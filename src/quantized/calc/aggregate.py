@@ -13,8 +13,9 @@ import numpy as np
 from scipy.interpolate import PchipInterpolator
 
 from ..datastruct import DataStruct
+from .resample import _interp_column
 
-__all__ = ["confidence_band"]
+__all__ = ["confidence_band", "dataset_algebra"]
 
 
 def confidence_band(
@@ -84,3 +85,69 @@ def confidence_band(
         "method": method,
         "nSets": n_sets,
     }
+
+
+_ALGEBRA_OPS = ("A+B", "A-B", "A*B", "A/B", "(A-B)/(A+B)")
+
+
+def _safe_label(ds: DataStruct, ch: int) -> str:
+    return ds.labels[ch] if ch < len(ds.labels) else f"ch{ch + 1}"
+
+
+def _safe_unit(ds: DataStruct, ch: int) -> str:
+    return ds.units[ch] if ch < len(ds.units) else ""
+
+
+def dataset_algebra(
+    ds_a: DataStruct,
+    ds_b: DataStruct,
+    operation: str,
+    *,
+    interp_method: str = "pchip",
+    channel_a: int = 0,
+    channel_b: int = 0,
+) -> DataStruct:
+    """Combine two datasets pointwise on A's x-grid. Port of utilities.datasetAlgebra.
+
+    B is interpolated onto A's time axis (``interp_method`` = pchip/linear/spline,
+    NaN outside B's range) and combined via ``operation`` (``A+B``, ``A-B``,
+    ``A*B``, ``A/B``, ``(A-B)/(A+B)``). Division/asymmetry guard zeros with NaN.
+    ``channel_a``/``channel_b`` are 0-based and clamped to the last channel.
+    """
+    if operation not in _ALGEBRA_OPS:
+        raise ValueError(f"operation must be one of {_ALGEBRA_OPS}")
+    xa = np.asarray(ds_a.time, dtype=float).ravel()
+    xb = np.asarray(ds_b.time, dtype=float).ravel()
+    va = np.asarray(ds_a.values, dtype=float)
+    vb = np.asarray(ds_b.values, dtype=float)
+    ch_a = min(channel_a, va.shape[1] - 1)
+    ch_b = min(channel_b, vb.shape[1] - 1)
+    ya = va[:, ch_a]
+    yb = _interp_column(xb, vb[:, ch_b], xa, interp_method, False)
+
+    la, lb = _safe_label(ds_a, ch_a), _safe_label(ds_b, ch_b)
+    unit_a = _safe_unit(ds_a, ch_a)
+    if operation == "A+B":
+        y_result, label, unit = ya + yb, f"{la} + {lb}", unit_a
+    elif operation == "A-B":
+        y_result, label, unit = ya - yb, f"{la} - {lb}", unit_a
+    elif operation == "A*B":
+        y_result, label, unit = ya * yb, f"{la} × {lb}", f"{unit_a}²"
+    elif operation == "A/B":
+        with np.errstate(divide="ignore", invalid="ignore"):
+            y_result = ya / yb
+        y_result[yb == 0] = np.nan
+        label, unit = f"{la} / {lb}", "ratio"
+    else:  # (A-B)/(A+B)
+        denom = ya + yb
+        with np.errstate(divide="ignore", invalid="ignore"):
+            y_result = (ya - yb) / denom
+        y_result[denom == 0] = np.nan
+        label = f"({la} - {lb}) / ({la} + {lb})"
+        unit = "asymmetry"
+
+    meta: dict[str, Any] = {}
+    if "source" in ds_a.metadata:
+        meta["source"] = ds_a.metadata["source"]
+    meta["operation"] = operation
+    return DataStruct.create(xa, y_result, labels=[label], units=[unit], metadata=meta)

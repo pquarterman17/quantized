@@ -221,6 +221,33 @@ function freeze_calc_values()
         'output', struct('Xq', Xqr, 'Yq', Yqr, 'Zq', Zqr)), ...
         fullfile(goldenDir, 'calc_regrid_idw.json'));
 
+    % ── datasetAlgebra (5 operations, pchip interp of B onto A) ───────────
+    % NOTE: utilities.datasetAlgebra is BROKEN in this MATLAB — it calls
+    % parser.createDataStruct('Time',...,'Values',...) but createDataStruct takes
+    % POSITIONAL (timeVec, valuesMatrix), so it always errors at the size assert.
+    % Freeze the intended algebra inline (interp1 pchip + op + label/unit rules);
+    % the Python port assembles the DataStruct correctly. 3rd golden-found bug.
+    xAa = linspace(0, 10, 40).';  yAa = sin(xAa) + 2;
+    xBb = linspace(-1, 11, 55).'; yBb = cos(xBb) + 2;
+    daIn = struct('xA', xAa.', 'yA', yAa.', 'xB', xBb.', 'yB', yBb.');
+    yBi = interp1(xBb, yBb, xAa, 'pchip', NaN);
+    TIMES = char(215); SUP2 = char(178);  % '×' and '²' (avoid source-encoding issues)
+    yDiv = yAa ./ yBi;  yDiv(yBi == 0) = NaN;
+    yAsym = (yAa - yBi) ./ (yAa + yBi);  yAsym((yAa + yBi) == 0) = NaN;
+    daDefs = {
+        'A+B', 'aplusb', yAa + yBi, 'A + B', 'V';
+        'A-B', 'aminusb', yAa - yBi, 'A - B', 'V';
+        'A*B', 'atimesb', yAa .* yBi, ['A ' TIMES ' B'], ['V' SUP2];
+        'A/B', 'adivb', yDiv, 'A / B', 'ratio';
+        '(A-B)/(A+B)', 'asym', yAsym, '(A - B) / (A + B)', 'asymmetry'
+    };
+    for oi = 1:size(daDefs, 1)
+        writeJson(struct('input', daIn, 'params', struct('op', daDefs{oi, 1}), ...
+            'output', struct('time', xAa.', 'values', daDefs{oi, 3}.', ...
+            'label', daDefs{oi, 4}, 'unit', daDefs{oi, 5})), ...
+            fullfile(goldenDir, sprintf('calc_dsalg_%s.json', daDefs{oi, 2})));
+    end
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
