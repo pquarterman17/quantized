@@ -63,8 +63,8 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 
 ### Processing utilities
 - [x] Smooth — `+utilities/smoothData.m` → `calc/processing.py` — golden (moving/gaussian/savgol); line-for-line port (reflect-pad conv + SG interior kernel + per-point polynomial edge fits)
-- [ ] FFT filter — `+utilities/fftFilter.m`
-- [ ] Spectral FFT — `+utilities/fftSpectral.m`
+- [x] FFT filter — `+utilities/fftFilter.m` → `calc/spectral.py` — golden (lowpass + bandpass); Butterworth transfer, freq-axis wrap, window normalization
+- [x] Spectral FFT — `+utilities/fftSpectral.m` → `calc/spectral.py` — golden (psd/magnitude one-sided, two-sided, Welch); windows + nextpow2 + fftshift replicated
 - [x] Normalize — `+utilities/normalize.m` — golden `bbb504b`
 - [x] Unit convert — `+utilities/convertUnits.m` → `calc/units.py` — golden (field/moment/temp/angle/length + same-unit + cross-family raise); makeValidName keying replicated via regex
 - [x] Resample — `+utilities/resampleData.m` → `calc/resample.py` — golden (linear/pchip/spline=not-a-knot/makima + step colon grid); scipy interpolators match MATLAB interp1 to 1e-9
