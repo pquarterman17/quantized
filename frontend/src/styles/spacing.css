@@ -1,0 +1,47 @@
+/* Quantized — spacing, radius, shadow and density tokens. The app is dense by
+   design (a desktop analysis tool, à la Origin) so spacing is tight and
+   measured in small fixed steps. Density (compact / regular / comfy) scales
+   the LIVE sizing tokens (--pad, --row-h, --font-size); the --space-* scale is
+   the fixed gap vocabulary between atoms and does not move with density. */
+
+:root {
+  /* fixed spacing scale — gaps between atoms */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 24px;
+
+  /* radii — cards/controls use --radius / --radius-sm; pills are full-round */
+  --radius: 8px;
+  --radius-sm: 5px;
+  --radius-pill: 99px;
+}
+
+/* density: regular is the default */
+:root,
+[data-density="regular"] {
+  --pad: 8px;
+  --pad-lg: 12px;
+  --row-h: 28px;
+  --font-size: 13px;
+  --font-size-sm: 11px;
+}
+
+[data-density="compact"] {
+  --pad: 5px;
+  --pad-lg: 8px;
+  --row-h: 24px;
+  --font-size: 12px;
+  --font-size-sm: 10px;
+}
+
+[data-density="comfy"] {
+  --pad: 11px;
+  --pad-lg: 16px;
+  --row-h: 32px;
+  --font-size: 14px;
+  --font-size-sm: 12px;
+}

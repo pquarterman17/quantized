@@ -1,0 +1,20 @@
+/* Quantized — webfonts. JetBrains Mono is vendored as WOFF2 under the SIL
+   Open Font License (see assets/fonts/OFL.txt). It is the single mono face
+   used for every numeric value, axis tick, code, shortcut and readout in the
+   app — scientific data is numbers, and numbers must align. */
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../assets/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../assets/fonts/JetBrainsMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

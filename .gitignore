@@ -41,3 +41,6 @@ CLAUDE.local.md
 # NOTE: plans/ is TRACKED in this repo for now (founding design docs).
 # Once active development starts we may adopt the sibling-repo convention
 # (gitignore plans/, track a BACKLOG.md dashboard) — see CLAUDE.md.
+
+# Built SPA (vite build output, served by FastAPI in prod)
+src/quantized/web/

@@ -66,7 +66,13 @@ mounts the built SPA via `StaticFiles` and `qz` opens the browser.
 
 ## Tier 1 — High Impact
 
-1. **Frontend scaffold** — `frontend/` Vite + React 19 + TS + Zustand + uPlot
+> **Status (2026-06-21):** vertical slice shipped on `feat/frontend-scaffold` —
+> scaffold + tokens + primitives + shell + Library + uPlot Stage + Inspector +
+> API/store + dev/prod serving. typecheck + 7 vitest + vite build green;
+> backend still 254/green; end-to-end smoke verified (health, SPA at `/`,
+> `/api/plot/series`). Partials noted per item below.
+
+1. **Frontend scaffold** — `frontend/` Vite + React 19 + TS + Zustand + uPlot ✅
    - [ ] `npm create vite@latest frontend -- --template react-ts`; pin React 19
    - [ ] add deps: `zustand`, `uplot`; dev: `vitest`, `@testing-library/react`,
      `eslint` + the design kit's `_adherence.oxlintrc.json` rules as a guide
@@ -186,4 +192,18 @@ mounts the built SPA via `StaticFiles` and `qz` opens the browser.
 
 ## Completed
 
-_(none yet)_
+- ~~**Tier 1 vertical slice (items 1–10, core paths)**~~ (2026-06-21) — `frontend/`
+  scaffolded (Vite/React19/TS/Zustand/uPlot, `/api` proxy, build→`src/quantized/web`);
+  design tokens + fonts + `qzk-*` shell CSS vendored from the handoff; `qz-*`
+  primitives ported (Button, IconButton, Card, MetaRow, Badge, StatusDot,
+  SegmentedControl, Select); app shell (TitleBar/MenuBar/StatusBar + qzk-app grid
+  with panel collapse); Library (dataset list, sparklines, filter, import-by-path
+  + demo dataset); Stage with a **live uPlot plot** wired to `/api/plot/series`
+  (offline client-fallback) + tab strip + read-only Worksheet preview; Inspector
+  (metadata/corrections-stub/axes-yLog/appearance theme·accent·density, all
+  token-driven); typed API client + Zustand store; backend `StaticFiles` mount of
+  the built SPA. Verified: tsc clean, 7 vitest pass, vite build OK, backend
+  254 tests green, end-to-end smoke (health + SPA + plot route).
+  **Partials carried forward:** remaining primitives (NumberField/Checkbox/Switch/
+  SliderRow/Pill/DataTable + specimen route); plot tool-dock (pan/zoom/cursor) #6;
+  corrections wiring (needs `/api/corrections`) #7; combined `qz --dev` launcher #10.

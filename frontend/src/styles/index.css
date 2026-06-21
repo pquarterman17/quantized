@@ -1,0 +1,17 @@
+/* Quantized frontend — global style entry point.
+   Vendored from the Claude Design "Quantized Design System" handoff
+   (plans/design/). Token + component CSS first, then the qzk-* shell chrome. */
+
+@import "./fonts.css";
+@import "./colors.css";
+@import "./typography.css";
+@import "./spacing.css";
+@import "./components.css";
+@import "./shell.css";
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
