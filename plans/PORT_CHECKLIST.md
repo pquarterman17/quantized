@@ -28,7 +28,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] SIMS depth profile — `+parser/importSIMS.m`
 - [ ] AFM — `+parser/importAFM.m`
 - [x] Generic CSV — `+parser/importCSV.m` → `io/delimited.py` — golden `a0a8929`
-- [ ] Excel — `+parser/importExcel.m`
+- [x] Excel — `+parser/importExcel.m` → `io/excel.py` (openpyxl) — golden `ce228ba`
 - [ ] Header parsing / auto-detect — `+parser/parseColHeader.m`
 - [ ] Auto-dispatch + registry — `+parser/importAuto.m`, `+parser/resolveParser.m` → `io/registry.py` (single map + sniffers)
 - [ ] DataStruct contract — `+parser/createDataStruct.m` → `datastruct.py`
