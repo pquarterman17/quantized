@@ -27,7 +27,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Lake Shore VSM — `+parser/importLakeShore.m` — golden `41dfef9` (synthetic fixture)
 - [ ] SIMS depth profile — `+parser/importSIMS.m`
 - [ ] AFM — `+parser/importAFM.m`
-- [ ] Generic CSV — `+parser/importCSV.m`
+- [x] Generic CSV — `+parser/importCSV.m` → `io/delimited.py` — golden `a0a8929`
 - [ ] Excel — `+parser/importExcel.m`
 - [ ] Header parsing / auto-detect — `+parser/parseColHeader.m`
 - [ ] Auto-dispatch + registry — `+parser/importAuto.m`, `+parser/resolveParser.m` → `io/registry.py` (single map + sniffers)
