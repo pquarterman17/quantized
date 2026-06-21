@@ -115,7 +115,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] MCMC sampling — `+fitting/mcmcSample.m`
 
 ### Reflectivity fitting
-- [ ] Parratt recursion — `+fitting/parrattRefl.m`
+- [x] Parratt recursion — `+fitting/parrattRefl.m` → `calc/reflectivity.py` — golden (R(Q) for 3-layer stack, with + without Gaussian resolution smearing @1e-9); Névot-Croce roughness, complex Fresnel internally, real |r|² output
 - [ ] SLD profile / spline SLD / profile→layers — `+fitting/{sldProfile,splineSLD,profileToLayers}.m`
 - [ ] SLD presets — `+fitting/reflSLDPresets.m`
 

@@ -480,6 +480,18 @@ function freeze_calc_values()
     writeJson(struct('x', xeq.', 'equations', {eqOut}), ...
         fullfile(goldenDir, 'calc_parseeqn.json'));
 
+    % ── parrattRefl: specular reflectivity of a 3-layer stack ─────────────
+    reflLayers = [0,   0,        0, 0; ...    % ambient (vacuum)
+                  200, 4.0e-6,   0, 5; ...    % film 200 Å
+                  0,   2.07e-6,  0, 3];       % Si substrate
+    Qr = linspace(0.01, 0.3, 100).';
+    Rr = fitting.parrattRefl(Qr, reflLayers);
+    writeJson(struct('input', struct('Q', Qr.', 'layers', reflLayers), ...
+        'output', Rr.'), fullfile(goldenDir, 'calc_parratt.json'));
+    Rres = fitting.parrattRefl(Qr, reflLayers, 'Resolution', 0.02);
+    writeJson(struct('input', struct('Q', Qr.', 'layers', reflLayers, 'resolution', 0.02), ...
+        'output', Rres.'), fullfile(goldenDir, 'calc_parratt_res.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
