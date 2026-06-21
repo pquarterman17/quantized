@@ -164,6 +164,18 @@ function freeze_calc_values()
         'window', 'hanning'), 'output', fbp), ...
         fullfile(goldenDir, 'calc_fftfilter_bandpass.json'));
 
+    % ── crossCorrelation (shifted sine -> peak at lag 5) ──────────────────
+    tcc = (0:63).';
+    xcc = sin(2*pi*tcc/16);
+    ycc = sin(2*pi*(tcc-5)/16);
+    ccIn = struct('x', xcc.', 'y', ycc.');
+    cc = utilities.crossCorrelation(xcc, ycc);
+    writeJson(struct('input', ccIn, 'params', struct('normalize', 'coeff'), ...
+        'output', cc), fullfile(goldenDir, 'calc_xcorr.json'));
+    ccn = utilities.crossCorrelation(xcc, ycc, 'Normalize', 'none');
+    writeJson(struct('input', ccIn, 'params', struct('normalize', 'none'), ...
+        'output', ccn), fullfile(goldenDir, 'calc_xcorr_none.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);

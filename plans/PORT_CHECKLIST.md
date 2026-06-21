@@ -71,7 +71,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Derivative / log-derivative / cumulative integral — `+utilities/{derivative,logDerivative,cumulativeIntegral}.m` → `calc/processing.py` — all golden
 - [ ] Dataset algebra — `+utilities/datasetAlgebra.m`
 - [ ] Robust peak find — `+utilities/findPeaksRobust.m`
-- [ ] Cross-correlation — `+utilities/crossCorrelation.m`
+- [x] Cross-correlation — `+utilities/crossCorrelation.m` → `calc/spectral.py` — golden (coeff + none); FFT-based, lag reassembly + peak-by-magnitude replicated
 - [ ] 2D regrid / interpolate — `+utilities/regrid2D.m`, `+utilities/interpolate2D.m`
 - [x] Peak shapes — `+utilities/{pseudoVoigt,splitPearsonVII,tchPseudoVoigt}.m` → `calc/peakshapes.py` — golden
 

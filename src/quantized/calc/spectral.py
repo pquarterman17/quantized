@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-__all__ = ["fft_filter", "fft_spectral"]
+__all__ = ["cross_correlation", "fft_filter", "fft_spectral"]
 
 _EPS = float(np.finfo(float).eps)
 _TWO_PI = 2.0 * math.pi
@@ -82,6 +82,40 @@ def _detrend(y: NDArray[np.float64], x: NDArray[np.float64], mode: str) -> NDArr
 def _two_sided_freq(nfft: int, df: float) -> NDArray[np.float64]:
     """MATLAB ``(-floor(nfft/2):ceil(nfft/2)-1)*df`` == fftshift bin order."""
     return np.asarray((np.arange(nfft) - (nfft // 2)) * df, dtype=float)
+
+
+def cross_correlation(
+    x: ArrayLike, y: ArrayLike, *, normalize: str = "coeff"
+) -> dict[str, Any]:
+    """FFT-based cross-correlation of two equal-length signals. Port of crossCorrelation.
+
+    Returns ``lags`` (-(N-1)..N-1), the cross-correlation ``xcorr``, and the peak
+    lag/value (by largest magnitude). ``normalize='coeff'`` divides by
+    ``sqrt(sum(x^2) * sum(y^2))`` so an autocorrelation peaks at 1.
+    """
+    xv = np.asarray(x, dtype=float).ravel()
+    yv = np.asarray(y, dtype=float).ravel()
+    if xv.size != yv.size:
+        raise ValueError(f"signals must have equal length (got {xv.size} and {yv.size})")
+    n = xv.size
+    if n < 2:
+        raise ValueError("need at least 2 data points")
+
+    nfft = 2 ** _nextpow2(2 * n - 1)
+    rxy = np.real(np.fft.ifft(np.conj(np.fft.fft(xv, nfft)) * np.fft.fft(yv, nfft)))
+    xcorr = np.concatenate([rxy[nfft - n + 1 : nfft], rxy[:n]])
+    lags = np.arange(-(n - 1), n)
+    if normalize == "coeff":
+        denom = math.sqrt(float(np.sum(xv**2)) * float(np.sum(yv**2)))
+        if denom > 0:
+            xcorr = xcorr / denom
+    i_peak = int(np.argmax(np.abs(xcorr)))
+    return {
+        "lags": lags,
+        "xcorr": xcorr,
+        "peakLag": int(lags[i_peak]),
+        "peakValue": float(xcorr[i_peak]),
+    }
 
 
 def fft_spectral(
