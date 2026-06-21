@@ -209,13 +209,19 @@ MATLAB."**
 ### Tier 1 — High Impact
 20. **Curve-fitting engine** — models + bounds + parameter errors +
     custom-equation parser (dispatch table, **no eval**).
-21. **Model library** — port the `+fitting` catalogue.
+21. **Model library** — port the `+fitting` catalogue: standard models +
+    peak shapes (pseudo-Voigt, split Pearson VII, TCH), hysteresis models,
+    reflectivity SLD presets, surface/2D models.
 22. **Peak fitting** — Lorentzian, auto-find peaks, baseline, multi-peak,
     constrained widths, peak tracking.
 
 ### Tier 2 — Medium Impact
-23. **Batch fitting** (via W0 #7 job queue) + fit comparison (AIC/BIC/
-    F-test) + confidence / prediction bands.
+23. **Advanced & batch fitting** (via W0 #7 job queue) — batch / global /
+    shared-parameter fits, fit comparison (AIC/BIC/F-test), residual
+    diagnostics, confidence/prediction bands, MCMC sampling, ODR;
+    **reflectivity fitting** (Parratt, SLD profile/spline, profile→layers),
+    **RSM** analyze/strain, surface/2D fitting, Pawley refinement, peak
+    tracking. (Full catalogue in `PORT_CHECKLIST.md`.)
 
 ---
 
