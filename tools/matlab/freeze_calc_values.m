@@ -293,6 +293,15 @@ function freeze_calc_values()
     writeJson(struct('input', struct('H', Hloop.', 'M', Mloop.'), 'output', rhy), ...
         fullfile(goldenDir, 'calc_hysteresis.json'));
 
+    % ── compareRelaxation (Arrhenius closed-form + VFT Nelder-Mead) ───────
+    Tr = linspace(30, 100, 15).';
+    kB2 = 8.617333e-5;
+    lnTauClean = log(1e-9) + 0.05 ./ (kB2 * (Tr - 20));
+    tauR = exp(lnTauClean + 0.02 * sin(Tr));  % deterministic perturbation
+    rrx = utilities.compareRelaxation(Tr, tauR);
+    writeJson(struct('input', struct('T', Tr.', 'tau', tauR.'), 'output', rrx), ...
+        fullfile(goldenDir, 'calc_relaxation.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
