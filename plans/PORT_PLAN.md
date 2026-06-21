@@ -147,6 +147,10 @@ MATLAB."**
    `../quantized_matlab/+test_datasets/`.
 5. **CI workflow** — pytest + ruff + mypy + frontend vitest + build +
    integrity gates. Self-hosted runner for golden tests that need MATLAB.
+   - [x] Backend CI — `.github/workflows/ci.yml` (ubuntu, uv sync, ruff +
+     mypy + pytest). Goldens/fixtures committed → no MATLAB needed; the
+     repo-integrity guard (pure-layer + 500-line) runs in pytest.
+   - [ ] Frontend vitest + build (deferred — frontend not started, W7)
 6. **`DataStruct`** — frozen dataclass + validation + JSON (de)serialization
    for the route boundary.
 7. **WebSocket job-queue infrastructure** — `routes/jobs` (submit → progress

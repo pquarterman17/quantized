@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: lint + type-check + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      # Golden parity fixtures + frozen JSON are committed, so the suite runs
+      # without MATLAB.
+      - name: Ruff (lint)
+        run: uv run ruff check src tests
+
+      - name: Mypy (type-check)
+        run: uv run mypy src
+
+      - name: Pytest
+        run: uv run pytest -q
