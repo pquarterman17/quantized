@@ -1,0 +1,43 @@
+"""Single parser registry: extension map + content sniffers for ambiguous types.
+
+One place to register a parser (no MATLAB-style dual registration). Ambiguous
+extensions (``.dat``) resolve by sniffing file content.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from pathlib import Path
+
+from quantized.datastruct import DataStruct
+from quantized.io.qd import import_qd_vsm, is_qd_file
+
+__all__ = ["import_auto", "resolve_parser"]
+
+Parser = Callable[[Path], DataStruct]
+Sniffer = Callable[[Path], bool]
+
+# Unambiguous extensions map directly (grows as parsers land).
+_EXT_MAP: dict[str, Parser] = {}
+
+# Ambiguous extensions resolve by content sniffing — first match wins.
+_SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
+    ".dat": [(is_qd_file, import_qd_vsm)],
+}
+
+
+def resolve_parser(path: Path) -> Parser:
+    """Pick the parser for ``path`` by extension, then by content sniffing."""
+    ext = path.suffix.lower()
+    if ext in _EXT_MAP:
+        return _EXT_MAP[ext]
+    for sniff, parser in _SNIFFERS.get(ext, []):
+        if sniff(path):
+            return parser
+    raise ValueError(f"no parser registered for '{path.name}' (extension '{ext}')")
+
+
+def import_auto(path: str | Path) -> DataStruct:
+    """Auto-detect format and import ``path`` into a DataStruct."""
+    resolved = Path(path)
+    return resolve_parser(resolved)(resolved)

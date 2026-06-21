@@ -5,3 +5,7 @@ Pure layer — MUST NOT import fastapi / pydantic / starlette / quantized.routes
 """
 
 from __future__ import annotations
+
+from quantized.io.registry import import_auto, resolve_parser
+
+__all__ = ["import_auto", "resolve_parser"]

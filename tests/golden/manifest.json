@@ -1,0 +1,15 @@
+{
+  "source_repo": "../quantized_matlab",
+  "source_commit": "95e1994",
+  "frozen": "2026-06-21",
+  "note": "Regenerate via MATLAB: addpath('tools/matlab'); freeze_reference_values(). Bump source_commit when an upstream formula changes.",
+  "cases": {
+    "qd_edp124_default": {
+      "fixture": "tests/fixtures/qd_edp124.dat",
+      "matlab_fn": "parser.importQDVSM (defaults: XAxis=field, YAxis=moment)",
+      "python_fn": "quantized.io.qd.import_qd_vsm (defaults)",
+      "rtol": 1e-9,
+      "atol": 1e-12
+    }
+  }
+}

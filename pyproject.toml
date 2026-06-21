@@ -49,3 +49,9 @@ strict = true
 # Third-party libs without bundled type stubs — skeleton-safe.
 module = ["scipy.*", "uvicorn.*"]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+markers = [
+    "golden: compares output against frozen quantized_matlab reference values",
+    "realdata: needs the local-only instrument corpus (auto-skips when absent)",
+]

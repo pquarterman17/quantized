@@ -24,7 +24,9 @@ tests/realdata/
 **/*.dat
 **/*.xrdml
 **/*.raw
-!tests/fixtures/**          # tiny synthetic fixtures ARE tracked
+# Exception: small committed golden-corpus fixtures (inline comments are
+# NOT supported in .gitignore, so this note must be on its own line).
+!tests/fixtures/**
 
 # ── OS / editor ───────────────────────────────────────────────────────
 .DS_Store
