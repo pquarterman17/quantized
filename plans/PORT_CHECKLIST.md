@@ -153,7 +153,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] Reflectivity builder — `buildReflectivityTab`
 
 ### Backend data / helpers (`calc/`)
-- [ ] Physical constants — `+calc/constants.m`
+- [x] Physical constants — `+calc/constants.m` → `calc/constants.py` — golden (CODATA 2018, all 14 constants)
 - [ ] Element data — `+calc/elementData.m`
 - [ ] Crystal cache — `+calc/crystalCache.m`
 - [ ] Unit conversion — `+calc/unitConvert.m`

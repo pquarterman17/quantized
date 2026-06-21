@@ -316,6 +316,9 @@ function freeze_calc_values()
         'nIter', prmM.nIter, 'converged', prmM.converged)), ...
         fullfile(goldenDir, 'calc_modpoly.json'));
 
+    % ── calc.constants (CODATA 2018) ──────────────────────────────────────
+    writeJson(struct('output', calc.constants()), fullfile(goldenDir, 'calc_constants.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
