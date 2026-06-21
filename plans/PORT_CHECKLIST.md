@@ -24,7 +24,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] NCNR reflectometry — `+parser/importNCNRRefl.m` — golden `8f9e4f8`
 - [x] NCNR `.dat` — `+parser/importNCNRDat.m` — golden `58cd15c`
 - [x] refl1d `.dat` — `+parser/importRefl1dDat.m` — golden `58cd15c`
-- [ ] Lake Shore VSM — `+parser/importLakeShore.m`
+- [x] Lake Shore VSM — `+parser/importLakeShore.m` — golden `41dfef9` (synthetic fixture)
 - [ ] SIMS depth profile — `+parser/importSIMS.m`
 - [ ] AFM — `+parser/importAFM.m`
 - [ ] Generic CSV — `+parser/importCSV.m`
