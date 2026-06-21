@@ -1,0 +1,8 @@
+Lake Shore VSM Measurement
+Sample: synthetic test
+Temperature (K),Magnetic Field (Oe),Moment (emu)
+300.0,5000.0,0.000123
+250.0,5000.0,0.000150
+200.0,5000.0,0.000180
+150.0,5000.0,0.000220
+100.0,5000.0,0.000280

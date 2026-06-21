@@ -57,6 +57,11 @@ function freeze_reference_values()
     dpp = parser.importPPMS(ppms);
     freezeCase(dpp, fullfile(goldenDir, 'ppms_synth_default.json'), 'ppms_synth.dat');
 
+    % ── Case: Lake Shore VSM (synthetic fixture; temp -> moment) ──────────
+    ls = fullfile(repoRoot, 'tests', 'fixtures', 'lakeshore_synth.csv');
+    dls = parser.importLakeShore(ls);
+    freezeCase(dls, fullfile(goldenDir, 'lakeshore_synth_default.json'), 'lakeshore_synth.csv');
+
     fprintf('Done.\n');
 end
 

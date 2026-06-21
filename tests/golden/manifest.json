@@ -60,6 +60,14 @@
       "note": "synthetic fixture (no real PPMS corpus); golden frozen from MATLAB on it",
       "rtol": 1e-9,
       "atol": 1e-12
+    },
+    "lakeshore_synth_default": {
+      "fixture": "tests/fixtures/lakeshore_synth.csv",
+      "matlab_fn": "parser.importLakeShore (defaults: temp, moment)",
+      "python_fn": "quantized.io.lakeshore.import_lake_shore",
+      "note": "synthetic fixture (no real Lake Shore corpus); golden frozen from MATLAB on it",
+      "rtol": 1e-9,
+      "atol": 1e-12
     }
   }
 }
