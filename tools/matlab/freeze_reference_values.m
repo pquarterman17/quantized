@@ -82,6 +82,11 @@ function freeze_reference_values()
     ds2 = parser.importSIMS(sims2);
     freezeCase(ds2, fullfile(goldenDir, 'sims_barrier_default.json'), 'sims_barrier.csv');
 
+    % ── Case: Rigaku SmartLab .raw (binary; 2theta -> counts) ─────────────
+    rgk = fullfile(repoRoot, 'tests', 'fixtures', 'rigaku_yig.raw');
+    drg = parser.importRigaku_raw(rgk);
+    freezeCase(drg, fullfile(goldenDir, 'rigaku_yig_default.json'), 'rigaku_yig.raw');
+
     fprintf('Done.\n');
 end
 

@@ -99,6 +99,13 @@
       "note": "real paired-column SIMS; exercises union-grid interpolation",
       "rtol": 1e-9,
       "atol": 1e-9
+    },
+    "rigaku_yig_default": {
+      "fixture": "tests/fixtures/rigaku_yig.raw",
+      "matlab_fn": "parser.importRigaku_raw (binary; default counts)",
+      "python_fn": "quantized.io.rigaku.import_rigaku_raw",
+      "rtol": 1e-9,
+      "atol": 1e-9
     }
   }
 }
