@@ -333,6 +333,17 @@ function freeze_calc_values()
             fullfile(goldenDir, sprintf('calc_unitconv_%s.json', ucDefs{ui,4})));
     end
 
+    % ── calc.importCIF on the SrTiO3 test fixture ────────────────────────
+    cifPath = fullfile(goldenDir, '..', 'fixtures', 'SrTiO3.cif');
+    cif = calc.importCIF(cifPath);
+    % NOTE: cif.tags is a dictionary (jsonencode can't serialize it) — omitted
+    % from the golden; the structured outputs below cover the parse. Python
+    % tests cif.tags structurally.
+    writeJson(struct('output', struct('blockName', cif.blockName, ...
+        'spaceGroup', cif.spaceGroup, 'formula', cif.formula, ...
+        'cellParams', cif.cellParams, 'atomSites', cif.atomSites)), ...
+        fullfile(goldenDir, 'calc_cif.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);

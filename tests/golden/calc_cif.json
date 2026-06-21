@@ -1,0 +1,1 @@
+{"output":{"blockName":"SrTiO3","spaceGroup":"Pm-3m","formula":"Sr Ti O3","cellParams":{"a":3.905,"b":3.905,"c":3.905,"alpha":90,"beta":90,"gamma":90},"atomSites":[{"label":"Sr1","symbol":"Sr","x":0,"y":0,"z":0,"occupancy":1},{"label":"Ti1","symbol":"Ti","x":0.5,"y":0.5,"z":0.5,"occupancy":1},{"label":"O1","symbol":"O","x":0.5,"y":0.5,"z":0,"occupancy":1}]}}
