@@ -17,7 +17,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Quantum Design PPMS — `+parser/importPPMS.m` — golden `a1960b5` (synthetic fixture)
 - [x] MPMS — `+parser/importMPMS.m` — golden `58cd15c` (delegates to QD VSM)
 - [x] Column shorthands (`field/moment/temp/time/stderr/all`) — `io/base.resolve_column` (used by QD/MPMS)
-- [ ] Rigaku `.raw` — `+parser/importRigaku_raw.m` — binary; **1D + 2D RSM** wanted
+- [~] Rigaku `.raw` — `+parser/importRigaku_raw.m` — **1D binary golden `488cf4b`**; 2D RSM still TODO
 - ~~Bruker — `+parser/importBruker.m`~~ — **out of scope → fermiviewer** (image data)
 - [~] PANalytical XRDML — `+parser/importXRDML.m` — **1D golden `5d7f1e7`**; **2D area-detector (RSM)** + `computeQSpace` IN SCOPE, still TODO
 - [x] NCNR neutron PNR — `+parser/importNCNRPNR.m` — golden `58cd15c`
