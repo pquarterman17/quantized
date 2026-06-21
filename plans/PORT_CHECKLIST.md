@@ -15,15 +15,15 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 ### Parsers (each returns `DataStruct`)
 - [x] Quantum Design VSM — `+parser/importQDVSM.m` — golden `fb3efe2`
 - [ ] Quantum Design PPMS — `+parser/importPPMS.m`
-- [ ] MPMS — `+parser/importMPMS.m`
-- [ ] Column shorthands (`field/moment/temp/time/stderr/all`) — `+parser/resolveColumnShorthand.m`
+- [x] MPMS — `+parser/importMPMS.m` — golden `58cd15c` (delegates to QD VSM)
+- [x] Column shorthands (`field/moment/temp/time/stderr/all`) — `io/base.resolve_column` (used by QD/MPMS)
 - [ ] Rigaku `.raw` — `+parser/importRigaku_raw.m`
 - [ ] Bruker — `+parser/importBruker.m`
 - [~] PANalytical XRDML — `+parser/importXRDML.m` — **1D golden `5d7f1e7`**; 2D area-detector (RSM) + `computeQSpace` still TODO
-- [ ] NCNR neutron PNR — `+parser/importNCNRPNR.m`
+- [x] NCNR neutron PNR — `+parser/importNCNRPNR.m` — golden `58cd15c`
 - [x] NCNR reflectometry — `+parser/importNCNRRefl.m` — golden `8f9e4f8`
-- [ ] NCNR `.dat` — `+parser/importNCNRDat.m`
-- [ ] refl1d `.dat` — `+parser/importRefl1dDat.m`
+- [x] NCNR `.dat` — `+parser/importNCNRDat.m` — golden `58cd15c`
+- [x] refl1d `.dat` — `+parser/importRefl1dDat.m` — golden `58cd15c`
 - [ ] Lake Shore VSM — `+parser/importLakeShore.m`
 - [ ] SIMS depth profile — `+parser/importSIMS.m`
 - [ ] AFM — `+parser/importAFM.m`
