@@ -121,6 +121,23 @@ function freeze_calc_values()
     end
     writeJson(cv, fullfile(goldenDir, 'calc_convert.json'));
 
+    % ── resampleData: 4 interp methods (NPoints) + Step grid ──────────────
+    xo = (0:1:10).';
+    yo = [sin(xo), 0.5 * cos(xo) + 2];
+    din = struct('time', xo, 'values', yo, 'labels', {{'s', 'c'}}, ...
+        'units', {{'', ''}}, 'metadata', struct());
+    rsIn = struct('time', xo.', 'values', yo);
+    for m = ["linear", "pchip", "spline", "makima"]
+        dm = utilities.resampleData(din, 'NPoints', 50, 'Method', m);
+        writeJson(struct('input', rsIn, 'params', struct('npoints', 50, 'method', char(m)), ...
+            'output', struct('time', dm.time.', 'values', dm.values)), ...
+            fullfile(goldenDir, sprintf('calc_resample_%s.json', m)));
+    end
+    dstep = utilities.resampleData(din, 'Step', 0.5, 'Method', 'makima');
+    writeJson(struct('input', rsIn, 'params', struct('step', 0.5, 'method', 'makima'), ...
+        'output', struct('time', dstep.time.', 'values', dstep.values)), ...
+        fullfile(goldenDir, 'calc_resample_step.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
