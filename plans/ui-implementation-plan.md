@@ -157,6 +157,8 @@ mounts the built SPA via `StaticFiles` and `qz` opens the browser.
     - [ ] CSV/Excel column-mapper dialog (role assignment) when confidence low
 
 13. **Curve-Fit workshop** — first draggable tool window (exercises the fit engine)
+    - [ ] **prereq:** port `ToolWindow` + `ParamDialog` + `ResultsWindow` from
+      fermiviewer — see `plans/frontend-reuse-library.md` Tier 1 (#1, #3, #5)
     - [ ] `components/workshops/CurveFit/*` (state hook + view + sub-components, <400 lines)
     - [ ] model + background pickers (from `calc/fit_models` catalog); param table
       (value ± error); residual scatter; R²/χ²ᵣ/iter stats
