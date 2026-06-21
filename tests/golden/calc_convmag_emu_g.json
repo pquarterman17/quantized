@@ -1,0 +1,1 @@
+{"input":{"x":[0,100,-250,5000],"y":[0,0.5,-1.2,3.4]},"params":{"fromField":"Oe","toField":"Oe","fromMoment":"emu","toMoment":"emu/g","mass":2,"vol":0},"output":{"xOut":[0,100,-250,5000],"yOut":[0,0.25,-0.6,1.7],"xUnit":"Oe","yUnit":"emu/g","warn":""}}

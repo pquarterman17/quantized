@@ -248,6 +248,42 @@ function freeze_calc_values()
             fullfile(goldenDir, sprintf('calc_dsalg_%s.json', daDefs{oi, 2})));
     end
 
+    % ── subtractMagBackground (linear high-T fit) ─────────────────────────
+    Tm = linspace(2, 300, 120).';
+    Mm = 0.02 * Tm + 1.5 + 8 * exp(-Tm / 20);  % linear bg + low-T Curie tail
+    [corr, bgS, bgI] = utilities.subtractMagBackground(Tm, Mm);
+    writeJson(struct('input', struct('T', Tm.', 'M', Mm.'), 'params', struct('autoFraction', 0.1), ...
+        'output', struct('corrected', corr.', 'bgSlope', bgS, 'bgIntercept', bgI)), ...
+        fullfile(goldenDir, 'calc_submagbg_auto.json'));
+    [corr2, bgS2, bgI2] = utilities.subtractMagBackground(Tm, Mm, 'FitRange', [200 300]);
+    writeJson(struct('input', struct('T', Tm.', 'M', Mm.'), 'params', struct('fitLo', 200, 'fitHi', 300), ...
+        'output', struct('corrected', corr2.', 'bgSlope', bgS2, 'bgIntercept', bgI2)), ...
+        fullfile(goldenDir, 'calc_submagbg_range.json'));
+
+    % ── convertMagUnits (field + sample-aware moment; success paths) ──────
+    AM2 = ['A' char(183) 'm' char(178)];      % 'A·m²'
+    EMUCM3 = ['emu/cm' char(179)];            % 'emu/cm³'
+    xf = [0 100 -250 5000].';
+    yf = [0 0.5 -1.2 3.4].';
+    cmDefs = {
+        'Oe', 'T',  'emu', 'emu',  0,   0,   'field_oe_t';
+        'A/m', 'Oe', 'emu', AM2,   0,   0,   'amts';
+        'Oe', 'Oe', 'emu', 'emu/g', 2.0, 0,  'emu_g';
+        'mT', 'T',  'emu', EMUCM3, 0,   4.0, 'emu_cm3'
+    };
+    for ci2 = 1:size(cmDefs, 1)
+        [xo, yo, xu, yu, wm] = utilities.convertMagUnits(xf, yf, ...
+            'FromField', cmDefs{ci2,1}, 'ToField', cmDefs{ci2,2}, ...
+            'FromMoment', cmDefs{ci2,3}, 'ToMoment', cmDefs{ci2,4}, ...
+            'SampleMass', cmDefs{ci2,5}, 'SampleVolume', cmDefs{ci2,6});
+        writeJson(struct('input', struct('x', xf.', 'y', yf.'), ...
+            'params', struct('fromField', cmDefs{ci2,1}, 'toField', cmDefs{ci2,2}, ...
+            'fromMoment', cmDefs{ci2,3}, 'toMoment', cmDefs{ci2,4}, ...
+            'mass', cmDefs{ci2,5}, 'vol', cmDefs{ci2,6}), ...
+            'output', struct('xOut', xo.', 'yOut', yo.', 'xUnit', xu, 'yUnit', yu, 'warn', wm)), ...
+            fullfile(goldenDir, sprintf('calc_convmag_%s.json', cmDefs{ci2,7})));
+    end
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);

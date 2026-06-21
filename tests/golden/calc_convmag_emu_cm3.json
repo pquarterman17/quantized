@@ -1,0 +1,1 @@
+{"input":{"x":[0,100,-250,5000],"y":[0,0.5,-1.2,3.4]},"params":{"fromField":"mT","toField":"T","fromMoment":"emu","toMoment":"emu/cm³","mass":0,"vol":4},"output":{"xOut":[0,0.1,-0.25,5],"yOut":[0,0.125,-0.3,0.85],"xUnit":"T","yUnit":"emu/cm³","warn":""}}

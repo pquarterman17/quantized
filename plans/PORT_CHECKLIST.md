@@ -78,6 +78,8 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 ### Magnetometry analysis
 - [ ] Hysteresis analysis — `+utilities/hysteresisAnalysis.m`
 - [ ] Relaxation comparison — `+utilities/compareRelaxation.m`
+- [x] Subtract mag background — `+utilities/subtractMagBackground.m` → `calc/magnetometry.py` — golden (auto + explicit FitRange); linear high-T fit
+- [x] Convert mag units — `+utilities/convertMagUnits.m` → `calc/magnetometry.py` — golden (field Oe/T/mT/A/m + sample-aware moment emu→emu/g/cm³/A·m²); warning paths tested structurally
 
 ### Statistics (no toolbox)
 - [x] Descriptive stats — `+utilities/descriptiveStats.m` — golden `bbb504b`
