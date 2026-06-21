@@ -21,7 +21,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] Bruker — `+parser/importBruker.m`
 - [~] PANalytical XRDML — `+parser/importXRDML.m` — **1D golden `5d7f1e7`**; 2D area-detector (RSM) + `computeQSpace` still TODO
 - [ ] NCNR neutron PNR — `+parser/importNCNRPNR.m`
-- [ ] NCNR reflectometry — `+parser/importNCNRRefl.m`
+- [x] NCNR reflectometry — `+parser/importNCNRRefl.m` — golden `8f9e4f8`
 - [ ] NCNR `.dat` — `+parser/importNCNRDat.m`
 - [ ] refl1d `.dat` — `+parser/importRefl1dDat.m`
 - [ ] Lake Shore VSM — `+parser/importLakeShore.m`
