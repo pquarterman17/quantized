@@ -9,6 +9,7 @@ export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
 export type Density = "compact" | "regular" | "comfy";
 export type StageTab = "plot" | "worksheet";
+export type PlotTool = "zoom" | "pan" | "cursor";
 
 interface AppState {
   datasets: Dataset[];
@@ -20,6 +21,7 @@ interface AppState {
   accent: Accent;
   density: Density;
   yLog: boolean;
+  plotTool: PlotTool;
   status: string;
 
   addDataset: (ds: Dataset) => void;
@@ -32,6 +34,7 @@ interface AppState {
   setAccent: (accent: Accent) => void;
   setDensity: (density: Density) => void;
   setYLog: (yLog: boolean) => void;
+  setPlotTool: (tool: PlotTool) => void;
   setStatus: (status: string) => void;
 }
 
@@ -52,6 +55,7 @@ export const useApp = create<AppState>((set, get) => ({
   accent: "violet",
   density: "regular",
   yLog: false,
+  plotTool: "zoom",
   status: "starting…",
 
   addDataset: (ds) =>
@@ -83,6 +87,7 @@ export const useApp = create<AppState>((set, get) => ({
     set({ density });
   },
   setYLog: (yLog) => set({ yLog }),
+  setPlotTool: (plotTool) => set({ plotTool }),
   setStatus: (status) => set({ status }),
 }));
 

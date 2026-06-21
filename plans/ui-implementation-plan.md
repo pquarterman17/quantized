@@ -207,3 +207,11 @@ mounts the built SPA via `StaticFiles` and `qz` opens the browser.
   **Partials carried forward:** remaining primitives (NumberField/Checkbox/Switch/
   SliderRow/Pill/DataTable + specimen route); plot tool-dock (pan/zoom/cursor) #6;
   corrections wiring (needs `/api/corrections`) #7; combined `qz --dev` launcher #10.
+- ~~**Tier 1 partials: tool-dock + full primitive set**~~ (2026-06-21) — ported the
+  remaining `qz-*` primitives (NumberField, Checkbox, Switch, SliderRow, Pill,
+  DataTable); added the plot **tool-dock** (box-zoom / pan / data-cursor as
+  mutually-exclusive armed modes with amber `--capture` active state, + reset-view)
+  via two uPlot plugins (`panPlugin` drag-to-pan, `readoutPlugin` cursor readout)
+  and a bottom-right readout chip. 13 vitest (was 7), tsc + build green.
+  **Still carried:** primitive specimen route; corrections wiring (#7, needs
+  `/api/corrections`); combined `qz --dev` launcher (#10).

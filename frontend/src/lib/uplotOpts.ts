@@ -4,6 +4,9 @@
 import type uPlot from "uplot";
 
 import type { PlotPayload } from "./plotdata";
+import { panPlugin, readoutPlugin, type Readout } from "./uplotPlugins";
+
+export type PlotTool = "zoom" | "pan" | "cursor";
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -20,12 +23,16 @@ const SERIES_VARS = [
   "--series-8",
 ];
 
-export function buildOpts(
-  payload: PlotPayload,
-  width: number,
-  height: number,
-  yLog: boolean,
-): uPlot.Options {
+export interface BuildOptsArgs {
+  width: number;
+  height: number;
+  yLog: boolean;
+  tool: PlotTool;
+  onReadout: (r: Readout | null) => void;
+}
+
+export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
+  const { width, height, yLog, tool, onReadout } = args;
   const axisColor = cssVar("--text-dim") || "#aaa";
   const gridColor = cssVar("--grid-line") || "#333";
   const font = `11px ${cssVar("--font-mono") || "monospace"}`;
@@ -38,10 +45,16 @@ export function buildOpts(
     ticks: { stroke: gridColor, width: 1 },
   };
 
+  const plugins: uPlot.Plugin[] = [];
+  if (tool === "pan") plugins.push(panPlugin());
+  if (tool === "cursor") plugins.push(readoutPlugin(onReadout));
+
   return {
     width,
     height,
-    cursor: { drag: { x: true, y: true, uni: 1 } },
+    // Box-zoom only in zoom mode; pan/cursor disable drag-zoom.
+    cursor: { drag: { x: tool === "zoom", y: tool === "zoom", uni: 1 } },
+    plugins,
     legend: { show: false },
     scales: { y: { distr: yLog ? 3 : 1 } },
     axes: [

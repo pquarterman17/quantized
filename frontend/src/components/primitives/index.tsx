@@ -4,6 +4,7 @@
 
 import type {
   ButtonHTMLAttributes,
+  InputHTMLAttributes,
   ReactNode,
   SelectHTMLAttributes,
 } from "react";
@@ -205,5 +206,184 @@ export function Select({ options, className, ...rest }: SelectProps) {
         </option>
       ))}
     </select>
+  );
+}
+
+// ── NumberField ─────────────────────────────────────────────────────────────
+interface NumberFieldProps
+  extends Omit<InputHTMLAttributes<HTMLInputElement>, "onChange" | "value"> {
+  value: string | number;
+  onChange?: (value: string) => void;
+  numeric?: boolean;
+  unit?: ReactNode;
+  width?: number;
+}
+
+export function NumberField({
+  value,
+  onChange,
+  numeric = true,
+  unit,
+  width = 72,
+  className,
+  ...rest
+}: NumberFieldProps) {
+  const input = (
+    <input
+      className={clsx("qz-input", numeric && "qz-num", className)}
+      value={value}
+      onChange={(e) => onChange?.(e.target.value)}
+      style={{ width }}
+      {...rest}
+    />
+  );
+  if (!unit) return input;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      {input}
+      <span
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--font-size-sm)",
+          color: "var(--text-faint)",
+        }}
+      >
+        {unit}
+      </span>
+    </span>
+  );
+}
+
+// ── Checkbox ────────────────────────────────────────────────────────────────
+export function Checkbox({
+  checked,
+  onChange,
+  children,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange?: (checked: boolean) => void;
+  children?: ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <label className={clsx("qz-check", disabled && "qz-disabled")}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange?.(e.target.checked)}
+      />
+      {children}
+    </label>
+  );
+}
+
+// ── Switch ──────────────────────────────────────────────────────────────────
+export function Switch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange?: (checked: boolean) => void;
+  label?: ReactNode;
+}) {
+  const sw = (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      className={clsx("qz-switch", checked && "qz-on")}
+      onClick={() => onChange?.(!checked)}
+    />
+  );
+  if (label == null) return sw;
+  return (
+    <label className="qz-check" style={{ justifyContent: "space-between" }}>
+      <span>{label}</span>
+      {sw}
+    </label>
+  );
+}
+
+// ── SliderRow ───────────────────────────────────────────────────────────────
+export function SliderRow({
+  label,
+  value,
+  min = 0,
+  max = 100,
+  step = 1,
+  onChange,
+  format,
+}: {
+  label: ReactNode;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  onChange?: (value: number) => void;
+  format?: (value: number) => ReactNode;
+}) {
+  return (
+    <div className="qz-slider-row">
+      <span className="qz-k">{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange?.(Number(e.target.value))}
+      />
+      <span className="qz-v">{format ? format(value) : value}</span>
+    </div>
+  );
+}
+
+// ── Pill ────────────────────────────────────────────────────────────────────
+interface PillProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  active?: boolean;
+}
+
+export function Pill({ children, active = false, className, ...rest }: PillProps) {
+  return (
+    <button
+      className={clsx("qz-pill", active && "qz-active", className)}
+      aria-pressed={active}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── DataTable ───────────────────────────────────────────────────────────────
+export function DataTable({
+  columns,
+  rows,
+}: {
+  columns: ReactNode[];
+  rows: ReactNode[][];
+}) {
+  return (
+    <table className="qz-table">
+      <thead>
+        <tr>
+          {columns.map((c, i) => (
+            <th key={i}>{c}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i}>
+            {row.map((cell, j) => (
+              <td key={j}>{cell}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

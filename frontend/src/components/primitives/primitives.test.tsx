@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { Badge, Button, Card, MetaRow } from "./index";
+import { Badge, Button, Card, MetaRow, Pill, Switch } from "./index";
 
 describe("primitives", () => {
   it("Button applies the primary variant class", () => {
@@ -25,5 +25,20 @@ describe("primitives", () => {
   it("Badge carries its tone class", () => {
     render(<Badge tone="accent">3ch</Badge>);
     expect(screen.getByText("3ch")).toHaveClass("qz-badge", "qz-accent");
+  });
+
+  it("Switch reflects checked state via aria + qz-on", () => {
+    render(<Switch checked />);
+    const sw = screen.getByRole("switch");
+    expect(sw).toHaveClass("qz-switch", "qz-on");
+    expect(sw).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("Pill toggles aria-pressed from active", () => {
+    render(<Pill active>field</Pill>);
+    expect(screen.getByRole("button", { name: "field" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 });
