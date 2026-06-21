@@ -57,8 +57,8 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 
 ### Baselines
 - [x] ALS — `+utilities/baselineALS.m` → `calc/baseline.py` — golden (scipy.sparse)
-- [ ] Rolling ball — `+utilities/baselineRollingBall.m`
-- [ ] ModPoly — `+utilities/baselineModPoly.m`
+- [x] Rolling ball — `+utilities/baselineRollingBall.m` → `calc/baseline.py` — golden; grayscale morphological opening (ball erosion/dilation) + boxcar smooth replicated
+- [x] ModPoly — `+utilities/baselineModPoly.m` → `calc/baseline.py` — golden; iterative polynomial clipping (Lieber) replicated
 - [x] Generic estimate — `+utilities/estimateBackground.m` → `calc/baseline.py` — golden (snip/polynomial/iterative); SNIP clip + boxcar smooth + robust poly + peak-dilation refine replicated
 
 ### Processing utilities

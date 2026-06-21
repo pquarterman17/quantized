@@ -6,6 +6,7 @@ Pure functions: spectrum in, baseline out.
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -13,7 +14,7 @@ from scipy import sparse
 from scipy.interpolate import interp1d
 from scipy.sparse.linalg import spsolve
 
-__all__ = ["baseline_als", "estimate_background"]
+__all__ = ["baseline_als", "baseline_modpoly", "baseline_rolling_ball", "estimate_background"]
 
 _EPS = float(np.finfo(float).eps)
 
@@ -194,3 +195,88 @@ def estimate_background(
             poly_degree, iter_max_passes, iter_sigma,
         )
     return np.asarray(np.minimum(bg, yv), dtype=float)
+
+
+def baseline_rolling_ball(
+    y: ArrayLike, *, radius: int = 100, smooth: int = -1
+) -> tuple[NDArray[np.float64], dict[str, int]]:
+    """Rolling-ball baseline (grayscale morphological opening). Port of baselineRollingBall.
+
+    Erodes then dilates the signal with a ball-shaped structuring element of the
+    given ``radius`` (in samples), boxcar-smooths, and clamps to ``min(bg, y)``.
+    ``smooth=-1`` auto-picks a half-width of ``round(radius/10)``. Returns
+    ``(baseline, {"radius", "smooth"})``.
+    """
+    yv = np.asarray(y, dtype=float).ravel()
+    n = yv.size
+    smooth_hw = max(1, _matlab_round(radius / 10)) if smooth < 0 else _matlab_round(smooth)
+    if n < 3:
+        return yv.copy(), {"radius": radius, "smooth": smooth_hw}
+
+    half_w = min(radius, n - 1)
+    offsets = np.arange(-half_w, half_w + 1)
+    rise = radius - np.sqrt(np.maximum(radius * radius - offsets.astype(float) ** 2, 0.0))
+
+    eroded = np.full(n, np.inf)
+    for off, rise_val in zip(offsets, rise, strict=True):
+        i0, i1 = max(0, -int(off)), min(n - 1, n - 1 - int(off))
+        if i1 >= i0:
+            eroded[i0 : i1 + 1] = np.minimum(
+                eroded[i0 : i1 + 1], yv[i0 + int(off) : i1 + int(off) + 1] + rise_val
+            )
+    dilated = np.full(n, -np.inf)
+    for off, rise_val in zip(offsets, rise, strict=True):
+        i0, i1 = max(0, -int(off)), min(n - 1, n - 1 - int(off))
+        if i1 >= i0:
+            dilated[i0 : i1 + 1] = np.maximum(
+                dilated[i0 : i1 + 1], eroded[i0 + int(off) : i1 + int(off) + 1] - rise_val
+            )
+
+    baseline = dilated
+    if smooth_hw > 0 and n > 2 * smooth_hw:
+        pad = min(smooth_hw, n - 1)
+        kernel = np.ones(2 * smooth_hw + 1) / (2 * smooth_hw + 1)
+        padded = np.concatenate(
+            [baseline[1 : pad + 1][::-1], baseline, baseline[n - 1 - pad : n - 1][::-1]]
+        )
+        baseline = np.convolve(padded, kernel, mode="valid")[:n]
+    baseline = np.asarray(np.minimum(baseline, yv), dtype=float)
+    return baseline, {"radius": radius, "smooth": smooth_hw}
+
+
+def baseline_modpoly(
+    y: ArrayLike, *, order: int = 5, max_iter: int = 100, tol: float = 1e-6
+) -> tuple[NDArray[np.float64], dict[str, Any]]:
+    """Modified-polynomial (Lieber) baseline. Port of baselineModPoly.
+
+    Iteratively fits a polynomial of ``order`` and clips the working signal to
+    ``min(signal, fit)`` until the RMS change (relative to the data range) drops
+    below ``tol``. Returns ``(baseline, {"order", "nIter", "converged"})``.
+    """
+    yv = np.asarray(y, dtype=float).ravel()
+    n = yv.size
+    if n < 3:
+        return yv.copy(), {"order": order, "nIter": 0, "converged": True}
+
+    poly_ord = min(order, n - 1)
+    x = np.arange(1, n + 1, dtype=float)
+    xn = (x - float(np.mean(x))) / max(float(np.std(x, ddof=1)), _EPS)
+    y_mod = yv.copy()
+    y_range = max(float(np.max(yv) - np.min(yv)), _EPS)
+
+    converged = False
+    n_iter = 0
+    coeffs = np.polyfit(xn, y_mod, poly_ord)
+    for it in range(1, max_iter + 1):
+        n_iter = it
+        coeffs = np.polyfit(xn, y_mod, poly_ord)
+        fit = np.polyval(coeffs, xn)
+        y_new = np.minimum(y_mod, fit)
+        rms = math.sqrt(float(np.mean((y_new - y_mod) ** 2)))
+        y_mod = y_new
+        if rms / y_range < tol:
+            converged = True
+            break
+
+    baseline = np.asarray(np.minimum(np.polyval(coeffs, xn), yv), dtype=float)
+    return baseline, {"order": poly_ord, "nIter": n_iter, "converged": converged}
