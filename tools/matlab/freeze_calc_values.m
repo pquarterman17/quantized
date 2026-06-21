@@ -391,6 +391,18 @@ function freeze_calc_values()
         'output', struct('time', cc3.time.', 'values', cc3.values.')), ...
         fullfile(goldenDir, 'calc_corrections_mag.json'));
 
+    % ── fitting.models: evaluate every model at its p0 over a fixed grid ──
+    fmCat = fitting.models();
+    xfm = linspace(1, 10, 25).';  % x>=1 keeps VFT finite (Inf -> null -> nan otherwise)
+    fmOut = cell(numel(fmCat), 1);
+    for fi = 1:numel(fmCat)
+        fm = fmCat(fi);
+        yfm = fm.fcn(xfm, fm.p0);
+        fmOut{fi} = struct('name', fm.name, 'p0', fm.p0, 'y', yfm(:).');
+    end
+    writeJson(struct('x', xfm.', 'models', {fmOut}), ...
+        fullfile(goldenDir, 'calc_fit_models.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);

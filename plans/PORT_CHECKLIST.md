@@ -97,7 +97,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 
 ### Engine
 - [ ] Curve fit driver — `+fitting/curveFit.m`
-- [ ] Model registry — `+fitting/models.m`
+- [~] Model registry — `+fitting/models.m` → `calc/fit_models.py` — 23 closed-form models golden (linear/poly/decay/growth/peak/power/sigmoid/Curie-Weiss/Bloch/Arrhenius/VFT/Langmuir/log/sqrt + reuses peakshapes.pseudo_voigt). REMAINING: helper-based Langevin/Brillouin/Stoner-Wohlfarth/Debye/Einstein/Debye+Einstein (next batch; golden already freezes all, test auto-covers as registered)
 - [ ] Equation parser (no eval) — `+fitting/parseEquation.m`
 - [ ] Auto-guess — `+fitting/autoGuess.m`
 - [ ] Constraints — `+fitting/applyConstraints.m`
