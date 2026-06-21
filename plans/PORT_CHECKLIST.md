@@ -50,7 +50,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 ## W2 — Corrections & processing (`calc/`)
 
 ### Corrections pipeline
-- [ ] Offsets / BG (slope/intercept/poly) / trim / units / counts-per-sec — BosonPlotter corrections + `applyParserAnalysisConfig.m`
+- [x] Offsets / BG (slope/intercept/poly) / trim / units / smooth / norm / derivative — `bosonPlotter.applyCorrections` + `correctionParams` → `calc/corrections.py` — golden (XRD trim+bg+smooth+norm; derivative; magnetometry field-convert+emu/g). Pure 8-step pipeline composed from ported helpers. `applyParserAnalysisConfig.m` is GUI relabeling only (no math, not ported).
 - [ ] Magnetometry mass/dimension normalization — `+utilities/convertMagUnits.m`
 - [ ] Magnetic background subtraction — `+utilities/subtractMagBackground.m`
 - [ ] BG-from-file / fit-BG-from-region — BosonPlotter + `+utilities/estimateBackground.m`
