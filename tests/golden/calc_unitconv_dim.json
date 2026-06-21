@@ -1,0 +1,1 @@
+{"input":{"value":1,"from":"mA/cm^2","to":"A/m^2"},"output":{"result":10,"factor":10,"fromDims":[0,-2,0,1,0,0,0],"fromScale":10,"toDims":[0,-2,0,1,0,0,0],"toScale":1}}

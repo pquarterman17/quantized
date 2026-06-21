@@ -157,7 +157,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Physical constants — `+calc/constants.m` → `calc/constants.py` — golden (CODATA 2018, all 14 constants)
 - [ ] Element data — `+calc/elementData.m`
 - [ ] Crystal cache — `+calc/crystalCache.m`
-- [ ] Unit conversion — `+calc/unitConvert.m`
+- [x] Unit conversion — `+calc/unitConvert.m` → `calc/unit_convert.py` — golden (dimensional/temperature-offset/Ang-nm/energy-wavelength/Oe-T/energy-freq); full expression parser (tokenize+prefix+dims vector) + bridges replicated
 - [ ] CIF import — `+calc/importCIF.m`
 
 ### Meta panels (frontend, W7)
