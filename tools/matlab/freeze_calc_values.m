@@ -96,6 +96,20 @@ function freeze_calc_values()
     writeJson(struct('input', cbsIn, 'params', struct('method', 'median'), ...
         'output', cbMed), fullfile(goldenDir, 'calc_confband_median.json'));
 
+    % ── smoothData: moving / gaussian / savitzky-golay ────────────────────
+    xs = linspace(0, 4*pi, 50).';
+    ys = sin(xs) + 0.2 * cos(7 * xs);   % deterministic structured signal
+    smMov = utilities.smoothData(ys, 'Method', 'moving', 'Window', 5);
+    writeJson(struct('input', ys.', 'params', struct('method', 'moving', 'window', 5), ...
+        'output', smMov.'), fullfile(goldenDir, 'calc_smooth_moving.json'));
+    smGau = utilities.smoothData(ys, 'Method', 'gaussian', 'Window', 5);
+    writeJson(struct('input', ys.', 'params', struct('method', 'gaussian', 'window', 5), ...
+        'output', smGau.'), fullfile(goldenDir, 'calc_smooth_gaussian.json'));
+    smSG = utilities.smoothData(ys, 'Method', 'savitzky-golay', 'Window', 5, 'PolyOrder', 2);
+    writeJson(struct('input', ys.', ...
+        'params', struct('method', 'savitzky-golay', 'window', 5, 'polyOrder', 2), ...
+        'output', smSG.'), fullfile(goldenDir, 'calc_smooth_savgol.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);

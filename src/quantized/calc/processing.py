@@ -10,7 +10,13 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy import integrate
 
-__all__ = ["cumulative_integral", "derivative", "log_derivative", "normalize"]
+__all__ = [
+    "cumulative_integral",
+    "derivative",
+    "log_derivative",
+    "normalize",
+    "smooth_data",
+]
 
 
 def _as_columns(y: NDArray[np.float64]) -> tuple[NDArray[np.float64], bool]:
@@ -134,3 +140,83 @@ def log_derivative(
         valid = (xv > 0) & (col > 0)
         out[valid, c] = (xv[valid] / col[valid]) * dydx[valid]
     return out.ravel() if was_1d else out
+
+
+def smooth_data(
+    y: NDArray[np.float64],
+    *,
+    method: str = "moving",
+    window: int = 5,
+    poly_order: int = 2,
+) -> NDArray[np.float64]:
+    """Column-wise smoothing. Port of utilities.smoothData.
+
+    ``window`` is the half-width (full window = ``2*window + 1``). Methods:
+
+    - ``'moving'``: boxcar average, reflect-padded at the edges.
+    - ``'gaussian'``: Gaussian kernel (sigma = hw/2), reflect-padded.
+    - ``'savitzky-golay'``: SG convolution interior + per-point polynomial fits
+      over the boundary window at each edge (matches MATLAB's edge handling).
+
+    The half-width is clamped to ``n-1`` per column; columns shorter than 2 are
+    returned unchanged.
+    """
+    if method not in ("moving", "gaussian", "savitzky-golay"):
+        raise ValueError("method must be moving/gaussian/savitzky-golay")
+    hw = window
+    if method == "savitzky-golay" and poly_order >= 2 * hw + 1:
+        raise ValueError(f"poly_order ({poly_order}) must be < window width ({2 * hw + 1})")
+
+    mat, was_1d = _as_columns(y)
+    out = np.full(mat.shape, np.nan)
+    for c in range(mat.shape[1]):
+        col = mat[:, c]
+        n = col.size
+        hwc = min(hw, n - 1)
+        if hwc < 1:
+            out[:, c] = col
+            continue
+
+        if method == "savitzky-golay":
+            out[:, c] = _savgol_column(col, hwc, min(poly_order, 2 * hwc))
+        else:
+            w_len = 2 * hwc + 1
+            if method == "moving":
+                kernel = np.ones(w_len) / w_len
+            else:  # gaussian
+                sigma = hwc / 2.0
+                t = np.arange(-hwc, hwc + 1, dtype=float)
+                kernel = np.exp(-(t**2) / (2.0 * sigma**2))
+                kernel = kernel / kernel.sum()
+            left = col[1 : hwc + 1][::-1]
+            right = col[n - 1 - hwc : n - 1][::-1]
+            padded = np.concatenate([left, col, right])
+            out[:, c] = np.convolve(padded, kernel, mode="valid")[:n]
+    return out.ravel() if was_1d else out
+
+
+def _savgol_column(col: NDArray[np.float64], hwc: int, poly_ord: int) -> NDArray[np.float64]:
+    """One column of Savitzky-Golay smoothing (interior kernel + polynomial edges)."""
+    n = col.size
+    w_len = 2 * hwc + 1
+    t = np.arange(-hwc, hwc + 1, dtype=float)
+    vand = np.vander(t, poly_ord + 1, increasing=True)
+    # SG smoothing kernel = first row of the normal-equations pseudoinverse.
+    coeff_mat = np.linalg.solve(vand.T @ vand, vand.T)
+    int_kernel = coeff_mat[0, :]
+
+    out = col.copy()
+    if n > 2 * hwc:
+        out = np.convolve(col, int_kernel[::-1], mode="same")
+
+    # Edges: one polynomial fit over the boundary window, evaluated per point.
+    n_pts = min(w_len, n)
+    t_local = np.arange(n_pts, dtype=float)
+    vand_local = np.vander(t_local, poly_ord + 1, increasing=True)
+    powers = np.arange(poly_ord + 1)
+    left_coeffs = np.linalg.lstsq(vand_local, col[:n_pts], rcond=None)[0]
+    right_coeffs = np.linalg.lstsq(vand_local, col[n - n_pts : n], rcond=None)[0]
+    for i in range(1, hwc + 1):
+        out[i - 1] = float(np.sum(left_coeffs * (i - 1.0) ** powers))
+        out[n - i] = float(np.sum(right_coeffs * float(n_pts - 1 - (i - 1)) ** powers))
+    return out

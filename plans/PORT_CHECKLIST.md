@@ -62,7 +62,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] Generic estimate — `+utilities/estimateBackground.m`
 
 ### Processing utilities
-- [ ] Smooth — `+utilities/smoothData.m`
+- [x] Smooth — `+utilities/smoothData.m` → `calc/processing.py` — golden (moving/gaussian/savgol); line-for-line port (reflect-pad conv + SG interior kernel + per-point polynomial edge fits)
 - [ ] FFT filter — `+utilities/fftFilter.m`
 - [ ] Spectral FFT — `+utilities/fftSpectral.m`
 - [x] Normalize — `+utilities/normalize.m` — golden `bbb504b`
