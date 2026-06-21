@@ -67,10 +67,13 @@ once the API contract (PR5) is fixed.
      `app.py` stub, `tests/conftest.py`, `LICENSE`+`NOTICE` (Apache-2.0).
    - DoD: `uv sync --group dev`; `import quantized` works; `ruff` + `mypy` clean.
 
-2. **PR2 — Enforcement guards** [PR1]
+2. **PR2 — Enforcement guards** ✅ **DONE** (`84cbd51`) [PR1]
    - Create: `tests/test_repo_integrity.py` (port fermiviewer's: no-GPL
      runtime deps, 500-line god-module ceiling, pure-layer import guard).
-   - DoD: three tests pass on the skeleton.
+   - DoD: three tests pass on the skeleton. ✅ (negative-tested: the
+     layering guard catches an injected web import.)
+   - Frontend component-size (~400-line `.tsx`) ceiling: lands with PR7
+     (needs `frontend/` to exist).
 
 3. **PR3 — `DataStruct`** [PR1]
    - Create: `src/quantized/datastruct.py` (frozen dataclass: `time`,
