@@ -67,6 +67,11 @@ function freeze_reference_values()
     dc = parser.importCSV(csv);
     freezeCase(dc, fullfile(goldenDir, 'csv_xrd_default.json'), 'csv_xrd.csv');
 
+    % ── Case: generic Excel (synthetic fixture; col1 x -> rest values) ────
+    xls = fullfile(repoRoot, 'tests', 'fixtures', 'excel_synth.xlsx');
+    dxl = parser.importExcel(xls);
+    freezeCase(dxl, fullfile(goldenDir, 'excel_synth_default.json'), 'excel_synth.xlsx');
+
     fprintf('Done.\n');
 end
 

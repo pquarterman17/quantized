@@ -11,6 +11,7 @@ from pathlib import Path
 
 from quantized.datastruct import DataStruct
 from quantized.io.delimited import import_csv
+from quantized.io.excel import import_excel
 from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl
 from quantized.io.qd import import_ppms, import_qd_vsm, is_ppms_dat, is_qd_file
 from quantized.io.refl1d import import_refl1d_dat, is_refl1d_dat
@@ -33,6 +34,8 @@ _EXT_MAP: dict[str, Parser] = {
     ".datd": import_ncnr_dat,  # .datD
     ".csv": import_csv,
     ".tsv": import_csv,
+    ".xlsx": import_excel,
+    ".xlsm": import_excel,
 }
 
 # Ambiguous extensions resolve by content sniffing — first match wins.

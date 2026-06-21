@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
     "pydantic>=2.7",
+    "openpyxl>=3.1",
 ]
 
 [project.scripts]
@@ -47,7 +48,7 @@ strict = true
 
 [[tool.mypy.overrides]]
 # Third-party libs without bundled type stubs — skeleton-safe.
-module = ["scipy.*", "uvicorn.*"]
+module = ["scipy.*", "uvicorn.*", "openpyxl.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -75,6 +75,14 @@
       "python_fn": "quantized.io.delimited.import_csv",
       "rtol": 1e-9,
       "atol": 1e-9
+    },
+    "excel_synth_default": {
+      "fixture": "tests/fixtures/excel_synth.xlsx",
+      "matlab_fn": "parser.importExcel (defaults: sheet 1, TimeColumn=1)",
+      "python_fn": "quantized.io.excel.import_excel",
+      "note": "synthetic .xlsx (no generic Excel corpus); golden frozen from MATLAB on it",
+      "rtol": 1e-9,
+      "atol": 1e-9
     }
   }
 }
