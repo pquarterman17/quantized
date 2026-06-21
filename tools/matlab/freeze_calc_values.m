@@ -192,6 +192,15 @@ function freeze_calc_values()
     writeJson(struct('input', bgIn, 'params', struct('method', 'snip', 'iterative', true), ...
         'output', bgIter.'), fullfile(goldenDir, 'calc_estbg_iter.json'));
 
+    % ── findPeaksRobust: 2 strong peaks on a sloping background ───────────
+    xp2 = linspace(20, 60, 400).';
+    yp2 = 100 + 2 * xp2 + 5000 * exp(-((xp2 - 30) / 0.4).^2) ...
+        + 4000 * exp(-((xp2 - 45) / 0.5).^2);
+    [pkr, bge] = utilities.findPeaksRobust(xp2, yp2);
+    writeJson(struct('input', struct('x', xp2.', 'y', yp2.'), ...
+        'output', struct('peaks', pkr, 'bg', bge.')), ...
+        fullfile(goldenDir, 'calc_findpeaks.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);

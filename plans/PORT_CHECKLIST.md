@@ -70,7 +70,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Resample — `+utilities/resampleData.m` → `calc/resample.py` — golden (linear/pchip/spline=not-a-knot/makima + step colon grid); scipy interpolators match MATLAB interp1 to 1e-9
 - [x] Derivative / log-derivative / cumulative integral — `+utilities/{derivative,logDerivative,cumulativeIntegral}.m` → `calc/processing.py` — all golden
 - [ ] Dataset algebra — `+utilities/datasetAlgebra.m`
-- [ ] Robust peak find — `+utilities/findPeaksRobust.m`
+- [x] Robust peak find — `+utilities/findPeaksRobust.m` → `calc/peaks.py` — golden (peaks + bg); local-maxima + prominence/slope/width/SNR/min-sep filters replicated; compare_calc extended for list-of-dicts
 - [x] Cross-correlation — `+utilities/crossCorrelation.m` → `calc/spectral.py` — golden (coeff + none); FFT-based, lag reassembly + peak-by-magnitude replicated
 - [ ] 2D regrid / interpolate — `+utilities/regrid2D.m`, `+utilities/interpolate2D.m`
 - [x] Peak shapes — `+utilities/{pseudoVoigt,splitPearsonVII,tchPseudoVoigt}.m` → `calc/peakshapes.py` — golden
