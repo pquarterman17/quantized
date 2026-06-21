@@ -135,6 +135,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 ## W4 — Calculators (`calc/`, DiraCulator parity)
 
 ### Calculator domains (panels) — `DiraCulator.m` build*Tab
+> DEFERRED (autonomous): formulas are embedded in DiraCulator GUI build*Tab functions, not standalone +calc files. Porting requires extracting each formula into a clean `calc/<domain>.py` and freezing via inline MATLAB computation. Backend `+calc/*.m` helpers (below) are ported first.
 - [ ] Unit Converter — `buildUnitConverterTab`
 - [ ] Crystal — `buildCrystalTab`
 - [ ] Electrical / transport — `buildElectricalTab`
