@@ -1,0 +1,37 @@
+# ── Python ────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+.uv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+dist-sidecar/
+
+# ── Node / frontend ───────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# ── Tauri / desktop ───────────────────────────────────────────────────
+src-tauri/target/
+
+# ── Local-only research corpus (never commit instrument data) ─────────
+tests/realdata/
+**/*.dat
+**/*.xrdml
+**/*.raw
+!tests/fixtures/**          # tiny synthetic fixtures ARE tracked
+
+# ── OS / editor ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# NOTE: plans/ is TRACKED in this repo for now (founding design docs).
+# Once active development starts we may adopt the sibling-repo convention
+# (gitignore plans/, track a BACKLOG.md dashboard) — see CLAUDE.md.
