@@ -109,9 +109,9 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] Peak tracking — `+fitting/trackPeak.m`
 
 ### Diagnostics / comparison / Bayesian
-- [ ] Fit comparison (AIC/BIC/F) — `+fitting/fitCompare.m`
-- [ ] Residual diagnostics — `+fitting/residualDiagnostics.m`
-- [ ] Confidence/prediction bands — `+fitting/fitBands.m`
+- [x] Fit comparison (AIC/BIC/F) — `+fitting/fitCompare.m` → `calc/fit_stats.py` — golden (R2/adjR2/AIC/AICc/BIC/F-test; betainc F p-value)
+- [x] Residual diagnostics — `+fitting/residualDiagnostics.m` → `calc/fit_stats.py` — golden (QQ/Durbin-Watson/runs/skew/kurtosis)
+- [x] Confidence/prediction bands — `+fitting/fitBands.m` → `calc/fit_stats.py` — golden (numerical-Jacobian CI/PI bands; Cornish-Fisher+bisection t-quantile replicated)
 - [ ] MCMC sampling — `+fitting/mcmcSample.m`
 
 ### Reflectivity fitting
