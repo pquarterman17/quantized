@@ -32,6 +32,10 @@ Thumbs.db
 .idea/
 .vscode/
 
+# ── Claude private working area (per-machine, not shared) ─────────────
+.claude/
+CLAUDE.local.md
+
 # NOTE: plans/ is TRACKED in this repo for now (founding design docs).
 # Once active development starts we may adopt the sibling-repo convention
 # (gitignore plans/, track a BACKLOG.md dashboard) — see CLAUDE.md.
