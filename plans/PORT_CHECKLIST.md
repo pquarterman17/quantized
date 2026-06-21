@@ -68,7 +68,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Normalize — `+utilities/normalize.m` — golden `bbb504b`
 - [ ] Unit convert — `+utilities/convertUnits.m`
 - [ ] Resample — `+utilities/resampleData.m`
-- [~] Derivative / log-derivative / cumulative integral — `+utilities/{derivative,logDerivative,cumulativeIntegral}.m` — **derivative golden `bbb504b`**; log-deriv + cumulative TODO
+- [x] Derivative / log-derivative / cumulative integral — `+utilities/{derivative,logDerivative,cumulativeIntegral}.m` → `calc/processing.py` — all golden
 - [ ] Dataset algebra — `+utilities/datasetAlgebra.m`
 - [ ] Robust peak find — `+utilities/findPeaksRobust.m`
 - [ ] Cross-correlation — `+utilities/crossCorrelation.m`

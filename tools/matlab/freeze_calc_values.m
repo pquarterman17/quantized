@@ -34,6 +34,15 @@ function freeze_calc_values()
         'params', struct('order', 1), 'output', dydx.'), ...
         fullfile(goldenDir, 'calc_derivative.json'));
 
+    % ── cumulative integral + log-derivative ──────────────────────────────
+    ci = utilities.cumulativeIntegral(xv, yv);
+    writeJson(struct('input', struct('x', xv.', 'y', yv.'), 'output', ci.'), ...
+        fullfile(goldenDir, 'calc_cumint.json'));
+    xl = (1:10).'; yl = xl.^2;
+    ld = utilities.logDerivative(xl, yl);
+    writeJson(struct('input', struct('x', xl.', 'y', yl.'), 'output', ld.'), ...
+        fullfile(goldenDir, 'calc_logderiv.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);

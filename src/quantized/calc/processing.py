@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy import integrate
 
-__all__ = ["derivative", "normalize"]
+__all__ = ["cumulative_integral", "derivative", "log_derivative", "normalize"]
 
 
 def _as_columns(y: NDArray[np.float64]) -> tuple[NDArray[np.float64], bool]:
@@ -91,4 +92,45 @@ def derivative(
         if order == 2:
             d = _matlab_gradient(d, xv)
         out[:, c] = d
+    return out.ravel() if was_1d else out
+
+
+def cumulative_integral(
+    x: NDArray[np.float64], y: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Cumulative trapezoidal integral (leading 0). Port of utilities.cumulativeIntegral.
+
+    NaNs are treated as 0 during integration and restored as NaN in the output.
+    """
+    xv = np.asarray(x, dtype=float).ravel()
+    mat, was_1d = _as_columns(y)
+    if xv.size != mat.shape[0]:
+        raise ValueError(f"x length ({xv.size}) must match y rows ({mat.shape[0]})")
+    out = np.zeros(mat.shape)
+    for c in range(mat.shape[1]):
+        col = mat[:, c].copy()
+        nan_mask = np.isnan(col)
+        col[nan_mask] = 0.0
+        out[:, c] = integrate.cumulative_trapezoid(col, xv, initial=0.0)
+        out[nan_mask, c] = np.nan
+    return out.ravel() if was_1d else out
+
+
+def log_derivative(
+    x: NDArray[np.float64], y: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Logarithmic derivative (x/y)·dy/dx. Port of utilities.logDerivative.
+
+    NaN where x<=0 or y<=0 (log undefined). PreSmooth not yet supported.
+    """
+    xv = np.asarray(x, dtype=float).ravel()
+    mat, was_1d = _as_columns(y)
+    if xv.size != mat.shape[0]:
+        raise ValueError(f"x length ({xv.size}) must match y rows ({mat.shape[0]})")
+    out = np.full(mat.shape, np.nan)
+    for c in range(mat.shape[1]):
+        col = mat[:, c]
+        dydx = _matlab_gradient(col, xv)
+        valid = (xv > 0) & (col > 0)
+        out[valid, c] = (xv[valid] / col[valid]) * dydx[valid]
     return out.ravel() if was_1d else out
