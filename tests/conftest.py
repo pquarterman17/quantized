@@ -8,6 +8,7 @@ tests/fixtures/ so the parity tests run in CI without MATLAB.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,33 @@ def load_golden() -> Callable[[str], dict[str, Any]]:
         return json.loads(path.read_text(encoding="utf-8"))
 
     return _load
+
+
+@pytest.fixture
+def compare_calc() -> Callable[..., None]:
+    """Recursively compare a calc result to a frozen golden value.
+
+    dict -> per-key; list/array -> assert_allclose (reshaped to the result's
+    shape, since MATLAB jsonencode flattens N x 1); scalar -> isclose with
+    NaN treated as equal.
+    """
+
+    def _cmp(result: Any, expected: Any, rtol: float = 1e-9, atol: float = 1e-12) -> None:
+        if isinstance(expected, dict):
+            assert isinstance(result, dict), f"expected dict, got {type(result)}"
+            for key, value in expected.items():
+                assert key in result, f"missing key: {key}"
+                _cmp(result[key], value, rtol, atol)
+        elif isinstance(expected, list):
+            res = np.asarray(result, dtype=float)
+            exp = np.asarray(expected, dtype=float).reshape(res.shape)
+            np.testing.assert_allclose(res, exp, rtol=rtol, atol=atol)
+        elif expected is None or (isinstance(expected, float) and math.isnan(expected)):
+            assert result is None or (isinstance(result, float) and math.isnan(result))
+        else:
+            np.testing.assert_allclose(float(result), float(expected), rtol=rtol, atol=atol)
+
+    return _cmp
 
 
 @pytest.fixture

@@ -1,0 +1,46 @@
+function freeze_calc_values()
+%FREEZE_CALC_VALUES  Freeze quantized_matlab +utilities/+calc outputs as golden JSON.
+%
+%   Companion to freeze_reference_values.m (parsers). Each case freezes
+%   {input, params, output} for a pure calc function on a fixed synthetic
+%   input, so the Python port can be compared exactly. Run with the sibling
+%   ../quantized_matlab present:
+%     addpath('<quantized>/tools/matlab'); freeze_calc_values()
+
+    here     = fileparts(mfilename('fullpath'));
+    repoRoot = fullfile(here, '..', '..');
+    qm       = fullfile(repoRoot, '..', 'quantized_matlab');
+    assert(isfolder(qm), 'quantized_matlab not found at %s', qm);
+    addpath(qm);
+    goldenDir = fullfile(repoRoot, 'tests', 'golden');
+    if ~isfolder(goldenDir), mkdir(goldenDir); end
+
+    % ── normalize (range) on a 5x2 matrix ─────────────────────────────────
+    y = [1 10; 3 20; 2 15; 5 5; 4 25];
+    out = utilities.normalize(y, 'Method', 'range');
+    writeJson(struct('input', y, 'params', struct('method', 'range'), 'output', out), ...
+        fullfile(goldenDir, 'calc_normalize_range.json'));
+
+    % ── descriptiveStats on a vector ──────────────────────────────────────
+    x = [2.1 3.4 1.9 5.6 4.2 3.3 2.8 4.9 3.1 2.5]';
+    s = utilities.descriptiveStats(x);
+    writeJson(struct('input', x.', 'output', s), ...
+        fullfile(goldenDir, 'calc_descriptive.json'));
+
+    % ── derivative (order 1) on uniform x ─────────────────────────────────
+    xv = (0:9).'; yv = xv.^2;
+    dydx = utilities.derivative(xv, yv);
+    writeJson(struct('input', struct('x', xv.', 'y', yv.'), ...
+        'params', struct('order', 1), 'output', dydx.'), ...
+        fullfile(goldenDir, 'calc_derivative.json'));
+
+    fprintf('Done.\n');
+end
+
+function writeJson(s, outPath)
+    fid = fopen(outPath, 'w');
+    assert(fid > 0, 'cannot open %s', outPath);
+    fwrite(fid, jsonencode(s));
+    fclose(fid);
+    fprintf('froze %s\n', outPath);
+end
