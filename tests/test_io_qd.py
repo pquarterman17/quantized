@@ -11,7 +11,7 @@ import pytest
 from numpy.testing import assert_allclose
 
 from quantized.io import import_auto
-from quantized.io.qd import import_mpms, import_qd_vsm
+from quantized.io.qd import import_mpms, import_ppms, import_qd_vsm
 
 
 @pytest.mark.golden
@@ -64,3 +64,25 @@ def test_mpms_defaults_temp_dcmoment(fixtures_dir: Path) -> None:
     assert ds.metadata["parser_name"] == "import_mpms"
     assert ds.metadata["instrument_type"] == "MPMS SQUID"
     assert ds.metadata["x_column_name"] == "Temperature"
+
+
+@pytest.mark.golden
+def test_ppms_matches_matlab(
+    fixtures_dir: Path,
+    assert_golden: Callable[..., None],
+) -> None:
+    ds = import_ppms(fixtures_dir / "ppms_synth.dat")
+    assert_golden(ds, "ppms_synth_default.json")
+
+
+def test_ppms_defaults_field_moment(fixtures_dir: Path) -> None:
+    ds = import_ppms(fixtures_dir / "ppms_synth.dat")
+    assert ds.labels == ("Moment",)
+    assert ds.units == ("emu",)
+    assert ds.metadata["x_column_name"] == "Magnetic Field"
+    assert ds.n_points == 5
+
+
+def test_registry_routes_ppms_plain_csv(fixtures_dir: Path) -> None:
+    ds = import_auto(fixtures_dir / "ppms_synth.dat")
+    assert ds.metadata["parser_name"] == "import_ppms"

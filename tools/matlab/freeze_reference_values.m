@@ -52,6 +52,11 @@ function freeze_reference_values()
     d1 = parser.importRefl1dDat(r1d);
     freezeCase(d1, fullfile(goldenDir, 'refl1d_nbau_profile_default.json'), 'refl1d_nbau_profile.dat');
 
+    % ── Case: PPMS plain-CSV .dat (synthetic fixture; field -> moment) ────
+    ppms = fullfile(repoRoot, 'tests', 'fixtures', 'ppms_synth.dat');
+    dpp = parser.importPPMS(ppms);
+    freezeCase(dpp, fullfile(goldenDir, 'ppms_synth_default.json'), 'ppms_synth.dat');
+
     fprintf('Done.\n');
 end
 

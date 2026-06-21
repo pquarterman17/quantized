@@ -52,6 +52,14 @@
       "python_fn": "quantized.io.refl1d.import_refl1d_dat",
       "rtol": 1e-9,
       "atol": 1e-9
+    },
+    "ppms_synth_default": {
+      "fixture": "tests/fixtures/ppms_synth.dat",
+      "matlab_fn": "parser.importPPMS (defaults: field, moment)",
+      "python_fn": "quantized.io.qd.import_ppms",
+      "note": "synthetic fixture (no real PPMS corpus); golden frozen from MATLAB on it",
+      "rtol": 1e-9,
+      "atol": 1e-12
     }
   }
 }
