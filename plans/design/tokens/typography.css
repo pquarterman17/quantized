@@ -1,0 +1,30 @@
+/* Quantized — typography tokens. Two families only: a native system UI stack
+   for chrome (zero load cost, matches the host OS), and JetBrains Mono for
+   every number, axis tick, readout, code and keyboard shortcut. The split is
+   semantic: prose/labels are UI; data is mono. Live UI sizing is
+   density-driven (see spacing.css --font-size*); the role sizes here are the
+   fixed vocabulary that does NOT scale with density. */
+
+:root {
+  --font-ui:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas,
+    monospace;
+
+  /* type weights */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* fixed type-role sizes (density-independent) */
+  --type-label: 11px;   /* uppercase card titles, section labels */
+  --type-micro: 10px;   /* tiny tick labels, captions */
+  --type-nano: 9px;     /* step badges, key caps, count chips */
+  --type-title: 14px;   /* dialog / window titles */
+  --type-display: 15px; /* command palette input, shortcuts heading */
+
+  /* uppercase-label tracking */
+  --tracking-label: 0.06em;
+  --tracking-wide: 0.1em;
+}

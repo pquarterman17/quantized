@@ -1,0 +1,389 @@
+/* Quantized — component styles. Token-driven class layer for the reusable
+   primitives (Button, Select, Card, …). Shipped to consumers via styles.css
+   so both the React components AND hand-written markup can use them. Class
+   names are prefixed `qz-`. Mirrors the sibling fermiviewer `fvd-*` shell
+   conventions so UI code ports between the two apps. Cursors are `default`
+   (not pointer) throughout — this is a desktop tool, not a web page. */
+
+/* ── Button ─────────────────────────────────────────────────────────────── */
+.qz-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  height: var(--row-h);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  cursor: default;
+  white-space: nowrap;
+  user-select: none;
+}
+.qz-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.qz-btn:active {
+  transform: translateY(0.5px);
+}
+.qz-btn.qz-primary {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.qz-btn.qz-primary:hover {
+  background: color-mix(in oklab, var(--accent-soft), var(--accent) 16%);
+}
+.qz-btn.qz-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.qz-btn.qz-ghost:hover {
+  background: var(--surface-3);
+}
+.qz-btn.qz-danger:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.qz-btn.qz-sm {
+  height: 22px;
+  padding: 0 8px;
+}
+.qz-btn:disabled,
+.qz-btn.qz-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ── Icon button ───────────────────────────────────────────────────────── */
+.qz-icon-btn {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: default;
+  font-size: 13px;
+}
+.qz-icon-btn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.qz-icon-btn.qz-active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+/* ── Segmented control ─────────────────────────────────────────────────── */
+.qz-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.qz-seg-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  padding: 3px 11px;
+  height: calc(var(--row-h) - 2px);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  cursor: default;
+  white-space: nowrap;
+}
+.qz-seg-btn + .qz-seg-btn {
+  border-left: 1px solid var(--border);
+}
+.qz-seg-btn:hover {
+  color: var(--text-dim);
+}
+.qz-seg-btn.qz-active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+/* ── Pill (filter) ─────────────────────────────────────────────────────── */
+.qz-pill {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  padding: 3px 11px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: default;
+}
+.qz-pill:hover {
+  border-color: var(--border-strong);
+}
+.qz-pill.qz-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface-3);
+}
+
+/* ── Chip (mono value / toggle) ────────────────────────────────────────── */
+.qz-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  padding: 2px 8px;
+  cursor: default;
+}
+.qz-chip.qz-active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+/* ── Badge / count ─────────────────────────────────────────────────────── */
+.qz-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--type-nano);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-faint);
+}
+.qz-badge.qz-accent {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.qz-badge.qz-ok { background: color-mix(in oklab, var(--ok) 18%, transparent); color: var(--ok); }
+.qz-badge.qz-danger { background: color-mix(in oklab, var(--danger) 18%, transparent); color: var(--danger); }
+
+/* ── Inputs ────────────────────────────────────────────────────────────── */
+.qz-input {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  height: var(--row-h);
+  padding: 0 8px;
+  min-width: 0;
+}
+.qz-input.qz-num {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+.qz-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+.qz-input::placeholder {
+  color: var(--text-faint);
+}
+
+.qz-select {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  height: var(--row-h);
+  padding: 0 6px;
+}
+.qz-select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ── Checkbox & switch ─────────────────────────────────────────────────── */
+.qz-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--font-size-sm);
+  color: var(--text-dim);
+  cursor: default;
+}
+.qz-check input {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+}
+
+.qz-switch {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  cursor: default;
+  flex: none;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.qz-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform 120ms ease, background 120ms ease;
+}
+.qz-switch.qz-on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.qz-switch.qz-on::after {
+  transform: translateX(14px);
+  background: var(--accent);
+}
+
+/* ── Slider row ────────────────────────────────────────────────────────── */
+.qz-slider-row {
+  display: flex;
+  align-items: center;
+  gap: var(--pad);
+  font-size: var(--font-size-sm);
+}
+.qz-slider-row .qz-k {
+  color: var(--text-faint);
+  min-width: 40px;
+}
+.qz-slider-row .qz-v {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  min-width: 48px;
+  text-align: right;
+}
+.qz-slider-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+/* ── Card (collapsible inspector card) ─────────────────────────────────── */
+.qz-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: var(--pad-lg);
+}
+.qz-card > summary,
+.qz-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+  list-style: none;
+  font-size: var(--type-label);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0 0 var(--pad);
+  user-select: none;
+}
+.qz-card > summary::-webkit-details-marker { display: none; }
+.qz-card > summary::before {
+  content: "▾";
+  font-size: 9px;
+  color: var(--text-faint);
+}
+.qz-card:not([open]) > summary::before {
+  content: "▸";
+}
+.qz-card:not([open]) > summary {
+  margin-bottom: 0;
+}
+
+/* ── Meta row (key / value) ────────────────────────────────────────────── */
+.qz-meta-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+  font-size: var(--font-size-sm);
+}
+.qz-meta-row .qz-k {
+  color: var(--text-faint);
+}
+.qz-meta-row .qz-v {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Status dot ────────────────────────────────────────────────────────── */
+.qz-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex: none;
+}
+.qz-dot.qz-ok { background: var(--ok); }
+.qz-dot.qz-danger { background: var(--danger); }
+.qz-dot.qz-warn { background: var(--warn); }
+.qz-dot.qz-accent { background: var(--accent); }
+
+/* ── Swatch ────────────────────────────────────────────────────────────── */
+.qz-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: default;
+  flex: none;
+}
+.qz-swatch.qz-active {
+  border-color: var(--accent);
+}
+
+/* ── Data table ────────────────────────────────────────────────────────── */
+.qz-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+}
+.qz-table th {
+  text-align: right;
+  color: var(--text-faint);
+  font-weight: var(--weight-medium);
+  border-bottom: 1px solid var(--border);
+  padding: 4px 8px;
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+}
+.qz-table th:first-child,
+.qz-table td:first-child {
+  text-align: left;
+  color: var(--text-faint);
+}
+.qz-table td {
+  padding: 3px 8px;
+  text-align: right;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border-soft);
+}
+.qz-table tr:hover td {
+  background: var(--surface-3);
+}

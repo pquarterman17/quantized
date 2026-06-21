@@ -1,0 +1,9 @@
+/* Quantized design system — global entry point.
+   Consumers link THIS one file. It is a list of @import lines only; every
+   token and @font-face the system ships lives in the files below. */
+
+@import "./tokens/fonts.css";
+@import "./tokens/colors.css";
+@import "./tokens/typography.css";
+@import "./tokens/spacing.css";
+@import "./components/components.css";

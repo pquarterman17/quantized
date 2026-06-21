@@ -1,0 +1,150 @@
+/* Quantized — color tokens. Authored in oklch so the neutral ramp stays
+   perceptually even and near-zero chroma keeps surfaces genuinely neutral.
+   Shared verbatim with the sibling fermiviewer app so UI code ports between
+   the two. Surfaces CLIMB in lightness from the app background up to elevated
+   cells; the plot/axes area stays dark in BOTH themes (dark-adaptation — you
+   stare at data for hours). Default scheme is violet; the accent ramp is the
+   only thing a color scheme changes — surfaces/text/borders never move. */
+
+:root,
+[data-theme="dark"] {
+  /* tell the browser the UI is dark so native widget chrome (number-input
+     spinners, select arrows, scrollbars) renders dark too */
+  color-scheme: dark;
+
+  /* surfaces: app bg → elevated cells */
+  --surface-0: oklch(0.16 0.008 280);
+  --surface-1: oklch(0.2 0.008 280);
+  --surface-2: oklch(0.24 0.008 280);
+  --surface-3: oklch(0.29 0.009 280);
+
+  --border-soft: oklch(0.28 0.01 280);
+  --border: oklch(0.34 0.01 280);
+  --border-strong: oklch(0.44 0.012 280);
+
+  --text: oklch(0.93 0.005 280);
+  --text-dim: oklch(0.72 0.008 280);
+  --text-faint: oklch(0.55 0.01 280);
+
+  /* violet — brand accent; swappable per color scheme */
+  --accent: oklch(0.7 0.17 295);
+  --accent-soft: oklch(0.7 0.17 295 / 0.18);
+  --accent-text: oklch(0.82 0.12 295);
+
+  /* amber — ONLY while a capture / pick / fit-region mode is armed */
+  --capture: oklch(0.78 0.14 75);
+  --capture-soft: oklch(0.78 0.14 75 / 0.16);
+
+  /* status — used sparingly (single dots / one word): green ok (connected,
+     converged), red danger (offline / destructive / diverged), warn = amber */
+  --ok: oklch(0.74 0.16 150);
+  --danger: oklch(0.66 0.2 18);
+  --warn: oklch(0.78 0.14 75);
+
+  /* plot series palette — categorical, color-blind-aware, ordered by use.
+     Series 1 is the accent violet so a single-trace plot reads on-brand. */
+  --series-1: oklch(0.7 0.17 295);
+  --series-2: oklch(0.74 0.13 185);
+  --series-3: oklch(0.78 0.14 75);
+  --series-4: oklch(0.66 0.2 18);
+  --series-5: oklch(0.74 0.16 150);
+  --series-6: oklch(0.68 0.15 250);
+  --series-7: oklch(0.72 0.16 12);
+  --series-8: oklch(0.8 0.1 95);
+
+  /* floating tool-bars, menus, dialogs, banners */
+  --glass: oklch(0.2 0.008 280 / 0.78);
+  --glass-border: oklch(0.6 0.01 280 / 0.25);
+
+  /* plot / data canvas — stays dark in both themes */
+  --axes-bg: oklch(0.13 0.006 280);
+  --grid-line: oklch(0.3 0.008 280);
+
+  --shadow: 0 6px 24px oklch(0 0 0 / 0.4);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --surface-0: oklch(0.96 0.004 280);
+  --surface-1: oklch(0.93 0.004 280);
+  --surface-2: oklch(0.89 0.005 280);
+  --surface-3: oklch(0.85 0.006 280);
+
+  --border-soft: oklch(0.88 0.005 280);
+  --border: oklch(0.8 0.006 280);
+  --border-strong: oklch(0.68 0.008 280);
+
+  --text: oklch(0.22 0.01 280);
+  --text-dim: oklch(0.42 0.01 280);
+  --text-faint: oklch(0.58 0.01 280);
+
+  --accent: oklch(0.55 0.18 295);
+  --accent-soft: oklch(0.55 0.18 295 / 0.14);
+  --accent-text: oklch(0.45 0.16 295);
+
+  --capture: oklch(0.66 0.15 75);
+  --capture-soft: oklch(0.66 0.15 75 / 0.16);
+
+  --ok: oklch(0.6 0.15 150);
+  --danger: oklch(0.58 0.2 18);
+  --warn: oklch(0.66 0.15 75);
+
+  --series-1: oklch(0.55 0.18 295);
+  --series-2: oklch(0.58 0.12 185);
+  --series-3: oklch(0.66 0.15 75);
+  --series-4: oklch(0.58 0.2 18);
+  --series-5: oklch(0.6 0.15 150);
+  --series-6: oklch(0.53 0.18 252);
+  --series-7: oklch(0.57 0.19 15);
+  --series-8: oklch(0.62 0.12 95);
+
+  --glass: oklch(0.96 0.004 280 / 0.82);
+  --glass-border: oklch(0.4 0.01 280 / 0.2);
+
+  /* plot canvas stays dark even in light mode */
+  --axes-bg: oklch(0.13 0.006 280);
+  --grid-line: oklch(0.3 0.008 280);
+
+  --shadow: 0 6px 24px oklch(0 0 0 / 0.18);
+}
+
+/* ── Accent schemes — user-chosen, swappable (Preferences → Appearance).
+   Surfaces, text and borders stay NEUTRAL across every scheme; only the
+   accent ramp (and series-1, which mirrors it) changes — the scheme is a
+   tint, not a reskin. Each [data-theme][data-accent] selector (specificity
+   0,2,0) overrides the base --accent*. ──────────────────────────────────── */
+
+[data-theme="dark"][data-accent="violet"] {
+  --accent: oklch(0.7 0.17 295);
+  --accent-soft: oklch(0.7 0.17 295 / 0.18);
+  --accent-text: oklch(0.82 0.12 295);
+  --series-1: oklch(0.7 0.17 295);
+}
+[data-theme="dark"][data-accent="teal"] {
+  --accent: oklch(0.74 0.13 185);
+  --accent-soft: oklch(0.74 0.13 185 / 0.2);
+  --accent-text: oklch(0.84 0.1 185);
+  --series-1: oklch(0.74 0.13 185);
+}
+[data-theme="dark"][data-accent="ocean"] {
+  --accent: oklch(0.68 0.15 250);
+  --accent-soft: oklch(0.68 0.15 250 / 0.2);
+  --accent-text: oklch(0.82 0.11 250);
+  --series-1: oklch(0.68 0.15 250);
+}
+[data-theme="dark"][data-accent="amber"] {
+  --accent: oklch(0.78 0.14 75);
+  --accent-soft: oklch(0.78 0.14 75 / 0.2);
+  --accent-text: oklch(0.86 0.1 78);
+  --series-1: oklch(0.78 0.14 75);
+  /* accent IS amber, so move capture to a contrasting cyan */
+  --capture: oklch(0.8 0.12 205);
+  --capture-soft: oklch(0.8 0.12 205 / 0.18);
+}
+[data-theme="dark"][data-accent="rose"] {
+  --accent: oklch(0.72 0.16 12);
+  --accent-soft: oklch(0.72 0.16 12 / 0.2);
+  --accent-text: oklch(0.83 0.11 12);
+  --series-1: oklch(0.72 0.16 12);
+}
