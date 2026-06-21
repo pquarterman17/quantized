@@ -492,6 +492,26 @@ function freeze_calc_values()
     writeJson(struct('input', struct('Q', Qr.', 'layers', reflLayers, 'resolution', 0.02), ...
         'output', Rres.'), fullfile(goldenDir, 'calc_parratt_res.json'));
 
+    % ── SLD profile helpers + presets (reuses reflLayers from above) ──────
+    [zp, sldp] = fitting.sldProfile(reflLayers);
+    writeJson(struct('input', reflLayers, 'output', struct('z', zp.', 'sld', sldp.')), ...
+        fullfile(goldenDir, 'calc_sldprofile.json'));
+    zk = [0; 50; 100; 150; 200];
+    sk = [2e-6; 4e-6; 3e-6; 5e-6; 2.07e-6];
+    [zs, slds] = fitting.splineSLD(zk, sk);
+    writeJson(struct('input', struct('zKnots', zk.', 'sldKnots', sk.'), ...
+        'output', struct('z', zs.', 'sld', slds.')), ...
+        fullfile(goldenDir, 'calc_splinesld.json'));
+    zpr = linspace(0, 200, 11).';
+    sldpr = 2e-6 + 3e-6 * exp(-((zpr - 100) / 40).^2);
+    plLayers = fitting.profileToLayers(zpr, sldpr);
+    writeJson(struct('input', struct('z', zpr.', 'sld', sldpr.'), 'output', plLayers), ...
+        fullfile(goldenDir, 'calc_profiletolayers.json'));
+    prFid = fopen(fullfile(repoRoot, 'src', 'quantized', 'calc', 'refl_sld_presets.json'), 'w');
+    fwrite(prFid, jsonencode(fitting.reflSLDPresets()));
+    fclose(prFid);
+    fprintf('wrote refl_sld_presets.json\n');
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);

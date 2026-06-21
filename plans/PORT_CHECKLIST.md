@@ -116,8 +116,8 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 
 ### Reflectivity fitting
 - [x] Parratt recursion — `+fitting/parrattRefl.m` → `calc/reflectivity.py` — golden (R(Q) for 3-layer stack, with + without Gaussian resolution smearing @1e-9); Névot-Croce roughness, complex Fresnel internally, real |r|² output
-- [ ] SLD profile / spline SLD / profile→layers — `+fitting/{sldProfile,splineSLD,profileToLayers}.m`
-- [ ] SLD presets — `+fitting/reflSLDPresets.m`
+- [x] SLD profile / spline SLD / profile→layers — `+fitting/{sldProfile,splineSLD,profileToLayers}.m` → `calc/sld.py` — golden (erf-interface profile; pchip knot spline; midpoint discretization)
+- [x] SLD presets — `+fitting/reflSLDPresets.m` → `calc/sld.py` (+ `refl_sld_presets.json`) — 30-material table dumped verbatim to JSON for exact data parity; loader exposes refl_sld_presets()
 
 ### XRD / RSM / surface
 - [ ] RSM analyze / strain — `+fitting/rsmAnalyze.m`, `+fitting/rsmStrain.m`
