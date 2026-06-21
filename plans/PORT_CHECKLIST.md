@@ -81,7 +81,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 
 ### Statistics (no toolbox)
 - [x] Descriptive stats — `+utilities/descriptiveStats.m` — golden `bbb504b`
-- [ ] Linear regression — `+utilities/linRegress.m`
+- [x] Linear regression — `+utilities/linRegress.m` — golden; betainc t/F p-values match MATLAB exactly. confBand/predBand fn-handles not ported (recompute at call site)
 - [ ] t-test / ANOVA — `+utilities/tTest.m`, `+utilities/anova1.m`
 - [ ] PCA — `+utilities/pcaAnalysis.m`
 - [ ] Confidence band — `+utilities/confidenceBand.m`

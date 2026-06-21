@@ -43,6 +43,15 @@ function freeze_calc_values()
     writeJson(struct('input', struct('x', xl.', 'y', yl.'), 'output', ld.'), ...
         fullfile(goldenDir, 'calc_logderiv.json'));
 
+    % ── linRegress (order-1 fit on a noisy line) ──────────────────────────
+    xr = (1:20).';
+    yr = 2.5 * xr + 1.0 + 0.3 * sin(xr);
+    lr = utilities.linRegress(xr, yr, 'Order', 1);
+    lr = rmfield(lr, {'confBand', 'predBand'});  % strip fn handles (not JSON-able)
+    writeJson(struct('input', struct('x', xr.', 'y', yr.'), ...
+        'params', struct('order', 1), 'output', lr), ...
+        fullfile(goldenDir, 'calc_linregress.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
