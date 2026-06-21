@@ -24,6 +24,34 @@
       "python_fn": "quantized.io.ncnr.import_ncnr_refl",
       "rtol": 1e-9,
       "atol": 1e-12
+    },
+    "mpms_mvst_default": {
+      "fixture": "tests/fixtures/mpms_mvst.dat",
+      "matlab_fn": "parser.importMPMS (defaults: temp, dcmoment)",
+      "python_fn": "quantized.io.qd.import_mpms",
+      "rtol": 1e-9,
+      "atol": 1e-9
+    },
+    "ncnr_s11_nsf_default": {
+      "fixture": "tests/fixtures/ncnr_s11_nsf.pnr",
+      "matlab_fn": "parser.importNCNRPNR",
+      "python_fn": "quantized.io.ncnr.import_ncnr_pnr",
+      "rtol": 1e-9,
+      "atol": 1e-9
+    },
+    "ncnr_s3_datA_default": {
+      "fixture": "tests/fixtures/ncnr_s3.datA",
+      "matlab_fn": "parser.importNCNRDat",
+      "python_fn": "quantized.io.ncnr.import_ncnr_dat",
+      "rtol": 1e-9,
+      "atol": 1e-9
+    },
+    "refl1d_nbau_profile_default": {
+      "fixture": "tests/fixtures/refl1d_nbau_profile.dat",
+      "matlab_fn": "parser.importRefl1dDat",
+      "python_fn": "quantized.io.refl1d.import_refl1d_dat",
+      "rtol": 1e-9,
+      "atol": 1e-9
     }
   }
 }

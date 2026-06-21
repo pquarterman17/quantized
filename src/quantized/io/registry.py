@@ -10,8 +10,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 from quantized.datastruct import DataStruct
-from quantized.io.ncnr import import_ncnr_refl
+from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl
 from quantized.io.qd import import_qd_vsm, is_qd_file
+from quantized.io.refl1d import import_refl1d_dat, is_refl1d_dat
 from quantized.io.xrdml import import_xrdml
 
 __all__ = ["import_auto", "resolve_parser"]
@@ -20,14 +21,20 @@ Parser = Callable[[Path], DataStruct]
 Sniffer = Callable[[Path], bool]
 
 # Unambiguous extensions map directly (grows as parsers land).
+# NOTE: resolve_parser lowercases the suffix, so .datA -> '.data', etc.
 _EXT_MAP: dict[str, Parser] = {
     ".xrdml": import_xrdml,
     ".refl": import_ncnr_refl,
+    ".pnr": import_ncnr_pnr,
+    ".data": import_ncnr_dat,  # .datA
+    ".datb": import_ncnr_dat,  # .datB
+    ".datc": import_ncnr_dat,  # .datC
+    ".datd": import_ncnr_dat,  # .datD
 }
 
 # Ambiguous extensions resolve by content sniffing — first match wins.
 _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
-    ".dat": [(is_qd_file, import_qd_vsm)],
+    ".dat": [(is_qd_file, import_qd_vsm), (is_refl1d_dat, import_refl1d_dat)],
 }
 
 

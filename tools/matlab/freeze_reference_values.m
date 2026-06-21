@@ -32,6 +32,26 @@ function freeze_reference_values()
     dr = parser.importNCNRRefl(refl);
     freezeCase(dr, fullfile(goldenDir, 'ncnr_j395_default.json'), 'ncnr_j395.refl');
 
+    % ── Case: MPMS default (Temperature -> dcmoment) ──────────────────────
+    mpms = fullfile(repoRoot, 'tests', 'fixtures', 'mpms_mvst.dat');
+    dm = parser.importMPMS(mpms);
+    freezeCase(dm, fullfile(goldenDir, 'mpms_mvst_default.json'), 'mpms_mvst.dat');
+
+    % ── Case: NCNR polarized .pnr (Q -> R++/R--/...) ──────────────────────
+    pnr = fullfile(repoRoot, 'tests', 'fixtures', 'ncnr_s11_nsf.pnr');
+    dp = parser.importNCNRPNR(pnr);
+    freezeCase(dp, fullfile(goldenDir, 'ncnr_s11_nsf_default.json'), 'ncnr_s11_nsf.pnr');
+
+    % ── Case: NCNR cross section .datA (Q -> dQ/R/dR/...) ──────────────────
+    datA = fullfile(repoRoot, 'tests', 'fixtures', 'ncnr_s3.datA');
+    dd = parser.importNCNRDat(datA);
+    freezeCase(dd, fullfile(goldenDir, 'ncnr_s3_datA_default.json'), 'ncnr_s3.datA');
+
+    % ── Case: refl1d profile .dat (z -> rho/irho/rhoM/theta) ──────────────
+    r1d = fullfile(repoRoot, 'tests', 'fixtures', 'refl1d_nbau_profile.dat');
+    d1 = parser.importRefl1dDat(r1d);
+    freezeCase(d1, fullfile(goldenDir, 'refl1d_nbau_profile_default.json'), 'refl1d_nbau_profile.dat');
+
     fprintf('Done.\n');
 end
 

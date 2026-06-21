@@ -15,7 +15,7 @@ import numpy as np
 from quantized.datastruct import DataStruct
 from quantized.io.base import NO_COLUMN, parse_col_header, resolve_column
 
-__all__ = ["import_qd_vsm", "is_qd_file"]
+__all__ = ["import_mpms", "import_qd_vsm", "is_qd_file"]
 
 # Shorthand -> canonical QD column name (from importQDVSM's resolveQDColumn map).
 _QD_SHORTHAND: dict[str, str] = {
@@ -163,6 +163,27 @@ def _parse_data_rows(data_lines: Sequence[str], n_cols: int) -> np.ndarray:
     if not rows:
         return np.empty((0, n_cols), dtype=float)
     return np.asarray(rows, dtype=float)
+
+
+def import_mpms(
+    filepath: str | Path,
+    *,
+    x_axis: str | int = "temp",
+    y_axis: str | int | Sequence[str | int] = "dcmoment",
+    include_raw: bool = False,
+) -> DataStruct:
+    """Import a QD MPMS SQUID ``.dat``.
+
+    MATLAB's importMPMS delegates to importQDVSM with MPMS defaults (temperature
+    vs DC moment) and re-tags the metadata; this mirrors that exactly.
+    """
+    ds = import_qd_vsm(filepath, x_axis=x_axis, y_axis=y_axis, include_raw=include_raw)
+    meta = dict(ds.metadata)
+    meta["parser_name"] = "import_mpms"
+    meta["instrument_type"] = "MPMS SQUID"
+    return DataStruct.create(
+        ds.time, ds.values, labels=list(ds.labels), units=list(ds.units), metadata=meta
+    )
 
 
 def _resolve_all_columns(

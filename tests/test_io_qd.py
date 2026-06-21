@@ -11,7 +11,7 @@ import pytest
 from numpy.testing import assert_allclose
 
 from quantized.io import import_auto
-from quantized.io.qd import import_qd_vsm
+from quantized.io.qd import import_mpms, import_qd_vsm
 
 
 @pytest.mark.golden
@@ -48,3 +48,19 @@ def test_qd_all_columns(fixtures_dir: Path) -> None:
 def test_registry_sniffs_qd_dat(fixtures_dir: Path) -> None:
     ds = import_auto(fixtures_dir / "qd_edp124.dat")
     assert ds.metadata["parser_name"] == "import_qd_vsm"
+
+
+@pytest.mark.golden
+def test_mpms_matches_matlab(
+    fixtures_dir: Path,
+    assert_golden: Callable[..., None],
+) -> None:
+    ds = import_mpms(fixtures_dir / "mpms_mvst.dat")
+    assert_golden(ds, "mpms_mvst_default.json")
+
+
+def test_mpms_defaults_temp_dcmoment(fixtures_dir: Path) -> None:
+    ds = import_mpms(fixtures_dir / "mpms_mvst.dat")
+    assert ds.metadata["parser_name"] == "import_mpms"
+    assert ds.metadata["instrument_type"] == "MPMS SQUID"
+    assert ds.metadata["x_column_name"] == "Temperature"
