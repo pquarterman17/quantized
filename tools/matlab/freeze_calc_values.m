@@ -201,6 +201,26 @@ function freeze_calc_values()
         'output', struct('peaks', pkr, 'bg', bge.')), ...
         fullfile(goldenDir, 'calc_findpeaks.json'));
 
+    % ── interpolate2D (exact-parity methods) + regrid2D ───────────────────
+    xs2 = [0.1 0.9 0.5 0.2 0.8 0.4 0.6 0.3 0.7 0.5 0.15 0.85].';
+    ys2 = [0.2 0.3 0.8 0.6 0.7 0.1 0.5 0.9 0.4 0.5 0.75 0.25].';
+    zs2 = sin(3*xs2) + cos(3*ys2) + xs2 .* ys2;
+    [xqg, yqg] = meshgrid(linspace(0.3, 0.7, 5), linspace(0.3, 0.7, 5));
+    i2In = struct('x', xs2.', 'y', ys2.', 'z', zs2.', 'xq', xqg, 'yq', yqg);
+    % nearest omitted: Voronoi-boundary tie-break differs from scipy (tested structurally)
+    for m = ["linear", "idw", "thinplate"]
+        ri = utilities.interpolate2D(xs2, ys2, zs2, xqg, yqg, 'Method', m);
+        writeJson(struct('input', i2In, 'params', struct('method', char(m)), ...
+            'output', struct('zq', ri.zq, 'method', char(ri.method), ...
+            'stats', struct('nPoints', ri.stats.nPoints, 'rmse', ri.stats.rmse))), ...
+            fullfile(goldenDir, sprintf('calc_interp2d_%s.json', m)));
+    end
+    [Xqr, Yqr, Zqr] = utilities.regrid2D(xs2, ys2, zs2, 'Nx', 8, 'Ny', 8, 'Method', 'idw');
+    writeJson(struct('input', struct('x', xs2.', 'y', ys2.', 'z', zs2.'), ...
+        'params', struct('nx', 8, 'ny', 8, 'method', 'idw'), ...
+        'output', struct('Xq', Xqr, 'Yq', Yqr, 'Zq', Zqr)), ...
+        fullfile(goldenDir, 'calc_regrid_idw.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
