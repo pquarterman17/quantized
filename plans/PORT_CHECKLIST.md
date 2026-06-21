@@ -17,16 +17,16 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Quantum Design PPMS — `+parser/importPPMS.m` — golden `a1960b5` (synthetic fixture)
 - [x] MPMS — `+parser/importMPMS.m` — golden `58cd15c` (delegates to QD VSM)
 - [x] Column shorthands (`field/moment/temp/time/stderr/all`) — `io/base.resolve_column` (used by QD/MPMS)
-- [ ] Rigaku `.raw` — `+parser/importRigaku_raw.m`
-- ~~Bruker — `+parser/importBruker.m`~~ — **out of scope → fermiviewer** (2D area-detector / RSM image data, not line data)
-- [~] PANalytical XRDML — `+parser/importXRDML.m` — **1D golden `5d7f1e7`**; 2D area-detector (RSM) + `computeQSpace` still TODO
+- [ ] Rigaku `.raw` — `+parser/importRigaku_raw.m` — binary; **1D + 2D RSM** wanted
+- ~~Bruker — `+parser/importBruker.m`~~ — **out of scope → fermiviewer** (image data)
+- [~] PANalytical XRDML — `+parser/importXRDML.m` — **1D golden `5d7f1e7`**; **2D area-detector (RSM)** + `computeQSpace` IN SCOPE, still TODO
 - [x] NCNR neutron PNR — `+parser/importNCNRPNR.m` — golden `58cd15c`
 - [x] NCNR reflectometry — `+parser/importNCNRRefl.m` — golden `8f9e4f8`
 - [x] NCNR `.dat` — `+parser/importNCNRDat.m` — golden `58cd15c`
 - [x] refl1d `.dat` — `+parser/importRefl1dDat.m` — golden `58cd15c`
 - [x] Lake Shore VSM — `+parser/importLakeShore.m` — golden `41dfef9` (synthetic fixture)
 - [x] SIMS depth profile — `+parser/importSIMS.m` — golden `2a7a538` (shared exact + paired interp 1e-9)
-- [ ] AFM — `+parser/importAFM.m`
+- ~~AFM — `+parser/importAFM.m`~~ — **out of scope → fermiviewer** (AFM topography/phase images)
 - [x] Generic CSV — `+parser/importCSV.m` → `io/delimited.py` — golden `a0a8929`
 - [x] Excel — `+parser/importExcel.m` → `io/excel.py` (openpyxl) — golden `ce228ba`
 - [ ] Header parsing / auto-detect — `+parser/parseColHeader.m`
@@ -200,9 +200,12 @@ Source: `+dataWorkspace/`, `DataWorkspace.m`
   Origin COM optional (W1).
 - **Out of scope:** EM tooling (→ fermiviewer), watch-file auto-reload,
   in-app bug reporting.
-- **Bruker (.brml/.raw) → fermiviewer:** these are 2D area-detector / RSM
-  *image* data, not line data — they belong with the imaging tooling in
-  `fermiviewer`, not in quantized's line-data scope. Removed from W1.
+- **Bruker (.brml/.raw) + AFM (.spm) → fermiviewer:** image data (Bruker
+  area-detector files; AFM topography/phase images) belong with the imaging
+  tooling in `fermiviewer`, not quantized. Removed from W1.
+- **XRDML + Rigaku 2D (RSM) stay IN quantized:** reciprocal-space-map data
+  feeds the RSM analysis (`rsmAnalyze`/`rsmStrain`) — it's XRD line/map data,
+  not microscopy imaging. Port the 2D extensions here.
 - The BosonPlotter "workshops" (Peak, Curve Fit, Hysteresis, Reflectivity)
   map to React `workshops/`; their *math* lives in `calc/`, their *state*
   in a hook, their *view* in components under the size ceiling.

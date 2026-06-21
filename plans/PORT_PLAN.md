@@ -349,8 +349,10 @@ MATLAB."**
 - **EM tooling** (Fermi viewer, EELS/EDS, imaging, diffraction) — lives in
   `fermi-viewer` (MATLAB) / `fermiviewer` (Python), mirroring the upstream
   split.
-- **Bruker `.brml`/`.raw`** — 2D area-detector / RSM **image** data → belongs
-  with the imaging tooling in `fermiviewer`, not quantized's line-data scope.
+- **Bruker `.brml`/`.raw`** and **AFM `.spm`** — image data (Bruker
+  area-detector files; AFM topography images) → belong with the imaging
+  tooling in `fermiviewer`, not quantized. (XRDML + Rigaku 2D RSM stay in
+  quantized — reciprocal-space maps feed RSM analysis, not microscopy.)
 - **Watch-file auto-reload** — deferred (niche live-acquisition feature).
 - **In-app bug reporting** — dropped; a GitHub issue template covers it for
   an open-source app.
