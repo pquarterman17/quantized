@@ -57,7 +57,13 @@ the behavioural reference (parity + golden values).
 
 - **Backend:** Python ≥3.11, FastAPI, numpy/scipy, matplotlib (export
   only), `uv` for env/deps. Package `quantized`, CLI `qz` (alias
-  `quantized`).
+  `quantized`). Long-running work (batch fit/export/convert) runs through
+  a **WebSocket job queue** (`routes/jobs`, mirrors fermiviewer); the
+  queue is thin transport — the actual work stays pure in `calc/`.
+- **Optional Origin (COM):** live "Send to Origin" is a **Windows-only,
+  OS-gated optional** extra (pywin32), behind a feature flag and untestable
+  in CI (mock-based tests only). The cross-platform, golden-tested Origin
+  path is Origin-ASCII + `.ogs` export. Everywhere else degrades to that.
 - **Frontend:** React 19 + TypeScript + Vite + Zustand (state) + uPlot
   (plots) + clsx. Vitest + Testing Library. Reuse `fermiviewer`'s theme
   tokens, `Shell/` chrome, and component conventions.
