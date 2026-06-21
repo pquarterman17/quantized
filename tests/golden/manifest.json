@@ -68,6 +68,13 @@
       "note": "synthetic fixture (no real Lake Shore corpus); golden frozen from MATLAB on it",
       "rtol": 1e-9,
       "atol": 1e-12
+    },
+    "csv_xrd_default": {
+      "fixture": "tests/fixtures/csv_xrd.csv",
+      "matlab_fn": "parser.importCSV (defaults: TimeColumn=1, DataColumns=[])",
+      "python_fn": "quantized.io.delimited.import_csv",
+      "rtol": 1e-9,
+      "atol": 1e-9
     }
   }
 }

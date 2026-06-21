@@ -62,6 +62,11 @@ function freeze_reference_values()
     dls = parser.importLakeShore(ls);
     freezeCase(dls, fullfile(goldenDir, 'lakeshore_synth_default.json'), 'lakeshore_synth.csv');
 
+    % ── Case: generic CSV (XRD batch export; col1 x -> col2 values) ───────
+    csv = fullfile(repoRoot, 'tests', 'fixtures', 'csv_xrd.csv');
+    dc = parser.importCSV(csv);
+    freezeCase(dc, fullfile(goldenDir, 'csv_xrd_default.json'), 'csv_xrd.csv');
+
     fprintf('Done.\n');
 end
 
