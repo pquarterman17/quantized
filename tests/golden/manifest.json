@@ -10,6 +10,13 @@
       "python_fn": "quantized.io.qd.import_qd_vsm (defaults)",
       "rtol": 1e-9,
       "atol": 1e-12
+    },
+    "xrdml_la2nio4_default": {
+      "fixture": "tests/fixtures/xrdml_la2nio4.xrdml",
+      "matlab_fn": "parser.importXRDML (default: Intensity=cps)",
+      "python_fn": "quantized.io.xrdml.import_xrdml (default)",
+      "rtol": 1e-9,
+      "atol": 1e-9
     }
   }
 }

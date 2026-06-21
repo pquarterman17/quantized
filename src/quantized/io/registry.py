@@ -11,6 +11,7 @@ from pathlib import Path
 
 from quantized.datastruct import DataStruct
 from quantized.io.qd import import_qd_vsm, is_qd_file
+from quantized.io.xrdml import import_xrdml
 
 __all__ = ["import_auto", "resolve_parser"]
 
@@ -18,7 +19,9 @@ Parser = Callable[[Path], DataStruct]
 Sniffer = Callable[[Path], bool]
 
 # Unambiguous extensions map directly (grows as parsers land).
-_EXT_MAP: dict[str, Parser] = {}
+_EXT_MAP: dict[str, Parser] = {
+    ".xrdml": import_xrdml,
+}
 
 # Ambiguous extensions resolve by content sniffing — first match wins.
 _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {

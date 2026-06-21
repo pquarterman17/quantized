@@ -22,6 +22,11 @@ function freeze_reference_values()
     d = parser.importQDVSM(fixture);   % defaults: XAxis=field, YAxis=moment
     freezeCase(d, fullfile(goldenDir, 'qd_edp124_default.json'), 'qd_edp124.dat');
 
+    % ── Case: XRDML 1D default (2theta -> cps) on the fixture ─────────────
+    xrdml = fullfile(repoRoot, 'tests', 'fixtures', 'xrdml_la2nio4.xrdml');
+    dx = parser.importXRDML(xrdml);    % default: Intensity=cps
+    freezeCase(dx, fullfile(goldenDir, 'xrdml_la2nio4_default.json'), 'xrdml_la2nio4.xrdml');
+
     fprintf('Done.\n');
 end
 
