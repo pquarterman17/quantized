@@ -460,6 +460,26 @@ function freeze_calc_values()
         'ciLo', bd.ciLo.', 'ciHi', bd.ciHi.', 'piLo', bd.piLo.', 'piHi', bd.piHi.', ...
         'level', bd.level)), fullfile(goldenDir, 'calc_fitbands.json'));
 
+    % ── fitting.parseEquation: parse + eval custom equation strings ───────
+    xeq = linspace(0.5, 5, 20).';
+    eqDefs = {
+        'a*exp(-x/b)+c',        [2, 1.5, 0.3];
+        'A*sin(w*x+phi)',       [3, 2, 0.7];
+        '-x^2 + 2*x',           [];
+        'k*tanh((x-x0)/d)',     [5, 2, 0.5];
+        'sqrt(abs(x)) + log(x)', []
+    };
+    eqOut = cell(size(eqDefs, 1), 1);
+    for ei = 1:size(eqDefs, 1)
+        [efcn, epn] = fitting.parseEquation(eqDefs{ei, 1});
+        ep = eqDefs{ei, 2};
+        yv = efcn(xeq, ep);
+        eqOut{ei} = struct('eqn', eqDefs{ei, 1}, 'paramNames', {epn}, ...
+            'p', ep, 'y', yv(:).');
+    end
+    writeJson(struct('x', xeq.', 'equations', {eqOut}), ...
+        fullfile(goldenDir, 'calc_parseeqn.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
