@@ -58,6 +58,8 @@ def compare_calc() -> Callable[..., None]:
             res = np.asarray(result, dtype=float)
             exp = np.asarray(expected, dtype=float).reshape(res.shape)
             np.testing.assert_allclose(res, exp, rtol=rtol, atol=atol)
+        elif isinstance(expected, str):
+            assert result == expected, f"{result!r} != {expected!r}"
         elif expected is None or (isinstance(expected, float) and math.isnan(expected)):
             assert result is None or (isinstance(result, float) and math.isnan(result))
         else:

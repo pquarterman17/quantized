@@ -1,0 +1,1 @@
+{"input":[[20,21,19,18,22],[28,27,29,30,26],[24,25,23,26,22]],"output":{"fStat":32,"df1":2,"df2":12,"pValue":1.5495511711205445E-5,"ssBetween":160,"ssWithin":30,"ssTotal":190,"msBetween":80,"msWithin":2.5,"groupMeans":[20,28,24],"groupN":[5,5,5],"grandMean":24,"reject":true}}

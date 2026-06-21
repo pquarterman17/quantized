@@ -52,6 +52,23 @@ function freeze_calc_values()
         'params', struct('order', 1), 'output', lr), ...
         fullfile(goldenDir, 'calc_linregress.json'));
 
+    % ── tTest: one-sample and Welch two-sample ────────────────────────────
+    xa = [5.1 4.9 5.3 5.0 4.8 5.2 5.05].';
+    r1 = utilities.tTest(xa, 'Mu', 5.0);
+    writeJson(struct('input', struct('x', xa.'), 'params', struct('mu', 5.0), ...
+        'output', r1), fullfile(goldenDir, 'calc_ttest_onesample.json'));
+    xb = [5.1 4.9 5.3 5.0 4.8 5.2 5.05].';
+    yb = [4.6 4.7 4.5 4.8 4.4 4.9 4.7 4.55].';
+    r2 = utilities.tTest(xb, yb);
+    writeJson(struct('input', struct('x', xb.', 'y', yb.'), ...
+        'output', r2), fullfile(goldenDir, 'calc_ttest_twosample.json'));
+
+    % ── anova1: three groups ──────────────────────────────────────────────
+    g1 = [20 21 19 18 22]; g2 = [28 27 29 30 26]; g3 = [24 25 23 26 22];
+    ra = utilities.anova1({g1.', g2.', g3.'});
+    writeJson(struct('input', {{g1, g2, g3}}, 'output', ra), ...
+        fullfile(goldenDir, 'calc_anova1.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
