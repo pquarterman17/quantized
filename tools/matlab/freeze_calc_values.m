@@ -69,6 +69,13 @@ function freeze_calc_values()
     writeJson(struct('input', {{g1, g2, g3}}, 'output', ra), ...
         fullfile(goldenDir, 'calc_anova1.json'));
 
+    % ── PCA (classic 2-variable correlated dataset) ───────────────────────
+    Xpca = [2.5 2.4; 0.5 0.7; 2.2 2.9; 1.9 2.2; 3.1 3.0; ...
+            2.3 2.7; 2.0 1.6; 1.0 1.1; 1.5 1.6; 1.1 0.9];
+    rp = utilities.pcaAnalysis(Xpca);
+    writeJson(struct('input', Xpca, 'params', struct('center', true, 'scale', false), ...
+        'output', rp), fullfile(goldenDir, 'calc_pca.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);

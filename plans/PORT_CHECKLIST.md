@@ -83,7 +83,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Descriptive stats — `+utilities/descriptiveStats.m` — golden `bbb504b`
 - [x] Linear regression — `+utilities/linRegress.m` — golden; betainc t/F p-values match MATLAB exactly. confBand/predBand fn-handles not ported (recompute at call site)
 - [x] t-test / ANOVA — `+utilities/tTest.m`, `+utilities/anova1.m` — golden (one-sample + Welch two-sample + 3-group ANOVA); CI uses replicated norminv+Newton tinv for exact parity
-- [ ] PCA — `+utilities/pcaAnalysis.m`
+- [x] PCA — `+utilities/pcaAnalysis.m` — golden; SVD + largest-loading sign convention → deterministic across MATLAB/numpy
 - [ ] Confidence band — `+utilities/confidenceBand.m`
 
 ### Error propagation

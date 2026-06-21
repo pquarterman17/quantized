@@ -14,7 +14,7 @@ from numpy.typing import NDArray
 from scipy.special import beta as _beta
 from scipy.special import betainc
 
-__all__ = ["anova1", "descriptive_stats", "lin_regress", "t_test"]
+__all__ = ["anova1", "descriptive_stats", "lin_regress", "pca_analysis", "t_test"]
 
 _EPS = float(np.finfo(float).eps)
 
@@ -302,4 +302,73 @@ def anova1(
         "groupN": group_n,
         "grandMean": grand_mean,
         "reject": bool(p_value < alpha),
+    }
+
+
+def pca_analysis(
+    x: NDArray[np.float64],
+    *,
+    center: bool = True,
+    scale: bool = False,
+    num_components: int = 0,
+) -> dict[str, Any]:
+    """Principal component analysis via SVD. Port of utilities.pcaAnalysis.
+
+    Returns the loadings (``coeff``, p×k), ``score`` (n×k), eigenvalues
+    (``latent``), percent/cumulative variance ``explained``/``cumulative``, the
+    centering ``mu`` and scaling ``sigma``, and the ``singular`` values. Each
+    component's sign is fixed so its largest-magnitude loading is positive,
+    making the decomposition deterministic (resolves SVD sign ambiguity).
+    """
+    xa = np.asarray(x, dtype=float)
+    if xa.size == 0:
+        raise ValueError("X must be non-empty")
+    if xa.ndim != 2:
+        raise ValueError("X must be a 2-D matrix (observations x variables)")
+    n, p = xa.shape
+    if n < 2:
+        raise ValueError(f"need at least 2 observations (rows), got {n}")
+
+    mu = xa.mean(axis=0) if center else np.zeros(p)
+    xc = xa - mu
+    if scale:
+        sigma = xc.std(axis=0, ddof=1)
+        sigma[sigma == 0] = 1.0
+        xc = xc / sigma
+    else:
+        sigma = np.ones(p)
+
+    u, sv, vt = np.linalg.svd(xc, full_matrices=False)
+    v = vt.T
+    latent = sv**2 / max(n - 1, 1)
+    total_var = float(latent.sum())
+    explained = np.zeros_like(latent) if total_var == 0 else 100.0 * latent / total_var
+    score = u * sv  # U .* sv' (column scaling), avoids forming the diagonal
+
+    for j in range(v.shape[1]):
+        idx = int(np.argmax(np.abs(v[:, j])))
+        if v[idx, j] < 0:
+            v[:, j] = -v[:, j]
+            score[:, j] = -score[:, j]
+
+    k = latent.size
+    if num_components > 0:
+        k = min(num_components, k)
+        v, score, latent, explained, sv = (
+            v[:, :k],
+            score[:, :k],
+            latent[:k],
+            explained[:k],
+            sv[:k],
+        )
+
+    return {
+        "coeff": v,
+        "score": score,
+        "latent": latent,
+        "explained": explained,
+        "cumulative": np.cumsum(explained),
+        "mu": mu,
+        "sigma": sigma,
+        "singular": sv,
     }
