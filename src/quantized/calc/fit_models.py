@@ -185,3 +185,6 @@ register_model("Langmuir", "Thermal", _langmuir, ["A", "K"], [1, 1], [0, 0], [_I
 register_model("Logarithmic", "Other", _logarithmic, ["a", "b"], [1, 0], [-_INF, -_INF],
                [_INF, _INF])
 register_model("Square Root", "Other", _sqrt, ["a", "b"], [1, 0], [-_INF, -_INF], [_INF, _INF])
+
+# Register the helper-based magnetic/heat-capacity models (side-effect import).
+from . import fit_models_special  # noqa: E402, F401
