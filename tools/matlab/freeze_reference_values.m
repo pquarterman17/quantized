@@ -72,6 +72,16 @@ function freeze_reference_values()
     dxl = parser.importExcel(xls);
     freezeCase(dxl, fullfile(goldenDir, 'excel_synth_default.json'), 'excel_synth.xlsx');
 
+    % ── Case: SIMS shared-depth (synthetic; no interpolation) ─────────────
+    sims1 = fullfile(repoRoot, 'tests', 'fixtures', 'sims_shared.csv');
+    ds1 = parser.importSIMS(sims1);
+    freezeCase(ds1, fullfile(goldenDir, 'sims_shared_default.json'), 'sims_shared.csv');
+
+    % ── Case: SIMS paired-column (real; union-grid interpolation) ─────────
+    sims2 = fullfile(repoRoot, 'tests', 'fixtures', 'sims_barrier.csv');
+    ds2 = parser.importSIMS(sims2);
+    freezeCase(ds2, fullfile(goldenDir, 'sims_barrier_default.json'), 'sims_barrier.csv');
+
     fprintf('Done.\n');
 end
 

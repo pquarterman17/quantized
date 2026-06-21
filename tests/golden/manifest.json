@@ -83,6 +83,22 @@
       "note": "synthetic .xlsx (no generic Excel corpus); golden frozen from MATLAB on it",
       "rtol": 1e-9,
       "atol": 1e-9
+    },
+    "sims_shared_default": {
+      "fixture": "tests/fixtures/sims_shared.csv",
+      "matlab_fn": "parser.importSIMS (shared-depth; no interpolation)",
+      "python_fn": "quantized.io.sims.import_sims",
+      "note": "synthetic shared-depth fixture; exact parity (no union-grid interp)",
+      "rtol": 1e-9,
+      "atol": 1e-12
+    },
+    "sims_barrier_default": {
+      "fixture": "tests/fixtures/sims_barrier.csv",
+      "matlab_fn": "parser.importSIMS (paired; union-grid + interp1 linear)",
+      "python_fn": "quantized.io.sims.import_sims",
+      "note": "real paired-column SIMS; exercises union-grid interpolation",
+      "rtol": 1e-9,
+      "atol": 1e-9
     }
   }
 }
