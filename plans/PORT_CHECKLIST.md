@@ -13,13 +13,13 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 ## W1 — Parsers & I/O (`io/`)
 
 ### Parsers (each returns `DataStruct`)
-- [ ] Quantum Design VSM — `+parser/importQDVSM.m`
+- [x] Quantum Design VSM — `+parser/importQDVSM.m` — golden `fb3efe2`
 - [ ] Quantum Design PPMS — `+parser/importPPMS.m`
 - [ ] MPMS — `+parser/importMPMS.m`
 - [ ] Column shorthands (`field/moment/temp/time/stderr/all`) — `+parser/resolveColumnShorthand.m`
 - [ ] Rigaku `.raw` — `+parser/importRigaku_raw.m`
 - [ ] Bruker — `+parser/importBruker.m`
-- [ ] PANalytical XRDML (+ 2D area detector) — `+parser/importXRDML.m`, `+parser/computeQSpace.m`
+- [~] PANalytical XRDML — `+parser/importXRDML.m` — **1D golden `5d7f1e7`**; 2D area-detector (RSM) + `computeQSpace` still TODO
 - [ ] NCNR neutron PNR — `+parser/importNCNRPNR.m`
 - [ ] NCNR reflectometry — `+parser/importNCNRRefl.m`
 - [ ] NCNR `.dat` — `+parser/importNCNRDat.m`
