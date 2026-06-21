@@ -25,7 +25,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] NCNR `.dat` — `+parser/importNCNRDat.m` — golden `58cd15c`
 - [x] refl1d `.dat` — `+parser/importRefl1dDat.m` — golden `58cd15c`
 - [x] Lake Shore VSM — `+parser/importLakeShore.m` — golden `41dfef9` (synthetic fixture)
-- [ ] SIMS depth profile — `+parser/importSIMS.m`
+- [x] SIMS depth profile — `+parser/importSIMS.m` — golden `2a7a538` (shared exact + paired interp 1e-9)
 - [ ] AFM — `+parser/importAFM.m`
 - [x] Generic CSV — `+parser/importCSV.m` → `io/delimited.py` — golden `a0a8929`
 - [x] Excel — `+parser/importExcel.m` → `io/excel.py` (openpyxl) — golden `ce228ba`
