@@ -284,6 +284,15 @@ function freeze_calc_values()
             fullfile(goldenDir, sprintf('calc_convmag_%s.json', cmDefs{ci2,7})));
     end
 
+    % ── hysteresisAnalysis (clean symmetric saturated M-H loop) ───────────
+    Hmx = 1000; Hc0 = 100; wch = 200; Ms0 = 5;
+    Hdn = linspace(Hmx, -Hmx, 100).';  Mdn = Ms0 * tanh((Hdn + Hc0) / wch);
+    Hup = linspace(-Hmx, Hmx, 100).';  Mup = Ms0 * tanh((Hup - Hc0) / wch);
+    Hloop = [Hdn; Hup];  Mloop = [Mdn; Mup];
+    rhy = utilities.hysteresisAnalysis(Hloop, Mloop);
+    writeJson(struct('input', struct('H', Hloop.', 'M', Mloop.'), 'output', rhy), ...
+        fullfile(goldenDir, 'calc_hysteresis.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);

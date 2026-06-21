@@ -54,8 +54,8 @@ def compare_calc() -> Callable[..., None]:
             for key, value in expected.items():
                 assert key in result, f"missing key: {key}"
                 _cmp(result[key], value, rtol, atol)
-        elif isinstance(expected, list) and expected and isinstance(expected[0], dict):
-            # list of structs (e.g. detected peaks) -> compare element-wise
+        elif isinstance(expected, list) and expected and isinstance(expected[0], dict | str):
+            # list of structs or strings (peaks, warnings) -> compare element-wise
             assert isinstance(result, list | tuple), f"expected list, got {type(result)}"
             assert len(result) == len(expected), f"list length {len(result)} != {len(expected)}"
             for res_item, exp_item in zip(result, expected, strict=True):

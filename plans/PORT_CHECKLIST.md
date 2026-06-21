@@ -76,7 +76,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Peak shapes — `+utilities/{pseudoVoigt,splitPearsonVII,tchPseudoVoigt}.m` → `calc/peakshapes.py` — golden
 
 ### Magnetometry analysis
-- [ ] Hysteresis analysis — `+utilities/hysteresisAnalysis.m`
+- [x] Hysteresis analysis — `+utilities/hysteresisAnalysis.m` → `calc/magnetometry.py` — golden (whole struct @1e-7: Hc/Mr/Ms/squareness/loopArea/SFD/dM-dH/warnings); branch-split + zero-crossing interp + gaussian-presmooth derivative replicated. Added `pre_smooth` to calc/processing.derivative. NOTE: MATLAB PreSmooth>0 path is broken (calls smoothData(H,M,..) positionally — uncallable); default 0, port does the intended savgol.
 - [ ] Relaxation comparison — `+utilities/compareRelaxation.m`
 - [x] Subtract mag background — `+utilities/subtractMagBackground.m` → `calc/magnetometry.py` — golden (auto + explicit FitRange); linear high-T fit
 - [x] Convert mag units — `+utilities/convertMagUnits.m` → `calc/magnetometry.py` — golden (field Oe/T/mT/A/m + sample-aware moment emu→emu/g/cm³/A·m²); warning paths tested structurally

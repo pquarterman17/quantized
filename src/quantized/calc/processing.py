@@ -81,10 +81,12 @@ def derivative(
     y: NDArray[np.float64],
     *,
     order: int = 1,
+    pre_smooth: int = 0,
 ) -> NDArray[np.float64]:
     """Numerical derivative dy/dx (order 1 or 2). Port of utilities.derivative.
 
-    PreSmooth is not yet supported (defaults to off in MATLAB too).
+    With ``pre_smooth > 0`` the signal is gaussian-smoothed (window = pre_smooth)
+    before differentiating, matching the MATLAB ``PreSmooth`` option.
     """
     if order not in (1, 2):
         raise ValueError("order must be 1 or 2")
@@ -92,6 +94,9 @@ def derivative(
     mat, was_1d = _as_columns(y)
     if xv.size != mat.shape[0]:
         raise ValueError(f"x length ({xv.size}) must match y rows ({mat.shape[0]})")
+    if pre_smooth > 0:
+        smoothed = smooth_data(mat, method="gaussian", window=pre_smooth)
+        mat = smoothed if smoothed.ndim == 2 else smoothed.reshape(-1, 1)
     out = np.zeros(mat.shape)
     for c in range(mat.shape[1]):
         d = _matlab_gradient(mat[:, c], xv)
