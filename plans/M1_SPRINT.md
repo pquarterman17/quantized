@@ -60,7 +60,7 @@ once the API contract (PR5) is fixed.
 
 ### Backend
 
-1. **PR1 — Skeleton & tooling** [—]
+1. **PR1 — Skeleton & tooling** ✅ **DONE** (`8a017e6`) [—]
    - Create: `pyproject.toml` (pkg `quantized`, deps numpy/scipy/fastapi/
      uvicorn/pydantic, `[project.scripts] qz`, ruff+mypy config),
      `src/quantized/__init__.py`, empty `io/ calc/ routes/` packages,
