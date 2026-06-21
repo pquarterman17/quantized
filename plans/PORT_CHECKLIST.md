@@ -56,7 +56,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] BG-from-file / fit-BG-from-region — BosonPlotter + `+utilities/estimateBackground.m`
 
 ### Baselines
-- [ ] ALS — `+utilities/baselineALS.m`
+- [x] ALS — `+utilities/baselineALS.m` → `calc/baseline.py` — golden (scipy.sparse)
 - [ ] Rolling ball — `+utilities/baselineRollingBall.m`
 - [ ] ModPoly — `+utilities/baselineModPoly.m`
 - [ ] Generic estimate — `+utilities/estimateBackground.m`

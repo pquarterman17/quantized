@@ -51,6 +51,13 @@ function freeze_calc_values()
     writeJson(struct('input', xp, 'params', struct('p', tchParams), 'output', tch.'), ...
         fullfile(goldenDir, 'calc_tchpv.json'));
 
+    % ── baselineALS on a synthetic spectrum (baseline + 2 peaks) ──────────
+    xq = linspace(0, 10, 100).';
+    yq = 2 + 0.5 * xq + 3 * exp(-((xq - 3) / 0.3).^2) + 2 * exp(-((xq - 7) / 0.4).^2);
+    bl = utilities.baselineALS(yq);
+    writeJson(struct('input', yq.', 'params', struct('lambda', 1e6, 'p', 0.01), ...
+        'output', bl.'), fullfile(goldenDir, 'calc_baseline_als.json'));
+
     % ── error propagation (scalars) → [val, err] ──────────────────────────
     [va, ea] = utilities.errorAdd(2, 0.1, 3, 0.2);
     writeJson(struct('output', [va ea]), fullfile(goldenDir, 'calc_erroradd.json'));
