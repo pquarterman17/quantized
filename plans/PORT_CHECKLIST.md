@@ -84,7 +84,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Linear regression — `+utilities/linRegress.m` — golden; betainc t/F p-values match MATLAB exactly. confBand/predBand fn-handles not ported (recompute at call site)
 - [x] t-test / ANOVA — `+utilities/tTest.m`, `+utilities/anova1.m` — golden (one-sample + Welch two-sample + 3-group ANOVA); CI uses replicated norminv+Newton tinv for exact parity
 - [x] PCA — `+utilities/pcaAnalysis.m` — golden; SVD + largest-loading sign convention → deterministic across MATLAB/numpy
-- [ ] Confidence band — `+utilities/confidenceBand.m`
+- [x] Confidence band — `+utilities/confidenceBand.m` → `calc/aggregate.py` — golden (mean + median); pchip + Hazen prctile match MATLAB. **MATLAB bug found:** `NPoints {mustBePositive} = 0` is uncallable in R2025b (defaults are validated); port keeps `n_points=0` as the intended "use maxLen" default. Surfaced for user — not fixed (sibling repo, out of autonomous scope).
 
 ### Error propagation
 - [~] add/mul/div/func — `calc/errors.py` — add/mul/div golden, func unit-tested; `errorProp` (fn-handle/MC) TODO

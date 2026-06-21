@@ -76,6 +76,26 @@ function freeze_calc_values()
     writeJson(struct('input', Xpca, 'params', struct('center', true, 'scale', false), ...
         'output', rp), fullfile(goldenDir, 'calc_pca.json'));
 
+    % ── confidenceBand across 3 datasets (mean + median) ──────────────────
+    x1 = linspace(0, 10, 21).';   y1 = sin(x1);
+    x2 = linspace(-1, 11, 25).';  y2 = sin(x2) + 0.15;
+    x3 = linspace(0.5, 9.5, 19).'; y3 = sin(x3) - 0.1;
+    d1.time = x1; d1.values = y1;
+    d2.time = x2; d2.values = y2;
+    d3.time = x3; d3.values = y3;
+    cbsIn = struct('x1', x1.', 'y1', y1.', 'x2', x2.', 'y2', y2.', ...
+        'x3', x3.', 'y3', y3.');
+    % NOTE: NPoints passed explicitly (=maxLen) to work around a MATLAB bug —
+    % confidenceBand.m declares `NPoints {mustBePositive} = 0`, and R2025b
+    % validates defaults, so the documented default (0 -> use maxLen) is
+    % uncallable. The Python port keeps n_points=0 as the intended default.
+    cbMean = utilities.confidenceBand({d1, d2, d3}, 'Method', 'mean', 'NPoints', 25);
+    writeJson(struct('input', cbsIn, 'params', struct('method', 'mean'), ...
+        'output', cbMean), fullfile(goldenDir, 'calc_confband_mean.json'));
+    cbMed = utilities.confidenceBand({d1, d2, d3}, 'Method', 'median', 'NPoints', 25);
+    writeJson(struct('input', cbsIn, 'params', struct('method', 'median'), ...
+        'output', cbMed), fullfile(goldenDir, 'calc_confband_median.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
