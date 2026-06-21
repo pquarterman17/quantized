@@ -81,7 +81,7 @@ once the API contract (PR5) is fixed.
      `from_json`), `tests/test_datastruct.py`.
    - DoD: construct + validate + JSON round-trip; pure-layer guard still green.
 
-4. **PR4 — Golden harness + QD parser** [PR3]
+4. **PR4 — Golden harness + QD parser** ✅ **DONE** (`fb3efe2`) [PR3]
    - Create: `io/base.py` (delimiter/header/data-start/unit detection),
      `io/registry.py` (extension map + sniffers), `io/qd.py`
      (`import_qd_vsm` ← `importQDVSM.m`, column shorthands),
