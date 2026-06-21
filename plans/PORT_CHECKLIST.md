@@ -65,10 +65,10 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] Smooth — `+utilities/smoothData.m`
 - [ ] FFT filter — `+utilities/fftFilter.m`
 - [ ] Spectral FFT — `+utilities/fftSpectral.m`
-- [ ] Normalize — `+utilities/normalize.m`
+- [x] Normalize — `+utilities/normalize.m` — golden `bbb504b`
 - [ ] Unit convert — `+utilities/convertUnits.m`
 - [ ] Resample — `+utilities/resampleData.m`
-- [ ] Derivative / log-derivative / cumulative integral — `+utilities/{derivative,logDerivative,cumulativeIntegral}.m`
+- [~] Derivative / log-derivative / cumulative integral — `+utilities/{derivative,logDerivative,cumulativeIntegral}.m` — **derivative golden `bbb504b`**; log-deriv + cumulative TODO
 - [ ] Dataset algebra — `+utilities/datasetAlgebra.m`
 - [ ] Robust peak find — `+utilities/findPeaksRobust.m`
 - [ ] Cross-correlation — `+utilities/crossCorrelation.m`
@@ -80,7 +80,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] Relaxation comparison — `+utilities/compareRelaxation.m`
 
 ### Statistics (no toolbox)
-- [ ] Descriptive stats — `+utilities/descriptiveStats.m`
+- [x] Descriptive stats — `+utilities/descriptiveStats.m` — golden `bbb504b`
 - [ ] Linear regression — `+utilities/linRegress.m`
 - [ ] t-test / ANOVA — `+utilities/tTest.m`, `+utilities/anova1.m`
 - [ ] PCA — `+utilities/pcaAnalysis.m`
