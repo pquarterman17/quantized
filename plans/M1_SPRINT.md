@@ -75,7 +75,7 @@ once the API contract (PR5) is fixed.
    - Frontend component-size (~400-line `.tsx`) ceiling: lands with PR7
      (needs `frontend/` to exist).
 
-3. **PR3 — `DataStruct`** [PR1]
+3. **PR3 — `DataStruct`** ✅ **DONE** (`10f4e7f`) [PR1]
    - Create: `src/quantized/datastruct.py` (frozen dataclass: `time`,
      `values`, `labels`, `units`, `metadata`; validation; `to_json`/
      `from_json`), `tests/test_datastruct.py`.
