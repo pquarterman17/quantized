@@ -96,7 +96,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 ## W3 — Fitting (`calc/fitting/`)
 
 ### Engine
-- [ ] Curve fit driver — `+fitting/curveFit.m`
+- [x] Curve fit driver — `+fitting/curveFit.m` → `calc/fitting.py` — golden (params/R2/chiSqRed/RMSE/AIC/errors all match MATLAB ~1e-8..1e-16); bounded NLLS via scipy Nelder-Mead + logit/log bound-transform + numerical-Hessian covariance. Supports Lower/Upper/Weights/Fixed; Constraints/ParamNames deferred (need parseEquation/applyConstraints).
 - [x] Model registry — `+fitting/models.m` → `calc/fit_models.py` + `calc/fit_models_special.py` — ALL 29 models golden @1e-9 (23 closed-form + 6 helper-based: Langevin/Brillouin/Stoner-Wohlfarth/Debye/Einstein/Debye+Einstein). scipy.quad matches MATLAB integral() to ~1e-15 for Debye/Einstein; reuses peakshapes.pseudo_voigt
 - [ ] Equation parser (no eval) — `+fitting/parseEquation.m`
 - [x] Auto-guess — `+fitting/autoGuess.m` → `calc/fit_autoguess.py` — golden (all 29 models' initial-param guesses @1e-9). **MATLAB bug #4 found+fixed** (agent fd11792): autoGuess used Statistics-Toolbox `range()` → uncallable on base MATLAB; replaced with max-min. Port uses np.ptp.

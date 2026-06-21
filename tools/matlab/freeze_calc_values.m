@@ -416,6 +416,18 @@ function freeze_calc_values()
     writeJson(struct('x', xag.', 'y', yag.', 'guesses', {agOut}), ...
         fullfile(goldenDir, 'calc_autoguess.json'));
 
+    % ── fitting.curveFit: bounded NLLS of a Gaussian on synthetic data ────
+    xfit = linspace(0, 20, 80).';
+    yfit = 5 * exp(-((xfit - 10) / 2).^2) + 0.05 * sin(xfit);  % gaussian + tiny det. noise
+    cfCat = fitting.models();
+    mg = cfCat(strcmp({cfCat.name}, 'Gaussian'));
+    p0g = fitting.autoGuess('Gaussian', xfit, yfit);
+    rf = fitting.curveFit(xfit, yfit, mg.fcn, p0g, 'Lower', mg.lb, 'Upper', mg.ub);
+    writeJson(struct('input', struct('x', xfit.', 'y', yfit.'), 'p0', p0g, ...
+        'output', struct('params', rf.params, 'R2', rf.R2, 'chiSqRed', rf.chiSqRed, ...
+        'RMSE', rf.RMSE, 'AIC', rf.AIC, 'errors', rf.errors)), ...
+        fullfile(goldenDir, 'calc_curvefit_gauss.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
