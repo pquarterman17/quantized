@@ -59,7 +59,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] ALS — `+utilities/baselineALS.m` → `calc/baseline.py` — golden (scipy.sparse)
 - [ ] Rolling ball — `+utilities/baselineRollingBall.m`
 - [ ] ModPoly — `+utilities/baselineModPoly.m`
-- [ ] Generic estimate — `+utilities/estimateBackground.m`
+- [x] Generic estimate — `+utilities/estimateBackground.m` → `calc/baseline.py` — golden (snip/polynomial/iterative); SNIP clip + boxcar smooth + robust poly + peak-dilation refine replicated
 
 ### Processing utilities
 - [x] Smooth — `+utilities/smoothData.m` → `calc/processing.py` — golden (moving/gaussian/savgol); line-for-line port (reflect-pad conv + SG interior kernel + per-point polynomial edge fits)

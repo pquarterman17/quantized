@@ -5,12 +5,22 @@ Pure functions: spectrum in, baseline out.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 from scipy import sparse
+from scipy.interpolate import interp1d
 from scipy.sparse.linalg import spsolve
 
-__all__ = ["baseline_als"]
+__all__ = ["baseline_als", "estimate_background"]
+
+_EPS = float(np.finfo(float).eps)
+
+
+def _matlab_round(x: float) -> int:
+    """Round half away from zero (MATLAB ``round``)."""
+    return int(math.copysign(math.floor(abs(x) + 0.5), x))
 
 
 def baseline_als(
@@ -53,3 +63,134 @@ def baseline_als(
             break
         w = w_new
     return np.asarray(z, dtype=float)
+
+
+def _snip_background(
+    x: NDArray[np.float64], y: NDArray[np.float64], n: int, max_window_deg: float, passes: int
+) -> NDArray[np.float64]:
+    """SNIP (iterative peak-clipping) background in sqrt space, then boxcar-smoothed."""
+    dx = float(np.median(np.diff(x)))
+    if dx <= 0:
+        return y.copy()
+    w_max = max(1, min(_matlab_round(max_window_deg / dx), (n - 1) // 2))
+    v = np.sqrt(np.maximum(y, 0.0))
+    for w in range(w_max, 0, -1):
+        v_new = v.copy()
+        avg = (v[: n - 2 * w] + v[2 * w :]) / 2.0
+        v_new[w : n - w] = np.minimum(v[w : n - w], avg)
+        v = v_new
+    bg = np.asarray(v**2, dtype=float)
+    kernel = np.ones(5) / 5.0
+    for _ in range(passes):
+        padded = np.concatenate([bg[1:3][::-1], bg, bg[n - 3 : n - 1][::-1]])
+        bg = np.asarray(np.convolve(padded, kernel, mode="valid")[:n], dtype=float)
+    return bg
+
+
+def _poly_background(
+    x: NDArray[np.float64], y: NDArray[np.float64], n: int, poly_degree: int, iter_sigma: float
+) -> NDArray[np.float64]:
+    """Polynomial background with iterative robust (MAD) outlier rejection."""
+    deg = min(poly_degree, max(1, n // 3 - 1))
+    mask = np.ones(n, dtype=bool)
+    bg = y.copy()
+    for _ in range(4):
+        xm, ym = x[mask], y[mask]
+        if xm.size < deg + 1:
+            break
+        xc = float(np.mean(xm))
+        xs = max(float(np.std(xm, ddof=1)), _EPS)
+        coeffs = np.polyfit((xm - xc) / xs, ym, deg)
+        bg = np.asarray(np.polyval(coeffs, (x - xc) / xs), dtype=float)
+        residual = y - bg
+        rm = residual[mask]
+        sigma = 1.4826 * float(np.median(np.abs(rm - np.median(rm))))
+        if sigma < _EPS:
+            break
+        mask = residual < iter_sigma * sigma
+        if int(mask.sum()) < deg + 1:
+            mask = np.ones(n, dtype=bool)
+            break
+    return np.asarray(bg, dtype=float)
+
+
+def _iterative_refine(
+    x: NDArray[np.float64],
+    y: NDArray[np.float64],
+    bg: NDArray[np.float64],
+    n: int,
+    method: str,
+    max_window_deg: float,
+    passes: int,
+    poly_degree: int,
+    iter_max_passes: int,
+    iter_sigma: float,
+) -> NDArray[np.float64]:
+    """Refine a background by masking+dilating peaks and re-estimating on the rest."""
+    for _ in range(iter_max_passes):
+        residual = y - bg
+        below_med = residual[residual < np.median(residual)]
+        ref = below_med if below_med.size > 5 else residual
+        sigma = 1.4826 * float(np.median(np.abs(ref - np.median(ref))))
+        data_range = float(np.max(y) - np.min(y))
+        if sigma < max(_EPS, data_range * 1e-10):
+            break
+        dilated = residual > iter_sigma * sigma
+        for _ in range(max(3, _matlab_round(0.005 * n))):
+            prev = dilated.copy()
+            dilated[1:] = dilated[1:] | prev[:-1]
+            dilated[:-1] = dilated[:-1] | prev[1:]
+        non_peak = ~dilated
+        if int(non_peak.sum()) < 10:
+            break
+        bg_prev = bg
+        if method == "snip":
+            y_clean = y.copy()
+            fill = interp1d(
+                x[non_peak], y[non_peak], kind="linear", fill_value="extrapolate"
+            )
+            y_clean[dilated] = fill(x[dilated])
+            bg = _snip_background(x, y_clean, n, max_window_deg, passes)
+        else:
+            bg = _poly_background(x, y, n, poly_degree, iter_sigma)
+        if float(np.max(np.abs(bg - bg_prev))) < 0.01 * sigma:
+            break
+    return bg
+
+
+def estimate_background(
+    x: ArrayLike,
+    y: ArrayLike,
+    *,
+    method: str = "snip",
+    max_window_deg: float = 2.0,
+    smooth_passes: int = 3,
+    poly_degree: int = 4,
+    iterative: bool = False,
+    iter_max_passes: int = 3,
+    iter_sigma: float = 3.0,
+) -> NDArray[np.float64]:
+    """Estimate a slowly-varying background. Port of utilities.estimateBackground.
+
+    ``method='snip'`` (default) uses sqrt-space iterative peak clipping; ``'polynomial'``
+    fits a robust low-order polynomial. With ``iterative=True`` peaks are masked,
+    dilated, and the background re-estimated on the remainder. The result is always
+    clamped to ``min(bg, y)``.
+    """
+    xv = np.asarray(x, dtype=float).ravel()
+    yv = np.asarray(y, dtype=float).ravel()
+    n = yv.size
+    if n < 3:
+        return yv.copy()
+    if method == "snip":
+        bg = _snip_background(xv, yv, n, max_window_deg, smooth_passes)
+    elif method == "polynomial":
+        bg = _poly_background(xv, yv, n, poly_degree, iter_sigma)
+    else:
+        raise ValueError("method must be snip/polynomial")
+    if iterative:
+        bg = _iterative_refine(
+            xv, yv, bg, n, method, max_window_deg, smooth_passes,
+            poly_degree, iter_max_passes, iter_sigma,
+        )
+    return np.asarray(np.minimum(bg, yv), dtype=float)

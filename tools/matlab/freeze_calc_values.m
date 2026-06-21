@@ -176,6 +176,22 @@ function freeze_calc_values()
     writeJson(struct('input', ccIn, 'params', struct('normalize', 'none'), ...
         'output', ccn), fullfile(goldenDir, 'calc_xcorr_none.json'));
 
+    % ── estimateBackground: snip / polynomial / snip-iterative ────────────
+    xb = linspace(10, 80, 300).';
+    trueBg = 50 + 0.5 * xb + 20 * exp(-((xb - 20) / 15).^2);
+    pkb = 200 * exp(-((xb - 35) / 0.5).^2) + 150 * exp(-((xb - 55) / 0.8).^2);
+    yb = trueBg + pkb;
+    bgIn = struct('x', xb.', 'y', yb.');
+    bgSnip = utilities.estimateBackground(xb, yb);
+    writeJson(struct('input', bgIn, 'params', struct('method', 'snip'), ...
+        'output', bgSnip.'), fullfile(goldenDir, 'calc_estbg_snip.json'));
+    bgPoly = utilities.estimateBackground(xb, yb, 'Method', 'polynomial');
+    writeJson(struct('input', bgIn, 'params', struct('method', 'polynomial'), ...
+        'output', bgPoly.'), fullfile(goldenDir, 'calc_estbg_poly.json'));
+    bgIter = utilities.estimateBackground(xb, yb, 'Iterative', true);
+    writeJson(struct('input', bgIn, 'params', struct('method', 'snip', 'iterative', true), ...
+        'output', bgIter.'), fullfile(goldenDir, 'calc_estbg_iter.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
