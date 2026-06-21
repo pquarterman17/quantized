@@ -73,7 +73,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] Robust peak find — `+utilities/findPeaksRobust.m`
 - [ ] Cross-correlation — `+utilities/crossCorrelation.m`
 - [ ] 2D regrid / interpolate — `+utilities/regrid2D.m`, `+utilities/interpolate2D.m`
-- [ ] Peak shapes — `+utilities/{pseudoVoigt,splitPearsonVII,tchPseudoVoigt}.m`
+- [x] Peak shapes — `+utilities/{pseudoVoigt,splitPearsonVII,tchPseudoVoigt}.m` → `calc/peakshapes.py` — golden
 
 ### Magnetometry analysis
 - [ ] Hysteresis analysis — `+utilities/hysteresisAnalysis.m`
@@ -87,7 +87,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] Confidence band — `+utilities/confidenceBand.m`
 
 ### Error propagation
-- [ ] Core + add/mul/div/func — `+utilities/{errorProp,errorAdd,errorMul,errorDiv,errorFunc}.m`
+- [~] add/mul/div/func — `calc/errors.py` — add/mul/div golden, func unit-tested; `errorProp` (fn-handle/MC) TODO
 
 ---
 

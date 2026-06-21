@@ -34,6 +34,31 @@ function freeze_calc_values()
         'params', struct('order', 1), 'output', dydx.'), ...
         fullfile(goldenDir, 'calc_derivative.json'));
 
+    % ── peak shapes on a 2-theta grid ─────────────────────────────────────
+    xp = linspace(28, 32, 50);
+    pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
+    writeJson(struct('input', xp, ...
+        'params', struct('x0', 30, 'fwhm', 0.3, 'H', 1000, 'eta', 0.5, 'bg', 10), ...
+        'output', pv), fullfile(goldenDir, 'calc_pseudovoigt.json'));
+
+    spvParams = [5000 30 0.15 0.25 8 2 20];
+    spv = utilities.splitPearsonVII(xp.', spvParams);
+    writeJson(struct('input', xp, 'params', struct('p', spvParams), 'output', spv.'), ...
+        fullfile(goldenDir, 'calc_splitpearson.json'));
+
+    tchParams = [1000 30 0.15 0.05 5];
+    tch = utilities.tchPseudoVoigt(xp.', tchParams);
+    writeJson(struct('input', xp, 'params', struct('p', tchParams), 'output', tch.'), ...
+        fullfile(goldenDir, 'calc_tchpv.json'));
+
+    % ── error propagation (scalars) → [val, err] ──────────────────────────
+    [va, ea] = utilities.errorAdd(2, 0.1, 3, 0.2);
+    writeJson(struct('output', [va ea]), fullfile(goldenDir, 'calc_erroradd.json'));
+    [vm, em] = utilities.errorMul(2, 0.1, 3, 0.2);
+    writeJson(struct('output', [vm em]), fullfile(goldenDir, 'calc_errormul.json'));
+    [vd, ed] = utilities.errorDiv(6, 0.1, 3, 0.2);
+    writeJson(struct('output', [vd ed]), fullfile(goldenDir, 'calc_errordiv.json'));
+
     fprintf('Done.\n');
 end
 
