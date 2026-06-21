@@ -155,8 +155,8 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 
 ### Backend data / helpers (`calc/`)
 - [x] Physical constants — `+calc/constants.m` → `calc/constants.py` — golden (CODATA 2018, all 14 constants)
-- [ ] Element data — `+calc/elementData.m`
-- [ ] Crystal cache — `+calc/crystalCache.m`
+- [x] Element data — `+calc/elementData.m` → `calc/element_data.py` (+ `element_data.json`) — golden (bySymbol/byZ/getProperty); 118-element table dumped verbatim from MATLAB to JSON for exact data parity, loader exposes element_data/by_symbol/by_z/get_property
+- [~] Crystal cache — `+calc/crystalCache.m` — DEFERRED: stateful .mat-backed persistence (not a pure function); revisit if the workspace/session layer needs it
 - [x] Unit conversion — `+calc/unitConvert.m` → `calc/unit_convert.py` — golden (dimensional/temperature-offset/Ang-nm/energy-wavelength/Oe-T/energy-freq); full expression parser (tokenize+prefix+dims vector) + bridges replicated
 - [x] CIF import — `+calc/importCIF.m` → `io/cif.py` — golden (cellParams/atomSites/blockName/spaceGroup/formula vs SrTiO3 fixture); full CIF tokenizer (comments/quotes/loops/uncertainty). Returns crystal dict, NOT registered in DataStruct registry (structural data, not a series).
 

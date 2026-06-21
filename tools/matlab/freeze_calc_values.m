@@ -344,6 +344,19 @@ function freeze_calc_values()
         'cellParams', cif.cellParams, 'atomSites', cif.atomSites)), ...
         fullfile(goldenDir, 'calc_cif.json'));
 
+    % ── calc.elementData: dump full table to a data file + freeze lookups ─
+    elAll = calc.elementData();
+    edPath = fullfile(repoRoot, 'src', 'quantized', 'calc', 'element_data.json');
+    edFid = fopen(edPath, 'w'); fwrite(edFid, jsonencode(elAll)); fclose(edFid);
+    fprintf('wrote %s\n', edPath);
+    writeJson(struct('output', calc.elementData('bySymbol', 'Fe')), ...
+        fullfile(goldenDir, 'calc_element_fe.json'));
+    writeJson(struct('output', calc.elementData('byZ', 8)), ...
+        fullfile(goldenDir, 'calc_element_o.json'));
+    edProps.mass = calc.elementData('getProperty', 'mass');
+    edProps.symbols = calc.elementData('getProperty', 'symbol');
+    writeJson(struct('output', edProps), fullfile(goldenDir, 'calc_element_props.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
