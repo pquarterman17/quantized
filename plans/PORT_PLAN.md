@@ -164,7 +164,8 @@ MATLAB."**
 9. **Quantum Design** — `importQDVSM` / `importPPMS` (PPMS/VSM/DynaCool/
    MPMS) incl. column shorthands (`field`/`moment`/`temp`/`time`/`stderr`/`all`).
 10. **XRD** — Rigaku, XRDML (incl. **2D area-detector** map extension:
-    `is2D`, `map2D.intensity/axis/Qx/Qz`), Bruker, PANalytical.
+    `is2D`, `map2D.intensity/axis/Qx/Qz`), PANalytical. (Bruker → fermiviewer:
+    its .brml/.raw are 2D-detector/RSM image data, not line data.)
 11. **Other lab data** — Lake Shore VSM, NCNR neutron reflectometry,
     SIMS depth profile, generic CSV/Excel/TSV with auto-detection +
     column-mapper fallback.
@@ -348,6 +349,8 @@ MATLAB."**
 - **EM tooling** (Fermi viewer, EELS/EDS, imaging, diffraction) — lives in
   `fermi-viewer` (MATLAB) / `fermiviewer` (Python), mirroring the upstream
   split.
+- **Bruker `.brml`/`.raw`** — 2D area-detector / RSM **image** data → belongs
+  with the imaging tooling in `fermiviewer`, not quantized's line-data scope.
 - **Watch-file auto-reload** — deferred (niche live-acquisition feature).
 - **In-app bug reporting** — dropped; a GitHub issue template covers it for
   an open-source app.

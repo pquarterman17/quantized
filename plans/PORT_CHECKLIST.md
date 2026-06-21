@@ -18,7 +18,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] MPMS — `+parser/importMPMS.m` — golden `58cd15c` (delegates to QD VSM)
 - [x] Column shorthands (`field/moment/temp/time/stderr/all`) — `io/base.resolve_column` (used by QD/MPMS)
 - [ ] Rigaku `.raw` — `+parser/importRigaku_raw.m`
-- [ ] Bruker — `+parser/importBruker.m`
+- ~~Bruker — `+parser/importBruker.m`~~ — **out of scope → fermiviewer** (2D area-detector / RSM image data, not line data)
 - [~] PANalytical XRDML — `+parser/importXRDML.m` — **1D golden `5d7f1e7`**; 2D area-detector (RSM) + `computeQSpace` still TODO
 - [x] NCNR neutron PNR — `+parser/importNCNRPNR.m` — golden `58cd15c`
 - [x] NCNR reflectometry — `+parser/importNCNRRefl.m` — golden `8f9e4f8`
@@ -200,6 +200,9 @@ Source: `+dataWorkspace/`, `DataWorkspace.m`
   Origin COM optional (W1).
 - **Out of scope:** EM tooling (→ fermiviewer), watch-file auto-reload,
   in-app bug reporting.
+- **Bruker (.brml/.raw) → fermiviewer:** these are 2D area-detector / RSM
+  *image* data, not line data — they belong with the imaging tooling in
+  `fermiviewer`, not in quantized's line-data scope. Removed from W1.
 - The BosonPlotter "workshops" (Peak, Curve Fit, Hysteresis, Reflectivity)
   map to React `workshops/`; their *math* lives in `calc/`, their *state*
   in a hook, their *view* in components under the size ceiling.
