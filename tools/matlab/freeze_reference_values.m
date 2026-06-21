@@ -27,6 +27,11 @@ function freeze_reference_values()
     dx = parser.importXRDML(xrdml);    % default: Intensity=cps
     freezeCase(dx, fullfile(goldenDir, 'xrdml_la2nio4_default.json'), 'xrdml_la2nio4.xrdml');
 
+    % ── Case: NCNR reductus .refl (Qz -> Intensity/uncertainty/resolution) ─
+    refl = fullfile(repoRoot, 'tests', 'fixtures', 'ncnr_j395.refl');
+    dr = parser.importNCNRRefl(refl);
+    freezeCase(dr, fullfile(goldenDir, 'ncnr_j395_default.json'), 'ncnr_j395.refl');
+
     fprintf('Done.\n');
 end
 

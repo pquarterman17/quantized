@@ -17,6 +17,13 @@
       "python_fn": "quantized.io.xrdml.import_xrdml (default)",
       "rtol": 1e-9,
       "atol": 1e-9
+    },
+    "ncnr_j395_default": {
+      "fixture": "tests/fixtures/ncnr_j395.refl",
+      "matlab_fn": "parser.importNCNRRefl",
+      "python_fn": "quantized.io.ncnr.import_ncnr_refl",
+      "rtol": 1e-9,
+      "atol": 1e-12
     }
   }
 }
