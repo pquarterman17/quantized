@@ -14,7 +14,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 
 ### Parsers (each returns `DataStruct`)
 - [x] Quantum Design VSM — `+parser/importQDVSM.m` — golden `fb3efe2`
-- [ ] Quantum Design PPMS — `+parser/importPPMS.m`
+- [x] Quantum Design PPMS — `+parser/importPPMS.m` — golden `a1960b5` (synthetic fixture)
 - [x] MPMS — `+parser/importMPMS.m` — golden `58cd15c` (delegates to QD VSM)
 - [x] Column shorthands (`field/moment/temp/time/stderr/all`) — `io/base.resolve_column` (used by QD/MPMS)
 - [ ] Rigaku `.raw` — `+parser/importRigaku_raw.m`
