@@ -403,6 +403,19 @@ function freeze_calc_values()
     writeJson(struct('x', xfm.', 'models', {fmOut}), ...
         fullfile(goldenDir, 'calc_fit_models.json'));
 
+    % ── fitting.autoGuess: initial-parameter guess for every model ────────
+    agCat = fitting.models();
+    xag = linspace(1, 20, 50).';
+    yag = 5 * exp(-((xag - 10) / 3).^2) + 1;  % positive peak (exercises branches)
+    agOut = cell(numel(agCat), 1);
+    for ai = 1:numel(agCat)
+        nm = agCat(ai).name;
+        gg = fitting.autoGuess(nm, xag, yag);
+        agOut{ai} = struct('name', nm, 'p0', gg(:).');
+    end
+    writeJson(struct('x', xag.', 'y', yag.', 'guesses', {agOut}), ...
+        fullfile(goldenDir, 'calc_autoguess.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);

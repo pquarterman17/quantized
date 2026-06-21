@@ -99,7 +99,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] Curve fit driver — `+fitting/curveFit.m`
 - [x] Model registry — `+fitting/models.m` → `calc/fit_models.py` + `calc/fit_models_special.py` — ALL 29 models golden @1e-9 (23 closed-form + 6 helper-based: Langevin/Brillouin/Stoner-Wohlfarth/Debye/Einstein/Debye+Einstein). scipy.quad matches MATLAB integral() to ~1e-15 for Debye/Einstein; reuses peakshapes.pseudo_voigt
 - [ ] Equation parser (no eval) — `+fitting/parseEquation.m`
-- [ ] Auto-guess — `+fitting/autoGuess.m`
+- [x] Auto-guess — `+fitting/autoGuess.m` → `calc/fit_autoguess.py` — golden (all 29 models' initial-param guesses @1e-9). **MATLAB bug #4 found+fixed** (agent fd11792): autoGuess used Statistics-Toolbox `range()` → uncallable on base MATLAB; replaced with max-min. Port uses np.ptp.
 - [ ] Constraints — `+fitting/applyConstraints.m`
 - [ ] ODR (orthogonal distance regression) — `+fitting/odrFit.m`
 
