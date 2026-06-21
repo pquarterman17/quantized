@@ -66,7 +66,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] FFT filter — `+utilities/fftFilter.m`
 - [ ] Spectral FFT — `+utilities/fftSpectral.m`
 - [x] Normalize — `+utilities/normalize.m` — golden `bbb504b`
-- [ ] Unit convert — `+utilities/convertUnits.m`
+- [x] Unit convert — `+utilities/convertUnits.m` → `calc/units.py` — golden (field/moment/temp/angle/length + same-unit + cross-family raise); makeValidName keying replicated via regex
 - [ ] Resample — `+utilities/resampleData.m`
 - [x] Derivative / log-derivative / cumulative integral — `+utilities/{derivative,logDerivative,cumulativeIntegral}.m` → `calc/processing.py` — all golden
 - [ ] Dataset algebra — `+utilities/datasetAlgebra.m`

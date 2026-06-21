@@ -110,6 +110,17 @@ function freeze_calc_values()
         'params', struct('method', 'savitzky-golay', 'window', 5, 'polyOrder', 2), ...
         'output', smSG.'), fullfile(goldenDir, 'calc_smooth_savgol.json'));
 
+    % ── convertUnits across families (field/moment/temp/angle/length) ─────
+    defs = {5, 'Oe', 'T'; 2.5, 'emu', 'a/m2'; 25, 'C', 'K'; 98.6, 'F', 'C'; ...
+            90, 'deg', 'rad'; 100, 'nm', 'm'; 7, 'Oe', 'Oe'};
+    cv = cell(size(defs, 1), 1);
+    for ci = 1:size(defs, 1)
+        [cvOut, cvUnit] = utilities.convertUnits(defs{ci,1}, defs{ci,2}, defs{ci,3});
+        cv{ci} = struct('value', defs{ci,1}, 'from', defs{ci,2}, 'to', defs{ci,3}, ...
+            'out', cvOut, 'unit', cvUnit);
+    end
+    writeJson(cv, fullfile(goldenDir, 'calc_convert.json'));
+
     % ── peak shapes on a 2-theta grid ─────────────────────────────────────
     xp = linspace(28, 32, 50);
     pv = utilities.pseudoVoigt(xp, 30, 0.3, 1000, 0.5, 10);
