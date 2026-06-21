@@ -91,7 +91,7 @@ once the API contract (PR5) is fixed.
    - DoD: parse a real QD `.dat` → `DataStruct` equals frozen MATLAB values
      within tolerance (golden test passes).
 
-5. **PR5 — App + import/plot routes** [PR3, PR4]
+5. **PR5 — App + import/plot routes** ✅ **DONE** (`8be5e45`) [PR3, PR4]
    - Create: `app.py` (compose routers, CORS for dev), `routes/parsers.py`
      (`POST /api/parsers/import`), `routes/plot.py` (`POST /api/plot/series`),
      `calc/plotting.py` (series builder + `PlotState` model),
