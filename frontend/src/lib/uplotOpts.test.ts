@@ -43,4 +43,12 @@ describe("buildOpts", () => {
     const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
     expect(opts.series[1].label).toBe("M (emu)");
   });
+
+  it("labels the y axis when a single series is shown", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    expect(opts.axes?.[1]?.label).toBe("M (emu)");
+    const two: PlotPayload = { ...payload, series: [...payload.series, { label: "B", unit: "" }] };
+    // With >1 series the legend names them, so the axis label is omitted.
+    expect(buildOpts(two, { ...base, yLog: false, tool: "zoom" }).axes?.[1]?.label).toBeUndefined();
+  });
 });

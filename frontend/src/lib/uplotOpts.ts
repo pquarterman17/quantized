@@ -38,6 +38,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const gridColor = cssVar("--grid-line") || "#333";
   const font = `11px ${cssVar("--font-mono") || "monospace"}`;
   const xLabel = payload.xUnit ? `${payload.xLabel} (${payload.xUnit})` : payload.xLabel;
+  // Label the Y axis only when one series is shown (otherwise the legend names them).
+  const ySolo = payload.series.length === 1 ? payload.series[0] : null;
+  const yLabel = ySolo ? (ySolo.unit ? `${ySolo.label} (${ySolo.unit})` : ySolo.label) : undefined;
 
   const axis = {
     stroke: axisColor,
@@ -60,7 +63,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     scales: { x: { distr: xLog ? 3 : 1 }, y: { distr: yLog ? 3 : 1 } },
     axes: [
       { ...axis, label: xLabel },
-      { ...axis, size: 60 },
+      { ...axis, size: 60, label: yLabel },
     ],
     series: [
       {},
