@@ -1,7 +1,7 @@
 // Typed fetch layer over the FastAPI backend. All endpoints are under /api
 // (dev: Vite proxies to uvicorn :8000; prod: same-origin static mount).
 
-import type { DataStruct, PlotSeriesResponse } from "./types";
+import type { CorrectionParams, DataStruct, PlotSeriesResponse } from "./types";
 
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -44,4 +44,16 @@ export interface PlotRequest {
 /** Build uPlot-ready series from a DataStruct + selection. */
 export function plotSeries(req: PlotRequest): Promise<PlotSeriesResponse> {
   return postJSON<PlotSeriesResponse>("/api/plot/series", req);
+}
+
+export interface CorrectionsRequest {
+  dataset: DataStruct;
+  params: CorrectionParams;
+  bg_dataset?: DataStruct | null;
+  bg_interp?: string;
+}
+
+/** Apply the correction pipeline to a DataStruct → corrected DataStruct. */
+export function applyCorrections(req: CorrectionsRequest): Promise<DataStruct> {
+  return postJSON<DataStruct>("/api/corrections/apply", req);
 }

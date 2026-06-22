@@ -3,7 +3,8 @@
 
 import { create } from "zustand";
 
-import type { Dataset } from "../lib/types";
+import { applyCorrections as applyCorrectionsApi } from "../lib/api";
+import type { CorrectionParams, Dataset } from "../lib/types";
 
 export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
@@ -28,6 +29,8 @@ interface AppState {
   addDataset: (ds: Dataset) => void;
   setActive: (id: string) => void;
   removeDataset: (id: string) => void;
+  applyCorrections: (id: string, params: CorrectionParams) => Promise<void>;
+  resetCorrections: (id: string) => void;
   toggleLeft: () => void;
   toggleRight: () => void;
   setStageTab: (tab: StageTab) => void;
@@ -74,6 +77,35 @@ export const useApp = create<AppState>((set, get) => ({
         s.activeId === id ? (datasets[0]?.id ?? null) : s.activeId;
       return { datasets, activeId };
     }),
+
+  // Corrections always apply to the pristine `raw`, never to an already-
+  // corrected `data` (the MATLAB pipeline is replace, not accumulate). The
+  // first import becomes `raw`; re-applying with new params re-derives `data`.
+  applyCorrections: async (id, params) => {
+    const ds = get().datasets.find((d) => d.id === id);
+    if (!ds) return;
+    const raw = ds.raw ?? ds.data;
+    try {
+      const corrected = await applyCorrectionsApi({ dataset: raw, params });
+      set((s) => ({
+        datasets: s.datasets.map((d) =>
+          d.id === id ? { ...d, data: corrected, raw, corrections: params } : d,
+        ),
+      }));
+    } catch (e) {
+      get().setStatus(
+        `corrections failed: ${e instanceof Error ? e.message : "error"}`,
+      );
+    }
+  },
+  resetCorrections: (id) =>
+    set((s) => ({
+      datasets: s.datasets.map((d) =>
+        d.id === id && d.raw
+          ? { ...d, data: d.raw, raw: undefined, corrections: undefined }
+          : d,
+      ),
+    })),
   toggleLeft: () => set((s) => ({ leftCollapsed: !s.leftCollapsed })),
   toggleRight: () => set((s) => ({ rightCollapsed: !s.rightCollapsed })),
   setStageTab: (stageTab) => set({ stageTab }),

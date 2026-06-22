@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from quantized import __version__
-from quantized.routes import parsers, plot
+from quantized.routes import corrections, parsers, plot
 
 __all__ = ["create_app", "app"]
 
@@ -89,6 +89,7 @@ def create_app() -> FastAPI:
 
     application.include_router(parsers.router)
     application.include_router(plot.router)
+    application.include_router(corrections.router)
 
     # Client-presence WebSocket (registered before the SPA mount so the
     # catch-all StaticFiles route never shadows it).

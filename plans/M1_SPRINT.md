@@ -128,11 +128,16 @@ once the API contract (PR5) is fixed.
 
 ### Close the slice
 
-10. **PR10 — Minimal corrections** [PR5, PR9]
-    - Create: `calc/corrections.py` (Y-offset, linear/poly BG subtract —
-      subset of W2 #16), `routes/corrections.py`, `src/components/Inspector/
-      CorrectionsPanel.tsx` (minimal), `tests/test_corrections.py` (`@golden`).
-    - DoD: apply offset/BG → plot updates live; golden test vs MATLAB.
+10. **PR10 — Minimal corrections** ✅ **DONE** [PR5, PR9]
+    - `calc/corrections.py` (full 8-step pipeline, golden-tested) was ported
+      ahead of M1; this PR added the transport + UI: `routes/corrections.py`
+      (thin `POST /api/corrections/apply` + typed `CorrectionParams`),
+      `frontend/.../Inspector/CorrectionsCard.tsx` (offset/BG/trim/smooth/
+      normalize/derivative), store `applyCorrections`/`resetCorrections`
+      (apply-to-`raw`, never accumulate), `tests/test_api_corrections.py`
+      (TestClient) + `store/useApp.test.ts` (vitest).
+    - DoD met: apply offset/BG/trim → plot re-renders off `active.data`. The
+      pipeline math is golden vs MATLAB in `test_calc_corrections`.
 
 11. **PR11 — CI** [all]
     - Create: `.github/workflows/ci.yml` (pytest, ruff, mypy, frontend

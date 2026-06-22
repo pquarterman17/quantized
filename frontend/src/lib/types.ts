@@ -18,9 +18,36 @@ export interface PlotSeriesResponse {
   y: { log: boolean };
 }
 
-/** A dataset held client-side: the parsed DataStruct + a stable id + name. */
+/** A dataset held client-side: the parsed DataStruct + a stable id + name.
+ *  `raw` is the pristine import; `data` is the currently displayed (corrected)
+ *  view. `corrections` are the params that produced `data` from `raw`. */
 export interface Dataset {
   id: string;
   name: string;
   data: DataStruct;
+  raw?: DataStruct;
+  corrections?: CorrectionParams;
+}
+
+/** Correction-pipeline params (camelCase wire keys; all optional).
+ *  Mirrors `routes/corrections.CorrectionParams` / MATLAB `correctionParams`. */
+export interface CorrectionParams {
+  xOff?: number;
+  yOff?: number;
+  bgSlope?: number;
+  bgInt?: number;
+  bgPoly?: number[];
+  xTrimMin?: number;
+  xTrimMax?: number;
+  isNeutron?: boolean;
+  isMag?: boolean;
+  fieldUnit?: string;
+  momentUnit?: string;
+  sampleMass?: number;
+  sampleVolume?: number;
+  smoothEnabled?: boolean;
+  smoothWindow?: number;
+  smoothMethod?: string;
+  normMethod?: string;
+  derivativeMode?: string;
 }

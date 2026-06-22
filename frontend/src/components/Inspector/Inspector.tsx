@@ -1,6 +1,7 @@
-// Right panel: stacked Cards. Metadata + Axes + Appearance are wired; the
-// Corrections card is UI-only until the /api/corrections route lands.
+// Right panel: stacked Cards. Metadata + Corrections + Axes + Appearance are
+// wired; Corrections posts to /api/corrections/apply via the store.
 
+import CorrectionsCard from "./CorrectionsCard";
 import { Card, MetaRow, Select } from "../primitives";
 import {
   type Accent,
@@ -41,12 +42,7 @@ export default function Inspector() {
         )}
       </Card>
 
-      <Card title="Corrections">
-        <div className="qzk-ds-meta">Offsets · background · trim · smooth</div>
-        <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
-          Wires to /api/corrections (next slice)
-        </div>
-      </Card>
+      <CorrectionsCard key={active?.id ?? "none"} active={active} />
 
       <Card title="Axes">
         <label className="qz-check">
