@@ -5,9 +5,14 @@ architecture end-to-end before breadth work begins. Covers `PORT_PLAN.md`
 M1 (W0 #1–#6, W1 #8–#9, W6 #33–#34, W7 #37–#40) **plus a minimal
 corrections subset** so "load → correct → plot" is genuinely complete.
 
-**Status:** Active
+**Status:** Active — substantially complete (2026-06-22 reconciliation:
+PR1–PR5, PR7–PR11 done; only PR6's full run model is partial). The backend
+has already overshot M1 into M2 breadth (fitting, baselines, stats, spectral,
+sld, reflectivity, calculators — all golden-tested), and those calc modules
+are now being exposed through thin routes (`/api/{fitting,baseline,stats,
+reference,corrections}`).
 **Created:** 2026-06-21
-**Updated:** 2026-06-21
+**Updated:** 2026-06-22
 
 ---
 
@@ -98,16 +103,19 @@ once the API contract (PR5) is fixed.
      `tests/test_api_parsers.py`, `tests/test_api_plot.py` (TestClient).
    - DoD: import → DataStruct JSON; plot/series → uPlot payload; tests pass.
 
-6. **PR6 — CLI & run model** [PR5]
+6. **PR6 — CLI & run model** ⚠ **PARTIAL** [PR5]
    - Create: `cli.py` (`qz` serves API+SPA + opens browser + auto-shutdown
      on last-tab-close; `--dev` = Vite HMR + reloading uvicorn; `--desktop`
      = pywebview window). Wire `[project.scripts]`.
    - DoD: `uv run qz --dev` boots backend+frontend; `uv run qz` serves the
      built SPA and opens the browser.
+   - **State:** `qz` exists and runs `uvicorn quantized.app:app` (serves the
+     API + mounted SPA). Still TODO: browser-open, auto-shutdown on last-tab-
+     close, `--dev` (Vite HMR + reload), `--desktop` (pywebview). Carry to M2.
 
 ### Frontend
 
-7. **PR7 — Frontend scaffold + theme** [PR1; API stubs ok]
+7. **PR7 — Frontend scaffold + theme** ✅ **DONE** [PR1; API stubs ok]
    - Create: `frontend/{package.json,vite.config.ts,tsconfig.json}`
      (React 19 + Vite + Zustand + uPlot + clsx; mirror fermiviewer),
      `src/main.tsx`, `src/App.tsx`, `src/lib/api.ts`,
@@ -116,15 +124,20 @@ once the API contract (PR5) is fixed.
      (~400-line ceiling).
    - DoD: app boots, Dark/Light toggle works, `/api/health` round-trips.
 
-8. **PR8 — Library panel + import flow** [PR5, PR7]
+8. **PR8 — Library panel + import flow** ✅ **DONE** [PR5, PR7]
    - Create: `src/components/Library/*` (dataset list, add-file). Wire to
      `/api/parsers/import` → `datasets` store.
    - DoD: add a file → appears in list → DataStruct in the store.
+   - State: `Library/Library.tsx` (+ `Sparkline.tsx`) imports `importFile` →
+     `addDataset`; rows activate on click.
 
-9. **PR9 — Stage (uPlot) + axis controls** [PR8]
+9. **PR9 — Stage (uPlot) + axis controls** ✅ **DONE** [PR8]
    - Create: `src/components/Stage/*` (uPlot wrapper), `src/components/
      Inspector/AxisControls.tsx`. Wire to `/api/plot/series` + `plot` store.
    - DoD: selected dataset renders as a line; limits + log toggles work.
+   - State: `Stage/PlotStage.tsx` wraps uPlot (mount-once + `fetchPlot` with
+     offline column fallback), re-renders off the active dataset; the
+     Inspector "Axes" card drives the log toggle; limits via interactive zoom.
 
 ### Close the slice
 
@@ -139,11 +152,13 @@ once the API contract (PR5) is fixed.
     - DoD met: apply offset/BG/trim → plot re-renders off `active.data`. The
       pipeline math is golden vs MATLAB in `test_calc_corrections`.
 
-11. **PR11 — CI** [all]
+11. **PR11 — CI** ✅ **DONE** [all]
     - Create: `.github/workflows/ci.yml` (pytest, ruff, mypy, frontend
       vitest + build, integrity gates). Golden tests gated to a self-hosted
       MATLAB runner *or* run against the committed frozen values.
     - DoD: CI green on a clean clone.
+    - State: matrix (ubuntu/win/mac × py3.11/3.13) + frontend job (vitest +
+      build) on committed frozen values (no MATLAB needed); CodeQL separate.
 
 ---
 

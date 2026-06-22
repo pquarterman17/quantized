@@ -29,9 +29,9 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - ~~AFM — `+parser/importAFM.m`~~ — **out of scope → fermiviewer** (AFM topography/phase images)
 - [x] Generic CSV — `+parser/importCSV.m` → `io/delimited.py` — golden `a0a8929`
 - [x] Excel — `+parser/importExcel.m` → `io/excel.py` (openpyxl) — golden `ce228ba`
-- [ ] Header parsing / auto-detect — `+parser/parseColHeader.m`
-- [ ] Auto-dispatch + registry — `+parser/importAuto.m`, `+parser/resolveParser.m` → `io/registry.py` (single map + sniffers)
-- [ ] DataStruct contract — `+parser/createDataStruct.m` → `datastruct.py`
+- [x] Header parsing / auto-detect — `+parser/parseColHeader.m` → `io/base.parse_col_header`/`resolve_column`
+- [x] Auto-dispatch + registry — `+parser/importAuto.m`, `+parser/resolveParser.m` → `io/registry.py` (single map + sniffers; `import_auto` drives `/api/parsers/import`)
+- [x] DataStruct contract — `+parser/createDataStruct.m` → `datastruct.py` (frozen dataclass; `from_dict`/`to_json`)
 
 ### Export writers
 - [ ] XRD CSV — `+utilities/writeXRDcsv.m`
