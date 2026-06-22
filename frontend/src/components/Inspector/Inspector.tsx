@@ -1,6 +1,7 @@
 // Right panel: stacked Cards. Metadata + Corrections + Axes + Appearance are
 // wired; Corrections posts to /api/corrections/apply via the store.
 
+import ChannelsCard from "./ChannelsCard";
 import CorrectionsCard from "./CorrectionsCard";
 import StatsCard from "./StatsCard";
 import { Card, MetaRow, Select } from "../primitives";
@@ -44,6 +45,8 @@ export default function Inspector() {
           <MetaRow label="—" value="no dataset" />
         )}
       </Card>
+
+      <ChannelsCard active={active} />
 
       <CorrectionsCard key={active?.id ?? "none"} active={active} />
 

@@ -26,6 +26,7 @@ interface AppState {
   density: Density;
   yLog: boolean;
   xLog: boolean;
+  yKeys: number[] | null; // which value channels to plot (null = all)
   plotTool: PlotTool;
   cmdkOpen: boolean;
   curveFitOpen: boolean;
@@ -49,6 +50,7 @@ interface AppState {
   setDensity: (density: Density) => void;
   setYLog: (yLog: boolean) => void;
   setXLog: (xLog: boolean) => void;
+  setYKeys: (yKeys: number[] | null) => void;
   setPlotTool: (tool: PlotTool) => void;
   setCmdk: (open: boolean) => void;
   setCurveFitOpen: (open: boolean) => void;
@@ -77,6 +79,7 @@ export const useApp = create<AppState>((set, get) => ({
   density: "regular",
   yLog: false,
   xLog: false,
+  yKeys: null,
   plotTool: "zoom",
   cmdkOpen: false,
   curveFitOpen: false,
@@ -90,6 +93,7 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({
       datasets: [...s.datasets, ds],
       activeId: ds.id,
+      yKeys: null, // new dataset → plot all its channels
     })),
 
   // Upload + parse each picked/dropped file; add to the library (continues on a
@@ -113,7 +117,7 @@ export const useApp = create<AppState>((set, get) => ({
         : `imported ${added} file${added === 1 ? "" : "s"}`,
     );
   },
-  setActive: (id) => set({ activeId: id }),
+  setActive: (id) => set({ activeId: id, yKeys: null }),
   removeDataset: (id) =>
     set((s) => {
       const datasets = s.datasets.filter((d) => d.id !== id);
@@ -167,6 +171,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
   setYLog: (yLog) => set({ yLog }),
   setXLog: (xLog) => set({ xLog }),
+  setYKeys: (yKeys) => set({ yKeys }),
   setPlotTool: (plotTool) => set({ plotTool }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
   setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),

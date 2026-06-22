@@ -106,9 +106,15 @@ export async function fetchPlot(
   ds: DataStruct,
   yLog: boolean,
   xLog = false,
+  yKeys: number[] | null = null,
 ): Promise<PlotPayload> {
   try {
-    const r = await plotSeries({ dataset: ds, y_log: yLog, x_log: xLog });
+    const r = await plotSeries({
+      dataset: ds,
+      y_log: yLog,
+      x_log: xLog,
+      y_keys: yKeys ?? undefined,
+    });
     return fromResponse(r);
   } catch {
     return buildColumns(ds);
