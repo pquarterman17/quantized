@@ -36,8 +36,8 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 ### Export writers
 - [x] XRD CSV — `+utilities/writeXRDcsv.m` → `io/xrd_csv.py` (golden: xrdcsv_standard_{both,counts,cps}, xrdcsv_origin_both)
 - [x] HDF5 — `+utilities/exportHDF5.m` → `io/hdf5.py` (+ `io/_hdf5_layout.py`); golden: hdf5_synth_default
-- [ ] Origin-ASCII + `.ogs` LabTalk script — `+utilities/exportOriginScript.m`
-- [ ] Reflectivity/neutron consolidated CSV (role-based columns) — BosonPlotter CSV path
+- [x] Origin-ASCII + `.ogs` LabTalk script — `+utilities/exportOriginScript.m` → `io/origin.py` (golden: origin_export; CSV byte-exact, .ogs minus Date line). Route `/api/export/origin` zips `.ogs`+CSV.
+- [~] Reflectivity/neutron consolidated CSV (role-based columns) — `+bosonPlotter/saveConsolidatedNeutronCSV.m` → `io/consolidated.py` (golden: consolidated_csv_{standard,origin}; per-dataset-block role-based writer). Route `/api/export/consolidated`. **Polarized-asymmetry path (shared-Q interp + ++/-- spin asymmetry) still TODO** — needs ++/-- polarization metadata.
 
 ### Origin live bridge — Windows-only OS-gated optional (W1 #14)
 - [ ] COM connect/send — `+utilities/connectOrigin.m`, `+utilities/toOrigin.m` (mock-tested only)

@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import re
 import tempfile
+import zipfile
+from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +20,9 @@ from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
 from quantized.datastruct import DataStruct
+from quantized.io.consolidated import consolidate_csv
 from quantized.io.hdf5 import write_hdf5
+from quantized.io.origin import format_origin_script
 from quantized.io.xrd_csv import format_xrd_csv
 
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -92,4 +97,70 @@ def export_hdf5(req: Hdf5Request) -> Response:
         content=payload,
         media_type="application/x-hdf5",
         headers=_attachment(_safe_name(req.filename, ".h5")),
+    )
+
+
+class OriginRequest(BaseModel):
+    dataset: dict[str, Any]
+    filename: str = "export"
+    log_x: bool = False
+    log_y: bool = False
+    make_graph: bool = True
+
+
+class ConsolidatedItem(BaseModel):
+    dataset: dict[str, Any]
+    name: str = ""
+
+
+class ConsolidatedRequest(BaseModel):
+    datasets: list[ConsolidatedItem]
+    fmt: str = "standard"
+    filename: str = "consolidated.csv"
+
+
+@router.post("/origin")
+def export_origin(req: OriginRequest) -> Response:
+    """DataStruct -> a ZIP of an Origin LabTalk ``.ogs`` script + its CSV."""
+    stem = _safe_name(req.filename, "")
+    csv_name = f"{stem}_data.csv"
+    created = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        ds = DataStruct.from_dict(req.dataset)
+        csv_text, ogs_text = format_origin_script(
+            ds,
+            csv_name=csv_name,
+            book_name=stem,
+            sheet_name=stem,
+            log_x=req.log_x,
+            log_y=req.log_y,
+            make_graph=req.make_graph,
+            created=created,
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"{stem}.ogs", ogs_text)
+        zf.writestr(csv_name, csv_text)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers=_attachment(_safe_name(stem, ".zip")),
+    )
+
+
+@router.post("/consolidated")
+def export_consolidated(req: ConsolidatedRequest) -> Response:
+    """Multiple datasets -> one role-based CSV (per-dataset Q + value blocks)."""
+    try:
+        items = [(DataStruct.from_dict(it.dataset), it.name) for it in req.datasets]
+        text = consolidate_csv(items, fmt=req.fmt)
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Response(
+        content=text,
+        media_type="text/csv",
+        headers=_attachment(_safe_name(req.filename, ".csv")),
     )

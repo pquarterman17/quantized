@@ -14,7 +14,13 @@ import CommandPalette, { type Action } from "./components/overlays/CommandPalett
 import ParamDialog from "./components/overlays/ParamDialog";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
-import { exportHdf5, exportXrdCsv, health } from "./lib/api";
+import {
+  exportConsolidated,
+  exportHdf5,
+  exportOrigin,
+  exportXrdCsv,
+  health,
+} from "./lib/api";
 import { makeDemoDataset } from "./lib/demo";
 import { useApp } from "./store/useApp";
 
@@ -129,6 +135,30 @@ export default function App() {
                 : { dataset: ds.data, filename: stem },
             ),
           ),
+      },
+      {
+        id: "export-origin",
+        group: "File",
+        label: "Export Origin (.ogs)…",
+        run: () =>
+          exportActive(s, (stem, ds) => exportOrigin({ dataset: ds.data, filename: stem })),
+      },
+      {
+        id: "export-consolidated",
+        group: "File",
+        label: "Export consolidated CSV…",
+        run: () => {
+          const all = s().datasets;
+          if (all.length === 0) {
+            s().setStatus("no datasets to consolidate");
+            return;
+          }
+          exportConsolidated({
+            datasets: all.map((d) => ({ dataset: d.data, name: d.name })),
+          }).catch((e: unknown) =>
+            s().setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`),
+          );
+        },
       },
       {
         id: "worksheet",

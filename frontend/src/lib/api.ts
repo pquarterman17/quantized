@@ -215,3 +215,23 @@ export function exportHdf5(body: {
 }): Promise<void> {
   return postDownload("/api/export/hdf5", body, "export.h5");
 }
+
+/** Export a DataStruct as an Origin LabTalk .ogs script + CSV (zipped). */
+export function exportOrigin(body: {
+  dataset: DataStruct;
+  filename?: string;
+  log_x?: boolean;
+  log_y?: boolean;
+  make_graph?: boolean;
+}): Promise<void> {
+  return postDownload("/api/export/origin", body, "export.zip");
+}
+
+/** Export several datasets side-by-side into one role-based CSV. */
+export function exportConsolidated(body: {
+  datasets: { dataset: DataStruct; name: string }[];
+  fmt?: string;
+  filename?: string;
+}): Promise<void> {
+  return postDownload("/api/export/consolidated", body, "consolidated.csv");
+}

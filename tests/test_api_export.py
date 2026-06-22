@@ -76,3 +76,45 @@ def test_hdf5_download_is_valid_file() -> None:
     assert resp.headers["content-disposition"] == 'attachment; filename="scan1.h5"'
     # HDF5 files start with the signature \x89HDF\r\n\x1a\n.
     assert resp.content[:8] == b"\x89HDF\r\n\x1a\n"
+
+
+def test_origin_export_is_zip_with_both_files() -> None:
+    import io
+    import zipfile
+
+    resp = client.post(
+        "/api/export/origin",
+        json={"dataset": _xrd_dataset(), "filename": "scan1"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/zip"
+    assert resp.headers["content-disposition"] == 'attachment; filename="scan1.zip"'
+    with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+        names = set(zf.namelist())
+        assert names == {"scan1.ogs", "scan1_data.csv"}
+        ogs = zf.read("scan1.ogs").decode()
+        assert "impASC" in ogs and 'wks.col1.type = 4;  // X' in ogs
+
+
+def test_consolidated_export_combines_datasets() -> None:
+    ds = _xrd_dataset()
+    resp = client.post(
+        "/api/export/consolidated",
+        json={
+            "datasets": [
+                {"dataset": ds, "name": "a.refl"},
+                {"dataset": ds, "name": "b.refl"},
+            ],
+            "fmt": "standard",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/csv")
+    header = resp.text.splitlines()[0]
+    # two Q blocks (one per dataset).
+    assert header.count("Q") == 2
+
+
+def test_consolidated_empty_is_422() -> None:
+    resp = client.post("/api/export/consolidated", json={"datasets": []})
+    assert resp.status_code == 422

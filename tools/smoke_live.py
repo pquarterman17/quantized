@@ -121,6 +121,23 @@ check(
     h5.status_code == 200 and h5.content[:8] == b"\x89HDF\r\n\x1a\n",
     f"{len(h5.content)}B, magic={h5.content[:4]!r}",
 )
+og = c.post("/api/export/origin", json={"dataset": xrd, "filename": "smoke"})
+check(
+    "export/origin download (zip of .ogs + .csv)",
+    og.status_code == 200
+    and og.headers["content-type"] == "application/zip"
+    and og.content[:2] == b"PK",
+    f"{len(og.content)}B, magic={og.content[:2]!r}",
+)
+cons = c.post(
+    "/api/export/consolidated",
+    json={"datasets": [{"dataset": xrd, "name": "a.refl"}, {"dataset": xrd, "name": "b.refl"}]},
+)
+check(
+    "export/consolidated download (two Q blocks)",
+    cons.status_code == 200 and cons.text.splitlines()[0].count("Q") == 2,
+    cons.text.splitlines()[0] if cons.status_code == 200 else str(cons.status_code),
+)
 
 print("== error handling ==")
 e1 = c.post("/api/fitting/fit", json={"model": "NoSuch", "x": [0, 1], "y": [0, 1]})

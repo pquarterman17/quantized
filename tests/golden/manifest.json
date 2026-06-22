@@ -4,6 +4,28 @@
   "frozen": "2026-06-21",
   "note": "Regenerate via MATLAB: addpath('tools/matlab'); freeze_reference_values(). Bump source_commit when an upstream formula changes.",
   "cases": {
+    "origin_export": {
+      "fixture": "tests/fixtures/xrdml_la2nio4.xrdml",
+      "matlab_fn": "utilities.exportOriginScript (BookName/SheetName='test', MakeGraph)",
+      "python_fn": "quantized.io.origin.format_origin_script",
+      "note": "freeze via tools/matlab/freeze_export_extra.m; .ogs Date line exempted",
+      "rtol": 0,
+      "atol": 0
+    },
+    "consolidated_csv_standard": {
+      "matlab_fn": "bosonPlotter.saveConsolidatedNeutronCSV (per-dataset block, 'standard')",
+      "python_fn": "quantized.io.consolidated.consolidate_csv",
+      "note": "two synthetic same-measurement neutron scans; freeze via freeze_export_extra.m",
+      "rtol": 0,
+      "atol": 0
+    },
+    "consolidated_csv_origin": {
+      "matlab_fn": "bosonPlotter.saveConsolidatedNeutronCSV (per-dataset block, 'origin')",
+      "python_fn": "quantized.io.consolidated.consolidate_csv",
+      "note": "two synthetic same-measurement neutron scans; freeze via freeze_export_extra.m",
+      "rtol": 0,
+      "atol": 0
+    },
     "qd_edp124_default": {
       "fixture": "tests/fixtures/qd_edp124.dat",
       "matlab_fn": "parser.importQDVSM (defaults: XAxis=field, YAxis=moment)",
