@@ -2,33 +2,53 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
+# Least privilege: CI only checks out and tests — it never writes to the repo.
+permissions:
+  contents: read
+
 jobs:
-  test:
-    name: lint + type-check + tests
-    runs-on: ubuntu-latest
+  backend:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        # 3.11 = supported floor (requires-python), 3.13 = latest.
+        python: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync
-
-      # Golden parity fixtures + frozen JSON are committed, so the suite runs
-      # without MATLAB.
-      - name: Ruff (lint)
+          python-version: ${{ matrix.python }}
+      - name: Sync deps
+        run: uv sync --group dev
+      # Lint + type-check once, on the latest interpreter (OS/version-independent).
+      - name: Lint
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
         run: uv run ruff check src tests
-
-      - name: Mypy (type-check)
+      - name: Type check
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
         run: uv run mypy src
-
-      - name: Pytest
+      # Golden fixtures + frozen JSON are committed, so the suite runs without MATLAB.
+      - name: Tests
         run: uv run pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install
+      - name: Unit tests (vitest)
+        run: npm test
+      - name: Build (includes typecheck)
+        run: npm run build

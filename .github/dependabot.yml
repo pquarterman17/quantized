@@ -1,0 +1,36 @@
+version: 2
+
+# Automated dependency updates across the repo's ecosystems. Minor/patch bumps
+# are grouped into one PR per ecosystem to cut noise; major bumps come as
+# individual PRs so breaking changes get reviewed alone.
+
+updates:
+  # GitHub Actions used by ci.yml
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  # Python backend (uv / pyproject.toml)
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  # Frontend SPA (npm)
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
