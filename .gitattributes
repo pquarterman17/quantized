@@ -1,0 +1,41 @@
+# Normalize line endings to LF in the repo and on checkout (both Windows
+# and macOS), so OneDrive sync across machines stops producing spurious
+# CRLF diffs. See memory note "onedrive-crlf-churn".
+* text=auto eol=lf
+
+# Explicit LF for source / text we control
+*.py    text eol=lf
+*.pyi   text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.jsx   text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.toml  text eol=lf
+*.cfg   text eol=lf
+*.ini   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.txt   text eol=lf
+*.svg   text eol=lf
+*.m     text eol=lf
+*.sh    text eol=lf
+# Instrument/data fixtures in this repo are ASCII (QD/PPMS/refl1d) — text,
+# not binary. A genuinely-binary .dat would need a path-specific override.
+*.dat   text eol=lf
+
+# Binary / never-touch
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.pdf   binary
+*.xlsx  binary

@@ -104,3 +104,80 @@ cd frontend && npm run build
   `plan-format.md` conventions; keep a `## Completed` log.
 - `plans/PORT_CHECKLIST.md` — exhaustive feature inventory (created with
   W1); check an item only when ported **and** golden-verified.
+- `plans/ui-implementation-plan.md` — frontend (W7) tiers.
+- `plans/frontend-reuse-library.md` — the fermiviewer-port inventory
+  (which platform modules to copy-vendor, and how).
+- `plans/design/` — the Claude Design "Quantized Design System" handoff
+  (DESIGN_HANDOFF / DESIGN_GUIDE + token CSS); the authority for the UI.
+
+## Lessons learned (working notes)
+
+Practical conventions discovered while porting — follow them to stay green.
+
+### Golden-parity porting
+- **Loop:** read MATLAB source → port to `calc/`/`io/` → add a freeze case
+  to `tools/matlab/freeze_calc_values.m` → run MATLAB to freeze → gate
+  (`ruff check src tests && mypy src && pytest -q`) → commit + tick
+  `PORT_CHECKLIST`. The freeze script needs `setupToolbox` for `+fitting`.
+- **Replicate vs delegate:** replicate MATLAB's *algorithm* for idiosyncratic
+  code (its local `betainc` CDFs, `tinv` norminv+Newton, window functions, SG
+  edge fits, SNIP) — matching the answer isn't enough, match the method.
+  *Delegate* to scipy for standard published algorithms (pchip/spline/makima,
+  `quad`, Nelder-Mead). When scipy has **no** equivalent (Sibson
+  natural-neighbour), document the gap — don't fake it.
+- **MEASURE before loosening tolerance.** Run the port vs the golden in a
+  quick `uv run python -c` first: scipy `quad`↔MATLAB `integral` matched
+  ~1e-15, Nelder-Mead↔`fminsearch` ~1e-5..1e-16 on clean data. Most fits
+  golden at 1e-9; don't pre-emptively relax.
+- **A golden-freeze ERROR is often a latent MATLAB source bug**, not a harness
+  problem (found 4: Bruker flatten, confidenceBand `NPoints {mustBePositive}=0`,
+  datasetAlgebra positional-vs-named `createDataStruct`, autoGuess toolbox
+  `range()`). Surface it (checklist + `project_matlab_bugs_from_golden`
+  memory), freeze the *intended* behaviour inline, port the intent. Fix the
+  sibling `quantized_matlab` repo only deliberately (a branch + headless
+  verify), never silently.
+
+### `jsonencode` golden quirks (the freeze boundary)
+- Flattens N×1 columns to 1-D → `compare_calc` reshapes to the result shape.
+- **Cannot serialize** complex or a MATLAB `dictionary` → freeze real-valued
+  outputs (e.g. `|r|²`, not complex amplitudes); for dict-typed fields, freeze
+  the structured outputs and test the raw map in Python.
+- Writes `Inf`/`NaN` as `null` → keep freeze inputs finite (the VFT-overflow
+  trap), or rely on `compare_calc`'s NaN-equality.
+- A 1-element struct array encodes as an **object**, not a list → normalize.
+- **Store 2-D arrays as 2-D** in the freeze, never flattened — MATLAB is
+  column-major, numpy row-major, so a flatten+reshape transposes silently.
+
+### mypy `--strict` + numpy
+- Wrap any float64-array reassignment from a numpy op (`x**2`, `np.convolve`,
+  `np.polyval`, `np.minimum`, `np.clip`, `np.linalg.*`, int×float) in
+  `np.asarray(..., dtype=float)` — they infer `floating[Any]`/`Any`.
+- No untyped lambdas in a typed context (e.g. a bridge table) — use `def`s.
+- Hoist `Any | None` to a narrowed typed local before numpy calls.
+- Don't reuse a return-variable's name for a `floating[Any]` loop intermediate.
+
+### Lint / CI
+- Always lint **`ruff check src tests`** (CI does) — not just `src`; a
+  tests-only import-sort slipped past a `src`-only local run and reddened CI.
+- CI is a matrix (ubuntu/win/mac × py3.11/3.13) + a frontend job; golden
+  fixtures are committed so it needs no MATLAB. `main` is branch-protected
+  (5 required checks, strict, conversation-resolution) with **admins exempt**,
+  so direct pushes to `main` still work for the owner.
+- Security: repo is public; secret scanning + push protection + Dependabot +
+  CodeQL are on. The `gh` CLI token **cannot** enable CodeQL default setup
+  (no `security_events` scope → 404); CodeQL runs as an advanced-setup
+  workflow (`.github/workflows/codeql.yml`).
+
+### Frontend
+- **Copy-vendor from `../fermiviewer/frontend/src`** with a
+  `// Ported from fermiviewer …` origin header; swap `fvd-*`→`qz-*` classes
+  and the store hook (`useViewer`→`useApp`); keep structure identical so a
+  future diff stays small. Decouple a ported component from the store when it
+  needn't be coupled (e.g. `ToolWindow` owns its position locally).
+- Design tokens are the single styling source — read CSS custom properties
+  (`--accent`, `--series-N`, …); never hardcode colours. Theme/accent/density
+  switch via `data-*` on `<html>`. Unicode-glyph icons, never emoji; cursors
+  `default`; JetBrains Mono for every number.
+- The plot has an **offline client fallback** (`lib/plotdata.ts`): try
+  `/api/plot/series`, fall back to local column packing so the UI + tests run
+  without a backend.
