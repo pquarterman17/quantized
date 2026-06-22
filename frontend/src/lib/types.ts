@@ -29,6 +29,29 @@ export interface Dataset {
   corrections?: CorrectionParams;
 }
 
+/** A registered fit model's metadata (from GET /api/fitting/models). */
+export interface FitModel {
+  name: string;
+  category: string;
+  paramNames: string[];
+  nParams: number;
+  p0: number[];
+  lb: (number | null)[];
+  ub: (number | null)[];
+}
+
+/** Loose result dict from a calc route (fit result, stats, info, …). Keys are
+ *  documented per endpoint; values may be scalars, arrays, or null (NaN/Inf). */
+export type CalcResult = Record<string, unknown>;
+
+/** One element row from the reference table. */
+export interface ElementInfo {
+  Z: number;
+  symbol: string;
+  name: string;
+  [key: string]: unknown;
+}
+
 /** Correction-pipeline params (camelCase wire keys; all optional).
  *  Mirrors `routes/corrections.CorrectionParams` / MATLAB `correctionParams`. */
 export interface CorrectionParams {

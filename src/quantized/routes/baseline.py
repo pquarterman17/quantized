@@ -1,0 +1,115 @@
+"""Thin baseline routes: estimate a slowly-varying background under a signal.
+
+Wraps ``calc.baseline``. ALS / rolling-ball / modpoly operate on ``y`` alone;
+``estimate`` (SNIP / polynomial) needs ``x`` too. Rolling-ball and modpoly also
+return an ``info`` dict (chosen window / iteration count).
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from quantized.calc.baseline import (
+    baseline_als,
+    baseline_modpoly,
+    baseline_rolling_ball,
+    estimate_background,
+)
+from quantized.routes._payload import jsonify, to_jsonable
+
+router = APIRouter(prefix="/api/baseline", tags=["baseline"])
+
+
+class EstimateRequest(BaseModel):
+    x: list[float]
+    y: list[float]
+    method: str = "snip"
+    max_window_deg: float = 2.0
+    smooth_passes: int = 3
+    poly_degree: int = 4
+    iterative: bool = False
+    iter_max_passes: int = 3
+    iter_sigma: float = 3.0
+
+
+class ALSRequest(BaseModel):
+    y: list[float]
+    lam: float = 1e6
+    p: float = 0.01
+    max_iter: int = 20
+    tol: float = 1e-6
+
+
+class RollingBallRequest(BaseModel):
+    y: list[float]
+    radius: int = 100
+    smooth: int = -1
+
+
+class ModPolyRequest(BaseModel):
+    y: list[float]
+    order: int = 5
+    max_iter: int = 100
+    tol: float = 1e-6
+
+
+@router.post("/estimate")
+def estimate(req: EstimateRequest) -> dict[str, Any]:
+    """SNIP / polynomial background, optionally peak-masked and refined."""
+    try:
+        bg = estimate_background(
+            req.x,
+            req.y,
+            method=req.method,
+            max_window_deg=req.max_window_deg,
+            smooth_passes=req.smooth_passes,
+            poly_degree=req.poly_degree,
+            iterative=req.iterative,
+            iter_max_passes=req.iter_max_passes,
+            iter_sigma=req.iter_sigma,
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"baseline": jsonify(bg)}
+
+
+@router.post("/als")
+def als(req: ALSRequest) -> dict[str, Any]:
+    """Asymmetric least-squares (Eilers/Whittaker) baseline."""
+    try:
+        bg = baseline_als(
+            np.asarray(req.y, dtype=float),
+            lam=req.lam,
+            p=req.p,
+            max_iter=req.max_iter,
+            tol=req.tol,
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"baseline": jsonify(bg)}
+
+
+@router.post("/rollingball")
+def rollingball(req: RollingBallRequest) -> dict[str, Any]:
+    """Rolling-ball (grayscale morphological opening) baseline."""
+    try:
+        bg, info = baseline_rolling_ball(req.y, radius=req.radius, smooth=req.smooth)
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"baseline": jsonify(bg), "info": to_jsonable(info)}
+
+
+@router.post("/modpoly")
+def modpoly(req: ModPolyRequest) -> dict[str, Any]:
+    """Modified-polynomial (Lieber) baseline."""
+    try:
+        bg, info = baseline_modpoly(
+            req.y, order=req.order, max_iter=req.max_iter, tol=req.tol
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"baseline": jsonify(bg), "info": to_jsonable(info)}

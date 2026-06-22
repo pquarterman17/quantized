@@ -1,7 +1,14 @@
 // Typed fetch layer over the FastAPI backend. All endpoints are under /api
 // (dev: Vite proxies to uvicorn :8000; prod: same-origin static mount).
 
-import type { CorrectionParams, DataStruct, PlotSeriesResponse } from "./types";
+import type {
+  CalcResult,
+  CorrectionParams,
+  DataStruct,
+  ElementInfo,
+  FitModel,
+  PlotSeriesResponse,
+} from "./types";
 
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -9,6 +16,14 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  return unwrap<T>(res);
+}
+
+async function getJSON<T>(path: string): Promise<T> {
+  return unwrap<T>(await fetch(path));
+}
+
+async function unwrap<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`;
     try {
@@ -56,4 +71,124 @@ export interface CorrectionsRequest {
 /** Apply the correction pipeline to a DataStruct → corrected DataStruct. */
 export function applyCorrections(req: CorrectionsRequest): Promise<DataStruct> {
   return postJSON<DataStruct>("/api/corrections/apply", req);
+}
+
+// ── Fitting ─────────────────────────────────────────────────────────────────
+export interface FitRequest {
+  model: string;
+  x: number[];
+  y: number[];
+  p0?: number[];
+  lower?: number[];
+  upper?: number[];
+  weights?: number[];
+  fixed?: boolean[];
+  calc_errors?: boolean;
+}
+
+/** Registry of fit models with parameter names and defaults. */
+export function listFitModels(): Promise<{ models: FitModel[] }> {
+  return getJSON("/api/fitting/models");
+}
+
+/** Initial-parameter guess for a named model given (x, y). */
+export function autoGuess(model: string, x: number[], y: number[]): Promise<{ p0: number[] }> {
+  return postJSON("/api/fitting/autoguess", { model, x, y });
+}
+
+/** Bounded nonlinear least-squares fit of a named model. */
+export function fitModel(req: FitRequest): Promise<CalcResult> {
+  return postJSON("/api/fitting/fit", req);
+}
+
+// ── Baseline ────────────────────────────────────────────────────────────────
+type BaselineResult = { baseline: (number | null)[] };
+type BaselineWithInfo = BaselineResult & { info: CalcResult };
+
+export function baselineEstimate(body: {
+  x: number[];
+  y: number[];
+  method?: string;
+}): Promise<BaselineResult> {
+  return postJSON("/api/baseline/estimate", body);
+}
+
+export function baselineALS(body: {
+  y: number[];
+  lam?: number;
+  p?: number;
+}): Promise<BaselineResult> {
+  return postJSON("/api/baseline/als", body);
+}
+
+export function baselineRollingBall(body: {
+  y: number[];
+  radius?: number;
+  smooth?: number;
+}): Promise<BaselineWithInfo> {
+  return postJSON("/api/baseline/rollingball", body);
+}
+
+export function baselineModPoly(body: {
+  y: number[];
+  order?: number;
+}): Promise<BaselineWithInfo> {
+  return postJSON("/api/baseline/modpoly", body);
+}
+
+// ── Stats ───────────────────────────────────────────────────────────────────
+export function statsDescriptive(x: number[]): Promise<CalcResult> {
+  return postJSON("/api/stats/descriptive", { x });
+}
+
+export function statsRegression(body: {
+  x: number[];
+  y: number[];
+  order?: number;
+  alpha?: number;
+}): Promise<CalcResult> {
+  return postJSON("/api/stats/regression", body);
+}
+
+export function statsTTest(body: {
+  x: number[];
+  y?: number[];
+  mu?: number;
+  paired?: boolean;
+  tail?: string;
+}): Promise<CalcResult> {
+  return postJSON("/api/stats/ttest", body);
+}
+
+export function statsAnova(groups: number[][]): Promise<CalcResult> {
+  return postJSON("/api/stats/anova", { groups });
+}
+
+export function statsPCA(body: {
+  data: number[][];
+  center?: boolean;
+  scale?: boolean;
+}): Promise<CalcResult> {
+  return postJSON("/api/stats/pca", body);
+}
+
+// ── Reference data ──────────────────────────────────────────────────────────
+export function getConstants(): Promise<{ constants: Record<string, number> }> {
+  return getJSON("/api/reference/constants");
+}
+
+export function getElements(): Promise<{ elements: ElementInfo[] }> {
+  return getJSON("/api/reference/elements");
+}
+
+export function getElement(symbol: string): Promise<ElementInfo> {
+  return getJSON(`/api/reference/elements/${encodeURIComponent(symbol)}`);
+}
+
+export function convertUnits(
+  value: number | number[],
+  from: string,
+  to: string,
+): Promise<{ result: number | (number | null)[]; info: CalcResult }> {
+  return postJSON("/api/reference/convert", { value, from, to });
 }

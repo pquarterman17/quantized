@@ -153,7 +153,14 @@ def curve_fit(
     dof = n - n_free
     chi_sq_red = ss_res / max(dof, 1)
     rmse = math.sqrt(ss_res / n)
-    log_lik = -n / 2 * math.log(2 * math.pi * ss_res / n) - n / 2
+    # AIC via the Gaussian-error log-likelihood. A perfect fit (ss_res == 0)
+    # gives log(0); MATLAB returns -Inf there (-> logLik +Inf, AIC -Inf), but
+    # Python's math.log raises. Guard to preserve MATLAB's intent exactly.
+    log_lik = (
+        -n / 2 * math.log(2 * math.pi * ss_res / n) - n / 2
+        if ss_res > 0
+        else math.inf
+    )
     aic = 2 * n_free - 2 * log_lik
 
     errors = np.full(m, np.nan)
