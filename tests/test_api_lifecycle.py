@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import quantized.app as app_mod
 from fastapi.testclient import TestClient
 
+import quantized.app as app_mod
 from quantized.app import app
 
 client = TestClient(app)
