@@ -13,7 +13,7 @@ const payload: PlotPayload = {
   xUnit: "Oe",
 };
 
-const base = { width: 600, height: 400, onReadout: vi.fn() };
+const base = { width: 600, height: 400, xLog: false, onReadout: vi.fn() };
 
 describe("buildOpts", () => {
   it("enables box-zoom drag only in zoom mode", () => {
@@ -32,6 +32,11 @@ describe("buildOpts", () => {
   it("sets the log distribution on the y scale when yLog", () => {
     expect(buildOpts(payload, { ...base, yLog: true, tool: "zoom" }).scales?.y?.distr).toBe(3);
     expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom" }).scales?.y?.distr).toBe(1);
+  });
+
+  it("sets the log distribution on the x scale when xLog", () => {
+    expect(buildOpts(payload, { ...base, xLog: true, yLog: false, tool: "zoom" }).scales?.x?.distr).toBe(3);
+    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom" }).scales?.x?.distr).toBe(1);
   });
 
   it("labels the y series with its unit", () => {

@@ -25,6 +25,7 @@ const TOOLS = [
 export default function PlotStage() {
   const active = useActiveDataset();
   const yLog = useApp((s) => s.yLog);
+  const xLog = useApp((s) => s.xLog);
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const tool = useApp((s) => s.plotTool);
@@ -51,13 +52,13 @@ export default function PlotStage() {
       setPayload(null);
       return;
     }
-    fetchPlot(active.data, yLog).then((p) => {
+    fetchPlot(active.data, yLog, xLog).then((p) => {
       if (!cancelled) setPayload(p);
     });
     return () => {
       cancelled = true;
     };
-  }, [active, yLog]);
+  }, [active, yLog, xLog]);
 
   // (Re)create the uPlot instance when payload / size / theme change.
   useEffect(() => {
@@ -75,6 +76,7 @@ export default function PlotStage() {
         width: w,
         height: h,
         yLog,
+        xLog,
         tool,
         onReadout: setReadout,
       }),
@@ -96,7 +98,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, theme, accent, tool]);
+  }, [displayPayload, yLog, xLog, theme, accent, tool]);
 
   function resetView() {
     if (plotRef.current && displayPayload) {

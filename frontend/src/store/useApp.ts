@@ -25,6 +25,7 @@ interface AppState {
   accent: Accent;
   density: Density;
   yLog: boolean;
+  xLog: boolean;
   plotTool: PlotTool;
   cmdkOpen: boolean;
   curveFitOpen: boolean;
@@ -47,6 +48,7 @@ interface AppState {
   setAccent: (accent: Accent) => void;
   setDensity: (density: Density) => void;
   setYLog: (yLog: boolean) => void;
+  setXLog: (xLog: boolean) => void;
   setPlotTool: (tool: PlotTool) => void;
   setCmdk: (open: boolean) => void;
   setCurveFitOpen: (open: boolean) => void;
@@ -74,6 +76,7 @@ export const useApp = create<AppState>((set, get) => ({
   accent: "violet",
   density: "regular",
   yLog: false,
+  xLog: false,
   plotTool: "zoom",
   cmdkOpen: false,
   curveFitOpen: false,
@@ -163,6 +166,7 @@ export const useApp = create<AppState>((set, get) => ({
     set({ density });
   },
   setYLog: (yLog) => set({ yLog }),
+  setXLog: (xLog) => set({ xLog }),
   setPlotTool: (plotTool) => set({ plotTool }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
   setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),

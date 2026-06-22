@@ -102,9 +102,13 @@ export function withPeakOverlay(
 }
 
 /** Fetch plot series from the backend; fall back to client packing offline. */
-export async function fetchPlot(ds: DataStruct, yLog: boolean): Promise<PlotPayload> {
+export async function fetchPlot(
+  ds: DataStruct,
+  yLog: boolean,
+  xLog = false,
+): Promise<PlotPayload> {
   try {
-    const r = await plotSeries({ dataset: ds, y_log: yLog });
+    const r = await plotSeries({ dataset: ds, y_log: yLog, x_log: xLog });
     return fromResponse(r);
   } catch {
     return buildColumns(ds);

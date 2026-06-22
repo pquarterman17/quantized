@@ -62,12 +62,28 @@ export default function App() {
       .catch(() => setStatus("offline — demo mode"));
   }, [setStatus]);
 
-  // Global ⌘K / Ctrl+K opens the command palette.
+  // Global keyboard shortcuts (Cmd/Ctrl + key).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        useApp.getState().setCmdk(true);
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const s = useApp.getState();
+      switch (e.key.toLowerCase()) {
+        case "k":
+          e.preventDefault();
+          s.setCmdk(true);
+          break;
+        case "o":
+          e.preventDefault();
+          openFilePicker((files) => void s.importFiles(files));
+          break;
+        case "[":
+          e.preventDefault();
+          s.toggleLeft();
+          break;
+        case "]":
+          e.preventDefault();
+          s.toggleRight();
+          break;
       }
     };
     window.addEventListener("keydown", onKey);
@@ -82,6 +98,7 @@ export default function App() {
         id: "import",
         group: "File",
         label: "Import data…",
+        shortcut: "⌘O",
         run: () => openFilePicker((files) => void s().importFiles(files)),
       },
       {

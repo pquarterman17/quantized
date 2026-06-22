@@ -27,12 +27,13 @@ export interface BuildOptsArgs {
   width: number;
   height: number;
   yLog: boolean;
+  xLog: boolean;
   tool: PlotTool;
   onReadout: (r: Readout | null) => void;
 }
 
 export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
-  const { width, height, yLog, tool, onReadout } = args;
+  const { width, height, yLog, xLog, tool, onReadout } = args;
   const axisColor = cssVar("--text-dim") || "#aaa";
   const gridColor = cssVar("--grid-line") || "#333";
   const font = `11px ${cssVar("--font-mono") || "monospace"}`;
@@ -56,7 +57,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     cursor: { drag: { x: tool === "zoom", y: tool === "zoom", uni: 1 } },
     plugins,
     legend: { show: false },
-    scales: { y: { distr: yLog ? 3 : 1 } },
+    scales: { x: { distr: xLog ? 3 : 1 }, y: { distr: yLog ? 3 : 1 } },
     axes: [
       { ...axis, label: xLabel },
       { ...axis, size: 60 },

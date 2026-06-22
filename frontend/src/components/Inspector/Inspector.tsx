@@ -21,6 +21,8 @@ export default function Inspector() {
   const active = useActiveDataset();
   const yLog = useApp((s) => s.yLog);
   const setYLog = useApp((s) => s.setYLog);
+  const xLog = useApp((s) => s.xLog);
+  const setXLog = useApp((s) => s.setXLog);
   const theme = useApp((s) => s.theme);
   const setTheme = useApp((s) => s.setTheme);
   const accent = useApp((s) => s.accent);
@@ -48,6 +50,14 @@ export default function Inspector() {
       <StatsCard active={active} />
 
       <Card title="Axes">
+        <label className="qz-check">
+          <input
+            type="checkbox"
+            checked={xLog}
+            onChange={(e) => setXLog(e.target.checked)}
+          />
+          Log X axis
+        </label>
         <label className="qz-check">
           <input
             type="checkbox"
