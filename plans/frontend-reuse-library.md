@@ -163,4 +163,17 @@ Tier-1 items 1, 3, 5 here).
 
 ## Completed
 
-_(none yet)_
+- ~~**Tier 1 platform library port (items 1–5 + errlog)**~~ (2026-06-21) — ported
+  from fermiviewer with origin headers: `ToolWindow` (decoupled — owns local
+  position + focus z, reuses `qzk-win*` frame), `TooltipLayer` (`[data-tip]`
+  delegated tooltips), the command-palette stack (`lib/fuzzy`, `store/commands`,
+  `CommandPalette` bound to `useApp.cmdkOpen`, ⌘K keymap, MenuBar publishing +
+  search chip, 7 curated actions), the param-dialog stack (`lib/params`,
+  `ParamFields`, `ParamDialog`+`askParams`), `ResultsWindow` (ToolWindow +
+  DataTable + CSV/JSON download), and `lib/errlog` (installed in main). Added
+  `styles/platform.css` (`qz-*` chrome adapted from fermiviewer theme-web.css,
+  same tokens). 21 vitest (was 13), tsc + build green.
+  **Deferred:** `lib/lifecycle.ts` (item 6) — needs a backend `/api/ws`
+  WebSocket route first (quantized backend has none yet); port + wire when that
+  lands. ToolWindow/ParamDialog/ResultsWindow now unblock the Curve-Fit
+  workshop (UI plan Tier 2 #13).

@@ -1,0 +1,153 @@
+/* Platform chrome for the ported fermiviewer overlays (command palette,
+   parameter dialog, tooltips, dialog frames). Adapted from fermiviewer
+   theme-web.css with fvd-* → qz-* renames; identical design tokens. The
+   tool/results window frame reuses the kit's qzk-win* classes (shell.css). */
+
+/* ── overlay backdrop (modal scrim) ── */
+.qz-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 0.35);
+  z-index: 100;
+}
+
+/* ── centered glass dialog panel ── */
+.qz-dialog {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(460px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+  padding: var(--pad-lg);
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.qz-dialog h2 {
+  margin: 0 0 var(--pad);
+  font-size: var(--font-size);
+  font-weight: var(--weight-semibold);
+}
+
+/* ── command palette ── */
+.qz-cmdk {
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 90vw);
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+}
+.qz-cmdk-input {
+  border: none;
+  border-bottom: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--type-display);
+  padding: 12px 14px;
+  outline: none;
+}
+.qz-cmdk-list {
+  overflow-y: auto;
+  padding: 6px;
+}
+.qz-cmdk-group {
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-faint);
+  padding: 8px 8px 3px;
+}
+.qz-cmdk-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  cursor: default;
+}
+.qz-cmdk-item.active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.qz-cmdk-hit {
+  background: none;
+  color: var(--accent-text);
+  font-weight: var(--weight-semibold);
+}
+.qz-cmdk-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-faint);
+}
+.qz-shortcut {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--text-faint);
+}
+
+/* ── hover tooltip (mounted at document body) ── */
+.qz-tip {
+  position: fixed;
+  z-index: 2000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.qz-tip-key {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+/* ── parameter-field row (shared by ParamDialog) ── */
+.qz-ws-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+}
+.qz-ws-row .k {
+  color: var(--text-faint);
+  white-space: nowrap;
+  flex: 1;
+}
+.qz-ws-row input,
+.qz-ws-row select {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  padding: 2px 5px;
+}
+
+/* ── dialog button row ── */
+.qz-btn-row {
+  display: flex;
+  gap: var(--pad);
+  padding-top: var(--pad);
+}
+.qz-btn-row .qz-btn {
+  flex: 1;
+}

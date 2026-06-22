@@ -1,0 +1,123 @@
+// Ported from fermiviewer frontend/src/components/overlays/CommandPalette.tsx.
+// ⌘K fuzzy command palette. Curated actions come from App; menu commands are
+// published by the MenuBar into the commands store and merged on open.
+
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+
+import { fuzzy } from "../../lib/fuzzy";
+import { mergeCommands, useCommands, type Action } from "../../store/commands";
+import { useApp } from "../../store/useApp";
+
+export type { Action };
+
+export default function CommandPalette({ actions }: { actions: Action[] }) {
+  const open = useApp((s) => s.cmdkOpen);
+  const setCmdk = useApp((s) => s.setCmdk);
+  const [query, setQuery] = useState("");
+  const [cursor, setCursor] = useState(0);
+  const [menuCmds, setMenuCmds] = useState<Action[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      setCursor(0);
+      setMenuCmds(useCommands.getState().menuCommands);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [open]);
+
+  const allActions = useMemo(
+    () => mergeCommands(actions, menuCmds),
+    [actions, menuCmds],
+  );
+
+  const matches = useMemo(() => {
+    return allActions
+      .map((a) => ({ a, m: fuzzy(query, a.label) }))
+      .filter((x): x is { a: Action; m: NonNullable<typeof x.m> } => !!x.m)
+      .sort((x, y) => y.m.score - x.m.score);
+  }, [allActions, query]);
+
+  useEffect(() => {
+    setCursor(0);
+  }, [query]);
+
+  if (!open) return null;
+
+  const run = (a: Action) => {
+    setCmdk(false);
+    a.run();
+  };
+
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      setCmdk(false);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setCursor((c) => Math.min(matches.length - 1, c + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setCursor((c) => Math.max(0, c - 1));
+    } else if (e.key === "Enter" && matches[cursor]) {
+      run(matches[cursor].a);
+    }
+    e.stopPropagation();
+  };
+
+  let lastGroup = "";
+
+  return (
+    <div className="qz-overlay-backdrop" onMouseDown={() => setCmdk(false)}>
+      <div className="qzk-glass qz-cmdk" onMouseDown={(e) => e.stopPropagation()}>
+        <input
+          ref={inputRef}
+          className="qz-cmdk-input"
+          placeholder="Type a command…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onKey}
+        />
+        <div className="qz-cmdk-list">
+          {matches.length === 0 && (
+            <div className="qz-cmdk-empty">No matching commands</div>
+          )}
+          {matches.map(({ a, m }, i) => {
+            const header =
+              a.group !== lastGroup ? (
+                <div className="qz-cmdk-group">{a.group}</div>
+              ) : null;
+            lastGroup = a.group;
+            return (
+              <div key={a.id}>
+                {header}
+                <div
+                  className={`qz-cmdk-item${i === cursor ? " active" : ""}`}
+                  onMouseEnter={() => setCursor(i)}
+                  onMouseDown={() => run(a)}
+                >
+                  <span>{highlight(a.label, m.hits)}</span>
+                  {a.shortcut && <span className="qz-shortcut">{a.shortcut}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function highlight(label: string, hits: number[]): ReactNode {
+  if (hits.length === 0) return label;
+  const set = new Set(hits);
+  return label.split("").map((ch, i) =>
+    set.has(i) ? (
+      <mark key={i} className="qz-cmdk-hit">
+        {ch}
+      </mark>
+    ) : (
+      ch
+    ),
+  );
+}

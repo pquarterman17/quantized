@@ -22,6 +22,7 @@ interface AppState {
   density: Density;
   yLog: boolean;
   plotTool: PlotTool;
+  cmdkOpen: boolean;
   status: string;
 
   addDataset: (ds: Dataset) => void;
@@ -35,6 +36,7 @@ interface AppState {
   setDensity: (density: Density) => void;
   setYLog: (yLog: boolean) => void;
   setPlotTool: (tool: PlotTool) => void;
+  setCmdk: (open: boolean) => void;
   setStatus: (status: string) => void;
 }
 
@@ -56,6 +58,7 @@ export const useApp = create<AppState>((set, get) => ({
   density: "regular",
   yLog: false,
   plotTool: "zoom",
+  cmdkOpen: false,
   status: "starting…",
 
   addDataset: (ds) =>
@@ -88,6 +91,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
   setYLog: (yLog) => set({ yLog }),
   setPlotTool: (plotTool) => set({ plotTool }),
+  setCmdk: (cmdkOpen) => set({ cmdkOpen }),
   setStatus: (status) => set({ status }),
 }));
 
