@@ -106,6 +106,31 @@
       "python_fn": "quantized.io.rigaku.import_rigaku_raw",
       "rtol": 1e-9,
       "atol": 1e-9
+    },
+    "xrdcsv_standard_both": {
+      "fixture": "tests/fixtures/xrdml_la2nio4.xrdml",
+      "matlab_fn": "utilities.writeXRDcsv (Format=standard, Intensity=both, IncludeMetadata=false) on parser.importXRDML output",
+      "python_fn": "quantized.io.xrd_csv.format_xrd_csv (fmt=standard, intensity=both, include_metadata=False)",
+      "note": "writer golden; frozen text lines, byte-exact comparison (IncludeMetadata=false -> deterministic)",
+      "compare": "lines"
+    },
+    "xrdcsv_standard_counts": {
+      "fixture": "tests/fixtures/xrdml_la2nio4.xrdml",
+      "matlab_fn": "utilities.writeXRDcsv (Format=standard, Intensity=counts, IncludeMetadata=false)",
+      "python_fn": "quantized.io.xrd_csv.format_xrd_csv (fmt=standard, intensity=counts, include_metadata=False)",
+      "compare": "lines"
+    },
+    "xrdcsv_standard_cps": {
+      "fixture": "tests/fixtures/xrdml_la2nio4.xrdml",
+      "matlab_fn": "utilities.writeXRDcsv (Format=standard, Intensity=cps, IncludeMetadata=false)",
+      "python_fn": "quantized.io.xrd_csv.format_xrd_csv (fmt=standard, intensity=cps, include_metadata=False)",
+      "compare": "lines"
+    },
+    "xrdcsv_origin_both": {
+      "fixture": "tests/fixtures/xrdml_la2nio4.xrdml",
+      "matlab_fn": "utilities.writeXRDcsv (Format=origin, Intensity=both, IncludeMetadata=false)",
+      "python_fn": "quantized.io.xrd_csv.format_xrd_csv (fmt=origin, intensity=both, include_metadata=False)",
+      "compare": "lines"
     }
   }
 }
