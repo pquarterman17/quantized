@@ -101,6 +101,21 @@ function freeze_reference_values()
     freezeWriterCase(dwr, fullfile(goldenDir, 'xrdcsv_origin_both.json'), ...
         'xrdml_la2nio4.xrdml', 'origin', 'both');
 
+    % ── Writer: HDF5 exporter (utilities.exportHDF5) ──────────────────────
+    % Binary HDF5 bytes differ between MATLAB h5write and Python h5py, so we
+    % freeze the *logical* content: read the MATLAB-written .h5 back via
+    % h5info/h5read/h5readatt and emit JSON capturing every dataset path,
+    % shape, class, numeric values, and every attribute name->value. The
+    % Python golden test writes the same logical DataStruct with
+    % quantized.io.hdf5.write_hdf5 and asserts the tree/dtypes/values/attrs
+    % match within tolerance.
+    %
+    % A synthetic DataStruct (built in freeze_hdf5_only) keeps the case fully
+    % deterministic and parser-naming-agnostic so the Python side can
+    % construct an identical logical input. Defined standalone in
+    % freeze_hdf5_only.m so a worktree can call it directly.
+    freeze_hdf5_only(fullfile(goldenDir, 'hdf5_synth_default.json'));
+
     fprintf('Done.\n');
 end
 

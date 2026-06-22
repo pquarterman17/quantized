@@ -131,6 +131,15 @@
       "matlab_fn": "utilities.writeXRDcsv (Format=origin, Intensity=both, IncludeMetadata=false)",
       "python_fn": "quantized.io.xrd_csv.format_xrd_csv (fmt=origin, intensity=both, include_metadata=False)",
       "compare": "lines"
+    },
+    "hdf5_synth_default": {
+      "fixture": "synthetic DataStruct built in tools/matlab/freeze_hdf5_only.m",
+      "matlab_fn": "utilities.exportHDF5 (CorrData + Corrections + Peaks), read back via h5info/h5read/h5readatt",
+      "python_fn": "quantized.io.hdf5.write_hdf5, reopened with h5py",
+      "note": "binary HDF5 bytes differ between MATLAB h5write and h5py; this freezes the LOGICAL content (dataset paths/shapes/classes/values + every attribute name->value). 'toolboxName' (quantized vs quantized_matlab) and 'createdAt' (timestamp) are presence-only, not value-compared. MATLAB jsonencode flattens 2-D datasets column-major -> Python reshapes with order='F'.",
+      "compare": "hdf5_logical",
+      "rtol": 1e-12,
+      "atol": 1e-12
     }
   }
 }
