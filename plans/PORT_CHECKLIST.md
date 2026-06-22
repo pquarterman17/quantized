@@ -34,7 +34,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] DataStruct contract — `+parser/createDataStruct.m` → `datastruct.py`
 
 ### Export writers
-- [ ] XRD CSV — `+utilities/writeXRDcsv.m`
+- [x] XRD CSV — `+utilities/writeXRDcsv.m` → `io/xrd_csv.py` (golden: xrdcsv_standard_{both,counts,cps}, xrdcsv_origin_both)
 - [ ] HDF5 — `+utilities/exportHDF5.m`
 - [ ] Origin-ASCII + `.ogs` LabTalk script — `+utilities/exportOriginScript.m`
 - [ ] Reflectivity/neutron consolidated CSV (role-based columns) — BosonPlotter CSV path

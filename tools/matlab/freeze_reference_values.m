@@ -87,7 +87,50 @@ function freeze_reference_values()
     drg = parser.importRigaku_raw(rgk);
     freezeCase(drg, fullfile(goldenDir, 'rigaku_yig_default.json'), 'rigaku_yig.raw');
 
+    % ── Writer: XRD CSV exporter (utilities.writeXRDcsv) ──────────────────
+    % Freeze the writer output text (IncludeMetadata=false -> fully
+    % deterministic, parser-independent). Source DataStruct is the XRDML
+    % fixture parsed with defaults (Intensity=cps, countingTime present).
+    dwr = parser.importXRDML(xrdml);   % cps, countingTime=23.97
+    freezeWriterCase(dwr, fullfile(goldenDir, 'xrdcsv_standard_both.json'), ...
+        'xrdml_la2nio4.xrdml', 'standard', 'both');
+    freezeWriterCase(dwr, fullfile(goldenDir, 'xrdcsv_standard_counts.json'), ...
+        'xrdml_la2nio4.xrdml', 'standard', 'counts');
+    freezeWriterCase(dwr, fullfile(goldenDir, 'xrdcsv_standard_cps.json'), ...
+        'xrdml_la2nio4.xrdml', 'standard', 'cps');
+    freezeWriterCase(dwr, fullfile(goldenDir, 'xrdcsv_origin_both.json'), ...
+        'xrdml_la2nio4.xrdml', 'origin', 'both');
+
     fprintf('Done.\n');
+end
+
+function freezeWriterCase(d, outPath, srcName, fmt, intensity)
+%FREEZEWRITERCASE  Run utilities.writeXRDcsv and freeze the text as JSON lines.
+    tmp = [tempname '.csv'];
+    cleanup = onCleanup(@() deleteIfExists(tmp)); %#ok<NASGU>
+    utilities.writeXRDcsv(d, tmp, Format=fmt, Intensity=intensity, ...
+        IncludeMetadata=false);
+    raw = fileread(tmp);
+    raw = strrep(raw, sprintf('\r\n'), sprintf('\n'));   % normalise newlines
+    lines = strsplit(raw, sprintf('\n'), 'CollapseDelimiters', false);
+    % strsplit on a trailing "\n" yields a trailing '' element; kept so the
+    % Python side can assert the trailing-newline contract too.
+    out = struct();
+    out.source_file = srcName;
+    out.format      = fmt;
+    out.intensity   = intensity;
+    out.lines       = lines;     % cell -> JSON array of strings
+    fid = fopen(outPath, 'w');
+    assert(fid > 0, 'cannot open %s for writing', outPath);
+    fwrite(fid, jsonencode(out));
+    fclose(fid);
+    fprintf('froze writer %s  (%d lines)\n', outPath, numel(lines));
+end
+
+function deleteIfExists(p)
+    if isfile(p)
+        delete(p);
+    end
 end
 
 function freezeCase(d, outPath, srcName)
