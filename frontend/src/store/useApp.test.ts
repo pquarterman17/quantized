@@ -70,6 +70,22 @@ describe("useApp corrections", () => {
   });
 });
 
+describe("useApp appearance prefs", () => {
+  it("setTheme applies to <html> and persists to localStorage", () => {
+    useApp.getState().setTheme("light");
+    expect(document.documentElement.dataset.theme).toBe("light");
+    const saved = JSON.parse(localStorage.getItem("qz.prefs") ?? "{}");
+    expect(saved.theme).toBe("light");
+    useApp.getState().setTheme("dark"); // restore
+  });
+
+  it("applied the persisted appearance attributes on load", () => {
+    // The module-level apply ran on import, so the attributes exist.
+    expect(document.documentElement.dataset.accent).toBeTruthy();
+    expect(document.documentElement.dataset.density).toBeTruthy();
+  });
+});
+
 describe("useApp importFiles", () => {
   const fakeFile = (name: string) => new File(["x"], name);
 

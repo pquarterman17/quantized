@@ -61,12 +61,45 @@ interface AppState {
   setStatus: (status: string) => void;
 }
 
+// ── Appearance prefs persisted to localStorage (survive a reload) ──
+const PREFS_KEY = "qz.prefs";
+const THEMES = ["dark", "light"];
+const ACCENTS = ["violet", "teal", "ocean", "amber", "rose"];
+const DENSITIES = ["compact", "regular", "comfy"];
+
+interface Prefs {
+  theme: Theme;
+  accent: Accent;
+  density: Density;
+}
+
+function loadPrefs(): Prefs {
+  const fb: Prefs = { theme: "dark", accent: "violet", density: "regular" };
+  try {
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") as Record<string, unknown>;
+    return {
+      theme: THEMES.includes(p.theme as string) ? (p.theme as Theme) : fb.theme,
+      accent: ACCENTS.includes(p.accent as string) ? (p.accent as Accent) : fb.accent,
+      density: DENSITIES.includes(p.density as string) ? (p.density as Density) : fb.density,
+    };
+  } catch {
+    return fb;
+  }
+}
+
 function applyDocAttrs(theme: Theme, accent: Accent, density: Density): void {
   const el = document.documentElement;
   el.dataset.theme = theme;
   el.dataset.accent = accent;
   el.dataset.density = density;
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ theme, accent, density }));
+  } catch {
+    /* storage unavailable (private mode) — non-fatal */
+  }
 }
+
+const _initialPrefs = loadPrefs();
 
 export const useApp = create<AppState>((set, get) => ({
   datasets: [],
@@ -74,9 +107,9 @@ export const useApp = create<AppState>((set, get) => ({
   leftCollapsed: false,
   rightCollapsed: false,
   stageTab: "plot",
-  theme: "dark",
-  accent: "violet",
-  density: "regular",
+  theme: _initialPrefs.theme,
+  accent: _initialPrefs.accent,
+  density: _initialPrefs.density,
   yLog: false,
   xLog: false,
   yKeys: null,
@@ -181,6 +214,10 @@ export const useApp = create<AppState>((set, get) => ({
   setPeakOverlay: (peakOverlay) => set({ peakOverlay }),
   setStatus: (status) => set({ status }),
 }));
+
+// Apply the persisted appearance to <html> on load (set* only ran on change,
+// so without this the first paint had no theme/accent/density attributes).
+applyDocAttrs(_initialPrefs.theme, _initialPrefs.accent, _initialPrefs.density);
 
 /** Convenience selector: the currently active dataset (or null). */
 export function useActiveDataset(): Dataset | null {
