@@ -1,11 +1,12 @@
 // Status bar: backend connection dot + terse status copy + dataset count.
 
 import { StatusDot } from "../primitives";
+import { useConnection } from "../../lib/lifecycle";
 import { useApp } from "../../store/useApp";
 
 export default function StatusBar() {
   const status = useApp((s) => s.status);
-  const connected = useApp((s) => s.status === "backend ready");
+  const connected = useConnection((s) => s.connected);
   const count = useApp((s) => s.datasets.length);
 
   return (

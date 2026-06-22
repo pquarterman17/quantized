@@ -173,7 +173,13 @@ Tier-1 items 1, 3, 5 here).
   DataTable + CSV/JSON download), and `lib/errlog` (installed in main). Added
   `styles/platform.css` (`qz-*` chrome adapted from fermiviewer theme-web.css,
   same tokens). 21 vitest (was 13), tsc + build green.
-  **Deferred:** `lib/lifecycle.ts` (item 6) — needs a backend `/api/ws`
-  WebSocket route first (quantized backend has none yet); port + wire when that
-  lands. ToolWindow/ParamDialog/ResultsWindow now unblock the Curve-Fit
-  workshop (UI plan Tier 2 #13).
+  ToolWindow/ParamDialog/ResultsWindow now unblock the Curve-Fit workshop
+  (UI plan Tier 2 #13).
+- ~~**Tier 1 #6: lifecycle (full-stack)**~~ (2026-06-21) — added the backend
+  `/api/ws` presence WebSocket in `app.py` (client counter, same-origin guard,
+  env-gated `QZ_AUTO_SHUTDOWN` grace-shutdown for the future `qz --desktop`
+  model) + ported `lib/lifecycle.ts` (`connectLifecycle` with backoff →
+  `useConnection`), wired in `main.tsx`, and switched StatusBar's connected dot
+  to the live socket. 3 backend WS tests (TestClient presence/origin) + a
+  real-uvicorn upgrade smoke (connect OK, cross-origin rejected). Backend 257
+  tests; frontend tsc/21 vitest/build green.
