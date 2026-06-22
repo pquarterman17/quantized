@@ -3,8 +3,11 @@
 
 import { create } from "zustand";
 
-import { applyCorrections as applyCorrectionsApi } from "../lib/api";
+import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
 import type { CorrectionParams, Dataset, FitOverlay, PeakOverlay } from "../lib/types";
+
+let _idSeq = 0;
+const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
 
 export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
@@ -32,6 +35,7 @@ interface AppState {
   status: string;
 
   addDataset: (ds: Dataset) => void;
+  importFiles: (files: File[]) => Promise<void>;
   setActive: (id: string) => void;
   removeDataset: (id: string) => void;
   applyCorrections: (id: string, params: CorrectionParams) => Promise<void>;
@@ -84,6 +88,28 @@ export const useApp = create<AppState>((set, get) => ({
       datasets: [...s.datasets, ds],
       activeId: ds.id,
     })),
+
+  // Upload + parse each picked/dropped file; add to the library (continues on a
+  // per-file error so one bad file doesn't abort the batch).
+  importFiles: async (files) => {
+    let added = 0;
+    let lastError = "";
+    for (const file of files) {
+      get().setStatus(`importing ${file.name}…`);
+      try {
+        const data = await uploadFile(file);
+        get().addDataset({ id: nextDatasetId(), name: file.name, data });
+        added += 1;
+      } catch (e) {
+        lastError = `${file.name}: ${e instanceof Error ? e.message : "error"}`;
+      }
+    }
+    get().setStatus(
+      lastError
+        ? `imported ${added}/${files.length} — failed ${lastError}`
+        : `imported ${added} file${added === 1 ? "" : "s"}`,
+    );
+  },
   setActive: (id) => set({ activeId: id }),
   removeDataset: (id) =>
     set((s) => {

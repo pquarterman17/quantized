@@ -50,6 +50,14 @@ export function importFile(path: string): Promise<DataStruct> {
   return postJSON<DataStruct>("/api/parsers/import", { path });
 }
 
+/** Upload a file's bytes from the browser (file-picker / drag-drop) → DataStruct. */
+export async function uploadFile(file: File): Promise<DataStruct> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  const res = await fetch("/api/parsers/upload", { method: "POST", body: form });
+  return unwrap<DataStruct>(res);
+}
+
 export interface PlotRequest {
   dataset: DataStruct;
   x_key?: number | string | null;

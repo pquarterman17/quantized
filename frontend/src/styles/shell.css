@@ -47,8 +47,15 @@ body {
 .qzk-entry .sc { font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-faint); }
 .qzk-sep { height: 1px; background: var(--border-soft); margin: 4px 6px; }
 
+/* ── menubar dropdowns ── */
+.qzk-menu-wrap { position: relative; }
+.qzk-menu-pop { position: absolute; top: 100%; left: 0; min-width: 200px; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 4px; z-index: 40; display: flex; flex-direction: column; }
+.qzk-menu-item { display: flex; justify-content: space-between; gap: 16px; align-items: center; width: 100%; text-align: left; padding: 5px 9px; border: 0; background: transparent; border-radius: var(--radius-sm); white-space: nowrap; cursor: default; font-size: var(--font-size-sm); color: var(--text-dim); text-decoration: none; }
+.qzk-menu-item:hover { background: var(--accent-soft); color: var(--accent-text); }
+
 /* ── library ── */
 .qzk-library { background: var(--surface-1); border-right: 1px solid var(--border-soft); overflow-y: auto; padding: var(--pad); display: flex; flex-direction: column; gap: var(--pad); }
+.qzk-library.dragover { outline: 2px dashed var(--accent); outline-offset: -6px; background: var(--accent-soft); }
 .qzk-lib-head { display: flex; align-items: center; justify-content: space-between; padding: 2px; }
 .qzk-lib-title { font-size: var(--type-label); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-faint); }
 .qzk-ds { border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--surface-2); padding: 8px 9px; cursor: default; display: flex; flex-direction: column; gap: 5px; }

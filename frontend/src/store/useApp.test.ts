@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { applyCorrections as applyCorrectionsApi } from "../lib/api";
+import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
 import type { DataStruct } from "../lib/types";
 import { useApp } from "./useApp";
 
-vi.mock("../lib/api", () => ({ applyCorrections: vi.fn() }));
+vi.mock("../lib/api", () => ({ applyCorrections: vi.fn(), uploadFile: vi.fn() }));
 
 const raw: DataStruct = {
   time: [1, 2, 3],
@@ -67,5 +67,31 @@ describe("useApp corrections", () => {
     const ds = useApp.getState().datasets[0];
     expect(ds.data).toEqual(raw); // untouched
     expect(useApp.getState().status).toContain("corrections failed");
+  });
+});
+
+describe("useApp importFiles", () => {
+  const fakeFile = (name: string) => new File(["x"], name);
+
+  it("uploads each file and adds it to the library", async () => {
+    vi.mocked(uploadFile).mockResolvedValue(raw);
+    await useApp.getState().importFiles([fakeFile("a.dat"), fakeFile("b.dat")]);
+
+    const ds = useApp.getState().datasets;
+    expect(ds).toHaveLength(2);
+    expect(ds.map((d) => d.name)).toEqual(["a.dat", "b.dat"]);
+    expect(ds[0].id).not.toEqual(ds[1].id); // unique ids
+    expect(useApp.getState().status).toContain("imported 2 files");
+  });
+
+  it("continues past a bad file and reports the failure", async () => {
+    vi.mocked(uploadFile)
+      .mockRejectedValueOnce(new Error("unknown format"))
+      .mockResolvedValueOnce(raw);
+    await useApp.getState().importFiles([fakeFile("bad.zzz"), fakeFile("good.dat")]);
+
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().datasets[0].name).toBe("good.dat");
+    expect(useApp.getState().status).toContain("failed bad.zzz");
   });
 });

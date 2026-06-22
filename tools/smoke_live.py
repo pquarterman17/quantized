@@ -40,6 +40,11 @@ print("== parsers + plot (real QD data) ==")
 ds = c.post("/api/parsers/import", json={"path": str(FIXTURE)}).json()
 npts = len(ds["time"])
 check("import QD .dat", npts > 100 and len(ds["labels"]) >= 1, f"{npts} pts, labels={ds['labels']}")
+up = c.post(
+    "/api/parsers/upload",
+    files={"file": ("qd_edp124.dat", FIXTURE.read_bytes(), "application/octet-stream")},
+).json()
+check("upload QD .dat (browser path)", len(up.get("time", [])) == npts, f"{len(up.get('time', []))} pts")
 plot = c.post("/api/plot/series", json={"dataset": ds}).json()
 plot_x_len = len(plot["data"][0])
 check("plot/series", plot_x_len == npts and len(plot["series"]) >= 1, f"x={plot_x_len}, series={len(plot['series'])}")

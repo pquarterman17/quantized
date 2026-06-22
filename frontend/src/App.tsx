@@ -24,6 +24,7 @@ import {
   health,
 } from "./lib/api";
 import { makeDemoDataset } from "./lib/demo";
+import { openFilePicker } from "./lib/openFilePicker";
 import { useApp } from "./store/useApp";
 
 type StoreGet = typeof useApp.getState;
@@ -78,8 +79,14 @@ export default function App() {
     const s = useApp.getState;
     return [
       {
+        id: "import",
+        group: "File",
+        label: "Import data…",
+        run: () => openFilePicker((files) => void s().importFiles(files)),
+      },
+      {
         id: "demo",
-        group: "Data",
+        group: "File",
         label: "Add demo dataset",
         run: () =>
           s().addDataset({
@@ -99,6 +106,24 @@ export default function App() {
         group: "View",
         label: "Toggle log Y axis",
         run: () => s().setYLog(!s().yLog),
+      },
+      {
+        id: "density",
+        group: "View",
+        label: "Cycle density",
+        run: () => {
+          const order = ["compact", "regular", "comfy"] as const;
+          s().setDensity(order[(order.indexOf(s().density) + 1) % order.length]);
+        },
+      },
+      {
+        id: "accent",
+        group: "View",
+        label: "Cycle accent color",
+        run: () => {
+          const order = ["violet", "teal", "ocean", "amber", "rose"] as const;
+          s().setAccent(order[(order.indexOf(s().accent) + 1) % order.length]);
+        },
       },
       {
         id: "left",
@@ -196,7 +221,7 @@ export default function App() {
   return (
     <div className="qzk-app">
       <TitleBar />
-      <MenuBar onOpenPalette={() => setCmdk(true)} />
+      <MenuBar actions={actions} onOpenPalette={() => setCmdk(true)} />
       <div className={mainCls}>
         <Library />
         <Stage />
