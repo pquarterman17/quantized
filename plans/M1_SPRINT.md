@@ -109,9 +109,11 @@ once the API contract (PR5) is fixed.
      = pywebview window). Wire `[project.scripts]`.
    - DoD: `uv run qz --dev` boots backend+frontend; `uv run qz` serves the
      built SPA and opens the browser.
-   - **State:** `qz` exists and runs `uvicorn quantized.app:app` (serves the
-     API + mounted SPA). Still TODO: browser-open, auto-shutdown on last-tab-
-     close, `--dev` (Vite HMR + reload), `--desktop` (pywebview). Carry to M2.
+   - **State:** `qz` serves the API + mounted SPA and **opens the browser**
+     (`--port`/`--no-browser` flags). One-click launchers `run.cmd` (Windows)
+     and `run.command` (macOS) do first-run setup (deps + UI build) then
+     launch. Still TODO: auto-shutdown on last-tab-close, `--dev` (Vite HMR +
+     reload), `--desktop` (pywebview). Carry to M2.
 
 ### Frontend
 

@@ -25,12 +25,35 @@ Magnetometry / XRD / lab-data analysis (parity with `quantized_matlab`).
 Electron-microscopy tooling (Fermi viewer, EELS/EDS, imaging) is **out of
 scope** and lives in the separate `fermiviewer` project.
 
-## Quick start (target)
+## Run it
+
+**Easiest — double-click a launcher** (builds the UI + installs deps on first
+run, then opens the app in your browser):
+
+- **Windows:** double-click [`run.cmd`](run.cmd)
+- **macOS:** double-click [`run.command`](run.command) (first time:
+  right-click → Open)
+
+**Or one command** (after `uv` + Node.js are installed):
 
 ```bash
-uv sync --group dev
-uv run qz            # API + SPA on :8000, opens the browser
-uv run qz --desktop  # native desktop window
+# first time only: build the UI bundle the app serves
+cd frontend && npm install && npm run build && cd ..
+
+uv run qz                 # serve on :8000 and open a browser tab
+uv run qz --port 9000     # different port
+uv run qz --no-browser    # headless (don't open a tab)
+```
+
+Stop the app with **Ctrl+C** in its window.
+
+## Develop
+
+```bash
+uv sync --group dev          # backend deps
+uv run pytest                # backend tests (+ `-m golden` for MATLAB parity)
+uv run ruff check src tests && uv run mypy src
+cd frontend && npm test && npm run build
 ```
 
 License: Apache-2.0.
