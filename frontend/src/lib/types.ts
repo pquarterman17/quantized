@@ -52,6 +52,24 @@ export interface FitOverlay {
   y: (number | null)[];
 }
 
+/** Peak markers to overlay (points only). `y` is sparse — null except at the
+ *  data points nearest each peak center. Tagged with the source dataset. */
+export interface PeakOverlay {
+  datasetId: string;
+  y: (number | null)[];
+}
+
+/** One detected peak (from /api/peaks/find). */
+export interface Peak {
+  center: number;
+  height: number;
+  fwhm: number;
+  prominence: number;
+  localSNR: number;
+  area: number | null;
+  [key: string]: unknown;
+}
+
 /** One element row from the reference table. */
 export interface ElementInfo {
   Z: number;

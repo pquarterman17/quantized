@@ -15,6 +15,7 @@ import ParamDialog from "./components/overlays/ParamDialog";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
 import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
+import PeaksPanel from "./components/workshops/peaks/PeaksPanel";
 import {
   exportConsolidated,
   exportHdf5,
@@ -50,6 +51,7 @@ export default function App() {
   const rightCollapsed = useApp((s) => s.rightCollapsed);
   const curveFitOpen = useApp((s) => s.curveFitOpen);
   const hysteresisOpen = useApp((s) => s.hysteresisOpen);
+  const peaksOpen = useApp((s) => s.peaksOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -123,6 +125,12 @@ export default function App() {
         group: "Analyze",
         label: "Hysteresis analysis…",
         run: () => s().setHysteresisOpen(true),
+      },
+      {
+        id: "peaks",
+        group: "Analyze",
+        label: "Find peaks…",
+        run: () => s().setPeaksOpen(true),
       },
       {
         id: "export-csv",
@@ -200,6 +208,7 @@ export default function App() {
       <TooltipLayer />
       {curveFitOpen && <CurveFitPanel />}
       {hysteresisOpen && <HysteresisPanel />}
+      {peaksOpen && <PeaksPanel />}
     </div>
   );
 }

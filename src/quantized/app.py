@@ -23,6 +23,7 @@ from quantized.routes import (
     fitting,
     magnetometry,
     parsers,
+    peaks,
     plot,
     reference,
     stats,
@@ -106,6 +107,7 @@ def create_app() -> FastAPI:
     application.include_router(reference.router)
     application.include_router(export.router)
     application.include_router(magnetometry.router)
+    application.include_router(peaks.router)
 
     # Client-presence WebSocket (registered before the SPA mount so the
     # catch-all StaticFiles route never shadows it).

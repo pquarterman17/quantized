@@ -63,12 +63,15 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     ],
     series: [
       {},
-      ...payload.series.map((s, i) => ({
-        label: s.unit ? `${s.label} (${s.unit})` : s.label,
-        stroke: cssVar(SERIES_VARS[i % SERIES_VARS.length]) || "#8b5cf6",
-        width: 1.5,
-        points: { show: false },
-      })),
+      ...payload.series.map((s, i) => {
+        const stroke = cssVar(SERIES_VARS[i % SERIES_VARS.length]) || "#8b5cf6";
+        const label = s.unit ? `${s.label} (${s.unit})` : s.label;
+        // Peak markers: points only, no connecting line.
+        if (s.kind === "points") {
+          return { label, stroke, fill: stroke, width: 0, points: { show: true, size: 8 } };
+        }
+        return { label, stroke, width: 1.5, points: { show: false } };
+      }),
     ],
   };
 }

@@ -5,11 +5,18 @@
 import type uPlot from "uplot";
 
 import { plotSeries } from "./api";
-import type { DataStruct, FitOverlay, PlotSeriesResponse } from "./types";
+import type { DataStruct, FitOverlay, PeakOverlay, PlotSeriesResponse } from "./types";
+
+export interface PlotSeriesSpec {
+  label: string;
+  unit: string;
+  /** "points" renders markers only (peak overlay); default is a line. */
+  kind?: "line" | "points";
+}
 
 export interface PlotPayload {
   data: uPlot.AlignedData;
-  series: { label: string; unit: string }[];
+  series: PlotSeriesSpec[];
   xLabel: string;
   xUnit: string;
 }
@@ -53,6 +60,44 @@ export function withFitOverlay(
     ...payload,
     data: [...payload.data, overlay.y] as uPlot.AlignedData,
     series: [...payload.series, { label: "fit", unit: "" }],
+  };
+}
+
+/** Build a sparse y-column (null everywhere except the data point nearest each
+ *  peak center, set to its height) so peaks render as markers on the shared x. */
+export function peakOverlayArray(
+  time: number[],
+  peaks: { center: number; height: number }[],
+): (number | null)[] {
+  const y: (number | null)[] = new Array(time.length).fill(null);
+  for (const p of peaks) {
+    if (!Number.isFinite(p.center)) continue;
+    let best = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < time.length; i++) {
+      const d = Math.abs(time[i] - p.center);
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    }
+    y[best] = p.height;
+  }
+  return y;
+}
+
+/** Append peak markers as a points-only series (same guards as withFitOverlay). */
+export function withPeakOverlay(
+  payload: PlotPayload,
+  overlay: PeakOverlay | null,
+  activeId: string | null,
+): PlotPayload {
+  if (!overlay || overlay.datasetId !== activeId) return payload;
+  if (overlay.y.length !== payload.data[0].length) return payload;
+  return {
+    ...payload,
+    data: [...payload.data, overlay.y] as uPlot.AlignedData,
+    series: [...payload.series, { label: "peaks", unit: "", kind: "points" }],
   };
 }
 

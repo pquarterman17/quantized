@@ -6,7 +6,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
-import { fetchPlot, withFitOverlay, type PlotPayload } from "../../lib/plotdata";
+import {
+  fetchPlot,
+  withFitOverlay,
+  withPeakOverlay,
+  type PlotPayload,
+} from "../../lib/plotdata";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotPlugins";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -25,16 +30,19 @@ export default function PlotStage() {
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
   const fitOverlay = useApp((s) => s.fitOverlay);
+  const peakOverlay = useApp((s) => s.peakOverlay);
   const hostRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
   const [payload, setPayload] = useState<PlotPayload | null>(null);
   const [readout, setReadout] = useState<Readout | null>(null);
 
-  // Splice in the fit curve (no-op unless it belongs to the active dataset).
-  const displayPayload = useMemo(
-    () => (payload ? withFitOverlay(payload, fitOverlay, active?.id ?? null) : null),
-    [payload, fitOverlay, active],
-  );
+  // Splice in the fit curve + peak markers (each a no-op unless it belongs to
+  // the active dataset and aligns to the plotted x).
+  const displayPayload = useMemo(() => {
+    if (!payload) return null;
+    const id = active?.id ?? null;
+    return withPeakOverlay(withFitOverlay(payload, fitOverlay, id), peakOverlay, id);
+  }, [payload, fitOverlay, peakOverlay, active]);
 
   // Fetch series whenever the active dataset or y-scale changes.
   useEffect(() => {

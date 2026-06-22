@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { buildColumns, withFitOverlay, type PlotPayload } from "./plotdata";
+import {
+  buildColumns,
+  peakOverlayArray,
+  withFitOverlay,
+  withPeakOverlay,
+  type PlotPayload,
+} from "./plotdata";
 import { makeDemoDataset } from "./demo";
 import type { DataStruct } from "./types";
 
@@ -82,5 +88,45 @@ describe("withFitOverlay", () => {
 
   it("is a no-op when there is no overlay", () => {
     expect(withFitOverlay(base, null, "d1")).toBe(base);
+  });
+});
+
+describe("peakOverlayArray", () => {
+  it("marks the nearest data point to each peak center with its height", () => {
+    const time = [0, 1, 2, 3, 4];
+    const y = peakOverlayArray(time, [
+      { center: 1.1, height: 9 },
+      { center: 3.8, height: 5 },
+    ]);
+    expect(y).toEqual([null, 9, null, null, 5]); // nearest indices: 1 and 4
+  });
+
+  it("skips non-finite centers", () => {
+    const y = peakOverlayArray([0, 1, 2], [{ center: NaN, height: 9 }]);
+    expect(y).toEqual([null, null, null]);
+  });
+});
+
+describe("withPeakOverlay", () => {
+  const base: PlotPayload = {
+    data: [
+      [0, 1, 2],
+      [10, 20, 30],
+    ],
+    series: [{ label: "y", unit: "V" }],
+    xLabel: "x",
+    xUnit: "s",
+  };
+
+  it("appends a points-kind series when datasetId + length match", () => {
+    const p = withPeakOverlay(base, { datasetId: "d1", y: [null, 20, null] }, "d1");
+    expect(p.data).toHaveLength(3);
+    expect(p.series[1]).toEqual({ label: "peaks", unit: "", kind: "points" });
+  });
+
+  it("is a no-op for a mismatched dataset or length", () => {
+    expect(withPeakOverlay(base, { datasetId: "x", y: [null, 1, null] }, "d1")).toBe(base);
+    expect(withPeakOverlay(base, { datasetId: "d1", y: [1] }, "d1")).toBe(base);
+    expect(withPeakOverlay(base, null, "d1")).toBe(base);
   });
 });

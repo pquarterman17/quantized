@@ -4,7 +4,7 @@
 import { create } from "zustand";
 
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
-import type { CorrectionParams, Dataset, FitOverlay } from "../lib/types";
+import type { CorrectionParams, Dataset, FitOverlay, PeakOverlay } from "../lib/types";
 
 export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
@@ -26,7 +26,9 @@ interface AppState {
   cmdkOpen: boolean;
   curveFitOpen: boolean;
   hysteresisOpen: boolean;
+  peaksOpen: boolean;
   fitOverlay: FitOverlay | null;
+  peakOverlay: PeakOverlay | null;
   status: string;
 
   addDataset: (ds: Dataset) => void;
@@ -45,7 +47,9 @@ interface AppState {
   setCmdk: (open: boolean) => void;
   setCurveFitOpen: (open: boolean) => void;
   setHysteresisOpen: (open: boolean) => void;
+  setPeaksOpen: (open: boolean) => void;
   setFitOverlay: (overlay: FitOverlay | null) => void;
+  setPeakOverlay: (overlay: PeakOverlay | null) => void;
   setStatus: (status: string) => void;
 }
 
@@ -70,7 +74,9 @@ export const useApp = create<AppState>((set, get) => ({
   cmdkOpen: false,
   curveFitOpen: false,
   hysteresisOpen: false,
+  peaksOpen: false,
   fitOverlay: null,
+  peakOverlay: null,
   status: "starting…",
 
   addDataset: (ds) =>
@@ -135,7 +141,9 @@ export const useApp = create<AppState>((set, get) => ({
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
   setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),
   setHysteresisOpen: (hysteresisOpen) => set({ hysteresisOpen }),
+  setPeaksOpen: (peaksOpen) => set({ peaksOpen }),
   setFitOverlay: (fitOverlay) => set({ fitOverlay }),
+  setPeakOverlay: (peakOverlay) => set({ peakOverlay }),
   setStatus: (status) => set({ status }),
 }));
 

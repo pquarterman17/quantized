@@ -8,6 +8,7 @@ import type {
   DataStruct,
   ElementInfo,
   FitModel,
+  Peak,
   PlotSeriesResponse,
 } from "./types";
 
@@ -246,4 +247,17 @@ export function hysteresisAnalysis(body: {
   virgin_detect?: boolean;
 }): Promise<CalcResult> {
   return postJSON("/api/magnetometry/hysteresis", body);
+}
+
+// ── Peaks ───────────────────────────────────────────────────────────────────
+/** Robust peak detection -> peak list + estimated background. */
+export function findPeaks(body: {
+  x: number[];
+  y: number[];
+  snr_threshold?: number;
+  min_prominence?: number;
+  max_peaks?: number;
+  sensitivity?: string;
+}): Promise<{ peaks: Peak[]; background: (number | null)[] }> {
+  return postJSON("/api/peaks/find", body);
 }

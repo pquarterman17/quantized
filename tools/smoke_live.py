@@ -150,6 +150,20 @@ check(
     f"Hc={hy.get('HcMean'):.1f} Oe, squareness={hy.get('squareness'):.3f}",
 )
 
+print("== peaks ==")
+px = list(np.linspace(0, 10, 500))
+py = list(
+    np.exp(-((np.array(px) - 3.0) ** 2) / 0.05)
+    + 0.7 * np.exp(-((np.array(px) - 6.0) ** 2) / 0.08)
+)
+pk = c.post("/api/peaks/find", json={"x": px, "y": py}).json()
+centers = sorted(p["center"] for p in pk["peaks"])
+check(
+    "find peaks -> two Gaussians at ~3 and ~6",
+    len(centers) == 2 and abs(centers[0] - 3) < 0.1 and abs(centers[1] - 6) < 0.1,
+    f"centers={[round(c, 2) for c in centers]}",
+)
+
 print("== error handling ==")
 e1 = c.post("/api/fitting/fit", json={"model": "NoSuch", "x": [0, 1], "y": [0, 1]})
 check("unknown model -> 422", e1.status_code == 422)
