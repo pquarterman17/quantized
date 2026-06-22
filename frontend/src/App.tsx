@@ -14,6 +14,7 @@ import CommandPalette, { type Action } from "./components/overlays/CommandPalett
 import ParamDialog from "./components/overlays/ParamDialog";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
+import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
 import {
   exportConsolidated,
   exportHdf5,
@@ -48,6 +49,7 @@ export default function App() {
   const leftCollapsed = useApp((s) => s.leftCollapsed);
   const rightCollapsed = useApp((s) => s.rightCollapsed);
   const curveFitOpen = useApp((s) => s.curveFitOpen);
+  const hysteresisOpen = useApp((s) => s.hysteresisOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -115,6 +117,12 @@ export default function App() {
         group: "Analyze",
         label: "Curve fit…",
         run: () => s().setCurveFitOpen(true),
+      },
+      {
+        id: "hysteresis",
+        group: "Analyze",
+        label: "Hysteresis analysis…",
+        run: () => s().setHysteresisOpen(true),
       },
       {
         id: "export-csv",
@@ -191,6 +199,7 @@ export default function App() {
       <ParamDialog />
       <TooltipLayer />
       {curveFitOpen && <CurveFitPanel />}
+      {hysteresisOpen && <HysteresisPanel />}
     </div>
   );
 }

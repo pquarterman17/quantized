@@ -235,3 +235,15 @@ export function exportConsolidated(body: {
 }): Promise<void> {
   return postDownload("/api/export/consolidated", body, "consolidated.csv");
 }
+
+// ── Magnetometry ────────────────────────────────────────────────────────────
+/** Analyze an M-H loop -> Hc / Mr / Ms / squareness / loop area / SFD. */
+export function hysteresisAnalysis(body: {
+  h: number[];
+  m: number[];
+  saturation_fraction?: number;
+  pre_smooth?: number;
+  virgin_detect?: boolean;
+}): Promise<CalcResult> {
+  return postJSON("/api/magnetometry/hysteresis", body);
+}

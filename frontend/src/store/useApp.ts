@@ -25,6 +25,7 @@ interface AppState {
   plotTool: PlotTool;
   cmdkOpen: boolean;
   curveFitOpen: boolean;
+  hysteresisOpen: boolean;
   fitOverlay: FitOverlay | null;
   status: string;
 
@@ -43,6 +44,7 @@ interface AppState {
   setPlotTool: (tool: PlotTool) => void;
   setCmdk: (open: boolean) => void;
   setCurveFitOpen: (open: boolean) => void;
+  setHysteresisOpen: (open: boolean) => void;
   setFitOverlay: (overlay: FitOverlay | null) => void;
   setStatus: (status: string) => void;
 }
@@ -67,6 +69,7 @@ export const useApp = create<AppState>((set, get) => ({
   plotTool: "zoom",
   cmdkOpen: false,
   curveFitOpen: false,
+  hysteresisOpen: false,
   fitOverlay: null,
   status: "starting…",
 
@@ -131,6 +134,7 @@ export const useApp = create<AppState>((set, get) => ({
   setPlotTool: (plotTool) => set({ plotTool }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
   setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),
+  setHysteresisOpen: (hysteresisOpen) => set({ hysteresisOpen }),
   setFitOverlay: (fitOverlay) => set({ fitOverlay }),
   setStatus: (status) => set({ status }),
 }));

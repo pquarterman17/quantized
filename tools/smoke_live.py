@@ -139,6 +139,17 @@ check(
     cons.text.splitlines()[0] if cons.status_code == 200 else str(cons.status_code),
 )
 
+print("== magnetometry (real QD M-H loop) ==")
+hy = c.post(
+    "/api/magnetometry/hysteresis",
+    json={"h": ds["time"], "m": [row[0] for row in ds["values"]]},
+).json()
+check(
+    "hysteresis on real QD loop -> Hc/Mr/Ms",
+    hy.get("HcMean", 0) > 0 and "MsMean" in hy and "SFD" in hy,
+    f"Hc={hy.get('HcMean'):.1f} Oe, squareness={hy.get('squareness'):.3f}",
+)
+
 print("== error handling ==")
 e1 = c.post("/api/fitting/fit", json={"model": "NoSuch", "x": [0, 1], "y": [0, 1]})
 check("unknown model -> 422", e1.status_code == 422)
