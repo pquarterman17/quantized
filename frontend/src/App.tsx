@@ -14,9 +14,27 @@ import CommandPalette, { type Action } from "./components/overlays/CommandPalett
 import ParamDialog from "./components/overlays/ParamDialog";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
-import { health } from "./lib/api";
+import { exportHdf5, exportXrdCsv, health } from "./lib/api";
 import { makeDemoDataset } from "./lib/demo";
 import { useApp } from "./store/useApp";
+
+type StoreGet = typeof useApp.getState;
+
+/** Export the active dataset via `fn`, surfacing failures in the status bar. */
+function exportActive(
+  s: StoreGet,
+  fn: (stem: string, ds: ReturnType<StoreGet>["datasets"][number]) => Promise<void>,
+): void {
+  const ds = s().datasets.find((d) => d.id === s().activeId);
+  if (!ds) {
+    s().setStatus("no dataset to export");
+    return;
+  }
+  const stem = ds.name.replace(/\.[^.]+$/, "");
+  fn(stem, ds).catch((e: unknown) =>
+    s().setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`),
+  );
+}
 
 let demoCounter = 0;
 
@@ -91,6 +109,26 @@ export default function App() {
         group: "Analyze",
         label: "Curve fit…",
         run: () => s().setCurveFitOpen(true),
+      },
+      {
+        id: "export-csv",
+        group: "File",
+        label: "Export XRD CSV…",
+        run: () =>
+          exportActive(s, (stem, ds) => exportXrdCsv({ dataset: ds.data, filename: stem })),
+      },
+      {
+        id: "export-hdf5",
+        group: "File",
+        label: "Export HDF5…",
+        run: () =>
+          exportActive(s, (stem, ds) =>
+            exportHdf5(
+              ds.raw
+                ? { dataset: ds.raw, corrected: ds.data, filename: stem }
+                : { dataset: ds.data, filename: stem },
+            ),
+          ),
       },
       {
         id: "worksheet",

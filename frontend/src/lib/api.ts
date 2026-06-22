@@ -1,6 +1,7 @@
 // Typed fetch layer over the FastAPI backend. All endpoints are under /api
 // (dev: Vite proxies to uvicorn :8000; prod: same-origin static mount).
 
+import { postDownload } from "./download";
 import type {
   CalcResult,
   CorrectionParams,
@@ -191,4 +192,26 @@ export function convertUnits(
   to: string,
 ): Promise<{ result: number | (number | null)[]; info: CalcResult }> {
   return postJSON("/api/reference/convert", { value, from, to });
+}
+
+// ── Export (file downloads) ─────────────────────────────────────────────────
+/** Export XRD data as CSV / Origin ASCII; triggers a browser download. */
+export function exportXrdCsv(body: {
+  dataset: DataStruct;
+  fmt?: string;
+  intensity?: string;
+  include_metadata?: boolean;
+  filename?: string;
+}): Promise<void> {
+  return postDownload("/api/export/xrd-csv", body, "export.csv");
+}
+
+/** Export a DataStruct (+ optional corrected view) as a self-describing HDF5
+ *  file; triggers a browser download. */
+export function exportHdf5(body: {
+  dataset: DataStruct;
+  corrected?: DataStruct | null;
+  filename?: string;
+}): Promise<void> {
+  return postDownload("/api/export/hdf5", body, "export.h5");
 }

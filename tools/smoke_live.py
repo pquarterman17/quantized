@@ -98,6 +98,30 @@ check("reference/elements/Fe", fe["symbol"] == "Fe" and fe["Z"] == 26)
 conv = c.post("/api/reference/convert", json={"value": 1.0, "from": "Oe", "to": "T"}).json()
 check("reference/convert (Oe->T)", abs(conv["result"] - 1e-4) < 1e-12, f"1 Oe = {conv['result']} T")
 
+print("== export (file downloads) ==")
+xrd = {
+    "time": [10.0, 10.02, 10.04, 10.06],
+    "values": [[100.0], [120.0], [95.0], [110.0]],
+    "labels": ["Intensity"],
+    "units": ["cps"],
+    "metadata": {"x_column_name": "2Theta", "x_column_unit": "deg"},
+}
+csv = c.post("/api/export/xrd-csv", json={"dataset": xrd, "filename": "smoke"})
+check(
+    "export/xrd-csv download",
+    csv.status_code == 200
+    and csv.headers["content-type"].startswith("text/csv")
+    and 'filename="smoke.csv"' in csv.headers.get("content-disposition", "")
+    and "Intensity" in csv.text,
+    csv.headers.get("content-disposition", ""),
+)
+h5 = c.post("/api/export/hdf5", json={"dataset": xrd, "filename": "smoke"})
+check(
+    "export/hdf5 download (valid signature)",
+    h5.status_code == 200 and h5.content[:8] == b"\x89HDF\r\n\x1a\n",
+    f"{len(h5.content)}B, magic={h5.content[:4]!r}",
+)
+
 print("== error handling ==")
 e1 = c.post("/api/fitting/fit", json={"model": "NoSuch", "x": [0, 1], "y": [0, 1]})
 check("unknown model -> 422", e1.status_code == 422)
