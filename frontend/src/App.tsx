@@ -13,6 +13,7 @@ import Stage from "./components/Stage/Stage";
 import CommandPalette, { type Action } from "./components/overlays/CommandPalette";
 import ParamDialog from "./components/overlays/ParamDialog";
 import TooltipLayer from "./components/overlays/TooltipLayer";
+import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
 import { health } from "./lib/api";
 import { makeDemoDataset } from "./lib/demo";
 import { useApp } from "./store/useApp";
@@ -22,6 +23,7 @@ let demoCounter = 0;
 export default function App() {
   const leftCollapsed = useApp((s) => s.leftCollapsed);
   const rightCollapsed = useApp((s) => s.rightCollapsed);
+  const curveFitOpen = useApp((s) => s.curveFitOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -85,6 +87,12 @@ export default function App() {
         run: () => s().toggleRight(),
       },
       {
+        id: "curvefit",
+        group: "Analyze",
+        label: "Curve fit…",
+        run: () => s().setCurveFitOpen(true),
+      },
+      {
         id: "worksheet",
         group: "View",
         label: "Show worksheet",
@@ -114,6 +122,7 @@ export default function App() {
       <CommandPalette actions={actions} />
       <ParamDialog />
       <TooltipLayer />
+      {curveFitOpen && <CurveFitPanel />}
     </div>
   );
 }

@@ -2,11 +2,11 @@
 // backend /api/plot/series route (offline fallback builds columns locally).
 // Re-styles on theme/accent change; resizes to its container.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
-import { fetchPlot, type PlotPayload } from "../../lib/plotdata";
+import { fetchPlot, withFitOverlay, type PlotPayload } from "../../lib/plotdata";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotPlugins";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -24,10 +24,17 @@ export default function PlotStage() {
   const accent = useApp((s) => s.accent);
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
+  const fitOverlay = useApp((s) => s.fitOverlay);
   const hostRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
   const [payload, setPayload] = useState<PlotPayload | null>(null);
   const [readout, setReadout] = useState<Readout | null>(null);
+
+  // Splice in the fit curve (no-op unless it belongs to the active dataset).
+  const displayPayload = useMemo(
+    () => (payload ? withFitOverlay(payload, fitOverlay, active?.id ?? null) : null),
+    [payload, fitOverlay, active],
+  );
 
   // Fetch series whenever the active dataset or y-scale changes.
   useEffect(() => {
@@ -47,7 +54,7 @@ export default function PlotStage() {
   // (Re)create the uPlot instance when payload / size / theme change.
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || !payload) {
+    if (!host || !displayPayload) {
       plotRef.current?.destroy();
       plotRef.current = null;
       return;
@@ -56,14 +63,14 @@ export default function PlotStage() {
     const h = host.clientHeight || 400;
     plotRef.current?.destroy();
     plotRef.current = new uPlot(
-      buildOpts(payload, {
+      buildOpts(displayPayload, {
         width: w,
         height: h,
         yLog,
         tool,
         onReadout: setReadout,
       }),
-      payload.data,
+      displayPayload.data,
       host,
     );
 
@@ -81,11 +88,11 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [payload, yLog, theme, accent, tool]);
+  }, [displayPayload, yLog, theme, accent, tool]);
 
   function resetView() {
-    if (plotRef.current && payload) {
-      plotRef.current.setData(payload.data, true); // resetScales = re-fit
+    if (plotRef.current && displayPayload) {
+      plotRef.current.setData(displayPayload.data, true); // resetScales = re-fit
     }
   }
 
@@ -93,7 +100,7 @@ export default function PlotStage() {
     <div className="qzk-stage">
       <div ref={hostRef} style={{ position: "absolute", inset: 8 }} />
 
-      {payload && (
+      {displayPayload && (
         <div className="qzk-glass qzk-float-tools">
           {TOOLS.map((t) => (
             <button
@@ -126,9 +133,9 @@ export default function PlotStage() {
           {readout.x.toPrecision(5)}, {readout.y.toPrecision(5)}
         </div>
       )}
-      {payload && (
+      {displayPayload && (
         <div className="qzk-glass qzk-legend">
-          {payload.series.map((s, i) => (
+          {displayPayload.series.map((s, i) => (
             <div className="it" key={s.label}>
               <span
                 className="ln"

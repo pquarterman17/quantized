@@ -4,7 +4,7 @@
 import { create } from "zustand";
 
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
-import type { CorrectionParams, Dataset } from "../lib/types";
+import type { CorrectionParams, Dataset, FitOverlay } from "../lib/types";
 
 export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
@@ -24,6 +24,8 @@ interface AppState {
   yLog: boolean;
   plotTool: PlotTool;
   cmdkOpen: boolean;
+  curveFitOpen: boolean;
+  fitOverlay: FitOverlay | null;
   status: string;
 
   addDataset: (ds: Dataset) => void;
@@ -40,6 +42,8 @@ interface AppState {
   setYLog: (yLog: boolean) => void;
   setPlotTool: (tool: PlotTool) => void;
   setCmdk: (open: boolean) => void;
+  setCurveFitOpen: (open: boolean) => void;
+  setFitOverlay: (overlay: FitOverlay | null) => void;
   setStatus: (status: string) => void;
 }
 
@@ -62,6 +66,8 @@ export const useApp = create<AppState>((set, get) => ({
   yLog: false,
   plotTool: "zoom",
   cmdkOpen: false,
+  curveFitOpen: false,
+  fitOverlay: null,
   status: "starting…",
 
   addDataset: (ds) =>
@@ -124,6 +130,8 @@ export const useApp = create<AppState>((set, get) => ({
   setYLog: (yLog) => set({ yLog }),
   setPlotTool: (plotTool) => set({ plotTool }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
+  setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),
+  setFitOverlay: (fitOverlay) => set({ fitOverlay }),
   setStatus: (status) => set({ status }),
 }));
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildColumns } from "./plotdata";
+import { buildColumns, withFitOverlay, type PlotPayload } from "./plotdata";
 import { makeDemoDataset } from "./demo";
 import type { DataStruct } from "./types";
 
@@ -49,5 +49,38 @@ describe("buildColumns", () => {
     expect(p.data).toHaveLength(2); // x + 1 channel
     expect(p.data[0]).toHaveLength(201);
     expect(p.series[0].label).toBe("Moment");
+  });
+});
+
+describe("withFitOverlay", () => {
+  const base: PlotPayload = {
+    data: [
+      [0, 1, 2],
+      [10, 20, 30],
+    ],
+    series: [{ label: "y", unit: "V" }],
+    xLabel: "x",
+    xUnit: "s",
+  };
+
+  it("appends the fit series when datasetId + length match", () => {
+    const p = withFitOverlay(base, { datasetId: "d1", y: [11, 21, 31] }, "d1");
+    expect(p.data).toHaveLength(3);
+    expect(p.data[2]).toEqual([11, 21, 31]);
+    expect(p.series[1]).toEqual({ label: "fit", unit: "" });
+  });
+
+  it("is a no-op when the overlay belongs to another dataset", () => {
+    const p = withFitOverlay(base, { datasetId: "other", y: [11, 21, 31] }, "d1");
+    expect(p).toBe(base);
+  });
+
+  it("is a no-op when the point count mismatches", () => {
+    const p = withFitOverlay(base, { datasetId: "d1", y: [11, 21] }, "d1");
+    expect(p).toBe(base);
+  });
+
+  it("is a no-op when there is no overlay", () => {
+    expect(withFitOverlay(base, null, "d1")).toBe(base);
   });
 });

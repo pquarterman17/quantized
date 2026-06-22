@@ -5,7 +5,7 @@
 import type uPlot from "uplot";
 
 import { plotSeries } from "./api";
-import type { DataStruct, PlotSeriesResponse } from "./types";
+import type { DataStruct, FitOverlay, PlotSeriesResponse } from "./types";
 
 export interface PlotPayload {
   data: uPlot.AlignedData;
@@ -36,6 +36,23 @@ function fromResponse(r: PlotSeriesResponse): PlotPayload {
     series: r.series,
     xLabel: r.x.label,
     xUnit: r.x.unit,
+  };
+}
+
+/** Append a fit curve as an extra series, but only when the overlay belongs to
+ *  the active dataset and aligns to the plotted x (same point count). Otherwise
+ *  return the payload unchanged — a stale/mismatched fit silently drops out. */
+export function withFitOverlay(
+  payload: PlotPayload,
+  overlay: FitOverlay | null,
+  activeId: string | null,
+): PlotPayload {
+  if (!overlay || overlay.datasetId !== activeId) return payload;
+  if (overlay.y.length !== payload.data[0].length) return payload;
+  return {
+    ...payload,
+    data: [...payload.data, overlay.y] as uPlot.AlignedData,
+    series: [...payload.series, { label: "fit", unit: "" }],
   };
 }
 

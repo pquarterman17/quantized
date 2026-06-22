@@ -44,6 +44,14 @@ export interface FitModel {
  *  documented per endpoint; values may be scalars, arrays, or null (NaN/Inf). */
 export type CalcResult = Record<string, unknown>;
 
+/** A fit curve to overlay on the plot, tagged with the dataset it was fit to
+ *  (so it only renders while that dataset is active). `y` aligns to the
+ *  dataset's plotted x (null = gap). */
+export interface FitOverlay {
+  datasetId: string;
+  y: (number | null)[];
+}
+
 /** One element row from the reference table. */
 export interface ElementInfo {
   Z: number;
