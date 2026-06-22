@@ -2,6 +2,7 @@
 // wired; Corrections posts to /api/corrections/apply via the store.
 
 import CorrectionsCard from "./CorrectionsCard";
+import StatsCard from "./StatsCard";
 import { Card, MetaRow, Select } from "../primitives";
 import {
   type Accent,
@@ -43,6 +44,8 @@ export default function Inspector() {
       </Card>
 
       <CorrectionsCard key={active?.id ?? "none"} active={active} />
+
+      <StatsCard active={active} />
 
       <Card title="Axes">
         <label className="qz-check">

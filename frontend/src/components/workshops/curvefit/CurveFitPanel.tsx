@@ -5,15 +5,9 @@
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, DataTable, Select } from "../../primitives";
+import { fmtNum as fmt } from "../../../lib/format";
 import { useApp } from "../../../store/useApp";
 import { useCurveFit } from "./useCurveFit";
-
-/** Compact numeric format: scientific for very large/small, else 6 sig figs. */
-function fmt(v: unknown): string {
-  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
-  const a = Math.abs(v);
-  return a !== 0 && (a < 1e-3 || a >= 1e5) ? v.toExponential(4) : String(Number(v.toPrecision(6)));
-}
 
 export default function CurveFitPanel() {
   const setOpen = useApp((s) => s.setCurveFitOpen);
