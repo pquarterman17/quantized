@@ -164,3 +164,63 @@ def export_consolidated(req: ConsolidatedRequest) -> Response:
         media_type="text/csv",
         headers=_attachment(_safe_name(req.filename, ".csv")),
     )
+
+
+class FigureRequest(BaseModel):
+    dataset: dict[str, Any]
+    x_key: int | str | None = None
+    y_keys: list[int | str] | None = None
+    x_log: bool = False
+    y_log: bool = False
+    fmt: str = "pdf"
+    filename: str = "figure"
+
+
+_FIGURE_MIME = {"pdf": "application/pdf", "svg": "image/svg+xml", "png": "image/png"}
+
+
+@router.post("/figure")
+def export_figure(req: FigureRequest) -> Response:
+    """Render the dataset (selected channels + log scales) to a publication
+    figure: PDF / SVG (vector) or PNG."""
+    if req.fmt not in _FIGURE_MIME:
+        raise HTTPException(
+            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
+        )
+    # Lazy import: matplotlib is heavy — only pay it when a figure is exported.
+    from quantized.calc.figure import render_figure
+    from quantized.calc.plotting import PlotState, build_series
+
+    try:
+        ds = DataStruct.from_dict(req.dataset)
+        state = PlotState(
+            x_key=req.x_key,
+            y_keys=tuple(req.y_keys) if req.y_keys is not None else None,
+            x_log=req.x_log,
+            y_log=req.y_log,
+        )
+        plot = build_series(ds, state)
+        x_label = f"{plot.x_label} ({plot.x_unit})" if plot.x_unit else plot.x_label
+        y_label = ""
+        if len(plot.series) == 1:
+            only = plot.series[0]
+            y_label = f"{only.label} ({only.unit})" if only.unit else only.label
+        series = [
+            (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series
+        ]
+        data = render_figure(
+            plot.x,
+            series,
+            x_label=x_label,
+            y_label=y_label,
+            x_log=req.x_log,
+            y_log=req.y_log,
+            fmt=req.fmt,
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Response(
+        content=data,
+        media_type=_FIGURE_MIME[req.fmt],
+        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
+    )

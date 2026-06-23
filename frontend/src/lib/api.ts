@@ -245,6 +245,18 @@ export function exportConsolidated(body: {
   return postDownload("/api/export/consolidated", body, "consolidated.csv");
 }
 
+/** Render a publication figure server-side (matplotlib) and download it. */
+export function exportFigure(body: {
+  dataset: DataStruct;
+  y_keys?: (number | string)[];
+  x_log?: boolean;
+  y_log?: boolean;
+  fmt?: string;
+  filename?: string;
+}): Promise<void> {
+  return postDownload("/api/export/figure", body, `figure.${body.fmt ?? "pdf"}`);
+}
+
 // ── Magnetometry ────────────────────────────────────────────────────────────
 /** Analyze an M-H loop -> Hc / Mr / Ms / squareness / loop area / SFD. */
 export function hysteresisAnalysis(body: {

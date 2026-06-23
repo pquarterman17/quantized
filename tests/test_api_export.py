@@ -118,3 +118,26 @@ def test_consolidated_export_combines_datasets() -> None:
 def test_consolidated_empty_is_422() -> None:
     resp = client.post("/api/export/consolidated", json={"datasets": []})
     assert resp.status_code == 422
+
+
+def test_figure_pdf_download() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "pdf", "filename": "fig1"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.headers["content-disposition"] == 'attachment; filename="fig1.pdf"'
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_figure_svg_download() -> None:
+    resp = client.post("/api/export/figure", json={"dataset": _xrd_dataset(), "fmt": "svg"})
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/svg+xml"
+    assert b"<svg" in resp.content[:400]
+
+
+def test_figure_bad_format_is_422() -> None:
+    resp = client.post("/api/export/figure", json={"dataset": _xrd_dataset(), "fmt": "bmp"})
+    assert resp.status_code == 422

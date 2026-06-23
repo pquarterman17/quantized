@@ -143,6 +143,12 @@ check(
     cons.status_code == 200 and cons.text.splitlines()[0].count("Q") == 2,
     cons.text.splitlines()[0] if cons.status_code == 200 else str(cons.status_code),
 )
+fig = c.post("/api/export/figure", json={"dataset": xrd, "fmt": "pdf", "filename": "smoke"})
+check(
+    "export/figure download (vector PDF via matplotlib)",
+    fig.status_code == 200 and fig.content[:5] == b"%PDF-",
+    f"{len(fig.content)}B, magic={fig.content[:5]!r}",
+)
 
 print("== magnetometry (real QD M-H loop) ==")
 hy = c.post(

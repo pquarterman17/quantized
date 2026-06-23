@@ -18,6 +18,7 @@ import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
 import PeaksPanel from "./components/workshops/peaks/PeaksPanel";
 import {
   exportConsolidated,
+  exportFigure,
   exportHdf5,
   exportOrigin,
   exportXrdCsv,
@@ -192,6 +193,21 @@ export default function App() {
                 ? { dataset: ds.raw, corrected: ds.data, filename: stem }
                 : { dataset: ds.data, filename: stem },
             ),
+          ),
+      },
+      {
+        id: "export-figure",
+        group: "File",
+        label: "Export figure (PDF)…",
+        run: () =>
+          exportActive(s, (stem, ds) =>
+            exportFigure({
+              dataset: ds.data,
+              y_keys: s().yKeys ?? undefined,
+              x_log: s().xLog,
+              y_log: s().yLog,
+              filename: stem,
+            }),
           ),
       },
       {
