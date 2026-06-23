@@ -12,6 +12,7 @@ import {
   withPeakOverlay,
   type PlotPayload,
 } from "../../lib/plotdata";
+import { exportPlotPng } from "../../lib/plotExport";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotPlugins";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -107,6 +108,12 @@ export default function PlotStage() {
     }
   }
 
+  function savePng() {
+    if (!plotRef.current) return;
+    const stem = active?.name.replace(/\.[^.]+$/, "") ?? "plot";
+    exportPlotPng(plotRef.current, `${stem}.png`);
+  }
+
   return (
     <div className="qzk-stage">
       <div ref={hostRef} style={{ position: "absolute", inset: 8 }} />
@@ -126,6 +133,9 @@ export default function PlotStage() {
           <span className="qzk-tool-sep" />
           <button className="qzk-tool-btn" title="Reset view" onClick={resetView}>
             ⊡
+          </button>
+          <button className="qzk-tool-btn" title="Save plot as PNG" onClick={savePng}>
+            ⤓
           </button>
         </div>
       )}

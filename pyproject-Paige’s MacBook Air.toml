@@ -1,0 +1,59 @@
+[project]
+name = "quantized"
+version = "0.0.1"
+description = "Clean-architecture Python + React port of the quantized_matlab scientific toolbox (magnetometry / XRD / lab data)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Paige Quarterman" }]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pydantic>=2.7",
+    "openpyxl>=3.1",
+    "h5py>=3.10",
+]
+
+[project.scripts]
+qz = "quantized.cli:main"
+quantized = "quantized.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/quantized"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[[tool.mypy.overrides]]
+# Third-party libs without bundled type stubs — skeleton-safe.
+module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+markers = [
+    "golden: compares output against frozen quantized_matlab reference values",
+    "realdata: needs the local-only instrument corpus (auto-skips when absent)",
+]
