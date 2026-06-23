@@ -40,6 +40,7 @@ interface AppState {
   importFiles: (files: File[]) => Promise<void>;
   setActive: (id: string) => void;
   removeDataset: (id: string) => void;
+  renameDataset: (id: string, name: string) => void;
   applyCorrections: (id: string, params: CorrectionParams) => Promise<void>;
   resetCorrections: (id: string) => void;
   toggleLeft: () => void;
@@ -158,6 +159,12 @@ export const useApp = create<AppState>((set, get) => ({
         s.activeId === id ? (datasets[0]?.id ?? null) : s.activeId;
       return { datasets, activeId };
     }),
+  renameDataset: (id, name) =>
+    set((s) => ({
+      datasets: s.datasets.map((d) =>
+        d.id === id ? { ...d, name: name.trim() || d.name } : d,
+      ),
+    })),
 
   // Corrections always apply to the pristine `raw`, never to an already-
   // corrected `data` (the MATLAB pipeline is replace, not accumulate). The

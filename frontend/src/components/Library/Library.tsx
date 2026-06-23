@@ -19,9 +19,16 @@ export default function Library() {
   const setActive = useApp((s) => s.setActive);
   const addDataset = useApp((s) => s.addDataset);
   const removeDataset = useApp((s) => s.removeDataset);
+  const renameDataset = useApp((s) => s.renameDataset);
   const importFiles = useApp((s) => s.importFiles);
   const [query, setQuery] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
+
+  const commitRename = () => {
+    if (editing) renameDataset(editing.id, editing.value);
+    setEditing(null);
+  };
 
   const onImport = () => openFilePicker((files) => void importFiles(files), ACCEPT);
 
@@ -83,9 +90,31 @@ export default function Library() {
           onClick={() => setActive(d.id)}
         >
           <div className="qzk-ds-top">
-            <span className="qzk-ds-name" title={d.name}>
-              {d.name}
-            </span>
+            {editing?.id === d.id ? (
+              <input
+                className="qz-input qzk-ds-name"
+                autoFocus
+                value={editing.value}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setEditing({ id: d.id, value: e.target.value })}
+                onBlur={commitRename}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitRename();
+                  if (e.key === "Escape") setEditing(null);
+                }}
+              />
+            ) : (
+              <span
+                className="qzk-ds-name"
+                title={`${d.name} — double-click to rename`}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setEditing({ id: d.id, value: d.name });
+                }}
+              >
+                {d.name}
+              </span>
+            )}
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Badge tone="accent">{d.data.labels.length}ch</Badge>
               <button

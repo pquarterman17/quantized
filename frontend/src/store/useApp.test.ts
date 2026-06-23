@@ -70,6 +70,16 @@ describe("useApp corrections", () => {
   });
 });
 
+describe("useApp renameDataset", () => {
+  it("renames by id and ignores a blank name", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "old.dat", data: raw }], activeId: "d1" });
+    useApp.getState().renameDataset("d1", "  5K loop  ");
+    expect(useApp.getState().datasets[0].name).toBe("5K loop"); // trimmed
+    useApp.getState().renameDataset("d1", "   ");
+    expect(useApp.getState().datasets[0].name).toBe("5K loop"); // blank → unchanged
+  });
+});
+
 describe("useApp appearance prefs", () => {
   it("setTheme applies to <html> and persists to localStorage", () => {
     useApp.getState().setTheme("light");
