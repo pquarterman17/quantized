@@ -52,6 +52,24 @@ describe("buildOpts", () => {
     expect(buildOpts(two, { ...base, yLog: false, tool: "zoom" }).axes?.[1]?.label).toBeUndefined();
   });
 
+  it("applies explicit axis limits as static scale ranges", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      xLim: [0, 5],
+      yLim: [-1, 10],
+    });
+    expect(opts.scales?.x?.range).toEqual([0, 5]);
+    expect(opts.scales?.y?.range).toEqual([-1, 10]);
+  });
+
+  it("omits the range (autoscale) when no limits are given", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    expect(opts.scales?.x?.range).toBeUndefined();
+    expect(opts.scales?.y?.range).toBeUndefined();
+  });
+
   it("has no secondary axis when all series are on the primary", () => {
     const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
     expect(opts.scales?.y2).toBeUndefined();

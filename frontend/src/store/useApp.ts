@@ -32,6 +32,8 @@ interface AppState {
   density: Density;
   yLog: boolean;
   xLog: boolean;
+  xLim: [number, number] | null; // explicit X range (null = autoscale)
+  yLim: [number, number] | null; // explicit Y range (null = autoscale)
   yKeys: number[] | null; // which value channels to plot (null = all)
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
   plotTool: PlotTool;
@@ -63,6 +65,8 @@ interface AppState {
   setDensity: (density: Density) => void;
   setYLog: (yLog: boolean) => void;
   setXLog: (xLog: boolean) => void;
+  setXLim: (xLim: [number, number] | null) => void;
+  setYLim: (yLim: [number, number] | null) => void;
   setYKeys: (yKeys: number[] | null) => void;
   setY2Keys: (y2Keys: number[] | null) => void;
   setPlotTool: (tool: PlotTool) => void;
@@ -131,6 +135,8 @@ export const useApp = create<AppState>((set, get) => ({
   density: _initialPrefs.density,
   yLog: false,
   xLog: false,
+  xLim: null,
+  yLim: null,
   yKeys: null,
   y2Keys: null,
   plotTool: "zoom",
@@ -153,6 +159,8 @@ export const useApp = create<AppState>((set, get) => ({
       activeId: ds.id,
       yKeys: null, // new dataset → plot all its channels
       y2Keys: null, // and reset the secondary-axis assignment
+      xLim: null, // and autoscale both axes
+      yLim: null,
     })),
 
   // Upload + parse each picked/dropped file; add to the library (continues on a
@@ -176,7 +184,7 @@ export const useApp = create<AppState>((set, get) => ({
         : `imported ${added} file${added === 1 ? "" : "s"}`,
     );
   },
-  setActive: (id) => set({ activeId: id, yKeys: null, y2Keys: null }),
+  setActive: (id) => set({ activeId: id, yKeys: null, y2Keys: null, xLim: null, yLim: null }),
   removeDataset: (id) =>
     set((s) => {
       const datasets = s.datasets.filter((d) => d.id !== id);
@@ -236,6 +244,8 @@ export const useApp = create<AppState>((set, get) => ({
   },
   setYLog: (yLog) => set({ yLog }),
   setXLog: (xLog) => set({ xLog }),
+  setXLim: (xLim) => set({ xLim }),
+  setYLim: (yLim) => set({ yLim }),
   setYKeys: (yKeys) => set({ yKeys }),
   setY2Keys: (y2Keys) => set({ y2Keys }),
   setPlotTool: (plotTool) => set({ plotTool }),

@@ -30,10 +30,13 @@ export interface BuildOptsArgs {
   xLog: boolean;
   tool: PlotTool;
   onReadout: (r: Readout | null) => void;
+  /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
+  xLim?: [number, number] | null;
+  yLim?: [number, number] | null;
 }
 
 export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
-  const { width, height, yLog, xLog, tool, onReadout } = args;
+  const { width, height, yLog, xLog, tool, onReadout, xLim, yLim } = args;
   const axisColor = cssVar("--text-dim") || "#aaa";
   const gridColor = cssVar("--grid-line") || "#333";
   const font = `11px ${cssVar("--font-mono") || "monospace"}`;
@@ -58,7 +61,11 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (tool === "pan") plugins.push(panPlugin());
   if (tool === "cursor") plugins.push(readoutPlugin(onReadout));
 
-  const scales: uPlot.Scales = { x: { distr: xLog ? 3 : 1 }, y: { distr: yLog ? 3 : 1 } };
+  // A static [min,max] tuple fixes the scale (Origin-style); omit it to autoscale.
+  const scales: uPlot.Scales = {
+    x: { distr: xLog ? 3 : 1, ...(xLim ? { range: xLim } : {}) },
+    y: { distr: yLog ? 3 : 1, ...(yLim ? { range: yLim } : {}) },
+  };
   const axes: uPlot.Axis[] = [
     { ...axis, label: xLabel },
     { ...axis, size: 60, label: soloLabel(0) },

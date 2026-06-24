@@ -1,6 +1,7 @@
 // Right panel: stacked Cards. Metadata + Corrections + Axes + Appearance are
 // wired; Corrections posts to /api/corrections/apply via the store.
 
+import AxisLimits from "./AxisLimits";
 import ChannelsCard from "./ChannelsCard";
 import CorrectionsCard from "./CorrectionsCard";
 import StatsCard from "./StatsCard";
@@ -69,6 +70,7 @@ export default function Inspector() {
           />
           Log Y axis
         </label>
+        <AxisLimits />
       </Card>
 
       <Card title="Appearance">

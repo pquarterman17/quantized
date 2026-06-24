@@ -80,6 +80,30 @@ describe("useApp renameDataset", () => {
   });
 });
 
+describe("useApp axis limits", () => {
+  it("clears explicit limits when switching the active dataset", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      activeId: "d1",
+      xLim: [0, 5],
+      yLim: [-1, 1],
+    });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().xLim).toBeNull();
+    expect(useApp.getState().yLim).toBeNull();
+  });
+
+  it("autoscales (clears limits) when a new dataset is added", () => {
+    useApp.setState({ datasets: [], activeId: null, xLim: [0, 5], yLim: [0, 9] });
+    useApp.getState().addDataset({ id: "n1", name: "new", data: raw });
+    expect(useApp.getState().xLim).toBeNull();
+    expect(useApp.getState().yLim).toBeNull();
+  });
+});
+
 describe("useApp appearance prefs", () => {
   it("setTheme applies to <html> and persists to localStorage", () => {
     useApp.getState().setTheme("light");

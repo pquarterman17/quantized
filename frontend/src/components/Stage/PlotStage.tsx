@@ -28,6 +28,8 @@ export default function PlotStage() {
   const active = useActiveDataset();
   const yLog = useApp((s) => s.yLog);
   const xLog = useApp((s) => s.xLog);
+  const xLim = useApp((s) => s.xLim);
+  const yLim = useApp((s) => s.yLim);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const theme = useApp((s) => s.theme);
@@ -84,6 +86,8 @@ export default function PlotStage() {
         height: h,
         yLog,
         xLog,
+        xLim,
+        yLim,
         tool,
         onReadout: setReadout,
       }),
@@ -105,7 +109,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, theme, accent, tool]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, theme, accent, tool]);
 
   function resetView() {
     if (plotRef.current && displayPayload) {
