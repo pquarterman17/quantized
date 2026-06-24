@@ -136,7 +136,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 
 ### Calculator domains (panels) — `DiraCulator.m` build*Tab
 > DEFERRED (autonomous): formulas are embedded in DiraCulator GUI build*Tab functions, not standalone +calc files. Porting requires extracting each formula into a clean `calc/<domain>.py` and freezing via inline MATLAB computation. Backend `+calc/*.m` helpers (below) are ported first.
-- [ ] Unit Converter — `buildUnitConverterTab`
+- [~] Unit Converter — `buildUnitConverterTab` — **UI shipped** (`workshops/calculators/` Units tab, backed by golden `calc/unit_convert.py`: dimensional + temperature-offset + energy↔wavelength / H↔B bridges, quick-pick chips). Constants reference (golden `calc/constants.py`) also surfaced in the same window's Constants tab.
 - [ ] Crystal — `buildCrystalTab`
 - [ ] Electrical / transport — `buildElectricalTab`
 - [ ] Semiconductor — `buildSemiconductorTab`
