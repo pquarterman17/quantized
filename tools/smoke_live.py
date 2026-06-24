@@ -175,6 +175,26 @@ check(
     f"centers={[round(c, 2) for c in centers]}",
 )
 
+print("== reflectivity ==")
+pres = c.get("/api/reflectivity/presets").json()["presets"]
+check("reflectivity/presets", len(pres) > 10 and any(p["formula"] == "Si" for p in pres), f"{len(pres)} presets")
+# vacuum / 200 Å Ni / Si substrate
+refl_layers = [[0.0, 0.0, 0.0, 0.0], [200.0, 9.4e-6, 0.0, 5.0], [0.0, 2.07e-6, 0.0, 3.0]]
+sim = c.post(
+    "/api/reflectivity/simulate",
+    json={"layers": refl_layers, "q_min": 0.005, "q_max": 0.3, "n_points": 200},
+).json()
+rvals = sim["r"]
+check(
+    "reflectivity/simulate -> R~1 low-Q, decays high-Q",
+    len(rvals) == 200 and rvals[0] > 0.9 and rvals[-1] < rvals[0],
+    f"R[0]={rvals[0]:.3f}, R[-1]={rvals[-1]:.2e}",
+)
+sld = c.post("/api/reflectivity/sld-profile", json={"layers": refl_layers}).json()
+check("reflectivity/sld-profile", len(sld["z"]) == len(sld["sld"]) and len(sld["z"]) > 100)
+e3 = c.post("/api/reflectivity/simulate", json={"layers": refl_layers, "q_min": 0.3, "q_max": 0.1})
+check("reflectivity bad Q range -> 422", e3.status_code == 422)
+
 print("== error handling ==")
 e1 = c.post("/api/fitting/fit", json={"model": "NoSuch", "x": [0, 1], "y": [0, 1]})
 check("unknown model -> 422", e1.status_code == 422)
