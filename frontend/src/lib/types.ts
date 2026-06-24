@@ -59,6 +59,13 @@ export interface PeakOverlay {
   y: (number | null)[];
 }
 
+/** An estimated baseline to overlay as a line, aligned 1:1 with the dataset's
+ *  plotted x. Tagged with the source dataset (drops out when stale/mismatched). */
+export interface BaselineOverlay {
+  datasetId: string;
+  y: (number | null)[];
+}
+
 /** One detected peak (from /api/peaks/find). */
 export interface Peak {
   center: number;

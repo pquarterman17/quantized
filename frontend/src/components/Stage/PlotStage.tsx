@@ -8,6 +8,7 @@ import "uplot/dist/uPlot.min.css";
 
 import {
   fetchPlot,
+  withBaselineOverlay,
   withFitOverlay,
   withPeakOverlay,
   type PlotPayload,
@@ -34,6 +35,7 @@ export default function PlotStage() {
   const setPlotTool = useApp((s) => s.setPlotTool);
   const fitOverlay = useApp((s) => s.fitOverlay);
   const peakOverlay = useApp((s) => s.peakOverlay);
+  const baselineOverlay = useApp((s) => s.baselineOverlay);
   const hostRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
   const [payload, setPayload] = useState<PlotPayload | null>(null);
@@ -44,8 +46,10 @@ export default function PlotStage() {
   const displayPayload = useMemo(() => {
     if (!payload) return null;
     const id = active?.id ?? null;
-    return withPeakOverlay(withFitOverlay(payload, fitOverlay, id), peakOverlay, id);
-  }, [payload, fitOverlay, peakOverlay, active]);
+    const withFit = withFitOverlay(payload, fitOverlay, id);
+    const withBase = withBaselineOverlay(withFit, baselineOverlay, id);
+    return withPeakOverlay(withBase, peakOverlay, id);
+  }, [payload, fitOverlay, peakOverlay, baselineOverlay, active]);
 
   // Fetch series whenever the active dataset or y-scale changes.
   useEffect(() => {

@@ -13,6 +13,7 @@ import Stage from "./components/Stage/Stage";
 import CommandPalette, { type Action } from "./components/overlays/CommandPalette";
 import ParamDialog from "./components/overlays/ParamDialog";
 import TooltipLayer from "./components/overlays/TooltipLayer";
+import BaselinePanel from "./components/workshops/baseline/BaselinePanel";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
 import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
 import PeaksPanel from "./components/workshops/peaks/PeaksPanel";
@@ -56,6 +57,7 @@ export default function App() {
   const hysteresisOpen = useApp((s) => s.hysteresisOpen);
   const peaksOpen = useApp((s) => s.peaksOpen);
   const reflectivityOpen = useApp((s) => s.reflectivityOpen);
+  const baselineOpen = useApp((s) => s.baselineOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -184,6 +186,12 @@ export default function App() {
         run: () => s().setReflectivityOpen(true),
       },
       {
+        id: "baseline",
+        group: "Analyze",
+        label: "Baseline / background…",
+        run: () => s().setBaselineOpen(true),
+      },
+      {
         id: "export-csv",
         group: "File",
         label: "Export XRD CSV…",
@@ -276,6 +284,7 @@ export default function App() {
       {hysteresisOpen && <HysteresisPanel />}
       {peaksOpen && <PeaksPanel />}
       {reflectivityOpen && <ReflectivityPanel />}
+      {baselineOpen && <BaselinePanel />}
     </div>
   );
 }

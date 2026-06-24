@@ -4,7 +4,13 @@
 import { create } from "zustand";
 
 import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
-import type { CorrectionParams, Dataset, FitOverlay, PeakOverlay } from "../lib/types";
+import type {
+  BaselineOverlay,
+  CorrectionParams,
+  Dataset,
+  FitOverlay,
+  PeakOverlay,
+} from "../lib/types";
 
 let _idSeq = 0;
 const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
@@ -33,8 +39,10 @@ interface AppState {
   hysteresisOpen: boolean;
   peaksOpen: boolean;
   reflectivityOpen: boolean;
+  baselineOpen: boolean;
   fitOverlay: FitOverlay | null;
   peakOverlay: PeakOverlay | null;
+  baselineOverlay: BaselineOverlay | null;
   status: string;
 
   addDataset: (ds: Dataset) => void;
@@ -59,8 +67,10 @@ interface AppState {
   setHysteresisOpen: (open: boolean) => void;
   setPeaksOpen: (open: boolean) => void;
   setReflectivityOpen: (open: boolean) => void;
+  setBaselineOpen: (open: boolean) => void;
   setFitOverlay: (overlay: FitOverlay | null) => void;
   setPeakOverlay: (overlay: PeakOverlay | null) => void;
+  setBaselineOverlay: (overlay: BaselineOverlay | null) => void;
   setStatus: (status: string) => void;
 }
 
@@ -122,8 +132,10 @@ export const useApp = create<AppState>((set, get) => ({
   hysteresisOpen: false,
   peaksOpen: false,
   reflectivityOpen: false,
+  baselineOpen: false,
   fitOverlay: null,
   peakOverlay: null,
+  baselineOverlay: null,
   status: "starting…",
 
   addDataset: (ds) =>
@@ -221,8 +233,10 @@ export const useApp = create<AppState>((set, get) => ({
   setHysteresisOpen: (hysteresisOpen) => set({ hysteresisOpen }),
   setPeaksOpen: (peaksOpen) => set({ peaksOpen }),
   setReflectivityOpen: (reflectivityOpen) => set({ reflectivityOpen }),
+  setBaselineOpen: (baselineOpen) => set({ baselineOpen }),
   setFitOverlay: (fitOverlay) => set({ fitOverlay }),
   setPeakOverlay: (peakOverlay) => set({ peakOverlay }),
+  setBaselineOverlay: (baselineOverlay) => set({ baselineOverlay }),
   setStatus: (status) => set({ status }),
 }));
 

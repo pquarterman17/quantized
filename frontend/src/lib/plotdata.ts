@@ -5,7 +5,13 @@
 import type uPlot from "uplot";
 
 import { plotSeries } from "./api";
-import type { DataStruct, FitOverlay, PeakOverlay, PlotSeriesResponse } from "./types";
+import type {
+  BaselineOverlay,
+  DataStruct,
+  FitOverlay,
+  PeakOverlay,
+  PlotSeriesResponse,
+} from "./types";
 
 export interface PlotSeriesSpec {
   label: string;
@@ -84,6 +90,22 @@ export function peakOverlayArray(
     y[best] = p.height;
   }
   return y;
+}
+
+/** Append an estimated baseline as an extra line series (same guards as
+ *  withFitOverlay: must belong to the active dataset and align to the x). */
+export function withBaselineOverlay(
+  payload: PlotPayload,
+  overlay: BaselineOverlay | null,
+  activeId: string | null,
+): PlotPayload {
+  if (!overlay || overlay.datasetId !== activeId) return payload;
+  if (overlay.y.length !== payload.data[0].length) return payload;
+  return {
+    ...payload,
+    data: [...payload.data, overlay.y] as uPlot.AlignedData,
+    series: [...payload.series, { label: "baseline", unit: "" }],
+  };
 }
 
 /** Append peak markers as a points-only series (same guards as withFitOverlay). */

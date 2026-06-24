@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildColumns,
   peakOverlayArray,
+  withBaselineOverlay,
   withFitOverlay,
   withPeakOverlay,
   type PlotPayload,
@@ -88,6 +89,31 @@ describe("withFitOverlay", () => {
 
   it("is a no-op when there is no overlay", () => {
     expect(withFitOverlay(base, null, "d1")).toBe(base);
+  });
+});
+
+describe("withBaselineOverlay", () => {
+  const base: PlotPayload = {
+    data: [
+      [0, 1, 2],
+      [10, 20, 30],
+    ],
+    series: [{ label: "y", unit: "V" }],
+    xLabel: "x",
+    xUnit: "s",
+  };
+
+  it("appends the baseline as a line series when id + length match", () => {
+    const p = withBaselineOverlay(base, { datasetId: "d1", y: [1, 2, 3] }, "d1");
+    expect(p.data).toHaveLength(3);
+    expect(p.data[2]).toEqual([1, 2, 3]);
+    expect(p.series[1]).toEqual({ label: "baseline", unit: "" });
+  });
+
+  it("is a no-op on mismatch / wrong dataset / null", () => {
+    expect(withBaselineOverlay(base, { datasetId: "x", y: [1, 2, 3] }, "d1")).toBe(base);
+    expect(withBaselineOverlay(base, { datasetId: "d1", y: [1, 2] }, "d1")).toBe(base);
+    expect(withBaselineOverlay(base, null, "d1")).toBe(base);
   });
 });
 
