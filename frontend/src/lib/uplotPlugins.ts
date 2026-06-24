@@ -2,6 +2,41 @@
 
 import type uPlot from "uplot";
 
+import type { RefLine } from "./types";
+
+/** Draw dashed reference lines at fixed X/Y values, clipped to the plot area. */
+export function refLinePlugin(lines: RefLine[], color: string): uPlot.Plugin {
+  return {
+    hooks: {
+      draw: (u: uPlot) => {
+        const { ctx } = u;
+        const { left, top, width, height } = u.bbox;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 4]);
+        for (const ln of lines) {
+          if (!Number.isFinite(ln.value)) continue;
+          ctx.beginPath();
+          if (ln.axis === "x") {
+            const px = u.valToPos(ln.value, "x", true);
+            if (px < left || px > left + width) continue;
+            ctx.moveTo(px, top);
+            ctx.lineTo(px, top + height);
+          } else {
+            const py = u.valToPos(ln.value, "y", true);
+            if (py < top || py > top + height) continue;
+            ctx.moveTo(left, py);
+            ctx.lineTo(left + width, py);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+      },
+    },
+  };
+}
+
 /** Readout reported by the cursor plugin (null when off-data). */
 export interface Readout {
   x: number;

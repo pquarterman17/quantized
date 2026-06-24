@@ -10,7 +10,10 @@ import type {
   Dataset,
   FitOverlay,
   PeakOverlay,
+  RefLine,
 } from "../lib/types";
+
+let _refSeq = 0;
 
 let _idSeq = 0;
 const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
@@ -36,6 +39,7 @@ interface AppState {
   yLim: [number, number] | null; // explicit Y range (null = autoscale)
   yKeys: number[] | null; // which value channels to plot (null = all)
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
+  refLines: RefLine[]; // fixed X/Y marker lines on the plot
   plotTool: PlotTool;
   cmdkOpen: boolean;
   curveFitOpen: boolean;
@@ -69,6 +73,8 @@ interface AppState {
   setYLim: (yLim: [number, number] | null) => void;
   setYKeys: (yKeys: number[] | null) => void;
   setY2Keys: (y2Keys: number[] | null) => void;
+  addRefLine: (axis: "x" | "y", value: number) => void;
+  removeRefLine: (id: string) => void;
   setPlotTool: (tool: PlotTool) => void;
   setCmdk: (open: boolean) => void;
   setCurveFitOpen: (open: boolean) => void;
@@ -139,6 +145,7 @@ export const useApp = create<AppState>((set, get) => ({
   yLim: null,
   yKeys: null,
   y2Keys: null,
+  refLines: [],
   plotTool: "zoom",
   cmdkOpen: false,
   curveFitOpen: false,
@@ -248,6 +255,9 @@ export const useApp = create<AppState>((set, get) => ({
   setYLim: (yLim) => set({ yLim }),
   setYKeys: (yKeys) => set({ yKeys }),
   setY2Keys: (y2Keys) => set({ y2Keys }),
+  addRefLine: (axis, value) =>
+    set((s) => ({ refLines: [...s.refLines, { id: `ref-${++_refSeq}`, axis, value }] })),
+  removeRefLine: (id) => set((s) => ({ refLines: s.refLines.filter((r) => r.id !== id) })),
   setPlotTool: (plotTool) => set({ plotTool }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
   setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),

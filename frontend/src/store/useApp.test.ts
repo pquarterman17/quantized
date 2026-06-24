@@ -104,6 +104,24 @@ describe("useApp axis limits", () => {
   });
 });
 
+describe("useApp reference lines", () => {
+  it("adds X/Y reference lines with unique ids and removes by id", () => {
+    useApp.setState({ refLines: [] });
+    useApp.getState().addRefLine("x", 100);
+    useApp.getState().addRefLine("y", -2.5);
+    const lines = useApp.getState().refLines;
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatchObject({ axis: "x", value: 100 });
+    expect(lines[1]).toMatchObject({ axis: "y", value: -2.5 });
+    expect(lines[0].id).not.toEqual(lines[1].id);
+
+    useApp.getState().removeRefLine(lines[0].id);
+    const after = useApp.getState().refLines;
+    expect(after).toHaveLength(1);
+    expect(after[0].axis).toBe("y");
+  });
+});
+
 describe("useApp appearance prefs", () => {
   it("setTheme applies to <html> and persists to localStorage", () => {
     useApp.getState().setTheme("light");

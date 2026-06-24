@@ -4,7 +4,8 @@
 import type uPlot from "uplot";
 
 import type { PlotPayload } from "./plotdata";
-import { panPlugin, readoutPlugin, type Readout } from "./uplotPlugins";
+import type { RefLine } from "./types";
+import { panPlugin, readoutPlugin, refLinePlugin, type Readout } from "./uplotPlugins";
 
 export type PlotTool = "zoom" | "pan" | "cursor";
 
@@ -33,10 +34,12 @@ export interface BuildOptsArgs {
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
   xLim?: [number, number] | null;
   yLim?: [number, number] | null;
+  /** Reference lines to draw at fixed X/Y values. */
+  refLines?: RefLine[];
 }
 
 export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
-  const { width, height, yLog, xLog, tool, onReadout, xLim, yLim } = args;
+  const { width, height, yLog, xLog, tool, onReadout, xLim, yLim, refLines } = args;
   const axisColor = cssVar("--text-dim") || "#aaa";
   const gridColor = cssVar("--grid-line") || "#333";
   const font = `11px ${cssVar("--font-mono") || "monospace"}`;
@@ -60,6 +63,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const plugins: uPlot.Plugin[] = [];
   if (tool === "pan") plugins.push(panPlugin());
   if (tool === "cursor") plugins.push(readoutPlugin(onReadout));
+  if (refLines && refLines.length > 0) {
+    plugins.push(refLinePlugin(refLines, cssVar("--text-dim") || "#888"));
+  }
 
   // A static [min,max] tuple fixes the scale (Origin-style); omit it to autoscale.
   const scales: uPlot.Scales = {

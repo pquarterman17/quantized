@@ -29,6 +29,17 @@ describe("buildOpts", () => {
     expect(buildOpts(payload, { ...base, yLog: false, tool: "cursor" }).plugins).toHaveLength(1);
   });
 
+  it("adds the reference-line plugin only when ref lines exist", () => {
+    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom", refLines: [] }).plugins).toHaveLength(0);
+    const withRefs = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      refLines: [{ id: "r1", axis: "x", value: 1 }],
+    });
+    expect(withRefs.plugins).toHaveLength(1);
+  });
+
   it("sets the log distribution on the y scale when yLog", () => {
     expect(buildOpts(payload, { ...base, yLog: true, tool: "zoom" }).scales?.y?.distr).toBe(3);
     expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom" }).scales?.y?.distr).toBe(1);

@@ -90,6 +90,14 @@ export interface SldPreset {
   [key: string]: unknown;
 }
 
+/** A reference line drawn across the plot at a fixed X or Y value (mark Hc, Tc,
+ *  zero, a critical edge…). Rendered by the uPlot refLinePlugin. */
+export interface RefLine {
+  id: string;
+  axis: "x" | "y";
+  value: number;
+}
+
 /** One element row from the reference table. */
 export interface ElementInfo {
   Z: number;
