@@ -51,4 +51,34 @@ describe("buildOpts", () => {
     // With >1 series the legend names them, so the axis label is omitted.
     expect(buildOpts(two, { ...base, yLog: false, tool: "zoom" }).axes?.[1]?.label).toBeUndefined();
   });
+
+  it("has no secondary axis when all series are on the primary", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    expect(opts.scales?.y2).toBeUndefined();
+    expect(opts.axes).toHaveLength(2); // x + primary y only
+  });
+
+  it("adds a right-side y2 scale + axis and routes axis-1 series to it", () => {
+    const dual: PlotPayload = {
+      ...payload,
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+        [0.5, 0.6, 0.7],
+      ],
+      series: [
+        { label: "M", unit: "emu", axis: 0 },
+        { label: "T", unit: "K", axis: 1 },
+      ],
+    };
+    const opts = buildOpts(dual, { ...base, yLog: true, tool: "zoom" });
+    expect(opts.scales?.y2?.distr).toBe(3); // y2 follows the log toggle
+    expect(opts.axes).toHaveLength(3);
+    expect(opts.axes?.[2]?.scale).toBe("y2");
+    expect(opts.axes?.[2]?.side).toBe(1); // right side
+    expect(opts.axes?.[2]?.label).toBe("T (K)"); // solo on the secondary
+    // Series scale routing: first on "y", second on "y2".
+    expect(opts.series[1].scale).toBe("y");
+    expect(opts.series[2].scale).toBe("y2");
+  });
 });

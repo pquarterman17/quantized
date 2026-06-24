@@ -38,9 +38,14 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const gridColor = cssVar("--grid-line") || "#333";
   const font = `11px ${cssVar("--font-mono") || "monospace"}`;
   const xLabel = payload.xUnit ? `${payload.xLabel} (${payload.xUnit})` : payload.xLabel;
-  // Label the Y axis only when one series is shown (otherwise the legend names them).
-  const ySolo = payload.series.length === 1 ? payload.series[0] : null;
-  const yLabel = ySolo ? (ySolo.unit ? `${ySolo.label} (${ySolo.unit})` : ySolo.label) : undefined;
+  const seriesLabel = (s: { label: string; unit: string }): string =>
+    s.unit ? `${s.label} (${s.unit})` : s.label;
+  // Label each Y axis only when it carries a single series (else the legend names them).
+  const soloLabel = (which: number): string | undefined => {
+    const on = payload.series.filter((s) => (s.axis ?? 0) === which);
+    return on.length === 1 ? seriesLabel(on[0]) : undefined;
+  };
+  const hasY2 = payload.series.some((s) => (s.axis ?? 0) === 1);
 
   const axis = {
     stroke: axisColor,
@@ -53,6 +58,24 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (tool === "pan") plugins.push(panPlugin());
   if (tool === "cursor") plugins.push(readoutPlugin(onReadout));
 
+  const scales: uPlot.Scales = { x: { distr: xLog ? 3 : 1 }, y: { distr: yLog ? 3 : 1 } };
+  const axes: uPlot.Axis[] = [
+    { ...axis, label: xLabel },
+    { ...axis, size: 60, label: soloLabel(0) },
+  ];
+  if (hasY2) {
+    scales.y2 = { distr: yLog ? 3 : 1 };
+    // Secondary axis on the right; hide its grid so the two grids don't overlap.
+    axes.push({
+      ...axis,
+      scale: "y2",
+      side: 1,
+      size: 60,
+      label: soloLabel(1),
+      grid: { show: false },
+    });
+  }
+
   return {
     width,
     height,
@@ -60,21 +83,19 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     cursor: { drag: { x: tool === "zoom", y: tool === "zoom", uni: 1 } },
     plugins,
     legend: { show: false },
-    scales: { x: { distr: xLog ? 3 : 1 }, y: { distr: yLog ? 3 : 1 } },
-    axes: [
-      { ...axis, label: xLabel },
-      { ...axis, size: 60, label: yLabel },
-    ],
+    scales,
+    axes,
     series: [
       {},
       ...payload.series.map((s, i) => {
         const stroke = cssVar(SERIES_VARS[i % SERIES_VARS.length]) || "#8b5cf6";
-        const label = s.unit ? `${s.label} (${s.unit})` : s.label;
+        const label = seriesLabel(s);
+        const scale = (s.axis ?? 0) === 1 ? "y2" : "y";
         // Peak markers: points only, no connecting line.
         if (s.kind === "points") {
-          return { label, stroke, fill: stroke, width: 0, points: { show: true, size: 8 } };
+          return { label, scale, stroke, fill: stroke, width: 0, points: { show: true, size: 8 } };
         }
-        return { label, stroke, width: 1.5, points: { show: false } };
+        return { label, scale, stroke, width: 1.5, points: { show: false } };
       }),
     ],
   };

@@ -18,6 +18,8 @@ export interface PlotSeriesSpec {
   unit: string;
   /** "points" renders markers only (peak overlay); default is a line. */
   kind?: "line" | "points";
+  /** 0 = primary (left) Y axis, 1 = secondary (right) — the dual-Y feature. */
+  axis?: number;
 }
 
 export interface PlotPayload {
@@ -27,17 +29,19 @@ export interface PlotPayload {
   xUnit: string;
 }
 
-/** Pure client-side column packing (x = time, all value channels). */
-export function buildColumns(ds: DataStruct): PlotPayload {
+/** Pure client-side column packing (x = time, all value channels). `y2Keys`
+ *  (channel indices) tags those series with axis 1 for the offline dual-Y path. */
+export function buildColumns(ds: DataStruct, y2Keys: number[] | null = null): PlotPayload {
   const x = ds.time.map((v) => (Number.isFinite(v) ? v : null));
   const nCh = ds.labels.length;
+  const y2 = new Set(y2Keys ?? []);
   const cols: (number | null)[][] = [x];
   for (let c = 0; c < nCh; c++) {
     cols.push(ds.values.map((row) => (Number.isFinite(row[c]) ? row[c] : null)));
   }
   return {
     data: cols as uPlot.AlignedData,
-    series: ds.labels.map((label, i) => ({ label, unit: ds.units[i] ?? "" })),
+    series: ds.labels.map((label, i) => ({ label, unit: ds.units[i] ?? "", axis: y2.has(i) ? 1 : 0 })),
     xLabel: String(ds.metadata?.["x_column_name"] ?? "x"),
     xUnit: String(ds.metadata?.["x_column_unit"] ?? ""),
   };
@@ -46,7 +50,7 @@ export function buildColumns(ds: DataStruct): PlotPayload {
 function fromResponse(r: PlotSeriesResponse): PlotPayload {
   return {
     data: r.data as uPlot.AlignedData,
-    series: r.series,
+    series: r.series.map((s) => ({ label: s.label, unit: s.unit, axis: s.axis ?? 0 })),
     xLabel: r.x.label,
     xUnit: r.x.unit,
   };
@@ -129,6 +133,7 @@ export async function fetchPlot(
   yLog: boolean,
   xLog = false,
   yKeys: number[] | null = null,
+  y2Keys: number[] | null = null,
 ): Promise<PlotPayload> {
   try {
     const r = await plotSeries({
@@ -136,9 +141,10 @@ export async function fetchPlot(
       y_log: yLog,
       x_log: xLog,
       y_keys: yKeys ?? undefined,
+      y2_keys: y2Keys ?? undefined,
     });
     return fromResponse(r);
   } catch {
-    return buildColumns(ds);
+    return buildColumns(ds, y2Keys);
   }
 }

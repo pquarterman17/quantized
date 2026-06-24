@@ -31,11 +31,26 @@ describe("buildColumns", () => {
       [100, 200, 300],
     ]);
     expect(p.series).toEqual([
-      { label: "A", unit: "V" },
-      { label: "B", unit: "A" },
+      { label: "A", unit: "V", axis: 0 },
+      { label: "B", unit: "A", axis: 0 },
     ]);
     expect(p.xLabel).toBe("T");
     expect(p.xUnit).toBe("s");
+  });
+
+  it("tags y2Keys channels with axis 1 (offline dual-Y)", () => {
+    const ds: DataStruct = {
+      time: [0, 1],
+      values: [
+        [10, 100],
+        [20, 200],
+      ],
+      labels: ["A", "B"],
+      units: ["V", "A"],
+      metadata: {},
+    };
+    const p = buildColumns(ds, [1]);
+    expect(p.series.map((s) => s.axis)).toEqual([0, 1]);
   });
 
   it("maps non-finite values to null", () => {

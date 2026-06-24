@@ -13,7 +13,8 @@ export interface DataStruct {
 export interface PlotSeriesResponse {
   /** Column-oriented: [xValues, series1Values, series2Values, ...] (null = NaN). */
   data: (number | null)[][];
-  series: { label: string; unit: string }[];
+  /** `axis` = 0 (primary/left Y) or 1 (secondary/right Y) for the dual-Y feature. */
+  series: { label: string; unit: string; axis?: number }[];
   x: { label: string; unit: string; log: boolean };
   y: { log: boolean };
 }

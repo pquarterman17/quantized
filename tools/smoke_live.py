@@ -48,6 +48,10 @@ check("upload QD .dat (browser path)", len(up.get("time", [])) == npts, f"{len(u
 plot = c.post("/api/plot/series", json={"dataset": ds}).json()
 plot_x_len = len(plot["data"][0])
 check("plot/series", plot_x_len == npts and len(plot["series"]) >= 1, f"x={plot_x_len}, series={len(plot['series'])}")
+# dual-Y: a 2-channel dataset with the 2nd channel on the secondary axis
+multi = {"time": [1.0, 2.0, 3.0], "values": [[10.0, 0.5], [20.0, 0.6], [30.0, 0.7]], "labels": ["Moment", "Temp"], "units": ["emu", "K"], "metadata": {}}
+dy = c.post("/api/plot/series", json={"dataset": multi, "y2_keys": [1]}).json()
+check("plot/series dual-Y axis assignment", [s["axis"] for s in dy["series"]] == [0, 1], f"axes={[s['axis'] for s in dy['series']]}")
 
 print("== corrections (real data) ==")
 corr = c.post("/api/corrections/apply", json={"dataset": ds, "params": {"yOff": 1.0, "smoothEnabled": True, "smoothWindow": 5, "smoothMethod": "moving"}}).json()

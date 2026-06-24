@@ -18,10 +18,15 @@ __all__ = ["PlotData", "PlotSeries", "PlotState", "build_series"]
 
 @dataclass(frozen=True, slots=True)
 class PlotState:
-    """Minimal plot selection/config (M1 subset of the full W6 model)."""
+    """Minimal plot selection/config (M1 subset of the full W6 model).
+
+    ``y2_keys`` names the channels drawn against a secondary (right) Y axis —
+    the dual-Y feature. Channels not listed there default to the primary axis.
+    """
 
     x_key: int | str | None = None
     y_keys: tuple[int | str, ...] | None = None
+    y2_keys: tuple[int | str, ...] | None = None
     x_log: bool = False
     y_log: bool = False
 
@@ -31,6 +36,7 @@ class PlotSeries:
     label: str
     unit: str
     values: NDArray[np.float64]
+    axis: int = 0  # 0 = primary (left) Y axis, 1 = secondary (right)
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,8 +72,14 @@ def build_series(ds: DataStruct, state: PlotState | None = None) -> PlotData:
     else:
         y_indices = [_resolve(ds, k) for k in state.y_keys]
 
+    y2 = {_resolve(ds, k) for k in state.y2_keys} if state.y2_keys is not None else set()
     series = tuple(
-        PlotSeries(label=ds.labels[i], unit=ds.units[i], values=ds.values[:, i])
+        PlotSeries(
+            label=ds.labels[i],
+            unit=ds.units[i],
+            values=ds.values[:, i],
+            axis=1 if i in y2 else 0,
+        )
         for i in y_indices
     )
     return PlotData(

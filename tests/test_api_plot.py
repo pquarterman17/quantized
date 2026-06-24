@@ -52,3 +52,31 @@ def test_plot_series_log_flags_passthrough() -> None:
     body = resp.json()
     assert body["x"]["log"] is True
     assert body["y"]["log"] is True
+
+
+_MULTI = {
+    "time": [1.0, 2.0, 3.0],
+    "values": [[10.0, 0.5], [20.0, 0.6], [30.0, 0.7]],
+    "labels": ["Moment", "Temp"],
+    "units": ["emu", "K"],
+    "metadata": {},
+}
+
+
+def test_plot_series_axis_defaults_to_primary() -> None:
+    body = client.post("/api/plot/series", json={"dataset": _MULTI}).json()
+    assert [s["axis"] for s in body["series"]] == [0, 0]
+
+
+def test_plot_series_secondary_axis_assignment() -> None:
+    # Put the "Temp" channel (index 1) on the secondary Y axis.
+    resp = client.post("/api/plot/series", json={"dataset": _MULTI, "y2_keys": [1]})
+    assert resp.status_code == 200
+    series = resp.json()["series"]
+    assert series[0]["label"] == "Moment" and series[0]["axis"] == 0
+    assert series[1]["label"] == "Temp" and series[1]["axis"] == 1
+
+
+def test_plot_series_secondary_axis_by_label() -> None:
+    body = client.post("/api/plot/series", json={"dataset": _MULTI, "y2_keys": ["Temp"]}).json()
+    assert [s["axis"] for s in body["series"]] == [0, 1]

@@ -18,6 +18,7 @@ class PlotRequest(BaseModel):
     dataset: dict[str, Any]
     x_key: int | str | None = None
     y_keys: list[int | str] | None = None
+    y2_keys: list[int | str] | None = None
     x_log: bool = False
     y_log: bool = False
 
@@ -30,6 +31,7 @@ def plot_series(req: PlotRequest) -> dict[str, Any]:
         state = PlotState(
             x_key=req.x_key,
             y_keys=tuple(req.y_keys) if req.y_keys is not None else None,
+            y2_keys=tuple(req.y2_keys) if req.y2_keys is not None else None,
             x_log=req.x_log,
             y_log=req.y_log,
         )
@@ -41,7 +43,7 @@ def plot_series(req: PlotRequest) -> dict[str, Any]:
     data = [jsonify(plot.x)] + [jsonify(s.values) for s in plot.series]
     return {
         "data": data,
-        "series": [{"label": s.label, "unit": s.unit} for s in plot.series],
+        "series": [{"label": s.label, "unit": s.unit, "axis": s.axis} for s in plot.series],
         "x": {"label": plot.x_label, "unit": plot.x_unit, "log": plot.x_log},
         "y": {"log": plot.y_log},
     }

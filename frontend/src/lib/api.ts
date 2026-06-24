@@ -63,6 +63,7 @@ export interface PlotRequest {
   dataset: DataStruct;
   x_key?: number | string | null;
   y_keys?: (number | string)[] | null;
+  y2_keys?: (number | string)[] | null;
   x_log?: boolean;
   y_log?: boolean;
 }

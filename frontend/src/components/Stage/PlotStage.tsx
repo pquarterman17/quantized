@@ -29,6 +29,7 @@ export default function PlotStage() {
   const yLog = useApp((s) => s.yLog);
   const xLog = useApp((s) => s.xLog);
   const yKeys = useApp((s) => s.yKeys);
+  const y2Keys = useApp((s) => s.y2Keys);
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const tool = useApp((s) => s.plotTool);
@@ -58,13 +59,13 @@ export default function PlotStage() {
       setPayload(null);
       return;
     }
-    fetchPlot(active.data, yLog, xLog, yKeys).then((p) => {
+    fetchPlot(active.data, yLog, xLog, yKeys, y2Keys).then((p) => {
       if (!cancelled) setPayload(p);
     });
     return () => {
       cancelled = true;
     };
-  }, [active, yLog, xLog, yKeys]);
+  }, [active, yLog, xLog, yKeys, y2Keys]);
 
   // (Re)create the uPlot instance when payload / size / theme change.
   useEffect(() => {

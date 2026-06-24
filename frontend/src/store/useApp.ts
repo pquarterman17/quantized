@@ -33,6 +33,7 @@ interface AppState {
   yLog: boolean;
   xLog: boolean;
   yKeys: number[] | null; // which value channels to plot (null = all)
+  y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
   plotTool: PlotTool;
   cmdkOpen: boolean;
   curveFitOpen: boolean;
@@ -62,6 +63,7 @@ interface AppState {
   setYLog: (yLog: boolean) => void;
   setXLog: (xLog: boolean) => void;
   setYKeys: (yKeys: number[] | null) => void;
+  setY2Keys: (y2Keys: number[] | null) => void;
   setPlotTool: (tool: PlotTool) => void;
   setCmdk: (open: boolean) => void;
   setCurveFitOpen: (open: boolean) => void;
@@ -128,6 +130,7 @@ export const useApp = create<AppState>((set, get) => ({
   yLog: false,
   xLog: false,
   yKeys: null,
+  y2Keys: null,
   plotTool: "zoom",
   cmdkOpen: false,
   curveFitOpen: false,
@@ -146,6 +149,7 @@ export const useApp = create<AppState>((set, get) => ({
       datasets: [...s.datasets, ds],
       activeId: ds.id,
       yKeys: null, // new dataset → plot all its channels
+      y2Keys: null, // and reset the secondary-axis assignment
     })),
 
   // Upload + parse each picked/dropped file; add to the library (continues on a
@@ -169,7 +173,7 @@ export const useApp = create<AppState>((set, get) => ({
         : `imported ${added} file${added === 1 ? "" : "s"}`,
     );
   },
-  setActive: (id) => set({ activeId: id, yKeys: null }),
+  setActive: (id) => set({ activeId: id, yKeys: null, y2Keys: null }),
   removeDataset: (id) =>
     set((s) => {
       const datasets = s.datasets.filter((d) => d.id !== id);
@@ -230,6 +234,7 @@ export const useApp = create<AppState>((set, get) => ({
   setYLog: (yLog) => set({ yLog }),
   setXLog: (xLog) => set({ xLog }),
   setYKeys: (yKeys) => set({ yKeys }),
+  setY2Keys: (y2Keys) => set({ y2Keys }),
   setPlotTool: (plotTool) => set({ plotTool }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
   setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),
