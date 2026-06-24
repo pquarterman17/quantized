@@ -178,12 +178,11 @@ Source: `+dataWorkspace/`, `DataWorkspace.m`
 ---
 
 ## W6 — Plotting & render
-- [~] Plot state model (axes/limits/scales/dual-Y/per-dataset/tick-format) — **dual-Y shipped** (`PlotState.y2_keys` + `PlotSeries.axis`; Channels-card "Y2" pill → secondary uPlot scale). Limits/per-dataset/tick-format still TODO.
-- [ ] Interactive render (uPlot 1D; Canvas2D for 2D maps)
-- [ ] Publication export — matplotlib → vector PDF/SVG, PNG/TIFF dpi
+- [~] Plot state model (axes/limits/scales/dual-Y/per-dataset/tick-format) — **dual-Y** (`PlotState.y2_keys` + `PlotSeries.axis`; Channels-card "Y2" pill → secondary uPlot scale) **+ explicit limits** (Axes-card X/Y min-max → static uPlot scale range; `store.xLim/yLim`) **shipped**. Per-dataset styling / tick-format still TODO.
+- [~] Interactive render (uPlot 1D; Canvas2D for 2D maps) — uPlot 1D done (Stage: zoom/pan/cursor, overlays, ref lines, waterfall). Canvas2D for 2D maps TODO.
+- [~] Publication export — matplotlib → vector PDF/SVG, PNG/TIFF dpi — vector PDF/SVG/PNG export shipped (`routes/export/figure`, `e6adc82`). TIFF/dpi options TODO.
 - [ ] Styles/templates (`aps`, report, web) — `+styles/`, `+plotting/`
-- [ ] Waterfall · overlays/unified legend · reference lines · insets ·
-      annotations · polar · multi-panel / figure builder
+- [~] Waterfall ✓ · overlays/unified legend ✓ (fit/peak/baseline overlays + legend) · reference lines ✓ (uPlot `refLinePlugin` + Inspector card) · insets · annotations · polar · multi-panel / figure builder — remaining TODO
 
 ---
 
