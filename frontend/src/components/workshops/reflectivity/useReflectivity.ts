@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { reflPresets, reflSimulate, type ReflLayer } from "../../../lib/api";
+import { reflPresets, reflSimulate, reflSldProfile, type ReflLayer } from "../../../lib/api";
 import type { DataStruct, SldPreset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 
@@ -51,6 +51,7 @@ export interface ReflectivityState {
   addLayer: () => void;
   removeLayer: (index: number) => void;
   simulate: () => Promise<void>;
+  sldProfile: () => Promise<void>;
 }
 
 /** Resolve a row's real SLD from its preset + the radiation type. */
@@ -142,6 +143,30 @@ export function useReflectivity(): ReflectivityState {
     }
   }
 
+  // The standard companion view to R(Q): the model's SLD(z) depth profile, added
+  // as its own dataset (z in Å, SLD in Å⁻²).
+  async function sldProfile(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await reflSldProfile({ layers: toApiLayers() });
+      const n = ++_simCounter;
+      const data: DataStruct = {
+        time: res.z,
+        values: res.sld.map((v) => [v ?? Number.NaN]),
+        labels: ["SLD"],
+        units: ["Å⁻²"],
+        metadata: { source: "reflectivity-sld", radiation, layers: layers.length },
+      };
+      addDataset({ id: `refl-sld-${n}`, name: `SLD profile ${n}`, data });
+      setStatus(`SLD profile — ${res.z.length} points`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "SLD profile failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return {
     presets,
     layers,
@@ -155,5 +180,6 @@ export function useReflectivity(): ReflectivityState {
     addLayer,
     removeLayer,
     simulate,
+    sldProfile,
   };
 }

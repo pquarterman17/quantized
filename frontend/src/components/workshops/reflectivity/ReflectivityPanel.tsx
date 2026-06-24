@@ -24,6 +24,7 @@ export default function ReflectivityPanel() {
     addLayer,
     removeLayer,
     simulate,
+    sldProfile,
   } = useReflectivity();
 
   return (
@@ -101,9 +102,12 @@ export default function ReflectivityPanel() {
         />
       </div>
 
-      <div style={{ marginTop: 12 }}>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
         <Button variant="primary" size="sm" disabled={busy} onClick={() => void simulate()}>
           {busy ? "Simulating…" : "Simulate R(Q)"}
+        </Button>
+        <Button size="sm" disabled={busy} onClick={() => void sldProfile()}>
+          SLD profile
         </Button>
       </div>
 

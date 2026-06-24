@@ -1,12 +1,16 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { reflPresets, reflSimulate } from "../../../lib/api";
+import { reflPresets, reflSimulate, reflSldProfile } from "../../../lib/api";
 import type { SldPreset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useReflectivity } from "./useReflectivity";
 
-vi.mock("../../../lib/api", () => ({ reflPresets: vi.fn(), reflSimulate: vi.fn() }));
+vi.mock("../../../lib/api", () => ({
+  reflPresets: vi.fn(),
+  reflSimulate: vi.fn(),
+  reflSldProfile: vi.fn(),
+}));
 
 const PRESETS: SldPreset[] = [
   { name: "Air / Vacuum", formula: "", sldX: 0, sldN: 0, sldImag: 0, density: 0 },
@@ -76,6 +80,23 @@ describe("useReflectivity", () => {
     expect(datasets[0].data.values).toEqual([[1], [0.5], [0.2]]);
     expect(datasets[0].data.labels).toEqual(["Reflectivity"]);
     expect(datasets[0].name).toMatch(/^Reflectivity model/);
+  });
+
+  it("sldProfile adds the SLD(z) depth profile as its own dataset", async () => {
+    vi.mocked(reflSldProfile).mockResolvedValue({ z: [-50, 0, 50], sld: [0, 3e-6, 2e-6] });
+    const { result } = await mountLoaded();
+
+    await act(async () => {
+      await result.current.sldProfile();
+    });
+
+    expect(reflSldProfile).toHaveBeenCalledWith({ layers: expect.any(Array) });
+    const datasets = useApp.getState().datasets;
+    expect(datasets).toHaveLength(1);
+    expect(datasets[0].name).toMatch(/^SLD profile/);
+    expect(datasets[0].data.time).toEqual([-50, 0, 50]);
+    expect(datasets[0].data.values).toEqual([[0], [3e-6], [2e-6]]);
+    expect(datasets[0].data.labels).toEqual(["SLD"]);
   });
 
   it("addLayer inserts above the substrate; removeLayer keeps ≥2 rows", async () => {
