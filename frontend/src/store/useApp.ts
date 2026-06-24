@@ -40,6 +40,7 @@ interface AppState {
   peaksOpen: boolean;
   reflectivityOpen: boolean;
   baselineOpen: boolean;
+  calculatorsOpen: boolean;
   fitOverlay: FitOverlay | null;
   peakOverlay: PeakOverlay | null;
   baselineOverlay: BaselineOverlay | null;
@@ -68,6 +69,7 @@ interface AppState {
   setPeaksOpen: (open: boolean) => void;
   setReflectivityOpen: (open: boolean) => void;
   setBaselineOpen: (open: boolean) => void;
+  setCalculatorsOpen: (open: boolean) => void;
   setFitOverlay: (overlay: FitOverlay | null) => void;
   setPeakOverlay: (overlay: PeakOverlay | null) => void;
   setBaselineOverlay: (overlay: BaselineOverlay | null) => void;
@@ -133,6 +135,7 @@ export const useApp = create<AppState>((set, get) => ({
   peaksOpen: false,
   reflectivityOpen: false,
   baselineOpen: false,
+  calculatorsOpen: false,
   fitOverlay: null,
   peakOverlay: null,
   baselineOverlay: null,
@@ -234,6 +237,7 @@ export const useApp = create<AppState>((set, get) => ({
   setPeaksOpen: (peaksOpen) => set({ peaksOpen }),
   setReflectivityOpen: (reflectivityOpen) => set({ reflectivityOpen }),
   setBaselineOpen: (baselineOpen) => set({ baselineOpen }),
+  setCalculatorsOpen: (calculatorsOpen) => set({ calculatorsOpen }),
   setFitOverlay: (fitOverlay) => set({ fitOverlay }),
   setPeakOverlay: (peakOverlay) => set({ peakOverlay }),
   setBaselineOverlay: (baselineOverlay) => set({ baselineOverlay }),
