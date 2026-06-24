@@ -32,6 +32,7 @@ interface AppState {
   curveFitOpen: boolean;
   hysteresisOpen: boolean;
   peaksOpen: boolean;
+  reflectivityOpen: boolean;
   fitOverlay: FitOverlay | null;
   peakOverlay: PeakOverlay | null;
   status: string;
@@ -57,6 +58,7 @@ interface AppState {
   setCurveFitOpen: (open: boolean) => void;
   setHysteresisOpen: (open: boolean) => void;
   setPeaksOpen: (open: boolean) => void;
+  setReflectivityOpen: (open: boolean) => void;
   setFitOverlay: (overlay: FitOverlay | null) => void;
   setPeakOverlay: (overlay: PeakOverlay | null) => void;
   setStatus: (status: string) => void;
@@ -119,6 +121,7 @@ export const useApp = create<AppState>((set, get) => ({
   curveFitOpen: false,
   hysteresisOpen: false,
   peaksOpen: false,
+  reflectivityOpen: false,
   fitOverlay: null,
   peakOverlay: null,
   status: "starting…",
@@ -217,6 +220,7 @@ export const useApp = create<AppState>((set, get) => ({
   setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),
   setHysteresisOpen: (hysteresisOpen) => set({ hysteresisOpen }),
   setPeaksOpen: (peaksOpen) => set({ peaksOpen }),
+  setReflectivityOpen: (reflectivityOpen) => set({ reflectivityOpen }),
   setFitOverlay: (fitOverlay) => set({ fitOverlay }),
   setPeakOverlay: (peakOverlay) => set({ peakOverlay }),
   setStatus: (status) => set({ status }),

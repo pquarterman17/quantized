@@ -70,6 +70,18 @@ export interface Peak {
   [key: string]: unknown;
 }
 
+/** One material SLD preset (from GET /api/reflectivity/presets). `sldX` is the
+ *  X-ray SLD (Å⁻²), `sldN` the neutron SLD, `sldImag` the X-ray imaginary part. */
+export interface SldPreset {
+  name: string;
+  formula: string;
+  sldX: number;
+  sldN: number;
+  sldImag: number;
+  density: number;
+  [key: string]: unknown;
+}
+
 /** One element row from the reference table. */
 export interface ElementInfo {
   Z: number;

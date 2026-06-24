@@ -16,6 +16,7 @@ import TooltipLayer from "./components/overlays/TooltipLayer";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
 import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
 import PeaksPanel from "./components/workshops/peaks/PeaksPanel";
+import ReflectivityPanel from "./components/workshops/reflectivity/ReflectivityPanel";
 import {
   exportConsolidated,
   exportFigure,
@@ -54,6 +55,7 @@ export default function App() {
   const curveFitOpen = useApp((s) => s.curveFitOpen);
   const hysteresisOpen = useApp((s) => s.hysteresisOpen);
   const peaksOpen = useApp((s) => s.peaksOpen);
+  const reflectivityOpen = useApp((s) => s.reflectivityOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -176,6 +178,12 @@ export default function App() {
         run: () => s().setPeaksOpen(true),
       },
       {
+        id: "reflectivity",
+        group: "Analyze",
+        label: "Reflectivity model…",
+        run: () => s().setReflectivityOpen(true),
+      },
+      {
         id: "export-csv",
         group: "File",
         label: "Export XRD CSV…",
@@ -267,6 +275,7 @@ export default function App() {
       {curveFitOpen && <CurveFitPanel />}
       {hysteresisOpen && <HysteresisPanel />}
       {peaksOpen && <PeaksPanel />}
+      {reflectivityOpen && <ReflectivityPanel />}
     </div>
   );
 }
