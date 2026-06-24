@@ -192,7 +192,7 @@ Source: `+dataWorkspace/`, `DataWorkspace.m`
 - [ ] Library (dataset list/import/groups/search)
 - [ ] Stage (uPlot + 2D viewer)
 - [ ] Inspector (corrections/axes/appearance)
-- [ ] Workshops: curve fit · peak · hysteresis · reflectivity · graph digitizer
+- [~] Workshops: curve fit ✓ · peak ✓ · hysteresis ✓ · reflectivity ✓ (Parratt R(Q) model builder, `routes/reflectivity.py` + `workshops/reflectivity/`) · graph digitizer TODO
 - [ ] DataWorkspace UI · DiraCulator UI
 - [ ] Macro record/export (action log → reproducible script)
 
