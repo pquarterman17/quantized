@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyWaterfall,
   buildColumns,
   peakOverlayArray,
   withBaselineOverlay,
@@ -104,6 +105,49 @@ describe("withFitOverlay", () => {
 
   it("is a no-op when there is no overlay", () => {
     expect(withFitOverlay(base, null, "d1")).toBe(base);
+  });
+});
+
+describe("applyWaterfall", () => {
+  // Two series over the combined range [10, 40] → span 30.
+  const base: PlotPayload = {
+    data: [
+      [0, 1, 2],
+      [10, 20, 30],
+      [20, 30, 40],
+    ],
+    series: [
+      { label: "A", unit: "" },
+      { label: "B", unit: "" },
+    ],
+    xLabel: "x",
+    xUnit: "",
+  };
+
+  it("leaves channel 0 put and offsets later channels by (s-1)·frac·span", () => {
+    const p = applyWaterfall(base, 0.5); // step = 0.5·30 = 15
+    expect(p.data[0]).toEqual([0, 1, 2]); // x unchanged
+    expect(p.data[1]).toEqual([10, 20, 30]); // first series unchanged
+    expect(p.data[2]).toEqual([35, 45, 55]); // +15
+  });
+
+  it("is a no-op when off, or with fewer than 2 series", () => {
+    expect(applyWaterfall(base, 0)).toBe(base);
+    const one: PlotPayload = { ...base, data: [base.data[0], base.data[1]] as PlotPayload["data"] };
+    expect(applyWaterfall(one, 0.5)).toBe(one);
+  });
+
+  it("preserves nulls (gaps) while offsetting finite points", () => {
+    const withGap: PlotPayload = {
+      ...base,
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+        [20, null, 40],
+      ],
+    };
+    const p = applyWaterfall(withGap, 1); // step = span 30
+    expect(p.data[2]).toEqual([50, null, 70]);
   });
 });
 

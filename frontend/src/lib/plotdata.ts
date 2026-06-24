@@ -127,6 +127,32 @@ export function withPeakOverlay(
   };
 }
 
+/** Vertically offset each series for a waterfall view: series s (1-indexed among
+ *  the value columns) is shifted up by (s-1)·fraction·span, where span is the
+ *  combined y-range. `fraction` is 0..1 (0 = off); a no-op with <2 series. The
+ *  offset is display-only, so absolute y-values no longer read true (standard for
+ *  waterfall). Apply to the base payload before overlays so channel 0 stays put. */
+export function applyWaterfall(payload: PlotPayload, fraction: number): PlotPayload {
+  if (fraction <= 0 || payload.data.length <= 2) return payload;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let s = 1; s < payload.data.length; s++) {
+    for (const v of payload.data[s]) {
+      if (v != null && Number.isFinite(v)) {
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      }
+    }
+  }
+  const span = hi > lo ? hi - lo : 1;
+  const step = fraction * span;
+  const cols = payload.data as unknown as (number | null)[][];
+  const data = cols.map((col, s) =>
+    s === 0 ? col : col.map((v) => (v == null ? v : v + (s - 1) * step)),
+  );
+  return { ...payload, data: data as unknown as uPlot.AlignedData };
+}
+
 /** Fetch plot series from the backend; fall back to client packing offline. */
 export async function fetchPlot(
   ds: DataStruct,

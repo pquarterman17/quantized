@@ -6,13 +6,15 @@
 
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { Card, Pill } from "../primitives";
+import { Card, Pill, SliderRow } from "../primitives";
 
 export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const yKeys = useApp((s) => s.yKeys);
   const setYKeys = useApp((s) => s.setYKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const setY2Keys = useApp((s) => s.setY2Keys);
+  const waterfall = useApp((s) => s.waterfall);
+  const setWaterfall = useApp((s) => s.setWaterfall);
 
   if (!active || active.data.labels.length < 2) return null;
 
@@ -70,6 +72,15 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
           </div>
         );
       })}
+      <SliderRow
+        label="Waterfall"
+        value={Math.round(waterfall * 100)}
+        min={0}
+        max={100}
+        step={5}
+        onChange={(v) => setWaterfall(v / 100)}
+        format={(v) => `${v}%`}
+      />
     </Card>
   );
 }

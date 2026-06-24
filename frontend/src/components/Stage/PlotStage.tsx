@@ -7,6 +7,7 @@ import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
 import {
+  applyWaterfall,
   fetchPlot,
   withBaselineOverlay,
   withFitOverlay,
@@ -31,6 +32,7 @@ export default function PlotStage() {
   const xLim = useApp((s) => s.xLim);
   const yLim = useApp((s) => s.yLim);
   const refLines = useApp((s) => s.refLines);
+  const waterfall = useApp((s) => s.waterfall);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const theme = useApp((s) => s.theme);
@@ -50,10 +52,13 @@ export default function PlotStage() {
   const displayPayload = useMemo(() => {
     if (!payload) return null;
     const id = active?.id ?? null;
-    const withFit = withFitOverlay(payload, fitOverlay, id);
+    // Waterfall offsets the channels first (channel 0 stays put), then overlays
+    // (fit/peak/baseline target channel 0) land in register on top.
+    const base = applyWaterfall(payload, waterfall);
+    const withFit = withFitOverlay(base, fitOverlay, id);
     const withBase = withBaselineOverlay(withFit, baselineOverlay, id);
     return withPeakOverlay(withBase, peakOverlay, id);
-  }, [payload, fitOverlay, peakOverlay, baselineOverlay, active]);
+  }, [payload, fitOverlay, peakOverlay, baselineOverlay, waterfall, active]);
 
   // Fetch series whenever the active dataset or y-scale changes.
   useEffect(() => {

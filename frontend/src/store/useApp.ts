@@ -40,6 +40,7 @@ interface AppState {
   yKeys: number[] | null; // which value channels to plot (null = all)
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
   refLines: RefLine[]; // fixed X/Y marker lines on the plot
+  waterfall: number; // waterfall offset as a fraction of the y-span (0 = off)
   plotTool: PlotTool;
   cmdkOpen: boolean;
   curveFitOpen: boolean;
@@ -75,6 +76,7 @@ interface AppState {
   setY2Keys: (y2Keys: number[] | null) => void;
   addRefLine: (axis: "x" | "y", value: number) => void;
   removeRefLine: (id: string) => void;
+  setWaterfall: (waterfall: number) => void;
   setPlotTool: (tool: PlotTool) => void;
   setCmdk: (open: boolean) => void;
   setCurveFitOpen: (open: boolean) => void;
@@ -146,6 +148,7 @@ export const useApp = create<AppState>((set, get) => ({
   yKeys: null,
   y2Keys: null,
   refLines: [],
+  waterfall: 0,
   plotTool: "zoom",
   cmdkOpen: false,
   curveFitOpen: false,
@@ -258,6 +261,7 @@ export const useApp = create<AppState>((set, get) => ({
   addRefLine: (axis, value) =>
     set((s) => ({ refLines: [...s.refLines, { id: `ref-${++_refSeq}`, axis, value }] })),
   removeRefLine: (id) => set((s) => ({ refLines: s.refLines.filter((r) => r.id !== id) })),
+  setWaterfall: (waterfall) => set({ waterfall }),
   setPlotTool: (plotTool) => set({ plotTool }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
   setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),
