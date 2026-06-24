@@ -178,7 +178,7 @@ Source: `+dataWorkspace/`, `DataWorkspace.m`
 ---
 
 ## W6 — Plotting & render
-- [ ] Plot state model (axes/limits/scales/dual-Y/per-dataset/tick-format)
+- [~] Plot state model (axes/limits/scales/dual-Y/per-dataset/tick-format) — **dual-Y shipped** (`PlotState.y2_keys` + `PlotSeries.axis`; Channels-card "Y2" pill → secondary uPlot scale). Limits/per-dataset/tick-format still TODO.
 - [ ] Interactive render (uPlot 1D; Canvas2D for 2D maps)
 - [ ] Publication export — matplotlib → vector PDF/SVG, PNG/TIFF dpi
 - [ ] Styles/templates (`aps`, report, web) — `+styles/`, `+plotting/`
