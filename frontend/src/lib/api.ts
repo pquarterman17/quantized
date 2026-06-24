@@ -271,6 +271,36 @@ export function hysteresisAnalysis(body: {
   return postJSON("/api/magnetometry/hysteresis", body);
 }
 
+/** Subtract a linear high-T background from M(T) -> corrected moment + fit. */
+export function subtractMagBackground(body: {
+  temperature: number[];
+  moment: number[];
+  fit_range?: [number, number] | null;
+  auto_fraction?: number;
+}): Promise<{ corrected: (number | null)[]; slope: number; intercept: number }> {
+  return postJSON("/api/magnetometry/subtract-background", body);
+}
+
+/** Convert field (x) + moment (y) units, sample-aware (emu→emu/g needs mass). */
+export function convertMagUnits(body: {
+  x: number[];
+  y: number[];
+  from_field?: string;
+  to_field?: string;
+  from_moment?: string;
+  to_moment?: string;
+  sample_mass?: number;
+  sample_volume?: number;
+}): Promise<{
+  x: (number | null)[];
+  y: (number | null)[];
+  x_unit: string;
+  y_unit: string;
+  warning: string;
+}> {
+  return postJSON("/api/magnetometry/convert-units", body);
+}
+
 // ── Peaks ───────────────────────────────────────────────────────────────────
 /** Robust peak detection -> peak list + estimated background. */
 export function findPeaks(body: {

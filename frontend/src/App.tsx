@@ -17,6 +17,7 @@ import BaselinePanel from "./components/workshops/baseline/BaselinePanel";
 import CalculatorsPanel from "./components/workshops/calculators/CalculatorsPanel";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
 import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
+import MagToolsPanel from "./components/workshops/magtools/MagToolsPanel";
 import PeaksPanel from "./components/workshops/peaks/PeaksPanel";
 import ReflectivityPanel from "./components/workshops/reflectivity/ReflectivityPanel";
 import {
@@ -60,6 +61,7 @@ export default function App() {
   const reflectivityOpen = useApp((s) => s.reflectivityOpen);
   const baselineOpen = useApp((s) => s.baselineOpen);
   const calculatorsOpen = useApp((s) => s.calculatorsOpen);
+  const magToolsOpen = useApp((s) => s.magToolsOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -174,6 +176,12 @@ export default function App() {
         group: "Analyze",
         label: "Hysteresis analysis…",
         run: () => s().setHysteresisOpen(true),
+      },
+      {
+        id: "magtools",
+        group: "Analyze",
+        label: "Magnetometry (background · units)…",
+        run: () => s().setMagToolsOpen(true),
       },
       {
         id: "peaks",
@@ -294,6 +302,7 @@ export default function App() {
       {reflectivityOpen && <ReflectivityPanel />}
       {baselineOpen && <BaselinePanel />}
       {calculatorsOpen && <CalculatorsPanel />}
+      {magToolsOpen && <MagToolsPanel />}
     </div>
   );
 }

@@ -164,6 +164,29 @@ check(
     hy.get("HcMean", 0) > 0 and "MsMean" in hy and "SFD" in hy,
     f"Hc={hy.get('HcMean'):.1f} Oe, squareness={hy.get('squareness'):.3f}",
 )
+# M(T) background subtraction: linear tail + small bump
+tmp = np.linspace(2.0, 300.0, 100)
+mom = list(0.002 * tmp + 0.01 + 0.5 * np.exp(-((tmp - 50.0) ** 2) / 200.0))
+bg = c.post("/api/magnetometry/subtract-background", json={"temperature": list(tmp), "moment": mom}).json()
+check(
+    "magnetometry/subtract-background (high-T linear)",
+    len(bg["corrected"]) == 100 and abs(bg["slope"] - 0.002) < 5e-4,
+    f"slope={bg['slope']:.4g}, intercept={bg['intercept']:.4g}",
+)
+cu = c.post(
+    "/api/magnetometry/convert-units",
+    json={"x": [1.0, 2.0], "y": [3.0, 4.0], "from_field": "Oe", "to_field": "T", "to_moment": "emu"},
+).json()
+check(
+    "magnetometry/convert-units (Oe->T)",
+    abs(cu["x"][0] - 1e-4) < 1e-12 and cu["x_unit"] == "T" and cu["y_unit"] == "emu",
+    f"1 Oe = {cu['x'][0]} T",
+)
+cu2 = c.post(
+    "/api/magnetometry/convert-units",
+    json={"x": [1.0], "y": [3.0], "to_moment": "emu/g", "sample_mass": 0.0},
+).json()
+check("convert-units warns on emu/g with no mass", "mass" in cu2.get("warning", ""), cu2.get("warning", ""))
 
 print("== peaks ==")
 px = list(np.linspace(0, 10, 500))
