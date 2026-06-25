@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { COLORMAPS, type ColormapName } from "../../lib/colormap";
 import { fetchMap, hasQSpace, rsmAxisKeys, type MapPayload } from "../../lib/mapdata";
+import { exportCanvasPng } from "../../lib/plotExport";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { draw, fmt, hitTest, type Readout } from "./mapRender";
 
@@ -79,6 +80,13 @@ export default function MapStage() {
     const rect = canvas.getBoundingClientRect();
     const r = hitTest(payload, host.clientWidth, host.clientHeight, ev.clientX - rect.left, ev.clientY - rect.top);
     setReadout(r);
+  }
+
+  function savePng() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const stem = active?.name.replace(/\.[^.]+$/, "") ?? "map";
+    exportCanvasPng(canvas, `${stem}_map.png`);
   }
 
   return (
@@ -157,6 +165,10 @@ export default function MapStage() {
             options={[100, 200, 400].map((n) => ({ v: n, text: String(n) }))}
             onChange={(v) => setRes(Number(v))}
           />
+          <span className="qzk-tool-sep" />
+          <button className="qzk-tool-btn" title="Save map as PNG" onClick={savePng}>
+            ⤓
+          </button>
         </div>
       )}
 
