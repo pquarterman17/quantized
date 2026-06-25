@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { COLORMAPS, colormap, colormapCss, sampleColormap } from "./colormap";
+import { COLORMAPS, colormap, colormapCss, normalize, sampleColormap } from "./colormap";
 
 describe("sampleColormap", () => {
   const stops = COLORMAPS.viridis;
@@ -41,5 +41,30 @@ describe("colormap / colormapCss", () => {
 
   it("emits an rgb() string", () => {
     expect(colormapCss("viridis", 0)).toBe("rgb(68, 1, 84)");
+  });
+});
+
+describe("normalize", () => {
+  it("linear maps endpoints to 0 and 1", () => {
+    expect(normalize(0, 0, 10, false)).toBe(0);
+    expect(normalize(10, 0, 10, false)).toBe(1);
+    expect(normalize(5, 0, 10, false)).toBe(0.5);
+  });
+
+  it("log compresses a wide dynamic range (decade midpoint -> 0.5)", () => {
+    // lo=1, hi=100 -> v=10 sits at half the log span.
+    expect(normalize(10, 1, 100, true)).toBeCloseTo(0.5, 12);
+    expect(normalize(1, 1, 100, true)).toBe(0);
+    expect(normalize(100, 1, 100, true)).toBeCloseTo(1, 12);
+  });
+
+  it("returns null (transparent) for non-finite, and non-positive in log mode", () => {
+    expect(normalize(NaN, 0, 10, false)).toBeNull();
+    expect(normalize(0, 1, 100, true)).toBeNull(); // log of 0 is undefined
+    expect(normalize(-5, 1, 100, true)).toBeNull();
+  });
+
+  it("collapses a degenerate range to 0", () => {
+    expect(normalize(5, 7, 7, false)).toBe(0);
   });
 });

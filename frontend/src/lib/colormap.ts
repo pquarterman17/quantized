@@ -65,3 +65,19 @@ export function colormapCss(name: ColormapName, t: number): string {
   const [r, g, b] = colormap(name, t);
   return `rgb(${r}, ${g}, ${b})`;
 }
+
+/** Normalize a value to [0,1] for colour mapping. Linear: (v-lo)/(hi-lo).
+ *  Log: (ln v - ln lo)/(ln hi - ln lo), assuming lo>0 — essential for RSM /
+ *  diffraction data spanning many decades. Returns null (= transparent cell)
+ *  for non-finite v, or a non-positive v in log mode. A degenerate range
+ *  (hi<=lo) collapses to 0. */
+export function normalize(v: number, lo: number, hi: number, log: boolean): number | null {
+  if (!Number.isFinite(v)) return null;
+  if (log) {
+    if (v <= 0) return null;
+    if (lo <= 0 || hi <= lo) return 0;
+    return (Math.log(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo));
+  }
+  if (hi <= lo) return 0;
+  return (v - lo) / (hi - lo);
+}

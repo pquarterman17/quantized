@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { COLORMAPS, type ColormapName, colormapCss, sampleColormap } from "../../lib/colormap";
+import { COLORMAPS, type ColormapName, colormapCss, normalize, sampleColormap } from "../../lib/colormap";
 import { fetchMap, type MapPayload } from "../../lib/mapdata";
 import { useActiveDataset, useApp } from "../../store/useApp";
 
@@ -33,6 +33,7 @@ export default function MapStage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [payload, setPayload] = useState<MapPayload | null>(null);
   const [cmap, setCmap] = useState<ColormapName>("viridis");
+  const [logZ, setLogZ] = useState(false);
   const [readout, setReadout] = useState<Readout | null>(null);
   // x/y/z channel picks, local to this view (default the first three channels).
   const [keys, setKeys] = useState<[number, number, number]>([0, 1, 2]);
@@ -66,13 +67,13 @@ export default function MapStage() {
     const host = hostRef.current;
     const canvas = canvasRef.current;
     if (!host || !canvas) return;
-    const paint = () => draw(canvas, host, payload, cmap);
+    const paint = () => draw(canvas, host, payload, cmap, logZ);
     paint();
     const ro = new ResizeObserver(paint);
     ro.observe(host);
     return () => ro.disconnect();
     // theme/accent in deps so the frame/axis ink recolors from fresh tokens.
-  }, [payload, cmap, theme, accent]);
+  }, [payload, cmap, logZ, theme, accent]);
 
   function onMove(ev: React.MouseEvent<HTMLCanvasElement>) {
     if (!payload) return;
@@ -129,6 +130,13 @@ export default function MapStage() {
               ))}
             </select>
           </label>
+          <button
+            className={`qzk-tool-btn${logZ ? " active" : ""}`}
+            title="Log intensity scale (for high-dynamic-range data like RSM)"
+            onClick={() => setLogZ((v) => !v)}
+          >
+            log
+          </button>
         </div>
       )}
 
@@ -192,7 +200,24 @@ function hitTest(p: MapPayload, w: number, h: number, px: number, py: number): R
   return { x, y, z: zGrid[j]?.[i] ?? null };
 }
 
-function draw(canvas: HTMLCanvasElement, host: HTMLElement, p: MapPayload | null, cmap: ColormapName) {
+/** Smallest strictly-positive finite cell (the log-scale colour floor). */
+function minPositive(grid: (number | null)[][]): number | null {
+  let lo = Infinity;
+  for (const row of grid) {
+    for (const v of row) {
+      if (v != null && Number.isFinite(v) && v > 0 && v < lo) lo = v;
+    }
+  }
+  return Number.isFinite(lo) ? lo : null;
+}
+
+function draw(
+  canvas: HTMLCanvasElement,
+  host: HTMLElement,
+  p: MapPayload | null,
+  cmap: ColormapName,
+  logZ: boolean,
+) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return; // jsdom / headless — nothing to paint
   const W = host.clientWidth || 600;
@@ -207,7 +232,8 @@ function draw(canvas: HTMLCanvasElement, host: HTMLElement, p: MapPayload | null
   const ink = cssVar("--text", "#e6e6e6");
   const muted = cssVar("--text-dim", "#9aa");
   const rect = plotRect(W, H);
-  const lo = p.zMin;
+  // Log mode floors at the smallest positive cell (0/negative -> transparent).
+  const lo = logZ ? minPositive(p.zGrid) : p.zMin;
   const hi = p.zMax;
   const stops = COLORMAPS[cmap];
 
@@ -226,11 +252,12 @@ function draw(canvas: HTMLCanvasElement, host: HTMLElement, p: MapPayload | null
         for (let i = 0; i < nx; i++) {
           const v = p.zGrid[j]?.[i];
           const px = ((ny - 1 - j) * nx + i) * 4;
-          if (v == null || !Number.isFinite(v)) {
+          const t = v == null ? null : normalize(v, lo, hi, logZ);
+          if (t == null) {
             img.data[px + 3] = 0;
             continue;
           }
-          const [r, g, b] = sampleColormap(stops, (v - lo) / (hi - lo));
+          const [r, g, b] = sampleColormap(stops, t);
           img.data[px] = r;
           img.data[px + 1] = g;
           img.data[px + 2] = b;
@@ -249,7 +276,7 @@ function draw(canvas: HTMLCanvasElement, host: HTMLElement, p: MapPayload | null
   ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w, rect.h);
 
   drawAxes(ctx, p, rect, ink, muted);
-  drawColorbar(ctx, p, rect, W, cmap, ink, muted);
+  drawColorbar(ctx, p, rect, W, cmap, lo, hi, logZ, ink, muted);
 }
 
 function drawAxes(
@@ -311,6 +338,9 @@ function drawColorbar(
   rect: { x: number; y: number; w: number; h: number },
   W: number,
   cmap: ColormapName,
+  lo: number | null,
+  hi: number | null,
+  logZ: boolean,
   ink: string,
   muted: string,
 ) {
@@ -323,12 +353,13 @@ function drawColorbar(
   ctx.strokeStyle = muted;
   ctx.strokeRect(bx + 0.5, rect.y + 0.5, bw, rect.h);
 
+  // Endpoint labels show the effective colour range (the log floor when on).
   ctx.fillStyle = muted;
   ctx.font = "10px 'JetBrains Mono', monospace";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  if (p.zMax != null) ctx.fillText(fmt(p.zMax), bx + bw + 4, rect.y);
-  if (p.zMin != null) ctx.fillText(fmt(p.zMin), bx + bw + 4, rect.y + rect.h);
+  if (hi != null) ctx.fillText(fmt(hi), bx + bw + 4, rect.y);
+  if (lo != null) ctx.fillText(fmt(lo), bx + bw + 4, rect.y + rect.h);
   ctx.fillStyle = ink;
   ctx.save();
   ctx.translate(bx + bw + 30, rect.y + rect.h / 2);
@@ -336,7 +367,7 @@ function drawColorbar(
   ctx.font = "11px 'JetBrains Mono', monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
-  const zt = p.zUnit ? `${p.zLabel} (${p.zUnit})` : p.zLabel;
-  ctx.fillText(zt, 0, 0);
+  const base = p.zUnit ? `${p.zLabel} (${p.zUnit})` : p.zLabel;
+  ctx.fillText(logZ ? `${base} — log` : base, 0, 0);
   ctx.restore();
 }

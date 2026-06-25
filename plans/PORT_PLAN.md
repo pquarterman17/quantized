@@ -265,8 +265,9 @@ MATLAB."**
     2D maps → **Canvas2D** (WebGL only if RSM maps demand it). **2D backend +
     minimal Canvas2D viewer shipped** (`calc/map.MapData`/`build_map` +
     `/api/plot/map`; `Stage/MapStage.tsx` heatmap + colormaps/colorbar/cursor +
-    "Map" tab). **Remaining:** axis ticks, Inspector gridding controls, a 2-D
-    area-detector (RSM) parser to feed it natively.
+    lin/log scale + "Map" tab; verified on real RSM `.xrdml` meshes).
+    **Remaining:** axis ticks, Inspector gridding controls, a 2-D area-detector
+    (RSM) parser to feed it natively.
 
 ### Tier 2 — Medium Impact
 36. **Plot features** — insets, polar, multi-panel / figure builder —
