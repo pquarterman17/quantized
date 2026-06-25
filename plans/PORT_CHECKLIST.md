@@ -122,7 +122,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 ### XRD / RSM / surface
 - [~] RSM analyze / strain — `+fitting/rsmAnalyze.m`, `+fitting/rsmStrain.m` — **`rsmStrain` ported** (`calc/rsm.rsm_strain`: in-plane/out-of-plane strain via Q ratios, nominal lattices `a~2π/|Q|`, relaxation R from optional bulk; thin `POST /api/rsm/strain`; formula-verified in `test_calc_rsm.py` + `test_api_rsm.py`, golden-freeze pending MATLAB). **`rsmAnalyze`** (peak extraction from the 2D map → feeds `rsm_strain`) still TODO.
 - [ ] Pawley refinement — `+fitting/pawleyRefine.m`
-- [ ] Surface (2D) fit / models / auto-guess — `+fitting/{surfaceFit,surfaceModels,surfaceAutoGuess}.m`
+- [~] Surface (2D) fit / models / auto-guess — `+fitting/{surfaceFit,surfaceModels,surfaceAutoGuess}.m` — **`surfaceModels` ported** (`calc/surface_models`: Plane/Paraboloid/2D Gaussian/2D Lorentzian/2D Pseudo-Voigt/Polynomial 2D/Exponential Decay 2D — pure `z=f(p,x,y)` registry with param names; formula-verified in `test_calc_surface_models.py`). **`surfaceFit`** (bounded LS fit, needed by `rsmAnalyze`) + **`surfaceAutoGuess`** still TODO.
 
 ### Peak fitting (BosonPlotter Peak workshop)
 - [ ] Lorentzian peak fit, auto-find, multi-peak, constrained widths — `+bosonPlotter/+peak/`
