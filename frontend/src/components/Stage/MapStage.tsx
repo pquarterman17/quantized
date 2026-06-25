@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { COLORMAPS, type ColormapName } from "../../lib/colormap";
-import { fetchMap, type MapPayload } from "../../lib/mapdata";
+import { fetchMap, hasQSpace, rsmAxisKeys, type MapPayload } from "../../lib/mapdata";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { draw, fmt, hitTest, type Readout } from "./mapRender";
 
@@ -28,6 +28,14 @@ export default function MapStage() {
 
   const labels = active?.data.labels ?? [];
   const enoughChannels = labels.length >= 3;
+
+  // RSM (XRDML 2D) datasets carry Qx/Qz columns -> offer an angular⇄Q toggle.
+  const axis1Name = String(active?.data.metadata?.axis1_name ?? "Omega");
+  const angularKeys = rsmAxisKeys(labels, axis1Name, "angular");
+  const qKeys = rsmAxisKeys(labels, axis1Name, "q");
+  const qAvailable = hasQSpace(labels) && angularKeys != null && qKeys != null;
+  const keysAre = (t: [number, number, number] | null) =>
+    t != null && t[0] === keys[0] && t[1] === keys[1] && t[2] === keys[2];
 
   // Reset the channel picks to 0/1/2 when the active dataset changes.
   useEffect(() => {
@@ -86,6 +94,25 @@ export default function MapStage() {
 
       {active && enoughChannels && (
         <div className="qzk-glass qzk-float-tools" style={{ gap: 8, padding: "6px 8px" }}>
+          {qAvailable && (
+            <>
+              <button
+                className={`qzk-tool-btn${keysAre(angularKeys) ? " active" : ""}`}
+                title="Angular axes (2θ / ω)"
+                onClick={() => angularKeys && setKeys(angularKeys)}
+              >
+                2θ/ω
+              </button>
+              <button
+                className={`qzk-tool-btn${keysAre(qKeys) ? " active" : ""}`}
+                title="Reciprocal-space axes (Qx / Qz)"
+                onClick={() => qKeys && setKeys(qKeys)}
+              >
+                Q
+              </button>
+              <span className="qzk-tool-sep" />
+            </>
+          )}
           {(["X", "Y", "Z"] as const).map((axis, slot) => (
             <Picker
               key={axis}

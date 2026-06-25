@@ -147,6 +147,31 @@ export function buildMapColumns(
   };
 }
 
+/** True when a dataset exposes reciprocal-space columns (an RSM from XRDML). */
+export function hasQSpace(labels: string[]): boolean {
+  return labels.includes("Qx") && labels.includes("Qz");
+}
+
+/** x/y/z channel indices for the RSM angular vs reciprocal-space axes toggle.
+ *  ``"q"`` -> (Qx, Qz, Intensity); ``"angular"`` -> (2Theta, axis1, Intensity).
+ *  Returns null when the needed columns are absent. */
+export function rsmAxisKeys(
+  labels: string[],
+  axis1Name: string,
+  space: "angular" | "q",
+): [number, number, number] | null {
+  const z = labels.indexOf("Intensity");
+  if (z < 0) return null;
+  if (space === "q") {
+    const qx = labels.indexOf("Qx");
+    const qz = labels.indexOf("Qz");
+    return qx < 0 || qz < 0 ? null : [qx, qz, z];
+  }
+  const tt = labels.indexOf("2Theta");
+  const a1 = labels.indexOf(axis1Name);
+  return tt < 0 || a1 < 0 ? null : [tt, a1, z];
+}
+
 /** Fetch a heatmap grid from the backend; fall back to client regrid offline. */
 export async function fetchMap(
   ds: DataStruct,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildMapColumns, fetchMap, regridNearest } from "./mapdata";
+import { buildMapColumns, fetchMap, hasQSpace, regridNearest, rsmAxisKeys } from "./mapdata";
 import type { DataStruct } from "./types";
 
 vi.mock("./api", () => ({
@@ -89,5 +89,33 @@ describe("fetchMap", () => {
     ]);
     expect(p.zMin).toBe(1);
     expect(p.zMax).toBe(4);
+  });
+});
+
+// An RSM DataStruct from import_xrdml: [2Theta, Omega, Intensity, Qx, Qz].
+const _RSM_LABELS = ["2Theta", "Omega", "Intensity", "Qx", "Qz"];
+
+describe("hasQSpace", () => {
+  it("is true only when both Qx and Qz columns exist", () => {
+    expect(hasQSpace(_RSM_LABELS)).toBe(true);
+    expect(hasQSpace(["2Theta", "Omega", "Intensity"])).toBe(false);
+    expect(hasQSpace(["Qx", "Intensity"])).toBe(false);
+  });
+});
+
+describe("rsmAxisKeys", () => {
+  it("maps angular -> (2Theta, axis1, Intensity)", () => {
+    expect(rsmAxisKeys(_RSM_LABELS, "Omega", "angular")).toEqual([0, 1, 2]);
+  });
+  it("maps q -> (Qx, Qz, Intensity)", () => {
+    expect(rsmAxisKeys(_RSM_LABELS, "Omega", "q")).toEqual([3, 4, 2]);
+  });
+  it("honours a non-Omega secondary axis name", () => {
+    const labels = ["2Theta", "Chi", "Intensity", "Qx", "Qz"];
+    expect(rsmAxisKeys(labels, "Chi", "angular")).toEqual([0, 1, 2]);
+  });
+  it("returns null when required columns are missing", () => {
+    expect(rsmAxisKeys(["2Theta", "Omega", "Intensity"], "Omega", "q")).toBeNull();
+    expect(rsmAxisKeys(["Qx", "Qz"], "Omega", "q")).toBeNull(); // no Intensity
   });
 });
