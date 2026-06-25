@@ -166,7 +166,11 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         }
         const width = style?.width ?? 1.5;
         const dash = style?.line ? DASH[style.line] : undefined;
-        return { label, scale, stroke, width, dash, points: { show: false } };
+        // Optional markers: show circular points (set line width to 0 for scatter).
+        const points = style?.marker
+          ? { show: true, size: style.markerSize ?? 5 }
+          : { show: false };
+        return { label, scale, stroke, width, dash, points };
       }),
     ],
   };

@@ -128,6 +128,8 @@ export interface SeriesStyle {
   color?: string;
   width?: number;
   line?: LineStyle;
+  marker?: boolean; // draw circular markers at each data point
+  markerSize?: number; // marker diameter in px (default 5); only when marker
 }
 
 /** One element row from the reference table. */

@@ -99,6 +99,23 @@ describe("buildOpts", () => {
     expect(opts.series[1].dash).toEqual([8, 4]); // dashed
   });
 
+  it("shows circular markers (with size) when the style enables them", () => {
+    const withMarkers = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      seriesStyles: [{ marker: true, markerSize: 7 }],
+    });
+    expect(withMarkers.series[1].points).toMatchObject({ show: true, size: 7 });
+    const noMarkers = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      seriesStyles: [{ width: 2 }],
+    });
+    expect(noMarkers.series[1].points).toMatchObject({ show: false });
+  });
+
   it("maps the dotted line style and leaves solid/unset dash-free", () => {
     const dotted = buildOpts(payload, {
       ...base,

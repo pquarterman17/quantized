@@ -6,7 +6,7 @@
 
 import type { Dataset, LineStyle, SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { Card, IconButton, NumberField, SegmentedControl } from "../primitives";
+import { Card, Checkbox, IconButton, NumberField, SegmentedControl } from "../primitives";
 
 const PALETTE = [1, 2, 3, 4, 5, 6, 7, 8];
 const LINE_OPTS: { value: LineStyle; label: string }[] = [
@@ -115,6 +115,29 @@ function StyleRow({ channel, label }: { channel: number; label: string }) {
             value={style.line ?? "solid"}
             onChange={(v) => setSeriesStyle(channel, { line: v })}
           />
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+          <Checkbox
+            checked={style.marker ?? false}
+            onChange={(c) => setSeriesStyle(channel, { marker: c })}
+          >
+            Markers
+          </Checkbox>
+          {style.marker && (
+            <NumberField
+              value={style.markerSize != null ? String(style.markerSize) : ""}
+              width={44}
+              placeholder="5"
+              unit="px"
+              title="Marker size"
+              onChange={(v) => {
+                if (v.trim() === "") return setSeriesStyle(channel, { markerSize: undefined });
+                const n = Number(v);
+                if (Number.isFinite(n) && n > 0) setSeriesStyle(channel, { markerSize: n });
+              }}
+            />
+          )}
         </div>
       </div>
     </details>
