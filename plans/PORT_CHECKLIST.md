@@ -19,7 +19,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Column shorthands (`field/moment/temp/time/stderr/all`) — `io/base.resolve_column` (used by QD/MPMS)
 - [~] Rigaku `.raw` — `+parser/importRigaku_raw.m` — **1D binary golden `488cf4b`**; 2D RSM still TODO
 - ~~Bruker — `+parser/importBruker.m`~~ — **out of scope → fermiviewer** (image data)
-- [~] PANalytical XRDML — `+parser/importXRDML.m` — **1D golden `5d7f1e7`**; **2D area-detector (RSM)** + `computeQSpace` IN SCOPE, still TODO
+- [~] PANalytical XRDML — `+parser/importXRDML.m` — **1D golden `5d7f1e7`**; **2D area-detector (RSM) + Q-space ported** (`io/xrdml._build_2d` auto-detects an RSM mesh — shared 2θ range + a stepping Omega/Chi/Phi — and returns a scattered multi-column DataStruct `[2Theta, axis1, Intensity, Qx, Qz]` with `is2D`/`map_shape` metadata; `calc/qspace.compute_qspace` ports `Qx=(4π/λ)sinθ·sin(ω−θ)`, `Qz=…cos(…)`). Verified vs the formula + real data (`synthetic_rsm` fixture committed; FAIRmat 25k-pt mesh renders a correct sheared Q-space parallelogram through `/api/plot/map`). **Golden-freeze vs MATLAB still pending** (needs a MATLAB run; not tickable to `[x]` until then). Beam-attenuation correction not yet ported (1D path unaffected).
 - [x] NCNR neutron PNR — `+parser/importNCNRPNR.m` — golden `58cd15c`
 - [x] NCNR reflectometry — `+parser/importNCNRRefl.m` — golden `8f9e4f8`
 - [x] NCNR `.dat` — `+parser/importNCNRDat.m` — golden `58cd15c`
