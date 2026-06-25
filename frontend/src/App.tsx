@@ -256,8 +256,20 @@ export default function App() {
               default: 300,
               hint: "Resolution for PNG / TIFF (50–1200); ignored by vector",
             },
+            { key: "title", label: "Title", type: "text", default: "" },
+            {
+              key: "x_label",
+              label: "X label",
+              type: "text",
+              default: "",
+              hint: "Blank = derive from the data column",
+            },
+            { key: "y_label", label: "Y label", type: "text", default: "" },
           ]);
           if (!params) return;
+          // Blank label fields mean "derive from the data" → send undefined, not "".
+          const xl = (params.x_label as string).trim();
+          const yl = (params.y_label as string).trim();
           exportActive(s, (stem, ds) =>
             exportFigure({
               dataset: ds.data,
@@ -267,6 +279,9 @@ export default function App() {
               fmt: params.fmt as string,
               style: params.style as string,
               dpi: params.dpi as number,
+              title: (params.title as string).trim(),
+              x_label: xl || undefined,
+              y_label: yl || undefined,
               filename: stem,
             }),
           );

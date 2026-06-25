@@ -69,3 +69,20 @@ def test_explicit_size_overrides_style() -> None:
 def test_bad_style_raises() -> None:
     with pytest.raises(ValueError, match="unknown style"):
         render_figure(np.array([0.0, 1.0]), [("y", np.array([0.0, 1.0]))], style="nope")
+
+
+def test_title_renders_in_svg() -> None:
+    x = np.linspace(0, 10, 30)
+    out = render_figure(x, [("y", np.sin(x))], fmt="svg", title="My Sample")
+    # SVG embeds text glyphs; the title text appears in the markup.
+    assert "My Sample" in out.decode("utf-8", "ignore")
+
+
+def test_custom_axis_labels_render_in_svg() -> None:
+    x = np.linspace(0, 10, 30)
+    out = render_figure(
+        x, [("y", x)], fmt="svg", x_label="Field (Oe)", y_label="Moment (emu)"
+    )
+    svg = out.decode("utf-8", "ignore")
+    assert "Field (Oe)" in svg
+    assert "Moment (emu)" in svg

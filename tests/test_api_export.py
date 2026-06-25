@@ -177,6 +177,24 @@ def test_figure_bad_style_is_422() -> None:
     assert resp.status_code == 422
 
 
+def test_figure_title_and_label_overrides() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "svg",
+            "title": "Scan 1",
+            "x_label": "Two-theta",
+            "y_label": "Counts",
+        },
+    )
+    assert resp.status_code == 200
+    svg = resp.content.decode("utf-8", "ignore")
+    assert "Scan 1" in svg
+    assert "Two-theta" in svg
+    assert "Counts" in svg
+
+
 def test_figure_bad_format_is_422() -> None:
     resp = client.post("/api/export/figure", json={"dataset": _xrd_dataset(), "fmt": "bmp"})
     assert resp.status_code == 422

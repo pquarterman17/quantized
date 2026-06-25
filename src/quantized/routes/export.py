@@ -175,6 +175,9 @@ class FigureRequest(BaseModel):
     fmt: str = "pdf"
     style: str = "default"  # publication preset: aps / report / web / …
     dpi: int = 200  # raster (png/tiff) resolution; ignored by vector formats
+    title: str = ""  # optional figure title
+    x_label: str | None = None  # override the auto-derived axis labels (None = derive)
+    y_label: str | None = None
     filename: str = "figure"
 
 
@@ -209,17 +212,23 @@ def export_figure(req: FigureRequest) -> Response:
             y_log=req.y_log,
         )
         plot = build_series(ds, state)
-        x_label = f"{plot.x_label} ({plot.x_unit})" if plot.x_unit else plot.x_label
-        y_label = ""
-        if len(plot.series) == 1:
-            only = plot.series[0]
-            y_label = f"{only.label} ({only.unit})" if only.unit else only.label
+        # Caller-supplied labels override the auto-derived "label (unit)" strings.
+        x_label = req.x_label
+        if x_label is None:
+            x_label = f"{plot.x_label} ({plot.x_unit})" if plot.x_unit else plot.x_label
+        y_label = req.y_label
+        if y_label is None:
+            y_label = ""
+            if len(plot.series) == 1:
+                only = plot.series[0]
+                y_label = f"{only.label} ({only.unit})" if only.unit else only.label
         series = [
             (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series
         ]
         data = render_figure(
             plot.x,
             series,
+            title=req.title,
             x_label=x_label,
             y_label=y_label,
             x_log=req.x_log,

@@ -33,6 +33,7 @@ def render_figure(
     x: ArrayLike,
     series: Sequence[tuple[str, ArrayLike]],
     *,
+    title: str = "",
     x_label: str = "",
     y_label: str = "",
     x_log: bool = False,
@@ -48,8 +49,9 @@ def render_figure(
     ``fmt`` is ``pdf`` / ``svg`` (vector) or ``png`` / ``tiff`` (raster, sized by
     ``dpi``). ``style`` names a publication preset (``aps`` / ``report`` / ``web``
     / …) that sets font, line width, figure geometry, grid, and legend; pass
-    ``width_in`` / ``height_in`` to override the preset's size. A legend is drawn
-    only for multiple series. Raises ``ValueError`` on an unknown format or style.
+    ``width_in`` / ``height_in`` to override the preset's size. ``title`` /
+    ``x_label`` / ``y_label`` are optional (empty = omit). A legend is drawn only
+    for multiple series. Raises ``ValueError`` on an unknown format or style.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -83,6 +85,8 @@ def render_figure(
                 ax.set_xscale("log")
             if y_log:
                 ax.set_yscale("log")
+            if title:
+                ax.set_title(title)
             if x_label:
                 ax.set_xlabel(x_label)
             if y_label:
