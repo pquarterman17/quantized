@@ -25,9 +25,80 @@ from scipy.optimize import minimize
 
 from quantized.calc.surface_models import SurfaceModel, get_surface_model
 
-__all__ = ["surface_fit"]
+__all__ = ["surface_fit", "surface_auto_guess"]
 
 _EPS = sys.float_info.epsilon
+
+
+def _weighted_centroid(
+    xa: NDArray[np.float64], ya: NDArray[np.float64], za: NDArray[np.float64], z_min: float
+) -> tuple[float, float]:
+    """Intensity-weighted (x, y) centre (weights = z - z_min, clamped >= 0)."""
+    wts = np.maximum(za - z_min, 0.0)
+    w_sum = max(float(np.sum(wts)), _EPS)
+    return float(np.sum(wts * xa) / w_sum), float(np.sum(wts * ya) / w_sum)
+
+
+def surface_auto_guess(
+    model: str | SurfaceModel,
+    x: ArrayLike,
+    y: ArrayLike,
+    z: ArrayLike,
+) -> NDArray[np.float64]:
+    """Heuristic initial parameter guess for a 2D model. Port of
+    ``fitting.surfaceAutoGuess``: linear models solve normal equations; peak
+    models use ``z``-range amplitude, an intensity-weighted centroid, and
+    range/4 widths."""
+    mdl = get_surface_model(model) if isinstance(model, str) else model
+    xa = np.asarray(x, dtype=float).ravel()
+    ya = np.asarray(y, dtype=float).ravel()
+    za = np.asarray(z, dtype=float).ravel()
+    n = za.size
+
+    x_rng = max(float(xa.max() - xa.min()), _EPS)
+    y_rng = max(float(ya.max() - ya.min()), _EPS)
+    z_min = float(za.min())
+    z_rng = max(float(za.max() - z_min), _EPS)
+    z_mean = float(za.mean())
+
+    name = mdl.name
+    if name == "Plane":
+        amat = np.column_stack([xa, ya, np.ones(n)])
+        return _lstsq_or(amat, za, [0.0, 0.0, z_mean])
+    if name == "Paraboloid":
+        amat = np.column_stack([xa**2, ya**2, xa * ya, xa, ya, np.ones(n)])
+        return _lstsq_or(amat, za, [0.0, 0.0, 0.0, 0.0, 0.0, z_mean])
+    if name == "Polynomial 2D":
+        amat = np.column_stack([np.ones(n), xa, ya, xa**2, xa * ya, ya**2])
+        return _lstsq_or(amat, za, [z_mean, 0.0, 0.0, 0.0, 0.0, 0.0])
+    if name in ("2D Gaussian", "2D Lorentzian", "2D Pseudo-Voigt"):
+        amp = float(za.max()) - z_min
+        x0, y0 = _weighted_centroid(xa, ya, za, z_min)
+        guess = [amp, x0, x_rng / 4, y0, y_rng / 4, z_min]
+        if name == "2D Pseudo-Voigt":
+            guess.append(0.5)  # eta
+        return np.asarray(guess, dtype=float)
+    if name == "Exponential Decay 2D":
+        return np.asarray([z_rng, x_rng / 3, y_rng / 3, z_min], dtype=float)
+
+    # Generic fallback for any other model.
+    out = np.ones(mdl.n_params, dtype=float)
+    defaults = [z_rng, (float(xa.min()) + float(xa.max())) / 2, x_rng / 4,
+                (float(ya.min()) + float(ya.max())) / 2, y_rng / 4, z_min]
+    for i, val in enumerate(defaults[: mdl.n_params]):
+        out[i] = val
+    return out
+
+
+def _lstsq_or(
+    amat: NDArray[np.float64], z: NDArray[np.float64], fallback: list[float]
+) -> NDArray[np.float64]:
+    """Least-squares solve (MATLAB ``A \\ z``), falling back on a singular system."""
+    try:
+        coeffs, *_ = np.linalg.lstsq(amat, z, rcond=None)
+        return np.asarray(coeffs, dtype=float).ravel()
+    except np.linalg.LinAlgError:
+        return np.asarray(fallback, dtype=float)
 
 
 def _bound_to_free(pb: float, lo: float, hi: float) -> float:
@@ -107,17 +178,19 @@ def surface_fit(
     z: ArrayLike,
     model: str | SurfaceModel,
     *,
-    p0: Sequence[float],
+    p0: Sequence[float] | None = None,
     lower: Sequence[float] | None = None,
     upper: Sequence[float] | None = None,
     max_iter: int = 10000,
 ) -> dict[str, Any]:
-    """Fit ``model`` to scattered ``(x, y, z)`` from initial guess ``p0``.
+    """Fit ``model`` to scattered ``(x, y, z)``.
 
-    ``lower``/``upper`` bound each parameter (defaults ``-inf``/``+inf``). Returns
-    a dict with ``params``, ``param_names``, ``errors`` (1-sigma, NaN if the
-    Hessian is singular), ``residuals``, ``z_fit``, ``r2``, ``rmse``,
-    ``chi_sq_red``, ``model_name``, ``n_points``, ``n_free``, ``exit_flag``.
+    ``p0`` is the initial guess; when omitted it is derived via
+    :func:`surface_auto_guess`. ``lower``/``upper`` bound each parameter
+    (defaults ``-inf``/``+inf``). Returns a dict with ``params``,
+    ``param_names``, ``errors`` (1-sigma, NaN if the Hessian is singular),
+    ``residuals``, ``z_fit``, ``r2``, ``rmse``, ``chi_sq_red``, ``model_name``,
+    ``n_points``, ``n_free``, ``exit_flag``.
     """
     mdl = get_surface_model(model) if isinstance(model, str) else model
     xa = np.asarray(x, dtype=float).ravel()
@@ -126,7 +199,10 @@ def surface_fit(
     n_pts = za.size
     n_p = mdl.n_params
 
-    p0_arr = np.asarray(p0, dtype=float).ravel()
+    if p0 is None:
+        p0_arr = surface_auto_guess(mdl, xa, ya, za)
+    else:
+        p0_arr = np.asarray(p0, dtype=float).ravel()
     if p0_arr.size != n_p:
         raise ValueError(f"p0 must have {n_p} elements for {mdl.name!r}, got {p0_arr.size}")
     lb = _bounds(lower, n_p, -np.inf, "lower")

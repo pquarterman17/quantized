@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from quantized.calc.surface_fit import surface_fit
+from quantized.calc.surface_fit import surface_auto_guess, surface_fit
 from quantized.calc.surface_models import get_surface_model
 
 
@@ -82,3 +82,43 @@ def test_result_shapes() -> None:
     assert res["param_names"] == ["a", "b", "c"]
     assert res["n_points"] == x.size
     assert res["n_free"] == 3
+
+
+# ── surface_auto_guess ────────────────────────────────────────────────────
+def test_auto_guess_gaussian_in_the_ballpark() -> None:
+    x, y = _grid()
+    true = [10.0, 1.0, 1.5, -1.0, 2.0, 2.0]
+    z = get_surface_model("2D Gaussian").func(true, x, y)
+    g = surface_auto_guess("2D Gaussian", x, y, z)
+    assert g.size == 6
+    assert g[0] == pytest.approx(10.0, rel=0.1)  # amplitude ~ zmax - zmin
+    assert g[1] == pytest.approx(1.0, abs=0.5)  # weighted centroid near x0
+    assert g[3] == pytest.approx(-1.0, abs=0.5)  # near y0
+    assert g[5] == pytest.approx(z.min())  # z0 = baseline
+
+
+def test_auto_guess_plane_solves_normal_equations() -> None:
+    x, y = _grid(n=11)
+    z = 2.0 * x + 3.0 * y + 1.0
+    g = surface_auto_guess("Plane", x, y, z)
+    np.testing.assert_allclose(g, [2.0, 3.0, 1.0], rtol=1e-9, atol=1e-9)
+
+
+def test_auto_guess_pseudo_voigt_has_eta() -> None:
+    x, y = _grid(n=9)
+    z = get_surface_model("2D Gaussian").func([5.0, 0.0, 1.0, 0.0, 1.0, 0.0], x, y)
+    g = surface_auto_guess("2D Pseudo-Voigt", x, y, z)
+    assert g.size == 7
+    assert g[6] == pytest.approx(0.5)  # eta default
+
+
+def test_surface_fit_without_p0_uses_auto_guess() -> None:
+    x, y = _grid()
+    true = [10.0, 1.0, 1.5, -1.0, 2.0, 2.0]
+    z = get_surface_model("2D Gaussian").func(true, x, y)
+    res = surface_fit(
+        x, y, z, "2D Gaussian",
+        lower=[0.0, -np.inf, 0.05, -np.inf, 0.05, -np.inf],
+    )  # no p0 -> auto-guessed
+    np.testing.assert_allclose(res["params"], true, rtol=3e-2, atol=3e-2)
+    assert res["r2"] > 0.999
