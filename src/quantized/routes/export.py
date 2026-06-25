@@ -173,6 +173,7 @@ class FigureRequest(BaseModel):
     x_log: bool = False
     y_log: bool = False
     fmt: str = "pdf"
+    style: str = "default"  # publication preset: aps / report / web / …
     dpi: int = 200  # raster (png/tiff) resolution; ignored by vector formats
     filename: str = "figure"
 
@@ -224,6 +225,7 @@ def export_figure(req: FigureRequest) -> Response:
             x_log=req.x_log,
             y_log=req.y_log,
             fmt=req.fmt,
+            style=req.style,
             dpi=dpi,
         )
     except (ValueError, KeyError, IndexError) as exc:

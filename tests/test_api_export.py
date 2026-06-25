@@ -159,6 +159,24 @@ def test_figure_dpi_is_clamped() -> None:
     assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_figure_style_preset_download() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "pdf", "style": "aps", "filename": "fig1"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_figure_bad_style_is_422() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "pdf", "style": "nope"},
+    )
+    assert resp.status_code == 422
+
+
 def test_figure_bad_format_is_422() -> None:
     resp = client.post("/api/export/figure", json={"dataset": _xrd_dataset(), "fmt": "bmp"})
     assert resp.status_code == 422

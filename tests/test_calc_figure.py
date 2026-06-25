@@ -50,3 +50,22 @@ def test_multi_series_renders() -> None:
 def test_bad_format_raises() -> None:
     with pytest.raises(ValueError, match="fmt"):
         render_figure(np.array([0.0, 1.0]), [("y", np.array([0.0, 1.0]))], fmt="bmp")
+
+
+def test_named_styles_render() -> None:
+    x = np.linspace(0, 10, 50)
+    for style in ("aps", "report", "web", "nature", "presentation"):
+        out = render_figure(x, [("y", np.sin(x))], fmt="pdf", style=style)
+        assert out[:5] == b"%PDF-"
+
+
+def test_explicit_size_overrides_style() -> None:
+    # Passing width_in/height_in must win over the preset geometry.
+    x = np.linspace(0, 10, 20)
+    out = render_figure(x, [("y", x)], fmt="pdf", style="aps", width_in=8.0, height_in=5.0)
+    assert out[:5] == b"%PDF-"
+
+
+def test_bad_style_raises() -> None:
+    with pytest.raises(ValueError, match="unknown style"):
+        render_figure(np.array([0.0, 1.0]), [("y", np.array([0.0, 1.0]))], style="nope")

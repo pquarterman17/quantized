@@ -242,6 +242,14 @@ export default function App() {
               hint: "PDF / SVG are vector; PNG / TIFF are raster",
             },
             {
+              key: "style",
+              label: "Style",
+              type: "select",
+              default: "default",
+              options: ["default", "aps", "nature", "thesis", "report", "web", "presentation", "poster"],
+              hint: "Publication preset: sets font, size, line width, grid",
+            },
+            {
               key: "dpi",
               label: "DPI (raster)",
               type: "number",
@@ -257,6 +265,7 @@ export default function App() {
               x_log: s().xLog,
               y_log: s().yLog,
               fmt: params.fmt as string,
+              style: params.style as string,
               dpi: params.dpi as number,
               filename: stem,
             }),
