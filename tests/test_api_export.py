@@ -195,6 +195,19 @@ def test_figure_title_and_label_overrides() -> None:
     assert "Counts" in svg
 
 
+def test_figure_series_styles_applied() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "svg",
+            "series_styles": [{"color": "#abcdef", "width": 2.5, "line": "dashed"}],
+        },
+    )
+    assert resp.status_code == 200
+    assert "#abcdef" in resp.content.decode("utf-8", "ignore")
+
+
 def test_figure_bad_format_is_422() -> None:
     resp = client.post("/api/export/figure", json={"dataset": _xrd_dataset(), "fmt": "bmp"})
     assert resp.status_code == 422

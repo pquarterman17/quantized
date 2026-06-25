@@ -29,6 +29,7 @@ import {
   health,
 } from "./lib/api";
 import { makeDemoDataset } from "./lib/demo";
+import { buildExportStyles } from "./lib/exportStyles";
 import { openFilePicker } from "./lib/openFilePicker";
 import { useApp } from "./store/useApp";
 
@@ -270,8 +271,10 @@ export default function App() {
           // Blank label fields mean "derive from the data" → send undefined, not "".
           const xl = (params.x_label as string).trim();
           const yl = (params.y_label as string).trim();
-          exportActive(s, (stem, ds) =>
-            exportFigure({
+          exportActive(s, (stem, ds) => {
+            // Per-series styles in plotted order so the figure matches the screen.
+            const plotted = s().yKeys ?? ds.data.labels.map((_, i) => i);
+            return exportFigure({
               dataset: ds.data,
               y_keys: s().yKeys ?? undefined,
               x_log: s().xLog,
@@ -282,9 +285,10 @@ export default function App() {
               title: (params.title as string).trim(),
               x_label: xl || undefined,
               y_label: yl || undefined,
+              series_styles: buildExportStyles(plotted, s().seriesStyles),
               filename: stem,
-            }),
-          );
+            });
+          });
         },
       },
       {

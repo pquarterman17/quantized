@@ -178,6 +178,8 @@ class FigureRequest(BaseModel):
     title: str = ""  # optional figure title
     x_label: str | None = None  # override the auto-derived axis labels (None = derive)
     y_label: str | None = None
+    # Per-series style (aligned to the plotted y_keys order): color/width/line/marker.
+    series_styles: list[dict[str, Any] | None] | None = None
     filename: str = "figure"
 
 
@@ -235,6 +237,7 @@ def export_figure(req: FigureRequest) -> Response:
             y_log=req.y_log,
             fmt=req.fmt,
             style=req.style,
+            series_styles=req.series_styles,
             dpi=dpi,
         )
     except (ValueError, KeyError, IndexError) as exc:

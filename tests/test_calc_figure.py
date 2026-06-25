@@ -86,3 +86,30 @@ def test_custom_axis_labels_render_in_svg() -> None:
     svg = out.decode("utf-8", "ignore")
     assert "Field (Oe)" in svg
     assert "Moment (emu)" in svg
+
+
+def test_series_styles_render() -> None:
+    x = np.linspace(0, 10, 30)
+    styles = [
+        {"color": "#ff0000", "width": 3, "line": "dashed", "marker": True, "marker_size": 6}
+    ]
+    out = render_figure(x, [("y", np.sin(x))], fmt="pdf", series_styles=styles)
+    assert out[:5] == b"%PDF-"
+
+
+def test_series_styles_color_appears_in_svg() -> None:
+    x = np.linspace(0, 10, 30)
+    out = render_figure(
+        x, [("y", x)], fmt="svg", series_styles=[{"color": "#123456"}]
+    )
+    # matplotlib serializes the stroke colour into the SVG path style.
+    assert "#123456" in out.decode("utf-8", "ignore")
+
+
+def test_extra_or_missing_series_styles_are_safe() -> None:
+    x = np.linspace(0, 10, 10)
+    # Fewer styles than series (second series → default) and a None entry.
+    out = render_figure(
+        x, [("a", x), ("b", 2 * x)], fmt="pdf", series_styles=[None]
+    )
+    assert out[:5] == b"%PDF-"

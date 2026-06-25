@@ -2,6 +2,7 @@
 // (dev: Vite proxies to uvicorn :8000; prod: same-origin static mount).
 
 import { postDownload } from "./download";
+import type { ExportSeriesStyle } from "./exportStyles";
 import type {
   CalcResult,
   CorrectionParams,
@@ -259,6 +260,7 @@ export function exportFigure(body: {
   title?: string;
   x_label?: string;
   y_label?: string;
+  series_styles?: (ExportSeriesStyle | null)[];
   filename?: string;
 }): Promise<void> {
   return postDownload("/api/export/figure", body, `figure.${body.fmt ?? "pdf"}`);

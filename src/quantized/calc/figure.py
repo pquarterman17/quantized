@@ -10,7 +10,7 @@ only (the heavy import is lazy at the route boundary).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from io import BytesIO
 from typing import Any
 
@@ -27,6 +27,28 @@ from quantized.calc.figure_styles import figure_style  # noqa: E402
 __all__ = ["render_figure"]
 
 _FORMATS = ("pdf", "svg", "png", "tiff")
+_LINESTYLE = {"solid": "-", "dashed": "--", "dotted": ":"}
+
+
+def _plot_kwargs(default_lw: float, spec: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Translate a per-series style spec (color/width/line/marker[/marker_size])
+    into matplotlib ``plot`` kwargs, so the export matches the on-screen styling."""
+    kw: dict[str, Any] = {"linewidth": default_lw}
+    if not spec:
+        return kw
+    color = spec.get("color")
+    if color:
+        kw["color"] = color
+    width = spec.get("width")
+    if width is not None:
+        kw["linewidth"] = width
+    line = spec.get("line")
+    if line in _LINESTYLE:
+        kw["linestyle"] = _LINESTYLE[line]
+    if spec.get("marker"):
+        kw["marker"] = "o"
+        kw["markersize"] = spec.get("marker_size") or 5
+    return kw
 
 
 def render_figure(
@@ -40,6 +62,7 @@ def render_figure(
     y_log: bool = False,
     fmt: str = "pdf",
     style: str = "default",
+    series_styles: Sequence[Mapping[str, Any] | None] | None = None,
     width_in: float | None = None,
     height_in: float | None = None,
     dpi: int = 200,
@@ -50,8 +73,10 @@ def render_figure(
     ``dpi``). ``style`` names a publication preset (``aps`` / ``report`` / ``web``
     / …) that sets font, line width, figure geometry, grid, and legend; pass
     ``width_in`` / ``height_in`` to override the preset's size. ``title`` /
-    ``x_label`` / ``y_label`` are optional (empty = omit). A legend is drawn only
-    for multiple series. Raises ``ValueError`` on an unknown format or style.
+    ``x_label`` / ``y_label`` are optional (empty = omit). ``series_styles``
+    (aligned 1:1 with ``series``) carries per-series color/width/line/marker so
+    the export matches the on-screen plot. A legend is drawn only for multiple
+    series. Raises ``ValueError`` on an unknown format or style.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -79,8 +104,10 @@ def render_figure(
     with matplotlib.rc_context(rc):  # type: ignore[arg-type]
         fig, ax = plt.subplots(figsize=figsize)
         try:
-            for label, y in series:
-                ax.plot(xv, np.asarray(y, dtype=float), label=label, linewidth=st.line_width)
+            for i, (label, y) in enumerate(series):
+                spec = series_styles[i] if series_styles and i < len(series_styles) else None
+                kw = _plot_kwargs(st.line_width, spec)
+                ax.plot(xv, np.asarray(y, dtype=float), label=label, **kw)
             if x_log:
                 ax.set_xscale("log")
             if y_log:
