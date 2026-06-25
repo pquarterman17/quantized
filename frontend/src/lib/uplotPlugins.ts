@@ -2,7 +2,7 @@
 
 import type uPlot from "uplot";
 
-import type { RefLine } from "./types";
+import type { Annotation, RefLine } from "./types";
 
 /** Draw dashed reference lines at fixed X/Y values, clipped to the plot area. */
 export function refLinePlugin(lines: RefLine[], color: string): uPlot.Plugin {
@@ -30,6 +30,38 @@ export function refLinePlugin(lines: RefLine[], color: string): uPlot.Plugin {
             ctx.lineTo(left + width, py);
           }
           ctx.stroke();
+        }
+        ctx.restore();
+      },
+    },
+  };
+}
+
+/** Draw text annotations (a small dot + label) pinned at data coordinates,
+ *  clipped to the plot area so off-screen labels don't bleed into the axes. */
+export function annotationPlugin(
+  annotations: Annotation[],
+  color: string,
+  font: string,
+): uPlot.Plugin {
+  return {
+    hooks: {
+      draw: (u: uPlot) => {
+        const { ctx } = u;
+        const { left, top, width, height } = u.bbox;
+        ctx.save();
+        ctx.fillStyle = color;
+        ctx.font = font;
+        ctx.textBaseline = "bottom";
+        for (const a of annotations) {
+          if (!Number.isFinite(a.x) || !Number.isFinite(a.y)) continue;
+          const px = u.valToPos(a.x, "x", true);
+          const py = u.valToPos(a.y, "y", true);
+          if (px < left || px > left + width || py < top || py > top + height) continue;
+          ctx.beginPath();
+          ctx.arc(px, py, 3, 0, Math.PI * 2);
+          ctx.fill();
+          if (a.text) ctx.fillText(a.text, px + 6, py - 2);
         }
         ctx.restore();
       },

@@ -182,7 +182,7 @@ Source: `+dataWorkspace/`, `DataWorkspace.m`
 - [~] Interactive render (uPlot 1D; Canvas2D for 2D maps) — uPlot 1D done (Stage: zoom/pan/cursor, overlays, ref lines, waterfall). Canvas2D for 2D maps TODO.
 - [x] Publication export — matplotlib → vector PDF/SVG, PNG/TIFF dpi — PDF/SVG (vector) + PNG/TIFF (raster) shipped (`routes/export/figure`, `calc/figure.render_figure`). User-selectable DPI for raster (clamped 50–1200, default 300) via the "Export figure…" format/DPI dialog (`askParams`); vector formats ignore DPI.
 - [x] Styles/templates (`aps`, report, web) — `+styles/template.m` → `calc/figure_styles.py` (named presets: default/aps/aps_double/nature/nature_double/thesis/presentation/poster/report/web — font/size/line-width/figure-geometry/grid/box/legend transcribed verbatim; applied in `render_figure` via rc_context). Selectable in the "Export figure…" dialog. **User-defined save/load templates** (`+plotting/plotTemplate.m`, prefdir `.mat` persistence) deferred → overlaps W5 workspace state.
-- [~] Waterfall ✓ · overlays/unified legend ✓ (fit/peak/baseline overlays + legend) · reference lines ✓ (uPlot `refLinePlugin` + Inspector card) · insets · annotations · polar · multi-panel / figure builder — remaining TODO
+- [~] Waterfall ✓ · overlays/unified legend ✓ (fit/peak/baseline overlays + legend) · reference lines ✓ (uPlot `refLinePlugin` + Inspector card) · annotations ✓ (uPlot `annotationPlugin` dot+label at data coords + Inspector card) · insets · polar · multi-panel / figure builder — remaining TODO
 
 ---
 

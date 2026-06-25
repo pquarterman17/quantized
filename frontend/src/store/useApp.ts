@@ -5,6 +5,7 @@ import { create } from "zustand";
 
 import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
 import type {
+  Annotation,
   AxisFormat,
   BaselineOverlay,
   CorrectionParams,
@@ -16,6 +17,7 @@ import type {
 } from "../lib/types";
 
 let _refSeq = 0;
+let _annSeq = 0;
 
 let _idSeq = 0;
 const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
@@ -44,6 +46,7 @@ interface AppState {
   yKeys: number[] | null; // which value channels to plot (null = all)
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
   refLines: RefLine[]; // fixed X/Y marker lines on the plot
+  annotations: Annotation[]; // text labels pinned at data coordinates
   seriesStyles: Record<number, SeriesStyle>; // per-channel color/width/line overrides
   waterfall: number; // waterfall offset as a fraction of the y-span (0 = off)
   plotTool: PlotTool;
@@ -83,6 +86,8 @@ interface AppState {
   setY2Keys: (y2Keys: number[] | null) => void;
   addRefLine: (axis: "x" | "y", value: number) => void;
   removeRefLine: (id: string) => void;
+  addAnnotation: (x: number, y: number, text: string) => void;
+  removeAnnotation: (id: string) => void;
   setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
   resetSeriesStyle: (channel: number) => void;
   setWaterfall: (waterfall: number) => void;
@@ -159,6 +164,7 @@ export const useApp = create<AppState>((set, get) => ({
   yKeys: null,
   y2Keys: null,
   refLines: [],
+  annotations: [],
   seriesStyles: {},
   waterfall: 0,
   plotTool: "zoom",
@@ -277,6 +283,12 @@ export const useApp = create<AppState>((set, get) => ({
   addRefLine: (axis, value) =>
     set((s) => ({ refLines: [...s.refLines, { id: `ref-${++_refSeq}`, axis, value }] })),
   removeRefLine: (id) => set((s) => ({ refLines: s.refLines.filter((r) => r.id !== id) })),
+  addAnnotation: (x, y, text) =>
+    set((s) => ({
+      annotations: [...s.annotations, { id: `ann-${++_annSeq}`, x, y, text }],
+    })),
+  removeAnnotation: (id) =>
+    set((s) => ({ annotations: s.annotations.filter((a) => a.id !== id) })),
   setSeriesStyle: (channel, patch) =>
     set((s) => ({
       seriesStyles: { ...s.seriesStyles, [channel]: { ...s.seriesStyles[channel], ...patch } },

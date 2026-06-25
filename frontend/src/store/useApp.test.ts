@@ -133,6 +133,24 @@ describe("useApp tick format", () => {
   });
 });
 
+describe("useApp annotations", () => {
+  it("adds annotations with unique ids and removes by id", () => {
+    useApp.setState({ annotations: [] });
+    useApp.getState().addAnnotation(1.5, 2.5, "peak");
+    useApp.getState().addAnnotation(3, 4, "edge");
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(2);
+    expect(anns[0]).toMatchObject({ x: 1.5, y: 2.5, text: "peak" });
+    expect(anns[1]).toMatchObject({ x: 3, y: 4, text: "edge" });
+    expect(anns[0].id).not.toEqual(anns[1].id);
+
+    useApp.getState().removeAnnotation(anns[0].id);
+    const after = useApp.getState().annotations;
+    expect(after).toHaveLength(1);
+    expect(after[0].text).toBe("edge");
+  });
+});
+
 describe("useApp series styles", () => {
   it("merges successive style patches per channel", () => {
     useApp.setState({ seriesStyles: {} });

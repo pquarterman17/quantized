@@ -4,8 +4,14 @@
 import type uPlot from "uplot";
 
 import type { PlotPayload } from "./plotdata";
-import type { AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
-import { panPlugin, readoutPlugin, refLinePlugin, type Readout } from "./uplotPlugins";
+import type { Annotation, AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
+import {
+  annotationPlugin,
+  panPlugin,
+  readoutPlugin,
+  refLinePlugin,
+  type Readout,
+} from "./uplotPlugins";
 
 export type PlotTool = "zoom" | "pan" | "cursor";
 
@@ -70,6 +76,8 @@ export interface BuildOptsArgs {
   yLim?: [number, number] | null;
   /** Reference lines to draw at fixed X/Y values. */
   refLines?: RefLine[];
+  /** Text annotations pinned at data coordinates. */
+  annotations?: Annotation[];
   /** Per-display-series style overrides, aligned 1:1 with `payload.series`
    *  (undefined entries — e.g. overlays — keep the defaults). */
   seriesStyles?: (SeriesStyle | undefined)[];
@@ -80,7 +88,7 @@ export interface BuildOptsArgs {
 
 export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
   const { width, height, yLog, xLog, tool, onReadout, xLim, yLim, refLines, seriesStyles } = args;
-  const { xFmt, yFmt } = args;
+  const { xFmt, yFmt, annotations } = args;
   const axisColor = cssVar("--text-dim") || "#aaa";
   const gridColor = cssVar("--grid-line") || "#333";
   const font = `11px ${cssVar("--font-mono") || "monospace"}`;
@@ -106,6 +114,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (tool === "cursor") plugins.push(readoutPlugin(onReadout));
   if (refLines && refLines.length > 0) {
     plugins.push(refLinePlugin(refLines, cssVar("--text-dim") || "#888"));
+  }
+  if (annotations && annotations.length > 0) {
+    plugins.push(annotationPlugin(annotations, cssVar("--text") || "#ddd", font));
   }
 
   // A static [min,max] tuple fixes the scale (Origin-style); omit it to autoscale.

@@ -1,6 +1,7 @@
 // Right panel: stacked Cards. Metadata + Corrections + Axes + Appearance are
 // wired; Corrections posts to /api/corrections/apply via the store.
 
+import AnnotationsCard from "./AnnotationsCard";
 import AxisLimits from "./AxisLimits";
 import ChannelsCard from "./ChannelsCard";
 import CorrectionsCard from "./CorrectionsCard";
@@ -78,6 +79,8 @@ export default function Inspector() {
       </Card>
 
       <RefLinesCard />
+
+      <AnnotationsCard />
 
       <SeriesStyleCard active={active} />
 

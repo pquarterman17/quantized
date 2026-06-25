@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { RefLine } from "./types";
-import { refLinePlugin } from "./uplotPlugins";
+import type { Annotation, RefLine } from "./types";
+import { annotationPlugin, refLinePlugin } from "./uplotPlugins";
 
 /** Minimal uPlot stub: a recording 2D context + a linear valToPos. */
 function fakeU() {
@@ -60,5 +60,64 @@ describe("refLinePlugin", () => {
 
   it("skips non-finite values", () => {
     expect(draw([{ id: "a", axis: "x", value: Number.NaN }])).toHaveLength(0);
+  });
+});
+
+/** Stub recording fillText + arc calls for the annotation plugin. */
+function fakeAnnU() {
+  const texts: { text: string; x: number; y: number }[] = [];
+  const dots: { x: number; y: number }[] = [];
+  const ctx = {
+    save() {},
+    restore() {},
+    beginPath() {},
+    fill() {},
+    arc(x: number, y: number) {
+      dots.push({ x, y });
+    },
+    fillText(text: string, x: number, y: number) {
+      texts.push({ text, x, y });
+    },
+    fillStyle: "",
+    font: "",
+    textBaseline: "" as CanvasTextBaseline,
+  };
+  const valToPos = (v: number, scale: string) => (scale === "x" ? v : 100 - v);
+  const u = { ctx, bbox: { left: 10, top: 5, width: 100, height: 80 }, valToPos };
+  return { u, texts, dots };
+}
+
+function drawAnn(anns: Annotation[]) {
+  const { u, texts, dots } = fakeAnnU();
+  const plugin = annotationPlugin(anns, "#fff", "11px mono");
+  // @ts-expect-error — minimal stub stands in for a real uPlot instance
+  plugin.hooks.draw?.(u);
+  return { texts, dots };
+}
+
+describe("annotationPlugin", () => {
+  it("draws a dot + label for an in-range annotation", () => {
+    const { texts, dots } = drawAnn([{ id: "a1", x: 50, y: 30, text: "Tc" }]);
+    expect(dots).toEqual([{ x: 50, y: 70 }]); // y px = 100-30
+    expect(texts).toHaveLength(1);
+    expect(texts[0].text).toBe("Tc");
+    expect(texts[0].x).toBeGreaterThan(50); // label offset to the right of the dot
+  });
+
+  it("clips annotations outside the plot area", () => {
+    const { dots } = drawAnn([
+      { id: "a", x: 999, y: 30, text: "off-x" },
+      { id: "b", x: 50, y: -50, text: "off-y" }, // py = 150 > bottom
+    ]);
+    expect(dots).toHaveLength(0);
+  });
+
+  it("skips non-finite coordinates and draws no text when empty", () => {
+    const { texts, dots } = drawAnn([
+      { id: "a", x: Number.NaN, y: 1, text: "x" },
+      { id: "b", x: 50, y: 30, text: "" }, // dot but no label
+    ]);
+    expect(dots).toHaveLength(1); // only the finite one
+    expect(texts).toHaveLength(0); // empty text → no fillText
   });
 });
