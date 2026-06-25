@@ -120,7 +120,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] SLD presets — `+fitting/reflSLDPresets.m` → `calc/sld.py` (+ `refl_sld_presets.json`) — 30-material table dumped verbatim to JSON for exact data parity; loader exposes refl_sld_presets()
 
 ### XRD / RSM / surface
-- [ ] RSM analyze / strain — `+fitting/rsmAnalyze.m`, `+fitting/rsmStrain.m`
+- [~] RSM analyze / strain — `+fitting/rsmAnalyze.m`, `+fitting/rsmStrain.m` — **`rsmStrain` ported** (`calc/rsm.rsm_strain`: in-plane/out-of-plane strain via Q ratios, nominal lattices `a~2π/|Q|`, relaxation R from optional bulk; thin `POST /api/rsm/strain`; formula-verified in `test_calc_rsm.py` + `test_api_rsm.py`, golden-freeze pending MATLAB). **`rsmAnalyze`** (peak extraction from the 2D map → feeds `rsm_strain`) still TODO.
 - [ ] Pawley refinement — `+fitting/pawleyRefine.m`
 - [ ] Surface (2D) fit / models / auto-guess — `+fitting/{surfaceFit,surfaceModels,surfaceAutoGuess}.m`
 

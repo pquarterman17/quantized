@@ -27,6 +27,7 @@ from quantized.routes import (
     plot,
     reference,
     reflectivity,
+    rsm,
     stats,
 )
 
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
     application.include_router(magnetometry.router)
     application.include_router(peaks.router)
     application.include_router(reflectivity.router)
+    application.include_router(rsm.router)
 
     # Client-presence WebSocket (registered before the SPA mount so the
     # catch-all StaticFiles route never shadows it).
