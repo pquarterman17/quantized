@@ -4,7 +4,7 @@
 import type uPlot from "uplot";
 
 import type { PlotPayload } from "./plotdata";
-import type { RefLine } from "./types";
+import type { LineStyle, RefLine, SeriesStyle } from "./types";
 import { panPlugin, readoutPlugin, refLinePlugin, type Readout } from "./uplotPlugins";
 
 export type PlotTool = "zoom" | "pan" | "cursor";
@@ -13,7 +13,7 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-const SERIES_VARS = [
+export const SERIES_VARS = [
   "--series-1",
   "--series-2",
   "--series-3",
@@ -23,6 +23,22 @@ const SERIES_VARS = [
   "--series-7",
   "--series-8",
 ];
+
+/** Dash patterns (canvas setLineDash arrays) per line style; solid = no dash. */
+const DASH: Record<LineStyle, number[] | undefined> = {
+  solid: undefined,
+  dashed: [8, 4],
+  dotted: [2, 4],
+};
+
+/** Effective stroke for display-series `i`: an explicit override (token name or
+ *  literal hex) wins, else the palette color by position. A `"--token"` color is
+ *  resolved through `cssVar` so it stays re-themeable; a literal passes through. */
+export function seriesColor(i: number, style?: SeriesStyle): string {
+  const c = style?.color;
+  if (c) return c.startsWith("--") ? cssVar(c) || c : c;
+  return cssVar(SERIES_VARS[i % SERIES_VARS.length]) || "#8b5cf6";
+}
 
 export interface BuildOptsArgs {
   width: number;
@@ -36,10 +52,13 @@ export interface BuildOptsArgs {
   yLim?: [number, number] | null;
   /** Reference lines to draw at fixed X/Y values. */
   refLines?: RefLine[];
+  /** Per-display-series style overrides, aligned 1:1 with `payload.series`
+   *  (undefined entries — e.g. overlays — keep the defaults). */
+  seriesStyles?: (SeriesStyle | undefined)[];
 }
 
 export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
-  const { width, height, yLog, xLog, tool, onReadout, xLim, yLim, refLines } = args;
+  const { width, height, yLog, xLog, tool, onReadout, xLim, yLim, refLines, seriesStyles } = args;
   const axisColor = cssVar("--text-dim") || "#aaa";
   const gridColor = cssVar("--grid-line") || "#333";
   const font = `11px ${cssVar("--font-mono") || "monospace"}`;
@@ -101,14 +120,17 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     series: [
       {},
       ...payload.series.map((s, i) => {
-        const stroke = cssVar(SERIES_VARS[i % SERIES_VARS.length]) || "#8b5cf6";
+        const style = seriesStyles?.[i];
+        const stroke = seriesColor(i, style);
         const label = seriesLabel(s);
         const scale = (s.axis ?? 0) === 1 ? "y2" : "y";
         // Peak markers: points only, no connecting line.
         if (s.kind === "points") {
           return { label, scale, stroke, fill: stroke, width: 0, points: { show: true, size: 8 } };
         }
-        return { label, scale, stroke, width: 1.5, points: { show: false } };
+        const width = style?.width ?? 1.5;
+        const dash = style?.line ? DASH[style.line] : undefined;
+        return { label, scale, stroke, width, dash, points: { show: false } };
       }),
     ],
   };

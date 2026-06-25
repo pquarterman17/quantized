@@ -98,6 +98,20 @@ export interface RefLine {
   value: number;
 }
 
+/** Per-channel line style (solid/dashed/dotted) — maps to a uPlot dash array. */
+export type LineStyle = "solid" | "dashed" | "dotted";
+
+/** A per-channel styling override for the plot. Keyed in the store by the
+ *  dataset *channel index* (stable across show/hide). Any field left unset
+ *  falls back to the default (palette color by display position, 1.5 px,
+ *  solid). `color` is either a token name (`"--series-3"`, re-themeable) or a
+ *  literal hex (`"#ff8800"`, from the custom picker). */
+export interface SeriesStyle {
+  color?: string;
+  width?: number;
+  line?: LineStyle;
+}
+
 /** One element row from the reference table. */
 export interface ElementInfo {
   Z: number;

@@ -122,6 +122,39 @@ describe("useApp reference lines", () => {
   });
 });
 
+describe("useApp series styles", () => {
+  it("merges successive style patches per channel", () => {
+    useApp.setState({ seriesStyles: {} });
+    useApp.getState().setSeriesStyle(1, { color: "#ff0000" });
+    useApp.getState().setSeriesStyle(1, { width: 3 });
+    expect(useApp.getState().seriesStyles[1]).toEqual({ color: "#ff0000", width: 3 });
+  });
+
+  it("resets a single channel without touching the others", () => {
+    useApp.setState({ seriesStyles: { 0: { width: 2 }, 1: { color: "#0f0" } } });
+    useApp.getState().resetSeriesStyle(0);
+    expect(useApp.getState().seriesStyles[0]).toBeUndefined();
+    expect(useApp.getState().seriesStyles[1]).toEqual({ color: "#0f0" });
+  });
+
+  it("clears all styles when the dataset changes (indices are per-dataset)", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      activeId: "d1",
+      seriesStyles: { 0: { width: 4 } },
+    });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().seriesStyles).toEqual({});
+
+    useApp.setState({ seriesStyles: { 0: { width: 4 } } });
+    useApp.getState().addDataset({ id: "d3", name: "c", data: raw });
+    expect(useApp.getState().seriesStyles).toEqual({});
+  });
+});
+
 describe("useApp appearance prefs", () => {
   it("setTheme applies to <html> and persists to localStorage", () => {
     useApp.getState().setTheme("light");

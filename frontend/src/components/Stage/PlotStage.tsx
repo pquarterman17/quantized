@@ -32,6 +32,7 @@ export default function PlotStage() {
   const xLim = useApp((s) => s.xLim);
   const yLim = useApp((s) => s.yLim);
   const refLines = useApp((s) => s.refLines);
+  const seriesStyles = useApp((s) => s.seriesStyles);
   const waterfall = useApp((s) => s.waterfall);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
@@ -59,6 +60,17 @@ export default function PlotStage() {
     const withBase = withBaselineOverlay(withFit, baselineOverlay, id);
     return withPeakOverlay(withBase, peakOverlay, id);
   }, [payload, fitOverlay, peakOverlay, baselineOverlay, waterfall, active]);
+
+  // Map each display-series back to its dataset channel so the per-channel style
+  // overrides land on the right line. Plotted channels come first (in yKeys order,
+  // matching the backend), overlays after — those get `undefined` (defaults).
+  const styleList = useMemo(() => {
+    if (!displayPayload || !active) return undefined;
+    const plotted = yKeys ?? active.data.labels.map((_, i) => i);
+    return displayPayload.series.map((_, i) =>
+      i < plotted.length ? seriesStyles[plotted[i]] : undefined,
+    );
+  }, [displayPayload, active, yKeys, seriesStyles]);
 
   // Fetch series whenever the active dataset or y-scale changes.
   useEffect(() => {
@@ -95,6 +107,7 @@ export default function PlotStage() {
         xLim,
         yLim,
         refLines,
+        seriesStyles: styleList,
         tool,
         onReadout: setReadout,
       }),
@@ -116,7 +129,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, refLines, theme, accent, tool]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, refLines, styleList, theme, accent, tool]);
 
   function resetView() {
     if (plotRef.current && displayPayload) {
@@ -172,20 +185,26 @@ export default function PlotStage() {
       )}
       {displayPayload && (
         <div className="qzk-glass qzk-legend">
-          {displayPayload.series.map((s, i) => (
-            <div className="it" key={s.label}>
-              <span
-                className="ln"
-                style={{
-                  display: "inline-block",
-                  width: 14,
-                  height: 2,
-                  background: `var(--series-${(i % 8) + 1})`,
-                }}
-              />
-              {s.unit ? `${s.label} (${s.unit})` : s.label}
-            </div>
-          ))}
+          {displayPayload.series.map((s, i) => {
+            // Keep the CSS token for default series (re-themes); use the resolved
+            // override color when one is set, so the legend matches the line.
+            const override = styleList?.[i]?.color;
+            const swatch =
+              override && !override.startsWith("--")
+                ? override
+                : override
+                  ? `var(${override})`
+                  : `var(--series-${(i % 8) + 1})`;
+            return (
+              <div className="it" key={s.label}>
+                <span
+                  className="ln"
+                  style={{ display: "inline-block", width: 14, height: 2, background: swatch }}
+                />
+                {s.unit ? `${s.label} (${s.unit})` : s.label}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

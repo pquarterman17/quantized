@@ -87,6 +87,46 @@ describe("buildOpts", () => {
     expect(opts.axes).toHaveLength(2); // x + primary y only
   });
 
+  it("applies a per-series color / width / line-style override", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      seriesStyles: [{ color: "#ff0000", width: 3, line: "dashed" }],
+    });
+    expect(opts.series[1].stroke).toBe("#ff0000");
+    expect(opts.series[1].width).toBe(3);
+    expect(opts.series[1].dash).toEqual([8, 4]); // dashed
+  });
+
+  it("maps the dotted line style and leaves solid/unset dash-free", () => {
+    const dotted = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      seriesStyles: [{ line: "dotted" }],
+    });
+    expect(dotted.series[1].dash).toEqual([2, 4]);
+    const solid = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      seriesStyles: [{ line: "solid" }],
+    });
+    expect(solid.series[1].dash).toBeUndefined();
+  });
+
+  it("falls back to default width when the style entry is undefined", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      seriesStyles: [undefined],
+    });
+    expect(opts.series[1].width).toBe(1.5);
+    expect(opts.series[1].dash).toBeUndefined();
+  });
+
   it("adds a right-side y2 scale + axis and routes axis-1 series to it", () => {
     const dual: PlotPayload = {
       ...payload,

@@ -5,6 +5,7 @@ import AxisLimits from "./AxisLimits";
 import ChannelsCard from "./ChannelsCard";
 import CorrectionsCard from "./CorrectionsCard";
 import RefLinesCard from "./RefLinesCard";
+import SeriesStyleCard from "./SeriesStyleCard";
 import StatsCard from "./StatsCard";
 import { Card, MetaRow, Select } from "../primitives";
 import {
@@ -75,6 +76,8 @@ export default function Inspector() {
       </Card>
 
       <RefLinesCard />
+
+      <SeriesStyleCard active={active} />
 
       <Card title="Appearance">
         <label className="qzk-field-lbl">Theme</label>

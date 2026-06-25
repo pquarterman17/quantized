@@ -178,7 +178,7 @@ Source: `+dataWorkspace/`, `DataWorkspace.m`
 ---
 
 ## W6 — Plotting & render
-- [~] Plot state model (axes/limits/scales/dual-Y/per-dataset/tick-format) — **dual-Y** (`PlotState.y2_keys` + `PlotSeries.axis`; Channels-card "Y2" pill → secondary uPlot scale) **+ explicit limits** (Axes-card X/Y min-max → static uPlot scale range; `store.xLim/yLim`) **shipped**. Per-dataset styling / tick-format still TODO.
+- [~] Plot state model (axes/limits/scales/dual-Y/per-dataset/tick-format) — **dual-Y** (`PlotState.y2_keys` + `PlotSeries.axis`; Channels-card "Y2" pill → secondary uPlot scale) **+ explicit limits** (Axes-card X/Y min-max → static uPlot scale range; `store.xLim/yLim`) **+ per-series styling** (Series-style card: per-channel color [palette token or custom hex] / width / line style → `store.seriesStyles` keyed by channel index, mapped to display order in `PlotStage`; `uplotOpts.seriesColor`) **shipped**. Tick-format still TODO.
 - [~] Interactive render (uPlot 1D; Canvas2D for 2D maps) — uPlot 1D done (Stage: zoom/pan/cursor, overlays, ref lines, waterfall). Canvas2D for 2D maps TODO.
 - [~] Publication export — matplotlib → vector PDF/SVG, PNG/TIFF dpi — vector PDF/SVG/PNG export shipped (`routes/export/figure`, `e6adc82`). TIFF/dpi options TODO.
 - [ ] Styles/templates (`aps`, report, web) — `+styles/`, `+plotting/`

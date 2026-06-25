@@ -11,6 +11,7 @@ import type {
   FitOverlay,
   PeakOverlay,
   RefLine,
+  SeriesStyle,
 } from "../lib/types";
 
 let _refSeq = 0;
@@ -40,6 +41,7 @@ interface AppState {
   yKeys: number[] | null; // which value channels to plot (null = all)
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
   refLines: RefLine[]; // fixed X/Y marker lines on the plot
+  seriesStyles: Record<number, SeriesStyle>; // per-channel color/width/line overrides
   waterfall: number; // waterfall offset as a fraction of the y-span (0 = off)
   plotTool: PlotTool;
   cmdkOpen: boolean;
@@ -76,6 +78,8 @@ interface AppState {
   setY2Keys: (y2Keys: number[] | null) => void;
   addRefLine: (axis: "x" | "y", value: number) => void;
   removeRefLine: (id: string) => void;
+  setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
+  resetSeriesStyle: (channel: number) => void;
   setWaterfall: (waterfall: number) => void;
   setPlotTool: (tool: PlotTool) => void;
   setCmdk: (open: boolean) => void;
@@ -148,6 +152,7 @@ export const useApp = create<AppState>((set, get) => ({
   yKeys: null,
   y2Keys: null,
   refLines: [],
+  seriesStyles: {},
   waterfall: 0,
   plotTool: "zoom",
   cmdkOpen: false,
@@ -169,6 +174,7 @@ export const useApp = create<AppState>((set, get) => ({
       activeId: ds.id,
       yKeys: null, // new dataset → plot all its channels
       y2Keys: null, // and reset the secondary-axis assignment
+      seriesStyles: {}, // styles are keyed by channel index → reset per dataset
       xLim: null, // and autoscale both axes
       yLim: null,
     })),
@@ -194,7 +200,8 @@ export const useApp = create<AppState>((set, get) => ({
         : `imported ${added} file${added === 1 ? "" : "s"}`,
     );
   },
-  setActive: (id) => set({ activeId: id, yKeys: null, y2Keys: null, xLim: null, yLim: null }),
+  setActive: (id) =>
+    set({ activeId: id, yKeys: null, y2Keys: null, seriesStyles: {}, xLim: null, yLim: null }),
   removeDataset: (id) =>
     set((s) => {
       const datasets = s.datasets.filter((d) => d.id !== id);
@@ -261,6 +268,16 @@ export const useApp = create<AppState>((set, get) => ({
   addRefLine: (axis, value) =>
     set((s) => ({ refLines: [...s.refLines, { id: `ref-${++_refSeq}`, axis, value }] })),
   removeRefLine: (id) => set((s) => ({ refLines: s.refLines.filter((r) => r.id !== id) })),
+  setSeriesStyle: (channel, patch) =>
+    set((s) => ({
+      seriesStyles: { ...s.seriesStyles, [channel]: { ...s.seriesStyles[channel], ...patch } },
+    })),
+  resetSeriesStyle: (channel) =>
+    set((s) => {
+      const next = { ...s.seriesStyles };
+      delete next[channel];
+      return { seriesStyles: next };
+    }),
   setWaterfall: (waterfall) => set({ waterfall }),
   setPlotTool: (plotTool) => set({ plotTool }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
