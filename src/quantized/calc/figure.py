@@ -1,8 +1,10 @@
 """Publication figure rendering via matplotlib. Pure layer: data in -> bytes.
 
 Renders a clean publication-style figure (white background, vector by default)
-to PDF / SVG / PNG. Server-side so the browser gets a real vector file — the
-architecture's vector-by-default export preference. matplotlib is imported here
+to PDF / SVG (vector) or PNG / TIFF (raster, at a chosen DPI). Server-side so the
+browser gets a real vector file — the architecture's vector-by-default export
+preference; raster formats are available for journals that demand them. TIFF
+output goes through Pillow (a matplotlib dependency). matplotlib is imported here
 only (the heavy import is lazy at the route boundary).
 """
 
@@ -21,7 +23,7 @@ from numpy.typing import ArrayLike, NDArray
 
 __all__ = ["render_figure"]
 
-_FORMATS = ("pdf", "svg", "png")
+_FORMATS = ("pdf", "svg", "png", "tiff")
 
 
 def render_figure(
@@ -39,8 +41,9 @@ def render_figure(
 ) -> bytes:
     """Render ``series`` (each ``(label, y)``) against ``x`` to image bytes.
 
-    ``fmt`` is ``pdf`` / ``svg`` (vector) or ``png`` (raster). A legend is drawn
-    only for multiple series. Raises ``ValueError`` on an unknown format.
+    ``fmt`` is ``pdf`` / ``svg`` (vector) or ``png`` / ``tiff`` (raster, sized by
+    ``dpi``). A legend is drawn only for multiple series. Raises ``ValueError`` on
+    an unknown format.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")

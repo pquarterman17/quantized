@@ -138,6 +138,27 @@ def test_figure_svg_download() -> None:
     assert b"<svg" in resp.content[:400]
 
 
+def test_figure_tiff_download() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "tiff", "dpi": 150, "filename": "fig1"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/tiff"
+    assert resp.headers["content-disposition"] == 'attachment; filename="fig1.tiff"'
+    assert resp.content[:4] in (b"II*\x00", b"MM\x00*")
+
+
+def test_figure_dpi_is_clamped() -> None:
+    # An absurd dpi must not blow up — it is clamped server-side and still renders.
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "png", "dpi": 100000},
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
 def test_figure_bad_format_is_422() -> None:
     resp = client.post("/api/export/figure", json={"dataset": _xrd_dataset(), "fmt": "bmp"})
     assert resp.status_code == 422

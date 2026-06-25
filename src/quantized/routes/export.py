@@ -173,20 +173,28 @@ class FigureRequest(BaseModel):
     x_log: bool = False
     y_log: bool = False
     fmt: str = "pdf"
+    dpi: int = 200  # raster (png/tiff) resolution; ignored by vector formats
     filename: str = "figure"
 
 
-_FIGURE_MIME = {"pdf": "application/pdf", "svg": "image/svg+xml", "png": "image/png"}
+_FIGURE_MIME = {
+    "pdf": "application/pdf",
+    "svg": "image/svg+xml",
+    "png": "image/png",
+    "tiff": "image/tiff",
+}
+_DPI_MIN, _DPI_MAX = 50, 1200  # clamp: guards against absurd allocations
 
 
 @router.post("/figure")
 def export_figure(req: FigureRequest) -> Response:
     """Render the dataset (selected channels + log scales) to a publication
-    figure: PDF / SVG (vector) or PNG."""
+    figure: PDF / SVG (vector) or PNG / TIFF (raster, at ``dpi``)."""
     if req.fmt not in _FIGURE_MIME:
         raise HTTPException(
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
+    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
     # Lazy import: matplotlib is heavy — only pay it when a figure is exported.
     from quantized.calc.figure import render_figure
     from quantized.calc.plotting import PlotState, build_series
@@ -216,6 +224,7 @@ def export_figure(req: FigureRequest) -> Response:
             x_log=req.x_log,
             y_log=req.y_log,
             fmt=req.fmt,
+            dpi=dpi,
         )
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

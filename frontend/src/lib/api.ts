@@ -254,6 +254,7 @@ export function exportFigure(body: {
   x_log?: boolean;
   y_log?: boolean;
   fmt?: string;
+  dpi?: number;
   filename?: string;
 }): Promise<void> {
   return postDownload("/api/export/figure", body, `figure.${body.fmt ?? "pdf"}`);

@@ -11,7 +11,7 @@ import StatusBar from "./components/Shell/StatusBar";
 import TitleBar from "./components/Shell/TitleBar";
 import Stage from "./components/Stage/Stage";
 import CommandPalette, { type Action } from "./components/overlays/CommandPalette";
-import ParamDialog from "./components/overlays/ParamDialog";
+import ParamDialog, { askParams } from "./components/overlays/ParamDialog";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import BaselinePanel from "./components/workshops/baseline/BaselinePanel";
 import CalculatorsPanel from "./components/workshops/calculators/CalculatorsPanel";
@@ -230,17 +230,38 @@ export default function App() {
       {
         id: "export-figure",
         group: "File",
-        label: "Export figure (PDF)…",
-        run: () =>
+        label: "Export figure…",
+        run: async () => {
+          const params = await askParams("Export figure", [
+            {
+              key: "fmt",
+              label: "Format",
+              type: "select",
+              default: "pdf",
+              options: ["pdf", "svg", "png", "tiff"],
+              hint: "PDF / SVG are vector; PNG / TIFF are raster",
+            },
+            {
+              key: "dpi",
+              label: "DPI (raster)",
+              type: "number",
+              default: 300,
+              hint: "Resolution for PNG / TIFF (50–1200); ignored by vector",
+            },
+          ]);
+          if (!params) return;
           exportActive(s, (stem, ds) =>
             exportFigure({
               dataset: ds.data,
               y_keys: s().yKeys ?? undefined,
               x_log: s().xLog,
               y_log: s().yLog,
+              fmt: params.fmt as string,
+              dpi: params.dpi as number,
               filename: stem,
             }),
-          ),
+          );
+        },
       },
       {
         id: "export-origin",
