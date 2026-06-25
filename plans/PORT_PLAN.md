@@ -7,7 +7,7 @@ the codebase never accretes the god-scripts the MATLAB original did.
 
 **Status:** Active
 **Created:** 2026-06-21
-**Updated:** 2026-06-21
+**Updated:** 2026-06-25
 
 ---
 
@@ -261,16 +261,16 @@ MATLAB."**
 ## W6 — Plotting & render
 
 ### Tier 1 — High Impact
-33. **Plot state model** — axes/limits/scales (lin/log), dual-Y,
-    per-dataset persisted state, tick formats.
-34. **Interactive render contract** — DataStruct → uPlot series; 2D maps →
-    **Canvas2D** (WebGL only if RSM maps demand it).
-35. **Publication export** — server-side matplotlib → **vector PDF/SVG**
-    (default), PNG/TIFF at dpi; styles/templates (`aps`, report, web).
+34. **Interactive render contract** — DataStruct → uPlot series (1D shipped);
+    2D maps → **Canvas2D** (WebGL only if RSM maps demand it) — **2D still TODO**.
 
 ### Tier 2 — Medium Impact
-36. **Plot features** — waterfall, overlays/unified legend, reference
-    lines, insets, annotations, polar, multi-panel / figure builder.
+36. **Plot features** — insets, polar, multi-panel / figure builder —
+    **remaining** (waterfall, overlays/unified legend, reference lines,
+    annotations all shipped → Completed).
+
+> Items 33 and 35 shipped — see `## Completed`. Per-feature detail (with
+> source mapping + golden status) lives in `PORT_CHECKLIST.md`'s W6 section.
 
 ---
 
@@ -365,4 +365,22 @@ MATLAB."**
 
 ## Completed
 
-*(nothing yet — created 2026-06-21)*
+> Note: W1–W3 backend parity (parsers, corrections, baselines, processing,
+> stats, fitting engine/models/diagnostics, reflectivity) is largely landed and
+> golden-verified — see `PORT_CHECKLIST.md` for the authoritative per-item state.
+> This log is being backfilled starting with the W6 plotting work.
+
+- ~~**#33 Plot state model**~~ (2026-06-25) — axes/limits/scales (lin/log),
+  dual-Y, tick formats (Auto/Fixed/Sci), and per-series styling (color/width/
+  line/markers) all shipped. `store` (xLim/yLim/xFmt/yFmt/seriesStyles) +
+  `calc/plotting.PlotState` + `uplotOpts`. Per-dataset state via the dataset list.
+- ~~**#35 Publication export**~~ (2026-06-25) — server-side matplotlib → vector
+  PDF/SVG (default) + raster PNG/TIFF at selectable DPI (50–1200); style presets
+  (`aps`/`report`/`web`/… from `+styles/template.m` → `calc/figure_styles.py`);
+  figure title + axis-label overrides; **WYSIWYG** per-series color/width/line/
+  marker carried into the figure (OKLCH→hex via canvas readout). `calc/figure.py`
+  + `routes/export.py` + "Export figure…" dialog.
+- ~~**#36 Plot features (partial)**~~ (2026-06-25) — waterfall, overlays +
+  unified legend (fit/peak/baseline), reference lines, and text annotations
+  shipped (uPlot plugins + Inspector cards), plus grid/legend show-hide toggles.
+  **Remaining (#36 open):** insets, polar, multi-panel / figure builder.
