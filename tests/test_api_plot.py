@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
@@ -80,3 +81,94 @@ def test_plot_series_secondary_axis_assignment() -> None:
 def test_plot_series_secondary_axis_by_label() -> None:
     body = client.post("/api/plot/series", json={"dataset": _MULTI, "y2_keys": ["Temp"]}).json()
     assert [s["axis"] for s in body["series"]] == [0, 1]
+
+
+# ── /api/plot/map (2-D heatmap grid) ──────────────────────────────────────
+# Scattered (x, y, z) packed as three channels; z = 2x + 3y + 1 (a plane).
+_MAP_DS = {
+    "time": [0.0, 1.0, 2.0, 3.0, 4.0],
+    "values": [
+        [0.0, 0.0, 1.0],
+        [1.0, 0.0, 3.0],
+        [0.0, 1.0, 4.0],
+        [1.0, 1.0, 6.0],
+        [0.5, 0.5, 3.5],
+    ],
+    "labels": ["Qx", "Qz", "Intensity"],
+    "units": ["1/A", "1/A", "cps"],
+    "metadata": {"source": "/tmp/rsm.dat"},
+}
+
+
+def test_plot_map_grid_shape_and_labels() -> None:
+    resp = client.post(
+        "/api/plot/map",
+        json={"dataset": _MAP_DS, "x_key": 0, "y_key": 1, "z_key": 2,
+              "method": "linear", "nx": 6, "ny": 5},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["x_axis"]) == 6
+    assert len(body["y_axis"]) == 5
+    assert len(body["z_grid"]) == 5  # ny rows
+    assert len(body["z_grid"][0]) == 6  # nx cols
+    assert body["x"]["label"] == "Qx"
+    assert body["z"]["label"] == "Intensity"
+    assert body["z"]["unit"] == "cps"
+    # z range over the plane on [0,1]^2: min at (0,0)=1, max at (1,1)=6.
+    assert body["z"]["min"] == pytest.approx(1.0, abs=1e-6)
+    assert body["z"]["max"] == pytest.approx(6.0, abs=1e-6)
+
+
+def test_plot_map_keys_by_label() -> None:
+    resp = client.post(
+        "/api/plot/map",
+        json={"dataset": _MAP_DS, "x_key": "Qx", "y_key": "Qz", "z_key": "Intensity",
+              "method": "idw", "nx": 4, "ny": 4},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["y"]["label"] == "Qz"
+
+
+def test_plot_map_out_of_hull_serializes_as_null() -> None:
+    # A triangle hull leaves the rectangular grid's far corner outside -> NaN -> null.
+    tri = {
+        "time": [0.0, 1.0, 2.0],
+        "values": [[0.0, 0.0, 1.0], [1.0, 0.0, 2.0], [0.0, 1.0, 3.0]],
+        "labels": ["x", "y", "z"],
+        "units": ["", "", ""],
+        "metadata": {},
+    }
+    resp = client.post(
+        "/api/plot/map",
+        json={"dataset": tri, "x_key": 0, "y_key": 1, "z_key": 2,
+              "method": "linear", "nx": 5, "ny": 5},
+    )
+    assert resp.status_code == 200
+    z = resp.json()["z_grid"]
+    flat = [v for row in z for v in row]
+    assert None in flat  # the (1,1) corner is outside the triangle hull
+
+
+def test_plot_map_clamps_grid_resolution() -> None:
+    # nx/ny above the Field ceiling are rejected by validation (DoS guard).
+    resp = client.post(
+        "/api/plot/map",
+        json={"dataset": _MAP_DS, "x_key": 0, "y_key": 1, "z_key": 2, "nx": 9999},
+    )
+    assert resp.status_code == 422
+
+
+def test_plot_map_too_few_points_is_422() -> None:
+    two = {
+        "time": [0.0, 1.0],
+        "values": [[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]],
+        "labels": ["x", "y", "z"],
+        "units": ["", "", ""],
+        "metadata": {},
+    }
+    resp = client.post(
+        "/api/plot/map",
+        json={"dataset": two, "x_key": 0, "y_key": 1, "z_key": 2},
+    )
+    assert resp.status_code == 422
