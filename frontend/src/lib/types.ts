@@ -101,6 +101,15 @@ export interface RefLine {
 /** Per-channel line style (solid/dashed/dotted) — maps to a uPlot dash array. */
 export type LineStyle = "solid" | "dashed" | "dotted";
 
+/** Axis tick number format. `auto` = uPlot's default; `fixed` = `toFixed(digits)`;
+ *  `sci` = `toExponential(digits)`. `digits` is the decimal/mantissa count. */
+export type TickMode = "auto" | "fixed" | "sci";
+
+export interface AxisFormat {
+  mode: TickMode;
+  digits: number;
+}
+
 /** A per-channel styling override for the plot. Keyed in the store by the
  *  dataset *channel index* (stable across show/hide). Any field left unset
  *  falls back to the default (palette color by display position, 1.5 px,

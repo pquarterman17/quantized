@@ -31,6 +31,8 @@ export default function PlotStage() {
   const xLog = useApp((s) => s.xLog);
   const xLim = useApp((s) => s.xLim);
   const yLim = useApp((s) => s.yLim);
+  const xFmt = useApp((s) => s.xFmt);
+  const yFmt = useApp((s) => s.yFmt);
   const refLines = useApp((s) => s.refLines);
   const seriesStyles = useApp((s) => s.seriesStyles);
   const waterfall = useApp((s) => s.waterfall);
@@ -106,6 +108,8 @@ export default function PlotStage() {
         xLog,
         xLim,
         yLim,
+        xFmt,
+        yFmt,
         refLines,
         seriesStyles: styleList,
         tool,
@@ -129,7 +133,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, refLines, styleList, theme, accent, tool]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, refLines, styleList, theme, accent, tool]);
 
   function resetView() {
     if (plotRef.current && displayPayload) {

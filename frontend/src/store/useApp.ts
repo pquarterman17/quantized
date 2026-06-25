@@ -5,6 +5,7 @@ import { create } from "zustand";
 
 import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
 import type {
+  AxisFormat,
   BaselineOverlay,
   CorrectionParams,
   Dataset,
@@ -38,6 +39,8 @@ interface AppState {
   xLog: boolean;
   xLim: [number, number] | null; // explicit X range (null = autoscale)
   yLim: [number, number] | null; // explicit Y range (null = autoscale)
+  xFmt: AxisFormat; // X-axis tick number format
+  yFmt: AxisFormat; // Y-axis tick number format (also applied to the secondary axis)
   yKeys: number[] | null; // which value channels to plot (null = all)
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
   refLines: RefLine[]; // fixed X/Y marker lines on the plot
@@ -74,6 +77,8 @@ interface AppState {
   setXLog: (xLog: boolean) => void;
   setXLim: (xLim: [number, number] | null) => void;
   setYLim: (yLim: [number, number] | null) => void;
+  setXFmt: (xFmt: AxisFormat) => void;
+  setYFmt: (yFmt: AxisFormat) => void;
   setYKeys: (yKeys: number[] | null) => void;
   setY2Keys: (y2Keys: number[] | null) => void;
   addRefLine: (axis: "x" | "y", value: number) => void;
@@ -149,6 +154,8 @@ export const useApp = create<AppState>((set, get) => ({
   xLog: false,
   xLim: null,
   yLim: null,
+  xFmt: { mode: "auto", digits: 2 },
+  yFmt: { mode: "auto", digits: 2 },
   yKeys: null,
   y2Keys: null,
   refLines: [],
@@ -263,6 +270,8 @@ export const useApp = create<AppState>((set, get) => ({
   setXLog: (xLog) => set({ xLog }),
   setXLim: (xLim) => set({ xLim }),
   setYLim: (yLim) => set({ yLim }),
+  setXFmt: (xFmt) => set({ xFmt }),
+  setYFmt: (yFmt) => set({ yFmt }),
   setYKeys: (yKeys) => set({ yKeys }),
   setY2Keys: (y2Keys) => set({ y2Keys }),
   addRefLine: (axis, value) =>

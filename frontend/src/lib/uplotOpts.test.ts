@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildOpts } from "./uplotOpts";
+import { buildOpts, tickFormatter } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
 
 const payload: PlotPayload = {
@@ -125,6 +125,30 @@ describe("buildOpts", () => {
     });
     expect(opts.series[1].width).toBe(1.5);
     expect(opts.series[1].dash).toBeUndefined();
+  });
+
+  it("formats ticks fixed/sci and leaves auto to uPlot", () => {
+    const fixed = tickFormatter({ mode: "fixed", digits: 2 });
+    expect(fixed?.(null as never, [1.5, 2], 0, 0, 0)).toEqual(["1.50", "2.00"]);
+    const sci = tickFormatter({ mode: "sci", digits: 1 });
+    expect(sci?.(null as never, [1500], 0, 0, 0)).toEqual(["1.5e+3"]);
+    expect(tickFormatter({ mode: "auto", digits: 2 })).toBeUndefined();
+    expect(tickFormatter(undefined)).toBeUndefined();
+  });
+
+  it("attaches the tick formatter to the x/y axes (and omits it for auto)", () => {
+    const formatted = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      xFmt: { mode: "fixed", digits: 1 },
+      yFmt: { mode: "sci", digits: 2 },
+    });
+    expect(typeof formatted.axes?.[0]?.values).toBe("function");
+    expect(typeof formatted.axes?.[1]?.values).toBe("function");
+    const auto = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    expect(auto.axes?.[0]?.values).toBeUndefined();
+    expect(auto.axes?.[1]?.values).toBeUndefined();
   });
 
   it("adds a right-side y2 scale + axis and routes axis-1 series to it", () => {

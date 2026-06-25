@@ -122,6 +122,17 @@ describe("useApp reference lines", () => {
   });
 });
 
+describe("useApp tick format", () => {
+  it("defaults both axes to auto and updates per axis", () => {
+    useApp.setState({ xFmt: { mode: "auto", digits: 2 }, yFmt: { mode: "auto", digits: 2 } });
+    expect(useApp.getState().xFmt).toEqual({ mode: "auto", digits: 2 });
+    useApp.getState().setXFmt({ mode: "sci", digits: 3 });
+    useApp.getState().setYFmt({ mode: "fixed", digits: 1 });
+    expect(useApp.getState().xFmt).toEqual({ mode: "sci", digits: 3 });
+    expect(useApp.getState().yFmt).toEqual({ mode: "fixed", digits: 1 });
+  });
+});
+
 describe("useApp series styles", () => {
   it("merges successive style patches per channel", () => {
     useApp.setState({ seriesStyles: {} });

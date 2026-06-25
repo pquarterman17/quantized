@@ -4,7 +4,7 @@
 import type uPlot from "uplot";
 
 import type { PlotPayload } from "./plotdata";
-import type { LineStyle, RefLine, SeriesStyle } from "./types";
+import type { AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
 import { panPlugin, readoutPlugin, refLinePlugin, type Readout } from "./uplotPlugins";
 
 export type PlotTool = "zoom" | "pan" | "cursor";
@@ -31,6 +31,24 @@ const DASH: Record<LineStyle, number[] | undefined> = {
   dotted: [2, 4],
 };
 
+/** A uPlot axis `values` callback: maps tick split values to label strings. */
+type TickValues = (
+  self: uPlot,
+  splits: number[],
+  axisIdx: number,
+  foundSpace: number,
+  foundIncr: number,
+) => (string | number | null)[];
+
+/** Build a uPlot axis `values` formatter for a tick mode; `auto` returns
+ *  undefined so uPlot keeps its own (locale-aware, span-adaptive) labels. */
+export function tickFormatter(fmt?: AxisFormat): TickValues | undefined {
+  if (!fmt || fmt.mode === "auto") return undefined;
+  const d = Math.max(0, Math.min(20, Math.round(fmt.digits)));
+  const fn = fmt.mode === "sci" ? (v: number) => v.toExponential(d) : (v: number) => v.toFixed(d);
+  return (_u, splits) => splits.map((v) => (v == null ? null : fn(v)));
+}
+
 /** Effective stroke for display-series `i`: an explicit override (token name or
  *  literal hex) wins, else the palette color by position. A `"--token"` color is
  *  resolved through `cssVar` so it stays re-themeable; a literal passes through. */
@@ -55,10 +73,14 @@ export interface BuildOptsArgs {
   /** Per-display-series style overrides, aligned 1:1 with `payload.series`
    *  (undefined entries — e.g. overlays — keep the defaults). */
   seriesStyles?: (SeriesStyle | undefined)[];
+  /** Axis tick number formats (auto = uPlot default). yFmt also drives y2. */
+  xFmt?: AxisFormat;
+  yFmt?: AxisFormat;
 }
 
 export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
   const { width, height, yLog, xLog, tool, onReadout, xLim, yLim, refLines, seriesStyles } = args;
+  const { xFmt, yFmt } = args;
   const axisColor = cssVar("--text-dim") || "#aaa";
   const gridColor = cssVar("--grid-line") || "#333";
   const font = `11px ${cssVar("--font-mono") || "monospace"}`;
@@ -91,9 +113,11 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     x: { distr: xLog ? 3 : 1, ...(xLim ? { range: xLim } : {}) },
     y: { distr: yLog ? 3 : 1, ...(yLim ? { range: yLim } : {}) },
   };
+  const xValues = tickFormatter(xFmt);
+  const yValues = tickFormatter(yFmt);
   const axes: uPlot.Axis[] = [
-    { ...axis, label: xLabel },
-    { ...axis, size: 60, label: soloLabel(0) },
+    { ...axis, label: xLabel, ...(xValues ? { values: xValues } : {}) },
+    { ...axis, size: 60, label: soloLabel(0), ...(yValues ? { values: yValues } : {}) },
   ];
   if (hasY2) {
     scales.y2 = { distr: yLog ? 3 : 1 };
@@ -105,6 +129,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       size: 60,
       label: soloLabel(1),
       grid: { show: false },
+      ...(yValues ? { values: yValues } : {}),
     });
   }
 

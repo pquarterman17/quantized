@@ -7,6 +7,7 @@ import CorrectionsCard from "./CorrectionsCard";
 import RefLinesCard from "./RefLinesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
 import StatsCard from "./StatsCard";
+import TickFormat from "./TickFormat";
 import { Card, MetaRow, Select } from "../primitives";
 import {
   type Accent,
@@ -73,6 +74,7 @@ export default function Inspector() {
           Log Y axis
         </label>
         <AxisLimits />
+        <TickFormat />
       </Card>
 
       <RefLinesCard />
