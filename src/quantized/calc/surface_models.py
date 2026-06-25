@@ -23,7 +23,9 @@ __all__ = ["SurfaceModel", "surface_models", "get_surface_model"]
 _EPS = sys.float_info.epsilon
 
 _Arr = NDArray[np.float64]
-SurfaceFunc = Callable[[Sequence[float], _Arr, _Arr], _Arr]
+# Parameter vector: a plain sequence or a numpy array (both index the same way).
+PVec = Sequence[float] | _Arr
+SurfaceFunc = Callable[[PVec, _Arr, _Arr], _Arr]
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,31 +44,31 @@ def _xy(x: ArrayLike, y: ArrayLike) -> tuple[_Arr, _Arr]:
     return np.asarray(x, dtype=float), np.asarray(y, dtype=float)
 
 
-def _plane(p: Sequence[float], x: _Arr, y: _Arr) -> _Arr:
+def _plane(p: PVec, x: _Arr, y: _Arr) -> _Arr:
     return np.asarray(p[0] * x + p[1] * y + p[2], dtype=float)
 
 
-def _paraboloid(p: Sequence[float], x: _Arr, y: _Arr) -> _Arr:
+def _paraboloid(p: PVec, x: _Arr, y: _Arr) -> _Arr:
     return np.asarray(
         p[0] * x**2 + p[1] * y**2 + p[2] * x * y + p[3] * x + p[4] * y + p[5], dtype=float
     )
 
 
-def _gaussian2d(p: Sequence[float], x: _Arr, y: _Arr) -> _Arr:
+def _gaussian2d(p: PVec, x: _Arr, y: _Arr) -> _Arr:
     sx = max(p[2], _EPS)
     sy = max(p[4], _EPS)
     z = p[0] * np.exp(-((x - p[1]) ** 2 / (2 * sx**2) + (y - p[3]) ** 2 / (2 * sy**2))) + p[5]
     return np.asarray(z, dtype=float)
 
 
-def _lorentzian2d(p: Sequence[float], x: _Arr, y: _Arr) -> _Arr:
+def _lorentzian2d(p: PVec, x: _Arr, y: _Arr) -> _Arr:
     wx = max(p[2], _EPS)
     wy = max(p[4], _EPS)
     z = p[0] / (1 + ((x - p[1]) / wx) ** 2 + ((y - p[3]) / wy) ** 2) + p[5]
     return np.asarray(z, dtype=float)
 
 
-def _pseudo_voigt2d(p: Sequence[float], x: _Arr, y: _Arr) -> _Arr:
+def _pseudo_voigt2d(p: PVec, x: _Arr, y: _Arr) -> _Arr:
     amp, x0, y0, z0 = p[0], p[1], p[3], p[5]
     wx = max(p[2], _EPS)
     wy = max(p[4], _EPS)
@@ -76,13 +78,13 @@ def _pseudo_voigt2d(p: Sequence[float], x: _Arr, y: _Arr) -> _Arr:
     return np.asarray(eta * loren + (1 - eta) * gauss + z0, dtype=float)
 
 
-def _poly2d(p: Sequence[float], x: _Arr, y: _Arr) -> _Arr:
+def _poly2d(p: PVec, x: _Arr, y: _Arr) -> _Arr:
     return np.asarray(
         p[0] + p[1] * x + p[2] * y + p[3] * x**2 + p[4] * x * y + p[5] * y**2, dtype=float
     )
 
 
-def _exp_decay2d(p: Sequence[float], x: _Arr, y: _Arr) -> _Arr:
+def _exp_decay2d(p: PVec, x: _Arr, y: _Arr) -> _Arr:
     tx = max(p[1], _EPS)
     ty = max(p[2], _EPS)
     return np.asarray(p[0] * np.exp(-x / tx - y / ty) + p[3], dtype=float)
@@ -91,7 +93,7 @@ def _exp_decay2d(p: Sequence[float], x: _Arr, y: _Arr) -> _Arr:
 # Wrap each kernel so callers may pass any array-like x/y (matches MATLAB's
 # element-wise handles) and always receive float64 ndarrays.
 def _wrap(fn: SurfaceFunc) -> SurfaceFunc:
-    def wrapped(p: Sequence[float], x: ArrayLike, y: ArrayLike) -> NDArray[np.float64]:
+    def wrapped(p: PVec, x: ArrayLike, y: ArrayLike) -> NDArray[np.float64]:
         xa, ya = _xy(x, y)
         return fn(p, xa, ya)
 
