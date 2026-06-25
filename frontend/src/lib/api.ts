@@ -9,6 +9,7 @@ import type {
   DataStruct,
   ElementInfo,
   FitModel,
+  MapResponse,
   Peak,
   PlotSeriesResponse,
   SldPreset,
@@ -72,6 +73,21 @@ export interface PlotRequest {
 /** Build uPlot-ready series from a DataStruct + selection. */
 export function plotSeries(req: PlotRequest): Promise<PlotSeriesResponse> {
   return postJSON<PlotSeriesResponse>("/api/plot/series", req);
+}
+
+export interface MapRequest {
+  dataset: DataStruct;
+  x_key: number | string;
+  y_key: number | string;
+  z_key: number | string;
+  method?: string;
+  nx?: number;
+  ny?: number;
+}
+
+/** Regrid 3 scattered channels (x, y, z) of a DataStruct into a heatmap grid. */
+export function mapSeries(req: MapRequest): Promise<MapResponse> {
+  return postJSON<MapResponse>("/api/plot/map", req);
 }
 
 export interface CorrectionsRequest {

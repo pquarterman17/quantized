@@ -19,6 +19,18 @@ export interface PlotSeriesResponse {
   y: { log: boolean };
 }
 
+/** Response of POST /api/plot/map — a regular grid for the 2-D heatmap.
+ *  `z_grid` is row-major `[ny][nx]` (null = NaN, i.e. outside the data hull);
+ *  cell `z_grid[j][i]` sits at `(x_axis[i], y_axis[j])`. */
+export interface MapResponse {
+  x_axis: number[];
+  y_axis: number[];
+  z_grid: (number | null)[][];
+  x: { label: string; unit: string };
+  y: { label: string; unit: string };
+  z: { label: string; unit: string; min: number | null; max: number | null };
+}
+
 /** A dataset held client-side: the parsed DataStruct + a stable id + name.
  *  `raw` is the pristine import; `data` is the currently displayed (corrected)
  *  view. `corrections` are the params that produced `data` from `raw`. */

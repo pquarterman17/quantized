@@ -262,9 +262,11 @@ MATLAB."**
 
 ### Tier 1 — High Impact
 34. **Interactive render contract** — DataStruct → uPlot series (1D shipped);
-    2D maps → **Canvas2D** (WebGL only if RSM maps demand it). **2D backend
-    foundation shipped** (`calc/map.MapData`/`build_map` + `/api/plot/map`
-    regrid route, scattered 3-column → grid); **Canvas2D viewer still TODO**.
+    2D maps → **Canvas2D** (WebGL only if RSM maps demand it). **2D backend +
+    minimal Canvas2D viewer shipped** (`calc/map.MapData`/`build_map` +
+    `/api/plot/map`; `Stage/MapStage.tsx` heatmap + colormaps/colorbar/cursor +
+    "Map" tab). **Remaining:** axis ticks, Inspector gridding controls, a 2-D
+    area-detector (RSM) parser to feed it natively.
 
 ### Tier 2 — Medium Impact
 36. **Plot features** — insets, polar, multi-panel / figure builder —

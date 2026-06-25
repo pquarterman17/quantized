@@ -25,7 +25,7 @@ const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
 export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
 export type Density = "compact" | "regular" | "comfy";
-export type StageTab = "plot" | "worksheet";
+export type StageTab = "plot" | "map" | "worksheet";
 export type PlotTool = "zoom" | "pan" | "cursor";
 
 interface AppState {
