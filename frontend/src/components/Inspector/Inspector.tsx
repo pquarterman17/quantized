@@ -29,6 +29,10 @@ export default function Inspector() {
   const setYLog = useApp((s) => s.setYLog);
   const xLog = useApp((s) => s.xLog);
   const setXLog = useApp((s) => s.setXLog);
+  const showGrid = useApp((s) => s.showGrid);
+  const setShowGrid = useApp((s) => s.setShowGrid);
+  const showLegend = useApp((s) => s.showLegend);
+  const setShowLegend = useApp((s) => s.setShowLegend);
   const theme = useApp((s) => s.theme);
   const setTheme = useApp((s) => s.setTheme);
   const accent = useApp((s) => s.accent);
@@ -73,6 +77,22 @@ export default function Inspector() {
             onChange={(e) => setYLog(e.target.checked)}
           />
           Log Y axis
+        </label>
+        <label className="qz-check">
+          <input
+            type="checkbox"
+            checked={showGrid}
+            onChange={(e) => setShowGrid(e.target.checked)}
+          />
+          Grid lines
+        </label>
+        <label className="qz-check">
+          <input
+            type="checkbox"
+            checked={showLegend}
+            onChange={(e) => setShowLegend(e.target.checked)}
+          />
+          Legend
         </label>
         <AxisLimits />
         <TickFormat />

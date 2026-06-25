@@ -33,6 +33,8 @@ export default function PlotStage() {
   const yLim = useApp((s) => s.yLim);
   const xFmt = useApp((s) => s.xFmt);
   const yFmt = useApp((s) => s.yFmt);
+  const showGrid = useApp((s) => s.showGrid);
+  const showLegend = useApp((s) => s.showLegend);
   const refLines = useApp((s) => s.refLines);
   const annotations = useApp((s) => s.annotations);
   const seriesStyles = useApp((s) => s.seriesStyles);
@@ -111,6 +113,7 @@ export default function PlotStage() {
         yLim,
         xFmt,
         yFmt,
+        showGrid,
         refLines,
         annotations,
         seriesStyles: styleList,
@@ -135,7 +138,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, refLines, annotations, styleList, theme, accent, tool]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, refLines, annotations, styleList, theme, accent, tool]);
 
   function resetView() {
     if (plotRef.current && displayPayload) {
@@ -189,7 +192,7 @@ export default function PlotStage() {
           {readout.x.toPrecision(5)}, {readout.y.toPrecision(5)}
         </div>
       )}
-      {displayPayload && (
+      {displayPayload && showLegend && (
         <div className="qzk-glass qzk-legend">
           {displayPayload.series.map((s, i) => {
             // Keep the CSS token for default series (re-themes); use the resolved

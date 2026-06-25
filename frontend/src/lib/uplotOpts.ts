@@ -84,11 +84,13 @@ export interface BuildOptsArgs {
   /** Axis tick number formats (auto = uPlot default). yFmt also drives y2. */
   xFmt?: AxisFormat;
   yFmt?: AxisFormat;
+  /** Draw grid lines (default true). */
+  showGrid?: boolean;
 }
 
 export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
   const { width, height, yLog, xLog, tool, onReadout, xLim, yLim, refLines, seriesStyles } = args;
-  const { xFmt, yFmt, annotations } = args;
+  const { xFmt, yFmt, annotations, showGrid } = args;
   const axisColor = cssVar("--text-dim") || "#aaa";
   const gridColor = cssVar("--grid-line") || "#333";
   const font = `11px ${cssVar("--font-mono") || "monospace"}`;
@@ -105,7 +107,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const axis = {
     stroke: axisColor,
     font,
-    grid: { stroke: gridColor, width: 1 },
+    grid: showGrid === false ? { show: false } : { stroke: gridColor, width: 1 },
     ticks: { stroke: gridColor, width: 1 },
   };
 

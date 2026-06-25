@@ -39,6 +39,8 @@ interface AppState {
   density: Density;
   yLog: boolean;
   xLog: boolean;
+  showGrid: boolean; // draw the plot grid lines
+  showLegend: boolean; // show the floating legend overlay
   xLim: [number, number] | null; // explicit X range (null = autoscale)
   yLim: [number, number] | null; // explicit Y range (null = autoscale)
   xFmt: AxisFormat; // X-axis tick number format
@@ -78,6 +80,8 @@ interface AppState {
   setDensity: (density: Density) => void;
   setYLog: (yLog: boolean) => void;
   setXLog: (xLog: boolean) => void;
+  setShowGrid: (showGrid: boolean) => void;
+  setShowLegend: (showLegend: boolean) => void;
   setXLim: (xLim: [number, number] | null) => void;
   setYLim: (yLim: [number, number] | null) => void;
   setXFmt: (xFmt: AxisFormat) => void;
@@ -157,6 +161,8 @@ export const useApp = create<AppState>((set, get) => ({
   density: _initialPrefs.density,
   yLog: false,
   xLog: false,
+  showGrid: true,
+  showLegend: true,
   xLim: null,
   yLim: null,
   xFmt: { mode: "auto", digits: 2 },
@@ -274,6 +280,8 @@ export const useApp = create<AppState>((set, get) => ({
   },
   setYLog: (yLog) => set({ yLog }),
   setXLog: (xLog) => set({ xLog }),
+  setShowGrid: (showGrid) => set({ showGrid }),
+  setShowLegend: (showLegend) => set({ showLegend }),
   setXLim: (xLim) => set({ xLim }),
   setYLim: (yLim) => set({ yLim }),
   setXFmt: (xFmt) => set({ xFmt }),

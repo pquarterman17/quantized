@@ -144,6 +144,17 @@ describe("buildOpts", () => {
     expect(opts.series[1].dash).toBeUndefined();
   });
 
+  it("hides grid lines when showGrid is false, draws them otherwise", () => {
+    const off = buildOpts(payload, { ...base, yLog: false, tool: "zoom", showGrid: false });
+    expect((off.axes?.[0]?.grid as { show?: boolean }).show).toBe(false);
+    expect((off.axes?.[1]?.grid as { show?: boolean }).show).toBe(false);
+    const on = buildOpts(payload, { ...base, yLog: false, tool: "zoom", showGrid: true });
+    expect((on.axes?.[1]?.grid as { stroke?: string }).stroke).toBeDefined();
+    // default (undefined) keeps the grid
+    const dflt = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    expect((dflt.axes?.[1]?.grid as { show?: boolean }).show).not.toBe(false);
+  });
+
   it("formats ticks fixed/sci and leaves auto to uPlot", () => {
     const fixed = tickFormatter({ mode: "fixed", digits: 2 });
     expect(fixed?.(null as never, [1.5, 2], 0, 0, 0)).toEqual(["1.50", "2.00"]);
