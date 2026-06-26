@@ -604,6 +604,24 @@ function freeze_calc_values()
         'fromErrors', fitting.odrFit(xodr, yodr, 'XError', xeOdr, 'YError', yeOdr)), ...
         fullfile(goldenDir, 'calc_odr.json'));
 
+    % ── fitting.trackPeak: follow a drifting peak across a scan series ────
+    xtp = linspace(40, 50, 200).';
+    tpCenters = [45.0, 45.3, 45.7, 46.1, 46.4];
+    tpG = cell(1, numel(tpCenters));  tpL = cell(1, numel(tpCenters));
+    tpYG = cell(1, numel(tpCenters));  tpYL = cell(1, numel(tpCenters));
+    for ti = 1:numel(tpCenters)
+        yG = 100 * exp(-(xtp - tpCenters(ti)).^2 / (2*0.5^2)) + 2 + 0.05*sin(xtp);
+        yL = 100 ./ (1 + ((xtp - tpCenters(ti)) / 0.5).^2) + 2 + 0.05*sin(xtp);
+        tpG{ti} = {xtp, yG};  tpL{ti} = {xtp, yL};
+        tpYG{ti} = yG.';      tpYL{ti} = yL.';
+    end
+    writeJson(struct('x', xtp.', 'seed', 45.0, 'window', 2, ...
+        'gaussian',   struct('y', {tpYG}, ...
+            'result', fitting.trackPeak(tpG, 45.0, 'Window', 2, 'Shape', 'gaussian')), ...
+        'lorentzian', struct('y', {tpYL}, ...
+            'result', fitting.trackPeak(tpL, 45.0, 'Window', 2, 'Shape', 'lorentzian'))), ...
+        fullfile(goldenDir, 'calc_trackpeak.json'));
+
     % ── baselineALS on a synthetic spectrum (baseline + 2 peaks) ──────────
     xq = linspace(0, 10, 100).';
     yq = 2 + 0.5 * xq + 3 * exp(-((xq - 3) / 0.3).^2) + 2 * exp(-((xq - 7) / 0.4).^2);

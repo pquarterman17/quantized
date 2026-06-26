@@ -154,6 +154,13 @@
       "python_fn": "quantized.io.xrd_csv.format_xrd_csv (fmt=origin, intensity=both, include_metadata=False)",
       "compare": "lines"
     },
+    "calc_trackpeak": {
+      "matlab_fn": "fitting.trackPeak (Gaussian + Lorentzian, drifting-peak series, follow on)",
+      "python_fn": "quantized.calc.peak_track.track_peak",
+      "note": "per-dataset single-peak curve_fit (Nelder-Mead↔fminsearch); worst rel ~1e-9 → rtol 1e-6/atol 1e-8; freeze via freeze_calc_values.m",
+      "rtol": 1e-6,
+      "atol": 1e-8
+    },
     "calc_odr": {
       "matlab_fn": "fitting.odrFit (Deming/orthogonal regression: default λ=1, λ=4, λ-from-errors)",
       "python_fn": "quantized.calc.fit_odr.odr_fit",

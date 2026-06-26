@@ -111,7 +111,9 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 ### Batch / global
 - [ ] Batch fit — `+fitting/batchFit.m`
 - [ ] Global / shared-parameter fit — `+fitting/globalFit.m`, `+fitting/globalCurveFit.m`
-- [ ] Peak tracking — `+fitting/trackPeak.m`
+- [x] Peak tracking — `+fitting/trackPeak.m` → `calc/peak_track.py` (follow a drifting
+      peak across a dataset series; Gaussian/Lorentzian via bounded curve_fit, R²>0.5
+      gate); golden `calc_trackpeak.json` (2 shapes @rtol 1e-6, ~1e-9)
 
 ### Diagnostics / comparison / Bayesian
 - [x] Fit comparison (AIC/BIC/F) — `+fitting/fitCompare.m` → `calc/fit_stats.py` — golden (R2/adjR2/AIC/AICc/BIC/F-test; betainc F p-value)
