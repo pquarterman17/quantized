@@ -24,7 +24,13 @@ from scipy.optimize import minimize
 
 from .peakshapes import split_pearson_vii, tch_pseudo_voigt
 
-__all__ = ["MODELS", "deduplicate_peaks", "fit_single_peak"]
+__all__ = [
+    "MODELS",
+    "deduplicate_peaks",
+    "eval_multi_peak",
+    "eval_multi_peak_pv",
+    "fit_single_peak",
+]
 
 _LN2 = math.log(2.0)
 _A_L = math.pi / 2.0  # integrated-area constant, Lorentzian
@@ -188,6 +194,45 @@ def fit_single_peak(
         "height": height, "bg": bg_fit, "eta": eta_fit, "area": area,
         "params": [float(v) for v in p_fit], "model": model, "window": window,
     }
+
+
+def eval_multi_peak(
+    p: ArrayLike, x: ArrayLike, n_peaks: int, *, gaussian: bool = False
+) -> NDArray[np.float64]:
+    """Sum of ``n_peaks`` Lorentzian (or Gaussian) peaks + linear background.
+
+    Port of evalMultiPeak.m. ``p`` layout: ``[H, x0, fw] * n_peaks`` then
+    ``[slope, intercept]``. ``gaussian=True`` selects the Gaussian shape.
+    """
+    pv = np.asarray(p, dtype=float).ravel()
+    xv = np.asarray(x, dtype=float)
+    y = pv[-2] * xv + pv[-1]
+    for k in range(n_peaks):
+        height, x0, fw = pv[k * 3], pv[k * 3 + 1], abs(pv[k * 3 + 2])
+        if gaussian:
+            y = y + height * np.exp(-4.0 * _LN2 * ((xv - x0) / fw) ** 2)
+        else:
+            y = y + height / (1.0 + 4.0 * ((xv - x0) / fw) ** 2)
+    return np.asarray(y, dtype=float)
+
+
+def eval_multi_peak_pv(p: ArrayLike, x: ArrayLike, n_peaks: int) -> NDArray[np.float64]:
+    """Sum of ``n_peaks`` pseudo-Voigt peaks + linear background.
+
+    Port of evalMultiPeakPV.m. ``p`` layout: ``[H, x0, fw, eta] * n_peaks`` then
+    ``[slope, intercept]``; ``eta`` is clamped to [0, 1].
+    """
+    pv = np.asarray(p, dtype=float).ravel()
+    xv = np.asarray(x, dtype=float)
+    y = pv[-2] * xv + pv[-1]
+    for k in range(n_peaks):
+        height, x0, fw = pv[k * 4], pv[k * 4 + 1], abs(pv[k * 4 + 2])
+        eta = max(0.0, min(1.0, float(pv[k * 4 + 3])))
+        u = (xv - x0) / fw
+        lor = height / (1.0 + 4.0 * u**2)
+        gau = height * np.exp(-4.0 * _LN2 * u**2)
+        y = y + eta * lor + (1.0 - eta) * gau
+    return np.asarray(y, dtype=float)
 
 
 def deduplicate_peaks(peaks: list[dict[str, Any]], min_sep: float) -> list[dict[str, Any]]:

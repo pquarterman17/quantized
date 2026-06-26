@@ -10,7 +10,13 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from quantized.calc.peak_fit import MODELS, deduplicate_peaks, fit_single_peak
+from quantized.calc.peak_fit import (
+    MODELS,
+    deduplicate_peaks,
+    eval_multi_peak,
+    eval_multi_peak_pv,
+    fit_single_peak,
+)
 from quantized.calc.peakshapes import pseudo_voigt
 
 
@@ -117,3 +123,45 @@ def test_deduplicate_noop_for_well_separated() -> None:
         {"center": 31.0, "height": 8.0, "status": "auto"},
     ]
     assert len(deduplicate_peaks(peaks, 0.2)) == 2
+
+
+@pytest.mark.golden
+def test_multi_peak_evaluators_match_matlab(
+    load_golden: Callable[[str], dict[str, Any]],
+) -> None:
+    g = load_golden("calc_multipeak.json")
+    x = np.asarray(g["x"], dtype=float)
+    lor = g["lorentzian"]
+    assert_allclose(
+        eval_multi_peak(lor["p"], x, lor["nP"]),
+        np.asarray(lor["y"], dtype=float), rtol=1e-12, atol=1e-12,
+    )
+    gau = g["gaussian"]
+    assert_allclose(
+        eval_multi_peak(gau["p"], x, gau["nP"], gaussian=True),
+        np.asarray(gau["y"], dtype=float), rtol=1e-12, atol=1e-12,
+    )
+    pv = g["pseudovoigt"]
+    assert_allclose(
+        eval_multi_peak_pv(pv["p"], x, pv["nP"]),
+        np.asarray(pv["y"], dtype=float), rtol=1e-12, atol=1e-12,
+    )
+
+
+def test_multi_peak_superposes_single_peaks() -> None:
+    # The multi-peak sum equals the linear bg plus each single Lorentzian.
+    x = np.linspace(28.0, 32.0, 50)
+    p = [100.0, 29.5, 0.3, 40.0, 31.0, 0.25, 2.0, 5.0]  # 2 peaks, slope 2, intercept 5
+    total = eval_multi_peak(p, x, 2)
+    bg = 2.0 * x + 5.0
+    pk1 = 100.0 / (1.0 + 4.0 * ((x - 29.5) / 0.3) ** 2)
+    pk2 = 40.0 / (1.0 + 4.0 * ((x - 31.0) / 0.25) ** 2)
+    assert_allclose(total, bg + pk1 + pk2, rtol=1e-12)
+
+
+def test_multi_peak_pv_eta_clamped() -> None:
+    # eta outside [0,1] is clamped; eta=1.5 behaves like eta=1 (pure Lorentzian).
+    x = np.linspace(28.0, 32.0, 50)
+    y_over = eval_multi_peak_pv([10.0, 30.0, 0.4, 1.5, 0.0, 0.0], x, 1)
+    y_one = eval_multi_peak_pv([10.0, 30.0, 0.4, 1.0, 0.0, 0.0], x, 1)
+    assert_allclose(y_over, y_one, rtol=1e-12)

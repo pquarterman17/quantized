@@ -129,7 +129,11 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
       + peak de-duplication — `+bosonPlotter/+peak/{fitSinglePeak,deduplicatePeaks}.m`
       → `calc/peak_fit.py` + `/api/peaks/fit`; golden `calc_peakfit.json` (rtol 1e-5)
 - [x] Auto-find peaks — `utilities.findPeaksRobust` → `calc/peaks.py` (golden)
-- [ ] Multi-peak simultaneous fit + constrained/linked widths — `+bosonPlotter/+peak/{evalMultiPeak,evalMultiPeakPV}.m`, `PeakWorkshopModel.m`
+- [x] Multi-peak evaluators (Lorentzian/Gaussian/pseudo-Voigt sum + linear bg) —
+      `+bosonPlotter/+peak/{evalMultiPeak,evalMultiPeakPV}.m` → `calc/peak_fit.py`;
+      golden `calc_multipeak.json` (exact, rtol 1e-12)
+- [ ] Multi-peak *simultaneous* fit + constrained/linked widths — `peakAnalysis.m`
+      `onFitSimultaneous` (freeToFull param mapping), `PeakWorkshopModel.m`
 
 ### Hysteresis (BosonPlotter Hysteresis workshop)
 - [x] Hysteresis models — `+fitting/hysteresisModels.m` → `calc/fit_models_special.py`
