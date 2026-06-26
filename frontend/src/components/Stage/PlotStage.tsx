@@ -18,6 +18,7 @@ import { exportPlotPng } from "../../lib/plotExport";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotPlugins";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import MultiPanelStage from "./MultiPanelStage";
 
 const TOOLS = [
   { id: "zoom", glyph: "⛶", tip: "Box zoom" },
@@ -45,6 +46,8 @@ export default function PlotStage() {
   const accent = useApp((s) => s.accent);
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
+  const stackMode = useApp((s) => s.stackMode);
+  const setStackMode = useApp((s) => s.setStackMode);
   const fitOverlay = useApp((s) => s.fitOverlay);
   const peakOverlay = useApp((s) => s.peakOverlay);
   const baselineOverlay = useApp((s) => s.baselineOverlay);
@@ -152,6 +155,10 @@ export default function PlotStage() {
     exportPlotPng(plotRef.current, `${stem}.png`);
   }
 
+  // Stacked multi-panel view (one panel per channel) when enabled + ≥2 channels.
+  const nPlotted = yKeys?.length ?? active?.data.labels.length ?? 0;
+  if (stackMode && nPlotted >= 2) return <MultiPanelStage />;
+
   return (
     <div className="qzk-stage">
       <div ref={hostRef} style={{ position: "absolute", inset: 8 }} />
@@ -174,6 +181,14 @@ export default function PlotStage() {
           </button>
           <button className="qzk-tool-btn" title="Save plot as PNG" onClick={savePng}>
             ⤓
+          </button>
+          <span className="qzk-tool-sep" />
+          <button
+            className={`qzk-tool-btn${stackMode ? " active" : ""}`}
+            title="Stack channels in separate panels"
+            onClick={() => setStackMode(true)}
+          >
+            ▤
           </button>
         </div>
       )}
