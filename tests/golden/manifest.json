@@ -154,6 +154,13 @@
       "python_fn": "quantized.io.xrd_csv.format_xrd_csv (fmt=origin, intensity=both, include_metadata=False)",
       "compare": "lines"
     },
+    "calc_hysteresis_models": {
+      "matlab_fn": "fitting.hysteresisModels() — each model .fcn evaluated at .p0 over H = linspace(-5000, 5000, 40)",
+      "python_fn": "quantized.calc.fit_models.evaluate (Hysteresis-category models in fit_models_special)",
+      "note": "5 M-H loop models (tanh, F+P, linear BG, approach-to-saturation, Langevin+BG); grid avoids H=0 so 1/|H| & 1/H^2 stay finite; freeze via tools/matlab/freeze_calc_values.m",
+      "rtol": 1e-9,
+      "atol": 1e-12
+    },
     "hdf5_synth_default": {
       "fixture": "synthetic DataStruct built in tools/matlab/freeze_hdf5_only.m",
       "matlab_fn": "utilities.exportHDF5 (CorrData + Corrections + Peaks), read back via h5info/h5read/h5readatt",

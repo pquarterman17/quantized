@@ -403,6 +403,20 @@ function freeze_calc_values()
     writeJson(struct('x', xfm.', 'models', {fmOut}), ...
         fullfile(goldenDir, 'calc_fit_models.json'));
 
+    % ── fitting.hysteresisModels: M-H loop models at p0 over a field grid ─
+    % Symmetric field sweep avoiding H=0 (40 pts → no sample at the origin,
+    % so the approach-to-saturation 1/|H| and 1/H^2 terms stay well-behaved).
+    hyCat = fitting.hysteresisModels();
+    xhy = linspace(-5000, 5000, 40).';
+    hyOut = cell(numel(hyCat), 1);
+    for hi = 1:numel(hyCat)
+        hm = hyCat(hi);
+        yhy = hm.fcn(xhy, hm.p0);
+        hyOut{hi} = struct('name', hm.name, 'p0', hm.p0, 'y', yhy(:).');
+    end
+    writeJson(struct('x', xhy.', 'models', {hyOut}), ...
+        fullfile(goldenDir, 'calc_hysteresis_models.json'));
+
     % ── fitting.autoGuess: initial-parameter guess for every model ────────
     agCat = fitting.models();
     xag = linspace(1, 20, 50).';

@@ -3,6 +3,13 @@
 Imported for its registration side effects (see the import at the bottom of
 fit_models.py). Models: Langevin, Brillouin, Stoner-Wohlfarth, Debye, Einstein,
 Debye+Einstein. Port of the local helpers in fitting/models.m.
+
+The ``Hysteresis``-category models (tanh loop, two-component F+P, linear
+background, approach-to-saturation, Langevin+background) are a port of
+``+fitting/hysteresisModels.m`` — the catalogue the magnetometry hysteresis
+workshop offers for M-H loop fitting. They are empirical loop descriptors, not
+full Stoner-Wohlfarth astroid solutions (see Cullity & Graham, "Introduction to
+Magnetic Materials", 2nd ed., Ch. 7/9/11; Akulov, Z. Phys. 67, 794 (1931)).
 """
 
 from __future__ import annotations
@@ -113,6 +120,60 @@ def _debye_einstein(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[n
         out[k] = gamma * tk + (n_d * c_d + n_e * c_e) * 1000
     return out
 
+
+# ── Hysteresis (magnetic M-H loop descriptors) ──────────────────────────
+def _tanh_hysteresis(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
+    """M = Ms·tanh((H - Hc)/Hw). Soft-ferromagnet loop. p = [Ms, Hc, Hw]."""
+    ms, hc, hw = float(p[0]), float(p[1]), max(abs(float(p[2])), _EPS)
+    return np.asarray(ms * np.tanh((x - hc) / hw), dtype=float)
+
+
+def _two_component(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
+    """M = Ms·tanh((H - Hc)/Hw) + χ·H. Ferromagnetic loop + linear (para) BG.
+
+    p = [Ms, Hc, Hw, χ].
+    """
+    ms, hc, hw, chi = float(p[0]), float(p[1]), max(abs(float(p[2])), _EPS), float(p[3])
+    return np.asarray(ms * np.tanh((x - hc) / hw) + chi * x, dtype=float)
+
+
+def _linear_background(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
+    """M = χ·H + offset. Pure linear (dia/paramagnetic) background. p = [χ, offset]."""
+    return np.asarray(float(p[0]) * x + float(p[1]), dtype=float)
+
+
+def _approach_saturation(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
+    """M = Ms(1 - a/|H| - b/H²) + χ·H. High-field Akulov expansion. p = [Ms, a, b, χ]."""
+    ms, a, b, chi = float(p[0]), float(p[1]), float(p[2]), float(p[3])
+    xv = np.asarray(x, dtype=float)
+    return np.asarray(
+        ms * (1.0 - a / (np.abs(xv) + _EPS) - b / (xv**2 + _EPS)) + chi * xv, dtype=float
+    )
+
+
+def _langevin_bg(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
+    """M = Ms·L(αH) + χ·H, L(u) = coth(u) - 1/u. Superparamagnet + BG. p = [Ms, α, χ]."""
+    ms, alpha, chi = float(p[0]), float(p[1]), float(p[2])
+    u = alpha * np.asarray(x, dtype=float)
+    out = np.empty_like(u, dtype=float)
+    small = np.abs(u) < 1e-4
+    out[small] = ms * (u[small] / 3.0 - u[small] ** 3 / 45.0)
+    us = u[~small]
+    out[~small] = ms * (1.0 / np.tanh(us) - 1.0 / us)
+    return np.asarray(out + chi * np.asarray(x, dtype=float), dtype=float)
+
+
+register_model("Tanh Hysteresis", "Hysteresis", _tanh_hysteresis, ["Ms", "Hc", "Hw"],
+               [1e-3, 100, 200], [0, -_INF, 0], [_INF, _INF, _INF])
+register_model("Two-Component (F+P)", "Hysteresis", _two_component, ["Ms", "Hc", "Hw", "χ"],
+               [1e-3, 100, 200, 0], [0, -_INF, 0, -_INF], [_INF, _INF, _INF, _INF])
+register_model("Linear Background", "Hysteresis", _linear_background, ["χ", "offset"],
+               [1e-7, 0], [-_INF, -_INF], [_INF, _INF])
+register_model("Approach to Saturation", "Hysteresis", _approach_saturation,
+               ["Ms", "a", "b", "χ"], [1e-3, 1, 1, 0], [0, 0, 0, -_INF],
+               [_INF, _INF, _INF, _INF])
+register_model("Langevin + Background", "Hysteresis", _langevin_bg, ["Ms", "μ/kT", "χ"],
+               [1e-3, 1e-3, 0], [0, 0, -_INF], [_INF, _INF, _INF])
 
 register_model("Langevin", "Magnetic", _langevin, ["A", "B"], [1, 1], [0, 0], [_INF, _INF])
 register_model("Brillouin", "Magnetic", _brillouin, ["Ms", "J", "g", "T"], [1, 0.5, 2, 300],

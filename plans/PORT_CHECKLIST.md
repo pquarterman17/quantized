@@ -128,7 +128,9 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] Lorentzian peak fit, auto-find, multi-peak, constrained widths — `+bosonPlotter/+peak/`
 
 ### Hysteresis (BosonPlotter Hysteresis workshop)
-- [ ] Hysteresis models — `+fitting/hysteresisModels.m`
+- [x] Hysteresis models — `+fitting/hysteresisModels.m` → `calc/fit_models_special.py`
+      ("Hysteresis" category: tanh, F+P, linear BG, approach-to-saturation,
+      Langevin+BG); golden `calc_hysteresis_models.json` (rtol 1e-9)
 
 ---
 
