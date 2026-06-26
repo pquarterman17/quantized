@@ -31,6 +31,38 @@ export interface MapResponse {
   z: { label: string; unit: string; min: number | null; max: number | null };
 }
 
+/** One peak from POST /api/rsm/analyze. Centres/FWHM are `[omega, 2theta]` in
+ *  angle space and `[Qx, Qz]` in reciprocal space (null when no Q-space). */
+export interface RsmPeak {
+  rank: number;
+  centre_angle: [number, number];
+  centre_Q: [number | null, number | null];
+  fwhm_angle: [number, number];
+  fwhm_Q: [number | null, number | null];
+  amplitude: number;
+  background: number;
+  classification: string; // "substrate" | "film" | "unknown"
+}
+
+/** Response of POST /api/rsm/analyze. */
+export interface RsmAnalysisResponse {
+  peaks: RsmPeak[];
+  n_peaks_found: number;
+  intensity_unit: string;
+  used_q_space: boolean;
+}
+
+/** Response of POST /api/rsm/strain (NaN fields serialize as null). */
+export interface RsmStrainResponse {
+  eps_parallel: number | null;
+  eps_perp: number | null;
+  a_sub_parallel: number;
+  a_sub_perp: number;
+  a_film_parallel: number;
+  a_film_perp: number;
+  relaxation: number | null;
+}
+
 /** A dataset held client-side: the parsed DataStruct + a stable id + name.
  *  `raw` is the pristine import; `data` is the currently displayed (corrected)
  *  view. `corrections` are the params that produced `data` from `raw`. */

@@ -12,6 +12,8 @@ import type {
   MapResponse,
   Peak,
   PlotSeriesResponse,
+  RsmAnalysisResponse,
+  RsmStrainResponse,
   SldPreset,
 } from "./types";
 
@@ -88,6 +90,29 @@ export interface MapRequest {
 /** Regrid 3 scattered channels (x, y, z) of a DataStruct into a heatmap grid. */
 export function mapSeries(req: MapRequest): Promise<MapResponse> {
   return postJSON<MapResponse>("/api/plot/map", req);
+}
+
+// ── RSM (reciprocal-space maps) ───────────────────────────────────────────────
+/** Find + fit peaks in a 2D RSM dataset (centres/FWHM in angle + Q-space). */
+export function analyzeRsm(body: {
+  dataset: DataStruct;
+  n_peaks?: number;
+  threshold?: number;
+  smooth_sigma?: number;
+  min_separation?: number;
+  fit_window?: number;
+  fit_model?: string;
+}): Promise<RsmAnalysisResponse> {
+  return postJSON("/api/rsm/analyze", body);
+}
+
+/** Strain + relaxation from substrate/film reciprocal-space peak centres. */
+export function rsmStrain(body: {
+  q_sub: [number, number];
+  q_film: [number, number];
+  bulk?: [number, number] | null;
+}): Promise<RsmStrainResponse> {
+  return postJSON("/api/rsm/strain", body);
 }
 
 export interface CorrectionsRequest {

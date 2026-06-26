@@ -20,6 +20,7 @@ import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
 import MagToolsPanel from "./components/workshops/magtools/MagToolsPanel";
 import PeaksPanel from "./components/workshops/peaks/PeaksPanel";
 import ReflectivityPanel from "./components/workshops/reflectivity/ReflectivityPanel";
+import RsmPanel from "./components/workshops/rsm/RsmPanel";
 import {
   exportConsolidated,
   exportFigure,
@@ -62,6 +63,7 @@ export default function App() {
   const reflectivityOpen = useApp((s) => s.reflectivityOpen);
   const baselineOpen = useApp((s) => s.baselineOpen);
   const calculatorsOpen = useApp((s) => s.calculatorsOpen);
+  const rsmOpen = useApp((s) => s.rsmOpen);
   const magToolsOpen = useApp((s) => s.magToolsOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
@@ -209,6 +211,12 @@ export default function App() {
         run: () => s().setCalculatorsOpen(true),
       },
       {
+        id: "rsm",
+        group: "Analyze",
+        label: "RSM analysis (strain · relaxation)…",
+        run: () => s().setRsmOpen(true),
+      },
+      {
         id: "export-csv",
         group: "File",
         label: "Export XRD CSV…",
@@ -352,6 +360,7 @@ export default function App() {
       {baselineOpen && <BaselinePanel />}
       {calculatorsOpen && <CalculatorsPanel />}
       {magToolsOpen && <MagToolsPanel />}
+      {rsmOpen && <RsmPanel />}
     </div>
   );
 }
