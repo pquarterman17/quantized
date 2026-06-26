@@ -161,6 +161,13 @@
       "rtol": 1e-6,
       "atol": 1e-8
     },
+    "calc_multipeakfit": {
+      "matlab_fn": "bosonPlotter.peakAnalysis.onFitSimultaneous (composite peaks+poly-bg fit; 5 cases: Lorentzian, Gaussian, PV+Shared-FWHM, Lorentzian+constrain×3, PV+Shared-FWHM+eta) + exposed bosonPlotter.buildLinkedPacker",
+      "python_fn": "quantized.calc.peak_multifit.{fit_multi_peak,build_linked_packer,compute_peak_area}",
+      "note": "fminsearch is eval-limited at default MaxFunEvals=200*nFree (MaxIter=30000 set, MaxFunEvals not) — Python replicates that budget so scipy Nelder-Mead matches bit-for-bit (worst rel ~7e-9); linked packer is exact. SPVII→symmetric Pearson(m=1.5), TCH→eta=0.5 PV in the composite (per-peak fit uses full forms). Freeze via freeze_calc_values.m (mpfFreeze).",
+      "rtol": 1e-6,
+      "atol": 1e-8
+    },
     "calc_batchfit": {
       "matlab_fn": "fitting.batchFit (Exponential Decay across 4 datasets, auto-guess + bounds)",
       "python_fn": "quantized.calc.batch_fit.batch_fit",

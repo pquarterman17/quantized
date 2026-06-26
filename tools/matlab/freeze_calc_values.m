@@ -668,6 +668,15 @@ function freeze_calc_values()
     [vd, ed] = utilities.errorDiv(6, 0.1, 3, 0.2);
     writeJson(struct('output', [vd ed]), fullfile(goldenDir, 'calc_errordiv.json'));
 
+    % ── multi-peak simultaneous fit (peakAnalysis.onFitSimultaneous) ──────
+    %   Replicates the GUI-nested fit driver (buildCompositeModel + compositeEval
+    %   + computeArea, copied verbatim in mpfRunCase) and uses the EXPOSED
+    %   bosonPlotter.buildLinkedPacker. Synthetic x/y are emitted so the Python
+    %   port fits the identical curve. NB: onFitSimultaneous sets MaxIter=30000
+    %   but leaves MaxFunEvals at fminsearch's default 200*nFree, so the fit is
+    %   eval-limited — the Python port replicates that budget (see peak_multifit).
+    writeJson(mpfFreeze(), fullfile(goldenDir, 'calc_multipeakfit.json'));
+
     fprintf('Done.\n');
 end
 
@@ -677,4 +686,187 @@ function writeJson(s, outPath)
     fwrite(fid, jsonencode(s));
     fclose(fid);
     fprintf('froze %s\n', outPath);
+end
+
+% ════════════════════════════════════════════════════════════════════════
+%  Multi-peak simultaneous fit freeze (onFitSimultaneous replica)
+% ════════════════════════════════════════════════════════════════════════
+function out = mpfFreeze()
+    out = struct();
+    x = linspace(10, 30, 300);
+    y = 5 + 0.2*x + mpfLorz(20,16,1.5,x) + mpfLorz(12,24,2.0,x);
+    out.lorentzian = mpfRunCase(x, y, mpfPeaks([15.6 24.4],[1.0 1.0],[18 11]), ...
+        'Lorentzian', 1, false, 'None');
+
+    x2 = linspace(0, 40, 350);
+    y2 = 3 + 0.05*x2 + mpfGaus(30,14,2.0,x2) + mpfGaus(18,27,1.6,x2);
+    out.gaussian = mpfRunCase(x2, y2, mpfPeaks([13.9 26.9],[1.9 1.7],[29 17]), ...
+        'Gaussian', 1, false, 'None');
+
+    x3 = linspace(20, 60, 320);
+    y3 = 2 + 0.1*x3 + mpfPvgt(25,33,2.2,0.6,x3) + mpfPvgt(16,47,2.2,0.6,x3);
+    out.pv_shared = mpfRunCase(x3, y3, mpfPeaksEta([32.6 47.4],[2.0 2.0],[23 15],[0.5 0.5]), ...
+        'Pseudo-Voigt', 1, false, 'Shared FWHM');
+
+    x4 = linspace(0, 50, 400);
+    y4 = 4 + 0.08*x4 + mpfLorz(22,12,1.8,x4) + mpfLorz(15,25,2.2,x4) + mpfLorz(18,38,1.5,x4);
+    out.lorentzian_constrained = mpfRunCase(x4, y4, ...
+        mpfPeaks([12.5 24.5 38.4],[1.5 1.5 1.5],[20 14 16]), 'Lorentzian', 1, true, 'None');
+
+    out.pv_shared_eta = mpfRunCase(x3, y3, ...
+        mpfPeaksEta([32.6 47.4],[2.0 2.0],[23 15],[0.5 0.5]), ...
+        'Pseudo-Voigt', 1, false, 'Shared FWHM + eta');
+
+    % Direct golden of the exposed packer.
+    p0d = [20 16 1.5,  12 24 2.0,  5 0.2];  ci = [2 5];
+    lp = struct();
+    [pf, ef, fci] = bosonPlotter.buildLinkedPacker(p0d, 2, 3, 2, 'Shared FWHM', ci);
+    pfp = pf + 0.5;
+    lp.shared_fwhm = struct('p0', p0d, 'pFree0', pf, 'expand_pFree0', ef(pf), ...
+        'freeCenterIdx', fci, 'pFree_perturbed', pfp, 'expand_perturbed', ef(pfp));
+    p0e = [20 16 1.5 0.6,  12 24 2.0 0.4,  5 0.2];
+    [pf2, ef2, fci2] = bosonPlotter.buildLinkedPacker(p0e, 2, 4, 2, 'Shared FWHM + eta', [2 6]);
+    lp.shared_eta = struct('p0', p0e, 'pFree0', pf2, 'expand_pFree0', ef2(pf2), ...
+        'freeCenterIdx', fci2);
+    [pf3, ~, fci3] = bosonPlotter.buildLinkedPacker(p0d, 2, 3, 2, 'None', ci);
+    lp.none = struct('pFree0', pf3, 'freeCenterIdx', fci3);
+    out.linked_packer = lp;
+end
+
+function res = mpfRunCase(xv, yv, detectedPeaks, modelName, bgDeg, constrain, linkMode)
+    xv = xv(:)'; yv = yv(:)';
+    nP = numel(detectedPeaks);
+    xSpan = max(xv) - min(xv);
+    [modelFun, p0, nPPerPeak, centerIndices, seedCenters] = ...
+        mpfBuildComposite(xv, yv, detectedPeaks, modelName, bgDeg);
+    nBgParams = bgDeg + 1;
+    [pFree0, freeToFull, freeCenterIdx] = bosonPlotter.buildLinkedPacker( ...
+        p0, nP, nPPerPeak, nBgParams, linkMode, centerIndices);
+    if constrain && nP > 1
+        centerBnd = zeros(1, nP);
+        for k = 1:nP
+            fwInit = abs(p0((k-1)*nPPerPeak + 3));
+            centerBnd(k) = max(3 * fwInit, xSpan * 0.02);
+        end
+        penaltyWt = sum((yv - mean(yv)).^2) * 10;
+        objFun = @(pFree) sum((modelFun(freeToFull(pFree), xv) - yv).^2) + ...
+            penaltyWt * sum(max(0, ((pFree(freeCenterIdx) - seedCenters) ./ centerBnd).^2 - 1));
+    else
+        objFun = @(pFree) sum((modelFun(freeToFull(pFree), xv) - yv).^2);
+    end
+    opts = optimset('Display', 'off', 'MaxIter', 30000, 'TolX', 1e-10, 'TolFun', 1e-14);
+    pFreeFit = fminsearch(objFun, pFree0, opts);
+    pFit     = freeToFull(pFreeFit);
+    bgParams = pFit(end-nBgParams+1:end);
+    peaks = struct('center', {}, 'fwhm', {}, 'height', {}, 'bg', {}, ...
+                   'eta', {}, 'area', {}, 'status', {});
+    for k = 1:nP
+        base = (k-1) * nPPerPeak;
+        pk = struct();
+        pk.center = pFit(base+2); pk.fwhm = abs(pFit(base+3)); pk.height = pFit(base+1);
+        pk.bg = polyval(flip(bgParams), pk.center);
+        if nPPerPeak == 4, pk.eta = max(0, min(1, pFit(base+4))); else, pk.eta = NaN; end
+        pk.area = mpfArea(modelName, pk);
+        pk.status = 'fitted(global)';
+        peaks(k) = pk; %#ok<AGROW>
+    end
+    yFitted = modelFun(pFit, xv);
+    ssRes = sum((yv - yFitted).^2); ssTot = sum((yv - mean(yv)).^2);
+    res = struct('x', xv, 'y', yv, 'seeds', mpfPackSeeds(detectedPeaks), ...
+        'model', modelName, 'bgDeg', bgDeg, 'constrain', constrain, 'linkMode', linkMode, ...
+        'peaks', peaks, 'bgCoeffs', bgParams, 'params', pFit, ...
+        'R2', 1 - ssRes / max(ssTot, eps), 'rmse', sqrt(ssRes / numel(yv)), 'nPeaks', nP);
+end
+
+function [modelFun, p0, nPPerPeak, centerIndices, seedCenters] = ...
+        mpfBuildComposite(xv, yv, peaks, modelName, bgDeg)
+    nP = numel(peaks); xSpan = max(xv) - min(xv);
+    isPV = strcmp(modelName, 'Pseudo-Voigt');
+    if isPV, nPPerPeak = 4; else, nPPerPeak = 3; end
+    nBgParams = bgDeg + 1;
+    p0 = zeros(1, nP * nPPerPeak + nBgParams);
+    centerIndices = zeros(1, nP); seedCenters = zeros(1, nP);
+    for k = 1:nP
+        pk = peaks(k); base = (k-1) * nPPerPeak;
+        p0(base+1) = max(pk.height, max(yv) * 0.01);
+        p0(base+2) = pk.center;
+        p0(base+3) = max(pk.fwhm, xSpan * 0.005);
+        if isPV
+            eta0 = 0.5;
+            if isfield(pk, 'eta') && ~isnan(pk.eta), eta0 = pk.eta; end
+            p0(base+4) = eta0;
+        end
+        centerIndices(k) = base + 2; seedCenters(k) = pk.center;
+    end
+    p0(end-nBgParams+1) = min(yv);
+    if nBgParams >= 2, p0(end-nBgParams+2) = 0; end
+    modelFun = @(p, x) mpfComposite(p, x, nP, nPPerPeak, nBgParams, modelName);
+end
+
+function y = mpfComposite(p, x, nP, nPPerPeak, nBgParams, modelName)
+    bgCoeffs = p(end-nBgParams+1:end);
+    y = polyval(flip(bgCoeffs), x);
+    for k = 1:nP
+        base = (k-1) * nPPerPeak;
+        H = p(base+1); x0 = p(base+2); fw = p(base+3);
+        if fw == 0, fw = eps; end
+        switch modelName
+            case 'Gaussian'
+                y = y + H .* exp(-4 .* log(2) .* ((x - x0) ./ fw).^2);
+            case 'Pseudo-Voigt'
+                eta = max(0, min(1, p(base+4)));
+                y = y + eta .* (H ./ (1 + 4 .* ((x - x0) ./ fw).^2)) + ...
+                    (1 - eta) .* (H .* exp(-4 .* log(2) .* ((x - x0) ./ fw).^2));
+            case 'Split Pearson VII'
+                m = 1.5;
+                y = y + H .* (1 + 4 .* (2^(1/m) - 1) .* ((x - x0) ./ fw).^2).^(-m);
+            case 'TCH-pV'
+                y = y + 0.5 .* (H ./ (1 + 4 .* ((x - x0) ./ fw).^2)) + ...
+                    0.5 .* (H .* exp(-4 .* log(2) .* ((x - x0) ./ fw).^2));
+            otherwise
+                y = y + H ./ (1 + 4 .* ((x - x0) ./ fw).^2);
+        end
+    end
+end
+
+function area = mpfArea(modelName, pk)
+    H = pk.height; fw = pk.fwhm;
+    switch modelName
+        case 'Gaussian'
+            area = H * fw * sqrt(pi / log(2)) / 2;
+        case 'Pseudo-Voigt'
+            eta = 0.5;
+            if isfield(pk, 'eta') && ~isnan(pk.eta), eta = pk.eta; end
+            area = H * fw * (eta * (pi/2) + (1 - eta) * (sqrt(pi) / (2 * sqrt(log(2)))));
+        otherwise
+            area = H * fw * pi / 2;
+    end
+end
+
+function y = mpfLorz(H, x0, fw, x), y = H ./ (1 + 4 .* ((x - x0) ./ fw).^2); end
+function y = mpfGaus(H, x0, fw, x), y = H .* exp(-4 .* log(2) .* ((x - x0) ./ fw).^2); end
+function y = mpfPvgt(H, x0, fw, eta, x)
+    y = eta .* (H ./ (1 + 4 .* ((x - x0) ./ fw).^2)) + ...
+        (1 - eta) .* (H .* exp(-4 .* log(2) .* ((x - x0) ./ fw).^2));
+end
+function s = mpfPeaks(centers, fwhms, heights)
+    s = struct('center', {}, 'fwhm', {}, 'height', {});
+    for k = 1:numel(centers)
+        s(k) = struct('center', centers(k), 'fwhm', fwhms(k), 'height', heights(k));
+    end
+end
+function s = mpfPeaksEta(centers, fwhms, heights, etas)
+    s = struct('center', {}, 'fwhm', {}, 'height', {}, 'eta', {});
+    for k = 1:numel(centers)
+        s(k) = struct('center', centers(k), 'fwhm', fwhms(k), ...
+                      'height', heights(k), 'eta', etas(k));
+    end
+end
+function arr = mpfPackSeeds(detectedPeaks)
+    arr = struct('center', {}, 'fwhm', {}, 'height', {}, 'eta', {});
+    for k = 1:numel(detectedPeaks)
+        pk = detectedPeaks(k); e = NaN;
+        if isfield(pk, 'eta'), e = pk.eta; end
+        arr(k) = struct('center', pk.center, 'fwhm', pk.fwhm, 'height', pk.height, 'eta', e);
+    end
 end

@@ -145,8 +145,12 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Multi-peak evaluators (Lorentzian/Gaussian/pseudo-Voigt sum + linear bg) —
       `+bosonPlotter/+peak/{evalMultiPeak,evalMultiPeakPV}.m` → `calc/peak_fit.py`;
       golden `calc_multipeak.json` (exact, rtol 1e-12)
-- [ ] Multi-peak *simultaneous* fit + constrained/linked widths — `peakAnalysis.m`
-      `onFitSimultaneous` (freeToFull param mapping), `PeakWorkshopModel.m`
+- [x] Multi-peak *simultaneous* fit + constrained/linked widths — `peakAnalysis.m`
+      `onFitSimultaneous` (composite peaks+poly-bg, center-drift penalty) +
+      `+bosonPlotter/buildLinkedPacker.m` (Shared FWHM / Shared FWHM+eta freeToFull
+      mapping) → `calc/peak_multifit.py` + `/api/peaks/fit-multi`; golden
+      `calc_multipeakfit.json` (5 fit cases bit-exact to ~7e-9 by replicating
+      fminsearch's eval-limited 200·nFree budget; linked packer exact, rtol 1e-6)
 
 ### Hysteresis (BosonPlotter Hysteresis workshop)
 - [x] Hysteresis models — `+fitting/hysteresisModels.m` → `calc/fit_models_special.py`

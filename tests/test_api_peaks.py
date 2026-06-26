@@ -100,3 +100,61 @@ def test_fit_reports_failure_reason_without_500() -> None:
     out = resp.json()
     assert out["success"] is False
     assert out["reason"] == "window-too-narrow"
+
+
+def _two_lorentzians_bg() -> tuple[list[float], list[float]]:
+    x = np.linspace(10.0, 30.0, 300)
+    y = (
+        5.0 + 0.2 * x
+        + 20.0 / (1.0 + 4.0 * ((x - 16.0) / 1.5) ** 2)
+        + 12.0 / (1.0 + 4.0 * ((x - 24.0) / 2.0) ** 2)
+    )
+    return list(x), list(y)
+
+
+def test_fit_multi_endpoint() -> None:
+    x, y = _two_lorentzians_bg()
+    resp = client.post(
+        "/api/peaks/fit-multi",
+        json={
+            "x": x, "y": y, "model": "Lorentzian", "bg_degree": 1,
+            "peaks": [
+                {"center": 15.6, "fwhm": 1.0, "height": 18.0},
+                {"center": 24.4, "fwhm": 1.0, "height": 11.0},
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["nPeaks"] == 2
+    assert out["R2"] > 0.99
+    centers = sorted(p["center"] for p in out["peaks"])
+    assert abs(centers[0] - 16.0) < 0.2
+    assert abs(centers[1] - 24.0) < 0.2
+    assert all(p["status"] == "fitted(global)" for p in out["peaks"])
+
+
+def test_fit_multi_unknown_model_rejected() -> None:
+    x, y = _two_lorentzians_bg()
+    resp = client.post(
+        "/api/peaks/fit-multi",
+        json={"x": x, "y": y, "model": "Bogus",
+              "peaks": [{"center": 16.0, "fwhm": 1.0, "height": 18.0}]},
+    )
+    assert resp.status_code == 422
+
+
+def test_fit_multi_unknown_link_mode_rejected() -> None:
+    x, y = _two_lorentzians_bg()
+    resp = client.post(
+        "/api/peaks/fit-multi",
+        json={"x": x, "y": y, "link_mode": "Telepathy",
+              "peaks": [{"center": 16.0, "fwhm": 1.0, "height": 18.0}]},
+    )
+    assert resp.status_code == 422
+
+
+def test_fit_multi_no_peaks_rejected() -> None:
+    x, y = _two_lorentzians_bg()
+    resp = client.post("/api/peaks/fit-multi", json={"x": x, "y": y, "peaks": []})
+    assert resp.status_code == 422
