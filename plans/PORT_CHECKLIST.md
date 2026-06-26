@@ -104,7 +104,9 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
       `calc_constraints.json` (5 cases @1e-12: positional/named refs, math fns, error
       paths). Faithfully reproduces MATLAB's two-pass rewrite incl. the reindexed
       double-replacement quirk (uses the no-eval parse_equation, appearance-order pN)
-- [ ] ODR (orthogonal distance regression) — `+fitting/odrFit.m`
+- [x] ODR (orthogonal distance regression) — `+fitting/odrFit.m` → `calc/fit_odr.py`
+      (closed-form Deming + jackknife SEs; λ explicit or from X/Y errors); golden
+      `calc_odr.json` (3 cases @1e-12, exact ~1e-14)
 
 ### Batch / global
 - [ ] Batch fit — `+fitting/batchFit.m`

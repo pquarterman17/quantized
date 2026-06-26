@@ -594,6 +594,16 @@ function freeze_calc_values()
     end
     writeJson(struct('cases', {acCases}), fullfile(goldenDir, 'calc_constraints.json'));
 
+    % ── fitting.odrFit: closed-form Deming regression + jackknife SEs ─────
+    xodr = linspace(0, 10, 20).' + 0.05*sin((1:20).');
+    yodr = 2*xodr + 1 + 0.1*cos((1:20).');
+    xeOdr = 0.2*ones(20,1);  yeOdr = 0.4*ones(20,1);
+    writeJson(struct('x', xodr.', 'y', yodr.', 'xerr', xeOdr.', 'yerr', yeOdr.', ...
+        'default',    fitting.odrFit(xodr, yodr), ...
+        'lambda4',    fitting.odrFit(xodr, yodr, 'Lambda', 4), ...
+        'fromErrors', fitting.odrFit(xodr, yodr, 'XError', xeOdr, 'YError', yeOdr)), ...
+        fullfile(goldenDir, 'calc_odr.json'));
+
     % ── baselineALS on a synthetic spectrum (baseline + 2 peaks) ──────────
     xq = linspace(0, 10, 100).';
     yq = 2 + 0.5 * xq + 3 * exp(-((xq - 3) / 0.3).^2) + 2 * exp(-((xq - 7) / 0.4).^2);

@@ -154,6 +154,13 @@
       "python_fn": "quantized.io.xrd_csv.format_xrd_csv (fmt=origin, intensity=both, include_metadata=False)",
       "compare": "lines"
     },
+    "calc_odr": {
+      "matlab_fn": "fitting.odrFit (Deming/orthogonal regression: default λ=1, λ=4, λ-from-errors)",
+      "python_fn": "quantized.calc.fit_odr.odr_fit",
+      "note": "closed-form Deming + jackknife SEs; exact match ~1e-14; freeze via freeze_calc_values.m",
+      "rtol": 1e-12,
+      "atol": 1e-12
+    },
     "calc_constraints": {
       "matlab_fn": "fitting.applyConstraints (free params + constraint expressions → full vector)",
       "python_fn": "quantized.calc.fit_constraints.apply_constraints",
