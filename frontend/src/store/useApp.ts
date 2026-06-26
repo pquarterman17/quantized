@@ -44,6 +44,7 @@ interface AppState {
   showLegend: boolean; // show the floating legend overlay
   stackMode: boolean; // multi-panel: one stacked sub-plot per channel
   insetMode: boolean; // show a magnifier inset over the plot
+  polarMode: boolean; // render the active series in polar (angle vs radius)
   xLim: [number, number] | null; // explicit X range (null = autoscale)
   yLim: [number, number] | null; // explicit Y range (null = autoscale)
   xFmt: AxisFormat; // X-axis tick number format
@@ -89,6 +90,7 @@ interface AppState {
   setShowLegend: (showLegend: boolean) => void;
   setStackMode: (stackMode: boolean) => void;
   setInsetMode: (insetMode: boolean) => void;
+  setPolarMode: (polarMode: boolean) => void;
   setXLim: (xLim: [number, number] | null) => void;
   setYLim: (yLim: [number, number] | null) => void;
   setXFmt: (xFmt: AxisFormat) => void;
@@ -174,6 +176,7 @@ export const useApp = create<AppState>((set, get) => ({
   showLegend: true,
   stackMode: false,
   insetMode: false,
+  polarMode: false,
   xLim: null,
   yLim: null,
   xFmt: { mode: "auto", digits: 2 },
@@ -297,6 +300,7 @@ export const useApp = create<AppState>((set, get) => ({
   setShowLegend: (showLegend) => set({ showLegend }),
   setStackMode: (stackMode) => set({ stackMode }),
   setInsetMode: (insetMode) => set({ insetMode }),
+  setPolarMode: (polarMode) => set({ polarMode }),
   setXLim: (xLim) => set({ xLim }),
   setYLim: (yLim) => set({ yLim }),
   setXFmt: (xFmt) => set({ xFmt }),

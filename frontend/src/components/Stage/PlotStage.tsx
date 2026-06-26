@@ -20,6 +20,7 @@ import type { Readout } from "../../lib/uplotPlugins";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import InsetPlot from "./InsetPlot";
 import MultiPanelStage from "./MultiPanelStage";
+import PolarStage from "./PolarStage";
 
 const TOOLS = [
   { id: "zoom", glyph: "⛶", tip: "Box zoom" },
@@ -51,6 +52,8 @@ export default function PlotStage() {
   const setStackMode = useApp((s) => s.setStackMode);
   const insetMode = useApp((s) => s.insetMode);
   const setInsetMode = useApp((s) => s.setInsetMode);
+  const polarMode = useApp((s) => s.polarMode);
+  const setPolarMode = useApp((s) => s.setPolarMode);
   const fitOverlay = useApp((s) => s.fitOverlay);
   const peakOverlay = useApp((s) => s.peakOverlay);
   const baselineOverlay = useApp((s) => s.baselineOverlay);
@@ -158,8 +161,9 @@ export default function PlotStage() {
     exportPlotPng(plotRef.current, `${stem}.png`);
   }
 
-  // Stacked multi-panel view (one panel per channel) when enabled + ≥2 channels.
+  // Alternate render modes (each self-contained; polar wins, then stack).
   const nPlotted = yKeys?.length ?? active?.data.labels.length ?? 0;
+  if (polarMode && active) return <PolarStage />;
   if (stackMode && nPlotted >= 2) return <MultiPanelStage />;
 
   return (
@@ -199,6 +203,13 @@ export default function PlotStage() {
             onClick={() => setInsetMode(!insetMode)}
           >
             ⊕
+          </button>
+          <button
+            className={`qzk-tool-btn${polarMode ? " active" : ""}`}
+            title="Polar plot (angle vs radius)"
+            onClick={() => setPolarMode(true)}
+          >
+            ✺
           </button>
         </div>
       )}
