@@ -73,6 +73,16 @@ def test_interpolate2d_too_few_points() -> None:
         interpolate2d([0.0, 1.0], [0.0, 1.0], [0.0, 1.0], [0.5], [0.5])
 
 
+def test_thinplate_singular_raises_valueerror() -> None:
+    # Collinear data (all points on y = x) makes the thin-plate system singular;
+    # it must surface as a clean ValueError, not an unhandled LinAlgError.
+    x = np.array([0.0, 1.0, 2.0, 3.0])
+    y = np.array([0.0, 1.0, 2.0, 3.0])
+    z = np.array([0.0, 1.0, 4.0, 9.0])
+    with pytest.raises(ValueError, match="singular"):
+        interpolate2d(x, y, z, np.array([1.5]), np.array([1.5]), method="thinplate")
+
+
 def test_regrid2d_shape_and_extent() -> None:
     x = np.array([0.0, 1.0, 0.0, 1.0, 0.5])
     y = np.array([0.0, 0.0, 1.0, 1.0, 0.5])

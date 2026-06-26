@@ -125,7 +125,13 @@ def _interp_thinplate(
     phi[mask] = r2[mask] * np.log(r[mask])
     pmat = np.column_stack([np.ones(n), xv, yv])
     amat = np.block([[phi + lam * np.eye(n), pmat], [pmat.T, np.zeros((3, 3))]])
-    coeff = np.linalg.solve(amat, np.concatenate([zv, np.zeros(3)]))
+    try:
+        coeff = np.linalg.solve(amat, np.concatenate([zv, np.zeros(3)]))
+    except np.linalg.LinAlgError as exc:
+        raise ValueError(
+            "thin-plate spline: data matrix is singular — points are collinear or "
+            "coincident; use a coarser grid or a different interpolation method"
+        ) from exc
     w, a = coeff[:n], coeff[n : n + 3]
 
     zqv = np.empty(xqv.size)
