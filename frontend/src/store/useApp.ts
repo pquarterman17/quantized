@@ -13,6 +13,7 @@ import type {
   FitOverlay,
   PeakOverlay,
   RefLine,
+  RsmPeak,
   SeriesStyle,
 } from "../lib/types";
 
@@ -64,6 +65,7 @@ interface AppState {
   fitOverlay: FitOverlay | null;
   peakOverlay: PeakOverlay | null;
   baselineOverlay: BaselineOverlay | null;
+  rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null; // markers on the 2D map
   status: string;
 
   addDataset: (ds: Dataset) => void;
@@ -109,6 +111,7 @@ interface AppState {
   setFitOverlay: (overlay: FitOverlay | null) => void;
   setPeakOverlay: (overlay: PeakOverlay | null) => void;
   setBaselineOverlay: (overlay: BaselineOverlay | null) => void;
+  setRsmPeaks: (rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null) => void;
   setStatus: (status: string) => void;
 }
 
@@ -188,6 +191,7 @@ export const useApp = create<AppState>((set, get) => ({
   fitOverlay: null,
   peakOverlay: null,
   baselineOverlay: null,
+  rsmPeaks: null,
   status: "starting…",
 
   addDataset: (ds) =>
@@ -223,7 +227,7 @@ export const useApp = create<AppState>((set, get) => ({
     );
   },
   setActive: (id) =>
-    set({ activeId: id, yKeys: null, y2Keys: null, seriesStyles: {}, xLim: null, yLim: null }),
+    set({ activeId: id, yKeys: null, y2Keys: null, seriesStyles: {}, xLim: null, yLim: null, rsmPeaks: null }),
   removeDataset: (id) =>
     set((s) => {
       const datasets = s.datasets.filter((d) => d.id !== id);
@@ -324,6 +328,7 @@ export const useApp = create<AppState>((set, get) => ({
   setFitOverlay: (fitOverlay) => set({ fitOverlay }),
   setPeakOverlay: (peakOverlay) => set({ peakOverlay }),
   setBaselineOverlay: (baselineOverlay) => set({ baselineOverlay }),
+  setRsmPeaks: (rsmPeaks) => set({ rsmPeaks }),
   setStatus: (status) => set({ status }),
 }));
 

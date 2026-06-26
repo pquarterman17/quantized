@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { MapPayload } from "../../lib/mapdata";
-import { fmt, hitTest, minPositive } from "./mapRender";
+import type { RsmPeak } from "../../lib/types";
+import { fmt, hitTest, minPositive, peakMarkerXY } from "./mapRender";
 
 describe("fmt", () => {
   it("trims to <=4 significant figures", () => {
@@ -43,6 +44,31 @@ const P: MapPayload = {
   zMin: 1,
   zMax: 9,
 };
+
+const PEAK: RsmPeak = {
+  rank: 1,
+  classification: "substrate",
+  centre_angle: [30.5, 61.0], // [omega, 2theta]
+  centre_Q: [0.5, 4.0], // [Qx, Qz]
+  fwhm_angle: [0.1, 0.2],
+  fwhm_Q: [0.01, 0.02],
+  amplitude: 100,
+  background: 1,
+};
+
+describe("peakMarkerXY", () => {
+  it("maps to angular axes (2Theta x, Omega y)", () => {
+    expect(peakMarkerXY(PEAK, "2Theta", "Omega")).toEqual([61.0, 30.5]);
+  });
+  it("maps to reciprocal axes (Qx x, Qz y)", () => {
+    expect(peakMarkerXY(PEAK, "Qx", "Qz")).toEqual([0.5, 4.0]);
+  });
+  it("returns null when the chosen space lacks finite coords", () => {
+    const noQ = { ...PEAK, centre_Q: [null, null] as [number | null, number | null] };
+    expect(peakMarkerXY(noQ, "Qx", "Qz")).toBeNull();
+    expect(peakMarkerXY(PEAK, "weird", "Omega")).toBeNull();
+  });
+});
 
 describe("hitTest", () => {
   // For 600×400: plot rect = {x:58, y:14, w:464, h:344}.

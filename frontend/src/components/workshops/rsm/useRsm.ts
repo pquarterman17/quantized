@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 
 import { analyzeRsm, rsmStrain } from "../../../lib/api";
 import type { Dataset, RsmPeak, RsmStrainResponse } from "../../../lib/types";
-import { useActiveDataset } from "../../../store/useApp";
+import { useActiveDataset, useApp } from "../../../store/useApp";
 
 export interface RsmState {
   active: Dataset | null;
@@ -47,6 +47,7 @@ export function strainPair(
 
 export function useRsm(): RsmState {
   const active = useActiveDataset();
+  const setRsmPeaks = useApp((s) => s.setRsmPeaks);
   const isRsm = isRsmDataset(active);
   const [nPeaks, setNPeaks] = useState(2);
   const [peaks, setPeaks] = useState<RsmPeak[] | null>(null);
@@ -69,6 +70,7 @@ export function useRsm(): RsmState {
     try {
       const res = await analyzeRsm({ dataset: active.data, n_peaks: nPeaks });
       setPeaks(res.peaks);
+      setRsmPeaks(res.peaks.length ? { datasetId: active.id, peaks: res.peaks } : null);
       if (res.n_peaks_found === 0) setError("No peaks found above threshold.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "RSM analysis failed");
@@ -99,6 +101,7 @@ export function useRsm(): RsmState {
     setPeaks(null);
     setStrain(null);
     setError(null);
+    setRsmPeaks(null);
   }
 
   return {

@@ -7,6 +7,7 @@
 import { COLORMAPS, type ColormapName, colormapCss, normalize, sampleColormap } from "../../lib/colormap";
 import type { MapPayload } from "../../lib/mapdata";
 import { niceTicks } from "../../lib/ticks";
+import type { RsmPeak } from "../../lib/types";
 
 const MARGIN = { left: 58, right: 78, top: 14, bottom: 42 };
 
@@ -59,6 +60,27 @@ export function hitTest(p: MapPayload, w: number, h: number, px: number, py: num
   return { x, y, z: zGrid[j]?.[i] ?? null };
 }
 
+/** Map an RSM peak to (x, y) in the map's *current* space (angular vs Q),
+ *  chosen by the displayed axis labels. Returns null when the peak lacks finite
+ *  coordinates in that space. centre_angle is `[omega, 2theta]`. */
+export function peakMarkerXY(
+  peak: RsmPeak,
+  xLabel: string,
+  yLabel: string,
+): [number, number] | null {
+  const pick = (label: string): number | null => {
+    if (label === "2Theta") return peak.centre_angle[1];
+    if (label === "Omega") return peak.centre_angle[0];
+    if (label === "Qx") return peak.centre_Q[0];
+    if (label === "Qz") return peak.centre_Q[1];
+    return null;
+  };
+  const x = pick(xLabel);
+  const y = pick(yLabel);
+  if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return [x, y];
+}
+
 /** Smallest strictly-positive finite cell (the log-scale colour floor). */
 export function minPositive(grid: (number | null)[][]): number | null {
   let lo = Infinity;
@@ -76,6 +98,7 @@ export function draw(
   p: MapPayload | null,
   cmap: ColormapName,
   logZ: boolean,
+  peaks: RsmPeak[] | null = null,
 ) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return; // jsdom / headless — nothing to paint
@@ -136,6 +159,49 @@ export function draw(
 
   drawAxes(ctx, p, rect, ink, muted);
   drawColorbar(ctx, p, rect, W, cmap, lo, hi, logZ, ink, muted);
+  if (peaks && peaks.length) drawPeaks(ctx, p, rect, peaks, ink);
+}
+
+function drawPeaks(
+  ctx: CanvasRenderingContext2D,
+  p: MapPayload,
+  rect: { x: number; y: number; w: number; h: number },
+  peaks: RsmPeak[],
+  ink: string,
+) {
+  const xmin = p.xAxis[0];
+  const xmax = p.xAxis[p.xAxis.length - 1];
+  const ymin = p.yAxis[0];
+  const ymax = p.yAxis[p.yAxis.length - 1];
+  ctx.font = "10px 'JetBrains Mono', monospace";
+  for (const peak of peaks) {
+    const xy = peakMarkerXY(peak, p.xLabel, p.yLabel);
+    if (!xy) continue;
+    const [vx, vy] = xy;
+    if (vx < xmin || vx > xmax || vy < ymin || vy > ymax) continue; // off-map
+    const sx = rect.x + ((vx - xmin) / (xmax - xmin)) * rect.w;
+    const sy = rect.y + rect.h - ((vy - ymin) / (ymax - ymin)) * rect.h;
+    // White cross with a dark halo so it reads on any colormap value.
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(0,0,0,0.6)";
+    _cross(ctx, sx, sy, 6);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#fff";
+    _cross(ctx, sx, sy, 6);
+    ctx.fillStyle = ink;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(peak.classification, sx + 8, sy - 2);
+  }
+}
+
+function _cross(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x - r, y);
+  ctx.lineTo(x + r, y);
+  ctx.moveTo(x, y - r);
+  ctx.lineTo(x, y + r);
+  ctx.stroke();
 }
 
 function drawAxes(

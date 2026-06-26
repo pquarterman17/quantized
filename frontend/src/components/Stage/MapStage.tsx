@@ -16,6 +16,7 @@ export default function MapStage() {
   const active = useActiveDataset();
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
+  const rsmPeaks = useApp((s) => s.rsmPeaks);
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [payload, setPayload] = useState<MapPayload | null>(null);
@@ -64,13 +65,15 @@ export default function MapStage() {
     const host = hostRef.current;
     const canvas = canvasRef.current;
     if (!host || !canvas) return;
-    const paint = () => draw(canvas, host, payload, cmap, logZ);
+    // Show peak markers only when they belong to the active dataset.
+    const markers = rsmPeaks && rsmPeaks.datasetId === active?.id ? rsmPeaks.peaks : null;
+    const paint = () => draw(canvas, host, payload, cmap, logZ, markers);
     paint();
     const ro = new ResizeObserver(paint);
     ro.observe(host);
     return () => ro.disconnect();
     // theme/accent in deps so the frame/axis ink recolors from fresh tokens.
-  }, [payload, cmap, logZ, theme, accent]);
+  }, [payload, cmap, logZ, theme, accent, rsmPeaks, active]);
 
   function onMove(ev: React.MouseEvent<HTMLCanvasElement>) {
     if (!payload) return;
