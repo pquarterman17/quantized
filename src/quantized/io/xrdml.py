@@ -17,6 +17,7 @@ when the secondary axis is Omega and a wavelength is present
 
 from __future__ import annotations
 
+import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -119,6 +120,7 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
 
     wavelength = _wavelength(root)
     counting_time = float("nan")
+    counting_times_all: list[float] = []
     intensity_tag = "counts"
     sec_name: str | None = None
     collected: list[_Scan] = []
@@ -132,8 +134,10 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
             continue
 
         ct = _text_float(_find_first(dp, "commonCountingTime"))
-        if np.isnan(counting_time) and not np.isnan(ct):
-            counting_time = ct
+        if not np.isnan(ct):
+            counting_times_all.append(ct)
+            if np.isnan(counting_time):
+                counting_time = ct
 
         counts_elem = _find_first(dp, "counts")
         if counts_elem is None:
@@ -168,6 +172,21 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
 
     if not collected:
         raise ValueError(f"no Completed scan data in {path.name}")
+
+    # Mixed counting times: cps uses the first scan's value (matches MATLAB), so
+    # frames measured at other counting times are scaled incorrectly. Warn, as
+    # MATLAB's parser:importXRDML:mixedCountingTimes does.
+    if intensity == "cps":
+        unique_ct = sorted({round(c, 12) for c in counting_times_all})
+        if len(unique_ct) > 1:
+            ct_str = ", ".join(f"{c:g}" for c in unique_ct)
+            warnings.warn(
+                f"Multi-range file has inconsistent counting times across scans "
+                f"({ct_str} s). cps normalisation uses the first value "
+                f"({counting_time:g} s); intensities from other ranges will be "
+                f"incorrectly scaled.",
+                stacklevel=2,
+            )
 
     if _is_2d(collected, sec_name):
         assert sec_name is not None  # guaranteed by _is_2d

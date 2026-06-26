@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,34 @@ from numpy.testing import assert_allclose
 from quantized.calc.qspace import compute_qspace
 from quantized.io import import_auto
 from quantized.io.xrdml import import_xrdml
+
+
+def _two_scan_xrdml(ct1: float, ct2: float) -> str:
+    """Minimal 1D two-range XRDML (no secondary axis → not RSM) with the given
+    per-scan counting times."""
+    ns = "http://www.xrdml.com/XRDMeasurement/2.1"
+
+    def scan(append: int, tt0: int, tt1: int, ct: float, counts: str) -> str:
+        return (
+            f'<scan appendNumber="{append}" status="Completed"><dataPoints>'
+            f'<positions axis="2Theta" unit="deg">'
+            f"<startPosition>{tt0}</startPosition><endPosition>{tt1}</endPosition>"
+            f"</positions>"
+            f'<commonCountingTime unit="seconds">{ct}</commonCountingTime>'
+            f'<counts unit="counts">{counts}</counts>'
+            f"</dataPoints></scan>"
+        )
+
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<xrdMeasurements xmlns="{ns}" status="Completed">'
+        '<xrdMeasurement measurementType="Scan">'
+        '<usedWavelength intended="K-Alpha 1">'
+        '<kAlpha1 unit="Angstrom">1.5405980</kAlpha1></usedWavelength>'
+        + scan(0, 10, 20, ct1, "10 20 30 40 50")
+        + scan(1, 20, 30, ct2, "60 70 80 90 100")
+        + "</xrdMeasurement></xrdMeasurements>"
+    )
 
 
 @pytest.mark.golden
@@ -107,3 +136,31 @@ def test_rsm_counts_option_skips_cps(fixtures_dir: Path) -> None:
     assert ds.units[2] == "counts"
     grid = ds.column("Intensity").reshape(*ds.metadata["map_shape"])
     assert grid[2].max() == pytest.approx(1036.0)  # raw counts, no /CT
+
+
+# ── mixed counting times (parity with parser:importXRDML:mixedCountingTimes) ──
+def test_mixed_counting_times_warns_for_cps(tmp_path: Path) -> None:
+    p = tmp_path / "mixed_ct.xrdml"
+    p.write_text(_two_scan_xrdml(1.0, 2.0), encoding="utf-8")
+    with pytest.warns(UserWarning, match="inconsistent counting times"):
+        ds = import_xrdml(p, intensity="cps")
+    # cps still normalises by the FIRST counting time (matches MATLAB)
+    assert ds.metadata["counting_time"] == pytest.approx(1.0)
+
+
+def test_mixed_counting_times_silent_for_counts(tmp_path: Path) -> None:
+    p = tmp_path / "mixed_ct.xrdml"
+    p.write_text(_two_scan_xrdml(1.0, 2.0), encoding="utf-8")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        import_xrdml(p, intensity="counts")  # no cps normalisation → no warning
+    assert not any("counting times" in str(w.message) for w in caught)
+
+
+def test_uniform_counting_times_do_not_warn(tmp_path: Path) -> None:
+    p = tmp_path / "uniform_ct.xrdml"
+    p.write_text(_two_scan_xrdml(1.0, 1.0), encoding="utf-8")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        import_xrdml(p, intensity="cps")
+    assert not any("counting times" in str(w.message) for w in caught)
