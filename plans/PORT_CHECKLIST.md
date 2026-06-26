@@ -109,7 +109,9 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
       `calc_odr.json` (3 cases @1e-12, exact ~1e-14)
 
 ### Batch / global
-- [ ] Batch fit — `+fitting/batchFit.m`
+- [x] Batch fit — `+fitting/batchFit.m` → `calc/batch_fit.py` (same model across a
+      dataset series; per-dataset auto-guess, bounds, weights, x-range, metadata
+      trend extraction); golden `calc_batchfit.json` (4 datasets @rtol 1e-6, ~1e-9)
 - [ ] Global / shared-parameter fit — `+fitting/globalFit.m`, `+fitting/globalCurveFit.m`
 - [x] Peak tracking — `+fitting/trackPeak.m` → `calc/peak_track.py` (follow a drifting
       peak across a dataset series; Gaussian/Lorentzian via bounded curve_fit, R²>0.5

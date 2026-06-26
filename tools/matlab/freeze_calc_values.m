@@ -622,6 +622,21 @@ function freeze_calc_values()
             'result', fitting.trackPeak(tpL, 45.0, 'Window', 2, 'Shape', 'lorentzian'))), ...
         fullfile(goldenDir, 'calc_trackpeak.json'));
 
+    % ── fitting.batchFit: same fit across a series of {x,y} datasets ──────
+    xbf = linspace(0, 10, 80).';
+    bfTaus = [1.5, 2.0, 2.8, 3.5];
+    bfData = cell(1, numel(bfTaus));  bfY = cell(1, numel(bfTaus));
+    for bi = 1:numel(bfTaus)
+        yb = 5*exp(-xbf/bfTaus(bi)) + 0.5 + 0.02*sin(3*xbf);
+        bfData{bi} = {xbf, yb};  bfY{bi} = yb.';
+    end
+    bfCat = fitting.models();
+    bfM = bfCat(strcmp({bfCat.name}, 'Exponential Decay'));
+    bfS = fitting.batchFit(bfData, bfM.fcn, bfM.p0, 'Lower', bfM.lb, 'Upper', bfM.ub, ...
+        'ModelName', 'Exponential Decay', 'Verbose', false);
+    writeJson(struct('x', xbf.', 'y', {bfY}, 'p0', bfM.p0, 'lb', bfM.lb, 'ub', bfM.ub, ...
+        'summary', bfS), fullfile(goldenDir, 'calc_batchfit.json'));
+
     % ── baselineALS on a synthetic spectrum (baseline + 2 peaks) ──────────
     xq = linspace(0, 10, 100).';
     yq = 2 + 0.5 * xq + 3 * exp(-((xq - 3) / 0.3).^2) + 2 * exp(-((xq - 7) / 0.4).^2);
