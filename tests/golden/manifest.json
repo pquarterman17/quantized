@@ -154,6 +154,13 @@
       "python_fn": "quantized.io.xrd_csv.format_xrd_csv (fmt=origin, intensity=both, include_metadata=False)",
       "compare": "lines"
     },
+    "calc_globalfit": {
+      "matlab_fn": "fitting.globalFit (3 exp-decay datasets, A free / tau,C shared)",
+      "python_fn": "quantized.calc.global_fit.global_fit",
+      "note": "joint shared-parameter NLLS via curve_fit; params/errors ~1e-9; Inf bounds → null → restore to ±inf; freeze via freeze_calc_values.m",
+      "rtol": 1e-6,
+      "atol": 1e-8
+    },
     "calc_batchfit": {
       "matlab_fn": "fitting.batchFit (Exponential Decay across 4 datasets, auto-guess + bounds)",
       "python_fn": "quantized.calc.batch_fit.batch_fit",

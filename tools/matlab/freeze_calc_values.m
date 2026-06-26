@@ -637,6 +637,22 @@ function freeze_calc_values()
     writeJson(struct('x', xbf.', 'y', {bfY}, 'p0', bfM.p0, 'lb', bfM.lb, 'ub', bfM.ub, ...
         'summary', bfS), fullfile(goldenDir, 'calc_batchfit.json'));
 
+    % ── fitting.globalFit: shared-parameter fit across datasets ───────────
+    gfFcn = @(x,p) p(1).*exp(-x./p(2)) + p(3);   % A free per dataset; tau,C shared
+    xgf = linspace(0, 10, 60).';
+    gfA = [5.0, 3.0, 7.0];  gfTau = 2.5;  gfC = 0.5;
+    gfData = cell(1, 3);  gfY = cell(1, 3);
+    for gi = 1:3
+        yg = gfFcn(xgf, [gfA(gi), gfTau, gfC]) + 0.02*sin(3*xgf);
+        gfData{gi} = {xgf, yg};  gfY{gi} = yg.';
+    end
+    gfShared = [false true true];  gfP0 = [4.0, 2.0, 0.0];
+    gfR = fitting.globalFit(gfData, gfFcn, gfP0, gfShared, ...
+        'Lower', [0 0 -Inf], 'Upper', [Inf Inf Inf], 'Verbose', false);
+    writeJson(struct('x', xgf.', 'y', {gfY}, 'p0', gfP0, 'lb', [0 0 -Inf], ...
+        'ub', [Inf Inf Inf], 'sharedMask', gfShared, 'result', gfR), ...
+        fullfile(goldenDir, 'calc_globalfit.json'));
+
     % ── baselineALS on a synthetic spectrum (baseline + 2 peaks) ──────────
     xq = linspace(0, 10, 100).';
     yq = 2 + 0.5 * xq + 3 * exp(-((xq - 3) / 0.3).^2) + 2 * exp(-((xq - 7) / 0.4).^2);
