@@ -47,3 +47,12 @@ def test_lin_regress_quadratic_order2() -> None:
 def test_lin_regress_too_few_points() -> None:
     with pytest.raises(ValueError, match="at least"):
         lin_regress(np.array([1.0, 2.0]), np.array([1.0, 2.0]), order=1)
+
+
+def test_lin_regress_singular_raises_valueerror() -> None:
+    # All-identical x → constant predictor column → singular normal equations.
+    # Must surface a clean ValueError, not an unguarded LinAlgError (HTTP 500).
+    x = np.array([3.0, 3.0, 3.0, 3.0, 3.0])
+    y = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    with pytest.raises(ValueError, match="singular"):
+        lin_regress(x, y, order=1)

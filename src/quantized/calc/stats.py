@@ -131,7 +131,16 @@ def lin_regress(
     # Vandermonde with increasing powers: columns x^0, x^1, ..., x^order.
     xmat = np.vander(xv, k, increasing=True)
     xtx = xmat.T @ xmat
-    coeffs = np.linalg.solve(xtx, xmat.T @ yv)
+    try:
+        coeffs = np.linalg.solve(xtx, xmat.T @ yv)
+    except np.linalg.LinAlgError as exc:
+        # Singular normal equations: duplicate x-values, a constant predictor, or
+        # collinear columns. MATLAB's backslash returns Inf with a warning; we
+        # surface a clean ValueError instead of an opaque LinAlgError (→ HTTP 422).
+        raise ValueError(
+            f"order-{order} regression is singular — x has too few distinct values "
+            f"or is collinear; use a lower order or more varied x"
+        ) from exc
     y_fit = xmat @ coeffs
     residuals = yv - y_fit
     df = n - k
