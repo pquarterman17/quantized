@@ -59,3 +59,44 @@ def test_empty_input_is_graceful() -> None:
     out = resp.json()
     assert out["peaks"] == []
     assert out["background"] == []
+
+
+def _one_lorentzian() -> tuple[list[float], list[float]]:
+    x = np.linspace(28.0, 32.0, 200)
+    y = 100.0 / (1.0 + 4.0 * ((x - 30.0) / 0.4) ** 2) + 5.0
+    return list(x), list(y)
+
+
+def test_fit_single_peak_endpoint() -> None:
+    x, y = _one_lorentzian()
+    resp = client.post(
+        "/api/peaks/fit",
+        json={"x": x, "y": y, "x_lo": 29.0, "x_hi": 31.0, "seed_center": 30.0},
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["success"] is True
+    assert abs(out["center"] - 30.0) < 1e-4
+    assert out["eta"] is None  # NaN -> null for the non-PV models
+
+
+def test_fit_unknown_model_rejected() -> None:
+    x, y = _one_lorentzian()
+    resp = client.post(
+        "/api/peaks/fit",
+        json={"x": x, "y": y, "x_lo": 29.0, "x_hi": 31.0, "seed_center": 30.0,
+              "model": "Bogus"},
+    )
+    assert resp.status_code == 422
+
+
+def test_fit_reports_failure_reason_without_500() -> None:
+    x, y = _one_lorentzian()
+    resp = client.post(
+        "/api/peaks/fit",
+        json={"x": x, "y": y, "x_lo": 29.99, "x_hi": 30.0, "seed_center": 30.0},
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["success"] is False
+    assert out["reason"] == "window-too-narrow"

@@ -13,6 +13,10 @@ from numpy.typing import NDArray
 
 __all__ = ["pseudo_voigt", "split_pearson_vii", "tch_pseudo_voigt"]
 
+# Parameter vector: a plain sequence or a float ndarray (e.g. straight from an
+# optimizer) — both are unpacked via float(...) so either works at runtime.
+Params = Sequence[float] | NDArray[np.float64]
+
 _LN2 = math.log(2)
 _EPS = float(np.finfo(float).eps)
 
@@ -37,7 +41,7 @@ def pseudo_voigt(
     return height * (eta * lorentz + (1.0 - eta) * gauss) + bg
 
 
-def split_pearson_vii(x: NDArray[np.float64], params: Sequence[float]) -> NDArray[np.float64]:
+def split_pearson_vii(x: NDArray[np.float64], params: Params) -> NDArray[np.float64]:
     """Asymmetric split Pearson VII. params = [H, center, wL, wR, mL, mR, baseline]."""
     height, center, w_l, w_r, m_l, m_r, baseline = (float(p) for p in params)
     if w_l <= 0 or w_r <= 0:
@@ -55,7 +59,7 @@ def split_pearson_vii(x: NDArray[np.float64], params: Sequence[float]) -> NDArra
     return y + baseline
 
 
-def tch_pseudo_voigt(x: NDArray[np.float64], params: Sequence[float]) -> NDArray[np.float64]:
+def tch_pseudo_voigt(x: NDArray[np.float64], params: Params) -> NDArray[np.float64]:
     """Thompson-Cox-Hastings pseudo-Voigt. params = [H, x0, fG, fL, bg]."""
     height, x0, f_g, f_l, bg = (float(p) for p in params)
     f_g, f_l = abs(f_g), abs(f_l)

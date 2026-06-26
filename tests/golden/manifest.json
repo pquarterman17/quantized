@@ -154,6 +154,13 @@
       "python_fn": "quantized.io.xrd_csv.format_xrd_csv (fmt=origin, intensity=both, include_metadata=False)",
       "compare": "lines"
     },
+    "calc_peakfit": {
+      "matlab_fn": "bosonPlotter.peak.fitSinglePeak (5 models on synthetic peaks + tiny perturbation, window [29,31], seed center 30)",
+      "python_fn": "quantized.calc.peak_fit.fit_single_peak",
+      "note": "Nelder-Mead (scipy) vs fminsearch; worst observed rel ~3e-7 on Split-Pearson-VII bg → rtol 1e-5 / atol 1e-6; freeze via freeze_calc_values.m",
+      "rtol": 1e-5,
+      "atol": 1e-6
+    },
     "calc_hysteresis_models": {
       "matlab_fn": "fitting.hysteresisModels() — each model .fcn evaluated at .p0 over H = linspace(-5000, 5000, 40)",
       "python_fn": "quantized.calc.fit_models.evaluate (Hysteresis-category models in fit_models_special)",

@@ -1,6 +1,6 @@
-"""Thin peak-finding route. Wraps ``calc.peaks.find_peaks_robust`` (golden vs
-MATLAB findPeaksRobust): local-maxima + prominence/slope/width/SNR filtering.
-Validate -> call -> serialize the (peaks, background) tuple.
+"""Thin peak routes. ``/find`` wraps ``calc.peaks.find_peaks_robust`` (golden vs
+MATLAB findPeaksRobust); ``/fit`` wraps ``calc.peak_fit.fit_single_peak`` (golden
+vs fitSinglePeak). Validate -> call -> serialize; no business logic here.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from quantized.calc.peak_fit import MODELS, fit_single_peak
 from quantized.calc.peaks import find_peaks_robust
 from quantized.routes._payload import jsonify, to_jsonable
 
@@ -48,3 +49,33 @@ def find(req: FindPeaksRequest) -> dict[str, Any]:
     except (ValueError, IndexError, KeyError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"peaks": to_jsonable(peaks), "background": jsonify(background)}
+
+
+class FitPeakRequest(BaseModel):
+    x: list[float]
+    y: list[float]
+    x_lo: float
+    x_hi: float
+    seed_center: float
+    seed_fwhm: float | None = None
+    model: str = "Lorentzian"
+    snip_bg: list[float] | None = None
+
+
+@router.post("/fit")
+def fit(req: FitPeakRequest) -> dict[str, Any]:
+    """Fit one peak in [x_lo, x_hi] to ``model``; returns the fit result dict."""
+    if req.model not in MODELS:
+        raise HTTPException(status_code=422, detail=f"unknown model: {req.model}")
+    try:
+        result = fit_single_peak(
+            req.x, req.y, req.x_lo, req.x_hi,
+            seed_center=req.seed_center,
+            seed_fwhm=float("nan") if req.seed_fwhm is None else req.seed_fwhm,
+            model=req.model,
+            snip_bg=req.snip_bg,
+        )
+    except (ValueError, IndexError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    out: dict[str, Any] = to_jsonable(result)
+    return out

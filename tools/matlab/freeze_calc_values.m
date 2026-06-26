@@ -543,6 +543,27 @@ function freeze_calc_values()
     writeJson(struct('input', xp, 'params', struct('p', tchParams), 'output', tch.'), ...
         fullfile(goldenDir, 'calc_tchpv.json'));
 
+    % ── fitSinglePeak: one peak per model on synthetic data + tiny perturbation ─
+    % Some utilities.* peak shapes return a row → force column before adding the
+    % column-shaped perturbation, else MATLAB broadcasts to an N×N matrix.
+    xpf = linspace(28, 32, 200).';  pfLo = 29; pfHi = 31;
+    pfSeed = struct('center', 30, 'fwhm', NaN);
+    pfLor = 100 ./ (1 + 4*((xpf-30)/0.4).^2) + 5 + 0.1*sin(3*xpf);  pfLor = pfLor(:);
+    pfGau = 50 .* exp(-4*log(2)*((xpf-30)/0.5).^2) + 2 + 0.1*cos(2*xpf);  pfGau = pfGau(:);
+    pfPV  = utilities.pseudoVoigt(xpf, 30, 0.45, 80, 0.6, 3);  pfPV = pfPV(:) + 0.1*sin(2.5*xpf);
+    pfSPV = utilities.splitPearsonVII(xpf, [90 30 0.2 0.25 1.5 1.5 4]);  pfSPV = pfSPV(:) + 0.05*cos(2*xpf);
+    pfTCH = utilities.tchPseudoVoigt(xpf, [85 30 0.3 0.15 3]);  pfTCH = pfTCH(:) + 0.05*sin(2*xpf);
+    pfDefs = {'Lorentzian', pfLor; 'Gaussian', pfGau; 'Pseudo-Voigt', pfPV; ...
+              'Split Pearson VII', pfSPV; 'TCH-pV', pfTCH};
+    pfCases = cell(size(pfDefs, 1), 1);
+    for pfi = 1:size(pfDefs, 1)
+        pfRes = bosonPlotter.peak.fitSinglePeak(xpf, pfDefs{pfi,2}, pfLo, pfHi, ...
+            pfSeed, pfDefs{pfi,1}, []);
+        pfCases{pfi} = struct('model', pfDefs{pfi,1}, 'y', pfDefs{pfi,2}(:).', 'result', pfRes);
+    end
+    writeJson(struct('x', xpf.', 'xLo', pfLo, 'xHi', pfHi, 'cases', {pfCases}), ...
+        fullfile(goldenDir, 'calc_peakfit.json'));
+
     % ── baselineALS on a synthetic spectrum (baseline + 2 peaks) ──────────
     xq = linspace(0, 10, 100).';
     yq = 2 + 0.5 * xq + 3 * exp(-((xq - 3) / 0.3).^2) + 2 * exp(-((xq - 7) / 0.4).^2);

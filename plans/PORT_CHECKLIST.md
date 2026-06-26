@@ -125,7 +125,11 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [~] Surface (2D) fit / models / auto-guess — `+fitting/{surfaceFit,surfaceModels,surfaceAutoGuess}.m` — **all three ported.** `calc/surface_models` (Plane/Paraboloid/2D Gaussian/Lorentzian/Pseudo-Voigt/Polynomial 2D/Exponential Decay 2D — pure `z=f(p,x,y)` registry). `calc/surface_fit.surface_fit` replicates MATLAB's idiosyncratic method (bounded→unbounded param transform + Nelder-Mead `fminsearch` + numerical-Hessian errors); `surface_auto_guess` (linear models → normal equations; peak models → z-range amplitude + weighted centroid + range/4 widths) supplies a default `p0`. Verified by synthetic recovery (`test_calc_surface_fit.py`, `test_calc_surface_models.py`); exact MATLAB parity (golden) pending. **Remaining:** `rsmAnalyze` (2D peak extraction from the map → `surface_fit` → `rsm_strain`) is the last piece; only the golden freezes need a MATLAB run.
 
 ### Peak fitting (BosonPlotter Peak workshop)
-- [ ] Lorentzian peak fit, auto-find, multi-peak, constrained widths — `+bosonPlotter/+peak/`
+- [x] Single-peak fit (Lorentzian/Gaussian/Pseudo-Voigt/Split-Pearson-VII/TCH-pV)
+      + peak de-duplication — `+bosonPlotter/+peak/{fitSinglePeak,deduplicatePeaks}.m`
+      → `calc/peak_fit.py` + `/api/peaks/fit`; golden `calc_peakfit.json` (rtol 1e-5)
+- [x] Auto-find peaks — `utilities.findPeaksRobust` → `calc/peaks.py` (golden)
+- [ ] Multi-peak simultaneous fit + constrained/linked widths — `+bosonPlotter/+peak/{evalMultiPeak,evalMultiPeakPV}.m`, `PeakWorkshopModel.m`
 
 ### Hysteresis (BosonPlotter Hysteresis workshop)
 - [x] Hysteresis models — `+fitting/hysteresisModels.m` → `calc/fit_models_special.py`
