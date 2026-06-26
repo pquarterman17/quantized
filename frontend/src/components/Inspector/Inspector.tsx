@@ -1,5 +1,5 @@
-// Right panel: stacked Cards. Metadata + Corrections + Axes + Appearance are
-// wired; Corrections posts to /api/corrections/apply via the store.
+// Right panel: stacked collapsible Cards (start collapsed). Corrections posts to
+// /api/corrections/apply via the store. Appearance lives in the title-bar menu.
 
 import AnnotationsCard from "./AnnotationsCard";
 import AxisLimits from "./AxisLimits";
@@ -9,19 +9,8 @@ import RefLinesCard from "./RefLinesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
 import StatsCard from "./StatsCard";
 import TickFormat from "./TickFormat";
-import { Card, MetaRow, Select } from "../primitives";
-import {
-  type Accent,
-  type Density,
-  type Theme,
-  useActiveDataset,
-  useApp,
-} from "../../store/useApp";
-
-const THEMES: Theme[] = ["dark", "light"];
-const ACCENTS: Accent[] = ["violet", "teal", "ocean", "amber", "rose"];
-const DENSITIES: Density[] = ["compact", "regular", "comfy"];
-const opts = (xs: string[]) => xs.map((v) => ({ value: v, label: v }));
+import { Card, MetaRow } from "../primitives";
+import { useActiveDataset, useApp } from "../../store/useApp";
 
 export default function Inspector() {
   const active = useActiveDataset();
@@ -33,16 +22,10 @@ export default function Inspector() {
   const setShowGrid = useApp((s) => s.setShowGrid);
   const showLegend = useApp((s) => s.showLegend);
   const setShowLegend = useApp((s) => s.setShowLegend);
-  const theme = useApp((s) => s.theme);
-  const setTheme = useApp((s) => s.setTheme);
-  const accent = useApp((s) => s.accent);
-  const setAccent = useApp((s) => s.setAccent);
-  const density = useApp((s) => s.density);
-  const setDensity = useApp((s) => s.setDensity);
 
   return (
     <aside className="qzk-inspector">
-      <Card title="Scan metadata">
+      <Card title="Scan metadata" defaultOpen={false}>
         {active ? (
           <>
             <MetaRow label="Name" value={active.name} title={active.name} />
@@ -61,7 +44,7 @@ export default function Inspector() {
 
       <StatsCard active={active} />
 
-      <Card title="Axes">
+      <Card title="Axes" defaultOpen={false}>
         <label className="qz-check">
           <input
             type="checkbox"
@@ -103,31 +86,6 @@ export default function Inspector() {
       <AnnotationsCard />
 
       <SeriesStyleCard active={active} />
-
-      <Card title="Appearance">
-        <label className="qzk-field-lbl">Theme</label>
-        <Select
-          options={opts(THEMES)}
-          value={theme}
-          onChange={(e) => setTheme(e.target.value as Theme)}
-        />
-        <label className="qzk-field-lbl" style={{ marginTop: 8 }}>
-          Accent
-        </label>
-        <Select
-          options={opts(ACCENTS)}
-          value={accent}
-          onChange={(e) => setAccent(e.target.value as Accent)}
-        />
-        <label className="qzk-field-lbl" style={{ marginTop: 8 }}>
-          Density
-        </label>
-        <Select
-          options={opts(DENSITIES)}
-          value={density}
-          onChange={(e) => setDensity(e.target.value as Density)}
-        />
-      </Card>
     </aside>
   );
 }

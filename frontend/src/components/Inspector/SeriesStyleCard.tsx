@@ -149,7 +149,7 @@ export default function SeriesStyleCard({ active }: { active: Dataset | null }) 
   if (!active || active.data.labels.length === 0) return null;
 
   return (
-    <Card title="Series style" count={styled || undefined}>
+    <Card title="Series style" count={styled || undefined} defaultOpen={false}>
       {active.data.labels.map((lab, i) => (
         <StyleRow key={i} channel={i} label={lab} />
       ))}

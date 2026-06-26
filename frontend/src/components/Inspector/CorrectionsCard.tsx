@@ -99,7 +99,7 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
 
   if (!active) {
     return (
-      <Card title="Corrections">
+      <Card title="Corrections" defaultOpen={false}>
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           Add a dataset to apply corrections.
         </div>
@@ -121,7 +121,7 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
   };
 
   return (
-    <Card title="Corrections">
+    <Card title="Corrections" defaultOpen={false}>
       <Field label="X offset">
         <NumberField value={form.xOff} placeholder="0" onChange={(v) => upd("xOff", v)} />
       </Field>

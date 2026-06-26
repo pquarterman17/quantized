@@ -48,7 +48,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   };
 
   return (
-    <Card title="Channels">
+    <Card title="Channels" defaultOpen={false}>
       {labels.map((lab, i) => {
         const visible = selected.includes(i);
         return (

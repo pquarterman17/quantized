@@ -2,6 +2,7 @@
 // Native window owns OS chrome (no traffic-light dots), matching fermiviewer.
 
 import { useActiveDataset, useApp } from "../../store/useApp";
+import AppearanceMenu from "./AppearanceMenu";
 
 export default function TitleBar() {
   const active = useActiveDataset();
@@ -34,6 +35,7 @@ export default function TitleBar() {
         >
           {theme === "dark" ? "☾" : "☀"}
         </button>
+        <AppearanceMenu />
         <button className="qz-icon-btn" title="Toggle library" onClick={toggleLeft}>
           ▤
         </button>

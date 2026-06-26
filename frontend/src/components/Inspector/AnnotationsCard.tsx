@@ -27,7 +27,7 @@ export default function AnnotationsCard() {
   };
 
   return (
-    <Card title="Annotations" count={annotations.length || undefined}>
+    <Card title="Annotations" count={annotations.length || undefined} defaultOpen={false}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <NumberField value={x} width={56} placeholder="X" onChange={setX} />
         <NumberField value={y} width={56} placeholder="Y" onChange={setY} />

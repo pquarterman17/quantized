@@ -43,11 +43,14 @@ export default function StatsCard({ active }: { active: Dataset | null }) {
   const channel = active?.data.labels[0] ?? "—";
 
   return (
-    <Card title="Statistics">
+    <Card title="Channel statistics" defaultOpen={false}>
       {!active && <MetaRow label="—" value="no dataset" />}
       {active && error && <MetaRow label="—" value="unavailable offline" />}
       {active && !error && (
         <>
+          <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", marginBottom: 4 }}>
+            Summary of the first channel's values.
+          </div>
           <MetaRow label="Channel" value={channel} title={channel} />
           {ROWS.map(([label, key]) => (
             <MetaRow key={key} label={label} value={stats ? fmtNum(stats[key]) : "…"} />

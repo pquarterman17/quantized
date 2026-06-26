@@ -21,7 +21,7 @@ export default function RefLinesCard() {
   };
 
   return (
-    <Card title="Reference lines" count={refLines.length || undefined}>
+    <Card title="Reference lines" count={refLines.length || undefined} defaultOpen={false}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <SegmentedControl<"x" | "y">
           options={[
