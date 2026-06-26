@@ -21,6 +21,7 @@ import MagToolsPanel from "./components/workshops/magtools/MagToolsPanel";
 import PeaksPanel from "./components/workshops/peaks/PeaksPanel";
 import ReflectivityPanel from "./components/workshops/reflectivity/ReflectivityPanel";
 import RsmPanel from "./components/workshops/rsm/RsmPanel";
+import DigitizerView from "./components/workshops/digitizer/DigitizerView";
 import {
   exportConsolidated,
   exportFigure,
@@ -64,6 +65,7 @@ export default function App() {
   const baselineOpen = useApp((s) => s.baselineOpen);
   const calculatorsOpen = useApp((s) => s.calculatorsOpen);
   const rsmOpen = useApp((s) => s.rsmOpen);
+  const digitizerOpen = useApp((s) => s.digitizerOpen);
   const magToolsOpen = useApp((s) => s.magToolsOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
@@ -217,6 +219,12 @@ export default function App() {
         run: () => s().setRsmOpen(true),
       },
       {
+        id: "digitizer",
+        group: "Analyze",
+        label: "Graph digitizer (trace a curve from an image)…",
+        run: () => s().setDigitizerOpen(true),
+      },
+      {
         id: "export-csv",
         group: "File",
         label: "Export XRD CSV…",
@@ -361,6 +369,7 @@ export default function App() {
       {calculatorsOpen && <CalculatorsPanel />}
       {magToolsOpen && <MagToolsPanel />}
       {rsmOpen && <RsmPanel />}
+      {digitizerOpen && <DigitizerView />}
     </div>
   );
 }
