@@ -154,6 +154,13 @@
       "python_fn": "quantized.io.xrd_csv.format_xrd_csv (fmt=origin, intensity=both, include_metadata=False)",
       "compare": "lines"
     },
+    "calc_constraints": {
+      "matlab_fn": "fitting.applyConstraints (free params + constraint expressions → full vector)",
+      "python_fn": "quantized.calc.fit_constraints.apply_constraints",
+      "note": "exact (deterministic string→value); 5 cases incl. named refs, math fns, and the reindexed double-replacement quirk (faithful to MATLAB); freeze via freeze_calc_values.m",
+      "rtol": 1e-12,
+      "atol": 1e-12
+    },
     "calc_multipeak": {
       "matlab_fn": "bosonPlotter.peak.{evalMultiPeak,evalMultiPeakPV} (sum of peaks + linear bg)",
       "python_fn": "quantized.calc.peak_fit.{eval_multi_peak,eval_multi_peak_pv}",

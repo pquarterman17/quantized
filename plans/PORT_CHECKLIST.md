@@ -100,7 +100,10 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Model registry — `+fitting/models.m` → `calc/fit_models.py` + `calc/fit_models_special.py` — ALL 29 models golden @1e-9 (23 closed-form + 6 helper-based: Langevin/Brillouin/Stoner-Wohlfarth/Debye/Einstein/Debye+Einstein). scipy.quad matches MATLAB integral() to ~1e-15 for Debye/Einstein; reuses peakshapes.pseudo_voigt
 - [x] Equation parser (no eval) — `+fitting/parseEquation.m` → `calc/fit_equation.py` — golden (5 equations: funcs/powers/unary-minus/multi-param; param-name order + values). Shunting-yard → RPN, interpreted on a stack (NO eval/exec — safer than MATLAB's str2func)
 - [x] Auto-guess — `+fitting/autoGuess.m` → `calc/fit_autoguess.py` — golden (all 29 models' initial-param guesses @1e-9). **MATLAB bug #4 found+fixed** (agent fd11792): autoGuess used Statistics-Toolbox `range()` → uncallable on base MATLAB; replaced with max-min. Port uses np.ptp.
-- [ ] Constraints — `+fitting/applyConstraints.m`
+- [x] Constraints — `+fitting/applyConstraints.m` → `calc/fit_constraints.py` — golden
+      `calc_constraints.json` (5 cases @1e-12: positional/named refs, math fns, error
+      paths). Faithfully reproduces MATLAB's two-pass rewrite incl. the reindexed
+      double-replacement quirk (uses the no-eval parse_equation, appearance-order pN)
 - [ ] ODR (orthogonal distance regression) — `+fitting/odrFit.m`
 
 ### Batch / global

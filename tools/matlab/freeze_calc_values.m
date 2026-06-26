@@ -577,6 +577,23 @@ function freeze_calc_values()
             'y', bosonPlotter.peak.evalMultiPeakPV(mpPV, xmp, 2).')), ...
         fullfile(goldenDir, 'calc_multipeak.json'));
 
+    % ── fitting.applyConstraints: expand free params via constraint exprs ──
+    acDefs = {
+        {3.5},  {'', '2*p1'},             {'a','b'};
+        {1, 2}, {'', '', 'p1 + p2'},      {'a','b','c'};
+        {2, 5}, {'', '', 'a + 2*tau'},    {'a','tau','C'};
+        {2, 3}, {'b + c', '', ''},        {'a','b','c'};
+        {9, 1}, {'', '', 'sqrt(p1) + 1'}, {'a','b','c'};
+    };
+    acCases = cell(size(acDefs, 1), 1);
+    for aci = 1:size(acDefs, 1)
+        acPFree = cell2mat(acDefs{aci, 1});
+        [acFull, acFree] = fitting.applyConstraints(acPFree, acDefs{aci, 2}, acDefs{aci, 3});
+        acCases{aci} = struct('pFree', acPFree, 'constraints', {acDefs{aci, 2}}, ...
+            'names', {acDefs{aci, 3}}, 'pFull', acFull, 'freeIdx', acFree);
+    end
+    writeJson(struct('cases', {acCases}), fullfile(goldenDir, 'calc_constraints.json'));
+
     % ── baselineALS on a synthetic spectrum (baseline + 2 peaks) ──────────
     xq = linspace(0, 10, 100).';
     yq = 2 + 0.5 * xq + 3 * exp(-((xq - 3) / 0.3).^2) + 2 * exp(-((xq - 7) / 0.4).^2);
