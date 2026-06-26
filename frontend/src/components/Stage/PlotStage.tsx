@@ -18,6 +18,7 @@ import { exportPlotPng } from "../../lib/plotExport";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotPlugins";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import InsetPlot from "./InsetPlot";
 import MultiPanelStage from "./MultiPanelStage";
 
 const TOOLS = [
@@ -48,6 +49,8 @@ export default function PlotStage() {
   const setPlotTool = useApp((s) => s.setPlotTool);
   const stackMode = useApp((s) => s.stackMode);
   const setStackMode = useApp((s) => s.setStackMode);
+  const insetMode = useApp((s) => s.insetMode);
+  const setInsetMode = useApp((s) => s.setInsetMode);
   const fitOverlay = useApp((s) => s.fitOverlay);
   const peakOverlay = useApp((s) => s.peakOverlay);
   const baselineOverlay = useApp((s) => s.baselineOverlay);
@@ -190,7 +193,18 @@ export default function PlotStage() {
           >
             ▤
           </button>
+          <button
+            className={`qzk-tool-btn${insetMode ? " active" : ""}`}
+            title="Magnifier inset"
+            onClick={() => setInsetMode(!insetMode)}
+          >
+            ⊕
+          </button>
         </div>
+      )}
+
+      {insetMode && displayPayload && (
+        <InsetPlot payload={displayPayload} styleList={styleList} />
       )}
 
       {!active && (

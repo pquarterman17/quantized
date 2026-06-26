@@ -43,6 +43,7 @@ interface AppState {
   showGrid: boolean; // draw the plot grid lines
   showLegend: boolean; // show the floating legend overlay
   stackMode: boolean; // multi-panel: one stacked sub-plot per channel
+  insetMode: boolean; // show a magnifier inset over the plot
   xLim: [number, number] | null; // explicit X range (null = autoscale)
   yLim: [number, number] | null; // explicit Y range (null = autoscale)
   xFmt: AxisFormat; // X-axis tick number format
@@ -87,6 +88,7 @@ interface AppState {
   setShowGrid: (showGrid: boolean) => void;
   setShowLegend: (showLegend: boolean) => void;
   setStackMode: (stackMode: boolean) => void;
+  setInsetMode: (insetMode: boolean) => void;
   setXLim: (xLim: [number, number] | null) => void;
   setYLim: (yLim: [number, number] | null) => void;
   setXFmt: (xFmt: AxisFormat) => void;
@@ -171,6 +173,7 @@ export const useApp = create<AppState>((set, get) => ({
   showGrid: true,
   showLegend: true,
   stackMode: false,
+  insetMode: false,
   xLim: null,
   yLim: null,
   xFmt: { mode: "auto", digits: 2 },
@@ -293,6 +296,7 @@ export const useApp = create<AppState>((set, get) => ({
   setShowGrid: (showGrid) => set({ showGrid }),
   setShowLegend: (showLegend) => set({ showLegend }),
   setStackMode: (stackMode) => set({ stackMode }),
+  setInsetMode: (insetMode) => set({ insetMode }),
   setXLim: (xLim) => set({ xLim }),
   setYLim: (yLim) => set({ yLim }),
   setXFmt: (xFmt) => set({ xFmt }),
