@@ -51,12 +51,22 @@ def test_registry_sniffs_qd_dat(fixtures_dir: Path) -> None:
 
 
 @pytest.mark.golden
-def test_mpms_matches_matlab(
+def test_mpms_empty_moment_falls_back_to_dc(
     fixtures_dir: Path,
-    assert_golden: Callable[..., None],
+    load_golden: Callable[[str], dict[str, Any]],
 ) -> None:
+    """mpms_mvst.dat is an MPMS3 file: the legacy "Moment" column is empty, so we
+    fall back to "DC Moment Free Ctr" with real data. (MATLAB importMPMS lacks
+    this — its frozen golden has an all-null Moment, a latent bug; we keep the
+    Temperature/x parity from that golden but assert the corrected y.)"""
     ds = import_mpms(fixtures_dir / "mpms_mvst.dat")
-    assert_golden(ds, "mpms_mvst_default.json")
+    ref = load_golden("mpms_mvst_default.json")
+    # Temperature (x) is read correctly by MATLAB -> keep that parity.
+    assert_allclose(ds.time, np.asarray(ref["time"], dtype=float), rtol=1e-9, atol=1e-9)
+    # The empty Moment column is replaced by the populated DC-moment column.
+    assert ds.labels == ("DC Moment Free Ctr",)
+    assert ds.units == ("emu",)
+    assert np.isfinite(ds.values[:, 0]).all()
 
 
 def test_mpms_defaults_temp_dcmoment(fixtures_dir: Path) -> None:

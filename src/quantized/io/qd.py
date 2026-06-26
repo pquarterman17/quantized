@@ -58,6 +58,39 @@ def _to_float(token: str) -> float:
         return float("nan")
 
 
+# MPMS3 ``.dat`` files leave the legacy "Moment" column blank and write the
+# signal to "DC Moment Free Ctr" / "DC Moment Fixed Ctr". When the resolved
+# Moment column is entirely empty, fall back to a populated DC-moment column so
+# the data actually plots. (MATLAB importQDVSM lacks this — MPMS3 M(H)/M(T) files
+# import there but the Moment trace is all-NaN; this is a deliberate improvement.)
+_DC_MOMENT_FALLBACKS = ("DC Moment Free Ctr", "DC Moment Fixed Ctr")
+
+
+def _first_populated(
+    col_names: Sequence[str], matrix: np.ndarray, candidates: Sequence[str]
+) -> int | None:
+    for name in candidates:
+        if name in col_names:
+            i = list(col_names).index(name)
+            if i < matrix.shape[1] and np.isfinite(matrix[:, i]).any():
+                return i
+    return None
+
+
+def _apply_moment_fallback(
+    col_names: Sequence[str], matrix: np.ndarray, y_idx: list[int]
+) -> list[int]:
+    """Swap an all-empty 'Moment' column for a populated DC-moment column."""
+    out: list[int] = []
+    for idx in y_idx:
+        if col_names[idx] == "Moment" and not np.isfinite(matrix[:, idx]).any():
+            fb = _first_populated(col_names, matrix, _DC_MOMENT_FALLBACKS)
+            out.append(fb if fb is not None else idx)
+        else:
+            out.append(idx)
+    return out
+
+
 def import_qd_vsm(
     filepath: str | Path,
     *,
@@ -89,6 +122,7 @@ def import_qd_vsm(
         y_idx = [resolve_column(s, col_names, _QD_SHORTHAND, "y-axis") for s in specs]
     if not y_idx:
         raise ValueError("no valid data columns resolved")
+    y_idx = _apply_moment_fallback(col_names, matrix, y_idx)
 
     metadata: dict[str, Any] = {
         "source": str(path),
@@ -263,6 +297,7 @@ def import_ppms(
         y_idx = [resolve_column(s, col_names, _QD_SHORTHAND, "y-axis") for s in specs]
     if not y_idx:
         raise ValueError("no valid data columns resolved")
+    y_idx = _apply_moment_fallback(col_names, matrix, y_idx)
 
     metadata: dict[str, Any] = {
         "source": str(path),
