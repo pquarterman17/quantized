@@ -106,7 +106,7 @@ describe("Worksheet row filter", () => {
     fireEvent.click(screen.getByRole("button", { name: /Extract/ }));
     const ds = useApp.getState().datasets;
     expect(ds).toHaveLength(2);
-    expect(ds[1].name).toBe("scan (filtered)");
+    expect(ds[1].name).toBe("scan (subset)");
     expect(ds[1].data.time).toEqual([2]);
     expect(ds[1].data.values).toEqual([[40, 50]]);
   });
@@ -116,5 +116,47 @@ describe("Worksheet row filter", () => {
     applyFilter("-1", "1.5", "between"); // x between 1.5 and …
     fireEvent.change(screen.getByLabelText("filter value upper"), { target: { value: "2.5" } });
     expect(screen.getByText("1 of 3 rows")).toBeInTheDocument(); // only x=2
+  });
+});
+
+describe("Worksheet row masking", () => {
+  it("keeps a masked row visible but flags the masked count", () => {
+    render(<Worksheet />);
+    fireEvent.click(screen.getByText("2")); // mask row index 1 (row number "2")
+    expect(screen.getByText("40.0000")).toBeInTheDocument(); // still rendered (greyed)
+    expect(screen.getByText(/1 masked/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Unmask/ })).toBeInTheDocument();
+  });
+
+  it("excludes masked rows from the descriptive-stats subset", async () => {
+    render(<Worksheet />);
+    fireEvent.click(screen.getByRole("button", { name: /Stats/ }));
+    fireEvent.click(screen.getByText("2")); // mask row index 1 → leaves rows 0,2
+    await waitFor(() => expect(statsDescriptive).toHaveBeenCalledWith([10, 11])); // A minus masked
+    expect(statsDescriptive).toHaveBeenCalledWith([1, 3]); // x minus masked
+    expect(statsDescriptive).toHaveBeenCalledWith([20, 12]); // B minus masked
+  });
+
+  it("excludes masked rows from Extract", () => {
+    render(<Worksheet />);
+    fireEvent.click(screen.getByText("2")); // mask row index 1
+    fireEvent.click(screen.getByRole("button", { name: /Extract/ }));
+    const ds = useApp.getState().datasets;
+    expect(ds).toHaveLength(2);
+    expect(ds[1].name).toBe("scan (subset)");
+    expect(ds[1].data.time).toEqual([1, 3]);
+    expect(ds[1].data.values).toEqual([
+      [10, 20],
+      [11, 12],
+    ]);
+  });
+
+  it("unmask restores the full analysis set", () => {
+    render(<Worksheet />);
+    fireEvent.click(screen.getByText("2"));
+    expect(screen.getByText(/1 masked/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Unmask/ }));
+    expect(screen.queryByText(/masked/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Extract/ })).not.toBeInTheDocument();
   });
 });

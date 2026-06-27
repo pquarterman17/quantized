@@ -55,6 +55,13 @@ export default function Worksheet() {
   const [filterOp, setFilterOp] = useState(">");
   const [filterV1, setFilterV1] = useState("");
   const [filterV2, setFilterV2] = useState("");
+  // Masked original-row indices: kept visible (greyed) but excluded from analysis.
+  const [masked, setMasked] = useState<Set<number>>(new Set());
+
+  // Row indices keyed by the source dataset; switching/replacing it invalidates them.
+  useEffect(() => {
+    setMasked(new Set());
+  }, [active]);
 
   // Row indices kept by the filter, in original order (all rows if no/incomplete
   // filter). The view, the stats subset, and "Extract" all derive from this.
@@ -87,9 +94,16 @@ export default function Worksheet() {
     });
   }, [active, filtered, sort]);
 
+  // The analysis set = filtered rows minus masked rows. Stats + Extract use this;
+  // the displayed table still shows masked rows (greyed) for context.
+  const analysisRows = useMemo(
+    () => filtered.filter((r) => !masked.has(r)),
+    [filtered, masked],
+  );
+
   // Fetch per-column descriptive stats (golden /api/stats/descriptive) over the
-  // FILTERED rows — independent of the MAX_ROWS display cap and the sort order, so
-  // stats follow the filter but not pagination/ordering.
+  // ANALYSIS rows — independent of the MAX_ROWS display cap and the sort order, so
+  // stats follow filter + mask but not pagination/ordering.
   useEffect(() => {
     if (!showStats || !active) {
       setColStats(null);
@@ -101,8 +115,8 @@ export default function Worksheet() {
     setStatsErr(false);
     const { time, values, labels } = active.data;
     const columns = [
-      filtered.map((r) => time[r]),
-      ...labels.map((_, c) => filtered.map((r) => values[r]?.[c])),
+      analysisRows.map((r) => time[r]),
+      ...labels.map((_, c) => analysisRows.map((r) => values[r]?.[c])),
     ];
     Promise.all(columns.map((col) => statsDescriptive(col)))
       .then((res) => {
@@ -114,7 +128,7 @@ export default function Worksheet() {
     return () => {
       cancelled = true;
     };
-  }, [active, showStats, filtered]);
+  }, [active, showStats, analysisRows]);
 
   if (!active) {
     return (
@@ -128,21 +142,33 @@ export default function Worksheet() {
   const xName = String(metadata?.["x_column_name"] ?? "x");
   const xUnit = String(metadata?.["x_column_unit"] ?? "");
   const filterActive = filtered.length !== time.length;
+  // Extract is meaningful whenever the analysis set differs from the full data
+  // (a filter narrowed it and/or some rows are masked), and isn't empty.
+  const canExtract = analysisRows.length > 0 && analysisRows.length !== time.length;
 
-  // Materialize the filtered rows as a new dataset in the library (plottable,
-  // fittable) — the non-destructive filter made actionable.
-  function extractFiltered() {
-    if (!filterActive) return;
+  const toggleMask = (r: number) =>
+    setMasked((prev) => {
+      const next = new Set(prev);
+      if (next.has(r)) next.delete(r);
+      else next.add(r);
+      return next;
+    });
+  const unmaskAll = () => setMasked(new Set());
+
+  // Materialize the analysis set (filtered minus masked) as a new dataset in the
+  // library (plottable, fittable) — the non-destructive filter/mask made actionable.
+  function extractSubset() {
+    if (!canExtract) return;
     const data: DataStruct = {
-      time: filtered.map((r) => time[r]),
-      values: filtered.map((r) => values[r]),
+      time: analysisRows.map((r) => time[r]),
+      values: analysisRows.map((r) => values[r]),
       labels,
       units,
       metadata,
     };
     const stem = active!.name.replace(/\.[^.]+$/, "");
-    addDataset({ id: `filt-${++_seq}`, name: `${stem} (filtered)`, data });
-    setStatus(`extracted ${filtered.length} of ${time.length} rows`);
+    addDataset({ id: `subset-${++_seq}`, name: `${stem} (subset)`, data });
+    setStatus(`extracted ${analysisRows.length} of ${time.length} rows`);
   }
 
   const toggleSort = (col: number) =>
@@ -221,6 +247,11 @@ export default function Worksheet() {
         >
           Σ Stats
         </button>
+        {masked.size > 0 && (
+          <button className="qz-btn" onClick={unmaskAll} title="Clear all masked rows">
+            Unmask ({masked.size})
+          </button>
+        )}
         <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           vars: {vars}
         </span>
@@ -240,7 +271,9 @@ export default function Worksheet() {
         filterActive={filterActive}
         keptCount={filtered.length}
         totalCount={time.length}
-        onExtract={extractFiltered}
+        maskedCount={masked.size}
+        canExtract={canExtract}
+        onExtract={extractSubset}
       />
       {err && (
         <div className="qzk-ds-meta" style={{ padding: "4px 8px", color: "var(--danger)" }}>
@@ -272,15 +305,25 @@ export default function Worksheet() {
           </tr>
         </thead>
         <tbody>
-          {order.slice(0, MAX_ROWS).map((r) => (
-            <tr key={r}>
-              <td className="rownum">{r + 1}</td>
-              <td>{fmt(time[r])}</td>
-              {labels.map((lab, c) => (
-                <td key={lab}>{fmt(values[r]?.[c])}</td>
-              ))}
-            </tr>
-          ))}
+          {order.slice(0, MAX_ROWS).map((r) => {
+            const isMasked = masked.has(r);
+            return (
+              <tr key={r} style={isMasked ? { opacity: 0.4, textDecoration: "line-through" } : undefined}>
+                <td
+                  className="rownum"
+                  style={{ cursor: "pointer" }}
+                  title={isMasked ? "click to unmask row" : "click to mask row (exclude from stats)"}
+                  onClick={() => toggleMask(r)}
+                >
+                  {r + 1}
+                </td>
+                <td>{fmt(time[r])}</td>
+                {labels.map((lab, c) => (
+                  <td key={lab}>{fmt(values[r]?.[c])}</td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
         {showStats && (
           <tfoot>

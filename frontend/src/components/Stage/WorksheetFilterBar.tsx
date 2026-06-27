@@ -27,6 +27,8 @@ export interface WorksheetFilterBarProps {
   filterActive: boolean;
   keptCount: number;
   totalCount: number;
+  maskedCount: number;
+  canExtract: boolean;
   onExtract: () => void;
 }
 
@@ -34,7 +36,7 @@ export default function WorksheetFilterBar(props: WorksheetFilterBarProps) {
   const {
     xName, labels, filterCol, filterOp, filterV1, filterV2,
     setFilterCol, setFilterOp, setFilterV1, setFilterV2,
-    filterActive, keptCount, totalCount, onExtract,
+    filterActive, keptCount, totalCount, maskedCount, canExtract, onExtract,
   } = props;
 
   return (
@@ -97,13 +99,17 @@ export default function WorksheetFilterBar(props: WorksheetFilterBarProps) {
               style={{ width: 80 }}
             />
           )}
-          <button className="qz-btn" disabled={!filterActive} onClick={onExtract}>
-            Extract →
-          </button>
         </>
+      )}
+      {/* Extract the analysis set — shown whenever a filter or a mask narrows it. */}
+      {canExtract && (
+        <button className="qz-btn" onClick={onExtract}>
+          Extract →
+        </button>
       )}
       <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
         {filterActive ? `${keptCount} of ${totalCount} rows` : `${totalCount} rows`}
+        {maskedCount > 0 ? ` · ${maskedCount} masked` : ""}
       </span>
     </div>
   );
