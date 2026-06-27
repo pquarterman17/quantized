@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 
 import { convertUnits, crystalDSpacing, getConstants, xrayCalc } from "../../../lib/api";
 
-export type CalcTab = "units" | "constants" | "xray" | "crystal";
+export type CalcTab = "units" | "constants" | "xray" | "crystal" | "elements";
 
 /** Crystal systems for the d-spacing calculator + the lattice params (beyond `a`)
  *  each one needs shown in the form. */
