@@ -19,6 +19,7 @@ from quantized import __version__
 from quantized.routes import (
     baseline,
     corrections,
+    crystallography,
     export,
     fitting,
     magnetometry,
@@ -114,6 +115,7 @@ def create_app() -> FastAPI:
     application.include_router(reflectivity.router)
     application.include_router(rsm.router)
     application.include_router(xray.router)
+    application.include_router(crystallography.router)
 
     # Client-presence WebSocket (registered before the SPA mount so the
     # catch-all StaticFiles route never shadows it).

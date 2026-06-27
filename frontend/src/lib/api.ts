@@ -282,6 +282,19 @@ export function xrayCalc(
   return postJSON("/api/xray/calc", { mode, wavelength, value, n });
 }
 
+/** Interplanar d-spacing from lattice params + Miller indices (calc.crystallography). */
+export function crystalDSpacing(body: {
+  system: string;
+  a: number;
+  b: number;
+  c: number;
+  h: number;
+  k: number;
+  l: number;
+}): Promise<{ d: number; system: string }> {
+  return postJSON("/api/crystallography/dspacing", body);
+}
+
 // ── Export (file downloads) ─────────────────────────────────────────────────
 /** Export XRD data as CSV / Origin ASCII; triggers a browser download. */
 export function exportXrdCsv(body: {

@@ -45,6 +45,13 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# Miller indices are conventionally named h, k, l — `l` is unavoidable and clear
+# in crystallographic context (E741 "ambiguous variable name").
+"src/quantized/calc/crystallography.py" = ["E741"]
+"src/quantized/routes/crystallography.py" = ["E741"]
+"tests/test_crystallography.py" = ["E741"]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true

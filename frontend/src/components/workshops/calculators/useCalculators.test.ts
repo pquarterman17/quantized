@@ -1,13 +1,14 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { convertUnits, getConstants, xrayCalc } from "../../../lib/api";
+import { convertUnits, crystalDSpacing, getConstants, xrayCalc } from "../../../lib/api";
 import { useCalculators } from "./useCalculators";
 
 vi.mock("../../../lib/api", () => ({
   convertUnits: vi.fn(),
   getConstants: vi.fn(),
   xrayCalc: vi.fn(),
+  crystalDSpacing: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -110,5 +111,40 @@ describe("useCalculators", () => {
     });
     expect(result.current.xrayError).toContain("inaccessible");
     expect(result.current.xrayResult).toBeNull();
+  });
+
+  it("computes a d-spacing from lattice params + Miller indices", async () => {
+    vi.mocked(crystalDSpacing).mockResolvedValue({ d: 3.1356, system: "cubic" });
+    const { result } = renderHook(() => useCalculators());
+
+    await act(async () => {
+      await result.current.crCompute();
+    });
+
+    // defaults: cubic, a=5.4309, (111).
+    expect(crystalDSpacing).toHaveBeenCalledWith({
+      system: "cubic", a: 5.4309, b: 5.4309, c: 5.4309, h: 1, k: 1, l: 1,
+    });
+    expect(result.current.crResult?.d).toBeCloseTo(3.1356, 4);
+    expect(result.current.crError).toBeNull();
+  });
+
+  it("updCrystal patches the form and switches system", () => {
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.updCrystal({ system: "hexagonal", a: "2.46", c: "6.70" }));
+    expect(result.current.crystal.system).toBe("hexagonal");
+    expect(result.current.crystal.a).toBe("2.46");
+    expect(result.current.crystal.c).toBe("6.70");
+  });
+
+  it("surfaces a zero-hkl error from the backend", async () => {
+    vi.mocked(crystalDSpacing).mockRejectedValue(new Error("must not all be zero"));
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.updCrystal({ h: "0", k: "0", l: "0" }));
+    await act(async () => {
+      await result.current.crCompute();
+    });
+    expect(result.current.crError).toContain("zero");
+    expect(result.current.crResult).toBeNull();
   });
 });

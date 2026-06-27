@@ -5,9 +5,28 @@
 
 import { useEffect, useState } from "react";
 
-import { convertUnits, getConstants, xrayCalc } from "../../../lib/api";
+import { convertUnits, crystalDSpacing, getConstants, xrayCalc } from "../../../lib/api";
 
-export type CalcTab = "units" | "constants" | "xray";
+export type CalcTab = "units" | "constants" | "xray" | "crystal";
+
+/** Crystal systems for the d-spacing calculator + the lattice params (beyond `a`)
+ *  each one needs shown in the form. */
+export const CRYSTAL_SYSTEMS: { value: string; label: string; extra: ("b" | "c")[] }[] = [
+  { value: "cubic", label: "Cubic", extra: [] },
+  { value: "tetragonal", label: "Tetragonal", extra: ["c"] },
+  { value: "hexagonal", label: "Hexagonal", extra: ["c"] },
+  { value: "orthorhombic", label: "Orthorhombic", extra: ["b", "c"] },
+];
+
+export interface CrystalForm {
+  system: string;
+  a: string;
+  b: string;
+  c: string;
+  h: string;
+  k: string;
+  l: string;
+}
 
 /** Bragg / Q↔2θ conversions: backend mode + the unit of the value it takes in. */
 export const XRAY_MODES: { value: string; label: string; inUnit: string }[] = [
@@ -72,6 +91,13 @@ export interface CalculatorsState {
   setWavelength: (v: string) => void;
   setXrayValue: (v: string) => void;
   xrayCompute: () => Promise<void>;
+  // Crystallography (d-spacing from lattice + Miller indices)
+  crystal: CrystalForm;
+  crResult: { d: number; system: string } | null;
+  crError: string | null;
+  crBusy: boolean;
+  updCrystal: (patch: Partial<CrystalForm>) => void;
+  crCompute: () => Promise<void>;
 }
 
 export function useCalculators(): CalculatorsState {
@@ -90,6 +116,12 @@ export function useCalculators(): CalculatorsState {
   const [xrayResult, setXrayResult] = useState<XrayResult | null>(null);
   const [xrayError, setXrayError] = useState<string | null>(null);
   const [xrayBusy, setXrayBusy] = useState(false);
+  const [crystal, setCrystal] = useState<CrystalForm>({
+    system: "cubic", a: "5.4309", b: "5.4309", c: "5.4309", h: "1", k: "1", l: "1",
+  });
+  const [crResult, setCrResult] = useState<{ d: number; system: string } | null>(null);
+  const [crError, setCrError] = useState<string | null>(null);
+  const [crBusy, setCrBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -149,6 +181,31 @@ export function useCalculators(): CalculatorsState {
     }
   }
 
+  const updCrystal = (patch: Partial<CrystalForm>): void =>
+    setCrystal((s) => ({ ...s, ...patch }));
+
+  async function crCompute(): Promise<void> {
+    setCrBusy(true);
+    setCrError(null);
+    try {
+      const a = Number(crystal.a);
+      const b = Number(crystal.b);
+      const c = Number(crystal.c);
+      const h = Number(crystal.h);
+      const k = Number(crystal.k);
+      const l = Number(crystal.l);
+      if ([a, b, c, h, k, l].some((v) => !Number.isFinite(v))) {
+        throw new Error("enter numeric lattice parameters and indices");
+      }
+      setCrResult(await crystalDSpacing({ system: crystal.system, a, b, c, h, k, l }));
+    } catch (e) {
+      setCrResult(null);
+      setCrError(e instanceof Error ? e.message : "calculation failed");
+    } finally {
+      setCrBusy(false);
+    }
+  }
+
   return {
     tab,
     setTab,
@@ -175,5 +232,11 @@ export function useCalculators(): CalculatorsState {
     setWavelength,
     setXrayValue,
     xrayCompute,
+    crystal,
+    crResult,
+    crError,
+    crBusy,
+    updCrystal,
+    crCompute,
   };
 }
