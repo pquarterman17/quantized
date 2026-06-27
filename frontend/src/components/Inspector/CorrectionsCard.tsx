@@ -18,6 +18,9 @@ const NORM_METHODS = [
 ];
 const DERIV_MODES = ["None", "dY/dX", "d²Y/dX²", "∫Y dx", "dlog/dlog"];
 const SMOOTH_METHODS = ["moving", "gaussian", "savgol"];
+// interp methods accepted by calc.corrections._interp_zero_fill (0-fill outside).
+const INTERP_METHODS = ["linear", "pchip", "spline"];
+const NO_BG = ""; // "— none —" sentinel for the background-dataset picker
 const opts = (xs: string[]) => xs.map((v) => ({ value: v, label: v }));
 
 interface FormState {
@@ -32,9 +35,12 @@ interface FormState {
   smoothMethod: string;
   normMethod: string;
   derivativeMode: string;
+  bgId: string; // reference-background dataset id ("" = none)
+  bgInterp: string; // interpolation method for the bg subtraction
 }
 
-function initialForm(c: CorrectionParams | undefined): FormState {
+function initialForm(active: Dataset | null): FormState {
+  const c = active?.corrections;
   const s = (v: number | undefined) => (v === undefined ? "" : String(v));
   return {
     xOff: s(c?.xOff),
@@ -48,6 +54,8 @@ function initialForm(c: CorrectionParams | undefined): FormState {
     smoothMethod: c?.smoothMethod ?? "moving",
     normMethod: c?.normMethod ?? "None",
     derivativeMode: c?.derivativeMode ?? "None",
+    bgId: active?.bgRef?.datasetId ?? NO_BG,
+    bgInterp: active?.bgRef?.interp ?? "linear",
   };
 }
 
@@ -91,11 +99,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export default function CorrectionsCard({ active }: { active: Dataset | null }) {
   const applyCorrections = useApp((s) => s.applyCorrections);
   const resetCorrections = useApp((s) => s.resetCorrections);
-  const [form, setForm] = useState<FormState>(() => initialForm(active?.corrections));
+  const datasets = useApp((s) => s.datasets);
+  const [form, setForm] = useState<FormState>(() => initialForm(active));
   const [busy, setBusy] = useState(false);
 
   const upd = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
+
+  // Other loaded datasets can serve as a reference background to subtract.
+  const bgOptions = [
+    { value: NO_BG, label: "— none —" },
+    ...datasets
+      .filter((d) => d.id !== active?.id)
+      .map((d) => ({ value: d.id, label: d.name })),
+  ];
 
   if (!active) {
     return (
@@ -110,14 +127,16 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
   const onApply = async () => {
     setBusy(true);
     try {
-      await applyCorrections(active.id, buildParams(form));
+      const bg =
+        form.bgId !== NO_BG ? { datasetId: form.bgId, interp: form.bgInterp } : undefined;
+      await applyCorrections(active.id, buildParams(form), bg);
     } finally {
       setBusy(false);
     }
   };
   const onReset = () => {
     resetCorrections(active.id);
-    setForm(initialForm(undefined));
+    setForm(initialForm(null));
   };
 
   return (
@@ -140,6 +159,27 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
       <Field label="Trim max">
         <NumberField value={form.xTrimMax} placeholder="—" onChange={(v) => upd("xTrimMax", v)} />
       </Field>
+
+      {bgOptions.length > 1 && (
+        <>
+          <Field label="Background">
+            <Select
+              options={bgOptions}
+              value={form.bgId}
+              onChange={(e) => upd("bgId", e.target.value)}
+            />
+          </Field>
+          {form.bgId !== NO_BG && (
+            <Field label="Interp">
+              <Select
+                options={opts(INTERP_METHODS)}
+                value={form.bgInterp}
+                onChange={(e) => upd("bgInterp", e.target.value)}
+              />
+            </Field>
+          )}
+        </>
+      )}
 
       <div style={{ marginTop: 8 }}>
         <Checkbox

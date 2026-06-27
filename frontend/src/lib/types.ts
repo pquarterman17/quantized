@@ -72,6 +72,10 @@ export interface Dataset {
   data: DataStruct;
   raw?: DataStruct;
   corrections?: CorrectionParams;
+  /** Reference-background subtraction folded into `corrections`: the picked
+   *  background dataset's id + the interpolation method. Persisted so the
+   *  Corrections card can re-populate and re-apply it reproducibly. */
+  bgRef?: { datasetId: string; interp: string };
 }
 
 /** A registered fit model's metadata (from GET /api/fitting/models). */

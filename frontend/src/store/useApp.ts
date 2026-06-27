@@ -3,6 +3,7 @@
 
 import { create } from "zustand";
 
+import type { CorrectionsRequest } from "../lib/api";
 import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
 import type {
   Annotation,
@@ -80,7 +81,11 @@ interface AppState {
   setActive: (id: string) => void;
   removeDataset: (id: string) => void;
   renameDataset: (id: string, name: string) => void;
-  applyCorrections: (id: string, params: CorrectionParams) => Promise<void>;
+  applyCorrections: (
+    id: string,
+    params: CorrectionParams,
+    bg?: { datasetId: string; interp: string },
+  ) => Promise<void>;
   resetCorrections: (id: string) => void;
   toggleLeft: () => void;
   toggleRight: () => void;
@@ -262,15 +267,29 @@ export const useApp = create<AppState>((set, get) => ({
   // Corrections always apply to the pristine `raw`, never to an already-
   // corrected `data` (the MATLAB pipeline is replace, not accumulate). The
   // first import becomes `raw`; re-applying with new params re-derives `data`.
-  applyCorrections: async (id, params) => {
+  // An optional `bg` picks another loaded dataset as the reference background
+  // (step 4 of the pipeline): we forward its CURRENT `data` + the interp method
+  // so the golden /api/corrections/apply does the interpolated subtraction.
+  applyCorrections: async (id, params, bg) => {
     const ds = get().datasets.find((d) => d.id === id);
     if (!ds) return;
     const raw = ds.raw ?? ds.data;
+    // Resolve the background only if it points at a real, different dataset.
+    const bgDs =
+      bg && bg.datasetId !== id
+        ? get().datasets.find((d) => d.id === bg.datasetId)
+        : undefined;
+    const bgRef = bgDs ? { datasetId: bgDs.id, interp: bg!.interp } : undefined;
+    const req: CorrectionsRequest = { dataset: raw, params };
+    if (bgDs) {
+      req.bg_dataset = bgDs.data;
+      req.bg_interp = bg!.interp;
+    }
     try {
-      const corrected = await applyCorrectionsApi({ dataset: raw, params });
+      const corrected = await applyCorrectionsApi(req);
       set((s) => ({
         datasets: s.datasets.map((d) =>
-          d.id === id ? { ...d, data: corrected, raw, corrections: params } : d,
+          d.id === id ? { ...d, data: corrected, raw, corrections: params, bgRef } : d,
         ),
       }));
     } catch (e) {
@@ -283,7 +302,7 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({
       datasets: s.datasets.map((d) =>
         d.id === id && d.raw
-          ? { ...d, data: d.raw, raw: undefined, corrections: undefined }
+          ? { ...d, data: d.raw, raw: undefined, corrections: undefined, bgRef: undefined }
           : d,
       ),
     })),

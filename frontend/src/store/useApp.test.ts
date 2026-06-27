@@ -68,6 +68,58 @@ describe("useApp corrections", () => {
     expect(ds.data).toEqual(raw); // untouched
     expect(useApp.getState().status).toContain("corrections failed");
   });
+
+  it("forwards a reference-background dataset + interp and records bgRef", async () => {
+    const bg: DataStruct = { ...raw, values: [[1], [1], [1]] };
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...raw, values: [[9], [19], [29]] });
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "x", data: raw },
+        { id: "bg1", name: "bg", data: bg },
+      ],
+      activeId: "d1",
+    });
+
+    await useApp.getState().applyCorrections("d1", { yOff: 0 }, { datasetId: "bg1", interp: "pchip" });
+
+    // The picked dataset's CURRENT data is the reference background (taken as-is).
+    expect(applyCorrectionsApi).toHaveBeenCalledWith({
+      dataset: raw,
+      params: { yOff: 0 },
+      bg_dataset: bg,
+      bg_interp: "pchip",
+    });
+    expect(useApp.getState().datasets[0].bgRef).toEqual({ datasetId: "bg1", interp: "pchip" });
+  });
+
+  it("omits bg when the picked id is the active dataset or does not exist", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(raw);
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1" });
+
+    await useApp.getState().applyCorrections("d1", {}, { datasetId: "d1", interp: "linear" });
+    expect(applyCorrectionsApi).toHaveBeenLastCalledWith({ dataset: raw, params: {} });
+
+    await useApp.getState().applyCorrections("d1", {}, { datasetId: "ghost", interp: "linear" });
+    expect(applyCorrectionsApi).toHaveBeenLastCalledWith({ dataset: raw, params: {} });
+    expect(useApp.getState().datasets[0].bgRef).toBeUndefined();
+  });
+
+  it("reset clears a recorded bgRef along with the corrections", async () => {
+    const bg: DataStruct = { ...raw, values: [[1], [1], [1]] };
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...raw, values: [[9], [19], [29]] });
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "x", data: raw },
+        { id: "bg1", name: "bg", data: bg },
+      ],
+      activeId: "d1",
+    });
+    await useApp.getState().applyCorrections("d1", { yOff: 0 }, { datasetId: "bg1", interp: "linear" });
+    expect(useApp.getState().datasets[0].bgRef).toBeDefined();
+
+    useApp.getState().resetCorrections("d1");
+    expect(useApp.getState().datasets[0].bgRef).toBeUndefined();
+  });
 });
 
 describe("useApp renameDataset", () => {
