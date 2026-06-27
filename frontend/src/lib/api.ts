@@ -192,6 +192,29 @@ export function baselineModPoly(body: {
   return postJSON("/api/baseline/modpoly", body);
 }
 
+/** Fit a polynomial background from a boxed x/y region (BosonPlotter "Fit BG
+ *  from Box"); returns the full-range background + coeffs + region stats. */
+export function baselineRegion(body: {
+  x: number[];
+  y: number[];
+  x_min: number;
+  x_max: number;
+  y_min?: number | null;
+  y_max?: number | null;
+  order?: number;
+}): Promise<{
+  background: (number | null)[];
+  coeffs: number[];
+  n_points: number;
+  mean: number;
+  std: number;
+  min: number;
+  max: number;
+  order: number;
+}> {
+  return postJSON("/api/baseline/region", body);
+}
+
 // ── Stats ───────────────────────────────────────────────────────────────────
 export function statsDescriptive(x: number[]): Promise<CalcResult> {
   return postJSON("/api/stats/descriptive", { x });

@@ -13,19 +13,32 @@ const METHODS: { value: BaselineMethod; label: string }[] = [
   { value: "rollingball", label: "Rolling ball" },
   { value: "modpoly", label: "Modified polynomial" },
   { value: "snip", label: "SNIP" },
+  { value: "region", label: "Fit from region" },
 ];
 
-/** Which param fields each method exposes (label + key + step). */
-const FIELDS: Record<BaselineMethod, { label: string; key: keyof BaselineParams; step?: number }[]> =
-  {
-    als: [
-      { label: "Smoothness λ", key: "lam" },
-      { label: "Asymmetry p", key: "p", step: 0.001 },
-    ],
-    rollingball: [{ label: "Radius", key: "radius" }],
-    modpoly: [{ label: "Poly order", key: "order" }],
-    snip: [{ label: "Window (°)", key: "maxWindowDeg", step: 0.1 }],
-  };
+interface ParamField {
+  label: string;
+  key: keyof BaselineParams;
+  step?: number;
+  allowEmpty?: boolean; // empty input -> NaN (region box edges: NaN = full range)
+  placeholder?: string;
+}
+
+/** Which param fields each method exposes. */
+const FIELDS: Record<BaselineMethod, ParamField[]> = {
+  als: [
+    { label: "Smoothness λ", key: "lam" },
+    { label: "Asymmetry p", key: "p", step: 0.001 },
+  ],
+  rollingball: [{ label: "Radius", key: "radius" }],
+  modpoly: [{ label: "Poly order", key: "order" }],
+  snip: [{ label: "Window (°)", key: "maxWindowDeg", step: 0.1 }],
+  region: [
+    { label: "Box x-min", key: "regionXMin", allowEmpty: true, placeholder: "auto" },
+    { label: "Box x-max", key: "regionXMax", allowEmpty: true, placeholder: "auto" },
+    { label: "Poly order", key: "order" },
+  ],
+};
 
 export default function BaselinePanel() {
   const setOpen = useApp((s) => s.setBaselineOpen);
@@ -61,10 +74,17 @@ export default function BaselinePanel() {
               {f.label}
             </label>
             <NumberField
-              value={params[f.key]}
+              value={Number.isFinite(params[f.key]) ? params[f.key] : ""}
               width={88}
               step={f.step}
-              onChange={(v) => setParams({ [f.key]: Number(v) || 0 })}
+              placeholder={f.placeholder}
+              onChange={(v) => {
+                if (f.allowEmpty && v.trim() === "") {
+                  setParams({ [f.key]: Number.NaN });
+                  return;
+                }
+                setParams({ [f.key]: Number(v) || 0 });
+              }}
             />
           </span>
         ))}

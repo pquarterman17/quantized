@@ -9,23 +9,29 @@ import {
   baselineALS,
   baselineEstimate,
   baselineModPoly,
+  baselineRegion,
   baselineRollingBall,
 } from "../../../lib/api";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
-export type BaselineMethod = "als" | "rollingball" | "modpoly" | "snip";
+export type BaselineMethod = "als" | "rollingball" | "modpoly" | "snip" | "region";
 
 /** Per-method tuning knobs (only the relevant subset is shown for each method). */
 export interface BaselineParams {
   lam: number; // ALS smoothness (λ)
   p: number; // ALS asymmetry
   radius: number; // rolling-ball radius
-  order: number; // modpoly polynomial order
+  order: number; // modpoly / region polynomial order
   maxWindowDeg: number; // SNIP clipping window
+  regionXMin: number; // region: box left edge (NaN -> data min)
+  regionXMax: number; // region: box right edge (NaN -> data max)
 }
 
-const DEFAULTS: BaselineParams = { lam: 1e6, p: 0.01, radius: 100, order: 5, maxWindowDeg: 2.0 };
+const DEFAULTS: BaselineParams = {
+  lam: 1e6, p: 0.01, radius: 100, order: 5, maxWindowDeg: 2.0,
+  regionXMin: Number.NaN, regionXMax: Number.NaN,
+};
 
 let _subCounter = 0;
 
@@ -59,6 +65,16 @@ function callBaseline(
       return baselineModPoly({ y, order: p.order });
     case "snip":
       return baselineEstimate({ x, y, method: "snip" });
+    case "region": {
+      // Default the box to the full x-range; the user narrows it to background-only.
+      const finite = x.filter((v) => Number.isFinite(v));
+      const xMin = Number.isFinite(p.regionXMin) ? p.regionXMin : Math.min(...finite);
+      const xMax = Number.isFinite(p.regionXMax) ? p.regionXMax : Math.max(...finite);
+      // The region endpoint returns the polynomial as `background`; adapt to `baseline`.
+      return baselineRegion({ x, y, x_min: xMin, x_max: xMax, order: p.order }).then((r) => ({
+        baseline: r.background,
+      }));
+    }
   }
 }
 

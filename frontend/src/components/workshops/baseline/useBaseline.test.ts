@@ -5,6 +5,7 @@ import {
   baselineALS,
   baselineEstimate,
   baselineModPoly,
+  baselineRegion,
   baselineRollingBall,
 } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
@@ -15,6 +16,7 @@ vi.mock("../../../lib/api", () => ({
   baselineALS: vi.fn(),
   baselineEstimate: vi.fn(),
   baselineModPoly: vi.fn(),
+  baselineRegion: vi.fn(),
   baselineRollingBall: vi.fn(),
 }));
 
@@ -78,6 +80,42 @@ describe("useBaseline", () => {
       x: [1, 2, 3, 4],
       y: [10, 12, 11, 13],
       method: "snip",
+    });
+  });
+
+  it("region defaults the box to the full x-range when edges are unset", async () => {
+    vi.mocked(baselineRegion).mockResolvedValue({
+      background: [10, 10, 10, 10], coeffs: [0, 10], n_points: 4,
+      mean: 10, std: 0, min: 10, max: 10, order: 1,
+    });
+    const { result } = renderHook(() => useBaseline());
+
+    act(() => result.current.setMethod("region"));
+    await act(async () => {
+      await result.current.compute();
+    });
+
+    expect(baselineRegion).toHaveBeenCalledWith({
+      x: [1, 2, 3, 4], y: [10, 12, 11, 13], x_min: 1, x_max: 4, order: 5,
+    });
+    expect(result.current.baseline).toEqual([10, 10, 10, 10]);
+  });
+
+  it("region uses explicit box edges + order when set", async () => {
+    vi.mocked(baselineRegion).mockResolvedValue({
+      background: [0, 0, 0, 0], coeffs: [0, 0], n_points: 2,
+      mean: 0, std: 0, min: 0, max: 0, order: 2,
+    });
+    const { result } = renderHook(() => useBaseline());
+
+    act(() => result.current.setMethod("region"));
+    act(() => result.current.setParams({ regionXMin: 2, regionXMax: 3, order: 2 }));
+    await act(async () => {
+      await result.current.compute();
+    });
+
+    expect(baselineRegion).toHaveBeenCalledWith({
+      x: [1, 2, 3, 4], y: [10, 12, 11, 13], x_min: 2, x_max: 3, order: 2,
     });
   });
 
