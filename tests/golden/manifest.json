@@ -203,6 +203,13 @@
       "rtol": 1e-9,
       "atol": 1e-9
     },
+    "calc_qspace": {
+      "matlab_fn": "parser.computeQSpace (coplanar RSM Qx/Qz from an omega×2theta grid): theta=2theta/2; Qx=(4pi/lambda)sin(theta)sin(omega-theta); Qz=...cos(...). axis1=omega (N=5), axis2=2theta (M=7), Cu Kalpha1.",
+      "python_fn": "quantized.calc.qspace.compute_qspace",
+      "note": "pure trig; matlab meshgrid(axis2',axis1) → N×M [omega][2theta] grids ≡ python broadcast omega(N,1)×2theta(1,M). N≠M catches an axis swap. Matches ~1e-13. Freeze via freeze_calc_values.m (qspFreeze).",
+      "rtol": 1e-12,
+      "atol": 1e-12
+    },
     "calc_batchfit": {
       "matlab_fn": "fitting.batchFit (Exponential Decay across 4 datasets, auto-guess + bounds)",
       "python_fn": "quantized.calc.batch_fit.batch_fit",

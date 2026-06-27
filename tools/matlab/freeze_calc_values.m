@@ -702,6 +702,9 @@ function freeze_calc_values()
     %   sides to exercise interp1's 0-fill; linear/pchip/spline interp methods.
     writeJson(bgfFreeze(), fullfile(goldenDir, 'calc_bgfromfile.json'));
 
+    % ── Q-space: parser.computeQSpace coplanar RSM Qx/Qz from (omega,2theta) ─
+    writeJson(qspFreeze(), fullfile(goldenDir, 'calc_qspace.json'));
+
     fprintf('Done.\n');
 end
 
@@ -1121,4 +1124,22 @@ function out = bgfFreeze()
             'time', cc.time, 'values', cc.values);  %#ok<AGROW>
     end
     out.cases = cases;
+end
+
+% ════════════════════════════════════════════════════════════════════════
+%  Q-space freeze (parser.computeQSpace: coplanar RSM Qx/Qz)
+% ════════════════════════════════════════════════════════════════════════
+function out = qspFreeze()
+    % Qx = (4pi/lambda) sin(theta) sin(omega-theta); Qz = ... cos(...), with
+    % theta = 2theta/2. axis1 = omega (N×1), axis2 = 2theta (1×M); Qx/Qz are
+    % N×M = [omega][2theta] (kept un-transposed). N != M catches any axis swap;
+    % a Si(004)-ish window around 2theta~69, omega~34.5.
+    map = struct();
+    map.axis1 = linspace(33.5, 35.5, 5).';   % omega, N=5
+    map.axis2 = linspace(68.0, 70.0, 7);     % 2theta, M=7
+    map.intensity = zeros(5, 7);             % present but unused by computeQSpace
+    map.wavelength_A = 1.5405980;            % Cu Kalpha1
+    map = parser.computeQSpace(map);
+    out = struct('axis1', map.axis1.', 'axis2', map.axis2, ...
+        'wavelength_A', map.wavelength_A, 'Qx', map.Qx, 'Qz', map.Qz);
 end
