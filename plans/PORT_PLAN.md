@@ -428,13 +428,23 @@ MATLAB."**
   "Interp" select. Store + card tests added; full frontend gate green (198 tests +
   build). Commit `66e4021`. The fit-BG-from-region half of #17 shipped earlier
   (`f531808`/`7d809a0`), so **#17 is now fully complete**.
+- **W5 worksheet — per-column descriptive statistics** (2026-06-27) — the Stage
+  `Worksheet` gained a "Σ Stats" toggle: fetches golden `descriptive_stats`
+  (`/api/stats/descriptive`) for x + every channel in parallel and renders a
+  column-aligned footer (mean/std/min/max/median/N). Computed over the FULL arrays
+  (not the 500-row display cap / sort order) and via the backend so the numbers
+  match the Inspector `StatsCard` (which only summarized channel 0). Commit
+  `e8834aa`; gate green (202 tests). **Advances W5 #209 "descriptive stats"**; sort
+  was already done, so **filter + masking remain** on that bundled checklist line.
 
 **Next pick-up (highest value first):**
-1. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
+1. **W5 worksheet — filter + masking** (continues #209) — row filtering by a
+   per-column predicate / x-range; the `descriptive stats` + `sort` halves are done.
+2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
-2. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
+3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
    Rigaku `.raw` 2-D RSM, polarized-asymmetry consolidated CSV.
-3. **Standing verification gap** — frontend uPlot/Canvas render modes (map,
+4. **Standing verification gap** — frontend uPlot/Canvas render modes (map,
    multi-panel, inset, polar, RSM, baseline/region drag) + the new BG picker's
    visible effect are unit-tested but visually unverified (jsdom can't render);
    needs a human eyeball or browser automation.
