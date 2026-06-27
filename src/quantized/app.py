@@ -29,6 +29,7 @@ from quantized.routes import (
     reflectivity,
     rsm,
     stats,
+    xray,
 )
 
 __all__ = ["create_app", "app"]
@@ -112,6 +113,7 @@ def create_app() -> FastAPI:
     application.include_router(peaks.router)
     application.include_router(reflectivity.router)
     application.include_router(rsm.router)
+    application.include_router(xray.router)
 
     # Client-presence WebSocket (registered before the SPA mount so the
     # catch-all StaticFiles route never shadows it).

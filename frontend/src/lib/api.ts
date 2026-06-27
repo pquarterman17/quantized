@@ -272,6 +272,16 @@ export function convertUnits(
   return postJSON("/api/reference/convert", { value, from, to });
 }
 
+/** Bragg / Q↔2θ scalar conversion (calc.xray). `mode` selects the quantity. */
+export function xrayCalc(
+  mode: string,
+  wavelength: number,
+  value: number,
+  n = 1,
+): Promise<{ result: number; unit: string; description: string }> {
+  return postJSON("/api/xray/calc", { mode, wavelength, value, n });
+}
+
 // ── Export (file downloads) ─────────────────────────────────────────────────
 /** Export XRD data as CSV / Origin ASCII; triggers a browser download. */
 export function exportXrdCsv(body: {

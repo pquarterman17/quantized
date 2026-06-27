@@ -5,9 +5,31 @@
 
 import { useEffect, useState } from "react";
 
-import { convertUnits, getConstants } from "../../../lib/api";
+import { convertUnits, getConstants, xrayCalc } from "../../../lib/api";
 
-export type CalcTab = "units" | "constants";
+export type CalcTab = "units" | "constants" | "xray";
+
+/** Bragg / Q↔2θ conversions: backend mode + the unit of the value it takes in. */
+export const XRAY_MODES: { value: string; label: string; inUnit: string }[] = [
+  { value: "2theta_from_d", label: "d → 2θ", inUnit: "Å" },
+  { value: "d_from_2theta", label: "2θ → d", inUnit: "°" },
+  { value: "q_from_2theta", label: "2θ → Q", inUnit: "°" },
+  { value: "2theta_from_q", label: "Q → 2θ", inUnit: "1/Å" },
+];
+
+/** Common characteristic X-ray wavelengths (Å) as one-click presets. */
+export const WAVELENGTHS: { label: string; a: number }[] = [
+  { label: "Cu Kα", a: 1.5406 },
+  { label: "Mo Kα", a: 0.7107 },
+  { label: "Co Kα", a: 1.789 },
+  { label: "Cr Kα", a: 2.2897 },
+];
+
+export interface XrayResult {
+  result: number;
+  unit: string;
+  description: string;
+}
 
 /** Common conversions offered as one-click chips (all supported by the backend). */
 export const QUICK_PAIRS: { label: string; from: string; to: string }[] = [
@@ -39,6 +61,17 @@ export interface CalculatorsState {
   convert: () => Promise<void>;
   // Constants
   constants: Record<string, number> | null;
+  // X-ray / neutron (Bragg, Q↔2θ)
+  xrayMode: string;
+  wavelength: string;
+  xrayValue: string;
+  xrayResult: XrayResult | null;
+  xrayError: string | null;
+  xrayBusy: boolean;
+  setXrayMode: (m: string) => void;
+  setWavelength: (v: string) => void;
+  setXrayValue: (v: string) => void;
+  xrayCompute: () => Promise<void>;
 }
 
 export function useCalculators(): CalculatorsState {
@@ -51,6 +84,12 @@ export function useCalculators(): CalculatorsState {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [constants, setConstants] = useState<Record<string, number> | null>(null);
+  const [xrayMode, setXrayMode] = useState("2theta_from_d");
+  const [wavelength, setWavelength] = useState("1.5406"); // Cu Kα
+  const [xrayValue, setXrayValue] = useState("3.1356"); // Si(111) d
+  const [xrayResult, setXrayResult] = useState<XrayResult | null>(null);
+  const [xrayError, setXrayError] = useState<string | null>(null);
+  const [xrayBusy, setXrayBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +131,24 @@ export function useCalculators(): CalculatorsState {
     }
   }
 
+  async function xrayCompute(): Promise<void> {
+    setXrayBusy(true);
+    setXrayError(null);
+    try {
+      const w = Number(wavelength);
+      const v = Number(xrayValue);
+      if (!Number.isFinite(w) || !Number.isFinite(v)) {
+        throw new Error("enter numeric wavelength and value");
+      }
+      setXrayResult(await xrayCalc(xrayMode, w, v));
+    } catch (e) {
+      setXrayResult(null);
+      setXrayError(e instanceof Error ? e.message : "calculation failed");
+    } finally {
+      setXrayBusy(false);
+    }
+  }
+
   return {
     tab,
     setTab,
@@ -108,5 +165,15 @@ export function useCalculators(): CalculatorsState {
     setPair,
     convert,
     constants,
+    xrayMode,
+    wavelength,
+    xrayValue,
+    xrayResult,
+    xrayError,
+    xrayBusy,
+    setXrayMode,
+    setWavelength,
+    setXrayValue,
+    xrayCompute,
   };
 }
