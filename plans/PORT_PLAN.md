@@ -450,13 +450,27 @@ MATLAB."**
   mask keyed by original index, reset per dataset. Extract now writes
   `<name> (subset)`. Commit `61e479e`; gate green (211 tests). **Completes W5 #209**
   (sort / filter / descriptive stats / masking all done — checklist ticked).
+- **W4 X-ray/Neutron calculator — d-spacing + Q↔2θ** (2026-06-27) — first W4
+  calculator domain surfaced (Boson Plotter being done unblocks W4). New pure
+  `calc/xray.py` (Bragg `d↔2θ` order n, `Q↔2θ`, no-eval mode dispatch, arcsin-domain
+  guards), thin `/api/xray/calc` (registered in `app.py`), and an "X-ray" tab in the
+  calculators workshop (mode select + Cu/Mo/Co/Cr Kα λ presets + live result).
+  Reference-value tested (Cu Kα/Si(111) → 2θ≈28.44°, Q≈2.004; `Q=2πn/d` identity;
+  round-trips) — **not** MATLAB-golden (universal formulas); theory in the module
+  docstring (repo has no `docs/` tree). Commit `ad72c6c`; full gate green (backend
+  17 + frontend 214 + ruff/mypy). **Partially addresses checklist #179** —
+  SLD-from-formula still TODO (`calc/sld.py` is reflectivity-profile only).
 
 **Next pick-up (highest value first):**
-1. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
+1. **More W4 calculator domains** — the X-ray tab proves the pattern; add others
+   that map to existing golden calc (constants/elements/unit_convert exist): a
+   crystallography (lattice↔d), magnetic, or semiconductor tab, or SLD-from-formula
+   to finish #179. Check `calc/` for an already-golden helper to surface.
+2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
-2. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
+3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
    Rigaku `.raw` 2-D RSM, polarized-asymmetry consolidated CSV.
-3. **Standing verification gap** — frontend uPlot/Canvas render modes (map,
+4. **Standing verification gap** — frontend uPlot/Canvas render modes (map,
    multi-panel, inset, polar, RSM, baseline/region drag) + the new BG picker's
    visible effect are unit-tested but visually unverified (jsdom can't render);
    needs a human eyeball or browser automation.

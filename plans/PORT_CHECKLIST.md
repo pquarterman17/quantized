@@ -176,7 +176,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] Semiconductor — `buildSemiconductorTab`
 - [ ] Thin Film — `buildThinFilmTab`
 - [ ] Periodic Table — `buildPeriodicTableTab`
-- [ ] X-ray & Neutron (d-spacing, Q↔2θ, SLD) — `buildXrayNeutronTab`
+- [ ] X-ray & Neutron (d-spacing, Q↔2θ, SLD) — `buildXrayNeutronTab` — **partial**: d-spacing (Bragg) + Q↔2θ done (`calc/xray.py`, `/api/xray/calc`, calculators "X-ray" tab; reference-value tested, commit `ad72c6c`). **SLD-from-formula still TODO** (needs a chemical-formula→SLD calc; `calc/sld.py` is reflectivity-profile only).
 - [ ] Superconductor — `buildSuperconductorTab`
 - [ ] Magnetic — `buildMagneticTab`
 - [ ] Optics — `buildOpticsTab`
