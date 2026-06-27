@@ -175,6 +175,13 @@
       "rtol": 1e-6,
       "atol": 1e-8
     },
+    "calc_surfacefit": {
+      "matlab_fn": "fitting.{surfaceModels (7 model evals), surfaceAutoGuess (per-model p0), surfaceFit (4 full fits: Plane/Paraboloid/2D-Gaussian/2D-Lorentzian, internal auto-guess + fminsearch)}",
+      "python_fn": "quantized.calc.{surface_models.get_surface_model, surface_fit.surface_auto_guess, surface_fit.surface_fit}",
+      "note": "model evals exact (~1e-16); auto-guess exact (~1e-15, numpy lstsq vs MATLAB backslash for linear models, centroid for peaks); full fits use the curveFit bound transform + fminsearch (MaxFunEvals=2*MaxIter, converges fully) so scipy matches MATLAB (params ~1e-9, errors ~7e-9). Shared flattened (x,y) grid emitted column-major so Python uses the identical points. Freeze via freeze_calc_values.m (sfFreeze).",
+      "rtol": 1e-6,
+      "atol": 1e-8
+    },
     "calc_batchfit": {
       "matlab_fn": "fitting.batchFit (Exponential Decay across 4 datasets, auto-guess + bounds)",
       "python_fn": "quantized.calc.batch_fit.batch_fit",

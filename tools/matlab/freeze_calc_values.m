@@ -684,6 +684,11 @@ function freeze_calc_values()
     %   Gaussian shared-sigma / no-constraint / subset-share, + Exp shared-tau.
     writeJson(gcfFreeze(), fullfile(goldenDir, 'calc_globalcurvefit.json'));
 
+    % ── fitting.{surfaceModels,surfaceAutoGuess,surfaceFit}: 2D surface fit ─
+    %   Model evals (exact), per-model auto-guesses, and full fits (internal
+    %   auto-guess + fminsearch over the curveFit bound transform, unbounded).
+    writeJson(sfFreeze(), fullfile(goldenDir, 'calc_surfacefit.json'));
+
     fprintf('Done.\n');
 end
 
@@ -949,4 +954,55 @@ function arr = mpfPackSeeds(detectedPeaks)
         if isfield(pk, 'eta'), e = pk.eta; end
         arr(k) = struct('center', pk.center, 'fwhm', pk.fwhm, 'height', pk.height, 'eta', e);
     end
+end
+
+% ════════════════════════════════════════════════════════════════════════
+%  2D surface fit freeze (surfaceModels / surfaceAutoGuess / surfaceFit)
+% ════════════════════════════════════════════════════════════════════════
+function out = sfFreeze()
+    cat = fitting.surfaceModels();
+    out = struct();
+    [X, Y] = meshgrid(linspace(-4, 4, 11), linspace(-3, 3, 9));
+    x = X(:); y = Y(:);
+    out.x = x'; out.y = y';
+
+    P = containers.Map();
+    P('Plane')                = [2 3 1];
+    P('Paraboloid')           = [0.5 -0.3 0.2 1 -1 2];
+    P('2D Gaussian')          = [3 0.5 1.5 -0.5 1.2 0.4];
+    P('2D Lorentzian')        = [3 0.5 1.5 -0.5 1.2 0.4];
+    P('2D Pseudo-Voigt')      = [3 0.5 1.5 -0.5 1.2 0.4 0.6];
+    P('Polynomial 2D')        = [2 0.5 -0.3 0.1 0.05 -0.2];
+    P('Exponential Decay 2D') = [5 2 3 0.5];
+
+    models = cell(1, numel(cat));
+    for i = 1:numel(cat)
+        nm = cat(i).name; p = P(nm);
+        z = cat(i).func(p, x, y); z = z(:)';
+        models{i} = struct('name', nm, 'p', p, 'z', z);
+    end
+    out.models = models;
+
+    ag = cell(1, numel(cat));
+    for i = 1:numel(cat)
+        nm = cat(i).name; p = P(nm);
+        zt = cat(i).func(p, x, y); zt = zt(:) + 0.02*sin(2*x).*cos(1.5*y);
+        p0 = fitting.surfaceAutoGuess(string(nm), x, y, zt);
+        ag{i} = struct('name', nm, 'z', zt', 'p0', p0(:)');
+    end
+    out.autoguess = ag;
+
+    fitNames = {'Plane', 'Paraboloid', '2D Gaussian', '2D Lorentzian'};
+    fits = cell(1, numel(fitNames));
+    for i = 1:numel(fitNames)
+        nm = fitNames{i}; p = P(nm);
+        f = cat(strcmp({cat.name}, nm)).func;
+        zt = f(p, x, y); zt = zt(:) + 0.03*sin(1.7*x + 0.5*y);
+        r = fitting.surfaceFit(x, y, zt, nm);
+        fits{i} = struct('name', nm, 'z', zt', ...
+            'params', r.params, 'errors', r.errors, 'R2', r.R2, 'RMSE', r.RMSE, ...
+            'chiSqRed', r.chiSqRed, 'nPoints', r.nPoints, 'nFree', r.nFree, ...
+            'exitFlag', r.exitFlag);
+    end
+    out.fits = fits;
 end
