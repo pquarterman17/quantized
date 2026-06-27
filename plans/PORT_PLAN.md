@@ -434,17 +434,24 @@ MATLAB."**
   column-aligned footer (mean/std/min/max/median/N). Computed over the FULL arrays
   (not the 500-row display cap / sort order) and via the backend so the numbers
   match the Inspector `StatsCard` (which only summarized channel 0). Commit
-  `e8834aa`; gate green (202 tests). **Advances W5 #209 "descriptive stats"**; sort
-  was already done, so **filter + masking remain** on that bundled checklist line.
+  `e8834aa`; gate green (202 tests). **Advances W5 #209 "descriptive stats"**.
+- **W5 worksheet — non-destructive row filter** (2026-06-27) — structured filter
+  (column + operator `> ≥ < ≤ = ≠ between` + value(s)) hides non-matching rows; the
+  stats footer narrows to the filtered subset and "Extract →" materializes the kept
+  rows as a new dataset. Empty value → NaN (no-op; dodges the `Number("")===0`
+  trap). Filter-bar JSX extracted to `WorksheetFilterBar.tsx` to hold Worksheet
+  under the ~400-line budget (385→323). Commit `b412725`; gate green (207 tests).
+  **Advances W5 #209 "filter"** — sort + stats + filter now done; only **masking**
+  (Origin click-to-mask individual rows, kept visible but excluded from analysis)
+  remains on that bundled line, and is largely subsumed by filtering for most uses.
 
 **Next pick-up (highest value first):**
-1. **W5 worksheet — filter + masking** (continues #209) — row filtering by a
-   per-column predicate / x-range; the `descriptive stats` + `sort` halves are done.
-2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
-   golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
-3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
+1. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
+   golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes);
+   worksheet masking (click-to-mask rows, excluded from stats but kept visible).
+2. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
    Rigaku `.raw` 2-D RSM, polarized-asymmetry consolidated CSV.
-4. **Standing verification gap** — frontend uPlot/Canvas render modes (map,
+3. **Standing verification gap** — frontend uPlot/Canvas render modes (map,
    multi-panel, inset, polar, RSM, baseline/region drag) + the new BG picker's
    visible effect are unit-tested but visually unverified (jsdom can't render);
    needs a human eyeball or browser automation.
