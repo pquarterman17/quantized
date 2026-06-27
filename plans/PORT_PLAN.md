@@ -460,12 +460,24 @@ MATLAB."**
   docstring (repo has no `docs/` tree). Commit `ad72c6c`; full gate green (backend
   17 + frontend 214 + ruff/mypy). **Partially addresses checklist #179** —
   SLD-from-formula still TODO (`calc/sld.py` is reflectivity-profile only).
+- **W4 Crystal calculator — d-spacing** (2026-06-27) — second W4 domain. New pure
+  `calc/crystallography.py` (1/d² quadratic forms for cubic/tetragonal/orthorhombic/
+  hexagonal, no-eval dispatch, validation), thin `/api/crystallography/dspacing`
+  (registered), "Crystal" tab in the calculators workshop (system select + per-system
+  lattice inputs + hkl). Composes with the X-ray tab (lattice→d→2θ). Reference-value
+  tested (Si(111)→3.1356, (h00)→a/h identity). Miller `l` needed a narrow ruff E741
+  per-file-ignore in `pyproject.toml` (h,k,l is the unavoidable convention). Commit
+  `e23d90b`; gates green (backend 26 + frontend 217 + ruff/mypy). **Partial #174**
+  (cell volume / density / low-symmetry systems remain). The calculators workshop now
+  has Units / X-ray / Crystal / Constants tabs — at ~224 lines, `CalculatorsPanel.tsx`
+  is a future extraction candidate (per-tab sub-components) if more tabs land.
 
 **Next pick-up (highest value first):**
-1. **More W4 calculator domains** — the X-ray tab proves the pattern; add others
-   that map to existing golden calc (constants/elements/unit_convert exist): a
-   crystallography (lattice↔d), magnetic, or semiconductor tab, or SLD-from-formula
-   to finish #179. Check `calc/` for an already-golden helper to surface.
+1. **More W4 calculator domains** — pattern proven twice. Surface existing golden
+   calc where possible (constants/elements/unit_convert exist; e.g. a Periodic-Table
+   tab over the already-routed `element_data`), or add SLD-from-formula to finish
+   #179, or a semiconductor/magnetic/transport tab (new calc + reference tests).
+   When `CalculatorsPanel.tsx` next grows, extract per-tab sub-components first.
 2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,

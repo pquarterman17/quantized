@@ -171,7 +171,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 ### Calculator domains (panels) — `DiraCulator.m` build*Tab
 > DEFERRED (autonomous): formulas are embedded in DiraCulator GUI build*Tab functions, not standalone +calc files. Porting requires extracting each formula into a clean `calc/<domain>.py` and freezing via inline MATLAB computation. Backend `+calc/*.m` helpers (below) are ported first.
 - [~] Unit Converter — `buildUnitConverterTab` — **UI shipped** (`workshops/calculators/` Units tab, backed by golden `calc/unit_convert.py`: dimensional + temperature-offset + energy↔wavelength / H↔B bridges, quick-pick chips). Constants reference (golden `calc/constants.py`) also surfaced in the same window's Constants tab.
-- [ ] Crystal — `buildCrystalTab`
+- [~] Crystal — `buildCrystalTab` — **partial**: d-spacing from lattice params + Miller indices (cubic/tetragonal/orthorhombic/hexagonal) shipped (`calc/crystallography.py`, `/api/crystallography/dspacing`, calculators "Crystal" tab; reference-value tested, commit `e23d90b`). Remaining: cell volume, density, bond angles, rhombohedral/monoclinic/triclinic systems.
 - [ ] Electrical / transport — `buildElectricalTab`
 - [ ] Semiconductor — `buildSemiconductorTab`
 - [ ] Thin Film — `buildThinFilmTab`
