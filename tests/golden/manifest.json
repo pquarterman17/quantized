@@ -189,6 +189,13 @@
       "rtol": 1e-6,
       "atol": 1e-6
     },
+    "calc_bgregion": {
+      "matlab_fn": "BosonPlotter onBGMouseUp pure core (box-mask + polyfit + region stats): 4 cases (linear shoulder, y-bounded linear, quadratic, cubic)",
+      "python_fn": "quantized.calc.baseline.fit_region_background",
+      "note": "raw-x polyfit (no normalization, matches MATLAB polyfit) over points inside [x_min,x_max]x[y_min,y_max]; coeffs ~1e-12, full-range background ~4e-12 even for the ill-conditioned cubic, sample-std (N-1) exact. Freeze via freeze_calc_values.m (bgrFreeze).",
+      "rtol": 1e-9,
+      "atol": 1e-9
+    },
     "calc_batchfit": {
       "matlab_fn": "fitting.batchFit (Exponential Decay across 4 datasets, auto-guess + bounds)",
       "python_fn": "quantized.calc.batch_fit.batch_fit",

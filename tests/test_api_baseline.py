@@ -4,6 +4,7 @@ test_calc_baseline; here we prove the transport for all four methods."""
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
@@ -58,3 +59,28 @@ def test_modpoly_returns_baseline_and_info() -> None:
     assert len(body["baseline"]) == len(y)
     assert body["info"]["order"] == 3
     assert "converged" in body["info"]
+
+
+def test_region_fits_box_background() -> None:
+    x, y = _peak_on_background()
+    resp = client.post(
+        "/api/baseline/region",
+        json={"x": x, "y": y, "x_min": 0.0, "x_max": 49.0, "y_max": 6.0, "order": 1},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["background"]) == len(y)
+    assert body["order"] == 1
+    # y_max=6 excludes the peak top → recovers the 0.1·x + 2 background line.
+    assert body["coeffs"][0] == pytest.approx(0.1, abs=0.02)
+    assert body["coeffs"][1] == pytest.approx(2.0, abs=0.3)
+    assert body["n_points"] > 0
+
+
+def test_region_too_few_points_is_422() -> None:
+    x, y = _peak_on_background()
+    resp = client.post(
+        "/api/baseline/region",
+        json={"x": x, "y": y, "x_min": 24.6, "x_max": 24.7, "order": 1},
+    )
+    assert resp.status_code == 422

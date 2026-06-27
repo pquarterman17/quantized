@@ -14,9 +14,70 @@ from scipy import sparse
 from scipy.interpolate import interp1d
 from scipy.sparse.linalg import spsolve
 
-__all__ = ["baseline_als", "baseline_modpoly", "baseline_rolling_ball", "estimate_background"]
+__all__ = [
+    "baseline_als",
+    "baseline_modpoly",
+    "baseline_rolling_ball",
+    "estimate_background",
+    "fit_region_background",
+]
 
 _EPS = float(np.finfo(float).eps)
+
+
+def fit_region_background(
+    x: ArrayLike,
+    y: ArrayLike,
+    x_min: float,
+    x_max: float,
+    *,
+    y_min: float | None = None,
+    y_max: float | None = None,
+    order: int = 1,
+) -> dict[str, Any]:
+    """Fit a polynomial background to the data inside a box region.
+
+    Pure core of BosonPlotter's "Fit BG from Box" (``+bosonPlotter/onBGMouseUp``):
+    select points with ``x_min <= x <= x_max`` (and, when given, ``y_min <= y <=
+    y_max``), then ``polyfit`` a degree-``order`` polynomial to them (raw x, no
+    normalisation — matching MATLAB ``polyfit``). The GUI cursor/box drawing and
+    trim/prefix mapping are not part of this pure layer.
+
+    Returns a dict with ``coeffs`` (highest-degree-first, MATLAB ``polyfit``
+    order), ``background`` (the polynomial evaluated across the *full* x for
+    subtraction), ``n_points``, region ``mean``/``std`` (sample, N-1)/``min``/
+    ``max`` of the selected y, and ``order``. Raises ``ValueError`` when fewer
+    than ``order + 1`` points fall inside the box.
+    """
+    xv = np.asarray(x, dtype=float).ravel()
+    yv = np.asarray(y, dtype=float).ravel()
+    n = min(xv.size, yv.size)
+    xv, yv = xv[:n], yv[:n]
+
+    mask = (xv >= x_min) & (xv <= x_max) & ~np.isnan(xv) & ~np.isnan(yv)
+    if y_min is not None:
+        mask &= yv >= y_min
+    if y_max is not None:
+        mask &= yv <= y_max
+    xp, yp = xv[mask], yv[mask]
+
+    if xp.size < 2:
+        raise ValueError(f"need at least 2 points inside the box to fit (got {xp.size})")
+    if xp.size < order + 1:
+        raise ValueError(f"need at least {order + 1} points for an order-{order} fit")
+
+    coeffs = np.polyfit(xp, yp, order)
+    background = np.asarray(np.polyval(coeffs, xv), dtype=float)
+    return {
+        "coeffs": [float(c) for c in coeffs],
+        "background": background,
+        "n_points": int(xp.size),
+        "mean": float(np.mean(yp)),
+        "std": float(np.std(yp, ddof=1)),
+        "min": float(np.min(yp)),
+        "max": float(np.max(yp)),
+        "order": int(order),
+    }
 
 
 def _matlab_round(x: float) -> int:

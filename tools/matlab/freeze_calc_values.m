@@ -694,6 +694,9 @@ function freeze_calc_values()
     %   smooth → local maxima → per-peak surfaceFit (angle + Q) → strain chain.
     writeJson(rsmFreeze(), fullfile(goldenDir, 'calc_rsm.json'));
 
+    % ── BG-from-region: box-mask + polyfit (BosonPlotter onBGMouseUp core) ─
+    writeJson(bgrFreeze(), fullfile(goldenDir, 'calc_bgregion.json'));
+
     fprintf('Done.\n');
 end
 
@@ -1052,4 +1055,29 @@ function arr = rsmPackPeaks(peaks)
             'amplitude', p.amplitude, 'background', p.background, ...
             'classification', p.classification);
     end
+end
+
+% ════════════════════════════════════════════════════════════════════════
+%  BG-from-region freeze (box-mask + polyfit; onBGMouseUp pure core)
+% ════════════════════════════════════════════════════════════════════════
+function out = bgrFreeze()
+    x = linspace(20, 80, 400);
+    y = 2 + 0.05*x + 30*exp(-((x-50)/3).^2) + 0.3*sin(0.5*x);
+    out = struct();
+    out.x = x; out.y = y;
+    cases = {};
+    cases{end+1} = bgrCase(x, y, 25, 45, min(y)-1, max(y)+1, 1);  % linear, left shoulder
+    cases{end+1} = bgrCase(x, y, 20, 80, -5, 8, 1);              % linear, y-bounded (excludes peak)
+    cases{end+1} = bgrCase(x, y, 25, 75, min(y)-1, max(y)+1, 2); % quadratic
+    cases{end+1} = bgrCase(x, y, 22, 78, min(y)-1, max(y)+1, 3); % cubic
+    out.cases = cases;
+end
+
+function c = bgrCase(x, y, xmin, xmax, ymin, ymax, order)
+    mask = x>=xmin & x<=xmax & y>=ymin & y<=ymax & ~isnan(x) & ~isnan(y);
+    xp = x(mask); yp = y(mask);
+    p = polyfit(xp, yp, order);
+    c = struct('x_min',xmin,'x_max',xmax,'y_min',ymin,'y_max',ymax,'order',order, ...
+        'coeffs',p, 'n',numel(xp), 'mean',mean(yp), 'std',std(yp), ...
+        'min',min(yp), 'max',max(yp), 'background', polyval(p, x));
 end

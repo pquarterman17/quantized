@@ -18,6 +18,7 @@ from quantized.calc.baseline import (
     baseline_modpoly,
     baseline_rolling_ball,
     estimate_background,
+    fit_region_background,
 )
 from quantized.routes._payload import jsonify, to_jsonable
 
@@ -55,6 +56,16 @@ class ModPolyRequest(BaseModel):
     order: int = 5
     max_iter: int = 100
     tol: float = 1e-6
+
+
+class RegionBackgroundRequest(BaseModel):
+    x: list[float]
+    y: list[float]
+    x_min: float
+    x_max: float
+    y_min: float | None = None
+    y_max: float | None = None
+    order: int = 1
 
 
 @router.post("/estimate")
@@ -113,3 +124,20 @@ def modpoly(req: ModPolyRequest) -> dict[str, Any]:
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg), "info": to_jsonable(info)}
+
+
+@router.post("/region")
+def region(req: RegionBackgroundRequest) -> dict[str, Any]:
+    """Fit a polynomial background from a boxed x/y region (BosonPlotter
+    "Fit BG from Box"); returns coeffs + the full-range background + region stats."""
+    try:
+        result = fit_region_background(
+            req.x, req.y, req.x_min, req.x_max,
+            y_min=req.y_min, y_max=req.y_max, order=req.order,
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    bg = result.pop("background")
+    out: dict[str, Any] = to_jsonable(result)
+    out["background"] = jsonify(bg)
+    return out
