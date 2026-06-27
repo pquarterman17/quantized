@@ -13,7 +13,7 @@ import {
   type Readout,
 } from "./uplotPlugins";
 
-export type PlotTool = "zoom" | "pan" | "cursor";
+export type PlotTool = "zoom" | "pan" | "cursor" | "region";
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -71,6 +71,9 @@ export interface BuildOptsArgs {
   xLog: boolean;
   tool: PlotTool;
   onReadout: (r: Readout | null) => void;
+  /** In `region` tool: called with the two data-x edges of a completed drag
+   *  (unordered). Used by the baseline "Fit from region" rubber-band. */
+  onRegionSelect?: (x0: number, x1: number) => void;
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
   xLim?: [number, number] | null;
   yLim?: [number, number] | null;
@@ -90,7 +93,7 @@ export interface BuildOptsArgs {
 
 export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
   const { width, height, yLog, xLog, tool, onReadout, xLim, yLim, refLines, seriesStyles } = args;
-  const { xFmt, yFmt, annotations, showGrid } = args;
+  const { xFmt, yFmt, annotations, showGrid, onRegionSelect } = args;
   const axisColor = cssVar("--text-dim") || "#aaa";
   const gridColor = cssVar("--grid-line") || "#333";
   const font = `11px ${cssVar("--font-mono") || "monospace"}`;
@@ -149,8 +152,27 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   return {
     width,
     height,
-    // Box-zoom only in zoom mode; pan/cursor disable drag-zoom.
-    cursor: { drag: { x: tool === "zoom", y: tool === "zoom", uni: 1 } },
+    // Box-zoom only in zoom mode; region drags an x-band without rescaling
+    // (setScale:false), so setSelect can read it back; pan/cursor disable drag.
+    cursor: {
+      drag:
+        tool === "region"
+          ? { x: true, y: false, setScale: false, uni: 1 }
+          : { x: tool === "zoom", y: tool === "zoom", uni: 1 },
+    },
+    // Region rubber-band: on drag end, hand the two data-x edges to the caller.
+    // posToVal does the pixel->data mapping (linear or log x); regionSelect
+    // orders/clamps. Guard width>0 so a click (zero-width select) is ignored.
+    hooks: {
+      setSelect: [
+        (u: uPlot): void => {
+          if (tool !== "region" || !onRegionSelect) return;
+          const w = u.select.width;
+          if (w <= 0) return;
+          onRegionSelect(u.posToVal(u.select.left, "x"), u.posToVal(u.select.left + w, "x"));
+        },
+      ],
+    },
     plugins,
     legend: { show: false },
     scales,

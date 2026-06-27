@@ -42,7 +42,7 @@ const FIELDS: Record<BaselineMethod, ParamField[]> = {
 
 export default function BaselinePanel() {
   const setOpen = useApp((s) => s.setBaselineOpen);
-  const { active, method, params, baseline, busy, error, setMethod, setParams, compute, subtract, clear } =
+  const { active, method, params, baseline, busy, error, setMethod, setParams, compute, subtract, clear, pickRegion } =
     useBaseline();
 
   const close = () => {
@@ -89,6 +89,17 @@ export default function BaselinePanel() {
           </span>
         ))}
       </div>
+
+      {method === "region" && (
+        <Button
+          size="sm"
+          disabled={!active}
+          onClick={pickRegion}
+          style={{ marginTop: 10, width: "100%" }}
+        >
+          ⬚ Pick range on plot
+        </Button>
+      )}
 
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
         <Button variant="primary" size="sm" disabled={!active || busy} onClick={() => void compute()}>

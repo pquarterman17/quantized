@@ -35,6 +35,8 @@ beforeEach(() => {
     activeId: "d1",
     status: "",
     baselineOverlay: null,
+    plotTool: "zoom",
+    regionPicked: null,
   });
 });
 
@@ -99,6 +101,35 @@ describe("useBaseline", () => {
       x: [1, 2, 3, 4], y: [10, 12, 11, 13], x_min: 1, x_max: 4, order: 5,
     });
     expect(result.current.baseline).toEqual([10, 10, 10, 10]);
+  });
+
+  it("arming the rubber-band sets the plot tool to region", () => {
+    const { result } = renderHook(() => useBaseline());
+    act(() => result.current.setMethod("region"));
+    act(() => result.current.pickRegion());
+    expect(useApp.getState().plotTool).toBe("region");
+  });
+
+  it("consumes a store-picked range into the box edges then clears it", async () => {
+    vi.mocked(baselineRegion).mockResolvedValue({
+      background: [5, 5, 5, 5], coeffs: [0, 5], n_points: 2,
+      mean: 5, std: 0, min: 5, max: 5, order: 1,
+    });
+    const { result } = renderHook(() => useBaseline());
+    act(() => result.current.setMethod("region"));
+
+    // The plot's rubber-band writes [x_min,x_max] to the store (already ordered).
+    act(() => useApp.getState().setRegionPicked([2, 3]));
+
+    // The hook pulls it into the params and consumes it (resets to null).
+    expect(useApp.getState().regionPicked).toBeNull();
+    expect(result.current.params.regionXMin).toBe(2);
+    await act(async () => {
+      await result.current.compute();
+    });
+    expect(baselineRegion).toHaveBeenCalledWith({
+      x: [1, 2, 3, 4], y: [10, 12, 11, 13], x_min: 2, x_max: 3, order: 5,
+    });
   });
 
   it("region uses explicit box edges + order when set", async () => {

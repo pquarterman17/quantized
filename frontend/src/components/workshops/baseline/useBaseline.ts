@@ -47,6 +47,8 @@ export interface BaselineState {
   compute: () => Promise<void>;
   subtract: () => void;
   clear: () => void;
+  /** Arm the plot's rubber-band so the next drag fills the region box edges. */
+  pickRegion: () => void;
 }
 
 /** Dispatch to the right baseline endpoint for the chosen method. */
@@ -83,6 +85,9 @@ export function useBaseline(): BaselineState {
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
   const setBaselineOverlay = useApp((s) => s.setBaselineOverlay);
+  const setPlotTool = useApp((s) => s.setPlotTool);
+  const regionPicked = useApp((s) => s.regionPicked);
+  const setRegionPicked = useApp((s) => s.setRegionPicked);
   const [method, setMethod] = useState<BaselineMethod>("als");
   const [params, setParamsState] = useState<BaselineParams>(DEFAULTS);
   const [baseline, setBaseline] = useState<(number | null)[] | null>(null);
@@ -98,6 +103,17 @@ export function useBaseline(): BaselineState {
 
   const setParams = (patch: Partial<BaselineParams>): void =>
     setParamsState((p) => ({ ...p, ...patch }));
+
+  // The plot's rubber-band writes its [x_min,x_max] to the store; pull it into
+  // the box-edge params (already ordered + clamped) and consume it once.
+  useEffect(() => {
+    if (!regionPicked) return;
+    const [lo, hi] = regionPicked;
+    setParamsState((p) => ({ ...p, regionXMin: lo, regionXMax: hi }));
+    setRegionPicked(null);
+  }, [regionPicked, setRegionPicked]);
+
+  const pickRegion = (): void => setPlotTool("region");
 
   async function compute(): Promise<void> {
     if (!active) return;
@@ -153,5 +169,6 @@ export function useBaseline(): BaselineState {
     compute,
     subtract,
     clear,
+    pickRegion,
   };
 }

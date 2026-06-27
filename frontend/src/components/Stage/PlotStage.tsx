@@ -15,6 +15,7 @@ import {
   type PlotPayload,
 } from "../../lib/plotdata";
 import { exportPlotPng } from "../../lib/plotExport";
+import { normalizeRange } from "../../lib/regionSelect";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotPlugins";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -48,6 +49,7 @@ export default function PlotStage() {
   const accent = useApp((s) => s.accent);
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
+  const setRegionPicked = useApp((s) => s.setRegionPicked);
   const stackMode = useApp((s) => s.stackMode);
   const setStackMode = useApp((s) => s.setStackMode);
   const insetMode = useApp((s) => s.insetMode);
@@ -128,6 +130,16 @@ export default function PlotStage() {
         seriesStyles: styleList,
         tool,
         onReadout: setReadout,
+        onRegionSelect: (x0, x1) => {
+          // Clamp to the plotted x-extent (x is monotonic, so the ends bound it),
+          // then hand the ordered range to the baseline workshop and exit the mode.
+          const xs = displayPayload.data[0] as number[];
+          const lo = xs.length ? Math.min(xs[0], xs[xs.length - 1]) : undefined;
+          const hi = xs.length ? Math.max(xs[0], xs[xs.length - 1]) : undefined;
+          const range = normalizeRange(x0, x1, { min: lo, max: hi });
+          if (range) setRegionPicked(range);
+          setPlotTool("zoom");
+        },
       }),
       displayPayload.data,
       host,
@@ -231,6 +243,9 @@ export default function PlotStage() {
         <div className="qzk-glass qzk-readout">
           {readout.x.toPrecision(5)}, {readout.y.toPrecision(5)}
         </div>
+      )}
+      {tool === "region" && (
+        <div className="qzk-glass qzk-readout">Drag to select a background range</div>
       )}
       {displayPayload && showLegend && (
         <div className="qzk-glass qzk-legend">

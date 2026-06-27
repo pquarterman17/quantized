@@ -27,7 +27,7 @@ export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
 export type Density = "compact" | "regular" | "comfy";
 export type StageTab = "plot" | "map" | "worksheet";
-export type PlotTool = "zoom" | "pan" | "cursor";
+export type PlotTool = "zoom" | "pan" | "cursor" | "region";
 
 interface AppState {
   datasets: Dataset[];
@@ -56,6 +56,9 @@ interface AppState {
   seriesStyles: Record<number, SeriesStyle>; // per-channel color/width/line overrides
   waterfall: number; // waterfall offset as a fraction of the y-span (0 = off)
   plotTool: PlotTool;
+  // Last x-range picked by the region rubber-band ([x_min,x_max]); the baseline
+  // workshop consumes it then resets to null. Drag direction is normalized away.
+  regionPicked: [number, number] | null;
   cmdkOpen: boolean;
   curveFitOpen: boolean;
   hysteresisOpen: boolean;
@@ -106,6 +109,7 @@ interface AppState {
   resetSeriesStyle: (channel: number) => void;
   setWaterfall: (waterfall: number) => void;
   setPlotTool: (tool: PlotTool) => void;
+  setRegionPicked: (range: [number, number] | null) => void;
   setCmdk: (open: boolean) => void;
   setCurveFitOpen: (open: boolean) => void;
   setHysteresisOpen: (open: boolean) => void;
@@ -190,6 +194,7 @@ export const useApp = create<AppState>((set, get) => ({
   seriesStyles: {},
   waterfall: 0,
   plotTool: "zoom",
+  regionPicked: null,
   cmdkOpen: false,
   curveFitOpen: false,
   hysteresisOpen: false,
@@ -331,6 +336,7 @@ export const useApp = create<AppState>((set, get) => ({
     }),
   setWaterfall: (waterfall) => set({ waterfall }),
   setPlotTool: (plotTool) => set({ plotTool }),
+  setRegionPicked: (regionPicked) => set({ regionPicked }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
   setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),
   setHysteresisOpen: (hysteresisOpen) => set({ hysteresisOpen }),
