@@ -1,19 +1,42 @@
-// Peaks workshop — state hook. Finds peaks in the active dataset's first
-// channel via /api/peaks and pushes markers into the store as a plot overlay
-// (points only). Re-runs when the active (or corrected) dataset changes.
+// Peaks workshop — state hook. Auto-finds peaks in the active dataset's first
+// channel via /api/peaks/find and pushes markers into the store as a plot
+// overlay. Also exposes two fit actions over the detected peaks: fitTogether
+// (simultaneous /api/peaks/fit-multi) and fitEach (independent /api/peaks/fit
+// per peak). Re-runs find — and clears any fit — when the active dataset changes.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { findPeaks } from "../../../lib/api";
+import { findPeaks, fitMultiPeak, fitPeak, type PeakSeed } from "../../../lib/api";
 import { peakOverlayArray } from "../../../lib/plotdata";
-import type { Dataset, Peak } from "../../../lib/types";
+import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+
+export interface PeakFitOptions {
+  model: string;
+  bgDegree: number;
+  linkMode: string;
+  constrain: boolean;
+}
 
 export interface PeaksState {
   active: Dataset | null;
   peaks: Peak[];
   busy: boolean;
   error: string | null;
+  fitResult: MultiFitResult | null;
+  fitting: boolean;
+  fitError: string | null;
+  fitTogether: (opts: PeakFitOptions) => Promise<void>;
+  fitEach: (opts: PeakFitOptions) => Promise<void>;
+}
+
+/** First-channel (x, y) for a dataset — the 1-D slice the peak tools operate on. */
+function xy(ds: Dataset): { x: number[]; y: number[] } {
+  return { x: ds.data.time, y: ds.data.values.map((row) => row[0]) };
+}
+
+function seedsFrom(peaks: Peak[]): PeakSeed[] {
+  return peaks.map((p) => ({ center: p.center, fwhm: p.fwhm, height: p.height }));
 }
 
 export function usePeaks(): PeaksState {
@@ -22,27 +45,30 @@ export function usePeaks(): PeaksState {
   const [peaks, setPeaks] = useState<Peak[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fitResult, setFitResult] = useState<MultiFitResult | null>(null);
+  const [fitting, setFitting] = useState(false);
+  const [fitError, setFitError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setPeaks([]);
     setError(null);
+    setFitResult(null); // a new dataset invalidates any prior fit
+    setFitError(null);
     if (!active) {
       setPeakOverlay(null);
       return;
     }
     setBusy(true);
-    const time = active.data.time;
-    const y = active.data.values.map((row) => row[0]);
-    findPeaks({ x: time, y })
+    const { x, y } = xy(active);
+    findPeaks({ x, y })
       .then((res) => {
         if (cancelled) return;
         setPeaks(res.peaks);
-        const overlayY = peakOverlayArray(
-          time,
-          res.peaks.map((p) => ({ center: p.center, height: p.height })),
-        );
-        setPeakOverlay({ datasetId: active.id, y: overlayY });
+        setPeakOverlay({
+          datasetId: active.id,
+          y: peakOverlayArray(x, res.peaks.map((p) => ({ center: p.center, height: p.height }))),
+        });
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : "peak find failed");
@@ -55,5 +81,82 @@ export function usePeaks(): PeaksState {
     };
   }, [active, setPeakOverlay]);
 
-  return { active, peaks, busy, error };
+  // Draw fitted peak tops (height above the local background) as the overlay.
+  const overlayFitted = useCallback(
+    (ds: Dataset, fitted: FittedPeak[]) => {
+      const { x } = xy(ds);
+      setPeakOverlay({
+        datasetId: ds.id,
+        y: peakOverlayArray(x, fitted.map((p) => ({ center: p.center, height: p.height + p.bg }))),
+      });
+    },
+    [setPeakOverlay],
+  );
+
+  const fitTogether = useCallback(
+    async (opts: PeakFitOptions) => {
+      if (!active || peaks.length === 0) {
+        setFitError("Find peaks before fitting.");
+        return;
+      }
+      setFitting(true);
+      setFitError(null);
+      try {
+        const { x, y } = xy(active);
+        const res = await fitMultiPeak({
+          x, y, peaks: seedsFrom(peaks), model: opts.model,
+          bg_degree: opts.bgDegree, constrain: opts.constrain, link_mode: opts.linkMode,
+        });
+        setFitResult(res);
+        overlayFitted(active, res.peaks);
+      } catch (e: unknown) {
+        setFitError(e instanceof Error ? e.message : "simultaneous fit failed");
+      } finally {
+        setFitting(false);
+      }
+    },
+    [active, peaks, overlayFitted],
+  );
+
+  const fitEach = useCallback(
+    async (opts: PeakFitOptions) => {
+      if (!active || peaks.length === 0) {
+        setFitError("Find peaks before fitting.");
+        return;
+      }
+      setFitting(true);
+      setFitError(null);
+      try {
+        const { x, y } = xy(active);
+        const fitted: FittedPeak[] = [];
+        for (const p of peaks) {
+          const half = (Number.isFinite(p.fwhm) && p.fwhm > 0 ? p.fwhm : 1) * 3;
+          const r = await fitPeak({
+            x, y, x_lo: p.center - half, x_hi: p.center + half,
+            seed_center: p.center, seed_fwhm: p.fwhm, model: opts.model,
+          });
+          if (r.success) {
+            fitted.push({
+              center: r.center, fwhm: r.fwhm, height: r.height, bg: r.bg,
+              eta: r.eta, area: r.area, status: "fitted", model: r.model,
+            });
+          }
+        }
+        const result: MultiFitResult = {
+          peaks: fitted, bgCoeffs: [], R2: null, rmse: null,
+          nPeaks: fitted.length, model: opts.model,
+        };
+        setFitResult(result);
+        if (fitted.length > 0) overlayFitted(active, fitted);
+        if (fitted.length === 0) setFitError("No peaks could be fit individually.");
+      } catch (e: unknown) {
+        setFitError(e instanceof Error ? e.message : "per-peak fit failed");
+      } finally {
+        setFitting(false);
+      }
+    },
+    [active, peaks, overlayFitted],
+  );
+
+  return { active, peaks, busy, error, fitResult, fitting, fitError, fitTogether, fitEach };
 }

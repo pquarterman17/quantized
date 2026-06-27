@@ -122,6 +122,46 @@ export interface Peak {
   [key: string]: unknown;
 }
 
+/** One fitted peak (from /api/peaks/fit-multi, or mapped from /api/peaks/fit).
+ *  `eta` is null for non-pseudo-Voigt models (NaN serialized at the wire). */
+export interface FittedPeak {
+  center: number;
+  fwhm: number;
+  height: number;
+  bg: number;
+  eta: number | null;
+  area: number;
+  status: string;
+  model: string;
+  [key: string]: unknown;
+}
+
+/** Result of a simultaneous multi-peak fit (/api/peaks/fit-multi). `R2`/`rmse`
+ *  are NaN-serialized to null when synthesized from independent per-peak fits. */
+export interface MultiFitResult {
+  peaks: FittedPeak[];
+  bgCoeffs: number[];
+  R2: number | null;
+  rmse: number | null;
+  nPeaks: number;
+  model: string;
+}
+
+/** Result of a single-peak window fit (/api/peaks/fit). */
+export interface SinglePeakFit {
+  success: boolean;
+  reason: string;
+  center: number;
+  fwhm: number;
+  height: number;
+  bg: number;
+  eta: number | null;
+  area: number;
+  params: number[];
+  model: string;
+  window: number[];
+}
+
 /** One material SLD preset (from GET /api/reflectivity/presets). `sldX` is the
  *  X-ray SLD (Å⁻²), `sldN` the neutron SLD, `sldImag` the X-ray imaginary part. */
 export interface SldPreset {

@@ -1,17 +1,20 @@
 // Peaks workshop — view. A draggable ToolWindow listing detected peaks
-// (center / height / FWHM / SNR); markers are drawn on the plot via the store
-// overlay (see usePeaks). Closing clears the overlay. Thin by design.
+// (center / height / FWHM / SNR) with markers on the plot via the store overlay
+// (see usePeaks), plus fit controls: fit all peaks simultaneously (shared
+// background) or each independently, then show the fitted parameters + R².
 
+import PeakFitControls from "./PeakFitControls";
+import { usePeaks } from "./usePeaks";
 import ToolWindow from "../../overlays/ToolWindow";
 import { DataTable } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { useApp } from "../../../store/useApp";
-import { usePeaks } from "./usePeaks";
 
 export default function PeaksPanel() {
   const setOpen = useApp((s) => s.setPeaksOpen);
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
-  const { active, peaks, busy, error } = usePeaks();
+  const { active, peaks, busy, error, fitResult, fitting, fitError, fitTogether, fitEach } =
+    usePeaks();
 
   const close = () => {
     setPeakOverlay(null); // remove the markers when the panel closes
@@ -26,10 +29,20 @@ export default function PeaksPanel() {
     fmtNum(p.localSNR),
   ]);
 
+  const fitRows = (fitResult?.peaks ?? []).map((p, i) => [
+    i + 1,
+    fmtNum(p.center),
+    fmtNum(p.height),
+    fmtNum(p.fwhm),
+    fmtNum(p.area),
+  ]);
+
+  const faint = { color: "var(--text-faint)" } as const;
+
   return (
     <ToolWindow title="Peaks" width={360} onClose={close}>
       {!active && (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-ds-meta" style={faint}>
           Select a dataset to find peaks.
         </div>
       )}
@@ -40,12 +53,41 @@ export default function PeaksPanel() {
         </div>
       )}
       {active && !busy && !error && peaks.length === 0 && (
-        <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+        <div className="qzk-ds-meta" style={faint}>
           No peaks found.
         </div>
       )}
       {rows.length > 0 && (
         <DataTable columns={["#", "center", "height", "FWHM", "SNR"]} rows={rows} />
+      )}
+
+      {active && (
+        <PeakFitControls
+          disabled={peaks.length === 0}
+          fitting={fitting}
+          onFitTogether={fitTogether}
+          onFitEach={fitEach}
+        />
+      )}
+
+      {fitError && (
+        <div className="qzk-ds-meta" style={{ color: "var(--danger)", marginTop: 6 }}>
+          {fitError}
+        </div>
+      )}
+
+      {fitResult && fitResult.peaks.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div className="qzk-ds-meta" style={{ ...faint, marginBottom: 4 }}>
+            {fitResult.model} ·{" "}
+            {fitResult.R2 == null ? "independent fits" : `R² = ${fmtNum(fitResult.R2)}`}
+            {fitResult.rmse != null && ` · RMSE = ${fmtNum(fitResult.rmse)}`}
+          </div>
+          <DataTable
+            columns={["#", "center", "height", "FWHM", "area"]}
+            rows={fitRows}
+          />
+        </div>
       )}
     </ToolWindow>
   );

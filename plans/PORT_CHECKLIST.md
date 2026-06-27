@@ -154,6 +154,10 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
       mapping) → `calc/peak_multifit.py` + `/api/peaks/fit-multi`; golden
       `calc_multipeakfit.json` (5 fit cases bit-exact to ~7e-9 by replicating
       fminsearch's eval-limited 200·nFree budget; linked packer exact, rtol 1e-6)
+- [x] **UI** — peaks workshop (`workshops/peaks/`): auto-find + markers, then fit
+      controls (model/bg-degree/linked-width/constrain) driving **Fit all together**
+      (`/api/peaks/fit-multi`) and **Fit each** (loops `/api/peaks/fit` per peak);
+      fitted params + R²/RMSE table + overlay (`usePeaks.test.ts`, 4 hook tests)
 
 ### Hysteresis (BosonPlotter Hysteresis workshop)
 - [x] Hysteresis models — `+fitting/hysteresisModels.m` → `calc/fit_models_special.py`

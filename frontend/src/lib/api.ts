@@ -10,10 +10,12 @@ import type {
   ElementInfo,
   FitModel,
   MapResponse,
+  MultiFitResult,
   Peak,
   PlotSeriesResponse,
   RsmAnalysisResponse,
   RsmStrainResponse,
+  SinglePeakFit,
   SldPreset,
 } from "./types";
 
@@ -360,6 +362,40 @@ export function findPeaks(body: {
   sensitivity?: string;
 }): Promise<{ peaks: Peak[]; background: (number | null)[] }> {
   return postJSON("/api/peaks/find", body);
+}
+
+/** Seed for a peak fit — center/FWHM/height (+ optional eta for pseudo-Voigt). */
+export interface PeakSeed {
+  center: number;
+  fwhm: number;
+  height: number;
+  eta?: number;
+}
+
+/** Fit one peak in a window to a named shape (/api/peaks/fit). */
+export function fitPeak(body: {
+  x: number[];
+  y: number[];
+  x_lo: number;
+  x_hi: number;
+  seed_center: number;
+  seed_fwhm?: number;
+  model?: string;
+}): Promise<SinglePeakFit> {
+  return postJSON("/api/peaks/fit", body);
+}
+
+/** Fit all peaks + a polynomial background simultaneously (/api/peaks/fit-multi). */
+export function fitMultiPeak(body: {
+  x: number[];
+  y: number[];
+  peaks: PeakSeed[];
+  model?: string;
+  bg_degree?: number;
+  constrain?: boolean;
+  link_mode?: string;
+}): Promise<MultiFitResult> {
+  return postJSON("/api/peaks/fit-multi", body);
 }
 
 // ── Reflectivity ──────────────────────────────────────────────────────────────
