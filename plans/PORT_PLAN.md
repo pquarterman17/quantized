@@ -7,7 +7,7 @@ the codebase never accretes the god-scripts the MATLAB original did.
 
 **Status:** Active
 **Created:** 2026-06-21
-**Updated:** 2026-06-26
+**Updated:** 2026-06-27
 
 ---
 
@@ -198,7 +198,7 @@ MATLAB."**
     polynomial order), trim, field/thickness units, magnetometry
     mass/dimension normalization, counts/s. Parser-aware config
     (the `applyParserAnalysisConfig` equivalent).
-17. **BG-from-file** subtraction + fit-BG-from-region.
+17. ~~**BG-from-file** subtraction + fit-BG-from-region~~ — shipped (see Completed).
 
 ### Tier 2 — Medium Impact
 18. **Processing utilities** — smoothing, normalize, resample,
@@ -413,13 +413,28 @@ MATLAB."**
   (2-D y-box is a future extension). Also fixed a latent RTL `afterEach(cleanup)`
   gap in the test setup. Commit `f531808`. Visual drag unverified (jsdom).
 
+### Session 2026-06-27 (BG-from-file UI — closes #17)
+
+- ~~**#17 BG-from-file picker (frontend UI)**~~ (2026-06-27) — the golden
+  reference-background subtraction (`apply_corrections` step 4) was reachable only
+  from the API; wired it into the UI. **Design choice (user-confirmed): extend the
+  Inspector `CorrectionsCard`, not a separate workshop** — bg-subtraction composes
+  into the *same single Apply* as the other params, matching how MATLAB
+  `applyCorrections` runs step 4 inline (a separate "subtract → new dataset"
+  workshop would have been a divergent second pass). `store.applyCorrections` now
+  takes an optional `bg {datasetId, interp}`, forwards the picked dataset's current
+  `data` as `bg_dataset`/`bg_interp`, and persists the choice as `Dataset.bgRef`
+  (cleared on reset). Card gains a "Background" picker (other loaded datasets) + an
+  "Interp" select. Store + card tests added; full frontend gate green (198 tests +
+  build). Commit `66e4021`. The fit-BG-from-region half of #17 shipped earlier
+  (`f531808`/`7d809a0`), so **#17 is now fully complete**.
+
 **Next pick-up (highest value first):**
-1. **Corrections workshop + BG-from-file picker** — no corrections workshop exists
-   in `frontend/src/components/workshops/`; build one (workshop pattern: hook +
-   panel + a "load dataset as background" picker) wiring `bg_dataset`/`bg_interp`
-   into `POST /api/corrections/apply`. Backend + API + golden are ready. This is a
-   real multi-component feature, not a bounded loop unit.
-2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
+1. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
-3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
+2. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
    Rigaku `.raw` 2-D RSM, polarized-asymmetry consolidated CSV.
+3. **Standing verification gap** — frontend uPlot/Canvas render modes (map,
+   multi-panel, inset, polar, RSM, baseline/region drag) + the new BG picker's
+   visible effect are unit-tested but visually unverified (jsdom can't render);
+   needs a human eyeball or browser automation.
