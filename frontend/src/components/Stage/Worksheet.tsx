@@ -9,6 +9,7 @@ import { fmtNum } from "../../lib/format";
 import { channelLetter, compileFormula } from "../../lib/formula";
 import type { CalcResult, DataStruct } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import WorksheetFilterBar from "./WorksheetFilterBar";
 
 const MAX_ROWS = 500;
 // The descriptive-stats keys surfaced in the footer (matches StatsCard's set).
@@ -20,6 +21,21 @@ const STAT_ROWS: [string, string][] = [
   ["Median", "median"],
   ["N", "N"],
 ];
+/** Does value `v` pass `op` against `a` (and `b` for "between")? Non-finite fails. */
+function passesFilter(v: number | undefined, op: string, a: number, b: number): boolean {
+  if (v == null || !Number.isFinite(v)) return false;
+  switch (op) {
+    case ">": return v > a;
+    case ">=": return v >= a;
+    case "<": return v < a;
+    case "<=": return v <= a;
+    case "==": return v === a;
+    case "!=": return v !== a;
+    case "between": return v >= a && v <= b;
+    default: return true;
+  }
+}
+
 let _seq = 0;
 
 export default function Worksheet() {
@@ -34,25 +50,46 @@ export default function Worksheet() {
   // Per-column descriptive stats: index 0 = x column, 1.. = channels (null = pending).
   const [colStats, setColStats] = useState<(CalcResult | null)[] | null>(null);
   const [statsErr, setStatsErr] = useState(false);
+  // Non-destructive row filter: column ("" none, "-1" x, "c" channel) op value(s).
+  const [filterCol, setFilterCol] = useState("");
+  const [filterOp, setFilterOp] = useState(">");
+  const [filterV1, setFilterV1] = useState("");
+  const [filterV2, setFilterV2] = useState("");
 
-  // Row order for the current sort (col = -1 is the x column). Non-finite last.
-  const order = useMemo(() => {
+  // Row indices kept by the filter, in original order (all rows if no/incomplete
+  // filter). The view, the stats subset, and "Extract" all derive from this.
+  const filtered = useMemo(() => {
     const n = active?.data.time.length ?? 0;
-    const idx = Array.from({ length: n }, (_, i) => i);
-    if (!active || !sort) return idx;
+    const all = Array.from({ length: n }, (_, i) => i);
+    if (!active || filterCol === "") return all;
+    const col = Number(filterCol);
+    // Empty string -> NaN (Number("") is 0, which would wrongly filter on "> 0").
+    const num = (s: string) => (s.trim() === "" ? Number.NaN : Number(s));
+    const a = num(filterV1);
+    const b = num(filterV2);
+    if (Number.isNaN(a) || (filterOp === "between" && Number.isNaN(b))) return all;
+    const { time, values } = active.data;
+    const valOf = (r: number) => (col < 0 ? time[r] : values[r]?.[col]);
+    return all.filter((r) => passesFilter(valOf(r), filterOp, a, b));
+  }, [active, filterCol, filterOp, filterV1, filterV2]);
+
+  // Sort the filtered rows for display (col = -1 is the x column). Non-finite last.
+  const order = useMemo(() => {
+    if (!active || !sort) return filtered;
     const key = (r: number) =>
       sort.col < 0 ? active.data.time[r] : active.data.values[r]?.[sort.col];
-    return idx.sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       const va = key(a);
       const vb = key(b);
       if (!Number.isFinite(va)) return 1;
       if (!Number.isFinite(vb)) return -1;
       return (va - vb) * sort.dir;
     });
-  }, [active, sort]);
+  }, [active, filtered, sort]);
 
   // Fetch per-column descriptive stats (golden /api/stats/descriptive) over the
-  // FULL arrays — independent of the MAX_ROWS display cap and the sort order.
+  // FILTERED rows — independent of the MAX_ROWS display cap and the sort order, so
+  // stats follow the filter but not pagination/ordering.
   useEffect(() => {
     if (!showStats || !active) {
       setColStats(null);
@@ -63,7 +100,10 @@ export default function Worksheet() {
     setColStats(null);
     setStatsErr(false);
     const { time, values, labels } = active.data;
-    const columns = [time, ...labels.map((_, c) => values.map((row) => row[c]))];
+    const columns = [
+      filtered.map((r) => time[r]),
+      ...labels.map((_, c) => filtered.map((r) => values[r]?.[c])),
+    ];
     Promise.all(columns.map((col) => statsDescriptive(col)))
       .then((res) => {
         if (!cancelled) setColStats(res);
@@ -74,7 +114,7 @@ export default function Worksheet() {
     return () => {
       cancelled = true;
     };
-  }, [active, showStats]);
+  }, [active, showStats, filtered]);
 
   if (!active) {
     return (
@@ -87,7 +127,23 @@ export default function Worksheet() {
   const { time, values, labels, units, metadata } = active.data;
   const xName = String(metadata?.["x_column_name"] ?? "x");
   const xUnit = String(metadata?.["x_column_unit"] ?? "");
-  const n = Math.min(time.length, MAX_ROWS);
+  const filterActive = filtered.length !== time.length;
+
+  // Materialize the filtered rows as a new dataset in the library (plottable,
+  // fittable) — the non-destructive filter made actionable.
+  function extractFiltered() {
+    if (!filterActive) return;
+    const data: DataStruct = {
+      time: filtered.map((r) => time[r]),
+      values: filtered.map((r) => values[r]),
+      labels,
+      units,
+      metadata,
+    };
+    const stem = active!.name.replace(/\.[^.]+$/, "");
+    addDataset({ id: `filt-${++_seq}`, name: `${stem} (filtered)`, data });
+    setStatus(`extracted ${filtered.length} of ${time.length} rows`);
+  }
 
   const toggleSort = (col: number) =>
     setSort((s) => (s && s.col === col ? (s.dir === 1 ? { col, dir: -1 } : null) : { col, dir: 1 }));
@@ -169,6 +225,23 @@ export default function Worksheet() {
           vars: {vars}
         </span>
       </div>
+
+      <WorksheetFilterBar
+        xName={xName}
+        labels={labels}
+        filterCol={filterCol}
+        filterOp={filterOp}
+        filterV1={filterV1}
+        filterV2={filterV2}
+        setFilterCol={setFilterCol}
+        setFilterOp={setFilterOp}
+        setFilterV1={setFilterV1}
+        setFilterV2={setFilterV2}
+        filterActive={filterActive}
+        keptCount={filtered.length}
+        totalCount={time.length}
+        onExtract={extractFiltered}
+      />
       {err && (
         <div className="qzk-ds-meta" style={{ padding: "4px 8px", color: "var(--danger)" }}>
           {err}
@@ -199,7 +272,7 @@ export default function Worksheet() {
           </tr>
         </thead>
         <tbody>
-          {order.slice(0, n).map((r) => (
+          {order.slice(0, MAX_ROWS).map((r) => (
             <tr key={r}>
               <td className="rownum">{r + 1}</td>
               <td>{fmt(time[r])}</td>
@@ -234,9 +307,10 @@ export default function Worksheet() {
           </tfoot>
         )}
       </table>
-      {time.length > MAX_ROWS && (
+      {filtered.length > MAX_ROWS && (
         <div className="qzk-ds-meta" style={{ padding: 8 }}>
-          showing {MAX_ROWS} of {time.length} rows
+          showing {MAX_ROWS} of {filtered.length}
+          {filterActive ? ` filtered (${time.length} total)` : ""} rows
         </div>
       )}
     </div>

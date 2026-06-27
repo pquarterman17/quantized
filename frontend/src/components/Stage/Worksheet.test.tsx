@@ -67,3 +67,54 @@ describe("Worksheet column statistics", () => {
     expect(await screen.findByText(/unavailable offline/)).toBeInTheDocument();
   });
 });
+
+describe("Worksheet row filter", () => {
+  const applyFilter = (col: string, value: string, op?: string) => {
+    fireEvent.change(screen.getByLabelText("filter column"), { target: { value: col } });
+    if (op) fireEvent.change(screen.getByLabelText("filter operator"), { target: { value: op } });
+    fireEvent.change(screen.getByLabelText("filter value"), { target: { value } });
+  };
+
+  it("does not filter while the value is blank (Number('') is 0 trap)", () => {
+    render(<Worksheet />);
+    fireEvent.change(screen.getByLabelText("filter column"), { target: { value: "0" } });
+    // operator ">" + empty value must NOT activate (would otherwise drop A<=0 rows).
+    expect(screen.getByText("3 rows")).toBeInTheDocument();
+  });
+
+  it("hides rows that fail the predicate and reports the count", () => {
+    render(<Worksheet />);
+    applyFilter("0", "15"); // channel A > 15 keeps only the A=40 row
+    expect(screen.getByText("1 of 3 rows")).toBeInTheDocument();
+    expect(screen.getByText("40.0000")).toBeInTheDocument(); // kept row's A
+    expect(screen.queryByText("10.0000")).not.toBeInTheDocument(); // dropped row's A
+    expect(screen.queryByText("11.0000")).not.toBeInTheDocument(); // dropped row's A
+  });
+
+  it("narrows the descriptive-stats subset to the filtered rows", async () => {
+    render(<Worksheet />);
+    fireEvent.click(screen.getByRole("button", { name: /Stats/ }));
+    applyFilter("0", "15"); // keep only row index 1 → x=[2], A=[40], B=[50]
+    await waitFor(() => expect(statsDescriptive).toHaveBeenCalledWith([40]));
+    expect(statsDescriptive).toHaveBeenCalledWith([2]);
+    expect(statsDescriptive).toHaveBeenCalledWith([50]);
+  });
+
+  it("Extract → materializes the filtered rows as a new dataset", () => {
+    render(<Worksheet />);
+    applyFilter("0", "15");
+    fireEvent.click(screen.getByRole("button", { name: /Extract/ }));
+    const ds = useApp.getState().datasets;
+    expect(ds).toHaveLength(2);
+    expect(ds[1].name).toBe("scan (filtered)");
+    expect(ds[1].data.time).toEqual([2]);
+    expect(ds[1].data.values).toEqual([[40, 50]]);
+  });
+
+  it("supports a between range on the x column", () => {
+    render(<Worksheet />);
+    applyFilter("-1", "1.5", "between"); // x between 1.5 and …
+    fireEvent.change(screen.getByLabelText("filter value upper"), { target: { value: "2.5" } });
+    expect(screen.getByText("1 of 3 rows")).toBeInTheDocument(); // only x=2
+  });
+});
