@@ -168,6 +168,13 @@
       "rtol": 1e-6,
       "atol": 1e-8
     },
+    "calc_globalcurvefit": {
+      "matlab_fn": "fitting.globalCurveFit (named per-group shared params; 4 cases: Gaussian shared-sigma / no-constraint / subset-share + Exp shared-tau, with the ASCII→Greek alias path)",
+      "python_fn": "quantized.calc.global_curve_fit.global_curve_fit",
+      "note": "fminsearch over the curveFit logit/log bound transform (MaxFunEvals=4*MaxIter, not eval-limited) + numerical-Hessian errors scaled by global chiSqRed; converges fully so scipy Nelder-Mead matches MATLAB (params ~3e-9, errors ~2e-8). Constraint dataset indices are 1-based in the golden → −1 to 0-based for Python. Inf bounds passed explicitly (not via serialized null). Freeze via freeze_calc_values.m (gcfFreeze).",
+      "rtol": 1e-6,
+      "atol": 1e-8
+    },
     "calc_batchfit": {
       "matlab_fn": "fitting.batchFit (Exponential Decay across 4 datasets, auto-guess + bounds)",
       "python_fn": "quantized.calc.batch_fit.batch_fit",

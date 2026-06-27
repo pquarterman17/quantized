@@ -677,6 +677,13 @@ function freeze_calc_values()
     %   eval-limited — the Python port replicates that budget (see peak_multifit).
     writeJson(mpfFreeze(), fullfile(goldenDir, 'calc_multipeakfit.json'));
 
+    % ── fitting.globalCurveFit: named per-group shared-parameter global fit ─
+    %   Richer than globalFit (boolean mask, shared across ALL): each constraint
+    %   names a param and the SUBSET of datasets sharing it. fminsearch over the
+    %   curveFit bound transform; errors from a numerical Hessian. 4 cases:
+    %   Gaussian shared-sigma / no-constraint / subset-share, + Exp shared-tau.
+    writeJson(gcfFreeze(), fullfile(goldenDir, 'calc_globalcurvefit.json'));
+
     fprintf('Done.\n');
 end
 
@@ -686,6 +693,79 @@ function writeJson(s, outPath)
     fwrite(fid, jsonencode(s));
     fclose(fid);
     fprintf('froze %s\n', outPath);
+end
+
+% ════════════════════════════════════════════════════════════════════════
+%  globalCurveFit freeze (named per-group shared parameters)
+% ════════════════════════════════════════════════════════════════════════
+function out = gcfFreeze()
+    m = fitting.models();
+    gauss = m(strcmp({m.name}, 'Gaussian'));            % p=[A,mu,sigma]
+    expd  = m(strcmp({m.name}, 'Exponential Decay'));   % p=[A,tau,C]
+    out = struct();
+
+    xg = linspace(-5, 5, 80);
+    gtrue = {[10 -1.0 1.2], [6 0.5 1.2], [8 1.5 1.2]};
+    dsG = cell(1,3);
+    for i=1:3, dsG{i} = {xg, gcfEval(gauss.fcn, xg, gtrue{i}) + 0.05*sin(2*xg)}; end
+    ig = {[9 -0.8 1.0], [5 0.4 1.0], [7 1.3 1.0]};
+    lbU = {[-Inf -Inf 0.1]}; ubU = {[Inf Inf 10]};
+
+    cG = struct('paramName', 'sigma', 'datasets', [1 2 3]);   % ASCII -> Greek alias
+    out.gauss_shared_sigma = gcfPack(dsG, gauss, ...
+        fitting.globalCurveFit(dsG, gauss, cG, 'InitGuess', ig, 'LowerBound', lbU, 'UpperBound', ubU), cG, ig);
+
+    out.gauss_no_constraint = gcfPack(dsG, gauss, ...
+        fitting.globalCurveFit(dsG, gauss, [], 'InitGuess', ig, 'LowerBound', lbU, 'UpperBound', ubU), [], ig);
+
+    cSub = struct('paramName', 'sigma', 'datasets', [1 2]);   % subset share
+    out.gauss_subset = gcfPack(dsG, gauss, ...
+        fitting.globalCurveFit(dsG, gauss, cSub, 'InitGuess', ig, 'LowerBound', lbU, 'UpperBound', ubU), cSub, ig);
+
+    xe = linspace(0, 8, 70);
+    etrue = {[5 2.5 0.5], [3 2.5 1.0], [7 2.5 0.2]};
+    dsE = cell(1,3);
+    for i=1:3, dsE{i} = {xe, gcfEval(expd.fcn, xe, etrue{i}) + 0.03*sin(3*xe)}; end
+    ige = {[4 2 0], [2.5 2 0.5], [6 2 0]};
+    lbE = {[-Inf 0 -Inf]}; ubE = {[Inf Inf Inf]};
+    cE = struct('paramName', 'τ', 'datasets', [1 2 3]);
+    out.exp_shared_tau = gcfPack(dsE, expd, ...
+        fitting.globalCurveFit(dsE, expd, cE, 'InitGuess', ige, 'LowerBound', lbE, 'UpperBound', ubE), cE, ige);
+end
+
+function y = gcfEval(fcn, x, p), y = fcn(x(:), p); y = y(:)'; end
+
+function s = gcfPack(ds, model, r, constraints, ig)
+    K = numel(ds);
+    s = struct();
+    s.x = ds{1}{1};
+    yy = cell(1,K); for i=1:K, yy{i} = ds{i}{2}; end
+    s.y = yy;
+    s.paramNames = model.paramNames;
+    s.initGuess = ig;
+    if isempty(constraints)
+        s.constraints = {};
+    else
+        cc = cell(1, numel(constraints));
+        for i=1:numel(constraints)
+            cc{i} = struct('paramName', char(string(constraints(i).paramName)), ...
+                           'datasets', constraints(i).datasets);
+        end
+        s.constraints = cc;
+    end
+    res = struct('params', {r.params}, 'errors', {r.errors}, 'R2', r.R2, 'RMSE', r.RMSE, ...
+        'chiSqRed', r.chiSqRed, 'nTotal', r.nTotal, 'nFree', r.nFree, 'exitFlag', r.exitFlag);
+    if isempty(r.shared)
+        res.shared = {};
+    else
+        sh = cell(1, numel(r.shared));
+        for i=1:numel(r.shared)
+            sh{i} = struct('name', r.shared(i).name, 'paramIdx', r.shared(i).paramIdx, ...
+                'datasets', r.shared(i).datasets, 'value', r.shared(i).value, 'error', r.shared(i).error);
+        end
+        res.shared = sh;
+    end
+    s.result = res;
 end
 
 % ════════════════════════════════════════════════════════════════════════

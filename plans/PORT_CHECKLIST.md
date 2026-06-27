@@ -115,8 +115,11 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] Global / shared-parameter fit — `+fitting/globalFit.m` → `calc/global_fit.py`
       (super-param packing: shared once + per-dataset free blocks; joint curve_fit);
       golden `calc_globalfit.json` (3 datasets @rtol 1e-6, ~1e-9)
-- [ ] Global fit (richer variant) — `+fitting/globalCurveFit.m` (per-dataset model +
-      named shared-parameter constraints; 600-line superset of globalFit)
+- [x] Global fit (richer variant) — `+fitting/globalCurveFit.m` → `calc/global_curve_fit.py`
+      (per-dataset models + named per-group shared-parameter constraints with subset
+      sharing + Greek-alias resolution; fminsearch over the curveFit bound transform,
+      numerical-Hessian errors); golden `calc_globalcurvefit.json` (4 cases:
+      Gaussian shared-σ / no-constraint / subset / Exp shared-τ @rtol 1e-6, ~3e-9)
 - [x] Peak tracking — `+fitting/trackPeak.m` → `calc/peak_track.py` (follow a drifting
       peak across a dataset series; Gaussian/Lorentzian via bounded curve_fit, R²>0.5
       gate); golden `calc_trackpeak.json` (2 shapes @rtol 1e-6, ~1e-9)
