@@ -206,7 +206,7 @@ Source: `+dataWorkspace/`, `DataWorkspace.m`
 - [ ] WorkspaceModel (datasets, columns, roles)
 - [ ] Column roles
 - [ ] Formula engine (no eval) + computed-column snapshots + recompute
-- [ ] Sort / filter / descriptive stats / masking
+- [x] Sort / filter / descriptive stats / masking — Stage `Worksheet`: header-click sort, structured row filter (col/op/value + Extract), per-column golden `descriptive_stats` footer, click-to-mask rows (excluded from stats/extract). Commits `e8834aa`/`b412725`/`61e479e`.
 - [ ] Workspace file format (`.dwk`) + autosave
 
 ---

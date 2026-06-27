@@ -444,11 +444,16 @@ MATLAB."**
   **Advances W5 #209 "filter"** — sort + stats + filter now done; only **masking**
   (Origin click-to-mask individual rows, kept visible but excluded from analysis)
   remains on that bundled line, and is largely subsumed by filtering for most uses.
+- **W5 worksheet — row masking** (2026-06-27) — click a row number to mask it: it
+  stays visible (greyed/struck) but drops from the analysis set. Stats + Extract
+  both consume one derived `analysisRows = filtered − masked`; "Unmask (N)" clears;
+  mask keyed by original index, reset per dataset. Extract now writes
+  `<name> (subset)`. Commit `61e479e`; gate green (211 tests). **Completes W5 #209**
+  (sort / filter / descriptive stats / masking all done — checklist ticked).
 
 **Next pick-up (highest value first):**
 1. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
-   golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes);
-   worksheet masking (click-to-mask rows, excluded from stats but kept visible).
+   golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 2. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
    Rigaku `.raw` 2-D RSM, polarized-asymmetry consolidated CSV.
 3. **Standing verification gap** — frontend uPlot/Canvas render modes (map,
