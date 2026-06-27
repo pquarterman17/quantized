@@ -7,7 +7,7 @@ the codebase never accretes the god-scripts the MATLAB original did.
 
 **Status:** Active
 **Created:** 2026-06-21
-**Updated:** 2026-06-25
+**Updated:** 2026-06-26
 
 ---
 
@@ -389,3 +389,37 @@ MATLAB."**
   unified legend (fit/peak/baseline), reference lines, and text annotations
   shipped (uPlot plugins + Inspector cards), plus grid/legend show-hide toggles.
   **Remaining (#36 open):** insets, polar, multi-panel / figure builder.
+
+### Session 2026-06-26 (golden backfill + region pick)
+
+> Backend golden parity is now essentially complete. The remaining backlog is
+> either out-of-scope (DiraCulator W4, MCMC/Pawley, Origin COM), blocked on real
+> binary sample files (importOxford/Opus/SPC, Rigaku 2D, polarized CSV), or a
+> larger frontend feature (a corrections workshop with a BG-from-file dataset
+> picker — backend + API are ready). **Pick-up pointer for next session below.**
+
+- ~~**BG-from-file dataset subtraction — golden**~~ (2026-06-26) — `applyCorrections`
+  step 4 (`calc/corrections.apply_corrections` `bg_dataset`/`bg_interp`) was
+  ported + routed but ungolden; froze `calc_bgfromfile.json` (linear/pchip/spline
+  + 0-fill extrapolation, 2-channel) → matches MATLAB ~1e-14. Commit `4f645d7`.
+- ~~**RSM Q-space — golden**~~ (2026-06-26) — `calc/qspace.compute_qspace` vs
+  `parser.computeQSpace` on a 5×7 omega×2θ grid (N≠M catches an axis swap);
+  **bit-exact**. Commit `a18c75a`. (The 2-D `_build_2d`/`map2D` matrix golden vs
+  `importXRDML` itself is still open — structure-mismatched scattered-vs-matrix.)
+- ~~**Rubber-band region pick (#36-adjacent)**~~ (2026-06-26) — baseline "Fit from
+  region" gains a "⬚ Pick range on plot" drag: a `region` `PlotTool` → uPlot
+  `setSelect`/`posToVal` → pure `lib/regionSelect.normalizeRange` (tested) →
+  `store.regionPicked` → `useBaseline` fills the x-min/x-max box edges. x-only
+  (2-D y-box is a future extension). Also fixed a latent RTL `afterEach(cleanup)`
+  gap in the test setup. Commit `f531808`. Visual drag unverified (jsdom).
+
+**Next pick-up (highest value first):**
+1. **Corrections workshop + BG-from-file picker** — no corrections workshop exists
+   in `frontend/src/components/workshops/`; build one (workshop pattern: hook +
+   panel + a "load dataset as background" picker) wiring `bg_dataset`/`bg_interp`
+   into `POST /api/corrections/apply`. Backend + API + golden are ready. This is a
+   real multi-component feature, not a bounded loop unit.
+2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
+   golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
+3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
+   Rigaku `.raw` 2-D RSM, polarized-asymmetry consolidated CSV.
