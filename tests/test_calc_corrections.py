@@ -71,6 +71,52 @@ def test_corrections_magnetometry_matches_matlab(
                     rtol=1e-9, atol=1e-12)
 
 
+@pytest.mark.golden
+def test_corrections_bg_from_file_matches_matlab(
+    load_golden: Callable[[str], dict[str, Any]],
+) -> None:
+    """BG-from-file: subtract an interpolated reference-background dataset.
+
+    Covers applyCorrections step 4 across all three interp methods. The active
+    x-range [0,10] overhangs the bg range [2,8], so the 0-fill extrapolation
+    outside the bg domain is exercised; two channels cover the per-channel loop.
+    """
+    g = load_golden("calc_bgfromfile.json")
+    active = DataStruct.create(
+        np.asarray(g["input"]["active"]["time"], dtype=float),
+        np.asarray(g["input"]["active"]["values"], dtype=float),
+        labels=["A", "B"],
+        units=["u", "u"],
+    )
+    bg = DataStruct.create(
+        np.asarray(g["input"]["bg"]["time"], dtype=float),
+        np.asarray(g["input"]["bg"]["values"], dtype=float),
+        labels=["bg"],
+        units=["u"],
+    )
+    for case in g["cases"]:
+        out = apply_corrections(active, {}, bg_dataset=bg, bg_interp=case["interp"])
+        exp_time = np.asarray(case["time"], dtype=float)
+        exp_vals = np.asarray(case["values"], dtype=float)  # (60, 2)
+        assert_allclose(out.time, exp_time, rtol=1e-9, atol=1e-9,
+                        err_msg=f"time mismatch for interp={case['interp']}")
+        assert_allclose(out.values, exp_vals, rtol=1e-9, atol=1e-9,
+                        err_msg=f"values mismatch for interp={case['interp']}")
+
+
+def test_corrections_bg_from_file_zero_fill_outside_range() -> None:
+    """Outside the bg x-range the subtraction is 0, so those points pass through."""
+    x = np.linspace(0.0, 10.0, 21)
+    y = np.full_like(x, 100.0)
+    active = DataStruct.create(x, y, labels=["I"], units=["cps"])
+    bg = DataStruct.create(np.array([4.0, 5.0, 6.0]), np.array([10.0, 10.0, 10.0]))
+    out = apply_corrections(active, {}, bg_dataset=bg, bg_interp="linear")
+    # x < 4 and x > 6 -> 0-fill -> unchanged 100; inside [4,6] -> 100 - 10 = 90.
+    inside = (x >= 4.0) & (x <= 6.0)
+    assert_allclose(out.values[~inside, 0], 100.0)
+    assert_allclose(out.values[inside, 0], 90.0)
+
+
 def test_corrections_trim_and_offset() -> None:
     x = np.linspace(0.0, 10.0, 11)
     y = np.arange(11.0)

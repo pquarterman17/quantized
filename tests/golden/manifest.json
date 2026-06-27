@@ -196,6 +196,13 @@
       "rtol": 1e-9,
       "atol": 1e-9
     },
+    "calc_bgfromfile": {
+      "matlab_fn": "bosonPlotter.applyCorrections step 4 (BG-from-file): subtract interp1(bgX, bgY, x, method, 0) from every channel; 3 cases (linear / pchip / spline) over an active range that overhangs the bg range on both sides",
+      "python_fn": "quantized.calc.corrections.apply_corrections (bg_dataset=, bg_interp=)",
+      "note": "reference-background dataset subtraction with 0-fill extrapolation outside the bg x-range. linear=np.interp(left=0,right=0); pchip=PchipInterpolator(extrapolate=False)→nan_to_num(0); spline=CubicSpline not-a-knot(extrapolate=False)→nan_to_num(0). 2-channel active covers the per-channel loop; all 3 methods match ~1e-14 abs (tol 1e-9 for cross-platform FP headroom). Freeze via freeze_calc_values.m (bgfFreeze).",
+      "rtol": 1e-9,
+      "atol": 1e-9
+    },
     "calc_batchfit": {
       "matlab_fn": "fitting.batchFit (Exponential Decay across 4 datasets, auto-guess + bounds)",
       "python_fn": "quantized.calc.batch_fit.batch_fit",

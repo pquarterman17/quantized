@@ -697,6 +697,11 @@ function freeze_calc_values()
     % ── BG-from-region: box-mask + polyfit (BosonPlotter onBGMouseUp core) ─
     writeJson(bgrFreeze(), fullfile(goldenDir, 'calc_bgregion.json'));
 
+    % ── BG-from-file: subtract an interpolated reference-background dataset ─
+    %   (applyCorrections step 4). Active x overhangs the bg range on both
+    %   sides to exercise interp1's 0-fill; linear/pchip/spline interp methods.
+    writeJson(bgfFreeze(), fullfile(goldenDir, 'calc_bgfromfile.json'));
+
     fprintf('Done.\n');
 end
 
@@ -1080,4 +1085,40 @@ function c = bgrCase(x, y, xmin, xmax, ymin, ymax, order)
     c = struct('x_min',xmin,'x_max',xmax,'y_min',ymin,'y_max',ymax,'order',order, ...
         'coeffs',p, 'n',numel(xp), 'mean',mean(yp), 'std',std(yp), ...
         'min',min(yp), 'max',max(yp), 'background', polyval(p, x));
+end
+
+% ════════════════════════════════════════════════════════════════════════
+%  BG-from-file freeze (reference-background dataset subtraction)
+% ════════════════════════════════════════════════════════════════════════
+function out = bgfFreeze()
+    % applyCorrections step 4: subtract interp1(bgX, bgY, x, method, 0) from
+    % every channel. The active x-range [0,10] overhangs the bg range [2,8]
+    % on both sides so interp1's 0-fill extrapolation is exercised; bg has
+    % structure so pchip/spline genuinely differ from linear. Two channels
+    % cover the per-channel subtraction loop. All other steps are no-ops.
+    x   = linspace(0, 10, 60).';
+    y1  = 100 + 5*x + 20*sin(x);
+    y2  = 50 + 2*x.^2 - 10*cos(x);
+    vals = [y1, y2];                       % 60×2 (kept un-transposed -> [pt][ch])
+    raw = struct('time', x, 'values', vals, 'labels', {{'A','B'}}, ...
+        'units', {{'u','u'}}, 'metadata', struct());
+    bgx = linspace(2, 8, 25).';            % narrower than [0,10] -> 0-fill outside
+    bgy = 10 + 2*bgx + 3*sin(2*bgx);
+    bg  = struct('time', bgx, 'values', bgy, 'labels', {{'bg'}}, ...
+        'units', {{'u'}}, 'metadata', struct());
+    p = struct('xOff',0,'yOff',0,'bgSlope',0,'bgInt',0, ...
+        'xTrimMin',NaN,'xTrimMax',NaN,'smoothEnabled',false, ...
+        'normMethod','None','derivativeMode','None');
+    out = struct();
+    out.input = struct('active', struct('time', x, 'values', vals), ...
+                       'bg', struct('time', bgx, 'values', bgy));
+    methods = {'linear','pchip','spline'};
+    cases = cell(numel(methods), 1);
+    for mi = 1:numel(methods)
+        cc = bosonPlotter.applyCorrections(raw, p, ...
+            'BgDataset', bg, 'BgInterp', methods{mi});
+        cases{mi} = struct('interp', methods{mi}, ...
+            'time', cc.time, 'values', cc.values);  %#ok<AGROW>
+    end
+    out.cases = cases;
 end
