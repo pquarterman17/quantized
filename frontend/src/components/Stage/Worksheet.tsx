@@ -2,13 +2,24 @@
 // computed column with a formula (e.g. "2*A + sqrt(B)") over x + the channels
 // A, B, C … The computed column lands as a derived dataset in the library.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { statsDescriptive } from "../../lib/api";
+import { fmtNum } from "../../lib/format";
 import { channelLetter, compileFormula } from "../../lib/formula";
-import type { DataStruct } from "../../lib/types";
+import type { CalcResult, DataStruct } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
 
 const MAX_ROWS = 500;
+// The descriptive-stats keys surfaced in the footer (matches StatsCard's set).
+const STAT_ROWS: [string, string][] = [
+  ["Mean", "mean"],
+  ["Std", "std"],
+  ["Min", "min"],
+  ["Max", "max"],
+  ["Median", "median"],
+  ["N", "N"],
+];
 let _seq = 0;
 
 export default function Worksheet() {
@@ -19,6 +30,10 @@ export default function Worksheet() {
   const [formula, setFormula] = useState("");
   const [colName, setColName] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [showStats, setShowStats] = useState(false);
+  // Per-column descriptive stats: index 0 = x column, 1.. = channels (null = pending).
+  const [colStats, setColStats] = useState<(CalcResult | null)[] | null>(null);
+  const [statsErr, setStatsErr] = useState(false);
 
   // Row order for the current sort (col = -1 is the x column). Non-finite last.
   const order = useMemo(() => {
@@ -35,6 +50,31 @@ export default function Worksheet() {
       return (va - vb) * sort.dir;
     });
   }, [active, sort]);
+
+  // Fetch per-column descriptive stats (golden /api/stats/descriptive) over the
+  // FULL arrays — independent of the MAX_ROWS display cap and the sort order.
+  useEffect(() => {
+    if (!showStats || !active) {
+      setColStats(null);
+      setStatsErr(false);
+      return;
+    }
+    let cancelled = false;
+    setColStats(null);
+    setStatsErr(false);
+    const { time, values, labels } = active.data;
+    const columns = [time, ...labels.map((_, c) => values.map((row) => row[c]))];
+    Promise.all(columns.map((col) => statsDescriptive(col)))
+      .then((res) => {
+        if (!cancelled) setColStats(res);
+      })
+      .catch(() => {
+        if (!cancelled) setStatsErr(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, showStats]);
 
   if (!active) {
     return (
@@ -117,6 +157,14 @@ export default function Worksheet() {
         <button className="qz-btn" disabled={!formula.trim()} onClick={addColumn}>
           Add column
         </button>
+        <button
+          className={showStats ? "qz-btn qz-active" : "qz-btn"}
+          aria-pressed={showStats}
+          onClick={() => setShowStats((v) => !v)}
+          title="Per-column statistics"
+        >
+          Σ Stats
+        </button>
         <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           vars: {vars}
         </span>
@@ -161,6 +209,30 @@ export default function Worksheet() {
             </tr>
           ))}
         </tbody>
+        {showStats && (
+          <tfoot>
+            {statsErr ? (
+              <tr>
+                <td className="rownum" />
+                <td colSpan={labels.length + 1} className="qzk-ds-meta">
+                  statistics unavailable offline
+                </td>
+              </tr>
+            ) : (
+              STAT_ROWS.map(([label, key]) => (
+                <tr key={key}>
+                  <td className="rownum" title="column statistic">
+                    {label}
+                  </td>
+                  <td>{colStats ? fmtNum(colStats[0]?.[key]) : "…"}</td>
+                  {labels.map((lab, c) => (
+                    <td key={lab}>{colStats ? fmtNum(colStats[c + 1]?.[key]) : "…"}</td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tfoot>
+        )}
       </table>
       {time.length > MAX_ROWS && (
         <div className="qzk-ds-meta" style={{ padding: 8 }}>
