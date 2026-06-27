@@ -689,6 +689,11 @@ function freeze_calc_values()
     %   auto-guess + fminsearch over the curveFit bound transform, unbounded).
     writeJson(sfFreeze(), fullfile(goldenDir, 'calc_surfacefit.json'));
 
+    % ── fitting.{rsmAnalyze,rsmStrain}: RSM peak extraction + strain ───────
+    %   Deterministic synthetic 2-Gaussian map (substrate+film) + Q grids:
+    %   smooth → local maxima → per-peak surfaceFit (angle + Q) → strain chain.
+    writeJson(rsmFreeze(), fullfile(goldenDir, 'calc_rsm.json'));
+
     fprintf('Done.\n');
 end
 
@@ -1005,4 +1010,46 @@ function out = sfFreeze()
             'exitFlag', r.exitFlag);
     end
     out.fits = fits;
+end
+
+% ════════════════════════════════════════════════════════════════════════
+%  RSM peak extraction + strain freeze (rsmAnalyze / rsmStrain)
+% ════════════════════════════════════════════════════════════════════════
+function out = rsmFreeze()
+    omega = linspace(33.0, 35.0, 40);    % axis1 (deg), N=40
+    tth   = linspace(68.0, 72.0, 50);    % axis2 (deg), M=50
+    [TTH, OM] = meshgrid(tth, omega);
+    g = @(A,o0,t0,so,st) A*exp(-((OM-o0).^2/(2*so^2) + (TTH-t0).^2/(2*st^2)));
+    I = g(1000, 34.00, 70.00, 0.12, 0.25) + g(450, 34.45, 70.70, 0.10, 0.22) + 2.0;
+    I = I + 0.5*sin(3*OM).*cos(2*TTH);
+    Qx = -0.05 + 0.012*(TTH-70.0) + 0.004*(OM-34.0);
+    Qz =  4.50 + 0.020*(TTH-70.0) + 0.001*(OM-34.0);
+
+    map = struct('intensity', I, 'axis1', omega(:), 'axis2', tth(:), ...
+                 'Qx', Qx, 'Qz', Qz, 'intensityUnit', 'cps');
+    r = fitting.rsmAnalyze(map, 'NPeaks', 2, 'FitModel', '2D Gaussian');
+
+    out = struct();
+    out.intensity = I; out.axis1 = omega; out.axis2 = tth; out.Qx = Qx; out.Qz = Qz;
+    out.analyze = struct('nPeaksFound', r.nPeaksFound, 'usedQSpace', r.usedQSpace, ...
+        'intensityUnit', r.intensityUnit, 'peaks', {rsmPackPeaks(r.peaks)});
+    out.strain_from_analyze = fitting.rsmStrain(r.peaks(1).centre_Q, r.peaks(2).centre_Q);
+
+    strain = struct();
+    strain.asym      = fitting.rsmStrain([-0.050, 4.500], [-0.048, 4.520]);
+    strain.with_bulk = fitting.rsmStrain([-0.050, 4.500], [-0.048, 4.520], 'Bulk', [-0.040, 4.520]);
+    strain.symmetric = fitting.rsmStrain([0.0, 4.500], [0.0, 4.530]);
+    out.strain = strain;
+end
+
+function arr = rsmPackPeaks(peaks)
+    n = numel(peaks);
+    arr = cell(1, n);
+    for k = 1:n
+        p = peaks(k);
+        arr{k} = struct('rank', p.rank, 'centre_angle', p.centre_angle, ...
+            'centre_Q', p.centre_Q, 'fwhm_angle', p.fwhm_angle, 'fwhm_Q', p.fwhm_Q, ...
+            'amplitude', p.amplitude, 'background', p.background, ...
+            'classification', p.classification);
+    end
 end
