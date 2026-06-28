@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildOpts, tickFormatter } from "./uplotOpts";
+import { buildOpts, tickFormatter, xIsAscending } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
 
 const payload: PlotPayload = {
@@ -200,6 +200,36 @@ describe("buildOpts", () => {
     const auto = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
     expect(auto.axes?.[0]?.values).toBeUndefined();
     expect(auto.axes?.[1]?.values).toBeUndefined();
+  });
+
+  it("marks the x series ascending for sorted x (keeps uPlot's fast path)", () => {
+    // base payload x = [0, 1, 2] is sorted ascending.
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    expect(opts.series[0].sorted).toBe(1);
+  });
+
+  it("marks the x series unsorted for a non-monotonic x (hysteresis loop)", () => {
+    // M-vs-H loop: field sweeps +max -> -max -> +max, so x is not monotonic.
+    // Without sorted:0 uPlot reads only the endpoints and collapses the x-range
+    // to a sliver -> blank plot (the QD magnetometry bug).
+    const loop: PlotPayload = {
+      ...payload,
+      data: [
+        [70000, 0, -70000, 0, 70000],
+        [1, 0.5, -1, -0.5, 1],
+      ],
+      series: [{ label: "M", unit: "emu" }],
+    };
+    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom" });
+    expect(opts.series[0].sorted).toBe(0);
+  });
+
+  it("xIsAscending: true for sorted/with-nulls, false on any decrease", () => {
+    expect(xIsAscending([0, 1, 2, 3])).toBe(true);
+    expect(xIsAscending([0, 1, 1, 2])).toBe(true); // non-strict (ties) is fine
+    expect(xIsAscending([0, null, 2, null, 4])).toBe(true); // nulls skipped
+    expect(xIsAscending([0, 1, 0.5, 2])).toBe(false);
+    expect(xIsAscending([70000, -70000, 70000])).toBe(false);
   });
 
   it("adds a right-side y2 scale + axis and routes axis-1 series to it", () => {

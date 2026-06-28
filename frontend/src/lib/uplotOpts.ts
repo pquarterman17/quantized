@@ -58,6 +58,23 @@ export function tickFormatter(fmt?: AxisFormat): TickValues | undefined {
   return (_u, splits) => splits.map((v) => (v == null ? null : fn(v)));
 }
 
+/** Is the x column sorted ascending? uPlot's x scale defaults to `sorted: 1`,
+ *  meaning it derives the scale range from the *endpoints* (a binary-search
+ *  optimization) instead of scanning. That assumption breaks for non-monotonic x
+ *  — e.g. a magnetometry M-vs-H hysteresis loop sweeps field up then down, so the
+ *  first/last points are both at +saturation and uPlot collapses the x-range to a
+ *  sliver → a blank plot. Detect it so we can fall back to `Unsorted` (scan all
+ *  points). Nulls are skipped (they don't break monotonicity). */
+export function xIsAscending(xs: readonly (number | null)[]): boolean {
+  let prev = -Infinity;
+  for (const v of xs) {
+    if (v == null) continue;
+    if (v < prev) return false;
+    prev = v;
+  }
+  return true;
+}
+
 /** Effective stroke for display-series `i`: an explicit override (token name or
  *  literal hex) wins, else the palette color by position. A `"--token"` color is
  *  resolved through `cssVar` so it stays re-themeable; a literal passes through. */
@@ -211,7 +228,10 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     scales,
     axes,
     series: [
-      {},
+      // x series: declare its sort order so uPlot autoscales correctly. Ascending
+      // (the common case: temperature/2θ/time) keeps the fast endpoint path;
+      // non-monotonic x (hysteresis loops, swept-back scans) must scan all points.
+      { sorted: xIsAscending(payload.data[0] as (number | null)[]) ? 1 : 0 },
       ...payload.series.map((s, i) => {
         const style = seriesStyles?.[i];
         const stroke = seriesColor(i, style);

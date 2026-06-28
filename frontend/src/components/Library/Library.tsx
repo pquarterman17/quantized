@@ -120,7 +120,13 @@ export default function Library() {
                 {d.name}
               </span>
             )}
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          </div>
+          <Sparkline data={d.data} />
+          <div className="qzk-ds-foot">
+            <span className="qzk-ds-meta">
+              {d.data.time.length} pts · {d.data.units[0] || "—"}
+            </span>
+            <span className="qzk-ds-actions">
               <Badge tone="accent">{d.data.labels.length}ch</Badge>
               {canReorder && (
                 <>
@@ -169,10 +175,6 @@ export default function Library() {
                 ✕
               </button>
             </span>
-          </div>
-          <Sparkline data={d.data} />
-          <div className="qzk-ds-meta">
-            {d.data.time.length} pts · {d.data.units[0] || "—"}
           </div>
         </div>
       ))}
