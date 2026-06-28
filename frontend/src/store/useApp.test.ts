@@ -175,6 +175,36 @@ describe("useApp duplicateDataset", () => {
   });
 });
 
+describe("useApp moveDataset", () => {
+  const three = () => [
+    { id: "d1", name: "a", data: raw },
+    { id: "d2", name: "b", data: raw },
+    { id: "d3", name: "c", data: raw },
+  ];
+
+  it("swaps a dataset up and down with its neighbor", () => {
+    useApp.setState({ datasets: three(), activeId: "d2" });
+    useApp.getState().moveDataset("d2", -1); // up
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["d2", "d1", "d3"]);
+    useApp.getState().moveDataset("d2", 1); // back down
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["d1", "d2", "d3"]);
+  });
+
+  it("does not change the active selection", () => {
+    useApp.setState({ datasets: three(), activeId: "d3" });
+    useApp.getState().moveDataset("d1", 1);
+    expect(useApp.getState().activeId).toBe("d3");
+  });
+
+  it("is a no-op at the ends and for an unknown id", () => {
+    useApp.setState({ datasets: three(), activeId: "d1" });
+    useApp.getState().moveDataset("d1", -1); // already first
+    useApp.getState().moveDataset("d3", 1); // already last
+    useApp.getState().moveDataset("ghost", 1);
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["d1", "d2", "d3"]);
+  });
+});
+
 describe("useApp renameDataset", () => {
   it("renames by id and ignores a blank name", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "old.dat", data: raw }], activeId: "d1" });

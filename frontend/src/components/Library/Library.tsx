@@ -20,6 +20,7 @@ export default function Library() {
   const addDataset = useApp((s) => s.addDataset);
   const removeDataset = useApp((s) => s.removeDataset);
   const duplicateDataset = useApp((s) => s.duplicateDataset);
+  const moveDataset = useApp((s) => s.moveDataset);
   const renameDataset = useApp((s) => s.renameDataset);
   const importFiles = useApp((s) => s.importFiles);
   const [query, setQuery] = useState("");
@@ -52,6 +53,9 @@ export default function Library() {
   const shown = datasets.filter((d) =>
     d.name.toLowerCase().includes(query.toLowerCase()),
   );
+  // Reorder only on the full list — swapping adjacent rows while a filter hides
+  // neighbors would be confusing, so the ▲▼ buttons hide when a query is active.
+  const canReorder = query.trim() === "";
 
   return (
     <aside
@@ -118,6 +122,32 @@ export default function Library() {
             )}
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Badge tone="accent">{d.data.labels.length}ch</Badge>
+              {canReorder && (
+                <>
+                  <button
+                    className="qz-icon-btn"
+                    title="Move up"
+                    disabled={datasets.indexOf(d) === 0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      moveDataset(d.id, -1);
+                    }}
+                  >
+                    ▲
+                  </button>
+                  <button
+                    className="qz-icon-btn"
+                    title="Move down"
+                    disabled={datasets.indexOf(d) === datasets.length - 1}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      moveDataset(d.id, 1);
+                    }}
+                  >
+                    ▼
+                  </button>
+                </>
+              )}
               <button
                 className="qz-icon-btn"
                 title="Duplicate"

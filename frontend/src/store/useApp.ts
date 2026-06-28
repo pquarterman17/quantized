@@ -87,6 +87,7 @@ interface AppState {
   setActive: (id: string) => void;
   removeDataset: (id: string) => void;
   duplicateDataset: (id: string) => void;
+  moveDataset: (id: string, dir: -1 | 1) => void;
   renameDataset: (id: string, name: string) => void;
   applyCorrections: (
     id: string,
@@ -339,6 +340,18 @@ export const useApp = create<AppState>((set, get) => ({
         yLim: null,
         rsmPeaks: null,
       };
+    }),
+  // Reorder the library by swapping a dataset with its neighbor (dir -1 = up,
+  // +1 = down). No-op at the ends or for an unknown id. Order drives the list and
+  // the consolidated-export column order; the active selection is unaffected.
+  moveDataset: (id, dir) =>
+    set((s) => {
+      const i = s.datasets.findIndex((d) => d.id === id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= s.datasets.length) return {};
+      const datasets = [...s.datasets];
+      [datasets[i], datasets[j]] = [datasets[j], datasets[i]];
+      return { datasets };
     }),
   renameDataset: (id, name) =>
     set((s) => ({
