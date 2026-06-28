@@ -528,6 +528,13 @@ MATLAB."**
   null → empty) unit-tested; capability-guarded `copyText` (false on insecure
   context / denial → "clipboard unavailable" status). Gates green (frontend 264 +
   build).
+- **Interactive legend** (2026-06-27, `8ac41f3`) — W6 plotting. Click a legend
+  entry on the plot to show/hide that series. Hidden series stays in the payload
+  (uPlot `show:false`) so its color is stable and the legend entry remains (greyed
+  + struck-through) to toggle back; hidden series drop out of autoscale. Store
+  `hiddenChannels[]` + `toggleHidden` (reset with the dataset); `uplotOpts.hidden`
+  arg; PlotStage maps legend index → plotted channel (overlays not clickable),
+  refuses to hide the last visible series. Gates green (frontend 266 + build).
 
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to
@@ -535,11 +542,12 @@ MATLAB."**
    alternation is **dropped — no W4/DiraCulator/SLD-from-formula work**. Pick from
    plotting + W5 DataWorkspace: **plot interactions** (measurement ruler `d5c3244`;
    remaining — legend rename/reorder, copy-data-to-clipboard, more cursor
-   read-outs; copy-data-to-clipboard `c3780c0` shipped), **W5 column roles** (X-role
-   `ad6b460` + Y-error bars `7da9a21` shipped; remaining — label/ignore roles), the
-   **computed-column formula engine** (snapshots + recompute), or **workspace
-   autosave**. Non-Boson-Plotter parity items (XRDML `map2D` golden, blocked
-   parsers) stay paused unless the user reopens scope.
+   read-outs; copy-data-to-clipboard `c3780c0` + interactive legend `8ac41f3`
+   shipped), **W5 column roles** (X-role `ad6b460` + Y-error bars `7da9a21` shipped;
+   remaining — label/ignore roles), the **computed-column formula engine**
+   (snapshots + recompute), or **workspace autosave**. Non-Boson-Plotter parity
+   items (XRDML `map2D` golden, blocked parsers) stay paused unless the user reopens
+   scope.
 2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
