@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { PALETTES } from "../../lib/palettes";
 import { type Accent, type Density, type Theme, useApp } from "../../store/useApp";
 import { Select } from "../primitives";
 
@@ -11,6 +12,7 @@ const THEMES: Theme[] = ["dark", "light"];
 const ACCENTS: Accent[] = ["violet", "teal", "ocean", "amber", "rose"];
 const DENSITIES: Density[] = ["compact", "regular", "comfy"];
 const opts = (xs: string[]) => xs.map((v) => ({ value: v, label: v }));
+const PALETTE_OPTS = PALETTES.map((p) => ({ value: p.value, label: p.label }));
 
 export default function AppearanceMenu() {
   const [open, setOpen] = useState(false);
@@ -21,6 +23,8 @@ export default function AppearanceMenu() {
   const setAccent = useApp((s) => s.setAccent);
   const density = useApp((s) => s.density);
   const setDensity = useApp((s) => s.setDensity);
+  const palette = useApp((s) => s.palette);
+  const setPalette = useApp((s) => s.setPalette);
 
   useEffect(() => {
     if (!open) return;
@@ -42,7 +46,7 @@ export default function AppearanceMenu() {
     <div ref={ref} style={{ position: "relative" }}>
       <button
         className={`qz-icon-btn${open ? " active" : ""}`}
-        title="Appearance (theme · accent · density)"
+        title="Appearance (theme · accent · density · palette)"
         onClick={() => setOpen((o) => !o)}
       >
         ⚙
@@ -74,6 +78,14 @@ export default function AppearanceMenu() {
             options={opts(DENSITIES)}
             value={density}
             onChange={(e) => setDensity(e.target.value as Density)}
+          />
+          <label className="qzk-field-lbl" style={{ marginTop: 4 }}>
+            Series palette
+          </label>
+          <Select
+            options={PALETTE_OPTS}
+            value={palette}
+            onChange={(e) => setPalette(e.target.value)}
           />
         </div>
       )}

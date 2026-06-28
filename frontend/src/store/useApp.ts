@@ -8,6 +8,7 @@ import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api"
 import { cloneDataStruct } from "../lib/dataset";
 import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit, macroStep, type MacroStep } from "../lib/macro";
+import { applyPalette, normalizePalette } from "../lib/palettes";
 import type {
   Annotation,
   AxisFormat,
@@ -52,6 +53,7 @@ interface AppState {
   theme: Theme;
   accent: Accent;
   density: Density;
+  palette: string; // series colour-cycle preset (overrides --series-1..8)
   yLog: boolean;
   xLog: boolean;
   showGrid: boolean; // draw the plot grid lines
@@ -140,6 +142,7 @@ interface AppState {
   setTheme: (theme: Theme) => void;
   setAccent: (accent: Accent) => void;
   setDensity: (density: Density) => void;
+  setPalette: (palette: string) => void;
   setYLog: (yLog: boolean) => void;
   setXLog: (xLog: boolean) => void;
   setShowGrid: (showGrid: boolean) => void;
@@ -211,29 +214,32 @@ interface Prefs {
   theme: Theme;
   accent: Accent;
   density: Density;
+  palette: string;
 }
 
 function loadPrefs(): Prefs {
-  const fb: Prefs = { theme: "dark", accent: "violet", density: "regular" };
+  const fb: Prefs = { theme: "dark", accent: "violet", density: "regular", palette: "default" };
   try {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") as Record<string, unknown>;
     return {
       theme: THEMES.includes(p.theme as string) ? (p.theme as Theme) : fb.theme,
       accent: ACCENTS.includes(p.accent as string) ? (p.accent as Accent) : fb.accent,
       density: DENSITIES.includes(p.density as string) ? (p.density as Density) : fb.density,
+      palette: normalizePalette(p.palette),
     };
   } catch {
     return fb;
   }
 }
 
-function applyDocAttrs(theme: Theme, accent: Accent, density: Density): void {
+function applyDocAttrs(theme: Theme, accent: Accent, density: Density, palette: string): void {
+  applyPalette(palette);
   const el = document.documentElement;
   el.dataset.theme = theme;
   el.dataset.accent = accent;
   el.dataset.density = density;
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ theme, accent, density }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ theme, accent, density, palette }));
   } catch {
     /* storage unavailable (private mode) — non-fatal */
   }
@@ -251,6 +257,7 @@ export const useApp = create<AppState>((set, get) => ({
   theme: _initialPrefs.theme,
   accent: _initialPrefs.accent,
   density: _initialPrefs.density,
+  palette: _initialPrefs.palette,
   yLog: false,
   xLog: false,
   showGrid: true,
@@ -654,16 +661,20 @@ export const useApp = create<AppState>((set, get) => ({
   toggleRight: () => set((s) => ({ rightCollapsed: !s.rightCollapsed })),
   setStageTab: (stageTab) => set({ stageTab }),
   setTheme: (theme) => {
-    applyDocAttrs(theme, get().accent, get().density);
+    applyDocAttrs(theme, get().accent, get().density, get().palette);
     set({ theme });
   },
   setAccent: (accent) => {
-    applyDocAttrs(get().theme, accent, get().density);
+    applyDocAttrs(get().theme, accent, get().density, get().palette);
     set({ accent });
   },
   setDensity: (density) => {
-    applyDocAttrs(get().theme, get().accent, density);
+    applyDocAttrs(get().theme, get().accent, density, get().palette);
     set({ density });
+  },
+  setPalette: (palette) => {
+    applyDocAttrs(get().theme, get().accent, get().density, palette);
+    set({ palette });
   },
   setYLog: (yLog) => {
     set({ yLog });
@@ -809,7 +820,7 @@ export const useApp = create<AppState>((set, get) => ({
 
 // Apply the persisted appearance to <html> on load (set* only ran on change,
 // so without this the first paint had no theme/accent/density attributes).
-applyDocAttrs(_initialPrefs.theme, _initialPrefs.accent, _initialPrefs.density);
+applyDocAttrs(_initialPrefs.theme, _initialPrefs.accent, _initialPrefs.density, _initialPrefs.palette);
 
 /** Convenience selector: the currently active dataset (or null). */
 export function useActiveDataset(): Dataset | null {
