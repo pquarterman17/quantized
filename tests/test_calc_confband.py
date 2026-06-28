@@ -61,3 +61,24 @@ def test_confband_mean_band_is_symmetric() -> None:
     out = confidence_band([d1, d2], method="mean")
     # center is the mean -> equidistant from upper and lower.
     np.testing.assert_allclose(out["upper"] - out["center"], out["center"] - out["lower"])
+
+
+def test_confband_skips_all_nan_dataset() -> None:
+    """A dataset whose channel is all-NaN must not crash PchipInterpolator; it is
+    excluded from the band (its column stays NaN and nanmean ignores it)."""
+    x = np.linspace(0.0, 10.0, 30)
+    good1 = DataStruct.create(x, np.sin(x))
+    good2 = DataStruct.create(x, np.sin(x))
+    nan_ds = DataStruct.create(x, np.full(x.size, np.nan))
+    out = confidence_band([good1, good2, nan_ds], method="mean")
+    assert np.all(np.isfinite(out["center"]))
+    np.testing.assert_allclose(out["center"], np.sin(out["x"]), atol=1e-6)
+
+
+def test_confband_handles_duplicate_x() -> None:
+    """Duplicate x would make PchipInterpolator raise; _sanitize_xy averages."""
+    x = np.array([0.0, 1.0, 1.0, 2.0, 3.0, 4.0])
+    d1 = DataStruct.create(x, x * 2.0)
+    d2 = DataStruct.create(x, x * 2.0 + 1.0)
+    out = confidence_band([d1, d2], method="mean")
+    assert np.all(np.isfinite(out["center"]))

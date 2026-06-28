@@ -52,3 +52,9 @@ def test_pca_num_components_truncates() -> None:
 def test_pca_too_few_rows() -> None:
     with pytest.raises(ValueError, match="at least 2"):
         pca_analysis(np.array([[1.0, 2.0, 3.0]]))
+
+
+def test_pca_nonfinite_raises_clean_error() -> None:
+    """NaN in the matrix gives a clear error, not 'SVD did not converge'."""
+    with pytest.raises(ValueError, match="finite"):
+        pca_analysis(np.array([[1.0, float("nan")], [2.0, 3.0], [4.0, 5.0]]))

@@ -106,6 +106,10 @@ def baseline_als(
     n = yv.size
     if n < 3:
         return yv.copy()
+    if not np.all(np.isfinite(yv)):
+        # A non-finite y makes the sparse solve return all-NaN silently (the
+        # reweighting collapses to a singular system). Fail loudly instead.
+        raise ValueError("baseline_als requires finite y (found NaN or Inf)")
 
     # Second-difference operator D: (n-2) x n  (rows: y[i] - 2y[i+1] + y[i+2]).
     diff2 = sparse.diags(
@@ -132,7 +136,9 @@ def _snip_background(
 ) -> NDArray[np.float64]:
     """SNIP (iterative peak-clipping) background in sqrt space, then boxcar-smoothed."""
     dx = float(np.median(np.diff(x)))
-    if dx <= 0:
+    if not math.isfinite(dx) or dx <= 0:
+        # NaN dx (from a NaN in x) must short-circuit too — NaN <= 0 is False,
+        # so the old guard fell through to _matlab_round(NaN) -> ValueError.
         return y.copy()
     w_max = max(1, min(_matlab_round(max_window_deg / dx), (n - 1) // 2))
     v = np.sqrt(np.maximum(y, 0.0))

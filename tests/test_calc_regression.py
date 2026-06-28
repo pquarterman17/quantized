@@ -56,3 +56,17 @@ def test_lin_regress_singular_raises_valueerror() -> None:
     y = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
     with pytest.raises(ValueError, match="singular"):
         lin_regress(x, y, order=1)
+
+
+def test_lin_regress_constant_y_gives_nan_adjusted_r2() -> None:
+    """Constant y -> ss_tot=0; adjusted R^2 is NaN (was ZeroDivisionError)."""
+    import math
+
+    out = lin_regress(np.array([0.0, 1.0, 2.0, 3.0, 4.0]), np.array([3.0] * 5))
+    assert math.isnan(out["R2adj"])
+    assert out["R2"] == pytest.approx(1.0)
+
+
+def test_lin_regress_mismatched_lengths_raises_clean_error() -> None:
+    with pytest.raises(ValueError, match="same length"):
+        lin_regress(np.array([0.0, 1.0, 2.0, 3.0]), np.array([1.0, 2.0]))

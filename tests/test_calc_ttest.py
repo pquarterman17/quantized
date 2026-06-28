@@ -71,3 +71,21 @@ def test_anova1_identical_groups_no_effect() -> None:
     assert r["fStat"] == pytest.approx(0.0)
     assert r["pValue"] == pytest.approx(1.0)
     assert r["reject"] is False
+
+
+# ── insufficient-sample guards (were ZeroDivisionError) ──────────────────────
+
+
+def test_ttest_one_sample_too_few_raises() -> None:
+    with pytest.raises(ValueError, match="at least 2"):
+        t_test(np.array([5.0]))
+
+
+def test_ttest_all_nan_drops_to_zero_and_raises() -> None:
+    with pytest.raises(ValueError, match="at least 2"):
+        t_test(np.array([float("nan")] * 5))
+
+
+def test_ttest_two_sample_singleton_group_raises() -> None:
+    with pytest.raises(ValueError, match="2 observations per group"):
+        t_test(np.array([5.0]), np.array([1.0, 2.0, 3.0]))

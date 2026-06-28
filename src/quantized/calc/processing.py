@@ -43,6 +43,9 @@ def normalize(
     lo_out, hi_out = out_range
     for c in range(mat.shape[1]):
         col = mat[:, c]
+        if col.size == 0:  # empty column: nothing to normalize (np.nanmin would raise)
+            out[:, c] = col
+            continue
         if method == "range":
             lo = np.nanmin(col)
             hi = np.nanmax(col)
@@ -66,6 +69,8 @@ def _matlab_gradient(f: NDArray[np.float64], x: NDArray[np.float64]) -> NDArray[
     """
     n = f.size
     g = np.empty(n)
+    if n == 0:
+        return g
     if n == 1:
         g[0] = 0.0
         return g

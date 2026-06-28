@@ -123,6 +123,8 @@ def lin_regress(
         raise ValueError("order must be a positive integer")
     xv = np.asarray(x, dtype=float).ravel()
     yv = np.asarray(y, dtype=float).ravel()
+    if xv.size != yv.size:
+        raise ValueError(f"x and y must have the same length (got {xv.size} vs {yv.size})")
     n = xv.size
     k = order + 1
     if n < k + 1:
@@ -149,7 +151,10 @@ def lin_regress(
     ss_tot = float(np.sum((yv - np.mean(yv)) ** 2))
     ss_reg = ss_tot - ss_res
     r2 = 1.0 - ss_res / max(ss_tot, _EPS)
-    r2_adj = 1.0 - (ss_res / df) / (ss_tot / (n - 1))
+    # Constant y -> ss_tot = 0; MATLAB yields NaN for adjusted R^2 (0/0), Python
+    # float division would raise ZeroDivisionError, so guard explicitly.
+    _adj_denom = ss_tot / (n - 1)
+    r2_adj = 1.0 - (ss_res / df) / _adj_denom if _adj_denom != 0.0 else float("nan")
     mse = ss_res / df
     rmse = math.sqrt(mse)
     f_stat = (ss_reg / order) / max(mse, _EPS)
@@ -200,6 +205,8 @@ def t_test(
     if y is None:
         test_type = "one-sample"
         n = xv.size
+        if n < 2:
+            raise ValueError(f"t_test requires at least 2 finite observations (got {n})")
         s = float(np.std(xv, ddof=1))
         se = s / math.sqrt(n)
         mean_diff = float(np.mean(xv)) - mu
@@ -212,6 +219,8 @@ def t_test(
         test_type = "paired"
         d = xv - yv
         n = d.size
+        if n < 2:
+            raise ValueError(f"paired t_test requires at least 2 finite pairs (got {n})")
         s = float(np.std(d, ddof=1))
         se = s / math.sqrt(n)
         mean_diff = float(np.mean(d))
@@ -221,6 +230,10 @@ def t_test(
         yv = yv[~np.isnan(yv)]
         test_type = "two-sample"
         n1, n2 = xv.size, yv.size
+        if n1 < 2 or n2 < 2:
+            raise ValueError(
+                f"two-sample t_test requires >= 2 observations per group (got {n1}, {n2})"
+            )
         s1, s2 = float(np.std(xv, ddof=1)), float(np.std(yv, ddof=1))
         v1, v2 = s1**2 / n1, s2**2 / n2
         se = math.sqrt(v1 + v2)
@@ -337,6 +350,9 @@ def pca_analysis(
     n, p = xa.shape
     if n < 2:
         raise ValueError(f"need at least 2 observations (rows), got {n}")
+    if not np.all(np.isfinite(xa)):
+        # NaN/Inf makes np.linalg.svd raise an opaque "SVD did not converge".
+        raise ValueError("X must contain only finite values (found NaN or Inf)")
 
     mu = xa.mean(axis=0) if center else np.zeros(p)
     xc = xa - mu

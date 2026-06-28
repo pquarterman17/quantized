@@ -13,7 +13,7 @@ import numpy as np
 from scipy.interpolate import PchipInterpolator
 
 from ..datastruct import DataStruct
-from .resample import _interp_column
+from .resample import _interp_column, _sanitize_xy
 
 __all__ = ["confidence_band", "dataset_algebra"]
 
@@ -47,10 +47,12 @@ def confidence_band(
     x_min, x_max, max_len = -np.inf, np.inf, 0
     for ds in datasets:
         xi = np.asarray(ds.time, dtype=float)
-        x_min = max(x_min, float(xi.min()))
-        x_max = min(x_max, float(xi.max()))
+        if not np.isfinite(xi).any():
+            continue  # a fully non-finite x axis contributes no overlap
+        x_min = max(x_min, float(np.nanmin(xi)))
+        x_max = min(x_max, float(np.nanmax(xi)))
         max_len = max(max_len, int(xi.size))
-    if x_min >= x_max:
+    if not np.isfinite([x_min, x_max]).all() or x_min >= x_max:
         raise ValueError("datasets have no overlapping x-range")
 
     n_pts = n_points if n_points > 0 else max_len
@@ -60,8 +62,12 @@ def confidence_band(
         xi = np.asarray(ds.time, dtype=float)
         vals = np.asarray(ds.values, dtype=float)
         ch = min(channel, vals.shape[1] - 1)
-        order = np.argsort(xi, kind="stable")
-        interp = PchipInterpolator(xi[order], vals[order, ch], extrapolate=False)
+        # Sanitize first (drop non-finite, sort, average duplicate x): pchip
+        # rejects NaN and non-strictly-increasing x. No-op on clean data.
+        xs, ys = _sanitize_xy(xi, vals[:, ch])
+        if xs.size < 2:
+            continue  # fewer than 2 finite points — leave this set's column NaN
+        interp = PchipInterpolator(xs, ys, extrapolate=False)
         y_matrix[:, i] = interp(x_common)
 
     if method == "mean":

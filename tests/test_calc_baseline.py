@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from quantized.calc.baseline import baseline_als
+from quantized.calc.baseline import baseline_als, estimate_background
 
 
 @pytest.mark.golden
@@ -30,3 +30,23 @@ def test_baseline_als_tracks_lower_envelope(load_golden: Callable[[str], dict[st
     assert np.all(np.isfinite(bl))
     # Peaks pull the data well above the baseline, so on average bl < y.
     assert float(np.mean(bl)) < float(np.mean(y))
+
+
+# ── non-finite-input robustness ──────────────────────────────────────────────
+
+
+def test_baseline_als_nonfinite_raises() -> None:
+    """A NaN/Inf in y must fail loudly, not silently return all-NaN."""
+    y = np.sin(np.linspace(0, 10, 50))
+    y[10] = np.nan
+    with pytest.raises(ValueError, match="finite"):
+        baseline_als(y)
+
+
+def test_estimate_background_snip_nan_in_x_no_crash() -> None:
+    """A NaN in x makes dx NaN; the SNIP guard must short-circuit, not raise
+    'cannot convert float NaN to integer'."""
+    x = np.linspace(0.0, 10.0, 40)
+    x[5] = np.nan
+    bg = estimate_background(x, np.abs(np.sin(x)), method="snip")
+    assert bg.shape == x.shape

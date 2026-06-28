@@ -49,3 +49,21 @@ def test_derivative_second_order_constant_curvature() -> None:
     d2 = derivative(x, x**2, order=2)
     # d2/dx2 of x^2 is 2 in the interior
     assert_allclose(d2[2:-2], 2.0)
+
+
+# ── degenerate-input robustness (corpus/edge audit) ──────────────────────────
+
+
+def test_derivative_empty_input_is_empty_not_crash() -> None:
+    """An empty x/y (e.g. after impossible trim bounds) must not IndexError."""
+    assert derivative(np.array([]), np.array([])).size == 0
+
+
+def test_derivative_single_point_is_zero() -> None:
+    assert_allclose(derivative(np.array([1.0]), np.array([5.0])), [0.0])
+
+
+@pytest.mark.parametrize("method", ["range", "peak", "zscore"])
+def test_normalize_empty_input_is_empty_not_crash(method: str) -> None:
+    """An empty column must return empty, not raise on np.nanmin of []."""
+    assert normalize(np.array([]), method=method).size == 0
