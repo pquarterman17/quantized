@@ -122,6 +122,59 @@ describe("useApp corrections", () => {
   });
 });
 
+describe("useApp duplicateDataset", () => {
+  it("inserts an independent copy right after the source and activates it", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "first.dat", data: raw },
+        { id: "d2", name: "second.dat", data: raw },
+      ],
+      activeId: "d2",
+    });
+
+    useApp.getState().duplicateDataset("d1");
+
+    const ds = useApp.getState().datasets;
+    expect(ds.map((d) => d.name)).toEqual(["first.dat", "first.dat (copy)", "second.dat"]);
+    const copy = ds[1];
+    expect(copy.id).not.toBe("d1");
+    expect(useApp.getState().activeId).toBe(copy.id); // copy becomes active
+    // Deep copy: the clone's arrays are independent of the source.
+    expect(copy.data).toEqual(raw);
+    expect(copy.data.values).not.toBe(raw.values);
+  });
+
+  it("carries raw / corrections / bgRef onto the copy", () => {
+    const corrected = { ...raw, values: [[5], [15], [25]] };
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "x",
+          data: corrected,
+          raw,
+          corrections: { yOff: 5 },
+          bgRef: { datasetId: "bg", interp: "pchip" },
+        },
+      ],
+      activeId: "d1",
+    });
+
+    useApp.getState().duplicateDataset("d1");
+    const copy = useApp.getState().datasets[1];
+    expect(copy.raw).toEqual(raw);
+    expect(copy.corrections).toEqual({ yOff: 5 });
+    expect(copy.bgRef).toEqual({ datasetId: "bg", interp: "pchip" });
+    expect(copy.corrections).not.toBe(useApp.getState().datasets[0].corrections); // independent
+  });
+
+  it("is a no-op for an unknown id", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1" });
+    useApp.getState().duplicateDataset("ghost");
+    expect(useApp.getState().datasets).toHaveLength(1);
+  });
+});
+
 describe("useApp renameDataset", () => {
   it("renames by id and ignores a blank name", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "old.dat", data: raw }], activeId: "d1" });

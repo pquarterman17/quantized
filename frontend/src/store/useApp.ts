@@ -5,6 +5,7 @@ import { create } from "zustand";
 
 import type { CorrectionsRequest } from "../lib/api";
 import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
+import { cloneDataStruct } from "../lib/dataset";
 import type {
   Annotation,
   AxisFormat,
@@ -85,6 +86,7 @@ interface AppState {
   loadWorkspace: (datasets: Dataset[]) => void;
   setActive: (id: string) => void;
   removeDataset: (id: string) => void;
+  duplicateDataset: (id: string) => void;
   renameDataset: (id: string, name: string) => void;
   applyCorrections: (
     id: string,
@@ -304,6 +306,39 @@ export const useApp = create<AppState>((set, get) => ({
       const activeId =
         s.activeId === id ? (datasets[0]?.id ?? null) : s.activeId;
       return { datasets, activeId };
+    }),
+
+  // Deep-copy a dataset (incl. raw/corrections/bgRef) as an independent "(copy)"
+  // — for trying different corrections/formulas while keeping the original.
+  // Lands right after the source and becomes active, resetting per-dataset view.
+  duplicateDataset: (id) =>
+    set((s) => {
+      const idx = s.datasets.findIndex((d) => d.id === id);
+      if (idx < 0) return {};
+      const src = s.datasets[idx];
+      const clone: Dataset = {
+        id: nextDatasetId(),
+        name: `${src.name} (copy)`,
+        data: cloneDataStruct(src.data),
+        ...(src.raw ? { raw: cloneDataStruct(src.raw) } : {}),
+        ...(src.corrections ? { corrections: { ...src.corrections } } : {}),
+        ...(src.bgRef ? { bgRef: { ...src.bgRef } } : {}),
+      };
+      const datasets = [...s.datasets];
+      datasets.splice(idx + 1, 0, clone);
+      return {
+        datasets,
+        activeId: clone.id,
+        xKey: null,
+        yKeys: null,
+        y2Keys: null,
+        seriesStyles: {},
+        errKeys: {},
+        hiddenChannels: [],
+        xLim: null,
+        yLim: null,
+        rsmPeaks: null,
+      };
     }),
   renameDataset: (id, name) =>
     set((s) => ({

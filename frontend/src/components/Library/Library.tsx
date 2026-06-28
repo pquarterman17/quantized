@@ -19,6 +19,7 @@ export default function Library() {
   const setActive = useApp((s) => s.setActive);
   const addDataset = useApp((s) => s.addDataset);
   const removeDataset = useApp((s) => s.removeDataset);
+  const duplicateDataset = useApp((s) => s.duplicateDataset);
   const renameDataset = useApp((s) => s.renameDataset);
   const importFiles = useApp((s) => s.importFiles);
   const [query, setQuery] = useState("");
@@ -117,6 +118,16 @@ export default function Library() {
             )}
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Badge tone="accent">{d.data.labels.length}ch</Badge>
+              <button
+                className="qz-icon-btn"
+                title="Duplicate"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  duplicateDataset(d.id);
+                }}
+              >
+                ⧉
+              </button>
               <button
                 className="qz-icon-btn"
                 title="Remove"
