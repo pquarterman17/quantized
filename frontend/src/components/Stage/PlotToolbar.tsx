@@ -43,7 +43,7 @@ export default function PlotToolbar({ onReset, onSavePng, onCopyData }: Props) {
         </button>
       ))}
       <span className="qzk-tool-sep" />
-      <button className="qzk-tool-btn" title="Reset view" onClick={onReset}>
+      <button className="qzk-tool-btn" title="Reset view (or double-click the plot)" onClick={onReset}>
         ⊡
       </button>
       <button className="qzk-tool-btn" title="Save plot as PNG" onClick={onSavePng}>

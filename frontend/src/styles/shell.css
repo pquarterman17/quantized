@@ -115,6 +115,11 @@ body {
 /* Optional uPlot chart title (Inspector "Titles & labels"); themed + a fixed
    ~24px height so PlotStage can reserve matching room and not clip the x-axis. */
 .u-title { color: var(--text); font-size: 14px; font-weight: var(--weight-semibold); line-height: 20px; padding-bottom: 4px; }
+/* uPlot box-zoom selection: the library default fill (rgba(0,0,0,.07)) is
+   invisible on the dark canvas, so a drag-zoom gave no feedback ("hope my cursor
+   ended at the right spot"). Tint it with the accent + a dashed border so the
+   user sees exactly what will be zoomed. Double-click the plot to reset. */
+.u-select { background: color-mix(in srgb, var(--accent) 16%, transparent); border: 1px dashed var(--accent); }
 .qzk-glass { position: absolute; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); }
 .qzk-float-tools { top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 3px; padding: 4px; }
 .qzk-tool-btn { width: 32px; height: 32px; display: grid; place-items: center; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text-dim); font-size: 15px; cursor: default; }
