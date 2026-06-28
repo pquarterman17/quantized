@@ -67,10 +67,11 @@ file → io.import_auto → DataStruct(.time/.values/.labels/.units/.metadata)
 ### Dependency map
 - Items 1, 4, 6 (done) were independent quick wins; 2 + 3 (done) shared the
   Library selection model.
-- Item 11 (two-frame refl) needs a refl1d **.dat-set** parser (`*-refl.dat` +
-  `*-profile.dat`), not `.refl` disambiguation — item 5 is robustness-only.
+- Item 11 (two-frame refl, done) needed only the frontend — the io/refl1d parser
+  already reads `*-refl.dat` + `*-profile.dat` (labels locked by tests). Item 5
+  (.refl sniffer) was never a dependency; it stays robustness-only.
 - Item 10 (right-click menu, done) shipped a reusable `ContextMenu`; item 18
-  extends it to the worksheet grid, and items 12/13 add actions it can host.
+  (done) extended it to the worksheet grid; items 12/13 add actions it can host.
 
 ---
 
@@ -83,13 +84,6 @@ file → io.import_auto → DataStruct(.time/.values/.labels/.units/.metadata)
 7. **Zoom UX** — make box-zoom legible
    - [ ] Show a live zoom rectangle while dragging; Esc cancels
    - [ ] Consider a "reset zoom" affordance / double-click to autoscale
-
-8. **Waterfall port** — port `+bosonPlotter/+figureBuilder/generateWaterfall.m`
-   - [ ] Survey the MATLAB feature set (offset modes: fraction/abs/auto, per-
-     series stagger, x-offset?, normalize-then-offset) and match it
-   - [ ] Extend the existing `applyWaterfall` (currently y-fraction only)
-   - [ ] Consolidated CSV export **with or without** the waterfall offset baked in
-   - [ ] Legend/labels stay correct under offset
 
 9. **XRDML 2D RSM → map view** — load 2D maps in 2D
    - [ ] On import, detect `metadata.is2D` and default the stage to the map tab
@@ -104,17 +98,7 @@ file → io.import_auto → DataStruct(.time/.values/.labels/.units/.metadata)
     - [ ] Palette presets incl. colourblind-safe (Tol, Okabe-Ito) + Viridis/Tab10
     - [ ] Apply across multi-dataset overlays; keep design-token theming as default
 
-18. **Worksheet table context menus** — extend the new `ContextMenu` to the grid
-    - [ ] Column menu: Sort asc/desc, Set as X, Plot as Y, Column stats, New
-      column from formula (MATLAB colCtxMenu)
-    - [ ] Row menu: mask/unmask rows, paste from clipboard (MATLAB tblCtxMenu)
-
 ## Tier 3 — Nice-to-Have / Needs Design
-
-11. **Two-frame reflectometry view** — data+model (top) + SLD profile (bottom)
-    - [ ] Parse a refl1d export set (`*-refl.dat` data+theory+fresnel, `*-profile.dat`
-      SLD) — see `../quantized_matlab/+test_datasets/Ref1ld Xray with Model/NbAl_XRR`
-    - [ ] Two-panel layout (linked x where sensible); depends on item 5
 
 14. **Marker shape variety** — SeriesStyleCard markers are on/off + size only
     - [ ] Shape picker: o / s / ^ / d / v / x / + / * (MATLAB ddMarkerShape)
@@ -158,3 +142,18 @@ file → io.import_auto → DataStruct(.time/.values/.labels/.units/.metadata)
   (rename/hide/show/move-to-Y2/reorder), and the plot area (reset/log X·Y/grid/
   legend/copy-TSV/save-PNG). Worksheet-table + on-canvas-trace menus are tracked
   as #18. (`9569ccb`)
+- ~~**#8 Waterfall port**~~ (2026-06-28) — multi-dataset Waterfall workshop
+  (`workshops/waterfall/`): stacks one channel across N datasets (defaults to the
+  multi-selection), auto-spacing (0.8 × median range), additive/multiplicative
+  offset, reverse, log-Y; renders its own uPlot. Pure `lib/waterfall.ts` +
+  consolidated CSV export **with or without** the offset baked in. 20 tests.
+- ~~**#18 Worksheet table context menus**~~ (2026-06-28) — extended `ContextMenu`
+  to the grid: column (sort asc/desc · set-X · plot/hide-Y · new formula column ·
+  toggle stats) + row (mask/unmask · unmask-all · copy-row-TSV). WorksheetTable
+  gained onHeaderContext/onRowContext; container owns the menu.
+- ~~**#11 Two-frame reflectometry view**~~ (2026-06-28) — `workshops/reflview/`:
+  top = R + theory (+ fresnel) vs Q (log-Y); bottom = SLD ρ(+irho) vs z. Pure
+  `lib/reflview.ts` classifies + auto-pairs the refl1d `-refl.dat`/`-profile.dat`
+  set by filename stem; two stacked uPlots. The io/refl1d parser already read both
+  (labels locked by `test_io_refl1d.py`), so this was frontend-only — item 5
+  (.refl sniffer) was NOT a dependency after all.
