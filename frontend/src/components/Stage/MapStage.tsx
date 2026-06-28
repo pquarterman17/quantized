@@ -26,6 +26,7 @@ export default function MapStage() {
   // map toolbar stays focused on view picks (channels / colormap / log).
   const method = useApp((s) => s.mapMethod);
   const res = useApp((s) => s.mapRes);
+  const antialias = useApp((s) => s.antialias); // Preferences ▸ Plot ▸ Antialias
   const [readout, setReadout] = useState<Readout | null>(null);
   // x/y/z channel picks, local to this view (default the first three channels).
   const [keys, setKeys] = useState<[number, number, number]>([0, 1, 2]);
@@ -69,13 +70,13 @@ export default function MapStage() {
     if (!host || !canvas) return;
     // Show peak markers only when they belong to the active dataset.
     const markers = rsmPeaks && rsmPeaks.datasetId === active?.id ? rsmPeaks.peaks : null;
-    const paint = () => draw(canvas, host, payload, cmap, logZ, markers);
+    const paint = () => draw(canvas, host, payload, cmap, logZ, markers, antialias);
     paint();
     const ro = new ResizeObserver(paint);
     ro.observe(host);
     return () => ro.disconnect();
     // theme/accent in deps so the frame/axis ink recolors from fresh tokens.
-  }, [payload, cmap, logZ, theme, accent, rsmPeaks, active]);
+  }, [payload, cmap, logZ, theme, accent, rsmPeaks, active, antialias]);
 
   function onMove(ev: React.MouseEvent<HTMLCanvasElement>) {
     if (!payload) return;

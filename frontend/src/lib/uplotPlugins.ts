@@ -456,6 +456,51 @@ export function statsPlugin(
   };
 }
 
+/**
+ * Wheel-to-zoom toward the cursor (Preferences ▸ Interaction ▸ Mouse wheel).
+ * Wheel up zooms in, down zooms out, by `step` per notch (default 1.18). `⌘`/Ctrl
+ * = X-only, `⇧` = Y-only. The new range is read back through `posToVal`, so the
+ * zoom is correct for log axes (distr:3) as well as linear. The listener is bound
+ * to `u.over`, which uPlot tears down on destroy.
+ */
+export function wheelZoomPlugin(step = 1.18): uPlot.Plugin {
+  return {
+    hooks: {
+      ready: (u: uPlot) => {
+        const over = u.over;
+        over.addEventListener(
+          "wheel",
+          (e: WheelEvent) => {
+            if (e.deltaY === 0) return;
+            e.preventDefault();
+            const rect = over.getBoundingClientRect();
+            const cx = e.clientX - rect.left;
+            const cy = e.clientY - rect.top;
+            const wid = over.clientWidth || 1;
+            const hgt = over.clientHeight || 1;
+            const f = e.deltaY < 0 ? 1 / step : step; // up → zoom in (shrink range)
+            const onlyX = e.metaKey || e.ctrlKey;
+            const onlyY = e.shiftKey;
+            if (!onlyY) {
+              // New left/right edges in OLD pixel space, scaled about the cursor,
+              // mapped back to data values (posToVal handles linear + log x).
+              const a = u.posToVal(cx - cx * f, "x");
+              const b = u.posToVal(cx + (wid - cx) * f, "x");
+              u.setScale("x", { min: Math.min(a, b), max: Math.max(a, b) });
+            }
+            if (!onlyX) {
+              const a = u.posToVal(cy - cy * f, "y");
+              const b = u.posToVal(cy + (hgt - cy) * f, "y");
+              u.setScale("y", { min: Math.min(a, b), max: Math.max(a, b) });
+            }
+          },
+          { passive: false },
+        );
+      },
+    },
+  };
+}
+
 /** Report every visible series' value at the nearest-x cursor index (or null when
  *  off-plot / no visible series have a value there). The cursor index is shared
  *  across the aligned data, so one lookup per column gives a full readout. */

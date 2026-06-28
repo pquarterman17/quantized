@@ -99,6 +99,7 @@ export function draw(
   cmap: ColormapName,
   logZ: boolean,
   peaks: RsmPeak[] | null = null,
+  smooth = true,
 ) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return; // jsdom / headless — nothing to paint
@@ -147,7 +148,9 @@ export function draw(
         }
       }
       octx.putImageData(img, 0, 0);
-      ctx.imageSmoothingEnabled = true;
+      // smooth = bilinear-interpolated heatmap; off = crisp pixel cells
+      // (Preferences ▸ Plot ▸ Antialias). Crisp suits sparse RSM grids.
+      ctx.imageSmoothingEnabled = smooth;
       ctx.drawImage(off, rect.x, rect.y, rect.w, rect.h);
     }
   }

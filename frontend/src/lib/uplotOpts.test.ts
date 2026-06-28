@@ -62,6 +62,50 @@ describe("buildOpts", () => {
     expect(withRefs.plugins).toHaveLength(1);
   });
 
+  it("adds the wheel-zoom plugin only when the pref is on", () => {
+    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom" }).plugins).toHaveLength(0);
+    expect(
+      buildOpts(payload, { ...base, yLog: false, tool: "zoom", wheelZoom: true }).plugins,
+    ).toHaveLength(1);
+  });
+});
+
+describe("buildOpts defaultTrace", () => {
+  type S = { width?: number; points?: { show?: boolean }; paths?: unknown };
+  const series = (trace: string): S =>
+    buildOpts(payload, { ...base, yLog: false, tool: "zoom", defaultTrace: trace }).series?.[1] as S;
+
+  it("Line: line only, no markers, no custom paths (default)", () => {
+    const s = series("Line");
+    expect(s.width).toBe(1.5);
+    expect(s.points?.show).toBe(false);
+    expect(s.paths).toBeUndefined();
+  });
+
+  it("Scatter: markers, zero line width", () => {
+    const s = series("Scatter");
+    expect(s.width).toBe(0);
+    expect(s.points?.show).toBe(true);
+  });
+
+  it("Line + markers: line width kept, markers shown", () => {
+    const s = series("Line + markers");
+    expect(s.width).toBe(1.5);
+    expect(s.points?.show).toBe(true);
+  });
+
+  it("Step: applies the caller-supplied stepped paths builder", () => {
+    const fn = vi.fn();
+    const s = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      defaultTrace: "Step",
+      steppedPaths: fn as unknown as Parameters<typeof buildOpts>[1]["steppedPaths"],
+    }).series?.[1] as S;
+    expect(s.paths).toBe(fn);
+  });
+
   it("disables time mode on the x scale (physics axes are never timestamps)", () => {
     // uPlot defaults scales.x.time = true, which formats Qz/2θ/field as dates
     // ("12/31/69", ":00.040") and blanks negative x. Must be explicitly false.

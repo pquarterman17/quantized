@@ -34,6 +34,10 @@ import PlotReadouts from "./PlotReadouts";
 import PlotToolbar from "./PlotToolbar";
 import PolarStage from "./PolarStage";
 
+// Step-after path builder for the "Step" default trace, made once (uPlot owns
+// the runtime; uplotOpts stays a pure options builder and receives this).
+const STEPPED_PATHS = uPlot.paths?.stepped?.({ align: 1 });
+
 export default function PlotStage() {
   const active = useActiveDataset();
   const yLog = useApp((s) => s.yLog);
@@ -49,6 +53,10 @@ export default function PlotStage() {
   const showLegend = useApp((s) => s.showLegend);
   const plotTemplate = useApp((s) => s.plotTemplate);
   const showAxisBox = useApp((s) => s.showAxisBox);
+  // Plot defaults from Preferences (apply when no per-series override / template).
+  const defaultTrace = useApp((s) => s.defaultTrace);
+  const defaultLineWidth = useApp((s) => s.defaultLineWidth);
+  const wheelZoom = useApp((s) => s.wheelZoom);
   const refLines = useApp((s) => s.refLines);
   const updateRefLine = useApp((s) => s.updateRefLine);
   const annotations = useApp((s) => s.annotations);
@@ -179,7 +187,13 @@ export default function PlotStage() {
         showGrid,
         axisBox: showAxisBox,
         fontSize: resolveTemplate(plotTemplate).fontSize,
-        baseLineWidth: resolveTemplate(plotTemplate).lineWidth,
+        // A publication template sets its own line width; the "screen" default
+        // defers to the user's Preferences default line width.
+        baseLineWidth:
+          plotTemplate === "screen" ? defaultLineWidth : resolveTemplate(plotTemplate).lineWidth,
+        defaultTrace,
+        steppedPaths: STEPPED_PATHS,
+        wheelZoom,
         title: plotTitle,
         xAxisLabel,
         yAxisLabel,
@@ -223,7 +237,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, plotTitle, xAxisLabel, yAxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool]);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the

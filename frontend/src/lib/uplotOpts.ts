@@ -17,6 +17,7 @@ import {
   readoutPlugin,
   refLinePlugin,
   statsPlugin,
+  wheelZoomPlugin,
   type Readout,
 } from "./uplotPlugins";
 
@@ -135,6 +136,16 @@ export interface BuildOptsArgs {
   fontSize?: number;
   /** Default series stroke width when no per-series override (template; default 1.5). */
   baseLineWidth?: number;
+  /** Default trace shape for series without an explicit per-series style
+   *  (Preferences ▸ Plot ▸ Default trace): "Line" | "Line + markers" | "Scatter"
+   *  | "Step". Per-series overrides still win. */
+  defaultTrace?: string;
+  /** Enable wheel-to-zoom over the plot (Preferences ▸ Interaction ▸ Mouse wheel). */
+  wheelZoom?: boolean;
+  /** Stepped path builder (uPlot.paths.stepped) used for the "Step" default trace.
+   *  Supplied by the caller so this module stays free of the uPlot *runtime*
+   *  (a value import would pull uPlot's matchMedia init into headless tests). */
+  steppedPaths?: uPlot.Series.PathBuilder;
   /** Draw a full rectangular frame around the plot area (publication "box"). */
   axisBox?: boolean;
   /** Chart title rendered above the plot (blank/undefined = none). */
@@ -203,6 +214,11 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   }
   if (args.axisBox) {
     plugins.push(axisBoxPlugin(cssVar("--text-dim") || "#888"));
+  }
+  // Wheel-to-zoom is independent of the active tool (it's a navigation aid, not a
+  // drag gesture), so it composes with any tool when the pref is on.
+  if (args.wheelZoom) {
+    plugins.push(wheelZoomPlugin());
   }
 
   // A static [min,max] tuple fixes the scale (Origin-style); omit it to autoscale.
@@ -278,7 +294,11 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         if (s.kind === "points") {
           return { label, scale, stroke, fill: stroke, width: 0, points: { show: true, size: 8 }, show };
         }
-        const width = style?.width ?? args.baseLineWidth ?? 1.5;
+        // Default trace shape (Preferences) when the series has no explicit style:
+        // Scatter = markers, no line; Line + markers = both; Step = stepped line.
+        const trace = args.defaultTrace ?? "Line";
+        const scatter = trace === "Scatter";
+        const width = style?.width ?? (scatter ? 0 : (args.baseLineWidth ?? 1.5));
         const dash = style?.line ? DASH[style.line] : undefined;
         // Optional markers. Default is a filled circle (uPlot built-in); other
         // glyphs supply a custom paths builder. Open glyphs (+/✕/✳) stroke only;
@@ -291,8 +311,16 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
           points = paths
             ? { show: true, size, paths, stroke, ...(FILLED_SHAPES.has(shape) ? { fill: stroke } : {}) }
             : { show: true, size };
+        } else if (scatter || trace === "Line + markers") {
+          points = { show: true, size: 5 };
         }
-        return { label, scale, stroke, width, dash, points, show };
+        const def: uPlot.Series = { label, scale, stroke, width, dash, points, show };
+        // Stepped trace: apply the caller-supplied step-after path builder (there's
+        // no per-series line-shape override, so it's a global default).
+        if (trace === "Step" && !style?.line && args.steppedPaths) {
+          def.paths = args.steppedPaths;
+        }
+        return def;
       }),
     ],
   };

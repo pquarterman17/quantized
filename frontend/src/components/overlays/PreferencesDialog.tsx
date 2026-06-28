@@ -162,7 +162,7 @@ export default function PreferencesDialog() {
                 <PrefRow label="Grid lines" hint="default for the plot">
                   <Switch checked={p.defaultGrid} onChange={(v) => setPref("defaultGrid", v)} />
                 </PrefRow>
-                <PrefRow label="Antialias traces">
+                <PrefRow label="Antialias 2-D map" hint="smooth vs crisp heatmap cells">
                   <Switch checked={p.antialias} onChange={(v) => setPref("antialias", v)} />
                 </PrefRow>
               </>
