@@ -7,14 +7,13 @@ import ChannelsCard from "./ChannelsCard";
 import CorrectionsCard from "./CorrectionsCard";
 import MacroCard from "./MacroCard";
 import MapCard from "./MapCard";
-import MetadataCard from "./MetadataCard";
 import NotesCard from "./NotesCard";
 import RefLinesCard from "./RefLinesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
 import StatsCard from "./StatsCard";
 import TickFormat from "./TickFormat";
 import TitlesCard from "./TitlesCard";
-import { Card, MetaRow } from "../primitives";
+import { Card } from "../primitives";
 import { useActiveDataset, useApp } from "../../store/useApp";
 
 export default function Inspector() {
@@ -32,21 +31,6 @@ export default function Inspector() {
   return (
     <aside className="qzk-inspector">
       {stageTab === "map" && <MapCard />}
-
-      <Card title="Scan metadata" defaultOpen={false}>
-        {active ? (
-          <>
-            <MetaRow label="Name" value={active.name} title={active.name} />
-            <MetaRow label="Points" value={active.data.time.length} />
-            <MetaRow label="Channels" value={active.data.labels.length} />
-            <MetaRow label="Units" value={active.data.units.join(", ") || "—"} />
-          </>
-        ) : (
-          <MetaRow label="—" value="no dataset" />
-        )}
-      </Card>
-
-      <MetadataCard active={active} />
 
       <NotesCard active={active} />
 

@@ -195,8 +195,12 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   }
 
   // A static [min,max] tuple fixes the scale (Origin-style); omit it to autoscale.
+  // time:false is CRITICAL — uPlot defaults the x scale to time mode, which
+  // formats scientific x (Qz, 2θ, field) as dates ("12/31/69", ":00.040") and
+  // renders blank for negative x (magnetometry field sweeps). These are physics
+  // axes, never timestamps.
   const scales: uPlot.Scales = {
-    x: { distr: xLog ? 3 : 1, ...(xLim ? { range: xLim } : {}) },
+    x: { time: false, distr: xLog ? 3 : 1, ...(xLim ? { range: xLim } : {}) },
     y: { distr: yLog ? 3 : 1, ...(yLim ? { range: yLim } : {}) },
   };
   const xValues = tickFormatter(xFmt);

@@ -47,6 +47,13 @@ describe("buildOpts", () => {
     expect(withRefs.plugins).toHaveLength(1);
   });
 
+  it("disables time mode on the x scale (physics axes are never timestamps)", () => {
+    // uPlot defaults scales.x.time = true, which formats Qz/2θ/field as dates
+    // ("12/31/69", ":00.040") and blanks negative x. Must be explicitly false.
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    expect(opts.scales?.x?.time).toBe(false);
+  });
+
   it("sets the log distribution on the y scale when yLog", () => {
     expect(buildOpts(payload, { ...base, yLog: true, tool: "zoom" }).scales?.y?.distr).toBe(3);
     expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom" }).scales?.y?.distr).toBe(1);
