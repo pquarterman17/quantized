@@ -6,6 +6,7 @@ import { create } from "zustand";
 import type { CorrectionsRequest } from "../lib/api";
 import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
 import { cloneDataStruct } from "../lib/dataset";
+import { setFormatOpts, type Notation } from "../lib/format";
 import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit, macroStep, type MacroStep } from "../lib/macro";
 import { mergeDatasets } from "../lib/merge";
@@ -50,6 +51,21 @@ export type Density = "compact" | "regular" | "comfy";
 export type StageTab = "plot" | "map" | "worksheet";
 export type PlotTool = "zoom" | "pan" | "cursor" | "region" | "measure" | "stats";
 export type LegendPos = "ne" | "nw" | "se" | "sw";
+// Keys the Preferences dialog can set through the generic setPref action.
+export type PrefKey =
+  | "theme"
+  | "accent"
+  | "density"
+  | "palette"
+  | "reduceMotion"
+  | "wheelZoom"
+  | "defaultTrace"
+  | "defaultLineWidth"
+  | "defaultGrid"
+  | "antialias"
+  | "sigFigs"
+  | "notation"
+  | "confirmRemove";
 
 interface AppState {
   datasets: Dataset[];
@@ -64,6 +80,18 @@ interface AppState {
   accent: Accent;
   density: Density;
   palette: string; // series colour-cycle preset (overrides --series-1..8)
+  // Behavioural prefs (Preferences dialog). reduceMotion + sigFigs/notation apply
+  // live; defaultGrid seeds showGrid at startup; the rest persist for later use.
+  reduceMotion: boolean;
+  wheelZoom: boolean;
+  defaultTrace: string;
+  defaultLineWidth: number;
+  defaultGrid: boolean;
+  antialias: boolean;
+  sigFigs: number;
+  notation: Notation;
+  confirmRemove: boolean;
+  prefsOpen: boolean;
   yLog: boolean;
   xLog: boolean;
   showGrid: boolean; // draw the plot grid lines
@@ -161,6 +189,9 @@ interface AppState {
   setAccent: (accent: Accent) => void;
   setDensity: (density: Density) => void;
   setPalette: (palette: string) => void;
+  // Generic pref setter (used by the Preferences dialog); applies + persists.
+  setPref: (key: PrefKey, value: string | number | boolean) => void;
+  setPrefsOpen: (open: boolean) => void;
   setYLog: (yLog: boolean) => void;
   setXLog: (xLog: boolean) => void;
   setShowGrid: (showGrid: boolean) => void;
@@ -235,36 +266,103 @@ const THEMES = ["dark", "light"];
 const ACCENTS = ["violet", "teal", "ocean", "amber", "rose"];
 const DENSITIES = ["compact", "regular", "comfy"];
 
+const NOTATIONS = ["auto", "scientific", "fixed"];
+const TRACES = ["Line", "Line + markers", "Scatter", "Step"];
+
+// Everything the Preferences dialog (and the Appearance menu) persists. Defaults
+// reproduce the app's prior behaviour so nothing changes until a user opts in.
 interface Prefs {
   theme: Theme;
   accent: Accent;
   density: Density;
   palette: string;
+  reduceMotion: boolean;
+  wheelZoom: boolean;
+  defaultTrace: string;
+  defaultLineWidth: number;
+  defaultGrid: boolean;
+  antialias: boolean;
+  sigFigs: number;
+  notation: Notation;
+  confirmRemove: boolean;
 }
 
+const PREF_DEFAULTS: Prefs = {
+  theme: "dark",
+  accent: "violet",
+  density: "regular",
+  palette: "default",
+  reduceMotion: false,
+  wheelZoom: true,
+  defaultTrace: "Line",
+  defaultLineWidth: 1.5,
+  defaultGrid: true,
+  antialias: true,
+  sigFigs: 6,
+  notation: "auto",
+  confirmRemove: false,
+};
+
 function loadPrefs(): Prefs {
-  const fb: Prefs = { theme: "dark", accent: "violet", density: "regular", palette: "default" };
+  const fb = PREF_DEFAULTS;
   try {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") as Record<string, unknown>;
+    const bool = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
+    const num = (v: unknown, d: number, lo: number, hi: number) =>
+      typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
     return {
       theme: THEMES.includes(p.theme as string) ? (p.theme as Theme) : fb.theme,
       accent: ACCENTS.includes(p.accent as string) ? (p.accent as Accent) : fb.accent,
       density: DENSITIES.includes(p.density as string) ? (p.density as Density) : fb.density,
       palette: normalizePalette(p.palette),
+      reduceMotion: bool(p.reduceMotion, fb.reduceMotion),
+      wheelZoom: bool(p.wheelZoom, fb.wheelZoom),
+      defaultTrace: TRACES.includes(p.defaultTrace as string) ? (p.defaultTrace as string) : fb.defaultTrace,
+      defaultLineWidth: num(p.defaultLineWidth, fb.defaultLineWidth, 0.5, 4),
+      defaultGrid: bool(p.defaultGrid, fb.defaultGrid),
+      antialias: bool(p.antialias, fb.antialias),
+      sigFigs: num(p.sigFigs, fb.sigFigs, 1, 12),
+      notation: NOTATIONS.includes(p.notation as string) ? (p.notation as Notation) : fb.notation,
+      confirmRemove: bool(p.confirmRemove, fb.confirmRemove),
     };
   } catch {
     return fb;
   }
 }
 
-function applyDocAttrs(theme: Theme, accent: Accent, density: Density, palette: string): void {
-  applyPalette(palette);
+/** Snapshot the pref fields out of the store state. */
+function prefsOf(s: AppState): Prefs {
+  return {
+    theme: s.theme,
+    accent: s.accent,
+    density: s.density,
+    palette: s.palette,
+    reduceMotion: s.reduceMotion,
+    wheelZoom: s.wheelZoom,
+    defaultTrace: s.defaultTrace,
+    defaultLineWidth: s.defaultLineWidth,
+    defaultGrid: s.defaultGrid,
+    antialias: s.antialias,
+    sigFigs: s.sigFigs,
+    notation: s.notation,
+    confirmRemove: s.confirmRemove,
+  };
+}
+
+/** Apply appearance prefs to <html> + the number formatter, then persist all
+ *  prefs. Called on load and after every pref change (token system keys off the
+ *  data-* attributes; data-reduce-motion drives the motion-killing rule). */
+function syncPrefs(s: AppState): void {
+  applyPalette(s.palette);
   const el = document.documentElement;
-  el.dataset.theme = theme;
-  el.dataset.accent = accent;
-  el.dataset.density = density;
+  el.dataset.theme = s.theme;
+  el.dataset.accent = s.accent;
+  el.dataset.density = s.density;
+  if (s.reduceMotion) el.dataset.reduceMotion = "";
+  else delete el.dataset.reduceMotion;
+  setFormatOpts(s.sigFigs, s.notation);
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ theme, accent, density, palette }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefsOf(s)));
   } catch {
     /* storage unavailable (private mode) — non-fatal */
   }
@@ -283,9 +381,19 @@ export const useApp = create<AppState>((set, get) => ({
   accent: _initialPrefs.accent,
   density: _initialPrefs.density,
   palette: _initialPrefs.palette,
+  reduceMotion: _initialPrefs.reduceMotion,
+  wheelZoom: _initialPrefs.wheelZoom,
+  defaultTrace: _initialPrefs.defaultTrace,
+  defaultLineWidth: _initialPrefs.defaultLineWidth,
+  defaultGrid: _initialPrefs.defaultGrid,
+  antialias: _initialPrefs.antialias,
+  sigFigs: _initialPrefs.sigFigs,
+  notation: _initialPrefs.notation,
+  confirmRemove: _initialPrefs.confirmRemove,
+  prefsOpen: false,
   yLog: false,
   xLog: false,
-  showGrid: true,
+  showGrid: _initialPrefs.defaultGrid,
   showLegend: true,
   legendPos: "ne",
   plotTemplate: "screen",
@@ -719,21 +827,26 @@ export const useApp = create<AppState>((set, get) => ({
   toggleRight: () => set((s) => ({ rightCollapsed: !s.rightCollapsed })),
   setStageTab: (stageTab) => set({ stageTab }),
   setTheme: (theme) => {
-    applyDocAttrs(theme, get().accent, get().density, get().palette);
     set({ theme });
+    syncPrefs(get());
   },
   setAccent: (accent) => {
-    applyDocAttrs(get().theme, accent, get().density, get().palette);
     set({ accent });
+    syncPrefs(get());
   },
   setDensity: (density) => {
-    applyDocAttrs(get().theme, get().accent, density, get().palette);
     set({ density });
+    syncPrefs(get());
   },
   setPalette: (palette) => {
-    applyDocAttrs(get().theme, get().accent, get().density, palette);
     set({ palette });
+    syncPrefs(get());
   },
+  setPref: (key, value) => {
+    set({ [key]: value } as Partial<AppState>);
+    syncPrefs(get());
+  },
+  setPrefsOpen: (prefsOpen) => set({ prefsOpen }),
   setYLog: (yLog) => {
     set({ yLog });
     get().recordMacro(`Y axis ${yLog ? "log" : "linear"}`, `qz.setYLog(${yLog})`);
@@ -890,9 +1003,10 @@ export const useApp = create<AppState>((set, get) => ({
   setStatus: (status) => set({ status }),
 }));
 
-// Apply the persisted appearance to <html> on load (set* only ran on change,
-// so without this the first paint had no theme/accent/density attributes).
-applyDocAttrs(_initialPrefs.theme, _initialPrefs.accent, _initialPrefs.density, _initialPrefs.palette);
+// Apply the persisted prefs to <html> + the number formatter on load (set* only
+// ran on change, so without this the first paint had no theme/accent/density/
+// reduce-motion attributes and the formatter used its compiled defaults).
+syncPrefs(useApp.getState());
 
 /** Convenience selector: the currently active dataset (or null). */
 export function useActiveDataset(): Dataset | null {

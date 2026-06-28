@@ -25,6 +25,7 @@ export default function AppearanceMenu() {
   const setDensity = useApp((s) => s.setDensity);
   const palette = useApp((s) => s.palette);
   const setPalette = useApp((s) => s.setPalette);
+  const setPrefsOpen = useApp((s) => s.setPrefsOpen);
 
   useEffect(() => {
     if (!open) return;
@@ -87,6 +88,17 @@ export default function AppearanceMenu() {
             value={palette}
             onChange={(e) => setPalette(e.target.value)}
           />
+          <button
+            className="qzk-menu-item"
+            style={{ marginTop: 6 }}
+            onClick={() => {
+              setOpen(false);
+              setPrefsOpen(true);
+            }}
+          >
+            <span>All preferences…</span>
+            <span className="qz-shortcut">⌘,</span>
+          </button>
         </div>
       )}
     </div>

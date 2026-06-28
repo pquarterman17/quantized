@@ -12,6 +12,7 @@ import TitleBar from "./components/Shell/TitleBar";
 import Stage from "./components/Stage/Stage";
 import CommandPalette, { type Action } from "./components/overlays/CommandPalette";
 import ParamDialog, { askParams } from "./components/overlays/ParamDialog";
+import PreferencesDialog from "./components/overlays/PreferencesDialog";
 import ShortcutsDialog from "./components/overlays/ShortcutsDialog";
 import Toaster from "./components/overlays/Toaster";
 import TooltipLayer from "./components/overlays/TooltipLayer";
@@ -138,10 +139,20 @@ export default function App() {
         if (s.datasets.length === 0) return;
         e.preventDefault();
         const n = s.selectedIds.length || (s.activeId ? 1 : 0);
-        s.removeSelected();
-        const msg = `removed ${n} dataset${n === 1 ? "" : "s"}`;
-        s.setStatus(msg);
-        toast(msg);
+        const doRemove = () => {
+          s.removeSelected();
+          const msg = `removed ${n} dataset${n === 1 ? "" : "s"}`;
+          s.setStatus(msg);
+          toast(msg);
+        };
+        // Preferences ▸ Interaction ▸ Confirm before removing data.
+        if (s.confirmRemove) {
+          void askParams(`Remove ${n} dataset${n === 1 ? "" : "s"}?`, []).then((ok) => {
+            if (ok) doRemove();
+          });
+        } else {
+          doRemove();
+        }
         return;
       }
       // "?" (Shift+/ on US layouts) opens the keyboard-shortcuts sheet.
@@ -212,6 +223,10 @@ export default function App() {
             e.preventDefault();
             s.setTheme(s.theme === "dark" ? "light" : "dark");
           }
+          break;
+        case ",":
+          e.preventDefault();
+          s.setPrefsOpen(true);
           break;
       }
     };
@@ -524,6 +539,13 @@ export default function App() {
         run: () => s().setStageTab("plot"),
       },
       {
+        id: "preferences",
+        group: "File",
+        label: "Preferences…",
+        shortcut: "⌘,",
+        run: () => s().setPrefsOpen(true),
+      },
+      {
         id: "shortcuts",
         group: "Help",
         label: "Keyboard shortcuts",
@@ -562,6 +584,7 @@ export default function App() {
       {waterfallOpen && <WaterfallView />}
       {reflViewOpen && <ReflView />}
       <ShortcutsDialog />
+      <PreferencesDialog />
       <Toaster />
     </div>
   );

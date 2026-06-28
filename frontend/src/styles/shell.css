@@ -63,6 +63,33 @@ body {
 /* Library group-filter dropdown (#20). */
 .qzk-group-filter { width: 100%; margin-top: 6px; }
 
+/* ── Preferences dialog (⌘,) — adapted from the design-system mock shell.css ── */
+.qzk-prefs-overlay { display: flex; align-items: flex-start; justify-content: center; }
+.qzk-prefs { margin-top: 7vh; width: min(640px, 94vw); max-height: 80vh; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
+.qzk-prefs-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border-soft); }
+.qzk-prefs-head .ttl { font-weight: var(--weight-semibold); font-size: var(--font-size); }
+.qzk-prefs-x { width: 22px; height: 22px; border: none; background: transparent; color: var(--text-faint); border-radius: var(--radius-sm); cursor: default; font-size: 13px; }
+.qzk-prefs-x:hover { background: var(--surface-3); color: var(--text); }
+.qzk-prefs-body { display: grid; grid-template-columns: 148px 1fr; min-height: 320px; }
+.qzk-prefs-nav { border-right: 1px solid var(--border-soft); padding: 8px; display: flex; flex-direction: column; gap: 2px; background: var(--surface-0); }
+.qzk-prefs-tab { padding: 6px 10px; border-radius: var(--radius-sm); font-size: var(--font-size-sm); color: var(--text-dim); cursor: default; }
+.qzk-prefs-tab:hover { background: var(--surface-2); color: var(--text); }
+.qzk-prefs-tab.active { background: var(--accent-soft); color: var(--accent-text); }
+.qzk-prefs-pane { padding: 16px 18px; overflow-y: auto; }
+.qzk-pref-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 9px 0; border-bottom: 1px solid var(--border-soft); }
+.qzk-pref-row:last-child { border-bottom: none; }
+.qzk-pref-lbl { font-size: var(--font-size); color: var(--text); display: flex; flex-direction: column; gap: 2px; }
+.qzk-pref-lbl .hint { font-size: 10px; color: var(--text-faint); }
+.qzk-pref-ctl { flex: none; }
+.qzk-pref-note { font-size: var(--font-size-sm); color: var(--text-faint); line-height: 1.6; padding: 10px 0; border-bottom: 1px solid var(--border-soft); }
+.qzk-prefs-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 16px; border-top: 1px solid var(--border-soft); }
+.qzk-pref-hint { font-size: var(--font-size-sm); color: var(--text-faint); }
+.qzk-accent-swatches { display: flex; gap: 5px; }
+.qzk-swatch { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px 4px 6px; border-radius: var(--radius-pill); border: 1px solid var(--border-soft); background: var(--surface-2); color: var(--text-faint); font-size: 10px; cursor: default; text-transform: capitalize; }
+.qzk-swatch .dot { width: 9px; height: 9px; border-radius: 50%; }
+.qzk-swatch:hover { border-color: var(--border); color: var(--text-dim); }
+.qzk-swatch.on { border-color: var(--sw); color: var(--text); box-shadow: 0 0 0 1px var(--sw); }
+
 /* Right-click context menu: a fixed-position variant of the menubar popup. */
 .qzk-ctx { position: fixed; top: auto; left: auto; min-width: 180px; }
 .qzk-ctx-sep { height: 1px; margin: 4px 6px; background: var(--glass-border); }
