@@ -1,27 +1,21 @@
-// Worksheet view of the active dataset: click a header to sort, and add a
-// computed column with a formula (e.g. "2*A + sqrt(B)") over x + the channels
-// A, B, C … The computed column lands as a derived dataset in the library.
+// Worksheet view of the active dataset: double-click a cell to edit it (commits
+// to the active dataset), click a header to sort, filter/mask rows, and add a
+// computed column with a formula (e.g. "2*A + sqrt(B)") over x + channels A,B,C…
+// The toolbar + data grid are extracted to keep this container under the budget.
 
 import { useEffect, useMemo, useState } from "react";
 
 import { statsDescriptive } from "../../lib/api";
 import { copyText, tableToTSV } from "../../lib/clipboard";
-import { fmtNum } from "../../lib/format";
 import { channelLetter, compileFormula } from "../../lib/formula";
 import type { CalcResult, DataStruct } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import WorksheetFilterBar from "./WorksheetFilterBar";
+import WorksheetTable from "./WorksheetTable";
+import WorksheetToolbar from "./WorksheetToolbar";
 
 const MAX_ROWS = 500;
-// The descriptive-stats keys surfaced in the footer (matches StatsCard's set).
-const STAT_ROWS: [string, string][] = [
-  ["Mean", "mean"],
-  ["Std", "std"],
-  ["Min", "min"],
-  ["Max", "max"],
-  ["Median", "median"],
-  ["N", "N"],
-];
+
 /** Does value `v` pass `op` against `a` (and `b` for "between")? Non-finite fails. */
 function passesFilter(v: number | undefined, op: string, a: number, b: number): boolean {
   if (v == null || !Number.isFinite(v)) return false;
@@ -43,6 +37,7 @@ export default function Worksheet() {
   const active = useActiveDataset();
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
+  const setCellValue = useApp((s) => s.setCellValue);
   const channelRoles = useApp((s) => s.channelRoles); // label/ignore column roles
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   const [formula, setFormula] = useState("");
@@ -225,57 +220,19 @@ export default function Worksheet() {
 
   return (
     <div className="qzk-sheet">
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "6px 8px",
-          borderBottom: "1px solid var(--border, #333)",
-          flexWrap: "wrap",
-        }}
-      >
-        <span className="qzk-field-lbl" style={{ margin: 0 }}>
-          ƒx
-        </span>
-        <input
-          className="qz-input"
-          placeholder="2*A + sqrt(B)"
-          value={formula}
-          onChange={(e) => setFormula(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && formula.trim() && addColumn()}
-          style={{ width: 200 }}
-        />
-        <input
-          className="qz-input"
-          placeholder="column name"
-          value={colName}
-          onChange={(e) => setColName(e.target.value)}
-          style={{ width: 120 }}
-        />
-        <button className="qz-btn" disabled={!formula.trim()} onClick={addColumn}>
-          Add column
-        </button>
-        <button
-          className={showStats ? "qz-btn qz-active" : "qz-btn"}
-          aria-pressed={showStats}
-          onClick={() => setShowStats((v) => !v)}
-          title="Per-column statistics"
-        >
-          Σ Stats
-        </button>
-        <button className="qz-btn" onClick={copyRows} title="Copy visible rows to clipboard (TSV)">
-          ⧉ Copy
-        </button>
-        {masked.size > 0 && (
-          <button className="qz-btn" onClick={unmaskAll} title="Clear all masked rows">
-            Unmask ({masked.size})
-          </button>
-        )}
-        <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
-          vars: {vars}
-        </span>
-      </div>
+      <WorksheetToolbar
+        formula={formula}
+        colName={colName}
+        setFormula={setFormula}
+        setColName={setColName}
+        onAddColumn={addColumn}
+        showStats={showStats}
+        onToggleStats={() => setShowStats((v) => !v)}
+        onCopy={copyRows}
+        maskedCount={masked.size}
+        onUnmaskAll={unmaskAll}
+        vars={vars}
+      />
 
       <WorksheetFilterBar
         xName={xName}
@@ -301,83 +258,25 @@ export default function Worksheet() {
         </div>
       )}
 
-      <table>
-        <thead>
-          <tr>
-            <th className="rownum">#</th>
-            <th onClick={() => toggleSort(-1)} style={{ cursor: "default" }}>
-              {xName}
-              <span className="role">
-                X{xUnit ? ` · ${xUnit}` : ""}
-                {mark(-1)}
-              </span>
-            </th>
-            {labels.map((lab, c) => (
-              <th
-                key={lab}
-                onClick={() => toggleSort(c)}
-                title={channelRoles[c] ? `${channelLetter(c)} — ${channelRoles[c]} column` : channelLetter(c)}
-                style={{ cursor: "default", opacity: channelRoles[c] ? 0.55 : 1 }}
-              >
-                {lab}
-                <span className="role">
-                  {channelRoles[c] ?? channelLetter(c)}
-                  {units[c] ? ` · ${units[c]}` : ""}
-                  {mark(c)}
-                </span>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {order.slice(0, MAX_ROWS).map((r) => {
-            const isMasked = masked.has(r);
-            return (
-              <tr key={r} style={isMasked ? { opacity: 0.4, textDecoration: "line-through" } : undefined}>
-                <td
-                  className="rownum"
-                  style={{ cursor: "pointer" }}
-                  title={isMasked ? "click to unmask row" : "click to mask row (exclude from stats)"}
-                  onClick={() => toggleMask(r)}
-                >
-                  {r + 1}
-                </td>
-                <td>{fmt(time[r])}</td>
-                {labels.map((lab, c) => (
-                  <td key={lab}>{fmt(values[r]?.[c])}</td>
-                ))}
-              </tr>
-            );
-          })}
-        </tbody>
-        {showStats && (
-          <tfoot>
-            {statsErr ? (
-              <tr>
-                <td className="rownum" />
-                <td colSpan={labels.length + 1} className="qzk-ds-meta">
-                  statistics unavailable offline
-                </td>
-              </tr>
-            ) : (
-              STAT_ROWS.map(([label, key]) => (
-                <tr key={key}>
-                  <td className="rownum" title="column statistic">
-                    {label}
-                  </td>
-                  <td>{colStats ? fmtNum(colStats[0]?.[key]) : "…"}</td>
-                  {labels.map((lab, c) => (
-                    // "ignore" columns are out of analysis → blank their stats.
-                    <td key={lab}>
-                      {channelRoles[c] === "ignore" ? "—" : colStats ? fmtNum(colStats[c + 1]?.[key]) : "…"}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tfoot>
-        )}
-      </table>
+      <WorksheetTable
+        time={time}
+        values={values}
+        labels={labels}
+        units={units}
+        xName={xName}
+        xUnit={xUnit}
+        order={order}
+        masked={masked}
+        channelRoles={channelRoles}
+        sortMark={mark}
+        onToggleSort={toggleSort}
+        onToggleMask={toggleMask}
+        onEditCell={(row, col, value) => setCellValue(active!.id, row, col, value)}
+        maxRows={MAX_ROWS}
+        showStats={showStats}
+        colStats={colStats}
+        statsErr={statsErr}
+      />
       {filtered.length > MAX_ROWS && (
         <div className="qzk-ds-meta" style={{ padding: 8 }}>
           showing {MAX_ROWS} of {filtered.length}
@@ -386,9 +285,4 @@ export default function Worksheet() {
       )}
     </div>
   );
-}
-
-function fmt(v: number | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  return Math.abs(v) >= 1e4 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(3) : v.toFixed(4);
 }

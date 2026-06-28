@@ -611,6 +611,26 @@ describe("useApp groups", () => {
   });
 });
 
+describe("useApp setCellValue", () => {
+  it("edits a value cell immutably and leaves the rest intact", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1" });
+    const before = useApp.getState().datasets[0].data;
+    useApp.getState().setCellValue("d1", 1, 0, 99);
+    const after = useApp.getState().datasets[0].data;
+    expect(after.values[1][0]).toBe(99);
+    expect(after.values[0][0]).toBe(10); // sibling row untouched
+    expect(after.values).not.toBe(before.values); // new array (immutable)
+    expect(raw.values[1][0]).toBe(20); // shared fixture never mutated
+  });
+
+  it("edits the x/time column for col < 0", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1" });
+    useApp.getState().setCellValue("d1", 0, -1, 7);
+    expect(useApp.getState().datasets[0].data.time[0]).toBe(7);
+    expect(raw.time[0]).toBe(1); // shared fixture never mutated
+  });
+});
+
 describe("useApp macro recorder", () => {
   beforeEach(() => {
     useApp.setState({ macroRecording: false, macroSteps: [] });

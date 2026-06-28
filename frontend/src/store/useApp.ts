@@ -101,6 +101,7 @@ interface AppState {
   duplicateDataset: (id: string) => void;
   moveDataset: (id: string, dir: -1 | 1) => void;
   renameDataset: (id: string, name: string) => void;
+  setCellValue: (id: string, row: number, col: number, value: number) => void;
   setDatasetNotes: (id: string, notes: string) => void;
   addDatasetTag: (id: string, tag: string) => void;
   removeDatasetTag: (id: string, tag: string) => void;
@@ -409,6 +410,29 @@ export const useApp = create<AppState>((set, get) => ({
         d.id === id ? { ...d, name: name.trim() || d.name } : d,
       ),
     })),
+  // Edit a single worksheet cell in place (col < 0 = the x/time column). Rebuilds
+  // the dataset's arrays immutably (DataStruct stays frozen-by-contract) so the
+  // plot + stats recompute live. Recovery of the original is via Duplicate.
+  setCellValue: (id, row, col, value) => {
+    const ds = get().datasets.find((d) => d.id === id);
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id) return d;
+        if (col < 0) {
+          return { ...d, data: { ...d.data, time: d.data.time.map((t, i) => (i === row ? value : t)) } };
+        }
+        const values = d.data.values.map((r, i) =>
+          i === row ? r.map((v, c) => (c === col ? value : v)) : r,
+        );
+        return { ...d, data: { ...d.data, values } };
+      }),
+    }));
+    if (ds)
+      get().recordMacro(
+        `Edit ${ds.name} [${row},${col}]`,
+        `qz.setCell(${lit(ds.name)}, ${row}, ${col}, ${lit(value)})`,
+      );
+  },
   // Attach free-text notes to a dataset (blank clears). Per-dataset, so it lives
   // on the object (round-trips through .dwk) rather than the transient view state.
   setDatasetNotes: (id, notes) =>

@@ -160,3 +160,33 @@ describe("Worksheet row masking", () => {
     expect(screen.queryByRole("button", { name: /Extract/ })).not.toBeInTheDocument();
   });
 });
+
+describe("Worksheet cell editing", () => {
+  it("double-click → edit → Enter commits to the active dataset", () => {
+    render(<Worksheet />);
+    fireEvent.doubleClick(screen.getByText("10.0000")); // row 0, channel A
+    const input = screen.getByDisplayValue("10");
+    fireEvent.change(input, { target: { value: "99" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(useApp.getState().datasets[0].data.values[0][0]).toBe(99);
+    expect(screen.getByText("99.0000")).toBeInTheDocument(); // re-rendered live
+  });
+
+  it("edits the x/time column (col -1) and commits on blur", () => {
+    render(<Worksheet />);
+    fireEvent.doubleClick(screen.getByText("1.0000")); // x of row 0
+    const input = screen.getByDisplayValue("1");
+    fireEvent.change(input, { target: { value: "7" } });
+    fireEvent.blur(input);
+    expect(useApp.getState().datasets[0].data.time[0]).toBe(7);
+  });
+
+  it("Escape cancels without committing", () => {
+    render(<Worksheet />);
+    fireEvent.doubleClick(screen.getByText("20.0000")); // row 0, channel B
+    const input = screen.getByDisplayValue("20");
+    fireEvent.change(input, { target: { value: "0" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(useApp.getState().datasets[0].data.values[0][1]).toBe(20); // unchanged
+  });
+});
