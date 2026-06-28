@@ -79,6 +79,7 @@ interface AppState {
 
   addDataset: (ds: Dataset) => void;
   importFiles: (files: File[]) => Promise<void>;
+  loadWorkspace: (datasets: Dataset[]) => void;
   setActive: (id: string) => void;
   removeDataset: (id: string) => void;
   renameDataset: (id: string, name: string) => void;
@@ -251,6 +252,24 @@ export const useApp = create<AppState>((set, get) => ({
         : `imported ${added} file${added === 1 ? "" : "s"}`,
     );
   },
+  // Replace the whole library with a restored workspace (from a .dwk file).
+  // Resets every per-dataset view (channels, styles, axis limits) and drops the
+  // overlays/markers tied to the old datasets — same hygiene as setActive.
+  loadWorkspace: (datasets) =>
+    set({
+      datasets,
+      activeId: datasets[0]?.id ?? null,
+      yKeys: null,
+      y2Keys: null,
+      seriesStyles: {},
+      xLim: null,
+      yLim: null,
+      fitOverlay: null,
+      peakOverlay: null,
+      baselineOverlay: null,
+      rsmPeaks: null,
+      status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}`,
+    }),
   setActive: (id) =>
     set({ activeId: id, yKeys: null, y2Keys: null, seriesStyles: {}, xLim: null, yLim: null, rsmPeaks: null }),
   removeDataset: (id) =>

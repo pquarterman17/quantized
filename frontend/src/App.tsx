@@ -32,8 +32,10 @@ import {
   health,
 } from "./lib/api";
 import { makeDemoDataset } from "./lib/demo";
+import { saveBlob } from "./lib/download";
 import { buildExportStyles } from "./lib/exportStyles";
 import { openFilePicker } from "./lib/openFilePicker";
+import { parseWorkspace, serializeWorkspace } from "./lib/workspace";
 import { useApp } from "./store/useApp";
 
 type StoreGet = typeof useApp.getState;
@@ -127,6 +129,36 @@ export default function App() {
             name: `demo-${demoCounter}.dat`,
             data: makeDemoDataset(),
           }),
+      },
+      {
+        id: "save-workspace",
+        group: "File",
+        label: "Save workspace (.dwk)…",
+        run: () => {
+          const all = s().datasets;
+          if (all.length === 0) {
+            s().setStatus("no datasets to save");
+            return;
+          }
+          saveBlob(new Blob([serializeWorkspace(all)], { type: "application/json" }), "workspace.dwk");
+          s().setStatus(`saved workspace — ${all.length} dataset${all.length === 1 ? "" : "s"}`);
+        },
+      },
+      {
+        id: "open-workspace",
+        group: "File",
+        label: "Open workspace (.dwk)…",
+        run: () =>
+          openFilePicker((files) => {
+            const file = files[0];
+            if (!file) return;
+            file
+              .text()
+              .then((text) => s().loadWorkspace(parseWorkspace(text)))
+              .catch((e: unknown) =>
+                s().setStatus(`open failed: ${e instanceof Error ? e.message : "error"}`),
+              );
+          }, ".dwk,.json"),
       },
       {
         id: "theme",

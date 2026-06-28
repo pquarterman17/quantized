@@ -277,3 +277,37 @@ describe("useApp importFiles", () => {
     expect(useApp.getState().status).toContain("failed bad.zzz");
   });
 });
+
+describe("useApp loadWorkspace", () => {
+  it("replaces the library and activates the first dataset", () => {
+    useApp.setState({
+      datasets: [{ id: "old", name: "stale", data: raw }],
+      activeId: "old",
+      yKeys: [1],
+      seriesStyles: { 0: { width: 5 } },
+      xLim: [0, 9],
+      rsmPeaks: { datasetId: "old", peaks: [] },
+    });
+
+    useApp.getState().loadWorkspace([
+      { id: "w1", name: "first", data: raw },
+      { id: "w2", name: "second", data: raw },
+    ]);
+
+    const s = useApp.getState();
+    expect(s.datasets.map((d) => d.id)).toEqual(["w1", "w2"]);
+    expect(s.activeId).toBe("w1"); // first dataset becomes active
+    expect(s.yKeys).toBeNull(); // per-dataset view reset
+    expect(s.seriesStyles).toEqual({});
+    expect(s.xLim).toBeNull();
+    expect(s.rsmPeaks).toBeNull(); // markers tied to the old library dropped
+    expect(s.status).toContain("2 datasets");
+  });
+
+  it("handles an empty workspace (no active dataset)", () => {
+    useApp.setState({ datasets: [{ id: "old", name: "x", data: raw }], activeId: "old" });
+    useApp.getState().loadWorkspace([]);
+    expect(useApp.getState().datasets).toEqual([]);
+    expect(useApp.getState().activeId).toBeNull();
+  });
+});
