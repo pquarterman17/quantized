@@ -5,7 +5,7 @@
 // (R / dR / resolution) etc. legible. Analysis workshops still use the first
 // channel; this controls the plot only.
 
-import type { Dataset } from "../../lib/types";
+import type { ChannelRole, Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { Card, Pill, Select, SliderRow } from "../primitives";
 
@@ -18,6 +18,8 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const setY2Keys = useApp((s) => s.setY2Keys);
   const errKeys = useApp((s) => s.errKeys);
   const setErrKey = useApp((s) => s.setErrKey);
+  const channelRoles = useApp((s) => s.channelRoles);
+  const setChannelRole = useApp((s) => s.setChannelRole);
   const waterfall = useApp((s) => s.waterfall);
   const setWaterfall = useApp((s) => s.setWaterfall);
 
@@ -26,6 +28,19 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const { labels, units } = active.data;
   const selected = yKeys ?? labels.map((_, i) => i);
   const y2 = new Set(y2Keys ?? []);
+  // Plottable data channels = non-x channels with no column role; the plot needs ≥1.
+  const dataCount = labels.filter((_, i) => i !== xKey && !channelRoles[i]).length;
+
+  const changeRole = (i: number, role: ChannelRole | null) => {
+    // Keep at least one plottable data channel (don't let the plot go empty).
+    if (role != null && !channelRoles[i] && dataCount <= 1) return;
+    setChannelRole(i, role);
+    // A non-data channel can't ride the secondary axis.
+    if (role != null && y2.has(i)) {
+      const ny2 = (y2Keys ?? []).filter((x) => x !== i);
+      setY2Keys(ny2.length ? ny2 : null);
+    }
+  };
   // Default x source name (ds.time), e.g. "Temperature" or "Index".
   const xDefaultLabel = String(active.data.metadata?.["x_column_name"] ?? "Index");
 
@@ -72,21 +87,34 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
       </div>
       {labels.map((lab, i) => {
         if (i === xKey) return null; // this channel is the X axis, not a Y series
-        const visible = selected.includes(i);
+        const role = channelRoles[i];
+        const isData = !role; // a roled channel (label/ignore) is not a plotted series
+        const visible = isData && selected.includes(i);
         return (
           <div
             key={i}
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
           >
-            <label className="qz-check">
-              <input type="checkbox" checked={visible} onChange={() => toggle(i)} />
+            <label className="qz-check" style={{ flex: 1, minWidth: 0, opacity: isData ? 1 : 0.6 }}>
+              <input type="checkbox" checked={visible} disabled={!isData} onChange={() => toggle(i)} />
               {lab}
               {units[i] ? ` (${units[i]})` : ""}
             </label>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Select
+                style={{ maxWidth: 78 }}
+                value={role ?? ""}
+                onChange={(e) => changeRole(i, e.target.value === "" ? null : (e.target.value as ChannelRole))}
+                title="Column role — Data: plotted · Label: kept in the worksheet but off the plot · Ignore: also dropped from statistics"
+                options={[
+                  { value: "", label: "Data" },
+                  { value: "label", label: "Label" },
+                  { value: "ignore", label: "Ignore" },
+                ]}
+              />
               {visible && (
                 <Select
-                  style={{ maxWidth: 96 }}
+                  style={{ maxWidth: 88 }}
                   value={errKeys[i] == null ? "" : String(errKeys[i])}
                   onChange={(e) => setErrKey(i, e.target.value === "" ? null : Number(e.target.value))}
                   title="Channel holding this series' ± error (draws error bars)"

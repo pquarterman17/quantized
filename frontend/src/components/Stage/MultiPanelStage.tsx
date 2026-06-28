@@ -30,6 +30,7 @@ export default function MultiPanelStage() {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
+  const channelRoles = useApp((s) => s.channelRoles);
   const tool = useApp((s) => s.plotTool);
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
@@ -41,8 +42,8 @@ export default function MultiPanelStage() {
 
   // Channels actually drawn (y selection minus the x-axis channel), in order.
   const plotted = useMemo(
-    () => (active ? effectiveChannels(active.data, yKeys, xKey) : []),
-    [active, yKeys, xKey],
+    () => (active ? effectiveChannels(active.data, yKeys, xKey, channelRoles) : []),
+    [active, yKeys, xKey, channelRoles],
   );
 
   // Per-panel style, mapped from the plotted channel to its override.

@@ -10,6 +10,7 @@ import type {
   Annotation,
   AxisFormat,
   BaselineOverlay,
+  ChannelRole,
   CorrectionParams,
   Dataset,
   FitOverlay,
@@ -59,6 +60,7 @@ interface AppState {
   seriesStyles: Record<number, SeriesStyle>; // per-channel color/width/line overrides
   seriesLabels: Record<number, string>; // per-channel display-name overrides (legend rename)
   errKeys: Record<number, number>; // y-channel index → channel holding its ± error (error bars)
+  channelRoles: Record<number, ChannelRole>; // non-data column roles (label/ignore) — excluded from the plot
   hiddenChannels: number[]; // channels toggled off via the interactive legend (kept in payload, not drawn)
   waterfall: number; // waterfall offset as a fraction of the y-span (0 = off)
   plotTool: PlotTool;
@@ -125,6 +127,7 @@ interface AppState {
   resetSeriesStyle: (channel: number) => void;
   setSeriesLabel: (channel: number, label: string) => void;
   setErrKey: (channel: number, errChannel: number | null) => void;
+  setChannelRole: (channel: number, role: ChannelRole | null) => void;
   toggleHidden: (channel: number) => void;
   setWaterfall: (waterfall: number) => void;
   setPlotTool: (tool: PlotTool) => void;
@@ -215,6 +218,7 @@ export const useApp = create<AppState>((set, get) => ({
   seriesStyles: {},
   seriesLabels: {},
   errKeys: {},
+  channelRoles: {},
   hiddenChannels: [],
   waterfall: 0,
   plotTool: "zoom",
@@ -246,6 +250,7 @@ export const useApp = create<AppState>((set, get) => ({
       seriesStyles: {}, // styles are keyed by channel index → reset per dataset
       seriesLabels: {}, // legend renames are channel-keyed → reset per dataset
       errKeys: {}, // error-bar pairings are channel-keyed → reset per dataset
+      channelRoles: {}, // column roles are channel-keyed → reset per dataset
       hiddenChannels: [], // legend show/hide is channel-keyed → reset per dataset
       xLim: null, // and autoscale both axes
       yLim: null,
@@ -285,6 +290,7 @@ export const useApp = create<AppState>((set, get) => ({
       seriesStyles: {},
       seriesLabels: {},
       errKeys: {},
+      channelRoles: {},
       hiddenChannels: [],
       xLim: null,
       yLim: null,
@@ -303,6 +309,7 @@ export const useApp = create<AppState>((set, get) => ({
       seriesStyles: {},
       seriesLabels: {},
       errKeys: {},
+      channelRoles: {},
       hiddenChannels: [],
       xLim: null,
       yLim: null,
@@ -476,6 +483,15 @@ export const useApp = create<AppState>((set, get) => ({
       if (errChannel == null) delete next[channel];
       else next[channel] = errChannel;
       return { errKeys: next };
+    }),
+  // Set (or clear, role=null) a channel's column role. A role excludes the
+  // channel from the plot; clearing reverts it to a plain data channel.
+  setChannelRole: (channel, role) =>
+    set((s) => {
+      const next = { ...s.channelRoles };
+      if (role == null) delete next[channel];
+      else next[channel] = role;
+      return { channelRoles: next };
     }),
   toggleHidden: (channel) =>
     set((s) => ({

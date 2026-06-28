@@ -43,6 +43,7 @@ export default function Worksheet() {
   const active = useActiveDataset();
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
+  const channelRoles = useApp((s) => s.channelRoles); // label/ignore column roles
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   const [formula, setFormula] = useState("");
   const [colName, setColName] = useState("");
@@ -312,10 +313,15 @@ export default function Worksheet() {
               </span>
             </th>
             {labels.map((lab, c) => (
-              <th key={lab} onClick={() => toggleSort(c)} title={channelLetter(c)} style={{ cursor: "default" }}>
+              <th
+                key={lab}
+                onClick={() => toggleSort(c)}
+                title={channelRoles[c] ? `${channelLetter(c)} — ${channelRoles[c]} column` : channelLetter(c)}
+                style={{ cursor: "default", opacity: channelRoles[c] ? 0.55 : 1 }}
+              >
                 {lab}
                 <span className="role">
-                  {channelLetter(c)}
+                  {channelRoles[c] ?? channelLetter(c)}
                   {units[c] ? ` · ${units[c]}` : ""}
                   {mark(c)}
                 </span>
@@ -361,7 +367,10 @@ export default function Worksheet() {
                   </td>
                   <td>{colStats ? fmtNum(colStats[0]?.[key]) : "…"}</td>
                   {labels.map((lab, c) => (
-                    <td key={lab}>{colStats ? fmtNum(colStats[c + 1]?.[key]) : "…"}</td>
+                    // "ignore" columns are out of analysis → blank their stats.
+                    <td key={lab}>
+                      {channelRoles[c] === "ignore" ? "—" : colStats ? fmtNum(colStats[c + 1]?.[key]) : "…"}
+                    </td>
                   ))}
                 </tr>
               ))

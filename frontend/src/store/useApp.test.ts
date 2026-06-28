@@ -267,6 +267,35 @@ describe("useApp error-bar pairings", () => {
   });
 });
 
+describe("useApp column roles (label/ignore)", () => {
+  it("sets and clears a channel's column role", () => {
+    useApp.setState({ channelRoles: {} });
+    useApp.getState().setChannelRole(1, "label");
+    expect(useApp.getState().channelRoles).toEqual({ 1: "label" });
+    useApp.getState().setChannelRole(1, "ignore");
+    expect(useApp.getState().channelRoles).toEqual({ 1: "ignore" });
+    useApp.getState().setChannelRole(1, null);
+    expect(useApp.getState().channelRoles).toEqual({});
+  });
+
+  it("resets column roles when switching or adding a dataset", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      activeId: "d1",
+      channelRoles: { 0: "ignore" },
+    });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().channelRoles).toEqual({});
+
+    useApp.setState({ channelRoles: { 0: "label" } });
+    useApp.getState().addDataset({ id: "d3", name: "c", data: raw });
+    expect(useApp.getState().channelRoles).toEqual({});
+  });
+});
+
 describe("useApp interactive legend (hidden channels)", () => {
   it("toggles a channel's hidden state", () => {
     useApp.setState({ hiddenChannels: [] });

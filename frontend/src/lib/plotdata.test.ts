@@ -137,6 +137,15 @@ describe("effectiveChannels", () => {
   it("intersects the y selection with the x exclusion", () => {
     expect(effectiveChannels(ds, [1, 2], 2)).toEqual([1]);
   });
+
+  it("excludes channels carrying a non-data role (label/ignore)", () => {
+    expect(effectiveChannels(ds, null, null, { 1: "label" })).toEqual([0, 2]);
+    expect(effectiveChannels(ds, null, null, { 0: "ignore", 2: "label" })).toEqual([1]);
+  });
+
+  it("combines the x exclusion and role exclusion", () => {
+    expect(effectiveChannels(ds, null, 0, { 1: "ignore" })).toEqual([2]);
+  });
 });
 
 describe("withFitOverlay", () => {

@@ -189,6 +189,12 @@ export interface RefLine {
 /** Per-channel line style (solid/dashed/dotted) — maps to a uPlot dash array. */
 export type LineStyle = "solid" | "dashed" | "dotted";
 
+/** A non-data column role (W5 DataWorkspace column roles). A channel with a role
+ *  is excluded from the plot. `label` keeps it in the worksheet + its statistics
+ *  (a descriptor column you tabulate but don't curve); `ignore` additionally
+ *  drops it from the worksheet statistics (out of analysis). Absent = "data". */
+export type ChannelRole = "label" | "ignore";
+
 /** A text annotation pinned at a data coordinate (label a peak, a feature, a
  *  transition…). Drawn by the uPlot annotationPlugin as a dot + label. */
 export interface Annotation {

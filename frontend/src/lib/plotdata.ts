@@ -7,6 +7,7 @@ import type uPlot from "uplot";
 import { plotSeries } from "./api";
 import type {
   BaselineOverlay,
+  ChannelRole,
   DataStruct,
   FitOverlay,
   PeakOverlay,
@@ -57,16 +58,18 @@ export function buildColumns(
 }
 
 /** The value-channel indices actually plotted, in order: the y selection (or all
- *  channels) minus the channel used as the x-axis (you can't plot a channel
- *  against itself). The single source of truth shared by the fetch + the
- *  per-channel style mapping in every stage. */
+ *  channels), minus the channel used as the x-axis (you can't plot a channel
+ *  against itself), minus any channel carrying a non-data column role
+ *  (label/ignore — those are not curves). The single source of truth shared by
+ *  the fetch + the per-channel style mapping in every stage. */
 export function effectiveChannels(
   ds: DataStruct,
   yKeys: number[] | null,
   xKey: number | null,
+  roles?: Record<number, ChannelRole>,
 ): number[] {
   const base = yKeys ?? ds.labels.map((_, i) => i);
-  return xKey == null ? base : base.filter((c) => c !== xKey);
+  return base.filter((c) => c !== xKey && !roles?.[c]);
 }
 
 function fromResponse(r: PlotSeriesResponse): PlotPayload {
