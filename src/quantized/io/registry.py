@@ -16,6 +16,7 @@ from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl
 from quantized.io.qd import import_ppms, import_qd_vsm, is_ppms_dat, is_qd_file
 from quantized.io.refl1d import import_refl1d_dat, is_refl1d_dat
 from quantized.io.rigaku import import_rigaku_raw, is_rigaku_raw
+from quantized.io.sims import import_sims, is_sims_file
 from quantized.io.xrdml import import_xrdml
 
 __all__ = ["import_auto", "resolve_parser"]
@@ -33,11 +34,13 @@ _EXT_MAP: dict[str, Parser] = {
     ".datb": import_ncnr_dat,  # .datB
     ".datc": import_ncnr_dat,  # .datC
     ".datd": import_ncnr_dat,  # .datD
-    ".csv": import_csv,
-    ".tsv": import_csv,
-    ".xlsx": import_excel,
-    ".xlsm": import_excel,
 }
+
+
+def _accept_any(_path: Path) -> bool:
+    """Catch-all sniffer: routes to the generic fallback parser for an extension."""
+    return True
+
 
 # Ambiguous extensions resolve by content sniffing — first match wins.
 _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
@@ -48,6 +51,12 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
     ],
     # .raw is Rigaku here (magic "FI"); Bruker .raw -> fermiviewer (out of scope).
     ".raw": [(is_rigaku_raw, import_rigaku_raw)],
+    # SIMS depth profiles share .csv/.tsv/.xlsx with generic tables: sniff for the
+    # SIMS layout first, else fall back to the generic delimited / Excel parser.
+    ".csv": [(is_sims_file, import_sims), (_accept_any, import_csv)],
+    ".tsv": [(is_sims_file, import_sims), (_accept_any, import_csv)],
+    ".xlsx": [(is_sims_file, import_sims), (_accept_any, import_excel)],
+    ".xlsm": [(is_sims_file, import_sims), (_accept_any, import_excel)],
 }
 
 

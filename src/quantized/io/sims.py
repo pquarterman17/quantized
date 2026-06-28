@@ -22,10 +22,56 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 
-__all__ = ["import_sims"]
+__all__ = ["import_sims", "is_sims_file"]
 
 _COMMENT_CHARS = "#%"
 _DELIM_CANDIDATES = (",", "\t", ";", " ")
+_EXCEL_EXTS = {".xlsx", ".xls", ".xlsm", ".xlsb", ".ods"}
+
+# SIMS exports share .csv/.tsv/.xlsx with generic tables, so detect them by a
+# vendor banner ("SIMS", "Evans Analytical", "Drawn Curves") or, failing that,
+# the structural fingerprint of a depth axis carrying concentration units.
+_SIMS_WORD_RE = re.compile(r"\bsims\b", re.IGNORECASE)
+_SIMS_PHRASE_MARKERS = ("evans analytical", "drawn curves", "secondary ion")
+
+
+def _sims_signals(text: str) -> bool:
+    if _SIMS_WORD_RE.search(text):
+        return True
+    low = text.lower()
+    if any(m in low for m in _SIMS_PHRASE_MARKERS):
+        return True
+    return "depth" in low and ("atoms/cc" in low or "atoms/cm" in low)
+
+
+def _excel_preview_text(path: Path, max_rows: int = 8) -> str:
+    """First few rows of sheet 0 flattened to a string (for content sniffing)."""
+    import openpyxl
+
+    workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    try:
+        ws = workbook.worksheets[0]
+        cells: list[str] = []
+        for i, row in enumerate(ws.iter_rows(values_only=True)):
+            if i >= max_rows:
+                break
+            cells.extend(str(v) for v in row if v is not None)
+    finally:
+        workbook.close()
+    return " ".join(cells)
+
+
+def is_sims_file(path: Path) -> bool:
+    """Content sniffer for ambiguous .csv/.tsv/.xlsx: True for a SIMS depth profile."""
+    p = Path(path)
+    try:
+        if p.suffix.lower() in _EXCEL_EXTS:
+            text = _excel_preview_text(p)
+        else:
+            text = p.read_text(encoding="latin-1", errors="replace")[:4096]
+    except Exception:  # noqa: BLE001 — a sniffer must never raise; unreadable -> not SIMS
+        return False
+    return _sims_signals(text)
 
 
 def _is_numeric(token: str) -> bool:
