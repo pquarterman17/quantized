@@ -504,17 +504,27 @@ MATLAB."**
   so the dashed segment stays pinned across zoom/pan. Wired through `uplotOpts`
   (tool + `onMeasure`) and `PlotStage` (button, chip, cleared on tool/dataset
   change). Gates green (frontend 246 + build).
+- **X-axis channel picker** (2026-06-27, `ad6b460`) — W5 column roles (X-role
+  slice). Surfaced the already-routed `PlotState.x_key`: a "X axis" select in the
+  Inspector ChannelsCard lets any value channel be the plot x-axis (M-vs-H, not
+  M-vs-time). New `lib/plotdata.effectiveChannels` (y selection minus the x
+  channel — single source of truth) drives both `PlotStage` and `MultiPanelStage`;
+  store `xKey` resets with the dataset (addDataset/setActive/loadWorkspace);
+  `buildColumns`/`fetchPlot` extended for the offline path. Backend already honored
+  x_key — added `/api/plot/series` x_key route tests. Gates green (frontend 253 +
+  build; backend plot 13 + ruff).
 
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to
    focus on bosonplotter features for now"); the calculator/non-calculator
    alternation is **dropped — no W4/DiraCulator/SLD-from-formula work**. Pick from
-   plotting + W5 DataWorkspace: **plot interactions** (measurement ruler shipped
-   `d5c3244`; remaining — legend rename/reorder, copy-data-to-clipboard, more
-   cursor read-outs), **W5 column roles** (assign X / Y / Y-err / label per
-   channel), the **computed-column formula engine** (snapshots + recompute), or
-   **workspace autosave**. Non-Boson-Plotter parity items (XRDML `map2D` golden,
-   blocked parsers) stay paused unless the user reopens scope.
+   plotting + W5 DataWorkspace: **plot interactions** (measurement ruler `d5c3244`;
+   remaining — legend rename/reorder, copy-data-to-clipboard, more cursor
+   read-outs), **W5 column roles** (X-role shipped `ad6b460`; remaining — Y-error
+   *error bars*, label/ignore roles), the **computed-column formula engine**
+   (snapshots + recompute), or **workspace autosave**. Non-Boson-Plotter parity
+   items (XRDML `map2D` golden, blocked parsers) stay paused unless the user
+   reopens scope.
 2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,

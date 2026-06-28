@@ -204,7 +204,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 ## W5 — DataWorkspace (`calc/` + `routes/workspace`)
 Source: `+dataWorkspace/`, `DataWorkspace.m`
 - [ ] WorkspaceModel (datasets, columns, roles)
-- [ ] Column roles
+- [~] Column roles — **X-role shipped**: ChannelsCard "X axis" picker surfaces the already-routed `PlotState.x_key` so any value channel can be the plot x-axis (e.g. M-vs-H instead of M-vs-time); the chosen x is excluded from the Y series via `lib/plotdata.effectiveChannels` (used by PlotStage + MultiPanelStage); store `xKey` resets with the dataset; `/api/plot/series` x_key route tests added. Commit `ad6b460`. **Y / Y-error (error bars) / label / ignore roles still TODO.**
 - [ ] Formula engine (no eval) + computed-column snapshots + recompute
 - [x] Sort / filter / descriptive stats / masking — Stage `Worksheet`: header-click sort, structured row filter (col/op/value + Extract), per-column golden `descriptive_stats` footer, click-to-mask rows (excluded from stats/extract). Commits `e8834aa`/`b412725`/`61e479e`.
 - [~] Workspace file format (`.dwk`) + autosave — **save/load shipped**: pure `lib/workspace.ts` (`serializeWorkspace`/`parseWorkspace`, JSON = format tag + version + datasets, defensive DataStruct validation at the file boundary), store `loadWorkspace` (hard-replace library + reset per-dataset view/overlays/markers), command-palette "Save/Open workspace (.dwk)…" (`saveBlob` / `openFilePicker`). Round-trip + validation unit-tested. Commit `97bd483`. **Autosave still TODO** (overlaps a future session/prefs layer).
