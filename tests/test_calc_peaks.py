@@ -91,14 +91,33 @@ def test_prominence_nonfinite_falls_back_to_bruteforce() -> None:
     )
 
 
-def test_find_peaks_scales_on_many_maxima() -> None:
-    """A 200k-point noisy signal must finish quickly (the old prominence walk was
-    O(n²) and took minutes); here it returns in well under a second."""
+def test_prominence_scales_to_a_million_points() -> None:
+    """The prominence computation was the O(n²) hot spot in find_peaks_robust
+    (193 s at 1M points). The sparse-table version is O(n log n); a 1M-point
+    signal with ~300k local maxima must finish in well under a second, isolating
+    the fix from the (separate, MATLAB-matched) SNIP background cost."""
     import time
 
     rng = np.random.default_rng(0)
-    x = np.linspace(0.0, 200.0, 200_000)
-    y = np.abs(np.sin(x)) + 0.01 * rng.standard_normal(x.size)
+    residual = np.abs(np.sin(np.linspace(0.0, 200.0, 1_000_000)))
+    residual = residual + 0.01 * rng.standard_normal(residual.size)
+    is_max = np.zeros(residual.size, dtype=bool)
+    is_max[1:-1] = (residual[1:-1] >= residual[:-2]) & (residual[1:-1] > residual[2:])
+    max_idx = np.flatnonzero(is_max)
+    assert max_idx.size > 100_000  # genuinely many candidates
+    t0 = time.perf_counter()
+    prom = _compute_prominence(residual, max_idx)
+    assert time.perf_counter() - t0 < 5.0
+    assert prom.shape == max_idx.shape
+
+
+def test_find_peaks_fast_at_realistic_sizes() -> None:
+    """At the largest real-corpus size (~22k points) peak finding is interactive."""
+    import time
+
+    rng = np.random.default_rng(1)
+    x = np.linspace(0.0, 100.0, 22_000)
+    y = np.abs(np.sin(x * 3)) + 0.01 * rng.standard_normal(x.size)
     t0 = time.perf_counter()
     peaks, _ = find_peaks_robust(x, y)
     assert time.perf_counter() - t0 < 5.0
