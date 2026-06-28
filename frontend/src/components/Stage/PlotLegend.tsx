@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 
+import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import type { SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -26,7 +27,19 @@ export default function PlotLegend({ series, styleList, plotted, hidden }: PlotL
   const seriesLabels = useApp((s) => s.seriesLabels);
   const setSeriesLabel = useApp((s) => s.setSeriesLabel);
   const setSeriesOrder = useApp((s) => s.setSeriesOrder);
+  const y2Keys = useApp((s) => s.y2Keys);
+  const setY2Keys = useApp((s) => s.setY2Keys);
   const [editing, setEditing] = useState<{ channel: number; value: string } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; channel: number; i: number } | null>(null);
+
+  // Toggle a plotted channel between the primary (left) and secondary (right) Y
+  // axis — the right-click equivalent of the dual-Y picker in the Channels card.
+  const toggleY2 = (channel: number) => {
+    const set = new Set(y2Keys ?? []);
+    if (set.has(channel)) set.delete(channel);
+    else set.add(channel);
+    setY2Keys(set.size ? [...set] : null);
+  };
 
   const defaultLabel = (s: PlotSeriesSpec) => (s.unit ? `${s.label} (${s.unit})` : s.label);
   const commit = () => {
@@ -101,7 +114,16 @@ export default function PlotLegend({ series, styleList, plotted, hidden }: PlotL
             onDoubleClick={
               isChannel ? () => setEditing({ channel, value: seriesLabels[channel] ?? "" }) : undefined
             }
-            title={isChannel ? (isHidden ? "Click to show" : "Click to hide · double-click to rename") : undefined}
+            onContextMenu={
+              isChannel
+                ? (e) => {
+                    e.preventDefault();
+                    e.stopPropagation(); // don't fall through to the stage axes menu
+                    setMenu({ x: e.clientX, y: e.clientY, channel, i });
+                  }
+                : undefined
+            }
+            title={isChannel ? (isHidden ? "Click to show" : "Click to hide · double-click to rename · right-click for more") : undefined}
             style={{
               opacity: isHidden ? 0.4 : 1,
               textDecoration: isHidden ? "line-through" : "none",
@@ -141,6 +163,41 @@ export default function PlotLegend({ series, styleList, plotted, hidden }: PlotL
           </div>
         );
       })}
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={((): ContextMenuItem[] => {
+            const isHidden = hiddenChannels.includes(menu.channel);
+            const visibleCount = plotted.filter((c) => !hiddenChannels.includes(c)).length;
+            const onY2 = (y2Keys ?? []).includes(menu.channel);
+            return [
+              {
+                label: "Rename…",
+                run: () => setEditing({ channel: menu.channel, value: seriesLabels[menu.channel] ?? "" }),
+              },
+              {
+                label: isHidden ? "Show" : "Hide",
+                run: () => toggleHidden(menu.channel),
+                disabled: !isHidden && visibleCount <= 1,
+              },
+              { separator: true },
+              {
+                label: onY2 ? "Move to left Y axis" : "Move to right Y axis",
+                run: () => toggleY2(menu.channel),
+              },
+              { separator: true },
+              { label: "Move earlier (draw under)", run: () => move(menu.i, -1), disabled: menu.i === 0 },
+              {
+                label: "Move later (draw over)",
+                run: () => move(menu.i, 1),
+                disabled: menu.i === plotted.length - 1,
+              },
+            ];
+          })()}
+        />
+      )}
     </div>
   );
 }

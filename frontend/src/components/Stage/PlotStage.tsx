@@ -24,6 +24,7 @@ import { normalizeRange } from "../../lib/regionSelect";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotPlugins";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import InsetPlot from "./InsetPlot";
 import MultiPanelStage from "./MultiPanelStage";
 import PlotLegend from "./PlotLegend";
@@ -75,6 +76,7 @@ export default function PlotStage() {
   const [readout, setReadout] = useState<Readout | null>(null);
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
   const [statsSel, setStatsSel] = useState<RegionStats | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Splice in the fit curve + peak markers (each a no-op unless it belongs to
   // the active dataset and aligns to the plotted x).
@@ -254,9 +256,33 @@ export default function PlotStage() {
   if (polarMode && active) return <PolarStage />;
   if (stackMode && nPlotted >= 2) return <MultiPanelStage />;
 
+  // Right-click anywhere on the plot background → axes/view actions (the parity
+  // surface for the MATLAB axes uicontextmenu). Legend right-clicks stop their own
+  // propagation, so they don't fall through to this.
+  const onStageContextMenu = (e: React.MouseEvent) => {
+    if (!displayPayload) return;
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY });
+  };
+  const axesMenuItems = (): ContextMenuItem[] => {
+    const s = useApp.getState();
+    return [
+      { label: "Reset view (autoscale)", run: resetView },
+      { separator: true },
+      { label: xLog ? "Linear X axis" : "Log X axis", run: () => s.setXLog(!xLog) },
+      { label: yLog ? "Linear Y axis" : "Log Y axis", run: () => s.setYLog(!yLog) },
+      { label: showGrid ? "Hide grid" : "Show grid", run: () => s.setShowGrid(!showGrid) },
+      { label: showLegend ? "Hide legend" : "Show legend", run: () => s.setShowLegend(!showLegend) },
+      { separator: true },
+      { label: "Copy plotted data (TSV)", run: copyData },
+      { label: "Save plot as PNG", run: savePng },
+    ];
+  };
+
   return (
-    <div className="qzk-stage">
+    <div className="qzk-stage" onContextMenu={onStageContextMenu}>
       <div ref={hostRef} style={{ position: "absolute", inset: 8 }} />
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={axesMenuItems()} onClose={() => setMenu(null)} />}
 
       {displayPayload && (
         <PlotToolbar onReset={resetView} onSavePng={savePng} onCopyData={copyData} />

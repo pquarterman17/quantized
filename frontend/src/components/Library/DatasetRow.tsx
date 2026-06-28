@@ -6,6 +6,7 @@
 import { useState } from "react";
 
 import Sparkline from "./Sparkline";
+import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { Badge } from "../primitives";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -35,6 +36,7 @@ export default function DatasetRow({
   const toggleSelected = useApp((s) => s.toggleSelected);
   const selectRange = useApp((s) => s.selectRange);
   const removeDataset = useApp((s) => s.removeDataset);
+  const removeSelected = useApp((s) => s.removeSelected);
   const duplicateDataset = useApp((s) => s.duplicateDataset);
   const moveDataset = useApp((s) => s.moveDataset);
   const renameDataset = useApp((s) => s.renameDataset);
@@ -46,6 +48,7 @@ export default function DatasetRow({
   const [rename, setRename] = useState<string | null>(null);
   const [tag, setTag] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   const commitRename = () => {
     if (rename != null) renameDataset(d.id, rename);
@@ -69,11 +72,37 @@ export default function DatasetRow({
     else setActive(d.id);
   };
 
+  // Right-click: if this row isn't already in the selection, select it first so
+  // the menu acts on what the user sees highlighted, then open the menu.
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!selected) setActive(d.id);
+    setMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const selectedCount = useApp.getState().selectedIds.length;
+  const menuItems: ContextMenuItem[] = [
+    { label: "Plot (make active)", run: () => setActive(d.id), disabled: active },
+    { label: "Duplicate", run: () => duplicateDataset(d.id) },
+    { label: "Rename…", run: () => setRename(d.name) },
+    { label: "Add tag…", run: () => setTag("") },
+    { separator: true },
+    { label: "Move up", run: () => moveDataset(d.id, -1), disabled: !canMoveUp },
+    { label: "Move down", run: () => moveDataset(d.id, 1), disabled: !canMoveDown },
+    { separator: true },
+    { label: "Remove", run: () => removeDataset(d.id), danger: true },
+    ...(selected && selectedCount > 1
+      ? [{ label: `Remove ${selectedCount} selected`, run: removeSelected, danger: true } as ContextMenuItem]
+      : []),
+  ];
+
   return (
     <div
       className={`qzk-ds${active ? " active" : ""}${selected ? " selected" : ""}`}
       onClick={onRowClick}
+      onContextMenu={onContextMenu}
     >
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
       <div className="qzk-ds-top">
         {rename != null ? (
           <input
