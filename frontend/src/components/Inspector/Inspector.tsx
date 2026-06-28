@@ -5,6 +5,7 @@ import AnnotationsCard from "./AnnotationsCard";
 import AxisLimits from "./AxisLimits";
 import ChannelsCard from "./ChannelsCard";
 import CorrectionsCard from "./CorrectionsCard";
+import MacroCard from "./MacroCard";
 import MetadataCard from "./MetadataCard";
 import NotesCard from "./NotesCard";
 import RefLinesCard from "./RefLinesCard";
@@ -95,6 +96,8 @@ export default function Inspector() {
       <AnnotationsCard />
 
       <SeriesStyleCard active={active} />
+
+      <MacroCard />
     </aside>
   );
 }

@@ -6,6 +6,7 @@ import { create } from "zustand";
 import type { CorrectionsRequest } from "../lib/api";
 import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
 import { cloneDataStruct } from "../lib/dataset";
+import { lit, macroStep, type MacroStep } from "../lib/macro";
 import type {
   Annotation,
   AxisFormat,
@@ -86,6 +87,10 @@ interface AppState {
   peakOverlay: PeakOverlay | null;
   baselineOverlay: BaselineOverlay | null;
   rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null; // markers on the 2D map
+  // Macro recorder: when `macroRecording` is on, curated actions append a step;
+  // the Inspector card exports `macroSteps` as a reproducible script.
+  macroRecording: boolean;
+  macroSteps: MacroStep[];
   status: string;
 
   addDataset: (ds: Dataset) => void;
@@ -159,6 +164,12 @@ interface AppState {
   setPeakOverlay: (overlay: PeakOverlay | null) => void;
   setBaselineOverlay: (overlay: BaselineOverlay | null) => void;
   setRsmPeaks: (rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null) => void;
+  startMacro: () => void;
+  stopMacro: () => void;
+  clearMacro: () => void;
+  // Append a step IFF recording is on (callers invoke unconditionally — the
+  // gate lives here so the "are we recording?" check isn't scattered).
+  recordMacro: (label: string, code: string) => void;
   setStatus: (status: string) => void;
 }
 
@@ -254,6 +265,8 @@ export const useApp = create<AppState>((set, get) => ({
   peakOverlay: null,
   baselineOverlay: null,
   rsmPeaks: null,
+  macroRecording: false,
+  macroSteps: [],
   status: "starting…",
 
   addDataset: (ds) =>
@@ -283,6 +296,7 @@ export const useApp = create<AppState>((set, get) => ({
       try {
         const data = await uploadFile(file);
         get().addDataset({ id: nextDatasetId(), name: file.name, data });
+        get().recordMacro(`Import ${file.name}`, `qz.import(${lit(file.name)})`);
         added += 1;
       } catch (e) {
         lastError = `${file.name}: ${e instanceof Error ? e.message : "error"}`;
@@ -461,20 +475,29 @@ export const useApp = create<AppState>((set, get) => ({
           d.id === id ? { ...d, data: corrected, raw, corrections: params, bgRef } : d,
         ),
       }));
+      get().recordMacro(
+        `Corrections → ${ds.name}`,
+        bgDs
+          ? `qz.applyCorrections(${lit(ds.name)}, ${lit(params)}, ${lit({ bg: bgDs.name, interp: bg!.interp })})`
+          : `qz.applyCorrections(${lit(ds.name)}, ${lit(params)})`,
+      );
     } catch (e) {
       get().setStatus(
         `corrections failed: ${e instanceof Error ? e.message : "error"}`,
       );
     }
   },
-  resetCorrections: (id) =>
+  resetCorrections: (id) => {
+    const ds = get().datasets.find((d) => d.id === id);
     set((s) => ({
       datasets: s.datasets.map((d) =>
         d.id === id && d.raw
           ? { ...d, data: d.raw, raw: undefined, corrections: undefined, bgRef: undefined }
           : d,
       ),
-    })),
+    }));
+    if (ds?.raw) get().recordMacro(`Reset corrections → ${ds.name}`, `qz.resetCorrections(${lit(ds.name)})`);
+  },
   toggleLeft: () => set((s) => ({ leftCollapsed: !s.leftCollapsed })),
   toggleRight: () => set((s) => ({ rightCollapsed: !s.rightCollapsed })),
   setStageTab: (stageTab) => set({ stageTab }),
@@ -490,8 +513,14 @@ export const useApp = create<AppState>((set, get) => ({
     applyDocAttrs(get().theme, get().accent, density);
     set({ density });
   },
-  setYLog: (yLog) => set({ yLog }),
-  setXLog: (xLog) => set({ xLog }),
+  setYLog: (yLog) => {
+    set({ yLog });
+    get().recordMacro(`Y axis ${yLog ? "log" : "linear"}`, `qz.setYLog(${yLog})`);
+  },
+  setXLog: (xLog) => {
+    set({ xLog });
+    get().recordMacro(`X axis ${xLog ? "log" : "linear"}`, `qz.setXLog(${xLog})`);
+  },
   setShowGrid: (showGrid) => set({ showGrid }),
   setShowLegend: (showLegend) => set({ showLegend }),
   setStackMode: (stackMode) => set({ stackMode }),
@@ -501,12 +530,27 @@ export const useApp = create<AppState>((set, get) => ({
   setYLim: (yLim) => set({ yLim }),
   setXFmt: (xFmt) => set({ xFmt }),
   setYFmt: (yFmt) => set({ yFmt }),
-  setPlotTitle: (plotTitle) => set({ plotTitle }),
+  setPlotTitle: (plotTitle) => {
+    set({ plotTitle });
+    get().recordMacro(`Title → ${plotTitle || "(none)"}`, `qz.setPlotTitle(${lit(plotTitle)})`);
+  },
   setXAxisLabel: (xAxisLabel) => set({ xAxisLabel }),
   setYAxisLabel: (yAxisLabel) => set({ yAxisLabel }),
-  setXKey: (xKey) => set({ xKey }),
-  setYKeys: (yKeys) => set({ yKeys }),
-  setY2Keys: (y2Keys) => set({ y2Keys }),
+  setXKey: (xKey) => {
+    set({ xKey });
+    get().recordMacro(`X axis → channel ${xKey ?? "time"}`, `qz.setXKey(${lit(xKey)})`);
+  },
+  setYKeys: (yKeys) => {
+    set({ yKeys });
+    get().recordMacro(`Y channels → ${yKeys ? yKeys.join(",") : "all"}`, `qz.setYKeys(${lit(yKeys)})`);
+  },
+  setY2Keys: (y2Keys) => {
+    set({ y2Keys });
+    get().recordMacro(
+      `Y2 channels → ${y2Keys ? y2Keys.join(",") : "none"}`,
+      `qz.setY2Keys(${lit(y2Keys)})`,
+    );
+  },
   addRefLine: (axis, value) =>
     set((s) => ({ refLines: [...s.refLines, { id: `ref-${++_refSeq}`, axis, value }] })),
   removeRefLine: (id) => set((s) => ({ refLines: s.refLines.filter((r) => r.id !== id) })),
@@ -548,13 +592,18 @@ export const useApp = create<AppState>((set, get) => ({
     }),
   // Set (or clear, role=null) a channel's column role. A role excludes the
   // channel from the plot; clearing reverts it to a plain data channel.
-  setChannelRole: (channel, role) =>
+  setChannelRole: (channel, role) => {
     set((s) => {
       const next = { ...s.channelRoles };
       if (role == null) delete next[channel];
       else next[channel] = role;
       return { channelRoles: next };
-    }),
+    });
+    get().recordMacro(
+      `Channel ${channel} role → ${role ?? "data"}`,
+      `qz.setChannelRole(${channel}, ${lit(role)})`,
+    );
+  },
   // Persist an explicit plotted-channel draw order (a permutation of the current
   // plotted channels). effectiveChannels reorders by it; stale entries (channels
   // no longer plotted) are ignored and newly-plotted channels append in order.
@@ -565,7 +614,10 @@ export const useApp = create<AppState>((set, get) => ({
         ? s.hiddenChannels.filter((c) => c !== channel)
         : [...s.hiddenChannels, channel],
     })),
-  setWaterfall: (waterfall) => set({ waterfall }),
+  setWaterfall: (waterfall) => {
+    set({ waterfall });
+    get().recordMacro(`Waterfall → ${waterfall}`, `qz.setWaterfall(${waterfall})`);
+  },
   setPlotTool: (plotTool) => set({ plotTool }),
   setRegionPicked: (regionPicked) => set({ regionPicked }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
@@ -583,6 +635,12 @@ export const useApp = create<AppState>((set, get) => ({
   setPeakOverlay: (peakOverlay) => set({ peakOverlay }),
   setBaselineOverlay: (baselineOverlay) => set({ baselineOverlay }),
   setRsmPeaks: (rsmPeaks) => set({ rsmPeaks }),
+  // ── Macro recorder ──────────────────────────────────────────────────────
+  startMacro: () => set({ macroRecording: true }),
+  stopMacro: () => set({ macroRecording: false }),
+  clearMacro: () => set({ macroSteps: [], macroRecording: false }),
+  recordMacro: (label, code) =>
+    set((s) => (s.macroRecording ? { macroSteps: [...s.macroSteps, macroStep(label, code)] } : {})),
   setStatus: (status) => set({ status }),
 }));
 

@@ -610,3 +610,41 @@ describe("useApp groups", () => {
     expect(useApp.getState().datasets[0].group).toBeUndefined();
   });
 });
+
+describe("useApp macro recorder", () => {
+  beforeEach(() => {
+    useApp.setState({ macroRecording: false, macroSteps: [] });
+  });
+
+  it("records nothing while paused (the gate lives in recordMacro)", () => {
+    useApp.getState().setYLog(true);
+    expect(useApp.getState().macroSteps).toHaveLength(0);
+  });
+
+  it("captures curated actions once recording", () => {
+    useApp.getState().startMacro();
+    useApp.getState().setYLog(true);
+    useApp.getState().setXKey(2);
+    const steps = useApp.getState().macroSteps;
+    expect(steps.map((s) => s.code)).toEqual(["qz.setYLog(true)", "qz.setXKey(2)"]);
+    expect(steps[0].label).toBe("Y axis log");
+  });
+
+  it("records corrections with the dataset name and params", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...raw, values: [[1], [2], [3]] });
+    useApp.setState({ datasets: [{ id: "d1", name: "samp.dat", data: raw }], activeId: "d1" });
+    useApp.getState().startMacro();
+    await useApp.getState().applyCorrections("d1", { yOff: 5 });
+    expect(useApp.getState().macroSteps[0].code).toBe(
+      'qz.applyCorrections("samp.dat", { yOff: 5 })',
+    );
+  });
+
+  it("clear empties the log and stops recording", () => {
+    useApp.getState().startMacro();
+    useApp.getState().setYLog(true);
+    useApp.getState().clearMacro();
+    expect(useApp.getState().macroSteps).toHaveLength(0);
+    expect(useApp.getState().macroRecording).toBe(false);
+  });
+});
