@@ -17,7 +17,7 @@ import {
 } from "../../lib/plotdata";
 import { copyText, payloadToTSV } from "../../lib/clipboard";
 import { buildErrorColumns } from "../../lib/errorbars";
-import { formatMeasurement, type Measurement } from "../../lib/measure";
+import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { exportPlotPng } from "../../lib/plotExport";
 import { normalizeRange } from "../../lib/regionSelect";
@@ -27,18 +27,9 @@ import { useActiveDataset, useApp } from "../../store/useApp";
 import InsetPlot from "./InsetPlot";
 import MultiPanelStage from "./MultiPanelStage";
 import PlotLegend from "./PlotLegend";
+import PlotReadouts from "./PlotReadouts";
+import PlotToolbar from "./PlotToolbar";
 import PolarStage from "./PolarStage";
-
-const TOOLS = [
-  { id: "zoom", glyph: "⛶", tip: "Box zoom" },
-  { id: "pan", glyph: "✥", tip: "Pan" },
-  { id: "cursor", glyph: "✛", tip: "Data cursor" },
-  { id: "measure", glyph: "∡", tip: "Measure (Δx, Δy, slope)" },
-  { id: "stats", glyph: "Σ", tip: "Region stats (drag a range)" },
-] as const;
-
-/** Compact number format for the stats panel; non-finite (e.g. std with n<2) → —. */
-const fmtStat = (v: number): string => (Number.isFinite(v) ? v.toPrecision(4) : "—");
 
 export default function PlotStage() {
   const active = useActiveDataset();
@@ -71,12 +62,11 @@ export default function PlotStage() {
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
   const setRegionPicked = useApp((s) => s.setRegionPicked);
+  // stack/inset/polar values gate the alternate render modes here; their toggle
+  // setters live in PlotToolbar, which owns the tool dock.
   const stackMode = useApp((s) => s.stackMode);
-  const setStackMode = useApp((s) => s.setStackMode);
   const insetMode = useApp((s) => s.insetMode);
-  const setInsetMode = useApp((s) => s.setInsetMode);
   const polarMode = useApp((s) => s.polarMode);
-  const setPolarMode = useApp((s) => s.setPolarMode);
   const fitOverlay = useApp((s) => s.fitOverlay);
   const peakOverlay = useApp((s) => s.peakOverlay);
   const baselineOverlay = useApp((s) => s.baselineOverlay);
@@ -270,50 +260,7 @@ export default function PlotStage() {
       <div ref={hostRef} style={{ position: "absolute", inset: 8 }} />
 
       {displayPayload && (
-        <div className="qzk-glass qzk-float-tools">
-          {TOOLS.map((t) => (
-            <button
-              key={t.id}
-              className={`qzk-tool-btn${tool === t.id ? " active" : ""}`}
-              title={t.tip}
-              onClick={() => setPlotTool(t.id)}
-            >
-              {t.glyph}
-            </button>
-          ))}
-          <span className="qzk-tool-sep" />
-          <button className="qzk-tool-btn" title="Reset view" onClick={resetView}>
-            ⊡
-          </button>
-          <button className="qzk-tool-btn" title="Save plot as PNG" onClick={savePng}>
-            ⤓
-          </button>
-          <button className="qzk-tool-btn" title="Copy plotted data (TSV)" onClick={copyData}>
-            ⧉
-          </button>
-          <span className="qzk-tool-sep" />
-          <button
-            className={`qzk-tool-btn${stackMode ? " active" : ""}`}
-            title="Stack channels in separate panels"
-            onClick={() => setStackMode(true)}
-          >
-            ▤
-          </button>
-          <button
-            className={`qzk-tool-btn${insetMode ? " active" : ""}`}
-            title="Magnifier inset"
-            onClick={() => setInsetMode(!insetMode)}
-          >
-            ⊕
-          </button>
-          <button
-            className={`qzk-tool-btn${polarMode ? " active" : ""}`}
-            title="Polar plot (angle vs radius)"
-            onClick={() => setPolarMode(true)}
-          >
-            ✺
-          </button>
-        </div>
+        <PlotToolbar onReset={resetView} onSavePng={savePng} onCopyData={copyData} />
       )}
 
       {insetMode && displayPayload && (
@@ -329,54 +276,7 @@ export default function PlotStage() {
         </div>
       )}
 
-      {tool === "cursor" && readout && (
-        <div className="qzk-glass qzk-readout">
-          <div style={{ color: "var(--text-dim)" }}>x = {readout.x.toPrecision(5)}</div>
-          {readout.rows.map((r, i) => (
-            <div key={`${r.label}-${i}`} style={{ display: "flex", gap: 6, justifyContent: "space-between" }}>
-              <span>{r.label || "y"}</span>
-              <span>{r.y.toPrecision(5)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {tool === "region" && (
-        <div className="qzk-glass qzk-readout">Drag to select a background range</div>
-      )}
-      {tool === "measure" && (
-        <div className="qzk-glass qzk-readout">
-          {measurement ? formatMeasurement(measurement) : "Drag between two points to measure"}
-        </div>
-      )}
-      {tool === "stats" && (
-        <div className="qzk-glass qzk-readout" style={{ maxHeight: 240, overflowY: "auto" }}>
-          {statsSel ? (
-            <>
-              <div style={{ color: "var(--text-dim)" }}>
-                x ∈ [{fmtStat(statsSel.xMin)}, {fmtStat(statsSel.xMax)}]
-              </div>
-              {statsSel.series.map((st, i) => (
-                <div key={`${st.label}-${i}`} style={{ marginTop: 4 }}>
-                  <div style={{ color: "var(--text)" }}>
-                    {st.label || "y"} · n={st.n}
-                  </div>
-                  <div style={{ display: "flex", gap: 8, color: "var(--text-dim)" }}>
-                    <span>μ {fmtStat(st.mean)}</span>
-                    <span>σ {fmtStat(st.std)}</span>
-                    <span>med {fmtStat(st.median)}</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, color: "var(--text-faint)" }}>
-                    <span>min {fmtStat(st.min)}</span>
-                    <span>max {fmtStat(st.max)}</span>
-                  </div>
-                </div>
-              ))}
-            </>
-          ) : (
-            "Drag a range to summarize"
-          )}
-        </div>
-      )}
+      <PlotReadouts tool={tool} readout={readout} measurement={measurement} stats={statsSel} />
       {displayPayload && showLegend && (
         <PlotLegend series={displayPayload.series} styleList={styleList} plotted={plotted} hidden={hidden} />
       )}
