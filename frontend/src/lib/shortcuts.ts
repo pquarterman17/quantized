@@ -23,6 +23,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "⌘ O", desc: "Import data files" },
       { keys: "⌘ [", desc: "Toggle the Library panel" },
       { keys: "⌘ ]", desc: "Toggle the Inspector panel" },
+      { keys: "⌘ ⇧ L", desc: "Toggle light / dark theme" },
       { keys: "?", desc: "Show this shortcuts sheet" },
       { keys: "Delete", desc: "Remove the selected dataset(s)" },
       { keys: "Esc", desc: "Close a dialog / menu / palette" },
@@ -32,6 +33,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     title: "Library",
     items: [
       { keys: "Click", desc: "Plot a dataset (make it active)" },
+      { keys: "↑ / ↓", desc: "Previous / next dataset (wraps)" },
       { keys: "⌘ Click", desc: "Add / remove from the selection" },
       { keys: "⇧ Click", desc: "Select a range from the anchor" },
       { keys: "Double-click", desc: "Rename a dataset" },
@@ -41,10 +43,18 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
     title: "Plot",
     items: [
+      { keys: "A", desc: "Autoscale / reset the view" },
       { keys: "Drag", desc: "Box-zoom to a region" },
       { keys: "Double-click", desc: "Reset / auto-scale the view" },
       { keys: "Right-click", desc: "Plot menu (log · grid · legend · copy · save…)" },
       { keys: "Right-click legend", desc: "Series menu (rename · hide · move to Y2…)" },
+    ],
+  },
+  {
+    title: "Analyze",
+    items: [
+      { keys: "F", desc: "Curve-fit workshop" },
+      { keys: "Y", desc: "Hysteresis workshop" },
     ],
   },
 ];

@@ -141,6 +141,43 @@ export default function App() {
         useApp.getState().setShortcutsOpen(true);
         return;
       }
+      // Single-key tool / nav shortcuts (design interaction layer) — only with no
+      // modifier held and not while typing in a field.
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && !isEditing(e.target)) {
+        const s = useApp.getState();
+        switch (e.key) {
+          case "a":
+          case "A": // autoscale / reset the plot view
+            if (!s.xLim && !s.yLim) return; // nothing to reset
+            e.preventDefault();
+            s.setXLim(null);
+            s.setYLim(null);
+            s.setStatus("view reset");
+            return;
+          case "f":
+          case "F": // curve-fit workshop
+            e.preventDefault();
+            s.setCurveFitOpen(true);
+            return;
+          case "y":
+          case "Y": // hysteresis workshop
+            e.preventDefault();
+            s.setHysteresisOpen(true);
+            return;
+          case "ArrowUp":
+          case "ArrowDown": {
+            // Previous / next dataset (wraps); plain click semantics.
+            if (s.datasets.length < 2) return;
+            e.preventDefault();
+            const n = s.datasets.length;
+            const cur = s.datasets.findIndex((d) => d.id === s.activeId);
+            const base = cur < 0 ? 0 : cur;
+            const delta = e.key === "ArrowDown" ? 1 : -1;
+            s.setActive(s.datasets[(((base + delta) % n) + n) % n].id);
+            return;
+          }
+        }
+      }
       if (!(e.metaKey || e.ctrlKey)) return;
       const s = useApp.getState();
       switch (e.key.toLowerCase()) {
@@ -159,6 +196,13 @@ export default function App() {
         case "]":
           e.preventDefault();
           s.toggleRight();
+          break;
+        case "l":
+          // ⌘⇧L toggles the theme (plain ⌘L is the browser address bar).
+          if (e.shiftKey) {
+            e.preventDefault();
+            s.setTheme(s.theme === "dark" ? "light" : "dark");
+          }
           break;
       }
     };
