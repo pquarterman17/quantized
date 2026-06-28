@@ -1,6 +1,6 @@
 [project]
 name = "quantized"
-version = "0.0.1"
+version = "0.1.0"
 description = "Clean-architecture Python + React port of the quantized_matlab scientific toolbox (magnetometry / XRD / lab data)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -28,6 +28,12 @@ dev = [
     "httpx>=0.27",
     "ruff>=0.6",
     "mypy>=1.11",
+]
+# Desktop packaging only — used by the release workflow to freeze the server
+# into a self-contained sidecar (tools/bundle/qz-server.spec). Never a runtime
+# dependency; CI installs it with `uv sync --group bundle`.
+bundle = [
+    "pyinstaller>=6.10",
 ]
 
 [build-system]

@@ -1,0 +1,26 @@
+[package]
+name = "quantized-shell"
+version = "0.1.0"
+description = "Quantized desktop shell (Tauri 2 window over the local FastAPI server)"
+license = "Apache-2.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+# generate_context! expands to serde_json once tauri.conf.json carries a plugin
+# config (the updater block), so these are required deps.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# auto-update: check GitHub Releases for a newer signed build, prompt via a
+# native dialog, install + restart (driven from Rust — the frontend loads from
+# a remote 127.0.0.1 URL, so JS-side Tauri APIs would need remote-IPC grants we
+# deliberately avoid).
+tauri-plugin-updater = "2"
+tauri-plugin-dialog = "2"
+
+[profile.release]
+strip = true
+lto = true
