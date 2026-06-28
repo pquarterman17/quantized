@@ -513,6 +513,14 @@ MATLAB."**
   `buildColumns`/`fetchPlot` extended for the offline path. Backend already honored
   x_key — added `/api/plot/series` x_key route tests. Gates green (frontend 253 +
   build; backend plot 13 + ruff).
+- **Error-bar role** (2026-06-27, `7da9a21`) — W5 column roles (Y-error slice).
+  Per-row "± <channel>" picker in ChannelsCard pairs a plotted y-channel with the
+  channel holding its uncertainty → vertical y±e whiskers. Frontend-only (the
+  error is just a column of the same dataset, read client-side): pure
+  `lib/errorbars.buildErrorColumns` (magnitudes keyed by uPlot data column) +
+  `uplotPlugins.errorBarsPlugin` (draw hook, per-series y scale, clipped; reads
+  the displayed y so waterfall offsets cancel). Store `errKeys` map resets with the
+  dataset. Gates green (frontend 259 + build).
 
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to
@@ -520,8 +528,8 @@ MATLAB."**
    alternation is **dropped — no W4/DiraCulator/SLD-from-formula work**. Pick from
    plotting + W5 DataWorkspace: **plot interactions** (measurement ruler `d5c3244`;
    remaining — legend rename/reorder, copy-data-to-clipboard, more cursor
-   read-outs), **W5 column roles** (X-role shipped `ad6b460`; remaining — Y-error
-   *error bars*, label/ignore roles), the **computed-column formula engine**
+   read-outs), **W5 column roles** (X-role `ad6b460` + Y-error bars `7da9a21`
+   shipped; remaining — label/ignore roles), the **computed-column formula engine**
    (snapshots + recompute), or **workspace autosave**. Non-Boson-Plotter parity
    items (XRDML `map2D` golden, blocked parsers) stay paused unless the user
    reopens scope.
