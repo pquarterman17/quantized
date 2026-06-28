@@ -40,6 +40,7 @@ export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
 export type Density = "compact" | "regular" | "comfy";
 export type StageTab = "plot" | "map" | "worksheet";
 export type PlotTool = "zoom" | "pan" | "cursor" | "region" | "measure" | "stats";
+export type LegendPos = "ne" | "nw" | "se" | "sw";
 
 interface AppState {
   datasets: Dataset[];
@@ -58,6 +59,7 @@ interface AppState {
   xLog: boolean;
   showGrid: boolean; // draw the plot grid lines
   showLegend: boolean; // show the floating legend overlay
+  legendPos: LegendPos; // which corner the floating legend pins to
   stackMode: boolean; // multi-panel: one stacked sub-plot per channel
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
@@ -147,6 +149,7 @@ interface AppState {
   setXLog: (xLog: boolean) => void;
   setShowGrid: (showGrid: boolean) => void;
   setShowLegend: (showLegend: boolean) => void;
+  setLegendPos: (pos: LegendPos) => void;
   setStackMode: (stackMode: boolean) => void;
   setInsetMode: (insetMode: boolean) => void;
   setPolarMode: (polarMode: boolean) => void;
@@ -262,6 +265,7 @@ export const useApp = create<AppState>((set, get) => ({
   xLog: false,
   showGrid: true,
   showLegend: true,
+  legendPos: "ne",
   stackMode: false,
   insetMode: false,
   polarMode: false,
@@ -686,6 +690,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
   setShowGrid: (showGrid) => set({ showGrid }),
   setShowLegend: (showLegend) => set({ showLegend }),
+  setLegendPos: (legendPos) => set({ legendPos }),
   setStackMode: (stackMode) => set({ stackMode }),
   setInsetMode: (insetMode) => set({ insetMode }),
   setPolarMode: (polarMode) => set({ polarMode }),

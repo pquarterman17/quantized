@@ -13,8 +13,8 @@ import SeriesStyleCard from "./SeriesStyleCard";
 import StatsCard from "./StatsCard";
 import TickFormat from "./TickFormat";
 import TitlesCard from "./TitlesCard";
-import { Card } from "../primitives";
-import { useActiveDataset, useApp } from "../../store/useApp";
+import { Card, Select } from "../primitives";
+import { useActiveDataset, useApp, type LegendPos } from "../../store/useApp";
 
 export default function Inspector() {
   const active = useActiveDataset();
@@ -27,6 +27,8 @@ export default function Inspector() {
   const setShowGrid = useApp((s) => s.setShowGrid);
   const showLegend = useApp((s) => s.showLegend);
   const setShowLegend = useApp((s) => s.setShowLegend);
+  const legendPos = useApp((s) => s.legendPos);
+  const setLegendPos = useApp((s) => s.setLegendPos);
 
   return (
     <aside className="qzk-inspector">
@@ -73,6 +75,21 @@ export default function Inspector() {
           />
           Legend
         </label>
+        {showLegend && (
+          <label className="qzk-field-lbl" style={{ marginTop: 2 }}>
+            Legend position
+            <Select
+              options={[
+                { value: "ne", label: "Top right" },
+                { value: "nw", label: "Top left" },
+                { value: "se", label: "Bottom right" },
+                { value: "sw", label: "Bottom left" },
+              ]}
+              value={legendPos}
+              onChange={(e) => setLegendPos(e.target.value as LegendPos)}
+            />
+          </label>
+        )}
         <AxisLimits />
         <TickFormat />
       </Card>

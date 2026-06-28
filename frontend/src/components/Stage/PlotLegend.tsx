@@ -29,6 +29,7 @@ export default function PlotLegend({ series, styleList, plotted, hidden }: PlotL
   const setSeriesOrder = useApp((s) => s.setSeriesOrder);
   const y2Keys = useApp((s) => s.y2Keys);
   const setY2Keys = useApp((s) => s.setY2Keys);
+  const legendPos = useApp((s) => s.legendPos);
   const [editing, setEditing] = useState<{ channel: number; value: string } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; channel: number; i: number } | null>(null);
 
@@ -57,7 +58,7 @@ export default function PlotLegend({ series, styleList, plotted, hidden }: PlotL
   };
 
   return (
-    <div className="qzk-glass qzk-legend">
+    <div className={`qzk-glass qzk-legend ${legendPos}`}>
       {series.map((s, i) => {
         // Keep the CSS token for default series (re-themes); use the resolved
         // override color when one is set, so the legend matches the line.

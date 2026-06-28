@@ -128,7 +128,12 @@ body {
 .qzk-tool-sep { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--border); }
 .qzk-zoom-chip { bottom: 12px; left: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
 .qzk-readout { bottom: 12px; right: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); }
-.qzk-legend { top: 12px; right: 12px; padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+.qzk-legend { padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+/* Floating-legend corner placement (Inspector "Legend position"). */
+.qzk-legend.ne { top: 12px; right: 12px; }
+.qzk-legend.nw { top: 12px; left: 12px; }
+.qzk-legend.se { bottom: 12px; right: 12px; }
+.qzk-legend.sw { bottom: 12px; left: 12px; }
 .qzk-legend .it { display: flex; align-items: center; gap: 7px; font-size: var(--font-size-sm); color: var(--text-dim); }
 .qzk-legend .ln { width: 16px; height: 3px; border-radius: 2px; }
 .qzk-legend .ln.dash { background: none !important; border-top: 2px dashed var(--capture); height: 0; }
