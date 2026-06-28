@@ -17,6 +17,12 @@ declutter, and two sizable feature ports (waterfall, two-frame reflectometry).
 > 4-column, and the refl1d "with model" set ships `*-refl.dat`/`*-profile.dat`
 > (not `.refl`), so the two-frame view (item 11) actually depends on a refl1d
 > *.dat-set* parser, not on `.refl` disambiguation.
+>
+> **Parity audit (2026-06-28):** a full survey of the MATLAB `BosonPlotter.m`
+> GUI (plotting options, 6 uicontextmenus, ~40 dropdowns, ~95 menu items) vs.
+> the port found most *actions* already exist as Inspector controls — the gap
+> was the right-click access pattern (now item 10, done) plus the plotting
+> options captured as items 12–20.
 
 ---
 
@@ -63,8 +69,8 @@ file → io.import_auto → DataStruct(.time/.values/.labels/.units/.metadata)
   Library selection model.
 - Item 11 (two-frame refl) needs a refl1d **.dat-set** parser (`*-refl.dat` +
   `*-profile.dat`), not `.refl` disambiguation — item 5 is robustness-only.
-- Item 10 (right-click menu) is a host for actions that several other items add
-  (remove, hide, waterfall) — design after 8 lands.
+- Item 10 (right-click menu, done) shipped a reusable `ContextMenu`; item 18
+  extends it to the worksheet grid, and items 12/13 add actions it can host.
 
 ---
 
@@ -89,17 +95,46 @@ file → io.import_auto → DataStruct(.time/.values/.labels/.units/.metadata)
    - [ ] On import, detect `metadata.is2D` and default the stage to the map tab
    - [ ] Feed `.values` (2θ/ω/I) + `map_shape` into the existing map regrid view
 
-## Tier 3 — Nice-to-Have / Needs Design
+12. **Cross-dataset apply (corrections + styles)** — pairs with multi-select
+    - [ ] "Apply corrections to all / selected" (MATLAB Edit ▸ Apply to All)
+    - [ ] "Apply style to all / selected" (styles currently reset per dataset)
+    - [ ] Expose from the Library context menu + a menu-bar action
 
-10. **Right-click context menu** — a context menu of useful actions
-    - [ ] Design pass: which actions, on what targets (plot series, legend item,
-      library row, axis, empty plot). Reuse fermiviewer patterns if present.
-    - [ ] Implement after items 2/3/8 so it can host remove/hide/waterfall
+13. **Series colormap / palette presets** — colour-cycle picker (MATLAB ddColormap)
+    - [ ] Palette presets incl. colourblind-safe (Tol, Okabe-Ito) + Viridis/Tab10
+    - [ ] Apply across multi-dataset overlays; keep design-token theming as default
+
+18. **Worksheet table context menus** — extend the new `ContextMenu` to the grid
+    - [ ] Column menu: Sort asc/desc, Set as X, Plot as Y, Column stats, New
+      column from formula (MATLAB colCtxMenu)
+    - [ ] Row menu: mask/unmask rows, paste from clipboard (MATLAB tblCtxMenu)
+
+## Tier 3 — Nice-to-Have / Needs Design
 
 11. **Two-frame reflectometry view** — data+model (top) + SLD profile (bottom)
     - [ ] Parse a refl1d export set (`*-refl.dat` data+theory+fresnel, `*-profile.dat`
       SLD) — see `../quantized_matlab/+test_datasets/Ref1ld Xray with Model/NbAl_XRR`
     - [ ] Two-panel layout (linked x where sensible); depends on item 5
+
+14. **Marker shape variety** — SeriesStyleCard markers are on/off + size only
+    - [ ] Shape picker: o / s / ^ / d / v / x / + / * (MATLAB ddMarkerShape)
+
+15. **Legend position selector** — legend is a fixed floating overlay
+    - [ ] NE / SE / SW / NW / outside / best placement (MATLAB cycleLegend)
+
+16. **Live publication template** — apply APS/Nature/thesis to the on-screen plot
+    - [ ] Presets exist only in the export dialog; let them style the live plot
+      (MATLAB ddTemplate)
+
+17. **Interactive axis fine-controls** — currently export-only
+    - [ ] Tick direction (in/out/both), minor ticks, axis box toggle, smart
+      auto-scale (auto-detect log/lin) — MATLAB plotStyleDialog + btnSmartScale
+
+19. **Merge selected datasets** — concatenate 2+ datasets (pairs with multi-select)
+    - [ ] MATLAB Data ▸ Merge Selected
+
+20. **Small menu/dropdown parity** — Keyboard-shortcuts help dialog; Recent files
+    menu; group-filter dropdown (MATLAB Help/ddRecent/ddGroup)
 
 ## Completed
 
@@ -117,3 +152,9 @@ file → io.import_auto → DataStruct(.time/.values/.labels/.units/.metadata)
   go there. Re-homed to the frontend multi-dataset overlay legend (parity work).
 - ~~**#6 Declutter the Inspector**~~ (2026-06-28) — removed the "Scan metadata"
   card + `MetadataCard.tsx`. (`32b6d1f`)
+- ~~**#10 Right-click context menu**~~ (2026-06-28) — reusable portal-based
+  `overlays/ContextMenu.tsx` wired to three surfaces: Library row
+  (plot/duplicate/rename/tag/move/remove + "Remove N selected"), plot legend
+  (rename/hide/show/move-to-Y2/reorder), and the plot area (reset/log X·Y/grid/
+  legend/copy-TSV/save-PNG). Worksheet-table + on-canvas-trace menus are tracked
+  as #18. (`9569ccb`)
