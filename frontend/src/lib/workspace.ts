@@ -30,6 +30,7 @@ export function serializeWorkspace(datasets: Dataset[]): string {
       ...(d.bgRef ? { bgRef: d.bgRef } : {}),
       ...(d.notes ? { notes: d.notes } : {}),
       ...(d.tags?.length ? { tags: d.tags } : {}),
+      ...(d.group?.trim() ? { group: d.group } : {}),
     })),
   };
   return JSON.stringify(doc, null, 2);
@@ -107,6 +108,7 @@ export function parseWorkspace(text: string): Dataset[] {
       const tags = dd.tags.filter((t): t is string => typeof t === "string" && t.trim() !== "");
       if (tags.length) ds.tags = tags;
     }
+    if (typeof dd.group === "string" && dd.group.trim()) ds.group = dd.group;
     return ds;
   });
 }

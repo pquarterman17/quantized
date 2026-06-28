@@ -82,6 +82,9 @@ export interface Dataset {
   /** User tags for organizing + filtering the Library (e.g. "MvsH", "sample-A").
    *  Round-trips through the .dwk workspace. */
   tags?: string[];
+  /** Optional group name; the Library renders collapsible sections by group
+   *  (ungrouped datasets fall under "Ungrouped"). Round-trips through .dwk. */
+  group?: string;
 }
 
 /** A registered fit model's metadata (from GET /api/fitting/models). */

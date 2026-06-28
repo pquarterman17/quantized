@@ -76,6 +76,13 @@ body {
 .qzk-tag-x:hover { opacity: 1; }
 .qzk-tag-add { background: transparent; color: var(--text-faint); border: 1px dashed var(--border); }
 .qzk-tag-input { height: 18px; width: 76px; padding: 0 4px; font-size: var(--type-nano); }
+/* Group chip (single-valued, distinct from tags) + collapsible group sections. */
+.qzk-group-chip { background: transparent; color: var(--text-dim); border: 1px solid var(--border); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qzk-lib-group { display: flex; flex-direction: column; gap: var(--pad); }
+.qzk-group-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 2px; background: none; border: none; cursor: pointer; color: var(--text-faint); font-size: var(--type-label); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-label); }
+.qzk-group-caret { width: 10px; color: var(--text-dim); }
+.qzk-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.qzk-group-count { color: var(--text-dim); font-variant-numeric: tabular-nums; }
 
 /* ── stage ── */
 .qzk-stage-cell { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }

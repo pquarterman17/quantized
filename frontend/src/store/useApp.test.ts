@@ -600,3 +600,13 @@ describe("useApp tags", () => {
     expect(useApp.getState().datasets[0].tags).toBeUndefined();
   });
 });
+
+describe("useApp groups", () => {
+  it("sets a trimmed group and clears it when blank", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1" });
+    useApp.getState().setDatasetGroup("d1", "  Batch A ");
+    expect(useApp.getState().datasets[0].group).toBe("Batch A");
+    useApp.getState().setDatasetGroup("d1", "   ");
+    expect(useApp.getState().datasets[0].group).toBeUndefined();
+  });
+});

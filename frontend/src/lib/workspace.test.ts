@@ -58,6 +58,15 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
     expect(parseWorkspace(serializeWorkspace([bare]))[0].tags).toBeUndefined();
   });
 
+  it("preserves a dataset group (and omits a blank one)", () => {
+    const ds = makeDataset("a", "grouped");
+    ds.group = "Cooldown 1";
+    expect(parseWorkspace(serializeWorkspace([ds]))[0].group).toBe("Cooldown 1");
+    const bare = makeDataset("b", "bare");
+    bare.group = "   ";
+    expect(parseWorkspace(serializeWorkspace([bare]))[0].group).toBeUndefined();
+  });
+
   it("preserves dataset notes", () => {
     const ds = makeDataset("a", "noted");
     ds.notes = "5 K M-vs-H, second cooldown";

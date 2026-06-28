@@ -99,6 +99,7 @@ interface AppState {
   setDatasetNotes: (id: string, notes: string) => void;
   addDatasetTag: (id: string, tag: string) => void;
   removeDatasetTag: (id: string, tag: string) => void;
+  setDatasetGroup: (id: string, group: string) => void;
   applyCorrections: (
     id: string,
     params: CorrectionParams,
@@ -358,6 +359,7 @@ export const useApp = create<AppState>((set, get) => ({
         ...(src.bgRef ? { bgRef: { ...src.bgRef } } : {}),
         ...(src.notes ? { notes: src.notes } : {}),
         ...(src.tags?.length ? { tags: [...src.tags] } : {}),
+        ...(src.group ? { group: src.group } : {}),
       };
       const datasets = [...s.datasets];
       datasets.splice(idx + 1, 0, clone);
@@ -422,6 +424,13 @@ export const useApp = create<AppState>((set, get) => ({
         const tags = d.tags.filter((x) => x !== tag);
         return { ...d, tags: tags.length ? tags : undefined };
       }),
+    })),
+  // Assign a dataset to a (trimmed) group; blank clears it back to Ungrouped.
+  setDatasetGroup: (id, group) =>
+    set((s) => ({
+      datasets: s.datasets.map((d) =>
+        d.id === id ? { ...d, group: group.trim() ? group.trim() : undefined } : d,
+      ),
     })),
 
   // Corrections always apply to the pristine `raw`, never to an already-
