@@ -83,6 +83,27 @@ _PREFIX_KEYS = sorted(_PREFIXES, key=len, reverse=True)
 _TEMP_DIM = np.array([0, 0, 0, 0, 1, 0, 0], dtype=float)
 
 
+_DIGITS = frozenset("0123456789")
+
+
+def _parse_exponent(s: str) -> float | None:
+    r"""Parse a unit exponent of the form ``[+-]?\d+\.?\d*`` (e.g. ``2``, ``-3``,
+    ``2.5``, ``2.``) without a regular expression.
+
+    The previous ``re.match(r"^(.+?)\^([+-]?\d+\.?\d*)$", chunk)`` was a
+    polynomial-ReDoS sink: the lazy ``.+?`` and the two unbounded digit runs let
+    an adversarial unit string (``"a^9" + "99"*n``) force O(n²) backtracking. A
+    single linear scan removes the sink while keeping identical accept/reject
+    semantics. Returns the float value, or ``None`` if ``s`` is not a valid
+    exponent (so the caller treats the chunk as having an implicit exponent 1)."""
+    body = s[1:] if s[:1] in "+-" else s
+    if not body or body[0] == "." or body.count(".") > 1:
+        return None  # need ≥1 leading digit and at most one decimal point
+    if any(c not in _DIGITS and c != "." for c in body):
+        return None
+    return float(s)
+
+
 def _tokenize(unit_str: str) -> list[dict[str, Any]]:
     tokens: list[dict[str, Any]] = []
     in_denom = False
@@ -99,9 +120,11 @@ def _tokenize(unit_str: str) -> list[dict[str, Any]]:
             if op == "/":
                 in_denom = True
             continue
-        exp_match = re.match(r"^(.+?)\^([+-]?\d+\.?\d*)$", chunk)
-        if exp_match:
-            tok_str, tok_exp = exp_match.group(1), float(exp_match.group(2))
+        # First '^' splits base from exponent (mirrors the old lazy ``.+?\^``).
+        caret = chunk.find("^")
+        exp_val = _parse_exponent(chunk[caret + 1 :]) if caret > 0 else None
+        if exp_val is not None:
+            tok_str, tok_exp = chunk[:caret], exp_val
         else:
             tok_str, tok_exp = chunk, 1.0
         tokens.append({"str": tok_str, "exp": tok_exp, "in_denom": in_denom})

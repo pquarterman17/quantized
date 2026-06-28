@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from quantized.calc.unit_convert import unit_convert
+from quantized.calc.unit_convert import _parse_exponent, unit_convert
 
 
 @pytest.mark.golden
@@ -59,3 +59,48 @@ def test_unit_convert_array_input() -> None:
 def test_unit_convert_incompatible_raises() -> None:
     with pytest.raises(ValueError, match="incompatible"):
         unit_convert(1.0, "kg", "s")
+
+
+# ── exponent parsing (ReDoS-safe replacement for the old regex) ───────────────
+
+
+@pytest.mark.parametrize(
+    ("s", "expected"),
+    [
+        ("2", 2.0),
+        ("-3", -3.0),
+        ("+4", 4.0),
+        ("2.5", 2.5),
+        ("2.", 2.0),
+        ("10", 10.0),
+    ],
+)
+def test_parse_exponent_accepts(s: str, expected: float) -> None:
+    assert _parse_exponent(s) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    "s",
+    ["", ".", ".5", "2.5.6", "2^3", "abc", "1e3", "inf", "nan", "2 ", "²"],
+)
+def test_parse_exponent_rejects(s: str) -> None:
+    assert _parse_exponent(s) is None
+
+
+def test_parse_exponent_no_redos_on_adversarial_input() -> None:
+    """The old regex was O(n²) on 'a^9' + '99'*n; the scan must stay linear.
+
+    A 200k-char adversarial exponent body would hang a backtracking regex for
+    seconds; here it returns immediately."""
+    import time
+
+    payload = "9" * 200_000 + "x"  # long digit run then a non-digit -> reject
+    start = time.perf_counter()
+    assert _parse_exponent(payload) is None
+    assert time.perf_counter() - start < 0.5
+
+
+def test_unit_convert_still_parses_exponents_end_to_end() -> None:
+    # m^2 -> cm^2 exercises the exponent path end-to-end (1 m² = 1e4 cm²).
+    result, _ = unit_convert(1.0, "m^2", "cm^2")
+    assert float(np.asarray(result)) == pytest.approx(1e4)
