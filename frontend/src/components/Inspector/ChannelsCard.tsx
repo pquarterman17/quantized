@@ -1,8 +1,9 @@
-// Inspector card: choose which value channels the plot draws (the backend
-// /api/plot/series y_keys selection) and which ride the secondary (right) Y axis
-// (y2_keys — the dual-Y feature). Only shown for multi-channel datasets — keeps
-// reflectivity (R / dR / resolution) etc. legible. Analysis workshops still use
-// the first channel; this controls the plot only.
+// Inspector card: assign per-channel plot roles. Choose the x-axis source
+// (x_key), which value channels the plot draws (y_keys), which ride the secondary
+// (right) Y axis (y2_keys — the dual-Y feature), and which channel holds a series'
+// ± error (error bars). Only shown for multi-channel datasets — keeps reflectivity
+// (R / dR / resolution) etc. legible. Analysis workshops still use the first
+// channel; this controls the plot only.
 
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -15,6 +16,8 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const setYKeys = useApp((s) => s.setYKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const setY2Keys = useApp((s) => s.setY2Keys);
+  const errKeys = useApp((s) => s.errKeys);
+  const setErrKey = useApp((s) => s.setErrKey);
   const waterfall = useApp((s) => s.waterfall);
   const setWaterfall = useApp((s) => s.setWaterfall);
 
@@ -80,14 +83,31 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
               {lab}
               {units[i] ? ` (${units[i]})` : ""}
             </label>
-            <Pill
-              active={y2.has(i)}
-              disabled={!visible}
-              title="Draw on the secondary (right) Y axis"
-              onClick={() => toggleAxis(i)}
-            >
-              Y2
-            </Pill>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {visible && (
+                <Select
+                  style={{ maxWidth: 96 }}
+                  value={errKeys[i] == null ? "" : String(errKeys[i])}
+                  onChange={(e) => setErrKey(i, e.target.value === "" ? null : Number(e.target.value))}
+                  title="Channel holding this series' ± error (draws error bars)"
+                  options={[
+                    { value: "", label: "± none" },
+                    ...labels
+                      .map((elab, j) => ({ elab, j }))
+                      .filter(({ j }) => j !== i && j !== xKey)
+                      .map(({ elab, j }) => ({ value: String(j), label: `± ${elab}` })),
+                  ]}
+                />
+              )}
+              <Pill
+                active={y2.has(i)}
+                disabled={!visible}
+                title="Draw on the secondary (right) Y axis"
+                onClick={() => toggleAxis(i)}
+              >
+                Y2
+              </Pill>
+            </div>
           </div>
         );
       })}

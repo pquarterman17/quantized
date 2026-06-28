@@ -8,6 +8,7 @@ import type { PlotPayload } from "./plotdata";
 import type { Annotation, AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
 import {
   annotationPlugin,
+  errorBarsPlugin,
   measurePlugin,
   panPlugin,
   readoutPlugin,
@@ -89,6 +90,9 @@ export interface BuildOptsArgs {
   /** Per-display-series style overrides, aligned 1:1 with `payload.series`
    *  (undefined entries — e.g. overlays — keep the defaults). */
   seriesStyles?: (SeriesStyle | undefined)[];
+  /** Error-bar magnitudes keyed by uPlot data-column index (1-based). Draws
+   *  vertical y±e whiskers for the mapped plotted series. */
+  errorBars?: Map<number, (number | null)[]>;
   /** Axis tick number formats (auto = uPlot default). yFmt also drives y2. */
   xFmt?: AxisFormat;
   yFmt?: AxisFormat;
@@ -130,6 +134,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   }
   if (annotations && annotations.length > 0) {
     plugins.push(annotationPlugin(annotations, cssVar("--text") || "#ddd", font));
+  }
+  if (args.errorBars && args.errorBars.size > 0) {
+    plugins.push(errorBarsPlugin(args.errorBars, cssVar("--text-dim") || "#888"));
   }
 
   // A static [min,max] tuple fixes the scale (Origin-style); omit it to autoscale.

@@ -15,6 +15,7 @@ import {
   withPeakOverlay,
   type PlotPayload,
 } from "../../lib/plotdata";
+import { buildErrorColumns } from "../../lib/errorbars";
 import { formatMeasurement, type Measurement } from "../../lib/measure";
 import { exportPlotPng } from "../../lib/plotExport";
 import { normalizeRange } from "../../lib/regionSelect";
@@ -49,6 +50,7 @@ export default function PlotStage() {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
+  const errKeys = useApp((s) => s.errKeys);
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const tool = useApp((s) => s.plotTool);
@@ -98,6 +100,12 @@ export default function PlotStage() {
     );
   }, [displayPayload, plotted, seriesStyles]);
 
+  // Error-bar magnitudes per plotted series (keyed by uPlot data column = p+1).
+  const errorBars = useMemo(
+    () => (active ? buildErrorColumns(active.data, plotted, errKeys) : new Map<number, (number | null)[]>()),
+    [active, plotted, errKeys],
+  );
+
   // Fetch series whenever the active dataset, scale, or channel roles change.
   useEffect(() => {
     let cancelled = false;
@@ -138,6 +146,7 @@ export default function PlotStage() {
         refLines,
         annotations,
         seriesStyles: styleList,
+        errorBars,
         tool,
         onReadout: setReadout,
         onRegionSelect: (x0, x1) => {
@@ -170,7 +179,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, refLines, annotations, styleList, theme, accent, tool]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, refLines, annotations, styleList, errorBars, theme, accent, tool]);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the

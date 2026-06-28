@@ -157,6 +157,33 @@ describe("useApp x-axis channel", () => {
   });
 });
 
+describe("useApp error-bar pairings", () => {
+  it("sets and clears a channel's error pairing", () => {
+    useApp.setState({ errKeys: {} });
+    useApp.getState().setErrKey(0, 1);
+    expect(useApp.getState().errKeys).toEqual({ 0: 1 });
+    useApp.getState().setErrKey(0, null);
+    expect(useApp.getState().errKeys).toEqual({});
+  });
+
+  it("resets error pairings when switching or adding a dataset", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      activeId: "d1",
+      errKeys: { 0: 1 },
+    });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().errKeys).toEqual({});
+
+    useApp.setState({ errKeys: { 0: 1 } });
+    useApp.getState().addDataset({ id: "d3", name: "c", data: raw });
+    expect(useApp.getState().errKeys).toEqual({});
+  });
+});
+
 describe("useApp axis limits", () => {
   it("clears explicit limits when switching the active dataset", () => {
     useApp.setState({

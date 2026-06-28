@@ -70,6 +70,55 @@ export function annotationPlugin(
   };
 }
 
+/** Draw vertical error-bar whiskers (y ± e) with end caps for selected data
+ *  columns. `errorsByCol` is keyed by uPlot data-column index (1-based); each
+ *  value is the per-point error magnitude (null = no bar there). Each column's
+ *  whiskers use that series' own y scale (primary or secondary). Clipped to the
+ *  plot area so off-range whiskers don't bleed into the axes. */
+export function errorBarsPlugin(
+  errorsByCol: Map<number, (number | null)[]>,
+  color: string,
+): uPlot.Plugin {
+  return {
+    hooks: {
+      draw: (u: uPlot) => {
+        const { ctx } = u;
+        const { left, top, width, height } = u.bbox;
+        const xs = u.data[0];
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(left, top, width, height);
+        ctx.clip();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        for (const [col, errs] of errorsByCol) {
+          const ys = u.data[col];
+          if (!ys) continue;
+          const scaleKey = u.series[col]?.scale ?? "y";
+          for (let i = 0; i < xs.length; i++) {
+            const x = xs[i];
+            const y = ys[i];
+            const e = errs[i];
+            if (x == null || y == null || e == null) continue;
+            const px = u.valToPos(x, "x", true);
+            const pHi = u.valToPos(y + e, scaleKey, true);
+            const pLo = u.valToPos(y - e, scaleKey, true);
+            ctx.beginPath();
+            ctx.moveTo(px, pLo);
+            ctx.lineTo(px, pHi);
+            ctx.moveTo(px - 3, pHi);
+            ctx.lineTo(px + 3, pHi);
+            ctx.moveTo(px - 3, pLo);
+            ctx.lineTo(px + 3, pLo);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      },
+    },
+  };
+}
+
 /** Readout reported by the cursor plugin (null when off-data). */
 export interface Readout {
   x: number;

@@ -56,6 +56,7 @@ interface AppState {
   refLines: RefLine[]; // fixed X/Y marker lines on the plot
   annotations: Annotation[]; // text labels pinned at data coordinates
   seriesStyles: Record<number, SeriesStyle>; // per-channel color/width/line overrides
+  errKeys: Record<number, number>; // y-channel index → channel holding its ± error (error bars)
   waterfall: number; // waterfall offset as a fraction of the y-span (0 = off)
   plotTool: PlotTool;
   // Last x-range picked by the region rubber-band ([x_min,x_max]); the baseline
@@ -116,6 +117,7 @@ interface AppState {
   removeAnnotation: (id: string) => void;
   setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
   resetSeriesStyle: (channel: number) => void;
+  setErrKey: (channel: number, errChannel: number | null) => void;
   setWaterfall: (waterfall: number) => void;
   setPlotTool: (tool: PlotTool) => void;
   setRegionPicked: (range: [number, number] | null) => void;
@@ -203,6 +205,7 @@ export const useApp = create<AppState>((set, get) => ({
   refLines: [],
   annotations: [],
   seriesStyles: {},
+  errKeys: {},
   waterfall: 0,
   plotTool: "zoom",
   regionPicked: null,
@@ -231,6 +234,7 @@ export const useApp = create<AppState>((set, get) => ({
       yKeys: null, // new dataset → plot all its channels
       y2Keys: null, // and reset the secondary-axis assignment
       seriesStyles: {}, // styles are keyed by channel index → reset per dataset
+      errKeys: {}, // error-bar pairings are channel-keyed → reset per dataset
       xLim: null, // and autoscale both axes
       yLim: null,
     })),
@@ -267,6 +271,7 @@ export const useApp = create<AppState>((set, get) => ({
       yKeys: null,
       y2Keys: null,
       seriesStyles: {},
+      errKeys: {},
       xLim: null,
       yLim: null,
       fitOverlay: null,
@@ -282,6 +287,7 @@ export const useApp = create<AppState>((set, get) => ({
       yKeys: null,
       y2Keys: null,
       seriesStyles: {},
+      errKeys: {},
       xLim: null,
       yLim: null,
       rsmPeaks: null,
@@ -389,6 +395,13 @@ export const useApp = create<AppState>((set, get) => ({
       const next = { ...s.seriesStyles };
       delete next[channel];
       return { seriesStyles: next };
+    }),
+  setErrKey: (channel, errChannel) =>
+    set((s) => {
+      const next = { ...s.errKeys };
+      if (errChannel == null) delete next[channel];
+      else next[channel] = errChannel;
+      return { errKeys: next };
     }),
   setWaterfall: (waterfall) => set({ waterfall }),
   setPlotTool: (plotTool) => set({ plotTool }),
