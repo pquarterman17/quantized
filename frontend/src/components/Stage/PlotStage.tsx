@@ -15,6 +15,7 @@ import {
   withPeakOverlay,
   type PlotPayload,
 } from "../../lib/plotdata";
+import { copyText, payloadToTSV } from "../../lib/clipboard";
 import { buildErrorColumns } from "../../lib/errorbars";
 import { formatMeasurement, type Measurement } from "../../lib/measure";
 import { exportPlotPng } from "../../lib/plotExport";
@@ -200,6 +201,19 @@ export default function PlotStage() {
     exportPlotPng(plotRef.current, `${stem}.png`);
   }
 
+  // Copy exactly what's plotted (x + series, honoring x-channel / waterfall /
+  // overlays) as TSV — paste straight into Origin / Excel / a notebook.
+  function copyData() {
+    if (!displayPayload) return;
+    const nRows = displayPayload.data[0]?.length ?? 0;
+    const nCols = displayPayload.series.length + 1; // + the x column
+    copyText(payloadToTSV(displayPayload)).then((ok) =>
+      useApp.getState().setStatus(
+        ok ? `copied ${nRows}×${nCols} to clipboard` : "clipboard unavailable",
+      ),
+    );
+  }
+
   // Alternate render modes (each self-contained; polar wins, then stack).
   const nPlotted = plotted.length;
   if (polarMode && active) return <PolarStage />;
@@ -227,6 +241,9 @@ export default function PlotStage() {
           </button>
           <button className="qzk-tool-btn" title="Save plot as PNG" onClick={savePng}>
             ⤓
+          </button>
+          <button className="qzk-tool-btn" title="Copy plotted data (TSV)" onClick={copyData}>
+            ⧉
           </button>
           <span className="qzk-tool-sep" />
           <button
