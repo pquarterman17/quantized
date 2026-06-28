@@ -479,13 +479,20 @@ MATLAB."**
   224→39 lines** into per-tab sub-components (Units/X-ray/Crystal/Constants take the
   shared `CalculatorsState`; Elements standalone) — the decomposition flagged last
   session. Gates green (frontend 221 + build). **Ticks checklist #178.**
+- **Dataset Math workshop** (2026-06-27, `14006ff`) — diversified off calculators.
+  Surfaced the golden-but-unrouted `calc.aggregate.dataset_algebra`: new thin
+  `/api/aggregate/algebra` route + a "Dataset Math" workshop (pick A; op A±B / A×B /
+  A/B / (A−B)/(A+B) asymmetry; B; interp pchip/linear/spline → new dataset; B is
+  resampled onto A's x-grid). Store `datasetMathOpen` flag + App command/mount. Route
+  + hook tested; gates green (backend 6 + frontend 226). Annotates the W2 dataset-
+  algebra checklist line (calc was already golden; the UI is the new part).
 
 **Next pick-up (highest value first):**
 1. **More W4 calculator domains** — pattern proven; tabs now decompose cleanly.
    Options: SLD-from-formula to finish #179; a semiconductor / magnetic / transport /
    superconductor tab (new `calc/<domain>.py` + reference tests + a `*Tab.tsx`).
-   Consider diversifying away from calculators (6 of the last features were
-   worksheet/calculator) — e.g. the XRDML `map2D` golden, or a plotting/export gap.
+   Keep alternating with non-calculator work — e.g. the XRDML `map2D` golden, a
+   plotting/export gap, or W5 column-roles / `.dwk` workspace format.
 2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
