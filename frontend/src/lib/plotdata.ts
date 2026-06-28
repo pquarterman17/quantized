@@ -67,9 +67,18 @@ export function effectiveChannels(
   yKeys: number[] | null,
   xKey: number | null,
   roles?: Record<number, ChannelRole>,
+  order?: number[] | null,
 ): number[] {
   const base = yKeys ?? ds.labels.map((_, i) => i);
-  return base.filter((c) => c !== xKey && !roles?.[c]);
+  const filtered = base.filter((c) => c !== xKey && !roles?.[c]);
+  if (!order || order.length === 0) return filtered;
+  // Reorder by the user's draw order; channels absent from `order` keep their
+  // natural position after the ordered ones (stable sort on the order index).
+  const rank = (c: number) => {
+    const i = order.indexOf(c);
+    return i === -1 ? order.length + filtered.indexOf(c) : i;
+  };
+  return [...filtered].sort((a, b) => rank(a) - rank(b));
 }
 
 function fromResponse(r: PlotSeriesResponse): PlotPayload {

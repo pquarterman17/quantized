@@ -61,6 +61,7 @@ interface AppState {
   seriesLabels: Record<number, string>; // per-channel display-name overrides (legend rename)
   errKeys: Record<number, number>; // y-channel index → channel holding its ± error (error bars)
   channelRoles: Record<number, ChannelRole>; // non-data column roles (label/ignore) — excluded from the plot
+  seriesOrder: number[] | null; // explicit plotted-channel draw order (null = natural/yKeys order)
   hiddenChannels: number[]; // channels toggled off via the interactive legend (kept in payload, not drawn)
   waterfall: number; // waterfall offset as a fraction of the y-span (0 = off)
   plotTool: PlotTool;
@@ -129,6 +130,7 @@ interface AppState {
   setSeriesLabel: (channel: number, label: string) => void;
   setErrKey: (channel: number, errChannel: number | null) => void;
   setChannelRole: (channel: number, role: ChannelRole | null) => void;
+  setSeriesOrder: (order: number[] | null) => void;
   toggleHidden: (channel: number) => void;
   setWaterfall: (waterfall: number) => void;
   setPlotTool: (tool: PlotTool) => void;
@@ -220,6 +222,7 @@ export const useApp = create<AppState>((set, get) => ({
   seriesLabels: {},
   errKeys: {},
   channelRoles: {},
+  seriesOrder: null,
   hiddenChannels: [],
   waterfall: 0,
   plotTool: "zoom",
@@ -252,6 +255,7 @@ export const useApp = create<AppState>((set, get) => ({
       seriesLabels: {}, // legend renames are channel-keyed → reset per dataset
       errKeys: {}, // error-bar pairings are channel-keyed → reset per dataset
       channelRoles: {}, // column roles are channel-keyed → reset per dataset
+      seriesOrder: null, // draw order is channel-keyed → reset per dataset
       hiddenChannels: [], // legend show/hide is channel-keyed → reset per dataset
       xLim: null, // and autoscale both axes
       yLim: null,
@@ -292,6 +296,7 @@ export const useApp = create<AppState>((set, get) => ({
       seriesLabels: {},
       errKeys: {},
       channelRoles: {},
+      seriesOrder: null,
       hiddenChannels: [],
       xLim: null,
       yLim: null,
@@ -311,6 +316,7 @@ export const useApp = create<AppState>((set, get) => ({
       seriesLabels: {},
       errKeys: {},
       channelRoles: {},
+      seriesOrder: null,
       hiddenChannels: [],
       xLim: null,
       yLim: null,
@@ -503,6 +509,10 @@ export const useApp = create<AppState>((set, get) => ({
       else next[channel] = role;
       return { channelRoles: next };
     }),
+  // Persist an explicit plotted-channel draw order (a permutation of the current
+  // plotted channels). effectiveChannels reorders by it; stale entries (channels
+  // no longer plotted) are ignored and newly-plotted channels append in order.
+  setSeriesOrder: (seriesOrder) => set({ seriesOrder }),
   toggleHidden: (channel) =>
     set((s) => ({
       hiddenChannels: s.hiddenChannels.includes(channel)

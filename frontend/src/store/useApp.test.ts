@@ -306,6 +306,33 @@ describe("useApp column roles (label/ignore)", () => {
   });
 });
 
+describe("useApp series draw order", () => {
+  it("sets and clears an explicit draw order", () => {
+    useApp.setState({ seriesOrder: null });
+    useApp.getState().setSeriesOrder([2, 0, 1]);
+    expect(useApp.getState().seriesOrder).toEqual([2, 0, 1]);
+    useApp.getState().setSeriesOrder(null);
+    expect(useApp.getState().seriesOrder).toBeNull();
+  });
+
+  it("resets the draw order when switching or adding a dataset", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      activeId: "d1",
+      seriesOrder: [1, 0],
+    });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().seriesOrder).toBeNull();
+
+    useApp.setState({ seriesOrder: [1, 0] });
+    useApp.getState().addDataset({ id: "d3", name: "c", data: raw });
+    expect(useApp.getState().seriesOrder).toBeNull();
+  });
+});
+
 describe("useApp interactive legend (hidden channels)", () => {
   it("toggles a channel's hidden state", () => {
     useApp.setState({ hiddenChannels: [] });

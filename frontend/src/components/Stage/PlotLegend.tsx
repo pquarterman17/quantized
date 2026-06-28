@@ -25,12 +25,22 @@ export default function PlotLegend({ series, styleList, plotted, hidden }: PlotL
   const toggleHidden = useApp((s) => s.toggleHidden);
   const seriesLabels = useApp((s) => s.seriesLabels);
   const setSeriesLabel = useApp((s) => s.setSeriesLabel);
+  const setSeriesOrder = useApp((s) => s.setSeriesOrder);
   const [editing, setEditing] = useState<{ channel: number; value: string } | null>(null);
 
   const defaultLabel = (s: PlotSeriesSpec) => (s.unit ? `${s.label} (${s.unit})` : s.label);
   const commit = () => {
     if (editing) setSeriesLabel(editing.channel, editing.value);
     setEditing(null);
+  };
+  // Reorder a plotted series by swapping it with its neighbor in the current draw
+  // order, then persist the full new order (a permutation of `plotted`).
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= plotted.length) return;
+    const order = [...plotted];
+    [order[i], order[j]] = [order[j], order[i]];
+    setSeriesOrder(order);
   };
 
   return (
@@ -102,6 +112,32 @@ export default function PlotLegend({ series, styleList, plotted, hidden }: PlotL
               style={{ display: "inline-block", width: 14, height: 2, background: swatch }}
             />
             {text}
+            {isChannel && plotted.length > 1 && (
+              <span style={{ marginLeft: 6, display: "inline-flex", gap: 2 }}>
+                <button
+                  className="qz-icon-btn"
+                  title="Move earlier (draw under)"
+                  disabled={i === 0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    move(i, -1);
+                  }}
+                >
+                  ▲
+                </button>
+                <button
+                  className="qz-icon-btn"
+                  title="Move later (draw over)"
+                  disabled={i === plotted.length - 1}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    move(i, 1);
+                  }}
+                >
+                  ▼
+                </button>
+              </span>
+            )}
           </div>
         );
       })}

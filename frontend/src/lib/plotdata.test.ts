@@ -146,6 +146,20 @@ describe("effectiveChannels", () => {
   it("combines the x exclusion and role exclusion", () => {
     expect(effectiveChannels(ds, null, 0, { 1: "ignore" })).toEqual([2]);
   });
+
+  it("applies an explicit draw order over the filtered channels", () => {
+    expect(effectiveChannels(ds, null, null, undefined, [2, 0, 1])).toEqual([2, 0, 1]);
+  });
+
+  it("appends channels missing from the order in their natural position", () => {
+    // only channel 2 listed → it leads, then 0,1 keep their natural order.
+    expect(effectiveChannels(ds, null, null, undefined, [2])).toEqual([2, 0, 1]);
+  });
+
+  it("ignores order entries that are not currently plotted (x-excluded)", () => {
+    // x = channel 0; order names it but it's excluded → 2 then 1.
+    expect(effectiveChannels(ds, null, 0, undefined, [0, 2, 1])).toEqual([2, 1]);
+  });
 });
 
 describe("withFitOverlay", () => {
