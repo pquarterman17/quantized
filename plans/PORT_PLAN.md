@@ -495,15 +495,26 @@ MATLAB."**
   overlays/markers tied to the old datasets. Command-palette "Save/Open workspace
   (.dwk)…" via `saveBlob`/`openFilePicker`. Round-trip + validation unit-tested
   (frontend 238 + build green). Autosave deferred (future session/prefs layer).
+- **Two-point plot measurement ruler** (2026-06-27, `d5c3244`) — W6 plotting
+  (Boson-Plotter-only scope, user-reaffirmed; calculator alternation dropped).
+  New `measure` PlotTool (∡ button): drag A→B over the plot → live Δx/Δy/slope
+  readout chip. Pure `lib/measure.ts` `computeMeasurement`/`formatMeasurement`
+  (vertical → null slope), unit-tested; `uplotPlugins.measurePlugin` (drag
+  handlers mirroring panPlugin + a draw hook) keeps the endpoints in DATA coords
+  so the dashed segment stays pinned across zoom/pan. Wired through `uplotOpts`
+  (tool + `onMeasure`) and `PlotStage` (button, chip, cleared on tool/dataset
+  change). Gates green (frontend 246 + build).
 
 **Next pick-up (highest value first):**
-1. **More W4 calculator domains** — pattern proven; tabs now decompose cleanly.
-   **(Last shipped was non-calculator → next should be a calculator to keep the
-   alternation.)** Options: SLD-from-formula to finish #179; a semiconductor /
-   magnetic / transport / superconductor tab (new `calc/<domain>.py` + reference
-   tests + a `*Tab.tsx`). Keep alternating with non-calculator work — e.g. the
-   XRDML `map2D` golden, a plotting/export gap, or W5 column-roles / workspace
-   autosave (`.dwk` save/load now shipped — `97bd483`).
+1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to
+   focus on bosonplotter features for now"); the calculator/non-calculator
+   alternation is **dropped — no W4/DiraCulator/SLD-from-formula work**. Pick from
+   plotting + W5 DataWorkspace: **plot interactions** (measurement ruler shipped
+   `d5c3244`; remaining — legend rename/reorder, copy-data-to-clipboard, more
+   cursor read-outs), **W5 column roles** (assign X / Y / Y-err / label per
+   channel), the **computed-column formula engine** (snapshots + recompute), or
+   **workspace autosave**. Non-Boson-Plotter parity items (XRDML `map2D` golden,
+   blocked parsers) stay paused unless the user reopens scope.
 2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
