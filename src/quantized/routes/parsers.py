@@ -40,34 +40,39 @@ def _allowed_roots() -> tuple[str, ...]:
     return tuple(roots)
 
 
-def _safe_local_path(raw_path: str) -> Path:
-    """Resolve a client-supplied path and confine it to the allowed roots.
-
-    ``/import`` reads a path the server can already see (local desktop / CLI
-    use). ``os.path.realpath`` collapses ``..`` and symlinks first, then
-    ``os.path.commonpath`` confirms the result sits under a fixed root — blocking
-    traversal to system files (e.g. ``/etc/passwd``, ``C:\\Windows\\...``) via the
-    localhost API. Raises HTTPException on an invalid or out-of-bounds path."""
-    try:
-        resolved = os.path.realpath(raw_path)
-    except (OSError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail="invalid path") from exc
+def _within_allowed_roots(resolved: str) -> bool:
+    """True if ``resolved`` (an already-realpath'd absolute path) sits inside one
+    of the allowed roots. Uses ``os.path.commonpath`` containment — the standard
+    path-traversal guard."""
     for root in _allowed_roots():
         try:
             if os.path.commonpath((root, resolved)) == root:
-                return Path(resolved)
+                return True
         except ValueError:
             continue  # different drives (Windows) -> not under this root
-    raise HTTPException(
-        status_code=403,
-        detail="path is outside the allowed roots (set QZ_DATA_ROOTS to widen)",
-    )
+    return False
 
 
 @router.post("/import")
 def import_file(req: ImportRequest) -> dict[str, Any]:
-    """Auto-detect format and import a local file path into a DataStruct."""
-    path = _safe_local_path(req.path)
+    """Auto-detect format and import a local file path into a DataStruct.
+
+    ``/import`` reads a path the server can already see (local desktop / CLI
+    use). The path is ``os.path.realpath``-normalized (collapsing ``..`` and
+    symlinks) and confined to an allowed root (home / cwd / temp, widen via
+    ``QZ_DATA_ROOTS``) before any filesystem access, so the localhost API cannot
+    be used to read system files (e.g. ``/etc/passwd``) via traversal.
+    """
+    try:
+        resolved = os.path.realpath(req.path)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="invalid path") from exc
+    if not _within_allowed_roots(resolved):
+        raise HTTPException(
+            status_code=403,
+            detail="path is outside the allowed roots (set QZ_DATA_ROOTS to widen)",
+        )
+    path = Path(resolved)
     if not path.is_file():
         raise HTTPException(status_code=404, detail=f"file not found: {req.path}")
     try:

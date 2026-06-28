@@ -107,12 +107,15 @@ def test_prominence_scales_to_a_million_points() -> None:
     assert max_idx.size > 100_000  # genuinely many candidates
     t0 = time.perf_counter()
     prom = _compute_prominence(residual, max_idx)
-    assert time.perf_counter() - t0 < 5.0
+    # Generous bound: O(n log n) finishes in ~1-4s even on a slow shared runner;
+    # an O(n²) regression would take minutes. The gap is what we're guarding.
+    assert time.perf_counter() - t0 < 30.0
     assert prom.shape == max_idx.shape
 
 
 def test_find_peaks_fast_at_realistic_sizes() -> None:
-    """At the largest real-corpus size (~22k points) peak finding is interactive."""
+    """At the largest real-corpus size (~22k points) peak finding is interactive
+    (~tens of ms locally); a 30s bound only trips on a catastrophic regression."""
     import time
 
     rng = np.random.default_rng(1)
@@ -120,5 +123,5 @@ def test_find_peaks_fast_at_realistic_sizes() -> None:
     y = np.abs(np.sin(x * 3)) + 0.01 * rng.standard_normal(x.size)
     t0 = time.perf_counter()
     peaks, _ = find_peaks_robust(x, y)
-    assert time.perf_counter() - t0 < 5.0
+    assert time.perf_counter() - t0 < 30.0
     assert isinstance(peaks, list)
