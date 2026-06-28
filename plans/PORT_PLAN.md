@@ -563,21 +563,49 @@ MATLAB."**
   at the ends and hidden while a search filter is active (reorder is a full-list
   op — swapping with a hidden neighbor would be confusing). Gates green (frontend
   286 + build). Committed staging explicit paths only (parallel W8 session).
+- **Five-feature batch** (2026-06-27) — user "do all of those": shipped all the
+  next-pickup plot/worksheet/inspector candidates in one sitting, each its own
+  branch+commit+merge, gates green per feature (frontend 290→295→301→305→310 + build):
+  - **Multi-series cursor readout** (`be38edf`, W6) — the cursor chip lists *every*
+    visible series' y at the shared nearest-x index (was first series only); skips
+    hidden + null gaps. Added the previously-untested `readoutPlugin` to the suite.
+  - **Legend entry rename** (`00cab7d`, W6) — double-click a floating-legend entry
+    to rename a series; the override flows into the uPlot series label → legend,
+    cursor readout, solo-axis label all show it. Blank reverts. Store `seriesLabels`
+    (channel-keyed, reset per dataset); legend extracted to `Stage/PlotLegend.tsx`
+    (PlotStage 357→334).
+  - **Draggable reference lines** (`400e0b9`, W6) — grab a ref line on the plot
+    (zoom/cursor tool) and drag it; resize cursor near a line. Live value held
+    plugin-locally + `u.redraw()` (no React rebuild per move), committed once on
+    release via store `updateRefLine`. Pure `pickRefLine` hit-test, tested. Disabled
+    in pan/measure/region (they own the drag gesture).
+  - **Label/ignore column roles** (`de2a3db`, W5) — per-channel role (Data/Label/
+    Ignore) in the Channels card. A roled channel is excluded from the plot
+    (`effectiveChannels` filters label+ignore); `ignore` also drops from worksheet
+    Σ Stats (label stays — a tabulated descriptor). Worksheet header tags roled
+    columns. Guard keeps ≥1 plottable data channel. Store `channelRoles` (reset per
+    dataset). `types.ChannelRole`.
+  - **Per-dataset notes card** (`12cc961`, W7) — free-text notes about the active
+    dataset in a new Inspector card; local draft committed on blur (no per-keystroke
+    plot refetch); lives on the `Dataset` so it round-trips through `.dwk` and is
+    carried by duplicate. Store `setDatasetNotes`.
 
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to
    focus on bosonplotter features for now"); the calculator/non-calculator
    alternation is **dropped — no W4/DiraCulator/SLD-from-formula work**. Pick from
-   plotting + W5 DataWorkspace: **plot interactions** (measurement ruler `d5c3244`;
-   remaining — legend rename/reorder, copy-data-to-clipboard, more cursor
-   read-outs; copy-data-to-clipboard `c3780c0` + interactive legend `8ac41f3`
-   shipped), **W5 column roles** (X-role `ad6b460` + Y-error bars `7da9a21` shipped;
-   remaining — label/ignore roles), the **computed-column formula engine**
-   (snapshot model done — `Stage/Worksheet.tsx`; "recompute on source change" needs
-   provenance links the architecture lacks → low priority), **Library** features
-   (duplicate `adc7ec4` + reorder `3eb8586` done; remaining — groups/tags), or
-   **workspace autosave**. Non-Boson-Plotter parity items (XRDML `map2D` golden,
-   blocked parsers) stay paused unless the user reopens scope.
+   plotting + W5 DataWorkspace: **plot interactions** (measurement ruler `d5c3244`,
+   copy-data `c3780c0`, interactive legend `8ac41f3`, **multi-series cursor readout
+   `be38edf`, legend rename `00cab7d`, draggable ref lines `400e0b9` shipped**;
+   remaining — legend *reorder*, crosshair/marquee stats), **W5 column roles**
+   (X-role `ad6b460`, Y-error bars `7da9a21`, **label/ignore roles `de2a3db` shipped**
+   — roles complete), the **computed-column formula engine** (snapshot model done —
+   `Stage/Worksheet.tsx`; "recompute on source change" needs provenance links the
+   architecture lacks → low priority), **Library** features (duplicate `adc7ec4` +
+   reorder `3eb8586` done; remaining — groups/tags), **Inspector** (metadata card
+   `4b4108f`, **notes card `12cc961` shipped**), or **workspace autosave**.
+   Non-Boson-Plotter parity items (XRDML `map2D` golden, blocked parsers) stay paused
+   unless the user reopens scope.
 2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
