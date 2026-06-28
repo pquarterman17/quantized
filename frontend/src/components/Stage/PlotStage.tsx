@@ -21,6 +21,7 @@ import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { exportPlotPng } from "../../lib/plotExport";
 import { normalizeRange } from "../../lib/regionSelect";
+import { resolveTemplate } from "../../lib/plotTemplates";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotPlugins";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -45,6 +46,7 @@ export default function PlotStage() {
   const yAxisLabel = useApp((s) => s.yAxisLabel);
   const showGrid = useApp((s) => s.showGrid);
   const showLegend = useApp((s) => s.showLegend);
+  const plotTemplate = useApp((s) => s.plotTemplate);
   const refLines = useApp((s) => s.refLines);
   const updateRefLine = useApp((s) => s.updateRefLine);
   const annotations = useApp((s) => s.annotations);
@@ -173,6 +175,8 @@ export default function PlotStage() {
         xFmt,
         yFmt,
         showGrid,
+        fontSize: resolveTemplate(plotTemplate).fontSize,
+        baseLineWidth: resolveTemplate(plotTemplate).lineWidth,
         title: plotTitle,
         xAxisLabel,
         yAxisLabel,
@@ -216,7 +220,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, plotTitle, xAxisLabel, yAxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, plotTemplate, plotTitle, xAxisLabel, yAxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool]);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the

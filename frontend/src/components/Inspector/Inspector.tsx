@@ -13,6 +13,7 @@ import SeriesStyleCard from "./SeriesStyleCard";
 import StatsCard from "./StatsCard";
 import TickFormat from "./TickFormat";
 import TitlesCard from "./TitlesCard";
+import { PLOT_TEMPLATES } from "../../lib/plotTemplates";
 import { Card, Select } from "../primitives";
 import { useActiveDataset, useApp, type LegendPos } from "../../store/useApp";
 
@@ -29,6 +30,8 @@ export default function Inspector() {
   const setShowLegend = useApp((s) => s.setShowLegend);
   const legendPos = useApp((s) => s.legendPos);
   const setLegendPos = useApp((s) => s.setLegendPos);
+  const plotTemplate = useApp((s) => s.plotTemplate);
+  const setPlotTemplate = useApp((s) => s.setPlotTemplate);
 
   return (
     <aside className="qzk-inspector">
@@ -90,6 +93,14 @@ export default function Inspector() {
             />
           </label>
         )}
+        <label className="qzk-field-lbl" style={{ marginTop: 2 }}>
+          Plot template
+          <Select
+            options={PLOT_TEMPLATES.map((t) => ({ value: t.value, label: t.label }))}
+            value={plotTemplate}
+            onChange={(e) => setPlotTemplate(e.target.value)}
+          />
+        </label>
         <AxisLimits />
         <TickFormat />
       </Card>

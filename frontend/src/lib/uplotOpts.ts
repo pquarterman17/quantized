@@ -130,6 +130,10 @@ export interface BuildOptsArgs {
   yFmt?: AxisFormat;
   /** Draw grid lines (default true). */
   showGrid?: boolean;
+  /** Base axis tick/label font size in px (publication template; default 11). */
+  fontSize?: number;
+  /** Default series stroke width when no per-series override (template; default 1.5). */
+  baseLineWidth?: number;
   /** Chart title rendered above the plot (blank/undefined = none). */
   title?: string;
   /** Override the x-axis label (blank/undefined = derive from the data). */
@@ -144,7 +148,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const { xFmt, yFmt, annotations, showGrid, onRegionSelect } = args;
   const axisColor = cssVar("--text-dim") || "#aaa";
   const gridColor = cssVar("--grid-line") || "#333";
-  const font = `11px ${cssVar("--font-mono") || "monospace"}`;
+  const font = `${args.fontSize ?? 11}px ${cssVar("--font-mono") || "monospace"}`;
   // X-axis label: an explicit override wins, else "name (unit)" from the data.
   const xLabel =
     args.xAxisLabel?.trim() ||
@@ -268,7 +272,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         if (s.kind === "points") {
           return { label, scale, stroke, fill: stroke, width: 0, points: { show: true, size: 8 }, show };
         }
-        const width = style?.width ?? 1.5;
+        const width = style?.width ?? args.baseLineWidth ?? 1.5;
         const dash = style?.line ? DASH[style.line] : undefined;
         // Optional markers. Default is a filled circle (uPlot built-in); other
         // glyphs supply a custom paths builder. Open glyphs (+/✕/✳) stroke only;

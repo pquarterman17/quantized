@@ -15,6 +15,21 @@ const payload: PlotPayload = {
 
 const base = { width: 600, height: 400, xLog: false, onReadout: vi.fn() };
 
+describe("buildOpts publication template (fontSize + baseLineWidth)", () => {
+  it("applies the template font size to the axes and base width to series", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", fontSize: 18, baseLineWidth: 3 });
+    expect(opts.axes?.[0].font).toContain("18px");
+    // series[0] is the x series; the first data series is index 1.
+    expect((opts.series?.[1] as { width?: number }).width).toBe(3);
+  });
+
+  it("defaults to 11px / 1.5 when no template args are given", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    expect(opts.axes?.[0].font).toContain("11px");
+    expect((opts.series?.[1] as { width?: number }).width).toBe(1.5);
+  });
+});
+
 describe("buildOpts", () => {
   it("enables box-zoom drag only in zoom mode", () => {
     const zoom = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
