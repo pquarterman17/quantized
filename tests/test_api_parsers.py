@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -81,7 +82,7 @@ def test_import_rejects_path_outside_allowed_roots(
     outside.mkdir()
     target = outside / "qd.dat"
     target.write_bytes(FIXTURE.read_bytes())
-    monkeypatch.setattr(parsers_mod, "_allowed_roots", lambda: (allowed.resolve(),))
+    monkeypatch.setattr(parsers_mod, "_allowed_roots", lambda: (os.path.realpath(allowed),))
     resp = client.post("/api/parsers/import", json={"path": str(target)})
     assert resp.status_code == 403
 
@@ -94,7 +95,7 @@ def test_import_blocks_traversal_escape(
     allowed.mkdir()
     secret = tmp_path / "secret.dat"
     secret.write_bytes(FIXTURE.read_bytes())
-    monkeypatch.setattr(parsers_mod, "_allowed_roots", lambda: (allowed.resolve(),))
+    monkeypatch.setattr(parsers_mod, "_allowed_roots", lambda: (os.path.realpath(allowed),))
     escape = str(allowed / ".." / "secret.dat")
     resp = client.post("/api/parsers/import", json={"path": escape})
     assert resp.status_code == 403
@@ -108,7 +109,7 @@ def test_import_allows_path_inside_root(
     allowed.mkdir()
     target = allowed / "qd_edp124.dat"
     target.write_bytes(FIXTURE.read_bytes())
-    monkeypatch.setattr(parsers_mod, "_allowed_roots", lambda: (allowed.resolve(),))
+    monkeypatch.setattr(parsers_mod, "_allowed_roots", lambda: (os.path.realpath(allowed),))
     resp = client.post("/api/parsers/import", json={"path": str(target)})
     assert resp.status_code == 200
     assert resp.json()["metadata"]["parser_name"] == "import_qd_vsm"
@@ -116,12 +117,12 @@ def test_import_allows_path_inside_root(
 
 def test_allowed_roots_includes_home_and_cwd() -> None:
     roots = parsers_mod._allowed_roots()
-    assert Path.home().resolve() in roots
-    assert Path.cwd().resolve() in roots
+    assert os.path.realpath(Path.home()) in roots
+    assert os.path.realpath(Path.cwd()) in roots
 
 
 def test_allowed_roots_honours_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     extra = tmp_path / "data_root"
     extra.mkdir()
     monkeypatch.setenv("QZ_DATA_ROOTS", str(extra))
-    assert extra.resolve() in parsers_mod._allowed_roots()
+    assert os.path.realpath(extra) in parsers_mod._allowed_roots()
