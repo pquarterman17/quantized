@@ -556,6 +556,13 @@ MATLAB."**
   series only). Pure `lib/clipboard.tableToTSV` (row-oriented header+rows, null →
   empty) unit-tested; `copyRows` uses raw values (not the rounded display) so the
   export keeps full precision. Gates green (frontend 283 + build).
+- **Library reorder (▲▼)** (2026-06-27, `3eb8586`) — W7, Library surface. Up/down
+  buttons on each row reorder the dataset list (drives list + consolidated-export
+  column order); active selection unaffected. Store `moveDataset(id, dir)` swaps a
+  dataset with its neighbor (no-op at ends/unknown), unit-tested; buttons disabled
+  at the ends and hidden while a search filter is active (reorder is a full-list
+  op — swapping with a hidden neighbor would be confusing). Gates green (frontend
+  286 + build). Committed staging explicit paths only (parallel W8 session).
 
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to
@@ -568,9 +575,9 @@ MATLAB."**
    remaining — label/ignore roles), the **computed-column formula engine**
    (snapshot model done — `Stage/Worksheet.tsx`; "recompute on source change" needs
    provenance links the architecture lacks → low priority), **Library** features
-   (duplicate `adc7ec4` done; remaining — reorder, groups/tags), or **workspace
-   autosave**. Non-Boson-Plotter parity items (XRDML `map2D` golden, blocked
-   parsers) stay paused unless the user reopens scope.
+   (duplicate `adc7ec4` + reorder `3eb8586` done; remaining — groups/tags), or
+   **workspace autosave**. Non-Boson-Plotter parity items (XRDML `map2D` golden,
+   blocked parsers) stay paused unless the user reopens scope.
 2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
