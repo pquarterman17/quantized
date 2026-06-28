@@ -42,6 +42,12 @@ export default function RefLinesCard() {
         </Button>
       </div>
 
+      {refLines.length > 0 && (
+        <div className="qz-hint" style={{ color: "var(--text-dim)", fontSize: 11, margin: "4px 0 2px" }}>
+          Drag a line on the plot (zoom/cursor tool) to move it.
+        </div>
+      )}
+
       {refLines.map((r) => (
         <div
           key={r.id}

@@ -85,6 +85,9 @@ export interface BuildOptsArgs {
   yLim?: [number, number] | null;
   /** Reference lines to draw at fixed X/Y values. */
   refLines?: RefLine[];
+  /** Commit a dragged reference line's new value (zoom/cursor tools only — the
+   *  pan/measure/region tools own the drag gesture, so dragging is disabled). */
+  onRefLineMove?: (id: string, value: number) => void;
   /** Text annotations pinned at data coordinates. */
   annotations?: Annotation[];
   /** Per-display-series style overrides, aligned 1:1 with `payload.series`
@@ -138,7 +141,14 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     plugins.push(measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
   }
   if (refLines && refLines.length > 0) {
-    plugins.push(refLinePlugin(refLines, cssVar("--text-dim") || "#888"));
+    // Dragging only in the non-gesture tools (zoom/cursor); pan/measure/region
+    // own the pointer-drag, so reference lines stay static there.
+    plugins.push(
+      refLinePlugin(refLines, cssVar("--text-dim") || "#888", {
+        onMove: args.onRefLineMove,
+        interactive: tool === "zoom" || tool === "cursor",
+      }),
+    );
   }
   if (annotations && annotations.length > 0) {
     plugins.push(annotationPlugin(annotations, cssVar("--text") || "#ddd", font));

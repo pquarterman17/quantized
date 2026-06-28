@@ -118,6 +118,7 @@ interface AppState {
   setY2Keys: (y2Keys: number[] | null) => void;
   addRefLine: (axis: "x" | "y", value: number) => void;
   removeRefLine: (id: string) => void;
+  updateRefLine: (id: string, value: number) => void;
   addAnnotation: (x: number, y: number, text: string) => void;
   removeAnnotation: (id: string) => void;
   setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
@@ -440,6 +441,9 @@ export const useApp = create<AppState>((set, get) => ({
   addRefLine: (axis, value) =>
     set((s) => ({ refLines: [...s.refLines, { id: `ref-${++_refSeq}`, axis, value }] })),
   removeRefLine: (id) => set((s) => ({ refLines: s.refLines.filter((r) => r.id !== id) })),
+  // Move a reference line to a new value (drag commit). No-op for an unknown id.
+  updateRefLine: (id, value) =>
+    set((s) => ({ refLines: s.refLines.map((r) => (r.id === id ? { ...r, value } : r)) })),
   addAnnotation: (x, y, text) =>
     set((s) => ({
       annotations: [...s.annotations, { id: `ann-${++_annSeq}`, x, y, text }],

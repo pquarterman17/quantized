@@ -5,10 +5,107 @@ import type uPlot from "uplot";
 import { computeMeasurement, type Measurement } from "./measure";
 import type { Annotation, RefLine } from "./types";
 
-/** Draw dashed reference lines at fixed X/Y values, clipped to the plot area. */
-export function refLinePlugin(lines: RefLine[], color: string): uPlot.Plugin {
+/** A reference line the pointer is over (for drag hit-testing). */
+export interface RefLineHit {
+  id: string;
+  axis: "x" | "y";
+}
+
+/** Pick the reference line nearest the pointer within `tol` px, or null. Each
+ *  candidate carries its on-axis pixel: x-lines are vertical (compare pointer.x),
+ *  y-lines horizontal (compare pointer.y). Ties resolve to the closest. */
+export function pickRefLine(
+  candidates: { id: string; axis: "x" | "y"; px: number }[],
+  pointer: { x: number; y: number },
+  tol = 6,
+): RefLineHit | null {
+  let best: RefLineHit | null = null;
+  let bestDist = tol;
+  for (const c of candidates) {
+    if (!Number.isFinite(c.px)) continue;
+    const d = Math.abs((c.axis === "x" ? pointer.x : pointer.y) - c.px);
+    if (d <= bestDist) {
+      bestDist = d;
+      best = { id: c.id, axis: c.axis };
+    }
+  }
+  return best;
+}
+
+/** Draw dashed reference lines at fixed X/Y values, clipped to the plot area.
+ *  When `opts.interactive` and `opts.onMove` are given, lines become draggable:
+ *  the pointer near a line shows a resize cursor and a drag moves it. The live
+ *  position is held plugin-locally (canvas redraw only) and committed to the
+ *  store once on release — so the plot isn't rebuilt on every mouse move. */
+export function refLinePlugin(
+  lines: RefLine[],
+  color: string,
+  opts?: { onMove?: (id: string, value: number) => void; interactive?: boolean },
+): uPlot.Plugin {
+  // Live override for the line being dragged (null = nothing dragging).
+  let dragId: string | null = null;
+  let dragValue = 0;
+
   return {
     hooks: {
+      ready:
+        opts?.interactive && opts.onMove
+          ? (u: uPlot) => {
+              const over = u.over;
+              const onMove = opts.onMove!;
+              // The line's pixel in *plot-area* space (canvasPixels=false), to
+              // match pointer coords measured from over's top-left.
+              const hit = (clientX: number, clientY: number): RefLineHit | null => {
+                const rect = over.getBoundingClientRect();
+                const cands = lines.map((ln) => ({
+                  id: ln.id,
+                  axis: ln.axis,
+                  px: u.valToPos(ln.value, ln.axis === "x" ? "x" : "y"),
+                }));
+                return pickRefLine(cands, { x: clientX - rect.left, y: clientY - rect.top });
+              };
+
+              over.addEventListener("mousemove", (e: MouseEvent) => {
+                if (dragId) return; // cursor managed during drag
+                const h = hit(e.clientX, e.clientY);
+                over.style.cursor = h ? (h.axis === "x" ? "ew-resize" : "ns-resize") : "";
+              });
+
+              over.addEventListener(
+                "mousedown",
+                (e: MouseEvent) => {
+                  if (e.button !== 0) return;
+                  const h = hit(e.clientX, e.clientY);
+                  if (!h) return; // not on a line → let uPlot box-zoom proceed
+                  e.preventDefault();
+                  e.stopPropagation(); // capture-phase: beat uPlot's drag handler
+                  const rect = over.getBoundingClientRect();
+                  const valAt = (ev: MouseEvent) =>
+                    h.axis === "x"
+                      ? u.posToVal(ev.clientX - rect.left, "x")
+                      : u.posToVal(ev.clientY - rect.top, "y");
+                  dragId = h.id;
+                  dragValue = lines.find((l) => l.id === h.id)?.value ?? valAt(e);
+
+                  const move = (ev: MouseEvent) => {
+                    dragValue = valAt(ev);
+                    u.redraw();
+                  };
+                  const up = (ev: MouseEvent) => {
+                    const v = valAt(ev);
+                    document.removeEventListener("mousemove", move);
+                    document.removeEventListener("mouseup", up);
+                    dragId = null;
+                    over.style.cursor = "";
+                    onMove(h.id, v); // commit once
+                  };
+                  document.addEventListener("mousemove", move);
+                  document.addEventListener("mouseup", up);
+                },
+                { capture: true },
+              );
+            }
+          : undefined,
       draw: (u: uPlot) => {
         const { ctx } = u;
         const { left, top, width, height } = u.bbox;
@@ -17,15 +114,17 @@ export function refLinePlugin(lines: RefLine[], color: string): uPlot.Plugin {
         ctx.lineWidth = 1;
         ctx.setLineDash([5, 4]);
         for (const ln of lines) {
-          if (!Number.isFinite(ln.value)) continue;
+          // Use the live drag value for the line under the cursor.
+          const value = ln.id === dragId ? dragValue : ln.value;
+          if (!Number.isFinite(value)) continue;
           ctx.beginPath();
           if (ln.axis === "x") {
-            const px = u.valToPos(ln.value, "x", true);
+            const px = u.valToPos(value, "x", true);
             if (px < left || px > left + width) continue;
             ctx.moveTo(px, top);
             ctx.lineTo(px, top + height);
           } else {
-            const py = u.valToPos(ln.value, "y", true);
+            const py = u.valToPos(value, "y", true);
             if (py < top || py > top + height) continue;
             ctx.moveTo(left, py);
             ctx.lineTo(left + width, py);

@@ -46,6 +46,7 @@ export default function PlotStage() {
   const showGrid = useApp((s) => s.showGrid);
   const showLegend = useApp((s) => s.showLegend);
   const refLines = useApp((s) => s.refLines);
+  const updateRefLine = useApp((s) => s.updateRefLine);
   const annotations = useApp((s) => s.annotations);
   const seriesStyles = useApp((s) => s.seriesStyles);
   const seriesLabels = useApp((s) => s.seriesLabels);
@@ -167,6 +168,7 @@ export default function PlotStage() {
         yFmt,
         showGrid,
         refLines,
+        onRefLineMove: updateRefLine,
         annotations,
         seriesStyles: styleList,
         seriesLabels: labelList,

@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import type { Annotation, RefLine } from "./types";
-import { annotationPlugin, readoutPlugin, refLinePlugin, type Readout } from "./uplotPlugins";
+import {
+  annotationPlugin,
+  pickRefLine,
+  readoutPlugin,
+  refLinePlugin,
+  type Readout,
+} from "./uplotPlugins";
 
 /** Minimal uPlot stub: a recording 2D context + a linear valToPos. */
 function fakeU() {
@@ -60,6 +66,37 @@ describe("refLinePlugin", () => {
 
   it("skips non-finite values", () => {
     expect(draw([{ id: "a", axis: "x", value: Number.NaN }])).toHaveLength(0);
+  });
+});
+
+describe("pickRefLine (drag hit-test)", () => {
+  const cands = [
+    { id: "vx", axis: "x" as const, px: 100 }, // vertical line at x px 100
+    { id: "hy", axis: "y" as const, px: 50 }, // horizontal line at y px 50
+  ];
+
+  it("hits a vertical (x) line by pointer x within tolerance", () => {
+    expect(pickRefLine(cands, { x: 103, y: 0 })).toEqual({ id: "vx", axis: "x" });
+  });
+
+  it("hits a horizontal (y) line by pointer y within tolerance", () => {
+    expect(pickRefLine(cands, { x: 0, y: 47 })).toEqual({ id: "hy", axis: "y" });
+  });
+
+  it("returns null when the pointer is beyond the tolerance", () => {
+    expect(pickRefLine(cands, { x: 120, y: 200 })).toBeNull();
+  });
+
+  it("picks the closest when two lines are near", () => {
+    const near = [
+      { id: "a", axis: "x" as const, px: 100 },
+      { id: "b", axis: "x" as const, px: 104 },
+    ];
+    expect(pickRefLine(near, { x: 103, y: 0 })?.id).toBe("b");
+  });
+
+  it("ignores non-finite candidate pixels (off-scale lines)", () => {
+    expect(pickRefLine([{ id: "z", axis: "x", px: Number.NaN }], { x: 0, y: 0 })).toBeNull();
   });
 });
 

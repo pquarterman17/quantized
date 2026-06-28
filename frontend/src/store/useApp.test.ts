@@ -334,6 +334,17 @@ describe("useApp reference lines", () => {
     expect(after).toHaveLength(1);
     expect(after[0].axis).toBe("y");
   });
+
+  it("updates a reference line's value by id (drag commit) and ignores unknown ids", () => {
+    useApp.setState({ refLines: [] });
+    useApp.getState().addRefLine("x", 10);
+    const id = useApp.getState().refLines[0].id;
+    useApp.getState().updateRefLine(id, 42);
+    expect(useApp.getState().refLines[0].value).toBe(42);
+    useApp.getState().updateRefLine("ghost", 99); // no-op
+    expect(useApp.getState().refLines).toHaveLength(1);
+    expect(useApp.getState().refLines[0].value).toBe(42);
+  });
 });
 
 describe("useApp tick format", () => {
