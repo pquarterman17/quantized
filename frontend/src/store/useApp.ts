@@ -95,6 +95,8 @@ interface AppState {
   peakOverlay: PeakOverlay | null;
   baselineOverlay: BaselineOverlay | null;
   rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null; // markers on the 2D map
+  mapMethod: string; // 2D-map regrid interpolation (natural/linear/nearest/idw)
+  mapRes: number; // 2D-map grid resolution (nx = ny)
   // Macro recorder: when `macroRecording` is on, curated actions append a step;
   // the Inspector card exports `macroSteps` as a reproducible script.
   macroRecording: boolean;
@@ -176,6 +178,8 @@ interface AppState {
   setPeakOverlay: (overlay: PeakOverlay | null) => void;
   setBaselineOverlay: (overlay: BaselineOverlay | null) => void;
   setRsmPeaks: (rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null) => void;
+  setMapMethod: (method: string) => void;
+  setMapRes: (res: number) => void;
   startMacro: () => void;
   stopMacro: () => void;
   clearMacro: () => void;
@@ -278,6 +282,8 @@ export const useApp = create<AppState>((set, get) => ({
   peakOverlay: null,
   baselineOverlay: null,
   rsmPeaks: null,
+  mapMethod: "natural",
+  mapRes: 200,
   macroRecording: false,
   macroSteps: [],
   status: "starting…",
@@ -712,6 +718,8 @@ export const useApp = create<AppState>((set, get) => ({
   setPeakOverlay: (peakOverlay) => set({ peakOverlay }),
   setBaselineOverlay: (baselineOverlay) => set({ baselineOverlay }),
   setRsmPeaks: (rsmPeaks) => set({ rsmPeaks }),
+  setMapMethod: (mapMethod) => set({ mapMethod }),
+  setMapRes: (mapRes) => set({ mapRes }),
   // ── Macro recorder ──────────────────────────────────────────────────────
   startMacro: () => set({ macroRecording: true }),
   stopMacro: () => set({ macroRecording: false }),

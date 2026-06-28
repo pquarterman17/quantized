@@ -22,8 +22,10 @@ export default function MapStage() {
   const [payload, setPayload] = useState<MapPayload | null>(null);
   const [cmap, setCmap] = useState<ColormapName>("viridis");
   const [logZ, setLogZ] = useState(false);
-  const [method, setMethod] = useState("natural"); // regrid interpolation method
-  const [res, setRes] = useState(200); // grid resolution (nx = ny)
+  // Gridding controls live in the Inspector "2-D map" card (store-backed) so the
+  // map toolbar stays focused on view picks (channels / colormap / log).
+  const method = useApp((s) => s.mapMethod);
+  const res = useApp((s) => s.mapRes);
   const [readout, setReadout] = useState<Readout | null>(null);
   // x/y/z channel picks, local to this view (default the first three channels).
   const [keys, setKeys] = useState<[number, number, number]>([0, 1, 2]);
@@ -153,21 +155,6 @@ export default function MapStage() {
           >
             log
           </button>
-          <span className="qzk-tool-sep" />
-          <Picker
-            label="grid"
-            title="Scattered-data interpolation method"
-            value={method}
-            options={["natural", "linear", "nearest", "idw"].map((m) => ({ v: m, text: m }))}
-            onChange={setMethod}
-          />
-          <Picker
-            label="res"
-            title="Grid resolution (nx = ny)"
-            value={res}
-            options={[100, 200, 400].map((n) => ({ v: n, text: String(n) }))}
-            onChange={(v) => setRes(Number(v))}
-          />
           <span className="qzk-tool-sep" />
           <button className="qzk-tool-btn" title="Save map as PNG" onClick={savePng}>
             ⤓

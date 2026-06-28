@@ -631,6 +631,17 @@ describe("useApp setCellValue", () => {
   });
 });
 
+describe("useApp 2-D map gridding", () => {
+  it("defaults to natural / 200 and updates via setters", () => {
+    expect(useApp.getState().mapMethod).toBe("natural");
+    expect(useApp.getState().mapRes).toBe(200);
+    useApp.getState().setMapMethod("idw");
+    useApp.getState().setMapRes(400);
+    expect(useApp.getState().mapMethod).toBe("idw");
+    expect(useApp.getState().mapRes).toBe(400);
+  });
+});
+
 describe("useApp computed columns (recompute)", () => {
   const twoCol: DataStruct = {
     time: [1, 2],

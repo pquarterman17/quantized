@@ -6,6 +6,7 @@ import AxisLimits from "./AxisLimits";
 import ChannelsCard from "./ChannelsCard";
 import CorrectionsCard from "./CorrectionsCard";
 import MacroCard from "./MacroCard";
+import MapCard from "./MapCard";
 import MetadataCard from "./MetadataCard";
 import NotesCard from "./NotesCard";
 import RefLinesCard from "./RefLinesCard";
@@ -18,6 +19,7 @@ import { useActiveDataset, useApp } from "../../store/useApp";
 
 export default function Inspector() {
   const active = useActiveDataset();
+  const stageTab = useApp((s) => s.stageTab);
   const yLog = useApp((s) => s.yLog);
   const setYLog = useApp((s) => s.setYLog);
   const xLog = useApp((s) => s.xLog);
@@ -29,6 +31,8 @@ export default function Inspector() {
 
   return (
     <aside className="qzk-inspector">
+      {stageTab === "map" && <MapCard />}
+
       <Card title="Scan metadata" defaultOpen={false}>
         {active ? (
           <>
