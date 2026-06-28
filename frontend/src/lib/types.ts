@@ -76,6 +76,9 @@ export interface Dataset {
    *  background dataset's id + the interpolation method. Persisted so the
    *  Corrections card can re-populate and re-apply it reproducibly. */
   bgRef?: { datasetId: string; interp: string };
+  /** Free-text user notes about this dataset (sample, conditions, caveats).
+   *  Shown in the Inspector Notes card; round-trips through the .dwk workspace. */
+  notes?: string;
 }
 
 /** A registered fit model's metadata (from GET /api/fitting/models). */

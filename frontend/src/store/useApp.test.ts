@@ -215,6 +215,16 @@ describe("useApp renameDataset", () => {
   });
 });
 
+describe("useApp setDatasetNotes", () => {
+  it("attaches notes by id and clears them on a blank value", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1" });
+    useApp.getState().setDatasetNotes("d1", "annealed at 600C");
+    expect(useApp.getState().datasets[0].notes).toBe("annealed at 600C");
+    useApp.getState().setDatasetNotes("d1", "   ");
+    expect(useApp.getState().datasets[0].notes).toBeUndefined();
+  });
+});
+
 describe("useApp x-axis channel", () => {
   it("resets xKey to .time when switching or adding a dataset", () => {
     useApp.setState({

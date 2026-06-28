@@ -44,6 +44,14 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
     expect(restored.raw).toBeUndefined();
     expect(restored.corrections).toBeUndefined();
     expect(restored.bgRef).toBeUndefined();
+    expect(restored.notes).toBeUndefined();
+  });
+
+  it("preserves dataset notes", () => {
+    const ds = makeDataset("a", "noted");
+    ds.notes = "5 K M-vs-H, second cooldown";
+    const [restored] = parseWorkspace(serializeWorkspace([ds]));
+    expect(restored.notes).toBe(ds.notes);
   });
 
   it("writes the format tag and version", () => {

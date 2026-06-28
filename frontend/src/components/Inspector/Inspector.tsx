@@ -6,6 +6,7 @@ import AxisLimits from "./AxisLimits";
 import ChannelsCard from "./ChannelsCard";
 import CorrectionsCard from "./CorrectionsCard";
 import MetadataCard from "./MetadataCard";
+import NotesCard from "./NotesCard";
 import RefLinesCard from "./RefLinesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
 import StatsCard from "./StatsCard";
@@ -40,6 +41,8 @@ export default function Inspector() {
       </Card>
 
       <MetadataCard active={active} />
+
+      <NotesCard active={active} />
 
       <ChannelsCard active={active} />
 

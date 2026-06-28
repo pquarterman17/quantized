@@ -92,6 +92,7 @@ interface AppState {
   duplicateDataset: (id: string) => void;
   moveDataset: (id: string, dir: -1 | 1) => void;
   renameDataset: (id: string, name: string) => void;
+  setDatasetNotes: (id: string, notes: string) => void;
   applyCorrections: (
     id: string,
     params: CorrectionParams,
@@ -338,6 +339,7 @@ export const useApp = create<AppState>((set, get) => ({
         ...(src.raw ? { raw: cloneDataStruct(src.raw) } : {}),
         ...(src.corrections ? { corrections: { ...src.corrections } } : {}),
         ...(src.bgRef ? { bgRef: { ...src.bgRef } } : {}),
+        ...(src.notes ? { notes: src.notes } : {}),
       };
       const datasets = [...s.datasets];
       datasets.splice(idx + 1, 0, clone);
@@ -371,6 +373,14 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({
       datasets: s.datasets.map((d) =>
         d.id === id ? { ...d, name: name.trim() || d.name } : d,
+      ),
+    })),
+  // Attach free-text notes to a dataset (blank clears). Per-dataset, so it lives
+  // on the object (round-trips through .dwk) rather than the transient view state.
+  setDatasetNotes: (id, notes) =>
+    set((s) => ({
+      datasets: s.datasets.map((d) =>
+        d.id === id ? { ...d, notes: notes.trim() ? notes : undefined } : d,
       ),
     })),
 
