@@ -37,6 +37,7 @@ export default function DatasetRow({
   const selectRange = useApp((s) => s.selectRange);
   const removeDataset = useApp((s) => s.removeDataset);
   const removeSelected = useApp((s) => s.removeSelected);
+  const mergeSelected = useApp((s) => s.mergeSelected);
   const applyCorrectionsToMany = useApp((s) => s.applyCorrectionsToMany);
   const duplicateDataset = useApp((s) => s.duplicateDataset);
   const moveDataset = useApp((s) => s.moveDataset);
@@ -105,6 +106,13 @@ export default function DatasetRow({
                 } as ContextMenuItem,
               ]
             : []),
+        ]
+      : []),
+    // Merge the multi-selection (≥2) into one new dataset.
+    ...(selected && selectedCount > 1
+      ? [
+          { separator: true } as ContextMenuItem,
+          { label: `Merge ${selectedCount} selected`, run: mergeSelected } as ContextMenuItem,
         ]
       : []),
     { separator: true },

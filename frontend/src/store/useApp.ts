@@ -8,6 +8,7 @@ import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api"
 import { cloneDataStruct } from "../lib/dataset";
 import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit, macroStep, type MacroStep } from "../lib/macro";
+import { mergeDatasets } from "../lib/merge";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import type {
   Annotation,
@@ -121,6 +122,8 @@ interface AppState {
   selectRange: (id: string) => void;
   removeDataset: (id: string) => void;
   removeSelected: () => void;
+  // Concatenate the multi-selected datasets (≥2) row-wise into a new dataset.
+  mergeSelected: () => void;
   duplicateDataset: (id: string) => void;
   moveDataset: (id: string, dir: -1 | 1) => void;
   renameDataset: (id: string, name: string) => void;
@@ -439,6 +442,29 @@ export const useApp = create<AppState>((set, get) => ({
         s.activeId && !ids.has(s.activeId) ? s.activeId : (datasets[0]?.id ?? null);
       return { datasets, activeId, selectedIds: activeId ? [activeId] : [] };
     }),
+
+  // Concatenate the selected datasets (in selection order) row-wise into one new
+  // library dataset. Needs ≥2 with a matching column count (mergeDatasets guards).
+  mergeSelected: () => {
+    const s = get();
+    const picks = s.selectedIds
+      .map((id) => s.datasets.find((d) => d.id === id))
+      .filter((d): d is Dataset => d != null);
+    if (picks.length < 2) {
+      get().setStatus("select ≥2 datasets to merge");
+      return;
+    }
+    try {
+      const data = mergeDatasets(
+        picks.map((d) => d.data),
+        picks.map((d) => d.name),
+      );
+      get().addDataset({ id: nextDatasetId(), name: `merged (${picks.length})`, data });
+      get().setStatus(`merged ${picks.length} datasets → ${data.time.length} rows`);
+    } catch (e) {
+      get().setStatus(e instanceof Error ? e.message : "merge failed");
+    }
+  },
 
   // Deep-copy a dataset (incl. raw/corrections/bgRef) as an independent "(copy)"
   // — for trying different corrections/formulas while keeping the original.
