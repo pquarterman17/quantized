@@ -151,7 +151,13 @@ export default function MultiPanelStage() {
       </div>
       {tool === "cursor" && readout && (
         <div className="qzk-glass qzk-readout">
-          {readout.x.toPrecision(5)}, {readout.y.toPrecision(5)}
+          <div style={{ color: "var(--text-dim)" }}>x = {readout.x.toPrecision(5)}</div>
+          {readout.rows.map((r, i) => (
+            <div key={`${r.label}-${i}`} style={{ display: "flex", gap: 6, justifyContent: "space-between" }}>
+              <span>{r.label || "y"}</span>
+              <span>{r.y.toPrecision(5)}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>

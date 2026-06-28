@@ -119,11 +119,17 @@ export function errorBarsPlugin(
   };
 }
 
-/** Readout reported by the cursor plugin (null when off-data). */
+/** One series' value at the cursor index. */
+export interface ReadoutRow {
+  label: string;
+  y: number;
+}
+
+/** Readout reported by the cursor plugin (null when off-data): the cursor x plus
+ *  every *visible* series' y at that shared aligned-data index (a mini tooltip). */
 export interface Readout {
   x: number;
-  y: number;
-  label: string;
+  rows: ReadoutRow[];
 }
 
 /**
@@ -244,7 +250,9 @@ export function measurePlugin(
   };
 }
 
-/** Report the nearest data point under the cursor (or null when off-plot). */
+/** Report every visible series' value at the nearest-x cursor index (or null when
+ *  off-plot / no visible series have a value there). The cursor index is shared
+ *  across the aligned data, so one lookup per column gives a full readout. */
 export function readoutPlugin(onReadout: (r: Readout | null) => void): uPlot.Plugin {
   return {
     hooks: {
@@ -255,13 +263,23 @@ export function readoutPlugin(onReadout: (r: Readout | null) => void): uPlot.Plu
           return;
         }
         const x = u.data[0][idx];
-        const y = u.data[1]?.[idx];
-        if (x == null || y == null) {
+        if (x == null) {
           onReadout(null);
           return;
         }
-        const lbl = u.series[1]?.label;
-        onReadout({ x, y, label: typeof lbl === "string" ? lbl : "" });
+        const rows: ReadoutRow[] = [];
+        for (let s = 1; s < u.data.length; s++) {
+          if (u.series[s]?.show === false) continue; // skip hidden (legend) series
+          const y = u.data[s]?.[idx];
+          if (y == null) continue;
+          const lbl = u.series[s]?.label;
+          rows.push({ label: typeof lbl === "string" ? lbl : "", y });
+        }
+        if (rows.length === 0) {
+          onReadout(null);
+          return;
+        }
+        onReadout({ x, rows });
       },
     },
   };
