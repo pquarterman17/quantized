@@ -12,10 +12,15 @@ import { relativeTime } from "../../lib/recentFiles";
 import { useApp } from "../../store/useApp";
 
 // Top-level menus and the action group each shows. "Help" is built in below.
+// Order mirrors the design handoff's menubar (File · Edit · Data · Plot ·
+// Analyze · View · Help). Empty groups simply don't open.
 const MENUS: { label: string; group: string }[] = [
   { label: "File", group: "File" },
-  { label: "View", group: "View" },
+  { label: "Edit", group: "Edit" },
+  { label: "Data", group: "Data" },
+  { label: "Plot", group: "Plot" },
   { label: "Analyze", group: "Analyze" },
+  { label: "View", group: "View" },
 ];
 
 const ACCEPT = ".dat,.csv,.txt,.xrdml,.raw,.refl,.pnr,.datA,.cif,.xlsx,.xls";

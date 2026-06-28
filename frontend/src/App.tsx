@@ -305,7 +305,7 @@ export default function App() {
       },
       {
         id: "yLog",
-        group: "View",
+        group: "Plot",
         label: "Toggle log Y axis",
         run: () => s().setYLog(!s().yLog),
       },
@@ -403,7 +403,7 @@ export default function App() {
       },
       {
         id: "dataset-math",
-        group: "Analyze",
+        group: "Data",
         label: "Dataset math (combine two datasets)…",
         run: () => s().setDatasetMathOpen(true),
       },
@@ -435,7 +435,7 @@ export default function App() {
       },
       {
         id: "waterfall",
-        group: "View",
+        group: "Plot",
         label: "Waterfall (stack datasets)…",
         run: () => s().setWaterfallOpen(true),
       },
@@ -544,6 +544,65 @@ export default function App() {
         label: "Preferences…",
         shortcut: "⌘,",
         run: () => s().setPrefsOpen(true),
+      },
+      // ── Edit ──
+      {
+        id: "palette",
+        group: "Edit",
+        label: "Command palette…",
+        shortcut: "⌘K",
+        run: () => s().setCmdk(true),
+      },
+      // ── Data ──
+      {
+        id: "merge",
+        group: "Data",
+        label: "Merge selected datasets",
+        run: () => s().mergeSelected(),
+      },
+      {
+        id: "duplicate",
+        group: "Data",
+        label: "Duplicate active dataset",
+        run: () => {
+          const id = s().activeId;
+          if (id) s().duplicateDataset(id);
+        },
+      },
+      // ── Plot ──
+      {
+        id: "autoscale",
+        group: "Plot",
+        label: "Autoscale / reset view",
+        shortcut: "A",
+        run: () => {
+          s().setXLim(null);
+          s().setYLim(null);
+        },
+      },
+      {
+        id: "xLog",
+        group: "Plot",
+        label: "Toggle log X axis",
+        run: () => s().setXLog(!s().xLog),
+      },
+      {
+        id: "grid",
+        group: "Plot",
+        label: "Toggle grid lines",
+        run: () => s().setShowGrid(!s().showGrid),
+      },
+      {
+        id: "legend",
+        group: "Plot",
+        label: "Toggle legend",
+        run: () => s().setShowLegend(!s().showLegend),
+      },
+      {
+        id: "stacked",
+        group: "Plot",
+        label: "Toggle stacked layout",
+        run: () => s().setStackMode(!s().stackMode),
       },
       {
         id: "shortcuts",
