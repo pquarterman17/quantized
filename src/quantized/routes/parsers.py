@@ -72,11 +72,12 @@ def import_file(req: ImportRequest) -> dict[str, Any]:
             status_code=403,
             detail="path is outside the allowed roots (set QZ_DATA_ROOTS to widen)",
         )
-    path = Path(resolved)
-    if not path.is_file():
+    # Use the validated, realpath-normalized string directly (no Path() re-wrap)
+    # so the guarded value is exactly what reaches the filesystem.
+    if not os.path.isfile(resolved):
         raise HTTPException(status_code=404, detail=f"file not found: {req.path}")
     try:
-        ds = import_auto(path)
+        ds = import_auto(resolved)
     except (ValueError, KeyError, OSError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return datastruct_payload(ds)
