@@ -55,6 +55,29 @@ describe("buildOpts", () => {
     expect(opts.series[1].label).toBe("M (emu)");
   });
 
+  it("applies a legend-rename override to the series label and solo-axis label", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      seriesLabels: ["Moment"],
+    });
+    expect(opts.series[1].label).toBe("Moment"); // override wins, no unit appended
+    expect(opts.axes?.[1]?.label).toBe("Moment"); // solo-axis label follows the rename
+  });
+
+  it("keeps the default label where the rename entry is undefined", () => {
+    const two: PlotPayload = { ...payload, series: [...payload.series, { label: "B", unit: "T" }] };
+    const opts = buildOpts(two, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      seriesLabels: [undefined, "renamed"],
+    });
+    expect(opts.series[1].label).toBe("M (emu)"); // untouched
+    expect(opts.series[2].label).toBe("renamed");
+  });
+
   it("labels the y axis when a single series is shown", () => {
     const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
     expect(opts.axes?.[1]?.label).toBe("M (emu)");

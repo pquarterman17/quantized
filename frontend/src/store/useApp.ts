@@ -57,6 +57,7 @@ interface AppState {
   refLines: RefLine[]; // fixed X/Y marker lines on the plot
   annotations: Annotation[]; // text labels pinned at data coordinates
   seriesStyles: Record<number, SeriesStyle>; // per-channel color/width/line overrides
+  seriesLabels: Record<number, string>; // per-channel display-name overrides (legend rename)
   errKeys: Record<number, number>; // y-channel index → channel holding its ± error (error bars)
   hiddenChannels: number[]; // channels toggled off via the interactive legend (kept in payload, not drawn)
   waterfall: number; // waterfall offset as a fraction of the y-span (0 = off)
@@ -121,6 +122,7 @@ interface AppState {
   removeAnnotation: (id: string) => void;
   setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
   resetSeriesStyle: (channel: number) => void;
+  setSeriesLabel: (channel: number, label: string) => void;
   setErrKey: (channel: number, errChannel: number | null) => void;
   toggleHidden: (channel: number) => void;
   setWaterfall: (waterfall: number) => void;
@@ -210,6 +212,7 @@ export const useApp = create<AppState>((set, get) => ({
   refLines: [],
   annotations: [],
   seriesStyles: {},
+  seriesLabels: {},
   errKeys: {},
   hiddenChannels: [],
   waterfall: 0,
@@ -240,6 +243,7 @@ export const useApp = create<AppState>((set, get) => ({
       yKeys: null, // new dataset → plot all its channels
       y2Keys: null, // and reset the secondary-axis assignment
       seriesStyles: {}, // styles are keyed by channel index → reset per dataset
+      seriesLabels: {}, // legend renames are channel-keyed → reset per dataset
       errKeys: {}, // error-bar pairings are channel-keyed → reset per dataset
       hiddenChannels: [], // legend show/hide is channel-keyed → reset per dataset
       xLim: null, // and autoscale both axes
@@ -278,6 +282,7 @@ export const useApp = create<AppState>((set, get) => ({
       yKeys: null,
       y2Keys: null,
       seriesStyles: {},
+      seriesLabels: {},
       errKeys: {},
       hiddenChannels: [],
       xLim: null,
@@ -295,6 +300,7 @@ export const useApp = create<AppState>((set, get) => ({
       yKeys: null,
       y2Keys: null,
       seriesStyles: {},
+      seriesLabels: {},
       errKeys: {},
       hiddenChannels: [],
       xLim: null,
@@ -449,6 +455,16 @@ export const useApp = create<AppState>((set, get) => ({
       const next = { ...s.seriesStyles };
       delete next[channel];
       return { seriesStyles: next };
+    }),
+  // Rename a channel's legend/series label. Blank (or whitespace) clears the
+  // override, reverting to the dataset's own label.
+  setSeriesLabel: (channel, label) =>
+    set((s) => {
+      const next = { ...s.seriesLabels };
+      const t = label.trim();
+      if (t) next[channel] = t;
+      else delete next[channel];
+      return { seriesLabels: next };
     }),
   setErrKey: (channel, errChannel) =>
     set((s) => {

@@ -398,6 +398,35 @@ describe("useApp series styles", () => {
   });
 });
 
+describe("useApp series labels (legend rename)", () => {
+  it("sets a per-channel label override", () => {
+    useApp.setState({ seriesLabels: {} });
+    useApp.getState().setSeriesLabel(1, "Moment");
+    expect(useApp.getState().seriesLabels[1]).toBe("Moment");
+  });
+
+  it("trims, and clears the override on a blank label", () => {
+    useApp.setState({ seriesLabels: {} });
+    useApp.getState().setSeriesLabel(2, "  Field  ");
+    expect(useApp.getState().seriesLabels[2]).toBe("Field");
+    useApp.getState().setSeriesLabel(2, "   ");
+    expect(useApp.getState().seriesLabels[2]).toBeUndefined();
+  });
+
+  it("clears all renames when the dataset changes (indices are per-dataset)", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      activeId: "d1",
+      seriesLabels: { 0: "renamed" },
+    });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().seriesLabels).toEqual({});
+  });
+});
+
 describe("useApp appearance prefs", () => {
   it("setTheme applies to <html> and persists to localStorage", () => {
     useApp.getState().setTheme("light");

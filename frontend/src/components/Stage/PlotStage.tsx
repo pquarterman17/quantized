@@ -25,6 +25,7 @@ import type { Readout } from "../../lib/uplotPlugins";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import InsetPlot from "./InsetPlot";
 import MultiPanelStage from "./MultiPanelStage";
+import PlotLegend from "./PlotLegend";
 import PolarStage from "./PolarStage";
 
 const TOOLS = [
@@ -47,13 +48,13 @@ export default function PlotStage() {
   const refLines = useApp((s) => s.refLines);
   const annotations = useApp((s) => s.annotations);
   const seriesStyles = useApp((s) => s.seriesStyles);
+  const seriesLabels = useApp((s) => s.seriesLabels);
   const waterfall = useApp((s) => s.waterfall);
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const errKeys = useApp((s) => s.errKeys);
   const hiddenChannels = useApp((s) => s.hiddenChannels);
-  const toggleHidden = useApp((s) => s.toggleHidden);
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const tool = useApp((s) => s.plotTool);
@@ -102,6 +103,16 @@ export default function PlotStage() {
       i < plotted.length ? seriesStyles[plotted[i]] : undefined,
     );
   }, [displayPayload, plotted, seriesStyles]);
+
+  // Legend-rename overrides, aligned 1:1 with the display series (overlays keep
+  // their default labels). Drives the uPlot series label → legend, cursor
+  // readout, and solo-axis label all read the renamed string.
+  const labelList = useMemo(() => {
+    if (!displayPayload) return undefined;
+    return displayPayload.series.map((_, i) =>
+      i < plotted.length ? seriesLabels[plotted[i]] : undefined,
+    );
+  }, [displayPayload, plotted, seriesLabels]);
 
   // Error-bar magnitudes per plotted series (keyed by uPlot data column = p+1).
   const errorBars = useMemo(
@@ -158,6 +169,7 @@ export default function PlotStage() {
         refLines,
         annotations,
         seriesStyles: styleList,
+        seriesLabels: labelList,
         errorBars,
         hidden,
         tool,
@@ -192,7 +204,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, refLines, annotations, styleList, errorBars, hidden, theme, accent, tool]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool]);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the
@@ -315,48 +327,7 @@ export default function PlotStage() {
         </div>
       )}
       {displayPayload && showLegend && (
-        <div className="qzk-glass qzk-legend">
-          {displayPayload.series.map((s, i) => {
-            // Keep the CSS token for default series (re-themes); use the resolved
-            // override color when one is set, so the legend matches the line.
-            const override = styleList?.[i]?.color;
-            const swatch =
-              override && !override.startsWith("--")
-                ? override
-                : override
-                  ? `var(${override})`
-                  : `var(--series-${(i % 8) + 1})`;
-            // Plotted channels are click-to-toggle; overlays (i ≥ plotted.length)
-            // are not. Refuse to hide the last visible series (keep ≥1 drawn).
-            const isChannel = i < plotted.length;
-            const isHidden = hidden?.[i] ?? false;
-            const visibleCount = plotted.filter((c) => !hiddenChannels.includes(c)).length;
-            const onClick = isChannel
-              ? () => {
-                  if (!isHidden && visibleCount <= 1) return;
-                  toggleHidden(plotted[i]);
-                }
-              : undefined;
-            return (
-              <div
-                className="it"
-                key={s.label}
-                onClick={onClick}
-                title={isChannel ? (isHidden ? "Click to show" : "Click to hide") : undefined}
-                style={{
-                  opacity: isHidden ? 0.4 : 1,
-                  textDecoration: isHidden ? "line-through" : "none",
-                }}
-              >
-                <span
-                  className="ln"
-                  style={{ display: "inline-block", width: 14, height: 2, background: swatch }}
-                />
-                {s.unit ? `${s.label} (${s.unit})` : s.label}
-              </div>
-            );
-          })}
-        </div>
+        <PlotLegend series={displayPayload.series} styleList={styleList} plotted={plotted} hidden={hidden} />
       )}
     </div>
   );

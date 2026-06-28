@@ -90,6 +90,9 @@ export interface BuildOptsArgs {
   /** Per-display-series style overrides, aligned 1:1 with `payload.series`
    *  (undefined entries — e.g. overlays — keep the defaults). */
   seriesStyles?: (SeriesStyle | undefined)[];
+  /** Per-display-series display-name overrides (legend rename), aligned 1:1 with
+   *  `payload.series` (undefined entries keep the dataset's own label + unit). */
+  seriesLabels?: (string | undefined)[];
   /** Error-bar magnitudes keyed by uPlot data-column index (1-based). Draws
    *  vertical y±e whiskers for the mapped plotted series. */
   errorBars?: Map<number, (number | null)[]>;
@@ -110,12 +113,14 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const gridColor = cssVar("--grid-line") || "#333";
   const font = `11px ${cssVar("--font-mono") || "monospace"}`;
   const xLabel = payload.xUnit ? `${payload.xLabel} (${payload.xUnit})` : payload.xLabel;
-  const seriesLabel = (s: { label: string; unit: string }): string =>
-    s.unit ? `${s.label} (${s.unit})` : s.label;
+  // Resolved display label per series: an explicit rename wins, else "label (unit)".
+  const labels = payload.series.map((s, i) =>
+    args.seriesLabels?.[i] ?? (s.unit ? `${s.label} (${s.unit})` : s.label),
+  );
   // Label each Y axis only when it carries a single series (else the legend names them).
   const soloLabel = (which: number): string | undefined => {
-    const on = payload.series.filter((s) => (s.axis ?? 0) === which);
-    return on.length === 1 ? seriesLabel(on[0]) : undefined;
+    const idxs = payload.series.map((_, i) => i).filter((i) => (payload.series[i].axis ?? 0) === which);
+    return idxs.length === 1 ? labels[idxs[0]] : undefined;
   };
   const hasY2 = payload.series.some((s) => (s.axis ?? 0) === 1);
 
@@ -200,7 +205,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       ...payload.series.map((s, i) => {
         const style = seriesStyles?.[i];
         const stroke = seriesColor(i, style);
-        const label = seriesLabel(s);
+        const label = labels[i];
         const scale = (s.axis ?? 0) === 1 ? "y2" : "y";
         const show = !args.hidden?.[i]; // interactive legend visibility
         // Peak markers: points only, no connecting line.
