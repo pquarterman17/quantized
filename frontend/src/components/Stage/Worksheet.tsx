@@ -10,6 +10,8 @@ import { copyText, tableToTSV } from "../../lib/clipboard";
 import { channelLetter, compileFormula } from "../../lib/formula";
 import type { CalcResult, DataStruct } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
+import { askParams } from "../overlays/ParamDialog";
 import WorksheetFilterBar from "./WorksheetFilterBar";
 import WorksheetTable from "./WorksheetTable";
 import WorksheetToolbar from "./WorksheetToolbar";
@@ -40,7 +42,13 @@ export default function Worksheet() {
   const setCellValue = useApp((s) => s.setCellValue);
   const addFormula = useApp((s) => s.addFormula);
   const removeFormula = useApp((s) => s.removeFormula);
+  const xKey = useApp((s) => s.xKey);
+  const setXKey = useApp((s) => s.setXKey);
+  const yKeys = useApp((s) => s.yKeys);
+  const setYKeys = useApp((s) => s.setYKeys);
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
+  // Right-click menu: a header column (target -1 = x) or a data row.
+  const [menu, setMenu] = useState<{ kind: "col" | "row"; target: number; x: number; y: number } | null>(null);
   const [formula, setFormula] = useState("");
   const [colName, setColName] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -191,6 +199,81 @@ export default function Worksheet() {
     setSort((s) => (s && s.col === col ? (s.dir === 1 ? { col, dir: -1 } : null) : { col, dir: 1 }));
   const mark = (col: number) => (sort?.col === col ? (sort.dir === 1 ? " ▲" : " ▼") : "");
 
+  // Copy one data row (TSV) — single-row sibling of copyRows.
+  function copyRow(r: number) {
+    const headers = [
+      xUnit ? `${xName} (${xUnit})` : xName,
+      ...labels.map((lab, c) => (units[c] ? `${lab} (${units[c]})` : lab)),
+    ];
+    const data = [[time[r], ...labels.map((_, c) => values[r]?.[c])]];
+    copyText(tableToTSV(headers, data)).then((ok) =>
+      setStatus(ok ? `copied row ${r + 1}` : "clipboard unavailable"),
+    );
+  }
+
+  // Prompt for a name + formula, then add a computed column (validated inline).
+  async function promptColumn() {
+    const p = await askParams("New computed column", [
+      { key: "name", label: "Column name", type: "text", default: "" },
+      { key: "expr", label: "Formula (e.g. 2*A + sqrt(B))", type: "text", default: "" },
+    ]);
+    if (!p) return;
+    const expr = String(p.expr).trim();
+    if (!expr) return;
+    try {
+      compileFormula(expr);
+      const name = String(p.name).trim() || expr;
+      addFormula(active!.id, name, expr);
+      setStatus(`added column "${name}"`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "formula error");
+    }
+  }
+
+  // Context-menu item builders (the grid parity of MATLAB's column/row menus).
+  const colMenuItems = (col: number): ContextMenuItem[] => {
+    const items: ContextMenuItem[] = [
+      { label: "Sort ascending", run: () => setSort({ col, dir: 1 }) },
+      { label: "Sort descending", run: () => setSort({ col, dir: -1 }) },
+    ];
+    if (col >= 0) {
+      const plotted = yKeys ?? labels.map((_, i) => i);
+      const shown = plotted.includes(col);
+      items.push({ separator: true });
+      items.push({
+        label: xKey === col ? "Already the X axis" : "Set as X axis",
+        run: () => setXKey(col),
+        disabled: xKey === col,
+      });
+      items.push(
+        shown
+          ? {
+              label: "Hide from plot",
+              run: () => setYKeys(plotted.filter((c) => c !== col)),
+              disabled: plotted.length <= 1,
+            }
+          : { label: "Plot as Y", run: () => setYKeys([...plotted, col].sort((a, b) => a - b)) },
+      );
+    }
+    items.push({ separator: true });
+    items.push({ label: "New column from formula…", run: () => void promptColumn() });
+    items.push({
+      label: showStats ? "Hide column statistics" : "Show column statistics",
+      run: () => setShowStats((v) => !v),
+    });
+    return items;
+  };
+  const rowMenuItems = (r: number): ContextMenuItem[] => [
+    { label: masked.has(r) ? "Unmask row" : "Mask row", run: () => toggleMask(r) },
+    { label: "Unmask all rows", run: unmaskAll, disabled: masked.size === 0 },
+    { separator: true },
+    { label: "Copy row (TSV)", run: () => copyRow(r) },
+  ];
+  const openMenu = (kind: "col" | "row") => (target: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    setMenu({ kind, target, x: e.clientX, y: e.clientY });
+  };
+
   // Add a live computed column to the active dataset (it recomputes when the base
   // changes). compileFormula validates the expression here so a syntax error
   // surfaces inline instead of becoming a silent all-NaN column.
@@ -270,7 +353,17 @@ export default function Worksheet() {
         showStats={showStats}
         colStats={colStats}
         statsErr={statsErr}
+        onHeaderContext={openMenu("col")}
+        onRowContext={openMenu("row")}
       />
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={menu.kind === "col" ? colMenuItems(menu.target) : rowMenuItems(menu.target)}
+        />
+      )}
       {filtered.length > MAX_ROWS && (
         <div className="qzk-ds-meta" style={{ padding: 8 }}>
           showing {MAX_ROWS} of {filtered.length}

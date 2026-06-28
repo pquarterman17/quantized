@@ -32,6 +32,38 @@ beforeEach(() => {
   useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data }], activeId: "d1", status: "" });
 });
 
+describe("Worksheet context menus", () => {
+  // Header cells in order: [ #, x(time), A, B ].
+  const header = (i: number) => screen.getAllByRole("columnheader")[i];
+  // Rows: [ headerRow, dataRow0, dataRow1, … ] (no stats footer by default).
+  const dataRow = (i: number) => screen.getAllByRole("row")[i + 1];
+
+  it("right-clicking a column header opens a menu that sets the X axis", () => {
+    render(<Worksheet />);
+    fireEvent.contextMenu(header(2)); // channel A
+    const setX = screen.getByText("Set as X axis");
+    fireEvent.click(setX);
+    expect(useApp.getState().xKey).toBe(0); // channel A is index 0
+  });
+
+  it("right-clicking a data row opens a menu that masks the row", () => {
+    render(<Worksheet />);
+    fireEvent.contextMenu(dataRow(0));
+    fireEvent.click(screen.getByText("Mask row"));
+    // After masking, the same row offers "Unmask row".
+    fireEvent.contextMenu(dataRow(0));
+    expect(screen.getByText("Unmask row")).toBeInTheDocument();
+  });
+
+  it("a column header menu can toggle plot visibility", () => {
+    render(<Worksheet />);
+    fireEvent.contextMenu(header(3)); // channel B
+    fireEvent.click(screen.getByText("Hide from plot"));
+    // yKeys now excludes channel B (index 1) → [0].
+    expect(useApp.getState().yKeys).toEqual([0]);
+  });
+});
+
 describe("Worksheet column statistics", () => {
   it("shows no stats footer until toggled", () => {
     render(<Worksheet />);

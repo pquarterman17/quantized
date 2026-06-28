@@ -42,6 +42,9 @@ export interface WorksheetTableProps {
   showStats: boolean;
   colStats: (CalcResult | null)[] | null;
   statsErr: boolean;
+  /** Right-click a header (col -1 = x) / a data row → the container opens a menu. */
+  onHeaderContext?: (col: number, e: React.MouseEvent) => void;
+  onRowContext?: (row: number, e: React.MouseEvent) => void;
 }
 
 export default function WorksheetTable({
@@ -64,6 +67,8 @@ export default function WorksheetTable({
   showStats,
   colStats,
   statsErr,
+  onHeaderContext,
+  onRowContext,
 }: WorksheetTableProps) {
   // The cell currently being edited (col -1 = x column) and its in-progress text.
   const [edit, setEdit] = useState<{ row: number; col: number } | null>(null);
@@ -115,7 +120,11 @@ export default function WorksheetTable({
       <thead>
         <tr>
           <th className="rownum">#</th>
-          <th onClick={() => onToggleSort(-1)} style={{ cursor: "default" }}>
+          <th
+            onClick={() => onToggleSort(-1)}
+            onContextMenu={onHeaderContext ? (e) => onHeaderContext(-1, e) : undefined}
+            style={{ cursor: "default" }}
+          >
             {xName}
             <span className="role">
               X{xUnit ? ` · ${xUnit}` : ""}
@@ -128,6 +137,7 @@ export default function WorksheetTable({
               <th
                 key={lab}
                 onClick={() => onToggleSort(c)}
+                onContextMenu={onHeaderContext ? (e) => onHeaderContext(c, e) : undefined}
                 title={
                   computed
                     ? `${channelLetter(c)} — computed column`
@@ -165,7 +175,11 @@ export default function WorksheetTable({
         {order.slice(0, maxRows).map((r) => {
           const isMasked = masked.has(r);
           return (
-            <tr key={r} style={isMasked ? { opacity: 0.4, textDecoration: "line-through" } : undefined}>
+            <tr
+              key={r}
+              onContextMenu={onRowContext ? (e) => onRowContext(r, e) : undefined}
+              style={isMasked ? { opacity: 0.4, textDecoration: "line-through" } : undefined}
+            >
               <td
                 className="rownum"
                 style={{ cursor: "pointer" }}
