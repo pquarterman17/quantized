@@ -521,6 +521,13 @@ MATLAB."**
   `uplotPlugins.errorBarsPlugin` (draw hook, per-series y scale, clipped; reads
   the displayed y so waterfall offsets cancel). Store `errKeys` map resets with the
   dataset. Gates green (frontend 259 + build).
+- **Copy plotted data to clipboard (TSV)** (2026-06-27, `c3780c0`) — W6 plotting.
+  ⧉ tool-dock button serializes the display payload (x + plotted series, honoring
+  x-channel / waterfall / overlays) to TSV and writes the clipboard for paste into
+  Origin / Excel / a notebook. Pure `lib/clipboard.payloadToTSV` (header + rows,
+  null → empty) unit-tested; capability-guarded `copyText` (false on insecure
+  context / denial → "clipboard unavailable" status). Gates green (frontend 264 +
+  build).
 
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to
@@ -528,11 +535,11 @@ MATLAB."**
    alternation is **dropped — no W4/DiraCulator/SLD-from-formula work**. Pick from
    plotting + W5 DataWorkspace: **plot interactions** (measurement ruler `d5c3244`;
    remaining — legend rename/reorder, copy-data-to-clipboard, more cursor
-   read-outs), **W5 column roles** (X-role `ad6b460` + Y-error bars `7da9a21`
-   shipped; remaining — label/ignore roles), the **computed-column formula engine**
-   (snapshots + recompute), or **workspace autosave**. Non-Boson-Plotter parity
-   items (XRDML `map2D` golden, blocked parsers) stay paused unless the user
-   reopens scope.
+   read-outs; copy-data-to-clipboard `c3780c0` shipped), **W5 column roles** (X-role
+   `ad6b460` + Y-error bars `7da9a21` shipped; remaining — label/ignore roles), the
+   **computed-column formula engine** (snapshots + recompute), or **workspace
+   autosave**. Non-Boson-Plotter parity items (XRDML `map2D` golden, blocked
+   parsers) stay paused unless the user reopens scope.
 2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
