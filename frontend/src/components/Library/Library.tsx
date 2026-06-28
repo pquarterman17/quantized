@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import DatasetRow from "./DatasetRow";
 import { makeDemoDataset } from "../../lib/demo";
-import { groupDatasets, hasAnyGroup } from "../../lib/grouping";
+import { groupDatasets, groupNames, hasAnyGroup } from "../../lib/grouping";
 import { openFilePicker } from "../../lib/openFilePicker";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -21,6 +21,7 @@ export default function Library() {
   const addDataset = useApp((s) => s.addDataset);
   const importFiles = useApp((s) => s.importFiles);
   const [query, setQuery] = useState("");
+  const [groupFilter, setGroupFilter] = useState(""); // "" = all groups
   const [dragging, setDragging] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
 
@@ -43,12 +44,17 @@ export default function Library() {
   };
 
   // Filter matches the dataset name OR any of its tags (so typing a tag — or
-  // clicking a tag chip, which sets the query — narrows the library to it).
+  // clicking a tag chip, which sets the query — narrows the library to it). An
+  // optional group-filter dropdown further restricts to one group.
   const q = query.toLowerCase();
+  const names = groupNames(datasets);
+  // A stale group filter (its group was renamed/removed) falls back to "all".
+  const activeGroup = names.includes(groupFilter) ? groupFilter : "";
   const shown = datasets.filter(
     (d) =>
-      d.name.toLowerCase().includes(q) ||
-      (d.tags ?? []).some((t) => t.toLowerCase().includes(q)),
+      (activeGroup === "" || (d.group?.trim() ?? "") === activeGroup) &&
+      (d.name.toLowerCase().includes(q) ||
+        (d.tags ?? []).some((t) => t.toLowerCase().includes(q))),
   );
   const grouped = hasAnyGroup(datasets);
   // Reorder is the flat manual-order tool; it operates on the global list, so it
@@ -107,6 +113,22 @@ export default function Library() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
+
+      {names.length > 0 && (
+        <select
+          className="qz-select qzk-group-filter"
+          value={activeGroup}
+          onChange={(e) => setGroupFilter(e.target.value)}
+          title="Filter the library to one group"
+        >
+          <option value="">All groups</option>
+          {names.map((g) => (
+            <option key={g} value={g}>
+              {g}
+            </option>
+          ))}
+        </select>
+      )}
 
       {sections
         ? sections.map((g) => (

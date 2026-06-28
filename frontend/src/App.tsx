@@ -12,6 +12,7 @@ import TitleBar from "./components/Shell/TitleBar";
 import Stage from "./components/Stage/Stage";
 import CommandPalette, { type Action } from "./components/overlays/CommandPalette";
 import ParamDialog, { askParams } from "./components/overlays/ParamDialog";
+import ShortcutsDialog from "./components/overlays/ShortcutsDialog";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import BaselinePanel from "./components/workshops/baseline/BaselinePanel";
 import CalculatorsPanel from "./components/workshops/calculators/CalculatorsPanel";
@@ -132,6 +133,12 @@ export default function App() {
         const n = s.selectedIds.length || (s.activeId ? 1 : 0);
         s.removeSelected();
         s.setStatus(`removed ${n} dataset${n === 1 ? "" : "s"}`);
+        return;
+      }
+      // "?" (Shift+/ on US layouts) opens the keyboard-shortcuts sheet.
+      if (e.key === "?" && !isEditing(e.target)) {
+        e.preventDefault();
+        useApp.getState().setShortcutsOpen(true);
         return;
       }
       if (!(e.metaKey || e.ctrlKey)) return;
@@ -461,6 +468,13 @@ export default function App() {
         label: "Show plot",
         run: () => s().setStageTab("plot"),
       },
+      {
+        id: "shortcuts",
+        group: "Help",
+        label: "Keyboard shortcuts",
+        shortcut: "?",
+        run: () => s().setShortcutsOpen(true),
+      },
     ];
   }, []);
 
@@ -492,6 +506,7 @@ export default function App() {
       {figureBuilderOpen && <FigureBuilderView />}
       {waterfallOpen && <WaterfallView />}
       {reflViewOpen && <ReflView />}
+      <ShortcutsDialog />
     </div>
   );
 }

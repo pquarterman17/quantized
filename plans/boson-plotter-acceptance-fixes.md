@@ -81,44 +81,9 @@ file → io.import_auto → DataStruct(.time/.values/.labels/.units/.metadata)
    - [ ] Add `is_ncnr_refl` (JSON `"columns"` header) + sniffer list for `.refl`
    - [ ] Route refl1d-style `.refl` to the refl1d parser; tests + fixtures
 
-7. **Zoom UX** — make box-zoom legible
-   - [ ] Show a live zoom rectangle while dragging; Esc cancels
-   - [ ] Consider a "reset zoom" affordance / double-click to autoscale
-
 9. **XRDML 2D RSM → map view** — load 2D maps in 2D
    - [ ] On import, detect `metadata.is2D` and default the stage to the map tab
    - [ ] Feed `.values` (2θ/ω/I) + `map_shape` into the existing map regrid view
-
-12. **Cross-dataset apply (corrections + styles)** — pairs with multi-select
-    - [ ] "Apply corrections to all / selected" (MATLAB Edit ▸ Apply to All)
-    - [ ] "Apply style to all / selected" (styles currently reset per dataset)
-    - [ ] Expose from the Library context menu + a menu-bar action
-
-13. **Series colormap / palette presets** — colour-cycle picker (MATLAB ddColormap)
-    - [ ] Palette presets incl. colourblind-safe (Tol, Okabe-Ito) + Viridis/Tab10
-    - [ ] Apply across multi-dataset overlays; keep design-token theming as default
-
-## Tier 3 — Nice-to-Have / Needs Design
-
-14. **Marker shape variety** — SeriesStyleCard markers are on/off + size only
-    - [ ] Shape picker: o / s / ^ / d / v / x / + / * (MATLAB ddMarkerShape)
-
-15. **Legend position selector** — legend is a fixed floating overlay
-    - [ ] NE / SE / SW / NW / outside / best placement (MATLAB cycleLegend)
-
-16. **Live publication template** — apply APS/Nature/thesis to the on-screen plot
-    - [ ] Presets exist only in the export dialog; let them style the live plot
-      (MATLAB ddTemplate)
-
-17. **Interactive axis fine-controls** — currently export-only
-    - [ ] Tick direction (in/out/both), minor ticks, axis box toggle, smart
-      auto-scale (auto-detect log/lin) — MATLAB plotStyleDialog + btnSmartScale
-
-19. **Merge selected datasets** — concatenate 2+ datasets (pairs with multi-select)
-    - [ ] MATLAB Data ▸ Merge Selected
-
-20. **Small menu/dropdown parity** — Keyboard-shortcuts help dialog; Recent files
-    menu; group-filter dropdown (MATLAB Help/ddRecent/ddGroup)
 
 ## Completed
 
@@ -157,3 +122,37 @@ file → io.import_auto → DataStruct(.time/.values/.labels/.units/.metadata)
   set by filename stem; two stacked uPlots. The io/refl1d parser already read both
   (labels locked by `test_io_refl1d.py`), so this was frontend-only — item 5
   (.refl sniffer) was NOT a dependency after all.
+- ~~**#7 Zoom UX**~~ (2026-06-28) — visible box-zoom selection rectangle while
+  dragging; double-click resets/auto-scales; a ⊿ "smart auto-scale" toolbar button
+  (picks log/lin). (`c55e327`)
+- ~~**#12 Cross-dataset apply**~~ (2026-06-28) — `applyCorrectionsToMany` re-derives
+  each target from its own raw; exposed from the Library row menu ("Apply
+  corrections to all / to N selected"). Style-to-all deferred (styles are global/
+  channel-keyed). (`4edcd59`)
+- ~~**#13 Series colormap / palette presets**~~ (2026-06-28) — `lib/palettes.ts`
+  (default / Okabe-Ito / Tol-bright / Tableau10 / Viridis); a palette overrides the
+  `--series-1..8` CSS tokens so it flows through legend, overlays, and export for
+  free. Picker in the Appearance menu. (`0fc05b6`)
+- ~~**#14 Marker shape variety**~~ (2026-06-28) — `lib/markers.ts` shape geometry
+  (o/s/^/d/v/x/+/*); pure `markerSubpaths` (testable) + a thin `markerPaths` Path2D
+  builder used only at draw time. SeriesStyle gained `markerShape`. (`4ab6bb4`)
+- ~~**#15 Legend position selector**~~ (2026-06-28) — store `legendPos`
+  (ne/nw/se/sw) applied as a legend class; selector in the Inspector + a legend
+  context-menu move. (`dad7fe0`)
+- ~~**#16 Live publication template**~~ (2026-06-28) — `lib/plotTemplates.ts`
+  (screen/APS/Nature/thesis…); `resolveTemplate` feeds `fontSize`/`baseLineWidth`
+  into `buildOpts` so the preset styles the on-screen plot, not just export.
+  Inspector selector. (`3842882`)
+- ~~**#17 Interactive axis fine-controls**~~ (2026-06-28) — `showAxisBox` toggle
+  (`axisBoxPlugin` strokes `u.bbox`) + ⊿ smart auto-scale (`suggestLogScale`:
+  strictly-positive + ≥2 decades → log). Tick-direction/minor-ticks deferred
+  (uPlot has no native support). (`c0d4560`)
+- ~~**#19 Merge selected datasets**~~ (2026-06-28) — pure `mergeDatasets`
+  concatenates the multi-selection (≥2) row-wise into a new Library dataset (guards
+  <2 inputs + column-count mismatch); store `mergeSelected` + a row-menu item.
+  (`4402cbf`)
+- ~~**#20 Small menu/dropdown parity**~~ (2026-06-28) — keyboard-shortcuts sheet
+  (`overlays/ShortcutsDialog` + pure `lib/shortcuts`, opened by `?` / Help menu /
+  palette); File ▸ Recent imports history (`lib/recentFiles`, persisted; a browser
+  picker can't re-open by path so a Recent entry re-opens the import dialog);
+  Library group-filter dropdown (`groupNames`). 26 tests.

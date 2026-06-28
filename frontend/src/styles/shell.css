@@ -55,6 +55,13 @@ body {
 .qzk-menu-item:disabled { opacity: 0.4; pointer-events: none; }
 .qzk-menu-item.danger { color: var(--danger, #e5484d); }
 .qzk-menu-item.danger:hover { background: color-mix(in srgb, var(--danger, #e5484d) 18%, transparent); color: var(--danger, #e5484d); }
+/* File ▸ Recent section (#20): a section label, a divider, and a name that
+   truncates so a long filename can't blow out the menu width. */
+.qzk-menu-sep { height: 1px; margin: 4px 6px; background: var(--border-soft); }
+.qzk-menu-label { padding: 3px 9px; font-size: var(--font-size-sm); text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-faint); }
+.qzk-menu-trunc { overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+/* Library group-filter dropdown (#20). */
+.qzk-group-filter { width: 100%; margin-top: 6px; }
 
 /* Right-click context menu: a fixed-position variant of the menubar popup. */
 .qzk-ctx { position: fixed; top: auto; left: auto; min-width: 180px; }

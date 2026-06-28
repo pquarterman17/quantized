@@ -10,6 +10,13 @@ import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit, macroStep, type MacroStep } from "../lib/macro";
 import { mergeDatasets } from "../lib/merge";
 import { applyPalette, normalizePalette } from "../lib/palettes";
+import {
+  addRecentEntry,
+  clearRecentMeta,
+  loadRecent,
+  saveRecent,
+  type RecentFile,
+} from "../lib/recentFiles";
 import type {
   Annotation,
   AxisFormat,
@@ -102,6 +109,9 @@ interface AppState {
   figureBuilderOpen: boolean;
   waterfallOpen: boolean;
   reflViewOpen: boolean;
+  shortcutsOpen: boolean;
+  // Recent-imports history (File ▸ Recent); persisted via lib/recentFiles.
+  recent: RecentFile[];
   fitOverlay: FitOverlay | null;
   peakOverlay: PeakOverlay | null;
   baselineOverlay: BaselineOverlay | null;
@@ -199,6 +209,10 @@ interface AppState {
   setFigureBuilderOpen: (open: boolean) => void;
   setWaterfallOpen: (open: boolean) => void;
   setReflViewOpen: (open: boolean) => void;
+  setShortcutsOpen: (open: boolean) => void;
+  // Record a successful import in the recent list; clearRecent empties it.
+  pushRecent: (name: string, size: number) => void;
+  clearRecent: () => void;
   setFitOverlay: (overlay: FitOverlay | null) => void;
   setPeakOverlay: (overlay: PeakOverlay | null) => void;
   setBaselineOverlay: (overlay: BaselineOverlay | null) => void;
@@ -312,6 +326,8 @@ export const useApp = create<AppState>((set, get) => ({
   figureBuilderOpen: false,
   waterfallOpen: false,
   reflViewOpen: false,
+  shortcutsOpen: false,
+  recent: loadRecent(),
   fitOverlay: null,
   peakOverlay: null,
   baselineOverlay: null,
@@ -350,6 +366,7 @@ export const useApp = create<AppState>((set, get) => ({
         const data = await uploadFile(file);
         get().addDataset({ id: nextDatasetId(), name: file.name, data });
         get().recordMacro(`Import ${file.name}`, `qz.import(${lit(file.name)})`);
+        get().pushRecent(file.name, file.size);
         added += 1;
       } catch (e) {
         lastError = `${file.name}: ${e instanceof Error ? e.message : "error"}`;
@@ -841,6 +858,17 @@ export const useApp = create<AppState>((set, get) => ({
   setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
   setWaterfallOpen: (waterfallOpen) => set({ waterfallOpen }),
   setReflViewOpen: (reflViewOpen) => set({ reflViewOpen }),
+  setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+  pushRecent: (name, size) =>
+    set((s) => {
+      const next = addRecentEntry(s.recent, { name, size, at: new Date().toISOString() });
+      saveRecent(next);
+      return { recent: next };
+    }),
+  clearRecent: () => {
+    clearRecentMeta();
+    set({ recent: [] });
+  },
   setMagToolsOpen: (magToolsOpen) => set({ magToolsOpen }),
   setFitOverlay: (fitOverlay) => set({ fitOverlay }),
   setPeakOverlay: (peakOverlay) => set({ peakOverlay }),

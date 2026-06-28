@@ -36,3 +36,18 @@ export function groupDatasets(items: Dataset[]): DatasetGroup[] {
 export function hasAnyGroup(items: Dataset[]): boolean {
   return items.some((d) => d.group?.trim());
 }
+
+/** Distinct non-empty group names in first-appearance order — populates the
+ *  Library group-filter dropdown (#20). */
+export function groupNames(items: Dataset[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const d of items) {
+    const key = d.group?.trim();
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      out.push(key);
+    }
+  }
+  return out;
+}

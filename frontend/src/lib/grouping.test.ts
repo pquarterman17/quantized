@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { groupDatasets, hasAnyGroup } from "./grouping";
+import { groupDatasets, groupNames, hasAnyGroup } from "./grouping";
 import type { Dataset } from "./types";
 
 const ds = (id: string, group?: string): Dataset => ({
@@ -31,6 +31,16 @@ describe("groupDatasets", () => {
 
   it("returns an empty list for no datasets", () => {
     expect(groupDatasets([])).toEqual([]);
+  });
+});
+
+describe("groupNames", () => {
+  it("lists distinct non-empty groups in first-appearance order", () => {
+    expect(groupNames([ds("a", "X"), ds("b", "Y"), ds("c", "X"), ds("d")])).toEqual(["X", "Y"]);
+  });
+
+  it("is empty when nothing is grouped", () => {
+    expect(groupNames([ds("a"), ds("b", "  ")])).toEqual([]);
   });
 });
 
