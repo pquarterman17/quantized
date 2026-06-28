@@ -33,6 +33,7 @@ import {
   health,
 } from "./lib/api";
 import { makeDemoDataset } from "./lib/demo";
+import { clearAutosave, loadAutosave, saveAutosave } from "./lib/autosave";
 import { saveBlob } from "./lib/download";
 import { buildExportStyles } from "./lib/exportStyles";
 import { openFilePicker } from "./lib/openFilePicker";
@@ -81,6 +82,33 @@ export default function App() {
       .then(() => setStatus("backend ready"))
       .catch(() => setStatus("offline — demo mode"));
   }, [setStatus]);
+
+  // Restore the autosaved library once on startup (before any new import).
+  useEffect(() => {
+    const restored = loadAutosave();
+    if (restored?.length) {
+      useApp.getState().loadWorkspace(restored);
+      setStatus(`restored ${restored.length} dataset${restored.length === 1 ? "" : "s"} from autosave`);
+    }
+  }, [setStatus]);
+
+  // Debounced autosave whenever the library changes (datasets identity).
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsub = useApp.subscribe((state, prev) => {
+      if (state.datasets === prev.datasets) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!saveAutosave(useApp.getState().datasets)) {
+          useApp.getState().setStatus("autosave skipped (storage full or unavailable)");
+        }
+      }, 800);
+    });
+    return () => {
+      clearTimeout(timer);
+      unsub();
+    };
+  }, []);
 
   // Global keyboard shortcuts (Cmd/Ctrl + key).
   useEffect(() => {
@@ -161,6 +189,15 @@ export default function App() {
                 s().setStatus(`open failed: ${e instanceof Error ? e.message : "error"}`),
               );
           }, ".dwk,.json"),
+      },
+      {
+        id: "clear-autosave",
+        group: "File",
+        label: "Clear autosaved workspace…",
+        run: () => {
+          clearAutosave();
+          s().setStatus("autosaved workspace cleared (current library unchanged)");
+        },
       },
       {
         id: "theme",
