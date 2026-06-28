@@ -97,6 +97,8 @@ interface AppState {
   moveDataset: (id: string, dir: -1 | 1) => void;
   renameDataset: (id: string, name: string) => void;
   setDatasetNotes: (id: string, notes: string) => void;
+  addDatasetTag: (id: string, tag: string) => void;
+  removeDatasetTag: (id: string, tag: string) => void;
   applyCorrections: (
     id: string,
     params: CorrectionParams,
@@ -355,6 +357,7 @@ export const useApp = create<AppState>((set, get) => ({
         ...(src.corrections ? { corrections: { ...src.corrections } } : {}),
         ...(src.bgRef ? { bgRef: { ...src.bgRef } } : {}),
         ...(src.notes ? { notes: src.notes } : {}),
+        ...(src.tags?.length ? { tags: [...src.tags] } : {}),
       };
       const datasets = [...s.datasets];
       datasets.splice(idx + 1, 0, clone);
@@ -397,6 +400,28 @@ export const useApp = create<AppState>((set, get) => ({
       datasets: s.datasets.map((d) =>
         d.id === id ? { ...d, notes: notes.trim() ? notes : undefined } : d,
       ),
+    })),
+  // Add a trimmed, de-duplicated tag to a dataset (blank or duplicate = no-op).
+  addDatasetTag: (id, tag) =>
+    set((s) => {
+      const t = tag.trim();
+      if (!t) return {};
+      return {
+        datasets: s.datasets.map((d) => {
+          if (d.id !== id) return d;
+          const tags = d.tags ?? [];
+          return tags.includes(t) ? d : { ...d, tags: [...tags, t] };
+        }),
+      };
+    }),
+  // Remove a tag; the list drops to undefined when it empties (keeps .dwk clean).
+  removeDatasetTag: (id, tag) =>
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id || !d.tags) return d;
+        const tags = d.tags.filter((x) => x !== tag);
+        return { ...d, tags: tags.length ? tags : undefined };
+      }),
     })),
 
   // Corrections always apply to the pristine `raw`, never to an already-

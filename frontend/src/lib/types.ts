@@ -79,6 +79,9 @@ export interface Dataset {
   /** Free-text user notes about this dataset (sample, conditions, caveats).
    *  Shown in the Inspector Notes card; round-trips through the .dwk workspace. */
   notes?: string;
+  /** User tags for organizing + filtering the Library (e.g. "MvsH", "sample-A").
+   *  Round-trips through the .dwk workspace. */
+  tags?: string[];
 }
 
 /** A registered fit model's metadata (from GET /api/fitting/models). */

@@ -22,14 +22,22 @@ export default function Library() {
   const duplicateDataset = useApp((s) => s.duplicateDataset);
   const moveDataset = useApp((s) => s.moveDataset);
   const renameDataset = useApp((s) => s.renameDataset);
+  const addDatasetTag = useApp((s) => s.addDatasetTag);
+  const removeDatasetTag = useApp((s) => s.removeDatasetTag);
   const importFiles = useApp((s) => s.importFiles);
   const [query, setQuery] = useState("");
   const [dragging, setDragging] = useState(false);
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
+  const [tagging, setTagging] = useState<{ id: string; value: string } | null>(null);
 
   const commitRename = () => {
     if (editing) renameDataset(editing.id, editing.value);
     setEditing(null);
+  };
+
+  const commitTag = () => {
+    if (tagging && tagging.value.trim()) addDatasetTag(tagging.id, tagging.value);
+    setTagging(null);
   };
 
   const onImport = () => openFilePicker((files) => void importFiles(files), ACCEPT);
@@ -50,8 +58,13 @@ export default function Library() {
     if (files.length) void importFiles(files);
   };
 
-  const shown = datasets.filter((d) =>
-    d.name.toLowerCase().includes(query.toLowerCase()),
+  // Filter matches the dataset name OR any of its tags (so typing a tag — or
+  // clicking a tag chip, which sets the query — narrows the library to it).
+  const q = query.toLowerCase();
+  const shown = datasets.filter(
+    (d) =>
+      d.name.toLowerCase().includes(q) ||
+      (d.tags ?? []).some((t) => t.toLowerCase().includes(q)),
   );
   // Reorder only on the full list — swapping adjacent rows while a filter hides
   // neighbors would be confusing, so the ▲▼ buttons hide when a query is active.
@@ -175,6 +188,57 @@ export default function Library() {
                 ✕
               </button>
             </span>
+          </div>
+          <div className="qzk-ds-tags">
+            {(d.tags ?? []).map((t) => (
+              <span
+                key={t}
+                className="qzk-tag"
+                title={`Filter by "${t}"`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setQuery(t);
+                }}
+              >
+                {t}
+                <button
+                  className="qzk-tag-x"
+                  title="Remove tag"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeDatasetTag(d.id, t);
+                  }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {tagging?.id === d.id ? (
+              <input
+                className="qz-input qzk-tag-input"
+                autoFocus
+                placeholder="tag…"
+                value={tagging.value}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setTagging({ id: d.id, value: e.target.value })}
+                onBlur={commitTag}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitTag();
+                  if (e.key === "Escape") setTagging(null);
+                }}
+              />
+            ) : (
+              <button
+                className="qzk-tag qzk-tag-add"
+                title="Add tag"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setTagging({ id: d.id, value: "" });
+                }}
+              >
+                ＋
+              </button>
+            )}
           </div>
         </div>
       ))}

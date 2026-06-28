@@ -579,3 +579,24 @@ describe("useApp loadWorkspace", () => {
     expect(useApp.getState().activeId).toBeNull();
   });
 });
+
+describe("useApp tags", () => {
+  it("adds a trimmed tag, dedupes, and ignores blanks", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1" });
+    useApp.getState().addDatasetTag("d1", "  MvsH ");
+    useApp.getState().addDatasetTag("d1", "MvsH"); // dupe -> no-op
+    useApp.getState().addDatasetTag("d1", "   "); // blank -> no-op
+    expect(useApp.getState().datasets[0].tags).toEqual(["MvsH"]);
+  });
+
+  it("removes a tag and drops the list to undefined when empty", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x", data: raw, tags: ["a", "b"] }],
+      activeId: "d1",
+    });
+    useApp.getState().removeDatasetTag("d1", "a");
+    expect(useApp.getState().datasets[0].tags).toEqual(["b"]);
+    useApp.getState().removeDatasetTag("d1", "b");
+    expect(useApp.getState().datasets[0].tags).toBeUndefined();
+  });
+});

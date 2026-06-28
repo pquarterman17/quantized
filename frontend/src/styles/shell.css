@@ -69,6 +69,13 @@ body {
 .qzk-ds-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .qzk-ds-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .qzk-ds-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-faint); }
+/* Per-dataset tag chips (Library): click a chip to filter, ✕ to remove, ＋ to add. */
+.qzk-ds-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.qzk-tag { display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 6px; border: none; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-size: var(--type-nano); cursor: pointer; }
+.qzk-tag-x { padding: 0; border: none; background: none; color: inherit; font-size: 12px; line-height: 1; cursor: pointer; opacity: 0.7; }
+.qzk-tag-x:hover { opacity: 1; }
+.qzk-tag-add { background: transparent; color: var(--text-faint); border: 1px dashed var(--border); }
+.qzk-tag-input { height: 18px; width: 76px; padding: 0 4px; font-size: var(--type-nano); }
 
 /* ── stage ── */
 .qzk-stage-cell { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }

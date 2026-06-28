@@ -47,6 +47,17 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
     expect(restored.notes).toBeUndefined();
   });
 
+  it("preserves dataset tags (and drops an empty tag list)", () => {
+    const ds = makeDataset("a", "tagged");
+    ds.tags = ["MvsH", "sample-A"];
+    const [restored] = parseWorkspace(serializeWorkspace([ds]));
+    expect(restored.tags).toEqual(["MvsH", "sample-A"]);
+    // an empty tag list is omitted on save -> undefined on restore
+    const bare = makeDataset("b", "bare");
+    bare.tags = [];
+    expect(parseWorkspace(serializeWorkspace([bare]))[0].tags).toBeUndefined();
+  });
+
   it("preserves dataset notes", () => {
     const ds = makeDataset("a", "noted");
     ds.notes = "5 K M-vs-H, second cooldown";

@@ -29,6 +29,7 @@ export function serializeWorkspace(datasets: Dataset[]): string {
       ...(d.corrections ? { corrections: d.corrections } : {}),
       ...(d.bgRef ? { bgRef: d.bgRef } : {}),
       ...(d.notes ? { notes: d.notes } : {}),
+      ...(d.tags?.length ? { tags: d.tags } : {}),
     })),
   };
   return JSON.stringify(doc, null, 2);
@@ -102,6 +103,10 @@ export function parseWorkspace(text: string): Dataset[] {
       ds.bgRef = dd.bgRef as { datasetId: string; interp: string };
     }
     if (typeof dd.notes === "string") ds.notes = dd.notes;
+    if (Array.isArray(dd.tags)) {
+      const tags = dd.tags.filter((t): t is string => typeof t === "string" && t.trim() !== "");
+      if (tags.length) ds.tags = tags;
+    }
     return ds;
   });
 }
