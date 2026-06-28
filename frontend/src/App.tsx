@@ -24,6 +24,7 @@ import PeaksPanel from "./components/workshops/peaks/PeaksPanel";
 import ReflectivityPanel from "./components/workshops/reflectivity/ReflectivityPanel";
 import RsmPanel from "./components/workshops/rsm/RsmPanel";
 import DigitizerView from "./components/workshops/digitizer/DigitizerView";
+import WaterfallView from "./components/workshops/waterfall/WaterfallView";
 import {
   exportConsolidated,
   exportFigure,
@@ -74,6 +75,7 @@ export default function App() {
   const magToolsOpen = useApp((s) => s.magToolsOpen);
   const datasetMathOpen = useApp((s) => s.datasetMathOpen);
   const figureBuilderOpen = useApp((s) => s.figureBuilderOpen);
+  const waterfallOpen = useApp((s) => s.waterfallOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -347,6 +349,12 @@ export default function App() {
         run: () => s().setFigureBuilderOpen(true),
       },
       {
+        id: "waterfall",
+        group: "View",
+        label: "Waterfall (stack datasets)…",
+        run: () => s().setWaterfallOpen(true),
+      },
+      {
         id: "export-figure",
         group: "File",
         label: "Export figure…",
@@ -474,6 +482,7 @@ export default function App() {
       {digitizerOpen && <DigitizerView />}
       {datasetMathOpen && <DatasetMathPanel />}
       {figureBuilderOpen && <FigureBuilderView />}
+      {waterfallOpen && <WaterfallView />}
     </div>
   );
 }

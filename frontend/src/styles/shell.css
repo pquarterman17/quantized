@@ -142,6 +142,12 @@ body {
 .qzk-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: var(--font-size-sm); color: var(--text-dim); padding: 2px 0; }
 .qzk-row .k { color: var(--text-faint); }
 .qzk-field-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-faint); margin-bottom: 4px; display: block; }
+/* Inline label-over-control field (waterfall workshop controls). */
+.qzk-field { display: inline-flex; flex-direction: column; gap: 3px; }
+.qzk-field > span { font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-faint); }
+/* Waterfall workshop: the include-datasets checklist. */
+.qzk-wf-list { max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 5px 7px; }
+.qzk-wf-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── statusbar ── */
 .qzk-statusbar { display: flex; align-items: center; gap: var(--pad-lg); background: var(--surface-1); border-top: 1px solid var(--border-soft); padding: 0 var(--pad-lg); font-size: var(--font-size-sm); font-family: var(--font-mono); color: var(--text-faint); white-space: nowrap; overflow: hidden; }
