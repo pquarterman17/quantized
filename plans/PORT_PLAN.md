@@ -589,6 +589,13 @@ MATLAB."**
     dataset in a new Inspector card; local draft committed on blur (no per-keystroke
     plot refetch); lives on the `Dataset` so it round-trips through `.dwk` and is
     carried by duplicate. Store `setDatasetNotes`.
+- **Legend series reorder (▲▼)** (2026-06-27, `34b58ae`) — W6, plot surface. Per-entry
+  up/down buttons in the floating legend reorder the plotted-series draw order (▲ under,
+  ▼ over); applies to the overlaid plot + multi-panel. Store `seriesOrder` (a permutation
+  of the plotted channels, reset per dataset); `effectiveChannels` reorders by it — stale
+  entries ignored, newly-plotted channels append in natural order; the style/label/error/
+  hidden mappings (all keyed by `plotted[i]`) follow for free. Gates green (frontend 315 +
+  build).
 
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to
@@ -596,8 +603,8 @@ MATLAB."**
    alternation is **dropped — no W4/DiraCulator/SLD-from-formula work**. Pick from
    plotting + W5 DataWorkspace: **plot interactions** (measurement ruler `d5c3244`,
    copy-data `c3780c0`, interactive legend `8ac41f3`, **multi-series cursor readout
-   `be38edf`, legend rename `00cab7d`, draggable ref lines `400e0b9` shipped**;
-   remaining — legend *reorder*, crosshair/marquee stats), **W5 column roles**
+   `be38edf`, legend rename `00cab7d`, draggable ref lines `400e0b9`, legend reorder
+   `34b58ae` shipped**; remaining — crosshair/marquee stats), **W5 column roles**
    (X-role `ad6b460`, Y-error bars `7da9a21`, **label/ignore roles `de2a3db` shipped**
    — roles complete), the **computed-column formula engine** (snapshot model done —
    `Stage/Worksheet.tsx`; "recompute on source change" needs provenance links the
