@@ -40,19 +40,6 @@ def _allowed_roots() -> tuple[str, ...]:
     return tuple(roots)
 
 
-def _within_allowed_roots(resolved: str) -> bool:
-    """True if ``resolved`` (an already-realpath'd absolute path) sits inside one
-    of the allowed roots. Uses ``os.path.commonpath`` containment — the standard
-    path-traversal guard."""
-    for root in _allowed_roots():
-        try:
-            if os.path.commonpath((root, resolved)) == root:
-                return True
-        except ValueError:
-            continue  # different drives (Windows) -> not under this root
-    return False
-
-
 @router.post("/import")
 def import_file(req: ImportRequest) -> dict[str, Any]:
     """Auto-detect format and import a local file path into a DataStruct.
@@ -60,20 +47,29 @@ def import_file(req: ImportRequest) -> dict[str, Any]:
     ``/import`` reads a path the server can already see (local desktop / CLI
     use). The path is ``os.path.realpath``-normalized (collapsing ``..`` and
     symlinks) and confined to an allowed root (home / cwd / temp, widen via
-    ``QZ_DATA_ROOTS``) before any filesystem access, so the localhost API cannot
-    be used to read system files (e.g. ``/etc/passwd``) via traversal.
+    ``QZ_DATA_ROOTS``) via ``os.path.commonpath`` before any filesystem access,
+    so the localhost API cannot be used to read system files (e.g.
+    ``/etc/passwd``) through path traversal.
     """
     try:
         resolved = os.path.realpath(req.path)
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="invalid path") from exc
-    if not _within_allowed_roots(resolved):
+    # Inline containment guard (kept in this function so the static analyzer can
+    # see the path-traversal barrier sits between the taint and the sink).
+    within_allowed = False
+    for root in _allowed_roots():
+        try:
+            if os.path.commonpath((root, resolved)) == root:
+                within_allowed = True
+                break
+        except ValueError:
+            continue  # different drives (Windows) -> not under this root
+    if not within_allowed:
         raise HTTPException(
             status_code=403,
             detail="path is outside the allowed roots (set QZ_DATA_ROOTS to widen)",
         )
-    # Use the validated, realpath-normalized string directly (no Path() re-wrap)
-    # so the guarded value is exactly what reaches the filesystem.
     if not os.path.isfile(resolved):
         raise HTTPException(status_code=404, detail=f"file not found: {req.path}")
     try:
