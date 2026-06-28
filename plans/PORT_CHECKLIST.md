@@ -207,7 +207,7 @@ Source: `+dataWorkspace/`, `DataWorkspace.m`
 - [ ] Column roles
 - [ ] Formula engine (no eval) + computed-column snapshots + recompute
 - [x] Sort / filter / descriptive stats / masking — Stage `Worksheet`: header-click sort, structured row filter (col/op/value + Extract), per-column golden `descriptive_stats` footer, click-to-mask rows (excluded from stats/extract). Commits `e8834aa`/`b412725`/`61e479e`.
-- [ ] Workspace file format (`.dwk`) + autosave
+- [~] Workspace file format (`.dwk`) + autosave — **save/load shipped**: pure `lib/workspace.ts` (`serializeWorkspace`/`parseWorkspace`, JSON = format tag + version + datasets, defensive DataStruct validation at the file boundary), store `loadWorkspace` (hard-replace library + reset per-dataset view/overlays/markers), command-palette "Save/Open workspace (.dwk)…" (`saveBlob` / `openFilePicker`). Round-trip + validation unit-tested. Commit `97bd483`. **Autosave still TODO** (overlaps a future session/prefs layer).
 
 ---
 

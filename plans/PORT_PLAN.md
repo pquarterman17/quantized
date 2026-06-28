@@ -486,13 +486,24 @@ MATLAB."**
   resampled onto A's x-grid). Store `datasetMathOpen` flag + App command/mount. Route
   + hook tested; gates green (backend 6 + frontend 226). Annotates the W2 dataset-
   algebra checklist line (calc was already golden; the UI is the new part).
+- **Workspace save/load (`.dwk`)** (2026-06-27, `97bd483`) — diversified off
+  calculators (W5 #210, partial). Datasets lived only in memory, so a reload lost
+  the whole library. New pure `lib/workspace.ts`: `serializeWorkspace`/
+  `parseWorkspace` (JSON = format tag + version + datasets; defensive DataStruct
+  validation at the untrusted file boundary). Store `loadWorkspace` hard-replaces
+  the library and resets per-dataset view state (channels/styles/limits) + drops
+  overlays/markers tied to the old datasets. Command-palette "Save/Open workspace
+  (.dwk)…" via `saveBlob`/`openFilePicker`. Round-trip + validation unit-tested
+  (frontend 238 + build green). Autosave deferred (future session/prefs layer).
 
 **Next pick-up (highest value first):**
 1. **More W4 calculator domains** — pattern proven; tabs now decompose cleanly.
-   Options: SLD-from-formula to finish #179; a semiconductor / magnetic / transport /
-   superconductor tab (new `calc/<domain>.py` + reference tests + a `*Tab.tsx`).
-   Keep alternating with non-calculator work — e.g. the XRDML `map2D` golden, a
-   plotting/export gap, or W5 column-roles / `.dwk` workspace format.
+   **(Last shipped was non-calculator → next should be a calculator to keep the
+   alternation.)** Options: SLD-from-formula to finish #179; a semiconductor /
+   magnetic / transport / superconductor tab (new `calc/<domain>.py` + reference
+   tests + a `*Tab.tsx`). Keep alternating with non-calculator work — e.g. the
+   XRDML `map2D` golden, a plotting/export gap, or W5 column-roles / workspace
+   autosave (`.dwk` save/load now shipped — `97bd483`).
 2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
