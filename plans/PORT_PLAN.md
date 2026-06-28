@@ -549,6 +549,13 @@ MATLAB."**
   hides internal `x_column_*` plot-wiring keys] / `metadataToTSV`) unit-tested;
   `Inspector/MetadataCard.tsx` (hidden when empty). Gates green (frontend 279 +
   build).
+- **Worksheet "Copy rows" → clipboard TSV** (2026-06-27, `1ad6152`) — W5, worksheet
+  surface. ⧉ Copy button copies the visible rows (filtered + sorted, masked
+  excluded) as TSV — the full table (every channel) at full numeric precision —
+  complementing "Extract →" (makes a dataset) and the plot's copy-data (plotted
+  series only). Pure `lib/clipboard.tableToTSV` (row-oriented header+rows, null →
+  empty) unit-tested; `copyRows` uses raw values (not the rounded display) so the
+  export keeps full precision. Gates green (frontend 283 + build).
 
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to

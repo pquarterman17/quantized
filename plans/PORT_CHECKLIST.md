@@ -226,7 +226,7 @@ Source: `+dataWorkspace/`, `DataWorkspace.m`
 - [ ] Stage (uPlot + 2D viewer)
 - [~] Inspector (corrections/axes/appearance) — `Inspector/`: scan-summary, **Metadata card** (read-only `.metadata` key/values + copy-as-TSV; `lib/metadata.ts` + `MetadataCard.tsx`, commit `4b4108f`), Channels (x-role/y/y2/error-bars), Corrections, Stats, Axes (log/grid/legend/limits/tick-format), RefLines, Annotations, SeriesStyle cards.
 - [~] Workshops: curve fit ✓ · peak ✓ · hysteresis ✓ · reflectivity ✓ (Parratt R(Q) model builder, `routes/reflectivity.py` + `workshops/reflectivity/`) · RSM analysis ✓ (`workshops/rsm/` — find peaks → substrate/film → strain/relaxation via `/api/rsm/{analyze,strain}`; "Analyze ▸ RSM analysis…") · **graph digitizer ✓** (`workshops/digitizer/` — load/paste a plot image → click 2 X + 2 Y axis refs → trace the curve → DataStruct to the library; pure `lib/digitizer` calibration, tested; full-screen overlay; "Analyze ▸ Graph digitizer…")
-- [~] DataWorkspace UI (worksheet: **sortable columns + computed-column formula bar** — `Stage/Worksheet.tsx` + safe `lib/formula` evaluator [recursive-descent, no eval, tested]; `2*A+sqrt(B)` over `x`/`A`/`B`… → derived dataset; full grid/roles/filter still TODO) · DiraCulator UI
+- [~] DataWorkspace UI (worksheet: **sortable columns + computed-column formula bar** — `Stage/Worksheet.tsx` + safe `lib/formula` evaluator [recursive-descent, no eval, tested]; `2*A+sqrt(B)` over `x`/`A`/`B`… → derived dataset; filter/mask/stats done [#209]; **copy visible rows → clipboard TSV** [⧉ Copy → `lib/clipboard.tableToTSV`, full table at full precision, commit `1ad6152`]; full grid/roles still TODO) · DiraCulator UI
 - [ ] Macro record/export (action log → reproducible script)
 
 ---
