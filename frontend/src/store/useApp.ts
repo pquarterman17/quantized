@@ -43,6 +43,9 @@ export type PlotTool = "zoom" | "pan" | "cursor" | "region" | "measure" | "stats
 interface AppState {
   datasets: Dataset[];
   activeId: string | null;
+  // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
+  // "primary"; ctrl/shift-click extend `selectedIds` without changing the plot.
+  selectedIds: string[];
   leftCollapsed: boolean;
   rightCollapsed: boolean;
   stageTab: StageTab;
@@ -106,7 +109,10 @@ interface AppState {
   importFiles: (files: File[]) => Promise<void>;
   loadWorkspace: (datasets: Dataset[]) => void;
   setActive: (id: string) => void;
+  toggleSelected: (id: string) => void;
+  selectRange: (id: string) => void;
   removeDataset: (id: string) => void;
+  removeSelected: () => void;
   duplicateDataset: (id: string) => void;
   moveDataset: (id: string, dir: -1 | 1) => void;
   renameDataset: (id: string, name: string) => void;
@@ -231,6 +237,7 @@ const _initialPrefs = loadPrefs();
 export const useApp = create<AppState>((set, get) => ({
   datasets: [],
   activeId: null,
+  selectedIds: [],
   leftCollapsed: false,
   rightCollapsed: false,
   stageTab: "plot",
@@ -290,6 +297,7 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({
       datasets: [...s.datasets, ds],
       activeId: ds.id,
+      selectedIds: [ds.id], // a fresh import is the sole selection
       xKey: null, // new dataset → x-axis back to .time
       yKeys: null, // new dataset → plot all its channels
       y2Keys: null, // and reset the secondary-axis assignment
@@ -331,6 +339,7 @@ export const useApp = create<AppState>((set, get) => ({
     set({
       datasets,
       activeId: datasets[0]?.id ?? null,
+      selectedIds: datasets[0] ? [datasets[0].id] : [],
       xKey: null,
       yKeys: null,
       y2Keys: null,
@@ -350,6 +359,7 @@ export const useApp = create<AppState>((set, get) => ({
   setActive: (id) =>
     set({
       activeId: id,
+      selectedIds: [id], // plain click collapses the selection to this one row
       xKey: null,
       yKeys: null,
       y2Keys: null,
@@ -362,12 +372,46 @@ export const useApp = create<AppState>((set, get) => ({
       yLim: null,
       rsmPeaks: null,
     }),
+  // Ctrl/Cmd-click: add or remove a row from the multi-selection WITHOUT changing
+  // the plotted/active dataset (the plot only follows a plain click).
+  toggleSelected: (id) =>
+    set((s) => ({
+      selectedIds: s.selectedIds.includes(id)
+        ? s.selectedIds.filter((x) => x !== id)
+        : [...s.selectedIds, id],
+    })),
+  // Shift-click: select the contiguous range from the anchor (activeId) to `id`
+  // in library order. Doesn't move the active selection (the plot stays put).
+  selectRange: (id) =>
+    set((s) => {
+      const order = s.datasets.map((d) => d.id);
+      const anchor = s.activeId ?? id;
+      const a = order.indexOf(anchor);
+      const b = order.indexOf(id);
+      if (a < 0 || b < 0) return { selectedIds: [id] };
+      const [lo, hi] = a <= b ? [a, b] : [b, a];
+      return { selectedIds: order.slice(lo, hi + 1) };
+    }),
   removeDataset: (id) =>
     set((s) => {
       const datasets = s.datasets.filter((d) => d.id !== id);
       const activeId =
         s.activeId === id ? (datasets[0]?.id ?? null) : s.activeId;
-      return { datasets, activeId };
+      const selectedIds = s.selectedIds.filter((x) => x !== id);
+      return { datasets, activeId, selectedIds };
+    }),
+  // Delete key: remove every selected dataset (falling back to the active one if
+  // nothing is multi-selected); reselect the first survivor so the plot recovers.
+  removeSelected: () =>
+    set((s) => {
+      const ids = new Set(
+        s.selectedIds.length ? s.selectedIds : s.activeId ? [s.activeId] : [],
+      );
+      if (ids.size === 0) return {};
+      const datasets = s.datasets.filter((d) => !ids.has(d.id));
+      const activeId =
+        s.activeId && !ids.has(s.activeId) ? s.activeId : (datasets[0]?.id ?? null);
+      return { datasets, activeId, selectedIds: activeId ? [activeId] : [] };
     }),
 
   // Deep-copy a dataset (incl. raw/corrections/bgRef) as an independent "(copy)"
@@ -396,6 +440,7 @@ export const useApp = create<AppState>((set, get) => ({
       return {
         datasets,
         activeId: clone.id,
+        selectedIds: [clone.id],
         xKey: null,
         yKeys: null,
         y2Keys: null,

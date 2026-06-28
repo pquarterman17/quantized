@@ -110,9 +110,26 @@ export default function App() {
     };
   }, []);
 
-  // Global keyboard shortcuts (Cmd/Ctrl + key).
+  // Global keyboard shortcuts (Cmd/Ctrl + key), plus Delete to remove datasets.
   useEffect(() => {
+    const isEditing = (t: EventTarget | null): boolean => {
+      const el = t as HTMLElement | null;
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+    };
     const onKey = (e: KeyboardEvent) => {
+      // Delete / Backspace removes the selected dataset(s) — but never while the
+      // user is typing in a field (rename, tag, filter, formula, dialog input).
+      if ((e.key === "Delete" || e.key === "Backspace") && !isEditing(e.target)) {
+        const s = useApp.getState();
+        if (s.datasets.length === 0) return;
+        e.preventDefault();
+        const n = s.selectedIds.length || (s.activeId ? 1 : 0);
+        s.removeSelected();
+        s.setStatus(`removed ${n} dataset${n === 1 ? "" : "s"}`);
+        return;
+      }
       if (!(e.metaKey || e.ctrlKey)) return;
       const s = useApp.getState();
       switch (e.key.toLowerCase()) {

@@ -205,6 +205,72 @@ describe("useApp moveDataset", () => {
   });
 });
 
+describe("useApp multi-select + removeSelected", () => {
+  const three = () => [
+    { id: "d1", name: "a", data: raw },
+    { id: "d2", name: "b", data: raw },
+    { id: "d3", name: "c", data: raw },
+  ];
+
+  it("a plain setActive collapses the selection to one row", () => {
+    useApp.setState({ datasets: three(), activeId: "d1", selectedIds: ["d1", "d2", "d3"] });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().selectedIds).toEqual(["d2"]);
+    expect(useApp.getState().activeId).toBe("d2");
+  });
+
+  it("toggleSelected adds/removes without changing the active dataset", () => {
+    useApp.setState({ datasets: three(), activeId: "d1", selectedIds: ["d1"] });
+    useApp.getState().toggleSelected("d3");
+    expect(useApp.getState().selectedIds).toEqual(["d1", "d3"]);
+    expect(useApp.getState().activeId).toBe("d1"); // plot unaffected
+    useApp.getState().toggleSelected("d3");
+    expect(useApp.getState().selectedIds).toEqual(["d1"]);
+  });
+
+  it("selectRange selects the contiguous range from the anchor (activeId)", () => {
+    useApp.setState({ datasets: three(), activeId: "d1", selectedIds: ["d1"] });
+    useApp.getState().selectRange("d3");
+    expect(useApp.getState().selectedIds).toEqual(["d1", "d2", "d3"]);
+    expect(useApp.getState().activeId).toBe("d1"); // anchor stays active
+  });
+
+  it("selectRange works regardless of click direction", () => {
+    useApp.setState({ datasets: three(), activeId: "d3", selectedIds: ["d3"] });
+    useApp.getState().selectRange("d1");
+    expect(useApp.getState().selectedIds).toEqual(["d1", "d2", "d3"]);
+  });
+
+  it("removeSelected removes every selected dataset and reselects a survivor", () => {
+    useApp.setState({ datasets: three(), activeId: "d1", selectedIds: ["d1", "d2"] });
+    useApp.getState().removeSelected();
+    const s = useApp.getState();
+    expect(s.datasets.map((d) => d.id)).toEqual(["d3"]);
+    expect(s.activeId).toBe("d3");
+    expect(s.selectedIds).toEqual(["d3"]);
+  });
+
+  it("removeSelected falls back to the active dataset when nothing is multi-selected", () => {
+    useApp.setState({ datasets: three(), activeId: "d2", selectedIds: [] });
+    useApp.getState().removeSelected();
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["d1", "d3"]);
+  });
+
+  it("removeSelected keeps the active dataset if it was not in the selection", () => {
+    useApp.setState({ datasets: three(), activeId: "d3", selectedIds: ["d1"] });
+    useApp.getState().removeSelected();
+    const s = useApp.getState();
+    expect(s.datasets.map((d) => d.id)).toEqual(["d2", "d3"]);
+    expect(s.activeId).toBe("d3"); // survived → stays active
+  });
+
+  it("removeDataset prunes the id from the selection too", () => {
+    useApp.setState({ datasets: three(), activeId: "d1", selectedIds: ["d1", "d2", "d3"] });
+    useApp.getState().removeDataset("d2");
+    expect(useApp.getState().selectedIds).toEqual(["d1", "d3"]);
+  });
+});
+
 describe("useApp renameDataset", () => {
   it("renames by id and ignores a blank name", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "old.dat", data: raw }], activeId: "d1" });

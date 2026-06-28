@@ -13,6 +13,8 @@ import { useApp } from "../../store/useApp";
 interface Props {
   dataset: Dataset;
   active: boolean;
+  /** Row is part of the multi-selection (ctrl/shift-click) — highlighted for bulk ops. */
+  selected: boolean;
   showReorder: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
@@ -23,12 +25,15 @@ interface Props {
 export default function DatasetRow({
   dataset: d,
   active,
+  selected,
   showReorder,
   canMoveUp,
   canMoveDown,
   onFilterTag,
 }: Props) {
   const setActive = useApp((s) => s.setActive);
+  const toggleSelected = useApp((s) => s.toggleSelected);
+  const selectRange = useApp((s) => s.selectRange);
   const removeDataset = useApp((s) => s.removeDataset);
   const duplicateDataset = useApp((s) => s.duplicateDataset);
   const moveDataset = useApp((s) => s.moveDataset);
@@ -55,8 +60,20 @@ export default function DatasetRow({
     setGroup(null);
   };
 
+  // Plain click activates (and collapses the selection); ctrl/cmd toggles this row
+  // in the multi-selection; shift selects a range from the anchor — neither moves
+  // the plotted dataset.
+  const onRowClick = (e: React.MouseEvent) => {
+    if (e.shiftKey) selectRange(d.id);
+    else if (e.ctrlKey || e.metaKey) toggleSelected(d.id);
+    else setActive(d.id);
+  };
+
   return (
-    <div className={`qzk-ds${active ? " active" : ""}`} onClick={() => setActive(d.id)}>
+    <div
+      className={`qzk-ds${active ? " active" : ""}${selected ? " selected" : ""}`}
+      onClick={onRowClick}
+    >
       <div className="qzk-ds-top">
         {rename != null ? (
           <input

@@ -17,6 +17,7 @@ const ACCEPT = ".dat,.csv,.txt,.xrdml,.raw,.refl,.pnr,.datA,.cif,.xlsx,.xls";
 export default function Library() {
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
+  const selectedIds = useApp((s) => s.selectedIds);
   const addDataset = useApp((s) => s.addDataset);
   const importFiles = useApp((s) => s.importFiles);
   const [query, setQuery] = useState("");
@@ -68,6 +69,7 @@ export default function Library() {
       key={d.id}
       dataset={d}
       active={d.id === activeId}
+      selected={selectedIds.includes(d.id)}
       showReorder={canReorder}
       canMoveUp={datasets.indexOf(d) > 0}
       canMoveDown={datasets.indexOf(d) < datasets.length - 1}
