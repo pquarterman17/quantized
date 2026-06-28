@@ -9,6 +9,7 @@ import Sparkline from "./Sparkline";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { Badge } from "../primitives";
 import type { Dataset } from "../../lib/types";
+import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 
 interface Props {
@@ -119,9 +120,26 @@ export default function DatasetRow({
     { label: "Move up", run: () => moveDataset(d.id, -1), disabled: !canMoveUp },
     { label: "Move down", run: () => moveDataset(d.id, 1), disabled: !canMoveDown },
     { separator: true },
-    { label: "Remove", run: () => removeDataset(d.id), danger: true },
+    {
+      label: "Remove",
+      run: () => {
+        removeDataset(d.id);
+        toast(`removed ${d.name}`);
+      },
+      danger: true,
+    },
     ...(selected && selectedCount > 1
-      ? [{ label: `Remove ${selectedCount} selected`, run: removeSelected, danger: true } as ContextMenuItem]
+      ? [
+          {
+            label: `Remove ${selectedCount} selected`,
+            run: () => {
+              const n = selectedCount;
+              removeSelected();
+              toast(`removed ${n} datasets`);
+            },
+            danger: true,
+          } as ContextMenuItem,
+        ]
       : []),
   ];
 

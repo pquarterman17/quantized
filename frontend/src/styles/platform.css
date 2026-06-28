@@ -137,6 +137,53 @@
   white-space: nowrap;
 }
 
+/* ── toast stack (transient confirmations, above the status bar) ── */
+.qzk-toaster {
+  position: fixed;
+  bottom: 38px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 250;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.qzk-toast {
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow);
+  padding: 6px 14px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--text);
+  cursor: default;
+  animation: qzk-toast-in 140ms ease;
+}
+.qzk-toast.ok {
+  border-color: color-mix(in srgb, var(--ok) 55%, var(--glass-border));
+  color: var(--ok);
+}
+.qzk-toast.danger {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--glass-border));
+  color: var(--danger);
+}
+@keyframes qzk-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+[data-reduce-motion] .qzk-toast {
+  animation: none;
+}
+
 /* ── hover tooltip (mounted at document body) ── */
 .qz-tip {
   position: fixed;

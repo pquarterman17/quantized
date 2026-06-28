@@ -13,6 +13,7 @@ import Stage from "./components/Stage/Stage";
 import CommandPalette, { type Action } from "./components/overlays/CommandPalette";
 import ParamDialog, { askParams } from "./components/overlays/ParamDialog";
 import ShortcutsDialog from "./components/overlays/ShortcutsDialog";
+import Toaster from "./components/overlays/Toaster";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import BaselinePanel from "./components/workshops/baseline/BaselinePanel";
 import CalculatorsPanel from "./components/workshops/calculators/CalculatorsPanel";
@@ -41,6 +42,7 @@ import { saveBlob } from "./lib/download";
 import { buildExportStyles } from "./lib/exportStyles";
 import { openFilePicker } from "./lib/openFilePicker";
 import { parseWorkspace, serializeWorkspace } from "./lib/workspace";
+import { toast } from "./store/toasts";
 import { useApp } from "./store/useApp";
 
 type StoreGet = typeof useApp.getState;
@@ -53,12 +55,17 @@ function exportActive(
   const ds = s().datasets.find((d) => d.id === s().activeId);
   if (!ds) {
     s().setStatus("no dataset to export");
+    toast("no dataset to export", "danger");
     return;
   }
   const stem = ds.name.replace(/\.[^.]+$/, "");
-  fn(stem, ds).catch((e: unknown) =>
-    s().setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`),
-  );
+  fn(stem, ds)
+    .then(() => toast(`exported ${stem}`, "ok"))
+    .catch((e: unknown) => {
+      const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;
+      s().setStatus(msg);
+      toast(msg, "danger");
+    });
 }
 
 let demoCounter = 0;
@@ -132,7 +139,9 @@ export default function App() {
         e.preventDefault();
         const n = s.selectedIds.length || (s.activeId ? 1 : 0);
         s.removeSelected();
-        s.setStatus(`removed ${n} dataset${n === 1 ? "" : "s"}`);
+        const msg = `removed ${n} dataset${n === 1 ? "" : "s"}`;
+        s.setStatus(msg);
+        toast(msg);
         return;
       }
       // "?" (Shift+/ on US layouts) opens the keyboard-shortcuts sheet.
@@ -243,7 +252,9 @@ export default function App() {
             return;
           }
           saveBlob(new Blob([serializeWorkspace(all)], { type: "application/json" }), "workspace.dwk");
-          s().setStatus(`saved workspace — ${all.length} dataset${all.length === 1 ? "" : "s"}`);
+          const msg = `saved workspace — ${all.length} dataset${all.length === 1 ? "" : "s"}`;
+          s().setStatus(msg);
+          toast(msg, "ok");
         },
       },
       {
@@ -551,6 +562,7 @@ export default function App() {
       {waterfallOpen && <WaterfallView />}
       {reflViewOpen && <ReflView />}
       <ShortcutsDialog />
+      <Toaster />
     </div>
   );
 }

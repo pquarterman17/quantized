@@ -17,6 +17,7 @@ import {
   saveRecent,
   type RecentFile,
 } from "../lib/recentFiles";
+import { toast } from "./toasts";
 import type {
   Annotation,
   AxisFormat,
@@ -372,11 +373,12 @@ export const useApp = create<AppState>((set, get) => ({
         lastError = `${file.name}: ${e instanceof Error ? e.message : "error"}`;
       }
     }
-    get().setStatus(
-      lastError
-        ? `imported ${added}/${files.length} — failed ${lastError}`
-        : `imported ${added} file${added === 1 ? "" : "s"}`,
-    );
+    const summary = lastError
+      ? `imported ${added}/${files.length} — failed ${lastError}`
+      : `imported ${added} file${added === 1 ? "" : "s"}`;
+    get().setStatus(summary);
+    if (added > 0) toast(`imported ${added} file${added === 1 ? "" : "s"}`, "ok");
+    if (lastError) toast(lastError, "danger");
   },
   // Replace the whole library with a restored workspace (from a .dwk file).
   // Resets every per-dataset view (channels, styles, axis limits) and drops the
@@ -478,8 +480,11 @@ export const useApp = create<AppState>((set, get) => ({
       );
       get().addDataset({ id: nextDatasetId(), name: `merged (${picks.length})`, data });
       get().setStatus(`merged ${picks.length} datasets → ${data.time.length} rows`);
+      toast(`merged ${picks.length} datasets`, "ok");
     } catch (e) {
-      get().setStatus(e instanceof Error ? e.message : "merge failed");
+      const msg = e instanceof Error ? e.message : "merge failed";
+      get().setStatus(msg);
+      toast(msg, "danger");
     }
   },
 
