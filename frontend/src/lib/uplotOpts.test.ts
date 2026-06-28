@@ -29,6 +29,13 @@ describe("buildOpts", () => {
     expect(buildOpts(payload, { ...base, yLog: false, tool: "cursor" }).plugins).toHaveLength(1);
   });
 
+  it("adds the stats plugin only in the stats tool", () => {
+    expect(
+      buildOpts(payload, { ...base, yLog: false, tool: "stats", onStats: vi.fn() }).plugins,
+    ).toHaveLength(1);
+    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom" }).plugins).toHaveLength(0);
+  });
+
   it("adds the reference-line plugin only when ref lines exist", () => {
     expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom", refLines: [] }).plugins).toHaveLength(0);
     const withRefs = buildOpts(payload, {

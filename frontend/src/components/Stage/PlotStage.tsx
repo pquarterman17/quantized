@@ -18,6 +18,7 @@ import {
 import { copyText, payloadToTSV } from "../../lib/clipboard";
 import { buildErrorColumns } from "../../lib/errorbars";
 import { formatMeasurement, type Measurement } from "../../lib/measure";
+import type { RegionStats } from "../../lib/regionStats";
 import { exportPlotPng } from "../../lib/plotExport";
 import { normalizeRange } from "../../lib/regionSelect";
 import { buildOpts } from "../../lib/uplotOpts";
@@ -33,7 +34,11 @@ const TOOLS = [
   { id: "pan", glyph: "✥", tip: "Pan" },
   { id: "cursor", glyph: "✛", tip: "Data cursor" },
   { id: "measure", glyph: "∡", tip: "Measure (Δx, Δy, slope)" },
+  { id: "stats", glyph: "Σ", tip: "Region stats (drag a range)" },
 ] as const;
+
+/** Compact number format for the stats panel; non-finite (e.g. std with n<2) → —. */
+const fmtStat = (v: number): string => (Number.isFinite(v) ? v.toPrecision(4) : "—");
 
 export default function PlotStage() {
   const active = useActiveDataset();
@@ -80,6 +85,7 @@ export default function PlotStage() {
   const [payload, setPayload] = useState<PlotPayload | null>(null);
   const [readout, setReadout] = useState<Readout | null>(null);
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
+  const [statsSel, setStatsSel] = useState<RegionStats | null>(null);
 
   // Splice in the fit curve + peak markers (each a no-op unless it belongs to
   // the active dataset and aligns to the plotted x).
@@ -199,6 +205,7 @@ export default function PlotStage() {
           setPlotTool("zoom");
         },
         onMeasure: setMeasurement,
+        onStats: setStatsSel,
       }),
       displayPayload.data,
       host,
@@ -225,6 +232,7 @@ export default function PlotStage() {
   // drawn segment; this resets the React-side readout).
   useEffect(() => {
     setMeasurement(null);
+    setStatsSel(null);
   }, [tool, active]);
 
   function resetView() {
@@ -338,6 +346,35 @@ export default function PlotStage() {
       {tool === "measure" && (
         <div className="qzk-glass qzk-readout">
           {measurement ? formatMeasurement(measurement) : "Drag between two points to measure"}
+        </div>
+      )}
+      {tool === "stats" && (
+        <div className="qzk-glass qzk-readout" style={{ maxHeight: 240, overflowY: "auto" }}>
+          {statsSel ? (
+            <>
+              <div style={{ color: "var(--text-dim)" }}>
+                x ∈ [{fmtStat(statsSel.xMin)}, {fmtStat(statsSel.xMax)}]
+              </div>
+              {statsSel.series.map((st, i) => (
+                <div key={`${st.label}-${i}`} style={{ marginTop: 4 }}>
+                  <div style={{ color: "var(--text)" }}>
+                    {st.label || "y"} · n={st.n}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, color: "var(--text-dim)" }}>
+                    <span>μ {fmtStat(st.mean)}</span>
+                    <span>σ {fmtStat(st.std)}</span>
+                    <span>med {fmtStat(st.median)}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, color: "var(--text-faint)" }}>
+                    <span>min {fmtStat(st.min)}</span>
+                    <span>max {fmtStat(st.max)}</span>
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            "Drag a range to summarize"
+          )}
         </div>
       )}
       {displayPayload && showLegend && (

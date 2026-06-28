@@ -3,6 +3,7 @@
 import type uPlot from "uplot";
 
 import { computeMeasurement, type Measurement } from "./measure";
+import { computeRegionStats, type RegionStats } from "./regionStats";
 import type { Annotation, RefLine } from "./types";
 
 /** A reference line the pointer is over (for drag hit-testing). */
@@ -343,6 +344,93 @@ export function measurePlugin(
           ctx.arc(px, py, 3, 0, Math.PI * 2);
           ctx.fill();
         }
+        ctx.restore();
+      },
+    },
+  };
+}
+
+/**
+ * Region statistics: drag an x-band over the plot (crosshair cursor) and report
+ * per-series summary stats (n / mean / std / median / min / max) over the points
+ * whose x falls in the band — live during the drag. The band is held in DATA
+ * x-coords so the shaded selection stays pinned across zoom/pan; pixels are
+ * re-derived each draw. Per-drag listeners are torn down on release (like
+ * measurePlugin). Stats use the series' own labels + visibility (legend-hidden
+ * series are excluded).
+ */
+export function statsPlugin(
+  onStats: (s: RegionStats | null) => void,
+  color: string,
+): uPlot.Plugin {
+  // Live band in DATA x-coords (null = nothing selected yet).
+  let band: { x0: number; x1: number } | null = null;
+
+  const recompute = (u: uPlot): void => {
+    if (!band) {
+      onStats(null);
+      return;
+    }
+    const labels: string[] = [];
+    const visible: boolean[] = [];
+    for (let s = 1; s < u.series.length; s++) {
+      const lbl = u.series[s]?.label;
+      labels.push(typeof lbl === "string" ? lbl : `series ${s}`);
+      visible.push(u.series[s]?.show !== false);
+    }
+    const data = u.data as unknown as (number | null)[][];
+    onStats(computeRegionStats(data, labels, band.x0, band.x1, visible));
+  };
+
+  return {
+    hooks: {
+      ready: (u: uPlot) => {
+        const over = u.over;
+        over.style.cursor = "crosshair";
+        over.addEventListener("mousedown", (e: MouseEvent) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          const rect = over.getBoundingClientRect();
+          const x0 = u.posToVal(e.clientX - rect.left, "x");
+          band = { x0, x1: x0 };
+          recompute(u);
+          u.redraw();
+          const onMove = (ev: MouseEvent) => {
+            band = { x0, x1: u.posToVal(ev.clientX - rect.left, "x") };
+            recompute(u);
+            u.redraw();
+          };
+          const onUp = () => {
+            document.removeEventListener("mousemove", onMove);
+            document.removeEventListener("mouseup", onUp);
+          };
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+        });
+      },
+      draw: (u: uPlot) => {
+        if (!band) return;
+        const { ctx } = u;
+        const { top, height } = u.bbox;
+        const ax = u.valToPos(band.x0, "x", true);
+        const bx = u.valToPos(band.x1, "x", true);
+        const x = Math.min(ax, bx);
+        const w = Math.abs(bx - ax);
+        if (w < 1) return;
+        ctx.save();
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.12;
+        ctx.fillRect(x, top, w, height);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(ax, top);
+        ctx.lineTo(ax, top + height);
+        ctx.moveTo(bx, top);
+        ctx.lineTo(bx, top + height);
+        ctx.stroke();
         ctx.restore();
       },
     },

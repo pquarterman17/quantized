@@ -5,6 +5,7 @@ import type uPlot from "uplot";
 
 import type { Measurement } from "./measure";
 import type { PlotPayload } from "./plotdata";
+import type { RegionStats } from "./regionStats";
 import type { Annotation, AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
 import {
   annotationPlugin,
@@ -13,10 +14,11 @@ import {
   panPlugin,
   readoutPlugin,
   refLinePlugin,
+  statsPlugin,
   type Readout,
 } from "./uplotPlugins";
 
-export type PlotTool = "zoom" | "pan" | "cursor" | "region" | "measure";
+export type PlotTool = "zoom" | "pan" | "cursor" | "region" | "measure" | "stats";
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -97,6 +99,9 @@ export interface BuildOptsArgs {
   /** In `measure` tool: called with the live Δx/Δy/slope while dragging the
    *  two-point ruler (null when the ruler is cleared). */
   onMeasure?: (m: Measurement | null) => void;
+  /** In `stats` tool: called with the live per-series summary stats over the
+   *  dragged x-band (null when the band is empty / zero-width). */
+  onStats?: (s: RegionStats | null) => void;
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
   xLim?: [number, number] | null;
   yLim?: [number, number] | null;
@@ -168,6 +173,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (tool === "cursor") plugins.push(readoutPlugin(onReadout));
   if (tool === "measure" && args.onMeasure) {
     plugins.push(measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
+  }
+  if (tool === "stats" && args.onStats) {
+    plugins.push(statsPlugin(args.onStats, cssVar("--accent") || "#8b5cf6"));
   }
   if (refLines && refLines.length > 0) {
     // Dragging only in the non-gesture tools (zoom/cursor); pan/measure/region
