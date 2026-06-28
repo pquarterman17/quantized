@@ -131,6 +131,9 @@ interface AppState {
     bg?: { datasetId: string; interp: string },
   ) => Promise<void>;
   resetCorrections: (id: string) => void;
+  // Copy `sourceId`'s correction params (+ bg reference) onto every target id,
+  // re-deriving each from its own raw. Batch parity with MATLAB "Apply to All".
+  applyCorrectionsToMany: (sourceId: string, targetIds: string[]) => Promise<void>;
   toggleLeft: () => void;
   toggleRight: () => void;
   setStageTab: (tab: StageTab) => void;
@@ -626,6 +629,26 @@ export const useApp = create<AppState>((set, get) => ({
       ),
     }));
     if (ds?.raw) get().recordMacro(`Reset corrections → ${ds.name}`, `qz.resetCorrections(${lit(ds.name)})`);
+  },
+  // Propagate one dataset's corrections to a batch. Each target re-derives from
+  // its OWN raw (applyCorrections is replace-not-accumulate), so this is safe to
+  // run repeatedly. The same bg-reference dataset is reused for all targets.
+  applyCorrectionsToMany: async (sourceId, targetIds) => {
+    const src = get().datasets.find((d) => d.id === sourceId);
+    if (!src?.corrections) {
+      get().setStatus("no corrections on the source dataset to copy");
+      return;
+    }
+    const bg = src.bgRef ? { datasetId: src.bgRef.datasetId, interp: src.bgRef.interp } : undefined;
+    let n = 0;
+    for (const id of targetIds) {
+      if (id === sourceId) continue;
+      // Don't subtract a dataset from itself if it's the shared bg reference.
+      const useBg = bg && bg.datasetId !== id ? bg : undefined;
+      await get().applyCorrections(id, src.corrections, useBg);
+      n += 1;
+    }
+    get().setStatus(`applied ${src.name}'s corrections to ${n} dataset${n === 1 ? "" : "s"}`);
   },
   toggleLeft: () => set((s) => ({ leftCollapsed: !s.leftCollapsed })),
   toggleRight: () => set((s) => ({ rightCollapsed: !s.rightCollapsed })),

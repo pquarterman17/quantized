@@ -37,6 +37,7 @@ export default function DatasetRow({
   const selectRange = useApp((s) => s.selectRange);
   const removeDataset = useApp((s) => s.removeDataset);
   const removeSelected = useApp((s) => s.removeSelected);
+  const applyCorrectionsToMany = useApp((s) => s.applyCorrectionsToMany);
   const duplicateDataset = useApp((s) => s.duplicateDataset);
   const moveDataset = useApp((s) => s.moveDataset);
   const renameDataset = useApp((s) => s.renameDataset);
@@ -80,12 +81,32 @@ export default function DatasetRow({
     setMenu({ x: e.clientX, y: e.clientY });
   };
 
-  const selectedCount = useApp.getState().selectedIds.length;
+  const { selectedIds } = useApp.getState();
+  const selectedCount = selectedIds.length;
+  const allIds = useApp.getState().datasets.map((x) => x.id);
   const menuItems: ContextMenuItem[] = [
     { label: "Plot (make active)", run: () => setActive(d.id), disabled: active },
     { label: "Duplicate", run: () => duplicateDataset(d.id) },
     { label: "Rename…", run: () => setRename(d.name) },
     { label: "Add tag…", run: () => setTag("") },
+    // Batch-apply this dataset's corrections (only when it has any).
+    ...(d.corrections
+      ? [
+          { separator: true } as ContextMenuItem,
+          {
+            label: "Apply corrections to all",
+            run: () => void applyCorrectionsToMany(d.id, allIds),
+          } as ContextMenuItem,
+          ...(selected && selectedCount > 1
+            ? [
+                {
+                  label: `Apply corrections to ${selectedCount} selected`,
+                  run: () => void applyCorrectionsToMany(d.id, selectedIds),
+                } as ContextMenuItem,
+              ]
+            : []),
+        ]
+      : []),
     { separator: true },
     { label: "Move up", run: () => moveDataset(d.id, -1), disabled: !canMoveUp },
     { label: "Move down", run: () => moveDataset(d.id, 1), disabled: !canMoveDown },

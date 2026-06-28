@@ -122,6 +122,44 @@ describe("useApp corrections", () => {
   });
 });
 
+describe("useApp applyCorrectionsToMany", () => {
+  const b: DataStruct = { ...raw, values: [[1], [2], [3]] };
+  const c: DataStruct = { ...raw, values: [[4], [5], [6]] };
+
+  it("copies the source's corrections onto every other target (re-derived from raw)", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...raw, values: [[0], [0], [0]] });
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "src", data: raw, raw, corrections: { yOff: 5 } },
+        { id: "d2", name: "b", data: b },
+        { id: "d3", name: "c", data: c },
+      ],
+      activeId: "d1",
+    });
+
+    await useApp.getState().applyCorrectionsToMany("d1", ["d1", "d2", "d3"]);
+
+    // Source skipped; both targets get d1's params applied to their own raw (=data).
+    expect(applyCorrectionsApi).toHaveBeenCalledTimes(2);
+    expect(applyCorrectionsApi).toHaveBeenCalledWith({ dataset: b, params: { yOff: 5 } });
+    expect(applyCorrectionsApi).toHaveBeenCalledWith({ dataset: c, params: { yOff: 5 } });
+    expect(useApp.getState().status).toContain("applied");
+  });
+
+  it("is a no-op (with a status) when the source has no corrections", async () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "src", data: raw },
+        { id: "d2", name: "b", data: b },
+      ],
+      activeId: "d1",
+    });
+    await useApp.getState().applyCorrectionsToMany("d1", ["d2"]);
+    expect(applyCorrectionsApi).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toContain("no corrections");
+  });
+});
+
 describe("useApp duplicateDataset", () => {
   it("inserts an independent copy right after the source and activates it", () => {
     useApp.setState({
