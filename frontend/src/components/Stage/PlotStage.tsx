@@ -54,7 +54,6 @@ export default function PlotStage() {
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const errKeys = useApp((s) => s.errKeys);
-  const channelRoles = useApp((s) => s.channelRoles);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const hiddenChannels = useApp((s) => s.hiddenChannels);
   const theme = useApp((s) => s.theme);
@@ -92,8 +91,8 @@ export default function PlotStage() {
 
   // Channels actually drawn (y selection minus the x-axis channel), in order.
   const plotted = useMemo(
-    () => (active ? effectiveChannels(active.data, yKeys, xKey, channelRoles, seriesOrder) : []),
-    [active, yKeys, xKey, channelRoles, seriesOrder],
+    () => (active ? effectiveChannels(active.data, yKeys, xKey, active.channelRoles, seriesOrder) : []),
+    [active, yKeys, xKey, seriesOrder],
   );
 
   // Map each display-series back to its dataset channel so the per-channel style

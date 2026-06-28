@@ -74,6 +74,17 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
     expect(restored.notes).toBe(ds.notes);
   });
 
+  it("preserves per-dataset column roles (filtering invalid entries)", () => {
+    const ds = makeDataset("a", "roled");
+    ds.channelRoles = { 0: "ignore", 1: "label" };
+    const [restored] = parseWorkspace(serializeWorkspace([ds]));
+    expect(restored.channelRoles).toEqual({ 0: "ignore", 1: "label" });
+    // Bad role values are dropped on parse.
+    const doc = JSON.parse(serializeWorkspace([ds]));
+    doc.datasets[0].channelRoles = { 0: "ignore", 2: "bogus" };
+    expect(parseWorkspace(JSON.stringify(doc))[0].channelRoles).toEqual({ 0: "ignore" });
+  });
+
   it("preserves computed-column formulas (and drops malformed entries)", () => {
     const ds = makeDataset("a", "computed");
     ds.formulas = [{ name: "S", expr: "A + B" }];

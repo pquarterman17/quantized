@@ -40,7 +40,6 @@ export default function Worksheet() {
   const setCellValue = useApp((s) => s.setCellValue);
   const addFormula = useApp((s) => s.addFormula);
   const removeFormula = useApp((s) => s.removeFormula);
-  const channelRoles = useApp((s) => s.channelRoles); // label/ignore column roles
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   const [formula, setFormula] = useState("");
   const [colName, setColName] = useState("");
@@ -138,6 +137,7 @@ export default function Worksheet() {
   }
 
   const { time, values, labels, units, metadata } = active.data;
+  const channelRoles = active.channelRoles ?? {}; // per-dataset label/ignore roles
   // Computed columns occupy the last `formulas.length` columns; the rest is base.
   const baseCount = labels.length - (active.formulas?.length ?? 0);
   const xName = String(metadata?.["x_column_name"] ?? "x");

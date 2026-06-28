@@ -71,7 +71,6 @@ interface AppState {
   seriesStyles: Record<number, SeriesStyle>; // per-channel color/width/line overrides
   seriesLabels: Record<number, string>; // per-channel display-name overrides (legend rename)
   errKeys: Record<number, number>; // y-channel index → channel holding its ± error (error bars)
-  channelRoles: Record<number, ChannelRole>; // non-data column roles (label/ignore) — excluded from the plot
   seriesOrder: number[] | null; // explicit plotted-channel draw order (null = natural/yKeys order)
   hiddenChannels: number[]; // channels toggled off via the interactive legend (kept in payload, not drawn)
   waterfall: number; // waterfall offset as a fraction of the y-span (0 = off)
@@ -260,7 +259,6 @@ export const useApp = create<AppState>((set, get) => ({
   seriesStyles: {},
   seriesLabels: {},
   errKeys: {},
-  channelRoles: {},
   seriesOrder: null,
   hiddenChannels: [],
   waterfall: 0,
@@ -298,7 +296,6 @@ export const useApp = create<AppState>((set, get) => ({
       seriesStyles: {}, // styles are keyed by channel index → reset per dataset
       seriesLabels: {}, // legend renames are channel-keyed → reset per dataset
       errKeys: {}, // error-bar pairings are channel-keyed → reset per dataset
-      channelRoles: {}, // column roles are channel-keyed → reset per dataset
       seriesOrder: null, // draw order is channel-keyed → reset per dataset
       hiddenChannels: [], // legend show/hide is channel-keyed → reset per dataset
       xLim: null, // and autoscale both axes
@@ -340,7 +337,6 @@ export const useApp = create<AppState>((set, get) => ({
       seriesStyles: {},
       seriesLabels: {},
       errKeys: {},
-      channelRoles: {},
       seriesOrder: null,
       hiddenChannels: [],
       xLim: null,
@@ -360,7 +356,6 @@ export const useApp = create<AppState>((set, get) => ({
       seriesStyles: {},
       seriesLabels: {},
       errKeys: {},
-      channelRoles: {},
       seriesOrder: null,
       hiddenChannels: [],
       xLim: null,
@@ -394,6 +389,7 @@ export const useApp = create<AppState>((set, get) => ({
         ...(src.tags?.length ? { tags: [...src.tags] } : {}),
         ...(src.group ? { group: src.group } : {}),
         ...(src.formulas?.length ? { formulas: src.formulas.map((f) => ({ ...f })) } : {}),
+        ...(src.channelRoles ? { channelRoles: { ...src.channelRoles } } : {}),
       };
       const datasets = [...s.datasets];
       datasets.splice(idx + 1, 0, clone);
@@ -672,15 +668,21 @@ export const useApp = create<AppState>((set, get) => ({
       else next[channel] = errChannel;
       return { errKeys: next };
     }),
-  // Set (or clear, role=null) a channel's column role. A role excludes the
-  // channel from the plot; clearing reverts it to a plain data channel.
+  // Set (or clear, role=null) a column role on the ACTIVE dataset. Roles live on
+  // the dataset (persist across switches + round-trip .dwk); the map empties to
+  // undefined to keep saved files clean.
   setChannelRole: (channel, role) => {
-    set((s) => {
-      const next = { ...s.channelRoles };
-      if (role == null) delete next[channel];
-      else next[channel] = role;
-      return { channelRoles: next };
-    });
+    const id = get().activeId;
+    if (id == null) return;
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id) return d;
+        const next = { ...(d.channelRoles ?? {}) };
+        if (role == null) delete next[channel];
+        else next[channel] = role;
+        return { ...d, channelRoles: Object.keys(next).length ? next : undefined };
+      }),
+    }));
     get().recordMacro(
       `Channel ${channel} role → ${role ?? "data"}`,
       `qz.setChannelRole(${channel}, ${lit(role)})`,

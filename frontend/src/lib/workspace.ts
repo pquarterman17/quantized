@@ -3,7 +3,7 @@
 // library (datasets live only in memory); this gives session persistence. Pure +
 // testable; the App wires it to Save/Open commands (download + file picker).
 
-import type { ComputedColumn, CorrectionParams, Dataset, DataStruct } from "./types";
+import type { ChannelRole, ComputedColumn, CorrectionParams, Dataset, DataStruct } from "./types";
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
 export const WORKSPACE_VERSION = 1;
@@ -32,6 +32,9 @@ export function serializeWorkspace(datasets: Dataset[]): string {
       ...(d.tags?.length ? { tags: d.tags } : {}),
       ...(d.group?.trim() ? { group: d.group } : {}),
       ...(d.formulas?.length ? { formulas: d.formulas } : {}),
+      ...(d.channelRoles && Object.keys(d.channelRoles).length
+        ? { channelRoles: d.channelRoles }
+        : {}),
     })),
   };
   return JSON.stringify(doc, null, 2);
@@ -119,6 +122,15 @@ export function parseWorkspace(text: string): Dataset[] {
           typeof (f as Record<string, unknown>).expr === "string",
       );
       if (formulas.length) ds.formulas = formulas;
+    }
+    if (dd.channelRoles && typeof dd.channelRoles === "object") {
+      const roles: Record<number, ChannelRole> = {};
+      for (const [k, v] of Object.entries(dd.channelRoles as Record<string, unknown>)) {
+        if ((v === "label" || v === "ignore") && Number.isInteger(Number(k))) {
+          roles[Number(k)] = v;
+        }
+      }
+      if (Object.keys(roles).length) ds.channelRoles = roles;
     }
     return ds;
   });

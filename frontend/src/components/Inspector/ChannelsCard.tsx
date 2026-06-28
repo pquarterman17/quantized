@@ -18,7 +18,6 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const setY2Keys = useApp((s) => s.setY2Keys);
   const errKeys = useApp((s) => s.errKeys);
   const setErrKey = useApp((s) => s.setErrKey);
-  const channelRoles = useApp((s) => s.channelRoles);
   const setChannelRole = useApp((s) => s.setChannelRole);
   const waterfall = useApp((s) => s.waterfall);
   const setWaterfall = useApp((s) => s.setWaterfall);
@@ -26,6 +25,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   if (!active || active.data.labels.length < 2) return null;
 
   const { labels, units } = active.data;
+  const channelRoles = active.channelRoles ?? {}; // per-dataset label/ignore roles
   const selected = yKeys ?? labels.map((_, i) => i);
   const y2 = new Set(y2Keys ?? []);
   // Plottable data channels = non-x channels with no column role; the plot needs ≥1.

@@ -277,32 +277,36 @@ describe("useApp error-bar pairings", () => {
   });
 });
 
-describe("useApp column roles (label/ignore)", () => {
-  it("sets and clears a channel's column role", () => {
-    useApp.setState({ channelRoles: {} });
+describe("useApp column roles (label/ignore) — per dataset", () => {
+  it("sets and clears a role on the active dataset", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "a", data: raw }], activeId: "d1" });
     useApp.getState().setChannelRole(1, "label");
-    expect(useApp.getState().channelRoles).toEqual({ 1: "label" });
+    expect(useApp.getState().datasets[0].channelRoles).toEqual({ 1: "label" });
     useApp.getState().setChannelRole(1, "ignore");
-    expect(useApp.getState().channelRoles).toEqual({ 1: "ignore" });
+    expect(useApp.getState().datasets[0].channelRoles).toEqual({ 1: "ignore" });
     useApp.getState().setChannelRole(1, null);
-    expect(useApp.getState().channelRoles).toEqual({});
+    expect(useApp.getState().datasets[0].channelRoles).toBeUndefined(); // empties to undefined
   });
 
-  it("resets column roles when switching or adding a dataset", () => {
+  it("roles are per-dataset and persist across a switch (not reset)", () => {
     useApp.setState({
       datasets: [
         { id: "d1", name: "a", data: raw },
         { id: "d2", name: "b", data: raw },
       ],
       activeId: "d1",
-      channelRoles: { 0: "ignore" },
     });
+    useApp.getState().setChannelRole(0, "ignore"); // role on d1
     useApp.getState().setActive("d2");
-    expect(useApp.getState().channelRoles).toEqual({});
+    expect(useApp.getState().datasets[1].channelRoles).toBeUndefined(); // d2 has its own (none)
+    useApp.getState().setActive("d1");
+    expect(useApp.getState().datasets[0].channelRoles).toEqual({ 0: "ignore" }); // d1 kept it
+  });
 
-    useApp.setState({ channelRoles: { 0: "label" } });
-    useApp.getState().addDataset({ id: "d3", name: "c", data: raw });
-    expect(useApp.getState().channelRoles).toEqual({});
+  it("is a no-op with no active dataset", () => {
+    useApp.setState({ datasets: [], activeId: null });
+    useApp.getState().setChannelRole(0, "label");
+    expect(useApp.getState().datasets).toEqual([]);
   });
 });
 

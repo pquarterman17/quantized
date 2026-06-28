@@ -99,6 +99,11 @@ export interface Dataset {
    *  of `data` and recompute when the base data changes (cell edits, corrections).
    *  Round-trips through the .dwk workspace. */
   formulas?: ComputedColumn[];
+  /** Per-channel column roles (label / ignore) — channel index → role. Excluded
+   *  from the plot; semantic metadata about the columns, so they live ON the
+   *  dataset (persist across dataset switches + round-trip .dwk), not in the
+   *  transient view state. */
+  channelRoles?: Record<number, ChannelRole>;
 }
 
 /** A registered fit model's metadata (from GET /api/fitting/models). */
