@@ -350,8 +350,10 @@ export function exportConsolidated(body: {
 }
 
 /** Render a publication figure server-side (matplotlib) and download it. */
-export function exportFigure(body: {
+/** Publication-figure request (shared by the download + preview paths). */
+export interface FigureSpec {
   dataset: DataStruct;
+  x_key?: number | string;
   y_keys?: (number | string)[];
   x_log?: boolean;
   y_log?: boolean;
@@ -363,8 +365,31 @@ export function exportFigure(body: {
   y_label?: string;
   series_styles?: (ExportSeriesStyle | null)[];
   filename?: string;
-}): Promise<void> {
+}
+
+export function exportFigure(body: FigureSpec): Promise<void> {
   return postDownload("/api/export/figure", body, `figure.${body.fmt ?? "pdf"}`);
+}
+
+/** Render a figure and return the raw image bytes — for an in-app WYSIWYG
+ *  preview (the figure builder), as opposed to exportFigure which downloads. */
+export async function renderFigureBlob(body: FigureSpec): Promise<Blob> {
+  const res = await fetch("/api/export/figure", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = `${res.status} ${res.statusText}`;
+    try {
+      const j = (await res.json()) as { detail?: string };
+      if (j.detail) detail = j.detail;
+    } catch {
+      /* non-JSON error body — keep the status line */
+    }
+    throw new Error(detail);
+  }
+  return res.blob();
 }
 
 // ── Magnetometry ────────────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ import TooltipLayer from "./components/overlays/TooltipLayer";
 import BaselinePanel from "./components/workshops/baseline/BaselinePanel";
 import CalculatorsPanel from "./components/workshops/calculators/CalculatorsPanel";
 import DatasetMathPanel from "./components/workshops/datasetmath/DatasetMathPanel";
+import FigureBuilderView from "./components/workshops/figurebuilder/FigureBuilderView";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
 import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
 import MagToolsPanel from "./components/workshops/magtools/MagToolsPanel";
@@ -71,6 +72,7 @@ export default function App() {
   const digitizerOpen = useApp((s) => s.digitizerOpen);
   const magToolsOpen = useApp((s) => s.magToolsOpen);
   const datasetMathOpen = useApp((s) => s.datasetMathOpen);
+  const figureBuilderOpen = useApp((s) => s.figureBuilderOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -285,6 +287,12 @@ export default function App() {
           ),
       },
       {
+        id: "figure-builder",
+        group: "File",
+        label: "Figure builder (live preview)…",
+        run: () => s().setFigureBuilderOpen(true),
+      },
+      {
         id: "export-figure",
         group: "File",
         label: "Export figure…",
@@ -411,6 +419,7 @@ export default function App() {
       {rsmOpen && <RsmPanel />}
       {digitizerOpen && <DigitizerView />}
       {datasetMathOpen && <DatasetMathPanel />}
+      {figureBuilderOpen && <FigureBuilderView />}
     </div>
   );
 }
