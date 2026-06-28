@@ -1,0 +1,11 @@
+[Header]
+TITLE,synthetic MPMS-classic ZFC (constant field, temperature sweep)
+BYAPP,MPMS
+[Data]
+Time,Comment,Field (Oe),Temperature (K),Long Moment (emu)
+0,,100,2,1.00e-4
+1,,100,4,1.10e-4
+2,,100,6,1.22e-4
+3,,100,8,1.31e-4
+4,,100,10,1.27e-4
+5,,100,12,1.15e-4

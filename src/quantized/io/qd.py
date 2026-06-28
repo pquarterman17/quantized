@@ -91,6 +91,39 @@ def _apply_moment_fallback(
     return out
 
 
+# When the resolved x-axis is constant — e.g. an M-vs-T sweep imported with the
+# field default, where the field is regulated flat — the default plot collapses to
+# a single vertical line. Fall back to a sweep axis that actually varies (in
+# priority order) so the data plots meaningfully by default; the user can still
+# re-pick the x-axis in the UI afterwards.
+_X_SWEEP_FALLBACKS = ("temp", "field", "time")
+
+
+def _is_constant_axis(col: np.ndarray) -> bool:
+    """True if a column has <2 finite points or a negligible (<0.1%) span."""
+    finite = col[np.isfinite(col)]
+    if finite.size < 2:
+        return True
+    lo = float(finite.min())
+    hi = float(finite.max())
+    scale = max(abs(lo), abs(hi), 1.0)
+    return (hi - lo) / scale < 1e-3
+
+
+def _auto_x_index(col_names: Sequence[str], matrix: np.ndarray, x_idx: int) -> int:
+    """If the chosen x column is constant, swap to the first varying sweep axis."""
+    if not _is_constant_axis(matrix[:, x_idx]):
+        return x_idx
+    for short in _X_SWEEP_FALLBACKS:
+        try:
+            cand = resolve_column(short, col_names, _QD_SHORTHAND, "x-axis")
+        except (KeyError, IndexError):
+            continue
+        if cand not in (NO_COLUMN, x_idx) and not _is_constant_axis(matrix[:, cand]):
+            return cand
+    return x_idx
+
+
 def import_qd_vsm(
     filepath: str | Path,
     *,
@@ -114,6 +147,7 @@ def import_qd_vsm(
     x_idx = resolve_column(x_axis, col_names, _QD_SHORTHAND, "x-axis")
     if x_idx == NO_COLUMN:
         raise ValueError("x-axis column could not be resolved")
+    x_idx = _auto_x_index(col_names, matrix, x_idx)
 
     if isinstance(y_axis, str) and y_axis.lower() == "all":
         y_idx = _resolve_all_columns(col_names, matrix, x_idx, include_raw)
@@ -290,6 +324,7 @@ def import_ppms(
     x_idx = resolve_column(x_axis, col_names, _QD_SHORTHAND, "x-axis")
     if x_idx == NO_COLUMN:
         raise ValueError("x-axis column could not be resolved")
+    x_idx = _auto_x_index(col_names, matrix, x_idx)
     if isinstance(y_axis, str) and y_axis.lower() == "all":
         y_idx = _resolve_all_columns(col_names, matrix, x_idx, include_raw)
     else:

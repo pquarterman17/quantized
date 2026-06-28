@@ -96,3 +96,25 @@ def test_ppms_defaults_field_moment(fixtures_dir: Path) -> None:
 def test_registry_routes_ppms_plain_csv(fixtures_dir: Path) -> None:
     ds = import_auto(fixtures_dir / "ppms_synth.dat")
     assert ds.metadata["parser_name"] == "import_ppms"
+
+
+def test_mvsh_keeps_field_when_it_varies(fixtures_dir: Path) -> None:
+    # qd_edp124 is an M-vs-H loop: field sweeps, so the field default must stand
+    # (the auto-x swap only triggers on a *constant* x). Guards the parity case.
+    ds = import_qd_vsm(fixtures_dir / "qd_edp124.dat")
+    assert ds.metadata["x_column_name"] == "Magnetic Field"
+
+
+def test_classic_mpms_imports_and_swaps_constant_field_to_temperature(
+    fixtures_dir: Path,
+) -> None:
+    """MPMS-classic ZFC file: the column is literally "Field" (resolved via the
+    literal-spec fallback) and is held constant, so the default x auto-swaps to
+    the varying Temperature sweep — otherwise the plot is a single vertical line."""
+    ds = import_auto(fixtures_dir / "mpms_zfc_classic.dat")
+    assert ds.metadata["parser_name"] == "import_qd_vsm"
+    assert ds.metadata["x_column_name"] == "Temperature"
+    assert ds.labels == ("Long Moment",)
+    # x must actually vary so the data is plottable by default.
+    assert float(np.ptp(ds.time)) > 0
+    assert np.isfinite(ds.values[:, 0]).all()
