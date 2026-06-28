@@ -471,13 +471,21 @@ MATLAB."**
   (cell volume / density / low-symmetry systems remain). The calculators workshop now
   has Units / X-ray / Crystal / Constants tabs — at ~224 lines, `CalculatorsPanel.tsx`
   is a future extraction candidate (per-tab sub-components) if more tabs land.
+- **W4 Periodic-Table/Elements tab + panel decomposition** (2026-06-27, `9ea8cee`) —
+  added an "Elements" tab over the golden `element_data` (`/api/reference/elements`):
+  search symbol/name/Z + per-element details (mass/category/group/period/config/
+  density/electronegativity/melting/boiling/neutron b_coh). Self-contained
+  `ElementsTab.tsx` (owns its fetch+search). **Decomposed `CalculatorsPanel.tsx`
+  224→39 lines** into per-tab sub-components (Units/X-ray/Crystal/Constants take the
+  shared `CalculatorsState`; Elements standalone) — the decomposition flagged last
+  session. Gates green (frontend 221 + build). **Ticks checklist #178.**
 
 **Next pick-up (highest value first):**
-1. **More W4 calculator domains** — pattern proven twice. Surface existing golden
-   calc where possible (constants/elements/unit_convert exist; e.g. a Periodic-Table
-   tab over the already-routed `element_data`), or add SLD-from-formula to finish
-   #179, or a semiconductor/magnetic/transport tab (new calc + reference tests).
-   When `CalculatorsPanel.tsx` next grows, extract per-tab sub-components first.
+1. **More W4 calculator domains** — pattern proven; tabs now decompose cleanly.
+   Options: SLD-from-formula to finish #179; a semiconductor / magnetic / transport /
+   superconductor tab (new `calc/<domain>.py` + reference tests + a `*Tab.tsx`).
+   Consider diversifying away from calculators (6 of the last features were
+   worksheet/calculator) — e.g. the XRDML `map2D` golden, or a plotting/export gap.
 2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
