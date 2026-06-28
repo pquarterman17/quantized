@@ -535,6 +535,13 @@ MATLAB."**
   `hiddenChannels[]` + `toggleHidden` (reset with the dataset); `uplotOpts.hidden`
   arg; PlotStage maps legend index → plotted channel (overlays not clickable),
   refuses to hide the last visible series. Gates green (frontend 266 + build).
+- **Duplicate dataset (Library)** (2026-06-27, `adc7ec4`) — W5/W7, diversified off
+  the plot. ⧉ button on each Library row deep-copies a dataset (incl. raw /
+  corrections / bgRef) as an independent "(copy)" inserted after the source and
+  activated — for trying different corrections / formulas / dataset-math while
+  keeping the original. Pure `lib/dataset.cloneDataStruct` (deep copy, no shared
+  column arrays — non-aliasing asserted in tests); store `duplicateDataset(id)`.
+  Gates green (frontend 272 + build).
 
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to
@@ -545,9 +552,11 @@ MATLAB."**
    read-outs; copy-data-to-clipboard `c3780c0` + interactive legend `8ac41f3`
    shipped), **W5 column roles** (X-role `ad6b460` + Y-error bars `7da9a21` shipped;
    remaining — label/ignore roles), the **computed-column formula engine**
-   (snapshots + recompute), or **workspace autosave**. Non-Boson-Plotter parity
-   items (XRDML `map2D` golden, blocked parsers) stay paused unless the user reopens
-   scope.
+   (snapshot model done — `Stage/Worksheet.tsx`; "recompute on source change" needs
+   provenance links the architecture lacks → low priority), **Library** features
+   (duplicate `adc7ec4` done; remaining — reorder, groups/tags), or **workspace
+   autosave**. Non-Boson-Plotter parity items (XRDML `map2D` golden, blocked
+   parsers) stay paused unless the user reopens scope.
 2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,

@@ -222,7 +222,7 @@ Source: `+dataWorkspace/`, `DataWorkspace.m`
 
 ## W7 — Frontend (React revamp — reference, not 1:1 port)
 - [ ] App scaffold + Zustand stores · theme (Dark/Light/Auto)
-- [ ] Library (dataset list/import/groups/search)
+- [~] Library (dataset list/import/groups/search) — `Library/Library.tsx`: dataset list with sparklines, file import (picker + drag-drop), name filter/search, click-to-activate, double-click rename, remove, **duplicate** (⧉ → deep-copy incl. raw/corrections/bgRef as an independent "(copy)"; `lib/dataset.cloneDataStruct` + store `duplicateDataset`, commit `adc7ec4`). **Groups/tags + reorder still TODO.**
 - [ ] Stage (uPlot + 2D viewer)
 - [ ] Inspector (corrections/axes/appearance)
 - [~] Workshops: curve fit ✓ · peak ✓ · hysteresis ✓ · reflectivity ✓ (Parratt R(Q) model builder, `routes/reflectivity.py` + `workshops/reflectivity/`) · RSM analysis ✓ (`workshops/rsm/` — find peaks → substrate/film → strain/relaxation via `/api/rsm/{analyze,strain}`; "Analyze ▸ RSM analysis…") · **graph digitizer ✓** (`workshops/digitizer/` — load/paste a plot image → click 2 X + 2 Y axis refs → trace the curve → DataStruct to the library; pure `lib/digitizer` calibration, tested; full-screen overlay; "Analyze ▸ Graph digitizer…")
