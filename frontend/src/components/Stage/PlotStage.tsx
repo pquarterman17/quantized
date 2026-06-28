@@ -52,6 +52,8 @@ export default function PlotStage() {
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const errKeys = useApp((s) => s.errKeys);
+  const hiddenChannels = useApp((s) => s.hiddenChannels);
+  const toggleHidden = useApp((s) => s.toggleHidden);
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const tool = useApp((s) => s.plotTool);
@@ -107,6 +109,15 @@ export default function PlotStage() {
     [active, plotted, errKeys],
   );
 
+  // Interactive-legend visibility, aligned 1:1 with the display series (overlays
+  // — index ≥ plotted.length — are never hidden).
+  const hidden = useMemo(
+    () =>
+      displayPayload?.series.map((_, i) => i < plotted.length && hiddenChannels.includes(plotted[i])) ??
+      undefined,
+    [displayPayload, plotted, hiddenChannels],
+  );
+
   // Fetch series whenever the active dataset, scale, or channel roles change.
   useEffect(() => {
     let cancelled = false;
@@ -148,6 +159,7 @@ export default function PlotStage() {
         annotations,
         seriesStyles: styleList,
         errorBars,
+        hidden,
         tool,
         onReadout: setReadout,
         onRegionSelect: (x0, x1) => {
@@ -180,7 +192,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, refLines, annotations, styleList, errorBars, theme, accent, tool]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, refLines, annotations, styleList, errorBars, hidden, theme, accent, tool]);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the
@@ -308,8 +320,28 @@ export default function PlotStage() {
                 : override
                   ? `var(${override})`
                   : `var(--series-${(i % 8) + 1})`;
+            // Plotted channels are click-to-toggle; overlays (i ≥ plotted.length)
+            // are not. Refuse to hide the last visible series (keep ≥1 drawn).
+            const isChannel = i < plotted.length;
+            const isHidden = hidden?.[i] ?? false;
+            const visibleCount = plotted.filter((c) => !hiddenChannels.includes(c)).length;
+            const onClick = isChannel
+              ? () => {
+                  if (!isHidden && visibleCount <= 1) return;
+                  toggleHidden(plotted[i]);
+                }
+              : undefined;
             return (
-              <div className="it" key={s.label}>
+              <div
+                className="it"
+                key={s.label}
+                onClick={onClick}
+                title={isChannel ? (isHidden ? "Click to show" : "Click to hide") : undefined}
+                style={{
+                  opacity: isHidden ? 0.4 : 1,
+                  textDecoration: isHidden ? "line-through" : "none",
+                }}
+              >
                 <span
                   className="ln"
                   style={{ display: "inline-block", width: 14, height: 2, background: swatch }}

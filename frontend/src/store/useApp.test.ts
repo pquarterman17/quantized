@@ -184,6 +184,33 @@ describe("useApp error-bar pairings", () => {
   });
 });
 
+describe("useApp interactive legend (hidden channels)", () => {
+  it("toggles a channel's hidden state", () => {
+    useApp.setState({ hiddenChannels: [] });
+    useApp.getState().toggleHidden(2);
+    expect(useApp.getState().hiddenChannels).toEqual([2]);
+    useApp.getState().toggleHidden(2);
+    expect(useApp.getState().hiddenChannels).toEqual([]);
+  });
+
+  it("resets hidden channels when switching or adding a dataset", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      activeId: "d1",
+      hiddenChannels: [0, 1],
+    });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().hiddenChannels).toEqual([]);
+
+    useApp.setState({ hiddenChannels: [1] });
+    useApp.getState().addDataset({ id: "d3", name: "c", data: raw });
+    expect(useApp.getState().hiddenChannels).toEqual([]);
+  });
+});
+
 describe("useApp axis limits", () => {
   it("clears explicit limits when switching the active dataset", () => {
     useApp.setState({

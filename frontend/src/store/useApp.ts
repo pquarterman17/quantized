@@ -57,6 +57,7 @@ interface AppState {
   annotations: Annotation[]; // text labels pinned at data coordinates
   seriesStyles: Record<number, SeriesStyle>; // per-channel color/width/line overrides
   errKeys: Record<number, number>; // y-channel index → channel holding its ± error (error bars)
+  hiddenChannels: number[]; // channels toggled off via the interactive legend (kept in payload, not drawn)
   waterfall: number; // waterfall offset as a fraction of the y-span (0 = off)
   plotTool: PlotTool;
   // Last x-range picked by the region rubber-band ([x_min,x_max]); the baseline
@@ -118,6 +119,7 @@ interface AppState {
   setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
   resetSeriesStyle: (channel: number) => void;
   setErrKey: (channel: number, errChannel: number | null) => void;
+  toggleHidden: (channel: number) => void;
   setWaterfall: (waterfall: number) => void;
   setPlotTool: (tool: PlotTool) => void;
   setRegionPicked: (range: [number, number] | null) => void;
@@ -206,6 +208,7 @@ export const useApp = create<AppState>((set, get) => ({
   annotations: [],
   seriesStyles: {},
   errKeys: {},
+  hiddenChannels: [],
   waterfall: 0,
   plotTool: "zoom",
   regionPicked: null,
@@ -235,6 +238,7 @@ export const useApp = create<AppState>((set, get) => ({
       y2Keys: null, // and reset the secondary-axis assignment
       seriesStyles: {}, // styles are keyed by channel index → reset per dataset
       errKeys: {}, // error-bar pairings are channel-keyed → reset per dataset
+      hiddenChannels: [], // legend show/hide is channel-keyed → reset per dataset
       xLim: null, // and autoscale both axes
       yLim: null,
     })),
@@ -272,6 +276,7 @@ export const useApp = create<AppState>((set, get) => ({
       y2Keys: null,
       seriesStyles: {},
       errKeys: {},
+      hiddenChannels: [],
       xLim: null,
       yLim: null,
       fitOverlay: null,
@@ -288,6 +293,7 @@ export const useApp = create<AppState>((set, get) => ({
       y2Keys: null,
       seriesStyles: {},
       errKeys: {},
+      hiddenChannels: [],
       xLim: null,
       yLim: null,
       rsmPeaks: null,
@@ -403,6 +409,12 @@ export const useApp = create<AppState>((set, get) => ({
       else next[channel] = errChannel;
       return { errKeys: next };
     }),
+  toggleHidden: (channel) =>
+    set((s) => ({
+      hiddenChannels: s.hiddenChannels.includes(channel)
+        ? s.hiddenChannels.filter((c) => c !== channel)
+        : [...s.hiddenChannels, channel],
+    })),
   setWaterfall: (waterfall) => set({ waterfall }),
   setPlotTool: (plotTool) => set({ plotTool }),
   setRegionPicked: (regionPicked) => set({ regionPicked }),

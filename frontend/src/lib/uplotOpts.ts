@@ -93,6 +93,9 @@ export interface BuildOptsArgs {
   /** Error-bar magnitudes keyed by uPlot data-column index (1-based). Draws
    *  vertical y±e whiskers for the mapped plotted series. */
   errorBars?: Map<number, (number | null)[]>;
+  /** Per-display-series visibility (aligned 1:1 with `payload.series`); `true`
+   *  hides that series (interactive legend). Undefined = all visible. */
+  hidden?: boolean[];
   /** Axis tick number formats (auto = uPlot default). yFmt also drives y2. */
   xFmt?: AxisFormat;
   yFmt?: AxisFormat;
@@ -199,9 +202,10 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         const stroke = seriesColor(i, style);
         const label = seriesLabel(s);
         const scale = (s.axis ?? 0) === 1 ? "y2" : "y";
+        const show = !args.hidden?.[i]; // interactive legend visibility
         // Peak markers: points only, no connecting line.
         if (s.kind === "points") {
-          return { label, scale, stroke, fill: stroke, width: 0, points: { show: true, size: 8 } };
+          return { label, scale, stroke, fill: stroke, width: 0, points: { show: true, size: 8 }, show };
         }
         const width = style?.width ?? 1.5;
         const dash = style?.line ? DASH[style.line] : undefined;
@@ -209,7 +213,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         const points = style?.marker
           ? { show: true, size: style.markerSize ?? 5 }
           : { show: false };
-        return { label, scale, stroke, width, dash, points };
+        return { label, scale, stroke, width, dash, points, show };
       }),
     ],
   };
