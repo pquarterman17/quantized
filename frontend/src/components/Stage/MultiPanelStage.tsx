@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
-import { fetchPlot, type PlotPayload } from "../../lib/plotdata";
+import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import { panelHeights, splitPayload } from "../../lib/multipanel";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotPlugins";
@@ -27,6 +27,7 @@ export default function MultiPanelStage() {
   const showGrid = useApp((s) => s.showGrid);
   const refLines = useApp((s) => s.refLines);
   const seriesStyles = useApp((s) => s.seriesStyles);
+  const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const tool = useApp((s) => s.plotTool);
@@ -38,12 +39,14 @@ export default function MultiPanelStage() {
   const [payload, setPayload] = useState<PlotPayload | null>(null);
   const [readout, setReadout] = useState<Readout | null>(null);
 
-  // Per-panel style, mapped from the plotted channel (yKeys order) to its override.
-  const styleList = useMemo(() => {
-    if (!active) return undefined;
-    const plotted = yKeys ?? active.data.labels.map((_, i) => i);
-    return plotted.map((ch) => seriesStyles[ch]);
-  }, [active, yKeys, seriesStyles]);
+  // Channels actually drawn (y selection minus the x-axis channel), in order.
+  const plotted = useMemo(
+    () => (active ? effectiveChannels(active.data, yKeys, xKey) : []),
+    [active, yKeys, xKey],
+  );
+
+  // Per-panel style, mapped from the plotted channel to its override.
+  const styleList = useMemo(() => plotted.map((ch) => seriesStyles[ch]), [plotted, seriesStyles]);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,13 +54,13 @@ export default function MultiPanelStage() {
       setPayload(null);
       return;
     }
-    fetchPlot(active.data, yLog, xLog, yKeys, y2Keys).then((p) => {
+    fetchPlot(active.data, yLog, xLog, plotted, y2Keys, xKey).then((p) => {
       if (!cancelled) setPayload(p);
     });
     return () => {
       cancelled = true;
     };
-  }, [active, yLog, xLog, yKeys, y2Keys]);
+  }, [active, yLog, xLog, plotted, y2Keys, xKey]);
 
   useEffect(() => {
     const host = hostRef.current;

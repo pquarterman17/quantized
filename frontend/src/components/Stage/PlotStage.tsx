@@ -8,6 +8,7 @@ import "uplot/dist/uPlot.min.css";
 
 import {
   applyWaterfall,
+  effectiveChannels,
   fetchPlot,
   withBaselineOverlay,
   withFitOverlay,
@@ -45,6 +46,7 @@ export default function PlotStage() {
   const annotations = useApp((s) => s.annotations);
   const seriesStyles = useApp((s) => s.seriesStyles);
   const waterfall = useApp((s) => s.waterfall);
+  const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const theme = useApp((s) => s.theme);
@@ -80,31 +82,36 @@ export default function PlotStage() {
     return withPeakOverlay(withBase, peakOverlay, id);
   }, [payload, fitOverlay, peakOverlay, baselineOverlay, waterfall, active]);
 
+  // Channels actually drawn (y selection minus the x-axis channel), in order.
+  const plotted = useMemo(
+    () => (active ? effectiveChannels(active.data, yKeys, xKey) : []),
+    [active, yKeys, xKey],
+  );
+
   // Map each display-series back to its dataset channel so the per-channel style
   // overrides land on the right line. Plotted channels come first (in yKeys order,
   // matching the backend), overlays after — those get `undefined` (defaults).
   const styleList = useMemo(() => {
-    if (!displayPayload || !active) return undefined;
-    const plotted = yKeys ?? active.data.labels.map((_, i) => i);
+    if (!displayPayload) return undefined;
     return displayPayload.series.map((_, i) =>
       i < plotted.length ? seriesStyles[plotted[i]] : undefined,
     );
-  }, [displayPayload, active, yKeys, seriesStyles]);
+  }, [displayPayload, plotted, seriesStyles]);
 
-  // Fetch series whenever the active dataset or y-scale changes.
+  // Fetch series whenever the active dataset, scale, or channel roles change.
   useEffect(() => {
     let cancelled = false;
     if (!active) {
       setPayload(null);
       return;
     }
-    fetchPlot(active.data, yLog, xLog, yKeys, y2Keys).then((p) => {
+    fetchPlot(active.data, yLog, xLog, plotted, y2Keys, xKey).then((p) => {
       if (!cancelled) setPayload(p);
     });
     return () => {
       cancelled = true;
     };
-  }, [active, yLog, xLog, yKeys, y2Keys]);
+  }, [active, yLog, xLog, plotted, y2Keys, xKey]);
 
   // (Re)create the uPlot instance when payload / size / theme change.
   useEffect(() => {
@@ -185,7 +192,7 @@ export default function PlotStage() {
   }
 
   // Alternate render modes (each self-contained; polar wins, then stack).
-  const nPlotted = yKeys?.length ?? active?.data.labels.length ?? 0;
+  const nPlotted = plotted.length;
   if (polarMode && active) return <PolarStage />;
   if (stackMode && nPlotted >= 2) return <MultiPanelStage />;
 

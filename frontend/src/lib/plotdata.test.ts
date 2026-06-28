@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyWaterfall,
   buildColumns,
+  effectiveChannels,
   peakOverlayArray,
   withBaselineOverlay,
   withFitOverlay,
@@ -72,6 +73,69 @@ describe("buildColumns", () => {
     expect(p.data).toHaveLength(2); // x + 1 channel
     expect(p.data[0]).toHaveLength(201);
     expect(p.series[0].label).toBe("Moment");
+  });
+
+  it("uses a value channel as the x-axis when xKey is set (M-vs-H)", () => {
+    const ds: DataStruct = {
+      time: [0, 1, 2], // time, ignored when xKey is set
+      values: [
+        [10, 100],
+        [20, 200],
+        [30, 300],
+      ],
+      labels: ["M", "H"],
+      units: ["emu", "Oe"],
+      metadata: { x_column_name: "T", x_column_unit: "s" },
+    };
+    const p = buildColumns(ds, null, 1); // x = channel 1 (H)
+    expect(p.data[0]).toEqual([100, 200, 300]); // x is the H column
+    expect(p.xLabel).toBe("H");
+    expect(p.xUnit).toBe("Oe");
+    // The x channel is excluded from the plotted series (no H-vs-H line).
+    expect(p.series).toEqual([{ label: "M", unit: "emu", axis: 0 }]);
+    expect(p.data[1]).toEqual([10, 20, 30]);
+  });
+
+  it("honors an explicit yChannels list alongside xKey", () => {
+    const ds: DataStruct = {
+      time: [0, 1],
+      values: [
+        [1, 2, 3],
+        [4, 5, 6],
+      ],
+      labels: ["A", "B", "C"],
+      units: ["", "", ""],
+      metadata: {},
+    };
+    const p = buildColumns(ds, null, 0, [2]); // x = A, plot only C
+    expect(p.series.map((s) => s.label)).toEqual(["C"]);
+    expect(p.data[0]).toEqual([1, 4]); // A as x
+    expect(p.data[1]).toEqual([3, 6]); // C as y
+  });
+});
+
+describe("effectiveChannels", () => {
+  const ds: DataStruct = {
+    time: [0, 1],
+    values: [
+      [1, 2, 3],
+      [4, 5, 6],
+    ],
+    labels: ["A", "B", "C"],
+    units: ["", "", ""],
+    metadata: {},
+  };
+
+  it("returns all channels when nothing is selected and x = time", () => {
+    expect(effectiveChannels(ds, null, null)).toEqual([0, 1, 2]);
+  });
+
+  it("excludes the x-axis channel (can't plot a channel against itself)", () => {
+    expect(effectiveChannels(ds, null, 1)).toEqual([0, 2]);
+  });
+
+  it("intersects the y selection with the x exclusion", () => {
+    expect(effectiveChannels(ds, [1, 2], 2)).toEqual([1]);
   });
 });
 

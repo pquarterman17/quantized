@@ -6,9 +6,11 @@
 
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import { Card, Pill, SliderRow } from "../primitives";
+import { Card, Pill, Select, SliderRow } from "../primitives";
 
 export default function ChannelsCard({ active }: { active: Dataset | null }) {
+  const xKey = useApp((s) => s.xKey);
+  const setXKey = useApp((s) => s.setXKey);
   const yKeys = useApp((s) => s.yKeys);
   const setYKeys = useApp((s) => s.setYKeys);
   const y2Keys = useApp((s) => s.y2Keys);
@@ -21,12 +23,15 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const { labels, units } = active.data;
   const selected = yKeys ?? labels.map((_, i) => i);
   const y2 = new Set(y2Keys ?? []);
+  // Default x source name (ds.time), e.g. "Temperature" or "Index".
+  const xDefaultLabel = String(active.data.metadata?.["x_column_name"] ?? "Index");
 
   const toggle = (i: number) => {
     const next = selected.includes(i)
       ? selected.filter((x) => x !== i)
       : [...selected, i].sort((a, b) => a - b);
-    if (next.length === 0) return; // always keep at least one channel visible
+    // Keep at least one *plotted* (non-x) channel — the x channel is filtered out.
+    if (next.filter((x) => x !== xKey).length === 0) return;
     setYKeys(next.length === labels.length ? null : next);
     // A hidden channel can't sit on the secondary axis.
     if (!next.includes(i) && y2.has(i)) {
@@ -49,7 +54,21 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
 
   return (
     <Card title="Channels" defaultOpen={false}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <span style={{ flex: "0 0 auto", color: "var(--text-dim)" }}>X axis</span>
+        <Select
+          style={{ flex: 1 }}
+          value={xKey == null ? "" : String(xKey)}
+          onChange={(e) => setXKey(e.target.value === "" ? null : Number(e.target.value))}
+          title="Channel to use as the plot's x-axis (default = the dataset's x column)"
+          options={[
+            { value: "", label: `${xDefaultLabel} (default)` },
+            ...labels.map((lab, i) => ({ value: String(i), label: units[i] ? `${lab} (${units[i]})` : lab })),
+          ]}
+        />
+      </div>
       {labels.map((lab, i) => {
+        if (i === xKey) return null; // this channel is the X axis, not a Y series
         const visible = selected.includes(i);
         return (
           <div

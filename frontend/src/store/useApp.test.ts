@@ -132,6 +132,31 @@ describe("useApp renameDataset", () => {
   });
 });
 
+describe("useApp x-axis channel", () => {
+  it("resets xKey to .time when switching or adding a dataset", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      activeId: "d1",
+      xKey: 1,
+    });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().xKey).toBeNull();
+
+    useApp.setState({ xKey: 2 });
+    useApp.getState().addDataset({ id: "d3", name: "c", data: raw });
+    expect(useApp.getState().xKey).toBeNull();
+  });
+
+  it("loadWorkspace resets the x-axis channel", () => {
+    useApp.setState({ datasets: [{ id: "old", name: "x", data: raw }], activeId: "old", xKey: 3 });
+    useApp.getState().loadWorkspace([{ id: "w1", name: "n", data: raw }]);
+    expect(useApp.getState().xKey).toBeNull();
+  });
+});
+
 describe("useApp axis limits", () => {
   it("clears explicit limits when switching the active dataset", () => {
     useApp.setState({

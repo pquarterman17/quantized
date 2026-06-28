@@ -29,22 +29,44 @@ export interface PlotPayload {
   xUnit: string;
 }
 
-/** Pure client-side column packing (x = time, all value channels). `y2Keys`
- *  (channel indices) tags those series with axis 1 for the offline dual-Y path. */
-export function buildColumns(ds: DataStruct, y2Keys: number[] | null = null): PlotPayload {
-  const x = ds.time.map((v) => (Number.isFinite(v) ? v : null));
-  const nCh = ds.labels.length;
+/** Pure client-side column packing — the offline mirror of /api/plot/series.
+ *  `xKey` (a value-channel index, null = ds.time) chooses the x-axis source;
+ *  `yChannels` is the explicit list of channels to plot (null = all channels
+ *  except the x one). `y2Keys` (channel indices) tags those series with axis 1
+ *  for the offline dual-Y path. */
+export function buildColumns(
+  ds: DataStruct,
+  y2Keys: number[] | null = null,
+  xKey: number | null = null,
+  yChannels: number[] | null = null,
+): PlotPayload {
+  const xSrc = xKey == null ? ds.time : ds.values.map((row) => row[xKey]);
+  const x = xSrc.map((v) => (Number.isFinite(v) ? v : null));
+  const channels = yChannels ?? ds.labels.map((_, i) => i).filter((i) => i !== xKey);
   const y2 = new Set(y2Keys ?? []);
   const cols: (number | null)[][] = [x];
-  for (let c = 0; c < nCh; c++) {
+  for (const c of channels) {
     cols.push(ds.values.map((row) => (Number.isFinite(row[c]) ? row[c] : null)));
   }
   return {
     data: cols as uPlot.AlignedData,
-    series: ds.labels.map((label, i) => ({ label, unit: ds.units[i] ?? "", axis: y2.has(i) ? 1 : 0 })),
-    xLabel: String(ds.metadata?.["x_column_name"] ?? "x"),
-    xUnit: String(ds.metadata?.["x_column_unit"] ?? ""),
+    series: channels.map((c) => ({ label: ds.labels[c], unit: ds.units[c] ?? "", axis: y2.has(c) ? 1 : 0 })),
+    xLabel: xKey == null ? String(ds.metadata?.["x_column_name"] ?? "x") : (ds.labels[xKey] ?? "x"),
+    xUnit: xKey == null ? String(ds.metadata?.["x_column_unit"] ?? "") : (ds.units[xKey] ?? ""),
   };
+}
+
+/** The value-channel indices actually plotted, in order: the y selection (or all
+ *  channels) minus the channel used as the x-axis (you can't plot a channel
+ *  against itself). The single source of truth shared by the fetch + the
+ *  per-channel style mapping in every stage. */
+export function effectiveChannels(
+  ds: DataStruct,
+  yKeys: number[] | null,
+  xKey: number | null,
+): number[] {
+  const base = yKeys ?? ds.labels.map((_, i) => i);
+  return xKey == null ? base : base.filter((c) => c !== xKey);
 }
 
 function fromResponse(r: PlotSeriesResponse): PlotPayload {
@@ -153,24 +175,28 @@ export function applyWaterfall(payload: PlotPayload, fraction: number): PlotPayl
   return { ...payload, data: data as unknown as uPlot.AlignedData };
 }
 
-/** Fetch plot series from the backend; fall back to client packing offline. */
+/** Fetch plot series from the backend; fall back to client packing offline.
+ *  `xKey` selects a value channel as the x-axis (null = ds.time); `yKeys` is the
+ *  effective plotted-channel list (already excluding the x channel). */
 export async function fetchPlot(
   ds: DataStruct,
   yLog: boolean,
   xLog = false,
   yKeys: number[] | null = null,
   y2Keys: number[] | null = null,
+  xKey: number | null = null,
 ): Promise<PlotPayload> {
   try {
     const r = await plotSeries({
       dataset: ds,
       y_log: yLog,
       x_log: xLog,
+      x_key: xKey ?? undefined,
       y_keys: yKeys ?? undefined,
       y2_keys: y2Keys ?? undefined,
     });
     return fromResponse(r);
   } catch {
-    return buildColumns(ds, y2Keys);
+    return buildColumns(ds, y2Keys, xKey, yKeys);
   }
 }

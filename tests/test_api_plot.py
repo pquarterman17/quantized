@@ -83,6 +83,31 @@ def test_plot_series_secondary_axis_by_label() -> None:
     assert [s["axis"] for s in body["series"]] == [0, 1]
 
 
+def test_plot_series_x_key_overrides_x_axis() -> None:
+    # Pick the "Temp" channel (index 1) as the x-axis; plot Moment vs Temp.
+    # The frontend sends y_keys excluding the x channel, so Temp is not replotted.
+    resp = client.post(
+        "/api/plot/series",
+        json={"dataset": _MULTI, "x_key": 1, "y_keys": [0]},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["data"][0] == [0.5, 0.6, 0.7]  # x is the Temp column
+    assert body["x"]["label"] == "Temp"
+    assert body["x"]["unit"] == "K"
+    assert [s["label"] for s in body["series"]] == ["Moment"]
+    assert body["data"][1] == [10.0, 20.0, 30.0]
+
+
+def test_plot_series_x_key_by_label() -> None:
+    body = client.post(
+        "/api/plot/series",
+        json={"dataset": _MULTI, "x_key": "Temp", "y_keys": ["Moment"]},
+    ).json()
+    assert body["x"]["label"] == "Temp"
+    assert [s["label"] for s in body["series"]] == ["Moment"]
+
+
 # ── /api/plot/map (2-D heatmap grid) ──────────────────────────────────────
 # Scattered (x, y, z) packed as three channels; z = 2x + 3y + 1 (a plane).
 _MAP_DS = {

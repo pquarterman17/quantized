@@ -50,6 +50,7 @@ interface AppState {
   yLim: [number, number] | null; // explicit Y range (null = autoscale)
   xFmt: AxisFormat; // X-axis tick number format
   yFmt: AxisFormat; // Y-axis tick number format (also applied to the secondary axis)
+  xKey: number | null; // value channel used as the plot x-axis (null = .time)
   yKeys: number[] | null; // which value channels to plot (null = all)
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
   refLines: RefLine[]; // fixed X/Y marker lines on the plot
@@ -106,6 +107,7 @@ interface AppState {
   setYLim: (yLim: [number, number] | null) => void;
   setXFmt: (xFmt: AxisFormat) => void;
   setYFmt: (yFmt: AxisFormat) => void;
+  setXKey: (xKey: number | null) => void;
   setYKeys: (yKeys: number[] | null) => void;
   setY2Keys: (y2Keys: number[] | null) => void;
   addRefLine: (axis: "x" | "y", value: number) => void;
@@ -195,6 +197,7 @@ export const useApp = create<AppState>((set, get) => ({
   yLim: null,
   xFmt: { mode: "auto", digits: 2 },
   yFmt: { mode: "auto", digits: 2 },
+  xKey: null,
   yKeys: null,
   y2Keys: null,
   refLines: [],
@@ -224,6 +227,7 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({
       datasets: [...s.datasets, ds],
       activeId: ds.id,
+      xKey: null, // new dataset → x-axis back to .time
       yKeys: null, // new dataset → plot all its channels
       y2Keys: null, // and reset the secondary-axis assignment
       seriesStyles: {}, // styles are keyed by channel index → reset per dataset
@@ -259,6 +263,7 @@ export const useApp = create<AppState>((set, get) => ({
     set({
       datasets,
       activeId: datasets[0]?.id ?? null,
+      xKey: null,
       yKeys: null,
       y2Keys: null,
       seriesStyles: {},
@@ -271,7 +276,16 @@ export const useApp = create<AppState>((set, get) => ({
       status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}`,
     }),
   setActive: (id) =>
-    set({ activeId: id, yKeys: null, y2Keys: null, seriesStyles: {}, xLim: null, yLim: null, rsmPeaks: null }),
+    set({
+      activeId: id,
+      xKey: null,
+      yKeys: null,
+      y2Keys: null,
+      seriesStyles: {},
+      xLim: null,
+      yLim: null,
+      rsmPeaks: null,
+    }),
   removeDataset: (id) =>
     set((s) => {
       const datasets = s.datasets.filter((d) => d.id !== id);
@@ -354,6 +368,7 @@ export const useApp = create<AppState>((set, get) => ({
   setYLim: (yLim) => set({ yLim }),
   setXFmt: (xFmt) => set({ xFmt }),
   setYFmt: (yFmt) => set({ yFmt }),
+  setXKey: (xKey) => set({ xKey }),
   setYKeys: (yKeys) => set({ yKeys }),
   setY2Keys: (y2Keys) => set({ y2Keys }),
   addRefLine: (axis, value) =>
