@@ -94,6 +94,7 @@ interface AppState {
   datasetMathOpen: boolean;
   figureBuilderOpen: boolean;
   waterfallOpen: boolean;
+  reflViewOpen: boolean;
   fitOverlay: FitOverlay | null;
   peakOverlay: PeakOverlay | null;
   baselineOverlay: BaselineOverlay | null;
@@ -181,6 +182,7 @@ interface AppState {
   setDatasetMathOpen: (open: boolean) => void;
   setFigureBuilderOpen: (open: boolean) => void;
   setWaterfallOpen: (open: boolean) => void;
+  setReflViewOpen: (open: boolean) => void;
   setFitOverlay: (overlay: FitOverlay | null) => void;
   setPeakOverlay: (overlay: PeakOverlay | null) => void;
   setBaselineOverlay: (overlay: BaselineOverlay | null) => void;
@@ -286,6 +288,7 @@ export const useApp = create<AppState>((set, get) => ({
   datasetMathOpen: false,
   figureBuilderOpen: false,
   waterfallOpen: false,
+  reflViewOpen: false,
   fitOverlay: null,
   peakOverlay: null,
   baselineOverlay: null,
@@ -764,6 +767,7 @@ export const useApp = create<AppState>((set, get) => ({
   setDatasetMathOpen: (datasetMathOpen) => set({ datasetMathOpen }),
   setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
   setWaterfallOpen: (waterfallOpen) => set({ waterfallOpen }),
+  setReflViewOpen: (reflViewOpen) => set({ reflViewOpen }),
   setMagToolsOpen: (magToolsOpen) => set({ magToolsOpen }),
   setFitOverlay: (fitOverlay) => set({ fitOverlay }),
   setPeakOverlay: (peakOverlay) => set({ peakOverlay }),

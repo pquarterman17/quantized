@@ -25,6 +25,7 @@ import ReflectivityPanel from "./components/workshops/reflectivity/ReflectivityP
 import RsmPanel from "./components/workshops/rsm/RsmPanel";
 import DigitizerView from "./components/workshops/digitizer/DigitizerView";
 import WaterfallView from "./components/workshops/waterfall/WaterfallView";
+import ReflView from "./components/workshops/reflview/ReflView";
 import {
   exportConsolidated,
   exportFigure,
@@ -76,6 +77,7 @@ export default function App() {
   const datasetMathOpen = useApp((s) => s.datasetMathOpen);
   const figureBuilderOpen = useApp((s) => s.figureBuilderOpen);
   const waterfallOpen = useApp((s) => s.waterfallOpen);
+  const reflViewOpen = useApp((s) => s.reflViewOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -293,6 +295,12 @@ export default function App() {
         run: () => s().setReflectivityOpen(true),
       },
       {
+        id: "reflview",
+        group: "Analyze",
+        label: "Reflectometry view (data + model + SLD)…",
+        run: () => s().setReflViewOpen(true),
+      },
+      {
         id: "baseline",
         group: "Analyze",
         label: "Baseline / background…",
@@ -483,6 +491,7 @@ export default function App() {
       {datasetMathOpen && <DatasetMathPanel />}
       {figureBuilderOpen && <FigureBuilderView />}
       {waterfallOpen && <WaterfallView />}
+      {reflViewOpen && <ReflView />}
     </div>
   );
 }
