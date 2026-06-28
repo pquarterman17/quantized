@@ -32,6 +32,31 @@ def _colon(a: float, d: float, b: float) -> NDArray[np.float64]:
     return np.asarray(a + np.arange(n + 1) * d, dtype=float)
 
 
+def _sanitize_xy(
+    x: NDArray[np.float64], y: NDArray[np.float64]
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Make ``(x, y)`` safe for interpolation: drop non-finite pairs, sort by x,
+    and collapse duplicate x (mean y). Mirrors MATLAB ``interp1``'s effective
+    tolerance (it ignores NaN values and accepts unsorted input). Every step is
+    guarded, so clean, strictly-increasing, finite data passes through untouched
+    — golden parity is preserved; only real-world data (NaN gaps, hysteresis /
+    unsorted sweeps, step profiles with repeated x) is repaired."""
+    finite = np.isfinite(x) & np.isfinite(y)
+    if not bool(finite.all()):
+        x, y = x[finite], y[finite]
+    if x.size > 1 and not bool(np.all(np.diff(x) > 0)):
+        order = np.argsort(x, kind="stable")
+        x, y = x[order], y[order]
+        if bool((x[1:] == x[:-1]).any()):
+            ux, inv = np.unique(x, return_inverse=True)
+            sums = np.zeros(ux.size)
+            cnts = np.zeros(ux.size)
+            np.add.at(sums, inv, y)
+            np.add.at(cnts, inv, 1.0)
+            x, y = ux, sums / cnts
+    return x, y
+
+
 def _interp_column(
     x: NDArray[np.float64],
     y: NDArray[np.float64],
@@ -39,6 +64,10 @@ def _interp_column(
     method: str,
     extrapolate: bool,
 ) -> NDArray[np.float64]:
+    x, y = _sanitize_xy(x, y)
+    if x.size < 2:
+        # Too few finite points to interpolate — undefined everywhere.
+        return np.full(np.shape(x_new), np.nan, dtype=float)
     if method == "linear":
         if extrapolate:
             fn = interp1d(x, y, kind="linear", fill_value="extrapolate", assume_sorted=True)
@@ -82,7 +111,11 @@ def resample_data(
     modes = sum(v is not None for v in (n_points, step, grid, match_dataset))
     if modes > 1:
         raise ValueError("specify only one of: n_points, step, grid, match_dataset")
-    lo, hi = float(x_old.min()), float(x_old.max())
+    # MATLAB min/max ignore NaN; mirror that so a NaN in the x axis doesn't
+    # collapse the auto-grid to all-NaN. No-op on clean data (golden parity).
+    if not np.isfinite(x_old).any():
+        raise ValueError("x axis has no finite values")
+    lo, hi = float(np.nanmin(x_old)), float(np.nanmax(x_old))
     if modes == 0:
         x_new = np.linspace(lo, hi, 500)
     elif n_points is not None:

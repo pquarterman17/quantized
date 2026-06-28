@@ -23,13 +23,22 @@ _UNIT_RE = re.compile(r"^(.+?)\s*\(([^)]+)\)$")
 
 
 def is_refl1d_dat(path: Path) -> bool:
-    """Sniff a ``.dat`` as refl1d output: ``#`` header, not a QD [Header] file."""
+    """Sniff a ``.dat`` as refl1d output: a ``#``-comment column header naming a
+    profile (``z``/``rho``) or reflectivity (``Q``/``R``) axis, and not a QD
+    ``[Header]`` file. The column header may follow other ``#`` metadata lines
+    (e.g. ``# intensity:`` / ``# background:`` in refl-fit exports), so scan every
+    comment line rather than only the first non-empty one."""
     head = Path(path).read_text(encoding="latin-1", errors="replace")[:512]
     if "[header]" in head.lower():
         return False
-    first = next((ln for ln in head.splitlines() if ln.strip()), "")
-    low = first.lower()
-    return first.startswith("#") and ("rho" in low or "z (" in low or ("q" in low and "r" in low))
+    for line in head.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("#"):
+            continue
+        low = stripped.lower()
+        if "rho" in low or "z (" in low or ("q" in low and "r" in low):
+            return True
+    return False
 
 
 def import_refl1d_dat(filepath: str | Path) -> DataStruct:

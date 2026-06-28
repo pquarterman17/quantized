@@ -217,17 +217,30 @@ def regrid2d(
     """
     xv = np.asarray(x, dtype=float).ravel()
     yv = np.asarray(y, dtype=float).ravel()
+    zv = np.asarray(z, dtype=float).ravel()
+    # Scattered interpolation (scatteredInterpolant/griddata) needs finite points;
+    # drop any non-finite (x, y, z) triple so real data with NaN gaps still grids.
+    # No-op on clean data, so golden parity holds.
+    finite = np.isfinite(xv) & np.isfinite(yv) & np.isfinite(zv)
+    if not bool(finite.all()):
+        xv, yv, zv = xv[finite], yv[finite], zv[finite]
     xl = (float(xv.min()), float(xv.max())) if xlim is None else (float(xlim[0]), float(xlim[1]))
     yl = (float(yv.min()), float(yv.max())) if ylim is None else (float(ylim[0]), float(ylim[1]))
     if xl[0] >= xl[1]:
-        raise ValueError("xlim[0] must be less than xlim[1]")
+        raise ValueError(
+            "cannot build a 2-D grid: the x axis has no range "
+            f"(min == max == {xl[0]:g}); it is constant or single-valued"
+        )
     if yl[0] >= yl[1]:
-        raise ValueError("ylim[0] must be less than ylim[1]")
+        raise ValueError(
+            "cannot build a 2-D grid: the y axis has no range "
+            f"(min == max == {yl[0]:g}); it is constant or single-valued"
+        )
     x_grid = np.linspace(xl[0], xl[1], nx)
     y_grid = np.linspace(yl[0], yl[1], ny)
     xq, yq = np.meshgrid(x_grid, y_grid)
     result = interpolate2d(
-        x, y, z, xq, yq,
+        xv, yv, zv, xq, yq,
         method=method, extrapolation=extrapolation, smoothing=smoothing, idw_power=idw_power,
     )
     return xq, yq, np.asarray(result["zq"], dtype=float)
