@@ -42,6 +42,7 @@ import { clearAutosave, loadAutosave, saveAutosave } from "./lib/autosave";
 import { saveBlob } from "./lib/download";
 import { buildExportStyles } from "./lib/exportStyles";
 import { openFilePicker } from "./lib/openFilePicker";
+import { toolForKey } from "./lib/plotToolKeys";
 import { parseWorkspace, serializeWorkspace } from "./lib/workspace";
 import { toast } from "./store/toasts";
 import { useApp } from "./store/useApp";
@@ -196,6 +197,18 @@ export default function App() {
             s.setActive(s.datasets[(((base + delta) % n) + n) % n].id);
             return;
           }
+          case "p":
+          case "P": // pick peak → the Peaks workshop
+            e.preventDefault();
+            s.setPeaksOpen(true);
+            return;
+        }
+        // H/Z/D/M select a plot tool.
+        const t = toolForKey(e.key);
+        if (t) {
+          e.preventDefault();
+          s.setPlotTool(t);
+          return;
         }
       }
       if (!(e.metaKey || e.ctrlKey)) return;

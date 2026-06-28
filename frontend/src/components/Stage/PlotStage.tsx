@@ -303,7 +303,7 @@ export default function PlotStage() {
   };
 
   return (
-    <div className="qzk-stage" onContextMenu={onStageContextMenu}>
+    <div className={`qzk-stage tool-${tool}`} onContextMenu={onStageContextMenu}>
       <div ref={hostRef} style={{ position: "absolute", inset: 8 }} />
       {menu && <ContextMenu x={menu.x} y={menu.y} items={axesMenuItems()} onClose={() => setMenu(null)} />}
 

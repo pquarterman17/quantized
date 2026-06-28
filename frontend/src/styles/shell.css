@@ -63,6 +63,17 @@ body {
 /* Library group-filter dropdown (#20). */
 .qzk-group-filter { width: 100%; margin-top: 6px; }
 
+/* Per-tool plot cursors (H/Z/D/M tool model). uPlot's .u-over is the interactive
+   layer; set the cursor there (and on the stage) to reflect the active tool. */
+.qzk-stage.tool-pan,
+.qzk-stage.tool-pan .u-over { cursor: grab; }
+.qzk-stage.tool-pan .u-over:active { cursor: grabbing; }
+.qzk-stage.tool-zoom .u-over,
+.qzk-stage.tool-cursor .u-over,
+.qzk-stage.tool-measure .u-over,
+.qzk-stage.tool-stats .u-over,
+.qzk-stage.tool-region .u-over { cursor: crosshair; }
+
 /* ── Preferences dialog (⌘,) — adapted from the design-system mock shell.css ── */
 .qzk-prefs-overlay { display: flex; align-items: flex-start; justify-content: center; }
 .qzk-prefs { margin-top: 7vh; width: min(640px, 94vw); max-height: 80vh; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }

@@ -44,7 +44,11 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     title: "Plot",
     items: [
       { keys: "A", desc: "Autoscale / reset the view" },
-      { keys: "Drag", desc: "Box-zoom to a region" },
+      { keys: "Z", desc: "Box-zoom tool" },
+      { keys: "H", desc: "Pan tool" },
+      { keys: "D", desc: "Data-cursor tool" },
+      { keys: "M", desc: "Measure tool" },
+      { keys: "Drag", desc: "Use the active tool over a region" },
       { keys: "Double-click", desc: "Reset / auto-scale the view" },
       { keys: "Right-click", desc: "Plot menu (log · grid · legend · copy · save…)" },
       { keys: "Right-click legend", desc: "Series menu (rename · hide · move to Y2…)" },
@@ -55,6 +59,7 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     items: [
       { keys: "F", desc: "Curve-fit workshop" },
       { keys: "Y", desc: "Hysteresis workshop" },
+      { keys: "P", desc: "Find peaks" },
     ],
   },
 ];
