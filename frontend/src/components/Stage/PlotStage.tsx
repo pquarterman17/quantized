@@ -21,6 +21,7 @@ import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { exportPlotPng } from "../../lib/plotExport";
 import { normalizeRange } from "../../lib/regionSelect";
+import { suggestLogScale } from "../../lib/autoscale";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotPlugins";
@@ -47,6 +48,7 @@ export default function PlotStage() {
   const showGrid = useApp((s) => s.showGrid);
   const showLegend = useApp((s) => s.showLegend);
   const plotTemplate = useApp((s) => s.plotTemplate);
+  const showAxisBox = useApp((s) => s.showAxisBox);
   const refLines = useApp((s) => s.refLines);
   const updateRefLine = useApp((s) => s.updateRefLine);
   const annotations = useApp((s) => s.annotations);
@@ -175,6 +177,7 @@ export default function PlotStage() {
         xFmt,
         yFmt,
         showGrid,
+        axisBox: showAxisBox,
         fontSize: resolveTemplate(plotTemplate).fontSize,
         baseLineWidth: resolveTemplate(plotTemplate).lineWidth,
         title: plotTitle,
@@ -220,7 +223,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, plotTemplate, plotTitle, xAxisLabel, yAxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, plotTitle, xAxisLabel, yAxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool]);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the
@@ -234,6 +237,22 @@ export default function PlotStage() {
     if (plotRef.current && displayPayload) {
       plotRef.current.setData(displayPayload.data, true); // resetScales = re-fit
     }
+  }
+
+  // Smart auto-scale: pick log vs linear per axis from the plotted data's dynamic
+  // range, then clear manual limits so the view re-fits. (#17)
+  function smartScale() {
+    if (!displayPayload) return;
+    const cols = displayPayload.data as (number | null)[][];
+    const xVals = cols[0] ?? [];
+    const yVals: (number | null)[] = [];
+    for (let s = 1; s < cols.length; s++) yVals.push(...cols[s]);
+    const st = useApp.getState();
+    st.setXLog(suggestLogScale(xVals));
+    st.setYLog(suggestLogScale(yVals));
+    st.setXLim(null);
+    st.setYLim(null);
+    st.setStatus("smart auto-scaled");
   }
 
   function savePng() {
@@ -289,7 +308,7 @@ export default function PlotStage() {
       {menu && <ContextMenu x={menu.x} y={menu.y} items={axesMenuItems()} onClose={() => setMenu(null)} />}
 
       {displayPayload && (
-        <PlotToolbar onReset={resetView} onSavePng={savePng} onCopyData={copyData} />
+        <PlotToolbar onReset={resetView} onSmartScale={smartScale} onSavePng={savePng} onCopyData={copyData} />
       )}
 
       {insetMode && displayPayload && (

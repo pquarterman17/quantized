@@ -10,6 +10,7 @@ import type { RegionStats } from "./regionStats";
 import type { Annotation, AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
 import {
   annotationPlugin,
+  axisBoxPlugin,
   errorBarsPlugin,
   measurePlugin,
   panPlugin,
@@ -134,6 +135,8 @@ export interface BuildOptsArgs {
   fontSize?: number;
   /** Default series stroke width when no per-series override (template; default 1.5). */
   baseLineWidth?: number;
+  /** Draw a full rectangular frame around the plot area (publication "box"). */
+  axisBox?: boolean;
   /** Chart title rendered above the plot (blank/undefined = none). */
   title?: string;
   /** Override the x-axis label (blank/undefined = derive from the data). */
@@ -197,6 +200,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   }
   if (args.errorBars && args.errorBars.size > 0) {
     plugins.push(errorBarsPlugin(args.errorBars, cssVar("--text-dim") || "#888"));
+  }
+  if (args.axisBox) {
+    plugins.push(axisBoxPlugin(cssVar("--text-dim") || "#888"));
   }
 
   // A static [min,max] tuple fixes the scale (Origin-style); omit it to autoscale.

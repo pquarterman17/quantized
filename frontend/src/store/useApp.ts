@@ -61,6 +61,7 @@ interface AppState {
   showLegend: boolean; // show the floating legend overlay
   legendPos: LegendPos; // which corner the floating legend pins to
   plotTemplate: string; // on-screen publication template (base font + line width)
+  showAxisBox: boolean; // draw a full frame around the plot area
   stackMode: boolean; // multi-panel: one stacked sub-plot per channel
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
@@ -152,6 +153,7 @@ interface AppState {
   setShowLegend: (showLegend: boolean) => void;
   setLegendPos: (pos: LegendPos) => void;
   setPlotTemplate: (template: string) => void;
+  setShowAxisBox: (show: boolean) => void;
   setStackMode: (stackMode: boolean) => void;
   setInsetMode: (insetMode: boolean) => void;
   setPolarMode: (polarMode: boolean) => void;
@@ -269,6 +271,7 @@ export const useApp = create<AppState>((set, get) => ({
   showLegend: true,
   legendPos: "ne",
   plotTemplate: "screen",
+  showAxisBox: false,
   stackMode: false,
   insetMode: false,
   polarMode: false,
@@ -695,6 +698,7 @@ export const useApp = create<AppState>((set, get) => ({
   setShowLegend: (showLegend) => set({ showLegend }),
   setLegendPos: (legendPos) => set({ legendPos }),
   setPlotTemplate: (plotTemplate) => set({ plotTemplate }),
+  setShowAxisBox: (showAxisBox) => set({ showAxisBox }),
   setStackMode: (stackMode) => set({ stackMode }),
   setInsetMode: (insetMode) => set({ insetMode }),
   setPolarMode: (polarMode) => set({ polarMode }),

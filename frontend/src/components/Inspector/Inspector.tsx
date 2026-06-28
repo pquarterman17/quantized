@@ -32,6 +32,8 @@ export default function Inspector() {
   const setLegendPos = useApp((s) => s.setLegendPos);
   const plotTemplate = useApp((s) => s.plotTemplate);
   const setPlotTemplate = useApp((s) => s.setPlotTemplate);
+  const showAxisBox = useApp((s) => s.showAxisBox);
+  const setShowAxisBox = useApp((s) => s.setShowAxisBox);
 
   return (
     <aside className="qzk-inspector">
@@ -69,6 +71,14 @@ export default function Inspector() {
             onChange={(e) => setShowGrid(e.target.checked)}
           />
           Grid lines
+        </label>
+        <label className="qz-check">
+          <input
+            type="checkbox"
+            checked={showAxisBox}
+            onChange={(e) => setShowAxisBox(e.target.checked)}
+          />
+          Axis box (frame)
         </label>
         <label className="qz-check">
           <input

@@ -16,11 +16,12 @@ const TOOLS = [
 
 interface Props {
   onReset: () => void;
+  onSmartScale: () => void;
   onSavePng: () => void;
   onCopyData: () => void;
 }
 
-export default function PlotToolbar({ onReset, onSavePng, onCopyData }: Props) {
+export default function PlotToolbar({ onReset, onSmartScale, onSavePng, onCopyData }: Props) {
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
   const stackMode = useApp((s) => s.stackMode);
@@ -45,6 +46,9 @@ export default function PlotToolbar({ onReset, onSavePng, onCopyData }: Props) {
       <span className="qzk-tool-sep" />
       <button className="qzk-tool-btn" title="Reset view (or double-click the plot)" onClick={onReset}>
         ⊡
+      </button>
+      <button className="qzk-tool-btn" title="Smart auto-scale (pick log/linear)" onClick={onSmartScale}>
+        ⊿
       </button>
       <button className="qzk-tool-btn" title="Save plot as PNG" onClick={onSavePng}>
         ⤓

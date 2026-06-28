@@ -140,6 +140,25 @@ export function refLinePlugin(
 
 /** Draw text annotations (a small dot + label) pinned at data coordinates,
  *  clipped to the plot area so off-screen labels don't bleed into the axes. */
+/** Draw a full rectangular frame around the plot area (the "axis box" look that
+ *  publications favour, esp. with the grid off). uPlot's per-axis border only
+ *  gives an L; this strokes all four sides of u.bbox. (#17) */
+export function axisBoxPlugin(color: string): uPlot.Plugin {
+  return {
+    hooks: {
+      draw: (u: uPlot) => {
+        const { ctx } = u;
+        const { left, top, width, height } = u.bbox;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(left + 0.5, top + 0.5, width - 1, height - 1);
+        ctx.restore();
+      },
+    },
+  };
+}
+
 export function annotationPlugin(
   annotations: Annotation[],
   color: string,
