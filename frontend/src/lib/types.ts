@@ -216,6 +216,15 @@ export interface RefLine {
 
 /** Per-channel line style (solid/dashed/dotted) — maps to a uPlot dash array. */
 export type LineStyle = "solid" | "dashed" | "dotted";
+export type MarkerShape =
+  | "circle"
+  | "square"
+  | "triangle"
+  | "downtriangle"
+  | "diamond"
+  | "plus"
+  | "cross"
+  | "star";
 
 /** A non-data column role (W5 DataWorkspace column roles). A channel with a role
  *  is excluded from the plot. `label` keeps it in the worksheet + its statistics
@@ -250,8 +259,9 @@ export interface SeriesStyle {
   color?: string;
   width?: number;
   line?: LineStyle;
-  marker?: boolean; // draw circular markers at each data point
+  marker?: boolean; // draw markers at each data point
   markerSize?: number; // marker diameter in px (default 5); only when marker
+  markerShape?: MarkerShape; // marker glyph (default circle); only when marker
 }
 
 /** One element row from the reference table. */

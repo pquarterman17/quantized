@@ -3,6 +3,7 @@
 
 import type uPlot from "uplot";
 
+import { FILLED_SHAPES, markerPaths } from "./markers";
 import type { Measurement } from "./measure";
 import type { PlotPayload } from "./plotdata";
 import type { RegionStats } from "./regionStats";
@@ -269,10 +270,18 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         }
         const width = style?.width ?? 1.5;
         const dash = style?.line ? DASH[style.line] : undefined;
-        // Optional markers: show circular points (set line width to 0 for scatter).
-        const points = style?.marker
-          ? { show: true, size: style.markerSize ?? 5 }
-          : { show: false };
+        // Optional markers. Default is a filled circle (uPlot built-in); other
+        // glyphs supply a custom paths builder. Open glyphs (+/✕/✳) stroke only;
+        // closed glyphs fill with the series colour.
+        let points: uPlot.Series.Points = { show: false };
+        if (style?.marker) {
+          const size = style.markerSize ?? 5;
+          const shape = style.markerShape ?? "circle";
+          const paths = markerPaths(shape, size);
+          points = paths
+            ? { show: true, size, paths, stroke, ...(FILLED_SHAPES.has(shape) ? { fill: stroke } : {}) }
+            : { show: true, size };
+        }
         return { label, scale, stroke, width, dash, points, show };
       }),
     ],
