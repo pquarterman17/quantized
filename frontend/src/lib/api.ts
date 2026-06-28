@@ -295,6 +295,18 @@ export function crystalDSpacing(body: {
   return postJSON("/api/crystallography/dspacing", body);
 }
 
+/** Combine two datasets pointwise on A's x-grid (B interpolated). calc.aggregate. */
+export function datasetAlgebra(body: {
+  dataset_a: DataStruct;
+  dataset_b: DataStruct;
+  operation: string;
+  interp_method?: string;
+  channel_a?: number;
+  channel_b?: number;
+}): Promise<DataStruct> {
+  return postJSON("/api/aggregate/algebra", body);
+}
+
 // ── Export (file downloads) ─────────────────────────────────────────────────
 /** Export XRD data as CSV / Origin ASCII; triggers a browser download. */
 export function exportXrdCsv(body: {

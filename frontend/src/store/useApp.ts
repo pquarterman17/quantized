@@ -70,6 +70,7 @@ interface AppState {
   magToolsOpen: boolean;
   rsmOpen: boolean;
   digitizerOpen: boolean;
+  datasetMathOpen: boolean;
   fitOverlay: FitOverlay | null;
   peakOverlay: PeakOverlay | null;
   baselineOverlay: BaselineOverlay | null;
@@ -125,6 +126,7 @@ interface AppState {
   setMagToolsOpen: (open: boolean) => void;
   setRsmOpen: (open: boolean) => void;
   setDigitizerOpen: (open: boolean) => void;
+  setDatasetMathOpen: (open: boolean) => void;
   setFitOverlay: (overlay: FitOverlay | null) => void;
   setPeakOverlay: (overlay: PeakOverlay | null) => void;
   setBaselineOverlay: (overlay: BaselineOverlay | null) => void;
@@ -210,6 +212,7 @@ export const useApp = create<AppState>((set, get) => ({
   magToolsOpen: false,
   rsmOpen: false,
   digitizerOpen: false,
+  datasetMathOpen: false,
   fitOverlay: null,
   peakOverlay: null,
   baselineOverlay: null,
@@ -365,6 +368,7 @@ export const useApp = create<AppState>((set, get) => ({
   setCalculatorsOpen: (calculatorsOpen) => set({ calculatorsOpen }),
   setRsmOpen: (rsmOpen) => set({ rsmOpen }),
   setDigitizerOpen: (digitizerOpen) => set({ digitizerOpen }),
+  setDatasetMathOpen: (datasetMathOpen) => set({ datasetMathOpen }),
   setMagToolsOpen: (magToolsOpen) => set({ magToolsOpen }),
   setFitOverlay: (fitOverlay) => set({ fitOverlay }),
   setPeakOverlay: (peakOverlay) => set({ peakOverlay }),

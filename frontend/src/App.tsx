@@ -15,6 +15,7 @@ import ParamDialog, { askParams } from "./components/overlays/ParamDialog";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import BaselinePanel from "./components/workshops/baseline/BaselinePanel";
 import CalculatorsPanel from "./components/workshops/calculators/CalculatorsPanel";
+import DatasetMathPanel from "./components/workshops/datasetmath/DatasetMathPanel";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
 import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
 import MagToolsPanel from "./components/workshops/magtools/MagToolsPanel";
@@ -67,6 +68,7 @@ export default function App() {
   const rsmOpen = useApp((s) => s.rsmOpen);
   const digitizerOpen = useApp((s) => s.digitizerOpen);
   const magToolsOpen = useApp((s) => s.magToolsOpen);
+  const datasetMathOpen = useApp((s) => s.datasetMathOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -225,6 +227,12 @@ export default function App() {
         run: () => s().setDigitizerOpen(true),
       },
       {
+        id: "dataset-math",
+        group: "Analyze",
+        label: "Dataset math (combine two datasets)…",
+        run: () => s().setDatasetMathOpen(true),
+      },
+      {
         id: "export-csv",
         group: "File",
         label: "Export XRD CSV…",
@@ -370,6 +378,7 @@ export default function App() {
       {magToolsOpen && <MagToolsPanel />}
       {rsmOpen && <RsmPanel />}
       {digitizerOpen && <DigitizerView />}
+      {datasetMathOpen && <DatasetMathPanel />}
     </div>
   );
 }
