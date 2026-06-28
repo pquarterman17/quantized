@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { payloadToTSV } from "./clipboard";
+import { payloadToTSV, tableToTSV } from "./clipboard";
 import type { PlotPayload } from "./plotdata";
 
 describe("payloadToTSV", () => {
@@ -52,5 +52,31 @@ describe("payloadToTSV", () => {
   it("handles an empty payload (header only)", () => {
     const empty: PlotPayload = { data: [[]], series: [], xLabel: "x", xUnit: "" };
     expect(payloadToTSV(empty)).toBe("x");
+  });
+});
+
+describe("tableToTSV", () => {
+  it("joins headers and rows with tabs and newlines", () => {
+    const tsv = tableToTSV(
+      ["Field (Oe)", "M (emu)"],
+      [
+        [0, 1.5],
+        [100, 2.5],
+      ],
+    );
+    expect(tsv).toBe("Field (Oe)\tM (emu)\n0\t1.5\n100\t2.5");
+  });
+
+  it("renders null/undefined cells as empty fields (constant width)", () => {
+    const tsv = tableToTSV(["a", "b", "c"], [[1, null, 3], [undefined, 5, 6]]);
+    expect(tsv.split("\n")).toEqual(["a\tb\tc", "1\t\t3", "\t5\t6"]);
+  });
+
+  it("keeps full numeric precision (not the rounded display)", () => {
+    expect(tableToTSV(["x"], [[0.123456789]])).toBe("x\n0.123456789");
+  });
+
+  it("emits just the header for no rows", () => {
+    expect(tableToTSV(["x", "y"], [])).toBe("x\ty");
   });
 });

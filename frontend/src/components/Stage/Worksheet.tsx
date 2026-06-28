@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { statsDescriptive } from "../../lib/api";
+import { copyText, tableToTSV } from "../../lib/clipboard";
 import { fmtNum } from "../../lib/format";
 import { channelLetter, compileFormula } from "../../lib/formula";
 import type { CalcResult, DataStruct } from "../../lib/types";
@@ -171,6 +172,21 @@ export default function Worksheet() {
     setStatus(`extracted ${analysisRows.length} of ${time.length} rows`);
   }
 
+  // Copy the visible rows (filtered + sorted, masked excluded) as TSV — the full
+  // table (every channel) at full precision, straight to the clipboard. Distinct
+  // from the plot's copy-data (which is the plotted series only).
+  function copyRows() {
+    const rows = order.filter((r) => !masked.has(r));
+    const headers = [
+      xUnit ? `${xName} (${xUnit})` : xName,
+      ...labels.map((lab, c) => (units[c] ? `${lab} (${units[c]})` : lab)),
+    ];
+    const data = rows.map((r) => [time[r], ...labels.map((_, c) => values[r]?.[c])]);
+    copyText(tableToTSV(headers, data)).then((ok) =>
+      setStatus(ok ? `copied ${rows.length} rows to clipboard` : "clipboard unavailable"),
+    );
+  }
+
   const toggleSort = (col: number) =>
     setSort((s) => (s && s.col === col ? (s.dir === 1 ? { col, dir: -1 } : null) : { col, dir: 1 }));
   const mark = (col: number) => (sort?.col === col ? (sort.dir === 1 ? " ▲" : " ▼") : "");
@@ -246,6 +262,9 @@ export default function Worksheet() {
           title="Per-column statistics"
         >
           Σ Stats
+        </button>
+        <button className="qz-btn" onClick={copyRows} title="Copy visible rows to clipboard (TSV)">
+          ⧉ Copy
         </button>
         {masked.size > 0 && (
           <button className="qz-btn" onClick={unmaskAll} title="Clear all masked rows">

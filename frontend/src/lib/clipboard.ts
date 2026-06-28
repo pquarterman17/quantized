@@ -23,6 +23,19 @@ export function payloadToTSV(payload: PlotPayload): string {
   return lines.join("\n");
 }
 
+/** Serialize a header row + data rows to TSV (the row-oriented complement to
+ *  payloadToTSV — used by the worksheet "Copy rows"). Cells: null/undefined →
+ *  empty field, else String(cell) at full precision. */
+export function tableToTSV(
+  headers: string[],
+  rows: (number | string | null | undefined)[][],
+): string {
+  const cell = (v: number | string | null | undefined): string => (v == null ? "" : String(v));
+  const lines = [headers.join("\t")];
+  for (const row of rows) lines.push(row.map(cell).join("\t"));
+  return lines.join("\n");
+}
+
 /** Write text to the clipboard; resolves false when unavailable (insecure
  *  context / permission denied) so callers can surface a status message. */
 export async function copyText(text: string): Promise<boolean> {
