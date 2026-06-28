@@ -35,12 +35,14 @@ def test_baseline_als_tracks_lower_envelope(load_golden: Callable[[str], dict[st
 # ── non-finite-input robustness ──────────────────────────────────────────────
 
 
-def test_baseline_als_nonfinite_raises() -> None:
-    """A NaN/Inf in y must fail loudly, not silently return all-NaN."""
+def test_baseline_als_nonfinite_returns_nan_like_matlab() -> None:
+    """A NaN in y propagates to an all-NaN baseline (MATLAB backslash parity),
+    returned directly to avoid a noisy MatrixRankWarning — not an exception."""
     y = np.sin(np.linspace(0, 10, 50))
     y[10] = np.nan
-    with pytest.raises(ValueError, match="finite"):
-        baseline_als(y)
+    out = baseline_als(y)
+    assert out.shape == y.shape
+    assert np.isnan(out).all()
 
 
 def test_estimate_background_snip_nan_in_x_no_crash() -> None:

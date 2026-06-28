@@ -107,9 +107,11 @@ def baseline_als(
     if n < 3:
         return yv.copy()
     if not np.all(np.isfinite(yv)):
-        # A non-finite y makes the sparse solve return all-NaN silently (the
-        # reweighting collapses to a singular system). Fail loudly instead.
-        raise ValueError("baseline_als requires finite y (found NaN or Inf)")
+        # A non-finite y makes the sparse reweighting collapse to a singular
+        # system; the solve then returns all-NaN with a noisy MatrixRankWarning.
+        # MATLAB's backslash propagates NaN the same way, so return NaN directly
+        # (parity-preserving, and skips the warning) rather than computing it.
+        return np.full(n, np.nan)
 
     # Second-difference operator D: (n-2) x n  (rows: y[i] - 2y[i+1] + y[i+2]).
     diff2 = sparse.diags(
