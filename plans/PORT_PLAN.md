@@ -542,6 +542,13 @@ MATLAB."**
   keeping the original. Pure `lib/dataset.cloneDataStruct` (deep copy, no shared
   column arrays — non-aliasing asserted in tests); store `duplicateDataset(id)`.
   Gates green (frontend 272 + build).
+- **Inspector Metadata card** (2026-06-27, `4b4108f`) — W7, Inspector surface. The
+  parser-captured `.metadata` (sample / temperature / header fields) was held on
+  every DataStruct but shown nowhere; new read-only card lists the key/values +
+  copy-as-TSV. Pure `lib/metadata.ts` (`formatMetaValue` / `metadataRows` [sorted,
+  hides internal `x_column_*` plot-wiring keys] / `metadataToTSV`) unit-tested;
+  `Inspector/MetadataCard.tsx` (hidden when empty). Gates green (frontend 279 +
+  build).
 
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to
