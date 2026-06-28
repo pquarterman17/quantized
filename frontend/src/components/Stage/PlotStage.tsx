@@ -14,6 +14,7 @@ import {
   withPeakOverlay,
   type PlotPayload,
 } from "../../lib/plotdata";
+import { formatMeasurement, type Measurement } from "../../lib/measure";
 import { exportPlotPng } from "../../lib/plotExport";
 import { normalizeRange } from "../../lib/regionSelect";
 import { buildOpts } from "../../lib/uplotOpts";
@@ -27,6 +28,7 @@ const TOOLS = [
   { id: "zoom", glyph: "⛶", tip: "Box zoom" },
   { id: "pan", glyph: "✥", tip: "Pan" },
   { id: "cursor", glyph: "✛", tip: "Data cursor" },
+  { id: "measure", glyph: "∡", tip: "Measure (Δx, Δy, slope)" },
 ] as const;
 
 export default function PlotStage() {
@@ -63,6 +65,7 @@ export default function PlotStage() {
   const plotRef = useRef<uPlot | null>(null);
   const [payload, setPayload] = useState<PlotPayload | null>(null);
   const [readout, setReadout] = useState<Readout | null>(null);
+  const [measurement, setMeasurement] = useState<Measurement | null>(null);
 
   // Splice in the fit curve + peak markers (each a no-op unless it belongs to
   // the active dataset and aligns to the plotted x).
@@ -140,6 +143,7 @@ export default function PlotStage() {
           if (range) setRegionPicked(range);
           setPlotTool("zoom");
         },
+        onMeasure: setMeasurement,
       }),
       displayPayload.data,
       host,
@@ -160,6 +164,13 @@ export default function PlotStage() {
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
   }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, refLines, annotations, styleList, theme, accent, tool]);
+
+  // The ruler is pinned to the active dataset's data coords, so clear it when we
+  // leave measure mode or switch datasets (the uPlot rebuild already drops the
+  // drawn segment; this resets the React-side readout).
+  useEffect(() => {
+    setMeasurement(null);
+  }, [tool, active]);
 
   function resetView() {
     if (plotRef.current && displayPayload) {
@@ -246,6 +257,11 @@ export default function PlotStage() {
       )}
       {tool === "region" && (
         <div className="qzk-glass qzk-readout">Drag to select a background range</div>
+      )}
+      {tool === "measure" && (
+        <div className="qzk-glass qzk-readout">
+          {measurement ? formatMeasurement(measurement) : "Drag between two points to measure"}
+        </div>
       )}
       {displayPayload && showLegend && (
         <div className="qzk-glass qzk-legend">

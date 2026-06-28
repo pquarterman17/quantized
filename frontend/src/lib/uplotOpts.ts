@@ -3,17 +3,19 @@
 
 import type uPlot from "uplot";
 
+import type { Measurement } from "./measure";
 import type { PlotPayload } from "./plotdata";
 import type { Annotation, AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
 import {
   annotationPlugin,
+  measurePlugin,
   panPlugin,
   readoutPlugin,
   refLinePlugin,
   type Readout,
 } from "./uplotPlugins";
 
-export type PlotTool = "zoom" | "pan" | "cursor" | "region";
+export type PlotTool = "zoom" | "pan" | "cursor" | "region" | "measure";
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -74,6 +76,9 @@ export interface BuildOptsArgs {
   /** In `region` tool: called with the two data-x edges of a completed drag
    *  (unordered). Used by the baseline "Fit from region" rubber-band. */
   onRegionSelect?: (x0: number, x1: number) => void;
+  /** In `measure` tool: called with the live Δx/Δy/slope while dragging the
+   *  two-point ruler (null when the ruler is cleared). */
+  onMeasure?: (m: Measurement | null) => void;
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
   xLim?: [number, number] | null;
   yLim?: [number, number] | null;
@@ -117,6 +122,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const plugins: uPlot.Plugin[] = [];
   if (tool === "pan") plugins.push(panPlugin());
   if (tool === "cursor") plugins.push(readoutPlugin(onReadout));
+  if (tool === "measure" && args.onMeasure) {
+    plugins.push(measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
+  }
   if (refLines && refLines.length > 0) {
     plugins.push(refLinePlugin(refLines, cssVar("--text-dim") || "#888"));
   }

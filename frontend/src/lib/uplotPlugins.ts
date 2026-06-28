@@ -2,6 +2,7 @@
 
 import type uPlot from "uplot";
 
+import { computeMeasurement, type Measurement } from "./measure";
 import type { Annotation, RefLine } from "./types";
 
 /** Draw dashed reference lines at fixed X/Y values, clipped to the plot area. */
@@ -114,6 +115,81 @@ export function panPlugin(): uPlot.Plugin {
           document.addEventListener("mousemove", onMove);
           document.addEventListener("mouseup", onUp);
         });
+      },
+    },
+  };
+}
+
+/**
+ * Two-point measurement ruler: drag from A to B over the plot; reports Δx / Δy /
+ * slope (in data units) and draws a dashed segment with endpoint dots. The
+ * endpoints are kept in DATA coords so the ruler stays pinned to the data as the
+ * view zooms/pans (pixels are re-derived each draw via valToPos). Per-drag
+ * move/up listeners are torn down on release, mirroring panPlugin.
+ */
+export function measurePlugin(
+  onMeasure: (m: Measurement | null) => void,
+  color: string,
+): uPlot.Plugin {
+  // Live segment in DATA coordinates (null = nothing measured yet).
+  let seg: Measurement | null = null;
+
+  return {
+    hooks: {
+      ready: (u: uPlot) => {
+        const over = u.over;
+        over.style.cursor = "crosshair";
+        over.addEventListener("mousedown", (e: MouseEvent) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          const rect = over.getBoundingClientRect();
+          const x0 = u.posToVal(e.clientX - rect.left, "x");
+          const y0 = u.posToVal(e.clientY - rect.top, "y");
+          seg = computeMeasurement(x0, y0, x0, y0);
+          onMeasure(seg);
+          u.redraw();
+
+          const onMove = (ev: MouseEvent) => {
+            const x1 = u.posToVal(ev.clientX - rect.left, "x");
+            const y1 = u.posToVal(ev.clientY - rect.top, "y");
+            seg = computeMeasurement(x0, y0, x1, y1);
+            onMeasure(seg);
+            u.redraw();
+          };
+          const onUp = () => {
+            document.removeEventListener("mousemove", onMove);
+            document.removeEventListener("mouseup", onUp);
+          };
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+        });
+      },
+      draw: (u: uPlot) => {
+        if (!seg) return;
+        const ax = u.valToPos(seg.x0, "x", true);
+        const ay = u.valToPos(seg.y0, "y", true);
+        const bx = u.valToPos(seg.x1, "x", true);
+        const by = u.valToPos(seg.y1, "y", true);
+        const { ctx } = u;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        for (const [px, py] of [
+          [ax, ay],
+          [bx, by],
+        ]) {
+          ctx.beginPath();
+          ctx.arc(px, py, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
       },
     },
   };
