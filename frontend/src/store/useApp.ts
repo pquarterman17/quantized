@@ -52,6 +52,9 @@ interface AppState {
   yLim: [number, number] | null; // explicit Y range (null = autoscale)
   xFmt: AxisFormat; // X-axis tick number format
   yFmt: AxisFormat; // Y-axis tick number format (also applied to the secondary axis)
+  plotTitle: string; // chart title rendered above the plot ("" = none)
+  xAxisLabel: string; // override for the x-axis label ("" = auto from data)
+  yAxisLabel: string; // override for the primary y-axis label ("" = auto)
   xKey: number | null; // value channel used as the plot x-axis (null = .time)
   yKeys: number[] | null; // which value channels to plot (null = all)
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
@@ -117,6 +120,9 @@ interface AppState {
   setYLim: (yLim: [number, number] | null) => void;
   setXFmt: (xFmt: AxisFormat) => void;
   setYFmt: (yFmt: AxisFormat) => void;
+  setPlotTitle: (plotTitle: string) => void;
+  setXAxisLabel: (xAxisLabel: string) => void;
+  setYAxisLabel: (yAxisLabel: string) => void;
   setXKey: (xKey: number | null) => void;
   setYKeys: (yKeys: number[] | null) => void;
   setY2Keys: (y2Keys: number[] | null) => void;
@@ -213,6 +219,9 @@ export const useApp = create<AppState>((set, get) => ({
   yLim: null,
   xFmt: { mode: "auto", digits: 2 },
   yFmt: { mode: "auto", digits: 2 },
+  plotTitle: "",
+  xAxisLabel: "",
+  yAxisLabel: "",
   xKey: null,
   yKeys: null,
   y2Keys: null,
@@ -458,6 +467,9 @@ export const useApp = create<AppState>((set, get) => ({
   setYLim: (yLim) => set({ yLim }),
   setXFmt: (xFmt) => set({ xFmt }),
   setYFmt: (yFmt) => set({ yFmt }),
+  setPlotTitle: (plotTitle) => set({ plotTitle }),
+  setXAxisLabel: (xAxisLabel) => set({ xAxisLabel }),
+  setYAxisLabel: (yAxisLabel) => set({ yAxisLabel }),
   setXKey: (xKey) => set({ xKey }),
   setYKeys: (yKeys) => set({ yKeys }),
   setY2Keys: (y2Keys) => set({ y2Keys }),

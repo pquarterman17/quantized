@@ -11,6 +11,7 @@ import RefLinesCard from "./RefLinesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
 import StatsCard from "./StatsCard";
 import TickFormat from "./TickFormat";
+import TitlesCard from "./TitlesCard";
 import { Card, MetaRow } from "../primitives";
 import { useActiveDataset, useApp } from "../../store/useApp";
 
@@ -86,6 +87,8 @@ export default function Inspector() {
         <AxisLimits />
         <TickFormat />
       </Card>
+
+      <TitlesCard />
 
       <RefLinesCard />
 

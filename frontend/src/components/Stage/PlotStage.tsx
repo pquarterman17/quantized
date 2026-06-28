@@ -43,6 +43,9 @@ export default function PlotStage() {
   const yLim = useApp((s) => s.yLim);
   const xFmt = useApp((s) => s.xFmt);
   const yFmt = useApp((s) => s.yFmt);
+  const plotTitle = useApp((s) => s.plotTitle);
+  const xAxisLabel = useApp((s) => s.xAxisLabel);
+  const yAxisLabel = useApp((s) => s.yAxisLabel);
   const showGrid = useApp((s) => s.showGrid);
   const showLegend = useApp((s) => s.showLegend);
   const refLines = useApp((s) => s.refLines);
@@ -156,7 +159,11 @@ export default function PlotStage() {
       return;
     }
     const w = host.clientWidth || 600;
-    const h = host.clientHeight || 400;
+    // uPlot's title div sits above the plot and its height is NOT counted in the
+    // height we pass, so reserve room for it (matches the .u-title CSS height) to
+    // keep the x-axis inside the overflow-hidden host.
+    const titleH = plotTitle.trim() ? 24 : 0;
+    const h = (host.clientHeight || 400) - titleH;
     plotRef.current?.destroy();
     plotRef.current = new uPlot(
       buildOpts(displayPayload, {
@@ -169,6 +176,9 @@ export default function PlotStage() {
         xFmt,
         yFmt,
         showGrid,
+        title: plotTitle,
+        xAxisLabel,
+        yAxisLabel,
         refLines,
         onRefLineMove: updateRefLine,
         annotations,
@@ -197,7 +207,7 @@ export default function PlotStage() {
     const ro = new ResizeObserver(() => {
       plotRef.current?.setSize({
         width: host.clientWidth || w,
-        height: host.clientHeight || h,
+        height: (host.clientHeight || 400) - titleH,
       });
     });
     ro.observe(host);
@@ -208,7 +218,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, plotTitle, xAxisLabel, yAxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool]);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the

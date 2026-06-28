@@ -124,6 +124,13 @@ export interface BuildOptsArgs {
   yFmt?: AxisFormat;
   /** Draw grid lines (default true). */
   showGrid?: boolean;
+  /** Chart title rendered above the plot (blank/undefined = none). */
+  title?: string;
+  /** Override the x-axis label (blank/undefined = derive from the data). */
+  xAxisLabel?: string;
+  /** Override the primary y-axis label; when set it shows even with >1 series
+   *  (blank/undefined = the solo-series auto label). */
+  yAxisLabel?: string;
 }
 
 export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
@@ -132,13 +139,18 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const axisColor = cssVar("--text-dim") || "#aaa";
   const gridColor = cssVar("--grid-line") || "#333";
   const font = `11px ${cssVar("--font-mono") || "monospace"}`;
-  const xLabel = payload.xUnit ? `${payload.xLabel} (${payload.xUnit})` : payload.xLabel;
+  // X-axis label: an explicit override wins, else "name (unit)" from the data.
+  const xLabel =
+    args.xAxisLabel?.trim() ||
+    (payload.xUnit ? `${payload.xLabel} (${payload.xUnit})` : payload.xLabel);
   // Resolved display label per series: an explicit rename wins, else "label (unit)".
   const labels = payload.series.map((s, i) =>
     args.seriesLabels?.[i] ?? (s.unit ? `${s.label} (${s.unit})` : s.label),
   );
-  // Label each Y axis only when it carries a single series (else the legend names them).
+  // Label each Y axis only when it carries a single series (else the legend names
+  // them); a non-blank override on the primary axis always wins and forces a label.
   const soloLabel = (which: number): string | undefined => {
+    if (which === 0 && args.yAxisLabel?.trim()) return args.yAxisLabel.trim();
     const idxs = payload.series.map((_, i) => i).filter((i) => (payload.series[i].axis ?? 0) === which);
     return idxs.length === 1 ? labels[idxs[0]] : undefined;
   };
@@ -202,6 +214,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   return {
     width,
     height,
+    ...(args.title?.trim() ? { title: args.title.trim() } : {}),
     // Box-zoom only in zoom mode; region drags an x-band without rescaling
     // (setScale:false), so setSelect can read it back; pan/cursor disable drag.
     cursor: {

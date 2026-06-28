@@ -77,6 +77,9 @@ body {
 .qzk-tab:hover { color: var(--text-dim); }
 .qzk-tab.active { color: var(--text); border-bottom-color: var(--accent); }
 .qzk-stage { position: relative; flex: 1; background: var(--axes-bg); min-height: 0; overflow: hidden; }
+/* Optional uPlot chart title (Inspector "Titles & labels"); themed + a fixed
+   ~24px height so PlotStage can reserve matching room and not clip the x-axis. */
+.u-title { color: var(--text); font-size: 14px; font-weight: var(--weight-semibold); line-height: 20px; padding-bottom: 4px; }
 .qzk-glass { position: absolute; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); }
 .qzk-float-tools { top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 3px; padding: 4px; }
 .qzk-tool-btn { width: 32px; height: 32px; display: grid; place-items: center; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text-dim); font-size: 15px; cursor: default; }

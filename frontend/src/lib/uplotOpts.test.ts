@@ -232,6 +232,31 @@ describe("buildOpts", () => {
     expect(xIsAscending([70000, -70000, 70000])).toBe(false);
   });
 
+  it("sets the chart title only when a non-blank title is given", () => {
+    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom", title: "Run 42" }).title).toBe(
+      "Run 42",
+    );
+    // blank / whitespace / unset -> no title key (uPlot draws no title bar)
+    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom", title: "  " }).title).toBeUndefined();
+    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom" }).title).toBeUndefined();
+  });
+
+  it("overrides the x-axis label, else derives it from the data", () => {
+    const over = buildOpts(payload, { ...base, yLog: false, tool: "zoom", xAxisLabel: "H (kOe)" });
+    expect(over.axes?.[0]?.label).toBe("H (kOe)");
+    const auto = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    expect(auto.axes?.[0]?.label).toBe("Field (Oe)"); // payload.xLabel + xUnit
+  });
+
+  it("overrides the primary y-axis label and forces it to show with >1 series", () => {
+    const two: PlotPayload = { ...payload, series: [...payload.series, { label: "B", unit: "T" }] };
+    // Without an override, >1 series leaves the axis label to the legend (undefined).
+    expect(buildOpts(two, { ...base, yLog: false, tool: "zoom" }).axes?.[1]?.label).toBeUndefined();
+    // With an override it shows regardless of series count.
+    const over = buildOpts(two, { ...base, yLog: false, tool: "zoom", yAxisLabel: "Moment (emu)" });
+    expect(over.axes?.[1]?.label).toBe("Moment (emu)");
+  });
+
   it("adds a right-side y2 scale + axis and routes axis-1 series to it", () => {
     const dual: PlotPayload = {
       ...payload,
