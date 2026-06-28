@@ -197,7 +197,10 @@ def import_ncnr_dat(filepath: str | Path) -> DataStruct:
     intensity = float("nan")
     background = float("nan")
     data_start = 0
-    for i, line in enumerate(lines[:5]):
+    # Scan the whole comment header (not just the first 5 lines) so intensity /
+    # background metadata is captured wherever it sits; the loop still breaks at
+    # the column header or first data row.
+    for i, line in enumerate(lines):
         if line.startswith("# intensity:"):
             intensity = _safe_float(line.split(":", 1)[1])
         elif line.startswith("# background:"):

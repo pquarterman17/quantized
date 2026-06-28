@@ -118,3 +118,20 @@ def test_classic_mpms_imports_and_swaps_constant_field_to_temperature(
     # x must actually vary so the data is plottable by default.
     assert float(np.ptp(ds.time)) > 0
     assert np.isfinite(ds.values[:, 0]).all()
+
+
+def test_ppms_resistance_vs_temperature_no_field_column(tmp_path: Path) -> None:
+    """The PPMS sniffer accepts an R-vs-T plain CSV that lacks Field/Moment; the
+    parser must degrade to auto-detected x/y rather than KeyError on 'field'."""
+    f = tmp_path / "rvt.dat"
+    f.write_text(
+        "Temperature (K),Resistance (Ohm)\n"
+        "100,150\n150,155\n200,160\n250,165\n300,170\n",
+        encoding="latin-1",
+    )
+    ds = import_ppms(f)
+    assert ds.metadata["x_column_name"] == "Temperature"
+    assert ds.labels == ("Resistance",)
+    assert ds.n_points == 5
+    # routes cleanly through import_auto too
+    assert import_auto(f).metadata["parser_name"] == "import_ppms"

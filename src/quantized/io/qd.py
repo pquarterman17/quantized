@@ -321,15 +321,24 @@ def import_ppms(
         raise ValueError(f"no valid data rows in {path.name}")
     matrix = np.asarray(rows, dtype=float)
 
-    x_idx = resolve_column(x_axis, col_names, _QD_SHORTHAND, "x-axis")
+    # The PPMS sniffer accepts any QD-ish plain CSV (e.g. resistance-vs-temperature
+    # or moment-only files), so the default x/y ("field"/"moment") may be absent.
+    # Degrade to auto-detection instead of crashing with a KeyError.
+    try:
+        x_idx = resolve_column(x_axis, col_names, _QD_SHORTHAND, "x-axis")
+    except KeyError:
+        x_idx = NO_COLUMN
     if x_idx == NO_COLUMN:
-        raise ValueError("x-axis column could not be resolved")
+        x_idx = 0
     x_idx = _auto_x_index(col_names, matrix, x_idx)
     if isinstance(y_axis, str) and y_axis.lower() == "all":
         y_idx = _resolve_all_columns(col_names, matrix, x_idx, include_raw)
     else:
         specs: list[str | int] = [y_axis] if isinstance(y_axis, (str, int)) else list(y_axis)
-        y_idx = [resolve_column(s, col_names, _QD_SHORTHAND, "y-axis") for s in specs]
+        try:
+            y_idx = [resolve_column(s, col_names, _QD_SHORTHAND, "y-axis") for s in specs]
+        except KeyError:
+            y_idx = _resolve_all_columns(col_names, matrix, x_idx, include_raw)
     if not y_idx:
         raise ValueError("no valid data columns resolved")
     y_idx = _apply_moment_fallback(col_names, matrix, y_idx)

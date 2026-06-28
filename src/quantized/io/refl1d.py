@@ -20,6 +20,13 @@ __all__ = ["import_refl1d_dat", "is_refl1d_dat"]
 _KV_RE = re.compile(r"^(\w[\w\s]*\w|\w+):\s*(.+)$")
 _TOKEN_RE = re.compile(r"\S+(?:\s*\([^)]*\))?")
 _UNIT_RE = re.compile(r"^(.+?)\s*\(([^)]+)\)$")
+# Column-header signals, matched on word boundaries so a prose comment like
+# "rhodium thermometer" or "quick readout" no longer false-positives (the bare
+# substrings "rho"/"q"+"r" did — mis-routing PPMS files into this parser).
+_RHO_RE = re.compile(r"\brho\b")
+_Z_COL_RE = re.compile(r"\bz\s*\(")
+_Q_COL_RE = re.compile(r"\bq\b")
+_R_COL_RE = re.compile(r"\br\b")
 
 
 def is_refl1d_dat(path: Path) -> bool:
@@ -36,7 +43,11 @@ def is_refl1d_dat(path: Path) -> bool:
         if not stripped.startswith("#"):
             continue
         low = stripped.lower()
-        if "rho" in low or "z (" in low or ("q" in low and "r" in low):
+        if (
+            _RHO_RE.search(low)
+            or _Z_COL_RE.search(low)
+            or (_Q_COL_RE.search(low) and _R_COL_RE.search(low))
+        ):
             return True
     return False
 
@@ -88,8 +99,18 @@ def import_refl1d_dat(filepath: str | Path) -> DataStruct:
             continue
     if not rows:
         raise ValueError(f"no numeric data in {path.name}")
+    # Pad/truncate ragged rows to the column count (header if known, else the
+    # widest row), filling gaps with NaN — mirrors MATLAB textscan, which yields
+    # NaN for missing fields rather than failing on a truncated/disk-cut file.
+    target = len(labels_all) if labels_all else max(len(r) for r in rows)
+    if any(len(r) != target for r in rows):
+        rows = [(r + [float("nan")] * (target - len(r)))[:target] for r in rows]
     matrix = np.asarray(rows, dtype=float)
     n_cols = matrix.shape[1]
+    if n_cols < 2:
+        raise ValueError(
+            f"refl1d .dat needs at least 2 columns (found {n_cols}) in {path.name}"
+        )
 
     if not labels_all:
         labels_all = [f"Col{j + 1}" for j in range(n_cols)]

@@ -116,7 +116,9 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
     scans_xml = _find_all(root, "scan")
     if not scans_xml:
         raise ValueError(f"no <scan> element in {path.name}")
-    scans_xml.sort(key=lambda s: int(s.get("appendNumber", "1")))
+    # appendNumber is usually an int but some exporters write "1.0"; float()
+    # accepts both and preserves ordering (int() raised on float strings).
+    scans_xml.sort(key=lambda s: float(s.get("appendNumber", "1")))
 
     wavelength = _wavelength(root)
     counting_time = float("nan")

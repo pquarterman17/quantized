@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from quantized.datastruct import DataStruct
@@ -65,3 +66,43 @@ def test_sniffer_rejects_qd_header_dat(fixtures_dir: Path) -> None:
         assert is_refl1d_dat(qd) is False
     finally:
         qd.unlink()
+
+
+def test_sniffer_word_boundary_no_rhodium_false_positive(tmp_path: Path) -> None:
+    """A PPMS comment mentioning 'rhodium' (contains 'rho') or prose with stray
+    q/r letters must NOT be claimed by the refl1d sniffer (was a substring match
+    that mis-routed PPMS files)."""
+    f = tmp_path / "ppms_rhodium.dat"
+    f.write_text(
+        "# PPMS measurement with rhodium thermometer, quick readout\n"
+        "Magnetic Field (Oe),Moment (emu),Temperature (K)\n"
+        "100,0.5,300\n200,0.6,300\n",
+        encoding="latin-1",
+    )
+    assert is_refl1d_dat(f) is False
+    ds = import_auto(f)  # routes to the PPMS parser instead
+    assert ds.metadata["parser_name"] == "import_ppms"
+
+
+def test_refl1d_ragged_row_padded_with_nan(tmp_path: Path) -> None:
+    """A truncated/ragged data row must pad to NaN, not crash np.asarray."""
+    f = tmp_path / "ragged.dat"
+    f.write_text(
+        "# z (A) rho (1e-6/A2) irho (1e-6/A2)\n"
+        "0.0 1.0 0.0\n"
+        "1.0 2.0\n"  # missing third column
+        "2.0 1.5 0.0\n",
+        encoding="latin-1",
+    )
+    ds = import_refl1d_dat(f)
+    assert ds.n_points == 3
+    assert ds.values.shape == (3, 2)
+    assert np.isnan(ds.values[1, 1])  # the missing irho -> NaN
+
+
+def test_refl1d_single_column_raises(tmp_path: Path) -> None:
+    """A single-column file would yield a 0-channel DataStruct; raise instead."""
+    f = tmp_path / "onecol.dat"
+    f.write_text("# z (A)\n0.0\n1.0\n2.0\n", encoding="latin-1")
+    with pytest.raises(ValueError, match="at least 2 columns"):
+        import_refl1d_dat(f)

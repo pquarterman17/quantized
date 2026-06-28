@@ -84,3 +84,21 @@ def test_ncnr_dat_polarization_from_extension(fixtures_dir: Path) -> None:
 def test_registry_routes_datA(fixtures_dir: Path) -> None:
     ds = import_auto(fixtures_dir / "ncnr_s3.datA")
     assert ds.metadata["parser_name"] == "import_ncnr_dat"
+
+
+def test_ncnr_metadata_beyond_first_five_lines(tmp_path: Path) -> None:
+    """intensity/background sitting past line 5 must still be captured (the scan
+    was capped at lines[:5])."""
+    f = tmp_path / "late_meta.datA"
+    f.write_text(
+        "# c1\n# c2\n# c3\n# c4\n# c5\n"
+        "# intensity: 1.2345\n"  # index 5 — beyond the old lines[:5] window
+        "# background: 0.001\n"
+        "# Q (1/A) R dR\n"
+        "0.01 0.5 0.01\n0.02 0.6 0.01\n0.03 0.7 0.01\n",
+        encoding="latin-1",
+    )
+    ds = import_ncnr_dat(f)
+    assert ds.metadata["intensity"] == pytest.approx(1.2345)
+    assert ds.metadata["background"] == pytest.approx(0.001)
+    assert ds.n_points == 3

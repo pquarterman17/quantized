@@ -164,3 +164,14 @@ def test_uniform_counting_times_do_not_warn(tmp_path: Path) -> None:
         warnings.simplefilter("always")
         import_xrdml(p, intensity="cps")
     assert not any("counting times" in str(w.message) for w in caught)
+
+
+def test_xrdml_float_append_number(tmp_path: Path) -> None:
+    """Some exporters write appendNumber="1.0"; int() raised, float() must not."""
+    xml = _two_scan_xrdml(1.0, 1.0).replace('appendNumber="0"', 'appendNumber="0.0"').replace(
+        'appendNumber="1"', 'appendNumber="1.0"'
+    )
+    p = tmp_path / "float_append.xrdml"
+    p.write_text(xml, encoding="utf-8")
+    ds = import_xrdml(p)  # must not raise ValueError: invalid literal for int()
+    assert ds.n_points == 10  # both scans (5 + 5 points) parsed and ordered
