@@ -5,6 +5,7 @@ import AnnotationsCard from "./AnnotationsCard";
 import AxisLimits from "./AxisLimits";
 import ChannelsCard from "./ChannelsCard";
 import CorrectionsCard from "./CorrectionsCard";
+import MetadataCard from "./MetadataCard";
 import RefLinesCard from "./RefLinesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
 import StatsCard from "./StatsCard";
@@ -37,6 +38,8 @@ export default function Inspector() {
           <MetaRow label="—" value="no dataset" />
         )}
       </Card>
+
+      <MetadataCard active={active} />
 
       <ChannelsCard active={active} />
 
