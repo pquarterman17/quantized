@@ -38,6 +38,8 @@ export default function Worksheet() {
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
   const setCellValue = useApp((s) => s.setCellValue);
+  const addFormula = useApp((s) => s.addFormula);
+  const removeFormula = useApp((s) => s.removeFormula);
   const channelRoles = useApp((s) => s.channelRoles); // label/ignore column roles
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   const [formula, setFormula] = useState("");
@@ -136,6 +138,8 @@ export default function Worksheet() {
   }
 
   const { time, values, labels, units, metadata } = active.data;
+  // Computed columns occupy the last `formulas.length` columns; the rest is base.
+  const baseCount = labels.length - (active.formulas?.length ?? 0);
   const xName = String(metadata?.["x_column_name"] ?? "x");
   const xUnit = String(metadata?.["x_column_unit"] ?? "");
   const filterActive = filtered.length !== time.length;
@@ -187,27 +191,15 @@ export default function Worksheet() {
     setSort((s) => (s && s.col === col ? (s.dir === 1 ? { col, dir: -1 } : null) : { col, dir: 1 }));
   const mark = (col: number) => (sort?.col === col ? (sort.dir === 1 ? " ▲" : " ▼") : "");
 
+  // Add a live computed column to the active dataset (it recomputes when the base
+  // changes). compileFormula validates the expression here so a syntax error
+  // surfaces inline instead of becoming a silent all-NaN column.
   function addColumn() {
     setErr(null);
     try {
-      const fn = compileFormula(formula);
-      const computed = time.map((t, r) => {
-        const ctx: Record<string, number> = { x: t };
-        labels.forEach((_, c) => {
-          ctx[channelLetter(c)] = values[r]?.[c];
-        });
-        return fn(ctx);
-      });
+      compileFormula(formula); // validate — throws on a bad expression
       const name = colName.trim() || formula.trim();
-      const data: DataStruct = {
-        time,
-        values: values.map((row, r) => [...row, computed[r]]),
-        labels: [...labels, name],
-        units: [...units, ""],
-        metadata,
-      };
-      const stem = active!.name.replace(/\.[^.]+$/, "");
-      addDataset({ id: `calc-${++_seq}`, name: `${stem} (+${name})`, data });
+      addFormula(active!.id, name, formula);
       setStatus(`added column "${name}"`);
       setFormula("");
       setColName("");
@@ -272,6 +264,8 @@ export default function Worksheet() {
         onToggleSort={toggleSort}
         onToggleMask={toggleMask}
         onEditCell={(row, col, value) => setCellValue(active!.id, row, col, value)}
+        baseCount={baseCount}
+        onRemoveFormula={(i) => removeFormula(active!.id, i)}
         maxRows={MAX_ROWS}
         showStats={showStats}
         colStats={colStats}

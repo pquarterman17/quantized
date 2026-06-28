@@ -161,6 +161,43 @@ describe("Worksheet row masking", () => {
   });
 });
 
+describe("Worksheet computed columns (recompute)", () => {
+  const addColumn = (expr: string, name?: string) => {
+    fireEvent.change(screen.getByPlaceholderText("2*A + sqrt(B)"), { target: { value: expr } });
+    if (name) fireEvent.change(screen.getByPlaceholderText("column name"), { target: { value: name } });
+    fireEvent.click(screen.getByRole("button", { name: /Add column/ }));
+  };
+
+  it("adds a live computed column to the active dataset (in place, no new dataset)", () => {
+    render(<Worksheet />);
+    addColumn("A + B", "S");
+    expect(useApp.getState().datasets).toHaveLength(1); // in place, not a new dataset
+    const d = useApp.getState().datasets[0];
+    expect(d.formulas).toEqual([{ name: "S", expr: "A + B" }]);
+    expect(d.data.values[0][2]).toBe(30); // 10 + 20
+    expect(screen.getByText("30.0000")).toBeInTheDocument();
+  });
+
+  it("recomputes the column when a base cell is edited", () => {
+    render(<Worksheet />);
+    addColumn("A + B", "S");
+    fireEvent.doubleClick(screen.getByText("10.0000")); // base A row 0
+    const input = screen.getByDisplayValue("10");
+    fireEvent.change(input, { target: { value: "100" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(useApp.getState().datasets[0].data.values[0][2]).toBe(120); // S recomputed
+    expect(screen.getByText("120.0000")).toBeInTheDocument();
+  });
+
+  it("removes a computed column via its header ×", () => {
+    render(<Worksheet />);
+    addColumn("A + B", "S");
+    fireEvent.click(screen.getByRole("button", { name: "remove computed column" }));
+    expect(useApp.getState().datasets[0].formulas).toBeUndefined();
+    expect(useApp.getState().datasets[0].data.labels).toEqual(["A", "B"]);
+  });
+});
+
 describe("Worksheet cell editing", () => {
   it("double-click → edit → Enter commits to the active dataset", () => {
     render(<Worksheet />);

@@ -74,6 +74,17 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
     expect(restored.notes).toBe(ds.notes);
   });
 
+  it("preserves computed-column formulas (and drops malformed entries)", () => {
+    const ds = makeDataset("a", "computed");
+    ds.formulas = [{ name: "S", expr: "A + B" }];
+    const [restored] = parseWorkspace(serializeWorkspace([ds]));
+    expect(restored.formulas).toEqual([{ name: "S", expr: "A + B" }]);
+    // A document with a malformed formula entry keeps only the valid ones.
+    const doc = JSON.parse(serializeWorkspace([ds]));
+    doc.datasets[0].formulas = [{ name: "ok", expr: "A" }, { name: 5 }];
+    expect(parseWorkspace(JSON.stringify(doc))[0].formulas).toEqual([{ name: "ok", expr: "A" }]);
+  });
+
   it("writes the format tag and version", () => {
     const doc = JSON.parse(serializeWorkspace([makeDataset("a", "x")]));
     expect(doc.format).toBe(WORKSPACE_FORMAT);

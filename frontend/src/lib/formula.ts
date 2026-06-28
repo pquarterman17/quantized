@@ -10,6 +10,8 @@
 //   unary := ('-' | '+') unary | atom
 //   atom  := number | name ['(' args ')'] | '(' expr ')'
 
+import type { ComputedColumn, DataStruct } from "./types";
+
 export type FormulaFn = (ctx: Record<string, number>) => number;
 
 const FUNCS: Record<string, (...a: number[]) => number> = {
@@ -158,6 +160,63 @@ export function compileFormula(src: string): FormulaFn {
   const fn = parseExpr();
   if (pos !== toks.length) throw new Error("trailing characters in expression");
   return fn;
+}
+
+/** Strip the last `n` columns (the computed ones) from a DataStruct, returning
+ *  the base. `n <= 0` returns the input unchanged. */
+export function baseColumns(data: DataStruct, n: number): DataStruct {
+  if (n <= 0) return data;
+  const keep = Math.max(0, data.labels.length - n);
+  return {
+    ...data,
+    labels: data.labels.slice(0, keep),
+    units: data.units.slice(0, keep),
+    values: data.values.map((row) => row.slice(0, keep)),
+  };
+}
+
+/** Append computed columns to a base DataStruct, evaluating each formula in order
+ *  over `x` + the accumulating channels (so a later formula may reference an
+ *  earlier computed column). A formula that fails to compile or evaluate yields
+ *  an all-NaN column, keeping the column count stable so downstream channel
+ *  indices never shift. */
+export function applyFormulas(base: DataStruct, formulas: ComputedColumn[]): DataStruct {
+  if (!formulas.length) return base;
+  const labels = [...base.labels];
+  const units = [...base.units];
+  const values = base.values.map((row) => [...row]);
+  for (const f of formulas) {
+    let fn: FormulaFn | null;
+    try {
+      fn = compileFormula(f.expr);
+    } catch {
+      fn = null;
+    }
+    for (let r = 0; r < base.time.length; r++) {
+      let v = Number.NaN;
+      if (fn) {
+        const ctx: Record<string, number> = { x: base.time[r] };
+        labels.forEach((_, c) => {
+          ctx[channelLetter(c)] = values[r]?.[c];
+        });
+        try {
+          v = fn(ctx);
+        } catch {
+          v = Number.NaN;
+        }
+      }
+      values[r].push(v);
+    }
+    labels.push(f.name);
+    units.push(f.unit ?? "");
+  }
+  return { ...base, labels, units, values };
+}
+
+/** Recompute a dataset's computed columns from its current base: strip the last
+ *  `formulas.length` columns (the stale computed ones) and reapply the formulas. */
+export function recomputeData(data: DataStruct, formulas: ComputedColumn[]): DataStruct {
+  return applyFormulas(baseColumns(data, formulas.length), formulas);
 }
 
 /** Channel letter for a 0-based index: 0→A, 1→B, … 25→Z, then AA, AB, … */

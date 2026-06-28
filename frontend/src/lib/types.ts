@@ -66,6 +66,16 @@ export interface RsmStrainResponse {
 /** A dataset held client-side: the parsed DataStruct + a stable id + name.
  *  `raw` is the pristine import; `data` is the currently displayed (corrected)
  *  view. `corrections` are the params that produced `data` from `raw`. */
+/** A worksheet computed column: a display `name` and a formula `expr` over `x`
+ *  and the channel letters (A, B, …). Stored on the dataset so it recomputes
+ *  when the base data changes. The computed columns are always the LAST
+ *  `formulas.length` columns of the dataset's `data`. */
+export interface ComputedColumn {
+  name: string;
+  expr: string;
+  unit?: string;
+}
+
 export interface Dataset {
   id: string;
   name: string;
@@ -85,6 +95,10 @@ export interface Dataset {
   /** Optional group name; the Library renders collapsible sections by group
    *  (ungrouped datasets fall under "Ungrouped"). Round-trips through .dwk. */
   group?: string;
+  /** Worksheet computed columns. They occupy the last `formulas.length` columns
+   *  of `data` and recompute when the base data changes (cell edits, corrections).
+   *  Round-trips through the .dwk workspace. */
+  formulas?: ComputedColumn[];
 }
 
 /** A registered fit model's metadata (from GET /api/fitting/models). */

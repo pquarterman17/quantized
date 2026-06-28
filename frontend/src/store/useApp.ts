@@ -6,12 +6,14 @@ import { create } from "zustand";
 import type { CorrectionsRequest } from "../lib/api";
 import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
 import { cloneDataStruct } from "../lib/dataset";
+import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit, macroStep, type MacroStep } from "../lib/macro";
 import type {
   Annotation,
   AxisFormat,
   BaselineOverlay,
   ChannelRole,
+  ComputedColumn,
   CorrectionParams,
   Dataset,
   FitOverlay,
@@ -20,6 +22,11 @@ import type {
   RsmPeak,
   SeriesStyle,
 } from "../lib/types";
+
+/** Recompute a dataset's computed columns from its current base (no-op without
+ *  formulas). Routed through after any base-data mutation (cell edit, corrections). */
+const recompute = (d: Dataset): Dataset =>
+  d.formulas?.length ? { ...d, data: recomputeData(d.data, d.formulas) } : d;
 
 let _refSeq = 0;
 let _annSeq = 0;
@@ -102,6 +109,8 @@ interface AppState {
   moveDataset: (id: string, dir: -1 | 1) => void;
   renameDataset: (id: string, name: string) => void;
   setCellValue: (id: string, row: number, col: number, value: number) => void;
+  addFormula: (id: string, name: string, expr: string) => void;
+  removeFormula: (id: string, index: number) => void;
   setDatasetNotes: (id: string, notes: string) => void;
   addDatasetTag: (id: string, tag: string) => void;
   removeDatasetTag: (id: string, tag: string) => void;
@@ -375,6 +384,7 @@ export const useApp = create<AppState>((set, get) => ({
         ...(src.notes ? { notes: src.notes } : {}),
         ...(src.tags?.length ? { tags: [...src.tags] } : {}),
         ...(src.group ? { group: src.group } : {}),
+        ...(src.formulas?.length ? { formulas: src.formulas.map((f) => ({ ...f })) } : {}),
       };
       const datasets = [...s.datasets];
       datasets.splice(idx + 1, 0, clone);
@@ -412,27 +422,65 @@ export const useApp = create<AppState>((set, get) => ({
     })),
   // Edit a single worksheet cell in place (col < 0 = the x/time column). Rebuilds
   // the dataset's arrays immutably (DataStruct stays frozen-by-contract) so the
-  // plot + stats recompute live. Recovery of the original is via Duplicate.
+  // plot + stats recompute live. Computed columns (the last `formulas.length`)
+  // are read-only — a recompute would overwrite them — so an edit there is a
+  // no-op. Editing a base cell recomputes the computed columns. Recovery of the
+  // original is via Duplicate.
   setCellValue: (id, row, col, value) => {
+    const ds = get().datasets.find((d) => d.id === id);
+    if (!ds) return;
+    const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
+    if (col >= baseCount) return; // computed column — read-only
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id) return d;
+        const data =
+          col < 0
+            ? { ...d.data, time: d.data.time.map((t, i) => (i === row ? value : t)) }
+            : {
+                ...d.data,
+                values: d.data.values.map((r, i) =>
+                  i === row ? r.map((v, c) => (c === col ? value : v)) : r,
+                ),
+              };
+        return recompute({ ...d, data });
+      }),
+    }));
+    get().recordMacro(
+      `Edit ${ds.name} [${row},${col}]`,
+      `qz.setCell(${lit(ds.name)}, ${row}, ${col}, ${lit(value)})`,
+    );
+  },
+  // Append a computed column (formula) to a dataset and evaluate it. The column
+  // lands as the last column of `data` and recomputes whenever the base changes.
+  // Strips the OLD computed columns first, then reapplies the grown list.
+  addFormula: (id, name, expr) => {
     const ds = get().datasets.find((d) => d.id === id);
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id) return d;
-        if (col < 0) {
-          return { ...d, data: { ...d.data, time: d.data.time.map((t, i) => (i === row ? value : t)) } };
-        }
-        const values = d.data.values.map((r, i) =>
-          i === row ? r.map((v, c) => (c === col ? value : v)) : r,
-        );
-        return { ...d, data: { ...d.data, values } };
+        const base = baseColumns(d.data, d.formulas?.length ?? 0);
+        const formulas: ComputedColumn[] = [...(d.formulas ?? []), { name, expr }];
+        return { ...d, formulas, data: applyFormulas(base, formulas) };
       }),
     }));
-    if (ds)
-      get().recordMacro(
-        `Edit ${ds.name} [${row},${col}]`,
-        `qz.setCell(${lit(ds.name)}, ${row}, ${col}, ${lit(value)})`,
-      );
+    if (ds) get().recordMacro(`Add column ${name}`, `qz.addColumn(${lit(name)}, ${lit(expr)})`);
   },
+  // Remove the computed column at `index` (in the formulas list). Strips the OLD
+  // computed columns, then reapplies the shrunk list (NaN-stable indices).
+  removeFormula: (id, index) =>
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id || !d.formulas) return d;
+        const base = baseColumns(d.data, d.formulas.length);
+        const formulas = d.formulas.filter((_, i) => i !== index);
+        return {
+          ...d,
+          formulas: formulas.length ? formulas : undefined,
+          data: applyFormulas(base, formulas),
+        };
+      }),
+    })),
   // Attach free-text notes to a dataset (blank clears). Per-dataset, so it lives
   // on the object (round-trips through .dwk) rather than the transient view state.
   setDatasetNotes: (id, notes) =>
@@ -494,9 +542,10 @@ export const useApp = create<AppState>((set, get) => ({
     }
     try {
       const corrected = await applyCorrectionsApi(req);
+      // Recompute any computed columns from the freshly-corrected base.
       set((s) => ({
         datasets: s.datasets.map((d) =>
-          d.id === id ? { ...d, data: corrected, raw, corrections: params, bgRef } : d,
+          d.id === id ? recompute({ ...d, data: corrected, raw, corrections: params, bgRef }) : d,
         ),
       }));
       get().recordMacro(
@@ -516,7 +565,7 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({
       datasets: s.datasets.map((d) =>
         d.id === id && d.raw
-          ? { ...d, data: d.raw, raw: undefined, corrections: undefined, bgRef: undefined }
+          ? recompute({ ...d, data: d.raw, raw: undefined, corrections: undefined, bgRef: undefined })
           : d,
       ),
     }));

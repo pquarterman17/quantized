@@ -1,8 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import { channelLetter, compileFormula } from "./formula";
+import {
+  applyFormulas,
+  baseColumns,
+  channelLetter,
+  compileFormula,
+  recomputeData,
+} from "./formula";
+import type { DataStruct } from "./types";
 
 const ev = (src: string, ctx: Record<string, number> = {}) => compileFormula(src)(ctx);
+
+const base: DataStruct = {
+  time: [1, 2],
+  values: [
+    [10, 20],
+    [30, 40],
+  ],
+  labels: ["A", "B"],
+  units: ["u", "v"],
+  metadata: {},
+};
 
 describe("compileFormula — arithmetic", () => {
   it("respects precedence and associativity", () => {
@@ -57,5 +75,56 @@ describe("channelLetter", () => {
     expect(channelLetter(25)).toBe("Z");
     expect(channelLetter(26)).toBe("AA");
     expect(channelLetter(27)).toBe("AB");
+  });
+});
+
+describe("computed columns", () => {
+  it("applies a formula over x + channel letters", () => {
+    const out = applyFormulas(base, [{ name: "S", expr: "A + B" }]);
+    expect(out.labels).toEqual(["A", "B", "S"]);
+    expect(out.values).toEqual([
+      [10, 20, 30],
+      [30, 40, 70],
+    ]);
+    expect(base.values[0]).toHaveLength(2); // input untouched (immutable)
+  });
+
+  it("evaluates formulas in order so a later one can reference an earlier (by letter)", () => {
+    const out = applyFormulas(base, [
+      { name: "S", expr: "A + B" }, // → column C (index 2)
+      { name: "T", expr: "C * 2" }, // references the computed S
+    ]);
+    expect(out.values).toEqual([
+      [10, 20, 30, 60],
+      [30, 40, 70, 140],
+    ]);
+  });
+
+  it("yields an all-NaN column for a broken formula (keeps indices stable)", () => {
+    const out = applyFormulas(base, [{ name: "bad", expr: "A +" }]);
+    expect(out.labels).toEqual(["A", "B", "bad"]);
+    expect(out.values[0][2]).toBeNaN();
+    expect(out.values[1][2]).toBeNaN();
+  });
+
+  it("baseColumns strips the last n columns", () => {
+    const out = applyFormulas(base, [{ name: "S", expr: "A + B" }]);
+    expect(baseColumns(out, 1)).toEqual(base);
+    expect(baseColumns(base, 0)).toBe(base); // no-op
+  });
+
+  it("recomputeData re-derives the computed column from an edited base", () => {
+    const withS = applyFormulas(base, [{ name: "S", expr: "A + B" }]);
+    // Simulate a base edit: A[0] 10 → 100.
+    const edited: DataStruct = {
+      ...withS,
+      values: [
+        [100, 20, 30],
+        [30, 40, 70],
+      ],
+    };
+    const out = recomputeData(edited, [{ name: "S", expr: "A + B" }]);
+    expect(out.values[0][2]).toBe(120); // 100 + 20
+    expect(out.values[1][2]).toBe(70); // unchanged row
   });
 });

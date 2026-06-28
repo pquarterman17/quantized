@@ -3,7 +3,7 @@
 // library (datasets live only in memory); this gives session persistence. Pure +
 // testable; the App wires it to Save/Open commands (download + file picker).
 
-import type { CorrectionParams, Dataset, DataStruct } from "./types";
+import type { ComputedColumn, CorrectionParams, Dataset, DataStruct } from "./types";
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
 export const WORKSPACE_VERSION = 1;
@@ -31,6 +31,7 @@ export function serializeWorkspace(datasets: Dataset[]): string {
       ...(d.notes ? { notes: d.notes } : {}),
       ...(d.tags?.length ? { tags: d.tags } : {}),
       ...(d.group?.trim() ? { group: d.group } : {}),
+      ...(d.formulas?.length ? { formulas: d.formulas } : {}),
     })),
   };
   return JSON.stringify(doc, null, 2);
@@ -109,6 +110,16 @@ export function parseWorkspace(text: string): Dataset[] {
       if (tags.length) ds.tags = tags;
     }
     if (typeof dd.group === "string" && dd.group.trim()) ds.group = dd.group;
+    if (Array.isArray(dd.formulas)) {
+      const formulas = dd.formulas.filter(
+        (f): f is ComputedColumn =>
+          typeof f === "object" &&
+          f !== null &&
+          typeof (f as Record<string, unknown>).name === "string" &&
+          typeof (f as Record<string, unknown>).expr === "string",
+      );
+      if (formulas.length) ds.formulas = formulas;
+    }
     return ds;
   });
 }

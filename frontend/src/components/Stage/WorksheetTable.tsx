@@ -34,6 +34,10 @@ export interface WorksheetTableProps {
   onToggleSort: (col: number) => void;
   onToggleMask: (r: number) => void;
   onEditCell: (row: number, col: number, value: number) => void;
+  /** Channels at index ≥ baseCount are computed (formula) columns: read-only +
+   *  removable, marked "ƒx" in the header. */
+  baseCount: number;
+  onRemoveFormula: (index: number) => void;
   maxRows: number;
   showStats: boolean;
   colStats: (CalcResult | null)[] | null;
@@ -54,6 +58,8 @@ export default function WorksheetTable({
   onToggleSort,
   onToggleMask,
   onEditCell,
+  baseCount,
+  onRemoveFormula,
   maxRows,
   showStats,
   colStats,
@@ -76,9 +82,15 @@ export default function WorksheetTable({
   };
 
   const cell = (r: number, col: number, value: number | undefined) => {
-    const editing = edit != null && edit.row === r && edit.col === col;
+    const computed = col >= baseCount; // col -1 (x) and base channels are editable
+    const editing = !computed && edit != null && edit.row === r && edit.col === col;
     return (
-      <td key={col} onDoubleClick={() => startEdit(r, col, value)} title="double-click to edit">
+      <td
+        key={col}
+        onDoubleClick={computed ? undefined : () => startEdit(r, col, value)}
+        title={computed ? "computed column — edit the formula" : "double-click to edit"}
+        style={computed ? { color: "var(--text-dim)" } : undefined}
+      >
         {editing ? (
           <input
             className="qz-input qzk-cell-edit"
@@ -110,21 +122,43 @@ export default function WorksheetTable({
               {sortMark(-1)}
             </span>
           </th>
-          {labels.map((lab, c) => (
-            <th
-              key={lab}
-              onClick={() => onToggleSort(c)}
-              title={channelRoles[c] ? `${channelLetter(c)} — ${channelRoles[c]} column` : channelLetter(c)}
-              style={{ cursor: "default", opacity: channelRoles[c] ? 0.55 : 1 }}
-            >
-              {lab}
-              <span className="role">
-                {channelRoles[c] ?? channelLetter(c)}
-                {units[c] ? ` · ${units[c]}` : ""}
-                {sortMark(c)}
-              </span>
-            </th>
-          ))}
+          {labels.map((lab, c) => {
+            const computed = c >= baseCount;
+            return (
+              <th
+                key={lab}
+                onClick={() => onToggleSort(c)}
+                title={
+                  computed
+                    ? `${channelLetter(c)} — computed column`
+                    : channelRoles[c]
+                      ? `${channelLetter(c)} — ${channelRoles[c]} column`
+                      : channelLetter(c)
+                }
+                style={{ cursor: "default", opacity: channelRoles[c] ? 0.55 : 1 }}
+              >
+                {lab}
+                {computed && (
+                  <button
+                    className="qzk-col-x"
+                    title="remove computed column"
+                    aria-label="remove computed column"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveFormula(c - baseCount);
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+                <span className="role">
+                  {computed ? "ƒx" : (channelRoles[c] ?? channelLetter(c))}
+                  {units[c] ? ` · ${units[c]}` : ""}
+                  {sortMark(c)}
+                </span>
+              </th>
+            );
+          })}
         </tr>
       </thead>
       <tbody>

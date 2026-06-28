@@ -92,6 +92,8 @@ body {
 
 /* ── worksheet inline cell edit ── */
 .qzk-cell-edit { width: 100%; min-width: 60px; padding: 1px 4px; font-family: var(--font-mono); font-size: inherit; box-sizing: border-box; }
+.qzk-col-x { margin-left: 4px; padding: 0 3px; background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: var(--type-nano); line-height: 1; }
+.qzk-col-x:hover { color: var(--danger); }
 
 /* ── stage ── */
 .qzk-stage-cell { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }

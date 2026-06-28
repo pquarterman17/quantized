@@ -631,6 +631,82 @@ describe("useApp setCellValue", () => {
   });
 });
 
+describe("useApp computed columns (recompute)", () => {
+  const twoCol: DataStruct = {
+    time: [1, 2],
+    values: [
+      [10, 20],
+      [30, 40],
+    ],
+    labels: ["A", "B"],
+    units: ["u", "v"],
+    metadata: {},
+  };
+
+  it("addFormula appends a computed column and evaluates it", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: twoCol }], activeId: "d1" });
+    useApp.getState().addFormula("d1", "S", "A + B");
+    const d = useApp.getState().datasets[0];
+    expect(d.formulas).toEqual([{ name: "S", expr: "A + B" }]);
+    expect(d.data.labels).toEqual(["A", "B", "S"]);
+    expect(d.data.values).toEqual([
+      [10, 20, 30],
+      [30, 40, 70],
+    ]);
+  });
+
+  it("recomputes the computed column when a base cell is edited", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: twoCol }], activeId: "d1" });
+    useApp.getState().addFormula("d1", "S", "A + B");
+    useApp.getState().setCellValue("d1", 0, 0, 100); // A[0] 10 → 100
+    const d = useApp.getState().datasets[0];
+    expect(d.data.values[0][0]).toBe(100);
+    expect(d.data.values[0][2]).toBe(120); // S recomputed = 100 + 20
+  });
+
+  it("refuses to edit a computed cell (it would be overwritten)", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: twoCol }], activeId: "d1" });
+    useApp.getState().addFormula("d1", "S", "A + B"); // S is column index 2
+    useApp.getState().setCellValue("d1", 0, 2, 999);
+    expect(useApp.getState().datasets[0].data.values[0][2]).toBe(30); // unchanged
+  });
+
+  it("removeFormula drops the computed column back to the base", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: twoCol }], activeId: "d1" });
+    useApp.getState().addFormula("d1", "S", "A + B");
+    useApp.getState().removeFormula("d1", 0);
+    const d = useApp.getState().datasets[0];
+    expect(d.formulas).toBeUndefined();
+    expect(d.data.labels).toEqual(["A", "B"]);
+    expect(d.data.values).toEqual([
+      [10, 20],
+      [30, 40],
+    ]);
+  });
+
+  it("recomputes after corrections (base changes upstream)", async () => {
+    // The backend echoes the same shape it received (3 cols incl. the stale
+    // computed S, value 999 here) — recompute strips it and re-derives S.
+    const corrected: DataStruct = {
+      ...twoCol,
+      labels: ["A", "B", "S"],
+      units: ["u", "v", ""],
+      values: [
+        [0, 20, 999],
+        [20, 40, 999],
+      ],
+    };
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(corrected);
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: twoCol }], activeId: "d1" });
+    useApp.getState().addFormula("d1", "S", "A + B");
+    await useApp.getState().applyCorrections("d1", { yOff: -10 });
+    const d = useApp.getState().datasets[0];
+    // corrected A column drove a fresh S = A + B (999 discarded).
+    expect(d.data.values[0][2]).toBe(20); // 0 + 20
+    expect(d.data.values[1][2]).toBe(60); // 20 + 40
+  });
+});
+
 describe("useApp macro recorder", () => {
   beforeEach(() => {
     useApp.setState({ macroRecording: false, macroSteps: [] });
