@@ -7,10 +7,16 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { useApp } from "../../../store/useApp";
 import ConstantsTab from "./ConstantsTab";
 import CrystalTab from "./CrystalTab";
+import DiffusionTab from "./DiffusionTab";
 import ElectricalTab from "./ElectricalTab";
+import ElectrochemistryTab from "./ElectrochemistryTab";
 import ElementsTab from "./ElementsTab";
+import OpticsTab from "./OpticsTab";
 import SldTab from "./SldTab";
+import SubstratesTab from "./SubstratesTab";
+import ThermalTab from "./ThermalTab";
 import UnitsTab from "./UnitsTab";
+import VacuumTab from "./VacuumTab";
 import XrayTab from "./XrayTab";
 import { useCalculators, type CalcTab } from "./useCalculators";
 
@@ -31,11 +37,27 @@ const TAB_GROUPS: { group: string; tabs: { value: CalcTab; label: string }[] }[]
       { value: "crystal", label: "Crystal" },
       { value: "sld", label: "SLD" },
       { value: "elements", label: "Elements" },
+      { value: "substrates", label: "Substrates" },
     ],
   },
   {
     group: "Transport",
-    tabs: [{ value: "electrical", label: "Electrical" }],
+    tabs: [
+      { value: "electrical", label: "Electrical" },
+      { value: "thermal", label: "Thermal" },
+      { value: "diffusion", label: "Diffusion" },
+    ],
+  },
+  {
+    group: "Optics & Vacuum",
+    tabs: [
+      { value: "optics", label: "Optics" },
+      { value: "vacuum", label: "Vacuum" },
+    ],
+  },
+  {
+    group: "Electrochemistry",
+    tabs: [{ value: "electrochemistry", label: "Electrochemistry" }],
   },
 ];
 
@@ -70,6 +92,12 @@ export default function CalculatorsPanel() {
       {c.tab === "elements" && <ElementsTab />}
       {c.tab === "constants" && <ConstantsTab c={c} />}
       {c.tab === "electrical" && <ElectricalTab />}
+      {c.tab === "thermal" && <ThermalTab />}
+      {c.tab === "diffusion" && <DiffusionTab />}
+      {c.tab === "optics" && <OpticsTab />}
+      {c.tab === "vacuum" && <VacuumTab />}
+      {c.tab === "electrochemistry" && <ElectrochemistryTab />}
+      {c.tab === "substrates" && <SubstratesTab />}
     </ToolWindow>
   );
 }

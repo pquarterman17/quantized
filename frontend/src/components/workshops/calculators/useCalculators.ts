@@ -24,7 +24,13 @@ export type CalcTab =
   | "crystal"
   | "sld"
   | "elements"
-  | "electrical";
+  | "electrical"
+  | "thermal"
+  | "diffusion"
+  | "optics"
+  | "vacuum"
+  | "electrochemistry"
+  | "substrates";
 
 export type CellAngle = "alpha" | "beta" | "gamma";
 

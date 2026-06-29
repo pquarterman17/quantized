@@ -1,6 +1,7 @@
 // Typed fetch layer over the FastAPI backend. All endpoints are under /api
 // (dev: Vite proxies to uvicorn :8000; prod: same-origin static mount).
 
+import type { SubstrateInfo } from "../components/workshops/calculators/SubstratesTab";
 import { postDownload } from "./download";
 import type { ExportSeriesStyle } from "./exportStyles";
 import type {
@@ -381,6 +382,241 @@ export function electricalHall(
   t: number,
 ): Promise<{ r_h: number; carrier_density: number; carrier_type: string }> {
   return postJSON("/api/electrical/hall", { v_h: vH, i, b, t });
+}
+
+// ── Optics (calc.optics) ────────────────────────────────────────────────────
+/** Fresnel reflectance/transmittance at an interface (θ in degrees). */
+export function opticsFresnel(
+  n1: number,
+  n2: number,
+  theta: number,
+): Promise<{ Rs: number; Rp: number; Ts: number; Tp: number }> {
+  return postJSON("/api/optics/fresnel", { n1, n2, theta });
+}
+
+/** θ_c = arcsin(n₂/n₁) (deg); NaN when n₂ ≥ n₁ (no total internal reflection). */
+export function opticsCriticalAngle(n1: number, n2: number): Promise<{ theta_c: number }> {
+  return postJSON("/api/optics/critical-angle", { n1, n2 });
+}
+
+/** θ_B = arctan(n₂/n₁) (deg). */
+export function opticsBrewsterAngle(n1: number, n2: number): Promise<{ theta_b: number }> {
+  return postJSON("/api/optics/brewster-angle", { n1, n2 });
+}
+
+/** δ = λ/(4πk); depth in the wavelength's unit. */
+export function opticsPenetrationDepth(
+  n: number,
+  k: number,
+  wavelength: number,
+): Promise<{ depth: number; abs_coeff: number; abs_length: number }> {
+  return postJSON("/api/optics/penetration-depth", { n, k, wavelength });
+}
+
+/** δ = √(2ρ/(ωμ₀)); ρ in Ω·m (SI), f in Hz. */
+export function opticsSkinDepth(
+  rho: number,
+  f: number,
+): Promise<{ delta: number; delta_um: number; delta_nm: number }> {
+  return postJSON("/api/optics/skin-depth", { rho, f });
+}
+
+/** (n, k) → (ε₁, ε₂): ε₁ = n²−k², ε₂ = 2nk. */
+export function opticsRefractiveToDielectric(
+  n: number,
+  k: number,
+): Promise<{ eps1: number; eps2: number }> {
+  return postJSON("/api/optics/refractive-to-dielectric", { n, k });
+}
+
+/** (ε₁, ε₂) → (n, k) via the physical square root. */
+export function opticsDielectricToRefractive(
+  eps1: number,
+  eps2: number,
+): Promise<{ n: number; k: number }> {
+  return postJSON("/api/optics/dielectric-to-refractive", { eps1, eps2 });
+}
+
+// ── Vacuum (calc.vacuum) ────────────────────────────────────────────────────
+/** Mean free path λ = kT/(√2·π·d²·P) (m / mm / µm). P in Pa, T in K, d in m. */
+export function vacuumMeanFreePath(
+  p: number,
+  temperature?: number,
+  d?: number,
+): Promise<{ mfp: number; mfpMm: number; mfpUm: number; P: number; T: number; d: number }> {
+  return postJSON("/api/vacuum/mean-free-path", { p, temperature, d });
+}
+
+/** Monolayer formation time from impingement flux. P in Pa. */
+export function vacuumMonolayerTime(
+  p: number,
+  m?: number,
+  temperature?: number,
+  aSite?: number,
+): Promise<{ tMono: number; flux: number; P: number; T: number }> {
+  return postJSON("/api/vacuum/monolayer-time", { p, m, temperature, a_site: aSite });
+}
+
+/** Knudsen number Kn = λ/L and the resulting flow regime. */
+export function vacuumKnudsen(
+  mfp: number,
+  length: number,
+): Promise<{ Kn: number; regime: string; mfp: number; L: number }> {
+  return postJSON("/api/vacuum/knudsen", { mfp, length });
+}
+
+/** Pump-down time t = (V/S)·ln(P0/Pf). */
+export function vacuumPumpDownTime(
+  v: number,
+  s: number,
+  p0: number,
+  pf: number,
+): Promise<{
+  time: number;
+  timeMin: number;
+  tau: number;
+  V: number;
+  S: number;
+  P0: number;
+  Pf: number;
+}> {
+  return postJSON("/api/vacuum/pump-down", { v, s, p0, pf });
+}
+
+/** Sputter yield (atoms/ion) for a material + ion at a given energy (eV). */
+export function vacuumSputterYield(
+  material: string,
+  energy: number,
+  ion?: string,
+): Promise<{ Y: number; material: string; ion: string; energy: number }> {
+  return postJSON("/api/vacuum/sputter-yield", { material, energy, ion });
+}
+
+/** Gas-flow conductance (molecular + viscous) and throughput. */
+export function vacuumGasFlow(
+  p1: number,
+  p2: number,
+  d: number,
+  length: number,
+  temperature?: number,
+  m?: number,
+): Promise<{ Cmol: number; Cvisc: number; throughput: number; Kn: number; regime: string }> {
+  return postJSON("/api/vacuum/gas-flow", { p1, p2, d, length, temperature, m });
+}
+
+// ── Thermal (calc.thermal) ──────────────────────────────────────────────────
+/** Wiedemann-Franz κ = L₀·σ·T (W/(m·K)). σ in S/cm, T in K. */
+export function thermalWiedemannFranz(
+  sigma: number,
+  temperature: number,
+): Promise<{ kappa: number; sigma: number; temperature: number; lorenz: number }> {
+  return postJSON("/api/thermal/wiedemann-franz", { sigma, temperature });
+}
+
+/** Debye temperature Θ_D = (ħ/k_B)·v_s·(6π²·n)^(1/3) (K). v_s in m/s, n in m⁻³. */
+export function thermalDebye(
+  vS: number,
+  n: number,
+): Promise<{ theta_D: number; v_s: number; n: number }> {
+  return postJSON("/api/thermal/debye", { v_s: vS, n });
+}
+
+/** Thermal diffusivity α = κ/(ρ·c_p) (m²/s). */
+export function thermalDiffusivity(
+  kappa: number,
+  rho: number,
+  cp: number,
+): Promise<{ alpha: number; alpha_mm2: number; kappa: number; rho: number; cp: number }> {
+  return postJSON("/api/thermal/diffusivity", { kappa, rho, cp });
+}
+
+// ── Diffusion (calc.diffusion) ──────────────────────────────────────────────
+/** D = D₀·exp(−Ea/(k_B·T)) (cm²/s). D₀ in cm²/s, Ea in eV, T in K. */
+export function diffusionArrhenius(
+  d0: number,
+  ea: number,
+  t: number,
+): Promise<{ D: number; D0: number; Ea: number; T: number }> {
+  return postJSON("/api/diffusion/arrhenius", { d0, ea, t });
+}
+
+/** Diffusion length L = √(D·t) (cm / µm / nm). */
+export function diffusionLength(
+  d: number,
+  t: number,
+): Promise<{ L: number; L_um: number; L_nm: number; D: number; t: number }> {
+  return postJSON("/api/diffusion/diffusion-length", { d, t });
+}
+
+/** Fick's first law J = −D·ΔC/Δx (atoms/(cm²·s)). */
+export function diffusionFickFlux(
+  d: number,
+  dc: number,
+  dx: number,
+): Promise<{ J: number; J_abs: number; D: number; dC: number; dx: number }> {
+  return postJSON("/api/diffusion/fick-flux", { d, dc, dx });
+}
+
+// ── Electrochemistry (calc.electrochemistry) ────────────────────────────────
+/** Nernst potential E = E⁰ − (R·T)/(n·F)·ln(Q) (V). */
+export function electrochemNernst(
+  e0: number,
+  n: number,
+  q: number,
+  t?: number,
+): Promise<{ E: number; E0: number; n: number; Q: number; T: number }> {
+  return postJSON("/api/electrochemistry/nernst", { e0, n, q, t });
+}
+
+/** Butler-Volmer current density (A/cm²). */
+export function electrochemButlerVolmer(
+  j0: number,
+  eta: number,
+  alpha?: number,
+  t?: number,
+): Promise<{ j: number; jAnodic: number; jCathodic: number; jTafel: number }> {
+  return postJSON("/api/electrochemistry/butler-volmer", { j0, eta, alpha, t });
+}
+
+/** Tafel slope b = 2.303·R·T/(α·F) (V/decade, mV/decade). */
+export function electrochemTafel(
+  alpha: number,
+  t?: number,
+): Promise<{ b: number; bMv: number }> {
+  return postJSON("/api/electrochemistry/tafel-slope", { alpha, t });
+}
+
+/** Ohmic (iR) drop V = I·R (V, mV). */
+export function electrochemOhmicDrop(i: number, r: number): Promise<{ V: number; VmV: number }> {
+  return postJSON("/api/electrochemistry/ohmic-drop", { i, r });
+}
+
+/** Double-layer capacitance C = ε₀·ε_r·A/d. d in nm, A in cm². */
+export function electrochemDoubleLayer(
+  epsilon: number,
+  d: number,
+  area: number,
+): Promise<{ C: number; CuF: number; CpF: number; Cspec: number }> {
+  return postJSON("/api/electrochemistry/double-layer-capacitance", { epsilon, d, area });
+}
+
+// ── Substrates (calc.substrates) ────────────────────────────────────────────
+/** Built-in substrate reference table. */
+export function getSubstrates(): Promise<{ substrates: SubstrateInfo[] }> {
+  return getJSON("/api/substrates");
+}
+
+/** One substrate by name. */
+export function getSubstrate(name: string): Promise<SubstrateInfo> {
+  return getJSON(`/api/substrates/${encodeURIComponent(name)}`);
+}
+
+/** Epitaxial lattice mismatch f = (a_film − a_sub)/a_sub. */
+export function substrateMismatch(
+  aFilm: number,
+  aSub: number,
+): Promise<{ mismatch: number; mismatchPct: number; description: string }> {
+  return postJSON("/api/substrates/mismatch", { a_film: aFilm, a_sub: aSub });
 }
 
 /** Combine two datasets pointwise on A's x-grid (B interpolated). calc.aggregate. */
