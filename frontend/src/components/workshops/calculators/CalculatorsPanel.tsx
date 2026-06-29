@@ -11,10 +11,14 @@ import DiffusionTab from "./DiffusionTab";
 import ElectricalTab from "./ElectricalTab";
 import ElectrochemistryTab from "./ElectrochemistryTab";
 import ElementsTab from "./ElementsTab";
+import MagneticTab from "./MagneticTab";
 import OpticsTab from "./OpticsTab";
+import SemiconductorTab from "./SemiconductorTab";
 import SldTab from "./SldTab";
 import SubstratesTab from "./SubstratesTab";
+import SuperconductorTab from "./SuperconductorTab";
 import ThermalTab from "./ThermalTab";
+import ThinFilmTab from "./ThinFilmTab";
 import UnitsTab from "./UnitsTab";
 import VacuumTab from "./VacuumTab";
 import XrayTab from "./XrayTab";
@@ -54,6 +58,18 @@ const TAB_GROUPS: { group: string; tabs: { value: CalcTab; label: string }[] }[]
       { value: "optics", label: "Optics" },
       { value: "vacuum", label: "Vacuum" },
     ],
+  },
+  {
+    group: "Devices",
+    tabs: [
+      { value: "semiconductor", label: "Semiconductor" },
+      { value: "superconductor", label: "Superconductor" },
+      { value: "thinfilm", label: "Thin Film" },
+    ],
+  },
+  {
+    group: "Magnetism",
+    tabs: [{ value: "magnetic", label: "Magnetic" }],
   },
   {
     group: "Electrochemistry",
@@ -98,6 +114,10 @@ export default function CalculatorsPanel() {
       {c.tab === "vacuum" && <VacuumTab />}
       {c.tab === "electrochemistry" && <ElectrochemistryTab />}
       {c.tab === "substrates" && <SubstratesTab />}
+      {c.tab === "semiconductor" && <SemiconductorTab />}
+      {c.tab === "superconductor" && <SuperconductorTab />}
+      {c.tab === "thinfilm" && <ThinFilmTab />}
+      {c.tab === "magnetic" && <MagneticTab />}
     </ToolWindow>
   );
 }

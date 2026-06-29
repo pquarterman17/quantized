@@ -619,6 +619,333 @@ export function substrateMismatch(
   return postJSON("/api/substrates/mismatch", { a_film: aFilm, a_sub: aSub });
 }
 
+// ── Semiconductor device physics (calc.semiconductor) ───────────────────────
+/** n_i = √(N_c N_v)·exp(−E_g/2k_BT) (cm⁻³). */
+export function semiconductorIntrinsic(
+  eg: number,
+  meStar: number,
+  mhStar: number,
+  t: number,
+): Promise<{ ni: number; Nc: number; Nv: number; Eg: number; T: number }> {
+  return postJSON("/api/semiconductor/intrinsic", { eg, me_star: meStar, mh_star: mhStar, t });
+}
+
+/** n, p from charge-neutrality + mass-action; doping type. */
+export function semiconductorCarrierConc(
+  nd: number,
+  na: number,
+  ni: number,
+): Promise<{ n: number; p: number; type: string }> {
+  return postJSON("/api/semiconductor/carrier-concentration", { nd, na, ni });
+}
+
+/** V_bi = (k_BT/q)·ln(N_a N_d / n_i²) (V). */
+export function semiconductorBuiltInPotential(
+  na: number,
+  nd: number,
+  ni: number,
+  t: number,
+): Promise<{ Vbi: number }> {
+  return postJSON("/api/semiconductor/built-in-potential", { na, nd, ni, t });
+}
+
+/** Depletion width W, x_n, x_p (nm) and Wcm (cm). */
+export function semiconductorDepletionWidth(
+  vbi: number,
+  na: number,
+  nd: number,
+  epsilonR: number,
+  t: number,
+): Promise<{ W: number; Wcm: number; xn: number; xp: number }> {
+  return postJSON("/api/semiconductor/depletion-width", { vbi, na, nd, epsilon_r: epsilonR, t });
+}
+
+/** D = μ·k_BT/q (cm²/s). */
+export function semiconductorDiffusionCoeff(
+  mu: number,
+  t: number,
+): Promise<{ D: number; mu: number; T: number }> {
+  return postJSON("/api/semiconductor/diffusion-coeff", { mu, t });
+}
+
+/** L = √(D·τ) (cm / µm). */
+export function semiconductorDiffusionLength(
+  d: number,
+  tau: number,
+): Promise<{ L: number; Lum: number; D: number; tau: number }> {
+  return postJSON("/api/semiconductor/diffusion-length", { d, tau });
+}
+
+/** E_F − E_i = k_BT·asinh(Δ/2n_i) (eV). */
+export function semiconductorFermiLevel(
+  eg: number,
+  meStar: number,
+  mhStar: number,
+  nd: number,
+  na: number,
+  t: number,
+): Promise<{ EF: number; type: string }> {
+  return postJSON("/api/semiconductor/fermi-level", {
+    eg,
+    me_star: meStar,
+    mh_star: mhStar,
+    nd,
+    na,
+    t,
+  });
+}
+
+/** L_D = √(ε₀εᵣk_BT/(q²n)) (nm). */
+export function semiconductorDebyeLength(
+  n: number,
+  epsilonR: number,
+  t: number,
+): Promise<{ LD: number; LDcm: number }> {
+  return postJSON("/api/semiconductor/debye-length", { n, epsilon_r: epsilonR, t });
+}
+
+/** n_s = n·t (cm⁻²). */
+export function semiconductorSheetCarrierDensity(
+  n: number,
+  t: number,
+): Promise<{ ns: number; n: number; t: number }> {
+  return postJSON("/api/semiconductor/sheet-carrier-density", { n, t });
+}
+
+/** v_th = √(3k_BT/(m* m₀)) (cm/s). */
+export function semiconductorThermalVelocity(
+  mStar: number,
+  t: number,
+): Promise<{ vth: number; mStar: number; T: number }> {
+  return postJSON("/api/semiconductor/thermal-velocity", { m_star: mStar, t });
+}
+
+/** R_H = (1/q)(pμ_h² − nμ_e²)/(pμ_h + nμ_e)² (cm³/C). */
+export function semiconductorHallCoefficient(
+  n: number,
+  p: number,
+  muE: number,
+  muH: number,
+): Promise<{ RH: number; apparent_type: string }> {
+  return postJSON("/api/semiconductor/hall-coefficient", { n, p, mu_e: muE, mu_h: muH });
+}
+
+/** Caughey-Thomas μ_e, μ_h (cm²/V·s). */
+export function semiconductorMobilityModel(
+  material: string,
+  t: number,
+  n: number,
+): Promise<{ muE: number; muH: number; material: string }> {
+  return postJSON("/api/semiconductor/mobility-model", { material, t, n });
+}
+
+// ── Thin Film (calc.thin_film) ──────────────────────────────────────────────
+/** Deposition rate = thickness/time. */
+export function thinFilmDepositionRate(
+  thickness: number,
+  time: number,
+): Promise<{ rate: number; rate_nm_per_min: number }> {
+  return postJSON("/api/thin-film/deposition-rate", { thickness, time });
+}
+
+/** Sputter deposition rate from yield, current density, density, molar mass. */
+export function thinFilmSputterRate(
+  y: number,
+  j: number,
+  rho: number,
+  m: number,
+): Promise<{ rate: number; rate_nm_per_min: number }> {
+  return postJSON("/api/thin-film/sputter-rate", { y, j, rho, m });
+}
+
+/** Thermal diffusion length L = √(D·t). */
+export function thinFilmDiffusionLength(
+  d: number,
+  t: number,
+): Promise<{ L: number; L_nm: number; L_um: number }> {
+  return postJSON("/api/thin-film/diffusion-length", { d, t });
+}
+
+/** Implant dose = I·t/(q·A). */
+export function thinFilmDoseFromCurrent(
+  current: number,
+  time: number,
+  area: number,
+): Promise<{ dose: number }> {
+  return postJSON("/api/thin-film/dose-from-current", { current, time, area });
+}
+
+/** Peak concentration from dose + projected-range straggle. */
+export function thinFilmDoseToConcentration(
+  dose: number,
+  rp: number,
+  deltaRp: number,
+): Promise<{ Cpeak: number }> {
+  return postJSON("/api/thin-film/dose-to-concentration", { dose, rp, delta_rp: deltaRp });
+}
+
+/** Kiessig fringe thickness from Δq (with refraction correction). */
+export function thinFilmKiessig(
+  deltaQ: number,
+  sld?: number,
+  qc?: number,
+): Promise<{ thickness: number; thickness_nm: number; Qc: number; thickness_raw: number }> {
+  return postJSON("/api/thin-film/kiessig-thickness", { delta_q: deltaQ, sld, qc });
+}
+
+/** Series + parallel thermal conductivity of a multilayer stack. */
+export function thinFilmMultilayerThermal(
+  thicknesses: number[],
+  kappas: number[],
+): Promise<{ k_series: number; k_parallel: number; total_thickness: number; n_layers: number }> {
+  return postJSON("/api/thin-film/multilayer-thermal", { thicknesses, kappas });
+}
+
+/** LSS projected range R_p + straggle ΔR_p. */
+export function thinFilmProjectedRange(
+  ion: string,
+  target: string,
+  energy: number,
+): Promise<{ Rp: number; deltaRp: number; warning: string }> {
+  return postJSON("/api/thin-film/projected-range", { ion, target, energy });
+}
+
+/** Stoney film stress from substrate curvature. */
+export function thinFilmStoneyStress(
+  es: number,
+  nus: number,
+  ts: number,
+  tf: number,
+  r: number,
+): Promise<{ stress: number; stress_MPa: number; stress_GPa: number }> {
+  return postJSON("/api/thin-film/stoney-stress", { es, nus, ts, tf, r });
+}
+
+/** Thermal-mismatch strain/stress between film and substrate. */
+export function thinFilmThermalMismatch(
+  alphaFilm: number,
+  alphaSub: number,
+  deltaT: number,
+  e?: number,
+  nu?: number,
+): Promise<{ strain: number; stress_MPa: number; description: string }> {
+  return postJSON("/api/thin-film/thermal-mismatch", {
+    alpha_film: alphaFilm,
+    alpha_sub: alphaSub,
+    delta_t: deltaT,
+    e,
+    nu,
+  });
+}
+
+// ── Superconductor (calc.superconductor) ────────────────────────────────────
+/** λ(T) = λ₀/√(1 − (T/Tc)⁴) (nm). */
+export function scLondonDepth(
+  lambda0: number,
+  t: number,
+  tc: number,
+): Promise<{ lambda: number; lambda0: number; T: number; Tc: number }> {
+  return postJSON("/api/superconductor/london-depth", { lambda0, t, tc });
+}
+
+/** ξ(T) = ξ₀/√(1 − (T/Tc)²) (nm). */
+export function scCoherenceLength(
+  xi0: number,
+  t: number,
+  tc: number,
+): Promise<{ xi: number; xi0: number; T: number; Tc: number }> {
+  return postJSON("/api/superconductor/coherence-length", { xi0, t, tc });
+}
+
+/** κ = λ/ξ; type 'I' (κ < 1/√2) or 'II'. */
+export function scGlParameter(
+  lambda: number,
+  xi: number,
+): Promise<{ kappa: number; lambda: number; xi: number; type: string }> {
+  return postJSON("/api/superconductor/gl-parameter", { lambda_: lambda, xi });
+}
+
+/** Hc, Hc1, Hc2 (Oe) and type; pass material for preset λ/ξ. */
+export function scCriticalFields(
+  hc0: number,
+  tc: number,
+  t: number,
+  material?: string,
+): Promise<{ Hc: number; Hc1: number; Hc2: number; type: string; T: number; Tc: number }> {
+  return postJSON("/api/superconductor/critical-fields", { hc0, tc, t, material });
+}
+
+/** Jd = Hc(T)/(3√6·π·λ(T)) (A/cm² and MA/cm²). */
+export function scDepairingCurrent(
+  hc0: number,
+  lambda0: number,
+  tc: number,
+  t: number,
+): Promise<{ Jd: number; JdMA: number; T: number; Tc: number }> {
+  return postJSON("/api/superconductor/depairing-current", { hc0, lambda0, tc, t });
+}
+
+/** Δ₀ = 1.764·k_B·Tc (meV); Mühlschlegel Δ(T) when T given. */
+export function scBcsGap(
+  tc: number,
+  t?: number,
+): Promise<{ delta0: number; ratio: number; deltaT: number; Tc: number; T: number }> {
+  return postJSON("/api/superconductor/bcs-gap", { tc, t });
+}
+
+// ── Magnetic properties (calc.magnetic) ─────────────────────────────────────
+/** Moment → emu / A·m² / µ_B (+ magnetization & µ_B/atom when V, atoms given). */
+export function magneticMomentConvert(
+  value: number,
+  unit: string,
+  volume?: number,
+  atoms?: number,
+): Promise<{
+  emu: number;
+  am2: number;
+  mu_b: number;
+  m_cgs: number | null;
+  m_si: number | null;
+  mu_b_per_atom: number | null;
+}> {
+  return postJSON("/api/magnetic/moment-convert", { value, unit, volume, atoms });
+}
+
+/** Demagnetizing factors Nz, Nxy, 4πNz from a geometry label. */
+export function magneticDemag(
+  shape: string,
+): Promise<{ Nz: number; Nxy: number; shape: string; n_cgs: number }> {
+  return postJSON("/api/magnetic/demag", { shape });
+}
+
+/** µ_eff (µ_B) and order type from Curie constant C and Weiss temperature θ. */
+export function magneticCurieWeiss(
+  c: number,
+  theta: number,
+): Promise<{ mu_eff: number; C: number; theta: number; mag_type: string }> {
+  return postJSON("/api/magnetic/curie-weiss", { C: c, theta });
+}
+
+/** Langevin L(x) = coth(x) − 1/x; x = µH/(k_B T) (CGS: emu, Oe, K). */
+export function magneticLangevin(
+  mu: number,
+  fieldOe: number,
+  temperature: number,
+): Promise<{ L: number; x: number; n_mu_b: number }> {
+  return postJSON("/api/magnetic/langevin", { mu, field_oe: fieldOe, temperature });
+}
+
+/** Domain-wall width δ = π√(A/K) and energy E = 4√(AK). */
+export function magneticDomainWall(
+  exchangeA: number,
+  anisotropyK: number,
+): Promise<{ delta_cm: number; delta_nm: number; e_wall_erg_cm2: number; e_wall_mj_m2: number }> {
+  return postJSON("/api/magnetic/domain-wall", {
+    exchange_a: exchangeA,
+    anisotropy_k: anisotropyK,
+  });
+}
+
 /** Combine two datasets pointwise on A's x-grid (B interpolated). calc.aggregate. */
 export function datasetAlgebra(body: {
   dataset_a: DataStruct;

@@ -30,7 +30,11 @@ export type CalcTab =
   | "optics"
   | "vacuum"
   | "electrochemistry"
-  | "substrates";
+  | "substrates"
+  | "semiconductor"
+  | "superconductor"
+  | "thinfilm"
+  | "magnetic";
 
 export type CellAngle = "alpha" | "beta" | "gamma";
 

@@ -26,6 +26,7 @@ from quantized.routes import (
     electrochemistry,
     export,
     fitting,
+    magnetic,
     magnetometry,
     optics,
     parsers,
@@ -34,10 +35,13 @@ from quantized.routes import (
     reference,
     reflectivity,
     rsm,
+    semiconductor,
     sld,
     stats,
     substrates,
+    superconductor,
     thermal,
+    thin_film,
     vacuum,
     xray,
 )
@@ -133,6 +137,10 @@ def create_app() -> FastAPI:
     application.include_router(diffusion.router)
     application.include_router(electrochemistry.router)
     application.include_router(substrates.router)
+    application.include_router(semiconductor.router)
+    application.include_router(thin_film.router)
+    application.include_router(superconductor.router)
+    application.include_router(magnetic.router)
     application.include_router(aggregate.router)
 
     # Client-presence WebSocket (registered before the SPA mount so the
