@@ -2,7 +2,7 @@
 // that holds its ± uncertainty, and render vertical whiskers. The error values
 // are just another channel of the same dataset, read client-side and aligned by
 // row — no backend involvement. This module is the pure, testable core; the
-// canvas drawing lives in uplotPlugins.errorBarsPlugin.
+// canvas drawing lives in uplotOverlays.errorBarsPlugin.
 
 import type { DataStruct } from "./types";
 

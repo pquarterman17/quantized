@@ -9,20 +9,16 @@ import type { FwhmResult } from "./peakwidth";
 import type { PlotPayload } from "./plotdata";
 import type { RegionStats } from "./regionStats";
 import type { Annotation, AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
+import { annotationPlugin, axisBoxPlugin, errorBarsPlugin, refLinePlugin } from "./uplotOverlays";
+import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
 import {
-  annotationPlugin,
-  axisBoxPlugin,
-  errorBarsPlugin,
-  fwhmPlugin,
-  integratePlugin,
   measurePlugin,
   panPlugin,
   readoutPlugin,
-  refLinePlugin,
   statsPlugin,
   wheelZoomPlugin,
   type Readout,
-} from "./uplotPlugins";
+} from "./uplotTools";
 
 export type PlotTool =
   | "zoom"

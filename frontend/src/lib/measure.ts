@@ -1,8 +1,8 @@
 // Pure geometry for the plot measurement tool: the user drags from point A to
 // point B and we report Δx, Δy, and the slope between them. Stored in DATA
 // coordinates (not pixels) so the segment stays pinned to the data across
-// zoom/pan. The canvas drawing + pointer plumbing live in uplotPlugins; this
-// module is the testable core.
+// zoom/pan. The canvas drawing + pointer plumbing live in uplotTools
+// (measurePlugin); this module is the testable core.
 
 export interface Measurement {
   x0: number;

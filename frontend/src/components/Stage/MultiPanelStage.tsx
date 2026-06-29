@@ -12,7 +12,7 @@ import "uplot/dist/uPlot.min.css";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import { panelHeights, splitPayload } from "../../lib/multipanel";
 import { buildOpts } from "../../lib/uplotOpts";
-import type { Readout } from "../../lib/uplotPlugins";
+import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
 
 const SYNC_KEY = "qz-multipanel";

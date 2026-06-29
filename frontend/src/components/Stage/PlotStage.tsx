@@ -24,7 +24,7 @@ import { normalizeRange } from "../../lib/regionSelect";
 import { suggestLogScale } from "../../lib/autoscale";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import { buildOpts } from "../../lib/uplotOpts";
-import type { Readout } from "../../lib/uplotPlugins";
+import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { toast } from "../../store/toasts";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";

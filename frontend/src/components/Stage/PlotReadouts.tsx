@@ -5,7 +5,7 @@
 import { formatMeasurement, type Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import type { PlotTool } from "../../lib/uplotOpts";
-import type { Readout } from "../../lib/uplotPlugins";
+import type { Readout } from "../../lib/uplotTools";
 
 /** Compact number format for the stats panel; non-finite (e.g. std with n<2) → —. */
 const fmtStat = (v: number): string => (Number.isFinite(v) ? v.toPrecision(4) : "—");
