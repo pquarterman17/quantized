@@ -863,3 +863,54 @@ describe("useApp macro recorder", () => {
     expect(useApp.getState().macroRecording).toBe(false);
   });
 });
+
+describe("stage routing (2-D map auto-open)", () => {
+  const map2d: DataStruct = {
+    time: [0, 1, 2, 3],
+    values: [
+      [0, 0, 1],
+      [1, 0, 2],
+      [0, 1, 3],
+      [1, 1, 4],
+    ],
+    labels: ["2Theta", "Omega", "Intensity"],
+    units: ["deg", "deg", "cps"],
+    metadata: { is2D: true },
+  };
+
+  beforeEach(() => {
+    useApp.setState({ datasets: [], activeId: null, stageTab: "plot" });
+  });
+
+  it("opens an imported 2-D map on the Map tab", () => {
+    useApp.getState().addDataset({ id: "m1", name: "rsm.xrdml", data: map2d });
+    expect(useApp.getState().stageTab).toBe("map");
+  });
+
+  it("opens an imported 1-D scan on the Plot tab", () => {
+    useApp.setState({ stageTab: "map" }); // was viewing a map
+    useApp.getState().addDataset({ id: "d1", name: "scan.dat", data: raw });
+    expect(useApp.getState().stageTab).toBe("plot");
+  });
+
+  it("routes the tab when selecting an existing dataset", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "scan.dat", data: raw },
+        { id: "m1", name: "rsm.xrdml", data: map2d },
+      ],
+      activeId: "d1",
+      stageTab: "plot",
+    });
+    useApp.getState().setActive("m1");
+    expect(useApp.getState().stageTab).toBe("map");
+    useApp.getState().setActive("d1");
+    expect(useApp.getState().stageTab).toBe("plot");
+  });
+
+  it("never overrides an explicit Worksheet choice", () => {
+    useApp.setState({ stageTab: "worksheet" });
+    useApp.getState().addDataset({ id: "m1", name: "rsm.xrdml", data: map2d });
+    expect(useApp.getState().stageTab).toBe("worksheet");
+  });
+});

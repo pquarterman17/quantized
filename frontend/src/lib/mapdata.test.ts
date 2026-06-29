@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildMapColumns, fetchMap, hasQSpace, regridNearest, rsmAxisKeys } from "./mapdata";
+import {
+  buildMapColumns,
+  fetchMap,
+  hasQSpace,
+  is2DMap,
+  regridNearest,
+  rsmAxisKeys,
+} from "./mapdata";
 import type { DataStruct } from "./types";
 
 vi.mock("./api", () => ({
@@ -94,6 +101,29 @@ describe("fetchMap", () => {
 
 // An RSM DataStruct from import_xrdml: [2Theta, Omega, Intensity, Qx, Qz].
 const _RSM_LABELS = ["2Theta", "Omega", "Intensity", "Qx", "Qz"];
+
+describe("is2DMap", () => {
+  const mk = (metadata: Record<string, unknown>, labels: string[]): DataStruct => ({
+    time: [],
+    values: [],
+    labels,
+    units: labels.map(() => ""),
+    metadata,
+  });
+
+  it("is true for an is2D dataset with ≥3 channels", () => {
+    expect(is2DMap(mk({ is2D: true }, ["2Theta", "Omega", "Intensity"]))).toBe(true);
+  });
+
+  it("is false without the is2D flag (a 1-D scan)", () => {
+    expect(is2DMap(mk({}, ["T", "M"]))).toBe(false);
+    expect(is2DMap(mk({ is2D: false }, ["2Theta", "Omega", "Intensity"]))).toBe(false);
+  });
+
+  it("is false when flagged 2-D but with too few channels to map", () => {
+    expect(is2DMap(mk({ is2D: true }, ["x", "y"]))).toBe(false);
+  });
+});
 
 describe("hasQSpace", () => {
   it("is true only when both Qx and Qz columns exist", () => {

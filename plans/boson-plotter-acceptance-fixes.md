@@ -81,12 +81,14 @@ file → io.import_auto → DataStruct(.time/.values/.labels/.units/.metadata)
    - [ ] Add `is_ncnr_refl` (JSON `"columns"` header) + sniffer list for `.refl`
    - [ ] Route refl1d-style `.refl` to the refl1d parser; tests + fixtures
 
-9. **XRDML 2D RSM → map view** — load 2D maps in 2D
-   - [ ] On import, detect `metadata.is2D` and default the stage to the map tab
-   - [ ] Feed `.values` (2θ/ω/I) + `map_shape` into the existing map regrid view
-
 ## Completed
 
+- ~~**#9 XRDML 2D RSM → map view**~~ (2026-06-28) — the map view already consumed
+  the 2-D scattered `.values` via the regrid (channels default to 2θ/ω/I with a
+  Q toggle); the only gap was import-time routing. Added pure `mapdata.is2DMap` +
+  `useApp.nextStageTab`; `addDataset`/`setActive`/`duplicateDataset`/`loadWorkspace`
+  now open a 2-D map on the Map tab and a 1-D scan on Plot, never overriding an
+  explicit Worksheet choice. 7 tests.
 - ~~**#1 Fix uPlot x-axis time-mode**~~ (2026-06-28) — set `scales.x.time=false`
   in `uplotOpts.ts`; magnetometry (negative field) + refl Qz now plot with
   numeric ticks, no epoch label. Regression test in `uplotOpts.test.ts`. (`32b6d1f`)

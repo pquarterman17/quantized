@@ -147,6 +147,13 @@ export function buildMapColumns(
   };
 }
 
+/** True when a dataset is a 2-D map (e.g. an XRDML reciprocal-space map): the
+ *  parser flagged `metadata.is2D` and it carries the ≥3 channels the map needs
+ *  (two axes + intensity). Drives import-time stage routing to the Map tab. */
+export function is2DMap(ds: DataStruct): boolean {
+  return ds.metadata["is2D"] === true && ds.labels.length >= 3;
+}
+
 /** True when a dataset exposes reciprocal-space columns (an RSM from XRDML). */
 export function hasQSpace(labels: string[]): boolean {
   return labels.includes("Qx") && labels.includes("Qz");

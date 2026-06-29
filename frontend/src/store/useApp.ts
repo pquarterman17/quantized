@@ -9,6 +9,7 @@ import { cloneDataStruct } from "../lib/dataset";
 import { setFormatOpts, type Notation } from "../lib/format";
 import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit, macroStep, type MacroStep } from "../lib/macro";
+import { is2DMap } from "../lib/mapdata";
 import { mergeDatasets } from "../lib/merge";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import type { FwhmResult } from "../lib/peakwidth";
@@ -64,6 +65,14 @@ export interface IntegralResult {
   xlo: number;
   xhi: number;
   area: number;
+}
+
+/** Default stage tab for a newly-activated dataset: a 2-D map (XRDML RSM) opens
+ *  in the Map view, a 1-D scan in the Plot view — but never override an explicit
+ *  Worksheet choice (the user is inspecting the data grid). */
+export function nextStageTab(d: Dataset, current: StageTab): StageTab {
+  if (current === "worksheet") return current;
+  return is2DMap(d.data) ? "map" : "plot";
 }
 export type LegendPos = "ne" | "nw" | "se" | "sw";
 // Keys the Preferences dialog can set through the generic setPref action.
@@ -475,6 +484,7 @@ export const useApp = create<AppState>((set, get) => ({
       datasets: [...s.datasets, ds],
       activeId: ds.id,
       selectedIds: [ds.id], // a fresh import is the sole selection
+      stageTab: nextStageTab(ds, s.stageTab), // 2-D maps open in the Map view
       xKey: null, // new dataset → x-axis back to .time
       yKeys: null, // new dataset → plot all its channels
       y2Keys: null, // and reset the secondary-axis assignment
@@ -517,10 +527,11 @@ export const useApp = create<AppState>((set, get) => ({
   // Resets every per-dataset view (channels, styles, axis limits) and drops the
   // overlays/markers tied to the old datasets — same hygiene as setActive.
   loadWorkspace: (datasets) =>
-    set({
+    set((s) => ({
       datasets,
       activeId: datasets[0]?.id ?? null,
       selectedIds: datasets[0] ? [datasets[0].id] : [],
+      stageTab: datasets[0] ? nextStageTab(datasets[0], s.stageTab) : s.stageTab,
       xKey: null,
       yKeys: null,
       y2Keys: null,
@@ -538,24 +549,28 @@ export const useApp = create<AppState>((set, get) => ({
       integral: null,
       fwhmResult: null,
       status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}`,
-    }),
+    })),
   setActive: (id) =>
-    set({
-      activeId: id,
-      selectedIds: [id], // plain click collapses the selection to this one row
-      xKey: null,
-      yKeys: null,
-      y2Keys: null,
-      seriesStyles: {},
-      seriesLabels: {},
-      errKeys: {},
-      seriesOrder: null,
-      hiddenChannels: [],
-      xLim: null,
-      yLim: null,
-      rsmPeaks: null,
-      integral: null,
-      fwhmResult: null,
+    set((s) => {
+      const ds = s.datasets.find((d) => d.id === id);
+      return {
+        activeId: id,
+        selectedIds: [id], // plain click collapses the selection to this one row
+        stageTab: ds ? nextStageTab(ds, s.stageTab) : s.stageTab,
+        xKey: null,
+        yKeys: null,
+        y2Keys: null,
+        seriesStyles: {},
+        seriesLabels: {},
+        errKeys: {},
+        seriesOrder: null,
+        hiddenChannels: [],
+        xLim: null,
+        yLim: null,
+        rsmPeaks: null,
+        integral: null,
+        fwhmResult: null,
+      };
     }),
   // Ctrl/Cmd-click: add or remove a row from the multi-selection WITHOUT changing
   // the plotted/active dataset (the plot only follows a plain click).
@@ -652,6 +667,7 @@ export const useApp = create<AppState>((set, get) => ({
         datasets,
         activeId: clone.id,
         selectedIds: [clone.id],
+        stageTab: nextStageTab(clone, s.stageTab),
         xKey: null,
         yKeys: null,
         y2Keys: null,
