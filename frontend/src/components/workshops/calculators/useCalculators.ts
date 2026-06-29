@@ -15,7 +15,16 @@ import {
 } from "../../../lib/api";
 import type { SldFormulaResult } from "../../../lib/api";
 
-export type CalcTab = "units" | "constants" | "xray" | "crystal" | "sld" | "elements";
+// Original shared-state tabs + self-contained domain tabs (each owns its own
+// hook; only the union member is needed here for the panel's tab selector).
+export type CalcTab =
+  | "units"
+  | "constants"
+  | "xray"
+  | "crystal"
+  | "sld"
+  | "elements"
+  | "electrical";
 
 export type CellAngle = "alpha" | "beta" | "gamma";
 

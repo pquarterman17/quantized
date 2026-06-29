@@ -21,6 +21,7 @@ from quantized.routes import (
     baseline,
     corrections,
     crystallography,
+    electrical,
     export,
     fitting,
     magnetometry,
@@ -119,6 +120,7 @@ def create_app() -> FastAPI:
     application.include_router(xray.router)
     application.include_router(sld.router)
     application.include_router(crystallography.router)
+    application.include_router(electrical.router)
     application.include_router(aggregate.router)
 
     # Client-presence WebSocket (registered before the SPA mount so the

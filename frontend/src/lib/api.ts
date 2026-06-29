@@ -347,6 +347,42 @@ export function sldFromFormula(body: {
   return postJSON("/api/sld/formula", body);
 }
 
+// ── Electrical transport (calc.electrical) ──────────────────────────────────
+/** ρ = R_s·t (Ω·cm). Thickness t in cm. */
+export function electricalResistivity(rs: number, t: number): Promise<{ rho: number }> {
+  return postJSON("/api/electrical/resistivity", { rs, t });
+}
+
+/** R_s = ρ/t (Ω/sq). */
+export function electricalSheetResistance(rho: number, t: number): Promise<{ Rs: number }> {
+  return postJSON("/api/electrical/sheet-resistance", { rho, t });
+}
+
+/** σ = 1/ρ (S/cm). */
+export function electricalConductivity(rho: number): Promise<{ sigma: number }> {
+  return postJSON("/api/electrical/conductivity", { rho });
+}
+
+/** μ = 1/(q·n·ρ) (cm²/V·s). */
+export function electricalMobility(rho: number, n: number): Promise<{ mu: number }> {
+  return postJSON("/api/electrical/mobility", { rho, n });
+}
+
+/** J = I/A (A/cm²). */
+export function electricalCurrentDensity(i: number, area: number): Promise<{ J: number }> {
+  return postJSON("/api/electrical/current-density", { i, area });
+}
+
+/** Single-point Hall: R_H (cm³/C), carrier density (cm⁻³), carrier type. */
+export function electricalHall(
+  vH: number,
+  i: number,
+  b: number,
+  t: number,
+): Promise<{ r_h: number; carrier_density: number; carrier_type: string }> {
+  return postJSON("/api/electrical/hall", { v_h: vH, i, b, t });
+}
+
 /** Combine two datasets pointwise on A's x-grid (B interpolated). calc.aggregate. */
 export function datasetAlgebra(body: {
   dataset_a: DataStruct;
