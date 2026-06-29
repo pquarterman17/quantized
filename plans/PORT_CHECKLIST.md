@@ -176,7 +176,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [ ] Semiconductor — `buildSemiconductorTab`
 - [ ] Thin Film — `buildThinFilmTab`
 - [x] Periodic Table — `buildPeriodicTableTab` — Elements tab in the calculators workshop over the golden `element_data` (`GET /api/reference/elements`): search by symbol/name/Z + per-element details (mass, category, group/period, config, density, electronegativity, melting/boiling, neutron b_coh). Self-contained `ElementsTab.tsx`; commit `9ea8cee`.
-- [ ] X-ray & Neutron (d-spacing, Q↔2θ, SLD) — `buildXrayNeutronTab` — **partial**: d-spacing (Bragg) + Q↔2θ done (`calc/xray.py`, `/api/xray/calc`, calculators "X-ray" tab; reference-value tested, commit `ad72c6c`). **SLD-from-formula still TODO** (needs a chemical-formula→SLD calc; `calc/sld.py` is reflectivity-profile only).
+- [x] X-ray & Neutron (d-spacing, Q↔2θ, SLD) — `buildXrayNeutronTab` — d-spacing (Bragg) + Q↔2θ (`calc/xray.py`, `/api/xray/calc`, "X-ray" tab; commit `ad72c6c`); **SLD-from-formula** (`calc/sld_formula.py`, `/api/sld/formula`, "SLD" tab; commit `7e03a6d`) — neutron + X-ray SLD, real + imaginary (absorption), wavelength-dependent, via `periodictable` (the NIST NCNR engine); reference-value tested vs published NCNR values (Si/quartz/H₂O/D₂O/Fe/Gd).
 - [ ] Superconductor — `buildSuperconductorTab`
 - [ ] Magnetic — `buildMagneticTab`
 - [ ] Optics — `buildOpticsTab`
