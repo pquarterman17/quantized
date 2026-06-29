@@ -9,6 +9,7 @@ import { useApp } from "../../../store/useApp";
 import ConstantsTab from "./ConstantsTab";
 import CrystalTab from "./CrystalTab";
 import ElementsTab from "./ElementsTab";
+import SldTab from "./SldTab";
 import UnitsTab from "./UnitsTab";
 import XrayTab from "./XrayTab";
 import { useCalculators, type CalcTab } from "./useCalculators";
@@ -17,6 +18,7 @@ const TABS: { value: CalcTab; label: string }[] = [
   { value: "units", label: "Units" },
   { value: "xray", label: "X-ray" },
   { value: "crystal", label: "Crystal" },
+  { value: "sld", label: "SLD" },
   { value: "elements", label: "Elements" },
   { value: "constants", label: "Constants" },
 ];
@@ -32,6 +34,7 @@ export default function CalculatorsPanel() {
       {c.tab === "units" && <UnitsTab c={c} />}
       {c.tab === "xray" && <XrayTab c={c} />}
       {c.tab === "crystal" && <CrystalTab c={c} />}
+      {c.tab === "sld" && <SldTab c={c} />}
       {c.tab === "elements" && <ElementsTab />}
       {c.tab === "constants" && <ConstantsTab c={c} />}
     </ToolWindow>

@@ -5,9 +5,17 @@
 
 import { useEffect, useState } from "react";
 
-import { convertUnits, crystalCell, crystalDSpacing, getConstants, xrayCalc } from "../../../lib/api";
+import {
+  convertUnits,
+  crystalCell,
+  crystalDSpacing,
+  getConstants,
+  sldFromFormula,
+  xrayCalc,
+} from "../../../lib/api";
+import type { SldFormulaResult } from "../../../lib/api";
 
-export type CalcTab = "units" | "constants" | "xray" | "crystal" | "elements";
+export type CalcTab = "units" | "constants" | "xray" | "crystal" | "sld" | "elements";
 
 export type CellAngle = "alpha" | "beta" | "gamma";
 
@@ -97,6 +105,31 @@ export interface XrayResult {
   description: string;
 }
 
+/** Common neutron wavelengths (Å): thermal (2200 m/s) + a couple of cold lines. */
+export const NEUTRON_WAVELENGTHS: { label: string; a: number }[] = [
+  { label: "Thermal", a: 1.798 },
+  { label: "4.75 Å", a: 4.75 },
+  { label: "5 Å", a: 5.0 },
+  { label: "6 Å", a: 6.0 },
+];
+
+/** One-click material presets for the SLD calculator (formula + mass density). */
+export const SLD_PRESETS: { label: string; formula: string; density: number }[] = [
+  { label: "Si", formula: "Si", density: 2.33 },
+  { label: "SiO₂", formula: "SiO2", density: 2.65 },
+  { label: "Al₂O₃", formula: "Al2O3", density: 3.95 },
+  { label: "Fe", formula: "Fe", density: 7.87 },
+  { label: "H₂O", formula: "H2O", density: 1.0 },
+  { label: "D₂O", formula: "D2O", density: 1.11 },
+];
+
+export interface SldForm {
+  formula: string;
+  density: string;
+  neutronWavelength: string;
+  xrayWavelength: string;
+}
+
 /** Common conversions offered as one-click chips (all supported by the backend). */
 export const QUICK_PAIRS: { label: string; from: string; to: string }[] = [
   { label: "Oe → T", from: "Oe", to: "T" },
@@ -150,6 +183,14 @@ export interface CalculatorsState {
   cellError: string | null;
   cellBusy: boolean;
   cellCompute: () => Promise<void>;
+  // SLD from formula (neutron + X-ray, real + imaginary/absorption)
+  sld: SldForm;
+  sldResult: SldFormulaResult | null;
+  sldError: string | null;
+  sldBusy: boolean;
+  updSld: (patch: Partial<SldForm>) => void;
+  setSldPreset: (formula: string, density: number) => void;
+  sldCompute: () => Promise<void>;
 }
 
 export function useCalculators(): CalculatorsState {
@@ -181,6 +222,15 @@ export function useCalculators(): CalculatorsState {
   >(null);
   const [cellError, setCellError] = useState<string | null>(null);
   const [cellBusy, setCellBusy] = useState(false);
+  const [sld, setSld] = useState<SldForm>({
+    formula: "Si",
+    density: "2.33",
+    neutronWavelength: "1.798",
+    xrayWavelength: "1.5406", // Cu Kα (matches the X-ray-tab presets)
+  });
+  const [sldResult, setSldResult] = useState<SldFormulaResult | null>(null);
+  const [sldError, setSldError] = useState<string | null>(null);
+  const [sldBusy, setSldBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -284,6 +334,40 @@ export function useCalculators(): CalculatorsState {
     }
   }
 
+  const updSld = (patch: Partial<SldForm>): void => setSld((s) => ({ ...s, ...patch }));
+
+  const setSldPreset = (formula: string, density: number): void => {
+    setSld((s) => ({ ...s, formula, density: String(density) }));
+    setSldResult(null);
+    setSldError(null);
+  };
+
+  async function sldCompute(): Promise<void> {
+    setSldBusy(true);
+    setSldError(null);
+    try {
+      const density = Number(sld.density);
+      const nw = Number(sld.neutronWavelength);
+      const xw = Number(sld.xrayWavelength);
+      if (!sld.formula.trim()) throw new Error("enter a chemical formula");
+      if (!(density > 0)) throw new Error("enter a positive density");
+      if (!(nw > 0 && xw > 0)) throw new Error("enter positive wavelengths");
+      setSldResult(
+        await sldFromFormula({
+          formula: sld.formula.trim(),
+          density,
+          neutron_wavelength: nw,
+          xray_wavelength: xw,
+        }),
+      );
+    } catch (e) {
+      setSldResult(null);
+      setSldError(e instanceof Error ? e.message : "calculation failed");
+    } finally {
+      setSldBusy(false);
+    }
+  }
+
   return {
     tab,
     setTab,
@@ -320,5 +404,12 @@ export function useCalculators(): CalculatorsState {
     cellError,
     cellBusy,
     cellCompute,
+    sld,
+    sldResult,
+    sldError,
+    sldBusy,
+    updSld,
+    setSldPreset,
+    sldCompute,
   };
 }

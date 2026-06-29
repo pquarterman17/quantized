@@ -314,6 +314,39 @@ export function crystalCell(body: {
   return postJSON("/api/crystallography/cell", body);
 }
 
+/** One probe's SLD block: real + imaginary (absorption) SLD in 10⁻⁶ Å⁻². */
+export interface SldProbe {
+  wavelength: number;
+  sld_real: number;
+  sld_imag: number;
+  penetration: number; // 1/e depth, cm
+  qc: number; // critical wavevector, 1/Å
+  // neutron-only extras:
+  incoherent?: number;
+  xs_coherent?: number;
+  xs_absorption?: number;
+  xs_incoherent?: number;
+}
+
+export interface SldFormulaResult {
+  formula: string;
+  molar_mass: number;
+  number_density: number;
+  neutron: SldProbe;
+  xray: SldProbe;
+}
+
+/** Neutron + X-ray SLD (real + imaginary/absorption) from a chemical formula,
+ *  mass density, and probe wavelengths. Wraps NIST-NCNR-grade periodictable. */
+export function sldFromFormula(body: {
+  formula: string;
+  density: number;
+  neutron_wavelength?: number;
+  xray_wavelength?: number;
+}): Promise<SldFormulaResult> {
+  return postJSON("/api/sld/formula", body);
+}
+
 /** Combine two datasets pointwise on A's x-grid (B interpolated). calc.aggregate. */
 export function datasetAlgebra(body: {
   dataset_a: DataStruct;

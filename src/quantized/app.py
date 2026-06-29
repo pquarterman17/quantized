@@ -30,6 +30,7 @@ from quantized.routes import (
     reference,
     reflectivity,
     rsm,
+    sld,
     stats,
     xray,
 )
@@ -116,6 +117,7 @@ def create_app() -> FastAPI:
     application.include_router(reflectivity.router)
     application.include_router(rsm.router)
     application.include_router(xray.router)
+    application.include_router(sld.router)
     application.include_router(crystallography.router)
     application.include_router(aggregate.router)
 

@@ -865,6 +865,18 @@ wheels = [
 ]
 
 [[package]]
+name = "periodictable"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "pyparsing" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/44/0d/f494a2ec62ab56ffd44da4f236db374421fe0cd1e39d9ebc9785751eb432/periodictable-2.1.0-py3-none-any.whl", hash = "sha256:e9155d2bf5ac10050abeff2f99096d4f04312c0c8a6bb432e28744367c5064b3", size = 830749, upload-time = "2026-02-28T00:08:27.135Z" },
+]
+
+[[package]]
 name = "pillow"
 version = "12.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1255,6 +1267,7 @@ dependencies = [
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "openpyxl" },
+    { name = "periodictable" },
     { name = "pydantic" },
     { name = "python-multipart" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -1280,6 +1293,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.11.0" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "openpyxl", specifier = ">=3.1" },
+    { name = "periodictable", specifier = ">=1.7" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "python-multipart", specifier = ">=0.0.32" },
     { name = "scipy", specifier = ">=1.11" },

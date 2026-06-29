@@ -16,6 +16,7 @@ dependencies = [
     "h5py>=3.10",
     "python-multipart>=0.0.32",
     "matplotlib>=3.11.0",
+    "periodictable>=1.7",
 ]
 
 [project.scripts]
@@ -64,7 +65,7 @@ strict = true
 
 [[tool.mypy.overrides]]
 # Third-party libs without bundled type stubs — skeleton-safe.
-module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*"]
+module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*", "periodictable.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
