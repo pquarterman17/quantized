@@ -172,20 +172,20 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 > DEFERRED (autonomous): formulas are embedded in DiraCulator GUI build*Tab functions, not standalone +calc files. Porting requires extracting each formula into a clean `calc/<domain>.py` and freezing via inline MATLAB computation. Backend `+calc/*.m` helpers (below) are ported first.
 - [~] Unit Converter — `buildUnitConverterTab` — **UI shipped** (`workshops/calculators/` Units tab, backed by golden `calc/unit_convert.py`: dimensional + temperature-offset + energy↔wavelength / H↔B bridges, quick-pick chips). Constants reference (golden `calc/constants.py`) also surfaced in the same window's Constants tab.
 - [~] Crystal — `buildCrystalTab` — **mostly done**: d-spacing for **all 7 systems** (cubic/tetragonal/orthorhombic/hexagonal + rhombohedral/monoclinic/triclinic via the general reciprocal-metric-tensor form), **unit-cell volume** (general triclinic) and **theoretical X-ray density** (`ρ = Z·M/(N_A·V)` from a chemical formula via new `calc/formula.py` parser + `element_data` masses). `calc/crystallography.py` + `/api/crystallography/{dspacing,cell}`, calculators "Crystal" tab; reference-value tested (Si d, NaCl ρ, low-symmetry reductions). Remaining: **bond angles** (needs atomic fractional coordinates, i.e. a structure/CIF — not lattice geometry, so deferred).
-- [ ] Electrical / transport — `buildElectricalTab`
-- [ ] Semiconductor — `buildSemiconductorTab`
-- [ ] Thin Film — `buildThinFilmTab`
+- [x] Electrical / transport — `buildElectricalTab` — `calc/electrical.py` + `/api/electrical/*` + self-contained "Electrical" tab (resistivity/sheet-R/conductivity/mobility/current-density/Hall + Wiedemann-Franz/hall-analysis); reference-value tested. Commit `7fa8e0f`.
+- [x] Semiconductor — `buildSemiconductorTab` — `calc/semiconductor.py` (13 fns: intrinsic/carrier-conc/Fermi/built-in-V/depletion/Debye/Hall/Caughey-Thomas mobility…) + `/api/semiconductor/*` + tab. Commit `af3e661`.
+- [x] Thin Film — `buildThinFilmTab` — `calc/thin_film.py` (deposition/sputter rate, Kiessig, Stoney stress, LSS range, multilayer-thermal…) + `/api/thin-film/*` + tab. Commit `af3e661`.
 - [x] Periodic Table — `buildPeriodicTableTab` — Elements tab in the calculators workshop over the golden `element_data` (`GET /api/reference/elements`): search by symbol/name/Z + per-element details (mass, category, group/period, config, density, electronegativity, melting/boiling, neutron b_coh). Self-contained `ElementsTab.tsx`; commit `9ea8cee`.
 - [x] X-ray & Neutron (d-spacing, Q↔2θ, SLD) — `buildXrayNeutronTab` — d-spacing (Bragg) + Q↔2θ (`calc/xray.py`, `/api/xray/calc`, "X-ray" tab; commit `ad72c6c`); **SLD-from-formula** (`calc/sld_formula.py`, `/api/sld/formula`, "SLD" tab; commit `7e03a6d`) — neutron + X-ray SLD, real + imaginary (absorption), wavelength-dependent, via `periodictable` (the NIST NCNR engine); reference-value tested vs published NCNR values (Si/quartz/H₂O/D₂O/Fe/Gd).
-- [ ] Superconductor — `buildSuperconductorTab`
-- [ ] Magnetic — `buildMagneticTab`
-- [ ] Optics — `buildOpticsTab`
-- [ ] Vacuum — `buildVacuumTab`
-- [ ] Electrochemistry — `buildElectrochemistryTab`
-- [ ] Thermal — `buildThermalTab`
-- [ ] Diffusion — `buildDiffusionTab`
-- [ ] Substrates — `buildSubstratesTab`
-- [ ] Reflectivity builder — `buildReflectivityTab`
+- [x] Superconductor — `buildSuperconductorTab` — `calc/superconductor.py` (London/coherence depth, GL κ, critical fields, depairing current, BCS gap + presets) + `/api/superconductor/*` + tab. Commit `af3e661`.
+- [x] Magnetic — `buildMagneticTab` — `calc/magnetic.py` (moment↔emu/Am²/µ_B, demag factors, Curie-Weiss µ_eff, Langevin, domain-wall); distinct from `calc/magnetometry.py`. Fixed MATLAB unit bugs (Curie-Weiss ~100×, domain-wall ×10) → froze GUI/textbook values. Commit `af3e661`.
+- [x] Optics — `buildOpticsTab` — `calc/optics.py` (Fresnel R/T, critical/Brewster angles, penetration & skin depth, n↔ε) + `/api/optics/*` + tab. Commit `13345d7`.
+- [x] Vacuum — `buildVacuumTab` — `calc/vacuum.py` (mean-free-path, monolayer time, Knudsen, pump-down, sputter yield, gas-flow conductance) + `/api/vacuum/*` + tab. Fixed sputterYield GUI arg-order bug. Commit `13345d7`.
+- [x] Electrochemistry — `buildElectrochemistryTab` — `calc/electrochemistry.py` (Nernst, Butler-Volmer, Tafel, ohmic drop, double-layer C) + `/api/electrochemistry/*` + tab. Commit `13345d7`.
+- [x] Thermal — `buildThermalTab` — `calc/thermal.py` (Wiedemann-Franz κ=L₀σT, Debye Θ_D, diffusivity α=κ/ρc_p) + `/api/thermal/*` + tab. Commit `13345d7`.
+- [x] Diffusion — `buildDiffusionTab` — `calc/diffusion.py` (Arrhenius D, diffusion length √(Dt), Fick flux) + `/api/diffusion/*` + tab. Commit `13345d7`.
+- [x] Substrates — `buildSubstratesTab` — `calc/substrates.py` (14-substrate reference DB + lattice-mismatch) + `/api/substrates/*` + Elements-style reference tab. Commit `13345d7`.
+- [x] Reflectivity builder — `buildReflectivityTab` — already shipped as the dedicated `workshops/reflectivity/` ToolWindow (`ReflectivityPanel` + `LayerTable` + `useReflectivity`) over golden `calc/reflectivity.py` (Parratt + Nevot-Croce) and `/api/reflectivity/{simulate,sld-profile,presets}`. Possible follow-up: density↔SLD mode toggle (MATLAB had both input modes).
 
 ### Backend data / helpers (`calc/`)
 - [x] Physical constants — `+calc/constants.m` → `calc/constants.py` — golden (CODATA 2018, all 14 constants)
@@ -195,8 +195,8 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [x] CIF import — `+calc/importCIF.m` → `io/cif.py` — golden (cellParams/atomSites/blockName/spaceGroup/formula vs SrTiO3 fixture); full CIF tokenizer (comments/quotes/loops/uncertainty). Returns crystal dict, NOT registered in DataStruct registry (structural data, not a series).
 
 ### Meta panels (frontend, W7)
-- [ ] History — `buildHistoryTab` · Favorites — `buildFavoritesTab` · Home — `buildHomeTab`
-- [ ] Cross-panel hooks (d→Q, molar-mass→cell-vol, SLD→reflectivity)
+- [x] History — `buildHistoryTab` · Favorites — `buildFavoritesTab` · Home — `buildHomeTab` — `store/calcHistory.ts` (persisted to `qz.calcHistory`: history cap 100 + favorites cap 50) + Home/History/Favorites tabs in a "Session" group; every calculator tab records on success via `useCalcHistory.record(...)`. Commit `ba5ce80`.
+- [ ] Cross-panel hooks (d→Q, molar-mass→cell-vol, SLD→reflectivity) — follow-up: wire "send to" affordances between the shared-state tabs (Crystal/X-ray/SLD live in `useCalculators`, so feasible there).
 - [ ] Headless API equivalent
 
 ---
@@ -221,9 +221,9 @@ Source: `+dataWorkspace/`, `DataWorkspace.m`
 ---
 
 ## W7 — Frontend (React revamp — reference, not 1:1 port)
-- [ ] App scaffold + Zustand stores · theme (Dark/Light/Auto)
+- [x] App scaffold + Zustand stores · theme (Dark/Light/Auto) — shipped: `App.tsx` shell + Shell chrome, `store/useApp.ts` (+ `prefs`/`toasts`/`commands`/`calcHistory` slices), theme/accent/density via `data-*` on `<html>` (reconciled drift, 2026-06-28).
 - [~] Library (dataset list/import/groups/search) — `Library/Library.tsx`: dataset list with sparklines, file import (picker + drag-drop), name filter/search, click-to-activate, double-click rename, remove, **duplicate** (⧉ → deep-copy incl. raw/corrections/bgRef as an independent "(copy)"; `lib/dataset.cloneDataStruct` + store `duplicateDataset`, commit `adc7ec4`), **reorder** (▲▼ → store `moveDataset(id,dir)` swaps adjacent; drives list + consolidated-export order; hidden while filtering; commit `3eb8586`). **Tags + groups shipped**: per-dataset tag chips (add/remove inline; name-or-tag search filter; commit `5d6a990`) and a group assignment with collapsible group sections (`lib/grouping.ts` first-appearance order, ungrouped last; row markup extracted to `DatasetRow.tsx`; both round-trip through `.dwk`; commit `7dabe3b`).
-- [ ] Stage (uPlot + 2D viewer)
+- [x] Stage (uPlot + 2D viewer) — shipped: `Stage/PlotStage.tsx` (uPlot + overlays/tools/region modules), `MultiPanelStage`, `PolarStage`, and the 2-D map viewer (auto-opens on the Map tab); reconciled drift, 2026-06-28.
 - [~] Inspector (corrections/axes/appearance) — `Inspector/`: scan-summary, **Metadata card** (read-only `.metadata` key/values + copy-as-TSV; `lib/metadata.ts` + `MetadataCard.tsx`, commit `4b4108f`), **Notes card** (free-text per-dataset notes, draft committed on blur, lives on the `Dataset` so it round-trips through `.dwk`; `NotesCard.tsx` + store `setDatasetNotes`, commit `12cc961`), Channels (x-role/y/y2/error-bars/**label-ignore roles**), Corrections, Stats, Axes (log/grid/legend/limits/tick-format), RefLines, Annotations, SeriesStyle cards.
 - [~] Workshops: curve fit ✓ · peak ✓ · hysteresis ✓ · reflectivity ✓ (Parratt R(Q) model builder, `routes/reflectivity.py` + `workshops/reflectivity/`) · RSM analysis ✓ (`workshops/rsm/` — find peaks → substrate/film → strain/relaxation via `/api/rsm/{analyze,strain}`; "Analyze ▸ RSM analysis…") · **graph digitizer ✓** (`workshops/digitizer/` — load/paste a plot image → click 2 X + 2 Y axis refs → trace the curve → DataStruct to the library; pure `lib/digitizer` calibration, tested; full-screen overlay; "Analyze ▸ Graph digitizer…")
 - [~] DataWorkspace UI (worksheet: **sortable columns + computed-column formula bar** — `Stage/Worksheet.tsx` + safe `lib/formula` evaluator [recursive-descent, no eval, tested]; `2*A+sqrt(B)` over `x`/`A`/`B`… → derived dataset; filter/mask/stats done [#209]; **copy visible rows → clipboard TSV** [⧉ Copy → `lib/clipboard.tableToTSV`, full table at full precision, commit `1ad6152`]; **column roles** [label/ignore via ChannelsCard — ignore drops from the Σ Stats footer, roled columns tagged in the header; commit `de2a3db`]; **editable grid** [double-click any cell → edit in place (Enter/blur commits, Esc cancels); the edit rebuilds the active dataset's arrays immutably so the plot + stats recompute live and the change is captured by the macro recorder; `setCellValue` store action; Worksheet decomposed into `WorksheetTable` + `WorksheetToolbar` (394→288); commit `10e4a34`]) · DiraCulator UI
