@@ -282,7 +282,8 @@ export function xrayCalc(
   return postJSON("/api/xray/calc", { mode, wavelength, value, n });
 }
 
-/** Interplanar d-spacing from lattice params + Miller indices (calc.crystallography). */
+/** Interplanar d-spacing from lattice params + Miller indices (calc.crystallography).
+ *  Angles (deg) default to 90 server-side; only the low-symmetry systems use them. */
 export function crystalDSpacing(body: {
   system: string;
   a: number;
@@ -291,8 +292,26 @@ export function crystalDSpacing(body: {
   h: number;
   k: number;
   l: number;
+  alpha?: number;
+  beta?: number;
+  gamma?: number;
 }): Promise<{ d: number; system: string }> {
   return postJSON("/api/crystallography/dspacing", body);
+}
+
+/** Unit-cell volume (Å³) + optional molar mass & theoretical density from a
+ *  chemical formula and Z (calc.crystallography + calc.formula). */
+export function crystalCell(body: {
+  a: number;
+  b: number;
+  c: number;
+  alpha?: number;
+  beta?: number;
+  gamma?: number;
+  formula?: string;
+  z?: number;
+}): Promise<{ volume: number; molar_mass?: number; density?: number }> {
+  return postJSON("/api/crystallography/cell", body);
 }
 
 /** Combine two datasets pointwise on A's x-grid (B interpolated). calc.aggregate. */

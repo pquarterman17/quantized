@@ -1,14 +1,15 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { convertUnits, crystalDSpacing, getConstants, xrayCalc } from "../../../lib/api";
-import { useCalculators } from "./useCalculators";
+import { convertUnits, crystalCell, crystalDSpacing, getConstants, xrayCalc } from "../../../lib/api";
+import { assembleCell, type CrystalForm, useCalculators } from "./useCalculators";
 
 vi.mock("../../../lib/api", () => ({
   convertUnits: vi.fn(),
   getConstants: vi.fn(),
   xrayCalc: vi.fn(),
   crystalDSpacing: vi.fn(),
+  crystalCell: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -121,9 +122,10 @@ describe("useCalculators", () => {
       await result.current.crCompute();
     });
 
-    // defaults: cubic, a=5.4309, (111).
+    // defaults: cubic, a=5.4309, (111); angles fill to 90.
     expect(crystalDSpacing).toHaveBeenCalledWith({
-      system: "cubic", a: 5.4309, b: 5.4309, c: 5.4309, h: 1, k: 1, l: 1,
+      system: "cubic", a: 5.4309, b: 5.4309, c: 5.4309,
+      alpha: 90, beta: 90, gamma: 90, h: 1, k: 1, l: 1,
     });
     expect(result.current.crResult?.d).toBeCloseTo(3.1356, 4);
     expect(result.current.crError).toBeNull();
@@ -146,5 +148,64 @@ describe("useCalculators", () => {
     });
     expect(result.current.crError).toContain("zero");
     expect(result.current.crResult).toBeNull();
+  });
+
+  it("computes cell volume + density from the formula", async () => {
+    vi.mocked(crystalCell).mockResolvedValue({ volume: 160.18, molar_mass: 28.09, density: 2.33 });
+    const { result } = renderHook(() => useCalculators());
+
+    await act(async () => {
+      await result.current.cellCompute();
+    });
+
+    // defaults: cubic a=5.4309, formula "Si", Z=8 → cube + formula passed through.
+    expect(crystalCell).toHaveBeenCalledWith({
+      a: 5.4309, b: 5.4309, c: 5.4309, alpha: 90, beta: 90, gamma: 90, formula: "Si", z: 8,
+    });
+    expect(result.current.cellResult?.density).toBeCloseTo(2.33, 2);
+    expect(result.current.cellError).toBeNull();
+  });
+
+  it("omits the formula when it is blank (volume only)", async () => {
+    vi.mocked(crystalCell).mockResolvedValue({ volume: 64 });
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.updCrystal({ formula: "  " }));
+    await act(async () => {
+      await result.current.cellCompute();
+    });
+    expect(crystalCell).toHaveBeenCalledWith({
+      a: 5.4309, b: 5.4309, c: 5.4309, alpha: 90, beta: 90, gamma: 90,
+    });
+    expect(result.current.cellResult?.volume).toBe(64);
+  });
+});
+
+describe("assembleCell", () => {
+  const base: CrystalForm = {
+    system: "cubic", a: "4", b: "5", c: "6", alpha: "80", beta: "85", gamma: "95",
+    h: "1", k: "0", l: "0", formula: "", z: "1",
+  };
+
+  it("fills unused lengths from a and angles to 90 (cubic)", () => {
+    expect(assembleCell(base)).toEqual({ a: 4, b: 4, c: 4, alpha: 90, beta: 90, gamma: 90 });
+  });
+
+  it("fixes γ=120 for hexagonal", () => {
+    const cell = assembleCell({ ...base, system: "hexagonal", c: "6.7" });
+    expect(cell).toMatchObject({ a: 4, b: 4, c: 6.7, alpha: 90, beta: 90, gamma: 120 });
+  });
+
+  it("sets α=β=γ for rhombohedral", () => {
+    const cell = assembleCell({ ...base, system: "rhombohedral", alpha: "70" });
+    expect(cell).toEqual({ a: 4, b: 4, c: 4, alpha: 70, beta: 70, gamma: 70 });
+  });
+
+  it("uses all six params for triclinic", () => {
+    const cell = assembleCell({ ...base, system: "triclinic" });
+    expect(cell).toEqual({ a: 4, b: 5, c: 6, alpha: 80, beta: 85, gamma: 95 });
+  });
+
+  it("throws on a non-numeric length", () => {
+    expect(() => assembleCell({ ...base, a: "xyz" })).toThrow(/numeric a/);
   });
 });
