@@ -3,12 +3,16 @@ import { describe, expect, it } from "vitest";
 import { toolForKey } from "./plotToolKeys";
 
 describe("toolForKey", () => {
-  it("maps H/Z/D/M to the dock tools (case-insensitive)", () => {
+  it("maps H/Z/D/M/I/W to the dock tools (case-insensitive)", () => {
     expect(toolForKey("z")).toBe("zoom");
     expect(toolForKey("Z")).toBe("zoom");
     expect(toolForKey("h")).toBe("pan");
     expect(toolForKey("d")).toBe("cursor");
     expect(toolForKey("M")).toBe("measure");
+    expect(toolForKey("i")).toBe("integ");
+    expect(toolForKey("I")).toBe("integ");
+    expect(toolForKey("w")).toBe("fwhm");
+    expect(toolForKey("W")).toBe("fwhm");
   });
 
   it("returns null for non-tool keys", () => {

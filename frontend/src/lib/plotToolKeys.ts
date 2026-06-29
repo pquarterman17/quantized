@@ -1,4 +1,4 @@
-// Map a bare keypress to a plot tool (design interaction layer: H/Z/D + M).
+// Map a bare keypress to a plot tool (design interaction layer: H/Z/D/M/I/W).
 // Pure so the mapping is unit-testable; App.tsx wires the global keydown to it.
 // "Pick peak" (P) opens the Peaks workshop rather than selecting a dock tool, so
 // it is handled separately in App — it isn't one of these persistent tools.
@@ -16,6 +16,10 @@ export function toolForKey(key: string): PlotTool | null {
       return "cursor"; // data cursor
     case "m":
       return "measure";
+    case "i":
+      return "integ"; // integrate (area under curve)
+    case "w":
+      return "fwhm"; // peak / full-width-half-max
     default:
       return null;
   }

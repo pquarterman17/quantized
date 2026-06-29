@@ -15,22 +15,24 @@ import {
   withPeakOverlay,
   type PlotPayload,
 } from "../../lib/plotdata";
-import { copyText, payloadToTSV } from "../../lib/clipboard";
+import { copyImage, copyText, payloadToTSV } from "../../lib/clipboard";
 import { buildErrorColumns } from "../../lib/errorbars";
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
-import { exportPlotPng } from "../../lib/plotExport";
+import { exportPlotPng, plotPngBlob } from "../../lib/plotExport";
 import { normalizeRange } from "../../lib/regionSelect";
 import { suggestLogScale } from "../../lib/autoscale";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotPlugins";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import { toast } from "../../store/toasts";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import InsetPlot from "./InsetPlot";
 import MultiPanelStage from "./MultiPanelStage";
 import PlotLegend from "./PlotLegend";
 import PlotReadouts from "./PlotReadouts";
+import PlotResultChips from "./PlotResultChips";
 import PlotToolbar from "./PlotToolbar";
 import PolarStage from "./PolarStage";
 
@@ -74,6 +76,10 @@ export default function PlotStage() {
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
   const setRegionPicked = useApp((s) => s.setRegionPicked);
+  const integral = useApp((s) => s.integral);
+  const fwhmResult = useApp((s) => s.fwhmResult);
+  const setIntegral = useApp((s) => s.setIntegral);
+  const setFwhmResult = useApp((s) => s.setFwhmResult);
   // stack/inset/polar values gate the alternate render modes here; their toggle
   // setters live in PlotToolbar, which owns the tool dock.
   const stackMode = useApp((s) => s.stackMode);
@@ -218,6 +224,10 @@ export default function PlotStage() {
         },
         onMeasure: setMeasurement,
         onStats: setStatsSel,
+        integral,
+        fwhmResult,
+        onIntegrate: setIntegral,
+        onFwhm: setFwhmResult,
       }),
       displayPayload.data,
       host,
@@ -237,7 +247,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool, integral, fwhmResult]);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the
@@ -288,6 +298,23 @@ export default function PlotStage() {
     );
   }
 
+  // Snapshot: copy exactly what's on screen to the clipboard as a PNG — a quick
+  // raster grab for pasting into notes/chat (distinct from the TSV copy and the
+  // server-rendered vector Figure export). Falls back to a toast where the async
+  // clipboard image API is unavailable (Firefox / insecure context).
+  function snapshot() {
+    const u = plotRef.current;
+    if (!u) return;
+    plotPngBlob(u).then(async (blob) => {
+      if (!blob) {
+        toast("snapshot failed", "danger");
+        return;
+      }
+      const ok = await copyImage(blob);
+      toast(ok ? "plot copied to clipboard" : "clipboard image unavailable", ok ? "ok" : "danger");
+    });
+  }
+
   // Alternate render modes (each self-contained; polar wins, then stack).
   const nPlotted = plotted.length;
   if (polarMode && active) return <PolarStage />;
@@ -311,7 +338,12 @@ export default function PlotStage() {
       { label: showGrid ? "Hide grid" : "Show grid", run: () => s.setShowGrid(!showGrid) },
       { label: showLegend ? "Hide legend" : "Show legend", run: () => s.setShowLegend(!showLegend) },
       { separator: true },
+      { label: "Integrate tool (area under curve)", run: () => s.setPlotTool("integ") },
+      { label: "Peak / FWHM tool", run: () => s.setPlotTool("fwhm") },
+      { label: "Measure tool (Δx, Δy)", run: () => s.setPlotTool("measure") },
+      { separator: true },
       { label: "Copy plotted data (TSV)", run: copyData },
+      { label: "Copy plot image (PNG)", run: snapshot },
       { label: "Save plot as PNG", run: savePng },
     ];
   };
@@ -322,7 +354,13 @@ export default function PlotStage() {
       {menu && <ContextMenu x={menu.x} y={menu.y} items={axesMenuItems()} onClose={() => setMenu(null)} />}
 
       {displayPayload && (
-        <PlotToolbar onReset={resetView} onSmartScale={smartScale} onSavePng={savePng} onCopyData={copyData} />
+        <PlotToolbar
+          onReset={resetView}
+          onSmartScale={smartScale}
+          onSavePng={savePng}
+          onCopyData={copyData}
+          onSnapshot={snapshot}
+        />
       )}
 
       {insetMode && displayPayload && (
@@ -339,6 +377,12 @@ export default function PlotStage() {
       )}
 
       <PlotReadouts tool={tool} readout={readout} measurement={measurement} stats={statsSel} />
+      <PlotResultChips
+        integral={integral}
+        fwhm={fwhmResult}
+        onClearIntegral={() => setIntegral(null)}
+        onClearFwhm={() => setFwhmResult(null)}
+      />
       {displayPayload && showLegend && (
         <PlotLegend series={displayPayload.series} styleList={styleList} plotted={plotted} hidden={hidden} />
       )}

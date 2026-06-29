@@ -11,6 +11,7 @@ import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit, macroStep, type MacroStep } from "../lib/macro";
 import { mergeDatasets } from "../lib/merge";
 import { applyPalette, normalizePalette } from "../lib/palettes";
+import type { FwhmResult } from "../lib/peakwidth";
 import {
   addRecentEntry,
   clearRecentMeta,
@@ -49,7 +50,21 @@ export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
 export type Density = "compact" | "regular" | "comfy";
 export type StageTab = "plot" | "map" | "worksheet";
-export type PlotTool = "zoom" | "pan" | "cursor" | "region" | "measure" | "stats";
+export type PlotTool =
+  | "zoom"
+  | "pan"
+  | "cursor"
+  | "region"
+  | "measure"
+  | "stats"
+  | "integ"
+  | "fwhm";
+/** Committed integral region from the ∫ tool (area under the curve). */
+export interface IntegralResult {
+  xlo: number;
+  xhi: number;
+  area: number;
+}
 export type LegendPos = "ne" | "nw" | "se" | "sw";
 // Keys the Preferences dialog can set through the generic setPref action.
 export type PrefKey =
@@ -124,6 +139,10 @@ interface AppState {
   // Last x-range picked by the region rubber-band ([x_min,x_max]); the baseline
   // workshop consumes it then resets to null. Drag direction is normalized away.
   regionPicked: [number, number] | null;
+  // On-plot analysis results (∫ / ∩ tools). Persist drawn until cleared via the
+  // result chip or a dataset change (reset alongside the per-dataset view state).
+  integral: IntegralResult | null;
+  fwhmResult: FwhmResult | null;
   cmdkOpen: boolean;
   curveFitOpen: boolean;
   hysteresisOpen: boolean;
@@ -227,6 +246,8 @@ interface AppState {
   setWaterfall: (waterfall: number) => void;
   setPlotTool: (tool: PlotTool) => void;
   setRegionPicked: (range: [number, number] | null) => void;
+  setIntegral: (integral: IntegralResult | null) => void;
+  setFwhmResult: (result: FwhmResult | null) => void;
   setCmdk: (open: boolean) => void;
   setCurveFitOpen: (open: boolean) => void;
   setHysteresisOpen: (open: boolean) => void;
@@ -421,6 +442,8 @@ export const useApp = create<AppState>((set, get) => ({
   waterfall: 0,
   plotTool: "zoom",
   regionPicked: null,
+  integral: null,
+  fwhmResult: null,
   cmdkOpen: false,
   curveFitOpen: false,
   hysteresisOpen: false,
@@ -462,6 +485,8 @@ export const useApp = create<AppState>((set, get) => ({
       hiddenChannels: [], // legend show/hide is channel-keyed → reset per dataset
       xLim: null, // and autoscale both axes
       yLim: null,
+      integral: null, // on-plot analysis results are tied to the old data → clear
+      fwhmResult: null,
     })),
 
   // Upload + parse each picked/dropped file; add to the library (continues on a
@@ -510,6 +535,8 @@ export const useApp = create<AppState>((set, get) => ({
       peakOverlay: null,
       baselineOverlay: null,
       rsmPeaks: null,
+      integral: null,
+      fwhmResult: null,
       status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}`,
     }),
   setActive: (id) =>
@@ -527,6 +554,8 @@ export const useApp = create<AppState>((set, get) => ({
       xLim: null,
       yLim: null,
       rsmPeaks: null,
+      integral: null,
+      fwhmResult: null,
     }),
   // Ctrl/Cmd-click: add or remove a row from the multi-selection WITHOUT changing
   // the plotted/active dataset (the plot only follows a plain click).
@@ -632,6 +661,8 @@ export const useApp = create<AppState>((set, get) => ({
         xLim: null,
         yLim: null,
         rsmPeaks: null,
+        integral: null,
+        fwhmResult: null,
       };
     }),
   // Reorder the library by swapping a dataset with its neighbor (dir -1 = up,
@@ -963,6 +994,8 @@ export const useApp = create<AppState>((set, get) => ({
   },
   setPlotTool: (plotTool) => set({ plotTool }),
   setRegionPicked: (regionPicked) => set({ regionPicked }),
+  setIntegral: (integral) => set({ integral }),
+  setFwhmResult: (fwhmResult) => set({ fwhmResult }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
   setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),
   setHysteresisOpen: (hysteresisOpen) => set({ hysteresisOpen }),

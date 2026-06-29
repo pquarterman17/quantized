@@ -5,6 +5,7 @@ import type uPlot from "uplot";
 
 import { FILLED_SHAPES, markerPaths } from "./markers";
 import type { Measurement } from "./measure";
+import type { FwhmResult } from "./peakwidth";
 import type { PlotPayload } from "./plotdata";
 import type { RegionStats } from "./regionStats";
 import type { Annotation, AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
@@ -12,6 +13,8 @@ import {
   annotationPlugin,
   axisBoxPlugin,
   errorBarsPlugin,
+  fwhmPlugin,
+  integratePlugin,
   measurePlugin,
   panPlugin,
   readoutPlugin,
@@ -21,7 +24,15 @@ import {
   type Readout,
 } from "./uplotPlugins";
 
-export type PlotTool = "zoom" | "pan" | "cursor" | "region" | "measure" | "stats";
+export type PlotTool =
+  | "zoom"
+  | "pan"
+  | "cursor"
+  | "region"
+  | "measure"
+  | "stats"
+  | "integ"
+  | "fwhm";
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -105,6 +116,14 @@ export interface BuildOptsArgs {
   /** In `stats` tool: called with the live per-series summary stats over the
    *  dragged x-band (null when the band is empty / zero-width). */
   onStats?: (s: RegionStats | null) => void;
+  /** Committed integral region (drawn persistently until cleared / dataset change). */
+  integral?: { xlo: number; xhi: number; area: number } | null;
+  /** In `integ` tool: commit the trapezoidal area over a completed drag. */
+  onIntegrate?: (r: { xlo: number; xhi: number; area: number }) => void;
+  /** Committed peak/FWHM result (drawn persistently until cleared / dataset change). */
+  fwhmResult?: FwhmResult | null;
+  /** In `fwhm` tool: commit the peak + FWHM estimate over a completed drag. */
+  onFwhm?: (r: FwhmResult) => void;
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
   xLim?: [number, number] | null;
   yLim?: [number, number] | null;
@@ -162,6 +181,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const { xFmt, yFmt, annotations, showGrid, onRegionSelect } = args;
   const axisColor = cssVar("--text-dim") || "#aaa";
   const gridColor = cssVar("--grid-line") || "#333";
+  const accentColor = cssVar("--accent") || "#8b5cf6";
+  const accentSoftColor = cssVar("--accent-soft") || "rgba(139,92,246,0.18)";
+  const captureSoftColor = cssVar("--capture-soft") || "rgba(200,160,80,0.16)";
   const font = `${args.fontSize ?? 11}px ${cssVar("--font-mono") || "monospace"}`;
   // X-axis label: an explicit override wins, else "name (unit)" from the data.
   const xLabel =
@@ -194,7 +216,30 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     plugins.push(measurePlugin(args.onMeasure, cssVar("--accent") || "#8b5cf6"));
   }
   if (tool === "stats" && args.onStats) {
-    plugins.push(statsPlugin(args.onStats, cssVar("--accent") || "#8b5cf6"));
+    plugins.push(statsPlugin(args.onStats, accentColor));
+  }
+  // Integrate / FWHM: when the tool is active, the plugin owns the drag AND draws
+  // the committed result; otherwise a draw-only instance keeps a prior result
+  // shaded across tool switches (it clears only on dataset change / chip clear).
+  if (tool === "integ") {
+    plugins.push(
+      integratePlugin(args.integral ?? null, accentColor, accentSoftColor, {
+        onIntegrate: args.onIntegrate,
+        interactive: true,
+      }),
+    );
+  } else if (args.integral) {
+    plugins.push(integratePlugin(args.integral, accentColor, accentSoftColor));
+  }
+  if (tool === "fwhm") {
+    plugins.push(
+      fwhmPlugin(args.fwhmResult ?? null, accentColor, captureSoftColor, {
+        onFwhm: args.onFwhm,
+        interactive: true,
+      }),
+    );
+  } else if (args.fwhmResult) {
+    plugins.push(fwhmPlugin(args.fwhmResult, accentColor, captureSoftColor));
   }
   if (refLines && refLines.length > 0) {
     // Dragging only in the non-gesture tools (zoom/cursor); pan/measure/region

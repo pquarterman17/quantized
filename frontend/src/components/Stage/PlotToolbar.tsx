@@ -6,6 +6,7 @@
 
 import { useApp } from "../../store/useApp";
 
+// Navigation + inspection tools (zoom/pan/cursor/measure/stats).
 const TOOLS = [
   { id: "zoom", glyph: "⛶", tip: "Box zoom" },
   { id: "pan", glyph: "✥", tip: "Pan" },
@@ -14,14 +15,27 @@ const TOOLS = [
   { id: "stats", glyph: "Σ", tip: "Region stats (drag a range)" },
 ] as const;
 
+// Region-analysis tools — drag a range; the result persists as a chip (∫ / ∩).
+const ANALYZE_TOOLS = [
+  { id: "integ", glyph: "∫", tip: "Integrate — area under the curve (drag a range)" },
+  { id: "fwhm", glyph: "∩", tip: "Peak / FWHM (drag a range)" },
+] as const;
+
 interface Props {
   onReset: () => void;
   onSmartScale: () => void;
   onSavePng: () => void;
   onCopyData: () => void;
+  onSnapshot: () => void;
 }
 
-export default function PlotToolbar({ onReset, onSmartScale, onSavePng, onCopyData }: Props) {
+export default function PlotToolbar({
+  onReset,
+  onSmartScale,
+  onSavePng,
+  onCopyData,
+  onSnapshot,
+}: Props) {
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
   const stackMode = useApp((s) => s.stackMode);
@@ -44,6 +58,17 @@ export default function PlotToolbar({ onReset, onSmartScale, onSavePng, onCopyDa
         </button>
       ))}
       <span className="qzk-tool-sep" />
+      {ANALYZE_TOOLS.map((t) => (
+        <button
+          key={t.id}
+          className={`qzk-tool-btn${tool === t.id ? " active" : ""}`}
+          title={t.tip}
+          onClick={() => setPlotTool(t.id)}
+        >
+          {t.glyph}
+        </button>
+      ))}
+      <span className="qzk-tool-sep" />
       <button className="qzk-tool-btn" title="Reset view (or double-click the plot)" onClick={onReset}>
         ⊡
       </button>
@@ -55,6 +80,9 @@ export default function PlotToolbar({ onReset, onSmartScale, onSavePng, onCopyDa
       </button>
       <button className="qzk-tool-btn" title="Copy plotted data (TSV)" onClick={onCopyData}>
         ⧉
+      </button>
+      <button className="qzk-tool-btn" title="Copy plot image to clipboard (PNG)" onClick={onSnapshot}>
+        ⎘
       </button>
       <span className="qzk-tool-sep" />
       <button

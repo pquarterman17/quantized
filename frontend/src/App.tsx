@@ -203,7 +203,7 @@ export default function App() {
             s.setPeaksOpen(true);
             return;
         }
-        // H/Z/D/M select a plot tool.
+        // H/Z/D/M/I/W select a plot tool.
         const t = toolForKey(e.key);
         if (t) {
           e.preventDefault();

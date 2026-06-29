@@ -48,6 +48,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "H", desc: "Pan tool" },
       { keys: "D", desc: "Data-cursor tool" },
       { keys: "M", desc: "Measure tool" },
+      { keys: "I", desc: "Integrate tool (area under curve)" },
+      { keys: "W", desc: "Peak / FWHM tool" },
       { keys: "Drag", desc: "Use the active tool over a region" },
       { keys: "Double-click", desc: "Reset / auto-scale the view" },
       { keys: "Right-click", desc: "Plot menu (log · grid · legend · copy · save…)" },

@@ -173,6 +173,15 @@ body {
 .qzk-tool-sep { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--border); }
 .qzk-zoom-chip { bottom: 12px; left: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
 .qzk-readout { bottom: 12px; right: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); }
+/* On-plot analysis result chips (∫ Integrate / ∩ FWHM) — stack bottom-center,
+   newest on top. The container is click-through; each chip re-enables pointers. */
+.qzk-result-chips { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column-reverse; align-items: center; gap: 6px; pointer-events: none; }
+.qzk-result-chip { pointer-events: auto; display: flex; align-items: center; gap: 7px; padding: 3px 5px 3px 10px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--accent-text); }
+.qzk-result-chip .g { color: var(--accent); font-size: 14px; }
+.qzk-result-chip .v { color: var(--accent-text); }
+.qzk-result-chip .lbl { color: var(--text-faint); }
+.qzk-chip-reset { border: none; background: transparent; color: var(--text-faint); cursor: default; width: 18px; height: 18px; padding: 0; border-radius: var(--radius-sm); display: grid; place-items: center; font-size: 13px; }
+.qzk-chip-reset:hover { background: var(--surface-3); color: var(--text); }
 .qzk-legend { padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
 /* Floating-legend corner placement (Inspector "Legend position"). */
 .qzk-legend.ne { top: 12px; right: 12px; }

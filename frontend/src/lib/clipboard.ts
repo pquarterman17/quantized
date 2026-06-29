@@ -49,3 +49,18 @@ export async function copyText(text: string): Promise<boolean> {
   }
   return false;
 }
+
+/** Write a PNG blob to the clipboard as an image; resolves false when the async
+ *  Clipboard image API is unavailable (e.g. Firefox, insecure context) so callers
+ *  can fall back to a toast. */
+export async function copyImage(blob: Blob): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      return true;
+    }
+  } catch {
+    /* permission denied / unsupported — fall through to false */
+  }
+  return false;
+}
