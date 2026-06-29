@@ -15,6 +15,9 @@ import {
   vacuumSputterYield,
 } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
+import { useCalcHistory } from "../../../store/calcHistory";
+
+const DOMAIN = "Vacuum";
 
 /** A titled group of inputs + a result line, mirroring the MATLAB cards. */
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -128,10 +131,13 @@ export default function VacuumTab() {
 
   async function run(
     setter: (r: { text: string; err?: boolean } | null) => void,
+    label: string,
     fn: () => Promise<string>,
   ): Promise<void> {
     try {
-      setter({ text: await fn() });
+      const text = await fn();
+      setter({ text });
+      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
     } catch (e) {
       setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
     }
@@ -160,7 +166,7 @@ export default function VacuumTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC1, async () => {
+              void run(setC1, "Mean free path", async () => {
                 const r = await vacuumMeanFreePath(Number(mfpP), Number(mfpT), Number(mfpGas));
                 return `λ = ${fmtNum(r.mfp)} m (${fmtNum(r.mfpMm)} mm)`;
               })
@@ -179,7 +185,7 @@ export default function VacuumTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC2, async () => {
+              void run(setC2, "Monolayer formation time", async () => {
                 const r = await vacuumMonolayerTime(Number(monoP));
                 return `t_mono = ${fmtNum(r.tMono)} s`;
               })
@@ -200,7 +206,7 @@ export default function VacuumTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC3, async () => {
+              void run(setC3, "Sputter yield", async () => {
                 const r = await vacuumSputterYield(syMat, Number(syE), syIon);
                 return Number.isNaN(r.Y)
                   ? `Y(${syMat}/${syIon}) = N/A (out of table)`
@@ -226,7 +232,7 @@ export default function VacuumTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC4, async () => {
+              void run(setC4, "Pump-down estimate", async () => {
                 const r = await vacuumPumpDownTime(
                   Number(pV),
                   Number(pS),
@@ -251,7 +257,7 @@ export default function VacuumTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC5, async () => {
+              void run(setC5, "Knudsen number", async () => {
                 const r = await vacuumKnudsen(Number(knMfp), Number(knL));
                 return `Kn = ${fmtNum(r.Kn)} [${r.regime} flow]`;
               })
@@ -275,7 +281,7 @@ export default function VacuumTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC6, async () => {
+              void run(setC6, "Gas-flow conductance", async () => {
                 const r = await vacuumGasFlow(
                   Number(gfP1),
                   Number(gfP2),

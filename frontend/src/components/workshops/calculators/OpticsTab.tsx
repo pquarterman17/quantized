@@ -16,6 +16,9 @@ import {
   opticsSkinDepth,
 } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
+import { useCalcHistory } from "../../../store/calcHistory";
+
+const DOMAIN = "Optics";
 
 /** A titled group of inputs + a result line, mirroring the MATLAB cards. */
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -104,10 +107,13 @@ export default function OpticsTab() {
 
   async function run(
     setter: (r: { text: string; err?: boolean } | null) => void,
+    label: string,
     fn: () => Promise<string>,
   ): Promise<void> {
     try {
-      setter({ text: await fn() });
+      const text = await fn();
+      setter({ text });
+      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
     } catch (e) {
       setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
     }
@@ -127,7 +133,7 @@ export default function OpticsTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC1, async () => {
+              void run(setC1, "Fresnel coefficients", async () => {
                 const r = await opticsFresnel(Number(fN1), Number(fN2), Number(fTh));
                 return `Rs = ${fmtNum(r.Rs)} · Rp = ${fmtNum(r.Rp)} · Ts = ${fmtNum(
                   r.Ts,
@@ -149,7 +155,7 @@ export default function OpticsTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC2, async () => {
+              void run(setC2, "Critical / Brewster angle", async () => {
                 const [rc, rb] = await Promise.all([
                   opticsCriticalAngle(Number(aN1), Number(aN2)),
                   opticsBrewsterAngle(Number(aN1), Number(aN2)),
@@ -174,7 +180,7 @@ export default function OpticsTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC3, async () => {
+              void run(setC3, "Penetration depth", async () => {
                 const r = await opticsPenetrationDepth(Number(pN), Number(pK), Number(pLam));
                 return `depth = ${fmtNum(r.depth)} (same unit as λ)`;
               })
@@ -194,7 +200,7 @@ export default function OpticsTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC4, async () => {
+              void run(setC4, "Skin depth", async () => {
                 const r = await opticsSkinDepth(Number(sRho), Number(sFreq));
                 return `δ = ${fmtNum(r.delta_um)} µm`;
               })
@@ -213,7 +219,7 @@ export default function OpticsTab() {
           <Button
             size="sm"
             onClick={() =>
-              void run(setC5, async () => {
+              void run(setC5, "Refractive index / Dielectric function", async () => {
                 const r = await opticsRefractiveToDielectric(Number(rdN), Number(rdK));
                 setRdE1(String(r.eps1));
                 setRdE2(String(r.eps2));
@@ -230,7 +236,7 @@ export default function OpticsTab() {
           <Button
             size="sm"
             onClick={() =>
-              void run(setC5, async () => {
+              void run(setC5, "Refractive index / Dielectric function", async () => {
                 const r = await opticsDielectricToRefractive(Number(rdE1), Number(rdE2));
                 setRdN(String(r.n));
                 setRdK(String(r.k));

@@ -12,6 +12,9 @@ import {
   thermalWiedemannFranz,
 } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
+import { useCalcHistory } from "../../../store/calcHistory";
+
+const DOMAIN = "Thermal";
 
 /** A titled group of inputs + a result line, mirroring the MATLAB cards. */
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -87,10 +90,13 @@ export default function ThermalTab() {
 
   async function run(
     setter: (r: { text: string; err?: boolean } | null) => void,
+    label: string,
     fn: () => Promise<string>,
   ): Promise<void> {
     try {
-      setter({ text: await fn() });
+      const text = await fn();
+      setter({ text });
+      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
     } catch (e) {
       setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
     }
@@ -109,7 +115,7 @@ export default function ThermalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC1, async () => {
+              void run(setC1, "Wiedemann-Franz law", async () => {
                 const r = await thermalWiedemannFranz(Number(sigma), Number(wfT));
                 return `κ = ${fmtNum(r.kappa)} W/(m·K)`;
               })
@@ -129,7 +135,7 @@ export default function ThermalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC2, async () => {
+              void run(setC2, "Debye temperature", async () => {
                 const r = await thermalDebye(Number(vs), Number(nDens));
                 return `Θ_D = ${fmtNum(r.theta_D)} K`;
               })
@@ -152,7 +158,7 @@ export default function ThermalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC3, async () => {
+              void run(setC3, "Thermal diffusivity", async () => {
                 const r = await thermalDiffusivity(Number(kappa), Number(rho), Number(cp));
                 return `α = ${fmtNum(r.alpha)} m²/s = ${fmtNum(r.alpha_mm2)} mm²/s`;
               })

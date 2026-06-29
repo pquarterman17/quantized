@@ -21,6 +21,9 @@ import {
   thinFilmThermalMismatch,
 } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
+import { useCalcHistory } from "../../../store/calcHistory";
+
+const DOMAIN = "Thin Film";
 
 /** A titled group of inputs + a result line, mirroring the MATLAB cards. */
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -157,10 +160,13 @@ export default function ThinFilmTab() {
 
   async function run(
     setter: (r: { text: string; err?: boolean } | null) => void,
+    label: string,
     fn: () => Promise<string>,
   ): Promise<void> {
     try {
-      setter({ text: await fn() });
+      const text = await fn();
+      setter({ text });
+      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
     } catch (e) {
       setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
     }
@@ -179,7 +185,7 @@ export default function ThinFilmTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC1, async () => {
+              void run(setC1, "Deposition rate", async () => {
                 const r = await thinFilmDepositionRate(Number(drThick), Number(drTime));
                 return `rate = ${fmtNum(r.rate)} Å/s · ${fmtNum(r.rate_nm_per_min)} nm/min`;
               })
@@ -201,7 +207,7 @@ export default function ThinFilmTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC2, async () => {
+              void run(setC2, "Sputter rate", async () => {
                 const r = await thinFilmSputterRate(
                   Number(spY),
                   Number(spJ),
@@ -226,7 +232,7 @@ export default function ThinFilmTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC3, async () => {
+              void run(setC3, "Thermal diffusion length", async () => {
                 const r = await thinFilmDiffusionLength(Number(dlD), Number(dlT));
                 return `L = ${fmtNum(r.L)} cm · ${fmtNum(r.L_nm)} nm`;
               })
@@ -247,7 +253,7 @@ export default function ThinFilmTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC4, async () => {
+              void run(setC4, "Implant dose (beam current)", async () => {
                 const r = await thinFilmDoseFromCurrent(
                   Number(doseI),
                   Number(doseT),
@@ -272,7 +278,7 @@ export default function ThinFilmTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC5, async () => {
+              void run(setC5, "Peak concentration", async () => {
                 const r = await thinFilmDoseToConcentration(
                   Number(dcDose),
                   Number(dcRp),
@@ -296,7 +302,7 @@ export default function ThinFilmTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC6, async () => {
+              void run(setC6, "Kiessig thickness", async () => {
                 const sld = kSld.trim() === "" ? undefined : Number(kSld);
                 const r = await thinFilmKiessig(Number(kDq), sld);
                 const corr = Number.isNaN(r.Qc) ? "" : ` (Qc = ${fmtNum(r.Qc)} Å⁻¹)`;
@@ -330,7 +336,7 @@ export default function ThinFilmTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC7, async () => {
+              void run(setC7, "Multilayer thermal conductivity", async () => {
                 const r = await thinFilmMultilayerThermal(parseList(mlD), parseList(mlK));
                 return `k⊥ = ${fmtNum(r.k_series)} · k∥ = ${fmtNum(r.k_parallel)} W/m/K`;
               })
@@ -357,7 +363,7 @@ export default function ThinFilmTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC8, async () => {
+              void run(setC8, "Projected range (LSS)", async () => {
                 const r = await thinFilmProjectedRange(prIon, prTarget, Number(prE));
                 return `Rp = ${fmtNum(r.Rp)} nm · ΔRp = ${fmtNum(r.deltaRp)} nm`;
               })
@@ -380,7 +386,7 @@ export default function ThinFilmTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC9, async () => {
+              void run(setC9, "Stoney stress", async () => {
                 const r = await thinFilmStoneyStress(
                   Number(stEs),
                   Number(stNu),
@@ -409,7 +415,7 @@ export default function ThinFilmTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC10, async () => {
+              void run(setC10, "Thermal-mismatch strain", async () => {
                 const e = tmE.trim() === "" ? undefined : Number(tmE);
                 const r = await thinFilmThermalMismatch(
                   Number(tmAf),

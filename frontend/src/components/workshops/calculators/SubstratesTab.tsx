@@ -9,6 +9,9 @@ import { useEffect, useState } from "react";
 
 import { getSubstrates, substrateMismatch } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
+import { useCalcHistory } from "../../../store/calcHistory";
+
+const DOMAIN = "Substrates";
 
 /** One substrate row from the reference table (mirrors calc.substrates dict). */
 export interface SubstrateInfo {
@@ -110,7 +113,13 @@ export default function SubstratesTab() {
     }
     try {
       const r = await substrateMismatch(af, selected.a);
-      setMm({ text: `f = ${fmtNum(r.mismatchPct)} %  (${r.description})` });
+      const text = `f = ${fmtNum(r.mismatchPct)} %  (${r.description})`;
+      setMm({ text });
+      useCalcHistory.getState().record({
+        domain: DOMAIN,
+        label: `Lattice mismatch vs ${selected.name}`,
+        summary: text,
+      });
     } catch {
       setMm({ text: "calculation failed", err: true });
     }

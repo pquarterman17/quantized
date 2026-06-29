@@ -18,6 +18,9 @@ import type { SldFormulaResult } from "../../../lib/api";
 // Original shared-state tabs + self-contained domain tabs (each owns its own
 // hook; only the union member is needed here for the panel's tab selector).
 export type CalcTab =
+  | "home"
+  | "history"
+  | "favorites"
   | "units"
   | "constants"
   | "xray"

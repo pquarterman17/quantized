@@ -15,6 +15,9 @@ import {
   electricalSheetResistance,
 } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
+import { useCalcHistory } from "../../../store/calcHistory";
+
+const DOMAIN = "Electrical";
 
 /** A titled group of inputs + a result line, mirroring the MATLAB cards. */
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -103,10 +106,13 @@ export default function ElectricalTab() {
 
   async function run(
     setter: (r: { text: string; err?: boolean } | null) => void,
+    label: string,
     fn: () => Promise<string>,
   ): Promise<void> {
     try {
-      setter({ text: await fn() });
+      const text = await fn();
+      setter({ text });
+      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
     } catch (e) {
       setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
     }
@@ -124,7 +130,7 @@ export default function ElectricalTab() {
           <Button
             size="sm"
             onClick={() =>
-              void run(setC1, async () => {
+              void run(setC1, "Resistivity / Sheet resistance", async () => {
                 const r = await electricalResistivity(Number(rs), Number(thick) * NM_TO_CM);
                 return `ρ = ${fmtNum(r.rho)} Ω·cm`;
               })
@@ -138,7 +144,7 @@ export default function ElectricalTab() {
           <Button
             size="sm"
             onClick={() =>
-              void run(setC1, async () => {
+              void run(setC1, "Resistivity / Sheet resistance", async () => {
                 const r = await electricalSheetResistance(Number(rho1), Number(thick) * NM_TO_CM);
                 return `Rs = ${fmtNum(r.Rs)} Ω/sq`;
               })
@@ -157,7 +163,7 @@ export default function ElectricalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC2, async () => {
+              void run(setC2, "Conductivity", async () => {
                 const r = await electricalConductivity(Number(rho2));
                 return `σ = ${fmtNum(r.sigma)} S/cm`;
               })
@@ -177,7 +183,7 @@ export default function ElectricalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC3, async () => {
+              void run(setC3, "Mobility", async () => {
                 const r = await electricalMobility(Number(rho3), Number(n3));
                 return `μ = ${fmtNum(r.mu)} cm²/(V·s)`;
               })
@@ -197,7 +203,7 @@ export default function ElectricalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC4, async () => {
+              void run(setC4, "Current density", async () => {
                 const r = await electricalCurrentDensity(Number(cur), Number(area));
                 return `J = ${fmtNum(r.J)} A/cm²`;
               })
@@ -221,7 +227,7 @@ export default function ElectricalTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC5, async () => {
+              void run(setC5, "Hall effect", async () => {
                 const r = await electricalHall(
                   Number(vH),
                   Number(hallI),

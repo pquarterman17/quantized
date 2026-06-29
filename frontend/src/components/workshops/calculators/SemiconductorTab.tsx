@@ -24,6 +24,9 @@ import {
   semiconductorThermalVelocity,
 } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
+import { useCalcHistory } from "../../../store/calcHistory";
+
+const DOMAIN = "Semiconductor";
 
 // Material presets (300 K) mirrored from calc.semiconductor.materialPresets so
 // the dropdowns auto-fill without a round-trip. Eg [eV], eps_r, me*, mh*.
@@ -232,6 +235,7 @@ export default function SemiconductorTab() {
     try {
       const text = await card.compute(num);
       setResults((s) => ({ ...s, [idx]: { text } }));
+      useCalcHistory.getState().record({ domain: DOMAIN, label: card.title, summary: text });
     } catch (e) {
       const text = e instanceof Error ? e.message : "calculation failed";
       setResults((s) => ({ ...s, [idx]: { text, err: true } }));

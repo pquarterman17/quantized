@@ -14,6 +14,9 @@ import {
   electrochemTafel,
 } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
+import { useCalcHistory } from "../../../store/calcHistory";
+
+const DOMAIN = "Electrochemistry";
 
 /** A titled group of inputs + a result line, mirroring the MATLAB cards. */
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -101,10 +104,13 @@ export default function ElectrochemistryTab() {
 
   async function run(
     setter: (r: { text: string; err?: boolean } | null) => void,
+    label: string,
     fn: () => Promise<string>,
   ): Promise<void> {
     try {
-      setter({ text: await fn() });
+      const text = await fn();
+      setter({ text });
+      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
     } catch (e) {
       setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
     }
@@ -124,7 +130,7 @@ export default function ElectrochemistryTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC1, async () => {
+              void run(setC1, "Nernst potential", async () => {
                 const r = await electrochemNernst(Number(e0), Number(nerN), Number(nerQ));
                 return `E = ${fmtNum(r.E)} V`;
               })
@@ -145,7 +151,7 @@ export default function ElectrochemistryTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC2, async () => {
+              void run(setC2, "Butler-Volmer", async () => {
                 const r = await electrochemButlerVolmer(
                   Number(j0),
                   Number(eta),
@@ -169,7 +175,7 @@ export default function ElectrochemistryTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC3, async () => {
+              void run(setC3, "Tafel slope", async () => {
                 const r = await electrochemTafel(Number(tafAlpha), Number(tafT));
                 return `b = ${fmtNum(r.bMv)} mV/decade`;
               })
@@ -190,7 +196,7 @@ export default function ElectrochemistryTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC4, async () => {
+              void run(setC4, "Double-layer capacitance", async () => {
                 const r = await electrochemDoubleLayer(Number(eps), Number(dlcD), Number(dlcA));
                 return `C = ${fmtNum(r.CuF)} µF · ${fmtNum(r.Cspec * 1e6)} µF/cm²`;
               })
@@ -210,7 +216,7 @@ export default function ElectrochemistryTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC5, async () => {
+              void run(setC5, "Ohmic drop (iR)", async () => {
                 const r = await electrochemOhmicDrop(Number(irI), Number(irR));
                 return `V_IR = ${fmtNum(r.VmV)} mV (${fmtNum(r.V)} V)`;
               })

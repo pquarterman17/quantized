@@ -11,6 +11,9 @@ import DiffusionTab from "./DiffusionTab";
 import ElectricalTab from "./ElectricalTab";
 import ElectrochemistryTab from "./ElectrochemistryTab";
 import ElementsTab from "./ElementsTab";
+import FavoritesTab from "./FavoritesTab";
+import HistoryTab from "./HistoryTab";
+import HomeTab from "./HomeTab";
 import MagneticTab from "./MagneticTab";
 import OpticsTab from "./OpticsTab";
 import SemiconductorTab from "./SemiconductorTab";
@@ -25,8 +28,17 @@ import XrayTab from "./XrayTab";
 import { useCalculators, type CalcTab } from "./useCalculators";
 
 // Domain groups — render as <optgroup>s so the selector scales past a flat
-// segmented control as more calculator domains are ported.
-const TAB_GROUPS: { group: string; tabs: { value: CalcTab; label: string }[] }[] = [
+// segmented control as more calculator domains are ported. Exported so the Home
+// tab can render the same grouped index without the two drifting apart.
+export const TAB_GROUPS: { group: string; tabs: { value: CalcTab; label: string }[] }[] = [
+  {
+    group: "Session",
+    tabs: [
+      { value: "home", label: "Home" },
+      { value: "history", label: "History" },
+      { value: "favorites", label: "Favorites" },
+    ],
+  },
   {
     group: "Conversion",
     tabs: [
@@ -101,6 +113,9 @@ export default function CalculatorsPanel() {
         ))}
       </select>
 
+      {c.tab === "home" && <HomeTab onPick={c.setTab} />}
+      {c.tab === "history" && <HistoryTab />}
+      {c.tab === "favorites" && <FavoritesTab />}
       {c.tab === "units" && <UnitsTab c={c} />}
       {c.tab === "xray" && <XrayTab c={c} />}
       {c.tab === "crystal" && <CrystalTab c={c} />}

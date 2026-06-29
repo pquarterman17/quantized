@@ -15,6 +15,9 @@ import {
   magneticMomentConvert,
 } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
+import { useCalcHistory } from "../../../store/calcHistory";
+
+const DOMAIN = "Magnetic";
 
 /** A titled group of inputs + a result line, mirroring the MATLAB cards. */
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -110,10 +113,13 @@ export default function MagneticTab() {
 
   async function run(
     setter: (r: { text: string; err?: boolean } | null) => void,
+    label: string,
     fn: () => Promise<string>,
   ): Promise<void> {
     try {
-      setter({ text: await fn() });
+      const text = await fn();
+      setter({ text });
+      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
     } catch (e) {
       setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
     }
@@ -147,7 +153,7 @@ export default function MagneticTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC1, async () => {
+              void run(setC1, "Moment conversions", async () => {
                 const vol = Number(momVol);
                 const atoms = Number(momAtoms);
                 const r = await magneticMomentConvert(
@@ -187,7 +193,7 @@ export default function MagneticTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC2, async () => {
+              void run(setC2, "Demagnetization factors", async () => {
                 const r = await magneticDemag(shape);
                 return `Nz = ${fmtNum(r.Nz)} · Nxy = ${fmtNum(r.Nxy)} · 4πNz = ${fmtNum(
                   r.n_cgs,
@@ -209,7 +215,7 @@ export default function MagneticTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC3, async () => {
+              void run(setC3, "Curie-Weiss law", async () => {
                 const r = await magneticCurieWeiss(Number(cwC), Number(cwTheta));
                 return `µ_eff = ${fmtNum(r.mu_eff)} µ_B · ${r.mag_type}`;
               })
@@ -230,7 +236,7 @@ export default function MagneticTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC4, async () => {
+              void run(setC4, "Langevin / superparamagnetism", async () => {
                 const r = await magneticLangevin(Number(langMu), Number(langH), Number(langT));
                 return `L(x) = ${fmtNum(r.L)} at x = ${fmtNum(r.x)}`;
               })
@@ -250,7 +256,7 @@ export default function MagneticTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC5, async () => {
+              void run(setC5, "Domain wall & anisotropy", async () => {
                 const r = await magneticDomainWall(Number(dwA), Number(dwK));
                 return `δ = ${fmtNum(r.delta_nm)} nm · E_wall = ${fmtNum(r.e_wall_mj_m2)} mJ/m²`;
               })

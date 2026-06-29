@@ -17,6 +17,9 @@ import {
   scLondonDepth,
 } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
+import { useCalcHistory } from "../../../store/calcHistory";
+
+const DOMAIN = "Superconductor";
 
 // lambda0 / xi0 in nm, Hc0 in Oe, Tc in K — port of materialPresets.m.
 const PRESETS: Record<
@@ -132,10 +135,13 @@ export default function SuperconductorTab() {
 
   async function run(
     setter: (r: { text: string; err?: boolean } | null) => void,
+    label: string,
     fn: () => Promise<string>,
   ): Promise<void> {
     try {
-      setter({ text: await fn() });
+      const text = await fn();
+      setter({ text });
+      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
     } catch (e) {
       setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
     }
@@ -183,7 +189,7 @@ export default function SuperconductorTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC1, async () => {
+              void run(setC1, "BCS gap", async () => {
                 const r = await scBcsGap(Number(gTc), Number(gT));
                 return `Δ₀ = ${fmtNum(r.delta0)} meV · Δ(T) = ${fmtNum(
                   r.deltaT,
@@ -214,7 +220,7 @@ export default function SuperconductorTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC2, async () => {
+              void run(setC2, "London penetration depth", async () => {
                 const r = await scLondonDepth(Number(lLam0), Number(lT), Number(lTc));
                 return `λ(${fmtNum(r.T)} K) = ${fmtNum(r.lambda)} nm`;
               })
@@ -243,7 +249,7 @@ export default function SuperconductorTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC3, async () => {
+              void run(setC3, "Coherence length", async () => {
                 const r = await scCoherenceLength(Number(xXi0), Number(xT), Number(xTc));
                 return `ξ(${fmtNum(r.T)} K) = ${fmtNum(r.xi)} nm`;
               })
@@ -263,7 +269,7 @@ export default function SuperconductorTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC4, async () => {
+              void run(setC4, "Ginzburg-Landau parameter", async () => {
                 const r = await scGlParameter(Number(kLam), Number(kXi));
                 return `κ = ${fmtNum(r.kappa)} (Type ${r.type})`;
               })
@@ -292,7 +298,7 @@ export default function SuperconductorTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC5, async () => {
+              void run(setC5, "Critical fields", async () => {
                 const r = await scCriticalFields(
                   Number(hHc0),
                   Number(hTc),
@@ -330,7 +336,7 @@ export default function SuperconductorTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC6, async () => {
+              void run(setC6, "Depairing current density", async () => {
                 const r = await scDepairingCurrent(
                   Number(dHc0),
                   Number(dLam0),

@@ -12,6 +12,9 @@ import {
   diffusionLength,
 } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
+import { useCalcHistory } from "../../../store/calcHistory";
+
+const DOMAIN = "Diffusion";
 
 /** A titled group of inputs + a result line, mirroring the MATLAB cards. */
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -88,10 +91,13 @@ export default function DiffusionTab() {
 
   async function run(
     setter: (r: { text: string; err?: boolean } | null) => void,
+    label: string,
     fn: () => Promise<string>,
   ): Promise<void> {
     try {
-      setter({ text: await fn() });
+      const text = await fn();
+      setter({ text });
+      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
     } catch (e) {
       setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
     }
@@ -111,7 +117,7 @@ export default function DiffusionTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC1, async () => {
+              void run(setC1, "Arrhenius diffusion coefficient", async () => {
                 const r = await diffusionArrhenius(Number(d0), Number(ea), Number(arrT));
                 return `D = ${fmtNum(r.D)} cm²/s`;
               })
@@ -131,7 +137,7 @@ export default function DiffusionTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC2, async () => {
+              void run(setC2, "Diffusion length", async () => {
                 const r = await diffusionLength(Number(dlD), Number(dlT));
                 return `L = √(Dt) = ${fmtNum(r.L)} cm = ${fmtNum(r.L_um)} µm`;
               })
@@ -152,7 +158,7 @@ export default function DiffusionTab() {
             variant="primary"
             size="sm"
             onClick={() =>
-              void run(setC3, async () => {
+              void run(setC3, "Fick's first law (flux)", async () => {
                 const r = await diffusionFickFlux(Number(fickD), Number(fickDC), Number(fickDx));
                 return `J = -D ∂C/∂x = ${fmtNum(r.J)} atoms/(cm²·s)`;
               })
