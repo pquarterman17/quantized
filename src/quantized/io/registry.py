@@ -12,7 +12,7 @@ from pathlib import Path
 from quantized.datastruct import DataStruct
 from quantized.io.delimited import import_csv
 from quantized.io.excel import import_excel
-from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl
+from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl, is_ncnr_refl
 from quantized.io.qd import import_ppms, import_qd_vsm, is_ppms_dat, is_qd_file
 from quantized.io.refl1d import import_refl1d_dat, is_refl1d_dat
 from quantized.io.rigaku import import_rigaku_raw, is_rigaku_raw
@@ -28,7 +28,6 @@ Sniffer = Callable[[Path], bool]
 # NOTE: resolve_parser lowercases the suffix, so .datA -> '.data', etc.
 _EXT_MAP: dict[str, Parser] = {
     ".xrdml": import_xrdml,
-    ".refl": import_ncnr_refl,
     ".pnr": import_ncnr_pnr,
     ".data": import_ncnr_dat,  # .datA
     ".datb": import_ncnr_dat,  # .datB
@@ -48,6 +47,14 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
         (is_qd_file, import_qd_vsm),
         (is_refl1d_dat, import_refl1d_dat),
         (is_ppms_dat, import_ppms),
+    ],
+    # .refl is reductus (JSON "columns" header) for the whole corpus, but refl1d
+    # also exports .refl (a "Q (1/A) R dR" column header below # metadata): route
+    # those to the refl1d parser. Catch-all stays reductus (the prior behaviour).
+    ".refl": [
+        (is_ncnr_refl, import_ncnr_refl),
+        (is_refl1d_dat, import_refl1d_dat),
+        (_accept_any, import_ncnr_refl),
     ],
     # .raw is Rigaku here (magic "FI"); Bruker .raw -> fermiviewer (out of scope).
     ".raw": [(is_rigaku_raw, import_rigaku_raw)],

@@ -5,7 +5,7 @@ Plotter (loading magnetometry / reflectometry / XRDML corpus files). Covers
 plot-rendering bugs, dataset selection/removal, parser disambiguation, Inspector
 declutter, and two sizable feature ports (waterfall, two-frame reflectometry).
 
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-06-28
 **Updated:** 2026-06-28
 
@@ -75,14 +75,15 @@ file → io.import_auto → DataStruct(.time/.values/.labels/.units/.metadata)
 
 ---
 
-## Tier 2 — Medium Impact
-
-5. **`.refl` dual-format disambiguation** — reductus 4-col vs refl1d-with-fits
-   - [ ] Add `is_ncnr_refl` (JSON `"columns"` header) + sniffer list for `.refl`
-   - [ ] Route refl1d-style `.refl` to the refl1d parser; tests + fixtures
-
 ## Completed
 
+- ~~**#5 `.refl` dual-format disambiguation**~~ (2026-06-28) — added streaming
+  `ncnr.is_ncnr_refl` (detects the JSON `"columns"` header; scans line-by-line
+  since the reductus `"template_data"` line alone runs ~30 KB) and moved `.refl`
+  from the registry extension map to a sniffer list: reductus → `import_ncnr_refl`,
+  refl1d-exported `.refl` (Q/R column header) → `import_refl1d_dat`, catch-all
+  stays reductus (prior behaviour). Robustness-only (the whole corpus is reductus
+  4-col). 3 tests; backend 689 green, ruff + mypy clean.
 - ~~**#9 XRDML 2D RSM → map view**~~ (2026-06-28) — the map view already consumed
   the 2-D scattered `.values` via the regrid (channels default to 2θ/ω/I with a
   Q toggle); the only gap was import-time routing. Added pure `mapdata.is2DMap` +

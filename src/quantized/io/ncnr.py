@@ -17,7 +17,7 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 
-__all__ = ["import_ncnr_dat", "import_ncnr_pnr", "import_ncnr_refl"]
+__all__ = ["import_ncnr_dat", "import_ncnr_pnr", "import_ncnr_refl", "is_ncnr_refl"]
 
 _HEADER_RE = re.compile(r'#\s*"([^"]+)":\s*(.+)$')
 
@@ -27,6 +27,24 @@ def _loads(text: str) -> Any:
         return json.loads(text)
     except (json.JSONDecodeError, ValueError):
         return None
+
+
+def is_ncnr_refl(path: str | Path) -> bool:
+    """Sniff a ``.refl`` as NCNR reductus output: its ``#``-comment header carries
+    a JSON ``"columns": [...]`` line. A refl1d-exported ``.refl`` instead uses a
+    plain ``Q (1/A) R dR`` column line, so it won't match — letting the registry
+    route it to the refl1d parser. Scans the header line-by-line (the reductus
+    ``"template_data"`` line alone can exceed several KB, so a fixed byte slice
+    would miss the later ``"columns"`` key) and stops at the first data row."""
+    with Path(path).open(encoding="latin-1", errors="replace") as fh:
+        for raw in fh:
+            line = raw.rstrip("\n")
+            if not line.startswith("#"):
+                break  # header ended without a "columns" key
+            match = _HEADER_RE.match(line)
+            if match is not None and match.group(1) == "columns":
+                return True
+    return False
 
 
 def import_ncnr_refl(filepath: str | Path) -> DataStruct:

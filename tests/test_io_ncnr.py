@@ -11,7 +11,7 @@ import pytest
 from numpy.testing import assert_allclose
 
 from quantized.io import import_auto
-from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl
+from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl, is_ncnr_refl
 
 
 @pytest.mark.golden
@@ -40,6 +40,40 @@ def test_ncnr_refl_structure(fixtures_dir: Path) -> None:
 def test_registry_routes_refl(fixtures_dir: Path) -> None:
     ds = import_auto(fixtures_dir / "ncnr_j395.refl")
     assert ds.metadata["parser_name"] == "import_ncnr_refl"
+
+
+# ── .refl dual-format disambiguation (reductus vs refl1d-exported) ────────────
+# The reductus "template_data" header line alone runs to ~30 KB, with the
+# "columns" key only on a later line — the sniffer must scan line-by-line.
+_REFL1D_STYLE_REFL = (
+    "# intensity: 1.04776102038159\n"
+    "# background: 0.0\n"
+    "# Q (1/A) dQ R dR theory fresnel\n"
+    "0.01 0.001 0.50 0.01 0.50 0.60\n"
+    "0.02 0.001 0.30 0.01 0.31 0.40\n"
+    "0.03 0.001 0.10 0.01 0.11 0.20\n"
+)
+
+
+def test_is_ncnr_refl_true_for_reductus(fixtures_dir: Path) -> None:
+    assert is_ncnr_refl(fixtures_dir / "ncnr_j395.refl") is True
+
+
+def test_is_ncnr_refl_false_for_refl1d_style(tmp_path: Path) -> None:
+    f = tmp_path / "model.refl"
+    f.write_text(_REFL1D_STYLE_REFL, encoding="latin-1")
+    assert is_ncnr_refl(f) is False
+
+
+def test_registry_routes_refl1d_style_refl(tmp_path: Path) -> None:
+    """A refl1d-exported .refl (Q/R column header, no JSON "columns") must route to
+    the refl1d parser, not crash in import_ncnr_refl ("no columns header")."""
+    f = tmp_path / "model.refl"
+    f.write_text(_REFL1D_STYLE_REFL, encoding="latin-1")
+    ds = import_auto(f)
+    assert ds.metadata["parser_name"] == "import_refl1d_dat"
+    assert ds.metadata["x_column_name"] == "Q"
+    assert ds.labels == ("dQ", "R", "dR", "theory", "fresnel")
 
 
 # ── Polarized .pnr ────────────────────────────────────────────────────────
