@@ -166,6 +166,59 @@ def test_uniform_counting_times_do_not_warn(tmp_path: Path) -> None:
     assert not any("counting times" in str(w.message) for w in caught)
 
 
+# ── beam-attenuation correction (per-pixel beamAttenuationFactors) ───────────
+
+
+@pytest.mark.golden
+def test_xrdml_beam_attenuation_matches_matlab(
+    fixtures_dir: Path,
+    load_golden: Callable[[str], dict[str, Any]],
+) -> None:
+    ref = load_golden("xrdml_attenuation.json")
+    ds = import_xrdml(fixtures_dir / "xrdml_attenuation.xrdml")  # default cps
+    assert list(ds.labels) == list(ref["labels"])
+    assert list(ds.units) == list(ref["units"])
+    assert_allclose(ds.time, np.asarray(ref["time"], dtype=float), rtol=1e-9, atol=1e-9)
+    ref_values = np.asarray(ref["values"], dtype=float).reshape(ds.values.shape)
+    assert_allclose(ds.values, ref_values, rtol=1e-9, atol=1e-9)
+
+
+def test_xrdml_attenuation_metadata_and_multiply(fixtures_dir: Path) -> None:
+    ds = import_xrdml(fixtures_dir / "xrdml_attenuation.xrdml")
+    assert ds.metadata["n_scans_att_corrected"] == 1
+    assert ds.metadata["attenuator_factor"] == pytest.approx(100.0)
+    assert ds.metadata["attenuator_material"] == "Cu"
+    assert ds.metadata["attenuator_activate_level"] == pytest.approx(800000.0)
+    # counts [100..1000], factors 6x1.0 then 4x100.0, /countingTime=10 → cps
+    expected = np.array([10, 20, 30, 40, 50, 60, 7000, 8000, 9000, 10000], dtype=float)
+    assert_allclose(ds.values[:, 0], expected, rtol=1e-12)
+
+
+def test_xrdml_no_attenuator_metadata_is_empty(fixtures_dir: Path) -> None:
+    ds = import_xrdml(fixtures_dir / "xrdml_la2nio4.xrdml")  # no attenuator block
+    assert ds.metadata["n_scans_att_corrected"] == 0
+    assert ds.metadata["attenuator_factor"] is None
+    assert ds.metadata["attenuator_material"] == ""
+
+
+@pytest.mark.golden
+def test_rsm_map_matrix_matches_matlab(
+    fixtures_dir: Path,
+    load_golden: Callable[[str], dict[str, Any]],
+) -> None:
+    """The Python scattered mesh, reshaped by map_shape, equals MATLAB's map2D."""
+    ref = load_golden("xrdml_rsm_map.json")
+    ds = import_xrdml(fixtures_dir / _RSM)
+    n_frames, n_pix = ds.metadata["map_shape"]
+    two_theta = ds.column("2Theta").reshape(n_frames, n_pix)
+    omega = ds.column("Omega").reshape(n_frames, n_pix)
+    intensity = ds.column("Intensity").reshape(n_frames, n_pix)
+    assert ds.metadata["axis1_name"] == ref["axis1Name"]
+    assert_allclose(omega[:, 0], np.asarray(ref["axis1"], dtype=float), rtol=1e-9, atol=1e-9)
+    assert_allclose(two_theta[0, :], np.asarray(ref["axis2"], dtype=float), rtol=1e-9, atol=1e-9)
+    assert_allclose(intensity, np.asarray(ref["intensity"], dtype=float), rtol=1e-9, atol=1e-9)
+
+
 def test_xrdml_float_append_number(tmp_path: Path) -> None:
     """Some exporters write appendNumber="1.0"; int() raised, float() must not."""
     xml = _two_scan_xrdml(1.0, 1.0).replace('appendNumber="0"', 'appendNumber="0.0"').replace(

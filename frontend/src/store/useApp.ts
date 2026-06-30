@@ -473,7 +473,10 @@ export const useApp = create<AppState>((set, get) => ({
   peakOverlay: null,
   baselineOverlay: null,
   rsmPeaks: null,
-  mapMethod: "natural",
+  // 'linear' default: fast (~50 ms) and bit-exact MATLAB parity. 'natural'
+  // (true Sibson) is correct but does a per-query Voronoi cavity walk (seconds
+  // at 200²), so it's an opt-in quality choice, not the auto-open default.
+  mapMethod: "linear",
   mapRes: 200,
   macroRecording: false,
   macroSteps: [],

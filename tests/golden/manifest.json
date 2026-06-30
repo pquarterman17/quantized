@@ -40,6 +40,22 @@
       "rtol": 1e-9,
       "atol": 1e-9
     },
+    "xrdml_attenuation": {
+      "fixture": "tests/fixtures/xrdml_attenuation.xrdml",
+      "matlab_fn": "parser.importXRDML (beam-attenuation: counts .* beamAttenuationFactors, then /countingTime)",
+      "python_fn": "quantized.io.xrdml.import_xrdml (default)",
+      "note": "synthetic 1D scan; per-pixel factors 6x1.0 then 4x100.0 exercise the attenuation multiply (n_scans_att_corrected=1)",
+      "rtol": 1e-9,
+      "atol": 1e-9
+    },
+    "xrdml_rsm_map": {
+      "fixture": "tests/fixtures/xrdml_rsm_synthetic.xrdml",
+      "matlab_fn": "parser.importXRDML .metadata.parserSpecific.map2D (N omega x M 2theta intensity matrix + axes)",
+      "python_fn": "quantized.io.xrdml.import_xrdml (scattered mesh reshaped by map_shape)",
+      "note": "freeze writes the NxM map2D matrix (jsonencode keeps it 2-D nested rows); the Python test reshapes the Intensity column by map_shape and compares axes + matrix",
+      "rtol": 1e-9,
+      "atol": 1e-9
+    },
     "ncnr_j395_default": {
       "fixture": "tests/fixtures/ncnr_j395.refl",
       "matlab_fn": "parser.importNCNRRefl",
@@ -202,6 +218,20 @@
       "note": "reference-background dataset subtraction with 0-fill extrapolation outside the bg x-range. linear=np.interp(left=0,right=0); pchip=PchipInterpolator(extrapolate=False)→nan_to_num(0); spline=CubicSpline not-a-knot(extrapolate=False)→nan_to_num(0). 2-channel active covers the per-channel loop; all 3 methods match ~1e-14 abs (tol 1e-9 for cross-platform FP headroom). Freeze via freeze_calc_values.m (bgfFreeze).",
       "rtol": 1e-9,
       "atol": 1e-9
+    },
+    "calc_interp2d_natural": {
+      "matlab_fn": "utilities.interpolate2D (Method=natural; Sibson natural-neighbour on a 12-point scattered set -> 5x5 interior grid)",
+      "python_fn": "quantized.calc.interp2d.interpolate2d (method='natural', hand-rolled Sibson in calc/_natural_neighbor)",
+      "note": "Sibson coordinates are geometrically unique, so the hand-rolled port matches MATLAB to ~1e-15 (previously a Clough-Tocher fallback, structural-only). MATLAB aliases 'cubic' to 'natural'. Freeze via freeze_calc_values.m.",
+      "rtol": 1e-9,
+      "atol": 1e-9
+    },
+    "calc_errorprop": {
+      "matlab_fn": "utilities.errorProp linear method (4 cases: scalar f=a*b+c, fully-correlated sum, vector-valued f, single-input f=x^2)",
+      "python_fn": "quantized.calc.errors.error_prop (method='linear')",
+      "note": "central-difference partials + full-covariance variance; matches MATLAB exactly (0.0 abs diff). The Monte Carlo method is RNG-based -> invariant-tested in test_errors.py, not frozen. Freeze via freeze_calc_values.m (errPropFreeze).",
+      "rtol": 1e-9,
+      "atol": 1e-12
     },
     "calc_qspace": {
       "matlab_fn": "parser.computeQSpace (coplanar RSM Qx/Qz from an omega×2theta grid): theta=2theta/2; Qx=(4pi/lambda)sin(theta)sin(omega-theta); Qz=...cos(...). axis1=omega (N=5), axis2=2theta (M=7), Cu Kalpha1.",
