@@ -92,6 +92,42 @@ export function minPositive(grid: (number | null)[][]): number | null {
   return Number.isFinite(lo) ? lo : null;
 }
 
+/** Build the offscreen `nx×ny` heatmap RGBA buffer for the map grid: one texel
+ *  per cell, coloured by `cmap` over `[lo, hi]` (log-optional). Rows are flipped
+ *  vertically so texel row 0 is the top (max y). A null / out-of-range cell is
+ *  transparent (alpha 0) — the 2-D "gap", matching uPlot's null-gap for 1-D.
+ *  Pure (no canvas/DOM), so the colour mapping + NaN transparency + flip are
+ *  unit-testable against raw RGBA. */
+export function buildHeatmapImage(
+  p: MapPayload,
+  lo: number,
+  hi: number,
+  logZ: boolean,
+  cmap: ColormapName,
+): { data: Uint8ClampedArray; width: number; height: number } {
+  const nx = p.xAxis.length;
+  const ny = p.yAxis.length;
+  const stops = COLORMAPS[cmap];
+  const data = new Uint8ClampedArray(nx * ny * 4);
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const v = p.zGrid[j]?.[i];
+      const px = ((ny - 1 - j) * nx + i) * 4; // flip: texel row 0 = max y
+      const t = v == null ? null : normalize(v, lo, hi, logZ);
+      if (t == null) {
+        data[px + 3] = 0; // transparent gap
+        continue;
+      }
+      const [r, g, b] = sampleColormap(stops, t);
+      data[px] = r;
+      data[px + 1] = g;
+      data[px + 2] = b;
+      data[px + 3] = 255;
+    }
+  }
+  return { data, width: nx, height: ny };
+}
+
 export function draw(
   canvas: HTMLCanvasElement,
   host: HTMLElement,
@@ -118,35 +154,17 @@ export function draw(
   // Log mode floors at the smallest positive cell (0/negative -> transparent).
   const lo = logZ ? minPositive(p.zGrid) : p.zMin;
   const hi = p.zMax;
-  const stops = COLORMAPS[cmap];
 
-  // Offscreen nx×ny image, then one scaled blit (vertically flipped: image row 0
-  // is the top = max y).
+  // Offscreen nx×ny image (built pure), then one scaled blit.
   if (lo != null && hi != null && hi > lo) {
-    const nx = p.xAxis.length;
-    const ny = p.yAxis.length;
+    const { data, width: nx, height: ny } = buildHeatmapImage(p, lo, hi, logZ, cmap);
     const off = document.createElement("canvas");
     off.width = nx;
     off.height = ny;
     const octx = off.getContext("2d");
     if (octx) {
       const img = octx.createImageData(nx, ny);
-      for (let j = 0; j < ny; j++) {
-        for (let i = 0; i < nx; i++) {
-          const v = p.zGrid[j]?.[i];
-          const px = ((ny - 1 - j) * nx + i) * 4;
-          const t = v == null ? null : normalize(v, lo, hi, logZ);
-          if (t == null) {
-            img.data[px + 3] = 0;
-            continue;
-          }
-          const [r, g, b] = sampleColormap(stops, t);
-          img.data[px] = r;
-          img.data[px + 1] = g;
-          img.data[px + 2] = b;
-          img.data[px + 3] = 255;
-        }
-      }
+      img.data.set(data);
       octx.putImageData(img, 0, 0);
       // smooth = bilinear-interpolated heatmap; off = crisp pixel cells
       // (Preferences ▸ Plot ▸ Antialias). Crisp suits sparse RSM grids.

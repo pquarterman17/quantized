@@ -648,7 +648,15 @@ MATLAB."**
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
    Rigaku `.raw` 2-D RSM, polarized-asymmetry consolidated CSV.
-4. **Standing verification gap** — frontend uPlot/Canvas render modes (map,
-   multi-panel, inset, polar, RSM, baseline/region drag) + the new BG picker's
-   visible effect are unit-tested but visually unverified (jsdom can't render);
-   needs a human eyeball or browser automation.
+4. **Standing verification gap (partly closed 2026-06-30)** — the **2-D map
+   Canvas2D render is now pixel-verified**: `mapRender.buildHeatmapImage` (extracted
+   pure — colormap mapping, NaN→transparent gaps, vertical flip, log floor) has
+   exact-RGBA tests, and a **real-raster `draw()` test** runs the full pipeline
+   against an actual canvas (node-canvas backing jsdom) asserting a data-filled grid
+   paints the interior while an all-null grid stays transparent. `canvas` is an
+   **optional** dev dep + the raster test skips where it's absent, so CI stays green
+   without the native lib. **Still open:** the *uPlot interactive* surfaces
+   (1-D plot plugins/overlays, multi-panel, inset, polar, drag interactions) draw via
+   uPlot's own layout, which needs a real browser (Playwright) to verify — node-canvas
+   alone can't (jsdom has no layout so uPlot sizes to 0). That's the remaining
+   browser-automation task.
