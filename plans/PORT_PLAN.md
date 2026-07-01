@@ -612,6 +612,14 @@ MATLAB."**
   4 cells — hkl/multiplicity exact, d/2θ ~1e-12; `psFreeze`). Gate green (ruff + mypy +
   967 pytest). **W3 fitting is now fully ported** (only cross-panel/headless follow-ups
   remain in W4).
+- ~~**#24 Calculator cross-panel hooks**~~ (2026-06-30) — "send to" affordances between
+  the shared-state calculator tabs. **Crystal d → X-ray** (`sendDToXray`, d→2θ→Q),
+  **SLD formula → Crystal** cell-volume/density (`sendFormulaToCrystal`, molar-mass→cell-vol),
+  **Crystal formula+density → SLD** (`sendCellToSld`) — all pure in `useCalculators`.
+  **SLD → Reflectivity** crosses ToolWindows via a one-shot store bridge
+  (`useApp.reflectivitySeed` + `seedReflectivityLayer`); `useReflectivity` consumes it
+  as a manual-SLD layer above the substrate. Frontend-only; gate green (602 tests + build).
+  Advances #24's "cross-panel data hand-off contract" (headless-API equivalent still open).
 
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to

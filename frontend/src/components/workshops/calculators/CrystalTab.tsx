@@ -78,8 +78,18 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
         </Button>
       </div>
       {c.crResult && !c.crError && (
-        <div style={{ marginTop: 10, fontFamily: "var(--font-mono)", fontSize: "var(--font-size-lg)" }}>
-          d = {fmtNum(c.crResult.d)} <span style={{ color: "var(--text-dim)" }}>Å</span>
+        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-lg)" }}>
+            d = {fmtNum(c.crResult.d)} <span style={{ color: "var(--text-dim)" }}>Å</span>
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={c.sendDToXray}
+            title="Use this d in the X-ray tab (d → 2θ → Q)"
+          >
+            → X-ray
+          </Button>
         </div>
       )}
       {c.crError && (
@@ -117,9 +127,21 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
             V = {fmtNum(c.cellResult.volume)} <span style={{ color: "var(--text-dim)" }}>Å³</span>
           </div>
           {c.cellResult.density != null && (
-            <div style={{ marginTop: 4, color: "var(--text-dim)" }}>
-              ρ = {fmtNum(c.cellResult.density)} g/cm³
-              {c.cellResult.molar_mass != null && <> · M = {fmtNum(c.cellResult.molar_mass)} g/mol</>}
+            <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ color: "var(--text-dim)" }}>
+                ρ = {fmtNum(c.cellResult.density)} g/cm³
+                {c.cellResult.molar_mass != null && (
+                  <> · M = {fmtNum(c.cellResult.molar_mass)} g/mol</>
+                )}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={c.sendCellToSld}
+                title="Use this formula + theoretical density in the SLD tab"
+              >
+                → SLD
+              </Button>
             </div>
           )}
         </div>

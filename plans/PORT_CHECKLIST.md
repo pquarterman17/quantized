@@ -196,7 +196,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 
 ### Meta panels (frontend, W7)
 - [x] History — `buildHistoryTab` · Favorites — `buildFavoritesTab` · Home — `buildHomeTab` — `store/calcHistory.ts` (persisted to `qz.calcHistory`: history cap 100 + favorites cap 50) + Home/History/Favorites tabs in a "Session" group; every calculator tab records on success via `useCalcHistory.record(...)`. Commit `ba5ce80`.
-- [ ] Cross-panel hooks (d→Q, molar-mass→cell-vol, SLD→reflectivity) — follow-up: wire "send to" affordances between the shared-state tabs (Crystal/X-ray/SLD live in `useCalculators`, so feasible there).
+- [x] Cross-panel hooks (d→Q, molar-mass→cell-vol, SLD→reflectivity) — **shipped**: "send to" affordances between the shared-state tabs. **Crystal d → X-ray** (`sendDToXray`: seeds the d→2θ conversion; 2θ→Q one more click), **SLD formula → Crystal** (`sendFormulaToCrystal`: the material's molar mass feeds cell-vol/theoretical-density), **Crystal formula+density → SLD** (`sendCellToSld`: use the crystallographic density in the SLD calc) — all pure in `useCalculators` (no store coupling). **SLD → Reflectivity** crosses ToolWindows via a one-shot store bridge (`useApp.reflectivitySeed` + `seedReflectivityLayer`/`clearReflectivitySeed`): the SLD tab's `→ Reflectivity (n)/(x)` buttons convert the probe SLD (×10⁻⁶ Å⁻² → Å⁻²) and open the reflectivity workshop, which consumes the seed on an effect and inserts a manual-SLD film above the substrate. Frontend-only (ghost buttons on the result rows); tested in `useCalculators.test.ts` (3 hooks + no-op guards), `useReflectivity.test.ts` (seed consumption), `useApp.test.ts` (seed store action). Gate green (602 frontend tests + build).
 - [ ] Headless API equivalent
 
 ---

@@ -22,7 +22,7 @@ const PRESETS: SldPreset[] = [
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(reflPresets).mockResolvedValue({ presets: PRESETS });
-  useApp.setState({ datasets: [], activeId: null, status: "" });
+  useApp.setState({ datasets: [], activeId: null, status: "", reflectivitySeed: null });
 });
 
 async function mountLoaded() {
@@ -111,6 +111,24 @@ describe("useReflectivity", () => {
     expect(result.current.layers).toHaveLength(2);
     act(() => result.current.removeLayer(0)); // would drop below 2 → ignored
     expect(result.current.layers).toHaveLength(2);
+  });
+
+  it("consumes an SLD seed from the calculator as a manual layer above the substrate", async () => {
+    const { result } = await mountLoaded();
+    expect(result.current.layers).toHaveLength(3);
+
+    act(() => {
+      useApp.getState().seedReflectivityLayer({ sld: 3.47e-6, label: "SiO2 neutron" });
+    });
+
+    await waitFor(() => expect(result.current.layers).toHaveLength(4));
+    const inserted = result.current.layers[2]; // just above the substrate
+    expect(inserted.preset).toBe(""); // manual SLD
+    expect(inserted.sld).toBe(3.47e-6);
+    expect(result.current.layers[3].preset).toBe("Silicon"); // substrate still last
+    // the one-shot seed is cleared, and a status line records the provenance
+    expect(useApp.getState().reflectivitySeed).toBeNull();
+    expect(useApp.getState().status).toContain("SiO2 neutron");
   });
 
   it("surfaces a simulation error without adding a dataset", async () => {

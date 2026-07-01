@@ -65,6 +65,8 @@ function layerSld(row: ModelLayer, presets: SldPreset[], radiation: Radiation): 
 export function useReflectivity(): ReflectivityState {
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
+  const reflectivitySeed = useApp((s) => s.reflectivitySeed);
+  const clearReflectivitySeed = useApp((s) => s.clearReflectivitySeed);
   const [presets, setPresets] = useState<SldPreset[]>([]);
   const [layers, setLayers] = useState<ModelLayer[]>(DEFAULT_LAYERS);
   const [radiation, setRadiation] = useState<Radiation>("xray");
@@ -85,6 +87,19 @@ export function useReflectivity(): ReflectivityState {
       cancelled = true;
     };
   }, []);
+
+  // Cross-panel hook: consume a one-shot SLD seed from the calculators SLD tab,
+  // inserting it as a manual-SLD film just above the substrate, then clear it.
+  useEffect(() => {
+    if (!reflectivitySeed) return;
+    const { sld, label } = reflectivitySeed;
+    setLayers((ls) => {
+      const film: ModelLayer = { preset: "", thickness: 50, roughness: 3, sld };
+      return [...ls.slice(0, -1), film, ls[ls.length - 1]];
+    });
+    setStatus(`added ${label ?? "calculated"} SLD layer from the SLD calculator`);
+    clearReflectivitySeed();
+  }, [reflectivitySeed, clearReflectivitySeed, setStatus]);
 
   // [thickness, sld_real, sld_imag, roughness] rows for the API. X-ray carries
   // the preset's imaginary SLD (absorption); neutron treats it as ~0.

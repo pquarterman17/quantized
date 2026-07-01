@@ -19,6 +19,22 @@ beforeEach(() => {
   useApp.setState({ datasets: [], activeId: null, status: "" });
 });
 
+describe("useApp reflectivity seed (SLD→reflectivity hook)", () => {
+  beforeEach(() => useApp.setState({ reflectivitySeed: null, reflectivityOpen: false }));
+
+  it("seedReflectivityLayer stores the seed and opens the workshop", () => {
+    useApp.getState().seedReflectivityLayer({ sld: 3.47e-6, label: "SiO2 neutron" });
+    expect(useApp.getState().reflectivitySeed).toEqual({ sld: 3.47e-6, label: "SiO2 neutron" });
+    expect(useApp.getState().reflectivityOpen).toBe(true);
+  });
+
+  it("clearReflectivitySeed removes the pending seed", () => {
+    useApp.getState().seedReflectivityLayer({ sld: 1e-6 });
+    useApp.getState().clearReflectivitySeed();
+    expect(useApp.getState().reflectivitySeed).toBeNull();
+  });
+});
+
 describe("useApp corrections", () => {
   it("applies params to raw and replaces displayed data", async () => {
     const corrected: DataStruct = { ...raw, values: [[5], [15], [25]] };
