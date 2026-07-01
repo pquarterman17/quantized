@@ -711,6 +711,10 @@ function freeze_calc_values()
     %   vector-valued, and single-input cases (MC is RNG-based → invariant-tested).
     writeJson(errPropFreeze(), fullfile(goldenDir, 'calc_errorprop.json'));
 
+    % ── planeSpacings: allowed reflections (hkl/d/2theta/multiplicity/system) ─
+    %   across centering rules + crystal-system inference (Pawley dependency).
+    writeJson(psFreeze(), fullfile(goldenDir, 'calc_planespacings.json'));
+
     fprintf('Done.\n');
 end
 
@@ -1171,4 +1175,26 @@ end
 function p = packEP(r)
     p = struct('value', r.value(:).', 'error', r.error(:).', ...
         'relError', r.relError(:).', 'partials', r.partials(:).');
+end
+
+% ════════════════════════════════════════════════════════════════════════
+%  planeSpacings freeze (calc.crystal.planeSpacings reflection lists)
+% ════════════════════════════════════════════════════════════════════════
+function out = psFreeze()
+    % Deterministic reflection enumeration across centering rules + systems.
+    out = struct();
+    out.fcc    = packPS(calc.crystal.planeSpacings(5.4307, ...
+        Centering='F', MaxHKL=4, Lambda=1.5406));            % cubic, F-centering
+    out.bcc    = packPS(calc.crystal.planeSpacings(2.867, ...
+        Centering='I', MaxHKL=3, Lambda=1.5406));            % cubic, I-centering
+    out.tetrag = packPS(calc.crystal.planeSpacings(3.905, ...
+        c=3.95, Centering='P', MaxHKL=2, Lambda=1.5406));    % tetragonal
+    out.hex    = packPS(calc.crystal.planeSpacings(4.758, ...
+        c=12.991, gamma=120, Centering='P', MaxHKL=3, Lambda=1.5406));  % hexagonal
+end
+
+function p = packPS(r)
+    p = struct('hkl', r.hkl, 'd', r.d(:).', 'twoTheta', r.twoTheta(:).', ...
+        'multiplicity', r.multiplicity(:).', 'centering', r.centering, ...
+        'system', r.system, 'lambda', r.lambda, 'nReflections', r.nReflections);
 end

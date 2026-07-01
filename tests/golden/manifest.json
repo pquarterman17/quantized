@@ -240,6 +240,13 @@
       "rtol": 1e-12,
       "atol": 1e-12
     },
+    "calc_planespacings": {
+      "matlab_fn": "calc.crystal.planeSpacings (allowed-reflection lists for 4 cells: FCC a=5.4307 Centering=F, BCC a=2.867 Centering=I, tetragonal a=3.905 c=3.95, hexagonal a=4.758 c=12.991 gamma=120; Cu Kalpha1)",
+      "python_fn": "quantized.calc.crystallography.plane_spacings",
+      "note": "hkl enumeration + centering absence rules (P/F/I/A/B/C/R) + round(d,8) grouping + canonical-rep tie-break (sortrows[nNegs,-sum,|hkl|]) + crystal-system inference. hkl/multiplicity exact; d/2theta ~1e-12 (identical triclinic tensor form as d_spacing). Pawley dependency. Freeze via freeze_calc_values.m (psFreeze).",
+      "rtol": 1e-9,
+      "atol": 1e-12
+    },
     "calc_batchfit": {
       "matlab_fn": "fitting.batchFit (Exponential Decay across 4 datasets, auto-guess + bounds)",
       "python_fn": "quantized.calc.batch_fit.batch_fit",

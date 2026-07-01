@@ -7,7 +7,7 @@ the codebase never accretes the god-scripts the MATLAB original did.
 
 **Status:** Active
 **Created:** 2026-06-21
-**Updated:** 2026-06-27
+**Updated:** 2026-06-30
 
 ---
 
@@ -596,6 +596,22 @@ MATLAB."**
   entries ignored, newly-plotted channels append in natural order; the style/label/error/
   hidden mappings (all keyed by `plotted[i]`) follow for free. Gates green (frontend 315 +
   build).
+
+### Session 2026-06-30 (W3 fitting workstream closed)
+
+- ~~**#23 MCMC sampling + Pawley refinement**~~ (2026-06-30) — the last two open
+  W3 fitting items. **MCMC** (`fitting.mcmcSample` → `calc/mcmc.py`): single-chain
+  random-walk Metropolis (Gaussian proposal, burn-in/thin, FFT-autocorrelation ESS);
+  RNG-based → invariant-tested (mean recovery, accept-rate band, seeded
+  reproducibility), mirroring the MATLAB scaffold's own test design. **Pawley**
+  (`fitting.pawleyRefine` → `calc/pawley.py`): adaptive grid-search cell refinement +
+  per-trial pseudo-Voigt/linear-bg least-squares + Rwp; invariant-tested (perturbed Si
+  cell recovers <0.02 Å). Its dependency **`plane_spacings`** (`calc.crystal.planeSpacings`
+  → `calc/crystallography.plane_spacings`: hkl enumeration + centering absences + system
+  inference) was ported and **golden-verified** vs MATLAB (`calc_planespacings.json`,
+  4 cells — hkl/multiplicity exact, d/2θ ~1e-12; `psFreeze`). Gate green (ruff + mypy +
+  967 pytest). **W3 fitting is now fully ported** (only cross-panel/headless follow-ups
+  remain in W4).
 
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to
