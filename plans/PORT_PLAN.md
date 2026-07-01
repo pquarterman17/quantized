@@ -619,7 +619,14 @@ MATLAB."**
   **SLD → Reflectivity** crosses ToolWindows via a one-shot store bridge
   (`useApp.reflectivitySeed` + `seedReflectivityLayer`); `useReflectivity` consumes it
   as a manual-SLD layer above the substrate. Frontend-only; gate green (602 tests + build).
-  Advances #24's "cross-panel data hand-off contract" (headless-API equivalent still open).
+  Advances #24's "cross-panel data hand-off contract".
+- ~~**#24 Headless calculator API**~~ (2026-06-30) — the scripting analogue of MATLAB
+  `api = DiraCulator()`. `calc/registry.py` (pure): a curated name→pure-function catalog
+  (89 ops / 16 domains) with `list_calculators`/`describe_calculator`/`call_calculator`;
+  thin `routes/calc.py` (`/api/calc/catalog|describe|call`, numpy-safe). Tests +
+  gate green (985 pytest). **Closes W4 #24** (calc framework: pure fns + registry +
+  cross-panel hand-off + headless API all done); only the calculator meta-panel
+  cross-panel *frontend* niceties remain optional.
 
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to
