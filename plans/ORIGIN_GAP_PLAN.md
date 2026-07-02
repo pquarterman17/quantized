@@ -407,14 +407,6 @@ an exported figure in Illustrator or a script, that's a W3 bug.)*
     contour polygons via d3-contour (ISC) over the gridded MapData,
     level count/spacing (lin/log) in the Inspector 2-D card.*
 
-18. **RSM/heatmap line-profile extractor** — drag a cut line on the 2-D
-    map viewer → extracted cross-section lands as a 1-D dataset
-    *Model: sonnet. Pickup: `Stage/mapRender.ts` hitTest + the ruler
-    tool show the interaction pattern; sample along the cut with
-    `calc/interp2d.py` (N points ≈ pixel length of the cut); result =
-    DataStruct (distance, intensity + endpoint metadata) in the
-    library, so it plots/fits/exports like any scan.*
-
 ### Tier 2 — Medium Impact
 
 19. **3D static export** — matplotlib 3-D surface / scatter / waterfall
@@ -686,16 +678,22 @@ the same field names.)*
           `import_xrdml`, CI-regression-tested via a BOM'd fixture in
           `test_io_xrdml.py`); full-sweep realdata test added
           (`test_corpus_xrdml_full_sweep`)
-    - [ ] **Schema-1.0 RSMs flatten to 1-D** (`xrdtools_rsm_point`,
-          76 Omega-2Theta rows): `_build_2d` mesh detection only
-          recognizes the schema-1.3 scanning-line layout
-    - [ ] **Schema-2.x area RSMs flatten to 1-D** (`m3learning_rsm`,
-          PIXcel3D "Scanning snapshot equatorial", 1827 scans,
-          465,885 points as one column): needs the schema-2.x layout —
-          raw `<counts>`, per-scan `<commonCountingTime>`,
-          `areaDetectorType` — mapped into the RSM path
+    - [x] **Schema-1.0 coupled RSMs** (2026-07-01) — `_classify_cloud`
+          detects the coupled Omega-2Theta layout (ω sweeps within each
+          scan, stepped offset across scans) → `mesh_kind="coupled"`
+          with true per-pixel ω; synthetic-XML + realdata tested
+    - [x] **Schema-2.x area RSMs** (2026-07-01) — snapshot layout
+          (ω fixed per frame, 2θ window also stepping) →
+          `mesh_kind="snapshot"` scattered cloud; the PIXcel3D
+          m3learning file now imports [1827×255] with Qx/Qz and renders
+          through `/api/plot/map`. NOTE: goes BEYOND MATLAB — the
+          reference's `ttSame` check rejects both of these layouts
     - [ ] Pole figures (Phi scans × Psi steps) import flat; decide a
           representation (2-D map vs multi-column)
+    - [ ] 2-D golden freeze vs MATLAB `importXRDML` (mesh kind only —
+          MATLAB has no snapshot/coupled to freeze against) + the
+          beam-attenuation port (tracked on PORT_CHECKLIST, in
+          progress separately)
 
 ### Tier 3 — Nice-to-Have
 
@@ -784,6 +782,18 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#18 RSM line cuts (full linescan layer)**~~ (2026-07-01) —
+  `calc/linecut.py` ports + extends MATLAB `extract2DLineCut.m`:
+  H/V cuts (width=0 = MATLAB's nearest-line; width>0 averages a swath),
+  arbitrary segment cuts (any angle, distance-parametrized, optional
+  perpendicular averaging), integrated projections (Σframes matches
+  MATLAB's integrated fallback), all in angular OR Q space, all
+  returning library-ready 1-D DataStructs. 3 thin `/api/rsm/*` routes.
+  UI: map-toolbar cut tools (─ │ ∕ Σx Σy + width field, drag preview
+  line) via `Stage/useMapCuts` + pure `lib/mapcuts` (unit-tested);
+  jsdom can't drive the canvas, so the gesture math is logic-tested and
+  the interaction needs a human eyeball (same caveat as the region
+  tool). E2E verified on the real PIXcel3D area file through the API.
 - ~~**#27 (core) Multiple regression + correlation matrices**~~
   (2026-07-01) — `calc/stats_multivar.py`: `multiple_regression`
   (intercept + k predictors, SE/t/p/CI/R²/F, listwise NaN deletion;

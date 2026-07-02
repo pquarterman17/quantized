@@ -75,3 +75,52 @@ def test_analyze_rejects_non_rsm_dataset() -> None:
     }
     resp = client.post("/api/rsm/analyze", json={"dataset": plain})
     assert resp.status_code == 422
+
+
+def _rsm_dataset() -> dict:
+    """The committed synthetic RSM fixture, parsed then serialized for the wire."""
+    from pathlib import Path
+
+    from quantized.io.xrdml import import_xrdml
+    from quantized.routes._payload import datastruct_payload
+
+    fx = Path(__file__).parent / "fixtures" / "xrdml_rsm_synthetic.xrdml"
+    return datastruct_payload(import_xrdml(fx))
+
+
+def test_linecut_roundtrip() -> None:
+    ds = _rsm_dataset()
+    omega0 = ds["values"][0][1]
+    resp = client.post(
+        "/api/rsm/linecut",
+        json={"dataset": ds, "direction": "h", "value": omega0, "space": "angular"},
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["labels"] == ["Intensity"]
+    assert "H-cut" in out["metadata"]["cut_label"]
+    assert len(out["time"]) == ds["metadata"]["map_shape"][1]
+
+
+def test_cut_segment_roundtrip_and_422() -> None:
+    ds = _rsm_dataset()
+    resp = client.post(
+        "/api/rsm/cut-segment",
+        json={"dataset": ds, "p0": [60.2, 30.1], "p1": [61.8, 30.9], "n": 40},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["metadata"]["x_column_name"] == "Distance"
+
+    bad = client.post(
+        "/api/rsm/cut-segment",
+        json={"dataset": ds, "p0": [60.0, 30.0], "p1": [60.0, 30.0]},
+    )
+    assert bad.status_code == 422
+
+
+def test_projection_roundtrip() -> None:
+    ds = _rsm_dataset()
+    resp = client.post("/api/rsm/projection", json={"dataset": ds, "axis": "frames"})
+    assert resp.status_code == 200
+    out = resp.json()
+    assert len(out["time"]) == ds["metadata"]["map_shape"][0]

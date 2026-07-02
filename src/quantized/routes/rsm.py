@@ -7,10 +7,11 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from quantized.calc.linecut import cut_segment, line_cut, projection
 from quantized.calc.rsm import rsm_strain
 from quantized.calc.rsm_analyze import rsm_analyze, rsm_grids_from_datastruct
 from quantized.datastruct import DataStruct
-from quantized.routes._payload import to_jsonable
+from quantized.routes._payload import datastruct_payload, to_jsonable
 
 router = APIRouter(prefix="/api/rsm", tags=["rsm"])
 
@@ -69,3 +70,67 @@ def analyze(req: AnalyzeRequest) -> dict[str, Any]:
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return to_jsonable(result)  # type: ignore[no-any-return]
+
+
+class LineCutRequest(BaseModel):
+    """Fixed-axis cut through a 2-D map dataset (H/V, angular or Q space)."""
+
+    dataset: dict[str, Any]
+    direction: str  # "h" | "v"
+    value: float
+    space: str = "angular"
+    width: float = Field(default=0.0, ge=0.0)
+
+
+@router.post("/linecut")
+def linecut(req: LineCutRequest) -> dict[str, Any]:
+    """H/V line cut -> a 1-D DataStruct (width>0 averages a swath)."""
+    try:
+        ds = DataStruct.from_dict(req.dataset)
+        out = line_cut(
+            ds, direction=req.direction, value=req.value, space=req.space, width=req.width
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return datastruct_payload(out)
+
+
+class CutSegmentRequest(BaseModel):
+    """Arbitrary straight cut p0 -> p1 through the scattered 2-D cloud."""
+
+    dataset: dict[str, Any]
+    p0: tuple[float, float]
+    p1: tuple[float, float]
+    n: int = Field(default=200, ge=2, le=1_000_000)
+    width: float = Field(default=0.0, ge=0.0)
+    space: str = "angular"
+
+
+@router.post("/cut-segment")
+def cut_segment_route(req: CutSegmentRequest) -> dict[str, Any]:
+    """Arbitrary-angle segment cut -> a distance-parametrized 1-D DataStruct."""
+    try:
+        ds = DataStruct.from_dict(req.dataset)
+        out = cut_segment(ds, p0=req.p0, p1=req.p1, n=req.n, width=req.width, space=req.space)
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return datastruct_payload(out)
+
+
+class ProjectionRequest(BaseModel):
+    """Integrate the whole map onto one axis."""
+
+    dataset: dict[str, Any]
+    axis: str = "pixels"  # "pixels" (I vs 2theta) | "frames" (I vs omega)
+    space: str = "angular"
+
+
+@router.post("/projection")
+def projection_route(req: ProjectionRequest) -> dict[str, Any]:
+    """Full-map integrated profile -> a 1-D DataStruct."""
+    try:
+        ds = DataStruct.from_dict(req.dataset)
+        out = projection(ds, axis=req.axis, space=req.space)
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return datastruct_payload(out)

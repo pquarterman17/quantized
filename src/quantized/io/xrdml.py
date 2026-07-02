@@ -5,14 +5,24 @@
 ``commonCountingTime`` to cps (the default). Multi-scan files concatenate
 Completed scans in appendNumber order. Returns ``[Intensity]`` vs 2theta.
 
-**2D area-detector (RSM)**: a reciprocal-space-map mesh — many Completed scans
-that share the same 2theta range while a secondary motor (Omega / Chi / Phi)
-steps between them. Detected automatically; returned as a *scattered* multi-
-column DataStruct so the 2-D map viewer (``calc/map``) can render it: columns
-``[2Theta, <axis1>, Intensity]`` plus ``[Qx, Qz]`` reciprocal-space coordinates
-when the secondary axis is Omega and a wavelength is present
-(``calc.qspace.compute_qspace``). ``metadata.is2D`` / ``map_shape`` record the
-``(N_frames, M_pixels)`` grid so a consumer can reshape without re-interpolating.
+**2D area-detector (RSM)** — three layouts, detected automatically and all
+returned as a *scattered* multi-column DataStruct (``[2Theta, <axis1>,
+Intensity]`` + ``[Qx, Qz]`` when the secondary axis is Omega and a wavelength
+is present) so the 2-D map viewer (``calc/map``) can render any of them.
+``metadata.is2D`` / ``map_shape`` record the ``(N_frames, M_pixels)`` index
+grid; ``metadata.mesh_kind`` records the layout:
+
+- ``"mesh"`` — the classic scanning-line RSM (schema 1.3): every scan shares
+  one 2theta range while a secondary motor (Omega / Chi / Phi) is fixed per
+  scan and steps between scans. (This is the only layout the MATLAB reference
+  detects; its output is byte-compatible here.)
+- ``"snapshot"`` — PIXcel3D-style area snapshots (schema 2.x, e.g. "Scanning
+  snapshot equatorial"): the secondary motor is fixed per scan, but the
+  2theta window ALSO moves scan-to-scan, so there is no shared 2theta vector
+  — each frame contributes its own 2theta pixels at its omega.
+- ``"coupled"`` — schema-1.0-era RSMs: each scan is a coupled Omega-2Theta
+  sweep (omega varies WITHIN the scan) at a stepped omega offset; the point
+  cloud is a sheared mesh.
 """
 
 from __future__ import annotations
@@ -91,7 +101,7 @@ def _axis_positions(
 class _Scan:
     """Per-scan data collected during the parse (1D concat + 2D classification)."""
 
-    __slots__ = ("tt_range", "tt_list", "counts", "sec_value")
+    __slots__ = ("tt_range", "tt_list", "counts", "sec_value", "sec_ranges")
 
     def __init__(
         self,
@@ -99,11 +109,29 @@ class _Scan:
         tt_list: NDArray[np.float64] | None,
         counts: NDArray[np.float64],
         sec_value: float,
+        sec_ranges: dict[str, tuple[float, float]],
     ) -> None:
         self.tt_range = tt_range
         self.tt_list = tt_list
         self.counts = counts
         self.sec_value = sec_value
+        # (start, end) per present secondary axis — start == end means the
+        # axis was held fixed for this scan.
+        self.sec_ranges = sec_ranges
+
+    def two_theta(self) -> NDArray[np.float64]:
+        """This scan's per-pixel 2theta vector (listPositions or linspace)."""
+        if self.tt_list is not None and self.tt_list.size == self.counts.size:
+            return self.tt_list
+        return np.linspace(self.tt_range[0], self.tt_range[1], self.counts.size)
+
+    def axis_vector(self, axis: str) -> NDArray[np.float64]:
+        """The secondary axis as a per-pixel vector: constant when fixed,
+        linspace(start, end) when the axis moved during the scan (coupled)."""
+        start, end = self.sec_ranges[axis]
+        if start == end:
+            return np.full(self.counts.size, start)
+        return np.linspace(start, end, self.counts.size)
 
 
 def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
@@ -161,21 +189,27 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
         if tt_range is None:
             continue
 
-        # Secondary axis: discover (first scan) which of Omega/Chi/Phi is held
-        # fixed within the scan (range start == end), then read it on every scan.
+        # Secondary axes: record every present Omega/Chi/Phi range for the 2-D
+        # classification. sec_name keeps the MATLAB-compatible behaviour
+        # (first axis found fixed within a scan) for the classic-mesh path.
+        sec_ranges: dict[str, tuple[float, float]] = {}
+        for axis in _SECONDARY_AXES:
+            rng, _ = _axis_positions(dp, axis)
+            if rng is not None:
+                sec_ranges[axis] = rng
         if sec_name is None:
             for axis in _SECONDARY_AXES:
-                rng, _ = _axis_positions(dp, axis)
-                if rng is not None and rng[0] == rng[1]:
+                rng2 = sec_ranges.get(axis)
+                if rng2 is not None and rng2[0] == rng2[1]:
                     sec_name = axis
                     break
         sec_value = float("nan")
         if sec_name is not None:
-            rng, _ = _axis_positions(dp, sec_name)
-            if rng is not None and rng[0] == rng[1]:
-                sec_value = rng[0]
+            rng3 = sec_ranges.get(sec_name)
+            if rng3 is not None and rng3[0] == rng3[1]:
+                sec_value = rng3[0]
 
-        collected.append(_Scan(tt_range, tt_list, counts, sec_value))
+        collected.append(_Scan(tt_range, tt_list, counts, sec_value, sec_ranges))
 
     if not collected:
         raise ValueError(f"no Completed scan data in {path.name}")
@@ -199,6 +233,11 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
         assert sec_name is not None  # guaranteed by _is_2d
         return _build_2d(collected, sec_name, path, intensity, counting_time,
                          wavelength, intensity_tag)
+    cloud = _classify_cloud(collected)
+    if cloud is not None:
+        cloud_axis, mesh_kind = cloud
+        return _build_2d_cloud(collected, cloud_axis, mesh_kind, path, intensity,
+                               counting_time, wavelength, intensity_tag)
     return _build_1d(collected, path, intensity, counting_time, intensity_tag)
 
 
@@ -215,6 +254,114 @@ def _is_2d(scans: list[_Scan], sec_name: str | None) -> bool:
         return False
     sec_varies = (max(sec_vals) - min(sec_vals)) > 1e-6
     return tt_same and sec_varies
+
+
+def _classify_cloud(scans: list[_Scan]) -> tuple[str, str] | None:
+    """Generalized 2-D detection BEYOND the MATLAB-compatible mesh (`_is_2d`).
+
+    Returns ``(axis, kind)`` or ``None``. Tried only after `_is_2d` fails, so
+    reaching the snapshot branch implies the per-scan 2theta windows differ.
+    Requires >= 3 scans (a 2-range 1-D file must never classify as a map).
+
+    - ``snapshot``: an axis held fixed within EVERY scan whose value varies
+      across scans (PIXcel3D "Scanning snapshot": omega fixed per frame while
+      both omega and the 2theta window step frame-to-frame).
+    - ``coupled``: all scans share one 2theta window while an axis sweeps
+      WITHIN each scan (start != end) at a stepped offset across scans
+      (schema-1.0 Omega-2Theta RSMs — a sheared mesh).
+    """
+    if len(scans) < 3:
+        return None
+    for axis in _SECONDARY_AXES:
+        ranges = [s.sec_ranges.get(axis) for s in scans]
+        if any(r is None for r in ranges):
+            continue
+        rr = [r for r in ranges if r is not None]  # narrow for the type checker
+        if all(r[0] == r[1] for r in rr):
+            vals = [r[0] for r in rr]
+            if max(vals) - min(vals) > 1e-6:
+                return axis, "snapshot"
+    s0, e0 = scans[0].tt_range
+    tt_same = all(
+        abs(s.tt_range[0] - s0) < 1e-4 and abs(s.tt_range[1] - e0) < 1e-4 for s in scans
+    )
+    if tt_same:
+        for axis in _SECONDARY_AXES:
+            ranges = [s.sec_ranges.get(axis) for s in scans]
+            if any(r is None for r in ranges):
+                continue
+            rr = [r for r in ranges if r is not None]
+            if all(r[0] != r[1] for r in rr):
+                mids = [0.5 * (r[0] + r[1]) for r in rr]
+                if max(mids) - min(mids) > 1e-6:
+                    return axis, "coupled"
+    return None
+
+
+def _build_2d_cloud(
+    scans: list[_Scan],
+    sec_name: str,
+    mesh_kind: str,
+    path: Path,
+    intensity: str,
+    counting_time: float,
+    wavelength: float,
+    intensity_tag: str,
+) -> DataStruct:
+    """Assemble a generalized RSM point cloud (snapshot / coupled layouts).
+
+    Unlike `_build_2d` there is no shared 2theta vector: every scan contributes
+    its own per-pixel 2theta (and, for coupled scans, per-pixel omega), so the
+    output is a true scattered cloud. Same column schema as the mesh path.
+    """
+
+    def _mid(s: _Scan) -> float:
+        r = s.sec_ranges[sec_name]
+        return 0.5 * (r[0] + r[1])
+
+    order = sorted(range(len(scans)), key=lambda i: _mid(scans[i]))
+    tt = np.concatenate([scans[i].two_theta() for i in order])
+    sec = np.concatenate([scans[i].axis_vector(sec_name) for i in order])
+    counts = np.concatenate([scans[i].counts for i in order])
+
+    vals, unit = _apply_intensity(counts, intensity, counting_time)
+    columns = [tt, sec, np.asarray(vals, dtype=float)]
+    labels = ["2Theta", sec_name, "Intensity"]
+    units = ["deg", "deg", unit]
+    if sec_name == "Omega" and np.isfinite(wavelength) and wavelength > 0:
+        qx, qz = compute_qspace(tt, sec, wavelength)
+        columns += [np.asarray(qx, dtype=float).ravel(), np.asarray(qz, dtype=float).ravel()]
+        labels += ["Qx", "Qz"]
+        units += ["Ang^-1", "Ang^-1"]
+
+    pix_counts = {s.counts.size for s in scans}
+    n_pix = pix_counts.pop() if len(pix_counts) == 1 else None
+    values = np.column_stack(columns)
+    metadata: dict[str, Any] = {
+        "source": str(path),
+        "parser_name": "import_xrdml",
+        "x_column_name": "2-Theta",
+        "x_column_unit": "deg",
+        "num_points": int(values.shape[0]),
+        "counting_time": counting_time,
+        "intensity_tag": intensity_tag,
+        "is2D": True,
+        "mesh_kind": mesh_kind,
+        # Index grid (frames x pixels) only when every frame has the same
+        # pixel count; None = ragged cloud (grid cuts unavailable, scattered
+        # rendering + segment cuts still work).
+        "map_shape": [len(scans), int(n_pix)] if n_pix is not None else None,
+        "axis1_name": sec_name,
+        "axis2_name": "2Theta",
+        "wavelength_a": float(wavelength) if np.isfinite(wavelength) else None,
+    }
+    return DataStruct.create(
+        np.arange(values.shape[0], dtype=float),
+        values,
+        labels=labels,
+        units=units,
+        metadata=metadata,
+    )
 
 
 def _build_1d(
@@ -303,6 +450,7 @@ def _build_2d(
         "counting_time": counting_time,
         "intensity_tag": intensity_tag,
         "is2D": True,
+        "mesh_kind": "mesh",
         "map_shape": [int(n_frames), int(n_pixels)],
         "axis1_name": sec_name,
         "axis2_name": "2Theta",

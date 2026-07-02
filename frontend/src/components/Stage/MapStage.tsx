@@ -7,10 +7,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import { COLORMAPS, type ColormapName } from "../../lib/colormap";
+import { cutSpaceForKeys } from "../../lib/mapcuts";
 import { fetchMap, hasQSpace, rsmAxisKeys, type MapPayload } from "../../lib/mapdata";
 import { exportCanvasPng } from "../../lib/plotExport";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { draw, fmt, hitTest, type Readout } from "./mapRender";
+import { useMapCuts } from "./useMapCuts";
 
 export default function MapStage() {
   const active = useActiveDataset();
@@ -41,6 +43,19 @@ export default function MapStage() {
   const qAvailable = hasQSpace(labels) && angularKeys != null && qKeys != null;
   const keysAre = (t: [number, number, number] | null) =>
     t != null && t[0] === keys[0] && t[1] === keys[1] && t[2] === keys[2];
+
+  // Cut tool (H/V/segment cuts + projections -> 1-D datasets). Only meaningful
+  // on a 2-D map with the displayed axes on an RSM pair (2θ/ω or Qx/Qz).
+  const is2D = active?.data.metadata?.is2D === true;
+  const cutSpace = is2D
+    ? cutSpaceForKeys(keysAre(angularKeys), qAvailable && keysAre(qKeys))
+    : null;
+  // Fixed-axis cuts + projections need the regular (frames x pixels) grid;
+  // segment cuts interpolate the scattered cloud and work regardless.
+  const gridable = Array.isArray(active?.data.metadata?.map_shape);
+  const cuts = useMapCuts(active, cutSpace);
+  // Segment-drag state in canvas pixels (for the SVG preview line).
+  const [dragPx, setDragPx] = useState<{ a: [number, number]; b: [number, number] } | null>(null);
 
   // Reset the channel picks to 0/1/2 when the active dataset changes.
   useEffect(() => {
@@ -78,14 +93,45 @@ export default function MapStage() {
     // theme/accent in deps so the frame/axis ink recolors from fresh tokens.
   }, [payload, cmap, logZ, theme, accent, rsmPeaks, active, antialias]);
 
-  function onMove(ev: React.MouseEvent<HTMLCanvasElement>) {
-    if (!payload) return;
+  function hitAt(ev: React.MouseEvent<HTMLCanvasElement>): {
+    r: Readout | null;
+    px: [number, number];
+  } {
     const canvas = canvasRef.current;
     const host = hostRef.current;
-    if (!canvas || !host) return;
+    if (!payload || !canvas || !host) return { r: null, px: [0, 0] };
     const rect = canvas.getBoundingClientRect();
-    const r = hitTest(payload, host.clientWidth, host.clientHeight, ev.clientX - rect.left, ev.clientY - rect.top);
+    const px: [number, number] = [ev.clientX - rect.left, ev.clientY - rect.top];
+    return { r: hitTest(payload, host.clientWidth, host.clientHeight, px[0], px[1]), px };
+  }
+
+  function onMove(ev: React.MouseEvent<HTMLCanvasElement>) {
+    const { r, px } = hitAt(ev);
     setReadout(r);
+    if (dragPx) setDragPx({ a: dragPx.a, b: px });
+  }
+
+  function onClick(ev: React.MouseEvent<HTMLCanvasElement>) {
+    if (cuts.mode !== "h" && cuts.mode !== "v") return;
+    const { r } = hitAt(ev);
+    if (r) cuts.runLine(cuts.mode, { x: r.x, y: r.y });
+  }
+
+  function onDown(ev: React.MouseEvent<HTMLCanvasElement>) {
+    if (cuts.mode !== "seg") return;
+    const { r, px } = hitAt(ev);
+    if (r) setDragPx({ a: px, b: px });
+  }
+
+  function onUp(ev: React.MouseEvent<HTMLCanvasElement>) {
+    if (cuts.mode !== "seg" || !dragPx) return;
+    const canvas = canvasRef.current;
+    const host = hostRef.current;
+    setDragPx(null);
+    if (!payload || !canvas || !host) return;
+    const start = hitTest(payload, host.clientWidth, host.clientHeight, dragPx.a[0], dragPx.a[1]);
+    const { r: end } = hitAt(ev);
+    if (start && end) cuts.runSegment({ x: start.x, y: start.y }, { x: end.x, y: end.y });
   }
 
   function savePng() {
@@ -100,10 +146,34 @@ export default function MapStage() {
       <div ref={hostRef} style={{ position: "absolute", inset: 8 }}>
         <canvas
           ref={canvasRef}
-          style={{ width: "100%", height: "100%", display: "block" }}
+          style={{
+            width: "100%",
+            height: "100%",
+            display: "block",
+            cursor: cuts.mode === "off" ? "default" : "crosshair",
+          }}
           onMouseMove={onMove}
-          onMouseLeave={() => setReadout(null)}
+          onMouseLeave={() => {
+            setReadout(null);
+            setDragPx(null);
+          }}
+          onClick={onClick}
+          onMouseDown={onDown}
+          onMouseUp={onUp}
         />
+        {dragPx && (
+          <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} width="100%" height="100%">
+            <line
+              x1={dragPx.a[0]}
+              y1={dragPx.a[1]}
+              x2={dragPx.b[0]}
+              y2={dragPx.b[1]}
+              stroke="var(--accent)"
+              strokeWidth={1.5}
+              strokeDasharray="5 4"
+            />
+          </svg>
+        )}
       </div>
 
       {active && enoughChannels && (
@@ -156,6 +226,67 @@ export default function MapStage() {
           >
             log
           </button>
+          {cutSpace != null && (
+            <>
+              <span className="qzk-tool-sep" />
+              {gridable && (
+                <button
+                  className={`qzk-tool-btn${cuts.mode === "h" ? " active" : ""}`}
+                  title="H-cut: click the map → intensity vs the horizontal axis at that height (width averages a swath)"
+                  onClick={() => cuts.setMode(cuts.mode === "h" ? "off" : "h")}
+                >
+                  ─
+                </button>
+              )}
+              {gridable && (
+                <button
+                  className={`qzk-tool-btn${cuts.mode === "v" ? " active" : ""}`}
+                  title="V-cut: click the map → intensity vs the vertical axis at that position"
+                  onClick={() => cuts.setMode(cuts.mode === "v" ? "off" : "v")}
+                >
+                  │
+                </button>
+              )}
+              <button
+                className={`qzk-tool-btn${cuts.mode === "seg" ? " active" : ""}`}
+                title="Segment cut: drag any line across the map → distance-parametrized linescan"
+                onClick={() => cuts.setMode(cuts.mode === "seg" ? "off" : "seg")}
+              >
+                ∕
+              </button>
+              {gridable && (
+                <button
+                  className="qzk-tool-btn"
+                  title="Project the whole map onto the horizontal axis (Σ over frames)"
+                  onClick={() => cuts.runProjection("pixels")}
+                >
+                  Σx
+                </button>
+              )}
+              {gridable && (
+                <button
+                  className="qzk-tool-btn"
+                  title="Project the whole map onto the vertical axis (Σ over pixels — rocking-curve profile)"
+                  onClick={() => cuts.runProjection("frames")}
+                >
+                  Σy
+                </button>
+              )}
+              {cuts.mode !== "off" && (
+                <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }} title="Cut width: average all lines within ±width/2 (0 = single line)">
+                  w
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={cuts.width}
+                    onChange={(e) => cuts.setWidth(Math.max(0, Number(e.target.value) || 0))}
+                    style={{ width: 52 }}
+                  />
+                </label>
+              )}
+            </>
+          )}
           <span className="qzk-tool-sep" />
           <button className="qzk-tool-btn" title="Save map as PNG" onClick={savePng}>
             ⤓

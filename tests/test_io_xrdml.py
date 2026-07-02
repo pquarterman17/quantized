@@ -188,3 +188,90 @@ def test_bom_prefixed_file_parses(tmp_path: Path, fixtures_dir: Path) -> None:
     out = import_xrdml(bom)
     assert_allclose(out.values, ref.values)
     assert list(out.labels) == list(ref.labels)
+
+
+def _cloud_xrdml(scans: list[str]) -> str:
+    body = "\n".join(scans)
+    return f"""<?xml version="1.0"?>
+<xrdMeasurements xmlns="http://www.xrdml.com/XRDMeasurement/2.0" status="Completed">
+ <xrdMeasurement measurementType="Area measurement" status="Completed">
+  <usedWavelength intended="K-Alpha 1"><kAlpha1 unit="Angstrom">1.5406</kAlpha1></usedWavelength>
+  {body}
+ </xrdMeasurement>
+</xrdMeasurements>"""
+
+
+def _snapshot_scan(append: int, tt0: float, tt1: float, omega: float, counts: str) -> str:
+    return f"""<scan appendNumber="{append}" status="Completed" scanAxis="2Theta">
+   <dataPoints>
+    <positions axis="2Theta" unit="deg"><startPosition>{tt0}</startPosition>
+    <endPosition>{tt1}</endPosition></positions>
+    <positions axis="Omega" unit="deg"><commonPosition>{omega}</commonPosition></positions>
+    <commonCountingTime unit="seconds">1.0</commonCountingTime>
+    <counts unit="counts">{counts}</counts>
+   </dataPoints>
+  </scan>"""
+
+
+def _coupled_scan(append: int, om0: float, om1: float, counts: str) -> str:
+    return f"""<scan appendNumber="{append}" status="Completed" scanAxis="Omega-2Theta">
+   <dataPoints>
+    <positions axis="2Theta" unit="deg"><startPosition>40.0</startPosition>
+    <endPosition>42.0</endPosition></positions>
+    <positions axis="Omega" unit="deg"><startPosition>{om0}</startPosition>
+    <endPosition>{om1}</endPosition></positions>
+    <commonCountingTime unit="seconds">1.0</commonCountingTime>
+    <intensities unit="counts">{counts}</intensities>
+   </dataPoints>
+  </scan>"""
+
+
+def test_snapshot_cloud_detection(tmp_path: Path) -> None:
+    """PIXcel3D 'Scanning snapshot': omega fixed per frame, 2theta window ALSO
+    steps per frame (no shared 2theta range) -> mesh_kind='snapshot'. The
+    MATLAB reference does NOT detect this layout (its ttSame check fails)."""
+    scans = [
+        _snapshot_scan(i + 1, 40.0 + 0.1 * i, 41.0 + 0.1 * i, 20.0 + 0.05 * i, "1 2 3 4")
+        for i in range(4)
+    ]
+    p = tmp_path / "snapshot.xrdml"
+    p.write_text(_cloud_xrdml(scans))
+    ds = import_xrdml(p)
+    assert ds.metadata["is2D"] is True
+    assert ds.metadata["mesh_kind"] == "snapshot"
+    assert ds.metadata["map_shape"] == [4, 4]
+    assert list(ds.labels) == ["2Theta", "Omega", "Intensity", "Qx", "Qz"]
+    # each frame keeps its OWN 2theta window
+    tt = ds.column("2Theta").reshape(4, 4)
+    assert_allclose(tt[0], np.linspace(40.0, 41.0, 4))
+    assert_allclose(tt[3], np.linspace(40.3, 41.3, 4))
+    om = ds.column("Omega").reshape(4, 4)
+    assert_allclose(om[:, 0], [20.0, 20.05, 20.1, 20.15])
+
+
+def test_coupled_scan_detection(tmp_path: Path) -> None:
+    """Schema-1.0-style RSM: omega sweeps WITHIN each scan (coupled Omega-2Theta)
+    at a stepped offset -> mesh_kind='coupled', per-pixel omega ramps."""
+    scans = [_coupled_scan(i + 1, 19.0 + 0.1 * i, 21.0 + 0.1 * i, "5 6 7 8 9") for i in range(3)]
+    p = tmp_path / "coupled.xrdml"
+    p.write_text(_cloud_xrdml(scans))
+    ds = import_xrdml(p)
+    assert ds.metadata["is2D"] is True
+    assert ds.metadata["mesh_kind"] == "coupled"
+    assert ds.metadata["map_shape"] == [3, 5]
+    om = ds.column("Omega").reshape(3, 5)
+    assert_allclose(om[0], np.linspace(19.0, 21.0, 5))  # sweeps within the scan
+    assert_allclose(om[:, 0], [19.0, 19.1, 19.2])  # steps between scans
+
+
+def test_two_range_1d_file_is_not_a_cloud(tmp_path: Path) -> None:
+    """A 2-range 1-D file with distinct fixed omegas must stay 1-D (the cloud
+    classifier requires >= 3 scans)."""
+    scans = [
+        _snapshot_scan(1, 40.0, 41.0, 20.0, "1 2 3"),
+        _snapshot_scan(2, 41.0, 42.0, 20.5, "4 5 6"),
+    ]
+    p = tmp_path / "two_range.xrdml"
+    p.write_text(_cloud_xrdml(scans))
+    ds = import_xrdml(p)
+    assert ds.metadata["is2D"] is False

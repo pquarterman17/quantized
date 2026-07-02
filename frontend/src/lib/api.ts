@@ -1163,3 +1163,35 @@ export function reflSldProfile(body: {
 }): Promise<{ z: number[]; sld: (number | null)[] }> {
   return postJSON("/api/reflectivity/sld-profile", body);
 }
+
+/** H/V line cut through a 2-D map → a 1-D DataStruct (calc.linecut). */
+export function rsmLinecut(body: {
+  dataset: DataStruct;
+  direction: "h" | "v";
+  value: number;
+  space?: string;
+  width?: number;
+}): Promise<DataStruct> {
+  return postJSON("/api/rsm/linecut", body);
+}
+
+/** Arbitrary segment cut p0→p1 through the scattered 2-D cloud. */
+export function rsmCutSegment(body: {
+  dataset: DataStruct;
+  p0: [number, number];
+  p1: [number, number];
+  n?: number;
+  width?: number;
+  space?: string;
+}): Promise<DataStruct> {
+  return postJSON("/api/rsm/cut-segment", body);
+}
+
+/** Integrate the whole map onto one axis (Σframes → I vs 2θ, or Σpixels). */
+export function rsmProjection(body: {
+  dataset: DataStruct;
+  axis?: "pixels" | "frames";
+  space?: string;
+}): Promise<DataStruct> {
+  return postJSON("/api/rsm/projection", body);
+}
