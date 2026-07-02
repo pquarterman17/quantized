@@ -140,3 +140,16 @@ describe("parseWorkspace validation", () => {
     expect(parseWorkspace(JSON.stringify({ format: WORKSPACE_FORMAT, version: 1, datasets: [] }))).toEqual([]);
   });
 });
+
+describe("workspace channel modeling types", () => {
+  it("preserves per-dataset type overrides (filtering invalid entries)", () => {
+    const ds = makeDataset("a", "typed");
+    ds.channelTypes = { 0: "nominal", 1: "ordinal" };
+    const [restored] = parseWorkspace(serializeWorkspace([ds]));
+    expect(restored.channelTypes).toEqual({ 0: "nominal", 1: "ordinal" });
+    // Bad type values are dropped on parse.
+    const doc = JSON.parse(serializeWorkspace([ds]));
+    doc.datasets[0].channelTypes = { 0: "continuous", 2: "bogus" };
+    expect(parseWorkspace(JSON.stringify(doc))[0].channelTypes).toEqual({ 0: "continuous" });
+  });
+});

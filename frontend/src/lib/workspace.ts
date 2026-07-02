@@ -3,7 +3,14 @@
 // library (datasets live only in memory); this gives session persistence. Pure +
 // testable; the App wires it to Save/Open commands (download + file picker).
 
-import type { ChannelRole, ComputedColumn, CorrectionParams, Dataset, DataStruct } from "./types";
+import type {
+  ChannelRole,
+  ComputedColumn,
+  CorrectionParams,
+  Dataset,
+  DataStruct,
+  ModelingType,
+} from "./types";
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
 export const WORKSPACE_VERSION = 1;
@@ -34,6 +41,9 @@ export function serializeWorkspace(datasets: Dataset[]): string {
       ...(d.formulas?.length ? { formulas: d.formulas } : {}),
       ...(d.channelRoles && Object.keys(d.channelRoles).length
         ? { channelRoles: d.channelRoles }
+        : {}),
+      ...(d.channelTypes && Object.keys(d.channelTypes).length
+        ? { channelTypes: d.channelTypes }
         : {}),
     })),
   };
@@ -131,6 +141,18 @@ export function parseWorkspace(text: string): Dataset[] {
         }
       }
       if (Object.keys(roles).length) ds.channelRoles = roles;
+    }
+    if (dd.channelTypes && typeof dd.channelTypes === "object") {
+      const types: Record<number, ModelingType> = {};
+      for (const [k, v] of Object.entries(dd.channelTypes as Record<string, unknown>)) {
+        if (
+          (v === "continuous" || v === "ordinal" || v === "nominal") &&
+          Number.isInteger(Number(k))
+        ) {
+          types[Number(k)] = v;
+        }
+      }
+      if (Object.keys(types).length) ds.channelTypes = types;
     }
     return ds;
   });

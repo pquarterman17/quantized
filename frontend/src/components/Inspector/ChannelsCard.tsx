@@ -5,9 +5,13 @@
 // (R / dR / resolution) etc. legible. Analysis workshops still use the first
 // channel; this controls the plot only.
 
-import type { ChannelRole, Dataset } from "../../lib/types";
+import { channelModelingType } from "../../lib/modeling";
+import type { ChannelRole, Dataset, ModelingType } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { Card, Pill, Select, SliderRow } from "../primitives";
+
+/** Compact modeling-type tags for the per-channel select. */
+const TYPE_TAG: Record<ModelingType, string> = { continuous: "C", ordinal: "O", nominal: "N" };
 
 export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const xKey = useApp((s) => s.xKey);
@@ -19,6 +23,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const errKeys = useApp((s) => s.errKeys);
   const setErrKey = useApp((s) => s.setErrKey);
   const setChannelRole = useApp((s) => s.setChannelRole);
+  const setChannelType = useApp((s) => s.setChannelType);
   const waterfall = useApp((s) => s.waterfall);
   const setWaterfall = useApp((s) => s.setWaterfall);
 
@@ -101,6 +106,20 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
               {units[i] ? ` (${units[i]})` : ""}
             </label>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Select
+                style={{ maxWidth: 64 }}
+                value={active.channelTypes?.[i] ?? ""}
+                onChange={(e) =>
+                  setChannelType(i, e.target.value === "" ? null : (e.target.value as ModelingType))
+                }
+                title="Modeling type — what this column means. Continuous: a measurement axis · Ordinal: ordered levels · Nominal: categories. Auto = inferred from the values; drives categorical plotting (boxes/violins group by nominal columns)."
+                options={[
+                  { value: "", label: `auto·${TYPE_TAG[channelModelingType(active, i)]}` },
+                  { value: "continuous", label: "Cont" },
+                  { value: "ordinal", label: "Ord" },
+                  { value: "nominal", label: "Nom" },
+                ]}
+              />
               <Select
                 style={{ maxWidth: 78 }}
                 value={role ?? ""}

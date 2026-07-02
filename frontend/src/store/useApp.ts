@@ -13,6 +13,7 @@ import { is2DMap } from "../lib/mapdata";
 import { mergeDatasets } from "../lib/merge";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import type { FwhmResult } from "../lib/peakwidth";
+import { effectiveChannels } from "../lib/plotdata";
 import {
   addRecentEntry,
   clearRecentMeta,
@@ -30,6 +31,7 @@ import type {
   CorrectionParams,
   Dataset,
   FitOverlay,
+  ModelingType,
   PeakOverlay,
   RefLine,
   RsmPeak,
@@ -166,6 +168,7 @@ interface AppState {
   figureBuilderOpen: boolean;
   waterfallOpen: boolean;
   reflViewOpen: boolean;
+  columnSwitcherOpen: boolean; // the JMP-style solo-a-channel flipper (#54)
   shortcutsOpen: boolean;
   // Recent-imports history (File ▸ Recent); persisted via lib/recentFiles.
   recent: RecentFile[];
@@ -250,8 +253,12 @@ interface AppState {
   setSeriesLabel: (channel: number, label: string) => void;
   setErrKey: (channel: number, errChannel: number | null) => void;
   setChannelRole: (channel: number, role: ChannelRole | null) => void;
+  setChannelType: (channel: number, t: ModelingType | null) => void;
   setSeriesOrder: (order: number[] | null) => void;
   toggleHidden: (channel: number) => void;
+  // Solo one plotted channel (hide all others); null = show all. The column
+  // switcher's engine — kept in the store so it's testable.
+  soloChannel: (channel: number | null) => void;
   setWaterfall: (waterfall: number) => void;
   setPlotTool: (tool: PlotTool) => void;
   setRegionPicked: (range: [number, number] | null) => void;
@@ -271,6 +278,7 @@ interface AppState {
   setFigureBuilderOpen: (open: boolean) => void;
   setWaterfallOpen: (open: boolean) => void;
   setReflViewOpen: (open: boolean) => void;
+  setColumnSwitcherOpen: (open: boolean) => void;
   setShortcutsOpen: (open: boolean) => void;
   // Record a successful import in the recent list; clearRecent empties it.
   pushRecent: (name: string, size: number) => void;
@@ -467,6 +475,7 @@ export const useApp = create<AppState>((set, get) => ({
   figureBuilderOpen: false,
   waterfallOpen: false,
   reflViewOpen: false,
+  columnSwitcherOpen: false,
   shortcutsOpen: false,
   recent: loadRecent(),
   fitOverlay: null,
@@ -660,6 +669,7 @@ export const useApp = create<AppState>((set, get) => ({
         ...(src.group ? { group: src.group } : {}),
         ...(src.formulas?.length ? { formulas: src.formulas.map((f) => ({ ...f })) } : {}),
         ...(src.channelRoles ? { channelRoles: { ...src.channelRoles } } : {}),
+        ...(src.channelTypes ? { channelTypes: { ...src.channelTypes } } : {}),
       };
       const datasets = [...s.datasets];
       datasets.splice(idx + 1, 0, clone);
@@ -994,6 +1004,26 @@ export const useApp = create<AppState>((set, get) => ({
       `qz.setChannelRole(${channel}, ${lit(role)})`,
     );
   },
+  // Set (or clear, t=null) a modeling-type OVERRIDE on the ACTIVE dataset.
+  // Mirrors setChannelRole: overrides live on the dataset (persist across
+  // switches + round-trip .dwk); absent = auto-inference (lib/modeling).
+  setChannelType: (channel, t) => {
+    const id = get().activeId;
+    if (id == null) return;
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id) return d;
+        const next = { ...(d.channelTypes ?? {}) };
+        if (t == null) delete next[channel];
+        else next[channel] = t;
+        return { ...d, channelTypes: Object.keys(next).length ? next : undefined };
+      }),
+    }));
+    get().recordMacro(
+      `Channel ${channel} type → ${t ?? "auto"}`,
+      `qz.setChannelType(${channel}, ${lit(t)})`,
+    );
+  },
   // Persist an explicit plotted-channel draw order (a permutation of the current
   // plotted channels). effectiveChannels reorders by it; stale entries (channels
   // no longer plotted) are ignored and newly-plotted channels append in order.
@@ -1004,6 +1034,17 @@ export const useApp = create<AppState>((set, get) => ({
         ? s.hiddenChannels.filter((c) => c !== channel)
         : [...s.hiddenChannels, channel],
     })),
+  // Solo = hide every plotted channel except `channel` (the column switcher's
+  // engine). null clears. View state like toggleHidden — not macro-recorded.
+  soloChannel: (channel) =>
+    set((s) => {
+      if (channel == null) return { hiddenChannels: [] };
+      const ds = s.datasets.find((d) => d.id === s.activeId);
+      if (!ds) return {};
+      const plotted = effectiveChannels(ds.data, s.yKeys, s.xKey, ds.channelRoles, s.seriesOrder);
+      if (!plotted.includes(channel)) return {};
+      return { hiddenChannels: plotted.filter((c) => c !== channel) };
+    }),
   setWaterfall: (waterfall) => {
     set({ waterfall });
     get().recordMacro(`Waterfall → ${waterfall}`, `qz.setWaterfall(${waterfall})`);
@@ -1025,6 +1066,7 @@ export const useApp = create<AppState>((set, get) => ({
   setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
   setWaterfallOpen: (waterfallOpen) => set({ waterfallOpen }),
   setReflViewOpen: (reflViewOpen) => set({ reflViewOpen }),
+  setColumnSwitcherOpen: (columnSwitcherOpen) => set({ columnSwitcherOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   pushRecent: (name, size) =>
     set((s) => {

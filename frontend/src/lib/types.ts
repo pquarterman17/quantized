@@ -104,6 +104,11 @@ export interface Dataset {
    *  dataset (persist across dataset switches + round-trip .dwk), not in the
    *  transient view state. */
   channelRoles?: Record<number, ChannelRole>;
+  /** Per-channel modeling-type OVERRIDES (channel index → type). Only user
+   *  overrides are stored; absent channels use the auto-inference
+   *  (lib/modeling.channelModelingType). Lives on the dataset like
+   *  channelRoles: persists across switches + round-trips .dwk. */
+  channelTypes?: Record<number, ModelingType>;
 }
 
 /** A registered fit model's metadata (from GET /api/fitting/models). */
@@ -231,6 +236,13 @@ export type MarkerShape =
  *  (a descriptor column you tabulate but don't curve); `ignore` additionally
  *  drops it from the worksheet statistics (out of analysis). Absent = "data". */
 export type ChannelRole = "label" | "ignore";
+
+/** JMP-style column modeling type (ORIGIN_GAP_PLAN #48): what a column MEANS.
+ *  `continuous` = a measurement axis; `ordinal` = ordered discrete levels;
+ *  `nominal` = unordered categories. Auto-inferred per column
+ *  (lib/modeling.ts); this type only appears on the dataset as a user
+ *  OVERRIDE — absent = use the inference. */
+export type ModelingType = "continuous" | "ordinal" | "nominal";
 
 /** A text annotation pinned at a data coordinate (label a peak, a feature, a
  *  transition…). Drawn by the uPlot annotationPlugin as a dot + label. */

@@ -914,3 +914,85 @@ describe("stage routing (2-D map auto-open)", () => {
     expect(useApp.getState().stageTab).toBe("worksheet");
   });
 });
+
+describe("useApp channel modeling types — per dataset", () => {
+  const wide: DataStruct = {
+    time: [1, 2, 3],
+    values: [
+      [10, 1, 0.1],
+      [20, 2, 0.2],
+      [30, 3, 0.3],
+    ],
+    labels: ["m", "T", "e"],
+    units: ["emu", "K", ""],
+    metadata: {},
+  };
+
+  it("sets and clears a type override on the active dataset", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "a", data: wide }], activeId: "d1" });
+    useApp.getState().setChannelType(1, "nominal");
+    expect(useApp.getState().datasets[0].channelTypes).toEqual({ 1: "nominal" });
+    useApp.getState().setChannelType(1, "ordinal");
+    expect(useApp.getState().datasets[0].channelTypes).toEqual({ 1: "ordinal" });
+    useApp.getState().setChannelType(1, null);
+    expect(useApp.getState().datasets[0].channelTypes).toBeUndefined(); // empties to undefined
+  });
+
+  it("is a no-op with no active dataset", () => {
+    useApp.setState({ datasets: [], activeId: null });
+    useApp.getState().setChannelType(0, "nominal");
+    expect(useApp.getState().datasets).toEqual([]);
+  });
+});
+
+describe("useApp soloChannel (column switcher engine)", () => {
+  const wide: DataStruct = {
+    time: [1, 2, 3],
+    values: [
+      [10, 1, 0.1],
+      [20, 2, 0.2],
+      [30, 3, 0.3],
+    ],
+    labels: ["m", "T", "e"],
+    units: ["emu", "K", ""],
+    metadata: {},
+  };
+
+  it("solos one plotted channel by hiding the others", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: wide }],
+      activeId: "d1",
+      xKey: null,
+      yKeys: null,
+      seriesOrder: null,
+      hiddenChannels: [],
+    });
+    useApp.getState().soloChannel(1);
+    expect([...useApp.getState().hiddenChannels].sort()).toEqual([0, 2]);
+  });
+
+  it("null clears the solo (show all)", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: wide }],
+      activeId: "d1",
+      hiddenChannels: [0, 2],
+    });
+    useApp.getState().soloChannel(null);
+    expect(useApp.getState().hiddenChannels).toEqual([]);
+  });
+
+  it("respects the x-key and column roles; ignores non-plotted channels", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: wide, channelRoles: { 2: "label" } }],
+      activeId: "d1",
+      xKey: 0, // channel 0 is the x-axis → plotted = [1] only
+      yKeys: null,
+      seriesOrder: null,
+      hiddenChannels: [],
+    });
+    useApp.getState().soloChannel(1);
+    expect(useApp.getState().hiddenChannels).toEqual([]); // 1 is the only plotted channel
+    useApp.getState().soloChannel(2); // a roled (non-plotted) channel → no-op
+    expect(useApp.getState().hiddenChannels).toEqual([]);
+  });
+});

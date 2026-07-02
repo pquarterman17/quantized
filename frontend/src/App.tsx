@@ -19,6 +19,7 @@ import TooltipLayer from "./components/overlays/TooltipLayer";
 import BaselinePanel from "./components/workshops/baseline/BaselinePanel";
 import CalculatorsPanel from "./components/workshops/calculators/CalculatorsPanel";
 import DatasetMathPanel from "./components/workshops/datasetmath/DatasetMathPanel";
+import ColumnSwitcher from "./components/workshops/switcher/ColumnSwitcher";
 import FigureBuilderView from "./components/workshops/figurebuilder/FigureBuilderView";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
 import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
@@ -85,6 +86,7 @@ export default function App() {
   const digitizerOpen = useApp((s) => s.digitizerOpen);
   const magToolsOpen = useApp((s) => s.magToolsOpen);
   const datasetMathOpen = useApp((s) => s.datasetMathOpen);
+  const columnSwitcherOpen = useApp((s) => s.columnSwitcherOpen);
   const figureBuilderOpen = useApp((s) => s.figureBuilderOpen);
   const waterfallOpen = useApp((s) => s.waterfallOpen);
   const reflViewOpen = useApp((s) => s.reflViewOpen);
@@ -421,6 +423,12 @@ export default function App() {
         run: () => s().setDatasetMathOpen(true),
       },
       {
+        id: "column-switcher",
+        group: "View",
+        label: "Column switcher (flip through channels)…",
+        run: () => s().setColumnSwitcherOpen(true),
+      },
+      {
         id: "export-csv",
         group: "File",
         label: "Export XRD CSV…",
@@ -652,6 +660,7 @@ export default function App() {
       {rsmOpen && <RsmPanel />}
       {digitizerOpen && <DigitizerView />}
       {datasetMathOpen && <DatasetMathPanel />}
+      {columnSwitcherOpen && <ColumnSwitcher />}
       {figureBuilderOpen && <FigureBuilderView />}
       {waterfallOpen && <WaterfallView />}
       {reflViewOpen && <ReflView />}

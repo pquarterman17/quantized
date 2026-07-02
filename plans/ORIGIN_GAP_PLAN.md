@@ -9,7 +9,9 @@ deeper statistics, and batch + reporting all in scope; custom steps land
 phased (no-code expressions first, then a Python plugin API);
 direct-manipulation figure editing is the target; OSS investments are
 plugin ecosystem, generic import wizard, and packaging/installers (docs
-site deprioritized for now).
+site deprioritized for now). W9 adds JMP-inspired interactive
+exploration (Graph Builder drag-drop, linked brushing) — strengths JMP
+has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
@@ -65,10 +67,11 @@ Cost-conscious defaults; per-item `Model:` lines below override.
   design decisions.
 - **sonnet** — the default workhorse: new workshops/components, plot
   interactions, parsers, wizards, serialization formats, CI/packaging.
-- **opus** — ONLY the four contract-defining items others consume:
-  #1 recalc DAG, #8 plugin API, #12 figure-document model, #36 report-
-  sheet schema. Use opus for the design + core; hand follow-on wiring
-  to sonnet. Nothing here needs fable.
+- **opus** — ONLY the contract-defining items others consume: #1 recalc
+  DAG, #8 plugin API, #12 figure-document model, #36 report-sheet
+  schema, #50 row-state model, and #51's plot-spec model. Use opus for
+  the design + core; hand follow-on wiring to sonnet. Nothing here
+  needs fable.
 
 Every implementer, regardless of model, must first read: `CLAUDE.md`,
 `.claude/rules/architecture-guards.md`, and this plan's Context — then
@@ -87,6 +90,23 @@ see `tests/test_calc_semiconductor.py` et al.).
   posteriors (also closes PORT_CHECKLIST's open `mcmcSample.m` item).
 - **Domain depth:** Parratt, RSM strain, hysteresis, VFT are native —
   "Origin can plot your PPMS data; quantized understands it."
+- **Interactive exploration (W9):** JMP-class drag-drop plotting and
+  linked brushing — Origin has neither, JMP costs a license and doesn't
+  speak instrument formats. No OSS tool combines both with domain depth.
+- **No-code publication figures (W3) — a headline pillar, not a
+  workstream detail.** Origin's hardest-to-beat quality is that a fully
+  custom, journal-ready figure never requires code; matching it means
+  two things at once: *every* property reachable from the UI (#11–14)
+  AND defaults good enough that the first render is already
+  publication-grade (style presets do the taste, panels do the tweaks).
+  The OSS Python competition fails here precisely because "just edit
+  the matplotlib script" is the answer — quantized must never give that
+  answer.
+- **Positioning sentence** (for the eventual README): Origin can't link
+  views, JMP can't read your instruments, glue doesn't know materials
+  science — quantized is the only tool where you drag a PPMS column
+  onto an axis, brush the outliers out of the fit, and walk away with a
+  journal-ready PDF and a script that reproduces it.
 
 ### Data / control flow (target end-state)
 
@@ -108,6 +128,10 @@ live → report sheets → summary sheet + docx/pptx/LaTeX/figures out
   editing); #11 (complete property panels) is independent and first.
 - #46 (test-data corpus) feeds #47 (PIXcel3D audit) and #42 (Bruker
   parsers — both need sample files before work can start).
+- W9: #48 (modeling types) precedes #49 (drag-to-axis) and #51 (Graph
+  Builder); #50 (row-state model) precedes #53 (local data filter) and
+  is consumed by every linked view; #51 also consumes #16 (statistical
+  plots) and #21 (faceting).
 - W4 (plot types), W5 (statistics), W6 (wizard/gadgets), W8 (import,
   packaging) are largely independent of each other and parallelizable.
 
@@ -122,10 +146,11 @@ live → report sheets → summary sheet + docx/pptx/LaTeX/figures out
 | 6–7 | Pipeline view + expression steps | W2 | Seeds analysis templates; macro recorder already captures the steps |
 | 1 | Recalc dependency graph | W1 | The architectural keystone everything "live" builds on |
 | 36–37 | Report sheets + docx/pptx export | W7 | What labs hand around at group meeting; python-docx/pptx are MIT |
-| 11, 12 | Complete property panels + figure documents | W3 | Stepping stones direct-manipulation editing requires anyway |
+| 11, 12 | Complete property panels + figure documents | W3 | Headline pillar: zero-code production figures is Origin's hardest-to-beat trait; stepping stones direct manipulation requires anyway |
 | 40 | Generic import wizard + saved filters | W8 | #1 onboarding blocker for outside users' data |
 | 41 | Packaging & installers | W8 | Zero-friction first run gates all OSS adoption |
 | 46–47 | Test-data corpus + PIXcel3D audit | W8 | Cheap now, unblocks #42/#47 and the checklist's XRDML 2-D freeze; corpus grows only if collected as found |
+| 49–50 | Drag-to-axis + row states | W9 | The JMP-differentiator foundation; #50 is a small contract many views consume — design it before W4 plots and the Graph Builder (#48 modeling types shipped 2026-07-01) |
 
 ---
 
@@ -278,6 +303,12 @@ live → report sheets → summary sheet + docx/pptx/LaTeX/figures out
 
 ## W3 — Figure documents & direct-manipulation editing
 
+*(Headline pillar — see the differentiators note. The bar: a fully
+custom, production-ready figure with zero code, ever. Two halves:
+complete UI reach over every property, and defaults so good the first
+render is already journal-grade. If a user ever needs to post-process
+an exported figure in Illustrator or a script, that's a W3 bug.)*
+
 ### Tier 1 — High Impact
 
 11. **Complete property panels** — every export property (fonts, sizes,
@@ -295,6 +326,11 @@ live → report sheets → summary sheet + docx/pptx/LaTeX/figures out
     - [ ] Every `render_figure` kwarg reachable from a panel; every new
           panel field lands as a `render_figure` kwarg (one config
           object, no side channels)
+    - [ ] **Beautiful-defaults audit:** before adding controls, make
+          the un-tweaked first render journal-grade per preset — real
+          figures (M-H loop, XRD log scan, R(Q), RSM map) reviewed
+          against published APS/Nature figures; fix the presets, not
+          the user (ux review pass)
     - [ ] Acceptance: reproduce an APS-preset-quality figure starting
           from the `default` preset using panels only
 
@@ -651,8 +687,97 @@ the same field names.)*
 
 ---
 
+## W9 — JMP-inspired interactive exploration
+
+*(What JMP does well that Origin doesn't: build plots by dragging
+columns, and every view stays linked. Scoped 2026-07-01 with defaults
+chosen autonomously — phased Graph Builder, brushing as core priority,
+auto-detected modeling types; re-tier if the owner disagrees.)*
+
+### Tier 1 — High Impact
+
+49. **Drag-to-axis (Graph Builder phase 1)** — drag a channel chip from
+    the Channels card / legend onto the plot's X, Y, or Y2 axis region
+    to re-plot instantly; nominal chips dropped on X produce a
+    categorical axis
+    *Model: sonnet (gui-interaction work). Pickup: axis picks already
+    exist as store state (`x_key`/`y2_keys`, ChannelsCard) — this adds
+    HTML5 drag + axis-region drop targets on the Stage that call the
+    same actions; no new plot machinery.*
+
+50. **Row-state model + linked brushing** — one shared per-row state
+    (selected / excluded / labeled) on the active dataset, consumed by
+    every view: rubber-band or click-select points in the plot →
+    same rows highlight in the worksheet (and vice versa); excluded
+    rows drop from stats/fits everywhere
+    *Model: opus (the row-state contract — worksheet masking, plot
+    selection, stats, and the local filter all consume it), sonnet
+    (view wiring). Pickup: the worksheet's mask + the plot's region
+    tool are the two existing halves; the design unifies them on the
+    `Dataset` so `.dwk` round-trips and the macro recorder captures
+    state changes.*
+    - [ ] **Universal-linking rule:** linking is threshold-shaped —
+          80% linked feels broken, not innovative. When this lands, add
+          an architecture guard (`architecture-guards.md` + a grep-able
+          convention or test): no view may read/derive row
+          selection/exclusion outside the row-state model. Every
+          later view (#51–55, distribution platform, gadgets) complies
+          from birth.
+
+51. **Graph Builder workshop (phase 2)** — a drop-zone canvas (X, Y,
+    Group/Color, Facet) that morphs the mark as columns land: two
+    continuous → scatter/line; nominal X + continuous Y → box → violin
+    → bar (cycle); Facet → small multiples; live preview, one-click
+    "send to Stage / export"
+    *Model: opus (the plot-spec model — a small grammar mapping zone
+    contents + modeling types → mark + scales; #49/#16/#21 all feed
+    it), sonnet (the workshop UI). Pickup: workshop pattern
+    (state hook + view + zone components <400 lines); marks reuse #16's
+    statistical-plot renderers and #21's faceting; spec serializes so
+    figures/templates/macros can replay it.*
+
+### Tier 2 — Medium Impact
+
+52. **Distribution platform** — click a column → histogram +
+    box/quantiles + normality verdict + optional distribution fit in
+    one linked panel, one panel per selected column
+    *Model: sonnet. Pickup: pure composition of #16 statplots math,
+    the shipped `calc/stats_tests.py` wrappers (Shapiro/AD), and #28
+    distribution fitting; brushing (#50) makes its histogram selection
+    highlight rows everywhere.*
+
+53. **Local data filter** — sidebar widget: per-column checkboxes
+    (nominal) or range sliders (continuous) that live-filter every
+    linked view without mutating the dataset
+    *Model: sonnet. Pickup: emits a derived row mask through #50's
+    row-state model; filter definition is serializable (a future
+    pipeline step, #6).*
+
+### Tier 3 — Nice-to-Have
+
+55. **Tabulate (drag-drop pivot)** — drag columns into row/column/value
+    wells to build group summary tables (mean/sd/count by category),
+    exportable as a dataset or report block (#36)
+    *Model: sonnet. Pickup: group-by math is `descriptive_stats` per
+    partition (pure calc); the well UI reuses #51's drop-zone
+    components.*
+
+---
+
 ## Completed
 
+- ~~**#48 Column modeling types**~~ (2026-07-01) — `lib/modeling.ts`
+  (conservative inference: nominal only for few-distinct level-like
+  columns, ordinal manual-only; `channelModelingType` = override ??
+  inference) + `Dataset.channelTypes` overrides (persist, `.dwk`
+  round-trip with validation, survive duplicate, macro-recorded) +
+  Channels-card per-channel type select showing the inferred value as
+  `auto·C/O/N`. Substrate for #20/#49/#51.
+- ~~**#54 Column switcher**~~ (2026-07-01) — `workshops/switcher/`
+  ToolWindow (◀ ▶ wrap-stepping + dropdown + Show all) over a new
+  store `soloChannel` action (hides all other *plotted* channels via
+  the legend's `hiddenChannels`; respects x-key/roles/order;
+  store-tested). Command palette: "Column switcher…" (View).
 - ~~**#25 Nonparametric family**~~ (2026-07-01) — `calc/stats_tests.py`
   (Mann-Whitney U, Wilcoxon signed-rank, Kruskal-Wallis, Friedman, sign
   test — plus the #26 wrappers: Shapiro-Wilk, Anderson-Darling,
