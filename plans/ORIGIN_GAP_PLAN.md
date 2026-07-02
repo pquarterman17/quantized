@@ -470,18 +470,6 @@ the same field names.)*
 
 ### Tier 2 — Medium Impact
 
-27. **Model selection (stepwise/AIC over multiple regression)** — the
-    remaining half of the original item; the MLR/correlation core
-    shipped 2026-07-01 (see Completed)
-    *Model: haiku. Pickup: wraps `calc/stats_multivar.multiple_regression`
-    in an add/drop loop scored by AIC/BIC (reuse `calc/fit_stats.py`
-    formulas).*
-
-28. **Distribution fitting with GOF** (normal/lognormal/Weibull/…) and
-    **power / sample-size analysis**
-    *Model: haiku. Pickup: scipy.stats fit + AD/KS GOF; statsmodels
-    `power` for t/ANOVA/proportions; feeds the #16 histogram overlay.*
-
 29. **Bootstrap + MCMC uncertainty** — emcee (MIT) posteriors and
     bootstrap CIs on any fit; also closes PORT_CHECKLIST's open
     `mcmcSample.m` item; a differentiator Origin lacks
@@ -783,6 +771,19 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#27 (complete) Stepwise model selection**~~ (2026-07-01) —
+  `stats_multivar.stepwise_regression`: forward/backward/both over
+  `multiple_regression`, AIC/BIC (RSS form), full search history,
+  refitted final model; `/api/stats/stepwise`. With the 2026-07-01 core
+  (MLR + correlations), #27 is now fully closed.
+- ~~**#28 Distribution fitting + power analysis**~~ (2026-07-01) —
+  `calc/stats_dist.py`: MLE fits for normal/lognormal/weibull/gamma/
+  exponential (positive families loc=0, 2-param convention) + KS GOF
+  (approximate-p flagged) + AIC ranking with explicit `skipped` reasons;
+  exact noncentral-t power + required-n solver (no statsmodels needed) —
+  verified against Cohen/G*Power published values (two-sample d=0.5 →
+  n=64, power 0.8015; one-sample → n=34). `/api/stats/{fit-distribution,
+  power}` routes.
 - ~~**#18 RSM line cuts (full linescan layer)**~~ (2026-07-01) —
   `calc/linecut.py` ports + extends MATLAB `extract2DLineCut.m`:
   H/V cuts (width=0 = MATLAB's nearest-line; width>0 averages a swath),

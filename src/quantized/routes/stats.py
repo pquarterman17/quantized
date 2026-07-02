@@ -19,10 +19,17 @@ from quantized.calc.stats import (
     pca_analysis,
     t_test,
 )
+from quantized.calc.stats_dist import (
+    fit_distribution,
+    fit_distributions,
+    required_n,
+    t_test_power,
+)
 from quantized.calc.stats_multivar import (
     correlation_matrix,
     multiple_regression,
     partial_correlation,
+    stepwise_regression,
 )
 from quantized.calc.stats_tests import (
     anderson_darling,
@@ -337,6 +344,74 @@ def ks_two_sample_route(req: TwoSampleRequest) -> dict[str, Any]:
                 np.asarray(req.x, dtype=float),
                 np.asarray(req.y, dtype=float),
                 alternative=req.alternative,
+            )
+        )
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class FitDistRequest(BaseModel):
+    x: list[float]
+    dist: str | None = None  # None = fit all families, rank by AIC
+
+
+@router.post("/fit-distribution")
+def fit_distribution_route(req: FitDistRequest) -> dict[str, Any]:
+    """MLE distribution fit(s) with KS GOF; dist=None ranks all families."""
+    try:
+        x = np.asarray(req.x, dtype=float)
+        if req.dist is None:
+            return _wrap(fit_distributions(x))
+        return _wrap(fit_distribution(x, req.dist))
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class PowerRequest(BaseModel):
+    effect_size: float
+    n: int | None = None  # given -> power; omitted -> solve for n
+    power: float = 0.8
+    kind: str = "two-sample"
+    alpha: float = 0.05
+    tails: int = 2
+
+
+@router.post("/power")
+def power_route(req: PowerRequest) -> dict[str, Any]:
+    """t-test power at n, or the required n for a target power (exact nct)."""
+    try:
+        if req.n is not None:
+            return _wrap(
+                t_test_power(
+                    req.effect_size, req.n, kind=req.kind, alpha=req.alpha, tails=req.tails
+                )
+            )
+        return _wrap(
+            required_n(
+                req.effect_size, req.power, kind=req.kind, alpha=req.alpha, tails=req.tails
+            )
+        )
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class StepwiseRequest(BaseModel):
+    predictors: list[list[float]]
+    y: list[float]
+    criterion: str = "aic"
+    direction: str = "forward"
+
+
+@router.post("/stepwise")
+def stepwise_route(req: StepwiseRequest) -> dict[str, Any]:
+    """Stepwise predictor selection (AIC/BIC) over multiple regression."""
+    try:
+        return _wrap(
+            stepwise_regression(
+                [np.asarray(c, dtype=float) for c in req.predictors],
+                np.asarray(req.y, dtype=float),
+                criterion=req.criterion,
+                direction=req.direction,
             )
         )
     except (ValueError, IndexError) as exc:

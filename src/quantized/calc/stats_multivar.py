@@ -176,3 +176,108 @@ def partial_correlation(
     partial = np.asarray(-prec / d, dtype=float)
     np.fill_diagonal(partial, 1.0)
     return {"r": partial, "N": n, "controlled": k - 2}
+
+
+def _subset_criterion(
+    x: NDArray[np.float64], y: NDArray[np.float64], idx: list[int], criterion: str
+) -> float:
+    """AIC/BIC of the OLS model using predictor columns ``idx`` (RSS form).
+
+    AIC = n·ln(SSE/n) + 2p, BIC = n·ln(SSE/n) + p·ln(n), p = len(idx) + 1
+    (intercept). Constant-only model when ``idx`` is empty. +inf for a
+    singular subset so the search simply never selects it.
+    """
+    n = y.size
+    if idx:
+        try:
+            fit = multiple_regression(x[:, idx], y)
+        except ValueError:
+            return float("inf")
+        sse = float(np.sum(np.asarray(fit["residuals"]) ** 2))
+    else:
+        sse = float(np.sum((y - np.mean(y)) ** 2))
+    sse = max(sse, _EPS)
+    p = len(idx) + 1
+    penalty = 2.0 * p if criterion == "aic" else p * math.log(n)
+    return n * math.log(sse / n) + penalty
+
+
+def stepwise_regression(
+    predictors: list[NDArray[np.float64]] | NDArray[np.float64],
+    y: NDArray[np.float64],
+    *,
+    criterion: str = "aic",
+    direction: str = "forward",
+) -> dict[str, Any]:
+    """Stepwise predictor selection over :func:`multiple_regression`.
+
+    ``direction='forward'`` starts from the intercept-only model and adds the
+    predictor that most improves the criterion; ``'backward'`` starts from the
+    full model and drops the worst; ``'both'`` is forward with a drop pass
+    after every addition. Stops when no single move improves the criterion.
+    Returns the selected column indices (original order), the search history,
+    and the refitted final model (empty selection = intercept-only, model None).
+    """
+    if criterion not in ("aic", "bic"):
+        raise ValueError(f'criterion must be "aic" or "bic", got "{criterion}"')
+    if direction not in ("forward", "backward", "both"):
+        raise ValueError(f'direction must be forward/backward/both, got "{direction}"')
+    xmat = _as_matrix(predictors)
+    yv = np.asarray(y, dtype=float).ravel()
+    if yv.size != xmat.shape[0]:
+        raise ValueError(f"y length {yv.size} != predictor length {xmat.shape[0]}")
+    keep = np.isfinite(yv) & np.all(np.isfinite(xmat), axis=1)
+    xmat, yv = xmat[keep], yv[keep]
+    k = xmat.shape[1]
+
+    selected = list(range(k)) if direction == "backward" else []
+    current = _subset_criterion(xmat, yv, selected, criterion)
+    history: list[dict[str, Any]] = [
+        {"action": "start", "index": None, "criterion": current}
+    ]
+
+    def best_add() -> tuple[int, float] | None:
+        cands = [
+            (j, _subset_criterion(xmat, yv, sorted([*selected, j]), criterion))
+            for j in range(k)
+            if j not in selected
+        ]
+        if not cands:
+            return None
+        j, c = min(cands, key=lambda t: t[1])
+        return (j, c) if c < current else None
+
+    def best_drop() -> tuple[int, float] | None:
+        cands = [
+            (j, _subset_criterion(xmat, yv, [i for i in selected if i != j], criterion))
+            for j in selected
+        ]
+        if not cands:
+            return None
+        j, c = min(cands, key=lambda t: t[1])
+        return (j, c) if c < current else None
+
+    for _ in range(4 * k + 4):  # generous bound; each move strictly improves
+        move = best_drop() if direction == "backward" else best_add()
+        action = "drop" if direction == "backward" else "add"
+        if move is None and direction == "both":
+            move, action = best_drop(), "drop"
+        if move is None:
+            break
+        j, current = move
+        if action == "add":
+            selected = sorted([*selected, j])
+        else:
+            selected = [i for i in selected if i != j]
+        history.append({"action": action, "index": j, "criterion": current})
+
+    model = multiple_regression(xmat[:, selected], yv) if selected else None
+    return {
+        "selected": selected,
+        "criterion": criterion,
+        "criterion_value": current,
+        "direction": direction,
+        "history": history,
+        "model": model,
+        "n_candidates": k,
+    }

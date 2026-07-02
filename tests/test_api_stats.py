@@ -136,3 +136,33 @@ def test_correlation_roundtrip_and_422() -> None:
 
     bad = client.post("/api/stats/correlation", json={"columns": [[1, 2, 3]]})
     assert bad.status_code == 422
+
+
+def test_fit_distribution_roundtrip() -> None:
+    x = [float(v) for v in np.exp(np.linspace(-1, 1, 25))]
+    resp = client.post("/api/stats/fit-distribution", json={"x": x})
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["best"] in {"lognormal", "gamma", "weibull", "normal", "exponential"}
+    assert len(out["fits"]) >= 2
+
+
+def test_power_roundtrip_both_modes() -> None:
+    p = client.post("/api/stats/power", json={"effect_size": 0.5, "n": 64})
+    assert p.status_code == 200
+    assert abs(p.json()["power"] - 0.8015) < 0.002
+    n = client.post("/api/stats/power", json={"effect_size": 0.5, "power": 0.8})
+    assert n.status_code == 200
+    assert n.json()["n"] == 64
+
+
+def test_stepwise_roundtrip() -> None:
+    t = list(np.linspace(0, 5, 50))
+    x0 = t
+    x1 = [np.cos(3.0 * v) for v in t]
+    y = [2.0 * a for a in t]
+    resp = client.post(
+        "/api/stats/stepwise", json={"predictors": [x0, x1], "y": y}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["selected"] == [0]
