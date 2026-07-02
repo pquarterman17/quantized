@@ -175,3 +175,16 @@ def test_xrdml_float_append_number(tmp_path: Path) -> None:
     p.write_text(xml, encoding="utf-8")
     ds = import_xrdml(p)  # must not raise ValueError: invalid literal for int()
     assert ds.n_points == 10  # both scans (5 + 5 points) parsed and ordered
+
+
+def test_bom_prefixed_file_parses(tmp_path: Path, fixtures_dir: Path) -> None:
+    """A UTF-8 BOM (Windows instrument exporters emit one) must not break the
+    parser — found by the corpus audit (ORIGIN_GAP_PLAN #46): 2 of 13 public
+    samples carried a BOM and failed with 'not well-formed' before the fix."""
+    src = fixtures_dir / "xrdml_la2nio4.xrdml"
+    bom = tmp_path / "bom.xrdml"
+    bom.write_bytes(b"\xef\xbb\xbf" + src.read_bytes())
+    ref = import_xrdml(src)
+    out = import_xrdml(bom)
+    assert_allclose(out.values, ref.values)
+    assert list(out.labels) == list(ref.labels)

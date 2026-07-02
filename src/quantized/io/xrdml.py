@@ -111,7 +111,12 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
     if intensity not in ("cps", "counts"):
         raise ValueError(f'intensity must be "cps" or "counts", got "{intensity}"')
     path = Path(filepath)
-    root = ET.fromstring(path.read_text(encoding="latin-1"))
+    text = path.read_text(encoding="latin-1")
+    # Strip a UTF-8 BOM: Windows instrument software emits one, and decoded
+    # as latin-1 it becomes "ï»¿" — an invalid token to the XML parser.
+    if text.startswith("\xef\xbb\xbf"):
+        text = text[3:]
+    root = ET.fromstring(text)
 
     scans_xml = _find_all(root, "scan")
     if not scans_xml:

@@ -478,10 +478,12 @@ the same field names.)*
 
 ### Tier 2 — Medium Impact
 
-27. **Multiple linear regression + model selection; correlation matrix
-    with significance + partial correlation**
-    *Model: haiku. Pickup: statsmodels OLS; extend the linRegress
-    route/tests pattern; correlation heatmap reuses the 2-D stage.*
+27. **Model selection (stepwise/AIC over multiple regression)** — the
+    remaining half of the original item; the MLR/correlation core
+    shipped 2026-07-01 (see Completed)
+    *Model: haiku. Pickup: wraps `calc/stats_multivar.multiple_regression`
+    in an add/drop loop scored by AIC/BIC (reuse `calc/fit_stats.py`
+    formulas).*
 
 28. **Distribution fitting with GOF** (normal/lognormal/Weibull/…) and
     **power / sample-size analysis**
@@ -678,6 +680,22 @@ the same field names.)*
     correction (`<beamAttenuationFactors>`) — fold into this audit.
     Requires #45's corpus. Output: per-file pass/fail table + parser
     fixes + new committed fixtures for each newly covered variant.*
+    - [x] **Audit sweep run (2026-07-01):** 18/18 corpus files parse
+          after fixing the one hard failure — a **UTF-8 BOM** broke 2
+          files (`read_text(latin-1)` → "ï»¿" → XML error; stripped in
+          `import_xrdml`, CI-regression-tested via a BOM'd fixture in
+          `test_io_xrdml.py`); full-sweep realdata test added
+          (`test_corpus_xrdml_full_sweep`)
+    - [ ] **Schema-1.0 RSMs flatten to 1-D** (`xrdtools_rsm_point`,
+          76 Omega-2Theta rows): `_build_2d` mesh detection only
+          recognizes the schema-1.3 scanning-line layout
+    - [ ] **Schema-2.x area RSMs flatten to 1-D** (`m3learning_rsm`,
+          PIXcel3D "Scanning snapshot equatorial", 1827 scans,
+          465,885 points as one column): needs the schema-2.x layout —
+          raw `<counts>`, per-scan `<commonCountingTime>`,
+          `areaDetectorType` — mapped into the RSM path
+    - [ ] Pole figures (Phi scans × Psi steps) import flat; decide a
+          representation (2-D map vs multi-column)
 
 ### Tier 3 — Nice-to-Have
 
@@ -766,6 +784,14 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#27 (core) Multiple regression + correlation matrices**~~
+  (2026-07-01) — `calc/stats_multivar.py`: `multiple_regression`
+  (intercept + k predictors, SE/t/p/CI/R²/F, listwise NaN deletion;
+  single-predictor case verified against the golden `lin_regress`),
+  `correlation_matrix` (Pearson/Spearman + t-transform p, matches
+  scipy.stats oracles), `partial_correlation` (precision-matrix,
+  matches the 3-var closed form). 3 thin `/api/stats/*` routes +
+  tests. Model-selection remainder re-scoped as the open #27.
 - ~~**#48 Column modeling types**~~ (2026-07-01) — `lib/modeling.ts`
   (conservative inference: nominal only for few-distinct level-like
   columns, ordinal manual-only; `channelModelingType` = override ??

@@ -108,3 +108,31 @@ def test_sign_test_roundtrip() -> None:
     out = resp.json()
     assert out["n_pos"] == 8
     assert abs(out["p"] - 2.0 * 56 / 1024.0) < 1e-12
+
+
+def test_regression_multi_roundtrip() -> None:
+    x1 = list(np.linspace(0, 10, 30))
+    x2 = [v * v for v in x1]
+    y = [1.0 + 2.0 * a - 0.5 * b for a, b in zip(x1, x2, strict=True)]
+    resp = client.post(
+        "/api/stats/regression-multi", json={"predictors": [x1, x2], "y": y}
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert abs(out["coeffs"][0] - 1.0) < 1e-6
+    assert abs(out["coeffs"][1] - 2.0) < 1e-6
+    assert abs(out["coeffs"][2] - (-0.5)) < 1e-6
+
+
+def test_correlation_roundtrip_and_422() -> None:
+    ok = client.post(
+        "/api/stats/correlation",
+        json={"columns": [[1, 2, 3, 4], [2, 4, 6, 8], [4, 3, 2, 1]]},
+    )
+    assert ok.status_code == 200
+    out = ok.json()
+    assert abs(out["r"][0][1] - 1.0) < 1e-12
+    assert abs(out["r"][0][2] - (-1.0)) < 1e-12
+
+    bad = client.post("/api/stats/correlation", json={"columns": [[1, 2, 3]]})
+    assert bad.status_code == 422

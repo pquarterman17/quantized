@@ -41,3 +41,22 @@ def test_corpus_file_imports(corpus_dir: Path, rel: str) -> None:
     assert ds.values.shape[0] > 0
     assert len(ds.labels) == ds.values.shape[1]
     assert np.isfinite(ds.values).any()
+
+
+def test_corpus_xrdml_full_sweep(corpus_dir: Path) -> None:
+    """ORIGIN_GAP_PLAN #46 (PIXcel3D audit): EVERY PANalytical corpus file must
+    parse — schemas 1.0-2.2, PIXcel/PIXcel1D/PIXcel3D/GaliPIX3D detectors,
+    1-D scans + RSMs + pole figures. Known limitation (tracked in the plan):
+    schema-1.0 and schema-2.x RSMs import as flattened 1-D (mesh detection
+    only recognizes the schema-1.3 scanning-line layout)."""
+    files = sorted((corpus_dir / "panalytical" / "xrd").glob("*.xrdml"))
+    if not files:
+        pytest.skip("no PANalytical corpus files present")
+    failures: list[str] = []
+    for f in files:
+        try:
+            ds = import_auto(str(f))
+            assert ds.values.shape[0] > 0
+        except Exception as exc:  # noqa: BLE001 — collecting a per-file report
+            failures.append(f"{f.name}: {type(exc).__name__}: {exc}")
+    assert not failures, "corpus files failed to parse:\n" + "\n".join(failures)

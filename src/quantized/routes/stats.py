@@ -19,6 +19,11 @@ from quantized.calc.stats import (
     pca_analysis,
     t_test,
 )
+from quantized.calc.stats_multivar import (
+    correlation_matrix,
+    multiple_regression,
+    partial_correlation,
+)
 from quantized.calc.stats_tests import (
     anderson_darling,
     friedman,
@@ -98,6 +103,21 @@ class KSNormalRequest(BaseModel):
     x: list[float]
     loc: float | None = None
     scale: float | None = None
+
+
+class MultiRegressionRequest(BaseModel):
+    predictors: list[list[float]]  # k same-length columns
+    y: list[float]
+    alpha: float = 0.05
+
+
+class CorrelationRequest(BaseModel):
+    columns: list[list[float]]
+    method: str = "pearson"
+
+
+class PartialCorrelationRequest(BaseModel):
+    columns: list[list[float]]
 
 
 def _wrap(result: dict[str, Any]) -> dict[str, Any]:
@@ -267,6 +287,43 @@ def ks_normal_route(req: KSNormalRequest) -> dict[str, Any]:
     """One-sample KS test vs a normal distribution."""
     try:
         return _wrap(ks_normal(np.asarray(req.x, dtype=float), loc=req.loc, scale=req.scale))
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/regression-multi")
+def regression_multi(req: MultiRegressionRequest) -> dict[str, Any]:
+    """Multiple linear regression (intercept + k predictors) with inference."""
+    try:
+        return _wrap(
+            multiple_regression(
+                [np.asarray(c, dtype=float) for c in req.predictors],
+                np.asarray(req.y, dtype=float),
+                alpha=req.alpha,
+            )
+        )
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/correlation")
+def correlation(req: CorrelationRequest) -> dict[str, Any]:
+    """Pairwise Pearson/Spearman correlation matrix with p-values."""
+    try:
+        return _wrap(
+            correlation_matrix(
+                [np.asarray(c, dtype=float) for c in req.columns], method=req.method
+            )
+        )
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/partial-correlation")
+def partial_correlation_route(req: PartialCorrelationRequest) -> dict[str, Any]:
+    """Partial correlation of every pair controlling for all other columns."""
+    try:
+        return _wrap(partial_correlation([np.asarray(c, dtype=float) for c in req.columns]))
     except (ValueError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
