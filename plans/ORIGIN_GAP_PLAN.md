@@ -449,24 +449,25 @@ the same field names.)*
 
 24. **Two-way + repeated-measures ANOVA with post-hoc** — Tukey,
     Bonferroni, Dunnett; formatted report-sheet output (#36)
-    *Model: sonnet. Pickup: statsmodels `anova_lm` +
-    `pairwise_tukeyhsd`; Dunnett via scipy ≥1.11 `dunnett`. Validate
-    two-way against NIST StRD / Montgomery worked examples; the
-    existing `anova1` port shows route + test style.*
+    *Model: sonnet. CORE SHIPPED 2026-07-01 (see Completed): balanced
+    two-way + Tukey HSD + Dunnett, scipy-only. Remaining below.*
+    - [x] Balanced two-way with interaction (Montgomery battery-life
+          table reproduced exactly); Tukey + Dunnett post-hoc (2026-07-01)
+    - [ ] Unbalanced designs (Type II/III sums — regression approach
+          over `multiple_regression` with dummy coding, or statsmodels)
+    - [ ] Repeated-measures ANOVA; Bonferroni correction helper
     - [ ] Long-format input from worksheet columns (value + factor
-          columns); balanced and unbalanced (Type II/III sums)
-    - [ ] Acceptance: reproduces a published two-way ANOVA table
-          (SS/df/F/p) and Tukey grouping letters exactly
+          columns) + report-sheet output (needs #36)
 
 26. **Assumption tests + guided chooser** — Shapiro-Wilk, Levene,
     Anderson-Darling, KS; a small "which test?" helper that gates
     parametric vs nonparametric
-    *Model: sonnet (chooser UX), haiku (the wrappers). Pickup: chooser
-    is a decision tree (n, groups, paired?, normality, equal
-    variance?) that recommends and one-click-runs the test — the
-    stats workshop's front door, not a separate window. The wrappers
-    shipped 2026-07-01 with #25 (`calc/stats_tests.py` + `/api/stats/*`);
-    only the chooser remains.*
+    *Model: sonnet (chooser UX), haiku (the wrappers). The wrappers
+    shipped 2026-07-01 with #25; the chooser DECISION TREE also shipped
+    2026-07-01 (`stats_tests.recommend_test` + `/api/stats/recommend` —
+    Shapiro + Brown-Forsythe gates -> recommendation + endpoint +
+    plain-language reasons). Remaining: the stats-workshop UI front
+    door that renders it and one-click-runs the recommended test.*
 
 ### Tier 2 — Medium Impact
 
@@ -771,6 +772,17 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#24 (core) Balanced two-way ANOVA + Tukey/Dunnett**~~
+  (2026-07-01) — `calc/stats_anova2.py`: balanced factorial closed form
+  (interaction dropped into error when n=1; unbalanced raises) verified
+  against Montgomery's battery-life table (SS/df/F/p exact); Tukey HSD
+  + Dunnett wrap scipy's exact implementations with CI rows.
+  `routes/stats_design.py` (new router — routes/stats.py was at the
+  ceiling): `/api/stats/{anova2,tukey,dunnett,recommend}`.
+- ~~**#26 (logic) Test chooser decision tree**~~ (2026-07-01) —
+  `stats_tests.recommend_test`: per-group Shapiro (differences for
+  paired) + Brown-Forsythe -> parametric/nonparametric recommendation
+  with endpoint + reasons; UI front door remains open on #26.
 - ~~**#27 (complete) Stepwise model selection**~~ (2026-07-01) —
   `stats_multivar.stepwise_regression`: forward/backward/both over
   `multiple_regression`, AIC/BIC (RSS form), full search history,

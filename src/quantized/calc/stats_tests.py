@@ -294,3 +294,87 @@ def ks_two_sample(
         "alternative": alternative,
         "method": "Kolmogorov-Smirnov (two-sample)",
     }
+
+
+def recommend_test(
+    groups: list[NDArray[np.float64]],
+    *,
+    paired: bool = False,
+    alpha: float = 0.05,
+) -> dict[str, Any]:
+    """The "which test?" decision tree (ORIGIN_GAP_PLAN #26 chooser logic).
+
+    Checks per-group normality (Shapiro-Wilk) and, for >= 2 groups, equal
+    variances (Brown-Forsythe), then recommends the parametric test when the
+    assumptions hold and the nonparametric analogue otherwise. Returns the
+    recommendation (name + /api/stats endpoint), the checks it ran, and
+    plain-language reasons — so a UI can show its work.
+    """
+    if not groups:
+        raise ValueError("recommend_test needs at least one group")
+    cleaned = [_clean(g) for g in groups]
+    if any(g.size < 3 for g in cleaned):
+        raise ValueError("every group needs at least 3 observations")
+    if paired:
+        if len(cleaned) != 2:
+            raise ValueError("paired analysis needs exactly 2 groups")
+        if cleaned[0].size != cleaned[1].size:
+            raise ValueError("paired groups must have the same length")
+
+    reasons: list[str] = []
+    checks: dict[str, Any] = {"alpha": alpha}
+
+    # Normality: for a paired design the DIFFERENCES are what must be normal.
+    if paired:
+        targets = [cleaned[0] - cleaned[1]]
+        labels = ["differences"]
+    else:
+        targets = cleaned
+        labels = [f"group {i}" for i in range(len(cleaned))]
+    norm_ps: list[float] = []
+    for lab, t in zip(labels, targets, strict=True):
+        p = shapiro_wilk(t)["p"] if t.size <= 5000 else float("nan")
+        norm_ps.append(p)
+        if np.isnan(p):
+            reasons.append(f"{lab}: n>5000, Shapiro skipped (assumed normal by CLT)")
+    checks["shapiro_p"] = norm_ps
+    all_normal = all(np.isnan(p) or p >= alpha for p in norm_ps)
+    if not all_normal:
+        bad = [labels[i] for i, p in enumerate(norm_ps) if not np.isnan(p) and p < alpha]
+        reasons.append(f"non-normal at alpha={alpha}: {', '.join(bad)}")
+    else:
+        reasons.append("normality not rejected for any group (Shapiro-Wilk)")
+
+    equal_var = True
+    if not paired and len(cleaned) >= 2:
+        lev = levene(cleaned)
+        checks["levene_p"] = lev["p"]
+        equal_var = lev["p"] >= alpha
+        reasons.append(
+            f"equal variances {'not rejected' if equal_var else 'REJECTED'} "
+            f"(Brown-Forsythe p={lev['p']:.3g})"
+        )
+
+    k = len(cleaned)
+    if k == 1:
+        rec = ("one-sample t-test", "/api/stats/ttest") if all_normal else (
+            "Wilcoxon signed-rank (one-sample)", "/api/stats/wilcoxon")
+    elif paired:
+        rec = ("paired t-test", "/api/stats/ttest") if all_normal else (
+            "Wilcoxon signed-rank (paired)", "/api/stats/wilcoxon")
+    elif k == 2:
+        rec = ("Welch two-sample t-test", "/api/stats/ttest") if all_normal else (
+            "Mann-Whitney U", "/api/stats/mann-whitney")
+    else:
+        rec = ("one-way ANOVA (+ Tukey HSD post-hoc)", "/api/stats/anova") if (
+            all_normal and equal_var) else ("Kruskal-Wallis H", "/api/stats/kruskal")
+
+    return {
+        "recommendation": rec[0],
+        "endpoint": rec[1],
+        "parametric": all_normal and (equal_var or paired or k == 1 or k == 2),
+        "n_groups": k,
+        "paired": paired,
+        "checks": checks,
+        "reasons": reasons,
+    }

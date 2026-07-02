@@ -166,3 +166,24 @@ def test_stepwise_roundtrip() -> None:
     )
     assert resp.status_code == 200
     assert resp.json()["selected"] == [0]
+
+
+def test_anova2_roundtrip() -> None:
+    cells = [
+        [[130, 155, 74, 180], [34, 40, 80, 75]],
+        [[150, 188, 159, 126], [136, 122, 106, 115]],
+    ]
+    resp = client.post("/api/stats/anova2", json={"cells": cells})
+    assert resp.status_code == 200
+    sources = [r["source"] for r in resp.json()["table"]]
+    assert sources == ["A", "B", "AxB", "Error", "Total"]
+
+
+def test_tukey_and_recommend_roundtrip() -> None:
+    g = [[1.0, 2.0, 1.5, 2.2, 1.8], [5.0, 6.0, 5.5, 6.2, 5.8], [1.1, 2.1, 1.6, 2.3, 1.9]]
+    t = client.post("/api/stats/tukey", json={"groups": g})
+    assert t.status_code == 200
+    assert len(t.json()["pairs"]) == 3
+    r = client.post("/api/stats/recommend", json={"groups": g})
+    assert r.status_code == 200
+    assert "recommendation" in r.json() and r.json()["reasons"]
