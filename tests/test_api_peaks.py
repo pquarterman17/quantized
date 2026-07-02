@@ -158,3 +158,18 @@ def test_fit_multi_no_peaks_rejected() -> None:
     x, y = _two_lorentzians_bg()
     resp = client.post("/api/peaks/fit-multi", json={"x": x, "y": y, "peaks": []})
     assert resp.status_code == 422
+
+
+def test_integrate_roundtrip() -> None:
+    import numpy as np
+
+    x = list(np.linspace(0, 10, 500))
+    y = [10.0 * float(np.exp(-0.5 * ((v - 5.0) / 0.3) ** 2)) for v in x]
+    resp = client.post(
+        "/api/peaks/integrate",
+        json={"x": x, "y": y, "regions": [[4.0, 6.0]], "baseline": "none"},
+    )
+    assert resp.status_code == 200
+    pk = resp.json()["peaks"][0]
+    assert abs(pk["centroid"] - 5.0) < 0.01
+    assert pk["area_pct"] == 100.0

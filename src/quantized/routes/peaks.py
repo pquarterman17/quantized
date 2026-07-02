@@ -9,10 +9,12 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from quantized.calc.peak_fit import MODELS, fit_single_peak
+from quantized.calc.peak_integrate import integrate_peaks
 from quantized.calc.peak_multifit import fit_multi_peak
 from quantized.calc.peaks import find_peaks_robust
 from quantized.routes._payload import jsonify, to_jsonable
@@ -126,3 +128,26 @@ def fit_multi(req: FitMultiPeakRequest) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     out: dict[str, Any] = to_jsonable(result)
     return out
+
+
+class IntegrateRequest(BaseModel):
+    x: list[float]
+    y: list[float]
+    regions: list[tuple[float, float]]
+    baseline: str = "linear"
+
+
+@router.post("/integrate")
+def integrate(req: IntegrateRequest) -> dict[str, Any]:
+    """Integrate-only peak analysis: area/centroid/FWHM/%-area per region."""
+    try:
+        return to_jsonable(  # type: ignore[no-any-return]
+            integrate_peaks(
+                np.asarray(req.x, dtype=float),
+                np.asarray(req.y, dtype=float),
+                [(float(a), float(b)) for a, b in req.regions],
+                baseline=req.baseline,
+            )
+        )
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

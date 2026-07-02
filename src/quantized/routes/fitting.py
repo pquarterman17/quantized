@@ -15,6 +15,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from quantized.calc.fit_autoguess import auto_guess
+from quantized.calc.fit_bootstrap import bootstrap_fit, fit_posterior
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fitting import curve_fit
 from quantized.routes._payload import to_jsonable
@@ -100,3 +101,81 @@ def fit(req: FitRequest) -> dict[str, Any]:
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return to_jsonable(result)  # type: ignore[no-any-return]
+
+
+class BootstrapRequest(BaseModel):
+    model: str
+    x: list[float]
+    y: list[float]
+    p0: list[float]
+    n_boot: int = 500
+    method: str = "residual"
+    seed: int = 0
+    alpha: float = 0.05
+    lower: list[float] | None = None
+    upper: list[float] | None = None
+
+
+@router.post("/bootstrap")
+def bootstrap(req: BootstrapRequest) -> dict[str, Any]:
+    """Bootstrap parameter CIs for a registry-model fit (calc.fit_bootstrap)."""
+    _require_model(req.model)
+
+    def model_fcn(xa: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
+        return np.asarray(evaluate(req.model, xa, p), dtype=float)
+
+    try:
+        return to_jsonable(  # type: ignore[no-any-return]
+            bootstrap_fit(
+                np.asarray(req.x, dtype=float),
+                np.asarray(req.y, dtype=float),
+                model_fcn,
+                req.p0,
+                n_boot=req.n_boot,
+                method=req.method,
+                seed=req.seed,
+                alpha=req.alpha,
+                lower=req.lower,
+                upper=req.upper,
+            )
+        )
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class PosteriorRequest(BaseModel):
+    model: str
+    x: list[float]
+    y: list[float]
+    p0: list[float]
+    num_steps: int = 10000
+    burn_in: int = 1000
+    seed: int = 0
+    lower: list[float] | None = None
+    upper: list[float] | None = None
+
+
+@router.post("/posterior")
+def posterior(req: PosteriorRequest) -> dict[str, Any]:
+    """MCMC posterior for a registry-model fit (calc.fit_bootstrap.fit_posterior)."""
+    _require_model(req.model)
+
+    def model_fcn(xa: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
+        return np.asarray(evaluate(req.model, xa, p), dtype=float)
+
+    try:
+        return to_jsonable(  # type: ignore[no-any-return]
+            fit_posterior(
+                np.asarray(req.x, dtype=float),
+                np.asarray(req.y, dtype=float),
+                model_fcn,
+                req.p0,
+                num_steps=req.num_steps,
+                burn_in=req.burn_in,
+                seed=req.seed,
+                lower=req.lower,
+                upper=req.upper,
+            )
+        )
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

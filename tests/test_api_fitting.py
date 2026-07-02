@@ -57,3 +57,18 @@ def test_unknown_model_is_422() -> None:
         "/api/fitting/fit", json={"model": "NoSuchModel", "x": [0, 1], "y": [0, 1]}
     )
     assert resp.status_code == 422
+
+
+def test_bootstrap_roundtrip() -> None:
+    import numpy as np
+
+    x = list(np.linspace(0, 5, 40))
+    y = [1.0 + 2.0 * v + 0.05 * float(np.sin(31.0 * v)) for v in x]
+    resp = client.post(
+        "/api/fitting/bootstrap",
+        json={"model": "Linear", "x": x, "y": y, "p0": [0.5, 1.0], "n_boot": 60, "seed": 2},
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["ciLow"][0] <= 2.0 <= out["ciHigh"][0]  # Linear params are [m, b]
+    assert out["n_boot"] >= 30
