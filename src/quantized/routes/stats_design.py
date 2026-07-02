@@ -11,7 +11,7 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from quantized.calc.stats_anova2 import anova2, dunnett_test, tukey_hsd
+from quantized.calc.stats_anova2 import adjust_pvalues, anova2, dunnett_test, tukey_hsd
 from quantized.calc.stats_tests import recommend_test
 from quantized.routes._payload import to_jsonable
 
@@ -82,5 +82,19 @@ def recommend_route(req: RecommendRequest) -> dict[str, Any]:
                 paired=req.paired, alpha=req.alpha,
             )
         )
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class AdjustPRequest(BaseModel):
+    p_values: list[float]
+    method: str = "holm"
+
+
+@router.post("/adjust-p")
+def adjust_p_route(req: AdjustPRequest) -> dict[str, Any]:
+    """Bonferroni / Holm / Benjamini-Hochberg p-value adjustment."""
+    try:
+        return _wrap(adjust_pvalues(req.p_values, method=req.method))
     except (ValueError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

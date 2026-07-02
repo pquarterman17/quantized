@@ -455,7 +455,10 @@ the same field names.)*
           table reproduced exactly); Tukey + Dunnett post-hoc (2026-07-01)
     - [ ] Unbalanced designs (Type II/III sums — regression approach
           over `multiple_regression` with dummy coding, or statsmodels)
-    - [ ] Repeated-measures ANOVA; Bonferroni correction helper
+    - [x] Bonferroni / Holm / Benjamini-Hochberg p-adjustment helper
+          (`stats_anova2.adjust_pvalues` + `/api/stats/adjust-p`,
+          textbook-case tested) (2026-07-02)
+    - [ ] Repeated-measures ANOVA
     - [ ] Long-format input from worksheet columns (value + factor
           columns) + report-sheet output (needs #36)
 

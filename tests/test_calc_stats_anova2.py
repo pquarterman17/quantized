@@ -104,3 +104,33 @@ def test_recommend_two_sample_and_paired() -> None:
     assert paired["n_groups"] == 2 and paired["paired"] is True
     with pytest.raises(ValueError, match="exactly 2"):
         recommend_test([_NORMALISH], paired=True)
+
+
+def test_adjust_pvalues_textbook_case() -> None:
+    from quantized.calc.stats_anova2 import adjust_pvalues
+
+    p = [0.01, 0.04, 0.03, 0.005]
+    # Bonferroni: p * 4, clipped
+    np.testing.assert_allclose(
+        adjust_pvalues(p, method="bonferroni")["adjusted"], [0.04, 0.16, 0.12, 0.02]
+    )
+    # Holm (sorted 0.005,0.01,0.03,0.04 * 4,3,2,1 with step-down monotonicity):
+    # 0.02, 0.03, 0.06, 0.06 -> mapped back to input order
+    np.testing.assert_allclose(
+        adjust_pvalues(p, method="holm")["adjusted"], [0.03, 0.06, 0.06, 0.02]
+    )
+    # Benjamini-Hochberg: sorted *4/1,4/2,4/3,4/4 = .02,.02,.04,.04 step-up
+    np.testing.assert_allclose(
+        adjust_pvalues(p, method="bh")["adjusted"], [0.02, 0.04, 0.04, 0.02]
+    )
+
+
+def test_adjust_pvalues_errors() -> None:
+    from quantized.calc.stats_anova2 import adjust_pvalues
+
+    with pytest.raises(ValueError, match="method"):
+        adjust_pvalues([0.05], method="fdr2")
+    with pytest.raises(ValueError, match="within"):
+        adjust_pvalues([1.5])
+    with pytest.raises(ValueError, match="at least one"):
+        adjust_pvalues([])

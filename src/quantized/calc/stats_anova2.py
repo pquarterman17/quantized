@@ -171,3 +171,32 @@ def dunnett_test(
         "comparisons": rows, "control": control, "alpha": alpha,
         "alternative": alternative, "method": "Dunnett",
     }
+
+
+def adjust_pvalues(p_values: list[float], *, method: str = "holm") -> dict[str, Any]:
+    """Multiple-comparison p-value adjustment.
+
+    ``bonferroni`` (p·m, most conservative), ``holm`` (step-down Bonferroni —
+    uniformly more powerful, the sensible default), or ``bh`` (Benjamini-
+    Hochberg false-discovery-rate step-up). All clipped to [0, 1] and
+    monotonicity-enforced. Reference: Holm (1979); Benjamini & Hochberg (1995).
+    """
+    if method not in ("bonferroni", "holm", "bh"):
+        raise ValueError(f'method must be "bonferroni", "holm", or "bh", got "{method}"')
+    p = np.asarray(p_values, dtype=float).ravel()
+    if p.size == 0:
+        raise ValueError("adjust_pvalues needs at least one p-value")
+    if np.any(~np.isfinite(p)) or np.any(p < 0) or np.any(p > 1):
+        raise ValueError("p-values must be finite and within [0, 1]")
+    m = p.size
+    order = np.argsort(p, kind="stable")
+    adj = np.empty(m, dtype=float)
+    if method == "bonferroni":
+        adj = np.asarray(np.minimum(p * m, 1.0), dtype=float)
+    elif method == "holm":
+        ranked = p[order] * (m - np.arange(m))
+        adj[order] = np.minimum(np.maximum.accumulate(ranked), 1.0)  # step-down
+    else:  # bh
+        ranked = p[order] * m / (np.arange(m) + 1)
+        adj[order] = np.minimum(np.minimum.accumulate(ranked[::-1])[::-1], 1.0)  # step-up
+    return {"adjusted": adj, "method": method, "m": int(m)}
