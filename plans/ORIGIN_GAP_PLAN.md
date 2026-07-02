@@ -690,10 +690,11 @@ the same field names.)*
           reference's `ttSame` check rejects both of these layouts
     - [ ] Pole figures (Phi scans × Psi steps) import flat; decide a
           representation (2-D map vs multi-column)
-    - [ ] 2-D golden freeze vs MATLAB `importXRDML` (mesh kind only —
-          MATLAB has no snapshot/coupled to freeze against) + the
-          beam-attenuation port (tracked on PORT_CHECKLIST, in
-          progress separately)
+    - [x] 2-D golden freeze vs MATLAB (2026-07-01) — after back-porting
+          the cloud support to MATLAB (`aee70d1`), ALL THREE mesh kinds
+          frozen (`xrdml_map2d.json`, `freeze_xrdml_map2d.m`, headless
+          R2025b) and golden-tested incl. Qx/Qz grids. Beam-attenuation
+          port still tracked on PORT_CHECKLIST (separate session)
 
 ### Tier 3 — Nice-to-Have
 

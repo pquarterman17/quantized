@@ -30,57 +30,57 @@
       "fixture": "tests/fixtures/qd_edp124.dat",
       "matlab_fn": "parser.importQDVSM (defaults: XAxis=field, YAxis=moment)",
       "python_fn": "quantized.io.qd.import_qd_vsm (defaults)",
-      "rtol": 1e-9,
+      "rtol": 1e-09,
       "atol": 1e-12
     },
     "xrdml_la2nio4_default": {
       "fixture": "tests/fixtures/xrdml_la2nio4.xrdml",
       "matlab_fn": "parser.importXRDML (default: Intensity=cps)",
       "python_fn": "quantized.io.xrdml.import_xrdml (default)",
-      "rtol": 1e-9,
-      "atol": 1e-9
+      "rtol": 1e-09,
+      "atol": 1e-09
     },
     "ncnr_j395_default": {
       "fixture": "tests/fixtures/ncnr_j395.refl",
       "matlab_fn": "parser.importNCNRRefl",
       "python_fn": "quantized.io.ncnr.import_ncnr_refl",
-      "rtol": 1e-9,
+      "rtol": 1e-09,
       "atol": 1e-12
     },
     "mpms_mvst_default": {
       "fixture": "tests/fixtures/mpms_mvst.dat",
       "matlab_fn": "parser.importMPMS (defaults: temp, dcmoment)",
       "python_fn": "quantized.io.qd.import_mpms",
-      "rtol": 1e-9,
-      "atol": 1e-9
+      "rtol": 1e-09,
+      "atol": 1e-09
     },
     "ncnr_s11_nsf_default": {
       "fixture": "tests/fixtures/ncnr_s11_nsf.pnr",
       "matlab_fn": "parser.importNCNRPNR",
       "python_fn": "quantized.io.ncnr.import_ncnr_pnr",
-      "rtol": 1e-9,
-      "atol": 1e-9
+      "rtol": 1e-09,
+      "atol": 1e-09
     },
     "ncnr_s3_datA_default": {
       "fixture": "tests/fixtures/ncnr_s3.datA",
       "matlab_fn": "parser.importNCNRDat",
       "python_fn": "quantized.io.ncnr.import_ncnr_dat",
-      "rtol": 1e-9,
-      "atol": 1e-9
+      "rtol": 1e-09,
+      "atol": 1e-09
     },
     "refl1d_nbau_profile_default": {
       "fixture": "tests/fixtures/refl1d_nbau_profile.dat",
       "matlab_fn": "parser.importRefl1dDat",
       "python_fn": "quantized.io.refl1d.import_refl1d_dat",
-      "rtol": 1e-9,
-      "atol": 1e-9
+      "rtol": 1e-09,
+      "atol": 1e-09
     },
     "ppms_synth_default": {
       "fixture": "tests/fixtures/ppms_synth.dat",
       "matlab_fn": "parser.importPPMS (defaults: field, moment)",
       "python_fn": "quantized.io.qd.import_ppms",
       "note": "synthetic fixture (no real PPMS corpus); golden frozen from MATLAB on it",
-      "rtol": 1e-9,
+      "rtol": 1e-09,
       "atol": 1e-12
     },
     "lakeshore_synth_default": {
@@ -88,30 +88,30 @@
       "matlab_fn": "parser.importLakeShore (defaults: temp, moment)",
       "python_fn": "quantized.io.lakeshore.import_lake_shore",
       "note": "synthetic fixture (no real Lake Shore corpus); golden frozen from MATLAB on it",
-      "rtol": 1e-9,
+      "rtol": 1e-09,
       "atol": 1e-12
     },
     "csv_xrd_default": {
       "fixture": "tests/fixtures/csv_xrd.csv",
       "matlab_fn": "parser.importCSV (defaults: TimeColumn=1, DataColumns=[])",
       "python_fn": "quantized.io.delimited.import_csv",
-      "rtol": 1e-9,
-      "atol": 1e-9
+      "rtol": 1e-09,
+      "atol": 1e-09
     },
     "excel_synth_default": {
       "fixture": "tests/fixtures/excel_synth.xlsx",
       "matlab_fn": "parser.importExcel (defaults: sheet 1, TimeColumn=1)",
       "python_fn": "quantized.io.excel.import_excel",
       "note": "synthetic .xlsx (no generic Excel corpus); golden frozen from MATLAB on it",
-      "rtol": 1e-9,
-      "atol": 1e-9
+      "rtol": 1e-09,
+      "atol": 1e-09
     },
     "sims_shared_default": {
       "fixture": "tests/fixtures/sims_shared.csv",
       "matlab_fn": "parser.importSIMS (shared-depth; no interpolation)",
       "python_fn": "quantized.io.sims.import_sims",
       "note": "synthetic shared-depth fixture; exact parity (no union-grid interp)",
-      "rtol": 1e-9,
+      "rtol": 1e-09,
       "atol": 1e-12
     },
     "sims_barrier_default": {
@@ -119,15 +119,15 @@
       "matlab_fn": "parser.importSIMS (paired; union-grid + interp1 linear)",
       "python_fn": "quantized.io.sims.import_sims",
       "note": "real paired-column SIMS; exercises union-grid interpolation",
-      "rtol": 1e-9,
-      "atol": 1e-9
+      "rtol": 1e-09,
+      "atol": 1e-09
     },
     "rigaku_yig_default": {
       "fixture": "tests/fixtures/rigaku_yig.raw",
       "matlab_fn": "parser.importRigaku_raw (binary; default counts)",
       "python_fn": "quantized.io.rigaku.import_rigaku_raw",
-      "rtol": 1e-9,
-      "atol": 1e-9
+      "rtol": 1e-09,
+      "atol": 1e-09
     },
     "xrdcsv_standard_both": {
       "fixture": "tests/fixtures/xrdml_la2nio4.xrdml",
@@ -157,84 +157,84 @@
     "calc_globalfit": {
       "matlab_fn": "fitting.globalFit (3 exp-decay datasets, A free / tau,C shared)",
       "python_fn": "quantized.calc.global_fit.global_fit",
-      "note": "joint shared-parameter NLLS via curve_fit; params/errors ~1e-9; Inf bounds → null → restore to ±inf; freeze via freeze_calc_values.m",
-      "rtol": 1e-6,
-      "atol": 1e-8
+      "note": "joint shared-parameter NLLS via curve_fit; params/errors ~1e-9; Inf bounds \u2192 null \u2192 restore to \u00b1inf; freeze via freeze_calc_values.m",
+      "rtol": 1e-06,
+      "atol": 1e-08
     },
     "calc_multipeakfit": {
-      "matlab_fn": "bosonPlotter.peakAnalysis.onFitSimultaneous (composite peaks+poly-bg fit; 5 cases: Lorentzian, Gaussian, PV+Shared-FWHM, Lorentzian+constrain×3, PV+Shared-FWHM+eta) + exposed bosonPlotter.buildLinkedPacker",
+      "matlab_fn": "bosonPlotter.peakAnalysis.onFitSimultaneous (composite peaks+poly-bg fit; 5 cases: Lorentzian, Gaussian, PV+Shared-FWHM, Lorentzian+constrain\u00d73, PV+Shared-FWHM+eta) + exposed bosonPlotter.buildLinkedPacker",
       "python_fn": "quantized.calc.peak_multifit.{fit_multi_peak,build_linked_packer,compute_peak_area}",
-      "note": "fminsearch is eval-limited at default MaxFunEvals=200*nFree (MaxIter=30000 set, MaxFunEvals not) — Python replicates that budget so scipy Nelder-Mead matches bit-for-bit (worst rel ~7e-9); linked packer is exact. SPVII→symmetric Pearson(m=1.5), TCH→eta=0.5 PV in the composite (per-peak fit uses full forms). Freeze via freeze_calc_values.m (mpfFreeze).",
-      "rtol": 1e-6,
-      "atol": 1e-8
+      "note": "fminsearch is eval-limited at default MaxFunEvals=200*nFree (MaxIter=30000 set, MaxFunEvals not) \u2014 Python replicates that budget so scipy Nelder-Mead matches bit-for-bit (worst rel ~7e-9); linked packer is exact. SPVII\u2192symmetric Pearson(m=1.5), TCH\u2192eta=0.5 PV in the composite (per-peak fit uses full forms). Freeze via freeze_calc_values.m (mpfFreeze).",
+      "rtol": 1e-06,
+      "atol": 1e-08
     },
     "calc_globalcurvefit": {
-      "matlab_fn": "fitting.globalCurveFit (named per-group shared params; 4 cases: Gaussian shared-sigma / no-constraint / subset-share + Exp shared-tau, with the ASCII→Greek alias path)",
+      "matlab_fn": "fitting.globalCurveFit (named per-group shared params; 4 cases: Gaussian shared-sigma / no-constraint / subset-share + Exp shared-tau, with the ASCII\u2192Greek alias path)",
       "python_fn": "quantized.calc.global_curve_fit.global_curve_fit",
-      "note": "fminsearch over the curveFit logit/log bound transform (MaxFunEvals=4*MaxIter, not eval-limited) + numerical-Hessian errors scaled by global chiSqRed; converges fully so scipy Nelder-Mead matches MATLAB (params ~3e-9, errors ~2e-8). Constraint dataset indices are 1-based in the golden → −1 to 0-based for Python. Inf bounds passed explicitly (not via serialized null). Freeze via freeze_calc_values.m (gcfFreeze).",
-      "rtol": 1e-6,
-      "atol": 1e-8
+      "note": "fminsearch over the curveFit logit/log bound transform (MaxFunEvals=4*MaxIter, not eval-limited) + numerical-Hessian errors scaled by global chiSqRed; converges fully so scipy Nelder-Mead matches MATLAB (params ~3e-9, errors ~2e-8). Constraint dataset indices are 1-based in the golden \u2192 \u22121 to 0-based for Python. Inf bounds passed explicitly (not via serialized null). Freeze via freeze_calc_values.m (gcfFreeze).",
+      "rtol": 1e-06,
+      "atol": 1e-08
     },
     "calc_surfacefit": {
       "matlab_fn": "fitting.{surfaceModels (7 model evals), surfaceAutoGuess (per-model p0), surfaceFit (4 full fits: Plane/Paraboloid/2D-Gaussian/2D-Lorentzian, internal auto-guess + fminsearch)}",
       "python_fn": "quantized.calc.{surface_models.get_surface_model, surface_fit.surface_auto_guess, surface_fit.surface_fit}",
       "note": "model evals exact (~1e-16); auto-guess exact (~1e-15, numpy lstsq vs MATLAB backslash for linear models, centroid for peaks); full fits use the curveFit bound transform + fminsearch (MaxFunEvals=2*MaxIter, converges fully) so scipy matches MATLAB (params ~1e-9, errors ~7e-9). Shared flattened (x,y) grid emitted column-major so Python uses the identical points. Freeze via freeze_calc_values.m (sfFreeze).",
-      "rtol": 1e-6,
-      "atol": 1e-8
+      "rtol": 1e-06,
+      "atol": 1e-08
     },
     "calc_rsm": {
-      "matlab_fn": "fitting.rsmAnalyze (synthetic 2-Gaussian RSM: smooth → 3x3 local maxima → greedy min-sep → per-peak surfaceFit in angle + Q) + fitting.rsmStrain (chain + 3 standalone closed-form cases)",
+      "matlab_fn": "fitting.rsmAnalyze (synthetic 2-Gaussian RSM: smooth \u2192 3x3 local maxima \u2192 greedy min-sep \u2192 per-peak surfaceFit in angle + Q) + fitting.rsmStrain (chain + 3 standalone closed-form cases)",
       "python_fn": "quantized.calc.rsm_analyze.rsm_analyze + quantized.calc.rsm.rsm_strain",
       "note": "deterministic synthetic map + Q grids emitted so Python runs on identical data. Peak detection matches exactly (separable conv2 smooth, stable descending sort, greedy suppression); per-peak fits ~1e-9 (centres ~1e-12), background ~1e-6 abs. rsmStrain closed-form exact (NaN/None for symmetric eps_par + undefined relaxation). Freeze via freeze_calc_values.m (rsmFreeze).",
-      "rtol": 1e-6,
-      "atol": 1e-6
+      "rtol": 1e-06,
+      "atol": 1e-06
     },
     "calc_bgregion": {
       "matlab_fn": "BosonPlotter onBGMouseUp pure core (box-mask + polyfit + region stats): 4 cases (linear shoulder, y-bounded linear, quadratic, cubic)",
       "python_fn": "quantized.calc.baseline.fit_region_background",
       "note": "raw-x polyfit (no normalization, matches MATLAB polyfit) over points inside [x_min,x_max]x[y_min,y_max]; coeffs ~1e-12, full-range background ~4e-12 even for the ill-conditioned cubic, sample-std (N-1) exact. Freeze via freeze_calc_values.m (bgrFreeze).",
-      "rtol": 1e-9,
-      "atol": 1e-9
+      "rtol": 1e-09,
+      "atol": 1e-09
     },
     "calc_bgfromfile": {
       "matlab_fn": "bosonPlotter.applyCorrections step 4 (BG-from-file): subtract interp1(bgX, bgY, x, method, 0) from every channel; 3 cases (linear / pchip / spline) over an active range that overhangs the bg range on both sides",
       "python_fn": "quantized.calc.corrections.apply_corrections (bg_dataset=, bg_interp=)",
-      "note": "reference-background dataset subtraction with 0-fill extrapolation outside the bg x-range. linear=np.interp(left=0,right=0); pchip=PchipInterpolator(extrapolate=False)→nan_to_num(0); spline=CubicSpline not-a-knot(extrapolate=False)→nan_to_num(0). 2-channel active covers the per-channel loop; all 3 methods match ~1e-14 abs (tol 1e-9 for cross-platform FP headroom). Freeze via freeze_calc_values.m (bgfFreeze).",
-      "rtol": 1e-9,
-      "atol": 1e-9
+      "note": "reference-background dataset subtraction with 0-fill extrapolation outside the bg x-range. linear=np.interp(left=0,right=0); pchip=PchipInterpolator(extrapolate=False)\u2192nan_to_num(0); spline=CubicSpline not-a-knot(extrapolate=False)\u2192nan_to_num(0). 2-channel active covers the per-channel loop; all 3 methods match ~1e-14 abs (tol 1e-9 for cross-platform FP headroom). Freeze via freeze_calc_values.m (bgfFreeze).",
+      "rtol": 1e-09,
+      "atol": 1e-09
     },
     "calc_qspace": {
-      "matlab_fn": "parser.computeQSpace (coplanar RSM Qx/Qz from an omega×2theta grid): theta=2theta/2; Qx=(4pi/lambda)sin(theta)sin(omega-theta); Qz=...cos(...). axis1=omega (N=5), axis2=2theta (M=7), Cu Kalpha1.",
+      "matlab_fn": "parser.computeQSpace (coplanar RSM Qx/Qz from an omega\u00d72theta grid): theta=2theta/2; Qx=(4pi/lambda)sin(theta)sin(omega-theta); Qz=...cos(...). axis1=omega (N=5), axis2=2theta (M=7), Cu Kalpha1.",
       "python_fn": "quantized.calc.qspace.compute_qspace",
-      "note": "pure trig; matlab meshgrid(axis2',axis1) → N×M [omega][2theta] grids ≡ python broadcast omega(N,1)×2theta(1,M). N≠M catches an axis swap. Matches ~1e-13. Freeze via freeze_calc_values.m (qspFreeze).",
+      "note": "pure trig; matlab meshgrid(axis2',axis1) \u2192 N\u00d7M [omega][2theta] grids \u2261 python broadcast omega(N,1)\u00d72theta(1,M). N\u2260M catches an axis swap. Matches ~1e-13. Freeze via freeze_calc_values.m (qspFreeze).",
       "rtol": 1e-12,
       "atol": 1e-12
     },
     "calc_batchfit": {
       "matlab_fn": "fitting.batchFit (Exponential Decay across 4 datasets, auto-guess + bounds)",
       "python_fn": "quantized.calc.batch_fit.batch_fit",
-      "note": "per-dataset curve_fit summary; params/errors ~1e-9 (Nelder-Mead), stats exact; Inf bounds serialize as null → restore to ±inf; freeze via freeze_calc_values.m",
-      "rtol": 1e-6,
-      "atol": 1e-8
+      "note": "per-dataset curve_fit summary; params/errors ~1e-9 (Nelder-Mead), stats exact; Inf bounds serialize as null \u2192 restore to \u00b1inf; freeze via freeze_calc_values.m",
+      "rtol": 1e-06,
+      "atol": 1e-08
     },
     "calc_trackpeak": {
       "matlab_fn": "fitting.trackPeak (Gaussian + Lorentzian, drifting-peak series, follow on)",
       "python_fn": "quantized.calc.peak_track.track_peak",
-      "note": "per-dataset single-peak curve_fit (Nelder-Mead↔fminsearch); worst rel ~1e-9 → rtol 1e-6/atol 1e-8; freeze via freeze_calc_values.m",
-      "rtol": 1e-6,
-      "atol": 1e-8
+      "note": "per-dataset single-peak curve_fit (Nelder-Mead\u2194fminsearch); worst rel ~1e-9 \u2192 rtol 1e-6/atol 1e-8; freeze via freeze_calc_values.m",
+      "rtol": 1e-06,
+      "atol": 1e-08
     },
     "calc_odr": {
-      "matlab_fn": "fitting.odrFit (Deming/orthogonal regression: default λ=1, λ=4, λ-from-errors)",
+      "matlab_fn": "fitting.odrFit (Deming/orthogonal regression: default \u03bb=1, \u03bb=4, \u03bb-from-errors)",
       "python_fn": "quantized.calc.fit_odr.odr_fit",
       "note": "closed-form Deming + jackknife SEs; exact match ~1e-14; freeze via freeze_calc_values.m",
       "rtol": 1e-12,
       "atol": 1e-12
     },
     "calc_constraints": {
-      "matlab_fn": "fitting.applyConstraints (free params + constraint expressions → full vector)",
+      "matlab_fn": "fitting.applyConstraints (free params + constraint expressions \u2192 full vector)",
       "python_fn": "quantized.calc.fit_constraints.apply_constraints",
-      "note": "exact (deterministic string→value); 5 cases incl. named refs, math fns, and the reindexed double-replacement quirk (faithful to MATLAB); freeze via freeze_calc_values.m",
+      "note": "exact (deterministic string\u2192value); 5 cases incl. named refs, math fns, and the reindexed double-replacement quirk (faithful to MATLAB); freeze via freeze_calc_values.m",
       "rtol": 1e-12,
       "atol": 1e-12
     },
@@ -248,15 +248,15 @@
     "calc_peakfit": {
       "matlab_fn": "bosonPlotter.peak.fitSinglePeak (5 models on synthetic peaks + tiny perturbation, window [29,31], seed center 30)",
       "python_fn": "quantized.calc.peak_fit.fit_single_peak",
-      "note": "Nelder-Mead (scipy) vs fminsearch; worst observed rel ~3e-7 on Split-Pearson-VII bg → rtol 1e-5 / atol 1e-6; freeze via freeze_calc_values.m",
-      "rtol": 1e-5,
-      "atol": 1e-6
+      "note": "Nelder-Mead (scipy) vs fminsearch; worst observed rel ~3e-7 on Split-Pearson-VII bg \u2192 rtol 1e-5 / atol 1e-6; freeze via freeze_calc_values.m",
+      "rtol": 1e-05,
+      "atol": 1e-06
     },
     "calc_hysteresis_models": {
-      "matlab_fn": "fitting.hysteresisModels() — each model .fcn evaluated at .p0 over H = linspace(-5000, 5000, 40)",
+      "matlab_fn": "fitting.hysteresisModels() \u2014 each model .fcn evaluated at .p0 over H = linspace(-5000, 5000, 40)",
       "python_fn": "quantized.calc.fit_models.evaluate (Hysteresis-category models in fit_models_special)",
       "note": "5 M-H loop models (tanh, F+P, linear BG, approach-to-saturation, Langevin+BG); grid avoids H=0 so 1/|H| & 1/H^2 stay finite; freeze via tools/matlab/freeze_calc_values.m",
-      "rtol": 1e-9,
+      "rtol": 1e-09,
       "atol": 1e-12
     },
     "hdf5_synth_default": {
@@ -266,6 +266,14 @@
       "note": "binary HDF5 bytes differ between MATLAB h5write and h5py; this freezes the LOGICAL content (dataset paths/shapes/classes/values + every attribute name->value). 'toolboxName' (quantized vs quantized_matlab) and 'createdAt' (timestamp) are presence-only, not value-compared. MATLAB jsonencode flattens 2-D datasets column-major -> Python reshapes with order='F'.",
       "compare": "hdf5_logical",
       "rtol": 1e-12,
+      "atol": 1e-12
+    },
+    "xrdml_map2d": {
+      "fixture": "tests/fixtures/xrdml_{rsm,snapshot,coupled}_synthetic.xrdml",
+      "matlab_fn": "parser.importXRDML (map2D) + parser.computeQSpace",
+      "python_fn": "quantized.io.xrdml.import_xrdml (2D paths, all three mesh_kinds)",
+      "note": "frozen @ quantized_matlab aee70d1 (snapshot/coupled cloud support) via tools/matlab/freeze_xrdml_map2d.m; intensity in cps (counting time 2 s exercises the division)",
+      "rtol": 1e-09,
       "atol": 1e-12
     }
   }

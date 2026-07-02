@@ -275,3 +275,51 @@ def test_two_range_1d_file_is_not_a_cloud(tmp_path: Path) -> None:
     p.write_text(_cloud_xrdml(scans))
     ds = import_xrdml(p)
     assert ds.metadata["is2D"] is False
+
+
+@pytest.mark.golden
+@pytest.mark.parametrize("kind,fixture", [
+    ("mesh", "xrdml_rsm_synthetic.xrdml"),
+    ("snapshot", "xrdml_snapshot_synthetic.xrdml"),
+    ("coupled", "xrdml_coupled_synthetic.xrdml"),
+])
+def test_map2d_golden_vs_matlab(
+    kind: str,
+    fixture: str,
+    fixtures_dir: Path,
+    load_golden: Callable[[str], dict[str, Any]],
+) -> None:
+    """2-D map golden parity vs MATLAB importXRDML+computeQSpace (all three
+    mesh kinds; frozen @ quantized_matlab aee70d1 via freeze_xrdml_map2d.m).
+
+    The Python parser emits a scattered cloud; MATLAB emits the map2D grid —
+    reshaping the cloud by map_shape must reproduce MATLAB's matrices exactly
+    (same assembly math + same cps normalisation on both sides)."""
+    ref = load_golden("xrdml_map2d.json")[kind]
+    ds = import_xrdml(fixtures_dir / fixture)
+    assert ds.metadata["mesh_kind"] == ref["meshKind"] == kind
+    n, m = ds.metadata["map_shape"]
+
+    tt = ds.column("2Theta").reshape(n, m)
+    om = ds.column(str(ds.metadata["axis1_name"])).reshape(n, m)
+    iv = ds.column("Intensity").reshape(n, m)
+
+    assert_allclose(iv, np.asarray(ref["intensity"], dtype=float), rtol=1e-9, atol=1e-12)
+    # MATLAB's axis vectors are the per-row secondary value (fixed value or
+    # coupled-sweep midpoint) and the representative 2theta axis — both equal
+    # the corresponding means of the Python per-point grids for every kind.
+    assert_allclose(om.mean(axis=1), np.asarray(ref["axis1"], dtype=float).ravel(), rtol=1e-9)
+    assert_allclose(tt.mean(axis=0), np.asarray(ref["axis2"], dtype=float).ravel(), rtol=1e-9)
+    # Exact per-point grids for the non-rectilinear kinds.
+    if kind == "snapshot":
+        assert_allclose(tt, np.asarray(ref["axis2Grid"], dtype=float), rtol=1e-12)
+    if kind == "coupled":
+        assert_allclose(om, np.asarray(ref["axis1Grid"], dtype=float), rtol=1e-12)
+    # Reciprocal space must match bit-for-bit-ish (same closed form both sides).
+    assert_allclose(
+        ds.column("Qx").reshape(n, m), np.asarray(ref["Qx"], dtype=float), rtol=1e-9, atol=1e-12
+    )
+    assert_allclose(
+        ds.column("Qz").reshape(n, m), np.asarray(ref["Qz"], dtype=float), rtol=1e-9, atol=1e-12
+    )
+    assert ds.units[list(ds.labels).index("Intensity")] == ref["intensityUnit"]

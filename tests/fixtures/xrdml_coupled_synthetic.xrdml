@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<xrdMeasurements xmlns="http://www.xrdml.com/XRDMeasurement/2.0" status="Completed">
+<xrdMeasurement measurementType="Area measurement" status="Completed">
+<usedWavelength intended="K-Alpha 1"><kAlpha1 unit="Angstrom">1.5406</kAlpha1></usedWavelength>
+<scan appendNumber="1" status="Completed" scanAxis="Omega-2Theta"><dataPoints><positions axis="2Theta" unit="deg"><startPosition>47.0</startPosition><endPosition>49.0</endPosition></positions><positions axis="Omega" unit="deg"><startPosition>18.5</startPosition><endPosition>20.5</endPosition></positions><commonCountingTime unit="seconds">2.0</commonCountingTime><intensities unit="counts">2 7 21 60 22 8 3</intensities></dataPoints></scan>
+<scan appendNumber="2" status="Completed" scanAxis="Omega-2Theta"><dataPoints><positions axis="2Theta" unit="deg"><startPosition>47.0</startPosition><endPosition>49.0</endPosition></positions><positions axis="Omega" unit="deg"><startPosition>18.65</startPosition><endPosition>20.65</endPosition></positions><commonCountingTime unit="seconds">2.0</commonCountingTime><intensities unit="counts">6 21 63 180 66 24 9</intensities></dataPoints></scan>
+<scan appendNumber="3" status="Completed" scanAxis="Omega-2Theta"><dataPoints><positions axis="2Theta" unit="deg"><startPosition>47.0</startPosition><endPosition>49.0</endPosition></positions><positions axis="Omega" unit="deg"><startPosition>18.8</startPosition><endPosition>20.8</endPosition></positions><commonCountingTime unit="seconds">2.0</commonCountingTime><intensities unit="counts">10 35 105 300 110 40 15</intensities></dataPoints></scan>
+<scan appendNumber="4" status="Completed" scanAxis="Omega-2Theta"><dataPoints><positions axis="2Theta" unit="deg"><startPosition>47.0</startPosition><endPosition>49.0</endPosition></positions><positions axis="Omega" unit="deg"><startPosition>18.95</startPosition><endPosition>20.95</endPosition></positions><commonCountingTime unit="seconds">2.0</commonCountingTime><intensities unit="counts">14 49 147 420 154 56 21</intensities></dataPoints></scan>
+</xrdMeasurement>
+</xrdMeasurements>

@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<xrdMeasurements xmlns="http://www.xrdml.com/XRDMeasurement/2.0" status="Completed">
+<xrdMeasurement measurementType="Area measurement" status="Completed">
+<usedWavelength intended="K-Alpha 1"><kAlpha1 unit="Angstrom">1.5406</kAlpha1></usedWavelength>
+<scan appendNumber="1" status="Completed" scanAxis="2Theta"><dataPoints><positions axis="2Theta" unit="deg"><startPosition>50.0</startPosition><endPosition>51.0</endPosition></positions><positions axis="Omega" unit="deg"><commonPosition>22.0</commonPosition></positions><commonCountingTime unit="seconds">2.0</commonCountingTime><counts unit="counts">3 14 55 89 34 8</counts></dataPoints></scan>
+<scan appendNumber="2" status="Completed" scanAxis="2Theta"><dataPoints><positions axis="2Theta" unit="deg"><startPosition>50.2</startPosition><endPosition>51.2</endPosition></positions><positions axis="Omega" unit="deg"><commonPosition>22.1</commonPosition></positions><commonCountingTime unit="seconds">2.0</commonCountingTime><counts unit="counts">6 28 110 178 68 16</counts></dataPoints></scan>
+<scan appendNumber="3" status="Completed" scanAxis="2Theta"><dataPoints><positions axis="2Theta" unit="deg"><startPosition>50.4</startPosition><endPosition>51.4</endPosition></positions><positions axis="Omega" unit="deg"><commonPosition>22.2</commonPosition></positions><commonCountingTime unit="seconds">2.0</commonCountingTime><counts unit="counts">9 42 165 267 102 24</counts></dataPoints></scan>
+<scan appendNumber="4" status="Completed" scanAxis="2Theta"><dataPoints><positions axis="2Theta" unit="deg"><startPosition>50.6</startPosition><endPosition>51.6</endPosition></positions><positions axis="Omega" unit="deg"><commonPosition>22.3</commonPosition></positions><commonCountingTime unit="seconds">2.0</commonCountingTime><counts unit="counts">12 56 220 356 136 32</counts></dataPoints></scan>
+<scan appendNumber="5" status="Completed" scanAxis="2Theta"><dataPoints><positions axis="2Theta" unit="deg"><startPosition>50.8</startPosition><endPosition>51.8</endPosition></positions><positions axis="Omega" unit="deg"><commonPosition>22.4</commonPosition></positions><commonCountingTime unit="seconds">2.0</commonCountingTime><counts unit="counts">15 70 275 445 170 40</counts></dataPoints></scan>
+</xrdMeasurement>
+</xrdMeasurements>
