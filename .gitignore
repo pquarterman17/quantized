@@ -49,3 +49,6 @@ src/quantized/web/
 # saves a duplicate named "<file>-<Device>.<ext>". Never commit these.
 *MacBook*
 *-DESKTOP-*
+
+# OneDrive sync-conflict copies ("<name>-<machine>.<ext>") — never commit
+*MacBook Air*
