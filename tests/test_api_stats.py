@@ -67,3 +67,44 @@ def test_descriptive_empty_is_graceful_with_null_stats() -> None:
     out = resp.json()
     assert out["N"] == 0
     assert out["mean"] is None  # NaN -> null at the wire boundary
+
+
+def test_mann_whitney_roundtrip() -> None:
+    resp = client.post(
+        "/api/stats/mann-whitney", json={"x": [1, 2, 3], "y": [4, 5, 6]}
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["U"] == 0.0
+    assert abs(out["p"] - 0.1) < 1e-12
+
+
+def test_kruskal_roundtrip() -> None:
+    resp = client.post(
+        "/api/stats/kruskal",
+        json={"groups": [[1, 2, 3], [4, 5, 6], [7, 8, 9]]},
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert abs(out["H"] - 7.2) < 1e-12
+    assert out["df"] == 2
+
+
+def test_shapiro_roundtrip_and_422() -> None:
+    ok = client.post("/api/stats/shapiro", json={"x": [0.1, -0.4, 0.9, -1.2, 0.3]})
+    assert ok.status_code == 200
+    assert 0.0 < ok.json()["W"] <= 1.0
+
+    bad = client.post("/api/stats/shapiro", json={"x": [1.0, 2.0]})
+    assert bad.status_code == 422
+
+
+def test_sign_test_roundtrip() -> None:
+    resp = client.post(
+        "/api/stats/sign-test",
+        json={"x": [1, 2, 3, 4, 5, 6, 7, 8, -1, -2], "mu": 0.0},
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["n_pos"] == 8
+    assert abs(out["p"] - 2.0 * 56 / 1024.0) < 1e-12

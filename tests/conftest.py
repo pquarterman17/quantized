@@ -21,11 +21,22 @@ from quantized.datastruct import DataStruct
 TESTS_DIR = Path(__file__).parent
 FIXTURES = TESTS_DIR / "fixtures"
 GOLDEN = TESTS_DIR / "golden"
+# Sibling instrument corpus (see ../test-data/README.md; ORIGIN_GAP_PLAN #45).
+# Local-only, like the MATLAB corpus — tests using it carry @pytest.mark.realdata.
+TEST_DATA_CORPUS = TESTS_DIR.parent.parent / "test-data"
 
 
 @pytest.fixture
 def fixtures_dir() -> Path:
     return FIXTURES
+
+
+@pytest.fixture
+def corpus_dir() -> Path:
+    """Root of the ../test-data corpus; skips when the sibling is absent (CI)."""
+    if not TEST_DATA_CORPUS.is_dir():
+        pytest.skip("../test-data corpus not present")
+    return TEST_DATA_CORPUS
 
 
 @pytest.fixture
