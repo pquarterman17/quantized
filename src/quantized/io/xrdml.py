@@ -98,6 +98,28 @@ def _axis_positions(
     return None, None
 
 
+def _attenuation_factors(dp: ET.Element) -> NDArray[np.float64] | None:
+    """Per-pixel ``<beamAttenuationFactors>`` for a dataPoints block (or None)."""
+    el = _find_first(dp, "beamAttenuationFactors")
+    if el is None or el.text is None:
+        return None
+    return np.asarray([float(v) for v in el.text.split()], dtype=float)
+
+
+def _attenuator_meta(root: ET.Element) -> tuple[float, str, float]:
+    """Instrument ``<beamAttenuator>`` (factor, material, activateLevel)."""
+    att = _find_first(root, "beamAttenuator")
+    if att is None:
+        return float("nan"), "", float("nan")
+    mat = _find_first(att, "material")
+    material = mat.text.strip() if (mat is not None and mat.text) else ""
+    return (
+        _text_float(_find_first(att, "factor")),
+        material,
+        _text_float(_find_first(att, "activateLevel")),
+    )
+
+
 class _Scan:
     """Per-scan data collected during the parse (1D concat + 2D classification)."""
 
@@ -154,6 +176,8 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
     scans_xml.sort(key=lambda s: float(s.get("appendNumber", "1")))
 
     wavelength = _wavelength(root)
+    att_factor, att_material, att_level = _attenuator_meta(root)
+    n_att_corrected = 0
     counting_time = float("nan")
     counting_times_all: list[float] = []
     intensity_tag = "counts"
@@ -184,6 +208,18 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
         counts = np.asarray([float(x) for x in counts_elem.text.split()], dtype=float)
         if counts.size < 1:
             continue
+
+        # Beam-attenuation correction: per-pixel factors (>1) restore the true
+        # intensity where the attenuator was engaged. Matches importXRDML.
+        baf = _attenuation_factors(dp)
+        if baf is not None:
+            if baf.size == counts.size:
+                if bool(np.any(np.abs(baf - 1.0) > 1e-6)):
+                    n_att_corrected += 1
+                counts = np.asarray(counts * baf, dtype=float)
+            elif baf.size == 1 and abs(float(baf[0]) - 1.0) > 1e-6:
+                n_att_corrected += 1
+                counts = np.asarray(counts * float(baf[0]), dtype=float)
 
         tt_range, tt_list = _axis_positions(dp, "2Theta")
         if tt_range is None:
@@ -229,16 +265,22 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
                 stacklevel=2,
             )
 
+    att: dict[str, Any] = {
+        "attenuator_factor": float(att_factor) if np.isfinite(att_factor) else None,
+        "attenuator_material": att_material,
+        "attenuator_activate_level": float(att_level) if np.isfinite(att_level) else None,
+        "n_scans_att_corrected": n_att_corrected,
+    }
     if _is_2d(collected, sec_name):
         assert sec_name is not None  # guaranteed by _is_2d
         return _build_2d(collected, sec_name, path, intensity, counting_time,
-                         wavelength, intensity_tag)
+                         wavelength, intensity_tag, att)
     cloud = _classify_cloud(collected)
     if cloud is not None:
         cloud_axis, mesh_kind = cloud
         return _build_2d_cloud(collected, cloud_axis, mesh_kind, path, intensity,
-                               counting_time, wavelength, intensity_tag)
-    return _build_1d(collected, path, intensity, counting_time, intensity_tag)
+                               counting_time, wavelength, intensity_tag, att)
+    return _build_1d(collected, path, intensity, counting_time, intensity_tag, att)
 
 
 def _is_2d(scans: list[_Scan], sec_name: str | None) -> bool:
@@ -307,6 +349,7 @@ def _build_2d_cloud(
     counting_time: float,
     wavelength: float,
     intensity_tag: str,
+    att: dict[str, Any],
 ) -> DataStruct:
     """Assemble a generalized RSM point cloud (snapshot / coupled layouts).
 
@@ -355,6 +398,7 @@ def _build_2d_cloud(
         "axis2_name": "2Theta",
         "wavelength_a": float(wavelength) if np.isfinite(wavelength) else None,
     }
+    metadata.update(att)
     return DataStruct.create(
         np.arange(values.shape[0], dtype=float),
         values,
@@ -370,6 +414,7 @@ def _build_1d(
     intensity: str,
     counting_time: float,
     intensity_tag: str,
+    att: dict[str, Any],
 ) -> DataStruct:
     """Concatenate Completed scans into a single 2theta/Intensity trace (unchanged
     behaviour; golden-frozen)."""
@@ -393,6 +438,7 @@ def _build_1d(
         "intensity_tag": intensity_tag,
         "is2D": False,
     }
+    metadata.update(att)
     return DataStruct.create(
         two_theta, values, labels=["Intensity"], units=[unit], metadata=metadata
     )
@@ -406,6 +452,7 @@ def _build_2d(
     counting_time: float,
     wavelength: float,
     intensity_tag: str,
+    att: dict[str, Any],
 ) -> DataStruct:
     """Assemble an RSM mesh and flatten to a scattered multi-column DataStruct."""
     order = sorted(range(len(scans)), key=lambda i: scans[i].sec_value)
@@ -456,6 +503,7 @@ def _build_2d(
         "axis2_name": "2Theta",
         "wavelength_a": float(wavelength) if np.isfinite(wavelength) else None,
     }
+    metadata.update(att)
     return DataStruct.create(
         np.arange(values.shape[0], dtype=float),
         values,

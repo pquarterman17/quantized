@@ -7,7 +7,7 @@ the codebase never accretes the god-scripts the MATLAB original did.
 
 **Status:** Active
 **Created:** 2026-06-21
-**Updated:** 2026-06-27
+**Updated:** 2026-06-30
 
 ---
 
@@ -597,6 +597,37 @@ MATLAB."**
   hidden mappings (all keyed by `plotted[i]`) follow for free. Gates green (frontend 315 +
   build).
 
+### Session 2026-06-30 (W3 fitting workstream closed)
+
+- ~~**#23 MCMC sampling + Pawley refinement**~~ (2026-06-30) — the last two open
+  W3 fitting items. **MCMC** (`fitting.mcmcSample` → `calc/mcmc.py`): single-chain
+  random-walk Metropolis (Gaussian proposal, burn-in/thin, FFT-autocorrelation ESS);
+  RNG-based → invariant-tested (mean recovery, accept-rate band, seeded
+  reproducibility), mirroring the MATLAB scaffold's own test design. **Pawley**
+  (`fitting.pawleyRefine` → `calc/pawley.py`): adaptive grid-search cell refinement +
+  per-trial pseudo-Voigt/linear-bg least-squares + Rwp; invariant-tested (perturbed Si
+  cell recovers <0.02 Å). Its dependency **`plane_spacings`** (`calc.crystal.planeSpacings`
+  → `calc/crystallography.plane_spacings`: hkl enumeration + centering absences + system
+  inference) was ported and **golden-verified** vs MATLAB (`calc_planespacings.json`,
+  4 cells — hkl/multiplicity exact, d/2θ ~1e-12; `psFreeze`). Gate green (ruff + mypy +
+  967 pytest). **W3 fitting is now fully ported** (only cross-panel/headless follow-ups
+  remain in W4).
+- ~~**#24 Calculator cross-panel hooks**~~ (2026-06-30) — "send to" affordances between
+  the shared-state calculator tabs. **Crystal d → X-ray** (`sendDToXray`, d→2θ→Q),
+  **SLD formula → Crystal** cell-volume/density (`sendFormulaToCrystal`, molar-mass→cell-vol),
+  **Crystal formula+density → SLD** (`sendCellToSld`) — all pure in `useCalculators`.
+  **SLD → Reflectivity** crosses ToolWindows via a one-shot store bridge
+  (`useApp.reflectivitySeed` + `seedReflectivityLayer`); `useReflectivity` consumes it
+  as a manual-SLD layer above the substrate. Frontend-only; gate green (602 tests + build).
+  Advances #24's "cross-panel data hand-off contract".
+- ~~**#24 Headless calculator API**~~ (2026-06-30) — the scripting analogue of MATLAB
+  `api = DiraCulator()`. `calc/registry.py` (pure): a curated name→pure-function catalog
+  (89 ops / 16 domains) with `list_calculators`/`describe_calculator`/`call_calculator`;
+  thin `routes/calc.py` (`/api/calc/catalog|describe|call`, numpy-safe). Tests +
+  gate green (985 pytest). **Closes W4 #24** (calc framework: pure fns + registry +
+  cross-panel hand-off + headless API all done); only the calculator meta-panel
+  cross-panel *frontend* niceties remain optional.
+
 **Next pick-up (highest value first):**
 1. **Boson Plotter features ONLY** — user reaffirmed 2026-06-27 ("I only want to
    focus on bosonplotter features for now"); the calculator/non-calculator
@@ -617,7 +648,15 @@ MATLAB."**
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
 3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
    Rigaku `.raw` 2-D RSM, polarized-asymmetry consolidated CSV.
-4. **Standing verification gap** — frontend uPlot/Canvas render modes (map,
-   multi-panel, inset, polar, RSM, baseline/region drag) + the new BG picker's
-   visible effect are unit-tested but visually unverified (jsdom can't render);
-   needs a human eyeball or browser automation.
+4. **Standing verification gap (partly closed 2026-06-30)** — the **2-D map
+   Canvas2D render is now pixel-verified**: `mapRender.buildHeatmapImage` (extracted
+   pure — colormap mapping, NaN→transparent gaps, vertical flip, log floor) has
+   exact-RGBA tests, and a **real-raster `draw()` test** runs the full pipeline
+   against an actual canvas (node-canvas backing jsdom) asserting a data-filled grid
+   paints the interior while an all-null grid stays transparent. `canvas` is an
+   **optional** dev dep + the raster test skips where it's absent, so CI stays green
+   without the native lib. **Still open:** the *uPlot interactive* surfaces
+   (1-D plot plugins/overlays, multi-panel, inset, polar, drag interactions) draw via
+   uPlot's own layout, which needs a real browser (Playwright) to verify — node-canvas
+   alone can't (jsdom has no layout so uPlot sizes to 0). That's the remaining
+   browser-automation task.

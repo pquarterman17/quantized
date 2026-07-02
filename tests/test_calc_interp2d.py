@@ -21,7 +21,7 @@ def _scattered(g: dict[str, Any]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 @pytest.mark.golden
-@pytest.mark.parametrize("method", ["linear", "idw", "thinplate"])
+@pytest.mark.parametrize("method", ["linear", "natural", "idw", "thinplate"])
 def test_interpolate2d_matches_matlab(
     method: str,
     load_golden: Callable[[str], dict[str, Any]],
@@ -66,6 +66,60 @@ def test_interpolate2d_idw_reproduces_nodes() -> None:
     z = np.array([1.0, 2.0, 3.0, 4.0, 9.0])
     out = interpolate2d(x, y, z, np.array([0.5]), np.array([0.5]), method="idw")
     assert out["zq"][0] == pytest.approx(9.0)
+
+
+# ── Sibson natural-neighbour (calc/_natural_neighbor) ─────────────────────────
+
+
+def test_natural_has_linear_precision() -> None:
+    # Sibson interpolation reproduces any affine field z = a*x + b*y + c exactly.
+    rng = np.random.default_rng(0)
+    x = rng.uniform(0, 4, 60)
+    y = rng.uniform(0, 4, 60)
+    z = 2.0 * x + 3.0 * y + 1.0
+    gx, gy = np.meshgrid(np.linspace(1, 3, 11), np.linspace(1, 3, 11))
+    zq = interpolate2d(x, y, z, gx, gy, method="natural")["zq"]
+    assert np.isfinite(zq).all()
+    np.testing.assert_allclose(zq, 2.0 * gx + 3.0 * gy + 1.0, atol=1e-9)
+
+
+def test_natural_reproduces_nodes() -> None:
+    # Querying exactly at a data node returns that node's value (degenerate cell).
+    x = np.array([0.1, 0.9, 0.5, 0.2, 0.8, 0.4])
+    y = np.array([0.2, 0.3, 0.8, 0.6, 0.7, 0.1])
+    z = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    # Node index 2 is (0.5, 0.8) with z = 3.0.
+    out = interpolate2d(x, y, z, np.array([0.5]), np.array([0.8]), method="natural")
+    assert out["zq"][0] == pytest.approx(3.0)
+
+
+def test_cubic_aliases_to_natural() -> None:
+    # MATLAB scatteredInterpolant has no 'cubic'; it aliases to 'natural'.
+    rng = np.random.default_rng(1)
+    x = rng.uniform(0, 4, 40)
+    y = rng.uniform(0, 4, 40)
+    z = np.sin(x) * np.cos(y)
+    gx, gy = np.meshgrid(np.linspace(1, 3, 7), np.linspace(1, 3, 7))
+    a = interpolate2d(x, y, z, gx, gy, method="natural")["zq"]
+    b = interpolate2d(x, y, z, gx, gy, method="cubic")["zq"]
+    np.testing.assert_array_equal(a, b)
+
+
+def test_natural_nan_outside_hull() -> None:
+    x = np.array([0.0, 1.0, 0.0, 1.0, 0.5])
+    y = np.array([0.0, 0.0, 1.0, 1.0, 0.5])
+    z = np.array([1.0, 2.0, 3.0, 4.0, 2.5])
+    out = interpolate2d(x, y, z, np.array([[5.0]]), np.array([[5.0]]), method="natural")
+    assert np.isnan(out["zq"][0, 0])
+
+
+def test_natural_collinear_returns_nan() -> None:
+    # Collinear data cannot be triangulated → all NaN (matches MATLAB natural).
+    x = np.array([0.0, 1.0, 2.0, 3.0])
+    y = np.array([0.0, 1.0, 2.0, 3.0])
+    z = np.array([0.0, 1.0, 4.0, 9.0])
+    out = interpolate2d(x, y, z, np.array([1.5]), np.array([1.5]), method="natural")
+    assert np.isnan(out["zq"][0])
 
 
 def test_interpolate2d_too_few_points() -> None:

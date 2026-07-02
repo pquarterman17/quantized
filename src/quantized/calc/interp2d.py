@@ -8,10 +8,11 @@ Parity notes:
     Delaunay) and match MATLAB ``scatteredInterpolant`` inside the convex hull.
   * ``idw`` and ``thinplate`` are hand-rolled (inverse-distance weighting and
     thin-plate-spline linear systems) and match MATLAB exactly.
-  * ``natural`` (the MATLAB default) and ``cubic`` use natural-neighbour in
-    MATLAB, which scipy has no equivalent for; here they fall back to scipy's
-    C1 cubic (Clough-Tocher). These two methods are NOT bit-for-bit MATLAB-equal
-    — see plans/PORT_CHECKLIST.md.
+  * ``natural`` (the MATLAB default) and ``cubic`` (which MATLAB aliases to
+    ``natural``) use Sibson natural-neighbour interpolation, hand-rolled in
+    ``_natural_neighbor`` from the Delaunay triangulation. Sibson coordinates
+    are geometrically unique, so this matches MATLAB's 'natural' to ~1e-9 at
+    interior points and reproduces affine fields exactly (linear precision).
 """
 
 from __future__ import annotations
@@ -23,6 +24,8 @@ from numpy.typing import ArrayLike, NDArray
 from scipy.interpolate import griddata
 from scipy.spatial import Delaunay
 from scipy.spatial._qhull import QhullError
+
+from quantized.calc._natural_neighbor import sibson_interpolate
 
 __all__ = ["interpolate2d", "regrid2d"]
 
@@ -74,13 +77,17 @@ def _interp_scattered(
 ) -> NDArray[np.float64]:
     pts = np.column_stack([xv, yv])
     qpts = np.column_stack([xqv, yqv])
-    gd_method = "cubic" if method in ("natural", "cubic") else method
-    if gd_method == "nearest":
+    if method in ("natural", "cubic"):
+        # Sibson natural-neighbour (MATLAB aliases 'cubic' to 'natural'); already
+        # NaN outside the convex hull.
+        zqv = sibson_interpolate(xv, yv, zv, xqv, yqv)
+    elif method == "nearest":
         zqv = np.asarray(griddata(pts, zv, qpts, method="nearest"), dtype=float)
         if extrapolation == "none":
             zqv = _hull_mask(xv, yv, qpts, zqv)
         return zqv
-    zqv = np.asarray(griddata(pts, zv, qpts, method=gd_method), dtype=float)
+    else:  # linear
+        zqv = np.asarray(griddata(pts, zv, qpts, method="linear"), dtype=float)
     if extrapolation == "nearest":
         nan_mask = np.isnan(zqv)
         if nan_mask.any():

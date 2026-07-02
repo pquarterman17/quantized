@@ -58,6 +58,7 @@ select = ["E", "F", "I", "UP", "B"]
 "src/quantized/calc/crystallography.py" = ["E741"]
 "src/quantized/routes/crystallography.py" = ["E741"]
 "tests/test_crystallography.py" = ["E741"]
+"tests/test_calc_planespacings.py" = ["E741"]
 
 [tool.mypy]
 python_version = "3.11"

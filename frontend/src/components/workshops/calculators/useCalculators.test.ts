@@ -178,6 +178,53 @@ describe("useCalculators", () => {
     });
     expect(result.current.cellResult?.volume).toBe(64);
   });
+
+  // ── Cross-panel hooks ──────────────────────────────────────────────────────
+  it("sendDToXray seeds the X-ray d→2θ conversion with the computed d", async () => {
+    vi.mocked(crystalDSpacing).mockResolvedValue({ d: 3.1356, system: "cubic" });
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.crCompute();
+    });
+    act(() => result.current.sendDToXray());
+    expect(result.current.tab).toBe("xray");
+    expect(result.current.xrayMode).toBe("2theta_from_d");
+    expect(result.current.xrayValue).toBe("3.1356");
+    expect(result.current.xrayResult).toBeNull();
+  });
+
+  it("sendDToXray is a no-op before a d-spacing is computed", () => {
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.sendDToXray());
+    expect(result.current.tab).toBe("units"); // unchanged (initial tab)
+  });
+
+  it("sendFormulaToCrystal copies the SLD formula into the Crystal tab", () => {
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.updSld({ formula: "TiO2" }));
+    act(() => result.current.sendFormulaToCrystal());
+    expect(result.current.tab).toBe("crystal");
+    expect(result.current.crystal.formula).toBe("TiO2");
+  });
+
+  it("sendCellToSld copies the crystallographic density into the SLD tab", async () => {
+    vi.mocked(crystalCell).mockResolvedValue({ volume: 160.18, molar_mass: 28.09, density: 2.33 });
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.updCrystal({ formula: "Si" }));
+    await act(async () => {
+      await result.current.cellCompute();
+    });
+    act(() => result.current.sendCellToSld());
+    expect(result.current.tab).toBe("sld");
+    expect(result.current.sld.formula).toBe("Si");
+    expect(result.current.sld.density).toBe("2.33");
+  });
+
+  it("sendCellToSld is a no-op when no density has been computed", () => {
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.sendCellToSld());
+    expect(result.current.tab).toBe("units");
+  });
 });
 
 describe("assembleCell", () => {

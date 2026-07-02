@@ -21,7 +21,7 @@ Reference values (frozen from ``quantized_matlab``):
   - ``resistivity(500, 2e-5) -> rho = 0.01`` Ω·cm
   - ``sheet_resistance(1e-3, 2e-5) -> Rs = 50`` Ω/sq
   - ``conductivity(1e-3) -> sigma = 1000`` S/cm
-  - ``mobility(1e-2, 1e18) -> mu ≈ 62.4`` cm²/(V·s)
+  - ``mobility(1e-2, 1e18) -> mu ≈ 624.15`` cm²/(V·s)
   - ``wiedemann_franz(300, 1.72e-6) -> kappa_e ≈ 4.26`` W/(cm·K)
 """
 

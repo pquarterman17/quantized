@@ -6,6 +6,7 @@
 import type { ReactNode } from "react";
 
 import type { SldProbe } from "../../../lib/api";
+import { useApp } from "../../../store/useApp";
 import { Button, NumberField, Pill } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import {
@@ -58,6 +59,11 @@ function ProbeBlock({
 
 export default function SldTab({ c }: { c: CalculatorsState }) {
   const r = c.sldResult;
+  const seedReflectivityLayer = useApp((s) => s.seedReflectivityLayer);
+  // SLD → reflectivity: hand a probe's SLD (×10⁻⁶ Å⁻² → Å⁻²) to the reflectivity
+  // workshop as a new manual-SLD layer, opening the workshop.
+  const sendToReflectivity = (sldReal: number, probe: string): void =>
+    seedReflectivityLayer({ sld: sldReal * 1e-6, label: `${r?.formula ?? "SLD"} ${probe}` });
   return (
     <div style={{ marginTop: 12 }}>
       {/* Material presets (formula + density) */}
@@ -90,6 +96,14 @@ export default function SldTab({ c }: { c: CalculatorsState }) {
         </span>
         <NumberField value={c.sld.density} width={64} onChange={(v) => c.updSld({ density: v })} />
         <span style={{ color: "var(--text-faint)" }}>g/cm³</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={c.sendFormulaToCrystal}
+          title="Use this formula in the Crystal tab (cell volume + theoretical density)"
+        >
+          → Crystal
+        </Button>
       </div>
 
       {/* Neutron wavelength */}
@@ -161,6 +175,25 @@ export default function SldTab({ c }: { c: CalculatorsState }) {
           <ProbeBlock title="X-ray SLD" p={r.xray} />
           <div className="qzk-ds-meta" style={{ marginTop: 12, color: "var(--text-faint)" }}>
             {r.formula} · M = {fmtNum(r.molar_mass)} g/mol · n = {fmtNum(r.number_density)} cm⁻³
+          </div>
+          {/* SLD → reflectivity workshop (as a manual-SLD layer) */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => sendToReflectivity(r.neutron.sld_real, "neutron")}
+              title="Add this neutron SLD as a layer in the reflectivity workshop"
+            >
+              → Reflectivity (n)
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => sendToReflectivity(r.xray.sld_real, "X-ray")}
+              title="Add this X-ray SLD as a layer in the reflectivity workshop"
+            >
+              → Reflectivity (x)
+            </Button>
           </div>
         </>
       )}

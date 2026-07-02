@@ -69,6 +69,14 @@ export interface IntegralResult {
   area: number;
 }
 
+/** A layer SLD handed from the calculators SLD tab to the reflectivity workshop
+ *  (cross-panel hook). `sld` is in Å⁻² (the reflectivity layer unit — the SLD tab
+ *  converts its ×10⁻⁶ Å⁻² display value). `label` is a short provenance note. */
+export interface ReflectivitySeed {
+  sld: number;
+  label?: string;
+}
+
 /** Default stage tab for a newly-activated dataset: a 2-D map (XRDML RSM) opens
  *  in the Map view, a 1-D scan in the Plot view — but never override an explicit
  *  Worksheet choice (the user is inspecting the data grid). */
@@ -159,6 +167,9 @@ interface AppState {
   hysteresisOpen: boolean;
   peaksOpen: boolean;
   reflectivityOpen: boolean;
+  // A pending SLD layer seeded by the calculators SLD tab; consumed once by the
+  // reflectivity workshop on open, then cleared (cross-panel hook).
+  reflectivitySeed: ReflectivitySeed | null;
   baselineOpen: boolean;
   calculatorsOpen: boolean;
   magToolsOpen: boolean;
@@ -269,6 +280,9 @@ interface AppState {
   setHysteresisOpen: (open: boolean) => void;
   setPeaksOpen: (open: boolean) => void;
   setReflectivityOpen: (open: boolean) => void;
+  // Send an SLD to the reflectivity workshop as a new layer + open it (SLD→refl).
+  seedReflectivityLayer: (seed: ReflectivitySeed) => void;
+  clearReflectivitySeed: () => void;
   setBaselineOpen: (open: boolean) => void;
   setCalculatorsOpen: (open: boolean) => void;
   setMagToolsOpen: (open: boolean) => void;
@@ -466,6 +480,7 @@ export const useApp = create<AppState>((set, get) => ({
   hysteresisOpen: false,
   peaksOpen: false,
   reflectivityOpen: false,
+  reflectivitySeed: null,
   baselineOpen: false,
   calculatorsOpen: false,
   magToolsOpen: false,
@@ -482,7 +497,10 @@ export const useApp = create<AppState>((set, get) => ({
   peakOverlay: null,
   baselineOverlay: null,
   rsmPeaks: null,
-  mapMethod: "natural",
+  // 'linear' default: fast (~50 ms) and bit-exact MATLAB parity. 'natural'
+  // (true Sibson) is correct but does a per-query Voronoi cavity walk (seconds
+  // at 200²), so it's an opt-in quality choice, not the auto-open default.
+  mapMethod: "linear",
   mapRes: 200,
   macroRecording: false,
   macroSteps: [],
@@ -1058,6 +1076,8 @@ export const useApp = create<AppState>((set, get) => ({
   setHysteresisOpen: (hysteresisOpen) => set({ hysteresisOpen }),
   setPeaksOpen: (peaksOpen) => set({ peaksOpen }),
   setReflectivityOpen: (reflectivityOpen) => set({ reflectivityOpen }),
+  seedReflectivityLayer: (reflectivitySeed) => set({ reflectivitySeed, reflectivityOpen: true }),
+  clearReflectivitySeed: () => set({ reflectivitySeed: null }),
   setBaselineOpen: (baselineOpen) => set({ baselineOpen }),
   setCalculatorsOpen: (calculatorsOpen) => set({ calculatorsOpen }),
   setRsmOpen: (rsmOpen) => set({ rsmOpen }),

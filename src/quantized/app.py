@@ -19,6 +19,7 @@ from quantized import __version__
 from quantized.routes import (
     aggregate,
     baseline,
+    calc,
     corrections,
     crystallography,
     diffusion,
@@ -142,6 +143,7 @@ def create_app() -> FastAPI:
     application.include_router(superconductor.router)
     application.include_router(magnetic.router)
     application.include_router(aggregate.router)
+    application.include_router(calc.router)
 
     # Client-presence WebSocket (registered before the SPA mount so the
     # catch-all StaticFiles route never shadows it).

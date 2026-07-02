@@ -27,6 +27,35 @@ function freeze_reference_values()
     dx = parser.importXRDML(xrdml);    % default: Intensity=cps
     freezeCase(dx, fullfile(goldenDir, 'xrdml_la2nio4_default.json'), 'xrdml_la2nio4.xrdml');
 
+    % ── Case: XRDML 1D beam-attenuation correction (per-pixel factors) ─────
+    % counts .* beamAttenuationFactors (6×1.0 then 4×100.0), then /countingTime.
+    xatt = fullfile(repoRoot, 'tests', 'fixtures', 'xrdml_attenuation.xrdml');
+    da = parser.importXRDML(xatt);
+    freezeCase(da, fullfile(goldenDir, 'xrdml_attenuation.json'), 'xrdml_attenuation.xrdml');
+
+    % ── Case: XRDML 2D RSM mesh — map2D matrix from importXRDML ────────────
+    % The Python port returns the mesh as a scattered DataStruct; this freezes
+    % MATLAB's map2D matrix (N omega frames × M 2theta pixels) for the Python
+    % test to compare against after reshaping by map_shape.
+    rsm = fullfile(repoRoot, 'tests', 'fixtures', 'xrdml_rsm_synthetic.xrdml');
+    dr = parser.importXRDML(rsm);
+    ps = dr.metadata.parserSpecific;
+    assert(ps.is2D, 'expected a 2D RSM mesh from synthetic_rsm');
+    m2 = ps.map2D;
+    om = struct();
+    om.source_file   = 'xrdml_rsm_synthetic.xrdml';
+    om.axis1Name     = m2.axis1Name;     % 'Omega'
+    om.axis1         = m2.axis1(:).';    % N omega values
+    om.axis2         = m2.axis2(:).';    % M 2theta values
+    om.intensity     = m2.intensity;     % N×M (kept 2-D; jsonencode → nested rows)
+    om.intensityUnit = m2.intensityUnit;
+    fidm = fopen(fullfile(goldenDir, 'xrdml_rsm_map.json'), 'w');
+    assert(fidm > 0, 'cannot open xrdml_rsm_map.json for writing');
+    fwrite(fidm, jsonencode(om));
+    fclose(fidm);
+    fprintf('froze xrdml_rsm_map.json  (%d x %d)\n', ...
+        size(m2.intensity, 1), size(m2.intensity, 2));
+
     % ── Case: NCNR reductus .refl (Qz -> Intensity/uncertainty/resolution) ─
     refl = fullfile(repoRoot, 'tests', 'fixtures', 'ncnr_j395.refl');
     dr = parser.importNCNRRefl(refl);

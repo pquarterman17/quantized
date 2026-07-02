@@ -208,7 +208,9 @@ function freeze_calc_values()
     [xqg, yqg] = meshgrid(linspace(0.3, 0.7, 5), linspace(0.3, 0.7, 5));
     i2In = struct('x', xs2.', 'y', ys2.', 'z', zs2.', 'xq', xqg, 'yq', yqg);
     % nearest omitted: Voronoi-boundary tie-break differs from scipy (tested structurally)
-    for m = ["linear", "idw", "thinplate"]
+    % natural = Sibson natural-neighbour (geometrically unique) — the Python port
+    % hand-rolls it (calc/_natural_neighbor) and matches MATLAB to ~1e-9 interior.
+    for m = ["linear", "natural", "idw", "thinplate"]
         ri = utilities.interpolate2D(xs2, ys2, zs2, xqg, yqg, 'Method', m);
         writeJson(struct('input', i2In, 'params', struct('method', char(m)), ...
             'output', struct('zq', ri.zq, 'method', char(ri.method), ...
@@ -705,6 +707,14 @@ function freeze_calc_values()
     % ── Q-space: parser.computeQSpace coplanar RSM Qx/Qz from (omega,2theta) ─
     writeJson(qspFreeze(), fullfile(goldenDir, 'calc_qspace.json'));
 
+    % ── errorProp (linear): partials/error/relError for scalar, correlated, ─
+    %   vector-valued, and single-input cases (MC is RNG-based → invariant-tested).
+    writeJson(errPropFreeze(), fullfile(goldenDir, 'calc_errorprop.json'));
+
+    % ── planeSpacings: allowed reflections (hkl/d/2theta/multiplicity/system) ─
+    %   across centering rules + crystal-system inference (Pawley dependency).
+    writeJson(psFreeze(), fullfile(goldenDir, 'calc_planespacings.json'));
+
     fprintf('Done.\n');
 end
 
@@ -1142,4 +1152,49 @@ function out = qspFreeze()
     map = parser.computeQSpace(map);
     out = struct('axis1', map.axis1.', 'axis2', map.axis2, ...
         'wavelength_A', map.wavelength_A, 'Qx', map.Qx, 'Qz', map.Qz);
+end
+
+% ════════════════════════════════════════════════════════════════════════
+%  errorProp freeze (utilities.errorProp linear method)
+% ════════════════════════════════════════════════════════════════════════
+function out = errPropFreeze()
+    % Linear (first-order Taylor) propagation: deterministic, so golden-frozen.
+    % The Python lambdas in test_errors.py must mirror these exactly.
+    rA = utilities.errorProp(@(a,b,c) a.*b + c, {3.0, 4.0, 1.0}, {0.1, 0.2, 0.05});
+    rB = utilities.errorProp(@(a,b) a + b, {1.0, 1.0}, {0.1, 0.1}, ...
+        Correlated=[1, 1; 1, 1]);
+    rC = utilities.errorProp(@(a,b) [a + b; a - b; a .* b], {3.0, 4.0}, {0.1, 0.2});
+    rD = utilities.errorProp(@(x) x.^2, {3.0}, {0.1});
+    out = struct();
+    out.abc    = packEP(rA);   % scalar f = a*b + c
+    out.corr   = packEP(rB);   % fully-correlated sum
+    out.vecfun = packEP(rC);   % vector-valued f → element-wise error
+    out.single = packEP(rD);   % single-input f = x^2
+end
+
+function p = packEP(r)
+    p = struct('value', r.value(:).', 'error', r.error(:).', ...
+        'relError', r.relError(:).', 'partials', r.partials(:).');
+end
+
+% ════════════════════════════════════════════════════════════════════════
+%  planeSpacings freeze (calc.crystal.planeSpacings reflection lists)
+% ════════════════════════════════════════════════════════════════════════
+function out = psFreeze()
+    % Deterministic reflection enumeration across centering rules + systems.
+    out = struct();
+    out.fcc    = packPS(calc.crystal.planeSpacings(5.4307, ...
+        Centering='F', MaxHKL=4, Lambda=1.5406));            % cubic, F-centering
+    out.bcc    = packPS(calc.crystal.planeSpacings(2.867, ...
+        Centering='I', MaxHKL=3, Lambda=1.5406));            % cubic, I-centering
+    out.tetrag = packPS(calc.crystal.planeSpacings(3.905, ...
+        c=3.95, Centering='P', MaxHKL=2, Lambda=1.5406));    % tetragonal
+    out.hex    = packPS(calc.crystal.planeSpacings(4.758, ...
+        c=12.991, gamma=120, Centering='P', MaxHKL=3, Lambda=1.5406));  % hexagonal
+end
+
+function p = packPS(r)
+    p = struct('hkl', r.hkl, 'd', r.d(:).', 'twoTheta', r.twoTheta(:).', ...
+        'multiplicity', r.multiplicity(:).', 'centering', r.centering, ...
+        'system', r.system, 'lambda', r.lambda, 'nReflections', r.nReflections);
 end

@@ -213,6 +213,10 @@ export interface CalculatorsState {
   updSld: (patch: Partial<SldForm>) => void;
   setSldPreset: (formula: string, density: number) => void;
   sldCompute: () => Promise<void>;
+  // Cross-panel hooks — hand a computed value to a related shared-state tab.
+  sendDToXray: () => void; // Crystal d-spacing → X-ray tab (d → 2θ → Q)
+  sendFormulaToCrystal: () => void; // SLD formula → Crystal cell-volume/density (molar mass)
+  sendCellToSld: () => void; // Crystal formula + theoretical density → SLD tab
 }
 
 export function useCalculators(): CalculatorsState {
@@ -364,6 +368,44 @@ export function useCalculators(): CalculatorsState {
     setSldError(null);
   };
 
+  // ── Cross-panel hooks ──────────────────────────────────────────────────────
+  // Crystal d-spacing → X-ray tab: seed the d→2θ conversion with the computed d
+  // (then 2θ→Q is one more click). No-op until a d has been computed.
+  const sendDToXray = (): void => {
+    if (!crResult) return;
+    setXrayValue(String(crResult.d));
+    setXrayMode("2theta_from_d");
+    setXrayResult(null);
+    setXrayError(null);
+    setTab("xray");
+  };
+
+  // SLD formula → Crystal tab: the same material's molar mass feeds the
+  // cell-volume/theoretical-density calc (molar-mass → cell-vol).
+  const sendFormulaToCrystal = (): void => {
+    const formula = sld.formula.trim();
+    if (!formula) return;
+    setCrystal((s) => ({ ...s, formula }));
+    setCellResult(null);
+    setCellError(null);
+    setTab("crystal");
+  };
+
+  // Crystal formula + theoretical density → SLD tab: use the crystallographic
+  // density in the SLD calc instead of a literature value.
+  const sendCellToSld = (): void => {
+    if (!cellResult || cellResult.density == null) return;
+    const formula = crystal.formula.trim();
+    setSld((s) => ({
+      ...s,
+      formula: formula || s.formula,
+      density: String(cellResult.density),
+    }));
+    setSldResult(null);
+    setSldError(null);
+    setTab("sld");
+  };
+
   async function sldCompute(): Promise<void> {
     setSldBusy(true);
     setSldError(null);
@@ -433,5 +475,8 @@ export function useCalculators(): CalculatorsState {
     updSld,
     setSldPreset,
     sldCompute,
+    sendDToXray,
+    sendFormulaToCrystal,
+    sendCellToSld,
   };
 }
