@@ -471,13 +471,11 @@ the same field names.)*
 
 ### Tier 2 — Medium Impact
 
-29. **Bootstrap + MCMC uncertainty** — emcee (MIT) posteriors and
-    bootstrap CIs on any fit; also closes PORT_CHECKLIST's open
-    `mcmcSample.m` item; a differentiator Origin lacks
-    *Model: sonnet. Pickup: wraps `calc/fitting.py`'s objective;
-    corner-style posterior panels through the export path; RNG output
-    → test invariants (shape/convergence/summary stats), not frozen
-    values, per golden-tests.md.*
+29. **Bootstrap + MCMC uncertainty** — CORE SHIPPED 2026-07-02 (see
+    Completed): bootstrap CIs (residual/pairs) + MCMC fit posteriors
+    over the ported `calc/mcmc.py` sampler (no emcee dep needed).
+    *Remaining: corner-style posterior panels through the export path
+    (UI/figure work — pairs naturally with the fitting workshop).*
 
 ### Tier 3 — Nice-to-Have
 
@@ -512,11 +510,11 @@ the same field names.)*
     - [ ] Acceptance: XRD fixture from load to report in ≤5 clicks with
           defaults; recipe re-run on a second scan reproduces the flow
 
-32. **Integrate-only workflow** — peak areas/centroid/FWHM without a
-    full fit; multi-peak deconvolution report with %-area per component
-    *Model: haiku. Pickup: trapezoid areas over baseline-subtracted
-    regions (`calc/baseline.py`); %-area table from existing multi-fit
-    output; surfaces as wizard page ⑤'s alternate path.*
+32. **Integrate-only workflow** — BACKEND SHIPPED 2026-07-02 (see
+    Completed): per-region trapezoid areas/centroid/FWHM/%-area over a
+    shoulder-to-shoulder linear baseline, `/api/peaks/integrate`.
+    *Remaining: surface it in the UI — wizard page ⑤'s alternate path
+    (or a region-tool action on the plot before the wizard exists).*
 
 33. **Quick-fit gadget** — drag an ROI rectangle on the live plot →
     fit of that region recomputes live as the ROI moves
@@ -772,6 +770,19 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#29 (core) Bootstrap + MCMC fit uncertainty**~~ (2026-07-02) —
+  `calc/fit_bootstrap.py`: residual/pairs bootstrap over `curve_fit`
+  (deterministic seed, failed-refit accounting, percentile CIs vs the
+  asymptotic SEs; verified against analytic OLS SEs) + `fit_posterior`
+  bridging fits into the ported `calc/mcmc.py` RW-Metropolis sampler
+  (Gaussian likelihood at fit RMSE, flat priors in bounds, 68%
+  intervals). `/api/fitting/{bootstrap,posterior}`. Corner-plot UI
+  panel remains on the open item.
+- ~~**#32 (backend) Integrate-only peak analysis**~~ (2026-07-02) —
+  `calc/peak_integrate.py`: per-region net area (linear/none baseline),
+  intensity-weighted centroid, height/position, interpolated FWHM,
+  %-area deconvolution table; Gaussian-analytic verified (A·σ·√2π,
+  FWHM 2.3548σ). `/api/peaks/integrate`. Wizard UI remains.
 - ~~**#24 (core) Balanced two-way ANOVA + Tukey/Dunnett**~~
   (2026-07-01) — `calc/stats_anova2.py`: balanced factorial closed form
   (interaction dropped into error when n=1; unbalanced raises) verified
