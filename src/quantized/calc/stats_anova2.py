@@ -194,9 +194,9 @@ def adjust_pvalues(p_values: list[float], *, method: str = "holm") -> dict[str, 
     if method == "bonferroni":
         adj = np.asarray(np.minimum(p * m, 1.0), dtype=float)
     elif method == "holm":
-        ranked = p[order] * (m - np.arange(m))
+        ranked = np.asarray(p[order] * (m - np.arange(m)), dtype=float)
         adj[order] = np.minimum(np.maximum.accumulate(ranked), 1.0)  # step-down
     else:  # bh
-        ranked = p[order] * m / (np.arange(m) + 1)
+        ranked = np.asarray(p[order] * m / (np.arange(m) + 1), dtype=float)
         adj[order] = np.minimum(np.minimum.accumulate(ranked[::-1])[::-1], 1.0)  # step-up
     return {"adjusted": adj, "method": method, "m": int(m)}
