@@ -712,12 +712,19 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
     toggleExcluded / activeRowIndices / pruneExcluded / analysisData /
     sanitizeExcluded) + store actions (toggle/set/clear) + worksheet wired
     to it (durable, dataset-scoped, replaces the transient local mask) +
-    .dwk round-trip. First consumer honoring it: Tabulate (#55) via
-    analysisData. Remaining: (a) the SELECTION dimension (plot rubber-band
-    ↔ worksheet highlight — canvas/interaction work); (b) fits honoring
-    exclusion needs a plot-display decision (hide vs grey excluded points —
-    fitModel returns yFit at the input x, so pruning fit inputs misaligns
-    the full-x overlay); (c) the universal-linking architecture guard.*
+    .dwk round-trip. Consumers honoring it: Tabulate (#55), Distribution
+    (#52), the local filter (#53) — all via analysisData.*
+    *CROSS-VIEW SHIPPED 2026-07-03: the plot + curve fit now honor exclusion
+    (and the filter). Preferences ▸ Plot ▸ "Excluded rows" toggles Hide
+    (default — dropped rows nulled to gaps) vs Grey (drawn as muted
+    companion markers); `excludedDisplay` pref, persisted. The plot x stays
+    full-length (`maskExcludedPayload` nulls/ghosts rows) so overlays/
+    error-bars/waterfall stay aligned; CurveFit fits `analysisData` and
+    expands its overlay via `expandToFull`. Remaining: (a) the SELECTION
+    dimension (plot rubber-band ↔ worksheet highlight — canvas/interaction);
+    (b) peaks/baseline/hysteresis fits should also read analysisData (their
+    overlays already align since x is full-length — they just don't exclude
+    yet); (c) the universal-linking architecture guard/test.*
     - [ ] **Universal-linking rule:** linking is threshold-shaped —
           80% linked feels broken, not innovative. When this lands, add
           an architecture guard (`architecture-guards.md` + a grep-able
