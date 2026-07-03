@@ -555,14 +555,15 @@ the same field names.)*
     thumbnails) in the workspace; the substrate for #3 and #37
     *Model: opus (schema design — W7's contract item; W1 batch, W5
     stats, and W6 wizard all emit it), sonnet (viewer component).*
-    - [ ] Schema: plain serializable data (like DataStruct), never
-          markup — title, source refs (dataset/fit ids), ordered
-          sections of typed blocks (param table / stats table / figure
-          ref / text note)
-    - [ ] Emitters: curve fit, multi-peak fit, W5 stats, #31 wizard,
-          #3 batch runs
+    - [x] Schema: plain serializable data (`calc/report.py` — frozen
+          `ReportSheet` + `text`/`table`/`params`/`figure` block builders
+          + `validate_report`, JSON round-trip like DataStruct) (2026-07-03)
+    - [x] Emitters (`calc/report_emit.py`): curve fit, multi-peak fit, and
+          W5 stats (ANOVA + generic record tables) map real result dicts to
+          reports (2026-07-03); #31 wizard + #3 batch emitters land with
+          those features
     - [ ] Viewer: collapsible report component in the workspace;
-          reports round-trip `.dwk`
+          reports round-trip `.dwk` (frontend — deferred)
     - [ ] Acceptance: one schema renders in the viewer AND through
           #37/#38 with no per-renderer special cases
 
