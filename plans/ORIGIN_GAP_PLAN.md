@@ -720,11 +720,13 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
     companion markers); `excludedDisplay` pref, persisted. The plot x stays
     full-length (`maskExcludedPayload` nulls/ghosts rows) so overlays/
     error-bars/waterfall stay aligned; CurveFit fits `analysisData` and
-    expands its overlay via `expandToFull`. Remaining: (a) the SELECTION
-    dimension (plot rubber-band ↔ worksheet highlight — canvas/interaction);
-    (b) peaks/baseline/hysteresis fits should also read analysisData (their
-    overlays already align since x is full-length — they just don't exclude
-    yet); (c) the universal-linking architecture guard/test.*
+    expands its overlay via `expandToFull`. Peaks (detect/fit on analysisData,
+    marker overlay on full time) and hysteresis (scalar Hc/Mr/Ms on
+    analysisData) now honor exclusion too (2026-07-03). Remaining: (a) the
+    SELECTION dimension (plot rubber-band ↔ worksheet highlight —
+    canvas/interaction); (b) baseline (a full-curve correction — needs
+    estimate-on-subset / evaluate-at-full) and RSM (2-D) intentionally still
+    fit the full data; (c) the universal-linking architecture guard/test.*
     - [ ] **Universal-linking rule:** linking is threshold-shaped —
           80% linked feels broken, not innovative. When this lands, add
           an architecture guard (`architecture-guards.md` + a grep-able
