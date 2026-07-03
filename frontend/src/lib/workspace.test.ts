@@ -96,6 +96,21 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
     expect(parseWorkspace(JSON.stringify(doc))[0].formulas).toEqual([{ name: "ok", expr: "A" }]);
   });
 
+  it("preserves excluded rows (#50) and clamps out-of-range indices on load", () => {
+    const ds = makeDataset("a", "with-exclusions");
+    ds.excludedRows = [0, 2]; // data has 3 rows (indices 0..2)
+    const [restored] = parseWorkspace(serializeWorkspace([ds]));
+    expect(restored.excludedRows).toEqual([0, 2]);
+    // an empty exclusion list is omitted on save -> undefined on restore
+    const bare = makeDataset("b", "bare");
+    bare.excludedRows = [];
+    expect(parseWorkspace(serializeWorkspace([bare]))[0].excludedRows).toBeUndefined();
+    // a stale/hand-edited doc with an out-of-range index is clamped away
+    const doc = JSON.parse(serializeWorkspace([ds]));
+    doc.datasets[0].excludedRows = [1, 99, -1];
+    expect(parseWorkspace(JSON.stringify(doc))[0].excludedRows).toEqual([1]);
+  });
+
   it("writes the format tag and version", () => {
     const doc = JSON.parse(serializeWorkspace([makeDataset("a", "x")]));
     expect(doc.format).toBe(WORKSPACE_FORMAT);

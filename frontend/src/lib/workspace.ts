@@ -3,6 +3,7 @@
 // library (datasets live only in memory); this gives session persistence. Pure +
 // testable; the App wires it to Save/Open commands (download + file picker).
 
+import { sanitizeExcluded } from "./rowstate";
 import type {
   ChannelRole,
   ComputedColumn,
@@ -45,6 +46,7 @@ export function serializeWorkspace(datasets: Dataset[]): string {
       ...(d.channelTypes && Object.keys(d.channelTypes).length
         ? { channelTypes: d.channelTypes }
         : {}),
+      ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
     })),
   };
   return JSON.stringify(doc, null, 2);
@@ -154,6 +156,10 @@ export function parseWorkspace(text: string): Dataset[] {
       }
       if (Object.keys(types).length) ds.channelTypes = types;
     }
+    // Row exclusions (#50): clamp to the loaded row count — a hand-edited or
+    // stale .dwk could carry out-of-range indices.
+    const excluded = sanitizeExcluded(dd.excludedRows, ds.data.time.length);
+    if (excluded.length) ds.excludedRows = excluded;
     return ds;
   });
 }

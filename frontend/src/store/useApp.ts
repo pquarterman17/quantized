@@ -14,6 +14,7 @@ import { mergeDatasets } from "../lib/merge";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import type { FwhmResult } from "../lib/peakwidth";
 import { effectiveChannels } from "../lib/plotdata";
+import { sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
 import {
   addRecentEntry,
   clearRecentMeta,
@@ -265,6 +266,11 @@ interface AppState {
   setErrKey: (channel: number, errChannel: number | null) => void;
   setChannelRole: (channel: number, role: ChannelRole | null) => void;
   setChannelType: (channel: number, t: ModelingType | null) => void;
+  // Row state (#50): persistent per-row exclusion on a dataset. Excluded rows
+  // stay visible but drop from analysis everywhere; round-trips .dwk.
+  toggleRowExcluded: (id: string, row: number) => void;
+  setRowsExcluded: (id: string, rows: number[]) => void;
+  clearRowExclusions: (id: string) => void;
   setSeriesOrder: (order: number[] | null) => void;
   toggleHidden: (channel: number) => void;
   // Solo one plotted channel (hide all others); null = show all. The column
@@ -1042,6 +1048,31 @@ export const useApp = create<AppState>((set, get) => ({
       `qz.setChannelType(${channel}, ${lit(t)})`,
     );
   },
+  // Row state (#50): the single source of truth for per-row exclusion. Excluded
+  // rows persist on the dataset (round-trip .dwk) so every view can honor them —
+  // no view should keep its own local row mask.
+  toggleRowExcluded: (id, row) =>
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id) return d;
+        const next = toggleExcluded(d.excludedRows, row);
+        return { ...d, excludedRows: next.length ? next : undefined };
+      }),
+    })),
+  setRowsExcluded: (id, rows) =>
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id) return d;
+        const clean = sanitizeExcluded(rows, d.data.time.length);
+        return { ...d, excludedRows: clean.length ? clean : undefined };
+      }),
+    })),
+  clearRowExclusions: (id) =>
+    set((s) => ({
+      datasets: s.datasets.map((d) =>
+        d.id === id ? { ...d, excludedRows: undefined } : d,
+      ),
+    })),
   // Persist an explicit plotted-channel draw order (a permutation of the current
   // plotted channels). effectiveChannels reorders by it; stale entries (channels
   // no longer plotted) are ignored and newly-plotted channels append in order.

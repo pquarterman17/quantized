@@ -109,6 +109,11 @@ export interface Dataset {
    *  (lib/modeling.channelModelingType). Lives on the dataset like
    *  channelRoles: persists across switches + round-trips .dwk. */
   channelTypes?: Record<number, ModelingType>;
+  /** Excluded original-row indices (JMP-style row state, #50). Excluded rows
+   *  stay visible in the worksheet (greyed) but drop from analysis everywhere.
+   *  Sorted, unique; managed only via lib/rowstate + the store's row actions,
+   *  and round-trips through the .dwk workspace. */
+  excludedRows?: number[];
 }
 
 /** A registered fit model's metadata (from GET /api/fitting/models). */

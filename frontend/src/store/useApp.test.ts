@@ -1012,3 +1012,53 @@ describe("useApp soloChannel (column switcher engine)", () => {
     expect(useApp.getState().hiddenChannels).toEqual([]);
   });
 });
+
+describe("useApp row exclusion (#50 row-state model)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds", data: raw }],
+      activeId: "d1",
+    });
+  });
+
+  const excludedOf = (id: string) =>
+    useApp.getState().datasets.find((d) => d.id === id)?.excludedRows;
+
+  it("toggleRowExcluded adds then removes a row, staying sorted", () => {
+    useApp.getState().toggleRowExcluded("d1", 2);
+    useApp.getState().toggleRowExcluded("d1", 0);
+    expect(excludedOf("d1")).toEqual([0, 2]);
+    useApp.getState().toggleRowExcluded("d1", 0);
+    expect(excludedOf("d1")).toEqual([2]);
+  });
+
+  it("clears the field to undefined when the last exclusion is removed", () => {
+    useApp.getState().toggleRowExcluded("d1", 1);
+    useApp.getState().toggleRowExcluded("d1", 1);
+    expect(excludedOf("d1")).toBeUndefined();
+  });
+
+  it("setRowsExcluded sanitizes to in-range, sorted, unique indices", () => {
+    // raw has 3 rows (indices 0..2); 9 and -1 are out of range, 1.5 non-integer
+    useApp.getState().setRowsExcluded("d1", [2, 2, 9, -1, 1.5, 0]);
+    expect(excludedOf("d1")).toEqual([0, 2]);
+  });
+
+  it("clearRowExclusions empties the field", () => {
+    useApp.getState().setRowsExcluded("d1", [0, 1]);
+    useApp.getState().clearRowExclusions("d1");
+    expect(excludedOf("d1")).toBeUndefined();
+  });
+
+  it("leaves other datasets untouched", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+    });
+    useApp.getState().toggleRowExcluded("d1", 1);
+    expect(excludedOf("d1")).toEqual([1]);
+    expect(excludedOf("d2")).toBeUndefined();
+  });
+});

@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { statsDescriptive } from "../../lib/api";
 import { copyText, tableToTSV } from "../../lib/clipboard";
 import { channelLetter, compileFormula } from "../../lib/formula";
+import { excludedSet } from "../../lib/rowstate";
 import type { CalcResult, DataStruct } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
@@ -46,6 +47,8 @@ export default function Worksheet() {
   const setXKey = useApp((s) => s.setXKey);
   const yKeys = useApp((s) => s.yKeys);
   const setYKeys = useApp((s) => s.setYKeys);
+  const toggleRowExcluded = useApp((s) => s.toggleRowExcluded);
+  const clearRowExclusions = useApp((s) => s.clearRowExclusions);
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   // Right-click menu: a header column (target -1 = x) or a data row.
   const [menu, setMenu] = useState<{ kind: "col" | "row"; target: number; x: number; y: number } | null>(null);
@@ -61,13 +64,11 @@ export default function Worksheet() {
   const [filterOp, setFilterOp] = useState(">");
   const [filterV1, setFilterV1] = useState("");
   const [filterV2, setFilterV2] = useState("");
-  // Masked original-row indices: kept visible (greyed) but excluded from analysis.
-  const [masked, setMasked] = useState<Set<number>>(new Set());
-
-  // Row indices keyed by the source dataset; switching/replacing it invalidates them.
-  useEffect(() => {
-    setMasked(new Set());
-  }, [active]);
+  // Masked (excluded) original-row indices: kept visible (greyed) but dropped
+  // from analysis. Sourced from the persistent per-dataset row-state model (#50)
+  // — NOT local component state — so it survives dataset switches, round-trips
+  // .dwk, and is honored by every view (lib/rowstate is the single source).
+  const masked = useMemo(() => excludedSet(active), [active]);
 
   // Row indices kept by the filter, in original order (all rows if no/incomplete
   // filter). The view, the stats subset, and "Extract" all derive from this.
@@ -155,14 +156,8 @@ export default function Worksheet() {
   // (a filter narrowed it and/or some rows are masked), and isn't empty.
   const canExtract = analysisRows.length > 0 && analysisRows.length !== time.length;
 
-  const toggleMask = (r: number) =>
-    setMasked((prev) => {
-      const next = new Set(prev);
-      if (next.has(r)) next.delete(r);
-      else next.add(r);
-      return next;
-    });
-  const unmaskAll = () => setMasked(new Set());
+  const toggleMask = (r: number) => toggleRowExcluded(active.id, r);
+  const unmaskAll = () => clearRowExclusions(active.id);
 
   // Materialize the analysis set (filtered minus masked) as a new dataset in the
   // library (plottable, fittable) — the non-destructive filter/mask made actionable.
