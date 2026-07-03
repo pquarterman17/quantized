@@ -139,18 +139,26 @@ live → report sheets → summary sheet + docx/pptx/LaTeX/figures out
 
 ## Cross-cutting priorities
 
-| # | Item | Workstream | Why first |
+Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
+
+| # | Item | Workstream | Status / why |
 |---|------|------------|-----------|
-| 31 | Peak Analyzer wizard | W6 | #1 reason labs keep Origin; calc engine already exists — pure UX packaging, highest ROI |
-| 24–26 | ANOVA/post-hoc + nonparametric + assumption tests | W5 | Nearly free via scipy/statsmodels (BSD); hard adoption blocker when missing |
-| 6–7 | Pipeline view + expression steps | W2 | Seeds analysis templates; macro recorder already captures the steps |
-| 1 | Recalc dependency graph | W1 | The architectural keystone everything "live" builds on |
-| 36–37 | Report sheets + docx/pptx export | W7 | What labs hand around at group meeting; python-docx/pptx are MIT |
-| 11, 12 | Complete property panels + figure documents | W3 | Headline pillar: zero-code production figures is Origin's hardest-to-beat trait; stepping stones direct manipulation requires anyway |
-| 40 | Generic import wizard + saved filters | W8 | #1 onboarding blocker for outside users' data |
-| 41 | Packaging & installers | W8 | Zero-friction first run gates all OSS adoption |
-| 46–47 | Test-data corpus + PIXcel3D audit | W8 | Cheap now, unblocks #42/#47 and the checklist's XRDML 2-D freeze; corpus grows only if collected as found |
-| 49–50 | Drag-to-axis + row states | W9 | The JMP-differentiator foundation; #50 is a small contract many views consume — design it before W4 plots and the Graph Builder (#48 modeling types shipped 2026-07-01) |
+| 31 | Peak Analyzer wizard | W6 | ⬜ #1 reason labs keep Origin; calc engine exists — pure UX packaging (frontend) |
+| 24–26 | ANOVA/post-hoc + nonparametric + assumption tests | W5 | ✅ backend complete (24 RM+unbalanced landed 2026-07-03); only the 26 chooser UI front door remains |
+| 6–7 | Pipeline view + expression steps | W2 | ⬜ frontend workshop; macro recorder already captures the steps |
+| 1 | Recalc dependency graph | W1 | ⬜ the architectural keystone everything "live" builds on (frontend/store) |
+| 36–37 | Report sheets + docx/pptx export | W7 | ✅ schema + emitters + LaTeX/HTML/docx/pptx export all landed 2026-07-03; frontend report viewer remains |
+| 11, 12 | Complete property panels + figure documents | W3 | ⬜ headline pillar: zero-code production figures (frontend) |
+| 40 | Generic import wizard + saved filters | W8 | 🟡 preview/parse engine + `/api/import/*` landed 2026-07-03; filter persistence + wizard UI remain |
+| 41 | Packaging & installers | W8 | ⬜ zero-friction first run gates all OSS adoption |
+| 46–47 | Test-data corpus + PIXcel3D audit | W8 | ✅ mostly done; only pole-figure representation open |
+| 49–50 | Drag-to-axis + row states | W9 | ⬜ the JMP-differentiator foundation (frontend; #50 is a small shared contract) |
+
+Also landed 2026-07-03 (beyond the table): #16 statistical-plot math + export,
+#17 contour export, #19 3-D export, #35 batch peak integration, #9 headless
+public API. Remaining safe-backend items with no user input needed are scarce —
+most open work is now frontend (needs UX direction) or parsers (#42/#43 need
+sample files).
 
 ---
 
