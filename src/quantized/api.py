@@ -70,7 +70,9 @@ from quantized.calc.report import (
 )
 from quantized.calc.report_emit import (
     from_anova,
+    from_batch_integrate,
     from_curve_fit,
+    from_integrate,
     from_multipeak_fit,
     from_stats_table,
 )
@@ -194,6 +196,8 @@ __all__ = [
     "from_multipeak_fit",
     "from_anova",
     "from_stats_table",
+    "from_integrate",
+    "from_batch_integrate",
     # export / rendering
     "render_figure",
     "render_map_figure",

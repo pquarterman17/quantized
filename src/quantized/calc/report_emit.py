@@ -22,7 +22,9 @@ from quantized.calc.report import (
 
 __all__ = [
     "from_anova",
+    "from_batch_integrate",
     "from_curve_fit",
+    "from_integrate",
     "from_multipeak_fit",
     "from_stats_table",
 ]
@@ -155,4 +157,71 @@ def from_anova(
         table, title=title, section_title="ANOVA table",
         columns=["source", "SS", "df", "MS", "F", "p"],
         source_refs=source_refs,
+    )
+
+
+def from_integrate(
+    result: Mapping[str, Any],
+    *,
+    title: str = "Peak integration",
+    source_refs: Sequence[Mapping[str, Any]] | None = None,
+) -> ReportSheet:
+    """Build a report from a ``calc.peak_integrate.integrate_peaks`` result."""
+    peaks = list(result.get("peaks", []))
+    if not peaks:
+        raise ValueError("from_integrate needs a result with peaks")
+    cols = ["Region", "Area", "% area", "Centroid", "Height", "Position", "FWHM"]
+    rows = []
+    for i, pk in enumerate(peaks, start=1):
+        region = pk.get("region")
+        region_str = f"{region[0]:g}–{region[1]:g}" if isinstance(region, list) else i
+        rows.append([
+            region_str, pk.get("area"), pk.get("area_pct"), pk.get("centroid"),
+            pk.get("height"), pk.get("position"), pk.get("fwhm"),
+        ])
+    caption = f"{len(peaks)} region(s), {result.get('baseline')} baseline"
+    blocks = [
+        table_block(cols, rows, caption=caption),
+        text_block(f"Total net area: {result.get('total_area')}"),
+    ]
+    return ReportSheet(
+        title=title,
+        sections=(section("Integration", blocks),),
+        source_refs=tuple(dict(r) for r in (source_refs or ())),
+    )
+
+
+def from_batch_integrate(
+    result: Mapping[str, Any],
+    *,
+    title: str = "Batch peak integration",
+    source_refs: Sequence[Mapping[str, Any]] | None = None,
+) -> ReportSheet:
+    """Build a report from a ``calc.peak_batch.batch_integrate_peaks`` result.
+
+    The area matrix (spectrum x region) becomes a trend table — one row per
+    spectrum, one column per region — plus per-spectrum alignment shift.
+    """
+    results = list(result.get("results", []))
+    regions = list(result.get("regions", []))
+    if not results or not regions:
+        raise ValueError("from_batch_integrate needs results and regions")
+    area_m = result.get("area_matrix", [])
+    region_cols = [f"{r[0]:g}–{r[1]:g}" for r in regions]
+    header = ["Spectrum", *(["Shift"] if result.get("aligned") else []), *region_cols]
+    rows = []
+    for i, row in enumerate(results):
+        cells: list[Any] = [row.get("label", i)]
+        if result.get("aligned"):
+            cells.append(row.get("shift_samples"))
+        cells.extend(area_m[i] if i < len(area_m) else [None] * len(regions))
+        rows.append(cells)
+    n_failed = result.get("n_failed", 0)
+    caption = f"{len(results)} spectra × {len(regions)} region(s)"
+    if n_failed:
+        caption += f" ({n_failed} failed)"
+    return ReportSheet(
+        title=title,
+        sections=(section("Area trends", [table_block(header, rows, caption=caption)]),),
+        source_refs=tuple(dict(r) for r in (source_refs or ())),
     )

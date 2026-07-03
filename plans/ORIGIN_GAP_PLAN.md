@@ -547,10 +547,10 @@ the same field names.)*
     - [x] Schema: plain serializable data (`calc/report.py` — frozen
           `ReportSheet` + `text`/`table`/`params`/`figure` block builders
           + `validate_report`, JSON round-trip like DataStruct) (2026-07-03)
-    - [x] Emitters (`calc/report_emit.py`): curve fit, multi-peak fit, and
-          W5 stats (ANOVA + generic record tables) map real result dicts to
-          reports (2026-07-03); #31 wizard + #3 batch emitters land with
-          those features
+    - [x] Emitters (`calc/report_emit.py`): curve fit, multi-peak fit,
+          single + batch peak integration, and W5 stats (ANOVA + generic
+          record tables) map real result dicts to reports (2026-07-03);
+          #31 wizard + #3 template-batch emitters land with those features
     - [ ] Viewer: collapsible report component in the workspace;
           reports round-trip `.dwk` (frontend — deferred)
     - [ ] Acceptance: one schema renders in the viewer AND through
