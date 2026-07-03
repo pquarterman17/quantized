@@ -390,8 +390,10 @@ an exported figure in Illustrator or a script, that's a W3 bug.)*
     - [ ] Interactive: box/violin stage over grouped columns (group by
           a label column or by dataset); Q-Q/histogram fit through the
           normal uPlot path
-    - [ ] Export: same figures server-side via matplotlib for
-          publication output
+    - [x] Export: `calc/figure_statplots.render_statplot_figure`
+          (box/violin/Q-Q/probability/histogram+fit) via matplotlib —
+          same algorithms as the calc stats, so export == interactive;
+          `/api/export/statplot-figure` (2026-07-03)
     - [ ] Acceptance: grouped box + violin of a multi-sample worksheet
           render interactively and export vector-identical stats
 

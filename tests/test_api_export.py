@@ -214,6 +214,36 @@ def test_map_figure_bad_kind_is_422() -> None:
     assert resp.status_code == 422
 
 
+def test_statplot_box_pdf() -> None:
+    resp = client.post(
+        "/api/export/statplot-figure",
+        json={"kind": "box", "data": [[1, 2, 3, 4, 5], [2, 3, 4, 5, 6]],
+              "labels": ["A", "B"], "fmt": "pdf", "filename": "box plot"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.headers["content-disposition"] == 'attachment; filename="box_plot.pdf"'
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_statplot_histogram_with_fit_png() -> None:
+    import numpy as np
+    sample = list(np.linspace(0, 10, 200))
+    resp = client.post(
+        "/api/export/statplot-figure",
+        json={"kind": "histogram", "data": sample, "fit": "norm", "fmt": "png"},
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_statplot_bad_kind_is_422() -> None:
+    resp = client.post(
+        "/api/export/statplot-figure", json={"kind": "swarm", "data": [1.0, 2.0, 3.0]}
+    )
+    assert resp.status_code == 422
+
+
 def test_figure_bad_style_is_422() -> None:
     resp = client.post(
         "/api/export/figure",

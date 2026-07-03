@@ -249,6 +249,50 @@ def export_figure(req: FigureRequest) -> Response:
     )
 
 
+class StatplotFigureRequest(BaseModel):
+    kind: str  # box|violin|qq|probability|histogram
+    data: list[list[float]] | list[float]  # groups (box/violin) or one sample
+    labels: list[str] | None = None
+    fmt: str = "pdf"
+    style: str = "default"
+    dist: str = "norm"
+    bins: str | int = "fd"
+    fit: str | None = None
+    title: str = ""
+    x_label: str = ""
+    y_label: str = ""
+    dpi: int = 200
+    filename: str = "statplot"
+
+
+@router.post("/statplot-figure")
+def export_statplot_figure(req: StatplotFigureRequest) -> Response:
+    """Render a statistical plot (box/violin/Q-Q/histogram) to a publication
+    figure (PDF/SVG/PNG/TIFF)."""
+    if req.fmt not in _FIGURE_MIME:
+        raise HTTPException(
+            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
+        )
+    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
+    from quantized.calc.figure_statplots import render_statplot_figure  # lazy: matplotlib
+
+    try:
+        data: Any = req.data
+        data = [list(g) for g in data] if req.kind in ("box", "violin") else list(data)
+        img = render_statplot_figure(
+            req.kind, data, labels=req.labels, fmt=req.fmt, style=req.style,
+            dist=req.dist, bins=req.bins, fit=req.fit,
+            title=req.title, x_label=req.x_label, y_label=req.y_label, dpi=dpi,
+        )
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Response(
+        content=img,
+        media_type=_FIGURE_MIME[req.fmt],
+        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
+    )
+
+
 class MapFigureRequest(BaseModel):
     x_axis: list[float]
     y_axis: list[float]

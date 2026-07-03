@@ -33,8 +33,8 @@ _EXPECTED = {
     "ReportSheet", "section", "text_block", "table_block", "params_block",
     "figure_block", "source_ref", "validate_report",
     "from_curve_fit", "from_multipeak_fit", "from_anova", "from_stats_table",
-    "render_figure", "render_map_figure", "render_report", "to_latex",
-    "to_html", "format_value_error",
+    "render_figure", "render_map_figure", "render_statplot_figure",
+    "render_report", "to_latex", "to_html", "format_value_error",
 }
 
 

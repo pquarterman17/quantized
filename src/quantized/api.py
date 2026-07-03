@@ -47,6 +47,7 @@ from quantized.calc.corrections import apply_corrections
 # ── Publication rendering (matplotlib) ─────────────────────────────────────
 from quantized.calc.figure import render_figure
 from quantized.calc.figure_map import render_map_figure
+from quantized.calc.figure_statplots import render_statplot_figure
 
 # ── Curve & peak fitting ───────────────────────────────────────────────────
 from quantized.calc.fitting import curve_fit
@@ -196,6 +197,7 @@ __all__ = [
     # export / rendering
     "render_figure",
     "render_map_figure",
+    "render_statplot_figure",
     "render_report",
     "to_latex",
     "to_html",
