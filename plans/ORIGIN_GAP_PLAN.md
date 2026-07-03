@@ -763,6 +763,16 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
     *Model: sonnet. Pickup: emits a derived row mask through #50's
     row-state model; filter definition is serializable (a future
     pipeline step, #6).*
+    *CORE SHIPPED 2026-07-03: Data Filter ToolWindow
+    (`workshops/datafilter`) — a min/max range per continuous column and a
+    level checklist per categorical column. The filter is a serializable
+    `Dataset.filter` (pure `lib/datafilter`) folded into
+    `rowstate.analysisData` alongside manual exclusions (#50), so every
+    analysisData consumer (Tabulate + Distribution today) honors it through
+    the single chokepoint. Round-trips .dwk with column validation.
+    Remaining: dual-thumb range sliders (min/max NumberFields today); the
+    plot + worksheet don't yet read analysisData, so they don't reflect the
+    global filter (same plot-display decision as #50).*
 
 ### Tier 3 — Nice-to-Have
 
