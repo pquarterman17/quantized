@@ -38,6 +38,7 @@ from quantized.routes import (
     rsm,
     semiconductor,
     sld,
+    statplots,
     stats,
     stats_design,
     substrates,
@@ -124,6 +125,7 @@ def create_app() -> FastAPI:
     application.include_router(baseline.router)
     application.include_router(stats.router)
     application.include_router(stats_design.router)
+    application.include_router(statplots.router)
     application.include_router(reference.router)
     application.include_router(export.router)
     application.include_router(magnetometry.router)

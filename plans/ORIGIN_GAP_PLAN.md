@@ -387,11 +387,13 @@ an exported figure in Illustrator or a script, that's a W3 bug.)*
     *Model: sonnet. Pickup: stats math is pure calc; interactive
     rendering follows the `PolarStage` Canvas2D precedent where uPlot
     can't express the mark.*
-    - [ ] New pure module (e.g. `calc/statplots.py`): box stats
-          (quartiles + whisker rule Tukey-1.5·IQR / min-max, outliers),
-          KDE for violins, theoretical quantiles for Q-Q/probability,
-          histogram binning rules (FD/Sturges/fixed) — validated against
-          published worked examples (NIST/textbook)
+    - [x] New pure module `calc/statplots.py`: box stats (quartiles +
+          Tukey-1.5·IQR / range whiskers, fliers — matches
+          `matplotlib.cbook.boxplot_stats` exactly), Gaussian-KDE violins
+          (scipy), Blom-position Q-Q/probability (line cross-checked vs
+          `scipy.stats.probplot`), histogram binning (numpy fd/sturges/
+          scott/rice/sqrt/auto + optional dist-fit overlay); thin
+          `/api/statplots/{box,violin,qq,histogram}` routes (2026-07-03)
     - [ ] Interactive: box/violin stage over grouped columns (group by
           a label column or by dataset); Q-Q/histogram fit through the
           normal uPlot path
