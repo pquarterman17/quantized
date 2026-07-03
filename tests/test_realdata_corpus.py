@@ -30,6 +30,8 @@ REPRESENTATIVES = [
     "panalytical/xrd/peakpo_feooh.xrdml",
     "jcamp/ir/ethanol.jdx",
     "jcamp/torture/sqzdupd1.jdx",
+    "synthetic/netcdf/andi_ms_tic.cdf",
+    "synthetic/netcdf/generic_spectrum.nc",
     "eag/sims/sims_depth_profile.xlsx",
     "synthetic/sims/sims_stack_oxide.csv",
 ]

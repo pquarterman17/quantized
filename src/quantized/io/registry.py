@@ -16,6 +16,7 @@ from quantized.io.delimited import import_csv
 from quantized.io.excel import import_excel
 from quantized.io.jcamp import import_jcamp
 from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl, is_ncnr_refl
+from quantized.io.netcdf import import_netcdf
 from quantized.io.qd import import_ppms, import_qd_vsm, is_ppms_dat, is_qd_file
 from quantized.io.refl1d import import_refl1d_dat, is_refl1d_dat
 from quantized.io.rigaku import import_rigaku_raw, is_rigaku_raw
@@ -34,6 +35,8 @@ _EXT_MAP: dict[str, Parser] = {
     ".brml": import_bruker_brml,  # Bruker XRD (ZIP of XML); 1-D line scans
     ".jdx": import_jcamp,  # JCAMP-DX spectroscopy (IR/Raman/UV-Vis/...)
     ".dx": import_jcamp,
+    ".nc": import_netcdf,  # NetCDF-3/4 (generic + ANDI/AIA chromatography)
+    ".cdf": import_netcdf,  # ANDI/AIA chromatography (NetCDF-3 classic)
     ".pnr": import_ncnr_pnr,
     ".data": import_ncnr_dat,  # .datA
     ".datb": import_ncnr_dat,  # .datB

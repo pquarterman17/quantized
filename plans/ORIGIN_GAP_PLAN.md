@@ -156,10 +156,10 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 
 Also landed 2026-07-03 (beyond the table): #16 statistical-plot math + export,
 #17 contour export, #19 3-D export, #35 batch peak integration, #9 headless
-public API, **#42 Bruker `.raw`/`.brml` parsers**, and the **JCAMP-DX half of
-#43** (NetCDF still open). Remaining safe-backend items are scarce — most open
-work is now frontend (needs UX direction); the last parser gap (#43 NetCDF)
-needs a sample `.nc` in the corpus.
+public API, **#42 Bruker `.raw`/`.brml` parsers**, and **#43 JCAMP-DX + NetCDF
+import** (both formats done). The parser workstream (W8 #42/#43) is now
+complete for the targeted formats — remaining open work is overwhelmingly
+frontend (needs UX direction).
 
 ---
 
@@ -614,12 +614,6 @@ blocks, and the frontend report viewer / `.dwk` round-trip under #36.)*
 
 ### Tier 2 — Medium Impact
 
-43. **NetCDF import** (xarray/scipy BSD) — the JCAMP-DX half shipped
-    2026-07-03 (see Completed). NetCDF (ANDI/AIA chromatography, generic
-    scientific `.nc`/`.cdf`) remains: scipy.io handles NetCDF-3, h5py
-    NetCDF-4. *Model: haiku. Pickup: register once in `io/registry.py`,
-    return DataStruct; needs a sample `.nc` in the #46 corpus first.*
-
 44. **`.opj` reader as an isolated dev-time CLI converter** — the
     migration lever for labs with legacy Origin projects; GPL
     `liborigin` stays a separate tool, never a runtime dep
@@ -772,14 +766,19 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
   direct). Sample files sourced into `../test-data/bruker/xrd/` (Apache-2.0
   `.brml`, LGPL-2.1 `.raw`). Synthetic-builder CI tests + realdata golden
   values (BT86 n=2374 first5=[187,183,178,174,193]).
-- ~~**#43 (JCAMP-DX half)**~~ (2026-07-03) — `io/jcamp.py` + `io/_jcamp_asdf.py`
-  (the SQZ/DIF/DUP ASDF decoder, incl. DUP-after-DIF difference re-application
-  and cross-line Y-value checks). Reads `(X++(Y..Y))` XYDATA and `(XY..XY)`
-  XYPOINTS/PEAK TABLE; `.jdx`/`.dx` registered. 10-file MIT corpus downloaded
-  to `../test-data/jcamp/` (Coblentz IR + the Lancashire compression-form
-  suite); tests hand-encode each form to known values and use JCAMP's own
-  NPOINTS/FIRSTY integrity fields as the realdata oracle. NetCDF remains open
-  as the narrowed #43.
+- ~~**#43 JCAMP-DX and NetCDF import**~~ (2026-07-03) — **JCAMP-DX:**
+  `io/jcamp.py` + `io/_jcamp_asdf.py` (the SQZ/DIF/DUP ASDF decoder, incl.
+  DUP-after-DIF difference re-application and cross-line Y-value checks); reads
+  `(X++(Y..Y))` XYDATA and `(XY..XY)` XYPOINTS/PEAK TABLE; `.jdx`/`.dx`
+  registered. 10-file MIT corpus in `../test-data/jcamp/` (Coblentz IR + the
+  Lancashire compression-form suite); tests hand-encode each form to known
+  values and use JCAMP's own NPOINTS/FIRSTY fields as the realdata oracle.
+  **NetCDF:** `io/netcdf.py` — a scipy(NetCDF-3)/h5py(NetCDF-4) reader (no new
+  deps) + an interpreter recognizing ANDI/AIA chromatography (TIC or single
+  detector) with a generic "monotonic coordinate = x" fallback; `.nc`/`.cdf`
+  registered. Synthetic ANDI/AIA fixtures generated into
+  `../test-data/synthetic/netcdf/`. CI builds NetCDF files in tmp_path (both
+  formats), realdata decodes the corpus.
 - ~~**#9 Documented headless public API**~~ (2026-07-03) — `quantized/api.py`
   is the blessed, frozen surface (`import quantized.api as qz`): ~65 curated
   pure functions (load, fitting, peaks, baseline, corrections, the full W5
