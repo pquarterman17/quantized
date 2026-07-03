@@ -7,12 +7,12 @@ import { useState } from "react";
 import DatasetRow from "./DatasetRow";
 import { makeDemoDataset } from "../../lib/demo";
 import { groupDatasets, groupNames, hasAnyGroup } from "../../lib/grouping";
-import { openFilePicker } from "../../lib/openFilePicker";
+import { IMPORT_ACCEPT, openFilePicker } from "../../lib/openFilePicker";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 
 let demoSeq = 0;
-const ACCEPT = ".dat,.csv,.txt,.xrdml,.raw,.refl,.pnr,.datA,.cif,.xlsx,.xls";
+const ACCEPT = IMPORT_ACCEPT;
 
 export default function Library() {
   const datasets = useApp((s) => s.datasets);

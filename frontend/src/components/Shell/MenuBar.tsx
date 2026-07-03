@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { Action } from "../../store/commands";
-import { openFilePicker } from "../../lib/openFilePicker";
+import { IMPORT_ACCEPT, openFilePicker } from "../../lib/openFilePicker";
 import { relativeTime } from "../../lib/recentFiles";
 import { useApp } from "../../store/useApp";
 
@@ -23,7 +23,7 @@ const MENUS: { label: string; group: string }[] = [
   { label: "View", group: "View" },
 ];
 
-const ACCEPT = ".dat,.csv,.txt,.xrdml,.raw,.refl,.pnr,.datA,.cif,.xlsx,.xls";
+const ACCEPT = IMPORT_ACCEPT;
 
 interface MenuBarProps {
   actions: Action[];

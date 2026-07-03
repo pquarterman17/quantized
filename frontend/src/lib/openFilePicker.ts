@@ -2,6 +2,13 @@
 // created imperatively, so any component (Library button, File menu) can
 // trigger it without rendering one or sharing a ref.
 
+// The file-dialog filter — one source of truth for every "Open" entry point
+// (the MATLAB uigetfile-filter footgun: keep this in lockstep with the backend
+// io/registry.py extension map). Covers all registered parsers.
+export const IMPORT_ACCEPT =
+  ".dat,.csv,.tsv,.txt,.xrdml,.brml,.raw,.refl,.pnr,.datA,.datB,.datC,.datD," +
+  ".jdx,.dx,.nc,.cdf,.cif,.xlsx,.xlsm,.xls";
+
 export function openFilePicker(onPick: (files: File[]) => void, accept = ""): void {
   const input = document.createElement("input");
   input.type = "file";
