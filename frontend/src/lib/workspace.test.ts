@@ -111,6 +111,20 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
     expect(parseWorkspace(JSON.stringify(doc))[0].excludedRows).toEqual([1]);
   });
 
+  it("preserves a data filter (#53) and drops predicates with a bad column on load", () => {
+    const ds = makeDataset("a", "filtered"); // data has 2 channels (0, 1)
+    ds.filter = [
+      { col: 1, kind: "range", min: 100, max: 300 },
+      { col: 0, kind: "set", values: [10, 30] },
+    ];
+    const [restored] = parseWorkspace(serializeWorkspace([ds]));
+    expect(restored.filter).toEqual(ds.filter);
+    // a stale predicate on a non-existent column is dropped on load
+    const doc = JSON.parse(serializeWorkspace([ds]));
+    doc.datasets[0].filter = [{ col: 9, kind: "range", min: 1 }];
+    expect(parseWorkspace(JSON.stringify(doc))[0].filter).toBeUndefined();
+  });
+
   it("writes the format tag and version", () => {
     const doc = JSON.parse(serializeWorkspace([makeDataset("a", "x")]));
     expect(doc.format).toBe(WORKSPACE_FORMAT);

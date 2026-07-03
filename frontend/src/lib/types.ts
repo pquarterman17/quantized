@@ -76,6 +76,20 @@ export interface ComputedColumn {
   unit?: string;
 }
 
+/** One column's non-destructive filter predicate (#53). `col` is -1 for x, 0..
+ *  for a channel. `range` keeps min ≤ value ≤ max (either bound optional); `set`
+ *  keeps values in `values` (nominal columns). See lib/datafilter. */
+export interface ColumnFilter {
+  col: number;
+  kind: "range" | "set";
+  min?: number;
+  max?: number;
+  values?: number[];
+}
+
+/** A dataset's local data filter — AND across its column predicates. */
+export type DataFilter = ColumnFilter[];
+
 export interface Dataset {
   id: string;
   name: string;
@@ -114,6 +128,10 @@ export interface Dataset {
    *  Sorted, unique; managed only via lib/rowstate + the store's row actions,
    *  and round-trips through the .dwk workspace. */
   excludedRows?: number[];
+  /** Local data filter (#53): non-destructive per-column predicates that narrow
+   *  the analysis view (lib/rowstate.analysisData folds filter-failed rows in
+   *  with excludedRows). Serializable; round-trips .dwk. */
+  filter?: DataFilter;
 }
 
 /** A registered fit model's metadata (from GET /api/fitting/models). */

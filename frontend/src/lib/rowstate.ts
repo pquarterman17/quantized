@@ -9,6 +9,7 @@
 // this model. Read exclusion via excludedSet()/pruneExcluded(), never a local
 // component mask.
 
+import { filteredOutRows } from "./datafilter";
 import type { DataStruct, Dataset } from "./types";
 
 type HasExcluded = Pick<Dataset, "excludedRows"> | null | undefined;
@@ -52,12 +53,17 @@ export function pruneExcluded(data: DataStruct, excluded: Iterable<number>): Dat
   };
 }
 
-/** The dataset's analysis view: its DataStruct with excluded rows pruned. Fit /
- *  stat / tabulate consumers read rows through this so exclusion is honored
- *  everywhere. Returns the SAME data reference when nothing is excluded. */
+/** The dataset's analysis view: its DataStruct with both manually-excluded rows
+ *  (#50) AND filter-failed rows (#53) pruned. Fit / stat / tabulate consumers
+ *  read rows through this so exclusion AND the local filter are honored
+ *  everywhere. Returns the SAME data reference when neither is active. */
 export function analysisData(ds: Dataset | null | undefined): DataStruct | null {
   if (!ds) return null;
-  return pruneExcluded(ds.data, excludedSet(ds));
+  const excluded = excludedSet(ds);
+  const filtered = filteredOutRows(ds.filter, ds.data);
+  if (excluded.size === 0 && filtered.size === 0) return ds.data;
+  const drop = filtered.size === 0 ? excluded : new Set([...excluded, ...filtered]);
+  return pruneExcluded(ds.data, drop);
 }
 
 /** Normalize a candidate exclusion list to valid, in-range, sorted, unique

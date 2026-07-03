@@ -21,6 +21,7 @@ import CalculatorsPanel from "./components/workshops/calculators/CalculatorsPane
 import DatasetMathPanel from "./components/workshops/datasetmath/DatasetMathPanel";
 import TabulatePanel from "./components/workshops/tabulate/TabulatePanel";
 import DistributionPanel from "./components/workshops/distribution/DistributionPanel";
+import DataFilterPanel from "./components/workshops/datafilter/DataFilterPanel";
 import ColumnSwitcher from "./components/workshops/switcher/ColumnSwitcher";
 import FigureBuilderView from "./components/workshops/figurebuilder/FigureBuilderView";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
@@ -90,6 +91,7 @@ export default function App() {
   const datasetMathOpen = useApp((s) => s.datasetMathOpen);
   const tabulateOpen = useApp((s) => s.tabulateOpen);
   const distributionOpen = useApp((s) => s.distributionOpen);
+  const dataFilterOpen = useApp((s) => s.dataFilterOpen);
   const columnSwitcherOpen = useApp((s) => s.columnSwitcherOpen);
   const figureBuilderOpen = useApp((s) => s.figureBuilderOpen);
   const waterfallOpen = useApp((s) => s.waterfallOpen);
@@ -439,6 +441,12 @@ export default function App() {
         run: () => s().setDistributionOpen(true),
       },
       {
+        id: "data-filter",
+        group: "Data",
+        label: "Data filter (live per-column row filter)…",
+        run: () => s().setDataFilterOpen(true),
+      },
+      {
         id: "column-switcher",
         group: "View",
         label: "Column switcher (flip through channels)…",
@@ -678,6 +686,7 @@ export default function App() {
       {datasetMathOpen && <DatasetMathPanel />}
       {tabulateOpen && <TabulatePanel />}
       {distributionOpen && <DistributionPanel />}
+      {dataFilterOpen && <DataFilterPanel />}
       {columnSwitcherOpen && <ColumnSwitcher />}
       {figureBuilderOpen && <FigureBuilderView />}
       {waterfallOpen && <WaterfallView />}

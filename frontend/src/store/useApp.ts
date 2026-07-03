@@ -12,6 +12,7 @@ import { lit, macroStep, type MacroStep } from "../lib/macro";
 import { is2DMap } from "../lib/mapdata";
 import { mergeDatasets } from "../lib/merge";
 import { applyPalette, normalizePalette } from "../lib/palettes";
+import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
 import { effectiveChannels } from "../lib/plotdata";
 import { sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
@@ -30,6 +31,7 @@ import type {
   ChannelRole,
   ComputedColumn,
   CorrectionParams,
+  DataFilter,
   Dataset,
   FitOverlay,
   ModelingType,
@@ -179,6 +181,7 @@ interface AppState {
   datasetMathOpen: boolean;
   tabulateOpen: boolean;
   distributionOpen: boolean;
+  dataFilterOpen: boolean;
   figureBuilderOpen: boolean;
   waterfallOpen: boolean;
   reflViewOpen: boolean;
@@ -273,6 +276,10 @@ interface AppState {
   toggleRowExcluded: (id: string, row: number) => void;
   setRowsExcluded: (id: string, rows: number[]) => void;
   clearRowExclusions: (id: string) => void;
+  // Local data filter (#53): non-destructive per-column predicates that narrow
+  // the analysis view of a dataset. Only active predicates are stored.
+  setDatasetFilter: (id: string, filter: DataFilter) => void;
+  clearDatasetFilter: (id: string) => void;
   setSeriesOrder: (order: number[] | null) => void;
   toggleHidden: (channel: number) => void;
   // Solo one plotted channel (hide all others); null = show all. The column
@@ -299,6 +306,7 @@ interface AppState {
   setDatasetMathOpen: (open: boolean) => void;
   setTabulateOpen: (open: boolean) => void;
   setDistributionOpen: (open: boolean) => void;
+  setDataFilterOpen: (open: boolean) => void;
   setFigureBuilderOpen: (open: boolean) => void;
   setWaterfallOpen: (open: boolean) => void;
   setReflViewOpen: (open: boolean) => void;
@@ -499,6 +507,7 @@ export const useApp = create<AppState>((set, get) => ({
   datasetMathOpen: false,
   tabulateOpen: false,
   distributionOpen: false,
+  dataFilterOpen: false,
   figureBuilderOpen: false,
   waterfallOpen: false,
   reflViewOpen: false,
@@ -1079,6 +1088,18 @@ export const useApp = create<AppState>((set, get) => ({
         d.id === id ? { ...d, excludedRows: undefined } : d,
       ),
     })),
+  setDatasetFilter: (id, filter) =>
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id) return d;
+        const active = filter.filter(isActive);
+        return { ...d, filter: active.length ? active : undefined };
+      }),
+    })),
+  clearDatasetFilter: (id) =>
+    set((s) => ({
+      datasets: s.datasets.map((d) => (d.id === id ? { ...d, filter: undefined } : d)),
+    })),
   // Persist an explicit plotted-channel draw order (a permutation of the current
   // plotted channels). effectiveChannels reorders by it; stale entries (channels
   // no longer plotted) are ignored and newly-plotted channels append in order.
@@ -1122,6 +1143,7 @@ export const useApp = create<AppState>((set, get) => ({
   setDatasetMathOpen: (datasetMathOpen) => set({ datasetMathOpen }),
   setTabulateOpen: (tabulateOpen) => set({ tabulateOpen }),
   setDistributionOpen: (distributionOpen) => set({ distributionOpen }),
+  setDataFilterOpen: (dataFilterOpen) => set({ dataFilterOpen }),
   setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
   setWaterfallOpen: (waterfallOpen) => set({ waterfallOpen }),
   setReflViewOpen: (reflViewOpen) => set({ reflViewOpen }),

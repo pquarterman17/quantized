@@ -3,6 +3,7 @@
 // library (datasets live only in memory); this gives session persistence. Pure +
 // testable; the App wires it to Save/Open commands (download + file picker).
 
+import { sanitizeFilter } from "./datafilter";
 import { sanitizeExcluded } from "./rowstate";
 import type {
   ChannelRole,
@@ -47,6 +48,7 @@ export function serializeWorkspace(datasets: Dataset[]): string {
         ? { channelTypes: d.channelTypes }
         : {}),
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
+      ...(d.filter?.length ? { filter: d.filter } : {}),
     })),
   };
   return JSON.stringify(doc, null, 2);
@@ -160,6 +162,9 @@ export function parseWorkspace(text: string): Dataset[] {
     // stale .dwk could carry out-of-range indices.
     const excluded = sanitizeExcluded(dd.excludedRows, ds.data.time.length);
     if (excluded.length) ds.excludedRows = excluded;
+    // Local data filter (#53): validate predicate columns against the channels.
+    const filter = sanitizeFilter(dd.filter, ds.data.labels.length);
+    if (filter.length) ds.filter = filter;
     return ds;
   });
 }

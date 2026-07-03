@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   activeRowIndices,
+  analysisData,
   excludedSet,
   isRowExcluded,
   pruneExcluded,
   sanitizeExcluded,
   toggleExcluded,
 } from "./rowstate";
-import type { DataStruct } from "./types";
+import type { Dataset, DataStruct } from "./types";
 
 const DATA: DataStruct = {
   time: [0, 1, 2, 3],
@@ -88,6 +89,34 @@ describe("pruneExcluded", () => {
   it("does not mutate the source", () => {
     pruneExcluded(DATA, [0]);
     expect(DATA.time).toEqual([0, 1, 2, 3]);
+  });
+});
+
+describe("analysisData (exclusion + filter chokepoint)", () => {
+  const mk = (over: Partial<Dataset>): Dataset => ({ id: "d", name: "d", data: DATA, ...over });
+
+  it("returns the SAME data when neither exclusion nor filter is active", () => {
+    expect(analysisData(mk({}))!).toBe(DATA);
+    expect(analysisData(null)).toBeNull();
+  });
+
+  it("prunes manually-excluded rows (#50)", () => {
+    const out = analysisData(mk({ excludedRows: [0, 2] }))!;
+    expect(out.time).toEqual([1, 3]);
+  });
+
+  it("prunes filter-failed rows (#53)", () => {
+    // keep rows with channel-0 value ≥ 30 → rows 2, 3
+    const out = analysisData(mk({ filter: [{ col: 0, kind: "range", min: 30 }] }))!;
+    expect(out.time).toEqual([2, 3]);
+  });
+
+  it("prunes the UNION of exclusions and the filter", () => {
+    const out = analysisData(
+      mk({ excludedRows: [3], filter: [{ col: 0, kind: "range", min: 30 }] }),
+    )!;
+    // filter keeps rows 2,3 (value ≥30); exclusion drops 3 → only row 2 remains
+    expect(out.time).toEqual([2]);
   });
 });
 
