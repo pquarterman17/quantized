@@ -173,3 +173,30 @@ def test_integrate_roundtrip() -> None:
     pk = resp.json()["peaks"][0]
     assert abs(pk["centroid"] - 5.0) < 0.01
     assert pk["area_pct"] == 100.0
+
+
+def test_integrate_batch_roundtrip() -> None:
+    import numpy as np
+
+    x = np.linspace(0, 100, 401)
+    def g(c: float) -> list[float]:
+        return list(100.0 * np.exp(-0.5 * ((x - c) / 4.0) ** 2) + 2.0)
+    resp = client.post(
+        "/api/peaks/integrate-batch",
+        json={"x": list(x), "spectra": [g(50.0), g(50.5), g(49.5)],
+              "regions": [[40.0, 60.0]], "align": True, "labels": ["a", "b", "c"]},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["n_spectra"] == 3 and body["n_regions"] == 1
+    assert len(body["area_matrix"]) == 3
+    assert [r["label"] for r in body["results"]] == ["a", "b", "c"]
+
+
+def test_integrate_batch_bad_reference_is_422() -> None:
+    resp = client.post(
+        "/api/peaks/integrate-batch",
+        json={"x": [0, 1, 2, 3, 4], "spectra": [[1, 2, 3, 4, 5]],
+              "regions": [[0.0, 4.0]], "reference": 9},
+    )
+    assert resp.status_code == 422

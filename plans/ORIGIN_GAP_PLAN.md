@@ -538,10 +538,6 @@ the same field names.)*
     *Model: haiku once #33 lands (same ROI pattern, different calc
     call — the gadget frame generalizes).*
 
-35. **Batch peak integration** across a spectra series with alignment
-    *Model: sonnet. Pickup: cross-correlation alignment already exists
-    in `calc/spectral.py`; loop pattern from `calc/batch_fit.py`.*
-
 ---
 
 ## W7 — Reporting & office integration
@@ -765,6 +761,13 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#35 Batch peak integration**~~ (2026-07-03) — `calc/peak_batch.py`
+  `batch_integrate_peaks` loops `integrate_peaks` over a spectra series on a
+  shared x-axis, with optional cross-correlation alignment
+  (`calc/spectral.cross_correlation` sample lag → edge-filled shift, verified
+  to recover a known shift). Emits per-spectrum results + area/centroid/FWHM
+  matrices (spectrum × region) for trend plotting; a failing spectrum yields a
+  flagged NaN row, never a dead batch. `/api/peaks/integrate-batch` route.
 - ~~**#19 3-D static export**~~ (2026-07-03) — `calc/figure_map.py`
   `render_map_figure` adds mplot3d surface / 3-D scatter / waterfall over the
   gridded MapData (plus 2-D heatmap), sharing `render_figure`'s style/format

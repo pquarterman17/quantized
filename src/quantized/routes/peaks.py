@@ -13,6 +13,7 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from quantized.calc.peak_batch import batch_integrate_peaks
 from quantized.calc.peak_fit import MODELS, fit_single_peak
 from quantized.calc.peak_integrate import integrate_peaks
 from quantized.calc.peak_multifit import fit_multi_peak
@@ -147,6 +148,36 @@ def integrate(req: IntegrateRequest) -> dict[str, Any]:
                 np.asarray(req.y, dtype=float),
                 [(float(a), float(b)) for a, b in req.regions],
                 baseline=req.baseline,
+            )
+        )
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class BatchIntegrateRequest(BaseModel):
+    x: list[float]
+    spectra: list[list[float]]  # each same length as x
+    regions: list[tuple[float, float]]
+    baseline: str = "linear"
+    align: bool = False
+    reference: int = 0
+    labels: list[str] | None = None
+
+
+@router.post("/integrate-batch")
+def integrate_batch(req: BatchIntegrateRequest) -> dict[str, Any]:
+    """Integrate fixed regions across a spectra series (optional alignment).
+
+    Returns per-spectrum results + area/centroid/FWHM matrices for trend
+    plotting; a failing spectrum is flagged, not fatal."""
+    try:
+        return to_jsonable(  # type: ignore[no-any-return]
+            batch_integrate_peaks(
+                np.asarray(req.x, dtype=float),
+                [np.asarray(s, dtype=float) for s in req.spectra],
+                [(float(a), float(b)) for a, b in req.regions],
+                baseline=req.baseline, align=req.align,
+                reference=req.reference, labels=req.labels,
             )
         )
     except (ValueError, IndexError) as exc:
