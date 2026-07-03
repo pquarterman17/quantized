@@ -156,9 +156,10 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 
 Also landed 2026-07-03 (beyond the table): #16 statistical-plot math + export,
 #17 contour export, #19 3-D export, #35 batch peak integration, #9 headless
-public API. Remaining safe-backend items with no user input needed are scarce —
-most open work is now frontend (needs UX direction) or parsers (#42/#43 need
-sample files).
+public API, **#42 Bruker `.raw`/`.brml` parsers**, and the **JCAMP-DX half of
+#43** (NetCDF still open). Remaining safe-backend items are scarce — most open
+work is now frontend (needs UX direction); the last parser gap (#43 NetCDF)
+needs a sample `.nc` in the corpus.
 
 ---
 
@@ -613,19 +614,11 @@ blocks, and the frontend report viewer / `.dwk` round-trip under #36.)*
 
 ### Tier 2 — Medium Impact
 
-42. **Bruker XRD 1-D parsers** (`.raw`/`.brml` line scans) — closes the
-    third XRD vendor (PANalytical + Rigaku covered). *Scope note:*
-    PORT_CHECKLIST routed "Bruker" to fermiviewer for **area-detector
-    image** data; 1-D diffractograms are line data and belong here.
-    *Model: sonnet (binary reverse-engineering; data-format-detective
-    territory). Pickup: `io/rigaku.py` shows the binary-parser +
-    fixture + guard-rail-test pattern; blocked on sample files — source
-    them into the #46 corpus first (`.brml` is a zip of XMLs — start
-    there; `.raw` v1/v4 layouts differ).*
-
-43. **JCAMP-DX and NetCDF import** (jcamp MIT / xarray BSD)
-    *Model: haiku. Pickup: standard formats, library-backed; register
-    once in `io/registry.py`, return DataStruct.*
+43. **NetCDF import** (xarray/scipy BSD) — the JCAMP-DX half shipped
+    2026-07-03 (see Completed). NetCDF (ANDI/AIA chromatography, generic
+    scientific `.nc`/`.cdf`) remains: scipy.io handles NetCDF-3, h5py
+    NetCDF-4. *Model: haiku. Pickup: register once in `io/registry.py`,
+    return DataStruct; needs a sample `.nc` in the #46 corpus first.*
 
 44. **`.opj` reader as an isolated dev-time CLI converter** — the
     migration lever for labs with legacy Origin projects; GPL
@@ -770,6 +763,23 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#42 Bruker XRD 1-D parsers**~~ (2026-07-03) — `io/bruker_raw.py`
+  (Diffrac-AT RAW1.01 binary; byte layout reverse-engineered + cross-checked
+  against xylib's UXD export — the variable supplementary-header offset is the
+  trap a one-file test misses) and `io/bruker_brml.py` (ZIP-of-XML; 1-D line
+  scans decode, multi-scan RSMs raise cleanly). Both appended to the single
+  registry (`.raw` magic `RAW1.01` vs Rigaku `FI` — no collision; `.brml`
+  direct). Sample files sourced into `../test-data/bruker/xrd/` (Apache-2.0
+  `.brml`, LGPL-2.1 `.raw`). Synthetic-builder CI tests + realdata golden
+  values (BT86 n=2374 first5=[187,183,178,174,193]).
+- ~~**#43 (JCAMP-DX half)**~~ (2026-07-03) — `io/jcamp.py` + `io/_jcamp_asdf.py`
+  (the SQZ/DIF/DUP ASDF decoder, incl. DUP-after-DIF difference re-application
+  and cross-line Y-value checks). Reads `(X++(Y..Y))` XYDATA and `(XY..XY)`
+  XYPOINTS/PEAK TABLE; `.jdx`/`.dx` registered. 10-file MIT corpus downloaded
+  to `../test-data/jcamp/` (Coblentz IR + the Lancashire compression-form
+  suite); tests hand-encode each form to known values and use JCAMP's own
+  NPOINTS/FIRSTY integrity fields as the realdata oracle. NetCDF remains open
+  as the narrowed #43.
 - ~~**#9 Documented headless public API**~~ (2026-07-03) — `quantized/api.py`
   is the blessed, frozen surface (`import quantized.api as qz`): ~65 curated
   pure functions (load, fitting, peaks, baseline, corrections, the full W5

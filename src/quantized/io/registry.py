@@ -10,8 +10,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 from quantized.datastruct import DataStruct
+from quantized.io.bruker_brml import import_bruker_brml
+from quantized.io.bruker_raw import import_bruker_raw, is_bruker_raw
 from quantized.io.delimited import import_csv
 from quantized.io.excel import import_excel
+from quantized.io.jcamp import import_jcamp
 from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl, is_ncnr_refl
 from quantized.io.qd import import_ppms, import_qd_vsm, is_ppms_dat, is_qd_file
 from quantized.io.refl1d import import_refl1d_dat, is_refl1d_dat
@@ -28,6 +31,9 @@ Sniffer = Callable[[Path], bool]
 # NOTE: resolve_parser lowercases the suffix, so .datA -> '.data', etc.
 _EXT_MAP: dict[str, Parser] = {
     ".xrdml": import_xrdml,
+    ".brml": import_bruker_brml,  # Bruker XRD (ZIP of XML); 1-D line scans
+    ".jdx": import_jcamp,  # JCAMP-DX spectroscopy (IR/Raman/UV-Vis/...)
+    ".dx": import_jcamp,
     ".pnr": import_ncnr_pnr,
     ".data": import_ncnr_dat,  # .datA
     ".datb": import_ncnr_dat,  # .datB
@@ -56,8 +62,9 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
         (is_refl1d_dat, import_refl1d_dat),
         (_accept_any, import_ncnr_refl),
     ],
-    # .raw is Rigaku here (magic "FI"); Bruker .raw -> fermiviewer (out of scope).
-    ".raw": [(is_rigaku_raw, import_rigaku_raw)],
+    # .raw is either Rigaku SmartLab (magic "FI") or Bruker Diffrac-AT RAW1.01
+    # (magic "RAW1.01"); the magic bytes disambiguate with no collision.
+    ".raw": [(is_rigaku_raw, import_rigaku_raw), (is_bruker_raw, import_bruker_raw)],
     # SIMS depth profiles share .csv/.tsv/.xlsx with generic tables: sniff for the
     # SIMS layout first, else fall back to the generic delimited / Excel parser.
     ".csv": [(is_sims_file, import_sims), (_accept_any, import_csv)],

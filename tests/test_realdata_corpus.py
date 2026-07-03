@@ -24,8 +24,12 @@ REPRESENTATIVES = [
     "reductus/xrr/NbAu_XRR_v2.refl",
     "refl1d/xrr/Nb XRR/XRR-refl.dat",
     "rigaku/xrd/YIG_Py_S3.raw",
+    "bruker/xrd/xylib_BT86.raw",
+    "bruker/xrd/FAIRmat_2thomega.brml",
     "panalytical/xrd/La2NiO4_1.xrdml",
     "panalytical/xrd/peakpo_feooh.xrdml",
+    "jcamp/ir/ethanol.jdx",
+    "jcamp/torture/sqzdupd1.jdx",
     "eag/sims/sims_depth_profile.xlsx",
     "synthetic/sims/sims_stack_oxide.csv",
 ]
