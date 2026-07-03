@@ -570,16 +570,22 @@ blocks, and the frontend report viewer / `.dwk` round-trip under #36.)*
     extension/pattern (persisted like registry sniffers)
     *Model: sonnet. Pickup: `io/delimited.py` + `io/base.py`
     (parse_col_header/resolve_column) do the detection.*
-    - [ ] Preview route: first N raw lines + current guess (delimiter,
-          skip rows, header row, column names/units) + parsed table
-          under those settings; wizard re-previews on every tweak
-    - [ ] Column mapping: name, unit, role (x/y/error/label/ignore —
-          reuses the channel-role vocabulary)
+    - [x] Preview engine + routes (`io/import_preview.py`: `guess_settings`
+          / `preview_import` / `parse_import` over absolute line indices,
+          reusing the `delimited` detectors; `/api/import/{guess,preview,
+          parse}`) — re-previews under adjustable `ImportSettings`
+          (delimiter / header / units / data-start / names) (2026-07-03)
+    - [x] Column mapping: name, unit, role (x/y/error/label/ignore —
+          `ImportSettings.roles`, x→axis, y/error→channels, label/ignore
+          dropped) (2026-07-03)
     - [ ] ImportFilter persistence (name, glob pattern, all settings);
           registry consults saved filters before content sniffers
-    - [ ] Acceptance: a messy multi-header instrument ASCII imports
-          correctly through the wizard, and the saved filter makes the
-          second file one-click
+          (`ImportSettings` IS the serializable filter shape; the
+          persistence store + registry hook + the wizard UI remain)
+    - [x] Acceptance (backend): a messy 3-comment-line, header+units-row
+          instrument ASCII imports correctly through `guess→preview→parse`
+          (test_io_import_preview); the saved-filter one-click needs the
+          persistence half above
 
 41. **Packaging & installers** — pip/uv install, standalone installers,
     versioned GitHub releases with CI-built artifacts; zero-friction
