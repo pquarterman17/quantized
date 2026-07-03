@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { findPeaks, fitMultiPeak, fitPeak, type PeakSeed } from "../../../lib/api";
 import { peakOverlayArray } from "../../../lib/plotdata";
+import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -30,9 +31,12 @@ export interface PeaksState {
   fitEach: (opts: PeakFitOptions) => Promise<void>;
 }
 
-/** First-channel (x, y) for a dataset — the 1-D slice the peak tools operate on. */
+/** First-channel (x, y) the peak tools DETECT/FIT on — the analysis view, so
+ *  excluded/filtered rows (#50/#53) don't produce or bias peaks. Marker overlays
+ *  are built against the FULL time array (below) so they align with the plot x. */
 function xy(ds: Dataset): { x: number[]; y: number[] } {
-  return { x: ds.data.time, y: ds.data.values.map((row) => row[0]) };
+  const d = analysisData(ds) ?? ds.data;
+  return { x: d.time, y: d.values.map((row) => row[0]) };
 }
 
 function seedsFrom(peaks: Peak[]): PeakSeed[] {
@@ -65,9 +69,11 @@ export function usePeaks(): PeaksState {
       .then((res) => {
         if (cancelled) return;
         setPeaks(res.peaks);
+        // Overlay on the FULL time (not the pruned x) so markers align with the
+        // full-length plot; peak centers land on their nearest full-x point.
         setPeakOverlay({
           datasetId: active.id,
-          y: peakOverlayArray(x, res.peaks.map((p) => ({ center: p.center, height: p.height }))),
+          y: peakOverlayArray(active.data.time, res.peaks.map((p) => ({ center: p.center, height: p.height }))),
         });
       })
       .catch((e: unknown) => {
@@ -81,13 +87,13 @@ export function usePeaks(): PeaksState {
     };
   }, [active, setPeakOverlay]);
 
-  // Draw fitted peak tops (height above the local background) as the overlay.
+  // Draw fitted peak tops (height above the local background) as the overlay,
+  // on the FULL time so markers align with the full-length plot x.
   const overlayFitted = useCallback(
     (ds: Dataset, fitted: FittedPeak[]) => {
-      const { x } = xy(ds);
       setPeakOverlay({
         datasetId: ds.id,
-        y: peakOverlayArray(x, fitted.map((p) => ({ center: p.center, height: p.height + p.bg }))),
+        y: peakOverlayArray(ds.data.time, fitted.map((p) => ({ center: p.center, height: p.height + p.bg }))),
       });
     },
     [setPeakOverlay],

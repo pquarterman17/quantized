@@ -77,6 +77,41 @@ describe("usePeaks find", () => {
   });
 });
 
+describe("usePeaks exclusion honoring (#50/#53)", () => {
+  it("detects on the pruned analysis view but builds a full-length overlay", async () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x.dat", data: DATA, excludedRows: [1, 3] }],
+      activeId: "d1",
+      peakOverlay: null,
+    });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    // excluded rows 1, 3 dropped from the detection inputs
+    const body = vi.mocked(findPeaks).mock.calls[0][0];
+    expect(body.x).toEqual([0, 2, 4, 5]);
+    expect(body.y).toEqual([1, 2, 2, 1]);
+    // overlay stays full-length (6 points) so it aligns with the plot x
+    expect(useApp.getState().peakOverlay?.y).toHaveLength(6);
+  });
+
+  it("fits (fitTogether) on the pruned analysis view", async () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x.dat", data: DATA, excludedRows: [0, 5] }],
+      activeId: "d1",
+      peakOverlay: null,
+    });
+    vi.mocked(fitMultiPeak).mockResolvedValue(fitted(1.02));
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.fitTogether(OPTS);
+    });
+    const body = vi.mocked(fitMultiPeak).mock.calls[0][0];
+    expect(body.x).toEqual([1, 2, 3, 4]); // rows 0 and 5 dropped
+    expect(body.y).toEqual([5, 2, 6, 2]);
+  });
+});
+
 describe("usePeaks fitTogether", () => {
   it("sends detected peaks as seeds to /fit-multi and stores the result", async () => {
     vi.mocked(fitMultiPeak).mockResolvedValue(fitted(1.02));

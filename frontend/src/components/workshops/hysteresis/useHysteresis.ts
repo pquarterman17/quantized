@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 
 import { hysteresisAnalysis } from "../../../lib/api";
+import { analysisData } from "../../../lib/rowstate";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { useActiveDataset } from "../../../store/useApp";
 
@@ -28,8 +29,11 @@ export function useHysteresis(): HysteresisState {
     setError(null);
     if (!active) return;
     setBusy(true);
-    const h = active.data.time;
-    const m = active.data.values.map((row) => row[0]);
+    // Analysis view (excluded/filtered rows dropped, #50/#53) so a masked outlier
+    // point doesn't skew Hc/Mr/Ms.
+    const src = analysisData(active) ?? active.data;
+    const h = src.time;
+    const m = src.values.map((row) => row[0]);
     hysteresisAnalysis({ h, m })
       .then((r) => {
         if (!cancelled) setResult(r);
