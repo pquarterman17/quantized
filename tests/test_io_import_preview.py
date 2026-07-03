@@ -94,6 +94,24 @@ def test_explicit_delimiter_overrides_autodetect() -> None:
     assert pv["rows"][0] == [None, 2.0]  # "1,5" isn't a float -> NaN -> None
 
 
+def test_trailing_delimiter_does_not_add_phantom_column() -> None:
+    # a tab-terminated file (common Excel/instrument artifact) must not create
+    # an extra all-NaN "Col3" channel (regression of the import_csv guard)
+    text = "Time\tValue\t\n1\t10\t\n2\t20\t\n3\t30\t\n"
+    g = guess_settings(text)
+    assert g.column_names == ["Time", "Value"] and g.roles == ["x", "y"]
+    ds = parse_import(text, g)
+    assert ds.labels == ("Value",) and ds.values.shape == (3, 1)
+
+
+def test_interior_empty_cell_is_preserved() -> None:
+    # only *trailing* empties are trimmed; a missing interior value stays a column
+    text = "a,b,c\n1,,3\n4,,6"
+    pv = preview_import(text, ImportSettings(delimiter=",", header_line=0, data_start_line=1))
+    assert len(pv["columns"]) == 3
+    assert pv["rows"][0] == [1.0, None, 3.0]
+
+
 def test_parse_requires_channels() -> None:
     text = "x\n1\n2\n3"
     with pytest.raises(ValueError, match="no y/error columns"):

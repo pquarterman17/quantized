@@ -244,6 +244,16 @@ def test_statplot_bad_kind_is_422() -> None:
     assert resp.status_code == 422
 
 
+def test_map_figure_degenerate_grid_is_422_not_500() -> None:
+    # a 1-wide grid used to raise matplotlib TypeError -> 500
+    resp = client.post(
+        "/api/export/map-figure",
+        json={"x_axis": [1.0], "y_axis": [1.0, 2.0], "z_grid": [[1.0], [2.0]],
+              "kind": "contourf"},
+    )
+    assert resp.status_code == 422
+
+
 def test_figure_bad_style_is_422() -> None:
     resp = client.post(
         "/api/export/figure",

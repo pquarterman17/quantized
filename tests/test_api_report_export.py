@@ -48,6 +48,15 @@ def test_unknown_format_is_422() -> None:
     assert resp.status_code == 422
 
 
+def test_malformed_report_is_422_not_500() -> None:
+    # non-dict entries in sections used to raise AttributeError -> 500
+    resp = client.post(
+        "/api/report/export",
+        json={"report": {"title": "x", "sections": ["oops"]}, "format": "html"},
+    )
+    assert resp.status_code == 422
+
+
 def test_docx_export_when_available() -> None:
     pytest.importorskip("docx")
     resp = client.post("/api/report/export", json={"report": _REPORT, "format": "docx"})

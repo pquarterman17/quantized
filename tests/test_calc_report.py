@@ -99,6 +99,26 @@ def test_validate_report_catches_bad_blocks() -> None:
         validate_report(ragged)
 
 
+def test_validate_report_rejects_non_dict_entries() -> None:
+    # non-dict section / block / param must raise ValueError, never AttributeError
+    with pytest.raises(ValueError, match="section 0 must be an object"):
+        validate_report({"title": "t", "sections": ["oops"]})
+    with pytest.raises(ValueError, match="block must be an object"):
+        validate_report({"title": "t", "sections": [{"title": "s", "blocks": ["oops"]}]})
+    with pytest.raises(ValueError, match="each param needs"):
+        validate_report({"title": "t", "sections": [
+            {"title": "s", "blocks": [{"type": "params", "params": ["namevalue"]}]}]})
+
+
+def test_params_block_sanitizes_nonfinite_for_strict_json() -> None:
+    import json
+
+    pb = params_block([{"name": "a", "value": float("nan"), "error": float("inf")}])
+    assert pb["params"][0] == {"name": "a", "value": None}  # NaN->None, inf error dropped
+    rep = ReportSheet(title="t", sections=(section("s", [pb]),)).to_dict()
+    json.dumps(rep, allow_nan=False)  # must not raise (valid wire JSON)
+
+
 # --------------------------------------------------------------------------
 # emitters
 # --------------------------------------------------------------------------

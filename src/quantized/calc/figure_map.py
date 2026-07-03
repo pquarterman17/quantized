@@ -37,8 +37,8 @@ def _contour_levels(
     """Explicit contour levels: ``levels`` count (or a list), lin or log spaced."""
     if isinstance(levels, (list, tuple)):
         arr = np.asarray(sorted(float(x) for x in levels), dtype=float)
-        if arr.size < 1:
-            raise ValueError("levels list must be non-empty")
+        if arr.size < 2:  # matplotlib's contourf needs >= 2 levels
+            raise ValueError("levels list needs at least 2 entries")
         return arr
     n = int(levels)
     if n < 2:
@@ -46,6 +46,8 @@ def _contour_levels(
     if not (np.isfinite(z_min) and np.isfinite(z_max) and z_max > z_min):
         raise ValueError("map has no finite z-range to contour")
     if scale == "log":
+        if z_max <= 0:
+            raise ValueError("log level_scale needs a positive z-range")
         lo = z_min if z_min > 0 else z_max * 1e-3
         return np.asarray(np.logspace(np.log10(lo), np.log10(z_max), n), dtype=float)
     if scale != "linear":
@@ -101,6 +103,8 @@ def render_map_figure(
     z = np.asarray(z_grid, dtype=float)
     if z.ndim != 2 or z.shape != (y.size, x.size):
         raise ValueError(f"z_grid must be (ny, nx) = ({y.size}, {x.size}), got {z.shape}")
+    if x.size < 2 or y.size < 2:
+        raise ValueError(f"a map needs at least a 2x2 grid, got ({y.size}, {x.size})")
 
     if np.any(np.isfinite(z)):
         z_min, z_max = float(np.nanmin(z)), float(np.nanmax(z))

@@ -51,6 +51,7 @@ def _sample_report() -> dict:
     (1.23456, 0.0123, "1.235 ± 0.012"),   # 2 sig figs on error -> value to 3 dp
     (1234.5, 120.0, "1230 ± 120"),        # large error -> round value to tens
     (0.00012345, 0.0000021, "0.0001234 ± 0.0000021"),
+    (5.0, -0.02, "5.000 ± 0.020"),        # a signed error prints as its magnitude
     (5.0, None, "5"),                     # no error -> plain number
     (5.0, 0.0, "5"),                      # zero error -> plain number
     (2.0, float("nan"), "2"),             # non-finite error -> plain number

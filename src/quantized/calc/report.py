@@ -105,9 +105,15 @@ def params_block(
     """
     out: list[dict[str, Any]] = []
     for p in params:
-        entry: dict[str, Any] = {"name": str(p["name"]), "value": float(p["value"])}
+        # non-finite value/error -> None/omitted, so to_json() stays valid wire
+        # JSON (consistent with _cell / DataStruct's null-at-the-boundary rule).
+        val = float(p["value"])
+        entry: dict[str, Any] = {
+            "name": str(p["name"]),
+            "value": val if math.isfinite(val) else None,
+        }
         err = p.get("error")
-        if err is not None and not (isinstance(err, float) and math.isnan(err)):
+        if err is not None and math.isfinite(float(err)):
             entry["error"] = float(err)
         unit = p.get("unit")
         if unit:
@@ -156,6 +162,8 @@ def source_ref(kind: str, ref_id: str, name: str | None = None) -> dict[str, Any
 
 # ── Validation ──────────────────────────────────────────────────────────────
 def _validate_block(block: Mapping[str, Any], where: str) -> None:
+    if not isinstance(block, Mapping):
+        raise ValueError(f"{where}: block must be an object")
     btype = block.get("type")
     if btype not in BLOCK_TYPES:
         raise ValueError(f"{where}: unknown block type {btype!r}")
@@ -175,7 +183,7 @@ def _validate_block(block: Mapping[str, Any], where: str) -> None:
         if not isinstance(ps, list):
             raise ValueError(f"{where}: params block needs a list 'params'")
         for p in ps:
-            if "name" not in p or "value" not in p:
+            if not isinstance(p, Mapping) or "name" not in p or "value" not in p:
                 raise ValueError(f"{where}: each param needs 'name' and 'value'")
     elif btype == "figure":  # noqa: SIM102
         if not isinstance(block.get("name"), str):
@@ -190,6 +198,8 @@ def validate_report(payload: Mapping[str, Any]) -> None:
     if not isinstance(sections, list):
         raise ValueError("report 'sections' must be a list")
     for si, sec in enumerate(sections):
+        if not isinstance(sec, Mapping):
+            raise ValueError(f"section {si} must be an object")
         if not isinstance(sec.get("title"), str):
             raise ValueError(f"section {si} needs a string 'title'")
         blocks = sec.get("blocks", [])

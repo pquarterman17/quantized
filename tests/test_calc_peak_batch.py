@@ -73,6 +73,17 @@ def test_failure_isolation_flags_bad_spectrum() -> None:
     assert not math.isnan(out["area_matrix"][0][0])
 
 
+def test_alignment_failure_is_isolated_not_fatal() -> None:
+    # a spectrum that's all-NaN can't be cross-correlated/integrated; with
+    # align=True the failure must be caught per-spectrum, not abort the batch
+    good = _gauss(50.0)
+    bad = np.full_like(good, np.nan)
+    out = batch_integrate_peaks(_X, [good, bad, good], [(40.0, 60.0)], align=True)
+    assert out["n_failed"] == 1
+    assert out["results"][1]["ok"] is False
+    assert out["results"][0]["ok"] and out["results"][2]["ok"]
+
+
 def test_labels_passthrough() -> None:
     out = batch_integrate_peaks(
         _X, [_gauss(50.0), _gauss(50.0)], [(40.0, 60.0)], labels=["300K", "10K"]

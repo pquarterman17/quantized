@@ -338,7 +338,7 @@ def export_map_figure(req: MapFigureRequest) -> Response:
             width_in=req.width_in, height_in=req.height_in,
             view_elev=req.view_elev, view_azim=req.view_azim,
         )
-    except (ValueError, KeyError, IndexError) as exc:
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=data,

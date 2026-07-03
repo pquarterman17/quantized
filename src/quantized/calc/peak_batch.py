@@ -86,18 +86,17 @@ def batch_integrate_peaks(
     area_m, cen_m, fwhm_m = [], [], []
 
     for i, y in enumerate(ys):
-        shift = 0
-        yi = y
-        if align and i != reference:
-            # cross_correlation(ref, y) peaks at the lag by which y trails ref;
-            # shift y back by that lag to align its feature onto the reference.
-            shift = int(cross_correlation(ref, y)["peakLag"])
-            yi = _shift_samples(y, -shift)
         label = labels[i] if labels else f"spectrum {i + 1}"
-        row: dict[str, Any] = {
-            "index": i, "label": label, "shift_samples": shift, "shift_x": shift * dx,
-        }
+        row: dict[str, Any] = {"index": i, "label": label, "shift_samples": 0, "shift_x": 0.0}
         try:
+            shift = 0
+            yi = y
+            if align and i != reference:
+                # cross_correlation(ref, y) peaks at the lag by which y trails
+                # ref; shift y back by that lag to align onto the reference.
+                shift = int(cross_correlation(ref, y)["peakLag"])
+                yi = _shift_samples(y, -shift)
+                row["shift_samples"], row["shift_x"] = shift, shift * dx
             integ = integrate_peaks(xv, yi, regions, baseline=baseline)
             row["ok"] = True
             row["total_area"] = integ["total_area"]

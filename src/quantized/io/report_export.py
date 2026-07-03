@@ -81,10 +81,10 @@ def format_value_error(value: Any, error: Any = None, *, sig: int = 2) -> str:
     v = float(value)
     if error is None or not math.isfinite(float(error)) or float(error) == 0.0:
         return _fmt_num(value)
-    e = abs(float(error))
+    e = abs(float(error))  # uncertainty is magnitude-only, sign is meaningless
     exp = math.floor(math.log10(e))
     ndp = sig - 1 - exp  # decimal places (may be negative for large errors)
-    v_r, e_r = round(v, ndp), round(float(error), ndp)
+    v_r, e_r = round(v, ndp), round(e, ndp)
     dp = max(0, ndp)
     return f"{v_r:.{dp}f} ± {e_r:.{dp}f}"
 

@@ -92,6 +92,21 @@ def _split(line: str, delim: str) -> list[str]:
     return line.split(delim)
 
 
+def _effective_ncols(rows: list[list[str]]) -> int:
+    """Column count ignoring trailing empty tokens (a trailing-delimiter row
+    like ``"1,2,"`` is 2 columns, not 3), while preserving empty *interior*
+    cells (``"1,,3"`` stays 3). Mirrors ``import_csv``'s trailing-column guard.
+    """
+    best = 0
+    for row in rows:
+        last = 0
+        for k, cell in enumerate(row):
+            if cell.strip():
+                last = k + 1
+        best = max(best, last)
+    return best
+
+
 def _resolve_delim(lines: list[str], setting: str) -> str:
     d = _NAMED_DELIMS.get(setting.lower(), setting)
     if d != "auto":
@@ -110,7 +125,8 @@ def guess_settings(text: str) -> ImportSettings:
 
     header_line: int | None = None
     units_line: int | None = None
-    n_cols = len(tokens[data_start]) if data_start < len(tokens) else 0
+    data_rows = [t for t in tokens[data_start:] if any(c.strip() for c in t)]
+    n_cols = _effective_ncols(data_rows)
     # a units row just above the data, and a header above that
     if data_start >= 2 and scores[data_start - 1] < 0.5 and _looks_like_units_row(
         tokens[data_start - 1], n_cols
@@ -143,7 +159,7 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
     tokens = [_split(ln, delim) for ln in lines]
     ds = max(0, settings.data_start_line)
     data_tokens = [t for t in tokens[ds:] if any(c.strip() for c in t)]
-    n_cols = max((len(t) for t in data_tokens), default=0)
+    n_cols = _effective_ncols(data_tokens)
     if settings.column_names:
         names = [settings.column_names[k] if k < len(settings.column_names) else f"Col{k + 1}"
                  for k in range(n_cols)]

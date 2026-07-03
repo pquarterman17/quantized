@@ -63,6 +63,23 @@ def test_render_rejects_bad_shape_and_kind() -> None:
         render_map_figure(x, y, z, fmt="jpg")
 
 
+def test_render_rejects_degenerate_grid() -> None:
+    # a 1-wide grid is not a map -> clean ValueError, never a matplotlib TypeError
+    with pytest.raises(ValueError, match="at least a 2x2 grid"):
+        render_map_figure(np.array([1.0]), np.array([1.0, 2.0]),
+                          np.array([[1.0], [2.0]]), kind="contourf")
+
+
+def test_contour_levels_log_all_nonpositive_raises() -> None:
+    with pytest.raises(ValueError, match="positive z-range"):
+        _contour_levels(-5.0, -1.0, 4, "log")
+
+
+def test_contour_levels_explicit_list_needs_two() -> None:
+    with pytest.raises(ValueError, match="at least 2 entries"):
+        _contour_levels(0.0, 1.0, [0.5], "linear")
+
+
 def test_render_rejects_all_nan_contour() -> None:
     x = np.linspace(0, 1, 5)
     y = np.linspace(0, 1, 4)
