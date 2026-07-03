@@ -707,6 +707,17 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
     tool are the two existing halves; the design unifies them on the
     `Dataset` so `.dwk` round-trips and the macro recorder captures
     state changes.*
+    *FOUNDATION SHIPPED 2026-07-03: the persistent EXCLUSION dimension —
+    `Dataset.excludedRows` + pure `lib/rowstate` (excludedSet /
+    toggleExcluded / activeRowIndices / pruneExcluded / analysisData /
+    sanitizeExcluded) + store actions (toggle/set/clear) + worksheet wired
+    to it (durable, dataset-scoped, replaces the transient local mask) +
+    .dwk round-trip. First consumer honoring it: Tabulate (#55) via
+    analysisData. Remaining: (a) the SELECTION dimension (plot rubber-band
+    ↔ worksheet highlight — canvas/interaction work); (b) fits honoring
+    exclusion needs a plot-display decision (hide vs grey excluded points —
+    fitModel returns yFit at the input x, so pruning fit inputs misaligns
+    the full-x overlay); (c) the universal-linking architecture guard.*
     - [ ] **Universal-linking rule:** linking is threshold-shaped —
           80% linked feels broken, not innovative. When this lands, add
           an architecture guard (`architecture-guards.md` + a grep-able
@@ -752,6 +763,13 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
     *Model: sonnet. Pickup: group-by math is `descriptive_stats` per
     partition (pure calc); the well UI reuses #51's drop-zone
     components.*
+    *CORE SHIPPED 2026-07-03: Tabulate ToolWindow (`workshops/tabulate`) —
+    pure `lib/tabulate` group-by (count/mean/sd/min/max/median), select-
+    based group/value column pickers (defaults to the first categorical
+    column via `lib/modeling`), a summary table, and export → new dataset
+    + copy TSV. Honors row exclusion (#50) via `rowstate.analysisData`.
+    Remaining: drag-drop wells (needs #51's drop zones) and report-block
+    export (#36).*
 
 ---
 
