@@ -567,23 +567,9 @@ the same field names.)*
     - [ ] Acceptance: one schema renders in the viewer AND through
           #37/#38 with no per-renderer special cases
 
-37. **Word + PowerPoint export** — one-click report → `.docx`
-    (python-docx, MIT) and graphs → `.pptx` one-per-slide (python-pptx,
-    MIT), embedding the existing vector figure export
-    *Model: haiku once #36 exists. Pickup: pure renderers over the
-    report schema in new `io/` writers + one thin route (format param),
-    like `io/origin.py`; figures embed via the existing `render_figure`
-    output (SVG/PNG per format capability).*
-
-38. **LaTeX table export** — booktabs-formatted fit & stats tables
-    *Model: haiku. Pickup: same renderer-over-schema pattern;
-    significant-digit handling follows the report schema's stated
-    uncertainties (value ± error formatting).*
-
-### Tier 2 — Medium Impact
-
-39. **HTML report export** — self-contained shareable report page
-    *Model: haiku.*
+*(All shipped 2026-07-03 — see Completed. Remaining W7 follow-on: wiring
+`calc/figure.render_figure` output into report emitters as embedded figure
+blocks, and the frontend report viewer / `.dwk` round-trip under #36.)*
 
 ---
 
@@ -781,6 +767,21 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#37 Word + PowerPoint export**~~ (2026-07-03) — `io/report_export.py`
+  `to`-renderers over the #36 schema; `.docx` (python-docx) with real tables
+  + `.pptx` (python-pptx) one-slide-per-section, both embedding raster figure
+  blocks via `add_picture` (SVG/other → text placeholder). MIT deps are an
+  optional `office` extra (guarded imports; core install stays lean, LaTeX/
+  HTML always work) + in the dev group so CI exercises them. Thin
+  `/api/report/export` route (format param → attachment).
+- ~~**#38 LaTeX table export**~~ (2026-07-03) — `report_export.to_latex`:
+  booktabs tables for params + stats, `value ± error` rounded to the
+  uncertainty's 2 sig figs (`format_value_error`), science-glyph→macro map so
+  it compiles under plain pdfLaTeX (no inputenc). Same renderer-over-schema
+  path as #37/#39.
+- ~~**#39 HTML report export**~~ (2026-07-03) — `report_export.to_html`:
+  self-contained styled page (inline CSS, escaped, data-URI figure images);
+  the third renderer proving one #36 schema → many formats, no special cases.
 - ~~**#29 (core) Bootstrap + MCMC fit uncertainty**~~ (2026-07-02) —
   `calc/fit_bootstrap.py`: residual/pairs bootstrap over `curve_fit`
   (deterministic seed, failed-refit accounting, percentile CIs vs the
