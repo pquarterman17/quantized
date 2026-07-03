@@ -179,6 +179,36 @@ def test_anova2_roundtrip() -> None:
     assert sources == ["A", "B", "AxB", "Error", "Total"]
 
 
+def test_anova2_unbalanced_roundtrip() -> None:
+    vals = [12.1, 13.4, 11.8, 15.0, 14.2, 9.6, 18.4, 17.1, 21.0, 22.3, 20.1, 13.3]
+    fa = ["lo"] * 6 + ["hi"] * 6
+    fb = ["x", "x", "x", "y", "y", "z", "x", "x", "y", "y", "y", "z"]
+    resp = client.post(
+        "/api/stats/anova2-unbalanced",
+        json={"values": vals, "factor_a": fa, "factor_b": fb, "ss_type": 3},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["balanced"] is False
+    assert [r["source"] for r in body["table"]] == ["A", "B", "AxB", "Error", "Total"]
+    # empty-cell design -> 422
+    bad = client.post(
+        "/api/stats/anova2-unbalanced",
+        json={"values": [1, 2, 3, 4], "factor_a": ["a", "a", "b", "b"],
+              "factor_b": ["x", "y", "x", "x"]},
+    )
+    assert bad.status_code == 422
+
+
+def test_anova_rm_roundtrip() -> None:
+    data = [[10.0, 12.0, 15.0], [8.0, 11.0, 14.0], [9.0, 10.0, 13.0], [11.0, 13.0, 17.0]]
+    resp = client.post("/api/stats/anova-rm", json={"data": data})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [r["source"] for r in body["table"]] == ["Subjects", "Conditions", "Error", "Total"]
+    assert "greenhouse_geisser" in body["sphericity"]
+
+
 def test_tukey_and_recommend_roundtrip() -> None:
     g = [[1.0, 2.0, 1.5, 2.2, 1.8], [5.0, 6.0, 5.5, 6.2, 5.8], [1.1, 2.1, 1.6, 2.3, 1.9]]
     t = client.post("/api/stats/tukey", json={"groups": g})

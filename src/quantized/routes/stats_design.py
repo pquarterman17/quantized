@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from quantized.calc.stats_anova2 import adjust_pvalues, anova2, dunnett_test, tukey_hsd
+from quantized.calc.stats_anova_ext import anova2_unbalanced, repeated_measures_anova
 from quantized.calc.stats_tests import recommend_test
 from quantized.routes._payload import to_jsonable
 
@@ -32,6 +33,43 @@ def anova2_route(req: Anova2Request) -> dict[str, Any]:
     """Balanced two-way factorial ANOVA with interaction."""
     try:
         return _wrap(anova2(req.cells, alpha=req.alpha))
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class Anova2UnbalancedRequest(BaseModel):
+    values: list[float]
+    factor_a: list[str]
+    factor_b: list[str]
+    ss_type: int = 3  # 2 or 3
+    alpha: float = 0.05
+
+
+@router.post("/anova2-unbalanced")
+def anova2_unbalanced_route(req: Anova2UnbalancedRequest) -> dict[str, Any]:
+    """Unbalanced two-way ANOVA (Type II/III SS) from long-format columns."""
+    try:
+        return _wrap(
+            anova2_unbalanced(
+                np.asarray(req.values, dtype=float),
+                req.factor_a, req.factor_b,
+                ss_type=req.ss_type, alpha=req.alpha,
+            )
+        )
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+class RepeatedMeasuresRequest(BaseModel):
+    data: list[list[float]]  # rows = subjects, columns = conditions
+    alpha: float = 0.05
+
+
+@router.post("/anova-rm")
+def anova_rm_route(req: RepeatedMeasuresRequest) -> dict[str, Any]:
+    """One-way repeated-measures (within-subjects) ANOVA + sphericity."""
+    try:
+        return _wrap(repeated_measures_anova(req.data, alpha=req.alpha))
     except (ValueError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

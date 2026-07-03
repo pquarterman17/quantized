@@ -15,7 +15,7 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-01
+**Updated:** 2026-07-03
 
 ---
 
@@ -453,14 +453,19 @@ the same field names.)*
     two-way + Tukey HSD + Dunnett, scipy-only. Remaining below.*
     - [x] Balanced two-way with interaction (Montgomery battery-life
           table reproduced exactly); Tukey + Dunnett post-hoc (2026-07-01)
-    - [ ] Unbalanced designs (Type II/III sums — regression approach
-          over `multiple_regression` with dummy coding, or statsmodels)
+    - [x] Unbalanced designs (Type II/III sums, pure-numpy effect-coded
+          nested-model regression — no statsmodels dep;
+          `stats_anova_ext.anova2_unbalanced` + `/api/stats/anova2-unbalanced`;
+          balanced-equivalence anchored on the golden closed form) (2026-07-03)
     - [x] Bonferroni / Holm / Benjamini-Hochberg p-adjustment helper
           (`stats_anova2.adjust_pvalues` + `/api/stats/adjust-p`,
           textbook-case tested) (2026-07-02)
-    - [ ] Repeated-measures ANOVA
-    - [ ] Long-format input from worksheet columns (value + factor
-          columns) + report-sheet output (needs #36)
+    - [x] Repeated-measures ANOVA (`stats_anova_ext.repeated_measures_anova`
+          + `/api/stats/anova-rm`; Greenhouse-Geisser/Huynh-Feldt sphericity;
+          cross-checked exactly vs the two-way-n=1 identity) (2026-07-03)
+    - [x] Long-format *input* helpers (`long_to_groups`/`long_to_cells`
+          reshape value+factor worksheet columns) (2026-07-03); report-sheet
+          *output* still pending #36
 
 26. **Assumption tests + guided chooser** — Shapiro-Wilk, Levene,
     Anderson-Darling, KS; a small "which test?" helper that gates
