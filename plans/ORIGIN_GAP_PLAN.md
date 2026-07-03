@@ -747,6 +747,15 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
     the shipped `calc/stats_tests.py` wrappers (Shapiro/AD), and #28
     distribution fitting; brushing (#50) makes its histogram selection
     highlight rows everywhere.*
+    *CORE SHIPPED 2026-07-03: Distribution ToolWindow
+    (`workshops/distribution`) — pick a column → DOM-bar histogram +
+    descriptive stats + Shapiro-Wilk normality verdict, composed over
+    `/api/statplots/histogram` + `/api/stats/descriptive` +
+    `/api/stats/shapiro` via `Promise.allSettled` (Shapiro n-range failure
+    degrades gracefully). Honors row exclusion (#50) via
+    `rowstate.analysisData`. Remaining: box/quantile strip, optional
+    distribution-fit overlay (#28), and #50 selection-brushing to
+    highlight rows from a histogram-bar pick.*
 
 53. **Local data filter** — sidebar widget: per-column checkboxes
     (nominal) or range sliders (continuous) that live-filter every
