@@ -20,6 +20,7 @@ import BaselinePanel from "./components/workshops/baseline/BaselinePanel";
 import CalculatorsPanel from "./components/workshops/calculators/CalculatorsPanel";
 import DatasetMathPanel from "./components/workshops/datasetmath/DatasetMathPanel";
 import TabulatePanel from "./components/workshops/tabulate/TabulatePanel";
+import DistributionPanel from "./components/workshops/distribution/DistributionPanel";
 import ColumnSwitcher from "./components/workshops/switcher/ColumnSwitcher";
 import FigureBuilderView from "./components/workshops/figurebuilder/FigureBuilderView";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
@@ -88,6 +89,7 @@ export default function App() {
   const magToolsOpen = useApp((s) => s.magToolsOpen);
   const datasetMathOpen = useApp((s) => s.datasetMathOpen);
   const tabulateOpen = useApp((s) => s.tabulateOpen);
+  const distributionOpen = useApp((s) => s.distributionOpen);
   const columnSwitcherOpen = useApp((s) => s.columnSwitcherOpen);
   const figureBuilderOpen = useApp((s) => s.figureBuilderOpen);
   const waterfallOpen = useApp((s) => s.waterfallOpen);
@@ -431,6 +433,12 @@ export default function App() {
         run: () => s().setTabulateOpen(true),
       },
       {
+        id: "distribution",
+        group: "Analyze",
+        label: "Distribution (histogram + normality of a column)…",
+        run: () => s().setDistributionOpen(true),
+      },
+      {
         id: "column-switcher",
         group: "View",
         label: "Column switcher (flip through channels)…",
@@ -669,6 +677,7 @@ export default function App() {
       {digitizerOpen && <DigitizerView />}
       {datasetMathOpen && <DatasetMathPanel />}
       {tabulateOpen && <TabulatePanel />}
+      {distributionOpen && <DistributionPanel />}
       {columnSwitcherOpen && <ColumnSwitcher />}
       {figureBuilderOpen && <FigureBuilderView />}
       {waterfallOpen && <WaterfallView />}

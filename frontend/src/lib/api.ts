@@ -221,6 +221,21 @@ export function statsDescriptive(x: number[]): Promise<CalcResult> {
   return postJSON("/api/stats/descriptive", { x });
 }
 
+/** Histogram with a data-driven bin rule (`fd`/`sturges`/`scott`/…/int) and an
+ *  optional distribution-fit overlay (scipy dist name). */
+export function statsHistogram(
+  data: number[],
+  bins: string | number = "fd",
+  fit?: string | null,
+): Promise<CalcResult> {
+  return postJSON("/api/statplots/histogram", { data, bins, ...(fit ? { fit } : {}) });
+}
+
+/** Shapiro-Wilk normality test (valid 3 ≤ n ≤ 5000). Returns W, p, N. */
+export function statsShapiro(x: number[]): Promise<CalcResult> {
+  return postJSON("/api/stats/shapiro", { x });
+}
+
 export function statsRegression(body: {
   x: number[];
   y: number[];
