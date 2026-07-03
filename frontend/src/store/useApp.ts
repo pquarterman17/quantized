@@ -177,6 +177,7 @@ interface AppState {
   rsmOpen: boolean;
   digitizerOpen: boolean;
   datasetMathOpen: boolean;
+  tabulateOpen: boolean;
   figureBuilderOpen: boolean;
   waterfallOpen: boolean;
   reflViewOpen: boolean;
@@ -295,6 +296,7 @@ interface AppState {
   setRsmOpen: (open: boolean) => void;
   setDigitizerOpen: (open: boolean) => void;
   setDatasetMathOpen: (open: boolean) => void;
+  setTabulateOpen: (open: boolean) => void;
   setFigureBuilderOpen: (open: boolean) => void;
   setWaterfallOpen: (open: boolean) => void;
   setReflViewOpen: (open: boolean) => void;
@@ -493,6 +495,7 @@ export const useApp = create<AppState>((set, get) => ({
   rsmOpen: false,
   digitizerOpen: false,
   datasetMathOpen: false,
+  tabulateOpen: false,
   figureBuilderOpen: false,
   waterfallOpen: false,
   reflViewOpen: false,
@@ -1114,6 +1117,7 @@ export const useApp = create<AppState>((set, get) => ({
   setRsmOpen: (rsmOpen) => set({ rsmOpen }),
   setDigitizerOpen: (digitizerOpen) => set({ digitizerOpen }),
   setDatasetMathOpen: (datasetMathOpen) => set({ datasetMathOpen }),
+  setTabulateOpen: (tabulateOpen) => set({ tabulateOpen }),
   setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
   setWaterfallOpen: (waterfallOpen) => set({ waterfallOpen }),
   setReflViewOpen: (reflViewOpen) => set({ reflViewOpen }),

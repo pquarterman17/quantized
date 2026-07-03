@@ -52,6 +52,14 @@ export function pruneExcluded(data: DataStruct, excluded: Iterable<number>): Dat
   };
 }
 
+/** The dataset's analysis view: its DataStruct with excluded rows pruned. Fit /
+ *  stat / tabulate consumers read rows through this so exclusion is honored
+ *  everywhere. Returns the SAME data reference when nothing is excluded. */
+export function analysisData(ds: Dataset | null | undefined): DataStruct | null {
+  if (!ds) return null;
+  return pruneExcluded(ds.data, excludedSet(ds));
+}
+
 /** Normalize a candidate exclusion list to valid, in-range, sorted, unique
  *  integer indices for a dataset of `n` rows. Used on load (.dwk) and after a
  *  row-count change (cell edits never resize, but a re-import / extract can). */
