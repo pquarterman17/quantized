@@ -247,3 +247,57 @@ def export_figure(req: FigureRequest) -> Response:
         media_type=_FIGURE_MIME[req.fmt],
         headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
     )
+
+
+class MapFigureRequest(BaseModel):
+    x_axis: list[float]
+    y_axis: list[float]
+    z_grid: list[list[float]]  # (ny, nx), NaN allowed for gaps
+    kind: str = "contourf"  # contourf|contour|heatmap|surface|scatter3d|waterfall
+    fmt: str = "pdf"
+    style: str = "default"
+    dpi: int = 200
+    cmap: str = "viridis"
+    levels: int | list[float] = 12
+    level_scale: str = "linear"  # linear|log
+    label_contours: bool = True
+    colorbar: bool = True
+    title: str = ""
+    x_label: str = ""
+    y_label: str = ""
+    z_label: str = ""
+    width_in: float | None = None
+    height_in: float | None = None
+    view_elev: float = 30.0
+    view_azim: float = -60.0
+    filename: str = "map"
+
+
+@router.post("/map-figure")
+def export_map_figure(req: MapFigureRequest) -> Response:
+    """Render a gridded 2-D map to a publication figure: filled/line contour,
+    heatmap, or static 3-D surface/scatter/waterfall (PDF/SVG/PNG/TIFF)."""
+    if req.fmt not in _FIGURE_MIME:
+        raise HTTPException(
+            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
+        )
+    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
+    from quantized.calc.figure_map import render_map_figure  # lazy: matplotlib is heavy
+
+    try:
+        data = render_map_figure(
+            req.x_axis, req.y_axis, req.z_grid,
+            kind=req.kind, fmt=req.fmt, style=req.style, dpi=dpi, cmap=req.cmap,
+            levels=req.levels, level_scale=req.level_scale,
+            label_contours=req.label_contours, colorbar=req.colorbar,
+            title=req.title, x_label=req.x_label, y_label=req.y_label, z_label=req.z_label,
+            width_in=req.width_in, height_in=req.height_in,
+            view_elev=req.view_elev, view_azim=req.view_azim,
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Response(
+        content=data,
+        media_type=_FIGURE_MIME[req.fmt],
+        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
+    )

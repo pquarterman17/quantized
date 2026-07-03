@@ -404,17 +404,15 @@ an exported figure in Illustrator or a script, that's a W3 bug.)*
 
 17. **Filled + labeled contour** — proper contourf/contour with labels,
     including tri-contour on scattered (RSM) data; interactive + export
-    *Model: sonnet. Pickup: `calc/map.py` + `MapStage.tsx` are the 2-D
-    substrate; export via matplotlib contourf/tricontourf; interactive
-    contour polygons via d3-contour (ISC) over the gridded MapData,
-    level count/spacing (lin/log) in the Inspector 2-D card.*
+    *Model: sonnet. EXPORT SHIPPED 2026-07-03 (see Completed):
+    `figure_map.render_map_figure` contourf/contour (inline labels,
+    lin/log/explicit levels) + `/api/export/map-figure`. Remaining: the
+    INTERACTIVE contour layer (d3-contour over gridded MapData in
+    `MapStage.tsx`, level controls in the Inspector 2-D card) and
+    tri-contour on raw scattered points (export currently contours the
+    regridded MapData).*
 
 ### Tier 2 — Medium Impact
-
-19. **3D static export** — matplotlib 3-D surface / scatter / waterfall
-    in the publication export path (defer interactive 3-D to #22)
-    *Model: haiku. Pickup: new branch in `calc/figure.py` over the
-    existing gridded MapData; mplot3d is stock matplotlib.*
 
 20. **Categorical plots** — grouped/stacked bar & column with error
     bars, categorical axes
@@ -767,6 +765,17 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#19 3-D static export**~~ (2026-07-03) — `calc/figure_map.py`
+  `render_map_figure` adds mplot3d surface / 3-D scatter / waterfall over the
+  gridded MapData (plus 2-D heatmap), sharing `render_figure`'s style/format
+  presets; `/api/export/map-figure` route (PDF/SVG/PNG/TIFF). Interactive 3-D
+  stays deferred to #22.
+- ~~**#17 (export) Filled + labeled contour**~~ (2026-07-03) —
+  `render_map_figure` contourf + line contour with inline `clabel` labels;
+  `_contour_levels` gives count / explicit / lin / log spacing (log floors a
+  non-positive z-min off z-max). Same `/api/export/map-figure` route. The
+  interactive d3-contour layer + tri-contour on raw scattered points remain
+  open on #17.
 - ~~**#37 Word + PowerPoint export**~~ (2026-07-03) — `io/report_export.py`
   `to`-renderers over the #36 schema; `.docx` (python-docx) with real tables
   + `.pptx` (python-pptx) one-slide-per-section, both embedding raster figure

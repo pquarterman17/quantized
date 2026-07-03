@@ -169,6 +169,51 @@ def test_figure_style_preset_download() -> None:
     assert resp.content[:5] == b"%PDF-"
 
 
+def _demo_map() -> dict:
+    import numpy as np
+    x = np.linspace(-2.0, 2.0, 16)
+    y = np.linspace(-1.0, 3.0, 12)
+    xg, yg = np.meshgrid(x, y)
+    z = 100.0 * np.exp(-(xg**2 + (yg - 1.0) ** 2))
+    return {"x_axis": x.tolist(), "y_axis": y.tolist(), "z_grid": z.tolist()}
+
+
+def test_map_figure_contourf_pdf() -> None:
+    resp = client.post(
+        "/api/export/map-figure",
+        json={**_demo_map(), "kind": "contourf", "fmt": "pdf",
+              "x_label": "Qx", "y_label": "Qz", "z_label": "I", "filename": "rsm map"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.headers["content-disposition"] == 'attachment; filename="rsm_map.pdf"'
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_map_figure_surface_png() -> None:
+    resp = client.post(
+        "/api/export/map-figure",
+        json={**_demo_map(), "kind": "surface", "fmt": "png"},
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_map_figure_log_contour_svg() -> None:
+    resp = client.post(
+        "/api/export/map-figure",
+        json={**_demo_map(), "kind": "contour", "fmt": "svg",
+              "level_scale": "log", "levels": 8},
+    )
+    assert resp.status_code == 200
+    assert b"<svg" in resp.content[:400]
+
+
+def test_map_figure_bad_kind_is_422() -> None:
+    resp = client.post("/api/export/map-figure", json={**_demo_map(), "kind": "nope"})
+    assert resp.status_code == 422
+
+
 def test_figure_bad_style_is_422() -> None:
     resp = client.post(
         "/api/export/figure",
