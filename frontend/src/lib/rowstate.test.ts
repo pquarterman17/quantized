@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   activeRowIndices,
   analysisData,
+  droppedRows,
   excludedSet,
+  expandToFull,
   isRowExcluded,
   pruneExcluded,
   sanitizeExcluded,
@@ -89,6 +91,38 @@ describe("pruneExcluded", () => {
   it("does not mutate the source", () => {
     pruneExcluded(DATA, [0]);
     expect(DATA.time).toEqual([0, 1, 2, 3]);
+  });
+});
+
+describe("droppedRows (exclusion ∪ filter)", () => {
+  const mk = (over: Partial<Dataset>): Dataset => ({ id: "d", name: "d", data: DATA, ...over });
+
+  it("is empty with neither exclusion nor filter", () => {
+    expect(droppedRows(mk({})).size).toBe(0);
+    expect(droppedRows(null).size).toBe(0);
+  });
+
+  it("returns exclusions alone, filter alone, or their union", () => {
+    expect([...droppedRows(mk({ excludedRows: [1] }))]).toEqual([1]);
+    // channel 0 = [10,20,30,40]; keep ≥30 → rows 0,1 fail
+    expect([...droppedRows(mk({ filter: [{ col: 0, kind: "range", min: 30 }] }))].sort()).toEqual([0, 1]);
+    const both = droppedRows(mk({ excludedRows: [3], filter: [{ col: 0, kind: "range", min: 30 }] }));
+    expect([...both].sort((a, b) => a - b)).toEqual([0, 1, 3]);
+  });
+});
+
+describe("expandToFull", () => {
+  it("scatters pruned values back to their kept indices, null elsewhere", () => {
+    // kept rows 0 and 2 of a 4-row dataset
+    expect(expandToFull([11, 33], [0, 2], 4)).toEqual([11, null, 33, null]);
+  });
+
+  it("is identity-shaped when all rows are kept", () => {
+    expect(expandToFull([1, 2, 3], [0, 1, 2], 3)).toEqual([1, 2, 3]);
+  });
+
+  it("stops at the shorter of pruned/kept", () => {
+    expect(expandToFull([9], [1, 3], 4)).toEqual([null, 9, null, null]);
   });
 });
 

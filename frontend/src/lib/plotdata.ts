@@ -21,6 +21,9 @@ export interface PlotSeriesSpec {
   kind?: "line" | "points";
   /** 0 = primary (left) Y axis, 1 = secondary (right) — the dual-Y feature. */
   axis?: number;
+  /** De-emphasized rendering (faint stroke, hollow markers) — the "grey" mode
+   *  companion series showing excluded/filtered points (#50/#53). */
+  muted?: boolean;
 }
 
 export interface PlotPayload {
@@ -87,6 +90,39 @@ function fromResponse(r: PlotSeriesResponse): PlotPayload {
     series: r.series.map((s) => ({ label: s.label, unit: s.unit, axis: s.axis ?? 0 })),
     xLabel: r.x.label,
     xUnit: r.x.unit,
+  };
+}
+
+/** Honor row exclusion (#50) + the local filter (#53) on the plot without
+ *  changing the x length (so overlays/error-bars/waterfall stay aligned): null
+ *  the `dropped` rows out of every data series so they aren't drawn. In "grey"
+ *  mode also append a muted points-companion per series so the dropped points
+ *  stay visible but de-emphasized. Identity when nothing is dropped. Applied to
+ *  the raw fetched payload, BEFORE overlays are spliced on. */
+export function maskExcludedPayload(
+  payload: PlotPayload,
+  dropped: Set<number>,
+  mode: "hide" | "grey",
+): PlotPayload {
+  if (dropped.size === 0) return payload;
+  const [x, ...ys] = payload.data as (number | null)[][];
+  const keptOnly = ys.map((col) => col.map((v, r) => (dropped.has(r) ? null : v)));
+  if (mode === "hide") {
+    return { ...payload, data: [x, ...keptOnly] as uPlot.AlignedData };
+  }
+  const ghosts = ys.map((col) => col.map((v, r) => (dropped.has(r) ? v : null)));
+  return {
+    ...payload,
+    data: [x, ...keptOnly, ...ghosts] as uPlot.AlignedData,
+    series: [
+      ...payload.series,
+      ...payload.series.map((s) => ({
+        ...s,
+        label: `${s.label} (excluded)`,
+        kind: "points" as const,
+        muted: true,
+      })),
+    ],
   };
 }
 

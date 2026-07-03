@@ -331,6 +331,11 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         const label = labels[i];
         const scale = (s.axis ?? 0) === 1 ? "y2" : "y";
         const show = !args.hidden?.[i]; // interactive legend visibility
+        // Muted "excluded" companion (grey mode): faint hollow markers, no line.
+        if (s.muted) {
+          const grey = cssVar("--text-faint") || cssVar("--text-dim") || "#888";
+          return { label, scale, stroke: grey, width: 0, points: { show: true, size: 5 }, show };
+        }
         // Peak markers: points only, no connecting line.
         if (s.kind === "points") {
           return { label, scale, stroke, fill: stroke, width: 0, points: { show: true, size: 8 }, show };

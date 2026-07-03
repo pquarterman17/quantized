@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { autoGuess, fitModel, listFitModels } from "../../../lib/api";
+import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -45,11 +46,13 @@ export function useCurveFit(): CurveFitState {
     };
   }, []);
 
-  // Fit the first value channel against the dataset's x (= DataStruct.time,
-  // the same x the plot uses), so the fit curve overlays in register.
+  // Fit the analysis view (excluded/filtered rows dropped, #50/#53) so the fit
+  // ignores them — the same rows the plot hides/greys. The overlay is then
+  // expanded back to full length so it overlays the full-length plot x in register.
   const xy = useMemo(() => {
-    if (!active) return null;
-    return { x: active.data.time, y: active.data.values.map((row) => row[0]) };
+    const d = analysisData(active);
+    if (!d) return null;
+    return { x: d.time, y: d.values.map((row) => row[0]) };
   }, [active]);
 
   async function run(kind: "guess" | "fit"): Promise<void> {
@@ -66,7 +69,15 @@ export function useCurveFit(): CurveFitState {
         setResult(r);
         setGuessOnly(false);
         const yFit = r.yFit as (number | null)[] | undefined;
-        if (Array.isArray(yFit)) setFitOverlay({ datasetId: active.id, y: yFit });
+        if (Array.isArray(yFit)) {
+          // yFit aligns to the pruned analysis x; expand it back to the full row
+          // count (null at dropped rows) so it stays in register with the
+          // full-length plot x, whether excluded rows are hidden or greyed.
+          const n = active.data.time.length;
+          const kept = activeRowIndices(n, droppedRows(active));
+          const y = kept.length === n ? yFit : expandToFull(yFit, kept, n);
+          setFitOverlay({ datasetId: active.id, y });
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "fit failed");

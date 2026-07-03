@@ -53,17 +53,40 @@ export function pruneExcluded(data: DataStruct, excluded: Iterable<number>): Dat
   };
 }
 
+/** Every row dropped from analysis: manually-excluded (#50) ∪ filter-failed
+ *  (#53). The single "what's out" set — the plot masks by it, analysisData
+ *  prunes by it, and consumers realign fits by its complement. */
+export function droppedRows(ds: Dataset | null | undefined): Set<number> {
+  if (!ds) return new Set();
+  const excluded = excludedSet(ds);
+  const filtered = filteredOutRows(ds.filter, ds.data);
+  if (filtered.size === 0) return excluded;
+  if (excluded.size === 0) return filtered;
+  return new Set([...excluded, ...filtered]);
+}
+
 /** The dataset's analysis view: its DataStruct with both manually-excluded rows
  *  (#50) AND filter-failed rows (#53) pruned. Fit / stat / tabulate consumers
  *  read rows through this so exclusion AND the local filter are honored
  *  everywhere. Returns the SAME data reference when neither is active. */
 export function analysisData(ds: Dataset | null | undefined): DataStruct | null {
   if (!ds) return null;
-  const excluded = excludedSet(ds);
-  const filtered = filteredOutRows(ds.filter, ds.data);
-  if (excluded.size === 0 && filtered.size === 0) return ds.data;
-  const drop = filtered.size === 0 ? excluded : new Set([...excluded, ...filtered]);
-  return pruneExcluded(ds.data, drop);
+  const drop = droppedRows(ds);
+  return drop.size === 0 ? ds.data : pruneExcluded(ds.data, drop);
+}
+
+/** Expand a pruned-length array back to full row count: each value at its kept
+ *  original-row index, null elsewhere. Realigns a fit computed on the analysis
+ *  subset with the full-length plot x (which keeps excluded rows as gaps), so
+ *  the overlay stays in register in "grey" mode. */
+export function expandToFull(
+  pruned: readonly (number | null)[],
+  kept: readonly number[],
+  n: number,
+): (number | null)[] {
+  const full: (number | null)[] = new Array(n).fill(null);
+  for (let i = 0; i < kept.length && i < pruned.length; i++) full[kept[i]] = pruned[i];
+  return full;
 }
 
 /** Normalize a candidate exclusion list to valid, in-range, sorted, unique

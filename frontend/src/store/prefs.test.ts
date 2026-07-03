@@ -10,6 +10,7 @@ afterEach(() => {
   s.setPref("notation", "auto");
   s.setPref("reduceMotion", false);
   s.setPref("confirmRemove", false);
+  s.setPref("excludedDisplay", "hide");
 });
 
 describe("preferences", () => {
@@ -33,5 +34,12 @@ describe("preferences", () => {
     expect(fmtNum(1234.5678)).toBe("1230");
     useApp.getState().setPref("notation", "scientific");
     expect(fmtNum(3)).toBe("3.00e+0");
+  });
+
+  it("excludedDisplay defaults to hide and persists when changed to grey", () => {
+    expect(useApp.getState().excludedDisplay).toBe("hide");
+    useApp.getState().setPref("excludedDisplay", "grey");
+    expect(useApp.getState().excludedDisplay).toBe("grey");
+    expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").excludedDisplay).toBe("grey");
   });
 });

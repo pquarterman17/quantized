@@ -4,6 +4,7 @@ import {
   applyWaterfall,
   buildColumns,
   effectiveChannels,
+  maskExcludedPayload,
   peakOverlayArray,
   withBaselineOverlay,
   withFitOverlay,
@@ -300,5 +301,44 @@ describe("withPeakOverlay", () => {
     expect(withPeakOverlay(base, { datasetId: "x", y: [null, 1, null] }, "d1")).toBe(base);
     expect(withPeakOverlay(base, { datasetId: "d1", y: [1] }, "d1")).toBe(base);
     expect(withPeakOverlay(base, null, "d1")).toBe(base);
+  });
+});
+
+describe("maskExcludedPayload", () => {
+  const payload: PlotPayload = {
+    data: [
+      [0, 1, 2, 3],
+      [10, 20, 30, 40],
+    ],
+    series: [{ label: "y", unit: "emu" }],
+    xLabel: "x",
+    xUnit: "",
+  };
+
+  it("returns the same payload when nothing is dropped (identity)", () => {
+    expect(maskExcludedPayload(payload, new Set(), "hide")).toBe(payload);
+    expect(maskExcludedPayload(payload, new Set(), "grey")).toBe(payload);
+  });
+
+  it("hide: nulls the dropped rows in the data series, x + series count intact", () => {
+    const out = maskExcludedPayload(payload, new Set([1, 3]), "hide");
+    expect(out.data[0]).toEqual([0, 1, 2, 3]); // x untouched
+    expect(out.data[1]).toEqual([10, null, 30, null]);
+    expect(out.series).toHaveLength(1);
+  });
+
+  it("grey: nulls the main series AND appends a muted points-companion of the dropped points", () => {
+    const out = maskExcludedPayload(payload, new Set([1]), "grey");
+    expect(out.data[1]).toEqual([10, null, 30, 40]); // main: kept only
+    expect(out.data[2]).toEqual([null, 20, null, null]); // ghost: dropped only
+    expect(out.series).toHaveLength(2);
+    expect(out.series[1]).toMatchObject({ kind: "points", muted: true });
+    expect(out.series[1].label).toContain("excluded");
+  });
+
+  it("does not mutate the input payload", () => {
+    maskExcludedPayload(payload, new Set([0]), "grey");
+    expect(payload.data[1]).toEqual([10, 20, 30, 40]);
+    expect(payload.series).toHaveLength(1);
   });
 });

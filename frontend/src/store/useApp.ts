@@ -56,6 +56,9 @@ export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
 export type Density = "compact" | "regular" | "comfy";
 export type StageTab = "plot" | "map" | "worksheet";
+/** How excluded/filtered rows (#50/#53) render on the plot: "hide" drops them
+ *  (gaps); "grey" draws them as muted markers. Fits exclude them either way. */
+export type ExcludedDisplay = "hide" | "grey";
 export type PlotTool =
   | "zoom"
   | "pan"
@@ -102,7 +105,8 @@ export type PrefKey =
   | "antialias"
   | "sigFigs"
   | "notation"
-  | "confirmRemove";
+  | "confirmRemove"
+  | "excludedDisplay";
 
 interface AppState {
   datasets: Dataset[];
@@ -128,6 +132,7 @@ interface AppState {
   sigFigs: number;
   notation: Notation;
   confirmRemove: boolean;
+  excludedDisplay: ExcludedDisplay;
   prefsOpen: boolean;
   yLog: boolean;
   xLog: boolean;
@@ -355,6 +360,7 @@ interface Prefs {
   sigFigs: number;
   notation: Notation;
   confirmRemove: boolean;
+  excludedDisplay: ExcludedDisplay;
 }
 
 const PREF_DEFAULTS: Prefs = {
@@ -371,6 +377,7 @@ const PREF_DEFAULTS: Prefs = {
   sigFigs: 6,
   notation: "auto",
   confirmRemove: false,
+  excludedDisplay: "hide",
 };
 
 function loadPrefs(): Prefs {
@@ -394,6 +401,7 @@ function loadPrefs(): Prefs {
       sigFigs: num(p.sigFigs, fb.sigFigs, 1, 12),
       notation: NOTATIONS.includes(p.notation as string) ? (p.notation as Notation) : fb.notation,
       confirmRemove: bool(p.confirmRemove, fb.confirmRemove),
+      excludedDisplay: p.excludedDisplay === "grey" ? "grey" : fb.excludedDisplay,
     };
   } catch {
     return fb;
@@ -416,6 +424,7 @@ function prefsOf(s: AppState): Prefs {
     sigFigs: s.sigFigs,
     notation: s.notation,
     confirmRemove: s.confirmRemove,
+    excludedDisplay: s.excludedDisplay,
   };
 }
 
@@ -457,6 +466,7 @@ export const useApp = create<AppState>((set, get) => ({
   defaultLineWidth: _initialPrefs.defaultLineWidth,
   defaultGrid: _initialPrefs.defaultGrid,
   antialias: _initialPrefs.antialias,
+  excludedDisplay: _initialPrefs.excludedDisplay,
   sigFigs: _initialPrefs.sigFigs,
   notation: _initialPrefs.notation,
   confirmRemove: _initialPrefs.confirmRemove,

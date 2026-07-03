@@ -162,6 +162,13 @@ export default function PreferencesDialog() {
                 <PrefRow label="Grid lines" hint="default for the plot">
                   <Switch checked={p.defaultGrid} onChange={(v) => setPref("defaultGrid", v)} />
                 </PrefRow>
+                <PrefRow label="Excluded rows" hint="filtered / excluded points on the plot">
+                  <SegmentedControl
+                    options={["Hide", "Grey"]}
+                    value={p.excludedDisplay === "grey" ? "Grey" : "Hide"}
+                    onChange={(v) => setPref("excludedDisplay", v === "Grey" ? "grey" : "hide")}
+                  />
+                </PrefRow>
                 <PrefRow label="Antialias 2-D map" hint="smooth vs crisp heatmap cells">
                   <Switch checked={p.antialias} onChange={(v) => setPref("antialias", v)} />
                 </PrefRow>

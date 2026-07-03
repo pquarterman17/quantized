@@ -10,11 +10,13 @@ import {
   applyWaterfall,
   effectiveChannels,
   fetchPlot,
+  maskExcludedPayload,
   withBaselineOverlay,
   withFitOverlay,
   withPeakOverlay,
   type PlotPayload,
 } from "../../lib/plotdata";
+import { droppedRows } from "../../lib/rowstate";
 import { copyImage, copyText, payloadToTSV } from "../../lib/clipboard";
 import { buildErrorColumns } from "../../lib/errorbars";
 import type { Measurement } from "../../lib/measure";
@@ -65,6 +67,7 @@ export default function PlotStage() {
   const seriesStyles = useApp((s) => s.seriesStyles);
   const seriesLabels = useApp((s) => s.seriesLabels);
   const waterfall = useApp((s) => s.waterfall);
+  const excludedDisplay = useApp((s) => s.excludedDisplay);
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
@@ -96,18 +99,24 @@ export default function PlotStage() {
   const [statsSel, setStatsSel] = useState<RegionStats | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
+  // Rows dropped from the plot: manually excluded (#50) ∪ filter-failed (#53).
+  const dropped = useMemo(() => droppedRows(active), [active]);
+
   // Splice in the fit curve + peak markers (each a no-op unless it belongs to
   // the active dataset and aligns to the plotted x).
   const displayPayload = useMemo(() => {
     if (!payload) return null;
     const id = active?.id ?? null;
-    // Waterfall offsets the channels first (channel 0 stays put), then overlays
-    // (fit/peak/baseline target channel 0) land in register on top.
+    // Waterfall offsets the channels first (channel 0 stays put), then the
+    // exclusion mask nulls (hide) or ghosts (grey) the dropped rows on the
+    // already-offset values, then overlays (fit/peak/baseline) land on top. The
+    // x length is preserved throughout so overlays stay in register.
     const base = applyWaterfall(payload, waterfall);
-    const withFit = withFitOverlay(base, fitOverlay, id);
+    const masked = maskExcludedPayload(base, dropped, excludedDisplay);
+    const withFit = withFitOverlay(masked, fitOverlay, id);
     const withBase = withBaselineOverlay(withFit, baselineOverlay, id);
     return withPeakOverlay(withBase, peakOverlay, id);
-  }, [payload, fitOverlay, peakOverlay, baselineOverlay, waterfall, active]);
+  }, [payload, fitOverlay, peakOverlay, baselineOverlay, waterfall, active, dropped, excludedDisplay]);
 
   // Channels actually drawn (y selection minus the x-axis channel), in order.
   const plotted = useMemo(
