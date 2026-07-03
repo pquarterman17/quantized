@@ -286,13 +286,6 @@ live → report sheets → summary sheet + docx/pptx/LaTeX/figures out
          contribution type + CI that runs the plugin against a pinned
          quantized version
 
-9. **Documented headless public API** — stabilize + document driving
-   `quantized.calc`/`io` from scripts/notebooks/CI (the layering already
-   permits it); the differentiator Origin structurally can't match
-   *Model: sonnet. Pickup: the pure layers are already importable;
-   work = choose the blessed surface, add docstrings/examples, freeze
-   names, add an API-stability test (public names don't vanish).*
-
 ### Tier 3 — Nice-to-Have
 
 10. **Plugin distribution conveniences** — `qz plugin list/enable`,
@@ -761,6 +754,14 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#9 Documented headless public API**~~ (2026-07-03) — `quantized/api.py`
+  is the blessed, frozen surface (`import quantized.api as qz`): ~65 curated
+  pure functions (load, fitting, peaks, baseline, corrections, the full W5
+  stats suite, statplots, reporting, and matplotlib export) with a worked
+  docstring example. `__init__` stays light (no matplotlib at package import;
+  the server never imports the surface). `tests/test_public_api.py` freezes
+  the name set (rename/removal fails on purpose) and runs an end-to-end
+  headless pipeline (detect → integrate → fit → report → LaTeX/HTML/PDF).
 - ~~**#35 Batch peak integration**~~ (2026-07-03) — `calc/peak_batch.py`
   `batch_integrate_peaks` loops `integrate_peaks` over a spectra series on a
   shared x-axis, with optional cross-correlation alignment
