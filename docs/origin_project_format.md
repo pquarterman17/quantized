@@ -858,37 +858,76 @@ first column (Origin's near-universal per-sheet X designation,
 independently confirmed via §4.2's designation markers for every corpus
 book checked).
 
-**Missing oracle.** `tools/origin_trial/export_ground_truth.py`'s per-plot
-dump (`layer.nplots` + `range __rp = {pi}; ... __rp.name$`) comes back
-**empty** (`"plots": []`) for every project in this corpus — a LabTalk/COM
-issue in that trial-window script, not fixable here (pure byte-level RE,
-no Origin). So validation rests on the by-construction `fig_pairs` oracle
-(exact, 4/4) plus a **designation gate**: every resolved `y` column is
-cross-checked against §4.2's independently-validated per-column
-designation and dropped unless it is exactly `"Y"` (never `"X"`,
-`"Y-error"`, or unresolved) — needed because the raw regex scan is not
-curve-exclusive enough on its own (it found a real-corpus token landing on
-"Fixed Lambdas SI"'s `dQ`, a `Y-error` column, which the gate now rejects).
-With the gate, the real corpus (RockingCurve/XAS/UnpolPlots/"Fixed Lambdas
-SI") yields 12 designation-confirmed curves across the 4 files, every one
-landing on a physically-sensible dependent-variable column (`Intensity`,
-`Absorption`, `R`, "Theory SA"), never an independent one (`Theta`,
-`Energy`, `Q`, `Z`).
+**The real oracle (2026-07-04 rework).**
+`tools/origin_trial/export_ground_truth.py`'s per-plot dump (`layer.nplots`
++ `range __rp = {pi}; ... __rp.name$`) came back **empty** (`"plots": []`)
+for every project in this corpus — a LabTalk/COM issue in that trial-window
+script. `tools/origin_trial/export_plot_refs.py` found a working recipe
+instead (`range -w __rw = {pi}; "%(__rw)"`, probing `pi` upward), writing
+`specimens/ground_truth/<stem>/plots.json` =
+`{"<graph>": {"<layer>": ["[Book]Sheet!Col\"LongName\"", ...]}}` for every
+stem including the real corpus (not just `fig_pairs`). This is the
+strongest oracle available and is used file-wide (every `(book, column)`
+pair a project plots anywhere) by
+`tests/test_io_origin_figures_opju.py::test_realdata_curve_bindings_vs_plots_oracle`.
 
-**Known gap — per-figure attribution (the reason item 35 stays open).**
-Scoping a curve to *which* decoded figure it belongs to is a best-effort
-`[anchor, next_anchor)` byte-range heuristic, and it drops the *majority*
-of curve tokens for composite/derived real-corpus graphs: "Fixed Lambdas
-SI"'s ten cleanest tokens (each landing on a different PNR book's
-reflectivity column) sit entirely outside all four of that file's decoded
-figures' windows, so none of them ship; each figure instead gets whatever
-handful of tokens (often just one, not necessarily the "main" curve a user
-expects) happen to sit inside its own narrow window. This is a recall gap,
-not a soundness one — everything reported is designation-confirmed, never
-fabricated — but it means restored figures are still commonly missing
-curves a user would expect. Closing it needs either a real oracle (the
-missing `plots` export) or a further RE pass to locate the object boundary
-that scopes a curve to its owning layer.
+**False positive found and fixed — the `__BCO` boilerplate.** Against this
+new oracle, `UnpolPlots` decoded two *wrong* pairs: `(PrNiO3STOprof, C)` and
+`(PrNiO3STOrefl, C)` — neither book's column C is plotted at all (the real
+bindings are `B` and `G`/`H`/`I`). Root cause: the whole-file regex scan
+also matches the tail of a completely unrelated, fixed ~365-byte-long
+per-book record that starts at a length-prefixed `__BCO2` string — one per
+book, byte-identical across every book in every file checked (`XAS`,
+`UnpolPlots`, `"Fixed Lambdas SI"`) apart from a few small varying
+counter/row-count fields. This record's last 8 bytes always happen to fit
+the curve-token shape and always resolve to **local column 3** ("C") of its
+own book, regardless of what (if anything) is plotted there. It went
+undetected before this oracle existed because every XAS book happens to
+plot column C as its real curve (`Intensity`), making the artifact
+"correct" by coincidence. `opju_curves._is_bco_boilerplate` now excludes a
+match only when **both** hold: the resolved column is local index 2, *and*
+a `__BCO` marker sits 340-380 bytes before the match (the exact span
+measured across every confirmed instance is 357-360 bytes). Neither signal
+alone is safe — `fig_pairs`' by-construction A-C diff curve also resolves
+to local column 3, but at a ~1288-byte distance from any `__BCO` marker,
+and must stay. This removes the 2 `UnpolPlots` false positives and,
+necessarily, the 2 previously-"correct" `XAS` pairs, which were never
+soundly decoded, only luckily right.
+
+**Validation against the real oracle (file-wide `(book, column)` sets,
+after the fix — see the module's docstring in `opju_curves.py` for the
+byte-level trail):**
+
+| stem | oracle pairs | decoded | correct | wrong | recall |
+|------|-------------:|--------:|--------:|------:|-------:|
+| `fig_pairs` (by-construction) | 2 | 2 | 2 | **0** | 100% |
+| `XAS` | 3 | 0 | 0 | **0** | 0% |
+| `RockingCurve` | 4 | 2 | 2 | **0** | 50% |
+| `UnpolPlots` | 8 | 0 | 0 | **0** | 0% (was 2 wrong before this fix) |
+| `"Fixed Lambdas SI"` | 14 | 2 | 2 | **0** | 14% |
+
+Precision is 100% on every oracle-covered file (mandatory, asserted
+unconditionally). Recall stays low and open — `RockingCurve`'s
+`NbAuRocking` multi-curve layer (`D`+`F`) decodes exactly, and each
+composite "Fixed Lambdas SI" window's *first* curve token ("Theory SA")
+survives, but the remaining curve tokens per window (each layer plots 6-8
+columns) either aren't found by the current regex at all, or resolve to a
+column the designation gate correctly rejects (`X`/`Y-error`) rather than
+the real intended column — the true multi-curve encoding for a graph
+plotting more than ~1-2 curves is not yet cracked.
+
+**Known gap — per-figure attribution AND multi-curve recall (the reason
+item 35 stays open).** Scoping a curve to *which* decoded figure it belongs
+to is still a best-effort `[anchor, next_anchor)` byte-range heuristic, and
+— now confirmed directly against the real oracle rather than inferred —
+most of a real graph's curve tokens are simply not locatable yet: e.g.
+"Fixed Lambdas SI"'s Graph1 genuinely plots 6 columns (`NbAl80nm`'s
+I/J/K plus `NbAl100/120/200nm`'s K) but only 1 is recovered. This is a
+recall gap, not a soundness one — everything reported is both
+designation-confirmed and now oracle-confirmed, never fabricated — but
+restored figures are still commonly missing curves a user would expect.
+Closing it needs a further RE pass to locate the true per-curve object
+boundary for graphs with more than 1-2 plotted curves.
 
 ### 6.3 Origin → quantized figure mapping + gap list
 
@@ -1087,10 +1126,14 @@ reading only this doc:
 - **Item 35 — figure curve→dataset column binding.** `.opj`'s DataPlot
   column selector (§6.1) stays permanently undecoded. `.opju`'s IS decoded
   (§6.2.1, `opju_curves.py`) and shipped in `"curves"`, gated on an
-  independently-validated column designation for precision — but
-  per-figure *attribution* drops most curves for composite/derived
-  real-corpus graphs (no oracle exists to close that gap), so the item
-  stays open.
+  independently-validated column designation for precision. Reworked
+  2026-07-04 against a real per-plot oracle (`plots.json`,
+  `tools/origin_trial/export_plot_refs.py`): found and fixed a false
+  positive (the `__BCO` per-book boilerplate, §6.2.1) that was misattributed
+  as a curve on `UnpolPlots`; precision is now 100% on every oracle-covered
+  file. Recall stays low (0-50% per file, see §6.2.1's table) — per-figure
+  *attribution* and multi-curve-per-layer recovery both remain lossy, so
+  the item stays open.
 - **Item 4 (report-sheet family) — non-double column values.** The
   FitLinear/NLFit auto-generated report-sheet text columns (§3.2) stay an
   honest drop; a materially harder variable-length RE problem.

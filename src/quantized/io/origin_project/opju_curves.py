@@ -111,6 +111,51 @@ validated per-column designation and **dropped unless it is exactly
 for precision, matching the "never guess" rule: some real curves are lost
 when a book's window-section metadata doesn't resolve (windows_opju.py's own
 documented limitation), but nothing reported here is a mis-typed column.
+
+**False positive found and fixed — the ``__BCO`` boilerplate (item 35
+rework, 2026-07-04).** Once a real per-plot oracle existed (``plots.json``,
+via ``tools/origin_trial/export_plot_refs.py``'s ``range -w`` LabTalk recipe
+— the earlier ``layer.nplots``/``range __rp`` approach used by
+``export_ground_truth.py`` never worked, see below), it exposed 2 false
+positives: ``UnpolPlots`` decoded ``(PrNiO3STOprof, C)`` and
+``(PrNiO3STOrefl, C)``, but the oracle plots neither book's column C at all
+(the real bindings are ``B`` and ``G``/``H``/``I`` respectively). Root
+cause: the whole-file regex also matches the *tail* of a completely
+unrelated, fixed ~365-byte-long per-book boilerplate record that begins at a
+length-prefixed ``__BCO2`` (occasionally ``__BCO3`` etc.) string — one per
+book, byte-for-byte identical across every book in every file checked
+(``XAS``, ``UnpolPlots``, ``"Fixed Lambdas SI"``) aside from a handful of
+small varying counter/row-count fields. This record's last 8 bytes always
+happen to fit the curve-token shape and always resolve to **local column 3
+(index 2, i.e. always "C")** of its own book — not because it references
+any column at all, but because that offset in the fixed template always
+holds the literal value 3. It is *not* curve-exclusive: it exists whether or
+not that book is plotted anywhere, and for a 3-column book whose real Y
+column *happens* to be column C (every XAS book: ``Co``/``bl11YIGPy032``/
+``bl11YIGPy033``, all plotting ``Intensity`` at C) the artifact is
+coincidentally "correct" — which is how it went undetected before the
+plots.json oracle existed. ``UnpolPlots``' books use column C for a
+*different* quantity than what's plotted (``Absorption``/``R``, not the
+real ``Nuclear``/``R-Rsub`` curves), exposing the coincidence as a false
+positive.
+
+Fix: :func:`_is_bco_boilerplate` requires **both** confirmed structural
+signals before excluding a match — (1) the match sits 340-380 bytes past a
+preceding ``__BCO`` marker (the exact span measured across every confirmed
+instance: 357-360 bytes) **and** (2) the resolved column is local index 2.
+Neither signal alone is safe to use: distance alone is untested against
+unseen templates; "local column 3" alone would wrongly exclude a real curve
+that legitimately plots that position (``fig_pairs``' A-C diff curve also
+resolves to local column 3, but at a completely different, ~1288-byte
+distance from any ``__BCO`` marker, and is correctly kept). Applying this
+filter removes exactly the ``UnpolPlots`` false positives and, incidentally,
+the previously "correct-by-coincidence" ``XAS`` pair (``Co``/
+``bl11YIGPy032``/``bl11YIGPy033``, all local-column-3) — these were never
+soundly decoded, only luckily right, and reporting them would contradict the
+"replicate the method, not just the answer" porting principle. See
+``tests/test_io_origin_figures_opju.py``'s realdata precision/recall suite
+and ``docs/origin_project_format.md`` §6.2.1 for the corrected validation
+counts.
 """
 
 from __future__ import annotations
@@ -127,6 +172,32 @@ __all__ = ["book_columns_from_bytes", "book_metadata_from_bytes", "extract_curve
 
 # <flag:1> 01 <konst:1> 01 80 03 <y_ord:1> 00 -- see module docstring.
 _CURVE_RE = re.compile(rb".\x01.\x01\x80\x03.\x00")
+
+# The "__BCO" boilerplate false positive -- see the module docstring's
+# "False positive found and fixed" section. The span from the marker to the
+# start of the coincidentally-matching tail token measures 357-360 bytes
+# across every confirmed instance; the range below gives margin either side.
+_BCO_MARKER = b"__BCO"
+_BCO_ARTIFACT_LO = 340
+_BCO_ARTIFACT_HI = 380
+
+
+def _is_bco_boilerplate(b: bytes, match_start: int, local_index: int) -> bool:
+    """True when a curve-token match is the tail of the fixed per-book
+    ``__BCO<n>`` worksheet-window record, not a real curve/DataPlot object.
+
+    Requires both confirmed signals at once (see module docstring): the
+    resolved column is local index 2 (always "C" in the boilerplate) AND a
+    ``__BCO`` marker sits 340-380 bytes before the match. Neither condition
+    alone is used -- a real curve can legitimately plot local column 3
+    (``fig_pairs``' A-C diff), and an unrelated ``__BCO`` marker could in
+    principle precede a real token at some other distance.
+    """
+    if local_index != 2:
+        return False
+    lo = max(0, match_start - _BCO_ARTIFACT_HI)
+    hi = max(0, match_start - _BCO_ARTIFACT_LO)
+    return b.find(_BCO_MARKER, lo, hi) >= 0
 
 
 def book_columns_from_bytes(b: bytes) -> dict[str, list[str]]:
@@ -187,6 +258,8 @@ def extract_curves(
         cols = book_columns.get(book)
         if not cols:
             continue
+        if _is_bco_boilerplate(b, m.start(), cols.index(y_col)):
+            continue  # the __BCO boilerplate, not a real curve -- see module docstring
         bm = books_meta.get(book)
         if bm is None:
             continue  # can't independently confirm the column type: drop, never guess
