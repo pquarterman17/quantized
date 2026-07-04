@@ -49,6 +49,12 @@ export default function Worksheet() {
   const setYKeys = useApp((s) => s.setYKeys);
   const toggleRowExcluded = useApp((s) => s.toggleRowExcluded);
   const clearRowExclusions = useApp((s) => s.clearRowExclusions);
+  const selection = useApp((s) => s.selection);
+  const toggleRowSelected = useApp((s) => s.toggleRowSelected);
+  const setRowSelection = useApp((s) => s.setRowSelection);
+  const clearRowSelection = useApp((s) => s.clearRowSelection);
+  const excludeSelectedRows = useApp((s) => s.excludeSelectedRows);
+  const keepOnlySelectedRows = useApp((s) => s.keepOnlySelectedRows);
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   // Right-click menu: a header column (target -1 = x) or a data row.
   const [menu, setMenu] = useState<{ kind: "col" | "row"; target: number; x: number; y: number } | null>(null);
@@ -69,6 +75,13 @@ export default function Worksheet() {
   // — NOT local component state — so it survives dataset switches, round-trips
   // .dwk, and is honored by every view (lib/rowstate is the single source).
   const masked = useMemo(() => excludedSet(active), [active]);
+
+  // Selected rows — only "live" when the store selection targets the active
+  // dataset (a transient brush; #50 selection dimension).
+  const selected = useMemo(
+    () => new Set(selection && active && selection.datasetId === active.id ? selection.rows : []),
+    [selection, active],
+  );
 
   // Row indices kept by the filter, in original order (all rows if no/incomplete
   // filter). The view, the stats subset, and "Extract" all derive from this.
@@ -301,6 +314,10 @@ export default function Worksheet() {
         onCopy={copyRows}
         maskedCount={masked.size}
         onUnmaskAll={unmaskAll}
+        selectedCount={selected.size}
+        onExcludeSelected={excludeSelectedRows}
+        onKeepOnlySelected={keepOnlySelectedRows}
+        onClearSelection={clearRowSelection}
         vars={vars}
       />
 
@@ -337,10 +354,12 @@ export default function Worksheet() {
         xUnit={xUnit}
         order={order}
         masked={masked}
+        selected={selected}
         channelRoles={channelRoles}
         sortMark={mark}
         onToggleSort={toggleSort}
-        onToggleMask={toggleMask}
+        onToggleSelect={toggleRowSelected}
+        onSelectRange={setRowSelection}
         onEditCell={(row, col, value) => setCellValue(active!.id, row, col, value)}
         baseCount={baseCount}
         onRemoveFormula={(i) => removeFormula(active!.id, i)}

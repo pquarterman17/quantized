@@ -29,10 +29,15 @@ export interface WorksheetTableProps {
   xUnit: string;
   order: number[];
   masked: Set<number>;
+  /** Selected original-row indices (#50 selection brush). */
+  selected: Set<number>;
   channelRoles: Record<number, ChannelRole>;
   sortMark: (col: number) => string;
   onToggleSort: (col: number) => void;
-  onToggleMask: (r: number) => void;
+  /** Toggle one row into the selection (plain click on the row number). */
+  onToggleSelect: (r: number) => void;
+  /** Replace the selection with a contiguous range (shift-click). */
+  onSelectRange: (rows: number[]) => void;
   onEditCell: (row: number, col: number, value: number) => void;
   /** Channels at index ≥ baseCount are computed (formula) columns: read-only +
    *  removable, marked "ƒx" in the header. */
@@ -56,10 +61,12 @@ export default function WorksheetTable({
   xUnit,
   order,
   masked,
+  selected,
   channelRoles,
   sortMark,
   onToggleSort,
-  onToggleMask,
+  onToggleSelect,
+  onSelectRange,
   onEditCell,
   baseCount,
   onRemoveFormula,
@@ -73,6 +80,22 @@ export default function WorksheetTable({
   // The cell currently being edited (col -1 = x column) and its in-progress text.
   const [edit, setEdit] = useState<{ row: number; col: number } | null>(null);
   const [draft, setDraft] = useState("");
+  // Anchor row for shift-click range selection (an index into `order`).
+  const [anchor, setAnchor] = useState<number | null>(null);
+
+  const onRowNumClick = (r: number, e: React.MouseEvent): void => {
+    if (e.shiftKey && anchor != null) {
+      const aPos = order.indexOf(anchor);
+      const pos = order.indexOf(r);
+      if (aPos >= 0 && pos >= 0) {
+        const [lo, hi] = aPos <= pos ? [aPos, pos] : [pos, aPos];
+        onSelectRange(order.slice(lo, hi + 1)); // the displayed rows between the two clicks
+        return;
+      }
+    }
+    onToggleSelect(r);
+    setAnchor(r);
+  };
 
   const startEdit = (row: number, col: number, current: number | undefined): void => {
     setEdit({ row, col });
@@ -174,17 +197,21 @@ export default function WorksheetTable({
       <tbody>
         {order.slice(0, maxRows).map((r) => {
           const isMasked = masked.has(r);
+          const isSelected = selected.has(r);
           return (
             <tr
               key={r}
               onContextMenu={onRowContext ? (e) => onRowContext(r, e) : undefined}
-              style={isMasked ? { opacity: 0.4, textDecoration: "line-through" } : undefined}
+              style={{
+                ...(isMasked ? { opacity: 0.4, textDecoration: "line-through" } : {}),
+                ...(isSelected ? { background: "var(--accent-soft)" } : {}),
+              }}
             >
               <td
                 className="rownum"
-                style={{ cursor: "pointer" }}
-                title={isMasked ? "click to unmask row" : "click to mask row (exclude from stats)"}
-                onClick={() => onToggleMask(r)}
+                style={{ cursor: "pointer", ...(isSelected ? { color: "var(--accent)", fontWeight: 600 } : {}) }}
+                title="click to select · shift-click a range · right-click to mask"
+                onClick={(e) => onRowNumClick(r, e)}
               >
                 {r + 1}
               </td>

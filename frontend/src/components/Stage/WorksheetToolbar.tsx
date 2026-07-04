@@ -13,6 +13,11 @@ export interface WorksheetToolbarProps {
   onCopy: () => void;
   maskedCount: number;
   onUnmaskAll: () => void;
+  /** #50 selection dimension: bulk actions on the selected rows. */
+  selectedCount: number;
+  onExcludeSelected: () => void;
+  onKeepOnlySelected: () => void;
+  onClearSelection: () => void;
   vars: string;
 }
 
@@ -27,6 +32,10 @@ export default function WorksheetToolbar({
   onCopy,
   maskedCount,
   onUnmaskAll,
+  selectedCount,
+  onExcludeSelected,
+  onKeepOnlySelected,
+  onClearSelection,
   vars,
 }: WorksheetToolbarProps) {
   return (
@@ -76,6 +85,30 @@ export default function WorksheetToolbar({
         <button className="qz-btn" onClick={onUnmaskAll} title="Clear all masked rows">
           Unmask ({maskedCount})
         </button>
+      )}
+      {selectedCount > 0 && (
+        <>
+          <span className="qzk-ds-meta" style={{ color: "var(--accent)" }}>
+            {selectedCount} selected
+          </span>
+          <button
+            className="qz-btn"
+            onClick={onExcludeSelected}
+            title="Mask the selected rows (exclude from analysis)"
+          >
+            Exclude
+          </button>
+          <button
+            className="qz-btn"
+            onClick={onKeepOnlySelected}
+            title="Mask every row except the selected ones"
+          >
+            Keep only
+          </button>
+          <button className="qz-btn" onClick={onClearSelection} title="Clear the selection">
+            Deselect
+          </button>
+        </>
       )}
       <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
         vars: {vars}

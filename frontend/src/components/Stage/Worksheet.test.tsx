@@ -29,7 +29,12 @@ beforeEach(() => {
   vi.mocked(statsDescriptive).mockResolvedValue({
     mean: 5, std: 1, min: 1, max: 9, median: 5, N: 3,
   });
-  useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data }], activeId: "d1", status: "" });
+  useApp.setState({
+    datasets: [{ id: "d1", name: "scan.dat", data }],
+    activeId: "d1",
+    status: "",
+    selection: null,
+  });
 });
 
 describe("Worksheet context menus", () => {
@@ -152,9 +157,15 @@ describe("Worksheet row filter", () => {
 });
 
 describe("Worksheet row masking", () => {
+  // Mask row index 1 via the right-click menu (the row-number click now selects).
+  const maskRow1 = () => {
+    fireEvent.contextMenu(screen.getAllByRole("row")[2]); // data row index 1
+    fireEvent.click(screen.getByText("Mask row"));
+  };
+
   it("keeps a masked row visible but flags the masked count", () => {
     render(<Worksheet />);
-    fireEvent.click(screen.getByText("2")); // mask row index 1 (row number "2")
+    maskRow1();
     expect(screen.getByText("40.0000")).toBeInTheDocument(); // still rendered (greyed)
     expect(screen.getByText(/1 masked/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Unmask/ })).toBeInTheDocument();
@@ -163,7 +174,7 @@ describe("Worksheet row masking", () => {
   it("excludes masked rows from the descriptive-stats subset", async () => {
     render(<Worksheet />);
     fireEvent.click(screen.getByRole("button", { name: /Stats/ }));
-    fireEvent.click(screen.getByText("2")); // mask row index 1 → leaves rows 0,2
+    maskRow1(); // leaves rows 0, 2
     await waitFor(() => expect(statsDescriptive).toHaveBeenCalledWith([10, 11])); // A minus masked
     expect(statsDescriptive).toHaveBeenCalledWith([1, 3]); // x minus masked
     expect(statsDescriptive).toHaveBeenCalledWith([20, 12]); // B minus masked
@@ -171,7 +182,7 @@ describe("Worksheet row masking", () => {
 
   it("excludes masked rows from Extract", () => {
     render(<Worksheet />);
-    fireEvent.click(screen.getByText("2")); // mask row index 1
+    maskRow1();
     fireEvent.click(screen.getByRole("button", { name: /Extract/ }));
     const ds = useApp.getState().datasets;
     expect(ds).toHaveLength(2);
@@ -185,11 +196,39 @@ describe("Worksheet row masking", () => {
 
   it("unmask restores the full analysis set", () => {
     render(<Worksheet />);
-    fireEvent.click(screen.getByText("2"));
+    maskRow1();
     expect(screen.getByText(/1 masked/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Unmask/ }));
     expect(screen.queryByText(/masked/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Extract/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("Worksheet row selection (#50)", () => {
+  // Row-number cells carry the visible index; "2" is data row index 1.
+  it("selects a row on row-number click and bulk-excludes the selection", () => {
+    render(<Worksheet />);
+    fireEvent.click(screen.getByText("2")); // select row index 1
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Exclude" }));
+    // selection → persistent exclusion (row index 1 masked); selection cleared
+    expect(useApp.getState().datasets[0].excludedRows).toEqual([1]);
+    expect(useApp.getState().selection).toBeNull();
+    expect(screen.getByText(/1 masked/)).toBeInTheDocument();
+  });
+
+  it("shift-click selects a contiguous range of displayed rows", () => {
+    render(<Worksheet />);
+    fireEvent.click(screen.getByText("1")); // anchor at row index 0
+    fireEvent.click(screen.getByText("3"), { shiftKey: true }); // extend to row index 2
+    expect(screen.getByText("3 selected")).toBeInTheDocument();
+  });
+
+  it("keep-only excludes every unselected row", () => {
+    render(<Worksheet />);
+    fireEvent.click(screen.getByText("2")); // select only row index 1
+    fireEvent.click(screen.getByRole("button", { name: "Keep only" }));
+    expect(useApp.getState().datasets[0].excludedRows).toEqual([0, 2]);
   });
 });
 

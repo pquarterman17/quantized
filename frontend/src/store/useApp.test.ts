@@ -1062,3 +1062,52 @@ describe("useApp row exclusion (#50 row-state model)", () => {
     expect(excludedOf("d2")).toBeUndefined();
   });
 });
+
+describe("useApp row selection (#50 selection dimension)", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [{ id: "d1", name: "ds", data: raw }], activeId: "d1", selection: null });
+  });
+  const excludedOf = (id: string) =>
+    useApp.getState().datasets.find((d) => d.id === id)?.excludedRows;
+
+  it("toggleRowSelected builds a selection scoped to the active dataset", () => {
+    useApp.getState().toggleRowSelected(2);
+    useApp.getState().toggleRowSelected(0);
+    expect(useApp.getState().selection).toEqual({ datasetId: "d1", rows: [0, 2] });
+    useApp.getState().toggleRowSelected(0);
+    expect(useApp.getState().selection).toEqual({ datasetId: "d1", rows: [2] });
+  });
+
+  it("setRowSelection replaces with a sorted unique set; empty clears", () => {
+    useApp.getState().setRowSelection([2, 0, 2]);
+    expect(useApp.getState().selection).toEqual({ datasetId: "d1", rows: [0, 2] });
+    useApp.getState().setRowSelection([]);
+    expect(useApp.getState().selection).toBeNull();
+  });
+
+  it("excludeSelectedRows merges the selection into excludedRows and clears it", () => {
+    useApp.getState().setRowSelection([1, 2]);
+    useApp.getState().excludeSelectedRows();
+    expect(excludedOf("d1")).toEqual([1, 2]);
+    expect(useApp.getState().selection).toBeNull();
+    useApp.getState().setRowSelection([0]); // unions with existing exclusions
+    useApp.getState().excludeSelectedRows();
+    expect(excludedOf("d1")).toEqual([0, 1, 2]);
+  });
+
+  it("keepOnlySelectedRows excludes the complement", () => {
+    useApp.getState().setRowSelection([1]); // raw has 3 rows → exclude 0 and 2
+    useApp.getState().keepOnlySelectedRows();
+    expect(excludedOf("d1")).toEqual([0, 2]);
+    expect(useApp.getState().selection).toBeNull();
+  });
+
+  it("ignores a stale selection belonging to another dataset", () => {
+    useApp.setState({ selection: { datasetId: "other", rows: [0, 1] } });
+    useApp.getState().toggleRowSelected(2); // starts fresh for the active dataset
+    expect(useApp.getState().selection).toEqual({ datasetId: "d1", rows: [2] });
+    useApp.setState({ selection: { datasetId: "other", rows: [0] } });
+    useApp.getState().excludeSelectedRows(); // stale → no-op
+    expect(excludedOf("d1")).toBeUndefined();
+  });
+});

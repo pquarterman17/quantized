@@ -281,6 +281,16 @@ interface AppState {
   toggleRowExcluded: (id: string, row: number) => void;
   setRowsExcluded: (id: string, rows: number[]) => void;
   clearRowExclusions: (id: string) => void;
+  // Row selection (#50 selection dimension): a transient brush on the active
+  // dataset. `selection` is null or {datasetId, rows}; it is "live" only when its
+  // datasetId matches activeId, so switching datasets naturally drops it (no
+  // reset wiring). The bulk actions turn a selection into persistent exclusions.
+  selection: { datasetId: string; rows: number[] } | null;
+  toggleRowSelected: (row: number) => void;
+  setRowSelection: (rows: number[]) => void;
+  clearRowSelection: () => void;
+  excludeSelectedRows: () => void;
+  keepOnlySelectedRows: () => void;
   // Local data filter (#53): non-destructive per-column predicates that narrow
   // the analysis view of a dataset. Only active predicates are stored.
   setDatasetFilter: (id: string, filter: DataFilter) => void;
@@ -501,6 +511,7 @@ export const useApp = create<AppState>((set, get) => ({
   waterfall: 0,
   plotTool: "zoom",
   regionPicked: null,
+  selection: null,
   integral: null,
   fwhmResult: null,
   cmdkOpen: false,
@@ -1110,6 +1121,52 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({
       datasets: s.datasets.map((d) => (d.id === id ? { ...d, filter: undefined } : d)),
     })),
+  toggleRowSelected: (row) => {
+    const id = get().activeId;
+    if (id == null) return;
+    set((s) => {
+      const cur = s.selection?.datasetId === id ? s.selection.rows : [];
+      const rows = cur.includes(row)
+        ? cur.filter((r) => r !== row)
+        : [...cur, row].sort((a, b) => a - b);
+      return { selection: rows.length ? { datasetId: id, rows } : null };
+    });
+  },
+  setRowSelection: (rows) => {
+    const id = get().activeId;
+    if (id == null) return;
+    const clean = [...new Set(rows)].sort((a, b) => a - b);
+    set({ selection: clean.length ? { datasetId: id, rows: clean } : null });
+  },
+  clearRowSelection: () => set({ selection: null }),
+  excludeSelectedRows: () => {
+    const id = get().activeId;
+    const sel = get().selection;
+    if (id == null || sel?.datasetId !== id || !sel.rows.length) return;
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id) return d;
+        const merged = [...new Set([...(d.excludedRows ?? []), ...sel.rows])].sort((a, b) => a - b);
+        return { ...d, excludedRows: merged };
+      }),
+      selection: null,
+    }));
+  },
+  keepOnlySelectedRows: () => {
+    const id = get().activeId;
+    const sel = get().selection;
+    if (id == null || sel?.datasetId !== id || !sel.rows.length) return;
+    set((s) => ({
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id) return d;
+        const keep = new Set(sel.rows);
+        const excluded: number[] = [];
+        for (let r = 0; r < d.data.time.length; r++) if (!keep.has(r)) excluded.push(r);
+        return { ...d, excludedRows: excluded.length ? excluded : undefined };
+      }),
+      selection: null,
+    }));
+  },
   // Persist an explicit plotted-channel draw order (a permutation of the current
   // plotted channels). effectiveChannels reorders by it; stale entries (channels
   // no longer plotted) are ignored and newly-plotted channels append in order.
