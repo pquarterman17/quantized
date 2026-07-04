@@ -460,14 +460,40 @@ the shipped contract)
 
 ## Completed
 
+- ~~**.ogs export live-verified in real Origin**~~ (2026-07-04) — running
+  the generated LabTalk through installed OriginPro (COM) exposed two
+  faithful-port bugs from MATLAB `exportOriginScript.m` that text-parity
+  could never catch, both now fixed in `io/origin.py`:
+  (1) `impASC ... options.SkipRows.Count:=2` is INVALID LabTalk in this
+  Origin build and aborts the whole import — bare `impASC` auto-detects
+  the 2-row header and the explicit `wks.col*` designations re-assert
+  names/units; this had silently broken *every* `.ogs` export (item 23).
+  (2) A successful `impASC` renames the book+sheet to the source file, so
+  names are restored AFTER import and the post-import short name captured
+  (`string qzbk$ = page.name$;`). The double-Y block was rewritten and
+  verified live: secondary `plotxy` uses an explicit `[%(qzbk$)]<sheet>!`
+  range (the graph, not the book, is active), `layer -nr` + `ogl:=2!`
+  lands the y2 curve in layer 2, and `label -yr` titles its right axis
+  (`yr.text$` fails on a bare `layer -nr` layer). Final corrected `.ogs`
+  runs with ZERO failed lines. Golden re-frozen to the intended output;
+  divergence documented in `docs/origin_re/validation_log.md`.
+- ~~**Book4 designation mismap fixed**~~ (2026-07-04) — the
+  `windows.window_metadata` bug noted (not fixed) during item 11/35:
+  `_is_column_block` required byte 0x06==0x0B, but real sheets store 0x09
+  for plain columns (0x0B only for formula/report columns), so Moke.opj
+  Book4 Sheet1's 14 plain columns were invisible and `FitLinear1` report
+  columns leaked into the mapping. Fixed by accepting 0x06∈{0x09,0x0B}
+  and a real sheet-boundary signal — a 365-byte `Pd<Name>` sub-header at
+  offset 0xD0 — closing collection at the 2nd marker per window. Book1–5
+  now recover all columns vs ground truth. `src/quantized/io/origin_project/
+  windows.py`; +2 tests.
 - ~~**#26 Figure export**~~ (2026-07-04) — the `.ogs` GRAPH block now
   recreates the CURRENT PLOT STATE (selected channels, x source, log
   axes, limits, y2 split) instead of just the single-column default:
   `io/origin.py` gains `GraphSpec` + `_plot_state_graph` (one grouped
   `plotxy iy:=(x,y1):(x,y2):…` call for the primary set; a secondary
   right-Y layer via `layer -nr` + a second `plotxy … ogl:=2!` for
-  `y2_keys`, with an inline documented second-graph-window fallback
-  since `layer -nr` is UNVERIFIED against a live Origin instance).
+  `y2_keys` — live-verified in OriginPro, see the entry above).
   `/api/export/origin` gained an optional `graph` field
   (`OriginGraphSpec`); the frontend's "Export Origin (.ogs)…" action now
   passes `yKeys/xKey/xLog/yLog/xLim/yLim/y2Keys` straight off the plot

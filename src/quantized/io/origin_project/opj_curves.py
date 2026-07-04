@@ -71,18 +71,17 @@ a report-sheet column (e.g. Moke's ``FitLinearCurve1``) can still resolve --
 none of the corpus's *locatable* graphs happen to need this, but nothing
 about the id scheme restricts it to primary-sheet columns.
 
-**Aside -- a pre-existing ``windows.window_metadata`` bug surfaced by this
-investigation, not fixed here.** Because most of ``Book4`` Sheet1's columns
-fail ``_is_column_block``'s stricter check, ``window_metadata``'s "sheet 2
-restarted" guard never triggers for Book4's real primary sheet -- so when its
-``FitLinear1`` sheet's columns (which DO pass, since their header byte is
-``0x0B``) come along, they get committed as if they were still the *primary*
-sheet's data, mislabeling ``Book4``'s ``A``-``G`` designations/long-names with
-``FitLinear1``'s. This is orthogonal to the curve/column-id decode (which
-uses its own, more permissive scan and never touches ``windows.py``) and is
-out of scope for item 11; noted here as a discovered side-finding, not
-patched, per the "fix the source deliberately, never silently" porting
-principle.
+**Aside -- a ``windows.window_metadata`` bug surfaced by this investigation,
+FIXED 2026-07-04.** Because most of ``Book4`` Sheet1's columns failed
+``_is_column_block``'s old strict check (they carry header byte ``0x09``, not
+``0x0B``), ``window_metadata``'s "sheet 2 restarted" guard never triggered for
+Book4's real primary sheet -- so its ``FitLinear1`` report-sheet columns got
+committed as if they were the *primary* sheet's data, mislabeling Book4's
+``A``-``G`` designations/long-names. Fixed in ``windows.py`` by accepting
+``0x06 in (0x09, 0x0B)`` and using the real sheet-boundary signal (a 365-byte
+``Pd<Name>`` sub-header at offset 0xD0) to close collection at the 2nd marker
+per window. This was orthogonal to the curve/column-id decode here (which uses
+its own more permissive scan and never touches ``windows.py``).
 
 **X is a structural inference, exactly as in ``.opju`` (`book_x_columns`).**
 No oracle (Moke's or XRD's ``index.json``) records which column is plotted as
