@@ -119,9 +119,12 @@ def main() -> None:
             )
         return out
 
-    targets = sorted(  # smallest first: most oracles land before the 16 MB Hc2 monster
-        [*CORPUS.glob("*.opju"), *SPEC.glob("*.opju")], key=lambda f: f.stat().st_size
+    targets = sorted(  # smallest first: most oracles land before the big files
+        [*CORPUS.glob("*.opj"), *CORPUS.glob("*.opju"), *SPEC.glob("*.opju")],
+        key=lambda f: f.stat().st_size,
     )
+    # A single file must finish inside one run window; PNR.opj (127 MB) can't.
+    targets = [f for f in targets if f.stat().st_size < 40_000_000]
     for f in targets:
         outdir = GT / f.stem
         outdir.mkdir(exist_ok=True)
