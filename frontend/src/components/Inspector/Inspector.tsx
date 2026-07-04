@@ -7,6 +7,7 @@ import ChannelsCard from "./ChannelsCard";
 import CorrectionsCard from "./CorrectionsCard";
 import MacroCard from "./MacroCard";
 import MapCard from "./MapCard";
+import MetadataCard from "./MetadataCard";
 import NotesCard from "./NotesCard";
 import RefLinesCard from "./RefLinesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
@@ -46,6 +47,8 @@ export default function Inspector() {
       <CorrectionsCard key={active?.id ?? "none"} active={active} />
 
       <StatsCard active={active} />
+
+      <MetadataCard active={active} />
 
       <Card title="Axes" defaultOpen={false}>
         <label className="qz-check">
