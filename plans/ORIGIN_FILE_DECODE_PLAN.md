@@ -13,7 +13,7 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-04 (post-overnight: width-rule + segment-grammar fix)
+**Updated:** 2026-07-04 (W4 frontend: figures section + book-family filter, items 17/18)
 
 ---
 
@@ -63,12 +63,12 @@ decoded graphs  → plot-spec mapping → restored figures (W3 + W4)
 - ~~Items 1, 7, 11 (wave-1 RE)~~ — 1 and 11 done; 7's codec cracked,
   mode schedule + framing remain (feeds 8).
 - 2 needs 1 · 5 needs 1 · 8 needs 7 · 9 needs 8 · 10 needs 1+8 ·
-  12 needs 11 · 13 needs 12+16 · 14 needs 7+11 · 17 needs 16 ·
-  18 needs 13+16 · 19 needs the matching RE item · 21 needs 1/11.
+  12 needs 11 · 13 needs 12+16 · 14 needs 7+11 ·
+  19 needs the matching RE item · 21 needs 1/11.
 - **15 (package split) precedes every new decoder** (2, 8, 13) — the
   500-line module ceiling forces the split before code lands.
-- 3 and 16 are independent of all RE and can start any time; 16/17
-  need owner UX decisions (AskUserQuestion at design time).
+- 3 and 16 are independent of all RE and can start any time; ~~16/17~~
+  needed owner UX decisions (resolved: see #17 in Completed).
 - 12 should coordinate with ORIGIN_GAP_PLAN #12 (FigureDoc entity) —
   imported Origin figures should land as the same document type.
 - W6: 23 and 24 are independent; 26 needs 12; 27 deferred.
@@ -111,11 +111,12 @@ relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
 **Origin → quantized (import).** Shipped: `.opj` numeric data (all books via
 `read_origin_books`), real column names/units/designations, book titles, AND
 `.opju` worksheet data (item 8 — canonical Burtscher FPC codec, bit-exact vs
-Origin's own export). Remaining gaps: `.opju` names/units (10 — Unicode windows
-decode) + its long near-constant-stride axis columns (32 — DFCM-collision),
-sheet hierarchy (5), non-double column types (4), the multi-dataset import flow
-+ picker UI (16/17 — owner UX decision), figures (12/13/14), notes/templates/
-log (6/21/22).
+Origin's own export). Also shipped: the multi-dataset import-all flow (16),
+figure restore + the post-import book-family filter (12/13/17/18 — the Library
+"Figures" and "Book families" sections). Remaining gaps: `.opju` names/units
+(10 — Unicode windows decode) + its long near-constant-stride axis columns (32
+— DFCM-collision), sheet hierarchy (5), non-double column types (4), `.opju`
+figures (14), notes/templates/log (6/21/22).
 
 **quantized → Origin (export).** Shipped: `format_origin_script`
 (`io/origin.py` — CSV + LabTalk `.ogs` that rebuilds designations, long
@@ -199,16 +200,7 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 1 — High Impact
 
-17. **Workbook picker UI** — tree of books/sheets/columns with
-    row/col counts; select which to import; "import all"
-    *Model: sonnet · ux-frontend-expert · needs 16.*
-
 ### Tier 2 — Medium Impact
-
-18. **Figure restore UX** — imported figures appear as restorable
-    plot documents (per 12's mapping); owner decision on where they
-    surface (Library "Figures" section per ORIGIN_GAP_PLAN #12)
-    *Model: sonnet · needs 13 + 16.*
 
 ---
 
@@ -282,6 +274,26 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ## Completed
 
+- ~~**#18 Figure restore UX**~~ (2026-07-04, `2f367e3`) — a Library "Figures"
+  section (`frontend/src/components/Library/FiguresSection.tsx`) lists every
+  `figures.extract_figures` snapshot from an import; clicking one activates its
+  resolved dataset and applies axis ranges + log flags
+  (`useApp.applyOriginFigure`). Resolution against the imported books is a
+  heuristic (`lib/originFigures.resolveFigureDataset` — source-hint vs.
+  `origin_book`/`origin_book_long`/name, unambiguous when only one book
+  exists); an unresolved figure shows disabled with the hint in its tooltip
+  rather than guessing. Removing a dataset disables (not deletes) any figure
+  pointing at it.
+- ~~**#17 Workbook picker UI**~~ (2026-07-04, `2f367e3`) — owner UX decision:
+  shipped as a lighter **post-import** bulk-manage filter instead of the
+  originally-scoped pre-import tree picker, so Origin imports never pause for
+  a dialog (`import-all` stays the only behavior at import time, per #16).
+  `lib/grouping.originBookFamilies` detects multi-book families (shared
+  `"<stem>:"` name prefix + `origin_book` metadata) and a "Book families"
+  Library section (`BookFamiliesSection.tsx`) offers "Manage…" — a checkbox
+  list (reusing the generic `ParamDialog`, all books checked by default);
+  unchecking + confirming bulk-removes exactly those datasets
+  (`useApp.removeDatasets`).
 - ~~**#32 (closed) chunked staircase records**~~ (2026-07-04, `7ee46ff`) —
   segments interleave freely with inline per-segment streams and a FRESH
   predictor state per stream; new 0x11 top-byte value tag. Pinned by a
