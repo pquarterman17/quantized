@@ -20,7 +20,11 @@ explicitly; items 6/10/14/17/18/19/20/22/33 shipped earlier today — notes
 windows + combined X-axis log flag pinned from licensed specimens,
 real-corpus figure records solved, structured results-log parsing, docs
 consolidated into one authoritative reference, synthetic fixture audit
-(figures.py + multi-book/multi-sheet gaps filled), W1 + W3 complete)
+(figures.py + multi-book/multi-sheet gaps filled), W1 + W3 complete;
+item 35's `.opju` curve→column selector decoded and shipped, gated on
+designation for precision — stays open, see item text: the GT `plots`
+oracle came back empty corpus-wide, a trial-script LabTalk bug now
+fixable with the license)
 
 ---
 
@@ -231,17 +235,29 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 3 — Nice-to-Have
 
-35. **Figure curve→dataset binding** — restored figures apply axis
-    ranges/log flags and resolve their dataset by a source-hint
-    heuristic, but the DataPlot curve→column selector was never cracked
-    (item 11's open sub-question): a figure doesn't know WHICH columns
-    each curve plots, so multi-curve graphs restore the book, not the
-    exact column pairs. RE target: the per-plot dataset references
-    Origin's own GT `index.json` records (`graphs → layers → plots`)
-    give an oracle for. Diff pairs `fig_pairs.opju` (scatter A-B vs A-C
-    vs line A-B in one project) already isolate the selector.
-    *Model: sonnet (oracle exists) · escalate only on demonstrated
-    failure.*
+35. **Figure curve→dataset binding** — `.opju`'s curve/DataPlot column
+    selector IS now decoded (`opju_curves.py`, `docs/origin_project_
+    format.md` §6.2.1): an 8-byte per-curve token gives the Y column's
+    global ordinal exactly (validated 4/4 against `fig_pairs.opju`'s
+    by-construction A-B/A-B/**A-C**/A-B diff, plus 12
+    designation-confirmed curves across the real corpus), gated against
+    an independently-validated column designation so nothing shipped is
+    a mis-typed column (X is a structural inference — the byte position
+    a naive read would expect to hold it never varied across ~44
+    samples, so it isn't reported as decoded). Still open because: (a)
+    the promised oracle (Origin's own GT `index.json` `plots` list)
+    comes back **empty** for every project in this corpus — a LabTalk/
+    COM limitation in `export_ground_truth.py`, not fixable without
+    starting Origin; (b) per-figure *attribution* (which curve belongs
+    to which decoded figure) is a lossy `[anchor, next_anchor)` window
+    heuristic that drops the majority of curves for composite/derived
+    real-corpus graphs (confirmed: "Fixed Lambdas SI"'s ten cleanest
+    tokens all sit outside every decoded figure's window). `.opj`'s
+    selector remains permanently undecoded (item 11's original
+    sub-question). Next step needs either a working GT `plots` export
+    or a further RE pass on the curve→layer scoping boundary.
+    *Model: sonnet · next step needs either Origin access to fix the GT
+    exporter, or fresh byte-level RE on curve/layer scoping.*
 
 (other W3 items shipped — see Completed)
 
