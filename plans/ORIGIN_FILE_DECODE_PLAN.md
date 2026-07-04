@@ -44,7 +44,11 @@ honest drop) now decodes in BOTH containers — `.opj`'s
 `decode_report_strings` (407/407 hc2convert columns recovered) and
 `.opju`'s new `opju_reports.py` (pinned against a new `fitreport2.opju`
 oracle, confirmed at scale against the real `Hc2 data.opju`, 1096
-columns) — item 4 CLOSED, moved to Completed)
+columns) — item 4 CLOSED, moved to Completed); item 35's "third encoding"
+search (default-dialog single-curve column selector) ran three more
+hypotheses (version-pair diff, window-local alternate encoding, legend/
+`__FRAMESRCDATAINFOS` backrefs) — all negative, no code shipped, recall
+stays 30.6% (see item text).
 
 ---
 
@@ -283,10 +287,37 @@ no documented real-Origin validation procedure for the trial window (31).
     file — a third, still-undecoded encoding for ordinary single-curve
     default-dialog graphs. Item stays open (precision 100% everywhere,
     but aggregate recall 30.6% < the 50% bar to close it).
-    *Model: sonnet · next step is byte-level RE on the third,
+    **Third-encoding search, 2026-07-04 — negative result, no code
+    shipped.** Three hypotheses chased, none validated (full byte-level
+    trail in `opju_curves.py`'s docstring / `docs/origin_project_
+    format.md` §6.2.1): (1) the `specimens/converted/*.opju` version-pair
+    (same corpus projects re-saved by the 4.3811 trial-writer build) was
+    hoped to be a Rosetta stone — it isn't; the apparent "new token" it
+    surfaces is the same `__BCO` boilerplate coincidence at a version-
+    shifted distance (383 vs. the pinned 357-360 bytes), and conversion
+    introduces a further false-positive cluster, making it a noisier
+    source, not a cleaner one. (2) A window-local alternate encoding WAS
+    found — a look-alike byte sequence sharing the real token's first 5
+    bytes, anchored on a length-prefixed workbook short-name string in
+    `RockingCurve`'s curve objects — but it fails validation decisively:
+    the 4.3811 re-save of the same project converts this exact slot into
+    the canonical token shape while preserving the same numeric value,
+    proving it's a real field, yet decoding that value through the
+    already-validated ordinal map gives the *wrong* column (`Nb!C` not
+    `Nb!B`) or an out-of-range one (`NbAl`) — a different, unidentified
+    numbering rule governs default-dialog plots, and it isn't even a
+    generally-locatable shape (the raw prefix recurs ~90x per file as a
+    generic idiom; `XAS`'s own default graphs don't embed the anchor
+    string at all). (3) `__FRAMESRCDATAINFOS` (found in `UnpolPlots`/
+    "Fixed Lambdas SI" only) decodes as frame-layout geometry, not a
+    curve backref; nearby slots carry generic `%(?X)`/`%(?Y)` auto-label
+    macros, not literal dataset references. Recall/precision unchanged
+    (30.6% / 100%); recorded as a confirmed negative so a future pass
+    doesn't re-spend time on these three leads.
+    *Model: sonnet · next step (still open) is byte-level RE on the third,
     single-curve-graph column-selector encoding (RockingCurve
-    Graph1/Graph2, XAS, UnpolPlots) — neither of the two shapes found so
-    far accounts for it.*
+    Graph1/Graph2, XAS, UnpolPlots) — three more leads eliminated, none of
+    the shapes found so far account for it.*
 
 (other W3 items shipped — see Completed)
 

@@ -235,6 +235,89 @@ soundly decoded, only luckily right, and reporting them would contradict the
 ``tests/test_io_origin_figures_opju.py``'s realdata precision/recall suite
 and ``docs/origin_project_format.md`` §6.2.1 for the corrected validation
 counts.
+
+**The "third encoding" search — negative result (item 35, 2026-07-04).**
+A further session went looking specifically for how ordinary, single-curve,
+*default-dialog* graphs (``RockingCurve`` ``Graph1``/``Graph2``, all of
+``XAS``, all of ``UnpolPlots``, most of ``"Fixed Lambdas SI"``) encode their
+Y column, since neither the real 8-byte token nor the column-candidate-list
+shape exists anywhere in their files. Three leads were chased; none
+validated, so **no code changed** — recall stays 30.6% / precision 100%.
+
+1. *Version-pair diff (refuted).* ``specimens/converted/*.opju`` are the
+   same corpus projects re-saved by the trial-writer's Origin build
+   (4.3811) from the corpus's native 4.3380 — a hoped-for Rosetta stone.
+   They are not one: re-scanning ``converted/XAS.opju`` and
+   ``converted/RockingCurve.opju`` with the existing regex finds matches
+   that *look* like new real tokens (e.g. an exact ``Co!C`` hit), but every
+   one is the **same ``__BCO`` boilerplate coincidence** described above,
+   just at a version-shifted distance — 383 bytes from the preceding
+   ``__BCO`` marker in the 4.3811 re-save vs. the pinned 357-360 in the
+   4.3380 corpus (the boilerplate record itself grew a handful of bytes
+   between builds), which happens to fall just outside
+   ``_BCO_ARTIFACT_LO``/``_HI``'s ``[340, 380)`` window. Re-saving also
+   introduces a *second*, further false-positive-shaped cluster at a
+   ~1872-byte distance from a ``__BCO`` marker (seen resolving to XAS's
+   local column B in the converted file only) — the converted corpus is a
+   **noisier** source for this investigation, not a cleaner one. No
+   genuine new curve/DataPlot token appears inside any default-dialog
+   graph's own axis window in either version.
+2. *Window-local alternate encoding (found a candidate, confirmed it does
+   not validate).* Anchoring on a length-prefixed workbook short-name
+   string embedded directly in ``RockingCurve``'s curve-object body (e.g.
+   ``\x80\x03Nb\x00``, ``\x80\x06Nb/Au\x00`` — a real, confirmed landmark,
+   found 11 bytes before the real token in the *solved* ``NbAuRocking``
+   object) turned up a byte sequence at the identical relative offset in
+   the *unsolved* ``Graph1``/``Graph2`` objects that shares the real
+   token's first 5 bytes (``<flag> 01 01 01 80``) but substitutes ``0x01``
+   for the literal ``0x03`` sub-type byte, has **no fixed ``0x00``
+   terminator** (``Graph1``: ``0x83``; ``Graph2``: also non-zero), and
+   does not resync with the shared downstream template until ~30-40 bytes
+   later (unlike the real token's clean fixed 2-byte tail). The byte
+   immediately following the ``0x01`` sub-type was ``0x09`` for ``Nb``
+   (expected column B: local ordinal 2, global cumulative ordinal 8) and
+   ``0x0e`` for ``NbAl`` (expected column B: local ordinal 2, global
+   ordinal 12) — matching neither numbering scheme, and the two values'
+   own difference (``14 - 9 = 5``) doesn't match the true ordinals'
+   difference (``12 - 8 = 4``) either, ruling out a fixed per-value
+   correction. **Decisive cross-check:** ``specimens/converted/
+   RockingCurve.opju`` (the same project, re-saved by 4.3811) rewrites
+   this exact slot into the *canonical* ``0x03``/``0x00`` token shape
+   while preserving the *same* numeric value (``9`` for ``Nb``, ``14`` for
+   ``NbAl``) — proving the slot is a real Origin-native field, not a
+   misparse — yet decoding ``9`` through the already-validated
+   ``_global_column_map`` resolves to ``Nb!C`` (wrong; the oracle wants
+   ``B``) and ``14`` is out of range entirely (``RockingCurve`` has only
+   12 FPC-decoded columns total). So this slot is governed by some *other*,
+   unidentified numbering rule that default-dialog plots use — not the
+   cumulative FPC-decoded ordinal explicit multi-curve/Select-Data tokens
+   use — and accepting it would have silently produced a **wrong** answer,
+   not merely a missing one. It also doesn't generalize as a locatable
+   *shape*: the raw 4-byte prefix (``01 01 80 01``) recurs ~90 times in
+   ``XAS.opju`` alone (a generic tag+small-int idiom used throughout this
+   format for style/color fields), so finding it at all required first
+   anchoring on the book-name string — and ``XAS``'s own default-dialog
+   curve objects don't embed a length-prefixed short name this way at all
+   (``\x80\x03Co\x00`` and friends: zero occurrences anywhere in the
+   file), so even the anchor technique is RockingCurve-specific, not
+   corpus-general.
+3. *Legend / ``__FRAMESRCDATAINFOS`` backrefs (dead end).* The
+   ``__FRAMESRCDATAINFOS`` marker exists exactly once each in
+   ``UnpolPlots`` and ``"Fixed Lambdas SI"`` (absent from ``XAS`` and
+   ``RockingCurve``) but its body decodes as a dense small-int/float64 run
+   consistent with multi-panel frame *layout geometry* (position/size),
+   not a per-curve dataset backref. The curve-object slots in that same
+   region carry Origin's generic auto-label macros (length-prefixed
+   ``%(?X)``/``%(?Y)`` strings — "substitute this axis's own column short
+   name at render time"), confirming these are ordinary default-titled
+   plots whose title template doesn't fix a literal dataset reference at
+   all, let alone one we could read back out.
+
+Conclusion: the encoding default-dialog graphs use to select their Y column
+remains unlocated. This is reported as a confirmed negative result (not
+merely "not yet tried") so a future pass doesn't re-spend time on the same
+three leads — see ``docs/origin_project_format.md`` §6.2.1 for the
+corresponding writeup.
 """
 
 from __future__ import annotations
