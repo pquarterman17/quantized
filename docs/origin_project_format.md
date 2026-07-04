@@ -638,18 +638,38 @@ OTP 1+1 layers) without a single misparse:
 | SuperlatticeFits g1 | (0.03, 0.5, 0.1) | (0, 1.25, 1.0) | Q range (Å⁻¹) ✓ |
 | SLD_DoubleY.otp | (2950, 3700, 100) | (-1, 10, 2) | template defaults |
 
-**Scale type (lin/log) — heuristic only, for `.opj`.** The range triple is
-solid, but no isolated scale-type bit was ever found in `.opj`: a candidate
-flag byte just past each step (X @43, Y @86) does **not** separate log from
-linear across all 22 SuperlatticeFits graphs (value `0x08` occurs for
-both). *(Note: `.opju`'s specimen form later isolated a combined scale
-byte via controlled trial specimens — §6.2 — but Origin ≥2023 cannot write
-`.opj`, so no equivalent specimen-based probe exists for CPYA; this gap is
-permanent for `.opj` short of a pre-2023 Origin license.)* Working
-heuristic: an axis reads as **log10** when `from > 0` and
-`to/from ≳ 10^3` with an integer `step` (decade ticks) — correctly flags
-XRD intensity, SuperlatticeFits reflectivity R(Q), and leaves MOKE/2θ
-linear. Confidence: range HIGH, scale MEDIUM (heuristic).
+**Y-scale type (lin/log) — solved 2026-07-04, exact.** The candidate flag
+bytes tried right after each step (X @43, Y @86) never worked (value `0x08`
+occurs for both log and linear across all 22 SuperlatticeFits graphs). The
+real flag is 2 bytes at **payload offset 98/99**: `01 00` = linear, `08 01`
+= log10 (`figures.py`'s `_y_scale_flag`). Isolated by byte-diffing XRD's
+single log-Y `Graph1` layer-continuation block against all 15 recovered
+linear-Y layers in `Moke.opj` — identical at every byte except 98/99 and a
+second candidate at 189 that a wider scan ruled out as noise (mixed values
+for both scale types). Validated against the *entire* `.opj` corpus (PNR,
+MnN_Diffusion_PNR, XMCD, hc2convert, SuperlatticeFits, Moke, XRD): 111 log +
+236 linear layers, **only these two byte values ever occur** — no third
+state, no exceptions. Several instances are flag-log but
+heuristic-linear (reflectivity R(Q) curves zoomed to a sub-decade log
+range, e.g. Y=(0.977, 1.292), or Y=(3.29e-6, 2.09e-3) spanning under 3
+decades) — cases the old heuristic got wrong that the flag resolves
+correctly; `_y_scale_flag` is tried first and the decade heuristic is only
+a fallback for the (so far unseen) unrecognized-byte-pair case. Same two
+byte values, independently discovered via `.opju`'s real-corpus form (see
+§6.2) — strong cross-container corroboration this is a real, dedicated
+field rather than coincidence.
+
+**X-scale type — still heuristic only.** No isolated X flag was found
+anywhere near the layer-continuation block during this pass (the search
+that found Y's flag did not surface an analogous one for X); an axis reads
+as **log10** when `from > 0` and `to/from ≳ 10^3` with an integer `step`
+(decade ticks) — correctly flags XRD intensity, SuperlatticeFits
+reflectivity R(Q), and leaves MOKE/2θ linear. *(Note: `.opju`'s specimen
+form separately isolated a combined X+Y scale byte via controlled trial
+specimens — §6.2 — but Origin ≥2023 cannot write `.opj`, so no equivalent
+specimen-based probe exists for CPYA to look for an analogous byte there;
+X stays a documented gap.)* Confidence: range HIGH, Y-scale HIGH (exact),
+X-scale MEDIUM (heuristic).
 
 **Axis titles.** `type=0x00` objects named `XB`/`XT`/`YL`/`YR`. **Auto:**
 `%(?X)`/`%(?Y)` — Origin builds the title from the plotted column's
@@ -793,11 +813,48 @@ absent when the record opens with a tagged value; `89 01`/`89 18`/
 RLE value = 1 byte. Semantics undecoded — across the oracle, every flagged
 X axis is GT-linear, so the flags do **not** correlate with axis type. The
 `85 02 f0 3f` sequence once suspected to be a y-log flag is in fact a
-tagged `y_from = 1.0` (whole-span exact-fill + GT confirm), so **the real
-form carries no isolated scale-type flag at all**: `x_log`/`y_log` fall
-back to the same decade heuristic `.opj` uses — correct for all 14 corpus
-anchors (RockingCurve's three log-Y layers span ≥5 decades; every linear
-layer spans <3).
+tagged `y_from = 1.0` (whole-span exact-fill + GT confirm), so **this form
+has no isolated X-scale flag**: `x_log` falls back to the same decade
+heuristic `.opj` uses — correct for all 14 corpus anchors (RockingCurve's
+three log-Y layers span ≥5 decades; every linear layer spans <3), except
+when the specimen-form's combined scale byte (§6.2's Specimen form,
+`_scale_byte`) happens to also be present nearby — see the Y-scale flag
+paragraph below for why this matters more than it first appears.
+
+**Y-scale flag — solved 2026-07-04.** Unlike X, this form DOES carry an
+isolated, exact Y flag, found via a new 4-file by-construction oracle:
+`rf_linlin`/`rf_logx`/`rf_logy`/`rf_loglog.opju` — the SAME single-curve
+graph with identical custom ranges `x=[0.2,20]`/`y=[50,2000]`, differing
+ONLY in `layer.x.type`/`layer.y.type` (1=linear, 2=log10). The end
+separator's geometry payload is followed by a fixed 4-byte layer-style
+marker `00 10 10 00`; the 2 bytes immediately before it are the flag: `01
+00` linear, `08 01` log10 — independent of the geometry payload's own
+(variable) shape/length and of X's own type/encoding (which shifts the
+marker's absolute position but never the flag's value or its relationship
+to the marker). `opju_axis_real_form.py`'s `_real_y_log_flag`. Validated
+exact against all 14 real-corpus anchors (RockingCurve's 3 log-Y layers
+read `08 01`; XAS 3 + UnpolPlots 4 + "Fixed Lambdas SI" 4, all linear-Y,
+read `01 00`) — the same two byte values, in the same order, as the
+independently-discovered `.opj` flag (§6.1's `_y_scale_flag`, a different
+fixed offset in a different container) — strong cross-container
+corroboration this is a real, dedicated field.
+
+Byte-diffing the oracle quad also surfaced a latent bug: all four
+specimens carry the specimen-form's `81 04 06 00 00 01 c3 66`
+Y-transition marker even though their X values use this form's RLE/tagged
+encoding, so `_parse_specimen_record` was spuriously "succeeding" on the
+two X-linear members (`rf_linlin`, `rf_logy`) with a **corrupted
+`x_from`** (`0.19539186479597628` instead of `0.2`): a bare-raw8 candidate
+in `_value_candidates` was accidentally decoding the leading `89 01`
+flag-token + part of the RLE-encoded `x_from` as a plausible-looking
+literal, and losing the real Y flag along with it (the specimen path's
+`type_byte` only ever reflects X in this shape). Fixed with a guard
+mirroring `_real_bare8`'s existing one: reject a bare (no-tag) raw8
+candidate whose leading byte falls in the real-form flag range
+`0x81..0x8f` — a genuine specimen-form literal never starts there. All
+four oracle files, and `axis_custom.opju` (a fifth, independently
+generated data point, byte-identical to `rf_logx` at the axis record),
+now route through the real-form parser and decode `x_from` exactly.
 
 **Span decoding is exact-fill**, mirroring the item-14 philosophy: X tries
 `[from, to, step]` then `[to, step]` (from elided) after the flag skip; Y
@@ -807,8 +864,11 @@ Any arity whose fill set is non-unique is dropped, never guessed.
 
 **Validation:** 14/14 real-corpus anchors match GT layers at 1e-9 rel with
 correct lin/log (RockingCurve 3, XAS 3, UnpolPlots 4, "Fixed Lambdas SI"
-4); the 6 specimen layers (`fig_lin`/`fig_log`/`fig_pairs`) still decode
-via the specimen-form path. Composite windows (e.g. RockingCurve `Graph3`)
+4) — Y from the new exact flag, X from the decade heuristic; the 6
+specimen layers (`fig_lin`/`fig_log`/`fig_pairs`) still decode via the
+specimen-form path, and the rf_* quad + `axis_custom` (5 more files) decode
+exact ranges with both X (via the specimen-form's scale byte, incidentally
+present) and Y (via the new flag) exact. Composite windows (e.g. RockingCurve `Graph3`)
 reference already-encoded layers, so anchor counts are fewer than GT
 layers by design; a few derived graphs ("Fixed Lambdas SI" Graph5/Graph6,
 including the corpus's only log-X layer) carry no `03 00 00 1f` record at
@@ -1034,11 +1094,14 @@ yet):
   style** (spline/step/B-spline) — partially or not modelled.
 - **Arrow/box/region annotations with arrowheads** — quantized `refLines`
   are axis-parallel only.
-- **`.opj`'s scale-type bit** — permanently heuristic-only (Origin ≥2023
-  can't write `.opj`, so no specimen-based probe is possible; see §6.1).
-- **`.opju` real-corpus scale-type bit** — also heuristic-only (§6.2); only
-  the synthetic specimen form has an exact flag, and real files don't use
-  that record shape.
+- **X-scale type bit (both containers)** — still heuristic-only: the search
+  that isolated Y's exact flag (below) did not surface an analogous X flag
+  in either container. `.opj` additionally can't be probed with new
+  specimens (Origin ≥2023 can't write it); see §6.1/§6.2.
+- ~~**Y-scale type bit**~~ — **solved 2026-07-04** for both containers (no
+  longer a gap): `.opj` payload offset 98/99 (§6.1) and `.opju`'s real-form
+  Y flag before the `00 10 10 00` marker (§6.2) are both exact, `01 00`
+  linear / `08 01` log10, validated against >300 layers corpus-wide.
 
 ---
 
@@ -1196,9 +1259,14 @@ reading only this doc:
 - **Item 4 (report-sheet family) — non-double column values.** The
   FitLinear/NLFit auto-generated report-sheet text columns (§3.2) stay an
   honest drop; a materially harder variable-length RE problem.
-- **`.opj`/`.opju` scale-type bit** — permanently heuristic for `.opj` and
-  for `.opju`'s real-corpus figure form (§6.1, §6.2); exact only for
-  `.opju`'s synthetic specimen form.
+- **Item 36 — Y-axis lin/log scale-flag byte (both containers), CLOSED
+  2026-07-04.** Both `.opj` (§6.1, `figures.py`'s `_y_scale_flag`, payload
+  offset 98/99) and `.opju`'s real-corpus form (§6.2,
+  `opju_axis_real_form.py`'s `_real_y_log_flag`) now decode Y-scale exactly
+  (`01 00` linear / `08 01` log10), validated against 14 real-corpus
+  `.opju` anchors and >300 `.opj` layers corpus-wide. **X still has no
+  isolated flag in either container** and stays on the decade heuristic —
+  a documented, narrower remaining gap.
 - **Sheet-name exact bytes** (§4.1's `50 64` prefix) and **extra-sheet
   suffix numbering** (§5) — medium confidence, not exhaustively pinned.
 - **Templates (`.otp`/`.otpu`)** — same CPY family, not yet RE'd as a

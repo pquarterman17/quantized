@@ -58,12 +58,27 @@ rule; its semantics stay undecoded — across the oracle corpus it shows **no**
 correlation with axis lin/log types (every flagged X-axis is linear in GT).
 The ``85 02 f0 3f`` sequence once suspected to be a y-log flag is in fact a
 tagged ``y_from = 1.0`` (proven by whole-span exact-fill + ground truth), so
-the real form carries **no** isolated scale-type flag: ``x_log``/``y_log``
-fall back to the same decade heuristic the ``.opj`` reader uses (which is
-correct for all 14 corpus anchors). Spans decode by exact-fill: X tries
-``[from, to, step]`` then ``[to, step]`` (from elided) after the flag skip; Y
-scans for its start (the separator payload length varies) using tagged/RLE
-tokens only. A span whose fills disagree is dropped, never guessed.
+this form has **no isolated X-scale flag**: ``x_log`` falls back to the same
+decade heuristic the ``.opj`` reader uses (correct for all 14 corpus
+anchors), except when the specimen-form's combined scale byte (above)
+happens to also be present nearby (``_scale_byte``) — see below. Spans
+decode by exact-fill: X tries ``[from, to, step]`` then ``[to, step]`` (from
+elided) after the flag skip; Y scans for its start (the separator payload
+length varies) using tagged/RLE tokens only. A span whose fills disagree is
+dropped, never guessed.
+
+**Y-scale flag — solved 2026-07-04** (a 4-file by-construction oracle:
+``rf_linlin``/``rf_logx``/``rf_logy``/``rf_loglog.opju``, the same
+single-curve graph with identical custom ranges, differing only in
+``layer.x.type``/``layer.y.type``): unlike X, Y in this form DOES carry an
+isolated, exact lin/log flag — see ``opju_axis_real_form.py``'s
+``_real_y_log_flag`` for the byte-level trail (the same two byte values,
+``01 00``/``08 01``, as the independently-discovered ``.opj`` flag,
+``figures.py``'s ``_y_scale_flag``, just at a different offset). Validated
+exact against all 14 real-corpus anchors and >300 further layers scanned
+across the wider ``.opj`` corpus during the cross-container validation (see
+``docs/origin_project_format.md`` §6.2). ``y_log`` uses this flag when
+present and only falls back to the decade heuristic otherwise.
 
 Validated end-to-end against Origin's own ground-truth export: all 6 specimen
 layers (``fig_lin``/``fig_log``/``fig_pairs``) decode exactly via the specimen
@@ -71,9 +86,13 @@ form (plus the X-scale diff pair ``fig_linx``/``fig_logx`` and both-log
 ``fig_xylog`` that pinned the combined flag), and **all 14 real-corpus anchors**
 (RockingCurve 3, XAS 3, UnpolPlots 4,
 "Fixed Lambdas SI" 4) decode with exact axis ranges and correct lin/log via
-the real form. Composite windows (e.g. RockingCurve ``Graph3``) reference
-already-encoded layers, so anchors are fewer than GT layers; GT layers whose
-ranges duplicate a matched anchor are covered by it.
+the real form (Y from the new exact flag, X from the decade heuristic).
+Composite windows (e.g. RockingCurve ``Graph3``) reference already-encoded
+layers, so anchors are fewer than GT layers; GT layers whose ranges
+duplicate a matched anchor are covered by it. The real-corpus-form value
+tokens, span decoding, and the Y-scale flag itself live in
+``opju_axis_real_form.py`` (split out to stay under the 500-line
+god-module ceiling).
 
 This module fills ``source_hint`` from the ``<BKNAME>...</BKNAME>`` OriginStorage
 XML tag when one appears near the graph (an unambiguous, low-false-positive
@@ -101,10 +120,15 @@ byte record.
 from __future__ import annotations
 
 import re
-import struct
 from typing import Any
 
 from quantized.io.origin_project.figures import _AUTO_TITLE, _LEGEND_RE, _log_heuristic, _texts_in
+from quantized.io.origin_project.opju_axis_real_form import (
+    _TAG_SEARCH_SPAN,
+    _decode_compact,
+    _decode_raw8,
+    _parse_real_record,
+)
 from quantized.io.origin_project.opju_curves import (
     book_columns_from_bytes,
     book_metadata_from_bytes,
@@ -129,41 +153,26 @@ _TYPE_LIN = 0x03  # both linear
 _TYPE_XLOG = 0x04  # X log, Y linear
 _BKNAME_RE = re.compile(rb"<BKNAME>([^<]+)</BKNAME>")
 _TEXT_WINDOW = 20_000  # bytes scanned per layer for legend/annotation/source-hint text
-_TAG_SEARCH_SPAN = 2_000  # max bytes allowed between an anchor and its transition/step tags
-
-# Real-corpus form (item 33): `81 <id> <plen> 00 00 01` separates the X span
-# from the layer-geometry payload and the geometry from the Y span.
-_SEP_RE = re.compile(rb"\x81..\x00\x00\x01", re.DOTALL)
-_Y_START_SCAN = 6  # Y may start up to this many bytes past the nominal payload end
-
-
-def _plausible(v: float) -> bool:
-    return v == v and (v == 0.0 or 1e-9 <= abs(v) <= 1e9)
-
-
-def _decode_compact(chunk: bytes) -> float | None:
-    """1-3 significant bytes: BE top-N of the double, stored reversed."""
-    n = len(chunk)
-    be = bytes(reversed(chunk)) + b"\x00" * (8 - n)
-    v = struct.unpack(">d", be)[0]
-    return v if _plausible(v) else None
-
-
-def _decode_raw8(chunk: bytes) -> float | None:
-    if len(chunk) != 8:
-        return None
-    v = struct.unpack("<d", chunk)[0]
-    return v if _plausible(v) else None
-
 
 # ── specimen-form value spans (item 14) ───────────────────────────────────────
 
 
 def _value_candidates(b: bytes, pos: int, end: int) -> list[tuple[float, int]]:
-    """Every plausible ``(value, bytes_consumed)`` parse starting at ``pos``."""
+    """Every plausible ``(value, bytes_consumed)`` parse starting at ``pos``.
+
+    The bare (no-tag) raw8 shape is rejected when ``pos`` itself starts with a
+    byte in the real-form flag-token range ``0x81..0x8f`` (mirroring
+    ``_real_bare8``'s identical guard): a genuine specimen-form literal never
+    starts there, but a real-form flag token (e.g. ``89 01`` before an
+    RLE-compressed value) does, and would otherwise misdecode as a plausible-
+    looking bare double -- the false positive that made the rf_* oracle
+    quad's linear-X records (whose 8 leading bytes are flag+RLE, not a
+    literal) parse via the specimen path with a wrong ``x_from`` and a
+    type-byte reading that (unlike the true real-form flag, see
+    ``_real_y_log_flag``) carries no Y information at all."""
     avail = end - pos
     out: list[tuple[float, int]] = []
-    if avail >= 8:
+    if avail >= 8 and not (pos < end and 0x81 <= b[pos] <= 0x8F):
         v = _decode_raw8(b[pos : pos + 8])
         if v is not None:
             out.append((v, 8))
@@ -198,139 +207,10 @@ def _parse_pair(b: bytes, pos: int, end: int) -> tuple[float, float] | None:
     return candidates.pop() if len(candidates) == 1 else None
 
 
-# ── real-corpus-form value tokens (item 33) ───────────────────────────────────
-
-
-def _real_tagged(b: bytes, p: int, end: int) -> tuple[float, int] | None:
-    """``8T nn <nn bytes>``: payload reversed is the double's BE top-``nn``."""
-    if p + 2 > end:
-        return None
-    tag, nn = b[p], b[p + 1]
-    if not (0x81 <= tag <= 0x8F) or not (1 <= nn <= 8) or p + 2 + nn > end:
-        return None
-    v = _decode_compact(b[p + 2 : p + 2 + nn])
-    return (v, 2 + nn) if v is not None else None
-
-
-def _real_rle(b: bytes, p: int, end: int) -> tuple[float, int] | None:
-    """RLE-compressed 8-byte literal: ``c2`` = run of 5, ``c3`` = run of 6.
-
-    Lead form (marker at ``p+1``) and run-first form (marker at ``p``); the
-    byte after the repeated byte is a context/tag byte and is skipped; literal
-    suffix bytes complete the 8-byte LE double (see the module docstring).
-    """
-    for lead_len in (1, 0):
-        mpos = p + lead_len
-        if mpos + 3 > end:
-            continue
-        marker = b[mpos]
-        if marker == 0xC2:
-            run = 5
-        elif marker == 0xC3:
-            run = 6
-        else:
-            continue
-        suffix_len = 8 - lead_len - run
-        tok_end = mpos + 3 + suffix_len
-        if suffix_len < 0 or tok_end > end:
-            continue
-        raw = b[p : p + lead_len] + bytes([b[mpos + 1]]) * run + b[mpos + 3 : tok_end]
-        v = struct.unpack("<d", raw)[0]
-        if _plausible(v):
-            return (v, tok_end - p)
-    return None
-
-
-def _real_bare8(b: bytes, p: int, end: int) -> tuple[float, int] | None:
-    """Bare 8-byte LE literal. A leading byte in the tag range ``0x81..0x8f``
-    that failed to decode as a tagged value marks a flag/control position, not
-    a literal — no corpus literal starts with such a byte."""
-    if p + 8 > end or 0x81 <= b[p] <= 0x8F:
-        return None
-    v = _decode_raw8(b[p : p + 8])
-    return (v, 8) if v is not None else None
-
-
-def _real_candidates(b: bytes, p: int, end: int, bare: bool) -> list[tuple[float, int]]:
-    out: list[tuple[float, int]] = []
-    t = _real_tagged(b, p, end)
-    if t is not None:
-        out.append(t)
-    r = _real_rle(b, p, end)
-    if r is not None:
-        out.append(r)
-    if bare:
-        w = _real_bare8(b, p, end)
-        if w is not None:
-            out.append(w)
-        if p < end and not (0x81 <= b[p] <= 0x8F):
-            for k in (1, 2, 3):  # tag-less compact (seen right after a flag token)
-                if p + k <= end:
-                    v = _decode_compact(b[p : p + k])
-                    if v is not None:
-                        out.append((v, k))
-    return out
-
-
-def _real_fills(b: bytes, pos: int, end: int, n: int, bare: bool) -> list[tuple[float, ...]]:
-    """All ways to place exactly ``n`` value tokens filling ``[pos, end)``."""
-    if n == 0:
-        return [()] if pos == end else []
-    out: list[tuple[float, ...]] = []
-    for v, consumed in _real_candidates(b, pos, end, bare):
-        for rest in _real_fills(b, pos + consumed, end, n - 1, bare):
-            out.append((v, *rest))
-    return out
-
-
-def _real_span_pair(b: bytes, start: int, end: int, bare: bool) -> tuple[float, float] | None:
-    """``[from, to, step]`` (n=3) else ``[to, step]`` with from elided (n=2),
-    exact-fill; accepted only when the fill set at that arity is unique."""
-    for n in (3, 2):
-        fills = _real_fills(b, start, end, n, bare)
-        pairs = {(f[0], f[1]) if n == 3 else (0.0, f[0]) for f in fills}
-        if len(pairs) == 1:
-            return pairs.pop()
-        if len(pairs) > 1:
-            return None  # ambiguous: drop, never guess
-    return None
-
-
-def _real_x_flag_len(b: bytes, p: int, end: int) -> int:
-    """Deterministic length of the optional X flag token (see module docstring):
-    0 when the record opens with a tagged value, 1 for a bare ``91`` before a
-    run-first RLE value, else 2 (every other observed flag is 2 bytes)."""
-    if _real_tagged(b, p, end) is not None:
-        return 0
-    if p + 1 < end and b[p] == 0x91 and b[p + 1] in (0xC2, 0xC3):
-        return 1
-    return 2
-
-
-def _parse_real_record(
-    b: bytes, p: int, window_end: int
-) -> tuple[float, float, float, float] | None:
-    """Real-corpus axis record at anchor payload ``p``: ``(xf, xt, yf, yt)``."""
-    m1 = _SEP_RE.search(b, p, min(window_end, p + _TAG_SEARCH_SPAN))
-    if m1 is None:
-        return None
-    x_start = p + _real_x_flag_len(b, p, m1.start())
-    if x_start >= m1.start():
-        return None
-    xpair = _real_span_pair(b, x_start, m1.start(), bare=True)
-    if xpair is None:
-        return None
-    plen = b[m1.start() + 2]
-    y_lo = m1.start() + 6
-    m2 = _SEP_RE.search(b, y_lo + plen, min(window_end, y_lo + plen + _TAG_SEARCH_SPAN))
-    y_hi = m2.start() if m2 else min(window_end, y_lo + plen + 200)
-    # plen is a hint only: Y can start inside or a few bytes past the nominal
-    # geometry payload, so scan for the first uniquely exact-filling start.
-    for y_start in range(y_lo, min(y_lo + plen + _Y_START_SCAN, y_hi)):
-        ypair = _real_span_pair(b, y_start, y_hi, bare=False)
-        if ypair is not None:
-            return (*xpair, *ypair)
-    return None
+# Real-corpus-form (item 33) value tokens, span decoding, and the Y-scale
+# flag live in ``opju_axis_real_form.py`` (kept out of this file to stay under
+# the repo's 500-line god-module ceiling) — ``_parse_real_record`` imported
+# above is the entry point used below.
 
 
 # ── shared helpers ────────────────────────────────────────────────────────────
@@ -427,21 +307,28 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         window_end = anchors[idx + 1] if idx + 1 < len(anchors) else len(b)
         spec = _parse_specimen_record(b, p)
         type_byte: int | None
+        real_y_log: bool | None = None
         if spec is not None:
             x_from, x_to, y_from, y_to, type_byte = spec
         else:
             real = _parse_real_record(b, p, window_end)
             if real is None:
                 continue  # undecodable record: skip, never guess
-            x_from, x_to, y_from, y_to = real
+            x_from, x_to, y_from, y_to, real_y_log = real
             # the full specimen record may not parse (e.g. an X-log record's
             # varying filler) yet still carry the scale marker — read it directly
             type_byte = _scale_byte(b, p, window_end)
-        if type_byte is None:  # real-corpus form: no marker, heuristic for both
+        if type_byte is None:  # real-corpus form: no marker, heuristic for X
             x_log = _log_heuristic(x_from, x_to)
             y_log = _log_heuristic(y_from, y_to)
         else:
             x_log, y_log = _axis_scales(type_byte, x_from, x_to, y_from, y_to)
+        if real_y_log is not None:
+            # the real-form Y-scale flag (_real_y_log_flag) is exact and
+            # always wins: type_byte's 0x03/0x04 pair only ever isolates X in
+            # this form (see the module docstring), so it must never override
+            # a real Y reading with a stale/heuristic one.
+            y_log = real_y_log
         window = b[anchor : min(window_end, anchor + _TEXT_WINDOW)]
         texts = _texts_in(window)
         titles = [t for t in texts if not _AUTO_TITLE.match(t) and "\\l(" not in t]
