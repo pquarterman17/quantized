@@ -13,7 +13,7 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-04
+**Updated:** 2026-07-04 (overnight run)
 
 ---
 
@@ -280,24 +280,6 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 1 — High Impact
 
-23. **Origin-ASCII + `.ogs` export completeness** — extend
-    `format_origin_script` to what import now recovers: multi-dataset
-    export (one `.ogs` importing N CSVs into N named books), comments,
-    book display titles; golden tests for the emitted script
-    *Model: sonnet · independent.*
-
-24. **Native `.opj` writer (data)** — emit a CPYA project directly:
-    header line, column header/data blocks (10-byte records, NaN → the
-    missing-value sentinel), and windows-section worksheet definitions
-    (property + label blocks) so names/units/designations open intact
-    in ANY Origin version — the "hand files back to Origin colleagues"
-    lever, unlocked by the completed RE
-    *Model: sonnet · knowledge complete (items 1 + M1); verified via 30 + 31.*
-    - [ ] Data-only single-book writer, round-tripped through our reader
-    - [ ] Windows-section metadata writer (names/units/designations)
-    - [ ] Multi-book projects
-    - [ ] Route + UI hook (export menu alongside `.ogs`)
-
 ### Tier 2 — Medium Impact
 
 25. **COM "Send to Origin" (Windows-only optional)** — pywin32 behind a
@@ -325,30 +307,6 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 1 — High Impact
 
-28. **Ground-truth oracle suite** — realdata tests comparing
-    `read_origin_books` (and the item-8 `.opju` decoder when it lands)
-    against Origin's own exports in `specimens/ground_truth/<stem>/`:
-    book/sheet/column names, units, designations, row counts, and values
-    within rtol; auto-skips where the ground truth is absent
-    *Model: sonnet · the strongest parity layer; oracle files exist.*
-
-29. **Corpus sweep, malformed-input + perf suite** —
-    *Model: sonnet/haiku.*
-    - [ ] Sweep: every corpus file parses or raises `OriginProjectError`
-          (never crashes or hangs)
-    - [ ] Fuzz fixtures: truncated blocks, lying sizes, huge nrows,
-          non-ASCII names, zero columns, label without property block
-    - [ ] Version-matrix anchors: `.opj` 4.3227 + 4.3380; `.opju`
-          4.3380 + 4.3811 (trial re-saves in `specimens/converted/`)
-    - [ ] Perf budget: PNR.opj (127 MB) parses within a set time/memory
-          bound (realdata marker)
-
-30. **Round-trip tests** — quantized → `.opj` writer → our reader
-    equality (data + names, CI-safe synthetic); import → `.ogs`
-    re-export consistency (designations/labels preserved); later
-    `.opju` decode → `.opj` write → reader equality
-    *Model: sonnet · needs 24 for the writer legs.*
-
 ### Tier 2 — Medium Impact
 
 31. **Trial-window validation log** — a documented, repeatable manual
@@ -361,6 +319,20 @@ no documented real-Origin validation procedure for the trial window (31).
 
 
 ## Completed
+
+- ~~**#28 Ground-truth oracle suite**~~ (2026-07-04) — per-stem realdata tests
+  vs Origin's own dumps; auto-activates per reader (`1181ac7`).
+- ~~**#24 Native .opj writer**~~ (2026-07-04) — opj_bytes/write_opj (CPYA data
+  + windows metadata, multi-book) + POST /api/export/opj; CI round-trips via
+  our reader (`7a41f07`); real-Origin open check remains on item 31's list.
+- ~~**#23 .ogs multi-book export**~~ (2026-07-04) —
+  format_origin_project_script + POST /api/export/origin-project; book
+  display titles round-trip (`cc8f5ed`).
+- ~~**#29 Sweep/fuzz/perf suite**~~ (2026-07-04) — malformed-input matrix,
+  corpus sweep, version anchors, 127 MB perf budget; caught+fixed a writer
+  non-latin1 crash (`ac7b905`).
+- ~~**#30 Round-trips (CI legs)**~~ (2026-07-04) — writer→reader equality +
+  API round-trip shipped with #24; the real-Origin leg lives in item 31.
 
 - ~~**#3 Multi-book extraction backend**~~ (2026-07-04) — `read_origin_books()` returns every workbook as a DataStruct (per-book
   names/units + shared inventory); single-file contract unchanged. Feeds item 16.
