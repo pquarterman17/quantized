@@ -20,7 +20,7 @@ describe("MetadataCard", () => {
 
   it("truncates long values for display (full text stays in the tooltip contract)", () => {
     const log = "x".repeat(1000);
-    render(<MetadataCard active={ds({ origin_results_log: log })} />);
+    render(<MetadataCard active={ds({ raw_header: log })} />);
     const cell = screen.getByText(/^x+…$/);
     expect(cell.textContent!.length).toBeLessThan(300);
   });
@@ -33,6 +33,23 @@ describe("MetadataCard", () => {
   it("hides the internal x-column wiring keys", () => {
     render(<MetadataCard active={ds({ x_column_name: "H", other: "v" })} />);
     expect(screen.queryByText("x_column_name")).toBeNull();
+    expect(screen.getByText("other")).toBeInTheDocument();
+  });
+
+  it("hides the Origin provenance keys (they have a dedicated card)", () => {
+    render(
+      <MetadataCard
+        active={ds({
+          origin_results_log: "log text",
+          origin_results_log_records: [{ timestamp: "t", operation: "op", params: {} }],
+          origin_notes: { Notes1: "hello" },
+          other: "v",
+        })}
+      />,
+    );
+    expect(screen.queryByText("origin_results_log")).toBeNull();
+    expect(screen.queryByText("origin_results_log_records")).toBeNull();
+    expect(screen.queryByText("origin_notes")).toBeNull();
     expect(screen.getByText("other")).toBeInTheDocument();
   });
 });

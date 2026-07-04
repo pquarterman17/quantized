@@ -329,6 +329,25 @@
   white-space: nowrap;
 }
 
+/* ── Provenance row (Origin results-log record, nested <details>) ───────── */
+.qz-provenance-row {
+  padding: 3px 0;
+  font-size: var(--font-size-sm);
+}
+.qz-provenance-row > summary {
+  cursor: default;
+  list-style: none;
+}
+.qz-provenance-row > summary::-webkit-details-marker { display: none; }
+.qz-provenance-row > summary::before {
+  content: "▸ ";
+  font-size: 9px;
+  color: var(--text-faint);
+}
+.qz-provenance-row[open] > summary::before {
+  content: "▾ ";
+}
+
 /* ── Status dot ────────────────────────────────────────────────────────── */
 .qz-dot {
   display: inline-block;

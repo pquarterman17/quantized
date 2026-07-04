@@ -9,6 +9,7 @@ import MacroCard from "./MacroCard";
 import MapCard from "./MapCard";
 import MetadataCard from "./MetadataCard";
 import NotesCard from "./NotesCard";
+import OriginProvenanceCard from "./OriginProvenanceCard";
 import RefLinesCard from "./RefLinesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
 import StatsCard from "./StatsCard";
@@ -49,6 +50,8 @@ export default function Inspector() {
       <StatsCard active={active} />
 
       <MetadataCard active={active} />
+
+      <OriginProvenanceCard active={active} />
 
       <Card title="Axes" defaultOpen={false}>
         <label className="qz-check">
