@@ -36,6 +36,7 @@ written (annotated inline below).
 5. [Sheet hierarchy (`Book@N` pseudo-books)](#5-sheet-hierarchy-bookn-pseudo-books)
 6. [Figures (graph windows)](#6-figures-graph-windows)
    - 6.1 [`.opj` figures — Graph → Layer → Curve](#61-opj-figures--graph--layer--curve)
+     - 6.1.1 [Curve→column binding (item 11, `.opj`, solved)](#611-curvecolumn-binding-item-11-opj-solved)
    - 6.2 [`.opju` figures](#62-opju-figures)
      - 6.2.1 [Curve→column binding (item 35, `.opju` only, partial)](#621-curvecolumn-binding-item-35-opju-only-partial)
    - 6.3 [Origin → quantized figure mapping + gap list](#63-origin--quantized-figure-mapping--gap-list)
@@ -79,10 +80,16 @@ record) — pinned against a new known-content oracle
 `Hc2 data.opju` corpus file (1096 columns, 100% clean).
 
 **Known, permanent gaps** (see [§11](#11-open-items) for detail): the
-DataPlot curve→column selector (which exact columns a curve plots) is
-undecoded in `.opj`; `.opju`'s IS decoded (§6.2.1) but a per-figure
-attribution gap means restored figures still commonly resolve to a *book*,
-not exact column pairs, in both containers. A native `.opj` writer
+DataPlot curve→column selector is now decoded in **both** containers — `.opj`
+solved 2026-07-04 (§6.1.1, item 11: every curve's own global column id,
+independently confirmed against that column's own workbook-storage block;
+100% precision, 45/70 combined Moke+XRD refs, the rest structurally
+unreachable) and `.opju` (§6.2.1, item 35: an 8-byte per-curve ordinal token,
+100% precision but recall stays 30.6% on the real corpus). `.opju` still has
+a per-figure attribution gap (which curve belongs to which decoded figure)
+that `.opj` does not — `.opj`'s curves are scoped by the same window-based
+walk the rest of the figure decode already uses, so this is not a shared
+limitation. A native `.opj` writer
 round-trips through our own reader but does **not** yet load in real Origin
 (item 34, open); full sheet-hierarchy UI (nested Book→Sheet trees) is out
 of scope by design — extra sheets surface as flat pseudo-books instead.
@@ -846,9 +853,14 @@ af 02 00 00  03 00 00 00   ...
 (confirmed `size - bodyLen == 89` on every DataPlot across the corpus — so
 the record is an **89-byte header + variable body**), a small enum
 (6 in all curves seen — plot-type/style?), a repeated `bodyLen`, another
-small enum (3 or 6 — color/axis?). **The column selector is inside the
-undecoded body** (no ASCII, no plain indices found) — this is the
-permanent curve→column-binding gap (§6.3, §11).
+small enum (3 or 6 — color/axis?). This first `type=0x07` + style +
+DataPlot pair is a **fixed template**, always exactly 2 per layer
+regardless of the real curve count (confirmed: Moke's `Graph2`/`Graph8`/
+`Graph9`, 1 real curve each, and `Graph3`, 3 real curves, all show exactly
+2) — its DataPlot body carries no column selector (no ASCII, no plain
+indices found) and its purpose is not otherwise characterized here. The
+**real, per-plotted-curve selector lives in a separate record** — see
+§6.1.1, solved 2026-07-04.
 
 **How a curve references its dataset — what IS known:** workbook binding
 is at the **layer level**, by display short-name (the layer-continuation
@@ -856,7 +868,110 @@ block names its source book once, e.g. Moke `Pd1` @~offset 208, XRD `Pd`)
 — *not* the internal `BookN`; resolving `Pd1 → Book4/Book5` needs the book
 short-name ↔ internal-name map from §4.1. Curve count/identity is
 authoritative from the legend `\l()` list + the count of `type=0x07`
-objects. *Which* columns of the book are X/Y is **not** decoded.
+objects (`figures.py`'s `n_curves`, unchanged by §6.1.1). *Which* columns
+of the book are X/Y **is now decoded exactly** — see §6.1.1.
+
+#### 6.1.1 Curve→column binding (item 11, `.opj`, solved 2026-07-04)
+
+`opj_curves.py`, wired into `figures.extract_figures`'s `"curves"` field
+(same `{"book", "x", "y"}` shape as `.opju`'s §6.2.1). Long presumed
+*permanently* undecoded (the DataPlot body genuinely carries no selector,
+per §6.1 above) — solved by looking one level up from the DataPlot, at a
+previously un-investigated record immediately in front of it:
+
+```
+01 00 00 00  <id:u16 LE>  00 01 00 00  00 00 a1 00  ...
+```
+
+The first 6 bytes are the whole story: a fixed `01 00 00 00` marker, then a
+little-endian `u16` that is the plotted column's own **global, project-wide,
+monotonically-assigned serial id** — the same id independently stamped in
+that column's own workbook-storage block (§4.1), at the identical offset
+(4, u16 LE). **Book and column resolve together via this one id — there is
+no separate book selector to find**, since ids are assigned once per column
+across the whole project, never restarted per book.
+
+**Detecting a real curve anchor** is content-based, not size-based: the
+record's overall size is a per-file/build constant (519 B in `Moke.opj`,
+515 B in `XRD.opj`) that carries no meaning, so the detector instead
+requires the `01 00 00 00` marker to be *immediately followed* by a block
+opening with the DataPlot magic itself (`58 00 00 00 98 03 40 b3`, the exact
+bytes documented above) — this pairing is what a real curve looks like, and
+nothing else in a graph window matches both halves at once.
+
+**How this was found (the designed experiment).** Moke's `Graph8` and
+`Graph9` both plot `[Book4]Sheet1!B` and have byte-identical block-size
+sequences end to end. Diffing them block-by-block isolates pure *noise*:
+every difference was a per-graph object/window creation-order serial
+counter (a small, per-window-pair constant offset, e.g. always +7 between
+these two windows — the same "creation-order counter, confirmed unrelated
+to column choice" profile item 35 already documented for `.opju`'s `flag`
+byte) or the window's own creation index (off by exactly 1 between
+adjacent windows). Diffing `Graph8` against `Graph2` (same book, different
+column `O`, same block-size alignment) with the same method isolates
+exactly one block that is IDENTICAL between `Graph8`/`Graph9` (the noise
+pair) but DIFFERENT between `Graph8`/`Graph2` (the signal pair): the
+519-byte curve-anchor block. Its first differing byte looked, at first,
+like a per-book column ordinal — Book2's `D`/`H`/`L` curves read 12/16/20
+(exactly `letter_position + 8`) and Book3's `B`/`C`/`D`/`E` read 26/27/28/29
+(exactly `letter_position + 24`) — but Book4 broke that model outright:
+`B`=31, `H`=94, `O`=93, `M`=53, `N`=92, and no additive constant (letter
+position or creation-order position) fits all five. The values were still
+**unique per (book, column) pair** across all 15 pairs tested (8
+independently-authored graphs, including `Graph7`/`Graph10` which each mix
+`Book4` and `Book5` curves in one window) — exactly the profile of a real
+per-column identifier, just not one derivable from position within its own
+book. Cross-checking the same 16-bit value against each column's own
+≥500-byte storage block in the windows section (located independently, via
+that column's `"<Book>_<Col>\0"` dataset-name string — nothing to do with
+any graph) found it verbatim at the identical relative offset — 5-for-5 on
+the first pass, then every one of the 45 validated curves below.
+
+**X is a structural inference**, exactly mirroring `.opju`'s §6.2.1: no
+oracle (Moke's or XRD's `index.json`) records which column is plotted as X,
+only the axis *range* — so `x` is inferred as the book's own designated-X
+column (primary sheet, `windows.py`'s designation enum value `3`), falling
+back to the sheet's first column when none is explicitly marked. This is
+**not verified against any oracle**, here or in `.opju` — a documented
+structural assumption, not a decoded value.
+
+**Validation (2026-07-04, both required oracle files):**
+
+| file | oracle refs | correct | wrong | recall | unreachable (why) |
+|------|------------:|--------:|------:|-------:|--------------------|
+| `Moke.opj` | 46 | 39 | **0** | 84.8% | `FitLine`/`Residual` (7 refs) — the FitLinear analysis's own auto-generated report graphs have no `00 00 <Name> 00` window header anywhere in the block stream (confirmed by an exhaustive string search); they live in the FitLinear analysis's own embedded storage |
+| `XRD.opj` | 24 | 6 | **0** | 25.0% | 18 `sparkline*` refs — a structurally different feature (per-COLUMN inline mini-plots embedded in the worksheet, not separate Graph windows; no header, and a whole-file scan for the curve-anchor pattern finds exactly 6 hits total in the entire file, all inside `Graph1`) |
+| **aggregate** | **70** | **45** | **0** | **64.3%** | two structurally distinct, out-of-scope window kinds, not undecoded curves |
+
+Precision is **100%** on every reachable curve — every graph a
+`00 00 <Name> 00` window header can locate at all decodes exactly, including
+multi-curve (`Graph3`: 3 curves, Book2 `D`/`H`/`L`), multi-layer
+(`Graph4`/`Graph10`: 2-4 layers), and cross-book-in-one-window
+(`Graph7`/`Graph10`: `Book5` + `Book4` curves in the same window; XRD
+`Graph1`: 6 curves across 6 different books) cases. The 25-ref shortfall is
+entirely accounted for by two window kinds this decoder cannot see at all
+(not curves it saw and mis-decoded) — a recall gap with a known, structural
+cause, not an open decoding question. Precision/recall reproducible via
+`tools/origin_trial/score_curve_bindings_opj.py` (a standalone rescorer,
+sibling to `.opju`'s `score_curve_bindings.py`) and asserted by
+`tests/test_io_origin_figures_opj_curves.py`.
+
+**A pre-existing, unrelated bug surfaced along the way, not fixed here.**
+`windows.window_metadata`'s column-block detector
+(`windows._is_column_block`) requires `payload[0x06] == 0x0B`, which most of
+`Moke.opj`'s `Book4`/`Book1` Sheet1 columns fail (they carry `0x09` there
+instead — only a handful, e.g. `Book4`'s `H`, carry `0x0B`). Because so few
+of Book4's real primary-sheet columns are ever "seen", the "sheet 2
+restarted" guard that stops `window_metadata` from overwriting primary-sheet
+data with a later sheet's never triggers for Book4 — so when its
+`FitLinear1` report sheet's columns (which DO pass, since their header byte
+is `0x0B`) come along, they get committed as if they were still primary-sheet
+data, silently mislabeling `Book4`'s `A`-`G` designations/long-names with
+`FitLinear1`'s instead. This is orthogonal to the id-based curve/column
+decode above (`opj_curves.py` uses its own, more permissive column detector
+and never calls into `windows.py`) and out of scope for item 11 — recorded
+here as a discovered side-finding per the "surface it, fix deliberately,
+never silently" porting principle, not patched in this pass.
 
 **Annotations.** Text (`type=0x00`, `Text`/`Text1`/`Text2` — e.g. XRD Bragg
 peak labels `Si (004)`, `MnN (004)`) and line (`type=0x22`, e.g. XRD
@@ -1271,14 +1386,22 @@ plot-state-snapshot dicts above):
 **Permanent gaps** (Origin features quantized cannot express / recover
 yet):
 
-- **Curve→column binding.** `.opj`'s DataPlot column selector is
-  permanently undecoded — restored figures resolve to a *book*, not exact
-  column pairs. `.opju`'s curve token IS decoded (§6.2.1) but per-figure
-  *attribution* (which curve belongs to which decoded figure) is a lossy
-  heuristic that drops most curves for composite/derived real-corpus
-  graphs — so `.opju` figures commonly still restore to the whole book
-  rather than each curve's specific X/Y pair, same as `.opj` in practice
-  (plan item 35, open: no oracle exists to close the attribution gap).
+- ~~**Curve→column binding (`.opj`)**~~ — **solved 2026-07-04** (§6.1.1,
+  item 11): every curve's own global column id, independently confirmed
+  against that id stamped in the column's own workbook-storage block. 100%
+  precision, 45/70 (64.3%) of the combined Moke+XRD oracle — the remaining
+  25 refs are two structurally distinct, out-of-reach window kinds
+  (FitLinear report graphs; per-column sparklines), not undecoded curves.
+  No longer a gap for `.opj`.
+- **Curve→column binding (`.opju`) — per-figure attribution.** `.opju`'s
+  curve token IS decoded (§6.2.1) but per-figure *attribution* (which curve
+  belongs to which decoded figure) is a lossy heuristic that drops most
+  curves for composite/derived real-corpus graphs — so `.opju` figures
+  commonly still restore to the whole book rather than each curve's
+  specific X/Y pair (plan item 35, open: no oracle exists to close the
+  attribution gap). Unlike `.opj` (whose curves are scoped by the same
+  window-based walk the rest of the figure decode already uses), this
+  attribution problem is specific to `.opju`'s regex/anchor-based scan.
 - **Multi-layer free layout.** Origin allows N independently
   positioned/sized layers; quantized has single-plot + stacked panels +
   one inset. >2 layers or non-stacked overlays are lossy.
@@ -1437,9 +1560,14 @@ reading only this doc:
 - **Item 34 — `.opj` writer real-Origin load failure.** Tier-1, open. See
   §8.
 - **Item 35 — figure curve→dataset column binding.** `.opj`'s DataPlot
-  column selector (§6.1) stays permanently undecoded. `.opju`'s IS decoded
-  (§6.2.1, `opju_curves.py`) and shipped in `"curves"`, gated on an
-  independently-validated column designation for precision. Reworked
+  column selector is **solved** (§6.1.1, item 11, `opj_curves.py`,
+  2026-07-04): 100% precision, 45/70 (64.3%) of the combined Moke+XRD
+  oracle, the shortfall being two structurally out-of-reach window kinds
+  (FitLinear report graphs; per-column sparklines), not undecoded curves.
+  `.opju`'s IS also decoded (§6.2.1, `opju_curves.py`) and shipped in
+  `"curves"`, gated on an independently-validated column designation for
+  precision, but stays open on recall (30.6%, per-figure attribution).
+  Reworked
   2026-07-04 against a real per-plot oracle (`plots.json`,
   `tools/origin_trial/export_plot_refs.py`): found and fixed a false
   positive (the `__BCO` per-book boilerplate, §6.2.1) that was misattributed

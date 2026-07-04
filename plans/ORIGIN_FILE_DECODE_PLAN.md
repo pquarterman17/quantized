@@ -13,7 +13,19 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-04 (added items 34/35 — the `.opj` writer real-Origin
+**Updated:** 2026-07-04 (item 35's `.opj`-side sub-question — item 11's
+original curve→column selector, long presumed permanently undecodable — is
+now SOLVED: every curve carries a small anchor record holding the plotted
+column's own global, project-wide serial id, independently confirmed
+against that same id stamped in the column's own workbook-storage block;
+book and column resolve together via this one id, no separate book selector
+needed. Validated 45/45 correct (100% precision), 45/70 (64.3%) of the full
+Moke+XRD oracle — the remaining 25 refs are two structurally distinct,
+out-of-reach window kinds (FitLinear analysis report graphs; per-column
+sparklines), not undecoded curves. Shipped in `opj_curves.py`, wired into
+`figures.py`'s `"curves"` field. `.opju`'s recall (30.6%) is unaffected and
+item 35 stays open for that half — see item text below; added items 34/35 —
+the `.opj` writer real-Origin
 load failure promoted to a Tier-1 item now that a persistent student
 license enables the fix loop, and figure curve→dataset binding tracked
 explicitly; items 6/10/14/17/18/19/20/22/33 shipped earlier today — notes
@@ -230,8 +242,58 @@ no documented real-Origin validation procedure for the trial window (31).
     global ordinal, gated against an independently-validated column
     designation (X is a structural inference — the byte position a
     naive read would expect to hold it never varied across ~44 samples,
-    so it isn't reported as decoded). `.opj`'s selector remains
-    permanently undecoded (item 11's original sub-question).
+    so it isn't reported as decoded).
+    **`.opj`'s selector SOLVED, 2026-07-04 (item 11's original sub-
+    question, long presumed permanent) — a fresh, hypothesis-driven pass
+    given a per-graph oracle now exists.** Designed experiment: byte-diff
+    Moke's `Graph8`/`Graph9` (both plot `[Book4]Sheet1!B`, byte-identical
+    block-size sequences) to isolate noise (every difference was a
+    per-object/window creation-order counter, never column-shaped), then
+    diff `Graph8`/`Graph2` (same book, different column) with the same
+    alignment to isolate signal: the 519-byte "curve anchor" block
+    immediately before each curve's DataPlot style+body pair. Its first
+    differing byte looked like a per-book column ordinal at first
+    (Book2/Book3 fit `letter_position + book_constant` cleanly) but Book4
+    broke that model outright — no additive constant fit any of its 5
+    tested columns. The values were still unique per (book, column)
+    across 15 pairs / 8 graphs, though: cross-checking the same 16-bit
+    value against each column's OWN storage block in the windows section
+    (an unrelated part of the file, located via that column's
+    `"<Book>_<Col>\0"` dataset-name string) found it verbatim, at the
+    identical offset (4, u16 LE) — the id is a global, project-wide,
+    monotonically-assigned column serial number, not a per-book ordinal.
+    **Book and column resolve together via this one id — no separate
+    book selector exists to find.** Anchor detection is content-based
+    (`01 00 00 00` marker + immediately followed by the already-
+    documented DataPlot magic `58 00 00 00 98 03 40 b3`), not size-based
+    (519 B in `Moke.opj`, 515 B in `XRD.opj` — a per-file/build constant,
+    confirmed not part of the encoding by testing both files). X is
+    inferred structurally (the book's own designated-X column), exactly
+    mirroring `.opju`'s unverified X inference — no oracle gives an
+    expected X column in either container. **Validated 45/45 correct
+    (100% precision), 45/70 (64.3%) of the combined Moke+XRD oracle**:
+    Moke 39/46 (`FitLine`/`Residual`, the FitLinear analysis's own
+    auto-generated report graphs, have no `00 00 <Name> 00` window header
+    anywhere in the block stream — structurally unreachable, not a decode
+    failure); XRD 6/6 on `Graph1` (all cross-book, one curve per book,
+    confirming the "one id resolves book+column together" claim across 6
+    different books in a single layer) — the 18 `sparkline*` refs are a
+    structurally different feature (per-column inline mini-plots, no
+    separate Graph window and no curve-anchor record anywhere in the
+    file at all: a whole-file scan for the anchor pattern finds exactly
+    6 hits total, all inside `Graph1`). Shipped in `opj_curves.py`,
+    wired into `figures.py`'s `"curves"` field (same shape as `.opju`'s).
+    Tests: `tests/test_io_origin_figures_opj_curves.py` (synthetic +
+    realdata); standalone rescorer `tools/origin_trial/
+    score_curve_bindings_opj.py`. Full trail in `opj_curves.py`'s module
+    docstring and `docs/origin_project_format.md` §6.1. A pre-existing,
+    unrelated bug was surfaced (not fixed) along the way:
+    `windows.window_metadata`'s stricter column-block check silently
+    mismaps `Moke.opj`'s `Book4` Sheet1 designations/long-names against
+    its `FitLinear1` report sheet — noted in `opj_curves.py`'s docstring,
+    left for a deliberate follow-up (out of scope for item 11/35).
+    `.opju`'s recall (30.6%) is untouched by this pass; item 35 stays
+    open for that half only.
     **Reworked 2026-07-04** against a real per-plot oracle
     (`export_plot_refs.py`'s `range -w` LabTalk recipe succeeded where
     `export_ground_truth.py`'s `range __rp`/`layer.nplots` came back

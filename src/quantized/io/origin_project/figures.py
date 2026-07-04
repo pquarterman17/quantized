@@ -28,9 +28,17 @@ The recoverable content is the plot-state snapshot the owner asked for: axis
 ranges, an exact Y-scale flag (falling back to the decade heuristic only
 when the flag byte pair is unrecognized), an X-scale decade heuristic (a
 positive axis spanning ≥ 3 decades reads as log — no isolated X flag found),
-titles/annotations, and the curve count. The curve→column selector lives in
-the undecoded DataPlot body, so figures name their source only loosely
-(``source_hint``).
+titles/annotations, the curve count, and — **solved 2026-07-04, item 11** —
+an exact per-curve ``{book, x, y}`` column binding (the ``"curves"`` field,
+same shape as ``.opju``'s). See ``opj_curves.py``'s module docstring for the
+full byte-level trail: every curve carries a small "anchor" record right
+before its DataPlot style+body pair, holding the plotted column's own
+global, project-wide serial id (independently confirmed against each
+column's own storage block in the windows section) — book and column are
+both resolved by this one id; X is a structural inference (the book's own
+designated-X column), unverified against any oracle, exactly like
+``.opju``. Figures still also carry the looser ``source_hint`` (the layer's
+source book display name) for cases the per-curve binding can't reach.
 """
 
 from __future__ import annotations
@@ -40,6 +48,7 @@ import struct
 from typing import Any
 
 from quantized.io.origin_project.container import walk_blocks
+from quantized.io.origin_project.opj_curves import book_x_columns, column_id_map, extract_curves
 from quantized.io.origin_project.windows import _cstring, _is_window_header
 
 __all__ = ["extract_figures"]
@@ -108,12 +117,15 @@ def _texts_in(payload: bytes) -> list[str]:
 def extract_figures(b: bytes) -> list[dict[str, Any]]:
     """Every graph window in a CPYA project as a plot-state snapshot dict."""
     blocks = [(size, payload) for size, payload in walk_blocks(b) if size]
+    id_map = column_id_map(blocks)
+    x_columns = book_x_columns(blocks)
     figures: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
+    fig_start = 0
     n_curves = 0
     texts: list[str] = []
 
-    def flush() -> None:
+    def flush(end_idx: int) -> None:
         nonlocal current, n_curves, texts
         if current is None:
             return
@@ -121,6 +133,9 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
         legend_ns = [int(n) for t in texts for n in _LEGEND_RE.findall(t)]
         current["n_curves"] = max(legend_ns) if legend_ns else n_curves
         current["annotations"] = titles[:12]
+        # item 11: per-curve {book, x, y} binding across the whole window
+        # (all layers), same aggregation level n_curves already uses.
+        current["curves"] = extract_curves(blocks, fig_start, end_idx, id_map, x_columns)
         figures.append(current)
         current, n_curves, texts = None, 0, []
 
@@ -131,11 +146,12 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
         if name is not None:
             nxt = blocks[i + 1][1] if i + 1 < len(blocks) else b""
             if len(nxt) >= 90 and nxt[:4] == b"\x00\x00\x1f\x00":
-                flush()  # a new GRAPH window begins
+                flush(i)  # a new GRAPH window begins
                 x_from, x_to = _axis(nxt, 15)
                 y_from, y_to = _axis(nxt, 58)
                 hint = _cstring(nxt, 208, 24) or ""
                 y_log = _y_scale_flag(nxt)
+                fig_start = i
                 current = {
                     "name": name,
                     "x_from": x_from,
@@ -148,12 +164,12 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
                 }
                 i += 2
                 continue
-            flush()  # a worksheet (or other) window ends any open graph
+            flush(i)  # a worksheet (or other) window ends any open graph
         elif current is not None:
             if size == 133 and len(payload) > 2 and payload[2] == 0x07:
                 n_curves += 1
             elif size < 1200:
                 texts.extend(_texts_in(payload))
         i += 1
-    flush()
+    flush(len(blocks))
     return figures
