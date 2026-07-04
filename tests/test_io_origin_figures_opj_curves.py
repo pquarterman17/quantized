@@ -42,12 +42,17 @@ def _window_header(name: str) -> bytes:
     return _block(payload)
 
 
-def _layer_block(x_from: float, x_to: float, y_from: float, y_to: float) -> bytes:
+def _layer_block(
+    x_from: float, x_to: float, y_from: float, y_to: float, *, head: int = 0x1F
+) -> bytes:
     """The layer-continuation block read immediately after a graph header:
-    head ``00 00 1f 00``, axis doubles at 15/23 (X) and 58/66 (Y) --
-    ``figures.py``'s ``_axis``/``_y_scale_flag`` layout."""
+    head ``00 00 <head> 00``, axis doubles at 15/23 (X) and 58/66 (Y) --
+    ``figures.py``'s ``_axis``/``_y_scale_flag`` layout. ``head`` defaults to
+    the ordinary 0x1f marker (a window's first layer, or a subsequent
+    OVERLAID layer, e.g. double-Y); pass 0x17 for a subsequent STACKED/
+    TILED-PANEL layer (see ``figures.py``'s ``_LAYER_HEAD_BYTES``)."""
     payload = bytearray(240)
-    payload[0:4] = b"\x00\x00\x1f\x00"
+    payload[0:4] = bytes([0, 0, head, 0])
     struct.pack_into("<d", payload, 15, x_from)
     struct.pack_into("<d", payload, 23, x_to)
     struct.pack_into("<d", payload, 58, y_from)
@@ -257,10 +262,13 @@ def test_extract_curves_unknown_book_dropped() -> None:
 # ── synthetic integration test through figures.py ─────────────────────────────
 
 
-def test_figures_carries_curves_across_multiple_layers() -> None:
-    """A two-layer graph (double-Y-style) aggregates curves from BOTH layers
-    into the one figure dict's ``"curves"`` list -- the same aggregation
-    level ``n_curves`` already uses."""
+def test_figures_scopes_curves_per_layer_not_merged_across_the_window() -> None:
+    """Item 36: a two-layer graph (double-Y-style) now yields ONE figure dict
+    PER LAYER, each carrying only ITS OWN layer's curves -- not one dict
+    merging both layers' curves together (the pre-item-36 behavior). Curve
+    attribution is positional: a curve anchor belongs to the layer whose
+    layer-continuation record precedes it (see ``figures.py``'s
+    ``_build_layer``)."""
     blob = _synthetic_opj(
         _window_header("BookOne"),
         _column_block("A", cid=1, designation=3),
@@ -275,10 +283,45 @@ def test_figures_carries_curves_across_multiple_layers() -> None:
         _curve(cid=22),
     )
     figs = extract_figures(blob)
-    assert len(figs) == 1
+    assert len(figs) == 2
+    assert [f["layer"] for f in figs] == [1, 2]
+    assert [f["name"] for f in figs] == ["Graph1", "Graph1"]
+    assert figs[0]["curves"] == [{"book": "BookOne", "x": "A", "y": "B"}]
+    assert figs[1]["curves"] == [{"book": "BookTwo", "x": "A", "y": "C"}]
+    assert (figs[0]["y_from"], figs[0]["y_to"]) == (0.0, 100.0)
+    assert (figs[1]["y_from"], figs[1]["y_to"]) == (-50.0, 50.0)
+
+
+def test_figures_stacked_panel_layer_curves_attributed_correctly() -> None:
+    """The rarer 0x17 "stacked/tiled panel" layer-head byte (mirroring
+    Moke's real Graph4) is attributed the same way as an ordinary 0x1f
+    layer: its curves are the anchors between IT and the window's end (or
+    the next layer)."""
+    blob = _synthetic_opj(
+        _window_header("Book3"),
+        _column_block("A", cid=1, designation=3),
+        _column_block("B", cid=2, designation=0),
+        _column_block("C", cid=3, designation=0),
+        _column_block("D", cid=4, designation=0),
+        _column_block("E", cid=5, designation=0),
+        _window_header("Graph4"),
+        _layer_block(0.9, 3.1, -50.0, 3000.0),
+        _curve(cid=2),
+        _curve(cid=3),
+        _layer_block(0.9, 3.1, 400.0, 1500.0, head=0x17),
+        _curve(cid=4),
+        _curve(cid=5),
+    )
+    figs = extract_figures(blob)
+    assert len(figs) == 2
+    assert [f["layer"] for f in figs] == [1, 2]
     assert figs[0]["curves"] == [
-        {"book": "BookOne", "x": "A", "y": "B"},
-        {"book": "BookTwo", "x": "A", "y": "C"},
+        {"book": "Book3", "x": "A", "y": "B"},
+        {"book": "Book3", "x": "A", "y": "C"},
+    ]
+    assert figs[1]["curves"] == [
+        {"book": "Book3", "x": "A", "y": "D"},
+        {"book": "Book3", "x": "A", "y": "E"},
     ]
 
 
@@ -382,15 +425,21 @@ def test_realdata_curve_bindings_precision_and_recall_floor(
     total_oracle = sum(len(v) for v in oracle.values())
 
     figs = extract_figures(src.read_bytes())
-    by_name = {f["name"]: f for f in figs}
+    # item 36: a multi-layer window now yields several dicts sharing the same
+    # "name" (one per layer) -- merge their curves back together, in layer
+    # order, to compare against the oracle's own cross-layer flattening
+    # (`_oracle_plots_by_graph`).
+    by_name: dict[str, list[dict[str, str]]] = {}
+    for f in sorted(figs, key=lambda f: f["layer"]):
+        by_name.setdefault(f["name"], []).extend(f["curves"])
 
     correct = 0
     wrong: list[tuple[str, tuple[str, str]]] = []
     for gname, expected in oracle.items():
-        f = by_name.get(gname)
-        if f is None:
+        curves = by_name.get(gname)
+        if curves is None:
             continue  # unreachable window (FitLine/Residual/sparklines) -- not a wrong answer
-        decoded = [(c["book"], c["y"]) for c in f["curves"]]
+        decoded = [(c["book"], c["y"]) for c in curves]
         remaining = list(expected)
         for d in decoded:
             if d in remaining:
@@ -404,3 +453,50 @@ def test_realdata_curve_bindings_precision_and_recall_floor(
         f"{stem}: expected exactly {n_expected_reachable} correct curves "
         f"(out of {total_oracle} oracle refs), got {correct}"
     )
+
+
+@pytest.mark.realdata
+def test_realdata_moke_multi_layer_windows_split_per_layer() -> None:
+    """Item 36: Moke's three multi-layer windows, checked layer-by-layer (not
+    flattened) -- both the axis ranges AND the exact per-layer ``(book,
+    column)`` curve sets must match ``ground_truth/Moke/index.json`` one
+    layer at a time. ``Graph10`` is the structurally interesting case: its 4
+    layers are the literal union of ``Graph7``'s 2 + ``Graph4``'s 2, so this
+    also confirms curve attribution doesn't bleed across a composite
+    window's layer boundaries."""
+    src = _CORPUS / "Moke.opj"
+    index_path = _GT / "Moke" / "index.json"
+    if not src.exists() or not index_path.exists():
+        pytest.skip("corpus file/ground-truth for 'Moke' not present on this machine")
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    oracle_layers = {g["graph"]: g["layers"] for g in index["graphs"]}
+
+    figs = extract_figures(src.read_bytes())
+    by_name: dict[str, list[dict[str, object]]] = {}
+    for f in figs:
+        by_name.setdefault(f["name"], []).append(f)
+    for entries in by_name.values():
+        entries.sort(key=lambda f: f["layer"])  # type: ignore[arg-type, return-value]
+
+    for gname in ("Graph4", "Graph7", "Graph10"):
+        expected_layers = oracle_layers[gname]
+        got_layers = by_name[gname]
+        assert len(got_layers) == len(expected_layers), (
+            f"{gname}: expected {len(expected_layers)} layers, got {len(got_layers)}"
+        )
+        pairs = zip(expected_layers, got_layers, strict=True)
+        for layer_no, (expected, got) in enumerate(pairs, start=1):
+            assert got["layer"] == layer_no
+            assert (got["x_from"], got["x_to"]) == tuple(expected["x"][:2])
+            assert (got["y_from"], got["y_to"]) == tuple(expected["y"][:2])
+            expected_pairs = []
+            for plotref in expected["plots"]:
+                book = plotref.split("]")[0][1:]
+                rest = plotref.split("]", 1)[1]
+                sheetcol = rest.split("!", 1)[1] if "!" in rest else rest
+                col = sheetcol.split('"')[0]
+                expected_pairs.append((book, col))
+            got_pairs = [(c["book"], c["y"]) for c in got["curves"]]
+            assert got_pairs == expected_pairs, (
+                f"{gname} layer {layer_no}: expected {expected_pairs}, got {got_pairs}"
+            )
