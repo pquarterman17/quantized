@@ -122,6 +122,33 @@ def test_synthetic_unrecognized_type_byte_falls_back_to_heuristic() -> None:
     assert figs[0]["y_log"] is True  # 5e5/0.5 >= 1e3 -> the shared decade heuristic
 
 
+def test_synthetic_xlog_type_byte_flags_x_log() -> None:
+    """The combined scale byte 0x04 means X-log, Y-lin (pinned from fig_logx):
+    X-scale is recovered from the flag, not the heuristic."""
+    blob = _synthetic_opju(
+        _layer_bytes(0.79, 8.22, 0.0, 1000.0, 200.0, 0x04, r"\l(1) %(1)")
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["x_log"] is True  # 0x04 isolates X-log even though X spans <1 decade
+    assert figs[0]["y_log"] is False
+
+
+def test_axis_scales_mapping() -> None:
+    """The combined-flag table, pinned from four controlled specimens; when Y
+    is log (0x0d) the byte carries no X info, so X uses the decade heuristic."""
+    from quantized.io.origin_project.figures_opju import _axis_scales
+
+    assert _axis_scales(0x03, 1.0, 8.0, 0.0, 1000.0) == (False, False)
+    assert _axis_scales(0x04, 1.0, 8.0, 0.0, 1000.0) == (True, False)
+    # 0x0d: Y log for sure; X falls to heuristic (here <1 decade -> linear)
+    assert _axis_scales(0x0D, 1.0, 8.0, 0.5, 500.0) == (False, True)
+    # a many-decade X under Y-log still only reflects the heuristic for X
+    assert _axis_scales(0x0D, 1.0, 1e5, 0.5, 500.0) == (True, True)
+    # unrecognized byte -> heuristic for both
+    assert _axis_scales(0xFF, 0.0, 10.0, 0.5, 5e5) == (False, True)
+
+
 def test_synthetic_multi_layer_graph_yields_multiple_figures() -> None:
     blob = _synthetic_opju(
         _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)"),
@@ -289,6 +316,30 @@ def test_realdata_matches_origin_ground_truth(stem: str) -> None:
         assert match is not None, f"{stem}: decoded layer {f} matches no oracle layer"
         remaining.remove(match)
         assert f["y_log"] == (match[1][2] == 2.0), f"{stem}: y_log flag mismatch for {f}"
+
+
+@pytest.mark.realdata
+@pytest.mark.parametrize(
+    ("stem", "x_log", "y_log"),
+    [
+        ("fig_linx", False, False),  # layer.x.type=1, y.type=1
+        ("fig_logx", True, False),  # layer.x.type=2, y.type=1  -> byte 0x04
+        ("fig_xylog", False, True),  # x.type=2, y.type=2 -> byte 0x0d can't encode X
+    ],
+)
+def test_realdata_xscale_specimens(stem: str, x_log: bool, y_log: bool) -> None:
+    """The X-scale diff pair + both-log specimen (generate_specimens2). Truth is
+    by construction (the LabTalk axis type set at generation), not a GT export.
+    fig_xylog's X is genuinely log but the 0x0d byte carries no X information,
+    so the decoder honestly reports the heuristic (linear) there — a documented
+    format limitation, asserted so it stays visible."""
+    src = _SPEC / f"{stem}.opju"
+    if not src.exists():
+        pytest.skip(f"X-scale specimen '{stem}' not present on this machine")
+    figs = extract_figures_opju(src.read_bytes())
+    assert figs, f"{stem}: no figure decoded"
+    assert figs[0]["x_log"] is x_log, f"{stem}: x_log"
+    assert figs[0]["y_log"] is y_log, f"{stem}: y_log"
 
 
 @pytest.mark.realdata

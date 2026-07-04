@@ -8,9 +8,13 @@ forms exist, both decoded here:
 
 **Specimen form** (default-dialog graphs, the item-14 shape): after the marker
 come the X-axis ``(from, to)`` values, a step field, a fixed 8-byte marker
-``81 04 06 00 00 01 c3 66`` whose *next byte* is the Y-axis scale-type flag
-(``0x03`` linear / ``0x0d`` log10, pinned from a controlled single-variable
-diff pair), a fixed 3-byte filler, then Y ``(from, to)`` + step. Values are a
+``81 04 06 00 00 01 c3 66`` whose *next byte* is a **combined axis-scale flag**
+(``0x03`` X-lin+Y-lin / ``0x04`` X-log+Y-lin / ``0x0d`` Y-log, X unencoded —
+pinned from four controlled specimens toggling X, Y, and both; see
+``_axis_scales`` and ``tools/origin_trial/generate_specimens*``). Y-scale is
+always exact; X-scale is exact only in the Y-linear case (``0x04``) and
+otherwise falls back to the decade heuristic. Then a fixed 3-byte filler, then
+Y ``(from, to)`` + step. Values are a
 2-byte tag + 8-byte LE float64 literal, a bare literal, or a 2-byte tag + 1-3
 *significant* bytes (the double's big-endian top-N bytes stored reversed); an
 exactly-zero ``from`` is elided entirely. The tag itself was never cracked, so
@@ -63,7 +67,9 @@ tokens only. A span whose fills disagree is dropped, never guessed.
 
 Validated end-to-end against Origin's own ground-truth export: all 6 specimen
 layers (``fig_lin``/``fig_log``/``fig_pairs``) decode exactly via the specimen
-form, and **all 14 real-corpus anchors** (RockingCurve 3, XAS 3, UnpolPlots 4,
+form (plus the X-scale diff pair ``fig_linx``/``fig_logx`` and both-log
+``fig_xylog`` that pinned the combined flag), and **all 14 real-corpus anchors**
+(RockingCurve 3, XAS 3, UnpolPlots 4,
 "Fixed Lambdas SI" 4) decode with exact axis ranges and correct lin/log via
 the real form. Composite windows (e.g. RockingCurve ``Graph3``) reference
 already-encoded layers, so anchors are fewer than GT layers; GT layers whose
@@ -92,8 +98,17 @@ __all__ = ["extract_figures_opju"]
 _ANCHOR = bytes.fromhex("0300001f")
 _Y_TRANSITION = bytes([0x81, 0x04, 0x06, 0x00, 0x00, 0x01, 0xC3, 0x66])
 _STEP_TAG = bytes([0x83, 0x02])
-_TYPE_LOG = 0x0D
-_TYPE_LIN = 0x03
+# The byte after _Y_TRANSITION is a *combined* axis-scale field, pinned from
+# four single/dual-variable specimens (fig_lin/log toggled Y, fig_linx/logx
+# toggled X, fig_xylog toggled both — see tools/origin_trial/generate_specimens*):
+#   0x03 -> X-lin, Y-lin      0x04 -> X-log, Y-lin
+#   0x0d -> Y-log  (0x0d whether X is lin OR log: the field does NOT encode X
+#                   once Y is log, so X falls back to the decade heuristic there)
+# Y-scale is therefore always exact (0x0d == log, else lin); X-scale is exact
+# only in the Y-linear case (0x04), heuristic otherwise.
+_TYPE_LOG = 0x0D  # Y log (X unencoded)
+_TYPE_LIN = 0x03  # both linear
+_TYPE_XLOG = 0x04  # X log, Y linear
 _BKNAME_RE = re.compile(rb"<BKNAME>([^<]+)</BKNAME>")
 _TEXT_WINDOW = 20_000  # bytes scanned per layer for legend/annotation/source-hint text
 _TAG_SEARCH_SPAN = 2_000  # max bytes allowed between an anchor and its transition/step tags
@@ -340,6 +355,37 @@ def _parse_specimen_record(b: bytes, p: int) -> tuple[float, float, float, float
     return (*xpair, *ypair, type_byte)
 
 
+def _scale_byte(b: bytes, p: int, end: int) -> int | None:
+    """The combined axis-scale byte after ``_Y_TRANSITION`` near anchor ``p``.
+
+    Returns ``None`` when the marker is absent (every real-corpus figure
+    anchor, whose scale is heuristic-only) so those layers stay untouched.
+    """
+    yt = b.find(_Y_TRANSITION, p, min(end, p + _TAG_SEARCH_SPAN))
+    if yt < 0 or yt + len(_Y_TRANSITION) >= len(b):
+        return None
+    return b[yt + len(_Y_TRANSITION)]
+
+
+def _axis_scales(
+    type_byte: int, x_from: float, x_to: float, y_from: float, y_to: float
+) -> tuple[bool, bool]:
+    """``(x_log, y_log)`` from the combined scale byte (see ``_TYPE_*`` notes).
+
+    Y-scale is exact for every observed byte; X-scale is exact only when the
+    byte isolates it (``0x04``) and otherwise honestly falls back to the
+    decade heuristic — the byte carries no X information once Y is log.
+    """
+    if type_byte == _TYPE_LIN:  # 0x03: both linear
+        return False, False
+    if type_byte == _TYPE_XLOG:  # 0x04: X log, Y linear
+        return True, False
+    if type_byte == _TYPE_LOG:  # 0x0d: Y log; X not encoded -> heuristic
+        return _log_heuristic(x_from, x_to), True
+    # unrecognized flag: no isolated evidence, heuristic for both (like .opj)
+    return _log_heuristic(x_from, x_to), _log_heuristic(y_from, y_to)
+
+
 def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
     """Every decodable graph layer in a CPYUA project as a plot-state snapshot.
 
@@ -357,20 +403,22 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         p = anchor + len(_ANCHOR)
         window_end = anchors[idx + 1] if idx + 1 < len(anchors) else len(b)
         spec = _parse_specimen_record(b, p)
+        type_byte: int | None
         if spec is not None:
             x_from, x_to, y_from, y_to, type_byte = spec
-            if type_byte == _TYPE_LOG:
-                y_log = True
-            elif type_byte == _TYPE_LIN:
-                y_log = False
-            else:  # an unrecognized flag byte: no isolated evidence, fall back like .opj
-                y_log = _log_heuristic(y_from, y_to)
         else:
             real = _parse_real_record(b, p, window_end)
             if real is None:
                 continue  # undecodable record: skip, never guess
             x_from, x_to, y_from, y_to = real
-            y_log = _log_heuristic(y_from, y_to)  # real form has no isolated flag
+            # the full specimen record may not parse (e.g. an X-log record's
+            # varying filler) yet still carry the scale marker — read it directly
+            type_byte = _scale_byte(b, p, window_end)
+        if type_byte is None:  # real-corpus form: no marker, heuristic for both
+            x_log = _log_heuristic(x_from, x_to)
+            y_log = _log_heuristic(y_from, y_to)
+        else:
+            x_log, y_log = _axis_scales(type_byte, x_from, x_to, y_from, y_to)
         window = b[anchor : min(window_end, anchor + _TEXT_WINDOW)]
         texts = _texts_in(window)
         titles = [t for t in texts if not _AUTO_TITLE.match(t) and "\\l(" not in t]
@@ -380,7 +428,7 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "name": "",  # per-layer window name not recoverable (see module docstring)
                 "x_from": x_from,
                 "x_to": x_to,
-                "x_log": _log_heuristic(x_from, x_to),  # no isolated X flag; same heuristic as .opj
+                "x_log": x_log,
                 "y_from": y_from,
                 "y_to": y_to,
                 "y_log": y_log,

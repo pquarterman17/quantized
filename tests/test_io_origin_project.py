@@ -712,3 +712,58 @@ def test_realdata_moke_results_log() -> None:
     ds = read_origin_project(src)
     log = str(ds.metadata.get("origin_results_log", ""))
     assert "subtract_line" in log and "[Book4]Sheet1" in log
+
+
+def _notes_record(name: str, text: str) -> bytes:
+    """The contiguous ``93 <nl> <name> 00 0a <tl> <text> 00`` notes framing."""
+    nb = name.encode("latin1")
+    tb = text.replace("\n", "\r\n").encode("latin1")
+    return (
+        bytes([0x93, len(nb) + 1])
+        + nb
+        + b"\x00"
+        + bytes([0x0A, len(tb) + 1])
+        + tb
+        + b"\x00"
+    )
+
+
+def test_notes_windows_recovered_from_synthetic() -> None:
+    """A CPYUA notes window (name + free text) is recovered by exact framing;
+    OriginStorage XML and lone 0x93 bytes never masquerade as a note."""
+    from quantized.io.origin_project.notes import notes_windows
+
+    blob = (
+        b"\x00\x01\x02"
+        + _notes_record("NProbe", "QZNOTE line one: sample MnN 30nm\nQZNOTE line two: 300K")
+        + b"\xff\xfe"
+    )
+    notes = notes_windows(blob)
+    assert set(notes) == {"NProbe"}
+    assert notes["NProbe"].split("\n") == [
+        "QZNOTE line one: sample MnN 30nm",
+        "QZNOTE line two: 300K",
+    ]
+
+    # Internal storage text framed the same way is rejected by the junk filter.
+    junk = bytes([0x93, 0x05]) + b"win\x00" + bytes([0x0A, 0x1F])
+    junk += b"<OriginStorage><Notes/></O>\x00"
+    assert notes_windows(junk) == {}
+    # A bare 0x93 with no valid name/text chain yields nothing.
+    assert notes_windows(b"\x93\x93\x93\x00\x0a\x00") == {}
+
+
+@pytest.mark.realdata
+def test_realdata_notes_probe_specimen() -> None:
+    """The known-content notes specimen recovers its exact planted text and
+    attaches it at metadata['origin_notes'] (plan item 6, notes half)."""
+    src = _CORPUS / "specimens" / "notes_probe.opju"
+    if not src.exists():
+        pytest.skip("Origin notes specimen not present")
+    ds = read_origin_project(src)
+    notes = ds.metadata.get("origin_notes", {})
+    assert "NProbe" in notes
+    assert notes["NProbe"].split("\n") == [
+        "QZNOTE line one: sample MnN 30nm",
+        "QZNOTE line two: field sweep at 300K",
+    ]

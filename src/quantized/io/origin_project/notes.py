@@ -1,4 +1,4 @@
-"""Results-log recovery from Origin project files (plan item 6, log half).
+"""Results-log + notes-window recovery from Origin project files (plan item 6).
 
 Origin's *results log* — the running record of every analysis operation
 (fits, subtractions, smoothing) with its parameters and outputs — is stored
@@ -16,17 +16,29 @@ Because the records are plain text in both ``.opj`` (CPYA) and ``.opju``
 contain at least one timestamp record header. This is fit *provenance*
 worth surfacing, not data — it lands in ``metadata['origin_results_log']``.
 
-Notes *windows* (free-form user text pages) are NOT recovered here: no
-corpus file offered a known-content specimen to validate against, and an
-unvalidated scraper would risk attaching arbitrary internal strings to user
-data. When a specimen exists the same run-scan can be extended honestly.
+*Notes windows* (free-form user text pages) sit in the ``.opju`` (CPYUA)
+windows section as a tight, contiguous pair of length-prefixed records::
+
+    93 <nl> <window-name> 00   0a <tl> <note-text> 00
+
+— a ``0x93`` window-name record (``nl`` counts name+NUL) whose NUL butts
+directly against a ``0x0a`` text record (``tl`` counts text+NUL). Validated
+against a known-content specimen (``tools/origin_trial/generate_specimens2``
+-> ``notes_probe.opju``, planted text ``QZNOTE line one/two``): the pattern
+recovers the exact two lines AND matches **zero** records across the whole
+real corpus (none of which carry a notes window), so it attaches nothing
+speculatively — the false-positive bar the earlier log-only scan set. Notes
+land in ``metadata['origin_notes']`` as ``{window_name: text}``. The scan is
+byte-level so it also runs over ``.opj`` (CPYA), where it is likewise
+false-positive-clean on the corpus but has no known-content oracle; Origin
+2023+ cannot write ``.opj`` so no such specimen can be produced.
 """
 
 from __future__ import annotations
 
 import re
 
-__all__ = ["results_log"]
+__all__ = ["notes_windows", "results_log"]
 
 # One timestamped operation-record header, e.g. `[5/6/2019 15:16:34 "" (2458609)]`.
 _RECORD = re.compile(rb"\[\d{1,2}/\d{1,2}/\d{4} \d{1,2}:\d{2}:\d{2}[^\]\r\n]{0,80}\]")
@@ -35,6 +47,11 @@ _RECORD = re.compile(rb"\[\d{1,2}/\d{1,2}/\d{4} \d{1,2}:\d{2}:\d{2}[^\]\r\n]{0,8
 _RUN = re.compile(rb"[\x20-\x7e\r\n\t]{40,}")
 
 _MAX_LOG = 200_000  # metadata guard: never attach unbounded text
+
+# Text containing any of these is an internal storage blob, not a user note.
+_NOTE_JUNK = (b"\\", b"OriginStorage", b"ColumnInfo", b"ImportFile", b"<", b">", b"CDATA")
+_MAX_NOTES = 64  # sane cap on notes windows per project
+_MAX_NOTE_LEN = 250  # single-byte length prefix ceiling
 
 
 def results_log(b: bytes) -> str:
@@ -56,3 +73,46 @@ def results_log(b: bytes) -> str:
         if total >= _MAX_LOG:
             break
     return "\n\n".join(parts)[:_MAX_LOG]
+
+
+def _printable(data: bytes, *, allow_newlines: bool = False) -> bool:
+    lo = 0x09 if allow_newlines else 0x20
+    return bool(data) and all(lo <= c <= 0x0D or 0x20 <= c <= 0x7E for c in data)
+
+
+def notes_windows(b: bytes) -> dict[str, str]:
+    """Map notes-window name -> its free text (``\\r\\n`` normalized to ``\\n``).
+
+    Recognizes only the exact contiguous ``93 <nl> <name> 00 0a <tl> <text>
+    00`` framing (see module docstring). Every candidate must pass a
+    printable-character + internal-junk-token filter, so OriginStorage XML
+    and storage blobs never masquerade as user notes. Returns ``{}`` when no
+    notes window is present.
+    """
+    out: dict[str, str] = {}
+    n = len(b)
+    for m in re.finditer(rb"\x93", b):
+        p = m.start()
+        if p + 2 >= n:
+            continue
+        nl = b[p + 1]
+        if not (2 <= nl <= 64) or p + 1 + nl >= n or b[p + 1 + nl] != 0:
+            continue
+        name = b[p + 2 : p + 1 + nl]  # nl-1 bytes + the NUL just checked
+        if not _printable(name):
+            continue
+        q = p + 2 + nl  # first byte after the name's NUL
+        if q + 1 >= n or b[q] != 0x0A:
+            continue
+        tl = b[q + 1]
+        if not (2 <= tl <= _MAX_NOTE_LEN) or q + 1 + tl >= n or b[q + 1 + tl] != 0:
+            continue
+        text = b[q + 2 : q + 1 + tl]  # tl-1 bytes + the NUL just checked
+        if not _printable(text, allow_newlines=True):
+            continue
+        if any(j in text for j in _NOTE_JUNK):
+            continue
+        out[name.decode("latin1")] = text.decode("latin1").replace("\r\n", "\n")
+        if len(out) >= _MAX_NOTES:
+            break
+    return out
