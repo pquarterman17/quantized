@@ -50,7 +50,7 @@ from numpy.typing import NDArray
 
 from quantized.io.origin_project.container import ORIGIN_MISSING, plausible_column
 
-__all__ = ["CodecError", "decode_stream", "scan_columns"]
+__all__ = ["CodecError", "decode_stream", "scan_columns", "tail_start"]
 
 _MASK = 0xFFFFFFFFFFFFFFFF
 _TABLE_MASK = (1 << 12) - 1  # 2**12-entry FCM/DFCM hash tables
@@ -270,3 +270,24 @@ def scan_columns(b: bytes) -> list[tuple[str, NDArray[np.float64]]]:
             out.append((prev[-1], vals))
         cursor = end
     return out
+
+
+def tail_start(b: bytes) -> int:
+    """Byte offset just past the last decoded worksheet-data record.
+
+    Everything before this point is the datasets section (FPC streams, whose
+    residual bytes routinely contain byte pairs that coincidentally match the
+    windows-section designation markers). ``windows_opju`` uses this to bound
+    its marker search to the tail region, avoiding those false positives.
+    """
+    end = 0
+    cursor = 0
+    for marker in _records(b):
+        if marker < cursor:  # a false marker inside an already-decoded record
+            continue
+        got = _decode_record(b, marker)
+        if got is None:
+            continue
+        cursor = got[1]
+        end = max(end, cursor, marker)
+    return end

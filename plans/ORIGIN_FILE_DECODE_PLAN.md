@@ -13,7 +13,7 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-04 (items 14/17/18 shipped; real-corpus figure-record gap tracked as item 33)
+**Updated:** 2026-07-04 (items 10/14/17/18 shipped; figure-record gap = item 33)
 
 ---
 
@@ -62,8 +62,8 @@ decoded graphs  → plot-spec mapping → restored figures (W3 + W4)
 
 - ~~Items 1, 7, 11 (wave-1 RE)~~ — 1 and 11 done; 7's codec cracked,
   mode schedule + framing remain (feeds 8).
-- 2 needs 1 · 5 needs 1 · 8 needs 7 · 9 needs 8 · 10 needs 1+8 ·
-  12 needs 11 · 13 needs 12+16 · 14 needs 7+11 ·
+- 2 needs 1 · 5 needs 1 · 8 needs 7 · 9 needs 8 · ~~10 needs 1+8~~ (done) ·
+  12 needs 11 · 13 needs 12+16 · ~~14 needs 7+11~~ (done) ·
   19 needs the matching RE item · 21 needs 1/11.
 - **15 (package split) precedes every new decoder** (2, 8, 13) — the
   500-line module ceiling forces the split before code lands.
@@ -113,11 +113,14 @@ relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
 `.opju` worksheet data (item 8 — canonical Burtscher FPC codec, bit-exact vs
 Origin's own export). Also shipped: the multi-dataset import-all flow (16),
 figure restore + the post-import book-family filter (12/13/17/18 — the Library
-"Figures" and "Book families" sections). `.opju` worksheet decode is COMPLETE
-(32 closed — 210/210 oracle columns; segment grammar + canonical FPC widths).
-Remaining gaps: `.opju` names/units (10 — Unicode windows decode), sheet
-hierarchy (5), non-double column *values* (4 — garbage now gated, decode
-open), `.opju` figures (14), notes/templates/log (6/21/22).
+"Figures" and "Book families" sections), `.opju` figures (14, specimen-exact;
+real-corpus record shape = item 33), AND `.opju` column names/units/
+designations/comments (item 10 — the windows-section marker+label grammar,
+151/151 names + 130/130 units + 17/17 comments across the oracle corpus).
+`.opju` worksheet decode is COMPLETE (32 closed — 210/210 oracle columns;
+segment grammar + canonical FPC widths). Remaining gaps: sheet hierarchy (5),
+non-double column *values* (4 — garbage now gated, decode open),
+notes/templates/log (6/21/22).
 
 **quantized → Origin (export).** Shipped: `format_origin_script`
 (`io/origin.py` — CSV + LabTalk `.ogs` that rebuilds designations, long
@@ -140,8 +143,8 @@ no documented real-Origin validation procedure for the trial window (31).
 
 | # | Item | Workstream | Why first |
 |---|------|------------|-----------|
-| 10 | `.opju` names/units | W2 | Unicode windows decode; data already reads (item 8 done) |
-| ~~16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 15~~ | import flow + all `.opju` decode RE | — | done, see Completed |
+| 33 | `.opju` real-corpus figure records | W3 | figures decode for complex/bound-curve graphs |
+| ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18~~ | all `.opju` decode + import flow + W4 UI | — | done, see Completed |
 
 ---
 
@@ -175,19 +178,7 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 2 — Medium Impact
 
-10. **`.opju` names/units parity with W1** — the Unicode windows-section
-    name/unit decode (multi-book already lands with item 8). `.opju` labels
-    currently fall back to Origin designations (A/B/C).
-    *Model: sonnet · needs 1 + 8.*
-    - Head-start (verified 2026-07-04): the `.opj`-style label blocks DO
-      survive in CPYUA — `Energy\r\neV`, `Intensity\r\narb. units` runs sit in
-      the tail windows section (XAS.opju @28538/@29118), each preceded by a
-      length byte. The `.opj` `window_metadata()` finds nothing (different
-      CPYUA framing), so this needs the CPYUA windows-section grammar to
-      associate each label block with its book + designation. Positional
-      guessing is unsafe (PNG/`.dat`-filename blocks interleave) → decode the
-      structure, don't scrape.
-
+(all W2 items shipped — see Completed)
 
 ---
 
@@ -338,6 +329,23 @@ no documented real-Origin validation procedure for the trial window (31).
   dialogs) don't share this exact record shape — the decoder safely returns
   no figures for them rather than guessing (confirmed via the `specimens/
   converted/` re-saved corpus files, ruling out a version difference).
+- ~~**#10 `.opju` column names/units**~~ (2026-07-04) — cracked the CPYUA
+  windows-section marker+label grammar (`windows_opju.py`): a 2-byte
+  designation marker (`21 51`=X, `21 61`=Y, `30 61`=Y-error, reusing `.opj`'s
+  own marker-byte + display-code convention) precedes each column's
+  `<len:u8><tag:u8><LongName\r\nUnit\r\nComment><NUL>` label record; books
+  anchored via the embedded `ImportFile` filename (alnum-stripped, handles
+  Origin dropping underscores) or a `<len=namelen+2>\x00\x00<name>`
+  window-header reference; columns associated by ordinal position within a
+  book's contiguous marker run (letters, not a parsed short-name field — none
+  was pinned for CPYUA) because undecodable columns still emit a marker.
+  Wired into `opju.py`/`_build_book` exactly like `.opj`'s `window_metadata`
+  (designation-X → x axis, book titles from the import filename). Validated
+  151/151 names, 130/130 units, 17/17 comments across every decodable column
+  in the oracle corpus (XAS, RockingCurve, UnpolPlots, "Fixed Lambdas SI",
+  rosetta_*); runs clean (no false positives) on the unlabeled probe/fig
+  specimens and the 16 MB/1390-column `Hc2 data.opju` stress file. Full report
+  in `docs/origin_re/opju_container.md` "SOLVED — item 10".
 - ~~**#32 (core) width rule + RLE segment grammar**~~ (2026-07-04, `9d1728d`) —
   the "DFCM-collision gap" was a width-table bug: residual byte-counts follow
   canonical FPC bcodes (codes 0-3 → 0-3 bytes; 4 skipped), which coincide with
