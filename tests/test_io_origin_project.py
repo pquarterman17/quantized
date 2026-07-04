@@ -149,6 +149,69 @@ def test_windows_section_supplies_names_units_and_x_designation(tmp_path) -> Non
     assert list(ds.values[:, 0]) == [10.0, 20.0, 30.0]
 
 
+def test_windows_section_multi_book_names_stay_isolated(tmp_path) -> None:
+    """Plan item 19 gap fill: two books' windows-section metadata land in
+    separate BookMeta entries with no cross-book bleed -- previously only
+    exercised implicitly via the real multi-book corpus (Moke/XRD)."""
+    data = (
+        b"CPYA 4.3380 188 W64 #\n" + _block(b"\x00" * 32) + _zero()
+        + _header("Alpha_A") + _data([1.0, 2.0])
+        + _zero()
+        + _header("Alpha_B") + _data([10.0, 20.0])
+        + _zero()
+        + _header("Beta_A") + _data([3.0, 4.0, 5.0])
+        + _zero()
+        + _header("Beta_B") + _data([30.0, 40.0, 50.0])
+        + _zero()
+        + _window_header("Alpha")
+        + _prop_block("A", 3) + _label_block("Time", "s")
+        + _prop_block("B", 0) + _label_block("Signal", "V")
+        + _zero()
+        + _window_header("Beta")
+        + _prop_block("A", 3) + _label_block("Cycle", "n")
+        + _prop_block("B", 0) + _label_block("Count", "counts")
+    )
+    from quantized.io.origin_project import read_origin_books
+    from quantized.io.origin_project.windows import window_metadata
+
+    meta = window_metadata(data)
+    assert set(meta) == {"Alpha", "Beta"}
+    assert meta["Alpha"].columns["B"].long_name == "Signal"
+    assert meta["Alpha"].columns["B"].unit == "V"
+    assert meta["Beta"].columns["B"].long_name == "Count"
+    assert meta["Beta"].columns["B"].unit == "counts"
+
+    path = _write(tmp_path, "multi.opj", data)
+    books = {b.metadata["origin_book"]: b for b in read_origin_books(path)}
+    assert books["Alpha"].labels == ("Signal",)
+    assert books["Alpha"].units == ("V",)
+    assert books["Beta"].labels == ("Count",)
+    assert books["Beta"].units == ("counts",)
+
+
+def test_windows_section_multi_sheet_guard_keeps_only_primary_sheet() -> None:
+    """Plan item 19 gap fill: a window whose block stream repeats a short
+    column name (sheet 2 restarting at column A) stops mapping after the
+    primary sheet -- the repeated-short guard in `window_metadata` (the
+    boundary item 5 relies on), previously only exercised via Moke.opj's
+    fit-table sheets (realdata)."""
+    data = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _window_header("Book4")
+        + _prop_block("A", 3) + _label_block("Field", "Oe")
+        + _prop_block("B", 0) + _label_block("Moment", "emu")
+        # sheet 2 restarts at column A -- must NOT overwrite the primary mapping
+        + _prop_block("A", 3) + _label_block("FitX", "")
+        + _prop_block("B", 0) + _label_block("FitY", "")
+    )
+    from quantized.io.origin_project.windows import window_metadata
+
+    book = window_metadata(data)["Book4"]
+    assert book.columns["A"].long_name == "Field"  # sheet-1 name preserved
+    assert book.columns["B"].long_name == "Moment"
+    assert set(book.columns) == {"A", "B"}  # sheet 2's columns never added/overwritten
+
+
 def test_read_origin_books_returns_every_workbook(tmp_path) -> None:
     data = (
         b"CPYA 4.3380 188 W64 #\n" + _block(b"\x00" * 32) + _zero()
@@ -280,6 +343,114 @@ def test_figures_absent_on_plain_synthetic(tmp_path) -> None:
     from quantized.io.origin_project.figures import extract_figures
 
     assert extract_figures(_synthetic_opj()) == []
+
+
+# ── synthetic .opj figure records (plan item 19 gap fill) ────────────────────
+#
+# `figures.py` previously had no positive-path synthetic test at all -- only
+# the realdata anchors above and the negative "absent" check just above. These
+# build the CPYA graph-window + layer-continuation record shape in-test.
+
+
+def _fig_window_header(name: str) -> bytes:
+    """A graph-window header block: 00 00 <Name> 00 …, >=150 B (figures.py's
+    `_is_window_header`, shared with windows.py)."""
+    payload = b"\x00\x00" + name.encode("latin1") + b"\x00"
+    payload += b"\x00" * (160 - len(payload))
+    return _block(payload)
+
+
+def _fig_layer_block(
+    x_from: float, x_to: float, y_from: float, y_to: float, *, hint: str = ""
+) -> bytes:
+    """The layer-continuation block read immediately after a graph header:
+    head `00 00 1f 00`, axis (from, to) doubles at 15/23 (X) and 58/66 (Y),
+    and an optional `source_hint` cstring at offset 208."""
+    payload = bytearray(240)
+    payload[0:4] = b"\x00\x00\x1f\x00"
+    struct.pack_into("<d", payload, 15, x_from)
+    struct.pack_into("<d", payload, 23, x_to)
+    struct.pack_into("<d", payload, 58, y_from)
+    struct.pack_into("<d", payload, 66, y_to)
+    if hint:
+        hb = hint.encode("latin1")
+        payload[208 : 208 + len(hb)] = hb
+    return _block(bytes(payload))
+
+
+def _fig_curve_block() -> bytes:
+    """A 133-byte curve/legend object block: figures.py counts one per curve
+    whenever `size == 133` and `payload[2] == 0x07`."""
+    payload = bytearray(133)
+    payload[2] = 0x07
+    return _block(bytes(payload))
+
+
+def _fig_text_block(text: str) -> bytes:
+    return _block(text.encode("latin1"))
+
+
+def test_synthetic_opj_figure_decodes_ranges_curves_and_annotations() -> None:
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph1")
+        + _fig_layer_block(0.0, 10.0, 0.0, 100.0, hint="Book1")
+        + _fig_curve_block()
+        + _fig_curve_block()
+        + _fig_text_block("Field Sweep (Oe)")
+    )
+    figs = extract_figures(blob)
+    assert len(figs) == 1
+    f = figs[0]
+    assert f["name"] == "Graph1"
+    assert (f["x_from"], f["x_to"]) == (0.0, 10.0)
+    assert (f["y_from"], f["y_to"]) == (0.0, 100.0)
+    assert f["x_log"] is False and f["y_log"] is False
+    assert f["n_curves"] == 2  # counted from the two 133-byte curve blocks
+    assert f["source_hint"] == "Book1"
+    assert "Field Sweep (Oe)" in f["annotations"]
+
+
+def test_synthetic_opj_multiple_figures_and_log_heuristic() -> None:
+    """Two graph windows in one project, and a trailing worksheet window that
+    closes the second graph without starting a new figure."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph1")
+        + _fig_layer_block(1.0, 8.0, 1.0, 5000.0)  # y spans >=3 decades -> log heuristic
+        + _zero()
+        + _fig_window_header("Graph2")
+        + _fig_layer_block(-100.0, 100.0, -50.0, 50.0)
+        + _zero()
+        + _window_header("Sheet1")  # a worksheet window ends the second graph
+    )
+    figs = extract_figures(blob)
+    assert [f["name"] for f in figs] == ["Graph1", "Graph2"]
+    assert figs[0]["x_log"] is False and figs[0]["y_log"] is True
+    assert figs[1]["x_log"] is False and figs[1]["y_log"] is False
+
+
+def test_synthetic_opj_figure_curve_count_from_legend_text() -> None:
+    """When no 133-byte curve-count blocks are present, the legend-text
+    `\\l(n)` markers (per-curve legend captions) recover the curve count."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph3")
+        + _fig_layer_block(0.0, 1.0, 0.0, 1.0)
+        + _fig_text_block(r"\l(1) %(1)\l(2) %(2)")
+    )
+    figs = extract_figures(blob)
+    assert len(figs) == 1
+    assert figs[0]["n_curves"] == 2
 
 
 def test_extra_sheet_datasets_become_pseudo_books(tmp_path) -> None:
@@ -680,6 +851,45 @@ def test_opju_windows_section_unlabeled_column_keeps_letter_fallback() -> None:
     tbook = meta["TBook"]
     assert tbook.columns["A"].long_name == "Energy"
     assert tbook.columns["B"].long_name == ""  # honest fallback, not guessed
+
+
+def test_opju_windows_section_multi_book_names_stay_isolated() -> None:
+    """Plan item 19 gap fill: `opju_window_metadata`'s per-book anchor cursor
+    (search_from advances past each resolved book) keeps two books' marker
+    runs from bleeding into each other -- previously only single-book blobs
+    were exercised synthetically here."""
+    from quantized.io.origin_project.opj import _group
+    from quantized.io.origin_project.opju_codec import scan_columns
+    from quantized.io.origin_project.windows_opju import opju_window_metadata
+
+    x1 = [float(i) for i in range(1, 9)]
+    y1 = [111.125 * (i + 1) for i in range(8)]
+    x2 = [float(i) for i in range(1, 6)]
+    y2 = [2.5 * (i + 1) for i in range(5)]
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_record("RBook_A", [("fpc", 8)], _fpc_encode(x1))
+        + _opju_record("RBook_B", [("fpc", 8)], _fpc_encode(y1))
+        + _opju_record("SBook_A", [("fpc", 5)], _fpc_encode(x2))
+        + _opju_record("SBook_B", [("fpc", 5)], _fpc_encode(y2))
+        + _opju_window_section(
+            "RBook", [("A", "X", "Field", "Oe", ""), ("B", "Y", "Moment", "emu", "")]
+        )
+        + b"\x00" * 700  # intervening content (>_MAX_GAP) so RBook's marker run
+        # doesn't greedily swallow SBook's markers too -- mirrors the real file
+        # layout, where other sections separate each book's window run
+        + _opju_window_section(
+            "SBook", [("A", "X", "Cycle", "n", ""), ("B", "Y", "Count", "counts", "")]
+        )
+    )
+    cols = scan_columns(blob)
+    books = _group(cols)
+    meta = opju_window_metadata(blob, {k: [c for c, _ in v] for k, v in books.items()})
+    assert set(meta) == {"RBook", "SBook"}
+    assert meta["RBook"].columns["B"].long_name == "Moment"
+    assert meta["RBook"].columns["B"].unit == "emu"
+    assert meta["SBook"].columns["B"].long_name == "Count"
+    assert meta["SBook"].columns["B"].unit == "counts"
 
 
 def test_results_log_recovered_from_project(tmp_path) -> None:
