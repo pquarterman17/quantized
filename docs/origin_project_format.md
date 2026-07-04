@@ -27,8 +27,9 @@ written (annotated inline below).
 2. [Container family](#2-container-family)
 3. [Worksheet data](#3-worksheet-data)
    - 3.1 [`.opj` (CPYA) worksheet columns](#31-opj-cpya-worksheet-columns)
-   - 3.2 [Non-double column values](#32-non-double-column-values-opj)
+   - 3.2 [Non-double column values (`.opj`)](#32-non-double-column-values-opj)
    - 3.3 [`.opju` (CPYUA) worksheet columns — the FPC codec](#33-opju-cpyua-worksheet-columns--the-fpc-codec)
+   - 3.4 [Non-double column values (`.opju`) — report-sheet residue](#34-non-double-column-values-opju--report-sheet-residue)
 4. [Windows-section metadata (names/units/designations)](#4-windows-section-metadata-namesunitsdesignations)
    - 4.1 [`.opj` windows section](#41-opj-windows-section)
    - 4.2 [`.opju` windows section](#42-opju-windows-section)
@@ -55,7 +56,13 @@ short user-facing page ("what do I get when I import an Origin file").
 `Book@N` pseudo-books), real column names/units/designations, book display
 titles, figures as plot-state snapshots, notes-window text, the results log,
 import-all-books flow, and export (a native `.opj` writer + multi-book
-`.ogs` scripts).
+`.ogs` scripts). Non-double column values are fully characterized: int/
+float32 needed no work, the inline-text sentinel shape decodes
+(`origin_text_columns`), and — as of this pass — the FitLinear/NLFit
+auto-generated report-sheet reference-string family decodes too
+(`origin_report_sheets`, §3.2), closing the item's "never garbage" AND
+"decode the content" halves; only the fit's own *computed number* (not its
+cell reference) stays unrecovered.
 
 **`.opju` (CPYUA):** worksheet data decodes completely (canonical Burtscher
 FPC codec, bit-exact vs. Origin's own ground-truth export — 210/210 oracle
@@ -64,19 +71,26 @@ columns). Column names/units/comments decode (151/151 names, 130/130 units,
 shapes covering both synthetic-specimen graphs and real-corpus graphs
 (14/14 real-corpus anchors + 6/6 specimen layers). Notes windows and the
 results log are recovered the same way as `.opj` (one byte-level scanner
-serves both containers).
+serves both containers). Report-sheet columns decode too (§3.4,
+`origin_report_sheets`) via a different record grammar than `.opj`'s (a
+`0x01` tag byte + ZigZag-varint string segments, not a wider fixed-width
+record) — pinned against a new known-content oracle
+(`specimens/fitreport2.opju`) and confirmed at scale against the real
+`Hc2 data.opju` corpus file (1096 columns, 100% clean).
 
 **Known, permanent gaps** (see [§11](#11-open-items) for detail): the
 DataPlot curve→column selector (which exact columns a curve plots) is
 undecoded in `.opj`; `.opju`'s IS decoded (§6.2.1) but a per-figure
 attribution gap means restored figures still commonly resolve to a *book*,
-not exact column pairs, in both containers. Origin's auto-generated
-FitLinear/NLFit report-sheet
-text columns (variable-length, row-unaligned) stay an honest drop; a native
-`.opj` writer round-trips through our own reader but does **not** yet load
-in real Origin (item 34, open); full sheet-hierarchy UI (nested
-Book→Sheet trees) is out of scope by design — extra sheets surface as
-flat pseudo-books instead.
+not exact column pairs, in both containers. A native `.opj` writer
+round-trips through our own reader but does **not** yet load in real Origin
+(item 34, open); full sheet-hierarchy UI (nested Book→Sheet trees) is out
+of scope by design — extra sheets surface as flat pseudo-books instead.
+One still-undecoded non-double shape remains in each container: `.opj`'s
+`Moke.opj Book3_A` mixes text labels and numeric-sentinel rows within one
+column (§3.2, a different real-world worksheet-label family, not a
+FitLinear/NLFit report); neither container recovers a report cell's actual
+*computed value* (only which statistic it represents).
 
 ---
 
@@ -213,29 +227,84 @@ the data block (`container.decode_inline_text`, `opj._looks_textual`):
   into `metadata["origin_text_columns"]` — **never** `.values` (the data
   contract stays numeric).
 - **A record with no NUL within its 8-byte value area is an unsafe
-  overflow, not a decode target**: Origin's FitLinear/NLFit auto-generated
-  "Notes"/"Summary"/ANOVA report-sheet columns (e.g. `hc2convert`'s
-  `Book2_C@2`..`Book2_X@2`) embed variable-length reference strings like
-  `"cell://Parameters.Slope.Value"` spanning *multiple* physical records
-  with no row-aligned boundary. Reconstructing the true row alignment is a
-  materially harder, variable-length RE problem outside this item's scope
-  — these stay an honest drop. `decode_inline_text` returns `None` for the
-  whole column the moment one record lacks an in-range NUL, so this family
-  can never partially/incorrectly decode.
+  overflow for `decode_inline_text`** — Origin's FitLinear/NLFit
+  auto-generated "Notes"/"Summary"/ANOVA report-sheet columns (e.g.
+  `hc2convert`'s `Book2_C@2`..`Book2_X@2`) embed variable-length reference
+  strings like `"cell://Parameters.Slope.Value"` too long for the 8-byte
+  value area. `decode_inline_text` returns `None` for the whole column the
+  moment one record lacks an in-range NUL — but this family is **not** an
+  honest drop anymore: see `decode_report_strings` below, a second, wider
+  record shape that recovers it.
+- **Report-sheet columns are a genuinely different, WIDER fixed record —
+  solved (`container.decode_report_strings`).** Not a variant of the
+  10-byte double/inline-text record: `<u16 mask=0x0001><NUL-terminated
+  ASCII/latin-1 string><zero padding>`, where the **width is constant
+  within one column** (Origin reserves it uniformly, sized to that
+  column's longest cell — e.g. wide enough for
+  `"cell://Notes.NumDerivParams"`) but **varies column to column** (21
+  bytes up to 45+ bytes seen in the corpus). The `0x0001` mask (vs. plain
+  data's/inline-text's `0x0000`) is the outright discriminator; the width
+  itself is recovered from the block's own byte content (the spacing
+  between consecutive `01 00` markers) and the whole block is
+  re-validated at that width before being accepted, so a coincidental
+  short match never survives past one row. Cells hold the same
+  `cell://<Section>.<Row>.<Field>` reference-string family
+  `decode_inline_text` already established the shape of (naming *which*
+  fit statistic that cell represents: `Notes.*` metadata,
+  `Input.R1/R2.C1..C4`, `Parameters.<param>.{Value,Error,tValue,Prob,
+  Dependency}`, `RegStats.C1.*`, `Summary.R1.*`, `ANOVAs.*`, plus
+  `embedding:FitLine`/`embedding:Residual` graph-embed references) — wired
+  into `metadata["origin_report_sheets"]`, **never** `.values`/`.labels`.
+  A sheet made entirely of report columns (e.g. a fit's own report table,
+  `hc2convert`'s `Table3`/`Table15`/`Table17`) has zero plausible-numeric
+  columns at all — still surfaced as its own empty-data pseudo-book
+  (`opj._build_book`'s empty-`cols` branch) rather than being silently
+  dropped for having nothing to put in `.values`.
+- **What is still NOT recovered: the fit's actual computed number.**
+  `cell://Parameters.Slope.Value` *names* the cell; the literal computed
+  value (e.g. Slope = -1.5) was not found stored as a plain or
+  FPC-compact-encoded float64 anywhere near these records in the `.opju`
+  oracle that has known fit results (`specimens/fitreport2.opju` — see
+  §3.4) — Origin appears to cache it in a separate internal structure
+  neither decoder reads. This is now the item's only open sub-gap.
 - **Secondary corroborating signal (header offset `0x3d`):** across every
   double AND text(`NaN`)-sentinel column in `hc2convert.opj`, header byte
   `0x3d` is `0x0a` (100%); every FitLinear/NLFit report-sheet column shows a
   different, varied value there. Flags "plain worksheet data column" vs.
   "auto-generated report construct" but does **not** distinguish
-  double-from-text — not used by the implementation, noted for a future RE
-  pass on the report-sheet family.
+  double-from-text — not used by the implementation.
 
 **Corpus census (real `.opj` files, all books):** `hc2convert.opj` 1242
-double / 58 text(`NaN`) / 407 still-dropped (report-sheet family);
-`Moke.opj` 71/0/25; `XRD.opj` 17/0/3; `XMCD.opj` 554/0/1;
-`MnN_Diffusion_PNR.opj` 179/0/18; `SuperlatticeFits.opj` 107/0/5. Only
-`hc2convert` has the inline-text sentinel pattern in this corpus; the other
-files' non-double columns are entirely the report-sheet family.
+double / 58 text(`NaN`) / 407 report-sheet (**all now recovered** — 0
+still-dropped); `Moke.opj` 71/0/24 (report) + 1 still-dropped (a different,
+undecoded shape — a worksheet column mixing multi-char text labels like
+`"As deposited"`/`"325 °C"` with numeric-sentinel rows, not the report-sheet
+family — see below); `XRD.opj` 17/0/0 (its 3 non-double columns are
+unrelated name-regex false matches on sheet-header/graph blocks, not
+worksheet columns at all); `XMCD.opj` 554/0/0 (1 still-dropped, same
+false-match category); `MnN_Diffusion_PNR.opj` 179/0/12 (report) + 6
+still-dropped (embedded-storage/sheet-header blocks, one large
+`_Storage_Ebdded_pages_Data_` blob); `SuperlatticeFits.opj` 107/0/0 (5
+still-dropped, all sheet-header/layer-storage false matches). Only
+`hc2convert` has the inline-text sentinel pattern in this corpus; every
+other file's non-double columns are either the report-sheet family (now
+recovered) or content that was never a worksheet column to begin with (the
+loose `NAME_RE` name-anchor incidentally matches a `Pd<SheetName>`-style
+sheet header or an embedded-object reference; `_columns()` still calls
+`decode_report_strings` on that payload, but its own internal validation —
+the `01 00` mask stride check — correctly rejects it, so these were never a
+risk of silent garbage, just an already-dropped, unrelated match).
+
+**One genuinely different, still-undecoded family (`Moke.opj Book3_A`,
+1 column):** a worksheet column mixing **short text labels** (`"As
+deposited"`, `"325 °C"`) with **numeric sentinel rows** (the
+`ORIGIN_MISSING` bit pattern) — i.e. varying record *type* row-to-row
+within one column, not simply a wider *width* per column. Neither
+`decode_inline_text` (7-char limit) nor `decode_report_strings` (uniform
+mask+width per column) fits this shape; it stays an honest drop. This is a
+real user worksheet's sample-condition label column, not a FitLinear/NLFit
+report artifact, so it is out of this item's scope — noted here as an
+open, separate residue for a future pass.
 
 ### 3.3 `.opju` (CPYUA) worksheet columns — the FPC codec
 
@@ -343,6 +412,75 @@ identification later confirmed outright (bit-flip probes against 2^12
 hash tables). No code from this stage remains; it is preserved only so a
 future RE session doesn't waste time re-deriving PREV/PRED and rediscover
 it's a dead end for the general case.
+
+### 3.4 Non-double column values (`.opju`) — report-sheet residue
+
+**Solved and shipping** (`opju_reports.py::scan_report_columns`), the
+`.opju` sibling of §3.2's `decode_report_strings`. Same conceptual content
+(the FitLinear/NLFit auto-generated `cell://<Section>.<Row>.<Field>`
+reference-string family) but a completely different on-disk shape — CPYUA
+doesn't reuse `.opj`'s fixed-record framing anywhere, so this needed its own
+grammar, pinned against `../test-data/origin/specimens/fitreport2.opju` (a
+licensed-trial specimen with a KNOWN linear fit: x=1..8,
+D=`[8.0,6.5,5.0,3.5,2.0,0.5,-1.0,-2.5]` ⇒ slope=-1.5, intercept=9.5; whose
+`FitBook` has `Sheet1` (A,B) + the auto-generated report sheets `FitNL1` (28
+columns, A..AB) + `FitNLCurve1` (11 columns, A..K) —
+`tools/origin_trial/generate_specimens3.py`'s `fitreport2` case; ground
+truth at `specimens/ground_truth/fitreport2/structure.json`).
+
+**The grammar.** A report column shares `opju_codec`'s record header
+exactly up through the row-count varint (`0a 05 <varint> ff ff
+<varint>`) — but where a plain numeric column always has `0x00` right
+after that second varint (`opju_codec._decode_record`'s own check), a
+report column has **`0x01`** there instead. This is the outright
+discriminator, checked at the exact byte position the numeric codec
+already gates on, so the two decoders are mutually exclusive by
+construction — `opju_reports.scan_report_columns` never intercepts a
+record `opju_codec.scan_columns` would otherwise decode, and vice versa;
+no cursor coordination between the two passes is needed. After the `0x01`
+tag: a single ZigZag-varint segment count `n`. When `n` is **negative**
+(`-m`), `m` consecutive `<len:u8><ASCII bytes>` strings follow (`len=0` is
+a valid *blank* report cell — most report columns populate only a handful
+of a sheet's rows). A **positive** `n` was observed on exactly 2 of
+`FitNL1`'s 28 columns (its first two, "A" and "B", with no `cell://`
+content at all) and its shape is not understood; those 2 columns are
+honestly dropped, never guessed at.
+
+**Book/sheet anchoring fix (shared with `opju_codec.scan_columns`).**
+`fitreport2.opju` was the corpus's first `.opju` specimen with more than
+one sheet inside a single book, and it exposed that `opju_codec._NAME` (the
+dataset-name regex both `scan_columns` and `scan_report_columns` anchor
+records to) lacked the `(?:@\d{1,2})?` sheet-suffix group `.opj`'s
+`container.NAME_RE` already has. Every extra-sheet column was silently
+mis-anchored to whichever **sheet-1** name came last before it (e.g. every
+`FitNL1`/`FitNLCurve1` column collapsing onto `"FitBook_B"`) — not merely a
+labelling cosmetic: `opj._group_named` groups columns by parsing the name's
+`@N` suffix, so every mis-anchored column landed in the WRONG (or the
+primary) pseudo-book, overwriting the previous one in the resulting dict.
+Fixed by adding the same optional suffix group to `_NAME`; verified as a
+pure fix (no matches change for any single-sheet file in the corpus, since
+the added group is optional and every existing name lacks a literal `@`).
+
+**Validation.** All 26 populated `FitNL1` columns decode to exactly the
+reference strings `generate_specimens3.py`'s `fitreport2` case is known to
+have produced (`Notes.*`, `Input.R1/R2.C1..C4`,
+`Parameters.A/B/xintercept.{Value,Error,tValue,Prob,Dependency}`,
+`RegStats.C1.*`, `Summary.R1.*`, `ANOVAs.*`); the 2 positive-segment columns
+honestly drop. The real-corpus `Hc2 data.opju` (16 MB, 80 books — the
+`.opju` sibling of `hc2convert.opj`, same Hc2-extraction naming) independently
+confirms the grammar at scale: 1096 report columns, 2920 non-empty strings,
+**100% `cell://`/`embedding:` prefixed** (zero garbage, zero validation
+failures) — this file has no curated ground truth, so it is a soundness
+check, not an exact-count anchor. `Fixed Lambdas SI`/`RockingCurve`/
+`UnpolPlots`/`XAS.opju` (no fit-report sheets) all report zero report
+columns — the grammar is not falsely triggering on ordinary worksheet data.
+
+**Same open sub-gap as `.opj` (§3.2):** the fit's actual computed number
+(e.g. Slope = -1.5, Intercept = 9.5) is not recoverable this way — checked
+directly against `fitreport2.opju`'s byte range for both the raw and
+FPC-top-N-byte-compact encodings of 9.5/-1.5, no match. The reference
+string only names *which* statistic a report cell represents; Origin's
+cache of the *value* lives somewhere this module does not decode.
 
 ---
 
@@ -1134,9 +1272,18 @@ reading only this doc:
   file. Recall stays low (0-50% per file, see §6.2.1's table) — per-figure
   *attribution* and multi-curve-per-layer recovery both remain lossy, so
   the item stays open.
-- **Item 4 (report-sheet family) — non-double column values.** The
-  FitLinear/NLFit auto-generated report-sheet text columns (§3.2) stay an
-  honest drop; a materially harder variable-length RE problem.
+- **Item 4 (report-sheet family) — non-double column values.** CLOSED for
+  the reference-string family: FitLinear/NLFit auto-generated report-sheet
+  columns decode in both containers (`origin_report_sheets` — §3.2 for
+  `.opj`'s `decode_report_strings`, §3.4 for `.opju`'s
+  `opju_reports.scan_report_columns`). Two residues remain, both
+  documented as separate, smaller gaps rather than reopening this item:
+  (1) the fit's actual *computed number* (e.g. Slope = -1.5) is not
+  recoverable — only the `cell://...` reference naming which statistic a
+  cell represents; (2) one still-undecoded non-double shape,
+  `Moke.opj Book3_A` (mixed text-label/numeric-sentinel rows within a
+  single column — a different real-world worksheet family, not a
+  FitLinear/NLFit report).
 - **`.opj`/`.opju` scale-type bit** — permanently heuristic for `.opj` and
   for `.opju`'s real-corpus figure form (§6.1, §6.2); exact only for
   `.opju`'s synthetic specimen form.

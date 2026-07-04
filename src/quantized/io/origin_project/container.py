@@ -23,6 +23,7 @@ __all__ = [
     "OriginProjectError",
     "decode_doubles",
     "decode_inline_text",
+    "decode_report_strings",
     "fallback",
     "plausible_column",
     "walk_blocks",
@@ -117,8 +118,9 @@ def decode_inline_text(data: bytes) -> list[str] | None:
     chars, overflowing into the next record — seen in Origin's FitLinear/
     NLFit auto-generated "Notes"/"Summary" report-sheet columns) makes the
     WHOLE column unsafe to decode this way: return ``None`` rather than emit
-    misaligned rows. That family stays an honest drop (plan item 4 still
-    open for it — a materially harder, variable-length RE problem).
+    misaligned rows. That family gets a second, dedicated try via
+    :func:`decode_report_strings` (a completely different, wider record
+    shape) before being dropped for good.
     """
     if not data or len(data) % 10 != 0:
         return None
@@ -136,6 +138,69 @@ def decode_inline_text(data: bytes) -> list[str] | None:
         if tail and not (tail[0] in (0x00, 0x01) and all(c == 0 for c in tail[1:])):
             return None
         rows.append(prefix.decode("latin1"))
+    return rows
+
+
+_REPORT_MASK = b"\x01\x00"
+
+
+def decode_report_strings(data: bytes) -> list[str] | None:
+    """Decode a data block as Origin's auto-generated *report-sheet* column
+    shape — the ``decode_inline_text`` overflow residue of plan item 4:
+    FitLinear/NLFit "Notes"/"Summary"/"Parameters"/"RegStats"/"ANOVA" columns
+    whose cells hold a variable-length ``cell://<Section>.<Row>.<Field>``
+    reference string (e.g. ``"cell://Parameters.Slope.Value"``) too long for
+    ``decode_inline_text``'s fixed 8-byte value area.
+
+    This is a genuinely **different, wider** fixed-per-column record, not a
+    variant of the 10-byte double record: ``<u16 mask=0x0001><NUL-terminated
+    ASCII/latin-1 string><zero padding>``. The *width* is constant within one
+    column (Origin reserves it uniformly, sized to that column's longest
+    cell) but **varies column to column** — unlike a double column's constant
+    10-byte stride. The ``0x0001`` mask (vs. plain data's/inline-text's
+    ``0x0000``) is the tell that discriminates this shape outright; the width
+    itself is recovered from the block's own byte content (the spacing
+    between consecutive mask markers), then the whole block is re-validated
+    at that width before being accepted — a coincidental short match never
+    survives more than one row's validation.
+
+    Pinned against ``hc2convert.opj``'s 407 previously honest-dropped
+    report-sheet columns (Notes/Input/Parameters/RegStats/Summary/ANOVA
+    families, widths from 21 bytes up to 45+ depending on the longest
+    ``cell://`` string in that column): **407/407 decode cleanly, 0
+    validation failures, 0 collisions with the 10-byte double/inline-text
+    shapes** (both already ruled out a data block before this is tried).
+    Recovers the *reference string* naming which fit statistic a report cell
+    represents — not the fit's computed number itself (e.g. a Slope's actual
+    value); that is a separate, harder gap documented in
+    ``docs/origin_project_format.md`` "Non-double column values".
+    """
+    n = len(data)
+    if n < 3:
+        return None
+    idxs: list[int] = []
+    i = data.find(_REPORT_MASK)
+    while i >= 0:
+        idxs.append(i)
+        i = data.find(_REPORT_MASK, i + 1)
+    if not idxs or idxs[0] != 0:
+        return None  # every record must open with the mask, starting at byte 0
+    width = n if len(idxs) == 1 else min(idxs[k + 1] - idxs[k] for k in range(len(idxs) - 1))
+    if width < 3 or n % width != 0:
+        return None
+    rows: list[str] = []
+    for k in range(n // width):
+        rec = data[width * k : width * k + width]
+        if rec[:2] != _REPORT_MASK:
+            return None
+        value = rec[2:]
+        nul = value.find(b"\x00")
+        if nul < 0:
+            return None
+        text, pad = value[:nul], value[nul + 1 :]
+        if any(pad) or not all(c in _INLINE_TEXT_PRINTABLE for c in text):
+            return None
+        rows.append(text.decode("latin1"))
     return rows
 
 
