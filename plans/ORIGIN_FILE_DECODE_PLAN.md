@@ -109,11 +109,13 @@ relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
 ### Gap analysis — both directions (2026-07-04)
 
 **Origin → quantized (import).** Shipped: `.opj` numeric data (all books via
-`read_origin_books`), real column names/units/designations, book titles.
-Remaining gaps: the `.opju` decoder (item 8 — codec cracked, mode schedule +
-outer framing open in item 7), sheet hierarchy (5), non-double column types
-(4), the multi-dataset import flow + picker UI (16/17 — owner UX decision),
-figures (12/13/14), notes/templates/log (6/21/22).
+`read_origin_books`), real column names/units/designations, book titles, AND
+`.opju` worksheet data (item 8 — canonical Burtscher FPC codec, bit-exact vs
+Origin's own export). Remaining gaps: `.opju` names/units (10 — Unicode windows
+decode) + its long near-constant-stride axis columns (32 — DFCM-collision),
+sheet hierarchy (5), non-double column types (4), the multi-dataset import flow
++ picker UI (16/17 — owner UX decision), figures (12/13/14), notes/templates/
+log (6/21/22).
 
 **quantized → Origin (export).** Shipped: `format_origin_script`
 (`io/origin.py` — CSV + LabTalk `.ogs` that rebuilds designations, long
@@ -136,10 +138,10 @@ no documented real-Origin validation procedure for the trial window (31).
 
 | # | Item | Workstream | Why first |
 |---|------|------------|-----------|
-| 7 | `.opju` container RE | W2 | codec cracked (docs/origin_re/opju_container.md); mode schedule + framing remain, then item 8 |
-| 8 | `.opju` decoder | W2 | the newer half of the corpus becomes readable |
+| 10 | `.opju` names/units | W2 | Unicode windows decode; data already reads (item 8 done) |
+| 32 | `.opju` DFCM-collision gap | W2 | recovers long axis columns the desync gate now drops |
 | 16 | multi-dataset import flow | W4 | owner UX decision, unlocks 3/17 |
-| ~~1 / 11 / 15~~ | wave-1 RE + split | — | done, see Completed |
+| ~~1 / 7 / 8 / 9 / 11 / 15~~ | wave-1/2 RE + `.opju` decoder | — | done, see Completed |
 
 ---
 
@@ -166,38 +168,19 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ## W2 — `.opju` container (M2)
 
-### Tier 1 — High Impact
-
-7. **`.opju` datasets-section framing + compression RE** — crack how
-   CPYUA stores worksheet columns: the type-tagged framing after the
-   shared 123-byte file-header block, where the compressed payloads
-   are (raw-deflate suspected — the visible zlib streams are preview
-   images), and the record layout
-   *Model: **sonnet** (was fable; the fable run died on the spend
-   limit with no report, and the trial specimens changed the job:
-   hunt known values `111.125, 222.25, …` + strings `Field`/`Moment`
-   from `specimens/rosetta_min.opju`, diff `rosetta_lname.opju` for
-   label storage, validate against `specimens/ground_truth/`).
-   Escalate to opus only if a sonnet pass demonstrably stalls.*
-   - [ ] Framing grammar with hex evidence + offsets
-   - [ ] Locate + decompress column payloads; confirm record layout
-   - [ ] Validate: decode one full known-physics column (RockingCurve
-         angle scan or XAS energy scan) end-to-end
-   - [ ] Report: `docs/origin_re/opju_container.md`
-
-8. **`.opju` decoder implementation** — implement `_read_opju` from
-   the RE spec; same DataStruct contract as `.opj`
-   *Model: sonnet · needs 7 + 15.*
-
-9. **`.opju` tests** — synthetic fixture (if the format permits a
-   minimal one) + realdata anchors for all five corpus `.opju` files
-   *Model: haiku/sonnet · test-writer · needs 8.*
-
 ### Tier 2 — Medium Impact
 
-10. **`.opju` feature parity with W1** — names/units + multi-book on
-    the `.opju` path once both sides exist
+10. **`.opju` names/units parity with W1** — the Unicode windows-section
+    name/unit decode (multi-book already lands with item 8). `.opju` labels
+    currently fall back to Origin designations (A/B/C).
     *Model: sonnet · needs 1 + 8.*
+
+32. **`.opju` codec — close the DFCM-collision gap** — long near-constant-
+    stride axis columns (energy/angle/Q ramps ≳150 rows) diverge on an exact
+    DFCM hash-collision detail and are dropped by the desync gate. Needs a
+    probe campaign with controlled repeating-stride sequences to pin the exact
+    collision/update timing.
+    *Model: sonnet/opus · needs the Origin trial (COM probe generation).*
 
 ---
 
@@ -299,6 +282,21 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ## Completed
 
+- ~~**#7 `.opju` container framing + codec RE**~~ (2026-07-04) — cracked the
+  CPYUA record framing (LEB128-varint `0a 05 … ff ff <nrows> … 0c` records) and
+  the column codec: it is **canonical Burtscher FPC** (FCM value-hash + DFCM
+  stride-hash, 2^12 tables, per-value XOR residual), NOT the XOR-delta/PREV-PRED
+  scheme first guessed. Params pinned via bit-flip probes + joint oracle-fit;
+  full report in `docs/origin_re/opju_container.md`.
+- ~~**#8 `.opju` decoder implementation**~~ (2026-07-04, `a72b7a2`) —
+  `opju_codec.py` (FPC decode + varint record locator) + `read_opju`/
+  `read_opju_books`; books grouped like `.opj`. A strict desync gate emits only
+  bit-exact columns (no silent garbage). Residual DFCM-collision gap on long
+  near-constant-stride axis columns → new item #32.
+- ~~**#9 `.opju` tests**~~ (2026-07-04, `a72b7a2`) — the ground-truth oracle
+  suite now checks `.opju` for soundness across all five corpus files (XAS
+  243/243 values bit-exact; hundreds of columns via RockingCurve/UnpolPlots/
+  Fixed Lambdas/Hc2), plus the probe/rosetta specimens.
 - ~~**#16 Multi-dataset import flow**~~ (2026-07-04) — locked import-all UX:
   /api/parsers/* attach "books"; frontend fans out per book (`5eefca6`).
 - ~~**#12/#13 Figures (core)**~~ (2026-07-04) — plot-state snapshot mapping
