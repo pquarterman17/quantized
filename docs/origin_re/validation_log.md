@@ -1,7 +1,31 @@
-# Origin trial-window validation log (plan item 31)
+# Origin license-window validation log (plan item 31)
 
 Manual/COM checks that need a real Origin install; run whenever a license is
-present. Origin 2026b trial window: ~2026-07-03 → early July 2026.
+present. Origin 2026b trial window: ~2026-07-03 → early July 2026; since
+2026-07-04 a persistent student license (page-limited — tiny projects only).
+
+## The repeatable checklist (run per license window)
+
+One COM script at a time; kill zombie `Origin64.exe` first. Record results
+as dated entries below.
+
+1. **Import parity oracles** — `tools/origin_trial/export_ground_truth.py`
+   (worksheets; skips stems with index.json) +
+   `tools/origin_trial/export_plot_refs.py` (per-plot refs; delete
+   plots.json to refresh). Then `uv run pytest -m "" tests/test_io_origin_ground_truth.py
+   tests/test_io_origin_figures_opju.py -q` — realdata suites must pass.
+2. **Curve-binding score** — `uv run python tools/origin_trial/score_curve_bindings.py`;
+   compare against the recall floors in the oracle test (raise only upward).
+3. **`.ogs` export runs clean** — export a dataset via
+   `POST /api/export/origin`, run the `.ogs` in Origin, confirm books/labels.
+4. **COM Send-to-Origin live** — `QZ_ORIGIN_COM=1`, send a dataset via the
+   GUI action or `POST /api/export/origin-com`; verify labels/units/values
+   land (watch the nrows-vs-filled trap).
+5. **Native `.opj` writer** (item 34, while open) —
+   `tools/origin_trial/probe_opj_loader.py build` + `run`; record the
+   probe matrix deltas.
+6. **New-specimen needs** — generate any specimens the open RE items call
+   for (`generate_specimens*.py` are the models; keep projects tiny).
 
 ## 2026-07-04 (overnight run)
 

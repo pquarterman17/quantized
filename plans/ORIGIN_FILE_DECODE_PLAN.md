@@ -356,18 +356,18 @@ the shipped contract)
 
 ### Tier 2 — Medium Impact
 
-31. **License-window validation log** — a documented, repeatable
-    checklist run whenever a real Origin license is present (now a
-    persistent student license — small projects only): our written
-    `.opj` files open in Origin with correct data/names (the load
-    failure itself is item 34); `.ogs` scripts run clean; the COM path
-    works; results recorded in `docs/origin_re/validation_log.md`
-    (Origin cannot run in CI — this plus 28 is the honest substitute)
-    *Model: haiku (docs) + owner (clicks) · partially done: the log
-    exists with codec/ground-truth/writer-failure entries.*
+(all W7 items shipped — see Completed)
 
 
 ## Completed
+
+- ~~**#31 License-window validation checklist**~~ (2026-07-04) — the
+  repeatable 6-step checklist now heads `docs/origin_re/validation_log.md`
+  (oracle refresh, curve-binding score, `.ogs` clean-run, live COM
+  Send-to-Origin, item-34 probe kit, new-specimen needs), with dated result
+  entries below it covering codec probes, ground-truth exports, the item-25
+  live verification, and both item-34 probe sessions. Origin still cannot
+  run in CI — this plus item 28's oracle suite is the honest substitute.
 
 - ~~**#36 Y-axis lin/log scale-flag byte (both containers)**~~ (2026-07-04)
   — closed both remaining "permanently heuristic" Y-scale gaps left open by
