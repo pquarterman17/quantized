@@ -142,11 +142,55 @@ fig_pairs 2/2 · XAS 2/3 · RockingCurve 2/4 · Fixed Lambdas 2/14 correct,
 (PrNiO3STOprof/refl col C, unplotted per oracle). Precision rework is in
 flight against this oracle.
 
+## 2026-07-04 (item 34, probe session 2 — the PRC/PRE differential series)
+
+Single-byte and single-section edits of REAL Moke.opj, each probed via COM
+`Load` (all with the fh size field @115 refreshed where sizes changed):
+
+| edit | load | conclusion |
+|------|------|------------|
+| 1 byte in tree folder name / params name | True | no global checksum |
+| 1 byte deep inside epilogue slot idx1 | False | slot blobs must parse internally |
+| tree winref ordinal 0→18 (nonexistent) | **True** | tree refs are LAX — never the gate |
+| ResultsLog note removed entirely | False | — |
+| ResultsLog note present but content stubbed to 1 byte | **True** | the NOTE'S PRESENCE is required, content free |
+| each epilogue slot idx0..3 emptied (one at a time) | **True** ×4 | every slot's content is individually optional |
+| all four slots emptied together | **False** | slot-emptying does NOT compose — some combination required |
+| ONE window (Graph12) removed from the stream | **False** | any window removal breaks load; coupling still unfound |
+
+**Tree grammar 100% SOLVED** (emitter reproduces Moke's tree
+byte-identically): `folder := hdr32 NULL name\0-blk bare-u32(2) attrs36
+stor95 blk4(nwin) {NULL blk8(0,ordinal) NULL}×nwin blk4(nsub)
+{folder}×nsub`; no root closer; the leading `blk4` scalar = byte length
+from the note-list-terminating NULL through tree end (= 37 + len(tree));
+the `blk16` ids have no cross-references (safe to clone). Windows are
+referenced by ordinal but NOT validated.
+
+**Epilogue = exactly 8 indexed records** (`\n 00 10 00 00 <idx:u32>
+<len:u32> <zeros> \n <len bytes>`), idx 0..7, consuming flush to EOF (no
+trailing nulls in a project; the `.otp` carries two): idx0 LAYMANAGE XML,
+idx1 style holders, idx2/idx3 binary state, idx4 empty, idx5 `3E`-rec,
+idx6 4B, idx7 `5D`-rec.
+
+**Synthesized minimal files still fail** (stream yields books=1, tail with
+correct tree + required note + otp epilogue → load=False), and so does
+every deletion-derived reduction — consistent with the single-window-
+removal failure: an unfound per-window coupling (not tree, not offsets —
+the ONLY absolute anchor in the whole file is the size u32 @ fh+115;
+window headers' post-name fields look like geometry, no obvious
+linked-list ids). **Next session**: (a) pairwise slot-emptying to find the
+required combination; (b) hunt the window coupling — diff the fh's seven
+unexplained u32s (25530/5428/8344/16354/31444/10240/19749) against
+window/section statistics, and dump the 133B '#' + 72B sub-block fields
+per window for chain candidates; (c) try removing a window AND emptying
+all slots together (composition of the two known failure axes).
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);
-`tools/origin_trial/generate_specimens.py`;
+`tools/origin_trial/generate_specimens.py` (+`generate_specimens2/3.py`);
 `tools/origin_trial/export_plot_refs.py` (per-plot oracle, delete
 plots.json to re-run); `tools/origin_trial/probe_opj_loader.py` (item-34
-loader probes). One COM script at a time; kill zombie `Origin64.exe`
-before starting; never run two concurrently.
+loader probes); `tools/origin_trial/score_curve_bindings.py` (item-35
+scorer). One COM script at a time; kill zombie `Origin64.exe` before
+starting; never run two concurrently.
