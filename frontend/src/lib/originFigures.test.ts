@@ -158,6 +158,14 @@ describe("buildOriginFigureEntries", () => {
 });
 
 describe("figureLabel", () => {
+  it("suffixes layers >= 2 with the layer number", () => {
+    const entry = { id: "f1", stem: "M", datasetId: "b1", figure: figure({ name: "Graph4", layer: 2 }) };
+    expect(figureLabel(entry)).toBe("Graph4 · layer 2");
+    const l1 = { id: "f2", stem: "M", datasetId: "b1", figure: figure({ name: "Graph4", layer: 1 }) };
+    expect(figureLabel(l1)).toBe("Graph4");
+  });
+
+
   it("prefers a surviving annotation over the raw window name", () => {
     const entry = { id: "f1", stem: "XRD", datasetId: "b1", figure: figure({ name: "Graph1", annotations: ["Si (004)"] }) };
     expect(figureLabel(entry)).toBe("Si (004)");

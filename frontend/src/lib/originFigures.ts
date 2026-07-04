@@ -103,5 +103,8 @@ export function buildOriginFigureEntries(
  *  or peak label) over the raw Origin graph-window name (e.g. "Graph3"). */
 export function figureLabel(entry: OriginFigureEntry): string {
   const f = entry.figure;
-  return f.annotations[0] || f.name || "Figure";
+  const base = f.annotations[0] || f.name || "Figure";
+  // Multi-layer .opj windows emit one figure per layer under the same window
+  // name — suffix layers ≥2 so "Graph4" and "Graph4 · layer 2" read apart.
+  return (f.layer ?? 1) >= 2 ? `${base} · layer ${f.layer}` : base;
 }

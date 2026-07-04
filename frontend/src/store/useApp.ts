@@ -14,8 +14,10 @@ import { mergeDatasets } from "../lib/merge";
 import {
   buildOriginFigureEntries,
   figureChannelSelection,
+  figureLabel,
   type OriginFigureEntry,
 } from "../lib/originFigures";
+import { buildOverlayDataset } from "../lib/originOverlay";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
@@ -651,8 +653,38 @@ export const useApp = create<AppState>((set, get) => ({
   applyOriginFigure: (id) => {
     const entry = get().originFigures.find((f) => f.id === id);
     if (!entry?.datasetId) return;
-    get().setActive(entry.datasetId);
     const fig = entry.figure;
+    // Cross-book figures (curves spanning ≥2 workbooks) materialize as an
+    // overlay dataset (owner decision) so the combined graph Origin showed is
+    // reproduced in one plot; re-applying reuses the existing overlay.
+    const overlayName = `${entry.stem}:${figureLabel(entry)} (overlay)`;
+    const existing = get().datasets.find(
+      (d) => d.name === overlayName && (d.data.metadata ?? {}).origin_overlay === true,
+    );
+    const overlay = existing ? null : buildOverlayDataset(fig, get().datasets);
+    if (existing || overlay) {
+      let targetId = existing?.id ?? null;
+      if (!existing && overlay) {
+        targetId = nextDatasetId();
+        get().addDataset({ id: targetId, name: overlayName, data: overlay });
+        toast(`built overlay — ${overlay.labels.length} curves`, "ok");
+      }
+      if (targetId) {
+        get().setActive(targetId);
+        const n = (existing?.data ?? overlay)?.labels.length ?? 0;
+        set({
+          xLim: [fig.x_from, fig.x_to],
+          yLim: [fig.y_from, fig.y_to],
+          xLog: fig.x_log,
+          yLog: fig.y_log,
+          xKey: null,
+          yKeys: Array.from({ length: n }, (_, i) => i),
+        });
+        get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
+        return;
+      }
+    }
+    get().setActive(entry.datasetId);
     // Decoded curve bindings (partial recall, 100% precision) select the
     // actually-plotted channels; without them the default view stands.
     const ds = get().datasets.find((d) => d.id === entry.datasetId);

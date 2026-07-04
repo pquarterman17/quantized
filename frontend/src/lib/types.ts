@@ -44,6 +44,9 @@ export interface OriginFigure {
   annotations: string[];
   /** Decoded curve bindings, when the importer recovered any. */
   curves?: OriginCurve[];
+  /** 1-based layer index within the graph window (multi-layer .opj windows
+   *  emit one figure per layer; absent/1 = single-layer or unknown). */
+  layer?: number;
 }
 
 /** Response of POST /api/plot/series — uPlot-ready column data. */

@@ -1262,6 +1262,69 @@ def test_opju_windows_section_multi_book_names_stay_isolated() -> None:
     assert meta["SBook"].columns["B"].unit == "counts"
 
 
+def test_stray_wrecked_cells_salvage_not_reject(tmp_path) -> None:
+    """A real double column with a couple of junk denormal cells is salvaged
+    (junk -> NaN) instead of dropped whole — but only as a LAST resort, after
+    the text/report decoders pass (order preserves plan item 4's families).
+    Measured case: XRD.opj Book6_A (1543 values + 4 denormals)."""
+    import struct
+
+    good = [20.0 + 0.1 * i for i in range(400)]
+    records = bytearray()
+    for i, v in enumerate(good):
+        records += b"\x00\x00" + struct.pack("<d", 1e-305 if i == 7 else v)
+    data = (
+        _synthetic_opj()
+        + _zero()
+        + _header("Book9_A")
+        + _block(bytes(records))
+    )
+    from quantized.io.origin_project import read_origin_books
+
+    books = read_origin_books(_write(tmp_path, "salvage2.opj", data))
+    b9 = next(b for b in books if b.metadata["origin_book"] == "Book9")
+    col = b9.time  # single column becomes x
+    import numpy as np
+
+    assert np.isnan(col[7])  # the junk cell is masked, not kept
+    assert np.isfinite(col).sum() == 399
+
+
+def test_many_wrecked_cells_still_reject(tmp_path) -> None:
+    """>4 wrecked cells (or >0.5%) keeps the honest drop — true garbage
+    (text/int reinterpretations run >=5% wrecked corpus-wide) never returns."""
+    import struct
+
+    records = bytearray()
+    for i in range(400):
+        v = 1e-305 if i % 50 == 0 else 20.0 + 0.1 * i  # 8 wrecked cells
+        records += b"\x00\x00" + struct.pack("<d", v)
+    data = _synthetic_opj() + _zero() + _header("Book9_A") + _block(bytes(records))
+    from quantized.io.origin_project import read_origin_books
+
+    books = read_origin_books(_write(tmp_path, "garbage.opj", data))
+    assert all(b.metadata["origin_book"] != "Book9" for b in books)
+
+
+@pytest.mark.realdata
+def test_realdata_xrd_book6_two_theta_salvaged() -> None:
+    """XRD.opj Book6's 2-theta column (4 stray denormals) imports as the x
+    axis with the junk cells NaN'd — the cross-book Graph1 overlay needs it."""
+    src = _CORPUS / "XRD.opj"
+    if not src.exists():
+        pytest.skip("Origin corpus not present")
+    import numpy as np
+
+    from quantized.io.origin_project import read_origin_books
+
+    books = read_origin_books(src)
+    b6 = next(b for b in books if b.metadata["origin_book"] == "Book6")
+    assert b6.metadata["x_column_name"] == "A"
+    assert list(b6.metadata["origin_column_names"]) == ["B", "C"]
+    assert 89.0 < float(np.nanmin(b6.time)) < 91.0
+    assert 97.0 < float(np.nanmax(b6.time)) < 99.0
+
+
 def test_results_log_recovered_from_project(tmp_path) -> None:
     """Timestamped analysis records land in metadata['origin_results_log']
     (plan item 6, log half); projects without a log get no key at all."""

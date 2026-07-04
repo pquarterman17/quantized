@@ -37,6 +37,7 @@ from quantized.io.origin_project.container import (
     decode_report_strings,
     fallback,
     plausible_column,
+    salvage_column,
     walk_blocks,
 )
 from quantized.io.origin_project.windows import BookMeta, ColumnMeta, window_metadata
@@ -84,6 +85,12 @@ def _columns(
                 text.append((pending, rows))
             elif (rows := decode_report_strings(payload)) is not None:
                 report.append((pending, rows))
+            elif (salvaged := salvage_column(vals)) is not None:
+                # Last resort, ORDER MATTERS: only after the text/report
+                # decoders pass — a real double column with a couple of stray
+                # junk cells (XRD Book6_A) is salvaged with those cells NaN'd;
+                # the report-sheet family must never be stolen into numeric.
+                numeric.append((pending, salvaged))
             pending = None
     return numeric, text, report
 

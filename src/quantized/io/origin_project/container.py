@@ -26,6 +26,7 @@ __all__ = [
     "decode_report_strings",
     "fallback",
     "plausible_column",
+    "salvage_column",
     "walk_blocks",
 ]
 
@@ -221,3 +222,35 @@ def plausible_column(vals: NDArray[np.float64], *, allow_all_nan: bool = False) 
     mag = np.abs(finite)
     wrecked = ((mag < 1e-290) & (finite != 0.0)) | (mag > 1e290)
     return not bool(np.any(wrecked))
+
+
+# A real double column may carry a couple of stray junk cells (denormals in the
+# missing-sentinel magnitude band) without being a non-double payload — XRD.opj
+# Book6_A (1543 2-theta values + 4 denormals) is the measured case. True garbage
+# (text/int reinterpretations) runs >=5% wrecked across the corpus; the gap
+# between <=0.26% (real) and >=0.83% (the report-sheet family, which the
+# text/report decoders claim FIRST) motivates the tight bound below.
+_SALVAGE_MAX_FRAC = 0.005
+_SALVAGE_MAX_CELLS = 4
+
+
+def salvage_column(vals: NDArray[np.float64]) -> NDArray[np.float64] | None:
+    """``vals`` with stray wrecked cells masked to NaN, or None if not salvageable.
+
+    Last-resort classification (after the text and report decoders have
+    passed): accepts only columns whose wrecked cells are both rare
+    (<= 0.5% of finite values) and few (<= 4 absolute) — measured to separate
+    real columns with junk cells from every true-garbage column in the corpus.
+    """
+    finite_mask = np.isfinite(vals)
+    finite = vals[finite_mask]
+    if finite.size == 0:
+        return None
+    mag = np.abs(vals)
+    wrecked = np.isfinite(vals) & (((mag < 1e-290) & (vals != 0.0)) | (mag > 1e290))
+    n = int(wrecked.sum())
+    if n == 0 or n > _SALVAGE_MAX_CELLS or n / finite.size > _SALVAGE_MAX_FRAC:
+        return None
+    out = vals.copy()
+    out[wrecked] = np.nan
+    return out
