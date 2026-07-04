@@ -174,6 +174,14 @@ no documented real-Origin validation procedure for the trial window (31).
     name/unit decode (multi-book already lands with item 8). `.opju` labels
     currently fall back to Origin designations (A/B/C).
     *Model: sonnet · needs 1 + 8.*
+    - Head-start (verified 2026-07-04): the `.opj`-style label blocks DO
+      survive in CPYUA — `Energy\r\neV`, `Intensity\r\narb. units` runs sit in
+      the tail windows section (XAS.opju @28538/@29118), each preceded by a
+      length byte. The `.opj` `window_metadata()` finds nothing (different
+      CPYUA framing), so this needs the CPYUA windows-section grammar to
+      associate each label block with its book + designation. Positional
+      guessing is unsafe (PNG/`.dat`-filename blocks interleave) → decode the
+      structure, don't scrape.
 
 32. **`.opju` codec — close the DFCM-collision gap** — long near-constant-
     stride axis columns (energy/angle/Q ramps ≳150 rows) diverge on an exact
