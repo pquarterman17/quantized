@@ -7,6 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
+import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import "uplot/dist/uPlot.min.css";
 
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
@@ -97,6 +98,8 @@ export default function MultiPanelStage() {
         tool,
         onReadout: setReadout,
         seriesStyles: styleList ? [styleList[i]] : undefined,
+        linearPaths: LINEAR_PATHS,
+        pointsPaths: POINTS_PATHS,
       });
       opts.cursor = { ...opts.cursor, sync: { key: SYNC_KEY } };
       // Propagate an x-zoom on one panel to all the others.

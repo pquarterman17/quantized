@@ -4,6 +4,7 @@
 
 import { useEffect, useRef } from "react";
 import uPlot from "uplot";
+import { LINEAR_PATHS, POINTS_PATHS } from "../../../lib/uplotPaths";
 import "uplot/dist/uPlot.min.css";
 
 import type { PlotPayload } from "../../../lib/plotdata";
@@ -36,6 +37,8 @@ export default function ReflPanel({ payload, yLog, height, label }: Props) {
       showGrid: true,
       tool: "zoom",
       onReadout: () => {},
+      linearPaths: LINEAR_PATHS,
+      pointsPaths: POINTS_PATHS,
     });
     plotRef.current = new uPlot(opts, payload.data, host);
     const ro = new ResizeObserver(() =>

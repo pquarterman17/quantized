@@ -386,3 +386,66 @@ describe("buildOpts select tool (#50 plot-brush)", () => {
     expect(onRangeSelect).not.toHaveBeenCalled();
   });
 });
+
+describe("buildOpts non-monotonic x (hysteresis loops)", () => {
+  // An M-vs-H loop: field sweeps up then back down — x is NOT ascending.
+  const loop: PlotPayload = {
+    data: [
+      [-2, 0, 2, 0, -2],
+      [-1, -0.5, 1, 0.5, -1],
+    ],
+    series: [{ label: "M", unit: "emu" }],
+    xLabel: "Field",
+    xUnit: "Oe",
+  };
+  const spyLinear = vi.fn(() => null);
+  const spyPoints = vi.fn(() => null);
+
+  it("declares the x series unsorted and sorted data ascending", () => {
+    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom" });
+    expect((opts.series?.[0] as { sorted?: number }).sorted).toBe(0);
+    const asc = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    expect((asc.series?.[0] as { sorted?: number }).sorted).toBe(1);
+  });
+
+  it("wraps the line paths to draw the full acquisition order", () => {
+    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom", linearPaths: spyLinear });
+    const s = opts.series?.[1] as { paths?: (u: unknown, si: number, i0: number, i1: number) => unknown };
+    expect(s.paths).toBeDefined();
+    // uPlot would call with a collapsed window (e.g. 2..2); the wrapper must
+    // forward the full index range instead.
+    const fakeU = { data: [loop.data[0]] };
+    s.paths!(fakeU, 1, 2, 2);
+    expect(spyLinear).toHaveBeenCalledWith(fakeU, 1, 0, 4);
+  });
+
+  it("does NOT override paths when x is ascending", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", linearPaths: spyLinear });
+    expect((opts.series?.[1] as { paths?: unknown }).paths).toBeUndefined();
+  });
+
+  it("wraps marker points the same way", () => {
+    const opts = buildOpts(loop, {
+      ...base, yLog: false, tool: "zoom", defaultTrace: "Scatter", pointsPaths: spyPoints,
+    });
+    const pts = (opts.series?.[1] as { points?: { paths?: (u: unknown, si: number, i0: number, i1: number, f?: unknown) => unknown } }).points;
+    expect(pts?.paths).toBeDefined();
+    const fakeU = { data: [loop.data[0]] };
+    pts!.paths!(fakeU, 1, 2, 2, null);
+    expect(spyPoints).toHaveBeenCalledWith(fakeU, 1, 0, 4, null);
+  });
+
+  it("supplies a full-scan y range (uPlot's own scan window is collapsed)", () => {
+    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom" });
+    const range = opts.scales?.y?.range;
+    expect(typeof range).toBe("function");
+    const [lo, hi] = (range as () => [number, number])();
+    expect(lo).toBeLessThanOrEqual(-1);
+    expect(hi).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps an explicit yLim over the full-scan range", () => {
+    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom", yLim: [-5, 5] });
+    expect(opts.scales?.y?.range).toEqual([-5, 5]);
+  });
+});

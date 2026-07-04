@@ -23,6 +23,7 @@ import { exportPlotPng, plotPngBlob } from "../../lib/plotExport";
 import { suggestLogScale } from "../../lib/autoscale";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import { buildOpts } from "../../lib/uplotOpts";
+import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { toast } from "../../store/toasts";
@@ -34,10 +35,6 @@ import PlotReadouts from "./PlotReadouts";
 import PlotResultChips from "./PlotResultChips";
 import PlotToolbar from "./PlotToolbar";
 import PolarStage from "./PolarStage";
-
-// Step-after path builder for the "Step" default trace, made once (uPlot owns
-// the runtime; uplotOpts stays a pure options builder and receives this).
-const STEPPED_PATHS = uPlot.paths?.stepped?.({ align: 1 });
 
 export default function PlotStage() {
   const active = useActiveDataset();
@@ -209,6 +206,8 @@ export default function PlotStage() {
           plotTemplate === "screen" ? defaultLineWidth : resolveTemplate(plotTemplate).lineWidth,
         defaultTrace,
         steppedPaths: STEPPED_PATHS,
+        linearPaths: LINEAR_PATHS,
+        pointsPaths: POINTS_PATHS,
         wheelZoom,
         title: plotTitle,
         xAxisLabel,

@@ -164,6 +164,15 @@ export interface BuildOptsArgs {
    *  Supplied by the caller so this module stays free of the uPlot *runtime*
    *  (a value import would pull uPlot's matchMedia init into headless tests). */
   steppedPaths?: uPlot.Series.PathBuilder;
+  /** Linear/points path builders (uPlot.paths.linear() / .points()), supplied by
+   *  the caller for the same runtime-free reason as `steppedPaths`. Used when x
+   *  is non-monotonic (hysteresis loops, swept-back scans): uPlot derives its
+   *  drawn index window from a binary search over x that assumes ascending
+   *  order, so a loop collapses to a sliver — one visible point. These builders
+   *  get wrapped to ignore the window and draw every point in acquisition
+   *  order, which renders the loop the way the instrument swept it. */
+  linearPaths?: uPlot.Series.PathBuilder;
+  pointsPaths?: uPlot.Series.Points.PathBuilder;
   /** Draw a full rectangular frame around the plot area (publication "box"). */
   axisBox?: boolean;
   /** Chart title rendered above the plot (blank/undefined = none). */
@@ -175,9 +184,49 @@ export interface BuildOptsArgs {
   yAxisLabel?: string;
 }
 
+/** Full-scan [min, max] of the finite values across every visible series on one
+ *  scale — the manual counterpart of uPlot's auto-range for non-monotonic x,
+ *  where uPlot's own scan window (derived from a binary search over x) is
+ *  meaningless. Log scales consider positive values only. Returns null when
+ *  nothing qualifies (leave uPlot's default behaviour alone). */
+function fullYExtents(
+  payload: PlotPayload,
+  hidden: boolean[] | undefined,
+  axis: 0 | 1,
+  log: boolean,
+): [number, number] | null {
+  let min = Infinity;
+  let max = -Infinity;
+  payload.series.forEach((s, i) => {
+    if ((s.axis ?? 0) !== axis || hidden?.[i]) return;
+    for (const v of payload.data[i + 1] ?? []) {
+      if (v == null || !Number.isFinite(v) || (log && v <= 0)) continue;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  });
+  if (min > max) return null;
+  if (log) return [min / 1.1, max * 1.1];
+  const pad = (max - min || Math.abs(max) || 1) * 0.1; // mirror uPlot's soft pad
+  return [min - pad, max + pad];
+}
+
 export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
   const { width, height, yLog, xLog, tool, onReadout, xLim, yLim, refLines, seriesStyles } = args;
   const { xFmt, yFmt, annotations, showGrid, onRegionSelect } = args;
+  const xAscending = xIsAscending(payload.data[0] as (number | null)[]);
+  // Non-monotonic x: wrap a path builder so it ignores uPlot's (collapsed)
+  // index window and draws the full acquisition order. See `linearPaths` docs.
+  const fullLine = (b: uPlot.Series.PathBuilder): uPlot.Series.PathBuilder =>
+    (u, sidx) => b(u, sidx, 0, u.data[0].length - 1);
+  const fullPoints = (b: uPlot.Series.Points.PathBuilder): uPlot.Series.Points.PathBuilder =>
+    (u, sidx, _i0, _i1, filt) => b(u, sidx, 0, u.data[0].length - 1, filt);
+  /** Point-marker config for one series honoring the loop fix. */
+  const loopPoints = (p: uPlot.Series.Points): uPlot.Series.Points => {
+    if (xAscending || !p.show) return p;
+    if (p.paths) return { ...p, paths: fullPoints(p.paths) };
+    return args.pointsPaths ? { ...p, paths: fullPoints(args.pointsPaths) } : p;
+  };
   const axisColor = cssVar("--text-dim") || "#aaa";
   const gridColor = cssVar("--grid-line") || "#333";
   const accentColor = cssVar("--accent") || "#8b5cf6";
@@ -270,9 +319,18 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // formats scientific x (Qz, 2θ, field) as dates ("12/31/69", ":00.040") and
   // renders blank for negative x (magnetometry field sweeps). These are physics
   // axes, never timestamps.
+  // Non-monotonic x also breaks uPlot's y auto-range (it scans the same
+  // collapsed index window), so supply full-scan extents. A range *function*
+  // is only consulted when no explicit scale is pending, so box/wheel zoom and
+  // a fixed yLim still win; double-click reset re-ranges back to the extents.
+  const loopY = !xAscending && !yLim ? fullYExtents(payload, args.hidden, 0, yLog) : null;
+  const loopY2 = !xAscending ? fullYExtents(payload, args.hidden, 1, yLog) : null;
   const scales: uPlot.Scales = {
     x: { time: false, distr: xLog ? 3 : 1, ...(xLim ? { range: xLim } : {}) },
-    y: { distr: yLog ? 3 : 1, ...(yLim ? { range: yLim } : {}) },
+    y: {
+      distr: yLog ? 3 : 1,
+      ...(yLim ? { range: yLim } : loopY ? { range: () => loopY } : {}),
+    },
   };
   const xValues = tickFormatter(xFmt);
   const yValues = tickFormatter(yFmt);
@@ -281,7 +339,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     { ...axis, size: 60, label: soloLabel(0), ...(yValues ? { values: yValues } : {}) },
   ];
   if (hasY2) {
-    scales.y2 = { distr: yLog ? 3 : 1 };
+    scales.y2 = { distr: yLog ? 3 : 1, ...(loopY2 ? { range: () => loopY2 } : {}) };
     // Secondary axis on the right; hide its grid so the two grids don't overlap.
     axes.push({
       ...axis,
@@ -328,7 +386,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       // x series: declare its sort order so uPlot autoscales correctly. Ascending
       // (the common case: temperature/2θ/time) keeps the fast endpoint path;
       // non-monotonic x (hysteresis loops, swept-back scans) must scan all points.
-      { sorted: xIsAscending(payload.data[0] as (number | null)[]) ? 1 : 0 },
+      { sorted: xAscending ? 1 : 0 },
       ...payload.series.map((s, i) => {
         const style = seriesStyles?.[i];
         const stroke = seriesColor(i, style);
@@ -337,16 +395,16 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         const show = !args.hidden?.[i]; // interactive legend visibility
         // Selected companion (#50 brush): accent, filled larger markers, no line.
         if (s.selected) {
-          return { label, scale, stroke: accentColor, fill: accentColor, width: 0, points: { show: true, size: 7 }, show };
+          return { label, scale, stroke: accentColor, fill: accentColor, width: 0, points: loopPoints({ show: true, size: 7 }), show };
         }
         // Muted "excluded" companion (grey mode): faint hollow markers, no line.
         if (s.muted) {
           const grey = cssVar("--text-faint") || cssVar("--text-dim") || "#888";
-          return { label, scale, stroke: grey, width: 0, points: { show: true, size: 5 }, show };
+          return { label, scale, stroke: grey, width: 0, points: loopPoints({ show: true, size: 5 }), show };
         }
         // Peak markers: points only, no connecting line.
         if (s.kind === "points") {
-          return { label, scale, stroke, fill: stroke, width: 0, points: { show: true, size: 8 }, show };
+          return { label, scale, stroke, fill: stroke, width: 0, points: loopPoints({ show: true, size: 8 }), show };
         }
         // Default trace shape (Preferences) when the series has no explicit style:
         // Scatter = markers, no line; Line + markers = both; Step = stepped line.
@@ -368,11 +426,14 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         } else if (scatter || trace === "Line + markers") {
           points = { show: true, size: 5 };
         }
-        const def: uPlot.Series = { label, scale, stroke, width, dash, points, show };
+        const def: uPlot.Series = { label, scale, stroke, width, dash, points: loopPoints(points), show };
         // Stepped trace: apply the caller-supplied step-after path builder (there's
         // no per-series line-shape override, so it's a global default).
         if (trace === "Step" && !style?.line && args.steppedPaths) {
-          def.paths = args.steppedPaths;
+          def.paths = xAscending ? args.steppedPaths : fullLine(args.steppedPaths);
+        } else if (!xAscending && width > 0 && args.linearPaths) {
+          // Loop rendering: draw the line over every point in acquisition order.
+          def.paths = fullLine(args.linearPaths);
         }
         return def;
       }),

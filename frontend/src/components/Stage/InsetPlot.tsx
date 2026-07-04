@@ -5,6 +5,7 @@
 
 import { useEffect, useRef } from "react";
 import uPlot from "uplot";
+import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import "uplot/dist/uPlot.min.css";
 
 import { centralRange } from "../../lib/inset";
@@ -40,6 +41,8 @@ export default function InsetPlot({ payload, styleList }: Props) {
       tool: "zoom", // drag to re-zoom the inset
       onReadout: () => {},
       seriesStyles: styleList,
+      linearPaths: LINEAR_PATHS,
+      pointsPaths: POINTS_PATHS,
     });
     // Compact: drop axis titles (the corner box is too small for them).
     opts.axes?.forEach((ax) => {
