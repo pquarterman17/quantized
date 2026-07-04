@@ -614,12 +614,6 @@ blocks, and the frontend report viewer / `.dwk` round-trip under #36.)*
 
 ### Tier 2 — Medium Impact
 
-44. **`.opj` reader as an isolated dev-time CLI converter** — the
-    migration lever for labs with legacy Origin projects; GPL
-    `liborigin` stays a separate tool, never a runtime dep
-    *Model: sonnet. Pickup: separate script/repo emitting CSV/.dwk;
-    must not enter `[project.dependencies]` (no-GPL guard).*
-
 45. **Public test-data corpus repo** — grow `../test-data/` (seeded
     2026-07-01 with PANalytical XRDML samples, PIXcel3D priority) into
     a standalone public repo of instrument files for parser development
@@ -808,6 +802,13 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#44 `.opj` reader as an isolated dev-time CLI converter**~~
+  (2026-07-03) — superseded by the owner's decision to build a
+  clean-room, GPL-free **in-app** Origin reader instead (no external
+  liborigin tool). M1 (`.opj` worksheet data) shipped `e520298`; the
+  full effort (names/units, `.opju`, figures) is now its own plan:
+  `plans/ORIGIN_FILE_DECODE_PLAN.md`. No separate converter will be
+  built.
 - ~~**#42 Bruker XRD 1-D parsers**~~ (2026-07-03) — `io/bruker_raw.py`
   (Diffrac-AT RAW1.01 binary; byte layout reverse-engineered + cross-checked
   against xylib's UXD export — the variable supplementary-header offset is the
