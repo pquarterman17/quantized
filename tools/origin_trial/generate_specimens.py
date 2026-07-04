@@ -65,7 +65,7 @@ def main() -> None:
         print(f"  {'saved' if ok else 'SAVE FAIL'}: {path.name}")
 
     def put_book(book: str, cols: list[list[float]]) -> None:
-        rows = [list(r) for r in zip(*cols)]
+        rows = [list(r) for r in zip(*cols, strict=True)]
         app.PutWorksheet(f"[{book}]1", rows, 0, 0)
 
     print("== rosetta_min (.opj + .opju, identical content) ==")
