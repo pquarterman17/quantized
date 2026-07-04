@@ -23,6 +23,7 @@ from quantized.datastruct import DataStruct
 from quantized.io.consolidated import consolidate_csv
 from quantized.io.hdf5 import write_hdf5
 from quantized.io.origin import format_origin_project_script, format_origin_script
+from quantized.io.origin_com import com_available, send_to_origin
 from quantized.io.origin_project.writer import opj_bytes
 from quantized.io.xrd_csv import format_xrd_csv
 
@@ -117,6 +118,10 @@ class ConsolidatedItem(BaseModel):
 class OpjRequest(BaseModel):
     datasets: list[ConsolidatedItem]
     filename: str = "project"
+
+
+class OriginComRequest(BaseModel):
+    datasets: list[ConsolidatedItem]
 
 
 class ConsolidatedRequest(BaseModel):
@@ -403,3 +408,39 @@ def export_origin_project(req: OpjRequest) -> Response:
         media_type="application/zip",
         headers=_attachment(_safe_name(stem, ".zip")),
     )
+
+
+@router.get("/origin-com/status")
+def origin_com_status() -> dict[str, bool]:
+    """Whether COM "Send to Origin" (item 25) is usable right now: Windows +
+    pywin32 + ``QZ_ORIGIN_COM=1`` + (unverified here) a running OriginPro
+    instance. The UI uses this to show/hide the action; everywhere it is
+    False, use ``/origin`` or ``/origin-project`` instead."""
+    return {"available": com_available()}
+
+
+@router.post("/origin-com")
+def export_origin_com(req: OriginComRequest) -> dict[str, Any]:
+    """DataStructs -> new workbooks in a RUNNING Origin instance via COM
+    (item 25, Windows-only optional). 409 when COM is unavailable or Origin
+    rejects the push — use ``/origin`` or ``/origin-project`` instead."""
+    if not req.datasets:
+        raise HTTPException(status_code=422, detail="datasets must be non-empty")
+    if not com_available():
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Origin COM is unavailable on this machine (needs Windows, "
+                "pywin32, QZ_ORIGIN_COM=1, and a running OriginPro instance). "
+                "Use POST /api/export/origin or /api/export/origin-project instead."
+            ),
+        )
+    try:
+        items = [DataStruct.from_dict(i.dataset) for i in req.datasets]
+        book_names = [i.name for i in req.datasets]
+        result = send_to_origin(items, book_names=book_names)
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return result

@@ -31,6 +31,14 @@ office = [
     "python-docx>=1.1",
     "python-pptx>=1.0",
 ]
+# COM "Send to Origin" (item 25) — Windows-only optional, behind QZ_ORIGIN_COM=1
+# (architecture guard #10: never a hard dependency, never a CI requirement).
+# io/origin_com.py imports win32com lazily and guards its absence; the
+# cross-platform fallback (Origin-ASCII / .ogs, always available) is
+# io/origin.py. `pip install quantized[origin-com]` adds the live COM path.
+origin-com = [
+    "pywin32; sys_platform == 'win32'",
+]
 
 [dependency-groups]
 dev = [
@@ -78,7 +86,7 @@ strict = true
 
 [[tool.mypy.overrides]]
 # Third-party libs without bundled type stubs — skeleton-safe.
-module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*"]
+module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
