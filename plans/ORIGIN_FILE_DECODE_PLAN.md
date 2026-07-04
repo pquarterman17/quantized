@@ -119,12 +119,6 @@ relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
 
 ### Tier 1 — High Impact
 
-3. **Multi-book extraction backend** — a `read_origin_books()`-style
-   pure API returning every workbook as its own DataStruct, plus a
-   listing call; `read_origin_project` keeps its current
-   largest-book behaviour for the single-file contract
-   *Model: sonnet · independent of RE; pairs with 16.*
-
 ### Tier 2 — Medium Impact
 
 4. **Non-double column value types** — text, int, float32 columns
@@ -255,6 +249,9 @@ relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
 ---
 
 ## Completed
+
+- ~~**#3 Multi-book extraction backend**~~ (2026-07-04) — `read_origin_books()` returns every workbook as a DataStruct (per-book
+  names/units + shared inventory); single-file contract unchanged. Feeds item 16.
 
 - ~~**#1 Windows-section RE**~~ (2026-07-03) — `docs/origin_re/opj_windows_section.md`
   (`1a6a740`): property/label block layout, designations, book/sheet names;
