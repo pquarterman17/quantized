@@ -13,10 +13,11 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-04 (items 10/14/17/18/33 shipped — real-corpus figure
-records solved, W3 complete; item 4 decode half partially shipped —
-inline-text sentinel + int/float32 no-op, report-sheet reference family
-still open)
+**Updated:** 2026-07-04 (items 6/10/14/17/18/33 shipped — notes windows +
+combined X-axis log flag pinned from licensed-trial specimens, real-corpus
+figure records solved, W1 + W3 complete; item 4 decode half partially
+shipped — inline-text sentinel + int/float32 no-op, report-sheet reference
+family still open)
 
 ---
 
@@ -202,14 +203,7 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 3 — Nice-to-Have
 
-6. **Notes windows + results-log text** — import as dataset metadata /
-   a text attachment (the analysis log is plain text in the windows
-   section and holds fit provenance)
-   *Model: haiku.*
-   - Results-log half SHIPPED (2026-07-04, `20d54fa`): timestamped
-     operation records → `metadata['origin_results_log']` on the primary
-     dataset, both containers, Moke-validated. Notes *windows* stay open
-     honestly — no known-content specimen exists to validate a scraper.
+(all W1 items shipped — see Completed)
 
 ---
 
@@ -311,6 +305,28 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ## Completed
 
+- ~~**#6 Notes windows + results-log text**~~ (2026-07-04, `8cf0b42`) —
+  BOTH halves now shipped. Results-log half (`20d54fa`): timestamped
+  operation records → `metadata['origin_results_log']`, both containers,
+  Moke-validated. Notes-windows half: a licensed-trial specimen
+  (`notes_probe.opju`, planted "QZNOTE" text — `generate_specimens2.py`)
+  unblocked a validated scraper for the contiguous CPYUA framing
+  `93 <nl> <name> 00 0a <tl> <text> 00`; recovers the exact planted lines
+  AND matches **zero** records across the whole real corpus (no speculative
+  attach), landing in `metadata['origin_notes']` = `{window: text}`. Read
+  once alongside the log in `_with_provenance`. `.opj` (CPYA) is scanned by
+  the same byte-level pass (false-positive-clean on the corpus) but has no
+  known-content oracle (Origin 2023+ can't write `.opj`).
+- ~~**#33 X-axis lin/log flag upgrade**~~ (2026-07-04, `8cf0b42`) — the byte
+  after `81 04 06 00 00 01 c3 66` is a **combined** axis-scale flag, not
+  Y-only, pinned from four licensed-trial specimens toggling X, Y, and both
+  (`fig_linx`/`fig_logx`/`fig_xylog`): `0x03` x-lin+y-lin, `0x04` x-log+y-lin,
+  `0x0d` y-log (X unencoded once Y is log — the additive "`0x0e` both-log"
+  guess was **measured false**). X-log is now recovered in the Y-linear case
+  via a targeted `_scale_byte` read that survives the X-log record's shifted
+  filler (the full specimen parse fails there); Y stays exact; the 14
+  real-corpus anchors (no marker) are untouched. `fig_xylog`'s X honestly
+  stays on the decade heuristic — a documented format limitation.
 - ~~**#33 `.opju` figures — real-corpus record shape**~~ (2026-07-04) —
   solved the item-33 grammar and extended `figures_opju.py` with a
   real-corpus path (specimen path untouched; tried first). RLE count law:
