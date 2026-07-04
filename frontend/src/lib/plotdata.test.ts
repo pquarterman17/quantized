@@ -5,10 +5,12 @@ import {
   buildColumns,
   clampPlottedRange,
   composeDisplayPayload,
+  defaultDenseChannels,
   effectiveChannels,
   highlightSelectedPayload,
   maskExcludedPayload,
   peakOverlayArray,
+  primaryChannel,
   rowsInXRange,
   withBaselineOverlay,
   withFitOverlay,
@@ -164,6 +166,68 @@ describe("effectiveChannels", () => {
   it("ignores order entries that are not currently plotted (x-excluded)", () => {
     // x = channel 0; order names it but it's excluded → 2 then 1.
     expect(effectiveChannels(ds, null, 0, undefined, [0, 2, 1])).toEqual([2, 1]);
+  });
+});
+
+describe("defaultDenseChannels / primaryChannel (NaN-sparse default selection)", () => {
+  // Shaped like a Quantum Design magnetometry file: field (x) sweeps densely,
+  // "Moment" is populated on every row, but an auxiliary column (e.g. an
+  // AC-susceptibility or std-err channel only meaningful during a different
+  // measurement sub-mode) is NaN on all but one row. Bug: the main plot used
+  // to default to "every channel" (yKeys=null), so this single stray point
+  // entered uPlot's shared y-axis autoscale and squashed the real Moment
+  // curve down to invisibility — "mostly empty, one point visible" — even
+  // though the Library thumbnail (hardcoded to channel 0) rendered fine.
+  const N = 200;
+  const field = Array.from({ length: N }, (_, i) => -1000 + (2000 * i) / (N - 1));
+  const sparseCol = Array.from({ length: N }, (_, i) => (i === 100 ? 42 : NaN));
+  const momentCol = Array.from({ length: N }, (_, i) => Math.sin(i / 10) * 1e-3);
+  const ds: DataStruct = {
+    time: field,
+    values: sparseCol.map((s, i) => [s, momentCol[i]]),
+    labels: ["M. Std. Err.", "Moment"],
+    units: ["emu", "emu"],
+    metadata: { x_column_name: "Magnetic Field", x_column_unit: "Oe" },
+  };
+
+  it("excludes the NaN-sparse channel from the default (yKeys=null) set", () => {
+    expect(defaultDenseChannels(ds)).toEqual([1]);
+    expect(effectiveChannels(ds, null, null)).toEqual([1]);
+  });
+
+  it("primaryChannel picks the dense channel even though it isn't index 0", () => {
+    expect(primaryChannel(ds)).toBe(1);
+  });
+
+  it("buildColumns' offline default matches the dense-only selection", () => {
+    const p = buildColumns(ds);
+    expect(p.series).toEqual([{ label: "Moment", unit: "emu", axis: 0 }]);
+    expect(p.data).toHaveLength(2); // x + the one dense channel
+    expect(p.data[1]).toEqual(momentCol);
+  });
+
+  it("still honors an explicit yKeys that names the sparse channel", () => {
+    // A deliberate user choice is never second-guessed by the density filter.
+    expect(effectiveChannels(ds, [0, 1], null)).toEqual([0, 1]);
+  });
+
+  it("falls back to every candidate when none are meaningfully denser than the rest", () => {
+    const flat: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [1, NaN],
+        [NaN, 2],
+        [3, NaN],
+        [NaN, 4],
+      ],
+      labels: ["A", "B"],
+      units: ["", ""],
+      metadata: {},
+    };
+    // Both channels are equally (50%) sparse — no channel is "the densest by
+    // a wide margin", so nothing is hidden (better a cluttered plot than an
+    // arbitrarily empty one).
+    expect(defaultDenseChannels(flat)).toEqual([0, 1]);
   });
 });
 

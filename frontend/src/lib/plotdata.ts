@@ -49,7 +49,7 @@ export function buildColumns(
 ): PlotPayload {
   const xSrc = xKey == null ? ds.time : ds.values.map((row) => row[xKey]);
   const x = xSrc.map((v) => (Number.isFinite(v) ? v : null));
-  const channels = yChannels ?? ds.labels.map((_, i) => i).filter((i) => i !== xKey);
+  const channels = yChannels ?? defaultDenseChannels(ds, xKey);
   const y2 = new Set(y2Keys ?? []);
   const cols: (number | null)[][] = [x];
   for (const c of channels) {
@@ -63,11 +63,70 @@ export function buildColumns(
   };
 }
 
-/** The value-channel indices actually plotted, in order: the y selection (or all
- *  channels), minus the channel used as the x-axis (you can't plot a channel
- *  against itself), minus any channel carrying a non-data column role
- *  (label/ignore — those are not curves). The single source of truth shared by
- *  the fetch + the per-channel style mapping in every stage. */
+/** How many rows have BOTH a finite x and a finite y — a channel's "usable
+ *  density" against a given x source. A channel with few finite pairs can't
+ *  render as a meaningful line, and worse: its stray finite values still enter
+ *  uPlot's shared y-axis autoscale, squashing every other series into
+ *  invisibility instead of just being invisible itself. */
+function finitePairCount(xs: readonly number[], ys: readonly number[]): number {
+  const n = Math.min(xs.length, ys.length);
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    if (Number.isFinite(xs[i]) && Number.isFinite(ys[i])) count++;
+  }
+  return count;
+}
+
+/** A channel this much sparser than the densest candidate is excluded from
+ *  the *default* (yKeys=null) view — see defaultDenseChannels. */
+const MIN_DENSITY_RATIO = 0.1;
+
+/** The channels an untouched dataset shows by default (yKeys=null): every
+ *  non-x channel, EXCLUDING ones so NaN-sparse they can't be meaningfully
+ *  co-plotted with the rest (fewer than 2 finite x/y pairs, or less than 10%
+ *  as dense as the densest candidate channel). Instrument files that pack many
+ *  measurement types into one wide table (e.g. Quantum Design magnetometry:
+ *  AC-susceptibility columns are NaN outside AC scans, DC columns NaN outside
+ *  DC scans, …) are the motivating case, but the heuristic is generic — not
+ *  QD-specific — so it helps any parser whose "all columns" output is
+ *  column-sparse. Falls back to "every candidate" when all are equally sparse
+ *  (nothing to gain by hiding any of them) or none are dense at all, so the
+ *  plot is never emptied outright. The single source of truth for "what does
+ *  a freshly-loaded dataset show" — shared by the main plot (effectiveChannels)
+ *  and the Library thumbnail (Sparkline). */
+export function defaultDenseChannels(ds: DataStruct, xKey: number | null = null): number[] {
+  const xs = xKey == null ? ds.time : ds.values.map((row) => row[xKey]);
+  const candidates = ds.labels.map((_, i) => i).filter((i) => i !== xKey);
+  const counts = candidates.map((c) =>
+    finitePairCount(
+      xs,
+      ds.values.map((row) => row[c]),
+    ),
+  );
+  const maxCount = counts.length ? Math.max(...counts) : 0;
+  if (maxCount === 0) return candidates; // nothing plots anyway — don't hide any
+  const floor = Math.max(2, maxCount * MIN_DENSITY_RATIO);
+  const dense = candidates.filter((_, i) => counts[i] >= floor);
+  return dense.length > 0 ? dense : candidates;
+}
+
+/** The single channel a one-line preview (the Library thumbnail) should draw:
+ *  the first channel in the plot's own default dense set (see
+ *  defaultDenseChannels), NOT a hardcoded "channel 0". Keeps the thumbnail
+ *  showing the same real data the main plot draws by default even when
+ *  channel 0 itself happens to be the NaN-sparse one. Returns null for a
+ *  dataset with no channels at all. */
+export function primaryChannel(ds: DataStruct): number | null {
+  const dense = defaultDenseChannels(ds, null);
+  return dense.length > 0 ? dense[0] : null;
+}
+
+/** The value-channel indices actually plotted, in order: the y selection (or the
+ *  robust dense default — see defaultDenseChannels), minus the channel used as
+ *  the x-axis (you can't plot a channel against itself), minus any channel
+ *  carrying a non-data column role (label/ignore — those are not curves). The
+ *  single source of truth shared by the fetch + the per-channel style mapping
+ *  in every stage. */
 export function effectiveChannels(
   ds: DataStruct,
   yKeys: number[] | null,
@@ -75,7 +134,7 @@ export function effectiveChannels(
   roles?: Record<number, ChannelRole>,
   order?: number[] | null,
 ): number[] {
-  const base = yKeys ?? ds.labels.map((_, i) => i);
+  const base = yKeys ?? defaultDenseChannels(ds, xKey);
   const filtered = base.filter((c) => c !== xKey && !roles?.[c]);
   if (!order || order.length === 0) return filtered;
   // Reorder by the user's draw order; channels absent from `order` keep their
