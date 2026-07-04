@@ -134,6 +134,26 @@ def test_windows_section_supplies_names_units_and_x_designation(tmp_path) -> Non
     assert list(ds.values[:, 0]) == [10.0, 20.0, 30.0]
 
 
+def test_read_origin_books_returns_every_workbook(tmp_path) -> None:
+    data = (
+        b"CPYA 4.3380 188 W64 #\n" + _block(b"\x00" * 32) + _zero()
+        + _header("Alpha_A") + _data([1.0, 2.0])
+        + _zero()
+        + _header("Alpha_B") + _data([5.0, 6.0])
+        + _zero()
+        + _header("Beta_A") + _data([7.0, 8.0, 9.0])
+    )
+    from quantized.io.origin_project import read_origin_books
+
+    books = read_origin_books(_write(tmp_path, "two.opj", data))
+    assert [b.metadata["origin_book"] for b in books] == ["Alpha", "Beta"]
+    assert list(books[0].time) == [1.0, 2.0]
+    assert list(books[0].values[:, 0]) == [5.0, 6.0]
+    assert books[1].values.shape == (3, 0)  # single-column book: X only
+    # shared inventory on every book
+    assert [i["name"] for i in books[1].metadata["origin_books"]] == ["Alpha", "Beta"]
+
+
 def test_ragged_columns_pad_with_nan(tmp_path) -> None:
     data = (
         b"CPYA 4.3380 188 W64 #\n" + _block(b"\x00" * 8) + _zero()
@@ -177,6 +197,18 @@ def test_realdata_moke_field_ramp() -> None:
     assert ds.time[0] == pytest.approx(-6796.22, abs=0.1)
     assert np.isfinite(ds.time).sum() > 100  # most of the ramp is real (empties → NaN)
     assert ds.values.shape[1] >= 1
+
+
+@pytest.mark.realdata
+@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+def test_realdata_moke_all_books_recovered() -> None:
+    from quantized.io.origin_project import read_origin_books
+
+    books = read_origin_books(_CORPUS / "Moke.opj")
+    names = [b.metadata["origin_book"] for b in books]
+    assert len(books) >= 5 and len(set(names)) == len(names)
+    # book display titles (sample names) recovered
+    assert any("MnN" in b.metadata["origin_book_long"] for b in books)
 
 
 @pytest.mark.realdata

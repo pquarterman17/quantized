@@ -19,7 +19,7 @@ from quantized.datastruct import DataStruct
 from quantized.io.origin_project.container import NAME_RE, decode_doubles, fallback, walk_blocks
 from quantized.io.origin_project.windows import BookMeta, ColumnMeta, window_metadata
 
-__all__ = ["read_opj"]
+__all__ = ["read_opj", "read_opj_books"]
 
 
 def _columns(b: bytes) -> list[tuple[str, NDArray[np.float64]]]:
@@ -42,23 +42,19 @@ def _label_for(col: str, meta: ColumnMeta | None) -> str:
     return meta.long_name if meta is not None and meta.long_name else col
 
 
-def _assemble(
-    columns: list[tuple[str, NDArray[np.float64]]],
-    books_meta: dict[str, BookMeta],
-) -> DataStruct:
-    """Group columns by workbook, return the largest book as a DataStruct.
+Columns = list[tuple[str, NDArray[np.float64]]]
 
-    Ragged columns are padded to the book's max length with NaN. The X column
-    is the first designation-X column when the windows metadata knows one,
-    else the first column; the rest become value columns labelled by their
-    long name (falling back to the Origin short designation A, B, …).
-    """
-    books: OrderedDict[str, list[tuple[str, NDArray[np.float64]]]] = OrderedDict()
+
+def _group(columns: Columns) -> OrderedDict[str, Columns]:
+    books: OrderedDict[str, Columns] = OrderedDict()
     for name, vals in columns:
         book, _, col = name.rpartition("_")
         books.setdefault(book or "Book", []).append((col or "A", vals))
+    return books
 
-    inventory = [
+
+def _inventory(books: OrderedDict[str, Columns], books_meta: dict[str, BookMeta]) -> list[dict[str, object]]:
+    return [
         {
             "name": k,
             "long_name": books_meta[k].long_name if k in books_meta else k,
@@ -67,9 +63,22 @@ def _assemble(
         }
         for k, v in books.items()
     ]
-    primary = max(books, key=lambda k: sum(len(v) for _, v in books[k]))
-    cols = books[primary]
-    col_meta = books_meta[primary].columns if primary in books_meta else {}
+
+
+def _build_book(
+    book: str,
+    cols: Columns,
+    books_meta: dict[str, BookMeta],
+    inventory: list[dict[str, object]],
+) -> DataStruct:
+    """Assemble one workbook into a DataStruct.
+
+    Ragged columns are padded to the book's max length with NaN. The X column
+    is the first designation-X column when the windows metadata knows one,
+    else the first column; the rest become value columns labelled by their
+    long name (falling back to the Origin short designation A, B, …).
+    """
+    col_meta = books_meta[book].columns if book in books_meta else {}
     maxlen = max((len(v) for _, v in cols), default=0)
 
     x_idx = next(
@@ -88,7 +97,8 @@ def _assemble(
     x_meta = col_meta.get(ordered[0][0]) if ordered else None
     meta = {
         "source_format": "origin_opj",
-        "origin_book": primary,
+        "origin_book": book,
+        "origin_book_long": books_meta[book].long_name if book in books_meta else book,
         "origin_books": inventory,
         "x_column_name": ordered[0][0] if ordered else "A",
         "x_column_long": _label_for(ordered[0][0], x_meta) if ordered else "",
@@ -105,11 +115,26 @@ def _assemble(
     )
 
 
-def read_opj(path: Path) -> DataStruct:
+def _parse(path: Path) -> tuple[OrderedDict[str, Columns], dict[str, BookMeta], list[dict[str, object]]]:
     b = path.read_bytes()
     if not b.startswith(b"CPYA"):
         raise fallback(path, f"'{path.name}' does not look like a CPYA .opj (bad header).")
     columns = _columns(b)
     if not columns:
         raise fallback(path, f"no worksheet columns could be decoded from '{path.name}'.")
-    return _assemble(columns, window_metadata(b))
+    books = _group(columns)
+    books_meta = window_metadata(b)
+    return books, books_meta, _inventory(books, books_meta)
+
+
+def read_opj(path: Path) -> DataStruct:
+    """The single-DataStruct contract: the largest workbook (inventory in metadata)."""
+    books, books_meta, inventory = _parse(path)
+    primary = max(books, key=lambda k: sum(len(v) for _, v in books[k]))
+    return _build_book(primary, books[primary], books_meta, inventory)
+
+
+def read_opj_books(path: Path) -> list[DataStruct]:
+    """Every workbook in the project as its own DataStruct (plan item 3)."""
+    books, books_meta, inventory = _parse(path)
+    return [_build_book(k, v, books_meta, inventory) for k, v in books.items() if v]
