@@ -155,11 +155,6 @@ no documented real-Origin validation procedure for the trial window (31).
    *Model: opus (RE mini-pass) then sonnet (impl) · needs corpus
    examples identified during 1.*
 
-5. **Sheet hierarchy** — Book→Sheet→columns for multi-sheet books
-   (evidence: `[Book5]Sheet1!` references) instead of the flat
-   book_col model
-   *Model: sonnet · needs 1.*
-
 ### Tier 3 — Nice-to-Have
 
 6. **Notes windows + results-log text** — import as dataset metadata /
@@ -210,16 +205,6 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 1 — High Impact
 
-12. **Origin-graph → quantized plot-spec mapping design** — decide
-    what an imported figure becomes (plot state / FigureDoc per
-    ORIGIN_GAP_PLAN #12), which Origin properties map, and the
-    documented gap list (what won't survive import)
-    *Model: opus · code-architect · needs 11.*
-
-13. **Figure decode + import implementation** — parse graph windows,
-    emit the mapped spec, land imported figures in the library
-    *Model: sonnet · needs 12 + 16.*
-
 ### Tier 2 — Medium Impact
 
 14. **`.opju` figures** — the same pipeline on the CPYUA container
@@ -230,12 +215,6 @@ no documented real-Origin validation procedure for the trial window (31).
 ## W4 — Import flow & UX
 
 ### Tier 1 — High Impact
-
-16. **Multi-dataset import flow** — one file yielding many datasets:
-    route shape, store handling, naming (`Moke:Book4` style?),
-    default selection — **needs owner UX decision** (import-all vs
-    picker vs primary+expand)
-    *Model: sonnet · AskUserQuestion at design time; pairs with 3.*
 
 17. **Workbook picker UI** — tree of books/sheets/columns with
     row/col counts; select which to import; "import all"
@@ -319,6 +298,17 @@ no documented real-Origin validation procedure for the trial window (31).
 
 
 ## Completed
+
+- ~~**#16 Multi-dataset import flow**~~ (2026-07-04) — locked import-all UX:
+  /api/parsers/* attach "books"; frontend fans out per book (`5eefca6`).
+- ~~**#12/#13 Figures (core)**~~ (2026-07-04) — plot-state snapshot mapping
+  decided (owner) + `figures.extract_figures` shipped in the import payload
+  (`4eb8eef`). Open follow-up: a small frontend apply-snapshot action (morning
+  UX review); log-scale uses the decade heuristic until the flag byte is
+  isolated.
+- ~~**#5 Sheet hierarchy (core)**~~ (2026-07-04) — `@N` datasets recovered as
+  `Book@N` pseudo-books with "(sheet N)" titles; sheet-1 keeps the primary
+  slot (`6631e03`). Full Book→Sheet nesting UI remains out of scope.
 
 - ~~**#28 Ground-truth oracle suite**~~ (2026-07-04) — per-stem realdata tests
   vs Origin's own dumps; auto-activates per reader (`1181ac7`).

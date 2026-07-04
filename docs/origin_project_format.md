@@ -6,10 +6,15 @@ locally (`tests/realdata/origin/`, gitignored). We do **not** use the GPL
 `liborigin` — this repo is Apache-2.0 (see `architecture-guards.md` #3). Format
 *facts* (byte layouts) aren't copyrightable; the implementation is our own.
 
-**Status:** **M1 landed** — `.opj` worksheet data decodes to `DataStruct`
-(`io/origin_project.py`), validated on the real corpus (XRD θ–2θ, MOKE loop, XMCD
-energy scans). M2 (`.opju`) and M3 (figures) next. Update this file as milestones
-land.
+**Status (2026-07-04, overnight run):** `.opj` support is BROAD — worksheet
+data for every book AND extra sheet (`Book@N`), real column names/units/
+designations, book display titles, figures as plot-state snapshots
+(`figures.py`), import-all-books flow, plus EXPORT: a native `.opj` writer
+(`writer.py`, readable by every Origin version) and multi-book `.ogs`
+scripts. `.opju` remains the open front: the container/codec architecture is
+solved (FPC-style two-table XOR-delta compressor — `docs/origin_re/
+opju_container.md`), with the predictor hash replication as the last blocker.
+Hardened by a fuzz/sweep/perf suite and Origin-exported ground-truth oracles.
 
 Note: empty numeric cells store Origin's missing-value sentinel
 `-1.23456789e-300` (bit pattern `0e 2c 13 1c fe 74 aa 81`), *not* flagged by the
