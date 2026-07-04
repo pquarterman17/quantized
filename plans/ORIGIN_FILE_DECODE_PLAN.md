@@ -13,9 +13,10 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-04 (items 10/14/17/18 shipped; figure-record gap = item 33;
-item 4 decode half partially shipped — inline-text sentinel + int/float32 no-op,
-report-sheet reference family still open)
+**Updated:** 2026-07-04 (items 10/14/17/18/33 shipped — real-corpus figure
+records solved, W3 complete; item 4 decode half partially shipped —
+inline-text sentinel + int/float32 no-op, report-sheet reference family
+still open)
 
 ---
 
@@ -115,8 +116,8 @@ relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
 `.opju` worksheet data (item 8 — canonical Burtscher FPC codec, bit-exact vs
 Origin's own export). Also shipped: the multi-dataset import-all flow (16),
 figure restore + the post-import book-family filter (12/13/17/18 — the Library
-"Figures" and "Book families" sections), `.opju` figures (14, specimen-exact;
-real-corpus record shape = item 33), AND `.opju` column names/units/
+"Figures" and "Book families" sections), `.opju` figures (14 specimen form +
+33 real-corpus form — 14/14 corpus anchors), AND `.opju` column names/units/
 designations/comments (item 10 — the windows-section marker+label grammar,
 151/151 names + 130/130 units + 17/17 comments across the oracle corpus).
 `.opju` worksheet decode is COMPLETE (32 closed — 210/210 oracle columns;
@@ -228,20 +229,7 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 3 — Nice-to-Have
 
-33. **`.opju` figures — real-corpus record shape** — item 14 shipped a
-    decoder that is exact on controlled specimens (axis range + log10 flag,
-    6/6 layers vs Origin ground truth) but real corpus graphs (bound curves,
-    non-default tick/grid dialogs) use a materially different axis-record
-    layout: the `03 00 00 1f` layer anchor is present, but the fixed
-    `81 04 06 00 00 01 c3 66` X→Y transition marker item 14 keys off is not
-    found — confirmed byte-identical between the original corpus file and a
-    same-content file re-saved by the newer CPYUA build, so it's a
-    *content-complexity* difference (extra dialog/style fields), not a
-    version difference. Real corpus graphs are safely skipped, never
-    mis-decoded. Next probe: diff a controlled specimen before/after binding
-    an actual curve or changing one axis dialog default, single-variable,
-    to localize where the extra fields live.
-    *Model: sonnet · needs 14 · see figures_opju.py's module docstring.*
+(all W3 items shipped — see Completed)
 
 ---
 
@@ -323,6 +311,24 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ## Completed
 
+- ~~**#33 `.opju` figures — real-corpus record shape**~~ (2026-07-04) —
+  solved the item-33 grammar and extended `figures_opju.py` with a
+  real-corpus path (specimen path untouched; tried first). RLE count law:
+  `c2` = run of exactly 5 repeated bytes, `c3` = exactly 6; the byte after
+  the rep byte is a context/tag byte (NOT a count — 01/02/03/0a observed for
+  identical structures), then literal suffix bytes complete the 8-byte LE
+  double; lead-form (`<lead> c2/c3 …`) and run-first (`c3 …`, e.g. 1.4 =
+  `c3 66 03 f6 3f`) alignments both occur. `85 02 f0 3f` resolved as a
+  tagged `y_from=1.0` (whole-span exact-fill + GT) — the real form has NO
+  isolated lin/log flag; the `.opj` decade heuristic is used and is correct
+  for every corpus anchor. Optional X flag tokens (`89 01`/`89 18`/`97 03`/
+  `91 09` 2-byte; bare `91` before run-first RLE 1-byte) skipped via a
+  deterministic length rule; semantics open, no GT-type correlation.
+  Validated **14/14 real anchors** (RockingCurve 3, XAS 3, UnpolPlots 4,
+  "Fixed Lambdas SI" 4) at 1e-9 rel with correct lin/log + specimens 6/6
+  (no regression). Composite windows (Graph3 families) reference existing
+  layers — anchors < GT layers by design. Synthetic real-form CI tests +
+  strict realdata anchor-count tests added.
 - ~~**#18 Figure restore UX**~~ (2026-07-04, `2f367e3`) — a Library "Figures"
   section (`frontend/src/components/Library/FiguresSection.tsx`) lists every
   `figures.extract_figures` snapshot from an import; clicking one activates its

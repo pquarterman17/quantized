@@ -1,14 +1,16 @@
-"""``.opju`` (CPYUA) figure extraction — plan item 14.
+"""``.opju`` (CPYUA) figure extraction — plan items 14 (specimen form) + 33
+(real-corpus form).
 
 Two layers, mirroring ``test_io_origin_project.py``'s ``.opj`` figures tests:
 
-* a **synthetic** CPYUA-shaped record built in-test (no private data) that
-  exercises the anchor/value-span decoder in CI;
-* a **realdata**-marked check against Origin's own ground-truth export for
-  the controlled specimens (``fig_lin``/``fig_log``/``fig_pairs`` — a
-  single-variable linear/log10 diff pair plus a 4-layer graph), which is the
-  only corpus subset whose binary layout this decoder currently understands
-  (see ``figures_opju.py``'s module docstring for the real-corpus gap).
+* **synthetic** CPYUA-shaped records built in-test (no private data) that
+  exercise both the specimen-form and the real-form decoders in CI;
+* **realdata**-marked checks against Origin's own ground-truth export for
+  the controlled specimens (``fig_lin``/``fig_log``/``fig_pairs``) AND the
+  real corpus files (RockingCurve/XAS/UnpolPlots/"Fixed Lambdas SI"), whose
+  axis records use the item-33 grammar (optional flag token + tagged/RLE/
+  bare value tokens + variable-length separators — see ``figures_opju.py``'s
+  module docstring for the solved layout).
 """
 
 from __future__ import annotations
@@ -142,6 +144,112 @@ def test_figures_absent_on_incomplete_record() -> None:
     assert extract_figures_opju(blob) == []
 
 
+# ── synthetic real-corpus-form records (item 33) ──────────────────────────────
+#
+# These byte layouts replicate — value for value — real anchors from the
+# oracle corpus (RockingCurve @55114/@137209, "Fixed Lambdas SI" @567652),
+# rebuilt in-test so CI needs no private data.
+
+
+def _real_form_tagged_and_rle() -> bytes:
+    """RockingCurve NbAuRocking: flag ``89 01`` + lead-form RLE x_from (0.2) +
+    tagged x_to (2.0) + tagged step, then tagged Y values (1.0 .. 450000)."""
+    return (
+        b"\x03\x00\x00\x1f"  # anchor
+        b"\x89\x01"  # 2-byte flag token
+        b"\x9a\xc2\x99\x02\xc9\x3f"  # x_from = 0.2 (lead-form c2 RLE: run of 5)
+        b"\x84\x01\x40"  # x_to = 2.0 (tagged compact-1)
+        b"\x83\x02\xe0\x3f"  # x step = 0.5 (tagged compact-2)
+        b"\x81\x0d\x08\x00\x00\x01"  # separator, plen=8
+        b"\x3d\x0a\xd7\xa3\x70\x3d\x5d\x40\x01"  # geometry payload + filler
+        b"\x85\x02\xf0\x3f"  # y_from = 1.0 (tagged — NOT a y-log flag)
+        b"\x81\x04\x40\x77\x1b\x41"  # y_to = 450000.0 (tagged compact-4)
+        b"\x83\x02\xf0\x3f"  # y step = 1.0
+        b"\x81\x35\x08\x00\x00\x01"  # end separator
+        b"\x8f\xc2\xf5\x28\x5c\x8f\x57\xc0"  # end-separator payload
+        + b"\x00" * 32
+    )
+
+
+def _real_form_runfirst_rle_elided_from() -> bytes:
+    """RockingCurve Graph2: bare ``91`` flag + run-first c3 RLE x_to (1.4,
+    x_from elided = 0.0) + RLE step, then RLE/tagged Y values."""
+    return (
+        b"\x03\x00\x00\x1f"
+        b"\x91"  # 1-byte flag (bare 0x91 before a run-first RLE value)
+        b"\xc3\x66\x03\xf6\x3f"  # x_to = 1.4 (run-first c3 RLE: run of 6)
+        b"\x9a\xc2\x99\x02\xc9\x3f"  # x step = 0.2
+        b"\x81\x10\x08\x00\x00\x01"  # separator, plen=8
+        b"\x42\x1d\xd4\x41\x1d\x54\x4f\x40\x01\x00\x00"  # geometry + filler
+        b"\x9a\xc2\x99\x02\xd9\x3f"  # y_from = 0.4 (lead-form c2 RLE)
+        b"\x82\x03\x88\xe3\x40"  # y_to = 40000.0 (tagged compact-3)
+        b"\x83\x02\xf0\x3f"  # y step = 1.0
+        b"\x81\x35\x08\x00\x00\x01"
+        b"\x80\x83\xdb\x46\x5d\x33\x7f\xc0" + b"\x00" * 32
+    )
+
+
+def _real_form_bare_raw8() -> bytes:
+    """"Fixed Lambdas SI" Graph1: flag ``89 18`` + three bare raw8 X values,
+    a short (plen=7) separator, then RLE Y values."""
+    return (
+        b"\x03\x00\x00\x1f"
+        b"\x89\x18"  # 2-byte flag token
+        b"\x7c\x14\xae\x47\xe1\x7a\x74\x3f"  # x_from = 0.005 (bare raw8)
+        b"\xeb\x51\xb8\x1e\x85\xeb\xa1\x3f"  # x_to = 0.035 (bare raw8)
+        b"\x7c\x14\xae\x47\xe1\x7a\x74\x3f"  # x step = 0.005 (bare raw8)
+        b"\x81\x04\x07\x00\x00\x01"  # separator, plen=7
+        b"\x81\x08\xc0\xe5\x03\x41\x01\x00\x00"  # geometry payload + filler
+        b"\x9a\xc2\x99\x03\xb9\xbf"  # y_from = -0.1 (lead-form c2 RLE)
+        b"\x9a\xc2\x99\x03\xb9\x3f"  # y_to = 0.1
+        b"\x9a\xc3\x99\x01\x3f"  # y step = 0.025 (lead-form c3 RLE: run of 6)
+        b"\x81\x04\x09\x00\x00\x01"
+        b"\x81\x2e\x40\x40\xd1\xc0\x01\x00\x00" + b"\x00" * 32
+    )
+
+
+def test_synthetic_real_form_tagged_and_rle_decodes() -> None:
+    figs = extract_figures_opju(_synthetic_opju(_real_form_tagged_and_rle()))
+    assert len(figs) == 1
+    f = figs[0]
+    assert (f["x_from"], f["x_to"]) == (0.2, 2.0)
+    assert (f["y_from"], f["y_to"]) == (1.0, 450000.0)
+    assert f["x_log"] is False
+    assert f["y_log"] is True  # real form has no isolated flag: decade heuristic
+
+
+def test_synthetic_real_form_runfirst_rle_and_elided_from() -> None:
+    figs = extract_figures_opju(_synthetic_opju(_real_form_runfirst_rle_elided_from()))
+    assert len(figs) == 1
+    f = figs[0]
+    assert (f["x_from"], f["x_to"]) == (0.0, 1.4)
+    assert (f["y_from"], f["y_to"]) == (0.4, 40000.0)
+    assert f["y_log"] is True
+
+
+def test_synthetic_real_form_bare_raw8() -> None:
+    figs = extract_figures_opju(_synthetic_opju(_real_form_bare_raw8()))
+    assert len(figs) == 1
+    f = figs[0]
+    # the raw8 literals hold the GT's exact doubles (0.005000000000000001 …)
+    assert (f["x_from"], f["x_to"]) == pytest.approx((0.005, 0.035), rel=1e-12)
+    assert (f["y_from"], f["y_to"]) == (-0.1, 0.1)
+    assert f["y_log"] is False
+
+
+def test_synthetic_real_form_garbage_after_separator_drops() -> None:
+    """A real-form record whose Y span never exact-fills drops cleanly."""
+    blob = _synthetic_opju(
+        b"\x03\x00\x00\x1f"
+        b"\x89\x01"
+        b"\x9a\xc2\x99\x02\xc9\x3f"
+        b"\x84\x01\x40"
+        b"\x83\x02\xe0\x3f"
+        b"\x81\x0d\x08\x00\x00\x01" + b"\x11" * 40  # no decodable Y span
+    )
+    assert extract_figures_opju(blob) == []
+
+
 # ── realdata: Origin ground-truth oracle (specimens only — see module docstring) ──
 
 _SPEC = Path(__file__).resolve().parents[1] / ".." / "test-data" / "origin" / "specimens"
@@ -184,37 +292,38 @@ def test_realdata_matches_origin_ground_truth(stem: str) -> None:
 
 
 @pytest.mark.realdata
-@pytest.mark.parametrize("stem", ["XAS", "RockingCurve", "UnpolPlots", "Fixed Lambdas SI"])
-def test_realdata_real_corpus_is_sound_or_absent(stem: str) -> None:
-    """Real corpus graphs (bound curves, custom axis dialogs) use a record
-    shape this decoder does not yet understand (see the module docstring's
-    documented gap) — it must return cleanly, and IF it ever decodes a figure
-    for one of these files, that figure must match a real oracle layer
-    (never fabricated data)."""
-    src = None
-    for parent in (_SPEC.parent, _SPEC):
-        for ext in (".opj", ".opju"):
-            candidate = parent / f"{stem}{ext}"
-            if candidate.exists():
-                src = candidate
-                break
-        if src is not None:
-            break
+@pytest.mark.parametrize(
+    ("stem", "n_anchors"),
+    [("XAS", 3), ("RockingCurve", 3), ("UnpolPlots", 4), ("Fixed Lambdas SI", 4)],
+)
+def test_realdata_real_corpus_anchors_decode_and_match(stem: str, n_anchors: int) -> None:
+    """Item 33: every real-corpus axis anchor decodes, and every decoded figure
+    matches an oracle layer's ranges within 1e-9 rel with correct lin/log.
+    Anchors are fewer than GT layers: only *unique* layers are encoded —
+    composite windows (RockingCurve/UnpolPlots ``Graph3``) reference existing
+    layers, and sparkline/derived layers carry no ``03 00 00 1f`` record —
+    so coverage is asserted per anchor, not per GT layer."""
+    src = _SPEC.parent / f"{stem}.opju"
     index_path = _GT / stem / "index.json"
-    if src is None or not index_path.exists():
+    if not src.exists() or not index_path.exists():
         pytest.skip(f"corpus file/ground-truth for '{stem}' not present on this machine")
-    if src.suffix.lower() != ".opju":
-        pytest.skip(f"{stem}: not a .opju source")
     index = json.loads(index_path.read_text(encoding="utf-8"))
     expected = [
         (layer["x"], layer["y"]) for g in index["graphs"] for layer in g["layers"]
     ]
+
+    def _tol(a: float, b: float) -> bool:
+        return abs(a - b) <= 1e-9 * max(1.0, abs(a), abs(b))
+
     figs = extract_figures_opju(src.read_bytes())
+    assert len(figs) == n_anchors, f"{stem}: expected {n_anchors} anchors, got {len(figs)}"
     for f in figs:
         assert any(
-            abs(f["x_from"] - x[0]) < 1e-6
-            and abs(f["x_to"] - x[1]) < 1e-6
-            and abs(f["y_from"] - y[0]) < 1e-6
-            and abs(f["y_to"] - y[1]) < 1e-6
+            _tol(f["x_from"], x[0])
+            and _tol(f["x_to"], x[1])
+            and _tol(f["y_from"], y[0])
+            and _tol(f["y_to"], y[1])
+            and f["x_log"] == (x[2] == 2.0)
+            and f["y_log"] == (y[2] == 2.0)
             for x, y in expected
         ), f"{stem}: decoded figure {f} matches no oracle layer"

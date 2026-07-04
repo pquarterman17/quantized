@@ -1,6 +1,6 @@
 # Origin `.opju` container — worksheet data encoding (SOLVED via Rosetta specimens)
 
-Clean-room RE for `plans/ORIGIN_FILE_DECODE_PLAN.md` **items 7 + 8 + 10**.
+Clean-room RE for `plans/ORIGIN_FILE_DECODE_PLAN.md` **items 7 + 8 + 10 + 33**.
 Method: controlled specimens generated with an Origin 2026b trial via COM
 (`tools/origin_trial/`), with known values/names, then byte-level analysis
 anchored on those knowns. No GPL source consulted; no open `.opju` reader
@@ -23,6 +23,93 @@ use zlib; worksheet columns never do.
 units, and 17/17 comments recovered across every decodable column in the
 five-file oracle corpus (XAS, RockingCurve, UnpolPlots, "Fixed Lambdas SI",
 plus the `rosetta_*` specimens).
+
+**Item 33 (real-corpus graph axis records) also SOLVED and shipping**
+(`src/quantized/io/origin_project/figures_opju.py`, 2026-07-04) — see the
+"SOLVED — item 33" section immediately below. 14/14 corpus anchors decode
+with GT-exact axis ranges and correct lin/log; the 6 specimen layers keep
+decoding via the original item-14 path.
+
+## SOLVED — item 33: real-corpus graph axis records (2026-07-04)
+
+Real corpus graphs (bound curves / non-default axis dialogs) don't use the
+specimen form's fixed `81 04 06 00 00 01 c3 66` X→Y transition. Their layer
+record, pinned against the 4-file ground-truth oracle (RockingCurve, XAS,
+UnpolPlots, "Fixed Lambdas SI" — 14 anchors), is:
+
+```
+03 00 00 1f                       layer anchor
+[optional flag token]             see length rule below
+[X from] [X to] [X step]          value tokens; "from" ELIDED when 0.0
+81 <id> <plen> 00 00 01 <geometry…>   separator; <id> and <plen> VARY
+                                  (0x04/0x0d/0x10 …, plen 7/8/10/14 seen);
+                                  plen is only a search-window HINT — the Y
+                                  span can start inside or a few bytes past
+                                  the nominal payload
+[Y from] [Y to] [Y step]          value tokens (tagged/RLE only)
+81 <id> <plen> 00 00 01 …         end separator (id 0x35 in 3 files, 0x04
+                                  in "Fixed Lambdas SI")
+```
+
+**Value token encodings** (superset of the specimen form's):
+
+1. **Tagged compact** `8T nn <nn bytes>` — tag byte `0x81..0x8f`, `nn` =
+   payload length 1-8; payload reversed = the double's BE top-`nn`. The tag
+   byte varies with the token's role (step is always `83 02`; "to" tags obey
+   T = 5 − nn; "from" tags cluster at 7 − nn and 17 − nn) but is not needed
+   for decoding — the reader treats it as opaque.
+2. **Bare raw8** — 8 LE double bytes, no tag ("messy" values, e.g. 0.005).
+   Never starts with a byte in `0x81..0x8f` in the corpus (used to reject
+   flag positions).
+3. **Bare compact** — 1-3 significant bytes with NO tag, right after a flag
+   token (`f0 3f` = 1.0, `d0 3f` = 0.25).
+4. **RLE-compressed raw8** — a byte-run inside the 8 LE double bytes
+   collapses to a `c2`/`c3` escape. **The count law (solved by a
+   constraint-fit across every `c2`/`c3` instance in all 4 files against the
+   GT candidate values): `c2` = a run of exactly 5 repeated bytes, `c3` =
+   exactly 6.** The byte after the repeated byte is a context/tag byte — NOT
+   a count (01/02/03/0a observed over identical run structures; 0.2 and ±0.1
+   share the byte-run shape but carry different context bytes) — and is
+   skipped; literal suffix bytes then complete the 8. Two alignments:
+   - lead form `<lead> c2/c3 <rep> <ctx> <suffix…>` — run covers double
+     bytes 1..N (`9a c2 99 02 c9 3f` = 0.2; `9a c3 99 01 3f` = 0.025);
+   - run-first form `c2/c3 <rep> <ctx> <suffix…>` — run covers bytes 0..N-1
+     (`c3 66 03 f6 3f` = 1.4). This resolved the last unmatched anchor —
+     and explains the `c3 66` inside the specimen form's transition marker
+     (it is the same escape, repeating 0x66 there).
+
+**Flag tokens** (X span only; skipped via a deterministic length rule):
+absent when the record opens with a tagged value (XAS, UnpolPlots SLD/NR);
+`89 01` / `89 18` / `97 03` / `91 09` = 2 bytes; a bare `91` immediately
+followed by a run-first RLE value = 1 byte (RockingCurve Graph2). Semantics
+undecoded — across the oracle every flagged X axis is GT-linear, so the
+flags do NOT correlate with axis type. The `85 02 f0 3f` sequence once
+suspected to be a y-log flag is a **tagged y_from = 1.0** (the whole-span
+exact-fill leaves no room for a flag reading, and GT confirms yf=1.0), so
+the real form has NO isolated lin/log flag; `x_log`/`y_log` fall back to the
+`.opj` decade heuristic (`hi/lo ≥ 1000`, positive) — correct for all 14
+corpus anchors (RockingCurve's three log-Y layers span ≥ 5 decades; every
+linear layer spans < 3).
+
+**Span decoding** is exact-fill, mirroring the item-14 philosophy: X tries
+`[from, to, step]` then `[to, step]` (from elided = 0.0) after the flag
+skip; Y (whose start position floats — plen is a hint) scans forward for the
+first position from which tagged/RLE tokens alone exactly fill the span up
+to the end separator. Any arity whose fill set is non-unique is dropped,
+never guessed.
+
+**Anchors vs GT layers:** only *unique* layers are anchor-encoded.
+Composite windows (RockingCurve `Graph3`, UnpolPlots `Graph3`) reference
+already-encoded layers; sparklines and a few derived graphs ("Fixed Lambdas
+SI" Graph5/Graph6 — including the corpus's only log-X layer) carry no
+`03 00 00 1f` record at all, so they are honestly out of reach of this
+decoder (no false coverage is claimed).
+
+Validation (2026-07-04): 14/14 anchors match their GT layers at 1e-9 rel
+with correct lin/log — RockingCurve 3/3, XAS 3/3, UnpolPlots 4/4, "Fixed
+Lambdas SI" 4/4 — and the specimen form still decodes 6/6 (fig_lin /
+fig_log / fig_pairs). `Hc2 data.opju` (16 MB, no GT) yields 32 plausible
+figures in ~0.03 s with no false-positive flood.
 
 ## SOLVED — item 10: windows-section names/units (2026-07-04)
 
