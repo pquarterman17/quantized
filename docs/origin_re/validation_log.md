@@ -126,10 +126,27 @@ embedded quotes now downgrade to `'`), and the writer-family
 fallbacks). Origin's `wks.nrows` reports ALLOCATED rows (32 for a 4-row
 put) — compare filled cells, never nrows.
 
+## 2026-07-04 (per-plot oracle regenerated — item 35 unblocked)
+
+`export_ground_truth.py`'s `graphs[].layers[].plots` was **empty for every
+project**: `range __rp = {pi}` is a column-range form that never binds a
+data plot, and `layer.nplots` / `layer.nplot` / `layer.plotN.data.*` are
+not live on this Origin's LabTalk (probed). Working recipe: `range -w
+__rw = {pi}` (plot range in the active layer) + the plain `%(__rw)`
+substitution → the FULL `[Book]"Sheet"!Col"LongName"` reference; enumerate
+`pi` upward until the substitution stops yielding fresh non-`###` text.
+`tools/origin_trial/export_plot_refs.py` wrote `plots.json` for 10 stems
+(92 refs). First comparison against the shipped `opju_curves` decoder:
+fig_pairs 2/2 · XAS 2/3 · RockingCurve 2/4 · Fixed Lambdas 2/14 correct,
+0 wrong on those — but UnpolPlots decoded **2 false bindings**
+(PrNiO3STOprof/refl col C, unplotted per oracle). Precision rework is in
+flight against this oracle.
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);
 `tools/origin_trial/generate_specimens.py`;
-`tools/origin_trial/probe_opj_loader.py` (item-34 loader probes). One COM
-script at a time; kill zombie `Origin64.exe` before starting; never run
-two concurrently.
+`tools/origin_trial/export_plot_refs.py` (per-plot oracle, delete
+plots.json to re-run); `tools/origin_trial/probe_opj_loader.py` (item-34
+loader probes). One COM script at a time; kill zombie `Origin64.exe`
+before starting; never run two concurrently.
