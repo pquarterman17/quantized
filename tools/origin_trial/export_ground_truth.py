@@ -119,7 +119,9 @@ def main() -> None:
             )
         return out
 
-    targets = sorted(CORPUS.glob("*.opju")) + sorted(SPEC.glob("*.opju"))
+    targets = sorted(  # smallest first: most oracles land before the 16 MB Hc2 monster
+        [*CORPUS.glob("*.opju"), *SPEC.glob("*.opju")], key=lambda f: f.stat().st_size
+    )
     for f in targets:
         outdir = GT / f.stem
         outdir.mkdir(exist_ok=True)
