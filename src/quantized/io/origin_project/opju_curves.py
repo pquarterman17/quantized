@@ -318,6 +318,21 @@ remains unlocated. This is reported as a confirmed negative result (not
 merely "not yet tried") so a future pass doesn't re-spend time on the same
 three leads — see ``docs/origin_project_format.md`` §6.2.1 for the
 corresponding writeup.
+
+**The third encoding — FOUND (item 35, 2026-07-04 rework).** Lead #2 above
+("window-local alternate encoding") was the real thing after all: re-
+anchored on the byte pattern itself rather than the book-name string that
+made it look file-specific, ``<flag> 01 01 01 80 01 <val>`` (subtype
+``0x01`` vs. this module's ``0x03``) is found corpus-wide. The earlier
+rejection was a counting-convention bug, not a wrong shape: ``val`` counts
+cumulatively over **every allocated column of every workbook**, including
+empty/undecoded ones — not ``_global_column_map``'s FPC-decoded-only
+ordinal. Re-resolving through that all-columns map raises aggregate
+oracle-covered recall from 30.6% (11/36) to 100% (36/36) at unchanged 100%
+precision. Full trail, the map builder, and why its designation gate is
+deliberately skipped live in ``opju_curves_allcols.py`` (split out to stay
+under the 500-line ceiling); :func:`extract_curves` below merges both
+families per figure, deduped on ``(book, y)``.
 """
 
 from __future__ import annotations
@@ -327,10 +342,19 @@ from collections.abc import Mapping, Sequence
 
 from quantized.io.origin_project.opj import _group
 from quantized.io.origin_project.opju_codec import scan_columns
+from quantized.io.origin_project.opju_curves_allcols import (
+    _allocated_column_map,
+    extract_curves_allcols,
+)
 from quantized.io.origin_project.windows import BookMeta
 from quantized.io.origin_project.windows_opju import opju_window_metadata
 
-__all__ = ["book_columns_from_bytes", "book_metadata_from_bytes", "extract_curves"]
+__all__ = [
+    "allocated_columns_from_bytes",
+    "book_columns_from_bytes",
+    "book_metadata_from_bytes",
+    "extract_curves",
+]
 
 # <flag:1> 01 <konst:1> 01 80 03 <y_ord:1> 00 -- see module docstring.
 _CURVE_RE = re.compile(rb".\x01.\x01\x80\x03.\x00")
@@ -380,6 +404,17 @@ def book_metadata_from_bytes(
     return opju_window_metadata(b, book_columns)
 
 
+def allocated_columns_from_bytes(b: bytes) -> dict[str, int]:
+    """``{book: total allocated column count}`` over EVERY allocated column
+    of EVERY workbook, including empty/undecoded books and columns — the
+    universe the 0x01-subtype token's ordinal counts over (see "The third
+    encoding — FOUND" section of the module docstring and
+    ``opju_curves_allcols.py``). A thin wrapper, mirroring
+    :func:`book_columns_from_bytes`, so ``figures_opju.py`` computes it once
+    per file and threads it through rather than every figure re-scanning."""
+    return dict(_allocated_column_map(b))
+
+
 def _global_column_map(
     book_columns: Mapping[str, Sequence[str]],
 ) -> dict[int, tuple[str, str]]:
@@ -393,21 +428,21 @@ def _global_column_map(
     return out
 
 
-def extract_curves(
+def _extract_curves_0x03(
     b: bytes,
     start: int,
     end: int,
     book_columns: Mapping[str, Sequence[str]],
     books_meta: Mapping[str, BookMeta],
 ) -> list[dict[str, str]]:
-    """Every curve's ``{book, x, y}`` column binding found in ``b[start:end)``.
+    """The shipped 0x03-subtype curve token path — UNCHANGED (see module
+    docstring; do not modify this function, its map, or the ``__BCO`` gate).
 
-    ``y`` is decoded from the curve token (see module docstring) and gated on
-    the "Designation gate" (must independently confirm as ``"Y"``); ``x`` is
-    inferred as ``y``'s own book's first column (not decoded from the byte
-    record — see the module docstring's "X is not decoded"). A token whose
-    ``y_ord`` doesn't resolve to a known, ``Y``-designated column is silently
-    dropped — never guessed.
+    ``y`` is decoded from the curve token and gated on the "Designation gate"
+    (must independently confirm as ``"Y"``); ``x`` is inferred as ``y``'s own
+    book's first column (not decoded from the byte record — see the module
+    docstring's "X is not decoded"). A token whose ``y_ord`` doesn't resolve
+    to a known, ``Y``-designated column is silently dropped — never guessed.
     """
     gmap = _global_column_map(book_columns)
     out: list[dict[str, str]] = []
@@ -429,4 +464,33 @@ def extract_curves(
         if cm is None or cm.designation != "Y":
             continue
         out.append({"book": book, "x": cols[0], "y": y_col})
+    return out
+
+
+def extract_curves(
+    b: bytes,
+    start: int,
+    end: int,
+    book_columns: Mapping[str, Sequence[str]],
+    books_meta: Mapping[str, BookMeta],
+    book_counts_all: Mapping[str, int],
+) -> list[dict[str, str]]:
+    """Every curve's ``{book, x, y}`` binding in ``b[start:end)``, merging
+    BOTH curve-token families (see "The third encoding — FOUND" above): the
+    shipped 0x03-subtype token (:func:`_extract_curves_0x03`, unchanged,
+    ``"Y"``-designation gated) and the 0x01-subtype all-columns token
+    (``opju_curves_allcols.extract_curves_allcols``, deliberately not
+    designation-gated — see that module's docstring). Deduped on
+    ``(book, y)`` (composite/duplicate-referencing windows, or the 0x01
+    family's own doubled hits, commonly re-emit one binding twice), first-
+    seen order (0x03 before 0x01).
+    """
+    out = _extract_curves_0x03(b, start, end, book_columns, books_meta)
+    seen = {(c["book"], c["y"]) for c in out}
+    for c in extract_curves_allcols(b, start, end, book_counts_all):
+        key = (c["book"], c["y"])
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(c)
     return out

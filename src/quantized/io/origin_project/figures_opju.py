@@ -101,20 +101,26 @@ signal, unlike blind name-scanning) and ``n_curves`` from the legend text's
 *window name* (Origin's "Graph1" etc.) is not recoverable with the current
 understanding, so ``name`` is always ``""``.
 
-**Curve-to-dataset binding (item 35, partial).** Unlike ``.opj``
+**Curve-to-dataset binding (item 35, closed).** Unlike ``.opj``
 (``figures.py``, where the DataPlot column selector is still permanently
 undecoded), CPYUA's curve/DataPlot objects carry a small fixed-shape token
-that decodes the Y-axis column exactly, gated against an independently
-validated per-column designation check so nothing reported is a mis-typed
-column (validated against a purpose-built specimen, exact 4/4; and the real
-corpus, 12 designation-confirmed curves across 4 files — no direct Origin-GT
-match was possible, see ``opju_curves.py``'s module docstring for the full
-byte-level trail). Each decodable figure gets a best-effort ``"curves"``
-list of ``{"book", "x", "y"}`` dicts (often empty, or missing curves a user
-would expect — see ``opju_curves.py``'s "Known gap — per-figure
-attribution", the reason item 35 stays open); ``x`` is a structural
-inference (the Y column's own book's first column), not decoded from the
-byte record.
+that decodes the Y-axis column exactly. TWO token subtypes exist and are
+both decoded and merged here: the 0x03-subtype token (custom-styled/multi-
+curve/Select-Data graphs, gated on an independently validated ``"Y"``
+column designation) and the 0x01-subtype token (ordinary single-curve
+default-dialog graphs, an all-columns cumulative ordinal, deliberately NOT
+designation-gated — see ``opju_curves_allcols.py``'s module docstring).
+Validated against the real per-plot oracle at 100% precision and 100%
+aggregate recall (36/36 oracle pairs across the four real-corpus files —
+see ``opju_curves.py`` / ``opju_curves_allcols.py``'s module docstrings for
+the full byte-level trail). Each decodable figure gets a best-effort
+``"curves"`` list of ``{"book", "x", "y"}`` dicts; per-*figure* attribution
+(which curve belongs to which decoded window) remains a best-effort
+``[anchor, next_anchor)`` heuristic — see ``opju_curves.py``'s "Known gap —
+per-figure attribution" — so a curve is sometimes attributed to the wrong
+figure within a file even though the ``(book, column)`` pair itself is
+never wrong. ``x`` is a structural inference (the Y column's own book's
+first column), not decoded from either token.
 """
 
 from __future__ import annotations
@@ -130,6 +136,7 @@ from quantized.io.origin_project.opju_axis_real_form import (
     _parse_real_record,
 )
 from quantized.io.origin_project.opju_curves import (
+    allocated_columns_from_bytes,
     book_columns_from_bytes,
     book_metadata_from_bytes,
     extract_curves,
@@ -301,6 +308,7 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
     figures: list[dict[str, Any]] = []
     book_columns = book_columns_from_bytes(b)
     books_meta = book_metadata_from_bytes(b, book_columns)
+    book_counts_all = allocated_columns_from_bytes(b)
     anchors = _find_all(b, _ANCHOR)
     for idx, anchor in enumerate(anchors):
         p = anchor + len(_ANCHOR)
@@ -345,7 +353,9 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "source_hint": _source_hint(b, anchor),
                 "n_curves": max(legend_ns) if legend_ns else 0,
                 "annotations": titles[:12],
-                "curves": extract_curves(b, anchor, window_end, book_columns, books_meta),
+                "curves": extract_curves(
+                    b, anchor, window_end, book_columns, books_meta, book_counts_all
+                ),
             }
         )
     return figures

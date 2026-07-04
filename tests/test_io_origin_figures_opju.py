@@ -548,6 +548,107 @@ def test_synthetic_curve_token_non_y_designation_dropped() -> None:
     assert figs[0]["curves"] == []
 
 
+# ── synthetic curve->column binding, the 0x01-subtype all-columns token ──────
+#
+# The second curve-token family (item 35, closed 2026-07-04): ordinary
+# single-curve default-dialog graphs (RockingCurve Graph1/Graph2, all of
+# XAS, all of UnpolPlots) encode their Y column with subtype 0x01 instead of
+# 0x03, counted cumulatively over EVERY allocated column of EVERY book --
+# including empty/undecoded books and columns -- not just the FPC-decoded
+# ones the 0x03 path's ``_global_column_map`` counts. See
+# ``opju_curves_allcols.py``'s module docstring for the full byte-level
+# trail and why this token is NOT designation-gated (unlike 0x03).
+
+
+def _name_marker(name: str) -> bytes:
+    """A bare length-prefixed dataset-name record with NO column data behind
+    it -- simulating an empty/undecoded column (e.g. XAS's unused default
+    ``Book1``), which still carries a name record but never appears in
+    ``opju_codec.scan_columns`` / ``book_columns_from_bytes``."""
+    nm = name.encode("latin1")
+    return bytes([len(nm)]) + nm
+
+
+def _curve_token_0x01(flag: int, val: int) -> bytes:
+    """The 7-byte 0x01-subtype all-columns curve token (see
+    ``opju_curves_allcols.py``) -- no fixed terminator, unlike the 0x03
+    family's trailing ``0x00``."""
+    return bytes([flag, 0x01, 0x01, 0x01, 0x80, 0x01, val])
+
+
+def test_synthetic_allcols_token_resolves_across_empty_book() -> None:
+    """``Book1`` carries name records but no decodable data (an empty
+    default book, mirroring XAS's real ``Book1_A``/``Book1_B``) -- it still
+    occupies 2 ordinals in the all-columns map, so ``FBook``'s columns start
+    at ordinal 3. A 0x01 token with val=5 must resolve to ``FBook!C``."""
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _name_marker("Book1_A")
+        + _name_marker("Book1_B")
+        + _opju_const_column("FBook_A", 1.0)
+        + _opju_const_column("FBook_B", 2.0)
+        + _opju_const_column("FBook_C", 3.0)
+        + _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _curve_token_0x01(0xBA, val=5)
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["curves"] == [{"book": "FBook", "x": "A", "y": "C"}]
+
+
+def test_synthetic_allcols_token_out_of_range_dropped() -> None:
+    """A val past the last allocated column of the last book resolves to
+    nothing -- dropped, not guessed (mirrors the 0x03 path's own
+    out-of-range test)."""
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_const_column("FBook_A", 1.0)
+        + _opju_const_column("FBook_B", 2.0)
+        + _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _curve_token_0x01(0xBA, val=9)  # only 2 allocated columns exist
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["curves"] == []
+
+
+def test_synthetic_allcols_token_not_designation_gated() -> None:
+    """Unlike the 0x03 path, a 0x01 token resolving to a Y-error-designated
+    column is KEPT, not dropped -- the deliberate difference documented in
+    ``opju_curves_allcols.py`` (real corpus files legitimately plot a
+    Y-error column, e.g. "dR Fresnel"/"dSA", as its own curve; requiring
+    "Y" designation here would silently lose those true positives)."""
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_const_column("FBook_A", 1.0)
+        + _opju_const_column("FBook_B", 2.0)
+        + _opju_window_section("FBook", ["X", "Y-error"])
+        + _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _curve_token_0x01(0xBA, val=2)  # resolves to FBook's B, which is Y-error
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["curves"] == [{"book": "FBook", "x": "A", "y": "B"}]
+
+
+def test_synthetic_curve_families_merge_and_dedup() -> None:
+    """When both token families resolve to the SAME (book, y) pair inside one
+    figure's window, the merged ``curves`` list reports it once, not twice."""
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_const_column("FBook_A", 1.0)
+        + _opju_const_column("FBook_B", 2.0)
+        + _opju_const_column("FBook_C", 3.0)
+        + _opju_window_section("FBook", ["X", "Y", "Y"])
+        + _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _curve_token(0xBA, y_ord=3)  # 0x03 family: FBook!C
+        + _curve_token_0x01(0xBB, val=3)  # 0x01 family: also FBook!C
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["curves"] == [{"book": "FBook", "x": "A", "y": "C"}]
+
+
 # ── realdata: Origin ground-truth oracle (specimens only — see module docstring) ──
 
 
@@ -871,29 +972,31 @@ def _oracle_pairs(plots_path: Path) -> set[tuple[str, str]]:
 
 
 # Measured 2026-07-04 against the real plots.json oracle (see
-# docs/origin_project_format.md sec 6.2.1 for the full table) after excluding
-# the "__BCO" boilerplate false positive (opju_curves.py's module docstring).
-# Precision is 100% on every stem -- asserted unconditionally below, no floor
-# needed. Recall is this decoder's documented, honest, and still-significant
-# gap (most real per-curve tokens are not yet locatable); these floors exist
-# to catch a regression, not to claim the ceiling has been reached.
+# docs/origin_project_format.md sec 6.2.1 for the full table). Precision is
+# 100% on every stem -- asserted unconditionally below, no floor needed.
+# These floors exist to catch a regression, not to claim a ceiling.
 #
 # ``curves_multi``/``curves_2books`` (item 35 recall push, same day) are two
-# new *purpose-built* specimens added to pin the multi-curve-per-layer and
-# cross-book-ordinal layout; both decode at 100% recall with the existing
-# pipeline (no code change needed for them -- see opju_curves.py's module
-# docstring). They raise the aggregate oracle-covered recall from 6/31
-# (19.4%) to 11/36 (30.6%); real-corpus recall itself is unchanged (the
-# investigation that produced them found a second confirmed-excluded near-miss
-# shape, not a new decodable signal -- see the module docstring).
+# purpose-built specimens pinning the multi-curve-per-layer and cross-book-
+# ordinal layout; both decode at 100% recall via the existing (0x03-subtype)
+# pipeline (see opju_curves.py's module docstring).
+#
+# The 0x01-subtype all-columns token (item 35 CLOSED, same-day rework --
+# see opju_curves_allcols.py's module docstring) then raised every real-
+# corpus stem to 100%: it decodes exactly the ordinary, single-curve
+# default-dialog graphs (RockingCurve Graph1/Graph2, all of XAS, all of
+# UnpolPlots, most of "Fixed Lambdas SI") the 0x03-subtype path could never
+# reach, using an ordinal counted over ALL allocated columns of ALL books
+# (not just FPC-decoded ones). Aggregate oracle-covered recall: 36/36
+# (100%), up from 11/36 (30.6%).
 _RECALL_FLOOR = {
     "fig_pairs": 1.0,  # 2/2 -- the by-construction specimen this was reverse-engineered from
-    "curves_multi": 1.0,  # 3/3 -- multi-curve-per-layer specimen (new 2026-07-04)
-    "curves_2books": 1.0,  # 2/2 -- cross-book-ordinal specimen (new 2026-07-04)
-    "XAS": 0.0,  # 0/3 -- its only matches were the __BCO artifact, now correctly excluded
-    "RockingCurve": 0.5,  # 2/4 -- NbAuRocking's D+F multi-curve layer decodes exactly
-    "UnpolPlots": 0.0,  # 0/8 -- both matches were the __BCO artifact (the fix this rework ships)
-    "Fixed Lambdas SI": 2 / 14,  # 2/14 -- only each window's first ("Theory SA") curve survives
+    "curves_multi": 1.0,  # 3/3 -- multi-curve-per-layer specimen (2026-07-04)
+    "curves_2books": 1.0,  # 2/2 -- cross-book-ordinal specimen (2026-07-04)
+    "XAS": 1.0,  # 3/3 -- all 3 now via the 0x01-subtype all-columns token
+    "RockingCurve": 1.0,  # 4/4 -- NbAuRocking's D+F (0x03) + Nb!B/NbAl!B (0x01)
+    "UnpolPlots": 1.0,  # 8/8 -- all 8 now via the 0x01-subtype all-columns token
+    "Fixed Lambdas SI": 1.0,  # 14/14 -- all 14 now via the 0x01-subtype all-columns token
 }
 
 # Stems that live directly in specimens/ (purpose-built, by-construction
@@ -932,3 +1035,38 @@ def test_realdata_curve_bindings_vs_plots_oracle(stem: str) -> None:
     recall = len(decoded & oracle) / len(oracle) if oracle else 1.0
     floor = _RECALL_FLOOR[stem]
     assert recall >= floor - 1e-9, f"{stem}: recall {recall:.3f} regressed below floor {floor:.3f}"
+
+
+# ── realdata: the GT-free all-columns map builder (item 35 rework) ───────────
+#
+# ``_allocated_column_map`` (opju_curves_allcols.py) is the piece that makes
+# the 0x01-subtype token decodable WITHOUT a curve oracle: it recovers every
+# book's total allocated-column count (including empty/undecoded books and
+# columns) from name records alone. This guards that builder directly
+# against each stem's independently-exported ``index.json`` book/column
+# inventory -- the one oracle that WAS always available (unlike plots.json).
+
+
+@pytest.mark.realdata
+@pytest.mark.parametrize("stem", ["XAS", "RockingCurve", "UnpolPlots", "Fixed Lambdas SI"])
+def test_realdata_allocated_column_map_matches_index(stem: str) -> None:
+    """The GT-free ``_allocated_column_map`` must reproduce, for every book,
+    the exact total column count ``index.json`` independently reports --
+    including empty default books (XAS/UnpolPlots/"Fixed Lambdas SI"'s
+    ``Book1``, 2 columns, never FPC-decoded) and books whose FPC-decoded
+    column count (``book_columns_from_bytes``) is SMALLER than their true
+    allocated count (e.g. RockingCurve's ``NbAu``: 7 allocated, only 6
+    FPC-decodable) -- this map must report the larger, allocated total."""
+    from quantized.io.origin_project.opju_curves_allcols import _allocated_column_map
+
+    src = _SPEC.parent / f"{stem}.opju"
+    index_path = _GT / stem / "index.json"
+    if not src.exists() or not index_path.exists():
+        pytest.skip(f"corpus file/ground-truth for '{stem}' not present on this machine")
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    expected = {
+        book["book"]: sum(len(sheet["columns"]) for sheet in book["sheets"])
+        for book in index["books"]
+    }
+    got = dict(_allocated_column_map(src.read_bytes()))
+    assert got == expected, f"{stem}: allocated column map {got} != index.json {expected}"
