@@ -1,4 +1,4 @@
-# Origin File Full-Decode Plan (.opj / .opju → quantized)
+# Origin Interop Plan (import .opj/.opju + export to Origin)
 
 Open OriginPro project files in quantized without owning Origin: every
 workbook's data (not just the largest), real column names/units, the
@@ -6,8 +6,10 @@ newer `.opju` format, and the saved figures. All clean-room reverse
 engineering (Apache-2.0; the GPL `liborigin` is a format *reference
 only*, never a dependency, never copied — this supersedes
 ORIGIN_GAP_PLAN #44's external-converter idea). M1 (`.opj` numeric
-worksheet data, largest book) shipped 2026-07-03; this plan covers
-everything remaining.
+worksheet data, largest book) shipped 2026-07-03. Scope now covers BOTH
+directions — importing Origin projects AND exporting quantized work back
+to Origin users (W6) — plus the testing hardening that makes either
+trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
@@ -69,6 +71,8 @@ decoded graphs  → plot-spec mapping → restored figures (W3 + W4)
   need owner UX decisions (AskUserQuestion at design time).
 - 12 should coordinate with ORIGIN_GAP_PLAN #12 (FigureDoc entity) —
   imported Origin figures should land as the same document type.
+- W6: 23 and 24 are independent; 26 needs 12; 27 deferred.
+- W7: 28 is ready now (oracle files exist); 30 needs 24; 29/31 anytime.
 
 ### Who does what (model routing)
 
@@ -101,6 +105,30 @@ Agent types: `data-format-detective` (1, 7, 11), `code-architect` (12,
 
 Every implementer must first read `docs/origin_project_format.md`, the
 relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
+
+### Gap analysis — both directions (2026-07-04)
+
+**Origin → quantized (import).** Shipped: `.opj` numeric data (all books via
+`read_origin_books`), real column names/units/designations, book titles.
+Remaining gaps: the `.opju` decoder (item 8 — codec cracked, mode schedule +
+outer framing open in item 7), sheet hierarchy (5), non-double column types
+(4), the multi-dataset import flow + picker UI (16/17 — owner UX decision),
+figures (12/13/14), notes/templates/log (6/21/22).
+
+**quantized → Origin (export).** Shipped: `format_origin_script`
+(`io/origin.py` — CSV + LabTalk `.ogs` that rebuilds designations, long
+names, units, optional graph; route-exposed, MATLAB-parity tested). Gaps:
+single-dataset only (no multi-book export), no figure export, the COM
+"Send to Origin" optional is designed but not built (25), and there is no
+native `.opj` writer (24) — newly feasible because the RE work documented
+the container: a written `.opj` opens in EVERY Origin version (Origin ≥2023
+still reads `.opj`, it only dropped *writing* it), making it the highest-value
+export lever. A `.opju` writer (27) is low-value while `.opj` opens everywhere.
+
+**Testing.** Exists: synthetic CI fixtures, realdata anchors, 1324-test gate.
+Gaps: no oracle comparison against Origin's own ground-truth dumps (28), no
+corpus-wide sweep/malformed-input/perf suite (29), no round-trip tests (30),
+no documented real-Origin validation procedure for the trial window (31).
 
 ---
 
@@ -247,6 +275,90 @@ relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
     *Model: haiku.*
 
 ---
+
+## W6 — Export to Origin (quantized → Origin)
+
+### Tier 1 — High Impact
+
+23. **Origin-ASCII + `.ogs` export completeness** — extend
+    `format_origin_script` to what import now recovers: multi-dataset
+    export (one `.ogs` importing N CSVs into N named books), comments,
+    book display titles; golden tests for the emitted script
+    *Model: sonnet · independent.*
+
+24. **Native `.opj` writer (data)** — emit a CPYA project directly:
+    header line, column header/data blocks (10-byte records, NaN → the
+    missing-value sentinel), and windows-section worksheet definitions
+    (property + label blocks) so names/units/designations open intact
+    in ANY Origin version — the "hand files back to Origin colleagues"
+    lever, unlocked by the completed RE
+    *Model: sonnet · knowledge complete (items 1 + M1); verified via 30 + 31.*
+    - [ ] Data-only single-book writer, round-tripped through our reader
+    - [ ] Windows-section metadata writer (names/units/designations)
+    - [ ] Multi-book projects
+    - [ ] Route + UI hook (export menu alongside `.ogs`)
+
+### Tier 2 — Medium Impact
+
+25. **COM "Send to Origin" (Windows-only optional)** — pywin32 behind a
+    feature flag pushing the active dataset(s) + labels into a running
+    Origin (the LabTalk/COM surface proven in `tools/origin_trial/`);
+    degrades to 23 everywhere else; mock-based tests only, never a CI
+    requirement (architecture guard #10)
+    *Model: sonnet.*
+
+### Tier 3 — Nice-to-Have
+
+26. **Figure export** — `.ogs` graph-building blocks from a FigureDoc,
+    and/or graph windows inside the `.opj` writer (the inverse of item
+    12's mapping)
+    *Model: sonnet · needs 12.*
+
+27. **`.opju` writer** — only if 24 ever proves insufficient; needs the
+    outer-framing RE tail and confirmation Origin accepts all-literal
+    codec streams (probe during a trial window)
+    *Model: defer.*
+
+---
+
+## W7 — Testing hardening (both directions)
+
+### Tier 1 — High Impact
+
+28. **Ground-truth oracle suite** — realdata tests comparing
+    `read_origin_books` (and the item-8 `.opju` decoder when it lands)
+    against Origin's own exports in `specimens/ground_truth/<stem>/`:
+    book/sheet/column names, units, designations, row counts, and values
+    within rtol; auto-skips where the ground truth is absent
+    *Model: sonnet · the strongest parity layer; oracle files exist.*
+
+29. **Corpus sweep, malformed-input + perf suite** —
+    *Model: sonnet/haiku.*
+    - [ ] Sweep: every corpus file parses or raises `OriginProjectError`
+          (never crashes or hangs)
+    - [ ] Fuzz fixtures: truncated blocks, lying sizes, huge nrows,
+          non-ASCII names, zero columns, label without property block
+    - [ ] Version-matrix anchors: `.opj` 4.3227 + 4.3380; `.opju`
+          4.3380 + 4.3811 (trial re-saves in `specimens/converted/`)
+    - [ ] Perf budget: PNR.opj (127 MB) parses within a set time/memory
+          bound (realdata marker)
+
+30. **Round-trip tests** — quantized → `.opj` writer → our reader
+    equality (data + names, CI-safe synthetic); import → `.ogs`
+    re-export consistency (designations/labels preserved); later
+    `.opju` decode → `.opj` write → reader equality
+    *Model: sonnet · needs 24 for the writer legs.*
+
+### Tier 2 — Medium Impact
+
+31. **Trial-window validation log** — a documented, repeatable manual
+    checklist run whenever a real Origin license is present: our written
+    `.opj` files open in Origin with correct data/names; `.ogs` scripts
+    run clean; the COM path works; results recorded in
+    `docs/origin_re/validation_log.md` (Origin cannot run in CI — this
+    plus 28 is the honest substitute)
+    *Model: haiku (docs) + owner (clicks).*
+
 
 ## Completed
 
