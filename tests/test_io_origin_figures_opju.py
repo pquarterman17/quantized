@@ -375,6 +375,37 @@ def test_synthetic_curve_token_out_of_range_ordinal_dropped() -> None:
     assert figs[0]["curves"] == []
 
 
+def _column_enum_token(marker: int, ordv: int) -> bytes:
+    """The 7-byte per-book "column candidate list" shape found near every
+    book reference in every specimen/real-corpus file checked (item 35
+    recall push, 2026-07-04) -- NOT a curve binding, see the module
+    docstring's "second near-miss shape" section. One byte shorter than the
+    real curve token (single ``0x01`` then straight to ``0x80 0x03``, never
+    the real token's double ``0x01``), so it can never satisfy ``_CURVE_RE``.
+    """
+    return bytes([0x33, 0x01, marker, 0x80, 0x03, ordv, 0x00])
+
+
+def test_synthetic_column_enum_list_not_mistaken_for_curve_token() -> None:
+    """A run of column-candidate-list tokens (one per column of a book, as
+    observed enumerating every column A..D in the real corpus and both new
+    curves_multi/curves_2books specimens) must never be reported as curves:
+    they are missing the second ``0x01`` byte the real per-curve token
+    requires, so the whole-file regex structurally cannot match them."""
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_const_column("FBook_A", 1.0)
+        + _opju_const_column("FBook_B", 2.0)
+        + _opju_const_column("FBook_C", 3.0)
+        + _opju_window_section("FBook", ["X", "Y", "Y"])
+        + _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + b"".join(_column_enum_token(0x10, ordv) for ordv in (1, 2, 3))
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["curves"] == []
+
+
 def test_synthetic_curve_token_non_y_designation_dropped() -> None:
     """A curve token whose y_ord resolves to an X or Y-error column is dropped
     (the designation gate) -- e.g. "Fixed Lambdas SI"'s ``dQ`` Y-error column,
@@ -551,6 +582,41 @@ def test_realdata_fig_pairs_curve_bindings() -> None:
         assert f["curves"] == [want], f"fig_pairs graph{i + 1}: curves={f['curves']}"
 
 
+@pytest.mark.realdata
+def test_realdata_curves_multi_bindings() -> None:
+    """``curves_multi``: one graph, one layer, three curves (MBook B/C/D vs
+    A) -- pins the multi-curve-per-layer byte layout (see module docstring's
+    "Multi-curve-per-layer and multi-book layout" section). By-construction
+    truth: ``ground_truth/curves_multi/plots.json``."""
+    src = _SPEC / "curves_multi.opju"
+    if not src.exists():
+        pytest.skip("curves_multi specimen not present on this machine")
+    figs = extract_figures_opju(src.read_bytes())
+    assert len(figs) == 1
+    assert figs[0]["curves"] == [
+        {"book": "MBook", "x": "A", "y": "B"},
+        {"book": "MBook", "x": "A", "y": "C"},
+        {"book": "MBook", "x": "A", "y": "D"},
+    ]
+
+
+@pytest.mark.realdata
+def test_realdata_curves_2books_bindings() -> None:
+    """``curves_2books``: one graph, curves from two different books
+    (``BookOne!B``, ``BookTwo!C``) -- pins the cumulative-ordinal base
+    carrying over a book boundary. By-construction truth:
+    ``ground_truth/curves_2books/plots.json``."""
+    src = _SPEC / "curves_2books.opju"
+    if not src.exists():
+        pytest.skip("curves_2books specimen not present on this machine")
+    figs = extract_figures_opju(src.read_bytes())
+    assert len(figs) == 1
+    assert figs[0]["curves"] == [
+        {"book": "BookOne", "x": "A", "y": "B"},
+        {"book": "BookTwo", "x": "A", "y": "C"},
+    ]
+
+
 # Long-names GT independently confirms belong to an independent/reference axis
 # (Theta, Energy/E, depth Z, momentum-transfer Q and its uncertainty dQ, time
 # T, flux F) -- a curve's decoded Y column must never be one of these.
@@ -624,25 +690,49 @@ def _oracle_pairs(plots_path: Path) -> set[tuple[str, str]]:
 # needed. Recall is this decoder's documented, honest, and still-significant
 # gap (most real per-curve tokens are not yet locatable); these floors exist
 # to catch a regression, not to claim the ceiling has been reached.
+#
+# ``curves_multi``/``curves_2books`` (item 35 recall push, same day) are two
+# new *purpose-built* specimens added to pin the multi-curve-per-layer and
+# cross-book-ordinal layout; both decode at 100% recall with the existing
+# pipeline (no code change needed for them -- see opju_curves.py's module
+# docstring). They raise the aggregate oracle-covered recall from 6/31
+# (19.4%) to 11/36 (30.6%); real-corpus recall itself is unchanged (the
+# investigation that produced them found a second confirmed-excluded near-miss
+# shape, not a new decodable signal -- see the module docstring).
 _RECALL_FLOOR = {
     "fig_pairs": 1.0,  # 2/2 -- the by-construction specimen this was reverse-engineered from
+    "curves_multi": 1.0,  # 3/3 -- multi-curve-per-layer specimen (new 2026-07-04)
+    "curves_2books": 1.0,  # 2/2 -- cross-book-ordinal specimen (new 2026-07-04)
     "XAS": 0.0,  # 0/3 -- its only matches were the __BCO artifact, now correctly excluded
     "RockingCurve": 0.5,  # 2/4 -- NbAuRocking's D+F multi-curve layer decodes exactly
     "UnpolPlots": 0.0,  # 0/8 -- both matches were the __BCO artifact (the fix this rework ships)
     "Fixed Lambdas SI": 2 / 14,  # 2/14 -- only each window's first ("Theory SA") curve survives
 }
 
+# Stems that live directly in specimens/ (purpose-built, by-construction
+# truth) rather than in the parent test-data/origin/ dir (the real corpus).
+_SPECIMEN_DIR_STEMS = {"fig_pairs", "curves_multi", "curves_2books"}
+
 
 @pytest.mark.realdata
 @pytest.mark.parametrize(
-    "stem", ["fig_pairs", "XAS", "RockingCurve", "UnpolPlots", "Fixed Lambdas SI"]
+    "stem",
+    [
+        "fig_pairs",
+        "curves_multi",
+        "curves_2books",
+        "XAS",
+        "RockingCurve",
+        "UnpolPlots",
+        "Fixed Lambdas SI",
+    ],
 )
 def test_realdata_curve_bindings_vs_plots_oracle(stem: str) -> None:
     """Strict precision (every decoded curve must be IN the oracle, file-wide,
     no exceptions) plus a recall floor (must not regress below what's
     currently achieved) against the real per-plot ``plots.json`` oracle."""
     plots_path = _GT / stem / "plots.json"
-    src = _SPEC / f"{stem}.opju" if stem == "fig_pairs" else _SPEC.parent / f"{stem}.opju"
+    src = _SPEC / f"{stem}.opju" if stem in _SPECIMEN_DIR_STEMS else _SPEC.parent / f"{stem}.opju"
     if not src.exists() or not plots_path.exists():
         pytest.skip(f"corpus file/plots-oracle for '{stem}' not present on this machine")
     oracle = _oracle_pairs(plots_path)
