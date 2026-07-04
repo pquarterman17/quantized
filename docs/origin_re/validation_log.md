@@ -209,6 +209,27 @@ window/section statistics, and dump the 133B '#' + 72B sub-block fields
 per window for chain candidates; (c) try removing a window AND emptying
 all slots together (composition of the two known failure axes).
 
+## 2026-07-05 (overlay + per-layer round — out-of-sample verification)
+
+- **Graphs-only oracles exported** for the two never-validated `.opj`
+  projects (`range -w` recipe): MnN_Diffusion_PNR 40 graphs / 392 plot
+  refs, SuperlatticeFits 32 / 152 → `ground_truth/<stem>/graphs.json`.
+- **Out-of-sample decoder score** (files the curve/flag decoders were
+  never tuned on): MnN 102/108 pairs (94.4%), Superlattice 47/53 (88.7%),
+  **0 wrong in both**; y-scale flags 80/80 + 38/38 on range-matched
+  layers. Precision holds at 100% beyond the development corpus.
+- **Live COM overlay roundtrip**: an overlay-shaped dataset (segment
+  blocks + NaN gaps) through `send_to_origin` — finite cells land
+  row-exact, **NaN cells become Origin missing values (`--`)**, labels
+  carry. The GUI's cross-book overlay datasets are COM-exportable as-is.
+- Live import fan-out test caught + fixed a real gap: XRD Book6's
+  2-theta column (4 stray denormals) was gate-dropped; `salvage_column`
+  now masks ≤4/≤0.5% wrecked cells AFTER the text/report decoders pass
+  (hc2convert 407 report + 58 text verified unchanged).
+- Full-book GT export for MnN timed out mid-stem (14 book CSVs written,
+  no index.json) — column enumeration is the slow path (~37 s/sheet);
+  graphs-only export is the fast oracle route for big projects.
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);
