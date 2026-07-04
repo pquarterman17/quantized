@@ -723,12 +723,12 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
     expands its overlay via `expandToFull`. Peaks (detect/fit on analysisData,
     marker overlay on full time) and hysteresis (scalar Hc/Mr/Ms on
     analysisData) now honor exclusion too (2026-07-03). Remaining: (a) the
-    SELECTION dimension is PARTLY shipped (2026-07-03): worksheet row
-    selection (row-number click / shift-range, tinted rows) + bulk actions
-    (Exclude / Keep only / Deselect) via a transient store `selection`
-    ({datasetId, rows}, live only for the active dataset). Still open: the
-    PLOT side (rubber-band select → highlight the same rows in the worksheet
-    and the selected points on the plot) — canvas work. (b) baseline (a full-curve correction — needs
+    SELECTION dimension is SHIPPED (2026-07-03): worksheet row selection
+    (row-number click / shift-range, tinted rows) + bulk actions (Exclude /
+    Keep only / Deselect) AND the plot rubber-band (a "select" tool drags an
+    x-band → rowsInXRange maps to the shared store `selection` {datasetId,
+    rows} → same rows light up in the worksheet + selected points glow on the
+    plot). (b) baseline (a full-curve correction — needs
     estimate-on-subset / evaluate-at-full) and RSM (2-D) intentionally still
     fit the full data; (c) the universal-linking architecture guard/test.*
     - [ ] **Universal-linking rule:** linking is threshold-shaped —
