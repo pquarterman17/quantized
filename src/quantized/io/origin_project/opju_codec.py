@@ -29,12 +29,14 @@ Both hash tables hold ``2**12`` entries and update the textbook FPC way::
     dh = ((dh << 2) ^ (stride >> 40)) & 0xFFF
 
 Origin frames each column record as ``0a 05 <varint> ff ff <nrows:varint> 00
-<segment list> [0c <stream>]``. The segment list is ZigZag varints: −m = "m
-FPC rows" (a plain column is the single segment ``zigzag(−nrows)``), +k = "k
-rows of one repeated value" whose value-spec follows (``0x50``+float64,
-``0x1a``+top-2-bytes, or bare ``0x64`` = 0.0) — Origin run-length-compresses
-constant runs like total-reflection plateaus *outside* the FPC stream, and a
-fully constant column has no stream at all. Empty numeric cells carry the
+<segments>``. Segments open with a ZigZag varint: −m = "m FPC rows", with
+``0x0c`` + the stream *inline* and a FRESH predictor state per stream (a
+plain column is the single segment ``zigzag(−nrows)``); +k = "k rows of one
+repeated value" whose value-spec follows (``0x50``+float64, ``0x1a``/``0x11``
++ the double's top 2/1 bytes, or bare ``0x64`` = 0.0). Segments interleave
+freely — Origin run-length-compresses constant runs (total-reflection
+plateaus, logger hold-steps) *outside* the FPC streams, and a fully constant
+column has no stream at all. Empty numeric cells carry the
 ``ORIGIN_MISSING`` sentinel and map to NaN.
 """
 
@@ -42,7 +44,6 @@ from __future__ import annotations
 
 import re
 import struct
-from typing import NamedTuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -140,33 +141,32 @@ def _zigzag(v: int) -> int:
     return (v >> 1) ^ -(v & 1)
 
 
-class _Record(NamedTuple):
-    """One parsed column record: run-length segments + an FPC stream."""
-
-    nrows: int
-    segments: list[tuple[str, int, float]]  # ("rep", count, value) | ("fpc", count, 0)
-    stream_start: int  # position after 0x0C; -1 when the record has no stream
+# Repeat-run value tags: tag byte → payload length. The payload holds the
+# float64's TOP bytes (rest zero) — the compact forms cover round values.
+_TAG_LEN = {0x50: 8, 0x1A: 2, 0x11: 1, 0x64: 0}
 
 
-def _record_at(b: bytes, ff: int) -> _Record | None:
-    """Parse the column-record header whose ``ff ff`` sits at ``ff``.
+def _decode_record(b: bytes, ff: int) -> tuple[NDArray[np.float64], int] | None:
+    """Parse *and* decode the column record whose ``ff ff`` sits at ``ff``.
 
-    Grammar (all validated against Origin's own CSV dumps): ``ff ff
-    <nrows:varint> 00`` then a segment list, then usually ``0c <FPC stream>``.
-    Each segment starts with a ZigZag varint: a *negative* value −m means "m
-    FPC-coded rows" (the plain columns are the one-segment case — the old
-    "2·nrows−1 size-ish field" was really ``zigzag(−nrows)``); a *positive*
-    value k means "k rows of one repeated value", whose value-spec follows:
+    Grammar (validated against Origin's own CSV dumps): ``ff ff
+    <nrows:varint> 00`` then a segment list. Each segment opens with a ZigZag
+    varint:
 
-    * ``0x50`` + little-endian float64 — the full repeated value,
-    * ``0x1a`` + 2 bytes — the float64's top two bytes (rest zero), the
-      compact form for round values like 1.0 or 5.0,
-    * ``0x64`` — no payload, value 0.0.
+    * **−m** — m FPC-coded rows; ``0x0c`` and the stream follow *inline*, and
+      the predictor state starts FRESH for every stream (the plain column is
+      the one-segment case — the old "2·nrows−1 size-ish field" was really
+      ``zigzag(−nrows)``);
+    * **+k** — k rows of one repeated value; a value-spec tag follows:
+      ``0x50`` + float64, ``0x1a``/``0x11`` + the double's top 2/1 bytes
+      (rest zero — round values like 1.0, 2.0, 5.0), or bare ``0x64`` = 0.0.
 
-    Constant columns are a single repeat segment with no stream at all.
-    Records whose segments don't sum to ``nrows`` (e.g. the chunked
-    multi-stream staircase form some logger columns use) return None here —
-    dropped, never guessed at.
+    Segments interleave freely (staircase logger columns alternate hold-runs
+    and FPC bursts); a fully constant column is one repeat segment with no
+    stream at all. Parsing and decoding fuse because an inline stream's byte
+    length is only known by decoding it. Returns ``(values, end)`` with
+    ``end`` just past the record's last byte, or None for anything that
+    doesn't sum exactly to ``nrows`` — dropped, never guessed at.
     """
     try:
         nrows, p = _read_varint(b, ff + 2)
@@ -177,92 +177,55 @@ def _record_at(b: bytes, ff: int) -> _Record | None:
     if p >= len(b) or b[p] != 0x00:
         return None
     p += 1
-    segments: list[tuple[str, int, float]] = []
-    pending: int | None = None  # a positive (repeat) count awaiting its value
+    parts: list[NDArray[np.float64]] = []
     total = 0
-    for _ in range(8):  # field-region guard: real headers are short
-        if total >= nrows:
-            break
-        if p >= len(b):
-            return None
-        tag = b[p]
-        if pending is not None:  # value-spec for the pending repeat run
-            if tag == 0x50 and p + 9 <= len(b):
-                value = struct.unpack("<d", b[p + 1 : p + 9])[0]
-                p += 9
-            elif tag == 0x1A and p + 3 <= len(b):
-                value = struct.unpack("<d", b"\x00" * 6 + b[p + 1 : p + 3])[0]
-                p += 3
-            elif tag == 0x64:
-                value = 0.0
-                p += 1
-            else:
-                return None
-            segments.append(("rep", pending, value))
-            total += pending
-            pending = None
-            continue
+    while total < nrows:  # each iteration adds ≥1 row, so this terminates
         try:
             raw, p = _read_varint(b, p)
         except CodecError:
             return None
         count = _zigzag(raw)
-        if count < 0:
-            segments.append(("fpc", -count, 0.0))
-            total += -count
-        elif count > 0:
-            pending = count
+        if count > 0:
+            if total + count > nrows or p >= len(b):
+                return None
+            plen = _TAG_LEN.get(b[p])
+            if plen is None or p + 1 + plen > len(b):
+                return None
+            value = struct.unpack("<d", b"\x00" * (8 - plen) + b[p + 1 : p + 1 + plen])[0]
+            p += 1 + plen
+            parts.append(np.full(count, value, dtype=float))
+            total += count
+        elif count < 0:
+            m = -count
+            if total + m > nrows or p >= len(b) or b[p] != 0x0C:
+                return None
+            try:
+                vals, consumed = _decode(b[p + 1 : p + 1 + m * 9 + 16], m)
+            except CodecError:
+                return None
+            parts.append(vals)
+            p += 1 + consumed
+            total += m
         else:
             return None
-    if pending is not None or total != nrows:
-        return None
-    n_fpc = sum(1 for kind, _, _ in segments if kind == "fpc")
-    if n_fpc > 1:
-        # the chunked staircase form runs one continuous predictor state
-        # across interleaved streams — not yet pinned; drop, never guess
-        return None
-    if n_fpc:
-        if p >= len(b) or b[p] != 0x0C:
-            return None
-        return _Record(nrows, segments, p + 1)
-    return _Record(nrows, segments, -1)
+    return np.concatenate(parts), p
 
 
-def _records(b: bytes) -> list[tuple[int, _Record]]:
-    """Candidate numeric records ``(marker, record)``, in file order.
+def _records(b: bytes) -> list[int]:
+    """Candidate record markers (``ff ff`` positions), in file order.
 
     ``0xff 0xff`` also occurs *inside* FPC residual data, so this over-reports;
     :func:`scan_columns` walks the list with a cursor that jumps past each
-    decoded stream, so the false in-stream markers are skipped.
+    decoded record, so the false in-stream markers are skipped.
     """
-    out: list[tuple[int, _Record]] = []
+    out: list[int] = []
     ff = b.find(b"\xff\xff")
     while ff >= 0:
         # the header opens with `0a 05 <varint>` (1-2 byte varint) before ff ff
         if any(ff - k >= 0 and b[ff - k] == 0x0A and b[ff - k + 1] == 0x05 for k in (3, 4)):
-            rec = _record_at(b, ff)
-            if rec is not None:
-                out.append((ff, rec))
+            out.append(ff)
         ff = b.find(b"\xff\xff", ff + 1)
     return out
-
-
-def _reconstruct(b: bytes, rec: _Record) -> tuple[NDArray[np.float64], int]:
-    """Rebuild a full column from a record's segments.
-
-    Returns ``(values, stream_end)`` where ``stream_end`` is the position just
-    past the record's FPC stream (its start for stream-less records).
-    """
-    parts: list[NDArray[np.float64]] = []
-    pos = max(rec.stream_start, 0)
-    for kind, count, value in rec.segments:
-        if kind == "rep":
-            parts.append(np.full(count, value, dtype=float))
-        else:
-            vals, consumed = _decode(b[pos : pos + count * 9 + 16], count)
-            parts.append(vals)
-            pos += consumed
-    return np.concatenate(parts), pos
 
 
 def _plausible(vals: NDArray[np.float64]) -> bool:
@@ -299,18 +262,17 @@ def scan_columns(b: bytes) -> list[tuple[str, NDArray[np.float64]]]:
     ]
     out: list[tuple[str, NDArray[np.float64]]] = []
     cursor = 0
-    for marker, rec in _records(b):
-        if marker < cursor:  # a false marker inside an already-decoded stream
+    for marker in _records(b):
+        if marker < cursor:  # a false marker inside an already-decoded record
             continue
-        try:
-            vals, stream_end = _reconstruct(b, rec)
-        except CodecError:
+        got = _decode_record(b, marker)
+        if got is None:
             continue
+        vals, end = got
         if not _plausible(vals):
             continue
         prev = [name for pos, name in names if pos < marker]
         if prev:
             out.append((prev[-1], vals))
-        if rec.stream_start >= 0:
-            cursor = stream_end
+        cursor = end
     return out

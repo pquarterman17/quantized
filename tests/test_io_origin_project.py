@@ -409,3 +409,26 @@ def test_opju_segment_grammar_prefix_run_and_constant() -> None:
     assert np.array_equal(cols["TBook_B"], np.asarray([1.00355] * 11 + tail))
     assert np.array_equal(cols["TBook_C"], np.asarray([0.0] * 5 + tail))
     assert np.array_equal(cols["TBook_D"], np.full(8, 2.5))
+
+
+def test_opju_chunked_staircase_record() -> None:
+    """Interleaved repeat-runs + FPC bursts (logger staircase data), with a
+    fresh predictor state per stream and the 1-byte 0x11 value tag."""
+    from quantized.io.origin_project.opju_codec import scan_columns
+
+    burst1 = [2.0, 3.0, 2.5]
+    burst2 = [4.0, 4.5]
+    # inline-stream layout: [-3][0c s1][+6][11 40][-2][0c s2][+4][64]
+    nm = b"\x07TBook_E"
+    body = (
+        b"\xff\xff" + _varint(15) + b"\x00"
+        + _zz(-3) + b"\x0c" + _fpc_encode(burst1)
+        + _zz(6) + b"\x11\x40"  # 6 rows of 2.0 via the 1-byte top-byte tag
+        + _zz(-2) + b"\x0c" + _fpc_encode(burst2)  # fresh state per stream
+        + _zz(4) + b"\x64"  # 4 rows of 0.0
+    )
+    blob = b"CPYUA 4.3380 188\n" + nm + b"\x0a\x05" + _varint(15) + body
+    cols = dict(scan_columns(blob))
+    assert "TBook_E" in cols
+    expect = burst1 + [2.0] * 6 + burst2 + [0.0] * 4
+    assert np.array_equal(cols["TBook_E"], np.asarray(expect))
