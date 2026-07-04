@@ -66,7 +66,11 @@ made it look file-specific and found it corpus-wide — it was the real
 encoding after all, rejected earlier only by a counting-convention bug
 (FPC-decoded-only ordinal vs. the true all-columns-of-every-book ordinal).
 **Item 35 CLOSED**: precision 100%, aggregate oracle-covered recall
-36/36 (100%), up from 30.6% — moved to Completed.
+36/36 (100%), up from 30.6% — moved to Completed. Same day, **item 26
+(Figure export) CLOSED**: the `.ogs` GRAPH block now exports the current
+plot state (channels/x-source/log axes/limits/y2 split), descoping the
+`needs 12` FigureDoc dependency by reading the live plot-store fields
+directly instead — see Completed for detail.
 
 ---
 
@@ -438,11 +442,6 @@ the shipped contract)
 
 ### Tier 3 — Nice-to-Have
 
-26. **Figure export** — `.ogs` graph-building blocks from a FigureDoc,
-    and/or graph windows inside the `.opj` writer (the inverse of item
-    12's mapping)
-    *Model: sonnet · needs 12.*
-
 27. **`.opju` writer** — only if 24 ever proves insufficient; needs the
     outer-framing RE tail and confirmation Origin accepts all-literal
     codec streams (probe during a trial window)
@@ -461,6 +460,24 @@ the shipped contract)
 
 ## Completed
 
+- ~~**#26 Figure export**~~ (2026-07-04) — the `.ogs` GRAPH block now
+  recreates the CURRENT PLOT STATE (selected channels, x source, log
+  axes, limits, y2 split) instead of just the single-column default:
+  `io/origin.py` gains `GraphSpec` + `_plot_state_graph` (one grouped
+  `plotxy iy:=(x,y1):(x,y2):…` call for the primary set; a secondary
+  right-Y layer via `layer -nr` + a second `plotxy … ogl:=2!` for
+  `y2_keys`, with an inline documented second-graph-window fallback
+  since `layer -nr` is UNVERIFIED against a live Origin instance).
+  `/api/export/origin` gained an optional `graph` field
+  (`OriginGraphSpec`); the frontend's "Export Origin (.ogs)…" action now
+  passes `yKeys/xKey/xLog/yLog/xLim/yLim/y2Keys` straight off the plot
+  store. This descopes the `needs 12` dependency — no `FigureDoc` entity
+  required, since the export reads the live/transient plot-state fields
+  directly rather than a persisted document. The `.opj`-writer graph-window
+  half of this item (binary project graphs, the inverse of item 12's
+  mapping) remains out of scope. 9 new unit tests in `tests/test_io_origin.py`
+  (default view, single-channel axis label, log axes, custom lims, x_key on
+  a value channel, y2 split, all-y2 fallback, `make_graph=False`, quoting).
 - ~~**#35 Figure curve→dataset binding**~~ (2026-07-04) — CLOSED: the
   "third encoding" search from earlier the same day (version-pair diff,
   window-local alternate encoding, legend backrefs — all reported
