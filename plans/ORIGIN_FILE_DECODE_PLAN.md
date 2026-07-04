@@ -76,10 +76,22 @@ cracking is frontier-model work while spec-driven decoding is not.
 
 | Tier | Good for | Items |
 |------|----------|-------|
-| **fable** | unknown-unknowns RE: cracking undocumented framing + compression from raw bytes with no anchors | 7 (and arbitrating cross-RE conflicts) |
-| **opus** | hard structural RE with known anchors; contract/mapping design | 1, 11, 12, RE half of 4 |
-| **sonnet** | spec-driven decoder implementation, refactors, frontend, synthetic fixtures | 2, 3, 5, 8, 10, 13–19, 21 |
+| **sonnet** | hypothesis-driven RE (now that Rosetta specimens + Origin-exported ground truth exist), spec-driven decoder implementation, refactors, frontend, synthetic fixtures | 7 (retry), 2, 3, 5, 8, 10, 13–19, 21 |
+| **opus** | escalation only: RE that a sonnet pass genuinely stalls on; contract/mapping design if it grows past a template | 1 ✓(done), 11 ✓(done), 12, RE half of 4 |
 | **haiku** | mechanical regression anchors, text extraction, docs consolidation | 6, 9, 20, 22 |
+| **fable** | not planned — owner directive (2026-07-03): delegate to cheaper models when feasible; the original fable run on item 7 died on the spend limit without a report, and the trial-generated specimens have since converted item 7 from open-ended to hypothesis-driven work | — |
+
+**Cost note (2026-07-03):** an Origin 2026b trial produced controlled
+specimens that de-risk the remaining RE: same-content `.opju` Rosetta
+files with known values/names, single-variable diff pairs (log flag,
+column selector — as `.opju`), and Origin-exported ground truth
+(CSV + JSON: all books/sheets/columns/names/units + graph axis/curve
+refs) under `../test-data/origin/specimens/`. Every remaining unknown
+now has an oracle, so default RE tier drops to sonnet with escalation
+only on demonstrated failure. NOTE: Origin ≥ 2023 cannot WRITE
+old-format `.opj` (removed by OriginLab), so no trial-made `.opj`
+specimens exist — `.opj` figure-flag probes must use within-corpus
+diffing per the item-11 report instead.
 
 Agent types: `data-format-detective` (1, 7, 11), `code-architect` (12,
 15 design), `code-implementer`/`quantized-porter` (decoders),
@@ -159,9 +171,12 @@ relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
    shared 123-byte file-header block, where the compressed payloads
    are (raw-deflate suspected — the visible zlib streams are preview
    images), and the record layout
-   *Model: **fable** · data-format-detective · WAVE 1. Known: framing
-   diverges at bytes `80 2b 03 00…`; no plain float64 runs anywhere;
-   see docs/origin_project_format.md "M2 findings".*
+   *Model: **sonnet** (was fable; the fable run died on the spend
+   limit with no report, and the trial specimens changed the job:
+   hunt known values `111.125, 222.25, …` + strings `Field`/`Moment`
+   from `specimens/rosetta_min.opju`, diff `rosetta_lname.opju` for
+   label storage, validate against `specimens/ground_truth/`).
+   Escalate to opus only if a sonnet pass demonstrably stalls.*
    - [ ] Framing grammar with hex evidence + offsets
    - [ ] Locate + decompress column payloads; confirm record layout
    - [ ] Validate: decode one full known-physics column (RockingCurve
