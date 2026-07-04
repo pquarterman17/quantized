@@ -14,7 +14,7 @@ from pathlib import Path
 
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project.container import OriginProjectError
-from quantized.io.origin_project.notes import notes_windows, results_log
+from quantized.io.origin_project.notes import notes_windows, parse_results_log, results_log
 from quantized.io.origin_project.opj import read_opj, read_opj_books
 from quantized.io.origin_project.opju import read_opju, read_opju_books
 
@@ -33,6 +33,9 @@ def _with_provenance(ds: DataStruct, path: Path) -> DataStruct:
     log = results_log(raw)
     if log:
         extra["origin_results_log"] = log
+        records = parse_results_log(log)
+        if records:
+            extra["origin_results_log_records"] = records
     notes = notes_windows(raw)
     if notes:
         extra["origin_notes"] = notes
@@ -47,8 +50,10 @@ def read_origin_project(path: Path) -> DataStruct:
     Origin projects are proprietary binary files; quantized decodes them itself
     (it will not bundle the GPL liborigin). Both containers recover worksheet
     data with real column names/units; the project's results log (analysis
-    provenance) lands in ``metadata['origin_results_log']`` and any notes-window
-    text in ``metadata['origin_notes']`` when present.
+    provenance) lands in ``metadata['origin_results_log']`` (raw text) and
+    ``metadata['origin_results_log_records']`` (parsed per-operation records,
+    when at least one parses) and any notes-window text in
+    ``metadata['origin_notes']`` when present.
     """
     reader = read_opju if path.suffix.lower() == ".opju" else read_opj
     return _with_provenance(reader(path), path)

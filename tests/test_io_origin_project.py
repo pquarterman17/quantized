@@ -705,13 +705,88 @@ def test_results_log_recovered_from_project(tmp_path) -> None:
 
 @pytest.mark.realdata
 def test_realdata_moke_results_log() -> None:
-    """Moke.opj's real analysis log (subtract_line provenance) is recovered."""
+    """Moke.opj's real analysis log (subtract_line provenance) is recovered,
+    both as raw text and as structured per-operation records (plan item 22)."""
     src = _CORPUS / "Moke.opj"
     if not src.exists():
         pytest.skip("Origin corpus not present")
     ds = read_origin_project(src)
     log = str(ds.metadata.get("origin_results_log", ""))
     assert "subtract_line" in log and "[Book4]Sheet1" in log
+
+    records = ds.metadata.get("origin_results_log_records", [])
+    assert len(records) >= 1
+    assert any(r["operation"] == "subtract_line" for r in records)
+    assert any(
+        "[Book4]Sheet1" in value
+        for r in records
+        for section in r["params"].values()
+        for value in section.values()
+    )
+
+
+def test_parse_results_log_structured_records() -> None:
+    """Unit test for the parser itself (plan item 22): operation + Input/Output
+    params, a record with no operation line, and a malformed trailing line
+    that stays in "extra" rather than being dropped."""
+    from quantized.io.origin_project.notes import parse_results_log
+
+    log_text = (
+        '[5/6/2019 15:16:34 "" (2458609)]\n'
+        "subtract_line(subtract_line)\n"
+        "  Input\n"
+        '    iy(Input) = [Book4]Sheet1!(C"H",M)\n'
+        "    x1(Start X) = -3789.29580\n"
+        "  Output\n"
+        '    oy(Output) = [Book4]Sheet1!(C"H",N"Subtracted Data")\n'
+        "??? not a real line ???\n"
+        '[5/7/2019 9:00:00 "" (2458611)]\n'
+        "  Input\n"
+        "    a(A) = 1\n"
+    )
+    records = parse_results_log(log_text)
+    assert len(records) == 2
+
+    r0 = records[0]
+    assert r0["timestamp"] == "5/6/2019 15:16:34"
+    assert r0["operation"] == "subtract_line"
+    assert r0["params"]["Input"]["iy"] == '[Book4]Sheet1!(C"H",M)'
+    assert r0["params"]["Input"]["x1"] == "-3789.29580"
+    assert r0["params"]["Output"]["oy"] == '[Book4]Sheet1!(C"H",N"Subtracted Data")'
+    assert r0["extra"] == ["??? not a real line ???"]
+
+    # a record with no operation line still yields its timestamp
+    r1 = records[1]
+    assert r1["timestamp"] == "5/7/2019 9:00:00"
+    assert r1["operation"] == ""
+    assert r1["params"]["Input"]["a"] == "1"
+    assert "extra" not in r1  # nothing malformed here, so no empty key
+
+
+def test_parse_results_log_empty_text_yields_no_records() -> None:
+    from quantized.io.origin_project.notes import parse_results_log
+
+    assert parse_results_log("") == []
+    assert parse_results_log("no timestamp headers here at all") == []
+
+
+def test_results_log_records_attached_alongside_raw_text(tmp_path) -> None:
+    """Wiring test: `_with_provenance` attaches the parsed records only when
+    the raw log text is present AND parses at least one record."""
+    log_text = (
+        b'[5/6/2019 15:16:34 "" (2458609)]\r\n'
+        b"subtract_line(subtract_line)\r\n"
+        b'  Input\r\n    iy(Input) = [Book4]Sheet1!(C"H",M)\r\n'
+    )
+    blob = _synthetic_opj() + _block(log_text)
+    ds = read_origin_project(_write(tmp_path, "logged2.opj", blob))
+    records = ds.metadata["origin_results_log_records"]
+    assert len(records) == 1
+    assert records[0]["operation"] == "subtract_line"
+    assert records[0]["params"]["Input"]["iy"] == '[Book4]Sheet1!(C"H",M)'
+
+    plain = read_origin_project(_write(tmp_path, "plain2.opj", _synthetic_opj()))
+    assert "origin_results_log_records" not in plain.metadata
 
 
 def _notes_record(name: str, text: str) -> bytes:

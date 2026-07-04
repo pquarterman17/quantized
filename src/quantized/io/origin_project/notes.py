@@ -16,6 +16,20 @@ Because the records are plain text in both ``.opj`` (CPYA) and ``.opju``
 contain at least one timestamp record header. This is fit *provenance*
 worth surfacing, not data — it lands in ``metadata['origin_results_log']``.
 
+That raw text is further parsed into structured per-operation records by
+``parse_results_log`` (plan item 22): each record is
+``{"timestamp": "M/D/YYYY H:MM:SS", "operation": str, "params": {...}}``
+where ``params`` nests by the log's ``Input``/``Output``/etc. section
+headers, e.g. ``params["Input"]["iy"] == '[Book4]Sheet1!(C"H",M)'``.
+Parameter lines that precede any section header land under the empty-
+string section ``params[""]``. Lines inside a record that don't parse as
+a timestamp header, an operation line, a section header, or a
+``key(display) = value`` parameter are never dropped silently — they
+collect in that record's ``"extra"`` list (omitted when empty). A record
+with no operation line still yields its timestamp, with
+``operation == ""``. This lands in
+``metadata['origin_results_log_records']`` alongside the raw text.
+
 *Notes windows* (free-form user text pages) sit in the ``.opju`` (CPYUA)
 windows section as a tight, contiguous pair of length-prefixed records::
 
@@ -38,7 +52,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ["notes_windows", "results_log"]
+__all__ = ["notes_windows", "parse_results_log", "results_log"]
 
 # One timestamped operation-record header, e.g. `[5/6/2019 15:16:34 "" (2458609)]`.
 _RECORD = re.compile(rb"\[\d{1,2}/\d{1,2}/\d{4} \d{1,2}:\d{2}:\d{2}[^\]\r\n]{0,80}\]")
@@ -116,3 +130,71 @@ def notes_windows(b: bytes) -> dict[str, str]:
         if len(out) >= _MAX_NOTES:
             break
     return out
+
+
+# ── structured results-log parsing (plan item 22) ────────────────────────────
+
+# A results-log record header, on ``results_log()``'s decoded str text (see
+# ``_RECORD`` above for the byte-level equivalent used to find the raw runs).
+_LOG_HEADER = re.compile(r"\[(\d{1,2}/\d{1,2}/\d{4} \d{1,2}:\d{2}:\d{2})[^\[\]\r\n]{0,80}\]")
+
+# A bare operation line, e.g. `subtract_line(subtract_line)`: no `=`, so it
+# never collides with a `key(display) = value` parameter line.
+_OPERATION_LINE = re.compile(r"^([A-Za-z_]\w*)\([^)]*\)\s*$")
+
+# A `key(display) = value` (or plain `key = value`) parameter line.
+_PARAM_LINE = re.compile(r"^([A-Za-z_]\w*)(?:\([^)]*\))?\s*=\s*(.*)$")
+
+# A section header, e.g. `Input` / `Output`: a short word/phrase, no `=`.
+_SECTION_LINE = re.compile(r"^[A-Za-z][A-Za-z0-9_ ]{0,40}$")
+
+
+def parse_results_log(text: str) -> list[dict[str, object]]:
+    """Parse ``results_log()``'s raw text into structured per-operation records.
+
+    Each record is ``{"timestamp": str, "operation": str, "params": dict}``,
+    optionally with an ``"extra"`` list of lines inside the record that didn't
+    match any recognized shape (never dropped silently). ``params`` nests by
+    the log's section headers (``Input``/``Output``/etc.); parameter lines
+    that appear before any section header land under ``params[""]``. A
+    record with no operation line still yields its timestamp, with
+    ``operation == ""``. Returns ``[]`` when ``text`` holds no timestamp
+    headers at all (e.g. ``""``).
+    """
+    records: list[dict[str, object]] = []
+    headers = list(_LOG_HEADER.finditer(text))
+    for i, m in enumerate(headers):
+        body_end = headers[i + 1].start() if i + 1 < len(headers) else len(text)
+        operation = ""
+        params: dict[str, dict[str, str]] = {}
+        extra: list[str] = []
+        section = ""
+        is_first_line = True
+        for line in text[m.end() : body_end].splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if is_first_line:
+                is_first_line = False
+                op_m = _OPERATION_LINE.match(stripped)
+                if op_m:
+                    operation = op_m.group(1)
+                    continue
+                # no operation line present -- fall through, reprocess below
+            param_m = _PARAM_LINE.match(stripped)
+            if param_m:
+                params.setdefault(section, {})[param_m.group(1)] = param_m.group(2).strip()
+            elif _SECTION_LINE.match(stripped):
+                section = stripped
+                params.setdefault(section, {})
+            else:
+                extra.append(stripped)
+        record: dict[str, object] = {
+            "timestamp": m.group(1),
+            "operation": operation,
+            "params": params,
+        }
+        if extra:
+            record["extra"] = extra
+        records.append(record)
+    return records
