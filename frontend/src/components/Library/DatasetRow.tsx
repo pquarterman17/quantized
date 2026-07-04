@@ -22,6 +22,11 @@ interface Props {
   canMoveDown: boolean;
   /** Click a tag chip to filter the library to that tag. */
   onFilterTag: (tag: string) => void;
+  /** Sheet number (>1) when this dataset is a non-first sheet of a multi-sheet
+   *  Origin pseudo-book group (`lib/grouping.originSheetGroups`) — renders a
+   *  subtle indent + "sheet N" chip so the parent/child relation reads at a
+   *  glance. Undefined for ordinary datasets and for a group's parent (sheet 1). */
+  sheetNumber?: number;
 }
 
 export default function DatasetRow({
@@ -32,6 +37,7 @@ export default function DatasetRow({
   canMoveUp,
   canMoveDown,
   onFilterTag,
+  sheetNumber,
 }: Props) {
   const setActive = useApp((s) => s.setActive);
   const toggleSelected = useApp((s) => s.toggleSelected);
@@ -145,12 +151,19 @@ export default function DatasetRow({
 
   return (
     <div
-      className={`qzk-ds${active ? " active" : ""}${selected ? " selected" : ""}`}
+      className={`qzk-ds${active ? " active" : ""}${selected ? " selected" : ""}${
+        sheetNumber ? " qzk-ds-sheet" : ""
+      }`}
       onClick={onRowClick}
       onContextMenu={onContextMenu}
     >
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
       <div className="qzk-ds-top">
+        {sheetNumber != null && (
+          <span className="qzk-ds-sheet-chip" title={`Sheet ${sheetNumber} of the same Origin workbook`}>
+            └ sheet {sheetNumber}
+          </span>
+        )}
         {rename != null ? (
           <input
             className="qz-input qzk-ds-name"

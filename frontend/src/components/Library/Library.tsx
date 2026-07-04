@@ -8,7 +8,13 @@ import BookFamiliesSection from "./BookFamiliesSection";
 import DatasetRow from "./DatasetRow";
 import FiguresSection from "./FiguresSection";
 import { makeDemoDataset } from "../../lib/demo";
-import { groupDatasets, groupNames, hasAnyGroup } from "../../lib/grouping";
+import {
+  groupDatasets,
+  groupNames,
+  hasAnyGroup,
+  originSheetGroups,
+  originSheetNumber,
+} from "../../lib/grouping";
 import { IMPORT_ACCEPT, openFilePicker } from "../../lib/openFilePicker";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -64,6 +70,18 @@ export default function Library() {
   const canReorder = query.trim() === "" && !grouped;
   const sections = grouped ? groupDatasets(shown) : null;
 
+  // Non-first sheets of a multi-sheet Origin pseudo-book (item ??) get a
+  // subtle indent + "sheet N" chip in the row so the parent/child relation
+  // reads at a glance without restructuring the list into a collapsible tree.
+  // Computed off the full library (not `shown`) so filtering doesn't change it.
+  const sheetOf = new Map<string, number>();
+  for (const g of originSheetGroups(datasets)) {
+    for (const member of g.members) {
+      const n = originSheetNumber(member);
+      if (n > 1) sheetOf.set(member.id, n);
+    }
+  }
+
   const toggle = (key: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -82,6 +100,7 @@ export default function Library() {
       canMoveUp={datasets.indexOf(d) > 0}
       canMoveDown={datasets.indexOf(d) < datasets.length - 1}
       onFilterTag={setQuery}
+      sheetNumber={sheetOf.get(d.id)}
     />
   );
 
