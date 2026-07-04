@@ -1,7 +1,8 @@
-// Tiny inline-SVG sparkline of a dataset's first y-channel. No deps.
+// Tiny inline-SVG sparkline of a dataset's primary y-channel. No deps.
 
 import { useMemo } from "react";
 
+import { primaryChannel } from "../../lib/plotdata";
 import type { DataStruct } from "../../lib/types";
 
 const W = 180;
@@ -9,7 +10,13 @@ const H = 26;
 
 export default function Sparkline({ data }: { data: DataStruct }) {
   const path = useMemo(() => {
-    const ys = data.values.map((row) => row[0]);
+    // Not hardcoded to channel 0: a NaN-sparse dataset (e.g. Quantum Design
+    // magnetometry, where unrelated measurement types populate different
+    // columns) may carry its real data on a later channel — primaryChannel
+    // picks the same dense channel the main plot draws by default, so the
+    // thumbnail always matches what the plot shows.
+    const ch = primaryChannel(data) ?? 0;
+    const ys = data.values.map((row) => row[ch]);
     const xs = data.time;
     const n = Math.min(xs.length, ys.length);
     if (n < 2) return "";

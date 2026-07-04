@@ -6,6 +6,7 @@
 // channel; this controls the plot only.
 
 import { channelModelingType } from "../../lib/modeling";
+import { defaultDenseChannels } from "../../lib/plotdata";
 import type { ChannelRole, Dataset, ModelingType } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { Card, Pill, Select, SliderRow } from "../primitives";
@@ -31,7 +32,12 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
 
   const { labels, units } = active.data;
   const channelRoles = active.channelRoles ?? {}; // per-dataset label/ignore roles
-  const selected = yKeys ?? labels.map((_, i) => i);
+  // The auto-picked default (yKeys=null) is the dense-channel subset, not
+  // "every channel" — a NaN-sparse channel (e.g. QD magnetometry columns
+  // populated only for one measurement sub-mode) stays off by default so it
+  // can't wreck the shared y-axis autoscale. See defaultDenseChannels.
+  const denseDefault = defaultDenseChannels(active.data, xKey);
+  const selected = yKeys ?? denseDefault;
   const y2 = new Set(y2Keys ?? []);
   // Plottable data channels = non-x channels with no column role; the plot needs ≥1.
   const dataCount = labels.filter((_, i) => i !== xKey && !channelRoles[i]).length;
@@ -55,7 +61,14 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
       : [...selected, i].sort((a, b) => a - b);
     // Keep at least one *plotted* (non-x) channel — the x channel is filtered out.
     if (next.filter((x) => x !== xKey).length === 0) return;
-    setYKeys(next.length === labels.length ? null : next);
+    // Collapse back to the "auto" sentinel (null) only when the manual pick
+    // matches what the dense default would already select — NOT whenever
+    // every channel is checked, since the default itself may hide some
+    // (sparse) channels. Otherwise a user who deliberately re-enables a sparse
+    // channel would see it immediately un-check itself on the next render.
+    const isDefault =
+      next.length === denseDefault.length && next.every((v, idx) => v === denseDefault[idx]);
+    setYKeys(isDefault ? null : next);
     // A hidden channel can't sit on the secondary axis.
     if (!next.includes(i) && y2.has(i)) {
       const ny2 = (y2Keys ?? []).filter((x) => x !== i);
