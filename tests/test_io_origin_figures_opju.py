@@ -278,6 +278,131 @@ def test_synthetic_real_form_garbage_after_separator_drops() -> None:
     assert extract_figures_opju(blob) == []
 
 
+# ── synthetic real-corpus-form Y-scale flag (the rf_* oracle, 2026-07-04) ─────
+#
+# Bytes below replicate -- value for value -- the actual `rf_linlin.opju` /
+# `rf_logy.opju` anchor payloads (a controlled 4-file oracle: the SAME
+# single-curve graph with identical custom ranges x=[0.2,20]/y=[50,2000],
+# differing only in `layer.x.type`/`layer.y.type`), rebuilt in-test so CI
+# needs no private data. Both carry the specimen-form's `81 04 06 00 00 01
+# c3 66` Y-transition marker (unlike the true real-corpus files, e.g.
+# RockingCurve) -- which is what previously made `_parse_specimen_record`
+# accept them: the leading flag token `89 01` plus the first 6 bytes of the
+# lead-form RLE `x_from` (`9a c2 99 02 c9 3f`) decode, by coincidence, as a
+# *plausible* bare raw8 double (0.19539186479597628, not the true 0.2),
+# silently corrupting `x_from` and losing the real Y-scale flag. The guard
+# in `_value_candidates` (reject a bare raw8 whose leading byte is in the
+# `0x81..0x8f` flag range) forces both through the real-form path instead.
+
+
+def _rf_linlin_bytes() -> bytes:
+    return bytes.fromhex(
+        "03 00 00 1f 89 01 9a c2 99 02 c9 3f 83 02 34 40 83 02 f0 3f"
+        "81 04 06 00 00 01 c3 66 03 7b 40 01 85 02 49 40 82 03 40 9f"
+        "40 83 02 69 40 81 05 06 00 00 01 9a c1 99 2c 19 76 c0 01 00"
+        "00 10 10 00 88 e9 6c 00 00 12".replace(" ", "")
+    )
+
+
+def _rf_logy_bytes() -> bytes:
+    return bytes.fromhex(
+        "03 00 00 1f 89 01 9a c2 99 02 c9 3f 83 02 34 40 83 02 f0 3f"
+        "81 04 06 00 00 01 c3 66 03 7b 40 01 85 02 49 40 82 03 40 9f"
+        "40 83 02 f0 3f 81 05 06 00 00 01 9a c1 99 2c 19 76 c0 08 01"
+        "00 10 10 00 88 e9 6c 00 00 12".replace(" ", "")
+    )
+
+
+def test_synthetic_real_form_y_lin_flag_and_no_specimen_false_positive() -> None:
+    """``rf_linlin``'s exact anchor bytes: x_from decodes to the true 0.2 (not
+    the specimen-path's false-positive 0.195...), and the ``01 00`` flag
+    (found from the ``00 10 10 00`` layer-style marker) reads Y as linear."""
+    blob = _synthetic_opju(_rf_linlin_bytes() + b"\x00" * 32)
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    f = figs[0]
+    assert (f["x_from"], f["x_to"]) == (0.2, 20.0)
+    assert (f["y_from"], f["y_to"]) == (50.0, 2000.0)
+    assert f["y_log"] is False
+
+
+def test_synthetic_real_form_y_log_flag_matches_rf_logy() -> None:
+    """``rf_logy``'s exact anchor bytes (same X, Y toggled to log10): only the
+    ``08 01`` flag differs from ``rf_linlin`` above, and it alone is enough
+    to flip ``y_log`` to ``True`` -- the axis ranges don't even span 2
+    decades, so the decade heuristic alone would have called this linear."""
+    blob = _synthetic_opju(_rf_logy_bytes() + b"\x00" * 32)
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    f = figs[0]
+    assert (f["x_from"], f["x_to"]) == (0.2, 20.0)
+    assert (f["y_from"], f["y_to"]) == (50.0, 2000.0)
+    assert f["y_log"] is True
+
+
+def test_synthetic_real_form_y_log_flag_overrides_heuristic_both_ways() -> None:
+    """The flag wins even when it *disagrees* with the decade heuristic in
+    either direction: a flagged log-Y axis spanning under 1 decade, and a
+    flagged linear-Y axis spanning 6 decades (the shape that would normally
+    trip the heuristic, per ``test_synthetic_unrecognized_type_byte_falls_
+    back_to_heuristic``)."""
+    flagged_log_small_range = (
+        b"\x03\x00\x00\x1f"
+        b"\x89\x01"
+        b"\x9a\xc2\x99\x02\xc9\x3f"  # x_from = 0.2
+        b"\x84\x01\x40"  # x_to = 2.0
+        b"\x83\x02\xe0\x3f"  # x step = 0.5
+        b"\x81\x0d\x08\x00\x00\x01"  # separator, plen=8
+        b"\x3d\x0a\xd7\xa3\x70\x3d\x5d\x40\x01"  # geometry payload + filler
+        b"\x85\x02\xf0\x3f"  # y_from = 1.0
+        b"\x81\x02\x59\x40"  # y_to = 100.0 (tagged compact-2; <2 decades)
+        b"\x83\x02\xf0\x3f"  # y step = 1.0
+        b"\x81\x35\x08\x00\x00\x01"  # end separator
+        b"\x8f\xc2\xf5\x28\x5c\x8f\x57\xc0"  # end-separator payload
+        b"\x08\x01"  # Y-log flag
+        b"\x00\x10\x10\x00"  # layer-style marker
+        + b"\x00" * 32
+    )
+    flagged_lin_wide_range = (
+        b"\x03\x00\x00\x1f"
+        b"\x89\x01"
+        b"\x9a\xc2\x99\x02\xc9\x3f"  # x_from = 0.2
+        b"\x84\x01\x40"  # x_to = 2.0
+        b"\x83\x02\xe0\x3f"  # x step = 0.5
+        b"\x81\x0d\x08\x00\x00\x01"
+        b"\x3d\x0a\xd7\xa3\x70\x3d\x5d\x40\x01"
+        b"\x85\x02\xe0\x3f"  # y_from = 0.5
+        b"\x81\x04\x40\x77\x1b\x41"  # y_to = 450000.0 (6 decades)
+        b"\x83\x02\xf0\x3f"  # y step = 1.0
+        b"\x81\x35\x08\x00\x00\x01"
+        b"\x8f\xc2\xf5\x28\x5c\x8f\x57\xc0"
+        b"\x01\x00"  # Y-linear flag
+        b"\x00\x10\x10\x00"
+        + b"\x00" * 32
+    )
+    figs = extract_figures_opju(_synthetic_opju(flagged_log_small_range))
+    assert len(figs) == 1
+    assert (figs[0]["y_from"], figs[0]["y_to"]) == (1.0, 100.0)
+    assert figs[0]["y_log"] is True  # flagged log, even though <2 decades
+
+    figs = extract_figures_opju(_synthetic_opju(flagged_lin_wide_range))
+    assert len(figs) == 1
+    assert (figs[0]["y_from"], figs[0]["y_to"]) == (0.5, 450000.0)
+    assert figs[0]["y_log"] is False  # flagged linear, even though 6 decades
+
+
+def test_synthetic_real_form_no_y_flag_marker_falls_back_to_heuristic() -> None:
+    """When the ``00 10 10 00`` marker isn't found (e.g. genuine real-corpus
+    files like RockingCurve, which lack the specimen-style Y-transition
+    marker entirely), ``y_log`` still falls back to the decade heuristic --
+    unchanged behavior, re-asserted here against the new flag-lookup path."""
+    figs = extract_figures_opju(
+        _synthetic_opju(_real_form_tagged_and_rle())
+    )
+    assert len(figs) == 1
+    assert figs[0]["y_log"] is True  # no marker in this fixture -> heuristic (450000/1 >= 1e3)
+
+
 # ── synthetic curve->column binding (item 35) ─────────────────────────────────
 #
 # Minimal .opju worksheet-column builder (constant "rep" segments — no FPC
@@ -476,6 +601,68 @@ def test_realdata_xscale_specimens(stem: str, x_log: bool, y_log: bool) -> None:
     assert figs, f"{stem}: no figure decoded"
     assert figs[0]["x_log"] is x_log, f"{stem}: x_log"
     assert figs[0]["y_log"] is y_log, f"{stem}: y_log"
+
+
+# ── realdata: the rf_* real-corpus-form axis-scale oracle (2026-07-04) ────────
+#
+# The controlled-specimen pair above (fig_linx/fig_logx/fig_xylog) all use
+# the *specimen* record form (default axis dialog). This quad instead uses a
+# *non-default* axis dialog (custom `layer.x.from/to` + `layer.y.from/to`),
+# which -- like `axis_custom.opju` -- produces the *real-corpus* record
+# form: the same shape RockingCurve/XAS/etc. use, not the specimen shape.
+# All four share identical custom ranges (x=[0.2,20], y=[50,2000]),
+# differing only in `layer.x.type`/`layer.y.type` (1=linear, 2=log10) --
+# truth is by construction, like the specimen pair above. This is the
+# oracle that isolated the real-form Y-scale flag (`_real_y_log_flag`).
+
+
+@pytest.mark.realdata
+@pytest.mark.parametrize(
+    ("stem", "x_log", "y_log"),
+    [
+        ("rf_linlin", False, False),  # layer.x.type=1, layer.y.type=1
+        ("rf_logx", True, False),  # layer.x.type=2, layer.y.type=1
+        ("rf_logy", False, True),  # layer.x.type=1, layer.y.type=2
+        ("rf_loglog", True, True),  # layer.x.type=2, layer.y.type=2
+    ],
+)
+def test_realdata_real_form_scale_quad(stem: str, x_log: bool, y_log: bool) -> None:
+    """The rf_* quad: identical custom ranges, only the axis types differ.
+    Both X (via the pre-existing ``_scale_byte``/type-byte path, incidentally
+    present here because these controlled specimens carry the specimen-form
+    Y-transition marker even though they use real-form value encoding) and Y
+    (via the new ``_real_y_log_flag``) must be exact -- not heuristic -- for
+    all four, and the axis range must be the true ``(0.2, 20.0)``/
+    ``(50.0, 2000.0)``, not the specimen-path false-positive's corrupted
+    ``x_from``."""
+    src = _SPEC / f"{stem}.opju"
+    if not src.exists():
+        pytest.skip(f"real-form scale specimen '{stem}' not present on this machine")
+    figs = extract_figures_opju(src.read_bytes())
+    assert len(figs) == 1, f"{stem}: expected 1 figure, got {len(figs)}"
+    f = figs[0]
+    assert (f["x_from"], f["x_to"]) == pytest.approx((0.2, 20.0), rel=1e-9), stem
+    assert (f["y_from"], f["y_to"]) == pytest.approx((50.0, 2000.0), rel=1e-9), stem
+    assert f["x_log"] is x_log, f"{stem}: x_log"
+    assert f["y_log"] is y_log, f"{stem}: y_log"
+
+
+@pytest.mark.realdata
+def test_realdata_axis_custom_real_form_scale() -> None:
+    """``axis_custom.opju`` (custom X range + log X, default linear Y) is an
+    independently-generated 5th data point for the same real-form scale
+    flags: byte-identical to ``rf_logx`` at the axis record (verified during
+    RE), giving x_log=True (flag) and y_log=False (flag, not heuristic)."""
+    src = _SPEC / "axis_custom.opju"
+    if not src.exists():
+        pytest.skip("axis_custom specimen not present on this machine")
+    figs = extract_figures_opju(src.read_bytes())
+    assert len(figs) == 1
+    f = figs[0]
+    assert (f["x_from"], f["x_to"]) == pytest.approx((0.2, 20.0), rel=1e-9)
+    assert (f["y_from"], f["y_to"]) == pytest.approx((50.0, 2000.0), rel=1e-9)
+    assert f["x_log"] is True
+    assert f["y_log"] is False
 
 
 @pytest.mark.realdata

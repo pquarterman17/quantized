@@ -29,7 +29,9 @@ working `plots.json` oracle recipe and item 35 was reworked against it —
 found + fixed a false positive (the `__BCO` per-book boilerplate
 misattributed as a curve on `UnpolPlots`), reaching 100% precision on
 every oracle-covered file; recall stays low (0-50% per file) so the item
-stays open, see item text)
+stays open, see item text; item 36 (new) closes both remaining "permanently
+heuristic" Y-scale gaps — a real-form `.opju` Y flag (new `rf_*` oracle
+quad) and the `.opj` flag (XRD-vs-Moke byte diff), both `01 00`/`08 01`)
 
 ---
 
@@ -363,6 +365,46 @@ the shipped contract)
 
 ## Completed
 
+- ~~**#36 Y-axis lin/log scale-flag byte (both containers)**~~ (2026-07-04)
+  — closed both remaining "permanently heuristic" Y-scale gaps left open by
+  item 33, using brand-new controlled oracles instead of the decade
+  heuristic. **`.opju` real form:** a new 4-file by-construction oracle
+  (`rf_linlin`/`rf_logx`/`rf_logy`/`rf_loglog.opju` — the SAME single-curve
+  graph, identical custom ranges `x=[0.2,20]`/`y=[50,2000]`, differing only
+  in `layer.x.type`/`layer.y.type`) isolated an exact Y flag: the 2 bytes
+  right before a fixed `00 10 10 00` layer-style marker following the end
+  separator are `01 00` (linear) / `08 01` (log10) — `opju_axis_real_form.py`'s
+  new `_real_y_log_flag`. Byte-diffing the quad also surfaced (and fixed) a
+  latent bug: these 4 specimens carry the specimen-form's `81 04 06 00 00 01
+  c3 66` Y-transition marker even though their X values use real-form
+  RLE/tagged encoding, so `_parse_specimen_record` was spuriously "succeeding"
+  on 2 of the 4 with a **corrupted `x_from`** (0.1954... instead of 0.2) — a
+  bare-raw8 candidate accidentally decoding a flag-token+RLE byte run as a
+  plausible literal. Fixed with a guard in `_value_candidates` (reject a
+  bare raw8 candidate whose leading byte is in the `0x81..0x8f` real-form
+  flag range, mirroring `_real_bare8`'s identical existing guard) — all four
+  now correctly route through the real-form parser. **`.opj`:** byte-diffing
+  XRD's single log-Y `Graph1` layer-continuation block against all 15
+  recovered linear-Y layers in `Moke.opj` found the SAME two byte values at
+  payload offset 98/99 (a second candidate at offset 189 was ruled out
+  against a wider scan — noise, uncorrelated) — `figures.py`'s new
+  `_y_scale_flag`. Validated far beyond the initial pair: 111 log / 236
+  linear layers across the *entire* `.opj` corpus (PNR, MnN_Diffusion_PNR,
+  XMCD, hc2convert, SuperlatticeFits, Moke, XRD) show ONLY these two byte
+  values, no third state, and several instances are flag-log but
+  heuristic-linear (reflectivity R(Q) curves zoomed to a sub-decade log
+  range, e.g. Y=(0.977, 1.292)) — cases the old heuristic got wrong that the
+  flag resolves correctly. Both flags fall back to the decade heuristic when
+  unrecognized/absent (X in both forms still has no isolated flag found —
+  stays heuristic). `figures_opju.py` split into `opju_axis_real_form.py`
+  (real-corpus-form value tokens + the new Y flag) to stay under the
+  500-line ceiling after the addition. Also fixed the worktree-nesting path
+  bug (`_CORPUS`/`_TD`/`TEST_DATA_CORPUS` resolving to a nonexistent
+  location one level too high) in `test_io_origin_project.py`,
+  `test_io_origin_fuzz.py`, `test_io_origin_ground_truth.py`, and
+  `conftest.py`'s `corpus_dir` fixture — those realdata suites were
+  silently skipping in any worktree agent; fixed with the same
+  ancestor-walk `test_io_origin_figures_opju.py` already used.
 - ~~**#19 Synthetic fixture builders**~~ (2026-07-04) — audited every
   `src/quantized/io/origin_project/` decoder against its test file (see
   table below); most already had synthetic in-test builders from earlier

@@ -267,7 +267,30 @@ def test_error_is_a_valueerror_so_the_route_maps_it_to_422() -> None:
 
 # ── realdata (skips in CI / where the corpus is absent) ───────────────────────
 
-_CORPUS = Path(__file__).resolve().parents[1] / ".." / "test-data" / "origin"
+
+def _resolve_corpus_dir() -> Path:
+    """The local-only ``../test-data/origin`` corpus.
+
+    ``parents[1] / "../test-data"`` assumes this file sits one level below a
+    repo root that is itself a sibling of ``test-data`` -- true for the main
+    checkout, but a worktree agent lives an extra ``.claude/worktrees/<name>``
+    deep, so that relative path silently resolves to a nonexistent location
+    and every realdata test below skips without saying why. Fall back to
+    walking up from ``__file__`` for a ``test-data`` sibling (works from any
+    nesting depth) before giving up -- mirrors
+    ``test_io_origin_figures_opju.py``'s ``_resolve_spec_dir``.
+    """
+    candidate = Path(__file__).resolve().parents[1] / ".." / "test-data" / "origin"
+    if candidate.exists():
+        return candidate
+    for ancestor in Path(__file__).resolve().parents:
+        walked = ancestor / "test-data" / "origin"
+        if walked.exists():
+            return walked
+    return candidate  # let downstream `.exists()` checks skip cleanly
+
+
+_CORPUS = _resolve_corpus_dir()
 
 
 @pytest.mark.realdata
@@ -340,6 +363,11 @@ def test_realdata_figures_extracted_as_plot_states() -> None:
     assert len(moke) == 12
     g = next(x for x in moke if x["name"] == "Graph3")
     assert g["x_from"] == -7000.0 and g["x_to"] == 7000.0  # field-symmetric loop
+    # the Y-scale flag (`_y_scale_flag`, isolated 2026-07-04 from this exact
+    # XRD/Moke byte-diff) must read every Moke window-level graph as linear --
+    # not just heuristically (all these ranges are well under 3 decades, so
+    # this also passed before the flag; the real regression guard is XRD above).
+    assert all(x["y_log"] is False for x in moke)
 
 
 def test_figures_absent_on_plain_synthetic(tmp_path) -> None:
@@ -364,11 +392,20 @@ def _fig_window_header(name: str) -> bytes:
 
 
 def _fig_layer_block(
-    x_from: float, x_to: float, y_from: float, y_to: float, *, hint: str = ""
+    x_from: float,
+    x_to: float,
+    y_from: float,
+    y_to: float,
+    *,
+    hint: str = "",
+    y_scale_flag: bytes | None = None,
 ) -> bytes:
     """The layer-continuation block read immediately after a graph header:
     head `00 00 1f 00`, axis (from, to) doubles at 15/23 (X) and 58/66 (Y),
-    and an optional `source_hint` cstring at offset 208."""
+    an optional `source_hint` cstring at offset 208, and an optional 2-byte
+    Y-scale flag at offset 98 (`01 00` linear / `08 01` log10 -- see
+    `figures.py`'s `_y_scale_flag`; left zero/unrecognized by default so
+    existing heuristic-only tests are unaffected)."""
     payload = bytearray(240)
     payload[0:4] = b"\x00\x00\x1f\x00"
     struct.pack_into("<d", payload, 15, x_from)
@@ -378,6 +415,8 @@ def _fig_layer_block(
     if hint:
         hb = hint.encode("latin1")
         payload[208 : 208 + len(hb)] = hb
+    if y_scale_flag is not None:
+        payload[98:100] = y_scale_flag
     return _block(bytes(payload))
 
 
@@ -454,6 +493,60 @@ def test_synthetic_opj_figure_curve_count_from_legend_text() -> None:
     figs = extract_figures(blob)
     assert len(figs) == 1
     assert figs[0]["n_curves"] == 2
+
+
+# ── synthetic .opj Y-scale flag (isolated 2026-07-04 against the XRD/Moke
+# byte-diff -- see figures.py's `_y_scale_flag` module docstring) ────────────
+
+
+def test_synthetic_y_scale_flag_log_overrides_heuristic() -> None:
+    """The `08 01` flag reads Y as log even though the range itself spans
+    under a decade (0.5 -> 2.0) -- the shape the old decade heuristic alone
+    would call linear, exactly like several real PNR/SuperlatticeFits
+    reflectivity sub-ranges."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph1")
+        + _fig_layer_block(18.0, 100.0, 0.5, 2.0, y_scale_flag=b"\x08\x01")
+    )
+    figs = extract_figures(blob)
+    assert len(figs) == 1
+    assert figs[0]["y_log"] is True
+
+
+def test_synthetic_y_scale_flag_linear_overrides_heuristic() -> None:
+    """The `01 00` flag reads Y as linear even though the range spans 6
+    decades (the shape the old decade heuristic alone would call log)."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph1")
+        + _fig_layer_block(1.0, 8.0, 0.5, 500000.0, y_scale_flag=b"\x01\x00")
+    )
+    figs = extract_figures(blob)
+    assert len(figs) == 1
+    assert figs[0]["y_log"] is False
+
+
+def test_synthetic_y_scale_flag_unrecognized_falls_back_to_heuristic() -> None:
+    """A block too short for the flag offset, or an unrecognized 2-byte
+    value there, falls back to the decade heuristic unchanged."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph1")
+        + _fig_layer_block(1.0, 8.0, 1.0, 5000.0)  # default payload: zero bytes at 98/99
+    )
+    figs = extract_figures(blob)
+    assert len(figs) == 1
+    assert figs[0]["y_log"] is True  # 5000/1 >= 1e3 -> decade heuristic, unchanged
 
 
 def test_extra_sheet_datasets_become_pseudo_books(tmp_path) -> None:

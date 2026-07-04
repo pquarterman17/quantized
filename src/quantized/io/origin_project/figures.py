@@ -6,11 +6,31 @@ Per ``docs/origin_re/opj_figures.md``: a graph window = a header block
 triples at offsets 15/23/31 (X) and 58/66/74 (Y), then typed child objects —
 legend text (``\\l(n) %(n)`` per curve), axis titles, and text annotations.
 
+**Y-axis scale flag — solved 2026-07-04** (the "real form scale bit" item):
+the 2 bytes at payload offsets 98/99 are an exact Y lin/log flag, ``01 00``
+= linear, ``08 01`` = log10 — the same two byte values (in the same order)
+as the independently-discovered ``.opju`` real-corpus-form flag
+(``figures_opju.py``'s ``_real_y_log_flag``), just at a different fixed
+offset in this container's layer-continuation block. Isolated by
+byte-diffing XRD's single log-Y ``Graph1`` layer against all 15 recovered
+linear-Y layers in ``Moke.opj`` (identical at every byte except 98/99 and a
+second, unrelated candidate at 189 that a wider corpus scan ruled out — see
+``docs/origin_project_format.md`` §6.1) and validated against >300 further
+layers across PNR/MnN_Diffusion_PNR/XMCD/hc2convert/SuperlatticeFits: only
+these two byte values ever occur, and several instances (reflectivity R(Q)
+curves zoomed to a sub-decade log range, e.g. Y=(0.9772, 1.2916)) are flag
+log but heuristic-linear — cases the flag resolves correctly where the old
+decade heuristic could not. **X has no known equivalent flag** (the search
+that isolated Y's did not find one for X in this corpus) and stays
+heuristic-only, same as before. See §6.1 for the byte-level trail.
+
 The recoverable content is the plot-state snapshot the owner asked for: axis
-ranges, a log-scale heuristic (the stored scale *flag* is still un-isolated —
-a positive axis spanning ≥ 3 decades reads as log), titles/annotations, and
-the curve count. The curve→column selector lives in the undecoded DataPlot
-body, so figures name their source only loosely (``source_hint``).
+ranges, an exact Y-scale flag (falling back to the decade heuristic only
+when the flag byte pair is unrecognized), an X-scale decade heuristic (a
+positive axis spanning ≥ 3 decades reads as log — no isolated X flag found),
+titles/annotations, and the curve count. The curve→column selector lives in
+the undecoded DataPlot body, so figures name their source only loosely
+(``source_hint``).
 """
 
 from __future__ import annotations
@@ -27,6 +47,12 @@ __all__ = ["extract_figures"]
 _LEGEND_RE = re.compile(r"\\l\((\d+)\)")
 _AUTO_TITLE = re.compile(r"^%\(\?[XY]\)")
 
+# Y-axis scale flag: 2 bytes at the layer-continuation payload's offset 98/99
+# (see the module docstring). Any other value falls back to the heuristic.
+_Y_SCALE_FLAG_OFFSET = 98
+_Y_LIN_FLAG = bytes([0x01, 0x00])
+_Y_LOG_FLAG = bytes([0x08, 0x01])
+
 
 def _axis(p: bytes, base: int) -> tuple[float, float]:
     lo, hi = struct.unpack_from("<d", p, base)[0], struct.unpack_from("<d", p, base + 8)[0]
@@ -35,6 +61,20 @@ def _axis(p: bytes, base: int) -> tuple[float, float]:
 
 def _log_heuristic(lo: float, hi: float) -> bool:
     return lo > 0 and hi > 0 and hi / lo >= 1000.0
+
+
+def _y_scale_flag(payload: bytes) -> bool | None:
+    """Exact Y lin/log flag from the layer-continuation payload, or ``None``
+    when the block is too short or the byte pair is unrecognized (caller
+    falls back to ``_log_heuristic``) -- see the module docstring."""
+    if len(payload) < _Y_SCALE_FLAG_OFFSET + 2:
+        return None
+    flag = payload[_Y_SCALE_FLAG_OFFSET : _Y_SCALE_FLAG_OFFSET + 2]
+    if flag == _Y_LIN_FLAG:
+        return False
+    if flag == _Y_LOG_FLAG:
+        return True
+    return None
 
 
 _WORDY = re.compile(r"[A-Za-z0-9 ()\[\].,%/+°:=-]")
@@ -95,14 +135,15 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
                 x_from, x_to = _axis(nxt, 15)
                 y_from, y_to = _axis(nxt, 58)
                 hint = _cstring(nxt, 208, 24) or ""
+                y_log = _y_scale_flag(nxt)
                 current = {
                     "name": name,
                     "x_from": x_from,
                     "x_to": x_to,
-                    "x_log": _log_heuristic(x_from, x_to),
+                    "x_log": _log_heuristic(x_from, x_to),  # no isolated X flag found
                     "y_from": y_from,
                     "y_to": y_to,
-                    "y_log": _log_heuristic(y_from, y_to),
+                    "y_log": y_log if y_log is not None else _log_heuristic(y_from, y_to),
                     "source_hint": hint,
                 }
                 i += 2
