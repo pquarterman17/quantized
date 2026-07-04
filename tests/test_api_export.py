@@ -326,3 +326,31 @@ def test_export_opj_roundtrips_through_our_reader(tmp_path):
 def test_export_opj_rejects_empty():
     resp = client.post("/api/export/opj", json={"datasets": [], "filename": "x"})
     assert resp.status_code == 422
+
+
+def test_export_origin_project_multibook_zip():
+    """POST /api/export/origin-project -> one .ogs + one CSV per book."""
+    import io as _io
+    import zipfile as _zip
+
+    ds = {
+        "time": [1.0, 2.0],
+        "values": [[3.0], [4.0]],
+        "labels": ["M"],
+        "units": ["emu"],
+        "metadata": {"origin_book_long": "30 nm sample"},
+    }
+    resp = client.post(
+        "/api/export/origin-project",
+        json={
+            "datasets": [{"dataset": ds, "name": "LoopA"}, {"dataset": ds, "name": "LoopB"}],
+            "filename": "proj",
+        },
+    )
+    assert resp.status_code == 200
+    zf = _zip.ZipFile(_io.BytesIO(resp.content))
+    names = set(zf.namelist())
+    assert names == {"proj.ogs", "LoopA_data.csv", "LoopB_data.csv"}
+    ogs = zf.read("proj.ogs").decode()
+    assert ogs.count("newbook") == 2
+    assert 'page.longname$ = "30 nm sample";' in ogs

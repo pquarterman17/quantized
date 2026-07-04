@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from quantized.datastruct import DataStruct
 from quantized.io.consolidated import consolidate_csv
 from quantized.io.hdf5 import write_hdf5
-from quantized.io.origin import format_origin_script
+from quantized.io.origin import format_origin_project_script, format_origin_script
 from quantized.io.origin_project.writer import opj_bytes
 from quantized.io.xrd_csv import format_xrd_csv
 
@@ -380,4 +380,26 @@ def export_opj(req: OpjRequest) -> Response:
         content=payload,
         media_type="application/octet-stream",
         headers=_attachment(f"{stem}.opj"),
+    )
+
+
+@router.post("/origin-project")
+def export_origin_project(req: OpjRequest) -> Response:
+    """DataStructs -> a ZIP holding one LabTalk ``.ogs`` + one CSV per book."""
+    created = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        items = [(DataStruct.from_dict(i.dataset), i.name) for i in req.datasets]
+        csvs, ogs_text = format_origin_project_script(items, created=created)
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    stem = _safe_name(req.filename, "")
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"{stem}.ogs", ogs_text)
+        for csv_name, csv_text in csvs:
+            zf.writestr(csv_name, csv_text)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers=_attachment(_safe_name(stem, ".zip")),
     )
