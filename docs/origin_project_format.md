@@ -37,7 +37,7 @@ written (annotated inline below).
 6. [Figures (graph windows)](#6-figures-graph-windows)
    - 6.1 [`.opj` figures — Graph → Layer → Curve](#61-opj-figures--graph--layer--curve)
    - 6.2 [`.opju` figures](#62-opju-figures)
-     - 6.2.1 [Curve→column binding (item 35, `.opju` only, partial)](#621-curvecolumn-binding-item-35-opju-only-partial)
+     - 6.2.1 [Curve→column binding (item 35, `.opju` only, CLOSED)](#621-curvecolumn-binding-item-35-opju-only-closed)
    - 6.3 [Origin → quantized figure mapping + gap list](#63-origin--quantized-figure-mapping--gap-list)
 7. [Notes windows & results-log recovery](#7-notes-windows--results-log-recovery)
 8. [Export: writing Origin projects](#8-export-writing-origin-projects)
@@ -80,9 +80,12 @@ record) — pinned against a new known-content oracle
 
 **Known, permanent gaps** (see [§11](#11-open-items) for detail): the
 DataPlot curve→column selector (which exact columns a curve plots) is
-undecoded in `.opj`; `.opju`'s IS decoded (§6.2.1) but a per-figure
-attribution gap means restored figures still commonly resolve to a *book*,
-not exact column pairs, in both containers. A native `.opj` writer
+undecoded in `.opj`; `.opju`'s IS decoded, at 100% precision and 100%
+oracle-covered recall (§6.2.1, item 35 CLOSED) — but a per-*figure*
+attribution gap remains: which decoded figure a correctly-resolved
+`(book, column)` pair gets attached to is still a best-effort heuristic, so
+a curve can land on the wrong figure within a file even though the pair
+itself is never wrong. A native `.opj` writer
 round-trips through our own reader but does **not** yet load in real Origin
 (item 34, open); full sheet-hierarchy UI (nested Book→Sheet trees) is out
 of scope by design — extra sheets surface as flat pseudo-books instead.
@@ -1020,7 +1023,7 @@ per-layer window name (Origin's "Graph1" etc.) is not recoverable, so
 header supplies it directly). Unlike `.opj`, the DataPlot column selector
 itself IS partially decoded — see §6.2.1.
 
-#### 6.2.1 Curve→column binding (item 35, `.opju` only, partial)
+#### 6.2.1 Curve→column binding (item 35, `.opju` only, CLOSED)
 
 `opju_curves.py::extract_curves`, wired into
 `figures_opju.extract_figures_opju`'s `"curves"` field. Every curve
@@ -1157,87 +1160,135 @@ appended last), not a decodable structural signal — using "trust the tail
 of the list" was considered and rejected as exactly the kind of guess this
 decoder's precision-first design forbids.
 
-**Known gap — per-figure attribution AND multi-curve recall (the reason
-item 35 stays open).** Scoping a curve to *which* decoded figure it belongs
-to is still a best-effort `[anchor, next_anchor)` byte-range heuristic, and
-— now confirmed directly against the real oracle rather than inferred —
-most of a real graph's curve tokens are simply not locatable yet: e.g.
-"Fixed Lambdas SI"'s Graph1 genuinely plots 6 columns (`NbAl80nm`'s
-I/J/K plus `NbAl100/120/200nm`'s K) but only 1 is recovered. Sharpened by
-this rework: `RockingCurve`'s `Graph1` (`Nb!B`) and `Graph2` (`NbAl!B`), and
-essentially all of XAS's and UnpolPlots's oracle-required curves, have
-**neither** a real 8-byte token **nor** a column-candidate-list tail match
-anywhere in the file — an exhaustive whole-file scan for both shapes
-confirms zero candidates exist for them at all. These are ordinary,
-single-curve, default-dialog graphs (unlike `NbAuRocking`'s custom-styled
-multi-curve layer, or "Fixed Lambdas SI"'s "Theory SA" reference-overlay
-curves, both of which DO carry the real token) — Origin evidently encodes
-their column choice a third way, not yet located. This is a recall gap, not
-a soundness one — everything reported is both designation-confirmed and
-oracle-confirmed, never fabricated — but restored figures are still
-commonly missing curves a user would expect. Closing it needs a further RE
-pass specifically on simple/default single-curve graphs (not the
-multi-curve/multi-book layout, which the two new specimens confirm is
-already solved).
+**Known gap at the time — per-figure attribution AND multi-curve recall.**
+Scoping a curve to *which* decoded figure it belongs to was, and remains, a
+best-effort `[anchor, next_anchor)` byte-range heuristic (unchanged by the
+work below — see "Remaining gap" at the end of this section). But the
+*recall* half of this gap — most of a real graph's curve tokens being
+simply unlocatable — turned out NOT to be permanent: `RockingCurve`'s
+`Graph1` (`Nb!B`) and `Graph2` (`NbAl!B`), and essentially all of XAS's and
+UnpolPlots's oracle-required curves, had **neither** the real 8-byte 0x03
+token **nor** a column-candidate-list tail match anywhere in the file —
+these are ordinary, single-curve, default-dialog graphs (unlike
+`NbAuRocking`'s custom-styled multi-curve layer, or "Fixed Lambdas SI"'s
+"Theory SA" reference-overlay curves, both of which DO carry the 0x03
+token) — meaning Origin encodes their column choice a *third* way. The
+next two subsections are that search: first a negative result, then (same
+day, reworked) the actual answer.
 
-**The "third encoding" search — negative result (2026-07-04).** A further
-session chased three hypotheses for the default-dialog column selector.
-None validated; **no code shipped**, recall stays 30.6% / precision 100%.
-See `opju_curves.py`'s module docstring for the full byte-level trail — the
-short version:
+**The "third encoding" search — first pass, negative result (2026-07-04).**
+Three hypotheses were chased for the default-dialog column selector; none
+validated in that pass:
 
-1. **Version-pair diff, refuted.** `specimens/converted/*.opju` are the
-   same corpus projects re-saved by the trial-writer's Origin build
-   (4.3811) from the corpus's native 4.3380 build — a hoped-for Rosetta
-   stone between "trial-written" and "real corpus" `.opju`. It isn't one:
-   re-scanning `converted/XAS.opju` finds what looks like a new real token
-   at `Co!C`, but it is the *same* `__BCO` boilerplate coincidence,
-   version-shifted to 383 bytes past the marker (vs. the pinned 357-360 in
-   the native corpus) — just outside the current `[340, 380)` filter
-   window by luck of which build wrote it, not a new decodable signal. The
-   re-save also introduces a second false-positive-shaped cluster (~1872
-   bytes from a `__BCO` marker) not seen in the native file — conversion
-   makes the corpus *noisier*, not cleaner, for this purpose. No genuine
-   curve/DataPlot token appears inside any default-dialog graph's own axis
-   window in either build.
-2. **Window-local alternate encoding, found but confirmed non-validating.**
-   Anchoring on a length-prefixed workbook short-name string embedded in
-   `RockingCurve`'s curve-object body (e.g. `\x80\x03Nb\x00`, found 11
-   bytes before the real token in the *solved* `NbAuRocking` object)
-   locates a look-alike byte sequence at the same relative offset in the
-   *unsolved* `Graph1`/`Graph2` objects — same first 5 bytes as the real
-   token (`<flag> 01 01 01 80`), but the literal `0x03` sub-type byte is
-   `0x01`, there is no fixed `0x00` terminator, and the record doesn't
-   resync with the shared downstream template for another ~30-40 bytes.
-   The byte following the swapped sub-type was `0x09` for `Nb!B` (expected
-   ordinal 2 local / 8 global) and `0x0e` for `NbAl!B` (expected ordinal 2
-   local / 12 global) — matching neither scheme, and not even matching
-   each other by the true ordinals' own difference (`14-9=5` vs. the real
-   `12-8=4`). The decisive check: the 4.3811 re-save of this exact project
-   rewrites the same slot into the *canonical* token shape while
-   preserving the *same* numeric value (`9`/`14`) — proof the slot is a
-   real Origin field, not a misparse — yet decoding `9` through the
-   already-validated cumulative-ordinal map resolves to `Nb!C` (**wrong**;
-   oracle wants `B`), and `14` is out of range entirely. Some other,
-   unidentified numbering rule governs default-dialog plots' column
-   choice; trusting this shape would have silently produced wrong answers,
-   not just missing ones — precisely what the precision-first design
-   forbids. It also isn't a generally-locatable shape: the raw 4-byte
-   prefix recurs ~90 times in `XAS.opju` alone (a generic idiom, not
-   curve-specific), and `XAS`'s own default-dialog curve objects don't
-   embed a length-prefixed short name this way at all — the anchor
-   technique is `RockingCurve`-specific, not corpus-general.
-3. **Legend / `__FRAMESRCDATAINFOS` backrefs, dead end.**
-   `__FRAMESRCDATAINFOS` exists exactly once each in `UnpolPlots` and
-   `"Fixed Lambdas SI"` (absent from `XAS`/`RockingCurve`), but decodes as
-   multi-panel frame layout geometry (position/size), not a per-curve
-   dataset backref; the neighboring curve-object slots carry Origin's
-   generic auto-label macros (`%(?X)`/`%(?Y)` — "substitute this axis's
-   own column short name at render time"), not a literal dataset
-   reference.
+1. **Version-pair diff, refuted.** `specimens/converted/*.opju` (the same
+   corpus projects re-saved by the trial-writer's Origin build 4.3811 from
+   the corpus's native 4.3380 build) looked like a hoped-for Rosetta stone
+   but wasn't one — the apparent "new token" it surfaces at `Co!C` is the
+   same `__BCO` boilerplate coincidence, just version-shifted outside the
+   `[340, 380)` filter window by luck, and conversion adds a further
+   false-positive cluster the native corpus doesn't have.
+2. **Window-local alternate encoding — found the real shape, but decoded
+   it through the wrong map.** Anchoring on a length-prefixed workbook
+   short-name string in `RockingCurve`'s curve-object body located a
+   look-alike sequence in the *unsolved* `Graph1`/`Graph2` objects sharing
+   the real token's first 5 bytes (`<flag> 01 01 01 80`) but with subtype
+   `0x01` instead of `0x03` and no fixed `0x00` terminator. Decoding its
+   value (`9` for `Nb!B`, `14` for `NbAl!B`) through the already-validated
+   FPC-decoded-only ordinal map (`_global_column_map`) gave `Nb!C` (wrong)
+   and an out-of-range result — so the lead was set aside as "a real field,
+   wrong numbering rule, not worth the risk." It was actually the right
+   field, decoded through the wrong map (see below).
+3. **Legend / `__FRAMESRCDATAINFOS` backrefs, dead end.** Decodes as
+   multi-panel frame layout geometry, not a per-curve dataset backref;
+   confirmed unrelated.
 
-Recorded as a confirmed negative result (not "not yet tried") so a future
-pass doesn't re-spend time on the same three leads.
+**The third encoding — FOUND (same-day rework).** Re-anchoring on lead #2's
+byte pattern itself, rather than the book-name string that made it look
+`RockingCurve`-specific, finds it corpus-wide:
+
+```
+<flag:1> 01 01 01 80 01 <val:1>
+```
+
+Same family as the shipped token, same fixed `01 01`, subtype `0x01`
+instead of `0x03`, no fixed terminator. The earlier rejection was a
+**counting-convention bug, not a wrong shape**: `val` is NOT
+`_global_column_map`'s FPC-decoded-only ordinal — it's a 1-based ordinal
+counted cumulatively across **every allocated column of every workbook,
+including empty/undecoded books and columns**, in file book-appearance
+order. Decoding `RockingCurve`'s `9`/`14` through this all-columns map
+(counting `NbAu`'s all 7 columns, including one FPC never decodes, before
+`Nb` starts) resolves to exactly `Nb!B`/`NbAl!B` — correct. The same
+re-decoding closes every other file:
+
+* `XAS` (`Book1`=2 cols, an empty default book FPC never touches, then
+  `Co`=3, `bl11YIGPy032`=3, `bl11YIGPy033`=3): `val` = 5, 8, 11 → exactly
+  `Co!C`, `bl11YIGPy032!C`, `bl11YIGPy033!C`.
+* `UnpolPlots` (`Book1`=2, `J315NdNiO3STO`=3, `J315NdNiO3ST1`=9,
+  `PrNiO3STOprof`=3, `PrNiO3STOrefl`=9): 16 hits collapse (each doubled by
+  a composite-window re-reference) to the file's 8 unique oracle pairs.
+* `"Fixed Lambdas SI"` (`Book1`=2, then 10 PNR books × 11 cols): 28 hits
+  collapse to exactly the file's 14 unique oracle pairs.
+
+**Building the all-columns map without ground truth.**
+`opju_codec._NAME` matches a length-prefixed dataset name for every
+allocated column, including empty ones, but also binary noise. The map
+builder (`opju_curves_allcols._allocated_column_map`) filters this to a
+clean, `index.json`-matching inventory with three checks: (1) reuse
+`scan_columns`'s length-prefix anchor; (2) keep only pure-letter,
+1-2-char column suffixes and drop any `@N` sheet-suffixed match; (3) group
+by book and require the column-letter set to be an exact contiguous run
+starting at `A`. Book order is first-appearance order in the byte stream
+— matches every stem's `index.json` book order exactly (guarded by
+`test_realdata_allocated_column_map_matches_index`).
+
+**No designation gate for this token — a deliberate, checked difference.**
+The shipped 0x03 path drops any column unless its independently-validated
+designation is exactly `"Y"`. Applying that same gate to the 0x01 token
+was checked against every oracle-confirmed binding it resolves and would
+**wrongly reject four of them**: `UnpolPlots`'s `J315NdNiO3ST1!H` /
+`PrNiO3STOrefl!H` ("dR Fresnel") and `"Fixed Lambdas SI"`'s
+`PNRNbAl80nm!J` / `PNRNbAu100nm!J` ("dSA") are genuinely plotted per
+`plots.json` but independently designated `"Y-error"` — a legitimate
+Origin usage (plotting an uncertainty column as its own curve) the
+designation gate can't distinguish from the `__BCO` artifact. Since the
+raw 7-byte token is already 100% precise file-wide with no cross-check at
+all (confirmed by scanning every `.opju` in the corpus — the token has
+**zero** hits anywhere except the four files that need it), the 0x01 path
+applies only a structural safety check (an unresolvable `val` is dropped)
+and skips the designation gate entirely. See `opju_curves_allcols.py`'s
+module docstring for the full byte-level trail (flag-byte and tail-byte
+characterization included).
+
+**Final validation (file-wide `(book, column)` sets, both token families
+merged and deduped):**
+
+| stem | oracle pairs | decoded | correct | wrong | recall |
+|------|-------------:|--------:|--------:|------:|-------:|
+| `fig_pairs` (by-construction) | 2 | 2 | 2 | **0** | 100% |
+| `curves_multi` (by-construction) | 3 | 3 | 3 | **0** | 100% |
+| `curves_2books` (by-construction) | 2 | 2 | 2 | **0** | 100% |
+| `XAS` | 3 | 3 | 3 | **0** | **100%** (was 0%) |
+| `RockingCurve` | 4 | 4 | 4 | **0** | **100%** (was 50%) |
+| `UnpolPlots` | 8 | 8 | 8 | **0** | **100%** (was 0%) |
+| `"Fixed Lambdas SI"` | 14 | 14 | 14 | **0** | **100%** (was 14%) |
+| **aggregate** | **36** | **36** | **36** | **0** | **100%** (was 30.6% / 11/36) |
+
+Precision stays 100% (mandatory, asserted unconditionally); aggregate
+recall goes from 30.6% to **100%** — reconfirmed by
+`tools/origin_trial/score_curve_bindings.py` against the absolute corpus
+path and `tests/test_io_origin_figures_opju.py::
+test_realdata_curve_bindings_vs_plots_oracle`.
+
+**Remaining gap — per-figure attribution (not a soundness gap).** Which
+*specific* decoded figure a curve is attributed to is still a best-effort
+`[anchor, next_anchor)` window heuristic (unchanged by this rework): e.g.
+"Fixed Lambdas SI"'s last anchor spans to EOF and physically contains all
+28 hits for both of its book families, so that one figure's `"curves"`
+list absorbs bindings that structurally belong to an earlier, already-
+closed figure. Every `(book, column)` pair reported is still correct —
+this only affects *which* figure it's attached to, never fabricating or
+mis-typing a binding.
 
 ### 6.3 Origin → quantized figure mapping + gap list
 
@@ -1261,7 +1312,7 @@ plot-state-snapshot dicts above):
 | Layer (`_cart_object`) | one plot/panel |
 | 2 layers, shared X, 2 Y ranges | dual-Y |
 | Curve (`type 0x07` + DataPlot) | a plotted series |
-| Layer source book short-name | resolved dataset (via `source_hint` heuristic); `.opju`'s curve token additionally gives exact `{book, x, y}` pairs where the per-figure attribution heuristic finds one (§6.2.1, partial) |
+| Layer source book short-name | resolved dataset (via `source_hint` heuristic); `.opju`'s curve tokens additionally give exact `{book, x, y}` pairs (100% precision/recall against the oracle, §6.2.1) attached wherever the per-figure attribution heuristic finds a home for them |
 | X/Y range | axis limits |
 | X/Y scale log | axis log flag (exact where solved, heuristic otherwise) |
 | Axis title | axis label (Origin escapes stripped) |
@@ -1273,12 +1324,13 @@ yet):
 
 - **Curve→column binding.** `.opj`'s DataPlot column selector is
   permanently undecoded — restored figures resolve to a *book*, not exact
-  column pairs. `.opju`'s curve token IS decoded (§6.2.1) but per-figure
-  *attribution* (which curve belongs to which decoded figure) is a lossy
-  heuristic that drops most curves for composite/derived real-corpus
-  graphs — so `.opju` figures commonly still restore to the whole book
-  rather than each curve's specific X/Y pair, same as `.opj` in practice
-  (plan item 35, open: no oracle exists to close the attribution gap).
+  column pairs. `.opju`'s curve token IS decoded (§6.2.1, item 35 CLOSED,
+  100% precision/100% oracle-covered recall) but per-figure *attribution*
+  (which curve belongs to which decoded figure) remains a lossy heuristic
+  — a correctly-resolved `(book, column)` pair can still land on the wrong
+  figure within a file, or all pile onto one composite/last figure, so
+  restored figures don't always split curves exactly the way Origin's own
+  layer layout would.
 - **Multi-layer free layout.** Origin allows N independently
   positioned/sized layers; quantized has single-plot + stacked panels +
   one inset. >2 layers or non-stacked overlays are lossy.
@@ -1436,26 +1488,23 @@ reading only this doc:
 
 - **Item 34 — `.opj` writer real-Origin load failure.** Tier-1, open. See
   §8.
-- **Item 35 — figure curve→dataset column binding.** `.opj`'s DataPlot
-  column selector (§6.1) stays permanently undecoded. `.opju`'s IS decoded
-  (§6.2.1, `opju_curves.py`) and shipped in `"curves"`, gated on an
-  independently-validated column designation for precision. Reworked
-  2026-07-04 against a real per-plot oracle (`plots.json`,
-  `tools/origin_trial/export_plot_refs.py`): found and fixed a false
-  positive (the `__BCO` per-book boilerplate, §6.2.1) that was misattributed
-  as a curve on `UnpolPlots`; precision is now 100% on every oracle-covered
-  file. Same day, two new controlled specimens (`curves_multi`,
-  `curves_2books`) confirmed the multi-curve-per-layer and cross-book
-  layout are already solved correctly (no code change), raising aggregate
-  recall from 6/31 (19.4%) to 11/36 (30.6%); a second near-miss shape (the
-  per-book "column candidate list", §6.2.1) was found and confirmed
-  excluded along the way. Real-corpus recall itself stays low (0-50% per
-  file, see §6.2.1's table) — per-figure *attribution*, and the still-
-  undecoded third encoding used by simple single-curve real-corpus graphs,
-  both remain open, so the item stays open.
-- **Item 4 (report-sheet family) — non-double column values.** The
-  FitLinear/NLFit auto-generated report-sheet text columns (§3.2) stay an
-  honest drop; a materially harder variable-length RE problem.
+- **Item 35 — figure curve→dataset column binding, CLOSED 2026-07-04.**
+  `.opj`'s DataPlot column selector (§6.1) stays permanently undecoded.
+  `.opju`'s IS decoded (§6.2.1, `opju_curves.py` + `opju_curves_allcols.py`)
+  and shipped in `"curves"`. Two token subtypes are merged: the 0x03
+  subtype (custom-styled/multi-curve graphs, gated on independently-
+  validated `"Y"` designation) and the 0x01 subtype (ordinary single-curve
+  default-dialog graphs, an all-columns cumulative ordinal, deliberately
+  NOT designation-gated). Reworked against a real per-plot oracle
+  (`plots.json`, `tools/origin_trial/export_plot_refs.py`): found and fixed
+  a false positive (the `__BCO` per-book boilerplate) misattributed as a
+  curve on `UnpolPlots`; found and closed the "third encoding" that
+  ordinary single-curve graphs use (a counting-convention fix, not a new
+  shape — see §6.2.1). Precision is 100% and aggregate oracle-covered
+  recall is **100% (36/36)**, up from 30.6% (11/36). Per-figure
+  *attribution* (which curve belongs to which decoded figure) remains a
+  best-effort heuristic — a narrower, documented remaining gap, not a
+  soundness one.
 - **Item 36 — Y-axis lin/log scale-flag byte (both containers), CLOSED
   2026-07-04.** Both `.opj` (§6.1, `figures.py`'s `_y_scale_flag`, payload
   offset 98/99) and `.opju`'s real-corpus form (§6.2,
@@ -1464,9 +1513,6 @@ reading only this doc:
   `.opju` anchors and >300 `.opj` layers corpus-wide. **X still has no
   isolated flag in either container** and stays on the decade heuristic —
   a documented, narrower remaining gap.
-  file. Recall stays low (0-50% per file, see §6.2.1's table) — per-figure
-  *attribution* and multi-curve-per-layer recovery both remain lossy, so
-  the item stays open.
 - **Item 4 (report-sheet family) — non-double column values.** CLOSED for
   the reference-string family: FitLinear/NLFit auto-generated report-sheet
   columns decode in both containers (`origin_report_sheets` — §3.2 for

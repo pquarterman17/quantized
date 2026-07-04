@@ -48,7 +48,13 @@ columns) — item 4 CLOSED, moved to Completed); item 35's "third encoding"
 search (default-dialog single-curve column selector) ran three more
 hypotheses (version-pair diff, window-local alternate encoding, legend/
 `__FRAMESRCDATAINFOS` backrefs) — all negative, no code shipped, recall
-stays 30.6% (see item text).
+stays 30.6% (see item text); later the same day, a follow-up pass re-
+anchored lead #2 on its byte pattern instead of the book-name string that
+made it look file-specific and found it corpus-wide — it was the real
+encoding after all, rejected earlier only by a counting-convention bug
+(FPC-decoded-only ordinal vs. the true all-columns-of-every-book ordinal).
+**Item 35 CLOSED**: precision 100%, aggregate oracle-covered recall
+36/36 (100%), up from 30.6% — moved to Completed.
 
 ---
 
@@ -224,102 +230,7 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 3 — Nice-to-Have
 
-35. **Figure curve→dataset binding** — `.opju`'s curve/DataPlot column
-    selector IS decoded (`opju_curves.py`, `docs/origin_project_
-    format.md` §6.2.1): an 8-byte per-curve token gives the Y column's
-    global ordinal, gated against an independently-validated column
-    designation (X is a structural inference — the byte position a
-    naive read would expect to hold it never varied across ~44 samples,
-    so it isn't reported as decoded). `.opj`'s selector remains
-    permanently undecoded (item 11's original sub-question).
-    **Reworked 2026-07-04** against a real per-plot oracle
-    (`export_plot_refs.py`'s `range -w` LabTalk recipe succeeded where
-    `export_ground_truth.py`'s `range __rp`/`layer.nplots` came back
-    empty; oracle now lives at `specimens/ground_truth/<stem>/
-    plots.json` for `fig_pairs` + the real corpus). That oracle exposed
-    a false positive: `UnpolPlots` decoded 2 *wrong* `(book, column)`
-    pairs. Root cause: the whole-file regex also matches the tail of an
-    unrelated, fixed ~365-byte per-book boilerplate record (starts at a
-    `__BCO2` string, byte-identical across every book in every file
-    checked) whose last 8 bytes coincidentally fit the curve-token shape
-    and always resolve to local column 3 — undetected before because
-    every `XAS` book happens to plot column C for real, making the
-    artifact "correct" by luck. Fixed via `_is_bco_boilerplate` (requires
-    both the local-column-3 match AND a `__BCO` marker at the confirmed
-    340-380 byte distance — neither alone is safe, since `fig_pairs`' own
-    A-C diff curve also resolves to local column 3, just far from any
-    `__BCO` marker). **Precision is now 100% on every oracle-covered
-    file** (`fig_pairs` 2/2, `XAS` 0/3, `RockingCurve` 2/4, `UnpolPlots`
-    0/8, "Fixed Lambdas SI" 2/14 — 0 wrong everywhere, asserted by
-    `test_realdata_curve_bindings_vs_plots_oracle`). Recall stays open:
-    per-figure *attribution* (which curve belongs to which decoded
-    figure) is still a lossy `[anchor, next_anchor)` window heuristic,
-    and — now confirmed directly against the real oracle rather than
-    inferred — most of a real graph's OWN curve tokens (not just
-    misattributed ones) aren't locatable yet: "Fixed Lambdas SI"'s
-    Graph1 genuinely plots 6 columns but only 1 (the first, "Theory SA")
-    is recovered per window; `RockingCurve`'s multi-curve
-    `NbAuRocking` layer (D+F) is the one case that decodes exactly.
-    **Recall push, same day (two new specimens):** `curves_multi.opju`
-    (one graph, one layer, 3 curves — MBook B/C/D vs A) and
-    `curves_2books.opju` (`BookOne!B` + `BookTwo!C`) were built to pin
-    the multi-curve-per-layer layout and the cross-book cumulative-
-    ordinal base. Both decode at **100% precision AND recall with zero
-    code change** — confirming the existing regex + `_global_column_map`
-    already generalize correctly to both cases (each curve is a fully
-    self-contained, back-to-back ~750-900-byte per-curve object; the
-    ordinal base carries over a book boundary exactly as implemented).
-    This raises **aggregate oracle-covered recall from 6/31 (19.4%) to
-    11/36 (30.6%)** — see `test_realdata_curves_multi_bindings` /
-    `test_realdata_curves_2books_bindings` and
-    `tools/origin_trial/score_curve_bindings.py` (standalone corpus-wide
-    scorer). The investigation also found and confirmed-excluded a
-    **second near-miss shape** — a per-book "column candidate list"
-    (`<flag> 01 <marker> 80 03 <ord> 00`, one byte shorter than the real
-    token's double-`0x01`, enumerating every column of a referenced book
-    with no independently-decodable "selected" marker; using its
-    tail-heavy correctness pattern would be corpus-convention luck, not
-    a decodable signal, so it was rejected — see
-    `test_synthetic_column_enum_list_not_mistaken_for_curve_token` and
-    `opju_curves.py`'s docstring). **Real-corpus recall itself did not
-    move**: `RockingCurve`'s `Graph1`/`Graph2` and nearly all of XAS's/
-    UnpolPlots's required curves have neither shape anywhere in the
-    file — a third, still-undecoded encoding for ordinary single-curve
-    default-dialog graphs. Item stays open (precision 100% everywhere,
-    but aggregate recall 30.6% < the 50% bar to close it).
-    **Third-encoding search, 2026-07-04 — negative result, no code
-    shipped.** Three hypotheses chased, none validated (full byte-level
-    trail in `opju_curves.py`'s docstring / `docs/origin_project_
-    format.md` §6.2.1): (1) the `specimens/converted/*.opju` version-pair
-    (same corpus projects re-saved by the 4.3811 trial-writer build) was
-    hoped to be a Rosetta stone — it isn't; the apparent "new token" it
-    surfaces is the same `__BCO` boilerplate coincidence at a version-
-    shifted distance (383 vs. the pinned 357-360 bytes), and conversion
-    introduces a further false-positive cluster, making it a noisier
-    source, not a cleaner one. (2) A window-local alternate encoding WAS
-    found — a look-alike byte sequence sharing the real token's first 5
-    bytes, anchored on a length-prefixed workbook short-name string in
-    `RockingCurve`'s curve objects — but it fails validation decisively:
-    the 4.3811 re-save of the same project converts this exact slot into
-    the canonical token shape while preserving the same numeric value,
-    proving it's a real field, yet decoding that value through the
-    already-validated ordinal map gives the *wrong* column (`Nb!C` not
-    `Nb!B`) or an out-of-range one (`NbAl`) — a different, unidentified
-    numbering rule governs default-dialog plots, and it isn't even a
-    generally-locatable shape (the raw prefix recurs ~90x per file as a
-    generic idiom; `XAS`'s own default graphs don't embed the anchor
-    string at all). (3) `__FRAMESRCDATAINFOS` (found in `UnpolPlots`/
-    "Fixed Lambdas SI" only) decodes as frame-layout geometry, not a
-    curve backref; nearby slots carry generic `%(?X)`/`%(?Y)` auto-label
-    macros, not literal dataset references. Recall/precision unchanged
-    (30.6% / 100%); recorded as a confirmed negative so a future pass
-    doesn't re-spend time on these three leads.
-    *Model: sonnet · next step (still open) is byte-level RE on the third,
-    single-curve-graph column-selector encoding (RockingCurve
-    Graph1/Graph2, XAS, UnpolPlots) — three more leads eliminated, none of
-    the shapes found so far account for it.*
-
-(other W3 items shipped — see Completed)
+(all W3 items shipped — see Completed)
 
 ---
 
@@ -391,6 +302,46 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**#35 Figure curve→dataset binding**~~ (2026-07-04) — CLOSED: the
+  "third encoding" search from earlier the same day (version-pair diff,
+  window-local alternate encoding, legend backrefs — all reported
+  negative) turned out to have found the right shape on lead #2 and
+  rejected it only because of a counting-convention bug, not a wrong
+  shape. `.opju`'s curve/DataPlot column selector uses TWO token
+  subtypes, both now decoded and merged in `opju_curves.py`: the shipped
+  0x03 subtype (`<flag> 01 01 01 80 03 <y_ord> 00`, an FPC-decoded-only
+  cumulative ordinal, gated on independently-validated `"Y"` designation)
+  and a new 0x01 subtype (`<flag> 01 01 01 80 01 <val>`, no fixed
+  terminator, no designation gate) used by ordinary single-curve
+  default-dialog graphs (`RockingCurve Graph1/Graph2`, all of `XAS`, all
+  of `UnpolPlots`, most of `"Fixed Lambdas SI"`) — exactly the graphs the
+  0x03 path could never reach. `val` counts cumulatively over **every
+  allocated column of every workbook, including empty/undecoded books and
+  columns** (new `opju_curves_allcols.py`, split out to stay under the
+  500-line ceiling): `_allocated_column_map` recovers this GT-free from
+  name records alone (filtered to pure-letter, non-`@N` column suffixes,
+  grouped by book, requiring a contiguous `A..N` run — validated to
+  reproduce each stem's `index.json` book/column counts exactly, including
+  empty default `Book1`s). The 0x03 path's designation gate is
+  deliberately NOT applied to the 0x01 token: checking it against every
+  oracle-confirmed 0x01 binding found 4 true positives
+  (`UnpolPlots`/`"Fixed Lambdas SI"`'s "dR Fresnel"/"dSA" columns) that are
+  independently designated `"Y-error"`, not `"Y"` — a legitimate Origin
+  usage the gate can't distinguish from the `__BCO` artifact, so applying
+  it would have silently dropped true positives; the raw 7-byte token is
+  already 100% precise file-wide with no cross-check (zero hits in any
+  `.opju` in the corpus except the four files that need it). Merged
+  results dedup on `(book, y)`. **Final validation:**
+  `tools/origin_trial/score_curve_bindings.py` — precision 100%, aggregate
+  oracle-covered recall **36/36 (100%)**, up from 11/36 (30.6%): `XAS`
+  0/3→3/3, `RockingCurve` 2/4→4/4, `UnpolPlots` 0/8→8/8, `"Fixed Lambdas
+  SI"` 2/14→14/14. Per-figure *attribution* (which decoded figure a
+  correctly-resolved pair is attached to) remains a best-effort
+  `[anchor, next_anchor)` heuristic — a documented, narrower remaining
+  gap, never a soundness one (every reported `(book, column)` pair is
+  oracle-confirmed). See `docs/origin_project_format.md` §6.2.1 for the
+  full byte-level trail and final table.
 
 - ~~**#31 License-window validation checklist**~~ (2026-07-04) — the
   repeatable 6-step checklist now heads `docs/origin_re/validation_log.md`
