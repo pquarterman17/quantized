@@ -121,6 +121,11 @@ body {
 .qzk-ds-spark { width: 100%; height: 26px; display: block; }
 /* Footer row: metadata on the left, row actions (badge + ▲▼⧉✕) on the right.
    The name owns its own full-width row above, so long filenames stay readable. */
+/* Non-first sheet of a multi-sheet Origin pseudo-book (lib/grouping's
+   originSheetGroups): a subtle indent + muted "sheet N" chip so the parent
+   (sheet 1) / child relation reads at a glance, without a collapsible tree. */
+.qzk-ds.qzk-ds-sheet { margin-left: 14px; }
+.qzk-ds-sheet-chip { flex-shrink: 0; color: var(--text-faint); font-size: var(--type-nano); font-family: var(--font-mono); white-space: nowrap; }
 .qzk-ds-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .qzk-ds-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .qzk-ds-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-faint); }

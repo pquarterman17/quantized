@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { groupDatasets, groupNames, hasAnyGroup, originBookFamilies } from "./grouping";
+import {
+  groupDatasets,
+  groupNames,
+  hasAnyGroup,
+  originBookFamilies,
+  originSheetGroups,
+} from "./grouping";
 import type { Dataset } from "./types";
 
 const ds = (id: string, group?: string): Dataset => ({
@@ -89,5 +95,57 @@ describe("originBookFamilies", () => {
       book("c2", "Moke:Book2"),
     ];
     expect(originBookFamilies(items).map((f) => f.stem)).toEqual(["XRD", "Moke"]);
+  });
+});
+
+describe("originSheetGroups", () => {
+  it("groups a book's sheet-1 base name with its '<Book>@N' sheet pseudo-books", () => {
+    const items = [
+      book("s1", "XRD:Book4", "Book4"),
+      book("s3", "XRD:Book4 — Book4 (sheet 3)", "Book4@3"),
+      book("s2", "XRD:Book4 — Book4 (sheet 2)", "Book4@2"),
+    ];
+    const groups = originSheetGroups(items);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].parent).toBe("Book4");
+    // Sorted by sheet number, not insertion order: sheet 1, then 2, then 3.
+    expect(groups[0].members.map((d) => d.id)).toEqual(["s1", "s2", "s3"]);
+  });
+
+  it("excludes a single-sheet book (nothing to relate)", () => {
+    expect(originSheetGroups([book("s1", "XRD:Book1", "Book1")])).toEqual([]);
+  });
+
+  it("excludes datasets without origin_book metadata", () => {
+    expect(originSheetGroups([ds("a"), ds("b")])).toEqual([]);
+  });
+
+  it("keeps distinct books as separate groups, first-appearance order", () => {
+    const items = [
+      book("a1", "XRD:Book4", "Book4"),
+      book("a2", "XRD:Book4 (sheet 2)", "Book4@2"),
+      book("b1", "Moke:Book7", "Book7"),
+      book("b2", "Moke:Book7 (sheet 2)", "Book7@2"),
+    ];
+    expect(originSheetGroups(items).map((g) => g.parent)).toEqual(["Book4", "Book7"]);
+  });
+
+  it("keeps a group's sheets adjacent when the list is already in import order", () => {
+    // useApp.importFiles appends `data.books` in the backend's order, which
+    // already lists sheet 1 before sheet 2/3 of the same workbook (verified
+    // against io/origin_project/opj.py's OrderedDict column-iteration order).
+    // The Library renders datasets in that natural insertion order rather
+    // than re-sorting — this asserts the natural order already agrees with
+    // the sheet-number order `originSheetGroups` computes, so no additional
+    // re-sort is needed at the list-rendering layer.
+    const items = [
+      book("s1", "XRD:Book4", "Book4"),
+      book("s2", "XRD:Book4 (sheet 2)", "Book4@2"),
+      book("s3", "XRD:Book4 (sheet 3)", "Book4@3"),
+      book("o1", "XRD:Book7", "Book7"),
+    ];
+    const insertionOrderIds = items.slice(0, 3).map((d) => d.id);
+    const groups = originSheetGroups(items);
+    expect(groups[0].members.map((d) => d.id)).toEqual(insertionOrderIds);
   });
 });
