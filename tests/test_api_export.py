@@ -296,3 +296,33 @@ def test_figure_series_styles_applied() -> None:
 def test_figure_bad_format_is_422() -> None:
     resp = client.post("/api/export/figure", json={"dataset": _xrd_dataset(), "fmt": "bmp"})
     assert resp.status_code == 422
+
+
+def test_export_opj_roundtrips_through_our_reader(tmp_path):
+    """POST /api/export/opj -> a CPYA project our own Origin reader re-opens."""
+    from quantized.io.origin_project import read_origin_books
+
+    ds = {
+        "time": [1.0, 2.0, 3.0],
+        "values": [[10.0], [20.0], [30.0]],
+        "labels": ["Moment"],
+        "units": ["emu"],
+        "metadata": {"x_column_long": "Field", "x_unit": "Oe"},
+    }
+    resp = client.post(
+        "/api/export/opj",
+        json={"datasets": [{"dataset": ds, "name": "LoopA"}], "filename": "proj"},
+    )
+    assert resp.status_code == 200
+    assert resp.content.startswith(b"CPYA")
+    out = tmp_path / "roundtrip.opj"
+    out.write_bytes(resp.content)
+    books = read_origin_books(out)
+    assert books[0].metadata["origin_book"] == "LoopA"
+    assert books[0].labels == ("Moment",)
+    assert list(books[0].time) == [1.0, 2.0, 3.0]
+
+
+def test_export_opj_rejects_empty():
+    resp = client.post("/api/export/opj", json={"datasets": [], "filename": "x"})
+    assert resp.status_code == 422

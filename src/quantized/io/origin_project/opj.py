@@ -53,7 +53,9 @@ def _group(columns: Columns) -> OrderedDict[str, Columns]:
     return books
 
 
-def _inventory(books: OrderedDict[str, Columns], books_meta: dict[str, BookMeta]) -> list[dict[str, object]]:
+def _inventory(
+    books: OrderedDict[str, Columns], books_meta: dict[str, BookMeta]
+) -> list[dict[str, object]]:
     return [
         {
             "name": k,
@@ -115,7 +117,9 @@ def _build_book(
     )
 
 
-def _parse(path: Path) -> tuple[OrderedDict[str, Columns], dict[str, BookMeta], list[dict[str, object]]]:
+def _parse(
+    path: Path,
+) -> tuple[OrderedDict[str, Columns], dict[str, BookMeta], list[dict[str, object]]]:
     b = path.read_bytes()
     if not b.startswith(b"CPYA"):
         raise fallback(path, f"'{path.name}' does not look like a CPYA .opj (bad header).")

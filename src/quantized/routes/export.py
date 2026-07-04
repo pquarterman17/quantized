@@ -23,6 +23,7 @@ from quantized.datastruct import DataStruct
 from quantized.io.consolidated import consolidate_csv
 from quantized.io.hdf5 import write_hdf5
 from quantized.io.origin import format_origin_script
+from quantized.io.origin_project.writer import opj_bytes
 from quantized.io.xrd_csv import format_xrd_csv
 
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -111,6 +112,11 @@ class OriginRequest(BaseModel):
 class ConsolidatedItem(BaseModel):
     dataset: dict[str, Any]
     name: str = ""
+
+
+class OpjRequest(BaseModel):
+    datasets: list[ConsolidatedItem]
+    filename: str = "project"
 
 
 class ConsolidatedRequest(BaseModel):
@@ -344,4 +350,34 @@ def export_map_figure(req: MapFigureRequest) -> Response:
         content=data,
         media_type=_FIGURE_MIME[req.fmt],
         headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
+    )
+
+
+@router.post("/opj")
+def export_opj(req: OpjRequest) -> Response:
+    """DataStructs -> a native Origin ``.opj`` project (readable by ANY Origin
+    version — Origin ≥2023 dropped writing .opj but still opens it)."""
+    try:
+        books = []
+        for item in req.datasets:
+            ds = DataStruct.from_dict(item.dataset)
+            if item.name and "origin_book" not in ds.metadata:
+                meta = dict(ds.metadata)
+                meta["origin_book"] = item.name
+                ds = DataStruct(
+                    time=ds.time,
+                    values=ds.values,
+                    labels=ds.labels,
+                    units=ds.units,
+                    metadata=meta,
+                )
+            books.append(ds)
+        payload = opj_bytes(books)
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    stem = _safe_name(req.filename, "")
+    return Response(
+        content=payload,
+        media_type="application/octet-stream",
+        headers=_attachment(f"{stem}.opj"),
     )
