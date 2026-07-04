@@ -901,20 +901,63 @@ byte-level trail):**
 | stem | oracle pairs | decoded | correct | wrong | recall |
 |------|-------------:|--------:|--------:|------:|-------:|
 | `fig_pairs` (by-construction) | 2 | 2 | 2 | **0** | 100% |
+| `curves_multi` (by-construction, new 2026-07-04) | 3 | 3 | 3 | **0** | 100% |
+| `curves_2books` (by-construction, new 2026-07-04) | 2 | 2 | 2 | **0** | 100% |
 | `XAS` | 3 | 0 | 0 | **0** | 0% |
 | `RockingCurve` | 4 | 2 | 2 | **0** | 50% |
-| `UnpolPlots` | 8 | 0 | 0 | **0** | 0% (was 2 wrong before this fix) |
+| `UnpolPlots` | 8 | 0 | 0 | **0** | 0% (was 2 wrong before the `__BCO` fix) |
 | `"Fixed Lambdas SI"` | 14 | 2 | 2 | **0** | 14% |
+| **aggregate** | **36** | **11** | **11** | **0** | **30.6%** (was 19.4% / 6/31 before the two new specimens) |
 
 Precision is 100% on every oracle-covered file (mandatory, asserted
-unconditionally). Recall stays low and open — `RockingCurve`'s
-`NbAuRocking` multi-curve layer (`D`+`F`) decodes exactly, and each
-composite "Fixed Lambdas SI" window's *first* curve token ("Theory SA")
-survives, but the remaining curve tokens per window (each layer plots 6-8
-columns) either aren't found by the current regex at all, or resolve to a
-column the designation gate correctly rejects (`X`/`Y-error`) rather than
-the real intended column — the true multi-curve encoding for a graph
-plotting more than ~1-2 curves is not yet cracked.
+unconditionally; reconfirmed by the standalone scorer
+`tools/origin_trial/score_curve_bindings.py`, run against the absolute
+corpus path). Recall stays low and open on the real corpus — see the two
+findings below.
+
+**Two new controlled specimens (`curves_multi`, `curves_2books`, item 35
+recall push, 2026-07-04) confirm the multi-curve/multi-book layout is
+already solved correctly, with no code change.** `curves_multi` (one graph,
+one layer, three curves — `MBook` B/C/D vs A) shows that multiple curves in
+one layer are simply back-to-back, fully self-contained ~750-900-byte
+per-curve objects, each with its own independent copy of the 8-byte token
+(`y_ord` = `0x02`/`0x03`/`0x04`, strictly increasing, no wrapper/count
+record). `curves_2books` (`BookOne!B` + `BookTwo!C`) confirms the
+cumulative-ordinal base correctly carries a book boundary (`BookOne`'s 2
+columns are counted before `BookTwo`'s 3 start at ordinal 3, exactly what
+`_global_column_map` already computes). Both decode at 100%
+precision/recall via the unmodified pipeline — see
+`test_realdata_curves_multi_bindings` /
+`test_realdata_curves_2books_bindings`. This raised the aggregate recall
+from 6/31 (19.4%) to 11/36 (30.6%), but real-corpus recall itself did not
+move — the investigation these specimens motivated (below) found a second
+confirmed-excluded near-miss shape, not a new decodable signal.
+
+**A second near-miss shape found and confirmed excluded — the per-book
+"column candidate list."** Chasing why real-corpus recall stays far below
+what `curves_multi`/`curves_2books` suggest turned up a decoy structurally
+distinct from `__BCO`, found near *every* book reference in *every* file
+checked (both new specimens included):
+
+```
+<flag:1> 01 <marker:1> 80 03 <ord:1> 00
+```
+
+One byte shorter than the real curve token — a single `0x01` (position 1)
+straight into `80 03`, never the real token's double `0x01` (`.. 01 .. 01
+80 03 ..`) — so `_CURVE_RE` structurally can never match it (confirmed by
+direct inspection, not just by construction; regression-guarded by
+`test_synthetic_column_enum_list_not_mistaken_for_curve_token`). It enumerates
+every column of a referenced book in order (e.g. "Fixed Lambdas SI"'s
+`PNRNbAu100nm` A→K, 11 entries). Its items were checked byte-for-byte for
+any independent "this one is selected" marker (tail bytes compared across
+several real-corpus runs) — none exists; items are shape-identical apart
+from the running ordinal. The columns actually plotted always turn out to
+be the run's *last* one to three entries, but that is a **corpus
+convention** (derived "SA"/"dSA"/"Theory SA" columns are habitually
+appended last), not a decodable structural signal — using "trust the tail
+of the list" was considered and rejected as exactly the kind of guess this
+decoder's precision-first design forbids.
 
 **Known gap — per-figure attribution AND multi-curve recall (the reason
 item 35 stays open).** Scoping a curve to *which* decoded figure it belongs
@@ -922,12 +965,22 @@ to is still a best-effort `[anchor, next_anchor)` byte-range heuristic, and
 — now confirmed directly against the real oracle rather than inferred —
 most of a real graph's curve tokens are simply not locatable yet: e.g.
 "Fixed Lambdas SI"'s Graph1 genuinely plots 6 columns (`NbAl80nm`'s
-I/J/K plus `NbAl100/120/200nm`'s K) but only 1 is recovered. This is a
-recall gap, not a soundness one — everything reported is both
-designation-confirmed and now oracle-confirmed, never fabricated — but
-restored figures are still commonly missing curves a user would expect.
-Closing it needs a further RE pass to locate the true per-curve object
-boundary for graphs with more than 1-2 plotted curves.
+I/J/K plus `NbAl100/120/200nm`'s K) but only 1 is recovered. Sharpened by
+this rework: `RockingCurve`'s `Graph1` (`Nb!B`) and `Graph2` (`NbAl!B`), and
+essentially all of XAS's and UnpolPlots's oracle-required curves, have
+**neither** a real 8-byte token **nor** a column-candidate-list tail match
+anywhere in the file — an exhaustive whole-file scan for both shapes
+confirms zero candidates exist for them at all. These are ordinary,
+single-curve, default-dialog graphs (unlike `NbAuRocking`'s custom-styled
+multi-curve layer, or "Fixed Lambdas SI"'s "Theory SA" reference-overlay
+curves, both of which DO carry the real token) — Origin evidently encodes
+their column choice a third way, not yet located. This is a recall gap, not
+a soundness one — everything reported is both designation-confirmed and
+oracle-confirmed, never fabricated — but restored figures are still
+commonly missing curves a user would expect. Closing it needs a further RE
+pass specifically on simple/default single-curve graphs (not the
+multi-curve/multi-book layout, which the two new specimens confirm is
+already solved).
 
 ### 6.3 Origin → quantized figure mapping + gap list
 
@@ -1131,9 +1184,15 @@ reading only this doc:
   `tools/origin_trial/export_plot_refs.py`): found and fixed a false
   positive (the `__BCO` per-book boilerplate, §6.2.1) that was misattributed
   as a curve on `UnpolPlots`; precision is now 100% on every oracle-covered
-  file. Recall stays low (0-50% per file, see §6.2.1's table) — per-figure
-  *attribution* and multi-curve-per-layer recovery both remain lossy, so
-  the item stays open.
+  file. Same day, two new controlled specimens (`curves_multi`,
+  `curves_2books`) confirmed the multi-curve-per-layer and cross-book
+  layout are already solved correctly (no code change), raising aggregate
+  recall from 6/31 (19.4%) to 11/36 (30.6%); a second near-miss shape (the
+  per-book "column candidate list", §6.2.1) was found and confirmed
+  excluded along the way. Real-corpus recall itself stays low (0-50% per
+  file, see §6.2.1's table) — per-figure *attribution*, and the still-
+  undecoded third encoding used by simple single-curve real-corpus graphs,
+  both remain open, so the item stays open.
 - **Item 4 (report-sheet family) — non-double column values.** The
   FitLinear/NLFit auto-generated report-sheet text columns (§3.2) stay an
   honest drop; a materially harder variable-length RE problem.
