@@ -658,6 +658,23 @@ describe("useApp importFiles", () => {
     expect(useApp.getState().status).toContain("imported 2 files");
   });
 
+  it("fans an Origin project out into one dataset per workbook", async () => {
+    const book = (short: string, long?: string) => ({
+      ...raw,
+      metadata: { origin_book: short, ...(long ? { origin_book_long: long } : {}) },
+    });
+    vi.mocked(uploadFile).mockResolvedValue({
+      ...raw,
+      books: [book("Book1", "30 nm MnN"), book("Book2")],
+    });
+    await useApp.getState().importFiles([fakeFile("Moke.opj")]);
+
+    const ds = useApp.getState().datasets;
+    expect(ds).toHaveLength(2);
+    expect(ds.map((d) => d.name)).toEqual(["Moke:Book1 — 30 nm MnN", "Moke:Book2"]);
+    expect(ds[0].data.metadata.origin_book).toBe("Book1");
+  });
+
   it("continues past a bad file and reports the failure", async () => {
     vi.mocked(uploadFile)
       .mockRejectedValueOnce(new Error("unknown format"))

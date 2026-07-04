@@ -126,3 +126,35 @@ def test_allowed_roots_honours_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     extra.mkdir()
     monkeypatch.setenv("QZ_DATA_ROOTS", str(extra))
     assert os.path.realpath(extra) in parsers_mod._allowed_roots()
+
+
+def test_upload_origin_project_returns_all_books(tmp_path):
+    """A multi-book .opj upload carries a 'books' payload array (import-all UX)."""
+    import numpy as np
+
+    from quantized.datastruct import DataStruct
+    from quantized.io.origin_project.writer import opj_bytes
+
+    def mk(book, xlong):
+        return DataStruct(
+            time=np.array([1.0, 2.0]),
+            values=np.array([[3.0], [4.0]]),
+            labels=("M",),
+            units=("emu",),
+            metadata={"origin_book": book, "x_column_long": xlong},
+        )
+
+    data = opj_bytes([mk("LoopA", "Field"), mk("ScanB", "2Theta")])
+    resp = client.post(
+        "/api/parsers/upload", files={"file": ("two.opj", data, "application/octet-stream")}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "books" in body and len(body["books"]) == 2
+    names = {b["metadata"]["origin_book"] for b in body["books"]}
+    assert names == {"LoopA", "ScanB"}
+    # non-project uploads stay unchanged (no books key)
+    csv = b"x,y\n1,2\n3,4\n"
+    resp2 = client.post("/api/parsers/upload", files={"file": ("plain.csv", csv, "text/csv")})
+    assert resp2.status_code == 200
+    assert "books" not in resp2.json()

@@ -7,6 +7,8 @@ export interface DataStruct {
   labels: string[];
   units: string[];
   metadata: Record<string, unknown>;
+  /** Origin projects only: every workbook, when the file holds more than one. */
+  books?: DataStruct[];
 }
 
 /** Response of POST /api/plot/series — uPlot-ready column data. */

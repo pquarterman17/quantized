@@ -578,7 +578,20 @@ export const useApp = create<AppState>((set, get) => ({
       get().setStatus(`importing ${file.name}…`);
       try {
         const data = await uploadFile(file);
-        get().addDataset({ id: nextDatasetId(), name: file.name, data });
+        if (data.books && data.books.length > 1) {
+          // Origin project: import every workbook as its own dataset.
+          const stem = file.name.replace(/\.[^.]+$/, "");
+          for (const book of data.books) {
+            const meta = (book.metadata ?? {}) as Record<string, unknown>;
+            const short = String(meta.origin_book ?? "Book");
+            const long = String(meta.origin_book_long ?? "");
+            const label = long && long !== short ? `${short} — ${long}` : short;
+            get().addDataset({ id: nextDatasetId(), name: `${stem}:${label}`, data: book });
+          }
+        } else {
+          delete data.books;
+          get().addDataset({ id: nextDatasetId(), name: file.name, data });
+        }
         get().recordMacro(`Import ${file.name}`, `qz.import(${lit(file.name)})`);
         get().pushRecent(file.name, file.size);
         added += 1;

@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from quantized.io import import_auto
+from quantized.io.origin_project import OriginProjectError, read_origin_books
 from quantized.routes._payload import datastruct_payload
 
 router = APIRouter(prefix="/api/parsers", tags=["parsers"])
@@ -38,6 +39,24 @@ def _allowed_roots() -> tuple[str, ...]:
         except OSError:
             continue
     return tuple(roots)
+
+
+def _import_with_books(path: Path) -> dict[str, Any]:
+    """Single-DataStruct payload; Origin projects also carry every workbook.
+
+    A multi-book project adds ``"books": [payload, …]`` so the frontend can
+    import all books (the locked import-all UX); other formats are untouched.
+    """
+    ds = import_auto(path)
+    payload = datastruct_payload(ds)
+    if Path(path).suffix.lower() in (".opj", ".opju"):
+        try:
+            books = read_origin_books(Path(path))
+        except OriginProjectError:
+            books = []
+        if len(books) > 1:
+            payload["books"] = [datastruct_payload(b) for b in books]
+    return payload
 
 
 @router.post("/import")
@@ -73,10 +92,9 @@ def import_file(req: ImportRequest) -> dict[str, Any]:
     if not os.path.isfile(resolved):
         raise HTTPException(status_code=404, detail=f"file not found: {req.path}")
     try:
-        ds = import_auto(resolved)
+        return _import_with_books(Path(resolved))
     except (ValueError, KeyError, OSError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return datastruct_payload(ds)
 
 
 @router.post("/upload")
@@ -92,7 +110,6 @@ async def upload_file(file: UploadFile) -> dict[str, Any]:
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / name
             dest.write_bytes(content)
-            ds = import_auto(dest)
+            return _import_with_books(dest)
     except (ValueError, KeyError, OSError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return datastruct_payload(ds)
