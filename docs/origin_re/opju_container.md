@@ -1,18 +1,68 @@
-# Origin `.opju` container — worksheet data encoding (cracked via Rosetta specimens)
+# Origin `.opju` container — worksheet data encoding (SOLVED via Rosetta specimens)
 
-Clean-room RE for `plans/ORIGIN_FILE_DECODE_PLAN.md` **item 7**. Findings only —
-no production decoder yet (that's item 8). Method: controlled specimens
-generated with an Origin 2026b trial via COM (`tools/origin_trial/`), with
-known values/names, then byte-level analysis anchored on those knowns. No GPL
-source consulted; no open `.opju` reader exists — these findings are original.
+Clean-room RE for `plans/ORIGIN_FILE_DECODE_PLAN.md` **items 7 + 8**. Method:
+controlled specimens generated with an Origin 2026b trial via COM
+(`tools/origin_trial/`), with known values/names, then byte-level analysis
+anchored on those knowns. No GPL source consulted; no open `.opju` reader
+exists — these findings are original.
 
-**Status: the column-data codec is substantially cracked.** The earlier recon
-("no plain float64 anywhere → must be compressed") was right for the wrong
-reason: worksheet columns are not deflate-compressed — they use a custom
-**XOR-delta floating-point codec** (Gorilla-family) stored directly in the
-container. Only preview/graph *images* use zlib. One codec detail (the
-PREV/PRED mode schedule) remains open; everything else below is validated
-byte-exact on specimens.
+**Status: SOLVED and shipping** (`src/quantized/io/origin_project/opju_codec.py`,
+2026-07-04). The column codec is **canonical Burtscher FPC** (see the SOLVED
+section below): two racing predictors + a per-value XOR residual, NOT the
+XOR-delta / PREV-PRED scheme the early recon guessed. The reader decodes
+worksheet columns bit-exact — validated against Origin's own ground-truth
+export (XAS 243/243 values; RockingCurve/UnpolPlots/Fixed Lambdas/Hc2 —
+hundreds of columns). Everything below the SOLVED section is the historical
+RE trail (the PREV/PRED model was a special-case illusion — see "why the
+early model looked right"), kept for provenance. Only preview/graph *images*
+use zlib; worksheet columns never do.
+
+## SOLVED — the codec is Burtscher FPC (2026-07-04)
+
+Burtscher & Ratanaworabhan, *FPC: A High-Speed Compressor for Double-Precision
+Floating-Point Data*, IEEE TC 2009. Per value, two predictors race:
+
+- **FCM** (value predictor): `pred = fcm[fh]`
+- **DFCM** (stride predictor): `pred = last + dfcm[dh]`
+
+The encoder XORs the true float64 bits against the closer prediction and stores
+the low `k` non-zero bytes (LE; dropped high bytes are the leading zeros). Each
+value carries a 4-bit code; two codes pack into one control byte, **low nibble
+first**:
+
+- **bit 3** selects the predictor (`0` = FCM, `1` = DFCM),
+- **bits 0-2** give the residual byte-count as `(code & 7) + 1`,
+- the single code `0x8` is the exact case (0 residual bytes).
+
+Both hash tables hold **2^12 = 4096** entries (a *sweet spot* — bigger tables
+decode strictly worse, because the collisions are load-bearing) and update the
+textbook FPC way:
+
+```
+fh = ((fh << 6) ^ (value  >> 48)) & 0xFFF
+dh = ((dh << 2) ^ (stride >> 40)) & 0xFFF
+```
+
+**How it was pinned:** designed probes localized the hash key to the high
+mantissa/exponent bits (a bit-flip probe: flipping stride bits ≥50 changed the
+slot, bits ≤48 didn't), then a joint oracle-fit across three XAS columns — each
+stressing a different bit range — fixed the exact shifts/masks where any single
+column left them underdetermined. This is why golden-parity RE needs *multiple*
+known-content specimens, not one.
+
+**Record framing (LEB128 varints):**
+`0a 05 <varint> ff ff <nrows:varint> 00 <varint> 0c <FPC stream>`. `0xff 0xff`
+also occurs *inside* residual data, so the reader walks records with a cursor
+that jumps past each decoded stream (skipping false in-stream markers), and
+labels each record by the nearest preceding `<Book>_<Col>` name.
+
+**Known residual gap:** long *near-constant-stride* axis columns (energy / angle
+/ Q ramps, ≳150 rows) diverge on an exact DFCM hash-collision detail — the
+colliding slot returns a neighbouring stride that differs only in the low bytes.
+Such a divergence shatters the float exponent, so a strict desync gate drops the
+whole column rather than emit silent garbage; short columns and non-monotonic
+columns decode fully. Closing this needs the exact collision/update timing (a
+future probe campaign with controlled repeating-stride sequences).
 
 ## Specimens (all local-only, `../test-data/origin/specimens/`)
 
@@ -114,6 +164,11 @@ first values match byte-exact):
   Lambdas SI match no record pattern at all — further variants beyond C.
 
 ### SOLVED CONCEPTUALLY (2026-07-04, C-probe session): it's a DFCM codec
+
+> **Superseded — now fully solved.** This section correctly identified the
+> DFCM architecture; the exact FCM+DFCM parameters were pinned later the same
+> night (see the "SOLVED — the codec is Burtscher FPC" section at the top).
+> The text below is the intermediate reasoning, kept for provenance.
 
 A designed COM probe (`specimens/probe_c.opju` + `probe_c_truth.json`,
 generated by trial COM with known values) plus implied-predictor analysis on

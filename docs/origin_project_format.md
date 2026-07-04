@@ -11,10 +11,14 @@ data for every book AND extra sheet (`Book@N`), real column names/units/
 designations, book display titles, figures as plot-state snapshots
 (`figures.py`), import-all-books flow, plus EXPORT: a native `.opj` writer
 (`writer.py`, readable by every Origin version) and multi-book `.ogs`
-scripts. `.opju` remains the open front: the container/codec architecture is
-solved (FPC-style two-table XOR-delta compressor — `docs/origin_re/
-opju_container.md`), with the predictor hash replication as the last blocker.
-Hardened by a fuzz/sweep/perf suite and Origin-exported ground-truth oracles.
+scripts. **`.opju` worksheet data now decodes too** — the codec is solved
+(canonical Burtscher FPC, `docs/origin_re/opju_container.md` + `opju_codec.py`)
+and validated bit-exact against Origin's own ground-truth export (XAS 243/243
+values; hundreds of columns across the corpus). `.opju` labels fall back to
+Origin designations (the Unicode windows-section name decode is future work),
+and long near-constant-stride axis columns are dropped by a strict desync gate
+(an exact DFCM hash-collision detail remains) rather than risk silent garbage.
+Hardened by a fuzz/sweep/perf suite and the ground-truth oracle suite.
 
 Note: empty numeric cells store Origin's missing-value sentinel
 `-1.23456789e-300` (bit pattern `0e 2c 13 1c fe 74 aa 81`), *not* flagged by the
@@ -94,16 +98,16 @@ probing `XAS.opju` / `RockingCurve.opju` / `UnpolPlots.opju`:
   numeric encoding and/or **raw-deflate** streams (no `78` header) that a naive
   scan misses.
 
-**UPDATE (2026-07-03): substantially cracked** — see
-`docs/origin_re/opju_container.md`. The data is NOT deflate-compressed; it
-uses a custom XOR-delta float codec (nibble-coded control stream, PREV/PRED
-predictors) stored plainly in the container, which is why no raw float64
-runs were found. Cracked via known-content Rosetta specimens generated with
-an Origin 2026b trial (`tools/origin_trial/`). Remaining for the decoder
-(item 8): the PREV/PRED mode schedule (validate against
-`specimens/ground_truth/`) and formal parsing of the outer type-tagged
-record framing. Until the decoder lands, `_read_opju` guides to the Origin
-Viewer export path.
+**UPDATE (2026-07-04): SOLVED** — see `docs/origin_re/opju_container.md`. The
+data is NOT deflate-compressed and NOT the XOR-delta/PREV-PRED scheme the early
+recon guessed; it is **canonical Burtscher FPC** (two racing predictors — FCM
+value-hash + DFCM stride-hash, 2^12 tables — with a per-value XOR residual),
+stored plainly in the container, which is why no raw float64 runs were found.
+Cracked via known-content Rosetta specimens generated with an Origin 2026b
+trial (`tools/origin_trial/`), then locked against `specimens/ground_truth/`.
+`read_opju` (`opju_codec.py`) now decodes worksheet columns bit-exact; the
+outer record framing is parsed as LEB128-varint records located by a
+cursor-walked scan. `.opju` labels currently fall back to Origin designations.
 
 ## Column long-names / units (later milestone)
 
