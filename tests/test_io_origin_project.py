@@ -135,10 +135,15 @@ def _window_header(book: str) -> bytes:
     return _block(payload)
 
 
-def _prop_block(short: str, designation: int) -> bytes:
-    """A 519-byte column-property block (designation@0x11, short name@0x12)."""
+def _prop_block(short: str, designation: int, *, flavor: int = 0x0B) -> bytes:
+    """A 519-byte column-property block (designation@0x11, short name@0x12).
+
+    ``flavor`` (byte 0x06) is ``0x0B`` by default -- a formula/derived column
+    or a report-sheet column; a plain, never-recalculated sheet-1 column uses
+    ``0x09`` instead (both are real column-property blocks; see
+    `windows._is_column_block`)."""
     p = bytearray(519)
-    p[0x06] = 0x0B
+    p[0x06] = flavor
     p[0x11] = designation
     p[0x12 : 0x12 + len(short) + 1] = short.encode() + b"\x00"
     p[0x25] = 0x21
@@ -150,6 +155,19 @@ def _label_block(long_name: str, unit: str) -> bytes:
     if len(payload) % 10 == 0:
         payload += b"\x00"
     return _block(payload)
+
+
+def _sheet_header(name: str) -> bytes:
+    """A per-sheet/per-layer sub-header: fixed 365 B, carrying NUL-terminated
+    ``Pd<Name>`` at offset 0xD0 -- the real sheet-boundary signal (report-sheet
+    leak fix). One appears at the start of every worksheet sheet; the *second*
+    one inside a window's span marks the start of sheet 2+ (a report/curve
+    sheet auto-added by FitLinear/NLFit, e.g.), which must never pollute the
+    primary sheet's column mapping."""
+    p = bytearray(365)  # matches the real corpus sheet/layer sub-header size
+    p[0xD0 : 0xD0 + 2] = b"Pd"
+    p[0xD0 + 2 : 0xD0 + 2 + len(name) + 1] = name.encode() + b"\x00"
+    return _block(bytes(p))
 
 
 def test_windows_section_supplies_names_units_and_x_designation(tmp_path) -> None:
@@ -221,7 +239,10 @@ def test_windows_section_multi_sheet_guard_keeps_only_primary_sheet() -> None:
     column name (sheet 2 restarting at column A) stops mapping after the
     primary sheet -- the repeated-short guard in `window_metadata` (the
     boundary item 5 relies on), previously only exercised via Moke.opj's
-    fit-table sheets (realdata)."""
+    fit-table sheets (realdata). No `_sheet_header` marker here on purpose:
+    this pins the *fallback* path for containers with no such marker (the
+    real signal is covered by
+    `test_windows_section_report_sheet_never_leaks_into_primary_mapping`)."""
     data = (
         b"CPYA 4.3380 188 W64 #\n"
         + _window_header("Book4")
@@ -237,6 +258,54 @@ def test_windows_section_multi_sheet_guard_keeps_only_primary_sheet() -> None:
     assert book.columns["A"].long_name == "Field"  # sheet-1 name preserved
     assert book.columns["B"].long_name == "Moment"
     assert set(book.columns) == {"A", "B"}  # sheet 2's columns never added/overwritten
+
+
+def test_windows_section_report_sheet_never_leaks_into_primary_mapping() -> None:
+    """The report-sheet-leak bug (Moke.opj Book4): a workbook with a real
+    data sheet (Sheet1) followed by a FitLinear-style report sheet whose own
+    property/label blocks (mostly ``disregard``-designated, "Input X Data
+    Source"/"Notes"/"Range"-style labels) must never reach the primary
+    mapping -- even though the report sheet also restarts lettering at "A"
+    and shares the 0x0B property-block byte with a formula column, so the
+    repeated-short fallback alone is not an early-enough signal (see the
+    module docstring). The `_sheet_header` ("Pd<Name>") marker between the
+    two sheets is what stops collection immediately, before the report
+    sheet's first property block is ever seen. Sheet1's columns use the
+    ``0x09`` storage flavour (the common case measured on Moke.opj -- 14/15
+    of a real sheet's columns), the report sheet's use ``0x0B`` (every
+    report-sheet column does, real corpus measurement) -- reproducing both
+    root causes of the original bug at once: without the broadened
+    ``_is_column_block`` byte check, Sheet1's own columns would be invisible
+    and the report sheet's would be mistaken for the primary mapping."""
+    data = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _window_header("Book4")
+        + _sheet_header("Sheet1")
+        + _prop_block("A", 3, flavor=0x09) + _label_block("H", "Oe")
+        + _prop_block("B", 0, flavor=0x09) + _label_block("Kerr Signal", "(mdeg)")
+        # sheet 2: an auto-generated report sheet -- restarts at "A", mostly
+        # 'disregard' designated, with report-style labels (never the truth
+        # for Sheet1's real columns A/B).
+        + _sheet_header("FitLinear1")
+        + _prop_block("A", 1, flavor=0x0B) + _label_block("Input X Data Source", "")
+        + _prop_block("B", 1, flavor=0x0B) + _label_block("Input Y Data Source", "")
+        + _prop_block("C", 1, flavor=0x0B) + _label_block("Range", "")
+        + _prop_block("D", 1, flavor=0x0B) + _label_block("Notes", "")
+    )
+    from quantized.io.origin_project.windows import window_metadata
+
+    book = window_metadata(data)["Book4"]
+    assert book.columns["A"].long_name == "H"
+    assert book.columns["A"].unit == "Oe"
+    assert book.columns["A"].designation == "X"
+    assert book.columns["B"].long_name == "Kerr Signal"
+    assert book.columns["B"].designation == "Y"
+    # neither the report sheet's columns C/D nor its 'disregard' bleed into A/B
+    assert set(book.columns) == {"A", "B"}
+    assert all(c.designation != "disregard" for c in book.columns.values())
+    assert all(
+        "Input" not in c.long_name and "Notes" not in c.long_name for c in book.columns.values()
+    )
 
 
 def test_read_origin_books_returns_every_workbook(tmp_path) -> None:
@@ -315,6 +384,7 @@ def _resolve_corpus_dir() -> Path:
 
 
 _CORPUS = _resolve_corpus_dir()
+_GT = _CORPUS / "specimens" / "ground_truth"
 
 
 @pytest.mark.realdata
@@ -337,6 +407,47 @@ def test_realdata_moke_all_books_recovered() -> None:
     assert len(books) >= 5 and len(set(names)) == len(names)
     # book display titles (sample names) recovered
     assert any("MnN" in b.metadata["origin_book_long"] for b in books)
+
+
+@pytest.mark.realdata
+@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+def test_realdata_moke_book4_sheet1_metadata_matches_ground_truth() -> None:
+    """Regression pin for the report-sheet leak bug: Book4 is a 3-sheet
+    workbook (Sheet1 real data / FitLinear1 report / FitLinearCurve1 curve
+    table) whose windows-section block stream used to bleed FitLinear1's
+    property/label blocks into Sheet1's mapping (mostly 'disregard'
+    designations, "Input X Data Source"/"Notes"-style labels), because most
+    of Sheet1's own property blocks use the 0x09 storage-flavour byte the old
+    ``==0x0B``-only detector silently dropped. Checked against Origin's own
+    export (``ground_truth/Moke/index.json`` -> ``books[Book4].sheets[0]``,
+    "Sheet1") -- every one of the 15 real columns' long name/unit, by letter,
+    plus the designation recovered straight from the property blocks (the
+    oracle has no designation field, so that part is cross-checked against
+    the "H" field-axis long name instead: every column named "H" is the
+    sweep's X column, 4 of them -- A/C/E/I)."""
+    import json
+
+    from quantized.io.origin_project.windows import window_metadata
+
+    gt_path = _GT / "Moke" / "index.json"
+    if not gt_path.exists():
+        pytest.skip("Moke ground-truth index.json not present")
+    index = json.loads(gt_path.read_text(encoding="utf-8"))
+    book4 = next(b for b in index["books"] if b["book"] == "Book4")
+    sheet1 = book4["sheets"][0]
+    assert sheet1["sheet"] == "Sheet1" and len(sheet1["columns"]) == 15
+
+    columns = window_metadata((_CORPUS / "Moke.opj").read_bytes())["Book4"].columns
+    assert set(columns) == {c["dataset"] for c in sheet1["columns"]}  # never FitLinear1's letters
+    for col in sheet1["columns"]:
+        letter = col["dataset"]
+        assert columns[letter].long_name == col["long_name"], f"column {letter} long_name"
+        assert columns[letter].unit == col["unit"], f"column {letter} unit"
+
+    field_axis = {c["dataset"] for c in sheet1["columns"] if c["long_name"] == "H"}
+    assert field_axis == {"A", "C", "E", "I"}
+    assert {k for k, v in columns.items() if v.designation == "X"} == field_axis
+    assert all(v.designation != "disregard" for v in columns.values())
 
 
 @pytest.mark.realdata
