@@ -13,7 +13,7 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-04 (overnight run)
+**Updated:** 2026-07-04 (post-overnight: width-rule + segment-grammar fix)
 
 ---
 
@@ -139,9 +139,8 @@ no documented real-Origin validation procedure for the trial window (31).
 | # | Item | Workstream | Why first |
 |---|------|------------|-----------|
 | 10 | `.opju` names/units | W2 | Unicode windows decode; data already reads (item 8 done) |
-| 32 | `.opju` DFCM-collision gap | W2 | recovers long axis columns the desync gate now drops |
-| 16 | multi-dataset import flow | W4 | owner UX decision, unlocks 3/17 |
-| ~~1 / 7 / 8 / 9 / 11 / 15~~ | wave-1/2 RE + `.opju` decoder | — | done, see Completed |
+| 32 | `.opju` chunked staircase records | W2 | last decode gap (6 corpus columns); core fixed 2026-07-04 |
+| ~~16~~ / ~~1 / 7 / 8 / 9 / 11 / 15~~ | import flow + wave-1/2 RE + decoder | — | done, see Completed |
 
 ---
 
@@ -183,12 +182,15 @@ no documented real-Origin validation procedure for the trial window (31).
       guessing is unsafe (PNG/`.dat`-filename blocks interleave) → decode the
       structure, don't scrape.
 
-32. **`.opju` codec — close the DFCM-collision gap** — long near-constant-
-    stride axis columns (energy/angle/Q ramps ≳150 rows) diverge on an exact
-    DFCM hash-collision detail and are dropped by the desync gate. Needs a
-    probe campaign with controlled repeating-stride sequences to pin the exact
-    collision/update timing.
-    *Model: sonnet/opus · needs the Origin trial (COM probe generation).*
+32. **`.opju` codec — chunked staircase records** — the residual decode gap,
+    twice narrowed on 2026-07-04: the "DFCM-collision" was really a width-table
+    bug (fixed — canonical FPC bcodes) and most plateau columns were the
+    now-decoded ZigZag repeat-segment form. What remains: records interleaving
+    *multiple* repeat-runs + FPC streams with one continuous predictor state
+    (lock-in logger staircases; 6 oracle-checked corpus columns). The per-chunk
+    repeat-count encoding is unpinned; the segment-sum gate drops these safely.
+    Offline work — the oracle CSVs give complete truth, no COM needed.
+    *Model: sonnet · see docs/origin_re/opju_container.md "chunked staircase".*
 
 ---
 
@@ -290,6 +292,15 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ## Completed
 
+- ~~**#32 (core) width rule + RLE segment grammar**~~ (2026-07-04, `9d1728d`) —
+  the "DFCM-collision gap" was a width-table bug: residual byte-counts follow
+  canonical FPC bcodes (codes 0-3 → 0-3 bytes; 4 skipped), which coincide with
+  the old `(c&7)+1` rule only for c ≥ 4 — exactly the codes clean data uses.
+  Also decoded the record header's ZigZag segment grammar (repeat-runs for
+  plateaus/zero/constant columns outside the FPC stream). Corpus census vs
+  Origin's own dumps: 61 → 6 missing columns; XAS/RockingCurve axes,
+  Theory±/T/F plateau curves, zero + constant columns all recover. Residue
+  (chunked staircase records) stays as the narrowed item 32.
 - ~~**#7 `.opju` container framing + codec RE**~~ (2026-07-04) — cracked the
   CPYUA record framing (LEB128-varint `0a 05 … ff ff <nrows> … 0c` records) and
   the column codec: it is **canonical Burtscher FPC** (FCM value-hash + DFCM

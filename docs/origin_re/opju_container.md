@@ -31,8 +31,19 @@ value carries a 4-bit code; two codes pack into one control byte, **low nibble
 first**:
 
 - **bit 3** selects the predictor (`0` = FCM, `1` = DFCM),
-- **bits 0-2** give the residual byte-count as `(code & 7) + 1`,
-- the single code `0x8` is the exact case (0 residual bytes).
+- **bits 0-2** give the residual byte-count with the **canonical FPC bcode
+  mapping**: codes 0-3 store 0-3 bytes; codes 4-7 store 5-8 (a leading-zero
+  count of exactly 4 is unsupported, per the paper). Code 0 with either
+  selector (`0x0`/`0x8`) is the predictor-exact, zero-byte case.
+
+> **2026-07-04 width-rule correction.** The decoder first shipped with
+> `(code & 7) + 1`, which *coincides* with the canonical mapping for codes
+> ≥ 4 — the only codes clean ramps and messy instrument data ever emit — so
+> hundreds of columns validated bit-exact while ultra-smooth data (codes
+> 0-3: sub-3-byte residuals) misparsed. Every "DFCM-collision" divergence in
+> the earlier notes below was a phantom-byte misalignment artifact of that
+> width table; the predictor model itself was right all along. Fixed by the
+> corpus census vs Origin's own dumps (61 → 6 missing columns).
 
 Both hash tables hold **2^12 = 4096** entries (a *sweet spot* — bigger tables
 decode strictly worse, because the collisions are load-bearing) and update the
@@ -50,19 +61,37 @@ stressing a different bit range — fixed the exact shifts/masks where any singl
 column left them underdetermined. This is why golden-parity RE needs *multiple*
 known-content specimens, not one.
 
-**Record framing (LEB128 varints):**
-`0a 05 <varint> ff ff <nrows:varint> 00 <varint> 0c <FPC stream>`. `0xff 0xff`
-also occurs *inside* residual data, so the reader walks records with a cursor
-that jumps past each decoded stream (skipping false in-stream markers), and
-labels each record by the nearest preceding `<Book>_<Col>` name.
+**Record framing — the ZigZag segment grammar (solved 2026-07-04):**
+`0a 05 <varint> ff ff <nrows:varint> 00 <segment list> [0c <FPC stream>]`.
+The field between `00` and `0c` — previously noted as a mysterious
+"`2·nrows−1` size-ish field" — is a **ZigZag-varint segment list**
+(`2·nrows−1` is exactly `zigzag(−nrows)`, the one-segment plain case):
 
-**Known residual gap:** long *near-constant-stride* axis columns (energy / angle
-/ Q ramps, ≳150 rows) diverge on an exact DFCM hash-collision detail — the
-colliding slot returns a neighbouring stride that differs only in the low bytes.
-Such a divergence shatters the float exponent, so a strict desync gate drops the
-whole column rather than emit silent garbage; short columns and non-monotonic
-columns decode fully. Closing this needs the exact collision/update timing (a
-future probe campaign with controlled repeating-stride sequences).
+- **negative −m** → m FPC-coded rows (from the `0c` stream);
+- **positive +k** → k rows of one repeated value; a value-spec follows:
+  `0x50` + float64, `0x1a` + the double's top 2 bytes (rest zero — round
+  values like 1.0/5.0), or a bare `0x64` = 0.0.
+
+Origin run-length-compresses constant runs *outside* the FPC stream: a
+reflectivity total-reflection plateau becomes `[+11][0x50 1.00355…][−140]`,
+an all-zero column `[+n][0x64]`, and a fully constant column is a single
+repeat segment with **no stream at all** (the `1a`-literal "PConst" form
+observed in the 4.3811 specimens is this same grammar). `0xff 0xff` also
+occurs *inside* residual data, so the reader walks records with a cursor
+that jumps past each decoded stream, and labels each record by the nearest
+preceding `<Book>_<Col>` name.
+
+**Known residual gap (plan item 32, narrowed):** the **chunked staircase
+form** — records that interleave *multiple* repeat-runs and FPC streams
+(`[+5][50 a][+4][50 b][−3][0c s1][50 b]…[0c s2]…`), seen in lock-in logger
+columns (`Hc2 data` Theta/K/Q/R) and a few long theory/profile columns whose
+plateau splits mid-record. Byte-level replay shows one *continuous* predictor
+state across the chunks (stale strides from earlier segments produce
+correction residuals inside later constant runs), but the per-chunk
+repeat-count encoding is not yet pinned (a mid-record `50 <val> 0d`
+reads as a plain count 13 where the opening segments are ZigZag). The
+segment-sum gate rejects these records outright — dropped, never guessed.
+6 corpus columns affected (of ~200 oracle-checked).
 
 ## Specimens (all local-only, `../test-data/origin/specimens/`)
 
