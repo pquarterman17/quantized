@@ -16,10 +16,11 @@ trustworthy (W7). Gap analysis: see Context.
 **Updated:** 2026-07-04 (added items 34/35 — the `.opj` writer real-Origin
 load failure promoted to a Tier-1 item now that a persistent student
 license enables the fix loop, and figure curve→dataset binding tracked
-explicitly; items 6/10/14/17/18/20/22/33 shipped earlier today — notes
+explicitly; items 6/10/14/17/18/19/20/22/33 shipped earlier today — notes
 windows + combined X-axis log flag pinned from licensed specimens,
 real-corpus figure records solved, structured results-log parsing, docs
-consolidated into one authoritative reference, W1 + W3 complete)
+consolidated into one authoritative reference, synthetic fixture audit
+(figures.py + multi-book/multi-sheet gaps filled), W1 + W3 complete)
 
 ---
 
@@ -70,7 +71,7 @@ decoded graphs  → plot-spec mapping → restored figures (W3 + W4)
   mode schedule + framing remain (feeds 8).
 - 2 needs 1 · 5 needs 1 · 8 needs 7 · 9 needs 8 · ~~10 needs 1+8~~ (done) ·
   12 needs 11 · 13 needs 12+16 · ~~14 needs 7+11~~ (done) ·
-  19 needs the matching RE item · 21 needs 1/11.
+  ~~19 needs the matching RE item~~ (done) · 21 needs 1/11.
 - **15 (package split) precedes every new decoder** (2, 8, 13) — the
   500-line module ceiling forces the split before code lands.
 - 3 and 16 are independent of all RE and can start any time; ~~16/17~~
@@ -157,7 +158,7 @@ no documented real-Origin validation procedure for the trial window (31).
 | # | Item | Workstream | Why first |
 |---|------|------------|-----------|
 | 34 | `.opj` writer real-Origin fix | W6 | the export lever is broken; loader model + tail grammar decoded 2026-07-04 (validation_log.md) — next: window-SECTION boundary re-cut |
-| ~~25~~ / ~~33~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18 / 20 / 22~~ | Send-to-Origin + all decode + import flow + W4 UI + docs + log parsing | — | done, see Completed |
+| ~~25~~ / ~~33~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18 / 19 / 20 / 22~~ | Send-to-Origin + all decode + import flow + W4 UI + docs + log parsing + fixture audit | — | done, see Completed |
 
 ---
 
@@ -258,11 +259,6 @@ the shipped contract)
 
 ### Tier 2 — Medium Impact
 
-19. **Synthetic fixture builders** — extend the in-test CPY builder to
-    windows/figure/opju sections so CI exercises every decoder with
-    zero private data
-    *Model: sonnet · test-writer · needs the matching RE item.*
-
 ### Tier 3 — Nice-to-Have
 
 21. **Templates (`.otp`/`.otpu`)** — same CPY family; a graph template
@@ -328,6 +324,33 @@ the shipped contract)
 
 ## Completed
 
+- ~~**#19 Synthetic fixture builders**~~ (2026-07-04) — audited every
+  `src/quantized/io/origin_project/` decoder against its test file (see
+  table below); most already had synthetic in-test builders from earlier
+  items, so only the real gaps were filled, following each file's
+  existing builder style (`tests/test_io_origin_project.py`):
+  `figures.py` (.opj graph-window decode: name/axis-range/log-heuristic/
+  curve-count/annotations/source-hint, multi-graph + worksheet-closes-
+  graph, legend-text curve-count fallback — it previously had ZERO
+  positive-path synthetic coverage, only realdata anchors + a negative
+  "absent" check), `windows.py`'s multi-sheet "closed" guard (repeated
+  short column name signalling sheet 2+, previously only implicitly
+  exercised via Moke.opj's fit-table sheets), and `windows.py` +
+  `windows_opju.py`'s multi-book isolation (per-book anchor
+  cursor/state, previously only single-book blobs tested). No corpus
+  bytes committed. Audit table (decoder → synthetic-CI-covered? → gap):
+  container.py block walker → yes (`_block`/`_zero`/`_header`/`_data`) →
+  none; opj.py worksheet data/grouping/inline-text/garbage-gate → yes
+  (multiple tests) → none; windows.py names/units/designations → yes,
+  gaps filled (multi-sheet guard, multi-book); figures.py graph records
+  → NO real coverage, gap filled; opju_codec.py FPC+RLE+chunked-
+  staircase → yes (comprehensive, incl. low-width codes) → none;
+  opju.py book assembly → yes (via `read_origin_books` wiring test) →
+  none; windows_opju.py marker+label grammar → yes, gap filled
+  (multi-book); figures_opju.py specimen + real-corpus forms → yes
+  (extensive, `test_io_origin_figures_opju.py`) → none; notes.py
+  results-log + notes-windows → yes → none; writer.py round-trip → yes
+  (`test_io_origin_writer.py`) → none.
 - ~~**#25 COM "Send to Origin"**~~ (2026-07-04) — `io/origin_com.py` behind
   the `QZ_ORIGIN_COM=1` env flag: `com_available()` (never raises, OS+flag+
   pywin32 gated) + `send_to_origin()` (one workbook per DataStruct via
