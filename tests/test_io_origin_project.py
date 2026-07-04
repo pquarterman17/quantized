@@ -84,7 +84,54 @@ def test_decodes_worksheet_data_from_a_synthetic_opj(tmp_path) -> None:
     assert ds.labels == ("B",)
     assert ds.metadata["source_format"] == "origin_opj"
     assert ds.metadata["origin_book"] == "Book1"
-    assert ds.metadata["origin_books"] == [{"name": "Book1", "ncols": 2, "nrows": 3}]
+    assert ds.metadata["origin_books"] == [
+        {"name": "Book1", "long_name": "Book1", "ncols": 2, "nrows": 3}
+    ]
+
+
+def _window_header(book: str) -> bytes:
+    """A worksheet window-header block: 00 00 <Book> 00 …, >=150 B."""
+    payload = b"\x00\x00" + book.encode() + b"\x00"
+    payload += b"\x00" * (165 - len(payload))  # not a multiple of 10
+    return _block(payload)
+
+
+def _prop_block(short: str, designation: int) -> bytes:
+    """A 519-byte column-property block (designation@0x11, short name@0x12)."""
+    p = bytearray(519)
+    p[0x06] = 0x0B
+    p[0x11] = designation
+    p[0x12 : 0x12 + len(short) + 1] = short.encode() + b"\x00"
+    p[0x25] = 0x21
+    return _block(bytes(p))
+
+
+def _label_block(long_name: str, unit: str) -> bytes:
+    payload = f"{long_name}\r\n{unit}".encode() + b"\x00"
+    if len(payload) % 10 == 0:
+        payload += b"\x00"
+    return _block(payload)
+
+
+def test_windows_section_supplies_names_units_and_x_designation(tmp_path) -> None:
+    data = (
+        _synthetic_opj()
+        + _zero()
+        + _window_header("Book1")
+        + _prop_block("A", 3)  # designation X
+        + _label_block("Field", "Oe")
+        + _prop_block("B", 0)  # designation Y
+        + _label_block("Moment", "emu")
+    )
+    ds = import_auto(_write(tmp_path, "named.opj", data))
+    assert ds.labels == ("Moment",)
+    assert ds.units == ("emu",)
+    assert ds.metadata["x_column_long"] == "Field"
+    assert ds.metadata["x_unit"] == "Oe"
+    assert ds.metadata["column_designations"] == {"A": "X", "B": "Y"}
+    # data itself is unchanged by the metadata
+    assert list(ds.time) == [1.0, 2.0, 3.0]
+    assert list(ds.values[:, 0]) == [10.0, 20.0, 30.0]
 
 
 def test_ragged_columns_pad_with_nan(tmp_path) -> None:
@@ -130,6 +177,23 @@ def test_realdata_moke_field_ramp() -> None:
     assert ds.time[0] == pytest.approx(-6796.22, abs=0.1)
     assert np.isfinite(ds.time).sum() > 100  # most of the ramp is real (empties → NaN)
     assert ds.values.shape[1] >= 1
+
+
+@pytest.mark.realdata
+@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+def test_realdata_xrd_column_names_units_from_windows_section() -> None:
+    """The windows-section metadata (RE item 1) reaches the DataStruct."""
+    ds = import_auto(_CORPUS / "XRD.opj")
+    # every XRD book: A = X "2Theta"/"degrees", B = Y "I"/"arb. units", C = Y "dI"
+    assert ds.metadata["x_column_long"] == "2Theta"
+    assert ds.metadata["x_unit"] == "degrees"
+    assert ds.labels[0] == "I"
+    assert ds.units[0] == "arb. units"
+    assert ds.metadata["column_designations"]["A"] == "X"
+    # long book names (source filenames) recovered from window headers
+    assert any(
+        b["long_name"] != b["name"] for b in ds.metadata["origin_books"]
+    )
 
 
 @pytest.mark.realdata
