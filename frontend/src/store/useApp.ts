@@ -13,6 +13,7 @@ import { is2DMap } from "../lib/mapdata";
 import { mergeDatasets } from "../lib/merge";
 import {
   buildOriginFigureEntries,
+  doubleYPartner,
   figureChannelSelection,
   figureLabel,
   type OriginFigureEntry,
@@ -683,6 +684,35 @@ export const useApp = create<AppState>((set, get) => ({
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         return;
       }
+    }
+    // Origin's double-Y idiom: a 2-layer graph window whose layers both
+    // resolved to this SAME dataset. Applying either layer's entry then
+    // offers the combined view Origin showed — layer-1 curves on the
+    // primary Y axis, layer-2 curves on the secondary (y2) axis — instead
+    // of just the clicked layer's own curves. Axis range/log come from the
+    // LOWER layer number (Origin draws layer 1's axis as the "main" one).
+    const partner = doubleYPartner(entry, get().originFigures);
+    const dsForPartner = partner ? get().datasets.find((d) => d.id === entry.datasetId) : null;
+    if (partner && dsForPartner) {
+      const lower = (entry.figure.layer ?? 1) <= (partner.figure.layer ?? 1) ? entry : partner;
+      const upper = lower === entry ? partner : entry;
+      const baseSel = figureChannelSelection(lower.figure, dsForPartner);
+      const partnerSel = figureChannelSelection(upper.figure, dsForPartner);
+      if (baseSel && partnerSel) {
+        get().setActive(entry.datasetId);
+        set({
+          xLim: [lower.figure.x_from, lower.figure.x_to],
+          yLim: [lower.figure.y_from, lower.figure.y_to],
+          xLog: lower.figure.x_log,
+          yLog: lower.figure.y_log,
+          xKey: baseSel.xKey,
+          yKeys: baseSel.yKeys,
+          y2Keys: partnerSel.yKeys,
+        });
+        get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
+        return;
+      }
+      // Either layer's curves didn't map to a channel — fall back below.
     }
     get().setActive(entry.datasetId);
     // Decoded curve bindings (partial recall, 100% precision) select the

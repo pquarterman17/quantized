@@ -798,6 +798,125 @@ describe("useApp applyOriginFigure (item 18)", () => {
   });
 });
 
+describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> same dataset)", () => {
+  const doubleYData: DataStruct = {
+    time: [1, 2, 3],
+    values: [
+      [10, 100, 1000],
+      [20, 200, 2000],
+      [30, 300, 3000],
+    ],
+    labels: ["ch0", "ch1", "ch2"],
+    units: ["", "", ""],
+    metadata: {
+      origin_book: "Book2",
+      x_column_name: "A",
+      origin_column_names: ["B", "C", "D"], // -> value channels 0, 1, 2
+    },
+  };
+
+  const layer1 = {
+    id: "fig-XRD-0",
+    stem: "XRD",
+    datasetId: "d2",
+    figure: {
+      name: "Graph7",
+      layer: 1,
+      x_from: 0,
+      x_to: 10,
+      x_log: false,
+      y_from: 0,
+      y_to: 50,
+      y_log: false,
+      n_curves: 1,
+      annotations: [] as string[],
+      curves: [{ book: "Book2", x: "A", y: "B" }],
+    },
+  };
+  const layer2 = {
+    id: "fig-XRD-1",
+    stem: "XRD",
+    datasetId: "d2",
+    figure: {
+      name: "Graph7",
+      layer: 2,
+      x_from: 0,
+      x_to: 10,
+      x_log: false,
+      y_from: 0,
+      y_to: 5000,
+      y_log: false,
+      n_curves: 2,
+      annotations: [] as string[],
+      curves: [
+        { book: "Book2", x: "A", y: "C" },
+        { book: "Book2", x: "A", y: "D" },
+      ],
+    },
+  };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ id: "d2", name: "XRD:Book2", data: doubleYData }],
+      activeId: null,
+      originFigures: [layer1, layer2],
+      xLim: null,
+      yLim: null,
+      xLog: false,
+      yLog: false,
+      yKeys: null,
+      y2Keys: null,
+    });
+  });
+
+  it("applying layer 1 sets yKeys from layer 1 and y2Keys from layer 2, axes from layer 1", () => {
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d2");
+    expect(s.yKeys).toEqual([0]);
+    expect(s.y2Keys).toEqual([1, 2]);
+    expect(s.xLim).toEqual([0, 10]);
+    expect(s.yLim).toEqual([0, 50]); // layer 1's own range, not layer 2's
+  });
+
+  it("applying layer 2 (the other entry) offers the same combined view", () => {
+    useApp.getState().applyOriginFigure("fig-XRD-1");
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d2");
+    expect(s.yKeys).toEqual([0]); // still layer 1 on y ...
+    expect(s.y2Keys).toEqual([1, 2]); // ... and layer 2 on y2
+    expect(s.yLim).toEqual([0, 50]); // axes always come from the lower layer
+  });
+
+  it("falls back to the clicked layer's own single-axis view when a selection can't be mapped", () => {
+    useApp.setState({
+      originFigures: [
+        layer1,
+        { ...layer2, figure: { ...layer2.figure, curves: [{ book: "Elsewhere", x: "A", y: "C" }] } },
+      ],
+    });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d2");
+    expect(s.yKeys).toEqual([0]); // layer 1's own selection, applied directly
+    expect(s.y2Keys).toBeNull(); // no combined view — partner selection failed
+  });
+
+  it("does not combine when the two layers resolve to different datasets", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d2", name: "XRD:Book2", data: doubleYData },
+        { id: "d3", name: "XRD:Book3", data: doubleYData },
+      ],
+      originFigures: [layer1, { ...layer2, datasetId: "d3" }],
+    });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    const s = useApp.getState();
+    expect(s.yKeys).toEqual([0]);
+    expect(s.y2Keys).toBeNull();
+  });
+});
+
 describe("useApp removeDatasets (item 17 book-family filter)", () => {
   it("removes exactly the given ids, leaving the rest untouched", () => {
     useApp.setState({

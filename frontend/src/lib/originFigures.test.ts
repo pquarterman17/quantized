@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildOriginFigureEntries,
+  doubleYPartner,
   figureChannelSelection,
   figureLabel,
+  type OriginFigureEntry,
   resolveFigureDataset,
 } from "./originFigures";
-import type { Dataset, OriginFigure } from "./types";
+import type { Dataset, OriginCurve, OriginFigure } from "./types";
 
 const figure = (overrides: Partial<OriginFigure> = {}): OriginFigure => ({
   name: "Graph1",
@@ -174,5 +176,60 @@ describe("figureLabel", () => {
   it("falls back to the window name with no annotations", () => {
     const entry = { id: "f1", stem: "XRD", datasetId: "b1", figure: figure({ name: "Graph3", annotations: [] }) };
     expect(figureLabel(entry)).toBe("Graph3");
+  });
+});
+
+describe("doubleYPartner", () => {
+  const curve = (y: string): OriginCurve => ({ book: "B1", x: "A", y });
+
+  const layerEntry = (
+    id: string,
+    layer: number,
+    datasetId: string | null,
+    curves: OriginCurve[] | undefined,
+  ): OriginFigureEntry => ({
+    id,
+    stem: "Moke",
+    datasetId,
+    figure: figure({ name: "Graph7", layer, curves }),
+  });
+
+  it("finds the other layer's entry for a genuine double-Y pair, symmetrically", () => {
+    const l1 = layerEntry("f1", 1, "d1", [curve("B")]);
+    const l2 = layerEntry("f2", 2, "d1", [curve("C")]);
+    expect(doubleYPartner(l1, [l1, l2])).toBe(l2);
+    expect(doubleYPartner(l2, [l1, l2])).toBe(l1);
+  });
+
+  it("returns null when more than 2 layers share the window name (composite/panel window)", () => {
+    const l1 = layerEntry("f1", 1, "d1", [curve("B")]);
+    const l2 = layerEntry("f2", 2, "d1", [curve("C")]);
+    const l3 = layerEntry("f3", 3, "d1", [curve("D")]);
+    expect(doubleYPartner(l1, [l1, l2, l3])).toBeNull();
+  });
+
+  it("returns null when the two layers resolved to different datasets", () => {
+    const l1 = layerEntry("f1", 1, "d1", [curve("B")]);
+    const l2 = layerEntry("f2", 2, "d2", [curve("C")]);
+    expect(doubleYPartner(l1, [l1, l2])).toBeNull();
+  });
+
+  it("returns null when either datasetId is unresolved (null)", () => {
+    const l1 = layerEntry("f1", 1, null, [curve("B")]);
+    const l2 = layerEntry("f2", 2, "d1", [curve("C")]);
+    expect(doubleYPartner(l1, [l1, l2])).toBeNull();
+  });
+
+  it("returns null when either layer has no decoded curves", () => {
+    const l1 = layerEntry("f1", 1, "d1", []);
+    const l2 = layerEntry("f2", 2, "d1", [curve("C")]);
+    expect(doubleYPartner(l1, [l1, l2])).toBeNull();
+    const l1b = layerEntry("f1", 1, "d1", undefined);
+    expect(doubleYPartner(l1b, [l1b, l2])).toBeNull();
+  });
+
+  it("returns null for a single-layer figure (no partner shares the name)", () => {
+    const l1 = layerEntry("f1", 1, "d1", [curve("B")]);
+    expect(doubleYPartner(l1, [l1])).toBeNull();
   });
 });

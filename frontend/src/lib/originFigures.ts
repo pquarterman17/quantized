@@ -99,6 +99,34 @@ export function buildOriginFigureEntries(
   }));
 }
 
+/** The other layer's entry when `entry` is one half of a genuine Origin
+ *  "double-Y" pair: same import (stem), same graph-window name, EXACTLY 2
+ *  layer-entries share that name (rules out >2-layer composite/panel
+ *  windows, which reuse the same multi-layer mechanism for a structurally
+ *  different layout — see `figures.py`'s module docstring), both already
+ *  resolved to the SAME dataset, and both carrying at least one decoded
+ *  curve (partial recall must degrade, never guess). When all of that
+ *  holds, `useApp.applyOriginFigure` can offer the combined view — layer-1
+ *  curves on y, layer-2 curves on y2 — instead of just the clicked layer's
+ *  own curves. Returns null for everything else: single-layer figures,
+ *  cross-book pairs, or missing curve recall. */
+export function doubleYPartner(
+  entry: OriginFigureEntry,
+  all: OriginFigureEntry[],
+): OriginFigureEntry | null {
+  const name = entry.figure.name;
+  if (!name) return null;
+  const family = all.filter((e) => e.stem === entry.stem && e.figure.name === name);
+  if (family.length !== 2) return null;
+  const partner = family.find((e) => e.id !== entry.id);
+  if (!partner) return null;
+  if (!entry.datasetId || !partner.datasetId) return null;
+  if (entry.datasetId !== partner.datasetId) return null;
+  if ((entry.figure.curves ?? []).length === 0) return null;
+  if ((partner.figure.curves ?? []).length === 0) return null;
+  return partner;
+}
+
 /** Library row label: prefer a surviving annotation (reads like a plot title
  *  or peak label) over the raw Origin graph-window name (e.g. "Graph3"). */
 export function figureLabel(entry: OriginFigureEntry): string {
