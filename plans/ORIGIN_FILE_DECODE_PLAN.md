@@ -16,9 +16,9 @@ trustworthy (W7). Gap analysis: see Context.
 **Updated:** 2026-07-04 (added items 34/35 — the `.opj` writer real-Origin
 load failure promoted to a Tier-1 item now that a persistent student
 license enables the fix loop, and figure curve→dataset binding tracked
-explicitly; items 6/10/14/17/18/33 shipped earlier today — notes windows +
+explicitly; items 6/10/14/17/18/33/22 shipped earlier today — notes windows +
 combined X-axis log flag pinned from licensed specimens, real-corpus
-figure records solved, W1 + W3 complete)
+figure records solved, W1 + W3 complete, structured results-log parsing)
 
 ---
 
@@ -158,8 +158,7 @@ no documented real-Origin validation procedure for the trial window (31).
 | 34 | `.opj` writer real-Origin fix | W6 | the export lever is broken; the license enables the fix loop NOW |
 | 25 | COM "Send to Origin" | W6 | live-verifiable while the license is present (COM-serialized after 34) |
 | 20 | docs consolidation | W5 | 1,450 lines of RE reports unfolded; independent, delegable |
-| 22 | structured results-log parsing | W5 | log text already ships; independent, delegable |
-| ~~33~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18~~ | all decode + import flow + W4 UI | — | done, see Completed |
+| ~~33~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18~~ / ~~22~~ | all decode + import flow + W4 UI | — | done, see Completed |
 
 ---
 
@@ -276,10 +275,6 @@ the shipped contract)
     could import as a quantized style preset
     *Model: sonnet · needs 1 + 11.*
 
-22. **Analysis-log recovery** — parse the results log's fit records
-    (visible plain text) into structured metadata
-    *Model: haiku.*
-
 ---
 
 ## W6 — Export to Origin (quantized → Origin)
@@ -346,6 +341,14 @@ the shipped contract)
 
 ## Completed
 
+- ~~**#22 Structured results-log parsing**~~ (2026-07-04) — `parse_results_log()`
+  turns each timestamped `results_log()` record into
+  `{"timestamp", "operation", "params"}` (params nested by `Input`/`Output`/etc.
+  section headers; unparseable lines collect in `"extra"` rather than being
+  dropped). `_with_provenance` attaches `metadata['origin_results_log_records']`
+  alongside the raw text whenever at least one record parses. Moke-validated
+  (`subtract_line` + `[Book4]Sheet1` params recovered structurally, matching
+  the existing raw-text anchor).
 - ~~**#6 Notes windows + results-log text**~~ (2026-07-04, `8cf0b42`) —
   BOTH halves now shipped. Results-log half (`20d54fa`): timestamped
   operation records → `metadata['origin_results_log']`, both containers,
