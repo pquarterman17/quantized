@@ -37,7 +37,14 @@ excluded a second near-miss shape (the per-book "column candidate list")
 — item still stays open, see item text: 30.6% < the 50% bar to close it;
 item 36 (new) closes both remaining "permanently heuristic" Y-scale gaps
 — a real-form `.opju` Y flag (new `rf_*` oracle quad) and the `.opj`
-flag (XRD-vs-Moke byte diff), both `01 00`/`08 01`)
+flag (XRD-vs-Moke byte diff), both `01 00`/`08 01`;
+item 4's report-sheet residue (the
+FitLinear/NLFit `cell://...` reference-string family, previously an
+honest drop) now decodes in BOTH containers — `.opj`'s
+`decode_report_strings` (407/407 hc2convert columns recovered) and
+`.opju`'s new `opju_reports.py` (pinned against a new `fitreport2.opju`
+oracle, confirmed at scale against the real `Hc2 data.opju`, 1096
+columns) — item 4 CLOSED, moved to Completed)
 
 ---
 
@@ -106,7 +113,7 @@ cracking is frontier-model work while spec-driven decoding is not.
 | Tier | Good for | Items |
 |------|----------|-------|
 | **sonnet** | hypothesis-driven RE (now that Rosetta specimens + Origin-exported ground truth exist), spec-driven decoder implementation, refactors, frontend, synthetic fixtures | 7 (retry), 2, 3, 5, 8, 10, 13–19, 21 |
-| **opus** | escalation only: RE that a sonnet pass genuinely stalls on; contract/mapping design if it grows past a template | 1 ✓(done), 11 ✓(done), 12, RE half of 4 |
+| **opus** | escalation only: RE that a sonnet pass genuinely stalls on; contract/mapping design if it grows past a template | 1 ✓(done), 11 ✓(done), 4 ✓(done — sonnet closed it without escalation), 12 |
 | **haiku** | mechanical regression anchors, text extraction, docs consolidation | 6, 9, 20, 22 |
 | **fable** | not planned — owner directive (2026-07-03): delegate to cheaper models when feasible; the original fable run on item 7 died on the spend limit without a report, and the trial-generated specimens have since converted item 7 from open-ended to hypothesis-driven work | — |
 
@@ -147,11 +154,17 @@ figure restore + the post-import book-family filter (12/13/17/18 — the Library
 designations/comments (item 10 — the windows-section marker+label grammar,
 151/151 names + 130/130 units + 17/17 comments across the oracle corpus).
 `.opju` worksheet decode is COMPLETE (32 closed — 210/210 oracle columns;
-segment grammar + canonical FPC widths). Remaining gaps: sheet hierarchy (5),
-non-double column *values* (4 — garbage gated, the inline-text sentinel shape
-now decodes to metadata; int/float32 needed no work; the report-sheet
-reference family stays an honest drop, see item 4),
-notes/templates/log (6/21/22).
+segment grammar + canonical FPC widths). Non-double column *values* (item 4)
+is now CLOSED in both containers: garbage-gated, int/float32 needed no work,
+the inline-text sentinel shape decodes, and the FitLinear/NLFit report-sheet
+reference-string family (the item's hardest residue) decodes too —
+`origin_report_sheets` metadata in `.opj` (`decode_report_strings`) and
+`.opju` (`opju_reports.py`, a different grammar, pinned against a new
+`fitreport2.opju` oracle). Only the fit's *computed number* itself (not its
+cell reference) and one unrelated still-undecoded shape
+(`Moke.opj Book3_A`) remain, documented as open residues rather than a
+reopened item. Remaining gaps: sheet hierarchy (5), notes/templates/log
+(6/21/22).
 
 **quantized → Origin (export).** Shipped: `format_origin_script`
 (`io/origin.py` — CSV + LabTalk `.ogs` that rebuilds designations, long
@@ -175,7 +188,7 @@ no documented real-Origin validation procedure for the trial window (31).
 | # | Item | Workstream | Why first |
 |---|------|------------|-----------|
 | 34 | `.opj` writer real-Origin fix | W6 | the export lever is broken; loader model + tail grammar decoded 2026-07-04 (validation_log.md) — next: window-SECTION boundary re-cut |
-| ~~25~~ / ~~33~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18 / 19 / 20 / 22~~ | Send-to-Origin + all decode + import flow + W4 UI + docs + log parsing + fixture audit | — | done, see Completed |
+| ~~25~~ / ~~33~~ / ~~4~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18 / 19 / 20 / 22~~ | Send-to-Origin + all decode + import flow + W4 UI + docs + log parsing + fixture audit | — | done, see Completed |
 
 ---
 
@@ -184,47 +197,6 @@ no documented real-Origin validation procedure for the trial window (31).
 ### Tier 1 — High Impact
 
 ### Tier 2 — Medium Impact
-
-4. **Non-double column value types** — text, int, float32 columns
-   (the 147-byte column header carries a type field M1 ignores);
-   decode or skip-with-metadata, never garbage
-   *Model: opus (RE mini-pass) then sonnet (impl) · corpus examples
-   confirmed: hc2convert.opj holds ~460 such columns.*
-   - "Never garbage" half SHIPPED (2026-07-04, `e788c0d`+`7a4d25e`): a
-     magnitude gate + text-shape check drops non-double columns instead
-     of emitting reinterpreted float64 noise (hc2convert: 462 garbage
-     columns gone, constant numeric columns preserved). Decoding the
-     actual text/int values stays open (needs the type-field RE).
-   - Decode half PARTIALLY SHIPPED (2026-07-04): the 147-byte header has
-     no offset that reliably discriminates double vs text (checked every
-     offset against 1242 double / 58 text headers, no split found) — decode
-     content-sniffs the data block instead (`container.decode_inline_text`).
-     **int/float32 needed no work**: Origin stores every worksheet cell as
-     the same 8-byte float64 record regardless of declared type, confirmed
-     across a 6-file/2687-column corpus scan (no narrower on-disk width
-     exists), so int/float32-typed columns already decoded correctly before
-     this change. **Text SHIPPED for the "inline sentinel" shape**: a short
-     (<=7 char) NUL-terminated string + tag byte inside the same 10-byte
-     record (Origin's literal `"NaN"` fit-failure marker — hc2convert's 58
-     Hc2-extraction columns, 112,887 matching records validated, zero
-     counter-examples) now decodes into `metadata["origin_text_columns"]`
-     (never `.values` — the contract stays numeric). **Still open**: the
-     bulk of hc2convert's originally-gated columns (407 of 465) are Origin's
-     FitLinear/NLFit auto-generated "Notes"/"Summary"/ANOVA report-sheet
-     columns, which embed variable-length reference strings
-     (`"cell://Parameters.Slope.Value"`) overflowing across multiple
-     physical records with no row-aligned boundary — a materially harder,
-     variable-length RE problem outside this item's original scope; they
-     keep the honest drop (`decode_inline_text` returns `None` the moment a
-     record's value area has no in-range NUL, so this family can never
-     partially/incorrectly decode). Full writeup:
-     `docs/origin_project_format.md` "Non-double column values". Note:
-     `test-data/origin/specimens/ground_truth/hc2convert/` (the CSV oracle
-     this item's task brief pointed at) is empty in this environment — no
-     ground-truth CSVs exist for hc2convert (nor XRD/XMCD/MnN_Diffusion_PNR/
-     SuperlatticeFits); validation instead used within-file cross-checks
-     (per-record byte-shape agreement across the whole 1707-column corpus)
-     and a live decode/import smoke test against the real `.opj`.
 
 ### Tier 3 — Nice-to-Have
 
@@ -437,6 +409,56 @@ the shipped contract)
   `conftest.py`'s `corpus_dir` fixture — those realdata suites were
   silently skipping in any worktree agent; fixed with the same
   ancestor-walk `test_io_origin_figures_opju.py` already used.
+- ~~**#4 Non-double column values — report-sheet residue**~~ (2026-07-04) —
+  closed the item's last-open family: Origin's FitLinear/NLFit
+  auto-generated report-sheet columns (`"cell://Parameters.Slope.Value"`-
+  style reference strings), previously an honest drop in both containers.
+  **`.opj`** (`container.decode_report_strings`): a genuinely wider,
+  column-specific fixed record — `<u16 mask=0x0001><NUL-terminated
+  string><zero padding>`, width constant within one column (sized to its
+  longest cell) but varying column to column — recovered via width
+  detection + full re-validation (never a coincidental short match).
+  hc2convert.opj: **407/407** previously-still-dropped columns now decode
+  (0 collisions with the 58 inline-text/1242 double columns); Moke.opj
+  24/25, MnN_Diffusion_PNR.opj 12/18 (residue in both is unrelated
+  content — sheet-header name-regex false matches, embedded-storage
+  blobs, plus one genuinely different still-open shape, `Moke.opj
+  Book3_A`, mixing text labels with numeric sentinels — documented, not
+  solved, out of this item's scope). A report-only pseudo-book (zero
+  plausible-numeric columns, e.g. hc2convert's `Table3`/`Table15`/
+  `Table17`) now still surfaces via `opj._build_book`'s new empty-`cols`
+  branch instead of being silently dropped. **`.opju`** (new
+  `opju_reports.py`): a completely different grammar (CPYUA doesn't reuse
+  `.opj`'s framing) — shares `opju_codec`'s `0a 05 <varint> ff ff
+  <varint>` record header, discriminated by a `0x01` tag (vs. a numeric
+  column's `0x00`) at the exact byte `opju_codec._decode_record` already
+  checks, then a single ZigZag-varint segment count `-m` followed by `m`
+  `<len:u8><string>` entries (`len=0` = a blank cell); a positive count
+  (2 of `FitNL1`'s 28 columns) is an undecoded shape, honestly dropped.
+  Pinned against a NEW known-content oracle, `specimens/fitreport2.opju`
+  (a licensed-trial-generated linear fit, x=1..8, slope=-1.5,
+  intercept=9.5, whose `FitNL1`/`FitNLCurve1` report sheets were the
+  corpus's first multi-sheet `.opju` book) — recovers all 26 populated
+  `FitNL1` columns exactly, matching the fit's own generator script.
+  Exposed and fixed a real latent bug along the way: `opju_codec._NAME`
+  lacked `.opj`'s `(?:@\d{1,2})?` sheet-suffix group, so every extra-sheet
+  column (in BOTH the new report scan and the existing `scan_columns`)
+  was silently mis-anchored to whichever sheet-1 name came last, landing
+  every `FitNL1`/`FitNLCurve1` column in the wrong pseudo-book — fixed by
+  adding the group (verified as a pure fix: no matches change for any
+  single-sheet file in the corpus). Confirmed at scale against the real
+  `Hc2 data.opju` (16 MB, no curated oracle): 1096 report columns, 2920
+  non-empty strings, 100% `cell://`/`embedding:`-prefixed, 0 garbage.
+  **What stays open (documented, not reopening the item):** the fit's
+  actual *computed number* (e.g. Slope = -1.5) is not recoverable this
+  way in either container — checked directly against `fitreport2.opju`'s
+  byte range for both raw and FPC-compact float64 encodings of 9.5/-1.5,
+  no match; the `cell://` string only names *which* statistic a cell
+  represents. Both non-double families attach as
+  `metadata["origin_report_sheets"]`, never `.values`/`.labels` (data
+  contract intact). Synthetic CI fixtures (both containers, incl. the
+  report-only pseudo-book case) + realdata anchors added; full writeup in
+  `docs/origin_project_format.md` §3.2/§3.4.
 - ~~**#19 Synthetic fixture builders**~~ (2026-07-04) — audited every
   `src/quantized/io/origin_project/` decoder against its test file (see
   table below); most already had synthetic in-test builders from earlier

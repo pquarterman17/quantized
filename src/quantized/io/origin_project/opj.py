@@ -11,10 +11,13 @@ a "Text & Numeric" column reuses the same 10-byte record as a double column,
 but its 8-byte value area holds a short NUL-terminated string instead of a
 raw float64 (`container.decode_inline_text`). Decoded text columns never
 enter `.values` (the data contract is numeric); they attach to metadata as
-`origin_text_columns: {short_name: [str, ...]}`. Columns that are neither a
-plausible double nor this text shape (Origin's FitLinear/NLFit auto-generated
-report-sheet columns, which overflow strings across records) keep the
-honest drop.
+`origin_text_columns: {short_name: [str, ...]}`. A column that overflows
+`decode_inline_text`'s 8-byte value area (Origin's FitLinear/NLFit
+auto-generated report-sheet columns, e.g. `"cell://Parameters.Slope.Value"`)
+gets a second try via `container.decode_report_strings` — a wider,
+column-specific record width — attaching to
+`origin_report_sheets: {short_name: [str, ...]}`. Whatever fits neither
+shape keeps the honest drop.
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ from quantized.io.origin_project.container import (
     NAME_RE,
     decode_doubles,
     decode_inline_text,
+    decode_report_strings,
     fallback,
     plausible_column,
     walk_blocks,
@@ -44,16 +48,22 @@ _V = TypeVar("_V")
 
 def _columns(
     b: bytes,
-) -> tuple[list[tuple[str, NDArray[np.float64]]], list[tuple[str, list[str]]]]:
+) -> tuple[
+    list[tuple[str, NDArray[np.float64]]], list[tuple[str, list[str]]], list[tuple[str, list[str]]]
+]:
     """Walk the datasets section, pairing each named header block with its data.
 
-    Returns ``(numeric_columns, text_columns)``. A data block that isn't a
-    plausible double column (see `plausible_column`/`_looks_textual`) is tried
-    as inline text (`decode_inline_text`); anything matching neither shape is
-    dropped exactly as before (honest-absent, never garbage).
+    Returns ``(numeric_columns, text_columns, report_columns)``. A data block
+    that isn't a plausible double column (see `plausible_column`/
+    `_looks_textual`) is tried as short inline text (`decode_inline_text`),
+    then — if that overflows — as a wider report-sheet record
+    (`decode_report_strings`, plan item 4's FitLinear/NLFit residue);
+    anything matching none of the three shapes is dropped exactly as before
+    (honest-absent, never garbage).
     """
     numeric: list[tuple[str, NDArray[np.float64]]] = []
     text: list[tuple[str, list[str]]] = []
+    report: list[tuple[str, list[str]]] = []
     pending: str | None = None
     for size, payload in walk_blocks(b):
         if size == 0:
@@ -70,12 +80,12 @@ def _columns(
             # >90%). All-NaN stays (empty columns are real).
             if plausible_column(vals, allow_all_nan=True) and not _looks_textual(payload):
                 numeric.append((pending, vals))
-            else:
-                rows = decode_inline_text(payload)
-                if rows is not None:
-                    text.append((pending, rows))
+            elif (rows := decode_inline_text(payload)) is not None:
+                text.append((pending, rows))
+            elif (rows := decode_report_strings(payload)) is not None:
+                report.append((pending, rows))
             pending = None
-    return numeric, text
+    return numeric, text, report
 
 
 _PRINTABLE = frozenset(range(0x20, 0x7F)) | {0x09, 0x0A, 0x0D}
@@ -130,9 +140,17 @@ def _group(columns: Columns) -> OrderedDict[str, Columns]:
 
 
 def _inventory(
-    books: OrderedDict[str, Columns], books_meta: dict[str, BookMeta]
+    books: OrderedDict[str, Columns],
+    books_meta: dict[str, BookMeta],
+    report_only: OrderedDict[str, TextColumns] | None = None,
 ) -> list[dict[str, object]]:
-    return [
+    """Book inventory for metadata. ``report_only`` (plan item 4) lists any
+    pseudo-book whose columns are entirely Origin's auto-generated
+    report-sheet family (e.g. a fit's "FitNL1" sheet with zero plausible
+    numeric columns) — without it, such a sheet would be silently absent from
+    the inventory despite getting its own DataStruct (see ``_build_book``).
+    """
+    out = [
         {
             "name": k,
             "long_name": books_meta[k].long_name if k in books_meta else k,
@@ -141,6 +159,25 @@ def _inventory(
         }
         for k, v in books.items()
     ]
+    for k, v in (report_only or {}).items():
+        if k in books:
+            continue
+        out.append(
+            {
+                "name": k,
+                "long_name": books_meta[k].long_name if k in books_meta else k,
+                "ncols": len(v),
+                "nrows": max((len(rows) for _, rows in v), default=0),
+            }
+        )
+    return out
+
+
+def _book_long_name(book: str, books_meta: dict[str, BookMeta]) -> str:
+    base_book, _, sheet_no = book.partition("@")
+    if sheet_no and base_book in books_meta:
+        return f"{books_meta[base_book].long_name} (sheet {sheet_no})"
+    return books_meta[book].long_name if book in books_meta else book
 
 
 def _build_book(
@@ -150,6 +187,7 @@ def _build_book(
     inventory: list[dict[str, object]],
     source_format: str = "origin_opj",
     text_cols: TextColumns | None = None,
+    report_cols: TextColumns | None = None,
 ) -> DataStruct:
     """Assemble one workbook into a DataStruct.
 
@@ -161,7 +199,27 @@ def _build_book(
     ``text_cols`` (plan item 4) are this book's inline-text columns — never
     part of `.values` (the data contract is numeric); they attach under
     ``metadata["origin_text_columns"]`` keyed by Origin short name (A, B, …).
+    ``report_cols`` (plan item 4, report-sheet residue) are this book's
+    report-sheet reference-string columns (Notes/Summary/Parameters/RegStats/
+    ANOVA "cell://" columns), attached the same way under
+    ``metadata["origin_report_sheets"]``.
+
+    A sheet made *entirely* of report-sheet columns (e.g. a fit's "FitNL1"
+    report, which typically has zero plausible-numeric columns of its own —
+    ``cols`` empty) still gets its own pseudo-book: an empty-data DataStruct
+    carrying only the report metadata, rather than being silently omitted.
     """
+    if not cols:
+        book_long = _book_long_name(book, books_meta)
+        meta_empty: dict[str, object] = {
+            "source_format": source_format,
+            "origin_book": book,
+            "origin_book_long": book_long,
+            "origin_books": inventory,
+            "origin_report_sheets": {c: rows for c, rows in (report_cols or [])},
+        }
+        return DataStruct(time=np.empty(0), values=np.empty((0, 0)), metadata=meta_empty)
+
     base_book, _, sheet_no = book.partition("@")
     col_meta = books_meta[base_book].columns if base_book in books_meta and not sheet_no else {}
     maxlen = max((len(v) for _, v in cols), default=0)
@@ -183,13 +241,7 @@ def _build_book(
     meta = {
         "source_format": source_format,
         "origin_book": book,
-        "origin_book_long": (
-            f"{books_meta[base_book].long_name} (sheet {sheet_no})"
-            if sheet_no and base_book in books_meta
-            else books_meta[book].long_name
-            if book in books_meta
-            else book
-        ),
+        "origin_book_long": _book_long_name(book, books_meta),
         "origin_books": inventory,
         "x_column_name": ordered[0][0] if ordered else "A",
         "x_column_long": _label_for(ordered[0][0], x_meta) if ordered else "",
@@ -200,6 +252,7 @@ def _build_book(
         "column_designations": {c: m.designation for c, m in col_meta.items()},
         "column_comments": {c: m.comment for c, m in col_meta.items() if m.comment},
         "origin_text_columns": {c: rows for c, rows in (text_cols or [])},
+        "origin_report_sheets": {c: rows for c, rows in (report_cols or [])},
     }
     return DataStruct(
         time=time,
@@ -213,6 +266,7 @@ def _build_book(
 _ParseResult = tuple[
     OrderedDict[str, Columns],
     OrderedDict[str, TextColumns],
+    OrderedDict[str, TextColumns],
     dict[str, BookMeta],
     list[dict[str, object]],
 ]
@@ -222,13 +276,14 @@ def _parse(path: Path) -> _ParseResult:
     b = path.read_bytes()
     if not b.startswith(b"CPYA"):
         raise fallback(path, f"'{path.name}' does not look like a CPYA .opj (bad header).")
-    columns, text_columns = _columns(b)
+    columns, text_columns, report_columns = _columns(b)
     if not columns:
         raise fallback(path, f"no worksheet columns could be decoded from '{path.name}'.")
     books = _group(columns)
     text_books = _group_named(text_columns)
+    report_books = _group_named(report_columns)
     books_meta = window_metadata(b)
-    return books, text_books, books_meta, _inventory(books, books_meta)
+    return books, text_books, report_books, books_meta, _inventory(books, books_meta, report_books)
 
 
 def read_opj(path: Path) -> DataStruct:
@@ -237,19 +292,41 @@ def read_opj(path: Path) -> DataStruct:
     Extra-sheet pseudo-books (``Book@N`` — often fit tables/curves) never win
     the primary slot over measured sheet-1 data, however large they are.
     """
-    books, text_books, books_meta, inventory = _parse(path)
+    books, text_books, report_books, books_meta, inventory = _parse(path)
     primary_pool = [k for k in books if "@" not in k] or list(books)
     primary = max(primary_pool, key=lambda k: sum(len(v) for _, v in books[k]))
     return _build_book(
-        primary, books[primary], books_meta, inventory, text_cols=text_books.get(primary)
+        primary,
+        books[primary],
+        books_meta,
+        inventory,
+        text_cols=text_books.get(primary),
+        report_cols=report_books.get(primary),
     )
 
 
 def read_opj_books(path: Path) -> list[DataStruct]:
-    """Every workbook in the project as its own DataStruct (plan item 3)."""
-    books, text_books, books_meta, inventory = _parse(path)
+    """Every workbook in the project as its own DataStruct (plan item 3).
+
+    A sheet made entirely of report-sheet columns (plan item 4 — e.g. a fit's
+    "FitNL1" report) has no plausible-numeric columns at all, so it never
+    appears as a key in ``books``; the union with ``report_books`` (and
+    ``text_books``, for the analogous inline-text case) below still surfaces
+    it as its own pseudo-book rather than dropping the whole sheet.
+    """
+    books, text_books, report_books, books_meta, inventory = _parse(path)
+    keys = list(books)
+    keys += [k for k in text_books if k not in books and k not in keys]
+    keys += [k for k in report_books if k not in books and k not in keys]
     return [
-        _build_book(k, v, books_meta, inventory, text_cols=text_books.get(k))
-        for k, v in books.items()
-        if v
+        _build_book(
+            k,
+            books.get(k, []),
+            books_meta,
+            inventory,
+            text_cols=text_books.get(k),
+            report_cols=report_books.get(k),
+        )
+        for k in keys
+        if books.get(k) or text_books.get(k) or report_books.get(k)
     ]

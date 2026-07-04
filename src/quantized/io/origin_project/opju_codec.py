@@ -57,9 +57,21 @@ _TABLE_MASK = (1 << 12) - 1  # 2**12-entry FCM/DFCM hash tables
 _FCM_SHIFT, _FCM_DROP = 6, 48  # fh = ((fh << 6) ^ (value  >> 48)) & mask
 _DFCM_SHIFT, _DFCM_DROP = 2, 40  # dh = ((dh << 2) ^ (stride >> 40)) & mask
 
-# A length-prefixed dataset name "<Book>_<Col>" (CPYUA strings carry no NUL
-# terminator, so the byte before the match must equal the name length).
-_NAME = re.compile(rb"[A-Za-z][\w ]{0,40}_[A-Za-z0-9]{1,4}")
+# A length-prefixed dataset name "<Book>_<Col>[@sheet]" (CPYUA strings carry
+# no NUL terminator, so the byte before the match must equal the name
+# length). The optional "@<N>" suffix marks a column of sheet N>1 in a
+# multi-sheet book (same convention `.opj`'s container.NAME_RE uses) — added
+# alongside plan item 4's report-sheet decode, whose fitreport2.opju oracle
+# was the first `.opju` specimen with more than one sheet in a book and
+# exposed that every extra-sheet column was previously mis-anchored to the
+# nearest SHEET-1 name instead (e.g. every FitNL1/FitNLCurve1 column
+# collapsing onto "FitBook_B"): the un-suffixed pattern still matched an
+# "@2"-suffixed name as a prefix, but the length-prefix byte then disagreed
+# with the (shorter) matched length, so it should have failed the anchoring
+# check below -- except sheet-1's own un-suffixed names sit right before the
+# extra-sheet block and satisfied it instead, silently swallowing every
+# later column into whichever sheet-1 name came last.
+_NAME = re.compile(rb"[A-Za-z][\w ]{0,40}_[A-Za-z0-9]{1,4}(?:@\d{1,2})?")
 
 
 class CodecError(ValueError):

@@ -54,6 +54,30 @@ def _text_data(strings: list[str], *, tag: int = 0x01) -> bytes:
     return _block(bytes(records))
 
 
+def _report_data(strings: list[str], *, width: int | None = None) -> bytes:
+    """A column data block: Origin's report-sheet record shape --
+    ``<uint16 mask=1><NUL-terminated string><zero padding>`` at a WIDTH
+    reserved uniformly for the whole column (unlike the double/inline-text
+    10-byte record) — the `decode_report_strings` shape (plan item 4's
+    `decode_inline_text` overflow residue, e.g. a FitLinear/NLFit report
+    sheet's ``"cell://Parameters.Slope.Value"`` reference columns).
+
+    ``width`` defaults to the minimal fit; the walker that dispatches a data
+    block to the numeric/text/report decoders only recognizes it as DATA (not
+    a column-HEADER block) when its total byte size is a multiple of 10 (a
+    property real report sheets happen to satisfy — every width/row-count
+    combination in the corpus multiplies out evenly) — pass an explicit
+    ``width`` when the minimal one doesn't, same as a real file would need a
+    compatible row count.
+    """
+    w = width if width is not None else 2 + max((len(s) for s in strings), default=0) + 1
+    records = bytearray()
+    for s in strings:
+        raw = s.encode("latin1")
+        records += b"\x01\x00" + raw + b"\x00" * (w - 2 - len(raw))
+    return _block(bytes(records))
+
+
 def _header(name: str) -> bytes:
     """A column-header block carrying '<book>_<col>\\0'; size kept off a /10 so the
     walker classifies it as a header, not data."""
@@ -595,6 +619,34 @@ def test_realdata_hc2convert_text_columns_recovered() -> None:
     assert "U" not in da.labels and "V" not in da.labels  # never in the numeric contract
 
 
+@pytest.mark.realdata
+@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+def test_realdata_hc2convert_report_sheets_recovered() -> None:
+    """Plan item 4 (report-sheet residue): the 407 FitLinear/NLFit report
+    columns that `decode_inline_text` honestly dropped (they overflow its
+    8-byte value area with variable-length `cell://...` reference strings)
+    now decode via the wider, column-specific `decode_report_strings` record
+    shape -- recovered as metadata, never `.values`/`.labels`, and every
+    previously-still-dropped column is accounted for (no leftover gap, no
+    collision with the 58 inline-text/numeric columns)."""
+    from quantized.io.origin_project import read_origin_books
+
+    books = read_origin_books(_CORPUS / "hc2convert.opj")
+    total_report_cols = sum(len(b.metadata.get("origin_report_sheets", {})) for b in books)
+    assert total_report_cols == 407
+
+    book2_2 = next(b for b in books if b.metadata["origin_book"] == "Book2@2")
+    reports = book2_2.metadata["origin_report_sheets"]
+    assert reports["C"][:2] == ["cell://Notes.Description", "cell://Notes.UserName"]
+    assert all(c not in book2_2.labels for c in reports)  # never in the numeric contract
+
+    # A sheet made entirely of report columns (no plausible-numeric column at
+    # all) still surfaces as its own pseudo-book instead of being dropped.
+    table3 = next(b for b in books if b.metadata["origin_book"] == "Table3")
+    assert table3.values.shape == (0, 0)
+    assert "cell://" in table3.metadata["origin_report_sheets"]["A"][0]
+
+
 # ── synthetic .opju FPC codec round-trip (runs in CI) ─────────────────────────
 #
 # A test-local FPC *encoder* mirroring the decoder's model (canonical
@@ -735,9 +787,147 @@ def test_opju_chunked_staircase_record() -> None:
     assert np.array_equal(cols["TBook_E"], np.asarray(expect))
 
 
+# ── synthetic .opju report-sheet columns (plan item 4, report-sheet residue) ──
+#
+# `.opju`'s (CPYUA) sibling of `.opj`'s decode_report_strings: a report column
+# shares opju_codec's `0a 05 <varint> ff ff <varint>` record header, but the
+# byte right after that second varint is 0x01 (not opju_codec's numeric 0x00)
+# and what follows is a single ZigZag-varint segment count -m, then m
+# consecutive <len:u8><ASCII bytes> strings (len=0 = a blank report cell) --
+# pinned against specimens/fitreport2.opju (see opju_reports.py docstring).
+
+
+def _opju_report_record(name: str, strings: list[str]) -> bytes:
+    """A named .opju REPORT column record: name + `0a 05 <varint> ff ff
+    <varint> 01 <ZigZag(-m)> <m x <len:u8><str>>` -- the shape
+    `opju_reports.scan_report_columns` decodes."""
+    m = len(strings)
+    payload = bytearray()
+    for s in strings:
+        raw = s.encode("latin1")
+        payload += bytes([len(raw)]) + raw
+    body = b"\xff\xff" + _varint(11) + b"\x01" + _zz(-m) + bytes(payload)
+    nm = name.encode("latin1")
+    return bytes([len(nm)]) + nm + b"\x0a\x05" + _varint(11) + body
+
+
+def test_opju_decodes_report_sheet_columns() -> None:
+    """A report column's `0x01` tag (vs. a numeric column's `0x00`) routes to
+    the string-segment grammar instead of opju_codec's FPC/repeat grammar;
+    an empty string (len=0) is a valid blank report cell, not a failure."""
+    from quantized.io.origin_project.opju_reports import scan_report_columns
+
+    strings = ["cell://Parameters.B.Value", "", "cell://Parameters.xintercept.Value"]
+    blob = b"CPYUA 4.3811 222\n" + _opju_report_record("FitBook_H@2", strings)
+    cols = scan_report_columns(blob)
+    assert cols == [("FitBook_H@2", strings)]
+
+
+def test_opju_report_record_never_intercepts_a_numeric_column() -> None:
+    """The two codecs are mutually exclusive by construction (gated on the
+    same tag byte) -- a report scan over a plain numeric record finds
+    nothing, and a numeric scan over a report record finds nothing."""
+    from quantized.io.origin_project.opju_codec import scan_columns
+    from quantized.io.origin_project.opju_reports import scan_report_columns
+
+    numeric_blob = b"CPYUA 4.3811 222\n" + _opju_record(
+        "TBook_A", [("fpc", 3)], _fpc_encode([1.0, 2.0, 3.0])
+    )
+    assert scan_report_columns(numeric_blob) == []
+
+    report_blob = b"CPYUA 4.3811 222\n" + _opju_report_record("TBook_B", ["cell://Notes.Model"])
+    assert scan_columns(report_blob) == []
+
+
+def test_opju_report_positive_segment_stays_an_honest_drop() -> None:
+    """A positive ZigZag segment count was observed on 2 of fitreport2.opju's
+    28 report columns (its first two, with no cell:// content at all) and
+    its shape is not understood -- honestly dropped, never guessed at."""
+    from quantized.io.origin_project.opju_reports import scan_report_columns
+
+    nm = b"\x0bFitBook_A@2"
+    body = b"\xff\xff" + _varint(11) + b"\x01" + _zz(11)  # positive count -- undecoded shape
+    blob = b"CPYUA 4.3811 222\n" + nm + b"\x0a\x05" + _varint(11) + body
+    assert scan_report_columns(blob) == []
+
+
+def test_opju_report_sheet_columns_wired_into_datastruct(tmp_path) -> None:
+    """End-to-end: report_cols attach to origin_report_sheets, never
+    .values/.labels, exactly like the .opj inline-text/report families."""
+    from quantized.io.origin_project import read_origin_project
+
+    strings = ["cell://RegStats.C1.N", "cell://RegStats.C1.DOF"]
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_record("FitBook_A", [("fpc", 2)], _fpc_encode([1.0, 2.0]))
+        + _opju_report_record("FitBook_M@2", strings)
+    )
+    ds = read_origin_project(_write(tmp_path, "report.opju", blob))
+    assert ds.metadata["origin_report_sheets"] == {}  # primary book (sheet 1) is untouched
+
+
+def test_opju_report_only_pseudo_book_still_surfaces(tmp_path) -> None:
+    """A sheet made entirely of report-sheet columns (fitreport2.opju's
+    FitNL1 -- 0 plausible-numeric columns of its own) still gets its own
+    pseudo-book via read_origin_books, an empty-data DataStruct carrying
+    only the report metadata."""
+    from quantized.io.origin_project import read_origin_books
+
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_record("FitBook_A", [("fpc", 2)], _fpc_encode([1.0, 2.0]))
+        + _opju_report_record("FitBook_C@2", ["cell://Notes.Description"])
+        + _opju_report_record("FitBook_H@2", ["cell://Parameters.B.Value"])
+    )
+    path = _write(tmp_path, "report_only.opju", blob)
+    books = {b.metadata["origin_book"]: b for b in read_origin_books(path)}
+    assert "FitBook" in books and "FitBook@2" in books
+    report_book = books["FitBook@2"]
+    assert report_book.values.shape == (0, 0)
+    assert report_book.labels == ()
+    assert report_book.metadata["origin_report_sheets"] == {
+        "C": ["cell://Notes.Description"],
+        "H": ["cell://Parameters.B.Value"],
+    }
+    names = {entry["name"] for entry in report_book.metadata["origin_books"]}
+    assert names == {"FitBook", "FitBook@2"}
+
+
+@pytest.mark.realdata
+def test_realdata_fitreport2_report_sheets_recovered() -> None:
+    """The known-content oracle (specimens/fitreport2.opju -- a linear fit
+    x=1..8, slope -1.5, intercept 9.5; ground truth:
+    specimens/ground_truth/fitreport2/structure.json): FitNL1's 28 report
+    columns recover 26 of them (2 are the positive-segment shape, honestly
+    dropped -- see test_opju_report_positive_segment_stays_an_honest_drop),
+    as their own "FitBook@2" pseudo-book, matching the exact reference
+    strings the fit's report sheet is known to hold."""
+    from quantized.io.origin_project import read_origin_books
+
+    src = _CORPUS / "specimens" / "fitreport2.opju"
+    if not src.exists():
+        pytest.skip("fitreport2.opju specimen not present")
+    books = {b.metadata["origin_book"]: b for b in read_origin_books(src)}
+    assert "FitBook@2" in books
+    reports = books["FitBook@2"].metadata["origin_report_sheets"]
+    assert len(reports) == 26  # 28 columns minus the 2 honestly-dropped ones
+    assert books["FitBook@2"].values.shape == (0, 0)
+
+    all_strings = {s for rows in reports.values() for s in rows if s}
+    # the fit's slope/intercept parameters (Origin's default linear-model
+    # names A=intercept, B=slope) are both individually addressable
+    assert "cell://Parameters.A.Value" in all_strings
+    assert "cell://Parameters.B.Value" in all_strings
+    assert "cell://Notes.Equation" in all_strings
+    assert "cell://RegStats.C1.ReducedChiSq" in all_strings
+    # never leak into the numeric data contract
+    assert "C" not in books["FitBook@2"].labels
+
+
 def test_opj_drops_non_double_garbage_columns(tmp_path) -> None:
     """A text column's bytes reinterpret as absurd float64s — drop the column,
-    never emit garbage (item 4's honest-absent contract; type decode is open)."""
+    never emit garbage (item 4's honest-absent contract; this byte shape
+    matches neither the inline-text nor the report-sheet decode target)."""
     # Real text blocks are raw strings with no <u16 mask><f64> record structure
     # (constant numeric columns DO keep the 00-00 mask stride — hc2convert's
     # lock-in K/Q/R columns of repeated 2.0 — and must survive this gate).
@@ -797,10 +987,11 @@ def test_opj_inline_text_supports_varying_short_strings(tmp_path) -> None:
 
 
 def test_opj_inline_text_overflow_stays_an_honest_drop(tmp_path) -> None:
-    """A string too long to fit one 8-byte value slot (Origin's FitLinear/
-    NLFit auto-generated report-sheet columns overflow a label across
-    several records) can't be safely row-aligned -- stays an honest drop,
-    never a partial/misaligned decode (item 4's still-open gap)."""
+    """A string too long to fit one 8-byte value slot, in a shape that ALSO
+    isn't the wider report-sheet record (no `0x0001` mask stride) -- stays
+    an honest drop rather than a partial/misaligned decode. The genuine
+    FitLinear/NLFit report-sheet overflow case (Origin's own `0x0001`-mask
+    wide record) is what `decode_report_strings` now recovers instead."""
     overflow = _block(b"Comment un")  # 8-byte value has no NUL in range
     blob = (
         b"CPYA 4.3380 188 W64 #\n"
@@ -812,6 +1003,7 @@ def test_opj_inline_text_overflow_stays_an_honest_drop(tmp_path) -> None:
     )
     ds = read_origin_project(_write(tmp_path, "overflow.opj", blob))
     assert ds.metadata.get("origin_text_columns", {}) == {}
+    assert ds.metadata.get("origin_report_sheets", {}) == {}
     assert "B" not in ds.labels
 
 
@@ -832,6 +1024,88 @@ def test_opj_text_columns_grouped_per_book(tmp_path) -> None:
     books = {b.metadata["origin_book"]: b for b in read_origin_books(path)}
     assert books["Alpha"].metadata["origin_text_columns"] == {"B": ["NaN", "NaN"]}
     assert books["Beta"].metadata["origin_text_columns"] == {}
+
+
+# ── synthetic .opj report-sheet columns (plan item 4, report-sheet residue) ──
+
+
+def test_opj_decodes_report_sheet_columns_as_metadata(tmp_path) -> None:
+    """A FitLinear/NLFit-style report column whose cells hold
+    ``cell://...`` reference strings too long for `decode_inline_text`'s
+    8-byte value area decodes via the WIDER, column-specific record width
+    `decode_report_strings` detects -- attaching to
+    ``origin_report_sheets`` metadata, never `.values`/`.labels`."""
+    strings = ["cell://Parameters.Slope.Value", "", "cell://Parameters.Intercept.Value"]
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _block(b"\x00" * 32)
+        + _zero()
+        + _header("Book1_A") + _data([1.0, 2.0, 3.0])
+        + _zero()
+        + _header("Book1_B") + _report_data(strings, width=40)  # 3 rows x 40 = 120, %10==0
+    )
+    ds = read_origin_project(_write(tmp_path, "report_col.opj", blob))
+    assert "B" not in ds.labels
+    assert ds.values.shape == (3, 0)  # only the x column decoded as data
+    assert ds.metadata["origin_report_sheets"] == {"B": strings}
+    assert ds.metadata.get("origin_text_columns", {}) == {}
+
+
+def test_opj_report_sheet_columns_never_collide_with_inline_text(tmp_path) -> None:
+    """Both non-double shapes coexist in one book without cross-contaminating
+    each other's metadata key."""
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _block(b"\x00" * 32)
+        + _zero()
+        + _header("Book1_A") + _data([1.0, 2.0])
+        + _zero()
+        + _header("Book1_B") + _text_data(["NaN", "NaN"])
+        + _zero()
+        + _header("Book1_C")
+        + _report_data(["cell://Notes.Equation", "cell://Notes.Model"], width=30)  # 2x30=60
+    )
+    ds = read_origin_project(_write(tmp_path, "mixed_nondouble.opj", blob))
+    assert ds.metadata["origin_text_columns"] == {"B": ["NaN", "NaN"]}
+    assert ds.metadata["origin_report_sheets"] == {
+        "C": ["cell://Notes.Equation", "cell://Notes.Model"]
+    }
+    assert "B" not in ds.labels and "C" not in ds.labels
+
+
+def test_opj_report_only_pseudo_book_still_surfaces(tmp_path) -> None:
+    """A sheet made entirely of report-sheet columns (no plausible-numeric
+    column of its own -- Origin's real "FitNL"-style report sheets commonly
+    look like this, see the hc2convert ``Table3``/``Table15``/``Table17``
+    realdata anchor) still gets its own pseudo-book: an empty-data
+    DataStruct carrying only the report metadata, not silently dropped."""
+    from quantized.io.origin_project import read_origin_books
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n" + _block(b"\x00" * 32) + _zero()
+        + _header("Book1_A") + _data([1.0, 2.0])
+        + _zero()
+        + _header("Book1_A@2") + _report_data(["cell://Notes.Description"], width=30)  # 1x30
+        + _zero()
+        + _header("Book1_B@2")
+        + _report_data(["cell://Parameters.Slope.Value"], width=40)  # 1x40
+    )
+    path = _write(tmp_path, "report_only.opj", blob)
+    books = {b.metadata["origin_book"]: b for b in read_origin_books(path)}
+    assert "Book1" in books and "Book1@2" in books
+    report_book = books["Book1@2"]
+    assert report_book.values.shape == (0, 0)
+    assert report_book.labels == ()
+    assert report_book.metadata["origin_report_sheets"] == {
+        "A": ["cell://Notes.Description"],
+        "B": ["cell://Parameters.Slope.Value"],
+    }
+    # no window-section metadata in this synthetic blob -> falls back to the
+    # raw pseudo-book key, same fallback rule as a normal (non-empty) book
+    assert report_book.metadata["origin_book_long"] == "Book1@2"
+    # the inventory lists the report-only pseudo-book too, not just Book1
+    names = {entry["name"] for entry in report_book.metadata["origin_books"]}
+    assert names == {"Book1", "Book1@2"}
 
 
 # ── synthetic .opju windows-section names/units (plan item 10) ───────────────
