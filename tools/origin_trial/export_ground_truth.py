@@ -123,6 +123,9 @@ def main() -> None:
     for f in targets:
         outdir = GT / f.stem
         outdir.mkdir(exist_ok=True)
+        if (outdir / "index.json").exists():
+            print(f"== {f.name} == already exported, skipping")
+            continue
         print(f"== {f.name} ==")
         try:
             if not app.Load(str(f)):
