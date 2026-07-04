@@ -152,8 +152,13 @@ no documented real-Origin validation procedure for the trial window (31).
 4. **Non-double column value types** — text, int, float32 columns
    (the 147-byte column header carries a type field M1 ignores);
    decode or skip-with-metadata, never garbage
-   *Model: opus (RE mini-pass) then sonnet (impl) · needs corpus
-   examples identified during 1.*
+   *Model: opus (RE mini-pass) then sonnet (impl) · corpus examples
+   confirmed: hc2convert.opj holds ~460 such columns.*
+   - "Never garbage" half SHIPPED (2026-07-04, `e788c0d`+`7a4d25e`): a
+     magnitude gate + text-shape check drops non-double columns instead
+     of emitting reinterpreted float64 noise (hc2convert: 462 garbage
+     columns gone, constant numeric columns preserved). Decoding the
+     actual text/int values stays open (needs the type-field RE).
 
 ### Tier 3 — Nice-to-Have
 
