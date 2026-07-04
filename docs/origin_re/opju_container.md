@@ -81,17 +81,21 @@ occurs *inside* residual data, so the reader walks records with a cursor
 that jumps past each decoded stream, and labels each record by the nearest
 preceding `<Book>_<Col>` name.
 
-**Known residual gap (plan item 32, narrowed):** the **chunked staircase
-form** — records that interleave *multiple* repeat-runs and FPC streams
-(`[+5][50 a][+4][50 b][−3][0c s1][50 b]…[0c s2]…`), seen in lock-in logger
-columns (`Hc2 data` Theta/K/Q/R) and a few long theory/profile columns whose
-plateau splits mid-record. Byte-level replay shows one *continuous* predictor
-state across the chunks (stale strides from earlier segments produce
-correction residuals inside later constant runs), but the per-chunk
-repeat-count encoding is not yet pinned (a mid-record `50 <val> 0d`
-reads as a plain count 13 where the opening segments are ZigZag). The
-segment-sum gate rejects these records outright — dropped, never guessed.
-6 corpus columns affected (of ~200 oracle-checked).
+**Chunked staircase form — SOLVED later the same day (item 32 closed).**
+The general grammar is the segment list above with two generalizations:
+segments **interleave freely** (`[+5][50 a][+4][50 b][−3][0c s1][+13][50 b]
+[−7][0c s2]…` — logger columns alternate hold-runs and FPC bursts), each
+FPC segment's `0c <stream>` sits **inline** right after its ZigZag count,
+and every stream starts with a **fresh predictor state** (the earlier
+"continuous state" reading, like the "chimeric strides", was a phantom-byte
+artifact — a `[+k]` count eaten by a mis-parsed stream tail). One more
+value tag: `0x11` + the double's top byte (2.0 = `40`). Pinned by a
+truth-guided backtracking parser against Origin's own CSVs (RockingCurve
+`Nb_B`, 937 integer counts; `Hc2` `A6221Lockin4_D`, 1995 rows / 134
+segments — both parse end-to-end). Note the lock-in CSVs are
+display-precision (−0.456 prints 1 ULP off the stored double), so those
+validate at rtol 1e-9 rather than bit-exact. **Census: 210/210 oracle
+columns decode across every ground-truth stem.**
 
 ## Specimens (all local-only, `../test-data/origin/specimens/`)
 

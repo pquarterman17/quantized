@@ -139,8 +139,7 @@ no documented real-Origin validation procedure for the trial window (31).
 | # | Item | Workstream | Why first |
 |---|------|------------|-----------|
 | 10 | `.opju` names/units | W2 | Unicode windows decode; data already reads (item 8 done) |
-| 32 | `.opju` chunked staircase records | W2 | last decode gap (6 corpus columns); core fixed 2026-07-04 |
-| ~~16~~ / ~~1 / 7 / 8 / 9 / 11 / 15~~ | import flow + wave-1/2 RE + decoder | — | done, see Completed |
+| ~~16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 15~~ | import flow + all `.opju` decode RE | — | done, see Completed |
 
 ---
 
@@ -182,15 +181,6 @@ no documented real-Origin validation procedure for the trial window (31).
       guessing is unsafe (PNG/`.dat`-filename blocks interleave) → decode the
       structure, don't scrape.
 
-32. **`.opju` codec — chunked staircase records** — the residual decode gap,
-    twice narrowed on 2026-07-04: the "DFCM-collision" was really a width-table
-    bug (fixed — canonical FPC bcodes) and most plateau columns were the
-    now-decoded ZigZag repeat-segment form. What remains: records interleaving
-    *multiple* repeat-runs + FPC streams with one continuous predictor state
-    (lock-in logger staircases; 6 oracle-checked corpus columns). The per-chunk
-    repeat-count encoding is unpinned; the segment-sum gate drops these safely.
-    Offline work — the oracle CSVs give complete truth, no COM needed.
-    *Model: sonnet · see docs/origin_re/opju_container.md "chunked staircase".*
 
 ---
 
@@ -292,6 +282,12 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ## Completed
 
+- ~~**#32 (closed) chunked staircase records**~~ (2026-07-04, `7ee46ff`) —
+  segments interleave freely with inline per-segment streams and a FRESH
+  predictor state per stream; new 0x11 top-byte value tag. Pinned by a
+  truth-guided backtracking parse of Nb_B + A6221Lockin4_D against Origin's
+  CSVs. **Census: 210/210 oracle columns decode — `.opju` worksheet data is
+  complete.**
 - ~~**#32 (core) width rule + RLE segment grammar**~~ (2026-07-04, `9d1728d`) —
   the "DFCM-collision gap" was a width-table bug: residual byte-counts follow
   canonical FPC bcodes (codes 0-3 → 0-3 bytes; 4 skipped), which coincide with
