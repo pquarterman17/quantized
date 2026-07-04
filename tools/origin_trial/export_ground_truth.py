@@ -103,10 +103,18 @@ def main() -> None:
             layers = []
             for li in range(1, int(lt_num("page.nlayers")) + 1):
                 lt(f"page.active = {li};")
+                # `layer.nplots` is not a live LabTalk property here and a bare
+                # `range = {pi}` is a COLUMN form that never binds a plot (both
+                # yielded empty plots corpus-wide, 2026-07-04). Working recipe:
+                # a `-w` plot range + the plain %() substitution, probed upward
+                # until the reference goes stale.
                 plots = []
-                for pi in range(1, int(lt_num("layer.nplots")) + 1):
-                    lt(f"range __rp = {pi};")
-                    plots.append(lt_str("__rp.name$"))
+                for pi in range(1, 41):
+                    lt(f"range -w __rp = {pi};")
+                    ref = lt_str('"%(__rp)"')
+                    if not ref or "###" in ref or (plots and ref == plots[-1]):
+                        break
+                    plots.append(ref)
                 layers.append(
                     {
                         "x": [lt_num("layer.x.from"), lt_num("layer.x.to"), lt_num("layer.x.type")],
