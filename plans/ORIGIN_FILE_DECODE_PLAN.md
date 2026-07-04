@@ -24,7 +24,12 @@ consolidated into one authoritative reference, synthetic fixture audit
 item 35's `.opju` curve→column selector decoded and shipped, gated on
 designation for precision — stays open, see item text: the GT `plots`
 oracle came back empty corpus-wide, a trial-script LabTalk bug now
-fixable with the license)
+fixable with the license; later same day, `export_plot_refs.py` found a
+working `plots.json` oracle recipe and item 35 was reworked against it —
+found + fixed a false positive (the `__BCO` per-book boilerplate
+misattributed as a curve on `UnpolPlots`), reaching 100% precision on
+every oracle-covered file; recall stays low (0-50% per file) so the item
+stays open, see item text)
 
 ---
 
@@ -236,28 +241,46 @@ no documented real-Origin validation procedure for the trial window (31).
 ### Tier 3 — Nice-to-Have
 
 35. **Figure curve→dataset binding** — `.opju`'s curve/DataPlot column
-    selector IS now decoded (`opju_curves.py`, `docs/origin_project_
+    selector IS decoded (`opju_curves.py`, `docs/origin_project_
     format.md` §6.2.1): an 8-byte per-curve token gives the Y column's
-    global ordinal exactly (validated 4/4 against `fig_pairs.opju`'s
-    by-construction A-B/A-B/**A-C**/A-B diff, plus 12
-    designation-confirmed curves across the real corpus), gated against
-    an independently-validated column designation so nothing shipped is
-    a mis-typed column (X is a structural inference — the byte position
-    a naive read would expect to hold it never varied across ~44
-    samples, so it isn't reported as decoded). Still open because: (a)
-    the promised oracle (Origin's own GT `index.json` `plots` list)
-    comes back **empty** for every project in this corpus — a LabTalk/
-    COM limitation in `export_ground_truth.py`, not fixable without
-    starting Origin; (b) per-figure *attribution* (which curve belongs
-    to which decoded figure) is a lossy `[anchor, next_anchor)` window
-    heuristic that drops the majority of curves for composite/derived
-    real-corpus graphs (confirmed: "Fixed Lambdas SI"'s ten cleanest
-    tokens all sit outside every decoded figure's window). `.opj`'s
-    selector remains permanently undecoded (item 11's original
-    sub-question). Next step needs either a working GT `plots` export
-    or a further RE pass on the curve→layer scoping boundary.
-    *Model: sonnet · next step needs either Origin access to fix the GT
-    exporter, or fresh byte-level RE on curve/layer scoping.*
+    global ordinal, gated against an independently-validated column
+    designation (X is a structural inference — the byte position a
+    naive read would expect to hold it never varied across ~44 samples,
+    so it isn't reported as decoded). `.opj`'s selector remains
+    permanently undecoded (item 11's original sub-question).
+    **Reworked 2026-07-04** against a real per-plot oracle
+    (`export_plot_refs.py`'s `range -w` LabTalk recipe succeeded where
+    `export_ground_truth.py`'s `range __rp`/`layer.nplots` came back
+    empty; oracle now lives at `specimens/ground_truth/<stem>/
+    plots.json` for `fig_pairs` + the real corpus). That oracle exposed
+    a false positive: `UnpolPlots` decoded 2 *wrong* `(book, column)`
+    pairs. Root cause: the whole-file regex also matches the tail of an
+    unrelated, fixed ~365-byte per-book boilerplate record (starts at a
+    `__BCO2` string, byte-identical across every book in every file
+    checked) whose last 8 bytes coincidentally fit the curve-token shape
+    and always resolve to local column 3 — undetected before because
+    every `XAS` book happens to plot column C for real, making the
+    artifact "correct" by luck. Fixed via `_is_bco_boilerplate` (requires
+    both the local-column-3 match AND a `__BCO` marker at the confirmed
+    340-380 byte distance — neither alone is safe, since `fig_pairs`' own
+    A-C diff curve also resolves to local column 3, just far from any
+    `__BCO` marker). **Precision is now 100% on every oracle-covered
+    file** (`fig_pairs` 2/2, `XAS` 0/3, `RockingCurve` 2/4, `UnpolPlots`
+    0/8, "Fixed Lambdas SI" 2/14 — 0 wrong everywhere, asserted by
+    `test_realdata_curve_bindings_vs_plots_oracle`). Recall stays open:
+    per-figure *attribution* (which curve belongs to which decoded
+    figure) is still a lossy `[anchor, next_anchor)` window heuristic,
+    and — now confirmed directly against the real oracle rather than
+    inferred — most of a real graph's OWN curve tokens (not just
+    misattributed ones) aren't locatable yet: "Fixed Lambdas SI"'s
+    Graph1 genuinely plots 6 columns but only 1 (the first, "Theory SA")
+    is recovered per window; `RockingCurve`'s multi-curve
+    `NbAuRocking` layer (D+F) is the one case that decodes exactly.
+    Next step needs a further RE pass on the true per-curve object
+    boundary for graphs with more than ~1-2 plotted curves.
+    *Model: sonnet · next step is byte-level RE on the multi-curve
+    per-layer object boundary — the oracle now exists to validate
+    against.*
 
 (other W3 items shipped — see Completed)
 
