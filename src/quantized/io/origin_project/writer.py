@@ -51,7 +51,7 @@ def _no_data_multiple(payload: bytes) -> bytes:
 
 
 def _column_header_block(dataset: str) -> bytes:
-    payload = b"\x00" * 40 + dataset.encode("latin1") + b"\x00" + b"\x00" * 6
+    payload = b"\x00" * 40 + dataset.encode("latin1", errors="replace") + b"\x00" + b"\x00" * 6
     return _block(_no_data_multiple(payload))
 
 
@@ -64,10 +64,10 @@ def _data_block(values: np.ndarray) -> bytes:
 
 
 def _window_header_block(book: str, long_name: str) -> bytes:
-    payload = bytearray(b"\x00\x00" + book.encode("latin1") + b"\x00")
+    payload = bytearray(b"\x00\x00" + book.encode("latin1", errors="replace") + b"\x00")
     payload += b"\x00" * (0xC0 - len(payload))
     if long_name and long_name != book:
-        payload += long_name.encode("latin1") + b"@${[0|]}"
+        payload += long_name.encode("latin1", errors="replace") + b"@${[0|]}"
     payload += b"\x00" * max(0, 165 - len(payload))
     return _block(_no_data_multiple(bytes(payload)))
 
@@ -76,7 +76,8 @@ def _property_block(short: str, designation: str) -> bytes:
     p = bytearray(519)
     p[0x06] = 0x0B
     p[0x11] = _DESIGNATION_CODE.get(designation, 0)
-    p[0x12 : 0x12 + len(short) + 1] = short.encode("latin1") + b"\x00"
+    enc = short.encode("latin1", errors="replace")
+    p[0x12 : 0x12 + len(enc) + 1] = enc + b"\x00"
     p[0x25] = 0x21
     return _block(bytes(p))
 
@@ -89,7 +90,10 @@ def _label_block(long_name: str, unit: str, comment: str) -> bytes:
 def _book_name(ds: DataStruct, index: int, used: set[str]) -> tuple[str, str]:
     """(short, long) book names: short must be latin-1 word-ish and unique."""
     raw = str(ds.metadata.get("origin_book", "") or f"Book{index + 1}")
-    short = "".join(c for c in raw if c.isalnum() or c == " ").strip() or f"Book{index + 1}"
+    # LabTalk/dataset names must stay ASCII word characters (the reader's
+    # NAME_RE contract): strip everything else, including non-Latin scripts.
+    short = "".join(c for c in raw if c.isascii() and (c.isalnum() or c == " ")).strip()
+    short = short or f"Book{index + 1}"
     base = short
     n = 1
     while short in used:
