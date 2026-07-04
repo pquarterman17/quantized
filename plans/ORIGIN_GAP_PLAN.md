@@ -730,14 +730,15 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
     rows} → same rows light up in the worksheet + selected points glow on the
     plot). (b) baseline (a full-curve correction — needs
     estimate-on-subset / evaluate-at-full) and RSM (2-D) intentionally still
-    fit the full data; (c) the universal-linking architecture guard/test.*
-    - [ ] **Universal-linking rule:** linking is threshold-shaped —
-          80% linked feels broken, not innovative. When this lands, add
-          an architecture guard (`architecture-guards.md` + a grep-able
-          convention or test): no view may read/derive row
-          selection/exclusion outside the row-state model. Every
-          later view (#51–55, distribution platform, gadgets) complies
-          from birth.
+    fit the full data; (c) the universal-linking architecture guard/test is
+    SHIPPED (2026-07-03, guard #11 + `frontend/src/architecture.test.ts`).*
+    - [x] **Universal-linking rule** (SHIPPED 2026-07-03) — architecture
+          guard #11 in `architecture-guards.md` + `frontend/src/architecture.test.ts`:
+          `Dataset.excludedRows` is touched only by `lib/rowstate` /
+          `lib/workspace` / `store/useApp`, `filteredOutRows` only by the
+          sanctioned modules, and any new analysis view must read rows via
+          `rowstate.analysisData`. Extending the allowlist is the review
+          checkpoint. Every later view (#51–55, gadgets) complies from birth.
 
 51. **Graph Builder workshop (phase 2)** — a drop-zone canvas (X, Y,
     Group/Color, Facet) that morphs the mark as columns land: two
