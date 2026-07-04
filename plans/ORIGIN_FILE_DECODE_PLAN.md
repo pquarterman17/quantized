@@ -29,7 +29,12 @@ working `plots.json` oracle recipe and item 35 was reworked against it —
 found + fixed a false positive (the `__BCO` per-book boilerplate
 misattributed as a curve on `UnpolPlots`), reaching 100% precision on
 every oracle-covered file; recall stays low (0-50% per file) so the item
-stays open, see item text)
+stays open, see item text; same day, a third pass added two new
+controlled specimens (`curves_multi`/`curves_2books`) confirming the
+multi-curve-per-layer + cross-book layout was already solved (zero code
+change), raising aggregate recall 19.4%→30.6%, and found + confirmed-
+excluded a second near-miss shape (the per-book "column candidate list")
+— item still stays open, see item text: 30.6% < the 50% bar to close it)
 
 ---
 
@@ -276,11 +281,37 @@ no documented real-Origin validation procedure for the trial window (31).
     Graph1 genuinely plots 6 columns but only 1 (the first, "Theory SA")
     is recovered per window; `RockingCurve`'s multi-curve
     `NbAuRocking` layer (D+F) is the one case that decodes exactly.
-    Next step needs a further RE pass on the true per-curve object
-    boundary for graphs with more than ~1-2 plotted curves.
-    *Model: sonnet · next step is byte-level RE on the multi-curve
-    per-layer object boundary — the oracle now exists to validate
-    against.*
+    **Recall push, same day (two new specimens):** `curves_multi.opju`
+    (one graph, one layer, 3 curves — MBook B/C/D vs A) and
+    `curves_2books.opju` (`BookOne!B` + `BookTwo!C`) were built to pin
+    the multi-curve-per-layer layout and the cross-book cumulative-
+    ordinal base. Both decode at **100% precision AND recall with zero
+    code change** — confirming the existing regex + `_global_column_map`
+    already generalize correctly to both cases (each curve is a fully
+    self-contained, back-to-back ~750-900-byte per-curve object; the
+    ordinal base carries over a book boundary exactly as implemented).
+    This raises **aggregate oracle-covered recall from 6/31 (19.4%) to
+    11/36 (30.6%)** — see `test_realdata_curves_multi_bindings` /
+    `test_realdata_curves_2books_bindings` and
+    `tools/origin_trial/score_curve_bindings.py` (standalone corpus-wide
+    scorer). The investigation also found and confirmed-excluded a
+    **second near-miss shape** — a per-book "column candidate list"
+    (`<flag> 01 <marker> 80 03 <ord> 00`, one byte shorter than the real
+    token's double-`0x01`, enumerating every column of a referenced book
+    with no independently-decodable "selected" marker; using its
+    tail-heavy correctness pattern would be corpus-convention luck, not
+    a decodable signal, so it was rejected — see
+    `test_synthetic_column_enum_list_not_mistaken_for_curve_token` and
+    `opju_curves.py`'s docstring). **Real-corpus recall itself did not
+    move**: `RockingCurve`'s `Graph1`/`Graph2` and nearly all of XAS's/
+    UnpolPlots's required curves have neither shape anywhere in the
+    file — a third, still-undecoded encoding for ordinary single-curve
+    default-dialog graphs. Item stays open (precision 100% everywhere,
+    but aggregate recall 30.6% < the 50% bar to close it).
+    *Model: sonnet · next step is byte-level RE on the third,
+    single-curve-graph column-selector encoding (RockingCurve
+    Graph1/Graph2, XAS, UnpolPlots) — neither of the two shapes found so
+    far accounts for it.*
 
 (other W3 items shipped — see Completed)
 

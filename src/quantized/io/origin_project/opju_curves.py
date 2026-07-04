@@ -85,6 +85,85 @@ either a real oracle (the missing ``plots`` export) or a further RE pass to
 locate the object boundary that actually scopes a curve to its owning
 layer (not yet found).
 
+**Multi-curve-per-layer and multi-book layout — confirmed against two new
+controlled specimens (item 35 recall push, 2026-07-04).** ``curves_multi.opju``
+(one graph, one layer, three curves — MBook B/C/D vs A) and
+``curves_2books.opju`` (one graph, curves from two different books —
+``BookOne!B`` and ``BookTwo!C``) were purpose-built to answer two open
+questions: how do *multiple* curve tokens sit in one layer, and does the
+cumulative-ordinal base really carry over correctly across a book boundary?
+Both answers turn out to be exactly what this module already implements,
+with **zero code change required** — these specimens are validating
+regression tests, not bug reports:
+
+* *Multi-curve layout*: each curve is a fully self-contained, back-to-back
+  copy of the same ~750-900-byte "graph object" (the generic
+  ``58 80 09 98 03 40 B3`` header + its own style/pen sub-records + its own
+  copy of the 8-byte token). ``curves_multi``'s three curves' tokens sit at
+  offsets 789 bytes apart, each with a strictly increasing ``y_ord``
+  (``0x02``, ``0x03``, ``0x04`` — MBook's B, C, D) and no shared/wrapper
+  record binding them together. There is no "run" or "count" prefix to
+  decode; the whole-file regex scan already finds all three independently,
+  and every one survives the designation gate and resolves correctly.
+* *Cross-book base*: ``curves_2books`` plots ``BookOne!B`` (``y_ord=2``,
+  since BookOne contributes columns 1-2) and ``BookTwo!C`` (``y_ord=5``,
+  since BookOne's 2 columns are counted before BookTwo's 3 start at ordinal
+  3) — exactly what ``_global_column_map``'s cumulative, book-appearance-order
+  counting already produces. No change needed.
+
+Both specimens decode with 100% precision *and* 100% recall via the
+existing pipeline (regex → designation gate → BCO gate), confirmed by
+``test_realdata_curves_multi_bindings`` and
+``test_realdata_curves_2books_bindings``. This raises the aggregate
+oracle-covered recall from 6/31 (19.4%) to 11/36 (30.6%) — see
+``docs/origin_project_format.md`` §6.2.1 for the updated per-stem table.
+
+**A second near-miss shape, found and confirmed excluded — the per-book
+"column candidate list."** Investigating why real-corpus recall stays far
+below what these clean specimens suggest turned up a second decoy shape,
+structurally distinct from ``__BCO`` but with the same danger profile: a
+run of 7-byte records, one per column of a referenced book, in column
+order —
+
+```
+<flag:1> 01 <marker:1> 80 03 <ord:1> 00
+```
+
+— found near *every* book reference in *every* file checked, both new
+specimens included (e.g. ``curves_multi`` shows MBook's A/B/C/D enumerated
+this way *in addition to* the three real per-curve tokens). It is one byte
+*shorter* than the real curve token — a single ``0x01`` (position 1) then
+straight to ``0x80 0x03``, never the real token's ``01 .. 01 80 03`` double
+``0x01`` — so it can **never** satisfy ``_CURVE_RE`` (which requires two
+literal ``0x01`` bytes at positions 1 and 3); confirmed by direct
+byte-window inspection, not just by construction. Whether this list's
+entries carry *any* independently-decodable "this one is selected" marker
+was checked directly (tail bytes compared item-by-item across several
+real-corpus runs, e.g. "Fixed Lambdas SI"'s ``PNRNbAu100nm`` A-K run) — they
+do not; the items are byte-identical in shape apart from the running
+ordinal. In every run checked, the columns that happen to be *actually*
+plotted are the run's *last* one to three entries, but that is a corpus
+*convention* (derived "SA"/"dSA"/"Theory SA" analysis columns are
+habitually appended last), not a decodable structural signal — using
+"trust the tail of the list" would be exactly the kind of guess this
+module's design forbids, and was rejected.
+``test_synthetic_column_enum_list_not_mistaken_for_curve_token`` is a
+regression guard: a future regex relaxation must not start accepting this
+shape.
+
+**Remaining gap, sharpened by the above.** RockingCurve's ``Graph1``
+(``Nb!B``) and ``Graph2`` (``NbAl!B``), and essentially all of XAS's and
+UnpolPlots's oracle-required curves, have **neither** a real 8-byte token
+**nor** a column-candidate-list tail match anywhere in the file — an
+exhaustive whole-file regex scan (both shapes) confirms zero candidates
+exist for these pairs at all. These are ordinary, single-curve, default-
+dialog graphs (unlike ``NbAuRocking``'s custom-styled multi-curve layer,
+or "Fixed Lambdas SI"'s "Theory SA" reference-overlay curves, both of which
+DO carry the real token) — Origin evidently encodes their column choice a
+third way, not yet located. This — not the multi-curve/multi-book layout,
+which is solved — is why real-corpus recall stays low; closing it needs a
+further RE pass specifically on simple/default single-curve graphs.
+
 **X is not decoded.** ``konst`` (the position a naive by-symmetry read would
 expect an X-column ordinal to occupy) was observed as exactly ``0x01`` in
 *every one* of ~44 samples across the specimen and the full real corpus —
