@@ -354,3 +354,35 @@ describe("buildOpts defaultTrace", () => {
     expect(opts.series[2].scale).toBe("y2");
   });
 });
+
+describe("buildOpts select tool (#50 plot-brush)", () => {
+  it("drags an x-band without rescaling (like region, unlike zoom)", () => {
+    const sel = buildOpts(payload, { ...base, yLog: false, tool: "select" });
+    expect(sel.cursor?.drag).toMatchObject({ x: true, y: false, setScale: false });
+  });
+
+  it("routes the drag-end band to onRangeSelect (not onRegionSelect)", () => {
+    const onRangeSelect = vi.fn();
+    const onRegionSelect = vi.fn();
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "select",
+      onRangeSelect,
+      onRegionSelect,
+    });
+    // Invoke the setSelect hook with a fake uPlot: 100px→data 1, 150px→data 1.5.
+    const u = { select: { left: 100, width: 50 }, posToVal: (px: number) => px / 100 };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRangeSelect).toHaveBeenCalledWith(1, 1.5);
+    expect(onRegionSelect).not.toHaveBeenCalled();
+  });
+
+  it("ignores a zero-width (click) select", () => {
+    const onRangeSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "select", onRangeSelect });
+    const u = { select: { left: 100, width: 0 }, posToVal: (px: number) => px / 100 };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRangeSelect).not.toHaveBeenCalled();
+  });
+});

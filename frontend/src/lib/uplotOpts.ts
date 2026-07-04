@@ -25,6 +25,7 @@ export type PlotTool =
   | "pan"
   | "cursor"
   | "region"
+  | "select"
   | "measure"
   | "stats"
   | "integ"
@@ -106,6 +107,8 @@ export interface BuildOptsArgs {
   /** In `region` tool: called with the two data-x edges of a completed drag
    *  (unordered). Used by the baseline "Fit from region" rubber-band. */
   onRegionSelect?: (x0: number, x1: number) => void;
+  /** #50 plot-brush: drag-end x-band edges for the "select" tool. */
+  onRangeSelect?: (x0: number, x1: number) => void;
   /** In `measure` tool: called with the live Δx/Δy/slope while dragging the
    *  two-point ruler (null when the ruler is cleared). */
   onMeasure?: (m: Measurement | null) => void;
@@ -299,20 +302,21 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     // (setScale:false), so setSelect can read it back; pan/cursor disable drag.
     cursor: {
       drag:
-        tool === "region"
+        tool === "region" || tool === "select"
           ? { x: true, y: false, setScale: false, uni: 1 }
           : { x: tool === "zoom", y: tool === "zoom", uni: 1 },
     },
-    // Region rubber-band: on drag end, hand the two data-x edges to the caller.
-    // posToVal does the pixel->data mapping (linear or log x); regionSelect
-    // orders/clamps. Guard width>0 so a click (zero-width select) is ignored.
+    // Region / select rubber-band: on drag end, hand the two data-x edges to the
+    // matching caller. posToVal does the pixel->data mapping (linear or log x);
+    // the caller orders/clamps. Guard width>0 so a click (zero-width) is ignored.
     hooks: {
       setSelect: [
         (u: uPlot): void => {
-          if (tool !== "region" || !onRegionSelect) return;
+          const cb = tool === "region" ? onRegionSelect : tool === "select" ? args.onRangeSelect : null;
+          if (!cb) return;
           const w = u.select.width;
           if (w <= 0) return;
-          onRegionSelect(u.posToVal(u.select.left, "x"), u.posToVal(u.select.left + w, "x"));
+          cb(u.posToVal(u.select.left, "x"), u.posToVal(u.select.left + w, "x"));
         },
       ],
     },
@@ -331,6 +335,10 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         const label = labels[i];
         const scale = (s.axis ?? 0) === 1 ? "y2" : "y";
         const show = !args.hidden?.[i]; // interactive legend visibility
+        // Selected companion (#50 brush): accent, filled larger markers, no line.
+        if (s.selected) {
+          return { label, scale, stroke: accentColor, fill: accentColor, width: 0, points: { show: true, size: 7 }, show };
+        }
         // Muted "excluded" companion (grey mode): faint hollow markers, no line.
         if (s.muted) {
           const grey = cssVar("--text-faint") || cssVar("--text-dim") || "#888";

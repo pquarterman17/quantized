@@ -3,9 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   applyWaterfall,
   buildColumns,
+  clampPlottedRange,
+  composeDisplayPayload,
   effectiveChannels,
+  highlightSelectedPayload,
   maskExcludedPayload,
   peakOverlayArray,
+  rowsInXRange,
   withBaselineOverlay,
   withFitOverlay,
   withPeakOverlay,
@@ -340,5 +344,109 @@ describe("maskExcludedPayload", () => {
     maskExcludedPayload(payload, new Set([0]), "grey");
     expect(payload.data[1]).toEqual([10, 20, 30, 40]);
     expect(payload.series).toHaveLength(1);
+  });
+});
+
+describe("rowsInXRange (#50 plot-brush)", () => {
+  const xs = [0, 1, 2, 3, 4];
+  it("returns original indices whose x falls within the band (endpoints in any order)", () => {
+    expect(rowsInXRange(xs, 1, 3)).toEqual([1, 2, 3]);
+    expect(rowsInXRange(xs, 3, 1)).toEqual([1, 2, 3]); // order-independent
+  });
+  it("is inclusive of the endpoints and empty for an out-of-range band", () => {
+    expect(rowsInXRange(xs, 4, 4)).toEqual([4]);
+    expect(rowsInXRange(xs, 10, 20)).toEqual([]);
+  });
+  it("skips null / non-finite x", () => {
+    expect(rowsInXRange([0, null, 2, NaN, 4], 0, 4)).toEqual([0, 2, 4]);
+  });
+});
+
+describe("highlightSelectedPayload (#50 plot-brush)", () => {
+  const payload: PlotPayload = {
+    data: [
+      [0, 1, 2, 3],
+      [10, 20, 30, 40],
+    ],
+    series: [{ label: "y", unit: "emu" }],
+    xLabel: "x",
+    xUnit: "",
+  };
+  it("is the identity when nothing is selected", () => {
+    expect(highlightSelectedPayload(payload, new Set())).toBe(payload);
+  });
+  it("appends an accent points-companion carrying only the selected rows", () => {
+    const out = highlightSelectedPayload(payload, new Set([1, 3]));
+    expect(out.data[1]).toEqual([10, 20, 30, 40]); // main series untouched
+    expect(out.data[2]).toEqual([null, 20, null, 40]); // marks: selected only
+    expect(out.series).toHaveLength(2);
+    expect(out.series[1]).toMatchObject({ kind: "points", selected: true });
+    expect(out.series[1].label).toContain("selected");
+  });
+  it("does not mutate the input payload", () => {
+    highlightSelectedPayload(payload, new Set([0]));
+    expect(payload.series).toHaveLength(1);
+  });
+});
+
+describe("clampPlottedRange (#50)", () => {
+  const xs = [0, 1, 2, 3, 4];
+  it("clamps to the data extent and orders low→high", () => {
+    expect(clampPlottedRange(xs, 1, 3)).toEqual([1, 3]);
+    expect(clampPlottedRange(xs, -5, 99)).toEqual([0, 4]); // clamped to extent
+    expect(clampPlottedRange(xs, 3, 1)).toEqual([1, 3]); // reordered
+  });
+  it("returns null for a degenerate (zero-width / no-finite-x) drag", () => {
+    expect(clampPlottedRange(xs, 2, 2)).toBeNull();
+    expect(clampPlottedRange([null, NaN], 0, 1)).toBeNull();
+  });
+});
+
+describe("composeDisplayPayload (#50 layer order)", () => {
+  const base: PlotPayload = {
+    data: [
+      [0, 1, 2, 3],
+      [10, 20, 30, 40],
+    ],
+    series: [{ label: "y", unit: "emu" }],
+    xLabel: "x",
+    xUnit: "",
+  };
+  const empty = {
+    id: "d1",
+    waterfall: 0,
+    dropped: new Set<number>(),
+    excludedDisplay: "hide" as const,
+    fitOverlay: null,
+    baselineOverlay: null,
+    peakOverlay: null,
+    selection: null,
+  };
+
+  it("is a near-identity when no masking / overlays / selection apply", () => {
+    const out = composeDisplayPayload(base, empty);
+    expect(out.data[1]).toEqual([10, 20, 30, 40]);
+    expect(out.series).toHaveLength(1);
+  });
+
+  it("masks dropped rows AND appends the selection highlight (both honored)", () => {
+    const out = composeDisplayPayload(base, {
+      ...empty,
+      dropped: new Set([0]),
+      selection: { datasetId: "d1", rows: [2] },
+    });
+    expect(out.data[1]).toEqual([null, 20, 30, 40]); // row 0 hidden
+    // last series is the accent selection companion with only row 2 set
+    const marks = out.data[out.data.length - 1] as (number | null)[];
+    expect(marks).toEqual([null, null, 30, null]);
+    expect(out.series[out.series.length - 1]).toMatchObject({ selected: true });
+  });
+
+  it("ignores a selection that targets a different dataset", () => {
+    const out = composeDisplayPayload(base, {
+      ...empty,
+      selection: { datasetId: "other", rows: [2] },
+    });
+    expect(out.series).toHaveLength(1); // no highlight companion added
   });
 });

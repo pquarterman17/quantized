@@ -7,13 +7,11 @@ import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
 import {
-  applyWaterfall,
+  clampPlottedRange,
+  composeDisplayPayload,
   effectiveChannels,
   fetchPlot,
-  maskExcludedPayload,
-  withBaselineOverlay,
-  withFitOverlay,
-  withPeakOverlay,
+  rowsInXRange,
   type PlotPayload,
 } from "../../lib/plotdata";
 import { droppedRows } from "../../lib/rowstate";
@@ -22,7 +20,6 @@ import { buildErrorColumns } from "../../lib/errorbars";
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { exportPlotPng, plotPngBlob } from "../../lib/plotExport";
-import { normalizeRange } from "../../lib/regionSelect";
 import { suggestLogScale } from "../../lib/autoscale";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import { buildOpts } from "../../lib/uplotOpts";
@@ -79,6 +76,8 @@ export default function PlotStage() {
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
   const setRegionPicked = useApp((s) => s.setRegionPicked);
+  const selection = useApp((s) => s.selection);
+  const setRowSelection = useApp((s) => s.setRowSelection);
   const integral = useApp((s) => s.integral);
   const fwhmResult = useApp((s) => s.fwhmResult);
   const setIntegral = useApp((s) => s.setIntegral);
@@ -102,21 +101,23 @@ export default function PlotStage() {
   // Rows dropped from the plot: manually excluded (#50) ∪ filter-failed (#53).
   const dropped = useMemo(() => droppedRows(active), [active]);
 
-  // Splice in the fit curve + peak markers (each a no-op unless it belongs to
-  // the active dataset and aligns to the plotted x).
-  const displayPayload = useMemo(() => {
-    if (!payload) return null;
-    const id = active?.id ?? null;
-    // Waterfall offsets the channels first (channel 0 stays put), then the
-    // exclusion mask nulls (hide) or ghosts (grey) the dropped rows on the
-    // already-offset values, then overlays (fit/peak/baseline) land on top. The
-    // x length is preserved throughout so overlays stay in register.
-    const base = applyWaterfall(payload, waterfall);
-    const masked = maskExcludedPayload(base, dropped, excludedDisplay);
-    const withFit = withFitOverlay(masked, fitOverlay, id);
-    const withBase = withBaselineOverlay(withFit, baselineOverlay, id);
-    return withPeakOverlay(withBase, peakOverlay, id);
-  }, [payload, fitOverlay, peakOverlay, baselineOverlay, waterfall, active, dropped, excludedDisplay]);
+  // Fold overlays + exclusion mask + selection brush in (see composeDisplayPayload).
+  const displayPayload = useMemo(
+    () =>
+      payload
+        ? composeDisplayPayload(payload, {
+            id: active?.id ?? null,
+            waterfall,
+            dropped,
+            excludedDisplay,
+            fitOverlay,
+            baselineOverlay,
+            peakOverlay,
+            selection,
+          })
+        : null,
+    [payload, fitOverlay, peakOverlay, baselineOverlay, waterfall, active, dropped, excludedDisplay, selection],
+  );
 
   // Channels actually drawn (y selection minus the x-axis channel), in order.
   const plotted = useMemo(
@@ -222,15 +223,14 @@ export default function PlotStage() {
         tool,
         onReadout: setReadout,
         onRegionSelect: (x0, x1) => {
-          // Clamp to the plotted x-extent (x is monotonic, so the ends bound it),
-          // then hand the ordered range to the baseline workshop and exit the mode.
-          const xs = displayPayload.data[0] as number[];
-          const lo = xs.length ? Math.min(xs[0], xs[xs.length - 1]) : undefined;
-          const hi = xs.length ? Math.max(xs[0], xs[xs.length - 1]) : undefined;
-          const range = normalizeRange(x0, x1, { min: lo, max: hi });
+          // Clamp to the plotted x-extent → baseline workshop; then exit the mode.
+          const range = clampPlottedRange(displayPayload.data[0] as (number | null)[], x0, x1);
           if (range) setRegionPicked(range);
           setPlotTool("zoom");
         },
+        // Plot-brush: dragged x-band → row indices (original order → worksheet).
+        onRangeSelect: (x0, x1) =>
+          setRowSelection(rowsInXRange(displayPayload.data[0] as (number | null)[], x0, x1)),
         onMeasure: setMeasurement,
         onStats: setStatsSel,
         integral,

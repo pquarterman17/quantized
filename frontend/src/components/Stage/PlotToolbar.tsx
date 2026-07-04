@@ -13,6 +13,7 @@ const TOOLS = [
   { id: "cursor", glyph: "✛", tip: "Data cursor" },
   { id: "measure", glyph: "∡", tip: "Measure (Δx, Δy, slope)" },
   { id: "stats", glyph: "Σ", tip: "Region stats (drag a range)" },
+  { id: "select", glyph: "⬚", tip: "Select rows (drag an x-range → worksheet)" },
 ] as const;
 
 // Region-analysis tools — drag a range; the result persists as a chip (∫ / ∩).

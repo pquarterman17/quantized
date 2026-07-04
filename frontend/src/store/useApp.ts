@@ -64,6 +64,7 @@ export type PlotTool =
   | "pan"
   | "cursor"
   | "region"
+  | "select"
   | "measure"
   | "stats"
   | "integ"

@@ -24,6 +24,9 @@ export interface PlotSeriesSpec {
   /** De-emphasized rendering (faint stroke, hollow markers) — the "grey" mode
    *  companion series showing excluded/filtered points (#50/#53). */
   muted?: boolean;
+  /** Emphasized rendering (accent, filled larger markers) — the companion series
+   *  highlighting rows in the current selection brush (#50 selection). */
+  selected?: boolean;
 }
 
 export interface PlotPayload {
@@ -124,6 +127,92 @@ export function maskExcludedPayload(
       })),
     ],
   };
+}
+
+/** Original row indices whose plotted x falls within [x0, x1] (endpoints in any
+ *  order). Non-finite / null x are skipped. The plot-brush maps a dragged x-band
+ *  to selected rows through this — independent of draw order, so the returned
+ *  indices line up with worksheet rows and index-aligned overlays (#50). */
+export function rowsInXRange(xs: (number | null)[], x0: number, x1: number): number[] {
+  const lo = Math.min(x0, x1);
+  const hi = Math.max(x0, x1);
+  const rows: number[] = [];
+  for (let r = 0; r < xs.length; r++) {
+    const v = xs[r];
+    if (v != null && Number.isFinite(v) && v >= lo && v <= hi) rows.push(r);
+  }
+  return rows;
+}
+
+/** Append an accent-highlighted points-companion per series for the selected
+ *  rows (value where selected, null elsewhere) so the plot echoes the worksheet
+ *  selection. Runs last (on the already-masked/overlaid payload), so a selected
+ *  row that is also hidden stays hidden. No-op when nothing is selected. */
+export function highlightSelectedPayload(payload: PlotPayload, selected: Set<number>): PlotPayload {
+  if (selected.size === 0) return payload;
+  const [x, ...ys] = payload.data as (number | null)[][];
+  const marks = ys.map((col) => col.map((v, r) => (selected.has(r) ? v : null)));
+  return {
+    ...payload,
+    data: [x, ...ys, ...marks] as uPlot.AlignedData,
+    series: [
+      ...payload.series,
+      ...payload.series.map((s) => ({
+        ...s,
+        label: `${s.label} (selected)`,
+        kind: "points" as const,
+        selected: true,
+      })),
+    ],
+  };
+}
+
+/** Clamp a dragged x-range to the plotted x-extent and return it low→high, or
+ *  null for a degenerate (zero-width / out-of-range) drag. Shared by the region
+ *  and select tools so both bound the band to the data the same way. */
+export function clampPlottedRange(
+  xs: (number | null)[],
+  x0: number,
+  x1: number,
+): [number, number] | null {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const v of xs) {
+    if (v == null || !Number.isFinite(v)) continue;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  if (min === Infinity) return null; // no finite x
+  const lo = Math.max(min, Math.min(x0, x1));
+  const hi = Math.min(max, Math.max(x0, x1));
+  return hi > lo ? [lo, hi] : null;
+}
+
+/** Everything the plot needs to fold into the drawn payload, beyond the base. */
+export interface DisplayCompose {
+  id: string | null;
+  waterfall: number;
+  dropped: Set<number>;
+  excludedDisplay: "hide" | "grey";
+  fitOverlay: FitOverlay | null;
+  baselineOverlay: BaselineOverlay | null;
+  peakOverlay: PeakOverlay | null;
+  selection: { datasetId: string; rows: number[] } | null;
+}
+
+/** Compose the drawn payload in the canonical layer order: waterfall offset →
+ *  exclusion mask (#50/#53) → fit / baseline / peak overlays → selection brush
+ *  (#50). The x-length is preserved throughout so every overlay stays
+ *  index-aligned with the base series. */
+export function composeDisplayPayload(payload: PlotPayload, o: DisplayCompose): PlotPayload {
+  const base = applyWaterfall(payload, o.waterfall);
+  const masked = maskExcludedPayload(base, o.dropped, o.excludedDisplay);
+  const withFit = withFitOverlay(masked, o.fitOverlay, o.id);
+  const withBase = withBaselineOverlay(withFit, o.baselineOverlay, o.id);
+  const withPeaks = withPeakOverlay(withBase, o.peakOverlay, o.id);
+  const sel =
+    o.selection && o.id && o.selection.datasetId === o.id ? new Set(o.selection.rows) : null;
+  return sel ? highlightSelectedPayload(withPeaks, sel) : withPeaks;
 }
 
 /** Append a fit curve as an extra series, but only when the overlay belongs to
