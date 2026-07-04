@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from quantized.io import import_auto
 from quantized.io.origin_project import OriginProjectError, read_origin_books
+from quantized.io.origin_project.figures import extract_figures
 from quantized.routes._payload import datastruct_payload
 
 router = APIRouter(prefix="/api/parsers", tags=["parsers"])
@@ -56,6 +57,10 @@ def _import_with_books(path: Path) -> dict[str, Any]:
             books = []
         if len(books) > 1:
             payload["books"] = [datastruct_payload(b) for b in books]
+        if Path(path).suffix.lower() == ".opj":
+            figs = extract_figures(Path(path).read_bytes())
+            if figs:
+                payload["figures"] = figs
     return payload
 
 

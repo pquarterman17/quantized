@@ -239,3 +239,29 @@ def test_realdata_xrd_two_theta_scan() -> None:
     real = ds.time[np.isfinite(ds.time)]
     assert (np.diff(real) > 0).all()
     assert np.isnan(ds.time[-1])  # sentinel-filled tail mapped to NaN
+
+
+@pytest.mark.realdata
+@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+def test_realdata_figures_extracted_as_plot_states() -> None:
+    """Plan items 12/13: graph windows -> plot-state snapshots."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    xrd = extract_figures((_CORPUS / "XRD.opj").read_bytes())
+    assert len(xrd) == 1
+    f = xrd[0]
+    assert (f["x_from"], f["x_to"]) == (18.0, 100.0)
+    assert f["y_log"] is True and f["x_log"] is False  # log-intensity XRD plot
+    assert f["n_curves"] == 3
+    assert any("Si (004)" in a for a in f["annotations"])  # peak label survives
+
+    moke = extract_figures((_CORPUS / "Moke.opj").read_bytes())
+    assert len(moke) == 12
+    g = next(x for x in moke if x["name"] == "Graph3")
+    assert g["x_from"] == -7000.0 and g["x_to"] == 7000.0  # field-symmetric loop
+
+
+def test_figures_absent_on_plain_synthetic(tmp_path) -> None:
+    from quantized.io.origin_project.figures import extract_figures
+
+    assert extract_figures(_synthetic_opj()) == []
