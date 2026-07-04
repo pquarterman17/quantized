@@ -36,6 +36,7 @@ written (annotated inline below).
 6. [Figures (graph windows)](#6-figures-graph-windows)
    - 6.1 [`.opj` figures — Graph → Layer → Curve](#61-opj-figures--graph--layer--curve)
    - 6.2 [`.opju` figures](#62-opju-figures)
+     - 6.2.1 [Curve→column binding (item 35, `.opju` only, partial)](#621-curvecolumn-binding-item-35-opju-only-partial)
    - 6.3 [Origin → quantized figure mapping + gap list](#63-origin--quantized-figure-mapping--gap-list)
 7. [Notes windows & results-log recovery](#7-notes-windows--results-log-recovery)
 8. [Export: writing Origin projects](#8-export-writing-origin-projects)
@@ -67,8 +68,10 @@ serves both containers).
 
 **Known, permanent gaps** (see [§11](#11-open-items) for detail): the
 DataPlot curve→column selector (which exact columns a curve plots) is
-undecoded in both containers, so restored figures resolve to a *book*, not
-exact column pairs; Origin's auto-generated FitLinear/NLFit report-sheet
+undecoded in `.opj`; `.opju`'s IS decoded (§6.2.1) but a per-figure
+attribution gap means restored figures still commonly resolve to a *book*,
+not exact column pairs, in both containers. Origin's auto-generated
+FitLinear/NLFit report-sheet
 text columns (variable-length, row-unaligned) stay an honest drop; a native
 `.opj` writer round-trips through our own reader but does **not** yet load
 in real Origin (item 34, open); full sheet-hierarchy UI (nested
@@ -811,13 +814,81 @@ layers by design; a few derived graphs ("Fixed Lambdas SI" Graph5/Graph6,
 including the corpus's only log-X layer) carry no `03 00 00 1f` record at
 all and are honestly out of reach (no false coverage claimed).
 
-**Curve/source resolution:** same permanent gap as `.opj` — the DataPlot
-column selector is undecoded. `source_hint` is filled from the
+**Curve/source resolution:** `source_hint` is filled from the
 `<BKNAME>...</BKNAME>` OriginStorage XML tag when one appears near the
 graph (unambiguous, low-false-positive — unlike blind name scanning); the
 per-layer window name (Origin's "Graph1" etc.) is not recoverable, so
 `name` is always `""` for `.opju` figures (unlike `.opj`, where the window
-header supplies it directly).
+header supplies it directly). Unlike `.opj`, the DataPlot column selector
+itself IS partially decoded — see §6.2.1.
+
+#### 6.2.1 Curve→column binding (item 35, `.opju` only, partial)
+
+`opju_curves.py::extract_curves`, wired into
+`figures_opju.extract_figures_opju`'s `"curves"` field. Every curve
+(`DataPlot`) object carries its own copy of the generic CPYUA "graph
+object" header (`58 80 09 98 03 40 B3 <u32 bodyLen>` — the same shape
+axis/legend/config objects use, so it isn't curve-exclusive and can't be
+located by the magic bytes alone). Diffing `fig_pairs.opju` (one project,
+4 graphs isolating the selector: A-B scatter / A-B scatter logY / **A-C
+scatter** — the deliberate diff — / A-B line; see
+`tools/origin_trial/generate_specimens.py`'s `fig_pairs` section — its
+`plotxy iy:=` calls are the ground truth, since Origin's own GT exporter
+has no oracle for this, see below) against itself isolated an 8-byte
+per-curve token:
+
+```
+<flag:1> 01 <konst:1> 01 80 03 <y_ord:1> 00
+```
+
+`flag` is a per-curve creation-order/style counter (confirmed unrelated to
+column choice). `y_ord` is a **1-based ordinal counted cumulatively across
+every column of every workbook `opju_codec.scan_columns` actually decoded,
+in book-appearance order** (a book with zero decodable columns — e.g. an
+unused default "Book1" — doesn't participate in the count); it changed from
+`0x02` to `0x03` in lockstep with fig_pairs' deliberate B→C swap, and only
+then. `konst` — the position a naive by-symmetry read would expect an
+X-column ordinal to occupy — was `0x01` in *every one* of ~44 samples
+(specimen + full real corpus), including cases whose Y column belongs to a
+different workbook than sibling curves in the same file; zero variation
+means neither "X is always column A" nor "this byte is unrelated" can be
+confirmed, so **X is not decoded** from the byte record at all. Instead the
+shipped `"x"` is a structural inference: the Y column's own workbook's
+first column (Origin's near-universal per-sheet X designation,
+independently confirmed via §4.2's designation markers for every corpus
+book checked).
+
+**Missing oracle.** `tools/origin_trial/export_ground_truth.py`'s per-plot
+dump (`layer.nplots` + `range __rp = {pi}; ... __rp.name$`) comes back
+**empty** (`"plots": []`) for every project in this corpus — a LabTalk/COM
+issue in that trial-window script, not fixable here (pure byte-level RE,
+no Origin). So validation rests on the by-construction `fig_pairs` oracle
+(exact, 4/4) plus a **designation gate**: every resolved `y` column is
+cross-checked against §4.2's independently-validated per-column
+designation and dropped unless it is exactly `"Y"` (never `"X"`,
+`"Y-error"`, or unresolved) — needed because the raw regex scan is not
+curve-exclusive enough on its own (it found a real-corpus token landing on
+"Fixed Lambdas SI"'s `dQ`, a `Y-error` column, which the gate now rejects).
+With the gate, the real corpus (RockingCurve/XAS/UnpolPlots/"Fixed Lambdas
+SI") yields 12 designation-confirmed curves across the 4 files, every one
+landing on a physically-sensible dependent-variable column (`Intensity`,
+`Absorption`, `R`, "Theory SA"), never an independent one (`Theta`,
+`Energy`, `Q`, `Z`).
+
+**Known gap — per-figure attribution (the reason item 35 stays open).**
+Scoping a curve to *which* decoded figure it belongs to is a best-effort
+`[anchor, next_anchor)` byte-range heuristic, and it drops the *majority*
+of curve tokens for composite/derived real-corpus graphs: "Fixed Lambdas
+SI"'s ten cleanest tokens (each landing on a different PNR book's
+reflectivity column) sit entirely outside all four of that file's decoded
+figures' windows, so none of them ship; each figure instead gets whatever
+handful of tokens (often just one, not necessarily the "main" curve a user
+expects) happen to sit inside its own narrow window. This is a recall gap,
+not a soundness one — everything reported is designation-confirmed, never
+fabricated — but it means restored figures are still commonly missing
+curves a user would expect. Closing it needs either a real oracle (the
+missing `plots` export) or a further RE pass to locate the object boundary
+that scopes a curve to its owning layer.
 
 ### 6.3 Origin → quantized figure mapping + gap list
 
@@ -841,7 +912,7 @@ plot-state-snapshot dicts above):
 | Layer (`_cart_object`) | one plot/panel |
 | 2 layers, shared X, 2 Y ranges | dual-Y |
 | Curve (`type 0x07` + DataPlot) | a plotted series |
-| Layer source book short-name | resolved dataset (via `source_hint` heuristic) |
+| Layer source book short-name | resolved dataset (via `source_hint` heuristic); `.opju`'s curve token additionally gives exact `{book, x, y}` pairs where the per-figure attribution heuristic finds one (§6.2.1, partial) |
 | X/Y range | axis limits |
 | X/Y scale log | axis log flag (exact where solved, heuristic otherwise) |
 | Axis title | axis label (Origin escapes stripped) |
@@ -851,10 +922,14 @@ plot-state-snapshot dicts above):
 **Permanent gaps** (Origin features quantized cannot express / recover
 yet):
 
-- **Curve→column binding.** The DataPlot column selector is undecoded in
-  both containers — restored figures resolve to a *book*, not exact
-  column pairs; multi-curve graphs restore the whole book rather than
-  each curve's specific X/Y pair (plan item 35, open).
+- **Curve→column binding.** `.opj`'s DataPlot column selector is
+  permanently undecoded — restored figures resolve to a *book*, not exact
+  column pairs. `.opju`'s curve token IS decoded (§6.2.1) but per-figure
+  *attribution* (which curve belongs to which decoded figure) is a lossy
+  heuristic that drops most curves for composite/derived real-corpus
+  graphs — so `.opju` figures commonly still restore to the whole book
+  rather than each curve's specific X/Y pair, same as `.opj` in practice
+  (plan item 35, open: no oracle exists to close the attribution gap).
 - **Multi-layer free layout.** Origin allows N independently
   positioned/sized layers; quantized has single-plot + stacked panels +
   one inset. >2 layers or non-stacked overlays are lossy.
@@ -1009,8 +1084,13 @@ reading only this doc:
 
 - **Item 34 — `.opj` writer real-Origin load failure.** Tier-1, open. See
   §8.
-- **Item 35 — figure curve→dataset column binding.** The DataPlot column
-  selector (§6.1, §6.2) stays undecoded in both containers.
+- **Item 35 — figure curve→dataset column binding.** `.opj`'s DataPlot
+  column selector (§6.1) stays permanently undecoded. `.opju`'s IS decoded
+  (§6.2.1, `opju_curves.py`) and shipped in `"curves"`, gated on an
+  independently-validated column designation for precision — but
+  per-figure *attribution* drops most curves for composite/derived
+  real-corpus graphs (no oracle exists to close that gap), so the item
+  stays open.
 - **Item 4 (report-sheet family) — non-double column values.** The
   FitLinear/NLFit auto-generated report-sheet text columns (§3.2) stay an
   honest drop; a materially harder variable-length RE problem.

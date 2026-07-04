@@ -75,14 +75,27 @@ the real form. Composite windows (e.g. RockingCurve ``Graph3``) reference
 already-encoded layers, so anchors are fewer than GT layers; GT layers whose
 ranges duplicate a matched anchor are covered by it.
 
-Curve-to-dataset binding is unresolved here just as it is for ``.opj``
-(``figures.py``): neither reader decodes the DataPlot column selector. This
-module fills ``source_hint`` from the ``<BKNAME>...</BKNAME>`` OriginStorage
+This module fills ``source_hint`` from the ``<BKNAME>...</BKNAME>`` OriginStorage
 XML tag when one appears near the graph (an unambiguous, low-false-positive
 signal, unlike blind name-scanning) and ``n_curves`` from the legend text's
 ``\\l(n)`` indices, mirroring ``figures.py`` exactly. The per-layer graph
 *window name* (Origin's "Graph1" etc.) is not recoverable with the current
 understanding, so ``name`` is always ``""``.
+
+**Curve-to-dataset binding (item 35, partial).** Unlike ``.opj``
+(``figures.py``, where the DataPlot column selector is still permanently
+undecoded), CPYUA's curve/DataPlot objects carry a small fixed-shape token
+that decodes the Y-axis column exactly, gated against an independently
+validated per-column designation check so nothing reported is a mis-typed
+column (validated against a purpose-built specimen, exact 4/4; and the real
+corpus, 12 designation-confirmed curves across 4 files — no direct Origin-GT
+match was possible, see ``opju_curves.py``'s module docstring for the full
+byte-level trail). Each decodable figure gets a best-effort ``"curves"``
+list of ``{"book", "x", "y"}`` dicts (often empty, or missing curves a user
+would expect — see ``opju_curves.py``'s "Known gap — per-figure
+attribution", the reason item 35 stays open); ``x`` is a structural
+inference (the Y column's own book's first column), not decoded from the
+byte record.
 """
 
 from __future__ import annotations
@@ -92,6 +105,11 @@ import struct
 from typing import Any
 
 from quantized.io.origin_project.figures import _AUTO_TITLE, _LEGEND_RE, _log_heuristic, _texts_in
+from quantized.io.origin_project.opju_curves import (
+    book_columns_from_bytes,
+    book_metadata_from_bytes,
+    extract_curves,
+)
 
 __all__ = ["extract_figures_opju"]
 
@@ -389,15 +407,20 @@ def _axis_scales(
 def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
     """Every decodable graph layer in a CPYUA project as a plot-state snapshot.
 
-    Same shape as ``figures.extract_figures`` (the ``.opj`` reader): each dict
-    has ``name``, ``x_from``, ``x_to``, ``x_log``, ``y_from``, ``y_to``,
-    ``y_log``, ``source_hint``, ``n_curves``, ``annotations``. A multi-layer
-    graph window (e.g. a double-Y or free-panel layout) yields one dict per
-    layer rather than nesting them, since the shipped payload shape is flat.
-    Composite windows that *reference* an already-encoded layer share its
-    single anchor (see the module docstring).
+    Same shape as ``figures.extract_figures`` (the ``.opj`` reader) plus one
+    addition: each dict has ``name``, ``x_from``, ``x_to``, ``x_log``,
+    ``y_from``, ``y_to``, ``y_log``, ``source_hint``, ``n_curves``,
+    ``annotations``, and ``curves`` (item 35 — a best-effort list of
+    ``{"book", "x", "y"}`` column bindings, possibly empty; see
+    ``opju_curves.py``). A multi-layer graph window (e.g. a double-Y or
+    free-panel layout) yields one dict per layer rather than nesting them,
+    since the shipped payload shape is flat. Composite windows that
+    *reference* an already-encoded layer share its single anchor (see the
+    module docstring).
     """
     figures: list[dict[str, Any]] = []
+    book_columns = book_columns_from_bytes(b)
+    books_meta = book_metadata_from_bytes(b, book_columns)
     anchors = _find_all(b, _ANCHOR)
     for idx, anchor in enumerate(anchors):
         p = anchor + len(_ANCHOR)
@@ -435,6 +458,7 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "source_hint": _source_hint(b, anchor),
                 "n_curves": max(legend_ns) if legend_ns else 0,
                 "annotations": titles[:12],
+                "curves": extract_curves(b, anchor, window_end, book_columns, books_meta),
             }
         )
     return figures

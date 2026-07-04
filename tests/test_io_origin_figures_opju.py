@@ -277,9 +277,144 @@ def test_synthetic_real_form_garbage_after_separator_drops() -> None:
     assert extract_figures_opju(blob) == []
 
 
+# ── synthetic curve->column binding (item 35) ─────────────────────────────────
+#
+# Minimal .opju worksheet-column builder (constant "rep" segments — no FPC
+# encoding needed) mirroring test_io_origin_project.py's ``_opju_record``, so
+# ``opju_curves.book_columns_from_bytes`` sees a real ``{book: [cols...]}``
+# shape without pulling in the full FPC encoder.
+
+
+def _varint(v: int) -> bytes:
+    out = bytearray()
+    while True:
+        b7 = v & 0x7F
+        v >>= 7
+        out.append(b7 | (0x80 if v else 0))
+        if not v:
+            return bytes(out)
+
+
+def _zz(n: int) -> bytes:
+    return _varint((n << 1) ^ (n >> 63) if n >= 0 else ((-n) << 1) - 1)
+
+
+def _opju_const_column(name: str, value: float, count: int = 4) -> bytes:
+    """A named .opju column record holding ``count`` copies of a constant."""
+    fields = _zz(count) + (b"\x64" if value == 0.0 else b"\x50" + struct.pack("<d", value))
+    body = b"\xff\xff" + _varint(count) + b"\x00" + bytes(fields)
+    nm = name.encode("latin1")
+    return bytes([len(nm)]) + nm + b"\x0a\x05" + _varint(count) + body
+
+
+# Designation-marker windows-section builder, mirroring
+# test_io_origin_project.py's ``_opju_window_section`` -- needed so
+# ``opju_curves``'s designation gate (must independently confirm "Y") can
+# resolve these synthetic books instead of dropping every curve.
+_OPJU_MARK = {"X": b"\x21\x51", "Y": b"\x21\x61", "Y-error": b"\x30\x61"}
+
+
+def _opju_window_section(book: str, designations: list[str]) -> bytes:
+    book_b = book.encode("latin1")
+    out = bytes([len(book_b) + 2]) + b"\x00\x00" + book_b
+    for desig in designations:
+        out += _OPJU_MARK[desig] + b"\x02\x01\x00"  # marker + empty-label placeholder
+    return out
+
+
+def _curve_token(flag: int, y_ord: int, konst: int = 1) -> bytes:
+    """The 8-byte curve->column-ordinal token (see ``opju_curves.py``)."""
+    return bytes([flag, 0x01, konst, 0x01, 0x80, 0x03, y_ord, 0x00])
+
+
+def test_synthetic_curve_token_resolves_book_and_column() -> None:
+    """A curve token whose y_ord=3 resolves to FBook's 3rd column (C), with
+    x inferred as that book's own first column (A) -- mirroring the fig_pairs
+    A-C diff that pinned this encoding."""
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_const_column("FBook_A", 1.0)
+        + _opju_const_column("FBook_B", 2.0)
+        + _opju_const_column("FBook_C", 3.0)
+        + _opju_window_section("FBook", ["X", "Y", "Y"])
+        + _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _curve_token(0xBA, y_ord=3)
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["curves"] == [{"book": "FBook", "x": "A", "y": "C"}]
+
+
+def test_synthetic_curve_token_missing_yields_empty_curves() -> None:
+    """No curve token in the window -> ``curves`` is an empty list, not a guess."""
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_const_column("FBook_A", 1.0)
+        + _opju_const_column("FBook_B", 2.0)
+        + _opju_window_section("FBook", ["X", "Y"])
+        + _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["curves"] == []
+
+
+def test_synthetic_curve_token_out_of_range_ordinal_dropped() -> None:
+    """A y_ord past the last known column resolves to nothing -- dropped, not guessed."""
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_const_column("FBook_A", 1.0)
+        + _opju_const_column("FBook_B", 2.0)
+        + _opju_window_section("FBook", ["X", "Y"])
+        + _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _curve_token(0xBA, y_ord=9)  # only 2 columns exist
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["curves"] == []
+
+
+def test_synthetic_curve_token_non_y_designation_dropped() -> None:
+    """A curve token whose y_ord resolves to an X or Y-error column is dropped
+    (the designation gate) -- e.g. "Fixed Lambdas SI"'s ``dQ`` Y-error column,
+    which the whole-file regex scan alone can't rule out (see module docstring)."""
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_const_column("FBook_A", 1.0)
+        + _opju_const_column("FBook_B", 2.0)
+        + _opju_window_section("FBook", ["X", "Y-error"])
+        + _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _curve_token(0xBA, y_ord=2)  # resolves to FBook's B, but B is Y-error
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["curves"] == []
+
+
 # ── realdata: Origin ground-truth oracle (specimens only — see module docstring) ──
 
-_SPEC = Path(__file__).resolve().parents[1] / ".." / "test-data" / "origin" / "specimens"
+
+def _resolve_spec_dir() -> Path:
+    """The local-only corpus's ``specimens`` dir.
+
+    ``parents[1] / "../test-data"`` assumes this file sits one level below a
+    repo root that is itself a sibling of ``test-data`` — true for the main
+    checkout, but a worktree agent lives an extra ``.claude/worktrees/<name>``
+    deep, so that relative path silently resolves to a nonexistent location.
+    Fall back to walking up from ``__file__`` for a ``test-data`` sibling
+    (works from any nesting depth) before giving up.
+    """
+    candidate = Path(__file__).resolve().parents[1] / ".." / "test-data" / "origin" / "specimens"
+    if candidate.exists():
+        return candidate
+    for ancestor in Path(__file__).resolve().parents:
+        walked = ancestor / "test-data" / "origin" / "specimens"
+        if walked.exists():
+            return walked
+    return candidate  # let downstream `.exists()` checks skip cleanly
+
+
+_SPEC = _resolve_spec_dir()
 _GT = _SPEC / "ground_truth"
 
 
@@ -378,3 +513,75 @@ def test_realdata_real_corpus_anchors_decode_and_match(stem: str, n_anchors: int
             and f["y_log"] == (y[2] == 2.0)
             for x, y in expected
         ), f"{stem}: decoded figure {f} matches no oracle layer"
+
+
+# ── realdata: curve->column binding (item 35) ─────────────────────────────────
+#
+# Origin's own GT exporter has no oracle for this (``index.json``'s
+# ``plots`` list comes back empty for every project in this corpus — a
+# LabTalk/COM limitation in ``export_ground_truth.py``, see
+# ``opju_curves.py``'s module docstring). Two substitute checks:
+#
+# 1. ``fig_pairs`` against the *by-construction* truth: the LabTalk
+#    ``plotxy iy:=`` calls in ``generate_specimens.py`` are the ground
+#    truth we wrote ourselves (same category of oracle already used by
+#    ``test_realdata_xscale_specimens`` above).
+# 2. Real corpus: every curve found must resolve to a column that GT's
+#    (independently populated) long-name metadata marks as a plausible
+#    *dependent*-variable column -- never an independent/reference axis.
+
+
+@pytest.mark.realdata
+def test_realdata_fig_pairs_curve_bindings() -> None:
+    """fig_pairs' 4 graphs (see module docstring / generate_specimens.py):
+    graph1/2/4 plot FBook A,B; graph3 -- the deliberate diff -- plots A,C."""
+    src = _SPEC / "fig_pairs.opju"
+    if not src.exists():
+        pytest.skip("fig_pairs specimen not present on this machine")
+    figs = extract_figures_opju(src.read_bytes())
+    assert len(figs) == 4
+    expected = [
+        {"book": "FBook", "x": "A", "y": "B"},
+        {"book": "FBook", "x": "A", "y": "B"},
+        {"book": "FBook", "x": "A", "y": "C"},  # the deliberate A-C diff
+        {"book": "FBook", "x": "A", "y": "B"},
+    ]
+    for i, (f, want) in enumerate(zip(figs, expected, strict=True)):
+        assert f["curves"] == [want], f"fig_pairs graph{i + 1}: curves={f['curves']}"
+
+
+# Long-names GT independently confirms belong to an independent/reference axis
+# (Theta, Energy/E, depth Z, momentum-transfer Q and its uncertainty dQ, time
+# T, flux F) -- a curve's decoded Y column must never be one of these.
+_INDEPENDENT_VAR_NAMES = {"Theta", "Energy", "E", "Z", "Q", "dQ", "T", "F"}
+
+
+@pytest.mark.realdata
+@pytest.mark.parametrize("stem", ["XAS", "RockingCurve", "UnpolPlots", "Fixed Lambdas SI"])
+def test_realdata_real_corpus_curves_are_plausible(stem: str) -> None:
+    """Every curve found in the real corpus resolves to a GT-known book/column
+    whose long-name is never an independent-variable axis (Theta/Energy/Q/...)
+    -- the strongest check available without a ``plots`` oracle (see above)."""
+    src = _SPEC.parent / f"{stem}.opju"
+    index_path = _GT / stem / "index.json"
+    if not src.exists() or not index_path.exists():
+        pytest.skip(f"corpus file/ground-truth for '{stem}' not present on this machine")
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    long_names: dict[tuple[str, str], str] = {}
+    for book in index["books"]:
+        for sheet in book["sheets"]:
+            for col in sheet["columns"]:
+                long_names[(book["book"], col["dataset"])] = col["long_name"]
+
+    figs = extract_figures_opju(src.read_bytes())
+    n_curves = 0
+    for f in figs:
+        for curve in f["curves"]:
+            n_curves += 1
+            key = (curve["book"], curve["y"])
+            assert key in long_names, f"{stem}: curve {curve} references an unknown column"
+            assert long_names[key] not in _INDEPENDENT_VAR_NAMES, (
+                f"{stem}: curve {curve} plots an independent-variable column as Y"
+            )
+    if n_curves == 0:
+        pytest.skip(f"{stem}: no curve tokens found within any decoded figure's window")
