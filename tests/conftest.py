@@ -21,9 +21,30 @@ from quantized.datastruct import DataStruct
 TESTS_DIR = Path(__file__).parent
 FIXTURES = TESTS_DIR / "fixtures"
 GOLDEN = TESTS_DIR / "golden"
-# Sibling instrument corpus (see ../test-data/README.md; ORIGIN_GAP_PLAN #45).
+
+
+def _resolve_test_data_corpus() -> Path:
+    """Sibling instrument corpus (see ../test-data/README.md; ORIGIN_GAP_PLAN #45).
+
+    ``TESTS_DIR.parent.parent`` assumes ``tests/`` sits directly below a repo
+    root that is itself a sibling of ``test-data`` -- true for the main
+    checkout, but a worktree agent lives an extra ``.claude/worktrees/<name>``
+    deep, so that relative path silently resolves to a nonexistent location
+    and ``corpus_dir`` skips without saying why. Fall back to walking up from
+    ``TESTS_DIR`` for a ``test-data`` sibling (works from any nesting depth).
+    """
+    candidate = TESTS_DIR.parent.parent / "test-data"
+    if candidate.is_dir():
+        return candidate
+    for ancestor in TESTS_DIR.resolve().parents:
+        walked = ancestor / "test-data"
+        if walked.is_dir():
+            return walked
+    return candidate  # let corpus_dir's own .is_dir() check skip cleanly
+
+
 # Local-only, like the MATLAB corpus — tests using it carry @pytest.mark.realdata.
-TEST_DATA_CORPUS = TESTS_DIR.parent.parent / "test-data"
+TEST_DATA_CORPUS = _resolve_test_data_corpus()
 
 
 @pytest.fixture
