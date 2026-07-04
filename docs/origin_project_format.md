@@ -89,11 +89,16 @@ probing `XAS.opju` / `RockingCurve.opju` / `UnpolPlots.opju`:
   numeric encoding and/or **raw-deflate** streams (no `78` header) that a naive
   scan misses.
 
-**Next-pass plan:** (1) parse the `.opju` datasets-section framing to find the
-per-column records; (2) handle raw-deflate payloads (`zlib.decompressobj(-15)`);
-(3) confirm the record layout (double vs float32, mask/no-mask) against a decoded
-column with a known shape. Until then `_read_opju` guides to the Origin Viewer
-export path.
+**UPDATE (2026-07-03): substantially cracked** — see
+`docs/origin_re/opju_container.md`. The data is NOT deflate-compressed; it
+uses a custom XOR-delta float codec (nibble-coded control stream, PREV/PRED
+predictors) stored plainly in the container, which is why no raw float64
+runs were found. Cracked via known-content Rosetta specimens generated with
+an Origin 2026b trial (`tools/origin_trial/`). Remaining for the decoder
+(item 8): the PREV/PRED mode schedule (validate against
+`specimens/ground_truth/`) and formal parsing of the outer type-tagged
+record framing. Until the decoder lands, `_read_opju` guides to the Origin
+Viewer export path.
 
 ## Column long-names / units (later milestone)
 
