@@ -113,10 +113,11 @@ relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
 `.opju` worksheet data (item 8 — canonical Burtscher FPC codec, bit-exact vs
 Origin's own export). Also shipped: the multi-dataset import-all flow (16),
 figure restore + the post-import book-family filter (12/13/17/18 — the Library
-"Figures" and "Book families" sections). Remaining gaps: `.opju` names/units
-(10 — Unicode windows decode) + its long near-constant-stride axis columns (32
-— DFCM-collision), sheet hierarchy (5), non-double column types (4), `.opju`
-figures (14), notes/templates/log (6/21/22).
+"Figures" and "Book families" sections). `.opju` worksheet decode is COMPLETE
+(32 closed — 210/210 oracle columns; segment grammar + canonical FPC widths).
+Remaining gaps: `.opju` names/units (10 — Unicode windows decode), sheet
+hierarchy (5), non-double column *values* (4 — garbage now gated, decode
+open), `.opju` figures (14), notes/templates/log (6/21/22).
 
 **quantized → Origin (export).** Shipped: `format_origin_script`
 (`io/origin.py` — CSV + LabTalk `.ogs` that rebuilds designations, long
