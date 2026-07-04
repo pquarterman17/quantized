@@ -11,7 +11,7 @@ everything remaining.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-03
+**Updated:** 2026-07-04
 
 ---
 
@@ -19,7 +19,8 @@ everything remaining.
 
 ### How the pieces fit together
 
-- `src/quantized/io/origin_project.py` — the shipped M1 decoder:
+- `src/quantized/io/origin_project/` — the shipped decoder package
+  (container/opj/opju/windows; item 15 done):
   CPY block walker → column pairing → 10-byte record decode →
   `DataStruct` (largest book; full book inventory in metadata).
   Registered for `.opj`/`.opju` in `io/registry.py` (one registry).
@@ -57,8 +58,8 @@ decoded graphs  → plot-spec mapping → restored figures (W3 + W4)
 
 ### Dependency map
 
-- **Items 1, 7, 11 (the three RE items) are independent — wave 1,
-  run in parallel as subagents.**
+- ~~Items 1, 7, 11 (wave-1 RE)~~ — 1 and 11 done; 7's codec cracked,
+  mode schedule + framing remain (feeds 8).
 - 2 needs 1 · 5 needs 1 · 8 needs 7 · 9 needs 8 · 10 needs 1+8 ·
   12 needs 11 · 13 needs 12+16 · 14 needs 7+11 · 17 needs 16 ·
   18 needs 13+16 · 19 needs the matching RE item · 21 needs 1/11.
@@ -107,32 +108,16 @@ relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
 
 | # | Item | Workstream | Why first |
 |---|------|------------|-----------|
-| 7 | `.opju` container RE | W2 | the only path to the newer half of the corpus; hardest unknown → fable |
-| 1 | windows-section RE | W1 | unlocks real names/units + book/sheet structure for everything downstream |
-| 11 | figure-model RE | W3 | figures are the stated goal ("I really don't want to lose the figures") |
-| 15 | split `io/origin/` package | W4 | ceiling headroom before any new decoder can land |
+| 7 | `.opju` container RE | W2 | codec cracked (docs/origin_re/opju_container.md); mode schedule + framing remain, then item 8 |
+| 8 | `.opju` decoder | W2 | the newer half of the corpus becomes readable |
+| 16 | multi-dataset import flow | W4 | owner UX decision, unlocks 3/17 |
+| ~~1 / 11 / 15~~ | wave-1 RE + split | — | done, see Completed |
 
 ---
 
 ## W1 — `.opj` data completion
 
 ### Tier 1 — High Impact
-
-1. **Windows-section RE** — recover column long-names, units,
-   designations (X/Y/Z/error), book/sheet display names, and the
-   window↔dataset mapping rule from the `.opj` windows section
-   *Model: opus · data-format-detective · WAVE 1.*
-   - [ ] Map the windows-section layout (starts where the M1 block
-         walker's framing breaks, ~60% into Moke.opj)
-   - [ ] Correlate window column entries to `<Book>_<Col>` datasets
-   - [ ] Validate: Moke.opj Book5 column N long-name "Kerr Signal",
-         X column long-name "H" (evidence already in the file)
-   - [ ] Report: `docs/origin_re/opj_windows_section.md`
-
-2. **Names/units decode implementation** — wire the windows-section
-   findings into the decoder so `DataStruct.labels`/`.units` carry the
-   user-facing names; keep honest A/B/C fallback when absent
-   *Model: sonnet · needs 1 + 15.*
 
 3. **Multi-book extraction backend** — a `read_origin_books()`-style
    pure API returning every workbook as its own DataStruct, plus a
@@ -203,19 +188,6 @@ relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
 
 ### Tier 1 — High Impact
 
-11. **Figure-model RE** — map the `.opj` graph windows:
-    Graph→Layer→Curve structure, how curves reference datasets by
-    name, axis ranges/scales(log)/titles, curve type/color/symbol/
-    line style, legend content, annotations
-    *Model: opus · data-format-detective · WAVE 1. Known: Graph/
-    Layer/Curve/Legend tokens present (Moke.opj ~105 Graph tokens);
-    lives in the windows section alongside item 1's targets.*
-    - [ ] Graph window layout + curve→dataset reference format
-    - [ ] Axis model (range, scale, labels) + style attributes
-    - [ ] Validate: Moke figures should reference Book4/Book5 H vs
-          Kerr-signal columns; XRD graph likely log-intensity
-    - [ ] Report: `docs/origin_re/opj_figures.md`
-
 12. **Origin-graph → quantized plot-spec mapping design** — decide
     what an imported figure becomes (plot state / FigureDoc per
     ORIGIN_GAP_PLAN #12), which Origin properties map, and the
@@ -236,13 +208,6 @@ relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
 ## W4 — Import flow & UX
 
 ### Tier 1 — High Impact
-
-15. **Split `io/origin_project.py` → `io/origin/` package** —
-    `container.py` (walker/records), `opj.py`, `opju.py`,
-    `windows.py`, `figures.py`; behaviour-preserving, tests green
-    before/after — **do this before any new decoder lands**
-    *Model: sonnet · independent; the 500-line ceiling makes it
-    mandatory prep.*
 
 16. **Multi-dataset import flow** — one file yielding many datasets:
     route shape, store handling, naming (`Moke:Book4` style?),
@@ -290,6 +255,20 @@ relevant `docs/origin_re/` report, and `src/quantized/io/origin_project.py`.
 ---
 
 ## Completed
+
+- ~~**#1 Windows-section RE**~~ (2026-07-03) — `docs/origin_re/opj_windows_section.md`
+  (`1a6a740`): property/label block layout, designations, book/sheet names;
+  validated on Moke/XRD/XMCD.
+- ~~**#11 Figure-model RE**~~ (2026-07-03) — `docs/origin_re/opj_figures.md`
+  (`087f6cf`): Graph→Layer→Curve object model, axis-range triples, double-Y;
+  FigureDoc mapping proposed. Open sub-questions carried into item 12/13.
+- ~~**#15 Split io/origin_project package**~~ (2026-07-04) — module → package
+  (container/opj/opju/windows); import path unchanged (io/origin.py is the
+  unrelated ASCII exporter). All modules well under the 500-line ceiling.
+- ~~**#2 Names/units decode**~~ (2026-07-04) — windows-section metadata wired
+  into DataStruct: real labels/units, designation-X becomes the x axis, book
+  display titles in metadata; synthetic CI fixture + XRD realdata anchors.
+  Multi-sheet books guard via repeated-short detection (full hierarchy = item 5).
 
 - ~~**M1: `.opj` worksheet data → DataStruct**~~ (2026-07-03) —
   `e520298`; CPY walker + 10-byte record decode + missing-value
