@@ -16,9 +16,10 @@ trustworthy (W7). Gap analysis: see Context.
 **Updated:** 2026-07-04 (added items 34/35 — the `.opj` writer real-Origin
 load failure promoted to a Tier-1 item now that a persistent student
 license enables the fix loop, and figure curve→dataset binding tracked
-explicitly; items 6/10/14/17/18/33 shipped earlier today — notes windows +
+explicitly; items 6/10/14/17/18/20/33 shipped earlier today — notes windows +
 combined X-axis log flag pinned from licensed specimens, real-corpus
-figure records solved, W1 + W3 complete)
+figure records solved, docs consolidated into one authoritative reference,
+W1 + W3 complete)
 
 ---
 
@@ -157,9 +158,8 @@ no documented real-Origin validation procedure for the trial window (31).
 |---|------|------------|-----------|
 | 34 | `.opj` writer real-Origin fix | W6 | the export lever is broken; the license enables the fix loop NOW |
 | 25 | COM "Send to Origin" | W6 | live-verifiable while the license is present (COM-serialized after 34) |
-| 20 | docs consolidation | W5 | 1,450 lines of RE reports unfolded; independent, delegable |
 | 22 | structured results-log parsing | W5 | log text already ships; independent, delegable |
-| ~~33~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18~~ | all decode + import flow + W4 UI | — | done, see Completed |
+| ~~33~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18 / 20~~ | all decode + import flow + W4 UI + docs | — | done, see Completed |
 
 ---
 
@@ -265,11 +265,6 @@ the shipped contract)
     zero private data
     *Model: sonnet · test-writer · needs the matching RE item.*
 
-20. **Format-doc consolidation** — fold each `docs/origin_re/` report
-    into `docs/origin_project_format.md`; keep one authoritative
-    format reference + a user-facing "opening Origin files" doc page
-    *Model: haiku · ongoing, after each RE lands.*
-
 ### Tier 3 — Nice-to-Have
 
 21. **Templates (`.otp`/`.otpu`)** — same CPY family; a graph template
@@ -346,6 +341,22 @@ the shipped contract)
 
 ## Completed
 
+- ~~**#20 Format-doc consolidation**~~ (2026-07-04) — folded all three
+  `docs/origin_re/` reports (`opj_windows_section.md`, `opj_figures.md`,
+  `opju_container.md`) into `docs/origin_project_format.md`, reorganized by
+  topic (container → worksheet data → windows metadata → sheet hierarchy →
+  figures → notes/results-log → export → testing → provenance → open
+  items) instead of discovery order; cross-checked every byte-level claim
+  against the current `src/quantized/io/origin_project/` source (found and
+  folded in one fact that had drifted past the reports — the `.opju`
+  figures' combined axis-scale byte `0x03`/`0x04`/`0x0d`, documented only in
+  `figures_opju.py`'s module docstring — plus a `.opj` Y-error column
+  marker refinement `0x30` and the real `../test-data/origin/` corpus path,
+  both likewise code-only). Added the user-facing
+  `docs/opening_origin_files.md` (what importing gets you, known
+  limitations, export guidance). Each consolidated report now carries a
+  short pointer stub; `docs/origin_re/validation_log.md` is untouched (a
+  live log, not a report). Docs-only change, `src/`/`tests/` untouched.
 - ~~**#6 Notes windows + results-log text**~~ (2026-07-04, `8cf0b42`) —
   BOTH halves now shipped. Results-log half (`20d54fa`): timestamped
   operation records → `metadata['origin_results_log']`, both containers,
