@@ -13,15 +13,38 @@ deterministic (the route passes the wall-clock time; tests pass a fixed value).
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 
 from quantized.datastruct import DataStruct
 
-__all__ = ["format_origin_project_script", "format_origin_script"]
+__all__ = ["GraphSpec", "format_origin_project_script", "format_origin_script"]
 
 _ERR_KEYWORDS = ("err", "dr", "std", "sigma")
+
+
+@dataclass(frozen=True, slots=True)
+class GraphSpec:
+    """Current plot-state snapshot for the ``.ogs`` GRAPH block (item 26) —
+    a LabTalk mirror of ``calc.plotting.PlotState`` plus axis limits.
+
+    ``y_keys``/``x_key``/``y2_keys`` are 0-based value-channel indices (the
+    same indexing as ``DataStruct.labels``/``.values`` columns — worksheet
+    column ``idx + 2``, since column 1 is X). ``y_keys=None`` means "all
+    channels" (mirrors ``PlotState``/``build_series``'s default). Channels
+    listed in ``y2_keys`` are drawn on a secondary (right) Y axis; they
+    should be a subset of the effective y-key set.
+    """
+
+    y_keys: tuple[int, ...] | None = None
+    x_key: int | None = None
+    x_log: bool = False
+    y_log: bool = False
+    x_lim: tuple[float, float] | None = None
+    y_lim: tuple[float, float] | None = None
+    y2_keys: tuple[int, ...] = ()
 
 
 def _meta_get(meta: dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -48,6 +71,99 @@ def _is_err_label(label: str) -> bool:
     return any(kw in low for kw in _ERR_KEYWORDS)
 
 
+def _col(idx: int) -> int:
+    """Worksheet column (1-based) for value-channel index ``idx`` (0-based).
+    Column 1 is X; channels start at column 2 (mirrors the designations loop
+    in ``format_origin_script``)."""
+    return idx + 2
+
+
+def _axis_title(label: str, unit: str) -> str:
+    return label + (f" ({unit})" if unit else "")
+
+
+def _plot_state_graph(
+    graph: GraphSpec,
+    *,
+    labels: list[str],
+    units: list[str],
+    x_name: str,
+    x_unit: str,
+) -> list[str]:
+    """LabTalk lines recreating the CURRENT PLOT STATE (item 26): selected
+    channels, x source, log flags, axis limits, and an optional secondary
+    (right) Y axis for ``y2_keys``.
+
+    One ``plotxy`` call plots the whole primary y-set via grouped range
+    syntax (``(x,y1):(x,y2):…`` — pairs need not be contiguous columns). The
+    secondary axis uses ``layer -nr`` (new right-Y layer linked to the active
+    graph's X axis) — the best-documented LabTalk shortcut for this, but
+    UNVERIFIED against a live Origin instance; the comment block below notes
+    the second-graph-window fallback if it turns out to error.
+    """
+    y_indices = list(range(len(labels))) if graph.y_keys is None else list(graph.y_keys)
+    if not y_indices:
+        return ["", "// Create graph (current plot state): no channels selected -- skipped"]
+
+    y2_set = set(graph.y2_keys)
+    primary = [i for i in y_indices if i not in y2_set]
+    secondary = [i for i in y_indices if i in y2_set]
+    if not primary:
+        # Nothing to anchor a left/right split against -- render the would-be
+        # y2 set on the single default axis instead.
+        primary, secondary = y_indices, []
+
+    x_col = 1 if graph.x_key is None else _col(graph.x_key)
+    if graph.x_key is None:
+        x_label, x_lbl_unit = x_name, x_unit
+    else:
+        xi = graph.x_key
+        x_label = labels[xi] if xi < len(labels) else x_name
+        x_lbl_unit = units[xi] if xi < len(units) else ""
+
+    o: list[str] = ["", "// Create graph (current plot state)"]
+    pairs = ":".join(f"({x_col},{_col(i)})" for i in primary)
+    o.append(f"plotxy iy:={pairs} plot:=201 ogl:=[<new>];")
+    if graph.x_log:
+        o.append("layer.x.type = 1;  // Log X")
+    if graph.y_log:
+        o.append("layer.y.type = 1;  // Log Y")
+    if graph.x_lim is not None:
+        lo, hi = graph.x_lim
+        o.append(f"layer.x.from = {lo:.10g};")
+        o.append(f"layer.x.to = {hi:.10g};")
+    if graph.y_lim is not None:
+        lo, hi = graph.y_lim
+        o.append(f"layer.y.from = {lo:.10g};")
+        o.append(f"layer.y.to = {hi:.10g};")
+    o.append(f'xb.text$ = "{_escape_lt(_axis_title(x_label, x_lbl_unit))}";')
+    if len(primary) == 1:
+        yi = primary[0]
+        y_unit = units[yi] if yi < len(units) else ""
+        o.append(f'yl.text$ = "{_escape_lt(_axis_title(labels[yi], y_unit))}";')
+
+    if secondary:
+        pairs2 = ":".join(f"({x_col},{_col(i)})" for i in secondary)
+        o += [
+            "",
+            "// Secondary (right) Y axis for y2-assigned channels (item 26).",
+            '// "layer -nr" is the best-documented LabTalk shortcut for a new',
+            "// right-Y layer linked to the active graph's X axis; UNVERIFIED",
+            "// against a live Origin instance -- if it errors instead, delete",
+            "// this block and use a second graph window:",
+            f"//   plotxy iy:={pairs2} plot:=201 ogl:=[<new>];",
+            "layer -nr;  // new right-Y layer, linked X",
+            f"plotxy iy:={pairs2} plot:=201 ogl:=2!;",
+        ]
+        if graph.y_log:
+            o.append("layer.y.type = 1;  // Log Y (right)")
+        if len(secondary) == 1:
+            yi = secondary[0]
+            y_unit = units[yi] if yi < len(units) else ""
+            o.append(f'yr.text$ = "{_escape_lt(_axis_title(labels[yi], y_unit))}";')
+    return o
+
+
 def format_origin_script(
     data: DataStruct,
     *,
@@ -59,12 +175,17 @@ def format_origin_script(
     make_graph: bool = True,
     created: str = "",
     book_long_name: str = "",
+    graph: GraphSpec | None = None,
 ) -> tuple[str, str]:
     """Return ``(csv_text, ogs_text)`` for ``data``. Port of exportOriginScript.
 
     ``csv_name`` is the CSV filename the script references (``impASC``).
     ``book_name``/``sheet_name`` default to the source filename in metadata,
     then ``"data"``; both are sanitized to LabTalk identifiers.
+
+    ``graph`` (item 26), when given, replaces the default single-column graph
+    with a full plot-state export: selected channels, x source, log axes,
+    limits, and a secondary Y axis. Ignored when ``make_graph`` is False.
     """
     meta = dict(data.metadata)
     source = _meta_get(meta, "source", "filepath", "filename", default="")
@@ -118,17 +239,20 @@ def format_origin_script(
         o.append(f'wks.col{cn}.unit$ = "{_escape_lt(unit)}";')
 
     if make_graph:
-        o += ["", "// Create graph", "plotxy iy:=(1,2) plot:=201 ogl:=[<new>];"]
-        if log_x:
-            o.append("layer.x.type = 1;  // Log X")
-        if log_y:
-            o.append("layer.y.type = 1;  // Log Y")
-        x_title = x_name + (f" ({x_unit})" if x_unit else "")
-        o.append(f'xb.text$ = "{_escape_lt(x_title)}";')
-        if len(labels) == 1:
-            y_unit = units[0] if units else ""
-            y_title = labels[0] + (f" ({y_unit})" if y_unit else "")
-            o.append(f'yl.text$ = "{_escape_lt(y_title)}";')
+        if graph is not None:
+            o += _plot_state_graph(graph, labels=labels, units=units, x_name=x_name, x_unit=x_unit)
+        else:
+            o += ["", "// Create graph", "plotxy iy:=(1,2) plot:=201 ogl:=[<new>];"]
+            if log_x:
+                o.append("layer.x.type = 1;  // Log X")
+            if log_y:
+                o.append("layer.y.type = 1;  // Log Y")
+            x_title = x_name + (f" ({x_unit})" if x_unit else "")
+            o.append(f'xb.text$ = "{_escape_lt(x_title)}";')
+            if len(labels) == 1:
+                y_unit = units[0] if units else ""
+                y_title = labels[0] + (f" ({y_unit})" if y_unit else "")
+                o.append(f'yl.text$ = "{_escape_lt(y_title)}";')
 
     o += ["", "// Done"]
     ogs_text = "\n".join(o) + "\n"

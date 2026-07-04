@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from quantized.datastruct import DataStruct
 from quantized.io.consolidated import consolidate_csv
 from quantized.io.hdf5 import write_hdf5
-from quantized.io.origin import format_origin_project_script, format_origin_script
+from quantized.io.origin import GraphSpec, format_origin_project_script, format_origin_script
 from quantized.io.origin_com import com_available, send_to_origin
 from quantized.io.origin_project.writer import opj_bytes
 from quantized.io.xrd_csv import format_xrd_csv
@@ -102,12 +102,27 @@ def export_hdf5(req: Hdf5Request) -> Response:
     )
 
 
+class OriginGraphSpec(BaseModel):
+    """Current plot-state snapshot for the ``.ogs`` GRAPH block (item 26) —
+    wire model for ``io.origin.GraphSpec``. Indices are 0-based value-channel
+    positions (same as ``PlotState``): ``y_keys=None`` means "all channels"."""
+
+    y_keys: list[int] | None = None
+    x_key: int | None = None
+    x_log: bool = False
+    y_log: bool = False
+    x_lim: tuple[float, float] | None = None
+    y_lim: tuple[float, float] | None = None
+    y2_keys: list[int] = []
+
+
 class OriginRequest(BaseModel):
     dataset: dict[str, Any]
     filename: str = "export"
     log_x: bool = False
     log_y: bool = False
     make_graph: bool = True
+    graph: OriginGraphSpec | None = None
 
 
 class ConsolidatedItem(BaseModel):
@@ -136,6 +151,18 @@ def export_origin(req: OriginRequest) -> Response:
     stem = _safe_name(req.filename, "")
     csv_name = f"{stem}_data.csv"
     created = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    graph_spec = None
+    if req.graph is not None:
+        g = req.graph
+        graph_spec = GraphSpec(
+            y_keys=tuple(g.y_keys) if g.y_keys is not None else None,
+            x_key=g.x_key,
+            x_log=g.x_log,
+            y_log=g.y_log,
+            x_lim=g.x_lim,
+            y_lim=g.y_lim,
+            y2_keys=tuple(g.y2_keys),
+        )
     try:
         ds = DataStruct.from_dict(req.dataset)
         csv_text, ogs_text = format_origin_script(
@@ -147,6 +174,7 @@ def export_origin(req: OriginRequest) -> Response:
             log_y=req.log_y,
             make_graph=req.make_graph,
             created=created,
+            graph=graph_spec,
         )
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

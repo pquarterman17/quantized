@@ -567,7 +567,24 @@ export default function App() {
         group: "File",
         label: "Export Origin (.ogs)…",
         run: () =>
-          exportActive(s, (stem, ds) => exportOrigin({ dataset: ds.data, filename: stem })),
+          exportActive(s, (stem, ds) =>
+            exportOrigin({
+              dataset: ds.data,
+              filename: stem,
+              log_x: s().xLog,
+              log_y: s().yLog,
+              // Current plot state -> an Origin GRAPH, not just the workbook (item 26).
+              graph: {
+                y_keys: s().yKeys,
+                x_key: s().xKey,
+                x_log: s().xLog,
+                y_log: s().yLog,
+                x_lim: s().xLim,
+                y_lim: s().yLim,
+                y2_keys: s().y2Keys ?? [],
+              },
+            }),
+          ),
       },
       {
         id: "send-to-origin",
