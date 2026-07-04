@@ -11,6 +11,7 @@ import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit, macroStep, type MacroStep } from "../lib/macro";
 import { is2DMap } from "../lib/mapdata";
 import { mergeDatasets } from "../lib/merge";
+import { buildOriginFigureEntries, type OriginFigureEntry } from "../lib/originFigures";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
@@ -35,6 +36,7 @@ import type {
   Dataset,
   FitOverlay,
   ModelingType,
+  OriginFigure,
   PeakOverlay,
   RefLine,
   RsmPeak,
@@ -45,6 +47,12 @@ import type {
  *  formulas). Routed through after any base-data mutation (cell edit, corrections). */
 const recompute = (d: Dataset): Dataset =>
   d.formulas?.length ? { ...d, data: recomputeData(d.data, d.formulas) } : d;
+
+/** Drop the resolved target on any Origin figure entry pointing at a removed
+ *  dataset (the figure itself stays listed — just disabled again, same as an
+ *  import whose source hint never resolved). */
+const pruneOriginFigureRefs = (figures: OriginFigureEntry[], removedIds: ReadonlySet<string>): OriginFigureEntry[] =>
+  figures.map((f) => (f.datasetId && removedIds.has(f.datasetId) ? { ...f, datasetId: null } : f));
 
 let _refSeq = 0;
 let _annSeq = 0;
@@ -115,6 +123,11 @@ interface AppState {
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
   // "primary"; ctrl/shift-click extend `selectedIds` without changing the plot.
   selectedIds: string[];
+  // Origin project figures (plan item 18): every graph window recovered from
+  // an imported .opj, tagged with the import's file stem and (best-effort)
+  // the dataset id it plots. `datasetId` is null when the figure's loose
+  // source reference didn't resolve — the Library shows those disabled.
+  originFigures: OriginFigureEntry[];
   leftCollapsed: boolean;
   rightCollapsed: boolean;
   stageTab: StageTab;
@@ -209,12 +222,22 @@ interface AppState {
 
   addDataset: (ds: Dataset) => void;
   importFiles: (files: File[]) => Promise<void>;
+  // Attach one import's worth of Origin figures (item 18), matched against the
+  // dataset ids that same import just created. Internal to importFiles, but a
+  // named action so it's directly testable.
+  addOriginFigures: (stem: string, figures: OriginFigure[], datasetIds: string[]) => void;
+  // Apply a stored figure's plot-state snapshot: activates its resolved
+  // dataset and sets the axis ranges + log flags. No-op if unresolved.
+  applyOriginFigure: (id: string) => void;
   loadWorkspace: (datasets: Dataset[]) => void;
   setActive: (id: string) => void;
   toggleSelected: (id: string) => void;
   selectRange: (id: string) => void;
   removeDataset: (id: string) => void;
   removeSelected: () => void;
+  // Bulk-remove by explicit id list (item 17's book-family filter dialog) —
+  // distinct from removeSelected, which acts on the transient row selection.
+  removeDatasets: (ids: string[]) => void;
   // Concatenate the multi-selected datasets (≥2) row-wise into a new dataset.
   mergeSelected: () => void;
   duplicateDataset: (id: string) => void;
@@ -464,6 +487,7 @@ export const useApp = create<AppState>((set, get) => ({
   datasets: [],
   activeId: null,
   selectedIds: [],
+  originFigures: [],
   leftCollapsed: false,
   rightCollapsed: false,
   stageTab: "plot",
@@ -578,20 +602,28 @@ export const useApp = create<AppState>((set, get) => ({
       get().setStatus(`importing ${file.name}…`);
       try {
         const data = await uploadFile(file);
+        const stem = file.name.replace(/\.[^.]+$/, "");
+        const figures = data.figures;
+        delete data.figures;
+        const newIds: string[] = [];
         if (data.books && data.books.length > 1) {
           // Origin project: import every workbook as its own dataset.
-          const stem = file.name.replace(/\.[^.]+$/, "");
           for (const book of data.books) {
             const meta = (book.metadata ?? {}) as Record<string, unknown>;
             const short = String(meta.origin_book ?? "Book");
             const long = String(meta.origin_book_long ?? "");
             const label = long && long !== short ? `${short} — ${long}` : short;
-            get().addDataset({ id: nextDatasetId(), name: `${stem}:${label}`, data: book });
+            const id = nextDatasetId();
+            get().addDataset({ id, name: `${stem}:${label}`, data: book });
+            newIds.push(id);
           }
         } else {
           delete data.books;
-          get().addDataset({ id: nextDatasetId(), name: file.name, data });
+          const id = nextDatasetId();
+          get().addDataset({ id, name: file.name, data });
+          newIds.push(id);
         }
+        if (figures?.length) get().addOriginFigures(stem, figures, newIds);
         get().recordMacro(`Import ${file.name}`, `qz.import(${lit(file.name)})`);
         get().pushRecent(file.name, file.size);
         added += 1;
@@ -606,6 +638,25 @@ export const useApp = create<AppState>((set, get) => ({
     if (added > 0) toast(`imported ${added} file${added === 1 ? "" : "s"}`, "ok");
     if (lastError) toast(lastError, "danger");
   },
+  addOriginFigures: (stem, figures, datasetIds) =>
+    set((s) => {
+      const candidates = s.datasets.filter((d) => datasetIds.includes(d.id));
+      const entries = buildOriginFigureEntries(stem, figures, candidates);
+      return { originFigures: [...s.originFigures, ...entries] };
+    }),
+  applyOriginFigure: (id) => {
+    const entry = get().originFigures.find((f) => f.id === id);
+    if (!entry?.datasetId) return;
+    get().setActive(entry.datasetId);
+    const fig = entry.figure;
+    set({
+      xLim: [fig.x_from, fig.x_to],
+      yLim: [fig.y_from, fig.y_to],
+      xLog: fig.x_log,
+      yLog: fig.y_log,
+    });
+    get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
+  },
   // Replace the whole library with a restored workspace (from a .dwk file).
   // Resets every per-dataset view (channels, styles, axis limits) and drops the
   // overlays/markers tied to the old datasets — same hygiene as setActive.
@@ -614,6 +665,7 @@ export const useApp = create<AppState>((set, get) => ({
       datasets,
       activeId: datasets[0]?.id ?? null,
       selectedIds: datasets[0] ? [datasets[0].id] : [],
+      originFigures: [], // a restored workspace has no Origin-import figures of its own
       stageTab: datasets[0] ? nextStageTab(datasets[0], s.stageTab) : s.stageTab,
       xKey: null,
       yKeys: null,
@@ -681,7 +733,8 @@ export const useApp = create<AppState>((set, get) => ({
       const activeId =
         s.activeId === id ? (datasets[0]?.id ?? null) : s.activeId;
       const selectedIds = s.selectedIds.filter((x) => x !== id);
-      return { datasets, activeId, selectedIds };
+      const originFigures = pruneOriginFigureRefs(s.originFigures, new Set([id]));
+      return { datasets, activeId, selectedIds, originFigures };
     }),
   // Delete key: remove every selected dataset (falling back to the active one if
   // nothing is multi-selected); reselect the first survivor so the plot recovers.
@@ -694,7 +747,26 @@ export const useApp = create<AppState>((set, get) => ({
       const datasets = s.datasets.filter((d) => !ids.has(d.id));
       const activeId =
         s.activeId && !ids.has(s.activeId) ? s.activeId : (datasets[0]?.id ?? null);
-      return { datasets, activeId, selectedIds: activeId ? [activeId] : [] };
+      const originFigures = pruneOriginFigureRefs(s.originFigures, ids);
+      return {
+        datasets,
+        activeId,
+        selectedIds: activeId ? [activeId] : [],
+        originFigures,
+      };
+    }),
+  // Bulk-remove by explicit id list (item 17's "manage books" dialog) — unlike
+  // removeSelected, this doesn't touch/depend on the transient row selection.
+  removeDatasets: (ids) =>
+    set((s) => {
+      if (ids.length === 0) return {};
+      const drop = new Set(ids);
+      const datasets = s.datasets.filter((d) => !drop.has(d.id));
+      const activeId =
+        s.activeId && !drop.has(s.activeId) ? s.activeId : (datasets[0]?.id ?? null);
+      const selectedIds = s.selectedIds.filter((x) => !drop.has(x));
+      const originFigures = pruneOriginFigureRefs(s.originFigures, drop);
+      return { datasets, activeId, selectedIds, originFigures };
     }),
 
   // Concatenate the selected datasets (in selection order) row-wise into one new

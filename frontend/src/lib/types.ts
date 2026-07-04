@@ -9,6 +9,29 @@ export interface DataStruct {
   metadata: Record<string, unknown>;
   /** Origin projects only: every workbook, when the file holds more than one. */
   books?: DataStruct[];
+  /** Origin `.opj` projects only: every graph window as a plot-state snapshot
+   *  (`figures.extract_figures`, plan items 12/13/18). `.opju` figures are not
+   *  extracted yet (item 14). */
+  figures?: OriginFigure[];
+}
+
+/** One graph window recovered from an Origin project — a plot-state snapshot:
+ *  axis ranges + log-scale heuristic, a loose source reference (Origin's graph
+ *  windows don't carry an exact curve->column selector, see
+ *  `docs/origin_re/opj_figures.md`), a curve count, and surviving annotation
+ *  text (titles, peak labels). Matched to an imported dataset client-side
+ *  (`lib/originFigures.resolveFigureDataset`). */
+export interface OriginFigure {
+  name: string;
+  x_from: number;
+  x_to: number;
+  x_log: boolean;
+  y_from: number;
+  y_to: number;
+  y_log: boolean;
+  source_hint?: string;
+  n_curves: number;
+  annotations: string[];
 }
 
 /** Response of POST /api/plot/series — uPlot-ready column data. */
