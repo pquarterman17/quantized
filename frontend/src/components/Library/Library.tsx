@@ -4,7 +4,9 @@
 
 import { useState } from "react";
 
+import BookFamiliesSection from "./BookFamiliesSection";
 import DatasetRow from "./DatasetRow";
+import FiguresSection from "./FiguresSection";
 import { makeDemoDataset } from "../../lib/demo";
 import { groupDatasets, groupNames, hasAnyGroup } from "../../lib/grouping";
 import { IMPORT_ACCEPT, openFilePicker } from "../../lib/openFilePicker";
@@ -129,6 +131,9 @@ export default function Library() {
           ))}
         </select>
       )}
+
+      <FiguresSection />
+      <BookFamiliesSection />
 
       {sections
         ? sections.map((g) => (

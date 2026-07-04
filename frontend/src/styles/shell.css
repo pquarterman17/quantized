@@ -137,7 +137,19 @@ body {
 .qzk-group-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 2px; background: none; border: none; cursor: pointer; color: var(--text-faint); font-size: var(--type-label); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-label); }
 .qzk-group-caret { width: 10px; color: var(--text-dim); }
 .qzk-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-.qzk-group-count { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.qzk-group-count { color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+
+/* Figures section (item 18): one restorable plot-state snapshot per row. */
+.qzk-fig-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; color: var(--text); font-size: var(--font-size-sm); }
+.qzk-fig-item:hover:not(:disabled) { border-color: var(--accent); }
+.qzk-fig-item:disabled { opacity: 0.45; cursor: default; }
+.qzk-fig-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qzk-fig-meta { flex-shrink: 0; color: var(--text-faint); font-size: var(--type-nano); font-family: var(--font-mono); }
+
+/* Book-families bulk-manage (item 17): one row per multi-book Origin import. */
+.qzk-fam-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); }
+.qzk-fam-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: var(--font-size-sm); }
+.qzk-fam-count { flex-shrink: 0; color: var(--text-faint); font-size: var(--type-nano); font-family: var(--font-mono); }
 
 /* ── macro recorder ── */
 .qzk-macro-list { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }

@@ -16,7 +16,7 @@ const raw: DataStruct = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useApp.setState({ datasets: [], activeId: null, status: "" });
+  useApp.setState({ datasets: [], activeId: null, status: "", originFigures: [] });
 });
 
 describe("useApp reflectivity seed (SLD→reflectivity hook)", () => {
@@ -684,6 +684,178 @@ describe("useApp importFiles", () => {
     expect(useApp.getState().datasets).toHaveLength(1);
     expect(useApp.getState().datasets[0].name).toBe("good.dat");
     expect(useApp.getState().status).toContain("failed bad.zzz");
+  });
+
+  it("stores Origin figures from the import, resolved against the new books (item 18)", async () => {
+    const book = (short: string) => ({ ...raw, metadata: { origin_book: short } });
+    const originFigure = {
+      name: "Graph1",
+      x_from: 18,
+      x_to: 100,
+      x_log: false,
+      y_from: 1,
+      y_to: 1e6,
+      y_log: true,
+      n_curves: 3,
+      annotations: [] as string[],
+      source_hint: "Book2",
+    };
+    vi.mocked(uploadFile).mockResolvedValue({
+      ...raw,
+      books: [book("Book1"), book("Book2")],
+      figures: [originFigure],
+    });
+    await useApp.getState().importFiles([fakeFile("XRD.opj")]);
+
+    const s = useApp.getState();
+    expect(s.originFigures).toHaveLength(1);
+    expect(s.originFigures[0].stem).toBe("XRD");
+    const book2 = s.datasets.find((d) => d.name === "XRD:Book2");
+    expect(s.originFigures[0].datasetId).toBe(book2?.id);
+    // figures never leak into the DataStruct payload itself (data contract).
+    expect(s.datasets.every((d) => !("figures" in d.data))).toBe(true);
+  });
+
+  it("disables a figure whose loose source hint matches no imported book", async () => {
+    const book = (short: string) => ({ ...raw, metadata: { origin_book: short } });
+    vi.mocked(uploadFile).mockResolvedValue({
+      ...raw,
+      books: [book("Book1"), book("Book2")],
+      figures: [
+        {
+          name: "Graph9",
+          x_from: 0,
+          x_to: 1,
+          x_log: false,
+          y_from: 0,
+          y_to: 1,
+          y_log: false,
+          n_curves: 1,
+          annotations: [],
+          source_hint: "NoSuchBook",
+        },
+      ],
+    });
+    await useApp.getState().importFiles([fakeFile("XRD.opj")]);
+    expect(useApp.getState().originFigures[0].datasetId).toBeNull();
+  });
+});
+
+describe("useApp applyOriginFigure (item 18)", () => {
+  const figureEntry = {
+    id: "fig-XRD-0",
+    stem: "XRD",
+    datasetId: "d2",
+    figure: {
+      name: "Graph1",
+      x_from: 18,
+      x_to: 100,
+      x_log: false,
+      y_from: 1,
+      y_to: 1e6,
+      y_log: true,
+      n_curves: 3,
+      annotations: [] as string[],
+    },
+  };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "XRD:Book1", data: raw },
+        { id: "d2", name: "XRD:Book2", data: raw },
+      ],
+      activeId: "d1",
+      originFigures: [figureEntry],
+      xLim: null,
+      yLim: null,
+      xLog: false,
+      yLog: false,
+    });
+  });
+
+  it("activates the resolved dataset and applies the axis/log snapshot", () => {
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d2");
+    expect(s.xLim).toEqual([18, 100]);
+    expect(s.yLim).toEqual([1, 1e6]);
+    expect(s.xLog).toBe(false);
+    expect(s.yLog).toBe(true);
+  });
+
+  it("is a no-op for an unresolved figure", () => {
+    useApp.setState({ originFigures: [{ ...figureEntry, datasetId: null }] });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d1"); // unchanged
+    expect(s.xLim).toBeNull();
+  });
+
+  it("is a no-op for an unknown figure id", () => {
+    useApp.getState().applyOriginFigure("nope");
+    expect(useApp.getState().activeId).toBe("d1");
+  });
+});
+
+describe("useApp removeDatasets (item 17 book-family filter)", () => {
+  it("removes exactly the given ids, leaving the rest untouched", () => {
+    useApp.setState({
+      datasets: [
+        { id: "b1", name: "XRD:Book1", data: raw },
+        { id: "b2", name: "XRD:Book2", data: raw },
+        { id: "b3", name: "XRD:Book3", data: raw },
+      ],
+      activeId: "b1",
+      selectedIds: ["b1"],
+    });
+    useApp.getState().removeDatasets(["b2"]);
+    const s = useApp.getState();
+    expect(s.datasets.map((d) => d.id)).toEqual(["b1", "b3"]);
+    expect(s.activeId).toBe("b1"); // untouched active dataset survives
+  });
+
+  it("falls back to the first survivor when the active dataset is removed", () => {
+    useApp.setState({
+      datasets: [
+        { id: "b1", name: "XRD:Book1", data: raw },
+        { id: "b2", name: "XRD:Book2", data: raw },
+      ],
+      activeId: "b1",
+    });
+    useApp.getState().removeDatasets(["b1"]);
+    expect(useApp.getState().activeId).toBe("b2");
+  });
+
+  it("disables (not removes) an Origin figure whose target dataset was removed", () => {
+    useApp.setState({
+      datasets: [
+        { id: "b1", name: "XRD:Book1", data: raw },
+        { id: "b2", name: "XRD:Book2", data: raw },
+      ],
+      originFigures: [
+        {
+          id: "fig-XRD-0",
+          stem: "XRD",
+          datasetId: "b2",
+          figure: {
+            name: "Graph1",
+            x_from: 0,
+            x_to: 1,
+            x_log: false,
+            y_from: 0,
+            y_to: 1,
+            y_log: false,
+            n_curves: 1,
+            annotations: [],
+          },
+        },
+      ],
+    });
+    useApp.getState().removeDatasets(["b2"]);
+    const s = useApp.getState();
+    expect(s.originFigures).toHaveLength(1); // still listed
+    expect(s.originFigures[0].datasetId).toBeNull(); // just disabled
   });
 });
 
