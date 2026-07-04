@@ -13,7 +13,7 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-04 (W4 frontend: figures section + book-family filter, items 17/18)
+**Updated:** 2026-07-04 (items 14/17/18 shipped; real-corpus figure-record gap tracked as item 33)
 
 ---
 
@@ -197,8 +197,22 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 2 — Medium Impact
 
-14. **`.opju` figures** — the same pipeline on the CPYUA container
-    *Model: sonnet · needs 7 + 11.*
+### Tier 3 — Nice-to-Have
+
+33. **`.opju` figures — real-corpus record shape** — item 14 shipped a
+    decoder that is exact on controlled specimens (axis range + log10 flag,
+    6/6 layers vs Origin ground truth) but real corpus graphs (bound curves,
+    non-default tick/grid dialogs) use a materially different axis-record
+    layout: the `03 00 00 1f` layer anchor is present, but the fixed
+    `81 04 06 00 00 01 c3 66` X→Y transition marker item 14 keys off is not
+    found — confirmed byte-identical between the original corpus file and a
+    same-content file re-saved by the newer CPYUA build, so it's a
+    *content-complexity* difference (extra dialog/style fields), not a
+    version difference. Real corpus graphs are safely skipped, never
+    mis-decoded. Next probe: diff a controlled specimen before/after binding
+    an actual curve or changing one axis dialog default, single-variable,
+    to localize where the extra fields live.
+    *Model: sonnet · needs 14 · see figures_opju.py's module docstring.*
 
 ---
 
@@ -306,6 +320,24 @@ no documented real-Origin validation procedure for the trial window (31).
   truth-guided backtracking parse of Nb_B + A6221Lockin4_D against Origin's
   CSVs. **Census: 210/210 oracle columns decode — `.opju` worksheet data is
   complete.**
+- ~~**#14 `.opju` figures**~~ (2026-07-04) — `figures_opju.py::extract_figures_opju`,
+  same payload shape as `.opj`'s `extract_figures`. RE: the layer axis record
+  opens with marker `03 00 00 1f`, then X `(from,to)`, a step field, a fixed
+  `81 04 06 00 00 01 c3 66` marker whose next byte is the isolated Y-axis
+  linear/log10 flag (`0x03`/`0x0d`, pinned from the `fig_lin`/`fig_log`
+  single-variable diff pair), a 3-byte filler, then Y `(from,to)` + step.
+  Each value is a bare/tagged 8-byte literal, a tagged 1-3 significant-byte
+  compact form, or elided when exactly 0.0; the 2-byte tag itself was never
+  cracked, so a backtracking parser tries every admissible split and accepts
+  only the unique one that both consumes the span exactly and yields two
+  plausible values — ambiguous or unknown spans are dropped, never guessed.
+  Validated 6/6 layers exact vs Origin's own ground truth (`fig_lin`,
+  `fig_log`, `fig_pairs`'s 4-layer graph). X has no isolated log flag (no
+  log-X specimen existed) so it reuses `.opj`'s decade heuristic. **Known
+  gap (new item #33):** real corpus graphs (bound curves, custom axis
+  dialogs) don't share this exact record shape — the decoder safely returns
+  no figures for them rather than guessing (confirmed via the `specimens/
+  converted/` re-saved corpus files, ruling out a version difference).
 - ~~**#32 (core) width rule + RLE segment grammar**~~ (2026-07-04, `9d1728d`) —
   the "DFCM-collision gap" was a width-table bug: residual byte-counts follow
   canonical FPC bcodes (codes 0-3 → 0-3 bytes; 4 skipped), which coincide with
