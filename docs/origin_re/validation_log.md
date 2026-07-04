@@ -82,21 +82,54 @@ offset **115 = exact file size** (v4.3227/XRD does not have this). Patching
 it alone does not change any probe outcome (necessary-but-not-sufficient at
 most).
 
-**Open blocker (where the next session picks up):** even an all-real reduced
-stream (fh + Book2's dataset triples + Book2's "window group") yields
-books=0 — the window-section cut was misaligned. Per openopj's section list
-there is a window LIST header before the per-window SECTIONS: the ~427 B
-block right after the datasets and the ~776–840 B blocks (starting
-`58 00 00 00 …`) are the real section headers; the named `00 00 BookN\0`
-348–365 B blocks (+ '^' 365 B + '#' 133 B sub-blocks) sit INSIDE a section.
-Next: map window-section boundaries by the 776–840 B headers, re-cut a
-single-book reduction on those boundaries, re-probe; then substitute
-synthesized pieces one at a time. After the stream yields books=1, re-test
-the synthesized minimal tail (built in the PS1/PR2 probes above) and pin the
-`blk(4)=0x46c` scalar + `blk(16)` ids.
+**STREAM MODEL SOLVED (same session, probes PR3/PR4):** the earlier books=0
+reductions were miscut, not misparsed. The valid stream shape is::
+
+    <header line> <123B fh block>
+    per column: [NULL][147B col-header][data block]
+    NULL NULL                          ← datasets/windows section separator
+    per window: [named header block][sub-blocks … props+labels]
+                (a window section = its `00 00 <Name>\0` header block through
+                 its last label block; NO leading null — the separator/closure
+                 nulls belong BETWEEN sections)
+    NULL NULL NULL                     ← closes the windows section (matches
+                                          the real file's stream end)
+
+PR3 (hdr + fh + Book2's 12 dataset triples + 2×NULL + Book2's window section
+#863–#917 + 3×NULL, fh size fixed) → **books=1**: Origin builds the workbook
+from a fully reduced stream. The window-section boundary is the NAMED header
+block (not the 776–840 B `58…` blocks — those are per-layer records inside
+graph sections).
+
+**Remaining delta (tail only, ~1 KB):** PR4 = PR3 + the synthesized minimal
+tail (params, project record, empty notes, 1-window tree, `.otp` epilogue)
+→ load=False books=1 (consistent but insufficient). PR5/PR6 (Moke's real
+19-window tail or real epilogue on the 1-window stream) → books=0,
+confirming strict stream↔tail consistency (an over-full tree/epilogue
+aborts everything). Next session: (a) map Moke's ~400 B between tree-end
+(~+2700) and epilogue start (+3099 = the `00 10 00 00` idx-0 entry with
+LAYMANAGE storage) — per openopj these are the File list / attachment
+lists; (b) regenerate the tree for 1 window with the parsed grammar and
+clone that middle verbatim; (c) pin the `blk(4)=0x46c` scalar (candidate:
+byte length of some tree region) and the `blk(16)` ids. All probe variants
+live under `$CLAUDE_JOB_DIR/tmp/opj_probe/` and rebuild via
+`tools/origin_trial/probe_opj_loader.py`.
+
+## 2026-07-04 (item 25 live verification)
+
+`send_to_origin` verified against real Origin 2026b (student license):
+workbook created, values cell-exact (spot-checked via LabTalk col reads),
+X labels from metadata, units land. Two defects found live and fixed:
+LabTalk has **no backslash escape** (an escaped `\"` lands literally —
+embedded quotes now downgrade to `'`), and the writer-family
+`x_column_long`/`x_unit` metadata keys weren't read (now accepted as
+fallbacks). Origin's `wks.nrows` reports ALLOCATED rows (32 for a 4-row
+put) — compare filled cells, never nrows.
 
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);
-`tools/origin_trial/generate_specimens.py`. One COM script at a time; kill
-zombie `Origin64.exe` before starting; never run two concurrently.
+`tools/origin_trial/generate_specimens.py`;
+`tools/origin_trial/probe_opj_loader.py` (item-34 loader probes). One COM
+script at a time; kill zombie `Origin64.exe` before starting; never run
+two concurrently.
