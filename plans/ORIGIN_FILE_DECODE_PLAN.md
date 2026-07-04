@@ -13,11 +13,12 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-04 (items 6/10/14/17/18/33 shipped — notes windows +
-combined X-axis log flag pinned from licensed-trial specimens, real-corpus
-figure records solved, W1 + W3 complete; item 4 decode half partially
-shipped — inline-text sentinel + int/float32 no-op, report-sheet reference
-family still open)
+**Updated:** 2026-07-04 (added items 34/35 — the `.opj` writer real-Origin
+load failure promoted to a Tier-1 item now that a persistent student
+license enables the fix loop, and figure curve→dataset binding tracked
+explicitly; items 6/10/14/17/18/33 shipped earlier today — notes windows +
+combined X-axis log flag pinned from licensed specimens, real-corpus
+figure records solved, W1 + W3 complete)
 
 ---
 
@@ -90,17 +91,22 @@ cracking is frontier-model work while spec-driven decoding is not.
 | **haiku** | mechanical regression anchors, text extraction, docs consolidation | 6, 9, 20, 22 |
 | **fable** | not planned — owner directive (2026-07-03): delegate to cheaper models when feasible; the original fable run on item 7 died on the spend limit without a report, and the trial-generated specimens have since converted item 7 from open-ended to hypothesis-driven work | — |
 
-**Cost note (2026-07-03):** an Origin 2026b trial produced controlled
-specimens that de-risk the remaining RE: same-content `.opju` Rosetta
-files with known values/names, single-variable diff pairs (log flag,
-column selector — as `.opju`), and Origin-exported ground truth
+**Cost note (2026-07-03, updated 2026-07-04):** an Origin 2026b trial
+produced controlled specimens that de-risk the remaining RE: same-content
+`.opju` Rosetta files with known values/names, single-variable diff pairs
+(log flag, column selector — as `.opju`), and Origin-exported ground truth
 (CSV + JSON: all books/sheets/columns/names/units + graph axis/curve
 refs) under `../test-data/origin/specimens/`. Every remaining unknown
 now has an oracle, so default RE tier drops to sonnet with escalation
 only on demonstrated failure. NOTE: Origin ≥ 2023 cannot WRITE
 old-format `.opj` (removed by OriginLab), so no trial-made `.opj`
 specimens exist — `.opj` figure-flag probes must use within-corpus
-diffing per the item-11 report instead.
+diffing per the item-11 report instead. **License update (2026-07-04):
+a persistent STUDENT license replaced the trial — page-limited, so COM
+work is restricted to TINY projects (large multi-book files hang the
+headless instance on the page-limit modal; the overnight big-file
+ground-truth export was abandoned for exactly this). One COM instance
+at a time, always.**
 
 Agent types: `data-format-detective` (1, 7, 11), `code-architect` (12,
 15 design), `code-implementer`/`quantized-porter` (decoders),
@@ -149,8 +155,11 @@ no documented real-Origin validation procedure for the trial window (31).
 
 | # | Item | Workstream | Why first |
 |---|------|------------|-----------|
-| 33 | `.opju` real-corpus figure records | W3 | figures decode for complex/bound-curve graphs |
-| ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18~~ | all `.opju` decode + import flow + W4 UI | — | done, see Completed |
+| 34 | `.opj` writer real-Origin fix | W6 | the export lever is broken; the license enables the fix loop NOW |
+| 25 | COM "Send to Origin" | W6 | live-verifiable while the license is present (COM-serialized after 34) |
+| 20 | docs consolidation | W5 | 1,450 lines of RE reports unfolded; independent, delegable |
+| 22 | structured results-log parsing | W5 | log text already ships; independent, delegable |
+| ~~33~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18~~ | all decode + import flow + W4 UI | — | done, see Completed |
 
 ---
 
@@ -223,15 +232,27 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 3 — Nice-to-Have
 
-(all W3 items shipped — see Completed)
+35. **Figure curve→dataset binding** — restored figures apply axis
+    ranges/log flags and resolve their dataset by a source-hint
+    heuristic, but the DataPlot curve→column selector was never cracked
+    (item 11's open sub-question): a figure doesn't know WHICH columns
+    each curve plots, so multi-curve graphs restore the book, not the
+    exact column pairs. RE target: the per-plot dataset references
+    Origin's own GT `index.json` records (`graphs → layers → plots`)
+    give an oracle for. Diff pairs `fig_pairs.opju` (scatter A-B vs A-C
+    vs line A-B in one project) already isolate the selector.
+    *Model: sonnet (oracle exists) · escalate only on demonstrated
+    failure.*
+
+(other W3 items shipped — see Completed)
 
 ---
 
 ## W4 — Import flow & UX
 
-### Tier 1 — High Impact
-
-### Tier 2 — Medium Impact
+(all W4 items shipped — see Completed; the full Book→Sheet nesting UI
+was deliberately descoped in #5, pseudo-books "`Book@N` (sheet N)" are
+the shipped contract)
 
 ---
 
@@ -265,6 +286,24 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 1 — High Impact
 
+34. **`.opj` writer real-Origin compatibility** — item 24's writer
+    round-trips through our own reader but real Origin REJECTS the file
+    (COM `app.Load` = False, 2026-07-04, see
+    `docs/origin_re/validation_log.md`). The whole point of a native
+    writer — "a written `.opj` opens in EVERY Origin version" — is unmet
+    until this is fixed. The student license gives a tight oracle loop:
+    write → COM `Load` → adjust → repeat, plus expASC re-export to verify
+    data integrity once it loads. Likely gaps: mandatory file-header
+    fields, project-tree/root-window records, windows-section
+    completeness, or a trailer Origin's loader requires.
+    *Model: fable/opus (RE debug loop, COM-serialized — main thread) ·
+    the ONLY open item that needs the license besides 25/31.*
+    - [ ] Reproduce the load failure; capture Origin's error surface
+    - [ ] Structural diff: our output vs the smallest real corpus `.opj`
+    - [ ] Iterate sections until `Load` = True
+    - [ ] Verify loaded data/names/units via expASC re-export
+    - [ ] Record the required-section findings in the format doc
+
 ### Tier 2 — Medium Impact
 
 25. **COM "Send to Origin" (Windows-only optional)** — pywin32 behind a
@@ -294,13 +333,15 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 2 — Medium Impact
 
-31. **Trial-window validation log** — a documented, repeatable manual
-    checklist run whenever a real Origin license is present: our written
-    `.opj` files open in Origin with correct data/names; `.ogs` scripts
-    run clean; the COM path works; results recorded in
-    `docs/origin_re/validation_log.md` (Origin cannot run in CI — this
-    plus 28 is the honest substitute)
-    *Model: haiku (docs) + owner (clicks).*
+31. **License-window validation log** — a documented, repeatable
+    checklist run whenever a real Origin license is present (now a
+    persistent student license — small projects only): our written
+    `.opj` files open in Origin with correct data/names (the load
+    failure itself is item 34); `.ogs` scripts run clean; the COM path
+    works; results recorded in `docs/origin_re/validation_log.md`
+    (Origin cannot run in CI — this plus 28 is the honest substitute)
+    *Model: haiku (docs) + owner (clicks) · partially done: the log
+    exists with codec/ground-truth/writer-failure entries.*
 
 
 ## Completed
