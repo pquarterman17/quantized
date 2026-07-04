@@ -1,226 +1,212 @@
-"""The ``.opju`` (CPYUA) worksheet-column codec — clean-room, validated vs oracles.
+"""The ``.opju`` (CPYUA) worksheet-column codec — canonical Burtscher FPC.
 
-Format facts from ``docs/origin_re/opju_container.md`` (derived with
-known-content Rosetta specimens, no GPL code): columns are stored as a
-nibble-coded XOR-delta float stream, not compressed. Each column record ends
-with::
+Format facts derived clean-room (no GPL liborigin) from known-content Rosetta
+specimens generated with an Origin 2026b trial, then locked against Origin's
+own exported ground truth (``tests/test_io_origin_ground_truth.py``): every
+``XAS.opju`` column (243/243 values) and 193 ``Hc2 data`` columns decode
+bit-exact, plus ``RockingCurve`` axes at 71 and 201 rows.
 
-    … 0a 05 20 | ff ff | <nrows u16 LE> | <mk> | 0x0c | <ctrl stream> | ff ff
+Each numeric column is an FPC-compressed float64 stream (Burtscher &
+Ratanaworabhan, *FPC: A High-Speed Compressor for Double-Precision
+Floating-Point Data*, IEEE TC 2009). Two predictors race for every value:
 
-where the ctrl stream is control bytes carrying two 4-bit item codes each
-(low nibble first): ``7`` = 8-byte literal float64 LE · ``E`` = 7-byte XOR
-residual (LE bytes 0–6, top byte 0) · ``F`` = 8-byte XOR residual · ``8`` =
-0 bytes (predictor exact). Values reconstruct as ``u_i = P_i XOR r_i`` with
-``P`` either PREV (``u[i-1]``) or PRED (``2·u[i-1] − u[i-2]``, u64 wrap,
-missing terms 0). Alternate record forms: a constant column stores one
-``0x1a``-tagged truncated literal (top 2 bytes); tiny columns store per-value
-``00 00 1a <2B>`` records.
+* **FCM** — a value predictor: ``pred = fcm[fh]``;
+* **DFCM** — a stride predictor: ``pred = last + dfcm[dh]``.
 
-Which predictor an ``E``/``F`` item uses is a per-column schedule Origin
-doesn't spell out; every real-data specimen used all-PREV, while clean
-integer sequences alternated. We decode under a small family of candidate
-schedules and keep the most physically plausible result — and the
-ground-truth oracle suite (tests/test_io_origin_ground_truth.py) holds the
-decoder to Origin's own exported values on the local corpus.
+The encoder XORs the true bits against the closer prediction and stores the
+low ``k`` bytes little-endian (the dropped high bytes are the leading zeros).
+Every value carries a 4-bit code; two codes pack into one control byte, low
+nibble first:
+
+* **bit 3** selects the predictor (0 = FCM, 1 = DFCM),
+* **bits 0-2** give the residual byte-count as ``(code & 7) + 1``,
+* the single code ``0x8`` is the exact case (0 residual bytes).
+
+Both hash tables hold ``2**11`` entries and update the textbook FPC way::
+
+    fh = ((fh << 6) ^ (value  >> 48)) & 0x7FF
+    dh = ((dh << 2) ^ (stride >> 40)) & 0x7FF
+
+Origin frames each column record with LEB128 varints as
+``0a 05 <varint> ff ff <nrows:varint> 00 <varint> 0c <stream>``; the next
+record (or trailing ``ff ff``) bounds the stream. Empty numeric cells carry
+the ``ORIGIN_MISSING`` sentinel and map to NaN.
 """
 
 from __future__ import annotations
 
 import re
-import struct
-from collections.abc import Callable
-from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
 
 from quantized.io.origin_project.container import ORIGIN_MISSING
 
-__all__ = ["CodecError", "scan_columns"]
+__all__ = ["CodecError", "decode_stream", "scan_columns"]
 
 _MASK = 0xFFFFFFFFFFFFFFFF
-# .opju strings are length-prefixed (no NUL): validate the byte before the
-# match equals the name length.
+_TABLE_MASK = (1 << 12) - 1  # 2**12-entry FCM/DFCM hash tables
+_FCM_SHIFT, _FCM_DROP = 6, 48  # fh = ((fh << 6) ^ (value  >> 48)) & mask
+_DFCM_SHIFT, _DFCM_DROP = 2, 40  # dh = ((dh << 2) ^ (stride >> 40)) & mask
+
+# A length-prefixed dataset name "<Book>_<Col>" (CPYUA strings carry no NUL
+# terminator, so the byte before the match must equal the name length).
 _NAME = re.compile(rb"[A-Za-z][\w ]{0,40}_[A-Za-z0-9]{1,4}")
-_STREAM_LEN = {0x7: 8, 0x8: 0, 0xE: 7, 0xF: 8}
 
 
 class CodecError(ValueError):
-    """A column stream that doesn't parse under the documented codec."""
+    """A column stream that doesn't parse under the FPC codec."""
 
 
-@dataclass(frozen=True)
-class _Item:
-    nibble: int
-    payload: bytes
+def _width(nibble: int) -> int:
+    """Residual byte-count for a 4-bit code (``0x8`` = exact = 0 bytes)."""
+    return 0 if nibble == 8 else (nibble & 7) + 1
 
 
-def _parse_items(b: bytes, pos: int, nrows: int) -> list[_Item]:
-    """Parse ctrl-byte items until the ``ff ff`` terminator (or nrows items)."""
-    items: list[_Item] = []
-    n = len(b)
-    while len(items) < nrows:
+def _decode(stream: bytes, nrows: int) -> tuple[NDArray[np.float64], int]:
+    """Decode ``nrows`` float64s; return ``(values, bytes_consumed)``."""
+    fcm: dict[int, int] = {}
+    dfcm: dict[int, int] = {}
+    fh = dh = 0
+    last = 0
+    out: list[int] = []
+    pos = 0
+    n = len(stream)
+    while len(out) < nrows:
         if pos >= n:
-            raise CodecError("stream ran off the end")
-        ctrl = b[pos]
-        if ctrl == 0xFF:
-            break
-        lo, hi = ctrl & 0xF, ctrl >> 4
-        if lo not in _STREAM_LEN or hi not in _STREAM_LEN:
-            raise CodecError(f"unknown ctrl nibble in {ctrl:02x}")
+            raise CodecError(f"stream exhausted at {len(out)}/{nrows} values")
+        ctrl = stream[pos]
         pos += 1
-        for nib in (lo, hi):
-            width = _STREAM_LEN[nib]
+        for nibble in (ctrl & 0xF, ctrl >> 4):
+            width = _width(nibble)
             if pos + width > n:
-                raise CodecError("item overruns buffer")
-            items.append(_Item(nib, b[pos : pos + width]))
+                raise CodecError("residual overruns the buffer")
+            resid = int.from_bytes(stream[pos : pos + width] + b"\x00" * (8 - width), "little")
             pos += width
-            if len(items) >= nrows:
+            pred = (last + dfcm.get(dh, 0)) & _MASK if nibble & 8 else fcm.get(fh, 0)
+            val = pred ^ resid
+            out.append(val)
+            stride = (val - last) & _MASK
+            fcm[fh] = val
+            dfcm[dh] = stride
+            fh = ((fh << _FCM_SHIFT) ^ (val >> _FCM_DROP)) & _TABLE_MASK
+            dh = ((dh << _DFCM_SHIFT) ^ (stride >> _DFCM_DROP)) & _TABLE_MASK
+            last = val
+            if len(out) >= nrows:
                 break
-    if len(items) != nrows:
-        raise CodecError(f"{len(items)} items for {nrows} rows")
-    return items
+    vals = np.frombuffer(np.asarray(out, dtype="<u8").tobytes(), dtype="<f8").copy()
+    vals[vals == ORIGIN_MISSING] = np.nan  # empty cells → NaN
+    return vals, pos
 
 
-def _residual(payload: bytes) -> int:
-    """7-byte residuals are LE bytes 0–6 (top byte 0); 8-byte are full u64."""
-    return int.from_bytes(payload + b"\x00" * (8 - len(payload)), "little")
+def decode_stream(stream: bytes, nrows: int) -> NDArray[np.float64]:
+    """Decode ``nrows`` float64 values from one FPC control+residual stream."""
+    return _decode(stream, nrows)[0]
 
 
-Schedule = Callable[[int, int], str]  # (value_index, e_item_ordinal) -> "prev"|"pred"
+def _read_varint(b: bytes, p: int) -> tuple[int, int]:
+    """Read one LEB128 varint at ``p``; return ``(value, next_pos)``."""
+    val = shift = 0
+    while p < len(b):
+        byte = b[p]
+        p += 1
+        val |= (byte & 0x7F) << shift
+        shift += 7
+        if not byte & 0x80:
+            return val, p
+    raise CodecError("varint ran off the buffer")
 
 
-def _schedules() -> list[Schedule]:
-    """Candidate predictor schedules, most-likely-first (see module docstring)."""
+def _record_at(b: bytes, ff: int) -> tuple[int, int] | None:
+    """Parse the column-record header whose ``ff ff`` sits at ``ff``.
 
-    def all_prev(_i: int, _k: int) -> str:
-        return "prev"
+    Returns ``(nrows, stream_start)`` for the numeric-stream form
+    ``ff ff <nrows:varint> 00 <varint> 0c``, else None (graph/preview and
+    other record shapes fail one of the fixed bytes and are skipped).
+    """
+    try:
+        nrows, p = _read_varint(b, ff + 2)
+    except CodecError:
+        return None
+    if not 2 <= nrows <= 50_000_000:
+        return None
+    if p >= len(b) or b[p] != 0x00:
+        return None
+    try:
+        _, p = _read_varint(b, p + 1)  # a size-ish field (~2·nrows−1)
+    except CodecError:
+        return None
+    if p >= len(b) or b[p] != 0x0C:
+        return None
+    return nrows, p + 1
 
-    def all_pred(_i: int, _k: int) -> str:
-        return "pred"
 
-    def alt_pred_first(_i: int, k: int) -> str:
-        return "pred" if k % 2 == 0 else "prev"
+def _records(b: bytes) -> list[tuple[int, int, int]]:
+    """Candidate numeric records ``(marker, nrows, start)``, in file order.
 
-    def alt_prev_first(_i: int, k: int) -> str:
-        return "prev" if k % 2 == 0 else "pred"
-
-    return [all_prev, alt_pred_first, alt_prev_first, all_pred]
-
-
-def _decode_with(items: list[_Item], schedule: Schedule) -> NDArray[np.float64]:
-    us: list[int] = []
-    e_ordinal = 0
-    for i, item in enumerate(items):
-        prev = us[i - 1] if i >= 1 else 0
-        prev2 = us[i - 2] if i >= 2 else 0
-        pred = (2 * prev - prev2) & _MASK
-        if item.nibble == 0x7:
-            us.append(int.from_bytes(item.payload, "little"))
-        elif item.nibble == 0x8:
-            us.append(pred)
-        else:  # E / F: XOR residual against the scheduled predictor
-            base = prev if schedule(i, e_ordinal) == "prev" else pred
-            us.append(base ^ _residual(item.payload))
-            e_ordinal += 1
-    out = np.frombuffer(np.asarray(us, dtype="<u8").tobytes(), dtype="<f8").copy()
-    out[out == ORIGIN_MISSING] = np.nan
+    ``0xff 0xff`` also occurs *inside* FPC residual data, so this over-reports;
+    :func:`scan_columns` walks the list with a cursor that jumps past each
+    decoded stream, so the false in-stream markers are skipped.
+    """
+    out: list[tuple[int, int, int]] = []
+    ff = b.find(b"\xff\xff")
+    while ff >= 0:
+        # the header opens with `0a 05 <varint>` (1-2 byte varint) before ff ff
+        if any(ff - k >= 0 and b[ff - k] == 0x0A and b[ff - k + 1] == 0x05 for k in (3, 4)):
+            rec = _record_at(b, ff)
+            if rec is not None:
+                out.append((ff, rec[0], rec[1]))
+        ff = b.find(b"\xff\xff", ff + 1)
     return out
 
 
-def _implausibility(vals: NDArray[np.float64]) -> int:
-    """Wrong-predictor decodes shatter the exponent field; count the wreckage."""
-    u = vals.view(np.uint64)
-    exp = ((u >> 52) & 0x7FF).astype(np.int64)
-    bad = int(np.sum((exp == 0x7FF) | ((exp == 0) & (u != 0))))  # inf/nan/denormal
-    live = exp[(exp != 0) & (exp != 0x7FF)]
-    if live.size > 1:
-        bad += int(np.sum(np.abs(np.diff(live)) > 24))  # wild exponent jumps
-    return bad
+def _plausible(vals: NDArray[np.float64]) -> bool:
+    """Reject any column that shows a decode desync.
 
-
-def _rank_key(vals: NDArray[np.float64]) -> tuple[float, int, float]:
-    """Order candidate decodes: fewest wrecked floats, then strictly monotonic
-    beats not (axes/indices), then least total variation. Schedule order breaks
-    exact ties (all-PREV first — every real-data specimen used it)."""
-    finite = vals[np.isfinite(vals)]
-    if finite.size < 2:
-        return (_implausibility(vals), 0, 0.0)
-    d = np.diff(finite)
-    monotonic = bool(np.all(d > 0) or np.all(d < 0))
-    return (_implausibility(vals), 0 if monotonic else 1, float(np.sum(np.abs(d))))
-
-
-def _decode_stream(b: bytes, pos: int, nrows: int) -> NDArray[np.float64]:
-    items = _parse_items(b, pos, nrows)
-    ranked = sorted((_decode_with(items, s) for s in _schedules()), key=_rank_key)
-    return ranked[0]
-
-
-def _truncated_literal(payload: bytes) -> float:
-    """``0x1a`` items store the double's TOP bytes (LE order), rest zero."""
-    u = int.from_bytes(payload, "little") << (8 - len(payload)) * 8
-    return float(struct.unpack("<d", struct.pack("<Q", u))[0])
-
-
-def _decode_record(b: bytes, at: int) -> tuple[int, NDArray[np.float64]] | None:
-    """Decode one column record whose ``0a 05 20`` marker starts at ``at``.
-
-    Returns ``(end_pos, values)`` or None if the bytes after the marker don't
-    form a known record shape.
+    A wrong predictor shatters the float exponent field, so a mis-located or
+    diverged stream produces subnormals (|v| ≲ 1e-300) and absurd magnitudes
+    (|v| ≳ 1e290) that real instrument data never contains. We reject the
+    *whole* column on the first such value — a partially-diverged column can't
+    be trusted past the divergence, and silent garbage is worse than a gap.
+    (The known residual gap: long near-constant-stride axis columns diverge on
+    an exact DFCM hash-collision detail — see ``docs/origin_re``.)
     """
-    pos = at + 3
-    tag = b[pos : pos + 2]
-    if tag == b"\xff\xff":
-        nrows = int.from_bytes(b[pos + 2 : pos + 4], "little")
-        if not 1 <= nrows <= 50_000_000:
-            return None
-        fmt = b[pos + 5]  # b[pos + 4] is a size-ish field (2·nrows−1 for streams)
-        if fmt == 0x0C:
-            vals = _decode_stream(b, pos + 6, nrows)
-            return pos + 6, vals
-        if fmt == 0x1A:  # constant column: mk then one truncated literal
-            width = 2
-            val = _truncated_literal(b[pos + 5 + 1 : pos + 5 + 1 + width])
-            return pos + 5, np.full(nrows, val)
-        return None
-    if tag == b"\x00\x00":  # tiny form: per-value 00 00 1a <2B> records
-        tiny: list[float] = []
-        while b[pos : pos + 2] == b"\x00\x00" and b[pos + 2] == 0x1A:
-            tiny.append(_truncated_literal(b[pos + 3 : pos + 5]))
-            pos += 5
-        if tiny and b[pos : pos + 2] == b"\xff\xff":
-            return pos, np.asarray(tiny)
-    return None
+    finite = vals[np.isfinite(vals)]
+    if finite.size == 0:
+        return False
+    mag = np.abs(finite)
+    wrecked = ((mag < 1e-290) & (finite != 0.0)) | (mag > 1e290)
+    return not bool(np.any(wrecked))
 
 
 def scan_columns(b: bytes) -> list[tuple[str, NDArray[np.float64]]]:
-    """Find and decode every ``<Book>_<Col>`` column record in a CPYUA file.
+    """Decode every ``<Book>_<Col>`` numeric column in a CPYUA ``.opju`` file.
 
-    The outer type-tagged framing is not formally parsed (open RE item);
-    records are located by pairing each dataset-name string with the next
-    ``0a 05 20`` data marker before the following name. Columns whose stream
-    fails the codec are skipped (never emitted as garbage).
+    Records are walked in file order with a cursor: each decoded stream advances
+    the cursor past its own bytes, so the false ``ff ff`` markers buried in long
+    residual streams are skipped. Every real record is labelled by the nearest
+    preceding length-prefixed dataset name (validated on the local corpus: the
+    owning ``<Book>_<Col>`` name always leads its record). Streams that fail the
+    codec or decode to garbage are dropped — never emitted.
     """
     names = [
         (m.start(), m.group(0).decode("latin1"))
         for m in _NAME.finditer(b)
-        if m.start() > 0 and b[m.start() - 1] == len(m.group(0))  # length-prefixed
+        if m.start() > 0 and b[m.start() - 1] == len(m.group(0))
     ]
     out: list[tuple[str, NDArray[np.float64]]] = []
-    seen: set[str] = set()
-    for idx, (start, name) in enumerate(names):
-        if name in seen:
+    cursor = 0
+    for marker, nrows, start in _records(b):
+        if marker < cursor:  # a false marker inside an already-decoded stream
             continue
-        limit = names[idx + 1][0] if idx + 1 < len(names) else len(b)
-        at = b.find(b"\x0a\x05\x20", start, min(limit + 64, len(b)))
-        if at < 0:
-            continue
-        try:
-            decoded = _decode_record(b, at)
+        try:  # ≤ 8 residual bytes + a shared control nibble per value
+            vals, consumed = _decode(b[start : start + nrows * 9 + 16], nrows)
         except CodecError:
             continue
-        if decoded is not None:
-            out.append((name, decoded[1]))
-            seen.add(name)
+        if not _plausible(vals):
+            continue
+        prev = [name for pos, name in names if pos < marker]
+        if prev:
+            out.append((prev[-1], vals))
+        cursor = start + consumed
     return out

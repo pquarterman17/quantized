@@ -75,6 +75,7 @@ def _build_book(
     cols: Columns,
     books_meta: dict[str, BookMeta],
     inventory: list[dict[str, object]],
+    source_format: str = "origin_opj",
 ) -> DataStruct:
     """Assemble one workbook into a DataStruct.
 
@@ -102,7 +103,7 @@ def _build_book(
     value_cols = [c for c, _ in ordered[1:]]
     x_meta = col_meta.get(ordered[0][0]) if ordered else None
     meta = {
-        "source_format": "origin_opj",
+        "source_format": source_format,
         "origin_book": book,
         "origin_book_long": (
             f"{books_meta[base_book].long_name} (sheet {sheet_no})"
