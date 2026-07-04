@@ -89,6 +89,7 @@ def _plot_state_graph(
     units: list[str],
     x_name: str,
     x_unit: str,
+    sheet: str,
 ) -> list[str]:
     """LabTalk lines recreating the CURRENT PLOT STATE (item 26): selected
     channels, x source, log flags, axis limits, and an optional secondary
@@ -97,9 +98,11 @@ def _plot_state_graph(
     One ``plotxy`` call plots the whole primary y-set via grouped range
     syntax (``(x,y1):(x,y2):…`` — pairs need not be contiguous columns). The
     secondary axis uses ``layer -nr`` (new right-Y layer linked to the active
-    graph's X axis) — the best-documented LabTalk shortcut for this, but
-    UNVERIFIED against a live Origin instance; the comment block below notes
-    the second-graph-window fallback if it turns out to error.
+    graph's X axis) followed by a ``plotxy`` into layer 2. Both were VERIFIED
+    live against OriginPro via COM: the secondary ``plotxy`` must reference the
+    worksheet explicitly (``[%(qzbk$)]<sheet>!``) because the graph — not the
+    book — is the active window by then, and impASC renamed the book, so
+    ``qzbk$`` (captured in the import block) holds its real short name.
     """
     y_indices = list(range(len(labels))) if graph.y_keys is None else list(graph.y_keys)
     if not y_indices:
@@ -143,24 +146,28 @@ def _plot_state_graph(
         o.append(f'yl.text$ = "{_escape_lt(_axis_title(labels[yi], y_unit))}";')
 
     if secondary:
-        pairs2 = ":".join(f"({x_col},{_col(i)})" for i in secondary)
+        # Explicit worksheet ref: the graph is the active window here, so a bare
+        # (x,y) range would not resolve. qzbk$ (import block) holds the book's
+        # post-impASC short name; <sheet> was restored right after import.
+        pairs2 = ":".join(f"[%(qzbk$)]{sheet}!({x_col},{_col(i)})" for i in secondary)
         o += [
             "",
             "// Secondary (right) Y axis for y2-assigned channels (item 26).",
-            '// "layer -nr" is the best-documented LabTalk shortcut for a new',
-            "// right-Y layer linked to the active graph's X axis; UNVERIFIED",
-            "// against a live Origin instance -- if it errors instead, delete",
-            "// this block and use a second graph window:",
-            f"//   plotxy iy:={pairs2} plot:=201 ogl:=[<new>];",
+            "// New right-Y layer linked to the active graph's X, then plot the",
+            "// y2 channels into layer 2 (verified live in OriginPro via COM).",
             "layer -nr;  // new right-Y layer, linked X",
             f"plotxy iy:={pairs2} plot:=201 ogl:=2!;",
+            "page.active = 2;  // operate on the new right-Y layer below",
         ]
         if graph.y_log:
             o.append("layer.y.type = 1;  // Log Y (right)")
         if len(secondary) == 1:
             yi = secondary[0]
             y_unit = units[yi] if yi < len(units) else ""
-            o.append(f'yr.text$ = "{_escape_lt(_axis_title(labels[yi], y_unit))}";')
+            # A "layer -nr" layer has no pre-made axis-title object, so use the
+            # `label -yr` command (yr.text$ / yl.text$ fail here) to title its
+            # right Y axis. Verified live in OriginPro via COM.
+            o.append(f'label -yr "{_escape_lt(_axis_title(labels[yi], y_unit))}";')
     return o
 
 
@@ -219,9 +226,19 @@ def format_origin_script(
         "",
         "// Import data",
         f'newbook name:="{book}" sheet:=1;',
+        # impASC auto-detects the 2-row (name/unit) header AND renames the book +
+        # sheet to the source file -- so restore the intended names AFTER import.
+        # (The historical `options.SkipRows.Count:=2` sub-option is INVALID LabTalk
+        # in current Origin and aborts the whole import; bare impASC reads our
+        # 2-header CSV correctly and the explicit designations below re-assert
+        # names/units. See docs/origin_project_format.md.)
+        f'impASC fname:="{csv_name}";',
         *([f'page.longname$ = "{_escape_lt(book_long_name)}";'] if book_long_name else []),
         f'wks.name$ = "{sheet}";',
-        f'impASC fname:="{csv_name}" options.SkipRows.Count:=2;',
+        # A successful impASC renamed the book; capture its (post-import) short
+        # name so the item-26 secondary-axis plotxy can reference the worksheet
+        # columns while the GRAPH window -- not the book -- is active.
+        *(["string qzbk$ = page.name$;"] if (make_graph and graph is not None) else []),
         "",
         "// Column designations and labels",
         "wks.col1.type = 4;  // X",
@@ -240,7 +257,9 @@ def format_origin_script(
 
     if make_graph:
         if graph is not None:
-            o += _plot_state_graph(graph, labels=labels, units=units, x_name=x_name, x_unit=x_unit)
+            o += _plot_state_graph(
+                graph, labels=labels, units=units, x_name=x_name, x_unit=x_unit, sheet=sheet
+            )
         else:
             o += ["", "// Create graph", "plotxy iy:=(1,2) plot:=201 ogl:=[<new>];"]
             if log_x:

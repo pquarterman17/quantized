@@ -129,16 +129,22 @@ def test_origin_graph_x_key_uses_value_channel() -> None:
 def test_origin_graph_y2_split() -> None:
     # y_keys=(0,1,2), y2_keys=(2,) -> primary (0,1) on the left, channel 2 on
     # a secondary right-Y layer via "layer -nr" + a second plotxy into it.
+    # The secondary plotxy references the worksheet explicitly via qzbk$ (the
+    # book's post-impASC short name) because the GRAPH is the active window by
+    # then -- verified live in OriginPro (a bare (1,4) range fails to resolve).
     ds = _three_channel_ds()
     _, ogs = format_origin_script(
         ds,
         make_graph=True,
         graph=GraphSpec(y_keys=(0, 1, 2), y2_keys=(2,)),
     )
+    assert "string qzbk$ = page.name$;" in ogs  # captured after impASC
     assert "plotxy iy:=(1,2):(1,3) plot:=201 ogl:=[<new>];" in ogs
     assert "layer -nr;  // new right-Y layer, linked X" in ogs
-    assert "plotxy iy:=(1,4) plot:=201 ogl:=2!;" in ogs
-    assert 'yr.text$ = "Y3 (C)";' in ogs
+    assert "plotxy iy:=[%(qzbk$)]data!(1,4) plot:=201 ogl:=2!;" in ogs
+    assert "page.active = 2;  // operate on the new right-Y layer below" in ogs
+    # A "layer -nr" layer has no title object -> label -yr, not yr.text$.
+    assert 'label -yr "Y3 (C)";' in ogs
 
 
 def test_origin_graph_y2_all_channels_falls_back_to_single_axis() -> None:

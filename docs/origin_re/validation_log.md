@@ -222,6 +222,27 @@ all slots together (composition of the two known failure axes).
   blocks + NaN gaps) through `send_to_origin` — finite cells land
   row-exact, **NaN cells become Origin missing values (`--`)**, labels
   carry. The GUI's cross-book overlay datasets are COM-exportable as-is.
+- **Live `.ogs` export verification (item 23 + item 26)** — running the
+  generated LabTalk in real OriginPro caught bugs that text-parity vs
+  MATLAB never could (the MATLAB `exportOriginScript.m` was never live-run
+  in this Origin build):
+  - `impASC ... options.SkipRows.Count:=2` is **invalid LabTalk here and
+    aborts the whole import** (faithfully ported from MATLAB line 115).
+    Bare `impASC fname:=...` auto-detects the 2-row name/unit header
+    correctly; the explicit `wks.col*.lname$/unit$` designations still
+    re-assert names/units. This silently broke *all* `.ogs` exports.
+  - A successful `impASC` **renames the destination book + sheet to the
+    source filename** — so `wks.name$` must be set AFTER import, and the
+    post-import short name captured (`string qzbk$ = page.name$;`) for any
+    later cross-window plot reference.
+  - Double-Y (item 26): the secondary `plotxy` runs while the GRAPH is the
+    active window, so it needs an explicit `[%(qzbk$)]<sheet>!(x,y)` range
+    (a bare `(x,y)` won't resolve); `layer -nr` + `plotxy ... ogl:=2!`
+    then lands the curve in layer 2 (confirmed: layer-2 y-axis rescales to
+    the y2 data). A `layer -nr` layer has **no pre-made axis-title
+    object**, so its right-Y title needs `label -yr` (`yr.text$` fails).
+  - Final corrected `.ogs` runs with **zero failed lines**; 2 layers,
+    correct per-layer limits + titles.
 - Live import fan-out test caught + fixed a real gap: XRD Book6's
   2-theta column (4 stray denormals) was gate-dropped; `salvage_column`
   now masks ≤4/≤0.5% wrecked cells AFTER the text/report decoders pass
