@@ -16,6 +16,7 @@ Two layers, mirroring ``test_io_origin_project.py``'s ``.opj`` figures tests:
 from __future__ import annotations
 
 import json
+import re
 import struct
 from pathlib import Path
 
@@ -585,3 +586,72 @@ def test_realdata_real_corpus_curves_are_plausible(stem: str) -> None:
             )
     if n_curves == 0:
         pytest.skip(f"{stem}: no curve tokens found within any decoded figure's window")
+
+
+# ── realdata: the real plots.json oracle (item 35 rework, 2026-07-04) ────────
+#
+# tools/origin_trial/export_plot_refs.py's `range -w` LabTalk recipe recovers
+# the real per-plot dataset references that export_ground_truth.py's
+# `layer.nplots`/`range __rp` approach could never populate (both described in
+# opju_curves.py's module docstring). Where `plots.json` exists, it is the
+# strongest oracle available: `{"<graph>": {"<layer>": ["<ref>", ...]}}` with
+# each ref shaped `[Book]Sheet!Col"LongName"` (or an unquoted sheet name, or
+# no long-name suffix for the by-construction fig_pairs specimen).
+
+_PLOT_REF_RE = re.compile(r'\[(?P<book>[^\]]+)\](?:"[^"]*"|[^!"]*)!(?P<col>[A-Za-z]+)')
+
+
+def _oracle_pairs(plots_path: Path) -> set[tuple[str, str]]:
+    """Every ``(book, column)`` pair referenced anywhere in one ``plots.json``,
+    across all graphs and layers (recall/precision are checked file-wide, not
+    per-graph, since this decoder's own figure-to-curve attribution is a
+    documented best-effort heuristic -- see opju_curves.py's "Known gap")."""
+    data = json.loads(plots_path.read_text(encoding="utf-8"))
+    out: set[tuple[str, str]] = set()
+    for layers in data.values():
+        for refs in layers.values():
+            for ref in refs:
+                m = _PLOT_REF_RE.match(ref)
+                if m:
+                    out.add((m.group("book"), m.group("col")))
+    return out
+
+
+# Measured 2026-07-04 against the real plots.json oracle (see
+# docs/origin_project_format.md sec 6.2.1 for the full table) after excluding
+# the "__BCO" boilerplate false positive (opju_curves.py's module docstring).
+# Precision is 100% on every stem -- asserted unconditionally below, no floor
+# needed. Recall is this decoder's documented, honest, and still-significant
+# gap (most real per-curve tokens are not yet locatable); these floors exist
+# to catch a regression, not to claim the ceiling has been reached.
+_RECALL_FLOOR = {
+    "fig_pairs": 1.0,  # 2/2 -- the by-construction specimen this was reverse-engineered from
+    "XAS": 0.0,  # 0/3 -- its only matches were the __BCO artifact, now correctly excluded
+    "RockingCurve": 0.5,  # 2/4 -- NbAuRocking's D+F multi-curve layer decodes exactly
+    "UnpolPlots": 0.0,  # 0/8 -- both matches were the __BCO artifact (the fix this rework ships)
+    "Fixed Lambdas SI": 2 / 14,  # 2/14 -- only each window's first ("Theory SA") curve survives
+}
+
+
+@pytest.mark.realdata
+@pytest.mark.parametrize(
+    "stem", ["fig_pairs", "XAS", "RockingCurve", "UnpolPlots", "Fixed Lambdas SI"]
+)
+def test_realdata_curve_bindings_vs_plots_oracle(stem: str) -> None:
+    """Strict precision (every decoded curve must be IN the oracle, file-wide,
+    no exceptions) plus a recall floor (must not regress below what's
+    currently achieved) against the real per-plot ``plots.json`` oracle."""
+    plots_path = _GT / stem / "plots.json"
+    src = _SPEC / f"{stem}.opju" if stem == "fig_pairs" else _SPEC.parent / f"{stem}.opju"
+    if not src.exists() or not plots_path.exists():
+        pytest.skip(f"corpus file/plots-oracle for '{stem}' not present on this machine")
+    oracle = _oracle_pairs(plots_path)
+    figs = extract_figures_opju(src.read_bytes())
+    decoded = {(c["book"], c["y"]) for f in figs for c in f["curves"]}
+
+    wrong = decoded - oracle
+    assert not wrong, f"{stem}: decoded curve(s) contradict the oracle: {sorted(wrong)}"
+
+    recall = len(decoded & oracle) / len(oracle) if oracle else 1.0
+    floor = _RECALL_FLOOR[stem]
+    assert recall >= floor - 1e-9, f"{stem}: recall {recall:.3f} regressed below floor {floor:.3f}"
