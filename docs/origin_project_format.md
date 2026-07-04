@@ -1180,6 +1180,65 @@ pass specifically on simple/default single-curve graphs (not the
 multi-curve/multi-book layout, which the two new specimens confirm is
 already solved).
 
+**The "third encoding" search — negative result (2026-07-04).** A further
+session chased three hypotheses for the default-dialog column selector.
+None validated; **no code shipped**, recall stays 30.6% / precision 100%.
+See `opju_curves.py`'s module docstring for the full byte-level trail — the
+short version:
+
+1. **Version-pair diff, refuted.** `specimens/converted/*.opju` are the
+   same corpus projects re-saved by the trial-writer's Origin build
+   (4.3811) from the corpus's native 4.3380 build — a hoped-for Rosetta
+   stone between "trial-written" and "real corpus" `.opju`. It isn't one:
+   re-scanning `converted/XAS.opju` finds what looks like a new real token
+   at `Co!C`, but it is the *same* `__BCO` boilerplate coincidence,
+   version-shifted to 383 bytes past the marker (vs. the pinned 357-360 in
+   the native corpus) — just outside the current `[340, 380)` filter
+   window by luck of which build wrote it, not a new decodable signal. The
+   re-save also introduces a second false-positive-shaped cluster (~1872
+   bytes from a `__BCO` marker) not seen in the native file — conversion
+   makes the corpus *noisier*, not cleaner, for this purpose. No genuine
+   curve/DataPlot token appears inside any default-dialog graph's own axis
+   window in either build.
+2. **Window-local alternate encoding, found but confirmed non-validating.**
+   Anchoring on a length-prefixed workbook short-name string embedded in
+   `RockingCurve`'s curve-object body (e.g. `\x80\x03Nb\x00`, found 11
+   bytes before the real token in the *solved* `NbAuRocking` object)
+   locates a look-alike byte sequence at the same relative offset in the
+   *unsolved* `Graph1`/`Graph2` objects — same first 5 bytes as the real
+   token (`<flag> 01 01 01 80`), but the literal `0x03` sub-type byte is
+   `0x01`, there is no fixed `0x00` terminator, and the record doesn't
+   resync with the shared downstream template for another ~30-40 bytes.
+   The byte following the swapped sub-type was `0x09` for `Nb!B` (expected
+   ordinal 2 local / 8 global) and `0x0e` for `NbAl!B` (expected ordinal 2
+   local / 12 global) — matching neither scheme, and not even matching
+   each other by the true ordinals' own difference (`14-9=5` vs. the real
+   `12-8=4`). The decisive check: the 4.3811 re-save of this exact project
+   rewrites the same slot into the *canonical* token shape while
+   preserving the *same* numeric value (`9`/`14`) — proof the slot is a
+   real Origin field, not a misparse — yet decoding `9` through the
+   already-validated cumulative-ordinal map resolves to `Nb!C` (**wrong**;
+   oracle wants `B`), and `14` is out of range entirely. Some other,
+   unidentified numbering rule governs default-dialog plots' column
+   choice; trusting this shape would have silently produced wrong answers,
+   not just missing ones — precisely what the precision-first design
+   forbids. It also isn't a generally-locatable shape: the raw 4-byte
+   prefix recurs ~90 times in `XAS.opju` alone (a generic idiom, not
+   curve-specific), and `XAS`'s own default-dialog curve objects don't
+   embed a length-prefixed short name this way at all — the anchor
+   technique is `RockingCurve`-specific, not corpus-general.
+3. **Legend / `__FRAMESRCDATAINFOS` backrefs, dead end.**
+   `__FRAMESRCDATAINFOS` exists exactly once each in `UnpolPlots` and
+   `"Fixed Lambdas SI"` (absent from `XAS`/`RockingCurve`), but decodes as
+   multi-panel frame layout geometry (position/size), not a per-curve
+   dataset backref; the neighboring curve-object slots carry Origin's
+   generic auto-label macros (`%(?X)`/`%(?Y)` — "substitute this axis's
+   own column short name at render time"), not a literal dataset
+   reference.
+
+Recorded as a confirmed negative result (not "not yet tried") so a future
+pass doesn't re-spend time on the same three leads.
+
 ### 6.3 Origin → quantized figure mapping + gap list
 
 Both readers emit a flat list of plot-state snapshot dicts (`name`,
