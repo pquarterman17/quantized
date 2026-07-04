@@ -336,7 +336,6 @@ the shipped contract)
 
 ## Completed
 
-<<<<<<< HEAD
 - ~~**#22 Structured results-log parsing**~~ (2026-07-04) — `parse_results_log()`
   turns each timestamped `results_log()` record into
   `{"timestamp", "operation", "params"}` (params nested by `Input`/`Output`/etc.
@@ -345,7 +344,6 @@ the shipped contract)
   alongside the raw text whenever at least one record parses. Moke-validated
   (`subtract_line` + `[Book4]Sheet1` params recovered structurally, matching
   the existing raw-text anchor).
-=======
 - ~~**#20 Format-doc consolidation**~~ (2026-07-04) — folded all three
   `docs/origin_re/` reports (`opj_windows_section.md`, `opj_figures.md`,
   `opju_container.md`) into `docs/origin_project_format.md`, reorganized by
@@ -362,7 +360,6 @@ the shipped contract)
   limitations, export guidance). Each consolidated report now carries a
   short pointer stub; `docs/origin_re/validation_log.md` is untouched (a
   live log, not a report). Docs-only change, `src/`/`tests/` untouched.
->>>>>>> worktree-agent-aaa48c8687fae93c3
 - ~~**#6 Notes windows + results-log text**~~ (2026-07-04, `8cf0b42`) —
   BOTH halves now shipped. Results-log half (`20d54fa`): timestamped
   operation records → `metadata['origin_results_log']`, both containers,
