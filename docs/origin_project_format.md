@@ -772,6 +772,64 @@ X range**, each with its own Y scale and curves — validated on
 Y `(-1.0,10.0,2.0)` vs. `(-0.5,2.5,0.5)`). Origin's general model allows N
 free-positioned layers; double-Y and stacked panels are special cases.
 
+**Multi-layer figure emission — solved 2026-07-04 (item 36).** A graph
+window is one figure to Origin's user but `extract_figures` previously
+emitted only its FIRST layer (the layer-continuation block immediately
+after the window header), silently dropping every additional layer's own
+axis range and curves. Fixed: every layer-continuation block found inside
+a window's span (from its header to the next window header, of either
+kind) now yields its own figure dict, with a new 1-based `"layer"` key;
+`"name"` repeats the window name across all its layers.
+
+*Layer-record repetition — two head-byte values, not one.* The
+layer-continuation block's 3rd payload byte is normally `0x1f` — every
+window's first layer, AND every subsequent **overlaid** layer (a double-Y
+graph's 2nd Y-axis on the *same* panel: validated on Moke's `Graph7`, both
+layers `0x1f`, and independently on `SLD_DoubleY.otp`'s double-Y template,
+also both `0x1f`). A second, much rarer value, `0x17`, marks a subsequent
+**stacked/tiled-panel** layer (Origin's "N Panels" layout — a structurally
+different multi-layer mechanism, a separate panel rather than an overlay
+on the same axes) — isolated on Moke's `Graph4`: layer 1 head `0x1f`
+`(0.9, 3.1, -50, 3000)`, layer 2 head `0x17` `(0.9, 3.1, 400, 1500)`, the
+2nd layer's Y range matching the oracle exactly. A corpus-wide grep across
+every local `.opj` (Moke, XRD, SuperlatticeFits, PNR, hc2convert, XMCD,
+MnN_Diffusion_PNR) finds `0x17` nowhere except those 2 exact occurrences
+(`Graph4` and its copy inside the composite `Graph10`) — never outside a
+graph window's own span, and no third head-byte value anywhere. Both
+values decode identically otherwise (same axis-triple/hint/Y-scale-flag
+offsets); `figures.py`'s `_is_layer_block` accepts exactly `{0x1f, 0x17}`
+and nothing else — a window's first layer is always `0x1f` (used to
+distinguish a graph header from a worksheet header in the first place),
+so this widening cannot affect that detection.
+
+*Curve/text/annotation attribution — positional, validated exactly.*
+Layer records and curve anchors are sequential within a window's block
+span, so every curve anchor (§6.1.1), 133-byte curve-count object, and
+annotation text between one layer-continuation block and the next belongs
+to that layer; `n_curves`/`annotations` are scoped the same way. Validated
+on Moke's three multi-layer windows, both layer count and the *exact*
+per-layer `(book, column)` curve sets against `ground_truth/Moke/
+index.json`:
+
+| graph | layers | curves/layer | note |
+|-------|-------:|--------------|------|
+| `Graph4` | 2 | 2, 2 | stacked panels (`0x1f`, `0x17`) |
+| `Graph7` | 2 | 3, 3 | double-Y overlay (`0x1f`, `0x1f`) |
+| `Graph10` | 4 | 3, 3, 2, 2 | composite — literally `Graph7`'s 2 layers then `Graph4`'s 2, both source graphs' curves reproduced with no cross-layer bleed |
+
+No fallback was needed — positional attribution matched the oracle
+exactly once the `0x17` head byte was recognized as a real layer boundary
+(the earlier failure was a layer-*detection* gap, not an attribution
+failure); had it not matched, the documented fallback is to attach the
+whole window's curves to layer 1 only, same as the pre-item-36 behavior,
+rather than guess. Single-layer windows are unaffected — they still yield
+exactly one figure dict, now carrying `"layer": 1`, byte-identical to the
+pre-split decode otherwise. `.opju`'s `extract_figures_opju` (§6.2) already
+emitted one dict per layer (its container has no window-grouping to
+recover in the first place — see §6.2); it now also carries `"layer": 1`
+as a constant on every dict, for shape parity with `.opj`, not a decoded
+per-window index.
+
 **Axis range — validated.** The layer-continuation block stores each axis
 as a `float64 (from, to, step)` triple at fixed offsets:
 
@@ -1411,9 +1469,10 @@ mis-typing a binding.
 
 ### 6.3 Origin → quantized figure mapping + gap list
 
-Both readers emit a flat list of plot-state snapshot dicts (`name`,
+Both readers emit a flat list of plot-state snapshot dicts (`name`, `layer`,
 `x_from`/`x_to`/`x_log`, `y_from`/`y_to`/`y_log`, `source_hint`,
-`n_curves`, `annotations`) — shipped in the import payload
+`n_curves`, `annotations`) — one dict per LAYER, not per window (item 36) —
+shipped in the import payload
 (`figures.extract_figures` / `figures_opju.extract_figures_opju`), surfaced
 in the frontend's Library "Figures" section
 (`frontend/src/components/Library/FiguresSection.tsx`). Resolving a
@@ -1466,9 +1525,20 @@ yet):
   attribution gap). Unlike `.opj` (whose curves are scoped by the same
   window-based walk the rest of the figure decode already uses), this
   attribution problem is specific to `.opju`'s regex/anchor-based scan.
-- **Multi-layer free layout.** Origin allows N independently
-  positioned/sized layers; quantized has single-plot + stacked panels +
-  one inset. >2 layers or non-stacked overlays are lossy.
+- ~~**Multi-layer window recovery (`.opj`)**~~ — **solved 2026-07-04**
+  (item 36, §6.1): every layer of a graph window (not just its first) is
+  now recovered as its own figure dict — axis range, curves, curve count,
+  and annotations all scoped to that layer, positionally attributed and
+  validated exactly against Moke's `Graph4`/`Graph7`/`Graph10` (2/2/4
+  layers). What remains open is UI *representation*, not backend
+  *recovery*: quantized's plot surface still has no dual-Y/stacked-panel
+  view to render N linked layers as Origin composed them — the recovered
+  dicts are there, one per layer, for a future frontend feature to consume.
+- **Multi-layer free layout (UI target).** Origin allows N independently
+  positioned/sized layers; quantized's plot surface has single-plot +
+  stacked panels + one inset. Backend recovery of every layer is no longer
+  the gap (see above) — >2 layers or non-stacked overlays are still lossy
+  *to render*, not to decode.
 - **>2 Y axes / independent top-right axes** (`XT`,`YR` with own scales).
 - **Rich text** (super/subscript, Greek, per-run font/color/size) — best
   effort via an escape→Unicode transform, dropping per-run styling.

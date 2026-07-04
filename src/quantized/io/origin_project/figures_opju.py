@@ -295,11 +295,14 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
     """Every decodable graph layer in a CPYUA project as a plot-state snapshot.
 
     Same shape as ``figures.extract_figures`` (the ``.opj`` reader) plus one
-    addition: each dict has ``name``, ``x_from``, ``x_to``, ``x_log``,
-    ``y_from``, ``y_to``, ``y_log``, ``source_hint``, ``n_curves``,
+    addition: each dict has ``name``, ``layer``, ``x_from``, ``x_to``,
+    ``x_log``, ``y_from``, ``y_to``, ``y_log``, ``source_hint``, ``n_curves``,
     ``annotations``, and ``curves`` (item 35 — a best-effort list of
     ``{"book", "x", "y"}`` column bindings, possibly empty; see
-    ``opju_curves.py``). A multi-layer graph window (e.g. a double-Y or
+    ``opju_curves.py``). ``layer`` is always ``1`` here — unlike ``.opj``'s
+    real per-window layer index, this reader has no window grouping to
+    number layers within (see below), so it is a constant, not a decoded
+    value. A multi-layer graph window (e.g. a double-Y or
     free-panel layout) yields one dict per layer rather than nesting them,
     since the shipped payload shape is flat. Composite windows that
     *reference* an already-encoded layer share its single anchor (see the
@@ -344,6 +347,9 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         figures.append(
             {
                 "name": "",  # per-layer window name not recoverable (see module docstring)
+                "layer": 1,  # already emitted one dict per layer; window grouping is
+                # unrecoverable here (see module docstring), so this is a constant, not
+                # a real per-window layer index like `.opj`'s `figures.extract_figures`.
                 "x_from": x_from,
                 "x_to": x_to,
                 "x_log": x_log,

@@ -372,26 +372,57 @@ def test_realdata_xrd_two_theta_scan() -> None:
 @pytest.mark.realdata
 @pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
 def test_realdata_figures_extracted_as_plot_states() -> None:
-    """Plan items 12/13: graph windows -> plot-state snapshots."""
+    """Plan items 12/13: graph windows -> plot-state snapshots. Multi-layer
+    windows (item 36) now yield one dict PER LAYER -- Moke has 12 reachable
+    graph windows totaling 17 layers (Graph4/Graph7 have 2 each, Graph10 --
+    the union of Graph7's + Graph4's layers -- has 4; every other window is
+    single-layer)."""
     from quantized.io.origin_project.figures import extract_figures
 
     xrd = extract_figures((_CORPUS / "XRD.opj").read_bytes())
-    assert len(xrd) == 1
+    assert len(xrd) == 1  # XRD has zero multi-layer windows
     f = xrd[0]
+    assert f["layer"] == 1
     assert (f["x_from"], f["x_to"]) == (18.0, 100.0)
     assert f["y_log"] is True and f["x_log"] is False  # log-intensity XRD plot
     assert f["n_curves"] == 3
     assert any("Si (004)" in a for a in f["annotations"])  # peak label survives
 
     moke = extract_figures((_CORPUS / "Moke.opj").read_bytes())
-    assert len(moke) == 12
+    assert len(moke) == 17  # 12 windows, 5 of them carrying a 2nd/3rd/4th layer
     g = next(x for x in moke if x["name"] == "Graph3")
+    assert g["layer"] == 1
     assert g["x_from"] == -7000.0 and g["x_to"] == 7000.0  # field-symmetric loop
     # the Y-scale flag (`_y_scale_flag`, isolated 2026-07-04 from this exact
     # XRD/Moke byte-diff) must read every Moke window-level graph as linear --
     # not just heuristically (all these ranges are well under 3 decades, so
     # this also passed before the flag; the real regression guard is XRD above).
     assert all(x["y_log"] is False for x in moke)
+
+    # per-layer axis ranges, validated against ground_truth/Moke/index.json:
+    # Graph4 (2 layers, both x=(0.9,3.1), y=(-50,3000)/(400,1500)), Graph7
+    # (2 layers, both x=(-7000,7000), y=(-1.25,1.25)/(-1.2,1.2)), Graph10 (4
+    # layers = Graph7's 2 then Graph4's 2, in that order).
+    g4 = [x for x in moke if x["name"] == "Graph4"]
+    assert [x["layer"] for x in g4] == [1, 2]
+    assert [(x["x_from"], x["x_to"], x["y_from"], x["y_to"]) for x in g4] == [
+        (0.9, 3.1, -50.0, 3000.0),
+        (0.9, 3.1, 400.0, 1500.0),
+    ]
+    g7 = [x for x in moke if x["name"] == "Graph7"]
+    assert [x["layer"] for x in g7] == [1, 2]
+    assert [(x["x_from"], x["x_to"], x["y_from"], x["y_to"]) for x in g7] == [
+        (-7000.0, 7000.0, -1.25, 1.25),
+        (-7000.0, 7000.0, -1.2, 1.2),
+    ]
+    g10 = [x for x in moke if x["name"] == "Graph10"]
+    assert [x["layer"] for x in g10] == [1, 2, 3, 4]
+    assert [(x["x_from"], x["x_to"], x["y_from"], x["y_to"]) for x in g10] == [
+        (-7000.0, 7000.0, -1.25, 1.25),
+        (-7000.0, 7000.0, -1.2, 1.2),
+        (0.9, 3.1, -50.0, 3000.0),
+        (0.9, 3.1, 400.0, 1500.0),
+    ]
 
 
 def test_figures_absent_on_plain_synthetic(tmp_path) -> None:
@@ -423,15 +454,19 @@ def _fig_layer_block(
     *,
     hint: str = "",
     y_scale_flag: bytes | None = None,
+    head: int = 0x1F,
 ) -> bytes:
     """The layer-continuation block read immediately after a graph header:
-    head `00 00 1f 00`, axis (from, to) doubles at 15/23 (X) and 58/66 (Y),
-    an optional `source_hint` cstring at offset 208, and an optional 2-byte
-    Y-scale flag at offset 98 (`01 00` linear / `08 01` log10 -- see
-    `figures.py`'s `_y_scale_flag`; left zero/unrecognized by default so
-    existing heuristic-only tests are unaffected)."""
+    head `00 00 <head> 00` (0x1f for a window's first layer or a subsequent
+    OVERLAID layer, e.g. double-Y; the rarer 0x17 for a subsequent STACKED/
+    TILED-PANEL layer -- see `figures.py`'s `_LAYER_HEAD_BYTES`), axis
+    (from, to) doubles at 15/23 (X) and 58/66 (Y), an optional `source_hint`
+    cstring at offset 208, and an optional 2-byte Y-scale flag at offset 98
+    (`01 00` linear / `08 01` log10 -- see `figures.py`'s `_y_scale_flag`;
+    left zero/unrecognized by default so existing heuristic-only tests are
+    unaffected)."""
     payload = bytearray(240)
-    payload[0:4] = b"\x00\x00\x1f\x00"
+    payload[0:4] = bytes([0, 0, head, 0])
     struct.pack_into("<d", payload, 15, x_from)
     struct.pack_into("<d", payload, 23, x_to)
     struct.pack_into("<d", payload, 58, y_from)
@@ -472,12 +507,77 @@ def test_synthetic_opj_figure_decodes_ranges_curves_and_annotations() -> None:
     assert len(figs) == 1
     f = figs[0]
     assert f["name"] == "Graph1"
+    assert f["layer"] == 1  # a single-layer window always gets layer=1
     assert (f["x_from"], f["x_to"]) == (0.0, 10.0)
     assert (f["y_from"], f["y_to"]) == (0.0, 100.0)
     assert f["x_log"] is False and f["y_log"] is False
     assert f["n_curves"] == 2  # counted from the two 133-byte curve blocks
     assert f["source_hint"] == "Book1"
     assert "Field Sweep (Oe)" in f["annotations"]
+
+
+def test_synthetic_opj_two_layer_window_yields_one_figure_per_layer() -> None:
+    """Item 36 (multi-layer windows): a window with TWO layer-continuation
+    blocks (a double-Y-style overlay, mirroring Moke's real Graph7) yields
+    TWO figure dicts -- not one dict merging both layers -- each with its
+    own 1-based `layer`, its own axis range/hint, and its own curve count
+    scoped to the blocks between its own layer-continuation record and the
+    next (or the window's end)."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph1")
+        + _fig_layer_block(0.0, 10.0, 0.0, 100.0, hint="Book1")
+        + _fig_curve_block()
+        + _fig_layer_block(0.0, 10.0, -50.0, 50.0, hint="Book2")
+        + _fig_curve_block()
+        + _fig_curve_block()
+    )
+    figs = extract_figures(blob)
+    assert [f["name"] for f in figs] == ["Graph1", "Graph1"]
+    assert [f["layer"] for f in figs] == [1, 2]
+    assert (figs[0]["x_from"], figs[0]["x_to"], figs[0]["y_from"], figs[0]["y_to"]) == (
+        0.0,
+        10.0,
+        0.0,
+        100.0,
+    )
+    assert (figs[1]["x_from"], figs[1]["x_to"], figs[1]["y_from"], figs[1]["y_to"]) == (
+        0.0,
+        10.0,
+        -50.0,
+        50.0,
+    )
+    assert figs[0]["source_hint"] == "Book1" and figs[1]["source_hint"] == "Book2"
+    assert figs[0]["n_curves"] == 1  # only the curve block BEFORE layer 2's record
+    assert figs[1]["n_curves"] == 2  # the two curve blocks AFTER it
+
+
+def test_synthetic_opj_stacked_panel_layer_head_byte_recognized() -> None:
+    """A subsequent layer whose continuation block's head byte is 0x17 (the
+    rarer "stacked/tiled panel" marker, mirroring Moke's real Graph4 --
+    see `figures.py`'s `_LAYER_HEAD_BYTES`) is recognized as a real layer
+    boundary exactly like the ordinary 0x1f overlay marker."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph4")
+        + _fig_layer_block(0.9, 3.1, -50.0, 3000.0, head=0x1F)
+        + _fig_curve_block()
+        + _fig_curve_block()
+        + _fig_layer_block(0.9, 3.1, 400.0, 1500.0, head=0x17)
+        + _fig_curve_block()
+        + _fig_curve_block()
+    )
+    figs = extract_figures(blob)
+    assert [f["layer"] for f in figs] == [1, 2]
+    assert (figs[0]["y_from"], figs[0]["y_to"]) == (-50.0, 3000.0)
+    assert (figs[1]["y_from"], figs[1]["y_to"]) == (400.0, 1500.0)
+    assert figs[0]["n_curves"] == 2 and figs[1]["n_curves"] == 2
 
 
 def test_synthetic_opj_multiple_figures_and_log_heuristic() -> None:

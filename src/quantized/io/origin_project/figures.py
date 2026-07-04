@@ -39,6 +39,30 @@ both resolved by this one id; X is a structural inference (the book's own
 designated-X column), unverified against any oracle, exactly like
 ``.opju``. Figures still also carry the looser ``source_hint`` (the layer's
 source book display name) for cases the per-curve binding can't reach.
+
+**One dict PER LAYER — solved 2026-07-04.** A graph window is one figure to
+Origin's user but can hold several **layers** — independent axis systems
+with their own curves, overlaid in the same window (double-Y plots, or
+composite/"panel" windows that union several source graphs' layers, e.g.
+Moke's ``Graph10`` = ``Graph7``'s two layers + ``Graph4``'s two layers).
+Each layer gets its own **layer-continuation block** (head ``00 00 1f 00``,
+the axis-range record described below) and these repeat, one per layer,
+positionally in the block stream — the first right after the window
+header, each next one immediately following the previous layer's own
+child objects (axis titles, legend, curves). `extract_figures` now walks
+every layer-continuation block found inside a window's span (from its
+header to the next window header, of either kind) and emits one figure
+dict per layer, identical in shape to before plus a new 1-based ``"layer"``
+key; ``"name"`` repeats the window name across all its layers' dicts.
+**Curve attribution is positional**: every curve anchor (see
+``opj_curves.py``) between one layer-continuation block and the next
+belongs to that layer — validated exactly (both curve count and the exact
+per-layer ``(book, column)`` sets) against Moke's ``Graph4`` (2 layers, 2
+curves each), ``Graph7`` (2 layers, 3 curves each), and ``Graph10`` (4
+layers, the literal union of ``Graph7``'s + ``Graph4``'s, 3/3/2/2 curves) —
+see §6.1 for the full trail. Single-layer windows are unaffected: they get
+exactly one figure dict, ``"layer": 1``, byte-identical to the pre-split
+decode.
 """
 
 from __future__ import annotations
@@ -86,6 +110,41 @@ def _y_scale_flag(payload: bytes) -> bool | None:
     return None
 
 
+# A layer-continuation block's 3rd payload byte -- normally 0x1f (every
+# window's first layer, and every subsequent OVERLAID layer, e.g. a
+# double-Y graph's 2nd layer: validated on Moke's Graph7 AND on
+# SLD_DoubleY.otp's two-layer double-Y template, both 0x1f/0x1f). A second,
+# rarer value, 0x1f - 0x08 = 0x17, appears ONLY as a subsequent STACKED/
+# TILED-PANEL layer (Origin's "N Panels" layout, a structurally different
+# multi-layer mechanism from double-Y overlay) -- isolated on Moke's Graph4
+# (layers 0x1f then 0x17, second layer's axis range (400.0, 1500.0) matches
+# the oracle's 2nd-layer Y range exactly) and its composite copy inside
+# Graph10. Corpus-wide grep (Moke/XRD/SuperlatticeFits/PNR/hc2convert/XMCD/
+# MnN_Diffusion_PNR) finds 0x17 nowhere else at all -- and never outside a
+# graph window's own span -- so accepting it is not a guess, it is confirmed
+# structural evidence, not (yet) a generalized "any byte works" heuristic:
+# only these two exact values are recognized; anything else falls through
+# and is not treated as a layer boundary.
+_LAYER_HEAD_BYTES = (0x1F, 0x17)
+
+
+def _is_layer_block(payload: bytes) -> bool:
+    """A layer-continuation block: head ``00 00 <0x1f|0x17> 00``, ≥90 B (the
+    axis-range triples' fixed offsets need at least that much). Graph windows
+    repeat this block once per layer (see module docstring); this same
+    detector both identifies a window header as a *graph* header (checked
+    against the block right after it -- always the first layer, always
+    0x1f) and finds every subsequent layer boundary inside one (0x1f or the
+    rarer 0x17 -- see ``_LAYER_HEAD_BYTES``)."""
+    return (
+        len(payload) >= 90
+        and payload[0] == 0
+        and payload[1] == 0
+        and payload[2] in _LAYER_HEAD_BYTES
+        and payload[3] == 0
+    )
+
+
 _WORDY = re.compile(r"[A-Za-z0-9 ()\[\].,%/+°:=-]")
 
 
@@ -114,62 +173,83 @@ def _texts_in(payload: bytes) -> list[str]:
     return out
 
 
+def _build_layer(
+    blocks: list[tuple[int, bytes]],
+    id_map: dict[int, tuple[str, str]],
+    x_columns: dict[str, str],
+    name: str,
+    layer_no: int,
+    start: int,
+    end: int,
+) -> dict[str, Any]:
+    """One layer's plot-state dict: axis ranges from its own
+    layer-continuation block (``blocks[start]``); curves/curve-count/
+    annotations scoped to the half-open ``blocks[start:end)`` -- exactly this
+    layer's own content, since layer records and curve anchors are
+    sequential within a window span (module docstring; validated against
+    Moke's Graph4/Graph7/Graph10)."""
+    layer_payload = blocks[start][1]
+    x_from, x_to = _axis(layer_payload, 15)
+    y_from, y_to = _axis(layer_payload, 58)
+    hint = _cstring(layer_payload, 208, 24) or ""
+    y_log = _y_scale_flag(layer_payload)
+    n_curves = 0
+    texts: list[str] = []
+    for k in range(start + 1, end):
+        size, payload = blocks[k]
+        if size == 133 and len(payload) > 2 and payload[2] == 0x07:
+            n_curves += 1
+        elif size < 1200 and not _is_layer_block(payload):
+            texts.extend(_texts_in(payload))
+    titles = [t for t in texts if not _AUTO_TITLE.match(t) and "\\l(" not in t]
+    legend_ns = [int(n) for t in texts for n in _LEGEND_RE.findall(t)]
+    return {
+        "name": name,
+        "layer": layer_no,
+        "x_from": x_from,
+        "x_to": x_to,
+        "x_log": _log_heuristic(x_from, x_to),  # no isolated X flag found
+        "y_from": y_from,
+        "y_to": y_to,
+        "y_log": y_log if y_log is not None else _log_heuristic(y_from, y_to),
+        "source_hint": hint,
+        "n_curves": max(legend_ns) if legend_ns else n_curves,
+        "annotations": titles[:12],
+        # item 2: curves attributed positionally to THIS layer only.
+        "curves": extract_curves(blocks, start, end, id_map, x_columns),
+    }
+
+
 def extract_figures(b: bytes) -> list[dict[str, Any]]:
-    """Every graph window in a CPYA project as a plot-state snapshot dict."""
+    """Every layer of every graph window in a CPYA project as a plot-state
+    snapshot dict -- one dict per layer (see module docstring)."""
     blocks = [(size, payload) for size, payload in walk_blocks(b) if size]
     id_map = column_id_map(blocks)
     x_columns = book_x_columns(blocks)
     figures: list[dict[str, Any]] = []
-    current: dict[str, Any] | None = None
-    fig_start = 0
-    n_curves = 0
-    texts: list[str] = []
 
-    def flush(end_idx: int) -> None:
-        nonlocal current, n_curves, texts
-        if current is None:
-            return
-        titles = [t for t in texts if not _AUTO_TITLE.match(t) and "\\l(" not in t]
-        legend_ns = [int(n) for t in texts for n in _LEGEND_RE.findall(t)]
-        current["n_curves"] = max(legend_ns) if legend_ns else n_curves
-        current["annotations"] = titles[:12]
-        # item 11: per-curve {book, x, y} binding across the whole window
-        # (all layers), same aggregation level n_curves already uses.
-        current["curves"] = extract_curves(blocks, fig_start, end_idx, id_map, x_columns)
-        figures.append(current)
-        current, n_curves, texts = None, 0, []
-
+    n = len(blocks)
     i = 0
-    while i < len(blocks):
-        size, payload = blocks[i]
-        name = _is_window_header(payload)
-        if name is not None:
-            nxt = blocks[i + 1][1] if i + 1 < len(blocks) else b""
-            if len(nxt) >= 90 and nxt[:4] == b"\x00\x00\x1f\x00":
-                flush(i)  # a new GRAPH window begins
-                x_from, x_to = _axis(nxt, 15)
-                y_from, y_to = _axis(nxt, 58)
-                hint = _cstring(nxt, 208, 24) or ""
-                y_log = _y_scale_flag(nxt)
-                fig_start = i
-                current = {
-                    "name": name,
-                    "x_from": x_from,
-                    "x_to": x_to,
-                    "x_log": _log_heuristic(x_from, x_to),  # no isolated X flag found
-                    "y_from": y_from,
-                    "y_to": y_to,
-                    "y_log": y_log if y_log is not None else _log_heuristic(y_from, y_to),
-                    "source_hint": hint,
-                }
-                i += 2
-                continue
-            flush(i)  # a worksheet (or other) window ends any open graph
-        elif current is not None:
-            if size == 133 and len(payload) > 2 and payload[2] == 0x07:
-                n_curves += 1
-            elif size < 1200:
-                texts.extend(_texts_in(payload))
-        i += 1
-    flush(len(blocks))
+    while i < n:
+        name = _is_window_header(blocks[i][1])
+        if name is None:
+            i += 1
+            continue
+        nxt = blocks[i + 1][1] if i + 1 < n else b""
+        if not _is_layer_block(nxt):
+            i += 1  # a worksheet (or other non-graph) window: not a figure
+            continue
+        # A GRAPH window: its span runs to the next window header of either
+        # kind (graph or worksheet), or EOF.
+        j = i + 2
+        while j < n and _is_window_header(blocks[j][1]) is None:
+            j += 1
+        win_end = j
+        layer_starts = [k for k in range(i + 1, win_end) if _is_layer_block(blocks[k][1])]
+        for pos, layer_start in enumerate(layer_starts):
+            layer_end = layer_starts[pos + 1] if pos + 1 < len(layer_starts) else win_end
+            figures.append(
+                _build_layer(blocks, id_map, x_columns, name, pos + 1, layer_start, layer_end)
+            )
+        i = win_end
     return figures
