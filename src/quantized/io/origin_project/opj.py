@@ -57,15 +57,21 @@ _PRINTABLE = frozenset(range(0x20, 0x7F)) | {0x09, 0x0A, 0x0D}
 def _looks_textual(payload: bytes) -> bool:
     """True when a data block's bytes read as text, not float64 records.
 
-    Judged over the *non-zero* bytes (both text cells and round-value doubles
-    are heavily NUL-padded): text is across-the-board printable, while float64
-    mantissa/exponent bytes run well under half printable.
+    Two signals must agree: the *non-zero* bytes are across-the-board
+    printable (text; float64 mantissa/exponent bytes run well under half —
+    but a short column of round values like 10.0 → ``24 40`` can also be
+    all-printable), AND the 10-byte record structure is absent — numeric
+    records open with a ``00 00`` mask word, text blocks put letters there.
     """
-    nonzero = [c for c in payload[:400] if c != 0]
+    sample = payload[:400]
+    nonzero = [c for c in sample if c != 0]
     if len(nonzero) < 8:
         return False
-    printable = sum(c in _PRINTABLE for c in nonzero)
-    return printable >= 0.9 * len(nonzero)
+    if sum(c in _PRINTABLE for c in nonzero) < 0.9 * len(nonzero):
+        return False
+    n_rec = len(sample) // 10
+    masked = sum(1 for k in range(n_rec) if sample[10 * k] == 0 and sample[10 * k + 1] == 0)
+    return masked < 0.5 * n_rec
 
 
 def _label_for(col: str, meta: ColumnMeta | None) -> str:

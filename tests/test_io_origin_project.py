@@ -437,7 +437,10 @@ def test_opju_chunked_staircase_record() -> None:
 def test_opj_drops_non_double_garbage_columns(tmp_path) -> None:
     """A text column's bytes reinterpret as absurd float64s — drop the column,
     never emit garbage (item 4's honest-absent contract; type decode is open)."""
-    text_block = _block((b"\x00\x00" + b"Comment!") * 3)  # ASCII payload, 10-byte records
+    # Real text blocks are raw strings with no <u16 mask><f64> record structure
+    # (constant numeric columns DO keep the 00-00 mask stride — hc2convert's
+    # lock-in K/Q/R columns of repeated 2.0 — and must survive this gate).
+    text_block = _block(b"Comment un" * 3)
     blob = (
         b"CPYA 4.3380 188 W64 #\n"
         + _block(b"\x00" * 32)
