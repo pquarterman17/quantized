@@ -1006,6 +1006,19 @@ export function exportOrigin(body: {
   return postDownload("/api/export/origin", body, "export.zip");
 }
 
+/** Whether COM "Send to Origin" is usable right now (Windows + pywin32 +
+ *  QZ_ORIGIN_COM=1); everywhere it's false, use exportOrigin instead. */
+export function originComStatus(): Promise<{ available: boolean }> {
+  return getJSON("/api/export/origin-com/status");
+}
+
+/** Push datasets into a RUNNING OriginPro instance as new workbooks (COM). */
+export function sendToOrigin(body: {
+  datasets: { dataset: DataStruct; name: string }[];
+}): Promise<{ books: string[]; rows: number[] }> {
+  return postJSON("/api/export/origin-com", body);
+}
+
 /** Export several datasets side-by-side into one role-based CSV. */
 export function exportConsolidated(body: {
   datasets: { dataset: DataStruct; name: string }[];

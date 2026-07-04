@@ -40,6 +40,8 @@ import {
   exportOrigin,
   exportXrdCsv,
   health,
+  originComStatus,
+  sendToOrigin,
 } from "./lib/api";
 import { makeDemoDataset } from "./lib/demo";
 import { clearAutosave, loadAutosave, saveAutosave } from "./lib/autosave";
@@ -566,6 +568,47 @@ export default function App() {
         label: "Export Origin (.ogs)…",
         run: () =>
           exportActive(s, (stem, ds) => exportOrigin({ dataset: ds.data, filename: stem })),
+      },
+      {
+        id: "send-to-origin",
+        group: "File",
+        label: "Send to Origin (COM)…",
+        run: () => {
+          // Selected datasets when a multi-selection exists, else the active one.
+          const all = s().datasets;
+          const sel = all.filter((d) => s().selectedIds.includes(d.id));
+          const targets = sel.length > 0 ? sel : all.filter((d) => d.id === s().activeId);
+          if (targets.length === 0) {
+            s().setStatus("no dataset to send");
+            toast("no dataset to send", "danger");
+            return;
+          }
+          originComStatus()
+            .then(({ available }) => {
+              if (!available) {
+                const msg =
+                  "Origin COM unavailable (needs Windows + QZ_ORIGIN_COM=1 + a running Origin) — use Export Origin (.ogs) instead";
+                s().setStatus(msg);
+                toast(msg, "danger");
+                return;
+              }
+              return sendToOrigin({
+                datasets: targets.map((d) => ({
+                  dataset: d.data,
+                  name: d.name.replace(/\.[^.]+$/, ""),
+                })),
+              }).then((r) => {
+                const msg = `sent to Origin: ${r.books.join(", ")}`;
+                s().setStatus(msg);
+                toast(msg, "ok");
+              });
+            })
+            .catch((e: unknown) => {
+              const msg = `send failed: ${e instanceof Error ? e.message : "error"}`;
+              s().setStatus(msg);
+              toast(msg, "danger");
+            });
+        },
       },
       {
         id: "export-consolidated",
