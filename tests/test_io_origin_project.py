@@ -39,6 +39,21 @@ def _data(values: list[float]) -> bytes:
     return _block(b"".join(b"\x00\x00" + struct.pack("<d", v) for v in values))
 
 
+def _text_data(strings: list[str], *, tag: int = 0x01) -> bytes:
+    """A column data block: 10-byte <uint16 mask><value> records where the
+    8-byte value area holds a NUL-terminated string + a tag byte (0x00 or
+    0x01) + zero padding — the inline-text "Text & Numeric" shape
+    `decode_inline_text` recognizes (plan item 4)."""
+    records = bytearray()
+    for s in strings:
+        raw = s.encode("latin1")
+        if len(raw) > 6:
+            raise ValueError("inline text must fit <string><NUL><tag> in 8 bytes")
+        value = raw + b"\x00" + bytes([tag]) + b"\x00" * (8 - len(raw) - 2)
+        records += b"\x00\x00" + value
+    return _block(bytes(records))
+
+
 def _header(name: str) -> bytes:
     """A column-header block carrying '<book>_<col>\\0'; size kept off a /10 so the
     walker classifies it as a header, not data."""
@@ -294,6 +309,25 @@ def test_realdata_moke_fit_sheets_recovered() -> None:
     assert "(sheet 2)" in books["Book4@2"].metadata["origin_book_long"]
 
 
+@pytest.mark.realdata
+@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+def test_realdata_hc2convert_text_columns_recovered() -> None:
+    """Plan item 4: non-double "Text & Numeric" columns decode as metadata,
+    never garbage. hc2convert.opj holds 58 Hc2-extraction result columns where
+    the critical-field fit failed for every row, and Origin stores the
+    literal text "NaN" -- previously silently dropped, now recovered."""
+    from quantized.io.origin_project import read_origin_books
+
+    books = read_origin_books(_CORPUS / "hc2convert.opj")
+    total_text_cols = sum(len(b.metadata.get("origin_text_columns", {})) for b in books)
+    assert total_text_cols == 58  # every fit-failure column recovered, no false positives
+
+    da = next(b for b in books if b.metadata["origin_book"] == "A6221LockinDA")
+    assert set(da.metadata["origin_text_columns"]) == {"U", "V"}
+    assert da.metadata["origin_text_columns"]["U"] == ["NaN"] * 1930
+    assert "U" not in da.labels and "V" not in da.labels  # never in the numeric contract
+
+
 # ── synthetic .opju FPC codec round-trip (runs in CI) ─────────────────────────
 #
 # A test-local FPC *encoder* mirroring the decoder's model (canonical
@@ -455,6 +489,84 @@ def test_opj_drops_non_double_garbage_columns(tmp_path) -> None:
     labels = set(ds.labels) | {str(ds.metadata.get("x_column_name", ""))}
     assert "B" not in labels  # the garbage column is gone
     assert ds.values.shape[1] >= 1  # the real columns survive
+
+
+def test_opj_decodes_inline_text_column_as_metadata(tmp_path) -> None:
+    """Plan item 4 (decode half): a short "Text & Numeric" column — every
+    record's 8-byte value area is a NUL-terminated string + tag byte, the
+    shape validated against hc2convert.opj's 58 fit-failure "NaN" columns —
+    decodes into origin_text_columns metadata, never into .values/.labels
+    (the DataStruct contract is numeric)."""
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _block(b"\x00" * 32)
+        + _zero()
+        + _header("Book1_A") + _data([1.0, 2.0, 3.0])
+        + _zero()
+        + _header("Book1_B") + _data([10.0, 20.0, 30.0])
+        + _zero()
+        + _header("Book1_C") + _text_data(["NaN", "NaN", "NaN"])
+    )
+    ds = read_origin_project(_write(tmp_path, "text_col.opj", blob))
+    assert "C" not in ds.labels
+    assert ds.values.shape == (3, 1)  # only B is a real value column
+    assert ds.metadata["origin_text_columns"] == {"C": ["NaN", "NaN", "NaN"]}
+
+
+def test_opj_inline_text_supports_varying_short_strings(tmp_path) -> None:
+    """Not hardcoded to the literal string "NaN" — any <=6-char printable
+    string in the validated tag shape decodes, and a 0x00 tag byte (plain
+    zero padding, no sentinel tag) is accepted too."""
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _block(b"\x00" * 32)
+        + _zero()
+        + _header("Book1_A") + _data([1.0, 2.0, 3.0])
+        + _zero()
+        + _header("Book1_B") + _text_data(["low", "mid", "hi"], tag=0x00)
+    )
+    ds = read_origin_project(_write(tmp_path, "varied_text.opj", blob))
+    assert ds.metadata["origin_text_columns"] == {"B": ["low", "mid", "hi"]}
+
+
+def test_opj_inline_text_overflow_stays_an_honest_drop(tmp_path) -> None:
+    """A string too long to fit one 8-byte value slot (Origin's FitLinear/
+    NLFit auto-generated report-sheet columns overflow a label across
+    several records) can't be safely row-aligned -- stays an honest drop,
+    never a partial/misaligned decode (item 4's still-open gap)."""
+    overflow = _block(b"Comment un")  # 8-byte value has no NUL in range
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _block(b"\x00" * 32)
+        + _zero()
+        + _header("Book1_A") + _data([1.0, 2.0])
+        + _zero()
+        + _header("Book1_B") + overflow
+    )
+    ds = read_origin_project(_write(tmp_path, "overflow.opj", blob))
+    assert ds.metadata.get("origin_text_columns", {}) == {}
+    assert "B" not in ds.labels
+
+
+def test_opj_text_columns_grouped_per_book(tmp_path) -> None:
+    """Inline-text columns are grouped into the right book, same rule as
+    numeric columns (read_origin_books, plan item 3)."""
+    from quantized.io.origin_project import read_origin_books
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n" + _block(b"\x00" * 32) + _zero()
+        + _header("Alpha_A") + _data([1.0, 2.0])
+        + _zero()
+        + _header("Alpha_B") + _text_data(["NaN", "NaN"])
+        + _zero()
+        + _header("Beta_A") + _data([3.0, 4.0, 5.0])
+    )
+    path = _write(tmp_path, "grp.opj", blob)
+    books = {b.metadata["origin_book"]: b for b in read_origin_books(path)}
+    assert books["Alpha"].metadata["origin_text_columns"] == {"B": ["NaN", "NaN"]}
+    assert books["Beta"].metadata["origin_text_columns"] == {}
+
+
 # ── synthetic .opju windows-section names/units (plan item 10) ───────────────
 
 _OPJU_MARK = {"X": b"\x21\x51", "Y": b"\x21\x61", "Y-error": b"\x30\x61"}

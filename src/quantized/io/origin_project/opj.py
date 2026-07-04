@@ -5,12 +5,23 @@ M1 recovered the numeric columns (datasets named ``"<Book>_<Col>"``, 10-byte
 item 2): real column long names, units, comments, and X/Y designations. The
 largest book returns as the :class:`~quantized.datastruct.DataStruct` (every
 book's inventory stays in metadata; per-book selection is plan item 3/16).
+
+Plan item 4 (non-double column value types) adds inline-text column decode:
+a "Text & Numeric" column reuses the same 10-byte record as a double column,
+but its 8-byte value area holds a short NUL-terminated string instead of a
+raw float64 (`container.decode_inline_text`). Decoded text columns never
+enter `.values` (the data contract is numeric); they attach to metadata as
+`origin_text_columns: {short_name: [str, ...]}`. Columns that are neither a
+plausible double nor this text shape (Origin's FitLinear/NLFit auto-generated
+report-sheet columns, which overflow strings across records) keep the
+honest drop.
 """
 
 from __future__ import annotations
 
 from collections import OrderedDict
 from pathlib import Path
+from typing import TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
@@ -19,6 +30,7 @@ from quantized.datastruct import DataStruct
 from quantized.io.origin_project.container import (
     NAME_RE,
     decode_doubles,
+    decode_inline_text,
     fallback,
     plausible_column,
     walk_blocks,
@@ -27,10 +39,21 @@ from quantized.io.origin_project.windows import BookMeta, ColumnMeta, window_met
 
 __all__ = ["read_opj", "read_opj_books"]
 
+_V = TypeVar("_V")
 
-def _columns(b: bytes) -> list[tuple[str, NDArray[np.float64]]]:
-    """Walk the datasets section, pairing each named header block with its data."""
-    out: list[tuple[str, NDArray[np.float64]]] = []
+
+def _columns(
+    b: bytes,
+) -> tuple[list[tuple[str, NDArray[np.float64]]], list[tuple[str, list[str]]]]:
+    """Walk the datasets section, pairing each named header block with its data.
+
+    Returns ``(numeric_columns, text_columns)``. A data block that isn't a
+    plausible double column (see `plausible_column`/`_looks_textual`) is tried
+    as inline text (`decode_inline_text`); anything matching neither shape is
+    dropped exactly as before (honest-absent, never garbage).
+    """
+    numeric: list[tuple[str, NDArray[np.float64]]] = []
+    text: list[tuple[str, list[str]]] = []
     pending: str | None = None
     for size, payload in walk_blocks(b):
         if size == 0:
@@ -46,9 +69,13 @@ def _columns(b: bytes) -> list[tuple[str, NDArray[np.float64]]]:
             # (text — real float64 arrays run ~35-40% printable bytes, text
             # >90%). All-NaN stays (empty columns are real).
             if plausible_column(vals, allow_all_nan=True) and not _looks_textual(payload):
-                out.append((pending, vals))
+                numeric.append((pending, vals))
+            else:
+                rows = decode_inline_text(payload)
+                if rows is not None:
+                    text.append((pending, rows))
             pending = None
-    return out
+    return numeric, text
 
 
 _PRINTABLE = frozenset(range(0x20, 0x7F)) | {0x09, 0x0A, 0x0D}
@@ -79,17 +106,27 @@ def _label_for(col: str, meta: ColumnMeta | None) -> str:
 
 
 Columns = list[tuple[str, NDArray[np.float64]]]
+TextColumns = list[tuple[str, list[str]]]
 
 
-def _group(columns: Columns) -> OrderedDict[str, Columns]:
-    books: OrderedDict[str, Columns] = OrderedDict()
-    for name, vals in columns:
+def _group_named(pairs: list[tuple[str, _V]]) -> OrderedDict[str, list[tuple[str, _V]]]:
+    """Group ``<Book>_<Col>[@sheet]`` names into per-book column lists.
+
+    Shared by numeric column grouping (`_group`) and text column grouping —
+    the naming/sheet rule doesn't care what a column's values look like.
+    """
+    books: OrderedDict[str, list[tuple[str, _V]]] = OrderedDict()
+    for name, vals in pairs:
         book, _, col = name.rpartition("_")
         col, _, sheet = (col or "A").partition("@")
         if sheet:  # sheet N>1 becomes its own pseudo-book "<Book>@N"
             book = f"{book or 'Book'}@{sheet}"
         books.setdefault(book or "Book", []).append((col or "A", vals))
     return books
+
+
+def _group(columns: Columns) -> OrderedDict[str, Columns]:
+    return _group_named(columns)
 
 
 def _inventory(
@@ -112,6 +149,7 @@ def _build_book(
     books_meta: dict[str, BookMeta],
     inventory: list[dict[str, object]],
     source_format: str = "origin_opj",
+    text_cols: TextColumns | None = None,
 ) -> DataStruct:
     """Assemble one workbook into a DataStruct.
 
@@ -119,6 +157,10 @@ def _build_book(
     is the first designation-X column when the windows metadata knows one,
     else the first column; the rest become value columns labelled by their
     long name (falling back to the Origin short designation A, B, …).
+
+    ``text_cols`` (plan item 4) are this book's inline-text columns — never
+    part of `.values` (the data contract is numeric); they attach under
+    ``metadata["origin_text_columns"]`` keyed by Origin short name (A, B, …).
     """
     base_book, _, sheet_no = book.partition("@")
     col_meta = books_meta[base_book].columns if base_book in books_meta and not sheet_no else {}
@@ -154,6 +196,7 @@ def _build_book(
         "x_unit": x_meta.unit if x_meta is not None else "",
         "column_designations": {c: m.designation for c, m in col_meta.items()},
         "column_comments": {c: m.comment for c, m in col_meta.items() if m.comment},
+        "origin_text_columns": {c: rows for c, rows in (text_cols or [])},
     }
     return DataStruct(
         time=time,
@@ -164,18 +207,25 @@ def _build_book(
     )
 
 
-def _parse(
-    path: Path,
-) -> tuple[OrderedDict[str, Columns], dict[str, BookMeta], list[dict[str, object]]]:
+_ParseResult = tuple[
+    OrderedDict[str, Columns],
+    OrderedDict[str, TextColumns],
+    dict[str, BookMeta],
+    list[dict[str, object]],
+]
+
+
+def _parse(path: Path) -> _ParseResult:
     b = path.read_bytes()
     if not b.startswith(b"CPYA"):
         raise fallback(path, f"'{path.name}' does not look like a CPYA .opj (bad header).")
-    columns = _columns(b)
+    columns, text_columns = _columns(b)
     if not columns:
         raise fallback(path, f"no worksheet columns could be decoded from '{path.name}'.")
     books = _group(columns)
+    text_books = _group_named(text_columns)
     books_meta = window_metadata(b)
-    return books, books_meta, _inventory(books, books_meta)
+    return books, text_books, books_meta, _inventory(books, books_meta)
 
 
 def read_opj(path: Path) -> DataStruct:
@@ -184,13 +234,19 @@ def read_opj(path: Path) -> DataStruct:
     Extra-sheet pseudo-books (``Book@N`` — often fit tables/curves) never win
     the primary slot over measured sheet-1 data, however large they are.
     """
-    books, books_meta, inventory = _parse(path)
+    books, text_books, books_meta, inventory = _parse(path)
     primary_pool = [k for k in books if "@" not in k] or list(books)
     primary = max(primary_pool, key=lambda k: sum(len(v) for _, v in books[k]))
-    return _build_book(primary, books[primary], books_meta, inventory)
+    return _build_book(
+        primary, books[primary], books_meta, inventory, text_cols=text_books.get(primary)
+    )
 
 
 def read_opj_books(path: Path) -> list[DataStruct]:
     """Every workbook in the project as its own DataStruct (plan item 3)."""
-    books, books_meta, inventory = _parse(path)
-    return [_build_book(k, v, books_meta, inventory) for k, v in books.items() if v]
+    books, text_books, books_meta, inventory = _parse(path)
+    return [
+        _build_book(k, v, books_meta, inventory, text_cols=text_books.get(k))
+        for k, v in books.items()
+        if v
+    ]
