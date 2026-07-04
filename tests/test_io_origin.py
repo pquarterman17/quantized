@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from quantized.io.origin import format_origin_script
+from quantized.io.origin import GraphSpec, format_origin_script
 from quantized.io.xrdml import import_xrdml
 
 
@@ -61,3 +61,118 @@ def test_origin_yerr_designation() -> None:
     _, ogs = format_origin_script(ds, make_graph=False)
     assert "wks.col2.type = 1;  // Y" in ogs  # R -> Y
     assert "wks.col3.type = 3;  // yErr" in ogs  # dR -> yErr
+
+
+def _three_channel_ds() -> Any:
+    """3-channel dataset (X + Y1/Y2/Y3 -> worksheet cols 1,2,3,4) for the
+    item 26 plot-state GRAPH block tests."""
+    from quantized.datastruct import DataStruct
+
+    return DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[10.0, 100.0, 1.0], [20.0, 200.0, 2.0], [30.0, 300.0, 3.0]],
+        labels=["Y1", "Y2", "Y3"],
+        units=["A", "B", "C"],
+        metadata={"x_column_name": "Time", "x_column_unit": "s"},
+    )
+
+
+def test_origin_graph_default_view() -> None:
+    # graph=GraphSpec() with y_keys=None -> all channels, one grouped plotxy.
+    ds = _three_channel_ds()
+    _, ogs = format_origin_script(ds, make_graph=True, graph=GraphSpec())
+    assert "plotxy iy:=(1,2):(1,3):(1,4) plot:=201 ogl:=[<new>];" in ogs
+    assert 'xb.text$ = "Time (s)";' in ogs
+    # 3 primary channels -> no single-series yl.text$ label is emitted.
+    assert "yl.text$" not in ogs
+
+
+def test_origin_graph_single_channel_labels_y_axis() -> None:
+    ds = _three_channel_ds()
+    _, ogs = format_origin_script(ds, make_graph=True, graph=GraphSpec(y_keys=(1,)))
+    assert "plotxy iy:=(1,3) plot:=201 ogl:=[<new>];" in ogs
+    assert 'yl.text$ = "Y2 (B)";' in ogs
+
+
+def test_origin_graph_log_axes() -> None:
+    ds = _three_channel_ds()
+    _, ogs = format_origin_script(
+        ds, make_graph=True, graph=GraphSpec(y_keys=(0,), x_log=True, y_log=True)
+    )
+    assert "layer.x.type = 1;  // Log X" in ogs
+    assert "layer.y.type = 1;  // Log Y" in ogs
+
+
+def test_origin_graph_custom_lims() -> None:
+    ds = _three_channel_ds()
+    _, ogs = format_origin_script(
+        ds,
+        make_graph=True,
+        graph=GraphSpec(y_keys=(0,), x_lim=(0.5, 12.0), y_lim=(-3.0, 250.0)),
+    )
+    assert "layer.x.from = 0.5;" in ogs
+    assert "layer.x.to = 12;" in ogs
+    assert "layer.y.from = -3;" in ogs
+    assert "layer.y.to = 250;" in ogs
+
+
+def test_origin_graph_x_key_uses_value_channel() -> None:
+    # x_key=1 -> X comes from worksheet col 3 (Y2), not col 1 (time).
+    ds = _three_channel_ds()
+    _, ogs = format_origin_script(
+        ds, make_graph=True, graph=GraphSpec(y_keys=(0,), x_key=1)
+    )
+    assert "plotxy iy:=(3,2) plot:=201 ogl:=[<new>];" in ogs
+    assert 'xb.text$ = "Y2 (B)";' in ogs
+
+
+def test_origin_graph_y2_split() -> None:
+    # y_keys=(0,1,2), y2_keys=(2,) -> primary (0,1) on the left, channel 2 on
+    # a secondary right-Y layer via "layer -nr" + a second plotxy into it.
+    ds = _three_channel_ds()
+    _, ogs = format_origin_script(
+        ds,
+        make_graph=True,
+        graph=GraphSpec(y_keys=(0, 1, 2), y2_keys=(2,)),
+    )
+    assert "plotxy iy:=(1,2):(1,3) plot:=201 ogl:=[<new>];" in ogs
+    assert "layer -nr;  // new right-Y layer, linked X" in ogs
+    assert "plotxy iy:=(1,4) plot:=201 ogl:=2!;" in ogs
+    assert 'yr.text$ = "Y3 (C)";' in ogs
+
+
+def test_origin_graph_y2_all_channels_falls_back_to_single_axis() -> None:
+    # No primary channels to anchor a right-axis split against -> everything
+    # renders on the single default axis instead (no "layer -nr").
+    ds = _three_channel_ds()
+    _, ogs = format_origin_script(
+        ds,
+        make_graph=True,
+        graph=GraphSpec(y_keys=(0, 1), y2_keys=(0, 1)),
+    )
+    assert "layer -nr" not in ogs
+    assert "plotxy iy:=(1,2):(1,3) plot:=201 ogl:=[<new>];" in ogs
+
+
+def test_origin_graph_respects_make_graph_false() -> None:
+    # make_graph=False suppresses the graph block even when a spec is given.
+    ds = _three_channel_ds()
+    _, ogs = format_origin_script(ds, make_graph=False, graph=GraphSpec())
+    assert "plotxy" not in ogs
+    assert "layer -nr" not in ogs
+
+
+def test_origin_graph_quoting_safety() -> None:
+    # A label containing a double-quote is escaped in the axis title, same
+    # guard as the existing wks.col*.lname$ quoting.
+    from quantized.datastruct import DataStruct
+
+    ds = DataStruct.create(
+        [1.0, 2.0],
+        [[1.0], [2.0]],
+        labels=['Weird "Y"'],
+        units=[""],
+        metadata={"x_column_name": "X"},
+    )
+    _, ogs = format_origin_script(ds, make_graph=True, graph=GraphSpec())
+    assert 'yl.text$ = "Weird \\"Y\\"";' in ogs

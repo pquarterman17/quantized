@@ -995,13 +995,29 @@ export function exportHdf5(body: {
   return postDownload("/api/export/hdf5", body, "export.h5");
 }
 
-/** Export a DataStruct as an Origin LabTalk .ogs script + CSV (zipped). */
+/** Current plot-state snapshot for the .ogs GRAPH block (item 26) — mirrors
+ *  the Zustand plot fields (yKeys/xKey/xLog/yLog/xLim/yLim/y2Keys). */
+export interface OriginGraphSpec {
+  y_keys?: number[] | null;
+  x_key?: number | null;
+  x_log?: boolean;
+  y_log?: boolean;
+  x_lim?: [number, number] | null;
+  y_lim?: [number, number] | null;
+  y2_keys?: number[];
+}
+
+/** Export a DataStruct as an Origin LabTalk .ogs script + CSV (zipped).
+ *  ``graph``, when given, exports the current plot state (selected
+ *  channels, axis limits/log flags, y2 split) as an Origin GRAPH, not just
+ *  the rebuilt workbook. */
 export function exportOrigin(body: {
   dataset: DataStruct;
   filename?: string;
   log_x?: boolean;
   log_y?: boolean;
   make_graph?: boolean;
+  graph?: OriginGraphSpec;
 }): Promise<void> {
   return postDownload("/api/export/origin", body, "export.zip");
 }
