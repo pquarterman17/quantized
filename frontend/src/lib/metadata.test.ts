@@ -32,6 +32,16 @@ describe("metadataRows", () => {
     expect(rows.map(([k]) => k)).toEqual(["sample"]);
   });
 
+  it("hides the Origin provenance keys (they have a dedicated card)", () => {
+    const rows = metadataRows({
+      origin_results_log: "log text",
+      origin_results_log_records: [{ timestamp: "t", operation: "op", params: {} }],
+      origin_notes: { Notes1: "hello" },
+      sample: "Si",
+    });
+    expect(rows.map(([k]) => k)).toEqual(["sample"]);
+  });
+
   it("is empty for an empty metadata dict", () => {
     expect(metadataRows({})).toEqual([]);
   });
