@@ -394,8 +394,14 @@ block), **not** by scraping the analysis log.
 - Designation codes **4 (Label) / 5 (Z) / 6 (X-Err)** are from the published
   enum, not observed in this corpus — verify when a matrix/label/contour
   project is available.
-- Column value-**type** (text vs numeric vs date) is in the 147-B datasets
-  header, not the window record — orthogonal to this report (plan item 4).
+- Column value-**type** (text vs numeric vs date): **resolved differently
+  than expected (2026-07-04, plan item 4)** — a full per-offset diff of the
+  147-B datasets header found NO byte that reliably distinguishes a double
+  column from a "Text & Numeric" one; decoding instead content-sniffs the
+  data block (`container.decode_inline_text`). int/float32-typed columns
+  need no special handling at all — Origin stores every cell as the same
+  8-byte float64 regardless of declared type. Full writeup:
+  `docs/origin_project_format.md` "Non-double column values".
 - All of the above is `.opj` (`CPYA`) only; `.opju` (`CPYUA`) uses different
   framing (plan item 7) and is out of scope here.
 

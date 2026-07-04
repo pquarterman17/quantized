@@ -22,6 +22,7 @@ __all__ = [
     "NAME_RE",
     "OriginProjectError",
     "decode_doubles",
+    "decode_inline_text",
     "fallback",
     "plausible_column",
     "walk_blocks",
@@ -88,6 +89,54 @@ def decode_doubles(data: bytes) -> NDArray[np.float64]:
     vals = np.ascontiguousarray(rows[:, 2:]).view("<f8").reshape(n).copy()
     vals[vals == ORIGIN_MISSING] = np.nan  # empty cells → NaN, not a bogus -1e-300
     return vals
+
+
+_INLINE_TEXT_PRINTABLE = frozenset(range(0x20, 0x7F))
+
+
+def decode_inline_text(data: bytes) -> list[str] | None:
+    """Decode a data block as one short inline-text string per 10-byte record,
+    or ``None`` if it doesn't fit that shape (plan item 4 — the non-double
+    "text" column case).
+
+    A double column's record is ``<u16 mask><f8 value>``; a **Text & Numeric**
+    column reuses the exact same 10-byte record, but the 8-byte value area
+    holds a NUL-terminated ASCII/latin-1 string (up to 7 chars) followed by a
+    single ``0x00``/``0x01`` tag byte and zero padding out to 8 bytes, instead
+    of a raw float64. Pinned against ``hc2convert.opj``: every one of its 58
+    dropped "text" columns is exactly this shape, ``prefix="NaN"`` (Origin's
+    literal text sentinel for a fit that produced no critical-field value),
+    tag byte at value-offset 3 — 112,887 matching records, zero
+    counter-examples in a 6-file real-corpus scan. No header type-field byte
+    was found that reliably discriminates this from a double column (every
+    offset in the 147-byte column-storage header matches between the two);
+    this is a content-shape detector, same spirit as ``plausible_column`` and
+    the existing ``_looks_textual`` gate.
+
+    A record with no NUL in its 8-byte value area (a string longer than 7
+    chars, overflowing into the next record — seen in Origin's FitLinear/
+    NLFit auto-generated "Notes"/"Summary" report-sheet columns) makes the
+    WHOLE column unsafe to decode this way: return ``None`` rather than emit
+    misaligned rows. That family stays an honest drop (plan item 4 still
+    open for it — a materially harder, variable-length RE problem).
+    """
+    if not data or len(data) % 10 != 0:
+        return None
+    n = len(data) // 10
+    rows: list[str] = []
+    for k in range(n):
+        value = data[10 * k + 2 : 10 * k + 10]
+        nul = value.find(b"\x00")
+        if nul < 0:
+            return None
+        prefix = value[:nul]
+        if prefix and not all(c in _INLINE_TEXT_PRINTABLE for c in prefix):
+            return None
+        tail = value[nul + 1 :]
+        if tail and not (tail[0] in (0x00, 0x01) and all(c == 0 for c in tail[1:])):
+            return None
+        rows.append(prefix.decode("latin1"))
+    return rows
 
 
 def plausible_column(vals: NDArray[np.float64], *, allow_all_nan: bool = False) -> bool:

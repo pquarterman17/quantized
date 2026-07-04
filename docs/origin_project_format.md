@@ -59,6 +59,64 @@ clean symmetric field ramp **−6796 … +6746 Oe** (the MOKE loop's field axis)
 > value size. M1 reads that header rather than assuming 10-byte records — the
 > `Moke` case is the default (double + mask). Text/other types come later.
 
+### Non-double column values (plan item 4 — decode half, 2026-07-04)
+
+The 147-byte column-storage header does **not** carry a byte offset that
+reliably distinguishes a double column from a non-double one — a full
+per-offset diff of 1242 known-double vs 58 known-text column headers in
+`hc2convert.opj` found no offset where the two groups' values cleanly split
+(one offset, 0x3d, is a useful *secondary* signal — see below — but it does
+not distinguish double from text). Decoding instead content-sniffs the data
+block, same spirit as the existing `plausible_column`/`_looks_textual` gates:
+
+- **Origin stores every worksheet cell in the same 10-byte
+  `<u16 mask><8-byte value>` record regardless of the column's declared
+  value type.** There is no narrower on-disk width for `int`/`float32` in
+  this container — a genuinely int- or float32-typed column's cells are
+  still plain IEEE754 float64 bit patterns (e.g. `12.0`), so they already
+  decode correctly through the existing `decode_doubles` +
+  `plausible_column` path with **no code change needed**. A corpus-wide scan
+  (`hc2convert`, `Moke`, `XRD`, `XMCD`, `MnN_Diffusion_PNR`,
+  `SuperlatticeFits` — 2687 total column pairs) found zero data blocks at
+  any stride other than 10 bytes/record.
+- **"Text & Numeric" columns reuse the same 10-byte record**: the 8-byte
+  value area holds a NUL-terminated ASCII/latin-1 string (up to 7 chars)
+  followed by a `0x00`/`0x01` tag byte and zero padding, instead of a raw
+  float64. Origin's own literal fit-failure sentinel is `"NaN"` (bytes
+  `4e 61 4e 00 01 00 00 00` — string, NUL at value-offset 3, tag `0x01`,
+  three zero-pad bytes): pinned from `hc2convert.opj`'s 58 Hc2-extraction
+  columns where the critical-field fit produced no value for any row —
+  112,887 matching records, zero counter-examples across the 6-file scan.
+  `container.decode_inline_text` decodes this shape; `opj.py` wires it into
+  `metadata["origin_text_columns"]` (never `.values` — the data contract
+  stays numeric).
+- **A record with no NUL within its 8-byte value area is an unsafe
+  overflow**, not a decode target: Origin's FitLinear/NLFit auto-generated
+  "Notes"/"Summary"/ANOVA report-sheet columns (e.g. `hc2convert`'s
+  `Book2_C@2`../`Book2_X@2`, `Moke`'s `Book4_C@2`..`Book4_Y@2`) embed
+  variable-length reference strings like `"cell://Parameters.Slope.Value"`
+  that span *multiple* physical 10-byte records with no row-aligned
+  boundary, followed by real double values for the sheet's remaining rows.
+  Reconstructing the true row alignment needs more RE than plan item 4
+  scoped (a materially different, variable-length problem) — these stay an
+  honest drop, exactly like an unrecognized type. `decode_inline_text`
+  returns `None` for the whole column the moment one record lacks an
+  in-range NUL, so this family can never partially/incorrectly decode.
+- **Secondary corroborating signal (header offset 0x3d):** across every
+  double AND text(`NaN`)-sentinel column in `hc2convert.opj`, header byte
+  0x3d is `0x0a` (100%); every FitLinear/NLFit report-sheet column shows a
+  different, varied value there. This byte reliably flags "plain worksheet
+  data column" vs "auto-generated report construct" but does **not**
+  distinguish double from text, so the implementation doesn't depend on it
+  — noted here in case it helps a future RE pass on the report-sheet family.
+
+**Corpus census (real `.opj` files, all books):** `hc2convert.opj` 1242
+double / 58 text(`NaN`) / 407 still-dropped (report-sheet family); `Moke.opj`
+71/0/25; `XRD.opj` 17/0/3; `XMCD.opj` 554/0/1; `MnN_Diffusion_PNR.opj`
+179/0/18; `SuperlatticeFits.opj` 107/0/5. Only `hc2convert` has the
+inline-text sentinel pattern in this corpus; the other files' non-double
+columns are entirely the report-sheet family.
+
 ## Figures (present, later milestone)
 
 The graph windows are in the file: token counts in `Moke.opj` — `Graph:105`,

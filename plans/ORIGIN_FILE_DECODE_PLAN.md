@@ -13,7 +13,9 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-04 (items 10/14/17/18 shipped; figure-record gap = item 33)
+**Updated:** 2026-07-04 (items 10/14/17/18 shipped; figure-record gap = item 33;
+item 4 decode half partially shipped — inline-text sentinel + int/float32 no-op,
+report-sheet reference family still open)
 
 ---
 
@@ -119,7 +121,9 @@ designations/comments (item 10 — the windows-section marker+label grammar,
 151/151 names + 130/130 units + 17/17 comments across the oracle corpus).
 `.opju` worksheet decode is COMPLETE (32 closed — 210/210 oracle columns;
 segment grammar + canonical FPC widths). Remaining gaps: sheet hierarchy (5),
-non-double column *values* (4 — garbage now gated, decode open),
+non-double column *values* (4 — garbage gated, the inline-text sentinel shape
+now decodes to metadata; int/float32 needed no work; the report-sheet
+reference family stays an honest drop, see item 4),
 notes/templates/log (6/21/22).
 
 **quantized → Origin (export).** Shipped: `format_origin_script`
@@ -164,6 +168,36 @@ no documented real-Origin validation procedure for the trial window (31).
      of emitting reinterpreted float64 noise (hc2convert: 462 garbage
      columns gone, constant numeric columns preserved). Decoding the
      actual text/int values stays open (needs the type-field RE).
+   - Decode half PARTIALLY SHIPPED (2026-07-04): the 147-byte header has
+     no offset that reliably discriminates double vs text (checked every
+     offset against 1242 double / 58 text headers, no split found) — decode
+     content-sniffs the data block instead (`container.decode_inline_text`).
+     **int/float32 needed no work**: Origin stores every worksheet cell as
+     the same 8-byte float64 record regardless of declared type, confirmed
+     across a 6-file/2687-column corpus scan (no narrower on-disk width
+     exists), so int/float32-typed columns already decoded correctly before
+     this change. **Text SHIPPED for the "inline sentinel" shape**: a short
+     (<=7 char) NUL-terminated string + tag byte inside the same 10-byte
+     record (Origin's literal `"NaN"` fit-failure marker — hc2convert's 58
+     Hc2-extraction columns, 112,887 matching records validated, zero
+     counter-examples) now decodes into `metadata["origin_text_columns"]`
+     (never `.values` — the contract stays numeric). **Still open**: the
+     bulk of hc2convert's originally-gated columns (407 of 465) are Origin's
+     FitLinear/NLFit auto-generated "Notes"/"Summary"/ANOVA report-sheet
+     columns, which embed variable-length reference strings
+     (`"cell://Parameters.Slope.Value"`) overflowing across multiple
+     physical records with no row-aligned boundary — a materially harder,
+     variable-length RE problem outside this item's original scope; they
+     keep the honest drop (`decode_inline_text` returns `None` the moment a
+     record's value area has no in-range NUL, so this family can never
+     partially/incorrectly decode). Full writeup:
+     `docs/origin_project_format.md` "Non-double column values". Note:
+     `test-data/origin/specimens/ground_truth/hc2convert/` (the CSV oracle
+     this item's task brief pointed at) is empty in this environment — no
+     ground-truth CSVs exist for hc2convert (nor XRD/XMCD/MnN_Diffusion_PNR/
+     SuperlatticeFits); validation instead used within-file cross-checks
+     (per-record byte-shape agreement across the whole 1707-column corpus)
+     and a live decode/import smoke test against the real `.opj`.
 
 ### Tier 3 — Nice-to-Have
 
