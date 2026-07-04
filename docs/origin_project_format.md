@@ -95,6 +95,20 @@ per-column records; (2) handle raw-deflate payloads (`zlib.decompressobj(-15)`);
 column with a known shape. Until then `_read_opju` guides to the Origin Viewer
 export path.
 
+## Column long-names / units (later milestone)
+
+M1 labels value columns by their Origin **designation** (A, B, C…) because that's
+all the per-column header block carries — the 147-byte header holds the *internal*
+dataset name (`Book1_A`) + binary column formatting, but **not** the user-facing
+long-name or units. Those live only in the spreadsheet **window definition** in
+the windows section (the part after the datasets section, which the M1 walker
+stops before). Evidence: analysis-log references there spell out
+`[Book5]Sheet1!(E"H",N"Kerr Signal")` — designation `E`, X long-name `H`, Y
+long-name `Kerr Signal`. Recovering names/units is therefore its own
+windows-section decode pass (comparable in effort to M2), **not** an extension of
+the header-block read — so M1 keeps honest A/B/C labels rather than risk
+mislabeling columns by scraping strings.
+
 ## Testing
 
 Real projects may hold private data, so fixtures live in
