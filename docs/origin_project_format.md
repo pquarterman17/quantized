@@ -6,8 +6,14 @@ locally (`tests/realdata/origin/`, gitignored). We do **not** use the GPL
 `liborigin` — this repo is Apache-2.0 (see `architecture-guards.md` #3). Format
 *facts* (byte layouts) aren't copyrightable; the implementation is our own.
 
-**Status:** container + column-data encoding validated; decoder build in
-progress (M1). Update this file as milestones land.
+**Status:** **M1 landed** — `.opj` worksheet data decodes to `DataStruct`
+(`io/origin_project.py`), validated on the real corpus (XRD θ–2θ, MOKE loop, XMCD
+energy scans). M2 (`.opju`) and M3 (figures) next. Update this file as milestones
+land.
+
+Note: empty numeric cells store Origin's missing-value sentinel
+`-1.23456789e-300` (bit pattern `0e 2c 13 1c fe 74 aa 81`), *not* flagged by the
+mask — the decoder maps it to `NaN`.
 
 ## Container family
 
