@@ -23,7 +23,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src" / "quantized"
 
 # GPL packages we must never ship at runtime (parser oracles etc. are dev-only).
-GPL_PACKAGES = {"rosettasciio", "rsciio", "hyperspy", "exspy", "holospy"}
+# `liborigin`/`ropj` read Origin projects but are GPL — quantized rolls its own
+# clean-room reader instead (see io/origin_project.py). Substring match, so
+# "liborigin" also blocks the "python-liborigin2" wrapper.
+GPL_PACKAGES = {"rosettasciio", "rsciio", "hyperspy", "exspy", "holospy", "liborigin", "ropj"}
 MAX_MODULE_LINES = 500
 PURE_LAYERS = ("io", "calc")
 FORBIDDEN_IN_PURE = ("fastapi", "pydantic", "quantized.routes", "starlette")
