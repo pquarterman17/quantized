@@ -568,3 +568,35 @@ def test_opju_windows_section_unlabeled_column_keeps_letter_fallback() -> None:
     tbook = meta["TBook"]
     assert tbook.columns["A"].long_name == "Energy"
     assert tbook.columns["B"].long_name == ""  # honest fallback, not guessed
+
+
+def test_results_log_recovered_from_project(tmp_path) -> None:
+    """Timestamped analysis records land in metadata['origin_results_log']
+    (plan item 6, log half); projects without a log get no key at all."""
+    log_text = (
+        b'[5/6/2019 15:16:34 "" (2458609)]\r\n'
+        b"subtract_line(subtract_line)\r\n"
+        b'  Input\r\n    iy(Input) = [Book4]Sheet1!(C"H",M)\r\n'
+    )
+    blob = _synthetic_opj() + _block(log_text)
+    ds = read_origin_project(_write(tmp_path, "logged.opj", blob))
+    assert "subtract_line" in str(ds.metadata["origin_results_log"])
+    assert "[Book4]Sheet1" in str(ds.metadata["origin_results_log"])
+
+    plain = read_origin_project(_write(tmp_path, "plain.opj", _synthetic_opj()))
+    assert "origin_results_log" not in plain.metadata
+    # OriginStorage XML / LabTalk text without a timestamp header never matches
+    noisy = _synthetic_opj() + _block(b"<OriginStorage><Notes NodeID='1'/></OriginStorage>" * 3)
+    ds2 = read_origin_project(_write(tmp_path, "noisy.opj", noisy))
+    assert "origin_results_log" not in ds2.metadata
+
+
+@pytest.mark.realdata
+def test_realdata_moke_results_log() -> None:
+    """Moke.opj's real analysis log (subtract_line provenance) is recovered."""
+    src = _CORPUS / "Moke.opj"
+    if not src.exists():
+        pytest.skip("Origin corpus not present")
+    ds = read_origin_project(src)
+    log = str(ds.metadata.get("origin_results_log", ""))
+    assert "subtract_line" in log and "[Book4]Sheet1" in log
