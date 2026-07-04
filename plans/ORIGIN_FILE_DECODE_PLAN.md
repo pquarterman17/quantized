@@ -156,9 +156,8 @@ no documented real-Origin validation procedure for the trial window (31).
 
 | # | Item | Workstream | Why first |
 |---|------|------------|-----------|
-| 34 | `.opj` writer real-Origin fix | W6 | the export lever is broken; the license enables the fix loop NOW |
-| 25 | COM "Send to Origin" | W6 | live-verifiable while the license is present (COM-serialized after 34) |
-| ~~33~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18 / 20 / 22~~ | all decode + import flow + W4 UI + docs + log parsing | — | done, see Completed |
+| 34 | `.opj` writer real-Origin fix | W6 | the export lever is broken; loader model + tail grammar decoded 2026-07-04 (validation_log.md) — next: window-SECTION boundary re-cut |
+| ~~25~~ / ~~33~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18 / 20 / 22~~ | Send-to-Origin + all decode + import flow + W4 UI + docs + log parsing | — | done, see Completed |
 
 ---
 
@@ -296,13 +295,6 @@ the shipped contract)
 
 ### Tier 2 — Medium Impact
 
-25. **COM "Send to Origin" (Windows-only optional)** — pywin32 behind a
-    feature flag pushing the active dataset(s) + labels into a running
-    Origin (the LabTalk/COM surface proven in `tools/origin_trial/`);
-    degrades to 23 everywhere else; mock-based tests only, never a CI
-    requirement (architecture guard #10)
-    *Model: sonnet.*
-
 ### Tier 3 — Nice-to-Have
 
 26. **Figure export** — `.ogs` graph-building blocks from a FigureDoc,
@@ -336,6 +328,18 @@ the shipped contract)
 
 ## Completed
 
+- ~~**#25 COM "Send to Origin"**~~ (2026-07-04) — `io/origin_com.py` behind
+  the `QZ_ORIGIN_COM=1` env flag: `com_available()` (never raises, OS+flag+
+  pywin32 gated) + `send_to_origin()` (one workbook per DataStruct via
+  `newbook`/`PutWorksheet`/`range lname$/unit$`, time column first). Thin
+  routes `GET /api/export/origin-com/status` + `POST /api/export/origin-com`
+  (409 → points at the `.ogs` path). `origin-com` optional-dep group
+  (`pywin32; sys_platform == 'win32'`), 16 mock-based tests (guard #10 —
+  never a CI requirement). **LIVE-VERIFIED against real Origin 2026b**
+  (student license): book created, values cell-exact, X labels from
+  metadata, units land. Live run exposed + fixed two defects: LabTalk has
+  NO backslash escape (embedded `"` now downgrades to `'`) and the
+  writer-family `x_column_long`/`x_unit` metadata keys are now accepted.
 - ~~**#22 Structured results-log parsing**~~ (2026-07-04) — `parse_results_log()`
   turns each timestamped `results_log()` record into
   `{"timestamp", "operation", "params"}` (params nested by `Input`/`Output`/etc.
