@@ -32,8 +32,9 @@ _VIEWER = "the free Origin Viewer (https://www.originlab.com/viewer/)"
 # stored in the data, not flagged by the mask, so we map it to NaN on decode.
 ORIGIN_MISSING = struct.unpack("<d", b"\x0e\x2c\x13\x1c\xfe\x74\xaa\x81")[0]
 
-# A dataset name inside a column-header block: "<book>_<col-designation>\0".
-NAME_RE = re.compile(rb"([A-Za-z][\w ]{0,40}_[A-Za-z0-9]{1,4})\x00")
+# A dataset name inside a column-header block: "<book>_<col>[@sheet]\0"
+# (the @N suffix marks columns of sheet N>1 in multi-sheet workbooks).
+NAME_RE = re.compile(rb"([A-Za-z][\w ]{0,40}_[A-Za-z0-9]{1,4}(?:@\d{1,2})?)\x00")
 
 
 class OriginProjectError(ValueError):

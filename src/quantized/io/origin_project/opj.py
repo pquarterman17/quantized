@@ -49,6 +49,9 @@ def _group(columns: Columns) -> OrderedDict[str, Columns]:
     books: OrderedDict[str, Columns] = OrderedDict()
     for name, vals in columns:
         book, _, col = name.rpartition("_")
+        col, _, sheet = (col or "A").partition("@")
+        if sheet:  # sheet N>1 becomes its own pseudo-book "<Book>@N"
+            book = f"{book or 'Book'}@{sheet}"
         books.setdefault(book or "Book", []).append((col or "A", vals))
     return books
 
@@ -80,7 +83,8 @@ def _build_book(
     else the first column; the rest become value columns labelled by their
     long name (falling back to the Origin short designation A, B, …).
     """
-    col_meta = books_meta[book].columns if book in books_meta else {}
+    base_book, _, sheet_no = book.partition("@")
+    col_meta = books_meta[base_book].columns if base_book in books_meta and not sheet_no else {}
     maxlen = max((len(v) for _, v in cols), default=0)
 
     x_idx = next(
@@ -100,7 +104,13 @@ def _build_book(
     meta = {
         "source_format": "origin_opj",
         "origin_book": book,
-        "origin_book_long": books_meta[book].long_name if book in books_meta else book,
+        "origin_book_long": (
+            f"{books_meta[base_book].long_name} (sheet {sheet_no})"
+            if sheet_no and base_book in books_meta
+            else books_meta[book].long_name
+            if book in books_meta
+            else book
+        ),
         "origin_books": inventory,
         "x_column_name": ordered[0][0] if ordered else "A",
         "x_column_long": _label_for(ordered[0][0], x_meta) if ordered else "",
@@ -132,9 +142,14 @@ def _parse(
 
 
 def read_opj(path: Path) -> DataStruct:
-    """The single-DataStruct contract: the largest workbook (inventory in metadata)."""
+    """The single-DataStruct contract: the largest workbook (inventory in metadata).
+
+    Extra-sheet pseudo-books (``Book@N`` — often fit tables/curves) never win
+    the primary slot over measured sheet-1 data, however large they are.
+    """
     books, books_meta, inventory = _parse(path)
-    primary = max(books, key=lambda k: sum(len(v) for _, v in books[k]))
+    primary_pool = [k for k in books if "@" not in k] or list(books)
+    primary = max(primary_pool, key=lambda k: sum(len(v) for _, v in books[k]))
     return _build_book(primary, books[primary], books_meta, inventory)
 
 

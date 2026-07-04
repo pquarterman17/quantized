@@ -265,3 +265,30 @@ def test_figures_absent_on_plain_synthetic(tmp_path) -> None:
     from quantized.io.origin_project.figures import extract_figures
 
     assert extract_figures(_synthetic_opj()) == []
+
+
+def test_extra_sheet_datasets_become_pseudo_books(tmp_path) -> None:
+    data = (
+        b"CPYA 4.3380 188 W64 #\n" + _block(b"\x00" * 32) + _zero()
+        + _header("Bk_A") + _data([1.0, 2.0])
+        + _zero()
+        + _header("Bk_A@2") + _data([9.0, 8.0, 7.0])
+    )
+    from quantized.io.origin_project import read_origin_books
+
+    books = read_origin_books(_write(tmp_path, "sheets.opj", data))
+    names = {b.metadata["origin_book"] for b in books}
+    assert names == {"Bk", "Bk@2"}
+    s2 = next(b for b in books if b.metadata["origin_book"] == "Bk@2")
+    assert list(s2.time) == [9.0, 8.0, 7.0]
+
+
+@pytest.mark.realdata
+@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+def test_realdata_moke_fit_sheets_recovered() -> None:
+    from quantized.io.origin_project import read_origin_books
+
+    books = {b.metadata["origin_book"]: b for b in read_origin_books(_CORPUS / "Moke.opj")}
+    assert "Book4@2" in books and "Book4@3" in books  # FitLinear sheets
+    assert books["Book4@3"].values.shape[0] == 1000  # fit-curve table
+    assert "(sheet 2)" in books["Book4@2"].metadata["origin_book_long"]
