@@ -18,10 +18,10 @@ export function formatMetaValue(v: unknown): string {
 /** Flatten a metadata record into sorted [key, formattedValue] rows. The
  *  internal plot-x hints (`x_column_name`/`x_column_unit`) are dropped — they're
  *  wiring, not instrument metadata, and already shown as the X column. The
- *  Origin provenance keys (`origin_results_log[_records]`, `origin_notes`) are
- *  also dropped — they have their own dedicated Inspector card
- *  (OriginProvenanceCard) that renders them readably instead of as raw
- *  text/JSON rows. */
+ *  Origin provenance keys (`origin_results_log[_records]`, `origin_notes`,
+ *  `origin_report_sheets`, `origin_text_columns`) are also dropped — they
+ *  have their own dedicated Inspector card (OriginProvenanceCard) that
+ *  renders them readably instead of as raw text/JSON rows. */
 export function metadataRows(metadata: Record<string, unknown>): [string, string][] {
   const hidden = new Set([
     "x_column_name",
@@ -29,6 +29,8 @@ export function metadataRows(metadata: Record<string, unknown>): [string, string
     "origin_results_log",
     "origin_results_log_records",
     "origin_notes",
+    "origin_report_sheets",
+    "origin_text_columns",
   ]);
   return Object.keys(metadata)
     .filter((k) => !hidden.has(k))

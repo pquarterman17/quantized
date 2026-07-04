@@ -119,4 +119,74 @@ describe("OriginProvenanceCard", () => {
     render(<OriginProvenanceCard active={ds({ origin_notes: { N1: "just a note" } })} />);
     expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
   });
+
+  it("renders a compact expandable section per report-sheet column", () => {
+    render(
+      <OriginProvenanceCard
+        active={ds({
+          origin_report_sheets: {
+            B: ["cell://Parameters.Slope.Value", "cell://Parameters.Intercept.Value"],
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText("Report-sheet columns")).toBeInTheDocument();
+    expect(screen.getByText("B")).toBeInTheDocument();
+    // the first row's string appears in both the summary label and the
+    // expanded body — the second (unique) row confirms full-list expansion.
+    expect(screen.getAllByText("cell://Parameters.Slope.Value").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("(2)")).toBeInTheDocument();
+    expect(screen.getByText("cell://Parameters.Intercept.Value")).toBeInTheDocument();
+  });
+
+  it("renders a compact expandable section per inline text column", () => {
+    render(
+      <OriginProvenanceCard
+        active={ds({
+          origin_text_columns: { U: ["NaN", "NaN", "NaN"] },
+        })}
+      />,
+    );
+    expect(screen.getByText("Text columns")).toBeInTheDocument();
+    expect(screen.getByText("U")).toBeInTheDocument();
+    expect(screen.getAllByText("NaN").length).toBeGreaterThan(0);
+    expect(screen.getByText("(3)")).toBeInTheDocument();
+  });
+
+  it("truncates a long first string in the column summary to ~60 chars", () => {
+    const longString = "cell://" + "x".repeat(80);
+    render(
+      <OriginProvenanceCard
+        active={ds({ origin_report_sheets: { A: [longString] } })}
+      />,
+    );
+    // the summary shows the truncated form; the expanded body still shows
+    // the full untruncated string (it's a full-list expansion, not a preview).
+    expect(screen.getByText(`${longString.slice(0, 60)}…`)).toBeInTheDocument();
+    expect(screen.getByText(longString)).toBeInTheDocument();
+  });
+
+  it("labels a column whose first string is empty as (empty)", () => {
+    render(<OriginProvenanceCard active={ds({ origin_text_columns: { A: ["", ""] } })} />);
+    expect(screen.getByText("(empty)")).toBeInTheDocument();
+  });
+
+  it("orders columns in Origin letter order (length-then-lex, so Z before AA)", () => {
+    const { container } = render(
+      <OriginProvenanceCard
+        active={ds({ origin_report_sheets: { AA: ["aa value"], Z: ["z value"] } })}
+      />,
+    );
+    const html = container.innerHTML;
+    expect(html.indexOf(">Z<")).toBeLessThan(html.indexOf(">AA<"));
+  });
+
+  it("renders no column sections when origin_report_sheets/origin_text_columns are empty dicts", () => {
+    const { container } = render(
+      <OriginProvenanceCard
+        active={ds({ origin_report_sheets: {}, origin_text_columns: {}, sample: "MnN 30nm" })}
+      />,
+    );
+    expect(container.firstChild).toBeNull();
+  });
 });

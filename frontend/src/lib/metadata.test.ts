@@ -37,6 +37,8 @@ describe("metadataRows", () => {
       origin_results_log: "log text",
       origin_results_log_records: [{ timestamp: "t", operation: "op", params: {} }],
       origin_notes: { Notes1: "hello" },
+      origin_report_sheets: { B: ["cell://Parameters.Slope.Value"] },
+      origin_text_columns: { C: ["NaN", "NaN"] },
       sample: "Si",
     });
     expect(rows.map(([k]) => k)).toEqual(["sample"]);
