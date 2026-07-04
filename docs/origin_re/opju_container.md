@@ -1,7 +1,7 @@
 # Origin `.opju` container — worksheet data encoding (SOLVED via Rosetta specimens)
 
-Clean-room RE for `plans/ORIGIN_FILE_DECODE_PLAN.md` **items 7 + 8**. Method:
-controlled specimens generated with an Origin 2026b trial via COM
+Clean-room RE for `plans/ORIGIN_FILE_DECODE_PLAN.md` **items 7 + 8 + 10**.
+Method: controlled specimens generated with an Origin 2026b trial via COM
 (`tools/origin_trial/`), with known values/names, then byte-level analysis
 anchored on those knowns. No GPL source consulted; no open `.opju` reader
 exists — these findings are original.
@@ -16,6 +16,117 @@ hundreds of columns). Everything below the SOLVED section is the historical
 RE trail (the PREV/PRED model was a special-case illusion — see "why the
 early model looked right"), kept for provenance. Only preview/graph *images*
 use zlib; worksheet columns never do.
+
+**Item 10 (column names/units) also SOLVED and shipping**
+(`src/quantized/io/origin_project/windows_opju.py`, 2026-07-04) — see the
+"SOLVED — item 10" section immediately below. 151/151 long-names, 130/130
+units, and 17/17 comments recovered across every decodable column in the
+five-file oracle corpus (XAS, RockingCurve, UnpolPlots, "Fixed Lambdas SI",
+plus the `rosetta_*` specimens).
+
+## SOLVED — item 10: windows-section names/units (2026-07-04)
+
+The CPYUA windows section is **not** `.opj`'s CPY block stream — it's a
+separate tag/length framing that this work does not fully parse. What *is*
+pinned (validated end-to-end through `read_origin_books`, not just in
+isolation):
+
+**1. Every worksheet column carries a 2-byte plot-designation marker,**
+reusing `.opj`'s own marker-byte + display-code convention (see
+`opj_windows_section.md` sec 4.1, offsets 0x25/0x26) inside CPYUA's framing:
+
+| marker | designation |
+|--------|-------------|
+| `21 51` | X |
+| `21 61` | Y |
+| `30 61` | Y-error |
+
+(`disregard`/`X-error` counterparts are unconfirmed — no oracle column
+exercised them — so only these three are wired; anything else falls back to
+plain `Y`, matching `.opj`'s own `_DESIGNATION.get(byte, "Y")` default.)
+
+**2. A fixed-shape run of default column-format doubles follows every
+marker**, then an OPTIONAL length-prefixed embedded blob
+(`<len:u8><tag=0x01><bytes><NUL>`) holding that column's `ColumnInfo`/
+`ImportFile` storage (present only for imported-file columns — a long
+Windows path, some of it using what looks like Origin's internal string
+back-reference shorthand, e.g. a literal `"` + `NUL` + a short binary run
+standing in for a `>` — never decoded, just skipped over), then the REAL
+label record in the **same** `<len:u8><tag:u8><text><NUL>` shape (`len`
+counts tag + text + NUL). `text` splits on `\r\n` into
+long_name/unit/comment (0-3 rows). A handful of concrete examples, from the
+real corpus:
+
+```
+XAS.opju      @28536: 0c 0b "Energy\r\neV"                  (len=12, tag=0x0b)
+XAS.opju      @29116: 1a 0b "Intensity\r\narb. units\r\nCo"  (multi-row + comment)
+UnpolPlots    @214403+27: 03 02 "Q"                          (bare long-name, no \r\n at all)
+rosetta_min   @2469:  0b 0a "Field\r\nOe"                    (the original head-start find)
+SBook (2books)@4795+27: 02 01 ""                             (empty text = no label)
+```
+
+The `tag` byte is **not** meaningful for association (observed values
+0x01/0x06/0x0a/0x0b/0x0c/0x0d/0x1a/0x43/0x62/… with no discernible per-column
+scheme) — it is only ever used to detect "is this a real label" (reject
+zero-length/known-internal-token text) vs skip.
+
+**3. Every column emits its own marker (+ optional label) record, in true
+sheet column order (A, B, C, ...) — INCLUDING columns that never decode as
+worksheet data** (e.g. `RockingCurve.opju`'s `NbAl` book: only column A
+decodes via `opju_codec.scan_columns`, but the windows section still emits
+markers for B and C). This is why association is by **ordinal position**
+within one book's *contiguous* marker run (mapped through standard
+A/B/C/... lettering), not by parsing an internal short-name field — no such
+field was pinned for CPYUA (`.opj` has one at property-block offset 0x12;
+CPYUA's equivalent, if it exists, was not found).
+
+**4. Each book's own marker run is anchored** via one of:
+
+- the embedded `ColumnInfo`/`ImportFile` path's filename, alnum-stripped and
+  matched against the book's known short name — handles Origin's habit of
+  dropping underscores when deriving a book short name from an imported
+  filename (`bl11_YIGPy_032.dat` -> book `bl11YIGPy032`); or
+- a `<len=namelen+2> 00 00 <name>` window/book-header reference that appears
+  even for books never imported from a file (manually-typed sheets, e.g. the
+  `rosetta_*` specimens — `80 78 07 00 00 52 42 6f 6f 6b 91 0c` for `RBook`,
+  where `07` = len("RBook") + 2).
+
+**Positional guessing is not used to *detect* a label** — every accepted
+record matches the exact `<len><tag><text><NUL>` byte count PLUS a
+character-class + known-internal-token filter (rejects embedded blob
+fragments like a truncated `ResultsLog`/`OriginStorage` token, which the
+length-prefix match alone can land inside by coincidence). Association
+across a book's columns *is* positional, but only after that book's
+boundary is independently confirmed by anchor (a) or (b) above — never by
+scanning the whole file for ASCII runs. When no anchor is found, or the
+contiguous marker run doesn't cover every column `scan_columns` actually
+decoded for that book, the book is left out of the result entirely (A/B/C
+fallback stays in force) rather than guessed at.
+
+**Corpus validation (2026-07-04), through the shipped `read_origin_books`,
+counting only columns that decode as worksheet data (the item-8/32 decode
+gap is orthogonal to this item):**
+
+| file | names | units | comments |
+|------|-------|-------|----------|
+| XAS | 6/6 | 6/6 | 3/3 |
+| RockingCurve | 8/8 | 8/8 | 3/3 |
+| UnpolPlots | 23/23 | 2/2 | 1/1 |
+| "Fixed Lambdas SI" | 108/108 | 108/108 | 10/10 |
+| rosetta_min/lname/2books | 2/2 each | 2/2 each | — |
+| **total** | **151/151** | **130/130** | **17/17** |
+
+`Hc2 data.opju` (16 MB, 80 books, 1390 columns — the item-32 lock-in logger
+file) has no consolidated `index.json` oracle, but runs clean (no crash, no
+false positives) in ~2.3 s; only 9/1390 columns land a label there, which is
+expected — most of that file's books are logger exports whose window
+section didn't match either anchor pattern, so they correctly keep the A/B/C
+fallback rather than being guessed at.
+
+Implementation: `src/quantized/io/origin_project/windows_opju.py`, wired into
+`opju.py`'s `_parse`/`_build_book` exactly the way `.opj`'s `window_metadata`
+feeds its own `_build_book` (designation-X becomes the x axis; book display
+titles recover from the embedded import filename where available).
 
 ## SOLVED — the codec is Burtscher FPC (2026-07-04)
 

@@ -409,3 +409,118 @@ def test_opju_segment_grammar_prefix_run_and_constant() -> None:
     assert np.array_equal(cols["TBook_B"], np.asarray([1.00355] * 11 + tail))
     assert np.array_equal(cols["TBook_C"], np.asarray([0.0] * 5 + tail))
     assert np.array_equal(cols["TBook_D"], np.full(8, 2.5))
+
+
+# ── synthetic .opju windows-section names/units (plan item 10) ───────────────
+
+_OPJU_MARK = {"X": b"\x21\x51", "Y": b"\x21\x61", "Y-error": b"\x30\x61"}
+
+
+def _opju_window_section(book: str, columns: list[tuple[str, str, str, str, str]]) -> bytes:
+    """A synthetic CPYUA windows-section run: a book-header anchor
+    (`<len=namelen+2> 00 00 <name>`, the manually-typed-sheet form) followed by
+    one designation-marker + label record per column, matching the byte shape
+    pinned in `docs/origin_re/opju_container.md` (marker immediately followed
+    by `<len:u8><tag:u8><LongName\\r\\nUnit\\r\\nComment><NUL>`, or a 3-byte
+    empty placeholder `02 01 00` for an unlabeled column)."""
+    book_b = book.encode("latin1")
+    out = bytes([len(book_b) + 2]) + b"\x00\x00" + book_b
+    for _short, desig, long_name, unit, comment in columns:
+        out += _OPJU_MARK[desig]
+        text = "\r\n".join([long_name, unit, comment]).rstrip("\r\n")
+        if text:
+            body = text.encode("latin1")
+            out += bytes([len(body) + 2]) + b"\x0a" + body + b"\x00"
+        else:
+            out += b"\x02\x01\x00"
+    return out
+
+
+def test_opju_windows_section_supplies_names_units_and_x_designation() -> None:
+    """The CPYUA windows-section marker+label grammar (plan item 10)."""
+    from quantized.io.origin_project.opj import _group
+    from quantized.io.origin_project.opju_codec import scan_columns
+    from quantized.io.origin_project.windows_opju import opju_window_metadata
+
+    x_values = [float(i) for i in range(1, 9)]
+    y_values = [111.125 * (i + 1) for i in range(8)]
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_record("RBook_A", [("fpc", 8)], _fpc_encode(x_values))
+        + _opju_record("RBook_B", [("fpc", 8)], _fpc_encode(y_values))
+        + _opju_window_section(
+            "RBook",
+            [
+                ("A", "X", "Field", "Oe", ""),
+                ("B", "Y", "Moment", "emu", "As deposited"),
+            ],
+        )
+    )
+    cols = scan_columns(blob)
+    books = _group(cols)
+    meta = opju_window_metadata(blob, {k: [c for c, _ in v] for k, v in books.items()})
+    assert set(meta) == {"RBook"}
+    rbook = meta["RBook"]
+    assert rbook.columns["A"].designation == "X"
+    assert rbook.columns["A"].long_name == "Field"
+    assert rbook.columns["A"].unit == "Oe"
+    assert rbook.columns["B"].designation == "Y"
+    assert rbook.columns["B"].long_name == "Moment"
+    assert rbook.columns["B"].unit == "emu"
+    assert rbook.columns["B"].comment == "As deposited"
+
+
+def test_opju_windows_section_reader_wires_labels_into_datastruct(tmp_path) -> None:
+    """End to end: `read_opju_books` picks up real labels instead of A/B fallback."""
+    from quantized.io.origin_project import read_origin_books
+
+    x_values = [float(i) for i in range(1, 9)]
+    y_values = [111.125 * (i + 1) for i in range(8)]
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_record("RBook_A", [("fpc", 8)], _fpc_encode(x_values))
+        + _opju_record("RBook_B", [("fpc", 8)], _fpc_encode(y_values))
+        + _opju_window_section(
+            "RBook",
+            [
+                ("A", "X", "Field", "Oe", ""),
+                ("B", "Y", "Moment", "emu", ""),
+            ],
+        )
+    )
+    books = read_origin_books(_write(tmp_path, "named.opju", blob))
+    assert len(books) == 1
+    ds = books[0]
+    assert ds.labels == ("Moment",)
+    assert ds.units == ("emu",)
+    assert ds.metadata["x_column_long"] == "Field"
+    assert ds.metadata["x_unit"] == "Oe"
+
+
+def test_opju_windows_section_unlabeled_column_keeps_letter_fallback() -> None:
+    """No label record (the 3-byte empty placeholder) -> honest A/B fallback,
+    never a guess -- mirrors real unlabeled Y columns (e.g. XAS's column B)."""
+    from quantized.io.origin_project.opj import _group
+    from quantized.io.origin_project.opju_codec import scan_columns
+    from quantized.io.origin_project.windows_opju import opju_window_metadata
+
+    values_a = [float(i) for i in range(1, 9)]
+    values_b = [2.0 * i for i in range(1, 9)]
+    blob = (
+        b"CPYUA 4.3811 222\n"
+        + _opju_record("TBook_A", [("fpc", 8)], _fpc_encode(values_a))
+        + _opju_record("TBook_B", [("fpc", 8)], _fpc_encode(values_b))
+        + _opju_window_section(
+            "TBook",
+            [
+                ("A", "X", "Energy", "eV", ""),
+                ("B", "Y", "", "", ""),  # no label at all
+            ],
+        )
+    )
+    cols = scan_columns(blob)
+    books = _group(cols)
+    meta = opju_window_metadata(blob, {k: [c for c, _ in v] for k, v in books.items()})
+    tbook = meta["TBook"]
+    assert tbook.columns["A"].long_name == "Energy"
+    assert tbook.columns["B"].long_name == ""  # honest fallback, not guessed
