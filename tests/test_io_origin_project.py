@@ -144,6 +144,9 @@ def test_windows_section_supplies_names_units_and_x_designation(tmp_path) -> Non
     assert ds.metadata["x_column_long"] == "Field"
     assert ds.metadata["x_unit"] == "Oe"
     assert ds.metadata["column_designations"] == {"A": "X", "B": "Y"}
+    # value-channel letters in channel order (curve->column binding support)
+    assert ds.metadata["x_column_name"] == "A"
+    assert ds.metadata["origin_column_names"] == ["B"]
     # data itself is unchanged by the metadata
     assert list(ds.time) == [1.0, 2.0, 3.0]
     assert list(ds.values[:, 0]) == [10.0, 20.0, 30.0]

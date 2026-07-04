@@ -11,7 +11,11 @@ import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit, macroStep, type MacroStep } from "../lib/macro";
 import { is2DMap } from "../lib/mapdata";
 import { mergeDatasets } from "../lib/merge";
-import { buildOriginFigureEntries, type OriginFigureEntry } from "../lib/originFigures";
+import {
+  buildOriginFigureEntries,
+  figureChannelSelection,
+  type OriginFigureEntry,
+} from "../lib/originFigures";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
@@ -649,11 +653,16 @@ export const useApp = create<AppState>((set, get) => ({
     if (!entry?.datasetId) return;
     get().setActive(entry.datasetId);
     const fig = entry.figure;
+    // Decoded curve bindings (partial recall, 100% precision) select the
+    // actually-plotted channels; without them the default view stands.
+    const ds = get().datasets.find((d) => d.id === entry.datasetId);
+    const selection = ds ? figureChannelSelection(fig, ds) : null;
     set({
       xLim: [fig.x_from, fig.x_to],
       yLim: [fig.y_from, fig.y_to],
       xLog: fig.x_log,
       yLog: fig.y_log,
+      ...(selection ? { xKey: selection.xKey, yKeys: selection.yKeys } : {}),
     });
     get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
   },

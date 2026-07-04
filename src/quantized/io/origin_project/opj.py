@@ -194,6 +194,9 @@ def _build_book(
         "x_column_name": ordered[0][0] if ordered else "A",
         "x_column_long": _label_for(ordered[0][0], x_meta) if ordered else "",
         "x_unit": x_meta.unit if x_meta is not None else "",
+        # Origin short names of the value columns, in channel order — lets a
+        # figure's curve->column binding (opju_curves) map onto `.values`.
+        "origin_column_names": value_cols,
         "column_designations": {c: m.designation for c, m in col_meta.items()},
         "column_comments": {c: m.comment for c, m in col_meta.items() if m.comment},
         "origin_text_columns": {c: rows for c, rows in (text_cols or [])},

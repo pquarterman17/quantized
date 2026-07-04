@@ -21,6 +21,16 @@ export interface DataStruct {
  *  `docs/origin_re/opj_figures.md`), a curve count, and surviving annotation
  *  text (titles, peak labels). Matched to an imported dataset client-side
  *  (`lib/originFigures.resolveFigureDataset`). */
+/** One decoded curve->column binding of an Origin graph (`.opju` only —
+ *  opju_curves; 100% oracle-precision, partial recall, so a figure may carry
+ *  fewer curves than it really plots, or none). Letters are Origin column
+ *  short names ("A", "B", ...). */
+export interface OriginCurve {
+  book: string;
+  x: string;
+  y: string;
+}
+
 export interface OriginFigure {
   name: string;
   x_from: number;
@@ -32,6 +42,8 @@ export interface OriginFigure {
   source_hint?: string;
   n_curves: number;
   annotations: string[];
+  /** Decoded curve bindings, when the importer recovered any. */
+  curves?: OriginCurve[];
 }
 
 /** Response of POST /api/plot/series — uPlot-ready column data. */
