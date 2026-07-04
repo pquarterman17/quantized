@@ -292,3 +292,120 @@ def test_realdata_moke_fit_sheets_recovered() -> None:
     assert "Book4@2" in books and "Book4@3" in books  # FitLinear sheets
     assert books["Book4@3"].values.shape[0] == 1000  # fit-curve table
     assert "(sheet 2)" in books["Book4@2"].metadata["origin_book_long"]
+
+
+# ── synthetic .opju FPC codec round-trip (runs in CI) ─────────────────────────
+#
+# A test-local FPC *encoder* mirroring the decoder's model (canonical
+# Burtscher FPC: FCM value-hash + DFCM stride-hash, 2^12 tables, canonical
+# bcode widths where codes 0-3 store 0-3 bytes and 4-7 store 5-8). Encoding
+# synthetic columns and decoding them pins the width table — the low codes
+# were misread as (c&7)+1 until 2026-07-04 and only ultra-smooth data
+# exercises them (the "DFCM-collision" drop-outs, plan item 32).
+
+
+def _varint(v: int) -> bytes:
+    out = bytearray()
+    while True:
+        b7 = v & 0x7F
+        v >>= 7
+        out.append(b7 | (0x80 if v else 0))
+        if not v:
+            return bytes(out)
+
+
+def _zz(n: int) -> bytes:
+    """ZigZag-encode a signed int as a varint."""
+    return _varint((n << 1) ^ (n >> 63) if n >= 0 else ((-n) << 1) - 1)
+
+
+def _fpc_encode(values: list[float]) -> bytes:
+    """Encode float64s with the canonical-FPC model the decoder implements."""
+    mask = (1 << 64) - 1
+    fcm: dict[int, int] = {}
+    dfcm: dict[int, int] = {}
+    fh = dh = last = 0
+    nibbles: list[int] = []
+    payloads: list[bytes] = []
+    for x in values:
+        val = struct.unpack("<Q", struct.pack("<d", x))[0]
+        xor_f = val ^ fcm.get(fh, 0)
+        xor_d = val ^ ((last + dfcm.get(dh, 0)) & mask)
+        use_d = xor_d < xor_f
+        resid = xor_d if use_d else xor_f
+        nbytes = (resid.bit_length() + 7) // 8
+        if nbytes == 4:
+            nbytes = 5  # canonical FPC skips the 4-byte case
+        code = nbytes if nbytes < 4 else nbytes - 1
+        nibbles.append(code | (0x8 if use_d else 0))
+        payloads.append(resid.to_bytes(8, "little")[:nbytes])
+        stride = (val - last) & mask
+        fcm[fh] = val
+        dfcm[dh] = stride
+        fh = ((fh << 6) ^ (val >> 48)) & 0xFFF
+        dh = ((dh << 2) ^ (stride >> 40)) & 0xFFF
+        last = val
+    if len(nibbles) % 2:
+        nibbles.append(0)
+    out = bytearray()
+    pi = 0
+    for i in range(0, len(nibbles), 2):
+        out.append(nibbles[i] | (nibbles[i + 1] << 4))
+        for k in (i, i + 1):
+            if k < len(values):
+                out += payloads[k]
+                pi += 1
+    return bytes(out)
+
+
+def _opju_record(name: str, segments: list[tuple], stream: bytes) -> bytes:
+    """A named .opju column record: name + `0a 05 … ff ff` framing + segments."""
+    nrows = sum(c for _, c, *_ in segments)
+    fields = bytearray()
+    for seg in segments:
+        kind, count = seg[0], seg[1]
+        if kind == "fpc":
+            fields += _zz(-count)
+        else:
+            fields += _zz(count)
+            value = seg[2]
+            if value == 0.0:
+                fields.append(0x64)
+            else:
+                fields += b"\x50" + struct.pack("<d", value)
+    body = b"\xff\xff" + _varint(nrows) + b"\x00" + bytes(fields)
+    if stream:
+        body += b"\x0c" + stream
+    nm = name.encode("latin1")
+    return bytes([len(nm)]) + nm + b"\x0a\x05" + _varint(nrows) + body
+
+
+def test_opju_codec_low_width_codes_round_trip() -> None:
+    """Ultra-smooth data exercises 0-3-byte residual codes (the 2026-07-04 fix)."""
+    from quantized.io.origin_project.opju_codec import scan_columns
+
+    # near-constant stride ramp → tiny residuals → low bcodes
+    values = [846.551 + 0.517 * i + 1e-9 * (i % 3) for i in range(40)]
+    blob = b"CPYUA 4.3380 188\n" + _opju_record("TBook_A", [("fpc", 40)], _fpc_encode(values))
+    cols = scan_columns(blob)
+    assert len(cols) == 1 and cols[0][0] == "TBook_A"
+    assert np.array_equal(cols[0][1], np.asarray(values))
+
+
+def test_opju_segment_grammar_prefix_run_and_constant() -> None:
+    """Repeat-run segments: plateau prefix (0x50 f64), zero run (0x64), and a
+    stream-less constant column decode alongside a plain column."""
+    from quantized.io.origin_project.opju_codec import scan_columns
+
+    tail = [1.00355 - 0.001 * i for i in range(20)]
+    plateau = _opju_record(
+        "TBook_B", [("rep", 11, 1.00355), ("fpc", 20)], _fpc_encode(tail)
+    )
+    zeros = _opju_record("TBook_C", [("rep", 5, 0.0), ("fpc", 20)], _fpc_encode(tail))
+    const = _opju_record("TBook_D", [("rep", 8, 2.5)], b"")
+    blob = b"CPYUA 4.3380 188\n" + plateau + zeros + const
+    cols = dict(scan_columns(blob))
+    assert set(cols) == {"TBook_B", "TBook_C", "TBook_D"}
+    assert np.array_equal(cols["TBook_B"], np.asarray([1.00355] * 11 + tail))
+    assert np.array_equal(cols["TBook_C"], np.asarray([0.0] * 5 + tail))
+    assert np.array_equal(cols["TBook_D"], np.full(8, 2.5))
