@@ -88,6 +88,31 @@ decode **byte-exact** as literal + PREV-XOR residuals; the geometric column
 (PRED exact each step); descending/ascending integer columns decode with a
 mix of PREV and PRED residuals.
 
+### Corpus findings (2026-07-04 overnight, v4.3380 files)
+
+Validated against Origin-exported oracles (XAS energy column, 81 rows,
+first values match byte-exact):
+
+- **Unified width rule:** item width = ``(nibble & 7) + 1`` bytes for every
+  nibble except ``8`` (0 bytes, predictor-exact). The 4.3811 specimen table
+  ({7:8, E:7, F:8}) is a special case. Verified by unique whole-stream
+  alignment on an 81-row stream using nibbles {5, 7, C, D}.
+- **The size fields are varints:** the ``2·nrows−1`` marker is LEB128-style
+  (81 rows → ``a1 01``). Record pattern to search:
+  ``ff ff <nrows u16> <varint 2n−1> 0c``.
+- Nibbles 5/7/D/E/F all decode as XOR-vs-PREV low-aligned residuals (44/81
+  items of the XAS column verified value-exact against the oracle).
+- **OPEN — nibble ``C`` (width 5):** 37/81 items. Payload is NOT the
+  low-5 bytes of any tested residual (xor/sub × prev/prev2/2a−b/float-pred,
+  bit-shifts 0–16, byte-reversal). The residual's missing 6th byte follows a
+  ``(2^k−1)·4`` mask pattern (XOR borrow-runs), so C is a genuinely different
+  sub-encoding (likely bit-packed significant-run coding). **Census: every
+  real corpus column contains C items** → the decoder cannot ship for real
+  files until C is cracked. Fastest path: a designed trial-COM probe (values
+  engineered for 5–6-significant-byte residuals, e.g. microsteps like the
+  XAS energy axis) giving known-residual↔payload pairs. UnpolPlots/Fixed
+  Lambdas SI match no record pattern at all — further variants beyond C.
+
 ### The open question: the PREV/PRED schedule
 
 Which predictor a given `E` item uses is deterministic but not yet derived.
