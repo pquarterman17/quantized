@@ -16,7 +16,13 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.datastruct import DataStruct
-from quantized.io.origin_project.container import NAME_RE, decode_doubles, fallback, walk_blocks
+from quantized.io.origin_project.container import (
+    NAME_RE,
+    decode_doubles,
+    fallback,
+    plausible_column,
+    walk_blocks,
+)
 from quantized.io.origin_project.windows import BookMeta, ColumnMeta, window_metadata
 
 __all__ = ["read_opj", "read_opj_books"]
@@ -33,9 +39,33 @@ def _columns(b: bytes) -> list[tuple[str, NDArray[np.float64]]]:
             m = NAME_RE.search(payload)
             pending = m.group(1).decode("latin1") if m else pending
         elif pending is not None and size >= 10:  # the paired data block
-            out.append((pending, decode_doubles(payload)))
+            vals = decode_doubles(payload)
+            # Non-double columns (text/int — plan item 4) reinterpret as float64
+            # garbage; drop them rather than emit nonsense. Two tells: absurd
+            # magnitudes (int/float32 payloads) and a printable-ASCII payload
+            # (text — real float64 arrays run ~35-40% printable bytes, text
+            # >90%). All-NaN stays (empty columns are real).
+            if plausible_column(vals, allow_all_nan=True) and not _looks_textual(payload):
+                out.append((pending, vals))
             pending = None
     return out
+
+
+_PRINTABLE = frozenset(range(0x20, 0x7F)) | {0x09, 0x0A, 0x0D}
+
+
+def _looks_textual(payload: bytes) -> bool:
+    """True when a data block's bytes read as text, not float64 records.
+
+    Judged over the *non-zero* bytes (both text cells and round-value doubles
+    are heavily NUL-padded): text is across-the-board printable, while float64
+    mantissa/exponent bytes run well under half printable.
+    """
+    nonzero = [c for c in payload[:400] if c != 0]
+    if len(nonzero) < 8:
+        return False
+    printable = sum(c in _PRINTABLE for c in nonzero)
+    return printable >= 0.9 * len(nonzero)
 
 
 def _label_for(col: str, meta: ColumnMeta | None) -> str:

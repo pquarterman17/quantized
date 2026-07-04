@@ -23,6 +23,7 @@ __all__ = [
     "OriginProjectError",
     "decode_doubles",
     "fallback",
+    "plausible_column",
     "walk_blocks",
 ]
 
@@ -87,3 +88,22 @@ def decode_doubles(data: bytes) -> NDArray[np.float64]:
     vals = np.ascontiguousarray(rows[:, 2:]).view("<f8").reshape(n).copy()
     vals[vals == ORIGIN_MISSING] = np.nan  # empty cells → NaN, not a bogus -1e-300
     return vals
+
+
+def plausible_column(vals: NDArray[np.float64], *, allow_all_nan: bool = False) -> bool:
+    """Reject a decoded column whose values betray a non-double payload.
+
+    Text / integer / float32 columns (the 147-byte column header carries a
+    type field the readers don't decode yet — plan item 4) reinterpret as
+    float64 garbage: subnormals (|v| ≲ 1e-300) and absurd magnitudes
+    (|v| ≳ 1e290) that real instrument data never contains. Dropping the whole
+    column on the first such value is honest-absent; silent garbage is worse
+    than a gap. ``allow_all_nan`` keeps genuinely empty columns (the ``.opj``
+    reader pads ragged books with them).
+    """
+    finite = vals[np.isfinite(vals)]
+    if finite.size == 0:
+        return allow_all_nan
+    mag = np.abs(finite)
+    wrecked = ((mag < 1e-290) & (finite != 0.0)) | (mag > 1e290)
+    return not bool(np.any(wrecked))

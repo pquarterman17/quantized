@@ -48,7 +48,7 @@ import struct
 import numpy as np
 from numpy.typing import NDArray
 
-from quantized.io.origin_project.container import ORIGIN_MISSING
+from quantized.io.origin_project.container import ORIGIN_MISSING, plausible_column
 
 __all__ = ["CodecError", "decode_stream", "scan_columns"]
 
@@ -231,18 +231,12 @@ def _records(b: bytes) -> list[int]:
 def _plausible(vals: NDArray[np.float64]) -> bool:
     """Reject any column that shows a decode desync.
 
-    A wrong predictor shatters the float exponent field, so a mis-located or
-    diverged stream produces subnormals (|v| ≲ 1e-300) and absurd magnitudes
-    (|v| ≳ 1e290) that real instrument data never contains. We reject the
-    *whole* column on the first such value — a partially-diverged column can't
-    be trusted past the divergence, and silent garbage is worse than a gap.
+    A wrong predictor shatters the float exponent field the same way a
+    non-double payload does, so the shared gate applies; all-NaN additionally
+    rejects here because a mis-located ``.opju`` record never legitimately
+    decodes to nothing but sentinels.
     """
-    finite = vals[np.isfinite(vals)]
-    if finite.size == 0:
-        return False
-    mag = np.abs(finite)
-    wrecked = ((mag < 1e-290) & (finite != 0.0)) | (mag > 1e290)
-    return not bool(np.any(wrecked))
+    return plausible_column(vals, allow_all_nan=False)
 
 
 def scan_columns(b: bytes) -> list[tuple[str, NDArray[np.float64]]]:

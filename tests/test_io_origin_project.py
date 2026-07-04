@@ -432,3 +432,23 @@ def test_opju_chunked_staircase_record() -> None:
     assert "TBook_E" in cols
     expect = burst1 + [2.0] * 6 + burst2 + [0.0] * 4
     assert np.array_equal(cols["TBook_E"], np.asarray(expect))
+
+
+def test_opj_drops_non_double_garbage_columns(tmp_path) -> None:
+    """A text column's bytes reinterpret as absurd float64s — drop the column,
+    never emit garbage (item 4's honest-absent contract; type decode is open)."""
+    text_block = _block((b"\x00\x00" + b"Comment!") * 3)  # ASCII payload, 10-byte records
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _block(b"\x00" * 32)
+        + _zero()
+        + _header("Book1_A") + _data([1.0, 2.0, 3.0])
+        + _zero()
+        + _header("Book1_B") + text_block
+        + _zero()
+        + _header("Book1_C") + _data([10.0, 20.0, 30.0])
+    )
+    ds = read_origin_project(_write(tmp_path, "mixed.opj", blob))
+    labels = set(ds.labels) | {str(ds.metadata.get("x_column_name", ""))}
+    assert "B" not in labels  # the garbage column is gone
+    assert ds.values.shape[1] >= 1  # the real columns survive
