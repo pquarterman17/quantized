@@ -158,13 +158,7 @@ no documented real-Origin validation procedure for the trial window (31).
 |---|------|------------|-----------|
 | 34 | `.opj` writer real-Origin fix | W6 | the export lever is broken; the license enables the fix loop NOW |
 | 25 | COM "Send to Origin" | W6 | live-verifiable while the license is present (COM-serialized after 34) |
-<<<<<<< HEAD
-| 20 | docs consolidation | W5 | 1,450 lines of RE reports unfolded; independent, delegable |
-| ~~33~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18~~ / ~~22~~ | all decode + import flow + W4 UI | — | done, see Completed |
-=======
-| 22 | structured results-log parsing | W5 | log text already ships; independent, delegable |
-| ~~33~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18 / 20~~ | all decode + import flow + W4 UI + docs | — | done, see Completed |
->>>>>>> worktree-agent-aaa48c8687fae93c3
+| ~~33~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18 / 20 / 22~~ | all decode + import flow + W4 UI + docs + log parsing | — | done, see Completed |
 
 ---
 
