@@ -1,12 +1,12 @@
 """Read Origin project files (``.opj`` / ``.opju``) — clean-room, no GPL liborigin.
 
 Origin's project formats are proprietary binary. The older ``.opj`` (Origin 2017
-and earlier) and the newer ``.opju`` (2018+) share the same ``CPY`` container —
-``CPYA`` is the ANSI variant, ``CPYUA`` the Unicode sibling — so one decoder
-serves both (the delta is mostly string encoding). This repo is Apache-2.0 with an
-enforced no-GPL rule (see ``architecture-guards`` #3), so it does **not** bundle
-the GPL ``liborigin``; we roll our own. Format layout is documented in
-``docs/origin_project_format.md``.
+and earlier, magic ``CPYA``) and the newer ``.opju`` (2018+, magic ``CPYUA``)
+share the ``CPY`` container *header*, but the ``.opju`` datasets section uses a
+different framing and compresses payloads — so it needs its own decode pass (M2,
+still in progress). This repo is Apache-2.0 with an enforced no-GPL rule (see
+``architecture-guards`` #3), so it does **not** bundle the GPL ``liborigin``; we
+roll our own. Format layout is documented in ``docs/origin_project_format.md``.
 
 Milestone M1 (here): recover worksheet DATA. The container is a stream of
 ``<uint32 size LE><0x0A><payload><0x0A>`` blocks (``size==0`` = section spacer);
@@ -165,8 +165,10 @@ def _read_opj(path: Path) -> DataStruct:
 
 
 def _read_opju(path: Path) -> DataStruct:
-    # TODO(M2): .opju (CPYUA) shares the CPY framing but stores Unicode strings —
-    # adapt _columns' name reads before enabling. Until then, guide the user.
+    # TODO(M2): .opju shares the CPY header but its datasets section uses a
+    # different framing and compresses payloads (the M1 block walker + record
+    # encoding do not apply) — needs a dedicated decode pass. See
+    # docs/origin_project_format.md "M2 findings". Until then, guide the user.
     raise _fallback(
         path,
         f"'{path.name}' is an Origin .opju (2018+) project; "

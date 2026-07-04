@@ -65,9 +65,35 @@ Exact-pixel reproduction is a stretch; the underlying data is never lost.
   framing → extract spreadsheets + columns → decode column data → one
   `DataStruct` per sheet (book/sheet/column names + units in metadata). The
   high-value "recover my data" deliverable.
-- **M2 — `.opju` worksheet data.** Same framing; swap ANSI→Unicode string reads.
+- **M2 — `.opju` worksheet data.** *Harder than first estimated* — see findings
+  below.
 - **M3 — figures → quantized plots.** Graph/Layer/Curve → plot spec (axes,
   series, basic styling). Partial fidelity expected.
+
+## M2 (`.opju`) findings — why it's a separate effort
+
+The `.opju` container is *not* just "`.opj` with Unicode strings". Confirmed by
+probing `XAS.opju` / `RockingCurve.opju` / `UnpolPlots.opju`:
+
+- **Header + preview.** Header line `CPYUA <ver> <build>\n` (no ` W64 #` tag),
+  then a `PrvwOPJU` preview preamble. The shared `CPY` file-header block
+  (`size=123`, starts `02 00 …`) resumes after it (offset ~69 in `XAS.opju`).
+- **Different datasets framing.** After the file-header block + a `size==0`
+  spacer, the next bytes (`80 2b 03 00 …`) are **not** the `.opj`
+  `<u32><0x0A>` frame — the `.opju` datasets section is framed differently
+  (looks type-tagged / var-length).
+- **Compression.** The file carries zlib streams (`78 9c`/`78 da`); the ones
+  found so far inflate to ~92 KB bitmap-like blobs (graph/preview images), not
+  worksheet columns. The **column data is not present as plain `float64` runs
+  anywhere** (raw or inside those zlib streams) — so it is stored in a different
+  numeric encoding and/or **raw-deflate** streams (no `78` header) that a naive
+  scan misses.
+
+**Next-pass plan:** (1) parse the `.opju` datasets-section framing to find the
+per-column records; (2) handle raw-deflate payloads (`zlib.decompressobj(-15)`);
+(3) confirm the record layout (double vs float32, mask/no-mask) against a decoded
+column with a known shape. Until then `_read_opju` guides to the Origin Viewer
+export path.
 
 ## Testing
 
