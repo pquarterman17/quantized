@@ -171,6 +171,10 @@ no documented real-Origin validation procedure for the trial window (31).
    a text attachment (the analysis log is plain text in the windows
    section and holds fit provenance)
    *Model: haiku.*
+   - Results-log half SHIPPED (2026-07-04, `20d54fa`): timestamped
+     operation records → `metadata['origin_results_log']` on the primary
+     dataset, both containers, Moke-validated. Notes *windows* stay open
+     honestly — no known-content specimen exists to validate a scraper.
 
 ---
 
