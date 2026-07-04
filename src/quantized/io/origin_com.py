@@ -71,8 +71,13 @@ def com_available() -> bool:
 
 
 def _escape_lt(text: str) -> str:
-    """Escape double-quotes for a LabTalk string literal."""
-    return text.replace('"', '\\"')
+    """Make ``text`` safe inside a LabTalk string literal.
+
+    LabTalk has NO backslash escape — a ``\\"`` lands literally in Origin
+    (live-verified 2026-07-04, see docs/origin_re/validation_log.md), so
+    embedded double-quotes are downgraded to single quotes instead.
+    """
+    return text.replace('"', "'")
 
 
 def _sanitize_book_name(name: str, index: int, used: set[str]) -> str:
@@ -164,9 +169,17 @@ def send_to_origin(
             app.PutWorksheet(f"[{book}]1", rows, 0, 0)
 
             x_name = str(
-                ds.metadata.get("x_column_name") or ds.metadata.get("xColumnName") or "X"
+                ds.metadata.get("x_column_name")
+                or ds.metadata.get("xColumnName")
+                or ds.metadata.get("x_column_long")  # writer.py's key family
+                or "X"
             )
-            x_unit = str(ds.metadata.get("x_column_unit") or ds.metadata.get("xColumnUnit") or "")
+            x_unit = str(
+                ds.metadata.get("x_column_unit")
+                or ds.metadata.get("xColumnUnit")
+                or ds.metadata.get("x_unit")
+                or ""
+            )
             _label_column(app, book, 1, x_name, x_unit)
             for k, (label, unit) in enumerate(zip(ds.labels, ds.units, strict=True)):
                 _label_column(app, book, k + 2, label, unit)

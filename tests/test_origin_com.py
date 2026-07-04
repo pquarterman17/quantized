@@ -157,10 +157,12 @@ def test_send_to_origin_labtalk_call_sequence(monkeypatch: pytest.MonkeyPatch) -
     assert '__c2.lname$ = "Moment";' in col2_cmd
     assert '__c2.unit$ = "emu";' in col2_cmd
 
-    # Quote escaping: a raw double-quote in the label must survive escaped.
+    # Quote handling: LabTalk has no backslash escape (live-verified — a
+    # backslash-escaped quote lands literally in Origin), so embedded
+    # double-quotes downgrade to single quotes.
     col3_cmd = fake.executed[3]
     assert "range __c3 = [Loop_A]1!col(3);" in col3_cmd
-    assert '__c3.lname$ = "Signal \\"raw\\"";' in col3_cmd
+    assert "__c3.lname$ = \"Signal 'raw'\";" in col3_cmd
     assert "__c3.unit$" not in col3_cmd  # empty unit -> no assignment emitted
 
     # Exactly one PutWorksheet call: time column first, then value columns,
