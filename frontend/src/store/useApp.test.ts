@@ -86,6 +86,43 @@ describe("clearAll (File ▸ Remove all)", () => {
   });
 });
 
+describe("Origin error-bar defaults on activation", () => {
+  // Reflectometry-shaped book: value cols R++, dR++, R--, dR-- (A=X extracted).
+  const reflBook = (): Dataset => ({
+    id: "refl",
+    name: "PNR",
+    data: {
+      time: [0, 1],
+      values: [
+        [1, 0.1, 2, 0.2],
+        [1, 0.1, 2, 0.2],
+      ],
+      labels: ["R++", "dR++", "R--", "dR--"],
+      units: ["", "", "", ""],
+      metadata: {
+        origin_column_names: ["C", "D", "E", "F"],
+        column_designations: { A: "X", C: "Y", D: "Y-error", E: "Y", F: "Y-error" },
+      },
+    },
+  });
+
+  it("addDataset pairs Origin Y-error columns into errKeys", () => {
+    useApp.getState().addDataset(reflBook());
+    expect(useApp.getState().errKeys).toEqual({ 0: 1, 2: 3 });
+  });
+
+  it("setActive re-derives errKeys for the activated Origin dataset", () => {
+    useApp.setState({ datasets: [reflBook()], activeId: null, errKeys: {} });
+    useApp.getState().setActive("refl");
+    expect(useApp.getState().errKeys).toEqual({ 0: 1, 2: 3 });
+  });
+
+  it("leaves errKeys empty for non-Origin data", () => {
+    useApp.getState().addDataset({ id: "plain", name: "p", data: raw });
+    expect(useApp.getState().errKeys).toEqual({});
+  });
+});
+
 describe("useApp corrections", () => {
   it("applies params to raw and replaces displayed data", async () => {
     const corrected: DataStruct = { ...raw, values: [[5], [15], [25]] };

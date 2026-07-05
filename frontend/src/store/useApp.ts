@@ -6,6 +6,7 @@ import { create } from "zustand";
 import type { CorrectionsRequest } from "../lib/api";
 import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
 import { cloneDataStruct } from "../lib/dataset";
+import { originErrKeys } from "../lib/errorbars";
 import { setFormatOpts, type Notation } from "../lib/format";
 import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit, macroStep, type MacroStep } from "../lib/macro";
@@ -622,7 +623,7 @@ export const useApp = create<AppState>((set, get) => ({
       y2Keys: null, // and reset the secondary-axis assignment
       seriesStyles: {}, // styles are keyed by channel index → reset per dataset
       seriesLabels: {}, // legend renames are channel-keyed → reset per dataset
-      errKeys: {}, // error-bar pairings are channel-keyed → reset per dataset
+      errKeys: originErrKeys(ds.data), // Origin Y-error columns → error bars (else empty)
       seriesOrder: null, // draw order is channel-keyed → reset per dataset
       hiddenChannels: [], // legend show/hide is channel-keyed → reset per dataset
       xLim: null, // and autoscale both axes
@@ -817,7 +818,7 @@ export const useApp = create<AppState>((set, get) => ({
         y2Keys: null,
         seriesStyles: {},
         seriesLabels: {},
-        errKeys: {},
+        errKeys: activeDs ? originErrKeys(activeDs.data) : {},
         seriesOrder: null,
         hiddenChannels: [],
         xLim: null,
@@ -843,7 +844,7 @@ export const useApp = create<AppState>((set, get) => ({
         y2Keys: null,
         seriesStyles: {},
         seriesLabels: {},
-        errKeys: {},
+        errKeys: ds ? originErrKeys(ds.data) : {},
         seriesOrder: null,
         hiddenChannels: [],
         xLim: null,

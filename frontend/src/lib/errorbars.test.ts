@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { buildErrorColumns } from "./errorbars";
+import { buildErrorColumns, originErrKeys } from "./errorbars";
 import type { DataStruct } from "./types";
+
+/** Build an Origin-shaped DataStruct carrying only the metadata originErrKeys
+ *  reads (value-column short names in channel order + their designations). */
+function origin(names: string[], desig: Record<string, string>): DataStruct {
+  return {
+    time: [0, 1],
+    values: [names.map(() => 0), names.map(() => 0)],
+    labels: [...names],
+    units: names.map(() => ""),
+    metadata: { origin_column_names: names, column_designations: desig },
+  };
+}
 
 const ds: DataStruct = {
   time: [0, 1, 2],
@@ -44,5 +56,83 @@ describe("buildErrorColumns", () => {
       ],
     };
     expect(buildErrorColumns(withNaN, [0], { 0: 1 }).get(1)).toEqual([null, null, 0.7]);
+  });
+});
+
+// Patterns below are the actual designations decoded from the reflectometry
+// corpus (probed 2026-07-05), so the expected pairings are ground truth.
+describe("originErrKeys (Origin Y-error → error-bar defaults)", () => {
+  it("pairs each Y-error with the nearest preceding Y (Fixed Lambdas layout)", () => {
+    // A=X (→time, excluded); value cols: dQ, R++, dR++, R--, dR--, T++, T--, SA, dSA, T-SA
+    const ds = origin(["B", "C", "D", "E", "F", "G", "H", "I", "J", "K"], {
+      A: "X",
+      B: "Y-error", // dQ — leading, no preceding Y → skipped
+      C: "Y", // R++
+      D: "Y-error", // dR++ → C
+      E: "Y", // R--
+      F: "Y-error", // dR-- → E
+      G: "Y", // T++
+      H: "Y", // T--
+      I: "Y", // SA
+      J: "Y-error", // dSA → I
+      K: "Y", // T SA
+    });
+    expect(originErrKeys(ds)).toEqual({ 1: 2, 3: 4, 7: 8 });
+  });
+
+  it("ignores X-error columns (MnN Book1 layout: dQ is X-error)", () => {
+    const ds = origin(["B", "C", "D", "E", "F", "G"], {
+      A: "X",
+      B: "X-error", // dQ — X-error, ignored
+      C: "Y", // R++
+      D: "Y-error", // dR++ → C
+      E: "Y", // R--
+      F: "Y-error", // dR-- → E
+      G: "Y",
+    });
+    expect(originErrKeys(ds)).toEqual({ 1: 2, 3: 4 });
+  });
+
+  it("pairs a lone Y-error to its preceding Y (UnpolPlots layout)", () => {
+    const ds = origin(["B", "C", "D", "E", "F", "G", "H", "I"], {
+      A: "X",
+      B: "Y",
+      C: "Y",
+      D: "Y",
+      E: "Y",
+      F: "Y",
+      G: "Y", // R/Rsub
+      H: "Y-error", // dR Fresnel → G
+      I: "Y",
+    });
+    expect(originErrKeys(ds)).toEqual({ 5: 6 });
+  });
+
+  it("returns empty for a multi-XY book with no error columns (RockingCurve)", () => {
+    const ds = origin(["B", "C", "D", "E", "F"], {
+      A: "X",
+      B: "Y",
+      C: "X",
+      D: "Y",
+      E: "X",
+      F: "Y",
+    });
+    expect(originErrKeys(ds)).toEqual({});
+  });
+
+  it("returns empty for non-Origin data (no designation metadata)", () => {
+    const plain: DataStruct = {
+      time: [0],
+      values: [[1, 2]],
+      labels: ["a", "b"],
+      units: ["", ""],
+      metadata: {},
+    };
+    expect(originErrKeys(plain)).toEqual({});
+  });
+
+  it("skips a Y-error with no preceding Y", () => {
+    const ds = origin(["B", "C"], { A: "X", B: "Y-error", C: "Y" });
+    expect(originErrKeys(ds)).toEqual({}); // B has no preceding Y (A is X, excluded)
   });
 });
