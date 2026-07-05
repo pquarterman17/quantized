@@ -53,14 +53,18 @@ export function originErrKeys(ds: DataStruct): Record<number, number> {
   return out;
 }
 
-/** The channels that are Origin error columns (any "Y-error"/"X-error"
- *  designation), to hide from the plot by default. A paired Y-error feeds its Y
- *  column's whiskers; an UNpaired one (a leading `dQ` that is really the X's
- *  resolution, or an X-error) is still an error, not data — neither should draw
- *  its own stray curve, which the plot-all default otherwise would. Origin never
- *  plots an error column as a separate series. They stay in the legend,
- *  toggleable. Empty for non-Origin data (no designations). */
-export function originHiddenErr(ds: DataStruct): number[] {
+/** The value channels an Origin book would NOT draw as their own Y curve, to
+ *  hide from the plot-all default so the imported plot matches Origin:
+ *   - error columns ("Y-error"/"X-error") — a paired Y-error feeds its Y
+ *     column's whiskers; an unpaired one (a leading `dQ`, or an X-error) is
+ *     still an error, not data. Origin never plots an error as a separate series.
+ *   - secondary X columns ("X") — a multi-XY book (e.g. a Moke file storing
+ *     several hysteresis loops as X,Y,X,Y) keeps its FIRST X as the axis (the
+ *     DataStruct `time`); any further X columns are axis columns, not data, and
+ *     Origin draws them as the shared abscissa, never as a flat Y line.
+ *  Hidden channels stay in the legend (toggleable) and still feed the whiskers
+ *  via errKeys. Empty for non-Origin data (no designations). */
+export function originHiddenChannels(ds: DataStruct): number[] {
   const meta = ds.metadata ?? {};
   const desig = meta["column_designations"];
   const names = meta["origin_column_names"];
@@ -69,7 +73,7 @@ export function originHiddenErr(ds: DataStruct): number[] {
   const out: number[] = [];
   for (let i = 0; i < names.length; i++) {
     const g = byName[String(names[i])];
-    if (g === "Y-error" || g === "X-error") out.push(i);
+    if (g === "Y-error" || g === "X-error" || g === "X") out.push(i);
   }
   return out;
 }

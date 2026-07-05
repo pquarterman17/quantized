@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildErrorColumns, originErrKeys, originHiddenErr } from "./errorbars";
+import { buildErrorColumns, originErrKeys, originHiddenChannels } from "./errorbars";
 import type { DataStruct } from "./types";
 
 /** Build an Origin-shaped DataStruct carrying only the metadata originErrKeys
@@ -136,7 +136,7 @@ describe("originErrKeys (Origin Y-error → error-bar defaults)", () => {
     expect(originErrKeys(ds)).toEqual({}); // B has no preceding Y (A is X, excluded)
   });
 
-  it("originHiddenErr hides ALL error columns incl. unpaired X-error (MnN Book1)", () => {
+  it("originHiddenChannels hides ALL error columns incl. unpaired X-error (MnN Book1)", () => {
     const ds = origin(["B", "C", "D", "E", "F", "G"], {
       A: "X",
       B: "X-error", // ch0 — dQ, unpaired but still an error → hidden
@@ -146,17 +146,33 @@ describe("originErrKeys (Origin Y-error → error-bar defaults)", () => {
       F: "Y-error", // ch4 — dR--
       G: "Y",
     });
-    expect(originHiddenErr(ds)).toEqual([0, 2, 4]);
+    expect(originHiddenChannels(ds)).toEqual([0, 2, 4]);
   });
 
-  it("originHiddenErr hides a leading Y-error (Fixed Lambdas dQ) even though it has no pair", () => {
+  it("originHiddenChannels hides a leading Y-error (Fixed Lambdas dQ) even though it has no pair", () => {
     // B=dQ is Y-error but has no preceding Y → not in errKeys, yet still hidden.
     const ds = origin(["B", "C", "D"], { A: "X", B: "Y-error", C: "Y", D: "Y-error" });
     expect(originErrKeys(ds)).toEqual({ 1: 2 }); // only D pairs (to C)
-    expect(originHiddenErr(ds)).toEqual([0, 2]); // BOTH error columns hidden
+    expect(originHiddenChannels(ds)).toEqual([0, 2]); // BOTH error columns hidden
   });
 
-  it("originHiddenErr is empty for data with no error columns", () => {
-    expect(originHiddenErr(origin(["B", "C"], { A: "X", B: "Y", C: "Y" }))).toEqual([]);
+  it("originHiddenChannels is empty for data with no error/secondary-X columns", () => {
+    expect(originHiddenChannels(origin(["B", "C"], { A: "X", B: "Y", C: "Y" }))).toEqual([]);
+  });
+
+  it("originHiddenChannels hides secondary X columns of a multi-XY book (Moke loops)", () => {
+    // A magnetometry book storing several hysteresis loops as X,Y,X,Y: the first
+    // X (A) is the axis (→time, not a value col); the further X columns are
+    // repeated H sweeps, not data — Origin draws them as the shared abscissa,
+    // never as flat Y lines, so they're hidden.
+    const ds = origin(["B", "C", "D", "E", "F"], {
+      A: "X", // primary X → time
+      B: "Y", // Kerr signal
+      C: "X", // secondary H sweep → hidden
+      D: "Y", // Kerr signal
+      E: "X", // secondary H sweep → hidden
+      F: "Y", // Kerr signal
+    });
+    expect(originHiddenChannels(ds)).toEqual([1, 3]);
   });
 });
