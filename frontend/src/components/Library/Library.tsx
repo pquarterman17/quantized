@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import BookFamiliesSection from "./BookFamiliesSection";
 import DatasetRow from "./DatasetRow";
+import FigureRow from "./FigureRow";
 import FiguresSection from "./FiguresSection";
 import FolderRow from "./FolderRow";
 import { useLibraryTree } from "./useLibraryTree";
@@ -114,23 +115,25 @@ export default function Library() {
   // Body: a folder tree when folders exist (and no active search), the derived
   // group sections when datasets carry a `group`, else the flat list. A search
   // query always collapses to a flat filtered list (tree/grouping step aside).
+  const inTree = query.trim() === "" && folders.length > 0;
   let body: React.ReactNode;
   if (query.trim() !== "") {
     body = shown.map((d) => row(d));
-  } else if (folders.length > 0) {
-    body = treeRows.map((r) =>
-      r.kind === "folder" ? (
-        <FolderRow
-          key={r.id}
-          folder={r.folder}
-          depth={r.depth}
-          count={r.count}
-          expanded={r.expanded}
-        />
-      ) : (
-        row(r.dataset, r.depth)
-      ),
-    );
+  } else if (inTree) {
+    body = treeRows.map((r) => {
+      if (r.kind === "folder")
+        return (
+          <FolderRow
+            key={r.id}
+            folder={r.folder}
+            depth={r.depth}
+            count={r.count}
+            expanded={r.expanded}
+          />
+        );
+      if (r.kind === "figure") return <FigureRow key={r.id} entry={r.entry} depth={r.depth} />;
+      return row(r.dataset, r.depth);
+    });
   } else if (sections) {
     body = sections.map((g) => (
       <div key={g.key} className="qzk-lib-group">
@@ -203,7 +206,7 @@ export default function Library() {
         </select>
       )}
 
-      <FiguresSection />
+      {!inTree && <FiguresSection />}
       <BookFamiliesSection />
 
       {body}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildTreeRows, type TreeRow } from "./useLibraryTree";
+import type { OriginFigureEntry } from "../../lib/originFigures";
 import type { Dataset, FolderNode } from "../../lib/types";
 
 const ds = (id: string, folderId?: string, order?: number): Dataset => ({
@@ -15,6 +16,23 @@ const fld = (id: string, parentId: string | null, order: number): FolderNode => 
   name: id,
   parentId,
   order,
+});
+const fig = (id: string, datasetId: string | null, siblingIds: string[] = []): OriginFigureEntry => ({
+  id,
+  stem: id,
+  figure: {
+    name: id,
+    x_from: 0,
+    x_to: 1,
+    x_log: false,
+    y_from: 0,
+    y_to: 1,
+    y_log: false,
+    n_curves: 1,
+    annotations: [],
+  },
+  datasetId,
+  siblingIds,
 });
 const label = (r: TreeRow) => `${"·".repeat(r.depth)}${r.kind === "folder" ? `[${r.id}]` : r.id}`;
 
@@ -54,5 +72,50 @@ describe("buildTreeRows", () => {
     const rows = buildTreeRows([fld("f1", null, 0)], [], new Set());
     expect(rows[0].kind === "folder" && rows[0].empty).toBe(true);
     expect(rows[0].kind === "folder" && rows[0].count).toBe(0);
+  });
+});
+
+describe("buildTreeRows — figures nest under their project folder", () => {
+  it("emits a figure under its bound dataset's folder, after the datasets", () => {
+    const rows = buildTreeRows(
+      [fld("f1", null, 0)],
+      [ds("a", "f1", 0)],
+      new Set(["f1"]),
+      [fig("g1", "a")],
+    );
+    expect(rows.map(label)).toEqual(["[f1]", "·a", "·g1"]);
+    expect(rows[2].kind).toBe("figure");
+  });
+
+  it("homes an unresolved figure (null datasetId) via its first sibling's folder", () => {
+    const rows = buildTreeRows(
+      [fld("f1", null, 0)],
+      [ds("a", "f1", 0)],
+      new Set(["f1"]),
+      [fig("g1", null, ["a"])],
+    );
+    expect(rows.map(label)).toEqual(["[f1]", "·a", "·g1"]);
+  });
+
+  it("emits a figure with no resolvable dataset at the tree root", () => {
+    const rows = buildTreeRows(
+      [fld("f1", null, 0)],
+      [ds("a", "f1", 0)],
+      new Set(["f1"]),
+      [fig("g1", "gone", ["also-gone"])],
+    );
+    expect(rows.map(label)).toEqual(["[f1]", "·a", "g1"]); // g1 at depth 0
+    expect(rows[2].depth).toBe(0);
+  });
+
+  it("hides a figure whose folder is collapsed", () => {
+    const rows = buildTreeRows([fld("f1", null, 0)], [ds("a", "f1", 0)], new Set(), [fig("g1", "a")]);
+    expect(rows.map(label)).toEqual(["[f1]"]); // folder collapsed → its figure hidden too
+  });
+
+  it("places a figure whose dataset is at root at the tree root, after datasets", () => {
+    const rows = buildTreeRows([], [ds("a")], new Set(), [fig("g1", "a")]);
+    expect(rows.map((r) => r.id)).toEqual(["a", "g1"]);
+    expect(rows[1].kind).toBe("figure");
   });
 });

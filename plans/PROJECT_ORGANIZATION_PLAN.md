@@ -12,7 +12,7 @@ away on import and re-approximated from name prefixes.
 
 **Status:** Active
 **Created:** 2026-07-04
-**Updated:** 2026-07-05 (item 5 figure `.dwk` persistence shipped)
+**Updated:** 2026-07-05 (item 5 complete — figures persist in `.dwk` AND nest in the tree)
 
 ---
 
@@ -126,17 +126,6 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
          grouping once folders exist (keep as a fallback for un-foldered
          legacy datasets, or delete if migration covers them). *(overlaps #6)*
 
-5. **Persistent figures inside the tree** — let a project contain its
-   graphs, like Origin.
-   - [x] Persist `originFigures` in `.dwk` v2 (previously dropped on load) —
-         serialized in `lib/workspace.ts`, restored in `useApp.loadWorkspace`
-         (was hard-reset to `[]`); parse validates each entry and clamps
-         `datasetId`/`siblingIds` to surviving datasets so a figure can't
-         dangle. Flows through both manual `.dwk` save and autosave (both pass
-         full `getState()`). +5 round-trip tests.
-   - [ ] Represent figures as tree items under their project folder (via
-         `datasetId`/`siblingIds` already on `OriginFigureEntry`).
-
 6. **Migrate the flat `group` string → folders** — one organizational model,
    not two.
    - [ ] On load/migration, map each distinct `Dataset.group` to a
@@ -164,6 +153,20 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
 
 ## Completed
 
+- ~~**5. Persistent figures inside the tree**~~ (2026-07-05) — two halves:
+  **(a) `.dwk` persistence** — `originFigures` serialized in `lib/workspace.ts`
+  and restored in `useApp.loadWorkspace` (was hard-reset to `[]`, dropping every
+  imported graph on reload); parse validates each entry and clamps
+  `datasetId`/`siblingIds` to surviving datasets so a figure can't dangle; flows
+  through manual `.dwk` save + autosave (both pass full `getState()`); +5
+  round-trip tests. **(b) nested in the tree** — `buildTreeRows` homes each
+  figure to its bound dataset's folder (unresolved → first sibling's folder →
+  root) and emits a `figure` row after that folder's datasets; a figure follows
+  its book when the book is moved (placement derived from live state). Shared
+  `FigureRow` renders in both the tree and the flat `FiguresSection`, which is
+  now hidden in tree mode (the `!inTree` gate) so figures never double-show. +5
+  tree + 2 Library integration tests. Frontend 921 green. (`e9e5196`, this
+  commit)
 - ~~**2. `.dwk` v2 persistence + migration**~~ (2026-07-04) — `WORKSPACE_VERSION`
   → 2; `.dwk` + localStorage autosave now carry the folder tree,
   `folderId`/`order`, active/selection, and folder expansion. v1 docs
