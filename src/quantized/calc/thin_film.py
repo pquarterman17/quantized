@@ -353,8 +353,9 @@ def stoney_stress(es: float, nus: float, ts: float, tf: float, r: float) -> dict
     """
     if es <= 0 or ts <= 0 or tf <= 0:
         raise ValueError("Es, ts and tf must be positive")
-    if nus < 0:
-        raise ValueError("nus must be non-negative")
+    if not (0 <= nus < 1):
+        # nus == 1 divides by zero in the biaxial modulus (1 - nus) below.
+        raise ValueError("nus must satisfy 0 <= nus < 1")
     if r == 0:
         raise ValueError("radius of curvature R must be non-zero")
     stress = (es * ts**2) / (6 * (1 - nus) * tf * r)
@@ -396,8 +397,10 @@ def thermal_mismatch_strain(
     >>> round(r["strain"], 9), r["description"]
     (-0.007, 'compressive')
     """
-    if nu < 0:
-        raise ValueError("nu must be non-negative")
+    if not (0 <= nu < 1):
+        # nu == 1 divides by zero in the biaxial modulus below; nu > 0.5 is
+        # already unphysical for a real solid.
+        raise ValueError("nu must satisfy 0 <= nu < 1")
     strain = (alpha_film - alpha_sub) * delta_t
 
     if e is not None:

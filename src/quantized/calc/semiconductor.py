@@ -130,6 +130,9 @@ def intrinsic_carrier_conc(
             mh_star = float(mat["mh"])
     if eg is None or me_star is None or mh_star is None:
         raise ValueError("provide eg, me_star, mh_star or a valid material name")
+    if eg < 0:
+        # A negative band gap is unphysical and makes exp(-eg·…) overflow below.
+        raise ValueError("band gap Eg must be non-negative")
     if t <= 0:
         raise ValueError("T must be positive")
     if me_star <= 0 or mh_star <= 0 or math.isnan(me_star) or math.isnan(mh_star):

@@ -148,10 +148,11 @@ def qq_plot(
     v = _finite(data)
     if v.size < 3:
         raise ValueError("qq_plot needs at least 3 finite values")
-    try:
-        rv = getattr(sps, dist)
-    except AttributeError as exc:
-        raise ValueError(f"unknown distribution '{dist}'") from exc
+    rv = getattr(sps, dist, None)
+    if not isinstance(rv, sps.rv_continuous):
+        # A name like 'kstest' resolves to a plain function, not a distribution;
+        # it would otherwise blow up on rv.ppf(...) with AttributeError -> 500.
+        raise ValueError(f"unknown distribution '{dist}'")
     ordered = np.sort(v)
     theo = np.asarray(rv.ppf(_blom_positions(v.size)), dtype=float)
     slope, intercept, r, _, _ = sps.linregress(theo, ordered)
@@ -196,10 +197,11 @@ def histogram(
         "bins": bins,
     }
     if fit is not None:
-        try:
-            rv = getattr(sps, fit)
-        except AttributeError as exc:
-            raise ValueError(f"unknown distribution '{fit}'") from exc
+        rv = getattr(sps, fit, None)
+        if not isinstance(rv, sps.rv_continuous):
+            # A name like 'kstest' resolves to a plain function, not a
+            # distribution; it would blow up on rv.fit(...) with AttributeError.
+            raise ValueError(f"unknown distribution '{fit}'")
         params = rv.fit(v)
         grid = np.linspace(float(v.min()), float(v.max()), 256)
         pdf = np.asarray(rv.pdf(grid, *params), dtype=float)

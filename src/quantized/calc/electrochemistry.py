@@ -91,10 +91,16 @@ def butler_volmer(
         raise ValueError("T must be positive")
     c = constants()
     f_over_rt = c["F"] / (c["R"] * t)
-    j_anodic = j0 * math.exp(alpha * f_over_rt * eta)
-    j_cathodic = -j0 * math.exp(-(1.0 - alpha) * f_over_rt * eta)
-    j = j_anodic + j_cathodic
-    j_tafel = j0 * math.exp(alpha * f_over_rt * eta)
+    try:
+        j_anodic = j0 * math.exp(alpha * f_over_rt * eta)
+        j_cathodic = -j0 * math.exp(-(1.0 - alpha) * f_over_rt * eta)
+        j = j_anodic + j_cathodic
+        j_tafel = j0 * math.exp(alpha * f_over_rt * eta)
+    except OverflowError as exc:
+        raise ValueError(
+            "overpotential eta is too large: the Butler-Volmer exponential "
+            "overflows (use a physical |eta|, well under ~30 V)"
+        ) from exc
     return {
         "j": j,
         "jAnodic": j_anodic,
