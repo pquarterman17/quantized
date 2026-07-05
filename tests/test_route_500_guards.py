@@ -69,3 +69,25 @@ def test_malformed_request_returns_422_not_500(path: str, body: dict[str, Any]) 
 def test_valid_request_still_200(path: str, body: dict[str, Any]) -> None:
     resp = client.post(path, json=body)
     assert resp.status_code == 200, f"{path} -> {resp.status_code}: {resp.text[:140]}"
+
+
+@pytest.mark.parametrize(
+    "filename, content",
+    [
+        # XML ParseError (not a ValueError) from the PANalytical .xrdml parser
+        ("empty.xrdml", b""),
+        ("bad.xrdml", b"<?xml version='1.0'?><xrdMeasurements><broken"),
+        ("notxml.xrdml", b"this is not xml at all \x00\xff"),
+        # zipfile.BadZipFile / InvalidFileException from the openpyxl .xlsx parser
+        ("empty.xlsx", b""),
+        ("bad.xlsx", b"PK\x03\x04 not really an xlsx payload"),
+    ],
+)
+def test_malformed_upload_returns_422_not_500(filename: str, content: bytes) -> None:
+    """A malformed binary upload must be rejected with 422, never crash the
+    import route with an uncaught ParseError/BadZipFile (a 500)."""
+    resp = client.post(
+        "/api/parsers/upload",
+        files={"file": (filename, content, "application/octet-stream")},
+    )
+    assert resp.status_code == 422, f"{filename} -> {resp.status_code}: {resp.text[:140]}"

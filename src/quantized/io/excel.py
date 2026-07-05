@@ -7,12 +7,14 @@ importExcel's logic; the cell grid replaces MATLAB's ``readcell``.
 
 from __future__ import annotations
 
+import zipfile
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import openpyxl
+from openpyxl.utils.exceptions import InvalidFileException
 
 from quantized.datastruct import DataStruct
 from quantized.io.base import resolve_column
@@ -46,7 +48,13 @@ def import_excel(
 ) -> DataStruct:
     """Import an ``.xlsx`` sheet (first column = x-axis by default)."""
     path = Path(filepath)
-    workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    try:
+        workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    except (zipfile.BadZipFile, InvalidFileException, OSError) as exc:
+        # An empty / non-ZIP / truncated .xlsx raises BadZipFile or
+        # InvalidFileException (neither a ValueError) -> would 500 the import
+        # route. Reject cleanly instead.
+        raise ValueError(f"{path.name} is not a readable .xlsx workbook: {exc}") from exc
     try:
         worksheet = workbook[sheet] if isinstance(sheet, str) else workbook.worksheets[sheet]
         sheet_name = worksheet.title
