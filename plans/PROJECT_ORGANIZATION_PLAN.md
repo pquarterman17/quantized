@@ -105,14 +105,22 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
    - [x] Frontend: `planOriginFolders` builds project folder (stem) →
          `origin_folder_path` (nested PE folders) → multi-sheet book subfolders
          → sheets; wired into `importFiles`; flat file→book→sheet fallback when
-         no folder path. (`dc42f99`)
-   - [ ] Backend: decode the PE folder tree in BOTH containers and attach
-         `metadata.origin_folder_path` (root-exclusive folder names) to each
-         book (`io/origin_project/tree.py`). *In progress — detective agent.*
-   - [ ] Verify Origin PE tree == Boson Library tree via COM, `.opj` + `.opju`.
+         no folder path. General, not sample-tuned (keyed on structure, not
+         joined names: arbitrary depth / duplicate / unicode / spaced names).
+         (`dc42f99`, `a94fc16`)
+   - [x] Backend: `io/origin_project/tree.py` decodes the PE folder tree and
+         attaches `metadata.origin_folder_path` (root-exclusive). **`.opj`:
+         100% vs live-Origin-COM across 7 diverse files (611/611 windows, incl.
+         4–5-level nesting + duplicate names + root-level mixes). `.opju`: a
+         documented gap — the per-window entry encoding wasn't cracked without
+         guessing, so `opju_folder_paths` returns `{}` and `.opju` books fall
+         back to a flat project folder.** 23 synthetic + 4 realdata tests.
+   - [x] Verified Origin PE tree == Boson Library tree via COM: `.opj` matches
+         (XRD `Folder1`✓, Moke `Raw normalized`/`Sub subtraction`✓); `.opju`
+         degrades to the flat project folder (expected, gap above).
    - [ ] Retire `originBookFamilies`/`originSheetGroups` as the *primary*
          grouping once folders exist (keep as a fallback for un-foldered
-         legacy datasets, or delete if migration covers them).
+         legacy datasets, or delete if migration covers them). *(overlaps #6)*
 
 5. **Persistent figures inside the tree** — let a project contain its
    graphs, like Origin.
