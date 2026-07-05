@@ -141,6 +141,16 @@ for (const shot of spec.shots) {
             : d,
         ),
       }));
+    } else if (s.figure) {
+      // Replay the real import→apply flow: add every book, register the decoded
+      // figures, then applyOriginFigure one entry — the definitive "click a
+      // figure to recreate its Origin plot" path (styles + log + curve select).
+      for (const d of s.figure.datasets) api.addDataset(d);
+      useApp.getState().addOriginFigures(s.figure.stem, s.figure.figures, s.figure.ids);
+      if (s.stageTab) useApp.getState().setStageTab(s.stageTab);
+      const entryId = `fig-${s.figure.ids[0]}-${s.figure.figureIndex ?? 0}`;
+      useApp.getState().applyOriginFigure(entryId);
+      if (s.state) useApp.setState(s.state);
     } else {
       api.addDataset(s.dataset);
       if (s.stageTab) useApp.getState().setStageTab(s.stageTab);
