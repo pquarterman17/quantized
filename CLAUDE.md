@@ -32,11 +32,15 @@ the behavioural reference (parity + golden values).
   Split before merging. Raise ONLY with written justification in the
   commit message. (The predecessor `BosonPlotter.m` hit ~7k lines; the
   decomposition is still ongoing. Never again.)
-- **Frontend component ceiling: ~400 lines per `.tsx` component**,
-  enforced by a frontend test. Heavy features become a `workshops/`
-  subtree (state hook + view + sub-components), the React analogue of the
-  MATLAB "workshop pattern". (`thin_film_toolkit`'s `FigureBuilder.vue`
-  hit 2,669 lines — the anti-pattern.)
+- **Frontend component ceiling: ~400 lines per `.tsx` component.**
+  Convention today, NOT yet test-enforced (a committed vitest is
+  PROJECT_ORGANIZATION_PLAN #7; `architecture.test.ts` currently guards
+  only the #11 row-state chokepoint, not line count). Two files exceed it:
+  `App.tsx` (~780, root orchestrator) and `ThinFilmTab.tsx` (~440). Heavy
+  features become a `workshops/` subtree (state hook + view +
+  sub-components), the React analogue of the MATLAB "workshop pattern".
+  (`thin_film_toolkit`'s `FigureBuilder.vue` hit 2,669 lines — the
+  anti-pattern.)
 - **Data contract:** every parser returns a frozen `DataStruct`
   (`quantized.datastruct`) with `.time`, `.values`, `.labels`, `.units`,
   `.metadata`. No ad-hoc dicts. Single source of truth for all downstream
