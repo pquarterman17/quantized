@@ -98,10 +98,18 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
 ## Tier 2 — Medium Impact
 
 4. **Origin import → auto folder structure** — stop discarding the decoded
-   hierarchy.
-   - [ ] On `.opj`/`.opju` import, create a project folder (file stem) with
-         per-book (and per-`@N` sheet) subfolders from `origin_book` /
-         `origin_book_long`, and drop the imported datasets into them.
+   hierarchy. Ground truth (live COM, OriginPro 2026b): corpus projects have
+   REAL Project Explorer folders (Moke.opj → `Raw normalized`/`Sub subtraction`;
+   RockingCurve.opju → `Folder1`), so faithful mirroring needs the PE folder
+   tree, not just book→sheet.
+   - [x] Frontend: `planOriginFolders` builds project folder (stem) →
+         `origin_folder_path` (nested PE folders) → multi-sheet book subfolders
+         → sheets; wired into `importFiles`; flat file→book→sheet fallback when
+         no folder path. (`dc42f99`)
+   - [ ] Backend: decode the PE folder tree in BOTH containers and attach
+         `metadata.origin_folder_path` (root-exclusive folder names) to each
+         book (`io/origin_project/tree.py`). *In progress — detective agent.*
+   - [ ] Verify Origin PE tree == Boson Library tree via COM, `.opj` + `.opju`.
    - [ ] Retire `originBookFamilies`/`originSheetGroups` as the *primary*
          grouping once folders exist (keep as a fallback for un-foldered
          legacy datasets, or delete if migration covers them).
