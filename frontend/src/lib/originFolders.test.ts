@@ -107,3 +107,61 @@ describe("planOriginFolders", () => {
     expect(plan.folders[0].parentId).toBeNull();
   });
 });
+
+// These exercise structures the corpus samples don't contain — the real proof
+// the planner is general, not tuned to Moke/RockingCurve's shapes.
+describe("planOriginFolders generality (not tuned to samples)", () => {
+  const byId = (plan: ReturnType<typeof planOriginFolders>) =>
+    new Map(plan.folders.map((f) => [f.id, f]));
+
+  it("a folder named like a nested path does NOT collide with that path", () => {
+    const plan = planOriginFolders(
+      "P",
+      [
+        ds("d1", "B1", ["Raw normalized"]), // ONE folder literally named "Raw normalized"
+        ds("d2", "B2", ["Raw", "normalized"]), // vs the two-level path Raw → normalized
+      ],
+      gen,
+    );
+    const m = byId(plan);
+    const d1f = m.get(plan.membership.d1)!;
+    const d2f = m.get(plan.membership.d2)!;
+    expect(d1f.name).toBe("Raw normalized");
+    expect(m.get(d1f.parentId!)!.name).toBe("P"); // one folder, directly under project
+    expect(d2f.name).toBe("normalized");
+    expect(m.get(d2f.parentId!)!.name).toBe("Raw"); // genuinely nested, distinct
+    expect(plan.membership.d1).not.toBe(plan.membership.d2);
+  });
+
+  it("keeps duplicate folder names under different parents distinct", () => {
+    const plan = planOriginFolders(
+      "P",
+      [ds("d1", "B1", ["A", "Data"]), ds("d2", "B2", ["B", "Data"])],
+      gen,
+    );
+    const data = plan.folders.filter((f) => f.name === "Data");
+    expect(data).toHaveLength(2); // two separate "Data" folders
+    const m = byId(plan);
+    expect(data.map((f) => m.get(f.parentId!)!.name).sort()).toEqual(["A", "B"]);
+    expect(plan.membership.d1).not.toBe(plan.membership.d2);
+  });
+
+  it("handles arbitrary nesting depth and root-level books together", () => {
+    const plan = planOriginFolders(
+      "P",
+      [ds("root", "R"), ds("deep", "D", ["a", "b", "c", "d"])],
+      gen,
+    );
+    const byName = new Map(plan.folders.map((f) => [f.name, f]));
+    expect(["a", "b", "c", "d"].every((n) => byName.has(n))).toBe(true);
+    expect(byName.get("b")!.parentId).toBe(byName.get("a")!.id); // chain a→b→c→d
+    expect(byName.get("d")!.parentId).toBe(byName.get("c")!.id);
+    expect(plan.membership.root).toBe(plan.folders[0].id); // book with no path → project root
+    expect(plan.membership.deep).toBe(byName.get("d")!.id);
+  });
+
+  it("preserves unicode / punctuation folder names verbatim", () => {
+    const plan = planOriginFolders("P", [ds("d1", "B", ["Messungen · 2024 (µ₀H)"])], gen);
+    expect(plan.folders.map((f) => f.name)).toContain("Messungen · 2024 (µ₀H)");
+  });
+});
