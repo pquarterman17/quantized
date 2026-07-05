@@ -110,9 +110,10 @@ export default function App() {
   // Restore the autosaved library once on startup (before any new import).
   useEffect(() => {
     const restored = loadAutosave();
-    if (restored?.length) {
+    if (restored?.datasets.length) {
       useApp.getState().loadWorkspace(restored);
-      setStatus(`restored ${restored.length} dataset${restored.length === 1 ? "" : "s"} from autosave`);
+      const n = restored.datasets.length;
+      setStatus(`restored ${n} dataset${n === 1 ? "" : "s"} from autosave`);
     }
   }, [setStatus]);
 
@@ -120,10 +121,20 @@ export default function App() {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const unsub = useApp.subscribe((state, prev) => {
-      if (state.datasets === prev.datasets) return;
+      // Persist on any change to the workspace slice — datasets OR the folder
+      // tree / expansion / active / selection (all part of .dwk v2).
+      if (
+        state.datasets === prev.datasets &&
+        state.folders === prev.folders &&
+        state.expandedFolders === prev.expandedFolders &&
+        state.activeId === prev.activeId &&
+        state.selectedIds === prev.selectedIds
+      ) {
+        return;
+      }
       clearTimeout(timer);
       timer = setTimeout(() => {
-        if (!saveAutosave(useApp.getState().datasets)) {
+        if (!saveAutosave(useApp.getState())) {
           useApp.getState().setStatus("autosave skipped (storage full or unavailable)");
         }
       }, 800);
@@ -302,7 +313,7 @@ export default function App() {
             s().setStatus("no datasets to save");
             return;
           }
-          saveBlob(new Blob([serializeWorkspace(all)], { type: "application/json" }), "workspace.dwk");
+          saveBlob(new Blob([serializeWorkspace(s())], { type: "application/json" }), "workspace.dwk");
           const msg = `saved workspace — ${all.length} dataset${all.length === 1 ? "" : "s"}`;
           s().setStatus(msg);
           toast(msg, "ok");

@@ -18,6 +18,7 @@ import {
 } from "../lib/foldertree";
 import { is2DMap } from "../lib/mapdata";
 import { mergeDatasets } from "../lib/merge";
+import type { WorkspaceState } from "../lib/workspace";
 import {
   buildOriginFigureEntries,
   doubleYPartner,
@@ -148,6 +149,9 @@ interface AppState {
   // organization over the flat `datasets[]` array — datasets point in via
   // `Dataset.folderId`; folders never gate row-state. Round-trips .dwk v2.
   folders: FolderNode[];
+  // Expanded folder ids (Library tree UI state); persisted so a project reopens
+  // with the same folders open. Round-trips .dwk v2.
+  expandedFolders: string[];
   leftCollapsed: boolean;
   rightCollapsed: boolean;
   stageTab: StageTab;
@@ -249,7 +253,7 @@ interface AppState {
   // Apply a stored figure's plot-state snapshot: activates its resolved
   // dataset and sets the axis ranges + log flags. No-op if unresolved.
   applyOriginFigure: (id: string) => void;
-  loadWorkspace: (datasets: Dataset[]) => void;
+  loadWorkspace: (ws: WorkspaceState) => void;
   setActive: (id: string) => void;
   toggleSelected: (id: string) => void;
   selectRange: (id: string) => void;
@@ -277,6 +281,7 @@ interface AppState {
   deleteFolder: (id: string, mode?: "reparent" | "cascade") => void;
   moveFolder: (id: string, newParentId: string | null, beforeId?: string) => void;
   moveDatasetToFolder: (id: string, folderId: string | null, beforeId?: string) => void;
+  toggleFolderExpanded: (id: string) => void;
   applyCorrections: (
     id: string,
     params: CorrectionParams,
@@ -516,6 +521,7 @@ export const useApp = create<AppState>((set, get) => ({
   selectedIds: [],
   originFigures: [],
   folders: [],
+  expandedFolders: [],
   leftCollapsed: false,
   rightCollapsed: false,
   stageTab: "plot",
@@ -770,31 +776,44 @@ export const useApp = create<AppState>((set, get) => ({
   // Replace the whole library with a restored workspace (from a .dwk file).
   // Resets every per-dataset view (channels, styles, axis limits) and drops the
   // overlays/markers tied to the old datasets — same hygiene as setActive.
-  loadWorkspace: (datasets) =>
-    set((s) => ({
-      datasets,
-      activeId: datasets[0]?.id ?? null,
-      selectedIds: datasets[0] ? [datasets[0].id] : [],
-      originFigures: [], // a restored workspace has no Origin-import figures of its own
-      stageTab: datasets[0] ? nextStageTab(datasets[0], s.stageTab) : s.stageTab,
-      xKey: null,
-      yKeys: null,
-      y2Keys: null,
-      seriesStyles: {},
-      seriesLabels: {},
-      errKeys: {},
-      seriesOrder: null,
-      hiddenChannels: [],
-      xLim: null,
-      yLim: null,
-      fitOverlay: null,
-      peakOverlay: null,
-      baselineOverlay: null,
-      rsmPeaks: null,
-      integral: null,
-      fwhmResult: null,
-      status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}`,
-    })),
+  loadWorkspace: (ws) =>
+    set((s) => {
+      const { datasets } = ws;
+      // Restore the persisted active/selection (v2); v1 or a stale id falls back
+      // to the first dataset. Folders + expansion come straight from the doc.
+      const active =
+        ws.activeId && datasets.some((d) => d.id === ws.activeId)
+          ? ws.activeId
+          : (datasets[0]?.id ?? null);
+      const activeDs = active ? (datasets.find((d) => d.id === active) ?? null) : null;
+      const selected = (ws.selectedIds ?? []).filter((id) => datasets.some((d) => d.id === id));
+      return {
+        datasets,
+        folders: ws.folders ?? [],
+        expandedFolders: ws.expandedFolders ?? [],
+        activeId: active,
+        selectedIds: selected.length ? selected : active ? [active] : [],
+        originFigures: [], // a restored workspace has no Origin-import figures of its own
+        stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
+        xKey: null,
+        yKeys: null,
+        y2Keys: null,
+        seriesStyles: {},
+        seriesLabels: {},
+        errKeys: {},
+        seriesOrder: null,
+        hiddenChannels: [],
+        xLim: null,
+        yLim: null,
+        fitOverlay: null,
+        peakOverlay: null,
+        baselineOverlay: null,
+        rsmPeaks: null,
+        integral: null,
+        fwhmResult: null,
+        status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}`,
+      };
+    }),
   setActive: (id) =>
     set((s) => {
       const ds = s.datasets.find((d) => d.id === id);
@@ -1079,6 +1098,12 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({ folders: treeMoveFolder(s.folders, id, newParentId, beforeId) })),
   moveDatasetToFolder: (id, folderId, beforeId) =>
     set((s) => ({ datasets: treeMoveDatasetToFolder(s.datasets, id, folderId, beforeId) })),
+  toggleFolderExpanded: (id) =>
+    set((s) => ({
+      expandedFolders: s.expandedFolders.includes(id)
+        ? s.expandedFolders.filter((x) => x !== id)
+        : [...s.expandedFolders, id],
+    })),
 
   // Corrections always apply to the pristine `raw`, never to an already-
   // corrected `data` (the MATLAB pipeline is replace, not accumulate). The

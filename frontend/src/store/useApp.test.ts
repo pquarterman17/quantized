@@ -17,7 +17,14 @@ const raw: DataStruct = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useApp.setState({ datasets: [], activeId: null, status: "", originFigures: [] });
+  useApp.setState({
+    datasets: [],
+    activeId: null,
+    status: "",
+    originFigures: [],
+    folders: [],
+    expandedFolders: [],
+  });
 });
 
 describe("useApp reflectivity seed (SLD→reflectivity hook)", () => {
@@ -366,7 +373,7 @@ describe("useApp x-axis channel", () => {
 
   it("loadWorkspace resets the x-axis channel", () => {
     useApp.setState({ datasets: [{ id: "old", name: "x", data: raw }], activeId: "old", xKey: 3 });
-    useApp.getState().loadWorkspace([{ id: "w1", name: "n", data: raw }]);
+    useApp.getState().loadWorkspace({ datasets: [{ id: "w1", name: "n", data: raw }] });
     expect(useApp.getState().xKey).toBeNull();
   });
 });
@@ -998,10 +1005,12 @@ describe("useApp loadWorkspace", () => {
       rsmPeaks: { datasetId: "old", peaks: [] },
     });
 
-    useApp.getState().loadWorkspace([
-      { id: "w1", name: "first", data: raw },
-      { id: "w2", name: "second", data: raw },
-    ]);
+    useApp.getState().loadWorkspace({
+      datasets: [
+        { id: "w1", name: "first", data: raw },
+        { id: "w2", name: "second", data: raw },
+      ],
+    });
 
     const s = useApp.getState();
     expect(s.datasets.map((d) => d.id)).toEqual(["w1", "w2"]);
@@ -1015,9 +1024,27 @@ describe("useApp loadWorkspace", () => {
 
   it("handles an empty workspace (no active dataset)", () => {
     useApp.setState({ datasets: [{ id: "old", name: "x", data: raw }], activeId: "old" });
-    useApp.getState().loadWorkspace([]);
+    useApp.getState().loadWorkspace({ datasets: [] });
     expect(useApp.getState().datasets).toEqual([]);
     expect(useApp.getState().activeId).toBeNull();
+  });
+
+  it("restores the folder tree, expansion, and persisted active/selection (v2)", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [
+        { id: "w1", name: "a", data: raw, folderId: "f1" },
+        { id: "w2", name: "b", data: raw },
+      ],
+      folders: [{ id: "f1", name: "XRD", parentId: null, order: 0 }],
+      activeId: "w2",
+      selectedIds: ["w2"],
+      expandedFolders: ["f1"],
+    });
+    const s = useApp.getState();
+    expect(s.folders.map((f) => f.id)).toEqual(["f1"]);
+    expect(s.datasets.find((d) => d.id === "w1")!.folderId).toBe("f1");
+    expect(s.activeId).toBe("w2"); // persisted active honored, not datasets[0]
+    expect(s.expandedFolders).toEqual(["f1"]);
   });
 });
 

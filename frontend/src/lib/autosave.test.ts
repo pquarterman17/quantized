@@ -22,11 +22,26 @@ beforeEach(() => {
 
 describe("autosave", () => {
   it("round-trips the library through localStorage", () => {
-    expect(saveAutosave([ds("a", "first"), ds("b", "second")])).toBe(true);
+    expect(saveAutosave({ datasets: [ds("a", "first"), ds("b", "second")] })).toBe(true);
     const restored = loadAutosave();
-    expect(restored).toHaveLength(2);
-    expect(restored?.[0].name).toBe("first");
-    expect(restored?.[1].data.values).toEqual([[10], [20], [30]]);
+    expect(restored?.datasets).toHaveLength(2);
+    expect(restored?.datasets[0].name).toBe("first");
+    expect(restored?.datasets[1].data.values).toEqual([[10], [20], [30]]);
+  });
+
+  it("round-trips the folder tree + membership + expansion (v2)", () => {
+    saveAutosave({
+      datasets: [{ ...ds("a", "first"), folderId: "f1", order: 0 }],
+      folders: [{ id: "f1", name: "XRD", parentId: null, order: 0 }],
+      activeId: "a",
+      selectedIds: ["a"],
+      expandedFolders: ["f1"],
+    });
+    const r = loadAutosave();
+    expect(r?.folders).toEqual([{ id: "f1", name: "XRD", parentId: null, order: 0 }]);
+    expect(r?.datasets[0].folderId).toBe("f1");
+    expect(r?.activeId).toBe("a");
+    expect(r?.expandedFolders).toEqual(["f1"]);
   });
 
   it("returns null when nothing is autosaved", () => {
@@ -34,14 +49,14 @@ describe("autosave", () => {
   });
 
   it("clears the slot when the library is empty", () => {
-    saveAutosave([ds("a", "first")]);
+    saveAutosave({ datasets: [ds("a", "first")] });
     expect(loadAutosave()).not.toBeNull();
-    saveAutosave([]); // empty → remove
+    saveAutosave({ datasets: [] }); // empty → remove
     expect(loadAutosave()).toBeNull();
   });
 
   it("clearAutosave wipes the slot", () => {
-    saveAutosave([ds("a", "first")]);
+    saveAutosave({ datasets: [ds("a", "first")] });
     clearAutosave();
     expect(loadAutosave()).toBeNull();
   });
@@ -50,7 +65,7 @@ describe("autosave", () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new DOMException("quota", "QuotaExceededError");
     });
-    expect(saveAutosave([ds("a", "first")])).toBe(false);
+    expect(saveAutosave({ datasets: [ds("a", "first")] })).toBe(false);
   });
 
   it("ignores a corrupt autosave slot", () => {

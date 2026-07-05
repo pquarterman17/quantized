@@ -4,6 +4,7 @@
 // testable; the App wires it to Save/Open commands (download + file picker).
 
 import { sanitizeFilter } from "./datafilter";
+import { pruneOrphans } from "./foldertree";
 import { sanitizeExcluded } from "./rowstate";
 import type {
   ChannelRole,
@@ -11,26 +12,59 @@ import type {
   CorrectionParams,
   Dataset,
   DataStruct,
+  FolderNode,
   ModelingType,
 } from "./types";
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
-export const WORKSPACE_VERSION = 1;
+// v2 (project-organization plan item 2): adds the folder tree, active/selection,
+// and folder-expansion. v1 docs (datasets only) still load — migrated on parse.
+export const WORKSPACE_VERSION = 2;
+
+/** The persistable slice of app state (input to serialize). The store's AppState
+ *  is a structural superset, so `useApp.getState()` can be passed directly where
+ *  this is expected; the extras are optional so a caller with only datasets can
+ *  pass `{ datasets }`. */
+export interface WorkspaceState {
+  datasets: Dataset[];
+  folders?: FolderNode[];
+  activeId?: string | null;
+  selectedIds?: string[];
+  expandedFolders?: string[];
+}
+
+/** A parsed workspace — every field populated (folder tree defaults to empty,
+ *  active/selection defaulted from the datasets). Assignable to WorkspaceState. */
+export interface LoadedWorkspace {
+  datasets: Dataset[];
+  folders: FolderNode[];
+  activeId: string | null;
+  selectedIds: string[];
+  expandedFolders: string[];
+}
 
 interface WorkspaceDoc {
   format: string;
   version: number;
   savedAt: string;
   datasets: Dataset[];
+  folders: FolderNode[];
+  activeId: string | null;
+  selectedIds: string[];
+  expandedFolders: string[];
 }
 
-/** Serialize the library to a pretty-printed .dwk JSON document. */
-export function serializeWorkspace(datasets: Dataset[]): string {
+/** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
+export function serializeWorkspace(ws: WorkspaceState): string {
   const doc: WorkspaceDoc = {
     format: WORKSPACE_FORMAT,
     version: WORKSPACE_VERSION,
     savedAt: new Date().toISOString(),
-    datasets: datasets.map((d) => ({
+    folders: ws.folders ?? [],
+    activeId: ws.activeId ?? null,
+    selectedIds: ws.selectedIds ?? [],
+    expandedFolders: ws.expandedFolders ?? [],
+    datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
       data: d.data,
@@ -40,6 +74,8 @@ export function serializeWorkspace(datasets: Dataset[]): string {
       ...(d.notes ? { notes: d.notes } : {}),
       ...(d.tags?.length ? { tags: d.tags } : {}),
       ...(d.group?.trim() ? { group: d.group } : {}),
+      ...(d.folderId ? { folderId: d.folderId } : {}),
+      ...(d.order !== undefined ? { order: d.order } : {}),
       ...(d.formulas?.length ? { formulas: d.formulas } : {}),
       ...(d.channelRoles && Object.keys(d.channelRoles).length
         ? { channelRoles: d.channelRoles }
@@ -52,6 +88,32 @@ export function serializeWorkspace(datasets: Dataset[]): string {
     })),
   };
   return JSON.stringify(doc, null, 2);
+}
+
+/** Validate a folder-node array (drops malformed entries; reparents a folder to
+ *  root if its parent is missing). */
+function parseFolders(v: unknown): FolderNode[] {
+  if (!Array.isArray(v)) return [];
+  const out: FolderNode[] = [];
+  for (const f of v) {
+    if (typeof f !== "object" || f === null) continue;
+    const o = f as Record<string, unknown>;
+    if (
+      typeof o.id === "string" &&
+      typeof o.name === "string" &&
+      (o.parentId === null || typeof o.parentId === "string") &&
+      typeof o.order === "number" &&
+      Number.isFinite(o.order)
+    ) {
+      out.push({ id: o.id, name: o.name, parentId: (o.parentId as string | null) ?? null, order: o.order });
+    }
+  }
+  const ids = new Set(out.map((f) => f.id));
+  return out.map((f) => (f.parentId && !ids.has(f.parentId) ? { ...f, parentId: null } : f));
+}
+
+function stringsIn(v: unknown, valid: Set<string>): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && valid.has(x)) : [];
 }
 
 function isNumberArray(v: unknown): v is number[] {
@@ -75,9 +137,10 @@ function isDataStruct(v: unknown): v is DataStruct {
   );
 }
 
-/** Parse a .dwk document back into datasets, throwing a clear error on anything
- *  malformed (bad JSON, wrong format/version, or an invalid DataStruct). */
-export function parseWorkspace(text: string): Dataset[] {
+/** Parse a .dwk document into the full workspace state, throwing a clear error on
+ *  anything malformed (bad JSON, wrong format/version, or an invalid DataStruct).
+ *  v1 docs (datasets only) load with an empty folder tree (migration). */
+export function parseWorkspace(text: string): LoadedWorkspace {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -91,13 +154,13 @@ export function parseWorkspace(text: string): Dataset[] {
   if (o.format !== WORKSPACE_FORMAT) {
     throw new Error("not a quantized workspace (.dwk) file");
   }
-  if (o.version !== WORKSPACE_VERSION) {
+  if (o.version !== 1 && o.version !== 2) {
     throw new Error(`unsupported workspace version: ${String(o.version)}`);
   }
   if (!Array.isArray(o.datasets)) {
     throw new Error("workspace has no datasets");
   }
-  return o.datasets.map((d, i): Dataset => {
+  const datasetsRaw = o.datasets.map((d, i): Dataset => {
     if (typeof d !== "object" || d === null) {
       throw new Error(`dataset ${i} is invalid`);
     }
@@ -165,6 +228,20 @@ export function parseWorkspace(text: string): Dataset[] {
     // Local data filter (#53): validate predicate columns against the channels.
     const filter = sanitizeFilter(dd.filter, ds.data.labels.length);
     if (filter.length) ds.filter = filter;
+    if (typeof dd.folderId === "string") ds.folderId = dd.folderId;
+    if (typeof dd.order === "number" && Number.isFinite(dd.order)) ds.order = dd.order;
     return ds;
   });
+
+  // Folder tree (absent in v1 → empty). Prune datasets pointing at a folder that
+  // didn't survive validation; clamp active/selection/expansion to live ids.
+  const folders = parseFolders(o.folders);
+  const datasets = pruneOrphans(folders, datasetsRaw);
+  const dsIds = new Set(datasets.map((d) => d.id));
+  const folderIds = new Set(folders.map((f) => f.id));
+  const selectedIds = stringsIn(o.selectedIds, dsIds);
+  const activeId =
+    typeof o.activeId === "string" && dsIds.has(o.activeId) ? o.activeId : (datasets[0]?.id ?? null);
+  const expandedFolders = stringsIn(o.expandedFolders, folderIds);
+  return { datasets, folders, activeId, selectedIds, expandedFolders };
 }
