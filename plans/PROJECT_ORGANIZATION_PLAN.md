@@ -78,22 +78,6 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
 
 ## Tier 1 — High Impact
 
-1. **Folder data model + store actions** — the normalized tree + membership
-   fields and the operations over them.
-   - [ ] Add `FolderNode { id, name, parentId, order }` and a `folders`
-         slice to `useApp` state; add `folderId?`/`order?` to `Dataset`
-         (`lib/types.ts`).
-   - [ ] Tree actions: `createFolder(parentId, name)`, `renameFolder`,
-         `deleteFolder(id, mode: reparent|cascade)`, `moveFolder(id,
-         newParentId, beforeId?)`.
-   - [ ] Membership/order actions: `moveDatasetToFolder(id, folderId,
-         beforeId?)`, `reorderWithinFolder(...)`; keep the flat `datasets`
-         array intact (order layer is `order`, not array index).
-   - [ ] Fractional-index helper (`lib/order.ts`) with a reindex fallback;
-         unit-test insert-between and rebalance.
-   - [ ] Guard against cycles (moving a folder into its own descendant) and
-         orphaned `folderId` (dataset points at a deleted folder → root).
-
 2. **`.dwk` v2 persistence + migration** — make an organized project
    survive save/reload (without this the feature is cosmetic).
    - [ ] Bump `WORKSPACE_VERSION` to 2; extend `WorkspaceDoc` with
@@ -159,4 +143,12 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
 
 ## Completed
 
-_(none yet)_
+- ~~**1. Folder data model + store actions**~~ (2026-07-04) — `FolderNode
+  {id,name,parentId,order}` + `Dataset.folderId`/`order` (`lib/types.ts`);
+  `lib/order.ts` (`orderBetween`/`byOrder`); `lib/foldertree.ts` — pure,
+  immutable ops (child queries, create/rename/delete[reparent|cascade],
+  `moveFolder` with cycle guard, `moveDatasetToFolder`, `pruneOrphans`);
+  `useApp` `folders` slice + 5 thin store actions. Reindex-on-move (dense
+  ints) instead of fractional keys — simpler, precision-proof at Library
+  scale. Datasets stay flat; membership on `folderId` → a delete can't
+  dangle a ref. 44 unit/store tests. (`5dafbfd`, `6bd12df`)
