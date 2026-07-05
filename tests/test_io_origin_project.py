@@ -539,6 +539,25 @@ def test_realdata_figures_extracted_as_plot_states() -> None:
     ]
 
 
+@pytest.mark.realdata
+@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+def test_realdata_xrd_axis_titles_and_legend_labels() -> None:
+    """2026-07-05 (axis-title/legend-label routing): XRD.opj's Graph1 has a
+    literal Y title, an escaped 2theta X title, and a legend with two curves
+    hand-relabeled to sample temperatures ("325"/"525") -- see `figures.py`'s
+    module docstring for the byte-level trail."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    xrd = extract_figures((_CORPUS / "XRD.opj").read_bytes())
+    assert len(xrd) == 1
+    f = xrd[0]
+    assert "Intensity" in f["y_title"]
+    assert f["x_title"] != ""  # the escaped 2theta string, e.g. "2\g(q...)degrees)"
+    assert f["legend_labels"] == ["325", "%(2)", "525"]
+    # the axis-title text no longer leaks into the flat annotations bucket
+    assert "Intensity" not in " ".join(f["annotations"])
+
+
 def test_figures_absent_on_plain_synthetic(tmp_path) -> None:
     from quantized.io.origin_project.figures import extract_figures
 
@@ -603,6 +622,27 @@ def _fig_curve_block() -> bytes:
 
 def _fig_text_block(text: str) -> bytes:
     return _block(text.encode("latin1"))
+
+
+def _fig_named_header(name: str, *, type_byte: int = 0x00) -> bytes:
+    """A 133-byte graph-child object header carrying its own name at the
+    fixed payload offset `figures.py`'s `_OBJ_NAME_OFFSET` (70) reads --
+    mirrors the real `YL`/`XB`/`YR`/`Legend`/`TextN`/`LineN` headers (see
+    `figures.py`'s module docstring, "Axis-title / legend-label routing")."""
+    payload = bytearray(133)
+    payload[2] = type_byte
+    nb = name.encode("latin1")
+    payload[70 : 70 + len(nb)] = nb
+    payload[70 + len(nb)] = 0  # NUL terminator (`_cstring` requires one)
+    return _block(bytes(payload))
+
+
+def _fig_format_block() -> bytes:
+    """The fixed-size, textless "format" block that always separates a named
+    object's header from its own content block in the real corpus (see
+    `figures.py`'s module docstring); its exact size varies by object type in
+    real data, but nothing reads it, so any small filler works here."""
+    return _block(bytes(103))
 
 
 def test_synthetic_opj_figure_decodes_ranges_curves_and_annotations() -> None:
@@ -731,6 +771,76 @@ def test_synthetic_opj_figure_curve_count_from_legend_text() -> None:
     figs = extract_figures(blob)
     assert len(figs) == 1
     assert figs[0]["n_curves"] == 2
+
+
+def test_synthetic_opj_figure_routes_axis_titles_and_legend_labels() -> None:
+    """2026-07-05: named graph-child objects (`YL`/`XB`/`YR`/`Legend`/`TextN`)
+    route their own content into `y_title`/`x_title`/`y2_title`/
+    `legend_labels`/`annotations` instead of one flat bucket -- mirrors the
+    real XRD.opj/hc2convert.opj byte layout (see `figures.py`'s module
+    docstring). The legend's `\\l(2)` line is left at the untouched auto
+    template (`%(2)`) while `\\l(1)` is hand-relabeled to `"Nb"`, exactly the
+    hc2convert.opj shape; a genuine `Text1` annotation AFTER the curve
+    blocks still lands in `annotations` (the curve-count blocks between
+    Legend and Text1 don't disturb the routing -- see the module docstring)."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph1")
+        + _fig_layer_block(0.0, 10.0, 0.0, 100.0, hint="Book1")
+        + _fig_named_header("YL")
+        + _fig_format_block()
+        + _fig_text_block("Intensity (arb. units)")
+        + _fig_named_header("XB")
+        + _fig_format_block()
+        + _fig_text_block("2theta (degrees)")
+        + _fig_named_header("Legend")
+        + _fig_format_block()
+        + _fig_text_block("\\l(1) Nb\r\n\\l(2) %(2)")
+        + _fig_curve_block()
+        + _fig_curve_block()
+        + _fig_named_header("Text1")
+        + _fig_format_block()
+        + _fig_text_block("Peak label")
+    )
+    figs = extract_figures(blob)
+    assert len(figs) == 1
+    f = figs[0]
+    assert f["y_title"] == "Intensity (arb. units)"
+    assert f["x_title"] == "2theta (degrees)"
+    assert f["y2_title"] == ""  # no YR object in this synthetic layer
+    assert f["legend_labels"] == ["Nb", "%(2)"]
+    assert f["annotations"] == ["Peak label"]
+    # none of the title/legend text leaks into the flat annotations bucket
+    assert "Intensity (arb. units)" not in f["annotations"]
+    assert "2theta (degrees)" not in f["annotations"]
+    assert f["n_curves"] == 2
+
+
+def test_synthetic_opj_figure_unnamed_header_falls_back_to_annotations() -> None:
+    """Fallback (module docstring): a layer with NO resolvable named header
+    at all keeps feeding its recovered text into `annotations`, exactly the
+    pre-2026-07-05 behavior -- `x_title`/`y_title`/`y2_title`/`legend_labels`
+    stay empty rather than losing the text."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph1")
+        + _fig_layer_block(0.0, 10.0, 0.0, 100.0, hint="Book1")
+        + _fig_curve_block()
+        + _fig_curve_block()
+        + _fig_text_block("Field Sweep (Oe)")
+    )
+    figs = extract_figures(blob)
+    assert len(figs) == 1
+    f = figs[0]
+    assert f["annotations"] == ["Field Sweep (Oe)"]
+    assert f["x_title"] == "" and f["y_title"] == "" and f["y2_title"] == ""
+    assert f["legend_labels"] == []
 
 
 # ── synthetic .opj Y-scale flag (isolated 2026-07-04 against the XRD/Moke
@@ -1769,3 +1879,36 @@ def test_build_book_no_designations_keeps_first_col_default() -> None:
     assert np.array_equal(np.asarray(ds.time), np.array([1.0, 2.0]))
     assert ds.metadata["x_column_recovered"] is True
     assert "x_column_unrecovered" not in ds.metadata
+
+
+# ── Origin rich-text (LabTalk escape) decoding for titles/legends ─────────────
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (r"2\g(q \(40))degrees)", "2θ (degrees)"),  # \(NN) nested inside \g(...)
+        ("Intensity (arb. units)", "Intensity (arb. units)"),  # no escapes → unchanged
+        (r"Resistance (\g(W))", "Resistance (Ω)"),  # Symbol W → capital Omega
+        (r"H\-(c2)", "Hc₂"),  # subscript run
+        (r"E\+(2)", "E²"),  # superscript run
+        (r"\b(bold)\i( italic) tail", "bold italic tail"),  # styling stripped
+        ("%(2)", "%(2)"),  # data reference, not rich-text → untouched
+        (r"\(176)C", "°C"),  # char-code 176 = degree sign
+        ("", ""),
+    ],
+)
+def test_clean_richtext(raw: str, expected: str) -> None:
+    from quantized.io.origin_project.origin_richtext import clean_richtext
+
+    assert clean_richtext(raw) == expected
+
+
+def test_clean_richtext_malformed_degrades_gracefully() -> None:
+    """An unterminated / nonsense escape returns something (never raises), and a
+    plain string is returned unchanged."""
+    from quantized.io.origin_project.origin_richtext import clean_richtext
+
+    assert clean_richtext("no escapes here") == "no escapes here"
+    # unterminated run: must not raise, and must not lose the visible text
+    assert "tail" in clean_richtext(r"\g(q tail")

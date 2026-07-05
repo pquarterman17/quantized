@@ -940,6 +940,35 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(s.yLog).toBe(true);
   });
 
+  it("applies Origin's decoded axis titles to the axis labels", () => {
+    useApp.setState({
+      originFigures: [
+        {
+          ...figureEntry,
+          figure: {
+            ...figureEntry.figure,
+            x_title: "2θ (°)",
+            y_title: "Intensity (arb. units)",
+          },
+        },
+      ],
+      xAxisLabel: "stale",
+      yAxisLabel: "stale",
+    });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    const s = useApp.getState();
+    expect(s.xAxisLabel).toBe("2θ (°)");
+    expect(s.yAxisLabel).toBe("Intensity (arb. units)");
+  });
+
+  it("resets axis labels to auto ('') when the figure carries no titles", () => {
+    useApp.setState({ xAxisLabel: "stale", yAxisLabel: "stale" });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    const s = useApp.getState();
+    expect(s.xAxisLabel).toBe("");
+    expect(s.yAxisLabel).toBe("");
+  });
+
   it("is a no-op for an unresolved figure", () => {
     useApp.setState({ originFigures: [{ ...figureEntry, datasetId: null }] });
     useApp.getState().applyOriginFigure("fig-XRD-0");

@@ -739,6 +739,9 @@ export const useApp = create<AppState>((set, get) => ({
           yKeys: Array.from({ length: n }, (_, i) => i),
           // Restore each overlay column's decoded line/scatter look.
           seriesStyles: overlayCurveStyles(src),
+          // Origin's real axis titles ("" falls back to the data-derived label).
+          xAxisLabel: fig.x_title ?? "",
+          yAxisLabel: fig.y_title ?? "",
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         return;
@@ -775,6 +778,8 @@ export const useApp = create<AppState>((set, get) => ({
           ],
           y2Keys: partnerSel.yKeys,
           seriesStyles: { ...baseSel.styles, ...partnerSel.styles },
+          xAxisLabel: lower.figure.x_title ?? "",
+          yAxisLabel: lower.figure.y_title ?? "",
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         return;
@@ -791,6 +796,8 @@ export const useApp = create<AppState>((set, get) => ({
       yLim: [fig.y_from, fig.y_to],
       xLog: fig.x_log,
       yLog: fig.y_log,
+      xAxisLabel: fig.x_title ?? "",
+      yAxisLabel: fig.y_title ?? "",
       ...(selection
         ? { xKey: selection.xKey, yKeys: selection.yKeys, seriesStyles: selection.styles }
         : {}),

@@ -63,16 +63,72 @@ layers, the literal union of ``Graph7``'s + ``Graph4``'s, 3/3/2/2 curves) —
 see §6.1 for the full trail. Single-layer windows are unaffected: they get
 exactly one figure dict, ``"layer": 1``, byte-identical to the pre-split
 decode.
+
+**Axis-title / legend-label routing — solved 2026-07-05.** Every graph-child
+object (axis title, legend, floating annotation) is a **133-byte header**
+(the same one counted for curves, ``payload[2] == 0x07``) followed by a
+fixed-size "format" block (no text) and then a content block holding the
+object's actual text — see the containment example above. The header block
+carries the object's own name as a plain NUL-terminated ASCII cstring at a
+**fixed payload offset, 70** (``_OBJ_NAME_OFFSET``) — confirmed corpus-wide
+(XRD/Moke/SuperlatticeFits/PNR/hc2convert/XMCD/MnN_Diffusion_PNR, several
+hundred header blocks) via ``_cstring(payload, 70, 24)``: axis-title objects
+are named ``YL``/``XB``/``YR``/``XT`` (Y-left, X-bottom, Y-right/secondary,
+X-top), the legend object is always named ``Legend``, floating textbox/line
+annotations are ``Text``/``TextN``/``Line``/``LineN``, and everything else
+(``__LayerInfoStorage``/``__BCO2``/``__FRAMESRCDATAINFOS``/``3D`` — internal
+storage/config objects; ``OB``/``OL``/``OR``/``X1``/``X2`` — composite-layout
+axis-break sub-objects seen only in double-Y/stacked graphs; ``Rect*``/
+``Circle*`` — box/region shapes; ``RLX*``/``RLY*`` — reference lines) is a
+different, unrelated object, not routed anywhere.
+
+``_build_layer`` now tracks which named object is "current" while walking a
+layer's block span and routes each recovered text run accordingly: ``YL`` →
+``y_title``, ``XB`` → ``x_title``, ``YR`` → ``y2_title``, ``Legend`` →
+``legend_labels`` (parsed per curve from the ``\\l(n) <label>`` lines — kept
+verbatim whether hand-edited literal text, e.g. hc2convert's ``Nb``/``Nb/Al``/
+``Nb/Au``, or the untouched auto template ``%(2)``), ``Text*``/``Line*`` →
+``annotations`` (genuine floating text only, now cleaned of internal
+storage/style noise the same way ``figures_opju.py``'s ``_clean_annotations``
+already protected ``.opju`` — ported here since ``.opj``'s own scan had no
+such filter, letting an internal ``OriginStorage``/``AxesDlgSettings`` XML
+blob leak into ``XMCD.opj``'s ``Graph3``/``Co-Fy`` annotations). Every other
+named or unresolved header switches the current bucket to "ignore" (dropped,
+never guessed) — including a curve header itself, so a curve's own style/
+DataPlot body never inherits the previous object's bucket. Before the first
+header in a layer (or if no header ever resolves), the bucket defaults to
+``annotations`` — the same fallback the old flat scrape gave, so a
+layer this scan can't structure at all degrades to the pre-2026-07-05
+behavior instead of losing text. Validated against XRD.opj (``YL``→
+"Intensity (arb. units)", ``XB``→ the escaped 2θ string, ``Legend``→
+``["%(2)", "325", "525"]`` — two curves hand-relabeled to sample
+temperatures) and hc2convert.opj (``Legend``→ ``["Nb", "Nb/Al", "Nb/Au"]``,
+fully hand-edited; a genuine trailing ``Text`` annotation, "Field applied
+in-plane"/"T = 1.3 K", correctly still lands in ``annotations`` even though
+it sits after the layer's curve blocks, because the ``Text`` header itself
+re-establishes the bucket).
+
+``.opju`` (``figures_opju.py``) is NOT covered by this: CPYUA has no
+133-byte object-header shape to key off — the same ``YL``/``XB``/``Legend``
+byte sequences do occur in a ``.opju`` file, but as 2-byte fragments inside
+dense unrelated binary records, not a length-prefixed or fixed-offset object
+name adjacent to its own content (checked directly on the real corpus, see
+``docs/origin_project_format.md`` §6.2 and this module's own
+docstring cross-reference). ``extract_figures_opju`` therefore still emits
+``x_title``/``y_title``/``y2_title`` as ``""`` and ``legend_labels`` as
+``[]`` for every figure — a documented limitation, not a fabricated zero.
 """
 
 from __future__ import annotations
 
 import re
 import struct
+from collections.abc import Sequence
 from typing import Any
 
 from quantized.io.origin_project.container import walk_blocks
 from quantized.io.origin_project.opj_curves import book_x_columns, column_id_map, extract_curves
+from quantized.io.origin_project.origin_richtext import clean_richtext
 from quantized.io.origin_project.windows import _cstring, _is_window_header
 
 __all__ = ["extract_figures"]
@@ -173,6 +229,104 @@ def _texts_in(payload: bytes) -> list[str]:
     return out
 
 
+# ── graph-child object name → text bucket (axis titles / legend / annotations,
+# 2026-07-05) ──────────────────────────────────────────────────────────────
+
+# Fixed payload offset of a 133-byte object header's own ASCII name (see
+# module docstring). 24 bytes is ample for every name observed corpus-wide
+# (the longest, "__FRAMESRCDATAINFOS", is 19 chars).
+_OBJ_NAME_OFFSET = 70
+_OBJ_NAME_LIMIT = 24
+
+_TITLE_OBJECT_BUCKETS = {"YL": "y_title", "XB": "x_title", "YR": "y2_title", "Legend": "legend"}
+
+# A graph window embeds no PNG thumbnail in ``.opj`` the way ``.opju`` does,
+# but the same internal storage/style markers can still leak into the raw
+# text scan (confirmed live on XMCD.opj's Graph3/Co-Fy, whose annotations
+# otherwise surface a whole OriginStorage/AxesDlgSettings XML blob) — so the
+# same cleanup ``figures_opju.py`` already applied to its own annotations is
+# ported here too (and re-exported from there, rather than duplicated, since
+# that module already imports several helpers from this one).
+_INTERNAL_ANN_RE = re.compile(
+    r"SYSTEM|STYLEHOLDER|OriginStorage|AxesDlgSettings|UseSameOptions|SRCINFO", re.IGNORECASE
+)
+_SHEETREF_ANN_RE = re.compile(r"^Sheet\d+<?$")  # internal sheet source reference, not a title
+
+
+def _clean_annotations(titles: list[str]) -> list[str]:
+    """Drop internal Origin storage/style markers and bare sheet references
+    from a layer's recovered floating-text annotations — see the module
+    docstring's "Axis-title / legend-label routing" section. Shared verbatim
+    with ``.opju``'s scan (``figures_opju.py`` imports this rather than
+    defining its own copy); ``.opju`` additionally truncates at its embedded
+    PNG thumbnail's image bytes, a concern this container doesn't have.
+    """
+    out: list[str] = []
+    for t in titles:
+        s = t.strip()
+        if not s or _INTERNAL_ANN_RE.search(s) or _SHEETREF_ANN_RE.match(s):
+            continue
+        out.append(s)
+    return out
+
+
+def _object_bucket(name: str | None) -> str:
+    """Which recovered-text bucket a graph-child object's own name routes to
+    (see module docstring): ``YL``/``XB``/``YR`` are the Y/X/secondary-Y axis
+    titles, ``Legend`` is the per-curve legend text, ``Text*``/``Line*`` are
+    genuine floating annotations. Everything else — ``XT`` (the rarely-used
+    top-X axis), internal storage/config objects (``__LayerInfoStorage``,
+    ``__BCO2``, ``__FRAMESRCDATAINFOS``, ``3D``), composite-layout axis-break
+    sub-objects (``OB``/``OL``/``OR``/``X1``/``X2``), box/region shapes
+    (``Rect*``/``Circle*``), reference lines (``RLX*``/``RLY*``), or an
+    unresolved name — is deliberately routed to ``"ignore"``: dropped, never
+    guessed into the wrong bucket.
+    """
+    if name is None:
+        return "ignore"
+    if name in _TITLE_OBJECT_BUCKETS:
+        return _TITLE_OBJECT_BUCKETS[name]
+    if name.startswith("Text") or name.startswith("Line"):
+        return "annotations"
+    return "ignore"
+
+
+def _first_title(texts: Sequence[str]) -> str:
+    """The first non-empty recovered string for a single-valued title bucket
+    (``x_title``/``y_title``/``y2_title``) — these objects hold exactly one
+    string in every corpus instance seen; ``""`` when the bucket never
+    resolved (an untouched auto-title template like ``%(?Y)`` is already
+    filtered out upstream by ``_texts_in``'s letter-count check). The chosen
+    string is decoded from Origin rich-text (``\\g(q)`` → θ, ``\\(40)`` → the
+    char, super/subscripts, styling stripped) so it displays as a plain title."""
+    for t in texts:
+        if t.strip():
+            return clean_richtext(t)
+    return ""
+
+
+_LEGEND_LINE_RE = re.compile(r"\\l\((\d+)\)\s*(.*)")
+
+
+def _parse_legend_labels(texts: Sequence[str]) -> list[str]:
+    """Per-curve legend captions from the Legend object's own
+    ``\\l(n) <label>`` lines. ``label`` is kept verbatim — whether hand-edited
+    literal text (e.g. hc2convert's ``"Nb"``/``"Nb/Al"``/``"Nb/Au"``, XRD's
+    ``"325"``/``"525"``) or the untouched auto template (``"%(2)"``) — never
+    resolved further. Returns a dense 1-based list sized to the highest ``n``
+    seen, with ``""`` for any gap; ``[]`` when no ``\\l(n)`` line was found.
+    Never fabricated: a missing slot stays blank rather than guessed.
+    """
+    labels: dict[int, str] = {}
+    for t in texts:
+        m = _LEGEND_LINE_RE.match(t)
+        if m:
+            labels[int(m.group(1))] = clean_richtext(m.group(2).strip())
+    if not labels:
+        return []
+    return [labels.get(i, "") for i in range(1, max(labels) + 1)]
+
+
 def _build_layer(
     blocks: list[tuple[int, bytes]],
     id_map: dict[int, tuple[str, str]],
@@ -184,25 +338,59 @@ def _build_layer(
 ) -> dict[str, Any]:
     """One layer's plot-state dict: axis ranges from its own
     layer-continuation block (``blocks[start]``); curves/curve-count/
-    annotations scoped to the half-open ``blocks[start:end)`` -- exactly this
-    layer's own content, since layer records and curve anchors are
-    sequential within a window span (module docstring; validated against
-    Moke's Graph4/Graph7/Graph10)."""
+    annotations/titles/legend scoped to the half-open ``blocks[start:end)``
+    -- exactly this layer's own content, since layer records, curve anchors,
+    and graph-child objects are sequential within a window span (module
+    docstring; validated against Moke's Graph4/Graph7/Graph10).
+
+    Text routing (2026-07-05): walks the block span tracking which named
+    object is "current" (``_object_bucket``) and files each block's
+    recovered text into that bucket -- ``x_title``/``y_title``/``y2_title``
+    (single string), ``legend`` (raw ``\\l(n)`` lines, parsed after the loop),
+    or ``annotations`` (floating text, cleaned of internal-storage noise).
+    The bucket starts as ``"annotations"`` (so text preceding the first
+    header, or an entire layer with no resolvable header at all, degrades to
+    the pre-2026-07-05 flat scrape rather than losing text). A curve header
+    (``payload[2] == 0x07``) only increments ``n_curves``, exactly as
+    before -- it does NOT change the current bucket, since a real curve's
+    own style/DataPlot body never produces recognizable text anyway (every
+    instance checked corpus-wide already scans to ``[]``) and a curve
+    template can legitimately sit *between* two objects that share one
+    bucket (e.g. a layer's fixed 2-curve template between ``Legend`` and a
+    later ``Text`` annotation). Any OTHER named or unresolved header does
+    switch the bucket, including to ``"ignore"`` for uninteresting objects.
+    """
     layer_payload = blocks[start][1]
     x_from, x_to = _axis(layer_payload, 15)
     y_from, y_to = _axis(layer_payload, 58)
     hint = _cstring(layer_payload, 208, 24) or ""
     y_log = _y_scale_flag(layer_payload)
     n_curves = 0
-    texts: list[str] = []
+    all_texts: list[str] = []  # every recognized text run -- feeds legend_ns/n_curves as before
+    bucket_texts: dict[str, list[str]] = {
+        "x_title": [],
+        "y_title": [],
+        "y2_title": [],
+        "legend": [],
+        "annotations": [],
+    }
+    bucket = "annotations"  # default until a named header switches it (see docstring)
     for k in range(start + 1, end):
         size, payload = blocks[k]
         if size == 133 and len(payload) > 2 and payload[2] == 0x07:
-            n_curves += 1
-        elif size < 1200 and not _is_layer_block(payload):
-            texts.extend(_texts_in(payload))
-    titles = [t for t in texts if not _AUTO_TITLE.match(t) and "\\l(" not in t]
-    legend_ns = [int(n) for t in texts for n in _LEGEND_RE.findall(t)]
+            n_curves += 1  # the curve counter only -- does not touch `bucket` (see docstring)
+            continue
+        if size == 133 and len(payload) > 2:
+            bucket = _object_bucket(_cstring(payload, _OBJ_NAME_OFFSET, _OBJ_NAME_LIMIT))
+        if size < 1200 and not _is_layer_block(payload):
+            found = _texts_in(payload)
+            all_texts.extend(found)
+            if bucket in bucket_texts:
+                bucket_texts[bucket].extend(found)
+    titles = [
+        t for t in bucket_texts["annotations"] if not _AUTO_TITLE.match(t) and "\\l(" not in t
+    ]
+    legend_ns = [int(n) for t in all_texts for n in _LEGEND_RE.findall(t)]
     return {
         "name": name,
         "layer": layer_no,
@@ -214,7 +402,11 @@ def _build_layer(
         "y_log": y_log if y_log is not None else _log_heuristic(y_from, y_to),
         "source_hint": hint,
         "n_curves": max(legend_ns) if legend_ns else n_curves,
-        "annotations": titles[:12],
+        "annotations": [clean_richtext(a) for a in _clean_annotations(titles)[:12]],
+        "x_title": _first_title(bucket_texts["x_title"]),
+        "y_title": _first_title(bucket_texts["y_title"]),
+        "y2_title": _first_title(bucket_texts["y2_title"]),
+        "legend_labels": _parse_legend_labels(bucket_texts["legend"]),
         # item 2: curves attributed positionally to THIS layer only.
         "curves": extract_curves(blocks, start, end, id_map, x_columns),
     }

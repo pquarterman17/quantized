@@ -131,6 +131,7 @@ import re
 from typing import Any
 
 from quantized.io.origin_project.figures import _AUTO_TITLE, _LEGEND_RE, _log_heuristic, _texts_in
+from quantized.io.origin_project.figures import _clean_annotations as _drop_internal_noise
 from quantized.io.origin_project.opju_axis_real_form import (
     _TAG_SEARCH_SPAN,
     _decode_compact,
@@ -170,12 +171,6 @@ _PNG_MARKERS = (
     "IHDR", "IDAT", "IEND", "PLTE", "pHYs", "tEXt",
     "zTXt", "iTXt", "sRGB", "gAMA", "cHRM", "bKGD",
 )
-# Internal Origin storage/style markers that leak into the annotation scan and are
-# never a user-facing graph title (dropped so the label shows the real title).
-_INTERNAL_ANN_RE = re.compile(
-    r"SYSTEM|STYLEHOLDER|OriginStorage|AxesDlgSettings|UseSameOptions|SRCINFO", re.IGNORECASE
-)
-_SHEETREF_ANN_RE = re.compile(r"^Sheet\d+<?$")  # internal sheet source reference, not a title
 
 
 def _clean_annotations(titles: list[str]) -> list[str]:
@@ -183,19 +178,20 @@ def _clean_annotations(titles: list[str]) -> list[str]:
 
     Two kinds of junk pollute the raw scan: (1) the embedded-PNG thumbnail's image
     bytes decoded as text, and (2) internal Origin storage/style markers. Truncate
-    at the first PNG chunk marker (image bytes are a contiguous trailing blob), then
-    drop internal markers and bare sheet references. What remains is the real graph
-    title(s) — so a figure labels as e.g. "dR/dB", not "SYSTEM".
+    at the first PNG chunk marker (image bytes are a contiguous trailing blob) --
+    a concern ``.opj`` doesn't have, so this truncation stays local -- then drop
+    internal markers and bare sheet references via ``figures.py``'s shared
+    ``_clean_annotations`` (``.opj``'s own scan needs the exact same internal-
+    marker filter, see its module docstring's 2026-07-05 note; imported here as
+    ``_drop_internal_noise`` rather than duplicated). What remains is the real
+    graph title(s) — so a figure labels as e.g. "dR/dB", not "SYSTEM".
     """
-    out: list[str] = []
+    truncated: list[str] = []
     for t in titles:
-        s = t.strip()
-        if any(s.startswith(m) for m in _PNG_MARKERS):
+        if any(t.strip().startswith(m) for m in _PNG_MARKERS):
             break  # PNG image data begins here; the rest of the list is binary junk
-        if not s or _INTERNAL_ANN_RE.search(s) or _SHEETREF_ANN_RE.match(s):
-            continue
-        out.append(s)
-    return out
+        truncated.append(t)
+    return _drop_internal_noise(truncated)
 
 # ── specimen-form value spans (item 14) ───────────────────────────────────────
 
@@ -345,6 +341,19 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
     since the shipped payload shape is flat. Composite windows that
     *reference* an already-encoded layer share its single anchor (see the
     module docstring).
+
+    ``x_title``/``y_title``/``y2_title``/``legend_labels`` — added
+    2026-07-05 for schema parity with ``.opj``'s ``extract_figures`` (see its
+    module docstring's "Axis-title / legend-label routing" section) — are
+    **always** ``""``/``[]`` here, a documented limitation rather than a
+    fabricated zero: CPYUA has no 133-byte object-header shape to key off.
+    The same ``YL``/``XB``/``YR``/``Legend`` byte sequences do occur in a
+    ``.opju`` file, but as 2-byte fragments embedded in dense, unrelated
+    binary records (checked directly against the real corpus), not a
+    length-prefixed or fixed-offset object name adjacent to its own text
+    content the way ``.opj``'s object headers are. Closing this needs a
+    fresh RE pass on CPYUA's own graph-child-object framing, not attempted
+    here.
     """
     figures: list[dict[str, Any]] = []
     book_columns = book_columns_from_bytes(b)
@@ -399,6 +408,11 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "source_hint": _source_hint(b, anchor),
                 "n_curves": max(legend_ns) if legend_ns else 0,
                 "annotations": titles[:12],
+                # Not recoverable in this container -- see the "x_title/..." docstring note.
+                "x_title": "",
+                "y_title": "",
+                "y2_title": "",
+                "legend_labels": [],
                 "curves": extract_curves(
                     b, anchor, window_end, book_columns, books_meta, book_counts_all
                 ),

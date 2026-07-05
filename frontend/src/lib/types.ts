@@ -46,6 +46,16 @@ export interface OriginFigure {
   source_hint?: string;
   n_curves: number;
   annotations: string[];
+  /** Origin's real axis titles, decoded from the graph's title text objects
+   *  (io/origin_project/figures.py). "" / absent = none decoded (the plot then
+   *  falls back to the data-derived label). Applied by applyOriginFigure. */
+  x_title?: string;
+  y_title?: string;
+  /** Secondary-Y axis title (double-Y graphs); decoded but not yet wired. */
+  y2_title?: string;
+  /** Per-curve legend labels (1-based curve order), including hand-edited
+   *  overrides. Decoded; wiring into seriesLabels is a follow-up. */
+  legend_labels?: string[];
   /** Decoded curve bindings, when the importer recovered any. */
   curves?: OriginCurve[];
   /** 1-based layer index within the graph window (multi-layer .opj windows
