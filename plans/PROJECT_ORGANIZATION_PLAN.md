@@ -114,10 +114,12 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
          4–5-level nesting + duplicate names + root-level mixes). `.opju`
          (CPYUA 4.3811, OriginPro 2026b): decoded and byte-exact vs live COM on
          11 controlled specimens (flat/sibling/nested/3-level/skip+reorder/
-         graph-in-folder/empty); the older 4.3380 corpus stores membership
-         outside the folder record (not yet decoded) and degrades cleanly to a
-         flat project folder — fail-closed, never mis-parsed.** (`4e1031e`)
-         34 synthetic + realdata tests total.
+         graph-in-folder/empty); the older 4.3380 corpus shares the same
+         encoding but a prototype over-matched window headers on the 39-book
+         Hc2 file (would mis-assign folders), so 4.3380 stays fail-closed and
+         degrades cleanly to a flat project folder — never mis-parsed.**
+         (`4e1031e`) 34 synthetic + realdata tests total.
+         *(Follow-up: a tighter true-window-header anchor unlocks 4.3380.)*
    - [x] Verified Origin PE tree == Boson Library tree via COM: `.opj` matches
          (XRD `Folder1`✓, Moke `Raw normalized`/`Sub subtraction`✓); `.opju`
          4.3811 matches (real1/real2/deep3/emptyf/split/nested all COM-pinned);
