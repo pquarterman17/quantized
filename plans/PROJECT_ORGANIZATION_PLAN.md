@@ -111,19 +111,17 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
    - [x] Backend: `io/origin_project/tree.py` decodes the PE folder tree and
          attaches `metadata.origin_folder_path` (root-exclusive). **`.opj`:
          100% vs live-Origin-COM across 7 diverse files (611/611 windows, incl.
-         4–5-level nesting + duplicate names + root-level mixes). `.opju`
-         (CPYUA 4.3811, OriginPro 2026b): decoded and byte-exact vs live COM on
-         11 controlled specimens (flat/sibling/nested/3-level/skip+reorder/
-         graph-in-folder/empty); the older 4.3380 corpus shares the same
-         encoding but a prototype over-matched window headers on the 39-book
-         Hc2 file (would mis-assign folders), so 4.3380 stays fail-closed and
-         degrades cleanly to a flat project folder — never mis-parsed.**
-         (`4e1031e`) 34 synthetic + realdata tests total.
-         *(Follow-up: a tighter true-window-header anchor unlocks 4.3380.)*
+         4–5-level nesting + duplicate names + root-level mixes). `.opju`: BOTH
+         CPYUA sub-versions decoded by one unified parser — 4.3811 (OriginPro
+         2026b) on 11 controlled specimens + 4.3380 (the sample corpus) on all
+         5 corpus files, byte-exact vs live COM. Handles the 39-book `Hc2 data`
+         (report-table windows in the ordinal space + sibling/nested folders) —
+         the case that broke the first naive attempt. Fail-closed on any
+         framing/consistency mismatch.** (`4e1031e`, `d27a1bb`)
    - [x] Verified Origin PE tree == Boson Library tree via COM: `.opj` matches
          (XRD `Folder1`✓, Moke `Raw normalized`/`Sub subtraction`✓); `.opju`
-         4.3811 matches (real1/real2/deep3/emptyf/split/nested all COM-pinned);
-         4.3380 `.opju` degrades to the flat project folder (documented gap).
+         4.3811 (real1/real2/deep3/emptyf/split/nested) AND 4.3380
+         (RockingCurve/XAS/UnpolPlots/Fixed Lambdas/Hc2) all COM-pinned.
    - [ ] Retire `originBookFamilies`/`originSheetGroups` as the *primary*
          grouping once folders exist (keep as a fallback for un-foldered
          legacy datasets, or delete if migration covers them). *(overlaps #6)*
