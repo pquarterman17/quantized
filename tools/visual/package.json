@@ -1,0 +1,12 @@
+{
+  "name": "qz-visual-harness",
+  "private": true,
+  "type": "module",
+  "description": "Headless-Chrome visual-verification harness for the Boson Plotter uPlot canvas (which jsdom cannot render). Isolated from the app frontend so it never touches the CI gate.",
+  "scripts": {
+    "shoot": "node shoot.mjs"
+  },
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  }
+}

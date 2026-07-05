@@ -1,0 +1,8 @@
+# Harness install + outputs are local-only.
+node_modules/
+out/
+out*/
+
+# spec.json may embed real ../test-data corpus values (generated locally) — never
+# commit it. The corpus-free spec.example.json is the committed default.
+spec.json
