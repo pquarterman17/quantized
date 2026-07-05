@@ -250,8 +250,10 @@ _OPJU_ATTRS = b"\x04\x07\x01\x47\xc0\x11\x01\x01\x9c\x0a\x00\x04\xa1\x01\x64\x84
 
 
 def _opju_win_header(name: str) -> bytes:
-    """A worksheet/graph window header: ``0A 00 80 75 04 00 00 <name> 94 0C``."""
-    return b"\x0a\x00\x80\x75\x04\x00\x00" + name.encode("latin1") + b"\x94\x0c"
+    """A page header: ``0A 00 80 <type> <namelen+2> 00 00 <name> 94 0C`` (the
+    ``namelen+2`` byte self-validates the name span, as the real format does)."""
+    raw = name.encode("latin1")
+    return b"\x0a\x00\x80\x75" + bytes([len(raw) + 2]) + b"\x00\x00" + raw + b"\x94\x0c"
 
 
 def _opju_name_block(name: str) -> bytes:
@@ -510,16 +512,25 @@ def test_realdata_xrd_single_folder1() -> None:
 
 @pytest.mark.realdata
 @pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
-def test_realdata_older_opju_container_degrades_to_empty_path() -> None:
-    """The 4.3380 CPYUA corpus stores folder membership outside the binary
-    folder record (not yet decoded), so its books degrade to ``[]`` — a
-    clean flat import, never a mis-parse."""
-    for stem in ("RockingCurve.opju", "XAS.opju"):
-        path = _CORPUS / stem
-        if not path.exists():
-            continue
-        books = read_origin_books(path)
-        assert books and all(b.metadata["origin_folder_path"] == [] for b in books)
+@pytest.mark.parametrize(
+    ("stem", "expected"),
+    [
+        ("RockingCurve.opju", {"NbAu": ["Folder1"], "Nb": ["Folder1"], "NbAl": ["Folder1"]}),
+        ("XAS.opju", {"Book1": ["Folder1"], "Co": ["Folder1"]}),
+        # 39-book project with report-table windows in the ordinal space and a
+        # sibling+nested folder tree — the case that broke a naive decoder.
+        ("Hc2 data.opju", {"Book2": ["Hc2 Plots"], "Book3": ["Hc2 Plots"], "Book1": ["IP"]}),
+    ],
+)
+def test_realdata_opju_4_3380_folder_tree_matches_com(stem: str, expected: dict) -> None:
+    """The older 4.3380 CPYUA corpus decodes (same encoding as 4.3811, count
+    after a ``<OriginStorage/>`` block); pinned against live Origin COM."""
+    path = _CORPUS / stem
+    if not path.exists():
+        pytest.skip(f"{stem} absent")
+    paths = opju_folder_paths(path.read_bytes())
+    for book, folder in expected.items():
+        assert paths.get(book) == folder
 
 
 _OPJU_SPECIMENS = _CORPUS / "specimens" / "_folder_probe"

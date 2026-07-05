@@ -47,39 +47,33 @@ shifting every later ordinal by an accumulating offset) and ``hc2convert.opj``
 /``XMCD.opj`` (single-character false-positive collisions inside the
 datasets section).
 
-``.opju`` (CPYUA) — SOLVED for the current container sub-version (4.3811,
-what OriginPro 2026b writes); see :func:`opju_folder_paths`. The CPYUA tail
-reuses ``.opj``'s name-block framing (``<u32 size><0x0A><NUL-terminated
-name><0x0A>``) but everything else differs: each folder record is
-``<name-block> <fixed attrs ending 0A 02 75 62 0A ("ub")> <2*nwin>
-[00] {window-entry} <2*nsub> {SEP <16 date bytes> subfolder}``, where a
-window entry is ``80 01 85 00`` for ordinal 0 or ``80 04 81 <len> <ordinal
-LE> 80 00`` for ordinal >= 1, ``SEP`` is ``80 12 8d 10``, and the same
+``.opju`` (CPYUA) — SOLVED for both known container sub-versions (4.3811,
+what OriginPro 2026b writes, and the older 4.3380 corpus); see
+:func:`opju_folder_paths`. The CPYUA tail reuses ``.opj``'s name-block
+framing but its own everything-else: each folder record is
+``<name-block> <attrs/storage> <2*nwin> [00] {window-entry} <2*nsub>
+{SEP <16 date bytes> subfolder}``, where a window entry is ``80 01 85 00``
+(ordinal 0) or ``80 04 81 <len> <ordinal LE> 80 00`` (ordinal >= 1), and the
 0-based window-stream ordinal indexes the windows (Origin writes headers
-grouped by folder, so members precede root-level windows). The tree is
-rebuilt from the *preorder + per-folder child count* (a structural
-invariant — arbitrary depth, empty folders, and duplicate/unicode/spaced
-names all parse), validated byte-exact against live COM on 11 controlled
-specimens (flat, sibling, nested, 3-level, skipped/reordered ordinals, a
-graph inside a folder, an empty folder).
-
-The **older 4.3380 CPYUA** container (the current sample corpus) uses the
-*same* entry/nsub/ordinal encoding, but the count sits after a variable
-properties + ``<OriginStorage.../>`` block instead of the fixed ``ub``
-anchor, and the subfolder separator is the longer ``80 16 03 00 00 01 8a
-10``. Because the shipped decoder anchors on ``ub`` (absent there), 4.3380
-files fall through to ``{}`` and degrade to a flat import — never a
-mis-parse. It is deliberately NOT decoded yet: a prototype unified parser
-(entry-validated count finder + two-form SEP + length-checked window
-enumerator) decoded 4 of 5 corpus files (incl. nested), but the 39-book
-``Hc2 data.opju`` exposed that the window-header shape ``80 <type>
-<namelen+2> 00 00 <name> <hi> 0C`` also matches ~2x as many lookalike
-records (columns/references), and the count scan hit false positives
-(out-of-range ordinals) — so it would silently assign books to the wrong
-folder on complex projects. That is exactly the overfitting trap (passes
-the simple samples, wrong on a real one), so 4.3380 stays fail-closed until
-a tighter true-window-header anchor is found. Fail-closed by construction:
-any framing/consistency mismatch returns ``{}``, never a guess.
+grouped by folder, so members precede root-level ones). The two versions
+differ only in *where* the count sits (4.3811: right after the ``0A 02 75 62
+0A`` "ub" attrs; 4.3380: after a ``<OriginStorage/>`` block) and the SEP
+bytes (``80 12 8d 10`` / ``80 16 03 00 00 01 8a 10``), so one parser handles
+both: it locates the count by scanning for ``0A <2*nwin> [00] <entries>``
+validated by a clean entry run, matches either SEP, and enumerates windows
+by the ``0A``-framed page header ``0A [00] 80 <type> <namelen+2> 00 00
+<name> <hi>`` — the leading ``0A`` separates a true page header from a
+dataset-curve record (a graph's ``FitLine``), ``namelen >= 2`` rejects
+1-byte coincidental matches, and the type byte is NOT used (unstable across
+files). The tree is rebuilt from *preorder + per-folder child count* (a
+structural invariant: arbitrary depth, empty folders, duplicate/unicode/
+spaced names). Validated byte-exact vs live COM on all 5 corpus files
+(incl. the 39-book ``Hc2 data`` with report-table windows and nested
+folders) plus 11 controlled 4.3811 specimens. Fail-closed: an ordinal past
+the window list, an inconsistent child count, or any framing mismatch
+returns ``{}`` (flat import). Ordinals are read as 1 byte (>255 windows
+degrades to flat); a 4.3380 empty *leaf* folder is recovered only via its
+introducing SEP.
 """
 
 from __future__ import annotations
@@ -333,89 +327,119 @@ def opj_folder_paths(b: bytes) -> dict[str, list[str]]:
     return out
 
 
-# --- CPYUA (.opju) 4.3811 folder tree ---------------------------------------
-_OPJU_UB = b"\x0a\x02\x75\x62\x0a"  # fixed attrs terminator, right before 2*nwin
-_OPJU_SEP = b"\x80\x12\x8d\x10"  # subfolder separator (precedes each child)
-# window header: 0A 00 80 <type> <n> 00 00 <name> <byte with high bit set>.
-# same identifier-charset rule as the .opj side keeps data blocks that happen
-# to start 00 00 from masquerading as window names (see module docstring).
+# --- CPYUA (.opju) folder tree — container sub-versions 4.3811 and 4.3380 ---
+# The subfolder separator precedes every child folder record: 4.3811 uses the
+# short form, 4.3380 the long one. Either shape also marks "leaf" when it lands
+# immediately after a folder's window entries (see _opju_peek_nsub).
+_OPJU_SEPS = (b"\x80\x12\x8d\x10", b"\x80\x16\x03\x00\x00\x01\x8a\x10")
+# Window/page header: 0A [00] 80 <type> <namelen+2> 00 00 <name> <hi-bit byte>.
+# The leading 0A is the record framing that tells a true page header apart from
+# a dataset-curve record (a graph's "FitLine" fit result lacks it); requiring
+# namelen >= 2 rejects 1-byte coincidental length-prefix matches inside data;
+# <namelen+2> self-validates the name span. Order = the 0-based ordinal the
+# folder tree references (Origin writes headers grouped by folder, depth-first).
 _OPJU_WIN_RE = re.compile(
-    rb"\x0a\x00\x80[\x00-\xff][\x00-\xff]\x00\x00"
-    rb"([A-Za-z0-9][A-Za-z0-9_-]{0,39})[\x80-\xff]"
+    rb"\x0a\x00?\x80.(.)\x00\x00([A-Za-z0-9][A-Za-z0-9_-]{1,39})[\x80-\xff]",
+    re.DOTALL,
 )
 
 
 def _enumerate_opju_windows(b: bytes) -> list[str]:
-    """Window (worksheet/graph) short names in file-stream order for CPYUA.
+    """Window (worksheet/graph/table) names in file-stream = ordinal order."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for m in _OPJU_WIN_RE.finditer(b):
+        name = m.group(2).decode("latin1")
+        if m.group(1)[0] == len(name) + 2 and name not in seen:
+            seen.add(name)
+            out.append(name)
+    return out
 
-    The order is exactly the 0-based ordinal the folder tree references:
-    Origin writes window headers grouped by folder (depth-first), so a
-    folder's members precede root-level windows.
-    """
-    return [m.group(1).decode("latin1") for m in _OPJU_WIN_RE.finditer(b)]
+
+def _opju_read_entries(b: bytes, q: int, nwin: int, hi: int) -> tuple[list[int] | None, int]:
+    """Parse ``nwin`` window entries at ``q``; ``(None, q)`` on the first byte
+    that isn't a valid entry — so a candidate count position whose bytes don't
+    form a clean entry run is rejected rather than mis-read."""
+    ords: list[int] = []
+    n = len(b)
+    for k in range(nwin):
+        if b[q : q + 3] == b"\x80\x01\x85":  # ordinal 0 (short form)
+            ords.append(0)
+            q += 4
+        elif b[q : q + 3] == b"\x80\x04\x81":  # ordinal >= 1 (1-byte tagged value)
+            ln = b[q + 3]
+            ords.append(int.from_bytes(b[q + 4 : q + 4 + ln], "little"))
+            q += 4 + ln + 2
+        else:
+            return None, q
+        if k < nwin - 1 and q < n and b[q] == 0x00:  # inter-entry separator
+            q += 1
+        if q > hi:
+            return None, q
+    return ords, q
+
+
+def _opju_peek_nsub(b: bytes, p: int) -> tuple[int, bool]:
+    """Subfolder count at ``p``: a separator here => leaf (0, it's an
+    ancestor's); ``<2*nsub>`` then a separator => that many children. The bool
+    reports whether a separator was seen (used to accept a 0-window count)."""
+    for sep in _OPJU_SEPS:
+        if b[p : p + len(sep)] == sep:
+            return 0, True
+    for sep in _OPJU_SEPS:
+        if p < len(b) and b[p] % 2 == 0 and b[p + 1 : p + 1 + len(sep)] == sep:
+            return b[p] // 2, True
+    return 0, False
 
 
 def _parse_opju_folder_seq(b: bytes) -> list[tuple[str, list[int], int]]:
-    """Preorder ``(name, [window ordinals], subfolder_count)`` per folder.
+    """Preorder ``(name, [ordinals], subfolder_count)`` per folder record.
 
-    Empty when the file carries no 4.3811-style tree (older CPYUA containers
-    store folder membership elsewhere; their folder records lack the ``ub``
-    anchor, so nothing matches and the caller degrades to a flat import).
-    Raises no exceptions the caller doesn't already trap.
+    Each folder's window count is found by scanning for ``0A <2*nwin> [00]
+    <entries>`` validated by a clean entry run — 4.3811 puts it just after the
+    "ub" attrs, 4.3380 after a ``<OriginStorage/>`` block, so no fixed anchor
+    works. A folder with no entries is accepted only when a subfolder separator
+    precedes its name block (a real empty folder is always introduced by one),
+    which keeps stray data that looks like a name block from becoming a phantom
+    folder. Returns ``[]`` when nothing parses (caller degrades to flat).
     """
-    seq: list[tuple[str, list[int], int]] = []
+    blocks: list[tuple[int, int, str]] = []
     n = len(b)
     i = 0
     while i < n - 8:
         size = int.from_bytes(b[i : i + 4], "little")
-        # folder name block: <u32 size><0A><name (size bytes, NUL-terminated)><0A>
-        if not (
+        if (
             1 <= size <= 64
             and b[i + 4] == 0x0A
             and b[i + 4 + size] == 0x00
             and b[i + 5 + size] == 0x0A
         ):
-            i += 1
+            blocks.append((i, i + 5 + size + 1, b[i + 5 : i + 4 + size].decode("latin1")))
+            i = i + 5 + size
             continue
-        name = b[i + 5 : i + 4 + size].decode("latin1")
-        # the fixed "ub" attrs anchor must follow within the folder header
-        ub = b.find(_OPJU_UB, i + 5 + size, i + 5 + size + 64)
-        if ub == -1:
-            i += 1
-            continue
-        p = ub + len(_OPJU_UB)
-        nwin = b[p] // 2
-        p += 1
-        if b[p] == 0x00:  # separator before the first window entry
+        i += 1
+    seq: list[tuple[str, list[int], int]] = []
+    for bi, (start, name_end, name) in enumerate(blocks):
+        hi = blocks[bi + 1][0] if bi + 1 < len(blocks) else n
+        found: tuple[str, list[int], int] | None = None
+        p = name_end
+        while p < hi - 1:
+            if b[p] == 0x0A and b[p + 1] % 2 == 0:
+                nwin = b[p + 1] // 2
+                q = p + 2
+                if q < n and b[q] == 0x00:  # optional separator before entries
+                    q += 1
+                ords, qend = _opju_read_entries(b, q, nwin, hi)
+                if ords is not None:
+                    nsub, has_sep = _opju_peek_nsub(b, qend)
+                    if nwin > 0 or has_sep:
+                        found = (name, ords, nsub)
+                        break
             p += 1
-        ords: list[int] = []
-        ok = True
-        for k in range(nwin):
-            if b[p : p + 3] == b"\x80\x01\x85":  # ordinal 0 (short form)
-                ords.append(0)
-                p += 4
-            elif b[p : p + 3] == b"\x80\x04\x81":  # ordinal >= 1 (tagged LE value)
-                ln = b[p + 3]
-                ords.append(int.from_bytes(b[p + 4 : p + 4 + ln], "little"))
-                p += 4 + ln + 2
-            else:
-                ok = False
-                break
-            if k < nwin - 1 and b[p] == 0x00:  # inter-entry separator
-                p += 1
-        if not ok:
-            i += 1
-            continue
-        # subfolder count: SEP right here => leaf (SEP is an ancestor's);
-        # <2*nsub> then SEP => that many direct children.
-        if b[p : p + 4] == _OPJU_SEP:
-            nsub = 0
-        elif b[p] % 2 == 0 and b[p + 1 : p + 5] == _OPJU_SEP:
-            nsub = b[p] // 2
-        else:
-            nsub = 0
-        seq.append((name, ords, nsub))
-        i = i + 5 + size
+        if found is None and any(sep in b[max(0, start - 28) : start] for sep in _OPJU_SEPS):
+            found = (name, [], 0)  # SEP-introduced empty folder
+        if found is not None:
+            seq.append(found)
     return seq
 
 
@@ -448,10 +472,11 @@ def opju_folder_paths(b: bytes) -> dict[str, list[str]]:
     """Map every ``.opju`` window's short name to its Project Explorer path.
 
     Root-exclusive, same contract as :func:`opj_folder_paths` (a book in the
-    project root maps to ``[]``; strays are absent). Decodes the CPYUA 4.3811
-    tree (see the module docstring); older/other CPYUA containers and any
-    framing or consistency mismatch return ``{}`` so the import degrades to a
-    flat project folder rather than a guess. Never raises.
+    project root maps to ``[]``; strays are absent). Decodes the CPYUA folder
+    tree for both container sub-versions (4.3811 and 4.3380 — see the module
+    docstring); other/newer containers and any framing or consistency mismatch
+    return ``{}`` so the import degrades to a flat project folder rather than a
+    guess. Never raises.
     """
     try:
         seq = _parse_opju_folder_seq(b)
