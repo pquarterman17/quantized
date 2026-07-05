@@ -457,7 +457,9 @@ export default function App() {
       {
         id: "calculators",
         group: "Analyze",
-        label: "Calculators (units · constants)…",
+        label: "DiraCulator — materials calculators…",
+        keywords:
+          "diraculator calculator units constants semiconductor superconductor magnetic crystal sld optics thermal vacuum electrical electrochemistry diffusion substrates thinfilm periodic table elements xray",
         run: () => s().setCalculatorsOpen(true),
       },
       {

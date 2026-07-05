@@ -34,7 +34,14 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
 
   const matches = useMemo(() => {
     return allActions
-      .map((a) => ({ a, m: fuzzy(query, a.label) }))
+      .map((a) => {
+        // Match the visible label first (so highlight hits map to it); fall back
+        // to hidden keywords (aliases like "diraculator") with no highlight.
+        const ml = fuzzy(query, a.label);
+        if (ml) return { a, m: ml };
+        const mk = a.keywords ? fuzzy(query, a.keywords) : null;
+        return { a, m: mk ? { score: mk.score, hits: [] as number[] } : null };
+      })
       .filter((x): x is { a: Action; m: NonNullable<typeof x.m> } => !!x.m)
       .sort((x, y) => y.m.score - x.m.score);
   }, [allActions, query]);

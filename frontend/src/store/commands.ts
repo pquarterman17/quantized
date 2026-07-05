@@ -10,6 +10,10 @@ export interface Action {
   group: string;
   label: string;
   shortcut?: string;
+  /** Extra space-separated search terms for the ⌘K palette (not displayed).
+   *  Lets a command stay findable by names/aliases not in its visible label
+   *  (e.g. "diraculator", or domain terms dropped to keep the label short). */
+  keywords?: string;
   run: () => void;
 }
 

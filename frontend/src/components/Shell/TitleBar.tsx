@@ -10,6 +10,7 @@ export default function TitleBar() {
   const toggleRight = useApp((s) => s.toggleRight);
   const theme = useApp((s) => s.theme);
   const setTheme = useApp((s) => s.setTheme);
+  const setCalculatorsOpen = useApp((s) => s.setCalculatorsOpen);
 
   const name = active?.name ?? "";
   const ext = name.match(/\.[^.]+$/)?.[0] ?? "";
@@ -28,6 +29,13 @@ export default function TitleBar() {
         {ext && <span className="ext">{ext}</span>}
       </div>
       <div className="qzk-tbar-right">
+        <button
+          className="qz-icon-btn"
+          title="DiraCulator — materials calculators"
+          onClick={() => setCalculatorsOpen(true)}
+        >
+          √
+        </button>
         <button
           className="qz-icon-btn"
           title="Toggle theme"
