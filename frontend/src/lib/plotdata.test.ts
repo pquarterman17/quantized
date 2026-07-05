@@ -357,6 +357,43 @@ describe("withBaselineOverlay", () => {
   });
 });
 
+describe("overlay alignment to a trailing-trimmed payload (Hc2 sparse worksheet)", () => {
+  // dropTrailingEmptyRows shrinks the plotted payload to the drawable rows, but
+  // fit/baseline/peak overlays are built at the dataset's FULL length. A longer
+  // overlay is a prefix of the plotted rows, so it must be TRUNCATED — not
+  // silently dropped, which used to make overlays vanish on sparse datasets.
+  const trimmed: PlotPayload = {
+    data: [
+      [0, 0.13, 0.23],
+      [1.3, 1.9, 7.8],
+    ],
+    series: [{ label: "y", unit: "" }],
+    xLabel: "x",
+    xUnit: "",
+  };
+
+  it("truncates a full-length fit overlay instead of dropping it", () => {
+    const p = withFitOverlay(trimmed, { datasetId: "d1", y: [1.2, 2, 7.5, null, null, null] }, "d1");
+    expect(p.data).toHaveLength(3);
+    expect(p.data[2]).toEqual([1.2, 2, 7.5]);
+    expect(p.series[1]).toEqual({ label: "fit", unit: "" });
+  });
+
+  it("truncates a full-length baseline overlay", () => {
+    const p = withBaselineOverlay(trimmed, { datasetId: "d1", y: [0.1, 0.2, 0.3, 0, 0, 0] }, "d1");
+    expect(p.data[2]).toEqual([0.1, 0.2, 0.3]);
+  });
+
+  it("truncates a full-length peak overlay", () => {
+    const p = withPeakOverlay(trimmed, { datasetId: "d1", y: [null, 5, null, null, null, null] }, "d1");
+    expect(p.data[2]).toEqual([null, 5, null]);
+  });
+
+  it("still drops an overlay strictly shorter than the plotted x", () => {
+    expect(withFitOverlay(trimmed, { datasetId: "d1", y: [1.2, 2] }, "d1")).toBe(trimmed);
+  });
+});
+
 describe("peakOverlayArray", () => {
   it("marks the nearest data point to each peak center with its height", () => {
     const time = [0, 1, 2, 3, 4];

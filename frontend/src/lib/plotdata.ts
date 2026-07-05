@@ -279,19 +279,34 @@ export function composeDisplayPayload(payload: PlotPayload, o: DisplayCompose): 
   return sel ? highlightSelectedPayload(withPeaks, sel) : withPeaks;
 }
 
+/** Align an overlay y-column to the plotted payload length. The payload may have
+ *  been shortened by dropTrailingEmptyRows (which only trims the TAIL), while a
+ *  fit/baseline/peak overlay is built at the dataset's full row count — so a
+ *  longer overlay is a prefix of the plotted rows and is truncated to align.
+ *  Returns null only when the overlay is strictly SHORTER than the plotted x (a
+ *  genuine mismatch that can't be aligned). Without this, an overlay on any
+ *  dataset with trailing empty rows (e.g. a sparse Hc2 worksheet) silently
+ *  vanishes because its full length != the trimmed payload length. */
+function alignOverlayY(y: (number | null)[], target: number): (number | null)[] | null {
+  if (y.length === target) return y;
+  if (y.length > target) return y.slice(0, target);
+  return null;
+}
+
 /** Append a fit curve as an extra series, but only when the overlay belongs to
- *  the active dataset and aligns to the plotted x (same point count). Otherwise
- *  return the payload unchanged — a stale/mismatched fit silently drops out. */
+ *  the active dataset and can align to the plotted x. Otherwise return the
+ *  payload unchanged — a genuinely mismatched fit silently drops out. */
 export function withFitOverlay(
   payload: PlotPayload,
   overlay: FitOverlay | null,
   activeId: string | null,
 ): PlotPayload {
   if (!overlay || overlay.datasetId !== activeId) return payload;
-  if (overlay.y.length !== payload.data[0].length) return payload;
+  const y = alignOverlayY(overlay.y, payload.data[0].length);
+  if (y === null) return payload;
   return {
     ...payload,
-    data: [...payload.data, overlay.y] as uPlot.AlignedData,
+    data: [...payload.data, y] as uPlot.AlignedData,
     series: [...payload.series, { label: "fit", unit: "" }],
   };
 }
@@ -327,10 +342,11 @@ export function withBaselineOverlay(
   activeId: string | null,
 ): PlotPayload {
   if (!overlay || overlay.datasetId !== activeId) return payload;
-  if (overlay.y.length !== payload.data[0].length) return payload;
+  const y = alignOverlayY(overlay.y, payload.data[0].length);
+  if (y === null) return payload;
   return {
     ...payload,
-    data: [...payload.data, overlay.y] as uPlot.AlignedData,
+    data: [...payload.data, y] as uPlot.AlignedData,
     series: [...payload.series, { label: "baseline", unit: "" }],
   };
 }
@@ -342,10 +358,11 @@ export function withPeakOverlay(
   activeId: string | null,
 ): PlotPayload {
   if (!overlay || overlay.datasetId !== activeId) return payload;
-  if (overlay.y.length !== payload.data[0].length) return payload;
+  const y = alignOverlayY(overlay.y, payload.data[0].length);
+  if (y === null) return payload;
   return {
     ...payload,
-    data: [...payload.data, overlay.y] as uPlot.AlignedData,
+    data: [...payload.data, y] as uPlot.AlignedData,
     series: [...payload.series, { label: "peaks", unit: "", kind: "points" }],
   };
 }

@@ -1052,10 +1052,32 @@ export const useApp = create<AppState>((set, get) => ({
         if (d.id !== id || !d.formulas) return d;
         const base = baseColumns(d.data, d.formulas.length);
         const formulas = d.formulas.filter((_, i) => i !== index);
+        // Computed columns are the LAST formulas.length value columns, in order,
+        // so the removed one is column (baseCount + index); every later column
+        // shifts down by one. Remap the index-keyed metadata so a role/type/
+        // filter set on a later computed column keeps pointing at the right
+        // column instead of its shifted neighbour (or a now-nonexistent index).
+        const removedCol = base.labels.length + index;
+        const remapKeyed = <T,>(rec?: Record<number, T>): Record<number, T> | undefined => {
+          if (!rec) return rec;
+          const out: Record<number, T> = {};
+          for (const [k, v] of Object.entries(rec)) {
+            const c = Number(k);
+            if (c === removedCol) continue; // the removed column's entry is gone
+            out[c > removedCol ? c - 1 : c] = v;
+          }
+          return Object.keys(out).length ? out : undefined;
+        };
+        const filter = d.filter
+          ?.filter((f) => f.col !== removedCol)
+          .map((f) => (f.col > removedCol ? { ...f, col: f.col - 1 } : f));
         return {
           ...d,
           formulas: formulas.length ? formulas : undefined,
           data: applyFormulas(base, formulas),
+          channelRoles: remapKeyed(d.channelRoles),
+          channelTypes: remapKeyed(d.channelTypes),
+          filter: filter && filter.length ? filter : undefined,
         };
       }),
     })),
@@ -1142,12 +1164,31 @@ export const useApp = create<AppState>((set, get) => ({
     }
     try {
       const corrected = await applyCorrectionsApi(req);
+      // excludedRows are raw row INDICES into ds.data; an xTrim shrinks/shifts
+      // the rows (corrections.py step 1), so carrying stale indices forward would
+      // exclude the WRONG rows (or silently lose the exclusion). Drop them when
+      // the row count changes rather than corrupt the analysis view.
+      const rowsChanged = corrected.time.length !== ds.data.time.length;
       // Recompute any computed columns from the freshly-corrected base.
       set((s) => ({
         datasets: s.datasets.map((d) =>
-          d.id === id ? recompute({ ...d, data: corrected, raw, corrections: params, bgRef }) : d,
+          d.id === id
+            ? recompute({
+                ...d,
+                data: corrected,
+                raw,
+                corrections: params,
+                bgRef,
+                ...(rowsChanged ? { excludedRows: undefined } : {}),
+              })
+            : d,
         ),
       }));
+      if (rowsChanged && ds.excludedRows?.length) {
+        get().setStatus(
+          "Row exclusions cleared: a trim changed the row count, so the saved row indices no longer apply.",
+        );
+      }
       get().recordMacro(
         `Corrections → ${ds.name}`,
         bgDs
@@ -1163,11 +1204,19 @@ export const useApp = create<AppState>((set, get) => ({
   resetCorrections: (id) => {
     const ds = get().datasets.find((d) => d.id === id);
     set((s) => ({
-      datasets: s.datasets.map((d) =>
-        d.id === id && d.raw
-          ? recompute({ ...d, data: d.raw, raw: undefined, corrections: undefined, bgRef: undefined })
-          : d,
-      ),
+      datasets: s.datasets.map((d) => {
+        if (d.id !== id || !d.raw) return d;
+        // Reverting a trim restores rows, so index-based excludedRows are stale.
+        const rowsChanged = d.raw.time.length !== d.data.time.length;
+        return recompute({
+          ...d,
+          data: d.raw,
+          raw: undefined,
+          corrections: undefined,
+          bgRef: undefined,
+          ...(rowsChanged ? { excludedRows: undefined } : {}),
+        });
+      }),
     }));
     if (ds?.raw) get().recordMacro(`Reset corrections → ${ds.name}`, `qz.resetCorrections(${lit(ds.name)})`);
   },

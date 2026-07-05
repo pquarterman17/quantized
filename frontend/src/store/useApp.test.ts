@@ -93,6 +93,36 @@ describe("useApp corrections", () => {
     expect(useApp.getState().status).toContain("corrections failed");
   });
 
+  it("clears stale excludedRows when a correction changes the row count (xTrim)", async () => {
+    // excludedRows are raw row INDICES; an xTrim shrinks the rows so a stale
+    // index would exclude the wrong row (or nothing). It must be dropped.
+    const trimmed: DataStruct = { ...raw, time: [2, 3], values: [[20], [30]] };
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(trimmed);
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x", data: raw, excludedRows: [2] }],
+      activeId: "d1",
+    });
+
+    await useApp.getState().applyCorrections("d1", { xTrimMin: 1.5 });
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.data.time).toEqual([2, 3]);
+    expect(ds.excludedRows).toBeUndefined();
+    expect(useApp.getState().status).toContain("Row exclusions cleared");
+  });
+
+  it("keeps excludedRows when the correction preserves the row count", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...raw, values: [[5], [15], [25]] });
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x", data: raw, excludedRows: [1] }],
+      activeId: "d1",
+    });
+
+    await useApp.getState().applyCorrections("d1", { yOff: 5 });
+
+    expect(useApp.getState().datasets[0].excludedRows).toEqual([1]);
+  });
+
   it("forwards a reference-background dataset + interp and records bgRef", async () => {
     const bg: DataStruct = { ...raw, values: [[1], [1], [1]] };
     vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...raw, values: [[9], [19], [29]] });
@@ -1542,5 +1572,45 @@ describe("useApp folder tree (project-organization item 1)", () => {
     const { folders } = useApp.getState();
     expect(folders.find((f) => f.id === a)!.name).toBe("XRD 2024");
     expect(folders.find((f) => f.id === b)!.parentId).toBe(a);
+  });
+});
+
+describe("useApp removeFormula column remap", () => {
+  it("remaps channelRoles + filter when removing a non-last computed column", () => {
+    // Base column m (col 0) + two computed columns F1 (col 1), F2 (col 2).
+    const data: DataStruct = {
+      time: [1, 2, 3],
+      values: [
+        [10, 20, 30],
+        [20, 40, 60],
+        [30, 60, 90],
+      ],
+      labels: ["m", "F1", "F2"],
+      units: ["emu", "", ""],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "x",
+          data,
+          formulas: [
+            { name: "F1", expr: "m*2" },
+            { name: "F2", expr: "m*3" },
+          ],
+          channelRoles: { 2: "ignore" }, // role tags F2 (column 2)
+          filter: [{ col: 2, kind: "range", min: 0 }], // filter on F2
+        },
+      ],
+      activeId: "d1",
+    });
+
+    useApp.getState().removeFormula("d1", 0); // remove F1 -> F2 shifts column 2 -> 1
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.data.labels).toEqual(["m", "F2"]);
+    expect(ds.channelRoles).toEqual({ 1: "ignore" }); // remapped 2 -> 1, not stale
+    expect(ds.filter).toEqual([{ col: 1, kind: "range", min: 0 }]);
   });
 });
