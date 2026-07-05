@@ -1,6 +1,6 @@
 [package]
 name = "quantized-shell"
-version = "0.2.2"
+version = "0.2.3"
 description = "Quantized desktop shell (Tauri 2 window over the local FastAPI server)"
 license = "Apache-2.0"
 edition = "2021"
