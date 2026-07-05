@@ -9,6 +9,13 @@ import { cloneDataStruct } from "../lib/dataset";
 import { setFormatOpts, type Notation } from "../lib/format";
 import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit, macroStep, type MacroStep } from "../lib/macro";
+import {
+  createFolder as treeCreateFolder,
+  deleteFolder as treeDeleteFolder,
+  moveDatasetToFolder as treeMoveDatasetToFolder,
+  moveFolder as treeMoveFolder,
+  renameFolder as treeRenameFolder,
+} from "../lib/foldertree";
 import { is2DMap } from "../lib/mapdata";
 import { mergeDatasets } from "../lib/merge";
 import {
@@ -42,6 +49,7 @@ import type {
   DataFilter,
   Dataset,
   FitOverlay,
+  FolderNode,
   ModelingType,
   OriginFigure,
   PeakOverlay,
@@ -66,6 +74,7 @@ let _annSeq = 0;
 
 let _idSeq = 0;
 const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
+const nextFolderId = (): string => `fld-${Date.now().toString(36)}-${++_idSeq}`;
 
 export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
@@ -135,6 +144,10 @@ interface AppState {
   // the dataset id it plots. `datasetId` is null when the figure's loose
   // source reference didn't resolve — the Library shows those disabled.
   originFigures: OriginFigureEntry[];
+  // Library folder tree (project-organization plan, Approach B). Pure
+  // organization over the flat `datasets[]` array — datasets point in via
+  // `Dataset.folderId`; folders never gate row-state. Round-trips .dwk v2.
+  folders: FolderNode[];
   leftCollapsed: boolean;
   rightCollapsed: boolean;
   stageTab: StageTab;
@@ -257,6 +270,13 @@ interface AppState {
   addDatasetTag: (id: string, tag: string) => void;
   removeDatasetTag: (id: string, tag: string) => void;
   setDatasetGroup: (id: string, group: string) => void;
+  // Folder tree (project-organization plan item 1). Thin wrappers over
+  // lib/foldertree; datasets stay a flat array (membership is Dataset.folderId).
+  createFolder: (parentId: string | null, name?: string) => string;
+  renameFolder: (id: string, name: string) => void;
+  deleteFolder: (id: string, mode?: "reparent" | "cascade") => void;
+  moveFolder: (id: string, newParentId: string | null, beforeId?: string) => void;
+  moveDatasetToFolder: (id: string, folderId: string | null, beforeId?: string) => void;
   applyCorrections: (
     id: string,
     params: CorrectionParams,
@@ -495,6 +515,7 @@ export const useApp = create<AppState>((set, get) => ({
   activeId: null,
   selectedIds: [],
   originFigures: [],
+  folders: [],
   leftCollapsed: false,
   rightCollapsed: false,
   stageTab: "plot",
@@ -1042,6 +1063,22 @@ export const useApp = create<AppState>((set, get) => ({
         d.id === id ? { ...d, group: group.trim() ? group.trim() : undefined } : d,
       ),
     })),
+
+  // ── Folder tree (project-organization plan item 1) ──────────────────────
+  // All five delegate to the pure lib/foldertree ops; the store only supplies
+  // ids and threads state. deleteFolder re-homes datasets (never destroys them).
+  createFolder: (parentId, name = "New Folder") => {
+    const id = nextFolderId();
+    set((s) => ({ folders: treeCreateFolder(s.folders, parentId, name, id) }));
+    return id;
+  },
+  renameFolder: (id, name) => set((s) => ({ folders: treeRenameFolder(s.folders, id, name) })),
+  deleteFolder: (id, mode = "reparent") =>
+    set((s) => treeDeleteFolder(s.folders, s.datasets, id, mode)),
+  moveFolder: (id, newParentId, beforeId) =>
+    set((s) => ({ folders: treeMoveFolder(s.folders, id, newParentId, beforeId) })),
+  moveDatasetToFolder: (id, folderId, beforeId) =>
+    set((s) => ({ datasets: treeMoveDatasetToFolder(s.datasets, id, folderId, beforeId) })),
 
   // Corrections always apply to the pristine `raw`, never to an already-
   // corrected `data` (the MATLAB pipeline is replace, not accumulate). The

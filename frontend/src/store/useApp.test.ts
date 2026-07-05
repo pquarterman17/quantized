@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
 import { effectiveChannels } from "../lib/plotdata";
-import type { DataStruct } from "../lib/types";
+import type { Dataset, DataStruct } from "../lib/types";
 import { useApp } from "./useApp";
 
 vi.mock("../lib/api", () => ({ applyCorrections: vi.fn(), uploadFile: vi.fn() }));
@@ -1426,5 +1426,58 @@ describe("useApp row selection (#50 selection dimension)", () => {
     useApp.setState({ selection: { datasetId: "other", rows: [0] } });
     useApp.getState().excludeSelectedRows(); // stale → no-op
     expect(excludedOf("d1")).toBeUndefined();
+  });
+});
+
+describe("useApp folder tree (project-organization item 1)", () => {
+  const mkDs = (id: string): Dataset => ({
+    id,
+    name: id,
+    data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: {} },
+  });
+
+  beforeEach(() => useApp.setState({ datasets: [], folders: [], activeId: null, selectedIds: [] }));
+
+  it("createFolder appends a folder and returns its id", () => {
+    const id = useApp.getState().createFolder(null, "XRD");
+    const { folders } = useApp.getState();
+    expect(folders).toHaveLength(1);
+    expect(folders[0]).toMatchObject({ id, name: "XRD", parentId: null });
+  });
+
+  it("moveDatasetToFolder sets the dataset's folderId", () => {
+    useApp.setState({ datasets: [mkDs("d1")] });
+    const fid = useApp.getState().createFolder(null, "F");
+    useApp.getState().moveDatasetToFolder("d1", fid);
+    expect(useApp.getState().datasets[0].folderId).toBe(fid);
+  });
+
+  it("deleteFolder (reparent) re-homes its datasets to root, never deleting them", () => {
+    useApp.setState({ datasets: [mkDs("d1")] });
+    const fid = useApp.getState().createFolder(null, "F");
+    useApp.getState().moveDatasetToFolder("d1", fid);
+    useApp.getState().deleteFolder(fid);
+    expect(useApp.getState().folders).toHaveLength(0);
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().datasets[0].folderId).toBeUndefined();
+  });
+
+  it("removing a dataset never dangles a folder ref (membership is on the dataset)", () => {
+    useApp.setState({ datasets: [mkDs("d1"), mkDs("d2")] });
+    const fid = useApp.getState().createFolder(null, "F");
+    useApp.getState().moveDatasetToFolder("d1", fid);
+    useApp.getState().removeDataset("d1");
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["d2"]);
+    expect(useApp.getState().folders).toHaveLength(1); // folder still valid, just empty
+  });
+
+  it("renameFolder + moveFolder nest and rename", () => {
+    const a = useApp.getState().createFolder(null, "A");
+    const b = useApp.getState().createFolder(null, "B");
+    useApp.getState().renameFolder(a, "XRD 2024");
+    useApp.getState().moveFolder(b, a); // nest B under A
+    const { folders } = useApp.getState();
+    expect(folders.find((f) => f.id === a)!.name).toBe("XRD 2024");
+    expect(folders.find((f) => f.id === b)!.parentId).toBe(a);
   });
 });
