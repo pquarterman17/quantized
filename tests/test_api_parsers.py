@@ -158,3 +158,24 @@ def test_upload_origin_project_returns_all_books(tmp_path):
     resp2 = client.post("/api/parsers/upload", files={"file": ("plain.csv", csv, "text/csv")})
     assert resp2.status_code == 200
     assert "books" not in resp2.json()
+
+
+@pytest.mark.realdata
+def test_every_origin_corpus_file_imports_without_crashing(corpus_dir: Path) -> None:
+    """Every real ``.opj``/``.opju`` in the corpus must import through the route
+    with HTTP 200 — an integration crash-safety guard over the whole Origin
+    pipeline (decode + figures + folder tree). Regression guard for the
+    deep-nesting RecursionError and the EOF Y-transition-marker IndexError,
+    both of which 500'd this route before being fixed. Auto-skips in CI
+    (corpus is local-only)."""
+    origin = corpus_dir / "origin"
+    if not origin.is_dir():
+        pytest.skip("origin corpus subdir absent")
+    files = sorted(p for ext in ("*.opj", "*.opju") for p in origin.glob(ext))
+    assert files, "no Origin corpus files found under test-data/origin"
+    failures = []
+    for p in files:
+        resp = client.post("/api/parsers/import", json={"path": str(p)})
+        if resp.status_code != 200:
+            failures.append(f"{p.name}: HTTP {resp.status_code} — {resp.text[:120]}")
+    assert not failures, "Origin imports that did not return 200:\n" + "\n".join(failures)
