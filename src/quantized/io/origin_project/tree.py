@@ -61,14 +61,25 @@ rebuilt from the *preorder + per-folder child count* (a structural
 invariant — arbitrary depth, empty folders, and duplicate/unicode/spaced
 names all parse), validated byte-exact against live COM on 11 controlled
 specimens (flat, sibling, nested, 3-level, skipped/reordered ordinals, a
-graph inside a folder, an empty folder). The **older 4.3380 CPYUA**
-container (the current sample corpus) stores folder membership *outside* the
-binary folder record — its folder record lacks the ``ub`` window list
-entirely — and is NOT yet decoded; such files degrade cleanly to a flat
-import (every book ``origin_folder_path: []``) because the 4.3811 grammar's
-anchors are simply absent, never mis-parsed. This is fail-closed by
-construction: any framing/consistency mismatch returns ``{}``, never a
-guess.
+graph inside a folder, an empty folder).
+
+The **older 4.3380 CPYUA** container (the current sample corpus) uses the
+*same* entry/nsub/ordinal encoding, but the count sits after a variable
+properties + ``<OriginStorage.../>`` block instead of the fixed ``ub``
+anchor, and the subfolder separator is the longer ``80 16 03 00 00 01 8a
+10``. Because the shipped decoder anchors on ``ub`` (absent there), 4.3380
+files fall through to ``{}`` and degrade to a flat import — never a
+mis-parse. It is deliberately NOT decoded yet: a prototype unified parser
+(entry-validated count finder + two-form SEP + length-checked window
+enumerator) decoded 4 of 5 corpus files (incl. nested), but the 39-book
+``Hc2 data.opju`` exposed that the window-header shape ``80 <type>
+<namelen+2> 00 00 <name> <hi> 0C`` also matches ~2x as many lookalike
+records (columns/references), and the count scan hit false positives
+(out-of-range ordinals) — so it would silently assign books to the wrong
+folder on complex projects. That is exactly the overfitting trap (passes
+the simple samples, wrong on a real one), so 4.3380 stays fail-closed until
+a tighter true-window-header anchor is found. Fail-closed by construction:
+any framing/consistency mismatch returns ``{}``, never a guess.
 """
 
 from __future__ import annotations
