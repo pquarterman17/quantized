@@ -43,6 +43,49 @@ describe("useApp reflectivity seed (SLD→reflectivity hook)", () => {
   });
 });
 
+describe("clearAll (File ▸ Remove all)", () => {
+  it("wipes datasets, folders, figures, selection, and active", () => {
+    useApp.setState({
+      datasets: [
+        { id: "a", name: "a", data: raw, folderId: "f1" },
+        { id: "b", name: "b", data: raw },
+      ],
+      folders: [{ id: "f1", name: "Proj", parentId: null, order: 0 }],
+      expandedFolders: ["f1"],
+      originFigures: [
+        {
+          id: "g1",
+          stem: "Proj",
+          datasetId: "a",
+          siblingIds: ["a"],
+          figure: {
+            name: "G",
+            x_from: 0,
+            x_to: 1,
+            x_log: false,
+            y_from: 0,
+            y_to: 1,
+            y_log: false,
+            n_curves: 1,
+            annotations: [],
+          },
+        },
+      ],
+      activeId: "a",
+      selectedIds: ["a", "b"],
+    });
+    useApp.getState().clearAll();
+    const s = useApp.getState();
+    expect(s.datasets).toEqual([]);
+    expect(s.folders).toEqual([]);
+    expect(s.expandedFolders).toEqual([]);
+    expect(s.originFigures).toEqual([]);
+    expect(s.activeId).toBeNull();
+    expect(s.selectedIds).toEqual([]);
+    expect(s.status).toMatch(/removed all/i);
+  });
+});
+
 describe("useApp corrections", () => {
   it("applies params to raw and replaces displayed data", async () => {
     const corrected: DataStruct = { ...raw, values: [[5], [15], [25]] };

@@ -11,6 +11,7 @@ import StatusBar from "./components/Shell/StatusBar";
 import TitleBar from "./components/Shell/TitleBar";
 import Stage from "./components/Stage/Stage";
 import CommandPalette, { type Action } from "./components/overlays/CommandPalette";
+import ConfirmDialog, { askConfirm } from "./components/overlays/ConfirmDialog";
 import ParamDialog, { askParams } from "./components/overlays/ParamDialog";
 import PreferencesDialog from "./components/overlays/PreferencesDialog";
 import ShortcutsDialog from "./components/overlays/ShortcutsDialog";
@@ -342,6 +343,29 @@ export default function App() {
         run: () => {
           clearAutosave();
           s().setStatus("autosaved workspace cleared (current library unchanged)");
+        },
+      },
+      {
+        id: "remove-all",
+        group: "File",
+        label: "Remove all…",
+        run: () => {
+          const n = s().datasets.length;
+          if (n === 0) {
+            s().setStatus("library is already empty");
+            return;
+          }
+          void askConfirm(
+            "Remove everything?",
+            `This removes all ${n} dataset${n === 1 ? "" : "s"}, plus every folder and ` +
+              `imported figure. This can't be undone.`,
+            "Remove all",
+            true,
+          ).then((ok) => {
+            if (!ok) return;
+            s().clearAll();
+            toast("removed all datasets", "ok");
+          });
         },
       },
       {
@@ -757,6 +781,7 @@ export default function App() {
       <StatusBar />
       <CommandPalette actions={actions} />
       <ParamDialog />
+      <ConfirmDialog />
       <TooltipLayer />
       {curveFitOpen && <CurveFitPanel />}
       {hysteresisOpen && <HysteresisPanel />}

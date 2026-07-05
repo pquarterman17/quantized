@@ -263,6 +263,9 @@ interface AppState {
   // Bulk-remove by explicit id list (item 17's book-family filter dialog) —
   // distinct from removeSelected, which acts on the transient row selection.
   removeDatasets: (ids: string[]) => void;
+  // Wipe the whole library (datasets + folders + figures + selection + view
+  // state) — the File ▸ Remove all command; reuses loadWorkspace's reset.
+  clearAll: () => void;
   // Concatenate the multi-selected datasets (≥2) row-wise into a new dataset.
   mergeSelected: () => void;
   duplicateDataset: (id: string) => void;
@@ -911,6 +914,22 @@ export const useApp = create<AppState>((set, get) => ({
       const originFigures = pruneOriginFigureRefs(s.originFigures, drop);
       return { datasets, activeId, selectedIds, originFigures };
     }),
+
+  // Wipe the entire library. Reuses loadWorkspace's "replace everything" reset
+  // (clears per-dataset view state, overlays, styles, folders, figures) with an
+  // empty workspace, so nothing stale survives; autosave self-clears on the
+  // resulting empty-datasets state.
+  clearAll: () => {
+    get().loadWorkspace({
+      datasets: [],
+      folders: [],
+      activeId: null,
+      selectedIds: [],
+      expandedFolders: [],
+      originFigures: [],
+    });
+    set({ status: "removed all datasets, folders, and figures" });
+  },
 
   // Concatenate the selected datasets (in selection order) row-wise into one new
   // library dataset. Needs ≥2 with a matching column count (mergeDatasets guards).
