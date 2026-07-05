@@ -69,6 +69,7 @@ export function buildOverlayDataset(
     label: string;
     unit: string;
     style: SeriesStyle | null; // decoded line/scatter, per curve
+    designation: string; // the source column's Origin designation (Y / Y-error / …)
   }
   const bound: Bound[] = [];
   for (const c of figure.curves ?? []) {
@@ -81,6 +82,7 @@ export function buildOverlayDataset(
     if (yCh < 0) continue; // dropped/undecoded column — skip honestly
     const xCh = c.x ? channelOf(meta, c.x) : -2;
     const label = ds.data.labels[yCh] || c.y;
+    const cd = meta.column_designations as Record<string, unknown> | undefined;
     bound.push({
       ds,
       xCh: xCh === -1 ? -2 : xCh,
@@ -88,6 +90,7 @@ export function buildOverlayDataset(
       label: `${c.book}: ${label}`,
       unit: ds.data.units[yCh] ?? "",
       style: originCurveSeriesStyle(c.style),
+      designation: cd ? String(cd[c.y] ?? "Y") : "Y",
     });
   }
   if (bound.length < 2) return null;
@@ -143,6 +146,12 @@ export function buildOverlayDataset(
       // so applyOriginFigure can restore the figure's look — carried in metadata
       // so it survives the overlay-reuse path too.
       origin_curve_styles: bound.map((b) => b.style),
+      // Carry each column's source Origin designation (as synthetic per-column
+      // keys), so the same error/secondary-X hiding the default view applies runs
+      // on the overlay too (setActive → originHiddenChannels): an error column
+      // like dSA feeds/whiskers, never a stray line, even in a cross-book figure.
+      origin_column_names: bound.map((_, i) => `c${i}`),
+      column_designations: Object.fromEntries(bound.map((b, i) => [`c${i}`, b.designation])),
       origin_overlay_books: blocks.map((d) =>
         String((d.data.metadata ?? {}).origin_book ?? d.name),
       ),

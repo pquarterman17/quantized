@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { originErrKeys, originHiddenChannels } from "./errorbars";
 import { buildOverlayDataset, overlayBooks, overlayCurveStyles } from "./originOverlay";
 import type { Dataset, OriginFigure } from "./types";
 
@@ -101,6 +102,51 @@ describe("buildOverlayDataset", () => {
   it("overlayCurveStyles is empty for a non-overlay dataset", () => {
     expect(overlayCurveStyles(b1.data)).toEqual({});
     expect(overlayCurveStyles(null)).toEqual({});
+  });
+
+  it("stamps per-column designations so error columns hide + pair on the overlay", () => {
+    // Two books, each a Y data column + its adjacent Y-error, plotted together —
+    // the shape of a cross-book reflectometry figure (SA + dSA per book).
+    const mk = (id: string, bk: string, y: number[], dy: number[]): Dataset => ({
+      id,
+      name: `R:${bk}`,
+      data: {
+        time: [1, 2],
+        values: [
+          [y[0], dy[0]],
+          [y[1], dy[1]],
+        ],
+        labels: ["SA", "dSA"],
+        units: ["", ""],
+        metadata: {
+          origin_book: bk,
+          x_column_name: "A",
+          origin_column_names: ["B", "C"],
+          column_designations: { A: "X", B: "Y", C: "Y-error" },
+        },
+      },
+    });
+    const bA = mk("a", "BookA", [1, 2], [0.1, 0.2]);
+    const bB = mk("b", "BookB", [3, 4], [0.3, 0.4]);
+    const fig = figure([
+      { book: "BookA", x: "A", y: "B" }, // c0 = SA_A
+      { book: "BookA", x: "A", y: "C" }, // c1 = dSA_A (adjacent after its SA)
+      { book: "BookB", x: "A", y: "B" }, // c2 = SA_B
+      { book: "BookB", x: "A", y: "C" }, // c3 = dSA_B
+    ]);
+    const ds = buildOverlayDataset(fig, [bA, bB]);
+    expect(ds).not.toBeNull();
+    expect(ds!.metadata.origin_column_names).toEqual(["c0", "c1", "c2", "c3"]);
+    expect(ds!.metadata.column_designations).toEqual({
+      c0: "Y",
+      c1: "Y-error",
+      c2: "Y",
+      c3: "Y-error",
+    });
+    // The same default-view rules now run on the overlay: error columns hidden,
+    // and each dSA pairs to its own SA (left-neighbor, book-grouped order).
+    expect(originHiddenChannels(ds!)).toEqual([1, 3]);
+    expect(originErrKeys(ds!)).toEqual({ 0: 1, 2: 3 });
   });
 
   it("preserves non-monotonic x order inside a segment (hysteresis-loop safe)", () => {
