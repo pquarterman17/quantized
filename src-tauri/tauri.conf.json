@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Quantized",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "identifier": "app.quantized.desktop",
   "build": {
     "frontendDist": "../src/quantized/web"
@@ -44,7 +44,8 @@
     ],
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerHooks": "./nsis-hooks.nsh"
       }
     }
   }
