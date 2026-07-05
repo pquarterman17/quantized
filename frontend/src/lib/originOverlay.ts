@@ -79,6 +79,10 @@ export function buildOverlayDataset(
   // One x-block per participating dataset, in first-curve order.
   const blocks: Dataset[] = [];
   for (const b of bound) if (!blocks.includes(b.ds)) blocks.push(b.ds);
+  // Re-validate AFTER channel resolution: if the other book's curves all
+  // dropped (undecoded columns), the survivors can collapse onto a single
+  // book -- that's not an overlay, so fall through to plain channel selection.
+  if (blocks.length < 2) return null;
   const starts = new Map<string, number>();
   let total = 0;
   for (const d of blocks) {

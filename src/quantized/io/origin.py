@@ -12,6 +12,7 @@ deterministic (the route passes the wall-clock time; tests pass a fixed value).
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -108,6 +109,18 @@ def _plot_state_graph(
     if not y_indices:
         return ["", "// Create graph (current plot state): no channels selected -- skipped"]
 
+    # Validate channel indices up front: an out-of-range or negative index would
+    # otherwise emit a `plotxy` referencing a worksheet column that was never
+    # declared (or column 0 / a wrapped-around label), silently producing a
+    # broken .ogs. The route converts this ValueError to a 422.
+    n_ch = len(labels)
+    checked = [*y_indices, *graph.y2_keys, *([] if graph.x_key is None else [graph.x_key])]
+    out_of_range = sorted({k for k in checked if not 0 <= k < n_ch})
+    if out_of_range:
+        raise ValueError(
+            f"graph channel index out of range for {n_ch} channel(s): {out_of_range}"
+        )
+
     y2_set = set(graph.y2_keys)
     primary = [i for i in y_indices if i not in y2_set]
     secondary = [i for i in y_indices if i in y2_set]
@@ -131,11 +144,14 @@ def _plot_state_graph(
         o.append("layer.x.type = 1;  // Log X")
     if graph.y_log:
         o.append("layer.y.type = 1;  // Log Y")
-    if graph.x_lim is not None:
+    # Only emit finite limits -- NaN/Inf would format as invalid LabTalk
+    # literals (`layer.x.from = nan;`). A non-finite bound just omits the line,
+    # letting Origin auto-scale that axis.
+    if graph.x_lim is not None and all(math.isfinite(v) for v in graph.x_lim):
         lo, hi = graph.x_lim
         o.append(f"layer.x.from = {lo:.10g};")
         o.append(f"layer.x.to = {hi:.10g};")
-    if graph.y_lim is not None:
+    if graph.y_lim is not None and all(math.isfinite(v) for v in graph.y_lim):
         lo, hi = graph.y_lim
         o.append(f"layer.y.from = {lo:.10g};")
         o.append(f"layer.y.to = {hi:.10g};")

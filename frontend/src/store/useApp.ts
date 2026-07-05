@@ -659,15 +659,26 @@ export const useApp = create<AppState>((set, get) => ({
     // overlay dataset (owner decision) so the combined graph Origin showed is
     // reproduced in one plot; re-applying reuses the existing overlay.
     const overlayName = `${entry.stem}:${figureLabel(entry)} (overlay)`;
+    // Scope overlay resolution to THIS import's datasets: Origin's default book
+    // names (Book1/Book2/…) repeat across separate projects, so resolving
+    // against every dataset in the store would silently combine the wrong
+    // books. Reuse is keyed on the entry id (not the display name, which can
+    // collide across same-stem imports) so re-applying reuses only this
+    // figure's own overlay.
+    const siblings = get().datasets.filter((d) => entry.siblingIds.includes(d.id));
     const existing = get().datasets.find(
-      (d) => d.name === overlayName && (d.data.metadata ?? {}).origin_overlay === true,
+      (d) => (d.data.metadata ?? {}).origin_overlay_source === entry.id,
     );
-    const overlay = existing ? null : buildOverlayDataset(fig, get().datasets);
+    const overlay = existing ? null : buildOverlayDataset(fig, siblings);
     if (existing || overlay) {
       let targetId = existing?.id ?? null;
       if (!existing && overlay) {
         targetId = nextDatasetId();
-        get().addDataset({ id: targetId, name: overlayName, data: overlay });
+        const stamped = {
+          ...overlay,
+          metadata: { ...overlay.metadata, origin_overlay_source: entry.id },
+        };
+        get().addDataset({ id: targetId, name: overlayName, data: stamped });
         toast(`built overlay — ${overlay.labels.length} curves`, "ok");
       }
       if (targetId) {
@@ -706,7 +717,14 @@ export const useApp = create<AppState>((set, get) => ({
           xLog: lower.figure.x_log,
           yLog: lower.figure.y_log,
           xKey: baseSel.xKey,
-          yKeys: baseSel.yKeys,
+          // The plotted-channel list derives from yKeys ALONE (y2Keys only tags
+          // which of them sit on the right axis), so yKeys must be the UNION of
+          // both layers' channels (lower layer first) or layer-2's curves never
+          // render. The filter also dedupes a y2 channel that overlaps primary.
+          yKeys: [
+            ...baseSel.yKeys,
+            ...partnerSel.yKeys.filter((k) => !baseSel.yKeys.includes(k)),
+          ],
           y2Keys: partnerSel.yKeys,
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);

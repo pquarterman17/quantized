@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
+import { effectiveChannels } from "../lib/plotdata";
 import type { DataStruct } from "../lib/types";
 import { useApp } from "./useApp";
 
@@ -746,6 +747,7 @@ describe("useApp applyOriginFigure (item 18)", () => {
     id: "fig-XRD-0",
     stem: "XRD",
     datasetId: "d2",
+    siblingIds: ["d2"],
     figure: {
       name: "Graph1",
       x_from: 18,
@@ -819,6 +821,7 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
     id: "fig-XRD-0",
     stem: "XRD",
     datasetId: "d2",
+    siblingIds: ["d2"],
     figure: {
       name: "Graph7",
       layer: 1,
@@ -837,6 +840,7 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
     id: "fig-XRD-1",
     stem: "XRD",
     datasetId: "d2",
+    siblingIds: ["d2"],
     figure: {
       name: "Graph7",
       layer: 2,
@@ -869,12 +873,16 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
     });
   });
 
-  it("applying layer 1 sets yKeys from layer 1 and y2Keys from layer 2, axes from layer 1", () => {
+  it("applying layer 1 plots the UNION of both layers, y2Keys tags layer 2's on the right", () => {
     useApp.getState().applyOriginFigure("fig-XRD-0");
     const s = useApp.getState();
     expect(s.activeId).toBe("d2");
-    expect(s.yKeys).toEqual([0]);
+    // yKeys is the union (layer 1 first, then layer 2) so layer-2 curves render;
+    // y2Keys tags which of them sit on the right axis. effectiveChannels (the
+    // real plotted set) derives from yKeys, so it must include 1 and 2.
+    expect(s.yKeys).toEqual([0, 1, 2]);
     expect(s.y2Keys).toEqual([1, 2]);
+    expect(effectiveChannels(doubleYData, s.yKeys, s.xKey)).toEqual([0, 1, 2]);
     expect(s.xLim).toEqual([0, 10]);
     expect(s.yLim).toEqual([0, 50]); // layer 1's own range, not layer 2's
   });
@@ -883,8 +891,8 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
     useApp.getState().applyOriginFigure("fig-XRD-1");
     const s = useApp.getState();
     expect(s.activeId).toBe("d2");
-    expect(s.yKeys).toEqual([0]); // still layer 1 on y ...
-    expect(s.y2Keys).toEqual([1, 2]); // ... and layer 2 on y2
+    expect(s.yKeys).toEqual([0, 1, 2]); // union, layer 1 first ...
+    expect(s.y2Keys).toEqual([1, 2]); // ... and layer 2 tagged onto y2
     expect(s.yLim).toEqual([0, 50]); // axes always come from the lower layer
   });
 
@@ -957,6 +965,7 @@ describe("useApp removeDatasets (item 17 book-family filter)", () => {
           id: "fig-XRD-0",
           stem: "XRD",
           datasetId: "b2",
+          siblingIds: ["b1", "b2"],
           figure: {
             name: "Graph1",
             x_from: 0,

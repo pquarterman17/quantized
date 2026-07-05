@@ -252,7 +252,11 @@ def _build_book(
         "origin_books": inventory,
         "x_column_name": ordered[0][0] if ordered else "A",
         "x_column_long": _label_for(ordered[0][0], x_meta) if ordered else "",
+        # `x_unit` is the Origin-subsystem key (writer/COM read it); also emit
+        # the canonical `x_column_unit` every other parser uses so the plot +
+        # .ogs export layers (which read `x_column_unit`) show the x-axis unit.
         "x_unit": x_meta.unit if x_meta is not None else "",
+        "x_column_unit": x_meta.unit if x_meta is not None else "",
         # Origin short names of the value columns, in channel order — lets a
         # figure's curve->column binding (opju_curves) map onto `.values`.
         "origin_column_names": value_cols,

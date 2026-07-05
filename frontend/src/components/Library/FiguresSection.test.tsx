@@ -36,6 +36,7 @@ describe("FiguresSection", () => {
           id: "fig-XRD-0",
           stem: "XRD",
           datasetId: "d1",
+          siblingIds: ["d1"],
           figure: {
             name: "Graph1",
             x_from: 18,
@@ -70,6 +71,7 @@ describe("FiguresSection", () => {
           id: "fig-XRD-1",
           stem: "XRD",
           datasetId: null,
+          siblingIds: [],
           figure: {
             name: "Graph2",
             x_from: 0,
@@ -98,6 +100,7 @@ describe("FiguresSection", () => {
           id: "fig-XRD-0",
           stem: "XRD",
           datasetId: "d1",
+          siblingIds: ["d1"],
           figure: {
             name: "Graph1",
             x_from: 0,

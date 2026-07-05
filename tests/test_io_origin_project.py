@@ -185,6 +185,9 @@ def test_windows_section_supplies_names_units_and_x_designation(tmp_path) -> Non
     assert ds.units == ("emu",)
     assert ds.metadata["x_column_long"] == "Field"
     assert ds.metadata["x_unit"] == "Oe"
+    # Canonical downstream key (plot + .ogs export read `x_column_unit`), mirrors
+    # `x_unit` so the x-axis unit isn't silently blank on Origin-project plots.
+    assert ds.metadata["x_column_unit"] == "Oe"
     assert ds.metadata["column_designations"] == {"A": "X", "B": "Y"}
     # value-channel letters in channel order (curve->column binding support)
     assert ds.metadata["x_column_name"] == "A"

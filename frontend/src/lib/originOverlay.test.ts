@@ -104,6 +104,18 @@ describe("buildOverlayDataset", () => {
     expect(buildOverlayDataset(fig, [b1, b2])).toBeNull();
   });
 
+  it("returns null when survivors collapse onto a single book (other book's column undecoded)", () => {
+    // 2 curves survive, but both are Book1's — Book2's column never decoded, so
+    // this isn't really an overlay. Must fall through to plain channel selection.
+    const bc = book("d4", "Book1", [1, 2, 3], { B: [10, 20, 30], C: [11, 21, 31] });
+    const fig = figure([
+      { book: "Book1", x: "A", y: "B" },
+      { book: "Book1", x: "A", y: "C" }, // 2 survivors, same book
+      { book: "Book2", x: "A", y: "Z" }, // undecoded column -> dropped
+    ]);
+    expect(buildOverlayDataset(fig, [bc, b2])).toBeNull();
+  });
+
   it("uses a non-default x channel for a block when the curve says so", () => {
     const fig = figure([
       { book: "Book2", x: "C", y: "B" }, // plot B against column C

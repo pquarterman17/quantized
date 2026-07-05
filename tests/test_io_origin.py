@@ -160,6 +160,36 @@ def test_origin_graph_y2_all_channels_falls_back_to_single_axis() -> None:
     assert "plotxy iy:=(1,2):(1,3) plot:=201 ogl:=[<new>];" in ogs
 
 
+def test_origin_graph_rejects_out_of_range_index() -> None:
+    # An out-of-range or negative channel index would emit a plotxy referencing
+    # a worksheet column that was never declared -> raise instead of a broken
+    # .ogs (the route turns this into a 422).
+    ds = _three_channel_ds()  # 3 value channels -> valid indices 0..2
+    bad_specs = [
+        GraphSpec(y_keys=(0, 7)),  # out of range
+        GraphSpec(y_keys=(0, -2)),  # negative
+        GraphSpec(x_key=9, y_keys=(0,)),  # bad x_key
+        GraphSpec(y_keys=(0,), y2_keys=(5,)),  # bad y2 index
+    ]
+    for bad in bad_specs:
+        with pytest.raises(ValueError, match="out of range"):
+            format_origin_script(ds, make_graph=True, graph=bad)
+
+
+def test_origin_graph_skips_non_finite_limits() -> None:
+    # NaN/Inf axis bounds must not format as invalid LabTalk literals -- the
+    # limit line is simply omitted (Origin auto-scales that axis).
+    ds = _three_channel_ds()
+    _, ogs = format_origin_script(
+        ds,
+        make_graph=True,
+        graph=GraphSpec(y_keys=(0,), x_lim=(float("nan"), 5.0), y_lim=(0.0, float("inf"))),
+    )
+    assert "nan" not in ogs and "inf" not in ogs
+    assert "layer.x.from" not in ogs  # x_lim had a NaN -> whole pair skipped
+    assert "layer.y.from" not in ogs  # y_lim had an Inf -> whole pair skipped
+
+
 def test_origin_graph_respects_make_graph_false() -> None:
     # make_graph=False suppresses the graph block even when a spec is given.
     ds = _three_channel_ds()

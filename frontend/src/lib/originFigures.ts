@@ -16,6 +16,11 @@ export interface OriginFigureEntry {
   stem: string;
   figure: OriginFigure;
   datasetId: string | null;
+  /** Dataset ids created by the SAME import as this figure. Cross-book overlay
+   *  resolution is scoped to these so a figure never pulls a same-named book
+   *  (Origin's default `Book1`/`Book2`/… repeat across separate projects) from
+   *  a different import. */
+  siblingIds: string[];
 }
 
 /** Best-effort match of a figure's loose `source_hint` against the datasets
@@ -91,11 +96,17 @@ export function buildOriginFigureEntries(
   figures: OriginFigure[],
   candidates: Dataset[],
 ): OriginFigureEntry[] {
+  const siblingIds = candidates.map((d) => d.id);
+  // Key the id on the first sibling dataset id (import-unique -- dataset ids are
+  // allocated monotonically) so two imports of a same-named file don't collide
+  // on `fig-<stem>-<i>` and silently apply / React-reconcile the wrong entry.
+  const importKey = siblingIds[0] ?? stem;
   return figures.map((figure, i) => ({
-    id: `fig-${stem}-${i}`,
+    id: `fig-${importKey}-${i}`,
     stem,
     figure,
     datasetId: resolveFigureDataset(figure, candidates),
+    siblingIds,
   }));
 }
 
@@ -116,7 +127,13 @@ export function doubleYPartner(
 ): OriginFigureEntry | null {
   const name = entry.figure.name;
   if (!name) return null;
-  const family = all.filter((e) => e.stem === entry.stem && e.figure.name === name);
+  // Same import (siblingIds[0] is the import key), same graph-window name.
+  // Scoping to the import stops two imports of a same-named file from inflating
+  // the family past 2 and disabling the double-Y offer.
+  const key = entry.siblingIds[0];
+  const family = all.filter(
+    (e) => e.stem === entry.stem && e.figure.name === name && e.siblingIds[0] === key,
+  );
   if (family.length !== 2) return null;
   const partner = family.find((e) => e.id !== entry.id);
   if (!partner) return null;

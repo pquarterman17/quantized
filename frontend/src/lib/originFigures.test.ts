@@ -156,25 +156,38 @@ describe("buildOriginFigureEntries", () => {
     expect(entries[0]).toMatchObject({ stem: "XRD", datasetId: "b1" });
     expect(entries[1]).toMatchObject({ stem: "XRD", datasetId: null });
     expect(new Set(entries.map((e) => e.id)).size).toBe(2); // stable, unique ids
+    // Each entry carries the import's sibling dataset ids (for overlay scoping).
+    expect(entries[0].siblingIds).toEqual(["b1", "b2"]);
+    expect(entries[1].siblingIds).toEqual(["b1", "b2"]);
+  });
+
+  it("gives two imports of a SAME-named file disjoint ids (no cross-import collision)", () => {
+    const figs = [figure({ name: "Graph1" })];
+    // Two separate imports of XRD.opj -> different dataset ids each time.
+    const a = buildOriginFigureEntries("XRD", figs, [book("a1", "XRD:Book1", { origin_book: "Book1" })]);
+    const b = buildOriginFigureEntries("XRD", figs, [book("b9", "XRD:Book1", { origin_book: "Book1" })]);
+    expect(a[0].id).not.toBe(b[0].id); // keyed on the import-unique sibling id
+    expect(a[0].siblingIds).toEqual(["a1"]);
+    expect(b[0].siblingIds).toEqual(["b9"]);
   });
 });
 
 describe("figureLabel", () => {
   it("suffixes layers >= 2 with the layer number", () => {
-    const entry = { id: "f1", stem: "M", datasetId: "b1", figure: figure({ name: "Graph4", layer: 2 }) };
+    const entry = { id: "f1", stem: "M", datasetId: "b1", siblingIds: [], figure: figure({ name: "Graph4", layer: 2 }) };
     expect(figureLabel(entry)).toBe("Graph4 · layer 2");
-    const l1 = { id: "f2", stem: "M", datasetId: "b1", figure: figure({ name: "Graph4", layer: 1 }) };
+    const l1 = { id: "f2", stem: "M", datasetId: "b1", siblingIds: [], figure: figure({ name: "Graph4", layer: 1 }) };
     expect(figureLabel(l1)).toBe("Graph4");
   });
 
 
   it("prefers a surviving annotation over the raw window name", () => {
-    const entry = { id: "f1", stem: "XRD", datasetId: "b1", figure: figure({ name: "Graph1", annotations: ["Si (004)"] }) };
+    const entry = { id: "f1", stem: "XRD", datasetId: "b1", siblingIds: [], figure: figure({ name: "Graph1", annotations: ["Si (004)"] }) };
     expect(figureLabel(entry)).toBe("Si (004)");
   });
 
   it("falls back to the window name with no annotations", () => {
-    const entry = { id: "f1", stem: "XRD", datasetId: "b1", figure: figure({ name: "Graph3", annotations: [] }) };
+    const entry = { id: "f1", stem: "XRD", datasetId: "b1", siblingIds: [], figure: figure({ name: "Graph3", annotations: [] }) };
     expect(figureLabel(entry)).toBe("Graph3");
   });
 });
@@ -187,10 +200,12 @@ describe("doubleYPartner", () => {
     layer: number,
     datasetId: string | null,
     curves: OriginCurve[] | undefined,
+    siblingIds: string[] = ["imp1"], // same import unless a test overrides
   ): OriginFigureEntry => ({
     id,
     stem: "Moke",
     datasetId,
+    siblingIds,
     figure: figure({ name: "Graph7", layer, curves }),
   });
 
