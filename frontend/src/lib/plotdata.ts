@@ -58,7 +58,12 @@ export function buildColumns(
   return {
     data: cols as uPlot.AlignedData,
     series: channels.map((c) => ({ label: ds.labels[c], unit: ds.units[c] ?? "", axis: y2.has(c) ? 1 : 0 })),
-    xLabel: xKey == null ? String(ds.metadata?.["x_column_name"] ?? "x") : (ds.labels[xKey] ?? "x"),
+    // Prefer the Origin long name ("Theta") over the raw column letter ("A")
+    // for the x-axis, matching what Origin shows; fall back to the letter.
+    xLabel:
+      xKey == null
+        ? String(ds.metadata?.["x_column_long"] || ds.metadata?.["x_column_name"] || "x")
+        : (ds.labels[xKey] ?? "x"),
     xUnit: xKey == null ? String(ds.metadata?.["x_column_unit"] ?? "") : (ds.units[xKey] ?? ""),
   };
 }

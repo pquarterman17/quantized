@@ -48,6 +48,30 @@ describe("buildColumns", () => {
     expect(p.xUnit).toBe("s");
   });
 
+  it("prefers the Origin long name over the column letter for the x-axis", () => {
+    const ds: DataStruct = {
+      time: [10, 20, 30],
+      values: [[1], [2], [3]],
+      labels: ["Intensity"],
+      units: ["arb. units"],
+      metadata: { x_column_long: "Theta", x_column_name: "A", x_column_unit: "Degrees" },
+    };
+    const p = buildColumns(ds);
+    expect(p.xLabel).toBe("Theta"); // Origin shows the long name, not the letter "A"
+    expect(p.xUnit).toBe("Degrees");
+  });
+
+  it("falls back to the column letter when no long name is present", () => {
+    const ds: DataStruct = {
+      time: [10, 20, 30],
+      values: [[1], [2], [3]],
+      labels: ["Intensity"],
+      units: ["arb. units"],
+      metadata: { x_column_name: "A", x_column_unit: "Degrees" },
+    };
+    expect(buildColumns(ds).xLabel).toBe("A");
+  });
+
   it("tags y2Keys channels with axis 1 (offline dual-Y)", () => {
     const ds: DataStruct = {
       time: [0, 1],
