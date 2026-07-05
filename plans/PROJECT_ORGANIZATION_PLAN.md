@@ -79,14 +79,19 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
 ## Tier 1 — High Impact
 
 3. **Library tree UI (decomposed) + drag move/reorder** — the Project
-   Explorer view, built to stay under the component ceiling.
-   - [ ] Extract a `useLibraryTree` hook (folders[] + datasets[] → ordered,
-         nested view-model; expand/collapse; DnD intent).
-   - [ ] `FolderRow` + `TreeSection` sub-components; `Library.tsx` stays a
-         thin container (workshop pattern).
-   - [ ] Drag a dataset into a folder and reorder within a folder; context
-         menu: New folder / Rename / Move to… / Delete folder.
-   - [ ] Replace the reorder-vs-group exclusion with tree-native ordering.
+   Explorer view, built to stay under the component ceiling. (3a landed;
+   drag-*reorder* within a folder remains — 3b.)
+   - [x] `useLibraryTree` hook (folders[] + datasets[] → ordered, nested
+         view-model with expand/collapse). — `8a2b45b`
+   - [x] `FolderRow` component; `Library.tsx` stays a thin container mapping
+         tree rows to FolderRow/DatasetRow.
+   - [x] Move a dataset into a folder — drag a row onto a folder header, or
+         the row context menu; folder menu: New subfolder / Rename / Delete.
+   - [x] Replace the reorder-vs-group exclusion (flat up/down arrows hidden
+         once folders exist).
+   - [ ] Drag to **reorder** within a folder (drop-between) and drag a folder
+         to reparent/reposition — the `move*` store actions already support
+         it; only the drop-target DnD is left (3b).
 
 ---
 
