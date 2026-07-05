@@ -375,22 +375,35 @@ export function applyWaterfall(payload: PlotPayload, fraction: number): PlotPayl
  *  `xKey` selects a value channel as the x-axis (null = ds.time); `yKeys` is the
  *  effective plotted-channel list (already excluding the x channel). */
 /**
- * Trim points whose x is null/non-finite from the END of the payload. Imported
- * worksheets — Origin especially — carry "allocated but unfilled" trailing rows
- * (the nrows-counts-allocated artifact), which surface as trailing null x. uPlot
- * optimizes x-axis autoscale by reading the LAST array element as the max
- * (it assumes x is sorted ascending), so a trailing null collapses the x-range
- * to ~[min, 0] and hides almost all the data on first view. A point with no x is
- * unplottable, so dropping the trailing null tail is always safe. Interior nulls
- * are left in place (uPlot draws them as gaps) to keep plot-brush row indices
+ * Trim trailing rows that yield NO plottable point from the END of the payload.
+ * A row is unplottable when its x is null/non-finite, OR (when there are y series)
+ * every y at that row is null/non-finite. Imported worksheets — Origin especially
+ * — carry "allocated but unfilled" trailing rows in two shapes: sometimes as
+ * trailing null x (the nrows-counts-allocated artifact), and sometimes as a
+ * formula-filled x column (e.g. 0..10 across every allocated row) whose measured
+ * y columns stop after the first handful of points. uPlot optimizes x-axis
+ * autoscale by reading the LAST array element as the max (it assumes x is sorted
+ * ascending), so either tail stretches the x-range far past the real data and
+ * collapses the actual points against the left edge on first view (the near-
+ * vertical-line symptom). A row with no drawable point is safe to drop; interior
+ * gaps are left in place (uPlot draws them as gaps) so plot-brush row indices stay
  * aligned with the source rows.
  */
-export function dropTrailingNullX(payload: PlotPayload): PlotPayload {
-  const x = payload.data[0] as (number | null)[];
+export function dropTrailingEmptyRows(payload: PlotPayload): PlotPayload {
+  const cols = payload.data as (number | null)[][];
+  const x = cols[0];
+  const hasY = cols.length > 1;
+  const finite = (v: number | null | undefined): boolean => v != null && Number.isFinite(v);
+  const plottable = (i: number): boolean => {
+    if (!finite(x[i])) return false; // no x → no point
+    if (!hasY) return true; // x-only payload: x alone decides
+    for (let c = 1; c < cols.length; c++) if (finite(cols[c][i])) return true;
+    return false; // x present but every y empty → nothing to draw at this row
+  };
   let end = x.length;
-  while (end > 0 && (x[end - 1] == null || !Number.isFinite(x[end - 1]))) end--;
-  if (end === x.length) return payload; // no trailing null tail — fast path
-  const data = payload.data.map((col) => (col as (number | null)[]).slice(0, end));
+  while (end > 0 && !plottable(end - 1)) end--;
+  if (end === x.length) return payload; // no trailing empty tail — fast path
+  const data = cols.map((col) => col.slice(0, end));
   return { ...payload, data: data as uPlot.AlignedData };
 }
 
@@ -411,8 +424,8 @@ export async function fetchPlot(
       y_keys: yKeys ?? undefined,
       y2_keys: y2Keys ?? undefined,
     });
-    return dropTrailingNullX(fromResponse(r));
+    return dropTrailingEmptyRows(fromResponse(r));
   } catch {
-    return dropTrailingNullX(buildColumns(ds, y2Keys, xKey, yKeys));
+    return dropTrailingEmptyRows(buildColumns(ds, y2Keys, xKey, yKeys));
   }
 }

@@ -6,7 +6,7 @@ import {
   clampPlottedRange,
   composeDisplayPayload,
   defaultDenseChannels,
-  dropTrailingNullX,
+  dropTrailingEmptyRows,
   effectiveChannels,
   highlightSelectedPayload,
   maskExcludedPayload,
@@ -516,10 +516,20 @@ describe("composeDisplayPayload (#50 layer order)", () => {
   });
 });
 
-describe("dropTrailingNullX", () => {
+describe("dropTrailingEmptyRows", () => {
   const mk = (x: (number | null)[]): PlotPayload => ({
     data: [x, x.map((_, i) => i)] as PlotPayload["data"],
     series: [{ label: "y", unit: "", axis: 0 }],
+    xLabel: "x",
+    xUnit: "",
+  });
+  // x + two y-series; a row is empty only when BOTH y are null.
+  const mkXY = (x: (number | null)[], y1: (number | null)[], y2: (number | null)[]): PlotPayload => ({
+    data: [x, y1, y2] as PlotPayload["data"],
+    series: [
+      { label: "y1", unit: "", axis: 0 },
+      { label: "y2", unit: "", axis: 0 },
+    ],
     xLabel: "x",
     xUnit: "",
   });
@@ -527,23 +537,40 @@ describe("dropTrailingNullX", () => {
   it("trims trailing null x (the Origin allocated-but-unfilled artifact)", () => {
     // Regression: uPlot reads the LAST x as the axis max (sorted-x optimization),
     // so a trailing null collapsed autoscale to ~[min, 0] and hid the data.
-    const out = dropTrailingNullX(mk([-10, -9, 0, 500, 1255, null, null]));
+    const out = dropTrailingEmptyRows(mk([-10, -9, 0, 500, 1255, null, null]));
     expect(out.data[0]).toEqual([-10, -9, 0, 500, 1255]);
     expect(out.data[1]).toEqual([0, 1, 2, 3, 4]); // y stays aligned
   });
 
   it("also trims trailing NaN/Infinity x", () => {
-    const out = dropTrailingNullX(mk([0, 1, 2, NaN, Infinity]));
+    const out = dropTrailingEmptyRows(mk([0, 1, 2, NaN, Infinity]));
     expect(out.data[0]).toEqual([0, 1, 2]);
   });
 
-  it("returns the same payload object when there is no trailing null tail", () => {
+  it("trims trailing rows where x is filled but every y is null (Hc2 sparse worksheet)", () => {
+    // The real Hc2 case: a formula-filled x column (0..10) with measured y only
+    // in the first few rows. x is never null, so the old null-x-only trim missed
+    // it and the 3 real points collapsed against the left edge.
+    const out = dropTrailingEmptyRows(
+      mkXY([0, 0.13, 0.23, 0.5, 1, 10], [1.3, 1.9, 7.8, null, null, null], [5, 13, 95, null, null, null]),
+    );
+    expect(out.data[0]).toEqual([0, 0.13, 0.23]); // x-axis now fits the data
+    expect(out.data[1]).toEqual([1.3, 1.9, 7.8]);
+    expect(out.data[2]).toEqual([5, 13, 95]);
+  });
+
+  it("keeps a trailing row where x is filled and at least one y has data", () => {
+    const out = dropTrailingEmptyRows(mkXY([0, 1, 2], [1, null, 3], [null, null, null]));
+    expect(out.data[0]).toEqual([0, 1, 2]); // last row has y1=3 → drawable
+  });
+
+  it("returns the same payload object when there is no trailing empty tail", () => {
     const p = mk([0, 1, 2, 3]);
-    expect(dropTrailingNullX(p)).toBe(p); // fast path, no realloc
+    expect(dropTrailingEmptyRows(p)).toBe(p); // fast path, no realloc
   });
 
   it("leaves interior nulls in place (uPlot draws them as gaps)", () => {
-    const out = dropTrailingNullX(mk([0, null, 2, 3]));
+    const out = dropTrailingEmptyRows(mk([0, null, 2, 3]));
     expect(out.data[0]).toEqual([0, null, 2, 3]);
   });
 });
