@@ -53,11 +53,23 @@ export function originErrKeys(ds: DataStruct): Record<number, number> {
   return out;
 }
 
-/** The channels that are Origin error columns (the values of `originErrKeys`),
- *  to hide from the plot by default: their data becomes the paired Y column's
- *  whiskers, so drawing them as their own stray curve — as the plot-all default
- *  otherwise would — is both cluttered and un-Origin-like (Origin never plots an
- *  error column as a separate series). They stay in the legend, toggleable. */
+/** The channels that are Origin error columns (any "Y-error"/"X-error"
+ *  designation), to hide from the plot by default. A paired Y-error feeds its Y
+ *  column's whiskers; an UNpaired one (a leading `dQ` that is really the X's
+ *  resolution, or an X-error) is still an error, not data — neither should draw
+ *  its own stray curve, which the plot-all default otherwise would. Origin never
+ *  plots an error column as a separate series. They stay in the legend,
+ *  toggleable. Empty for non-Origin data (no designations). */
 export function originHiddenErr(ds: DataStruct): number[] {
-  return Object.values(originErrKeys(ds));
+  const meta = ds.metadata ?? {};
+  const desig = meta["column_designations"];
+  const names = meta["origin_column_names"];
+  if (typeof desig !== "object" || desig === null || !Array.isArray(names)) return [];
+  const byName = desig as Record<string, unknown>;
+  const out: number[] = [];
+  for (let i = 0; i < names.length; i++) {
+    const g = byName[String(names[i])];
+    if (g === "Y-error" || g === "X-error") out.push(i);
+  }
+  return out;
 }

@@ -136,20 +136,27 @@ describe("originErrKeys (Origin Y-error → error-bar defaults)", () => {
     expect(originErrKeys(ds)).toEqual({}); // B has no preceding Y (A is X, excluded)
   });
 
-  it("originHiddenErr lists the error channels to hide (MnN Book1 layout)", () => {
+  it("originHiddenErr hides ALL error columns incl. unpaired X-error (MnN Book1)", () => {
     const ds = origin(["B", "C", "D", "E", "F", "G"], {
       A: "X",
-      B: "X-error",
+      B: "X-error", // ch0 — dQ, unpaired but still an error → hidden
       C: "Y",
-      D: "Y-error", // ch2
+      D: "Y-error", // ch2 — dR++
       E: "Y",
-      F: "Y-error", // ch4
+      F: "Y-error", // ch4 — dR--
       G: "Y",
     });
-    expect(originHiddenErr(ds)).toEqual([2, 4]); // the dR++/dR-- channels
+    expect(originHiddenErr(ds)).toEqual([0, 2, 4]);
   });
 
-  it("originHiddenErr is empty for data with no Y-error columns", () => {
+  it("originHiddenErr hides a leading Y-error (Fixed Lambdas dQ) even though it has no pair", () => {
+    // B=dQ is Y-error but has no preceding Y → not in errKeys, yet still hidden.
+    const ds = origin(["B", "C", "D"], { A: "X", B: "Y-error", C: "Y", D: "Y-error" });
+    expect(originErrKeys(ds)).toEqual({ 1: 2 }); // only D pairs (to C)
+    expect(originHiddenErr(ds)).toEqual([0, 2]); // BOTH error columns hidden
+  });
+
+  it("originHiddenErr is empty for data with no error columns", () => {
     expect(originHiddenErr(origin(["B", "C"], { A: "X", B: "Y", C: "Y" }))).toEqual([]);
   });
 });
