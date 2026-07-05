@@ -52,8 +52,10 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
       setY2Keys(ny2.length ? ny2 : null);
     }
   };
-  // Default x source name (ds.time), e.g. "Temperature" or "Index".
-  const xDefaultLabel = String(active.data.metadata?.["x_column_name"] ?? "Index");
+  // Default x source name (ds.time), e.g. "Temperature" or "Index". Prefer the
+  // Origin long name over the raw column letter, matching the plot x-axis.
+  const meta = active.data.metadata;
+  const xDefaultLabel = String(meta?.["x_column_long"] || meta?.["x_column_name"] || "Index");
 
   const toggle = (i: number) => {
     const next = selected.includes(i)
