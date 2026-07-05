@@ -81,8 +81,8 @@ def read_origin_books(path: Path) -> list[DataStruct]:
     (largest book); this is the pure API a multi-dataset import flow (plan
     item 16) builds on. The results log rides the first book only; every
     book gets an ``origin_folder_path`` (plan item: Project Explorer folder
-    tree -- see ``tree.py``; ``.opju`` is a documented gap and always
-    resolves to ``[]``).
+    tree -- see ``tree.py``; decoded for ``.opj`` and CPYUA 4.3811 ``.opju``,
+    with older ``.opju`` containers degrading to ``[]``).
     """
     is_opju = path.suffix.lower() == ".opju"
     books = read_opju_books(path) if is_opju else read_opj_books(path)

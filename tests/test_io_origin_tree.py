@@ -233,12 +233,196 @@ def test_notes_section_of_any_length_is_skipped_generically() -> None:
         assert opj_folder_paths(project) == {"W1": []}
 
 
-def test_opju_gap_always_returns_empty_mapping() -> None:
-    """Documented gap: the .opju tail's per-window encoding isn't pinned, so
-    this must never guess -- any input, even the .opj-shaped bytes above,
-    maps to {}."""
+# ── synthetic CPYUA .opju 4.3811 folder-tree builder ─────────────────────────
+#
+# Emits the exact 4.3811 grammar the decoder was validated against (byte-exact
+# vs live COM on 11 controlled projects). These tests then stress structural
+# shapes those 11 specimens don't all cover -- deep nesting, empty folders,
+# duplicate/unicode/spaced names, graphs interleaved with books -- proving the
+# parser is a real recursive grammar, not tuned to the sample byte layouts.
+
+_OPJU_HEADER = b"CPYUA 4.3811 222\n" + b"\x00" * 8
+_OPJU_UB = b"\x0a\x02\x75\x62\x0a"
+_OPJU_SEP = b"\x80\x12\x8d\x10"
+# attrs block between a folder name and its window count; the trailing bytes
+# up to and including the "ub" marker are what the parser anchors on.
+_OPJU_ATTRS = b"\x04\x07\x01\x47\xc0\x11\x01\x01\x9c\x0a\x00\x04\xa1\x01\x64\x84" + _OPJU_UB
+
+
+def _opju_win_header(name: str) -> bytes:
+    """A worksheet/graph window header: ``0A 00 80 75 04 00 00 <name> 94 0C``."""
+    return b"\x0a\x00\x80\x75\x04\x00\x00" + name.encode("latin1") + b"\x94\x0c"
+
+
+def _opju_name_block(name: str) -> bytes:
+    raw = name.encode("latin1") + b"\x00"
+    return struct.pack("<I", len(raw)) + b"\x0a" + raw + b"\x0a"
+
+
+def _opju_entry(ordinal: int) -> bytes:
+    if ordinal == 0:
+        return b"\x80\x01\x85\x00"  # ordinal 0 short form
+    assert 1 <= ordinal <= 255, "builder only emits the 1-byte ordinal form"
+    return b"\x80\x04\x81\x01" + bytes([ordinal]) + b"\x80\x00"
+
+
+def _opju_folder(
+    name: str,
+    ordinals: list[int],
+    children: list[tuple] | None = None,
+    *,
+    is_last_child: bool = True,
+) -> bytes:
+    children = children or []
+    out = bytearray(_opju_name_block(name))
+    out += _OPJU_ATTRS
+    out += bytes([2 * len(ordinals)])  # 2*nwin
+    out += b"\x00"  # separator before the first entry
+    for k, o in enumerate(ordinals):
+        out += _opju_entry(o)
+        if k < len(ordinals) - 1:
+            out += b"\x00"  # inter-entry separator
+    if children:
+        out += bytes([2 * len(children)])  # 2*nsub
+        for j, child in enumerate(children):
+            out += _OPJU_SEP + b"\x00" * 16  # separator + 16 date bytes
+            out += _opju_folder(*child, is_last_child=(j == len(children) - 1))
+    elif is_last_child:
+        out += b"\x00"  # leaf terminator (only when no sibling's SEP follows)
+    return bytes(out)
+
+
+def _synthetic_opju(
+    window_names: list[str],
+    root_name: str,
+    root_ordinals: list[int],
+    children: list[tuple] | None = None,
+) -> bytes:
+    """A minimal parseable ``.opju`` stream: header, one window header per
+    name (in stream order, so ``window_names[k]`` is ordinal ``k``), then the
+    folder tree rooted at ``root_name``."""
+    out = bytearray(_OPJU_HEADER)
+    for name in window_names:
+        out += _opju_win_header(name)
+    out += b"\x00" * 8  # gap between the window stream and the tree
+    out += _opju_folder(root_name, root_ordinals, children, is_last_child=True)
+    out += b"\x00\x00\x00\xde"  # epilogue (must not start with SEP)
+    return bytes(out)
+
+
+# ── .opju 4.3811 structural generality (shapes the 11 COM specimens miss) ─────
+
+
+def test_opju_deep_nesting_four_levels() -> None:
+    d = ("D", [0], [])
+    c = ("C", [], [d])
+    b = ("B", [], [c])
+    a = ("A", [], [b])
+    data = _synthetic_opju(["Deepest"], "Proj", [], [a])
+    assert opju_folder_paths(data) == {"Deepest": ["A", "B", "C", "D"]}
+
+
+def test_opju_empty_folder_claims_no_window() -> None:
+    one = ("One", [0], [])
+    empty = ("Empty", [], [])
+    data = _synthetic_opju(["Solo"], "Proj", [], [one, empty])
+    paths = opju_folder_paths(data)
+    assert paths == {"Solo": ["One"]}
+    assert ["Empty"] not in paths.values()
+
+
+def test_opju_root_level_window_has_empty_path() -> None:
+    data = _synthetic_opju(["Standalone"], "Proj", [0])
+    assert opju_folder_paths(data) == {"Standalone": []}
+
+
+def test_opju_graph_interleaved_with_books_keeps_ordinals_aligned() -> None:
+    """A graph between books in ordinal order must not shift a book's folder
+    (the real ``real2`` COM specimen: [book, graph, book])."""
+    folder = ("F1", [0, 1], [])  # book + graph
+    data = _synthetic_opju(["BookA", "Graph1", "BookB"], "Proj", [2], [folder])
+    paths = opju_folder_paths(data)
+    assert paths["BookA"] == ["F1"]
+    assert paths["Graph1"] == ["F1"]
+    assert paths["BookB"] == []  # ordinal 2 = the root-level book, not shifted
+
+
+def test_opju_duplicate_folder_names_at_different_parents_never_collide() -> None:
+    data_a = ("Data", [0], [])
+    a = ("A", [], [data_a])
+    data_b = ("Data", [1], [])
+    b = ("B", [], [data_b])
+    data = _synthetic_opju(["X0", "X1"], "Proj", [], [a, b])
+    assert opju_folder_paths(data) == {"X0": ["A", "Data"], "X1": ["B", "Data"]}
+
+
+def test_opju_skipped_ordinals_resolve_by_value_not_position() -> None:
+    """A folder holding non-consecutive ordinals (0 and 2, skipping 1) — the
+    ``ac_in_f1`` COM specimen — resolves each entry by its true ordinal."""
+    folder = ("F1", [0, 2], [])
+    data = _synthetic_opju(["Wa", "Wb", "Wc"], "Proj", [1], [folder])
+    paths = opju_folder_paths(data)
+    assert paths == {"Wa": ["F1"], "Wc": ["F1"], "Wb": []}
+
+
+@pytest.mark.parametrize(
+    "folder_name",
+    ["Café España", "weird!@#$%name", "x" * 60, "Raw normalized"],
+    ids=["latin1-accented", "punctuation", "long", "spaced"],
+)
+def test_opju_arbitrary_folder_names(folder_name: str) -> None:
+    sub = (folder_name, [0], [])
+    data = _synthetic_opju(["W1"], "Proj", [], [sub])
+    assert opju_folder_paths(data) == {"W1": [folder_name]}
+
+
+def test_opju_many_sibling_folders_with_0_1_and_n_books() -> None:
+    empty_f = ("Empty", [], [])
+    one_f = ("One", [1], [])
+    many_f = ("Many", [2, 3, 4, 5], [])
+    data = _synthetic_opju(
+        ["R0", "Solo", "M0", "M1", "M2", "M3"], "Proj", [0], [empty_f, one_f, many_f]
+    )
+    paths = opju_folder_paths(data)
+    assert paths["R0"] == []
+    assert paths["Solo"] == ["One"]
+    assert all(paths[f"M{i}"] == ["Many"] for i in range(4))
+
+
+def test_opju_no_folders_at_all_maps_every_book_to_root() -> None:
+    data = _synthetic_opju(["B1", "B2", "G1"], "Proj", [0, 1, 2])
+    assert opju_folder_paths(data) == {"B1": [], "B2": [], "G1": []}
+
+
+def test_opju_inconsistent_child_count_fails_closed() -> None:
+    """A root byte-claiming more children than the stream provides must
+    degrade to ``{}`` (fail-closed), never a partial/guessed tree."""
+    # root header says 2*nsub = 4 (two children) but only one folder follows
+    root = bytearray(_opju_name_block("Proj"))
+    root += _OPJU_ATTRS + b"\x00\x00" + b"\x04" + _OPJU_SEP + b"\x00" * 16
+    root += _opju_folder("F1", [0], [], is_last_child=True)
+    stream = (
+        _OPJU_HEADER + _opju_win_header("W1") + b"\x00" * 8 + bytes(root) + b"\x00\x00\x00\xde"
+    )
+    assert opju_folder_paths(stream) == {}
+
+
+def test_opju_ordinal_beyond_window_count_fails_closed() -> None:
+    """If the tree references an ordinal past the enumerated window list, the
+    enumeration is incomplete, so the whole mapping is withheld (stricter than
+    the .opj side, which drops just the stray ordinal)."""
+    folder = ("F1", [0, 99], [])
+    data = _synthetic_opju(["OnlyOne"], "Proj", [], [folder])
+    assert opju_folder_paths(data) == {}
+
+
+def test_opju_older_container_and_junk_degrade_to_empty() -> None:
+    """Fail-closed for everything that isn't a 4.3811 tree: empty input,
+    ``.opj``-shaped bytes, and random noise all map to ``{}`` (older CPYUA
+    containers store membership elsewhere and degrade to a flat import)."""
     assert opju_folder_paths(b"") == {}
     assert opju_folder_paths(_synthetic_opj(["W1"], "Root", [0])) == {}
+    assert opju_folder_paths(b"CPYUA 4.3380 188\n" + b"\x00" * 500) == {}
 
 
 # ── the __init__ wiring: sheet pseudo-books inherit the base book's path ─────
@@ -326,11 +510,44 @@ def test_realdata_xrd_single_folder1() -> None:
 
 @pytest.mark.realdata
 @pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
-def test_realdata_opju_books_default_to_empty_path() -> None:
-    """Honest documented gap: .opju books always get ``[]`` for now."""
+def test_realdata_older_opju_container_degrades_to_empty_path() -> None:
+    """The 4.3380 CPYUA corpus stores folder membership outside the binary
+    folder record (not yet decoded), so its books degrade to ``[]`` — a
+    clean flat import, never a mis-parse."""
     for stem in ("RockingCurve.opju", "XAS.opju"):
         path = _CORPUS / stem
         if not path.exists():
             continue
         books = read_origin_books(path)
         assert books and all(b.metadata["origin_folder_path"] == [] for b in books)
+
+
+_OPJU_SPECIMENS = _CORPUS / "specimens" / "_folder_probe"
+
+
+@pytest.mark.realdata
+@pytest.mark.skipif(
+    not _OPJU_SPECIMENS.exists(), reason="local .opju 4.3811 folder specimens not present"
+)
+@pytest.mark.parametrize(
+    ("stem", "expected"),
+    [
+        ("real1", {"Ba": ["F1"], "Bb": ["F1"], "Bc": []}),
+        ("real2", {"Ba": ["F1"], "Bb": []}),
+        ("deep3", {"Ba": ["F1"], "Bb": ["F1", "F2"], "Bc": ["F1", "F2", "F3"]}),
+        ("emptyf", {"Ba": ["F1"], "Bb": []}),
+        ("split", {"Wa": ["F1"], "Wb": ["F2"], "Wc": []}),
+        ("nested", {"Wb": ["F1"], "Wa": ["F1", "F2"], "Wc": []}),
+    ],
+)
+def test_realdata_opju_4_3811_folder_tree_matches_com(stem: str, expected: dict) -> None:
+    """Pinned against live Origin COM (OriginPro 2026b, CPYUA 4.3811): the
+    decoded book→folder path matches the Project Explorer tree exactly across
+    flat/sibling/nested/deep/empty/graph shapes."""
+    path = _OPJU_SPECIMENS / f"{stem}.opju"
+    if not path.exists():
+        pytest.skip(f"{stem}.opju specimen absent")
+    paths = opju_folder_paths(path.read_bytes())
+    books = {k: v for k, v in paths.items() if not k.lower().startswith("graph")}
+    for book, folder in expected.items():
+        assert books.get(book) == folder
