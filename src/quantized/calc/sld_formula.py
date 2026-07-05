@@ -87,7 +87,10 @@ def sld_from_formula(
 
     try:
         mol = _formula(compound, density=density)
-    except (ValueError, KeyError) as exc:
+    except Exception as exc:
+        # periodictable's formula parser raises pyparsing.ParseException (NOT a
+        # ValueError/KeyError) on malformed text; treat any parse/lookup failure
+        # as a bad formula so the route returns 422, never a 500.
         raise ValueError(f"could not parse formula {compound!r}: {exc}") from exc
 
     # neutron_scattering → ((real, -imag, incoh) SLD [1e-6/Å²],

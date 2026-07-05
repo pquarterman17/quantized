@@ -161,6 +161,15 @@ def _rhombohedral(
     sin2 = _sin(al) ** 2
     num = (h * h + k * k + l * l) * sin2 + 2.0 * (h * k + k * l + h * l) * (ca * ca - ca)
     den = a * a * (1.0 - 3.0 * ca * ca + 2.0 * ca * ca * ca)
+    if den <= 0.0:
+        # den -> 0 at alpha = 120 deg (and < 0 past it): the rhombohedral cell
+        # volume collapses. Raise a specific error instead of silently returning
+        # d -> 0 or tripping _from_inv_d2's unrelated "hkl all zero" guard.
+        # (ASCII message so Windows cp1252 console/log handlers never choke.)
+        raise ValueError(
+            "degenerate rhombohedral cell: the angle alpha is at or beyond the "
+            "120 deg singularity (cell volume -> 0); require 0 < alpha < 120 deg"
+        )
     return _from_inv_d2(num / den)
 
 

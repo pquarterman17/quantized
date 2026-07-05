@@ -276,6 +276,8 @@ def baseline_rolling_ball(
     ``smooth=-1`` auto-picks a half-width of ``round(radius/10)``. Returns
     ``(baseline, {"radius", "smooth"})``.
     """
+    if radius <= 0:
+        raise ValueError("radius must be a positive integer (in samples)")
     yv = np.asarray(y, dtype=float).ravel()
     n = yv.size
     smooth_hw = max(1, _matlab_round(radius / 10)) if smooth < 0 else _matlab_round(smooth)
@@ -322,6 +324,8 @@ def baseline_modpoly(
     ``min(signal, fit)`` until the RMS change (relative to the data range) drops
     below ``tol``. Returns ``(baseline, {"order", "nIter", "converged"})``.
     """
+    if order <= 0:
+        raise ValueError("order must be a positive integer")
     yv = np.asarray(y, dtype=float).ravel()
     n = yv.size
     if n < 3:

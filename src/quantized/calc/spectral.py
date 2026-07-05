@@ -210,6 +210,9 @@ def _welch_psd(
     if seg_len < 4:
         raise ValueError("segment_len must be >= 4")
     step = seg_len - _matlab_round(seg_len * overlap)
+    # overlap >= 1 (or any value making the hop <= 0) would make the segment loop
+    # below never advance -> infinite loop. Clamp to a 1-sample hop (max overlap).
+    step = max(step, 1)
     nfft = max(zero_pad, seg_len) if zero_pad > 0 else 2 ** _nextpow2(seg_len)
     df = fs / nfft
     win = _make_window(window, seg_len, kaiser_beta)

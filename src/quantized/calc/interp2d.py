@@ -87,7 +87,14 @@ def _interp_scattered(
             zqv = _hull_mask(xv, yv, qpts, zqv)
         return zqv
     else:  # linear
-        zqv = np.asarray(griddata(pts, zv, qpts, method="linear"), dtype=float)
+        try:
+            zqv = np.asarray(griddata(pts, zv, qpts, method="linear"), dtype=float)
+        except QhullError:
+            # Degenerate (collinear / coincident) cloud — Qhull can't triangulate,
+            # so linear interpolation is undefined. Degrade to NaN (as for points
+            # outside the convex hull) rather than let QhullError escape as a 500;
+            # mirrors the QhullError guards already used by _hull_mask and natural.
+            zqv = np.full(qpts.shape[0], np.nan)
     if extrapolation == "nearest":
         nan_mask = np.isnan(zqv)
         if nan_mask.any():

@@ -29,6 +29,8 @@ def sld_profile(
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Layer stack -> (z, SLD) with error-function interfaces. Port of sldProfile."""
     lay = np.asarray(layers, dtype=float)
+    if lay.ndim != 2 or lay.shape[0] < 1 or lay.shape[1] < 4:
+        raise ValueError("layers must be a (N, 4) array [thickness, sld, _, roughness], N >= 1")
     n_layers = lay.shape[0]
     d, sld_r, sigma = lay[:, 0], lay[:, 1], lay[:, 3]
     total_thick = float(np.sum(d[1:-1]))

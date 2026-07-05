@@ -151,7 +151,14 @@ def _parse_units(unit_str: str) -> dict[str, Any]:
     scale = 1.0
     for tok in _tokenize(unit_str):
         base_dims, base_scale = _decompose_token(tok["str"])
-        total_scale = base_scale ** tok["exp"]
+        try:
+            total_scale = base_scale ** tok["exp"]
+        except OverflowError as exc:
+            raise ValueError(f"unit exponent too large in {unit_str!r}") from exc
+        if total_scale == 0.0 and base_scale != 0.0:
+            # A huge negative exponent underflowed the scale to exactly 0.0, which
+            # would divide-by-zero downstream; reject instead of crashing.
+            raise ValueError(f"unit exponent underflows the scale to zero in {unit_str!r}")
         if tok["in_denom"]:
             dims = dims - base_dims * tok["exp"]
             scale = scale / total_scale

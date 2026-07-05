@@ -28,6 +28,8 @@ _METHODS = ("linear", "pchip", "spline", "makima")
 
 def _colon(a: float, d: float, b: float) -> NDArray[np.float64]:
     """MATLAB ``a:d:b`` colon grid (endpoint included only if it lands exactly)."""
+    if d == 0:
+        raise ValueError("resample step must be non-zero")
     n = int(math.floor((b - a) / d + 1e-10))
     return np.asarray(a + np.arange(n + 1) * d, dtype=float)
 
