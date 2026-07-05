@@ -106,9 +106,10 @@ describe("Origin error-bar defaults on activation", () => {
     },
   });
 
-  it("addDataset pairs Origin Y-error columns into errKeys", () => {
+  it("addDataset pairs Origin Y-error columns into errKeys and hides them", () => {
     useApp.getState().addDataset(reflBook());
     expect(useApp.getState().errKeys).toEqual({ 0: 1, 2: 3 });
+    expect(useApp.getState().hiddenChannels).toEqual([1, 3]); // dR++/dR-- hidden as lines
   });
 
   it("setActive re-derives errKeys for the activated Origin dataset", () => {

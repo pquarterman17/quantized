@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildErrorColumns, originErrKeys } from "./errorbars";
+import { buildErrorColumns, originErrKeys, originHiddenErr } from "./errorbars";
 import type { DataStruct } from "./types";
 
 /** Build an Origin-shaped DataStruct carrying only the metadata originErrKeys
@@ -134,5 +134,22 @@ describe("originErrKeys (Origin Y-error → error-bar defaults)", () => {
   it("skips a Y-error with no preceding Y", () => {
     const ds = origin(["B", "C"], { A: "X", B: "Y-error", C: "Y" });
     expect(originErrKeys(ds)).toEqual({}); // B has no preceding Y (A is X, excluded)
+  });
+
+  it("originHiddenErr lists the error channels to hide (MnN Book1 layout)", () => {
+    const ds = origin(["B", "C", "D", "E", "F", "G"], {
+      A: "X",
+      B: "X-error",
+      C: "Y",
+      D: "Y-error", // ch2
+      E: "Y",
+      F: "Y-error", // ch4
+      G: "Y",
+    });
+    expect(originHiddenErr(ds)).toEqual([2, 4]); // the dR++/dR-- channels
+  });
+
+  it("originHiddenErr is empty for data with no Y-error columns", () => {
+    expect(originHiddenErr(origin(["B", "C"], { A: "X", B: "Y", C: "Y" }))).toEqual([]);
   });
 });

@@ -6,7 +6,7 @@ import { create } from "zustand";
 import type { CorrectionsRequest } from "../lib/api";
 import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
 import { cloneDataStruct } from "../lib/dataset";
-import { originErrKeys } from "../lib/errorbars";
+import { originErrKeys, originHiddenErr } from "../lib/errorbars";
 import { setFormatOpts, type Notation } from "../lib/format";
 import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit, macroStep, type MacroStep } from "../lib/macro";
@@ -625,7 +625,7 @@ export const useApp = create<AppState>((set, get) => ({
       seriesLabels: {}, // legend renames are channel-keyed → reset per dataset
       errKeys: originErrKeys(ds.data), // Origin Y-error columns → error bars (else empty)
       seriesOrder: null, // draw order is channel-keyed → reset per dataset
-      hiddenChannels: [], // legend show/hide is channel-keyed → reset per dataset
+      hiddenChannels: originHiddenErr(ds.data), // hide Origin error columns (they feed the whiskers)
       xLim: null, // and autoscale both axes
       yLim: null,
       integral: null, // on-plot analysis results are tied to the old data → clear
@@ -820,7 +820,7 @@ export const useApp = create<AppState>((set, get) => ({
         seriesLabels: {},
         errKeys: activeDs ? originErrKeys(activeDs.data) : {},
         seriesOrder: null,
-        hiddenChannels: [],
+        hiddenChannels: activeDs ? originHiddenErr(activeDs.data) : [],
         xLim: null,
         yLim: null,
         fitOverlay: null,
@@ -846,7 +846,7 @@ export const useApp = create<AppState>((set, get) => ({
         seriesLabels: {},
         errKeys: ds ? originErrKeys(ds.data) : {},
         seriesOrder: null,
-        hiddenChannels: [],
+        hiddenChannels: ds ? originHiddenErr(ds.data) : [],
         xLim: null,
         yLim: null,
         rsmPeaks: null,

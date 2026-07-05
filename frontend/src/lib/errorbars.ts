@@ -52,3 +52,12 @@ export function originErrKeys(ds: DataStruct): Record<number, number> {
   }
   return out;
 }
+
+/** The channels that are Origin error columns (the values of `originErrKeys`),
+ *  to hide from the plot by default: their data becomes the paired Y column's
+ *  whiskers, so drawing them as their own stray curve — as the plot-all default
+ *  otherwise would — is both cluttered and un-Origin-like (Origin never plots an
+ *  error column as a separate series). They stay in the legend, toggleable. */
+export function originHiddenErr(ds: DataStruct): number[] {
+  return Object.values(originErrKeys(ds));
+}
