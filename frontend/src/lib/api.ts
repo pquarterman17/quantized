@@ -1109,6 +1109,15 @@ export function subtractMagBackground(body: {
   return postJSON("/api/magnetometry/subtract-background", body);
 }
 
+export function subtractHysteresisBackground(body: {
+  h: number[];
+  m: number[];
+  hi_fraction?: number;
+  min_points?: number;
+}): Promise<{ corrected: (number | null)[]; slope: number }> {
+  return postJSON("/api/magnetometry/subtract-hysteresis-background", body);
+}
+
 /** Convert field (x) + moment (y) units, sample-aware (emu→emu/g needs mass). */
 export function convertMagUnits(body: {
   x: number[];

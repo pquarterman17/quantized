@@ -3,14 +3,14 @@
 // M-H dataset. Thin by design — all logic lives in useHysteresis.
 
 import ToolWindow from "../../overlays/ToolWindow";
-import { DataTable } from "../../primitives";
+import { Button, DataTable } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { useApp } from "../../../store/useApp";
 import { useHysteresis } from "./useHysteresis";
 
 export default function HysteresisPanel() {
   const setOpen = useApp((s) => s.setHysteresisOpen);
-  const { active, result, busy, error } = useHysteresis();
+  const { active, result, busy, error, bgBusy, subtractBackground } = useHysteresis();
 
   const sfd = (result?.SFD as Record<string, unknown> | undefined) ?? {};
   const warnings = (result?.warnings as string[] | undefined) ?? [];
@@ -51,6 +51,18 @@ export default function HysteresisPanel() {
             </div>
           )}
         </>
+      )}
+      {active && (
+        <div style={{ marginTop: 10 }}>
+          <Button
+            size="sm"
+            disabled={bgBusy}
+            onClick={() => void subtractBackground()}
+            title="Fit the linear dia/paramagnetic slope on the high-field tails and subtract it (offset kept, so Hc/Mr are unchanged). Writes a new (bg-sub) dataset."
+          >
+            {bgBusy ? "Subtracting…" : "Subtract linear background"}
+          </Button>
+        </div>
       )}
     </ToolWindow>
   );

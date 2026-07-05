@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from quantized.calc.magnetometry import (
     convert_mag_units,
     hysteresis_analysis,
+    subtract_hysteresis_background,
     subtract_mag_background,
 )
 from quantized.routes._payload import to_jsonable
@@ -34,6 +35,13 @@ class SubtractBgRequest(BaseModel):
     moment: list[float]
     fit_range: tuple[float, float] | None = None
     auto_fraction: float = 0.1
+
+
+class HysteresisBgRequest(BaseModel):
+    h: list[float]
+    m: list[float]
+    hi_fraction: float = 0.7
+    min_points: int = 4
 
 
 class ConvertUnitsRequest(BaseModel):
@@ -80,6 +88,19 @@ def subtract_background(req: SubtractBgRequest) -> dict[str, Any]:
         "slope": to_jsonable(slope),
         "intercept": to_jsonable(intercept),
     }
+
+
+@router.post("/subtract-hysteresis-background")
+def subtract_hysteresis_bg(req: HysteresisBgRequest) -> dict[str, Any]:
+    """Subtract a linear dia/paramagnetic slope from an M-H loop (slope only;
+    offset kept so Hc/Mr are unaffected)."""
+    try:
+        corrected, slope = subtract_hysteresis_background(
+            req.h, req.m, hi_fraction=req.hi_fraction, min_points=req.min_points
+        )
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"corrected": to_jsonable(corrected), "slope": to_jsonable(slope)}
 
 
 @router.post("/convert-units")

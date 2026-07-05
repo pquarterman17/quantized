@@ -15,7 +15,12 @@ from numpy.typing import ArrayLike, NDArray
 
 from .processing import derivative
 
-__all__ = ["convert_mag_units", "hysteresis_analysis", "subtract_mag_background"]
+__all__ = [
+    "convert_mag_units",
+    "hysteresis_analysis",
+    "subtract_hysteresis_background",
+    "subtract_mag_background",
+]
 
 _EPS = float(np.finfo(float).eps)
 
@@ -57,6 +62,49 @@ def subtract_mag_background(
     slope, intercept = np.polyfit(t[mask], m[mask], 1)
     corrected = m - (slope * t + intercept)
     return np.asarray(corrected, dtype=float), float(slope), float(intercept)
+
+
+def subtract_hysteresis_background(
+    h: ArrayLike,
+    m: ArrayLike,
+    *,
+    hi_fraction: float = 0.7,
+    min_points: int = 4,
+) -> tuple[NDArray[np.float64], float]:
+    """Subtract a linear dia/paramagnetic slope from an M-H hysteresis loop.
+
+    Port of ``bosonPlotter.hysteresis.subtractLinearBG``. Fits a line to the
+    high-field tails — *both* saturated ends, ``|H| > hi_fraction * max|H|`` —
+    and subtracts **only the slope**: ``M -= slope * H``. The intercept is
+    deliberately KEPT so the loop stays vertically centred and the coercivity /
+    remanence are unaffected (subtracting the offset too would shift M=0 and
+    corrupt Hc). A no-op (slope ``0.0``, ``M`` returned unchanged) when fewer
+    than ``min_points`` high-field points exist or the field span is degenerate.
+
+    This is distinct from :func:`subtract_mag_background`, which is for M(T):
+    a one-sided high-*temperature* window whose slope *and* intercept are both
+    removed. Do not use that on a hysteresis loop.
+
+    Returns ``(corrected, slope)``.
+    """
+    hv = np.asarray(h, dtype=float).ravel()
+    mv = np.asarray(m, dtype=float).ravel()
+    if hv.size != mv.size:
+        raise ValueError("h and m must be the same length")
+    if hv.size == 0:
+        raise ValueError("need at least 1 data point")
+
+    h_max = float(np.nanmax(np.abs(hv))) if hv.size else 0.0
+    if not np.isfinite(h_max) or h_max == 0.0:
+        return mv.copy(), 0.0
+    hi_mask = np.abs(hv) > hi_fraction * h_max
+    if int(np.count_nonzero(hi_mask)) < min_points:
+        return mv.copy(), 0.0
+
+    slope = float(np.polyfit(hv[hi_mask], mv[hi_mask], 1)[0])
+    if not np.isfinite(slope):
+        return mv.copy(), 0.0
+    return np.asarray(mv - slope * hv, dtype=float), slope
 
 
 def _field_factor(from_u: str, to_u: str) -> tuple[float, bool, str]:

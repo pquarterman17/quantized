@@ -9,7 +9,11 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from quantized.calc.magnetometry import convert_mag_units, subtract_mag_background
+from quantized.calc.magnetometry import (
+    convert_mag_units,
+    subtract_hysteresis_background,
+    subtract_mag_background,
+)
 
 
 @pytest.mark.golden
@@ -68,6 +72,41 @@ def test_subtract_mag_background_removes_linear() -> None:
     assert slope == pytest.approx(0.05, rel=1e-6)
     assert intercept == pytest.approx(3.0, rel=1e-6)
     assert_allclose(corrected, 0.0, atol=1e-9)
+
+
+def test_subtract_hysteresis_background_removes_slope_keeps_offset() -> None:
+    # Pure linear dia/paramagnetic background + a vertical offset, no loop.
+    h = np.linspace(-100.0, 100.0, 201)
+    offset = 1.5
+    m = 0.02 * h + offset
+    corrected, slope = subtract_hysteresis_background(h, m)
+    assert slope == pytest.approx(0.02, rel=1e-6)
+    # The slope is removed but the offset is KEPT — the crucial difference from
+    # subtract_mag_background (M-vs-T), which removes the intercept too. Keeping
+    # it leaves M=0 crossings (coercivity) unchanged.
+    assert_allclose(corrected, offset, atol=1e-9)
+
+
+def test_subtract_hysteresis_background_matches_matlab_formula() -> None:
+    # Loop signal + linear background + offset. Assert the port reproduces
+    # subtractLinearBG.m exactly: mask |H|>0.7*max|H| (both tails), fit slope,
+    # subtract slope*H only.
+    h = np.linspace(-50.0, 50.0, 101)
+    m = 3.0 * np.sign(h) + 0.01 * h + 0.2
+    corrected, slope = subtract_hysteresis_background(h, m)
+    mask = np.abs(h) > 0.7 * np.max(np.abs(h))
+    expected_slope = float(np.polyfit(h[mask], m[mask], 1)[0])
+    assert slope == pytest.approx(expected_slope)
+    assert_allclose(corrected, m - expected_slope * h, atol=1e-12)
+
+
+def test_subtract_hysteresis_background_noop_too_few_tail_points() -> None:
+    # Only 1-2 points exceed 0.7*max|H| → below min_points → no-op.
+    h = np.array([-1.0, 0.0, 1.0, 2.0, 3.0])
+    m = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
+    corrected, slope = subtract_hysteresis_background(h, m, min_points=4)
+    assert slope == 0.0
+    assert_allclose(corrected, m)
 
 
 def test_convert_mag_units_missing_mass_warns() -> None:
