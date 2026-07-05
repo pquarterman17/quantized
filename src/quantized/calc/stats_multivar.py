@@ -148,7 +148,13 @@ def correlation_matrix(
     # t-transform off-diagonal; clamp so |r|=1 gives p=0 instead of a 0-division.
     rr = np.clip(r, -1.0, 1.0)
     denom = np.maximum(1.0 - rr**2, _EPS)
-    t = np.abs(rr) * np.sqrt((n - 2) / denom)
+    # |r|==1 floors denom to _EPS, so (n-2)/denom overflows to +inf for larger
+    # n. That is intentional: sqrt(inf)=inf and _t_cdf(inf)=1 give the exact
+    # p=0. Suppress the expected overflow rather than raise the floor — a bigger
+    # floor would, for dof=1 (heavy Cauchy tail), turn that exact 0 into a
+    # spurious ~1e-7.
+    with np.errstate(over="ignore", divide="ignore"):
+        t = np.abs(rr) * np.sqrt((n - 2) / denom)
     p = np.asarray(2.0 * (1.0 - _t_cdf(t, n - 2)), dtype=float)
     np.fill_diagonal(p, 1.0)
 
