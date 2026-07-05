@@ -28,7 +28,7 @@ import {
   type OriginFigureEntry,
 } from "../lib/originFigures";
 import { planOriginFolders } from "../lib/originFolders";
-import { buildOverlayDataset } from "../lib/originOverlay";
+import { buildOverlayDataset, overlayCurveStyles } from "../lib/originOverlay";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
@@ -728,7 +728,8 @@ export const useApp = create<AppState>((set, get) => ({
       }
       if (targetId) {
         get().setActive(targetId);
-        const n = (existing?.data ?? overlay)?.labels.length ?? 0;
+        const src = existing?.data ?? overlay;
+        const n = src?.labels.length ?? 0;
         set({
           xLim: [fig.x_from, fig.x_to],
           yLim: [fig.y_from, fig.y_to],
@@ -736,6 +737,8 @@ export const useApp = create<AppState>((set, get) => ({
           yLog: fig.y_log,
           xKey: null,
           yKeys: Array.from({ length: n }, (_, i) => i),
+          // Restore each overlay column's decoded line/scatter look.
+          seriesStyles: overlayCurveStyles(src),
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         return;
@@ -771,6 +774,7 @@ export const useApp = create<AppState>((set, get) => ({
             ...partnerSel.yKeys.filter((k) => !baseSel.yKeys.includes(k)),
           ],
           y2Keys: partnerSel.yKeys,
+          seriesStyles: { ...baseSel.styles, ...partnerSel.styles },
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         return;
@@ -787,7 +791,9 @@ export const useApp = create<AppState>((set, get) => ({
       yLim: [fig.y_from, fig.y_to],
       xLog: fig.x_log,
       yLog: fig.y_log,
-      ...(selection ? { xKey: selection.xKey, yKeys: selection.yKeys } : {}),
+      ...(selection
+        ? { xKey: selection.xKey, yKeys: selection.yKeys, seriesStyles: selection.styles }
+        : {}),
     });
     get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
   },

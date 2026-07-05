@@ -103,12 +103,12 @@ describe("figureChannelSelection", () => {
 
   it("maps curve y letters onto value-channel indices", () => {
     const fig = figure({ curves: [{ book: "Co", x: "A", y: "C" }] });
-    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [1] });
+    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [1], styles: {} });
   });
 
   it("selects a non-default x channel when the curve's x is not the dataset x", () => {
     const fig = figure({ curves: [{ book: "Co", x: "B", y: "C" }] });
-    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: 0, yKeys: [1] });
+    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: 0, yKeys: [1], styles: {} });
   });
 
   it("collects multiple curves, deduplicated", () => {
@@ -119,7 +119,21 @@ describe("figureChannelSelection", () => {
         { book: "Co", x: "A", y: "C" },
       ],
     });
-    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [0, 1] });
+    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [0, 1], styles: {} });
+  });
+
+  it("maps decoded line/scatter styles onto the plotted channels", () => {
+    const fig = figure({
+      curves: [
+        { book: "Co", x: "A", y: "B", style: "scatter" }, // ch 0 → markers, no line
+        { book: "Co", x: "A", y: "C", style: "line" }, // ch 1 → line at default width
+      ],
+    });
+    expect(figureChannelSelection(fig, ds)).toEqual({
+      xKey: null,
+      yKeys: [0, 1],
+      styles: { 0: { marker: true, width: 0 }, 1: { width: 1.5 } },
+    });
   });
 
   it("returns null when no curve targets this book (default view stands)", () => {
@@ -140,7 +154,7 @@ describe("figureChannelSelection", () => {
         { book: "Co", x: "A", y: "B" },
       ],
     });
-    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [0] });
+    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [0], styles: {} });
   });
 });
 
