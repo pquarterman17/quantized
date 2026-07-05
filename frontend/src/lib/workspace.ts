@@ -5,6 +5,7 @@
 
 import { sanitizeFilter } from "./datafilter";
 import { pruneOrphans } from "./foldertree";
+import type { OriginFigureEntry } from "./originFigures";
 import { sanitizeExcluded } from "./rowstate";
 import type {
   ChannelRole,
@@ -31,6 +32,7 @@ export interface WorkspaceState {
   activeId?: string | null;
   selectedIds?: string[];
   expandedFolders?: string[];
+  originFigures?: OriginFigureEntry[];
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -41,6 +43,7 @@ export interface LoadedWorkspace {
   activeId: string | null;
   selectedIds: string[];
   expandedFolders: string[];
+  originFigures: OriginFigureEntry[];
 }
 
 interface WorkspaceDoc {
@@ -52,6 +55,7 @@ interface WorkspaceDoc {
   activeId: string | null;
   selectedIds: string[];
   expandedFolders: string[];
+  originFigures: OriginFigureEntry[];
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -64,6 +68,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     activeId: ws.activeId ?? null,
     selectedIds: ws.selectedIds ?? [],
     expandedFolders: ws.expandedFolders ?? [],
+    originFigures: ws.originFigures ?? [],
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -114,6 +119,43 @@ function parseFolders(v: unknown): FolderNode[] {
 
 function stringsIn(v: unknown, valid: Set<string>): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && valid.has(x)) : [];
+}
+
+/** Validate the persisted Origin-import figures, dropping malformed entries and
+ *  clamping dataset references to ids that survived load — so a restored figure
+ *  can never dangle onto a pruned dataset. `figure` is opaque decoded Origin
+ *  data (an `OriginFigure`); it is passed through structurally rather than
+ *  deep-validated, mirroring how `data` (a DataStruct) is the only structurally
+ *  checked payload. */
+function parseOriginFigures(v: unknown, dsIds: Set<string>): OriginFigureEntry[] {
+  if (!Array.isArray(v)) return [];
+  const out: OriginFigureEntry[] = [];
+  for (const f of v) {
+    if (typeof f !== "object" || f === null) continue;
+    const o = f as Record<string, unknown>;
+    if (
+      typeof o.id !== "string" ||
+      typeof o.stem !== "string" ||
+      typeof o.figure !== "object" ||
+      o.figure === null ||
+      !(o.datasetId === null || typeof o.datasetId === "string")
+    ) {
+      continue;
+    }
+    const datasetId =
+      typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
+    const siblingIds = Array.isArray(o.siblingIds)
+      ? o.siblingIds.filter((x): x is string => typeof x === "string" && dsIds.has(x))
+      : [];
+    out.push({
+      id: o.id,
+      stem: o.stem,
+      figure: o.figure as OriginFigureEntry["figure"],
+      datasetId,
+      siblingIds,
+    });
+  }
+  return out;
 }
 
 function isNumberArray(v: unknown): v is number[] {
@@ -243,5 +285,6 @@ export function parseWorkspace(text: string): LoadedWorkspace {
   const activeId =
     typeof o.activeId === "string" && dsIds.has(o.activeId) ? o.activeId : (datasets[0]?.id ?? null);
   const expandedFolders = stringsIn(o.expandedFolders, folderIds);
-  return { datasets, folders, activeId, selectedIds, expandedFolders };
+  const originFigures = parseOriginFigures(o.originFigures, dsIds);
+  return { datasets, folders, activeId, selectedIds, expandedFolders, originFigures };
 }

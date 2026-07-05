@@ -12,7 +12,7 @@ away on import and re-approximated from name prefixes.
 
 **Status:** Active
 **Created:** 2026-07-04
-**Updated:** 2026-07-05
+**Updated:** 2026-07-05 (item 5 figure `.dwk` persistence shipped)
 
 ---
 
@@ -128,7 +128,12 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
 
 5. **Persistent figures inside the tree** — let a project contain its
    graphs, like Origin.
-   - [ ] Persist `originFigures` in `.dwk` v2 (today dropped on load).
+   - [x] Persist `originFigures` in `.dwk` v2 (previously dropped on load) —
+         serialized in `lib/workspace.ts`, restored in `useApp.loadWorkspace`
+         (was hard-reset to `[]`); parse validates each entry and clamps
+         `datasetId`/`siblingIds` to surviving datasets so a figure can't
+         dangle. Flows through both manual `.dwk` save and autosave (both pass
+         full `getState()`). +5 round-trip tests.
    - [ ] Represent figures as tree items under their project folder (via
          `datasetId`/`siblingIds` already on `OriginFigureEntry`).
 

@@ -807,7 +807,7 @@ export const useApp = create<AppState>((set, get) => ({
         expandedFolders: ws.expandedFolders ?? [],
         activeId: active,
         selectedIds: selected.length ? selected : active ? [active] : [],
-        originFigures: [], // a restored workspace has no Origin-import figures of its own
+        originFigures: ws.originFigures ?? [], // restored from the .dwk (v2 persists them)
         stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
         xKey: null,
         yKeys: null,

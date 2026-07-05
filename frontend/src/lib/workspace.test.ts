@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { Dataset } from "./types";
+import type { OriginFigureEntry } from "./originFigures";
+import type { Dataset, OriginFigure } from "./types";
 import { parseWorkspace, serializeWorkspace, WORKSPACE_FORMAT } from "./workspace";
 
 function makeDataset(id: string, name: string): Dataset {
@@ -268,5 +269,82 @@ describe("workspace channel modeling types", () => {
     const doc = JSON.parse(ser([ds]));
     doc.datasets[0].channelTypes = { 0: "continuous", 2: "bogus" };
     expect(parse(JSON.stringify(doc))[0].channelTypes).toEqual({ 0: "continuous" });
+  });
+});
+
+// Origin-import figures (project-organization plan item 5): a graph imported
+// from an .opj/.opju must survive save→reload. Before v2 carried them, a
+// reload silently dropped every figure (`useApp.loadWorkspace` reset the slot).
+const originFig = (overrides: Partial<OriginFigure> = {}): OriginFigure => ({
+  name: "Graph1",
+  x_from: 0,
+  x_to: 100,
+  x_log: false,
+  y_from: 1,
+  y_to: 1e6,
+  y_log: true,
+  n_curves: 1,
+  annotations: [],
+  ...overrides,
+});
+const figEntry = (over: Partial<OriginFigureEntry> = {}): OriginFigureEntry => ({
+  id: "f1",
+  stem: "Moke",
+  figure: originFig(),
+  datasetId: "a",
+  siblingIds: ["a", "b"],
+  ...over,
+});
+
+describe("workspace originFigures persistence", () => {
+  it("round-trips figures attached to surviving datasets", () => {
+    const datasets = [makeDataset("a", "first"), makeDataset("b", "second")];
+    const entry = figEntry();
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, originFigures: [entry] }));
+    expect(loaded.originFigures).toHaveLength(1);
+    expect(loaded.originFigures[0]).toEqual(entry);
+    expect(loaded.originFigures[0].figure).toEqual(originFig());
+  });
+
+  it("clamps a dangling datasetId to null and prunes dead siblingIds", () => {
+    // Figure references dataset "gone", which is not in the library on reload.
+    const datasets = [makeDataset("a", "first")];
+    const entry = figEntry({ datasetId: "gone", siblingIds: ["a", "gone"] });
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, originFigures: [entry] }));
+    expect(loaded.originFigures[0].datasetId).toBeNull();
+    expect(loaded.originFigures[0].siblingIds).toEqual(["a"]);
+  });
+
+  it("keeps a legitimately-unbound (null) figure and defaults missing siblingIds", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(serializeWorkspace({ datasets }));
+    doc.originFigures = [{ id: "f2", stem: "x", figure: originFig(), datasetId: null }];
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.originFigures[0].datasetId).toBeNull();
+    expect(loaded.originFigures[0].siblingIds).toEqual([]);
+  });
+
+  it("drops malformed figure entries", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(serializeWorkspace({ datasets }));
+    doc.originFigures = [
+      { id: "ok", stem: "s", figure: {}, datasetId: "a", siblingIds: [] },
+      null,
+      { id: 5, stem: "s", figure: {} }, // id not a string
+      { id: "nofig", stem: "s", datasetId: "a" }, // no figure
+      { id: "badfig", stem: "s", figure: "nope", datasetId: null }, // figure not an object
+    ];
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.originFigures.map((f) => f.id)).toEqual(["ok"]);
+  });
+
+  it("defaults to an empty array for a v1 doc (no originFigures field)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(serializeWorkspace({ datasets }));
+    doc.version = 1;
+    delete doc.originFigures;
+    delete doc.folders;
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.originFigures).toEqual([]);
   });
 });
