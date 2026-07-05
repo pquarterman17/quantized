@@ -8,6 +8,7 @@ and drag-drop). Both auto-detect format via ``io.import_auto``.
 from __future__ import annotations
 
 import os
+import struct
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -62,13 +63,20 @@ def _import_with_books(path: Path) -> dict[str, Any]:
         if len(books) > 1:
             payload["books"] = [datastruct_payload(b) for b in books]
         suffix = Path(path).suffix.lower()
-        if suffix == ".opj":
-            figs = extract_figures(Path(path).read_bytes())
-        else:
-            # Gate out non-actionable layer anchors (internal storage/thumbnail
-            # blocks with no bound curves and no source) so the Library's Figures
-            # section shows only restorable graphs, not dead "SYSTEM" rows.
-            figs = drop_nonactionable_figures(extract_figures_opju(Path(path).read_bytes()))
+        try:
+            raw = Path(path).read_bytes()
+            if suffix == ".opj":
+                figs = extract_figures(raw)
+            else:
+                # Gate out non-actionable layer anchors (internal storage/thumbnail
+                # blocks with no bound curves and no source) so the Library's Figures
+                # section shows only restorable graphs, not dead "SYSTEM" rows.
+                figs = drop_nonactionable_figures(extract_figures_opju(raw))
+        except (IndexError, ValueError, KeyError, struct.error):
+            # Figures are an optional nicety; a decode hiccup on a malformed or
+            # truncated project must degrade to "no figures", never fail the
+            # whole import (the data books already succeeded above).
+            figs = []
         if figs:
             payload["figures"] = figs
     return payload

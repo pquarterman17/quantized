@@ -23,6 +23,9 @@ from pathlib import Path
 import pytest
 
 from quantized.io.origin_project.figures_opju import (
+    _ANCHOR,
+    _STEP_TAG,
+    _Y_TRANSITION,
     _clean_annotations,
     drop_nonactionable_figures,
     extract_figures_opju,
@@ -174,6 +177,15 @@ def test_figures_absent_on_incomplete_record() -> None:
     graph, or truncated data) drops cleanly instead of guessing."""
     blob = b"CPYUA 4.3811 222\n\x03\x00\x00\x1f" + b"\x00" * 50
     assert extract_figures_opju(blob) == []
+
+
+def test_y_transition_marker_at_eof_does_not_crash() -> None:
+    """A record whose Y-transition marker is the very last bytes of the buffer
+    (so there is no type byte after it) must degrade to [] rather than index
+    one past the end — this 500'd /import + /upload for truncated .opju files
+    before the bounds guard was added."""
+    blob = _ANCHOR + struct.pack("<d", 2.0) + _STEP_TAG + _Y_TRANSITION
+    assert extract_figures_opju(blob) == []  # must not raise IndexError
 
 
 # ── synthetic real-corpus-form records (item 33) ──────────────────────────────

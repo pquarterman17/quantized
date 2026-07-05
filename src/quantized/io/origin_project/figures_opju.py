@@ -283,6 +283,8 @@ def _parse_specimen_record(b: bytes, p: int) -> tuple[float, float, float, float
     xpair = _parse_pair(b, p, xstep)
     if xpair is None:
         return None
+    if ytrans + len(_Y_TRANSITION) >= len(b):  # marker at EOF — no type byte to read
+        return None
     type_byte = b[ytrans + len(_Y_TRANSITION)]
     y_start = ytrans + len(_Y_TRANSITION) + 1 + 3  # + type byte + "7b 40 01" filler
     ystep = b.find(_STEP_TAG, y_start, min(len(b), y_start + _TAG_SEARCH_SPAN))
