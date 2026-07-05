@@ -15,6 +15,40 @@ const payload: PlotPayload = {
 
 const base = { width: 600, height: 400, xLog: false, onReadout: vi.fn() };
 
+describe("buildOpts non-monotonic x (hysteresis loop) x-range", () => {
+  // Field sweeps up then back down, starting and ending near the SAME value —
+  // uPlot's binary-search autorange would collapse the x-axis to a sliver.
+  const loop: PlotPayload = {
+    data: [
+      [-100, 0, 100, 0, -90],
+      [-1, -0.5, 1, 0.5, -0.9],
+    ],
+    series: [{ label: "M", unit: "emu" }],
+    xLabel: "Field",
+    xUnit: "Oe",
+  };
+
+  it("supplies a full-scan x range covering the whole sweep, not the collapsed endpoints", () => {
+    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom" });
+    const xr = (opts.scales?.x as { range?: unknown }).range;
+    expect(typeof xr).toBe("function");
+    const [lo, hi] = (xr as () => [number, number])();
+    expect(lo).toBeLessThanOrEqual(-100);
+    expect(hi).toBeGreaterThanOrEqual(100);
+    expect(hi - lo).toBeGreaterThan(150); // the true sweep, not a [first,last] sliver
+  });
+
+  it("leaves the x range to uPlot (no function) when x is monotonic", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    expect((opts.scales?.x as { range?: unknown }).range).toBeUndefined();
+  });
+
+  it("an explicit xLim still wins over the loop x-range", () => {
+    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom", xLim: [-50, 50] });
+    expect((opts.scales?.x as { range?: unknown }).range).toEqual([-50, 50]);
+  });
+});
+
 describe("buildOpts publication template (fontSize + baseLineWidth)", () => {
   it("applies the template font size to the axes and base width to series", () => {
     const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", fontSize: 18, baseLineWidth: 3 });

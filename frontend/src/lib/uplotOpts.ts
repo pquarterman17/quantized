@@ -211,6 +211,26 @@ function fullYExtents(
   return [min - pad, max + pad];
 }
 
+/** Full-scan [min, max] of the finite x values, lightly padded — the X
+ *  counterpart of fullYExtents. For non-monotonic x (a hysteresis loop sweeps
+ *  field up then down, so it starts and ends near the SAME saturation), uPlot's
+ *  binary-search autorange collapses the axis to [first, last] — a sliver near
+ *  one end. Scanning restores the true sweep width. Log considers positive x
+ *  only. Null when nothing qualifies (leave uPlot's default alone). */
+function fullXExtents(xs: readonly (number | null)[], log: boolean): [number, number] | null {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const v of xs) {
+    if (v == null || !Number.isFinite(v) || (log && v <= 0)) continue;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  if (min > max) return null;
+  if (log) return [min / 1.1, max * 1.1];
+  const pad = (max - min || Math.abs(max) || 1) * 0.02; // slim x margin, avoid edge clipping
+  return [min - pad, max + pad];
+}
+
 export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
   const { width, height, yLog, xLog, tool, onReadout, xLim, yLim, refLines, seriesStyles } = args;
   const { xFmt, yFmt, annotations, showGrid, onRegionSelect } = args;
@@ -325,8 +345,15 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // a fixed yLim still win; double-click reset re-ranges back to the extents.
   const loopY = !xAscending && !yLim ? fullYExtents(payload, args.hidden, 0, yLog) : null;
   const loopY2 = !xAscending ? fullYExtents(payload, args.hidden, 1, yLog) : null;
+  // …and its x auto-range collapses to a sliver for the same reason — scan the
+  // x column for the true sweep width (a range function, so zoom/xLim still win).
+  const loopX = !xAscending && !xLim ? fullXExtents(payload.data[0] as (number | null)[], xLog) : null;
   const scales: uPlot.Scales = {
-    x: { time: false, distr: xLog ? 3 : 1, ...(xLim ? { range: xLim } : {}) },
+    x: {
+      time: false,
+      distr: xLog ? 3 : 1,
+      ...(xLim ? { range: xLim } : loopX ? { range: () => loopX } : {}),
+    },
     y: {
       distr: yLog ? 3 : 1,
       ...(yLim ? { range: yLim } : loopY ? { range: () => loopY } : {}),
