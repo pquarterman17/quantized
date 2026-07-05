@@ -18,7 +18,10 @@ from pydantic import BaseModel
 from quantized.io import import_auto
 from quantized.io.origin_project import OriginProjectError, read_origin_books
 from quantized.io.origin_project.figures import extract_figures
-from quantized.io.origin_project.figures_opju import extract_figures_opju
+from quantized.io.origin_project.figures_opju import (
+    drop_nonactionable_figures,
+    extract_figures_opju,
+)
 from quantized.routes._payload import datastruct_payload
 
 router = APIRouter(prefix="/api/parsers", tags=["parsers"])
@@ -62,7 +65,10 @@ def _import_with_books(path: Path) -> dict[str, Any]:
         if suffix == ".opj":
             figs = extract_figures(Path(path).read_bytes())
         else:
-            figs = extract_figures_opju(Path(path).read_bytes())
+            # Gate out non-actionable layer anchors (internal storage/thumbnail
+            # blocks with no bound curves and no source) so the Library's Figures
+            # section shows only restorable graphs, not dead "SYSTEM" rows.
+            figs = drop_nonactionable_figures(extract_figures_opju(Path(path).read_bytes()))
         if figs:
             payload["figures"] = figs
     return payload

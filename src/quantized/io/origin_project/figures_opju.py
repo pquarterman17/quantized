@@ -161,6 +161,40 @@ _TYPE_XLOG = 0x04  # X log, Y linear
 _BKNAME_RE = re.compile(rb"<BKNAME>([^<]+)</BKNAME>")
 _TEXT_WINDOW = 20_000  # bytes scanned per layer for legend/annotation/source-hint text
 
+# A graph window embeds a PNG preview thumbnail; `_texts_in` decodes its image
+# bytes as spurious "text". These chunk names open (or lead) that binary blob, so
+# they mark where real annotation text ends — everything at/after is image junk.
+_PNG_MARKERS = (
+    "IHDR", "IDAT", "IEND", "PLTE", "pHYs", "tEXt",
+    "zTXt", "iTXt", "sRGB", "gAMA", "cHRM", "bKGD",
+)
+# Internal Origin storage/style markers that leak into the annotation scan and are
+# never a user-facing graph title (dropped so the label shows the real title).
+_INTERNAL_ANN_RE = re.compile(
+    r"SYSTEM|STYLEHOLDER|OriginStorage|AxesDlgSettings|UseSameOptions|SRCINFO", re.IGNORECASE
+)
+_SHEETREF_ANN_RE = re.compile(r"^Sheet\d+<?$")  # internal sheet source reference, not a title
+
+
+def _clean_annotations(titles: list[str]) -> list[str]:
+    """Drop non-title noise from a layer's recovered text.
+
+    Two kinds of junk pollute the raw scan: (1) the embedded-PNG thumbnail's image
+    bytes decoded as text, and (2) internal Origin storage/style markers. Truncate
+    at the first PNG chunk marker (image bytes are a contiguous trailing blob), then
+    drop internal markers and bare sheet references. What remains is the real graph
+    title(s) — so a figure labels as e.g. "dR/dB", not "SYSTEM".
+    """
+    out: list[str] = []
+    for t in titles:
+        s = t.strip()
+        if any(s.startswith(m) for m in _PNG_MARKERS):
+            break  # PNG image data begins here; the rest of the list is binary junk
+        if not s or _INTERNAL_ANN_RE.search(s) or _SHEETREF_ANN_RE.match(s):
+            continue
+        out.append(s)
+    return out
+
 # ── specimen-form value spans (item 14) ───────────────────────────────────────
 
 
@@ -342,7 +376,9 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
             y_log = real_y_log
         window = b[anchor : min(window_end, anchor + _TEXT_WINDOW)]
         texts = _texts_in(window)
-        titles = [t for t in texts if not _AUTO_TITLE.match(t) and "\\l(" not in t]
+        titles = _clean_annotations(
+            [t for t in texts if not _AUTO_TITLE.match(t) and "\\l(" not in t]
+        )
         legend_ns = [int(n) for t in texts for n in _LEGEND_RE.findall(t)]
         figures.append(
             {
@@ -365,3 +401,20 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
             }
         )
     return figures
+
+
+def drop_nonactionable_figures(figs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep only figures a user can act on: those with bound curves OR a resolvable
+    source hint.
+
+    The layer-anchor scan also locates internal storage/thumbnail blocks that carry
+    a decodable axis record but no bound curves and no source reference — the
+    decoder can find them, but they are not user graphs and cannot be restored onto
+    any imported dataset. Surfacing them just floods the Library's Figures section
+    with dead "SYSTEM" rows (the Hc2 project produced 32 of them). This is a
+    presentation gate, applied at the import boundary, not in the decoder — so the
+    decoder stays a complete axis-record reader for the synthetic tests. Verified
+    against the corpus: keeps all 14 real figures (each has curves), drops all 32
+    non-actionable Hc2 anchors.
+    """
+    return [f for f in figs if f.get("curves") or str(f.get("source_hint") or "").strip()]

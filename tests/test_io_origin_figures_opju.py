@@ -22,7 +22,11 @@ from pathlib import Path
 
 import pytest
 
-from quantized.io.origin_project.figures_opju import extract_figures_opju
+from quantized.io.origin_project.figures_opju import (
+    _clean_annotations,
+    drop_nonactionable_figures,
+    extract_figures_opju,
+)
 
 # ── synthetic CPYUA figure-record builder ─────────────────────────────────────
 
@@ -1070,3 +1074,43 @@ def test_realdata_allocated_column_map_matches_index(stem: str) -> None:
     }
     got = dict(_allocated_column_map(src.read_bytes()))
     assert got == expected, f"{stem}: allocated column map {got} != index.json {expected}"
+
+
+def test_clean_annotations_drops_system_and_png_noise() -> None:
+    # The real Hc2 annotation shape: internal storage markers, the real title,
+    # then the embedded-PNG thumbnail bytes decoded as text.
+    raw = [
+        "SYSTEM",
+        "AxesDlgSettings",
+        "<OriginStorage><UseSameOptions>{1073741893=0,",
+        "dR/dB",
+        r"/Applied Magnetic Field \g(\i(m))\-(0)\i(H) (T)",
+        "-__STYLEHOLDERSOURCEINFO",
+        "Sheet1<",
+        "T = 1.3 K",
+        "IHDR",
+        "IDATx",
+        "2YMcD",
+    ]
+    cleaned = _clean_annotations(raw)
+    # internal markers, sheet ref, and everything at/after the PNG chunk are gone
+    assert cleaned == [
+        "dR/dB",
+        r"/Applied Magnetic Field \g(\i(m))\-(0)\i(H) (T)",
+        "T = 1.3 K",
+    ]
+    assert "SYSTEM" not in cleaned and "IHDR" not in cleaned
+
+
+def test_drop_nonactionable_keeps_curves_or_source_only() -> None:
+    curve = [{"book": "B", "x": 0, "y": 1}]
+    figs = [
+        {"annotations": ["dR/dB"], "curves": [], "source_hint": ""},  # neither → drop
+        {"annotations": ["A"], "curves": curve, "source_hint": ""},  # has curves → keep
+        {"annotations": [], "curves": [], "source_hint": "Book3"},  # has source → keep
+        {"annotations": ["SYSTEM"], "curves": [], "source_hint": "  "},  # blank source → drop
+    ]
+    kept = drop_nonactionable_figures(figs)
+    assert len(kept) == 2
+    assert kept[0]["annotations"] == ["A"]  # curve-bound
+    assert kept[1]["source_hint"] == "Book3"  # source-resolvable
