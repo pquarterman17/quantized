@@ -78,15 +78,6 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
 
 ## Tier 1 — High Impact
 
-2. **`.dwk` v2 persistence + migration** — make an organized project
-   survive save/reload (without this the feature is cosmetic).
-   - [ ] Bump `WORKSPACE_VERSION` to 2; extend `WorkspaceDoc` with
-         `folders`, `activeId`, `selectedIds`, and folder `expanded` state.
-   - [ ] Relax the strict `version === 1` gate to accept v1 (migrate: every
-         dataset → root, no folders) and v2; keep v1 round-trip green.
-   - [ ] Persist + restore `activeId`/`selectedIds` (today reset to
-         `datasets[0]`), and folder expansion (today component-local).
-
 3. **Library tree UI (decomposed) + drag move/reorder** — the Project
    Explorer view, built to stay under the component ceiling.
    - [ ] Extract a `useLibraryTree` hook (folders[] + datasets[] → ordered,
@@ -143,6 +134,13 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
 
 ## Completed
 
+- ~~**2. `.dwk` v2 persistence + migration**~~ (2026-07-04) — `WORKSPACE_VERSION`
+  → 2; `.dwk` + localStorage autosave now carry the folder tree,
+  `folderId`/`order`, active/selection, and folder expansion. v1 docs
+  migrate (empty tree, first dataset active). Defensive load: prune
+  dangling `folderId`, reparent orphan folders, clamp stale active/
+  selection. `WorkspaceState` (input) + `LoadedWorkspace` (parsed).
+  Autosave fires on folder/selection changes too. +8 tests. (`19c79d4`)
 - ~~**1. Folder data model + store actions**~~ (2026-07-04) — `FolderNode
   {id,name,parentId,order}` + `Dataset.folderId`/`order` (`lib/types.ts`);
   `lib/order.ts` (`orderBetween`/`byOrder`); `lib/foldertree.ts` — pure,
