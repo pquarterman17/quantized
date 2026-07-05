@@ -147,8 +147,19 @@ export interface Dataset {
    *  Round-trips through the .dwk workspace. */
   tags?: string[];
   /** Optional group name; the Library renders collapsible sections by group
-   *  (ungrouped datasets fall under "Ungrouped"). Round-trips through .dwk. */
+   *  (ungrouped datasets fall under "Ungrouped"). Round-trips through .dwk.
+   *  Legacy: superseded by the folder tree (`folderId`); kept for .dwk v1
+   *  back-compat + migration (project-organization plan, item 6). */
   group?: string;
+  /** Containing folder id (project-organization plan, Approach B). Absent = the
+   *  dataset lives at the tree root. The folder tree itself is the store's
+   *  `folders` slice; membership lives HERE (not as a folder child-list) so
+   *  deleting a dataset can never dangle a ref. Pure organization — it never
+   *  gates row-state (excludedRows/filter). Round-trips through .dwk v2. */
+  folderId?: string;
+  /** Sort key within the containing folder (see lib/order). Absent = fall back
+   *  to insertion order. Round-trips through .dwk v2. */
+  order?: number;
   /** Worksheet computed columns. They occupy the last `formulas.length` columns
    *  of `data` and recompute when the base data changes (cell edits, corrections).
    *  Round-trips through the .dwk workspace. */
@@ -172,6 +183,20 @@ export interface Dataset {
    *  the analysis view (lib/rowstate.analysisData folds filter-failed rows in
    *  with excludedRows). Serializable; round-trips .dwk. */
   filter?: DataFilter;
+}
+
+/** A folder in the Library's project tree (project-organization plan, Approach
+ *  B). Folders are pure organization over the flat `datasets[]` array: a node
+ *  carries only its identity, display name, parent link, and sort key. Datasets
+ *  point INTO folders via `Dataset.folderId`; folders never list their children,
+ *  so the two structures can't disagree. Round-trips through .dwk v2. */
+export interface FolderNode {
+  id: string;
+  name: string;
+  /** Parent folder id, or null for a top-level (root) folder. */
+  parentId: string | null;
+  /** Sort key among siblings sharing the same parent (see lib/order). */
+  order: number;
 }
 
 /** A registered fit model's metadata (from GET /api/fitting/models). */
