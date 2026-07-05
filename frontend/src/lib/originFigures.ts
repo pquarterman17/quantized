@@ -4,7 +4,18 @@
 // is unit-testable without mounting the store — `store/useApp.ts` owns the
 // actual apply-to-plot-state action.
 
-import type { Dataset, OriginCurve, OriginFigure } from "./types";
+import type { Dataset, OriginCurve, OriginFigure, SeriesStyle } from "./types";
+
+/** Translate a decoded Origin curve style into a plot SeriesStyle. "scatter" →
+ *  markers, no connecting line (width 0); "line" → a solid line at the default
+ *  width (set explicitly so the figure looks like Origin even if the user's
+ *  default trace is Scatter). Returns null when the style is unknown/absent, so
+ *  callers leave that series to the default trace rather than forcing a look. */
+export function originCurveSeriesStyle(style: string | undefined): SeriesStyle | null {
+  if (style === "scatter") return { marker: true, width: 0 };
+  if (style === "line") return { width: 1.5 };
+  return null;
+}
 
 /** One figure attached to an import "family" (one file's worth of books).
  *  `datasetId` is the best-effort resolved target, or null if the figure's
@@ -64,7 +75,7 @@ export function resolveFigureDataset(figure: OriginFigure, candidates: Dataset[]
 export function figureChannelSelection(
   figure: OriginFigure,
   ds: Dataset,
-): { xKey: number | null; yKeys: number[] } | null {
+): { xKey: number | null; yKeys: number[]; styles: Record<number, SeriesStyle> } | null {
   const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
   const book = String(meta.origin_book ?? "");
   const letters = Array.isArray(meta.origin_column_names)
@@ -75,17 +86,20 @@ export function figureChannelSelection(
   if (mine.length === 0) return null;
   const xLetter = String(meta.x_column_name ?? "");
   const yKeys: number[] = [];
+  const styles: Record<number, SeriesStyle> = {};
   let xKey: number | null = null;
   for (const curve of mine) {
     const yIdx = letters.indexOf(curve.y);
     if (yIdx < 0) continue; // e.g. a text/dropped column — skip, never guess
     if (!yKeys.includes(yIdx)) yKeys.push(yIdx);
+    const st = originCurveSeriesStyle(curve.style);
+    if (st) styles[yIdx] = st; // line/scatter from the decoded .opju curve record
     if (curve.x && curve.x !== xLetter) {
       const xIdx = letters.indexOf(curve.x);
       if (xIdx >= 0) xKey = xIdx; // plot against a non-default x channel
     }
   }
-  return yKeys.length > 0 ? { xKey, yKeys } : null;
+  return yKeys.length > 0 ? { xKey, yKeys, styles } : null;
 }
 
 /** Build the Library entries for one import's figures, tagged with the

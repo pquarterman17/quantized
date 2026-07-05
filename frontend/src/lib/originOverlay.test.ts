@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildOverlayDataset, overlayBooks } from "./originOverlay";
+import { buildOverlayDataset, overlayBooks, overlayCurveStyles } from "./originOverlay";
 import type { Dataset, OriginFigure } from "./types";
 
 const figure = (curves: OriginFigure["curves"]): OriginFigure => ({
@@ -74,6 +74,33 @@ describe("buildOverlayDataset", () => {
     expect(ds!.values.map((r) => r[1])).toEqual([NaN, NaN, 10, 20, 30]);
     expect(ds!.metadata.origin_overlay).toBe(true);
     expect(ds!.metadata.origin_overlay_books).toEqual(["Book2", "Book1"]);
+  });
+
+  it("stamps decoded line/scatter styles in column order, recoverable via overlayCurveStyles", () => {
+    const fig = figure([
+      { book: "Book2", x: "A", y: "B", style: "scatter" }, // overlay col 0
+      { book: "Book1", x: "A", y: "B", style: "line" }, // overlay col 1
+    ]);
+    const ds = buildOverlayDataset(fig, [b1, b2]);
+    expect(ds).not.toBeNull();
+    expect(ds!.metadata.origin_curve_styles).toEqual([{ marker: true, width: 0 }, { width: 1.5 }]);
+    // The store reads them back as a channel-index → SeriesStyle map.
+    expect(overlayCurveStyles(ds)).toEqual({ 0: { marker: true, width: 0 }, 1: { width: 1.5 } });
+  });
+
+  it("leaves a gap (null) for an undecoded curve style, so unstyled columns take the default", () => {
+    const fig = figure([
+      { book: "Book2", x: "A", y: "B", style: "scatter" },
+      { book: "Book1", x: "A", y: "B" }, // no style → null slot, no override
+    ]);
+    const ds = buildOverlayDataset(fig, [b1, b2]);
+    expect(ds!.metadata.origin_curve_styles).toEqual([{ marker: true, width: 0 }, null]);
+    expect(overlayCurveStyles(ds)).toEqual({ 0: { marker: true, width: 0 } }); // col 1 absent
+  });
+
+  it("overlayCurveStyles is empty for a non-overlay dataset", () => {
+    expect(overlayCurveStyles(b1.data)).toEqual({});
+    expect(overlayCurveStyles(null)).toEqual({});
   });
 
   it("preserves non-monotonic x order inside a segment (hysteresis-loop safe)", () => {

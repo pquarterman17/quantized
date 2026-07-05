@@ -11,7 +11,8 @@
 // point order intact and render correctly through the existing loop-safe
 // plot machinery (sorted=0 + full-range path builders).
 
-import type { Dataset, DataStruct, OriginFigure } from "./types";
+import { originCurveSeriesStyle } from "./originFigures";
+import type { Dataset, DataStruct, OriginFigure, SeriesStyle } from "./types";
 
 /** Letter -> 0-based value-channel index via origin_column_names, or -1;
  *  the designation-X letter maps to the time column (-2 sentinel). */
@@ -40,6 +41,19 @@ export function overlayBooks(figure: OriginFigure, datasets: Dataset[]): Dataset
  *  null when it doesn't (single-book figures use the plain channel-selection
  *  path). Curves whose letters don't map to decoded channels are skipped —
  *  partial recall must degrade gracefully, never invent data. */
+/** Recover the per-column line/scatter styles stamped by buildOverlayDataset
+ *  into an overlay's metadata, as a channel-index → SeriesStyle map ready for
+ *  the store's `seriesStyles`. Empty for a non-overlay dataset. */
+export function overlayCurveStyles(data: DataStruct | null | undefined): Record<number, SeriesStyle> {
+  const arr = (data?.metadata ?? {})["origin_curve_styles"];
+  if (!Array.isArray(arr)) return {};
+  const out: Record<number, SeriesStyle> = {};
+  arr.forEach((s, i) => {
+    if (s) out[i] = s as SeriesStyle;
+  });
+  return out;
+}
+
 export function buildOverlayDataset(
   figure: OriginFigure,
   datasets: Dataset[],
@@ -54,6 +68,7 @@ export function buildOverlayDataset(
     yCh: number;
     label: string;
     unit: string;
+    style: SeriesStyle | null; // decoded line/scatter, per curve
   }
   const bound: Bound[] = [];
   for (const c of figure.curves ?? []) {
@@ -72,6 +87,7 @@ export function buildOverlayDataset(
       yCh,
       label: `${c.book}: ${label}`,
       unit: ds.data.units[yCh] ?? "",
+      style: originCurveSeriesStyle(c.style),
     });
   }
   if (bound.length < 2) return null;
@@ -123,6 +139,10 @@ export function buildOverlayDataset(
       source_format: String((first as Record<string, unknown>).source_format ?? "origin"),
       origin_overlay: true,
       origin_overlay_figure: figure.name || "",
+      // Per-column line/scatter styles in column order (null where undecoded),
+      // so applyOriginFigure can restore the figure's look — carried in metadata
+      // so it survives the overlay-reuse path too.
+      origin_curve_styles: bound.map((b) => b.style),
       origin_overlay_books: blocks.map((d) =>
         String((d.data.metadata ?? {}).origin_book ?? d.name),
       ),

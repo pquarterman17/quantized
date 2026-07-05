@@ -29,6 +29,10 @@ export interface OriginCurve {
   book: string;
   x: string;
   y: string;
+  /** Plot style decoded from the .opju curve record: "line" (Origin plot:=200)
+   *  or "scatter" (plot:=201). Absent when the importer couldn't recover it
+   *  (all .opj curves, ~8% of .opju curves) — the default trace then stands. */
+  style?: "line" | "scatter";
 }
 
 export interface OriginFigure {
