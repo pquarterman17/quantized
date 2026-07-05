@@ -26,6 +26,7 @@ import {
   figureLabel,
   type OriginFigureEntry,
 } from "../lib/originFigures";
+import { planOriginFolders } from "../lib/originFolders";
 import { buildOverlayDataset } from "../lib/originOverlay";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import { isActive } from "../lib/datafilter";
@@ -651,6 +652,19 @@ export const useApp = create<AppState>((set, get) => ({
             get().addDataset({ id, name: `${stem}:${label}`, data: book });
             newIds.push(id);
           }
+          // item 4: organize the imported books into a project folder that mirrors
+          // Origin's Project Explorer (origin_folder_path) → book → sheet, instead
+          // of dumping N workbooks flat into the Library.
+          const newIdSet = new Set(newIds);
+          const projectDatasets = get().datasets.filter((d) => newIdSet.has(d.id));
+          const plan = planOriginFolders(stem, projectDatasets, nextFolderId);
+          set((s) => ({
+            folders: [...s.folders, ...plan.folders],
+            expandedFolders: [...new Set([...s.expandedFolders, ...plan.expanded])],
+            datasets: s.datasets.map((d) =>
+              plan.membership[d.id] ? { ...d, folderId: plan.membership[d.id] } : d,
+            ),
+          }));
         } else {
           delete data.books;
           const id = nextDatasetId();

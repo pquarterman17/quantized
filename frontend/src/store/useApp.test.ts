@@ -666,7 +666,7 @@ describe("useApp importFiles", () => {
     expect(useApp.getState().status).toContain("imported 2 files");
   });
 
-  it("fans an Origin project out into one dataset per workbook", async () => {
+  it("fans an Origin project out into one dataset per workbook + a project folder", async () => {
     const book = (short: string, long?: string) => ({
       ...raw,
       metadata: { origin_book: short, ...(long ? { origin_book_long: long } : {}) },
@@ -677,10 +677,46 @@ describe("useApp importFiles", () => {
     });
     await useApp.getState().importFiles([fakeFile("Moke.opj")]);
 
-    const ds = useApp.getState().datasets;
-    expect(ds).toHaveLength(2);
-    expect(ds.map((d) => d.name)).toEqual(["Moke:Book1 — 30 nm MnN", "Moke:Book2"]);
-    expect(ds[0].data.metadata.origin_book).toBe("Book1");
+    const st = useApp.getState();
+    expect(st.datasets).toHaveLength(2);
+    expect(st.datasets.map((d) => d.name)).toEqual(["Moke:Book1 — 30 nm MnN", "Moke:Book2"]);
+    expect(st.datasets[0].data.metadata.origin_book).toBe("Book1");
+    // item 4: a "Moke" project folder holding both books (no folder path → flat).
+    expect(st.folders.map((f) => f.name)).toEqual(["Moke"]);
+    const moke = st.folders[0].id;
+    expect(st.datasets.every((d) => d.folderId === moke)).toBe(true);
+    expect(st.expandedFolders).toContain(moke);
+  });
+
+  it("mirrors the Origin Project Explorer folder tree on import (item 4)", async () => {
+    const book = (short: string, path: string[]) => ({
+      ...raw,
+      metadata: { origin_book: short, origin_folder_path: path },
+    });
+    // Moke.opj's real shape: two PE folders; Book4 is a 3-sheet workbook.
+    vi.mocked(uploadFile).mockResolvedValue({
+      ...raw,
+      books: [
+        book("Book1", ["Raw normalized"]),
+        book("Book4", ["Sub subtraction"]),
+        book("Book4@2", ["Sub subtraction"]),
+        book("Book4@3", ["Sub subtraction"]),
+      ],
+    });
+    await useApp.getState().importFiles([fakeFile("Moke.opj")]);
+
+    const st = useApp.getState();
+    const byName = new Map(st.folders.map((f) => [f.name, f]));
+    // Moke → {Raw normalized, Sub subtraction → Book4}
+    expect(st.folders.map((f) => f.name).sort()).toEqual(
+      ["Book4", "Moke", "Raw normalized", "Sub subtraction"].sort(),
+    );
+    expect(byName.get("Raw normalized")!.parentId).toBe(byName.get("Moke")!.id);
+    expect(byName.get("Book4")!.parentId).toBe(byName.get("Sub subtraction")!.id);
+    const at = (name: string) => st.datasets.find((d) => d.name === name)!.folderId;
+    expect(at("Moke:Book1")).toBe(byName.get("Raw normalized")!.id);
+    expect(at("Moke:Book4")).toBe(byName.get("Book4")!.id); // sheet nested in its workbook folder
+    expect(at("Moke:Book4@2")).toBe(byName.get("Book4")!.id);
   });
 
   it("continues past a bad file and reports the failure", async () => {
