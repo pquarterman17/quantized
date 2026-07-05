@@ -6,7 +6,7 @@ import { create } from "zustand";
 import type { CorrectionsRequest } from "../lib/api";
 import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
 import { cloneDataStruct } from "../lib/dataset";
-import { originErrKeys, originHiddenChannels } from "../lib/errorbars";
+import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
 import { setFormatOpts, type Notation } from "../lib/format";
 import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit, macroStep, type MacroStep } from "../lib/macro";
@@ -623,7 +623,7 @@ export const useApp = create<AppState>((set, get) => ({
       y2Keys: null, // and reset the secondary-axis assignment
       seriesStyles: {}, // styles are keyed by channel index → reset per dataset
       seriesLabels: {}, // legend renames are channel-keyed → reset per dataset
-      errKeys: originErrKeys(ds.data), // Origin Y-error columns → error bars (else empty)
+      errKeys: defaultErrKeys(ds.data), // Origin Y-error + parser hints (e.g. refl R←dR)
       seriesOrder: null, // draw order is channel-keyed → reset per dataset
       hiddenChannels: originHiddenChannels(ds.data), // hide Origin error + secondary-X columns
       xLim: null, // and autoscale both axes
@@ -831,7 +831,7 @@ export const useApp = create<AppState>((set, get) => ({
         y2Keys: null,
         seriesStyles: {},
         seriesLabels: {},
-        errKeys: activeDs ? originErrKeys(activeDs.data) : {},
+        errKeys: activeDs ? defaultErrKeys(activeDs.data) : {},
         seriesOrder: null,
         hiddenChannels: activeDs ? originHiddenChannels(activeDs.data) : [],
         xLim: null,
@@ -857,7 +857,7 @@ export const useApp = create<AppState>((set, get) => ({
         y2Keys: null,
         seriesStyles: {},
         seriesLabels: {},
-        errKeys: ds ? originErrKeys(ds.data) : {},
+        errKeys: ds ? defaultErrKeys(ds.data) : {},
         seriesOrder: null,
         hiddenChannels: ds ? originHiddenChannels(ds.data) : [],
         xLim: null,

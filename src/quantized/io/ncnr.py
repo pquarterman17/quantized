@@ -262,6 +262,17 @@ def import_ncnr_dat(filepath: str | Path) -> DataStruct:
         metadata["intensity"] = intensity
     if not np.isnan(background):
         metadata["background"] = background
+    # Plot hints (honoured by the frontend defaults): show the measured
+    # reflectivity R and the fit line 'theory' by default, with dR as R's error
+    # bars; the resolution 'dQ' and normalisation 'fresnel' columns stay off the
+    # plot by default (still toggleable in the Channels card). Keyed by value-
+    # column index (0-based, x/Q excluded).
+    label_idx = {lab: j for j, lab in enumerate(labels)}
+    default_channels = [label_idx[name] for name in ("R", "theory") if name in label_idx]
+    if default_channels:
+        metadata["default_value_channels"] = default_channels
+    if "R" in label_idx and "dR" in label_idx:
+        metadata["error_channels"] = {label_idx["R"]: label_idx["dR"]}
     return DataStruct.create(
         matrix[:, 0], matrix[:, 1:], labels=labels, units=units, metadata=metadata
     )

@@ -4,6 +4,7 @@
 // Colors are stored either as a palette-token name ("--series-3", re-themeable)
 // or a literal hex from the custom picker. Renders for any dataset (≥1 channel).
 
+import { defaultErrKeys } from "../../lib/errorbars";
 import { MARKER_SHAPES } from "../../lib/markers";
 import type { Dataset, LineStyle, MarkerShape, SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -16,10 +17,27 @@ const LINE_OPTS: { value: LineStyle; label: string }[] = [
   { value: "dotted", label: "···" },
 ];
 
-function StyleRow({ channel, label }: { channel: number; label: string }) {
+type TraceMode = "line" | "scatter" | "both";
+const TRACE_OPTS: { value: TraceMode; label: string }[] = [
+  { value: "line", label: "Line" },
+  { value: "scatter", label: "Scatter" },
+  { value: "both", label: "Both" },
+];
+
+function StyleRow({
+  channel,
+  label,
+  naturalErr,
+}: {
+  channel: number;
+  label: string;
+  naturalErr?: number;
+}) {
   const style: SeriesStyle = useApp((s) => s.seriesStyles[channel]) ?? {};
   const setSeriesStyle = useApp((s) => s.setSeriesStyle);
   const resetSeriesStyle = useApp((s) => s.resetSeriesStyle);
+  const errCol = useApp((s) => s.errKeys[channel]);
+  const setErrKey = useApp((s) => s.setErrKey);
 
   const overridden = Object.values(style).some((v) => v !== undefined);
   const customHex = style.color && !style.color.startsWith("--") ? style.color : "#8b5cf6";
@@ -29,6 +47,18 @@ function StyleRow({ channel, label }: { channel: number; label: string }) {
     const n = Number(v);
     if (Number.isFinite(n) && n > 0) setSeriesStyle(channel, { width: n });
   };
+
+  // Quick trace preset: derive from width (0 = no line) + marker, and set both
+  // at once. "Line"/"Both" keep any custom width when the line is already on.
+  const lineOff = style.width === 0;
+  const trace: TraceMode = lineOff ? "scatter" : style.marker ? "both" : "line";
+  const setTrace = (t: TraceMode) => {
+    if (t === "scatter") setSeriesStyle(channel, { width: 0, marker: true });
+    else setSeriesStyle(channel, { marker: t === "both", ...(lineOff ? { width: undefined } : {}) });
+  };
+  // Error bars can be toggled on only when there's a channel to point at: an
+  // existing pick or the dataset's default pairing (Origin Y-error / refl dR).
+  const canError = errCol != null || naturalErr != null;
 
   return (
     <details className="qz-card" style={{ marginBottom: 4 }}>
@@ -62,6 +92,19 @@ function StyleRow({ channel, label }: { channel: number; label: string }) {
         )}
       </summary>
       <div className="qz-card-body">
+        <div
+          style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}
+        >
+          <SegmentedControl<TraceMode> options={TRACE_OPTS} value={trace} onChange={setTrace} />
+          <Checkbox
+            checked={errCol != null}
+            disabled={!canError}
+            onChange={(c) => setErrKey(channel, c ? (naturalErr ?? errCol ?? null) : null)}
+          >
+            Error bars
+          </Checkbox>
+        </div>
+
         <span className="qzk-field-lbl">Color</span>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           {PALETTE.map((n) => {
@@ -157,10 +200,13 @@ export default function SeriesStyleCard({ active }: { active: Dataset | null }) 
   const styled = useApp((s) => Object.keys(s.seriesStyles).length);
   if (!active || active.data.labels.length === 0) return null;
 
+  // Default error pairing per series (Origin Y-error / parser hint) so the
+  // per-row "Error bars" toggle knows which column to switch on.
+  const natErr = defaultErrKeys(active.data);
   return (
     <Card title="Series style" count={styled || undefined} defaultOpen={false}>
       {active.data.labels.map((lab, i) => (
-        <StyleRow key={i} channel={i} label={lab} />
+        <StyleRow key={i} channel={i} label={lab} naturalErr={natErr[i]} />
       ))}
     </Card>
   );

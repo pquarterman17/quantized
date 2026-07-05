@@ -136,3 +136,36 @@ def test_ncnr_metadata_beyond_first_five_lines(tmp_path: Path) -> None:
     assert ds.metadata["intensity"] == pytest.approx(1.2345)
     assert ds.metadata["background"] == pytest.approx(0.001)
     assert ds.n_points == 3
+
+
+def test_ncnr_dat_default_plot_hints(tmp_path: Path) -> None:
+    """A full cross section emits plot hints: default to R + fit (theory) with
+    dR as R's error bars; dQ and fresnel stay off the plot by default."""
+    f = tmp_path / "hints.datA"
+    f.write_text(
+        "# Q (1/A) dQ R dR theory fresnel\n"
+        "0.01 0.001 0.5 0.01 0.51 1.0\n"
+        "0.02 0.001 0.6 0.01 0.61 1.0\n"
+        "0.03 0.001 0.7 0.01 0.71 1.0\n",
+        encoding="latin-1",
+    )
+    ds = import_ncnr_dat(f)
+    assert list(ds.labels) == ["dQ", "R", "dR", "theory", "fresnel"]
+    # R (value-col 1) + theory (3) plotted by default; dQ (0), dR (2), fresnel (4) off.
+    assert ds.metadata["default_value_channels"] == [1, 3]
+    # dR (2) is R's (1) error bars.
+    assert ds.metadata["error_channels"] == {1: 2}
+
+
+def test_ncnr_dat_hints_absent_when_columns_missing(tmp_path: Path) -> None:
+    """A minimal 3-column file (Q dQ R) has no theory/fresnel — the default set
+    is just R, and there's no dR so no error pairing is emitted."""
+    f = tmp_path / "min.datA"
+    f.write_text(
+        "# Q (1/A) dQ R\n0.01 0.001 0.5\n0.02 0.001 0.6\n0.03 0.001 0.7\n",
+        encoding="latin-1",
+    )
+    ds = import_ncnr_dat(f)
+    assert list(ds.labels) == ["dQ", "R"]
+    assert ds.metadata["default_value_channels"] == [1]  # R only
+    assert "error_channels" not in ds.metadata  # no dR column

@@ -37,6 +37,24 @@ export function buildErrorColumns(
  *  `errKeys`. Empty for non-Origin data (no designations) or books with no
  *  Y-error columns. "X-error" columns are ignored — the plugin draws vertical
  *  whiskers only, and a leading `dQ` is genuinely the X's error, not a Y's. */
+/** Default error-bar pairings for a dataset: Origin Y-error designations
+ *  ({@link originErrKeys}) merged with any parser-provided
+ *  `metadata.error_channels` hint ({seriesCol: errCol} — e.g. reflectometry
+ *  `.dat` pairs R with dR). The explicit hint wins on a conflict. Used to seed
+ *  `errKeys` on dataset activation and to drive the Series-style error toggle. */
+export function defaultErrKeys(ds: DataStruct): Record<number, number> {
+  const out: Record<number, number> = { ...originErrKeys(ds) };
+  const hint = (ds.metadata ?? {})["error_channels"];
+  if (hint && typeof hint === "object" && !Array.isArray(hint)) {
+    for (const [k, v] of Object.entries(hint as Record<string, unknown>)) {
+      const ki = Number(k);
+      const vi = Number(v);
+      if (Number.isInteger(ki) && Number.isInteger(vi) && ki >= 0 && vi >= 0) out[ki] = vi;
+    }
+  }
+  return out;
+}
+
 export function originErrKeys(ds: DataStruct): Record<number, number> {
   const meta = ds.metadata ?? {};
   const desig = meta["column_designations"];

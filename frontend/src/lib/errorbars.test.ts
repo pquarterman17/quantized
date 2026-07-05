@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildErrorColumns, originErrKeys, originHiddenChannels } from "./errorbars";
+import {
+  buildErrorColumns,
+  defaultErrKeys,
+  originErrKeys,
+  originHiddenChannels,
+} from "./errorbars";
 import type { DataStruct } from "./types";
 
 /** Build an Origin-shaped DataStruct carrying only the metadata originErrKeys
@@ -174,5 +179,32 @@ describe("originErrKeys (Origin Y-error → error-bar defaults)", () => {
       F: "Y", // Kerr signal
     });
     expect(originHiddenChannels(ds)).toEqual([1, 3]);
+  });
+});
+
+describe("defaultErrKeys (Origin designations + parser error_channels hint)", () => {
+  it("reads a parser error_channels hint (e.g. reflectometry R←dR)", () => {
+    const ds: DataStruct = {
+      time: [0, 1],
+      values: [
+        [0, 0, 0],
+        [1, 1, 1],
+      ],
+      labels: ["dQ", "R", "dR"],
+      units: ["", "", ""],
+      metadata: { error_channels: { 1: 2 } },
+    };
+    expect(defaultErrKeys(ds)).toEqual({ 1: 2 });
+  });
+
+  it("merges Origin Y-error designations with the hint", () => {
+    const ds = origin(["A", "B", "C"], { A: "X", B: "Y", C: "Y-error" });
+    (ds.metadata as Record<string, unknown>).error_channels = { 5: 6 };
+    expect(defaultErrKeys(ds)).toEqual({ 1: 2, 5: 6 });
+  });
+
+  it("falls back to Origin-only when no hint is present", () => {
+    const ds = origin(["A", "B", "C"], { A: "X", B: "Y", C: "Y-error" });
+    expect(defaultErrKeys(ds)).toEqual({ 1: 2 });
   });
 });

@@ -100,6 +100,17 @@ const MIN_DENSITY_RATIO = 0.1;
  *  a freshly-loaded dataset show" — shared by the main plot (effectiveChannels)
  *  and the Library thumbnail (Sparkline). */
 export function defaultDenseChannels(ds: DataStruct, xKey: number | null = null): number[] {
+  // A parser-provided default plotted set (metadata.default_value_channels —
+  // e.g. reflectometry .dat picks R + fit, leaving dQ/fresnel off by default)
+  // wins over the density heuristic when present and valid.
+  const hint = (ds.metadata ?? {})["default_value_channels"];
+  if (Array.isArray(hint)) {
+    const picks = hint.filter(
+      (v): v is number =>
+        typeof v === "number" && Number.isInteger(v) && v >= 0 && v < ds.labels.length && v !== xKey,
+    );
+    if (picks.length > 0) return picks;
+  }
   const xs = xKey == null ? ds.time : ds.values.map((row) => row[xKey]);
   const candidates = ds.labels.map((_, i) => i).filter((i) => i !== xKey);
   const counts = candidates.map((c) =>

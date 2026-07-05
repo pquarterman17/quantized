@@ -254,6 +254,35 @@ describe("defaultDenseChannels / primaryChannel (NaN-sparse default selection)",
     // arbitrarily empty one).
     expect(defaultDenseChannels(flat)).toEqual([0, 1]);
   });
+
+  it("honors a parser default_value_channels hint over the density heuristic", () => {
+    // Reflectometry .dat: every column is dense, but the parser hints that only
+    // R (1) and theory (3) should plot by default (dQ/dR/fresnel stay off).
+    const row = [1, 1, 1, 1, 1];
+    const refl: DataStruct = {
+      time: [0.01, 0.02, 0.03],
+      values: [row, row, row],
+      labels: ["dQ", "R", "dR", "theory", "fresnel"],
+      units: ["1/A", "", "", "", ""],
+      metadata: { default_value_channels: [1, 3] },
+    };
+    expect(defaultDenseChannels(refl)).toEqual([1, 3]);
+  });
+
+  it("ignores an out-of-range hint and falls back to the heuristic", () => {
+    const ds2: DataStruct = {
+      time: [0, 1, 2],
+      values: [
+        [1, 2],
+        [1, 2],
+        [1, 2],
+      ],
+      labels: ["A", "B"],
+      units: ["", ""],
+      metadata: { default_value_channels: [9, 9] },
+    };
+    expect(defaultDenseChannels(ds2)).toEqual([0, 1]);
+  });
 });
 
 describe("withFitOverlay", () => {
