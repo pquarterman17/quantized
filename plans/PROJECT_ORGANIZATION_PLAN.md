@@ -111,13 +111,17 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
    - [x] Backend: `io/origin_project/tree.py` decodes the PE folder tree and
          attaches `metadata.origin_folder_path` (root-exclusive). **`.opj`:
          100% vs live-Origin-COM across 7 diverse files (611/611 windows, incl.
-         4–5-level nesting + duplicate names + root-level mixes). `.opju`: a
-         documented gap — the per-window entry encoding wasn't cracked without
-         guessing, so `opju_folder_paths` returns `{}` and `.opju` books fall
-         back to a flat project folder.** 23 synthetic + 4 realdata tests.
+         4–5-level nesting + duplicate names + root-level mixes). `.opju`
+         (CPYUA 4.3811, OriginPro 2026b): decoded and byte-exact vs live COM on
+         11 controlled specimens (flat/sibling/nested/3-level/skip+reorder/
+         graph-in-folder/empty); the older 4.3380 corpus stores membership
+         outside the folder record (not yet decoded) and degrades cleanly to a
+         flat project folder — fail-closed, never mis-parsed.** (`4e1031e`)
+         34 synthetic + realdata tests total.
    - [x] Verified Origin PE tree == Boson Library tree via COM: `.opj` matches
          (XRD `Folder1`✓, Moke `Raw normalized`/`Sub subtraction`✓); `.opju`
-         degrades to the flat project folder (expected, gap above).
+         4.3811 matches (real1/real2/deep3/emptyf/split/nested all COM-pinned);
+         4.3380 `.opju` degrades to the flat project folder (documented gap).
    - [ ] Retire `originBookFamilies`/`originSheetGroups` as the *primary*
          grouping once folders exist (keep as a fallback for un-foldered
          legacy datasets, or delete if migration covers them). *(overlaps #6)*
