@@ -50,7 +50,7 @@ from numpy.typing import NDArray
 
 from quantized.io.origin_project.container import ORIGIN_MISSING, plausible_column
 
-__all__ = ["CodecError", "decode_stream", "scan_columns", "tail_start"]
+__all__ = ["CodecError", "curve_plot_style", "decode_stream", "scan_columns", "tail_start"]
 
 _MASK = 0xFFFFFFFFFFFFFFFF
 _TABLE_MASK = (1 << 12) - 1  # 2**12-entry FCM/DFCM hash tables
@@ -303,3 +303,38 @@ def tail_start(b: bytes) -> int:
         cursor = got[1]
         end = max(end, cursor, marker)
     return end
+
+
+# ── curve plot-style (item 35 follow-on: line vs scatter) ─────────────────────
+#
+# A compact-int property tag inside a CPYUA curve's own object body, found at
+# a variable forward offset (22-44 bytes past the curve/column token's start
+# -- never a fixed offset; see ``opju_curves.py``'s ``_CURVE_RE``/``_extract_
+# curves_0x03`` and ``opju_curves_allcols.py``'s ``extract_curves_allcols``,
+# both of which locate a curve token first and then call this on its start).
+# Validated 135/147 real-corpus curve tokens, 0 disagreements, and 4/4 on the
+# ``fig_pairs`` by-construction oracle (scatter/scatter/scatter/line, matching
+# LabTalk's ``plot:=201``/``plot:=200``). Lives here, not in ``opju_curves.py``,
+# because ``opju_curves_allcols.py`` needs it too and already sits *beneath*
+# ``opju_curves.py`` in the import graph (the latter imports the former) --
+# importing it the other way round would be circular. ``opju_codec`` is the
+# lowest-level module both curve modules already import (``scan_columns``/
+# ``_NAME``), so it carries no new dependency edge.
+_STYLE_RE = re.compile(rb"\x8f\x01(.)\x83")
+_STYLE_WINDOW = 400  # corpus-wide minimum gap between two curve tokens is 697
+_STYLE_BYTES = {0xC8: "line", 0xC9: "scatter"}
+
+
+def curve_plot_style(b: bytes, token_start: int) -> str | None:
+    """Plot style ("line"/"scatter") of the curve token starting at
+    ``token_start``, or ``None`` when no ``8f 01 <style> 83`` tag is found in
+    the 400-byte forward window, or the style byte is unrecognized.
+
+    ~8% of real-corpus curve tokens (composite-window duplicate references)
+    legitimately have no tag in range -- this returns ``None`` for those
+    rather than fabricating a default.
+    """
+    m = _STYLE_RE.search(b, token_start, min(len(b), token_start + _STYLE_WINDOW))
+    if m is None:
+        return None
+    return _STYLE_BYTES.get(m.group(1)[0])

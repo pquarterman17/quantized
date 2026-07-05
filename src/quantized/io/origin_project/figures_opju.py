@@ -114,8 +114,10 @@ Validated against the real per-plot oracle at 100% precision and 100%
 aggregate recall (36/36 oracle pairs across the four real-corpus files —
 see ``opju_curves.py`` / ``opju_curves_allcols.py``'s module docstrings for
 the full byte-level trail). Each decodable figure gets a best-effort
-``"curves"`` list of ``{"book", "x", "y"}`` dicts; per-*figure* attribution
-(which curve belongs to which decoded window) remains a best-effort
+``"curves"`` list of ``{"book", "x", "y"}`` dicts, plus an optional
+``"style"`` key (``"line"``/``"scatter"``, from ``opju_codec.curve_plot_style``)
+present only when the token's ``8f 01 <style> 83`` tag was found; per-*figure*
+attribution (which curve belongs to which decoded window) remains a best-effort
 ``[anchor, next_anchor)`` heuristic — see ``opju_curves.py``'s "Known gap —
 per-figure attribution" — so a curve is sometimes attributed to the wrong
 figure within a file even though the ``(book, column)`` pair itself is

@@ -30,6 +30,7 @@ from quantized.io.origin_project.figures_opju import (
     drop_nonactionable_figures,
     extract_figures_opju,
 )
+from quantized.io.origin_project.opju_codec import curve_plot_style
 
 # ── synthetic CPYUA figure-record builder ─────────────────────────────────────
 
@@ -665,6 +666,41 @@ def test_synthetic_curve_families_merge_and_dedup() -> None:
     assert figs[0]["curves"] == [{"book": "FBook", "x": "A", "y": "C"}]
 
 
+# ── curve plot-style (line vs scatter) — pure unit tests ──────────────────────
+
+
+def test_curve_plot_style_line() -> None:
+    """``0xC8`` -> "line" (Origin LabTalk ``plot:=200``)."""
+    b = b"\x00" * 10 + b"\x8f\x01\xc8\x83"
+    assert curve_plot_style(b, 0) == "line"
+
+
+def test_curve_plot_style_scatter() -> None:
+    """``0xC9`` -> "scatter" (Origin LabTalk ``plot:=201``)."""
+    b = b"\x00" * 10 + b"\x8f\x01\xc9\x83"
+    assert curve_plot_style(b, 0) == "scatter"
+
+
+def test_curve_plot_style_no_tag_found() -> None:
+    """No ``8f 01 <style> 83`` tag anywhere in the forward window -> ``None``,
+    never a fabricated default (~8% of real-corpus tokens legitimately have none)."""
+    b = b"\x00" * 50
+    assert curve_plot_style(b, 0) is None
+
+
+def test_curve_plot_style_unknown_byte() -> None:
+    """A style byte outside the known ``{0xc8, 0xc9}`` set -> ``None``."""
+    b = b"\x00" * 10 + b"\x8f\x01\xca\x83"
+    assert curve_plot_style(b, 0) is None
+
+
+def test_curve_plot_style_scans_forward_window_not_fixed_offset() -> None:
+    """The tag is found at a variable offset (not a hardcoded position) as
+    long as it falls inside the 400-byte forward window from ``token_start``."""
+    b = b"\x00" * 30 + b"\x8f\x01\xc8\x83"
+    assert curve_plot_style(b, 0) == "line"
+
+
 # ── realdata: Origin ground-truth oracle (specimens only — see module docstring) ──
 
 
@@ -877,13 +913,27 @@ def test_realdata_fig_pairs_curve_bindings() -> None:
     figs = extract_figures_opju(src.read_bytes())
     assert len(figs) == 4
     expected = [
-        {"book": "FBook", "x": "A", "y": "B"},
-        {"book": "FBook", "x": "A", "y": "B"},
-        {"book": "FBook", "x": "A", "y": "C"},  # the deliberate A-C diff
-        {"book": "FBook", "x": "A", "y": "B"},
+        {"book": "FBook", "x": "A", "y": "B", "style": "scatter"},
+        {"book": "FBook", "x": "A", "y": "B", "style": "scatter"},
+        {"book": "FBook", "x": "A", "y": "C", "style": "scatter"},  # the deliberate A-C diff
+        {"book": "FBook", "x": "A", "y": "B", "style": "line"},
     ]
     for i, (f, want) in enumerate(zip(figs, expected, strict=True)):
         assert f["curves"] == [want], f"fig_pairs graph{i + 1}: curves={f['curves']}"
+
+
+@pytest.mark.realdata
+def test_realdata_fig_pairs_curve_plot_styles() -> None:
+    """Dedicated style-field assertion for the plot-style wiring (curve_plot_style):
+    Graph1's curves 1-3 plot ``:=201`` (scatter), curve 4 plots ``:=200`` (line) --
+    see ``opju_codec.curve_plot_style``'s module docstring for the byte-level trail."""
+    src = _SPEC / "fig_pairs.opju"
+    if not src.exists():
+        pytest.skip("fig_pairs specimen not present on this machine")
+    figs = extract_figures_opju(src.read_bytes())
+    assert len(figs) == 4
+    styles = [f["curves"][0]["style"] for f in figs]
+    assert styles == ["scatter", "scatter", "scatter", "line"]
 
 
 @pytest.mark.realdata
@@ -898,9 +948,9 @@ def test_realdata_curves_multi_bindings() -> None:
     figs = extract_figures_opju(src.read_bytes())
     assert len(figs) == 1
     assert figs[0]["curves"] == [
-        {"book": "MBook", "x": "A", "y": "B"},
-        {"book": "MBook", "x": "A", "y": "C"},
-        {"book": "MBook", "x": "A", "y": "D"},
+        {"book": "MBook", "x": "A", "y": "B", "style": "scatter"},
+        {"book": "MBook", "x": "A", "y": "C", "style": "scatter"},
+        {"book": "MBook", "x": "A", "y": "D", "style": "scatter"},
     ]
 
 
@@ -916,8 +966,8 @@ def test_realdata_curves_2books_bindings() -> None:
     figs = extract_figures_opju(src.read_bytes())
     assert len(figs) == 1
     assert figs[0]["curves"] == [
-        {"book": "BookOne", "x": "A", "y": "B"},
-        {"book": "BookTwo", "x": "A", "y": "C"},
+        {"book": "BookOne", "x": "A", "y": "B", "style": "scatter"},
+        {"book": "BookTwo", "x": "A", "y": "C", "style": "scatter"},
     ]
 
 

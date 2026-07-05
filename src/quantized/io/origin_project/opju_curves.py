@@ -341,7 +341,7 @@ import re
 from collections.abc import Mapping, Sequence
 
 from quantized.io.origin_project.opj import _group
-from quantized.io.origin_project.opju_codec import scan_columns
+from quantized.io.origin_project.opju_codec import curve_plot_style, scan_columns
 from quantized.io.origin_project.opju_curves_allcols import (
     _allocated_column_map,
     extract_curves_allcols,
@@ -463,7 +463,8 @@ def _extract_curves_0x03(
         cm = bm.columns.get(y_col)
         if cm is None or cm.designation != "Y":
             continue
-        out.append({"book": book, "x": cols[0], "y": y_col})
+        style = curve_plot_style(b, m.start())
+        out.append({"book": book, "x": cols[0], "y": y_col, **({"style": style} if style else {})})
     return out
 
 

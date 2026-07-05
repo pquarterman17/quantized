@@ -154,7 +154,7 @@ import re
 from collections import OrderedDict
 from collections.abc import Mapping
 
-from quantized.io.origin_project.opju_codec import _NAME
+from quantized.io.origin_project.opju_codec import _NAME, curve_plot_style
 
 __all__ = ["extract_curves_allcols"]
 
@@ -249,5 +249,6 @@ def extract_curves_allcols(
         if info is None:
             continue
         book, y_col = info
-        out.append({"book": book, "x": "A", "y": y_col})
+        style = curve_plot_style(b, m.start())
+        out.append({"book": book, "x": "A", "y": y_col, **({"style": style} if style else {})})
     return out
