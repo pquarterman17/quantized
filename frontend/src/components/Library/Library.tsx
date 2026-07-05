@@ -7,6 +7,8 @@ import { useState } from "react";
 import BookFamiliesSection from "./BookFamiliesSection";
 import DatasetRow from "./DatasetRow";
 import FiguresSection from "./FiguresSection";
+import FolderRow from "./FolderRow";
+import { useLibraryTree } from "./useLibraryTree";
 import { makeDemoDataset } from "../../lib/demo";
 import {
   groupDatasets,
@@ -28,6 +30,9 @@ export default function Library() {
   const selectedIds = useApp((s) => s.selectedIds);
   const addDataset = useApp((s) => s.addDataset);
   const importFiles = useApp((s) => s.importFiles);
+  const folders = useApp((s) => s.folders);
+  const createFolder = useApp((s) => s.createFolder);
+  const treeRows = useLibraryTree();
   const [query, setQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState(""); // "" = all groups
   const [dragging, setDragging] = useState(false);
@@ -66,8 +71,9 @@ export default function Library() {
   );
   const grouped = hasAnyGroup(datasets);
   // Reorder is the flat manual-order tool; it operates on the global list, so it
-  // only makes sense when the list isn't filtered or split into group sections.
-  const canReorder = query.trim() === "" && !grouped;
+  // only makes sense when the list isn't filtered, split into group sections, or
+  // organized into folders (the tree has its own drag/menu ordering).
+  const canReorder = query.trim() === "" && !grouped && folders.length === 0;
   const sections = grouped ? groupDatasets(shown) : null;
 
   // Non-first sheets of a multi-sheet Origin pseudo-book (item ??) get a
@@ -90,7 +96,7 @@ export default function Library() {
       return next;
     });
 
-  const row = (d: Dataset) => (
+  const row = (d: Dataset, depth = 0) => (
     <DatasetRow
       key={d.id}
       dataset={d}
@@ -101,13 +107,52 @@ export default function Library() {
       canMoveDown={datasets.indexOf(d) < datasets.length - 1}
       onFilterTag={setQuery}
       sheetNumber={sheetOf.get(d.id)}
+      depth={depth}
     />
   );
+
+  // Body: a folder tree when folders exist (and no active search), the derived
+  // group sections when datasets carry a `group`, else the flat list. A search
+  // query always collapses to a flat filtered list (tree/grouping step aside).
+  let body: React.ReactNode;
+  if (query.trim() !== "") {
+    body = shown.map((d) => row(d));
+  } else if (folders.length > 0) {
+    body = treeRows.map((r) =>
+      r.kind === "folder" ? (
+        <FolderRow
+          key={r.id}
+          folder={r.folder}
+          depth={r.depth}
+          count={r.count}
+          expanded={r.expanded}
+        />
+      ) : (
+        row(r.dataset, r.depth)
+      ),
+    );
+  } else if (sections) {
+    body = sections.map((g) => (
+      <div key={g.key} className="qzk-lib-group">
+        <button className="qzk-group-head" onClick={() => toggle(g.key)}>
+          <span className="qzk-group-caret">{collapsed.has(g.key) ? "▸" : "▾"}</span>
+          <span className="qzk-group-name">{g.label}</span>
+          <span className="qzk-group-count">{g.items.length}</span>
+        </button>
+        {!collapsed.has(g.key) && g.items.map((d) => row(d))}
+      </div>
+    ));
+  } else {
+    body = shown.map((d) => row(d));
+  }
 
   return (
     <aside
       className={`qzk-library${dragging ? " dragover" : ""}`}
       onDragOver={(e) => {
+        // Only react to OS file drags; an internal dataset drag (row → folder) is
+        // handled by FolderRow and must not trip the file-import dropzone.
+        if (!e.dataTransfer.types.includes("Files")) return;
         e.preventDefault();
         if (!dragging) setDragging(true);
       }}
@@ -119,6 +164,13 @@ export default function Library() {
       <div className="qzk-lib-head">
         <span className="qzk-lib-title">Library</span>
         <div style={{ display: "flex", gap: 4 }}>
+          <button
+            className="qz-icon-btn"
+            title="New folder"
+            onClick={() => createFolder(null, "New Folder")}
+          >
+            ▦
+          </button>
           <button className="qz-icon-btn" title="Add demo dataset" onClick={onDemo}>
             ✚
           </button>
@@ -154,20 +206,9 @@ export default function Library() {
       <FiguresSection />
       <BookFamiliesSection />
 
-      {sections
-        ? sections.map((g) => (
-            <div key={g.key} className="qzk-lib-group">
-              <button className="qzk-group-head" onClick={() => toggle(g.key)}>
-                <span className="qzk-group-caret">{collapsed.has(g.key) ? "▸" : "▾"}</span>
-                <span className="qzk-group-name">{g.label}</span>
-                <span className="qzk-group-count">{g.items.length}</span>
-              </button>
-              {!collapsed.has(g.key) && g.items.map(row)}
-            </div>
-          ))
-        : shown.map(row)}
+      {body}
 
-      {shown.length === 0 && (
+      {shown.length === 0 && folders.length === 0 && (
         <div className="qzk-ds-meta" style={{ padding: 8, textAlign: "center" }}>
           {datasets.length === 0
             ? "Drop files here, or use ⊞ to import / ✚ for a demo"

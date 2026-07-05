@@ -144,6 +144,14 @@ body {
 .qzk-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .qzk-group-count { color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 
+/* Folder tree (project-organization item 3): user-named folders over the flat
+   dataset list. Reuses the group caret/name/count, but normal-case with a folder
+   feel and a drop-target highlight. Indent is inline (depth * step). */
+.qzk-folder-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 3px 4px; background: none; border: none; border-radius: var(--radius-sm); cursor: pointer; color: var(--text); font-size: var(--font-size-sm); font-weight: var(--weight-semibold); text-align: left; }
+.qzk-folder-head:hover { background: var(--surface-2); }
+.qzk-folder-head.dropinto { box-shadow: inset 0 0 0 2px var(--accent); background: var(--surface-2); }
+.qzk-folder-rename { flex: 1; min-width: 0; }
+
 /* Figures section (item 18): one restorable plot-state snapshot per row. */
 .qzk-fig-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; color: var(--text); font-size: var(--font-size-sm); }
 .qzk-fig-item:hover:not(:disabled) { border-color: var(--accent); }

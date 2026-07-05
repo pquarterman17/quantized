@@ -6,6 +6,7 @@
 import { useState } from "react";
 
 import Sparkline from "./Sparkline";
+import { DATASET_DND } from "./useLibraryTree";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { Badge } from "../primitives";
 import type { Dataset } from "../../lib/types";
@@ -27,6 +28,9 @@ interface Props {
    *  subtle indent + "sheet N" chip so the parent/child relation reads at a
    *  glance. Undefined for ordinary datasets and for a group's parent (sheet 1). */
   sheetNumber?: number;
+  /** Indent depth in the folder tree (0 = root); shifts the row right so nesting
+   *  reads at a glance. Undefined outside the tree view. */
+  depth?: number;
 }
 
 export default function DatasetRow({
@@ -38,6 +42,7 @@ export default function DatasetRow({
   canMoveDown,
   onFilterTag,
   sheetNumber,
+  depth = 0,
 }: Props) {
   const setActive = useApp((s) => s.setActive);
   const toggleSelected = useApp((s) => s.toggleSelected);
@@ -52,6 +57,9 @@ export default function DatasetRow({
   const addDatasetTag = useApp((s) => s.addDatasetTag);
   const removeDatasetTag = useApp((s) => s.removeDatasetTag);
   const setDatasetGroup = useApp((s) => s.setDatasetGroup);
+  const moveDatasetToFolder = useApp((s) => s.moveDatasetToFolder);
+  const createFolder = useApp((s) => s.createFolder);
+  const folders = useApp((s) => s.folders);
 
   // Inline editors (null = not editing); group/rename allow an empty draft.
   const [rename, setRename] = useState<string | null>(null);
@@ -97,6 +105,24 @@ export default function DatasetRow({
     { label: "Duplicate", run: () => duplicateDataset(d.id) },
     { label: "Rename…", run: () => setRename(d.name) },
     { label: "Add tag…", run: () => setTag("") },
+    // Move into a folder (project-organization item 3). Flat list of folders +
+    // an out-to-root option + create-a-new-folder-with-this. (Drag onto a folder
+    // header does the same.)
+    { separator: true },
+    ...folders.map(
+      (f): ContextMenuItem => ({
+        label: `Move to "${f.name}"`,
+        run: () => moveDatasetToFolder(d.id, f.id),
+        disabled: d.folderId === f.id,
+      }),
+    ),
+    ...(d.folderId
+      ? [{ label: "Move to top level", run: () => moveDatasetToFolder(d.id, null) } as ContextMenuItem]
+      : []),
+    {
+      label: "New folder with this…",
+      run: () => moveDatasetToFolder(d.id, createFolder(null, "New Folder")),
+    },
     // Batch-apply this dataset's corrections (only when it has any).
     ...(d.corrections
       ? [
@@ -154,6 +180,12 @@ export default function DatasetRow({
       className={`qzk-ds${active ? " active" : ""}${selected ? " selected" : ""}${
         sheetNumber ? " qzk-ds-sheet" : ""
       }`}
+      style={depth ? { marginLeft: depth * 14 } : undefined}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DATASET_DND, d.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       onClick={onRowClick}
       onContextMenu={onContextMenu}
     >

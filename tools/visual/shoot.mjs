@@ -119,31 +119,56 @@ for (const shot of spec.shots) {
   // overrides (yKeys/y2Keys/plotTitle/…) AFTER addDataset resets them.
   await page.evaluate((s) => {
     const { useApp } = window.__qz;
-    useApp.setState({ datasets: [], activeId: null, selectedIds: [], originFigures: [] });
+    useApp.setState({
+      datasets: [],
+      folders: [],
+      expandedFolders: [],
+      activeId: null,
+      selectedIds: [],
+      originFigures: [],
+    });
     const api = useApp.getState();
-    api.addDataset(s.dataset);
-    if (s.stageTab) useApp.getState().setStageTab(s.stageTab);
-    if (s.state) useApp.setState(s.state);
+    if (s.tree) {
+      // Build a folder tree: addDataset for each (inits view state), then set the
+      // folders + per-dataset folderId + expansion directly (rendering reads them).
+      for (const d of s.tree.datasets) api.addDataset(d);
+      useApp.setState((st) => ({
+        folders: s.tree.folders || [],
+        expandedFolders: s.tree.expanded || [],
+        datasets: st.datasets.map((d) =>
+          s.tree.membership && s.tree.membership[d.id]
+            ? { ...d, folderId: s.tree.membership[d.id] }
+            : d,
+        ),
+      }));
+    } else {
+      api.addDataset(s.dataset);
+      if (s.stageTab) useApp.getState().setStageTab(s.stageTab);
+      if (s.state) useApp.setState(s.state);
+    }
   }, shot);
 
-  // Wait for the real canvas to exist and draw.
-  const sel = shot.stageTab === "worksheet" ? ".qzk-stage-cell" : ".qzk-stage";
-  await page.waitForSelector(`${sel} canvas, ${sel}`, { timeout: 6000 }).catch(() => {});
-  await new Promise((r) => setTimeout(r, 500)); // let uPlot settle + fonts
+  // Screenshot target: the plot canvas by default, or an explicit selector (e.g.
+  // ".qzk-library" for the folder tree).
+  const target = shot.target || ".qzk-stage";
+  const isPlot = target === ".qzk-stage";
+  await page.waitForSelector(target, { timeout: 6000 }).catch(() => {});
+  await new Promise((r) => setTimeout(r, isPlot ? 500 : 250));
 
-  const el = (await page.$(".qzk-stage")) || (await page.$(".qzk-stage-cell"));
+  const el = (await page.$(target)) || (await page.$(".qzk-stage-cell"));
   const outPath = join(outDir, `${shot.name}.png`);
   if (el) await el.screenshot({ path: outPath });
   else await page.screenshot({ path: outPath }); // fallback: full page
 
-  // Report whether a canvas with non-blank pixels actually rendered.
-  const canvasInfo = await page.evaluate((sel) => {
-    const c = document.querySelector(`${sel} canvas`);
-    if (!c) return { canvas: false };
-    return { canvas: true, w: c.width, h: c.height };
-  }, sel);
+  // For plot shots, confirm a canvas with real dimensions rendered.
+  const canvasInfo = isPlot
+    ? await page.evaluate(() => {
+        const c = document.querySelector(".qzk-stage canvas");
+        return c ? { canvas: true, w: c.width, h: c.height } : { canvas: false };
+      })
+    : { canvas: "n/a" };
   results.push({ name: shot.name, out: outPath, ...canvasInfo });
-  console.log(`shot ${shot.name}: canvas=${canvasInfo.canvas} ${canvasInfo.w || ""}x${canvasInfo.h || ""} -> ${outPath}`);
+  console.log(`shot ${shot.name}: target=${target} canvas=${canvasInfo.canvas} ${canvasInfo.w || ""} -> ${outPath}`);
 }
 
 await writeFile(join(outDir, "console.log"), logs.join("\n"), "utf8");
