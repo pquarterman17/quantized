@@ -1699,3 +1699,73 @@ def test_realdata_notes_probe_specimen() -> None:
         "QZNOTE line one: sample MnN 30nm",
         "QZNOTE line two: field sweep at 300K",
     ]
+
+
+# ── unrecovered designated-X fallback (silent x-mislabel regression) ──────────
+
+
+def test_build_book_unrecovered_x_falls_back_to_row_index() -> None:
+    """A book that DECLARES an X column but whose X failed to decode (absent from
+    ``cols``) must NOT promote a Y column to the x-axis — that silently relabels
+    a measurement as the independent variable and drops the real X. It falls back
+    to a synthetic 0..N-1 row index and keeps every decoded column as a value
+    series. Regression for Moke.opj Book3 / the hc2convert.opj TDI-column class.
+    """
+    from quantized.io.origin_project.opj import _build_book
+    from quantized.io.origin_project.windows import BookMeta, ColumnMeta
+
+    meta = BookMeta(
+        short="Book1",
+        long_name="Book1",
+        columns={
+            "A": ColumnMeta("A", "X", "Temperature", "K", ""),  # declared X, never decodes
+            "B": ColumnMeta("B", "Y", "Hex", "Oe", ""),
+            "C": ColumnMeta("C", "Y", "Hc", "Oe", ""),
+        },
+    )
+    cols = [("B", np.array([10.0, 20.0, 30.0])), ("C", np.array([1.0, 2.0, 3.0]))]
+    ds = _build_book("Book1", cols, {"Book1": meta}, [], "origin_opj")
+
+    assert np.array_equal(np.asarray(ds.time), np.array([0.0, 1.0, 2.0]))  # row index, not Hex
+    assert ds.metadata["x_column_recovered"] is False
+    assert ds.metadata["x_column_unrecovered"] == "Temperature"
+    assert ds.metadata["x_column_long"] == "Row"
+    assert set(ds.labels) == {"Hex", "Hc"}  # Hex preserved, not consumed as x
+    assert ds.values.shape == (3, 2)
+
+
+def test_build_book_declared_x_present_is_the_axis() -> None:
+    """Control: when the declared X column DOES decode it is the x-axis and
+    ``x_column_recovered`` is True (the common path stays unchanged)."""
+    from quantized.io.origin_project.opj import _build_book
+    from quantized.io.origin_project.windows import BookMeta, ColumnMeta
+
+    meta = BookMeta(
+        short="Book1",
+        long_name="Book1",
+        columns={
+            "A": ColumnMeta("A", "X", "Temperature", "K", ""),
+            "B": ColumnMeta("B", "Y", "Hex", "Oe", ""),
+        },
+    )
+    cols = [("A", np.array([300.0, 310.0])), ("B", np.array([10.0, 20.0]))]
+    ds = _build_book("Book1", cols, {"Book1": meta}, [], "origin_opj")
+
+    assert np.array_equal(np.asarray(ds.time), np.array([300.0, 310.0]))
+    assert ds.metadata["x_column_recovered"] is True
+    assert ds.metadata["x_column_long"] == "Temperature"
+    assert "x_column_unrecovered" not in ds.metadata
+    assert ds.labels == ("Hex",)
+
+
+def test_build_book_no_designations_keeps_first_col_default() -> None:
+    """No windows designations at all → the first column stays the x-axis (the
+    long-standing default) and nothing is flagged as lost."""
+    from quantized.io.origin_project.opj import _build_book
+
+    cols = [("A", np.array([1.0, 2.0])), ("B", np.array([3.0, 4.0]))]
+    ds = _build_book("Book1", cols, {}, [], "origin_opj")
+
+    assert np.array_equal(np.asarray(ds.time), np.array([1.0, 2.0]))
+    assert ds.metadata["x_column_recovered"] is True
+    assert "x_column_unrecovered" not in ds.metadata

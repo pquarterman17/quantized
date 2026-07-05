@@ -132,9 +132,17 @@ export default function OriginProvenanceCard({ active }: { active: Dataset | nul
   const textColumns = isColumnStringsMap(meta.origin_text_columns) ? meta.origin_text_columns : null;
   const textKeys = textColumns ? sortColumnKeys(Object.keys(textColumns)) : [];
 
+  // The designated X column failed to decode, so `.time` is a synthetic row
+  // index rather than Origin's real independent variable (io/origin_project/
+  // opj.py). Surface it so a row-index x-axis isn't a silent mystery.
+  const xUnrecovered = meta.x_column_recovered === false;
+  const xUnrecoveredName =
+    typeof meta.x_column_unrecovered === "string" ? meta.x_column_unrecovered : "";
+
   const hasLog = records.length > 0 || rawLog.length > 0;
   const hasColumnSections = reportKeys.length > 0 || textKeys.length > 0;
-  if (!active || (noteWindows.length === 0 && !hasLog && !hasColumnSections)) return null;
+  if (!active || (noteWindows.length === 0 && !hasLog && !hasColumnSections && !xUnrecovered))
+    return null;
 
   const copyLog = () =>
     copyText(rawLog).then((ok) => setStatus(ok ? "copied results log" : "clipboard unavailable"));
@@ -145,6 +153,21 @@ export default function OriginProvenanceCard({ active }: { active: Dataset | nul
       count={noteWindows.length + records.length + reportKeys.length + textKeys.length || undefined}
       defaultOpen={false}
     >
+      {xUnrecovered && (
+        <div
+          style={{
+            marginBottom: 10,
+            fontSize: "var(--font-size-sm)",
+            color: "var(--text-faint)",
+            lineHeight: 1.4,
+          }}
+        >
+          <span style={{ color: "var(--accent)" }}>⚠</span> X axis shows the row index — Origin's
+          designated X column{xUnrecoveredName ? ` (“${xUnrecoveredName}”)` : ""} could not be
+          decoded, so its values aren&rsquo;t available.
+        </div>
+      )}
+
       {noteWindows.length > 0 && (
         <div style={{ marginBottom: hasLog ? 10 : 0 }}>
           {noteWindows.map((w) => (

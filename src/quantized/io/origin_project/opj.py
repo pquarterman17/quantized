@@ -231,32 +231,61 @@ def _build_book(
     col_meta = books_meta[base_book].columns if base_book in books_meta and not sheet_no else {}
     maxlen = max((len(v) for _, v in cols), default=0)
 
-    x_idx = next(
+    # Locate the independent (X) axis among the DECODED columns. When a book's
+    # windows metadata *declares* an X column but that column failed every decode
+    # path (so it is absent from ``cols``), do NOT fall back to promoting the
+    # first value column to the x-axis: that silently relabels a Y measurement as
+    # the independent variable and drops the real X without a trace (Moke.opj
+    # Book3; the hc2convert.opj "A6221Lockin*" TDI family — 34 of 74 books). Use
+    # a synthetic row-index axis instead, keep every decoded column as a value
+    # series, and flag the loss in metadata (``x_column_recovered``).
+    decoded_x = next(
         (j for j, (c, _) in enumerate(cols) if (m := col_meta.get(c)) and m.designation == "X"),
-        0,
+        None,
     )
-    ordered = [cols[x_idx]] + [cv for j, cv in enumerate(cols) if j != x_idx]
+    declared_x = next((c for c, m in col_meta.items() if m.designation == "X"), None)
+    x_unrecovered = decoded_x is None and declared_x is not None
+
+    if x_unrecovered:
+        ordered = list(cols)
+    else:
+        x_idx = decoded_x if decoded_x is not None else 0
+        ordered = [cols[x_idx]] + [cv for j, cv in enumerate(cols) if j != x_idx]
 
     def _pad(a: NDArray[np.float64]) -> NDArray[np.float64]:
         return a if len(a) == maxlen else np.concatenate([a, np.full(maxlen - len(a), np.nan)])
 
     padded = [_pad(v) for _, v in ordered]
-    time = padded[0] if padded else np.empty(0)
-    values = np.column_stack(padded[1:]) if len(padded) > 1 else np.empty((maxlen, 0))
-    value_cols = [c for c, _ in ordered[1:]]
-    x_meta = col_meta.get(ordered[0][0]) if ordered else None
+    if x_unrecovered:
+        # The designated X column is unrecoverable → synthetic 0..N-1 row index
+        # as `.time`; every decoded column stays a value series (none consumed).
+        time = np.arange(maxlen, dtype=np.float64)
+        values = np.column_stack(padded) if padded else np.empty((maxlen, 0))
+        value_cols = [c for c, _ in ordered]
+        x_meta = None
+    else:
+        time = padded[0] if padded else np.empty(0)
+        values = np.column_stack(padded[1:]) if len(padded) > 1 else np.empty((maxlen, 0))
+        value_cols = [c for c, _ in ordered[1:]]
+        x_meta = col_meta.get(ordered[0][0]) if ordered else None
     meta = {
         "source_format": source_format,
         "origin_book": book,
         "origin_book_long": _book_long_name(book, books_meta),
         "origin_books": inventory,
-        "x_column_name": ordered[0][0] if ordered else "A",
-        "x_column_long": _label_for(ordered[0][0], x_meta) if ordered else "",
+        "x_column_name": "" if x_unrecovered else (ordered[0][0] if ordered else "A"),
+        "x_column_long": (
+            "Row" if x_unrecovered else (_label_for(ordered[0][0], x_meta) if ordered else "")
+        ),
         # `x_unit` is the Origin-subsystem key (writer/COM read it); also emit
         # the canonical `x_column_unit` every other parser uses so the plot +
         # .ogs export layers (which read `x_column_unit`) show the x-axis unit.
         "x_unit": x_meta.unit if x_meta is not None else "",
         "x_column_unit": x_meta.unit if x_meta is not None else "",
+        # False when `.time` is a synthetic row index substituted because the
+        # designated X column could not be decoded (its long name, when known,
+        # is in ``x_column_unrecovered``); True when `.time` is the real X.
+        "x_column_recovered": not x_unrecovered,
         # Origin short names of the value columns, in channel order — lets a
         # figure's curve->column binding (opju_curves) map onto `.values`.
         "origin_column_names": value_cols,
@@ -265,6 +294,11 @@ def _build_book(
         "origin_text_columns": {c: rows for c, rows in (text_cols or [])},
         "origin_report_sheets": {c: rows for c, rows in (report_cols or [])},
     }
+    if x_unrecovered and declared_x is not None:
+        # The declared X's long name, so the Inspector can say *which* column
+        # was lost (e.g. "Temperature") rather than just that the axis is a row
+        # index.
+        meta["x_column_unrecovered"] = _label_for(declared_x, col_meta.get(declared_x))
     return DataStruct(
         time=time,
         values=values,
