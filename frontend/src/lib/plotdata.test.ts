@@ -6,6 +6,7 @@ import {
   clampPlottedRange,
   composeDisplayPayload,
   defaultDenseChannels,
+  dropTrailingNullX,
   effectiveChannels,
   highlightSelectedPayload,
   maskExcludedPayload,
@@ -512,5 +513,37 @@ describe("composeDisplayPayload (#50 layer order)", () => {
       selection: { datasetId: "other", rows: [2] },
     });
     expect(out.series).toHaveLength(1); // no highlight companion added
+  });
+});
+
+describe("dropTrailingNullX", () => {
+  const mk = (x: (number | null)[]): PlotPayload => ({
+    data: [x, x.map((_, i) => i)] as PlotPayload["data"],
+    series: [{ label: "y", unit: "", axis: 0 }],
+    xLabel: "x",
+    xUnit: "",
+  });
+
+  it("trims trailing null x (the Origin allocated-but-unfilled artifact)", () => {
+    // Regression: uPlot reads the LAST x as the axis max (sorted-x optimization),
+    // so a trailing null collapsed autoscale to ~[min, 0] and hid the data.
+    const out = dropTrailingNullX(mk([-10, -9, 0, 500, 1255, null, null]));
+    expect(out.data[0]).toEqual([-10, -9, 0, 500, 1255]);
+    expect(out.data[1]).toEqual([0, 1, 2, 3, 4]); // y stays aligned
+  });
+
+  it("also trims trailing NaN/Infinity x", () => {
+    const out = dropTrailingNullX(mk([0, 1, 2, NaN, Infinity]));
+    expect(out.data[0]).toEqual([0, 1, 2]);
+  });
+
+  it("returns the same payload object when there is no trailing null tail", () => {
+    const p = mk([0, 1, 2, 3]);
+    expect(dropTrailingNullX(p)).toBe(p); // fast path, no realloc
+  });
+
+  it("leaves interior nulls in place (uPlot draws them as gaps)", () => {
+    const out = dropTrailingNullX(mk([0, null, 2, 3]));
+    expect(out.data[0]).toEqual([0, null, 2, 3]);
   });
 });

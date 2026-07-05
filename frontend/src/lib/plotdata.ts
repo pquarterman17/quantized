@@ -374,6 +374,26 @@ export function applyWaterfall(payload: PlotPayload, fraction: number): PlotPayl
 /** Fetch plot series from the backend; fall back to client packing offline.
  *  `xKey` selects a value channel as the x-axis (null = ds.time); `yKeys` is the
  *  effective plotted-channel list (already excluding the x channel). */
+/**
+ * Trim points whose x is null/non-finite from the END of the payload. Imported
+ * worksheets — Origin especially — carry "allocated but unfilled" trailing rows
+ * (the nrows-counts-allocated artifact), which surface as trailing null x. uPlot
+ * optimizes x-axis autoscale by reading the LAST array element as the max
+ * (it assumes x is sorted ascending), so a trailing null collapses the x-range
+ * to ~[min, 0] and hides almost all the data on first view. A point with no x is
+ * unplottable, so dropping the trailing null tail is always safe. Interior nulls
+ * are left in place (uPlot draws them as gaps) to keep plot-brush row indices
+ * aligned with the source rows.
+ */
+export function dropTrailingNullX(payload: PlotPayload): PlotPayload {
+  const x = payload.data[0] as (number | null)[];
+  let end = x.length;
+  while (end > 0 && (x[end - 1] == null || !Number.isFinite(x[end - 1]))) end--;
+  if (end === x.length) return payload; // no trailing null tail — fast path
+  const data = payload.data.map((col) => (col as (number | null)[]).slice(0, end));
+  return { ...payload, data: data as uPlot.AlignedData };
+}
+
 export async function fetchPlot(
   ds: DataStruct,
   yLog: boolean,
@@ -391,8 +411,8 @@ export async function fetchPlot(
       y_keys: yKeys ?? undefined,
       y2_keys: y2Keys ?? undefined,
     });
-    return fromResponse(r);
+    return dropTrailingNullX(fromResponse(r));
   } catch {
-    return buildColumns(ds, y2Keys, xKey, yKeys);
+    return dropTrailingNullX(buildColumns(ds, y2Keys, xKey, yKeys));
   }
 }
