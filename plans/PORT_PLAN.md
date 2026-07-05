@@ -7,7 +7,8 @@ the codebase never accretes the god-scripts the MATLAB original did.
 
 **Status:** Active
 **Created:** 2026-06-21
-**Updated:** 2026-06-30
+**Updated:** 2026-07-05 (W0 checkboxes reconciled against code — all shipped
+except the frontend component-size test; W1–W9 not re-reconciled this pass)
 
 ---
 
@@ -131,13 +132,16 @@ MATLAB."**
 1. **Repo scaffold** — `src/quantized/{datastruct.py,io,calc,routes,assets}`,
    `frontend/`, `tests/`, `tools/`, `pyproject.toml` (package `quantized`,
    CLI `qz`), `uv` env, Apache-2.0 LICENSE/NOTICE.
-   - [ ] Python package skeleton + `pyproject.toml` (deps, scripts, ruff/mypy config)
-   - [ ] `frontend/` Vite+React+TS skeleton (mirror fermiviewer `package.json`)
-   - [ ] `tools/matlab/` for the freeze script
+   - [x] Python package skeleton + `pyproject.toml` (deps, scripts, ruff/mypy config)
+   - [x] `frontend/` Vite+React+TS skeleton (mirror fermiviewer `package.json`)
+   - [x] `tools/matlab/` for the freeze script
 2. **Enforcement tests** — port `fermiviewer/tests/test_repo_integrity.py`:
    no-GPL-runtime-deps, 500-line god-module ceiling, pure-layer import guard.
-   - [ ] Backend `test_repo_integrity.py`
-   - [ ] Frontend component-size test (~400-line `.tsx` ceiling)
+   - [x] Backend `test_repo_integrity.py`
+   - [ ] Frontend component-size test (~400-line `.tsx` ceiling) — NOT built yet;
+     `architecture.test.ts` only guards row-state, not line count. (Same item as
+     PROJECT_ORGANIZATION_PLAN's `.tsx`-ceiling vitest; CLAUDE.md wrongly claims
+     it exists.)
 3. **CLI + run model** — `qz` serves API+SPA + opens browser + auto-shutdown
    on last-tab-close; `qz --desktop` native window (**pywebview**);
    `qz --dev` Vite HMR + reloading backend. (Tauri packaging deferred to W8.)
@@ -150,7 +154,7 @@ MATLAB."**
    - [x] Backend CI — `.github/workflows/ci.yml` (ubuntu, uv sync, ruff +
      mypy + pytest). Goldens/fixtures committed → no MATLAB needed; the
      repo-integrity guard (pure-layer + 500-line) runs in pytest.
-   - [ ] Frontend vitest + build (deferred — frontend not started, W7)
+   - [x] Frontend vitest + build — CI `frontend` job runs `npm test` + `npm run build`
 6. **`DataStruct`** — frozen dataclass + validation + JSON (de)serialization
    for the route boundary.
 7. **WebSocket job-queue infrastructure** — `routes/jobs` (submit → progress
