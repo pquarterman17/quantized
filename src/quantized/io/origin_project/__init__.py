@@ -17,7 +17,8 @@ from quantized.io.origin_project.container import OriginProjectError
 from quantized.io.origin_project.notes import notes_windows, parse_results_log, results_log
 from quantized.io.origin_project.opj import read_opj, read_opj_books
 from quantized.io.origin_project.opju import read_opju, read_opju_books
-from quantized.io.origin_project.tree import opj_folder_paths, opju_folder_paths
+from quantized.io.origin_project.tree import opj_folder_paths
+from quantized.io.origin_project.tree_opju import opju_folder_paths
 
 __all__ = ["OriginProjectError", "read_origin_books", "read_origin_project"]
 

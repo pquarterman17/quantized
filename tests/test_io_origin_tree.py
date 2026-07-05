@@ -26,7 +26,8 @@ import pytest
 
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project import _with_folder_path, read_origin_books
-from quantized.io.origin_project.tree import opj_folder_paths, opju_folder_paths
+from quantized.io.origin_project.tree import _flatten, _FolderNode, opj_folder_paths
+from quantized.io.origin_project.tree_opju import opju_folder_paths
 
 # ── synthetic CPY .opj tail builder ───────────────────────────────────────────
 
@@ -114,6 +115,48 @@ def test_deep_nesting_four_levels() -> None:
     data = _synthetic_opj(["Deepest"], "Root", [], [a])
     paths = opj_folder_paths(data)
     assert paths == {"Deepest": ["A", "B", "C", "D"]}
+
+
+# ── fail-closed / never-raises robustness (a crash would break the import) ────
+
+
+def test_flatten_extremely_deep_chain_does_not_recurse() -> None:
+    """A pathologically deep folder chain must not hit Python's recursion limit
+    in ``_flatten`` (that would raise past the callers' catch and crash the
+    import instead of degrading). Built iteratively so the test itself doesn't
+    recurse; the window at the bottom still resolves through the full path."""
+    depth = 5000
+    leaf = _FolderNode(name=f"L{depth - 1}", windows=[0])
+    node = leaf
+    for i in range(depth - 2, -1, -1):
+        node = _FolderNode(name=f"L{i}", windows=[], subfolders=[node])
+    out: dict[str, list[str]] = {}
+    _flatten(node, ["W0"], (), out)  # must not raise RecursionError
+    assert out["W0"] == [f"L{i}" for i in range(1, depth)]
+
+
+def test_opj_pathologically_deep_tree_degrades_without_crashing() -> None:
+    """A ~3000-level ``.opj`` folder chain overflows the recursive *parser*;
+    it must be caught and degrade to ``{}`` (flat import), never propagate a
+    RecursionError. Bytes assembled bottom-up so building stays iterative."""
+    node = _folder("L2999", [0])
+    for i in range(2998, -1, -1):
+        node = _folder(f"L{i}", [], [node])
+    data = _synthetic_opj(["W"], "Root", [], [node])
+    assert opj_folder_paths(data) == {}  # degraded, and crucially did not raise
+
+
+def test_opju_moderately_deep_nesting_resolves_full_path() -> None:
+    """A 60-level ``.opju`` chain (well beyond the 4-level COM specimens) must
+    resolve the deep window through its whole path — proving the iterative
+    reconstruct + flatten hold past trivial depth."""
+    depth = 60
+    tree: tuple = (f"L{depth - 1}", [0], [])
+    for i in range(depth - 2, -1, -1):
+        tree = (f"L{i}", [], [tree])
+    # "Proj" is the root (excluded); L0..L59 are all real folders in the path.
+    data = _synthetic_opju(["Deep"], "Proj", [], [tree])
+    assert opju_folder_paths(data) == {"Deep": [f"L{i}" for i in range(depth)]}
 
 
 def test_empty_folder_with_only_a_subfolder_holding_a_graph_only_folder() -> None:
