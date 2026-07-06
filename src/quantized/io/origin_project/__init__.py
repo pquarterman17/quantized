@@ -19,7 +19,7 @@ from quantized.io.origin_project.container import OriginProjectError
 from quantized.io.origin_project.notes import notes_windows, parse_results_log, results_log
 from quantized.io.origin_project.opj import read_opj, read_opj_books
 from quantized.io.origin_project.opju import read_opju, read_opju_books
-from quantized.io.origin_project.tree import opj_folder_paths
+from quantized.io.origin_project.tree import opj_folder_paths, opj_project_dates
 from quantized.io.origin_project.tree_opju import opju_folder_paths
 
 __all__ = [
@@ -51,6 +51,11 @@ def _with_provenance(ds: DataStruct, path: Path, *, raw: bytes | None = None) ->
     notes = notes_windows(raw)
     if notes:
         extra["origin_notes"] = notes
+    # .opj project created/modified timestamps (tree.py::opj_project_dates,
+    # §13.2 #5); None on the 4.3227 variant / CPYUA bytes — key then absent.
+    dates = opj_project_dates(raw)
+    if dates:
+        extra["origin_project_dates"] = dates
     if not extra:
         return ds
     return dataclasses.replace(ds, metadata={**ds.metadata, **extra})

@@ -644,3 +644,59 @@ def test_realdata_opju_4_3811_folder_tree_matches_com(stem: str, expected: dict)
     books = {k: v for k, v in paths.items() if not k.lower().startswith("graph")}
     for book, folder in expected.items():
         assert books.get(book) == folder
+
+
+# ── project created/modified dates (§13.2 #5, 2026-07-06) ─────────────────────
+
+
+def _synthetic_opj_with_dates(record: bytes) -> bytes:
+    """Header + one window + empty params + the given project record."""
+    out = bytearray(_HEADER_LINE)
+    out += _window_header_block("W1")
+    out += b"\x00\n"  # params terminator
+    out += _NULL_BLOCK
+    out += _block(record)
+    return bytes(out)
+
+
+def test_opj_project_dates_decodes_julian_pair() -> None:
+    """Two f64 Julian dates at record offsets 32/40 -> naive ISO-8601.
+    JD 2459014.9575231481 = 2020-06-14T10:58:49 (Moke.opj's own stamp)."""
+    from quantized.io.origin_project.tree import opj_project_dates
+
+    rec = bytearray(88)
+    struct.pack_into("<d", rec, 32, 2459014.9575231481)
+    struct.pack_into("<d", rec, 40, 2459268.7144791665)
+    dates = opj_project_dates(_synthetic_opj_with_dates(bytes(rec)))
+    assert dates == {"created": "2020-06-14T10:58:49", "modified": "2021-02-23T05:08:50"}
+
+
+def test_opj_project_dates_fail_closed() -> None:
+    """No plausible Julian value (the 4.3227 80-byte variant, zeros, junk,
+    truncated record, or non-CPYA bytes) -> None, never a guessed date."""
+    from quantized.io.origin_project.tree import opj_project_dates
+
+    assert opj_project_dates(_synthetic_opj_with_dates(b"\x00" * 88)) is None
+    assert opj_project_dates(_synthetic_opj_with_dates(b"\x00" * 80)) is None
+    junk = bytearray(88)
+    struct.pack_into("<d", junk, 32, 1.5e300)
+    struct.pack_into("<d", junk, 40, 2459014.0)
+    assert opj_project_dates(_synthetic_opj_with_dates(bytes(junk))) is None
+    assert opj_project_dates(_synthetic_opj_with_dates(b"\x00" * 20)) is None
+    assert opj_project_dates(b"CPYUA 4.3811 222\n" + b"\x00" * 64) is None
+
+
+@pytest.mark.realdata
+@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+def test_realdata_project_dates_land_in_metadata() -> None:
+    """Moke.opj's own stamp (validated against its results-log JDNs) reaches
+    DataStruct metadata; the 4.3227 XMCD.opj honestly carries no key."""
+    from quantized.io.origin_project import read_origin_project
+
+    moke = read_origin_project(_CORPUS / "Moke.opj")
+    assert moke.metadata["origin_project_dates"] == {
+        "created": "2020-06-14T10:58:49",
+        "modified": "2020-06-14T10:58:49",
+    }
+    xmcd = read_origin_project(_CORPUS / "XMCD.opj")
+    assert "origin_project_dates" not in xmcd.metadata

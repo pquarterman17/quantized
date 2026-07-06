@@ -58,10 +58,11 @@ from __future__ import annotations
 import re
 import struct
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 
 from quantized.io.origin_project.container import walk_blocks
 
-__all__ = ["opj_folder_paths"]
+__all__ = ["opj_folder_paths", "opj_project_dates"]
 
 # A plain Origin window (page) short name: verified against every window name
 # in a 12-file corpus (.opj + .opju) via live COM enumeration — always
@@ -175,6 +176,47 @@ def _skip_project_record(b: bytes, p: int) -> int:
         raise _TailParseError("expected NULL block before the project record")
     _size, _payload, p = _read_block(b, p)
     return p
+
+
+# The project record's two f64 Julian-date fields (created/modified — they
+# match the results log's own JDN timestamps, validation_log.md §"tail"):
+# payload offsets 32/40 of the CPYA-4.3380 88-byte record. The 4.3227
+# variant is 80 bytes with NO value in the Julian range at any offset
+# (measured on XMCD.opj) — fail-closed there.
+_PROJECT_DATE_OFFSETS = (32, 40)
+_JD_MIN, _JD_MAX = 2_378_497.0, 2_524_593.0  # ~1800-01-01 .. ~2200-01-01
+_JD_UNIX_EPOCH = 2_440_587.5  # JD of 1970-01-01T00:00:00
+
+
+def _jd_to_iso(jd: float) -> str:
+    """Julian date -> naive ISO-8601 (Origin stamps local wall-clock time)."""
+    epoch = datetime(1970, 1, 1)
+    return (epoch + timedelta(days=jd - _JD_UNIX_EPOCH)).isoformat(timespec="seconds")
+
+
+def opj_project_dates(b: bytes) -> dict[str, str] | None:
+    """The project's created/modified timestamps from the ``.opj`` tail's
+    project record, as naive ISO-8601 strings, or ``None`` when the tail
+    doesn't parse or the fields aren't plausible Julian dates (the 4.3227
+    container variant, truncated files, CPYUA bytes) — never guessed.
+    """
+    try:
+        p = _find_tail_start(b)
+        p = _skip_params(b, p)
+        size, _payload, p = _read_block(b, p)
+        if size != 0:
+            return None
+        size, payload, _p = _read_block(b, p)
+    except (_TailParseError, struct.error):
+        return None
+    if len(payload) < _PROJECT_DATE_OFFSETS[-1] + 8:
+        return None
+    created, modified = (
+        float(struct.unpack_from("<d", payload, off)[0]) for off in _PROJECT_DATE_OFFSETS
+    )
+    if not all(_JD_MIN <= v <= _JD_MAX for v in (created, modified)):
+        return None
+    return {"created": _jd_to_iso(created), "modified": _jd_to_iso(modified)}
 
 
 def _skip_notes(b: bytes, p: int) -> int:
