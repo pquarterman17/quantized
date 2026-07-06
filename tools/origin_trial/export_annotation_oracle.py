@@ -63,13 +63,12 @@ def main() -> None:
         return float(app.LTVar("__d"))
 
     def obj_exists(name: str) -> bool:
-        # exist(name) returns a nonzero type code for any existing named object;
-        # we further require a non-empty text$ below, so a rare non-annotation
-        # name collision can't leak in. (Deliberately not relying on the
-        # graphic-object type code -- a wrong code would silently capture zero
-        # on the single run this oracle gets.)
+        # exist(name, 16) tests for a GRAPHIC object (type code 16, confirmed via
+        # diagnostic: exist("Text",16) -> 16 on a graph that has a Text label,
+        # while no-arg/1/8 all return 0). A non-empty text$ is still required
+        # below so a non-text graphic object can't leak in.
         try:
-            return ltn(f"exist({name})") > 0
+            return ltn(f"exist({name},16)") > 0
         except Exception:
             return False
 
