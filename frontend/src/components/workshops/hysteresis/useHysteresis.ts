@@ -58,9 +58,9 @@ export function useHysteresis(): HysteresisState {
     };
   }, [active]);
 
-  // Subtract the linear dia/paramagnetic slope fit to the high-field tails
-  // (slope only — the offset is kept so Hc/Mr are unchanged; port of MATLAB
-  // subtractLinearBG). Writes an "(bg-sub)" dataset rather than mutating.
+  // Remove the linear dia/paramagnetic background fit to the high-field tails
+  // and vertically centre the loop (per-tail slope + saturation-midpoint offset,
+  // so no vertical shift remains). Writes an "(bg-sub)" dataset, never mutates.
   async function subtractBackground(): Promise<void> {
     if (!active) return;
     setBgBusy(true);
@@ -81,9 +81,10 @@ export function useHysteresis(): HysteresisState {
       const stem = active.name.replace(/\.[^.]+$/, "");
       addDataset({ id: `hystbg-${++_bgCounter}`, name: `${stem} (bg-sub)`, data });
       setStatus(
-        res.slope === 0
+        res.slope === 0 && res.offset === 0
           ? "no high-field background found (too few tail points)"
-          : `subtracted linear background (slope ${res.slope.toExponential(2)})`,
+          : `removed background (slope ${res.slope.toExponential(2)}` +
+              `, offset ${res.offset.toExponential(2)}) + centred loop`,
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "background subtraction failed");

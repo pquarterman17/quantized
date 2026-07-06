@@ -92,15 +92,20 @@ def subtract_background(req: SubtractBgRequest) -> dict[str, Any]:
 
 @router.post("/subtract-hysteresis-background")
 def subtract_hysteresis_bg(req: HysteresisBgRequest) -> dict[str, Any]:
-    """Subtract a linear dia/paramagnetic slope from an M-H loop (slope only;
-    offset kept so Hc/Mr are unaffected)."""
+    """Remove a linear dia/paramagnetic background from an M-H loop and centre it
+    vertically (per-tail slope + saturation-midpoint offset, so no vertical shift
+    remains)."""
     try:
-        corrected, slope = subtract_hysteresis_background(
+        corrected, slope, offset = subtract_hysteresis_background(
             req.h, req.m, hi_fraction=req.hi_fraction, min_points=req.min_points
         )
     except (ValueError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"corrected": to_jsonable(corrected), "slope": to_jsonable(slope)}
+    return {
+        "corrected": to_jsonable(corrected),
+        "slope": to_jsonable(slope),
+        "offset": to_jsonable(offset),
+    }
 
 
 @router.post("/convert-units")

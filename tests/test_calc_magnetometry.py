@@ -74,38 +74,54 @@ def test_subtract_mag_background_removes_linear() -> None:
     assert_allclose(corrected, 0.0, atol=1e-9)
 
 
-def test_subtract_hysteresis_background_removes_slope_keeps_offset() -> None:
-    # Pure linear dia/paramagnetic background + a vertical offset, no loop.
+def test_subtract_hysteresis_background_removes_slope_and_centers() -> None:
+    # Pure linear dia/paramagnetic background + a vertical offset, no loop: BOTH
+    # the slope and the vertical offset are removed, leaving a flat line on 0.
     h = np.linspace(-100.0, 100.0, 201)
-    offset = 1.5
-    m = 0.02 * h + offset
-    corrected, slope = subtract_hysteresis_background(h, m)
+    m = 0.02 * h + 1.5
+    corrected, slope, offset = subtract_hysteresis_background(h, m)
     assert slope == pytest.approx(0.02, rel=1e-6)
-    # The slope is removed but the offset is KEPT — the crucial difference from
-    # subtract_mag_background (M-vs-T), which removes the intercept too. Keeping
-    # it leaves M=0 crossings (coercivity) unchanged.
-    assert_allclose(corrected, offset, atol=1e-9)
+    assert offset == pytest.approx(1.5, rel=1e-6)
+    assert_allclose(corrected, 0.0, atol=1e-9)
 
 
-def test_subtract_hysteresis_background_matches_matlab_formula() -> None:
-    # Loop signal + linear background + offset. Assert the port reproduces
-    # subtractLinearBG.m exactly: mask |H|>0.7*max|H| (both tails), fit slope,
-    # subtract slope*H only.
-    h = np.linspace(-50.0, 50.0, 101)
-    m = 3.0 * np.sign(h) + 0.01 * h + 0.2
-    corrected, slope = subtract_hysteresis_background(h, m)
-    mask = np.abs(h) > 0.7 * np.max(np.abs(h))
-    expected_slope = float(np.polyfit(h[mask], m[mask], 1)[0])
-    assert slope == pytest.approx(expected_slope)
-    assert_allclose(corrected, m - expected_slope * h, atol=1e-12)
+def test_subtract_hysteresis_background_centers_saturated_loop() -> None:
+    # A square loop (+/-Ms) + diamagnetic slope + a vertical offset c. After
+    # correction the tails must land symmetrically on +/-Ms about M=0. The
+    # per-tail slope recovers the TRUE chi (not chi+Ms/Hmax, which a single
+    # both-tails fit would give and which would shear the saturation), and the
+    # saturation-midpoint offset removes the vertical shift — this is exactly the
+    # "don't leave a vertically-offset loop" fix.
+    h = np.linspace(-100.0, 100.0, 401)
+    ms, chi, c = 2.0, -0.01, 0.7
+    m = ms * np.sign(h) + chi * h + c
+    corrected, slope, offset = subtract_hysteresis_background(h, m)
+    assert slope == pytest.approx(chi, abs=1e-6)
+    assert offset == pytest.approx(c, abs=1e-6)
+    assert corrected[-1] == pytest.approx(ms, abs=1e-6)  # +tail -> +Ms
+    assert corrected[0] == pytest.approx(-ms, abs=1e-6)  # -tail -> -Ms
+    assert corrected[-1] == pytest.approx(-corrected[0], abs=1e-9)  # symmetric about 0
+
+
+def test_subtract_hysteresis_background_one_sided_fallback() -> None:
+    # High field on the positive side only (a minor loop / partial sweep): a
+    # symmetric vertical centre isn't defined, so fall back to a both-tails slope
+    # with the offset KEPT (no centring) rather than mis-centring on one plateau.
+    h = np.linspace(0.0, 100.0, 101)
+    m = 0.02 * h + 1.0
+    corrected, slope, offset = subtract_hysteresis_background(h, m)
+    assert offset == 0.0
+    assert slope == pytest.approx(0.02, rel=1e-6)
+    assert_allclose(corrected, 1.0, atol=1e-9)  # slope removed, offset (1.0) kept
 
 
 def test_subtract_hysteresis_background_noop_too_few_tail_points() -> None:
     # Only 1-2 points exceed 0.7*max|H| → below min_points → no-op.
     h = np.array([-1.0, 0.0, 1.0, 2.0, 3.0])
     m = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
-    corrected, slope = subtract_hysteresis_background(h, m, min_points=4)
+    corrected, slope, offset = subtract_hysteresis_background(h, m, min_points=4)
     assert slope == 0.0
+    assert offset == 0.0
     assert_allclose(corrected, m)
 
 

@@ -1114,7 +1114,7 @@ export function subtractHysteresisBackground(body: {
   m: number[];
   hi_fraction?: number;
   min_points?: number;
-}): Promise<{ corrected: (number | null)[]; slope: number }> {
+}): Promise<{ corrected: (number | null)[]; slope: number; offset: number }> {
   return postJSON("/api/magnetometry/subtract-hysteresis-background", body);
 }
 

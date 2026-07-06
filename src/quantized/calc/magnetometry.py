@@ -70,22 +70,35 @@ def subtract_hysteresis_background(
     *,
     hi_fraction: float = 0.7,
     min_points: int = 4,
-) -> tuple[NDArray[np.float64], float]:
-    """Subtract a linear dia/paramagnetic slope from an M-H hysteresis loop.
+) -> tuple[NDArray[np.float64], float, float]:
+    """Remove a linear dia/paramagnetic background from an M-H hysteresis loop
+    and vertically centre it.
 
-    Port of ``bosonPlotter.hysteresis.subtractLinearBG``. Fits a line to the
-    high-field tails — *both* saturated ends, ``|H| > hi_fraction * max|H|`` —
-    and subtracts **only the slope**: ``M -= slope * H``. The intercept is
-    deliberately KEPT so the loop stays vertically centred and the coercivity /
-    remanence are unaffected (subtracting the offset too would shift M=0 and
-    corrupt Hc). A no-op (slope ``0.0``, ``M`` returned unchanged) when fewer
-    than ``min_points`` high-field points exist or the field span is degenerate.
+    Both saturated tails (``|H| > hi_fraction * max|H|``) sit where
+    ``M ~= +/-Ms + chi*H + offset``. Each tail is fit *separately* for its slope,
+    the two are averaged, and that background susceptibility ``chi`` is removed
+    (``M -= chi*H``). The loop is then centred on the midpoint of its two
+    saturation plateaus so **no vertical offset remains** — the tails land
+    symmetrically on ``+/-Ms`` about ``M = 0``.
 
-    This is distinct from :func:`subtract_mag_background`, which is for M(T):
-    a one-sided high-*temperature* window whose slope *and* intercept are both
-    removed. Do not use that on a hysteresis loop.
+    Fitting the tails separately matters: a single fit across *both* tails folds
+    the +/-Ms jump between them into the slope (``chi + Ms/Hmax``), which
+    over-subtracts and shears a well-saturated loop toward the origin. Per-tail
+    slopes see only the constant ``+Ms`` or ``-Ms`` within one tail, so they
+    recover the true background.
 
-    Returns ``(corrected, slope)``.
+    Improves on MATLAB ``bosonPlotter.hysteresis.subtractLinearBG`` (single
+    both-tails fit, slope-only, offset kept — which left the loop vertically
+    shifted). Falls back to a both-tails slope with no centring when high field
+    is present on only one side (a minor loop — a symmetric centre is undefined).
+    A no-op (``chi = offset = 0``, ``M`` unchanged) when fewer than
+    ``min_points`` high-field points exist or the field span is degenerate.
+
+    Distinct from :func:`subtract_mag_background` (M-vs-T, one-sided high-T
+    window). Do not use that on a hysteresis loop.
+
+    Returns ``(corrected, slope, offset)`` — ``slope`` = removed susceptibility
+    ``chi``, ``offset`` = removed vertical shift.
     """
     hv = np.asarray(h, dtype=float).ravel()
     mv = np.asarray(m, dtype=float).ravel()
@@ -94,17 +107,37 @@ def subtract_hysteresis_background(
     if hv.size == 0:
         raise ValueError("need at least 1 data point")
 
-    h_max = float(np.nanmax(np.abs(hv))) if hv.size else 0.0
+    h_max = float(np.nanmax(np.abs(hv)))
     if not np.isfinite(h_max) or h_max == 0.0:
-        return mv.copy(), 0.0
-    hi_mask = np.abs(hv) > hi_fraction * h_max
-    if int(np.count_nonzero(hi_mask)) < min_points:
-        return mv.copy(), 0.0
+        return mv.copy(), 0.0, 0.0
+    thresh = hi_fraction * h_max
+    pos = hv > thresh
+    neg = hv < -thresh
+    n_pos = int(np.count_nonzero(pos))
+    n_neg = int(np.count_nonzero(neg))
 
-    slope = float(np.polyfit(hv[hi_mask], mv[hi_mask], 1)[0])
+    # Both saturated tails present: per-tail slope + vertical centring.
+    if n_pos >= 2 and n_neg >= 2 and (n_pos + n_neg) >= min_points:
+        slope = 0.5 * (
+            float(np.polyfit(hv[pos], mv[pos], 1)[0])
+            + float(np.polyfit(hv[neg], mv[neg], 1)[0])
+        )
+        if not np.isfinite(slope):
+            return mv.copy(), 0.0, 0.0
+        corrected = np.asarray(mv - slope * hv, dtype=float)
+        offset = 0.5 * (float(np.mean(corrected[pos])) + float(np.mean(corrected[neg])))
+        if not np.isfinite(offset):
+            offset = 0.0
+        return np.asarray(corrected - offset, dtype=float), slope, offset
+
+    # One-sided high field (a minor loop): both-tails slope only, no centring.
+    hi = np.abs(hv) > thresh
+    if int(np.count_nonzero(hi)) < min_points:
+        return mv.copy(), 0.0, 0.0
+    slope = float(np.polyfit(hv[hi], mv[hi], 1)[0])
     if not np.isfinite(slope):
-        return mv.copy(), 0.0
-    return np.asarray(mv - slope * hv, dtype=float), slope
+        return mv.copy(), 0.0, 0.0
+    return np.asarray(mv - slope * hv, dtype=float), slope, 0.0
 
 
 def _field_factor(from_u: str, to_u: str) -> tuple[float, bool, str]:
