@@ -66,13 +66,22 @@ bar curves whose oracle reports the inherited effective black).
   inherited black); that resolution is Origin-side state we cannot decode,
   so auto yields ``None`` -- the frontend palette default stands.
 
-**NOT decoded -- checked and rejected, don't re-guess:** line width and
-symbol size. The width-shaped u16 triple at body offsets 213-236 (500 =
-0.5pt) reads 500 even for oracle ``line_width == 3.0`` plots, and the
-symbol-size candidates fail on the oracle's scaled-graph cases (a resized
-Origin graph window scales the *reported* width/size by a layer print
-factor, e.g. 3.18 = 9pt x 0.353), so any fixed-offset read would ship
-WRONG values. Omitted entirely.
+**Line width + symbol size (SOLVED 2026-07-06, 92/92 oracle-exact both
+containers):**
+
+* offset 21 -- **line width** u16 LE, in units of 1/500 pt (``1500`` = 3.0pt,
+  ``250`` = 0.5pt).
+* offset 25 -- **symbol size** u16 LE, same 1/500-pt units (``4500`` = 9pt).
+
+Both store the value LabTalk itself reports: when the user resizes a graph
+window Origin *bakes* the rescale into these stored values (``795`` = 1.59pt
+shown as "1.6"), so there is NO separate print-factor field to decode -- the
+2026-07-05 "layer print factor" model (§13.2 #1's old blocker) was an
+artifact of reading two CONSTANT fields (the DataPlot-body 213-236 triple
+and record offset 282, both fixed boilerplate corpus-wide) and mistaking
+oracle/constant ratios for a scale. Exhaustive per-offset search across all
+31 width-varying oracle plots isolated offsets 21/25 as the only fields
+that group plots exactly by width/size.
 
 See ``tests/test_io_origin_curve_style.py`` for the synthetic + oracle
 verification suite.
@@ -91,6 +100,9 @@ _COLOR_TERM_OFF = 310
 _LINE_COLOR_OFF = 362
 _SYMBOL_KIND_OFF = 23
 _STYLE_BYTE_OFF = 76
+_LINE_WIDTH_OFF = 21  # u16 LE, 1/500 pt (see module docstring)
+_SYMBOL_SIZE_OFF = 25  # u16 LE, 1/500 pt
+_PT500_MAX = 50_000  # plausibility ceiling: 100 pt — reject junk, never guess
 
 # Origin's classic 24-color list (LabTalk ``color()`` indices 1-24, here
 # 0-indexed 0-23): black, red, green, blue, cyan, magenta, yellow, dark
@@ -185,12 +197,14 @@ def raw_color(record: bytes) -> int | None:
     return field if kind == 1 else None
 
 
-def style_fields(record: bytes) -> dict[str, str]:
+def style_fields(record: bytes) -> dict[str, str | float]:
     """Decoded per-curve style keys from one curve-anchor record (raw ``.opj``
     payload or :func:`opju_style_record` reconstruction): any of ``color``
     (``"#RRGGBB"``), ``symbol`` (marker shape name), ``style``
-    (``"line"``/``"scatter"``). Undecodable fields are simply absent."""
-    out: dict[str, str] = {}
+    (``"line"``/``"scatter"``), ``lineWidth`` / ``symbolSize`` (points, the
+    1/500-pt u16 fields at offsets 21/25 — 92/92 oracle-exact). Undecodable
+    or implausible fields are simply absent, never defaulted."""
+    out: dict[str, str | float] = {}
     if len(record) < _LINE_COLOR_OFF + 4:
         return out
     style = _CONNECT_STYLE.get(record[_STYLE_BYTE_OFF])
@@ -199,6 +213,12 @@ def style_fields(record: bytes) -> dict[str, str]:
     shape = _SYMBOL_SHAPES.get(record[_SYMBOL_KIND_OFF])
     if shape:
         out["symbol"] = shape
+    width500 = struct.unpack_from("<H", record, _LINE_WIDTH_OFF)[0]
+    if 0 < width500 <= _PT500_MAX:
+        out["lineWidth"] = width500 / 500.0
+    size500 = struct.unpack_from("<H", record, _SYMBOL_SIZE_OFF)[0]
+    if 0 < size500 <= _PT500_MAX:
+        out["symbolSize"] = size500 / 500.0
     raw = raw_color(record)
     if raw is not None:
         rgb = ocolor_to_rgb(raw)

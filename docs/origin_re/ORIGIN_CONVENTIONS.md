@@ -1030,6 +1030,7 @@ rather than shipped wrong.
 | **X-axis log/lin flag** (both `.opju` record forms; both-log = `0x0d`+`08 01`) | `.opju` | rf_* 2x2 + Fixed Lambdas SI Graph6 log-x + ~70 linear (0 false pos) | `8c3f91b` |
 | **Curve color** (type-1 RGB + type-0 24-colour palette, 0-based disk) | both (shared 519-byte record) | 349-plot oracle, 0 wrong | `1347d15` |
 | **Curve symbol kind** + line-vs-scatter (`c8`/`c9` @76) | both | 92/92 reachable plots | `1347d15` |
+| **Curve line-width (u16@21) + symbol-size (u16@25)**, 1/500 pt | both (shared record) | 92/92 oracle-exact incl. resized-graph baked values | (2026-07-06) |
 | Axis titles (XB/YL/YR) + legend labels + annotation text | both | COM text oracle | (earlier) |
 | Annotation positions (layer-fraction, y-from-top) | both | 5/5 oracle-exact (<6e-17) | `170b46e` |
 | Notes pages + structured results-log records | both | corpus | (earlier) |
@@ -1038,12 +1039,16 @@ rather than shipped wrong.
 
 Ordered by value. Each names the decode path so it can be picked up cold.
 
-1. **Curve line-width + symbol-size** — bytes located (width triple at
-   DataPlot-body 213-236) but a resized graph scales the reported width/size
-   by a layer print factor (e.g. `3.18 = 9pt x 0.353`), and the raw bytes
-   read the *unscaled* `500`=0.5pt even when the oracle says `3.0`. Needs the
-   layer print-scale decoded to divide out, THEN the width/size become exact.
-   Semi-blocked, not free. (Omitted today — palette default stands.)
+1. ~~**Curve line-width + symbol-size**~~ **CLOSED 2026-07-06** — see 13.1.
+   The old "layer print factor" blocker was a phantom: the width triple at
+   DataPlot-body 213-236 AND record offset 282 are CONSTANT boilerplate
+   corpus-wide, and oracle/constant ratios masqueraded as a per-graph scale
+   (page_dims COM capture disproved it: identical page sizes across
+   different "factors"). The real fields are record offsets **21** (line
+   width) and **25** (symbol size), u16 LE in 1/500 pt, storing exactly what
+   LabTalk reports — a graph resize is BAKED into the stored value, so no
+   factor field exists. Isolated by an exhaustive per-offset search across
+   the 31 width-varying oracle plots; verified 92/92 both containers.
 2. **Auto/increment colours** (37 oracle plots + error-bar curves) — stored
    as sentinel `0xFFFFFFF7`; the effective colour is Origin replaying its
    increment list by plot order. Decodable by replicating that ordering.

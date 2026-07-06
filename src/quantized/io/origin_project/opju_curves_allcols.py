@@ -234,7 +234,7 @@ def _cumulative_ordinals(book_counts: Mapping[str, int]) -> dict[int, tuple[str,
 
 def extract_curves_allcols(
     b: bytes, start: int, end: int, book_counts: Mapping[str, int]
-) -> list[dict[str, str]]:
+) -> list[dict[str, str | float]]:
     """Every curve's ``{book, x, y}`` binding found via the 0x01-subtype
     token in ``b[start:end)``.
 
@@ -247,7 +247,7 @@ def extract_curves_allcols(
     only keeps books whose columns form a contiguous run starting at A.
     """
     ordmap = _cumulative_ordinals(book_counts)
-    out: list[dict[str, str]] = []
+    out: list[dict[str, str | float]] = []
     for m in _CURVE_RE.finditer(b, start, end):
         info = ordmap.get(m.group(1)[0])
         if info is None:

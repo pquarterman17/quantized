@@ -260,7 +260,7 @@ def extract_curves(
     end: int,
     id_map: dict[int, tuple[str, str]],
     x_columns: dict[str, str],
-) -> list[dict[str, str]]:
+) -> list[dict[str, str | float]]:
     """Every curve's ``{book, x, y}`` binding found in ``blocks[start:end)``.
 
     ``y`` is decoded exactly via the curve anchor's own global column id (see
@@ -271,7 +271,7 @@ def extract_curves(
     scatter -- oracle-verified on ``hc2convert.opj``), so any decodable
     ``color``/``symbol``/``style`` keys ride along; undecodable fields
     (auto color, unmapped bytes) are absent, never defaulted."""
-    out: list[dict[str, str]] = []
+    out: list[dict[str, str | float]] = []
     last = min(end, len(blocks) - 1)
     for j in range(start, last):
         _, payload = blocks[j]

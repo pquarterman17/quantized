@@ -34,9 +34,13 @@ export function originCurveSeriesStyle(
     out.marker = true;
     out.markerShape = curve.symbol as MarkerShape;
   }
-  // Not emitted by the backend today (undecoded); consumed here so a future
-  // decode flows through without another wiring pass.
-  if (typeof curve.lineWidth === "number" && curve.lineWidth > 0) out.width = curve.lineWidth;
+  // Decoded 2026-07-06 (u16@21/25 of the shared curve record, 1/500 pt,
+  // 92/92 oracle-exact). A "scatter" curve keeps width 0: Origin stores the
+  // latent line width even on symbol-only plots, and applying it would draw
+  // a connecting line Origin doesn't show.
+  if (typeof curve.lineWidth === "number" && curve.lineWidth > 0 && curve.style !== "scatter") {
+    out.width = curve.lineWidth;
+  }
   if (typeof curve.symbolSize === "number" && curve.symbolSize > 0 && out.marker) {
     out.markerSize = curve.symbolSize;
   }

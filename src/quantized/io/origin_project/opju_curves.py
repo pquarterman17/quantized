@@ -434,7 +434,7 @@ def _extract_curves_0x03(
     end: int,
     book_columns: Mapping[str, Sequence[str]],
     books_meta: Mapping[str, BookMeta],
-) -> list[dict[str, str]]:
+) -> list[dict[str, str | float]]:
     """The shipped 0x03-subtype curve token path — UNCHANGED (see module
     docstring; do not modify this function, its map, or the ``__BCO`` gate).
 
@@ -445,7 +445,7 @@ def _extract_curves_0x03(
     to a known, ``Y``-designated column is silently dropped — never guessed.
     """
     gmap = _global_column_map(book_columns)
-    out: list[dict[str, str]] = []
+    out: list[dict[str, str | float]] = []
     for m in _CURVE_RE.finditer(b, start, end):
         y_ord = m.group()[6]
         info = gmap.get(y_ord)
@@ -475,7 +475,7 @@ def extract_curves(
     book_columns: Mapping[str, Sequence[str]],
     books_meta: Mapping[str, BookMeta],
     book_counts_all: Mapping[str, int],
-) -> list[dict[str, str]]:
+) -> list[dict[str, str | float]]:
     """Every curve's ``{book, x, y}`` binding in ``b[start:end)``, merging
     BOTH curve-token families (see "The third encoding — FOUND" above): the
     shipped 0x03-subtype token (:func:`_extract_curves_0x03`, unchanged,

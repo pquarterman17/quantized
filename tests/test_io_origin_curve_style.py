@@ -94,15 +94,39 @@ def _record(
     line_color: int | None = None,
     term: int = 0xFF,
     size: int = 519,
+    width500: int = 0,
+    size500: int = 0,
 ) -> bytes:
     buf = bytearray(size)
+    struct.pack_into("<H", buf, 21, width500)  # line width, 1/500 pt
     buf[23] = kind
+    struct.pack_into("<H", buf, 25, size500)  # symbol size, 1/500 pt
     buf[76] = style
     struct.pack_into("<I", buf, 302, 0xFFFFFFF7)  # the constant auto sentinel
     struct.pack_into("<I", buf, 306, 0xFFFFFFF7 if symbol_color is None else symbol_color)
     buf[310] = term
     struct.pack_into("<I", buf, 362, 0 if line_color is None else line_color)
     return bytes(buf)
+
+
+def test_style_fields_line_width_and_symbol_size_are_1_500_pt() -> None:
+    """u16@21 / u16@25 are 1/500-pt fields (92/92 oracle-exact, both
+    containers): 1500 -> 3.0 pt, 795 -> 1.59 pt (LabTalk displays "1.6"),
+    4500 -> 9 pt."""
+    out = style_fields(_record(kind=2, style=0xC9, width500=1500, size500=4500))
+    assert out["lineWidth"] == 3.0 and out["symbolSize"] == 9.0
+    out = style_fields(_record(width500=795, size500=2385))
+    assert out["lineWidth"] == pytest.approx(1.59)
+    assert out["symbolSize"] == pytest.approx(4.77)
+
+
+def test_style_fields_width_size_fail_closed_bounds() -> None:
+    """Zero or implausibly large (>100 pt) width/size fields are omitted,
+    never guessed or clamped."""
+    out = style_fields(_record(width500=0, size500=0))
+    assert "lineWidth" not in out and "symbolSize" not in out
+    out = style_fields(_record(width500=60_000, size500=60_000))
+    assert "lineWidth" not in out and "symbolSize" not in out
 
 
 def test_style_fields_symbol_plot_reads_symbol_color() -> None:
@@ -297,6 +321,8 @@ def test_realdata_curve_style_matches_oracle(stem, fname, decoder, floor) -> Non
     graphs = decoder(src)
     ok = wrong = omitted = 0
     sym_wrong = 0
+    dims_checked = 0
+    dim_wrong: list[tuple[str, str, object, object]] = []
     for gname, plots in oracle.items():
         curves = graphs.get(gname)
         if curves is None:
@@ -322,8 +348,20 @@ def test_realdata_curve_style_matches_oracle(stem, fname, decoder, floor) -> Non
             want_kind = int(p["symbol_kind"])  # type: ignore[call-overload]
             if want_kind in _KIND_NAME and cur.get("symbol") != _KIND_NAME[want_kind]:
                 sym_wrong += 1
+            # line width + symbol size (u16@21/25, 1/500 pt): LabTalk reports
+            # a rounded display value (795 -> "1.6"), so compare within the
+            # rounding half-width.
+            got_w = cur.get("lineWidth")
+            if got_w is not None and abs(float(got_w) - float(p["line_width"])) > 0.055:  # type: ignore[arg-type]
+                dim_wrong.append((gname, "width", got_w, p["line_width"]))
+            got_s = cur.get("symbolSize")
+            if got_s is not None and abs(float(got_s) - float(p["symbol_size"])) > 0.055:  # type: ignore[arg-type]
+                dim_wrong.append((gname, "size", got_s, p["symbol_size"]))
+            dims_checked += got_w is not None
     assert wrong == 0, f"{stem}: {wrong} curves decoded to the WRONG color"
     assert sym_wrong == 0, f"{stem}: {sym_wrong} curves decoded to the wrong symbol"
+    assert not dim_wrong, f"{stem}: wrong width/size decodes: {dim_wrong}"
+    assert dims_checked >= floor // 2, f"{stem}: width/size coverage collapsed"
     assert ok >= floor, f"{stem}: color coverage regressed ({ok} < {floor}, omitted={omitted})"
 
 

@@ -240,7 +240,7 @@ def column_id_table(b: bytes, pages: list[tuple[int, str]]) -> ColumnIdTable:
 
 def extract_curves_by_id(
     b: bytes, start: int, end: int, table: ColumnIdTable
-) -> list[dict[str, str]]:
+) -> list[dict[str, str | float]]:
     """Every curve binding in ``b[start:end)`` via the unified id token.
 
     ``y`` resolves through ``table.ids`` (a token whose id is unknown is
@@ -255,7 +255,7 @@ def extract_curves_by_id(
     ``RockingCurve``/``UnpolPlots`` ``curve_style.json`` oracle; auto/
     undecodable fields stay absent, never defaulted).
     """
-    out: list[dict[str, str]] = []
+    out: list[dict[str, str | float]] = []
     seen: set[tuple[str, str]] = set()
     for m in _CURVE_TOKEN.finditer(b, start, end):
         width = m.group(1)[0]
@@ -279,7 +279,7 @@ def extract_curves_by_id(
             x_col = partner_info[1]
         else:
             x_col = table.book_x.get(book, "A")
-        curve = {"book": book, "x": x_col, "y": y_col}
+        curve: dict[str, str | float] = {"book": book, "x": x_col, "y": y_col}
         # the token IS the sparse form of the .opj curve-anchor record; the
         # id chunk's 0x80 tag sits 3 bytes into the regex match
         record = opju_style_record(b, m.start() + 3)

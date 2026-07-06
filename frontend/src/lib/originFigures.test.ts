@@ -139,7 +139,7 @@ describe("originCurveSeriesStyle", () => {
     expect(originCurveSeriesStyle({ symbol: "blob" })).toBeNull();
   });
 
-  it("passes through future lineWidth/symbolSize when present", () => {
+  it("applies decoded lineWidth/symbolSize (u16@21/25, shipped 2026-07-06)", () => {
     expect(
       originCurveSeriesStyle({ style: "line", lineWidth: 3 }),
     ).toEqual({ width: 3 });
@@ -148,6 +148,18 @@ describe("originCurveSeriesStyle", () => {
     ).toEqual({ marker: true, width: 0, markerShape: "circle", markerSize: 9 });
     // symbolSize without any marker means nothing to size — ignored
     expect(originCurveSeriesStyle({ style: "line", symbolSize: 9 })).toEqual({ width: 1.5 });
+  });
+
+  it("never lets the latent stored lineWidth draw a line on a scatter plot", () => {
+    // Origin stores a line width even on symbol-only plots; a scatter curve
+    // must keep width 0 or the restored figure grows lines Origin never drew.
+    expect(
+      originCurveSeriesStyle({ style: "scatter", lineWidth: 0.5, symbolSize: 9, symbol: "square" }),
+    ).toEqual({ marker: true, width: 0, markerShape: "square", markerSize: 9 });
+    // undetermined style (line+symbol plots): decoded width still applies
+    expect(
+      originCurveSeriesStyle({ lineWidth: 2, symbol: "circle", symbolSize: 6 }),
+    ).toEqual({ width: 2, marker: true, markerShape: "circle", markerSize: 6 });
   });
 });
 

@@ -99,9 +99,7 @@ def _synthetic_opju(*layers: bytes) -> bytes:
 
 
 def test_synthetic_linear_layer_decodes() -> None:
-    blob = _synthetic_opju(
-        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
-    )
+    blob = _synthetic_opju(_layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)"))
     figs = extract_figures_opju(blob)
     assert len(figs) == 1
     f = figs[0]
@@ -113,9 +111,7 @@ def test_synthetic_linear_layer_decodes() -> None:
 
 def test_synthetic_log_type_byte_flags_y_log() -> None:
     """The isolated type-byte flag (0x0d) wins over the decade heuristic."""
-    blob = _synthetic_opju(
-        _layer_bytes(0.79, 8.22, 1e-9, 1000.0, 1.0, 0x0D, r"\l(1) %(1)")
-    )
+    blob = _synthetic_opju(_layer_bytes(0.79, 8.22, 1e-9, 1000.0, 1.0, 0x0D, r"\l(1) %(1)"))
     figs = extract_figures_opju(blob)
     assert len(figs) == 1
     assert (figs[0]["x_from"], figs[0]["x_to"]) == (0.79, 8.22)
@@ -126,9 +122,7 @@ def test_synthetic_log_type_byte_flags_y_log() -> None:
 def test_synthetic_unrecognized_type_byte_falls_back_to_heuristic() -> None:
     """An unseen type byte (neither 0x03 nor 0x0d) falls back to the decade
     heuristic, exactly like the .opj decoder does for its unresolved flag."""
-    blob = _synthetic_opju(
-        _layer_bytes(0.0, 10.0, 0.5, 5e5, 1.0, 0xFF, r"\l(1) %(1)")
-    )
+    blob = _synthetic_opju(_layer_bytes(0.0, 10.0, 0.5, 5e5, 1.0, 0xFF, r"\l(1) %(1)"))
     figs = extract_figures_opju(blob)
     assert len(figs) == 1
     assert figs[0]["y_log"] is True  # 5e5/0.5 >= 1e3 -> the shared decade heuristic
@@ -222,8 +216,7 @@ def _real_form_tagged_and_rle() -> bytes:
         b"\x81\x04\x40\x77\x1b\x41"  # y_to = 450000.0 (tagged compact-4)
         b"\x83\x02\xf0\x3f"  # y step = 1.0
         b"\x81\x35\x08\x00\x00\x01"  # end separator
-        b"\x8f\xc2\xf5\x28\x5c\x8f\x57\xc0"  # end-separator payload
-        + b"\x00" * 32
+        b"\x8f\xc2\xf5\x28\x5c\x8f\x57\xc0" + b"\x00" * 32  # end-separator payload
     )
 
 
@@ -246,7 +239,7 @@ def _real_form_runfirst_rle_elided_from() -> bytes:
 
 
 def _real_form_bare_raw8() -> bytes:
-    """"Fixed Lambdas SI" Graph1: flag ``89 18`` + three bare raw8 X values,
+    """ "Fixed Lambdas SI" Graph1: flag ``89 18`` + three bare raw8 X values,
     a short (plen=7) separator, then RLE Y values."""
     return (
         b"\x03\x00\x00\x1f"
@@ -459,8 +452,7 @@ def test_synthetic_real_form_y_log_flag_overrides_heuristic_both_ways() -> None:
         b"\x81\x35\x08\x00\x00\x01"  # end separator
         b"\x8f\xc2\xf5\x28\x5c\x8f\x57\xc0"  # end-separator payload
         b"\x08\x01"  # Y-log flag
-        b"\x00\x10\x10\x00"  # layer-style marker
-        + b"\x00" * 32
+        b"\x00\x10\x10\x00" + b"\x00" * 32  # layer-style marker
     )
     flagged_lin_wide_range = (
         b"\x03\x00\x00\x1f"
@@ -476,8 +468,7 @@ def test_synthetic_real_form_y_log_flag_overrides_heuristic_both_ways() -> None:
         b"\x81\x35\x08\x00\x00\x01"
         b"\x8f\xc2\xf5\x28\x5c\x8f\x57\xc0"
         b"\x01\x00"  # Y-linear flag
-        b"\x00\x10\x10\x00"
-        + b"\x00" * 32
+        b"\x00\x10\x10\x00" + b"\x00" * 32
     )
     figs = extract_figures_opju(_synthetic_opju(flagged_log_small_range))
     assert len(figs) == 1
@@ -495,9 +486,7 @@ def test_synthetic_real_form_no_y_flag_marker_falls_back_to_heuristic() -> None:
     files like RockingCurve, which lack the specimen-style Y-transition
     marker entirely), ``y_log`` still falls back to the decade heuristic --
     unchanged behavior, re-asserted here against the new flag-lookup path."""
-    figs = extract_figures_opju(
-        _synthetic_opju(_real_form_tagged_and_rle())
-    )
+    figs = extract_figures_opju(_synthetic_opju(_real_form_tagged_and_rle()))
     assert len(figs) == 1
     assert figs[0]["y_log"] is True  # no marker in this fixture -> heuristic (450000/1 >= 1e3)
 
@@ -809,9 +798,7 @@ def test_synthetic_opju_alt_header_and_text_tags_with_utf8() -> None:
     titles). All variants route identically."""
     blob = _synthetic_opju(
         _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
-        + _opju_text_object(
-            "YL", "H\\-(c2∥) (T)", axis_shape=True, hdr_tag=0x92, text_tag=0xA8
-        )
+        + _opju_text_object("YL", "H\\-(c2∥) (T)", axis_shape=True, hdr_tag=0x92, text_tag=0xA8)
         + _opju_text_object("XB", "Temperature (K)", axis_shape=True, hdr_tag=0x84)
     )
     f = extract_figures_opju(blob)[0]
@@ -972,9 +959,7 @@ def test_realdata_matches_origin_ground_truth(stem: str) -> None:
     if not src.exists() or not index_path.exists():
         pytest.skip("Origin specimen/ground-truth not present on this machine")
     index = json.loads(index_path.read_text(encoding="utf-8"))
-    expected = [
-        (layer["x"], layer["y"]) for g in index["graphs"] for layer in g["layers"]
-    ]
+    expected = [(layer["x"], layer["y"]) for g in index["graphs"] for layer in g["layers"]]
     figs = extract_figures_opju(src.read_bytes())
     assert len(figs) == len(expected), f"{stem}: expected {len(expected)} layers, got {len(figs)}"
     remaining = list(expected)
@@ -1126,9 +1111,7 @@ def test_realdata_real_corpus_anchors_decode_and_match(stem: str, n_anchors: int
     if not src.exists() or not index_path.exists():
         pytest.skip(f"corpus file/ground-truth for '{stem}' not present on this machine")
     index = json.loads(index_path.read_text(encoding="utf-8"))
-    expected = [
-        (layer["x"], layer["y"]) for g in index["graphs"] for layer in g["layers"]
-    ]
+    expected = [(layer["x"], layer["y"]) for g in index["graphs"] for layer in g["layers"]]
 
     def _tol(a: float, b: float) -> bool:
         return abs(a - b) <= 1e-9 * max(1.0, abs(a), abs(b))
@@ -1173,11 +1156,35 @@ def test_realdata_fig_pairs_curve_bindings() -> None:
     figs = extract_figures_opju(src.read_bytes())
     assert len(figs) == 4
     expected = [
-        {"book": "FBook", "x": "A", "y": "B", "style": "scatter", "symbol": "square"},
-        {"book": "FBook", "x": "A", "y": "B", "style": "scatter", "symbol": "square"},
+        {
+            "book": "FBook",
+            "x": "A",
+            "y": "B",
+            "style": "scatter",
+            "symbol": "square",
+            "lineWidth": 0.5,
+            "symbolSize": 9.0,
+        },
+        {
+            "book": "FBook",
+            "x": "A",
+            "y": "B",
+            "style": "scatter",
+            "symbol": "square",
+            "lineWidth": 0.5,
+            "symbolSize": 9.0,
+        },
         # the deliberate A-C diff
-        {"book": "FBook", "x": "A", "y": "C", "style": "scatter", "symbol": "square"},
-        {"book": "FBook", "x": "A", "y": "B", "style": "line"},
+        {
+            "book": "FBook",
+            "x": "A",
+            "y": "C",
+            "style": "scatter",
+            "symbol": "square",
+            "lineWidth": 0.5,
+            "symbolSize": 9.0,
+        },
+        {"book": "FBook", "x": "A", "y": "B", "style": "line", "lineWidth": 0.5, "symbolSize": 9.0},
     ]
     for i, (f, want) in enumerate(zip(figs, expected, strict=True)):
         assert f["curves"] == [want], f"fig_pairs graph{i + 1}: curves={f['curves']}"
@@ -1209,9 +1216,33 @@ def test_realdata_curves_multi_bindings() -> None:
     figs = extract_figures_opju(src.read_bytes())
     assert len(figs) == 1
     assert figs[0]["curves"] == [
-        {"book": "MBook", "x": "A", "y": "B", "style": "scatter", "symbol": "square"},
-        {"book": "MBook", "x": "A", "y": "C", "style": "scatter", "symbol": "square"},
-        {"book": "MBook", "x": "A", "y": "D", "style": "scatter", "symbol": "square"},
+        {
+            "book": "MBook",
+            "x": "A",
+            "y": "B",
+            "style": "scatter",
+            "symbol": "square",
+            "lineWidth": 0.5,
+            "symbolSize": 9.0,
+        },
+        {
+            "book": "MBook",
+            "x": "A",
+            "y": "C",
+            "style": "scatter",
+            "symbol": "square",
+            "lineWidth": 0.5,
+            "symbolSize": 9.0,
+        },
+        {
+            "book": "MBook",
+            "x": "A",
+            "y": "D",
+            "style": "scatter",
+            "symbol": "square",
+            "lineWidth": 0.5,
+            "symbolSize": 9.0,
+        },
     ]
 
 
@@ -1227,8 +1258,24 @@ def test_realdata_curves_2books_bindings() -> None:
     figs = extract_figures_opju(src.read_bytes())
     assert len(figs) == 1
     assert figs[0]["curves"] == [
-        {"book": "BookOne", "x": "A", "y": "B", "style": "scatter", "symbol": "square"},
-        {"book": "BookTwo", "x": "A", "y": "C", "style": "scatter", "symbol": "square"},
+        {
+            "book": "BookOne",
+            "x": "A",
+            "y": "B",
+            "style": "scatter",
+            "symbol": "square",
+            "lineWidth": 0.5,
+            "symbolSize": 9.0,
+        },
+        {
+            "book": "BookTwo",
+            "x": "A",
+            "y": "C",
+            "style": "scatter",
+            "symbol": "square",
+            "lineWidth": 0.5,
+            "symbolSize": 9.0,
+        },
     ]
 
 
@@ -1451,10 +1498,14 @@ def _id_curve_token(flag: int, cid: int, width: int = 3) -> bytes:
 
 def _id_table_blob(*graph_payloads: bytes, records: bytes | None = None) -> bytes:
     """Magic + a WBook page carrying id records + one graph page per payload."""
-    recs = records if records is not None else (
-        _column_id_record(1, "A", "X")
-        + _column_id_record(2, "B", "Y", partner=1)
-        + _column_id_record(3, "C", "Y", partner=1)
+    recs = (
+        records
+        if records is not None
+        else (
+            _column_id_record(1, "A", "X")
+            + _column_id_record(2, "B", "Y", partner=1)
+            + _column_id_record(3, "C", "Y", partner=1)
+        )
     )
     out = b"CPYUA 4.3811 222\n" + _opju_page_header("WBook") + recs
     for i, payload in enumerate(graph_payloads, start=1):
@@ -1501,9 +1552,8 @@ def test_synthetic_id_table_unknown_id_dropped() -> None:
 def test_synthetic_id_table_form_b_record_resolves() -> None:
     """A column stored via the rarer form-B id record (``07 10 01 00 00``)
     resolves identically (RockingCurve NbAu!D / UnpolPlots PrNiO3STOprof!B)."""
-    records = (
-        _column_id_record(1, "A", "X")
-        + _column_id_record(2, "B", "Y", partner=1, form_b=True)
+    records = _column_id_record(1, "A", "X") + _column_id_record(
+        2, "B", "Y", partner=1, form_b=True
     )
     blob = _id_table_blob(
         _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
@@ -1577,9 +1627,7 @@ def test_realdata_hc2_per_graph_bindings_vs_index_oracle() -> None:
     for g in index["graphs"]:
         refs = [ref for layer in g["layers"] for ref in layer.get("plots", [])]
         pairs = {
-            (m.group("book"), m.group("col"))
-            for ref in refs
-            if (m := _PLOT_REF_RE.match(ref))
+            (m.group("book"), m.group("col")) for ref in refs if (m := _PLOT_REF_RE.match(ref))
         }
         if pairs:
             oracle[g["graph"]] = pairs
@@ -1588,9 +1636,7 @@ def test_realdata_hc2_per_graph_bindings_vs_index_oracle() -> None:
     named: dict[str, set[tuple[str, str]]] = {}
     for f in figs:
         if f["name"]:
-            named.setdefault(f["name"], set()).update(
-                (c["book"], c["y"]) for c in f["curves"]
-            )
+            named.setdefault(f["name"], set()).update((c["book"], c["y"]) for c in f["curves"])
 
     exact = []
     for gname, pairs in oracle.items():
