@@ -9,17 +9,21 @@ forms exist, both decoded here:
 **Specimen form** (default-dialog graphs, the item-14 shape): after the marker
 come the X-axis ``(from, to)`` values, a step field, a fixed 8-byte marker
 ``81 04 06 00 00 01 c3 66`` whose *next byte* is a **combined axis-scale flag**
-(``0x03`` X-lin+Y-lin / ``0x04`` X-log+Y-lin / ``0x0d`` Y-log, X unencoded —
-pinned from four controlled specimens toggling X, Y, and both; see
-``_axis_scales`` and ``tools/origin_trial/generate_specimens*``). Y-scale is
-always exact; X-scale is exact only in the Y-linear case (``0x04``) and
-otherwise falls back to the decade heuristic. Then a fixed 3-byte filler, then
-Y ``(from, to)`` + step. Values are a
-2-byte tag + 8-byte LE float64 literal, a bare literal, or a 2-byte tag + 1-3
-*significant* bytes (the double's big-endian top-N bytes stored reversed); an
-exactly-zero ``from`` is elided entirely. The tag itself was never cracked, so
-every admissible split of a value span is tried and accepted **only** when
-exactly one split parses plausibly and consumes the span exactly.
+(``0x03`` X-lin+Y-lin / ``0x04`` X-log+Y-lin / ``0x0d`` Y-log — pinned from
+four controlled specimens toggling X, Y, and both; see ``_axis_scales`` and
+``tools/origin_trial/generate_specimens*``). Y-scale is always exact from that
+byte. X-scale is exact from the NEXT field (solved 2026-07-06): the "filler"
+after the type byte is really ``7b 40`` + a 2-value X-scale field, ``01`` =
+linear / ``08 01`` = log10 — the same encoding the real form carries before
+its Y span (``opju_axis_real_form._real_x_log_flag``, pinned by the
+fig_log/fig_xylog byte-diff); it is what encodes X when the combined byte
+reads ``0x0d``, with the byte's ``0x03``/``0x04`` reading as fallback. Then Y
+``(from, to)`` + step. Values are a 2-byte tag + 8-byte LE float64 literal, a
+bare literal, or a 2-byte tag + 1-3 *significant* bytes (the double's
+big-endian top-N bytes stored reversed); an exactly-zero ``from`` is elided
+entirely. The tag itself was never cracked, so every admissible split of a
+value span is tried and accepted **only** when exactly one split parses
+plausibly and consumes the span exactly.
 
 **Real-corpus form** (bound curves / non-default axis dialogs, the item-33
 shape, solved 2026-07-04 against the 4-file ground-truth oracle — see
@@ -53,46 +57,33 @@ Real-form value tokens add two encodings to the specimen set:
 
 The optional X flag token (``89 01``/``89 18``/``97 03``/``91 09`` = 2 bytes;
 a bare ``91`` directly before a run-first RLE value = 1 byte; absent when the
-record opens with a tagged value) is skipped via that deterministic length
-rule; its semantics stay undecoded — across the oracle corpus it shows **no**
-correlation with axis lin/log types (every flagged X-axis is linear in GT).
-The ``85 02 f0 3f`` sequence once suspected to be a y-log flag is in fact a
-tagged ``y_from = 1.0`` (proven by whole-span exact-fill + ground truth), so
-this form has **no isolated X-scale flag**: ``x_log`` falls back to the same
-decade heuristic the ``.opj`` reader uses (correct for all 14 corpus
-anchors), except when the specimen-form's combined scale byte (above)
-happens to also be present nearby (``_scale_byte``) — see below. Spans
-decode by exact-fill: X tries ``[from, to, step]`` then ``[to, step]`` (from
-elided) after the flag skip; Y scans for its start (the separator payload
-length varies) using tagged/RLE tokens only. A span whose fills disagree is
-dropped, never guessed.
+record opens with a tagged value) is skipped via a deterministic length
+rule; its semantics stay undecoded. Spans decode by exact-fill: X tries
+``[from, to, step]`` then ``[to, step]`` (from elided) after the flag skip;
+Y scans for its start (the separator payload length varies) using tagged/RLE
+tokens first, with a flag-authenticated bare-literal retry for panel layers.
+A span whose fills disagree is dropped, never guessed.
 
-**Y-scale flag — solved 2026-07-04** (a 4-file by-construction oracle:
-``rf_linlin``/``rf_logx``/``rf_logy``/``rf_loglog.opju``, the same
-single-curve graph with identical custom ranges, differing only in
-``layer.x.type``/``layer.y.type``): unlike X, Y in this form DOES carry an
-isolated, exact lin/log flag — see ``opju_axis_real_form.py``'s
-``_real_y_log_flag`` for the byte-level trail (the same two byte values,
-``01 00``/``08 01``, as the independently-discovered ``.opj`` flag,
-``figures.py``'s ``_y_scale_flag``, just at a different offset). Validated
-exact against all 14 real-corpus anchors and >300 further layers scanned
-across the wider ``.opj`` corpus during the cross-container validation (see
-``docs/origin_project_format.md`` §6.2). ``y_log`` uses this flag when
-present and only falls back to the decade heuristic otherwise.
+**Both axis-scale flags are exact in this form** (Y solved 2026-07-04, X
+2026-07-06, both against the 4-file by-construction rf_* oracle plus the
+real-corpus proof): see ``opju_axis_real_form.py``'s ``_real_y_log_flag`` /
+``_real_x_log_flag`` for the byte-level trails. Both use the same two byte
+values (``01 00``-family = linear, ``08 01`` = log10) as the independently-
+discovered ``.opj`` Y flag (``figures.py``'s ``_y_scale_flag``) — strong
+cross-container corroboration. ``x_log``/``y_log`` use these flags when
+present, decade heuristic only otherwise (e.g. the six Hc2 records whose X
+field reads an unrecognized ``02``).
 
 Validated end-to-end against Origin's own ground-truth export: all 6 specimen
 layers (``fig_lin``/``fig_log``/``fig_pairs``) decode exactly via the specimen
 form (plus the X-scale diff pair ``fig_linx``/``fig_logx`` and both-log
-``fig_xylog`` that pinned the combined flag), and **all 14 real-corpus anchors**
-(RockingCurve 3, XAS 3, UnpolPlots 4,
-"Fixed Lambdas SI" 4) decode with exact axis ranges and correct lin/log via
-the real form (Y from the new exact flag, X from the decade heuristic).
-Composite windows (e.g. RockingCurve ``Graph3``) reference already-encoded
-layers, so anchors are fewer than GT layers; GT layers whose ranges
-duplicate a matched anchor are covered by it. The real-corpus-form value
-tokens, span decoding, and the Y-scale flag itself live in
-``opju_axis_real_form.py`` (split out to stay under the 500-line
-god-module ceiling).
+``fig_xylog`` that pinned the flags), and **all real-corpus anchors**
+(RockingCurve 3+3, XAS 3, UnpolPlots 4+4, "Fixed Lambdas SI" 4+4 — the +N
+are the ``03 00 00 5f`` panel-layer anchors of composite/panel windows,
+incl. the real log-x ``Graph6``) decode with exact axis ranges and correct
+lin/log via the real form. The real-corpus-form value tokens, span decoding,
+and both scale flags live in ``opju_axis_real_form.py`` (split out to stay
+under the 500-line god-module ceiling).
 
 This module fills ``source_hint`` from the ``<BKNAME>...</BKNAME>`` OriginStorage
 XML tag when one appears near the graph (an unambiguous, low-false-positive
@@ -159,6 +150,10 @@ from quantized.io.origin_project.opju_figure_text import routed_figure_text
 __all__ = ["extract_figures_opju"]
 
 _ANCHOR = bytes.fromhex("0300001f")
+# Panel/composite multi-layer windows anchor their per-layer records with
+# `1f | 0x40` instead (Fixed Lambdas SI Graph5/Graph6, RockingCurve and
+# UnpolPlots Graph3 -- all GT-verified); same record grammar after the anchor.
+_ANCHOR_PANEL = bytes.fromhex("0300005f")
 _Y_TRANSITION = bytes([0x81, 0x04, 0x06, 0x00, 0x00, 0x01, 0xC3, 0x66])
 _STEP_TAG = bytes([0x83, 0x02])
 # The byte after _Y_TRANSITION is a *combined* axis-scale field, pinned from
@@ -166,9 +161,9 @@ _STEP_TAG = bytes([0x83, 0x02])
 # toggled X, fig_xylog toggled both — see tools/origin_trial/generate_specimens*):
 #   0x03 -> X-lin, Y-lin      0x04 -> X-log, Y-lin
 #   0x0d -> Y-log  (0x0d whether X is lin OR log: the field does NOT encode X
-#                   once Y is log, so X falls back to the decade heuristic there)
-# Y-scale is therefore always exact (0x0d == log, else lin); X-scale is exact
-# only in the Y-linear case (0x04), heuristic otherwise.
+#                   once Y is log — X lives in the separate filler flag there,
+#                   see _parse_specimen_record; heuristic only if that is
+#                   unrecognized too). Y-scale is always exact (0x0d == log).
 _TYPE_LOG = 0x0D  # Y log (X unencoded)
 _TYPE_LIN = 0x03  # both linear
 _TYPE_XLOG = 0x04  # X log, Y linear
@@ -280,9 +275,18 @@ def _source_hint(b: bytes, anchor: int) -> str:
     return m.group(1).decode("latin1", errors="replace") if m else ""
 
 
-def _parse_specimen_record(b: bytes, p: int) -> tuple[float, float, float, float, int] | None:
+def _parse_specimen_record(
+    b: bytes, p: int
+) -> tuple[float, float, float, float, int, bool | None] | None:
     """Specimen-form axis record at anchor payload ``p``:
-    ``(xf, xt, yf, yt, type_byte)``."""
+    ``(xf, xt, yf, yt, type_byte, x_log)``.
+
+    ``x_log`` is the exact X-scale flag inside the "filler" after the type
+    byte -- really ``7b 40`` + ``01`` (linear) / ``08 01`` (log10), the same
+    field the real form carries (see the module docstring); ``None`` keeps
+    the type-byte/heuristic path. ``y_start`` stays at the historical +3
+    skip: a log X's extra ``08`` byte is absorbed by ``_parse_pair``'s
+    2-byte tag-skip candidate, byte-identically to before."""
     ytrans = b.find(_Y_TRANSITION, p, min(len(b), p + _TAG_SEARCH_SPAN))
     if ytrans < 0:
         return None
@@ -294,15 +298,21 @@ def _parse_specimen_record(b: bytes, p: int) -> tuple[float, float, float, float
         return None
     if ytrans + len(_Y_TRANSITION) >= len(b):  # marker at EOF — no type byte to read
         return None
-    type_byte = b[ytrans + len(_Y_TRANSITION)]
-    y_start = ytrans + len(_Y_TRANSITION) + 1 + 3  # + type byte + "7b 40 01" filler
+    tb = ytrans + len(_Y_TRANSITION)
+    type_byte = b[tb]
+    x_log: bool | None = None
+    if b[tb + 1 : tb + 4] == b"\x7b\x40\x01":
+        x_log = False
+    elif b[tb + 1 : tb + 5] == b"\x7b\x40\x08\x01":
+        x_log = True
+    y_start = tb + 1 + 3  # + type byte + "7b 40 ..." filler (see docstring)
     ystep = b.find(_STEP_TAG, y_start, min(len(b), y_start + _TAG_SEARCH_SPAN))
     if ystep < 0:
         return None
     ypair = _parse_pair(b, y_start, ystep)
     if ypair is None:
         return None
-    return (*xpair, *ypair, type_byte)
+    return (*xpair, *ypair, type_byte, x_log)
 
 
 def _scale_byte(b: bytes, p: int, end: int) -> int | None:
@@ -375,7 +385,7 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         book_counts_all = allocated_columns_from_bytes(b)
     page_starts = [off for off, _name in pages]
     page_layers: dict[int, int] = {}  # page index -> layers emitted so far
-    anchors = _find_all(b, _ANCHOR)
+    anchors = sorted(_find_all(b, _ANCHOR) + _find_all(b, _ANCHOR_PANEL))
     for idx, anchor in enumerate(anchors):
         p = anchor + len(_ANCHOR)
         next_anchor = anchors[idx + 1] if idx + 1 < len(anchors) else len(b)
@@ -391,13 +401,14 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         spec = _parse_specimen_record(b, p)
         type_byte: int | None
         real_y_log: bool | None = None
+        x_flag: bool | None
         if spec is not None:
-            x_from, x_to, y_from, y_to, type_byte = spec
+            x_from, x_to, y_from, y_to, type_byte, x_flag = spec
         else:
             real = _parse_real_record(b, p, window_end)
             if real is None:
                 continue  # undecodable record: skip, never guess
-            x_from, x_to, y_from, y_to, real_y_log = real
+            x_from, x_to, y_from, y_to, x_flag, real_y_log = real
             # the full specimen record may not parse (e.g. an X-log record's
             # varying filler) yet still carry the scale marker — read it directly
             type_byte = _scale_byte(b, p, window_end)
@@ -406,6 +417,10 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
             y_log = _log_heuristic(y_from, y_to)
         else:
             x_log, y_log = _axis_scales(type_byte, x_from, x_to, y_from, y_to)
+        if x_flag is not None:
+            # the exact X-scale flag (both forms carry it right before the Y
+            # span, see _real_x_log_flag) wins over type byte and heuristic.
+            x_log = x_flag
         if real_y_log is not None:
             # the real-form Y-scale flag (_real_y_log_flag) is exact and
             # always wins: type_byte's 0x03/0x04 pair only ever isolates X in

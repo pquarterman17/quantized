@@ -20,9 +20,14 @@ layers across PNR/MnN_Diffusion_PNR/XMCD/hc2convert/SuperlatticeFits: only
 these two byte values ever occur, and several instances (reflectivity R(Q)
 curves zoomed to a sub-decade log range, e.g. Y=(0.9772, 1.2916)) are flag
 log but heuristic-linear — cases the flag resolves correctly where the old
-decade heuristic could not. **X has no known equivalent flag** (the search
-that isolated Y's did not find one for X in this corpus) and stays
-heuristic-only, same as before. See §6.1 for the byte-level trail.
+decade heuristic could not. **X stays heuristic-only in this container**:
+``.opju`` grew an exact X flag on 2026-07-06 (the same ``01``/``08 01``
+byte values, see ``opju_axis_real_form._real_x_log_flag``), but no ``.opj``
+log-x oracle exists to isolate an ``.opj`` twin — the corpus is all-linear
+in X and the trial Origin only writes CPYUA (a ``.opj`` save silently
+becomes ``.opju``), so a candidate offset near 98/99 cannot be told apart
+from constants. Honest boundary: heuristic, never guessed. See
+``docs/origin_re/ORIGIN_CONVENTIONS.md`` §6.2.
 
 The recoverable content is the plot-state snapshot the owner asked for: axis
 ranges, an exact Y-scale flag (falling back to the decade heuristic only

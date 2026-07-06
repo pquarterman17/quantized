@@ -62,8 +62,11 @@ def _layer_bytes(
     legend: str,
 ) -> bytes:
     """One CPYUA axis record: anchor + X ``(from, to)`` + step + the
-    Y-transition marker (carries ``type_byte``) + Y ``(from, to)`` + step +
-    trailing legend text — the shape ``figures_opju.py`` decodes.
+    Y-transition marker (carries ``type_byte``) + the ``7b 40`` filler + a
+    linear X-scale flag (``01`` — an X-log record's ``08 01`` flag reshapes
+    the Y span so it only decodes via the REAL-form path; see the fig_logx
+    real-bytes fixture below) + Y ``(from, to)`` + step + trailing legend
+    text — the shape ``figures_opju.py`` decodes.
 
     ``from`` is elided (0 bytes) when exactly 0.0, matching the real
     encoding; every other value is a 2-byte tag + the smallest exact compact
@@ -78,7 +81,7 @@ def _layer_bytes(
     out += b"\x83\x02" + _pack_compact(1.0, 2)  # X step
     out += b"\x81\x04\x06\x00\x00\x01\xc3\x66"  # Y-transition marker
     out += bytes([type_byte])
-    out += b"\x7b\x40\x01"  # fixed filler
+    out += b"\x7b\x40\x01"  # filler + linear X flag (see docstring)
     out += _encode_value(y_from) if y_from != 0.0 else b""
     out += _encode_value(y_to)
     out += b"\x83\x02" + _pack_compact(y_step, 2)  # Y step
@@ -117,7 +120,7 @@ def test_synthetic_log_type_byte_flags_y_log() -> None:
     assert len(figs) == 1
     assert (figs[0]["x_from"], figs[0]["x_to"]) == (0.79, 8.22)
     assert figs[0]["y_log"] is True
-    assert figs[0]["x_log"] is False  # X has no isolated flag; falls back to the heuristic
+    assert figs[0]["x_log"] is False  # the exact `01` filler flag reads linear
 
 
 def test_synthetic_unrecognized_type_byte_falls_back_to_heuristic() -> None:
@@ -131,16 +134,24 @@ def test_synthetic_unrecognized_type_byte_falls_back_to_heuristic() -> None:
     assert figs[0]["y_log"] is True  # 5e5/0.5 >= 1e3 -> the shared decade heuristic
 
 
-def test_synthetic_xlog_type_byte_flags_x_log() -> None:
-    """The combined scale byte 0x04 means X-log, Y-lin (pinned from fig_logx):
-    X-scale is recovered from the flag, not the heuristic."""
-    blob = _synthetic_opju(
-        _layer_bytes(0.79, 8.22, 0.0, 1000.0, 200.0, 0x04, r"\l(1) %(1)")
+def test_synthetic_xlog_record_flags_x_log() -> None:
+    """An X-log record (``fig_logx.opju``'s exact anchor bytes: combined byte
+    0x04 AND the ``08 01`` X-scale flag after the ``7b 40`` filler): X-scale
+    is recovered exactly -- flag, not heuristic (X spans <1 decade)."""
+    rec = bytes.fromhex(
+        "03 00 00 1f 89 10 48 e1 7a 14 ae 47 e9 3f 71 3d 0a d7 a3 70"
+        "20 40 83 02 f0 3f 81 04 06 00 00 01 c3 66 04 7b 40 08 01 8b"
+        "03 40 8f 40 83 02 69 40 81 05 06 00 00 01 9a c1 99 2c 19 76"
+        "c0 01 00 00 10 10 00 88 e9 6c 00 00 12".replace(" ", "")
     )
+    blob = _synthetic_opju(rec + b"\x00" * 32)
     figs = extract_figures_opju(blob)
     assert len(figs) == 1
-    assert figs[0]["x_log"] is True  # 0x04 isolates X-log even though X spans <1 decade
-    assert figs[0]["y_log"] is False
+    f = figs[0]
+    assert (f["x_from"], f["x_to"]) == (0.79, 8.22)
+    assert (f["y_from"], f["y_to"]) == (0.0, 1000.0)
+    assert f["x_log"] is True  # the 08 01 flag, even though X spans <1 decade
+    assert f["y_log"] is False
 
 
 def test_axis_scales_mapping() -> None:
@@ -295,7 +306,7 @@ def test_synthetic_real_form_garbage_after_separator_drops() -> None:
     assert extract_figures_opju(blob) == []
 
 
-# ── synthetic real-corpus-form Y-scale flag (the rf_* oracle, 2026-07-04) ─────
+# ── synthetic real-corpus-form X/Y-scale flags (the rf_* oracle, 2026-07-04/06) ──
 #
 # Bytes below replicate -- value for value -- the actual `rf_linlin.opju` /
 # `rf_logy.opju` anchor payloads (a controlled 4-file oracle: the SAME
@@ -330,16 +341,36 @@ def _rf_logy_bytes() -> bytes:
     )
 
 
+def _rf_logx_bytes() -> bytes:
+    return bytes.fromhex(
+        "03 00 00 1f 89 01 9a c2 99 02 c9 3f 83 02 34 40 83 02 f0 3f"
+        "81 04 06 00 00 01 c3 66 04 7b 40 08 01 84 02 49 40 82 03 40"
+        "9f 40 83 02 69 40 81 05 06 00 00 01 9a c1 99 2c 19 76 c0 01"
+        "00 00 10 10 00 88 e9 6c 00 00 12".replace(" ", "")
+    )
+
+
+def _rf_loglog_bytes() -> bytes:
+    return bytes.fromhex(
+        "03 00 00 1f 89 01 9a c2 99 02 c9 3f 83 02 34 40 83 02 f0 3f"
+        "81 04 06 00 00 01 c3 66 04 7b 40 08 01 84 02 49 40 82 03 40"
+        "9f 40 83 02 f0 3f 81 05 06 00 00 01 9a c1 99 2c 19 76 c0 08"
+        "01 00 10 10 00 88 e9 6c 00 00 12".replace(" ", "")
+    )
+
+
 def test_synthetic_real_form_y_lin_flag_and_no_specimen_false_positive() -> None:
     """``rf_linlin``'s exact anchor bytes: x_from decodes to the true 0.2 (not
-    the specimen-path's false-positive 0.195...), and the ``01 00`` flag
-    (found from the ``00 10 10 00`` layer-style marker) reads Y as linear."""
+    the specimen-path's false-positive 0.195...), the ``01 00`` flag
+    (found from the ``00 10 10 00`` layer-style marker) reads Y as linear,
+    and the geometry-tail ``01`` X flag reads X as linear."""
     blob = _synthetic_opju(_rf_linlin_bytes() + b"\x00" * 32)
     figs = extract_figures_opju(blob)
     assert len(figs) == 1
     f = figs[0]
     assert (f["x_from"], f["x_to"]) == (0.2, 20.0)
     assert (f["y_from"], f["y_to"]) == (50.0, 2000.0)
+    assert f["x_log"] is False
     assert f["y_log"] is False
 
 
@@ -354,7 +385,58 @@ def test_synthetic_real_form_y_log_flag_matches_rf_logy() -> None:
     f = figs[0]
     assert (f["x_from"], f["x_to"]) == (0.2, 20.0)
     assert (f["y_from"], f["y_to"]) == (50.0, 2000.0)
+    assert f["x_log"] is False
     assert f["y_log"] is True
+
+
+def test_synthetic_real_form_x_log_flag_matches_rf_logx_and_loglog() -> None:
+    """``rf_logx``/``rf_loglog``'s exact anchor bytes (X toggled to log10 with
+    Y linear resp. log): the geometry tail flips ``... 7b 40 01`` -> ``... 7b
+    40 08 01`` and that alone flips ``x_log`` -- the 100x X span is below the
+    decade heuristic's threshold, so only the flag can read these as log.
+    ``rf_loglog`` is the resolved both-log case (the specimen-form combined
+    byte cannot encode it; the once-suspected ``0x0e`` was proven FALSE)."""
+    for fixture, want_y in ((_rf_logx_bytes, False), (_rf_loglog_bytes, True)):
+        figs = extract_figures_opju(_synthetic_opju(fixture() + b"\x00" * 32))
+        assert len(figs) == 1, fixture.__name__
+        f = figs[0]
+        assert (f["x_from"], f["x_to"]) == (0.2, 20.0), fixture.__name__
+        assert (f["y_from"], f["y_to"]) == (50.0, 2000.0), fixture.__name__
+        assert f["x_log"] is True, fixture.__name__
+        assert f["y_log"] is want_y, fixture.__name__
+
+
+# Fixed Lambdas SI's panel-layer records (the ``03 00 00 5f`` anchor form,
+# 2026-07-06): real Graph6/Graph5 layer-1 bytes -- bare-literal Y spans
+# (allowed only via the flag-authenticated bare retry) with the X flag
+# ``08 01`` (Graph6, the corpus' one REAL log-x graph) resp. ``01`` (Graph5).
+
+
+def _fl_panel_bytes(x_from_hex: str, x_flag_hex: str) -> bytes:
+    return bytes.fromhex(
+        f"03 00 00 5f 89 18 {x_from_hex} eb 51 b8 1e 85 eb a1 3f"
+        f"7b 14 ae 47 e1 7a 74 3f 81 04 07 00 00 01 81 1f c0 e5 03 41"
+        f"{x_flag_hex} ec 51 b8 1e 85 eb b1 bf ec 51 b8 1e 85 eb b1 3f"
+        "7b 14 ae 47 e1 7a 94 3f 81 04 09 00 00 01 81 2d 40 40 d1 c0"
+        "01 00 00 10 10 00 80 e9 6c 00".replace(" ", "")
+    )
+
+
+def test_synthetic_panel_anchor_bare_y_and_x_flags() -> None:
+    """The ``5f`` panel anchor decodes with bare-literal Y tokens, and the
+    ``08 01 00`` / ``01 00 00`` field before the Y span reads X log resp.
+    linear -- Graph6's 3.8x span would heuristic to linear otherwise."""
+    g6 = _fl_panel_bytes("48 50 fc 18 73 d7 82 3f", "08 01 00")  # x_from=0.0092
+    g5 = _fl_panel_bytes("7c 14 ae 47 e1 7a 74 3f", "01 00 00")  # x_from=0.005
+    for rec, want_xf, want_x_log in ((g6, 0.0092, True), (g5, 0.005, False)):
+        figs = extract_figures_opju(_synthetic_opju(rec + b"\x00" * 32))
+        assert len(figs) == 1
+        f = figs[0]
+        assert f["x_from"] == pytest.approx(want_xf, rel=1e-12)
+        assert f["x_to"] == pytest.approx(0.035, rel=1e-12)
+        assert (f["y_from"], f["y_to"]) == (-0.07, 0.07)
+        assert f["x_log"] is want_x_log
+        assert f["y_log"] is False
 
 
 def test_synthetic_real_form_y_log_flag_overrides_heuristic_both_ways() -> None:
@@ -905,16 +987,16 @@ def test_realdata_matches_origin_ground_truth(stem: str) -> None:
     ("stem", "x_log", "y_log"),
     [
         ("fig_linx", False, False),  # layer.x.type=1, y.type=1
-        ("fig_logx", True, False),  # layer.x.type=2, y.type=1  -> byte 0x04
-        ("fig_xylog", False, True),  # x.type=2, y.type=2 -> byte 0x0d can't encode X
+        ("fig_logx", True, False),  # layer.x.type=2, y.type=1  -> byte 0x04 + flag 08 01
+        ("fig_xylog", True, True),  # x.type=2, y.type=2 -> byte 0x0d + flag 08 01
     ],
 )
 def test_realdata_xscale_specimens(stem: str, x_log: bool, y_log: bool) -> None:
     """The X-scale diff pair + both-log specimen (generate_specimens2). Truth is
     by construction (the LabTalk axis type set at generation), not a GT export.
-    fig_xylog's X is genuinely log but the 0x0d byte carries no X information,
-    so the decoder honestly reports the heuristic (linear) there — a documented
-    format limitation, asserted so it stays visible."""
+    fig_xylog's X was a documented limitation while only the combined 0x0d byte
+    was known (it carries no X information); the X-scale filler flag (solved
+    2026-07-06, ``01``/``08 01`` after ``7b 40``) now decodes it exactly."""
     src = _SPEC / f"{stem}.opju"
     if not src.exists():
         pytest.skip(f"X-scale specimen '{stem}' not present on this machine")
@@ -949,13 +1031,11 @@ def test_realdata_xscale_specimens(stem: str, x_log: bool, y_log: bool) -> None:
 )
 def test_realdata_real_form_scale_quad(stem: str, x_log: bool, y_log: bool) -> None:
     """The rf_* quad: identical custom ranges, only the axis types differ.
-    Both X (via the pre-existing ``_scale_byte``/type-byte path, incidentally
-    present here because these controlled specimens carry the specimen-form
-    Y-transition marker even though they use real-form value encoding) and Y
-    (via the new ``_real_y_log_flag``) must be exact -- not heuristic -- for
-    all four, and the axis range must be the true ``(0.2, 20.0)``/
-    ``(50.0, 2000.0)``, not the specimen-path false-positive's corrupted
-    ``x_from``."""
+    Both X (via ``_real_x_log_flag``, the geometry-tail ``01``/``08 01``
+    field this very quad's pairwise byte-diffs isolated) and Y (via
+    ``_real_y_log_flag``) must be exact -- not heuristic -- for all four,
+    and the axis range must be the true ``(0.2, 20.0)``/``(50.0, 2000.0)``,
+    not the specimen-path false-positive's corrupted ``x_from``."""
     src = _SPEC / f"{stem}.opju"
     if not src.exists():
         pytest.skip(f"real-form scale specimen '{stem}' not present on this machine")
@@ -983,21 +1063,51 @@ def test_realdata_axis_custom_real_form_scale() -> None:
     assert (f["x_from"], f["x_to"]) == pytest.approx((0.2, 20.0), rel=1e-9)
     assert (f["y_from"], f["y_to"]) == pytest.approx((50.0, 2000.0), rel=1e-9)
     assert f["x_log"] is True
+
+
+@pytest.mark.realdata
+def test_realdata_fixed_lambdas_real_log_x_graph() -> None:
+    """``Fixed Lambdas SI!Graph6`` is the corpus' one REAL (non-specimen)
+    log-x graph (GT ``layer.x.type == 2`` for both layers): its panel-layer
+    records must decode with x_log=True FROM THE FLAG -- the 3.8x span
+    (0.0092..0.035) is far below the decade heuristic's threshold, so a
+    heuristic reading would mislabel it linear. Its linear twin ``Graph5``
+    (same window shape, x from 0.005) must stay x_log=False."""
+    src = _SPEC.parent / "Fixed Lambdas SI.opju"
+    if not src.exists():
+        pytest.skip("Fixed Lambdas SI corpus file not present on this machine")
+    figs = extract_figures_opju(src.read_bytes())
+    by_name: dict[str, list[dict[str, object]]] = {}
+    for f in figs:
+        by_name.setdefault(str(f["name"]), []).append(f)
+    assert len(by_name.get("Graph6", [])) == 2
+    for f in by_name["Graph6"]:
+        assert f["x_from"] == pytest.approx(0.0092, rel=1e-9)
+        assert f["x_to"] == pytest.approx(0.035, rel=1e-9)
+        assert f["x_log"] is True
+        assert f["y_log"] is False
+    assert len(by_name.get("Graph5", [])) == 2
+    for f in by_name["Graph5"]:
+        assert f["x_from"] == pytest.approx(0.005, rel=1e-9)
+        assert f["x_log"] is False
     assert f["y_log"] is False
 
 
 @pytest.mark.realdata
 @pytest.mark.parametrize(
     ("stem", "n_anchors"),
-    [("XAS", 3), ("RockingCurve", 3), ("UnpolPlots", 4), ("Fixed Lambdas SI", 4)],
+    [("XAS", 3), ("RockingCurve", 6), ("UnpolPlots", 8), ("Fixed Lambdas SI", 8)],
 )
 def test_realdata_real_corpus_anchors_decode_and_match(stem: str, n_anchors: int) -> None:
     """Item 33: every real-corpus axis anchor decodes, and every decoded figure
     matches an oracle layer's ranges within 1e-9 rel with correct lin/log.
-    Anchors are fewer than GT layers: only *unique* layers are encoded —
-    composite windows (RockingCurve/UnpolPlots ``Graph3``) reference existing
-    layers, and sparkline/derived layers carry no ``03 00 00 1f`` record —
-    so coverage is asserted per anchor, not per GT layer."""
+    Counts include the ``03 00 00 5f`` panel-layer anchors (2026-07-06):
+    composite windows (RockingCurve/UnpolPlots ``Graph3``) carry their own
+    per-layer panel records, and Fixed Lambdas' two 2-layer panel graphs
+    include ``Graph6`` — the corpus' one REAL log-x graph, whose 3.8x span
+    the decade heuristic would mislabel linear; only the exact X-scale flag
+    decodes it. Sparkline/derived layers carry no anchor record at all, so
+    coverage is asserted per anchor, not per GT layer."""
     src = _SPEC.parent / f"{stem}.opju"
     index_path = _GT / stem / "index.json"
     if not src.exists() or not index_path.exists():

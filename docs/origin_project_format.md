@@ -869,17 +869,18 @@ byte values, independently discovered via `.opju`'s real-corpus form (see
 §6.2) — strong cross-container corroboration this is a real, dedicated
 field rather than coincidence.
 
-**X-scale type — still heuristic only.** No isolated X flag was found
-anywhere near the layer-continuation block during this pass (the search
-that found Y's flag did not surface an analogous one for X); an axis reads
-as **log10** when `from > 0` and `to/from ≳ 10^3` with an integer `step`
-(decade ticks) — correctly flags XRD intensity, SuperlatticeFits
-reflectivity R(Q), and leaves MOKE/2θ linear. *(Note: `.opju`'s specimen
-form separately isolated a combined X+Y scale byte via controlled trial
-specimens — §6.2 — but Origin ≥2023 cannot write `.opj`, so no equivalent
-specimen-based probe exists for CPYA to look for an analogous byte there;
-X stays a documented gap.)* Confidence: range HIGH, Y-scale HIGH (exact),
-X-scale MEDIUM (heuristic).
+**X-scale type — still heuristic only in `.opj`.** No isolated X flag was
+found anywhere near the layer-continuation block during this pass (the
+search that found Y's flag did not surface an analogous one for X); an axis
+reads as **log10** when `from > 0` and `to/from ≳ 10^3` with an integer
+`step` (decade ticks) — correctly flags XRD intensity, SuperlatticeFits
+reflectivity R(Q), and leaves MOKE/2θ linear. *(Note: `.opju` grew an EXACT
+X flag on 2026-07-06 — §6.2, `_real_x_log_flag`, the same `01`/`08 01` byte
+values as this container's Y flag — but the `.opj` corpus is all-linear in
+X and the trial Origin cannot write `.opj` (a `.opj` save silently becomes
+`.opju`, attempted 2026-07-06), so no oracle exists to isolate an `.opj`
+twin from constants; X stays a documented `.opj` gap.)* Confidence: range
+HIGH, Y-scale HIGH (exact), X-scale MEDIUM (heuristic).
 
 **Axis titles.** `type=0x00` objects named `XB`/`XT`/`YL`/`YR`. **Auto:**
 `%(?X)`/`%(?Y)` — Origin builds the title from the plotted column's
@@ -1079,10 +1080,15 @@ authoritative version:
 Pinned from four controlled single/dual-variable Origin-trial specimens
 (`fig_lin`/`fig_log` toggling Y only, `fig_linx`/`fig_logx` toggling X
 only, `fig_xylog` toggling both). **Y-scale is therefore always exact**
-(`0x0d` ⟺ log, else linear); **X-scale is exact only in the Y-linear case**
-(`0x04`) and otherwise falls back to the same decade heuristic `.opj` uses
-(`fig_xylog`'s X honestly stays on the heuristic — a documented format
-limitation, not a bug).
+(`0x0d` ⟺ log, else linear). **X-scale is exact too — solved 2026-07-06**,
+but from the NEXT field, not this byte: the "`7b 40 01` filler" after the
+type byte is really `7b 40` + a 2-value X-scale field, `01` = linear /
+`08 01` = log10 (fig_log vs fig_xylog byte-diff; the same encoding the real
+form carries before its Y span, `_real_x_log_flag`). That field is what
+encodes X when the combined byte reads `0x0d` — both-log is `0x0d` + flag
+`08 01`, closing what used to be a documented limitation (`fig_xylog`'s X
+formerly fell to the decade heuristic). The byte's `0x03`/`0x04` X reading
+remains as fallback corroboration for an unrecognized filler.
 
 #### Real-corpus form (bound curves / non-default axis dialogs, item 33)
 
@@ -1093,13 +1099,18 @@ ground-truth oracle (RockingCurve, XAS, UnpolPlots, "Fixed Lambdas SI" —
 14 anchors):
 
 ```
-03 00 00 1f                       layer anchor
+03 00 00 1f                       layer anchor (03 00 00 5f = 1f|0x40 for
+                                  panel/composite multi-layer windows,
+                                  2026-07-06; same grammar after it)
 [optional flag token]             see length rule below
 [X from] [X to] [X step]          value tokens; "from" ELIDED when 0.0
 81 <id> <plen> 00 00 01 <geometry…>   separator; <id>/<plen> VARY
                                   (0x04/0x0d/0x10 …, plen 7/8/10/14 seen);
                                   plen is only a search-window HINT
-[Y from] [Y to] [Y step]          value tokens (tagged/RLE only)
+[X-scale flag] [00-pads]          geometry TAIL: 01=lin / 08 01=log10,
+                                  then 0-2 pad 00s (solved 2026-07-06)
+[Y from] [Y to] [Y step]          value tokens (tagged/RLE; bare literals
+                                  only via the flag-authenticated retry)
 81 <id> <plen> 00 00 01 …         end separator (id 0x35 in 3 files, 0x04
                                   in "Fixed Lambdas SI")
 ```
@@ -1129,15 +1140,27 @@ ground-truth oracle (RockingCurve, XAS, UnpolPlots, "Fixed Lambdas SI" —
 absent when the record opens with a tagged value; `89 01`/`89 18`/
 `97 03`/`91 09` = 2 bytes; a bare `91` immediately followed by a run-first
 RLE value = 1 byte. Semantics undecoded — across the oracle, every flagged
-X axis is GT-linear, so the flags do **not** correlate with axis type. The
-`85 02 f0 3f` sequence once suspected to be a y-log flag is in fact a
-tagged `y_from = 1.0` (whole-span exact-fill + GT confirm), so **this form
-has no isolated X-scale flag**: `x_log` falls back to the same decade
-heuristic `.opj` uses — correct for all 14 corpus anchors (RockingCurve's
-three log-Y layers span ≥5 decades; every linear layer spans <3), except
-when the specimen-form's combined scale byte (§6.2's Specimen form,
-`_scale_byte`) happens to also be present nearby — see the Y-scale flag
-paragraph below for why this matters more than it first appears.
+X axis is GT-linear, so these leading flags do **not** correlate with axis
+type. (The `85 02 f0 3f` sequence once suspected to be a y-log flag is in
+fact a tagged `y_from = 1.0`, whole-span exact-fill + GT confirm; the real
+X-scale flag lives at the geometry TAIL instead — next paragraph.)
+
+**X-scale flag — solved 2026-07-06.** The same rf_* by-construction quad
+(below), byte-diffed pairwise on the X toggle (`rf_logx` vs `rf_linlin`,
+`rf_loglog` vs `rf_logy`): the first separator's geometry payload ENDS with
+an X-scale field right before the Y span's first token — `01` = linear,
+`08 01` = log10 (the Y flag's own byte values), followed by 0-2 pad `00`s
+whose count varies with the Y token encoding. `opju_axis_real_form.py`'s
+`_real_x_log_flag` reads it backward from the decoded Y-span start; an
+unrecognized tail returns `None` → decade heuristic (never guessed).
+Corpus proof: all 9 by-construction specimens exact (rf quad,
+fig_linx/logx/xylog, axis_custom); the corpus' one REAL log-x graph,
+"Fixed Lambdas SI" `Graph6` (2 panel layers, GT `layer.x.type=2`, a 3.8x
+span the decade heuristic mislabels linear) reads `08 01`; every GT-linear
+real record (~70 across Hc2/RockingCurve/XAS/UnpolPlots/Fixed Lambdas)
+reads `01`; zero false positives. Six Hc2 records read `02` — unrecognized,
+heuristic kept. The specimen form carries the SAME field as the tail of its
+"`7b 40 01` filler" (§6.2's Specimen form).
 
 **Y-scale flag — solved 2026-07-04.** Unlike X, this form DOES carry an
 isolated, exact Y flag, found via a new 4-file by-construction oracle:
@@ -1180,17 +1203,24 @@ now route through the real-form parser and decode `x_from` exactly.
 first position from which tagged/RLE tokens alone exactly fill the span.
 Any arity whose fill set is non-unique is dropped, never guessed.
 
-**Validation:** 14/14 real-corpus anchors match GT layers at 1e-9 rel with
-correct lin/log (RockingCurve 3, XAS 3, UnpolPlots 4, "Fixed Lambdas SI"
-4) — Y from the new exact flag, X from the decade heuristic; the 6
-specimen layers (`fig_lin`/`fig_log`/`fig_pairs`) still decode via the
-specimen-form path, and the rf_* quad + `axis_custom` (5 more files) decode
-exact ranges with both X (via the specimen-form's scale byte, incidentally
-present) and Y (via the new flag) exact. Composite windows (e.g. RockingCurve `Graph3`)
-reference already-encoded layers, so anchor counts are fewer than GT
-layers by design; a few derived graphs ("Fixed Lambdas SI" Graph5/Graph6,
-including the corpus's only log-X layer) carry no `03 00 00 1f` record at
-all and are honestly out of reach (no false coverage claimed).
+**Validation:** all real-corpus anchors match GT layers at 1e-9 rel with
+correct lin/log — the original 14 `1f` anchors (RockingCurve 3, XAS 3,
+UnpolPlots 4, "Fixed Lambdas SI" 4) plus, since 2026-07-06, the `5f`
+panel-layer anchors (RockingCurve `Graph3` 3, UnpolPlots `Graph3` 4,
+"Fixed Lambdas SI" `Graph5`/`Graph6` 2+2 — `Graph6` being the corpus' only
+REAL log-x graph, x exact from the flag where the heuristic would mislabel
+it linear). Fixed Lambdas' panel layers encode Y as bare literals: decoded
+via a last-resort bare retry accepted only where the X-flag bytes
+authenticate the Y-span start (a `y_start` pointing at a pad `00` is
+rejected — letting a bare literal absorb the pads mis-decoded Graph5 L2's
+`y_from` as -0.0488.. for -0.05 during development; measured, fixed,
+regression-tested). The 6 specimen layers (`fig_lin`/`fig_log`/
+`fig_pairs`) still decode via the specimen-form path, and the rf_* quad +
+`axis_custom` (5 more files) decode exact ranges with both X and Y exact
+from the flags. The same retry also surfaced 4 additional Hc2 records
+(`Graph19` + 3 report-embedded graphs) absent from the page-limit-truncated
+Hc2 GT capture — their bound-curve data brackets the decoded ranges
+(internally consistent), but they are honestly unverifiable against GT.
 
 **Curve/source resolution:** `source_hint` is filled from the
 `<BKNAME>...</BKNAME>` OriginStorage XML tag when one appears near the
@@ -1635,10 +1665,11 @@ yet):
   style** (spline/step/B-spline) — partially or not modelled.
 - **Arrow/box/region annotations with arrowheads** — quantized `refLines`
   are axis-parallel only.
-- **X-scale type bit (both containers)** — still heuristic-only: the search
-  that isolated Y's exact flag (below) did not surface an analogous X flag
-  in either container. `.opj` additionally can't be probed with new
-  specimens (Origin ≥2023 can't write it); see §6.1/§6.2.
+- **X-scale type bit (`.opj` only)** — still heuristic-only there: no
+  `.opj` log-x graph exists in the corpus and Origin ≥2023 can't write
+  `.opj` to make one, so the `.opju` X flag's twin (if any) can't be
+  isolated from constants. `.opju` X-scale is EXACT since 2026-07-06
+  (`_real_x_log_flag`, both record forms); see §6.1/§6.2.
 - ~~**Y-scale type bit**~~ — **solved 2026-07-04** for both containers (no
   longer a gap): `.opj` payload offset 98/99 (§6.1) and `.opju`'s real-form
   Y flag before the `00 10 10 00` marker (§6.2) are both exact, `01 00`
@@ -1827,9 +1858,11 @@ reading only this doc:
   offset 98/99) and `.opju`'s real-corpus form (§6.2,
   `opju_axis_real_form.py`'s `_real_y_log_flag`) now decode Y-scale exactly
   (`01 00` linear / `08 01` log10), validated against 14 real-corpus
-  `.opju` anchors and >300 `.opj` layers corpus-wide. **X still has no
-  isolated flag in either container** and stays on the decade heuristic —
-  a documented, narrower remaining gap.
+  `.opju` anchors and >300 `.opj` layers corpus-wide. **X-scale followed on
+  2026-07-06 for `.opju` only** (`_real_x_log_flag`, the geometry-tail
+  `01`/`08 01` field, exact in both record forms — §6.2); `.opj` X stays on
+  the decade heuristic (no log-x oracle exists or can be generated) — a
+  documented, narrower remaining gap.
 - **Item 4 (report-sheet family) — non-double column values.** CLOSED for
   the reference-string family: FitLinear/NLFit auto-generated report-sheet
   columns decode in both containers (`origin_report_sheets` — §3.2 for

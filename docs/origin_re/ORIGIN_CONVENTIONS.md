@@ -474,14 +474,43 @@ real-corpus `.opju` anchors, plus a 4-file by-construction oracle
 (`rf_linlin`/`rf_logx`/`rf_logy`/`rf_loglog.opju`) that isolated the flag
 from the axis geometry payload entirely.
 
-**X-scale — still (heuristic) in both containers.** No isolated X flag was
-ever found in either container (the search that found Y's did not surface an
-analogous one for X). Falls back to: an axis reads as log10 when `from > 0`
-and `to/from ≳ 10^3` with an integer `step` (decade ticks). `.opju`'s
-*specimen* form (default-dialog graphs only) does carry a combined X+Y scale
-byte after a fixed 8-byte marker (`0x03` both-lin, `0x04` X-log+Y-lin,
-`0x0d` Y-log with X unencoded — the tempting "0x0e = both-log" guess was
-tested and is **false**), so X is exact there in the Y-linear case only.
+**X-scale — exact in `.opju` (both record forms, solved 2026-07-06); still
+(heuristic) in `.opj`.** Isolated by pairwise byte-diffs of the same rf_*
+quad (`rf_logx` vs `rf_linlin`, `rf_loglog` vs `rf_logy` — each pair differs
+only in `layer.x.type`): the geometry payload between an axis record's two
+separators ENDS with an X-scale field carrying the same two byte values as
+the Y flag — `01` = linear, `08 01` = log10 — immediately before the Y
+span's first token, with 0-2 trailing `00` pad bytes in between
+(`opju_axis_real_form.py::_real_x_log_flag`, read backward from the decoded
+Y-span start). In the *specimen* form the same field is the tail of the
+"`7b 40 01` filler" after the combined scale byte (really `7b 40` + the
+flag; `figures_opju.py::_parse_specimen_record`) — it is what encodes X when
+the combined byte reads `0x0d` = Y-log (that byte carries no X info; the
+tempting "0x0e = both-log" guess was tested and is **false** — both-log is
+`0x0d` + flag `08 01`, resolved by `fig_xylog`/`rf_loglog`). Corpus proof:
+all 9 by-construction log/lin specimens exact; the one REAL log-x graph,
+`Fixed Lambdas SI!Graph6` (2 panel layers, GT `layer.x.type=2`, a 3.8x span
+the decade heuristic mislabels linear), reads `08 01`; every GT-linear real
+record (~70 across Hc2/RockingCurve/XAS/UnpolPlots/Fixed Lambdas) reads
+`01`; zero false positives. Six Hc2 records carry an unrecognized `02` in
+the field — those return `None` and keep the heuristic (never guessed).
+
+The heuristic (an axis reads log10 when `from > 0` and `to/from ≳ 10^3`
+with an integer `step`) remains for: (a) `.opju` records whose field is
+unrecognized, and (b) **all `.opj` layers** — no `.opj` log-x graph exists
+in the corpus to diff against, and one cannot be generated: the trial
+Origin only writes CPYUA (`app.Save` and LabTalk `save -d` both silently
+save `.opju` regardless of a `.opj` extension, attempted 2026-07-06). A
+candidate `.opj` X flag near the Y flag at offset 98/99 therefore cannot be
+isolated from constants on an all-linear corpus; the honest boundary is
+heuristic-only there.
+
+Related (2026-07-06): panel/composite multi-layer windows anchor per-layer
+records with `03 00 00 5f` (= `1f | 0x40`), and Fixed Lambdas' panel layers
+encode Y spans as bare 8-byte LE literals — decoded via a last-resort bare
+retry accepted only where the X-flag bytes authenticate the Y-span start.
+This is what surfaced the previously-undecodable Graph5/Graph6 (and the
+RockingCurve/UnpolPlots `Graph3` composite) layers.
 
 Source: `docs/origin_project_format.md` §6.1 ("Axis range", "Y-scale type"),
 §6.2 (specimen form combined flag, real form Y flag); `figures.py`,
@@ -808,9 +837,11 @@ not inferred:
   unidentified. **Do not represent this writer's output as "opens in
   Origin" to users** — the Origin-ASCII + `.ogs` path is the one that
   reliably does (`docs/opening_origin_files.md`).
-- **X-scale type has no isolated flag in either container** — permanently
-  heuristic (decade-range test) except `.opju`'s synthetic specimen form in
-  the Y-linear case. (§6.2.)
+- **X-scale type is heuristic in `.opj`** (decade-range test): no `.opj`
+  log-x oracle exists and the trial Origin cannot write old-format projects
+  to make one, so the `.opju` flag's `.opj` twin (if any) cannot be
+  isolated. `.opju` X-scale is EXACT since 2026-07-06 except where the
+  flag field reads an unrecognized value (six Hc2 records read `02`). (§6.2.)
 - **`.opju`'s per-layer window *name*** was `""` prior to the 2026-07-05
   id-table rework and is now recovered only for pages that own no column
   records (graph pages) — a report/fit-embedded figure with no page name
