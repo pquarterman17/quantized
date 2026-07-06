@@ -88,11 +88,19 @@ def _cstring(payload: bytes, start: int, limit: int = 48) -> str | None:
 
 
 def _is_window_header(payload: bytes) -> str | None:
-    """A window-header block starts ``00 00 <Name> 00``; return the name."""
+    """A window-header block starts ``00 00 <Name> 00``; return the name.
+
+    Digit-led names are real (``tree.py``'s module docstring documents
+    ``30nmADPNR`` and six digit-led graph names in the corpus, COM-verified),
+    so the first-char gate is ``isalnum``, not ``isalpha`` — the old
+    alpha-first check silently hid digit-led graph windows from
+    ``figures.py`` AND let their internal blocks poison
+    ``opj_curves.column_id_map`` (a digit-led graph was not recognized as a
+    graph, so its 519-byte curve records were scanned as column storage)."""
     if len(payload) < 150 or payload[0] or payload[1]:
         return None
-    name = _cstring(payload, 2, 32)
-    return name if name and name[0].isalpha() else None
+    name = _cstring(payload, 2, 64)
+    return name if name and name[0].isalnum() else None
 
 
 def _book_long_name(payload: bytes, short: str) -> str:

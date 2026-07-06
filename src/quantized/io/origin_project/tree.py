@@ -67,7 +67,10 @@ __all__ = ["opj_folder_paths"]
 # in a 12-file corpus (.opj + .opju) via live COM enumeration — always
 # `[A-Za-z0-9_-]`, never a space or other punctuation (folder names, unlike
 # window names, CAN have spaces/parens/unicode — see `_read_cstring`).
-_WINDOW_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{1,39}")
+# Length 1+ (a window renamed to a single letter is legal in Origin; a
+# 2-char minimum would skip it and shift every later window's ordinal — the
+# same accumulating-offset bug class the digit-led fix addressed).
+_WINDOW_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,62}")
 
 
 class _TailParseError(ValueError):
@@ -99,7 +102,7 @@ def _enumerate_window_names(b: bytes) -> list[str]:
     for size, payload in walk_blocks(b):
         if size == 0 or len(payload) < 150 or payload[0] or payload[1]:
             continue
-        end = payload.find(b"\x00", 2, 34)
+        end = payload.find(b"\x00", 2, 66)
         if end <= 2:
             continue
         raw = payload[2:end]
@@ -306,7 +309,29 @@ def opj_folder_paths(b: bytes) -> dict[str, list[str]]:
     if root is None:
         return {}
     names = _enumerate_window_names(b)
+    # Fail-closed cross-check: the tree's ordinals index into the enumerated
+    # name list positionally, so an ordinal past the end PROVES the name
+    # enumeration missed at least one window header — every later name would
+    # be attributed to the wrong window. Degrade to "no tree" rather than
+    # ship misattributed folder paths.
+    max_ordinal = max(
+        (o for node in _iter_nodes(root) for o in node.windows), default=-1
+    )
+    if max_ordinal >= len(names):
+        return {}
     out: dict[str, list[str]] = {}
     _flatten(root, names, (), out)
+    return out
+
+
+def _iter_nodes(root: _FolderNode) -> list[_FolderNode]:
+    """Every folder node, iteratively (same no-recursion rationale as
+    ``_flatten``)."""
+    out: list[_FolderNode] = []
+    stack: list[_FolderNode] = [root]
+    while stack:
+        cur = stack.pop()
+        out.append(cur)
+        stack.extend(cur.subfolders)
     return out
 

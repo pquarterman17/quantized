@@ -100,6 +100,28 @@ def test_property_block_without_label_is_tolerated(tmp_path) -> None:
     assert list(ds.time) == [1.0, 2.0]
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"CPYUA",  # bare magic
+        b"CPYUA 4.3811 222\n",  # header only
+        b"CPYUA 4.3811 222\n" + b"\xa5" * 400,  # FPC garbage
+        b"CPYUA 4.3811 222\n"
+        + b"\x07Fake_A\xff\xff"
+        + struct.pack("<H", 50)
+        + b"\x9f\x86",  # record truncated mid-stream
+        b"CPYUA 4.3380 111\n" + b"\x00" * 64,  # older sub-version, no records
+    ],
+)
+def test_malformed_opju_raises_origin_error_only(tmp_path, payload: bytes) -> None:
+    """The .opju top-level contract mirrors the .opj one: any malformed or
+    empty container raises ``OriginProjectError`` (with recovery guidance),
+    never returns a silently-partial DataStruct (2026-07-06 genericity
+    audit: this battery previously existed only for ``.opj``)."""
+    with pytest.raises(OriginProjectError):
+        _read(tmp_path, "bad.opju", payload)
+
+
 def test_opju_codec_scan_survives_garbage() -> None:
     assert scan_columns(b"") == []
     assert scan_columns(b"CPYUA 4.3811 222\n" + b"\xa5" * 500) == []
@@ -164,8 +186,13 @@ def test_version_anchors_43227_and_43380() -> None:
     """One pinned value per .opj container version in the corpus. (The
     2026-07-06 corpus swap replaced XRD.opj with a CPYA 4.3380 project, so
     XMCD.opj is now the sole 4.3227 anchor.)"""
+    # 620.0414: re-pinned 2026-07-06 after the genericity fixes — the old
+    # 4-char column-name cap dropped every 5+-char short-named column
+    # (i0esA/normA/average/difference…), which also shifted the primary-book
+    # choice; the recovered columns are verified against the full XMCD COM
+    # ground-truth oracle (171 books).
     xmcd = read_origin_project(_CORPUS / "XMCD.opj")  # CPYA 4.3227
-    assert xmcd.time[0] == pytest.approx(760.0048, abs=0.001)
+    assert xmcd.time[0] == pytest.approx(620.0414, abs=0.001)
     xrd = read_origin_project(_CORPUS / "XRD.opj")  # CPYA 4.3380
     assert xrd.time[0] == pytest.approx(10.0, abs=0.05)
     moke = read_origin_project(_CORPUS / "Moke.opj")  # CPYA 4.3380

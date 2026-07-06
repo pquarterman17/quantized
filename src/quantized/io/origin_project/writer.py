@@ -35,7 +35,19 @@ __all__ = ["opj_bytes", "write_opj"]
 
 _HEADER_LINE = b"CPYA 4.3380 188 W64 #\n"
 _DESIGNATION_CODE = {"Y": 0, "disregard": 1, "Y-error": 2, "X": 3, "label": 4, "Z": 5, "X-error": 6}
-_SHORTS = [chr(c) for c in range(ord("A"), ord("Z") + 1)]
+
+
+def _col_short(i: int) -> str:
+    """0-based column index -> Origin short name, bijective base-26
+    (A..Z, AA, AB, …) — the same lettering the readers decode. (The old
+    A..Z-only table made the writer reject >26-column books that the read
+    path handles fine; 2026-07-06 genericity audit.)"""
+    out = ""
+    i += 1
+    while i:
+        i, rem = divmod(i - 1, 26)
+        out = chr(ord("A") + rem) + out
+    return out
 
 
 def _block(payload: bytes) -> bytes:
@@ -120,13 +132,10 @@ def opj_bytes(books: list[DataStruct]) -> bytes:
 
     for i, ds in enumerate(books):
         short_book, long_book = _book_name(ds, i, used)
-        ncols = 1 + ds.values.shape[1]
-        if ncols > len(_SHORTS):
-            raise ValueError(f"book '{short_book}': {ncols} columns exceeds A..Z")
         cols: list[tuple[str, str, str, str]] = []  # (short, long, unit, designation)
         cols.append(
             (
-                _SHORTS[0],
+                _col_short(0),
                 str(ds.metadata.get("x_column_long", "") or ""),
                 str(ds.metadata.get("x_unit", "") or ""),
                 "X",
@@ -135,7 +144,7 @@ def opj_bytes(books: list[DataStruct]) -> bytes:
         for j in range(ds.values.shape[1]):
             label = ds.labels[j] if j < len(ds.labels) else ""
             unit = ds.units[j] if j < len(ds.units) else ""
-            cols.append((_SHORTS[j + 1], str(label), str(unit), "Y"))
+            cols.append((_col_short(j + 1), str(label), str(unit), "Y"))
         named.append((short_book, long_book, ds, cols))
 
         # datasets section: [spacer][column header][data] per column

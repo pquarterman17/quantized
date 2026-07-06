@@ -162,9 +162,13 @@ __all__ = ["extract_curves_allcols"]
 # 0x03 family, no fixed terminator byte was found, so none is required here.
 _CURVE_RE = re.compile(rb"[\x00-\xff]\x01\x01\x01\x80\x01(.)")
 
-# A column suffix eligible for the all-columns map: pure letters, 1-2 chars,
+# A column suffix eligible for the all-columns map: pure letters, any width,
 # no sheet suffix (that case is dropped by the caller before this check runs).
-_PURE_COLUMN = re.compile(r"[A-Z]{1,2}")
+# No length cap: the old {1,2} silently discarded AAA+ columns of a >702-col
+# book while the survivors still formed a contiguous A..ZZ run, shifting every
+# later book's cumulative ordinal base (2026-07-06 genericity audit) —
+# ``_letter_index`` already handles arbitrary-width bijective base-26.
+_PURE_COLUMN = re.compile(r"[A-Z]+")
 
 
 def _letter_index(letters: str) -> int:

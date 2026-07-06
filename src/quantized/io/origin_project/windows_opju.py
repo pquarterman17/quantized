@@ -101,10 +101,6 @@ _KNOWN_TOKENS = (
     b"PConst",
 )
 _MAX_GAP = 600  # max byte spacing between one column-property record and the next
-_MAX_RUN = 128  # upper bound on columns scanned per book (a run still stops at the
-# first >_MAX_GAP break, i.e. the book boundary; this is only a runaway backstop).
-# Wide books are real: the Hc2 measurement sheets carry 37-42 columns (past Z into
-# AA..), so this must comfortably exceed one worksheet's column count.
 
 
 def _strip_alnum(s: bytes) -> bytes:
@@ -227,13 +223,19 @@ def opju_window_metadata(
         x_positions = [i for i, t in enumerate(candidates) if t[1] == "X"]
         letter_map: dict[str, tuple[int, str]] | None = None
         run: list[tuple[int, str]] = []
+        # The run bound is DERIVED from the column count (the old fixed
+        # _MAX_RUN=128 cap silently dropped ALL metadata of a >128-column
+        # book — names, units, and the X designation; 2026-07-06 genericity
+        # audit). The >_MAX_GAP break remains the real book-boundary signal;
+        # len(cols) + slack is only the runaway backstop.
+        max_run = len(cols) + 32
         for xi in x_positions:
             attempt = [candidates[xi]]
             j = xi + 1
             while (
                 j < len(candidates)
                 and candidates[j][0] - attempt[-1][0] <= _MAX_GAP
-                and len(attempt) < _MAX_RUN
+                and len(attempt) < max_run
             ):
                 attempt.append(candidates[j])
                 j += 1

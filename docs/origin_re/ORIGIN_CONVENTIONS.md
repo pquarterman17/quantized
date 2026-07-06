@@ -1061,6 +1061,55 @@ Ordered by value. Each names the decode path so it can be picked up cold.
 8. **Tick spacing / number format** (axis increment, decimal places).
 9. **Matrix objects** — unattempted; rare in the corpus.
 
+The 2026-07-06 genericity audit (three parallel reviewers over every decode
+module; the silent-wrong findings were fixed the same day — see 13.5) left
+these lower-severity items open. All fail CLOSED today (drop/None, never a
+wrong answer); they are listed so the drop cases are known, not rediscovered:
+
+10. **Column-designation whitelists** — `windows.py::_is_column_block` gates
+    on bytes `0x06 ∈ {09,0B}` / `0x25 ∈ {21,30}` (the corpus-observed set:
+    X/Y/Y-error only), and `windows_opju.py` knows only the X/Y/Y-error
+    markers, requiring one marker per column. A book containing a
+    Label/Z/X-error/disregard column loses its WHOLE metadata run (names,
+    units, and the X designation) in `.opju`, or that column's metadata in
+    `.opj`. Fix path: decode the remaining designation markers (need a
+    specimen with a Z/Label column) or count an unknown marker as
+    designation-"unknown" instead of failing the run.
+11. **Notes decoder thinness** — `notes.py` is validated against ONE
+    synthetic 2-line specimen; the junk filter rejects any note containing
+    `\`, `<`, or `>` (legit in real notes: paths, inequalities, HTML-ish),
+    and the frame assumes a single-byte length (≤250 B). Real multi-paragraph
+    notes are silently dropped. Also the results-log timestamp regex assumes
+    US `M/D/YYYY` — a non-US-locale project's whole fit-provenance log reads
+    as absent. Needs a real-notes + non-US-locale specimen before trusting.
+12. **`_INTERNAL_ANN_RE` substring matching** — an annotation whose text
+    contains `system` (any case) is dropped as internal storage. Needs
+    word-boundary/context anchoring.
+13. **Remaining corpus-sized scan bounds** (all fail-safe drops, candidates
+    for derived bounds): `windows_opju._MAX_GAP=600` (a >600-byte column
+    record — e.g. a long embedded import path — ends the metadata run
+    early), `opju_axis_real_form._Y_START_SCAN=7` (already bumped 6→7 once;
+    a farther Y-span start drops the whole figure), `figures.py`'s 1200-byte
+    text-block size window + the 12-annotation cap (flat list only; the
+    positioned marks are uncapped), `opju_reports._MAX_ROWS/_MAX_STRLEN`,
+    the `figures_opju._TEXT_WINDOW=20_000` text scan, and the single-row
+    label ASCII whitelist in `windows_opju._SINGLE_ROW_RE` (a `°`/`θ`/`Å`
+    in a long-name-only label drops that label; the multi-row path already
+    accepts high bytes).
+14. **Duplicate window short-names** — two windows sharing a name merge
+    book metadata (`windows.py` `setdefault`) and can offer a false
+    double-Y pair on the frontend (`originFigures.doubleYPartner`). Origin
+    mostly enforces uniqueness; needs an identity key better than the
+    display name if a real collision file ever appears.
+15. **Symbol kinds 4-8 unverified** — `curve_style_color._SYMBOL_SHAPES`
+    maps 1-3 oracle-verified; 4-8 follow Origin's published gallery order
+    but no corpus plot uses them. Capture a synthetic specimen with kinds
+    4-8 to pin (or accept the documented-order risk).
+16. **`opju_codec._records` pre-`ffff` varint width** — only 1-2-byte
+    forms accepted (`k in (3,4)`); if a huge column presents a 3-byte value
+    there, its data is skipped. No large-row `.opju` exists to test; make a
+    synthetic one.
+
 ### 13.3 BLOCKED (documented dead ends — do not re-chase)
 
 - **Fit-curve overlays** (FitLine / fitted curve on a graph) — Origin does
@@ -1079,7 +1128,57 @@ Ordered by value. Each names the decode path so it can be picked up cold.
 - **`.opju` scale field value `0x02`** (6 Hc2 records) — an unrecognised
   third scale type with no oracle; read as `None` -> heuristic, never guessed.
 
-### 13.4 Meta findings (from the gap inventory)
+### 13.4 CLOSED by the 2026-07-06 genericity audit
+
+Silent-wrong / silent-truncation overfits found by a three-way adversarial
+review of every decode module against the "samples are not standards"
+directive, fixed and regression-tested the same day:
+
+- **Digit-led window names** (`windows.py::_is_window_header` was
+  alpha-first): digit-led graph windows were invisible to `figures.py` AND
+  their 519-byte records poisoned `opj_curves.column_id_map` → wrong curve
+  bindings. Now `isalnum`, matching `tree.py`'s COM-validated rule.
+- **Window-name length caps** (`tree.py` 2-40 chars; `tree_opju.py`
+  `_OPJU_WIN_RE` 2-40): a 1-char or >40-char name skipped a window header →
+  every later ordinal shifted (`.opj` folders) / every column in the missed
+  page span attributed to the PREVIOUS book (`.opju`). `.opju` enumeration
+  is now driven by the on-disk `<namelen+2>` prefix (no cap); `.opj` allows
+  1..63. Plus a fail-closed guard: an ordinal past the enumerated list now
+  degrades the whole tree to `{}` instead of shipping shifted paths.
+- **Dataset-name regex caps** (`container.NAME_RE` + `opju_codec._NAME`
+  column part `{1,4}`, sheet `@\d{1,2}`): a 5+-char column short name lost
+  its WHOLE column. Live in the corpus: XMCD's `i0esA`/`normA`/`average`/
+  `difference*` columns were all dropped; recovery verified against the
+  full 171-book XMCD COM oracle. Now `{1,16}`/`@\d{1,3}` (book `{0,62}`)
+  with the structural gates unchanged.
+- **`opju_figure_curves._NAME_RE` 16-char/alpha-first cap** — same class;
+  now uncapped alnum-led.
+- **`windows_opju._MAX_RUN=128`** — a >128-column book lost all its
+  metadata; the bound is now derived (`len(cols)+32`), the `_MAX_GAP`
+  break remains the real boundary signal.
+- **`opju_codec.curve_plot_style` 400-byte window** — could alias the NEXT
+  curve's style tag on files packing curve objects closer than the corpus
+  minimum gap; now bounded by the next curve token (grammar), with the 400
+  as backstop only.
+- **`opju_curves_allcols._PURE_COLUMN` `[A-Z]{1,2}`** — dropped AAA+
+  columns while keeping the run contiguous → silently shifted every later
+  book's ordinal base. Now `[A-Z]+`.
+- **Writer A..Z-only lettering** — rejected >26-column books the readers
+  handle; now bijective base-26 (`AA`, `AB`, …), round-trip tested.
+- **Short rich-text titles** (`figures._texts_in` wordiness veto on
+  `2\g(q)`-style strings) — fixed a day earlier via `_RICHTEXT_MARK`
+  (commit `15b8e23`).
+- **Ground-truth harness assumptions** (tests, not decoders): expASC's
+  header rows are presence-conditional and reflect the VISIBLE view; CSVs
+  can be cp1252; empty books export zero-byte CSVs; exports repeat a
+  dataset (view stacking) and omit hidden/filtered rows — the comparator
+  now accepts exact tiling + contiguous-run containment while still
+  failing loudly on genuine truncation. New corpus-wide oracles captured
+  for XMCD (171 books), MnN, SuperlatticeFits.
+- **New malformed-`.opju` fuzz battery** — the raise-or-valid contract now
+  tested for both containers.
+
+### 13.5 Meta findings (from the gap inventory)
 
 - **Doc drift, both directions** — user-facing docs had *understated*
   shipped capability (curve->column binding described as "not decoded" long

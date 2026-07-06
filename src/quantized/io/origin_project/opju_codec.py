@@ -71,7 +71,11 @@ _DFCM_SHIFT, _DFCM_DROP = 2, 40  # dh = ((dh << 2) ^ (stride >> 40)) & mask
 # check below -- except sheet-1's own un-suffixed names sit right before the
 # extra-sheet block and satisfied it instead, silently swallowing every
 # later column into whichever sheet-1 name came last.
-_NAME = re.compile(rb"[A-Za-z][\w ]{0,40}_[A-Za-z0-9]{1,4}(?:@\d{1,2})?")
+# Bounds deliberately wider than any corpus maximum (book 62 / column 16 /
+# sheet 999 — the old 40/4/99 caps were corpus-shaped and silently dropped a
+# column whose name exceeded them; 2026-07-06 genericity audit). The
+# length-prefix byte check at the match site is the actual validity gate.
+_NAME = re.compile(rb"[A-Za-z][\w ]{0,62}_[A-Za-z0-9]{1,16}(?:@\d{1,3})?")
 
 
 class CodecError(ValueError):
@@ -321,20 +325,34 @@ def tail_start(b: bytes) -> int:
 # lowest-level module both curve modules already import (``scan_columns``/
 # ``_NAME``), so it carries no new dependency edge.
 _STYLE_RE = re.compile(rb"\x8f\x01(.)\x83")
-_STYLE_WINDOW = 400  # corpus-wide minimum gap between two curve tokens is 697
+_STYLE_WINDOW = 400  # backstop only; the next-token bound below is the gate
 _STYLE_BYTES = {0xC8: "line", 0xC9: "scatter"}
+# The two curve-token shapes (opju_figure_curves' unified id token and
+# opju_curves' 0x03-family token): the style search must STOP at the next
+# curve token so a curve with no style tag of its own can never pick up its
+# NEIGHBOR's tag. The old fixed 400-byte window was sized against the
+# corpus-wide minimum inter-token gap (697 B) — corpus-shaped: a file packing
+# curve objects closer than 400 B aliased the next curve's style (2026-07-06
+# genericity audit). A false positive of this pattern only SHRINKS the search
+# window (worst case an honest ``None``), never widens it.
+_NEXT_TOKEN_RE = re.compile(rb"\x01\x01\x01\x80[\x01\x03]|\x01.\x01\x80\x03.\x00", re.DOTALL)
 
 
 def curve_plot_style(b: bytes, token_start: int) -> str | None:
     """Plot style ("line"/"scatter") of the curve token starting at
-    ``token_start``, or ``None`` when no ``8f 01 <style> 83`` tag is found in
-    the 400-byte forward window, or the style byte is unrecognized.
+    ``token_start``, or ``None`` when no ``8f 01 <style> 83`` tag is found
+    before the next curve token (or the 400-byte backstop), or the style
+    byte is unrecognized.
 
     ~8% of real-corpus curve tokens (composite-window duplicate references)
     legitimately have no tag in range -- this returns ``None`` for those
     rather than fabricating a default.
     """
-    m = _STYLE_RE.search(b, token_start, min(len(b), token_start + _STYLE_WINDOW))
+    hi = min(len(b), token_start + _STYLE_WINDOW)
+    nxt = _NEXT_TOKEN_RE.search(b, token_start + 8, hi)
+    if nxt is not None:
+        hi = nxt.start()
+    m = _STYLE_RE.search(b, token_start, hi)
     if m is None:
         return None
     return _STYLE_BYTES.get(m.group(1)[0])

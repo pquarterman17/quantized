@@ -920,6 +920,19 @@ def test_curve_plot_style_scans_forward_window_not_fixed_offset() -> None:
     assert curve_plot_style(b, 0) == "line"
 
 
+def test_curve_plot_style_never_aliases_the_next_curves_tag() -> None:
+    """A curve with no style tag of its own, packed close to the next curve
+    token, must NOT pick up the neighbor's tag: the search stops at the next
+    curve token (grammar bound), not at a fixed 400-byte window — the old
+    window was sized against the corpus's minimum inter-token gap and
+    aliased on any denser file (2026-07-06 genericity audit)."""
+    # token A (tagless) at 0, token B 40 bytes later, B's own tag after it
+    token = b"\x00\x01\x01\x01\x80\x01\x07"  # the unified id-token shape
+    b = token + b"\x00" * 33 + token + b"\x00" * 4 + b"\x8f\x01\xc9\x83"
+    assert curve_plot_style(b, 0) is None  # A: tagless, must not read B's
+    assert curve_plot_style(b, 40) == "scatter"  # B still resolves its own
+
+
 # ── realdata: Origin ground-truth oracle (specimens only — see module docstring) ──
 
 

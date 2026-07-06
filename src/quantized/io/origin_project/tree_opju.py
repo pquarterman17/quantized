@@ -45,26 +45,45 @@ __all__ = ["opju_folder_paths"]
 _OPJU_SEPS = (b"\x80\x12\x8d\x10", b"\x80\x16\x03\x00\x00\x01\x8a\x10")
 # Window/page header: 0A [00] 80 <type> <namelen+2> 00 00 <name> <hi-bit byte>.
 # The leading 0A is the record framing that tells a true page header apart from
-# a dataset-curve record (a graph's "FitLine" fit result lacks it); requiring
-# namelen >= 2 rejects 1-byte coincidental length-prefix matches inside data;
-# <namelen+2> self-validates the name span. Order = the 0-based ordinal the
-# folder tree references (Origin writes headers grouped by folder, depth-first).
-_OPJU_WIN_RE = re.compile(
-    rb"\x0a\x00?\x80.(.)\x00\x00([A-Za-z0-9][A-Za-z0-9_-]{1,39})[\x80-\xff]",
-    re.DOTALL,
-)
+# a dataset-curve record (a graph's "FitLine" fit result lacks it). The name
+# span is driven by the <namelen+2> length prefix itself — NOT by a regex
+# length window (the old {1,39} bound was a corpus maximum: a >40-char or
+# 1-char window name was silently skipped, and a skipped page header doesn't
+# just lose that window — every column record inside its span is attributed
+# to the PREVIOUS page, i.e. the wrong book; 2026-07-06 genericity audit).
+# The name charset + the trailing hi-bit byte remain the validity gates.
+# Order = the 0-based ordinal the folder tree references (Origin writes
+# headers grouped by folder, depth-first).
+_OPJU_WIN_HEAD_RE = re.compile(rb"\x0a\x00?\x80.(.)\x00\x00", re.DOTALL)
+_OPJU_WIN_NAME_RE = re.compile(rb"[A-Za-z0-9][A-Za-z0-9_-]*\Z")
+
+
+def iter_opju_windows(b: bytes) -> list[tuple[int, str]]:
+    """Every page header as ``(match_offset, name)``, file-stream order,
+    first occurrence per name. Shared by the folder tree (ordinal order)
+    and ``opju_figure_curves.opju_pages`` (span scoping)."""
+    out: list[tuple[int, str]] = []
+    seen: set[str] = set()
+    for m in _OPJU_WIN_HEAD_RE.finditer(b):
+        nlen = m.group(1)[0] - 2
+        if nlen < 1:
+            continue
+        raw = b[m.end() : m.end() + nlen]
+        if len(raw) < nlen or not _OPJU_WIN_NAME_RE.fullmatch(raw):
+            continue
+        trail = b[m.end() + nlen : m.end() + nlen + 1]
+        if not trail or trail[0] < 0x80:
+            continue
+        name = raw.decode("latin1")
+        if name not in seen:
+            seen.add(name)
+            out.append((m.start(), name))
+    return out
 
 
 def _enumerate_opju_windows(b: bytes) -> list[str]:
     """Window (worksheet/graph/table) names in file-stream = ordinal order."""
-    out: list[str] = []
-    seen: set[str] = set()
-    for m in _OPJU_WIN_RE.finditer(b):
-        name = m.group(2).decode("latin1")
-        if m.group(1)[0] == len(name) + 2 and name not in seen:
-            seen.add(name)
-            out.append(name)
-    return out
+    return [name for _pos, name in iter_opju_windows(b)]
 
 
 def _opju_read_entries(b: bytes, q: int, nwin: int, hi: int) -> tuple[list[int] | None, int]:

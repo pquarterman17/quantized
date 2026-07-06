@@ -90,15 +90,24 @@ def test_value_only_dataset_roundtrips(tmp_path) -> None:
     assert back.values.shape == (2, 0)
 
 
-def test_writer_rejects_empty_and_too_wide() -> None:
+def test_writer_rejects_empty_and_letters_wide_books(tmp_path) -> None:
     with pytest.raises(ValueError):
         opj_bytes([])
+    # A >26-column book letters past Z (bijective base-26, matching the
+    # readers) — the old A..Z-only table made the writer reject books the
+    # read path handles fine (2026-07-06 genericity audit).
     wide = DataStruct(
-        time=np.zeros(2),
-        values=np.zeros((2, 26)),
-        labels=tuple(f"c{i}" for i in range(26)),
-        units=tuple("" for _ in range(26)),
-        metadata={},
+        time=np.arange(4, dtype=float),
+        values=np.arange(4 * 27, dtype=float).reshape(4, 27),
+        labels=tuple(f"c{i}" for i in range(27)),
+        units=tuple("" for _ in range(27)),
+        metadata={"origin_book": "Wide"},
     )
-    with pytest.raises(ValueError):
-        opj_bytes([wide])
+    blob = opj_bytes([wide])
+    assert b"Wide_AA\x00" in blob and b"Wide_AB\x00" in blob
+    p = tmp_path / "wide.opj"
+    p.write_bytes(blob)
+    back = read_origin_project(p)
+    assert back.values.shape == (4, 27)
+    assert list(back.metadata["origin_column_names"])[-2:] == ["AA", "AB"]
+    assert list(back.values[:, 26]) == list(wide.values[:, 26])

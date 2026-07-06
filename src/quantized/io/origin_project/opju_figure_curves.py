@@ -102,7 +102,7 @@ from typing import NamedTuple
 
 from quantized.io.origin_project.curve_style_color import opju_style_record, style_fields
 from quantized.io.origin_project.opju_codec import curve_plot_style
-from quantized.io.origin_project.tree_opju import _OPJU_WIN_RE
+from quantized.io.origin_project.tree_opju import iter_opju_windows
 
 __all__ = ["ColumnIdTable", "column_id_table", "extract_curves_by_id", "opju_pages"]
 
@@ -117,7 +117,12 @@ _CURVE_TOKEN = re.compile(rb"\x01\x01\x01\x80([\x01\x03])", re.DOTALL)
 _MARKS = {b"\x21\x51": "X", b"\x21\x61": "Y", b"\x30\x61": "Y-error"}
 
 _MAX_FIELDS = 10  # field-walk runaway backstop; real records resolve in <= 6
-_NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,15}\Z")
+# Column short-name gate: no 16-char ceiling (the old {0,15} was a corpus
+# maximum — a longer user-renamed short name made the column's id unresolvable
+# and silently dropped every curve plotting it; 2026-07-06 genericity audit).
+# The structural guards (the 09-separator field walk + designation marker)
+# carry the precision; digit-led short names are legal in Origin.
+_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_]*\Z")
 
 
 class ColumnIdTable(NamedTuple):
@@ -141,17 +146,12 @@ def opju_pages(b: bytes) -> list[tuple[int, str]]:
     """Every ``0a``-framed page header as ``(offset, name)``, file order.
 
     Reuses the exact enumeration ``tree_opju`` validated byte-exact against
-    live COM (first occurrence per name; the ``namelen+2`` self-check rejects
-    coincidental matches inside data).
+    live COM (first occurrence per name; the ``namelen+2`` length prefix
+    drives the name span, so arbitrary-length window names enumerate — a
+    missed header here would attribute every column in its span to the
+    previous page).
     """
-    out: list[tuple[int, str]] = []
-    seen: set[str] = set()
-    for m in _OPJU_WIN_RE.finditer(b):
-        name = m.group(2).decode("latin1")
-        if m.group(1)[0] == len(name) + 2 and name not in seen:
-            seen.add(name)
-            out.append((m.start(), name))
-    return out
+    return iter_opju_windows(b)
 
 
 def _walk_fields(b: bytes, p: int) -> list[bytes]:

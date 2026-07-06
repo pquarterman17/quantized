@@ -246,14 +246,17 @@ def test_no_windows_at_all_returns_empty_mapping() -> None:
     assert opj_folder_paths(project) == {}
 
 
-def test_ordinal_out_of_range_is_dropped_not_guessed() -> None:
+def test_ordinal_out_of_range_fails_closed_to_no_tree() -> None:
     """A folder referencing an ordinal beyond the enumerated window list
-    (can't happen in a well-formed file, but must never crash or fabricate
-    a name) is silently skipped."""
+    proves the window-name enumeration missed at least one header — and a
+    missed header shifts EVERY later window's ordinal, so any returned path
+    could be misattributed. The whole tree degrades to ``{}`` (same as an
+    unparseable tail): honest "no folder info", never a wrong folder.
+    (2026-07-06 genericity audit: replaces the old skip-just-that-ordinal
+    policy, which silently shipped shifted attributions.)"""
     folder = _folder("F", [0, 99])
     project = _synthetic_opj(["OnlyOne"], "Root", [], [folder])
-    paths = opj_folder_paths(project)
-    assert paths == {"OnlyOne": ["F"]}
+    assert opj_folder_paths(project) == {}
 
 
 def test_window_name_enumeration_skips_non_identifier_shaped_blocks() -> None:
@@ -268,6 +271,18 @@ def test_window_name_enumeration_skips_non_identifier_shaped_blocks() -> None:
 def test_digit_led_window_name_is_recognized() -> None:
     project = _synthetic_opj(["30nmADPNR"], "Root", [0])
     assert opj_folder_paths(project) == {"30nmADPNR": []}
+
+
+def test_single_char_and_long_window_names_enumerate() -> None:
+    """A window renamed to one character, or given a >40-char name, must not
+    be skipped by the enumerator — a skipped header shifts every later
+    window's ordinal (2026-07-06 genericity audit: the old {1,39} length
+    window silently dropped both shapes)."""
+    long_name = "L" + "x" * 45
+    folder = _folder("F", [0, 1, 2])
+    project = _synthetic_opj(["A", long_name, "After"], "Root", [], [folder])
+    paths = opj_folder_paths(project)
+    assert paths == {"A": ["F"], long_name: ["F"], "After": ["F"]}
 
 
 def test_notes_section_of_any_length_is_skipped_generically() -> None:
@@ -379,6 +394,18 @@ def test_opju_empty_folder_claims_no_window() -> None:
 def test_opju_root_level_window_has_empty_path() -> None:
     data = _synthetic_opju(["Standalone"], "Proj", [0])
     assert opju_folder_paths(data) == {"Standalone": []}
+
+
+def test_opju_single_char_and_long_window_names_enumerate() -> None:
+    """The page enumerator is length-prefix-driven, not length-capped: a
+    1-char or >40-char window name must enumerate (a missed page header
+    doesn't just lose that window — every column record in its span would
+    be attributed to the PREVIOUS page; 2026-07-06 genericity audit)."""
+    long_name = "L" + "y" * 45
+    folder = ("F", [0, 1, 2], [])
+    data = _synthetic_opju(["Q", long_name, "After"], "Proj", [], [folder])
+    paths = opju_folder_paths(data)
+    assert paths == {"Q": ["F"], long_name: ["F"], "After": ["F"]}
 
 
 def test_opju_graph_interleaved_with_books_keeps_ordinals_aligned() -> None:

@@ -96,20 +96,46 @@ def _read_oracle_csv(
     so content-sniffing cannot distinguish it from data). Without ``columns``
     the legacy two-row layout is assumed.
     """
-    with path.open(encoding="utf-8-sig", newline="") as fh:
-        rows = list(csv.reader(fh))
-    names = rows[0]
-    if columns is None:
-        n_header, units = 2, rows[1]
-    else:
-        has_units = any(c.get("unit", "") for c in columns)
-        has_comments = any(c.get("comment", "") for c in columns)
-        n_header = 1 + has_units + has_comments
-        units = rows[1] if has_units else [""] * len(names)
+    try:
+        with path.open(encoding="utf-8-sig", newline="") as fh:
+            rows = list(csv.reader(fh))
+    except UnicodeDecodeError:
+        # expASC writes ANSI unless told otherwise — a label with e.g. Å is
+        # cp1252 bytes, not UTF-8 (SuperlatticeFits corpus).
+        with path.open(encoding="cp1252", newline="") as fh:
+            rows = list(csv.reader(fh))
+    if not rows:  # an empty book exports a zero-byte CSV (XMCD Book1)
+        return [], [], []
+    # expASC's header height is a property of the sheet's VISIBLE columns
+    # (index metadata can disagree — a hidden name-carrying column removes
+    # the whole names row from the export, seen live on XMCD), so classify
+    # by content: a header row has at least one non-empty NON-numeric cell
+    # (or is fully empty); the first row whose non-empty cells are all
+    # numeric starts the data. A pathological fully-numeric header row
+    # would leak one stray row into the data — which the containment
+    # matcher then fails LOUDLY for that column, so misclassification
+    # cannot pass silently.
+    n_header = 0
+    for row in rows[:3]:
+        nonempty = [cell for cell in row if cell.strip()]
+        if nonempty and all(_is_number(cell) for cell in nonempty):
+            break
+        n_header += 1
+    ncols = max(len(r) for r in rows)
+    # names/units are for the metadata assertions — empty when the export
+    # carried no such row (asserting index fallback short-names against
+    # decoded LONG names would be apples-to-oranges).
+    names = rows[0] if n_header >= 1 else [""] * ncols
+    # The units row (when present) is row 1; disambiguate a names+comments
+    # header (no units) via the index metadata when available.
+    has_units = n_header >= 2 and (
+        columns is None or any(c.get("unit", "") for c in columns)
+    )
+    units = rows[1] if has_units else [""] * ncols
     data = [row for row in rows[n_header:] if any(_is_number(c) for c in row)]
-    cols: list[list[float]] = [[] for _ in names]
+    cols: list[list[float]] = [[] for _ in range(ncols)]
     for row in data:
-        for j in range(len(names)):
+        for j in range(ncols):
             cell = row[j] if j < len(row) else ""
             cols[j].append(float(cell) if _is_number(cell) else math.nan)
     return names, units, cols
@@ -136,17 +162,55 @@ def _sound_match(oracle: list[float], candidate: np.ndarray) -> bool:
     )
 
 
-def _column_matches(oracle: list[float], candidate: np.ndarray) -> bool:
-    """Oracle column == candidate over the oracle's finite cells (rtol 1e-9)."""
-    o = np.asarray(oracle, dtype=float)
-    n = min(len(o), len(candidate))
-    if n == 0 or len(o) - n > 1:  # allow one trailing-row slack from padding
-        return n == len(o) == len(candidate)
-    o, c = o[:n], np.asarray(candidate[:n], dtype=float)
-    finite = np.isfinite(o)
-    if not finite.any():
+def _finite_window(a: np.ndarray) -> np.ndarray:
+    """``a`` trimmed to its first..last finite cell (internal NaNs kept)."""
+    idx = np.nonzero(np.isfinite(a))[0]
+    return a[idx[0] : idx[-1] + 1] if idx.size else a[:0]
+
+
+def _run_eq(seg: np.ndarray, arr: np.ndarray) -> bool:
+    """``seg`` occurs as a contiguous run in ``arr`` (exact over seg's finite
+    cells, rtol 1e-9)."""
+    if len(seg) > len(arr):
+        return False
+    fin = np.isfinite(seg)
+    if not fin.any():
         return True
-    return bool(np.allclose(o[finite], c[finite], rtol=1e-9, atol=1e-12))
+    return any(
+        np.allclose(seg[fin], arr[off : off + len(seg)][fin], rtol=1e-9, atol=1e-12)
+        for off in range(len(arr) - len(seg) + 1)
+    )
+
+
+def _column_matches(oracle: list[float], candidate: np.ndarray) -> bool:
+    """Oracle column content is explained by the decoded column (rtol 1e-9).
+
+    The COM oracle exports Origin's *view* while the decoder reads the
+    *stored* dataset, and three view artifacts are real in the corpus
+    (2026-07-06): a hidden/filtered leading row (XMCD ``T1066all3`` exports
+    549 of the stored 550 rows — the decode's rows 1.. match the export
+    exactly), masked cells exported as ``--`` (NaN here), and view stacking
+    that repeats the dataset verbatim (MnN ``Book1``: the same 146 rows
+    exactly 3x in every column). So:
+
+    * oracle ≤ decode: the oracle's finite window must occur as one
+      contiguous run inside the decode's finite window;
+    * oracle > decode: ONLY an exact k-fold tiling of the decode's finite
+      window is accepted — a genuinely-longer dataset with distinct tail
+      rows does not tile, so real truncation still fails loudly.
+    """
+    o = _finite_window(np.asarray(oracle, dtype=float))
+    c = _finite_window(np.asarray(candidate, dtype=float))
+    if o.size == 0:
+        return True  # an all-NaN/empty oracle column carries no content
+    if c.size == 0:
+        return False
+    if o.size <= c.size:
+        return _run_eq(o, c)
+    k, rem = divmod(o.size, c.size)
+    if rem or k < 2:
+        return False
+    return all(_run_eq(o[i * c.size : (i + 1) * c.size], c) for i in range(k))
 
 
 @pytest.mark.parametrize("stem", _stems() or ["<no oracle present>"])
