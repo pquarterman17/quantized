@@ -211,6 +211,49 @@ def test_reader_matches_origin_ground_truth(stem: str) -> None:
     assert checked_cols > 0
 
 
+def test_realdata_opju_wide_book_column_names() -> None:
+    """The .opju column-name reader must scale to Hc2's wide measurement sheets
+    (37-42 columns, past Z into AA.., interleaved book windows). Every recovered
+    long-name must match Origin's own CSV export exactly (no WRONG names -- a
+    mis-named column is worse than a generic one), and coverage must clear a
+    floor. Regression guard for the _MAX_RUN / Excel-lettering / broadened-label
+    / independent-anchor fix."""
+    src = _TD / "Hc2 data.opju"
+    gt_dir = _GT / "Hc2 data"
+    if not src.exists() or not gt_dir.exists():
+        pytest.skip("Hc2 corpus not present")
+    generic = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+    def gt_names(book: str) -> set[str]:
+        out: set[str] = set()
+        for p in gt_dir.glob(f"{book}_s*.csv"):
+            with p.open(encoding="utf-8-sig", newline="") as fh:
+                out |= {c for c in next(csv.reader(fh)) if c and c != "TDI Format 1.5"}
+        return out
+
+    books = read_origin_books(src)
+    recovered = matched = 0
+    total_labels = named_labels = 0
+    for b in books:
+        total_labels += len(b.labels)
+        named_labels += sum(
+            1 for lab in b.labels if str(lab) and not (len(str(lab)) == 1 and str(lab) in generic)
+        )
+        gts = gt_names(str(b.metadata.get("origin_book", "")))
+        if not gts:
+            continue
+        for lab in [*b.labels, b.metadata.get("x_column_long", "")]:
+            lab = str(lab)
+            if not lab or (len(lab) == 1 and lab in generic):
+                continue
+            recovered += 1
+            if lab in gts:
+                matched += 1
+    assert recovered > 200, f"far too few names recovered ({recovered})"
+    assert matched == recovered, f"{recovered - matched} WRONG column names (must be 0)"
+    assert named_labels / total_labels >= 0.6, f"coverage {named_labels}/{total_labels} below floor"
+
+
 @pytest.mark.parametrize("stem", ["Hc2 data", "hc2convert"])
 def test_realdata_empty_report_books_gated_from_library(stem: str) -> None:
     """Origin fit/report sheets surface as empty pseudo-books (``Book2@N`` shells

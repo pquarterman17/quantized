@@ -27,9 +27,14 @@ corpus files (XAS, RockingCurve, UnpolPlots, "Fixed Lambdas SI", plus the
   sheet column order (A, B, C, ...) — INCLUDING columns that never decode
   as data (e.g. a blank/text column between two decoded numeric ones).
   That is why association is by ORDINAL POSITION within one book's
-  contiguous marker run, mapped through the standard A/B/C/... lettering,
+  contiguous marker run, mapped through Origin's column lettering
+  (A, B, ... Z, AA, AB, ... — wide measurement sheets run well past Z),
   rather than by parsing an internal short-name field — no such field was
-  pinned for CPYUA (unlike `.opj`'s offset-0x12 short name).
+  pinned for CPYUA (unlike `.opj`'s offset-0x12 short name). Each book is
+  anchored INDEPENDENTLY (not via a forward-only cursor): a project's book
+  windows are not in decoded-book order, so a monotonic cursor drops every
+  book whose window sits before an already-anchored one (the Hc2 project
+  interleaves 30+ of them). Anchors are exact, so independent search is safe.
 * Each book's own marker run is anchored via ONE OF: (a) the embedded
   ``ColumnInfo``/``ImportFile`` path's filename, alnum-stripped and matched
   against the book's known short name (handles Origin's habit of dropping
@@ -71,8 +76,13 @@ _DESIGNATION = {"X": "X", "Y": "Y", "Y-error": "Y-error"}
 
 # A backslash-delimited filename token, as embedded in a column's ImportFile path.
 _FILENAME_RE = re.compile(rb"\\([\w \-]{1,60}?\.[A-Za-z0-9]{2,5})(?=[^\w.]|$)")
-# A plausible bare long-name (no unit/comment row): starts alnum, short, no path/markup chars.
-_SINGLE_ROW_RE = re.compile(rb"^[A-Za-z][A-Za-z0-9 ./+-]{0,39}$")
+# A plausible bare long-name (no unit/comment row): starts with a letter, then
+# the punctuation real scientific column names use -- parens/brackets/colons/
+# underscores (e.g. "Nb Hc2 (T)", "NiBi_3::R", "temperature: T1",
+# "multi[0]:iterator"). Still excludes path/markup chars (backslash, <, >), which
+# the _JUNK_MARKERS filter rejects separately, so a length-prefix coincidence
+# landing inside a storage blob is still caught.
+_SINGLE_ROW_RE = re.compile(rb"^[A-Za-z][A-Za-z0-9 _:()\[\]./+%#*,-]{0,59}$")
 # Text containing any of these is inside an embedded storage blob, not a real label.
 _JUNK_MARKERS = (b"\\", b"OriginStorage", b"ColumnInfo", b"ImportFile", b"<", b">")
 # Single-row candidates that are themselves a fragment of one of these internal
@@ -91,11 +101,24 @@ _KNOWN_TOKENS = (
     b"PConst",
 )
 _MAX_GAP = 600  # max byte spacing between one column-property record and the next
-_MAX_RUN = 30  # sane upper bound on columns scanned per book in one contiguous run
+_MAX_RUN = 128  # upper bound on columns scanned per book (a run still stops at the
+# first >_MAX_GAP break, i.e. the book boundary; this is only a runaway backstop).
+# Wide books are real: the Hc2 measurement sheets carry 37-42 columns (past Z into
+# AA..), so this must comfortably exceed one worksheet's column count.
 
 
 def _strip_alnum(s: bytes) -> bytes:
     return re.sub(rb"[^A-Za-z0-9]", b"", s)
+
+
+def _excel_col(i: int) -> str:
+    """0-based column index -> Origin/Excel column letter (0->A, 25->Z, 26->AA...)."""
+    letters = ""
+    i += 1
+    while i:
+        i, rem = divmod(i - 1, 26)
+        letters = chr(ord("A") + rem) + letters
+    return letters
 
 
 def _filename_anchors(b: bytes, start: int) -> list[tuple[int, bytes, bytes]]:
@@ -187,11 +210,16 @@ def opju_window_metadata(
     )
     filename_hits = _filename_anchors(b, start)
     books: dict[str, BookMeta] = {}
-    cursor = start
+    # Anchor each book INDEPENDENTLY from the tail start (not a forward-only
+    # cursor): a project's book windows are not laid out in decoded-book order
+    # (the Hc2 project interleaves them), so a monotonic cursor drops every book
+    # whose window section sits before an already-anchored one. Anchors are exact
+    # (length-prefixed name / filename basename), so independent search cannot
+    # cross-match a different book.
     for book, cols in book_columns.items():
         if not cols:
             continue
-        anchored = _book_anchor(b, book, cursor, filename_hits)
+        anchored = _book_anchor(b, book, start, filename_hits)
         if anchored is None:
             continue
         anchor, raw_filename = anchored
@@ -211,7 +239,7 @@ def opju_window_metadata(
                 j += 1
             if len(attempt) < len(cols):
                 continue
-            candidate_map = {chr(ord("A") + i): attempt[i] for i in range(min(len(attempt), 26))}
+            candidate_map = {_excel_col(i): attempt[i] for i in range(len(attempt))}
             if all(c in candidate_map for c in cols):
                 letter_map, run = candidate_map, attempt
                 break
@@ -227,5 +255,4 @@ def opju_window_metadata(
             rows = (label.split("\r\n") if label else []) + ["", "", ""]
             columns[col] = ColumnMeta(col, _DESIGNATION.get(desig, "Y"), rows[0], rows[1], rows[2])
         books[book] = BookMeta(book, long_name, columns)
-        cursor = run[-1][0] + 1
     return books
