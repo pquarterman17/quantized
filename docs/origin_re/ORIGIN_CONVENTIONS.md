@@ -1004,3 +1004,91 @@ inline above); `docs/origin_project_format.md` §6.2, §6.2.1;
 All `realdata`-marked tests auto-skip when `../test-data/origin/` is absent,
 so this whole verification layer is invisible-but-safe in CI and on other
 machines.
+
+---
+
+## 13. Gap register — what is decoded, open, and blocked
+
+The living status of the Origin decode effort. Updated as gaps close; the
+point is that a future session reads this instead of rediscovering. Three
+states only: **CLOSED** (decoded + oracle-verified), **OPEN** (tractable —
+either oracle-ready or free to wire), **BLOCKED** (not recoverable from the
+bytes, documented dead end — do not re-chase). "Omitted" inside an otherwise
+CLOSED row means a sub-field was measured against the oracle and found
+un-decodable at a fixed offset, so it is deliberately left to a default
+rather than shipped wrong.
+
+### 13.1 CLOSED (decoded + verified)
+
+| Capability | Container(s) | Verified against | Commit |
+|---|---|---|---|
+| Worksheet data (all columns, no empty shells) | both | oracle column values | (earlier) |
+| Column long-names / units / comments + X/Y/Y-err roles | both | 1037/1037 names exact | (earlier) |
+| Every workbook + book display titles + sheet pseudo-books | both | corpus | (earlier) |
+| Curve -> column bindings (incl. cross-book overlay) | both | Hc2 per-graph oracle | (earlier) |
+| Y-axis log/lin flag | both | rf_* + real corpus | (earlier) |
+| **X-axis log/lin flag** (both `.opju` record forms; both-log = `0x0d`+`08 01`) | `.opju` | rf_* 2x2 + Fixed Lambdas SI Graph6 log-x + ~70 linear (0 false pos) | `8c3f91b` |
+| **Curve color** (type-1 RGB + type-0 24-colour palette, 0-based disk) | both (shared 519-byte record) | 349-plot oracle, 0 wrong | `1347d15` |
+| **Curve symbol kind** + line-vs-scatter (`c8`/`c9` @76) | both | 92/92 reachable plots | `1347d15` |
+| Axis titles (XB/YL/YR) + legend labels + annotation text | both | COM text oracle | (earlier) |
+| Annotation positions (layer-fraction, y-from-top) | both | 5/5 oracle-exact (<6e-17) | `170b46e` |
+| Notes pages + structured results-log records | both | corpus | (earlier) |
+
+### 13.2 OPEN (tractable)
+
+Ordered by value. Each names the decode path so it can be picked up cold.
+
+1. **Curve line-width + symbol-size** — bytes located (width triple at
+   DataPlot-body 213-236) but a resized graph scales the reported width/size
+   by a layer print factor (e.g. `3.18 = 9pt x 0.353`), and the raw bytes
+   read the *unscaled* `500`=0.5pt even when the oracle says `3.0`. Needs the
+   layer print-scale decoded to divide out, THEN the width/size become exact.
+   Semi-blocked, not free. (Omitted today — palette default stands.)
+2. **Auto/increment colours** (37 oracle plots + error-bar curves) — stored
+   as sentinel `0xFFFFFFF7`; the effective colour is Origin replaying its
+   increment list by plot order. Decodable by replicating that ordering.
+3. **Legend position** — oracle-ready now (`Legend.x`/`Legend.y` via COM,
+   same graphic-object model as annotations, `exist("Legend",16)`). Labels
+   are decoded; only placement is missing.
+4. **Annotation attach-mode + tag variants** (`86 13`, `85 1f` vs the shipped
+   `85 13`) — extend the annotation oracle FILES to `RockingCurve.opju` /
+   `UnpolPlots.opju` (which carry the variants) and diff.
+5. **Folder-tree project dates** — the 88-byte project record's two f64 date
+   fields are already RE'd in `validation_log.md`; just wire them into
+   `tree.py::_skip_project_record` and expose as metadata. **FREE** (no RE).
+6. **Y2 (right) axis range** for double-Y plots.
+7. **Multi-layer frame geometry** — per-panel positions for multi-panel pages.
+8. **Tick spacing / number format** (axis increment, decimal places).
+9. **Matrix objects** — unattempted; rare in the corpus.
+
+### 13.3 BLOCKED (documented dead ends — do not re-chase)
+
+- **Fit-curve overlays** (FitLine / fitted curve on a graph) — Origin does
+  NOT store the fitted curve; it regenerates it from the fit at open time.
+  Only the report TEXT is on disk. No byte decode is possible; the honest
+  path is to re-run the fit from the recovered parameters, not to "find" a
+  curve that isn't there.
+- **`.opj` auto-generated report graphs** (FitLinear/NLFit pages) — live
+  outside the normal window stream; ~257 corpus plots are these embedded
+  report/sparkline pages, the pre-existing figure-recall boundary.
+- **`Graph5`-class tokenless graphs** — carry no binding token at all.
+- **`.opj` X-scale exact flag** — no oracle can exist: the corpus is
+  all-linear-X, and modern Origin silently saves CPYUA even to a `.opj`
+  filename, so no by-construction `.opj` log-x specimen can be made. The
+  decade-range heuristic is the documented ceiling here.
+- **`.opju` scale field value `0x02`** (6 Hc2 records) — an unrecognised
+  third scale type with no oracle; read as `None` -> heuristic, never guessed.
+
+### 13.4 Meta findings (from the gap inventory)
+
+- **Doc drift, both directions** — user-facing docs had *understated*
+  shipped capability (curve->column binding described as "not decoded" long
+  after it shipped). Fixed in `opening_origin_files.md` + `origin_project_format.md`.
+  Lesson: when a decode lands, sweep the prose docs in the same commit.
+- **False gaps** — three "open" items were already done as side-effects
+  (structured results-log parsing, the suspected `.opju` "third encoding,"
+  per-figure attribution). Verify against the code before booking work.
+- **The oracle-first rule paid repeatedly** — every shipped decode in 13.1
+  was gated on a COM oracle; every omission in 13.2 is an oracle DISPROVING
+  a plausible byte guess (line-width `500`, both-log `0x0e`). Capture ground
+  truth before claiming a field.
