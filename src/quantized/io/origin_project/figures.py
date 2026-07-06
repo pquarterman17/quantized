@@ -108,6 +108,13 @@ in-plane"/"T = 1.3 K", correctly still lands in ``annotations`` even though
 it sits after the layer's curve blocks, because the ``Text`` header itself
 re-establishes the bucket).
 
+**Positioned annotation marks — solved 2026-07-05.** A ``Text*``/``Line*``
+object's 133-byte header also stores its box's top-left corner as two LE
+float64 layer-fractions at payload offsets **19/27**, converted to data
+coordinates via the layer axis range and shipped as ``annotation_marks``
+(one entry per text OBJECT, multi-line text ``\\n``-joined) — decode,
+formula, oracle validation and known negatives in ``annotation_marks.py``.
+
 ``.opju`` (``figures_opju.py``) routes to the same buckets through its own,
 different framing (solved 2026-07-05): CPYUA has no 133-byte header, but it
 carries the SAME object names in a tagged name-header + framed-text grammar
@@ -126,6 +133,12 @@ import struct
 from collections.abc import Sequence
 from typing import Any
 
+from quantized.io.origin_project.annotation_marks import (
+    _AUTO_TITLE,
+    _clean_annotations,
+    build_mark,
+    opj_text_fractions,
+)
 from quantized.io.origin_project.container import walk_blocks
 from quantized.io.origin_project.opj_curves import book_x_columns, column_id_map, extract_curves
 from quantized.io.origin_project.origin_richtext import clean_richtext
@@ -134,7 +147,6 @@ from quantized.io.origin_project.windows import _cstring, _is_window_header
 __all__ = ["extract_figures"]
 
 _LEGEND_RE = re.compile(r"\\l\((\d+)\)")
-_AUTO_TITLE = re.compile(r"^%\(\?[XY]\)")
 
 # Y-axis scale flag: 2 bytes at the layer-continuation payload's offset 98/99
 # (see the module docstring). Any other value falls back to the heuristic.
@@ -240,34 +252,11 @@ _OBJ_NAME_LIMIT = 24
 
 _TITLE_OBJECT_BUCKETS = {"YL": "y_title", "XB": "x_title", "YR": "y2_title", "Legend": "legend"}
 
-# A graph window embeds no PNG thumbnail in ``.opj`` the way ``.opju`` does,
-# but the same internal storage/style markers can still leak into the raw
-# text scan (confirmed live on XMCD.opj's Graph3/Co-Fy, whose annotations
-# otherwise surface a whole OriginStorage/AxesDlgSettings XML blob) — so the
-# same cleanup ``figures_opju.py`` already applied to its own annotations is
-# ported here too (and re-exported from there, rather than duplicated, since
-# that module already imports several helpers from this one).
-_INTERNAL_ANN_RE = re.compile(
-    r"SYSTEM|STYLEHOLDER|OriginStorage|AxesDlgSettings|UseSameOptions|SRCINFO", re.IGNORECASE
-)
-_SHEETREF_ANN_RE = re.compile(r"^Sheet\d+<?$")  # internal sheet source reference, not a title
-
-
-def _clean_annotations(titles: list[str]) -> list[str]:
-    """Drop internal Origin storage/style markers and bare sheet references
-    from a layer's recovered floating-text annotations — see the module
-    docstring's "Axis-title / legend-label routing" section. Shared verbatim
-    with ``.opju``'s scan (``figures_opju.py`` imports this rather than
-    defining its own copy); ``.opju`` additionally truncates at its embedded
-    PNG thumbnail's image bytes, a concern this container doesn't have.
-    """
-    out: list[str] = []
-    for t in titles:
-        s = t.strip()
-        if not s or _INTERNAL_ANN_RE.search(s) or _SHEETREF_ANN_RE.match(s):
-            continue
-        out.append(s)
-    return out
+# The annotation cleanup (internal storage/style markers, bare sheet refs,
+# ``_clean_annotations``/``_AUTO_TITLE``) is shared by BOTH containers and
+# by the positioned annotation marks, so it lives in ``annotation_marks.py``
+# — imported above, and imported directly from there by ``figures_opju.py``
+# and ``opju_figure_text.py`` too.
 
 
 def _object_bucket(name: str | None) -> str:
@@ -382,6 +371,22 @@ def _build_layer(
         "annotations": [],
     }
     bucket = "annotations"  # default until a named header switches it (see docstring)
+    # Positioned annotation marks: one per Text*/Line* OBJECT, its fraction
+    # pair read from the header payload (annotation_marks.py) and its lines
+    # grouped until the next named header — multi-line text stays ONE mark.
+    marks: list[dict[str, Any]] = []
+    mark_fracs: tuple[float, float] | None = None
+    mark_lines: list[str] = []
+    mark_active = False  # only text owned by a named Text*/Line* header groups
+
+    def _flush_mark() -> None:
+        nonlocal mark_fracs
+        mark = build_mark(mark_fracs, mark_lines, x_from, x_to, y_from, y_to)
+        if mark is not None:
+            marks.append(mark)
+        mark_fracs = None
+        mark_lines.clear()
+
     for k in range(start + 1, end):
         size, payload = blocks[k]
         if size == 133 and len(payload) > 2 and payload[2] == 0x07:
@@ -389,6 +394,10 @@ def _build_layer(
             continue
         if size == 133 and len(payload) > 2:
             bucket = _object_bucket(_cstring(payload, _OBJ_NAME_OFFSET, _OBJ_NAME_LIMIT))
+            _flush_mark()
+            mark_active = bucket == "annotations"
+            if mark_active:
+                mark_fracs = opj_text_fractions(payload)
             # Never text-scan the header block itself: its geometry floats can
             # contain printable accidents that would land in the just-set
             # bucket (hc2convert's Graph13-18 all surfaced a bogus y_title
@@ -401,6 +410,9 @@ def _build_layer(
             all_texts.extend(found)
             if bucket in bucket_texts:
                 bucket_texts[bucket].extend(found)
+            if mark_active:
+                mark_lines.extend(found)
+    _flush_mark()
     titles = [
         t for t in bucket_texts["annotations"] if not _AUTO_TITLE.match(t) and "\\l(" not in t
     ]
@@ -417,6 +429,9 @@ def _build_layer(
         "source_hint": hint,
         "n_curves": max(legend_ns) if legend_ns else n_curves,
         "annotations": [clean_richtext(a) for a in _clean_annotations(titles)[:12]],
+        # Positioned floating text (box top-left, data coords) — only objects
+        # whose header fractions decoded; the rest stay text-only above.
+        "annotation_marks": marks,
         "x_title": _first_title(bucket_texts["x_title"]),
         "y_title": _first_title(bucket_texts["y_title"]),
         "y2_title": _first_title(bucket_texts["y2_title"]),

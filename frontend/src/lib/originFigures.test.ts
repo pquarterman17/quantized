@@ -5,6 +5,7 @@ import {
   doubleYPartner,
   figureChannelSelection,
   figureLabel,
+  originFigureAnnotations,
   type OriginFigureEntry,
   resolveFigureDataset,
 } from "./originFigures";
@@ -260,5 +261,40 @@ describe("doubleYPartner", () => {
   it("returns null for a single-layer figure (no partner shares the name)", () => {
     const l1 = layerEntry("f1", 1, "d1", [curve("B")]);
     expect(doubleYPartner(l1, [l1])).toBeNull();
+  });
+});
+
+describe("originFigureAnnotations", () => {
+  it("maps annotation_marks to plot Annotations with generated ids", () => {
+    const f = figure({
+      annotation_marks: [
+        { text: "Field applied in-plane\nT = 1.3 K", x: -5.311, y: 0.4915 },
+        { text: "Peak label", x: 2.5, y: 100 },
+      ],
+    });
+    const anns = originFigureAnnotations([f], "fig-key");
+    expect(anns).toHaveLength(2);
+    expect(anns[0]).toEqual({
+      id: "figann-fig-key-0-0",
+      x: -5.311,
+      y: 0.4915,
+      text: "Field applied in-plane\nT = 1.3 K",
+    });
+    expect(anns[1].id).toBe("figann-fig-key-0-1");
+    expect(new Set(anns.map((a) => a.id)).size).toBe(2); // ids unique
+  });
+
+  it("returns [] when the figure carries no marks (field absent or empty)", () => {
+    expect(originFigureAnnotations([figure()], "k")).toEqual([]);
+    expect(originFigureAnnotations([figure({ annotation_marks: [] })], "k")).toEqual([]);
+    expect(originFigureAnnotations([], "k")).toEqual([]);
+  });
+
+  it("concatenates marks across figure layers (double-Y apply)", () => {
+    const l1 = figure({ annotation_marks: [{ text: "on layer 1", x: 1, y: 2 }] });
+    const l2 = figure({ annotation_marks: [{ text: "on layer 2", x: 3, y: 4 }] });
+    const anns = originFigureAnnotations([l1, l2], "fig-0");
+    expect(anns.map((a) => a.text)).toEqual(["on layer 1", "on layer 2"]);
+    expect(anns.map((a) => a.id)).toEqual(["figann-fig-0-0-0", "figann-fig-0-1-0"]);
   });
 });

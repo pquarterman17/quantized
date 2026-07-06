@@ -134,8 +134,9 @@ import re
 from bisect import bisect_right
 from typing import Any
 
-from quantized.io.origin_project.figures import _AUTO_TITLE, _LEGEND_RE, _log_heuristic, _texts_in
-from quantized.io.origin_project.figures import _clean_annotations as _drop_internal_noise
+from quantized.io.origin_project.annotation_marks import _AUTO_TITLE
+from quantized.io.origin_project.annotation_marks import _clean_annotations as _drop_internal_noise
+from quantized.io.origin_project.figures import _LEGEND_RE, _log_heuristic, _texts_in
 from quantized.io.origin_project.opju_axis_real_form import (
     _TAG_SEARCH_SPAN,
     _decode_compact,
@@ -418,7 +419,7 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
             [t for t in texts if not _AUTO_TITLE.match(t) and "\\l(" not in t]
         )
         legend_ns = [int(n) for t in texts for n in _LEGEND_RE.findall(t)]
-        routed = routed_figure_text(b, anchor, text_end)
+        routed = routed_figure_text(b, anchor, text_end, (x_from, x_to, y_from, y_to))
         # A page that owns no column records is a GRAPH page: its figures get
         # the page's own window name ("Graph1", ...) and a real 1-based layer
         # index within the page. Anchors inside a workbook/report page are
@@ -453,6 +454,10 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 # framed text grammar (opju_figure_text); flat-scrape degrade
                 # (the historical behavior) otherwise.
                 "annotations": routed.annotations if routed else titles[:12],
+                # Positioned floating text (box top-left, data coords) — only
+                # objects whose fixed-distance position field decoded (see
+                # annotation_marks.py); the rest stay text-only above.
+                "annotation_marks": routed.annotation_marks if routed else [],
                 "x_title": routed.x_title if routed else "",
                 "y_title": routed.y_title if routed else "",
                 "y2_title": routed.y2_title if routed else "",

@@ -981,6 +981,54 @@ describe("useApp applyOriginFigure (item 18)", () => {
     useApp.getState().applyOriginFigure("nope");
     expect(useApp.getState().activeId).toBe("d1");
   });
+
+  it("pins the figure's positioned annotation_marks as plot annotations", () => {
+    useApp.setState({
+      originFigures: [
+        {
+          ...figureEntry,
+          figure: {
+            ...figureEntry.figure,
+            annotation_marks: [
+              { text: "Field applied in-plane\nT = 1.3 K", x: -5.311, y: 0.4915 },
+            ],
+          },
+        },
+      ],
+      annotations: [{ id: "stale", x: 0, y: 0, text: "from a previous figure" }],
+    });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    const anns = useApp.getState().annotations;
+    expect(anns).toHaveLength(1); // REPLACED the stale one, not appended
+    expect(anns[0].text).toBe("Field applied in-plane\nT = 1.3 K");
+    expect(anns[0].x).toBeCloseTo(-5.311);
+    expect(anns[0].y).toBeCloseTo(0.4915);
+  });
+
+  it("re-applying the same figure never stacks its marks", () => {
+    useApp.setState({
+      originFigures: [
+        {
+          ...figureEntry,
+          figure: {
+            ...figureEntry.figure,
+            annotation_marks: [{ text: "T = 1.3 K", x: 1, y: 2 }],
+          },
+        },
+      ],
+    });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    expect(useApp.getState().annotations).toHaveLength(1);
+  });
+
+  it("a figure without marks clears previously pinned annotations", () => {
+    useApp.setState({
+      annotations: [{ id: "old", x: 5, y: 5, text: "left over" }],
+    });
+    useApp.getState().applyOriginFigure("fig-XRD-0"); // figureEntry has no marks
+    expect(useApp.getState().annotations).toEqual([]);
+  });
 });
 
 describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> same dataset)", () => {

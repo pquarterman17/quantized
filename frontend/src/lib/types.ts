@@ -46,6 +46,12 @@ export interface OriginFigure {
   source_hint?: string;
   n_curves: number;
   annotations: string[];
+  /** Positioned floating text (Origin Text objects) at DATA coordinates —
+   *  the text box's top-left corner, multi-line text "\n"-joined. Only
+   *  objects whose position decoded are listed (never guessed); the same
+   *  text also appears (per line) in `annotations`. Applied to the store's
+   *  plot `annotations` by applyOriginFigure. */
+  annotation_marks?: { text: string; x: number; y: number }[];
   /** Origin's real axis titles, decoded from the graph's title text objects
    *  (io/origin_project/figures.py). "" / absent = none decoded (the plot then
    *  falls back to the data-derived label). Applied by applyOriginFigure. */

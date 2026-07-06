@@ -59,11 +59,15 @@ Pure library: bytes in → strings out. No fastapi/pydantic/routes imports.
 from __future__ import annotations
 
 import re
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
-from quantized.io.origin_project.figures import (
+from quantized.io.origin_project.annotation_marks import (
     _AUTO_TITLE,
     _clean_annotations,
+    build_mark,
+    opju_text_fractions,
+)
+from quantized.io.origin_project.figures import (
     _first_title,
     _object_bucket,
     _parse_legend_labels,
@@ -93,6 +97,10 @@ class FigureText(NamedTuple):
     y2_title: str
     legend_labels: list[str]
     annotations: list[str]
+    # Positioned floating text ({"text", "x", "y"} in data coords, one per
+    # Text object, multi-line preserved) — see annotation_marks.py. Empty
+    # when the caller supplied no axis range or no position field decoded.
+    annotation_marks: list[dict[str, Any]]
 
 
 def _object_headers(b: bytes, start: int, end: int) -> list[tuple[int, str]]:
@@ -140,7 +148,12 @@ def _text_runs(b: bytes, start: int, end: int) -> list[tuple[int, str]]:
     return out
 
 
-def routed_figure_text(b: bytes, start: int, end: int) -> FigureText | None:
+def routed_figure_text(
+    b: bytes,
+    start: int,
+    end: int,
+    axes: tuple[float, float, float, float] | None = None,
+) -> FigureText | None:
     """Route one figure window's text objects into the ``.opj``-shaped buckets.
 
     Returns ``None`` when the window holds no framed text run at all (legacy/
@@ -155,6 +168,13 @@ def routed_figure_text(b: bytes, start: int, end: int) -> FigureText | None:
     where ``.opj``'s byte scan naturally splits at the control bytes) are
     split into lines first, so both containers feed identical strings into
     the shared cleanup pipeline.
+
+    ``axes`` is the layer's ``(x_from, x_to, y_from, y_to)``; when given,
+    every annotation-bucket text whose own name header carries the
+    fixed-distance position field (``annotation_marks.opju_text_fractions``)
+    also emits a positioned ``annotation_marks`` entry — the whole
+    multi-line object as ONE mark. Objects without the field (or an
+    unpaired text, which has no header to read from) stay text-only.
     """
     texts = _text_runs(b, start, end)
     if not texts:
@@ -167,6 +187,7 @@ def routed_figure_text(b: bytes, start: int, end: int) -> FigureText | None:
         "legend": [],
         "annotations": [],
     }
+    marks: list[dict[str, Any]] = []
     events = sorted(
         [(pos, 0, name) for pos, name in headers] + [(pos, 1, text) for pos, text in texts]
     )
@@ -175,15 +196,21 @@ def routed_figure_text(b: bytes, start: int, end: int) -> FigureText | None:
         if kind == 0:  # a name header: becomes the pending object (one text each)
             pending = (pos, value)
             continue
+        header_pos: int | None = None
         if pending is not None and pos - pending[0] <= _MAX_NAME_TO_TEXT:
             bucket = _object_bucket(pending[1])
+            header_pos = pending[0]
         else:
             bucket = "annotations"  # unpaired text: same default bucket .opj uses
         pending = None
-        if bucket in buckets:
-            for line in re.split(r"\r\n|[\r\n]", value):
-                if line.strip():
-                    buckets[bucket].append(line)
+        if bucket not in buckets:
+            continue
+        lines = [line for line in re.split(r"\r\n|[\r\n]", value) if line.strip()]
+        buckets[bucket].extend(lines)
+        if bucket == "annotations" and header_pos is not None and axes is not None:
+            mark = build_mark(opju_text_fractions(b, header_pos), lines, *axes)
+            if mark is not None:
+                marks.append(mark)
 
     def _title(lines: list[str]) -> str:
         # .opj's _texts_in drops the %(?X)/%(?Y) auto-templates via its letter
@@ -197,4 +224,5 @@ def routed_figure_text(b: bytes, start: int, end: int) -> FigureText | None:
         y2_title=_title(buckets["y2_title"]),
         legend_labels=_parse_legend_labels(buckets["legend"]),
         annotations=[clean_richtext(a) for a in _clean_annotations(notes)[:12]],
+        annotation_marks=marks,
     )

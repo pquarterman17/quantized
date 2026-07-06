@@ -4,7 +4,7 @@
 // is unit-testable without mounting the store — `store/useApp.ts` owns the
 // actual apply-to-plot-state action.
 
-import type { Dataset, OriginCurve, OriginFigure, SeriesStyle } from "./types";
+import type { Annotation, Dataset, OriginCurve, OriginFigure, SeriesStyle } from "./types";
 
 /** Translate a decoded Origin curve style into a plot SeriesStyle. "scatter" →
  *  markers, no connecting line (width 0); "line" → a solid line at the default
@@ -156,6 +156,23 @@ export function doubleYPartner(
   if ((entry.figure.curves ?? []).length === 0) return null;
   if ((partner.figure.curves ?? []).length === 0) return null;
   return partner;
+}
+
+/** The store `annotations` an applied figure pins on the plot: every decoded
+ *  positioned text mark (`annotation_marks`, data coords) of the given
+ *  figure layer(s), mapped to the plot Annotation shape with ids generated
+ *  from `key` (the figure entry id, so re-applying regenerates the same
+ *  ids). `applyOriginFigure` REPLACES the store's annotations with this —
+ *  never accumulates — so switching or re-applying figures can't stack
+ *  stale marks. Figures without marks yield [], which clears the plot. */
+export function originFigureAnnotations(figures: OriginFigure[], key: string): Annotation[] {
+  const out: Annotation[] = [];
+  figures.forEach((f, fi) => {
+    (f.annotation_marks ?? []).forEach((m, mi) => {
+      out.push({ id: `figann-${key}-${fi}-${mi}`, x: m.x, y: m.y, text: m.text });
+    });
+  });
+  return out;
 }
 
 /** Library row label: prefer a surviving annotation (reads like a plot title
