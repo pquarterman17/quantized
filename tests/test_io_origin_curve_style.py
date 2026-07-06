@@ -325,3 +325,44 @@ def test_realdata_curve_style_matches_oracle(stem, fname, decoder, floor) -> Non
     assert wrong == 0, f"{stem}: {wrong} curves decoded to the WRONG color"
     assert sym_wrong == 0, f"{stem}: {sym_wrong} curves decoded to the wrong symbol"
     assert ok >= floor, f"{stem}: color coverage regressed ({ok} < {floor}, omitted={omitted})"
+
+
+@realdata
+def test_realdata_cross_container_style_matches_opj_and_opju() -> None:
+    """``hc2convert.opj`` and ``Hc2 data.opju`` are exports of the SAME Origin
+    project (see ``test_io_origin_figures_opju.py``'s
+    ``test_realdata_hc2_opju_text_routing_matches_opj_conversion``): the two
+    independent decoders (the ``.opj`` curve-anchor reader and the ``.opju``
+    sparse-token reconstructor, both feeding the shared
+    ``curve_style_color.style_fields``) must therefore emit IDENTICAL
+    color/symbol/style dicts for every state-matched graph's curves -- not
+    just each container's own oracle-correctness. Verified byte-exact on
+    Graph1/4/6/8/10/11 (the 6 state-matched, curve-bearing graphs among the
+    7 the binding decoder itself resolves in both containers); Graph2 is
+    excluded entirely because its ``x`` differs by design (the ``.opju``
+    decoder reads the column's own stored X-partner id, giving ``AG`` where
+    the ``.opj`` structural-inference fallback gives ``A`` -- a documented
+    binding difference, not a style one -- see ``opj_curves.py``'s "X is a
+    structural inference" note), so comparing it here would flag a known,
+    unrelated divergence rather than a style regression."""
+    opj_src = _TD / "hc2convert.opj"
+    opju_src = _TD / "Hc2 data.opju"
+    if not opj_src.exists() or not opju_src.exists():
+        pytest.skip("Hc2 .opj/.opju corpus pair not present on this machine")
+    opj = _opj_graph_curves(opj_src)
+    opju = _opju_graph_curves(opju_src)
+    checked = 0
+    for gname in ("Graph1", "Graph4", "Graph6", "Graph8", "Graph10", "Graph11"):
+        a = opj.get(gname)
+        b = opju.get(gname)
+        assert a and b, f"{gname}: missing from one container's decode"
+        assert len(a) == len(b), f"{gname}: curve count differs {len(a)} vs {len(b)}"
+        for ca, cb in zip(a, b, strict=True):
+            assert ca.get("y") == cb.get("y"), f"{gname}: curve binding mismatch"
+            for key in ("style", "color", "symbol"):
+                assert ca.get(key) == cb.get(key), (
+                    f"{gname}/{ca.get('y')}: '{key}' disagrees between containers "
+                    f"({ca.get(key)!r} vs {cb.get(key)!r})"
+                )
+            checked += 1
+    assert checked >= 15, f"only {checked} curves cross-checked -- corpus changed?"
