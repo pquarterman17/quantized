@@ -220,20 +220,33 @@ def _is_layer_block(payload: bytes) -> bool:
 
 _WORDY = re.compile(r"[A-Za-z0-9 ()\[\].,%/+°:=-]")
 
+# A well-formed Origin rich-text escape (see ``origin_richtext``): a legend
+# swatch ``\l(n)``, a formatting run ``\g( \b( \i( \u( \+( \-(``, a font/colour
+# run ``\f:Name(`` / ``\c<n>(``, or a character-code atom ``\(40)`` / ``\(x2225)``.
+# Binary noise essentially never forms these 3+-byte structured sequences, so a
+# string containing one is user text by construction — the wordiness heuristic
+# below must not veto it (it mis-scored short titles like ``2\g(q)`` = "2θ",
+# whose escape syntax IS most of the string).
+_RICHTEXT_MARK = re.compile(r"\\(?:[gbiul+\-]\(|\((?:\d|[xX][0-9a-fA-F])|f:|c\d+\()")
+
 
 def _texts_in(payload: bytes) -> list[str]:
     """Human-looking text runs of a text-object body (annotations, titles, legend).
 
     Binary blocks are full of short printable accidents and internal tokens —
     keep only strings that read like labels: mostly word-ish characters, at
-    least two letters, not internal ``_``/``@${`` machinery.
+    least two letters, not internal ``_``/``@${`` machinery. A string carrying
+    a well-formed rich-text escape (``_RICHTEXT_MARK``) is kept verbatim
+    without the wordiness test — escape syntax is proof of user text, and the
+    escapes themselves (backslashes, single Symbol-font letters) are exactly
+    what the heuristic mis-scores.
     """
     out = []
     for m in re.finditer(rb"[\x20-\x7e\\]{3,}", payload):
         s = m.group().decode("latin1").strip()
         if not s or s.startswith(("@${", "_", "*")):
             continue
-        if "\\l(" in s:  # legend text: keep verbatim for curve counting
+        if _RICHTEXT_MARK.search(s):  # incl. legend \l(n): keep verbatim
             out.append(s)
             continue
         letters = sum(c.isalpha() for c in s)
