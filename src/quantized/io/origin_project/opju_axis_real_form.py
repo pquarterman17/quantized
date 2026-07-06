@@ -43,12 +43,37 @@ mirrors the independently-discovered ``.opj`` flag (``figures.py``'s
 ``_y_scale_flag``, same two byte values, different fixed offset) -- strong
 cross-container corroboration that both are real, not coincidental.
 
-**No X flag exists in this form**: the ``85 02 f0 3f`` sequence once
-suspected to be one is in fact a tagged ``y_from = 1.0`` (whole-span
-exact-fill + ground truth), so ``x_log`` stays on the decade heuristic
-(correct for all 14 corpus anchors; the specimen-form's combined scale byte
-occasionally still applies when that marker happens to be present -- see
-``figures_opju.py``'s ``_scale_byte``/``_axis_scales``).
+**X-axis scale flag — solved 2026-07-06** (the same rf_* oracle, byte-diffed
+pairwise: ``rf_logx`` vs ``rf_linlin`` and ``rf_loglog`` vs ``rf_logy`` differ
+ONLY in X): the geometry payload between the two separators ENDS with an
+X-scale field carrying the very same two byte values as the Y flag --
+``01`` = linear, ``08 01`` = log10 -- immediately before the Y span's first
+token, with 0-2 trailing ``00`` pad bytes in between (pad count varies with
+the Y token encoding; the flag bytes never do). ``_real_x_log_flag`` reads it
+by scanning backward from the decoded Y-span start over the ``00`` pads.
+Corpus-proof (see ``docs/origin_re/ORIGIN_CONVENTIONS.md`` §6.2): all 9
+by-construction specimens read exactly (rf quad, fig_linx/logx/xylog via the
+same bytes on the specimen path, ``axis_custom``), the real-corpus log-x
+graph ``Fixed Lambdas SI!Graph6`` (2 layers, GT ``layer.x.type=2``, a 3.8x
+span the decade heuristic mislabels linear) reads ``08 01``, and every
+GT-linear real record (~70 across Hc2/RockingCurve/XAS/UnpolPlots/Fixed
+Lambdas) reads ``01`` -- zero false positives. Six Hc2 records end ``02``
+instead (an unrecognized value, possibly another scale type): those return
+``None`` and keep the decade heuristic -- never guessed. (The ``85 02 f0
+3f`` sequence once suspected to be a scale flag is in fact a tagged
+``y_from = 1.0``; the real flag sits before the Y span, not inside it.)
+
+**Panel-layer records (``03 00 00 5f`` anchor) + bare-literal Y spans.**
+Multi-layer panel/composite windows (Fixed Lambdas SI ``Graph5``/``Graph6``,
+RockingCurve/UnpolPlots ``Graph3``) anchor their per-layer records with
+``03 00 00 5f`` (= ``1f | 0x40``), not ``1f`` -- same record grammar inside.
+Fixed Lambdas' panel layers additionally encode their Y spans as bare 8-byte
+LE literals (elsewhere Y is tagged/RLE only), so the Y scan gets a
+LAST-RESORT bare retry that is accepted ONLY where `_real_x_log_flag`
+authenticates the Y-span start (the exact flag bytes right before it) --
+binary noise cannot satisfy both the flag pattern and a unique exact fill,
+so previously-decoding records parse byte-identically (retry-only, like
+``_SEP_WIDE``).
 """
 
 from __future__ import annotations
@@ -240,6 +265,23 @@ def _real_x_flag_len(b: bytes, p: int, end: int) -> int:
     return 2
 
 
+def _real_x_log_flag(b: bytes, y_lo: int, y_start: int) -> bool | None:
+    """Exact X-axis lin/log flag: the geometry payload's trailing field,
+    read backward from the Y-span start over 0-2 ``00`` pad bytes --
+    ``01`` = linear, ``08 01`` = log10 (the same byte values as the Y flag;
+    see the module docstring for the rf_*-diff derivation and the corpus
+    proof). Any other tail returns ``None`` (decade heuristic; e.g. the six
+    Hc2 records whose field reads ``02``) -- never guessed."""
+    q = y_start
+    while q > y_lo and b[q - 1] == 0x00:
+        q -= 1
+    if q - y_lo >= 2 and b[q - 2 : q] == b"\x08\x01":
+        return True
+    if q - y_lo >= 1 and b[q - 1] == 0x01 and (q - y_lo < 2 or b[q - 2] != 0x08):
+        return False
+    return None
+
+
 def _real_y_log_flag(b: bytes, sep_start: int, window_end: int) -> bool | None:
     """Exact Y-axis lin/log flag for the real-corpus form.
 
@@ -270,11 +312,11 @@ def _real_y_log_flag(b: bytes, sep_start: int, window_end: int) -> bool | None:
 
 def _parse_real_record(
     b: bytes, p: int, window_end: int
-) -> tuple[float, float, float, float, bool | None] | None:
+) -> tuple[float, float, float, float, bool | None, bool | None] | None:
     """Real-corpus axis record at anchor payload ``p``:
-    ``(xf, xt, yf, yt, y_log)`` -- ``y_log`` is the exact flag from
-    ``_real_y_log_flag`` when isolatable, else ``None`` (caller falls back
-    to the decade heuristic).
+    ``(xf, xt, yf, yt, x_log, y_log)`` -- ``x_log``/``y_log`` are the exact
+    flags from ``_real_x_log_flag``/``_real_y_log_flag`` when isolatable,
+    else ``None`` (caller falls back to the decade heuristic).
 
     Tried with the strict ``81``-lead separator first (every record
     validated through 2026-07-04 parses byte-identically), then retried
@@ -290,7 +332,7 @@ def _parse_real_record(
 
 def _parse_real_record_sep(
     b: bytes, p: int, window_end: int, sep_re: re.Pattern[bytes]
-) -> tuple[float, float, float, float, bool | None] | None:
+) -> tuple[float, float, float, float, bool | None, bool | None] | None:
     """One separator-form attempt of `_parse_real_record` (see above)."""
     m1 = sep_re.search(b, p, min(window_end, p + _TAG_SEARCH_SPAN))
     if m1 is None:
@@ -305,11 +347,27 @@ def _parse_real_record_sep(
     y_lo = m1.start() + 6
     m2 = sep_re.search(b, y_lo + plen, min(window_end, y_lo + plen + _TAG_SEARCH_SPAN))
     y_hi = m2.start() if m2 else min(window_end, y_lo + plen + 200)
+    y_scan_hi = min(y_lo + plen + _Y_START_SCAN, y_hi)
     # plen is a hint only: Y can start inside or a few bytes past the nominal
     # geometry payload, so scan for the first uniquely exact-filling start.
-    for y_start in range(y_lo, min(y_lo + plen + _Y_START_SCAN, y_hi)):
-        ypair = _real_span_pair(b, y_start, y_hi, bare=False)
-        if ypair is not None:
-            y_log = _real_y_log_flag(b, m2.start(), window_end) if m2 else None
-            return (*xpair, *ypair, y_log)
+    # Bare 8-byte literals are excluded from the first pass (a mis-aligned
+    # scan start could decode plausible junk) and retried last-resort ONLY
+    # where the exact X-scale flag authenticates the Y-span start (the
+    # Fixed Lambdas panel-layer form -- see the module docstring). In the
+    # retry a start pointing AT a ``00`` pad byte is not a candidate: the
+    # true span begins at the first non-``00`` after the flag, and letting a
+    # bare literal absorb the pads decodes a wrong-but-plausible value
+    # (measured: Fixed Lambdas Graph5 layer 2's y_from, -0.0488.. for -0.05).
+    for bare in (False, True):
+        for y_start in range(y_lo, y_scan_hi):
+            if bare and (
+                (y_start < y_hi and b[y_start] == 0x00)
+                or _real_x_log_flag(b, y_lo, y_start) is None
+            ):
+                continue
+            ypair = _real_span_pair(b, y_start, y_hi, bare=bare)
+            if ypair is not None:
+                x_log = _real_x_log_flag(b, y_lo, y_start)
+                y_log = _real_y_log_flag(b, m2.start(), window_end) if m2 else None
+                return (*xpair, *ypair, x_log, y_log)
     return None
