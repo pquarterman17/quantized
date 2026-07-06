@@ -101,33 +101,37 @@ signal, unlike blind name-scanning) and ``n_curves`` from the legend text's
 *window name* (Origin's "Graph1" etc.) is not recoverable with the current
 understanding, so ``name`` is always ``""``.
 
-**Curve-to-dataset binding (item 35, closed).** Unlike ``.opj``
-(``figures.py``, where the DataPlot column selector is still permanently
-undecoded), CPYUA's curve/DataPlot objects carry a small fixed-shape token
-that decodes the Y-axis column exactly. TWO token subtypes exist and are
-both decoded and merged here: the 0x03-subtype token (custom-styled/multi-
-curve/Select-Data graphs, gated on an independently validated ``"Y"``
-column designation) and the 0x01-subtype token (ordinary single-curve
-default-dialog graphs, an all-columns cumulative ordinal, deliberately NOT
-designation-gated — see ``opju_curves_allcols.py``'s module docstring).
-Validated against the real per-plot oracle at 100% precision and 100%
-aggregate recall (36/36 oracle pairs across the four real-corpus files —
-see ``opju_curves.py`` / ``opju_curves_allcols.py``'s module docstrings for
-the full byte-level trail). Each decodable figure gets a best-effort
-``"curves"`` list of ``{"book", "x", "y"}`` dicts, plus an optional
-``"style"`` key (``"line"``/``"scatter"``, from ``opju_codec.curve_plot_style``)
-present only when the token's ``8f 01 <style> 83`` tag was found; per-*figure*
-attribution (which curve belongs to which decoded window) remains a best-effort
-``[anchor, next_anchor)`` heuristic — see ``opju_curves.py``'s "Known gap —
-per-figure attribution" — so a curve is sometimes attributed to the wrong
-figure within a file even though the ``(book, column)`` pair itself is
-never wrong. ``x`` is a structural inference (the Y column's own book's
-first column), not decoded from either token.
+**Curve-to-dataset binding — REWORKED 2026-07-05 (the Hc2 per-graph pass;
+supersedes item 35's counting decoders).** The curve token's value is the
+plotted column's **global creation-order serial id** (a tagged u8/u16 LE
+field, NOT an ordinal to count), resolved through the per-column id table
+each workbook column's own windows-section record stores — see
+``opju_figure_curves.py``'s module docstring for the full byte grammar,
+the validation trail (36/36 file-level oracle pairs, 7/8 per-graph-exact on
+the ``Hc2 data`` oracle's real graph pages, 0 wrong bindings anywhere), and
+the documented negatives (``Graph5``'s tokenless duplicate-window curve
+objects; the ``90 00 80 … 89`` style-boilerplate trap). Windows are scoped
+by the ``0a``-framed **page span** (the same page headers ``tree_opju``
+validated against live COM), which both kills the old cross-window
+attribution leaks and recovers each figure's real window ``name``
+(``"Graph1"`` …) for pages that own no column records (graph pages).
+``x`` is the Y column's own stored X-partner id when present (e.g. Hc2's
+``Derivative Y1`` pairs with ``Derivative X1``, not column A), else the
+book's X-designated column, else ``"A"``.
+
+The pre-rework counting decoders (``opju_curves.py`` /
+``opju_curves_allcols.py``) remain as the fallback for byte streams whose
+id table is empty (synthetic fixtures, template files): their counting
+conventions equal the stored ids only for never-edited projects, which is
+exactly what the synthetic corpus is. On a real edited project they alias
+(measured: 12 of 14 bindings wrong on ``Hc2 data`` before this rework), so
+the id table always wins when present.
 """
 
 from __future__ import annotations
 
 import re
+from bisect import bisect_right
 from typing import Any
 
 from quantized.io.origin_project.figures import _AUTO_TITLE, _LEGEND_RE, _log_heuristic, _texts_in
@@ -143,6 +147,11 @@ from quantized.io.origin_project.opju_curves import (
     book_columns_from_bytes,
     book_metadata_from_bytes,
     extract_curves,
+)
+from quantized.io.origin_project.opju_figure_curves import (
+    column_id_table,
+    extract_curves_by_id,
+    opju_pages,
 )
 
 __all__ = ["extract_figures_opju"]
@@ -328,19 +337,22 @@ def _axis_scales(
 def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
     """Every decodable graph layer in a CPYUA project as a plot-state snapshot.
 
-    Same shape as ``figures.extract_figures`` (the ``.opj`` reader) plus one
-    addition: each dict has ``name``, ``layer``, ``x_from``, ``x_to``,
-    ``x_log``, ``y_from``, ``y_to``, ``y_log``, ``source_hint``, ``n_curves``,
-    ``annotations``, and ``curves`` (item 35 — a best-effort list of
-    ``{"book", "x", "y"}`` column bindings, possibly empty; see
-    ``opju_curves.py``). ``layer`` is always ``1`` here — unlike ``.opj``'s
-    real per-window layer index, this reader has no window grouping to
-    number layers within (see below), so it is a constant, not a decoded
-    value. A multi-layer graph window (e.g. a double-Y or
-    free-panel layout) yields one dict per layer rather than nesting them,
-    since the shipped payload shape is flat. Composite windows that
-    *reference* an already-encoded layer share its single anchor (see the
-    module docstring).
+    Same shape as ``figures.extract_figures`` (the ``.opj`` reader): each
+    dict has ``name``, ``layer``, ``x_from``, ``x_to``, ``x_log``,
+    ``y_from``, ``y_to``, ``y_log``, ``source_hint``, ``n_curves``,
+    ``annotations``, and ``curves`` (a list of ``{"book", "x", "y"}``
+    column bindings, possibly empty — decoded via the global column-id
+    table, see ``opju_figure_curves.py`` and the module docstring's
+    "Curve-to-dataset binding" section). ``name`` is the figure's own
+    window name (``"Graph1"`` …) when its anchor falls inside a graph
+    *page* span and the file carries an id table; ``layer`` is then the
+    1-based anchor index within that page. Embedded fit-report graphs
+    (anchors inside a workbook page) and legacy/id-table-less streams keep
+    ``name == ""``/``layer == 1``. A multi-layer graph window (e.g. a
+    double-Y or free-panel layout) yields one dict per layer rather than
+    nesting them, since the shipped payload shape is flat. Composite
+    windows that *reference* an already-encoded layer share its single
+    anchor (see the module docstring).
 
     ``x_title``/``y_title``/``y2_title``/``legend_labels`` — added
     2026-07-05 for schema parity with ``.opj``'s ``extract_figures`` (see its
@@ -356,13 +368,28 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
     here.
     """
     figures: list[dict[str, Any]] = []
-    book_columns = book_columns_from_bytes(b)
-    books_meta = book_metadata_from_bytes(b, book_columns)
-    book_counts_all = allocated_columns_from_bytes(b)
+    pages = opju_pages(b)
+    table = column_id_table(b, pages)
+    legacy = not table.ids  # no id table (synthetic/template stream): counting fallback
+    if legacy:
+        book_columns = book_columns_from_bytes(b)
+        books_meta = book_metadata_from_bytes(b, book_columns)
+        book_counts_all = allocated_columns_from_bytes(b)
+    page_starts = [off for off, _name in pages]
+    page_layers: dict[int, int] = {}  # page index -> layers emitted so far
     anchors = _find_all(b, _ANCHOR)
     for idx, anchor in enumerate(anchors):
         p = anchor + len(_ANCHOR)
-        window_end = anchors[idx + 1] if idx + 1 < len(anchors) else len(b)
+        next_anchor = anchors[idx + 1] if idx + 1 < len(anchors) else len(b)
+        # Scope the window by the containing page span (see opju_figure_curves):
+        # an anchor's curves/axis record never extend past its own page.
+        page_idx = bisect_right(page_starts, anchor) - 1
+        if page_idx >= 0:
+            page_end = page_starts[page_idx + 1] if page_idx + 1 < len(pages) else len(b)
+            page_name = pages[page_idx][1]
+        else:
+            page_end, page_name = len(b), None
+        window_end = min(next_anchor, page_end)
         spec = _parse_specimen_record(b, p)
         type_byte: int | None
         real_y_log: bool | None = None
@@ -393,12 +420,28 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
             [t for t in texts if not _AUTO_TITLE.match(t) and "\\l(" not in t]
         )
         legend_ns = [int(n) for t in texts for n in _LEGEND_RE.findall(t)]
+        # A page that owns no column records is a GRAPH page: its figures get
+        # the page's own window name ("Graph1", ...) and a real 1-based layer
+        # index within the page. Anchors inside a workbook/report page are
+        # embedded (fit-report) graphs -- unnamed, layer 1, as before. Name
+        # attachment needs the id table (it is what tells book pages apart),
+        # so legacy streams keep the historical ""/1.
+        if not legacy and page_name is not None and page_name not in table.book_pages:
+            layer = page_layers.get(page_idx, 0) + 1
+            page_layers[page_idx] = layer
+            name = page_name
+        else:
+            name, layer = "", 1
+        if legacy:
+            curves = extract_curves(
+                b, anchor, window_end, book_columns, books_meta, book_counts_all
+            )
+        else:
+            curves = extract_curves_by_id(b, anchor, window_end, table)
         figures.append(
             {
-                "name": "",  # per-layer window name not recoverable (see module docstring)
-                "layer": 1,  # already emitted one dict per layer; window grouping is
-                # unrecoverable here (see module docstring), so this is a constant, not
-                # a real per-window layer index like `.opj`'s `figures.extract_figures`.
+                "name": name,
+                "layer": layer,
                 "x_from": x_from,
                 "x_to": x_to,
                 "x_log": x_log,
@@ -413,9 +456,7 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "y_title": "",
                 "y2_title": "",
                 "legend_labels": [],
-                "curves": extract_curves(
-                    b, anchor, window_end, book_columns, books_meta, book_counts_all
-                ),
+                "curves": curves,
             }
         )
     return figures

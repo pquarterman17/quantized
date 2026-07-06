@@ -1138,6 +1138,224 @@ def test_realdata_allocated_column_map_matches_index(stem: str) -> None:
     assert got == expected, f"{stem}: allocated column map {got} != index.json {expected}"
 
 
+# ── the global column-id table path (2026-07-05 rework) ──────────────────────
+#
+# The curve token's value is the plotted column's global creation-order id,
+# resolved through the per-column id table stored in the windows section --
+# see opju_figure_curves.py's module docstring for the byte grammar and the
+# full validation trail (Hc2 per-graph oracle). These synthetics build a
+# minimal id table + page headers, so extract_figures_opju takes the id
+# path (the counting-fallback tests above deliberately build NO id table
+# and keep exercising the legacy path).
+
+
+def _opju_page_header(name: str) -> bytes:
+    """A ``0a``-framed page header (`tree_opju._OPJU_WIN_RE` shape)."""
+    nm = name.encode("latin1")
+    return b"\x0a\x80\x01" + bytes([len(nm) + 2]) + b"\x00\x00" + nm + b"\x80"
+
+
+def _column_id_record(
+    cid: int, name: str, desig: str, partner: int | None = None, form_b: bool = False
+) -> bytes:
+    """One windows-section column record (form A/B) -- see opju_figure_curves."""
+    head = (
+        b"\x80\x32"
+        + (b"\x07\x10\x01\x00\x00" if form_b else b"\x01\x10\x80\x03")
+        + cid.to_bytes(2, "little")
+        + b"\x0b"
+    )
+    nm = name.encode("latin1")
+    if desig == "X":
+        name_field = bytes([0x82, len(nm) + 1, 0x03]) + nm
+        marker_field = b"\x83\x02\x21\x51"
+    elif desig == "Y" and partner is not None:
+        name_field = bytes([0x82, len(nm)]) + nm
+        marker_field = b"\x81\x04" + partner.to_bytes(2, "little") + b"\x21\x61"
+    elif desig == "Y":
+        name_field = bytes([0x82, len(nm)]) + nm
+        marker_field = b"\x83\x02\x21\x61"
+    else:  # Y-error
+        name_field = bytes([0x82, len(nm) + 1, 0x02]) + nm
+        marker_field = b"\x83\x02\x30\x61"
+    return head + name_field + b"\x88\x01\x09" + marker_field
+
+
+def _id_curve_token(flag: int, cid: int, width: int = 3) -> bytes:
+    """The unified curve token: u8 (width 1) or u16 LE + flag byte (width 3)."""
+    if width == 1:
+        return bytes([flag, 1, 1, 1, 0x80, 0x01, cid])
+    return bytes([flag, 1, 1, 1, 0x80, 0x03]) + cid.to_bytes(2, "little") + b"\x09"
+
+
+def _id_table_blob(*graph_payloads: bytes, records: bytes | None = None) -> bytes:
+    """Magic + a WBook page carrying id records + one graph page per payload."""
+    recs = records if records is not None else (
+        _column_id_record(1, "A", "X")
+        + _column_id_record(2, "B", "Y", partner=1)
+        + _column_id_record(3, "C", "Y", partner=1)
+    )
+    out = b"CPYUA 4.3811 222\n" + _opju_page_header("WBook") + recs
+    for i, payload in enumerate(graph_payloads, start=1):
+        out += _opju_page_header(f"Graph{i}") + payload
+    return out
+
+
+def test_synthetic_id_table_resolves_u16_token_and_page_name() -> None:
+    """A u16 curve token resolves through the id table (never a counting
+    map), and the figure carries its graph page's own window name."""
+    blob = _id_table_blob(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _id_curve_token(0xBA, cid=3)
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["name"] == "Graph1"
+    assert figs[0]["curves"] == [{"book": "WBook", "x": "A", "y": "C"}]
+
+
+def test_synthetic_id_table_u8_token() -> None:
+    """The 1-byte-id token form resolves through the same table."""
+    blob = _id_table_blob(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _id_curve_token(0xBA, cid=2, width=1)
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["curves"] == [{"book": "WBook", "x": "A", "y": "B"}]
+
+
+def test_synthetic_id_table_unknown_id_dropped() -> None:
+    """A token whose id has no column record resolves to nothing -- dropped,
+    never guessed (the Hc2 Graph12-family deleted-column case)."""
+    blob = _id_table_blob(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _id_curve_token(0xBA, cid=9)
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["curves"] == []
+
+
+def test_synthetic_id_table_form_b_record_resolves() -> None:
+    """A column stored via the rarer form-B id record (``07 10 01 00 00``)
+    resolves identically (RockingCurve NbAu!D / UnpolPlots PrNiO3STOprof!B)."""
+    records = (
+        _column_id_record(1, "A", "X")
+        + _column_id_record(2, "B", "Y", partner=1, form_b=True)
+    )
+    blob = _id_table_blob(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _id_curve_token(0xBA, cid=2),
+        records=records,
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["curves"] == [{"book": "WBook", "x": "A", "y": "B"}]
+
+
+def test_synthetic_id_table_x_partner_wins_over_book_x() -> None:
+    """A Y column whose record stores an X-partner id pairs with THAT column,
+    not the book's first X (the Hc2 ``Derivative Y1``/``Derivative X1`` case:
+    AH pairs with AG, not column A)."""
+    records = (
+        _column_id_record(1, "A", "X")
+        + _column_id_record(2, "B", "Y", partner=1)
+        + _column_id_record(3, "C", "X")
+        + _column_id_record(4, "D", "Y", partner=3)
+    )
+    blob = _id_table_blob(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _id_curve_token(0xBA, cid=4),
+        records=records,
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    assert figs[0]["curves"] == [{"book": "WBook", "x": "C", "y": "D"}]
+
+
+def test_synthetic_id_table_window_scoped_to_page() -> None:
+    """Each graph page's tokens bind only to that page's own figure -- the
+    cross-window attribution leak the old [anchor, next_anchor) scoping had."""
+    blob = _id_table_blob(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _id_curve_token(0xBA, cid=2),
+        _layer_bytes(0.0, 5.0, 0.0, 100.0, 20.0, 0x03, r"\l(1) %(1)")
+        + _id_curve_token(0xBB, cid=3),
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 2
+    assert figs[0]["name"] == "Graph1"
+    assert figs[0]["curves"] == [{"book": "WBook", "x": "A", "y": "B"}]
+    assert figs[1]["name"] == "Graph2"
+    assert figs[1]["curves"] == [{"book": "WBook", "x": "A", "y": "C"}]
+
+
+# ── realdata: per-graph bindings vs the populated index.json oracle ──────────
+#
+# 'Hc2 data' is the first corpus export whose ``graphs[].layers[].plots``
+# came back populated (the older stems' index.json carries empty plots
+# lists -- those assert nothing per-graph and are covered file-wide by
+# plots.json above). The oracle itself is TRUNCATED by Origin's eval page
+# limit, so it is authoritative for the bindings of the graphs it lists,
+# never a completeness denominator.
+
+
+@pytest.mark.realdata
+def test_realdata_hc2_per_graph_bindings_vs_index_oracle() -> None:
+    """Every decoded figure whose page name matches an oracle graph must have
+    ZERO wrong bindings; at least 7 of the 8 oracle graphs that exist as real
+    graph pages must match the oracle exactly (all but Graph5, the documented
+    tokenless negative -- see opju_figure_curves.py's module docstring)."""
+    src = _SPEC.parent / "Hc2 data.opju"
+    index_path = _GT / "Hc2 data" / "index.json"
+    if not src.exists() or not index_path.exists():
+        pytest.skip("Hc2 corpus file/ground-truth not present on this machine")
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    oracle: dict[str, set[tuple[str, str]]] = {}
+    for g in index["graphs"]:
+        refs = [ref for layer in g["layers"] for ref in layer.get("plots", [])]
+        pairs = {
+            (m.group("book"), m.group("col"))
+            for ref in refs
+            if (m := _PLOT_REF_RE.match(ref))
+        }
+        if pairs:
+            oracle[g["graph"]] = pairs
+
+    figs = extract_figures_opju(src.read_bytes())
+    named: dict[str, set[tuple[str, str]]] = {}
+    for f in figs:
+        if f["name"]:
+            named.setdefault(f["name"], set()).update(
+                (c["book"], c["y"]) for c in f["curves"]
+            )
+
+    exact = []
+    for gname, pairs in oracle.items():
+        decoded = named.get(gname)
+        if decoded is None:
+            continue  # graph page not decoded (or not a page at all): missing, not wrong
+        wrong = decoded - pairs
+        assert not wrong, f"Hc2 {gname}: wrong binding(s) {sorted(wrong)}"
+        if decoded == pairs:
+            exact.append(gname)
+    assert len(exact) >= 7, f"Hc2: only {sorted(exact)} matched the oracle exactly"
+    # Graph5 is the sole known incomplete page: bindings missing, never wrong.
+    assert named.get("Graph5") == set(), "Graph5 grew bindings -- re-verify before trusting"
+
+
+@pytest.mark.realdata
+def test_realdata_rockingcurve_figures_carry_page_names() -> None:
+    """Real graph pages label their figures with the window's own name."""
+    src = _SPEC.parent / "RockingCurve.opju"
+    if not src.exists():
+        pytest.skip("RockingCurve corpus file not present on this machine")
+    figs = extract_figures_opju(src.read_bytes())
+    names = {f["name"] for f in figs}
+    assert {"Graph1", "Graph2", "NbAuRocking"} <= names
+
+
 def test_clean_annotations_drops_system_and_png_noise() -> None:
     # The real Hc2 annotation shape: internal storage markers, the real title,
     # then the embedded-PNG thumbnail bytes decoded as text.

@@ -58,11 +58,22 @@ import struct
 
 __all__: list[str] = []  # internal to the .opju figures subsystem; imported by name
 
-# `81 <id> <plen> 00 00 01` separates the X span from the layer-geometry
-# payload and the geometry from the Y span.
-_SEP_RE = re.compile(rb"\x81..\x00\x00\x01", re.DOTALL)
+# `8x <id> <plen> 00 00 01` separates the X span from the layer-geometry
+# payload and the geometry from the Y span. Two lead bytes exist: `81`
+# (the original form, every record validated through 2026-07-04) and `80`
+# (found 2026-07-05 on Hc2's Graph8/Graph12-family records, always paired
+# with a final span token carrying one trailing subfield byte -- see
+# `_real_tagged_trailer`). The strict `81` form is always tried first and
+# the wide form only as a retry, so previously-decoding records parse
+# byte-identically (see `_parse_real_record`).
+_SEP_STRICT = re.compile(rb"\x81..\x00\x00\x01", re.DOTALL)
+_SEP_WIDE = re.compile(rb"[\x80\x81]..\x00\x00\x01", re.DOTALL)
 _TAG_SEARCH_SPAN = 2_000  # max bytes allowed between an anchor and its separator/marker
-_Y_START_SCAN = 6  # Y may start up to this many bytes past the nominal payload end
+# Y may start up to this many bytes past the nominal payload end. 7, not 6:
+# the geometry payload runs 11 bytes past `y_lo` when plen=5 (Hc2 Graph1 /
+# the Graph3 6-curve family, oracle-verified), which the old 6-byte scan
+# missed by exactly one.
+_Y_START_SCAN = 7
 
 # Y-scale flag: the fixed layer-style marker that follows the end separator's
 # geometry payload, and the 2-byte flag immediately before it (see module docstring).
@@ -141,7 +152,31 @@ def _real_bare8(b: bytes, p: int, end: int) -> tuple[float, int] | None:
     return (v, 8) if v is not None else None
 
 
-def _real_candidates(b: bytes, p: int, end: int, bare: bool) -> list[tuple[float, int]]:
+def _real_tagged_trailer(b: bytes, p: int, end: int) -> tuple[float, int] | None:
+    """``8T nn <nn-1 value bytes> <trailer>`` — a tagged compact whose payload
+    carries ONE trailing subfield byte (a small int, ``02``/``04`` observed).
+
+    Found 2026-07-05 on Hc2's ``80``-lead-separator records: the span's FINAL
+    (step) token gains one payload byte and the separator lead flips 81->80
+    in lockstep (e.g. ``83 03 14 40 02`` = step 5.0 + trailer 02 on Graph8,
+    vs ``83 02 14 40`` on the byte-identical Graph4). Only ever offered for
+    the last token of a span (see ``_real_fills``) so it cannot re-split
+    ``from``/``to`` values, and the trailer is constrained to a small int.
+    """
+    if p + 2 > end:
+        return None
+    tag, nn = b[p], b[p + 1]
+    if not (0x81 <= tag <= 0x8F) or not (2 <= nn <= 8) or p + 2 + nn > end:
+        return None
+    if not 0x01 <= b[p + 2 + nn - 1] <= 0x0F:
+        return None
+    v = _decode_compact(b[p + 2 : p + 2 + nn - 1])
+    return (v, 2 + nn) if v is not None else None
+
+
+def _real_candidates(
+    b: bytes, p: int, end: int, bare: bool, last: bool = False
+) -> list[tuple[float, int]]:
     out: list[tuple[float, int]] = []
     t = _real_tagged(b, p, end)
     if t is not None:
@@ -149,6 +184,10 @@ def _real_candidates(b: bytes, p: int, end: int, bare: bool) -> list[tuple[float
     r = _real_rle(b, p, end)
     if r is not None:
         out.append(r)
+    if last:
+        tt = _real_tagged_trailer(b, p, end)
+        if tt is not None:
+            out.append(tt)
     if bare:
         w = _real_bare8(b, p, end)
         if w is not None:
@@ -163,11 +202,15 @@ def _real_candidates(b: bytes, p: int, end: int, bare: bool) -> list[tuple[float
 
 
 def _real_fills(b: bytes, pos: int, end: int, n: int, bare: bool) -> list[tuple[float, ...]]:
-    """All ways to place exactly ``n`` value tokens filling ``[pos, end)``."""
+    """All ways to place exactly ``n`` value tokens filling ``[pos, end)``.
+
+    The final token position (``n == 1``) additionally admits the
+    trailing-subfield tagged form (`_real_tagged_trailer`) — the step slot
+    only, so ``from``/``to`` decoding is never affected by it."""
     if n == 0:
         return [()] if pos == end else []
     out: list[tuple[float, ...]] = []
-    for v, consumed in _real_candidates(b, pos, end, bare):
+    for v, consumed in _real_candidates(b, pos, end, bare, last=n == 1):
         for rest in _real_fills(b, pos + consumed, end, n - 1, bare):
             out.append((v, *rest))
     return out
@@ -231,8 +274,25 @@ def _parse_real_record(
     """Real-corpus axis record at anchor payload ``p``:
     ``(xf, xt, yf, yt, y_log)`` -- ``y_log`` is the exact flag from
     ``_real_y_log_flag`` when isolatable, else ``None`` (caller falls back
-    to the decade heuristic)."""
-    m1 = _SEP_RE.search(b, p, min(window_end, p + _TAG_SEARCH_SPAN))
+    to the decade heuristic).
+
+    Tried with the strict ``81``-lead separator first (every record
+    validated through 2026-07-04 parses byte-identically), then retried
+    with the wide ``[80|81]`` lead that Hc2's Graph8/Graph12-family records
+    need -- a record only ever reaches the wide pass after failing the
+    strict one, so the retry can add parses but never change one."""
+    for sep_re in (_SEP_STRICT, _SEP_WIDE):
+        got = _parse_real_record_sep(b, p, window_end, sep_re)
+        if got is not None:
+            return got
+    return None
+
+
+def _parse_real_record_sep(
+    b: bytes, p: int, window_end: int, sep_re: re.Pattern[bytes]
+) -> tuple[float, float, float, float, bool | None] | None:
+    """One separator-form attempt of `_parse_real_record` (see above)."""
+    m1 = sep_re.search(b, p, min(window_end, p + _TAG_SEARCH_SPAN))
     if m1 is None:
         return None
     x_start = p + _real_x_flag_len(b, p, m1.start())
@@ -243,7 +303,7 @@ def _parse_real_record(
         return None
     plen = b[m1.start() + 2]
     y_lo = m1.start() + 6
-    m2 = _SEP_RE.search(b, y_lo + plen, min(window_end, y_lo + plen + _TAG_SEARCH_SPAN))
+    m2 = sep_re.search(b, y_lo + plen, min(window_end, y_lo + plen + _TAG_SEARCH_SPAN))
     y_hi = m2.start() if m2 else min(window_end, y_lo + plen + 200)
     # plen is a hint only: Y can start inside or a few bytes past the nominal
     # geometry payload, so scan for the first uniquely exact-filling start.

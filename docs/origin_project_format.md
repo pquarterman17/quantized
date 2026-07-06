@@ -1467,6 +1467,93 @@ closed figure. Every `(book, column)` pair reported is still correct —
 this only affects *which* figure it's attached to, never fabricating or
 mis-typing a binding.
 
+#### 6.2.2 The global column-id table — the real curve-binding semantics (2026-07-05)
+
+The Hc2 per-graph pass (`Hc2 data.opju`, the first corpus export whose
+`index.json` `graphs[].layers[].plots` came back populated — 59 graphs /
+200 plot refs, truncated by Origin's eval page limit) **falsified the
+counting model above** and replaced it: on that project the merged counting
+decoders produced 14 file-level bindings of which only 2 were in the oracle
+union. The token value is not an ordinal to count — it is the plotted
+column's **global, project-wide, creation-order serial id**, the exact
+CPYUA analogue of `.opj`'s curve-anchor id (§6.1). The two "families" are
+one encoding with a variable-width tagged integer:
+
+```
+<flag:1> 01 01 01 80 <width:01|03> <payload>
+    width 0x01 -> <id:u8>
+    width 0x03 -> <id:u16 LE> <flag:1>     (3rd byte 01/09/0b/0c/11/21 — not id)
+```
+
+The old `0x03` regex's "trailing `00`" was the u16's high byte, so counting
+only ever worked on <256-column, never-edited projects (where creation
+order == layout order — every pre-Hc2 corpus file). The id itself is stored
+in every worksheet column's own windows-section record, two forms:
+
+```
+form A:  80 <serial> 01 10 80 03 <id:u16 LE> <pb> <fields…>
+form B:  80 <serial> 07 10 01 00 00 <id:u16 LE> <pb> <fields…>   (rare)
+```
+
+`<fields…>` = tagged fields `<tag:0x80-0x9f> <len> <payload>`: the column
+short name (payload = optional `0x03`-X / `0x02`-Y-error designation prefix
++ ASCII name; found as the first alnum-payload field whose next field's
+payload opens `0x09`), a fixed `<tag> 01 09` separator, then the field
+whose payload ends with the §4.2 designation marker (`21 51`/`21 61`/
+`30 61`); a Y column's marker field is exactly `<x_partner_id:u16 LE>
+21 61`, storing the column's own designated **X partner** (validated:
+Hc2's `Derivative Y1` AH, id 132, pairs with `Derivative X1` AG id 131 —
+not column A; decoded `x` now uses this, falling back to the book's
+X-designated column, then `"A"`). Form B is exactly the four bindings the
+form-A-only table missed (RockingCurve `NbAu!D`/`NbAl!B`, UnpolPlots
+`PrNiO3STOprof!B`/`PrNiO3STOrefl!I`); the two forms' id sets never overlap
+(0 collisions in 28 corpus files). Records are attributed to books by
+containing **page span** (the `0a`-framed page headers `tree_opju`
+validated byte-exact vs COM), which also gives each figure its real window
+`name` ("Graph1" …: a page owning zero column records is a graph page) and
+page-bounded curve windows — killing the cross-window attribution leak in
+the "Remaining gap" note above. Implementation: `opju_figure_curves.py`;
+the counting decoders remain only as the fallback for id-table-less
+streams (synthetic fixtures, templates).
+
+Axis-record grammar extensions found in the same pass
+(`opju_axis_real_form.py`): the span separator's lead byte can be `80` as
+well as `81` (strict-`81` is tried first so every pre-2026-07-05 record
+parses byte-identically); a span's final (step) token can carry one
+trailing subfield byte (`83 03 14 40 02` = 5.0 + trailer `02`, vs Graph4's
+`83 02 14 40`; only ever admitted in a span's last slot so `from`/`to`
+splits are unaffected); and the Y-start scan reaches one byte further
+(plen=5 records carry an 11-byte geometry payload the old 6-byte scan
+missed by exactly one). Result: 51 of Hc2's anchors decode (was 32),
+covering 38 of its 40 graph pages.
+
+**Validation.** File-level `plots.json`: unchanged 36/36, 0 wrong (table
+above, now resolved via ids). Per-graph vs the populated `index.json`
+oracles (`tools/origin_trial/score_curve_bindings.py`'s per-graph section +
+`test_realdata_hc2_per_graph_bindings_vs_index_oracle`):
+
+| oracle graph (Hc2) | oracle plots | decoded | verdict |
+|---|---|---|---|
+| Graph1 | DA!E/G/I | same | **exact** (axis ranges also exact) |
+| Graph2 | DA!AH (id 132, added post-hoc) | same | **exact** |
+| Graph4/6/8/10/11 | E/G/I of D3/D8/L2/L4/D5 | same | **exact** (Graph8/10 ids > 255) |
+| Graph5 | D3!I | none | **missing-only**, 0 wrong (see below) |
+| FitLine*/Residual*/G (51) | Book2 fit-report refs | unnamed embedded figures | unverifiable per-graph; their decoded tokens (Book2!C/D/E) are in-oracle |
+
+0 wrong bindings anywhere. Documented negatives — do not re-chase without
+new evidence:
+
+* **Graph5** — a duplicate-window graph whose curve objects carry no id
+  token at all. Its `_202`/`_232` sub-objects contain
+  `90 00 80 <tag> 01 89` bytes whose `0x89` *coincidentally* equals its
+  true column id 137 — the same constant appears in every graph page of
+  the corpus (`_202`/`_232`-named style objects, values 0x89/0x02)
+  regardless of what is plotted: style boilerplate, chased and refuted.
+* The embedded fit-report graphs' fit-CURVE overlays (`FitNLCurveN!B` …)
+  are not token-encoded anywhere in the byte stream.
+* Graph19 / Graph34's axis records still fail both separator forms
+  (flag-token + bare-literal X spans that defeat the exact-fill).
+
 ### 6.3 Origin → quantized figure mapping + gap list
 
 Both readers emit a flat list of plot-state snapshot dicts (`name`, `layer`,
