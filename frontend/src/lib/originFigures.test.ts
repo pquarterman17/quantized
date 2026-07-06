@@ -7,6 +7,7 @@ import {
   figureLabel,
   originCurveSeriesStyle,
   originFigureAnnotations,
+  originLegendPos,
   type OriginFigureEntry,
   resolveFigureDataset,
 } from "./originFigures";
@@ -377,5 +378,36 @@ describe("originFigureAnnotations", () => {
     const anns = originFigureAnnotations([l1, l2], "fig-0");
     expect(anns.map((a) => a.text)).toEqual(["on layer 1", "on layer 2"]);
     expect(anns.map((a) => a.id)).toEqual(["figann-fig-0-0-0", "figann-fig-0-1-0"]);
+  });
+});
+
+describe("originLegendPos", () => {
+  const base = { x_from: 0, x_to: 10, x_log: false, y_from: 0, y_to: 100, y_log: false };
+
+  it("maps the decoded legend box corner to the nearest corner preset", () => {
+    expect(originLegendPos({ ...base, legend_pos: { x: 8, y: 90 } })).toBe("ne");
+    expect(originLegendPos({ ...base, legend_pos: { x: 1, y: 90 } })).toBe("nw");
+    expect(originLegendPos({ ...base, legend_pos: { x: 8, y: 10 } })).toBe("se");
+    expect(originLegendPos({ ...base, legend_pos: { x: 1, y: 10 } })).toBe("sw");
+  });
+
+  it("computes the fraction in log10 space on log axes", () => {
+    // y 1..1e5 (log): 7.3e4 sits at ~0.97 of the DECADE span (top) even
+    // though it is 0.73 linearly; x 1..100 (log): 5 is below the midpoint.
+    expect(
+      originLegendPos({
+        x_from: 1, x_to: 100, x_log: true,
+        y_from: 1, y_to: 1e5, y_log: true,
+        legend_pos: { x: 5, y: 7.3e4 },
+      }),
+    ).toBe("nw");
+  });
+
+  it("returns null when absent or the range is degenerate", () => {
+    expect(originLegendPos({ ...base, legend_pos: null })).toBeNull();
+    expect(originLegendPos({ ...base })).toBeNull();
+    expect(
+      originLegendPos({ ...base, x_from: 5, x_to: 5, legend_pos: { x: 5, y: 50 } }),
+    ).toBeNull();
   });
 });

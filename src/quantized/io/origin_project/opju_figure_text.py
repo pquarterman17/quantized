@@ -65,9 +65,10 @@ from quantized.io.origin_project.annotation_marks import (
     _AUTO_TITLE,
     _clean_annotations,
     build_mark,
+    frac_to_data,
     opju_text_fractions,
 )
-from quantized.io.origin_project.figures import (
+from quantized.io.origin_project.figure_text import (
     _first_title,
     _object_bucket,
     _parse_legend_labels,
@@ -101,6 +102,11 @@ class FigureText(NamedTuple):
     # Text object, multi-line preserved) — see annotation_marks.py. Empty
     # when the caller supplied no axis range or no position field decoded.
     annotation_marks: list[dict[str, Any]]
+    # The Legend object's box top-left in data coords ({"x", "y"}) — the
+    # SAME position field every text object carries (§13.2 #3, 2026-07-06),
+    # read from the Legend name header. None when no legend, no axes, or
+    # the position field didn't decode (omitted, never guessed).
+    legend_pos: dict[str, float] | None
 
 
 def _object_headers(b: bytes, start: int, end: int) -> list[tuple[int, str]]:
@@ -153,6 +159,8 @@ def routed_figure_text(
     start: int,
     end: int,
     axes: tuple[float, float, float, float] | None = None,
+    x_log: bool = False,
+    y_log: bool = False,
 ) -> FigureText | None:
     """Route one figure window's text objects into the ``.opj``-shaped buckets.
 
@@ -188,6 +196,7 @@ def routed_figure_text(
         "annotations": [],
     }
     marks: list[dict[str, Any]] = []
+    legend_pos: dict[str, float] | None = None
     events = sorted(
         [(pos, 0, name) for pos, name in headers] + [(pos, 1, text) for pos, text in texts]
     )
@@ -208,9 +217,16 @@ def routed_figure_text(
         lines = [line for line in re.split(r"\r\n|[\r\n]", value) if line.strip()]
         buckets[bucket].extend(lines)
         if bucket == "annotations" and header_pos is not None and axes is not None:
-            mark = build_mark(opju_text_fractions(b, header_pos), lines, *axes)
+            mark = build_mark(
+                opju_text_fractions(b, header_pos), lines, *axes, x_log, y_log
+            )
             if mark is not None:
                 marks.append(mark)
+        if bucket == "legend" and header_pos is not None and axes is not None:
+            fracs = opju_text_fractions(b, header_pos)
+            if fracs is not None and legend_pos is None:
+                lx, ly = frac_to_data(fracs[0], fracs[1], *axes, x_log, y_log)
+                legend_pos = {"x": lx, "y": ly}
 
     def _title(lines: list[str]) -> str:
         # .opj's _texts_in drops the %(?X)/%(?Y) auto-templates via its letter
@@ -225,4 +241,5 @@ def routed_figure_text(
         legend_labels=_parse_legend_labels(buckets["legend"]),
         annotations=[clean_richtext(a) for a in _clean_annotations(notes)[:12]],
         annotation_marks=marks,
+        legend_pos=legend_pos,
     )

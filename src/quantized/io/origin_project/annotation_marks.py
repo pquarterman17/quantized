@@ -91,9 +91,14 @@ _OPJ_FRACB_OFFSET = 27
 # .opju: the position field's tag pair and its fixed distance before the
 # object-name header (see module docstring). The `80 00` right after frac_b
 # is the next field's boundary — constant across every corpus instance, kept
-# as a cheap structural check against false tag matches.
-_OPJU_POS_TAG = b"\x85\x13"
-_OPJU_POS_LOOKBACK = 32
+# as a cheap structural check against false tag matches. Two tag flavours
+# carry the same <fracA:8><fracB:8> payload, each at its own fixed distance:
+# `85 13` at header-32 (Text* objects, the original 2026-07-05 decode) and
+# `85 1f` at header-33 (Legend objects — resolved 2026-07-06 when the
+# legend-position COM oracle verified every `85 1f` instance under the
+# identical fraction model; previously a known-negative). `86 13`
+# (RockingCurve panel labels) remains unverified and is NOT accepted.
+_OPJU_POS_TAG_LOOKBACK = {b"\x85\x13": 32, b"\x85\x1f": 33}
 _OPJU_POS_SENTINEL = b"\x80\x00"
 
 # Corpus-wide the fractions stay within ~[-0.2, 4] (text can sit outside the
@@ -105,6 +110,19 @@ def _plausible(v: float) -> bool:
     return math.isfinite(v) and abs(v) <= _FRAC_BOUND
 
 
+def _interp(frac: float, lo: float, hi: float, log: bool) -> float:
+    """Axis-fraction -> data value, linear or log10-space.
+
+    The log mapping was CONFIRMED 2026-07-06 against the legend-position COM
+    oracle on two log-Y graphs (XRD Graph2: linear read 9.73e4 vs oracle
+    7.291e4; log10 read 7.291e4 exact — same for Si-YIG-Py): on a log axis
+    Origin stores the fraction of the DECADE span. Non-positive bounds can't
+    be a real log axis — degrade to linear rather than crash."""
+    if log and lo > 0 and hi > 0:
+        return float(10 ** (math.log10(lo) + frac * (math.log10(hi) - math.log10(lo))))
+    return lo + frac * (hi - lo)
+
+
 def frac_to_data(
     frac_a: float,
     frac_b: float,
@@ -112,10 +130,16 @@ def frac_to_data(
     x_to: float,
     y_from: float,
     y_to: float,
+    x_log: bool = False,
+    y_log: bool = False,
 ) -> tuple[float, float]:
     """The confirmed fraction→data model (module docstring): the box top-left
-    corner in data coordinates. ``frac_b`` measures down from the axis TOP."""
-    return (x_from + frac_a * (x_to - x_from), y_to - frac_b * (y_to - y_from))
+    corner in data coordinates. ``frac_b`` measures down from the axis TOP;
+    log axes interpolate in log10 space (see ``_interp``)."""
+    return (
+        _interp(frac_a, x_from, x_to, x_log),
+        _interp(frac_b, y_to, y_from, y_log),  # from the TOP: hi -> lo
+    )
 
 
 def opj_text_fractions(payload: bytes) -> tuple[float, float] | None:
@@ -136,16 +160,17 @@ def opju_text_fractions(b: bytes, header_pos: int) -> tuple[float, float] | None
     starts at ``header_pos``, or ``None`` when the fixed-distance ``85 13``
     field isn't there (the known ``86 13``/``85 1f`` variants, or no position
     at all — omitted, never guessed; see the module docstring)."""
-    q = header_pos - _OPJU_POS_LOOKBACK
-    if q < 0 or b[q : q + 2] != _OPJU_POS_TAG:
-        return None
-    if b[q + 18 : q + 20] != _OPJU_POS_SENTINEL:
-        return None
-    frac_a = float(struct.unpack_from("<d", b, q + 2)[0])
-    frac_b = float(struct.unpack_from("<d", b, q + 10)[0])
-    if not (_plausible(frac_a) and _plausible(frac_b)):
-        return None
-    return frac_a, frac_b
+    for tag, lookback in _OPJU_POS_TAG_LOOKBACK.items():
+        q = header_pos - lookback
+        if q < 0 or b[q : q + 2] != tag:
+            continue
+        if b[q + 18 : q + 20] != _OPJU_POS_SENTINEL:
+            continue
+        frac_a = float(struct.unpack_from("<d", b, q + 2)[0])
+        frac_b = float(struct.unpack_from("<d", b, q + 10)[0])
+        if _plausible(frac_a) and _plausible(frac_b):
+            return frac_a, frac_b
+    return None
 
 
 def build_mark(
@@ -155,6 +180,8 @@ def build_mark(
     x_to: float,
     y_from: float,
     y_to: float,
+    x_log: bool = False,
+    y_log: bool = False,
 ) -> dict[str, Any] | None:
     """One positioned annotation mark ``{"text", "x", "y"}`` — or ``None``
     when the position never decoded or no user text survives cleanup.
@@ -171,5 +198,5 @@ def build_mark(
     text = "\n".join(s for s in cleaned if s.strip())
     if not text:
         return None
-    x, y = frac_to_data(fracs[0], fracs[1], x_from, x_to, y_from, y_to)
+    x, y = frac_to_data(fracs[0], fracs[1], x_from, x_to, y_from, y_to, x_log, y_log)
     return {"text": text, "x": x, "y": y}

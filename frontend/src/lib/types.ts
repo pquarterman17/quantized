@@ -77,6 +77,11 @@ export interface OriginFigure {
   /** Per-curve legend labels (1-based curve order), including hand-edited
    *  overrides. Decoded; wiring into seriesLabels is a follow-up. */
   legend_labels?: string[];
+  /** The Origin legend box's top-left corner at DATA coordinates (same
+   *  position model as annotation_marks; log axes decoded in log10 space).
+   *  null/absent = no legend or position not decoded (never guessed).
+   *  applyOriginFigure maps it to the nearest legend corner preset. */
+  legend_pos?: { x: number; y: number } | null;
   /** Decoded curve bindings, when the importer recovered any. */
   curves?: OriginCurve[];
   /** 1-based layer index within the graph window (multi-layer .opj windows

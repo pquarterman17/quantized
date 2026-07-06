@@ -20,13 +20,11 @@ from quantized.io import import_auto
 from quantized.io.origin_project import (
     OriginProjectError,
     drop_empty_library_books,
+    drop_nonactionable_figures,
     read_origin_books,
 )
 from quantized.io.origin_project.figures import extract_figures
-from quantized.io.origin_project.figures_opju import (
-    drop_nonactionable_figures,
-    extract_figures_opju,
-)
+from quantized.io.origin_project.figures_opju import extract_figures_opju
 from quantized.routes._payload import datastruct_payload
 
 router = APIRouter(prefix="/api/parsers", tags=["parsers"])

@@ -349,3 +349,95 @@ def test_realdata_oracle_covers_all_five_instances() -> None:
         oracle = json.loads(p.read_text(encoding="utf-8"))
         total += sum(len(v) for v in oracle.values())
     assert total == 5
+
+
+# ── §13.2 #3 (2026-07-06): legend position + log-axis fraction mapping ────────
+
+
+def test_frac_to_data_log_axis_maps_in_log10_space() -> None:
+    """CONFIRMED against the legend COM oracle on two log-Y graphs (XRD
+    Graph2: frac_b=0.0274 over y 1..1e5 -> 7.291e4, where the linear read
+    gave 9.73e4). Log axes interpolate the DECADE span."""
+    from quantized.io.origin_project.annotation_marks import frac_to_data
+
+    x, y = frac_to_data(0.5, 0.0274, 10.0, 120.0, 1.0, 1e5, False, True)
+    assert x == pytest.approx(65.0)
+    assert y == pytest.approx(7.291e4, rel=1e-3)
+    # non-positive bounds can't be log: degrade to linear, never crash
+    _, y_lin = frac_to_data(0.0, 0.5, 0.0, 1.0, -5.0, 5.0, False, True)
+    assert y_lin == pytest.approx(0.0)
+
+
+def test_opju_legend_position_tag_variant_85_1f_at_header_minus_33() -> None:
+    """Legend objects carry the same <fracA><fracB> payload under an `85 1f`
+    tag one byte further out (header-33) — verified against the legend COM
+    oracle on every .opju instance. The unverified `86 13` stays rejected."""
+    field = (
+        b"\x85\x1f"
+        + struct.pack("<d", 0.6024)
+        + struct.pack("<d", 0.0352)
+        + b"\x80\x00\x2f"
+        + b"\x80\x08"
+        + bytes(10)
+    )
+    hdr = b"\x8a\x01\x10\x83\x06Legend"
+    b = bytes(5) + field + hdr
+    assert opju_text_fractions(b, 5 + 33) == (0.6024, 0.0352)
+
+
+@pytest.mark.realdata
+def test_realdata_legend_positions_match_com_oracle() -> None:
+    """Decoded figure `legend_pos` vs the graph_extras.json oracle
+    (Legend.x1/.y1 = the box top-left in data coords) across BOTH
+    containers: every decoded position must sit within 0.5% of the axis
+    span; the 2026-07-06 baseline is 53 exact / 0 wrong / 2 honest misses."""
+    from quantized.io.origin_project.figures import extract_figures
+    from quantized.io.origin_project.figures_opju import extract_figures_opju
+
+    stems = [
+        ("XRD", "XRD.opj"),
+        ("Moke", "Moke.opj"),
+        ("hc2convert", "hc2convert.opj"),
+        ("Hc2 data", "Hc2 data.opju"),
+        ("RockingCurve", "RockingCurve.opju"),
+        ("UnpolPlots", "UnpolPlots.opju"),
+        ("Fixed Lambdas SI", "Fixed Lambdas SI.opju"),
+    ]
+    ok = wrong = miss = 0
+    for stem, fname in stems:
+        oracle_path = _TD / "specimens" / "ground_truth" / stem / "graph_extras.json"
+        src = _TD / fname
+        if not oracle_path.exists() or not src.exists():
+            continue
+        extras = json.loads(oracle_path.read_text(encoding="utf-8"))
+        raw = src.read_bytes()
+        figs = extract_figures(raw) if fname.endswith(".opj") else extract_figures_opju(raw)
+        by_name: dict[str, list] = {}
+        for f in figs:
+            by_name.setdefault(f["name"], []).append(f)
+        for gname, layers in extras["graphs"].items():
+            for lay in layers:
+                leg = lay.get("legend")
+                cand = by_name.get(gname)
+                if not leg or not cand:
+                    continue
+                ordered = sorted(cand, key=lambda f: f["layer"])
+                if len(ordered) < lay["layer"]:
+                    continue
+                got = ordered[lay["layer"] - 1].get("legend_pos")
+                if got is None:
+                    miss += 1
+                    continue
+                xspan = abs(lay["x_to"] - lay["x_from"]) or 1.0
+                yspan = abs(lay["y_to"] - lay["y_from"]) or 1.0
+                if (
+                    abs(got["x"] - leg["x1"]) / xspan < 0.005
+                    and abs(got["y"] - leg["y1"]) / yspan < 0.005
+                ):
+                    ok += 1
+                else:
+                    wrong += 1
+    if ok == 0 and wrong == 0 and miss == 0:
+        pytest.skip("graph_extras oracle not present on this machine")
+    assert wrong == 0, f"{wrong} legend positions decoded WRONG"
+    assert ok >= 50, f"legend-position coverage regressed ({ok} exact, {miss} missed)"

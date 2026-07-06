@@ -25,6 +25,7 @@ from quantized.io.origin_project.tree_opju import opju_folder_paths
 __all__ = [
     "OriginProjectError",
     "drop_empty_library_books",
+    "drop_nonactionable_figures",
     "read_origin_books",
     "read_origin_project",
 ]
@@ -126,3 +127,21 @@ def drop_empty_library_books(books: list[DataStruct]) -> list[DataStruct]:
         or b.metadata.get("origin_text_columns")
     ]
     return kept or books
+
+
+def drop_nonactionable_figures(figs: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Keep only figures a user can act on: those with bound curves OR a resolvable
+    source hint.
+
+    The layer-anchor scan also locates internal storage/thumbnail blocks that carry
+    a decodable axis record but no bound curves and no source reference -- the
+    decoder can find them, but they are not user graphs and cannot be restored onto
+    any imported dataset. Surfacing them just floods the Library's Figures section
+    with dead "SYSTEM" rows (the Hc2 project produced 32 of them). This is a
+    presentation gate, applied at the import boundary, not in the decoder -- so the
+    decoder stays a complete axis-record reader for the synthetic tests. Verified
+    against the corpus: keeps all 14 real figures (each has curves), drops all 32
+    non-actionable Hc2 anchors. (Moved here from ``figures_opju`` 2026-07-06 --
+    it pairs with ``drop_empty_library_books``, the sibling gate above.)
+    """
+    return [f for f in figs if f.get("curves") or str(f.get("source_hint") or "").strip()]

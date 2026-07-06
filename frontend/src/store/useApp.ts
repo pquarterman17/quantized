@@ -26,6 +26,7 @@ import {
   figureChannelSelection,
   figureLabel,
   originFigureAnnotations,
+  originLegendPos,
   type OriginFigureEntry,
 } from "../lib/originFigures";
 import { planOriginFolders } from "../lib/originFolders";
@@ -746,6 +747,9 @@ export const useApp = create<AppState>((set, get) => ({
           // Pin the figure's decoded floating text; REPLACE so re-applying
           // or switching figures never stacks stale marks.
           annotations: originFigureAnnotations([fig], entry.id),
+          // Origin's legend placement -> nearest corner preset (decoded box
+          // top-left; only when the position decoded, never guessed).
+          ...(originLegendPos(fig) ? { legendPos: originLegendPos(fig)! } : {}),
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         return;
@@ -786,6 +790,9 @@ export const useApp = create<AppState>((set, get) => ({
           yAxisLabel: lower.figure.y_title ?? "",
           // Both layers' marks (lower first) — REPLACE, never stack.
           annotations: originFigureAnnotations([lower.figure, upper.figure], entry.id),
+          ...(originLegendPos(lower.figure)
+            ? { legendPos: originLegendPos(lower.figure)! }
+            : {}),
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         return;
@@ -806,6 +813,7 @@ export const useApp = create<AppState>((set, get) => ({
       yAxisLabel: fig.y_title ?? "",
       // Pin the figure's decoded floating text; REPLACE, never stack.
       annotations: originFigureAnnotations([fig], entry.id),
+      ...(originLegendPos(fig) ? { legendPos: originLegendPos(fig)! } : {}),
       ...(selection
         ? { xKey: selection.xKey, yKeys: selection.yKeys, seriesStyles: selection.styles }
         : {}),

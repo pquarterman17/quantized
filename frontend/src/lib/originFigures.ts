@@ -47,6 +47,32 @@ export function originCurveSeriesStyle(
   return Object.keys(out).length > 0 ? out : null;
 }
 
+/** Fraction of `v` along [lo, hi], in log10 space on a log axis (the same
+ *  model the backend used to decode the position — see annotation_marks.py).
+ *  NaN when the range is degenerate/invalid, so callers can bail. */
+function axisFraction(v: number, lo: number, hi: number, log: boolean): number {
+  if (log && lo > 0 && hi > 0 && v > 0) {
+    const [a, b] = [Math.log10(lo), Math.log10(hi)];
+    return b === a ? NaN : (Math.log10(v) - a) / (b - a);
+  }
+  return hi === lo ? NaN : (v - lo) / (hi - lo);
+}
+
+/** Map a figure's decoded Origin legend-box corner (data coords, box
+ *  top-left) to the nearest legend corner preset, or null when no position
+ *  decoded / the figure's range is degenerate. The store's `legendPos`
+ *  presets are the four corners, so nearest-quadrant is the faithful apply. */
+export function originLegendPos(
+  fig: Pick<OriginFigure, "legend_pos" | "x_from" | "x_to" | "x_log" | "y_from" | "y_to" | "y_log">,
+): "ne" | "nw" | "se" | "sw" | null {
+  const p = fig.legend_pos;
+  if (!p) return null;
+  const fx = axisFraction(p.x, fig.x_from, fig.x_to, fig.x_log);
+  const fy = axisFraction(p.y, fig.y_from, fig.y_to, fig.y_log); // 0 = bottom
+  if (!Number.isFinite(fx) || !Number.isFinite(fy)) return null;
+  return `${fy >= 0.5 ? "n" : "s"}${fx >= 0.5 ? "e" : "w"}` as "ne" | "nw" | "se" | "sw";
+}
+
 /** One figure attached to an import "family" (one file's worth of books).
  *  `datasetId` is the best-effort resolved target, or null if the figure's
  *  loose `source_hint` didn't match any book created by this import — the

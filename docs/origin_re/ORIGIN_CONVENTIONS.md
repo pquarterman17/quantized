@@ -1032,6 +1032,7 @@ rather than shipped wrong.
 | **Curve symbol kind** + line-vs-scatter (`c8`/`c9` @76) | both | 92/92 reachable plots | `1347d15` |
 | **Curve line-width (u16@21) + symbol-size (u16@25)**, 1/500 pt | both (shared record) | 92/92 oracle-exact incl. resized-graph baked values | (2026-07-06) |
 | **Auto/increment colours** (`0x81010151` placeholder + group role @6 -> `SYSTEM_COLOR_LIST[k]`) | both (shared record) | render-pixel oracle, 4 by-construction specimens, k=0..11 | (2026-07-06) |
+| **Legend position** (same fraction pair as annotations; `.opju` tag `85 1f` @ header-33) + **log-axis fraction model** (log10-space decade interpolation) | both | 53/53 graph_extras COM oracle, 0 wrong, incl. 2 log-Y graphs | (2026-07-06) |
 | Axis titles (XB/YL/YR) + legend labels + annotation text | both | COM text oracle | (earlier) |
 | Annotation positions (layer-fraction, y-from-top) | both | 5/5 oracle-exact (<6e-17) | `170b46e` |
 | Notes pages + structured results-log records | both | corpus | (earlier) |
@@ -1065,9 +1066,18 @@ Ordered by value. Each names the decode path so it can be picked up cold.
    Origin-side theme state), members past the 12 verified entries, and the
    plain `0xFFFFFFF7` sentinel (error-bar inherit; corpus oracle reports
    black/inherited) all stay `None`, never guessed.
-3. **Legend position** — oracle-ready now (`Legend.x`/`Legend.y` via COM,
-   same graphic-object model as annotations, `exist("Legend",16)`). Labels
-   are decoded; only placement is missing.
+3. ~~**Legend position**~~ **CLOSED 2026-07-06** — see 13.1. The Legend
+   object carries the SAME top-left fraction pair every text object does:
+   `.opj` at header payload 19/27; `.opju` under the `85 1f` tag at
+   header-33 (the old known-negative "85 1f variant" was simply the Legend
+   flavour of the position field — same payload, one byte further out).
+   Verified 53/53 (0 wrong, 2 honest misses) against the `graph_extras.json`
+   COM oracle (`export_graph_extras.py`: titles + legend text/x1/y1/attach +
+   `pe_path` folders, generic per-stem). BONUS: the two log-Y oracle
+   instances CONFIRMED the log-axis fraction model (interpolate the decade
+   span in log10 space) — previously flagged unverified for annotation
+   marks, now applied to both. Frontend: `originLegendPos` maps the box
+   corner to the nearest legend corner preset in `applyOriginFigure`.
 4. **Annotation attach-mode + tag variants** (`86 13`, `85 1f` vs the shipped
    `85 13`) — extend the annotation oracle FILES to `RockingCurve.opju` /
    `UnpolPlots.opju` (which carry the variants) and diff.

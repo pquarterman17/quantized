@@ -127,7 +127,8 @@ from typing import Any
 
 from quantized.io.origin_project.annotation_marks import _AUTO_TITLE
 from quantized.io.origin_project.annotation_marks import _clean_annotations as _drop_internal_noise
-from quantized.io.origin_project.figures import _LEGEND_RE, _log_heuristic, _texts_in
+from quantized.io.origin_project.figure_text import _LEGEND_RE, _texts_in
+from quantized.io.origin_project.figures import _log_heuristic
 from quantized.io.origin_project.opju_axis_real_form import (
     _TAG_SEARCH_SPAN,
     _decode_compact,
@@ -434,7 +435,9 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
             [t for t in texts if not _AUTO_TITLE.match(t) and "\\l(" not in t]
         )
         legend_ns = [int(n) for t in texts for n in _LEGEND_RE.findall(t)]
-        routed = routed_figure_text(b, anchor, text_end, (x_from, x_to, y_from, y_to))
+        routed = routed_figure_text(
+            b, anchor, text_end, (x_from, x_to, y_from, y_to), x_log, y_log
+        )
         # A page that owns no column records is a GRAPH page: its figures get
         # the page's own window name ("Graph1", ...) and a real 1-based layer
         # index within the page. Anchors inside a workbook/report page are
@@ -477,24 +480,9 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "y_title": routed.y_title if routed else "",
                 "y2_title": routed.y2_title if routed else "",
                 "legend_labels": routed.legend_labels if routed else [],
+                # Legend box top-left in data coords, or None (never guessed).
+                "legend_pos": routed.legend_pos if routed else None,
                 "curves": curves,
             }
         )
     return figures
-
-
-def drop_nonactionable_figures(figs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Keep only figures a user can act on: those with bound curves OR a resolvable
-    source hint.
-
-    The layer-anchor scan also locates internal storage/thumbnail blocks that carry
-    a decodable axis record but no bound curves and no source reference — the
-    decoder can find them, but they are not user graphs and cannot be restored onto
-    any imported dataset. Surfacing them just floods the Library's Figures section
-    with dead "SYSTEM" rows (the Hc2 project produced 32 of them). This is a
-    presentation gate, applied at the import boundary, not in the decoder — so the
-    decoder stays a complete axis-record reader for the synthetic tests. Verified
-    against the corpus: keeps all 14 real figures (each has curves), drops all 32
-    non-actionable Hc2 anchors.
-    """
-    return [f for f in figs if f.get("curves") or str(f.get("source_hint") or "").strip()]
