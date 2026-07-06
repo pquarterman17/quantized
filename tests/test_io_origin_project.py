@@ -824,6 +824,42 @@ def test_synthetic_opj_figure_routes_axis_titles_and_legend_labels() -> None:
     assert f["n_curves"] == 2
 
 
+def test_synthetic_opj_header_block_bytes_never_scanned_as_text() -> None:
+    """The 133-byte object header's own geometry floats can contain printable
+    accidents; they must never be filed into the bucket the header just set.
+    Regression for hc2convert.opj Graph13-18, whose YL headers all surfaced a
+    bogus ``y_title == "TEP]"`` from 4 printable bytes inside their position
+    doubles (the real YL content there is the untouched auto-template)."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    payload = bytearray(133)
+    payload[20:24] = b"TEP]"  # printable junk inside the header's float bytes
+    payload[70:73] = b"YL\x00"  # the real object name at _OBJ_NAME_OFFSET
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph13")
+        + _fig_layer_block(0.0, 10.0, 0.0, 100.0)
+        + _block(bytes(payload))
+        + _fig_format_block()
+        + _fig_text_block("%(?Y)")  # untouched auto-template -> no title
+    )
+    figs = extract_figures(blob)
+    assert len(figs) == 1
+    assert figs[0]["y_title"] == ""  # junk never becomes a title
+    assert "TEP]" not in figs[0]["annotations"]
+
+
+def test_parse_legend_labels_multiple_entries_on_one_line() -> None:
+    """Several ``\\l(n)`` entries can share one line with no newline between
+    them (Hc2 data.opju Graph3: ``\\l(4) Nb\\l(5) Nb/Al\\l(6) Nb/Au``) -- each
+    still parses as its own label instead of mangling into one caption."""
+    from quantized.io.origin_project.figures import _parse_legend_labels
+
+    got = _parse_legend_labels([r"\l(1) %(1)", r"\l(4) Nb\l(5) Nb/Al\l(6) Nb/Au"])
+    assert got == ["%(1)", "", "", "Nb", "Nb/Al", "Nb/Au"]
+
+
 def test_synthetic_opj_figure_unnamed_header_falls_back_to_annotations() -> None:
     """Fallback (module docstring): a layer with NO resolvable named header
     at all keeps feeding its recovered text into `annotations`, exactly the
@@ -1900,6 +1936,12 @@ def test_build_book_no_designations_keeps_first_col_default() -> None:
         (r"\b(bold)\i( italic) tail", "bold italic tail"),  # styling stripped
         ("%(2)", "%(2)"),  # data reference, not rich-text → untouched
         (r"\(176)C", "°C"),  # char-code 176 = degree sign
+        # \(xHHHH) hex form — Origin's Unicode escape, how a .opj-container
+        # Save-As stores non-ANSI chars (seen live in hc2convert.opj):
+        (r"\(x2225)", "∥"),  # ∥ (parallel)
+        (r"H\-(c2\(x22A5)) (T)", "Hc₂⊥ (T)"),  # ⊥ nested in a subscript run
+        (r"\(xZZ)", "(xZZ)"),  # malformed hex body → literal-paren degrade
+        (r"\(x110000)", "(x110000)"),  # out of Unicode range → degrade, never chr() crash
         ("", ""),
     ],
 )

@@ -10,6 +10,10 @@ display-affecting escapes so a recreated plot's labels match Origin.
 Handled escapes:
   ``\\g(...)``            Symbol-font run → Greek letters (q→θ, a→α, m→μ, …)
   ``\\(NNN)``             insert the character with decimal code NNN
+  ``\\(xHHHH)``           insert the character with hex code HHHH — Origin's
+                         Unicode form (how a ``.opj``-container Save-As stores
+                         non-ANSI characters, e.g. ``\\(x2225)`` → ∥; observed
+                         live in hc2convert.opj's converted axis titles)
   ``\\+(...)`` / ``\\-(...)``  super-/sub-script → Unicode super/subscripts
   ``\\b(...)`` ``\\i(...)`` ``\\u(...)`` ``\\f:Font(...)`` ``\\c<n>(...)``
                          bold/italic/underline/font/colour → keep inner text
@@ -39,6 +43,24 @@ _SUP = str.maketrans("0123456789+-=()n", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼�
 _SUB = str.maketrans("0123456789+-=()", "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎")
 
 
+def _codepoint(code: str) -> int | None:
+    """The character code of a ``\\(...)`` escape body: decimal (``40``) or
+    hex with an ``x`` prefix (``x2225`` — Origin's Unicode form, see the
+    module docstring). ``None`` when the body is neither shape, or falls
+    outside Unicode's assignable range (malformed → literal-paren fallback).
+    """
+    if code.isdigit():
+        value = int(code)
+    elif code[:1] in ("x", "X") and len(code) > 1:
+        try:
+            value = int(code[1:], 16)
+        except ValueError:
+            return None
+    else:
+        return None
+    return value if 0 <= value <= 0x10FFFF and not 0xD800 <= value <= 0xDFFF else None
+
+
 def _apply_run(control: str, inner: str) -> str:
     """Render a ``\\<control>(inner)`` run's already-decoded inner text."""
     if control == "g":
@@ -60,12 +82,13 @@ def _render(s: str) -> str:
             out.append(c)
             i += 1
             continue
-        # \(NNN) — a decimal character-code escape (atomic: its own parens).
+        # \(NNN) / \(xHHHH) — a character-code escape (atomic: its own parens).
         if i + 1 < n and s[i + 1] == "(":
             close = s.find(")", i + 2)
             code = s[i + 2 : close] if close != -1 else ""
-            if close != -1 and code.isdigit():
-                out.append(chr(int(code)))
+            cp = _codepoint(code) if close != -1 else None
+            if cp is not None:
+                out.append(chr(cp))
                 i = close + 1
             else:
                 out.append("(")  # malformed — treat as a literal paren

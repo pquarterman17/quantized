@@ -108,15 +108,15 @@ in-plane"/"T = 1.3 K", correctly still lands in ``annotations`` even though
 it sits after the layer's curve blocks, because the ``Text`` header itself
 re-establishes the bucket).
 
-``.opju`` (``figures_opju.py``) is NOT covered by this: CPYUA has no
-133-byte object-header shape to key off — the same ``YL``/``XB``/``Legend``
-byte sequences do occur in a ``.opju`` file, but as 2-byte fragments inside
-dense unrelated binary records, not a length-prefixed or fixed-offset object
-name adjacent to its own content (checked directly on the real corpus, see
-``docs/origin_project_format.md`` §6.2 and this module's own
-docstring cross-reference). ``extract_figures_opju`` therefore still emits
-``x_title``/``y_title``/``y2_title`` as ``""`` and ``legend_labels`` as
-``[]`` for every figure — a documented limitation, not a fabricated zero.
+``.opju`` (``figures_opju.py``) routes to the same buckets through its own,
+different framing (solved 2026-07-05): CPYUA has no 133-byte header, but it
+carries the SAME object names in a tagged name-header + framed-text grammar
+— see ``opju_figure_text.py``'s module docstring for the byte layout and
+the cross-container validation (every state-matched graph shared between
+``Hc2 data.opju`` and ``hc2convert.opj`` routes to identical titles). That
+module reuses ``_object_bucket``/``_first_title``/``_parse_legend_labels``/
+``_clean_annotations`` from here so the two containers' cleanup pipelines
+cannot drift.
 """
 
 from __future__ import annotations
@@ -306,22 +306,29 @@ def _first_title(texts: Sequence[str]) -> str:
 
 
 _LEGEND_LINE_RE = re.compile(r"\\l\((\d+)\)\s*(.*)")
+# A single legend LINE can hold several entries back-to-back with no newline
+# between them (Origin only needs the \l(n) swatch marker, not a line break —
+# seen live in Hc2 data.opju Graph3: ``\l(4) Nb\l(5) Nb/Al\l(6) Nb/Au``), so
+# split each line into per-entry segments at every \l(n) boundary first.
+_LEGEND_SEG_RE = re.compile(r"(?=\\l\(\d+\))")
 
 
 def _parse_legend_labels(texts: Sequence[str]) -> list[str]:
     """Per-curve legend captions from the Legend object's own
-    ``\\l(n) <label>`` lines. ``label`` is kept verbatim — whether hand-edited
-    literal text (e.g. hc2convert's ``"Nb"``/``"Nb/Al"``/``"Nb/Au"``, XRD's
-    ``"325"``/``"525"``) or the untouched auto template (``"%(2)"``) — never
-    resolved further. Returns a dense 1-based list sized to the highest ``n``
-    seen, with ``""`` for any gap; ``[]`` when no ``\\l(n)`` line was found.
-    Never fabricated: a missing slot stays blank rather than guessed.
+    ``\\l(n) <label>`` entries. ``label`` is kept verbatim — whether
+    hand-edited literal text (e.g. hc2convert's ``"Nb"``/``"Nb/Al"``/
+    ``"Nb/Au"``, XRD's ``"325"``/``"525"``) or the untouched auto template
+    (``"%(2)"``) — never resolved further. Returns a dense 1-based list sized
+    to the highest ``n`` seen, with ``""`` for any gap; ``[]`` when no
+    ``\\l(n)`` entry was found. Never fabricated: a missing slot stays blank
+    rather than guessed.
     """
     labels: dict[int, str] = {}
     for t in texts:
-        m = _LEGEND_LINE_RE.match(t)
-        if m:
-            labels[int(m.group(1))] = clean_richtext(m.group(2).strip())
+        for seg in _LEGEND_SEG_RE.split(t):
+            m = _LEGEND_LINE_RE.match(seg)
+            if m:
+                labels[int(m.group(1))] = clean_richtext(m.group(2).strip())
     if not labels:
         return []
     return [labels.get(i, "") for i in range(1, max(labels) + 1)]
@@ -382,6 +389,13 @@ def _build_layer(
             continue
         if size == 133 and len(payload) > 2:
             bucket = _object_bucket(_cstring(payload, _OBJ_NAME_OFFSET, _OBJ_NAME_LIMIT))
+            # Never text-scan the header block itself: its geometry floats can
+            # contain printable accidents that would land in the just-set
+            # bucket (hc2convert's Graph13-18 all surfaced a bogus y_title
+            # "TEP]" from 4 printable bytes inside the YL header's own
+            # position doubles). Real object text lives in the CONTENT block
+            # that follows, never in the header.
+            continue
         if size < 1200 and not _is_layer_block(payload):
             found = _texts_in(payload)
             all_texts.extend(found)

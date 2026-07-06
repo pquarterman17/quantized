@@ -153,6 +153,7 @@ from quantized.io.origin_project.opju_figure_curves import (
     extract_curves_by_id,
     opju_pages,
 )
+from quantized.io.origin_project.opju_figure_text import routed_figure_text
 
 __all__ = ["extract_figures_opju"]
 
@@ -354,18 +355,14 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
     windows that *reference* an already-encoded layer share its single
     anchor (see the module docstring).
 
-    ``x_title``/``y_title``/``y2_title``/``legend_labels`` — added
-    2026-07-05 for schema parity with ``.opj``'s ``extract_figures`` (see its
-    module docstring's "Axis-title / legend-label routing" section) — are
-    **always** ``""``/``[]`` here, a documented limitation rather than a
-    fabricated zero: CPYUA has no 133-byte object-header shape to key off.
-    The same ``YL``/``XB``/``YR``/``Legend`` byte sequences do occur in a
-    ``.opju`` file, but as 2-byte fragments embedded in dense, unrelated
-    binary records (checked directly against the real corpus), not a
-    length-prefixed or fixed-offset object name adjacent to its own text
-    content the way ``.opj``'s object headers are. Closing this needs a
-    fresh RE pass on CPYUA's own graph-child-object framing, not attempted
-    here.
+    ``x_title``/``y_title``/``y2_title``/``legend_labels``/``annotations``
+    are routed per named graph-child object (``YL``/``XB``/``YR``/``Legend``/
+    ``Text*`` — the same object names and bucket table as ``.opj``) via
+    CPYUA's own name-header + framed-text grammar, solved 2026-07-05: see
+    ``opju_figure_text.py``'s module docstring for the byte-level framing
+    and the hc2convert.opj cross-container validation. Windows with no
+    framed text objects at all (legacy/synthetic streams) degrade to the
+    historical flat-scrape ``annotations`` with empty titles/legend.
     """
     figures: list[dict[str, Any]] = []
     pages = opju_pages(b)
@@ -414,12 +411,14 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
             # this form (see the module docstring), so it must never override
             # a real Y reading with a stale/heuristic one.
             y_log = real_y_log
-        window = b[anchor : min(window_end, anchor + _TEXT_WINDOW)]
+        text_end = min(window_end, anchor + _TEXT_WINDOW)
+        window = b[anchor:text_end]
         texts = _texts_in(window)
         titles = _clean_annotations(
             [t for t in texts if not _AUTO_TITLE.match(t) and "\\l(" not in t]
         )
         legend_ns = [int(n) for t in texts for n in _LEGEND_RE.findall(t)]
+        routed = routed_figure_text(b, anchor, text_end)
         # A page that owns no column records is a GRAPH page: its figures get
         # the page's own window name ("Graph1", ...) and a real 1-based layer
         # index within the page. Anchors inside a workbook/report page are
@@ -450,12 +449,14 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "y_log": y_log,
                 "source_hint": _source_hint(b, anchor),
                 "n_curves": max(legend_ns) if legend_ns else 0,
-                "annotations": titles[:12],
-                # Not recoverable in this container -- see the "x_title/..." docstring note.
-                "x_title": "",
-                "y_title": "",
-                "y2_title": "",
-                "legend_labels": [],
+                # Routed per named text object when the window carries CPYUA's
+                # framed text grammar (opju_figure_text); flat-scrape degrade
+                # (the historical behavior) otherwise.
+                "annotations": routed.annotations if routed else titles[:12],
+                "x_title": routed.x_title if routed else "",
+                "y_title": routed.y_title if routed else "",
+                "y2_title": routed.y2_title if routed else "",
+                "legend_labels": routed.legend_labels if routed else [],
                 "curves": curves,
             }
         )

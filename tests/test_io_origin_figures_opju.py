@@ -666,6 +666,143 @@ def test_synthetic_curve_families_merge_and_dedup() -> None:
     assert figs[0]["curves"] == [{"book": "FBook", "x": "A", "y": "C"}]
 
 
+# ── synthetic CPYUA text objects (title/legend/annotation routing) ────────────
+#
+# The name-header + framed-text grammar `opju_figure_text.py` decodes (see its
+# module docstring for the byte-level trail and the hc2convert.opj
+# cross-container validation). Shapes below replicate the real corpus bytes:
+# axis titles use the `<tag> 04 10 00 00 <xx>` header + name tag 0x80,
+# Legend/Text use `<tag> 01 10` + name tag 0x83; text is `<tag> 01 80 <len>
+# <utf-8 ... 00>` with tag 0x86 or 0xa8 (both observed).
+
+
+def _opju_text_object(
+    name: str,
+    text: str,
+    *,
+    hdr_tag: int = 0x8A,
+    axis_shape: bool = False,
+    text_tag: int = 0x86,
+    pad: int = 24,
+) -> bytes:
+    """One CPYUA graph-child text object: name header, an inert style/format
+    filler run (``pad`` bytes -- real objects put 49-66 bytes here), then the
+    object's framed text."""
+    nm = name.encode("ascii")
+    if axis_shape:
+        hdr = bytes([hdr_tag, 0x04, 0x10, 0x00, 0x00, 0x04, 0x80, len(nm)]) + nm
+    else:
+        hdr = bytes([hdr_tag, 0x01, 0x10, 0x83, len(nm)]) + nm
+    raw = text.encode("utf-8") + b"\x00"
+    style = b"\x9c\x02\xfb\x07\x85\x01\x08\x90\x00" + b"\x00" * pad
+    return hdr + style + bytes([text_tag, 0x01, 0x80, len(raw)]) + raw
+
+
+def test_synthetic_opju_text_objects_route_to_buckets() -> None:
+    """YL/XB/Legend/Text objects route into y_title/x_title/legend_labels/
+    annotations (never the flat bucket), with rich-text cleaned and the
+    multi-line legend/textbox strings split per line -- mirroring the .opj
+    routing test in test_io_origin_project.py."""
+    blob = _synthetic_opju(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _opju_text_object("YL", "Resistance (Ohms)", axis_shape=True)
+        + _opju_text_object("XB", r"\g(q) (degrees)", axis_shape=True)
+        + _opju_text_object("Legend", "\\l(1) Nb\r\n\\l(2) %(2)")
+        + _opju_text_object("Text", "Field applied in-plane\r\nT = 1.3 K")
+    )
+    figs = extract_figures_opju(blob)
+    assert len(figs) == 1
+    f = figs[0]
+    assert f["y_title"] == "Resistance (Ohms)"
+    assert f["x_title"] == "θ (degrees)"  # \g(q) -> theta
+    assert f["y2_title"] == ""
+    assert f["legend_labels"] == ["Nb", "%(2)"]
+    assert f["annotations"] == ["Field applied in-plane", "T = 1.3 K"]
+    assert "Resistance (Ohms)" not in f["annotations"]  # no flat-bucket leak
+
+
+def test_synthetic_opju_alt_header_and_text_tags_with_utf8() -> None:
+    """The header prelude tag varies (0x8a/0x84/0x92 observed) and the text
+    field tag can be 0xa8 (Hc2 Graph33); text is UTF-8 (Hc2's raw ``⊥``/``∥``
+    titles). All variants route identically."""
+    blob = _synthetic_opju(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _opju_text_object(
+            "YL", "H\\-(c2∥) (T)", axis_shape=True, hdr_tag=0x92, text_tag=0xA8
+        )
+        + _opju_text_object("XB", "Temperature (K)", axis_shape=True, hdr_tag=0x84)
+    )
+    f = extract_figures_opju(blob)[0]
+    assert f["y_title"] == "Hc₂∥ (T)"  # subscript run + raw Unicode kept
+    assert f["x_title"] == "Temperature (K)"
+
+
+def test_synthetic_opju_auto_template_titles_stay_empty() -> None:
+    """An untouched auto-title template (%(?Y)/%(?X)) never becomes a title
+    (matching .opj, where _texts_in's letter filter drops it) and never
+    leaks into annotations."""
+    blob = _synthetic_opju(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _opju_text_object("YL", "%(?Y)", axis_shape=True)
+        + _opju_text_object("XB", "%(?X)", axis_shape=True)
+    )
+    f = extract_figures_opju(blob)[0]
+    assert f["x_title"] == "" and f["y_title"] == ""
+    assert f["annotations"] == []
+
+
+def test_synthetic_opju_unknown_object_text_dropped() -> None:
+    """Text owned by an internal/unroutable object (__FRAMESRCDATAINFOS and
+    friends) is dropped -- never guessed into a title or annotation."""
+    blob = _synthetic_opju(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _opju_text_object("__FRAMESRCDATAINFOS", "Internal Config Text")
+    )
+    f = extract_figures_opju(blob)[0]
+    assert f["x_title"] == "" and f["y_title"] == "" and f["y2_title"] == ""
+    assert f["annotations"] == []
+
+
+def test_synthetic_opju_orphan_text_defaults_to_annotations() -> None:
+    """A framed text run with no governing name header lands in annotations
+    (the same degrade .opj uses for text before its first header)."""
+    raw = b"Floating note\x00"
+    blob = _synthetic_opju(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + bytes([0x86, 0x01, 0x80, len(raw)])
+        + raw
+    )
+    f = extract_figures_opju(blob)[0]
+    assert f["annotations"] == ["Floating note"]
+    assert f["x_title"] == "" and f["y_title"] == ""
+
+
+def test_synthetic_opju_stale_header_beyond_bound_not_paired() -> None:
+    """A text further than _MAX_NAME_TO_TEXT past the last header does NOT
+    inherit its bucket -- it demotes to annotations (missing title, never a
+    wrong one)."""
+    blob = _synthetic_opju(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _opju_text_object("YL", "Too Far Away", axis_shape=True, pad=600)
+    )
+    f = extract_figures_opju(blob)[0]
+    assert f["y_title"] == ""
+    assert f["annotations"] == ["Too Far Away"]
+
+
+def test_synthetic_opju_no_framed_text_keeps_flat_fallback() -> None:
+    """A window with no framed text objects at all (legacy/synthetic streams)
+    keeps the historical flat-scrape annotations and empty titles/legend."""
+    blob = _synthetic_opju(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + b"Field Sweep (Oe)\x00"  # printable but unframed
+    )
+    f = extract_figures_opju(blob)[0]
+    assert f["annotations"] == ["Field Sweep (Oe)"]
+    assert f["x_title"] == "" and f["y_title"] == "" and f["y2_title"] == ""
+    assert f["legend_labels"] == []
+
+
 # ── curve plot-style (line vs scatter) — pure unit tests ──────────────────────
 
 
@@ -1343,6 +1480,100 @@ def test_realdata_hc2_per_graph_bindings_vs_index_oracle() -> None:
     assert len(exact) >= 7, f"Hc2: only {sorted(exact)} matched the oracle exactly"
     # Graph5 is the sole known incomplete page: bindings missing, never wrong.
     assert named.get("Graph5") == set(), "Graph5 grew bindings -- re-verify before trusting"
+
+
+@pytest.mark.realdata
+def test_realdata_hc2_opju_text_routing_matches_opj_conversion() -> None:
+    """hc2convert.opj is a COM Save-As of the same project as Hc2 data.opju
+    (saved at a slightly different edit state). For every shared graph whose
+    LAYER STATE matches across the two containers (same axis ranges and same
+    curve (book, column) multiset -- i.e. the same window snapshot), the
+    independently-framed .opju text routing must produce IDENTICAL x/y/y2
+    titles, legend labels, AND annotations to the independently-decoded .opj
+    (2026-07-05: 24 of 32 shared graphs state-match; 0 mismatched fields).
+    Graphs whose state diverged between the two saves are excluded by the
+    guard, not compared -- each container is decoded faithfully to its own
+    bytes (verified live: .opju Graph3 is the 6-curve R/R_N-normalized edit,
+    y range (-0.1, 1.1), where .opj still holds the older 3-curve resistance
+    plot, y (-0.05, 0.45); Graph7/9/15/22 dropped their legends for "T ="
+    text labels; Graph28/29 gained a \\g(m)\\-(0) title prefix)."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    src = _SPEC.parent / "Hc2 data.opju"
+    conv = _SPEC.parent / "hc2convert.opj"
+    if not src.exists() or not conv.exists():
+        pytest.skip("Hc2 .opju/.opj corpus pair not present on this machine")
+    opju = {}
+    for f in extract_figures_opju(src.read_bytes()):
+        if f["name"]:
+            opju.setdefault(f["name"], f)
+    opj = {}
+    for f in extract_figures(conv.read_bytes()):
+        opj.setdefault(f["name"], f)
+
+    def _same_state(a: dict, b: dict) -> bool:  # type: ignore[type-arg]
+        ranges = all(
+            abs(a[k] - b[k]) <= 1e-9 * max(1.0, abs(a[k]), abs(b[k]))
+            for k in ("x_from", "x_to", "y_from", "y_to")
+        )
+        curves_a = sorted((c["book"], c["y"]) for c in a["curves"])
+        curves_b = sorted((c["book"], c["y"]) for c in b["curves"])
+        return ranges and curves_a == curves_b
+
+    matched = [g for g in sorted(set(opju) & set(opj)) if _same_state(opju[g], opj[g])]
+    assert len(matched) >= 20, f"only {len(matched)} state-matched graphs -- corpus changed?"
+    mismatches = [
+        (g, key, opju[g][key], opj[g][key])
+        for g in matched
+        for key in ("x_title", "y_title", "y2_title", "legend_labels", "annotations")
+        if opju[g][key] != opj[g][key]
+    ]
+    assert not mismatches, f"routed .opju text disagrees with the .opj decode: {mismatches}"
+    # Graph1 pinned exactly (state-matched flagship: hand-edited titles, a
+    # hand-edited legend, and a 2-line floating text annotation).
+    g1 = opju["Graph1"]
+    assert g1["x_title"] == "Applied Magnetic Field μ₀H (T)"
+    assert g1["y_title"] == "Resistance (Ohms)"
+    assert g1["legend_labels"] == ["Nb", "Nb/Al", "Nb/Au"]
+    assert g1["annotations"] == ["Field applied in-plane", "T = 1.3 K"]
+
+
+@pytest.mark.realdata
+def test_realdata_hc2_opju_titles_match_live_com_oracle() -> None:
+    """The strongest title oracle: 'Hc2 data'/index.json's ``x_title_raw``/
+    ``y_title_raw`` came from live COM against this very .opju (truncated by
+    Origin's eval page limit to Graph1/2/4/5/6/8/10/11 -- 16 title slots).
+    Every routed title must equal the oracle's exactly (auto-templates
+    ``%(?X)``/``%(?Y)`` map to ``""``, hand-edited titles to their
+    rich-text-cleaned form). 16/16 exact at pin time (2026-07-05)."""
+    from quantized.io.origin_project.origin_richtext import clean_richtext
+
+    src = _SPEC.parent / "Hc2 data.opju"
+    index_path = _GT / "Hc2 data" / "index.json"
+    if not src.exists() or not index_path.exists():
+        pytest.skip("Hc2 corpus file/ground-truth not present on this machine")
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    named = {}
+    for f in extract_figures_opju(src.read_bytes()):
+        if f["name"]:
+            named.setdefault(f["name"], f)
+    checked = 0
+    for g in index["graphs"]:
+        if not g["graph"].startswith("Graph") or not g["layers"]:
+            continue
+        layer = g["layers"][0]
+        fig = named.get(g["graph"])
+        assert fig is not None, f"{g['graph']}: no decoded figure"
+        for key, raw in (
+            ("x_title", layer.get("x_title_raw", {}).get("xb")),
+            ("y_title", layer.get("y_title_raw", {}).get("yl")),
+        ):
+            if raw is None:
+                continue
+            want = "" if raw in ("%(?X)", "%(?Y)") else clean_richtext(raw)
+            assert fig[key] == want, f"{g['graph']}.{key}: {fig[key]!r} != oracle {want!r}"
+            checked += 1
+    assert checked >= 16, f"only {checked} oracle title slots checked -- oracle changed?"
 
 
 @pytest.mark.realdata
