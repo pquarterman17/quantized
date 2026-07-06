@@ -28,7 +28,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from quantized.io.origin_project import OriginProjectError, read_origin_books
+from quantized.datastruct import DataStruct
+from quantized.io.origin_project import (
+    OriginProjectError,
+    drop_empty_library_books,
+    read_origin_books,
+)
 
 
 def _resolve_corpus_dir() -> Path:
@@ -149,6 +154,10 @@ def test_reader_matches_origin_ground_truth(stem: str) -> None:
     # decoded column may disagree with the oracle), not completeness.
     partial = src.suffix.lower() == ".opju"
     checked_books = checked_cols = 0
+    # Some oracles are graph-only (e.g. the Hc2 COM capture skipped the expensive
+    # per-sheet dump); with no "books" section there's nothing to compare here.
+    if not index.get("books"):
+        pytest.skip(f"{stem}: oracle has no books section (graph-only)")
     for book in index["books"]:
         name = book["book"]
         sheets = book["sheets"]
@@ -200,3 +209,33 @@ def test_reader_matches_origin_ground_truth(stem: str) -> None:
     if checked_books == 0:
         pytest.skip(f"{stem}: no comparable books (all multi-sheet/non-dataset)")
     assert checked_cols > 0
+
+
+@pytest.mark.parametrize("stem", ["Hc2 data", "hc2convert"])
+def test_realdata_empty_report_books_gated_from_library(stem: str) -> None:
+    """Origin fit/report sheets surface as empty pseudo-books (``Book2@N`` shells
+    whose numeric values are empty and whose content is unresolved ``cell://``
+    stubs). ``drop_empty_library_books`` must hide every book with no finite data
+    and no text, and must never drop a data-bearing book. The Hc2 project alone
+    produced 48 such shells in the ``.opju`` (and 3 in the ``.opj``)."""
+    src = _TD / f"{stem}.opju"
+    if not src.exists():
+        src = _TD / f"{stem}.opj"
+    if not src.exists():
+        pytest.skip(f"{stem} not in corpus")
+    books = read_origin_books(src)
+    kept = drop_empty_library_books(books)
+    kept_ids = {id(b) for b in kept}
+
+    def has_data(b: DataStruct) -> bool:
+        return bool(b.values.size) and int(np.count_nonzero(np.isfinite(b.values))) > 0
+
+    # No data-bearing book is ever gated.
+    for b in books:
+        if has_data(b):
+            assert id(b) in kept_ids, f"{b.metadata.get('origin_book')} has data but was gated"
+    # Every kept book has plottable data or text content.
+    for b in kept:
+        assert has_data(b) or b.metadata.get("origin_text_columns")
+    # Hc2 genuinely has empty shells to gate.
+    assert len(kept) < len(books)

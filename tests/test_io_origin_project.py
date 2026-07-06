@@ -18,7 +18,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from quantized.io.origin_project import OriginProjectError, read_origin_project
+from quantized.datastruct import DataStruct
+from quantized.io.origin_project import (
+    OriginProjectError,
+    drop_empty_library_books,
+    read_origin_project,
+)
 from quantized.io.registry import import_auto, resolve_parser
 
 # ── synthetic CPY .opj builder ────────────────────────────────────────────────
@@ -1912,3 +1917,48 @@ def test_clean_richtext_malformed_degrades_gracefully() -> None:
     assert clean_richtext("no escapes here") == "no escapes here"
     # unterminated run: must not raise, and must not lose the visible text
     assert "tail" in clean_richtext(r"\g(q tail")
+
+
+def _mk_book(name: str, *, values: np.ndarray, labels: list[str], **meta: object) -> DataStruct:
+    time = np.arange(values.shape[0], dtype=float) if values.size else np.empty(0)
+    return DataStruct.create(
+        time,
+        values,
+        labels=labels,
+        units=[""] * len(labels),
+        metadata={"origin_book": name, **meta},
+    )
+
+
+def test_drop_empty_library_books_hides_report_shells() -> None:
+    # A real data book, an empty fit-report shell (report_sheets metadata only),
+    # and a text-only book (empty numeric values but real text content).
+    data = _mk_book("Book1", values=np.array([[1.0], [2.0]]), labels=["A"])
+    shell = _mk_book(
+        "Book1@2",
+        values=np.empty((0, 0)),
+        labels=[],
+        origin_report_sheets={"C": ["cell://Parameters.A.Value"]},
+    )
+    text = _mk_book(
+        "Notes", values=np.empty((0, 0)), labels=[], origin_text_columns={"A": ["hello"]}
+    )
+    kept = drop_empty_library_books([data, shell, text])
+    # The report shell is gated; the data book and the text-only book survive.
+    assert [b.metadata["origin_book"] for b in kept] == ["Book1", "Notes"]
+
+
+def test_drop_empty_library_books_never_returns_empty() -> None:
+    # A degenerate all-empty project must pass through unchanged (better to show
+    # the empty shells than an empty Library).
+    shell = _mk_book("X@2", values=np.empty((0, 0)), labels=[], origin_report_sheets={"C": []})
+    result = drop_empty_library_books([shell])
+    assert len(result) == 1 and result[0] is shell
+
+
+def test_drop_empty_library_books_gates_all_nan_book() -> None:
+    # A book whose only column is entirely NaN carries no plottable data.
+    nan_book = _mk_book("Empty", values=np.full((3, 1), np.nan), labels=["A"])
+    data = _mk_book("Real", values=np.array([[1.0], [2.0]]), labels=["A"])
+    kept = drop_empty_library_books([nan_book, data])
+    assert [b.metadata["origin_book"] for b in kept] == ["Real"]

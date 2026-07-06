@@ -17,7 +17,11 @@ from fastapi import APIRouter, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from quantized.io import import_auto
-from quantized.io.origin_project import OriginProjectError, read_origin_books
+from quantized.io.origin_project import (
+    OriginProjectError,
+    drop_empty_library_books,
+    read_origin_books,
+)
 from quantized.io.origin_project.figures import extract_figures
 from quantized.io.origin_project.figures_opju import (
     drop_nonactionable_figures,
@@ -57,7 +61,7 @@ def _import_with_books(path: Path) -> dict[str, Any]:
     payload = datastruct_payload(ds)
     if Path(path).suffix.lower() in (".opj", ".opju"):
         try:
-            books = read_origin_books(Path(path))
+            books = drop_empty_library_books(read_origin_books(Path(path)))
         except OriginProjectError:
             books = []
         if len(books) > 1:

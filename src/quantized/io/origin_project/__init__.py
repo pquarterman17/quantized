@@ -12,6 +12,8 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
+import numpy as np
+
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project.container import OriginProjectError
 from quantized.io.origin_project.notes import notes_windows, parse_results_log, results_log
@@ -20,7 +22,12 @@ from quantized.io.origin_project.opju import read_opju, read_opju_books
 from quantized.io.origin_project.tree import opj_folder_paths
 from quantized.io.origin_project.tree_opju import opju_folder_paths
 
-__all__ = ["OriginProjectError", "read_origin_books", "read_origin_project"]
+__all__ = [
+    "OriginProjectError",
+    "drop_empty_library_books",
+    "read_origin_books",
+    "read_origin_project",
+]
 
 
 def _with_provenance(ds: DataStruct, path: Path, *, raw: bytes | None = None) -> DataStruct:
@@ -94,3 +101,28 @@ def read_origin_books(path: Path) -> list[DataStruct]:
     books[0] = _with_provenance(books[0], path, raw=raw)
     folder_paths = opju_folder_paths(raw) if is_opju else opj_folder_paths(raw)
     return [_with_folder_path(b, folder_paths) for b in books]
+
+
+def drop_empty_library_books(books: list[DataStruct]) -> list[DataStruct]:
+    """Presentation gate for the multi-book Library listing: hide books with no
+    plottable numeric data and no text content.
+
+    Origin fit/report sheets (plan item 4) surface as pseudo-books whose numeric
+    ``.values`` are empty -- their content is unresolved ``cell://`` reference
+    stubs in ``metadata['origin_report_sheets']``, not real data -- so listing
+    them as top-level Library entries floods it with empty rows (the Hc2 project
+    alone produced 48 ``Book2@N`` fit-report shells). Mirrors
+    ``drop_nonactionable_figures``: a gate applied at the import boundary, not in
+    the decoder, so ``read_origin_books`` stays a complete reader (the report
+    metadata still rides the returned DataStruct for a future fit-report surface).
+    Text-only books (real content in ``origin_text_columns``) are kept. Never
+    returns empty: a degenerate all-empty project passes through unchanged so the
+    Library still shows something.
+    """
+    kept = [
+        b
+        for b in books
+        if (b.values.size and int(np.count_nonzero(np.isfinite(b.values))) > 0)
+        or b.metadata.get("origin_text_columns")
+    ]
+    return kept or books
