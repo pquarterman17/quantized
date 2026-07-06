@@ -1160,9 +1160,10 @@ def test_realdata_fig_pairs_curve_bindings() -> None:
     figs = extract_figures_opju(src.read_bytes())
     assert len(figs) == 4
     expected = [
-        {"book": "FBook", "x": "A", "y": "B", "style": "scatter"},
-        {"book": "FBook", "x": "A", "y": "B", "style": "scatter"},
-        {"book": "FBook", "x": "A", "y": "C", "style": "scatter"},  # the deliberate A-C diff
+        {"book": "FBook", "x": "A", "y": "B", "style": "scatter", "symbol": "square"},
+        {"book": "FBook", "x": "A", "y": "B", "style": "scatter", "symbol": "square"},
+        # the deliberate A-C diff
+        {"book": "FBook", "x": "A", "y": "C", "style": "scatter", "symbol": "square"},
         {"book": "FBook", "x": "A", "y": "B", "style": "line"},
     ]
     for i, (f, want) in enumerate(zip(figs, expected, strict=True)):
@@ -1195,9 +1196,9 @@ def test_realdata_curves_multi_bindings() -> None:
     figs = extract_figures_opju(src.read_bytes())
     assert len(figs) == 1
     assert figs[0]["curves"] == [
-        {"book": "MBook", "x": "A", "y": "B", "style": "scatter"},
-        {"book": "MBook", "x": "A", "y": "C", "style": "scatter"},
-        {"book": "MBook", "x": "A", "y": "D", "style": "scatter"},
+        {"book": "MBook", "x": "A", "y": "B", "style": "scatter", "symbol": "square"},
+        {"book": "MBook", "x": "A", "y": "C", "style": "scatter", "symbol": "square"},
+        {"book": "MBook", "x": "A", "y": "D", "style": "scatter", "symbol": "square"},
     ]
 
 
@@ -1213,8 +1214,8 @@ def test_realdata_curves_2books_bindings() -> None:
     figs = extract_figures_opju(src.read_bytes())
     assert len(figs) == 1
     assert figs[0]["curves"] == [
-        {"book": "BookOne", "x": "A", "y": "B", "style": "scatter"},
-        {"book": "BookTwo", "x": "A", "y": "C", "style": "scatter"},
+        {"book": "BookOne", "x": "A", "y": "B", "style": "scatter", "symbol": "square"},
+        {"book": "BookTwo", "x": "A", "y": "C", "style": "scatter", "symbol": "square"},
     ]
 
 

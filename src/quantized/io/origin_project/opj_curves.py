@@ -128,6 +128,7 @@ from __future__ import annotations
 import struct
 from collections.abc import Sequence
 
+from quantized.io.origin_project.curve_style_color import style_fields
 from quantized.io.origin_project.windows import _cstring, _is_window_header
 
 __all__ = ["book_x_columns", "column_id_map", "extract_curves"]
@@ -265,7 +266,11 @@ def extract_curves(
     ``y`` is decoded exactly via the curve anchor's own global column id (see
     module docstring); a curve whose id doesn't resolve to a known column, or
     whose book has no inferable X column, is silently dropped -- never
-    guessed."""
+    guessed. The anchor payload is also the curve's fixed style record
+    (``curve_style_color.py``: symbol color/kind, line color, line-vs-
+    scatter -- oracle-verified on ``hc2convert.opj``), so any decodable
+    ``color``/``symbol``/``style`` keys ride along; undecodable fields
+    (auto color, unmapped bytes) are absent, never defaulted."""
     out: list[dict[str, str]] = []
     last = min(end, len(blocks) - 1)
     for j in range(start, last):
@@ -283,5 +288,5 @@ def extract_curves(
         x = x_columns.get(book)
         if x is None:
             continue  # unknown/columnless book: drop, never guess
-        out.append({"book": book, "x": x, "y": col})
+        out.append({"book": book, "x": x, "y": col, **style_fields(payload)})
     return out

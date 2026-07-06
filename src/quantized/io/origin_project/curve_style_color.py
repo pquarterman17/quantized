@@ -1,0 +1,257 @@
+"""Per-curve visual style (color / symbol kind / line-vs-scatter) for Origin
+graph curves -- shared by BOTH containers (solved 2026-07-06 against the
+4-stem ``curve_style.json`` oracle: ``hc2convert`` (.opj), ``Hc2 data``,
+``RockingCurve``, ``UnpolPlots`` (.opju)).
+
+**The key structural fact.** The ``.opj`` (CPYA) curve-anchor record (the
+519/515-byte block ``opj_curves.py`` reads the column id from) and the
+``.opju`` (CPYUA) curve token are the SAME fixed-layout record: CPYUA stores
+it as a sparse serialization that elides zero runs. The grammar (derived by
+aligning ``hc2convert.opj`` against ``Hc2 data.opju`` -- the same project in
+both containers -- and validated byte-exact through record offset 310+):
+
+```
+<tag 0x80..0xbf> <len:u8> <payload:len>   skip (tag-0x80)+3 zero bytes, then
+                                          write len literal bytes
+<0xc0..0xc3> <rep:1>                      write (tag-0xc0)+3 copies of rep
+                                          (the same count law the axis-record
+                                          RLE uses: c2=5, c3=6)
+<len 0x01..0x7f> <payload:len>            bare literal continuation
+```
+
+Reconstructing the record from the token's own ``80 01/03 <id>`` chunk
+(position 1 before it; the id lands at offset 4, exactly the ``.opj``
+anchor's layout) reproduces the ``.opj`` record byte-for-byte, and the
+stream always completes the record to exactly 519 bytes (chained zero-len
+skip chunks, e.g. ``9a 00``, pad the tail) before the DataPlot body object
+(``58 80 09 98 03 40 b3``) begins.
+
+**Style fields inside the record** (same offsets in both containers;
+landmark constants at 370/378/386/394/404/420/440/448/456/472/480/488
+verified at identical offsets for both the 519- and 515-byte ``.opj``
+variants -- the 4-byte size difference sits past offset 492):
+
+* offset 23 -- **symbol kind** (Origin's symbol-gallery index; 0 = none).
+  Oracle-verified 49/49 (.opj) + 43/43 (.opju).
+* offset 76 -- the **line-vs-scatter byte** (``0xc8`` line / ``0xc9``
+  scatter -- the very byte ``opju_codec.curve_plot_style``'s
+  ``8f 01 <style> 83`` tag writes: that tag is this record's sparse chunk
+  for offset 76). ``0xca`` (Moke) and ``0xe7``/``0xe9`` (PNR corpus) also
+  occur; unmapped -- omitted, never guessed.
+* offsets 302-305 -- a constant ``0xFFFFFFF7`` "auto" sentinel u32.
+* offsets 306-309 -- the **symbol color** (ocolor u32 LE), terminator
+  ``0xff`` at 310 (the validity gate: hc2convert's 24 non-oracle anchors
+  carrying ``0x1e`` there get no color, fail-closed).
+* offsets 362-365 -- the **line color** (ocolor u32 LE, no terminator).
+
+The plot's *effective* color (what the oracle's COM capture reports) is the
+symbol color when symbol kind > 0, else the line color -- verified 48/49 on
+``hc2convert`` reachable plots (the 49th is the palette case below) and
+39/43 on the ``.opju`` stems (the other 4 are honestly auto-on-disk: error-
+bar curves whose oracle reports the inherited effective black).
+
+**On-disk ocolor encoding** (the low-level u32; three cases):
+
+* high byte ``0x01`` -- direct RGB, COLORREF byte order: ``0x01BBGGRR``.
+  Verified: every one of the oracle's 96 type-1 plots decodes to its
+  ``color_rgb`` under this model.
+* high byte ``0x00`` -- a **0-based** index into Origin's classic 24-color
+  palette. The oracle/LabTalk convention is 1-based (``1`` = black); disk
+  stores ``index-1`` (verified: hc2convert Graph2's black plot stores 0
+  where the oracle says 1; UnpolPlots' orange line stores 0x0e where the
+  oracle says 0x0f). :func:`raw_color` returns the ORACLE (1-based) form so
+  callers and tests compare against the oracle int directly.
+* ``0xFFFFFFF7`` -- "auto/increment" (Origin assigns by plot order). The
+  oracle reports the *effective* resolved color (e.g. ``-4`` or an
+  inherited black); that resolution is Origin-side state we cannot decode,
+  so auto yields ``None`` -- the frontend palette default stands.
+
+**NOT decoded -- checked and rejected, don't re-guess:** line width and
+symbol size. The width-shaped u16 triple at body offsets 213-236 (500 =
+0.5pt) reads 500 even for oracle ``line_width == 3.0`` plots, and the
+symbol-size candidates fail on the oracle's scaled-graph cases (a resized
+Origin graph window scales the *reported* width/size by a layer print
+factor, e.g. 3.18 = 9pt x 0.353), so any fixed-offset read would ship
+WRONG values. Omitted entirely.
+
+See ``tests/test_io_origin_curve_style.py`` for the synthetic + oracle
+verification suite.
+"""
+
+from __future__ import annotations
+
+import struct
+
+__all__ = ["ORIGIN_PALETTE", "ocolor_to_rgb", "opju_style_record", "raw_color", "style_fields"]
+
+_RECORD_LEN = 519  # the .opj curve-anchor record length (515 variant differs past 492)
+_AUTO = 0xFFFFFFF7  # the on-disk "auto/increment" color sentinel (-9 as i32)
+_SYMBOL_COLOR_OFF = 306
+_COLOR_TERM_OFF = 310
+_LINE_COLOR_OFF = 362
+_SYMBOL_KIND_OFF = 23
+_STYLE_BYTE_OFF = 76
+
+# Origin's classic 24-color list (LabTalk ``color()`` indices 1-24, here
+# 0-indexed 0-23): black, red, green, blue, cyan, magenta, yellow, dark
+# yellow, navy, purple, wine, olive, dark cyan, royal, orange, violet, pink,
+# white, light gray, gray, light yellow, light cyan, light magenta, dark
+# gray. Ported verbatim from Origin's documented default color list -- the
+# calibrated values are intentional, do not "fix".
+ORIGIN_PALETTE: tuple[str, ...] = (
+    "#000000",  # 1  black
+    "#FF0000",  # 2  red
+    "#00FF00",  # 3  green
+    "#0000FF",  # 4  blue
+    "#00FFFF",  # 5  cyan
+    "#FF00FF",  # 6  magenta
+    "#FFFF00",  # 7  yellow
+    "#808000",  # 8  dark yellow
+    "#000080",  # 9  navy
+    "#800080",  # 10 purple
+    "#800000",  # 11 wine
+    "#008000",  # 12 olive
+    "#008080",  # 13 dark cyan
+    "#0000A0",  # 14 royal
+    "#FF8000",  # 15 orange
+    "#8000FF",  # 16 violet
+    "#FF0080",  # 17 pink
+    "#FFFFFF",  # 18 white
+    "#C0C0C0",  # 19 light gray
+    "#808080",  # 20 gray
+    "#FFFF80",  # 21 light yellow
+    "#80FFFF",  # 22 light cyan
+    "#FF80FF",  # 23 light magenta
+    "#404040",  # 24 dark gray
+)
+
+# Origin's symbol-gallery indices (LabTalk ``set -k``): 1 square, 2 circle,
+# 3 up-triangle, 4 down-triangle, 5 diamond, 6 cross(+), 7 cross(x),
+# 8 star. Indices 1-3 are oracle-verified; 4-8 port the documented gallery
+# order. Names match the frontend MarkerShape union so they pass through.
+_SYMBOL_SHAPES = {
+    1: "square",
+    2: "circle",
+    3: "triangle",
+    4: "downtriangle",
+    5: "diamond",
+    6: "plus",
+    7: "cross",
+    8: "star",
+}
+
+# Same byte table opju_codec._STYLE_BYTES validated (fig_pairs oracle);
+# 0xca/0xe7/0xe9 also occur in the corpus but are unmapped -- never guessed.
+_CONNECT_STYLE = {0xC8: "line", 0xC9: "scatter"}
+
+
+def ocolor_to_rgb(raw: int) -> str | None:
+    """An Origin ocolor int (ORACLE/LabTalk form) -> ``"#RRGGBB"``, or
+    ``None`` for auto/unrecognized (never guessed).
+
+    Type 1 (high byte ``0x01``) is a direct COLORREF: ``0x01BBGGRR``.
+    Type 0 (high byte ``0x00``) is a 1-based classic-palette index (1-24) --
+    the LabTalk convention the ground-truth oracle uses; the on-disk field
+    is 0-based and :func:`raw_color` converts before returning.
+    """
+    raw &= 0xFFFFFFFF
+    kind = raw >> 24
+    if kind == 1:  # direct RGB (COLORREF low 24 bits, BGR order)
+        r, g, b = raw & 0xFF, (raw >> 8) & 0xFF, (raw >> 16) & 0xFF
+        return f"#{r:02X}{g:02X}{b:02X}"
+    if kind == 0 and 1 <= raw <= len(ORIGIN_PALETTE):  # classic palette, 1-based
+        return ORIGIN_PALETTE[raw - 1]
+    return None  # auto/increment or an unrecognized type: no color, never guess
+
+
+def raw_color(record: bytes) -> int | None:
+    """The plot's effective ocolor from a curve-anchor record, in ORACLE
+    (1-based-palette) form, or ``None`` (auto on disk / gates failed).
+
+    Reads the symbol color (offset 306) for symbol plots (kind > 0) and the
+    line color (offset 362) otherwise -- the rule the oracle verified 87/92.
+    Gated on the color-group terminator byte (``0xff`` at 310); a record
+    that fails it (or is too short) yields ``None``, never a guess.
+    """
+    if len(record) < _LINE_COLOR_OFF + 4 or record[_COLOR_TERM_OFF] != 0xFF:
+        return None
+    off = _SYMBOL_COLOR_OFF if record[_SYMBOL_KIND_OFF] > 0 else _LINE_COLOR_OFF
+    field = struct.unpack_from("<I", record, off)[0]
+    if field == _AUTO:
+        return None  # auto/increment: resolved Origin-side, not decodable here
+    kind = field >> 24
+    if kind == 0:
+        return field + 1 if field < len(ORIGIN_PALETTE) else None  # disk is 0-based
+    return field if kind == 1 else None
+
+
+def style_fields(record: bytes) -> dict[str, str]:
+    """Decoded per-curve style keys from one curve-anchor record (raw ``.opj``
+    payload or :func:`opju_style_record` reconstruction): any of ``color``
+    (``"#RRGGBB"``), ``symbol`` (marker shape name), ``style``
+    (``"line"``/``"scatter"``). Undecodable fields are simply absent."""
+    out: dict[str, str] = {}
+    if len(record) < _LINE_COLOR_OFF + 4:
+        return out
+    style = _CONNECT_STYLE.get(record[_STYLE_BYTE_OFF])
+    if style:
+        out["style"] = style
+    shape = _SYMBOL_SHAPES.get(record[_SYMBOL_KIND_OFF])
+    if shape:
+        out["symbol"] = shape
+    raw = raw_color(record)
+    if raw is not None:
+        rgb = ocolor_to_rgb(raw)
+        if rgb:
+            out["color"] = rgb
+    return out
+
+
+def opju_style_record(b: bytes, tag_pos: int) -> bytes | None:
+    """Reconstruct the 519-byte curve-anchor record from the CPYUA sparse
+    stream whose id chunk (``80 01/03 <id>``) starts at ``tag_pos``.
+
+    Follows the chunk grammar in the module docstring. Returns ``None``
+    unless the stream demonstrably completes the record (reaches offset
+    519 exactly, as every validated real stream does) -- a partial
+    reconstruction could misread an unreached zero region as palette black,
+    which is exactly the wrong-color failure this gate forbids."""
+    buf = bytearray(_RECORD_LEN)
+    pos = 1  # the id chunk's skip starts after the record's offset-0 byte
+    p = tag_pos
+    n = len(b)
+    while p < n and pos < _RECORD_LEN:
+        t = b[p]
+        if 0x80 <= t <= 0xBF:  # tagged chunk: skip zeros, then literal bytes
+            if p + 2 > n:
+                return None
+            ln = b[p + 1]
+            if p + 2 + ln > n:
+                return None
+            pos += (t - 0x80) + 3
+            payload = b[p + 2 : p + 2 + ln]
+            end = min(pos + ln, _RECORD_LEN)
+            if pos < _RECORD_LEN:
+                buf[pos:end] = payload[: end - pos]
+            pos += ln
+            p += 2 + ln
+        elif 0xC0 <= t <= 0xC3:  # RLE run: (t-0xc0)+3 copies of the next byte
+            if p + 2 > n:
+                return None
+            run = (t - 0xC0) + 3
+            end = min(pos + run, _RECORD_LEN)
+            if pos < _RECORD_LEN:
+                buf[pos:end] = bytes([b[p + 1]]) * (end - pos)
+            pos += run
+            p += 2
+        elif 0 < t < 0x80:  # bare literal continuation
+            if p + 1 + t > n:
+                return None
+            end = min(pos + t, _RECORD_LEN)
+            if pos < _RECORD_LEN:
+                buf[pos:end] = b[p + 1 : p + 1 + (end - pos)]
+            pos += t
+            p += 1 + t
+        else:  # 0x00 / unknown escape: the stream ended before the record did
+            return None
+    return bytes(buf) if pos >= _RECORD_LEN else None

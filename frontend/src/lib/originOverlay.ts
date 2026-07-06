@@ -89,7 +89,7 @@ export function buildOverlayDataset(
       yCh,
       label: `${c.book}: ${label}`,
       unit: ds.data.units[yCh] ?? "",
-      style: originCurveSeriesStyle(c.style),
+      style: originCurveSeriesStyle(c),
       designation: cd ? String(cd[c.y] ?? "Y") : "Y",
     });
   }

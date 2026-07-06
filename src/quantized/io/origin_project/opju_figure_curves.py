@@ -100,6 +100,7 @@ from __future__ import annotations
 import re
 from typing import NamedTuple
 
+from quantized.io.origin_project.curve_style_color import opju_style_record, style_fields
 from quantized.io.origin_project.opju_codec import curve_plot_style
 from quantized.io.origin_project.tree_opju import _OPJU_WIN_RE
 
@@ -247,7 +248,12 @@ def extract_curves_by_id(
     when its record carried one, else the book's first X-designated column,
     else ``"A"`` (the documented structural fallback). Deduped on
     ``(book, y)`` in first-seen (token) order; ``style`` is attached when
-    ``opju_codec.curve_plot_style`` finds the ``8f 01 <style> 83`` tag.
+    ``opju_codec.curve_plot_style`` finds the ``8f 01 <style> 83`` tag
+    (falling back to the reconstructed record's own style byte), and
+    ``color``/``symbol`` when the token's sparse style record decodes
+    (``curve_style_color.py`` -- oracle-verified on the ``Hc2 data``/
+    ``RockingCurve``/``UnpolPlots`` ``curve_style.json`` oracle; auto/
+    undecodable fields stay absent, never defaulted).
     """
     out: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
@@ -273,8 +279,14 @@ def extract_curves_by_id(
             x_col = partner_info[1]
         else:
             x_col = table.book_x.get(book, "A")
-        style = curve_plot_style(b, m.start())
         curve = {"book": book, "x": x_col, "y": y_col}
+        # the token IS the sparse form of the .opj curve-anchor record; the
+        # id chunk's 0x80 tag sits 3 bytes into the regex match
+        record = opju_style_record(b, m.start() + 3)
+        if record is not None:
+            curve.update(style_fields(record))
+        # the shipped 8f-tag reader stays authoritative for line/scatter
+        style = curve_plot_style(b, m.start())
         if style:
             curve["style"] = style
         out.append(curve)
