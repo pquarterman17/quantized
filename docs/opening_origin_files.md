@@ -55,13 +55,14 @@ Import is thorough but not lossless. In particular:
   is correct for the great majority of real plots (log intensity axes,
   reflectivity curves) but can occasionally mis-classify an unusual
   linear axis that happens to span a wide range.
-- **A restored figure resolves to the source workbook, not the exact
-  columns each curve plotted.** Origin doesn't store curve→column
-  bindings in a form quantized has decoded yet, so a multi-curve graph
-  restores axis ranges/scale/titles against the whole book rather than
-  the precise X/Y pair each original curve used. You may need to
-  re-select the right columns after applying a figure with more than one
-  series.
+- **A restored figure binds each curve to the exact columns it plotted.**
+  quantized decodes Origin's per-curve column bindings in both containers
+  (`.opj` and `.opju`), so a multi-curve graph restores each series against
+  its precise book + X/Y columns — including cross-book overlays and the
+  decoded line/scatter style and axis titles. A few structurally
+  unreachable cases still fall back to a whole-book resolution: duplicate-
+  window graphs that carry no binding token, and auto-generated
+  FitLinear/NLFit report graphs that live outside the normal window stream.
 - **Sheets show as flat pseudo-books, not a nested tree.** A workbook's
   second/third/etc. sheet appears as its own `"Book@2"`-style dataset
   rather than nested under the parent book, and only the first sheet

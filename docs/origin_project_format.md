@@ -92,11 +92,13 @@ solved 2026-07-04 (§6.1.1, item 11: every curve's own global column id,
 independently confirmed against that column's own workbook-storage block;
 100% precision, 45/70 combined Moke+XRD refs, the rest structurally
 unreachable) and `.opju` (§6.2.1, item 35: an 8-byte per-curve ordinal token,
-100% precision but recall stays 30.6% on the real corpus). `.opju` still has
-a per-figure attribution gap (which curve belongs to which decoded figure)
-that `.opj` does not — `.opj`'s curves are scoped by the same window-based
-walk the rest of the figure decode already uses, so this is not a shared
-limitation. A native `.opj` writer
+100% precision; the 2026-07-05 global column-id-table rework (§6.2.2) then
+raised `.opju` oracle-covered recall to 100% (36/36) and, via `0a`-framed
+page-span scoping, closed the former per-figure attribution gap — only
+`Graph5` (a duplicate-window graph carrying no binding token) remains a
+documented negative. [Superseded note: earlier text in this section and §11
+still quote the pre-rework 30.6% figure; §6.2.2 and `opju_figure_curves.py`
+are authoritative. See `docs/origin_re/ORIGIN_CONVENTIONS.md` §6.1.] A native `.opj` writer
 round-trips through our own reader but does **not** yet load in real Origin
 (item 34, open); full sheet-hierarchy UI (nested Book→Sheet trees) is out
 of scope by design — extra sheets surface as flat pseudo-books instead.
