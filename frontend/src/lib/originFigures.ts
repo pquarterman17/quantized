@@ -4,17 +4,43 @@
 // is unit-testable without mounting the store — `store/useApp.ts` owns the
 // actual apply-to-plot-state action.
 
-import type { Annotation, Dataset, OriginCurve, OriginFigure, SeriesStyle } from "./types";
+import type { Annotation, Dataset, MarkerShape, OriginCurve, OriginFigure, SeriesStyle } from "./types";
 
-/** Translate a decoded Origin curve style into a plot SeriesStyle. "scatter" →
- *  markers, no connecting line (width 0); "line" → a solid line at the default
- *  width (set explicitly so the figure looks like Origin even if the user's
- *  default trace is Scatter). Returns null when the style is unknown/absent, so
- *  callers leave that series to the default trace rather than forcing a look. */
-export function originCurveSeriesStyle(style: string | undefined): SeriesStyle | null {
-  if (style === "scatter") return { marker: true, width: 0 };
-  if (style === "line") return { width: 1.5 };
-  return null;
+const MARKER_SHAPES: ReadonlySet<string> = new Set([
+  "circle", "square", "triangle", "downtriangle", "diamond", "plus", "cross", "star",
+]);
+
+/** Translate a decoded Origin curve's style fields into a plot SeriesStyle.
+ *  "scatter" → markers, no connecting line (width 0); "line" → a solid line at
+ *  the default width (set explicitly so the figure looks like Origin even if
+ *  the user's default trace is Scatter); a decoded `color` (#RRGGBB) and
+ *  `symbol` (marker shape) apply on top — including when line/scatter itself
+ *  wasn't recovered (e.g. Origin's line+symbol plots still get their color and
+ *  marker glyph). Returns null when nothing was decoded, so callers leave that
+ *  series to the default trace/palette rather than forcing a look. */
+export function originCurveSeriesStyle(
+  curve: Pick<OriginCurve, "style" | "color" | "symbol" | "lineWidth" | "symbolSize"> | undefined,
+): SeriesStyle | null {
+  if (!curve) return null;
+  const out: SeriesStyle = {};
+  if (curve.style === "scatter") {
+    out.marker = true;
+    out.width = 0;
+  } else if (curve.style === "line") {
+    out.width = 1.5;
+  }
+  if (curve.color && /^#[0-9a-fA-F]{6}$/.test(curve.color)) out.color = curve.color;
+  if (curve.symbol && MARKER_SHAPES.has(curve.symbol)) {
+    out.marker = true;
+    out.markerShape = curve.symbol as MarkerShape;
+  }
+  // Not emitted by the backend today (undecoded); consumed here so a future
+  // decode flows through without another wiring pass.
+  if (typeof curve.lineWidth === "number" && curve.lineWidth > 0) out.width = curve.lineWidth;
+  if (typeof curve.symbolSize === "number" && curve.symbolSize > 0 && out.marker) {
+    out.markerSize = curve.symbolSize;
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 /** One figure attached to an import "family" (one file's worth of books).
@@ -92,7 +118,7 @@ export function figureChannelSelection(
     const yIdx = letters.indexOf(curve.y);
     if (yIdx < 0) continue; // e.g. a text/dropped column — skip, never guess
     if (!yKeys.includes(yIdx)) yKeys.push(yIdx);
-    const st = originCurveSeriesStyle(curve.style);
+    const st = originCurveSeriesStyle(curve);
     if (st) styles[yIdx] = st; // line/scatter from the decoded .opju curve record
     if (curve.x && curve.x !== xLetter) {
       const xIdx = letters.indexOf(curve.x);

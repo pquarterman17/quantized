@@ -29,10 +29,25 @@ export interface OriginCurve {
   book: string;
   x: string;
   y: string;
-  /** Plot style decoded from the .opju curve record: "line" (Origin plot:=200)
-   *  or "scatter" (plot:=201). Absent when the importer couldn't recover it
-   *  (all .opj curves, ~8% of .opju curves) — the default trace then stands. */
+  /** Plot style decoded from the curve's style record: "line" (Origin
+   *  plot:=200) or "scatter" (plot:=201). Absent when the importer couldn't
+   *  recover it (unmapped bytes, e.g. Origin's line+symbol) — the default
+   *  trace then stands. */
   style?: "line" | "scatter";
+  /** Origin's plot color as "#RRGGBB", decoded from the curve style record
+   *  (io/origin_project/curve_style_color.py: direct-RGB and classic-palette
+   *  ocolors). Absent for "auto/increment" colors and anything undecodable —
+   *  the palette default then stands, never a guessed color. */
+  color?: string;
+  /** Origin's symbol shape (gallery kinds 1-8 mapped to MarkerShape names:
+   *  square/circle/triangle/...). Absent when the plot has no symbols or the
+   *  kind is unmapped. */
+  symbol?: string;
+  /** Not currently emitted: Origin's on-disk line-width/symbol-size fields
+   *  failed oracle verification (scaled-graph cases), so the backend omits
+   *  them rather than ship wrong values. Typed so a future decode flows. */
+  lineWidth?: number;
+  symbolSize?: number;
 }
 
 export interface OriginFigure {

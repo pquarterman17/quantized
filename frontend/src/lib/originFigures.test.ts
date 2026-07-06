@@ -5,6 +5,7 @@ import {
   doubleYPartner,
   figureChannelSelection,
   figureLabel,
+  originCurveSeriesStyle,
   originFigureAnnotations,
   type OriginFigureEntry,
   resolveFigureDataset,
@@ -95,6 +96,61 @@ describe("resolveFigureDataset", () => {
   });
 });
 
+describe("originCurveSeriesStyle", () => {
+  it("maps scatter/line as before (no color/symbol decoded)", () => {
+    expect(originCurveSeriesStyle({ style: "scatter" })).toEqual({ marker: true, width: 0 });
+    expect(originCurveSeriesStyle({ style: "line" })).toEqual({ width: 1.5 });
+    expect(originCurveSeriesStyle({})).toBeNull();
+    expect(originCurveSeriesStyle(undefined)).toBeNull();
+  });
+
+  it("applies the decoded Origin color on top of the trace style", () => {
+    expect(originCurveSeriesStyle({ style: "scatter", color: "#F14040" })).toEqual({
+      marker: true,
+      width: 0,
+      color: "#F14040",
+    });
+    expect(originCurveSeriesStyle({ style: "line", color: "#1A6FDF" })).toEqual({
+      width: 1.5,
+      color: "#1A6FDF",
+    });
+  });
+
+  it("applies a decoded symbol shape as the marker glyph", () => {
+    expect(
+      originCurveSeriesStyle({ style: "scatter", color: "#515151", symbol: "circle" }),
+    ).toEqual({ marker: true, width: 0, color: "#515151", markerShape: "circle" });
+  });
+
+  it("styles a curve with color/symbol but no line-vs-scatter decode", () => {
+    // e.g. Origin's line+symbol plots: style byte unmapped, but color and
+    // symbol kind decoded — apply both without forcing a trace shape.
+    expect(originCurveSeriesStyle({ color: "#FF8000", symbol: "square" })).toEqual({
+      color: "#FF8000",
+      marker: true,
+      markerShape: "square",
+    });
+    expect(originCurveSeriesStyle({ color: "#FF8000" })).toEqual({ color: "#FF8000" });
+  });
+
+  it("rejects malformed colors and unknown symbol names (fail closed)", () => {
+    expect(originCurveSeriesStyle({ color: "red" })).toBeNull();
+    expect(originCurveSeriesStyle({ color: "#12345" })).toBeNull();
+    expect(originCurveSeriesStyle({ symbol: "blob" })).toBeNull();
+  });
+
+  it("passes through future lineWidth/symbolSize when present", () => {
+    expect(
+      originCurveSeriesStyle({ style: "line", lineWidth: 3 }),
+    ).toEqual({ width: 3 });
+    expect(
+      originCurveSeriesStyle({ style: "scatter", symbol: "circle", symbolSize: 9 }),
+    ).toEqual({ marker: true, width: 0, markerShape: "circle", markerSize: 9 });
+    // symbolSize without any marker means nothing to size — ignored
+    expect(originCurveSeriesStyle({ style: "line", symbolSize: 9 })).toEqual({ width: 1.5 });
+  });
+});
+
 describe("figureChannelSelection", () => {
   const ds = book("b1", "XAS:Co", {
     origin_book: "Co",
@@ -134,6 +190,19 @@ describe("figureChannelSelection", () => {
       xKey: null,
       yKeys: [0, 1],
       styles: { 0: { marker: true, width: 0 }, 1: { width: 1.5 } },
+    });
+  });
+
+  it("carries decoded color + symbol into the channel styles", () => {
+    const fig = figure({
+      curves: [
+        { book: "Co", x: "A", y: "B", style: "scatter", color: "#F14040", symbol: "triangle" },
+      ],
+    });
+    expect(figureChannelSelection(fig, ds)).toEqual({
+      xKey: null,
+      yKeys: [0],
+      styles: { 0: { marker: true, width: 0, color: "#F14040", markerShape: "triangle" } },
     });
   });
 
