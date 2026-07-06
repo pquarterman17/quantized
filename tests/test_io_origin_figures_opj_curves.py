@@ -405,18 +405,19 @@ def _oracle_plots_by_graph(index_path: Path) -> dict[str, list[tuple[str, str]]]
 @pytest.mark.realdata
 @pytest.mark.parametrize(
     ("stem", "n_expected_reachable"),
-    [("Moke", 39), ("XRD", 6)],
+    [("Moke", 39), ("XRD", 12)],
 )
 def test_realdata_curve_bindings_precision_and_recall_floor(
     stem: str, n_expected_reachable: int
 ) -> None:
     """Strict precision (every decoded curve must match the oracle exactly,
-    per graph) plus a recall floor against the achieved 2026-07-04 counts
-    (39/46 Moke -- ``FitLine``/``Residual`` have no locatable window header
-    at all; 6/24 XRD -- only ``Graph1`` is a real graph window, the other 18
-    refs are per-column sparklines with no curve-anchor record anywhere in
-    the file). See ``opj_curves.py``'s module docstring for the full
-    byte-level trail."""
+    per graph) plus a recall floor against the achieved counts (39/46 Moke,
+    2026-07-04 -- ``FitLine``/``Residual`` have no locatable window header at
+    all; 12/20 XRD, re-frozen 2026-07-06 against the replaced corpus file --
+    all 12 real-graph plot refs decode exactly, the other 8 oracle refs are
+    per-column sparkline windows with no curve-anchor record anywhere in the
+    file). See ``opj_curves.py``'s module docstring for the full byte-level
+    trail."""
     src = _CORPUS / f"{stem}.opj"
     index_path = _GT / stem / "index.json"
     if not src.exists() or not index_path.exists():

@@ -461,31 +461,49 @@ def test_realdata_moke_book4_sheet1_metadata_matches_ground_truth() -> None:
 @pytest.mark.realdata
 @pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
 def test_realdata_xrd_column_names_units_from_windows_section() -> None:
-    """The windows-section metadata (RE item 1) reaches the DataStruct."""
+    """The windows-section metadata (RE item 1) reaches the DataStruct.
+
+    Expectations pinned against the live-Origin COM oracle for the 2026-07-06
+    corpus file (``ground_truth/XRD/index.json``): the primary book is Book6
+    (A = X "#Theta" — the long name really is the literal string "#Theta" —
+    B = Y "I", C = Y "dI", all unitless), while Book2 carries the units
+    ("2Theta"/"Degrees", "Intensity"/"arb. units")."""
     ds = import_auto(_CORPUS / "XRD.opj")
-    # every XRD book: A = X "2Theta"/"degrees", B = Y "I"/"arb. units", C = Y "dI"
-    assert ds.metadata["x_column_long"] == "2Theta"
-    assert ds.metadata["x_unit"] == "degrees"
+    assert ds.metadata["x_column_long"] == "#Theta"
+    assert ds.metadata["x_unit"] == ""
     assert ds.labels[0] == "I"
-    assert ds.units[0] == "arb. units"
     assert ds.metadata["column_designations"]["A"] == "X"
     # long book names (source filenames) recovered from window headers
     assert any(
         b["long_name"] != b["name"] for b in ds.metadata["origin_books"]
     )
+    # unit decoding still covered: Book2 is the unit-carrying book
+    from quantized.io.origin_project import read_origin_books
+
+    b2 = next(
+        b
+        for b in read_origin_books(_CORPUS / "XRD.opj")
+        if b.metadata["origin_book"] == "Book2"
+    )
+    assert b2.metadata["x_column_long"] == "2Theta"
+    assert b2.metadata["x_unit"] == "Degrees"
+    assert b2.labels[0] == "Intensity"
+    assert b2.units[0] == "arb. units"
 
 
 @pytest.mark.realdata
 @pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
 def test_realdata_xrd_two_theta_scan() -> None:
     ds = import_auto(_CORPUS / "XRD.opj")
-    # a fine θ–2θ scan: X starts at 20° and increases monotonically over the real
-    # rows (trailing empty cells decode to NaN, not Origin's -1.23e-300 sentinel).
-    assert ds.time[0] == pytest.approx(20.0, abs=0.05)
-    assert ds.time.shape[0] > 1000
+    # a fine θ–2θ scan (Book6, oracle nrows 21154): X starts at 10° and
+    # increases monotonically to 120° with no junk cells. (The NaN-sentinel
+    # tail behaviour the pre-2026-07-06 corpus file pinned here is covered by
+    # the synthetic garbage-cell tests below.)
+    assert ds.time[0] == pytest.approx(10.0, abs=0.05)
+    assert ds.time.shape[0] == 21154
     real = ds.time[np.isfinite(ds.time)]
     assert (np.diff(real) > 0).all()
-    assert np.isnan(ds.time[-1])  # sentinel-filled tail mapped to NaN
+    assert real[-1] == pytest.approx(120.0, abs=0.05)
 
 
 @pytest.mark.realdata
@@ -499,13 +517,23 @@ def test_realdata_figures_extracted_as_plot_states() -> None:
     from quantized.io.origin_project.figures import extract_figures
 
     xrd = extract_figures((_CORPUS / "XRD.opj").read_bytes())
-    assert len(xrd) == 1  # XRD has zero multi-layer windows
-    f = xrd[0]
-    assert f["layer"] == 1
-    assert (f["x_from"], f["x_to"]) == (18.0, 100.0)
+    # 9 real graph windows, all single-layer (oracle: ground_truth/XRD).
+    assert len(xrd) == 9
+    assert all(f["layer"] == 1 for f in xrd)
+    assert {f["name"] for f in xrd} == {
+        "Si-YIG-Co", "Pt311Phi", "Pt1112th-w", "Graph1", "Graph2",
+        "Graph3", "Graph4", "Graph5", "Si-YIG-Py",
+    }
+    f = next(x for x in xrd if x["name"] == "Si-YIG-Co")
+    assert (f["x_from"], f["x_to"]) == (20.0, 90.0)
     assert f["y_log"] is True and f["x_log"] is False  # log-intensity XRD plot
-    assert f["n_curves"] == 3
-    assert any("Si (004)" in a for a in f["annotations"])  # peak label survives
+    assert any("Pt(111)" in a for a in f["annotations"])  # peak label survives
+    g3 = next(x for x in xrd if x["name"] == "Graph3")
+    assert any("Si (004)" in a for a in g3["annotations"])
+    # linear-Y windows read linear, log-Y windows read log (oracle y type 1/2)
+    by_name = {x["name"]: x for x in xrd}
+    assert by_name["Graph4"]["y_log"] is False
+    assert by_name["Graph2"]["y_log"] is True
 
     moke = extract_figures((_CORPUS / "Moke.opj").read_bytes())
     assert len(moke) == 17  # 12 windows, 5 of them carrying a 2nd/3rd/4th layer
@@ -547,20 +575,31 @@ def test_realdata_figures_extracted_as_plot_states() -> None:
 @pytest.mark.realdata
 @pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
 def test_realdata_xrd_axis_titles_and_legend_labels() -> None:
-    """2026-07-05 (axis-title/legend-label routing): XRD.opj's Graph1 has a
-    literal Y title, an escaped 2theta X title, and a legend with two curves
-    hand-relabeled to sample temperatures ("325"/"525") -- see `figures.py`'s
-    module docstring for the byte-level trail."""
+    """Axis-title/legend-label routing, pinned against the live-Origin COM
+    extras oracle (``ground_truth/XRD/graph_extras.json``, 2026-07-06):
+    every graph carries a literal escaped X title (``2\\g(q)`` -> "2θ";
+    Pt311Phi ``\\g(j)`` -> "ϕ"), exactly two carry a literal Y title, the
+    other seven use Origin's auto template ``%(?Y)`` which must stay empty
+    (the frontend falls back to the column long-name, mirroring Origin's own
+    auto-resolution), and the four legend-bearing graphs keep their
+    ``\\l(n) %(n)`` entries verbatim."""
     from quantized.io.origin_project.figures import extract_figures
 
     xrd = extract_figures((_CORPUS / "XRD.opj").read_bytes())
-    assert len(xrd) == 1
-    f = xrd[0]
-    assert "Intensity" in f["y_title"]
-    assert f["x_title"] != ""  # the escaped 2theta string, e.g. "2\g(q...)degrees)"
-    assert f["legend_labels"] == ["325", "%(2)", "525"]
-    # the axis-title text no longer leaks into the flat annotations bucket
-    assert "Intensity" not in " ".join(f["annotations"])
+    by_name = {f["name"]: f for f in xrd}
+    assert by_name["Si-YIG-Co"]["x_title"] == "2θ"
+    assert by_name["Pt311Phi"]["x_title"] == "ϕ"
+    assert all(f["x_title"] != "" for f in xrd)
+    assert by_name["Si-YIG-Co"]["y_title"] == "Intensity (arb. units)"
+    assert by_name["Graph3"]["y_title"] == "Intensity (arb. units)"
+    # %(?Y) auto-titles stay empty — never leaked as literal template text
+    assert by_name["Graph1"]["y_title"] == ""
+    assert by_name["Graph1"]["legend_labels"] == ["%(1)", "%(2)"]
+    # oracle: Si-YIG-Py's legend has a dangling third swatch with no caption
+    assert by_name["Si-YIG-Py"]["legend_labels"] == ["%(1)", "%(2)", ""]
+    assert by_name["Si-YIG-Co"]["legend_labels"] == []
+    # the axis-title text does not leak into the flat annotations bucket
+    assert "Intensity" not in " ".join(by_name["Si-YIG-Co"]["annotations"])
 
 
 def test_figures_absent_on_plain_synthetic(tmp_path) -> None:
@@ -1673,8 +1712,11 @@ def test_many_wrecked_cells_still_reject(tmp_path) -> None:
 
 @pytest.mark.realdata
 def test_realdata_xrd_book6_two_theta_salvaged() -> None:
-    """XRD.opj Book6's 2-theta column (4 stray denormals) imports as the x
-    axis with the junk cells NaN'd — the cross-book Graph1 overlay needs it."""
+    """XRD.opj Book6 (oracle: sheet GGG_YIG60nm, 21154 rows, A/B/C =
+    #Theta/I/dI) imports as x axis 10..120° — the cross-book Graph2/Graph4
+    overlays need it. (The pre-2026-07-06 corpus file's stray-denormal
+    salvage behaviour this test used to pin is covered by the synthetic
+    garbage-cell tests.)"""
     src = _CORPUS / "XRD.opj"
     if not src.exists():
         pytest.skip("Origin corpus not present")
@@ -1686,8 +1728,9 @@ def test_realdata_xrd_book6_two_theta_salvaged() -> None:
     b6 = next(b for b in books if b.metadata["origin_book"] == "Book6")
     assert b6.metadata["x_column_name"] == "A"
     assert list(b6.metadata["origin_column_names"]) == ["B", "C"]
-    assert 89.0 < float(np.nanmin(b6.time)) < 91.0
-    assert 97.0 < float(np.nanmax(b6.time)) < 99.0
+    assert 9.9 < float(np.nanmin(b6.time)) < 10.1
+    assert 119.9 < float(np.nanmax(b6.time)) < 120.1
+    assert b6.time.shape[0] == 21154  # oracle nrows
 
 
 def test_results_log_recovered_from_project(tmp_path) -> None:

@@ -546,11 +546,23 @@ def test_realdata_moke_books_carry_origin_folder_path() -> None:
 
 @pytest.mark.realdata
 @pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
-def test_realdata_xrd_single_folder1() -> None:
+def test_realdata_xrd_folder_tree_matches_com() -> None:
+    """Three sibling folders (Si/GGG/S11) holding books AND graph windows —
+    pinned against the live-Origin ``pe_path`` capture
+    (``ground_truth/XRD/graph_extras.json`` "folders", 2026-07-06)."""
     raw = (_CORPUS / "XRD.opj").read_bytes()
     paths = opj_folder_paths(raw)
-    for book in ("Book1", "Book2", "Book3", "Book4", "Book5", "Book6"):
-        assert paths[book] == ["Folder1"]
+    expected = {
+        "Book1": ["Si"], "Book2": ["Si"], "Book3": ["Si"],
+        "Book4": ["GGG"], "Book5": ["S11"], "Book6": ["GGG"],
+        "Graph1": ["Si"], "Graph2": ["GGG"], "Graph3": ["S11"],
+        "Graph4": ["GGG"], "Graph5": ["Si"],
+        "Si-YIG-Co": ["Si"], "Si-YIG-Py": ["Si"], "SiYIGCo": ["Si"],
+        "Pt311Phi": ["Si"], "Pt1112thw": ["Si"], "Pt1112th-w": ["Si"],
+        "YIG642phi": ["Si"],
+    }
+    for window, folder in expected.items():
+        assert paths[window] == folder, window
 
 
 @pytest.mark.realdata

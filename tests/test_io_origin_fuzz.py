@@ -161,9 +161,13 @@ def test_corpus_sweep_parses_or_raises_cleanly(fname: str) -> None:
 @pytest.mark.realdata
 @pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
 def test_version_anchors_43227_and_43380() -> None:
-    """One pinned value per .opj container version in the corpus."""
-    xrd = read_origin_project(_CORPUS / "XRD.opj")  # CPYA 4.3227
-    assert xrd.time[0] == pytest.approx(20.0, abs=0.05)
+    """One pinned value per .opj container version in the corpus. (The
+    2026-07-06 corpus swap replaced XRD.opj with a CPYA 4.3380 project, so
+    XMCD.opj is now the sole 4.3227 anchor.)"""
+    xmcd = read_origin_project(_CORPUS / "XMCD.opj")  # CPYA 4.3227
+    assert xmcd.time[0] == pytest.approx(760.0048, abs=0.001)
+    xrd = read_origin_project(_CORPUS / "XRD.opj")  # CPYA 4.3380
+    assert xrd.time[0] == pytest.approx(10.0, abs=0.05)
     moke = read_origin_project(_CORPUS / "Moke.opj")  # CPYA 4.3380
     assert moke.time[0] == pytest.approx(-6796.22, abs=0.1)
 

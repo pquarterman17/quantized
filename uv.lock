@@ -1411,7 +1411,7 @@ wheels = [
 
 [[package]]
 name = "quantized"
-version = "0.2.3"
+version = "0.2.8"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },

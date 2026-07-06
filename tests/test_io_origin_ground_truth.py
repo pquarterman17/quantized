@@ -80,17 +80,33 @@ def _is_number(cell: str) -> bool:
     return True
 
 
-def _read_oracle_csv(path: Path) -> tuple[list[str], list[str], list[list[float]]]:
+def _read_oracle_csv(
+    path: Path, columns: list[dict] | None = None
+) -> tuple[list[str], list[str], list[list[float]]]:
     """(long_names, units, columns) from an expASC CSV; non-numeric cells → NaN.
 
-    Row 0 is long-names, row 1 is units. Some Origin exports carry extra
-    header rows (a sample-name row like ``,,Co``); drop any fully-non-numeric
-    row so the data columns don't shift.
+    expASC's header height is VARIABLE: row 0 is always long-names, but the
+    units row is only written when some column has a unit, and the comments
+    row only when some column has a comment (observed live 2026-07-06: a
+    unitless XRD sheet exports name-row-then-data, eating the first data row
+    under the old fixed two-row assumption). ``index.json`` records units and
+    comments authoritatively, so when the book's column dicts are passed the
+    header height is *derived* from them — never guessed from row content
+    (a comments row can be fully numeric, e.g. Moke's ``525`` sample labels,
+    so content-sniffing cannot distinguish it from data). Without ``columns``
+    the legacy two-row layout is assumed.
     """
     with path.open(encoding="utf-8-sig", newline="") as fh:
         rows = list(csv.reader(fh))
-    names, units = rows[0], rows[1]
-    data = [row for row in rows[2:] if any(_is_number(c) for c in row)]
+    names = rows[0]
+    if columns is None:
+        n_header, units = 2, rows[1]
+    else:
+        has_units = any(c.get("unit", "") for c in columns)
+        has_comments = any(c.get("comment", "") for c in columns)
+        n_header = 1 + has_units + has_comments
+        units = rows[1] if has_units else [""] * len(names)
+    data = [row for row in rows[n_header:] if any(_is_number(c) for c in row)]
     cols: list[list[float]] = [[] for _ in names]
     for row in data:
         for j in range(len(names)):
@@ -172,7 +188,9 @@ def test_reader_matches_origin_ground_truth(stem: str) -> None:
             for sheet in sheets:
                 cn = sheet.get("csv")
                 if cn and (_GT / stem / cn).exists():
-                    oracle_cols.extend(_read_oracle_csv(_GT / stem / cn)[2])
+                    oracle_cols.extend(
+                        _read_oracle_csv(_GT / stem / cn, sheet.get("columns"))[2]
+                    )
             if not oracle_cols:
                 continue
             for cand in candidates:
@@ -189,7 +207,9 @@ def test_reader_matches_origin_ground_truth(stem: str) -> None:
         csv_name = sheet1.get("csv")
         if not csv_name or not (_GT / stem / csv_name).exists():
             continue
-        names, units, cols = _read_oracle_csv(_GT / stem / csv_name)
+        names, units, cols = _read_oracle_csv(
+            _GT / stem / csv_name, sheet1.get("columns")
+        )
         for j, oracle_col in enumerate(cols):
             assert any(_column_matches(oracle_col, c) for c in candidates), (
                 f"{stem}/{name}: oracle column {j} ({names[j]!r}) matches no "
