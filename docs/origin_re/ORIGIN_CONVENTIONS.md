@@ -1031,6 +1031,7 @@ rather than shipped wrong.
 | **Curve color** (type-1 RGB + type-0 24-colour palette, 0-based disk) | both (shared 519-byte record) | 349-plot oracle, 0 wrong | `1347d15` |
 | **Curve symbol kind** + line-vs-scatter (`c8`/`c9` @76) | both | 92/92 reachable plots | `1347d15` |
 | **Curve line-width (u16@21) + symbol-size (u16@25)**, 1/500 pt | both (shared record) | 92/92 oracle-exact incl. resized-graph baked values | (2026-07-06) |
+| **Auto/increment colours** (`0x81010151` placeholder + group role @6 -> `SYSTEM_COLOR_LIST[k]`) | both (shared record) | render-pixel oracle, 4 by-construction specimens, k=0..11 | (2026-07-06) |
 | Axis titles (XB/YL/YR) + legend labels + annotation text | both | COM text oracle | (earlier) |
 | Annotation positions (layer-fraction, y-from-top) | both | 5/5 oracle-exact (<6e-17) | `170b46e` |
 | Notes pages + structured results-log records | both | corpus | (earlier) |
@@ -1049,9 +1050,21 @@ Ordered by value. Each names the decode path so it can be picked up cold.
    LabTalk reports — a graph resize is BAKED into the stored value, so no
    factor field exists. Isolated by an exhaustive per-offset search across
    the 31 width-varying oracle plots; verified 92/92 both containers.
-2. **Auto/increment colours** (37 oracle plots + error-bar curves) — stored
-   as sentinel `0xFFFFFFF7`; the effective colour is Origin replaying its
-   increment list by plot order. Decodable by replicating that ordering.
+2. ~~**Auto/increment colours**~~ **CLOSED 2026-07-06** (the tractable
+   half) — see 13.1. An increment placeholder is the EXACT u32
+   `0x81010151` in the colour field (a third ocolor type, distinct from
+   the plain `0xFFFFFFF7` auto sentinel); record byte 6 carries the group
+   role (`0x09` standalone / `0x29` head / `0x19` member); a grouped
+   placeholder takes `SYSTEM_COLOR_LIST[k]` (k = within-group index,
+   verified k=0..11, no wrap), an ungrouped one always takes list[0].
+   Pinned by-construction (style_group/style_ungrouped/style_group12/
+   style_mixed specimens) against a RENDER-PIXEL oracle — the COM
+   `layer.plotN.color` property only reports the group-level colour, so
+   `expGraph` PNG line-sampling is the only per-member ground truth.
+   Fail-closed remainder: any OTHER `0x81` payload (a custom colour list —
+   Origin-side theme state), members past the 12 verified entries, and the
+   plain `0xFFFFFFF7` sentinel (error-bar inherit; corpus oracle reports
+   black/inherited) all stay `None`, never guessed.
 3. **Legend position** — oracle-ready now (`Legend.x`/`Legend.y` via COM,
    same graphic-object model as annotations, `exist("Legend",16)`). Labels
    are decoded; only placement is missing.

@@ -25,6 +25,8 @@ import pytest
 
 from quantized.io.origin_project.curve_style_color import (
     ORIGIN_PALETTE,
+    SYSTEM_COLOR_LIST,
+    apply_increment_colors,
     ocolor_to_rgb,
     opju_style_record,
     style_fields,
@@ -165,6 +167,68 @@ def test_style_fields_515_byte_variant_reads_the_same_offsets() -> None:
     492 -- all style fields sit at identical offsets."""
     rec = _record(kind=3, style=0xC9, symbol_color=0x01515151, size=515)
     assert style_fields(rec) == {"style": "scatter", "symbol": "triangle", "color": "#515151"}
+
+
+# ── synthetic: auto/increment colour resolution (§13.2 #2) ────────────────────
+
+_PLACEHOLDER = 0x81010151  # the exact increment-placeholder u32 (pixel-verified)
+
+
+def _inc_record(role: int, line_color: int = _PLACEHOLDER) -> bytes:
+    buf = bytearray(_record(kind=0, style=0xC8, line_color=line_color))
+    buf[6] = role
+    return bytes(buf)
+
+
+def _curves_for(records: list[bytes]) -> list[dict[str, str | float]]:
+    curves: list[dict[str, str | float]] = [dict(style_fields(r)) for r in records]
+    apply_increment_colors(curves, list(records))
+    return curves
+
+
+def test_increment_group_walks_the_system_color_list() -> None:
+    """head (0x29) + members (0x19) with the 0x81010151 placeholder take
+    SYSTEM_COLOR_LIST[0..k] in plot order (render-pixel oracle:
+    style_group/style_group12 specimens)."""
+    recs = [_inc_record(0x29)] + [_inc_record(0x19) for _ in range(3)]
+    colors = [c.get("color") for c in _curves_for(recs)]
+    assert colors == list(SYSTEM_COLOR_LIST[:4])
+
+
+def test_increment_standalone_takes_first_list_color_and_groups_reset() -> None:
+    """An ungrouped placeholder (role 0x09) always renders the FIRST list
+    colour (style_ungrouped specimen: all 8 curves #515151); a standalone
+    plot also ends any open group, and a following head restarts at 0."""
+    recs = [
+        _inc_record(0x29), _inc_record(0x19),  # group: [0], [1]
+        _inc_record(0x09),                     # standalone: [0]
+        _inc_record(0x29), _inc_record(0x19),  # new group: [0], [1]
+    ]
+    colors = [c.get("color") for c in _curves_for(recs)]
+    assert colors == [
+        SYSTEM_COLOR_LIST[0], SYSTEM_COLOR_LIST[1],
+        SYSTEM_COLOR_LIST[0],
+        SYSTEM_COLOR_LIST[0], SYSTEM_COLOR_LIST[1],
+    ]
+
+
+def test_increment_fail_closed_cases() -> None:
+    """Never guessed: an explicit colour is untouched, a non-placeholder
+    0x81-typed value stays unresolved, an unrecognized role byte abstains,
+    a member without a preceding head abstains, and members past the
+    12-entry verified list stay unresolved (no wrap-guess)."""
+    explicit = _inc_record(0x29, line_color=14)  # palette orange, in a group
+    assert _curves_for([explicit])[0]["color"] == "#FF8000"
+    foreign = _inc_record(0x29, line_color=0x81FF0000)  # unknown 0x81 payload
+    assert "color" not in _curves_for([foreign])[0]
+    unknown_role = _inc_record(0x42)
+    assert "color" not in _curves_for([unknown_role])[0]
+    orphan_member = _inc_record(0x19)  # member with no head
+    assert "color" not in _curves_for([orphan_member])[0]
+    big_group = [_inc_record(0x29)] + [_inc_record(0x19) for _ in range(13)]
+    colors = [c.get("color") for c in _curves_for(big_group)]
+    assert colors[:12] == list(SYSTEM_COLOR_LIST)
+    assert colors[12] is None and colors[13] is None
 
 
 # ── synthetic: the CPYUA sparse-stream reconstructor ──────────────────────────
@@ -404,3 +468,38 @@ def test_realdata_cross_container_style_matches_opj_and_opju() -> None:
                 )
             checked += 1
     assert checked >= 15, f"only {checked} curves cross-checked -- corpus changed?"
+
+
+@realdata
+def test_realdata_style_specimens_resolve_increment_colors() -> None:
+    """The by-construction style specimens (generate_specimens_style.py) vs
+    their RENDER-PIXEL oracle (expGraph PNG line-colour sampling — the COM
+    color property only reports the group-level colour):
+
+    * ``style_group``: 8 grouped placeholders -> SYSTEM_COLOR_LIST[0..7];
+    * ``style_group12``: 12 -> the full verified list, no wrap;
+    * ``style_ungrouped``: 8 standalone placeholders -> all list[0];
+    * ``style_mixed``: 3 grouped + explicit palette-15/16 curves untouched.
+    """
+    from quantized.io.origin_project.figures_opju import extract_figures_opju
+
+    spec = _TD / "specimens"
+    cases = {
+        "style_group": list(SYSTEM_COLOR_LIST[:8]),
+        "style_group12": list(SYSTEM_COLOR_LIST),
+        "style_ungrouped": [SYSTEM_COLOR_LIST[0]] * 8,
+        "style_mixed": list(SYSTEM_COLOR_LIST[:3]) + ["#FF8000", "#8000FF"],
+    }
+    checked = 0
+    for stem, want in cases.items():
+        src = spec / f"{stem}.opju"
+        if not src.exists():
+            continue
+        figs = extract_figures_opju(src.read_bytes())
+        fig = next((f for f in figs if f.get("curves")), None)
+        assert fig is not None, f"{stem}: no curves decoded"
+        got = [c.get("color") for c in fig["curves"]]
+        assert got == want, f"{stem}: {got} != {want}"
+        checked += 1
+    if checked == 0:
+        pytest.skip("style specimens not present on this machine")

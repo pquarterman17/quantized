@@ -100,7 +100,11 @@ from __future__ import annotations
 import re
 from typing import NamedTuple
 
-from quantized.io.origin_project.curve_style_color import opju_style_record, style_fields
+from quantized.io.origin_project.curve_style_color import (
+    apply_increment_colors,
+    opju_style_record,
+    style_fields,
+)
 from quantized.io.origin_project.opju_codec import curve_plot_style
 from quantized.io.origin_project.tree_opju import iter_opju_windows
 
@@ -256,6 +260,7 @@ def extract_curves_by_id(
     undecodable fields stay absent, never defaulted).
     """
     out: list[dict[str, str | float]] = []
+    records: list[bytes | None] = []
     seen: set[tuple[str, str]] = set()
     for m in _CURVE_TOKEN.finditer(b, start, end):
         width = m.group(1)[0]
@@ -290,4 +295,8 @@ def extract_curves_by_id(
         if style:
             curve["style"] = style
         out.append(curve)
+        records.append(record)
+    # auto/increment placeholders resolve by group role + plot order
+    # (curve_style_color.apply_increment_colors, pixel-oracle-verified)
+    apply_increment_colors(out, records)
     return out

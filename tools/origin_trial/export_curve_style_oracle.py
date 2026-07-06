@@ -37,7 +37,17 @@ import win32com.client as wc
 
 CORPUS = Path(r"C:\Users\patri\OneDrive\Coding\git\test-data\origin")
 GT = CORPUS / "specimens" / "ground_truth"
-FILES = ["hc2convert.opj", "Hc2 data.opju", "RockingCurve.opju", "UnpolPlots.opju"]
+FILES = [
+    "hc2convert.opj",
+    "Hc2 data.opju",
+    "RockingCurve.opju",
+    "UnpolPlots.opju",
+    # style-decode specimens (auto/increment colour work, 2026-07-06)
+    "specimens/style_group.opju",
+    "specimens/style_ungrouped.opju",
+    "specimens/style_mixed.opju",
+    "specimens/curves_grouped.opju",
+]
 MAX_PLOTS = 60
 _SENTINEL = -987654.0
 

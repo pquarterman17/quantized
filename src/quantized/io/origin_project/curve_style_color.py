@@ -91,7 +91,15 @@ from __future__ import annotations
 
 import struct
 
-__all__ = ["ORIGIN_PALETTE", "ocolor_to_rgb", "opju_style_record", "raw_color", "style_fields"]
+__all__ = [
+    "ORIGIN_PALETTE",
+    "SYSTEM_COLOR_LIST",
+    "apply_increment_colors",
+    "ocolor_to_rgb",
+    "opju_style_record",
+    "raw_color",
+    "style_fields",
+]
 
 _RECORD_LEN = 519  # the .opj curve-anchor record length (515 variant differs past 492)
 _AUTO = 0xFFFFFFF7  # the on-disk "auto/increment" color sentinel (-9 as i32)
@@ -155,6 +163,38 @@ _SYMBOL_SHAPES = {
 # Same byte table opju_codec._STYLE_BYTES validated (fig_pairs oracle);
 # 0xca/0xe7/0xe9 also occur in the corpus but are unmapped -- never guessed.
 _CONNECT_STYLE = {0xC8: "line", 0xC9: "scatter"}
+
+# ── auto/increment colours (2026-07-06, §13.2 #2) ────────────────────────────
+#
+# A curve whose colour field holds the EXACT u32 ``0x81010151`` is an
+# "increment placeholder": Origin resolves it at render time by walking its
+# active colour list. Pinned by-construction (style_group/style_ungrouped/
+# style_group12 specimens, generate_specimens_style.py) with a RENDER-PIXEL
+# oracle (expGraph PNG, sampled line colours — the COM ``layer.plotN.color``
+# property reports only the group-level colour, so pixels are the only
+# per-member ground truth):
+#
+# * record byte 6 carries the plot's group role: ``0x09`` standalone,
+#   ``0x29`` group head, ``0x19`` group member (byte-diff of the grouped vs
+#   ungrouped specimens, otherwise identical records).
+# * a GROUPED placeholder takes SYSTEM_COLOR_LIST[k], k = index within its
+#   group (verified for k=0..11, twelve distinct colours, no wrap);
+# * an UNGROUPED placeholder always renders the list's FIRST colour.
+#
+# SYSTEM_COLOR_LIST is Origin's default "System Color List" (2018+); the 12
+# entries below are the pixel-verified ones. A project using a CUSTOM colour
+# list is Origin-side state we cannot see — any 0x81-typed value OTHER than
+# the observed 0x81010151 payload is left unresolved (None) rather than
+# guessed, and members past index 11 are likewise left unresolved.
+# Values are calibrated/verified — do not "fix".
+SYSTEM_COLOR_LIST: tuple[str, ...] = (
+    "#515151", "#F14040", "#1A6FDF", "#37AD6B", "#B177DE", "#CC9900",
+    "#00CBCC", "#7D4E4E", "#8E8E00", "#FB6501", "#6699CC", "#6FB802",
+)  # fmt: skip
+
+_INCREMENT_PLACEHOLDER = 0x81010151
+_GROUP_ROLE_OFF = 6
+_GROUP_ROLES = {0x09: "standalone", 0x29: "head", 0x19: "member"}
 
 
 def ocolor_to_rgb(raw: int) -> str | None:
@@ -225,6 +265,48 @@ def style_fields(record: bytes) -> dict[str, str | float]:
         if rgb:
             out["color"] = rgb
     return out
+
+
+def _effective_color_field(record: bytes) -> int | None:
+    """The raw u32 of the plot's effective colour field (symbol colour for
+    symbol plots, line colour otherwise), or ``None`` on a short record."""
+    if len(record) < _LINE_COLOR_OFF + 4:
+        return None
+    off = _SYMBOL_COLOR_OFF if record[_SYMBOL_KIND_OFF] > 0 else _LINE_COLOR_OFF
+    return int(struct.unpack_from("<I", record, off)[0])
+
+
+def apply_increment_colors(
+    curves: list[dict[str, str | float]], records: list[bytes | None]
+) -> None:
+    """Resolve auto/increment placeholder colours in-place for one layer's
+    curves (plot order). See the SYSTEM_COLOR_LIST block comment for the
+    verified rule. ``records[i]`` is curve ``i``'s style record (``None``
+    when unavailable). Only a curve with NO decoded ``color``, whose
+    effective colour field is the exact ``0x81010151`` placeholder, and
+    whose group role byte is recognized, is filled — everything else is
+    left untouched (never guessed).
+    """
+    group_index: int | None = None  # None = not inside a group
+    for curve, record in zip(curves, records, strict=True):
+        if record is None or len(record) <= _GROUP_ROLE_OFF:
+            group_index = None
+            continue
+        role = _GROUP_ROLES.get(record[_GROUP_ROLE_OFF])
+        if role == "head":
+            group_index = 0
+        elif role == "member":
+            group_index = group_index + 1 if group_index is not None else None
+        else:  # standalone or unrecognized: any open group ends here
+            group_index = None
+        if "color" in curve or _effective_color_field(record) != _INCREMENT_PLACEHOLDER:
+            continue
+        if role == "standalone":
+            curve["color"] = SYSTEM_COLOR_LIST[0]
+        elif role in ("head", "member") and group_index is not None:
+            if group_index < len(SYSTEM_COLOR_LIST):
+                curve["color"] = SYSTEM_COLOR_LIST[group_index]
+            # past the verified list: leave unresolved, never wrap-guess
 
 
 def opju_style_record(b: bytes, tag_pos: int) -> bytes | None:

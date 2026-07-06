@@ -1184,7 +1184,17 @@ def test_realdata_fig_pairs_curve_bindings() -> None:
             "lineWidth": 0.5,
             "symbolSize": 9.0,
         },
-        {"book": "FBook", "x": "A", "y": "B", "style": "line", "lineWidth": 0.5, "symbolSize": 9.0},
+        # graph4's line plot is a standalone auto/increment placeholder ->
+        # resolves to SYSTEM_COLOR_LIST[0] (render-pixel-verified rule)
+        {
+            "book": "FBook",
+            "x": "A",
+            "y": "B",
+            "style": "line",
+            "lineWidth": 0.5,
+            "symbolSize": 9.0,
+            "color": "#515151",
+        },
     ]
     for i, (f, want) in enumerate(zip(figs, expected, strict=True)):
         assert f["curves"] == [want], f"fig_pairs graph{i + 1}: curves={f['curves']}"
