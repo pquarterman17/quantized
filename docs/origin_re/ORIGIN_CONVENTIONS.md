@@ -1207,9 +1207,15 @@ wrong answer); they are listed so the drop cases are known, not rediscovered:
     kind FIELD reads 1..8 exactly; the glyph-name mapping follows Origin's
     documented gallery order. BONUS discovery (new OPEN): that specimen's
     graph stores a HYBRID axis record (specimen-form layout with real-form
-    value tokens — produced by post-plot property edits) that neither
-    parser accepts, so the graph yields no figure; specimen retained for
-    the future fix (fail-closed today: no figure, never a wrong one).
+    value tokens — produced by post-plot `layer.plotN.*` edits). CLOSED
+    2026-07-06 (§13.2 #13): a last-resort `parse_hybrid_record` (gated
+    behind BOTH the specimen and real parsers failing, so it can't perturb
+    either) decodes the spans with the oracle-validated real-form token
+    machinery. `symbol_kinds.opju` now yields X=0.85..6.15, Y=5..95, both
+    linear, 8 curves — exact vs the COM oracle; 22 real-corpus graph
+    layers show zero range drift. Split
+    `opju_axis_real_form.py`→`opju_axis_specimen_form.py` to stay under the
+    500-line ceiling.
 16. ~~**`opju_codec._records` pre-`ffff` varint width**~~ **CLOSED
     2026-07-06** — the audit's low-confidence hunch was REAL and severe: a
     120k-row column stores a 3-byte LEB128 varint (`c0 a9 07` = 120000)
