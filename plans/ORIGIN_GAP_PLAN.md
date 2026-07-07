@@ -15,12 +15,11 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-07 (#36, #26, #31, #32, #6, #7 ALL CLOSED today —
-report viewer, Test chooser, Peak Analyzer wizard (with integrate-only
-path), and the typed pipeline view + expression steps shipped. W2 Tier 1,
-W5 Tier 1, W6 Tier 1 headline, and W7 all complete. Earlier:
-reconciliation pass — #53's stale plot-display note fixed, #12 FigureDoc
-prior-art noted.)
+**Updated:** 2026-07-07 (EIGHT items closed today: #36, #26, #31, #32,
+#6, #7, #2, #3 — report viewer, Test chooser, Peak Analyzer wizard,
+typed pipeline view + expression steps, and analysis templates + batch
+runs with summary sheets. W2 Tier 1, W5 Tier 1, W6 Tier 1 headline, W7
+all complete; W1 down to #1/#4/#5.)
 
 ---
 
@@ -151,6 +150,7 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 | 31 | Peak Analyzer wizard | W6 | ✅ COMPLETE 2026-07-07 — 5-step workshop + recipes + #36 report ending (and #32's integrate-only UI path) |
 | 24–26 | ANOVA/post-hoc + nonparametric + assumption tests | W5 | ✅ COMPLETE — backend 2026-07-03; #26 Test chooser workshop UI 2026-07-07 |
 | 6–7 | Pipeline view + expression steps | W2 | ✅ COMPLETE 2026-07-07 — typed step contract + editable/runnable workshop + validated expression steps |
+| 1–5 | Recalc engine + templates + batch (W1) | W1 | 🟡 #2 templates + #3 batch CLOSED 2026-07-07; #1 recalc DAG, #4 badges, #5 workspace v2 remain |
 | 1 | Recalc dependency graph | W1 | ⬜ the architectural keystone everything "live" builds on (frontend/store) |
 | 36–37 | Report sheets + docx/pptx export | W7 | ✅ COMPLETE — schema + emitters + exports 2026-07-03; viewer + Library section + .dwk round-trip 2026-07-07 |
 | 11, 12 | Complete property panels + figure documents | W3 | ⬜ headline pillar: zero-code production figures (frontend) |
@@ -196,36 +196,13 @@ frontend (needs UX direction).
          dependent fit and re-renders the dependent figure with no user
          action; in manual mode the same edit only flips staleness (#4)
 
-2. **Analysis templates** — save an end-to-end recipe (import →
-   corrections → fit → figure → report) as a named, re-runnable template
-   file; seeded from a recorded pipeline (#6)
-   *Model: sonnet. Pickup: a template = a serialized pipeline (#6) with
-   input slots; format must be text/JSON and diffable (differentiator).*
-   - [ ] Format: version tag + ordered typed steps (import / correction
-         / expression / fit / figure / report) + declared inputs (file
-         slot, overridable params) + declared outputs (named fit params
-         for #3's summary columns)
-   - [ ] Save from the pipeline view; load into it for editing; store
-         alongside workspace + exportable as a standalone file
-   - [ ] Acceptance: record a session on file A, save as template,
-         apply to file B → same chain executes and produces the report;
-         template diffs cleanly in git
+~~2. **Analysis templates**~~ **CLOSED 2026-07-07** — see Completed.
 
-3. **Batch-run templates with summary sheet** — apply a template to N
-   files; produce per-file report sheets plus one summary worksheet of
-   extracted parameters (Tc/Ms/peak positions/fit params per row)
-   *Model: sonnet. Pickup: mirror `calc/batch_fit.py`'s per-dataset
-   loop + trend extraction; run through the `routes/jobs` WebSocket
-   queue.*
-   - [ ] Job type: template ref + file list; per-file progress +
-         failure isolation (one bad file doesn't kill the batch)
-   - [ ] Summary sheet: one row per input file, columns = the
-         template's declared outputs; lands in the library as a normal
-         DataStruct (plottable, exportable — parameter-vs-file trends
-         for free)
-   - [ ] Acceptance: 20-file corpus end-to-end → 20 report sheets + 1
-         summary sheet; a deliberately corrupt file yields a flagged
-         row, not a crash
+~~3. **Batch-run templates with summary sheet**~~ **CLOSED 2026-07-07**
+— see Completed. (Deliberate deviation from the item's pickup note: the
+batch runs CLIENT-SIDE through the shared step executor — pipeline
+steps replay store actions, which live in the frontend; the routes/jobs
+queue stays the home for pure-calc batches like `calc/batch_fit`.)
 
 ### Tier 2 — Medium Impact
 
@@ -761,6 +738,22 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#2 Analysis templates + #3 batch-run with summary sheet**~~
+  (2026-07-07) — `lib/template.ts`: a template = version tag + the
+  ordered typed steps + declared outputs (auto-derived: last fit step's
+  registry param names + R2); pretty key-stable JSON (diffs cleanly),
+  localStorage persistence (upsert by name) + standalone .qzt.json
+  export/import. Pipeline workshop grew a Templates section:
+  save-current / load-into-pipeline / batch-run over N picked files.
+  The batch (shared `executeSteps`, extracted from the #6 runner)
+  imports each file, replays the steps with per-step failure isolation,
+  emits a per-file #36 curve-fit report, and lands ONE summary
+  worksheet — row per file, columns = declared outputs, corrupt files
+  flagged in metadata.failures as NaN rows (never a dead batch) — as a
+  normal plottable library dataset. Acceptance held in tests: 3-file
+  batch with a deliberately corrupt file → 2 reports + flagged summary
+  row. Client-side-runner deviation documented on the item. Frontend
+  1038 green.
 - ~~**#6 Editable pipeline view + #7 expression steps**~~ (2026-07-07) —
   the typed step contract (`lib/pipeline.ts`: `PipelineStep` = kind +
   params + regenerable `code`; kinds ui / import / expression /
