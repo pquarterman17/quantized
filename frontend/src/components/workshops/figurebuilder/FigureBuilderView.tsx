@@ -3,6 +3,7 @@
 // a live, server-rendered WYSIWYG preview on the right. Thin: all state + the
 // preview/export wiring live in the hook.
 
+import PropertyPanels from "./PropertyPanels";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, NumberField, Select } from "../../primitives";
 import { useApp } from "../../../store/useApp";
@@ -56,6 +57,8 @@ export default function FigureBuilderView() {
               placeholder="auto"
               onChange={(e) => f.setYLabel(e.target.value)}
             />
+            {/* #11: every export property, panel-grouped, one config object */}
+            <PropertyPanels overrides={f.overrides} setOverrides={f.setOverrides} />
             <Button variant="primary" onClick={f.exportNow} style={{ marginTop: 6 }}>
               Export {f.fmt.toUpperCase()}
             </Button>

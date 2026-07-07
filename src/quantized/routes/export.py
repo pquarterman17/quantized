@@ -219,6 +219,9 @@ class FigureRequest(BaseModel):
     y_label: str | None = None
     # Per-series style (aligned to the plotted y_keys order): color/width/line/marker.
     series_styles: list[dict[str, Any] | None] | None = None
+    # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
+    # limits / margins / grid / annotations — validated in calc.
+    overrides: dict[str, Any] | None = None
     filename: str = "figure"
 
 
@@ -278,6 +281,7 @@ def export_figure(req: FigureRequest) -> Response:
             style=req.style,
             series_styles=req.series_styles,
             dpi=dpi,
+            overrides=req.overrides,
         )
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { exportFigure, type FigureSpec, renderFigureBlob } from "../../../lib/api";
+import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
 import { buildExportStyles } from "../../../lib/exportStyles";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -38,6 +39,8 @@ export function useFigureBuilder() {
   const [title, setTitle] = useState("");
   const [xLabel, setXLabel] = useState("");
   const [yLabel, setYLabel] = useState("");
+  // Property-panel overrides (#11): one config object, folded into the spec.
+  const [overrides, setOverrides] = useState<FigureOverrides>({});
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -55,12 +58,13 @@ export function useFigureBuilder() {
       x_log: xLog,
       y_log: yLog,
       style,
+      overrides: compactOverrides(overrides),
       title: title.trim(),
       x_label: xLabel.trim() || undefined,
       y_label: yLabel.trim() || undefined,
       series_styles: buildExportStyles(plotted, seriesStyles),
     };
-  }, [active, yKeys, xKey, xLog, yLog, style, title, xLabel, yLabel, seriesStyles]);
+  }, [active, yKeys, xKey, xLog, yLog, style, title, xLabel, yLabel, seriesStyles, overrides]);
 
   // Debounced PNG preview — re-renders on any spec change.
   useEffect(() => {
@@ -127,5 +131,7 @@ export function useFigureBuilder() {
     error,
     busy,
     exportNow,
+    overrides,
+    setOverrides,
   };
 }

@@ -4,6 +4,7 @@
 import type { SubstrateInfo } from "../components/workshops/calculators/SubstratesTab";
 import { postDownload } from "./download";
 import type { ExportSeriesStyle } from "./exportStyles";
+import type { FigureOverrides } from "./figureOverrides";
 import type { ReportSheet } from "./report";
 import type { Recommendation } from "./statschooser";
 import type {
@@ -1061,6 +1062,8 @@ export interface FigureSpec {
   x_label?: string;
   y_label?: string;
   series_styles?: (ExportSeriesStyle | null)[];
+  /** Property-panel overrides (#11): fonts/legend/ticks/spines/limits/margins. */
+  overrides?: FigureOverrides | null;
   filename?: string;
 }
 

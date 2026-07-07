@@ -66,6 +66,7 @@ def render_figure(
     width_in: float | None = None,
     height_in: float | None = None,
     dpi: int = 200,
+    overrides: Mapping[str, Any] | None = None,
 ) -> bytes:
     """Render ``series`` (each ``(label, y)``) against ``x`` to image bytes.
 
@@ -76,28 +77,40 @@ def render_figure(
     ``x_label`` / ``y_label`` are optional (empty = omit). ``series_styles``
     (aligned 1:1 with ``series``) carries per-series color/width/line/marker so
     the export matches the on-screen plot. A legend is drawn only for multiple
-    series. Raises ``ValueError`` on an unknown format or style.
+    series. ``overrides`` (gap #11 — every property UI-reachable) patches the
+    preset per-figure: see :func:`_apply_overrides`; unknown keys are ignored,
+    invalid values raise ``ValueError``. Raises ``ValueError`` on an unknown
+    format or style.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
     st = figure_style(style)
+    ov = dict(overrides or {})
+    _validate_overrides(ov)
 
     # rc_context scopes typography to this render; the named font is given a
     # generic fallback so matplotlib stays silent when Helvetica/Arial/Times
     # aren't installed on the host. (matplotlib's RcParams Literal-key type is
     # impractical with the dynamic font.<generic> key, hence the targeted ignore.)
     fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
+    font_size = float(ov.get("font_size", st.font_size))
+    font_name = str(ov.get("font_name", st.font_name))
+    tick_dir = str(ov.get("ticks", {}).get("dir", st.tick_dir))
     rc: dict[str, Any] = {
         "font.family": st.font_generic,
-        f"font.{st.font_generic}": [st.font_name, fallback],
-        "font.size": st.font_size,
-        "axes.labelsize": st.font_size,
-        "axes.titlesize": st.title_font_size,
-        "xtick.labelsize": st.font_size,
-        "ytick.labelsize": st.font_size,
-        "xtick.direction": st.tick_dir,
-        "ytick.direction": st.tick_dir,
+        f"font.{st.font_generic}": [font_name, fallback],
+        "font.size": font_size,
+        "axes.labelsize": font_size,
+        "axes.titlesize": float(ov.get("title_size", st.title_font_size)),
+        "xtick.labelsize": font_size,
+        "ytick.labelsize": font_size,
+        "xtick.direction": tick_dir,
+        "ytick.direction": tick_dir,
     }
+    tick_len = ov.get("ticks", {}).get("len")
+    if tick_len is not None:
+        rc["xtick.major.size"] = float(tick_len)
+        rc["ytick.major.size"] = float(tick_len)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
 
     xv: NDArray[np.float64] = np.asarray(x, dtype=float)
@@ -121,16 +134,115 @@ def render_figure(
             if not st.box_on:
                 ax.spines["top"].set_visible(False)
                 ax.spines["right"].set_visible(False)
-            if len(series) > 1:
+            if len(series) > 1 and "legend" not in ov:
                 # All presets place the legend at "best" (matplotlib's default loc).
                 ax.legend(frameon=st.legend_box, fontsize=st.legend_font_size)
             if st.grid_alpha > 0:
                 ax.grid(True, alpha=st.grid_alpha)
             else:
                 ax.grid(False)
-            fig.tight_layout()
+            _apply_overrides(fig, ax, st, ov, n_series=len(series))
+            if not ov.get("margins"):
+                fig.tight_layout()
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=dpi)
             return buf.getvalue()
         finally:
             plt.close(fig)
+
+# ── Figure property overrides (gap #11) ─────────────────────────────────────
+# The one config object behind the property panels: every export property the
+# UI exposes lands here, patching the preset per-figure. Plain dict (calc stays
+# pydantic-free); unknown keys are ignored so old clients keep working.
+
+_LEGEND_LOCS = frozenset({
+    "best", "upper right", "upper left", "lower left", "lower right",
+    "right", "center left", "center right", "lower center", "upper center",
+    "center", "outside right", "outside top",
+})
+
+
+def _validate_overrides(ov: Mapping[str, Any]) -> None:
+    """Raise ``ValueError`` on invalid override values (bad keys are ignored)."""
+    legend = ov.get("legend")
+    if legend is not None:
+        loc = legend.get("loc")
+        if loc is not None and loc not in _LEGEND_LOCS:
+            raise ValueError(f"legend loc must be one of {sorted(_LEGEND_LOCS)}")
+    ticks = ov.get("ticks")
+    if ticks is not None:
+        tdir = ticks.get("dir")
+        if tdir is not None and tdir not in ("in", "out"):
+            raise ValueError("ticks dir must be 'in' or 'out'")
+    for key in ("x_lim", "y_lim"):
+        lim = ov.get(key)
+        if lim is not None and (not isinstance(lim, (list, tuple)) or len(lim) != 2):
+            raise ValueError(f"{key} must be a [lo, hi] pair (null member = auto)")
+    margins = ov.get("margins")
+    if margins is not None:
+        for side in ("left", "right", "top", "bottom"):
+            v = margins.get(side)
+            if v is not None and not 0.0 <= float(v) <= 1.0:
+                raise ValueError("margins are figure fractions in [0, 1]")
+
+
+def _apply_overrides(
+    fig: Any, ax: Any, st: Any, ov: Mapping[str, Any], *, n_series: int
+) -> None:
+    """Apply the post-plot override properties (legend / ticks / spines /
+    limits / margins / grid / annotations). rc-level properties (fonts, tick
+    direction/length) are folded into the rc context by the caller."""
+    legend = ov.get("legend")
+    if legend is not None:
+        show = legend.get("show")
+        if (show is None and n_series > 1) or show:
+            frame = bool(legend.get("frame", st.legend_box))
+            loc = str(legend.get("loc", "best"))
+            kw: dict[str, Any] = {"frameon": frame, "fontsize": st.legend_font_size}
+            if loc == "outside right":
+                kw.update(loc="center left", bbox_to_anchor=(1.02, 0.5))
+            elif loc == "outside top":
+                kw.update(loc="lower center", bbox_to_anchor=(0.5, 1.02), ncols=max(1, n_series))
+            else:
+                kw["loc"] = loc
+            ax.legend(**kw)
+        elif ax.get_legend() is not None:
+            ax.get_legend().remove()
+
+    ticks = ov.get("ticks")
+    if ticks is not None and ticks.get("minor"):
+        ax.minorticks_on()
+
+    spines = ov.get("spines")
+    if spines is not None:
+        for side in ("top", "right", "left", "bottom"):
+            if side in spines:
+                ax.spines[side].set_visible(bool(spines[side]))
+
+    for key, setter in (("x_lim", ax.set_xlim), ("y_lim", ax.set_ylim)):
+        lim = ov.get(key)
+        if lim is not None:
+            lo, hi = lim
+            setter(
+                None if lo is None else float(lo),
+                None if hi is None else float(hi),
+            )
+
+    if "grid" in ov:
+        ax.grid(bool(ov["grid"]), alpha=st.grid_alpha or 0.3)
+
+    for ann in ov.get("annotations", []):
+        ax.annotate(
+            str(ann.get("text", "")),
+            xy=(float(ann.get("x", 0.0)), float(ann.get("y", 0.0))),
+            fontsize=float(ov.get("font_size", st.font_size)),
+        )
+
+    margins = ov.get("margins")
+    if margins is not None:
+        fig.subplots_adjust(
+            left=margins.get("left"),
+            right=None if margins.get("right") is None else 1.0 - float(margins["right"]),
+            top=None if margins.get("top") is None else 1.0 - float(margins["top"]),
+            bottom=margins.get("bottom"),
+        )
