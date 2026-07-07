@@ -450,3 +450,26 @@ describe("workspace v3 (gap #5): pipeline + recalc mode + fit specs", () => {
     expect(loaded.datasets[0].fitSpec).toBeUndefined();
   });
 });
+
+describe("workspace figure documents (#12)", () => {
+  it("round-trips docs and clamps a dead dataset ref (frozen keeps its snapshot)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const config = {
+      xKey: null, yKeys: [0], xLog: false, yLog: true, title: "t",
+      xLabel: "", yLabel: "", style: "aps", fmt: "pdf", dpi: 300,
+      overrides: { font_size: 9 }, seriesStyles: null,
+    };
+    const docs = [
+      { id: "f1", name: "live", datasetId: "a", live: true, config },
+      { id: "f2", name: "frozen", datasetId: "gone", live: false, config,
+        dataSnapshot: datasets[0].data },
+    ];
+    const loaded = parseWorkspace(
+      serializeWorkspace({ datasets, figureDocs: docs as never }),
+    );
+    expect(loaded.figureDocs).toHaveLength(2);
+    expect(loaded.figureDocs[0].datasetId).toBe("a");
+    expect(loaded.figureDocs[1].datasetId).toBeNull();
+    expect(loaded.figureDocs[1].dataSnapshot).toEqual(datasets[0].data);
+  });
+});

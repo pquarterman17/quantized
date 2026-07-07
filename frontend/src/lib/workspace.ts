@@ -6,6 +6,7 @@
 import { sanitizeFilter } from "./datafilter";
 import { pruneOrphans } from "./foldertree";
 import type { OriginFigureEntry } from "./originFigures";
+import { sanitizeFigureDocs, type FigureDoc } from "./figuredoc";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
 import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
@@ -41,6 +42,7 @@ export interface WorkspaceState {
   reports?: ReportEntry[];
   macroSteps?: PipelineStep[];
   recalcMode?: RecalcMode;
+  figureDocs?: FigureDoc[];
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -55,6 +57,7 @@ export interface LoadedWorkspace {
   reports: ReportEntry[];
   macroSteps: PipelineStep[];
   recalcMode: RecalcMode;
+  figureDocs: FigureDoc[];
 }
 
 interface WorkspaceDoc {
@@ -70,6 +73,7 @@ interface WorkspaceDoc {
   reports: ReportEntry[];
   pipeline: PipelineStep[];
   recalcMode: RecalcMode;
+  figureDocs: FigureDoc[];
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -86,6 +90,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     reports: ws.reports ?? [],
     pipeline: ws.macroSteps ?? [],
     recalcMode: ws.recalcMode ?? "auto",
+    figureDocs: ws.figureDocs ?? [],
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -315,6 +320,7 @@ export function parseWorkspace(text: string): LoadedWorkspace {
   const macroSteps = sanitizeSteps(o.pipeline);
   const recalcMode: RecalcMode =
     o.recalcMode === "manual" || o.recalcMode === "off" ? o.recalcMode : "auto";
+  const figureDocs = sanitizeFigureDocs(o.figureDocs, dsIds);
   return {
     datasets,
     folders,
@@ -325,5 +331,6 @@ export function parseWorkspace(text: string): LoadedWorkspace {
     reports,
     macroSteps,
     recalcMode,
+    figureDocs,
   };
 }

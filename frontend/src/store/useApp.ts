@@ -43,6 +43,7 @@ import { applyPalette, normalizePalette } from "../lib/palettes";
 import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
 import { effectiveChannels } from "../lib/plotdata";
+import { docRenderable, type FigureDoc } from "../lib/figuredoc";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import { activeRowIndices, analysisData, droppedRows, expandToFull, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
 import {
@@ -172,6 +173,10 @@ interface AppState {
   reports: ReportEntry[];
   // The report currently open in the viewer ToolWindow (null = closed).
   openReportId: string | null;
+  // Figure documents (#12): named figures that re-open/re-edit/re-export at
+  // any time. `figureDocSeed` hands an opened doc to the figure builder.
+  figureDocs: FigureDoc[];
+  figureDocSeed: FigureDoc | null;
   // Recalc engine (#1): auto re-runs downstream corrections/fits when data
   // changes; manual only flips staleness (#4 badges); off does neither.
   recalcMode: RecalcMode;
@@ -306,6 +311,13 @@ interface AppState {
   setOpenReport: (id: string | null) => void;
   // Recalc engine (#1): mark everything downstream of a data change, run the
   // dirty set now, and record/clear a dataset's re-runnable fit spec.
+  // Figure documents (#12).
+  addFigureDoc: (doc: FigureDoc) => void;
+  removeFigureDoc: (id: string) => void;
+  renameFigureDoc: (id: string, name: string) => void;
+  duplicateFigureDoc: (id: string) => void;
+  openFigureDoc: (id: string) => void;
+  clearFigureDocSeed: () => void;
   setRecalcMode: (mode: RecalcMode) => void;
   touchDataset: (id: string) => void;
   recalcNow: () => Promise<void>;
@@ -599,6 +611,8 @@ export const useApp = create<AppState>((set, get) => ({
   originFigures: [],
   reports: [],
   openReportId: null,
+  figureDocs: [],
+  figureDocSeed: null,
   recalcMode: "auto",
   staleDatasets: [],
   staleFits: [],
@@ -938,6 +952,8 @@ export const useApp = create<AppState>((set, get) => ({
         openReportId: null,
         macroSteps: ws.macroSteps ?? [], // typed pipeline (#6) — .dwk v3
         recalcMode: ws.recalcMode ?? "auto", // recalc engine (#1) — .dwk v3
+        figureDocs: ws.figureDocs ?? [], // figure documents (#12) — .dwk v3
+        figureDocSeed: null,
         staleDatasets: [],
         staleFits: [],
         stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
@@ -1017,7 +1033,10 @@ export const useApp = create<AppState>((set, get) => ({
       const removed = new Set([id]);
       const originFigures = pruneOriginFigureRefs(s.originFigures, removed);
       const reports = pruneReportRefs(s.reports, removed);
-      return { datasets, activeId, selectedIds, originFigures, reports };
+      const figureDocs = s.figureDocs.map((f) =>
+        f.datasetId && removed.has(f.datasetId) ? { ...f, datasetId: null } : f,
+      );
+      return { datasets, activeId, selectedIds, originFigures, reports, figureDocs };
     }),
   // Delete key: remove every selected dataset (falling back to the active one if
   // nothing is multi-selected); reselect the first survivor so the plot recovers.
@@ -1032,12 +1051,16 @@ export const useApp = create<AppState>((set, get) => ({
         s.activeId && !ids.has(s.activeId) ? s.activeId : (datasets[0]?.id ?? null);
       const originFigures = pruneOriginFigureRefs(s.originFigures, ids);
       const reports = pruneReportRefs(s.reports, ids);
+      const figureDocs = s.figureDocs.map((f) =>
+        f.datasetId && ids.has(f.datasetId) ? { ...f, datasetId: null } : f,
+      );
       return {
         datasets,
         activeId,
         selectedIds: activeId ? [activeId] : [],
         originFigures,
         reports,
+        figureDocs,
       };
     }),
   // Bulk-remove by explicit id list (item 17's "manage books" dialog) — unlike
@@ -1052,7 +1075,10 @@ export const useApp = create<AppState>((set, get) => ({
       const selectedIds = s.selectedIds.filter((x) => !drop.has(x));
       const originFigures = pruneOriginFigureRefs(s.originFigures, drop);
       const reports = pruneReportRefs(s.reports, drop);
-      return { datasets, activeId, selectedIds, originFigures, reports };
+      const figureDocs = s.figureDocs.map((f) =>
+        f.datasetId && drop.has(f.datasetId) ? { ...f, datasetId: null } : f,
+      );
+      return { datasets, activeId, selectedIds, originFigures, reports, figureDocs };
     }),
 
   // Wipe the entire library. Reuses loadWorkspace's "replace everything" reset
@@ -1068,6 +1094,7 @@ export const useApp = create<AppState>((set, get) => ({
       expandedFolders: [],
       originFigures: [],
       reports: [],
+      figureDocs: [],
     });
     set({ status: "removed all datasets, folders, figures, and reports" });
   },
@@ -1720,6 +1747,37 @@ export const useApp = create<AppState>((set, get) => ({
       reports: s.reports.map((r) => (r.id === id ? { ...r, name } : r)),
     })),
   setOpenReport: (openReportId) => set({ openReportId }),
+  // ── Figure documents (#12) ──────────────────────────────────────────────
+  addFigureDoc: (doc) =>
+    set((s) => ({
+      figureDocs: [...s.figureDocs, doc],
+      status: `figure "${doc.name}" saved`,
+    })),
+  removeFigureDoc: (id) =>
+    set((s) => ({ figureDocs: s.figureDocs.filter((f) => f.id !== id) })),
+  renameFigureDoc: (id, name) =>
+    set((s) => ({
+      figureDocs: s.figureDocs.map((f) => (f.id === id ? { ...f, name } : f)),
+    })),
+  duplicateFigureDoc: (id) =>
+    set((s) => {
+      const src = s.figureDocs.find((f) => f.id === id);
+      if (!src) return {};
+      const copy: FigureDoc = {
+        ...src,
+        id: `figd-${Date.now().toString(36)}-${++_idSeq}`,
+        name: `${src.name} copy`,
+      };
+      return { figureDocs: [...s.figureDocs, copy] };
+    }),
+  // Open = activate the doc's dataset and hand the config to the builder.
+  openFigureDoc: (id) => {
+    const doc = get().figureDocs.find((f) => f.id === id);
+    if (!doc || !docRenderable(doc)) return;
+    if (doc.live && doc.datasetId) get().setActive(doc.datasetId);
+    set({ figureDocSeed: doc, figureBuilderOpen: true });
+  },
+  clearFigureDocSeed: () => set({ figureDocSeed: null }),
   // ── Recalc engine (#1) ───────────────────────────────────────────────────
   setRecalcMode: (recalcMode) => set({ recalcMode }),
   touchDataset: (id) => {

@@ -3,19 +3,24 @@
 // a live, server-rendered WYSIWYG preview on the right. Thin: all state + the
 // preview/export wiring live in the hook.
 
+import { useState } from "react";
+
 import PropertyPanels from "./PropertyPanels";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, NumberField, Select } from "../../primitives";
+import { Button, Checkbox, NumberField, Select } from "../../primitives";
 import { useApp } from "../../../store/useApp";
 import { FIGURE_FORMATS, FIGURE_STYLES, useFigureBuilder } from "./useFigureBuilder";
 
 export default function FigureBuilderView() {
   const setOpen = useApp((s) => s.setFigureBuilderOpen);
   const f = useFigureBuilder();
+  const [figName, setFigName] = useState("");
+  const [figLive, setFigLive] = useState(true);
+  const [tplName, setTplName] = useState("");
 
   return (
-    <ToolWindow title="Figure builder" width={560} onClose={() => setOpen(false)}>
-      {!f.active ? (
+    <ToolWindow title={f.frozen ? "Figure builder (frozen data)" : "Figure builder"} width={560} onClose={() => setOpen(false)}>
+      {!f.data ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           Select a dataset to build a figure.
         </div>
@@ -59,6 +64,62 @@ export default function FigureBuilderView() {
             />
             {/* #11: every export property, panel-grouped, one config object */}
             <PropertyPanels overrides={f.overrides} setOverrides={f.setOverrides} />
+
+            {/* #12: save the configuration as a named, re-openable figure */}
+            <label className="qzk-field-lbl" style={{ marginTop: 6 }}>Save as figure</label>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <NumberField
+                numeric={false}
+                width={100}
+                value={figName}
+                placeholder="name"
+                onChange={setFigName}
+              />
+              <Checkbox checked={figLive} onChange={setFigLive}>live</Checkbox>
+              <Button
+                size="sm"
+                disabled={!figName.trim()}
+                onClick={() => {
+                  f.saveAsFigure(figName.trim(), figLive);
+                  setFigName("");
+                }}
+              >
+                Save
+              </Button>
+            </div>
+
+            {/* #15: user graph templates — the style half, appliable anywhere */}
+            <label className="qzk-field-lbl" style={{ marginTop: 6 }}>Style template</label>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <NumberField
+                numeric={false}
+                width={100}
+                value={tplName}
+                placeholder="save style as…"
+                onChange={setTplName}
+              />
+              <Button
+                size="sm"
+                disabled={!tplName.trim()}
+                onClick={() => {
+                  f.saveStyleTemplate(tplName.trim());
+                  setTplName("");
+                }}
+              >
+                Save
+              </Button>
+            </div>
+            {f.graphTemplates.length > 0 && (
+              <Select
+                options={[
+                  { value: "", label: "apply template…" },
+                  ...f.graphTemplates.map((t) => ({ value: t.name, label: t.name })),
+                ]}
+                value=""
+                onChange={(e) => e.target.value && f.applyStyleTemplate(e.target.value)}
+              />
+            )}
+
             <Button variant="primary" onClick={f.exportNow} style={{ marginTop: 6 }}>
               Export {f.fmt.toUpperCase()}
             </Button>
