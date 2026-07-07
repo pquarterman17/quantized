@@ -15,11 +15,11 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-07 (EIGHT items closed today: #36, #26, #31, #32,
-#6, #7, #2, #3 — report viewer, Test chooser, Peak Analyzer wizard,
-typed pipeline view + expression steps, and analysis templates + batch
-runs with summary sheets. W2 Tier 1, W5 Tier 1, W6 Tier 1 headline, W7
-all complete; W1 down to #1/#4/#5.)
+**Updated:** 2026-07-07 (ELEVEN items closed today: #36, #26, #31, #32,
+#6, #7, #2, #3, #1, #4, #5 — report viewer, Test chooser, Peak Analyzer
+wizard, typed pipeline + expression steps, templates + batch, and the
+recalc dependency graph + staleness + workspace v3. **W1, W2 Tier 1,
+W5 Tier 1, W6 headline, and W7 are all complete.**)
 
 ---
 
@@ -150,7 +150,7 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 | 31 | Peak Analyzer wizard | W6 | ✅ COMPLETE 2026-07-07 — 5-step workshop + recipes + #36 report ending (and #32's integrate-only UI path) |
 | 24–26 | ANOVA/post-hoc + nonparametric + assumption tests | W5 | ✅ COMPLETE — backend 2026-07-03; #26 Test chooser workshop UI 2026-07-07 |
 | 6–7 | Pipeline view + expression steps | W2 | ✅ COMPLETE 2026-07-07 — typed step contract + editable/runnable workshop + validated expression steps |
-| 1–5 | Recalc engine + templates + batch (W1) | W1 | 🟡 #2 templates + #3 batch CLOSED 2026-07-07; #1 recalc DAG, #4 badges, #5 workspace v2 remain |
+| 1–5 | Recalc engine + templates + batch (W1) | W1 | ✅ COMPLETE 2026-07-07 — recalc DAG + staleness + workspace v3 + templates + batch ALL shipped; W1 done |
 | 1 | Recalc dependency graph | W1 | ⬜ the architectural keystone everything "live" builds on (frontend/store) |
 | 36–37 | Report sheets + docx/pptx export | W7 | ✅ COMPLETE — schema + emitters + exports 2026-07-03; viewer + Library section + .dwk round-trip 2026-07-07 |
 | 11, 12 | Complete property panels + figure documents | W3 | ⬜ headline pillar: zero-code production figures (frontend) |
@@ -175,26 +175,11 @@ frontend (needs UX direction).
 
 ### Tier 1 — High Impact
 
-1. **Recalc dependency graph** — generalize the column-level formula
-   recompute into a workspace-wide DAG (dataset → corrections → fits →
-   figures → reports) with dirty-flag propagation and Auto/Manual/None
-   recalculation modes
-   *Model: opus (design + core graph), sonnet (store/UI wiring).*
-   *Pickup: study how `Dataset.formulas`/`recomputeData` already chain
-   recomputes in the frontend store, and how corrections re-derive from
-   `Dataset.raw`; the DAG is the generalization of those two paths.*
-   - [ ] Node/edge model: node kinds = dataset, computed column,
-         correction config, fit result, figure document, report sheet;
-         edges keyed by stable dataset/figure ids (survive `.dwk`
-         round-trip)
-   - [ ] Store slice: dirty-set + recalc mode (auto/manual/off) +
-         topological recompute scheduler, debounced so a burst of cell
-         edits triggers one downstream pass
-   - [ ] Backend stays stateless — routes/calc unchanged; recompute =
-         re-issuing the same API calls with fresh inputs
-   - [ ] Acceptance: in auto mode, editing a worksheet cell re-runs the
-         dependent fit and re-renders the dependent figure with no user
-         action; in manual mode the same edit only flips staleness (#4)
+~~1. **Recalc dependency graph**~~ **CLOSED 2026-07-07** — see
+Completed. (Scope notes booked deliberately: figure documents join the
+graph as `fig:` nodes when #12 lands; reports are immutable artifacts
+by design and never recalc; the graph is DERIVED from live state on
+every query, never persisted — so it cannot drift.)
 
 ~~2. **Analysis templates**~~ **CLOSED 2026-07-07** — see Completed.
 
@@ -206,19 +191,13 @@ queue stays the home for pure-calc batches like `calc/batch_fit`.)
 
 ### Tier 2 — Medium Impact
 
-4. **Staleness indicators** — green/amber/red recalc badges on datasets,
-   computed columns, fits, and figures; "recalculate now" affordance
-   *Model: haiku. Pickup: pure UI over #1's dirty flags; badge styling
-   follows the design tokens (`--accent` etc.), no hardcoded colors.*
+~~4. **Staleness indicators**~~ **CLOSED 2026-07-07** — see Completed
+(amber dot on DatasetRow, click-to-recalc, command palette entries).
 
-5. **Workspace format v2** — persist the dependency graph, templates,
-   pipelines, and figure documents through `.dwk` (and autosave)
-   *Model: sonnet. Pickup: extend `lib/workspace.ts`
-   (serialize/parse + defensive validation) and `lib/autosave.ts`.*
-   - [ ] Versioned migration: v1 `.dwk` files keep loading (datasets
-         only, empty graph)
-   - [ ] Acceptance: save → reload → recalc graph, templates, and
-         figure documents all survive; autosave restores the same
+~~5. **Workspace format v2**~~ **CLOSED 2026-07-07** — shipped as .dwk
+**v3** (v2 was already taken by the folder tree): typed pipeline steps,
+recalc mode, and per-dataset fit specs round-trip with v1/v2 migration.
+Figure documents extend it when #12 lands. See Completed.
 
 ---
 
@@ -738,6 +717,23 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#1 Recalc dependency graph + #4 staleness + #5 workspace v3**~~
+  (2026-07-07) — `lib/recalc.ts` derives the DAG from live state (bgRef
+  chains → dependent-correction nodes, breadth-first + cycle-safe;
+  `Dataset.fitSpec` → fit nodes; computed columns already recompute
+  inline). All five data mutators feed `touchDataset`; auto mode
+  debounces bursts into one topological pass (corrections re-derive
+  before fits; the shown fit overlay refreshes in place); manual mode
+  flips staleness only — the #4 amber dot on DatasetRow (click =
+  recalc now) + command palette "Recalculate now" / mode cycler; off
+  mode is inert. An in-progress guard keeps the recalc's own writes
+  from re-marking (no feedback loops). CurveFit records the durable
+  fitSpec (cleared on Clear). #5 shipped as **.dwk v3**: typed pipeline
+  steps (sanitized on load, fresh ids), recalcMode, and fitSpec
+  round-trip; v1/v2 docs migrate with safe defaults. Acceptance held in
+  store tests: cell-edit burst → ONE debounced dependent-fit re-run
+  (auto) / staleness only (manual); failing fits stay stale. Frontend
+  1050 green.
 - ~~**#2 Analysis templates + #3 batch-run with summary sheet**~~
   (2026-07-07) — `lib/template.ts`: a template = version tag + the
   ordered typed steps + declared outputs (auto-derived: last fit step's
