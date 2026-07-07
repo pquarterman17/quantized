@@ -1195,23 +1195,19 @@ wrong answer); they are listed so the drop cases are known, not rediscovered:
     * Flat-scrape annotation cap 12 -> 64 (the routed grammar path is exact and
       uncapped); floating-text block cap 512 -> 4096 bytes (a paragraph
       annotation), UTF-8-first. All bounded — runaway guards, not feature caps.
-
-13. **Remaining corpus-sized scan bounds** (all fail-safe drops, candidates
-    for derived bounds): `windows_opju._MAX_GAP=600` (a >600-byte column
-    record — e.g. a long embedded import path — ends the metadata run
-    early), `opju_axis_real_form._Y_START_SCAN=7` (already bumped 6→7 once;
-    a farther Y-span start drops the whole figure), `figures.py`'s 1200-byte
-    text-block size window + the 12-annotation cap (flat list only; the
-    positioned marks are uncapped), `opju_reports._MAX_ROWS/_MAX_STRLEN`,
-    the `figures_opju._TEXT_WINDOW=20_000` text scan, and the single-row
-    label ASCII whitelist in `windows_opju._SINGLE_ROW_RE` (a `°`/`θ`/`Å`
-    in a long-name-only label drops that label; the multi-row path already
-    accepts high bytes).
-14. **Duplicate window short-names** — two windows sharing a name merge
-    book metadata (`windows.py` `setdefault`) and can offer a false
-    double-Y pair on the frontend (`originFigures.doubleYPartner`). Origin
-    mostly enforces uniqueness; needs an identity key better than the
-    display name if a real collision file ever appears.
+    * STILL OPEN (fail-safe drops, low priority — each drops one figure/field,
+      never corrupts): `opju_axis_real_form._Y_START_SCAN=7` (a farther Y-span
+      start drops the whole figure), `opju_reports._MAX_ROWS/_MAX_STRLEN`, and
+      the `figures_opju._TEXT_WINDOW=20_000` layer text scan. No specimen has
+      forced any of these; they are noted so a future overrun is diagnosed fast.
+14. ~~**Duplicate window short-names**~~ **RESOLVED (not-a-real-input)
+    2026-07-06** — probed via COM: `win -r <B> <A>` (rename a window to an
+    existing name) triggers a modal confirmation and does NOT silently
+    create a duplicate, i.e. Origin ENFORCES window-name uniqueness at the
+    source. A saved project therefore cannot contain two same-named windows,
+    so the `windows.py` `setdefault` merge and `doubleYPartner` name-pairing
+    are safe as written. Left fail-safe (first-wins) rather than adding an
+    identity key for an input Origin can't produce.
 15. ~~**Symbol kinds 4-8 unverified**~~ **CLOSED 2026-07-06** — the
     `symbol_kinds.opju` specimen (kinds 1-8 set explicitly) verifies the
     kind FIELD reads 1..8 exactly; the glyph-name mapping follows Origin's
@@ -1234,6 +1230,15 @@ wrong answer); they are listed so the drop cases are known, not rediscovered:
     columns. The gate is now a structural varint check (continuation bits),
     not a size cap; the `bigcolumn.opju` specimen decodes 120k rows
     bit-exact in ~0.35 s (test-pinned).
+17. **Multi-panel spatial layout (frontend)** — the backend decodes and
+    EXPOSES full panel geometry (`figure_geometry`: per-layer `frame` quad +
+    page size; verified e.g. "Fixed Lambdas SI"!Graph6 = two vertically
+    stacked frames). The frontend renders multi-layer graphs functionally
+    (each layer as its own figure; the 2-layer case as a combined Y/Y2 view
+    via `doubleYPartner`) but does not yet lay panels out in their true
+    spatial arrangement from `frame`/`page`. That is a UI enhancement (a
+    multi-panel plot canvas), NOT a backend-parity gap — deferred to the GUI
+    workstream.
 
 ### 13.3 BLOCKED (documented dead ends — do not re-chase)
 
