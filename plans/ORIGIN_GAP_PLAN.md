@@ -15,10 +15,10 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-07 (#36 CLOSED — frontend report viewer + Library
-section + .dwk round-trip shipped; W7 is now fully complete. Earlier same
-day: reconciliation pass — #53's stale plot-display note fixed, #12
-FigureDoc prior-art pickup noted.)
+**Updated:** 2026-07-07 (#36 + #26 CLOSED — report viewer/Library/.dwk
+and the Test chooser workshop shipped; W7 and W5 Tier 1 now fully
+complete. Earlier same day: reconciliation pass — #53's stale
+plot-display note fixed, #12 FigureDoc prior-art pickup noted.)
 
 ---
 
@@ -147,7 +147,7 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 | # | Item | Workstream | Status / why |
 |---|------|------------|-----------|
 | 31 | Peak Analyzer wizard | W6 | ⬜ #1 reason labs keep Origin; calc engine exists — pure UX packaging (frontend) |
-| 24–26 | ANOVA/post-hoc + nonparametric + assumption tests | W5 | ✅ backend complete (24 RM+unbalanced landed 2026-07-03); only the 26 chooser UI front door remains |
+| 24–26 | ANOVA/post-hoc + nonparametric + assumption tests | W5 | ✅ COMPLETE — backend 2026-07-03; #26 Test chooser workshop UI 2026-07-07 |
 | 6–7 | Pipeline view + expression steps | W2 | ⬜ frontend workshop; macro recorder already captures the steps |
 | 1 | Recalc dependency graph | W1 | ⬜ the architectural keystone everything "live" builds on (frontend/store) |
 | 36–37 | Report sheets + docx/pptx export | W7 | ✅ COMPLETE — schema + emitters + exports 2026-07-03; viewer + Library section + .dwk round-trip 2026-07-07 |
@@ -481,15 +481,9 @@ the same field names.)*
           reshape value+factor worksheet columns) (2026-07-03); report-sheet
           *output* still pending #36
 
-26. **Assumption tests + guided chooser** — Shapiro-Wilk, Levene,
-    Anderson-Darling, KS; a small "which test?" helper that gates
-    parametric vs nonparametric
-    *Model: sonnet (chooser UX), haiku (the wrappers). The wrappers
-    shipped 2026-07-01 with #25; the chooser DECISION TREE also shipped
-    2026-07-01 (`stats_tests.recommend_test` + `/api/stats/recommend` —
-    Shapiro + Brown-Forsythe gates -> recommendation + endpoint +
-    plain-language reasons). Remaining: the stats-workshop UI front
-    door that renders it and one-click-runs the recommended test.*
+~~26. **Assumption tests + guided chooser**~~ **CLOSED 2026-07-07** —
+see Completed. Wrappers + decision tree (2026-07-01) and the Test
+chooser workshop front door (2026-07-07) all shipped.
 
 ### Tier 2 — Medium Impact
 
@@ -801,6 +795,16 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#26 Assumption tests + guided chooser (complete)**~~ (2026-07-07) —
+  the UI front door: `workshops/statschooser/` ToolWindow (command
+  palette ▸ Analyze ▸ "Test chooser"). Groups from picked columns or
+  value-partitioned-by-category (pure `lib/statschooser`, reads
+  `rowstate.analysisData` per guard #11), paired toggle (gated on 2
+  equal-length groups), `/api/stats/recommend` verdict + plain-language
+  reasons, one-click run of the recommended test (allowlisted endpoint
+  dispatch — ttest/wilcoxon/mann-whitney/anova/kruskal), scalar result
+  table, and "→ Report" through the #36 stats_table emitter with the
+  reasons as the caption. Frontend 1005 green.
 - ~~**#36 Structured report sheets (complete)**~~ (2026-07-07) — the
   frontend half: `/api/report/emit` (thin route over the pure
   `calc/report_emit` emitters — one emission source of truth, the
