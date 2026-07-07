@@ -93,6 +93,11 @@ __all__: list[str] = []  # internal to the .opju figures subsystem; imported by 
 # byte-identically (see `_parse_real_record`).
 _SEP_STRICT = re.compile(rb"\x81..\x00\x00\x01", re.DOTALL)
 _SEP_WIDE = re.compile(rb"[\x80\x81]..\x00\x00\x01", re.DOTALL)
+# Specimen-form record markers (moved with _parse_specimen_record from
+# figures_opju, 2026-07-06).
+_Y_TRANSITION = bytes([0x81, 0x04, 0x06, 0x00, 0x00, 0x01, 0xC3, 0x66])
+_STEP_TAG = bytes([0x83, 0x02])
+
 _TAG_SEARCH_SPAN = 2_000  # max bytes allowed between an anchor and its separator/marker
 # Y may start up to this many bytes past the nominal payload end. 7, not 6:
 # the geometry payload runs 11 bytes past `y_lo` when plen=5 (Hc2 Graph1 /
@@ -371,3 +376,107 @@ def _parse_real_record_sep(
                 y_log = _real_y_log_flag(b, m2.start(), window_end) if m2 else None
                 return (*xpair, *ypair, x_log, y_log)
     return None
+
+
+# --------------------------------------------------------------------------
+# Specimen-form record parsing (moved from figures_opju 2026-07-06, the
+# 500-line guard): the value-token readers + the default-dialog record
+# parser. Same axis-record domain as the real form above.
+
+def _value_candidates(b: bytes, pos: int, end: int) -> list[tuple[float, int]]:
+    """Every plausible ``(value, bytes_consumed)`` parse starting at ``pos``.
+
+    The bare (no-tag) raw8 shape is rejected when ``pos`` itself starts with a
+    byte in the real-form flag-token range ``0x81..0x8f`` (mirroring
+    ``_real_bare8``'s identical guard): a genuine specimen-form literal never
+    starts there, but a real-form flag token (e.g. ``89 01`` before an
+    RLE-compressed value) does, and would otherwise misdecode as a plausible-
+    looking bare double -- the false positive that made the rf_* oracle
+    quad's linear-X records (whose 8 leading bytes are flag+RLE, not a
+    literal) parse via the specimen path with a wrong ``x_from`` and a
+    type-byte reading that (unlike the true real-form flag, see
+    ``_real_y_log_flag``) carries no Y information at all."""
+    avail = end - pos
+    out: list[tuple[float, int]] = []
+    if avail >= 8 and not (pos < end and 0x81 <= b[pos] <= 0x8F):
+        v = _decode_raw8(b[pos : pos + 8])
+        if v is not None:
+            out.append((v, 8))
+    if avail >= 10:
+        v = _decode_raw8(b[pos + 2 : pos + 10])
+        if v is not None:
+            out.append((v, 10))
+    for k in (1, 2, 3):
+        if avail >= 2 + k:
+            v = _decode_compact(b[pos + 2 : pos + 2 + k])
+            if v is not None:
+                out.append((v, 2 + k))
+    return out
+
+
+def _parse_pair(b: bytes, pos: int, end: int) -> tuple[float, float] | None:
+    """Decode ``(from, to)`` from the byte span ``[pos, end)``, or ``None``.
+
+    See the module docstring: every admissible split (``from`` elided, or
+    ``from``+``to`` both present) is tried; accepted only if exactly one split
+    consumes the span exactly with two plausible values.
+    """
+    candidates: set[tuple[float, float]] = set()
+    for v, n in _value_candidates(b, pos, end):  # from elided (== 0.0): one token = "to"
+        if pos + n == end:
+            candidates.add((0.0, v))
+    for vf, nf in _value_candidates(b, pos, end):  # from present, then to
+        p2 = pos + nf
+        for vt, nt in _value_candidates(b, p2, end):
+            if p2 + nt == end:
+                candidates.add((vf, vt))
+    return candidates.pop() if len(candidates) == 1 else None
+
+
+# Real-corpus-form (item 33) value tokens, span decoding, and the Y-scale
+# flag live in ``opju_axis_real_form.py`` (kept out of this file to stay under
+# the repo's 500-line god-module ceiling) — ``_parse_real_record`` imported
+# above is the entry point used below.
+
+
+# ── shared helpers ────────────────────────────────────────────────────────────
+
+
+def _parse_specimen_record(
+    b: bytes, p: int
+) -> tuple[float, float, float, float, int, bool | None] | None:
+    """Specimen-form axis record at anchor payload ``p``:
+    ``(xf, xt, yf, yt, type_byte, x_log)``.
+
+    ``x_log`` is the exact X-scale flag inside the "filler" after the type
+    byte -- really ``7b 40`` + ``01`` (linear) / ``08 01`` (log10), the same
+    field the real form carries (see the module docstring); ``None`` keeps
+    the type-byte/heuristic path. ``y_start`` stays at the historical +3
+    skip: a log X's extra ``08`` byte is absorbed by ``_parse_pair``'s
+    2-byte tag-skip candidate, byte-identically to before."""
+    ytrans = b.find(_Y_TRANSITION, p, min(len(b), p + _TAG_SEARCH_SPAN))
+    if ytrans < 0:
+        return None
+    xstep = b.rfind(_STEP_TAG, p, ytrans)
+    if xstep < 0:
+        return None
+    xpair = _parse_pair(b, p, xstep)
+    if xpair is None:
+        return None
+    if ytrans + len(_Y_TRANSITION) >= len(b):  # marker at EOF — no type byte to read
+        return None
+    tb = ytrans + len(_Y_TRANSITION)
+    type_byte = b[tb]
+    x_log: bool | None = None
+    if b[tb + 1 : tb + 4] == b"\x7b\x40\x01":
+        x_log = False
+    elif b[tb + 1 : tb + 5] == b"\x7b\x40\x08\x01":
+        x_log = True
+    y_start = tb + 1 + 3  # + type byte + "7b 40 ..." filler (see docstring)
+    ystep = b.find(_STEP_TAG, y_start, min(len(b), y_start + _TAG_SEARCH_SPAN))
+    if ystep < 0:
+        return None
+    ypair = _parse_pair(b, y_start, ystep)
+    if ypair is None:
+        return None
+    return (*xpair, *ypair, type_byte, x_log)

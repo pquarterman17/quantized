@@ -25,11 +25,10 @@ import pytest
 from quantized.io.origin_project import drop_nonactionable_figures
 from quantized.io.origin_project.figures_opju import (
     _ANCHOR,
-    _STEP_TAG,
-    _Y_TRANSITION,
     _clean_annotations,
     extract_figures_opju,
 )
+from quantized.io.origin_project.opju_axis_real_form import _STEP_TAG, _Y_TRANSITION
 from quantized.io.origin_project.opju_codec import curve_plot_style
 
 # ── synthetic CPYUA figure-record builder ─────────────────────────────────────

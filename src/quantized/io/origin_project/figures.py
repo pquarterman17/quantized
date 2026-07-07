@@ -146,6 +146,7 @@ from quantized.io.origin_project.annotation_marks import (
     page_point_fractions,
 )
 from quantized.io.origin_project.container import walk_blocks
+from quantized.io.origin_project.figure_geometry import opj_layer_frame, opj_page_size
 from quantized.io.origin_project.figure_text import (
     _LEGEND_RE,
     _first_title,
@@ -176,28 +177,6 @@ _Y_LOG_FLAG = bytes([0x08, 0x01])
 def _axis(p: bytes, base: int) -> tuple[float, float]:
     lo, hi = struct.unpack_from("<d", p, base)[0], struct.unpack_from("<d", p, base + 8)[0]
     return float(lo), float(hi)
-
-
-# The layer FRAME rect: four u16 LE at layer-continuation payload offsets
-# 113-119 = (left, top, right, bottom) in page units — the same units the
-# object headers' bounding boxes use (annotation_marks.opj_object_box).
-# Verified 41/44 layers against the live-COM layer_geometry oracle (XRD /
-# hc2convert / Moke; the 3 misses are Moke's LINKED composite layers, where
-# COM itself reports out-of-page link-mode values — the decoded quads there
-# are self-consistent normal frames). Solved 2026-07-06 (§13.2 #7 groundwork).
-_FRAME_OFFSET = 113
-
-
-def _layer_frame(payload: bytes) -> tuple[int, int, int, int] | None:
-    """The layer frame quad ``(left, top, right, bottom)`` in page units, or
-    ``None`` when missing/degenerate (older layer-block variants) — callers
-    then fall back to the fraction-pair position model."""
-    if len(payload) < _FRAME_OFFSET + 8:
-        return None
-    left, top, right, bottom = struct.unpack_from("<4H", payload, _FRAME_OFFSET)
-    if not (left < right and top < bottom):
-        return None
-    return int(left), int(top), int(right), int(bottom)
 
 
 def _log_heuristic(lo: float, hi: float) -> bool:
@@ -296,7 +275,7 @@ def _build_layer(
     # legend box) interpolate in log10 space on log axes (annotation_marks).
     x_log = _log_heuristic(x_from, x_to)  # no isolated X flag found in .opj
     y_log_final = y_log if y_log is not None else _log_heuristic(y_from, y_to)
-    frame = _layer_frame(layer_payload)
+    frame = opj_layer_frame(layer_payload)
     n_curves = 0
     all_texts: list[str] = []  # every recognized text run -- feeds legend_ns/n_curves as before
     bucket_texts: dict[str, list[str]] = {
@@ -471,10 +450,13 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
             j += 1
         win_end = j
         layer_starts = [k for k in range(i + 1, win_end) if _is_layer_block(blocks[k][1])]
+        page = opj_page_size(blocks[i][1])
         for pos, layer_start in enumerate(layer_starts):
             layer_end = layer_starts[pos + 1] if pos + 1 < len(layer_starts) else win_end
-            figures.append(
-                _build_layer(blocks, id_map, x_columns, name, pos + 1, layer_start, layer_end)
-            )
+            fig = _build_layer(blocks, id_map, x_columns, name, pos + 1, layer_start, layer_end)
+            # Page size (u16 pair @35 of the window header): with the layer
+            # frame quad this places every panel of a multi-panel page.
+            fig["page"] = page
+            figures.append(fig)
         i = win_end
     return figures

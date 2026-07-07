@@ -1035,7 +1035,7 @@ rather than shipped wrong.
 | **Legend position** (same fraction pair as annotations; `.opju` tag `85 1f` @ header-33) + **log-axis fraction model** (log10-space decade interpolation) | both | 53/53 graph_extras COM oracle, 0 wrong, incl. 2 log-Y graphs | (2026-07-06) |
 | **Project created/modified dates** (f64 JDN pair @ record 32/40) | `.opj` 4.3380 (4.3227: honest absent) | matches the results log's own JDN stamps | (2026-07-06) |
 | **Annotation tag variants + attach modes + rotated labels + exact short text** (`86 13`@-32, `85 1f`@-33, page-box+frame+diagonal-signature rotation, owned-block text) | both | 109/111 expanded COM oracle, 0 wrong | (2026-07-06) |
-| **`.opj` layer frame rect** (u16 quad @113-119, page units) | `.opj` | 41/44 layer_geometry COM oracle | (2026-07-06) |
+| **Layer frame rect + page size, both containers** (`figure_geometry.py`: .opj quad@113 + pair@35; .opju `12 00 20 22` marker + containment-validated pair) | both | 57 frames + 27 pages exact, 0 wrong (layer_geometry COM oracle) | (2026-07-06) |
 | Axis titles (XB/YL/YR) + legend labels + annotation text | both | COM text oracle | (earlier) |
 | Annotation positions (layer-fraction, y-from-top) | both | 5/5 oracle-exact (<6e-17) | `170b46e` |
 | Notes pages + structured results-log records | both | corpus | (earlier) |
@@ -1114,14 +1114,16 @@ Ordered by value. Each names the decode path so it can be picked up cold.
    fixed range + log distr (falling back to autoscale/yLog as before).
    Follow-up (small): a `y2AxisLabel` override from layer 2's decoded
    `y_title` — the y2 axis label still auto-derives from the channel.
-7. **Multi-layer frame geometry** — PARTIALLY closed 2026-07-06: the `.opj`
-   layer FRAME rect is decoded (u16 quad at layer-block offsets 113-119 =
-   left/top/right/bottom in page units; 41/44 vs the live-COM
-   layer_geometry oracle — the 3 misses are Moke's LINKED composite layers
-   where COM itself reports out-of-page link-mode values) and emitted as
-   the figure's `frame` field. Remaining: the `.opju` frame equivalent,
-   the page SIZE from bytes (needed to place frames as page fractions),
-   and the frontend multi-panel apply.
+7. ~~**Multi-layer frame geometry**~~ **CLOSED 2026-07-06** (decode side)
+   — `figure_geometry.py`: `.opj` frame = u16 quad at layer-block 113-119
+   (41/44 COM oracle), `.opju` frame = the `12 00 20 22` marker after the
+   layer's axis anchor (30/30 where present, fail-closed absent); page
+   size = `.opj` u16 pair @ window-header 35 (39/39), `.opju` by a
+   frame-containment-validated candidate scan near the page-header start
+   (exact on every resolved page, None when ambiguous). Figures emit
+   `frame` + `page` (page units) — everything a multi-panel layout needs.
+   Remaining (frontend, follow-up): the multi-panel APPLY — rendering
+   several panels of one page together; today each layer applies alone.
 8. **Tick spacing / number format** (axis increment, decimal places).
 9. **Matrix objects** — unattempted; rare in the corpus.
 
