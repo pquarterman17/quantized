@@ -15,10 +15,9 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-07 (FOURTEEN items closed today: #36, #26, #31,
-#32, #6, #7, #2, #3, #1, #4, #5, #11, #12, #15 — capped by figure
-documents + user graph templates. **W1, W2 Tier 1, W3 Tier 1, W5
-Tier 1, W6 headline, and W7 are all complete.**)
+**Updated:** 2026-07-07 (SIXTEEN items closed today: #36, #26, #31,
+#32, #6, #7, #2, #3, #1, #4, #5, #11, #12, #15, #13, #14. **W1, W2
+Tier 1, W3 (all), W5 Tier 1, W6 headline, and W7 are complete.**)
 
 ---
 
@@ -152,7 +151,7 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 | 1–5 | Recalc engine + templates + batch (W1) | W1 | ✅ COMPLETE 2026-07-07 — recalc DAG + staleness + workspace v3 + templates + batch ALL shipped; W1 done |
 | 1 | Recalc dependency graph | W1 | ⬜ the architectural keystone everything "live" builds on (frontend/store) |
 | 36–37 | Report sheets + docx/pptx export | W7 | ✅ COMPLETE — schema + emitters + exports 2026-07-03; viewer + Library section + .dwk round-trip 2026-07-07 |
-| 11, 12 | Complete property panels + figure documents | W3 | ✅ #11 + #12 + #15 CLOSED 2026-07-07 — W3 Tier 1 complete; #13/#14 direct manipulation remain |
+| 11–15 | Property panels + figure docs + direct manipulation | W3 | ✅ **W3 COMPLETE 2026-07-07** — #11/#12/#13/#14/#15 all shipped (defaults audit = eyeball residual) |
 | 40 | Generic import wizard + saved filters | W8 | 🟡 preview/parse engine + `/api/import/*` landed 2026-07-03; filter persistence + wizard UI remain |
 | 41 | Packaging & installers | W8 | ⬜ zero-friction first run gates all OSS adoption |
 | 46–47 | Test-data corpus + PIXcel3D audit | W8 | ✅ mostly done; only pole-figure representation open |
@@ -272,21 +271,12 @@ happens in the re-opened builder.)
 
 ### Tier 2 — Medium Impact
 
-13. **Click-to-select on the preview** — hit-test the rendered preview
-    (title, axis labels, legend, series, annotations) and open the
-    matching property editor; the bridge from panels to direct
-    manipulation
-    *Model: sonnet (gui-interaction work). Pickup: extend the export
-    route so `render_figure` also returns an element map (artist id →
-    pixel bounding box, from matplotlib artist extents at draw time);
-    client overlays hover outlines on the preview image and focuses the
-    matching #11 panel control on click.*
+~~13. **Click-to-select on the preview**~~ **CLOSED 2026-07-07** — see
+Completed.
 
-14. **In-place editing** — edit text inline and drag legend/annotations
-    directly on the preview canvas (Origin-style double-click-anything)
-    *Model: sonnet. Pickup: builds directly on #13's hit-boxes; commit
-    edits back through #11's config object, never a parallel path;
-    drag = update position property + re-render (debounced).*
+~~14. **In-place editing**~~ **CLOSED 2026-07-07** — see Completed.
+(Inline text editing + legend/annotation drag shipped; every commit
+routes through #11's config object, never a parallel path.)
 
 ~~15. **User graph templates**~~ **CLOSED 2026-07-07** — see Completed
 (save/apply/delete in the builder; persisted like peak recipes).
@@ -682,6 +672,20 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#13 Click-to-select + #14 in-place editing**~~ (2026-07-07) —
+  `calc/figure.render_figure_map` + `/api/export/figure-hitmap`: the
+  preview PNG plus per-artist pixel boxes (title/labels/legend/series/
+  annotations; window extents flipped to top-left image coords) and
+  the axes rect with data limits. The builder preview became
+  `PreviewOverlay` (percentage-positioned hit boxes — scale-free):
+  hover outline, click focuses the matching #11 panel group,
+  double-click edits title/axis labels inline (Enter/blur commit,
+  Esc cancels), drag the legend → new `custom` legend loc with a
+  figure-fraction anchor (transFigure bbox), drag an annotation → new
+  data coords (`lib/previewmap.pxToData`, log-aware). All commits ride
+  the ONE overrides object. jsdom pointer-capture guarded; the real
+  drag gesture needs the usual visual-harness eyeball. Backend 49
+  figure/export tests + frontend 1072 green.
 - ~~**#12 Figures as live documents + #15 user graph templates**~~
   (2026-07-07) — `lib/figuredoc.ts`: FigureDoc = id/name + dataset ref
   (by id, clamped on load like reports) + the FULL builder config
