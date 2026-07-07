@@ -5,6 +5,7 @@ import type { SubstrateInfo } from "../components/workshops/calculators/Substrat
 import { postDownload } from "./download";
 import type { ExportSeriesStyle } from "./exportStyles";
 import type { ReportSheet } from "./report";
+import type { Recommendation } from "./statschooser";
 import type {
   CalcResult,
   CorrectionParams,
@@ -1276,4 +1277,35 @@ export function reportExport(
   filename: string,
 ): Promise<void> {
   return postDownload("/api/report/export", { report, format, filename }, filename);
+}
+
+// ── Test chooser (#26) ──────────────────────────────────────────────────────
+
+/** Assumption checks -> recommended test (+ endpoint + reasons). */
+export function statsRecommend(body: {
+  groups: number[][];
+  paired?: boolean;
+  alpha?: number;
+}): Promise<Recommendation> {
+  return postJSON("/api/stats/recommend", body);
+}
+
+/** The tests the chooser can recommend — the only paths statsRunTest accepts. */
+const RUNNABLE_TESTS = new Set([
+  "/api/stats/ttest",
+  "/api/stats/wilcoxon",
+  "/api/stats/mann-whitney",
+  "/api/stats/anova",
+  "/api/stats/kruskal",
+]);
+
+/** Run a chooser-recommended test by its endpoint path (allowlisted). */
+export function statsRunTest(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<CalcResult> {
+  if (!RUNNABLE_TESTS.has(path)) {
+    return Promise.reject(new Error(`unknown test endpoint: ${path}`));
+  }
+  return postJSON(path, body);
 }

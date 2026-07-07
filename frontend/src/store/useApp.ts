@@ -241,6 +241,7 @@ interface AppState {
   tabulateOpen: boolean;
   distributionOpen: boolean;
   dataFilterOpen: boolean;
+  statsChooserOpen: boolean; // the "which test?" front door (#26)
   figureBuilderOpen: boolean;
   waterfallOpen: boolean;
   reflViewOpen: boolean;
@@ -403,6 +404,7 @@ interface AppState {
   setTabulateOpen: (open: boolean) => void;
   setDistributionOpen: (open: boolean) => void;
   setDataFilterOpen: (open: boolean) => void;
+  setStatsChooserOpen: (open: boolean) => void;
   setFigureBuilderOpen: (open: boolean) => void;
   setWaterfallOpen: (open: boolean) => void;
   setReflViewOpen: (open: boolean) => void;
@@ -618,6 +620,7 @@ export const useApp = create<AppState>((set, get) => ({
   tabulateOpen: false,
   distributionOpen: false,
   dataFilterOpen: false,
+  statsChooserOpen: false,
   figureBuilderOpen: false,
   waterfallOpen: false,
   reflViewOpen: false,
@@ -1608,6 +1611,7 @@ export const useApp = create<AppState>((set, get) => ({
   setDatasetMathOpen: (datasetMathOpen) => set({ datasetMathOpen }),
   setTabulateOpen: (tabulateOpen) => set({ tabulateOpen }),
   setDistributionOpen: (distributionOpen) => set({ distributionOpen }),
+  setStatsChooserOpen: (statsChooserOpen) => set({ statsChooserOpen }),
   // Report sheets (#36). Adding opens the viewer on the new report so the
   // producing workshop's "→ Report" lands somewhere visible immediately.
   addReport: (name, report, datasetId) =>

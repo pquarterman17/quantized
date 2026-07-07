@@ -159,6 +159,10 @@ body {
 .qzk-fig-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-fig-meta { flex-shrink: 0; color: var(--text-faint); font-size: var(--type-nano); font-family: var(--font-mono); }
 
+/* Test chooser (#26): plain-language assumption reasons. */
+.qzk-reason-list { list-style: none; margin: 6px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 2px; color: var(--text-dim); font-size: var(--font-size-sm); }
+.qzk-reason-list li::before { content: "· "; color: var(--text-faint); }
+
 /* Report sheets (#36): the viewer's section/block rendering. */
 .qzk-report-section { margin-top: 10px; }
 .qzk-report-text { margin: 6px 0 0; color: var(--text-dim); font-size: var(--font-size-sm); }

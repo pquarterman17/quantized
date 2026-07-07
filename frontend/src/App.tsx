@@ -23,6 +23,7 @@ import DatasetMathPanel from "./components/workshops/datasetmath/DatasetMathPane
 import TabulatePanel from "./components/workshops/tabulate/TabulatePanel";
 import DistributionPanel from "./components/workshops/distribution/DistributionPanel";
 import ReportPanel from "./components/workshops/report/ReportPanel";
+import StatsChooserPanel from "./components/workshops/statschooser/StatsChooserPanel";
 import DataFilterPanel from "./components/workshops/datafilter/DataFilterPanel";
 import ColumnSwitcher from "./components/workshops/switcher/ColumnSwitcher";
 import FigureBuilderView from "./components/workshops/figurebuilder/FigureBuilderView";
@@ -101,6 +102,7 @@ export default function App() {
   const waterfallOpen = useApp((s) => s.waterfallOpen);
   const reflViewOpen = useApp((s) => s.reflViewOpen);
   const openReportId = useApp((s) => s.openReportId);
+  const statsChooserOpen = useApp((s) => s.statsChooserOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -495,6 +497,12 @@ export default function App() {
         run: () => s().setDistributionOpen(true),
       },
       {
+        id: "stats-chooser",
+        group: "Analyze",
+        label: "Test chooser (which stats test? + run it)…",
+        run: () => s().setStatsChooserOpen(true),
+      },
+      {
         id: "data-filter",
         group: "Data",
         label: "Data filter (live per-column row filter)…",
@@ -800,6 +808,7 @@ export default function App() {
       {tabulateOpen && <TabulatePanel />}
       {distributionOpen && <DistributionPanel />}
       {dataFilterOpen && <DataFilterPanel />}
+      {statsChooserOpen && <StatsChooserPanel />}
       {openReportId && <ReportPanel />}
       {columnSwitcherOpen && <ColumnSwitcher />}
       {figureBuilderOpen && <FigureBuilderView />}
