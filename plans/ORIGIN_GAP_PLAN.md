@@ -149,7 +149,6 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 | 24–26 | ANOVA/post-hoc + nonparametric + assumption tests | W5 | ✅ COMPLETE — backend 2026-07-03; #26 Test chooser workshop UI 2026-07-07 |
 | 6–7 | Pipeline view + expression steps | W2 | ✅ COMPLETE 2026-07-07 — typed step contract + editable/runnable workshop + validated expression steps |
 | 1–5 | Recalc engine + templates + batch (W1) | W1 | ✅ COMPLETE 2026-07-07 — recalc DAG + staleness + workspace v3 + templates + batch ALL shipped; W1 done |
-| 1 | Recalc dependency graph | W1 | ⬜ the architectural keystone everything "live" builds on (frontend/store) |
 | 36–37 | Report sheets + docx/pptx export | W7 | ✅ COMPLETE — schema + emitters + exports 2026-07-03; viewer + Library section + .dwk round-trip 2026-07-07 |
 | 11–15 | Property panels + figure docs + direct manipulation | W3 | ✅ **W3 COMPLETE 2026-07-07** — #11/#12/#13/#14/#15 all shipped (defaults audit = eyeball residual) |
 | 40 | Generic import wizard + saved filters | W8 | 🟡 preview/parse engine + `/api/import/*` landed 2026-07-03; filter persistence + wizard UI remain |
