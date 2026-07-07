@@ -1840,15 +1840,27 @@ def test_results_log_records_attached_alongside_raw_text(tmp_path) -> None:
     assert "origin_results_log_records" not in plain.metadata
 
 
+def _leb128(n: int) -> bytes:
+    """LEB128 varint (matches the ``.opju`` note text-length prefix)."""
+    out = bytearray()
+    while True:
+        b = n & 0x7F
+        n >>= 7
+        out.append(b | 0x80 if n else b)
+        if not n:
+            return bytes(out)
+
+
 def _notes_record(name: str, text: str) -> bytes:
-    """The contiguous ``93 <nl> <name> 00 0a <tl> <text> 00`` notes framing."""
-    nb = name.encode("latin1")
-    tb = text.replace("\n", "\r\n").encode("latin1")
+    """The contiguous ``93 <nl> <name> 00 0a <tl-varint> <text> 00`` framing."""
+    nb = name.encode("utf-8")
+    tb = text.replace("\n", "\r\n").encode("utf-8")
     return (
         bytes([0x93, len(nb) + 1])
         + nb
         + b"\x00"
-        + bytes([0x0A, len(tb) + 1])
+        + b"\x0a"
+        + _leb128(len(tb) + 1)
         + tb
         + b"\x00"
     )
@@ -1878,6 +1890,18 @@ def test_notes_windows_recovered_from_synthetic() -> None:
     # A bare 0x93 with no valid name/text chain yields nothing.
     assert notes_windows(b"\x93\x93\x93\x00\x0a\x00") == {}
 
+    # A LONG note (>127 bytes -> 2-byte varint length) is recovered whole, and
+    # real-note content (Windows paths, inequalities, degree sign) survives the
+    # relaxed junk filter + UTF-8 decode (2026-07-06 notes_real.opju fixes).
+    long_body = "Run at C:\\lab\\data\\run7.dat; T < 4 K, H > 2 T, tilt 45°. " * 6
+    blob2 = b"\x00" + _notes_record("RealNotes", long_body) + b"\xff"
+    got = notes_windows(blob2)
+    assert set(got) == {"RealNotes"}
+    assert got["RealNotes"] == long_body.replace("\n", "\n")
+    assert "C:\\lab\\data" in got["RealNotes"] and "T < 4 K" in got["RealNotes"]
+    assert "45°" in got["RealNotes"]  # UTF-8 degree sign
+    assert len(long_body.encode("utf-8")) > 127  # exercises the 2-byte varint path
+
 
 @pytest.mark.realdata
 def test_realdata_notes_probe_specimen() -> None:
@@ -1893,6 +1917,23 @@ def test_realdata_notes_probe_specimen() -> None:
         "QZNOTE line one: sample MnN 30nm",
         "QZNOTE line two: field sweep at 300K",
     ]
+
+
+@pytest.mark.realdata
+def test_realdata_long_notes_with_paths() -> None:
+    """``notes_real.opju`` (a real 717-char note loaded via ``open -n``) is
+    recovered whole: the 2-byte varint length is honored and the Windows path
+    (backslashes) + inequalities survive the relaxed junk filter (2026-07-06)."""
+    src = _CORPUS / "specimens" / "notes_real.opju"
+    if not src.exists():
+        pytest.skip("notes_real specimen not present on this machine")
+    ds = read_origin_project(src)
+    notes = ds.metadata.get("origin_notes", {})
+    assert "RealNotes" in notes
+    body = notes["RealNotes"]
+    assert len(body) > 200  # the varint length worked (single-byte would truncate)
+    assert "C:\\lab\\data" in body
+    assert "T < 4 K" in body and "H > 2 T" in body
 
 
 # ── unrecovered designated-X fallback (silent x-mislabel regression) ──────────

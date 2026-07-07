@@ -1165,14 +1165,17 @@ wrong answer); they are listed so the drop cases are known, not rediscovered:
     metadata run (all 7 designations + long names decode exactly,
     test-pinned). The `.opj` `_is_column_block` byte whitelists remain as
     documented gates (no .opj specimen can be made).
-11. **Notes decoder thinness** — still OPEN; specimen attempt 2026-07-06
-    FAILED: `notes.text$` is not COM-writable and `notes.append` reports
-    success but persists nothing into the saved project, so no
-    hostile-content notes specimen could be made headlessly. The junk
-    filter (rejects `\`, `<`, `>`) and the 250-byte frame stay fail-closed
-    against the one shape ever validated; needs a hand-made notes project
-    to go further. The results-log US-locale timestamp assumption also
-    stands (needs a non-US-locale project).
+11. ~~**Notes decoder thinness**~~ **CLOSED 2026-07-06** — `open -n <file>
+    <winname>` DOES persist a real notes window (the earlier `notes.text$`/
+    `notes.append` COM paths do not), yielding `notes_real.opju` (a 717-char
+    note with a Windows path + inequalities). It exposed two real bugs, now
+    fixed: (a) the text length is a LEB128 **varint** (718 = `ce 05`), not a
+    single byte — the old read dropped every note past ~127 chars; (b) the
+    junk filter rejected bare `\`/`<`/`>`, which real notes carry ("C:\lab
+    \data", "T < 4 K") — it now keys on named OriginStorage/CDATA tokens
+    only. Text decodes UTF-8-first. Still **zero** false positives across the
+    real corpus. The results-log US-locale timestamp assumption remains
+    (needs a non-US-locale project).
 12. ~~**`_INTERNAL_ANN_RE` substring matching**~~ **CLOSED 2026-07-06** —
     `SYSTEM`/`SRCINFO` now drop only as UPPERCASE whole words (the internal
     tokens' real shape); "System pressure = 3 bar" survives. Test-pinned.

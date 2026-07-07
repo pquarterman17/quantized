@@ -33,14 +33,18 @@ with no operation line still yields its timestamp, with
 *Notes windows* (free-form user text pages) sit in the ``.opju`` (CPYUA)
 windows section as a tight, contiguous pair of length-prefixed records::
 
-    93 <nl> <window-name> 00   0a <tl> <note-text> 00
+    93 <nl> <window-name> 00   0a <tl-varint> <note-text> 00
 
 — a ``0x93`` window-name record (``nl`` counts name+NUL) whose NUL butts
-directly against a ``0x0a`` text record (``tl`` counts text+NUL). Validated
-against a known-content specimen (``tools/origin_trial/generate_specimens2``
--> ``notes_probe.opju``, planted text ``QZNOTE line one/two``): the pattern
-recovers the exact two lines AND matches **zero** records across the whole
-real corpus (none of which carry a notes window), so it attaches nothing
+directly against a ``0x0a`` text record. ``tl`` is a **LEB128 varint**
+counting text+NUL (a 718-byte note stores ``ce 05``): the original
+single-byte read silently dropped every note past ~127 chars, fixed
+2026-07-06 against ``notes_real.opju`` (a real 717-char note loaded via
+``open -n``, holding Windows paths and inequalities). Text decodes
+UTF-8-first (latin-1 fallback), and the internal-junk filter keys on named
+OriginStorage/CDATA tokens only — NOT bare ``\``/``<``/``>``, which real
+notes legitimately carry. It still matches **zero** records across the whole
+real corpus (none carry a notes window), so it attaches nothing
 speculatively — the false-positive bar the earlier log-only scan set. Notes
 land in ``metadata['origin_notes']`` as ``{window_name: text}``. The scan is
 byte-level so it also runs over ``.opj`` (CPYA), where it is likewise
@@ -63,9 +67,14 @@ _RUN = re.compile(rb"[\x20-\x7e\r\n\t]{40,}")
 _MAX_LOG = 200_000  # metadata guard: never attach unbounded text
 
 # Text containing any of these is an internal storage blob, not a user note.
-_NOTE_JUNK = (b"\\", b"OriginStorage", b"ColumnInfo", b"ImportFile", b"<", b">", b"CDATA")
+# Bare `\`, `<`, `>` were REMOVED 2026-07-06: real notes legitimately hold
+# Windows paths ("C:\lab\data") and inequalities ("T < 4 K", "H > 2 T"); the
+# named storage tokens below still reject every OriginStorage/CDATA XML blob
+# (corpus stays false-positive-clean). `</` catches XML close-tags without
+# hitting a lone inequality.
+_NOTE_JUNK = (b"OriginStorage", b"ColumnInfo", b"ImportFile", b"CDATA", b"</", b"<NEWBOOK")
 _MAX_NOTES = 64  # sane cap on notes windows per project
-_MAX_NOTE_LEN = 250  # single-byte length prefix ceiling
+_MAX_NOTE_LEN = 100_000  # a note is free-form prose; bounded, not a 250-byte cap
 
 
 def results_log(b: bytes) -> str:
@@ -94,6 +103,41 @@ def _printable(data: bytes, *, allow_newlines: bool = False) -> bool:
     return bool(data) and all(lo <= c <= 0x0D or 0x20 <= c <= 0x7E for c in data)
 
 
+def _read_varint(b: bytes, p: int) -> tuple[int | None, int]:
+    """LEB128 length varint at ``p`` -> ``(value, next_pos)``.
+
+    Returns ``(None, p)`` if it isn't a well-formed varint within 3 bytes. The
+    ``.opju`` text record's length prefix GROWS with the note (a 718-byte note
+    stores ``ce 05``), so a single-byte read silently dropped every note past
+    ~127 chars -- the same varint-width class as the big-column fix (audit
+    #16), here confirmed by ``notes_real.opju`` (2026-07-06)."""
+    val = shift = 0
+    for k in range(3):
+        if p + k >= len(b):
+            return None, p
+        c = b[p + k]
+        val |= (c & 0x7F) << shift
+        if not c & 0x80:
+            return val, p + k + 1
+        shift += 7
+    return None, p
+
+
+def _decode_note(raw: bytes) -> str | None:
+    """UTF-8-first (latin-1 fallback) note text, ``\\r\\n`` normalized, or
+    ``None`` if it isn't printable text. The ``.opju`` container is UTF-8, so a
+    note with a degree sign / Greek survives."""
+    for enc in ("utf-8", "latin1"):
+        try:
+            s = raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+        if any(ord(c) < 0x20 and c not in "\t\r\n" for c in s):
+            return None
+        return s.replace("\r\n", "\n")
+    return None
+
+
 def notes_windows(b: bytes) -> dict[str, str]:
     """Map notes-window name -> its free text (``\\r\\n`` normalized to ``\\n``).
 
@@ -118,15 +162,19 @@ def notes_windows(b: bytes) -> dict[str, str]:
         q = p + 2 + nl  # first byte after the name's NUL
         if q + 1 >= n or b[q] != 0x0A:
             continue
-        tl = b[q + 1]
-        if not (2 <= tl <= _MAX_NOTE_LEN) or q + 1 + tl >= n or b[q + 1 + tl] != 0:
+        tl, text_start = _read_varint(b, q + 1)  # tl counts text + trailing NUL
+        if tl is None or not (2 <= tl <= _MAX_NOTE_LEN):
             continue
-        text = b[q + 2 : q + 1 + tl]  # tl-1 bytes + the NUL just checked
-        if not _printable(text, allow_newlines=True):
+        text_end = text_start + tl - 1  # index of the trailing NUL
+        if text_end >= n or b[text_end] != 0:
             continue
+        text = b[text_start:text_end]
         if any(j in text for j in _NOTE_JUNK):
             continue
-        out[name.decode("latin1")] = text.decode("latin1").replace("\r\n", "\n")
+        decoded = _decode_note(text)
+        if decoded is None:
+            continue
+        out[name.decode("latin1")] = decoded
         if len(out) >= _MAX_NOTES:
             break
     return out
