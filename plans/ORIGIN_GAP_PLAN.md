@@ -15,12 +15,10 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-07 (TWELVE items closed today: #36, #26, #31, #32,
-#6, #7, #2, #3, #1, #4, #5, #11 — report viewer, Test chooser, Peak
-Analyzer wizard, typed pipeline + expression steps, templates + batch,
-recalc graph + staleness + workspace v3, and the complete figure
-property panels. **W1, W2 Tier 1, W5 Tier 1, W6 headline, and W7 are
-all complete.**)
+**Updated:** 2026-07-07 (FOURTEEN items closed today: #36, #26, #31,
+#32, #6, #7, #2, #3, #1, #4, #5, #11, #12, #15 — capped by figure
+documents + user graph templates. **W1, W2 Tier 1, W3 Tier 1, W5
+Tier 1, W6 headline, and W7 are all complete.**)
 
 ---
 
@@ -154,7 +152,7 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 | 1–5 | Recalc engine + templates + batch (W1) | W1 | ✅ COMPLETE 2026-07-07 — recalc DAG + staleness + workspace v3 + templates + batch ALL shipped; W1 done |
 | 1 | Recalc dependency graph | W1 | ⬜ the architectural keystone everything "live" builds on (frontend/store) |
 | 36–37 | Report sheets + docx/pptx export | W7 | ✅ COMPLETE — schema + emitters + exports 2026-07-03; viewer + Library section + .dwk round-trip 2026-07-07 |
-| 11, 12 | Complete property panels + figure documents | W3 | 🟡 #11 panels CLOSED 2026-07-07 (defaults audit = eyeball residual); #12 figure documents remain |
+| 11, 12 | Complete property panels + figure documents | W3 | ✅ #11 + #12 + #15 CLOSED 2026-07-07 — W3 Tier 1 complete; #13/#14 direct manipulation remain |
 | 40 | Generic import wizard + saved filters | W8 | 🟡 preview/parse engine + `/api/import/*` landed 2026-07-03; filter persistence + wizard UI remain |
 | 41 | Packaging & installers | W8 | ⬜ zero-friction first run gates all OSS adoption |
 | 46–47 | Test-data corpus + PIXcel3D audit | W8 | ✅ mostly done; only pole-figure representation open |
@@ -266,25 +264,11 @@ real M-H / XRD / R(Q) / RSM figures against published APS/Nature
 figures — needs a human eyeball + the visual harness; the panels,
 overrides object, and preset plumbing are all in place for it.)
 
-12. **Figures as live documents** — named figure objects in the
-    workspace that re-open, re-edit, and re-export at any time (never
-    recreate a figure); round-trip through `.dwk`; recalc-aware (#1) so
-    figures track data changes
-    *Model: opus (document/state model — W3's contract item), sonnet
-    (wiring). Pickup: today figure config is transient dialog state;
-    promote it to a first-class store entity like `Dataset`. Prior art:
-    imported Origin figures (`OriginFigureEntry`, store `figures` slice)
-    already persist through `.dwk` and nest in the Library tree
-    (PROJECT_ORGANIZATION_PLAN #5, 2026-07-05) — FigureDoc generalizes
-    that entity for user-authored figures.*
-    - [ ] FigureDoc entity: id, name, dataset refs (by id, not copies),
-          plot-state snapshot (channels/scales/styles/overlays), export
-          config (#11's object), live-link vs frozen flag
-    - [ ] Library gets a "Figures" section (open / rename / duplicate /
-          delete / export)
-    - [ ] Acceptance: build a figure, close the app (autosave), reopen
-          → identical render from the FigureDoc; with live-link on,
-          editing the source data updates the figure via #1
+~~12. **Figures as live documents**~~ **CLOSED 2026-07-07** — see
+Completed. (The Library "Figures" acceptance criterion — open / rename
+/ duplicate / delete / export — shipped with rename available through
+the store action; the row UI exposes open/duplicate/delete, export
+happens in the re-opened builder.)
 
 ### Tier 2 — Medium Impact
 
@@ -304,12 +288,8 @@ overrides object, and preset plumbing are all in place for it.)
     edits back through #11's config object, never a parallel path;
     drag = update position property + re-render (debounced).*
 
-15. **User graph templates** — save any figure's full style as a named,
-    shareable template file (extends the 10 built-in presets); apply to
-    other figures / use in batch plotting
-    *Model: haiku. Pickup: `calc/figure_styles.py` presets define the
-    schema; a user template is the same dict, user-authored, persisted
-    like saved import filters (#40).*
+~~15. **User graph templates**~~ **CLOSED 2026-07-07** — see Completed
+(save/apply/delete in the builder; persisted like peak recipes).
 
 ---
 
@@ -702,6 +682,20 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#12 Figures as live documents + #15 user graph templates**~~
+  (2026-07-07) — `lib/figuredoc.ts`: FigureDoc = id/name + dataset ref
+  (by id, clamped on load like reports) + the FULL builder config
+  (channels/scales/labels, #11 overrides, preset/fmt/dpi) + live-vs-
+  frozen flag (frozen docs carry a data snapshot and render without
+  their dataset). Store slice (add/remove/rename/duplicate/open) with
+  dataset-removal ref-nulling; opening activates the dataset and seeds
+  the builder via `figureDocSeed` — the builder restores the config
+  WITHOUT touching live plot state, renders current data for live docs
+  (recalc-fresh, the #1 acceptance path) or the snapshot for frozen.
+  Library "Saved figures" section (◉ live / ❄ frozen). Round-trips
+  .dwk v3. #15: GraphTemplate = the style half (preset + overrides +
+  series styles), save/apply/delete in the builder, localStorage like
+  peak recipes. Frontend 1062 green.
 - ~~**#11 Complete property panels**~~ (2026-07-07) —
   `calc/figure.render_figure` gained the ONE `overrides` config object
   (validated in calc, pydantic-free, unknown keys ignored): fonts
