@@ -15,7 +15,8 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-03
+**Updated:** 2026-07-07 (reconciliation: cross-cutting table caught up to
+the W9 item bodies — #50/#52/#53/#55 cores shipped 2026-07-03)
 
 ---
 
@@ -152,12 +153,15 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 | 40 | Generic import wizard + saved filters | W8 | 🟡 preview/parse engine + `/api/import/*` landed 2026-07-03; filter persistence + wizard UI remain |
 | 41 | Packaging & installers | W8 | ⬜ zero-friction first run gates all OSS adoption |
 | 46–47 | Test-data corpus + PIXcel3D audit | W8 | ✅ mostly done; only pole-figure representation open |
-| 49–50 | Drag-to-axis + row states | W9 | ⬜ the JMP-differentiator foundation (frontend; #50 is a small shared contract) |
+| 49–50 | Drag-to-axis + row states | W9 | 🟡 #50 row-state model SHIPPED in full (foundation + cross-view + selection + guard #11, 2026-07-03; index-staleness fixes 2026-07-05 `4113104`) — #49 drag-to-axis still open |
 
 Also landed 2026-07-03 (beyond the table): #16 statistical-plot math + export,
 #17 contour export, #19 3-D export, #35 batch peak integration, #9 headless
 public API, **#42 Bruker `.raw`/`.brml` parsers**, and **#43 JCAMP-DX + NetCDF
-import** (both formats done). The parser workstream (W8 #42/#43) is now
+import** (both formats done). The #50 row-state stack cores also shipped
+2026-07-03: **#52 Distribution**, **#53 local data filter**, **#55 Tabulate**
+(each keeps a "Remaining" note in its W9 item body — those notes, not this
+table, are the live status). The parser workstream (W8 #42/#43) is now
 complete for the targeted formats — remaining open work is overwhelmingly
 frontend (needs UX direction).
 

@@ -13,7 +13,9 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-04 (item 35's `.opj`-side sub-question — item 11's
+**Updated:** 2026-07-07 (items 36–37 booked into W4 from the gap-register
+deferrals §13.2 #17/#6; previous update 2026-07-04: item 35's `.opj`-side
+sub-question — item 11's
 original curve→column selector, long presumed permanently undecodable — is
 now SOLVED: every curve carries a small anchor record holding the plotted
 column's own global, project-wide serial id, independently confirmed
@@ -398,9 +400,27 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ## W4 — Import flow & UX
 
-(all W4 items shipped — see Completed; the full Book→Sheet nesting UI
+(earlier W4 items shipped — see Completed; the full Book→Sheet nesting UI
 was deliberately descoped in #5, pseudo-books "`Book@N` (sheet N)" are
 the shipped contract)
+
+### Tier 2 — Medium Impact
+
+36. **Multi-panel spatial apply (frontend)** — booked from gap register
+    §13.2 #17: the backend exposes per-layer `frame` quads + page size
+    (`figure_geometry`), but the frontend applies each layer alone (or a
+    2-layer Y/Y2 combo via `doubleYPartner`). Render a multi-layer page's
+    panels in their true spatial arrangement from `frame`/`page`.
+    *Model: sonnet (gui work). Not a decode gap — pure UI enhancement.*
+    - [ ] Panel-layout apply path in `applyOriginFigure` (frame → grid)
+    - [ ] Visual-harness check on "Fixed Lambdas SI"!Graph6 (2 stacked)
+
+37. **y2 axis label from layer 2's decoded title** — booked from gap
+    register §13.2 #6 follow-up: the double-Y apply carries layer 2's
+    range/log to y2 but the y2 axis label still auto-derives from the
+    channel; use the decoded `y_title` when present.
+    *Model: haiku (small frontend wiring).*
+    - [ ] `y2AxisLabel` override in the double-Y path of `applyOriginFigure`
 
 ---
 

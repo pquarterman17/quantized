@@ -1114,7 +1114,8 @@ Ordered by value. Each names the decode path so it can be picked up cold.
    fields, reset with `y2Keys`), and `uplotOpts` gives the y2 scale its own
    fixed range + log distr (falling back to autoscale/yLog as before).
    Follow-up (small): a `y2AxisLabel` override from layer 2's decoded
-   `y_title` — the y2 axis label still auto-derives from the channel.
+   `y_title` — the y2 axis label still auto-derives from the channel
+   (booked: `plans/ORIGIN_FILE_DECODE_PLAN.md` W4 #37).
 7. ~~**Multi-layer frame geometry**~~ **CLOSED 2026-07-06** (decode side)
    — `figure_geometry.py`: `.opj` frame = u16 quad at layer-block 113-119
    (41/44 COM oracle), `.opju` frame = the `12 00 20 22` marker after the
@@ -1238,7 +1239,7 @@ wrong answer); they are listed so the drop cases are known, not rediscovered:
     via `doubleYPartner`) but does not yet lay panels out in their true
     spatial arrangement from `frame`/`page`. That is a UI enhancement (a
     multi-panel plot canvas), NOT a backend-parity gap — deferred to the GUI
-    workstream.
+    workstream (booked: `plans/ORIGIN_FILE_DECODE_PLAN.md` W4 #36).
 
 ### 13.3 BLOCKED (documented dead ends — do not re-chase)
 
