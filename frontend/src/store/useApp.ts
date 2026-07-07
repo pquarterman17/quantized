@@ -4,7 +4,7 @@
 import { create } from "zustand";
 
 import type { CorrectionsRequest } from "../lib/api";
-import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
+import { applyCorrections as applyCorrectionsApi, fitModel, uploadFile } from "../lib/api";
 import { cloneDataStruct } from "../lib/dataset";
 import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
 import { setFormatOpts, type Notation } from "../lib/format";
@@ -43,7 +43,8 @@ import { applyPalette, normalizePalette } from "../lib/palettes";
 import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
 import { effectiveChannels } from "../lib/plotdata";
-import { sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
+import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
+import { activeRowIndices, analysisData, droppedRows, expandToFull, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
 import {
   addRecentEntry,
   clearRecentMeta,
@@ -89,6 +90,12 @@ let _idSeq = 0;
 const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
 const nextFolderId = (): string => `fld-${Date.now().toString(36)}-${++_idSeq}`;
 const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_idSeq}`;
+
+// Recalc scheduler internals (#1): a module-level debounce timer plus an
+// in-progress guard so the recalc's own applyCorrections calls never re-mark
+// or re-schedule (the loop would otherwise feed itself).
+let _recalcTimer: ReturnType<typeof setTimeout> | null = null;
+let _recalcInProgress = false;
 
 export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
@@ -165,6 +172,14 @@ interface AppState {
   reports: ReportEntry[];
   // The report currently open in the viewer ToolWindow (null = closed).
   openReportId: string | null;
+  // Recalc engine (#1): auto re-runs downstream corrections/fits when data
+  // changes; manual only flips staleness (#4 badges); off does neither.
+  recalcMode: RecalcMode;
+  // Dirty nodes awaiting recalculation (dataset ids). A dataset is stale when
+  // its corrections need re-deriving (its bg source changed); a fit is stale
+  // when its dataset's data changed under a saved fitSpec.
+  staleDatasets: string[];
+  staleFits: string[];
   // Library folder tree (project-organization plan, Approach B). Pure
   // organization over the flat `datasets[]` array — datasets point in via
   // `Dataset.folderId`; folders never gate row-state. Round-trips .dwk v2.
@@ -289,6 +304,12 @@ interface AppState {
   removeReport: (id: string) => void;
   renameReport: (id: string, name: string) => void;
   setOpenReport: (id: string | null) => void;
+  // Recalc engine (#1): mark everything downstream of a data change, run the
+  // dirty set now, and record/clear a dataset's re-runnable fit spec.
+  setRecalcMode: (mode: RecalcMode) => void;
+  touchDataset: (id: string) => void;
+  recalcNow: () => Promise<void>;
+  setFitSpec: (id: string, spec: { model: string } | null) => void;
   loadWorkspace: (ws: WorkspaceState) => void;
   setActive: (id: string) => void;
   toggleSelected: (id: string) => void;
@@ -578,6 +599,9 @@ export const useApp = create<AppState>((set, get) => ({
   originFigures: [],
   reports: [],
   openReportId: null,
+  recalcMode: "auto",
+  staleDatasets: [],
+  staleFits: [],
   folders: [],
   expandedFolders: [],
   leftCollapsed: false,
@@ -912,6 +936,10 @@ export const useApp = create<AppState>((set, get) => ({
         originFigures: ws.originFigures ?? [], // restored from the .dwk (v2 persists them)
         reports: ws.reports ?? [], // report sheets (#36) — .dwk v2 persists them
         openReportId: null,
+        macroSteps: ws.macroSteps ?? [], // typed pipeline (#6) — .dwk v3
+        recalcMode: ws.recalcMode ?? "auto", // recalc engine (#1) — .dwk v3
+        staleDatasets: [],
+        staleFits: [],
         stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
         xKey: null,
         yKeys: null,
@@ -1163,6 +1191,7 @@ export const useApp = create<AppState>((set, get) => ({
       `Edit ${ds.name} [${row},${col}]`,
       `qz.setCell(${lit(ds.name)}, ${row}, ${col}, ${lit(value)})`,
     );
+    get().touchDataset(id); // recalc graph (#1): data changed
   },
   // Append a computed column (formula) to a dataset and evaluate it. The column
   // lands as the last column of `data` and recomputes whenever the base changes.
@@ -1183,10 +1212,11 @@ export const useApp = create<AppState>((set, get) => ({
         params: { name, expr },
       });
     }
+    get().touchDataset(id); // recalc graph (#1): data changed
   },
   // Remove the computed column at `index` (in the formulas list). Strips the OLD
   // computed columns, then reapplies the shrunk list (NaN-stable indices).
-  removeFormula: (id, index) =>
+  removeFormula: (id, index) => {
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id || !d.formulas) return d;
@@ -1220,7 +1250,9 @@ export const useApp = create<AppState>((set, get) => ({
           filter: filter && filter.length ? filter : undefined,
         };
       }),
-    })),
+    }));
+    get().touchDataset(id); // recalc graph (#1): data changed
+  },
   // Attach free-text notes to a dataset (blank clears). Per-dataset, so it lives
   // on the object (round-trips through .dwk) rather than the transient view state.
   setDatasetNotes: (id, notes) =>
@@ -1336,6 +1368,7 @@ export const useApp = create<AppState>((set, get) => ({
           : `qz.applyCorrections(${lit(ds.name)}, ${lit(params)})`,
         { kind: "correction", params: { params, bg } },
       );
+      get().touchDataset(id); // recalc graph (#1): data changed
     } catch (e) {
       get().setStatus(
         `corrections failed: ${e instanceof Error ? e.message : "error"}`,
@@ -1365,6 +1398,7 @@ export const useApp = create<AppState>((set, get) => ({
         params: {},
       });
     }
+    get().touchDataset(id); // recalc graph (#1): data changed
   },
   // Propagate one dataset's corrections to a batch. Each target re-derives from
   // its OWN raw (applyCorrections is replace-not-accumulate), so this is safe to
@@ -1686,6 +1720,84 @@ export const useApp = create<AppState>((set, get) => ({
       reports: s.reports.map((r) => (r.id === id ? { ...r, name } : r)),
     })),
   setOpenReport: (openReportId) => set({ openReportId }),
+  // ── Recalc engine (#1) ───────────────────────────────────────────────────
+  setRecalcMode: (recalcMode) => set({ recalcMode }),
+  touchDataset: (id) => {
+    if (_recalcInProgress) return; // the recalc's own writes never re-mark
+    const s = get();
+    if (s.recalcMode === "off") return;
+    const down = downstreamOf(s.datasets, id);
+    const staleDatasets = markStale(s.staleDatasets, down.datasets);
+    const staleFits = markStale(s.staleFits, down.fits);
+    if (staleDatasets !== s.staleDatasets || staleFits !== s.staleFits) {
+      set({ staleDatasets, staleFits });
+    }
+    if (s.recalcMode === "auto" && (staleDatasets.length || staleFits.length)) {
+      // Debounced: a burst of cell edits triggers ONE downstream pass.
+      if (_recalcTimer) clearTimeout(_recalcTimer);
+      _recalcTimer = setTimeout(() => {
+        _recalcTimer = null;
+        void get().recalcNow();
+      }, 400);
+    }
+  },
+  recalcNow: async () => {
+    if (_recalcInProgress) return;
+    _recalcInProgress = true;
+    try {
+      // Corrections first (they change the data fits consume), then fits.
+      for (const id of [...get().staleDatasets]) {
+        const d = get().datasets.find((x) => x.id === id);
+        if (d?.corrections && d.raw) {
+          try {
+            await get().applyCorrections(id, d.corrections, d.bgRef);
+            set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
+          } catch {
+            /* stays stale; applyCorrections already surfaced the error */
+          }
+        } else {
+          set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
+        }
+      }
+      for (const id of [...get().staleFits]) {
+        const d = get().datasets.find((x) => x.id === id);
+        if (!d?.fitSpec) {
+          set((s) => ({ staleFits: s.staleFits.filter((x) => x !== id) }));
+          continue;
+        }
+        try {
+          const ad = analysisData(d);
+          if (!ad || ad.values.length === 0) throw new Error("no data");
+          const r = await fitModel({
+            model: d.fitSpec.model,
+            x: ad.time,
+            y: ad.values.map((row) => row[0]),
+          });
+          const yFit = r.yFit as (number | null)[] | undefined;
+          // Refresh the overlay only if this dataset's fit is the one shown.
+          if (Array.isArray(yFit) && get().fitOverlay?.datasetId === id) {
+            const n = d.data.time.length;
+            const kept = activeRowIndices(n, droppedRows(d));
+            const y = kept.length === n ? yFit : expandToFull(yFit, kept, n);
+            set({ fitOverlay: { datasetId: id, y } });
+          }
+          set((s) => ({ staleFits: s.staleFits.filter((x) => x !== id) }));
+        } catch (e) {
+          get().setStatus(
+            `recalc fit failed: ${e instanceof Error ? e.message : "error"}`,
+          );
+        }
+      }
+    } finally {
+      _recalcInProgress = false;
+    }
+  },
+  setFitSpec: (id, spec) =>
+    set((s) => ({
+      datasets: s.datasets.map((d) =>
+        d.id === id ? { ...d, fitSpec: spec ?? undefined } : d,
+      ),
+    })),
   setDataFilterOpen: (dataFilterOpen) => set({ dataFilterOpen }),
   setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
   setWaterfallOpen: (waterfallOpen) => set({ waterfallOpen }),

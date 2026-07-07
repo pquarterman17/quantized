@@ -6,6 +6,8 @@
 import { sanitizeFilter } from "./datafilter";
 import { pruneOrphans } from "./foldertree";
 import type { OriginFigureEntry } from "./originFigures";
+import { sanitizeSteps, type PipelineStep } from "./pipeline";
+import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeExcluded } from "./rowstate";
 import type {
@@ -20,8 +22,10 @@ import type {
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
 // v2 (project-organization plan item 2): adds the folder tree, active/selection,
-// and folder-expansion. v1 docs (datasets only) still load — migrated on parse.
-export const WORKSPACE_VERSION = 2;
+// and folder-expansion. v3 (gap #5): adds the typed pipeline steps, the recalc
+// mode, per-dataset fit specs, and reports. Older docs still load — migrated
+// on parse with safe defaults.
+export const WORKSPACE_VERSION = 3;
 
 /** The persistable slice of app state (input to serialize). The store's AppState
  *  is a structural superset, so `useApp.getState()` can be passed directly where
@@ -35,6 +39,8 @@ export interface WorkspaceState {
   expandedFolders?: string[];
   originFigures?: OriginFigureEntry[];
   reports?: ReportEntry[];
+  macroSteps?: PipelineStep[];
+  recalcMode?: RecalcMode;
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -47,6 +53,8 @@ export interface LoadedWorkspace {
   expandedFolders: string[];
   originFigures: OriginFigureEntry[];
   reports: ReportEntry[];
+  macroSteps: PipelineStep[];
+  recalcMode: RecalcMode;
 }
 
 interface WorkspaceDoc {
@@ -60,6 +68,8 @@ interface WorkspaceDoc {
   expandedFolders: string[];
   originFigures: OriginFigureEntry[];
   reports: ReportEntry[];
+  pipeline: PipelineStep[];
+  recalcMode: RecalcMode;
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -74,6 +84,8 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     expandedFolders: ws.expandedFolders ?? [],
     originFigures: ws.originFigures ?? [],
     reports: ws.reports ?? [],
+    pipeline: ws.macroSteps ?? [],
+    recalcMode: ws.recalcMode ?? "auto",
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -95,6 +107,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
         : {}),
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
+      ...(d.fitSpec ? { fitSpec: d.fitSpec } : {}),
     })),
   };
   return JSON.stringify(doc, null, 2);
@@ -201,7 +214,7 @@ export function parseWorkspace(text: string): LoadedWorkspace {
   if (o.format !== WORKSPACE_FORMAT) {
     throw new Error("not a quantized workspace (.dwk) file");
   }
-  if (o.version !== 1 && o.version !== 2) {
+  if (o.version !== 1 && o.version !== 2 && o.version !== 3) {
     throw new Error(`unsupported workspace version: ${String(o.version)}`);
   }
   if (!Array.isArray(o.datasets)) {
@@ -275,6 +288,13 @@ export function parseWorkspace(text: string): LoadedWorkspace {
     // Local data filter (#53): validate predicate columns against the channels.
     const filter = sanitizeFilter(dd.filter, ds.data.labels.length);
     if (filter.length) ds.filter = filter;
+    if (
+      dd.fitSpec &&
+      typeof dd.fitSpec === "object" &&
+      typeof (dd.fitSpec as Record<string, unknown>).model === "string"
+    ) {
+      ds.fitSpec = { model: (dd.fitSpec as { model: string }).model };
+    }
     if (typeof dd.folderId === "string") ds.folderId = dd.folderId;
     if (typeof dd.order === "number" && Number.isFinite(dd.order)) ds.order = dd.order;
     return ds;
@@ -292,5 +312,18 @@ export function parseWorkspace(text: string): LoadedWorkspace {
   const expandedFolders = stringsIn(o.expandedFolders, folderIds);
   const originFigures = parseOriginFigures(o.originFigures, dsIds);
   const reports = sanitizeReports(o.reports, dsIds);
-  return { datasets, folders, activeId, selectedIds, expandedFolders, originFigures, reports };
+  const macroSteps = sanitizeSteps(o.pipeline);
+  const recalcMode: RecalcMode =
+    o.recalcMode === "manual" || o.recalcMode === "off" ? o.recalcMode : "auto";
+  return {
+    datasets,
+    folders,
+    activeId,
+    selectedIds,
+    expandedFolders,
+    originFigures,
+    reports,
+    macroSteps,
+    recalcMode,
+  };
 }

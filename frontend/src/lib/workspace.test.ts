@@ -144,7 +144,7 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
   it("writes the format tag and version", () => {
     const doc = JSON.parse(ser([makeDataset("a", "x")]));
     expect(doc.format).toBe(WORKSPACE_FORMAT);
-    expect(doc.version).toBe(2);
+    expect(doc.version).toBe(3); // v3 (gap #5): pipeline + recalc mode + fit specs
     expect(typeof doc.savedAt).toBe("string");
   });
 });
@@ -401,5 +401,52 @@ describe("workspace report persistence (#36)", () => {
     // v1/older docs without a reports key parse to an empty list
     delete doc.reports;
     expect(parseWorkspace(JSON.stringify(doc)).reports).toEqual([]);
+  });
+});
+
+describe("workspace v3 (gap #5): pipeline + recalc mode + fit specs", () => {
+  it("round-trips the typed pipeline, recalc mode, and per-dataset fit specs", () => {
+    const datasets = [makeDataset("a", "first")];
+    (datasets[0] as { fitSpec?: { model: string } }).fitSpec = { model: "Gaussian" };
+    const steps = [
+      {
+        id: "step-1",
+        kind: "expression" as const,
+        label: "Add column r",
+        code: 'qz.addColumn("r", "A * 2")',
+        params: { name: "r", expr: "A * 2" },
+        enabled: false,
+      },
+    ];
+    const loaded = parseWorkspace(
+      serializeWorkspace({ datasets, macroSteps: steps, recalcMode: "manual" }),
+    );
+    expect(loaded.recalcMode).toBe("manual");
+    expect(loaded.macroSteps).toHaveLength(1);
+    expect(loaded.macroSteps[0].kind).toBe("expression");
+    expect(loaded.macroSteps[0].params).toEqual({ name: "r", expr: "A * 2" });
+    expect(loaded.macroSteps[0].enabled).toBe(false);
+    expect(loaded.datasets[0].fitSpec).toEqual({ model: "Gaussian" });
+  });
+
+  it("v1/v2 docs load with safe defaults (empty pipeline, auto mode)", () => {
+    const doc = JSON.parse(serializeWorkspace({ datasets: [makeDataset("a", "x")] }));
+    doc.version = 2;
+    delete doc.pipeline;
+    delete doc.recalcMode;
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.macroSteps).toEqual([]);
+    expect(loaded.recalcMode).toBe("auto");
+  });
+
+  it("drops malformed persisted steps and invalid fit specs", () => {
+    const doc = JSON.parse(serializeWorkspace({ datasets: [makeDataset("a", "x")] }));
+    doc.pipeline = [{ kind: "alien" }, null, {
+      id: "s", kind: "ui", label: "ok", code: "qz.x()", params: {},
+    }];
+    doc.datasets[0].fitSpec = { model: 7 };
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.macroSteps.map((s) => s.label)).toEqual(["ok"]);
+    expect(loaded.datasets[0].fitSpec).toBeUndefined();
   });
 });

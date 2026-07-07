@@ -180,6 +180,10 @@ export interface Dataset {
    *  background dataset's id + the interpolation method. Persisted so the
    *  Corrections card can re-populate and re-apply it reproducibly. */
   bgRef?: { datasetId: string; interp: string };
+  /** The last fit run on this dataset (model name) — the recalc graph (#1)
+   *  re-runs it when the data changes (auto mode) or marks it stale (manual).
+   *  Set by the Curve Fit workshop; round-trips through .dwk v3. */
+  fitSpec?: { model: string };
   /** Free-text user notes about this dataset (sample, conditions, caveats).
    *  Shown in the Inspector Notes card; round-trips through the .dwk workspace. */
   notes?: string;

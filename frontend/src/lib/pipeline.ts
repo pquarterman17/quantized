@@ -113,6 +113,32 @@ export const STEP_FIELDS: Record<string, { key: string; label: string }[]> = {
   fit: [{ key: "model", label: "fit model" }],
 };
 
+/** Validate persisted steps from a .dwk (v3): drop malformed entries, mint
+ *  fresh ids (persisted ids could collide with this session's counter). */
+export function sanitizeSteps(v: unknown): PipelineStep[] {
+  if (!Array.isArray(v)) return [];
+  const kinds: readonly string[] = ["ui", "import", "expression", "correction", "reset", "fit"];
+  const out: PipelineStep[] = [];
+  for (const s of v) {
+    if (typeof s !== "object" || s === null) continue;
+    const o = s as Record<string, unknown>;
+    if (
+      typeof o.label !== "string" ||
+      typeof o.code !== "string" ||
+      !kinds.includes(String(o.kind)) ||
+      typeof o.params !== "object" ||
+      o.params === null
+    ) {
+      continue;
+    }
+    out.push({
+      ...makeStep(o.kind as StepKind, o.label, o.code, { ...(o.params as Record<string, unknown>) }),
+      enabled: o.enabled !== false,
+    });
+  }
+  return out;
+}
+
 /** Reorder helper: move the step at `index` by `delta`, clamped. */
 export function moveStep(
   steps: readonly PipelineStep[],

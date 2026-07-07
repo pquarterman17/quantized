@@ -519,6 +519,24 @@ export default function App() {
         run: () => s().setPipelineOpen(true),
       },
       {
+        id: "recalc-now",
+        group: "Data",
+        label: "Recalculate now (run stale corrections + fits)",
+        run: () => void s().recalcNow(),
+      },
+      {
+        id: "recalc-mode",
+        group: "Data",
+        label: "Recalc mode (cycle auto → manual → off)",
+        run: () => {
+          const order = ["auto", "manual", "off"] as const;
+          const cur = s().recalcMode;
+          const next = order[(order.indexOf(cur) + 1) % order.length];
+          s().setRecalcMode(next);
+          s().setStatus(`recalc mode: ${next}`);
+        },
+      },
+      {
         id: "data-filter",
         group: "Data",
         label: "Data filter (live per-column row filter)…",

@@ -44,6 +44,11 @@ export default function DatasetRow({
   sheetNumber,
   depth = 0,
 }: Props) {
+  // Staleness badge (#4): amber when this dataset's corrections or fit await
+  // recalculation (manual mode) — click runs the dirty set now.
+  const staleDs = useApp((s) => s.staleDatasets);
+  const staleFits = useApp((s) => s.staleFits);
+  const recalcNow = useApp((s) => s.recalcNow);
   const setActive = useApp((s) => s.setActive);
   const toggleSelected = useApp((s) => s.toggleSelected);
   const selectRange = useApp((s) => s.selectRange);
@@ -191,6 +196,18 @@ export default function DatasetRow({
     >
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
       <div className="qzk-ds-top">
+        {(staleDs.includes(d.id) || staleFits.includes(d.id)) && (
+          <span
+            className="qzk-stale-dot"
+            title="stale — data changed; click to recalculate now"
+            onClick={(e) => {
+              e.stopPropagation();
+              void recalcNow();
+            }}
+          >
+            ●
+          </span>
+        )}
         {sheetNumber != null && (
           <span className="qzk-ds-sheet-chip" title={`Sheet ${sheetNumber} of the same Origin workbook`}>
             └ sheet {sheetNumber}

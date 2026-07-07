@@ -74,6 +74,9 @@ export function useCurveFit(): CurveFitState {
           kind: "fit",
           params: { model: modelName },
         });
+        // Durable fit spec: the recalc graph (#1) re-runs / stales this fit
+        // when the dataset's data changes.
+        useApp.getState().setFitSpec(active.id, { model: modelName });
         const yFit = r.yFit as (number | null)[] | undefined;
         if (Array.isArray(yFit)) {
           // yFit aligns to the pruned analysis x; expand it back to the full row
@@ -97,6 +100,7 @@ export function useCurveFit(): CurveFitState {
     setGuessOnly(false);
     setError(null);
     setFitOverlay(null);
+    if (active) useApp.getState().setFitSpec(active.id, null);
   }
 
   return {
