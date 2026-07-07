@@ -8,6 +8,7 @@ the corpus sweep + the 127 MB perf budget are ``realdata``-marked.
 
 from __future__ import annotations
 
+import json
 import struct
 import time
 from pathlib import Path
@@ -356,3 +357,28 @@ def test_text_bound_hardening_specimens() -> None:
     lc = read_origin_books(spec / "long_comment.opju")[0]
     assert "After" in lc.labels
     assert "mA" in lc.units
+
+
+@pytest.mark.realdata
+def test_hybrid_axis_record_decodes_to_oracle() -> None:
+    """§13.2 #13 hybrid axis record: a specimen-form skeleton whose X/Y spans
+    carry real-corpus RLE value tokens (a plotted-then-customized graph). It
+    used to decode ZERO figures (fail-closed); now the last-resort
+    ``parse_hybrid_record`` recovers it EXACTLY against the COM oracle
+    (X=0.85..6.15, Y=5..95, both linear, 8 curves). The parser is gated behind
+    both other forms failing, so the rf_* real-form log oracle is untouched."""
+    spec = _CORPUS / "specimens" / "symbol_kinds.opju"
+    gt = _CORPUS / "specimens" / "ground_truth" / "symbol_kinds" / "axis_ticks.json"
+    if not spec.exists() or not gt.exists():
+        pytest.skip("symbol_kinds specimen/oracle not present on this machine")
+
+    from quantized.io.origin_project.figures_opju import extract_figures_opju
+
+    oracle = json.loads(gt.read_text(encoding="utf-8"))["Graph1"][0]
+    figs = [f for f in extract_figures_opju(spec.read_bytes()) if f["name"] == "Graph1"]
+    assert len(figs) == 1
+    f = figs[0]
+    assert f["x_from"] == oracle["x_from"] and f["x_to"] == oracle["x_to"]
+    assert f["y_from"] == oracle["y_from"] and f["y_to"] == oracle["y_to"]
+    assert f["x_log"] is False and f["y_log"] is False
+    assert len(f["curves"]) == 8

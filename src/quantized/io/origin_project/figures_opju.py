@@ -134,7 +134,10 @@ from quantized.io.origin_project.opju_axis_real_form import (
     _TAG_SEARCH_SPAN,
     _Y_TRANSITION,
     _parse_real_record,
+)
+from quantized.io.origin_project.opju_axis_specimen_form import (
     _parse_specimen_record,
+    parse_hybrid_record,
 )
 from quantized.io.origin_project.opju_curves import (
     allocated_columns_from_bytes,
@@ -169,6 +172,10 @@ _TYPE_LIN = 0x03  # both linear
 _TYPE_XLOG = 0x04  # X log, Y linear
 _BKNAME_RE = re.compile(rb"<BKNAME>([^<]+)</BKNAME>")
 _TEXT_WINDOW = 20_000  # bytes scanned per layer for legend/annotation/source-hint text
+# _parse_real_record's return: (xf, xt, yf, yt, x_log, y_log, x_step, y_step).
+_OptF = float | None
+_OptB = bool | None
+_RealRecord = tuple[float, float, float, float, _OptB, _OptB, _OptF, _OptF]
 # Cap on annotations from the imprecise flat-scrape fallback (the routed
 # grammar path is exact and uncapped). Raised from 12 -> 64 so a real XRD graph
 # with many peak labels keeps them all; still a runaway guard against a noisy
@@ -313,10 +320,17 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         x_flag: bool | None
         x_step: float | None = None
         y_step: float | None = None
+        real: _RealRecord | None = None
+        if spec is None:
+            real = _parse_real_record(b, p, window_end)
+            if real is None:
+                # Neither form parsed: try the hybrid (specimen skeleton +
+                # real-form value tokens, §13.2 #13). Gated behind BOTH so it
+                # can never change a record the others already decode.
+                spec = parse_hybrid_record(b, p)
         if spec is not None:
             x_from, x_to, y_from, y_to, type_byte, x_flag = spec
         else:
-            real = _parse_real_record(b, p, window_end)
             if real is None:
                 continue  # undecodable record: skip, never guess
             x_from, x_to, y_from, y_to, x_flag, real_y_log, x_step, y_step = real
