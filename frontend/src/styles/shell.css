@@ -282,3 +282,11 @@ body {
 .qzk-wizard-step.qzk-active { border-color: var(--accent); color: var(--text); }
 .qzk-wizard-num { font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-faint); }
 .qzk-wizard-step.qzk-active .qzk-wizard-num { color: var(--accent); }
+
+/* Pipeline view (#6): the editable step list. */
+.qzk-step-row { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; }
+.qzk-step-row.qzk-active { border-color: var(--accent); }
+.qzk-step-kind { flex-shrink: 0; padding: 0 5px; border-radius: var(--radius-sm); background: var(--surface-3, var(--surface-1)); color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-nano); }
+.qzk-step-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: var(--font-size-sm); }
+.qzk-step-editor { margin: 2px 0 6px 24px; padding: 6px 8px; border-left: 2px solid var(--border-soft); }
+.qzk-step-code { font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-dim); word-break: break-all; }

@@ -4,7 +4,7 @@
 
 import { copyText } from "../../lib/clipboard";
 import { saveBlob } from "../../lib/download";
-import { macroToScript } from "../../lib/macro";
+import { pipelineToScript } from "../../lib/pipeline";
 import { useApp } from "../../store/useApp";
 import { Button, Card } from "../primitives";
 
@@ -17,13 +17,13 @@ export default function MacroCard() {
   const setStatus = useApp((s) => s.setStatus);
 
   const copyScript = (): void => {
-    copyText(macroToScript(steps)).then((ok) =>
+    copyText(pipelineToScript(steps)).then((ok) =>
       setStatus(ok ? `copied macro — ${steps.length} steps` : "clipboard unavailable"),
     );
   };
 
   const downloadScript = (): void => {
-    saveBlob(new Blob([macroToScript(steps)], { type: "text/plain" }), "macro.qzm");
+    saveBlob(new Blob([pipelineToScript(steps)], { type: "text/plain" }), "macro.qzm");
     setStatus(`saved macro.qzm — ${steps.length} steps`);
   };
 

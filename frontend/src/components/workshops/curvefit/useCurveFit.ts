@@ -68,6 +68,12 @@ export function useCurveFit(): CurveFitState {
         const r = await fitModel({ model: modelName, x: xy.x, y: xy.y });
         setResult(r);
         setGuessOnly(false);
+        // Recorded as a typed step so the pipeline view (#6) can edit the
+        // model and re-run the fit.
+        useApp.getState().recordMacro(`Fit ${modelName}`, `qz.fit("${modelName}")`, {
+          kind: "fit",
+          params: { model: modelName },
+        });
         const yFit = r.yFit as (number | null)[] | undefined;
         if (Array.isArray(yFit)) {
           // yFit aligns to the pruned analysis x; expand it back to the full row

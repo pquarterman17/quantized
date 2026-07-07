@@ -9,7 +9,14 @@ import { cloneDataStruct } from "../lib/dataset";
 import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
 import { setFormatOpts, type Notation } from "../lib/format";
 import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
-import { lit, macroStep, type MacroStep } from "../lib/macro";
+import { lit } from "../lib/macro";
+import {
+  makeStep,
+  moveStep as movePipelineStep,
+  regenerateStep,
+  type PipelineStep,
+  type StepKind,
+} from "../lib/pipeline";
 import {
   createFolder as treeCreateFolder,
   deleteFolder as treeDeleteFolder,
@@ -243,6 +250,7 @@ interface AppState {
   dataFilterOpen: boolean;
   statsChooserOpen: boolean; // the "which test?" front door (#26)
   peakWizardOpen: boolean; // the Peak Analyzer stepper (#31)
+  pipelineOpen: boolean; // the editable pipeline view (#6)
   figureBuilderOpen: boolean;
   waterfallOpen: boolean;
   reflViewOpen: boolean;
@@ -257,9 +265,14 @@ interface AppState {
   mapMethod: string; // 2D-map regrid interpolation (natural/linear/nearest/idw)
   mapRes: number; // 2D-map grid resolution (nx = ny)
   // Macro recorder: when `macroRecording` is on, curated actions append a step;
-  // the Inspector card exports `macroSteps` as a reproducible script.
+  // the Inspector card exports `macroSteps` as a reproducible script. Steps are
+  // TYPED (lib/pipeline): runnable kinds carry {kind, params} so the pipeline
+  // view (#6) edits and re-runs the same list the script exports — one source
+  // of truth. `pipelineRunning` suppresses recording while the runner replays
+  // steps through these same store actions (no self-recording loops).
   macroRecording: boolean;
-  macroSteps: MacroStep[];
+  macroSteps: PipelineStep[];
+  pipelineRunning: boolean;
   status: string;
 
   addDataset: (ds: Dataset) => void;
@@ -407,6 +420,7 @@ interface AppState {
   setDataFilterOpen: (open: boolean) => void;
   setStatsChooserOpen: (open: boolean) => void;
   setPeakWizardOpen: (open: boolean) => void;
+  setPipelineOpen: (open: boolean) => void;
   setFigureBuilderOpen: (open: boolean) => void;
   setWaterfallOpen: (open: boolean) => void;
   setReflViewOpen: (open: boolean) => void;
@@ -426,7 +440,18 @@ interface AppState {
   clearMacro: () => void;
   // Append a step IFF recording is on (callers invoke unconditionally — the
   // gate lives here so the "are we recording?" check isn't scattered).
-  recordMacro: (label: string, code: string) => void;
+  recordMacro: (
+    label: string,
+    code: string,
+    typed?: { kind: StepKind; params: Record<string, unknown> },
+  ) => void;
+  // Pipeline view (#6): edit the recorded step list in place.
+  updateStepParams: (id: string, params: Record<string, unknown>) => void;
+  toggleStep: (id: string) => void;
+  removeStep: (id: string) => void;
+  moveStep: (id: string, delta: number) => void;
+  insertStep: (step: PipelineStep) => void;
+  setPipelineRunning: (running: boolean) => void;
   setStatus: (status: string) => void;
 }
 
@@ -624,6 +649,7 @@ export const useApp = create<AppState>((set, get) => ({
   dataFilterOpen: false,
   statsChooserOpen: false,
   peakWizardOpen: false,
+  pipelineOpen: false,
   figureBuilderOpen: false,
   waterfallOpen: false,
   reflViewOpen: false,
@@ -641,6 +667,7 @@ export const useApp = create<AppState>((set, get) => ({
   mapRes: 200,
   macroRecording: false,
   macroSteps: [],
+  pipelineRunning: false,
   status: "starting…",
 
   addDataset: (ds) =>
@@ -710,7 +737,10 @@ export const useApp = create<AppState>((set, get) => ({
           newIds.push(id);
         }
         if (figures?.length) get().addOriginFigures(stem, figures, newIds);
-        get().recordMacro(`Import ${file.name}`, `qz.import(${lit(file.name)})`);
+        get().recordMacro(`Import ${file.name}`, `qz.import(${lit(file.name)})`, {
+          kind: "import",
+          params: { name: file.name },
+        });
         get().pushRecent(file.name, file.size);
         added += 1;
       } catch (e) {
@@ -1145,7 +1175,12 @@ export const useApp = create<AppState>((set, get) => ({
         return { ...d, formulas, data: applyFormulas(base, formulas) };
       }),
     }));
-    if (ds) get().recordMacro(`Add column ${name}`, `qz.addColumn(${lit(name)}, ${lit(expr)})`);
+    if (ds) {
+      get().recordMacro(`Add column ${name}`, `qz.addColumn(${lit(name)}, ${lit(expr)})`, {
+        kind: "expression",
+        params: { name, expr },
+      });
+    }
   },
   // Remove the computed column at `index` (in the formulas list). Strips the OLD
   // computed columns, then reapplies the shrunk list (NaN-stable indices).
@@ -1297,6 +1332,7 @@ export const useApp = create<AppState>((set, get) => ({
         bgDs
           ? `qz.applyCorrections(${lit(ds.name)}, ${lit(params)}, ${lit({ bg: bgDs.name, interp: bg!.interp })})`
           : `qz.applyCorrections(${lit(ds.name)}, ${lit(params)})`,
+        { kind: "correction", params: { params, bg } },
       );
     } catch (e) {
       get().setStatus(
@@ -1321,7 +1357,12 @@ export const useApp = create<AppState>((set, get) => ({
         });
       }),
     }));
-    if (ds?.raw) get().recordMacro(`Reset corrections → ${ds.name}`, `qz.resetCorrections(${lit(ds.name)})`);
+    if (ds?.raw) {
+      get().recordMacro(`Reset corrections → ${ds.name}`, `qz.resetCorrections(${lit(ds.name)})`, {
+        kind: "reset",
+        params: {},
+      });
+    }
   },
   // Propagate one dataset's corrections to a batch. Each target re-derives from
   // its OWN raw (applyCorrections is replace-not-accumulate), so this is safe to
@@ -1616,6 +1657,7 @@ export const useApp = create<AppState>((set, get) => ({
   setDistributionOpen: (distributionOpen) => set({ distributionOpen }),
   setStatsChooserOpen: (statsChooserOpen) => set({ statsChooserOpen }),
   setPeakWizardOpen: (peakWizardOpen) => set({ peakWizardOpen }),
+  setPipelineOpen: (pipelineOpen) => set({ pipelineOpen }),
   // Report sheets (#36). Adding opens the viewer on the new report so the
   // producing workshop's "→ Report" lands somewhere visible immediately.
   addReport: (name, report, datasetId) =>
@@ -1669,8 +1711,39 @@ export const useApp = create<AppState>((set, get) => ({
   startMacro: () => set({ macroRecording: true }),
   stopMacro: () => set({ macroRecording: false }),
   clearMacro: () => set({ macroSteps: [], macroRecording: false }),
-  recordMacro: (label, code) =>
-    set((s) => (s.macroRecording ? { macroSteps: [...s.macroSteps, macroStep(label, code)] } : {})),
+  recordMacro: (label, code, typed) =>
+    set((s) =>
+      s.macroRecording && !s.pipelineRunning
+        ? {
+            macroSteps: [
+              ...s.macroSteps,
+              makeStep(typed?.kind ?? "ui", label, code, typed?.params ?? {}),
+            ],
+          }
+        : {},
+    ),
+  // ── Pipeline view (#6): edit + replay the recorded step list ────────────
+  updateStepParams: (id, params) =>
+    set((s) => ({
+      macroSteps: s.macroSteps.map((st) =>
+        st.id === id ? regenerateStep({ ...st, params }) : st,
+      ),
+    })),
+  toggleStep: (id) =>
+    set((s) => ({
+      macroSteps: s.macroSteps.map((st) =>
+        st.id === id ? { ...st, enabled: !st.enabled } : st,
+      ),
+    })),
+  removeStep: (id) =>
+    set((s) => ({ macroSteps: s.macroSteps.filter((st) => st.id !== id) })),
+  moveStep: (id, delta) =>
+    set((s) => {
+      const i = s.macroSteps.findIndex((st) => st.id === id);
+      return i < 0 ? {} : { macroSteps: movePipelineStep(s.macroSteps, i, delta) };
+    }),
+  insertStep: (step) => set((s) => ({ macroSteps: [...s.macroSteps, step] })),
+  setPipelineRunning: (pipelineRunning) => set({ pipelineRunning }),
   setStatus: (status) => set({ status }),
 }));
 

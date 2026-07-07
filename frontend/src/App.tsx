@@ -25,6 +25,7 @@ import DistributionPanel from "./components/workshops/distribution/DistributionP
 import ReportPanel from "./components/workshops/report/ReportPanel";
 import StatsChooserPanel from "./components/workshops/statschooser/StatsChooserPanel";
 import PeakWizardPanel from "./components/workshops/peakwizard/PeakWizardPanel";
+import PipelinePanel from "./components/workshops/pipeline/PipelinePanel";
 import DataFilterPanel from "./components/workshops/datafilter/DataFilterPanel";
 import ColumnSwitcher from "./components/workshops/switcher/ColumnSwitcher";
 import FigureBuilderView from "./components/workshops/figurebuilder/FigureBuilderView";
@@ -105,6 +106,7 @@ export default function App() {
   const openReportId = useApp((s) => s.openReportId);
   const statsChooserOpen = useApp((s) => s.statsChooserOpen);
   const peakWizardOpen = useApp((s) => s.peakWizardOpen);
+  const pipelineOpen = useApp((s) => s.pipelineOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -511,6 +513,12 @@ export default function App() {
         run: () => s().setPeakWizardOpen(true),
       },
       {
+        id: "pipeline",
+        group: "Data",
+        label: "Pipeline (edit + re-run recorded steps)…",
+        run: () => s().setPipelineOpen(true),
+      },
+      {
         id: "data-filter",
         group: "Data",
         label: "Data filter (live per-column row filter)…",
@@ -818,6 +826,7 @@ export default function App() {
       {dataFilterOpen && <DataFilterPanel />}
       {statsChooserOpen && <StatsChooserPanel />}
       {peakWizardOpen && <PeakWizardPanel />}
+      {pipelineOpen && <PipelinePanel />}
       {openReportId && <ReportPanel />}
       {columnSwitcherOpen && <ColumnSwitcher />}
       {figureBuilderOpen && <FigureBuilderView />}
