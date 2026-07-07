@@ -1037,6 +1037,7 @@ rather than shipped wrong.
 | **Annotation tag variants + attach modes + rotated labels + exact short text** (`86 13`@-32, `85 1f`@-33, page-box+frame+diagonal-signature rotation, owned-block text) | both | 109/111 expanded COM oracle, 0 wrong | (2026-07-06) |
 | **Layer frame rect + page size, both containers** (`figure_geometry.py`: .opj quad@113 + pair@35; .opju `12 00 20 22` marker + containment-validated pair) | both | 57 frames + 27 pages exact, 0 wrong (layer_geometry COM oracle) | (2026-07-06) |
 | **Axis tick increments** (`x_step`/`y_step`: .opj triple's 3rd double @31/74; .opju real-form step token) | both | 88/88 .opj + full .opju corpus vs axis_ticks COM oracle | (2026-07-06) |
+| **Native `.opj` writer loads in real Origin + re-exports value-exact** (loader requirement set: stream grammar, `ResultsLog` note, record-group minimum, serial↔ordinal binding, 6-null worksheet separators) | `.opj` write | COM `app.Load` + expASC value-exact (PQ3/PQ5/PQ6, Origin 2026b) | (2026-07-07) |
 | Axis titles (XB/YL/YR) + legend labels + annotation text | both | COM text oracle | (earlier) |
 | Annotation positions (layer-fraction, y-from-top) | both | 5/5 oracle-exact (<6e-17) | `170b46e` |
 | Notes pages + structured results-log records | both | corpus | (earlier) |

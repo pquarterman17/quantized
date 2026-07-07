@@ -1741,23 +1741,47 @@ is MATLAB-parity tested.
 
 **Native `.opj` writer** (`writer.py::opj_bytes`/`write_opj`, route
 `POST /api/export/opj`): Origin ≥2023 dropped *writing* `.opj` but still
-*reads* it, so a native CPYA writer reaches every Origin version — in
-principle the highest-value export lever. It emits: header line + file-header
-block; per column, a header block (`"<Book>_<Col>"`) + a 10-byte
-`<mask><float64>` data block (NaN → `ORIGIN_MISSING`); then a windows
-section per book (window-header block with short/long name, then per
-column a 519-byte property block + a `LongName\r\nUnit\r\nComment` label
-block) — mirroring §2.1/§4.1's layout exactly.
+*reads* it, so a native CPYA writer reaches every Origin version — the
+highest-value export lever.
 
-**Status: round-trips through our own reader (CI-tested) but does NOT yet
-load in real Origin** (validated via COM `app.Load` during the 2026-07-04
-trial window — `docs/origin_re/validation_log.md`). This is plan item 34,
-open: the structural fields Origin's own loader may additionally require
-(mandatory file-header fields, project-tree/root-window records, windows-
-section completeness, or a trailer) are not yet identified. **Until this is
-fixed, the `.opj` writer output should not be represented to users as
-"opens in Origin"** — the LabTalk/CSV path above is the one that reliably
-does. See `docs/opening_origin_files.md` for the user-facing framing.
+**Status: LOADS IN REAL ORIGIN (2026-07-07, plan item 34 closed).** The
+loader's full requirement set was pinned by the PN/PJ/PK/PT/PU/PW COM
+probe series (`docs/origin_re/validation_log.md`, 2026-07-07 entry) and
+the writer emits exactly that shape (`writer_blocks.py` holds the
+sanitized byte templates + the measured field model):
+
+* **stream** — header line + 123-byte fh block; per column
+  `[NULL][147B column header][data block]` (name @88, filled/allocated
+  row u32s @25/@6); `NULL NULL`; per book a window section: window header
+  (short name @2, long name at the 195-byte prefix's end anchored by
+  `@${`), the 365-byte `Pd` sheet sub-header (row count u16 @82), the
+  `__LayerInfoStorage` record group (a window section must carry at least
+  ONE `133B/72B/content` record group or the load is refused), then per
+  column a 519-byte property block + a `LongName\r\nUnit\r\nComment`
+  label block. **Worksheet window sections are separated by SIX null
+  blocks** (two folds the next book into the previous one); three nulls
+  close the stream.
+* **column ↔ dataset binding** — the 519B property block's u16 serial @4
+  is matched against the dataset's **1-based ordinal in the file's stream
+  order**; @30 is the constant 9; @35 carries the associated X column's
+  serial (0 on X/disregard columns); @38 is 0x51 X / 0x61 Y / 0x41
+  disregard; @51 is the 1-based X-group index. Wrong values here do NOT
+  refuse the load — the columns silently render EMPTY (the PU5 probe's
+  failure mode), so this block is the writer's most safety-critical spot.
+* **tail** — params section, NULL + project record, a note list that
+  CONTAINS a `ResultsLog` note (presence required, content free), NULL,
+  the `37 + len(tree)` scalar, the constant 16-byte id blob, the folder
+  tree, and a global-storage section of exactly 8 indexed records
+  (content lax — three constant records + five empties suffice; even
+  dialog-state XML referencing nonexistent windows is accepted); plus the
+  file-size u32 at fh offset 115. Everything else measured lax (fh's
+  seven `rand()`-like u32s, tree window ordinals, storage content).
+
+Verified live on Origin 2026b: single-book, multi-book, and synthetic
+(NaN-cell) writer outputs all `app.Load` = True with the right book
+count, and expASC re-exports are **value-exact with correct names and
+units** (`tools/origin_trial/probe_opj_loader.py verify`). Re-verify per
+license window via the validation-log checklist.
 
 ---
 
@@ -1811,8 +1835,10 @@ Double-Precision Floating-Point Data*, IEEE Transactions on Computers,
 Tracked in `plans/ORIGIN_FILE_DECODE_PLAN.md`; summarized here for anyone
 reading only this doc:
 
-- **Item 34 — `.opj` writer real-Origin load failure.** Tier-1, open. See
-  §8.
+- **Item 34 — `.opj` writer real-Origin load, CLOSED 2026-07-07.** The
+  writer's output loads in real Origin (2026b) and re-exports value-exact;
+  the loader requirement set is documented in §8 and
+  `docs/origin_re/validation_log.md`.
 - **Item 35 — figure curve→dataset column binding, CLOSED 2026-07-04.**
   `.opj`'s DataPlot column selector (§6.1) stays permanently undecoded.
   `.opju`'s IS decoded (§6.2.1, `opju_curves.py` + `opju_curves_allcols.py`)

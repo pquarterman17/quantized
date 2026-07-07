@@ -251,6 +251,41 @@ all slots together (composition of the two known failure axes).
   no index.json) — column enumeration is the slow path (~37 s/sheet);
   graphs-only export is the fast oracle route for big projects.
 
+## 2026-07-07 (item 34 CLOSED — writer loads + re-exports value-exact)
+
+The PN/PJ/PK/PT/PU/PW probe series completed the loader model; the writer
+(`writer.py` + new `writer_blocks.py`) now emits the full requirement set.
+Key discriminations (all COM `app.Load` on Origin 2026b):
+
+- **PN1** (1-book stream + minimal tail: params, projrec, `ResultsLog`
+  stub note, 1-window tree, storage = count-8 with idx0..4 EMPTY +
+  constant idx5/6/7) → **True**. The old "all-slots-empty fails" /
+  "real epilogue on 1-window stream aborts" results were confounds of
+  the full-Moke stream / a miscut — storage content is LAX (PN3: even
+  dialog XML naming nonexistent windows loads). **PN4**: removing the
+  `ResultsLog` note → False even on the minimal file (presence required,
+  content free).
+- **PJ1/PK1**: a window section with ZERO `133B/72B/content` record
+  groups is refused; ANY one group suffices — the writer ships the
+  byte-invariant `__LayerInfoStorage` group.
+- **PU5 → field hunt**: with everything else real, synthesized 519B
+  property blocks silently UNBIND the data (load ok, columns empty).
+  Measured across all 61 corpus workbook columns: binding = u16 @4
+  serial ↔ dataset's 1-based stream ordinal; @30 = constant 9; @35 =
+  the X column's serial (0 on X/disregard); @38 = 0x51 X / 0x61 Y /
+  0x41 disregard; @51 = X-group index. (The old writer's @30=serial
+  "worked" only for the column whose serial happened to be 9 — the
+  Book2_A coincidence that also fooled the byte-diff.)
+- **PW1**: worksheet window sections must be separated by SIX null
+  blocks — with two, the loader folds the next book into the previous
+  one (books=1). Graph sections in the corpus use two.
+- **Acceptance**: PQ3 (corpus 12-col book), PQ5 (two books), PQ6
+  (synthetic with NaN) all load with correct book counts and expASC
+  re-export **value-exact** data, names, units (NaN → `--`).
+  `probe_opj_loader.py verify` now deletes the CSV before exporting —
+  a silent expASC failure must not read stale bytes (a trap hit twice
+  this session).
+
 ## How to re-run
 
 `tools/origin_trial/export_ground_truth.py` (skips completed stems);

@@ -84,12 +84,13 @@ quantized can hand data back to Origin colleagues two ways:
   graph. This works with **every version of Origin** and is the
   well-tested, cross-platform path — use it by default.
 - **Native `.opj` project file.** quantized can also write a `.opj` file
-  directly. This is **not yet confirmed to open in real OriginPro** — it
-  round-trips correctly through quantized's own reader, but a real Origin
-  install currently rejects the file when loading it (a known open issue,
-  tracked as plan item 34). Until that's fixed, don't rely on the native
-  `.opj` export for handing files to Origin users — use the Origin-ASCII
-  + `.ogs` path above instead.
+  directly. This **opens in real OriginPro** (verified live on Origin
+  2026b, 2026-07-07: single- and multi-book files load and re-export
+  value-exact data, names, and units — plan item 34). Because Origin
+  ≥2023 still *reads* the classic `.opj` format even though it no longer
+  writes it, one file reaches every Origin version. The Origin-ASCII +
+  `.ogs` path remains the belt-and-braces alternative (it re-runs the
+  import inside Origin itself).
 
 A live "Send to Origin" (pushing data directly into a running Origin
 session via COM) also exists as a Windows-only optional feature for users

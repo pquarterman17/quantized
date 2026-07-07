@@ -13,8 +13,10 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-07 (items 36–37 booked into W4 from the gap-register
-deferrals §13.2 #17/#6; previous update 2026-07-04: item 35's `.opj`-side
+**Updated:** 2026-07-07 (item 34 CLOSED — the native `.opj` writer now
+loads in real Origin and re-exports value-exact, see Completed; items
+36–37 booked into W4 from the gap-register deferrals §13.2 #17/#6;
+previous update 2026-07-04: item 35's `.opj`-side
 sub-question — item 11's
 original curve→column selector, long presumed permanently undecodable — is
 now SOLVED: every curve carries a small anchor record holding the plotted
@@ -215,8 +217,7 @@ no documented real-Origin validation procedure for the trial window (31).
 
 | # | Item | Workstream | Why first |
 |---|------|------------|-----------|
-| 34 | `.opj` writer real-Origin fix | W6 | the export lever is broken; loader model + tail grammar decoded 2026-07-04 (validation_log.md) — next: window-SECTION boundary re-cut |
-| ~~25~~ / ~~33~~ / ~~4~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18 / 19 / 20 / 22~~ | Send-to-Origin + all decode + import flow + W4 UI + docs + log parsing + fixture audit | — | done, see Completed |
+| ~~34~~ / ~~25~~ / ~~33~~ / ~~4~~ / ~~10 / 16 / 32~~ / ~~1 / 7 / 8 / 9 / 11 / 14 / 15 / 17 / 18 / 19 / 20 / 22~~ | `.opj` writer (CLOSED 2026-07-07) + Send-to-Origin + all decode + import flow + W4 UI + docs + log parsing + fixture audit | — | done, see Completed |
 
 ---
 
@@ -440,23 +441,7 @@ the shipped contract)
 
 ### Tier 1 — High Impact
 
-34. **`.opj` writer real-Origin compatibility** — item 24's writer
-    round-trips through our own reader but real Origin REJECTS the file
-    (COM `app.Load` = False, 2026-07-04, see
-    `docs/origin_re/validation_log.md`). The whole point of a native
-    writer — "a written `.opj` opens in EVERY Origin version" — is unmet
-    until this is fixed. The student license gives a tight oracle loop:
-    write → COM `Load` → adjust → repeat, plus expASC re-export to verify
-    data integrity once it loads. Likely gaps: mandatory file-header
-    fields, project-tree/root-window records, windows-section
-    completeness, or a trailer Origin's loader requires.
-    *Model: fable/opus (RE debug loop, COM-serialized — main thread) ·
-    the ONLY open item that needs the license besides 25/31.*
-    - [ ] Reproduce the load failure; capture Origin's error surface
-    - [ ] Structural diff: our output vs the smallest real corpus `.opj`
-    - [ ] Iterate sections until `Load` = True
-    - [ ] Verify loaded data/names/units via expASC re-export
-    - [ ] Record the required-section findings in the format doc
+(item 34 shipped — see Completed)
 
 ### Tier 2 — Medium Impact
 
@@ -479,6 +464,20 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**#34 `.opj` writer real-Origin compatibility**~~ (2026-07-07) — the
+  writer's output now LOADS in real Origin (2026b) and expASC re-exports
+  are value-exact (names/units/NaN included), single- and multi-book. The
+  loader requirement set was pinned by a COM probe series (PN/PJ/PK/PT/
+  PU/PW, `docs/origin_re/validation_log.md`): minimal consistent tail
+  (the old all-slots-empty/over-full "consistency" results were probe
+  confounds — storage content is lax; the `ResultsLog` note presence is
+  required), ≥1 record group per window section (`__LayerInfoStorage`),
+  column↔dataset binding via 519B serial @4 = dataset stream ordinal
+  (+@30=9, @35=X-serial, @38 designation flag — wrong values silently
+  blank the data), and 6-null worksheet-section separators. New
+  `writer_blocks.py` (sanitized templates + field model); format doc §8
+  rewritten; user-facing `opening_origin_files.md` updated.
 
 - ~~**.ogs export live-verified in real Origin**~~ (2026-07-04) — running
   the generated LabTalk through installed OriginPro (COM) exposed two
