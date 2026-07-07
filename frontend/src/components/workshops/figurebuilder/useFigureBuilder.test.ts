@@ -1,14 +1,21 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { exportFigure, renderFigureBlob } from "../../../lib/api";
+import { exportFigure, renderFigureHitmap } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useFigureBuilder } from "./useFigureBuilder";
 
 vi.mock("../../../lib/api", () => ({
   exportFigure: vi.fn().mockResolvedValue(undefined),
-  renderFigureBlob: vi.fn().mockResolvedValue(new Blob(["png"], { type: "image/png" })),
+  // the preview now renders through the #13 hit-map endpoint
+  renderFigureHitmap: vi.fn().mockResolvedValue({
+    image: "cGln",
+    width: 600,
+    height: 400,
+    elements: [{ id: "title", x0: 1, y0: 1, x1: 2, y1: 2 }],
+    axes: { x0: 0, y0: 0, x1: 600, y1: 400, xlim: [0, 1], ylim: [0, 1], xlog: false, ylog: false },
+  }),
 }));
 
 const DATA: DataStruct = {
@@ -25,9 +32,6 @@ const DATA: DataStruct = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // jsdom has no object-URL impl — stub for the preview lifecycle.
-  globalThis.URL.createObjectURL = vi.fn(() => "blob:preview");
-  globalThis.URL.revokeObjectURL = vi.fn();
   useApp.setState({
     datasets: [{ id: "d1", name: "scan.dat", data: DATA }],
     activeId: "d1",
@@ -40,12 +44,13 @@ beforeEach(() => {
 });
 
 describe("useFigureBuilder", () => {
-  it("renders a debounced PNG preview from the active dataset", async () => {
+  it("renders a debounced preview + hit-map from the active dataset", async () => {
     const { result } = renderHook(() => useFigureBuilder());
-    await waitFor(() => expect(renderFigureBlob).toHaveBeenCalledTimes(1));
-    const body = vi.mocked(renderFigureBlob).mock.calls[0][0];
-    expect(body.fmt).toBe("png"); // preview is always PNG
-    await waitFor(() => expect(result.current.preview).toBe("blob:preview"));
+    await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(result.current.preview).toBe("data:image/png;base64,cGln"),
+    );
+    expect(result.current.hitmap?.elements[0].id).toBe("title");
   });
 
   it("exports at the chosen format/DPI with the dataset stem as filename", () => {

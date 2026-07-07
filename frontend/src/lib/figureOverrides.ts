@@ -7,7 +7,7 @@ export interface FigureOverrides {
   font_size?: number;
   font_name?: string;
   title_size?: number;
-  legend?: { show?: boolean; loc?: string; frame?: boolean };
+  legend?: { show?: boolean; loc?: string; frame?: boolean; anchor?: [number, number] };
   ticks?: { dir?: "in" | "out"; len?: number; minor?: boolean };
   spines?: { top?: boolean; right?: boolean };
   x_lim?: [number | null, number | null];

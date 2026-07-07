@@ -292,6 +292,54 @@ def export_figure(req: FigureRequest) -> Response:
     )
 
 
+@router.post("/figure-hitmap")
+def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
+    """Preview render + element hit-map (gap #13): base64 PNG, per-artist
+    pixel boxes (title/labels/legend/series/annotations), and the axes rect
+    with data limits — the client hit-tests the preview and maps drags back
+    to data coordinates. ``fmt`` is ignored (always PNG at ``dpi``)."""
+    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
+    from quantized.calc.figure import render_figure_map
+    from quantized.calc.plotting import PlotState, build_series
+
+    try:
+        ds = DataStruct.from_dict(req.dataset)
+        state = PlotState(
+            x_key=req.x_key,
+            y_keys=tuple(req.y_keys) if req.y_keys is not None else None,
+            x_log=req.x_log,
+            y_log=req.y_log,
+        )
+        plot = build_series(ds, state)
+        x_label = req.x_label
+        if x_label is None:
+            x_label = f"{plot.x_label} ({plot.x_unit})" if plot.x_unit else plot.x_label
+        y_label = req.y_label
+        if y_label is None:
+            y_label = ""
+            if len(plot.series) == 1:
+                only = plot.series[0]
+                y_label = f"{only.label} ({only.unit})" if only.unit else only.label
+        series = [
+            (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series
+        ]
+        return render_figure_map(
+            plot.x,
+            series,
+            title=req.title,
+            x_label=x_label,
+            y_label=y_label,
+            x_log=req.x_log,
+            y_log=req.y_log,
+            style=req.style,
+            series_styles=req.series_styles,
+            dpi=dpi,
+            overrides=req.overrides,
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 class StatplotFigureRequest(BaseModel):
     kind: str  # box|violin|qq|probability|histogram
     data: list[list[float]] | list[float]  # groups (box/violin) or one sample

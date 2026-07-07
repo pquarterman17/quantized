@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 
+import PreviewOverlay from "./PreviewOverlay";
 import PropertyPanels from "./PropertyPanels";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Checkbox, NumberField, Select } from "../../primitives";
@@ -63,7 +64,11 @@ export default function FigureBuilderView() {
               onChange={(e) => f.setYLabel(e.target.value)}
             />
             {/* #11: every export property, panel-grouped, one config object */}
-            <PropertyPanels overrides={f.overrides} setOverrides={f.setOverrides} />
+            <PropertyPanels
+              overrides={f.overrides}
+              setOverrides={f.setOverrides}
+              openGroup={f.focusGroup}
+            />
 
             {/* #12: save the configuration as a named, re-openable figure */}
             <label className="qzk-field-lbl" style={{ marginTop: 6 }}>Save as figure</label>
@@ -140,11 +145,16 @@ export default function FigureBuilderView() {
               <div className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
                 {f.error}
               </div>
-            ) : f.preview ? (
-              <img
+            ) : f.preview && f.hitmap ? (
+              /* #13/#14: hit-testable preview — click to focus a panel,
+                 double-click text to edit, drag legend/annotations */
+              <PreviewOverlay
                 src={f.preview}
-                alt="figure preview"
-                style={{ maxWidth: "100%", maxHeight: 340 }}
+                map={f.hitmap}
+                textOf={f.textOf}
+                onSelect={f.selectElement}
+                onEditText={f.editElementText}
+                onDragEnd={f.dragElement}
               />
             ) : (
               <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>

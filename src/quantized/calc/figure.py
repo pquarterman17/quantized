@@ -51,7 +51,7 @@ def _plot_kwargs(default_lw: float, spec: Mapping[str, Any] | None) -> dict[str,
     return kw
 
 
-def render_figure(
+def _render_impl(
     x: ArrayLike,
     series: Sequence[tuple[str, ArrayLike]],
     *,
@@ -67,7 +67,8 @@ def render_figure(
     height_in: float | None = None,
     dpi: int = 200,
     overrides: Mapping[str, Any] | None = None,
-) -> bytes:
+    collect_map: bool = False,
+) -> bytes | dict[str, Any]:
     """Render ``series`` (each ``(label, y)``) against ``x`` to image bytes.
 
     ``fmt`` is ``pdf`` / ``svg`` (vector) or ``png`` / ``tiff`` (raster, sized by
@@ -144,11 +145,100 @@ def render_figure(
             _apply_overrides(fig, ax, st, ov, n_series=len(series))
             if not ov.get("margins"):
                 fig.tight_layout()
+            if collect_map:
+                return _collect_map(fig, ax, n_series=len(series), dpi=dpi)
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=dpi)
             return buf.getvalue()
         finally:
             plt.close(fig)
+
+
+def render_figure(
+    x: ArrayLike,
+    series: Sequence[tuple[str, ArrayLike]],
+    **kwargs: Any,
+) -> bytes:
+    """Render ``series`` against ``x`` to image bytes (see ``_render_impl``)."""
+    out = _render_impl(x, series, **kwargs)
+    assert isinstance(out, bytes)
+    return out
+
+
+def render_figure_map(
+    x: ArrayLike,
+    series: Sequence[tuple[str, ArrayLike]],
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Render a PNG AND its element hit-map (gap #13): base64 image + one
+    pixel bounding box per interactive artist (title / axis labels / legend /
+    series lines / annotations) + the axes rect with data limits, so the
+    client can hit-test the preview and map pixels back to data coords."""
+    kwargs.pop("fmt", None)
+    out = _render_impl(x, series, fmt="png", collect_map=True, **kwargs)
+    assert isinstance(out, dict)
+    return out
+
+
+def _bbox_to_pixels(bbox: Any, height: float) -> dict[str, float]:
+    """Window extent (origin bottom-left) -> image pixels (origin top-left)."""
+    return {
+        "x0": float(bbox.x0),
+        "y0": float(height - bbox.y1),
+        "x1": float(bbox.x1),
+        "y1": float(height - bbox.y0),
+    }
+
+
+def _collect_map(fig: Any, ax: Any, *, n_series: int, dpi: int) -> dict[str, Any]:
+    """Draw at ``dpi`` and harvest artist extents in image-pixel coords."""
+    import base64
+
+    fig.set_dpi(dpi)
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    width, height = fig.canvas.get_width_height()
+
+    elements: list[dict[str, Any]] = []
+
+    def add(el_id: str, artist: Any) -> None:
+        try:
+            bbox = artist.get_window_extent(renderer)
+        except (RuntimeError, AttributeError):
+            return
+        if bbox.width <= 0 or bbox.height <= 0:
+            return
+        elements.append({"id": el_id, **_bbox_to_pixels(bbox, height)})
+
+    if ax.get_title():
+        add("title", ax.title)
+    if ax.get_xlabel():
+        add("xlabel", ax.xaxis.label)
+    if ax.get_ylabel():
+        add("ylabel", ax.yaxis.label)
+    if ax.get_legend() is not None:
+        add("legend", ax.get_legend())
+    for i, line in enumerate(ax.lines[:n_series]):
+        add(f"series:{i}", line)
+    for i, txt in enumerate(ax.texts):
+        add(f"ann:{i}", txt)
+
+    axes_px = _bbox_to_pixels(ax.get_window_extent(renderer), height)
+    buf = BytesIO()
+    fig.savefig(buf, format="png")
+    return {
+        "image": base64.b64encode(buf.getvalue()).decode("ascii"),
+        "width": int(width),
+        "height": int(height),
+        "elements": elements,
+        "axes": {
+            **axes_px,
+            "xlim": [float(v) for v in ax.get_xlim()],
+            "ylim": [float(v) for v in ax.get_ylim()],
+            "xlog": ax.get_xscale() == "log",
+            "ylog": ax.get_yscale() == "log",
+        },
+    }
 
 # ── Figure property overrides (gap #11) ─────────────────────────────────────
 # The one config object behind the property panels: every export property the
@@ -158,7 +248,7 @@ def render_figure(
 _LEGEND_LOCS = frozenset({
     "best", "upper right", "upper left", "lower left", "lower right",
     "right", "center left", "center right", "lower center", "upper center",
-    "center", "outside right", "outside top",
+    "center", "outside right", "outside top", "custom",
 })
 
 
@@ -203,6 +293,14 @@ def _apply_overrides(
                 kw.update(loc="center left", bbox_to_anchor=(1.02, 0.5))
             elif loc == "outside top":
                 kw.update(loc="lower center", bbox_to_anchor=(0.5, 1.02), ncols=max(1, n_series))
+            elif loc == "custom":
+                # #14 drag-to-place: anchor is a figure-fraction (fx, fy).
+                anchor = legend.get("anchor") or (0.5, 0.5)
+                kw.update(
+                    loc="center",
+                    bbox_to_anchor=(float(anchor[0]), float(anchor[1])),
+                    bbox_transform=fig.transFigure,
+                )
             else:
                 kw["loc"] = loc
             ax.legend(**kw)

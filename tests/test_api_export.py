@@ -354,3 +354,49 @@ def test_export_origin_project_multibook_zip():
     ogs = zf.read("proj.ogs").decode()
     assert ogs.count("newbook") == 2
     assert 'page.longname$ = "30 nm sample";' in ogs
+
+
+# ── /api/export/figure-hitmap (#13 — preview element map) ───────────────────
+def test_figure_hitmap_elements_and_axes() -> None:
+    ds = {
+        "time": [1.0, 2.0, 3.0, 4.0],
+        "values": [[1.0, 2.0], [4.0, 3.0], [9.0, 5.0], [16.0, 7.0]],
+        "labels": ["a", "b"],
+        "units": ["V", "V"],
+        "metadata": {},
+    }
+    resp = client.post("/api/export/figure-hitmap", json={
+        "dataset": ds,
+        "title": "T",
+        "dpi": 100,
+        "overrides": {"annotations": [{"x": 2.0, "y": 4.0, "text": "pk"}]},
+    })
+    assert resp.status_code == 200
+    m = resp.json()
+    assert m["width"] > 0 and m["height"] > 0
+    ids = {e["id"] for e in m["elements"]}
+    assert {"title", "xlabel", "legend", "series:0", "series:1", "ann:0"} <= ids
+    for e in m["elements"]:  # boxes are inside the image, top-left origin
+        assert 0 <= e["x0"] < e["x1"] <= m["width"] + 1
+        assert -1 <= e["y0"] < e["y1"] <= m["height"] + 1
+    ax = m["axes"]
+    assert ax["xlim"][0] < 2 < ax["xlim"][1]
+    assert ax["xlog"] is False
+    assert m["image"][:10]  # base64 payload present
+
+
+def test_figure_custom_legend_anchor_renders() -> None:
+    ds = {
+        "time": [1.0, 2.0, 3.0],
+        "values": [[1.0, 2.0], [2.0, 3.0], [3.0, 5.0]],
+        "labels": ["a", "b"],
+        "units": ["", ""],
+        "metadata": {},
+    }
+    resp = client.post("/api/export/figure", json={
+        "dataset": ds,
+        "fmt": "png",
+        "overrides": {"legend": {"loc": "custom", "anchor": [0.7, 0.3]}},
+    })
+    assert resp.status_code == 200
+    assert resp.content[:4] == b"\x89PNG"

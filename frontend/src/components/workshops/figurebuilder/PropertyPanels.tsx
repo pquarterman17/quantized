@@ -5,7 +5,7 @@
 // that lands as render_figure's `overrides` kwarg — no side channels. Thin:
 // state lives in useFigureBuilder.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { LEGEND_LOCS, type FigureOverrides } from "../../../lib/figureOverrides";
 import { Checkbox, NumberField, Select } from "../../primitives";
@@ -45,11 +45,17 @@ function Num({
 function Group({
   title,
   children,
+  forceOpen,
 }: {
   title: string;
   children: React.ReactNode;
+  /** Preview click-to-select (#13): a matching group opens itself. */
+  forceOpen?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
   return (
     <div className="qzk-report-section">
       <button className="qzk-group-head" onClick={() => setOpen((o) => !o)}>
@@ -64,9 +70,12 @@ function Group({
 export default function PropertyPanels({
   overrides,
   setOverrides,
+  openGroup = null,
 }: {
   overrides: FigureOverrides;
   setOverrides: (ov: FigureOverrides) => void;
+  /** #13 click-to-select: the group to force open (element -> group). */
+  openGroup?: string | null;
 }) {
   const ov = overrides;
   const patch = (p: Partial<FigureOverrides>) => setOverrides({ ...ov, ...p });
@@ -76,7 +85,7 @@ export default function PropertyPanels({
 
   return (
     <div>
-      <Group title="Text & fonts">
+      <Group title="Text & fonts" forceOpen={openGroup === "Text & fonts"}>
         <Num label="font size" value={ov.font_size} onValue={(v) => patch({ font_size: v })} />
         <Num label="title size" value={ov.title_size} onValue={(v) => patch({ title_size: v })} />
         <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
@@ -159,7 +168,7 @@ export default function PropertyPanels({
         </Checkbox>
       </Group>
 
-      <Group title="Legend">
+      <Group title="Legend" forceOpen={openGroup === "Legend"}>
         <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
           <label className="qzk-field-lbl">position</label>
           <Select
@@ -210,7 +219,7 @@ export default function PropertyPanels({
         />
       </Group>
 
-      <Group title="Annotations">
+      <Group title="Annotations" forceOpen={openGroup === "Annotations"}>
         {(ov.annotations ?? []).map((a, i) => (
           <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", width: "100%" }}>
             <span className="qzk-ds-meta">

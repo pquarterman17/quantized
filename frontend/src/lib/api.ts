@@ -5,6 +5,7 @@ import type { SubstrateInfo } from "../components/workshops/calculators/Substrat
 import { postDownload } from "./download";
 import type { ExportSeriesStyle } from "./exportStyles";
 import type { FigureOverrides } from "./figureOverrides";
+import type { FigureHitmap } from "./previewmap";
 import type { ReportSheet } from "./report";
 import type { Recommendation } from "./statschooser";
 import type {
@@ -1069,6 +1070,11 @@ export interface FigureSpec {
 
 export function exportFigure(body: FigureSpec): Promise<void> {
   return postDownload("/api/export/figure", body, `figure.${body.fmt ?? "pdf"}`);
+}
+
+/** Preview render + element hit-map (#13): PNG + per-artist pixel boxes. */
+export function renderFigureHitmap(body: FigureSpec): Promise<FigureHitmap> {
+  return postJSON("/api/export/figure-hitmap", body);
 }
 
 /** Render a figure and return the raw image bytes — for an in-app WYSIWYG

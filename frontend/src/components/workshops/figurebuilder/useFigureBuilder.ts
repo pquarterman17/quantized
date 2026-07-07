@@ -4,9 +4,9 @@
 // The heavy rendering is the matplotlib export route — this is a thin WYSIWYG
 // layer on top of it (the export backend already existed; this adds the preview).
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { exportFigure, type FigureSpec, renderFigureBlob } from "../../../lib/api";
+import { exportFigure, renderFigureHitmap, type FigureSpec } from "../../../lib/api";
 import {
   deleteGraphTemplate,
   loadGraphTemplates,
@@ -15,6 +15,12 @@ import {
 } from "../../../lib/figuredoc";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
 import { buildExportStyles } from "../../../lib/exportStyles";
+import {
+  groupForElement,
+  pxToData,
+  pxToFigureFraction,
+  type FigureHitmap,
+} from "../../../lib/previewmap";
 import type { DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -83,9 +89,11 @@ export function useFigureBuilder() {
     clearFigureDocSeed();
   }, [figureDocSeed, clearFigureDocSeed]);
   const [preview, setPreview] = useState<string | null>(null);
+  // The preview's element hit-map (#13) + which panel group a click focused.
+  const [hitmap, setHitmap] = useState<FigureHitmap | null>(null);
+  const [focusGroup, setFocusGroup] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const urlRef = useRef<string | null>(null);
 
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.
@@ -176,13 +184,11 @@ export function useFigureBuilder() {
     let cancelled = false;
     setBusy(true);
     const timer = setTimeout(() => {
-      renderFigureBlob({ ...spec, fmt: "png", dpi: PREVIEW_DPI })
-        .then((blob) => {
+      renderFigureHitmap({ ...spec, dpi: PREVIEW_DPI })
+        .then((m) => {
           if (cancelled) return;
-          const url = URL.createObjectURL(blob);
-          if (urlRef.current) URL.revokeObjectURL(urlRef.current);
-          urlRef.current = url;
-          setPreview(url);
+          setHitmap(m);
+          setPreview(`data:image/png;base64,${m.image}`);
           setError(null);
         })
         .catch((e) => {
@@ -198,13 +204,46 @@ export function useFigureBuilder() {
     };
   }, [spec]);
 
-  // Revoke the last object URL when the builder closes.
-  useEffect(
-    () => () => {
-      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
-    },
-    [],
-  );
+  // ── Preview interactions (#13/#14) ────────────────────────────────────
+  /** Click: focus the matching #11 panel group. */
+  function selectElement(id: string): void {
+    setFocusGroup(groupForElement(id));
+  }
+
+  /** Double-click inline edit commits straight into the config fields. */
+  function editElementText(id: string, value: string): void {
+    if (id === "title") setTitle(value);
+    else if (id === "xlabel") setXLabel(value);
+    else if (id === "ylabel") setYLabel(value);
+  }
+
+  const textOf = (id: string): string =>
+    id === "title" ? title : id === "xlabel" ? xLabel : id === "ylabel" ? yLabel : "";
+
+  /** Drag-to-place: legend -> custom figure-fraction anchor; annotation ->
+   *  new data coords. Both commit through the ONE overrides object (#11). */
+  function dragElement(id: string, px: number, py: number): void {
+    if (!hitmap) return;
+    if (id === "legend") {
+      setOverrides({
+        ...overrides,
+        legend: {
+          ...overrides.legend,
+          loc: "custom",
+          anchor: pxToFigureFraction(hitmap.width, hitmap.height, px, py),
+        },
+      });
+    } else if (id.startsWith("ann:")) {
+      const i = Number(id.slice(4));
+      const anns = overrides.annotations ?? [];
+      if (!Number.isInteger(i) || i >= anns.length) return;
+      const { x, y } = pxToData(hitmap.axes, px, py);
+      setOverrides({
+        ...overrides,
+        annotations: anns.map((a, j) => (j === i ? { ...a, x, y } : a)),
+      });
+    }
+  }
 
   function exportNow(): void {
     if (!spec) return;
@@ -235,6 +274,12 @@ export function useFigureBuilder() {
     overrides,
     setOverrides,
     data,
+    hitmap,
+    focusGroup,
+    selectElement,
+    editElementText,
+    textOf,
+    dragElement,
     frozen: frozenData !== null,
     saveAsFigure,
     graphTemplates,
