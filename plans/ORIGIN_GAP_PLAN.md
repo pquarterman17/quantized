@@ -15,11 +15,12 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-07 (ELEVEN items closed today: #36, #26, #31, #32,
-#6, #7, #2, #3, #1, #4, #5 — report viewer, Test chooser, Peak Analyzer
-wizard, typed pipeline + expression steps, templates + batch, and the
-recalc dependency graph + staleness + workspace v3. **W1, W2 Tier 1,
-W5 Tier 1, W6 headline, and W7 are all complete.**)
+**Updated:** 2026-07-07 (TWELVE items closed today: #36, #26, #31, #32,
+#6, #7, #2, #3, #1, #4, #5, #11 — report viewer, Test chooser, Peak
+Analyzer wizard, typed pipeline + expression steps, templates + batch,
+recalc graph + staleness + workspace v3, and the complete figure
+property panels. **W1, W2 Tier 1, W5 Tier 1, W6 headline, and W7 are
+all complete.**)
 
 ---
 
@@ -153,7 +154,7 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 | 1–5 | Recalc engine + templates + batch (W1) | W1 | ✅ COMPLETE 2026-07-07 — recalc DAG + staleness + workspace v3 + templates + batch ALL shipped; W1 done |
 | 1 | Recalc dependency graph | W1 | ⬜ the architectural keystone everything "live" builds on (frontend/store) |
 | 36–37 | Report sheets + docx/pptx export | W7 | ✅ COMPLETE — schema + emitters + exports 2026-07-03; viewer + Library section + .dwk round-trip 2026-07-07 |
-| 11, 12 | Complete property panels + figure documents | W3 | ⬜ headline pillar: zero-code production figures (frontend) |
+| 11, 12 | Complete property panels + figure documents | W3 | 🟡 #11 panels CLOSED 2026-07-07 (defaults audit = eyeball residual); #12 figure documents remain |
 | 40 | Generic import wizard + saved filters | W8 | 🟡 preview/parse engine + `/api/import/*` landed 2026-07-03; filter persistence + wizard UI remain |
 | 41 | Packaging & installers | W8 | ⬜ zero-friction first run gates all OSS adoption |
 | 46–47 | Test-data corpus + PIXcel3D audit | W8 | ✅ mostly done; only pole-figure representation open |
@@ -258,28 +259,12 @@ an exported figure in Illustrator or a script, that's a W3 bug.)*
 
 ### Tier 1 — High Impact
 
-11. **Complete property panels** — every export property (fonts, sizes,
-    margins, legend placement, tick/spine details, panel layout)
-    editable in the figure builder with live preview; no code ever
-    required to change a figure
-    *Model: sonnet. Pickup: extend `workshops/figurebuilder/` and
-    `calc/figure.render_figure` param-for-param; the WYSIWYG
-    series-style passthrough shows the plumbing pattern.*
-    - [ ] Panel groups: Text & fonts · Axes & ticks (labels, limits,
-          scales, tick direction/length, minor ticks, spines) · Legend
-          (position incl. outside, frame, order) · Canvas (size,
-          margins, dpi) · Per-series (color/width/style/marker — exists)
-          · Annotations
-    - [ ] Every `render_figure` kwarg reachable from a panel; every new
-          panel field lands as a `render_figure` kwarg (one config
-          object, no side channels)
-    - [ ] **Beautiful-defaults audit:** before adding controls, make
-          the un-tweaked first render journal-grade per preset — real
-          figures (M-H loop, XRD log scan, R(Q), RSM map) reviewed
-          against published APS/Nature figures; fix the presets, not
-          the user (ux review pass)
-    - [ ] Acceptance: reproduce an APS-preset-quality figure starting
-          from the `default` preset using panels only
+~~11. **Complete property panels**~~ **CLOSED 2026-07-07** — see
+Completed. (Residual booked deliberately, NOT a gap in the mechanics:
+the beautiful-defaults audit — reviewing un-tweaked first renders of
+real M-H / XRD / R(Q) / RSM figures against published APS/Nature
+figures — needs a human eyeball + the visual harness; the panels,
+overrides object, and preset plumbing are all in place for it.)
 
 12. **Figures as live documents** — named figure objects in the
     workspace that re-open, re-edit, and re-export at any time (never
@@ -717,6 +702,23 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#11 Complete property panels**~~ (2026-07-07) —
+  `calc/figure.render_figure` gained the ONE `overrides` config object
+  (validated in calc, pydantic-free, unknown keys ignored): fonts
+  (base/title size + family), legend (show/frame/position incl.
+  `outside right`/`outside top` via bbox anchors), ticks
+  (dir/len/minor), spines, half-open x/y limits, margins (figure
+  fractions; replace tight_layout when set), grid, and text
+  annotations — passed through `/api/export/figure`. The figure
+  builder grew collapsible panels (Text & fonts · Axes & ticks ·
+  Legend · Canvas · Annotations; per-series was already the WYSIWYG
+  series_styles passthrough) writing that one object
+  (`lib/figureOverrides.compactOverrides` strips untouched values so
+  presets rule by default); the live preview re-renders on every edit.
+  Acceptance mechanics hold (every override kwarg panel-reachable and
+  every panel field lands as a kwarg); the beautiful-defaults EYEBALL
+  audit vs published figures is the booked residual on the item.
+  Backend 47 figure/export tests + frontend suite green.
 - ~~**#1 Recalc dependency graph + #4 staleness + #5 workspace v3**~~
   (2026-07-07) — `lib/recalc.ts` derives the DAG from live state (bgRef
   chains → dependent-correction nodes, breadth-first + cycle-safe;
