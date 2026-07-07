@@ -15,10 +15,10 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-07 (second reconciliation: #53's plot-display note was
-stale — the plot already masks filter-failed rows; worksheet-side filter
-display is the remaining half. #12 pickup note added: Origin figure
-entries already persist/nest, prior art for FigureDoc.)
+**Updated:** 2026-07-07 (#36 CLOSED — frontend report viewer + Library
+section + .dwk round-trip shipped; W7 is now fully complete. Earlier same
+day: reconciliation pass — #53's stale plot-display note fixed, #12
+FigureDoc prior-art pickup noted.)
 
 ---
 
@@ -150,7 +150,7 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 | 24–26 | ANOVA/post-hoc + nonparametric + assumption tests | W5 | ✅ backend complete (24 RM+unbalanced landed 2026-07-03); only the 26 chooser UI front door remains |
 | 6–7 | Pipeline view + expression steps | W2 | ⬜ frontend workshop; macro recorder already captures the steps |
 | 1 | Recalc dependency graph | W1 | ⬜ the architectural keystone everything "live" builds on (frontend/store) |
-| 36–37 | Report sheets + docx/pptx export | W7 | ✅ schema + emitters + LaTeX/HTML/docx/pptx export all landed 2026-07-03; frontend report viewer remains |
+| 36–37 | Report sheets + docx/pptx export | W7 | ✅ COMPLETE — schema + emitters + exports 2026-07-03; viewer + Library section + .dwk round-trip 2026-07-07 |
 | 11, 12 | Complete property panels + figure documents | W3 | ⬜ headline pillar: zero-code production figures (frontend) |
 | 40 | Generic import wizard + saved filters | W8 | 🟡 preview/parse engine + `/api/import/*` landed 2026-07-03; filter persistence + wizard UI remain |
 | 41 | Packaging & installers | W8 | ⬜ zero-friction first run gates all OSS adoption |
@@ -558,26 +558,13 @@ the same field names.)*
 
 ### Tier 1 — High Impact
 
-36. **Structured report sheets** — fit/stat/wizard outputs land as
-    hierarchical report objects (params + stats tables + embedded figure
-    thumbnails) in the workspace; the substrate for #3 and #37
-    *Model: opus (schema design — W7's contract item; W1 batch, W5
-    stats, and W6 wizard all emit it), sonnet (viewer component).*
-    - [x] Schema: plain serializable data (`calc/report.py` — frozen
-          `ReportSheet` + `text`/`table`/`params`/`figure` block builders
-          + `validate_report`, JSON round-trip like DataStruct) (2026-07-03)
-    - [x] Emitters (`calc/report_emit.py`): curve fit, multi-peak fit,
-          single + batch peak integration, and W5 stats (ANOVA + generic
-          record tables) map real result dicts to reports (2026-07-03);
-          #31 wizard + #3 template-batch emitters land with those features
-    - [ ] Viewer: collapsible report component in the workspace;
-          reports round-trip `.dwk` (frontend — deferred)
-    - [ ] Acceptance: one schema renders in the viewer AND through
-          #37/#38 with no per-renderer special cases
+~~36. **Structured report sheets**~~ **CLOSED 2026-07-07** — see
+Completed. Schema + emitters (2026-07-03) and the frontend viewer +
+`.dwk` round-trip (2026-07-07) all shipped.
 
-*(All shipped 2026-07-03 — see Completed. Remaining W7 follow-on: wiring
-`calc/figure.render_figure` output into report emitters as embedded figure
-blocks, and the frontend report viewer / `.dwk` round-trip under #36.)*
+*(Remaining W7 follow-on, tracked on the consuming items: wiring
+`calc/figure.render_figure` output into report emitters as embedded
+figure blocks — lands naturally with the #31 wizard's report page.)*
 
 ---
 
@@ -814,6 +801,19 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#36 Structured report sheets (complete)**~~ (2026-07-07) — the
+  frontend half: `/api/report/emit` (thin route over the pure
+  `calc/report_emit` emitters — one emission source of truth, the
+  frontend never re-shapes results), `lib/report.ts` (TS schema types +
+  sanitizers), a `reports` store slice (add opens the viewer;
+  dataset-ref pruning mirrors Origin figures; removeAll clears),
+  `.dwk` round-trip via `lib/workspace` with validating load, a Library
+  "Reports" section, and the block-rendering viewer ToolWindow
+  (`workshops/report/ReportPanel` — text/table/params/figure blocks,
+  collapsible sections, HTML/LaTeX/docx/pptx export buttons). Producers:
+  "→ Report" in the Curve Fit + Peaks workshops. Acceptance held: the
+  SAME schema renders in the viewer and through the #37/#38 exporters
+  with no per-renderer special cases. Backend 1738 + frontend 994 green.
 - ~~**#44 `.opj` reader as an isolated dev-time CLI converter**~~
   (2026-07-03) — superseded by the owner's decision to build a
   clean-room, GPL-free **in-app** Origin reader instead (no external
