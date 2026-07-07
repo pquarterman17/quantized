@@ -1309,3 +1309,27 @@ export function statsRunTest(
   }
   return postJSON(path, body);
 }
+
+// ── Peak integration (#32) ──────────────────────────────────────────────────
+
+/** One integrated region from /api/peaks/integrate. */
+export interface IntegratedPeak {
+  region: [number, number];
+  area: number;
+  area_pct: number;
+  centroid: number;
+  height: number;
+  position: number;
+  fwhm: number;
+  [key: string]: unknown;
+}
+
+/** Integrate-only peak analysis: net area/centroid/FWHM/%-area per region. */
+export function peaksIntegrate(body: {
+  x: number[];
+  y: number[];
+  regions: [number, number][];
+  baseline?: "linear" | "none";
+}): Promise<{ peaks: IntegratedPeak[]; total_area: number; baseline: string }> {
+  return postJSON("/api/peaks/integrate", body);
+}

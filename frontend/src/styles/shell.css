@@ -275,3 +275,10 @@ body {
 .qzk-resid { width: 100%; height: 64px; display: block; background: var(--axes-bg); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); }
 .qzk-marker { position: absolute; pointer-events: none; }
 .qzk-marker .v { font-family: var(--font-mono); font-size: var(--type-nano); color: var(--capture); background: var(--glass); padding: 1px 5px; border-radius: var(--radius-sm); border: 1px solid var(--glass-border); white-space: nowrap; }
+
+/* Peak Analyzer wizard (#31): the step chips. */
+.qzk-wizard-steps { display: flex; flex-wrap: wrap; gap: 4px; }
+.qzk-wizard-step { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: pointer; color: var(--text-dim); font-size: var(--type-label); }
+.qzk-wizard-step.qzk-active { border-color: var(--accent); color: var(--text); }
+.qzk-wizard-num { font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-faint); }
+.qzk-wizard-step.qzk-active .qzk-wizard-num { color: var(--accent); }

@@ -24,6 +24,7 @@ import TabulatePanel from "./components/workshops/tabulate/TabulatePanel";
 import DistributionPanel from "./components/workshops/distribution/DistributionPanel";
 import ReportPanel from "./components/workshops/report/ReportPanel";
 import StatsChooserPanel from "./components/workshops/statschooser/StatsChooserPanel";
+import PeakWizardPanel from "./components/workshops/peakwizard/PeakWizardPanel";
 import DataFilterPanel from "./components/workshops/datafilter/DataFilterPanel";
 import ColumnSwitcher from "./components/workshops/switcher/ColumnSwitcher";
 import FigureBuilderView from "./components/workshops/figurebuilder/FigureBuilderView";
@@ -103,6 +104,7 @@ export default function App() {
   const reflViewOpen = useApp((s) => s.reflViewOpen);
   const openReportId = useApp((s) => s.openReportId);
   const statsChooserOpen = useApp((s) => s.statsChooserOpen);
+  const peakWizardOpen = useApp((s) => s.peakWizardOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -503,6 +505,12 @@ export default function App() {
         run: () => s().setStatsChooserOpen(true),
       },
       {
+        id: "peak-wizard",
+        group: "Analyze",
+        label: "Peak Analyzer (baseline → find → fit → report wizard)…",
+        run: () => s().setPeakWizardOpen(true),
+      },
+      {
         id: "data-filter",
         group: "Data",
         label: "Data filter (live per-column row filter)…",
@@ -809,6 +817,7 @@ export default function App() {
       {distributionOpen && <DistributionPanel />}
       {dataFilterOpen && <DataFilterPanel />}
       {statsChooserOpen && <StatsChooserPanel />}
+      {peakWizardOpen && <PeakWizardPanel />}
       {openReportId && <ReportPanel />}
       {columnSwitcherOpen && <ColumnSwitcher />}
       {figureBuilderOpen && <FigureBuilderView />}
