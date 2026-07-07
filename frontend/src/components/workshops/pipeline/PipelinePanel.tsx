@@ -11,6 +11,7 @@ import { pipelineToScript, STEP_FIELDS, type PipelineStep } from "../../../lib/p
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Checkbox, NumberField, StatusDot } from "../../primitives";
+import TemplatesSection from "./TemplatesSection";
 import { usePipeline, type StepStatus } from "./usePipeline";
 
 const TONE: Record<StepStatus, "ok" | "warn" | "danger"> = {
@@ -183,6 +184,8 @@ export default function PipelinePanel() {
           Export script
         </Button>
       </div>
+
+      <TemplatesSection />
     </ToolWindow>
   );
 }

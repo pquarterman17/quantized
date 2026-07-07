@@ -451,6 +451,8 @@ interface AppState {
   removeStep: (id: string) => void;
   moveStep: (id: string, delta: number) => void;
   insertStep: (step: PipelineStep) => void;
+  // Replace the whole step list (loading a template, #2).
+  loadSteps: (steps: PipelineStep[]) => void;
   setPipelineRunning: (running: boolean) => void;
   setStatus: (status: string) => void;
 }
@@ -1743,6 +1745,7 @@ export const useApp = create<AppState>((set, get) => ({
       return i < 0 ? {} : { macroSteps: movePipelineStep(s.macroSteps, i, delta) };
     }),
   insertStep: (step) => set((s) => ({ macroSteps: [...s.macroSteps, step] })),
+  loadSteps: (macroSteps) => set({ macroSteps }),
   setPipelineRunning: (pipelineRunning) => set({ pipelineRunning }),
   setStatus: (status) => set({ status }),
 }));
