@@ -281,12 +281,8 @@ the shipped contract)
     - [ ] Panel-layout apply path in `applyOriginFigure` (frame → grid)
     - [ ] Visual-harness check on "Fixed Lambdas SI"!Graph6 (2 stacked)
 
-37. **y2 axis label from layer 2's decoded title** — booked from gap
-    register §13.2 #6 follow-up: the double-Y apply carries layer 2's
-    range/log to y2 but the y2 axis label still auto-derives from the
-    channel; use the decoded `y_title` when present.
-    *Model: haiku (small frontend wiring).*
-    - [ ] `y2AxisLabel` override in the double-Y path of `applyOriginFigure`
+~~37. **y2 axis label from layer 2's decoded title**~~ **CLOSED
+2026-07-07** — see Completed.
 
 ---
 
@@ -329,6 +325,21 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**#37 y2 axis label from layer 2's decoded title**~~ (2026-07-07) —
+  `applyOriginFigure`'s double-Y path sets a new `y2AxisLabel` store
+  override from `upper.figure.y_title`; consumed by `uplotOpts.soloLabel`
+  for the right axis, editable via a TitlesCard "Y2 label" row (shown when
+  y2 channels are assigned), reset wherever the y2 assignment resets.
+  Closes gap-register §13.2 #6's follow-up. Test: the double-Y apply spec
+  asserts the override.
+
+- ~~**gap-register §13.2 #13 label-record residual**~~ (2026-07-07) — the
+  `.opju` column label record is a chunked string (`<LEB128 length>
+  <chunks: <len:1><data>>`, 127-byte chunks); `_parse_label_record`
+  replaces the fixed single-byte read, so a column carrying a >127-byte
+  comment keeps its own long-name + full comment (`long_comment.opju`
+  test-pinned; synthetic fixtures updated to the true grammar).
 
 - ~~**#34 `.opj` writer real-Origin compatibility**~~ (2026-07-07) — the
   writer's output now LOADS in real Origin (2026b) and expASC re-exports

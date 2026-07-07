@@ -1081,6 +1081,7 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
       y_from: 0,
       y_to: 5000,
       y_log: false,
+      y_title: "Counts",
       n_curves: 2,
       annotations: [] as string[],
       curves: [
@@ -1119,6 +1120,8 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
     // 13.2 #6: layer 2's own axis state reaches the secondary axis
     expect(s.y2Lim).toEqual([0, 5000]);
     expect(s.y2Log).toBe(false);
+    // W4 #37: layer 2's decoded title becomes the y2 axis label override
+    expect(s.y2AxisLabel).toBe("Counts");
   });
 
   it("applying layer 2 (the other entry) offers the same combined view", () => {

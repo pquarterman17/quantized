@@ -51,15 +51,21 @@ export default function TitlesCard() {
   const plotTitle = useApp((s) => s.plotTitle);
   const xAxisLabel = useApp((s) => s.xAxisLabel);
   const yAxisLabel = useApp((s) => s.yAxisLabel);
+  const y2AxisLabel = useApp((s) => s.y2AxisLabel);
+  const y2Keys = useApp((s) => s.y2Keys);
   const setPlotTitle = useApp((s) => s.setPlotTitle);
   const setXAxisLabel = useApp((s) => s.setXAxisLabel);
   const setYAxisLabel = useApp((s) => s.setYAxisLabel);
+  const setY2AxisLabel = useApp((s) => s.setY2AxisLabel);
 
   return (
     <Card title="Titles & labels" defaultOpen={false}>
       <LabelRow label="Title" placeholder="(none)" value={plotTitle} onCommit={setPlotTitle} />
       <LabelRow label="X label" placeholder="auto" value={xAxisLabel} onCommit={setXAxisLabel} />
       <LabelRow label="Y label" placeholder="auto" value={yAxisLabel} onCommit={setYAxisLabel} />
+      {y2Keys && y2Keys.length > 0 && (
+        <LabelRow label="Y2 label" placeholder="auto" value={y2AxisLabel} onCommit={setY2AxisLabel} />
+      )}
     </Card>
   );
 }

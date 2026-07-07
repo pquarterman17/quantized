@@ -187,6 +187,9 @@ export interface BuildOptsArgs {
   /** Override the primary y-axis label; when set it shows even with >1 series
    *  (blank/undefined = the solo-series auto label). */
   yAxisLabel?: string;
+  /** Override the secondary y-axis label (Origin double-Y apply carries layer
+   *  2's decoded title here); same blank/undefined semantics as yAxisLabel. */
+  y2AxisLabel?: string;
 }
 
 /** Full-scan [min, max] of the finite values across every visible series on one
@@ -270,6 +273,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // them); a non-blank override on the primary axis always wins and forces a label.
   const soloLabel = (which: number): string | undefined => {
     if (which === 0 && args.yAxisLabel?.trim()) return args.yAxisLabel.trim();
+    if (which === 1 && args.y2AxisLabel?.trim()) return args.y2AxisLabel.trim();
     const idxs = payload.series.map((_, i) => i).filter((i) => (payload.series[i].axis ?? 0) === which);
     return idxs.length === 1 ? labels[idxs[0]] : undefined;
   };

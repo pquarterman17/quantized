@@ -47,6 +47,7 @@ export default function PlotStage() {
   const plotTitle = useApp((s) => s.plotTitle);
   const xAxisLabel = useApp((s) => s.xAxisLabel);
   const yAxisLabel = useApp((s) => s.yAxisLabel);
+  const y2AxisLabel = useApp((s) => s.y2AxisLabel);
   const showGrid = useApp((s) => s.showGrid);
   const showLegend = useApp((s) => s.showLegend);
   const plotTemplate = useApp((s) => s.plotTemplate);
@@ -216,6 +217,7 @@ export default function PlotStage() {
         title: plotTitle,
         xAxisLabel,
         yAxisLabel,
+        y2AxisLabel,
         refLines,
         onRefLineMove: updateRefLine,
         annotations,
@@ -259,7 +261,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, y2Lim, y2Log, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool, integral, fwhmResult]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, y2Lim, y2Log, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, y2AxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool, integral, fwhmResult]);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the

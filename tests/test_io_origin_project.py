@@ -1522,16 +1522,25 @@ def _opju_window_section(book: str, columns: list[tuple[str, str, str, str, str]
     (`<len=namelen+2> 00 00 <name>`, the manually-typed-sheet form) followed by
     one designation-marker + label record per column, matching the byte shape
     pinned in `docs/origin_re/opju_container.md` (marker immediately followed
-    by `<len:u8><tag:u8><LongName\\r\\nUnit\\r\\nComment><NUL>`, or a 3-byte
-    empty placeholder `02 01 00` for an unlabeled column)."""
+    by `<len:varint><chunks: <len:u8><data>>` whose concatenated chunk data
+    is `<LongName\\r\\nUnit\\r\\nComment><NUL>` — the chunked-string grammar
+    measured on the ``long_comment.opju`` specimen (§13.2 #13: non-final
+    chunks are exactly 127 bytes; the short single-chunk case is the
+    common one) — or a 3-byte empty placeholder `02 01 00` for an
+    unlabeled column."""
     book_b = book.encode("latin1")
     out = bytes([len(book_b) + 2]) + b"\x00\x00" + book_b
     for _short, desig, long_name, unit, comment in columns:
         out += _OPJU_MARK[desig]
         text = "\r\n".join([long_name, unit, comment]).rstrip("\r\n")
         if text:
-            body = text.encode("latin1")
-            out += bytes([len(body) + 2]) + b"\x0a" + body + b"\x00"
+            body = text.encode("latin1") + b"\x00"
+            chunks = b"".join(
+                bytes([len(body[i : i + 127])]) + body[i : i + 127]
+                for i in range(0, len(body), 127)
+            )
+            assert len(chunks) < 0x80, "extend to a 2-byte varint for long fixtures"
+            out += bytes([len(chunks)]) + chunks
         else:
             out += b"\x02\x01\x00"
     return out

@@ -1114,9 +1114,10 @@ Ordered by value. Each names the decode path so it can be picked up cold.
    `applyOriginFigure`'s double-Y path now sets `y2Lim`/`y2Log` (new store
    fields, reset with `y2Keys`), and `uplotOpts` gives the y2 scale its own
    fixed range + log distr (falling back to autoscale/yLog as before).
-   Follow-up (small): a `y2AxisLabel` override from layer 2's decoded
-   `y_title` — the y2 axis label still auto-derives from the channel
-   (booked: `plans/ORIGIN_FILE_DECODE_PLAN.md` W4 #37).
+   Follow-up CLOSED 2026-07-07 (W4 #37): the double-Y apply now carries
+   layer 2's decoded `y_title` into a `y2AxisLabel` store override
+   (consumed by `uplotOpts.soloLabel`, editable via a TitlesCard "Y2
+   label" row, reset with the y2 assignment).
 7. ~~**Multi-layer frame geometry**~~ **CLOSED 2026-07-06** (decode side)
    — `figure_geometry.py`: `.opj` frame = u16 quad at layer-block 113-119
    (41/44 COM oracle), `.opju` frame = the `12 00 20 22` marker after the
@@ -1191,9 +1192,14 @@ wrong answer); they are listed so the drop cases are known, not rediscovered:
     * The inter-marker gap allowance is now STRUCTURAL: ``_MAX_GAP`` plus the
       longest contiguous printable run in the gap, so a long column comment no
       longer splits a book's whole metadata run (a real book boundary is a
-      multi-KB binary header, never a printable run). RESIDUAL (documented,
-      minor): the ONE column that carries a >~120-char comment still loses its
-      own long-name, whose varint-framed record ``_find_label`` doesn't parse.
+      multi-KB binary header, never a printable run). The residual — the ONE
+      column carrying a >~120-char comment lost its own long-name — was
+      CLOSED 2026-07-07: the label record is a **chunked string**
+      (``<LEB128 length><chunks: <len:1><data>>``, non-final chunks exactly
+      127 bytes, concatenated data = ``<text><NUL>``; the old single-byte
+      read was the 1-chunk special case). ``_parse_label_record`` decodes
+      it; ``long_comment.opju``'s B column now keeps "Middle" + its
+      727-char comment (test-pinned); corpus + synthetic suites green.
     * Flat-scrape annotation cap 12 -> 64 (the routed grammar path is exact and
       uncapped); floating-text block cap 512 -> 4096 bytes (a paragraph
       annotation), UTF-8-first. All bounded — runaway guards, not feature caps.

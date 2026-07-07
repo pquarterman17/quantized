@@ -357,6 +357,12 @@ def test_text_bound_hardening_specimens() -> None:
     lc = read_origin_books(spec / "long_comment.opju")[0]
     assert "After" in lc.labels
     assert "mA" in lc.units
+    # §13.2 #13 residual CLOSED (2026-07-07): the comment-carrying column
+    # ITSELF keeps its long-name + full comment — its >127-byte label record
+    # is a 2-byte-varint chunked string (127-byte chunks) the old
+    # single-byte read dropped wholesale.
+    assert "Middle" in lc.labels
+    assert len(lc.metadata["column_comments"]["B"]) == 727
 
 
 @pytest.mark.realdata

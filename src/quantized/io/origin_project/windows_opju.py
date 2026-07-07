@@ -238,6 +238,46 @@ def _gap_text_span(b: bytes, start: int, end: int) -> int:
     return best
 
 
+def _parse_label_record(b: bytes, p: int) -> bytes | None:
+    """One label record at ``p``: ``<LEB128 length><chunks>`` where each chunk
+    is ``<len:1><data>``, non-final chunks are exactly 127 bytes, and the
+    concatenated data is ``<text><NUL>``.
+
+    The common short label is the single-chunk case (the old fixed-shape
+    read). A >127-byte label — a long column comment — stores a 2-byte
+    varint length and 127-byte chunking; the old single-byte read silently
+    dropped that column's WHOLE label (long-name included), the §13.2 #13
+    residual, pinned by the ``long_comment.opju`` specimen (record:
+    varint ``e8 05`` = 744, chunks 127×5 + 103, text 737)."""
+    length = b[p]
+    off = 1
+    if length & 0x80:  # LEB128 continuation bit -> 2-byte varint
+        if p + 2 > len(b):
+            return None
+        length = (length & 0x7F) | (b[p + 1] << 7)
+        off = 2
+        if length <= 0x7F or length > 4096:  # a real 2-byte varint is >127
+            return None
+    elif length < 2:
+        return None
+    end_rec = p + off + length
+    if end_rec > len(b):
+        return None
+    payload = b[p + off : end_rec]
+    data = bytearray()
+    i = 0
+    while i < len(payload):
+        clen = payload[i]
+        last = i + 1 + clen == len(payload)
+        if clen == 0 or (not last and clen != 0x7F) or i + 1 + clen > len(payload):
+            return None
+        data += payload[i + 1 : i + 1 + clen]
+        i += 1 + clen
+    if not data or data[-1] != 0:
+        return None
+    return bytes(data[:-1])
+
+
 def _find_label(b: bytes, start: int, end: int) -> str | None:
     """First label-shaped record in ``[start, end)``.
 
@@ -248,14 +288,8 @@ def _find_label(b: bytes, start: int, end: int) -> str | None:
     multi = single = None
     limit = min(end, len(b) - 2)
     for p in range(start, limit):
-        length = b[p]
-        if length < 2 or length > 120 or p + 1 + length > len(b):
-            continue
-        payload = b[p + 1 : p + 1 + length]
-        if payload[-1] != 0:
-            continue
-        text = payload[1:-1]
-        if not text:
+        text = _parse_label_record(b, p)
+        if text is None or not text:
             continue
         if any(marker in text for marker in _JUNK_MARKERS):
             continue
