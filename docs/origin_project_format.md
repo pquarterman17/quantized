@@ -1840,47 +1840,24 @@ reading only this doc:
   the loader requirement set is documented in §8 and
   `docs/origin_re/validation_log.md`.
 - **Item 35 — figure curve→dataset column binding, CLOSED 2026-07-04.**
-  `.opj`'s DataPlot column selector (§6.1) stays permanently undecoded.
-  `.opju`'s IS decoded (§6.2.1, `opju_curves.py` + `opju_curves_allcols.py`)
-  and shipped in `"curves"`. Two token subtypes are merged: the 0x03
-  subtype (custom-styled/multi-curve graphs, gated on independently-
-  validated `"Y"` designation) and the 0x01 subtype (ordinary single-curve
-  default-dialog graphs, an all-columns cumulative ordinal, deliberately
-  NOT designation-gated). Reworked against a real per-plot oracle
-  (`plots.json`, `tools/origin_trial/export_plot_refs.py`): found and fixed
-  a false positive (the `__BCO` per-book boilerplate) misattributed as a
-  curve on `UnpolPlots`; found and closed the "third encoding" that
-  ordinary single-curve graphs use (a counting-convention fix, not a new
-  shape — see §6.2.1). Precision is 100% and aggregate oracle-covered
-  recall is **100% (36/36)**, up from 30.6% (11/36). Per-figure
-  *attribution* (which curve belongs to which decoded figure) remains a
-  best-effort heuristic — a narrower, documented remaining gap, not a
-  soundness one.
-- **Item 35 — figure curve→dataset column binding.** `.opj`'s DataPlot
-  column selector is **solved** (§6.1.1, item 11, `opj_curves.py`,
-  2026-07-04): 100% precision, 45/70 (64.3%) of the combined Moke+XRD
-  oracle, the shortfall being two structurally out-of-reach window kinds
-  (FitLinear report graphs; per-column sparklines), not undecoded curves.
-  `.opju`'s IS also decoded (§6.2.1, `opju_curves.py`) and shipped in
-  `"curves"`, gated on an independently-validated column designation for
-  precision, but stays open on recall (30.6%, per-figure attribution).
-  Reworked
-  2026-07-04 against a real per-plot oracle (`plots.json`,
-  `tools/origin_trial/export_plot_refs.py`): found and fixed a false
-  positive (the `__BCO` per-book boilerplate, §6.2.1) that was misattributed
-  as a curve on `UnpolPlots`; precision is now 100% on every oracle-covered
-  file. Same day, two new controlled specimens (`curves_multi`,
-  `curves_2books`) confirmed the multi-curve-per-layer and cross-book
-  layout are already solved correctly (no code change), raising aggregate
-  recall from 6/31 (19.4%) to 11/36 (30.6%); a second near-miss shape (the
-  per-book "column candidate list", §6.2.1) was found and confirmed
-  excluded along the way. Real-corpus recall itself stays low (0-50% per
-  file, see §6.2.1's table) — per-figure *attribution*, and the still-
-  undecoded third encoding used by simple single-curve real-corpus graphs,
-  both remain open, so the item stays open.
-- **Item 4 (report-sheet family) — non-double column values.** The
-  FitLinear/NLFit auto-generated report-sheet text columns (§3.2) stay an
-  honest drop; a materially harder variable-length RE problem.
+  BOTH containers decode. `.opj` (§6.1.1, `opj_curves.py`): the per-curve
+  anchor record's global column serial id — 100% precision, 45/70 (64.3%)
+  of the combined Moke+XRD oracle, the shortfall being two structurally
+  out-of-reach window kinds (FitLinear report graphs; per-column
+  sparklines), not undecoded curves. `.opju` (§6.2.1, `opju_curves.py` +
+  `opju_curves_allcols.py`): two merged token subtypes — 0x03
+  (custom-styled/multi-curve graphs, gated on independently-validated
+  `"Y"` designation) and 0x01 (ordinary single-curve default-dialog
+  graphs, an all-columns cumulative ordinal, deliberately NOT
+  designation-gated; the one-time "third encoding" fell to this
+  counting-convention fix). Reworked against the real per-plot
+  `plots.json` oracle (`tools/origin_trial/export_plot_refs.py`), which
+  also exposed and killed the `__BCO` boilerplate false positive.
+  **Precision 100%, aggregate oracle-covered recall 100% (36/36)** — up
+  from 30.6% — pinned by `test_realdata_curve_bindings_vs_plots_oracle`'s
+  per-stem floors (all 1.0). Per-figure *attribution* (which curve
+  belongs to which decoded figure) remains a best-effort heuristic — a
+  narrower, documented remaining gap, not a soundness one.
 - **Item 36 — Y-axis lin/log scale-flag byte (both containers), CLOSED
   2026-07-04.** Both `.opj` (§6.1, `figures.py`'s `_y_scale_flag`, payload
   offset 98/99) and `.opju`'s real-corpus form (§6.2,
@@ -1903,12 +1880,10 @@ reading only this doc:
   `Moke.opj Book3_A` (mixed text-label/numeric-sentinel rows within a
   single column — a different real-world worksheet family, not a
   FitLinear/NLFit report).
-- **`.opj`/`.opju` scale-type bit** — permanently heuristic for `.opj` and
-  for `.opju`'s real-corpus figure form (§6.1, §6.2); exact only for
-  `.opju`'s synthetic specimen form.
 - **Sheet-name exact bytes** (§4.1's `50 64` prefix) and **extra-sheet
   suffix numbering** (§5) — medium confidence, not exhaustively pinned.
 - **Templates (`.otp`/`.otpu`)** — same CPY family, not yet RE'd as a
   quantized style-preset source (plan item 21).
-- **Analysis-log structured parsing** — the results log (§7) ships as raw
-  text; parsing its fit records into structured metadata is plan item 22.
+- **Analysis-log structured parsing — CLOSED 2026-07-04** (plan item 22):
+  the results log (§7) parses into structured per-fit records; the
+  US-locale timestamp assumption is the documented residue.

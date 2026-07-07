@@ -14,7 +14,11 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Created:** 2026-07-03
 **Updated:** 2026-07-07 (item 34 CLOSED — the native `.opj` writer now
-loads in real Origin and re-exports value-exact, see Completed; items
+loads in real Origin and re-exports value-exact, see Completed; item 35's
+stale W3 body text reconciled — the item was already CLOSED 2026-07-04 at
+100%/100% per this header + Completed + the format doc, but its open-item
+narrative was never condensed (re-scored today: 36/36, 0 wrong; realdata
+suite green); items
 36–37 booked into W4 from the gap-register deferrals §13.2 #17/#6;
 previous update 2026-07-04: item 35's `.opj`-side
 sub-question — item 11's
@@ -250,150 +254,11 @@ no documented real-Origin validation procedure for the trial window (31).
 ### Tier 3 — Nice-to-Have
 
 (all W3 items shipped — see Completed)
-35. **Figure curve→dataset binding** — `.opju`'s curve/DataPlot column
-    selector IS decoded (`opju_curves.py`, `docs/origin_project_
-    format.md` §6.2.1): an 8-byte per-curve token gives the Y column's
-    global ordinal, gated against an independently-validated column
-    designation (X is a structural inference — the byte position a
-    naive read would expect to hold it never varied across ~44 samples,
-    so it isn't reported as decoded).
-    **`.opj`'s selector SOLVED, 2026-07-04 (item 11's original sub-
-    question, long presumed permanent) — a fresh, hypothesis-driven pass
-    given a per-graph oracle now exists.** Designed experiment: byte-diff
-    Moke's `Graph8`/`Graph9` (both plot `[Book4]Sheet1!B`, byte-identical
-    block-size sequences) to isolate noise (every difference was a
-    per-object/window creation-order counter, never column-shaped), then
-    diff `Graph8`/`Graph2` (same book, different column) with the same
-    alignment to isolate signal: the 519-byte "curve anchor" block
-    immediately before each curve's DataPlot style+body pair. Its first
-    differing byte looked like a per-book column ordinal at first
-    (Book2/Book3 fit `letter_position + book_constant` cleanly) but Book4
-    broke that model outright — no additive constant fit any of its 5
-    tested columns. The values were still unique per (book, column)
-    across 15 pairs / 8 graphs, though: cross-checking the same 16-bit
-    value against each column's OWN storage block in the windows section
-    (an unrelated part of the file, located via that column's
-    `"<Book>_<Col>\0"` dataset-name string) found it verbatim, at the
-    identical offset (4, u16 LE) — the id is a global, project-wide,
-    monotonically-assigned column serial number, not a per-book ordinal.
-    **Book and column resolve together via this one id — no separate
-    book selector exists to find.** Anchor detection is content-based
-    (`01 00 00 00` marker + immediately followed by the already-
-    documented DataPlot magic `58 00 00 00 98 03 40 b3`), not size-based
-    (519 B in `Moke.opj`, 515 B in `XRD.opj` — a per-file/build constant,
-    confirmed not part of the encoding by testing both files). X is
-    inferred structurally (the book's own designated-X column), exactly
-    mirroring `.opju`'s unverified X inference — no oracle gives an
-    expected X column in either container. **Validated 45/45 correct
-    (100% precision), 45/70 (64.3%) of the combined Moke+XRD oracle**:
-    Moke 39/46 (`FitLine`/`Residual`, the FitLinear analysis's own
-    auto-generated report graphs, have no `00 00 <Name> 00` window header
-    anywhere in the block stream — structurally unreachable, not a decode
-    failure); XRD 6/6 on `Graph1` (all cross-book, one curve per book,
-    confirming the "one id resolves book+column together" claim across 6
-    different books in a single layer) — the 18 `sparkline*` refs are a
-    structurally different feature (per-column inline mini-plots, no
-    separate Graph window and no curve-anchor record anywhere in the
-    file at all: a whole-file scan for the anchor pattern finds exactly
-    6 hits total, all inside `Graph1`). Shipped in `opj_curves.py`,
-    wired into `figures.py`'s `"curves"` field (same shape as `.opju`'s).
-    Tests: `tests/test_io_origin_figures_opj_curves.py` (synthetic +
-    realdata); standalone rescorer `tools/origin_trial/
-    score_curve_bindings_opj.py`. Full trail in `opj_curves.py`'s module
-    docstring and `docs/origin_project_format.md` §6.1. A pre-existing,
-    unrelated bug was surfaced (not fixed) along the way:
-    `windows.window_metadata`'s stricter column-block check silently
-    mismaps `Moke.opj`'s `Book4` Sheet1 designations/long-names against
-    its `FitLinear1` report sheet — noted in `opj_curves.py`'s docstring,
-    left for a deliberate follow-up (out of scope for item 11/35).
-    `.opju`'s recall (30.6%) is untouched by this pass; item 35 stays
-    open for that half only.
-    **Reworked 2026-07-04** against a real per-plot oracle
-    (`export_plot_refs.py`'s `range -w` LabTalk recipe succeeded where
-    `export_ground_truth.py`'s `range __rp`/`layer.nplots` came back
-    empty; oracle now lives at `specimens/ground_truth/<stem>/
-    plots.json` for `fig_pairs` + the real corpus). That oracle exposed
-    a false positive: `UnpolPlots` decoded 2 *wrong* `(book, column)`
-    pairs. Root cause: the whole-file regex also matches the tail of an
-    unrelated, fixed ~365-byte per-book boilerplate record (starts at a
-    `__BCO2` string, byte-identical across every book in every file
-    checked) whose last 8 bytes coincidentally fit the curve-token shape
-    and always resolve to local column 3 — undetected before because
-    every `XAS` book happens to plot column C for real, making the
-    artifact "correct" by luck. Fixed via `_is_bco_boilerplate` (requires
-    both the local-column-3 match AND a `__BCO` marker at the confirmed
-    340-380 byte distance — neither alone is safe, since `fig_pairs`' own
-    A-C diff curve also resolves to local column 3, just far from any
-    `__BCO` marker). **Precision is now 100% on every oracle-covered
-    file** (`fig_pairs` 2/2, `XAS` 0/3, `RockingCurve` 2/4, `UnpolPlots`
-    0/8, "Fixed Lambdas SI" 2/14 — 0 wrong everywhere, asserted by
-    `test_realdata_curve_bindings_vs_plots_oracle`). Recall stays open:
-    per-figure *attribution* (which curve belongs to which decoded
-    figure) is still a lossy `[anchor, next_anchor)` window heuristic,
-    and — now confirmed directly against the real oracle rather than
-    inferred — most of a real graph's OWN curve tokens (not just
-    misattributed ones) aren't locatable yet: "Fixed Lambdas SI"'s
-    Graph1 genuinely plots 6 columns but only 1 (the first, "Theory SA")
-    is recovered per window; `RockingCurve`'s multi-curve
-    `NbAuRocking` layer (D+F) is the one case that decodes exactly.
-    **Recall push, same day (two new specimens):** `curves_multi.opju`
-    (one graph, one layer, 3 curves — MBook B/C/D vs A) and
-    `curves_2books.opju` (`BookOne!B` + `BookTwo!C`) were built to pin
-    the multi-curve-per-layer layout and the cross-book cumulative-
-    ordinal base. Both decode at **100% precision AND recall with zero
-    code change** — confirming the existing regex + `_global_column_map`
-    already generalize correctly to both cases (each curve is a fully
-    self-contained, back-to-back ~750-900-byte per-curve object; the
-    ordinal base carries over a book boundary exactly as implemented).
-    This raises **aggregate oracle-covered recall from 6/31 (19.4%) to
-    11/36 (30.6%)** — see `test_realdata_curves_multi_bindings` /
-    `test_realdata_curves_2books_bindings` and
-    `tools/origin_trial/score_curve_bindings.py` (standalone corpus-wide
-    scorer). The investigation also found and confirmed-excluded a
-    **second near-miss shape** — a per-book "column candidate list"
-    (`<flag> 01 <marker> 80 03 <ord> 00`, one byte shorter than the real
-    token's double-`0x01`, enumerating every column of a referenced book
-    with no independently-decodable "selected" marker; using its
-    tail-heavy correctness pattern would be corpus-convention luck, not
-    a decodable signal, so it was rejected — see
-    `test_synthetic_column_enum_list_not_mistaken_for_curve_token` and
-    `opju_curves.py`'s docstring). **Real-corpus recall itself did not
-    move**: `RockingCurve`'s `Graph1`/`Graph2` and nearly all of XAS's/
-    UnpolPlots's required curves have neither shape anywhere in the
-    file — a third, still-undecoded encoding for ordinary single-curve
-    default-dialog graphs. Item stays open (precision 100% everywhere,
-    but aggregate recall 30.6% < the 50% bar to close it).
-    **Third-encoding search, 2026-07-04 — negative result, no code
-    shipped.** Three hypotheses chased, none validated (full byte-level
-    trail in `opju_curves.py`'s docstring / `docs/origin_project_
-    format.md` §6.2.1): (1) the `specimens/converted/*.opju` version-pair
-    (same corpus projects re-saved by the 4.3811 trial-writer build) was
-    hoped to be a Rosetta stone — it isn't; the apparent "new token" it
-    surfaces is the same `__BCO` boilerplate coincidence at a version-
-    shifted distance (383 vs. the pinned 357-360 bytes), and conversion
-    introduces a further false-positive cluster, making it a noisier
-    source, not a cleaner one. (2) A window-local alternate encoding WAS
-    found — a look-alike byte sequence sharing the real token's first 5
-    bytes, anchored on a length-prefixed workbook short-name string in
-    `RockingCurve`'s curve objects — but it fails validation decisively:
-    the 4.3811 re-save of the same project converts this exact slot into
-    the canonical token shape while preserving the same numeric value,
-    proving it's a real field, yet decoding that value through the
-    already-validated ordinal map gives the *wrong* column (`Nb!C` not
-    `Nb!B`) or an out-of-range one (`NbAl`) — a different, unidentified
-    numbering rule governs default-dialog plots, and it isn't even a
-    generally-locatable shape (the raw prefix recurs ~90x per file as a
-    generic idiom; `XAS`'s own default graphs don't embed the anchor
-    string at all). (3) `__FRAMESRCDATAINFOS` (found in `UnpolPlots`/
-    "Fixed Lambdas SI" only) decodes as frame-layout geometry, not a
-    curve backref; nearby slots carry generic `%(?X)`/`%(?Y)` auto-label
-    macros, not literal dataset references. Recall/precision unchanged
-    (30.6% / 100%); recorded as a confirmed negative so a future pass
-    doesn't re-spend time on these three leads.
-    *Model: sonnet · next step (still open) is byte-level RE on the third,
-    single-curve-graph column-selector encoding (RockingCurve
-    Graph1/Graph2, XAS, UnpolPlots) — three more leads eliminated, none of
-    the shapes found so far account for it.*
+~~35. **Figure curve→dataset binding**~~ **CLOSED 2026-07-04** — see
+Completed. (The multi-day decode trail — anchor-record discovery, oracle
+rework, near-miss exclusions, and the 0x01-subtype close — lives in
+`docs/origin_project_format.md` §6.1.1/§6.2.1/§11 and the module
+docstrings of `opj_curves.py`/`opju_curves.py`/`opju_curves_allcols.py`.)
 
 (other W3 items shipped — see Completed)
 
