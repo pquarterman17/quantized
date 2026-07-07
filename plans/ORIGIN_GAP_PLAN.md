@@ -15,10 +15,11 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-07 (#36 + #26 CLOSED — report viewer/Library/.dwk
-and the Test chooser workshop shipped; W7 and W5 Tier 1 now fully
-complete. Earlier same day: reconciliation pass — #53's stale
-plot-display note fixed, #12 FigureDoc prior-art pickup noted.)
+**Updated:** 2026-07-07 (#36, #26, #31, #32 ALL CLOSED today — report
+viewer, Test chooser, and the Peak Analyzer wizard (with the
+integrate-only path) shipped. W7 complete; W5 Tier 1 complete; W6's
+headline item done. Earlier: reconciliation pass — #53's stale
+plot-display note fixed, #12 FigureDoc prior-art noted.)
 
 ---
 
@@ -146,7 +147,7 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 
 | # | Item | Workstream | Status / why |
 |---|------|------------|-----------|
-| 31 | Peak Analyzer wizard | W6 | ⬜ #1 reason labs keep Origin; calc engine exists — pure UX packaging (frontend) |
+| 31 | Peak Analyzer wizard | W6 | ✅ COMPLETE 2026-07-07 — 5-step workshop + recipes + #36 report ending (and #32's integrate-only UI path) |
 | 24–26 | ANOVA/post-hoc + nonparametric + assumption tests | W5 | ✅ COMPLETE — backend 2026-07-03; #26 Test chooser workshop UI 2026-07-07 |
 | 6–7 | Pipeline view + expression steps | W2 | ⬜ frontend workshop; macro recorder already captures the steps |
 | 1 | Recalc dependency graph | W1 | ⬜ the architectural keystone everything "live" builds on (frontend/store) |
@@ -504,33 +505,16 @@ chooser workshop front door (2026-07-07) all shipped.
 
 ### Tier 1 — High Impact
 
-31. **Peak Analyzer wizard** — guided multi-step flow (baseline →
-    detect → fit → integrate → report) over the existing calc engine;
-    the recipe saves as a re-runnable theme (feeds #2 templates); ends
-    in a formatted report sheet (#36). *The single most cited reason
-    labs keep an Origin license.*
-    *Model: sonnet (large frontend workshop; take a ux review pass
-    before shipping). Pickup: zero new math — compose
-    `workshops/peaks/`, `useBaseline`, `calc/peak_fit.py` /
-    `peak_multifit.py` / `baseline.py` behind a stepper; workshop
-    pattern, every component <400 lines.*
-    - [ ] Stepper pages: ① Range & baseline (method + live subtract
-          preview) → ② Find peaks (auto-find params + click to
-          add/remove markers) → ③ Model & constraints (per-peak or
-          linked widths) → ④ Fit & review (overlay, residuals, per-peak
-          table) → ⑤ Report (report sheet + optional integrate-only
-          #32 path)
-    - [ ] Each page = existing hook state; Back/Next never loses edits
-    - [ ] The completed run saves as a recipe (a pipeline fragment,
-          #6-compatible) that re-runs on another dataset
-    - [ ] Acceptance: XRD fixture from load to report in ≤5 clicks with
-          defaults; recipe re-run on a second scan reproduces the flow
+~~31. **Peak Analyzer wizard**~~ **CLOSED 2026-07-07** — see Completed.
+All five stepper pages, recipe save/re-run, and the #36 report ending
+shipped. (Known limitation, booked deliberately: step ② adds/removes
+peaks via the table + an "add at x" field — direct click-on-plot marker
+editing waits for the #33 gadget's plot-interaction plumbing.)
 
-32. **Integrate-only workflow** — BACKEND SHIPPED 2026-07-02 (see
-    Completed): per-region trapezoid areas/centroid/FWHM/%-area over a
-    shoulder-to-shoulder linear baseline, `/api/peaks/integrate`.
-    *Remaining: surface it in the UI — wizard page ⑤'s alternate path
-    (or a region-tool action on the plot before the wizard exists).*
+~~32. **Integrate-only workflow**~~ **CLOSED 2026-07-07** — backend
+2026-07-02; the UI half shipped as wizard page ⑤'s alternate path
+(regions auto-derived from found/fitted peaks at ×FWHM width,
+`/api/peaks/integrate`, → #36 integrate report). See Completed.
 
 33. **Quick-fit gadget** — drag an ROI rectangle on the live plot →
     fit of that region recomputes live as the ROI moves
@@ -795,6 +779,23 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#31 Peak Analyzer wizard + #32 integrate-only UI (complete)**~~
+  (2026-07-07) — `workshops/peakwizard/` (command palette ▸ Analyze ▸
+  "Peak Analyzer"): ① range & baseline (none/ALS/rolling-ball/modpoly,
+  live subtract preview through the baseline overlay, mapped back to
+  full plot rows via kept-index expansion) → ② find peaks (SNR/max
+  knobs, include/exclude + remove per row, manual add-at-x; markers
+  overlay) → ③ model & constraints (5 shapes, shared-FWHM linking, bg
+  degree, window constraint) → ④ simultaneous fit + GOF verdict +
+  per-peak table → ⑤ report: `multipeak_fit` report OR the #32
+  integrate-only path (regions = center ± k·FWHM from found/fitted
+  peaks → `/api/peaks/integrate` → `integrate` report). The whole
+  configuration is a `PeakRecipe` (pure `lib/peakwizard`, localStorage
+  persistence, upsert-by-name) that re-applies on any dataset —
+  deliberately shaped as the future #6 pipeline step's params. Reads
+  `rowstate.analysisData` (guard #11); every component <400 lines;
+  frontend 1018 green. Deferred nicety: click-on-plot marker editing
+  (waits for #33's plot-interaction plumbing).
 - ~~**#26 Assumption tests + guided chooser (complete)**~~ (2026-07-07) —
   the UI front door: `workshops/statschooser/` ToolWindow (command
   palette ▸ Analyze ▸ "Test chooser"). Groups from picked columns or
