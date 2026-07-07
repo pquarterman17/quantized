@@ -210,3 +210,24 @@ def test_perf_budget_127mb_project() -> None:
     elapsed = time.monotonic() - t0
     assert books, "no books decoded from PNR.opj"
     assert elapsed < 120, f"PNR.opj took {elapsed:.1f}s (budget 120s)"
+
+
+@pytest.mark.realdata
+def test_matrix_specimens_fail_closed_and_degrade(tmp_path) -> None:
+    """Matrix (MBook) pages are undecoded (§13.2 #9 recon 2026-07-06: their
+    data uses a distinct compact codec — no FPC name records, no raw f64
+    runs — cracked only with new RE). The CONTRACT this pins: a matrix-only
+    project raises a clean OriginProjectError (guidance, never garbage), and
+    a MIXED project still decodes its worksheets exactly while matrix pages
+    are skipped — graceful degradation for arbitrary real-world projects."""
+    spec = _CORPUS / "specimens"
+    mat_only = spec / "matrix_spec.opju"
+    mixed = spec / "matrix_mixed.opju"
+    if not mat_only.exists() or not mixed.exists():
+        pytest.skip("matrix specimens not present on this machine")
+    with pytest.raises(OriginProjectError):
+        read_origin_project(mat_only)
+    books = read_origin_books(mixed)
+    assert [b.metadata.get("origin_book") for b in books] == ["WBook"]
+    assert list(books[0].time) == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    assert list(books[0].values[:, 0]) == [1.0, 4.0, 9.0, 16.0, 25.0, 36.0]

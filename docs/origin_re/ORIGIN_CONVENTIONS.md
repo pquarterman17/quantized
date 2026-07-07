@@ -1135,7 +1135,14 @@ Ordered by value. Each names the decode path so it can be picked up cold.
    `layer.x.label.digits` COM property doesn't even respond) — nothing to
    decode or verify against; books as OPEN-blocked-on-specimen if ever
    needed.
-9. **Matrix objects** — unattempted; rare in the corpus.
+9. **Matrix objects** — RECONNOITRED 2026-07-06 (still open): generated
+   by-construction specimens (`matrix_spec.opju` 4x6 known values +
+   `matrix_mixed.opju` worksheet+matrix). The matrix data record is a
+   DISTINCT compact codec — no FPC `<name> ff ff <nrows>` records, no raw
+   f64 runs anywhere — so decoding needs fresh RE against the specimen.
+   The shipped CONTRACT (test-pinned): a matrix-only project raises a
+   clean `OriginProjectError`; a mixed project decodes its worksheets
+   exactly and skips matrix pages — graceful degradation, never garbage.
 
 The 2026-07-06 genericity audit (three parallel reviewers over every decode
 module; the silent-wrong findings were fixed the same day — see 13.5) left
