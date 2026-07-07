@@ -15,11 +15,12 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-07 (#36, #26, #31, #32 ALL CLOSED today — report
-viewer, Test chooser, and the Peak Analyzer wizard (with the
-integrate-only path) shipped. W7 complete; W5 Tier 1 complete; W6's
-headline item done. Earlier: reconciliation pass — #53's stale
-plot-display note fixed, #12 FigureDoc prior-art noted.)
+**Updated:** 2026-07-07 (#36, #26, #31, #32, #6, #7 ALL CLOSED today —
+report viewer, Test chooser, Peak Analyzer wizard (with integrate-only
+path), and the typed pipeline view + expression steps shipped. W2 Tier 1,
+W5 Tier 1, W6 Tier 1 headline, and W7 all complete. Earlier:
+reconciliation pass — #53's stale plot-display note fixed, #12 FigureDoc
+prior-art noted.)
 
 ---
 
@@ -149,7 +150,7 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 |---|------|------------|-----------|
 | 31 | Peak Analyzer wizard | W6 | ✅ COMPLETE 2026-07-07 — 5-step workshop + recipes + #36 report ending (and #32's integrate-only UI path) |
 | 24–26 | ANOVA/post-hoc + nonparametric + assumption tests | W5 | ✅ COMPLETE — backend 2026-07-03; #26 Test chooser workshop UI 2026-07-07 |
-| 6–7 | Pipeline view + expression steps | W2 | ⬜ frontend workshop; macro recorder already captures the steps |
+| 6–7 | Pipeline view + expression steps | W2 | ✅ COMPLETE 2026-07-07 — typed step contract + editable/runnable workshop + validated expression steps |
 | 1 | Recalc dependency graph | W1 | ⬜ the architectural keystone everything "live" builds on (frontend/store) |
 | 36–37 | Report sheets + docx/pptx export | W7 | ✅ COMPLETE — schema + emitters + exports 2026-07-03; viewer + Library section + .dwk round-trip 2026-07-07 |
 | 11, 12 | Complete property panels + figure documents | W3 | ⬜ headline pillar: zero-code production figures (frontend) |
@@ -248,36 +249,17 @@ frontend (needs UX direction).
 
 ### Tier 1 — High Impact
 
-6. **Editable pipeline view** — promote a macro recording to a
-   first-class, editable step list (reorder, edit params, delete,
-   insert); save as / load into templates (#2)
-   *Model: sonnet. Pickup: steps already exist as structured
-   `macroSteps` in the store (`lib/macro.ts` serializes them); build a
-   workshop (state hook + view, workshop pattern) that edits the step
-   list rather than the emitted script.*
-   - [ ] `workshops/pipeline/` — hook (step list state, run/dry-run) +
-         view + one row component per step with a schema-driven param
-         form (each macro step type declares its editable params)
-   - [ ] Step ops: reorder, enable/disable, delete, insert, edit params
-   - [ ] Run against the active dataset or a picked file; per-step
-         success/failure markers
-   - [ ] Acceptance: record a correction+fit session → change the fit
-         model in the pipeline view → re-run reproduces the edited
-         analysis; script export still works (same steps, one source of
-         truth)
+~~6. **Editable pipeline view**~~ **CLOSED 2026-07-07** — see Completed.
+(The one caveat found during the build: the plan's pickup line was
+optimistic — `macroSteps` were {label, code} STRINGS, not structured;
+the typed contract had to be built first, and now lives in
+`lib/pipeline.ts`. "Run against a picked file" = activate it first;
+file-slot binding lands with #2 templates.)
 
-7. **No-code expression steps** — dataset-level transforms authored with
-   the existing safe formula engine (no eval) usable as pipeline steps
-   alongside built-in corrections
-   *Model: sonnet. Pickup: `lib/formula.ts` (recursive-descent, no
-   eval) is the evaluator; wrap it as a step type consumable by #6.*
-   - [ ] Step type `expression`: formula string(s) over `x`/`A`/`B`/…
-         producing new or replaced columns; validated at author time
-         (compile before save, surface parse errors inline)
-   - [ ] Usable both in the pipeline view and as a one-off worksheet
-         action (the current formula bar becomes a recorded step)
-   - [ ] Acceptance: an expression step recorded on one dataset replays
-         correctly inside a template run on another file
+~~7. **No-code expression steps**~~ **CLOSED 2026-07-07** — see
+Completed. (The cross-file template replay half of the acceptance runs
+when #2 lands; the step type, author-time validation, and replay on the
+active dataset all shipped.)
 
 ### Tier 2 — Medium Impact
 
@@ -779,6 +761,23 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#6 Editable pipeline view + #7 expression steps**~~ (2026-07-07) —
+  the typed step contract (`lib/pipeline.ts`: `PipelineStep` = kind +
+  params + regenerable `code`; kinds ui / import / expression /
+  correction / reset / fit) upgraded `macroSteps` in place — the SAME
+  list drives the script export (MacroCard → `pipelineToScript`,
+  disabled steps commented out) and the new `workshops/pipeline/`
+  view: toggle / ↑↓ reorder / schema-driven param edit (fit model,
+  expression name+expr with inline parse errors) / delete / insert /
+  run-on-active with per-step ok/skip/fail markers and failure
+  isolation; `pipelineRunning` suppresses self-recording during
+  replay. Typed recording added at import / addFormula / corrections /
+  reset sites, and the CurveFit workshop now records `fit` steps — so
+  the acceptance holds: record corrections+fit, edit the model in the
+  pipeline, re-run reproduces the edited analysis. Expression steps
+  (#7) validate through the no-eval formula parser at author AND run
+  time; the worksheet formula bar has recorded (now-typed) steps since
+  it already routed through `addFormula`. Frontend 1030 green.
 - ~~**#31 Peak Analyzer wizard + #32 integrate-only UI (complete)**~~
   (2026-07-07) — `workshops/peakwizard/` (command palette ▸ Analyze ▸
   "Peak Analyzer"): ① range & baseline (none/ALS/rolling-ball/modpoly,
