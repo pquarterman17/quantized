@@ -22,6 +22,7 @@ __all__ = [
     "_TITLE_OBJECT_BUCKETS",
     "_first_title",
     "_object_bucket",
+    "_object_text",
     "_parse_legend_labels",
     "_texts_in",
 ]
@@ -136,3 +137,24 @@ def _parse_legend_labels(texts: Sequence[str]) -> list[str]:
     if not labels:
         return []
     return [labels.get(i, "") for i in range(1, max(labels) + 1)]
+
+
+def _object_text(payload: bytes) -> str | None:
+    """The exact text of an annotation object's CONTENT block: the entire
+    block is ``<text>\x00`` (observed structurally: a Text object = 133-byte
+    header, a 103-byte format block, then a content block holding ONLY the
+    NUL-terminated string — e.g. ``b"X\x00"`` for a one-char peak marker).
+    Returns ``None`` unless the block is exactly that shape (non-empty,
+    single trailing NUL, no interior NULs/controls beyond CR/LF/TAB) — so
+    format/geometry blocks can never read as text. Solved 2026-07-06: the
+    heuristic ``_texts_in`` scan needs >=3 printable chars and wordiness,
+    silently dropping Origin's ultra-short peak labels ('X', '*', 'Si');
+    ownership by a named Text header is the trust signal that replaces
+    those noise filters."""
+    if not 2 <= len(payload) <= 512 or payload[-1] != 0:
+        return None
+    body = payload[:-1]
+    if not body or any(b < 0x20 and b not in (0x09, 0x0A, 0x0D) for b in body) or 0 in body:
+        return None
+    text = body.decode("latin1").replace("\r\n", "\n").strip()
+    return text or None

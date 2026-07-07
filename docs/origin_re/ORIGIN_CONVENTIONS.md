@@ -1034,6 +1034,8 @@ rather than shipped wrong.
 | **Auto/increment colours** (`0x81010151` placeholder + group role @6 -> `SYSTEM_COLOR_LIST[k]`) | both (shared record) | render-pixel oracle, 4 by-construction specimens, k=0..11 | (2026-07-06) |
 | **Legend position** (same fraction pair as annotations; `.opju` tag `85 1f` @ header-33) + **log-axis fraction model** (log10-space decade interpolation) | both | 53/53 graph_extras COM oracle, 0 wrong, incl. 2 log-Y graphs | (2026-07-06) |
 | **Project created/modified dates** (f64 JDN pair @ record 32/40) | `.opj` 4.3380 (4.3227: honest absent) | matches the results log's own JDN stamps | (2026-07-06) |
+| **Annotation tag variants + attach modes + rotated labels + exact short text** (`86 13`@-32, `85 1f`@-33, page-box+frame+diagonal-signature rotation, owned-block text) | both | 109/111 expanded COM oracle, 0 wrong | (2026-07-06) |
+| **`.opj` layer frame rect** (u16 quad @113-119, page units) | `.opj` | 41/44 layer_geometry COM oracle | (2026-07-06) |
 | Axis titles (XB/YL/YR) + legend labels + annotation text | both | COM text oracle | (earlier) |
 | Annotation positions (layer-fraction, y-from-top) | both | 5/5 oracle-exact (<6e-17) | `170b46e` |
 | Notes pages + structured results-log records | both | corpus | (earlier) |
@@ -1079,9 +1081,25 @@ Ordered by value. Each names the decode path so it can be picked up cold.
    span in log10 space) — previously flagged unverified for annotation
    marks, now applied to both. Frontend: `originLegendPos` maps the box
    corner to the nearest legend corner preset in `applyOriginFigure`.
-4. **Annotation attach-mode + tag variants** (`86 13`, `85 1f` vs the shipped
-   `85 13`) — extend the annotation oracle FILES to `RockingCurve.opju` /
-   `UnpolPlots.opju` (which carry the variants) and diff.
+4. ~~**Annotation attach-mode + tag variants**~~ **CLOSED 2026-07-06** — see
+   13.1. Expanded the annotations COM oracle to 7 stems / 111 objects:
+   `86 13` decodes at the same header-32 distance as `85 13` (RockingCurve
+   9/9 exact); `85 1f` (header-33) also appears on panel Texts. attach!=0
+   objects (Moke's `(a)`/`(b)` panel letters) verify exactly in FRACTION
+   space — Origin reports their x1/y1 in the object's own attach coords.
+   BONUS solved along the way: **rotated .opj labels** (XRD's 46 vertical
+   peak labels) — the fraction pair stores only the PRE-rotation anchor; the
+   object header also carries a page-unit bounding BOX (u16 quad @3-10,
+   post-rotation) which, mapped through the layer FRAME quad (see #7),
+   is exact. Rotation is detected geometrically: the anchor sits at the
+   `(+d, -d)` equal-magnitude diagonal from the box bottom-left (rotation
+   about the first-char baseline; d = font ascent) — never true of bordered
+   horizontal labels. And **ultra-short peak labels** ('X', '*', 'Si') are
+   now read EXACTLY from the owned content block (whole block =
+   `<text> `), replacing the wordiness heuristic that dropped them.
+   Sweep result: 109/111 exact, 0 wrong (the 2 non-exact are UnpolPlots
+   Graph3 layer-1/2 duplicate Text objects — on-disk objects Origin does
+   not enumerate; a documented over-emission, positions self-consistent).
 5. ~~**Folder-tree project dates**~~ **CLOSED 2026-07-06** — see 13.1.
    `tree.py::opj_project_dates` reads the two f64 Julian dates at project-
    record payload offsets 32/40 (4.3380's 88-byte record) and stamps
@@ -1089,7 +1107,14 @@ Ordered by value. Each names the decode path so it can be picked up cold.
    ISO-8601). Fail-closed: the 4.3227 80-byte variant carries no plausible
    Julian value at any offset (measured on XMCD.opj) and yields no key.
 6. **Y2 (right) axis range** for double-Y plots.
-7. **Multi-layer frame geometry** — per-panel positions for multi-panel pages.
+7. **Multi-layer frame geometry** — PARTIALLY closed 2026-07-06: the `.opj`
+   layer FRAME rect is decoded (u16 quad at layer-block offsets 113-119 =
+   left/top/right/bottom in page units; 41/44 vs the live-COM
+   layer_geometry oracle — the 3 misses are Moke's LINKED composite layers
+   where COM itself reports out-of-page link-mode values) and emitted as
+   the figure's `frame` field. Remaining: the `.opju` frame equivalent,
+   the page SIZE from bytes (needed to place frames as page fractions),
+   and the frontend multi-panel apply.
 8. **Tick spacing / number format** (axis increment, decimal places).
 9. **Matrix objects** — unattempted; rare in the corpus.
 

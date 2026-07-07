@@ -114,7 +114,9 @@ def test_opju_text_fractions_absent_or_malformed_is_none() -> None:
     good = _opju_pos_field(0.1, 0.2)
     hdr = b"\x8a\x01\x10\x83\x04Text"
     assert opju_text_fractions(bytes(32) + hdr, 32) is None  # no tag
-    assert opju_text_fractions(b"\x86" + good[1:] + hdr, 32) is None  # 86-tag variant: omit
+    # the 86 13 flavour decodes at the same distance (verified 2026-07-06
+    # against RockingCurve's oracle instances)
+    assert opju_text_fractions(b"\x86" + good[1:] + hdr, 32) == (0.1, 0.2)
     bad_sentinel = good[:18] + b"\x00\x00" + good[20:]
     assert opju_text_fractions(bad_sentinel + hdr, 32) is None
     assert opju_text_fractions(good + hdr, 5) is None  # header too close to BOF
@@ -441,3 +443,96 @@ def test_realdata_legend_positions_match_com_oracle() -> None:
         pytest.skip("graph_extras oracle not present on this machine")
     assert wrong == 0, f"{wrong} legend positions decoded WRONG"
     assert ok >= 50, f"legend-position coverage regressed ({ok} exact, {miss} missed)"
+
+
+# ── §13.2 #4 (2026-07-06): the expanded 111-instance oracle sweep ─────────────
+
+
+@pytest.mark.realdata
+def test_realdata_annotation_positions_expanded_oracle_sweep() -> None:
+    """Every decodable positioned annotation across 7 corpus stems vs the
+    expanded ``annotations.json`` COM oracle (111 objects, both containers).
+
+    Verifies the 2026-07-06 position model: rotated .opj labels via the
+    page-box + layer-frame + diagonal-anchor-signature decode, the .opju
+    ``86 13`` / ``85 1f`` tag flavours, exact owned-block text ('X'/'*'/'Si'
+    peak labels), and log-axis fraction mapping. Matching is one-to-one
+    nearest (several objects can share a 1-char text); ``attach != 0``
+    objects are compared in FRACTION space (Origin reports their x1/y1 in
+    the object's own attach coordinates). Baseline: >=100 exact, 0 wrong.
+    Layer-1/2 duplicate Text objects of UnpolPlots' composite Graph3 are a
+    documented over-emission (on-disk objects Origin does not enumerate) —
+    extra marks are not counted as wrong, only bad POSITIONS are."""
+    import math
+
+    from quantized.io.origin_project.figures import extract_figures
+    from quantized.io.origin_project.figures_opju import extract_figures_opju
+    from quantized.io.origin_project.origin_richtext import clean_richtext
+
+    stems = [
+        ("hc2convert", "hc2convert.opj"),
+        ("Hc2 data", "Hc2 data.opju"),
+        ("RockingCurve", "RockingCurve.opju"),
+        ("UnpolPlots", "UnpolPlots.opju"),
+        ("XRD", "XRD.opj"),
+        ("Moke", "Moke.opj"),
+        ("Fixed Lambdas SI", "Fixed Lambdas SI.opju"),
+    ]
+    ok = wrong = missing = 0
+    for stem, fname in stems:
+        oracle_path = _TD / "specimens" / "ground_truth" / stem / "annotations.json"
+        src = _TD / fname
+        if not oracle_path.exists() or not src.exists():
+            continue
+        oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+        raw = src.read_bytes()
+        figs = extract_figures(raw) if fname.endswith(".opj") else extract_figures_opju(raw)
+        marks_by_graph: dict[str, list[dict]] = {}
+        for f in figs:
+            for m in f.get("annotation_marks", []):
+                marks_by_graph.setdefault(f["name"], []).append(
+                    {**m, "_xr": (f["x_from"], f["x_to"], f["x_log"]),
+                     "_yr": (f["y_from"], f["y_to"], f["y_log"])}
+                )
+        for gname, anns in oracle.items():
+            marks = marks_by_graph.get(gname, [])
+            for a in anns:
+                want_text = clean_richtext(str(a["text"]).replace("\r\n", "\n"))
+                cands = [m for m in marks
+                         if m["text"] == want_text
+                         or m["text"].split("\n")[0] == want_text.split("\n")[0]]
+                if not cands:
+                    missing += 1
+                    continue
+                xspan = abs(a["x_to"] - a["x_from"]) or 1.0
+                yspan = abs(a["y_to"] - a["y_from"]) or 1.0
+
+                def err(m, a=a, xspan=xspan, yspan=yspan):
+                    if a["attach"] != 0:
+                        # attach!=0: oracle x1/y1 are the object's own attach
+                        # coords (fractions; y measured from the frame TOP) --
+                        # compare our mark's fracs.
+                        xf, xt, xlog = m["_xr"]
+                        yf, yt, ylog = m["_yr"]
+                        if xlog and xf > 0 and xt > 0 and m["x"] > 0:
+                            fx = (math.log10(m["x"]) - math.log10(xf)) / (
+                                math.log10(xt) - math.log10(xf))
+                        else:
+                            fx = (m["x"] - xf) / (xt - xf) if xt != xf else float("nan")
+                        if ylog and yf > 0 and yt > 0 and m["y"] > 0:
+                            fy = (math.log10(yt) - math.log10(m["y"])) / (
+                                math.log10(yt) - math.log10(yf))
+                        else:
+                            fy = (yt - m["y"]) / (yt - yf) if yt != yf else float("nan")
+                        return abs(fx - a["x1"]) + abs(fy - a["y1"])
+                    return abs(m["x"] - a["x1"]) / xspan + abs(m["y"] - a["y1"]) / yspan
+
+                best = min(err(m) for m in cands)
+                if best < 0.01:
+                    ok += 1
+                else:
+                    wrong += 1
+    if ok == 0 and wrong == 0 and missing == 0:
+        pytest.skip("expanded annotations oracle not present on this machine")
+    assert wrong == 0, f"{wrong} annotation positions decoded WRONG"
+    assert ok >= 100, f"annotation-position coverage regressed ({ok} exact, {missing} missing)"

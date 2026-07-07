@@ -141,13 +141,16 @@ from quantized.io.origin_project.annotation_marks import (
     _clean_annotations,
     build_mark,
     frac_to_data,
+    opj_object_box,
     opj_text_fractions,
+    page_point_fractions,
 )
 from quantized.io.origin_project.container import walk_blocks
 from quantized.io.origin_project.figure_text import (
     _LEGEND_RE,
     _first_title,
     _object_bucket,
+    _object_text,
     _parse_legend_labels,
     _texts_in,
 )
@@ -173,6 +176,28 @@ _Y_LOG_FLAG = bytes([0x08, 0x01])
 def _axis(p: bytes, base: int) -> tuple[float, float]:
     lo, hi = struct.unpack_from("<d", p, base)[0], struct.unpack_from("<d", p, base + 8)[0]
     return float(lo), float(hi)
+
+
+# The layer FRAME rect: four u16 LE at layer-continuation payload offsets
+# 113-119 = (left, top, right, bottom) in page units — the same units the
+# object headers' bounding boxes use (annotation_marks.opj_object_box).
+# Verified 41/44 layers against the live-COM layer_geometry oracle (XRD /
+# hc2convert / Moke; the 3 misses are Moke's LINKED composite layers, where
+# COM itself reports out-of-page link-mode values — the decoded quads there
+# are self-consistent normal frames). Solved 2026-07-06 (§13.2 #7 groundwork).
+_FRAME_OFFSET = 113
+
+
+def _layer_frame(payload: bytes) -> tuple[int, int, int, int] | None:
+    """The layer frame quad ``(left, top, right, bottom)`` in page units, or
+    ``None`` when missing/degenerate (older layer-block variants) — callers
+    then fall back to the fraction-pair position model."""
+    if len(payload) < _FRAME_OFFSET + 8:
+        return None
+    left, top, right, bottom = struct.unpack_from("<4H", payload, _FRAME_OFFSET)
+    if not (left < right and top < bottom):
+        return None
+    return int(left), int(top), int(right), int(bottom)
 
 
 def _log_heuristic(lo: float, hi: float) -> bool:
@@ -228,6 +253,7 @@ def _is_layer_block(payload: bytes) -> bool:
     )
 
 
+
 def _build_layer(
     blocks: list[tuple[int, bytes]],
     id_map: dict[int, tuple[str, str]],
@@ -270,6 +296,7 @@ def _build_layer(
     # legend box) interpolate in log10 space on log axes (annotation_marks).
     x_log = _log_heuristic(x_from, x_to)  # no isolated X flag found in .opj
     y_log_final = y_log if y_log is not None else _log_heuristic(y_from, y_to)
+    frame = _layer_frame(layer_payload)
     n_curves = 0
     all_texts: list[str] = []  # every recognized text run -- feeds legend_ns/n_curves as before
     bucket_texts: dict[str, list[str]] = {
@@ -287,9 +314,40 @@ def _build_layer(
     mark_fracs: tuple[float, float] | None = None
     mark_lines: list[str] = []
     mark_active = False  # only text owned by a named Text*/Line* header groups
-    # The Legend object's own header carries the SAME position fraction pair
+    # The Legend object's own header carries the SAME position fields
     # every text object does (§13.2 #3, 2026-07-06) — box top-left.
     legend_fracs: tuple[float, float] | None = None
+
+    def _object_fractions(payload: bytes) -> tuple[float, float] | None:
+        """Anchor fractions for one object header (solved 2026-07-06 vs the
+        111-instance annotations oracle). Two independent position fields
+        exist: the FRACTION pair (the text anchor -- exact for every
+        unrotated object, bordered or not) and the page-unit bounding BOX
+        (post-rotation geometry). For a 90-degree-rotated label the fraction
+        pair stores only the PRE-rotation anchor, which lands at exactly
+        ``(+d, -d)`` page units from the box's bottom-left -- the signature
+        of rotation about the first character's baseline point (d = the font
+        ascent; measured equal-magnitude on every rotated corpus instance,
+        XRD's 46 peak labels). A bordered horizontal label's anchor sits at
+        ``(+inset, -boxheight+inset)`` instead -- never the equal-magnitude
+        diagonal -- so the test is geometric, not a corpus threshold.
+        Rotated: anchor at the box bottom-left (the text-start corner Origin
+        itself reports); everything else: the fraction pair (the
+        pre-2026-07-06 behaviour, still exact for those)."""
+        fracs = opj_text_fractions(payload)
+        if frame is None or fracs is None:
+            return fracs
+        box = opj_object_box(payload)
+        if box is None:
+            return fracs
+        fl, ft, fr, fb = frame
+        anchor_x = fl + fracs[0] * (fr - fl)
+        anchor_y = ft + fracs[1] * (fb - ft)
+        dx = anchor_x - box[0]
+        dy = anchor_y - box[3]
+        if dx > 0 > dy and abs(dx + dy) <= 0.25 * dx:
+            return page_point_fractions(box[0], box[3], frame)
+        return fracs
 
     def _flush_mark() -> None:
         nonlocal mark_fracs
@@ -311,9 +369,9 @@ def _build_layer(
             _flush_mark()
             mark_active = bucket == "annotations"
             if mark_active:
-                mark_fracs = opj_text_fractions(payload)
+                mark_fracs = _object_fractions(payload)
             if bucket == "legend" and legend_fracs is None:
-                legend_fracs = opj_text_fractions(payload)
+                legend_fracs = _object_fractions(payload)
             # Never text-scan the header block itself: its geometry floats can
             # contain printable accidents that would land in the just-set
             # bucket (hc2convert's Graph13-18 all surfaced a bogus y_title
@@ -322,7 +380,16 @@ def _build_layer(
             # that follows, never in the header.
             continue
         if size < 1200 and not _is_layer_block(payload):
-            found = _texts_in(payload)
+            # A block OWNED by a Text/Line annotation header that is exactly
+            # a NUL-terminated string is the object's verbatim text -- exact,
+            # no noise heuristics (they drop 'X'/'*'/'Si' peak labels). Split
+            # per line so the flat annotations bucket keeps the same per-line
+            # shape both containers use (marks re-join with newline anyway).
+            exact = _object_text(payload) if mark_active else None
+            if exact is not None:
+                found = [line for line in exact.split("\n") if line.strip()]
+            else:
+                found = _texts_in(payload)
             all_texts.extend(found)
             if bucket in bucket_texts:
                 bucket_texts[bucket].extend(found)
@@ -342,6 +409,13 @@ def _build_layer(
         "y_from": y_from,
         "y_to": y_to,
         "y_log": y_log_final,
+        # The layer frame rect in page units (multi-panel layout, §13.2 #7);
+        # None when the quad is missing/degenerate.
+        "frame": (
+            dict(zip(("left", "top", "right", "bottom"), frame, strict=True))
+            if frame is not None
+            else None
+        ),
         "source_hint": hint,
         "n_curves": max(legend_ns) if legend_ns else n_curves,
         "annotations": [clean_richtext(a) for a in _clean_annotations(titles)[:12]],

@@ -41,7 +41,17 @@ import win32com.client as wc
 
 CORPUS = Path(r"C:\Users\patri\OneDrive\Coding\git\test-data\origin")
 GT = CORPUS / "specimens" / "ground_truth"
-FILES = ["hc2convert.opj", "Hc2 data.opju"]
+FILES = [
+    "hc2convert.opj",
+    "Hc2 data.opju",
+    # §13.2 #4 (2026-07-06): the files carrying the 86 13 / 85 1f position-tag
+    # variants, plus the annotation-rich replaced XRD.opj and Moke.opj.
+    "RockingCurve.opju",
+    "UnpolPlots.opju",
+    "XRD.opj",
+    "Moke.opj",
+    "Fixed Lambdas SI.opju",
+]
 MAX_TEXT = 30  # highest TextN index probed per layer (auto-named annotations)
 
 
