@@ -169,6 +169,11 @@ _TYPE_LIN = 0x03  # both linear
 _TYPE_XLOG = 0x04  # X log, Y linear
 _BKNAME_RE = re.compile(rb"<BKNAME>([^<]+)</BKNAME>")
 _TEXT_WINDOW = 20_000  # bytes scanned per layer for legend/annotation/source-hint text
+# Cap on annotations from the imprecise flat-scrape fallback (the routed
+# grammar path is exact and uncapped). Raised from 12 -> 64 so a real XRD graph
+# with many peak labels keeps them all; still a runaway guard against a noisy
+# scrape flooding the list (2026-07-06 genericity audit).
+_MAX_FLAT_ANNOTATIONS = 64
 
 # A graph window embeds a PNG preview thumbnail; `_texts_in` decodes its image
 # bytes as spurious "text". These chunk names open (or lead) that binary blob, so
@@ -376,7 +381,7 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 # Routed per named text object when the window carries CPYUA's
                 # framed text grammar (opju_figure_text); flat-scrape degrade
                 # (the historical behavior) otherwise.
-                "annotations": routed.annotations if routed else titles[:12],
+                "annotations": routed.annotations if routed else titles[:_MAX_FLAT_ANNOTATIONS],
                 # Positioned floating text (box top-left, data coords) — only
                 # objects whose fixed-distance position field decoded (see
                 # annotation_marks.py); the rest stay text-only above.

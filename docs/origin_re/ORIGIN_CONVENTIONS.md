@@ -1169,6 +1169,23 @@ wrong answer); they are listed so the drop cases are known, not rediscovered:
 12. ~~**`_INTERNAL_ANN_RE` substring matching**~~ **CLOSED 2026-07-06** —
     `SYSTEM`/`SRCINFO` now drop only as UPPERCASE whole words (the internal
     tokens' real shape); "System pressure = 3 bar" survives. Test-pinned.
+13. ~~**Remaining corpus-sized scan bounds**~~ **PARTLY CLOSED 2026-07-06**
+    via by-construction text specimens (``text_bounds.opju``,
+    ``long_comment.opju``):
+    * ``.opju`` labels now decode UTF-8-first (Unicode-aware single-row check)
+      — degree/Ångström/micro/Greek in a real column name survive; the old
+      byte-only ASCII regex + latin-1 both rejected AND mojibaked them. 5531
+      corpus label cells re-decode with zero replacement chars (no regression).
+    * The inter-marker gap allowance is now STRUCTURAL: ``_MAX_GAP`` plus the
+      longest contiguous printable run in the gap, so a long column comment no
+      longer splits a book's whole metadata run (a real book boundary is a
+      multi-KB binary header, never a printable run). RESIDUAL (documented,
+      minor): the ONE column that carries a >~120-char comment still loses its
+      own long-name, whose varint-framed record ``_find_label`` doesn't parse.
+    * Flat-scrape annotation cap 12 -> 64 (the routed grammar path is exact and
+      uncapped); floating-text block cap 512 -> 4096 bytes (a paragraph
+      annotation), UTF-8-first. All bounded — runaway guards, not feature caps.
+
 13. **Remaining corpus-sized scan bounds** (all fail-safe drops, candidates
     for derived bounds): `windows_opju._MAX_GAP=600` (a >600-byte column
     record — e.g. a long embedded import path — ends the metadata run

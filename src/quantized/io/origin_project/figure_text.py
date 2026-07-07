@@ -151,10 +151,18 @@ def _object_text(payload: bytes) -> str | None:
     silently dropping Origin's ultra-short peak labels ('X', '*', 'Si');
     ownership by a named Text header is the trust signal that replaces
     those noise filters."""
-    if not 2 <= len(payload) <= 512 or payload[-1] != 0:
+    # 4096-byte cap: a floating-text annotation can hold a paragraph (the old
+    # 512 silently dropped long notes); still bounded so a large format/geometry
+    # block can't be mistaken for text (2026-07-06 genericity audit).
+    if not 2 <= len(payload) <= 4096 or payload[-1] != 0:
         return None
     body = payload[:-1]
     if not body or any(b < 0x20 and b not in (0x09, 0x0A, 0x0D) for b in body) or 0 in body:
         return None
-    text = body.decode("latin1").replace("\r\n", "\n").strip()
+    # UTF-8-first (the .opju container's text encoding — degree/Greek/micro);
+    # latin-1 fallback for the rare cell that is latin-1 but not valid UTF-8.
+    try:
+        text = body.decode("utf-8").replace("\r\n", "\n").strip()
+    except UnicodeDecodeError:
+        text = body.decode("latin1").replace("\r\n", "\n").strip()
     return text or None

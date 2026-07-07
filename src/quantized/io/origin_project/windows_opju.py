@@ -98,8 +98,12 @@ _FILENAME_RE = re.compile(rb"\\([\w \-]{1,60}?\.[A-Za-z0-9]{2,5})(?=[^\w.]|$)")
 # underscores (e.g. "Nb Hc2 (T)", "NiBi_3::R", "temperature: T1",
 # "multi[0]:iterator"). Still excludes path/markup chars (backslash, <, >), which
 # the _JUNK_MARKERS filter rejects separately, so a length-prefix coincidence
-# landing inside a storage blob is still caught.
-_SINGLE_ROW_RE = re.compile(rb"^[A-Za-z][A-Za-z0-9 _:()\[\]./+%#*,-]{0,59}$")
+# landing inside a storage blob is still caught. Checked on the DECODED string
+# (see _is_single_row_label) so non-ASCII scientific glyphs -- degree, Angstrom,
+# micro, ohm, Greek, sub/superscripts -- are accepted; the .opju container is
+# UTF-8, so "tilt 45<deg>" arrives as bytes c2 b0 and a byte-only ASCII regex
+# both rejected it and (via latin-1) mojibaked it (2026-07-06 genericity audit).
+_LABEL_PUNCT = frozenset(" _:()[]./+%#*,-")
 # Text containing any of these is inside an embedded storage blob, not a real label.
 _JUNK_MARKERS = (b"\\", b"OriginStorage", b"ColumnInfo", b"ImportFile", b"<", b">")
 # Single-row candidates that are themselves a fragment of one of these internal
@@ -130,6 +134,37 @@ def _zx_designation(b: bytes, mark_pos: int) -> str:
     if j >= 0 and j + 2 < len(b) and b[j + 2] == 5:
         return "X-error"
     return "Z"
+
+
+def _decode_cell_text(raw: bytes) -> str | None:
+    """Decode a column-label cell, or ``None`` if it isn't text.
+
+    The ``.opju`` container stores text as UTF-8 (degree = ``c2 b0``, micro =
+    ``c2 b5``, Greek mu = ``ce bc``); fall back to latin-1 for the rare cell
+    that is valid latin-1 but not UTF-8. Reject any cell holding a C0 control
+    other than TAB/CR/LF — that is a binary/format block, never a label."""
+    for enc in ("utf-8", "latin1"):
+        try:
+            s = raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+        if any(ord(c) < 0x20 and c not in "\t\r\n" for c in s):
+            return None
+        return s
+    return None
+
+
+def _is_single_row_label(s: str) -> bool:
+    """Whether ``s`` is a plausible bare long-name (see ``_LABEL_PUNCT``).
+
+    Unicode-aware: the first char is any letter (incl. Greek/Cyrillic) and the
+    rest are alphanumerics, the scientific punctuation set, or ANY non-ASCII
+    printable (``ord >= 0x80``) — the glyphs real column names use. Markup/path
+    chars (``\\``, ``<``, ``>``) are ASCII and not in the set, so they still
+    fail here on top of the ``_JUNK_MARKERS`` pre-filter."""
+    if not s or not s[0].isalpha() or len(s) > 60:
+        return False
+    return all(c.isalnum() or c in _LABEL_PUNCT or ord(c) >= 0x80 for c in s)
 
 
 def _strip_alnum(s: bytes) -> bytes:
@@ -180,6 +215,29 @@ def _book_anchor(
     return None
 
 
+def _gap_text_span(b: bytes, start: int, end: int) -> int:
+    """Longest run of consecutive text bytes in ``[start, end)``.
+
+    A text byte is printable ASCII / TAB / CR / LF, or a UTF-8 high byte
+    (>= 0x80 — a label glyph). Used only to WIDEN the inter-marker gap
+    allowance by the label content actually present, so a long column comment
+    (a long contiguous printable run) can't split a book's metadata run. A
+    real book boundary is a multi-KB BINARY window header — no comparable
+    printable run — so this never merges two books. Framing-agnostic on
+    purpose: the comment's length prefix is a multi-byte varint we don't parse
+    here, and we don't need to."""
+
+    def _is_text(c: int) -> bool:
+        return c in (0x09, 0x0A, 0x0D) or 0x20 <= c <= 0x7E or c >= 0x80
+
+    best = run = 0
+    for c in b[start : min(end, len(b))]:
+        run = run + 1 if _is_text(c) else 0
+        if run > best:
+            best = run
+    return best
+
+
 def _find_label(b: bytes, start: int, end: int) -> str | None:
     """First label-shaped record in ``[start, end)``.
 
@@ -199,18 +257,15 @@ def _find_label(b: bytes, start: int, end: int) -> str | None:
         text = payload[1:-1]
         if not text:
             continue
-        if not all(0x09 <= c <= 0x0D or 0x20 <= c <= 0x7E or 0xA0 <= c <= 0xFF for c in text):
-            continue
         if any(marker in text for marker in _JUNK_MARKERS):
             continue
-        try:
-            decoded = text.decode("latin1")
-        except UnicodeDecodeError:
+        decoded = _decode_cell_text(text)
+        if decoded is None:
             continue
-        if b"\r\n" in text:
+        if "\r\n" in decoded:
             multi = decoded
             break
-        if single is None and _SINGLE_ROW_RE.match(text):
+        if single is None and _is_single_row_label(decoded):
             if len(text) >= 4 and any(text in token for token in _KNOWN_TOKENS):
                 continue
             single = decoded
@@ -267,11 +322,20 @@ def opju_window_metadata(
         for xi in x_positions:
             attempt = [candidates[xi]]
             j = xi + 1
-            while (
-                j < len(candidates)
-                and candidates[j][0] - attempt[-1][0] <= _MAX_GAP
-                and len(attempt) < max_run
-            ):
+            while j < len(candidates) and len(attempt) < max_run:
+                # The gap to the NEXT column marker is set by how much label
+                # content THIS column carries: long_name + unit + comment, and
+                # a comment can run to hundreds of chars. So the allowance is
+                # _MAX_GAP plus the length of the label record that actually
+                # sits in the gap (structural), not a fixed byte cap that a
+                # long comment silently overruns -- which used to drop the
+                # whole book's metadata (2026-07-06 genericity audit). The
+                # real book boundary is a multi-KB window header, far past any
+                # single label record, so this never merges two books.
+                gap = candidates[j][0] - attempt[-1][0]
+                allow = _MAX_GAP + _gap_text_span(b, attempt[-1][0] + 2, candidates[j][0])
+                if gap > allow:
+                    break
                 attempt.append(candidates[j])
                 j += 1
             if len(attempt) < len(cols):

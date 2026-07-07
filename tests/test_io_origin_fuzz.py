@@ -303,3 +303,56 @@ def test_realdata_hardening_specimens_decode() -> None:
         "B": "square", "C": "circle", "D": "triangle", "E": "downtriangle",
         "F": "diamond", "G": "plus", "H": "cross", "I": "star",
     }
+
+
+def test_opju_label_decode_is_utf8_unicode_aware() -> None:
+    """`.opju` column labels are UTF-8 (the container's text encoding), and the
+    single-row plausibility check runs on the DECODED string — so scientific
+    glyphs survive: "tilt 45°" (c2 b0), "µ0H (T)" (c2 b5), Greek. The old
+    byte-only ASCII regex + latin-1 decode rejected or mojibaked them
+    (2026-07-06 genericity audit)."""
+    from quantized.io.origin_project.windows_opju import (
+        _decode_cell_text,
+        _gap_text_span,
+        _is_single_row_label,
+    )
+
+    assert _decode_cell_text(b"tilt 45\xc2\xb0") == "tilt 45°"
+    assert _decode_cell_text(b"\xce\xbc0H (T)") == "μ0H (T)"
+    assert _decode_cell_text(b"plain ASCII") == "plain ASCII"
+    assert _decode_cell_text(b"latin1 \xb0 only") == "latin1 ° only"  # latin-1 fallback
+    assert _decode_cell_text(b"bad\x01ctrl") is None  # C0 control -> not text
+
+    assert _is_single_row_label("tilt 45°")
+    assert _is_single_row_label("µ0H (T)")
+    assert _is_single_row_label("Nb Hc2 (T)")
+    assert not _is_single_row_label("has\backslash")
+    assert not _is_single_row_label("<markup>")
+    assert not _is_single_row_label("")
+
+    # A long printable run (a column comment) widens the gap allowance; binary
+    # (a book boundary) does not.
+    assert _gap_text_span(b"\x00\x00" + b"comment text " * 40 + b"\x00", 0, 600) >= 500
+    assert _gap_text_span(bytes(range(0, 32)) * 10, 0, 320) <= 4
+
+
+@pytest.mark.realdata
+def test_text_bound_hardening_specimens() -> None:
+    """The 2026-07-06 text-bound specimens (generate via live Origin):
+
+    * ``text_bounds.opju`` — a non-ASCII single-row long-name ("tilt 45°")
+      decodes exactly (UTF-8);
+    * ``long_comment.opju`` — a >600-char column comment no longer splits the
+      book's metadata run: the LATER column keeps its name+unit ("After"/"mA")
+      that the old fixed 600-byte gap dropped wholesale.
+    """
+    spec = _CORPUS / "specimens"
+    if not (spec / "text_bounds.opju").exists() or not (spec / "long_comment.opju").exists():
+        pytest.skip("text-bound specimens not present on this machine")
+
+    tb = read_origin_books(spec / "text_bounds.opju")[0]
+    assert "tilt 45°" in tb.labels
+
+    lc = read_origin_books(spec / "long_comment.opju")[0]
+    assert "After" in lc.labels
+    assert "mA" in lc.units
