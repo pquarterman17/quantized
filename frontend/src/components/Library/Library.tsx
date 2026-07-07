@@ -9,6 +9,7 @@ import DatasetRow from "./DatasetRow";
 import FigureRow from "./FigureRow";
 import FiguresSection from "./FiguresSection";
 import FolderRow from "./FolderRow";
+import ReportsSection from "./ReportsSection";
 import { useLibraryTree } from "./useLibraryTree";
 import { makeDemoDataset } from "../../lib/demo";
 import {
@@ -207,6 +208,7 @@ export default function Library() {
       )}
 
       {!inTree && <FiguresSection />}
+      <ReportsSection />
       <BookFamiliesSection />
 
       {body}

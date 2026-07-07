@@ -1,22 +1,51 @@
 // Curve Fit workshop — view. A draggable ToolWindow: pick a model, auto-guess
 // or fit the active dataset, see params (± errors) and goodness-of-fit. The
 // fitted curve overlays on the plot via the store (see useCurveFit). Thin by
-// design — all state/logic lives in the hook.
+// design — all state/logic lives in the hook. "→ Report" lands the fit as a
+// #36 report sheet in the library (emitted server-side, one source of truth).
+
+import { useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, DataTable, Select } from "../../primitives";
+import { reportEmit } from "../../../lib/api";
 import { fmtNum as fmt } from "../../../lib/format";
+import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useCurveFit } from "./useCurveFit";
 
 export default function CurveFitPanel() {
   const setOpen = useApp((s) => s.setCurveFitOpen);
+  const addReport = useApp((s) => s.addReport);
+  const [reporting, setReporting] = useState(false);
   const { active, models, modelName, setModelName, result, guessOnly, busy, error, run, clear } =
     useCurveFit();
 
   const close = () => {
     clear();
     setOpen(false);
+  };
+
+  const toReport = async () => {
+    if (!result || !active) return;
+    setReporting(true);
+    try {
+      const names = models.find((m) => m.name === modelName)?.paramNames ?? [];
+      const nParams = (result.params as number[] | undefined)?.length ?? 0;
+      const { report } = await reportEmit({
+        kind: "curve_fit",
+        result: result as Record<string, unknown>,
+        param_names: names.length === nParams ? names : Array.from({ length: nParams }, (_, i) => `p${i}`),
+        model_name: modelName,
+        title: `${modelName} fit — ${active.name}`,
+        source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
+      });
+      addReport(`${modelName} fit — ${active.name}`, report, active.id);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "report failed", "danger");
+    } finally {
+      setReporting(false);
+    }
   };
 
   const paramNames = models.find((m) => m.name === modelName)?.paramNames ?? [];
@@ -75,6 +104,13 @@ export default function CurveFitPanel() {
       {statRows.length > 0 && (
         <div style={{ marginTop: 8 }}>
           <DataTable columns={["stat", "value"]} rows={statRows} />
+        </div>
+      )}
+      {result && !guessOnly && (
+        <div style={{ marginTop: 8 }}>
+          <Button size="sm" disabled={reporting} onClick={() => void toReport()}>
+            {reporting ? "Reporting…" : "→ Report"}
+          </Button>
         </div>
       )}
     </ToolWindow>

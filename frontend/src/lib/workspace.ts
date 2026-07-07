@@ -6,6 +6,7 @@
 import { sanitizeFilter } from "./datafilter";
 import { pruneOrphans } from "./foldertree";
 import type { OriginFigureEntry } from "./originFigures";
+import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeExcluded } from "./rowstate";
 import type {
   ChannelRole,
@@ -33,6 +34,7 @@ export interface WorkspaceState {
   selectedIds?: string[];
   expandedFolders?: string[];
   originFigures?: OriginFigureEntry[];
+  reports?: ReportEntry[];
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -44,6 +46,7 @@ export interface LoadedWorkspace {
   selectedIds: string[];
   expandedFolders: string[];
   originFigures: OriginFigureEntry[];
+  reports: ReportEntry[];
 }
 
 interface WorkspaceDoc {
@@ -56,6 +59,7 @@ interface WorkspaceDoc {
   selectedIds: string[];
   expandedFolders: string[];
   originFigures: OriginFigureEntry[];
+  reports: ReportEntry[];
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -69,6 +73,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     selectedIds: ws.selectedIds ?? [],
     expandedFolders: ws.expandedFolders ?? [],
     originFigures: ws.originFigures ?? [],
+    reports: ws.reports ?? [],
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -286,5 +291,6 @@ export function parseWorkspace(text: string): LoadedWorkspace {
     typeof o.activeId === "string" && dsIds.has(o.activeId) ? o.activeId : (datasets[0]?.id ?? null);
   const expandedFolders = stringsIn(o.expandedFolders, folderIds);
   const originFigures = parseOriginFigures(o.originFigures, dsIds);
-  return { datasets, folders, activeId, selectedIds, expandedFolders, originFigures };
+  const reports = sanitizeReports(o.reports, dsIds);
+  return { datasets, folders, activeId, selectedIds, expandedFolders, originFigures, reports };
 }

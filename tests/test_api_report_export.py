@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
+from quantized.calc.report import validate_report
 from quantized.calc.report_emit import from_anova
 from quantized.calc.stats_anova2 import anova2
 
@@ -71,3 +72,58 @@ def test_pptx_export_when_available() -> None:
     assert resp.status_code == 200
     assert "presentationml" in resp.headers["content-type"]
     assert resp.content[:2] == b"PK"
+
+
+# ── /api/report/emit (#36 — the viewer's emission front door) ──────────────
+def test_emit_curve_fit_round_trips_schema() -> None:
+    resp = client.post("/api/report/emit", json={
+        "kind": "curve_fit",
+        "result": {"params": [2.0, 0.5], "errors": [0.1, 0.02],
+                   "R2": 0.998, "chiSqRed": 1.02, "RMSE": 0.03,
+                   "AIC": -12.0, "nFree": 2, "nPoints": 50},
+        "param_names": ["slope", "intercept"],
+        "model_name": "Linear",
+        "source_refs": [{"kind": "dataset", "id": "ds-1", "name": "scan A"}],
+    })
+    assert resp.status_code == 200
+    report = resp.json()["report"]
+    validate_report(report)  # emitted payload satisfies the #36 schema
+    assert report["title"] == "Curve fit"
+    assert report["created"]  # route stamps creation time
+    params = report["sections"][0]["blocks"][1]["params"]
+    assert params[0] == {"name": "slope", "value": 2.0, "error": 0.1}
+    assert report["source_refs"][0]["id"] == "ds-1"
+
+
+def test_emit_multipeak_fit() -> None:
+    resp = client.post("/api/report/emit", json={
+        "kind": "multipeak_fit",
+        "result": {"peaks": [{"model": "gaussian", "center": 1.0, "fwhm": 0.2,
+                              "height": 5.0, "area": 1.1}],
+                   "rmse": 0.01, "nPeaks": 1, "model": "gaussian"},
+        "title": "XRD peaks",
+    })
+    assert resp.status_code == 200
+    report = resp.json()["report"]
+    validate_report(report)
+    assert report["title"] == "XRD peaks"
+
+
+def test_emit_stats_table_needs_records() -> None:
+    resp = client.post("/api/report/emit", json={"kind": "stats_table"})
+    assert resp.status_code == 422
+
+
+def test_emit_unknown_kind_is_422() -> None:
+    resp = client.post("/api/report/emit",
+                       json={"kind": "nope", "result": {"a": 1}})
+    assert resp.status_code == 422
+
+
+def test_emit_mismatched_param_names_is_422_not_500() -> None:
+    resp = client.post("/api/report/emit", json={
+        "kind": "curve_fit",
+        "result": {"params": [1.0, 2.0]},
+        "param_names": ["only-one"],
+    })
+    assert resp.status_code == 422

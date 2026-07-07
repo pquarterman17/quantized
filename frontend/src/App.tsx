@@ -22,6 +22,7 @@ import CalculatorsPanel from "./components/workshops/calculators/CalculatorsPane
 import DatasetMathPanel from "./components/workshops/datasetmath/DatasetMathPanel";
 import TabulatePanel from "./components/workshops/tabulate/TabulatePanel";
 import DistributionPanel from "./components/workshops/distribution/DistributionPanel";
+import ReportPanel from "./components/workshops/report/ReportPanel";
 import DataFilterPanel from "./components/workshops/datafilter/DataFilterPanel";
 import ColumnSwitcher from "./components/workshops/switcher/ColumnSwitcher";
 import FigureBuilderView from "./components/workshops/figurebuilder/FigureBuilderView";
@@ -99,6 +100,7 @@ export default function App() {
   const figureBuilderOpen = useApp((s) => s.figureBuilderOpen);
   const waterfallOpen = useApp((s) => s.waterfallOpen);
   const reflViewOpen = useApp((s) => s.reflViewOpen);
+  const openReportId = useApp((s) => s.openReportId);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
 
@@ -798,6 +800,7 @@ export default function App() {
       {tabulateOpen && <TabulatePanel />}
       {distributionOpen && <DistributionPanel />}
       {dataFilterOpen && <DataFilterPanel />}
+      {openReportId && <ReportPanel />}
       {columnSwitcherOpen && <ColumnSwitcher />}
       {figureBuilderOpen && <FigureBuilderView />}
       {waterfallOpen && <WaterfallView />}

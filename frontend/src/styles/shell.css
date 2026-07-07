@@ -159,6 +159,12 @@ body {
 .qzk-fig-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-fig-meta { flex-shrink: 0; color: var(--text-faint); font-size: var(--type-nano); font-family: var(--font-mono); }
 
+/* Report sheets (#36): the viewer's section/block rendering. */
+.qzk-report-section { margin-top: 10px; }
+.qzk-report-text { margin: 6px 0 0; color: var(--text-dim); font-size: var(--font-size-sm); }
+.qzk-report-tablewrap { margin-top: 6px; max-height: 260px; overflow-y: auto; }
+.qzk-report-caption { margin-top: 3px; color: var(--text-faint); font-size: var(--type-nano); }
+
 /* Book-families bulk-manage (item 17): one row per multi-book Origin import. */
 .qzk-fam-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); }
 .qzk-fam-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: var(--font-size-sm); }

@@ -4,6 +4,7 @@
 import type { SubstrateInfo } from "../components/workshops/calculators/SubstratesTab";
 import { postDownload } from "./download";
 import type { ExportSeriesStyle } from "./exportStyles";
+import type { ReportSheet } from "./report";
 import type {
   CalcResult,
   CorrectionParams,
@@ -1247,4 +1248,32 @@ export function rsmProjection(body: {
   space?: string;
 }): Promise<DataStruct> {
   return postJSON("/api/rsm/projection", body);
+}
+
+// ── Report sheets (#36) ─────────────────────────────────────────────────────
+
+/** Shape an analysis result into a #36 report sheet via the backend emitters
+ *  (one emission source of truth — the frontend never re-shapes results). */
+export function reportEmit(body: {
+  kind: "curve_fit" | "multipeak_fit" | "integrate" | "batch_integrate" | "anova" | "stats_table";
+  result?: Record<string, unknown>;
+  records?: Record<string, unknown>[];
+  title?: string;
+  model_name?: string;
+  param_names?: string[];
+  param_units?: string[];
+  columns?: string[];
+  caption?: string;
+  source_refs?: { kind: string; id: string; name?: string }[];
+}): Promise<{ report: ReportSheet }> {
+  return postJSON("/api/report/emit", body);
+}
+
+/** Render a report sheet server-side and download it (.html/.tex/.docx/.pptx). */
+export function reportExport(
+  report: ReportSheet,
+  format: "html" | "latex" | "docx" | "pptx",
+  filename: string,
+): Promise<void> {
+  return postDownload("/api/report/export", { report, format, filename }, filename);
 }

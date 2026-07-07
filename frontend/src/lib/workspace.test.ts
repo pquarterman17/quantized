@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { OriginFigureEntry } from "./originFigures";
+import type { ReportEntry } from "./report";
 import type { Dataset, OriginFigure } from "./types";
 import { parseWorkspace, serializeWorkspace, WORKSPACE_FORMAT } from "./workspace";
 
@@ -346,5 +347,59 @@ describe("workspace originFigures persistence", () => {
     delete doc.folders;
     const loaded = parseWorkspace(JSON.stringify(doc));
     expect(loaded.originFigures).toEqual([]);
+  });
+});
+
+describe("workspace report persistence (#36)", () => {
+  const repEntry = (over: Partial<ReportEntry> = {}): ReportEntry => ({
+    id: "rep-1",
+    name: "Linear fit — first",
+    datasetId: "a",
+    report: {
+      title: "Linear fit — first",
+      sections: [
+        {
+          title: "Fit results",
+          blocks: [
+            { type: "text", text: "Model: Linear" },
+            { type: "params", params: [{ name: "slope", value: 2, error: 0.1 }] },
+          ],
+        },
+      ],
+      created: "2026-07-07T00:00:00+00:00",
+    },
+    ...over,
+  });
+
+  it("round-trips a report attached to a surviving dataset", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, reports: [repEntry()] }));
+    expect(loaded.reports).toHaveLength(1);
+    expect(loaded.reports[0]).toEqual(repEntry());
+  });
+
+  it("keeps the report but clamps a dangling datasetId to null", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(
+      serializeWorkspace({ datasets, reports: [repEntry({ datasetId: "gone" })] }),
+    );
+    expect(loaded.reports).toHaveLength(1);
+    expect(loaded.reports[0].datasetId).toBeNull();
+  });
+
+  it("drops malformed report entries (invalid sheet) and defaults absent field", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(serializeWorkspace({ datasets }));
+    expect(doc.reports).toEqual([]); // serialized default
+    doc.reports = [
+      repEntry(),
+      { id: "bad", name: "x", datasetId: null, report: { title: 7, sections: [] } },
+      null,
+    ];
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.reports.map((r) => r.id)).toEqual(["rep-1"]);
+    // v1/older docs without a reports key parse to an empty list
+    delete doc.reports;
+    expect(parseWorkspace(JSON.stringify(doc)).reports).toEqual([]);
   });
 });

@@ -30,6 +30,7 @@ import {
   type OriginFigureEntry,
 } from "../lib/originFigures";
 import { planOriginFolders } from "../lib/originFolders";
+import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
 import { buildOverlayDataset, overlayCurveStyles } from "../lib/originOverlay";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import { isActive } from "../lib/datafilter";
@@ -80,6 +81,7 @@ let _annSeq = 0;
 let _idSeq = 0;
 const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
 const nextFolderId = (): string => `fld-${Date.now().toString(36)}-${++_idSeq}`;
+const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_idSeq}`;
 
 export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
@@ -149,6 +151,13 @@ interface AppState {
   // the dataset id it plots. `datasetId` is null when the figure's loose
   // source reference didn't resolve — the Library shows those disabled.
   originFigures: OriginFigureEntry[];
+  // Report sheets (#36): named analysis reports (curve fits, peak tables,
+  // stats) living in the library. `datasetId` ties one back to its source
+  // dataset (nulled if that dataset is removed — the report itself stays, it
+  // is a computed artifact, not a view). Round-trips .dwk.
+  reports: ReportEntry[];
+  // The report currently open in the viewer ToolWindow (null = closed).
+  openReportId: string | null;
   // Library folder tree (project-organization plan, Approach B). Pure
   // organization over the flat `datasets[]` array — datasets point in via
   // `Dataset.folderId`; folders never gate row-state. Round-trips .dwk v2.
@@ -260,6 +269,11 @@ interface AppState {
   // Apply a stored figure's plot-state snapshot: activates its resolved
   // dataset and sets the axis ranges + log flags. No-op if unresolved.
   applyOriginFigure: (id: string) => void;
+  // Report sheets (#36): add opens the viewer on the new report.
+  addReport: (name: string, report: ReportSheet, datasetId?: string | null) => void;
+  removeReport: (id: string) => void;
+  renameReport: (id: string, name: string) => void;
+  setOpenReport: (id: string | null) => void;
   loadWorkspace: (ws: WorkspaceState) => void;
   setActive: (id: string) => void;
   toggleSelected: (id: string) => void;
@@ -531,6 +545,8 @@ export const useApp = create<AppState>((set, get) => ({
   activeId: null,
   selectedIds: [],
   originFigures: [],
+  reports: [],
+  openReportId: null,
   folders: [],
   expandedFolders: [],
   leftCollapsed: false,
@@ -856,6 +872,8 @@ export const useApp = create<AppState>((set, get) => ({
         activeId: active,
         selectedIds: selected.length ? selected : active ? [active] : [],
         originFigures: ws.originFigures ?? [], // restored from the .dwk (v2 persists them)
+        reports: ws.reports ?? [], // report sheets (#36) — .dwk v2 persists them
+        openReportId: null,
         stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
         xKey: null,
         yKeys: null,
@@ -930,8 +948,10 @@ export const useApp = create<AppState>((set, get) => ({
       const activeId =
         s.activeId === id ? (datasets[0]?.id ?? null) : s.activeId;
       const selectedIds = s.selectedIds.filter((x) => x !== id);
-      const originFigures = pruneOriginFigureRefs(s.originFigures, new Set([id]));
-      return { datasets, activeId, selectedIds, originFigures };
+      const removed = new Set([id]);
+      const originFigures = pruneOriginFigureRefs(s.originFigures, removed);
+      const reports = pruneReportRefs(s.reports, removed);
+      return { datasets, activeId, selectedIds, originFigures, reports };
     }),
   // Delete key: remove every selected dataset (falling back to the active one if
   // nothing is multi-selected); reselect the first survivor so the plot recovers.
@@ -945,11 +965,13 @@ export const useApp = create<AppState>((set, get) => ({
       const activeId =
         s.activeId && !ids.has(s.activeId) ? s.activeId : (datasets[0]?.id ?? null);
       const originFigures = pruneOriginFigureRefs(s.originFigures, ids);
+      const reports = pruneReportRefs(s.reports, ids);
       return {
         datasets,
         activeId,
         selectedIds: activeId ? [activeId] : [],
         originFigures,
+        reports,
       };
     }),
   // Bulk-remove by explicit id list (item 17's "manage books" dialog) — unlike
@@ -963,7 +985,8 @@ export const useApp = create<AppState>((set, get) => ({
         s.activeId && !drop.has(s.activeId) ? s.activeId : (datasets[0]?.id ?? null);
       const selectedIds = s.selectedIds.filter((x) => !drop.has(x));
       const originFigures = pruneOriginFigureRefs(s.originFigures, drop);
-      return { datasets, activeId, selectedIds, originFigures };
+      const reports = pruneReportRefs(s.reports, drop);
+      return { datasets, activeId, selectedIds, originFigures, reports };
     }),
 
   // Wipe the entire library. Reuses loadWorkspace's "replace everything" reset
@@ -978,8 +1001,9 @@ export const useApp = create<AppState>((set, get) => ({
       selectedIds: [],
       expandedFolders: [],
       originFigures: [],
+      reports: [],
     });
-    set({ status: "removed all datasets, folders, and figures" });
+    set({ status: "removed all datasets, folders, figures, and reports" });
   },
 
   // Concatenate the selected datasets (in selection order) row-wise into one new
@@ -1584,6 +1608,32 @@ export const useApp = create<AppState>((set, get) => ({
   setDatasetMathOpen: (datasetMathOpen) => set({ datasetMathOpen }),
   setTabulateOpen: (tabulateOpen) => set({ tabulateOpen }),
   setDistributionOpen: (distributionOpen) => set({ distributionOpen }),
+  // Report sheets (#36). Adding opens the viewer on the new report so the
+  // producing workshop's "→ Report" lands somewhere visible immediately.
+  addReport: (name, report, datasetId) =>
+    set((s) => {
+      const entry: ReportEntry = {
+        id: nextReportId(),
+        name,
+        datasetId: datasetId ?? null,
+        report,
+      };
+      return {
+        reports: [...s.reports, entry],
+        openReportId: entry.id,
+        status: `report "${name}" created`,
+      };
+    }),
+  removeReport: (id) =>
+    set((s) => ({
+      reports: s.reports.filter((r) => r.id !== id),
+      openReportId: s.openReportId === id ? null : s.openReportId,
+    })),
+  renameReport: (id, name) =>
+    set((s) => ({
+      reports: s.reports.map((r) => (r.id === id ? { ...r, name } : r)),
+    })),
+  setOpenReport: (openReportId) => set({ openReportId }),
   setDataFilterOpen: (dataFilterOpen) => set({ dataFilterOpen }),
   setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
   setWaterfallOpen: (waterfallOpen) => set({ waterfallOpen }),
