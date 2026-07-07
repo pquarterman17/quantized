@@ -306,13 +306,15 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
         type_byte: int | None
         real_y_log: bool | None = None
         x_flag: bool | None
+        x_step: float | None = None
+        y_step: float | None = None
         if spec is not None:
             x_from, x_to, y_from, y_to, type_byte, x_flag = spec
         else:
             real = _parse_real_record(b, p, window_end)
             if real is None:
                 continue  # undecodable record: skip, never guess
-            x_from, x_to, y_from, y_to, x_flag, real_y_log = real
+            x_from, x_to, y_from, y_to, x_flag, real_y_log, x_step, y_step = real
             # the full specimen record may not parse (e.g. an X-log record's
             # varying filler) yet still carry the scale marker — read it directly
             type_byte = _scale_byte(b, p, window_end)
@@ -392,6 +394,10 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                     if frame is not None
                     else None
                 ),
+                # Major tick increments (the span's own step values, 13.2 #8);
+                # None when the record form doesn't carry/agree on them.
+                "x_step": x_step,
+                "y_step": y_step,
                 "_page_idx": page_idx,
                 "curves": curves,
             }

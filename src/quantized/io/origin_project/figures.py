@@ -133,6 +133,7 @@ cannot drift.
 
 from __future__ import annotations
 
+import math
 import struct
 from typing import Any
 
@@ -269,6 +270,10 @@ def _build_layer(
     layer_payload = blocks[start][1]
     x_from, x_to = _axis(layer_payload, 15)
     y_from, y_to = _axis(layer_payload, 58)
+    # The triples' third double IS the major tick increment (88/88 exact vs
+    # the axis_ticks COM oracle, 2026-07-06 -- 13.2 #8).
+    x_step = float(struct.unpack_from("<d", layer_payload, 31)[0])
+    y_step = float(struct.unpack_from("<d", layer_payload, 74)[0])
     hint = _cstring(layer_payload, 208, 24) or ""
     y_log = _y_scale_flag(layer_payload)
     # Final scale flags, needed up-front: positions (annotation marks, the
@@ -395,6 +400,9 @@ def _build_layer(
             if frame is not None
             else None
         ),
+        # Major tick increments (the axis triples' step doubles, 13.2 #8).
+        "x_step": x_step if math.isfinite(x_step) and x_step > 0 else None,
+        "y_step": y_step if math.isfinite(y_step) and y_step > 0 else None,
         "source_hint": hint,
         "n_curves": max(legend_ns) if legend_ns else n_curves,
         "annotations": [clean_richtext(a) for a in _clean_annotations(titles)[:12]],

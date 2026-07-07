@@ -141,3 +141,51 @@ def test_realdata_frames_and_page_sizes_match_com_oracle() -> None:
     assert page_bad == 0, f"{page_bad} page sizes decoded WRONG"
     assert frame_ok >= 55, f"frame coverage regressed ({frame_ok})"
     assert page_ok >= 25, f"page-size coverage regressed ({page_ok})"
+
+
+@pytest.mark.realdata
+def test_realdata_tick_increments_match_com_oracle() -> None:
+    """Decoded x_step/y_step (§13.2 #8: the axis triples' step double in
+    .opj; the real-form span's own step token in .opju) vs the
+    ``axis_ticks.json`` COM oracle (``layer.x.inc``/``layer.y.inc``).
+    Emitted steps must be exact; a None step is an honest miss (record
+    forms that don't carry/agree on it), never a wrong value."""
+    from quantized.io.origin_project.figures import extract_figures
+    from quantized.io.origin_project.figures_opju import extract_figures_opju
+
+    stems = [
+        ("XRD", "XRD.opj"),
+        ("hc2convert", "hc2convert.opj"),
+        ("Moke", "Moke.opj"),
+        ("UnpolPlots", "UnpolPlots.opju"),
+        ("RockingCurve", "RockingCurve.opju"),
+        ("Fixed Lambdas SI", "Fixed Lambdas SI.opju"),
+    ]
+    ok = bad = missing = 0
+    for stem, fname in stems:
+        oracle_path = _GT / stem / "axis_ticks.json"
+        src = _TD / fname
+        if not oracle_path.exists() or not src.exists():
+            continue
+        ticks = json.loads(oracle_path.read_text(encoding="utf-8"))
+        raw = src.read_bytes()
+        figs = extract_figures(raw) if fname.endswith(".opj") else extract_figures_opju(raw)
+        for f in figs:
+            layers = ticks.get(f["name"])
+            if not layers or len(layers) < f["layer"]:
+                continue
+            lay = layers[f["layer"] - 1]
+            for axis in ("x", "y"):
+                got = f.get(f"{axis}_step")
+                want = lay[f"{axis}_inc"]
+                if got is None or not want:
+                    missing += got is None
+                    continue
+                if abs(got - want) <= abs(want) * 1e-6:
+                    ok += 1
+                else:
+                    bad += 1
+    if ok == 0 and bad == 0:
+        pytest.skip("axis_ticks oracle not present on this machine")
+    assert bad == 0, f"{bad} tick increments decoded WRONG"
+    assert ok >= 80, f"tick-increment coverage regressed ({ok}, {missing} honest misses)"

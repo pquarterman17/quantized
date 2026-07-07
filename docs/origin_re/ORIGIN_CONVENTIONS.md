@@ -1036,6 +1036,7 @@ rather than shipped wrong.
 | **Project created/modified dates** (f64 JDN pair @ record 32/40) | `.opj` 4.3380 (4.3227: honest absent) | matches the results log's own JDN stamps | (2026-07-06) |
 | **Annotation tag variants + attach modes + rotated labels + exact short text** (`86 13`@-32, `85 1f`@-33, page-box+frame+diagonal-signature rotation, owned-block text) | both | 109/111 expanded COM oracle, 0 wrong | (2026-07-06) |
 | **Layer frame rect + page size, both containers** (`figure_geometry.py`: .opj quad@113 + pair@35; .opju `12 00 20 22` marker + containment-validated pair) | both | 57 frames + 27 pages exact, 0 wrong (layer_geometry COM oracle) | (2026-07-06) |
+| **Axis tick increments** (`x_step`/`y_step`: .opj triple's 3rd double @31/74; .opju real-form step token) | both | 88/88 .opj + full .opju corpus vs axis_ticks COM oracle | (2026-07-06) |
 | Axis titles (XB/YL/YR) + legend labels + annotation text | both | COM text oracle | (earlier) |
 | Annotation positions (layer-fraction, y-from-top) | both | 5/5 oracle-exact (<6e-17) | `170b46e` |
 | Notes pages + structured results-log records | both | corpus | (earlier) |
@@ -1124,7 +1125,16 @@ Ordered by value. Each names the decode path so it can be picked up cold.
    `frame` + `page` (page units) — everything a multi-panel layout needs.
    Remaining (frontend, follow-up): the multi-panel APPLY — rendering
    several panels of one page together; today each layer applies alone.
-8. **Tick spacing / number format** (axis increment, decimal places).
+8. ~~**Tick spacing**~~ **CLOSED 2026-07-06** — the tick increment was in
+   the decoded records all along: `.opj` = the axis triples' third double
+   (offsets 31 X / 74 Y; 88/88 vs a new `axis_ticks.json` COM oracle),
+   `.opju` = the real-form span's own step token (previously parsed and
+   discarded; 100% of the .opju corpus decodes, exact). Figures emit
+   `x_step`/`y_step` (None = honest miss). **Number format**: the corpus
+   has NO variance (every graph uses automatic digits; the
+   `layer.x.label.digits` COM property doesn't even respond) — nothing to
+   decode or verify against; books as OPEN-blocked-on-specimen if ever
+   needed.
 9. **Matrix objects** — unattempted; rare in the corpus.
 
 The 2026-07-06 genericity audit (three parallel reviewers over every decode

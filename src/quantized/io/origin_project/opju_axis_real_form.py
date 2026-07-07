@@ -246,14 +246,21 @@ def _real_fills(b: bytes, pos: int, end: int, n: int, bare: bool) -> list[tuple[
     return out
 
 
-def _real_span_pair(b: bytes, start: int, end: int, bare: bool) -> tuple[float, float] | None:
+def _real_span_pair(
+    b: bytes, start: int, end: int, bare: bool
+) -> tuple[float, float, float | None] | None:
     """``[from, to, step]`` (n=3) else ``[to, step]`` with from elided (n=2),
-    exact-fill; accepted only when the fill set at that arity is unique."""
+    exact-fill; accepted only when the fill set at that arity is unique on
+    the ``(from, to)`` pair (the historical acceptance rule — §13.2 #8 added
+    the STEP as a third returned value: the tick increment, ``None`` when
+    the accepted fills disagree on it)."""
     for n in (3, 2):
         fills = _real_fills(b, start, end, n, bare)
         pairs = {(f[0], f[1]) if n == 3 else (0.0, f[0]) for f in fills}
         if len(pairs) == 1:
-            return pairs.pop()
+            fr, to = pairs.pop()
+            steps = {f[2] if n == 3 else f[1] for f in fills}
+            return (fr, to, steps.pop() if len(steps) == 1 else None)
         if len(pairs) > 1:
             return None  # ambiguous: drop, never guess
     return None
@@ -317,9 +324,10 @@ def _real_y_log_flag(b: bytes, sep_start: int, window_end: int) -> bool | None:
 
 def _parse_real_record(
     b: bytes, p: int, window_end: int
-) -> tuple[float, float, float, float, bool | None, bool | None] | None:
+) -> tuple[float, float, float, float, bool | None, bool | None, float | None, float | None] | None:
     """Real-corpus axis record at anchor payload ``p``:
-    ``(xf, xt, yf, yt, x_log, y_log)`` -- ``x_log``/``y_log`` are the exact
+    ``(xf, xt, yf, yt, x_log, y_log, x_step, y_step)`` -- the last two are
+    the tick increments (None when undecoded); ``x_log``/``y_log`` are the exact
     flags from ``_real_x_log_flag``/``_real_y_log_flag`` when isolatable,
     else ``None`` (caller falls back to the decade heuristic).
 
@@ -337,7 +345,7 @@ def _parse_real_record(
 
 def _parse_real_record_sep(
     b: bytes, p: int, window_end: int, sep_re: re.Pattern[bytes]
-) -> tuple[float, float, float, float, bool | None, bool | None] | None:
+) -> tuple[float, float, float, float, bool | None, bool | None, float | None, float | None] | None:
     """One separator-form attempt of `_parse_real_record` (see above)."""
     m1 = sep_re.search(b, p, min(window_end, p + _TAG_SEARCH_SPAN))
     if m1 is None:
@@ -374,7 +382,10 @@ def _parse_real_record_sep(
             if ypair is not None:
                 x_log = _real_x_log_flag(b, y_lo, y_start)
                 y_log = _real_y_log_flag(b, m2.start(), window_end) if m2 else None
-                return (*xpair, *ypair, x_log, y_log)
+                return (
+                    xpair[0], xpair[1], ypair[0], ypair[1], x_log, y_log,
+                    xpair[2], ypair[2],
+                )
     return None
 
 
