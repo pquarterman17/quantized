@@ -97,6 +97,17 @@ stop); guard #11 untouched by this plan; vector export by default
 
 ### Open questions
 
+**RESOLVED 2026-07-07 (owner):** import filters persist in the SERVER
+config dir (platformdirs); plugins are TRUSTED installs (no sandboxing);
+pole figures import as a 2-D map (`mesh_kind="pole"`); WebGL 3-D (#22)
+STAYS DEFERRED. Adopted planner defaults (owner may override later):
+#41 closes with PyPI-only (installers already shipped); Graph Builder
+v1 zones = X/Y/Group + typed-inert Facet; quick-fit ends in a chip with
+EXPLICIT commit; GLM/survival ship as an optional `stats` extra; axis
+breaks render as panels with break glyphs; plus the minor calls as
+written below.
+
+
 1. **Import-filter persistence location** — (a) server-side JSON in a
    new user config dir (platformdirs; env override for tests) — works
    for the registry/CLI/headless path and the wizard alike; (b)

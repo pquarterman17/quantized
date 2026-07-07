@@ -103,6 +103,17 @@ vector export by default (corner/ternary/quiver default to PDF/SVG).
 
 ### Open questions
 
+**RESOLVED 2026-07-07 (owner):** import filters persist in the SERVER
+config dir (platformdirs); plugins are TRUSTED installs (no sandboxing);
+pole figures import as a 2-D map (`mesh_kind="pole"`); WebGL 3-D (#22)
+STAYS DEFERRED. Adopted planner defaults (owner may override later):
+#41 closes with PyPI-only (installers already shipped); Graph Builder
+v1 zones = X/Y/Group + typed-inert Facet; quick-fit ends in a chip with
+EXPLICIT commit; GLM/survival ship as an optional `stats` extra; axis
+breaks render as panels with break glyphs; plus the minor calls as
+written below.
+
+
 1. **Pole-figure representation (#46)** — (a) gridded 2-D map
    (chi/psi × phi) with `mesh_kind="pole"`, rendered through the
    existing Map tab (levels, cuts, contour export all apply);
