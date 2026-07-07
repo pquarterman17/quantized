@@ -67,8 +67,14 @@ _AUTO_TITLE = re.compile(r"^%\(\?[XY]\)")
 
 # Internal Origin storage/style markers that leak into raw text scans — see
 # figures.py's module docstring ("Axis-title / legend-label routing").
+# ``SYSTEM`` and ``SRCINFO`` are matched as UPPERCASE whole words only (the
+# internal tokens are always all-caps): the old case-insensitive substring
+# match silently dropped legitimate annotations like "System pressure = 3
+# bar" (2026-07-06 genericity audit #12). The remaining tokens are unusual
+# enough that a case-insensitive substring can't hit real prose.
 _INTERNAL_ANN_RE = re.compile(
-    r"SYSTEM|STYLEHOLDER|OriginStorage|AxesDlgSettings|UseSameOptions|SRCINFO", re.IGNORECASE
+    r"\bSYSTEM\b|\bSRCINFO\b"
+    r"|(?i:STYLEHOLDER|OriginStorage|AxesDlgSettings|UseSameOptions)"
 )
 _SHEETREF_ANN_RE = re.compile(r"^Sheet\d+<?$")  # internal sheet source reference, not a title
 

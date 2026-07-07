@@ -72,7 +72,24 @@ __all__ = ["opju_window_metadata"]
 _X_MARK = b"\x21\x51"
 _Y_MARK = b"\x21\x61"
 _YERR_MARK = b"\x30\x61"
-_DESIGNATION = {"X": "X", "Y": "Y", "Y-error": "Y-error"}
+# Label / Z / X-error markers, pinned 2026-07-06 by the designations.opju
+# by-construction specimen (one column per designation): Label = `21 41`;
+# Z and X-error SHARE `20 61` and are told apart by the record's own
+# designation code byte (`82 02 <code>`: 1=label 2=Y-error 3=X 4=Z
+# 5=X-error; a plain Y stores no code field at all). Before these, a book
+# containing ANY such column failed the cover-check and silently lost its
+# ENTIRE metadata run (names, units, and the X designation) — the audit's
+# whole-book blast radius (#10).
+_LABEL_MARK = b"\x21\x41"
+_ZX_MARK = b"\x20\x61"  # Z or X-error; resolved via the code byte
+_DESIGNATION = {
+    "X": "X",
+    "Y": "Y",
+    "Y-error": "Y-error",
+    "label": "label",
+    "Z": "Z",
+    "X-error": "X-error",
+}
 
 # A backslash-delimited filename token, as embedded in a column's ImportFile path.
 _FILENAME_RE = re.compile(rb"\\([\w \-]{1,60}?\.[A-Za-z0-9]{2,5})(?=[^\w.]|$)")
@@ -101,6 +118,18 @@ _KNOWN_TOKENS = (
     b"PConst",
 )
 _MAX_GAP = 600  # max byte spacing between one column-property record and the next
+
+
+def _zx_designation(b: bytes, mark_pos: int) -> str:
+    """Resolve the shared ``20 61`` marker to Z or X-error via the record's
+    own designation code (``82 02 <code>`` a few bytes earlier: 4=Z,
+    5=X-error). An unresolvable record reads as "Z" (either way the column
+    is a non-plottable auxiliary; the marker still COUNTS the column, which
+    is what protects the book's metadata run)."""
+    j = b.rfind(b"\x82\x02", max(0, mark_pos - 16), mark_pos)
+    if j >= 0 and j + 2 < len(b) and b[j + 2] == 5:
+        return "X-error"
+    return "Z"
 
 
 def _strip_alnum(s: bytes) -> bytes:
@@ -203,6 +232,12 @@ def opju_window_metadata(
         [(m.start(), "X") for m in re.finditer(_X_MARK, b) if m.start() >= start]
         + [(m.start(), "Y") for m in re.finditer(_Y_MARK, b) if m.start() >= start]
         + [(m.start(), "Y-error") for m in re.finditer(_YERR_MARK, b) if m.start() >= start]
+        + [(m.start(), "label") for m in re.finditer(_LABEL_MARK, b) if m.start() >= start]
+        + [
+            (m.start(), _zx_designation(b, m.start()))
+            for m in re.finditer(_ZX_MARK, b)
+            if m.start() >= start
+        ]
     )
     filename_hits = _filename_anchors(b, start)
     books: dict[str, BookMeta] = {}

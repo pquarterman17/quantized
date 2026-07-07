@@ -1149,25 +1149,26 @@ module; the silent-wrong findings were fixed the same day — see 13.5) left
 these lower-severity items open. All fail CLOSED today (drop/None, never a
 wrong answer); they are listed so the drop cases are known, not rediscovered:
 
-10. **Column-designation whitelists** — `windows.py::_is_column_block` gates
-    on bytes `0x06 ∈ {09,0B}` / `0x25 ∈ {21,30}` (the corpus-observed set:
-    X/Y/Y-error only), and `windows_opju.py` knows only the X/Y/Y-error
-    markers, requiring one marker per column. A book containing a
-    Label/Z/X-error/disregard column loses its WHOLE metadata run (names,
-    units, and the X designation) in `.opju`, or that column's metadata in
-    `.opj`. Fix path: decode the remaining designation markers (need a
-    specimen with a Z/Label column) or count an unknown marker as
-    designation-"unknown" instead of failing the run.
-11. **Notes decoder thinness** — `notes.py` is validated against ONE
-    synthetic 2-line specimen; the junk filter rejects any note containing
-    `\`, `<`, or `>` (legit in real notes: paths, inequalities, HTML-ish),
-    and the frame assumes a single-byte length (≤250 B). Real multi-paragraph
-    notes are silently dropped. Also the results-log timestamp regex assumes
-    US `M/D/YYYY` — a non-US-locale project's whole fit-provenance log reads
-    as absent. Needs a real-notes + non-US-locale specimen before trusting.
-12. **`_INTERNAL_ANN_RE` substring matching** — an annotation whose text
-    contains `system` (any case) is dropped as internal storage. Needs
-    word-boundary/context anchoring.
+10. ~~**Column-designation whitelists**~~ **CLOSED 2026-07-06** (.opju) —
+    the `designations.opju` by-construction specimen (one column per
+    designation) pinned the remaining markers: Label = `21 41`; Z and
+    X-error SHARE `20 61`, disambiguated by the record's designation code
+    byte (`82 02 <code>`: 1=label 2=Y-error 3=X 4=Z 5=X-error; plain Y
+    stores no code). A book with ANY such column now keeps its whole
+    metadata run (all 7 designations + long names decode exactly,
+    test-pinned). The `.opj` `_is_column_block` byte whitelists remain as
+    documented gates (no .opj specimen can be made).
+11. **Notes decoder thinness** — still OPEN; specimen attempt 2026-07-06
+    FAILED: `notes.text$` is not COM-writable and `notes.append` reports
+    success but persists nothing into the saved project, so no
+    hostile-content notes specimen could be made headlessly. The junk
+    filter (rejects `\`, `<`, `>`) and the 250-byte frame stay fail-closed
+    against the one shape ever validated; needs a hand-made notes project
+    to go further. The results-log US-locale timestamp assumption also
+    stands (needs a non-US-locale project).
+12. ~~**`_INTERNAL_ANN_RE` substring matching**~~ **CLOSED 2026-07-06** —
+    `SYSTEM`/`SRCINFO` now drop only as UPPERCASE whole words (the internal
+    tokens' real shape); "System pressure = 3 bar" survives. Test-pinned.
 13. **Remaining corpus-sized scan bounds** (all fail-safe drops, candidates
     for derived bounds): `windows_opju._MAX_GAP=600` (a >600-byte column
     record — e.g. a long embedded import path — ends the metadata run
@@ -1184,14 +1185,22 @@ wrong answer); they are listed so the drop cases are known, not rediscovered:
     double-Y pair on the frontend (`originFigures.doubleYPartner`). Origin
     mostly enforces uniqueness; needs an identity key better than the
     display name if a real collision file ever appears.
-15. **Symbol kinds 4-8 unverified** — `curve_style_color._SYMBOL_SHAPES`
-    maps 1-3 oracle-verified; 4-8 follow Origin's published gallery order
-    but no corpus plot uses them. Capture a synthetic specimen with kinds
-    4-8 to pin (or accept the documented-order risk).
-16. **`opju_codec._records` pre-`ffff` varint width** — only 1-2-byte
-    forms accepted (`k in (3,4)`); if a huge column presents a 3-byte value
-    there, its data is skipped. No large-row `.opju` exists to test; make a
-    synthetic one.
+15. ~~**Symbol kinds 4-8 unverified**~~ **CLOSED 2026-07-06** — the
+    `symbol_kinds.opju` specimen (kinds 1-8 set explicitly) verifies the
+    kind FIELD reads 1..8 exactly; the glyph-name mapping follows Origin's
+    documented gallery order. BONUS discovery (new OPEN): that specimen's
+    graph stores a HYBRID axis record (specimen-form layout with real-form
+    value tokens — produced by post-plot property edits) that neither
+    parser accepts, so the graph yields no figure; specimen retained for
+    the future fix (fail-closed today: no figure, never a wrong one).
+16. ~~**`opju_codec._records` pre-`ffff` varint width**~~ **CLOSED
+    2026-07-06** — the audit's low-confidence hunch was REAL and severe: a
+    120k-row column stores a 3-byte LEB128 varint (`c0 a9 07` = 120000)
+    before `ff ff`, and the fixed 1-2-byte gate silently rejected the
+    whole record — an ordinary instrument-log-sized worksheet decoded ZERO
+    columns. The gate is now a structural varint check (continuation bits),
+    not a size cap; the `bigcolumn.opju` specimen decodes 120k rows
+    bit-exact in ~0.35 s (test-pinned).
 
 ### 13.3 BLOCKED (documented dead ends — do not re-chase)
 

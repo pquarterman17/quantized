@@ -536,3 +536,18 @@ def test_realdata_annotation_positions_expanded_oracle_sweep() -> None:
         pytest.skip("expanded annotations oracle not present on this machine")
     assert wrong == 0, f"{wrong} annotation positions decoded WRONG"
     assert ok >= 100, f"annotation-position coverage regressed ({ok} exact, {missing} missing)"
+
+
+def test_internal_noise_filter_is_word_anchored() -> None:
+    """`SYSTEM`/`SRCINFO` drop only as UPPERCASE whole words (the internal
+    storage tokens' real shape): "System pressure = 3 bar" is a legitimate
+    annotation and must survive (2026-07-06 audit #12 — the old
+    case-insensitive substring silently dropped it)."""
+    from quantized.io.origin_project.annotation_marks import _clean_annotations
+
+    assert _clean_annotations(["System pressure = 3 bar"]) == ["System pressure = 3 bar"]
+    assert _clean_annotations(["my system calibration"]) == ["my system calibration"]
+    assert _clean_annotations(["SYSTEM"]) == []
+    assert _clean_annotations(["blah SYSTEM blah"]) == []
+    assert _clean_annotations(["OriginStorage blob"]) == []
+    assert _clean_annotations(["originstorage blob"]) == []  # still case-insensitive

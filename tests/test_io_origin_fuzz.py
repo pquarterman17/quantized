@@ -231,3 +231,75 @@ def test_matrix_specimens_fail_closed_and_degrade(tmp_path) -> None:
     assert [b.metadata.get("origin_book") for b in books] == ["WBook"]
     assert list(books[0].time) == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
     assert list(books[0].values[:, 0]) == [1.0, 4.0, 9.0, 16.0, 25.0, 36.0]
+
+
+def test_opju_record_gate_accepts_wide_varints() -> None:
+    """The `0a 05 <varint>` before `ff ff` grows with the record (LEB128:
+    120000 rows = 3 bytes) — the gate is a structural varint check, not a
+    size cap (2026-07-06 audit #16: the old 1-2-byte gate silently rejected
+    every large column; confirmed by the 120k-row bigcolumn.opju specimen)."""
+    from quantized.io.origin_project.opju_codec import _records
+
+    head = b"\x00" * 8
+    one = head + b"\x0a\x05\x20\xff\xff" + b"\x00" * 8
+    three = head + b"\x0a\x05\xc0\xa9\x07\xff\xff" + b"\x00" * 8
+    malformed = head + b"\x0a\x05\xc0\xa9\xff\xff" + b"\x00" * 8  # dangling continuation
+    assert _records(one), "1-byte varint header must gate in"
+    assert _records(three), "3-byte varint header must gate in"
+    assert not _records(malformed), "ill-formed varint must gate out"
+
+
+@pytest.mark.realdata
+def test_realdata_hardening_specimens_decode() -> None:
+    """The 2026-07-06 hardening specimens (generate via live Origin):
+
+    * ``bigcolumn.opju`` — 120k rows decode bit-exact (audit #16);
+    * ``designations.opju`` — a book with ALL designations (X/Y/Y-error/
+      label/Z/X-error) keeps its whole metadata run: every long name and
+      every designation decodes (audit #10 — one unknown marker used to
+      drop the entire book's names/units/X role);
+    * ``symbol_kinds.opju`` — curve records carry symbol kinds 1..8 exactly
+      (audit #15: 4-8 previously unverified).
+    """
+    spec = _CORPUS / "specimens"
+    needed = ["bigcolumn.opju", "designations.opju", "symbol_kinds.opju"]
+    if not all((spec / n).exists() for n in needed):
+        pytest.skip("hardening specimens not present on this machine")
+
+    big = read_origin_books(spec / "bigcolumn.opju")
+    assert big[0].values.shape == (120_000, 1)
+    assert big[0].time[0] == 0.0 and big[0].time[-1] == 119_999.0
+    assert big[0].values[-1, 0] == 60_000.5
+
+    des = read_origin_books(spec / "designations.opju")[0]
+    assert des.metadata["column_designations"] == {
+        "A": "X", "B": "Y", "C": "Y-error", "D": "label",
+        "E": "Z", "F": "X-error", "G": "Y",
+    }
+    assert des.metadata["x_column_long"] == "XXlong"
+    assert des.labels == ("YYlong", "EYlong", "LBlong", "ZZlong", "EXlong", "DDlong")
+
+    from quantized.io.origin_project.curve_style_color import opju_style_record, style_fields
+    from quantized.io.origin_project.opju_figure_curves import (
+        _CURVE_TOKEN,
+        column_id_table,
+        opju_pages,
+    )
+
+    b = (spec / "symbol_kinds.opju").read_bytes()
+    pages = opju_pages(b)
+    table = column_id_table(b, pages)
+    got: dict[str, str | float | None] = {}
+    for m in _CURVE_TOKEN.finditer(b):
+        w = m.group(1)[0]
+        cid = b[m.end()] if w == 1 else int.from_bytes(b[m.end() : m.end() + 2], "little")
+        info = table.ids.get(cid)
+        if info is None:
+            continue
+        rec = opju_style_record(b, m.start() + 3)
+        if rec is not None:
+            got[info[1]] = style_fields(rec).get("symbol")
+    assert got == {
+        "B": "square", "C": "circle", "D": "triangle", "E": "downtriangle",
+        "F": "diamond", "G": "plus", "H": "cross", "I": "star",
+    }

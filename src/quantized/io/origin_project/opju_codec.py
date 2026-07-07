@@ -237,9 +237,21 @@ def _records(b: bytes) -> list[int]:
     out: list[int] = []
     ff = b.find(b"\xff\xff")
     while ff >= 0:
-        # the header opens with `0a 05 <varint>` (1-2 byte varint) before ff ff
-        if any(ff - k >= 0 and b[ff - k] == 0x0A and b[ff - k + 1] == 0x05 for k in (3, 4)):
-            out.append(ff)
+        # The header opens with `0a 05 <varint>` before ff ff. The varint is
+        # LEB128-shaped and GROWS with the record (a 120k-row column stores
+        # `c0 a9 07` = 120000, three bytes — the old fixed 1-2-byte gate
+        # silently rejected every large column's record; 2026-07-06 audit
+        # item #16, confirmed by the bigcolumn.opju specimen). Accept any
+        # 1..5-byte span that is a WELL-FORMED varint (continuation bytes
+        # have the high bit set, the final byte does not) — a structural
+        # check, not a size cap.
+        for k in (3, 4, 5, 6, 7):
+            if ff - k < 0 or b[ff - k] != 0x0A or b[ff - k + 1] != 0x05:
+                continue
+            varint = b[ff - k + 2 : ff]
+            if varint and all(v & 0x80 for v in varint[:-1]) and not varint[-1] & 0x80:
+                out.append(ff)
+                break
         ff = b.find(b"\xff\xff", ff + 1)
     return out
 
