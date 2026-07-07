@@ -15,8 +15,10 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-07 (reconciliation: cross-cutting table caught up to
-the W9 item bodies — #50/#52/#53/#55 cores shipped 2026-07-03)
+**Updated:** 2026-07-07 (second reconciliation: #53's plot-display note was
+stale — the plot already masks filter-failed rows; worksheet-side filter
+display is the remaining half. #12 pickup note added: Origin figure
+entries already persist/nest, prior art for FigureDoc.)
 
 ---
 
@@ -346,7 +348,11 @@ an exported figure in Illustrator or a script, that's a W3 bug.)*
     figures track data changes
     *Model: opus (document/state model — W3's contract item), sonnet
     (wiring). Pickup: today figure config is transient dialog state;
-    promote it to a first-class store entity like `Dataset`.*
+    promote it to a first-class store entity like `Dataset`. Prior art:
+    imported Origin figures (`OriginFigureEntry`, store `figures` slice)
+    already persist through `.dwk` and nest in the Library tree
+    (PROJECT_ORGANIZATION_PLAN #5, 2026-07-05) — FigureDoc generalizes
+    that entity for user-authored figures.*
     - [ ] FigureDoc entity: id, name, dataset refs (by id, not copies),
           plot-state snapshot (channels/scales/styles/overlays), export
           config (#11's object), live-link vs frozen flag
@@ -783,8 +789,10 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
     analysisData consumer (Tabulate + Distribution today) honors it through
     the single chokepoint. Round-trips .dwk with column validation.
     Remaining: dual-thumb range sliders (min/max NumberFields today); the
-    plot + worksheet don't yet read analysisData, so they don't reflect the
-    global filter (same plot-display decision as #50).*
+    WORKSHEET doesn't reflect the global filter (it greys exclusions only —
+    the plot DOES mask/ghost filter-failed rows: `rowstate.droppedRows` =
+    exclusion ∪ filter, applied via `maskExcludedPayload` in PlotStage
+    since the #50 cross-view pass; reconciled 2026-07-07).*
 
 ### Tier 3 — Nice-to-Have
 
