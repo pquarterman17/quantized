@@ -1106,7 +1106,14 @@ Ordered by value. Each names the decode path so it can be picked up cold.
    `metadata["origin_project_dates"]` (`{"created","modified"}`, naive
    ISO-8601). Fail-closed: the 4.3227 80-byte variant carries no plausible
    Julian value at any offset (measured on XMCD.opj) and yields no key.
-6. **Y2 (right) axis range** for double-Y plots.
+6. ~~**Y2 (right) axis range**~~ **CLOSED 2026-07-06** — no new RE was
+   needed: each layer's own range/log flag was already decoded; the gap was
+   the frontend never carrying layer 2's axis state to the secondary axis.
+   `applyOriginFigure`'s double-Y path now sets `y2Lim`/`y2Log` (new store
+   fields, reset with `y2Keys`), and `uplotOpts` gives the y2 scale its own
+   fixed range + log distr (falling back to autoscale/yLog as before).
+   Follow-up (small): a `y2AxisLabel` override from layer 2's decoded
+   `y_title` — the y2 axis label still auto-derives from the channel.
 7. **Multi-layer frame geometry** — PARTIALLY closed 2026-07-06: the `.opj`
    layer FRAME rect is decoded (u16 quad at layer-block offsets 113-119 =
    left/top/right/bottom in page units; 41/44 vs the live-COM

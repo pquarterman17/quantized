@@ -1116,6 +1116,9 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
     expect(effectiveChannels(doubleYData, s.yKeys, s.xKey)).toEqual([0, 1, 2]);
     expect(s.xLim).toEqual([0, 10]);
     expect(s.yLim).toEqual([0, 50]); // layer 1's own range, not layer 2's
+    // 13.2 #6: layer 2's own axis state reaches the secondary axis
+    expect(s.y2Lim).toEqual([0, 5000]);
+    expect(s.y2Log).toBe(false);
   });
 
   it("applying layer 2 (the other entry) offers the same combined view", () => {

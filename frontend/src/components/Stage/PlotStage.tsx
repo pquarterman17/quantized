@@ -65,6 +65,8 @@ export default function PlotStage() {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
+  const y2Lim = useApp((s) => s.y2Lim);
+  const y2Log = useApp((s) => s.y2Log);
   const errKeys = useApp((s) => s.errKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const hiddenChannels = useApp((s) => s.hiddenChannels);
@@ -195,6 +197,8 @@ export default function PlotStage() {
         xLog,
         xLim,
         yLim,
+        y2Lim,
+        y2Log,
         xFmt,
         yFmt,
         showGrid,
@@ -255,7 +259,7 @@ export default function PlotStage() {
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool, integral, fwhmResult]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, y2Lim, y2Log, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool, integral, fwhmResult]);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the

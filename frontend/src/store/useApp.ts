@@ -196,6 +196,8 @@ interface AppState {
   xKey: number | null; // value channel used as the plot x-axis (null = .time)
   yKeys: number[] | null; // which value channels to plot (null = all)
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
+  y2Lim: [number, number] | null; // fixed secondary-Y range (Origin double-Y apply)
+  y2Log: boolean | null; // secondary-Y log scale (null = inherit yLog)
   refLines: RefLine[]; // fixed X/Y marker lines on the plot
   annotations: Annotation[]; // text labels pinned at data coordinates
   seriesStyles: Record<number, SeriesStyle>; // per-channel color/width/line overrides
@@ -567,6 +569,8 @@ export const useApp = create<AppState>((set, get) => ({
   xKey: null,
   yKeys: null,
   y2Keys: null,
+  y2Lim: null,
+  y2Log: null,
   refLines: [],
   annotations: [],
   seriesStyles: {},
@@ -622,7 +626,9 @@ export const useApp = create<AppState>((set, get) => ({
       stageTab: nextStageTab(ds, s.stageTab), // 2-D maps open in the Map view
       xKey: null, // new dataset → x-axis back to .time
       yKeys: null, // new dataset → plot all its channels
-      y2Keys: null, // and reset the secondary-axis assignment
+      y2Keys: null,
+      y2Lim: null,
+      y2Log: null, // and reset the secondary-axis assignment
       seriesStyles: {}, // styles are keyed by channel index → reset per dataset
       seriesLabels: {}, // legend renames are channel-keyed → reset per dataset
       errKeys: defaultErrKeys(ds.data), // Origin Y-error + parser hints (e.g. refl R←dR)
@@ -785,6 +791,10 @@ export const useApp = create<AppState>((set, get) => ({
             ...partnerSel.yKeys.filter((k) => !baseSel.yKeys.includes(k)),
           ],
           y2Keys: partnerSel.yKeys,
+          // Layer 2's own axis state -> the secondary axis (13.2 #6): range,
+          // log flag, and title (falls back to auto when undecoded).
+          y2Lim: [upper.figure.y_from, upper.figure.y_to],
+          y2Log: upper.figure.y_log,
           seriesStyles: { ...baseSel.styles, ...partnerSel.styles },
           xAxisLabel: lower.figure.x_title ?? "",
           yAxisLabel: lower.figure.y_title ?? "",
@@ -845,6 +855,8 @@ export const useApp = create<AppState>((set, get) => ({
         xKey: null,
         yKeys: null,
         y2Keys: null,
+      y2Lim: null,
+      y2Log: null,
         seriesStyles: {},
         seriesLabels: {},
         errKeys: activeDs ? defaultErrKeys(activeDs.data) : {},
@@ -871,6 +883,8 @@ export const useApp = create<AppState>((set, get) => ({
         xKey: null,
         yKeys: null,
         y2Keys: null,
+      y2Lim: null,
+      y2Log: null,
         seriesStyles: {},
         seriesLabels: {},
         errKeys: ds ? defaultErrKeys(ds.data) : {},
@@ -1019,6 +1033,8 @@ export const useApp = create<AppState>((set, get) => ({
         xKey: null,
         yKeys: null,
         y2Keys: null,
+      y2Lim: null,
+      y2Log: null,
         seriesStyles: {},
         errKeys: {},
         hiddenChannels: [],
@@ -1348,7 +1364,7 @@ export const useApp = create<AppState>((set, get) => ({
     get().recordMacro(`Y channels → ${yKeys ? yKeys.join(",") : "all"}`, `qz.setYKeys(${lit(yKeys)})`);
   },
   setY2Keys: (y2Keys) => {
-    set({ y2Keys });
+    set({ y2Keys, ...(y2Keys ? {} : { y2Lim: null, y2Log: null }) });
     get().recordMacro(
       `Y2 channels → ${y2Keys ? y2Keys.join(",") : "none"}`,
       `qz.setY2Keys(${lit(y2Keys)})`,

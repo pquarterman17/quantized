@@ -483,3 +483,37 @@ describe("buildOpts non-monotonic x (hysteresis loops)", () => {
     expect(opts.scales?.y?.range).toEqual([-5, 5]);
   });
 });
+
+describe("buildOpts y2 axis state (Origin double-Y apply, 13.2 #6)", () => {
+  const dual: PlotPayload = {
+    ...payload,
+    data: [
+      [0, 1, 2],
+      [10, 20, 30],
+      [0.5, 0.6, 0.7],
+    ],
+    series: [
+      { label: "M", unit: "emu", axis: 0 },
+      { label: "T", unit: "K", axis: 1 },
+    ],
+  };
+
+  it("fixes the y2 range from y2Lim and scales it with y2Log", () => {
+    const opts = buildOpts(dual, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      y2Lim: [400, 1500],
+      y2Log: true,
+    });
+    expect(opts.scales?.y2?.range).toEqual([400, 1500]);
+    expect(opts.scales?.y2?.distr).toBe(3); // its own log flag, not yLog's
+    expect(opts.scales?.y?.distr).toBe(1); // primary stays linear
+  });
+
+  it("inherits yLog and autoscales when y2 state is absent (legacy behaviour)", () => {
+    const opts = buildOpts(dual, { ...base, yLog: true, tool: "zoom" });
+    expect(opts.scales?.y2?.distr).toBe(3);
+    expect(opts.scales?.y2?.range).toBeUndefined();
+  });
+});

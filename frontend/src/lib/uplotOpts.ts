@@ -126,6 +126,11 @@ export interface BuildOptsArgs {
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
   xLim?: [number, number] | null;
   yLim?: [number, number] | null;
+  /** Secondary (right) Y axis: explicit range + log scale. An applied Origin
+   *  double-Y figure carries layer 2's own axis state here; null/undefined =
+   *  autoscale / inherit yLog (the pre-2026-07-06 behaviour). */
+  y2Lim?: [number, number] | null;
+  y2Log?: boolean | null;
   /** Reference lines to draw at fixed X/Y values. */
   refLines?: RefLine[];
   /** Commit a dragged reference line's new value (zoom/cursor tools only — the
@@ -343,8 +348,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // collapsed index window), so supply full-scan extents. A range *function*
   // is only consulted when no explicit scale is pending, so box/wheel zoom and
   // a fixed yLim still win; double-click reset re-ranges back to the extents.
+  const y2LogEff = args.y2Log ?? yLog;
   const loopY = !xAscending && !yLim ? fullYExtents(payload, args.hidden, 0, yLog) : null;
-  const loopY2 = !xAscending ? fullYExtents(payload, args.hidden, 1, yLog) : null;
+  const loopY2 = !xAscending ? fullYExtents(payload, args.hidden, 1, y2LogEff) : null;
   // …and its x auto-range collapses to a sliver for the same reason — scan the
   // x column for the true sweep width (a range function, so zoom/xLim still win).
   const loopX = !xAscending && !xLim ? fullXExtents(payload.data[0] as (number | null)[], xLog) : null;
@@ -366,7 +372,11 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     { ...axis, size: 60, label: soloLabel(0), ...(yValues ? { values: yValues } : {}) },
   ];
   if (hasY2) {
-    scales.y2 = { distr: yLog ? 3 : 1, ...(loopY2 ? { range: () => loopY2 } : {}) };
+    const y2Lim = args.y2Lim ?? null;
+    scales.y2 = {
+      distr: y2LogEff ? 3 : 1,
+      ...(y2Lim ? { range: y2Lim } : loopY2 ? { range: () => loopY2 } : {}),
+    };
     // Secondary axis on the right; hide its grid so the two grids don't overlap.
     axes.push({
       ...axis,
