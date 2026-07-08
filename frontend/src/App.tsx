@@ -51,6 +51,7 @@ import {
   sendToOrigin,
 } from "./lib/api";
 import { makeDemoDataset } from "./lib/demo";
+import { loadSampleDataset } from "./lib/sampleDataset";
 import { clearAutosave, loadAutosave, saveAutosave } from "./lib/autosave";
 import { saveBlob } from "./lib/download";
 import { buildExportStyles } from "./lib/exportStyles";
@@ -84,6 +85,7 @@ function exportActive(
 }
 
 let demoCounter = 0;
+let sampleCounter = 0;
 
 export default function App() {
   const leftCollapsed = useApp((s) => s.leftCollapsed);
@@ -338,6 +340,22 @@ export default function App() {
             name: `demo-${demoCounter}.dat`,
             data: makeDemoDataset(),
           }),
+      },
+      {
+        id: "load-sample",
+        group: "File",
+        label: "Load sample dataset (bundled)",
+        keywords: "demo example first-run VSM hysteresis try this",
+        run: () => {
+          void loadSampleDataset().then(({ data, name, offline }) => {
+            s().addDataset({ id: `sample-${++sampleCounter}`, name, data });
+            const msg = offline
+              ? "sample endpoint unavailable — added offline demo instead"
+              : `loaded sample dataset (${name})`;
+            s().setStatus(msg);
+            toast(msg, offline ? "info" : "ok");
+          });
+        },
       },
       {
         id: "save-workspace",

@@ -2,7 +2,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { autoGuess, fitModel, listFitModels } from "../../../lib/api";
+import { autoGuess, bootstrapFit, exportCornerFigure, fitModel, listFitModels } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useCurveFit } from "./useCurveFit";
@@ -11,6 +11,8 @@ vi.mock("../../../lib/api", () => ({
   autoGuess: vi.fn(),
   fitModel: vi.fn(),
   listFitModels: vi.fn(),
+  bootstrapFit: vi.fn(),
+  exportCornerFigure: vi.fn(),
 }));
 
 const DATA: DataStruct = {
@@ -86,5 +88,84 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
       await result.current.run("guess");
     });
     expect(autoGuess).toHaveBeenCalledWith("Linear", [1, 2, 3], [20, 30, 40]);
+  });
+});
+
+describe("useCurveFit corner plot (gap #29 UI leg)", () => {
+  it("is a no-op with no fit result yet", async () => {
+    const { result } = renderHook(() => useCurveFit());
+    await act(async () => {
+      await result.current.runCornerPlot();
+    });
+    expect(bootstrapFit).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op after an auto-guess (guessOnly) — no completed fit to bootstrap", async () => {
+    vi.mocked(autoGuess).mockResolvedValue({ p0: [1] });
+    const { result } = renderHook(() => useCurveFit());
+    await act(async () => {
+      await result.current.run("guess");
+    });
+    await act(async () => {
+      await result.current.runCornerPlot();
+    });
+    expect(bootstrapFit).not.toHaveBeenCalled();
+  });
+
+  it("bootstraps with return_samples then exports the corner figure with the fit's params as truths", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [2, 5], yFit: [10, 20, 30, 40] });
+    vi.mocked(bootstrapFit).mockResolvedValue({
+      params: [2, 5],
+      boot_mean: [2, 5],
+      boot_se: [0.1, 0.2],
+      ciLow: [1.8, 4.6],
+      ciHigh: [2.2, 5.4],
+      n_boot: 500,
+      n_failed: 0,
+      boot_samples: [
+        [1.9, 4.9],
+        [2.1, 5.1],
+      ],
+    });
+    const { result } = renderHook(() => useCurveFit());
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    await act(async () => {
+      await result.current.runCornerPlot();
+    });
+    expect(bootstrapFit).toHaveBeenCalledWith({
+      model: "Linear",
+      x: [0, 1, 2, 3],
+      y: [10, 20, 30, 40],
+      p0: [2, 5],
+      return_samples: true,
+    });
+    expect(exportCornerFigure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        samples: [
+          [1.9, 4.9],
+          [2.1, 5.1],
+        ],
+        truths: [2, 5],
+        filename: "run-corner",
+      }),
+    );
+    expect(result.current.error).toBeNull();
+  });
+
+  it("surfaces a bootstrap failure as an error instead of throwing", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [2, 5], yFit: [10, 20, 30, 40] });
+    vi.mocked(bootstrapFit).mockRejectedValue(new Error("bootstrap unstable"));
+    const { result } = renderHook(() => useCurveFit());
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    await act(async () => {
+      await result.current.runCornerPlot();
+    });
+    expect(exportCornerFigure).not.toHaveBeenCalled();
+    expect(result.current.error).toBe("bootstrap unstable");
+    expect(result.current.cornerBusy).toBe(false);
   });
 });

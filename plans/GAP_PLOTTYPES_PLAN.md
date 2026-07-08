@@ -265,9 +265,28 @@ in `plans/GAP_TIER3_PLAN.md`)
   `highlightSelectedPayload`/`composeDisplayPayload`/`dropTrailingEmptyRows`).
   Ordinal tick formatting landed in `lib/uplotOpts.ts`
   (`categoricalTickFormatter`, wins over an explicit numeric `xFmt` on the x
-  axis) — this consumer is real and tested but has **no producer yet** in
-  this pass (see deviation below); it's ready scaffolding for a future
-  "categorical X on the ordinary uPlot plot" feature.
+  axis) — this consumer is real and tested but has ~~**no producer yet**~~
+  CLOSED 2026-07-08: `lib/plotdata.ts` gained `categoricalXPayload(payload,
+  data, xKey, modelingType)` — when `xKey` is a real value channel (not the
+  time axis) whose modeling type (`lib/modeling.ts`'s `channelModelingType`,
+  override-aware) reads nominal/ordinal, it remaps `data[0]` to ordinal
+  level positions and sets `xCategories` via `lib/barlayout.ts`'s
+  `resolveCategoryLabels` (Origin text-label column when one covers every
+  level, else formatted numeric levels); a no-op passthrough otherwise
+  (continuous channel, time axis, no finite levels). Wired into the main
+  uPlot fetch path in `Stage/PlotStage.tsx` (the one `setPayload` call site,
+  applied before the `composeDisplayPayload` overlay stack, which never
+  reads x values — only length — so it's unaffected). 7 new tests in
+  `plotdata.test.ts`'s new "categoricalXPayload (gap #20 producer)" block
+  (passthrough for continuous/null-xKey/no-levels, ordinal remap + formatted
+  labels, ordinal-vs-nominal both honored, Origin text-label preference,
+  null/non-finite row handling). Known accepted gap (not introduced by this
+  change — the field's own contract already blesses it): `lib/clipboard.ts`'s
+  `payloadToTSV` still exports the raw `data[0]` (ordinal positions for a
+  categorical x) rather than the resolved category labels; a future
+  consumer-side enhancement, same shape as `categoricalTickFormatter`.
+  Frontend 1559 passed, build green — "categorical X on the ordinary uPlot
+  plot" is no longer just scaffolding, it now actually happens.
   New pure `lib/barlayout.ts` (category level/label resolution — an Origin
   `metadata.origin_text_columns` column when one consistently labels every
   level, RESOLVED decision b, else formatted numeric levels, decision a;

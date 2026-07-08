@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { exportFigure, renderFigureHitmap } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
-import { useFigureBuilder } from "./useFigureBuilder";
+import { FIGURE_STYLE_DPI, useFigureBuilder } from "./useFigureBuilder";
 
 vi.mock("../../../lib/api", () => ({
   exportFigure: vi.fn().mockResolvedValue(undefined),
@@ -72,5 +72,29 @@ describe("useFigureBuilder", () => {
     act(() => result.current.exportNow());
     expect(exportFigure).not.toHaveBeenCalled();
     expect(result.current.preview).toBeNull();
+  });
+
+  it("syncs DPI to the preset's calibrated value when the style changes", () => {
+    const { result } = renderHook(() => useFigureBuilder());
+    expect(result.current.dpi).toBe(FIGURE_STYLE_DPI.default);
+
+    act(() => result.current.setStyle("aps"));
+    expect(result.current.style).toBe("aps");
+    expect(result.current.dpi).toBe(600); // FIGURE_STYLE_DPI.aps
+
+    act(() => result.current.setStyle("web"));
+    expect(result.current.dpi).toBe(150); // FIGURE_STYLE_DPI.web
+  });
+
+  it("still lets the user override DPI after a preset sync", () => {
+    const { result } = renderHook(() => useFigureBuilder());
+    act(() => result.current.setStyle("nature"));
+    expect(result.current.dpi).toBe(600);
+
+    act(() => result.current.setDpi(1200));
+    expect(result.current.dpi).toBe(1200); // manual override sticks
+
+    act(() => result.current.setFmt("png")); // unrelated change doesn't reset it
+    expect(result.current.dpi).toBe(1200);
   });
 });

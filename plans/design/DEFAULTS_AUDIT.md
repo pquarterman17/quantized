@@ -147,14 +147,14 @@ as the renderer's wiring, and the wiring had gaps. Those are fixed below
 
 ## Follow-ups (out of scope for this item)
 
-- **Frontend DPI does not track the selected preset.**
-  `frontend/src/components/workshops/figurebuilder/useFigureBuilder.ts`
-  initializes `dpi` to a hardcoded `300` and never re-syncs it when the
-  user changes `style`; `routes/export.py`'s `FigureRequest.dpi` always
-  sends an explicit value, so item 1's backend fix has no visible effect
-  through the shipped export dialog today. Closing the loop needs a
-  frontend change (sync/display the preset's dpi on style change) — out of
-  scope for this backend-only item.
+- ~~**Frontend DPI does not track the selected preset.**~~ (2026-07-08) —
+  CLOSED: `useFigureBuilder.ts` gained a `FIGURE_STYLE_DPI` map (mirrored by
+  hand from `calc/figure_styles.py` — no styles-list endpoint exists to fetch
+  it live) and a `setStyle` wrapper that re-syncs the `dpi` field to the
+  preset's calibrated value on every style change, while leaving the field
+  freely user-editable afterwards (only a *style* change re-syncs it). Also
+  applies when a saved style template is applied. 4 new tests in
+  `useFigureBuilder.test.ts`. Frontend 1559 passed, build green.
 - **`calc/figure_map.py` and `calc/figure_statplots.py` have the same two
   gaps** (`dpi: int = 200` hardcoded, no `xtick.top`/`ytick.right` mirroring)
   as `calc/figure.py` had. Neither renderer is exercised by this audit's

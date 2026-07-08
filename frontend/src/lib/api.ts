@@ -77,6 +77,14 @@ export async function uploadFile(file: File): Promise<DataStruct> {
   return unwrap<DataStruct>(res);
 }
 
+/** The bundled first-run demo dataset (a synthetic VSM-like hysteresis loop,
+ *  `GET /api/samples/demo`) — the real packaged sample, parsed server-side
+ *  through the ordinary `import_auto` path, as opposed to the purely
+ *  client-side `makeDemoDataset()` fallback used when offline. */
+export function fetchDemoSample(): Promise<DataStruct> {
+  return getJSON<DataStruct>("/api/samples/demo");
+}
+
 /** Best-effort starting import settings for raw text (delimiter, header/units
  *  lines, column roles) — the same guesser behind the import wizard's first
  *  render (`io.import_preview.guess_settings`). Used by clipboard paste
@@ -185,6 +193,43 @@ export function autoGuess(model: string, x: number[], y: number[]): Promise<{ p0
 /** Bounded nonlinear least-squares fit of a named model. */
 export function fitModel(req: FitRequest): Promise<CalcResult> {
   return postJSON("/api/fitting/fit", req);
+}
+
+export interface BootstrapRequest {
+  model: string;
+  x: number[];
+  y: number[];
+  p0: number[];
+  n_boot?: number;
+  method?: string;
+  seed?: number;
+  alpha?: number;
+  lower?: number[];
+  upper?: number[];
+  /** Opt-in (gap #29): also return the full replicate matrix as
+   *  `boot_samples` ([n_kept x P]) — the corner-plot source. */
+  return_samples?: boolean;
+}
+
+export interface BootstrapResult {
+  params: number[];
+  boot_mean: number[];
+  boot_se: number[];
+  ciLow: number[];
+  ciHigh: number[];
+  n_boot: number;
+  n_failed: number;
+  /** Present only when `return_samples: true` was posted. */
+  boot_samples?: number[][];
+  [key: string]: unknown;
+}
+
+/** Bootstrap parameter uncertainty (percentile CIs) for a named model fit;
+ *  pass `return_samples: true` to also get the replicate matrix for a
+ *  corner (pairs) plot — the uncertainty-quantification counterpart to
+ *  `fitModel` (gap #29). */
+export function bootstrapFit(req: BootstrapRequest): Promise<BootstrapResult> {
+  return postJSON("/api/fitting/bootstrap", req);
 }
 
 // ── Baseline ────────────────────────────────────────────────────────────────

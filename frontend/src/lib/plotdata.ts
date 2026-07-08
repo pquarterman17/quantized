@@ -5,11 +5,14 @@
 import type uPlot from "uplot";
 
 import { plotSeries } from "./api";
+import { categoryLevels, resolveCategoryLabels } from "./barlayout";
+import { isCategorical } from "./modeling";
 import type {
   BaselineOverlay,
   ChannelRole,
   DataStruct,
   FitOverlay,
+  ModelingType,
   PeakOverlay,
   PlotSeriesResponse,
 } from "./types";
@@ -75,6 +78,36 @@ export function buildColumns(
         : (ds.labels[xKey] ?? "x"),
     xUnit: xKey == null ? String(ds.metadata?.["x_column_unit"] ?? "") : (ds.units[xKey] ?? ""),
   };
+}
+
+/** The xCategories PRODUCER (gap #20 residual): the field and its consumer
+ *  (`lib/uplotOpts.ts`'s `categoricalTickFormatter`) already existed; nothing
+ *  populated it for the main uPlot path. When `xKey` is a real value channel
+ *  (not the time axis — time is never categorical) whose modeling type reads
+ *  as categorical (nominal/ordinal — the caller supplies it, typically
+ *  `lib/modeling.ts`'s `channelModelingType(dataset, xKey)` so the dataset's
+ *  own `.channelTypes` override is honored), remaps `data[0]` from raw
+ *  channel values to ORDINAL positions (0, 1, 2, …) and sets `xCategories`
+ *  to the resolved level labels (`lib/barlayout.ts`'s `resolveCategoryLabels`
+ *  — an Origin text-label column when one consistently covers every level,
+ *  else formatted numeric levels). A passthrough no-op for a continuous
+ *  channel, the time axis, or a channel with no finite levels at all — every
+ *  existing PlotPayload consumer already treats `xCategories` as optional
+ *  (see the "xCategories (gap #20 contract)" tests), so this is additive. */
+export function categoricalXPayload(
+  payload: PlotPayload,
+  data: DataStruct,
+  xKey: number | null,
+  modelingType: ModelingType,
+): PlotPayload {
+  if (xKey == null || !isCategorical(modelingType)) return payload;
+  const levels = categoryLevels(data, xKey);
+  if (levels.length === 0) return payload;
+  const labels = resolveCategoryLabels(data, xKey, levels);
+  const position = new Map(levels.map((lvl, i) => [lvl, i]));
+  const [x, ...ys] = payload.data as (number | null)[][];
+  const ordinal = x.map((v) => (v == null ? null : (position.get(v) ?? null)));
+  return { ...payload, data: [ordinal, ...ys] as uPlot.AlignedData, xCategories: labels };
 }
 
 /** How many rows have BOTH a finite x and a finite y — a channel's "usable
