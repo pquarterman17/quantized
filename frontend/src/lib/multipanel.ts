@@ -91,6 +91,19 @@ export function cellSize(
   };
 }
 
+/** Panel width across a ROW of `n` x-break panels (gap #21 residual) filling
+ *  `width` px, with a fixed `glyphW`-px break-glyph gutter between each
+ *  adjacent pair (`n - 1` of them, narrower than the plain panel `gap` so the
+ *  diagonal break mark reads as a seam rather than another panel). Unlike
+ *  `facetGridSize`'s sqrt-balanced grid, x-break panels always sit in ONE row
+ *  left-to-right in x order (the conventional "broken axis" layout; there are
+ *  usually only 2-3 segments). Never below 1px (mirrors `panelHeights`). */
+export function breakPanelWidths(n: number, width: number, glyphW = 20): number[] {
+  if (n <= 0) return [];
+  const w = Math.max(1, Math.floor((width - (n - 1) * glyphW) / n));
+  return new Array(n).fill(w);
+}
+
 /** A uPlot `hooks.setScale` callback that propagates an x-zoom/pan on one
  *  panel to every other panel `getPlots()` returns — the sync behaviour BOTH
  *  the plain per-channel stack and the facet grid want (the x axis means the

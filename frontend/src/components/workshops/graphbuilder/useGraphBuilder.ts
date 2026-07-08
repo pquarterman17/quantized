@@ -4,7 +4,13 @@
 // specToRender → rowstate.analysisData), and "sends" the spec to the main stage:
 // scatter/line through the ordinary axis store actions (setXKey/setYKeys — which
 // record their own macro steps), box/violin through the stat-stage seed
-// (seedStatStage → useStatStage pickers). Thin: all grammar lives in lib/plotspec.
+// (seedStatStage → useStatStage pickers). When the Facet zone is also filled
+// (scatter/line only — box/violin/bar don't facet, see plotspec.ts), sendToStage
+// enters the main Stage's facet-grid mode (store.facetByColumn) instead of the
+// flat plot: setXKey/setYKeys run FIRST so facetByColumn's own "carry the
+// current x/y selection when the dataset is already active" rule picks them up
+// (gap #21 residual — closes GAP_PLOTTYPES_PLAN item 5's booked (c)). Thin: all
+// grammar lives in lib/plotspec.
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -57,6 +63,7 @@ export function useGraphBuilder(): GraphBuilderState {
   const setYKeys = useApp((s) => s.setYKeys);
   const setStatMode = useApp((s) => s.setStatMode);
   const seedStatStage = useApp((s) => s.seedStatStage);
+  const facetByColumn = useApp((s) => s.facetByColumn);
   const setStatus = useApp((s) => s.setStatus);
 
   const [spec, setSpec] = useState<PlotSpec>(emptySpec);
@@ -118,6 +125,16 @@ export function useGraphBuilder(): GraphBuilderState {
       setStatMode(false);
       if (spec.zones.group) {
         toast("series-split by group is preview-only in v1 (lands with faceting)", "info");
+      }
+      // Facet zone filled (gap #21 residual): enter the main Stage's facet
+      // grid instead of the flat plot. facetByColumn is called AFTER
+      // setXKey/setYKeys above, so its own "carry the current x/y selection
+      // when the dataset is already active" rule picks up exactly the
+      // channels just assigned.
+      if (spec.zones.facet) {
+        facetByColumn(active.id, spec.zones.facet.channel);
+        setStatus(`sent ${spec.mark} to the plot, faceted by ${labelOf(spec.zones.facet.channel)}`);
+        return;
       }
       setStatus(`sent ${spec.mark} to the plot`);
       return;

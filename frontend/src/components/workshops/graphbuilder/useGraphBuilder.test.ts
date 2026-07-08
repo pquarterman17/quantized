@@ -6,25 +6,27 @@ import { useApp } from "../../../store/useApp";
 import { useGraphBuilder } from "./useGraphBuilder";
 
 // channel 0 monotonic continuous x, channel 1 continuous y, channel 2 a 2-level
-// nominal grouping column (needs ≥12 rows for nominal inference).
+// nominal grouping column (needs ≥12 rows for nominal inference), channel 3 a
+// 2-level nominal FACET column (gap #21 residual — same 6/6 split as channel 2
+// so a facet send has 2 finite levels to build panels from).
 const DATA: DataStruct = {
   time: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
   values: [
-    [1, 10, 0],
-    [2, 12, 0],
-    [3, 14, 0],
-    [4, 16, 0],
-    [5, 18, 0],
-    [6, 20, 0],
-    [7, 30, 1],
-    [8, 32, 1],
-    [9, 34, 1],
-    [10, 36, 1],
-    [11, 38, 1],
-    [12, 40, 1],
+    [1, 10, 0, 0],
+    [2, 12, 0, 0],
+    [3, 14, 0, 0],
+    [4, 16, 0, 0],
+    [5, 18, 0, 0],
+    [6, 20, 0, 0],
+    [7, 30, 1, 1],
+    [8, 32, 1, 1],
+    [9, 34, 1, 1],
+    [10, 36, 1, 1],
+    [11, 38, 1, 1],
+    [12, 40, 1, 1],
   ],
-  labels: ["x", "y", "grp"],
-  units: ["s", "emu", ""],
+  labels: ["x", "y", "grp", "fct"],
+  units: ["s", "emu", "", ""],
   metadata: { x_column_name: "T" },
 };
 
@@ -39,6 +41,10 @@ beforeEach(() => {
     statMode: false,
     statStageSeed: null,
     macroRecording: false,
+    stackMode: false,
+    spatialPanels: null,
+    facetPanels: null,
+    breakPanels: null,
   });
 });
 
@@ -108,5 +114,33 @@ describe("useGraphBuilder — send to stage", () => {
     act(() => result.current.sendToStage());
     expect(useApp.getState().statStageSeed).toEqual({ mode: "box", groupCol: 2, valueCol: 1 });
     expect(useApp.getState().statMode).toBe(true);
+  });
+
+  it("scatter/line WITH a facet zone enters the main Stage's facet grid (gap #21 residual)", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("facet", 3)); // 2-level nominal facet column
+    act(() => result.current.sendToStage());
+    const s = useApp.getState();
+    expect(s.stackMode).toBe(true);
+    expect(s.facetPanels).toHaveLength(2);
+    expect(s.spatialPanels).toBeNull();
+    // facetByColumn's own setActive resets the LIVE xKey/yKeys to null (same
+    // as the App.tsx "Facet by column…" command path), but it read the x/y
+    // selection just assigned (channel 0/1, not the time axis / all-channels
+    // default) BEFORE that reset, baking it into each panel's payload.
+    expect(s.facetPanels?.[0].payload.xLabel).toBe("x");
+    expect(s.facetPanels?.[0].payload.series.map((ser) => ser.label)).toEqual(["y"]);
+  });
+
+  it("scatter/line WITHOUT a facet zone does not touch facetPanels/stackMode", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.sendToStage());
+    const s = useApp.getState();
+    expect(s.facetPanels).toBeNull();
+    expect(s.stackMode).toBe(false);
   });
 });

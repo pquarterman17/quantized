@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import type uPlot from "uplot";
 
-import { cellSize, facetGridSize, panelHeights, splitPayload, xZoomSyncHook } from "./multipanel";
+import {
+  breakPanelWidths,
+  cellSize,
+  facetGridSize,
+  panelHeights,
+  splitPayload,
+  xZoomSyncHook,
+} from "./multipanel";
 import type { PlotPayload } from "./plotdata";
 
 const PAYLOAD: PlotPayload = {
@@ -94,6 +101,30 @@ describe("cellSize", () => {
 
   it("never goes below 1px in either dimension", () => {
     expect(cellSize(5, 5, { rows: 3, cols: 3 }, 8)).toEqual({ cellW: 1, cellH: 1 });
+  });
+});
+
+describe("breakPanelWidths", () => {
+  it("divides width evenly minus glyph gutters between panels", () => {
+    // 3 panels, 600px, 20px gutters -> (600 - 2*20)/3 = 186.67 -> floor 186 each.
+    expect(breakPanelWidths(3, 600, 20)).toEqual([186, 186, 186]);
+  });
+
+  it("a single panel gets the full width (no gutters)", () => {
+    expect(breakPanelWidths(1, 600, 20)).toEqual([600]);
+  });
+
+  it("defaults the glyph width to 20px", () => {
+    expect(breakPanelWidths(2, 440)).toEqual([210, 210]);
+  });
+
+  it("never goes below 1px", () => {
+    expect(breakPanelWidths(5, 10, 20)).toEqual(new Array(5).fill(1));
+  });
+
+  it("handles the degenerate count", () => {
+    expect(breakPanelWidths(0, 600)).toEqual([]);
+    expect(breakPanelWidths(-2, 600)).toEqual([]);
   });
 });
 

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { facetPayloads, sharedXDomain, suggestBreaks, type FacetPanel } from "./facet";
+import {
+  breakPayloads,
+  facetPayloads,
+  sharedXDomain,
+  sharedYDomain,
+  suggestBreaks,
+  type BreakPanel,
+  type FacetPanel,
+} from "./facet";
 import type { PlotPayload } from "./plotdata";
 import type { DataStruct } from "./types";
 
@@ -129,5 +137,135 @@ describe("sharedXDomain", () => {
 
   it("handles a single panel (domain = that panel's own range)", () => {
     expect(sharedXDomain([panel([3, 1, 2])])).toEqual([1, 3]);
+  });
+});
+
+describe("breakPayloads", () => {
+  const ds: DataStruct = {
+    time: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 60, 61, 62, 63],
+    values: Array.from({ length: 14 }, (_, i) => [i * 10]),
+    labels: ["y"],
+    units: [""],
+    metadata: {},
+  };
+  const oneBreak: [number, number][] = [[9, 60]];
+
+  it("splits a single gap into two contiguous panels", () => {
+    const panels = breakPayloads(ds, null, [0], oneBreak);
+    expect(panels).toHaveLength(2);
+    expect(panels[0].payload.data[0]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(panels[1].payload.data[0]).toEqual([60, 61, 62, 63]);
+  });
+
+  it("each panel's xRange is its own finite x extent, not the full data span", () => {
+    const panels = breakPayloads(ds, null, [0], oneBreak);
+    expect(panels[0].xRange).toEqual([0, 9]);
+    expect(panels[1].xRange).toEqual([60, 63]);
+  });
+
+  it("handles multiple breaks (N breaks -> N+1 panels)", () => {
+    const multi: DataStruct = {
+      time: [0, 1, 2, 20, 21, 22, 100, 101, 102],
+      values: Array.from({ length: 9 }, (_, i) => [i]),
+      labels: ["y"],
+      units: [""],
+      metadata: {},
+    };
+    const breaks: [number, number][] = [
+      [2, 20],
+      [22, 100],
+    ];
+    const panels = breakPayloads(multi, null, [0], breaks);
+    expect(panels).toHaveLength(3);
+    expect(panels[0].payload.data[0]).toEqual([0, 1, 2]);
+    expect(panels[1].payload.data[0]).toEqual([20, 21, 22]);
+    expect(panels[2].payload.data[0]).toEqual([100, 101, 102]);
+  });
+
+  it("sorts unsorted breaks before segmenting", () => {
+    const multi: DataStruct = {
+      time: [0, 1, 2, 20, 21, 22, 100, 101, 102],
+      values: Array.from({ length: 9 }, (_, i) => [i]),
+      labels: ["y"],
+      units: [""],
+      metadata: {},
+    };
+    const reversedBreaks: [number, number][] = [
+      [22, 100],
+      [2, 20],
+    ];
+    const panels = breakPayloads(multi, null, [0], reversedBreaks);
+    expect(panels).toHaveLength(3);
+    expect(panels[0].payload.data[0]).toEqual([0, 1, 2]);
+  });
+
+  it("drops a segment with no finite rows rather than rendering an empty panel", () => {
+    // Break carves out a segment [9, 60] with no data on either side of a third gap.
+    const sparse: DataStruct = {
+      time: [0, 1, 100, 101],
+      values: [[0], [1], [100], [101]],
+      labels: ["y"],
+      units: [""],
+      metadata: {},
+    };
+    const breaks: [number, number][] = [
+      [1, 50],
+      [50, 100],
+    ];
+    const panels = breakPayloads(sparse, null, [0], breaks);
+    // middle segment [50,50] has no rows -> dropped, leaving 2 panels.
+    expect(panels).toHaveLength(2);
+  });
+
+  it("returns [] when breaks is empty", () => {
+    expect(breakPayloads(ds, null, [0], [])).toEqual([]);
+  });
+});
+
+describe("sharedYDomain", () => {
+  const panel = (ys: (number | null)[]): BreakPanel => ({
+    xRange: [0, ys.length - 1],
+    payload: {
+      data: [ys.map((_, i) => i), ys] as PlotPayload["data"],
+      series: [{ label: "y", unit: "", axis: 0 }],
+      xLabel: "x",
+      xUnit: "",
+    },
+  });
+
+  it("unions the finite y-range across every panel's series", () => {
+    expect(sharedYDomain([panel([0, 5]), panel([10, -3])])).toEqual([-3, 10]);
+  });
+
+  it("ignores non-finite values", () => {
+    expect(sharedYDomain([panel([NaN, 1, Infinity]), panel([-2, 3])])).toEqual([-2, 3]);
+  });
+
+  it("returns null when no panel has any finite y value", () => {
+    expect(sharedYDomain([panel([NaN, null]), panel([])])).toBeNull();
+  });
+
+  it("returns null for an empty panel set", () => {
+    expect(sharedYDomain([])).toBeNull();
+  });
+
+  it("covers multiple series within one panel", () => {
+    const twoSeries: BreakPanel = {
+      xRange: [0, 1],
+      payload: {
+        data: [
+          [0, 1],
+          [5, 6],
+          [-10, 2],
+        ] as PlotPayload["data"],
+        series: [
+          { label: "a", unit: "", axis: 0 },
+          { label: "b", unit: "", axis: 0 },
+        ],
+        xLabel: "x",
+        xUnit: "",
+      },
+    };
+    expect(sharedYDomain([twoSeries])).toEqual([-10, 6]);
   });
 });

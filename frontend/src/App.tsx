@@ -907,6 +907,29 @@ export default function App() {
         },
       },
       {
+        id: "break-x-axis",
+        group: "Plot",
+        label: "Break x-axis at gaps…",
+        run: async () => {
+          const ds = s().datasets.find((d) => d.id === s().activeId);
+          if (!ds) {
+            toast("no active dataset", "danger");
+            return;
+          }
+          const params = await askParams("Break x-axis at gaps", [
+            {
+              key: "gapFactor",
+              label: "Gap factor",
+              type: "number",
+              default: 4,
+              hint: "A gap at least this many times the median x-spacing becomes a break",
+            },
+          ]);
+          if (!params) return;
+          s().breakAtGaps(ds.id, undefined, Number(params.gapFactor));
+        },
+      },
+      {
         id: "shortcuts",
         group: "Help",
         label: "Keyboard shortcuts",

@@ -154,9 +154,10 @@ now fully closed, interactive + export halves both shipped)
 
 ## Tier 2 — Medium Impact
 
-(items 4 and 5 shipped 2026-07-07 — see Completed for the full outcome,
-including two deliberate deviations from the bullets below and the
-lane-blocked remainders booked for a future pass)
+(items 4 and 5 shipped 2026-07-07, with item 5's two booked interactive
+residuals — paneled x-breaks and the Graph Builder facet send-to-stage —
+closed in a 2026-07-08 follow-up; see Completed for the full outcome,
+including two deliberate deviations from the bullets below)
 
 ---
 
@@ -396,17 +397,73 @@ in `plans/GAP_TIER3_PLAN.md`)
   `PlotStage.tsx`'s stack-mode gate now also fires on `facetPanels`.
   Frontend +~35 tests (`facet.test.ts`, `multipanel.test.ts`,
   `useApp.test.ts`'s new `facetByColumn` describe block); full suite green
-  (1570), `npm run build` green. **Still booked, now genuinely optional (the
-  blocker is gone, not lane-forbidden):** (b) interactive x-breaks as paneled
-  sub-views, and (c) the Graph Builder's "Send to Stage" carrying a facet
-  spec through to this new mode (today it still only sends xy/box/violin/bar
-  — the facet zone stays a Graph-Builder-preview-only feature on send).
+  (1570), `npm run build` green.
   **Code-health note:** `Stage/statRender.ts` (539 lines) and
   `Stage/useStatStage.ts` (416 lines) are now past the informal ~400-line
   mark — neither is a `.tsx` component (the enforced convention's literal
   scope) and no test fails, but both are candidates for a future split (e.g.
   bar drawing into its own sibling file, mirroring the `calc/figure_break.py`
   precedent) rather than growing further untouched.
+  **Follow-up (2026-07-08) — closes booked items (b) and (c), gap #21 fully
+  interactive now:** (b) paneled x-breaks shipped as a FOURTH `MultiPanelStage`
+  mode. `lib/facet.ts` gained `breakPayloads` (splits a series into one panel
+  per contiguous x-segment implied by a set of `[lo,hi]` breaks — typically
+  `suggestBreaks`'s own output, finally wired up — segmenting the SAME way
+  `facetPayloads` row-slices, just by x-range instead of by category level)
+  and `sharedYDomain` (the opposite sharing axis from facet's `sharedXDomain`:
+  break panels each keep their OWN local x-range but share ONE y-domain — an
+  honest axis break only elides x). `lib/multipanel.ts` gained
+  `breakPanelWidths` (a single ROW of panels, not facet's sqrt-balanced grid —
+  breaks are conventionally 2-3 segments read left-to-right in x order, with a
+  fixed-width gutter between each pair for the break glyph). The glyph itself
+  is a pure-CSS diagonal-hash seam (`repeating-linear-gradient` on the
+  `--border` token), not a text/unicode glyph, so it never depends on font
+  rendering. New store slice: `breakPanels` (parallel to `spatialPanels`/
+  `facetPanels`, cleared in lockstep everywhere those three are — `setActive`,
+  `setStackMode`, `loadWorkspace`, dataset clone) and `breakAtGaps(datasetId,
+  breaks?, gapFactor?)` (mirrors `facetByColumn`'s shape: reads the ANALYSIS
+  view (guard #11), carries over the current x/y selection only when the
+  dataset is already active, auto-detects via `suggestBreaks` when no explicit
+  override is given, no-ops with a toast when no qualifying gap exists or
+  fewer than 2 segments end up with data). A "Break x-axis at gaps…" `⌘K`
+  command (`App.tsx`) prompts for the gap-factor threshold via `askParams`.
+  (c) Graph Builder's "Send to Stage" now carries a facet spec:
+  `useGraphBuilder.ts`'s scatter/line branch calls `setXKey`/`setYKeys` FIRST,
+  then — only when the Facet zone is filled — calls the store's
+  `facetByColumn` (which then carries over exactly the x/y selection just
+  assigned, since the dataset is already active) instead of leaving the plot
+  flat; `GraphBuilderPanel.tsx`'s facet-well note updated to match (was
+  explicitly documenting the gap as NOT done). Box/violin/bar still don't
+  facet (unchanged, out of scope — the categorical-x-facet cross-product).
+  **Code-health follow-up:** `MultiPanelStage.tsx` would have crossed 450+
+  lines with a 4th mode inlined, so it was split into a thin view (71 lines)
+  + a new `Stage/useMultiPanelStage.ts` state/render-effect hook (421 lines,
+  the `useStatStage.ts`/`StatStage.tsx` precedent) — the enforced ~400-line
+  convention is `.tsx`-component-scoped, and 71 lines is comfortably under
+  it. **Drive-by fix surfaced while writing the first-ever MultiPanelStage
+  component test:** the spatial-payloads-fetch effect called
+  `setSpatialPayloads([])` with a FRESH empty-array literal on every non-
+  spatial render, which — being referentially unequal to the prior empty
+  state — triggered a pointless extra re-render that re-ran (and
+  double-built) the uPlot instances in the render effect on every
+  facet/break/plain-stack mount or mode switch (silent in production since
+  `destroyAll()` cleans up the first set before the rebuild; only visible
+  once a test recorded constructor calls). Fixed with a functional update
+  that preserves the same `[]` reference when already empty.
+  Tests: `facet.test.ts` (+`breakPayloads`/`sharedYDomain`, mirroring the
+  facet-side cases plus multi-break/unsorted-break/empty-segment-dropped
+  cases), `multipanel.test.ts` (+`breakPanelWidths`), `useApp.test.ts`'s new
+  `breakAtGaps` describe block (12 cases, including a same-active-vs-
+  different-active x/y carry-over pair using a deliberately evenly-spaced
+  decoy column), `useGraphBuilder.test.ts` (+2: facet-zone send enters the
+  facet grid with the right channels baked into each panel; no-facet send is
+  unaffected), and a NEW `Stage/MultiPanelStage.test.tsx` — the first
+  component-level regression test for this file, mocking `uplot`'s
+  constructor (headless — jsdom has no canvas/layout engine for it) and
+  `ResizeObserver` (absent in jsdom) to confirm all FOUR modes (plain stack,
+  spatial-apply, facet-by-column, paneled x-break) build the expected panel
+  count without throwing. Frontend 1669 passed (was 1570 — some of the gap
+  is other work merged in the interim), `npm run build` green.
 
 - ~~**3. Tri-contour export (gap #17 last remaining piece)**~~ (2026-07-08) —
   `calc/figure_map.py` (199 → 281 lines, still well under the ceiling) gained

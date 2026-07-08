@@ -69,8 +69,8 @@ export default function GraphBuilderPanel() {
               assigned={g.chips("facet")}
               note={
                 <span style={faint}>
-                  scatter/line: previews as small multiples below. Box/violin/bar don't facet yet,
-                  and "Send to Stage" doesn't carry facets to the main plot (plot-types item 5).
+                  scatter/line: previews as small multiples below and "Send to Stage" carries it to
+                  the main plot as a facet grid. Box/violin/bar don't facet yet.
                 </span>
               }
               onAssign={(c) => g.assign("facet", c)}
