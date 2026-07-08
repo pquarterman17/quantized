@@ -79,8 +79,6 @@ clear of the GPL guard; ROC needs only numpy.
 - Item 5's paste half reuses the #40 import engine (GAP_ECOSYSTEM item
   1's backend already exists — no dependency, `/api/import/*` is
   shipped).
-- Item 6's parser work waits on its representation decision (open
-  question 1) — decide first, then it's one focused io/ change.
 - Item 7 is a decision gate, not work.
 - No item here touches `frontend/src/store/useApp.ts` except item 5
   (paste actions) — this plan is broadly parallel-safe with the other
@@ -114,7 +112,17 @@ breaks render as panels with break glyphs; plus the minor calls as
 written below.
 
 
-1. **Pole-figure representation (#46)** — (a) gridded 2-D map
+1. *(SHIPPED 2026-07-07 — built exactly as recommended, (a). Detection
+   in `io/_xrdml_scan.py` runs before the mesh/cloud classifiers: shared
+   2Theta `commonPosition` + Phi swept within every scan + a tilt axis
+   ("Psi" or "Chi", both handled) fixed per scan but stepped across
+   scans. Output labels `[Phi, Psi, Intensity]` (tilt axis normalized to
+   "Psi"); 2Theta is scalar metadata, not a column. Renders in the Map
+   tab via the existing generic path; the RSM-specific cut/projection
+   tools stay gated to literal "2Theta"/"Qx" columns (frontend,
+   untouched) — stereographic/polar projection remains the later view.
+   See the Completed entry for full detail.)* **Pole-figure
+   representation (#46)** — (a) gridded 2-D map
    (chi/psi × phi) with `mesh_kind="pole"`, rendered through the
    existing Map tab (levels, cuts, contour export all apply);
    stereographic/polar projection as a later view; (b) multi-column
@@ -279,28 +287,6 @@ written below.
      same-schema CSVs with Append checked lands one concatenated
      dataset flagged `merged_from`.
 
-6. **Pole-figure representation + import (gap #46 residual)** —
-   decide the representation, then make pole-figure XRDML import as
-   something better than a flat trace.
-   *Model: sonnet.* *Agent: materials-science-expert.*
-   - [ ] Representation decision per open question 1 (owner sign-off;
-         gridded chi/psi × phi map recommended)
-   - [ ] Parser: extend the dispatch in `src/quantized/io/xrdml.py` +
-         `io/_xrdml_scan.py` to detect the pole-figure layout (fixed
-         2θ `commonPosition`, Phi array within scans, Chi/Psi
-         stepping across scans — today it falls through to the 1-D
-         path and degenerates) → `mesh_kind="pole"` gridded output
-         with proper axis names/units
-   - [ ] Fixtures: synthetic pole-figure XML in
-         `tests/test_io_xrdml.py`; a realdata corpus anchor (acquire
-         a redistributable PANalytical pole-figure file into
-         `../test-data/` with a MANIFEST row if none exists); flip
-         the known-limitation note in `tests/test_realdata_corpus.py`
-         to a positive assertion
-   - Acceptance: a pole-figure XRDML imports as a chi × phi map that
-     renders in the Map tab (and inherits contour/export support);
-     the realdata suite asserts it.
-
 ---
 
 ## Tier 3 — Nice-to-Have
@@ -318,6 +304,38 @@ written below.
 ---
 
 ## Completed
+
+- ~~**#6 Pole-figure representation + import (gap #46 residual)**~~
+  (2026-07-07) — representation decision was already owner-resolved (a)
+  gridded 2-D map. Parser: `io/_xrdml_scan.py` gained `_classify_pole` +
+  `_build_pole` (a new classifier run BEFORE `_is_2d`/`_classify_cloud` in
+  `io/xrdml.py`, since a Chi-named pole tilt axis alone already satisfies
+  the generic "snapshot" cloud pattern and would otherwise silently drop
+  the Phi sweep). Detection: one shared 2Theta `commonPosition` (the fixed
+  Bragg reflection) + Phi swept WITHIN every scan (azimuthal) + a tilt axis
+  — "Psi" (texture cradles) or "Chi" (older Eulerian cradles), both
+  handled, checked in that order — fixed within each scan but stepped
+  ACROSS scans. `xrdml.py`'s `_SECONDARY_AXES` gained "Psi" so it's
+  captured into each scan's `sec_ranges` at all. Output: `mesh_kind="pole"`,
+  `labels=["Phi","Psi","Intensity"]` (tilt axis normalized to "Psi" in the
+  output regardless of source naming; original name kept as
+  `tilt_axis_source`), 2Theta recorded as scalar `two_theta_deg` metadata
+  (not a column — it doesn't vary point-to-point, unlike the RSM kinds).
+  `is2D`+3 labeled channels alone makes it render in the Map tab via the
+  existing generic first-three-columns path and the generic regrid/export
+  pipeline; the RSM-specific angular/Q cut+projection tools stay gated to
+  literal "2Theta"/"Qx" columns (unchanged, out of scope here) —
+  polar/stereographic display remains a later view. Fixtures: 6 synthetic
+  cases in `tests/test_io_xrdml.py` (Psi naming, Chi naming, Phi-not-swept
+  non-match, single-scan non-match, plus an explicit regression test
+  re-proving mesh/snapshot/coupled classify identically); a real corpus
+  anchor exists (`../test-data/panalytical/xrd/xrayutilities_polefig_point.xrdml`,
+  91 Psi steps × 1199 Phi points, GPL-2.0-flagged in the corpus MANIFEST —
+  kept local-only/never redistributed, used only as a private realdata
+  oracle) — `tests/test_realdata_corpus.py`'s known-limitation note flipped
+  to a positive reference. `io/xrdml.py` 394 lines / `io/_xrdml_scan.py`
+  291 lines (both well under the 500-line ceiling — no split needed).
+  Backend 1874 passed (was 1795); ruff + mypy clean.
 
 - ~~**#1 Corner-plot posterior panels (gap #29 residual)**~~ (2026-07-07) —
   new pure `calc/figure_corner.py` (226 lines, `figure_statplots.py`

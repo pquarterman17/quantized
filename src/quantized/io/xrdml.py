@@ -23,6 +23,11 @@ grid; ``metadata.mesh_kind`` records the layout:
 - ``"coupled"`` — schema-1.0-era RSMs: each scan is a coupled Omega-2Theta
   sweep (omega varies WITHIN the scan) at a stepped omega offset; the point
   cloud is a sheared mesh.
+- ``"pole"`` — pole figures (gap #46 residual): fixed 2Theta (one Bragg
+  reflection), Phi swept WITHIN every scan (azimuthal), a tilt axis ("Psi"
+  or "Chi", normalized to "Psi" in the output) stepped ACROSS scans. Not a
+  reciprocal-space map (no Qx/Qz); ``labels`` is ``[Phi, Psi, Intensity]``
+  and 2Theta is scalar metadata (``two_theta_deg``), not a column.
 """
 
 from __future__ import annotations
@@ -40,13 +45,18 @@ from quantized.datastruct import DataStruct
 from quantized.io._xrdml_scan import (
     _apply_intensity,
     _build_2d_cloud,
+    _build_pole,
     _classify_cloud,
+    _classify_pole,
     _Scan,
 )
 
 __all__ = ["import_xrdml"]
 
-_SECONDARY_AXES = ("Omega", "Chi", "Phi")
+# "Psi" is captured here (not just in _xrdml_scan's cloud-only tuple) so a
+# pole-figure tilt axis using that naming shows up in each scan's sec_ranges
+# for _classify_pole to see -- see the mesh_kind="pole" note above.
+_SECONDARY_AXES = ("Omega", "Chi", "Phi", "Psi")
 
 
 def _local(tag: str) -> str:
@@ -246,6 +256,11 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
         "attenuator_activate_level": float(att_level) if np.isfinite(att_level) else None,
         "n_scans_att_corrected": n_att_corrected,
     }
+    pole = _classify_pole(collected)
+    if pole is not None:
+        tilt_axis, two_theta_deg = pole
+        return _build_pole(collected, tilt_axis, two_theta_deg, path, intensity,
+                           counting_time, intensity_tag, att)
     if _is_2d(collected, sec_name):
         assert sec_name is not None  # guaranteed by _is_2d
         return _build_2d(collected, sec_name, path, intensity, counting_time,
