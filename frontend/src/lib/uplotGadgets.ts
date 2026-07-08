@@ -229,3 +229,158 @@ export function quickFitPlugin(
     },
   };
 }
+
+export type CursorHandle = 0 | 1;
+
+/** Which of two cursors (given in PIXELS) the pointer (also pixels) is over,
+ *  within `tol` px — the two-point sibling of hitTestRoiHandles. Ties prefer
+ *  cursor 0. Null when the pointer isn't near either. */
+export function hitTestCursorHandles(
+  aPx: number,
+  bPx: number,
+  pointerPx: number,
+  tol = 6,
+): CursorHandle | null {
+  const dA = Math.abs(pointerPx - aPx);
+  const dB = Math.abs(pointerPx - bPx);
+  if (dA <= tol && dA <= dB) return 0;
+  if (dB <= tol) return 1;
+  return null;
+}
+
+/**
+ * Paired-cursors gadget (gap #34): drag out two independent x-cursors (thin
+ * lines, no fill — unlike quickFitPlugin's band) and move either one
+ * afterwards. Structurally mirrors quickFitPlugin's create/move-edge drag
+ * state machine (instance-local override once committed, sub-6px drag =
+ * click = clear), but there is no "move both" gesture — a pointer-down
+ * between the two cursors starts a NEW pair, matching quickFitPlugin's
+ * fallback-to-create branch when nothing is hit.
+ */
+export function gadgetCursorsPlugin(
+  cursors: [number, number] | null,
+  color: string,
+  opts?: { onCursorsChange?: (c: [number, number] | null) => void; interactive?: boolean },
+): uPlot.Plugin {
+  let hasLocal = false;
+  let local: [number, number] | null = null;
+  const current = (): [number, number] | null => (hasLocal ? local : cursors);
+  const commit = (
+    next: [number, number] | null,
+    onCursorsChange: (c: [number, number] | null) => void,
+  ): void => {
+    hasLocal = true;
+    local = next;
+    onCursorsChange(next);
+  };
+
+  return {
+    hooks: {
+      ready:
+        opts?.interactive && opts.onCursorsChange
+          ? (u: uPlot) => {
+              const over = u.over;
+              const onCursorsChange = opts.onCursorsChange!;
+              over.style.cursor = "crosshair";
+              let dragging = false;
+
+              over.addEventListener("mousemove", (e: MouseEvent) => {
+                if (dragging) return;
+                const c = current();
+                if (!c) {
+                  over.style.cursor = "crosshair";
+                  return;
+                }
+                const rect = over.getBoundingClientRect();
+                const pointerPx = e.clientX - rect.left;
+                const aPx = u.valToPos(c[0], "x", true);
+                const bPx = u.valToPos(c[1], "x", true);
+                over.style.cursor = hitTestCursorHandles(aPx, bPx, pointerPx) != null ? "ew-resize" : "crosshair";
+              });
+
+              over.addEventListener("mousedown", (e: MouseEvent) => {
+                if (e.button !== 0) return;
+                e.preventDefault();
+                const rect = over.getBoundingClientRect();
+                const downPx = e.clientX - rect.left;
+                const bounds = xDataExtent(u);
+                const c = current();
+                let hit: CursorHandle | null = null;
+                if (c) {
+                  const aPx = u.valToPos(c[0], "x", true);
+                  const bPx = u.valToPos(c[1], "x", true);
+                  hit = hitTestCursorHandles(aPx, bPx, downPx);
+                }
+                dragging = true;
+
+                if (c && hit != null) {
+                  const other = hit === 0 ? c[1] : c[0];
+                  const onMove = (ev: MouseEvent) => {
+                    let v = u.posToVal(ev.clientX - rect.left, "x");
+                    if (bounds) v = Math.min(bounds[1], Math.max(bounds[0], v));
+                    commit(hit === 0 ? [v, other] : [other, v], onCursorsChange);
+                    u.redraw();
+                  };
+                  const onUp = () => {
+                    document.removeEventListener("mousemove", onMove);
+                    document.removeEventListener("mouseup", onUp);
+                    dragging = false;
+                  };
+                  document.addEventListener("mousemove", onMove);
+                  document.addEventListener("mouseup", onUp);
+                  return;
+                }
+
+                // No hit (or nothing placed yet) → drag out a NEW cursor pair.
+                const x0 = u.posToVal(downPx, "x");
+                commit([x0, x0], onCursorsChange);
+                u.redraw();
+                const onMove = (ev: MouseEvent) => {
+                  const x1 = u.posToVal(ev.clientX - rect.left, "x");
+                  commit([x0, x1], onCursorsChange);
+                  u.redraw();
+                };
+                const onUp = (ev: MouseEvent) => {
+                  document.removeEventListener("mousemove", onMove);
+                  document.removeEventListener("mouseup", onUp);
+                  dragging = false;
+                  const x1 = u.posToVal(ev.clientX - rect.left, "x");
+                  const dpx = Math.abs(u.valToPos(x1, "x", true) - u.valToPos(x0, "x", true));
+                  if (dpx < 6) {
+                    commit(null, onCursorsChange); // a click, not a placement
+                    u.redraw();
+                    return;
+                  }
+                  commit([x0, x1], onCursorsChange);
+                  u.redraw();
+                };
+                document.addEventListener("mousemove", onMove);
+                document.addEventListener("mouseup", onUp);
+              });
+            }
+          : undefined,
+      draw: (u: uPlot) => {
+        const c = current();
+        if (!c) return;
+        const { ctx } = u;
+        const { left, top, width, height } = u.bbox;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(left, top, width, height);
+        ctx.clip();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([2, 3]);
+        for (const v of c) {
+          const px = u.valToPos(v, "x", true);
+          if (px < left || px > left + width) continue;
+          ctx.beginPath();
+          ctx.moveTo(px, top);
+          ctx.lineTo(px, top + height);
+          ctx.stroke();
+        }
+        ctx.restore();
+      },
+    },
+  };
+}

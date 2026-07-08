@@ -14,6 +14,7 @@ import {
   primaryChannel,
   rowsInXRange,
   withBaselineOverlay,
+  withDerivOverlay,
   withFitOverlay,
   withPeakOverlay,
   type PlotPayload,
@@ -318,6 +319,33 @@ describe("withFitOverlay", () => {
   });
 });
 
+describe("withDerivOverlay (gap #34 differentiate mode)", () => {
+  const base: PlotPayload = {
+    data: [
+      [0, 1, 2],
+      [10, 20, 30],
+    ],
+    series: [{ label: "y", unit: "V" }],
+    xLabel: "x",
+    xUnit: "s",
+  };
+
+  it("appends the dy/dx series on the secondary axis when datasetId + length match", () => {
+    const p = withDerivOverlay(base, { datasetId: "d1", y: [1, 2, 3] }, "d1");
+    expect(p.data).toHaveLength(3);
+    expect(p.data[2]).toEqual([1, 2, 3]);
+    expect(p.series[1]).toEqual({ label: "dy/dx", unit: "", axis: 1 });
+  });
+
+  it("is a no-op when the overlay belongs to another dataset", () => {
+    expect(withDerivOverlay(base, { datasetId: "other", y: [1, 2, 3] }, "d1")).toBe(base);
+  });
+
+  it("is a no-op when there is no overlay", () => {
+    expect(withDerivOverlay(base, null, "d1")).toBe(base);
+  });
+});
+
 describe("applyWaterfall", () => {
   // Two series over the combined range [10, 40] → span 30.
   const base: PlotPayload = {
@@ -575,6 +603,7 @@ describe("composeDisplayPayload (#50 layer order)", () => {
     fitOverlay: null,
     baselineOverlay: null,
     peakOverlay: null,
+    derivOverlay: null,
     selection: null,
   };
 

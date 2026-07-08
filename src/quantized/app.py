@@ -45,6 +45,7 @@ from quantized.routes import (
     samples,
     semiconductor,
     sld,
+    spectral,
     statplots,
     stats,
     stats_design,
@@ -153,6 +154,7 @@ def create_app() -> FastAPI:
     application.include_router(rsm.router)
     application.include_router(xray.router)
     application.include_router(sld.router)
+    application.include_router(spectral.router)
     application.include_router(crystallography.router)
     application.include_router(electrical.router)
     application.include_router(optics.router)

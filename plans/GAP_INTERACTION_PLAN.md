@@ -138,30 +138,6 @@ written below.
 
 ## Tier 2 — Medium Impact
 
-4. **ROI gadget family (gap #34)** — integrate, statistics, FFT, and
-   differentiate gadgets in the item-1 frame; paired cursors with
-   Δx/Δy/slope readout.
-   *Model: haiku (the frame exists after item 1; per-gadget dispatch is
-   mechanical) — escalate to sonnet for the FFT route.* *Agent:
-   code-implementer.*
-   - [ ] Generalize item 1's gadget frame with a gadget-kind dispatch
-         table: integrate (client `frontend/src/lib/integrate.ts`
-         trapz), statistics (client `frontend/src/lib/regionStats.ts`),
-         differentiate (new pure finite-difference helper), FFT
-         (backend `calc/spectral.fft_spectral` — **no route exposes it
-         today**; add a thin route in `src/quantized/routes/calc.py`
-         and a client fn in `frontend/src/lib/api.ts`)
-   - [ ] FFT gadget result lands as a new library dataset (spectrum),
-         the others as chips; "→ Report" ending via `/api/report/emit`
-         stats_table where sensible
-   - [ ] Paired cursors: two draggable vertical cursors extending the
-         `refLinePlugin` interactive-drag pattern in
-         `frontend/src/lib/uplotOverlays.ts`, readout via
-         `frontend/src/components/Stage/PlotReadouts.tsx`
-   - Acceptance: each gadget recomputes live on ROI move; the FFT
-     gadget emits a spectrum dataset; paired cursors read Δx/Δy/slope
-     between two draggable positions.
-
 5. **Peak Analyzer click-on-plot marker editing (deferred from closed
    gap #31)** — add/remove peak markers by clicking the plot during
    wizard step ②.
@@ -259,6 +235,88 @@ written below.
   new `onReject` callback). Frontend 1260 tests + `npm run build` green.
   Eyeball caveat: the live drag gesture is unverified in jsdom, same as every
   prior ZoneWell/CHANNEL_DND item — eyeball via a browser / `tools/visual`.
+- ~~**4. ROI gadget family (gap #34)**~~ (2026-07-07) — generalized the item-1
+  ROI-band frame into a mode-aware gadget: a "Fit / Integrate / Stats /
+  Differentiate / FFT / Cursors" picker on the SAME chip, keeping the `qfit`
+  tool id and the existing ROI band (`quickFitPlugin`/`qfitRoi`) as the shared
+  drag surface for the four region-based modes (fit's own code path —
+  `qfitModel`/`qfitBusy`/`qfitResult`/`qfitError`/`runQuickFit` — is
+  **completely unchanged**). New store fields `gadgetMode` + shared
+  `gadgetBusy`/`gadgetError` + one result slot per mode
+  (`gadgetIntegrateResult`/`gadgetStatsResult`/`gadgetDerivResult`/
+  `gadgetFftPreview`) and a `runGadget()` dispatcher generalizing
+  `setQfitRoi`'s debounce (still 350ms, still cancels a pending request on the
+  next move). **Integrate** mode calls `/api/peaks/integrate` with a single
+  `[lo,hi]` region over the first visible plotted channel (area/centroid/FWHM
+  chip — richer than the existing one-shot ∫ tool's client-side trapz, and
+  edit-in-place like the fit ROI rather than a one-shot drag). **Stats** mode
+  calls `/api/stats/descriptive` on the ROI's y values (N/mean/sd/min/max
+  chip — a distinct, backend-verified sibling of the existing live "Σ stats"
+  tool's client-side `regionStats`). **Differentiate** mode is a new pure
+  `frontend/src/lib/differentiate.ts` (`centralDifference` — MATLAB
+  `gradient`'s non-uniform-spacing weighted formula, sorts by x internally
+  then un-permutes back to the caller's row order so `rowstate.expandToFull`
+  aligns correctly) — overlays dy/dx via a new `derivOverlay` store field
+  (same `{datasetId,y}` shape as `fitOverlay`, new `withDerivOverlay` in
+  `lib/plotdata.ts`, drawn on the **secondary Y axis** since a derivative's
+  scale rarely matches the data's) plus an extremum-value chip. **FFT**:
+  `calc/spectral.fft_spectral` already existed (Welch/window/one-two-sided
+  magnitude-psd-phase-complex, ported+golden already) but **no route exposed
+  it** — added a new thin `src/quantized/routes/spectral.py`
+  (`POST /api/spectral/fft`), registered in `app.py`, and a
+  `frontend/src/lib/api.ts` `fftSpectral` wrapper. The route explicitly never
+  accepts `output_type=complex` (422) since a numpy complex array isn't
+  JSON-serializable (the CLAUDE.md jsonencode-quirks lesson); ROI rows are
+  sorted by x before the call (`differentiate.ts`'s new `sortByX`, shared with
+  the differentiate path) since `fft_spectral`'s sampling-rate inference
+  assumes ascending x and ROI rows arrive in acquisition order. The FFT gadget
+  recomputes a **live preview** on every ROI move (N points / window name
+  chip) like the other modes, and an explicit "→ Spectrum" commit action
+  (reusing the fit mode's "Commit" button slot) adds it as a **new library
+  dataset** via `addDataset` — never auto-committed, matching the #33 explicit-
+  commit precedent. **Cursors** mode is NOT ROI-based: a new
+  `gadgetCursorsPlugin` in `lib/uplotGadgets.ts` (structurally mirrors
+  `quickFitPlugin`'s create/move-edge state machine but draws two independent
+  thin lines with no fill, no "move both" gesture) drives a new
+  `gadgetCursors` store field, recomputed **synchronously** (nearest-sample,
+  not interpolated — new `lib/gadgetCursors.ts` `nearestY`/
+  `computeCursorReadout`, reusing `lib/measure`'s `Measurement` type +
+  `computeMeasurement`/`formatMeasurement` directly for the Δx/Δy/slope math
+  instead of re-deriving it) against the FULL first-plotted-channel data (not
+  ROI-scoped). Selecting cursors mode clears any armed ROI and vice versa —
+  they're mutually exclusive on the one `qfit` tool. "→ Report" (via the
+  existing `/api/report/emit`) is wired for fit (unchanged `curve_fit`),
+  integrate (`kind:"integrate"`, the full response passed through verbatim —
+  `from_integrate` wants it as-is), and stats (`kind:"stats_table"`,
+  `records:[result]`, `columns:["N","mean","std","min","max"]`); differentiate
+  /fft/cursors have no natural report ending and the chip omits the button for
+  them (fft gets "→ Spectrum" instead; cursors/differentiate get neither).
+  `useQuickFitChip.ts`/`.test.ts` renamed to `useGadgetChip.ts`/`.test.ts`
+  (mode-aware `GadgetChipState`); `PlotResultChips`'s `qfit` prop renamed
+  `gadget`, chip class `.qzk-qfit-chip` → `.qzk-gadget-chip`. Deviations from
+  the plan bullet text: Integrate/Stats route through the BACKEND
+  (`peaksIntegrate`/`statsDescriptive`) per the orchestrator's explicit spec,
+  not `lib/integrate.ts` trapz / `lib/regionStats.ts` (those remain the
+  existing ∫/Σ tools' own client-side math, untouched — a deliberate parallel
+  sibling, not a replacement); cursors' readout renders in the CHIP (per the
+  orchestrator's spec), not `PlotReadouts.tsx`; no new `PlotTool`/toolbar
+  button for cursors — it is a `gadgetMode` on the existing `qfit` tool/chip,
+  not a separate tool, so the toolbar only grew a longer tooltip. 92 new/
+  reworked tests (`lib/differentiate.test.ts`, `lib/gadgetCursors.test.ts`,
+  `store/gadget.test.ts`, `components/Stage/useGadgetChip.test.ts` +
+  `lib/quickfit.test.ts`/`lib/uplotGadgets.test.ts`/`lib/uplotOpts.test.ts`/
+  `lib/plotdata.test.ts`/`components/Stage/PlotResultChips.test.tsx`
+  additions; backend `tests/test_api_spectral.py`, 5 tests, transport only —
+  the FFT math itself is already golden in `tests/test_calc_spectral.py`).
+  Frontend 1313 tests (was 1249) + `npm run build` green; backend 1922 passed
+  + 3 skipped, `ruff check src tests` + `mypy src` clean. Eyeball caveat: the
+  live ROI-band and paired-cursors drag gestures are unverified in jsdom
+  (canvas) — eyeball via `tools/visual` or a manual browser check, same as
+  items 1/2/3. Known pre-existing debt (not introduced by this item, not
+  fixed either — out of scope): `PlotStage.tsx` crossed the ~400-line
+  convention back in item 1 (405→421 lines) and is now 451 after this item's
+  additions; a future item should extract its gadget/overlay wiring into a
+  `workshops/`-style hook if it keeps growing.
 
 - ~~**3. Graph Builder workshop (gap #51 phase 2)**~~ (2026-07-07) — the
   plot-spec grammar + a drop-zone workshop. New pure

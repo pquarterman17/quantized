@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { firstVisiblePlottedChannel, formatQfitParams, selectRoiRows } from "./quickfit";
+import {
+  firstVisiblePlottedChannel,
+  formatQfitParams,
+  GADGET_MODE_LABELS,
+  GADGET_MODES,
+  selectRoiRows,
+} from "./quickfit";
 import type { Dataset, DataStruct } from "./types";
 
 const DATA: DataStruct = {
@@ -107,5 +113,12 @@ describe("formatQfitParams", () => {
   it("returns empty string for a null result or no params", () => {
     expect(formatQfitParams(null)).toBe("");
     expect(formatQfitParams({})).toBe("");
+  });
+});
+
+describe("GADGET_MODES / GADGET_MODE_LABELS (gap #34)", () => {
+  it("labels every mode, in the picker's presentation order", () => {
+    expect(GADGET_MODES).toEqual(["fit", "integrate", "stats", "differentiate", "fft", "cursors"]);
+    for (const m of GADGET_MODES) expect(GADGET_MODE_LABELS[m]).toBeTruthy();
   });
 });

@@ -1,7 +1,7 @@
 // Drag-to-axis (#49) hook test: the callback applies resolveAxisDrop's
 // action(s) through the REAL store actions (setXKey/setYKeys/setY2Keys — no
 // new plot machinery) and surfaces the categorical-X note as a toast.
-// Mirrors useQuickFitChip.test.ts's renderHook + useApp.setState pattern.
+// Mirrors useGadgetChip.test.ts's renderHook + useApp.setState pattern.
 
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";

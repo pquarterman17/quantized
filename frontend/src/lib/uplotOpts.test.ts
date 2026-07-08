@@ -102,6 +102,19 @@ describe("buildOpts", () => {
       buildOpts(payload, { ...base, yLog: false, tool: "zoom", wheelZoom: true }).plugins,
     ).toHaveLength(1);
   });
+
+  it("the qfit tool adds the ROI-band gadget plugin by default (fit/integrate/stats/differentiate/fft)", () => {
+    expect(buildOpts(payload, { ...base, yLog: false, tool: "qfit" }).plugins).toHaveLength(1);
+    expect(
+      buildOpts(payload, { ...base, yLog: false, tool: "qfit", gadgetMode: "integrate" }).plugins,
+    ).toHaveLength(1);
+  });
+
+  it("the qfit tool swaps to the paired-cursors plugin in cursors mode (gap #34)", () => {
+    expect(
+      buildOpts(payload, { ...base, yLog: false, tool: "qfit", gadgetMode: "cursors" }).plugins,
+    ).toHaveLength(1);
+  });
 });
 
 describe("buildOpts defaultTrace", () => {
