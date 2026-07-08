@@ -15,9 +15,17 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-07 (EIGHTEEN items closed today: #36, #26, #31,
-#32, #6, #7, #2, #3, #1, #4, #5, #11, #12, #15, #13, #14, #16, #40. **W1,
-W2 Tier 1, W3 (all), W5 Tier 1, W6 headline, and W7 are complete.**)
+**Updated:** 2026-07-08 (CAMPAIGN COMPLETE — every buildable item in this
+plan and the four GAP_* endgame plans is shipped and merged: W1-W9 all
+closed. Gates: backend 2024 + frontend 1544 tests green. Remaining, by
+design: owner actions (browser gesture eyeball via tools/visual, the aps
+preset height taste call in plans/design/DEFAULTS_AUDIT.md, PyPI Trusted
+Publisher registration per RELEASE.md, corpus-publish licensing sign-off
+#45) and deliberate deferrals (#22 WebGL 3-D, decode-plan #27 .opju
+writer, #10's separate plugin-template repo). Booked follow-up debt lives
+in the GAP_* plans (PlotStage/statRender size splits, facet-by-group
+MultiPanelStage integration, Graph Builder export button + .dwk spec
+persistence, tri-contour export, frontend DPI-preset sync).
 
 ---
 
