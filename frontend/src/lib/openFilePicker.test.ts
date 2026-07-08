@@ -8,7 +8,7 @@ describe("IMPORT_ACCEPT", () => {
   const REQUIRED = [
     ".dat", ".csv", ".tsv", ".xrdml", ".brml", ".raw", ".refl", ".pnr",
     ".datA", ".datB", ".datC", ".datD", ".jdx", ".dx", ".nc", ".cdf",
-    ".xlsx", ".xlsm",
+    ".xlsx", ".xlsm", ".spc", ".opus",
   ];
   const exts = IMPORT_ACCEPT.split(",");
 

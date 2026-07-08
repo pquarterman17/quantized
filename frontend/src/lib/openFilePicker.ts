@@ -7,7 +7,7 @@
 // io/registry.py extension map). Covers all registered parsers.
 export const IMPORT_ACCEPT =
   ".dat,.csv,.tsv,.txt,.xrdml,.brml,.raw,.refl,.pnr,.datA,.datB,.datC,.datD," +
-  ".jdx,.dx,.nc,.cdf,.cif,.xlsx,.xlsm,.xls";
+  ".jdx,.dx,.nc,.cdf,.cif,.xlsx,.xlsm,.xls,.spc,.opus";
 
 export function openFilePicker(onPick: (files: File[]) => void, accept = ""): void {
   const input = document.createElement("input");

@@ -42,8 +42,32 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 ### Origin live bridge — Windows-only OS-gated optional (W1 #14)
 - [ ] COM connect/send — `+utilities/connectOrigin.m`, `+utilities/toOrigin.m` (mock-tested only)
 
-### Paused (awaiting example files)
-- [ ] `importOxford`, `importOpus`, `importSPC`
+### Paused (awaiting example files) / never written in MATLAB
+None of these three has MATLAB source: `quantized_matlab` never implemented
+them (`plans/archive/parser-roadmap.md`: "Paused — awaiting example
+files"), so there is no behavioural truth to freeze golden values from.
+- [~] `importOpus` → `io/opus.py` — **independent implementation** against
+  the published Bruker OPUS block-directory format (no MATLAB, no golden;
+  synthetic-fixture tests only — `tests/test_io_opus.py`). No real `.opus`
+  sample file was available. **Freeze pending: N/A (no MATLAB source
+  exists to freeze — this line can never be ticked golden).**
+- [~] `importSPC` → `io/spc.py` — **independent implementation** against
+  the published GRAMS/Thermo SPC binary format (no MATLAB, no golden;
+  synthetic-fixture tests — `tests/test_io_spc.py`). Offsets
+  cross-validated during development against four real instrument files
+  (Horiba Raman, Perkin-Elmer FTIR, a Kr calibration lamp, a Nicolet
+  FTIR/Raman scan; not committed — no redistribution rights). Only the
+  modern "new format LSB" sub-version (`fversn=0x4B`) is implemented; the
+  old (`0x4D`), MSB (`0x4C`), and Shimadzu (`0xCF`) sub-formats are
+  recognized but rejected with a clear error (no example to validate
+  against). **Freeze pending: N/A (no MATLAB source exists).**
+- [ ] `importOxford` — **still blocked, not attempted.** Unlike Opus/SPC,
+  Oxford Instruments MagLab exports have no published spec at all — the
+  MATLAB roadmap itself says "format varies by software version... needs
+  example file to determine structure." Implementing this without any
+  real example would mean guessing at a column layout with a real risk of
+  silently misparsing a genuine file. Needs a real example file before
+  any implementation is honest.
 
 ---
 
