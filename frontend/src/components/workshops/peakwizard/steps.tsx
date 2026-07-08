@@ -123,11 +123,17 @@ export function StepRangeBaseline({ w }: { w: PeakWizardState }) {
   );
 }
 
-/** ② Find peaks: auto-find knobs + editable candidate list + manual add. */
+/** ② Find peaks: auto-find knobs + editable candidate list + manual add, plus
+ *  click-on-plot editing (interaction item 5) while this step is showing. */
 export function StepFindPeaks({ w }: { w: PeakWizardState }) {
   const [manualX, setManualX] = useState<number | null>(null);
   return (
     <>
+      {w.markerEditActive && (
+        <div className="qzk-ds-meta" style={{ ...faint, marginBottom: 6 }}>
+          Click the plot to add a peak · click a marker to remove it (Esc to pause)
+        </div>
+      )}
       <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
         <Num
           label="SNR ≥"

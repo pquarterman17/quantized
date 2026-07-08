@@ -1,11 +1,12 @@
 // Peak Analyzer wizard (#31 + #32) — state hook. Orchestrates the 5-step flow
 // over the EXISTING calc endpoints (zero new math): ① range & baseline (live
 // subtract preview via the baseline overlay) → ② find peaks (auto-find params,
-// include/exclude, manual add) → ③ model & constraints → ④ fit & review →
-// ⑤ report (fit report, or the #32 integrate-only path). All state lives here
-// so Back/Next never loses edits; the whole configuration round-trips as a
-// PeakRecipe (lib/peakwizard) that re-runs on another dataset. Reads the
-// ANALYSIS view (rowstate.analysisData) so exclusions/filters are honored.
+// include/exclude, manual add, OR click-on-plot add/remove — interaction plan
+// item 5) → ③ model & constraints → ④ fit & review → ⑤ report (fit report, or
+// the #32 integrate-only path). All state lives here so Back/Next never loses
+// edits; the whole configuration round-trips as a PeakRecipe (lib/peakwizard)
+// that re-runs on another dataset. Reads the ANALYSIS view
+// (rowstate.analysisData) so exclusions/filters are honored.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -19,6 +20,7 @@ import {
   reportEmit,
   type IntegratedPeak,
 } from "../../../lib/api";
+import { visiblePeakMarkers } from "../../../lib/peakMarkerHit";
 import {
   cutRange,
   DEFAULT_RECIPE,
@@ -71,6 +73,12 @@ export interface PeakWizardState {
   togglePeak: (i: number) => void;
   removePeak: (i: number) => void;
   addPeakAt: (center: number) => void;
+  /** True iff click-on-plot marker editing (interaction item 5) is live: step
+   *  ② is showing, a dataset is active, and Escape hasn't paused it (see the
+   *  suppression effect below). Drives the plot's crosshair cursor + the
+   *  step's status hint; PlotStage reads the actual bridge via the store's
+   *  `peakWizardEdit` (null exactly when this is false). */
+  markerEditActive: boolean;
   // ④ fit
   fitBusy: boolean;
   fitError: string | null;
@@ -101,6 +109,7 @@ export function usePeakWizard(): PeakWizardState {
   const addReport = useApp((s) => s.addReport);
   const setBaselineOverlay = useApp((s) => s.setBaselineOverlay);
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
+  const setPeakWizardEdit = useApp((s) => s.setPeakWizardEdit);
 
   const [step, setStep] = useState(0);
   const [recipe, setRecipe] = useState<PeakRecipe>(DEFAULT_RECIPE);
@@ -117,6 +126,10 @@ export function usePeakWizard(): PeakWizardState {
   const [reportBusy, setReportBusy] = useState(false);
   const [recipes, setRecipes] = useState<PeakRecipe[]>(() => loadRecipes());
   const [recipeRev, setRecipeRev] = useState(0);
+  // Click-on-plot marker editing (item 5): Escape pauses the mode without
+  // leaving step ②; re-entering the step (or any step change and back) resets
+  // it, so the pause never outlives the step it was raised on.
+  const [editSuppressed, setEditSuppressed] = useState(false);
 
   const patchRecipe = useCallback((p: DeepPartialRecipe) => {
     setRecipe((r) => ({
@@ -257,6 +270,47 @@ export function usePeakWizard(): PeakWizardState {
     ]);
   };
 
+  // Click-on-plot marker editing (interaction item 5, deferred from closed
+  // gap #31): live only while step ② is showing, a dataset is active, and
+  // Escape hasn't paused it. `addPeakAt`/`removePeak` above are the SAME
+  // functions the manual "+ Add" field and the candidate table's "×" button
+  // use — no parallel state model. This hook stays the sole owner of
+  // `candidates`; the store only carries a thin, disposable projection
+  // (visible marker positions + these two callbacks) so PlotStage's plugin
+  // can hit-test a click without needing its own copy of the wizard state.
+  const markerEditActive = step === 1 && !!active && !editSuppressed;
+
+  // Escape pauses the mode (mirrors useGadgetChip's Escape-to-dismiss) without
+  // navigating away from step ②; re-entering the step below un-pauses it.
+  useEffect(() => {
+    if (step !== 1 || !active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setEditSuppressed(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [step, active]);
+
+  // Any step change resets the pause — so it never outlives the visit to ②
+  // that raised it, and returning to ② always starts un-paused.
+  useEffect(() => {
+    setEditSuppressed(false);
+  }, [step]);
+
+  // Push the current bridge into the store on every render while active (so a
+  // stale `segment`/`workingY` closure — e.g. a baseline recompute landing
+  // without the candidate list itself changing — can never leave `addPeakAt`
+  // out of sync with what the manual "+ Add" field in step ② would use); a
+  // full unmount (wizard closed) always clears it.
+  useEffect(() => {
+    setPeakWizardEdit(
+      markerEditActive
+        ? { markers: visiblePeakMarkers(candidates), addPeakAt, removePeak }
+        : null,
+    );
+  }, [markerEditActive, candidates, addPeakAt, removePeak, setPeakWizardEdit]);
+  useEffect(() => () => setPeakWizardEdit(null), [setPeakWizardEdit]);
+
   // ④ Simultaneous fit of the included candidates.
   const runFit = useCallback(async () => {
     const seeds = candidates.filter((c) => c.included);
@@ -378,6 +432,7 @@ export function usePeakWizard(): PeakWizardState {
     togglePeak,
     removePeak,
     addPeakAt,
+    markerEditActive,
     fitBusy,
     fitError,
     fitResult,

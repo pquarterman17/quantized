@@ -12,7 +12,7 @@ seams file-by-file so implementers extend rather than reinvent.
 
 **Status:** Active
 **Created:** 2026-07-07
-**Updated:** 2026-07-07
+**Updated:** 2026-07-08
 
 ---
 
@@ -138,48 +138,12 @@ written below.
 
 ## Tier 2 — Medium Impact
 
-5. **Peak Analyzer click-on-plot marker editing (deferred from closed
-   gap #31)** — add/remove peak markers by clicking the plot during
-   wizard step ②.
-   *Model: sonnet.* *Agent: gui-interaction-expert.*
-   - [ ] Pure marker hit-test helper (marker pixel positions from the
-         peak centers vs. click position, tolerance) — colocate with
-         the gadget hit-test math from item 1 in
-         `frontend/src/lib/uplotGadgets.ts` or a small sibling lib;
-         unit-tested
-   - [ ] Wizard-scoped interaction: while step ② of
-         `frontend/src/components/workshops/peakwizard/` is active,
-         plot clicks map x → `addPeakAt(x)` and clicks within
-         tolerance of an existing marker → `removePeak`/`togglePeak`
-         (all three already exist in `usePeakWizard.ts`)
-   - [ ] Markers stay on the existing `setPeakOverlay` series
-         (`withPeakOverlay` in `frontend/src/lib/plotdata.ts`); step ②
-         shows a crosshair cursor + a hint line while the mode is on
-   - Acceptance: in step ②, clicking an empty plot region adds a peak
-     at that x, clicking a marker removes it, and the candidate table,
-     overlay, and fit inputs stay in sync throughout.
+(all shipped — see `## Completed`)
 
 ---
 
 ## Tier 3 — Nice-to-Have
 
-8. **Tabulate residuals (gap #55)** — drag-drop wells and
-   report-block export for the pivot workshop.
-   *Model: sonnet (wells), haiku (report ending — the statschooser
-   pattern exists).* *Agent: ux-frontend-expert.*
-   - [ ] Replace the Group/Value Selects in
-         `frontend/src/components/workshops/tabulate/TabulatePanel.tsx`
-         with item 3's `ZoneWell` drop-zone component (Selects remain
-         as keyboard fallback); accepts the item-2 `dragchannel`
-         payloads
-   - [ ] "→ Report" ending: emit the `lib/tabulate.ts` group-summary
-         rows through `/api/report/emit` as a stats_table (the generic
-         `from_stats_table` emitter in `calc/report_emit.py` — follow
-         `workshops/statschooser/`'s existing pattern), landing in the
-         Library Reports viewer via `addReport`
-   - Acceptance: dragging a categorical column into Group and a
-     continuous one into Value builds the summary table; "→ Report"
-     produces a report sheet whose rows match the on-screen table.
 7. **Data-filter dual-thumb sliders (gap #53 residual)** — replace the
    min/max number-field pair with a proper range slider; optionally
    close the worksheet-reflect asymmetry.
@@ -208,6 +172,51 @@ written below.
   committed component-ceiling test) — do both together.
 
 ## Completed
+
+- ~~**5. Peak Analyzer click-on-plot marker editing (deferred from closed
+  gap #31)**~~ (2026-07-08) — add/remove peak markers by clicking the plot
+  during wizard step ②. New pure `frontend/src/lib/peakMarkerHit.ts` (a
+  sibling to `uplotGadgets.ts`, not an addition to it — peak-wizard-specific,
+  not generic gadget-frame infra): `visiblePeakMarkers` (candidates →
+  included-only, tagged with their FULL-array index — what `removePeak`
+  expects), `peakMarkerPixels` (data → pixel via `valToPos`, the same
+  `fakeU`-testable idiom as the sibling gadget plugins), `hitTestPeakMarkers`
+  (2-D Euclidean nearest-wins, unlike `hitTestRoiHandles`/
+  `hitTestCursorHandles`'s 1-D edge tests — a marker is a POINT), and
+  `peakMarkerEditPlugin` (a plain click, sub-6px movement like the gadget
+  plugins' click-vs-drag threshold, either removes the hit marker or adds one
+  at the clicked x; composes unconditionally of `tool`, like
+  `wheelZoomPlugin`, since the interaction is wizard-scoped not toolbar-tool-
+  scoped). **Seam decision** (the plan's "thread the minimal state through
+  the store or a focused prop" call): `usePeakWizard.ts` stays the SOLE owner
+  of `candidates`/`addPeakAt`/`removePeak` (no parallel state model, no
+  migration into the store); a new store field `peakWizardEdit`
+  (`PeakWizardEditBridge` — markers + the two callbacks, mirrors
+  ReflectivitySeed/StatStageSeed's cross-panel-hook shape) carries a THIN,
+  disposable projection into `useApp.ts`, pushed by a `usePeakWizard` effect
+  only while step ② is showing, a dataset is active, and Escape hasn't
+  paused it — null otherwise (wizard closed, another step, or paused). PlotStage
+  reads it as a normal reactive prop into `buildOpts` (unlike `qfitRoi`/
+  `gadgetCursors`, which are read imperatively to avoid rebuilding mid-drag —
+  this only changes on discrete clicks, so a rebuild per change is correct
+  and cheap), adapting the bridge's `addPeakAt`/`removePeak` names to
+  `uplotOpts.ts`'s own `onAdd`/`onRemove` convention at that one seam.
+  Escape pauses the mode without leaving step ② (mirrors `useGadgetChip`'s
+  Escape-to-dismiss); any step change resets the pause, so returning to ②
+  always starts un-paused. `steps.tsx`'s `StepFindPeaks` shows a status hint
+  ("Click the plot to add a peak · click a marker to remove it (Esc to
+  pause)") while `w.markerEditActive`. 23 new tests
+  (`lib/peakMarkerHit.test.ts` — tolerance/nearest-wins/ties/empty-list/2-D-
+  not-just-x; `components/workshops/peakwizard/usePeakWizard.test.ts` —
+  click→add and click-near→remove through the exposed `addPeakAt`/
+  `removePeak` handlers, scoping across wizard-closed/other-step/no-active-
+  dataset, Escape pause + re-arm). Frontend 1567 tests + `npm run build`
+  green. jsdom canvas caveat: the live click gesture itself (`peakMarkerEdit
+  Plugin`'s `ready` hook) is not unit-tested, same as the sibling gadget
+  plugins' drag hooks — only the pure hit-test math is. Housekeeping while
+  in this file: removed a stale duplicate open Tier-3 entry for item 8
+  (already fully documented below, dated 2026-07-07) left over from a prior
+  strike-and-move that forgot to delete the open stub.
 
 - ~~**8. Tabulate residuals (gap #55)**~~ (2026-07-07) — drag-drop wells and
   report-block export for the pivot workshop. The two Group/Value `<Select>`s
