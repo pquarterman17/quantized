@@ -37,6 +37,20 @@ export const FIGURE_STYLES = [
   "presentation",
   "poster",
 ];
+// Calibrated raster DPI per preset, mirrored from
+// src/quantized/calc/figure_styles.py's FIGURE_STYLES table (no styles-list
+// endpoint exists to fetch this live — keep in sync by hand if the backend
+// table changes; tests/test_calc_figure_styles.py guards the source values).
+export const FIGURE_STYLE_DPI: Record<string, number> = {
+  default: 200,
+  aps: 600,
+  nature: 600,
+  thesis: 300,
+  report: 300,
+  web: 150,
+  presentation: 150,
+  poster: 150,
+};
 const PREVIEW_DPI = 110; // screen-resolution preview; export uses the chosen DPI
 
 export function useFigureBuilder() {
@@ -52,8 +66,8 @@ export function useFigureBuilder() {
   const addFigureDoc = useApp((s) => s.addFigureDoc);
 
   const [fmt, setFmt] = useState("pdf");
-  const [style, setStyle] = useState("default");
-  const [dpi, setDpi] = useState(300);
+  const [style, setStyleRaw] = useState("default");
+  const [dpi, setDpi] = useState(FIGURE_STYLE_DPI.default);
   const [title, setTitle] = useState("");
   const [xLabel, setXLabel] = useState("");
   const [yLabel, setYLabel] = useState("");
@@ -76,8 +90,8 @@ export function useFigureBuilder() {
     if (!figureDocSeed) return;
     const c = figureDocSeed.config;
     setFmt(c.fmt);
-    setStyle(c.style);
-    setDpi(c.dpi);
+    setStyleRaw(c.style);
+    setDpi(c.dpi); // doc carries its own saved dpi — restore verbatim, not the preset default
     setTitle(c.title);
     setXLabel(c.xLabel);
     setYLabel(c.yLabel);
@@ -94,6 +108,17 @@ export function useFigureBuilder() {
   const [focusGroup, setFocusGroup] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Style preset change: sync DPI to that preset's calibrated value (audit
+  // follow-up — the field previously stayed wherever it was left, so a
+  // journal preset's dpi never actually reached the export dialog). The user
+  // can still freely override the DPI field afterwards; only a *style*
+  // change re-syncs it.
+  function setStyle(next: string): void {
+    setStyleRaw(next);
+    const presetDpi = FIGURE_STYLE_DPI[next];
+    if (presetDpi !== undefined) setDpi(presetDpi);
+  }
 
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.

@@ -7,6 +7,7 @@ import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
 import {
+  categoricalXPayload,
   clampPlottedRange,
   composeDisplayPayload,
   effectiveChannels,
@@ -14,6 +15,7 @@ import {
   rowsInXRange,
   type PlotPayload,
 } from "../../lib/plotdata";
+import { channelModelingType } from "../../lib/modeling";
 import { droppedRows } from "../../lib/rowstate";
 import { copyImage, copyText, payloadToTSV } from "../../lib/clipboard";
 import { buildErrorColumns } from "../../lib/errorbars";
@@ -196,7 +198,15 @@ export default function PlotStage() {
       return;
     }
     fetchPlot(active.data, yLog, xLog, plotted, y2Keys, xKey).then((p) => {
-      if (!cancelled) setPayload(p);
+      if (cancelled) return;
+      // xCategories producer (gap #20 residual): a categorical-typed x
+      // channel (nominal/ordinal — user override or inferred, see
+      // lib/modeling.ts) gets ordinal x positions + resolved category labels
+      // so lib/uplotOpts.ts's categoricalTickFormatter draws real tick names
+      // instead of the raw channel numbers. No-op for a continuous x/time axis
+      // (xKey === null, the time column, is never modeled/categorical).
+      const xType = xKey == null ? "continuous" : channelModelingType(active, xKey);
+      setPayload(categoricalXPayload(p, active.data, xKey, xType));
     });
     return () => {
       cancelled = true;

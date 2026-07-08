@@ -362,9 +362,20 @@ written below.
   `POST /api/export/corner-figure` in `routes/export_figures.py` (297
   lines) takes posted samples + names (never re-runs a fit). Frontend:
   `exportCornerFigure` + `CornerFigureSpec` wrapper only in `lib/api.ts` —
-  **the Curve Fit workshop "Corner plot…" action is NOT built**; that
-  UI wiring is the remaining sub-task, deferred pending the workshop
-  pairing work. Tests: `tests/test_calc_figure_corner.py` (16 cases —
+  ~~**the Curve Fit workshop "Corner plot…" action is NOT built**~~ CLOSED
+  2026-07-08: bootstrap/posterior had no frontend consumer at all yet, so
+  the minimal wiring landed straight in the Curve Fit workshop rather than
+  a separate uncertainty surface — `lib/api.ts` gained `bootstrapFit()` +
+  `BootstrapRequest`/`BootstrapResult`; `useCurveFit.ts` gained
+  `runCornerPlot()` (bootstraps the just-completed fit with
+  `return_samples: true`, then calls `exportCornerFigure` with the
+  replicate matrix, the model's param names, and the fit's own params as
+  the dashed truth overlay) + `cornerBusy`; `CurveFitPanel.tsx` gained a
+  "Corner plot…" button next to "→ Report", enabled only after a completed
+  (non-guess) fit. 4 new tests in `useCurveFit.test.ts` (no-op with no fit,
+  no-op after guess-only, happy path asserting the bootstrap request shape
+  + corner export payload, and a bootstrap-failure error path). Frontend
+  1559 passed, build green. Tests: `tests/test_calc_figure_corner.py` (16 cases —
   k=2/4 renders in pdf/svg/png, Gaussian marginal-peak sanity, k=1 and
   truths-overlay, dpi-preset resolution, shape/finite-sample error
   paths), `tests/test_calc_bootstrap_integrate.py` (+2, flag off/on),

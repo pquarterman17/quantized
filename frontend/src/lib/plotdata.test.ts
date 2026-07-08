@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyWaterfall,
   buildColumns,
+  categoricalXPayload,
   clampPlottedRange,
   composeDisplayPayload,
   defaultDenseChannels,
@@ -579,6 +580,77 @@ describe("xCategories (gap #20 contract — additive, untouched numeric path)", 
   it("dropTrailingEmptyRows preserves xCategories (per-level labels, not per-row)", () => {
     const withTail: PlotPayload = { ...categorical, data: [[0, 1, 2, 3, null], [10, 20, 30, 40, null]] as PlotPayload["data"] };
     expect(dropTrailingEmptyRows(withTail).xCategories).toEqual(categorical.xCategories);
+  });
+});
+
+describe("categoricalXPayload (gap #20 producer — wires a categorical x channel into xCategories)", () => {
+  // x channel (index 0) is a repeated few-level "batch" column; y channel
+  // (index 1) is the measurement. Six rows over three levels satisfies
+  // lib/modeling.ts's inference floor, but here the caller passes the
+  // modeling type explicitly (as the Stage layer does via
+  // channelModelingType, which also honors the dataset's own override).
+  const ds: DataStruct = {
+    time: [0, 1, 2, 3, 4, 5],
+    values: [
+      [10, 1],
+      [20, 2],
+      [10, 3],
+      [30, 4],
+      [20, 5],
+      [30, 6],
+    ],
+    labels: ["Batch", "Signal"],
+    units: ["", "V"],
+    metadata: {},
+  };
+  const base = buildColumns(ds, null, 0, [1]); // x = channel 0, y = channel 1
+
+  it("is a passthrough no-op for a continuous modeling type", () => {
+    const out = categoricalXPayload(base, ds, 0, "continuous");
+    expect(out).toBe(base); // same reference — no transform applied
+    expect(out.xCategories).toBeUndefined();
+  });
+
+  it("is a passthrough no-op when xKey is null (time axis is never categorical)", () => {
+    const out = categoricalXPayload(base, ds, null, "nominal");
+    expect(out).toBe(base);
+  });
+
+  it("is a passthrough no-op when the channel has no finite levels", () => {
+    const empty: DataStruct = { ...ds, values: ds.values.map((row) => [NaN, row[1]]) };
+    const p = buildColumns(empty, null, 0, [1]);
+    expect(categoricalXPayload(p, empty, 0, "nominal").xCategories).toBeUndefined();
+  });
+
+  it("remaps data[0] to ordinal level positions and sets xCategories to formatted levels", () => {
+    const out = categoricalXPayload(base, ds, 0, "nominal");
+    // levels ascending: 10 -> 0, 20 -> 1, 30 -> 2
+    expect(out.data[0]).toEqual([0, 1, 0, 2, 1, 2]);
+    expect(out.xCategories).toEqual(["10", "20", "30"]);
+    // y column (and every other column) is untouched
+    expect(out.data[1]).toEqual(base.data[1]);
+  });
+
+  it("also honors an ordinal modeling type (not just nominal)", () => {
+    expect(categoricalXPayload(base, ds, 0, "ordinal").xCategories).toEqual(["10", "20", "30"]);
+  });
+
+  it("prefers a consistent Origin text-label column over formatted numeric levels", () => {
+    const labeled: DataStruct = {
+      ...ds,
+      metadata: { origin_text_columns: { C: ["Low", "Mid", "Low", "High", "Mid", "High"] } },
+    };
+    const p = buildColumns(labeled, null, 0, [1]);
+    const out = categoricalXPayload(p, labeled, 0, "nominal");
+    expect(out.xCategories).toEqual(["Low", "Mid", "High"]);
+    expect(out.data[0]).toEqual([0, 1, 0, 2, 1, 2]); // same ordinal positions, nicer labels
+  });
+
+  it("maps a null/non-finite row to a null ordinal position, not a crash", () => {
+    const withGap: DataStruct = { ...ds, values: [...ds.values, [NaN, 7]] };
+    const p = buildColumns(withGap, null, 0, [1]);
+    const out = categoricalXPayload(p, withGap, 0, "nominal");
+    expect(out.data[0][6]).toBeNull();
   });
 });
 

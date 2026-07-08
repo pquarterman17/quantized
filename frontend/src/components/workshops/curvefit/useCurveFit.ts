@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { autoGuess, fitModel, listFitModels } from "../../../lib/api";
+import { autoGuess, bootstrapFit, exportCornerFigure, fitModel, listFitModels } from "../../../lib/api";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -20,6 +20,11 @@ export interface CurveFitState {
   error: string | null;
   run: (kind: "guess" | "fit") => Promise<void>;
   clear: () => void;
+  /** Bootstraps the current fit (return_samples: true) then exports a
+   *  pairwise corner (pairs) plot of the parameter uncertainty — gap #29's
+   *  remaining UI leg. Requires a completed (non-guess) fit result. */
+  runCornerPlot: () => Promise<void>;
+  cornerBusy: boolean;
 }
 
 export function useCurveFit(): CurveFitState {
@@ -31,6 +36,7 @@ export function useCurveFit(): CurveFitState {
   const [guessOnly, setGuessOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cornerBusy, setCornerBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +109,41 @@ export function useCurveFit(): CurveFitState {
     if (active) useApp.getState().setFitSpec(active.id, null);
   }
 
+  async function runCornerPlot(): Promise<void> {
+    if (!active || !xy || !result || guessOnly) return;
+    const p0 = (result.params as number[] | undefined) ?? [];
+    if (p0.length === 0) return;
+    setCornerBusy(true);
+    setError(null);
+    try {
+      const boot = await bootstrapFit({
+        model: modelName,
+        x: xy.x,
+        y: xy.y,
+        p0,
+        return_samples: true,
+      });
+      if (!boot.boot_samples || boot.boot_samples.length === 0) {
+        throw new Error("bootstrap returned no replicate samples");
+      }
+      const names = models.find((m) => m.name === modelName)?.paramNames ?? [];
+      const paramNames =
+        names.length === boot.params.length ? names : boot.params.map((_, i) => `p${i}`);
+      const stem = active.name.replace(/\.[^.]+$/, "");
+      await exportCornerFigure({
+        samples: boot.boot_samples,
+        param_names: paramNames,
+        truths: boot.params,
+        title: `${modelName} corner — ${active.name}`,
+        filename: `${stem}-corner`,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "corner plot failed");
+    } finally {
+      setCornerBusy(false);
+    }
+  }
+
   return {
     active,
     models,
@@ -114,5 +155,7 @@ export function useCurveFit(): CurveFitState {
     error,
     run,
     clear,
+    runCornerPlot,
+    cornerBusy,
   };
 }

@@ -245,9 +245,15 @@ written below.
    to serve the UI + demo from a fresh venv; `.github/workflows/pypi.yml`
    (Trusted Publishing); `/api/samples/demo` + bundled synthetic CSV.
    OWNER ACTION REMAINING: one-time PyPI Trusted Publisher registration —
-   see RELEASE.md — before the first tagged PyPI publish. Follow-up
+   see RELEASE.md — before the first tagged PyPI publish. ~~Follow-up
    booked: surface the bundled sample in the UI next to the client-side
-   demo button.)*
+   demo button.~~ CLOSED 2026-07-08: `lib/api.ts` gained `fetchDemoSample()`
+   (`GET /api/samples/demo`); new `lib/sampleDataset.ts::loadSampleDataset()`
+   fetches the real packaged sample with an offline fallback to the existing
+   client-side `makeDemoDataset()`; wired as a "Load sample dataset
+   (bundled)" command-palette entry in `App.tsx`, alongside the pre-existing
+   "Add demo dataset" entry. 2 new tests in `sampleDataset.test.ts`. Frontend
+   1559 passed, build green.)*
   
    the installer half of #41 already shipped (release.yml: Tauri
    installers + PyInstaller sidecar + update manifest; the gap plan's

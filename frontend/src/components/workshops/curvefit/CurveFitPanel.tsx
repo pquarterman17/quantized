@@ -18,8 +18,20 @@ export default function CurveFitPanel() {
   const setOpen = useApp((s) => s.setCurveFitOpen);
   const addReport = useApp((s) => s.addReport);
   const [reporting, setReporting] = useState(false);
-  const { active, models, modelName, setModelName, result, guessOnly, busy, error, run, clear } =
-    useCurveFit();
+  const {
+    active,
+    models,
+    modelName,
+    setModelName,
+    result,
+    guessOnly,
+    busy,
+    error,
+    run,
+    clear,
+    runCornerPlot,
+    cornerBusy,
+  } = useCurveFit();
 
   const close = () => {
     clear();
@@ -107,9 +119,17 @@ export default function CurveFitPanel() {
         </div>
       )}
       {result && !guessOnly && (
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
           <Button size="sm" disabled={reporting} onClick={() => void toReport()}>
             {reporting ? "Reporting…" : "→ Report"}
+          </Button>
+          <Button
+            size="sm"
+            disabled={cornerBusy}
+            title="Bootstrap the fit and export a pairwise parameter-uncertainty corner plot"
+            onClick={() => void runCornerPlot()}
+          >
+            {cornerBusy ? "Bootstrapping…" : "Corner plot…"}
           </Button>
         </div>
       )}
