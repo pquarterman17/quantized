@@ -14,6 +14,8 @@ from quantized.io.bruker_brml import import_bruker_brml
 from quantized.io.bruker_raw import import_bruker_raw, is_bruker_raw
 from quantized.io.delimited import import_csv
 from quantized.io.excel import import_excel
+from quantized.io.import_filters import match_filter
+from quantized.io.import_preview import parse_import
 from quantized.io.jcamp import import_jcamp
 from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl, is_ncnr_refl
 from quantized.io.netcdf import import_netcdf
@@ -82,11 +84,28 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
 }
 
 
+def _import_via_saved_filter(path: Path) -> DataStruct:
+    """Parse ``path`` under its best-matching saved import filter.
+
+    See :mod:`quantized.io.import_filters` (gap #40): a user-saved
+    ``ImportSettings`` bound to a filename glob, consulted by
+    :func:`resolve_parser` before the content sniffers below.
+    """
+    filt = match_filter(path)
+    if filt is None:  # pragma: no cover - resolve_parser only routes here on a match
+        raise ValueError(f"no saved import filter matches '{path.name}'")
+    return parse_import(path.read_text(encoding="latin-1"), filt.settings)
+
+
 def resolve_parser(path: Path) -> Parser:
-    """Pick the parser for ``path`` by extension, then by content sniffing."""
+    """Pick the parser for ``path``: unambiguous extension, else a saved
+    import filter (gap #40 — a user-named glob -> ``ImportSettings``), else
+    content sniffing."""
     ext = path.suffix.lower()
     if ext in _EXT_MAP:
         return _EXT_MAP[ext]
+    if match_filter(path) is not None:
+        return _import_via_saved_filter
     for sniff, parser in _SNIFFERS.get(ext, []):
         if sniff(path):
             return parser

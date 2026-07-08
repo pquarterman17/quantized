@@ -17,6 +17,7 @@ dependencies = [
     "python-multipart>=0.0.32",
     "matplotlib>=3.11.0",
     "periodictable>=1.7",
+    "platformdirs>=4.10.0",
 ]
 
 [project.scripts]
