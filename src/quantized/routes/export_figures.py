@@ -1,10 +1,11 @@
-"""Figure export routes: render dataset/statplot/map visualizations to PDF/SVG/PNG/TIFF.
+"""Figure export routes: render dataset/statplot/map/ternary/field visualizations.
 
-Wraps ``calc.figure`` (basic plots), ``calc.figure_statplots`` (box/violin/Q-Q/
-histogram), ``calc.figure_map`` (gridded 2-D heatmap/contour/surface), and
-``calc.figure_corner`` (posterior/bootstrap pairs plots). No formatting logic
-here — renderers own it. Filenames are sanitized before reaching the
-Content-Disposition header.
+Wraps ``calc.figure`` (basic plots), ``calc.figure_statplots`` (box/violin/
+Q-Q/histogram), ``calc.figure_map`` (gridded 2-D heatmap/contour/surface),
+``calc.figure_corner`` (posterior/bootstrap pairs plots), ``calc.figure_ternary``
+(3-component compositions), and ``calc.figure_field`` (quiver/streamline vector
+fields). Output formats: PDF/SVG/PNG/TIFF. No formatting logic here — renderers
+own it. Filenames are sanitized before reaching the Content-Disposition header.
 """
 
 from __future__ import annotations
@@ -287,6 +288,87 @@ def export_corner_figure(req: CornerFigureRequest) -> Response:
             req.samples, req.param_names, truths=req.truths,
             title=req.title, fmt=req.fmt, style=req.style, dpi=dpi, bins=req.bins,
             width_in=req.width_in, height_in=req.height_in,
+        )
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Response(
+        content=img,
+        media_type=_FIGURE_MIME[req.fmt],
+        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
+    )
+
+
+class TernaryFigureRequest(BaseModel):
+    data: list[list[float]]  # (n, 3) composition array
+    labels: tuple[str, str, str] = ("A", "B", "C")  # corner labels
+    values: list[float] | None = None  # optional color values (length n)
+    fmt: str = "pdf"
+    style: str = "default"
+    dpi: int | None = None
+    marker_size: float | None = None
+    title: str = ""
+    filename: str = "ternary"
+
+
+@router.post("/ternary-figure")
+def export_ternary_figure(req: TernaryFigureRequest) -> Response:
+    """Render a ternary diagram (3-component composition scatter plot) to a
+    publication figure (PDF/SVG/PNG/TIFF). Points are normalized so each row
+    sums to 1; non-positive components raise 422 error."""
+    if req.fmt not in _FIGURE_MIME:
+        raise HTTPException(
+            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
+        )
+    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
+    from quantized.calc.figure_ternary import render_ternary_figure  # lazy: matplotlib
+
+    try:
+        img = render_ternary_figure(
+            req.data, labels=req.labels, values=req.values,
+            fmt=req.fmt, style=req.style, dpi=dpi, marker_size=req.marker_size,
+            title=req.title,
+        )
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Response(
+        content=img,
+        media_type=_FIGURE_MIME[req.fmt],
+        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
+    )
+
+
+class FieldFigureRequest(BaseModel):
+    x_axis: list[float]  # 1-D coordinate array
+    y_axis: list[float]  # 1-D coordinate array
+    u_grid: list[list[float]]  # (ny, nx) component grid
+    v_grid: list[list[float]]  # (ny, nx) component grid
+    kind: str = "quiver"  # quiver|streamline
+    fmt: str = "pdf"
+    style: str = "default"
+    dpi: int | None = None
+    title: str = ""
+    x_label: str = ""
+    y_label: str = ""
+    filename: str = "field"
+
+
+@router.post("/field-figure")
+def export_field_figure(req: FieldFigureRequest) -> Response:
+    """Render a vector field plot (quiver arrows or streamlines) to a
+    publication figure (PDF/SVG/PNG/TIFF). u_grid and v_grid must have shape
+    (len(y_axis), len(x_axis))."""
+    if req.fmt not in _FIGURE_MIME:
+        raise HTTPException(
+            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
+        )
+    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
+    from quantized.calc.figure_field import render_field_figure  # lazy: matplotlib
+
+    try:
+        img = render_field_figure(
+            req.x_axis, req.y_axis, req.u_grid, req.v_grid,
+            kind=req.kind, fmt=req.fmt, style=req.style, dpi=dpi,
+            title=req.title, x_label=req.x_label, y_label=req.y_label,
         )
     except (ValueError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

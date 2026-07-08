@@ -1122,6 +1122,47 @@ export function exportCornerFigure(body: CornerFigureSpec): Promise<void> {
   return postDownload("/api/export/corner-figure", body, `corner.${body.fmt ?? "pdf"}`);
 }
 
+/** Ternary diagram request: 3-component composition scatter plot (gap #23). */
+export interface TernaryFigureSpec {
+  data: number[][];
+  labels?: [string, string, string];
+  values?: number[] | null;
+  fmt?: string;
+  style?: string;
+  dpi?: number;
+  marker_size?: number;
+  title?: string;
+  filename?: string;
+}
+
+/** Render a ternary diagram (3-component scatter) server-side (matplotlib)
+ *  and download it (gap #23). */
+export function exportTernaryFigure(body: TernaryFigureSpec): Promise<void> {
+  return postDownload("/api/export/ternary-figure", body, `ternary.${body.fmt ?? "pdf"}`);
+}
+
+/** Vector field plot request: quiver or streamline visualization (gap #23). */
+export interface FieldFigureSpec {
+  x_axis: number[];
+  y_axis: number[];
+  u_grid: number[][];
+  v_grid: number[][];
+  kind?: "quiver" | "streamline";
+  fmt?: string;
+  style?: string;
+  dpi?: number;
+  title?: string;
+  x_label?: string;
+  y_label?: string;
+  filename?: string;
+}
+
+/** Render a vector field plot (quiver arrows or streamlines) server-side
+ *  (matplotlib) and download it (gap #23). */
+export function exportFieldFigure(body: FieldFigureSpec): Promise<void> {
+  return postDownload("/api/export/field-figure", body, `field.${body.fmt ?? "pdf"}`);
+}
+
 // ── Magnetometry ────────────────────────────────────────────────────────────
 /** Analyze an M-H loop -> Hc / Mr / Ms / squareness / loop area / SFD. */
 export function hysteresisAnalysis(body: {

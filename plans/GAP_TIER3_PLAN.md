@@ -13,7 +13,7 @@ cheap-model task.
 
 **Status:** Active
 **Created:** 2026-07-07
-**Updated:** 2026-07-07
+**Updated:** 2026-07-08
 
 ---
 
@@ -231,26 +231,6 @@ written below.
      reference values exactly; a clean install without the extra
      fails with an actionable message, never an ImportError traceback.
 
-4. **Ternary + quiver/streamline export (gap #23)** — export-only
-   figure kinds via matplotlib, no interactive stage.
-   *Model: haiku (the figure_statplots template is the in-repo
-   pattern).* *Agent: code-implementer.*
-   - [ ] New pure `calc/figure_ternary.py`: hand-rolled barycentric
-         transform (per open question 3) on plain axes, scatter +
-         optional composition gridlines, `figure_style` presets
-   - [ ] New pure `calc/figure_field.py`: quiver + streamplot over
-         gridded (x, y, u, v) input, shared level/scale conventions
-         with `calc/figure_map.py`
-   - [ ] Two endpoints in `routes/export_figures.py`; client
-         postDownload helpers in `frontend/src/lib/api.ts`; minimal
-         UI surface — export dialog entries, full builder integration
-         deferred to Graph Builder
-   - [ ] Tests: known 3-component compositions land at the correct
-         barycentric points; a synthetic vortex field renders both
-         kinds; vector formats default
-   - Acceptance: a 3-component composition table exports a ternary
-     PDF with correctly placed points; a gridded vector field exports
-     quiver and streamline PDFs.
 
 5. **Structured clipboard paste + multi-file append import (gap #47,
    connectors stay deferred)** — inbound paste and one-step append
@@ -318,6 +298,23 @@ written below.
 ---
 
 ## Completed
+
+- ~~**#4 Ternary + quiver/streamline export (gap #23)**~~ (2026-07-08) — two new pure
+  modules: `calc/figure_ternary.py` (170 lines, hand-rolled barycentric transform,
+  scatter with optional colorbar, 10% gridlines, corner labels), `calc/figure_field.py`
+  (126 lines, quiver + streamline over gridded (x, y, u, v), shared dpi/preset
+  conventions). Two thin routes in `routes/export_figures.py` (added 82 lines, still
+  379 total, under 500-line ceiling): `POST /api/export/ternary-figure` and
+  `POST /api/export/field-figure`, both with pydantic request models, format/kind
+  validation, 422 error handling. Frontend: `TernaryFigureSpec` / `FieldFigureSpec`
+  interfaces + `exportTernaryFigure()` / `exportFieldFigure()` helpers in `lib/api.ts`.
+  Tests: `tests/test_calc_figure_ternary_field.py` (43 cases — ternary 3/2/1 points,
+  corner cases, normalization warnings, colorbar, dpi presets, marker size, format/shape
+  errors; field quiver/streamline in each format, grid shape validation, axis/title labels,
+  dpi handling; 9 integration tests via TestClient for both routes, happy-path + 4×422s).
+  Ternary barycentric formula documented in docstring; row normalization with warning on
+  denormalized input; non-positive components rejected. Backend: 1838 passed (was 1795);
+  ruff + mypy clean.
 
 - ~~**#1 Corner-plot posterior panels (gap #29 residual)**~~ (2026-07-07) —
   new pure `calc/figure_corner.py` (226 lines, `figure_statplots.py`
