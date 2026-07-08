@@ -5,11 +5,13 @@ import {
   doubleYPartner,
   figureChannelSelection,
   figureLabel,
+  figureLayerFamily,
   originCurveSeriesStyle,
   originFigureAnnotations,
   originLegendPos,
   type OriginFigureEntry,
   resolveFigureDataset,
+  resolveFigurePanels,
 } from "./originFigures";
 import type { Dataset, OriginCurve, OriginFigure } from "./types";
 
@@ -343,6 +345,98 @@ describe("doubleYPartner", () => {
   it("returns null for a single-layer figure (no partner shares the name)", () => {
     const l1 = layerEntry("f1", 1, "d1", [curve("B")]);
     expect(doubleYPartner(l1, [l1])).toBeNull();
+  });
+});
+
+describe("figureLayerFamily", () => {
+  const layerEntry = (
+    id: string,
+    layer: number,
+    datasetId: string | null,
+    curves: OriginCurve[] | undefined,
+    overrides: Partial<Pick<OriginFigureEntry, "stem" | "siblingIds">> = {},
+  ): OriginFigureEntry => ({
+    id,
+    stem: overrides.stem ?? "Moke",
+    datasetId,
+    siblingIds: overrides.siblingIds ?? ["imp1"],
+    figure: figure({ name: "Graph7", layer, curves }),
+  });
+
+  it("collects every same-window layer, sorted by layer number ascending", () => {
+    const l3 = layerEntry("f3", 3, "d1", []);
+    const l1 = layerEntry("f1", 1, "d1", []);
+    const l2 = layerEntry("f2", 2, "d1", []);
+    // Deliberately out-of-order input — the family must come back sorted.
+    expect(figureLayerFamily(l1, [l3, l1, l2]).map((e) => e.id)).toEqual(["f1", "f2", "f3"]);
+  });
+
+  it("scopes to the SAME import (siblingIds[0]) so a same-named window from a different import doesn't join", () => {
+    const l1 = layerEntry("f1", 1, "d1", [], { siblingIds: ["impA"] });
+    const l2 = layerEntry("f2", 2, "d1", [], { siblingIds: ["impA"] });
+    const other = layerEntry("f9", 1, "d9", [], { siblingIds: ["impB"] });
+    expect(figureLayerFamily(l1, [l1, l2, other]).map((e) => e.id)).toEqual(["f1", "f2"]);
+  });
+
+  it("returns just itself for a nameless figure or one with no same-window siblings", () => {
+    const l1 = layerEntry("f1", 1, "d1", []);
+    expect(figureLayerFamily(l1, [l1]).map((e) => e.id)).toEqual(["f1"]);
+    const nameless: OriginFigureEntry = { ...l1, figure: { ...l1.figure, name: "" } };
+    expect(figureLayerFamily(nameless, [nameless, l1])).toEqual([nameless]);
+  });
+});
+
+describe("resolveFigurePanels", () => {
+  const ds1 = book("d1", "M:Book1", {
+    origin_book: "Book1",
+    x_column_name: "A",
+    origin_column_names: ["B", "C"],
+  });
+  const ds2 = book("d2", "M:Book2", {
+    origin_book: "Book2",
+    x_column_name: "A",
+    origin_column_names: ["B"],
+  });
+
+  const entry = (
+    id: string,
+    layer: number,
+    datasetId: string | null,
+    figOverrides: Partial<OriginFigure>,
+  ): OriginFigureEntry => ({
+    id,
+    stem: "M",
+    datasetId,
+    siblingIds: [datasetId ?? "none"],
+    figure: figure({ name: "Graph9", layer, ...figOverrides }),
+  });
+
+  it("resolves every family member's dataset + channel selection + axis state", () => {
+    const l1 = entry("f1", 1, "d1", {
+      x_from: 0, x_to: 10, y_from: 0, y_to: 50, x_title: "Time", y_title: "V",
+      curves: [{ book: "Book1", x: "A", y: "B" }],
+    });
+    const l2 = entry("f2", 2, "d2", {
+      x_from: 0, x_to: 20, y_from: -1, y_to: 1, y_log: false,
+      curves: [{ book: "Book2", x: "A", y: "B" }],
+    });
+    const panels = resolveFigurePanels([l1, l2], [ds1, ds2]);
+    expect(panels).toEqual([
+      { datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 10], yLim: [0, 50], xLog: false, yLog: true, xAxisLabel: "Time", yAxisLabel: "V", seriesStyles: {} },
+      { datasetId: "d2", xKey: null, yKeys: [0], xLim: [0, 20], yLim: [-1, 1], xLog: false, yLog: false, xAxisLabel: undefined, yAxisLabel: undefined, seriesStyles: {} },
+    ]);
+  });
+
+  it("returns null (all-or-nothing) when ANY family member has no resolved dataset", () => {
+    const l1 = entry("f1", 1, "d1", { curves: [{ book: "Book1", x: "A", y: "B" }] });
+    const l2 = entry("f2", 2, null, { curves: [{ book: "Book2", x: "A", y: "B" }] });
+    expect(resolveFigurePanels([l1, l2], [ds1, ds2])).toBeNull();
+  });
+
+  it("returns null (all-or-nothing) when ANY family member's channel selection is empty", () => {
+    const l1 = entry("f1", 1, "d1", { curves: [{ book: "Book1", x: "A", y: "B" }] });
+    const l2 = entry("f2", 2, "d2", { curves: [{ book: "Elsewhere", x: "A", y: "B" }] }); // wrong book -> no selection
+    expect(resolveFigurePanels([l1, l2], [ds1, ds2])).toBeNull();
   });
 });
 

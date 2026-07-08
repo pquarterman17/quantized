@@ -94,6 +94,11 @@ export default function PlotStage() {
   // stack/inset/polar values gate the alternate render modes here; their toggle
   // setters live in PlotToolbar, which owns the tool dock.
   const stackMode = useApp((s) => s.stackMode);
+  // Set by applyOriginFigure's spatial multi-panel path (decode-plan #36):
+  // each panel owns its own dataset, so the plain "≥2 plotted channels on the
+  // active dataset" gate below doesn't apply — a spatial arrangement can be
+  // shown even with 0/1 channels selected on whatever is active.
+  const spatialPanels = useApp((s) => s.spatialPanels);
   const insetMode = useApp((s) => s.insetMode);
   const polarMode = useApp((s) => s.polarMode);
   const statMode = useApp((s) => s.statMode);
@@ -372,7 +377,7 @@ export default function PlotStage() {
   const nPlotted = plotted.length;
   if (polarMode && active) return <PolarStage />;
   if (statMode && active) return <StatStage />;
-  if (stackMode && nPlotted >= 2) return <MultiPanelStage />;
+  if (stackMode && (nPlotted >= 2 || (spatialPanels?.length ?? 0) >= 2)) return <MultiPanelStage />;
 
   // Right-click anywhere on the plot background → axes/view actions (the parity
   // surface for the MATLAB axes uicontextmenu). Legend right-clicks stop their own

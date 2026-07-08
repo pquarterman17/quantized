@@ -272,14 +272,20 @@ the shipped contract)
 
 ### Tier 2 — Medium Impact
 
-36. **Multi-panel spatial apply (frontend)** — booked from gap register
-    §13.2 #17: the backend exposes per-layer `frame` quads + page size
-    (`figure_geometry`), but the frontend applies each layer alone (or a
-    2-layer Y/Y2 combo via `doubleYPartner`). Render a multi-layer page's
-    panels in their true spatial arrangement from `frame`/`page`.
-    *Model: sonnet (gui work). Not a decode gap — pure UI enhancement.*
-    - [ ] Panel-layout apply path in `applyOriginFigure` (frame → grid)
-    - [ ] Visual-harness check on "Fixed Lambdas SI"!Graph6 (2 stacked)
+~~36. **Multi-panel spatial apply (frontend)**~~ **CLOSED 2026-07-07** —
+    booked from gap register §13.2 #17, shipped as
+    `plans/GAP_ECOSYSTEM_PLAN.md` Tier 2 item 4 (same item — this repo's
+    frontend work lives there, not here): `OriginFigure` gained the
+    already-decoded `frame`/`page` fields, a new `lib/originPanels.ts`
+    clusters frame quads into a rows×cols grid (ordinal-stack fallback when
+    geometry is missing/degenerate/overlapping), and `applyOriginFigure`
+    arranges resolved ≥2-layer windows into a new spatial multi-panel view
+    (`MultiPanelStage.tsx`) while the existing 2-layer Y/Y2 `doubleYPartner`
+    path stays first. Geometry verified against the real "Fixed Lambdas
+    SI"!Graph6 file (2 contiguous stacked frames) via a direct decode +
+    dedicated unit test; the full click-through + canvas screenshot
+    (`tools/visual` harness) pass was not run — see that plan's
+    `## Completed` entry for the full writeup and the eyeball caveat.
 
 ~~37. **y2 axis label from layer 2's decoded title**~~ **CLOSED
 2026-07-07** — see Completed.

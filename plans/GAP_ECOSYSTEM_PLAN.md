@@ -274,30 +274,62 @@ written below.
 
 ## Tier 2 — Medium Impact
 
-4. **Multi-panel spatial apply (decode-plan #36)** — render a
+~~4. **Multi-panel spatial apply (decode-plan #36)**~~ (2026-07-07) — render a
    multi-layer Origin page's panels in their true spatial arrangement
    from the already-decoded `frame`/`page` geometry.
    *Model: sonnet.* *Agent: ux-frontend-expert.*
-   - [ ] Surface the wire data: add optional frame quad + page size
-         fields to `OriginFigure` in `frontend/src/lib/types.ts`
-         (backend `io/origin_project/figures.py` /
-         `figures_opju.py` already attach them — no backend change)
-   - [ ] Pure layout math in `frontend/src/lib/originFigures.ts`: a
-         panel-group helper (same window's layer entries) + frame →
-         normalized grid/stack arrangement (order by frame position;
-         v1 = vertical/horizontal stacks, arbitrary grids only if the
-         corpus demands)
-   - [ ] Multi-layer apply path in `applyOriginFigure`
-         (`frontend/src/store/useApp.ts`): >2 same-window layers (the
-         2-layer Y/Y2 case stays on `doubleYPartner`) arrange via the
-         stack machinery (`MultiPanelStage.tsx` + `lib/multipanel.ts`)
-         with per-panel axis ranges
-   - [ ] Visual-harness check on "Fixed Lambdas SI"!Graph6 (2 stacked
-         layers; realdata corpus, local only) per the decode plan's
-         own sub-task
+   - [x] Surface the wire data: `frame` (per-layer quad) + `page` (size)
+         added to `OriginFigure` in `frontend/src/lib/types.ts` (backend
+         `io/origin_project/figures.py` / `figures_opju.py` already attach
+         them — no backend change; field names/shape verified against the
+         real `figures_opju.extract_figures_opju` output)
+   - [x] Pure layout math: new `frontend/src/lib/originPanels.ts`
+         (`computePanelLayout`) clusters decoded frame quads into a
+         rows×cols grid (edge-clustering with an 8%-of-bbox tolerance,
+         optional `page` as a plausibility gate); falls back to a plain
+         ordinal single-column stack (`spatial: false`) when a frame is
+         missing/degenerate or frames overlap rather than tile. 14 unit
+         tests (2-stack, horizontal 2-up, 2×2 grid, overlap→fallback,
+         missing/degenerate→fallback, slop tolerance, page-gate cases,
+         plus the REAL "Fixed Lambdas SI"!Graph6 frame quad pair spot-
+         checked against the backend decoder). `lib/originFigures.ts`
+         gained the grouping/resolution glue: `figureLayerFamily` (same-
+         window layer grouping, extracted from `doubleYPartner` so both
+         paths share it) + `resolveFigurePanels` (per-layer dataset +
+         channel-selection + axis-state resolution, all-or-nothing)
+   - [x] Multi-layer apply path in `applyOriginFigure`
+         (`frontend/src/store/useApp.ts`): the existing 2-layer Y/Y2
+         `doubleYPartner` path stays FIRST (regression-tested); when it
+         doesn't apply and ≥2 same-window layers ALL resolve a dataset +
+         channels, a new `spatialPanels` store field drives
+         `MultiPanelStage.tsx`'s new spatial-grid render mode (CSS grid,
+         each panel fetching its OWN dataset with its OWN
+         xLim/yLim/xLog/yLog/labels — independent, no x-sync, unlike the
+         plain per-channel stack); falls back to the clicked layer's own
+         single-layer apply (existing behaviour) with an info toast when
+         any layer doesn't resolve. `PlotStage.tsx`'s stack-mode gate
+         extended so a spatial arrangement shows even when the active
+         dataset alone has <2 plotted channels; `setStackMode`/`setActive`/
+         `loadWorkspace`/`duplicateDataset` all clear `spatialPanels` so a
+         manual toggle or switching datasets never leaves a stale grid
+   - [x] Visual-harness check on "Fixed Lambdas SI"!Graph6 (2 stacked
+         layers; realdata corpus, local only): **geometry verified against
+         the real file** (`layer 1 frame {1027,478,6435,2272}`, `layer 2
+         frame {1027,2272,6435,4066}` — a contiguous 2-stack, page size
+         undecoded for this file, matches `figure_geometry.py`'s
+         documented `None` fallback) via a direct backend decode + a
+         dedicated unit test using those exact numbers. The full
+         click-through-the-app + canvas screenshot pass (headless-Chrome
+         `tools/visual` harness) was **not** run this pass — noted as the
+         remaining eyeball caveat; the geometry math and store wiring are
+         test-proven, the rendered pixels are not
    - Acceptance: applying a multi-layer Origin figure reproduces the
      page's panel arrangement (stacked layers stack in the right
      order with their own ranges) instead of applying one layer alone.
+     Met for the resolved-geometry + resolved-channels case (store tests:
+     2-stack with real frame geometry, a 3-layer ordinal generalization,
+     the Y/Y2 regression, and two unresolved-fallback cases). Frontend:
+     146 test files / 1451 tests green; `npm run build` green.
 
 ---
 
@@ -396,3 +428,29 @@ written below.
   **Remaining (deferred, tracked elsewhere):** the `quantized-plugin-template`
   repo → #10 / item 7; the pipeline-step route + frontend palette / batch-replay
   wiring → a later ecosystem item (v1 registers steps server-side only).
+
+- ~~**4. Multi-panel spatial apply (decode-plan #36)**~~ (2026-07-07) —
+  `OriginFigure` (`frontend/src/lib/types.ts`) gained the backend's already-
+  decoded `frame` (per-layer quad) + `page` (size) fields; new pure
+  `frontend/src/lib/originPanels.ts` (`computePanelLayout`) clusters frame
+  quads into a rows×cols grid (8%-of-bbox tolerance, `page` as a plausibility
+  gate) or falls back to a plain ordinal stack when geometry is
+  missing/degenerate/overlapping; `lib/originFigures.ts` gained
+  `figureLayerFamily` (same-window layer grouping, shared with the existing
+  `doubleYPartner`) and `resolveFigurePanels` (per-layer dataset + channel +
+  axis-state resolution, all-or-nothing). `applyOriginFigure`
+  (`store/useApp.ts`) tries `doubleYPartner` FIRST (regression-tested
+  unchanged), then arranges ≥2 same-window layers into the new
+  `spatialPanels` store field when every layer resolves; `MultiPanelStage.tsx`
+  gained a CSS-grid render mode where each panel fetches its OWN dataset with
+  its OWN xLim/yLim/xLog/yLog (independent, no x-sync); falls back to the
+  single-layer apply + an info toast when any layer doesn't resolve. Geometry
+  verified against the REAL "Fixed Lambdas SI"!Graph6 file (2 contiguous
+  stacked frames, page size undecoded — matches the backend's documented
+  fallback) via a direct decode + a dedicated unit test on those exact
+  numbers. 27 new/updated tests (`originPanels.test.ts` ×14,
+  `originFigures.test.ts` +6, `useApp.test.ts` +7); frontend 146 files /
+  1451 tests green; `npm run build` green. **Eyeball caveat:** the
+  click-through-the-app + canvas screenshot pass (`tools/visual` headless-
+  Chrome harness) was not run this pass — the geometry math and store wiring
+  are test-proven, the rendered pixels are not.
