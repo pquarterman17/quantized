@@ -430,6 +430,116 @@ def test_corner_figure_shape_mismatch_is_422_not_500() -> None:
     assert resp.status_code == 422
 
 
+def test_figure_x_breaks_override_renders() -> None:
+    ds = {
+        "time": [0.0, 1.0, 2.0, 3.0, 60.0, 61.0, 62.0],
+        "values": [[1.0], [2.0], [1.5], [3.0], [4.0], [3.5], [5.0]],
+        "labels": ["y"],
+        "units": [""],
+        "metadata": {},
+    }
+    resp = client.post("/api/export/figure", json={
+        "dataset": ds,
+        "fmt": "pdf",
+        "overrides": {"x_breaks": [[3.0, 60.0]]},
+    })
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_figure_x_breaks_invalid_is_422() -> None:
+    resp = client.post("/api/export/figure", json={
+        "dataset": _xrd_dataset(),
+        "overrides": {"x_breaks": [[5.0, 2.0]]},  # lo > hi
+    })
+    assert resp.status_code == 422
+
+
+# ── /api/export/categorical-figure (gap #20 grouped/stacked bar) ────────────
+def test_categorical_figure_grouped_pdf() -> None:
+    resp = client.post(
+        "/api/export/categorical-figure",
+        json={
+            "groups": ["Low", "High"],
+            "series": ["A", "B"],
+            "values": [[10.0, 20.0], [15.0, 25.0]],
+            "errors": [[1.0, None], [2.0, 3.0]],
+            "stacked": False,
+            "fmt": "pdf",
+            "filename": "bar chart",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.headers["content-disposition"] == 'attachment; filename="bar_chart.pdf"'
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_categorical_figure_stacked_png() -> None:
+    resp = client.post(
+        "/api/export/categorical-figure",
+        json={
+            "groups": ["Low", "High"],
+            "series": ["A", "B"],
+            "values": [[10.0, 20.0], [15.0, 25.0]],
+            "stacked": True,
+            "fmt": "png",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_categorical_figure_shape_mismatch_is_422() -> None:
+    resp = client.post(
+        "/api/export/categorical-figure",
+        json={"groups": ["A", "B"], "series": ["x"], "values": [[1.0]]},
+    )
+    assert resp.status_code == 422
+
+
+def test_categorical_figure_bad_format_is_422() -> None:
+    resp = client.post(
+        "/api/export/categorical-figure",
+        json={"groups": ["A"], "series": ["x"], "values": [[1.0]], "fmt": "bmp"},
+    )
+    assert resp.status_code == 422
+
+
+# ── /api/export/facets-figure (gap #21 faceting) ────────────────────────────
+def test_facets_figure_pdf() -> None:
+    resp = client.post(
+        "/api/export/facets-figure",
+        json={
+            "panels": [
+                {"label": "Low", "x": [0, 1, 2], "series": [{"label": "y", "y": [1, 2, 3]}]},
+                {"label": "High", "x": [0, 1, 2], "series": [{"label": "y", "y": [3, 2, 1]}]},
+            ],
+            "fmt": "pdf",
+            "title": "facets",
+            "filename": "facet grid",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.headers["content-disposition"] == 'attachment; filename="facet_grid.pdf"'
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_facets_figure_empty_panels_is_422() -> None:
+    resp = client.post("/api/export/facets-figure", json={"panels": []})
+    assert resp.status_code == 422
+
+
+def test_facets_figure_bad_format_is_422() -> None:
+    panels = [{"label": "l", "x": [0, 1], "series": [{"label": "y", "y": [1, 2]}]}]
+    resp = client.post(
+        "/api/export/facets-figure",
+        json={"panels": panels, "fmt": "bmp"},
+    )
+    assert resp.status_code == 422
+
+
 def test_figure_custom_legend_anchor_renders() -> None:
     ds = {
         "time": [1.0, 2.0, 3.0],

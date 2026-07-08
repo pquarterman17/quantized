@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DataStruct, Dataset } from "./types";
 import {
+  barValueDomain,
   boxStatsClient,
   categoricalChannels,
   categorySlots,
@@ -153,6 +154,30 @@ describe("zeroBasedDomain", () => {
   it("returns [0,1] for an all-zero / empty input", () => {
     expect(zeroBasedDomain([[0, 0]])).toEqual([0, 1]);
     expect(zeroBasedDomain([[]])).toEqual([0, 1]);
+  });
+});
+
+describe("barValueDomain (gap #20 bar mode — always spans 0, unlike zeroBasedDomain)", () => {
+  it("spans [0, max] for all-positive values (padded)", () => {
+    expect(barValueDomain([1, 5, 3])).toEqual([0, 5 * 1.08]);
+  });
+
+  it("spans [min, 0] for all-negative values", () => {
+    const [lo, hi] = barValueDomain([-1, -5, -3]);
+    expect(hi).toBeCloseTo(0, 10);
+    expect(lo).toBeCloseTo(-5 * 1.08, 10);
+  });
+
+  it("spans both sides for mixed-sign values, padding each side by its own magnitude", () => {
+    const [lo, hi] = barValueDomain([-2, 4]);
+    expect(lo).toBeCloseTo(-2 - 2 * 0.08, 10);
+    expect(hi).toBeCloseTo(4 + 4 * 0.08, 10);
+  });
+
+  it("returns [0,1] for an all-zero / empty / all-non-finite input", () => {
+    expect(barValueDomain([0, 0])).toEqual([0, 1]);
+    expect(barValueDomain([])).toEqual([0, 1]);
+    expect(barValueDomain([NaN, Infinity])).toEqual([0, 1]);
   });
 });
 

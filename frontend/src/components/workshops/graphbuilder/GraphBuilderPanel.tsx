@@ -69,8 +69,8 @@ export default function GraphBuilderPanel() {
               assigned={g.chips("facet")}
               note={
                 <span style={faint}>
-                  Small multiples land with plot-types item 5 — the facet column is stored and
-                  serialized now, but not yet drawn.
+                  scatter/line: previews as small multiples below. Box/violin/bar don't facet yet,
+                  and "Send to Stage" doesn't carry facets to the main plot (plot-types item 5).
                 </span>
               }
               onAssign={(c) => g.assign("facet", c)}

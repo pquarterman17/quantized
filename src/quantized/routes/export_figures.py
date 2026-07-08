@@ -197,6 +197,48 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
     )
 
 
+class CategoricalFigureRequest(BaseModel):
+    groups: list[str]  # category tick labels, in axis order
+    series: list[str]  # series (legend) labels, in stack/cluster order
+    values: list[list[float]]  # [group][series] bar height (mean)
+    errors: list[list[float | None]] | None = None  # [group][series] SEM
+    stacked: bool = False
+    fmt: str = "pdf"
+    style: str = "default"
+    title: str = ""
+    x_label: str = ""
+    y_label: str = ""
+    dpi: int = 200
+    filename: str = "bar"
+
+
+@router.post("/categorical-figure")
+def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
+    """Render a grouped/stacked bar chart (gap #20) to a publication figure
+    (PDF/SVG/PNG/TIFF) — the same category x series matrix (mean ± SEM) the
+    interactive stat stage's "bar" mode draws on-screen."""
+    if req.fmt not in _FIGURE_MIME:
+        raise HTTPException(
+            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
+        )
+    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
+    from quantized.calc.figure_categorical import render_categorical_figure  # lazy: matplotlib
+
+    try:
+        img = render_categorical_figure(
+            req.groups, req.series, req.values, req.errors, stacked=req.stacked,
+            fmt=req.fmt, style=req.style, title=req.title, x_label=req.x_label,
+            y_label=req.y_label, dpi=dpi,
+        )
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Response(
+        content=img,
+        media_type=_FIGURE_MIME[req.fmt],
+        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
+    )
+
+
 class MapFigureRequest(BaseModel):
     x_axis: list[float]
     y_axis: list[float]

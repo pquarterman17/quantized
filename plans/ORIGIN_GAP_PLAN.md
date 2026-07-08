@@ -306,16 +306,27 @@ routes through #11's config object, never a parallel path.)
 
 ### Tier 2 — Medium Impact
 
-20. **Categorical plots** — grouped/stacked bar & column with error
-    bars, categorical axes
-    *Model: sonnet. Pickup: needs a categorical x-axis concept in
-    `lib/plotdata.ts` — small but touches the shared payload shape.*
+~~20. **Categorical plots**~~ **CLOSED 2026-07-07** — see
+`plans/GAP_PLOTTYPES_PLAN.md` Completed item 4 for the full breakdown
+(`PlotPayload.xCategories` contract + `lib/barlayout.ts` + grouped/
+stacked bar as a new `StatMode` on the interactive stat stage +
+`calc/figure_categorical.py` export). Deliberate deviation: bar
+rendering lives in the Canvas2D stat stage, not uPlot's native `bars()`
+path factory (documented reasoning in that entry).
 
-21. **Axis break + faceting** — automatic/manual axis breaks; a
-    trellis/faceted multi-panel generator
-    *Model: sonnet. Pickup: extends `MultiPanelStage.tsx` +
-    `lib/multipanel.ts` (facet by group/tag from the library); export-
-    side breaks via twinned matplotlib axes.*
+~~21. **Axis break + faceting**~~ **CLOSED 2026-07-07 (export-side +
+facet-preview; interactive facet/break in the main Stage BOOKED)** —
+see `plans/GAP_PLOTTYPES_PLAN.md` Completed item 5. Export breaks
+(`overrides.x_breaks` on `render_figure`, twinned panels + break
+glyphs, `calc/figure_break.py`) and facet export
+(`calc/figure_facets.py` + `/api/export/facets-figure`) shipped; a pure
+`lib/facet.ts` (facetPayloads splitter + gap-detection `suggestBreaks`)
+shipped and the Graph Builder's facet zone now previews small multiples
+for the xy family. Facet-by-group and paneled x-breaks in the MAIN
+stacked-panel `MultiPanelStage.tsx` did NOT ship — that pass's lane
+reserved `lib/multipanel.ts` / `MultiPanelStage.tsx` for a sibling
+workstream with no facet/break config seam exposed yet; booked for
+whoever owns that file next.
 
 ### Tier 3 — Nice-to-Have
 
@@ -658,6 +669,26 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
   breakdown (grouping reuse, offline fallbacks, export wiring). All 4
   modes render on one Canvas2D stage (a deliberate scope call, not the
   originally-sketched uPlot split for Q-Q/histogram).
+- ~~**#20 Categorical plots**~~ (2026-07-07) — see
+  `plans/GAP_PLOTTYPES_PLAN.md` item 4's Completed entry for the full
+  breakdown. `PlotPayload.xCategories` contract (additive, regression-
+  tested); `lib/barlayout.ts` (text-column-or-numeric category labels,
+  mean±SEM, grouped/stacked geometry); grouped/stacked bar shipped as a
+  5th `StatMode` on the interactive stat stage (a deliberate deviation
+  from the originally-sketched uPlot `bars()` path factory — the
+  categorical mark family already lives there via box/violin);
+  `calc/figure_categorical.py` export. Booked: horizontal (bar vs
+  column) orientation.
+- ~~**#21 Axis break + faceting**~~ (2026-07-07 export-side + facet
+  preview; interactive facet/break in the main Stage BOOKED) — see
+  `plans/GAP_PLOTTYPES_PLAN.md` item 5's Completed entry. Export breaks
+  (`overrides.x_breaks`, `calc/figure_break.py`, twinned panels + break
+  glyphs) and facet export (`calc/figure_facets.py`) shipped; `lib/
+  facet.ts` (pure splitter + gap-detection `suggestBreaks`) and a Graph
+  Builder facet-zone small-multiples preview (xy family) shipped.
+  Facet-by-group / paneled x-breaks in `MultiPanelStage.tsx` itself did
+  NOT ship — that file was reserved for a sibling workstream this pass
+  with no facet/break seam exposed yet.
 - ~~**#13 Click-to-select + #14 in-place editing**~~ (2026-07-07) —
   `calc/figure.render_figure_map` + `/api/export/figure-hitmap`: the
   preview PNG plus per-artist pixel boxes (title/labels/legend/series/

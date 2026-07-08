@@ -74,6 +74,21 @@ export function tickFormatter(fmt?: AxisFormat): TickValues | undefined {
   return (_u, splits) => splits.map((v) => (v == null ? null : fn(v)));
 }
 
+/** Build a uPlot axis `values` formatter for a categorical x-axis
+ *  (`PlotPayload.xCategories`, gap #20): `data[0]` holds ORDINAL positions
+ *  (0, 1, 2, …), so a tick maps to its label only when it lands exactly on an
+ *  in-range integer index — a fractional split (uPlot may propose one
+ *  between categories at some zoom levels) or an out-of-range one renders
+ *  blank rather than a misleading label. */
+export function categoricalTickFormatter(categories: readonly string[]): TickValues {
+  return (_u, splits) =>
+    splits.map((v) => {
+      if (v == null) return null;
+      const i = Math.round(v);
+      return i >= 0 && i < categories.length && Math.abs(v - i) < 1e-6 ? categories[i] : "";
+    });
+}
+
 /** Is the x column sorted ascending? uPlot's x scale defaults to `sorted: 1`,
  *  meaning it derives the scale range from the *endpoints* (a binary-search
  *  optimization) instead of scanning. That assumption breaks for non-monotonic x
@@ -413,7 +428,12 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       ...(yLim ? { range: yLim } : loopY ? { range: () => loopY } : {}),
     },
   };
-  const xValues = tickFormatter(xFmt);
+  // A categorical x-axis (gap #20) overrides a numeric xFmt: the plotted
+  // x values are ordinal positions, not physical quantities, so a fixed/sci
+  // number format would show "1.0"/"2.0" instead of the real category names.
+  const xValues = payload.xCategories
+    ? categoricalTickFormatter(payload.xCategories)
+    : tickFormatter(xFmt);
   const yValues = tickFormatter(yFmt);
   const axes: uPlot.Axis[] = [
     { ...axis, label: xLabel, ...(xValues ? { values: xValues } : {}) },

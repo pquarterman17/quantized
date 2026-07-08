@@ -34,6 +34,15 @@ export interface PlotPayload {
   series: PlotSeriesSpec[];
   xLabel: string;
   xUnit: string;
+  /** Categorical x-axis (gap #20): when present, `data[0]` holds ORDINAL
+   *  positions (0, 1, 2, …) rather than raw channel values, and
+   *  `xCategories[i]` is the tick label for position `i`. Optional and
+   *  additive — every existing consumer that doesn't know about it just
+   *  keeps treating `data[0]` as plain numeric x, which is still correct
+   *  (an ordinal position IS a number). Built by `lib/barlayout.ts`'s
+   *  category-chart payloads; absent (undefined) for every ordinary
+   *  numeric plot. */
+  xCategories?: string[];
 }
 
 /** Pure client-side column packing — the offline mirror of /api/plot/series.

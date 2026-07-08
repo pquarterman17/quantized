@@ -11,7 +11,7 @@ import { channelModelingType, isCategorical } from "./modeling";
 import { groupsByCategory, groupsFromColumns, type GroupSpec } from "./statschooser";
 import type { DataStruct, Dataset } from "./types";
 
-export type StatMode = "box" | "violin" | "qq" | "histogram";
+export type StatMode = "box" | "violin" | "qq" | "histogram" | "bar";
 
 // ── Column selection ────────────────────────────────────────────────────────
 
@@ -168,6 +168,28 @@ export function zeroBasedDomain(
   let hi = 0;
   for (const vs of lists) for (const v of vs) if (Number.isFinite(v) && v > hi) hi = v;
   return hi > 0 ? [0, hi * (1 + padFrac)] : [0, 1];
+}
+
+/** A domain for a bar-chart value axis: ALWAYS includes 0 (bars grow from a
+ *  zero baseline, whether the values are positive, negative, or mixed) — the
+ *  signed counterpart of `zeroBasedDomain`, which only ever spans [0, max].
+ *  Each side is padded independently by `padFrac` of ITS OWN magnitude (so an
+ *  all-positive input keeps 0 fixed at the bottom exactly like
+ *  `zeroBasedDomain`, an all-negative input keeps 0 fixed at the top, and a
+ *  mixed-sign input pads both sides proportionally). `[0, 1]` when every
+ *  candidate is non-finite or exactly zero (empty-data guard). */
+export function barValueDomain(values: readonly number[], padFrac = 0.08): [number, number] {
+  let lo = 0;
+  let hi = 0;
+  for (const v of values) {
+    if (!Number.isFinite(v)) continue;
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  if (lo === 0 && hi === 0) return [0, 1];
+  const loPad = lo < 0 ? -lo * padFrac : 0;
+  const hiPad = hi > 0 ? hi * padFrac : 0;
+  return [lo - loPad, hi + hiPad];
 }
 
 export interface CategorySlot {

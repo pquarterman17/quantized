@@ -20,6 +20,12 @@ const MODE_OPTIONS: { value: StatMode; label: string }[] = [
   { value: "violin", label: "Violin" },
   { value: "qq", label: "Q-Q" },
   { value: "histogram", label: "Histogram" },
+  { value: "bar", label: "Bar" },
+];
+
+const BAR_STACK_OPTIONS: { value: "grouped" | "stacked"; label: string }[] = [
+  { value: "grouped", label: "Grouped" },
+  { value: "stacked", label: "Stacked" },
 ];
 
 export default function StatStage() {
@@ -82,7 +88,7 @@ export default function StatStage() {
         <SegmentedControl options={MODE_OPTIONS} value={st.mode} onChange={st.setMode} />
         <span className="qzk-tool-sep" />
 
-        {(st.mode === "box" || st.mode === "violin") && (
+        {(st.mode === "box" || st.mode === "violin" || st.mode === "bar") && (
           <>
             <Picker label="group by">
               <Select
@@ -93,7 +99,7 @@ export default function StatStage() {
                 }
               />
             </Picker>
-            {st.groupCol != null && (
+            {st.groupCol != null && st.mode !== "bar" && (
               <Picker label="value">
                 <Select
                   options={columnOptions}
@@ -103,6 +109,16 @@ export default function StatStage() {
               </Picker>
             )}
           </>
+        )}
+
+        {st.mode === "bar" && (
+          <Picker label="layout">
+            <SegmentedControl
+              options={BAR_STACK_OPTIONS}
+              value={st.barStack ? "stacked" : "grouped"}
+              onChange={(v) => st.setBarStack(v === "stacked")}
+            />
+          </Picker>
         )}
 
         {(st.mode === "qq" || st.mode === "histogram") && (

@@ -56,7 +56,11 @@
 //
 //   { kind: "xy",  payload }   — a lib/plotdata PlotPayload (scatter/line; the
 //                                ordinary uPlot path). `grouped` flags a colour
-//                                split so the caller can label it.
+//                                split so the caller can label it. `facets`
+//                                (GAP_PLOTTYPES #5, only when zones.facet is
+//                                set) is one payload per facet-column level
+//                                (lib/facet.facetPayloads) — small multiples
+//                                for the xy family only in v1.
 //   { kind: "box", boxes, … }  — client box-stats (lib/statstage) for the
 //                                stat-stage renderer (statRender.ts). `violin`
 //                                flags that the user asked for violin — the pure
@@ -64,10 +68,14 @@
 //                                mini-preview shows a box and the real KDE
 //                                renders once the spec reaches the live stat
 //                                stage (the exact degrade useStatStage uses).
+//   { kind: "bar", data, … }   — a lib/barlayout BarChartData (GAP_PLOTTYPES
+//                                #4 categorical plots) for the SAME stat-stage
+//                                renderer's "bar" mode (statRender.ts). The Y
+//                                zone's channels become the clustered series.
 //   { kind: "message", … }     — nothing to draw yet: tone "hint" = the spec is
 //                                incomplete (drop more channels); tone "note" =
-//                                the combo is valid but its renderer is deferred
-//                                (bar → GAP_PLOTTYPES #4 categorical plots).
+//                                the combo can't render (e.g. bar with a
+//                                non-categorical X).
 //
 // SERIALIZATION (serialize / deserialize / validate)
 // --------------------------------------------------
@@ -76,6 +84,8 @@
 // so a figure / template / macro can persist and replay a built graph. The
 // `version: 1` tag is the migration seam — a future v2 reads v1 and up-converts.
 
+import { buildBarMatrix, type BarChartData } from "./barlayout";
+import { facetPayloads, type FacetPanel } from "./facet";
 import { channelModelingType, isCategorical } from "./modeling";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import { analysisData } from "./rowstate";
@@ -294,8 +304,18 @@ export function markContext(spec: PlotSpec, datasets: readonly Dataset[]): MarkC
 // ── Render ───────────────────────────────────────────────────────────────────
 
 export type SpecRender =
-  | { kind: "xy"; payload: PlotPayload; mark: "scatter" | "line"; grouped: boolean }
+  | {
+      kind: "xy";
+      payload: PlotPayload;
+      mark: "scatter" | "line";
+      grouped: boolean;
+      /** Small multiples (GAP_PLOTTYPES #5 faceting), one per facet-column
+       *  level — present only when `zones.facet` is set. Absent = the
+       *  ordinary single-panel xy render. */
+      facets?: FacetPanel[];
+    }
   | { kind: "box"; boxes: BoxStat[]; valueLabel: string; groupLabel: string; violin: boolean }
+  | { kind: "bar"; data: BarChartData; valueLabel: string; groupLabel: string; stacked: boolean }
   | { kind: "message"; message: string; tone: "hint" | "note" };
 
 const hint = (message: string): SpecRender => ({ kind: "message", message, tone: "hint" });
@@ -365,11 +385,17 @@ export function specToRender(spec: PlotSpec, datasets: readonly Dataset[]): Spec
 
   if (spec.mark === "scatter" || spec.mark === "line") {
     const groupCol = spec.zones.group?.channel ?? null;
+    const facetCol = spec.zones.facet?.channel ?? null;
+    // Small multiples (#5): one xy payload per facet-column level, built from
+    // the SAME analysis-view data + zones as the single-panel path — facet
+    // just partitions the rows first.
+    const facets = facetCol !== null ? facetPayloads(data, facetCol, xKey, yChannels) : undefined;
     return {
       kind: "xy",
       payload: buildXY(data, xKey, yChannels, groupCol),
       mark: spec.mark,
       grouped: groupCol !== null,
+      ...(facets && facets.length > 0 ? { facets } : {}),
     };
   }
 
@@ -388,8 +414,21 @@ export function specToRender(spec: PlotSpec, datasets: readonly Dataset[]): Spec
     };
   }
 
-  // mark === "bar"
-  return note("Bar charts land with categorical plots (plot-types item 4).");
+  // mark === "bar" (GAP_PLOTTYPES #4): X must be categorical — it's the
+  // group axis; every Y channel becomes a clustered/stacked series within it.
+  const x = spec.zones.x;
+  const groupCol = x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel : null;
+  if (groupCol === null) return note("Bar charts need a categorical X column.");
+  const seriesLabels = yChannels.map((c) => channelLabel(data, c));
+  const matrix = buildBarMatrix(data, groupCol, yChannels, seriesLabels);
+  if (matrix.groups.length === 0) return hint("No finite values to group.");
+  return {
+    kind: "bar",
+    data: matrix,
+    valueLabel: seriesLabels.length > 1 ? "value" : seriesLabels[0],
+    groupLabel: channelLabel(data, groupCol),
+    stacked: false,
+  };
 }
 
 // ── Serialization ────────────────────────────────────────────────────────────

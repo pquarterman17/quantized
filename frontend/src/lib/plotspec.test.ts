@@ -58,8 +58,14 @@ const ctx = (xMonotonic?: boolean): MarkContext => ({
 const ref = (channel: number, datasetId = "d1"): ChannelRef => ({ datasetId, channel });
 
 /** Build a spec from zone refs + mark (test convenience). */
-function spec(x: ChannelRef | null, y: ChannelRef[], mark: PlotSpec["mark"], group: ChannelRef | null = null): PlotSpec {
-  return { version: 1, zones: { x, y, group, facet: null }, mark };
+function spec(
+  x: ChannelRef | null,
+  y: ChannelRef[],
+  mark: PlotSpec["mark"],
+  group: ChannelRef | null = null,
+  facet: ChannelRef | null = null,
+): PlotSpec {
+  return { version: 1, zones: { x, y, group, facet }, mark };
 }
 
 // ── ChannelRef / zone algebra ────────────────────────────────────────────────
@@ -246,9 +252,48 @@ describe("specToRender", () => {
     expect(r.violin).toBe(true);
   });
 
-  it("bar mark returns a deferred note", () => {
+  it("nominal X + continuous Y, bar mark → a bar chart matrix (gap #20)", () => {
     const r = specToRender(spec(ref(2), [ref(1)], "bar"), [DS]);
+    expect(r.kind).toBe("bar");
+    if (r.kind !== "bar") return;
+    expect(r.data.groups).toHaveLength(2); // grp levels 0 and 1
+    expect(r.data.seriesLabels).toEqual(["y"]);
+    expect(r.valueLabel).toBe("y");
+    expect(r.groupLabel).toBe("grp");
+    expect(r.stacked).toBe(false);
+    // group 0 = rows with grp 0 → y in 10..20 → mean 15
+    expect(r.data.groups[0].series[0].mean).toBeCloseTo(15, 10);
+    expect(r.data.groups[1].series[0].mean).toBeCloseTo(35, 10);
+  });
+
+  it("bar mark with multiple Y channels → one series per channel per category", () => {
+    const r = specToRender(spec(ref(2), [ref(1), ref(0)], "bar"), [DS]);
+    expect(r.kind).toBe("bar");
+    if (r.kind !== "bar") return;
+    expect(r.data.seriesLabels).toEqual(["y", "x"]);
+    expect(r.valueLabel).toBe("value"); // multi-series: no single value label
+    expect(r.data.groups[0].series).toHaveLength(2);
+  });
+
+  it("bar mark with a non-categorical X is a note (bar needs a category axis)", () => {
+    const r = specToRender(spec(ref(0), [ref(1)], "bar"), [DS]);
     expect(r).toMatchObject({ kind: "message", tone: "note" });
+  });
+
+  it("a facet channel splits the xy payload into one panel per level (gap #21)", () => {
+    const r = specToRender(spec(ref(0), [ref(1)], "scatter", null, ref(2)), [DS]);
+    expect(r.kind).toBe("xy");
+    if (r.kind !== "xy") return;
+    expect(r.facets).toBeDefined();
+    expect(r.facets).toHaveLength(2); // grp levels 0 and 1
+    expect(r.facets?.[0].payload.data[0]).toHaveLength(6); // 6 rows per level
+  });
+
+  it("omits facets entirely when zones.facet is unset (untouched path)", () => {
+    const r = specToRender(spec(ref(0), [ref(1)], "scatter"), [DS]);
+    expect(r.kind).toBe("xy");
+    if (r.kind !== "xy") return;
+    expect(r.facets).toBeUndefined();
   });
 
   it("an empty spec is an incomplete hint", () => {
