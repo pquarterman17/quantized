@@ -137,6 +137,16 @@ export interface ReflectivitySeed {
   label?: string;
 }
 
+/** The stat-stage pickers the Graph Builder hands over when it sends a box/violin
+ *  spec to the stage (cross-panel hook, mirrors ReflectivitySeed). `useStatStage`
+ *  consumes it once and clears it. `groupCol` = the categorical column to group
+ *  by (null = per-plotted-channel fallback); `valueCol` = the value channel. */
+export interface StatStageSeed {
+  mode: "box" | "violin";
+  groupCol: number | null;
+  valueCol: number;
+}
+
 /** Default stage tab for a newly-activated dataset: a 2-D map (XRDML RSM) opens
  *  in the Map view, a 1-D scan in the Plot view — but never override an explicit
  *  Worksheet choice (the user is inspecting the data grid). */
@@ -292,6 +302,10 @@ interface AppState {
   peakWizardOpen: boolean; // the Peak Analyzer stepper (#31)
   pipelineOpen: boolean; // the editable pipeline view (#6)
   figureBuilderOpen: boolean;
+  graphBuilderOpen: boolean; // the drag-columns-to-wells plot-spec builder (#51)
+  // One-shot pickers handed from the Graph Builder to the stat stage when a
+  // box/violin spec is sent (consumed + cleared by useStatStage). null = none.
+  statStageSeed: StatStageSeed | null;
   waterfallOpen: boolean;
   reflViewOpen: boolean;
   columnSwitcherOpen: boolean; // the JMP-style solo-a-channel flipper (#54)
@@ -485,6 +499,11 @@ interface AppState {
   setPeakWizardOpen: (open: boolean) => void;
   setPipelineOpen: (open: boolean) => void;
   setFigureBuilderOpen: (open: boolean) => void;
+  setGraphBuilderOpen: (open: boolean) => void;
+  // Send a box/violin Graph Builder spec to the stat stage: store the pickers +
+  // switch statMode on; clearStatStageSeed drops the pending pickers once read.
+  seedStatStage: (seed: StatStageSeed) => void;
+  clearStatStageSeed: () => void;
   setWaterfallOpen: (open: boolean) => void;
   setReflViewOpen: (open: boolean) => void;
   setColumnSwitcherOpen: (open: boolean) => void;
@@ -727,6 +746,8 @@ export const useApp = create<AppState>((set, get) => ({
   peakWizardOpen: false,
   pipelineOpen: false,
   figureBuilderOpen: false,
+  graphBuilderOpen: false,
+  statStageSeed: null,
   waterfallOpen: false,
   reflViewOpen: false,
   columnSwitcherOpen: false,
@@ -1990,6 +2011,9 @@ export const useApp = create<AppState>((set, get) => ({
     })),
   setDataFilterOpen: (dataFilterOpen) => set({ dataFilterOpen }),
   setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
+  setGraphBuilderOpen: (graphBuilderOpen) => set({ graphBuilderOpen }),
+  seedStatStage: (statStageSeed) => set({ statStageSeed, statMode: true }),
+  clearStatStageSeed: () => set({ statStageSeed: null }),
   setWaterfallOpen: (waterfallOpen) => set({ waterfallOpen }),
   setReflViewOpen: (reflViewOpen) => set({ reflViewOpen }),
   setColumnSwitcherOpen: (columnSwitcherOpen) => set({ columnSwitcherOpen }),

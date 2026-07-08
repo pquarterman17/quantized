@@ -29,6 +29,7 @@ import PipelinePanel from "./components/workshops/pipeline/PipelinePanel";
 import DataFilterPanel from "./components/workshops/datafilter/DataFilterPanel";
 import ColumnSwitcher from "./components/workshops/switcher/ColumnSwitcher";
 import FigureBuilderView from "./components/workshops/figurebuilder/FigureBuilderView";
+import GraphBuilderPanel from "./components/workshops/graphbuilder/GraphBuilderPanel";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
 import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
 import MagToolsPanel from "./components/workshops/magtools/MagToolsPanel";
@@ -101,6 +102,7 @@ export default function App() {
   const dataFilterOpen = useApp((s) => s.dataFilterOpen);
   const columnSwitcherOpen = useApp((s) => s.columnSwitcherOpen);
   const figureBuilderOpen = useApp((s) => s.figureBuilderOpen);
+  const graphBuilderOpen = useApp((s) => s.graphBuilderOpen);
   const waterfallOpen = useApp((s) => s.waterfallOpen);
   const reflViewOpen = useApp((s) => s.reflViewOpen);
   const openReportId = useApp((s) => s.openReportId);
@@ -507,6 +509,13 @@ export default function App() {
         run: () => s().setStatsChooserOpen(true),
       },
       {
+        id: "graph-builder",
+        group: "Analyze",
+        label: "Graph Builder (drag columns into X/Y/Group wells)…",
+        keywords: "plot spec scatter line box violin bar mark morph drop zone well facet",
+        run: () => s().setGraphBuilderOpen(true),
+      },
+      {
         id: "peak-wizard",
         group: "Analyze",
         label: "Peak Analyzer (baseline → find → fit → report wizard)…",
@@ -854,6 +863,7 @@ export default function App() {
       {openReportId && <ReportPanel />}
       {columnSwitcherOpen && <ColumnSwitcher />}
       {figureBuilderOpen && <FigureBuilderView />}
+      {graphBuilderOpen && <GraphBuilderPanel />}
       {waterfallOpen && <WaterfallView />}
       {reflViewOpen && <ReflView />}
       <ShortcutsDialog />

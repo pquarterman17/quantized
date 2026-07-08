@@ -242,6 +242,27 @@ body {
 .qzk-axis-zone.y { top: 0; left: 0; bottom: 0; width: clamp(32px, 16%, 88px); }
 .qzk-axis-zone.y2 { top: 0; right: 0; bottom: 0; width: clamp(32px, 16%, 88px); }
 
+/* ── Graph Builder wells + preview (gap #51) ── */
+.qzk-zone-wells { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.qzk-zone-well { border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 6px 8px; background: var(--surface-1); transition: border-color 0.1s ease, background 0.1s ease; }
+.qzk-zone-well.over { border-color: var(--accent); border-style: solid; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.qzk-zone-well-hd { display: flex; align-items: baseline; gap: 6px; }
+.qzk-zone-well-title { font-weight: var(--weight-semibold); color: var(--text); }
+.qzk-zone-well-hint { font-size: var(--type-nano); color: var(--text-faint); }
+.qzk-zone-well-body { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; min-height: 20px; align-items: center; }
+.qzk-zone-well-empty { font-size: var(--font-size-sm); color: var(--text-faint); font-style: italic; }
+.qzk-zone-well-note { font-size: var(--type-nano); color: var(--text-faint); }
+.qzk-zone-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 6px; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent-text); font-size: var(--font-size-sm); }
+.qzk-zone-chip-x { border: none; background: none; color: inherit; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
+.qzk-zone-well-add { width: 100%; margin-top: 2px; }
+.qzk-graph-mark-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.qzk-graph-mark-label { font-family: var(--font-mono); color: var(--text); }
+.qzk-graph-preview { position: relative; height: 200px; margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-0); overflow: hidden; }
+.qzk-graph-preview-msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 16px; color: var(--text-faint); font-size: var(--font-size-sm); }
+.qzk-graph-preview-msg.note { color: var(--text-dim); }
+.qzk-graph-preview-approx { position: absolute; left: 6px; bottom: 4px; font-size: var(--type-nano); color: var(--text-faint); }
+.qzk-graph-actions { display: flex; gap: 8px; margin-top: 10px; }
+
 /* worksheet */
 .qzk-sheet { flex: 1; overflow: auto; background: var(--surface-0); }
 .qzk-sheet table { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: var(--font-size-sm); }

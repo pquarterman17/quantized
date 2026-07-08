@@ -132,43 +132,7 @@ written below.
 
 ## Tier 1 — High Impact
 
-3. **Graph Builder workshop (gap #51 phase 2)** — a drop-zone canvas
-   (X, Y, Group, Facet) that morphs the mark as columns land; the
-   plot-spec grammar is the contract every later feature replays.
-   *Model: opus (the plot-spec grammar + morph rules), sonnet (the
-   workshop UI).* *Agent: ux-frontend-expert.*
-   - [ ] Contract first — new pure `frontend/src/lib/plotspec.ts`: a
-         versioned, serializable PlotSpec (zones x / y-list / group /
-         facet, each holding channel refs + their ModelingType from
-         `frontend/src/lib/modeling.ts`) and a pure mark-morph
-         function (two continuous → scatter/line; nominal X +
-         continuous Y → box → violin → bar cycle; filled facet →
-         small multiples); exhaustively unit-tested — this file is the
-         review centre of the item
-   - [ ] `frontend/src/components/workshops/graphbuilder/`:
-         `useGraphBuilder.ts` (state hook), `GraphBuilderPanel.tsx`
-         (view), `ZoneWell.tsx` (reusable drop-zone component — item 8
-         consumes it); each under ~400 lines (workshop pattern);
-         command-palette entry under Analyze
-   - [ ] Live preview: continuous marks reuse the existing payload
-         path (`frontend/src/lib/plotdata.ts` builders); box/violin
-         marks consume the GAP_PLOTTYPES item 2 stat renderers — until
-         that lands, those combos show a "needs stat stage"
-         placeholder rather than blocking the item
-   - [ ] Rows via `rowstate.analysisData` (guard #11 — extend the
-         allowlist deliberately if a direct read is ever needed)
-   - [ ] "Send to Stage" maps the spec onto store actions
-         (`setXKey`/`setYKeys`/`setY2Keys` + the stat-stage mode);
-         "Export" maps it onto `/api/export/figure` or
-         `/api/export/statplot-figure`
-   - [ ] Spec round-trips: `.dwk` persistence via
-         `frontend/src/lib/workspace.ts` and a recorded pipeline step
-         (`frontend/src/lib/pipeline.ts`) so macros/templates replay a
-         built graph
-   - Acceptance: dropping two continuous columns yields a scatter;
-     swapping a nominal column onto X morphs to box and cycles
-     box→violin→bar; the serialized spec round-trips and "Send to
-     Stage" reproduces the preview on the main plot.
+(all shipped — see `## Completed`)
 
 ---
 
@@ -287,6 +251,50 @@ written below.
 ---
 
 ## Completed
+
+- ~~**3. Graph Builder workshop (gap #51 phase 2)**~~ (2026-07-07) — the
+  plot-spec grammar + a drop-zone workshop. New pure
+  `frontend/src/lib/plotspec.ts` is the contract (the review centre): a
+  versioned, serializable `PlotSpec` = `{version:1, zones:{x:ChannelRef|null,
+  y:ChannelRef[], group:ChannelRef|null, facet:ChannelRef|null}, mark}` where
+  `ChannelRef={datasetId,channel}` (by id → survives .dwk). Morph rules
+  (`inferMark`/`validMarks`/`cycleMark`, driven by the X well's ModelingType
+  from `lib/modeling`): continuous/empty X + Y → the **xy family**
+  scatter|line (line only when X is sorted-monotonic — `defaultMark`; else
+  scatter); nominal/ordinal X + Y → the **categorical family** box|violin|bar;
+  a group channel → colour/series split (xy preview). `inferMark` is STICKY
+  within a family (keeps the user's cycled mark) and SNAPS across families
+  (scatter↔box when X's type flips). `specToRender(spec, datasets)` reads
+  `rowstate.analysisData` (guard #11) and returns an xy `PlotPayload`
+  (lib/plotdata), client box-stats (lib/statstage — violin degrades to a box
+  preview offline, real KDE on the stage), or a message (incomplete hint / bar
+  deferred to GAP_PLOTTYPES #4). `serialize`/`deserialize`/`validate` round-trip
+  the spec for future figure/template/macro replay. Workshop
+  `frontend/src/components/workshops/graphbuilder/`: `useGraphBuilder.ts`
+  (state hook), `GraphBuilderPanel.tsx` (view), `ZoneWell.tsx` (the reusable
+  drop-zone — item 8 consumes it; accepts the #49 `CHANNEL_DND` drag + a
+  click-to-assign Select for keyboard/AT), `GraphPreview.tsx` (Canvas2D
+  mini-preview: statRender for box, compact scatter/line otherwise). Store:
+  `graphBuilderOpen` flag + `⌘K` Analyze entry (statschooser wiring); "Send to
+  Stage" maps xy → `setXKey`/`setYKeys` (macro-recorded free) + statMode off,
+  box/violin → a new `statStageSeed` cross-panel hook (`seedStatStage` →
+  `useStatStage` consumes the mode/groupCol/valueCol pickers, mirrors the
+  reflectivity SLD seed). **Facet is TYPED-BUT-INERT**: the zone accepts,
+  displays, and serializes a facet ref from day one (the spec type is final),
+  but rendering the small multiples is deferred to GAP_PLOTTYPES item 5 — the
+  well shows that note. Deviations: `inferMark`'s 2nd arg is a `MarkContext`
+  (typeOf + xMonotonic) not a bare modeling-type map — monotonicity is
+  data-derived, not a modeling type; group-in-xy is preview-only in v1 (Send to
+  Stage can't row-split the column-oriented main plot, so it toasts and applies
+  x/y only); `.dwk`/pipeline-step persistence wiring is left as a follow-up —
+  the serialize/validate contract lives in `lib/plotspec` ready for it. 45 new
+  tests (`lib/plotspec.test.ts` — every morph rule + round-trip + specToRender
+  branch incl. the #50 exclusion path; `ZoneWell.test.tsx` — synthetic drop via
+  the `AxisDropZones.test.tsx` hand-built-event workaround + click-to-assign +
+  foreign-dataset reject; `useGraphBuilder.test.ts` — morph + send-to-stage
+  store effects). Frontend 1249 tests + `npm run build` green. Eyeball caveat:
+  the live drag gesture and the Canvas2D preview are unverified in jsdom —
+  eyeball via a browser / `tools/visual`.
 
 - ~~**1. Quick-fit gadget (gap #33)**~~ (2026-07-07) — drag an ROI band on
   the live plot; a debounced live fit of the region's rows (`rowstate

@@ -121,6 +121,19 @@ export function useStatStage(): StatStageState {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
 
+  // Cross-panel hook: the Graph Builder hands over the mode + pickers for a
+  // box/violin spec it "sent to stage" (mirrors the reflectivity SLD seed).
+  // Declared AFTER the active-id reset so a same-dataset send wins over it.
+  const statStageSeed = useApp((s) => s.statStageSeed);
+  const clearStatStageSeed = useApp((s) => s.clearStatStageSeed);
+  useEffect(() => {
+    if (!statStageSeed) return;
+    setMode(statStageSeed.mode);
+    setGroupColState(statStageSeed.groupCol);
+    setValueCol(statStageSeed.valueCol);
+    clearStatStageSeed();
+  }, [statStageSeed, clearStatStageSeed]);
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
