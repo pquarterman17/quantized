@@ -1,6 +1,6 @@
 [project]
 name = "quantized"
-version = "0.5.0"
+version = "0.5.1"
 description = "Clean-architecture Python + React port of the quantized_matlab scientific toolbox (magnetometry / XRD / lab data)."
 readme = "README.md"
 requires-python = ">=3.11"
