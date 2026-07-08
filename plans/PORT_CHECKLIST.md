@@ -40,7 +40,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 - [~] Reflectivity/neutron consolidated CSV (role-based columns) — `+bosonPlotter/saveConsolidatedNeutronCSV.m` → `io/consolidated.py` (golden: consolidated_csv_{standard,origin}; per-dataset-block role-based writer). Route `/api/export/consolidated`. **Polarized-asymmetry path (shared-Q interp + ++/-- spin asymmetry) still TODO** — needs ++/-- polarization metadata.
 
 ### Origin live bridge — Windows-only OS-gated optional (W1 #14)
-- [ ] COM connect/send — `+utilities/connectOrigin.m`, `+utilities/toOrigin.m` (mock-tested only)
+- [~] COM connect/send — `+utilities/connectOrigin.m`, `+utilities/toOrigin.m` → `io/origin_com.py` + `/api/export/origin-com`. Ported + 16 mock tests (`test_origin_com.py`). No golden possible: COM is Windows-only OS-gated optional, untestable in CI by design — the mock model IS the agreed acceptance criterion (CLAUDE.md architecture contract). Everywhere COM is unavailable, the flow degrades to Origin-ASCII/`.ogs`/`.opj`.
 
 ### Paused (awaiting example files) / never written in MATLAB
 None of these three has MATLAB source: `quantized_matlab` never implemented
