@@ -318,6 +318,12 @@ interface AppState {
   rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null; // markers on the 2D map
   mapMethod: string; // 2D-map regrid interpolation (natural/linear/nearest/idw)
   mapRes: number; // 2D-map grid resolution (nx = ny)
+  // Interactive contour overlay (ORIGIN_GAP_PLAN #17 remaining half). Mirrors
+  // the export side's `_contour_levels` semantics (calc/figure_map.py) so the
+  // on-screen lines and the exported figure agree.
+  contourOn: boolean;
+  contourLevelCount: number;
+  contourScale: "linear" | "log";
   // Macro recorder: when `macroRecording` is on, curated actions append a step;
   // the Inspector card exports `macroSteps` as a reproducible script. Steps are
   // TYPED (lib/pipeline): runnable kinds carry {kind, params} so the pipeline
@@ -517,6 +523,9 @@ interface AppState {
   setRsmPeaks: (rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null) => void;
   setMapMethod: (method: string) => void;
   setMapRes: (res: number) => void;
+  setContourOn: (on: boolean) => void;
+  setContourLevelCount: (n: number) => void;
+  setContourScale: (scale: "linear" | "log") => void;
   startMacro: () => void;
   stopMacro: () => void;
   clearMacro: () => void;
@@ -762,6 +771,9 @@ export const useApp = create<AppState>((set, get) => ({
   // at 200²), so it's an opt-in quality choice, not the auto-open default.
   mapMethod: "linear",
   mapRes: 200,
+  contourOn: false,
+  contourLevelCount: 8,
+  contourScale: "linear",
   macroRecording: false,
   macroSteps: [],
   pipelineRunning: false,
@@ -2035,6 +2047,9 @@ export const useApp = create<AppState>((set, get) => ({
   setRsmPeaks: (rsmPeaks) => set({ rsmPeaks }),
   setMapMethod: (mapMethod) => set({ mapMethod }),
   setMapRes: (mapRes) => set({ mapRes }),
+  setContourOn: (contourOn) => set({ contourOn }),
+  setContourLevelCount: (n) => set({ contourLevelCount: Math.max(2, Math.round(n)) }),
+  setContourScale: (contourScale) => set({ contourScale }),
   // ── Macro recorder ──────────────────────────────────────────────────────
   startMacro: () => set({ macroRecording: true }),
   stopMacro: () => set({ macroRecording: false }),

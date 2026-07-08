@@ -198,4 +198,39 @@ function countPainted(img: Uint8ClampedArray): number {
     expect(canvas.width).toBeGreaterThan(0); // sized (600×dpr)
     expect(countPainted(readInterior(canvas))).toBe(0);
   });
+
+  // ── Contour overlay (ORIGIN_GAP_PLAN #17 remaining half) ──────────────────
+  it("adds ink-coloured contour pixels on top of the heatmap when enabled", () => {
+    const host = document.createElement("div");
+    const p = gradientPayload(24, 20);
+    const bare = document.createElement("canvas");
+    draw(bare, host, p, "viridis", false, null, true, null);
+    const contoured = document.createElement("canvas");
+    draw(contoured, host, p, "viridis", false, null, true, {
+      on: true,
+      levelCount: 6,
+      scale: "linear",
+    });
+
+    const a = readInterior(bare);
+    const b = readInterior(contoured);
+    expect(a).toHaveLength(b.length);
+    let diff = 0;
+    for (let k = 0; k < a.length; k += 4) {
+      if (a[k] !== b[k] || a[k + 1] !== b[k + 1] || a[k + 2] !== b[k + 2]) diff++;
+    }
+    // The overlay strokes several lines across the interior -> more than a
+    // handful of pixels must differ from the bare heatmap.
+    expect(diff).toBeGreaterThan(20);
+  });
+
+  it("contour on a degenerate (all-null) map does not throw and paints no lines", () => {
+    const host = document.createElement("div");
+    const canvas = document.createElement("canvas");
+    const p = gradientPayload(12, 10, /* allNull */ true);
+    expect(() =>
+      draw(canvas, host, p, "viridis", false, null, true, { on: true, levelCount: 6, scale: "linear" }),
+    ).not.toThrow();
+    expect(countPainted(readInterior(canvas))).toBe(0);
+  });
 });
