@@ -12,6 +12,7 @@ import type { RegionStats } from "./regionStats";
 import type { Annotation, AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
 import { annotationPlugin, axisBoxPlugin, errorBarsPlugin, refLinePlugin } from "./uplotOverlays";
 import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
+import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
 import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
 import {
   measurePlugin,
@@ -159,6 +160,16 @@ export interface BuildOptsArgs {
   gadgetCursors?: [number, number] | null;
   /** In `qfit` tool + cursors mode: fires on every create/move of a cursor. */
   onCursorsChange?: (c: [number, number] | null) => void;
+  /** Peak Analyzer wizard click-on-plot marker editing (interaction item 5,
+   *  deferred from closed gap #31): non-null only while wizard step ② is
+   *  live (see PlotStage's `peakWizardEdit` store read). Independent of
+   *  `tool` — like wheelZoom, it composes with whatever tool is active; only
+   *  a plain (non-drag) click over the plot acts. */
+  peakWizardEdit?: {
+    markers: PeakMarkerCandidate[];
+    onAdd: (x: number) => void;
+    onRemove: (index: number) => void;
+  } | null;
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
   xLim?: [number, number] | null;
   yLim?: [number, number] | null;
@@ -400,6 +411,12 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // drag gesture), so it composes with any tool when the pref is on.
   if (args.wheelZoom) {
     plugins.push(wheelZoomPlugin());
+  }
+  // Peak wizard click-on-plot marker editing (item 5): also tool-independent —
+  // wizard-scoped, not toolbar-tool-scoped (see BuildOptsArgs.peakWizardEdit).
+  if (args.peakWizardEdit) {
+    const { markers, onAdd, onRemove } = args.peakWizardEdit;
+    plugins.push(peakMarkerEditPlugin(markers, { onAdd, onRemove }));
   }
 
   // A static [min,max] tuple fixes the scale (Origin-style); omit it to autoscale.

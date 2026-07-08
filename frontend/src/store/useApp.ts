@@ -167,6 +167,23 @@ export interface StatStageSeed {
   valueCol: number;
 }
 
+/** Peak Analyzer wizard click-on-plot marker editing (interaction plan item
+ *  5, deferred from closed gap #31) — the bridge PlotStage reads to wire
+ *  `peakMarkerEditPlugin` (lib/peakMarkerHit.ts). `usePeakWizard` is the sole
+ *  owner of the candidate list and `addPeakAt`/`removePeak`; this is a THIN,
+ *  minimal projection (marker data coords + the two callbacks) pushed into
+ *  the store only while step ② is live — null the rest of the time (wizard
+ *  closed, a different step, or Escape-suppressed). Mirrors
+ *  ReflectivitySeed/StatStageSeed's cross-panel-hook shape, generalized to a
+ *  live bridge rather than a one-shot consume (closer in spirit to
+ *  qfitRoi/onRoiChange, but the callbacks travel WITH the data since
+ *  usePeakWizard — not the store — owns the compute). */
+export interface PeakWizardEditBridge {
+  markers: { index: number; center: number; height: number }[];
+  addPeakAt: (x: number) => void;
+  removePeak: (index: number) => void;
+}
+
 /** Default stage tab for a newly-activated dataset: a 2-D map (XRDML RSM) opens
  *  in the Map view, a 1-D scan in the Plot view — but never override an explicit
  *  Worksheet choice (the user is inspecting the data grid). */
@@ -366,6 +383,8 @@ interface AppState {
   fitOverlay: FitOverlay | null;
   peakOverlay: PeakOverlay | null;
   baselineOverlay: BaselineOverlay | null;
+  // Peak wizard click-on-plot marker editing (item 5) — see PeakWizardEditBridge.
+  peakWizardEdit: PeakWizardEditBridge | null;
   rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null; // markers on the 2D map
   mapMethod: string; // 2D-map regrid interpolation (natural/linear/nearest/idw)
   mapRes: number; // 2D-map grid resolution (nx = ny)
@@ -596,6 +615,7 @@ interface AppState {
   setFitOverlay: (overlay: FitOverlay | null) => void;
   setPeakOverlay: (overlay: PeakOverlay | null) => void;
   setBaselineOverlay: (overlay: BaselineOverlay | null) => void;
+  setPeakWizardEdit: (edit: PeakWizardEditBridge | null) => void;
   setRsmPeaks: (rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null) => void;
   setMapMethod: (method: string) => void;
   setMapRes: (res: number) => void;
@@ -853,6 +873,7 @@ export const useApp = create<AppState>((set, get) => ({
   fitOverlay: null,
   peakOverlay: null,
   baselineOverlay: null,
+  peakWizardEdit: null,
   rsmPeaks: null,
   // 'linear' default: fast (~50 ms) and bit-exact MATLAB parity. 'natural'
   // (true Sibson) is correct but does a per-query Voronoi cavity walk (seconds
@@ -1284,6 +1305,7 @@ export const useApp = create<AppState>((set, get) => ({
         fitOverlay: null,
         peakOverlay: null,
         baselineOverlay: null,
+        peakWizardEdit: null,
         rsmPeaks: null,
         integral: null,
         fwhmResult: null,
@@ -2487,6 +2509,7 @@ export const useApp = create<AppState>((set, get) => ({
   setFitOverlay: (fitOverlay) => set({ fitOverlay }),
   setPeakOverlay: (peakOverlay) => set({ peakOverlay }),
   setBaselineOverlay: (baselineOverlay) => set({ baselineOverlay }),
+  setPeakWizardEdit: (peakWizardEdit) => set({ peakWizardEdit }),
   setRsmPeaks: (rsmPeaks) => set({ rsmPeaks }),
   setMapMethod: (mapMethod) => set({ mapMethod }),
   setMapRes: (mapRes) => set({ mapRes }),

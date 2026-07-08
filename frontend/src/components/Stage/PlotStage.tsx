@@ -108,6 +108,9 @@ export default function PlotStage() {
   const peakOverlay = useApp((s) => s.peakOverlay);
   const baselineOverlay = useApp((s) => s.baselineOverlay);
   const derivOverlay = useApp((s) => s.derivOverlay);
+  // Peak wizard click-on-plot marker editing (item 5) — non-null only while
+  // the wizard's step ② is live (see usePeakWizard's store bridge).
+  const peakWizardEdit = useApp((s) => s.peakWizardEdit);
   const hostRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
   const [payload, setPayload] = useState<PlotPayload | null>(null);
@@ -291,6 +294,19 @@ export default function PlotStage() {
         gadgetMode,
         gadgetCursors: useApp.getState().gadgetCursors,
         onCursorsChange: setGadgetCursors,
+        // Unlike qfitRoi/gadgetCursors, this is a normal reactive dep (below):
+        // it only changes on discrete add/remove clicks, not a live drag, so a
+        // plot rebuild per change (fresh marker positions in the plugin
+        // closure) is correct and cheap — see usePeakWizard's store bridge.
+        // The store bridge names its callbacks after the wizard functions
+        // they ARE (addPeakAt/removePeak); buildOpts uses this file's own
+        // on*-callback convention (onRoiChange, onCursorsChange, …) — adapt
+        // at this one narrow seam rather than picking one name across layers.
+        peakWizardEdit: peakWizardEdit && {
+          markers: peakWizardEdit.markers,
+          onAdd: peakWizardEdit.addPeakAt,
+          onRemove: peakWizardEdit.removePeak,
+        },
       }),
       displayPayload.data,
       host,
@@ -311,7 +327,7 @@ export default function PlotStage() {
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins; gadgetMode swaps the qfit tool's plugin
     // (ROI band vs paired cursors) — a discrete pick, not a live-drag value.
-  }, [displayPayload, yLog, xLog, xLim, yLim, y2Lim, y2Log, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, y2AxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool, integral, fwhmResult, gadgetMode]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, y2Lim, y2Log, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, y2AxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool, integral, fwhmResult, gadgetMode, peakWizardEdit]);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the
