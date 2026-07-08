@@ -14,6 +14,9 @@ import type {
   DataStruct,
   ElementInfo,
   FitModel,
+  ImportFilterWire,
+  ImportPreviewResponse,
+  ImportSettingsWire,
   MapResponse,
   MultiFitResult,
   Peak,
@@ -35,6 +38,10 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
 
 async function getJSON<T>(path: string): Promise<T> {
   return unwrap<T>(await fetch(path));
+}
+
+async function deleteJSON<T>(path: string): Promise<T> {
+  return unwrap<T>(await fetch(path, { method: "DELETE" }));
 }
 
 async function unwrap<T>(res: Response): Promise<T> {
@@ -1568,4 +1575,48 @@ export function fftSpectral(body: {
   detrend?: "mean" | "linear" | "none";
 }): Promise<FftSpectralResult> {
   return postJSON("/api/spectral/fft", body);
+}
+
+// ── Import wizard + saved filters (ORIGIN_GAP_PLAN #40) ────────────────────
+
+/** Best-effort starting `ImportSettings` for a file's raw text. */
+export function importGuess(text: string): Promise<ImportSettingsWire> {
+  return postJSON("/api/import/guess", { text });
+}
+
+/** Parse the first rows under `settings` (or auto-guess if `null`) for the
+ *  wizard's live preview table. */
+export function importPreview(
+  text: string,
+  settings: ImportSettingsWire | null,
+  maxRows = 30,
+): Promise<ImportPreviewResponse> {
+  return postJSON("/api/import/preview", { text, settings, max_rows: maxRows });
+}
+
+/** Import the full text under confirmed settings into a DataStruct. */
+export function importParse(
+  text: string,
+  settings: ImportSettingsWire,
+): Promise<DataStruct> {
+  return postJSON("/api/import/parse", { text, settings });
+}
+
+/** All saved import filters (name + glob + settings), most-recent last. */
+export function listImportFilters(): Promise<ImportFilterWire[]> {
+  return getJSON("/api/import/filters");
+}
+
+/** Save (upsert by name) a filter binding a glob to import settings. */
+export function saveImportFilter(
+  name: string,
+  glob: string,
+  settings: ImportSettingsWire,
+): Promise<ImportFilterWire> {
+  return postJSON("/api/import/filters", { name, glob, settings });
+}
+
+/** Delete a saved filter by name. */
+export function deleteImportFilter(name: string): Promise<{ deleted: string }> {
+  return deleteJSON(`/api/import/filters/${encodeURIComponent(name)}`);
 }

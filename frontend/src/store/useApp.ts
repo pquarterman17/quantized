@@ -333,6 +333,7 @@ interface AppState {
   dataFilterOpen: boolean;
   statsChooserOpen: boolean; // the "which test?" front door (#26)
   peakWizardOpen: boolean; // the Peak Analyzer stepper (#31)
+  importWizardOpen: boolean; // guess/preview/parse over a saved-filter (#40)
   pipelineOpen: boolean; // the editable pipeline view (#6)
   figureBuilderOpen: boolean;
   graphBuilderOpen: boolean; // the drag-columns-to-wells plot-spec builder (#51)
@@ -549,6 +550,7 @@ interface AppState {
   setDataFilterOpen: (open: boolean) => void;
   setStatsChooserOpen: (open: boolean) => void;
   setPeakWizardOpen: (open: boolean) => void;
+  setImportWizardOpen: (open: boolean) => void;
   setPipelineOpen: (open: boolean) => void;
   setFigureBuilderOpen: (open: boolean) => void;
   setGraphBuilderOpen: (open: boolean) => void;
@@ -809,6 +811,7 @@ export const useApp = create<AppState>((set, get) => ({
   dataFilterOpen: false,
   statsChooserOpen: false,
   peakWizardOpen: false,
+  importWizardOpen: false,
   pipelineOpen: false,
   figureBuilderOpen: false,
   graphBuilderOpen: false,
@@ -924,12 +927,16 @@ export const useApp = create<AppState>((set, get) => ({
         lastError = `${file.name}: ${e instanceof Error ? e.message : "error"}`;
       }
     }
+    // A parse failure is the wizard's second front door (#40): the auto-detect
+    // path gave up, so point at the manual guess/preview/parse one instead of
+    // just reporting the error.
+    const hint = " — try the Import wizard (⌘K → Import wizard…)";
     const summary = lastError
-      ? `imported ${added}/${files.length} — failed ${lastError}`
+      ? `imported ${added}/${files.length} — failed ${lastError}${hint}`
       : `imported ${added} file${added === 1 ? "" : "s"}`;
     get().setStatus(summary);
     if (added > 0) toast(`imported ${added} file${added === 1 ? "" : "s"}`, "ok");
-    if (lastError) toast(lastError, "danger");
+    if (lastError) toast(`${lastError}${hint}`, "danger");
   },
   addOriginFigures: (stem, figures, datasetIds) =>
     set((s) => {
@@ -2145,6 +2152,7 @@ export const useApp = create<AppState>((set, get) => ({
   setDistributionOpen: (distributionOpen) => set({ distributionOpen }),
   setStatsChooserOpen: (statsChooserOpen) => set({ statsChooserOpen }),
   setPeakWizardOpen: (peakWizardOpen) => set({ peakWizardOpen }),
+  setImportWizardOpen: (importWizardOpen) => set({ importWizardOpen }),
   setPipelineOpen: (pipelineOpen) => set({ pipelineOpen }),
   // Report sheets (#36). Adding opens the viewer on the new report so the
   // producing workshop's "→ Report" lands somewhere visible immediately.

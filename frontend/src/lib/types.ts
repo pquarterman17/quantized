@@ -438,3 +438,53 @@ export interface CorrectionParams {
   normMethod?: string;
   derivativeMode?: string;
 }
+
+// ── Import wizard (ORIGIN_GAP_PLAN #40) ─────────────────────────────────────
+
+/** Per-column role, mirroring the backend's `ImportSettings.roles` semantics
+ *  (`io/import_preview.DATA_ROLES`): `x` becomes the axis, `y`/`error` become
+ *  DataStruct channels, `label`/`ignore` are dropped (numeric-only contract). */
+export type ImportColumnRole = "x" | "y" | "error" | "label" | "ignore";
+
+/** How to read a delimited file — mirrors
+ *  `quantized.io.import_preview.ImportSettings.to_dict()` exactly (also the
+ *  persistable import-filter shape). */
+export interface ImportSettingsWire {
+  delimiter: string;
+  header_line: number | null;
+  units_line: number | null;
+  data_start_line: number;
+  column_names: string[] | null;
+  roles: ImportColumnRole[] | null;
+}
+
+/** One resolved column descriptor from `preview_import`. */
+export interface ImportPreviewColumn {
+  index: number;
+  name: string;
+  unit: string;
+  role: ImportColumnRole;
+}
+
+/** `/api/import/preview` response — the wizard's live preview payload. */
+export interface ImportPreviewResponse {
+  raw_lines: string[];
+  n_lines: number;
+  delimiter: string;
+  header_line: number | null;
+  units_line: number | null;
+  data_start_line: number;
+  columns: ImportPreviewColumn[];
+  rows: (number | null)[][];
+  n_data_rows: number;
+  n_preview_rows: number;
+}
+
+/** A saved, named `ImportSettingsWire` bound to a filename glob
+ *  (`io.import_filters.ImportFilter`). */
+export interface ImportFilterWire {
+  name: string;
+  glob: string;
+  settings: ImportSettingsWire;
+  updated: string;
+}

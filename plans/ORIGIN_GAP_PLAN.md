@@ -15,9 +15,9 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-07 (SEVENTEEN items closed today: #36, #26, #31,
-#32, #6, #7, #2, #3, #1, #4, #5, #11, #12, #15, #13, #14, #16. **W1, W2
-Tier 1, W3 (all), W5 Tier 1, W6 headline, and W7 are complete.**)
+**Updated:** 2026-07-07 (EIGHTEEN items closed today: #36, #26, #31,
+#32, #6, #7, #2, #3, #1, #4, #5, #11, #12, #15, #13, #14, #16, #40. **W1,
+W2 Tier 1, W3 (all), W5 Tier 1, W6 headline, and W7 are complete.**)
 
 ---
 
@@ -151,7 +151,7 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 | 1–5 | Recalc engine + templates + batch (W1) | W1 | ✅ COMPLETE 2026-07-07 — recalc DAG + staleness + workspace v3 + templates + batch ALL shipped; W1 done |
 | 36–37 | Report sheets + docx/pptx export | W7 | ✅ COMPLETE — schema + emitters + exports 2026-07-03; viewer + Library section + .dwk round-trip 2026-07-07 |
 | 11–15 | Property panels + figure docs + direct manipulation | W3 | ✅ **W3 COMPLETE 2026-07-07** — #11/#12/#13/#14/#15 all shipped (defaults audit = eyeball residual) |
-| 40 | Generic import wizard + saved filters | W8 | 🟡 preview/parse engine + `/api/import/*` landed 2026-07-03; filter persistence + wizard UI remain |
+| 40 | Generic import wizard + saved filters | W8 | ✅ COMPLETE 2026-07-07 — preview/parse engine 2026-07-03; filter persistence + registry hook + wizard UI (`GAP_ECOSYSTEM_PLAN.md` item 1) 2026-07-07 |
 | 41 | Packaging & installers | W8 | ⬜ zero-friction first run gates all OSS adoption |
 | 46–47 | Test-data corpus + PIXcel3D audit | W8 | ✅ mostly done; only pole-figure representation open |
 | 49–50 | Drag-to-axis + row states | W9 | 🟡 #50 row-state model SHIPPED in full (foundation + cross-view + selection + guard #11, 2026-07-03; index-staleness fixes 2026-07-05 `4113104`) — #49 drag-to-axis still open |
@@ -427,29 +427,6 @@ figure blocks — lands naturally with the #31 wizard's report page.)*
 
 ### Tier 1 — High Impact
 
-40. **Generic import wizard + saved filters** — interactive
-    delimiter/skip/header/units mapping with live preview for arbitrary
-    instrument ASCII; save as a named import filter bound to an
-    extension/pattern (persisted like registry sniffers)
-    *Model: sonnet. Pickup: `io/delimited.py` + `io/base.py`
-    (parse_col_header/resolve_column) do the detection.*
-    - [x] Preview engine + routes (`io/import_preview.py`: `guess_settings`
-          / `preview_import` / `parse_import` over absolute line indices,
-          reusing the `delimited` detectors; `/api/import/{guess,preview,
-          parse}`) — re-previews under adjustable `ImportSettings`
-          (delimiter / header / units / data-start / names) (2026-07-03)
-    - [x] Column mapping: name, unit, role (x/y/error/label/ignore —
-          `ImportSettings.roles`, x→axis, y/error→channels, label/ignore
-          dropped) (2026-07-03)
-    - [ ] ImportFilter persistence (name, glob pattern, all settings);
-          registry consults saved filters before content sniffers
-          (`ImportSettings` IS the serializable filter shape; the
-          persistence store + registry hook + the wizard UI remain)
-    - [x] Acceptance (backend): a messy 3-comment-line, header+units-row
-          instrument ASCII imports correctly through `guess→preview→parse`
-          (test_io_import_preview); the saved-filter one-click needs the
-          persistence half above
-
 41. **Packaging & installers** — pip/uv install, standalone installers,
     versioned GitHub releases with CI-built artifacts; zero-friction
     first run for outside users
@@ -640,6 +617,15 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#40 Generic import wizard + saved filters**~~ (2026-07-07) — the
+  preview engine + routes shipped 2026-07-03 (`io/import_preview.py`,
+  `/api/import/{guess,preview,parse}`); persistence (`io/import_filters.py`,
+  the registry consult hook, `/api/import/filters` CRUD) and the wizard UI
+  (`frontend/src/components/workshops/importwizard/`) both shipped
+  2026-07-07 via `plans/GAP_ECOSYSTEM_PLAN.md` item 1 — see that plan's
+  Completed entry for the full breakdown. A messy instrument ASCII now
+  imports one-click via its saved filter, through both the GUI wizard and
+  headless `quantized.api`/`import_auto`.
 - ~~**#55 Tabulate (drag-drop pivot)**~~ (2026-07-07) — CORE shipped
   2026-07-03 (`workshops/tabulate`: pure `lib/tabulate` group-by, select-
   based pickers, summary table, export → dataset + copy TSV, honors #50 row
