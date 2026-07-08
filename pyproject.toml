@@ -88,6 +88,13 @@ include = ["src/quantized", "README.md", "LICENSE", "NOTICE"]
 # frontend/node_modules ships its own LICENSE + README.md) — exclude wins
 # over that default, so this is required even with the include list above.
 exclude = ["frontend/**"]
+# The Vite SPA output (src/quantized/web/**) is gitignored, so hatchling's
+# VCS-aware sdist drops it even though it's under the `include` path above.
+# `uv build`/`python -m build` build the WHEEL FROM THIS SDIST, so if the SPA
+# is missing here it's missing from the wheel too (the wheel target's own
+# artifacts= can't re-add what the sdist never carried). Force-include it in
+# BOTH targets. (Regression fixed 2026-07-08: v0.5.0's wheel shipped UI-less.)
+artifacts = ["src/quantized/web/**"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/quantized"]
