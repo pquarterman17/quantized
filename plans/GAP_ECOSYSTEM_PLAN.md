@@ -149,24 +149,30 @@ written below.
 ## Tier 1 — High Impact
 
 1. **Import-filter persistence + wizard UI (gap #40 remaining)** —
+   *(Backend half SHIPPED 2026-07-07: `io/import_filters.py` 178 lines —
+   platformdirs config dir + `QZ_CONFIG_DIR` override, upsert-by-name,
+   specificity-then-recency glob tie-break; registry consults filters
+   AFTER unambiguous extensions, BEFORE sniffers; CRUD +
+   import-with-filter routes; 28 tests. Wizard UI half remains.)*
+  
    name-and-save the wizard's `ImportSettings` against a glob, have
    the registry consult saved filters, and give the preview engine its
    missing frontend.
    *Model: sonnet.* *Agent: code-implementer (persistence + registry
    hook), ux-frontend-expert (wizard workshop).*
-   - [ ] New pure `src/quantized/io/import_filters.py`: an
+   - [x] New pure `src/quantized/io/import_filters.py`: an
          ImportFilter record (name, glob pattern, the
          `ImportSettings` dict from `io/import_preview.py`), JSON
          load/save in a new user config dir (introduce `platformdirs`
          (MIT) — the repo's first config-dir concept; `QZ_CONFIG_DIR`
          env override for tests), and a pure glob-match function;
          under 500 lines, no fastapi imports
-   - [ ] Registry hook: `resolve_parser` in
+   - [x] Registry hook: `resolve_parser` in
          `src/quantized/io/registry.py` consults matching saved
          filters BEFORE `_SNIFFERS` (a matched filter parses via
          `parse_import` with its stored settings); single-registration
          rule preserved — one chokepoint, no second dispatch path
-   - [ ] Thin CRUD routes on
+   - [x] Thin CRUD routes on
          `src/quantized/routes/import_wizard.py`:
          list/save/delete `/api/import/filters`
    - [ ] Wizard UI: new
@@ -177,7 +183,7 @@ written below.
          (the `ImportSettings` fields), "Save as filter…" with name +
          glob; offered from the command palette AND as the fallback
          when a normal import fails with no parser
-   - [ ] Tests: filter store round-trip + registry-consult precedence
+   - [x] Tests: filter store round-trip + registry-consult precedence
          (backend), wizard flow (vitest); the gap item's
          messy-3-comment-line ASCII case imports one-click via its
          saved filter, including through headless `import_auto`
