@@ -239,34 +239,6 @@ written below.
      reference values exactly; a clean install without the extra
      fails with an actionable message, never an ImportError traceback.
 
-
-5. **Structured clipboard paste + multi-file append import (gap #47,
-   connectors stay deferred)** — inbound paste and one-step append
-   import; database connectors remain out of scope.
-   *Model: haiku per the master plan; escalate to sonnet if the paste
-   UX grows modes.* *Agent: ux-frontend-expert.*
-   - [ ] Paste: an onPaste handler in
-         `frontend/src/components/Stage/Worksheet.tsx` (which already
-         owns the copy handlers) — pasted text routes through the
-         SHIPPED import engine (`/api/import/guess` + `/parse` in
-         `routes/import_wizard.py`, which takes raw text by design)
-         into a new dataset; small single-cell/range pastes edit
-         cells in place instead (size heuristic in a pure, unit-tested
-         `frontend/src/lib/pasteparse.ts`)
-   - [ ] Append import: an "append to one dataset" toggle in the
-         multi-file import flow (`frontend/src/lib/openFilePicker.ts`
-         already returns multiple files) — same-schema results
-         concatenate via `frontend/src/lib/merge.ts` `mergeDatasets`
-         (metadata `merged_from` already recorded); schema mismatch
-         degrades to separate datasets with a toast, never a dead
-         import
-   - [ ] Tests: TSV/CSV paste with header+units detection; the
-         3-same-schema-files append case; the mismatch degrade path
-   - Acceptance: pasting a TSV block from a spreadsheet creates a
-     correctly-parsed dataset (headers/units detected); importing 3
-     same-schema CSVs with Append checked lands one concatenated
-     dataset flagged `merged_from`.
-
 ---
 
 ## Tier 3 — Nice-to-Have
@@ -284,6 +256,46 @@ written below.
 ---
 
 ## Completed
+
+- ~~**#5 Structured clipboard paste + multi-file append import (gap #47)**~~
+  (2026-07-08) — built simpler than the item's original sketch, per the
+  dispatching agent's concrete direction: an Edit-menu / palette command
+  instead of an in-worksheet `onPaste` handler (no cell-level paste-in-place;
+  every paste creates a new dataset), and a File-menu / palette command for
+  append instead of a Library multi-select toggle. Investigation found the
+  backend needed ZERO changes — `io/import_preview.py`'s `guess_settings` /
+  `parse_import` and their `/api/import/guess` + `/api/import/parse` routes
+  (`routes/import_wizard.py`) already take raw `text` directly (shipped with
+  GAP_ECOSYSTEM #1's import wizard); paste just needed a frontend consumer.
+  Frontend: `lib/api.ts` gained `guessImportSettings()` / `parseImportText()`
+  (thin `postJSON` wrappers, matching the wizard's own contract — no second
+  parser). `store/useApp.ts` gained two actions: `pasteDataFromClipboard()`
+  (`navigator.clipboard.readText()` → guess → parse → `addDataset("pasted
+  data N")`; sets status + toasts on an empty clipboard, a denied read, or a
+  parse failure) and `importFilesAppended(files)` (uploads every file via the
+  existing `uploadFile`, then row-concatenates them with the existing
+  `lib/merge.ts` `mergeDatasets` — reused as-is, it already threw on a
+  column-count mismatch and already recorded `merged_from`/`merged_count`;
+  no new pure helper needed). An Origin multi-workbook file (`data.books`) or
+  a `mergeDatasets` mismatch degrades to `importFiles(files)` — N separate
+  datasets plus a toast — never a dead import. `App.tsx`: "Paste data" (⌘V,
+  Edit group — the shortcut only fires when no field is focused, so native
+  paste in rename/tag/formula inputs is untouched) and "Import & append as
+  one dataset…" (File group) commands, both auto-surfaced in the MenuBar and
+  ⌘K palette via the existing `Action` registry (no new UI component).
+  Tests: 12 new cases in `store/useApp.test.ts` (append: ≥2-file guard, the
+  3-file concat + `merged_from`/`merged_count`, column-mismatch degrade,
+  Origin-multi-book degrade, per-file upload-failure degrade; paste: guess/
+  parse round-trip, successive `pasted data N` naming, empty clipboard,
+  denied clipboard read, backend parse-error surfacing). Uncovered en route:
+  this project's Vitest/Rolldown toolchain corrupts a hoisted `vi.mock()`
+  function's subsequently-assigned `.mockImplementation()` if a local
+  `beforeEach` calls `.mockReset()`/`.mockClear()` on it directly first
+  (`.mockResolvedValue()` is unaffected) — worked around by relying on the
+  file's existing top-level `vi.clearAllMocks()` and keying per-call mock
+  behavior off the argument instead of call order. Backend unchanged (1953
+  passed, 3 skipped); frontend 1437 passed (was 1425); `npm run typecheck`
+  and `npm run build` clean; `ruff`/`mypy`/`test_repo_integrity.py` clean.
 
 - ~~**#4 Ternary + quiver/streamline export (gap #23)**~~ (2026-07-08) — two new pure
   modules: `calc/figure_ternary.py` (170 lines, hand-rolled barycentric transform,

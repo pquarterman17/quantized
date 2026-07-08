@@ -1,11 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { applyCorrections as applyCorrectionsApi, uploadFile } from "../lib/api";
+import {
+  applyCorrections as applyCorrectionsApi,
+  guessImportSettings,
+  parseImportText,
+  uploadFile,
+} from "../lib/api";
 import { effectiveChannels } from "../lib/plotdata";
 import type { Dataset, DataStruct } from "../lib/types";
 import { useApp } from "./useApp";
 
-vi.mock("../lib/api", () => ({ applyCorrections: vi.fn(), uploadFile: vi.fn() }));
+vi.mock("../lib/api", () => ({
+  applyCorrections: vi.fn(),
+  uploadFile: vi.fn(),
+  guessImportSettings: vi.fn(),
+  parseImportText: vi.fn(),
+}));
 
 const raw: DataStruct = {
   time: [1, 2, 3],
@@ -893,6 +903,184 @@ describe("useApp importFiles", () => {
     });
     await useApp.getState().importFiles([fakeFile("XRD.opj")]);
     expect(useApp.getState().originFigures[0].datasetId).toBeNull();
+  });
+});
+
+describe("useApp importFilesAppended (gap #47 — multi-file append import)", () => {
+  const fakeFile = (name: string, size = 10) => new File(["x".repeat(size)], name);
+
+  // A failed/mismatched append degrades to importFiles, which re-uploads every
+  // file from scratch — so uploadFile is called MORE than once per file on
+  // that path. Key the mock off the filename (not call order) so it behaves
+  // the same on the append attempt and the fallback retry. (Deliberately no
+  // local beforeEach calling .mockReset()/.mockClear() on this hoisted
+  // vi.mock() function — the top-of-file beforeEach's vi.clearAllMocks()
+  // already resets call state, and re-resetting here breaks a subsequently
+  // assigned .mockImplementation() under this project's toolchain.)
+
+  it("requires ≥2 files", async () => {
+    await useApp.getState().importFilesAppended([fakeFile("a.dat")]);
+    expect(useApp.getState().datasets).toHaveLength(0);
+  });
+
+  it("uploads every file and concatenates them row-wise into ONE dataset", async () => {
+    const a: DataStruct = { time: [1, 2], values: [[10], [20]], labels: ["m"], units: ["emu"], metadata: {} };
+    const b: DataStruct = { time: [3, 4], values: [[30], [40]], labels: ["m"], units: ["emu"], metadata: {} };
+    const c: DataStruct = { time: [5], values: [[50]], labels: ["m"], units: ["emu"], metadata: {} };
+    vi.mocked(uploadFile)
+      .mockResolvedValueOnce(a)
+      .mockResolvedValueOnce(b)
+      .mockResolvedValueOnce(c);
+
+    await useApp.getState().importFilesAppended([
+      fakeFile("day1.dat"),
+      fakeFile("day2.dat"),
+      fakeFile("day3.dat"),
+    ]);
+
+    const ds = useApp.getState().datasets;
+    expect(ds).toHaveLength(1); // one appended dataset, not three
+    expect(ds[0].data.time).toEqual([1, 2, 3, 4, 5]);
+    expect(ds[0].data.values).toEqual([[10], [20], [30], [40], [50]]);
+    expect(ds[0].data.metadata.merged_from).toBe("day1.dat + day2.dat + day3.dat");
+    expect(ds[0].data.metadata.merged_count).toBe(3);
+    expect(useApp.getState().status).toContain("appended 3 files");
+  });
+
+  it("degrades to separate imports (with a toast) on a column-count mismatch", async () => {
+    const narrow: DataStruct = { time: [1], values: [[1]], labels: ["m"], units: ["emu"], metadata: {} };
+    const wide: DataStruct = {
+      time: [2],
+      values: [[2, 3]],
+      labels: ["m", "T"],
+      units: ["emu", "K"],
+      metadata: {},
+    };
+    vi.mocked(uploadFile).mockImplementation(async (file: File) =>
+      file.name === "a.dat" ? narrow : wide,
+    );
+
+    await useApp.getState().importFilesAppended([fakeFile("a.dat"), fakeFile("b.dat")]);
+
+    // mismatch falls back to importFiles: N separate datasets, never a dead import.
+    const ds = useApp.getState().datasets;
+    expect(ds).toHaveLength(2);
+    expect(ds.map((d) => d.name)).toEqual(["a.dat", "b.dat"]);
+  });
+
+  it("degrades to separate imports when a file is a multi-workbook Origin project", async () => {
+    const plain: DataStruct = { time: [1], values: [[1]], labels: ["m"], units: ["emu"], metadata: {} };
+    const bookish = (short: string) => ({ ...plain, metadata: { origin_book: short } });
+    vi.mocked(uploadFile).mockImplementation(async (file: File) =>
+      file.name === "a.dat" ? plain : { ...plain, books: [bookish("Book1"), bookish("Book2")] },
+    );
+
+    await useApp.getState().importFilesAppended([fakeFile("a.dat"), fakeFile("Proj.opj")]);
+
+    // falls back to importFiles, which fans the project out into its own books.
+    const st = useApp.getState();
+    expect(st.datasets.map((d) => d.name)).toEqual(["a.dat", "Proj:Book1", "Proj:Book2"]);
+  });
+
+  it("surfaces a per-file upload failure and degrades to separate imports", async () => {
+    const ok: DataStruct = { time: [1], values: [[1]], labels: ["m"], units: ["emu"], metadata: {} };
+    vi.mocked(uploadFile).mockImplementation(async (file: File) => {
+      if (file.name === "bad.zzz") throw new Error("unknown format");
+      return ok;
+    });
+
+    await useApp.getState().importFilesAppended([fakeFile("bad.zzz"), fakeFile("good.dat")]);
+
+    const st = useApp.getState();
+    expect(st.datasets).toHaveLength(1); // only the file that succeeded on retry
+    expect(st.datasets[0].name).toBe("good.dat");
+  });
+});
+
+describe("useApp pasteDataFromClipboard (gap #47 — structured clipboard paste)", () => {
+  const readText = vi.fn();
+
+  // readText is a plain local vi.fn() (not from the hoisted vi.mock()
+  // factory), so resetting it directly is safe; guessImportSettings /
+  // parseImportText ARE from that factory — every test that exercises them
+  // sets a fresh .mockResolvedValue()/.mockRejectedValue() itself, so they
+  // don't need (and deliberately don't get) a reset here.
+  beforeEach(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { readText },
+      configurable: true,
+    });
+    readText.mockReset();
+  });
+
+  it("reads the clipboard and imports it through the guess/parse text engine", async () => {
+    readText.mockResolvedValue("x\ty\n1\t2\n3\t4\n");
+    vi.mocked(guessImportSettings).mockResolvedValue({ delimiter: "\t" });
+    const parsed: DataStruct = {
+      time: [1, 3],
+      values: [[2], [4]],
+      labels: ["y"],
+      units: [""],
+      metadata: {},
+    };
+    vi.mocked(parseImportText).mockResolvedValue(parsed);
+
+    await useApp.getState().pasteDataFromClipboard();
+
+    expect(guessImportSettings).toHaveBeenCalledWith("x\ty\n1\t2\n3\t4\n");
+    expect(parseImportText).toHaveBeenCalledWith("x\ty\n1\t2\n3\t4\n", { delimiter: "\t" });
+    const ds = useApp.getState().datasets;
+    expect(ds).toHaveLength(1);
+    expect(ds[0].name).toBe("pasted data 1");
+    expect(ds[0].data).toEqual(parsed);
+    expect(useApp.getState().status).toContain("pasted data 1");
+  });
+
+  it("names successive pastes pasted data 1, 2, …", async () => {
+    readText.mockResolvedValue("x\n1\n2\n");
+    vi.mocked(guessImportSettings).mockResolvedValue({});
+    const parsed: DataStruct = { time: [1, 2], values: [[1], [2]], labels: ["x"], units: [""], metadata: {} };
+    vi.mocked(parseImportText).mockResolvedValue(parsed);
+
+    await useApp.getState().pasteDataFromClipboard();
+    await useApp.getState().pasteDataFromClipboard();
+
+    const names = useApp.getState().datasets.map((d) => d.name);
+    expect(names.at(-2)).toMatch(/^pasted data \d+$/);
+    expect(names.at(-1)).toMatch(/^pasted data \d+$/);
+    expect(names.at(-1)).not.toBe(names.at(-2));
+  });
+
+  it("surfaces a status message and adds nothing when the clipboard is empty", async () => {
+    readText.mockResolvedValue("   ");
+    const before = useApp.getState().datasets.length;
+
+    await useApp.getState().pasteDataFromClipboard();
+
+    expect(useApp.getState().datasets).toHaveLength(before);
+    expect(useApp.getState().status).toMatch(/empty/i);
+  });
+
+  it("surfaces a status message when the clipboard read is denied", async () => {
+    readText.mockRejectedValue(new Error("permission denied"));
+    const before = useApp.getState().datasets.length;
+
+    await useApp.getState().pasteDataFromClipboard();
+
+    expect(useApp.getState().datasets).toHaveLength(before);
+    expect(useApp.getState().status).toMatch(/clipboard/i);
+  });
+
+  it("surfaces the backend's error message and adds nothing on a parse failure", async () => {
+    readText.mockResolvedValue("garbage");
+    vi.mocked(guessImportSettings).mockResolvedValue({});
+    vi.mocked(parseImportText).mockRejectedValue(new Error("no data rows found"));
+    const before = useApp.getState().datasets.length;
+
+    await useApp.getState().pasteDataFromClipboard();
+
+    expect(useApp.getState().datasets).toHaveLength(before);
+    expect(useApp.getState().status).toBe("no data rows found");
   });
 });
 

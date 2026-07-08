@@ -53,7 +53,7 @@ import { makeDemoDataset } from "./lib/demo";
 import { clearAutosave, loadAutosave, saveAutosave } from "./lib/autosave";
 import { saveBlob } from "./lib/download";
 import { buildExportStyles } from "./lib/exportStyles";
-import { openFilePicker } from "./lib/openFilePicker";
+import { IMPORT_ACCEPT, openFilePicker } from "./lib/openFilePicker";
 import { toolForKey } from "./lib/plotToolKeys";
 import { parseWorkspace, serializeWorkspace } from "./lib/workspace";
 import { toast } from "./store/toasts";
@@ -267,6 +267,15 @@ export default function App() {
           e.preventDefault();
           openFilePicker((files) => void s.importFiles(files));
           break;
+        case "v":
+          // Only claim ⌘/Ctrl+V as "paste a dataset" when the user isn't typing
+          // into a field (rename, tag, formula, dialog input) — those keep the
+          // browser's native paste. Command palette / Edit menu always work.
+          if (!isEditing(e.target)) {
+            e.preventDefault();
+            void s.pasteDataFromClipboard();
+          }
+          break;
         case "[":
           e.preventDefault();
           s.toggleLeft();
@@ -302,6 +311,13 @@ export default function App() {
         label: "Import data…",
         shortcut: "⌘O",
         run: () => openFilePicker((files) => void s().importFiles(files)),
+      },
+      {
+        id: "import-append",
+        group: "File",
+        label: "Import & append as one dataset…",
+        keywords: "combine concatenate merge multi-file append",
+        run: () => openFilePicker((files) => void s().importFilesAppended(files), IMPORT_ACCEPT),
       },
       {
         id: "demo",
@@ -760,6 +776,14 @@ export default function App() {
         label: "Command palette…",
         shortcut: "⌘K",
         run: () => s().setCmdk(true),
+      },
+      {
+        id: "paste-data",
+        group: "Edit",
+        label: "Paste data",
+        shortcut: "⌘V",
+        keywords: "clipboard import tsv csv table",
+        run: () => void s().pasteDataFromClipboard(),
       },
       // ── Data ──
       {

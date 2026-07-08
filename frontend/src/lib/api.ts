@@ -70,6 +70,24 @@ export async function uploadFile(file: File): Promise<DataStruct> {
   return unwrap<DataStruct>(res);
 }
 
+/** Best-effort starting import settings for raw text (delimiter, header/units
+ *  lines, column roles) — the same guesser behind the import wizard's first
+ *  render (`io.import_preview.guess_settings`). Used by clipboard paste
+ *  (gap #47) so pasted text imports through the one shared text-import engine
+ *  instead of a second parser. */
+export function guessImportSettings(text: string): Promise<Record<string, unknown>> {
+  return postJSON<Record<string, unknown>>("/api/import/guess", { text });
+}
+
+/** Parse raw text under `settings` (from `guessImportSettings`, or a caller's
+ *  own tweak of it) into a DataStruct — the import wizard's "confirm" step. */
+export function parseImportText(
+  text: string,
+  settings: Record<string, unknown>,
+): Promise<DataStruct> {
+  return postJSON<DataStruct>("/api/import/parse", { text, settings });
+}
+
 export interface PlotRequest {
   dataset: DataStruct;
   x_key?: number | string | null;

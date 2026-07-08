@@ -8,6 +8,8 @@ import {
   applyCorrections as applyCorrectionsApi,
   fftSpectral,
   fitModel,
+  guessImportSettings,
+  parseImportText,
   peaksIntegrate,
   statsDescriptive,
   uploadFile,
@@ -104,6 +106,9 @@ let _idSeq = 0;
 const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
 const nextFolderId = (): string => `fld-${Date.now().toString(36)}-${++_idSeq}`;
 const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_idSeq}`;
+
+// Names successive clipboard pastes "pasted data 1", "pasted data 2", … (gap #47).
+let _pasteSeq = 0;
 
 // Recalc scheduler internals (#1): a module-level debounce timer plus an
 // in-progress guard so the recalc's own applyCorrections calls never re-mark
@@ -370,6 +375,17 @@ interface AppState {
 
   addDataset: (ds: Dataset) => void;
   importFiles: (files: File[]) => Promise<void>;
+  // Import ≥2 files and concatenate them row-wise into ONE dataset (gap #47) —
+  // the alternative to importFiles' N-separate-datasets result, for same-shape
+  // multi-file series (e.g. a scan split across daily files). Falls back to
+  // importFiles (separate datasets + a toast) on a shape mismatch or an Origin
+  // multi-workbook file, so it never produces a dead import.
+  importFilesAppended: (files: File[]) => Promise<void>;
+  // Import the OS clipboard's text through the shared paste/import-wizard text
+  // engine (`/api/import/guess` + `/parse`, gap #47) into a new dataset named
+  // "pasted data N". Tab/comma/semicolon/whitespace tables with or without a
+  // header row all work — it's the same guesser the import wizard uses.
+  pasteDataFromClipboard: () => Promise<void>;
   // Attach one import's worth of Origin figures (item 18), matched against the
   // dataset ids that same import just created. Internal to importFiles, but a
   // named action so it's directly testable.
@@ -931,6 +947,104 @@ export const useApp = create<AppState>((set, get) => ({
     if (added > 0) toast(`imported ${added} file${added === 1 ? "" : "s"}`, "ok");
     if (lastError) toast(lastError, "danger");
   },
+
+  // Upload every file, then concatenate them row-wise into ONE dataset instead
+  // of importFiles' N separate ones (gap #47) — for a same-shape multi-file
+  // series (e.g. a scan split across daily files). An Origin multi-workbook
+  // file (`data.books`) or a column-count mismatch (mergeDatasets's guard)
+  // can't append cleanly, so either degrades to importFiles (N separate
+  // datasets) with an explanatory toast — never a dead/half-finished import.
+  importFilesAppended: async (files) => {
+    if (files.length < 2) {
+      toast("append needs ≥2 files — use Import data… for one", "danger");
+      return;
+    }
+    get().setStatus(`importing ${files.length} files to append…`);
+    const uploaded: { name: string; size: number; data: DataStruct }[] = [];
+    let failReason = "";
+    for (const file of files) {
+      try {
+        const data = await uploadFile(file);
+        if (data.books && data.books.length > 1) {
+          failReason = `${file.name} is a multi-workbook Origin project — can't append`;
+          break;
+        }
+        uploaded.push({ name: file.name, size: file.size, data });
+      } catch (e) {
+        failReason = `${file.name}: ${e instanceof Error ? e.message : "error"}`;
+        break;
+      }
+    }
+    if (!failReason && uploaded.length === files.length) {
+      try {
+        const merged = mergeDatasets(
+          uploaded.map((u) => u.data),
+          uploaded.map((u) => u.name),
+        );
+        const id = nextDatasetId();
+        const name = `${uploaded[0].name} +${uploaded.length - 1} more (appended)`;
+        get().addDataset({ id, name, data: merged });
+        for (const u of uploaded) get().pushRecent(u.name, u.size);
+        get().recordMacro(
+          `Import (append) ${uploaded.length} files`,
+          `qz.importAppended(${lit(uploaded.map((u) => u.name))})`,
+          { kind: "import", params: { names: uploaded.map((u) => u.name) } },
+        );
+        const msg = `appended ${uploaded.length} files → ${merged.time.length} rows`;
+        get().setStatus(msg);
+        toast(msg, "ok");
+        return;
+      } catch (e) {
+        failReason = e instanceof Error ? e.message : "append failed (column-count mismatch)";
+      }
+    }
+    // Degrade to N separate datasets rather than a dead import.
+    toast(`${failReason} — importing separately instead`, "danger");
+    await get().importFiles(files);
+  },
+
+  // Import the OS clipboard's text (gap #47) through the same guess/parse text
+  // engine that backs the import wizard, so a pasted Excel/Origin selection or
+  // any tab/comma/semicolon/whitespace table (with or without a header row)
+  // lands as a correctly-parsed dataset — never a second parser.
+  pasteDataFromClipboard: async () => {
+    let text: string;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      const msg = "clipboard read failed — check browser permissions";
+      get().setStatus(msg);
+      toast(msg, "danger");
+      return;
+    }
+    if (!text.trim()) {
+      const msg = "clipboard is empty";
+      get().setStatus(msg);
+      toast(msg, "danger");
+      return;
+    }
+    get().setStatus("parsing pasted data…");
+    try {
+      const settings = await guessImportSettings(text);
+      const data = await parseImportText(text, settings);
+      _pasteSeq += 1;
+      const id = nextDatasetId();
+      const name = `pasted data ${_pasteSeq}`;
+      get().addDataset({ id, name, data });
+      get().recordMacro(`Paste ${name}`, `qz.pasteData(${lit(name)})`, {
+        kind: "import",
+        params: { name },
+      });
+      const msg = `${name} — ${data.time.length} rows, ${data.labels.length} column${data.labels.length === 1 ? "" : "s"}`;
+      get().setStatus(msg);
+      toast(msg, "ok");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "paste import failed";
+      get().setStatus(msg);
+      toast(msg, "danger");
+    }
+  },
+
   addOriginFigures: (stem, figures, datasetIds) =>
     set((s) => {
       const candidates = s.datasets.filter((d) => datasetIds.includes(d.id));
