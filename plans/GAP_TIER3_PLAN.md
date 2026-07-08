@@ -122,7 +122,14 @@ written below.
    (c) both. *Recommendation: (a) — it reuses the whole 2-D pipeline
    and keeps one representation; (b) falls out for free later via the
    existing map line-cut tools.*
-2. **GLM/survival dependency shape (#30)** — (a) statsmodels +
+2. *(SHIPPED 2026-07-07 — tools/audit_defaults.py 32-render contact
+   sheet + plans/design/DEFAULTS_AUDIT.md. Verdict: preset VALUES are
+   journal-grade; the bugs were declared-but-dead fields — per-preset
+   dpi/legend_location/marker_size now honored, mirrored box ticks added.
+   TASTE calls left for the owner in the audit doc: aps height vs
+   log-decade label thinning. Follow-ups booked: same dpi/tick gaps in
+   figure_map/figure_statplots; frontend DPI field doesn't sync to
+   preset.)* **GLM/survival dependency shape (#30)** — (a) statsmodels +
    lifelines in a new optional `stats` extra with guarded imports (the
    `office` extra pattern; clean core install); (b) runtime deps for
    everyone; (c) hand-roll logistic/Poisson IRLS + Kaplan-Meier in

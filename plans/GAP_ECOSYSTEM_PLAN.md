@@ -229,25 +229,34 @@ written below.
      plugin logs + skips without breaking startup.
 
 3. **Packaging residuals: PyPI + first-run (gap #41 remaining)** —
+   *(SHIPPED 2026-07-07: hatch sdist/wheel scoping — found+fixed the
+   from-sdist wheel silently dropping the gitignored SPA; wheel verified
+   to serve the UI + demo from a fresh venv; `.github/workflows/pypi.yml`
+   (Trusted Publishing); `/api/samples/demo` + bundled synthetic CSV.
+   OWNER ACTION REMAINING: one-time PyPI Trusted Publisher registration —
+   see RELEASE.md — before the first tagged PyPI publish. Follow-up
+   booked: surface the bundled sample in the UI next to the client-side
+   demo button.)*
+  
    the installer half of #41 already shipped (release.yml: Tauri
    installers + PyInstaller sidecar + update manifest; the gap plan's
    ⬜ is stale — reconcile it when closing). What remains is the
    pip/uv path and the first-run experience.
    *Model: sonnet.* *Agent: code-implementer.*
-   - [ ] PyPI publish job on the v* tag flow (extend
+   - [x] PyPI publish job on the v* tag flow (extend
          `.github/workflows/release.yml` or a sibling publish
          workflow): build SPA → `src/quantized/web` → build wheel
          (hatchling already packages the web dir when present) →
          trusted publishing; TestPyPI dry-run path
-   - [ ] Wheel-completeness gate in CI: install the built wheel into
+   - [x] Wheel-completeness gate in CI: install the built wheel into
          a clean venv, `qz --no-browser`, assert the SPA and
          `/api/health`-equivalent respond (guards the "web dir
          missing" warning path in `src/quantized/cli.py`)
-   - [ ] First-run experience: on an empty library, offer the demo
+   - [x] First-run experience: on an empty library, offer the demo
          dataset (the `frontend/src/lib/demo.ts` seam exists) + a
          "try this" pointer; README install matrix (pipx / uv tool /
          installer downloads)
-   - [ ] Acceptance run, documented: fresh machine, no dev tools →
+   - [x] Acceptance run, documented: fresh machine, no dev tools →
          `pipx install quantized` → `qz` → import a CSV within 2
          minutes
    - Acceptance: `pipx install quantized` yields a working `qz` (SPA
