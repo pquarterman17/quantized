@@ -132,38 +132,6 @@ written below.
 
 ## Tier 1 — High Impact
 
-2. **Drag-to-axis (gap #49, Graph Builder phase 1)** — drag a channel
-   chip from the Channels card or legend onto the plot's X / Y / Y2
-   axis regions to re-plot instantly.
-   *Model: sonnet.* *Agent: gui-interaction-expert.*
-   - [ ] New pure `frontend/src/lib/dragchannel.ts`: dataTransfer
-         payload encode/decode (dataset id + channel index + modeling
-         type via `frontend/src/lib/modeling.ts`
-         `channelModelingType`) and drop-zone resolution rules;
-         unit-tested
-   - [ ] Make channel rows draggable in
-         `frontend/src/components/Inspector/ChannelsCard.tsx` and
-         legend entries in
-         `frontend/src/components/Stage/PlotLegend.tsx` (HTML5 drag,
-         no new dep)
-   - [ ] Axis drop regions overlaid on
-         `frontend/src/components/Stage/PlotStage.tsx`: left band →
-         add to `setYKeys`, bottom band → `setXKey`, right band →
-         `setY2Keys` — existing store actions only, no new plot
-         machinery; active zone highlights with theme tokens; Esc
-         cancels
-   - [ ] Nominal chips dropped on X route through `setXKey` today and
-         surface the categorical intent (the categorical axis itself
-         renders once GAP_PLOTTYPES item 4 lands — cross-plan note,
-         degrade gracefully to numeric)
-   - [ ] Vitest: dragchannel lib + synthetic dragover/drop events on
-         the zone components; macro recording covered free via the
-         existing `setXKey` recorder
-   - Acceptance: dragging a channel chip onto the left axis adds it as
-     a Y series, onto the bottom axis makes it X, onto the right axis
-     lands it on Y2 — all instant, all through existing store actions,
-     all macro-recorded.
-
 3. **Graph Builder workshop (gap #51 phase 2)** — a drop-zone canvas
    (X, Y, Group, Facet) that morphs the mark as columns land; the
    plot-spec grammar is the contract every later feature replays.
@@ -343,3 +311,43 @@ written below.
   `store/quickfit.test.ts`, `components/Stage/useQuickFitChip.test.ts`,
   + `PlotResultChips.test.tsx` additions); the live drag gesture itself
   is un-tested in jsdom (canvas) — eyeball via `tools/visual`.
+
+- ~~**2. Drag-to-axis (gap #49, Graph Builder phase 1)**~~ (2026-07-07) —
+  channel chips in the Channels card and legend entries are HTML5-draggable
+  (`CHANNEL_DND` mime, mirrors the Library's `DATASET_DND`); dropping onto
+  one of three bands overlaid on `PlotStage` (bottom = X, left = Y, right =
+  Y2) re-plots through the SAME store actions the card's clicks already use
+  (`setXKey`/`setYKeys`/`setY2Keys` — no new plot machinery). New pure
+  `lib/dragaxis.ts`: `resolveAxisZone` (band-geometry hit-test against the
+  stage's own bounding rect) + `resolveAxisDrop` (the decision — validates
+  the payload against the active dataset, enforces the same invariants the
+  Channels card's click handlers do: a Label/Ignore-role channel can't ride
+  Y/Y2, the last primary Y series can't be moved to Y2, adding to Y
+  collapses back to the `yKeys=null` auto sentinel when the result matches
+  the dense default) + payload encode/decode. A nominal/ordinal chip
+  dropped on X still sets it (degrades to numeric) and surfaces a toast
+  ("categorical axes land with plot-types item 4"). New thin
+  `components/Stage/AxisDropZones.tsx` (the drop-target shim — one
+  listener set on the Stage's outer element catches drag events bubbled
+  from every descendant, so no per-band handlers are needed; the three
+  band `<div>`s are `pointer-events: none` visual-only, driven by local
+  enter/leave-depth + zone state) and `useAxisDrop.ts` (applies
+  `resolveAxisDrop`'s actions + the categorical toast, mirrors
+  `useQuickFitChip`'s extraction so `PlotStage.tsx` only grew 6 lines).
+  Macro recording is free (the real `setXKey`/`setYKeys`/`setY2Keys`
+  record their own steps) — verified directly. 54 new tests
+  (`lib/dragaxis.test.ts` — zone geometry + every drop-decision branch;
+  `components/Stage/AxisDropZones.test.tsx` — synthetic dragenter/
+  dragover/drop with a hand-built dataTransfer + a manually-constructed
+  event for clientX/clientY, since jsdom has no `DragEvent` constructor at
+  all and RTL's `fireEvent.dragOver`/`.drop` sugar silently drops
+  coordinates as a result; `components/Stage/useAxisDrop.test.ts`;
+  `ChannelsCard.test.tsx` (new) + `PlotLegend.test.tsx` additions).
+  Deviations: named the pure lib `lib/dragaxis.ts` (not the plan's
+  `lib/dragchannel.ts` — matches the parent task's explicit instruction);
+  Esc-cancel relies on native HTML5 DnD (the browser aborts the drag
+  before any `drop` fires — no extra code, same as the Library's
+  `DATASET_DND` precedent, which also has no Escape handling). Eyeball
+  caveat: the real drag gesture (cursor tracking, band visuals, drop
+  physically landing) is unverified in jsdom — eyeball via `tools/visual`
+  or a manual browser check.

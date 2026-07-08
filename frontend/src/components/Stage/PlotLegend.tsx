@@ -7,9 +7,10 @@
 import { useState } from "react";
 
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
+import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import type { SeriesStyle } from "../../lib/types";
-import { useApp } from "../../store/useApp";
+import { useActiveDataset, useApp } from "../../store/useApp";
 
 interface PlotLegendProps {
   series: PlotSeriesSpec[];
@@ -22,6 +23,7 @@ interface PlotLegendProps {
 }
 
 export default function PlotLegend({ series, styleList, plotted, hidden }: PlotLegendProps) {
+  const active = useActiveDataset();
   const hiddenChannels = useApp((s) => s.hiddenChannels);
   const toggleHidden = useApp((s) => s.toggleHidden);
   const seriesLabels = useApp((s) => s.seriesLabels);
@@ -107,10 +109,23 @@ export default function PlotLegend({ series, styleList, plotted, hidden }: PlotL
               toggleHidden(channel);
             }
           : undefined;
+        const draggable = isChannel && !!active;
         return (
           <div
             className="it"
             key={s.label}
+            draggable={draggable}
+            onDragStart={
+              draggable
+                ? (e) => {
+                    e.dataTransfer.setData(
+                      CHANNEL_DND,
+                      encodeChannelDrag({ datasetId: active!.id, channel }),
+                    );
+                    e.dataTransfer.effectAllowed = "copy";
+                  }
+                : undefined
+            }
             onClick={onClick}
             onDoubleClick={
               isChannel ? () => setEditing({ channel, value: seriesLabels[channel] ?? "" }) : undefined
@@ -124,7 +139,11 @@ export default function PlotLegend({ series, styleList, plotted, hidden }: PlotL
                   }
                 : undefined
             }
-            title={isChannel ? (isHidden ? "Click to show" : "Click to hide · double-click to rename · right-click for more") : undefined}
+            title={
+              isChannel
+                ? "Click to hide/show · double-click to rename · drag onto an axis band · right-click for more"
+                : undefined
+            }
             style={{
               opacity: isHidden ? 0.4 : 1,
               textDecoration: isHidden ? "line-through" : "none",

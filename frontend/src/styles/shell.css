@@ -231,6 +231,17 @@ body {
 .qzk-legend .ln { width: 16px; height: 3px; border-radius: 2px; }
 .qzk-legend .ln.dash { background: none !important; border-top: 2px dashed var(--capture); height: 0; }
 
+/* ── drag-to-axis (gap #49) ── */
+/* Band sizing MUST match lib/dragaxis.ts's resolveAxisZone (X_BAND_FRACTION/
+   Y_BAND_FRACTION/BAND_MIN_PX/BAND_MAX_PX) so the highlighted band always
+   matches where a drop actually lands. */
+.qzk-axis-drop-zones { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+.qzk-axis-zone { position: absolute; background: color-mix(in srgb, var(--accent) 7%, transparent); border: 1px dashed var(--border); transition: background 0.1s ease, border-color 0.1s ease; }
+.qzk-axis-zone.active { background: color-mix(in srgb, var(--accent) 24%, transparent); border-color: var(--accent); }
+.qzk-axis-zone.x { left: 0; right: 0; bottom: 0; height: clamp(32px, 22%, 88px); }
+.qzk-axis-zone.y { top: 0; left: 0; bottom: 0; width: clamp(32px, 16%, 88px); }
+.qzk-axis-zone.y2 { top: 0; right: 0; bottom: 0; width: clamp(32px, 16%, 88px); }
+
 /* worksheet */
 .qzk-sheet { flex: 1; overflow: auto; background: var(--surface-0); }
 .qzk-sheet table { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: var(--font-size-sm); }

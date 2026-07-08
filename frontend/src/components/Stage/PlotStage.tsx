@@ -28,6 +28,7 @@ import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { toast } from "../../store/toasts";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
+import AxisDropZones from "./AxisDropZones";
 import InsetPlot from "./InsetPlot";
 import MultiPanelStage from "./MultiPanelStage";
 import PlotLegend from "./PlotLegend";
@@ -35,6 +36,7 @@ import PlotReadouts from "./PlotReadouts";
 import PlotResultChips from "./PlotResultChips";
 import PlotToolbar from "./PlotToolbar";
 import PolarStage from "./PolarStage";
+import { useAxisDrop } from "./useAxisDrop";
 import { useQuickFitChip } from "./useQuickFitChip";
 
 export default function PlotStage() {
@@ -85,6 +87,7 @@ export default function PlotStage() {
   const setFwhmResult = useApp((s) => s.setFwhmResult);
   const setQfitRoi = useApp((s) => s.setQfitRoi);
   const qfit = useQuickFitChip();
+  const onAxisDrop = useAxisDrop();
   // stack/inset/polar values gate the alternate render modes here; their toggle
   // setters live in PlotToolbar, which owns the tool dock.
   const stackMode = useApp((s) => s.stackMode);
@@ -378,7 +381,11 @@ export default function PlotStage() {
   };
 
   return (
-    <div className={`qzk-stage tool-${tool}`} onContextMenu={onStageContextMenu}>
+    <AxisDropZones
+      className={`qzk-stage tool-${tool}`}
+      onContextMenu={onStageContextMenu}
+      onAxisDrop={onAxisDrop}
+    >
       <div ref={hostRef} style={{ position: "absolute", inset: 8 }} />
       {menu && <ContextMenu x={menu.x} y={menu.y} items={axesMenuItems()} onClose={() => setMenu(null)} />}
 
@@ -416,6 +423,6 @@ export default function PlotStage() {
       {displayPayload && showLegend && (
         <PlotLegend series={displayPayload.series} styleList={styleList} plotted={plotted} hidden={hidden} />
       )}
-    </div>
+    </AxisDropZones>
   );
 }
