@@ -68,6 +68,25 @@ describe("ZoneWell", () => {
     expect(onAssign).not.toHaveBeenCalled();
   });
 
+  it("calls onReject('dataset') for a foreign-dataset drop, when provided", () => {
+    const onAssign = vi.fn();
+    const onReject = vi.fn();
+    const { container } = render(
+      <ZoneWell
+        title="X"
+        datasetId="d1"
+        options={OPTIONS}
+        assigned={[]}
+        onAssign={onAssign}
+        onRemove={() => {}}
+        onReject={onReject}
+      />,
+    );
+    fireDrag(container.querySelector(".qzk-zone-well")!, "drop", channelDataTransfer("OTHER", 1));
+    expect(onAssign).not.toHaveBeenCalled();
+    expect(onReject).toHaveBeenCalledWith("dataset");
+  });
+
   it("does not react to a non-channel (OS file) drag", () => {
     const onAssign = vi.fn();
     const { container } = render(

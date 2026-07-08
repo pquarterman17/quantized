@@ -39,6 +39,10 @@ export interface ZoneWellProps {
   multiple?: boolean;
   onAssign: (channel: number) => void;
   onRemove: (channel: number) => void;
+  /** Optional: a channel-drag reached this well but was rejected (foreign
+   *  dataset or a malformed payload) — callers can surface a toast. Omit for
+   *  the original silent-reject behavior (dragging is exploratory). */
+  onReject?: (reason: "dataset" | "malformed") => void;
 }
 
 /** Does a drag carry our channel-chip payload (vs an OS file / foreign drag)? */
@@ -56,6 +60,7 @@ export default function ZoneWell({
   multiple = false,
   onAssign,
   onRemove,
+  onReject,
 }: ZoneWellProps) {
   const [over, setOver] = useState(false);
 
@@ -70,8 +75,14 @@ export default function ZoneWell({
     if (!isChannelDrag(e.dataTransfer)) return;
     e.preventDefault();
     const payload = decodeChannelDrag(e.dataTransfer.getData(CHANNEL_DND));
-    if (!payload) return; // malformed — ignore rather than throw mid-drop
-    if (datasetId && payload.datasetId !== datasetId) return; // foreign dataset
+    if (!payload) {
+      onReject?.("malformed"); // ignore rather than throw mid-drop
+      return;
+    }
+    if (datasetId && payload.datasetId !== datasetId) {
+      onReject?.("dataset"); // foreign dataset
+      return;
+    }
     onAssign(payload.channel);
   };
 

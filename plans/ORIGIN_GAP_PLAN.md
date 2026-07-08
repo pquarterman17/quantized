@@ -161,10 +161,11 @@ Also landed 2026-07-03 (beyond the table): #16 statistical-plot math + export,
 public API, **#42 Bruker `.raw`/`.brml` parsers**, and **#43 JCAMP-DX + NetCDF
 import** (both formats done). The #50 row-state stack cores also shipped
 2026-07-03: **#52 Distribution**, **#53 local data filter**, **#55 Tabulate**
-(each keeps a "Remaining" note in its W9 item body — those notes, not this
-table, are the live status). The parser workstream (W8 #42/#43) is now
-complete for the targeted formats — remaining open work is overwhelmingly
-frontend (needs UX direction).
+(#52/#53 each still keep a "Remaining" note in their W9 item body — those
+notes, not this table, are the live status; **#55 fully closed 2026-07-07**,
+see Completed). The parser workstream (W8 #42/#43) is now complete for the
+targeted formats — remaining open work is overwhelmingly frontend (needs UX
+direction).
 
 ---
 
@@ -633,26 +634,19 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
     exclusion ∪ filter, applied via `maskExcludedPayload` in PlotStage
     since the #50 cross-view pass; reconciled 2026-07-07).*
 
-### Tier 3 — Nice-to-Have
-
-55. **Tabulate (drag-drop pivot)** — drag columns into row/column/value
-    wells to build group summary tables (mean/sd/count by category),
-    exportable as a dataset or report block (#36)
-    *Model: sonnet. Pickup: group-by math is `descriptive_stats` per
-    partition (pure calc); the well UI reuses #51's drop-zone
-    components.*
-    *CORE SHIPPED 2026-07-03: Tabulate ToolWindow (`workshops/tabulate`) —
-    pure `lib/tabulate` group-by (count/mean/sd/min/max/median), select-
-    based group/value column pickers (defaults to the first categorical
-    column via `lib/modeling`), a summary table, and export → new dataset
-    + copy TSV. Honors row exclusion (#50) via `rowstate.analysisData`.
-    Remaining: drag-drop wells (needs #51's drop zones) and report-block
-    export (#36).*
-
 ---
 
 ## Completed
 
+- ~~**#55 Tabulate (drag-drop pivot)**~~ (2026-07-07) — CORE shipped
+  2026-07-03 (`workshops/tabulate`: pure `lib/tabulate` group-by, select-
+  based pickers, summary table, export → dataset + copy TSV, honors #50 row
+  exclusion). The two remaining pieces (drag-drop wells + report-block
+  export) shipped 2026-07-07 via `plans/GAP_INTERACTION_PLAN.md` item 8 —
+  see that plan's Completed entry for the full breakdown (ZoneWell reuse,
+  the `reportEmit`/`from_stats_table` report ending, the new `onReject`
+  toast on a cross-dataset drop). #55 is now fully closed, no remaining
+  work.
 - ~~**#16 Statistical plots**~~ (2026-07-07) — the interactive half
   (calc + export shipped 2026-07-03): `Stage/StatStage.tsx` Canvas2D
   stage (the `PolarStage.tsx` precedent) over box/violin/Q-Q/
