@@ -1,0 +1,99 @@
+name: pypi
+
+# Tag a version (v0.1.0 …) → build the SPA, build the sdist + wheel, smoke-test
+# the wheel in a clean venv, and publish to PyPI via Trusted Publishing (OIDC —
+# no token secrets, see https://docs.pypi.org/trusted-publishers/). A manual
+# dispatch runs the same build + smoke-test and instead publishes to TestPyPI,
+# so the pipeline can be validated without cutting a real release (the
+# release.yml installer workflow's "manual dry run" convention, extended here
+# with an actual publish target instead of just uploading run artifacts).
+#
+# One-time setup (see RELEASE.md): register this repo as a Trusted Publisher
+# on both pypi.org and test.pypi.org, and create the `pypi` / `testpypi`
+# GitHub Environments referenced below.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# Least privilege at the workflow level; the publish job elevates only the
+# OIDC token it needs, scoped to its own job.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build + smoke-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build SPA (→ src/quantized/web)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      - name: Smoke-test the wheel in a clean venv
+        run: |
+          set -euo pipefail
+          wheel=$(ls dist/*.whl)
+          uv venv .smoke-venv
+          # shellcheck disable=SC1091
+          source .smoke-venv/bin/activate
+          uv pip install "$wheel"
+          qz --help
+          python -c "import quantized; print('quantized', quantized.__version__)"
+          python -c "
+          import importlib.resources
+          pkg = importlib.resources.files('quantized')
+          spa = pkg / 'web' / 'index.html'
+          demo = pkg / 'samples' / 'demo_vsm.csv'
+          assert spa.is_file(), f'SPA missing from installed wheel: {spa}'
+          assert demo.is_file(), f'demo sample missing from installed wheel: {demo}'
+          print('SPA OK:', spa)
+          print('demo sample OK:', demo)
+          "
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pypi-dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: publish (${{ github.event_name == 'workflow_dispatch' && 'TestPyPI' || 'PyPI' }})
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'testpypi' || 'pypi' }}
+    permissions:
+      id-token: write # OIDC for Trusted Publishing — no API token secret
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: pypi-dist
+          path: dist
+
+      - name: Publish to TestPyPI (manual dry run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+      - name: Publish to PyPI (tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: pypa/gh-action-pypi-publish@release/v1

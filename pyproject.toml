@@ -61,8 +61,33 @@ bundle = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# Hatchling's default sdist has no include/exclude list, so it sweeps in the
+# whole repo (frontend/node_modules alone is 5000+ files) — scope it to just
+# what a build needs: the package sources (including src/quantized/web/, the
+# gitignored Vite build output, and src/quantized/samples/, the bundled demo
+# dataset — both walked from disk, not from git, so they're picked up when
+# present) plus top-level metadata. Build the SPA BEFORE `uv build` / `python
+# -m build` (`cd frontend && npm ci && npm run build`) or the wheel ships
+# without a UI (qz still runs — see cli.py's "UI not built" warning).
+[tool.hatch.build.targets.sdist]
+include = ["src/quantized", "README.md", "LICENSE", "NOTICE"]
+# Hatchling force-includes LICENSE*/README*-named files project-wide by
+# default (a footgun here: every vendored npm package under
+# frontend/node_modules ships its own LICENSE + README.md) — exclude wins
+# over that default, so this is required even with the include list above.
+exclude = ["frontend/**"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/quantized"]
+# `packages` alone only reliably ships src/quantized/web/ when hatchling
+# builds directly against a live git checkout; building the wheel FROM an
+# sdist (what `uv build`/`python -m build` do by default, and what the
+# publish workflow does) drops it, since that step can't see this repo's
+# .git and treats the gitignored build output as excluded. `artifacts` is
+# hatchling's explicit "include this even though it looks ignored" escape
+# hatch — force it so the SPA ships in both the direct-build and
+# build-from-sdist paths.
+artifacts = ["src/quantized/web/**"]
 
 [tool.ruff]
 line-length = 100
