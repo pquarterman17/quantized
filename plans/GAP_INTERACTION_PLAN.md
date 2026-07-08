@@ -144,23 +144,7 @@ written below.
 
 ## Tier 3 — Nice-to-Have
 
-7. **Data-filter dual-thumb sliders (gap #53 residual)** — replace the
-   min/max number-field pair with a proper range slider; optionally
-   close the worksheet-reflect asymmetry.
-   *Model: sonnet.* *Agent: ux-frontend-expert.*
-   - [ ] New dual-thumb `RangeSlider` primitive in
-         `frontend/src/components/primitives/index.tsx` (keyboard
-         accessible, theme tokens, JetBrains Mono value readouts)
-   - [ ] Swap it into the range branch of
-         `frontend/src/components/workshops/datafilter/DataFilterPanel.tsx`,
-         committing through the existing `setRange` in
-         `useDataFilter.ts`; keep the NumberFields as fine-entry twins
-   - [ ] (Per open question 4) grey filter-dropped rows in the
-         worksheet via one `rowstate.droppedRows` read in
-         `frontend/src/components/Stage/WorksheetTable.tsx`
-   - Acceptance: dragging either thumb live-filters every linked view
-     (plot ghosting, Tabulate, Distribution) without mutating the
-     dataset; slider and number fields stay in sync.
+(all shipped — see `## Completed`)
 
 ---
 
