@@ -32,6 +32,7 @@ import {
 import {
   createFolder as treeCreateFolder,
   deleteFolder as treeDeleteFolder,
+  migrateGroupsToFolders,
   moveDatasetToFolder as treeMoveDatasetToFolder,
   moveFolder as treeMoveFolder,
   renameFolder as treeRenameFolder,
@@ -1240,11 +1241,19 @@ export const useApp = create<AppState>((set, get) => ({
   // Replace the whole library with a restored workspace (from a .dwk file).
   // Resets every per-dataset view (channels, styles, axis limits) and drops the
   // overlays/markers tied to the old datasets — same hygiene as setActive.
+  // Runs on BOTH triggers that call this action: the autosave restore on
+  // startup, and an explicit File ▸ Open .dwk — so a legacy v1 doc's `group`
+  // strings get promoted to folders (item 6) either way, exactly once.
   loadWorkspace: (ws) =>
     set((s) => {
-      const { datasets } = ws;
+      // v1/legacy compat: promote any un-foldered `Dataset.group` into a
+      // root-level folder before anything else reads `datasets`/`folders` —
+      // idempotent, so reloading an already-migrated workspace is a no-op.
+      const migrated = migrateGroupsToFolders(ws.folders ?? [], ws.datasets, nextFolderId);
+      const datasets = migrated.datasets;
       // Restore the persisted active/selection (v2); v1 or a stale id falls back
-      // to the first dataset. Folders + expansion come straight from the doc.
+      // to the first dataset. Folders + expansion come straight from the doc
+      // (plus any folder the group migration just created, auto-revealed).
       const active =
         ws.activeId && datasets.some((d) => d.id === ws.activeId)
           ? ws.activeId
@@ -1253,8 +1262,8 @@ export const useApp = create<AppState>((set, get) => ({
       const selected = (ws.selectedIds ?? []).filter((id) => datasets.some((d) => d.id === id));
       return {
         datasets,
-        folders: ws.folders ?? [],
-        expandedFolders: ws.expandedFolders ?? [],
+        folders: migrated.folders,
+        expandedFolders: [...new Set([...(ws.expandedFolders ?? []), ...migrated.createdFolderIds])],
         activeId: active,
         selectedIds: selected.length ? selected : active ? [active] : [],
         originFigures: ws.originFigures ?? [], // restored from the .dwk (v2 persists them)

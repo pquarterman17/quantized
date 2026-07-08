@@ -1,9 +1,11 @@
-import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { folderDatasets } from "../../lib/foldertree";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import DatasetRow from "./DatasetRow";
+import { DATASET_DND } from "./useLibraryTree";
 
 const plain: Dataset = {
   id: "plain",
@@ -47,5 +49,122 @@ describe("DatasetRow sheet affordance", () => {
     const { container } = render(<DatasetRow dataset={sheet1} {...baseProps} sheetNumber={2} />);
     expect(screen.getByText(/sheet 2/)).toBeInTheDocument();
     expect(container.querySelector(".qzk-ds")).toHaveClass("qzk-ds-sheet");
+  });
+});
+
+// project-organization plan item 3b: drop-between reorder. jsdom has no real
+// DnD or layout (see AxisDropZones.test.tsx's header note for the same
+// workaround this borrows: a hand-built DragEvent with clientX/clientY +
+// dataTransfer, dispatched via RTL's low-level fireEvent, plus a mocked
+// getBoundingClientRect).
+function datasetTransfer(id: string) {
+  return {
+    types: [DATASET_DND],
+    getData: (t: string) => (t === DATASET_DND ? id : ""),
+    setData: () => {},
+  };
+}
+const foreignTransfer = { types: ["Files"], getData: () => "", setData: () => {} };
+
+function fireDrag(el: Element, type: "dragover" | "drop", clientY: number, dataTransfer: unknown) {
+  const evt = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(evt, "clientX", { value: 10, configurable: true });
+  Object.defineProperty(evt, "clientY", { value: clientY, configurable: true });
+  Object.defineProperty(evt, "dataTransfer", { value: dataTransfer, configurable: true });
+  fireEvent(el, evt);
+}
+
+function setRowRect(el: Element) {
+  vi.spyOn(el, "getBoundingClientRect").mockReturnValue({
+    top: 100,
+    height: 40,
+    bottom: 140,
+    left: 0,
+    right: 200,
+    width: 200,
+    x: 0,
+    y: 100,
+    toJSON: () => "",
+  } as DOMRect);
+}
+
+describe("DatasetRow drop-between reorder", () => {
+  const dsA: Dataset = { id: "a", name: "a", data: plain.data, folderId: "f1", order: 0 };
+  const dsB: Dataset = { id: "b", name: "b", data: plain.data, folderId: "f1", order: 1 };
+  const dsC: Dataset = { id: "c", name: "c", data: plain.data, folderId: "f1", order: 2 };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [dsA, dsB, dsC],
+      folders: [{ id: "f1", name: "F", parentId: null, order: 0 }],
+      activeId: null,
+      selectedIds: [],
+    });
+  });
+
+  it("shows the above/below indicator class per the half the pointer is over", () => {
+    const { container } = render(<DatasetRow dataset={dsA} {...baseProps} />);
+    const row = container.querySelector(".qzk-ds")!;
+    setRowRect(row);
+    fireDrag(row, "dragover", 110, datasetTransfer("c")); // top half (100-120)
+    expect(row).toHaveClass("drop-above");
+    fireDrag(row, "dragover", 135, datasetTransfer("c")); // bottom half (120-140)
+    expect(row).toHaveClass("drop-below");
+    expect(row).not.toHaveClass("drop-above");
+  });
+
+  it("dropping on the top half inserts the dragged dataset before this row", () => {
+    const { container } = render(<DatasetRow dataset={dsA} {...baseProps} />);
+    const row = container.querySelector(".qzk-ds")!;
+    setRowRect(row);
+    fireDrag(row, "dragover", 110, datasetTransfer("c")); // top half
+    fireDrag(row, "drop", 110, datasetTransfer("c"));
+    // Order lives in the `.order` field (sort key), not the flat array's
+    // element position — read it back through the same folderDatasets view
+    // the tree renders through (mirrors lib/foldertree.test.ts's convention).
+    expect(folderDatasets(useApp.getState().datasets, "f1").map((d) => d.id)).toEqual(["c", "a", "b"]);
+  });
+
+  it("dropping on the bottom half inserts the dragged dataset after this row", () => {
+    const { container } = render(<DatasetRow dataset={dsA} {...baseProps} />);
+    const row = container.querySelector(".qzk-ds")!;
+    setRowRect(row);
+    fireDrag(row, "dragover", 135, datasetTransfer("c")); // bottom half
+    fireDrag(row, "drop", 135, datasetTransfer("c"));
+    expect(folderDatasets(useApp.getState().datasets, "f1").map((d) => d.id)).toEqual(["a", "c", "b"]);
+  });
+
+  it("dropping onto itself is a no-op", () => {
+    const { container } = render(<DatasetRow dataset={dsA} {...baseProps} />);
+    const row = container.querySelector(".qzk-ds")!;
+    setRowRect(row);
+    fireDrag(row, "drop", 110, datasetTransfer("a"));
+    expect(folderDatasets(useApp.getState().datasets, "f1").map((d) => d.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("moves a dataset from a different folder into this row's folder", () => {
+    useApp.setState({
+      datasets: [dsA, dsB, { ...dsC, folderId: "f2" }],
+      folders: [
+        { id: "f1", name: "F1", parentId: null, order: 0 },
+        { id: "f2", name: "F2", parentId: null, order: 1 },
+      ],
+    });
+    const { container } = render(<DatasetRow dataset={dsA} {...baseProps} />);
+    const row = container.querySelector(".qzk-ds")!;
+    setRowRect(row);
+    fireDrag(row, "drop", 110, datasetTransfer("c")); // top half of a (folder f1)
+    const s = useApp.getState();
+    expect(s.datasets.find((d) => d.id === "c")!.folderId).toBe("f1");
+    expect(folderDatasets(s.datasets, "f1").map((d) => d.id)).toEqual(["c", "a", "b"]);
+  });
+
+  it("ignores a non-dataset drag (e.g. an OS file drop)", () => {
+    const { container } = render(<DatasetRow dataset={dsA} {...baseProps} />);
+    const row = container.querySelector(".qzk-ds")!;
+    setRowRect(row);
+    fireDrag(row, "dragover", 110, foreignTransfer);
+    expect(row).not.toHaveClass("drop-above");
+    expect(row).not.toHaveClass("drop-below");
   });
 });

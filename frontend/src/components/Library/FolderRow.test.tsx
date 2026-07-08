@@ -1,0 +1,171 @@
+// project-organization plan item 3b: folder-onto-folder drag (reparent via the
+// middle band, reposition-as-sibling via the top/bottom edge bands) plus the
+// pre-existing dataset-onto-folder-header "drop into" behavior. jsdom has no
+// real DnD or layout — see AxisDropZones.test.tsx's header note for the same
+// workaround this borrows: a hand-built DragEvent with clientX/clientY +
+// dataTransfer, dispatched via RTL's low-level fireEvent, plus a mocked
+// getBoundingClientRect.
+
+import { fireEvent, render } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import FolderRow from "./FolderRow";
+import { DATASET_DND, FOLDER_DND } from "./useLibraryTree";
+import { childFolders } from "../../lib/foldertree";
+import type { Dataset, FolderNode } from "../../lib/types";
+import { useApp } from "../../store/useApp";
+
+function folderTransfer(id: string) {
+  return {
+    types: [FOLDER_DND],
+    getData: (t: string) => (t === FOLDER_DND ? id : ""),
+    setData: () => {},
+  };
+}
+function datasetTransfer(id: string) {
+  return {
+    types: [DATASET_DND],
+    getData: (t: string) => (t === DATASET_DND ? id : ""),
+    setData: () => {},
+  };
+}
+
+function fireDrag(el: Element, type: "dragover" | "drop", clientY: number, dataTransfer: unknown) {
+  const evt = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(evt, "clientX", { value: 10, configurable: true });
+  Object.defineProperty(evt, "clientY", { value: clientY, configurable: true });
+  Object.defineProperty(evt, "dataTransfer", { value: dataTransfer, configurable: true });
+  fireEvent(el, evt);
+}
+
+// height 40 → edge band = min(40/3, max(6, 10)) = 10: above y<110, into
+// 110<=y<=130, below y>130 (rect top pinned at 100 by setRowRect).
+function setRowRect(el: Element) {
+  vi.spyOn(el, "getBoundingClientRect").mockReturnValue({
+    top: 100,
+    height: 40,
+    bottom: 140,
+    left: 0,
+    right: 200,
+    width: 200,
+    x: 0,
+    y: 100,
+    toJSON: () => "",
+  } as DOMRect);
+}
+
+const fld = (id: string, parentId: string | null, order: number): FolderNode => ({
+  id,
+  name: id,
+  parentId,
+  order,
+});
+const ds = (id: string, folderId?: string): Dataset => ({
+  id,
+  name: id,
+  data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} },
+  ...(folderId ? { folderId } : {}),
+});
+
+const baseProps = { depth: 0, count: 0, expanded: false };
+
+describe("FolderRow — dataset drop (pre-existing whole-row target)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [ds("d1")],
+      folders: [fld("target", null, 0)],
+      expandedFolders: [],
+    });
+  });
+
+  it("moves a dropped dataset into this folder and expands it", () => {
+    const { container } = render(<FolderRow folder={fld("target", null, 0)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    fireDrag(row, "drop", 0, datasetTransfer("d1"));
+    expect(useApp.getState().datasets[0].folderId).toBe("target");
+    expect(useApp.getState().expandedFolders).toContain("target");
+  });
+});
+
+describe("FolderRow — folder drop (project-organization plan item 3b)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [],
+      folders: [fld("a", null, 0), fld("b", null, 1), fld("c", null, 2)],
+      expandedFolders: [],
+    });
+  });
+
+  it("shows dropinto for the middle band and drop-above/below for the edge bands", () => {
+    const { container } = render(<FolderRow folder={fld("b", null, 1)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    setRowRect(row);
+    fireDrag(row, "dragover", 105, folderTransfer("c")); // top edge
+    expect(row).toHaveClass("drop-above");
+    fireDrag(row, "dragover", 120, folderTransfer("c")); // middle
+    expect(row).toHaveClass("dropinto");
+    fireDrag(row, "dragover", 135, folderTransfer("c")); // bottom edge
+    expect(row).toHaveClass("drop-below");
+  });
+
+  it("reparents into the target on a middle-band drop", () => {
+    const { container } = render(<FolderRow folder={fld("b", null, 1)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    setRowRect(row);
+    fireDrag(row, "drop", 120, folderTransfer("c")); // middle band → "into"
+    const s = useApp.getState();
+    expect(s.folders.find((f) => f.id === "c")!.parentId).toBe("b");
+    expect(s.expandedFolders).toContain("b");
+  });
+
+  it("repositions as a sibling before the target on a top-edge drop", () => {
+    const { container } = render(<FolderRow folder={fld("b", null, 1)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    setRowRect(row);
+    fireDrag(row, "drop", 105, folderTransfer("c")); // top edge → "above"
+    const s = useApp.getState();
+    expect(childFolders(s.folders, null).map((f) => f.id)).toEqual(["a", "c", "b"]);
+  });
+
+  it("repositions as a sibling after the target on a bottom-edge drop", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    setRowRect(row);
+    fireDrag(row, "drop", 135, folderTransfer("c")); // bottom edge → "below"
+    const s = useApp.getState();
+    expect(childFolders(s.folders, null).map((f) => f.id)).toEqual(["a", "c", "b"]);
+  });
+
+  it("dropping a folder onto itself is a no-op", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    setRowRect(row);
+    fireDrag(row, "drop", 120, folderTransfer("a"));
+    expect(childFolders(useApp.getState().folders, null).map((f) => f.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("dropping a folder into its own descendant is a silent no-op (cycle guard)", () => {
+    useApp.setState({
+      folders: [fld("parent", null, 0), fld("child", "parent", 0)],
+    });
+    const { container } = render(<FolderRow folder={fld("child", "parent", 0)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    setRowRect(row);
+    fireDrag(row, "drop", 120, folderTransfer("parent")); // parent dropped INTO its own child
+    const s = useApp.getState();
+    // Unchanged: "parent" is still the root, "child" still its child.
+    expect(s.folders.find((f) => f.id === "parent")!.parentId).toBeNull();
+    expect(s.folders.find((f) => f.id === "child")!.parentId).toBe("parent");
+  });
+
+  it("ignores an unrelated drag type", () => {
+    const { container } = render(<FolderRow folder={fld("b", null, 1)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    setRowRect(row);
+    const foreign = { types: ["Files"], getData: () => "", setData: () => {} };
+    fireDrag(row, "dragover", 120, foreign);
+    expect(row).not.toHaveClass("dropinto");
+    expect(row).not.toHaveClass("drop-above");
+    expect(row).not.toHaveClass("drop-below");
+  });
+});

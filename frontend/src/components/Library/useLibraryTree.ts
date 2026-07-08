@@ -13,9 +13,17 @@ import type { OriginFigureEntry } from "../../lib/originFigures";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 
-/** dataTransfer type for an internal dataset drag (row → folder). Distinct from
- *  an OS file drop, so the Library's file-import handler can ignore these. */
+/** dataTransfer type for an internal dataset drag (row → folder, or row →
+ *  drop-between-rows to reorder — plan item 3b). Distinct from an OS file
+ *  drop, so the Library's file-import handler can ignore these. */
 export const DATASET_DND = "application/x-qz-dataset";
+
+/** dataTransfer type for an internal folder drag (folder header → folder
+ *  header, for reparent/reposition — plan item 3b). Distinct from
+ *  DATASET_DND so a drop target can tell a dragged folder from a dragged
+ *  dataset without decoding the payload (only `types` is readable during
+ *  dragover; the payload itself is only readable on drop). */
+export const FOLDER_DND = "application/x-qz-folder";
 
 export type TreeRow =
   | {

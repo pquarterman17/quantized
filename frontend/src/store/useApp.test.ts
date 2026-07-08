@@ -1608,6 +1608,45 @@ describe("useApp loadWorkspace", () => {
     expect(s.activeId).toBe("w2"); // persisted active honored, not datasets[0]
     expect(s.expandedFolders).toEqual(["f1"]);
   });
+
+  // project-organization plan item 6: a legacy v1 .dwk carries only `group`
+  // strings (no folder tree at all) — loadWorkspace must promote them.
+  it("migrates a v1 doc's legacy `group` strings into root folders on load", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [
+        { id: "w1", name: "a", data: raw, group: "Batch A" },
+        { id: "w2", name: "b", data: raw, group: "Batch A" },
+        { id: "w3", name: "c", data: raw }, // ungrouped — stays at root
+      ],
+    });
+    const s = useApp.getState();
+    expect(s.folders).toHaveLength(1);
+    expect(s.folders[0].name).toBe("Batch A");
+    const fid = s.folders[0].id;
+    expect(s.datasets.find((d) => d.id === "w1")!.folderId).toBe(fid);
+    expect(s.datasets.find((d) => d.id === "w2")!.folderId).toBe(fid);
+    expect(s.datasets.find((d) => d.id === "w3")!.folderId).toBeUndefined();
+    // group is cleared post-migration — the folder is now the source of truth.
+    expect(s.datasets.find((d) => d.id === "w1")!.group).toBeUndefined();
+    // the freshly-created folder is auto-revealed, not left collapsed+hidden.
+    expect(s.expandedFolders).toContain(fid);
+  });
+
+  it("re-loading an already-migrated workspace does not duplicate the folder", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "w1", name: "a", data: raw, group: "Batch A" }],
+    });
+    const first = useApp.getState();
+    const savedFolders = first.folders;
+    const savedDatasets = first.datasets;
+
+    // Simulate a re-open of the SAME (now-migrated) workspace — datasets carry
+    // folderId, no group; folders carry the one migrated folder.
+    useApp.getState().loadWorkspace({ datasets: savedDatasets, folders: savedFolders });
+    const second = useApp.getState();
+    expect(second.folders).toHaveLength(1); // still just one — no duplicate
+    expect(second.folders[0].id).toBe(first.folders[0].id);
+  });
 });
 
 describe("useApp tags", () => {

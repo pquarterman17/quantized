@@ -77,3 +77,53 @@ describe("Library — figures nested in the tree", () => {
     expect(screen.getByRole("button", { name: /MokeGraph/ })).toBeInTheDocument();
   });
 });
+
+// project-organization plan item 6: the group-chip UI (filter dropdown +
+// collapsible group sections) is retired — folders are the one organizational
+// model. A dataset that still carries a legacy `.group` (bypassing the
+// loadWorkspace migration, e.g. set directly on the store as a stale/edited
+// doc would) must NOT resurrect any of that UI; the flat-list fallback keeps
+// rendering it normally instead.
+describe("Library — group-chip UI retired (item 6)", () => {
+  const grouped = (id: string, group: string): Dataset => ({ ...dsWith(id), group });
+
+  it("never renders a group-filter dropdown, regardless of .group data", () => {
+    useApp.setState({
+      datasets: [grouped("a", "Batch A"), grouped("b", "Batch B")],
+      activeId: "a",
+      selectedIds: ["a"],
+    });
+    render(<Library />);
+    expect(screen.queryByTitle("Filter the library to one group")).not.toBeInTheDocument();
+    expect(screen.queryByText("All groups")).not.toBeInTheDocument();
+  });
+
+  it("never splits the list into collapsible group sections — falls back to a flat list", () => {
+    useApp.setState({
+      datasets: [grouped("a", "Batch A"), grouped("b", "Batch B")],
+      activeId: "a",
+      selectedIds: ["a"],
+    });
+    render(<Library />);
+    // Both datasets render as plain rows, not headed by a "Batch A"/"Batch B"
+    // collapsible section (the retired qzk-group-head rendering).
+    expect(screen.queryByText("Batch A")).not.toBeInTheDocument();
+    expect(screen.queryByText("Batch B")).not.toBeInTheDocument();
+    expect(screen.getByText("a")).toBeInTheDocument();
+    expect(screen.getByText("b")).toBeInTheDocument();
+  });
+
+  it("still renders normally (fallback intact) once folders exist alongside a stray .group", () => {
+    useApp.setState({
+      datasets: [grouped("a", "Batch A"), dsWith("b", "f1")],
+      folders: [folder("f1", "F1")],
+      expandedFolders: ["f1"],
+      activeId: "a",
+      selectedIds: ["a"],
+    });
+    render(<Library />);
+    expect(screen.getByText("F1")).toBeInTheDocument(); // folder header renders
+    expect(screen.getByText("a")).toBeInTheDocument(); // un-foldered dataset still shown at root
+    expect(screen.getByText("b")).toBeInTheDocument(); // foldered dataset shown nested
+  });
+});

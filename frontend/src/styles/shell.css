@@ -60,8 +60,6 @@ body {
 .qzk-menu-sep { height: 1px; margin: 4px 6px; background: var(--border-soft); }
 .qzk-menu-label { padding: 3px 9px; font-size: var(--font-size-sm); text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-faint); }
 .qzk-menu-trunc { overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
-/* Library group-filter dropdown (#20). */
-.qzk-group-filter { width: 100%; margin-top: 6px; }
 
 /* Per-tool plot cursors (H/Z/D/M tool model). uPlot's .u-over is the interactive
    layer; set the cursor there (and on the stage) to reflect the active tool. */
@@ -136,8 +134,8 @@ body {
 .qzk-tag-x:hover { opacity: 1; }
 .qzk-tag-add { background: transparent; color: var(--text-faint); border: 1px dashed var(--border); }
 .qzk-tag-input { height: 18px; width: 76px; padding: 0 4px; font-size: var(--type-nano); }
-/* Group chip (single-valued, distinct from tags) + collapsible group sections. */
-.qzk-group-chip { background: transparent; color: var(--text-dim); border: 1px solid var(--border); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Collapsible sidebar sections (Figures, Reports, Book families, …) — also
+   reused by the folder tree's caret/name/count (below). */
 .qzk-lib-group { display: flex; flex-direction: column; gap: var(--pad); }
 .qzk-group-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 2px; background: none; border: none; cursor: pointer; color: var(--text-faint); font-size: var(--type-label); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-label); }
 .qzk-group-caret { width: 10px; color: var(--text-dim); }
@@ -151,6 +149,15 @@ body {
 .qzk-folder-head:hover { background: var(--surface-2); }
 .qzk-folder-head.dropinto { box-shadow: inset 0 0 0 2px var(--accent); background: var(--surface-2); }
 .qzk-folder-rename { flex: 1; min-width: 0; }
+
+/* Drop-between reorder indicators (project-organization plan item 3b): a thin
+   accent line at the row's top/bottom edge shows where a dragged dataset (any
+   row) or folder (folder headers only) would land. Shared between .qzk-ds and
+   .qzk-folder-head so both row kinds read identically mid-drag. */
+.qzk-ds.drop-above,
+.qzk-folder-head.drop-above { box-shadow: inset 0 2px 0 0 var(--accent); }
+.qzk-ds.drop-below,
+.qzk-folder-head.drop-below { box-shadow: inset 0 -2px 0 0 var(--accent); }
 
 /* Figures section (item 18): one restorable plot-state snapshot per row. */
 .qzk-fig-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; color: var(--text); font-size: var(--font-size-sm); }

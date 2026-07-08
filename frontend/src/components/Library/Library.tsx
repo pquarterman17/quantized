@@ -1,6 +1,9 @@
 // Left panel: dataset list with sparklines. Import via the file picker or by
-// dragging files onto the panel; click a row to activate. Rows can carry a group
-// and tags; when any dataset has a group the list renders collapsible sections.
+// dragging files onto the panel; click a row to activate. Datasets organize
+// into a folder tree (project-organization plan); the legacy flat `group`
+// string is a read-only compat field only — migrated into folders on load
+// (lib/foldertree.migrateGroupsToFolders), never rendered as its own UI here
+// (item 6 — one organizational model, not two).
 
 import { useState } from "react";
 
@@ -13,13 +16,7 @@ import ReportsSection from "./ReportsSection";
 import SavedFiguresSection from "./SavedFiguresSection";
 import { useLibraryTree } from "./useLibraryTree";
 import { makeDemoDataset } from "../../lib/demo";
-import {
-  groupDatasets,
-  groupNames,
-  hasAnyGroup,
-  originSheetGroups,
-  originSheetNumber,
-} from "../../lib/grouping";
+import { originSheetGroups, originSheetNumber } from "../../lib/grouping";
 import { IMPORT_ACCEPT, openFilePicker } from "../../lib/openFilePicker";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -37,9 +34,7 @@ export default function Library() {
   const createFolder = useApp((s) => s.createFolder);
   const treeRows = useLibraryTree();
   const [query, setQuery] = useState("");
-  const [groupFilter, setGroupFilter] = useState(""); // "" = all groups
   const [dragging, setDragging] = useState(false);
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
 
   const onImport = () => openFilePicker((files) => void importFiles(files), ACCEPT);
 
@@ -60,44 +55,33 @@ export default function Library() {
   };
 
   // Filter matches the dataset name OR any of its tags (so typing a tag — or
-  // clicking a tag chip, which sets the query — narrows the library to it). An
-  // optional group-filter dropdown further restricts to one group.
+  // clicking a tag chip, which sets the query — narrows the library to it).
   const q = query.toLowerCase();
-  const names = groupNames(datasets);
-  // A stale group filter (its group was renamed/removed) falls back to "all".
-  const activeGroup = names.includes(groupFilter) ? groupFilter : "";
   const shown = datasets.filter(
     (d) =>
-      (activeGroup === "" || (d.group?.trim() ?? "") === activeGroup) &&
-      (d.name.toLowerCase().includes(q) ||
-        (d.tags ?? []).some((t) => t.toLowerCase().includes(q))),
+      d.name.toLowerCase().includes(q) || (d.tags ?? []).some((t) => t.toLowerCase().includes(q)),
   );
-  const grouped = hasAnyGroup(datasets);
   // Reorder is the flat manual-order tool; it operates on the global list, so it
-  // only makes sense when the list isn't filtered, split into group sections, or
-  // organized into folders (the tree has its own drag/menu ordering).
-  const canReorder = query.trim() === "" && !grouped && folders.length === 0;
-  const sections = grouped ? groupDatasets(shown) : null;
+  // only makes sense when the list isn't filtered or organized into folders (the
+  // tree has its own drag reorder — item 3b — plus its menu ordering).
+  const canReorder = query.trim() === "" && folders.length === 0;
 
-  // Non-first sheets of a multi-sheet Origin pseudo-book (item ??) get a
-  // subtle indent + "sheet N" chip in the row so the parent/child relation
-  // reads at a glance without restructuring the list into a collapsible tree.
+  // Non-first sheets of a multi-sheet Origin pseudo-book get a subtle indent +
+  // "sheet N" chip in the row so the parent/child relation reads at a glance —
+  // but ONLY as a fallback for un-foldered legacy datasets (a pre-item-4 .dwk):
+  // once folders exist, the real nesting from `planOriginFolders` already
+  // conveys the same relationship, so the chip would just be a redundant
+  // decoration on top of it (item 4/6 — retire as the primary indicator).
   // Computed off the full library (not `shown`) so filtering doesn't change it.
   const sheetOf = new Map<string, number>();
-  for (const g of originSheetGroups(datasets)) {
-    for (const member of g.members) {
-      const n = originSheetNumber(member);
-      if (n > 1) sheetOf.set(member.id, n);
+  if (folders.length === 0) {
+    for (const g of originSheetGroups(datasets)) {
+      for (const member of g.members) {
+        const n = originSheetNumber(member);
+        if (n > 1) sheetOf.set(member.id, n);
+      }
     }
   }
-
-  const toggle = (key: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
 
   const row = (d: Dataset, depth = 0) => (
     <DatasetRow
@@ -114,9 +98,8 @@ export default function Library() {
     />
   );
 
-  // Body: a folder tree when folders exist (and no active search), the derived
-  // group sections when datasets carry a `group`, else the flat list. A search
-  // query always collapses to a flat filtered list (tree/grouping step aside).
+  // Body: a folder tree when folders exist (and no active search), else the
+  // flat list. A search query always collapses to a flat filtered list.
   const inTree = query.trim() === "" && folders.length > 0;
   let body: React.ReactNode;
   if (query.trim() !== "") {
@@ -136,17 +119,6 @@ export default function Library() {
       if (r.kind === "figure") return <FigureRow key={r.id} entry={r.entry} depth={r.depth} />;
       return row(r.dataset, r.depth);
     });
-  } else if (sections) {
-    body = sections.map((g) => (
-      <div key={g.key} className="qzk-lib-group">
-        <button className="qzk-group-head" onClick={() => toggle(g.key)}>
-          <span className="qzk-group-caret">{collapsed.has(g.key) ? "▸" : "▾"}</span>
-          <span className="qzk-group-name">{g.label}</span>
-          <span className="qzk-group-count">{g.items.length}</span>
-        </button>
-        {!collapsed.has(g.key) && g.items.map((d) => row(d))}
-      </div>
-    ));
   } else {
     body = shown.map((d) => row(d));
   }
@@ -191,22 +163,6 @@ export default function Library() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-
-      {names.length > 0 && (
-        <select
-          className="qz-select qzk-group-filter"
-          value={activeGroup}
-          onChange={(e) => setGroupFilter(e.target.value)}
-          title="Filter the library to one group"
-        >
-          <option value="">All groups</option>
-          {names.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-        </select>
-      )}
 
       {!inTree && <FiguresSection />}
       <SavedFiguresSection />

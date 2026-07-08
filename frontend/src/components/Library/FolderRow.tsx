@@ -1,14 +1,23 @@
 // A folder header in the Library tree (project-organization plan item 3). Caret
 // toggles expand; double-click (or the menu) renames inline; the count chip is
 // the folder's whole-subtree dataset count. It's also a drop target — dragging a
-// dataset row onto it moves that dataset into this folder. Context menu: New
-// subfolder, Rename, Delete (reparent — a delete re-homes contents, never
-// destroys datasets). Indent is inline (depth * step).
+// dataset row onto it moves that dataset into this folder (whole-row target, no
+// split). Context menu: New subfolder, Rename, Delete (reparent — a delete
+// re-homes contents, never destroys datasets). Indent is inline (depth * step).
+//
+// Folder headers ADDITIONALLY accept a dragged folder (plan item 3b): the thin
+// top/bottom edge bands reposition the dragged folder as a SIBLING of this one
+// (before/after, same parent); the wide middle band reparents it INTO this one.
+// See lib/foldertree's dropZoneAt for the pure 3-zone hit-testing. Dropping a
+// folder into its own descendant is a silent no-op — `moveFolder` (the store
+// action → lib/foldertree's pure `moveFolder`) already guards that cycle via
+// `isSelfOrDescendant`, so this component doesn't need to re-check it.
 
 import { useState } from "react";
 
-import { DATASET_DND } from "./useLibraryTree";
+import { DATASET_DND, FOLDER_DND } from "./useLibraryTree";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
+import { childFolders, dropZoneAt, resolveDropBeforeId, type DropZone3 } from "../../lib/foldertree";
 import type { FolderNode } from "../../lib/types";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
@@ -26,9 +35,13 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
   const renameFolder = useApp((s) => s.renameFolder);
   const deleteFolder = useApp((s) => s.deleteFolder);
   const moveDatasetToFolder = useApp((s) => s.moveDatasetToFolder);
+  const moveFolder = useApp((s) => s.moveFolder);
   const [rename, setRename] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const [dropHover, setDropHover] = useState(false);
+  // Unified drop indicator: "into" for a whole-row dataset-drop OR a folder
+  // dropped in the middle band; "above"/"below" for a folder dropped near an
+  // edge (reposition as a sibling). Null = no drag currently over this row.
+  const [dropZone, setDropZone] = useState<DropZone3 | null>(null);
 
   const commit = () => {
     if (rename != null) renameFolder(folder.id, rename);
@@ -60,8 +73,17 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
 
   return (
     <div
-      className={`qzk-folder-head${dropHover ? " dropinto" : ""}`}
+      className={`qzk-folder-head${dropZone === "into" ? " dropinto" : ""}${
+        dropZone === "above" || dropZone === "below" ? ` drop-${dropZone}` : ""
+      }`}
       style={{ paddingLeft: 6 + depth * 14 }}
+      // Renaming needs normal text-selection/click behaviour in the input —
+      // don't compete with a native drag gesture while that's open.
+      draggable={rename == null}
+      onDragStart={(e) => {
+        e.dataTransfer.setData(FOLDER_DND, folder.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       onClick={() => toggle(folder.id)}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -70,18 +92,41 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
       onDragOver={(e) => {
         if (e.dataTransfer.types.includes(DATASET_DND)) {
           e.preventDefault();
-          if (!dropHover) setDropHover(true);
+          if (dropZone !== "into") setDropZone("into");
+        } else if (e.dataTransfer.types.includes(FOLDER_DND)) {
+          e.preventDefault();
+          const zone = dropZoneAt(e.currentTarget.getBoundingClientRect(), e.clientY);
+          if (zone !== dropZone) setDropZone(zone);
         }
       }}
-      onDragLeave={() => setDropHover(false)}
+      onDragLeave={() => setDropZone(null)}
       onDrop={(e) => {
-        setDropHover(false);
-        const id = e.dataTransfer.getData(DATASET_DND);
-        if (!id) return;
-        e.preventDefault();
-        e.stopPropagation();
-        moveDatasetToFolder(id, folder.id);
-        expand();
+        const zone = dropZone ?? dropZoneAt(e.currentTarget.getBoundingClientRect(), e.clientY);
+        setDropZone(null);
+        if (e.dataTransfer.types.includes(DATASET_DND)) {
+          const id = e.dataTransfer.getData(DATASET_DND);
+          if (!id) return;
+          e.preventDefault();
+          e.stopPropagation();
+          moveDatasetToFolder(id, folder.id);
+          expand();
+          return;
+        }
+        if (e.dataTransfer.types.includes(FOLDER_DND)) {
+          const draggedId = e.dataTransfer.getData(FOLDER_DND);
+          if (!draggedId || draggedId === folder.id) return; // no-op: dropped onto itself
+          e.preventDefault();
+          e.stopPropagation();
+          if (zone === "into") {
+            moveFolder(draggedId, folder.id); // reparent — becomes a new child, appended
+            expand();
+          } else {
+            // Reposition as a SIBLING of this folder, under ITS parent.
+            const siblingIds = childFolders(useApp.getState().folders, folder.parentId).map((f) => f.id);
+            const beforeId = resolveDropBeforeId(siblingIds, folder.id, zone);
+            moveFolder(draggedId, folder.parentId, beforeId);
+          }
+        }
       }}
     >
       {menu && <ContextMenu x={menu.x} y={menu.y} items={items} onClose={() => setMenu(null)} />}

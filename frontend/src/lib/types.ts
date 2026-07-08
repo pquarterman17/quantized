@@ -199,10 +199,12 @@ export interface Dataset {
   /** User tags for organizing + filtering the Library (e.g. "MvsH", "sample-A").
    *  Round-trips through the .dwk workspace. */
   tags?: string[];
-  /** Optional group name; the Library renders collapsible sections by group
-   *  (ungrouped datasets fall under "Ungrouped"). Round-trips through .dwk.
-   *  Legacy: superseded by the folder tree (`folderId`); kept for .dwk v1
-   *  back-compat + migration (project-organization plan, item 6). */
+  /** LEGACY read-only field — superseded by the folder tree (`folderId`).
+   *  `useApp.loadWorkspace` promotes any un-foldered `group` into a
+   *  root-level folder and clears it (`lib/foldertree.migrateGroupsToFolders`,
+   *  project-organization plan item 6); nothing renders off this field
+   *  anymore. Kept only so an old .dwk v1 doc (datasets carrying just a
+   *  `group` string, no folder tree at all) still parses and migrates. */
   group?: string;
   /** Containing folder id (project-organization plan, Approach B). Absent = the
    *  dataset lives at the tree root. The folder tree itself is the store's
