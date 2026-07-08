@@ -77,7 +77,7 @@ def roc_curve(
     thresholds = np.concatenate([[np.inf], ys[order]])
 
     # AUC via trapezoidal rule
-    auc_val = float(np.trapz(tpr, fpr))
+    auc_val = float(np.trapezoid(tpr, fpr))
 
     return {
         "fpr": fpr,
@@ -111,7 +111,7 @@ def auc(
     if fpr_v.size < 2:
         raise ValueError("need at least 2 points to compute AUC")
 
-    return float(np.trapz(tpr_v, fpr_v))
+    return float(np.trapezoid(tpr_v, fpr_v))
 
 
 def youden_optimal_threshold(

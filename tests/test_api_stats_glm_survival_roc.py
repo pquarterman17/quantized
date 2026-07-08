@@ -3,9 +3,16 @@
 Tests the thin routes in routes/stats_design.py for the new optional-dependency
 methods. Tests both the happy path (with statsmodels/lifelines installed) and the
 graceful degradation (missing extra).
+
+Wire shape: ``predictors`` is JSON for a list of *k predictor columns*
+(each a same-length array of n observations), matching
+``GlmRequest``/``CoxRequest`` and the ``calc.stats_glm``/
+``calc.stats_survival`` contract — never a list of n row records.
 """
 
 from __future__ import annotations
+
+import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,14 +29,18 @@ class TestGlmRoutes:
     """GLM logistic/Poisson regression routes."""
 
     def test_glm_logistic_route_200(self) -> None:
-        """POST /api/stats/glm-logistic returns 200 with valid data."""
+        """POST /api/stats/glm-logistic returns 200 with valid data.
+
+        n=12, 2 predictor columns, non-separable (fixed-seed synthetic
+        overlap — a small perfectly-separable set makes statsmodels'
+        Newton-Raphson fit unstable and isn't a meaningful smoke test).
+        """
+        x1 = [0.13, -0.13, 0.64, 0.1, -0.54, 0.36, 1.3, 0.95, -0.7, -1.27, -0.62, 0.04]
+        x2 = [-2.33, -0.22, -1.25, -0.73, -0.54, -0.32, 0.41, 1.04, -0.13, 1.37, -0.67, 0.35]
+        y = [1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0]
         resp = client.post(
             "/api/stats/glm-logistic",
-            json={
-                "predictors": [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0]],
-                "y": [0.0, 0.0, 1.0, 1.0],
-                "alpha": 0.05,
-            },
+            json={"predictors": [x1, x2], "y": y, "alpha": 0.05},
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -45,7 +56,7 @@ class TestGlmRoutes:
         resp = client.post(
             "/api/stats/glm-logistic",
             json={
-                "predictors": [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0]],
+                "predictors": [[1.0, 2.0, 3.0]],  # 1 predictor column, 3 rows
                 "y": [0.0, 0.5, 1.0],
                 "alpha": 0.05,
             },
@@ -53,14 +64,17 @@ class TestGlmRoutes:
         assert resp.status_code == 422
 
     def test_glm_poisson_route_200(self) -> None:
-        """POST /api/stats/glm-poisson returns 200 with count data."""
+        """POST /api/stats/glm-poisson returns 200 with count data.
+
+        n=10, 2 predictor columns, real Poisson-generated counts
+        (fixed-seed) — not the monotone toy set the previous version used.
+        """
+        x1 = [0.13, -0.13, 0.64, 0.1, -0.54, 0.36, 1.3, 0.95, -0.7, -1.27]
+        x2 = [-0.62, 0.04, -2.33, -0.22, -1.25, -0.73, -0.54, -0.32, 0.41, 1.04]
+        y = [0.0, 0.0, 8.0, 1.0, 2.0, 4.0, 2.0, 2.0, 1.0, 2.0]
         resp = client.post(
             "/api/stats/glm-poisson",
-            json={
-                "predictors": [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0]],
-                "y": [1.0, 2.0, 3.0, 4.0, 5.0],
-                "alpha": 0.05,
-            },
+            json={"predictors": [x1, x2], "y": y, "alpha": 0.05},
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -73,7 +87,7 @@ class TestGlmRoutes:
         resp = client.post(
             "/api/stats/glm-poisson",
             json={
-                "predictors": [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0]],
+                "predictors": [[1.0, 2.0, 3.0]],  # 1 predictor column, 3 rows
                 "y": [1.5, 2.0, 3.0],
                 "alpha": 0.05,
             },
@@ -140,7 +154,7 @@ class TestSurvivalRoutes:
             json={
                 "time": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
                 "event": [1.0, 1.0, 0.0, 1.0, 1.0, 0.0],
-                "predictors": [[1.0], [2.0], [3.0], [4.0], [5.0], [6.0]],
+                "predictors": [[0.0, 1.0, 0.0, 1.0, 0.0, 1.0]],  # 1 predictor column, 6 rows
             },
         )
         assert resp.status_code == 200
@@ -214,17 +228,33 @@ class TestRocRoutes:
 
 
 class TestMissingOptionalDep:
-    """Test graceful degradation when optional deps are missing."""
+    """Test graceful degradation when optional deps are missing.
+
+    ``sys.modules[name] = None`` simulates "package not importable" without
+    actually uninstalling it — any subsequent ``import <name>`` raises
+    ImportError immediately, even if submodules were already cached by an
+    earlier test in this session (verified: setting only the top-level
+    package to None is sufficient). ``monkeypatch`` restores the original
+    entry after each test, so this can't leak into other tests. Same
+    technique used in calc/stats_glm.py's own guarded-import unit test.
+    """
 
     def test_glm_logistic_501_when_statsmodels_missing(self, monkeypatch) -> None:
         """GLM returns 501 (Not Implemented) when statsmodels missing."""
-        # This test requires actually uninstalling statsmodels, which we can't do
-        # in the test. Instead, this is a placeholder that documents the expected
-        # behavior: the route returns 501 when the extra is missing.
-        # In real use, `pip install quantized[stats]` installs statsmodels.
-        pass
+        monkeypatch.setitem(sys.modules, "statsmodels", None)
+        resp = client.post(
+            "/api/stats/glm-logistic",
+            json={"predictors": [[1.0, 2.0, 3.0]], "y": [0.0, 1.0, 1.0], "alpha": 0.05},
+        )
+        assert resp.status_code == 501
+        assert "quantized[stats]" in resp.json()["detail"]
 
     def test_survival_501_when_lifelines_missing(self, monkeypatch) -> None:
         """Survival routes return 501 when lifelines missing."""
-        # Placeholder: same rationale as above.
-        pass
+        monkeypatch.setitem(sys.modules, "lifelines", None)
+        resp = client.post(
+            "/api/stats/kaplan-meier",
+            json={"time": [1.0, 2.0, 3.0], "event": [1.0, 0.0, 1.0]},
+        )
+        assert resp.status_code == 501
+        assert "quantized[stats]" in resp.json()["detail"]

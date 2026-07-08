@@ -41,6 +41,32 @@ def _as_matrix(columns: list[NDArray[np.float64]] | NDArray[np.float64]) -> NDAr
     return np.column_stack(cols)
 
 
+def _binomial_deviance(y: NDArray[np.float64], mu: NDArray[np.float64]) -> float:
+    """Bernoulli/binomial deviance: D = 2·Σ[y·log(y/μ) + (1-y)·log((1-y)/(1-μ))].
+
+    ``statsmodels``' discrete-choice ``LogitResults`` does not expose a
+    ``.deviance`` scalar (only per-observation ``resid_dev``), unlike the
+    ``genmod.GLM`` family models — compute it directly from the standard
+    formula (matches ``sm.GLM(..., family=Binomial()).deviance`` exactly).
+    """
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t1 = np.where(y > 0, y * np.log(y / mu), 0.0)
+        t2 = np.where(y < 1, (1.0 - y) * np.log((1.0 - y) / (1.0 - mu)), 0.0)
+    return float(2.0 * np.sum(t1 + t2))
+
+
+def _poisson_deviance(y: NDArray[np.float64], mu: NDArray[np.float64]) -> float:
+    """Poisson deviance: D = 2·Σ[y·log(y/μ) - (y - μ)].
+
+    ``statsmodels``' discrete-choice ``PoissonResults`` does not expose a
+    ``.deviance`` scalar — compute it directly (matches
+    ``sm.GLM(..., family=Poisson()).deviance`` exactly).
+    """
+    with np.errstate(divide="ignore", invalid="ignore"):
+        term = np.where(y > 0, y * np.log(y / mu), 0.0)
+    return float(2.0 * np.sum(term - (y - mu)))
+
+
 def logistic_regression(
     predictors: list[NDArray[np.float64]] | NDArray[np.float64],
     y: NDArray[np.float64],
@@ -77,7 +103,12 @@ def logistic_regression(
 
     # Check binary
     unique_y = np.unique(yv)
-    if not (np.array_equal(unique_y, [0.0, 1.0]) or np.array_equal(unique_y, [0.0]) or np.array_equal(unique_y, [1.0])):
+    is_binary = (
+        np.array_equal(unique_y, [0.0, 1.0])
+        or np.array_equal(unique_y, [0.0])
+        or np.array_equal(unique_y, [1.0])
+    )
+    if not is_binary:
         raise ValueError("logistic regression requires binary y (0/1)")
 
     # Add constant, fit
@@ -85,10 +116,10 @@ def logistic_regression(
     model = sm.Logit(yv, xmat)
     result = model.fit(disp=0)
 
-    coeffs = np.asarray(result.params.values, dtype=float)
-    se = np.asarray(result.bse.values, dtype=float)
-    z_stats = np.asarray(result.tvalues.values, dtype=float)
-    p_values = np.asarray(result.pvalues.values, dtype=float)
+    coeffs = np.asarray(result.params, dtype=float)
+    se = np.asarray(result.bse, dtype=float)
+    z_stats = np.asarray(result.tvalues, dtype=float)
+    p_values = np.asarray(result.pvalues, dtype=float)
 
     # 95% CIs (z_crit ≈ 1.96 for alpha=0.05)
     z_crit = 1.959964  # scipy.stats.norm.ppf(1 - alpha / 2)
@@ -102,7 +133,15 @@ def logistic_regression(
     null_model = sm.Logit(yv, sm.add_constant(np.ones(n))).fit(disp=0)
     ll_full = float(result.llf)
     ll_null = float(null_model.llf)
-    pseudo_r2 = 1.0 - (ll_full / max(ll_null, _EPS))
+    # ll_null is a log-likelihood (log of a probability mass ≤ 1), so it is
+    # always ≤ 0 — guard the magnitude while preserving sign. `max(ll_null,
+    # _EPS)` (the previous form) picks the tiny *positive* _EPS whenever
+    # ll_null is negative (virtually always), which inverts the sign of the
+    # ratio and silently saturates pseudoR2 to 1.0 for every non-degenerate
+    # fit — verified against the McFadden pseudo-R² statsmodels itself
+    # reports (0.374 on the spector logistic reference case).
+    ll_null_safe = -max(abs(ll_null), _EPS)
+    pseudo_r2 = 1.0 - (ll_full / ll_null_safe)
 
     return {
         "coeffs": coeffs,  # intercept first
@@ -113,7 +152,7 @@ def logistic_regression(
         "ciHigh": ci_high,
         "pseudoR2": float(np.clip(pseudo_r2, 0.0, 1.0)),
         "AIC": float(result.aic),
-        "deviance": float(result.deviance),
+        "deviance": _binomial_deviance(yv, y_pred),
         "yPred": y_pred,
         "N": n,
         "alpha": alpha,
@@ -163,10 +202,10 @@ def poisson_regression(
     model = sm.Poisson(yv, xmat)
     result = model.fit(disp=0)
 
-    coeffs = np.asarray(result.params.values, dtype=float)
-    se = np.asarray(result.bse.values, dtype=float)
-    z_stats = np.asarray(result.tvalues.values, dtype=float)
-    p_values = np.asarray(result.pvalues.values, dtype=float)
+    coeffs = np.asarray(result.params, dtype=float)
+    se = np.asarray(result.bse, dtype=float)
+    z_stats = np.asarray(result.tvalues, dtype=float)
+    p_values = np.asarray(result.pvalues, dtype=float)
 
     # 95% CIs
     z_crit = 1.959964
@@ -180,7 +219,15 @@ def poisson_regression(
     null_model = sm.Poisson(yv, sm.add_constant(np.ones(n))).fit(disp=0)
     ll_full = float(result.llf)
     ll_null = float(null_model.llf)
-    pseudo_r2 = 1.0 - (ll_full / max(ll_null, _EPS))
+    # ll_null is a log-likelihood (log of a probability mass ≤ 1), so it is
+    # always ≤ 0 — guard the magnitude while preserving sign. `max(ll_null,
+    # _EPS)` (the previous form) picks the tiny *positive* _EPS whenever
+    # ll_null is negative (virtually always), which inverts the sign of the
+    # ratio and silently saturates pseudoR2 to 1.0 for every non-degenerate
+    # fit — verified against the McFadden pseudo-R² statsmodels itself
+    # reports (0.374 on the spector logistic reference case).
+    ll_null_safe = -max(abs(ll_null), _EPS)
+    pseudo_r2 = 1.0 - (ll_full / ll_null_safe)
 
     return {
         "coeffs": coeffs,
@@ -191,7 +238,7 @@ def poisson_regression(
         "ciHigh": ci_high,
         "pseudoR2": float(np.clip(pseudo_r2, 0.0, 1.0)),
         "AIC": float(result.aic),
-        "deviance": float(result.deviance),
+        "deviance": _poisson_deviance(yv, y_pred),
         "yPred": y_pred,
         "N": n,
         "alpha": alpha,

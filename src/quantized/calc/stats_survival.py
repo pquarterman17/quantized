@@ -14,8 +14,6 @@ from numpy.typing import NDArray
 
 __all__ = ["kaplan_meier", "logrank_test", "cox_proportional_hazards"]
 
-_EPS = float(np.finfo(float).tiny)
-
 
 def _check_lifelines() -> None:
     """Raise a clear error if lifelines is not installed."""
@@ -179,8 +177,8 @@ def cox_proportional_hazards(
     Reference: Cox PH via lifelines ``CoxPHFitter``.
     """
     _check_lifelines()
-    from lifelines import CoxPHFitter
     import pandas as pd
+    from lifelines import CoxPHFitter
 
     tv = np.asarray(time, dtype=float).ravel()
     ev = np.asarray(event, dtype=float).ravel()
@@ -228,18 +226,22 @@ def cox_proportional_hazards(
     cph = CoxPHFitter()
     cph.fit(df, duration_col="T", event_col="E")
 
-    # Extract results
+    # Extract results. cph.params_/standard_errors_ are pandas Series (not
+    # ndarrays), so .values is safe here — unlike statsmodels' discrete-choice
+    # results (see stats_glm.py), which return bare ndarrays and broke on
+    # .values. cph.summary already carries correctly-computed z and two-sided
+    # p (verified against the lifelines rossi.csv reference: p=0.0474 for
+    # z=-1.983 etc.) — read them directly rather than recomputing/transforming.
     coeffs = np.asarray(cph.params_.values, dtype=float)
     se = np.asarray(cph.standard_errors_.values, dtype=float)
-    z_stats = np.asarray(cph.params_.values / cph.standard_errors_.values, dtype=float)
-    p_values = np.asarray(2.0 * (1.0 - cph.summary["p"].values), dtype=float)
+    z_stats = np.asarray(cph.summary["z"].values, dtype=float)
+    p_values = np.asarray(cph.summary["p"].values, dtype=float)
 
-    # CIs from the summary
-    ci_low = np.asarray(cph.summary["exp(coef) lower 95%"].values, dtype=float)
-    ci_high = np.asarray(cph.summary["exp(coef) upper 95%"].values, dtype=float)
-    # Convert exponentiated CIs back to log scale (linear)
-    ci_low = np.log(np.maximum(ci_low, _EPS))
-    ci_high = np.log(np.maximum(ci_high, _EPS))
+    # CIs on the linear (log-hazard / coefficient) scale — lifelines' summary
+    # already carries these directly ("coef lower/upper 95%"); no need to
+    # round-trip through the exponentiated hazard-ratio columns.
+    ci_low = np.asarray(cph.summary["coef lower 95%"].values, dtype=float)
+    ci_high = np.asarray(cph.summary["coef upper 95%"].values, dtype=float)
 
     concordance = float(cph.concordance_index_)
 
@@ -252,6 +254,8 @@ def cox_proportional_hazards(
         "ciHigh": ci_high,
         "concordanceIndex": concordance,
         "logLikelihood": float(cph.log_likelihood_),
-        "AIC": float(cph.AIC_),
+        # CoxPHFitter is semi-parametric — .AIC_ raises StatError ("does not
+        # exist... you probably want .AIC_partial_"); use the partial AIC.
+        "AIC": float(cph.AIC_partial_),
         "N": n_clean,
     }

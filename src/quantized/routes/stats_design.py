@@ -14,10 +14,10 @@ from pydantic import BaseModel
 
 from quantized.calc.stats_anova2 import adjust_pvalues, anova2, dunnett_test, tukey_hsd
 from quantized.calc.stats_anova_ext import anova2_unbalanced, repeated_measures_anova
-from quantized.calc.stats_tests import recommend_test
 from quantized.calc.stats_glm import logistic_regression, poisson_regression
-from quantized.calc.stats_survival import kaplan_meier, logrank_test, cox_proportional_hazards
-from quantized.calc.stats_roc import roc_curve, auc, youden_optimal_threshold
+from quantized.calc.stats_roc import auc, roc_curve, youden_optimal_threshold
+from quantized.calc.stats_survival import cox_proportional_hazards, kaplan_meier, logrank_test
+from quantized.calc.stats_tests import recommend_test
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
@@ -146,7 +146,13 @@ def adjust_p_route(req: AdjustPRequest) -> dict[str, Any]:
 
 
 class GlmRequest(BaseModel):
-    """Request for logistic or Poisson GLM."""
+    """Request for logistic or Poisson GLM.
+
+    ``predictors`` is a list of *k predictor columns* (each a same-length
+    array of n observations) — ``[[x1_1..x1_n], [x2_1..x2_n], ...]`` — not a
+    list of n row records. Same convention as ``calc.stats_glm``/
+    ``calc.stats_multivar``; the intercept is added automatically.
+    """
     predictors: list[list[float]]
     y: list[float]
     alpha: float = 0.05
@@ -156,7 +162,9 @@ class GlmRequest(BaseModel):
 def glm_logistic_route(req: GlmRequest) -> dict[str, Any]:
     """Logistic regression with coefficients, SEs, z-stats, p-values, AIC."""
     try:
-        return _wrap(logistic_regression(req.predictors, np.asarray(req.y, dtype=float), alpha=req.alpha))
+        predictors = [np.asarray(c, dtype=float) for c in req.predictors]
+        y = np.asarray(req.y, dtype=float)
+        return _wrap(logistic_regression(predictors, y, alpha=req.alpha))
     except RuntimeError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
     except (ValueError, IndexError) as exc:
@@ -167,7 +175,9 @@ def glm_logistic_route(req: GlmRequest) -> dict[str, Any]:
 def glm_poisson_route(req: GlmRequest) -> dict[str, Any]:
     """Poisson regression with coefficients, SEs, z-stats, p-values, AIC."""
     try:
-        return _wrap(poisson_regression(req.predictors, np.asarray(req.y, dtype=float), alpha=req.alpha))
+        predictors = [np.asarray(c, dtype=float) for c in req.predictors]
+        y = np.asarray(req.y, dtype=float)
+        return _wrap(poisson_regression(predictors, y, alpha=req.alpha))
     except RuntimeError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
     except (ValueError, IndexError) as exc:
@@ -197,7 +207,12 @@ class LogRankRequest(BaseModel):
 
 
 class CoxRequest(BaseModel):
-    """Request for Cox proportional-hazards model."""
+    """Request for Cox proportional-hazards model.
+
+    ``predictors`` is a list of *k predictor columns* (each length n),
+    same convention as ``GlmRequest.predictors`` — not a list of row
+    records.
+    """
     time: list[float]
     event: list[float]
     predictors: list[list[float]]
@@ -207,7 +222,9 @@ class CoxRequest(BaseModel):
 def kaplan_meier_route(req: KaplanMeierRequest) -> dict[str, Any]:
     """Kaplan-Meier survival curve with Greenwood CIs."""
     try:
-        return _wrap(kaplan_meier(np.asarray(req.time, dtype=float), np.asarray(req.event, dtype=float)))
+        time = np.asarray(req.time, dtype=float)
+        event = np.asarray(req.event, dtype=float)
+        return _wrap(kaplan_meier(time, event))
     except RuntimeError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
     except (ValueError, IndexError) as exc:
@@ -234,10 +251,11 @@ def logrank_route(req: LogRankRequest) -> dict[str, Any]:
 def cox_ph_route(req: CoxRequest) -> dict[str, Any]:
     """Cox proportional-hazards model."""
     try:
+        predictors = [np.asarray(c, dtype=float) for c in req.predictors]
         return _wrap(
             cox_proportional_hazards(
                 np.asarray(req.time, dtype=float), np.asarray(req.event, dtype=float),
-                req.predictors,
+                predictors,
             )
         )
     except RuntimeError as exc:
@@ -272,7 +290,9 @@ class YoudenRequest(BaseModel):
 def roc_curve_route(req: RocRequest) -> dict[str, Any]:
     """ROC curve points (FPR, TPR) at all thresholds."""
     try:
-        return _wrap(roc_curve(np.asarray(req.y_true, dtype=float), np.asarray(req.y_score, dtype=float)))
+        y_true = np.asarray(req.y_true, dtype=float)
+        y_score = np.asarray(req.y_score, dtype=float)
+        return _wrap(roc_curve(y_true, y_score))
     except (ValueError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

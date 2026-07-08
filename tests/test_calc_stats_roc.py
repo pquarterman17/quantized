@@ -5,8 +5,8 @@ Reference values from hand-computable examples and standard definitions.
 
 from __future__ import annotations
 
-import pytest
 import numpy as np
+import pytest
 
 
 def test_roc_perfect_separation():
@@ -200,7 +200,7 @@ def test_roc_requires_both_classes():
 
 def test_roc_curve_integration():
     """Test ROC curve, AUC, and Youden together."""
-    from quantized.calc.stats_roc import roc_curve, auc, youden_optimal_threshold
+    from quantized.calc.stats_roc import auc, roc_curve, youden_optimal_threshold
 
     y_true = np.array([0.0, 0.0, 0.0, 1.0, 1.0, 1.0])
     y_score = np.array([0.1, 0.3, 0.4, 0.6, 0.7, 0.9])
