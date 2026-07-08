@@ -136,7 +136,14 @@ written below.
    numpy (no deps, more code to validate). *Recommendation: (a) —
    optional extra, guarded imports, clear "install quantized[stats]"
    error; ROC is hand-rolled numpy regardless.*
-3. **Ternary rendering (#23)** — (a) hand-rolled barycentric
+3. *(SHIPPED 2026-07-07 after one rejected round — the first agent
+   never installed the extras and shipped untested code; the repair pass
+   with statsmodels 0.14.6 + lifelines 0.30.3 actually running found the
+   real bugs: numpy-2 trapz, ndarray-vs-Series results, a SILENT
+   pseudo-R² saturation to 1.0, missing discrete-model deviance, Cox
+   p-value double-transform. Reference tests now use Spector&Mazzeo
+   (logistic), RAND HIE (Poisson), and Rossi recidivism (KM/log-rank/
+   Cox). `stats` optional extra; ROC is pure numpy. +59 tests.)* **Ternary rendering (#23)** — (a) hand-rolled barycentric
    transform on plain matplotlib axes (small, no dep); (b) add
    python-ternary (MIT). *Recommendation: (a) — the transform is a
    few lines of pure math; a dep for one export kind isn't worth it.*
