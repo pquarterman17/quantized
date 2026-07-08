@@ -10,6 +10,7 @@ import type { PlotPayload } from "./plotdata";
 import type { RegionStats } from "./regionStats";
 import type { Annotation, AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
 import { annotationPlugin, axisBoxPlugin, errorBarsPlugin, refLinePlugin } from "./uplotOverlays";
+import { quickFitPlugin } from "./uplotGadgets";
 import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
 import {
   measurePlugin,
@@ -29,7 +30,8 @@ export type PlotTool =
   | "measure"
   | "stats"
   | "integ"
-  | "fwhm";
+  | "fwhm"
+  | "qfit";
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -123,6 +125,14 @@ export interface BuildOptsArgs {
   fwhmResult?: FwhmResult | null;
   /** In `fwhm` tool: commit the peak + FWHM estimate over a completed drag. */
   onFwhm?: (r: FwhmResult) => void;
+  /** Quick-fit gadget (#33) ROI band, in data coords (null = none committed
+   *  yet). Persists across draws while the `qfit` tool is active; the tool
+   *  clears it (and the fit overlay/chip) on tool switch — see PlotStage. */
+  qfitRoi?: [number, number] | null;
+  /** In `qfit` tool: fires on every create/move/resize of the ROI band (data
+   *  coords; null = a sub-6px drag cleared it). The caller debounces the
+   *  actual re-fit request — see the store's `setQfitRoi`. */
+  onRoiChange?: (roi: [number, number] | null) => void;
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
   xLim?: [number, number] | null;
   yLim?: [number, number] | null;
@@ -317,6 +327,17 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     );
   } else if (args.fwhmResult) {
     plugins.push(fwhmPlugin(args.fwhmResult, accentColor, captureSoftColor));
+  }
+  // Quick-fit ROI band: only draws/drags while its tool is active (unlike
+  // integ/fwhm, the gadget is cleared entirely on tool switch — see PlotStage
+  // — so there is no draw-only "persists across tools" branch here).
+  if (tool === "qfit") {
+    plugins.push(
+      quickFitPlugin(args.qfitRoi ?? null, accentColor, accentSoftColor, {
+        onRoiChange: args.onRoiChange,
+        interactive: true,
+      }),
+    );
   }
   if (refLines && refLines.length > 0) {
     // Dragging only in the non-gesture tools (zoom/cursor); pan/measure/region

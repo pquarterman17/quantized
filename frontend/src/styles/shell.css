@@ -217,6 +217,10 @@ body {
 .qzk-result-chip .lbl { color: var(--text-faint); }
 .qzk-chip-reset { border: none; background: transparent; color: var(--text-faint); cursor: default; width: 18px; height: 18px; padding: 0; border-radius: var(--radius-sm); display: grid; place-items: center; font-size: 13px; }
 .qzk-chip-reset:hover { background: var(--surface-3); color: var(--text); }
+/* Quick-fit chip (#33) is richer than ∫/∩ (model picker + params + two
+   actions), so it wraps instead of forcing one long unreadable row. */
+.qzk-qfit-chip { flex-wrap: wrap; max-width: min(92vw, 560px); padding: 5px 6px 5px 10px; gap: 6px; }
+.qzk-qfit-chip .qz-select { font-size: var(--font-size-sm); padding: 2px 6px; }
 .qzk-legend { padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
 /* Floating-legend corner placement (Inspector "Legend position"). */
 .qzk-legend.ne { top: 12px; right: 12px; }

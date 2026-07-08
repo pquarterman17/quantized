@@ -132,45 +132,6 @@ written below.
 
 ## Tier 1 — High Impact
 
-1. **Quick-fit gadget (gap #33)** — drag an ROI band on the live plot;
-   a model fit of that region recomputes live as the ROI moves/resizes.
-   *Model: sonnet.* *Agent: gui-interaction-expert.*
-   - [ ] Add a `qfit` tool id to the `PlotTool` union in
-         `frontend/src/lib/uplotOpts.ts` and an entry in
-         `ANALYZE_TOOLS` in
-         `frontend/src/components/Stage/PlotToolbar.tsx`; optional key
-         in `frontend/src/lib/plotToolKeys.ts` (F is free)
-   - [ ] New `frontend/src/lib/uplotGadgets.ts`: an ROI-band plugin
-         generalizing `integratePlugin`'s drag pattern from
-         `frontend/src/lib/uplotRegionTools.ts` — committed ROI kept in
-         data coords, move + edge-resize handles on the committed band
-         (pixels re-derived per draw via valToPos, the
-         `uplotOverlays.ts` convention), `onRoiChange` callback,
-         sub-6px drag = click no-op; pure handle hit-test math exported
-         and unit-tested
-   - [ ] Store slice in `frontend/src/store/useApp.ts`: gadget ROI,
-         model name, busy flag, result; actions to set/clear (this is
-         the shared-file chokepoint — see dependency map)
-   - [ ] Debounced ROI-change → POST `/api/fitting/fit` through
-         `frontend/src/lib/api.ts`, fitting only the ROI-sliced rows of
-         `rowstate.analysisData` (guard #11); result overlay through
-         `setFitOverlay` with nulls outside the ROI so it rides
-         `composeDisplayPayload`/`withFitOverlay` in
-         `frontend/src/lib/plotdata.ts` unchanged
-   - [ ] Result chip in
-         `frontend/src/components/Stage/PlotResultChips.tsx`: model
-         picker (linear/gaussian/exponential via the
-         `frontend/src/components/primitives/index.tsx` Select),
-         params ± SE + R², a commit action (per open question 2), and ✕
-         dismiss
-   - [ ] Vitest: gadget math, debounce (fake timers), store wiring,
-         model switch refits; note the real drag gesture needs the
-         `tools/visual` harness eyeball (jsdom cannot drive canvas)
-   - Acceptance: dragging/resizing the ROI over a synthetic Gaussian
-     re-fits live with one debounced request per gesture; the overlay
-     and chip track the ROI; switching model refits; clearing the tool
-     removes overlay, chip, and store state.
-
 2. **Drag-to-axis (gap #49, Graph Builder phase 1)** — drag a channel
    chip from the Channels card or legend onto the plot's X / Y / Y2
    axis regions to re-plot instantly.
@@ -359,4 +320,26 @@ written below.
 
 ## Completed
 
-(empty — nothing shipped against this plan yet)
+- ~~**1. Quick-fit gadget (gap #33)**~~ (2026-07-07) — drag an ROI band on
+  the live plot; a debounced live fit of the region's rows (`rowstate
+  .analysisData` ∩ ROI, guard #11) overlays via the shared `fitOverlay`
+  slot. `qfit` tool + `PlotToolbar`/context-menu entries; new
+  `lib/uplotGadgets.ts` (ROI-band plugin generalizing `integratePlugin`'s
+  drag pattern — create/move/edge-resize, pure `hitTestRoiHandles`) and
+  `lib/quickfit.ts` (pure ROI∩analysis row/x,y selection, curated
+  Linear/Gaussian/"Exponential Decay" model list, param formatting); store
+  slice (`qfitRoi`/`qfitModel`/`qfitBusy`/`qfitResult`/`qfitError` +
+  `setQfitRoi`/`setQfitModel`/`runQuickFit`/`commitQfit`/`clearQfit`,
+  debounced like the recalc engine); chip in `PlotResultChips.tsx` (model
+  picker, params ± SE + R², **explicit** Commit → durable `fitSpec` +
+  macro step, optional → Report via `reportEmit`, ✕ dismiss) driven by a
+  new `useQuickFitChip` hook (Escape-to-dismiss + the report async flow).
+  Deviations: no hotkey (F is already the Curve Fit workshop's — see
+  `plotToolKeys.ts`); commit reuses `fitSpec: {model}` as-is (no ROI
+  persisted into the durable spec — a future data-change refit runs over
+  the FULL analysis view, matching the Curve Fit workshop's own semantics)
+  rather than extending the recalc #1 schema. 49 new tests (
+  `lib/quickfit.test.ts`, `lib/uplotGadgets.test.ts`,
+  `store/quickfit.test.ts`, `components/Stage/useQuickFitChip.test.ts`,
+  + `PlotResultChips.test.tsx` additions); the live drag gesture itself
+  is un-tested in jsdom (canvas) — eyeball via `tools/visual`.

@@ -45,6 +45,7 @@ import type { FwhmResult } from "../lib/peakwidth";
 import { effectiveChannels } from "../lib/plotdata";
 import { docRenderable, type FigureDoc } from "../lib/figuredoc";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
+import { firstVisiblePlottedChannel, selectRoiRows } from "../lib/quickfit";
 import { activeRowIndices, analysisData, droppedRows, expandToFull, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
 import {
   addRecentEntry,
@@ -58,6 +59,7 @@ import type {
   Annotation,
   AxisFormat,
   BaselineOverlay,
+  CalcResult,
   ChannelRole,
   ComputedColumn,
   CorrectionParams,
@@ -98,6 +100,10 @@ const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_idSeq}`;
 let _recalcTimer: ReturnType<typeof setTimeout> | null = null;
 let _recalcInProgress = false;
 
+// Quick-fit gadget (#33) internals: a module-level debounce timer, mirroring
+// the recalc scheduler above — a burst of ROI-drag moves triggers ONE fit.
+let _qfitTimer: ReturnType<typeof setTimeout> | null = null;
+
 export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
 export type Density = "compact" | "regular" | "comfy";
@@ -114,7 +120,8 @@ export type PlotTool =
   | "measure"
   | "stats"
   | "integ"
-  | "fwhm";
+  | "fwhm"
+  | "qfit";
 /** Committed integral region from the ∫ tool (area under the curve). */
 export interface IntegralResult {
   xlo: number;
@@ -251,6 +258,18 @@ interface AppState {
   // result chip or a dataset change (reset alongside the per-dataset view state).
   integral: IntegralResult | null;
   fwhmResult: FwhmResult | null;
+  // Quick-fit gadget (#33): drag an ROI band; a debounced live fit of that
+  // region's rows (guard #11: rowstate.analysisData ∩ the ROI) overlays the
+  // plot via the shared `fitOverlay` slot (only one fit curve shows at a
+  // time — same slot the Curve Fit workshop/recalc use). The chip's explicit
+  // "Commit" action durably adopts the model as the dataset's fitSpec; the
+  // live drag preview never does (auto-committing every move would spam the
+  // recalc graph). Cleared on tool switch, Escape, dataset change, or ✕.
+  qfitRoi: [number, number] | null;
+  qfitModel: string;
+  qfitBusy: boolean;
+  qfitResult: CalcResult | null;
+  qfitError: string | null;
   cmdkOpen: boolean;
   curveFitOpen: boolean;
   hysteresisOpen: boolean;
@@ -434,6 +453,15 @@ interface AppState {
   setRegionPicked: (range: [number, number] | null) => void;
   setIntegral: (integral: IntegralResult | null) => void;
   setFwhmResult: (result: FwhmResult | null) => void;
+  // Quick-fit gadget (#33): set/clear the ROI (debounces a live re-fit —
+  // internal `runQuickFit`), switch the model (re-fits the current ROI, if
+  // any), durably commit the current result as the dataset's fitSpec, or
+  // clear the gadget entirely (roi + result + chip + its fit overlay).
+  setQfitRoi: (roi: [number, number] | null) => void;
+  setQfitModel: (model: string) => void;
+  runQuickFit: () => Promise<void>;
+  commitQfit: () => void;
+  clearQfit: () => void;
   setCmdk: (open: boolean) => void;
   setCurveFitOpen: (open: boolean) => void;
   setHysteresisOpen: (open: boolean) => void;
@@ -672,6 +700,11 @@ export const useApp = create<AppState>((set, get) => ({
   selection: null,
   integral: null,
   fwhmResult: null,
+  qfitRoi: null,
+  qfitModel: "Linear",
+  qfitBusy: false,
+  qfitResult: null,
+  qfitError: null,
   cmdkOpen: false,
   curveFitOpen: false,
   hysteresisOpen: false,
@@ -731,6 +764,10 @@ export const useApp = create<AppState>((set, get) => ({
       yLim: null,
       integral: null, // on-plot analysis results are tied to the old data → clear
       fwhmResult: null,
+      qfitRoi: null,
+      qfitResult: null,
+      qfitBusy: false,
+      qfitError: null,
     })),
 
   // Upload + parse each picked/dropped file; add to the library (continues on a
@@ -976,6 +1013,10 @@ export const useApp = create<AppState>((set, get) => ({
         rsmPeaks: null,
         integral: null,
         fwhmResult: null,
+        qfitRoi: null,
+        qfitResult: null,
+        qfitBusy: false,
+        qfitError: null,
         status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}`,
       };
     }),
@@ -1002,6 +1043,10 @@ export const useApp = create<AppState>((set, get) => ({
         rsmPeaks: null,
         integral: null,
         fwhmResult: null,
+        qfitRoi: null,
+        qfitResult: null,
+        qfitBusy: false,
+        qfitError: null,
       };
     }),
   // Ctrl/Cmd-click: add or remove a row from the multi-selection WITHOUT changing
@@ -1168,6 +1213,10 @@ export const useApp = create<AppState>((set, get) => ({
         rsmPeaks: null,
         integral: null,
         fwhmResult: null,
+        qfitRoi: null,
+        qfitResult: null,
+        qfitBusy: false,
+        qfitError: null,
       };
     }),
   // Reorder the library by swapping a dataset with its neighbor (dir -1 = up,
@@ -1704,6 +1753,85 @@ export const useApp = create<AppState>((set, get) => ({
   setRegionPicked: (regionPicked) => set({ regionPicked }),
   setIntegral: (integral) => set({ integral }),
   setFwhmResult: (fwhmResult) => set({ fwhmResult }),
+  // ── Quick-fit gadget (#33) ────────────────────────────────────────────────
+  setQfitRoi: (roi) => {
+    set({ qfitRoi: roi });
+    if (_qfitTimer) {
+      clearTimeout(_qfitTimer);
+      _qfitTimer = null;
+    }
+    if (!roi) {
+      // A cleared ROI (sub-6px click, or an explicit clear) drops the result
+      // + chip; only null the shared fit overlay if THIS gadget set it (a
+      // result was ever produced) — never clobber an unrelated fit overlay
+      // (e.g. the Curve Fit workshop's) just because the tool was touched.
+      set((s) => ({
+        qfitResult: null,
+        qfitBusy: false,
+        qfitError: null,
+        fitOverlay: s.qfitResult != null ? null : s.fitOverlay,
+      }));
+      return;
+    }
+    // Debounced: a burst of drag-move events triggers ONE fit request.
+    _qfitTimer = setTimeout(() => {
+      _qfitTimer = null;
+      void get().runQuickFit();
+    }, 350);
+  },
+  setQfitModel: (qfitModel) => {
+    set({ qfitModel });
+    // Switching model while an ROI is active refits it (debounced, like a move).
+    if (get().qfitRoi) get().setQfitRoi(get().qfitRoi);
+  },
+  runQuickFit: async () => {
+    const s = get();
+    const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
+    if (!active || !s.qfitRoi) return;
+    const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
+    const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
+    const sel = selectRoiRows(active, s.qfitRoi, col);
+    if (sel.x.length < 2) {
+      set({ qfitError: "not enough points in the selected region", qfitBusy: false });
+      return;
+    }
+    set({ qfitBusy: true, qfitError: null });
+    try {
+      const r = await fitModel({ model: s.qfitModel, x: sel.x, y: sel.y });
+      // Guard a stale response: the gadget may have been cleared, or the
+      // active dataset switched, while the request was in flight.
+      const cur = get();
+      if (cur.activeId !== active.id || !cur.qfitRoi) return;
+      set({ qfitResult: r, qfitBusy: false });
+      const yFit = r.yFit as (number | null)[] | undefined;
+      if (Array.isArray(yFit)) {
+        // yFit aligns to the ROI-sliced rows; expand back to the full row
+        // count (null outside the ROI / excluded / filtered) so it overlays
+        // the full-length plot x in register — the expandToFull pattern
+        // useCurveFit uses for the whole-dataset case (rowstate.ts).
+        const y = expandToFull(yFit, sel.rows, active.data.time.length);
+        set({ fitOverlay: { datasetId: active.id, y } });
+      }
+    } catch (e) {
+      set({ qfitBusy: false, qfitError: e instanceof Error ? e.message : "fit failed" });
+    }
+  },
+  commitQfit: () => {
+    const s = get();
+    const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
+    if (!active || !s.qfitResult) return;
+    // Recorded like the Curve Fit workshop's own commit (lib/pipeline "fit"
+    // step) so the pipeline view can edit/replay it identically.
+    get().recordMacro(`Fit ${s.qfitModel}`, `qz.fit(${lit(s.qfitModel)})`, {
+      kind: "fit",
+      params: { model: s.qfitModel },
+    });
+    // Durable fit spec: the recalc graph (#1) re-runs / stales this fit over
+    // the dataset's full analysis view when the data changes — the gadget's
+    // ROI only shaped which model + starting rows the user previewed with.
+    get().setFitSpec(active.id, { model: s.qfitModel });
+  },
+  clearQfit: () => get().setQfitRoi(null),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
   setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),
   setHysteresisOpen: (hysteresisOpen) => set({ hysteresisOpen }),

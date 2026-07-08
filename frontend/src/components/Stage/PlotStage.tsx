@@ -35,6 +35,7 @@ import PlotReadouts from "./PlotReadouts";
 import PlotResultChips from "./PlotResultChips";
 import PlotToolbar from "./PlotToolbar";
 import PolarStage from "./PolarStage";
+import { useQuickFitChip } from "./useQuickFitChip";
 
 export default function PlotStage() {
   const active = useActiveDataset();
@@ -82,6 +83,8 @@ export default function PlotStage() {
   const fwhmResult = useApp((s) => s.fwhmResult);
   const setIntegral = useApp((s) => s.setIntegral);
   const setFwhmResult = useApp((s) => s.setFwhmResult);
+  const setQfitRoi = useApp((s) => s.setQfitRoi);
+  const qfit = useQuickFitChip();
   // stack/inset/polar values gate the alternate render modes here; their toggle
   // setters live in PlotToolbar, which owns the tool dock.
   const stackMode = useApp((s) => s.stackMode);
@@ -242,6 +245,14 @@ export default function PlotStage() {
         fwhmResult,
         onIntegrate: setIntegral,
         onFwhm: setFwhmResult,
+        // Read imperatively (not a reactive dependency below) — the plugin's
+        // own instance-local state tracks live drag moves between rebuilds;
+        // this only seeds a FRESH instance after some OTHER dep triggers one
+        // (e.g. a debounced fit landing). Keeping qfitRoi off the dependency
+        // list avoids rebuilding the whole plot (and orphaning the plugin's
+        // in-flight drag listeners) on every ROI move.
+        qfitRoi: useApp.getState().qfitRoi,
+        onRoiChange: setQfitRoi,
       }),
       displayPayload.data,
       host,
@@ -265,10 +276,13 @@ export default function PlotStage() {
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the
-  // drawn segment; this resets the React-side readout).
+  // drawn segment; this resets the React-side readout). Leaving the quick-fit
+  // tool clears its ROI/chip/overlay too — unlike ∫/∩, it does NOT persist
+  // across tool switches (Escape does the same via the chip's dismiss).
   useEffect(() => {
     setMeasurement(null);
     setStatsSel(null);
+    if (tool !== "qfit") useApp.getState().clearQfit();
   }, [tool, active]);
 
   function resetView() {
@@ -354,6 +368,7 @@ export default function PlotStage() {
       { separator: true },
       { label: "Integrate tool (area under curve)", run: () => s.setPlotTool("integ") },
       { label: "Peak / FWHM tool", run: () => s.setPlotTool("fwhm") },
+      { label: "Quick-fit tool (drag a region to fit)", run: () => s.setPlotTool("qfit") },
       { label: "Measure tool (Δx, Δy)", run: () => s.setPlotTool("measure") },
       { separator: true },
       { label: "Copy plotted data (TSV)", run: copyData },
@@ -396,6 +411,7 @@ export default function PlotStage() {
         fwhm={fwhmResult}
         onClearIntegral={() => setIntegral(null)}
         onClearFwhm={() => setFwhmResult(null)}
+        qfit={qfit}
       />
       {displayPayload && showLegend && (
         <PlotLegend series={displayPayload.series} styleList={styleList} plotted={plotted} hidden={hidden} />
