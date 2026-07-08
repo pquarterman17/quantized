@@ -4,6 +4,8 @@
     qz --port 9000      use a different port
     qz --no-browser     don't open a browser (headless / CI)
     qz plugin list      list discovered plugins and what they contribute
+    qz plugin enable <name>    re-enable a previously disabled plugin
+    qz plugin disable <name>   disable a plugin without deleting it
 
 The UI is served from the Vite build output (``src/quantized/web``). On a bare
 dev checkout that directory is absent — build it once with
@@ -69,17 +71,32 @@ def _serve(argv: list[str]) -> None:
 
 
 def _plugin_command(argv: list[str]) -> None:
-    """``qz plugin ...`` — inspect installed/drop-in plugins.
+    """``qz plugin ...`` — inspect and manage installed/drop-in plugins.
 
-    Only ``list`` exists in v1 (enable/disable arrive with gap #10; until then
-    disable by adding a source name to the ``disabled`` list in
-    ``<config_dir>/plugins.json``). No subcommand defaults to ``list``.
+    Subcommands: ``list`` (default — also runs when no subcommand is given),
+    ``enable <name>``, ``disable <name>``. ``<name>`` is the source
+    identifier shown in the first column of ``qz plugin list`` (the drop-in
+    module's file stem, or the entry-point name for a packaged plugin).
+    Enable/disable persist the ``disabled`` list in
+    ``<config_dir>/plugins.json`` (see :mod:`quantized.plugins.loader`); a
+    disabled plugin is never imported, so it can be parked without deleting
+    it.
     """
     parser = argparse.ArgumentParser(prog="qz plugin", description="Inspect quantized plugins.")
     sub = parser.add_subparsers(dest="action")
     sub.add_parser("list", help="list discovered plugins and what they contribute")
-    parser.parse_args(argv)
-    _plugin_list()
+    enable_parser = sub.add_parser("enable", help="re-enable a disabled plugin")
+    enable_parser.add_argument("name", help="plugin source identifier (see 'qz plugin list')")
+    disable_parser = sub.add_parser("disable", help="disable a plugin without deleting it")
+    disable_parser.add_argument("name", help="plugin source identifier (see 'qz plugin list')")
+    args = parser.parse_args(argv)
+
+    if args.action == "enable":
+        _plugin_set_enabled(args.name, enabled=True)
+    elif args.action == "disable":
+        _plugin_set_enabled(args.name, enabled=False)
+    else:
+        _plugin_list()
 
 
 def _plugin_list() -> None:
@@ -105,6 +122,34 @@ def _plugin_list() -> None:
             print(f"    steps: {', '.join(info.steps)}")
         if info.error:
             print(f"    ! {info.error}")
+
+
+def _plugin_set_enabled(name: str, *, enabled: bool) -> None:
+    """``qz plugin enable|disable <name>``: flip ``name``'s disabled state.
+
+    ``name`` is validated against the currently discoverable plugins (a
+    disabled plugin still shows up here — only a nonexistent source is
+    rejected) so a typo fails loudly with the known names, instead of
+    silently writing a dead entry to ``plugins.json``. Reloads afterwards so
+    the change (and a following ``qz plugin list``) reflects it immediately.
+    """
+    from quantized.plugins import disable_plugin, enable_plugin, load_plugins
+
+    known = {info.source for info in load_plugins()}
+    if name not in known:
+        print(f"[qz] unknown plugin {name!r}.")
+        if known:
+            print(f"  known plugins: {', '.join(sorted(known))}")
+        else:
+            print("  no plugins discovered. Run 'qz plugin list' for details.")
+        sys.exit(1)
+
+    if enabled:
+        enable_plugin(name)
+    else:
+        disable_plugin(name)
+    load_plugins()
+    print(f"[qz] plugin {name!r} {'enabled' if enabled else 'disabled'}.")
 
 
 if __name__ == "__main__":

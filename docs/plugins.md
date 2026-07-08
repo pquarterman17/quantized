@@ -154,8 +154,26 @@ column of `qz plugin list`) to a `disabled` list in
 ```
 
 A disabled plugin is **not imported at all** — safe to use for a plugin that
-errors on import. (Dedicated `qz plugin enable` / `disable` subcommands are a
-planned convenience; until then, edit this file.)
+errors on import.
+
+The `qz plugin enable` / `disable` subcommands do the same edit for you:
+
+```console
+$ qz plugin disable broken_one
+[qz] plugin 'broken_one' disabled.
+$ qz plugin list
+broken_one  [disabled]
+$ qz plugin enable broken_one
+[qz] plugin 'broken_one' enabled.
+```
+
+`<name>` is the **source identifier** — the first column of `qz plugin list`
+(a drop-in plugin's file stem, or a packaged plugin's entry-point name), not
+the human-facing `QZ_PLUGIN["name"]`. Both subcommands are idempotent
+(disabling an already-disabled plugin, or enabling one that isn't disabled,
+is a no-op) and create `plugins.json` on first use. An unknown name is
+rejected with a list of the currently discoverable source identifiers and a
+non-zero exit code — nothing is written.
 
 ---
 
@@ -248,4 +266,74 @@ is a registered step.
   contribution type + CI pinned to a quantized version) — gap #10.
 - Interactive pipeline-palette surfacing + template/batch replay of plugin
   steps.
-- `qz plugin enable` / `disable` subcommands (today: edit `plugins.json`).
+
+---
+
+## Publishing & discovering plugins
+
+There is no plugin registry service (see the trust model above — quantized
+deliberately stays out of the business of vetting third-party code). Publishing
+a plugin today means shipping an ordinary installable Python package; here's
+the shape that makes it discoverable.
+
+### Naming and shipping a plugin package
+
+1. Pick a distribution name (PyPI-style, e.g. `quantized-acme-reader`) and lay
+   out a normal package — a `pyproject.toml` plus one importable module that
+   defines `QZ_PLUGIN` and its contribution lists, exactly as in the [worked
+   example](#worked-single-file-example-all-three-contribution-types) above.
+2. Register the module under the `quantized.plugins` entry-point group so
+   quantized's discovery (`importlib.metadata.entry_points(group="quantized.plugins")`)
+   finds it once installed — no quantized-side registration step:
+
+   ```toml
+   # pyproject.toml
+   [project]
+   name = "quantized-acme-reader"
+   dependencies = ["quantized"]
+
+   [project.entry-points."quantized.plugins"]
+   acme_reader = "quantized_acme_reader.plugin"   # module defining QZ_PLUGIN + PARSERS/...
+   ```
+3. Publish it however you publish any Python package (PyPI, a private index,
+   or just `pip install git+https://...`). A user installs it into the same
+   environment as `quantized` (`pip install quantized-acme-reader`, or
+   `uv pip install ...`) and it shows up in `qz plugin list` on the next
+   launch — no restart-and-hope, since discovery happens once at startup, and
+   `qz plugin list`/`enable`/`disable` re-run discovery on demand.
+4. Pin a `quantized` version range in `dependencies` and bump it deliberately
+   when the plugin contract (`api_version`, currently `1`) changes — a plugin
+   declaring an incompatible `api_version` is skipped with a logged warning,
+   never crashes the host.
+
+Drop-in `.py` files (the other discovery path, see above) are the right
+choice for a personal or lab-internal script that never needs to be
+`pip install`-ed by anyone else; package + entry point is the right choice
+once you want to share it.
+
+### The disabled-list mechanics
+
+Every discovered plugin — file or package — is keyed by its **source
+identifier** (file stem or entry-point name) in
+`<config_dir>/plugins.json`'s `disabled` list (see "Enabling / disabling"
+above). This is host-side, per-installation state: it travels with the
+quantized config directory, not with the plugin package, so uninstalling a
+package doesn't require editing `plugins.json` first (a stale disabled
+entry for a package that's no longer installed is simply never matched by
+discovery, and is harmless).
+
+### Discovering plugins (index)
+
+There is no live index yet — this section is the placeholder called out
+above ("Not yet in v1", gap #10) until a `quantized-plugin-template` repo
+exists to link from here. In the meantime, `qz plugin list` is the source of truth
+for *what's installed*; to find *what exists*, search PyPI/GitHub for
+packages exposing the `quantized.plugins` entry point (e.g.
+`quantized-*` naming, or a `quantized-plugin` topic tag on GitHub, once
+enough plugins exist to make that worth curating). Known plugins:
+
+| Plugin | Contributes | Link |
+|--------|--------------|------|
+| _(none published yet)_ | | |
+
+If you publish a quantized plugin, open a PR adding it to this table.
