@@ -12,7 +12,9 @@ away on import and re-approximated from name prefixes.
 
 **Status:** Active
 **Created:** 2026-07-04
-**Updated:** 2026-07-05 (item 5 complete — figures persist in `.dwk` AND nest in the tree)
+**Updated:** 2026-07-08 (items 3, 4, 6 complete — drop-between DnD reorder/reparent
+shipped (3b) and the legacy `group` string is fully migrated into folders (6),
+closing item 4's last box too; only Tier 3 nice-to-haves remain open)
 
 ---
 
@@ -76,64 +78,6 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
 
 ---
 
-## Tier 1 — High Impact
-
-3. **Library tree UI (decomposed) + drag move/reorder** — the Project
-   Explorer view, built to stay under the component ceiling. (3a landed;
-   drag-*reorder* within a folder remains — 3b.)
-   - [x] `useLibraryTree` hook (folders[] + datasets[] → ordered, nested
-         view-model with expand/collapse). — `8a2b45b`
-   - [x] `FolderRow` component; `Library.tsx` stays a thin container mapping
-         tree rows to FolderRow/DatasetRow.
-   - [x] Move a dataset into a folder — drag a row onto a folder header, or
-         the row context menu; folder menu: New subfolder / Rename / Delete.
-   - [x] Replace the reorder-vs-group exclusion (flat up/down arrows hidden
-         once folders exist).
-   - [ ] Drag to **reorder** within a folder (drop-between) and drag a folder
-         to reparent/reposition — the `move*` store actions already support
-         it; only the drop-target DnD is left (3b).
-
----
-
-## Tier 2 — Medium Impact
-
-4. **Origin import → auto folder structure** — stop discarding the decoded
-   hierarchy. Ground truth (live COM, OriginPro 2026b): corpus projects have
-   REAL Project Explorer folders (Moke.opj → `Raw normalized`/`Sub subtraction`;
-   RockingCurve.opju → `Folder1`), so faithful mirroring needs the PE folder
-   tree, not just book→sheet.
-   - [x] Frontend: `planOriginFolders` builds project folder (stem) →
-         `origin_folder_path` (nested PE folders) → multi-sheet book subfolders
-         → sheets; wired into `importFiles`; flat file→book→sheet fallback when
-         no folder path. General, not sample-tuned (keyed on structure, not
-         joined names: arbitrary depth / duplicate / unicode / spaced names).
-         (`dc42f99`, `a94fc16`)
-   - [x] Backend: `io/origin_project/tree.py` decodes the PE folder tree and
-         attaches `metadata.origin_folder_path` (root-exclusive). **`.opj`:
-         100% vs live-Origin-COM across 7 diverse files (611/611 windows, incl.
-         4–5-level nesting + duplicate names + root-level mixes). `.opju`: BOTH
-         CPYUA sub-versions decoded by one unified parser — 4.3811 (OriginPro
-         2026b) on 11 controlled specimens + 4.3380 (the sample corpus) on all
-         5 corpus files, byte-exact vs live COM. Handles the 39-book `Hc2 data`
-         (report-table windows in the ordinal space + sibling/nested folders) —
-         the case that broke the first naive attempt. Fail-closed on any
-         framing/consistency mismatch.** (`4e1031e`, `d27a1bb`)
-   - [x] Verified Origin PE tree == Boson Library tree via COM: `.opj` matches
-         (XRD `Folder1`✓, Moke `Raw normalized`/`Sub subtraction`✓); `.opju`
-         4.3811 (real1/real2/deep3/emptyf/split/nested) AND 4.3380
-         (RockingCurve/XAS/UnpolPlots/Fixed Lambdas/Hc2) all COM-pinned.
-   - [ ] Retire `originBookFamilies`/`originSheetGroups` as the *primary*
-         grouping once folders exist (keep as a fallback for un-foldered
-         legacy datasets, or delete if migration covers them). *(overlaps #6)*
-
-6. **Migrate the flat `group` string → folders** — one organizational model,
-   not two.
-   - [ ] On load/migration, map each distinct `Dataset.group` to a
-         root-level folder and set `folderId`; drop the `group` chip UI.
-   - [ ] Keep a compatibility read of `group` for old `.dwk` files.
-
----
-
 ## Tier 3 — Nice-to-Have
 
 7. **Enforce the component max-lines ceiling** — the ~400-line rule has no
@@ -153,6 +97,48 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
 
 ## Completed
 
+- ~~**6. Migrate the flat `group` string → folders**~~ (2026-07-08) —
+  `lib/foldertree.migrateGroupsToFolders` (pure, idempotent): for every
+  un-foldered dataset carrying a non-blank `.group`, create-or-reuse (by name)
+  a root-level folder and move the dataset into it, then clears `.group` — its
+  job (migration) is done, so re-running on an already-migrated set is a true
+  no-op (same array references). Wired into `useApp.loadWorkspace`, which
+  BOTH triggers that call it (the autosave restore on startup, and an
+  explicit File ▸ Open `.dwk`) funnel through, so a v1 doc migrates exactly
+  once either way; the newly-created folder is auto-revealed
+  (`expandedFolders`). Dropped the group-chip UI entirely: `DatasetRow`'s
+  group input/button, `Library`'s group-filter dropdown, and the collapsible
+  group-sections rendering; `lib/grouping.ts`'s `groupDatasets`/`hasAnyGroup`/
+  `groupNames` (which existed only to serve that UI) removed along with their
+  tests. `Dataset.group` the field + `parseWorkspace`'s read stay — the
+  compat surface the plan asked to keep — nothing renders off it anymore.
+  +9 pure/store tests (creation, dedup-by-name reuse, idempotence-on-reload,
+  clearing) + 3 Library integration tests confirming the flat-list fallback
+  still renders correctly once groups are gone.
+- ~~**4. Origin import → auto folder structure**~~ (2026-07-08) — closed the
+  last open box: `originSheetGroups`' "sheet N" chip/indent decoration
+  (`Library.tsx`) is now gated to `folders.length === 0` — a fallback for
+  un-foldered legacy datasets (a `.dwk` saved before this item shipped) only.
+  Once real folders exist (`planOriginFolders`, landed earlier), the tree's
+  own nesting already conveys the sheet relationship, so the chip would just
+  double-decorate it. `originBookFamilies`' bulk-manage widget
+  (`BookFamiliesSection`) is untouched — it was never a render-grouping
+  mechanism, so "retire as primary grouping" didn't apply to it.
+- ~~**3. Library tree UI (decomposed) + drag move/reorder**~~ (2026-07-08) —
+  3b (the drop-target DnD) shipped, closing the item: `lib/foldertree` gained
+  pure hit-testing (`dropEdgeAt` — half-height split for dataset-row reorder;
+  `dropZoneAt` — 3-zone split for folder headers; `resolveDropBeforeId`).
+  `DatasetRow` shows a thin above/below indicator while a dataset drag hovers
+  it and, on drop, reorders within (or moves into) the hovered row's own
+  folder. `FolderRow` now ALSO accepts a dragged folder (a distinct
+  `FOLDER_DND` payload type): the thin top/bottom edge bands reposition it as
+  a sibling of the target (before/after, same parent), the wide middle band
+  reparents it into the target — dropping a folder into its own descendant is
+  a silent no-op via `moveFolder`'s existing `isSelfOrDescendant` cycle guard
+  (no new UI-side check needed). +25 tests: foldertree geometry (pure) +
+  DatasetRow/FolderRow DnD wiring via the synthetic-DragEvent pattern
+  (`AxisDropZones.test.tsx`'s jsdom workaround — hand-built `DragEvent` +
+  mocked `getBoundingClientRect`).
 - ~~**5. Persistent figures inside the tree**~~ (2026-07-05) — two halves:
   **(a) `.dwk` persistence** — `originFigures` serialized in `lib/workspace.ts`
   and restored in `useApp.loadWorkspace` (was hard-reset to `[]`, dropping every

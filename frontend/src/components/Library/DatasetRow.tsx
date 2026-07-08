@@ -1,7 +1,11 @@
 // A single Library dataset row: name (double-click to rename), sparkline, footer
-// (meta + reorder/duplicate/remove), then a group chip + tag chips. Each row owns
-// its own inline-edit state. Extracted from Library so the list can render rows
-// inside collapsible group sections without duplicating the markup.
+// (meta + reorder/duplicate/remove), then tag chips. Each row owns its own
+// inline-edit state. Extracted from Library so the list can render rows inside
+// the folder tree without duplicating the markup. Also a drop-between reorder
+// target (project-organization plan item 3b): dragging another dataset row
+// over the top/bottom half of this one shows a thin indicator and, on drop,
+// reorders within (or moves into) THIS row's own folder — see lib/foldertree's
+// dropEdgeAt/resolveDropBeforeId for the pure hit-testing.
 
 import { useState } from "react";
 
@@ -9,6 +13,7 @@ import Sparkline from "./Sparkline";
 import { DATASET_DND } from "./useLibraryTree";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { Badge } from "../primitives";
+import { dropEdgeAt, folderDatasets, resolveDropBeforeId, type DropEdge } from "../../lib/foldertree";
 import type { Dataset } from "../../lib/types";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
@@ -61,16 +66,17 @@ export default function DatasetRow({
   const renameDataset = useApp((s) => s.renameDataset);
   const addDatasetTag = useApp((s) => s.addDatasetTag);
   const removeDatasetTag = useApp((s) => s.removeDatasetTag);
-  const setDatasetGroup = useApp((s) => s.setDatasetGroup);
   const moveDatasetToFolder = useApp((s) => s.moveDatasetToFolder);
   const createFolder = useApp((s) => s.createFolder);
   const folders = useApp((s) => s.folders);
 
-  // Inline editors (null = not editing); group/rename allow an empty draft.
+  // Inline editors (null = not editing); rename allows an empty draft.
   const [rename, setRename] = useState<string | null>(null);
   const [tag, setTag] = useState<string | null>(null);
-  const [group, setGroup] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  // Drop-between indicator (plan item 3b): which edge of THIS row a dragged
+  // dataset is currently hovering, or null when no drag is over this row.
+  const [dropEdge, setDropEdge] = useState<DropEdge | null>(null);
 
   const commitRename = () => {
     if (rename != null) renameDataset(d.id, rename);
@@ -79,10 +85,6 @@ export default function DatasetRow({
   const commitTag = () => {
     if (tag && tag.trim()) addDatasetTag(d.id, tag);
     setTag(null);
-  };
-  const commitGroup = () => {
-    if (group != null) setDatasetGroup(d.id, group);
-    setGroup(null);
   };
 
   // Plain click activates (and collapses the selection); ctrl/cmd toggles this row
@@ -184,12 +186,34 @@ export default function DatasetRow({
     <div
       className={`qzk-ds${active ? " active" : ""}${selected ? " selected" : ""}${
         sheetNumber ? " qzk-ds-sheet" : ""
-      }`}
+      }${dropEdge ? ` drop-${dropEdge}` : ""}`}
       style={depth ? { marginLeft: depth * 14 } : undefined}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData(DATASET_DND, d.id);
         e.dataTransfer.effectAllowed = "move";
+      }}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(DATASET_DND)) return;
+        e.preventDefault(); // required every dragover to keep the drop legal
+        const edge = dropEdgeAt(e.currentTarget.getBoundingClientRect(), e.clientY);
+        if (edge !== dropEdge) setDropEdge(edge);
+      }}
+      onDragLeave={() => setDropEdge(null)}
+      onDrop={(e) => {
+        if (!e.dataTransfer.types.includes(DATASET_DND)) return;
+        e.preventDefault();
+        e.stopPropagation(); // don't let it bubble to FolderRow/Library's file dropzone
+        const edge = dropEdge ?? dropEdgeAt(e.currentTarget.getBoundingClientRect(), e.clientY);
+        setDropEdge(null);
+        const draggedId = e.dataTransfer.getData(DATASET_DND);
+        if (!draggedId || draggedId === d.id) return; // no-op: dropped onto itself
+        // Reorder within THIS row's own folder (or move into it, if the dragged
+        // dataset lived elsewhere — "moves into the between-position's folder").
+        const folderId = d.folderId ?? null;
+        const siblingIds = folderDatasets(useApp.getState().datasets, folderId).map((x) => x.id);
+        const beforeId = resolveDropBeforeId(siblingIds, d.id, edge);
+        moveDatasetToFolder(draggedId, folderId, beforeId);
       }}
       onClick={onRowClick}
       onContextMenu={onContextMenu}
@@ -295,32 +319,6 @@ export default function DatasetRow({
         </span>
       </div>
       <div className="qzk-ds-tags">
-        {group != null ? (
-          <input
-            className="qz-input qzk-tag-input"
-            autoFocus
-            placeholder="group…"
-            value={group}
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => setGroup(e.target.value)}
-            onBlur={commitGroup}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitGroup();
-              if (e.key === "Escape") setGroup(null);
-            }}
-          />
-        ) : (
-          <button
-            className={d.group ? "qzk-tag qzk-group-chip" : "qzk-tag qzk-tag-add"}
-            title={d.group ? `Group "${d.group}" — click to change` : "Set a group"}
-            onClick={(e) => {
-              e.stopPropagation();
-              setGroup(d.group ?? "");
-            }}
-          >
-            {d.group || "group…"}
-          </button>
-        )}
         {(d.tags ?? []).map((t) => (
           <span
             key={t}

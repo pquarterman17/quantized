@@ -189,3 +189,100 @@ export function pruneOrphans(folders: FolderNode[], datasets: Dataset[]): Datase
   });
   return changed ? next : datasets;
 }
+
+/**
+ * Migrate legacy `Dataset.group` strings into folders (project-organization
+ * plan item 6 — "one organizational model, not two"). For every dataset that
+ * carries a non-blank `group` but no `folderId`, resolve (create-or-reuse by
+ * name) a ROOT-level folder named after the group, move the dataset into it,
+ * and clear `group` — its job was migration, and clearing it keeps the
+ * retired group-chip UI's `hasAnyGroup`-style checks honest (nothing left to
+ * render twice).
+ *
+ * Idempotent: a dataset that already has a `folderId` (already migrated, or
+ * organized some other way) is left alone, so re-running this on an
+ * already-migrated set — e.g. every autosave reload — is a true no-op and
+ * returns the SAME array references. Multiple datasets sharing a group name
+ * land in one folder; a root folder already named like the group (hand-made,
+ * or created by an earlier migration run) is reused rather than duplicated.
+ */
+export function migrateGroupsToFolders(
+  folders: FolderNode[],
+  datasets: Dataset[],
+  genId: () => string,
+): { folders: FolderNode[]; datasets: Dataset[]; createdFolderIds: string[] } {
+  const pending = datasets.filter((d) => d.folderId == null && d.group?.trim());
+  if (pending.length === 0) return { folders, datasets, createdFolderIds: [] };
+
+  let nextFolders = folders;
+  const createdFolderIds: string[] = [];
+  const idByName = new Map(childFolders(folders, null).map((f) => [f.name, f.id]));
+  for (const d of pending) {
+    const name = d.group!.trim();
+    if (!idByName.has(name)) {
+      const id = genId();
+      nextFolders = createFolder(nextFolders, null, name, id);
+      idByName.set(name, id);
+      createdFolderIds.push(id);
+    }
+  }
+
+  let nextDatasets = datasets;
+  for (const d of pending) {
+    nextDatasets = moveDatasetToFolder(nextDatasets, d.id, idByName.get(d.group!.trim())!);
+  }
+  const pendingIds = new Set(pending.map((d) => d.id));
+  nextDatasets = nextDatasets.map((d) => (pendingIds.has(d.id) ? { ...d, group: undefined } : d));
+
+  return { folders: nextFolders, datasets: nextDatasets, createdFolderIds };
+}
+
+// ── drag-and-drop geometry (project-organization plan item 3b) ────────────
+// Pure hit-testing so the DnD components (DatasetRow/FolderRow) stay thin —
+// jsdom has no native DnD or layout, so keeping the geometry here (not
+// inline in a component) is what makes it unit-testable without a real drag
+// gesture (see the components' .test.tsx for the synthetic-event pattern).
+
+/** A "drop between rows" indicator position: the classic half-height split —
+ *  the pointer above a row's own vertical midpoint means "insert before this
+ *  row", below means "insert after". Used for dataset-row reorder, where a
+ *  row is never itself a drop container (no third "into" zone). */
+export type DropEdge = "above" | "below";
+
+export function dropEdgeAt(rect: { top: number; height: number }, clientY: number): DropEdge {
+  return clientY - rect.top < rect.height / 2 ? "above" : "below";
+}
+
+/** A folder header additionally accepts a THIRD zone: dropping in the wide
+ *  middle band reparents the dragged folder INTO the target (it becomes a new
+ *  child), while the thin top/bottom edge bands reposition it as a SIBLING of
+ *  the target (before/after). Edge bands are a quarter of the row height,
+ *  clamped to a comfortable minimum so a short row still has a usable edge. */
+export type DropZone3 = DropEdge | "into";
+
+export function dropZoneAt(rect: { top: number; height: number }, clientY: number): DropZone3 {
+  const edge = Math.min(rect.height / 3, Math.max(6, rect.height * 0.25));
+  const y = clientY - rect.top;
+  if (y < edge) return "above";
+  if (y > rect.height - edge) return "below";
+  return "into";
+}
+
+/**
+ * Resolve a drop edge against an ORDERED sibling-id list to the `beforeId`
+ * argument `moveDatasetToFolder`/`moveFolder` expect: "above" inserts right
+ * at `targetId`; "below" resolves to whatever sibling id comes right after it
+ * (undefined = append, when `targetId` is already last). `targetId` not being
+ * found in `siblingIds` (a stale row) also resolves to undefined (append) —
+ * safe degrade rather than a thrown error mid-drop.
+ */
+export function resolveDropBeforeId(
+  siblingIds: readonly string[],
+  targetId: string,
+  edge: DropEdge,
+): string | undefined {
+  if (edge === "above") return targetId;
+  const i = siblingIds.indexOf(targetId);
+  if (i < 0) return undefined;
+  return siblingIds[i + 1];
+}

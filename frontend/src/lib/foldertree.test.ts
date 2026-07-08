@@ -4,12 +4,16 @@ import {
   childFolders,
   createFolder,
   deleteFolder,
+  dropEdgeAt,
+  dropZoneAt,
   folderDatasets,
   isSelfOrDescendant,
+  migrateGroupsToFolders,
   moveDatasetToFolder,
   moveFolder,
   pruneOrphans,
   renameFolder,
+  resolveDropBeforeId,
   subtreeIds,
 } from "./foldertree";
 import type { Dataset, FolderNode } from "./types";
@@ -21,6 +25,14 @@ const ds = (id: string, folderId?: string, order?: number): Dataset => ({
   data: { time: [], values: [], labels: [], units: [], metadata: {} },
   ...(folderId !== undefined ? { folderId } : {}),
   ...(order !== undefined ? { order } : {}),
+});
+/** A dataset carrying only a legacy `.group` string (no folderId) — the
+ *  migrateGroupsToFolders input shape. */
+const grouped = (id: string, group: string): Dataset => ({
+  id,
+  name: id,
+  data: { time: [], values: [], labels: [], units: [], metadata: {} },
+  group,
 });
 const fld = (id: string, parentId: string | null, order: number): FolderNode => ({
   id,
@@ -157,5 +169,111 @@ describe("pruneOrphans", () => {
     const folders = [fld("a", null, 0)];
     const datasets = [ds("d1", "a", 0), ds("d2")];
     expect(pruneOrphans(folders, datasets)).toBe(datasets);
+  });
+});
+
+describe("migrateGroupsToFolders", () => {
+  it("creates one root folder per distinct group and assigns folderId, clearing group", () => {
+    const datasets = [grouped("d1", "Batch A"), grouped("d2", "Batch B"), grouped("d3", "Batch A")];
+    let seq = 0;
+    const out = migrateGroupsToFolders([], datasets, () => `f${++seq}`);
+    expect(out.folders.map((f) => f.name).sort()).toEqual(["Batch A", "Batch B"]);
+    expect(out.createdFolderIds).toHaveLength(2);
+    const byId = new Map(out.datasets.map((d) => [d.id, d]));
+    // d1 and d3 share the same folder (same group name).
+    expect(byId.get("d1")!.folderId).toBe(byId.get("d3")!.folderId);
+    expect(byId.get("d1")!.folderId).not.toBe(byId.get("d2")!.folderId);
+    // group is cleared — its job (promoting into a folder) is done.
+    expect(byId.get("d1")!.group).toBeUndefined();
+    expect(byId.get("d2")!.group).toBeUndefined();
+  });
+
+  it("reuses an existing root folder with a matching name instead of duplicating", () => {
+    const folders = [fld("existing", null, 0)];
+    const folders2 = renameFolder(folders, "existing", "Batch A");
+    const out = migrateGroupsToFolders(folders2, [grouped("d1", "Batch A")], () => "new");
+    expect(out.folders).toHaveLength(1); // no new folder created
+    expect(out.createdFolderIds).toEqual([]);
+    expect(out.datasets[0].folderId).toBe("existing");
+  });
+
+  it("leaves an already-foldered dataset alone even if it still carries a group", () => {
+    const folders = [fld("a", null, 0)];
+    const datasets = [{ ...grouped("d1", "Batch A"), folderId: "a" }];
+    const out = migrateGroupsToFolders(folders, datasets, () => "new");
+    expect(out.folders).toBe(folders); // unchanged reference — no folder created
+    expect(out.datasets).toBe(datasets); // unchanged reference — dataset untouched
+    expect(out.datasets[0].folderId).toBe("a");
+    expect(out.datasets[0].group).toBe("Batch A"); // NOT cleared — migration never ran on it
+  });
+
+  it("is a true no-op (same references) when nothing is pending", () => {
+    const folders = [fld("a", null, 0)];
+    const datasets = [ds("d1", "a", 0), ds("d2")]; // no groups at all
+    const out = migrateGroupsToFolders(folders, datasets, () => "new");
+    expect(out.folders).toBe(folders);
+    expect(out.datasets).toBe(datasets);
+    expect(out.createdFolderIds).toEqual([]);
+  });
+
+  it("is idempotent: running it twice in a row only migrates once", () => {
+    const datasets = [grouped("d1", "Batch A")];
+    const once = migrateGroupsToFolders([], datasets, () => "f1");
+    const twice = migrateGroupsToFolders(once.folders, once.datasets, () => "f2");
+    expect(twice.folders).toBe(once.folders); // no second folder created
+    expect(twice.datasets).toBe(once.datasets);
+    expect(twice.createdFolderIds).toEqual([]);
+  });
+
+  it("blank/whitespace-only group is treated as ungrouped (no folder created)", () => {
+    const out = migrateGroupsToFolders([], [grouped("d1", "   ")], () => "new");
+    expect(out.folders).toEqual([]);
+    expect(out.datasets[0].folderId).toBeUndefined();
+  });
+});
+
+describe("dropEdgeAt", () => {
+  it("splits a row at its vertical midpoint", () => {
+    const rect = { top: 100, height: 40 };
+    expect(dropEdgeAt(rect, 110)).toBe("above"); // upper half
+    expect(dropEdgeAt(rect, 130)).toBe("below"); // lower half
+    expect(dropEdgeAt(rect, 119)).toBe("above");
+    expect(dropEdgeAt(rect, 120)).toBe("below"); // exact midpoint counts as below
+  });
+});
+
+describe("dropZoneAt", () => {
+  it("splits a tall row into above/into/below (quarter-height edges)", () => {
+    const rect = { top: 0, height: 40 }; // edge = min(40/3, max(6, 10)) = 10
+    expect(dropZoneAt(rect, 5)).toBe("above");
+    expect(dropZoneAt(rect, 20)).toBe("into");
+    expect(dropZoneAt(rect, 35)).toBe("below");
+  });
+
+  it("clamps the edge band to a usable minimum on a short row", () => {
+    const rect = { top: 0, height: 10 }; // edge = min(10/3, max(6, 2.5)) = 3.33
+    expect(dropZoneAt(rect, 1)).toBe("above");
+    expect(dropZoneAt(rect, 5)).toBe("into");
+    expect(dropZoneAt(rect, 9)).toBe("below");
+  });
+});
+
+describe("resolveDropBeforeId", () => {
+  const siblingIds = ["a", "b", "c"];
+
+  it("above resolves to the target id itself (insert right there)", () => {
+    expect(resolveDropBeforeId(siblingIds, "b", "above")).toBe("b");
+  });
+
+  it("below resolves to the next sibling's id", () => {
+    expect(resolveDropBeforeId(siblingIds, "a", "below")).toBe("b");
+  });
+
+  it("below on the last sibling resolves to undefined (append)", () => {
+    expect(resolveDropBeforeId(siblingIds, "c", "below")).toBeUndefined();
+  });
+
+  it("a stale/missing target resolves to undefined (append) on below", () => {
+    expect(resolveDropBeforeId(siblingIds, "ghost", "below")).toBeUndefined();
   });
 });
