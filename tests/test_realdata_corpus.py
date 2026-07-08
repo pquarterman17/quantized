@@ -52,9 +52,8 @@ def test_corpus_file_imports(corpus_dir: Path, rel: str) -> None:
 def test_corpus_xrdml_full_sweep(corpus_dir: Path) -> None:
     """ORIGIN_GAP_PLAN #46 (PIXcel3D audit): EVERY PANalytical corpus file must
     parse — schemas 1.0-2.2, PIXcel/PIXcel1D/PIXcel3D/GaliPIX3D detectors,
-    1-D scans + RSMs + pole figures. Known limitation (tracked in the plan):
-    schema-1.0 and schema-2.x RSMs import as flattened 1-D (mesh detection
-    only recognizes the schema-1.3 scanning-line layout)."""
+    1-D scans, RSMs (mesh/snapshot/coupled), and pole figures (mesh_kind
+    "pole", gap #46 residual — see test_io_xrdml.py::test_pole_figure_*)."""
     files = sorted((corpus_dir / "panalytical" / "xrd").glob("*.xrdml"))
     if not files:
         pytest.skip("no PANalytical corpus files present")

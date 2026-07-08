@@ -3,7 +3,9 @@
 Split out of ``io/xrdml.py`` (500-line module ceiling). ``_Scan`` is the
 per-scan record collected during the parse; ``_classify_cloud`` /
 ``_build_2d_cloud`` implement the snapshot/coupled RSM layouts that go
-beyond the MATLAB-compatible mesh (see the ``io/xrdml`` module docstring).
+beyond the MATLAB-compatible mesh (see the ``io/xrdml`` module docstring);
+``_classify_pole`` / ``_build_pole`` implement the pole-figure layout
+(gap #46 residual).
 """
 
 from __future__ import annotations
@@ -18,6 +20,10 @@ from quantized.calc.qspace import compute_qspace
 from quantized.datastruct import DataStruct
 
 _SECONDARY_AXES = ("Omega", "Chi", "Phi")
+# Tilt-axis element names PANalytical schemas use for pole-figure cradles:
+# "Psi" on texture-goniometer (Eulerian/chi-less) cradles, "Chi" on older
+# Eulerian cradles. Checked in this order; either satisfies _classify_pole.
+_TILT_AXES = ("Psi", "Chi")
 
 class _Scan:
     """Per-scan data collected during the parse (1D concat + 2D classification)."""
@@ -95,6 +101,117 @@ def _classify_cloud(scans: list[_Scan]) -> tuple[str, str] | None:
                 if max(mids) - min(mids) > 1e-6:
                     return axis, "coupled"
     return None
+
+
+def _classify_pole(scans: list[_Scan]) -> tuple[str, float] | None:
+    """Detect a PANalytical pole-figure layout.
+
+    A pole figure holds 2Theta fixed at the Bragg condition for one
+    reflection, sweeps Phi (azimuthal, typically ~360 deg) WITHIN every
+    scan, and steps a tilt axis -- "Psi" (texture cradles) or "Chi" (older
+    Eulerian cradles) -- fixed within each scan but varying ACROSS scans.
+
+    Returns ``(tilt_axis, two_theta_deg)`` or ``None``. Must run BEFORE
+    ``_is_2d``/``_classify_cloud``: a Chi-named tilt axis alone already
+    satisfies the generic ``snapshot`` cloud pattern (fixed-per-scan,
+    varying across scans) and would silently classify as a mesh/snapshot
+    RSM while dropping the Phi sweep entirely; a Psi-named one is invisible
+    to both classifiers (Psi is not one of the axes they inspect), so it
+    would otherwise fall through to the flat 1-D path.
+    """
+    if len(scans) < 2:
+        return None
+    s0, e0 = scans[0].tt_range
+    if abs(s0 - e0) > 1e-6:
+        return None  # 2Theta itself sweeps -> not a fixed-reflection pole figure
+    tt_same = all(
+        abs(s.tt_range[0] - s0) < 1e-4 and abs(s.tt_range[1] - e0) < 1e-4 for s in scans
+    )
+    if not tt_same:
+        return None
+
+    phi_ranges = [s.sec_ranges.get("Phi") for s in scans]
+    if any(r is None for r in phi_ranges):
+        return None
+    phi_rr = [r for r in phi_ranges if r is not None]
+    if not all(r[0] != r[1] for r in phi_rr):
+        return None  # Phi must sweep WITHIN every scan
+
+    for tilt_axis in _TILT_AXES:
+        ranges = [s.sec_ranges.get(tilt_axis) for s in scans]
+        if any(r is None for r in ranges):
+            continue
+        rr = [r for r in ranges if r is not None]
+        if not all(r[0] == r[1] for r in rr):
+            continue  # tilt axis must be fixed WITHIN every scan
+        vals = [r[0] for r in rr]
+        if max(vals) - min(vals) > 1e-6:  # and step ACROSS scans
+            return tilt_axis, s0
+    return None
+
+
+def _build_pole(
+    scans: list[_Scan],
+    tilt_axis: str,
+    two_theta_deg: float,
+    path: Path,
+    intensity: str,
+    counting_time: float,
+    intensity_tag: str,
+    att: dict[str, Any],
+) -> DataStruct:
+    """Assemble a pole-figure point cloud: per-point (Phi, Psi, Intensity).
+
+    Every scan is an azimuthal Phi sweep at one fixed tilt. Unlike the RSM
+    mesh/cloud kinds, 2Theta does not vary point-to-point here -- it is the
+    single Bragg condition for the whole measurement, so it is recorded as
+    scalar metadata (``two_theta_deg``) rather than a column. The tilt axis
+    is normalized to the "Psi" label in the output regardless of whether
+    the source XML called it "Psi" or "Chi" (``tilt_axis_source`` keeps the
+    original element name), so downstream code has one consistent name.
+    Stereographic/polar projection is a later view (ORIGIN_GAP_PLAN #46) --
+    this is the flat psi x phi map that feeds it.
+    """
+    order = sorted(range(len(scans)), key=lambda i: scans[i].sec_ranges[tilt_axis][0])
+    phi = np.concatenate([scans[i].axis_vector("Phi") for i in order])
+    psi = np.concatenate(
+        [np.full(scans[i].counts.size, scans[i].sec_ranges[tilt_axis][0]) for i in order]
+    )
+    counts = np.concatenate([scans[i].counts for i in order])
+
+    vals, unit = _apply_intensity(counts, intensity, counting_time)
+    values = np.column_stack([phi, psi, np.asarray(vals, dtype=float)])
+    labels = ["Phi", "Psi", "Intensity"]
+    units = ["deg", "deg", unit]
+
+    pix_counts = {s.counts.size for s in scans}
+    n_pix = pix_counts.pop() if len(pix_counts) == 1 else None
+    metadata: dict[str, Any] = {
+        "source": str(path),
+        "parser_name": "import_xrdml",
+        "x_column_name": "Phi",
+        "x_column_unit": "deg",
+        "num_points": int(values.shape[0]),
+        "counting_time": counting_time,
+        "intensity_tag": intensity_tag,
+        "is2D": True,
+        "mesh_kind": "pole",
+        # Index grid (frames x pixels) only when every scan has the same
+        # Phi-sample count; None = ragged (rare, but no reason to require it).
+        "map_shape": [len(scans), int(n_pix)] if n_pix is not None else None,
+        "axis1_name": "Psi",
+        "axis2_name": "Phi",
+        "two_theta_deg": float(two_theta_deg),
+        "tilt_axis_source": tilt_axis,
+    }
+    metadata.update(att)
+    return DataStruct.create(
+        np.arange(values.shape[0], dtype=float),
+        values,
+        labels=labels,
+        units=units,
+        metadata=metadata,
+    )
 
 
 def _build_2d_cloud(

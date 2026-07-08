@@ -317,6 +317,137 @@ def test_coupled_scan_detection(tmp_path: Path) -> None:
     assert_allclose(om[:, 0], [19.0, 19.1, 19.2])  # steps between scans
 
 
+def _pole_scan(
+    append: int, tt: float, phi0: float, phi1: float, tilt_axis: str, tilt: float, counts: str
+) -> str:
+    return f"""<scan appendNumber="{append}" status="Completed" scanAxis="Phi">
+   <dataPoints>
+    <positions axis="2Theta" unit="deg"><commonPosition>{tt}</commonPosition></positions>
+    <positions axis="Phi" unit="deg"><startPosition>{phi0}</startPosition>
+    <endPosition>{phi1}</endPosition></positions>
+    <positions axis="{tilt_axis}" unit="deg"><commonPosition>{tilt}</commonPosition></positions>
+    <commonCountingTime unit="seconds">1.0</commonCountingTime>
+    <counts unit="counts">{counts}</counts>
+   </dataPoints>
+  </scan>"""
+
+
+def test_pole_figure_psi_naming_detected(tmp_path: Path) -> None:
+    """Texture-cradle pole figure: fixed 2Theta, Phi sweeps 0-360 WITHIN each
+    scan, Psi steps ACROSS scans -> mesh_kind='pole'. Naming matches the real
+    xrayutilities_polefig_point.xrdml corpus anchor (see below)."""
+    scans = [_pole_scan(i + 1, 53.686, 0.0, 360.0, "Psi", 15.0 * i, "1 2 3 4 5") for i in range(4)]
+    p = tmp_path / "pole_psi.xrdml"
+    p.write_text(_cloud_xrdml(scans))
+    ds = import_xrdml(p)
+    assert ds.metadata["is2D"] is True
+    assert ds.metadata["mesh_kind"] == "pole"
+    assert ds.metadata["map_shape"] == [4, 5]
+    assert ds.metadata["axis1_name"] == "Psi"
+    assert ds.metadata["axis2_name"] == "Phi"
+    assert ds.metadata["tilt_axis_source"] == "Psi"
+    assert ds.metadata["two_theta_deg"] == pytest.approx(53.686)
+    assert list(ds.labels) == ["Phi", "Psi", "Intensity"]
+    assert list(ds.units) == ["deg", "deg", "cps"]
+    phi = ds.column("Phi").reshape(4, 5)
+    psi = ds.column("Psi").reshape(4, 5)
+    assert_allclose(phi[0], np.linspace(0.0, 360.0, 5))
+    assert_allclose(psi[:, 0], [0.0, 15.0, 30.0, 45.0])
+
+
+def test_pole_figure_chi_naming_detected(tmp_path: Path) -> None:
+    """Older Eulerian-cradle pole figures name the tilt axis 'Chi' instead of
+    'Psi'; must still classify as a pole figure, not a Chi-axis 'snapshot'
+    RSM (Chi alone -- fixed per scan, varying across scans -- would
+    otherwise satisfy _classify_cloud's snapshot pattern and silently drop
+    the Phi sweep). Output normalizes the label to 'Psi' either way."""
+    scans = [_pole_scan(i + 1, 60.0, -180.0, 180.0, "Chi", 10.0 * i, "1 2 3") for i in range(3)]
+    p = tmp_path / "pole_chi.xrdml"
+    p.write_text(_cloud_xrdml(scans))
+    ds = import_xrdml(p)
+    assert ds.metadata["mesh_kind"] == "pole"
+    assert ds.metadata["tilt_axis_source"] == "Chi"
+    assert ds.metadata["axis1_name"] == "Psi"  # normalized regardless of source name
+    assert list(ds.labels) == ["Phi", "Psi", "Intensity"]
+    psi = ds.column("Psi").reshape(3, 3)
+    assert_allclose(psi[:, 0], [0.0, 10.0, 20.0])
+
+
+def test_pole_figure_needs_phi_sweep_within_every_scan(tmp_path: Path) -> None:
+    """A Psi-stepped file where Phi is fixed per scan (not swept) is not a
+    pole figure -- ambiguous layouts must never misclassify; this one falls
+    through to the flat 1-D path, same as an unrecognized secondary axis."""
+    scans = [
+        _pole_scan(i + 1, 53.686, 45.0, 45.0, "Psi", 15.0 * i, "1 2 3 4 5") for i in range(4)
+    ]
+    p = tmp_path / "not_pole.xrdml"
+    p.write_text(_cloud_xrdml(scans))
+    ds = import_xrdml(p)
+    assert ds.metadata.get("mesh_kind") != "pole"
+    assert ds.metadata["is2D"] is False
+
+
+def test_pole_figure_needs_at_least_two_scans(tmp_path: Path) -> None:
+    """A single Phi sweep at one Psi is just a normal 1-D azimuthal scan."""
+    p = tmp_path / "single_pole_scan.xrdml"
+    p.write_text(_cloud_xrdml([_pole_scan(1, 53.686, 0.0, 360.0, "Psi", 0.0, "1 2 3 4 5")]))
+    ds = import_xrdml(p)
+    assert ds.metadata["is2D"] is False
+
+
+def test_existing_mesh_kinds_unaffected_by_pole_detection(
+    fixtures_dir: Path, tmp_path: Path
+) -> None:
+    """Regression guard (gap #46): the pole-figure classifier runs BEFORE
+    _is_2d/_classify_cloud and adds 'Psi' to the axes captured per scan --
+    neither change may alter classification of the three pre-existing mesh
+    kinds (none of their fixtures use Phi or Psi)."""
+    mesh = import_xrdml(fixtures_dir / _RSM)
+    assert mesh.metadata["mesh_kind"] == "mesh"
+
+    snap_scans = [
+        _snapshot_scan(i + 1, 40.0 + 0.1 * i, 41.0 + 0.1 * i, 20.0 + 0.05 * i, "1 2 3 4")
+        for i in range(4)
+    ]
+    p1 = tmp_path / "snap_regress.xrdml"
+    p1.write_text(_cloud_xrdml(snap_scans))
+    assert import_xrdml(p1).metadata["mesh_kind"] == "snapshot"
+
+    coup_scans = [
+        _coupled_scan(i + 1, 19.0 + 0.1 * i, 21.0 + 0.1 * i, "5 6 7 8 9") for i in range(3)
+    ]
+    p2 = tmp_path / "coup_regress.xrdml"
+    p2.write_text(_cloud_xrdml(coup_scans))
+    assert import_xrdml(p2).metadata["mesh_kind"] == "coupled"
+
+
+@pytest.mark.realdata
+def test_pole_figure_corpus_anchor(corpus_dir: Path) -> None:
+    """Real PANalytical pole-figure file (xrayutilities corpus; GPL-2.0,
+    flagged copyleft in ../test-data/panalytical/xrd/MANIFEST.md -- kept
+    local-only, never redistributed, used purely as a private parsing
+    oracle): 91 Psi steps (0-90 deg) x 1199 Phi points (~-179.7..179.7 deg)
+    at a fixed 2Theta=53.686 deg reflection -> mesh_kind='pole', flipping
+    the known-limitation note in test_realdata_corpus.py to a positive
+    assertion."""
+    path = corpus_dir / "panalytical" / "xrd" / "xrayutilities_polefig_point.xrdml"
+    if not path.exists():
+        pytest.skip("pole-figure corpus file missing")
+    ds = import_xrdml(path)
+    assert ds.metadata["is2D"] is True
+    assert ds.metadata["mesh_kind"] == "pole"
+    assert ds.metadata["tilt_axis_source"] == "Psi"
+    assert ds.metadata["map_shape"] == [91, 1199]
+    assert ds.metadata["two_theta_deg"] == pytest.approx(53.686, abs=1e-3)
+    assert list(ds.labels) == ["Phi", "Psi", "Intensity"]
+    phi = ds.column("Phi")
+    psi = ds.column("Psi")
+    assert phi.min() == pytest.approx(-179.70, abs=1e-2)
+    assert phi.max() == pytest.approx(179.70, abs=1e-2)
+    assert psi.min() == pytest.approx(0.0, abs=1e-6)
+    assert psi.max() == pytest.approx(90.0, abs=1e-6)
+
+
 def test_two_range_1d_file_is_not_a_cloud(tmp_path: Path) -> None:
     """A 2-range 1-D file with distinct fixed omegas must stay 1-D (the cloud
     classifier requires >= 3 scans)."""
