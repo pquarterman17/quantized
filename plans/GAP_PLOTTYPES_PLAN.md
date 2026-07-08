@@ -131,21 +131,19 @@ written below.
 
 ## Tier 1 — High Impact
 
-1. **Split `routes/export.py` back under the 500-line ceiling** — the
-   integrity guard (`tests/test_repo_integrity.py::test_no_god_modules`)
-   is red on main at 526 lines, and items 3–5 all add export
-   endpoints.
-   *Model: haiku (mechanical move, tests exist).* *Agent:
-   code-implementer.*
-   - [ ] Move the four figure endpoints (`/api/export/figure`,
-         `/figure-hitmap`, `/statplot-figure`, `/map-figure`) into a
-         new `src/quantized/routes/export_figures.py`; shared helpers
-         (`_FIGURE_MIME`, dpi clamp, `_safe_name`, `_attachment`)
-         into a small `src/quantized/routes/_export_common.py`
-   - [ ] Register the new router in `src/quantized/app.py`; zero
-         behavior change; every existing export test passes unmoved
-   - Acceptance: `test_no_god_modules` passes; all `/api/export/*`
-     endpoints respond byte-identically to before the split.
+(all shipped — see `## Completed`)
+
+~~1. **Split `routes/export.py` back under the 500-line ceiling**~~
+   **CLOSED 2026-07-08** — done (boxes were plan drift, verified against
+   code):
+   - [x] Four figure endpoints (`/api/export/figure`, `/figure-hitmap`,
+         `/statplot-figure`, `/map-figure`) live in
+         `src/quantized/routes/export_figures.py`; shared helpers
+         (`_FIGURE_MIME`, dpi clamp, `_safe_name`, `_attachment`) in
+         `src/quantized/routes/_export_common.py`
+   - [x] `export_figures.router` registered in `src/quantized/app.py`;
+         `export.py` now 280 lines, `test_no_god_modules` green, all
+         `/api/export/*` endpoints unchanged (e2e-smoke verified)
 
 (item 3, tri-contour export, shipped 2026-07-08 — see Completed; gap #17 is
 now fully closed, interactive + export halves both shipped)
