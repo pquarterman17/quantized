@@ -1229,6 +1229,8 @@ export interface FieldFigureSpec {
  *  (matplotlib) and download it (gap #23). */
 export function exportFieldFigure(body: FieldFigureSpec): Promise<void> {
   return postDownload("/api/export/field-figure", body, `field.${body.fmt ?? "pdf"}`);
+}
+
 /** A statistical-plot export request (StatStage's "Export figure" button):
  *  `data` is a list of groups for box/violin, or one flat sample for
  *  qq/histogram — the SAME raw values the interactive stats/box, /violin,
