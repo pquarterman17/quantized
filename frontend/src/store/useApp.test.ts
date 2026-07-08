@@ -849,6 +849,8 @@ describe("useApp importFiles", () => {
     expect(useApp.getState().datasets).toHaveLength(1);
     expect(useApp.getState().datasets[0].name).toBe("good.dat");
     expect(useApp.getState().status).toContain("failed bad.zzz");
+    // #40: a parse failure points at the wizard's manual guess/preview/parse path.
+    expect(useApp.getState().status).toContain("Import wizard");
   });
 
   it("stores Origin figures from the import, resolved against the new books (item 18)", async () => {

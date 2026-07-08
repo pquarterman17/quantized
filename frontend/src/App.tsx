@@ -25,6 +25,7 @@ import DistributionPanel from "./components/workshops/distribution/DistributionP
 import ReportPanel from "./components/workshops/report/ReportPanel";
 import StatsChooserPanel from "./components/workshops/statschooser/StatsChooserPanel";
 import PeakWizardPanel from "./components/workshops/peakwizard/PeakWizardPanel";
+import ImportWizardPanel from "./components/workshops/importwizard/ImportWizardPanel";
 import PipelinePanel from "./components/workshops/pipeline/PipelinePanel";
 import DataFilterPanel from "./components/workshops/datafilter/DataFilterPanel";
 import ColumnSwitcher from "./components/workshops/switcher/ColumnSwitcher";
@@ -108,6 +109,7 @@ export default function App() {
   const openReportId = useApp((s) => s.openReportId);
   const statsChooserOpen = useApp((s) => s.statsChooserOpen);
   const peakWizardOpen = useApp((s) => s.peakWizardOpen);
+  const importWizardOpen = useApp((s) => s.importWizardOpen);
   const pipelineOpen = useApp((s) => s.pipelineOpen);
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
@@ -318,6 +320,13 @@ export default function App() {
         label: "Import & append as one dataset…",
         keywords: "combine concatenate merge multi-file append",
         run: () => openFilePicker((files) => void s().importFilesAppended(files), IMPORT_ACCEPT),
+      },
+      {
+        id: "import-wizard",
+        group: "File",
+        label: "Import wizard (guided preview + saved filters)…",
+        keywords: "guess preview parse delimiter header units filter messy",
+        run: () => s().setImportWizardOpen(true),
       },
       {
         id: "demo",
@@ -883,6 +892,7 @@ export default function App() {
       {dataFilterOpen && <DataFilterPanel />}
       {statsChooserOpen && <StatsChooserPanel />}
       {peakWizardOpen && <PeakWizardPanel />}
+      {importWizardOpen && <ImportWizardPanel />}
       {pipelineOpen && <PipelinePanel />}
       {openReportId && <ReportPanel />}
       {columnSwitcherOpen && <ColumnSwitcher />}

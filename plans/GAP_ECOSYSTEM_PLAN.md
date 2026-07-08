@@ -1,8 +1,9 @@
 # Gap Ecosystem Plan — import filters, plugin API, packaging, Origin-interop leftovers
 
 Implementation plan for the ecosystem/distribution batch: the
-import-filter persistence + wizard UI (ORIGIN_GAP_PLAN #40 remaining),
-the Python plugin API (#8) and its conveniences (#10), the packaging
+import-filter persistence + wizard UI (ORIGIN_GAP_PLAN #40 — CLOSED
+2026-07-07, see `## Completed`), the Python plugin API (#8) and its
+conveniences (#10), the packaging
 residuals of #41 (a Tauri-installer release pipeline ALREADY exists in
 `.github/workflows/release.yml` — the gap plan's ⬜ status is stale;
 what remains is PyPI + first-run), and the three
@@ -148,13 +149,9 @@ written below.
 
 ## Tier 1 — High Impact
 
-1. **Import-filter persistence + wizard UI (gap #40 remaining)** —
-   *(Backend half SHIPPED 2026-07-07: `io/import_filters.py` 178 lines —
-   platformdirs config dir + `QZ_CONFIG_DIR` override, upsert-by-name,
-   specificity-then-recency glob tie-break; registry consults filters
-   AFTER unambiguous extensions, BEFORE sniffers; CRUD +
-   import-with-filter routes; 28 tests. Wizard UI half remains.)*
-  
+1. ~~**Import-filter persistence + wizard UI (gap #40)**~~ — *SHIPPED
+   2026-07-07 (see `## Completed`).*
+
    name-and-save the wizard's `ImportSettings` against a glob, have
    the registry consult saved filters, and give the preview engine its
    missing frontend.
@@ -175,14 +172,21 @@ written below.
    - [x] Thin CRUD routes on
          `src/quantized/routes/import_wizard.py`:
          list/save/delete `/api/import/filters`
-   - [ ] Wizard UI: new
+   - [x] Wizard UI: new
          `frontend/src/components/workshops/importwizard/`
-         (state hook + panel, workshop pattern): live preview grid
-         over `/api/import/{guess,preview}`, controls for delimiter /
-         header line / units line / data start / column names / roles
-         (the `ImportSettings` fields), "Save as filter…" with name +
-         glob; offered from the command palette AND as the fallback
-         when a normal import fails with no parser
+         (`useImportWizard` hook + `ImportWizardPanel` view +
+         `PreviewTable` sub-component, workshop pattern): live preview
+         grid over `/api/import/{guess,preview}` with the header/units
+         raw lines highlighted, controls for delimiter / header line /
+         units line / data start, and per-column name / unit / role
+         editors (x/y/error/label/ignore, matching
+         `ImportSettings.roles` exactly) that re-preview debounced;
+         "Save as filter…" (name + glob prefilled from the extension,
+         via the shared `ParamDialog`) + a saved-filter picker
+         (apply/delete) at the top over the `/filters` CRUD; offered
+         from the command palette ("Import wizard…", File group) AND
+         as a status/toast hint when a normal drag-import fails to
+         parse
    - [x] Tests: filter store round-trip + registry-consult precedence
          (backend), wizard flow (vitest); the gap item's
          messy-3-comment-line ASCII case imports one-click via its
@@ -409,6 +413,32 @@ written below.
 ---
 
 ## Completed
+
+- ~~**1. Import-filter persistence + wizard UI (gap #40)**~~ (2026-07-07) —
+  the wizard UI half over the already-shipped preview engine + persistence
+  (backend: `io/import_filters.py`, the registry hook, `/api/import/filters`
+  CRUD — landed earlier the same day). New
+  `frontend/src/components/workshops/importwizard/` (workshop pattern):
+  `useImportWizard.ts` (file text read client-side → `guess` → debounced
+  `preview` on every settings edit → `parse` lands via `addDataset`, named
+  after the file; an optimistic per-column overlay keeps rapid name/unit/
+  role edits composing correctly instead of racing the 300ms re-preview
+  debounce), `ImportWizardPanel.tsx` (view: file picker, delimiter/header-
+  line/units-line/data-start controls, a saved-filter apply+delete picker,
+  "Save as filter…" via the shared `ParamDialog`), `PreviewTable.tsx`
+  (numbered raw lines with the header/units rows highlighted, above the
+  resolved-columns grid — name/unit text inputs + a role select matching
+  `ImportSettings.roles` exactly: x/y/error/label/ignore). New pure
+  `lib/importwizard.ts` (default filter name/glob from the extension,
+  name+unit label composition matching the backend's `"Name (unit)"`
+  syntax, line-field parsing) plus `lib/api.ts` / `lib/types.ts` wire
+  additions (`importGuess/Preview/Parse`, the filters CRUD, a `deleteJSON`
+  helper). Wired into the command palette ("Import wizard…", File group)
+  and into `importFiles`' failure path as a status/toast hint pointing at
+  the wizard (lightest touch — no new store state, no toast-action
+  plumbing). 31 new frontend tests (12 lib + 9 hook + 7 panel + 3
+  preview-table) plus one assertion added to the existing import-failure
+  test; full suite 1458 passed; `npm run build` green.
 
 - ~~**2. Python plugin API v1 (gap #8)**~~ (2026-07-07) — the contract-defining
   ecosystem item. New pure `src/quantized/plugins/` package (`contract.py`
