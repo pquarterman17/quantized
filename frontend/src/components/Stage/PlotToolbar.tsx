@@ -20,7 +20,11 @@ const TOOLS = [
 const ANALYZE_TOOLS = [
   { id: "integ", glyph: "∫", tip: "Integrate — area under the curve (drag a range)" },
   { id: "fwhm", glyph: "∩", tip: "Peak / FWHM (drag a range)" },
-  { id: "qfit", glyph: "≈", tip: "Quick-fit — drag a region to fit live (Linear/Gaussian/Exponential)" },
+  {
+    id: "qfit",
+    glyph: "≈",
+    tip: "Gadget — drag a region (Fit/Integrate/Stats/Differentiate/FFT) or place cursors, live",
+  },
 ] as const;
 
 interface Props {

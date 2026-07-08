@@ -272,22 +272,27 @@ export interface DisplayCompose {
   fitOverlay: FitOverlay | null;
   baselineOverlay: BaselineOverlay | null;
   peakOverlay: PeakOverlay | null;
+  /** ROI gadget family (#34) differentiate mode's dy/dx curve. Same
+   *  `{datasetId,y}` shape as fitOverlay (drawn on the secondary axis so its
+   *  usually-very-different scale never squashes the primary data). */
+  derivOverlay: FitOverlay | null;
   selection: { datasetId: string; rows: number[] } | null;
 }
 
 /** Compose the drawn payload in the canonical layer order: waterfall offset →
- *  exclusion mask (#50/#53) → fit / baseline / peak overlays → selection brush
- *  (#50). The x-length is preserved throughout so every overlay stays
- *  index-aligned with the base series. */
+ *  exclusion mask (#50/#53) → fit / baseline / peak / deriv overlays →
+ *  selection brush (#50). The x-length is preserved throughout so every
+ *  overlay stays index-aligned with the base series. */
 export function composeDisplayPayload(payload: PlotPayload, o: DisplayCompose): PlotPayload {
   const base = applyWaterfall(payload, o.waterfall);
   const masked = maskExcludedPayload(base, o.dropped, o.excludedDisplay);
   const withFit = withFitOverlay(masked, o.fitOverlay, o.id);
   const withBase = withBaselineOverlay(withFit, o.baselineOverlay, o.id);
   const withPeaks = withPeakOverlay(withBase, o.peakOverlay, o.id);
+  const withDeriv = withDerivOverlay(withPeaks, o.derivOverlay, o.id);
   const sel =
     o.selection && o.id && o.selection.datasetId === o.id ? new Set(o.selection.rows) : null;
-  return sel ? highlightSelectedPayload(withPeaks, sel) : withPeaks;
+  return sel ? highlightSelectedPayload(withDeriv, sel) : withDeriv;
 }
 
 /** Align an overlay y-column to the plotted payload length. The payload may have
@@ -319,6 +324,25 @@ export function withFitOverlay(
     ...payload,
     data: [...payload.data, y] as uPlot.AlignedData,
     series: [...payload.series, { label: "fit", unit: "" }],
+  };
+}
+
+/** Append the differentiate gadget's dy/dx curve (#34), same guards as
+ *  withFitOverlay. Drawn on the secondary (right) Y axis — a derivative's
+ *  scale is usually wildly different from the plotted data's, and sharing the
+ *  primary axis would squash one or the other. */
+export function withDerivOverlay(
+  payload: PlotPayload,
+  overlay: FitOverlay | null,
+  activeId: string | null,
+): PlotPayload {
+  if (!overlay || overlay.datasetId !== activeId) return payload;
+  const y = alignOverlayY(overlay.y, payload.data[0].length);
+  if (y === null) return payload;
+  return {
+    ...payload,
+    data: [...payload.data, y] as uPlot.AlignedData,
+    series: [...payload.series, { label: "dy/dx", unit: "", axis: 1 }],
   };
 }
 

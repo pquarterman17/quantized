@@ -1,7 +1,7 @@
 // Drag-to-axis (ORIGIN_GAP_PLAN #49, Graph Builder phase 1) drop handler.
 // Turns an AxisDropZones drop into the store mutation(s) via the pure
 // `resolveAxisDrop` decision in lib/dragaxis.ts, plus the categorical-X
-// status note. Extracted from PlotStage (mirrors useQuickFitChip) so the
+// status note. Extracted from PlotStage (mirrors useGadgetChip) so the
 // drop-zone wiring doesn't grow the Stage's own line count.
 
 import { useCallback } from "react";

@@ -3,10 +3,32 @@
 // filtered rows are dropped BEFORE the ROI clip, the same rows the plot itself
 // hides/greys — see lib/rowstate). No React / store / uPlot imports here, so
 // this is unit-tested standalone like lib/mapcuts.
+//
+// Generalized for the ROI gadget family (gap #34): `selectRoiRows` is the
+// shared row-selection helper for every region-based gadget mode (fit /
+// integrate / stats / differentiate / fft), not just the fit path — the ROI
+// band + row math is identical across modes, only what's computed FROM the
+// selected rows differs (see the store's `runGadget*` actions).
 
 import { fmtNum } from "./format";
 import { activeRowIndices, analysisData, droppedRows } from "./rowstate";
 import type { CalcResult, Dataset } from "./types";
+
+/** The gadget's dispatch modes, in the order the chip's picker presents them.
+ *  "fit" is the original #33 behavior; the rest are #34. "cursors" doesn't use
+ *  the ROI band at all — see the store's `gadgetCursors` field. */
+export const GADGET_MODES = ["fit", "integrate", "stats", "differentiate", "fft", "cursors"] as const;
+export type GadgetMode = (typeof GADGET_MODES)[number];
+
+/** Human label for the mode picker. */
+export const GADGET_MODE_LABELS: Record<GadgetMode, string> = {
+  fit: "Fit",
+  integrate: "Integrate",
+  stats: "Stats",
+  differentiate: "Differentiate",
+  fft: "FFT",
+  cursors: "Cursors",
+};
 
 /** The curated model choices offered by the gadget — a small, fast subset of
  *  the full /api/fitting/models registry (the Curve Fit workshop exposes the

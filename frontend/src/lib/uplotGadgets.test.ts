@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { hitTestRoiHandles, quickFitPlugin } from "./uplotGadgets";
+import { gadgetCursorsPlugin, hitTestCursorHandles, hitTestRoiHandles, quickFitPlugin } from "./uplotGadgets";
 
 describe("hitTestRoiHandles", () => {
   it("hits the left edge within tolerance", () => {
@@ -56,6 +56,7 @@ function fakeU(dataX: (number | null)[] = [0, 10]) {
     lineTo(x: number, y: number) {
       strokes.push({ from: pen, to: [x, y] });
     },
+    setLineDash() {},
     fillStyle: "",
     strokeStyle: "",
     lineWidth: 0,
@@ -98,5 +99,64 @@ describe("quickFitPlugin draw hook", () => {
   it("clips the shaded band to the plot area", () => {
     const { fills } = draw([-50, 60]); // left edge off-canvas (bbox left=0)
     expect(fills).toEqual([{ x: 0, y: 0, w: 60, h: 50 }]);
+  });
+});
+
+describe("hitTestCursorHandles", () => {
+  it("hits cursor 0 within tolerance", () => {
+    expect(hitTestCursorHandles(100, 200, 103)).toBe(0);
+    expect(hitTestCursorHandles(100, 200, 97)).toBe(0);
+  });
+
+  it("hits cursor 1 within tolerance", () => {
+    expect(hitTestCursorHandles(100, 200, 204)).toBe(1);
+  });
+
+  it("returns null between the two cursors (no 'move both' hit)", () => {
+    expect(hitTestCursorHandles(100, 200, 150)).toBeNull();
+  });
+
+  it("returns null outside both + tolerance", () => {
+    expect(hitTestCursorHandles(100, 200, 50)).toBeNull();
+    expect(hitTestCursorHandles(100, 200, 250)).toBeNull();
+  });
+
+  it("prefers cursor 0 on a tie for a very close pair", () => {
+    expect(hitTestCursorHandles(100, 103, 101)).toBe(0);
+  });
+
+  it("respects a custom tolerance", () => {
+    expect(hitTestCursorHandles(100, 200, 92)).toBeNull();
+    expect(hitTestCursorHandles(100, 200, 92, 10)).toBe(0);
+  });
+});
+
+function drawCursors(cursors: [number, number] | null) {
+  const { u, fills, strokes } = fakeU();
+  const plugin = gadgetCursorsPlugin(cursors, "#abc");
+  // @ts-expect-error — minimal stub stands in for a real uPlot instance
+  plugin.hooks.draw?.(u);
+  return { fills, strokes };
+}
+
+describe("gadgetCursorsPlugin draw hook", () => {
+  it("draws nothing when no cursors are placed", () => {
+    const { fills, strokes } = drawCursors(null);
+    expect(fills).toHaveLength(0);
+    expect(strokes).toHaveLength(0);
+  });
+
+  it("draws two vertical lines, one per cursor, with no fill", () => {
+    const { fills, strokes } = drawCursors([20, 60]);
+    expect(fills).toHaveLength(0); // thin lines only — no band fill, unlike quickFitPlugin
+    expect(strokes).toEqual([
+      { from: [20, 0], to: [20, 50] },
+      { from: [60, 0], to: [60, 50] },
+    ]);
+  });
+
+  it("clips off-canvas cursors", () => {
+    const { strokes } = drawCursors([-50, 60]);
+    expect(strokes).toEqual([{ from: [60, 0], to: [60, 50] }]);
   });
 });

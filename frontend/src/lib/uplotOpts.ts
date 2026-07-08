@@ -7,10 +7,11 @@ import { FILLED_SHAPES, markerPaths } from "./markers";
 import type { Measurement } from "./measure";
 import type { FwhmResult } from "./peakwidth";
 import type { PlotPayload } from "./plotdata";
+import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import type { Annotation, AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
 import { annotationPlugin, axisBoxPlugin, errorBarsPlugin, refLinePlugin } from "./uplotOverlays";
-import { quickFitPlugin } from "./uplotGadgets";
+import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
 import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
 import {
   measurePlugin,
@@ -133,6 +134,16 @@ export interface BuildOptsArgs {
    *  coords; null = a sub-6px drag cleared it). The caller debounces the
    *  actual re-fit request — see the store's `setQfitRoi`. */
   onRoiChange?: (roi: [number, number] | null) => void;
+  /** ROI gadget family (#34): which gadget is selected on the chip. When
+   *  `"cursors"`, the `qfit` tool swaps its plugin from the ROI band
+   *  (quickFitPlugin) to the paired-cursors drag (gadgetCursorsPlugin) — the
+   *  rest of the modes (fit/integrate/stats/differentiate/fft) all share the
+   *  same ROI band, only what the store computes from it differs. */
+  gadgetMode?: GadgetMode;
+  /** Cursors-mode positions, in data coords (null = none placed yet). */
+  gadgetCursors?: [number, number] | null;
+  /** In `qfit` tool + cursors mode: fires on every create/move of a cursor. */
+  onCursorsChange?: (c: [number, number] | null) => void;
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
   xLim?: [number, number] | null;
   yLim?: [number, number] | null;
@@ -328,16 +339,28 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   } else if (args.fwhmResult) {
     plugins.push(fwhmPlugin(args.fwhmResult, accentColor, captureSoftColor));
   }
-  // Quick-fit ROI band: only draws/drags while its tool is active (unlike
-  // integ/fwhm, the gadget is cleared entirely on tool switch — see PlotStage
-  // — so there is no draw-only "persists across tools" branch here).
+  // Gadget frame (#33 fit → #34 the rest): only draws/drags while its tool is
+  // active (the gadget is cleared entirely on tool switch — see PlotStage —
+  // so there is no draw-only "persists across tools" branch here). Cursors
+  // mode swaps the ROI band for two independent draggable lines; every other
+  // mode (fit/integrate/stats/differentiate/fft) shares the same band — only
+  // what the store computes from it differs.
   if (tool === "qfit") {
-    plugins.push(
-      quickFitPlugin(args.qfitRoi ?? null, accentColor, accentSoftColor, {
-        onRoiChange: args.onRoiChange,
-        interactive: true,
-      }),
-    );
+    if (args.gadgetMode === "cursors") {
+      plugins.push(
+        gadgetCursorsPlugin(args.gadgetCursors ?? null, accentColor, {
+          onCursorsChange: args.onCursorsChange,
+          interactive: true,
+        }),
+      );
+    } else {
+      plugins.push(
+        quickFitPlugin(args.qfitRoi ?? null, accentColor, accentSoftColor, {
+          onRoiChange: args.onRoiChange,
+          interactive: true,
+        }),
+      );
+    }
   }
   if (refLines && refLines.length > 0) {
     // Dragging only in the non-gesture tools (zoom/cursor); pan/measure/region

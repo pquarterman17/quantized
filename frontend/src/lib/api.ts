@@ -1492,12 +1492,51 @@ export interface IntegratedPeak {
   [key: string]: unknown;
 }
 
+/** Full /api/peaks/integrate response (one or more regions). The ROI gadget's
+ *  Integrate mode (#34) always sends a single region, but keeps the full
+ *  shape — that's what `from_integrate`'s report emitter expects verbatim. */
+export interface IntegrateResponse {
+  peaks: IntegratedPeak[];
+  total_area: number;
+  baseline: string;
+}
+
 /** Integrate-only peak analysis: net area/centroid/FWHM/%-area per region. */
 export function peaksIntegrate(body: {
   x: number[];
   y: number[];
   regions: [number, number][];
   baseline?: "linear" | "none";
-}): Promise<{ peaks: IntegratedPeak[]; total_area: number; baseline: string }> {
+}): Promise<IntegrateResponse> {
   return postJSON("/api/peaks/integrate", body);
+}
+
+// ── FFT spectral (gap #34 ROI gadget family) ────────────────────────────────
+
+/** /api/spectral/fft response — magnitude/psd/phase spectrum (never complex;
+ *  see the route's own docstring). `window` is dropped server-side. */
+export interface FftSpectralResult {
+  freq: number[];
+  magnitude?: (number | null)[];
+  psd?: (number | null)[];
+  phase?: (number | null)[];
+  df: number;
+  nfft: number;
+  fs: number;
+  windowName: string;
+  [key: string]: unknown;
+}
+
+/** Single-record FFT spectrum of one ROI's (x, y). Defaults to a one-sided
+ *  magnitude spectrum (hanning window, mean-detrended) — the ROI gadget's
+ *  FFT mode never requests "complex" (unserializable; see the route). */
+export function fftSpectral(body: {
+  x: number[];
+  y: number[];
+  window?: string;
+  output_type?: "psd" | "magnitude" | "phase";
+  sided?: "one" | "two";
+  detrend?: "mean" | "linear" | "none";
+}): Promise<FftSpectralResult> {
+  return postJSON("/api/spectral/fft", body);
 }

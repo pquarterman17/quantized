@@ -38,7 +38,7 @@ import PlotToolbar from "./PlotToolbar";
 import PolarStage from "./PolarStage";
 import StatStage from "./StatStage";
 import { useAxisDrop } from "./useAxisDrop";
-import { useQuickFitChip } from "./useQuickFitChip";
+import { useGadgetChip } from "./useGadgetChip";
 
 export default function PlotStage() {
   const active = useActiveDataset();
@@ -87,7 +87,9 @@ export default function PlotStage() {
   const setIntegral = useApp((s) => s.setIntegral);
   const setFwhmResult = useApp((s) => s.setFwhmResult);
   const setQfitRoi = useApp((s) => s.setQfitRoi);
-  const qfit = useQuickFitChip();
+  const setGadgetCursors = useApp((s) => s.setGadgetCursors);
+  const gadgetMode = useApp((s) => s.gadgetMode);
+  const gadget = useGadgetChip();
   const onAxisDrop = useAxisDrop();
   // stack/inset/polar values gate the alternate render modes here; their toggle
   // setters live in PlotToolbar, which owns the tool dock.
@@ -98,6 +100,7 @@ export default function PlotStage() {
   const fitOverlay = useApp((s) => s.fitOverlay);
   const peakOverlay = useApp((s) => s.peakOverlay);
   const baselineOverlay = useApp((s) => s.baselineOverlay);
+  const derivOverlay = useApp((s) => s.derivOverlay);
   const hostRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
   const [payload, setPayload] = useState<PlotPayload | null>(null);
@@ -121,10 +124,22 @@ export default function PlotStage() {
             fitOverlay,
             baselineOverlay,
             peakOverlay,
+            derivOverlay,
             selection,
           })
         : null,
-    [payload, fitOverlay, peakOverlay, baselineOverlay, waterfall, active, dropped, excludedDisplay, selection],
+    [
+      payload,
+      fitOverlay,
+      peakOverlay,
+      baselineOverlay,
+      derivOverlay,
+      waterfall,
+      active,
+      dropped,
+      excludedDisplay,
+      selection,
+    ],
   );
 
   // Channels actually drawn (y selection minus the x-axis channel), in order.
@@ -253,11 +268,14 @@ export default function PlotStage() {
         // Read imperatively (not a reactive dependency below) — the plugin's
         // own instance-local state tracks live drag moves between rebuilds;
         // this only seeds a FRESH instance after some OTHER dep triggers one
-        // (e.g. a debounced fit landing). Keeping qfitRoi off the dependency
-        // list avoids rebuilding the whole plot (and orphaning the plugin's
-        // in-flight drag listeners) on every ROI move.
+        // (e.g. a debounced fit landing). Keeping qfitRoi/gadgetCursors off the
+        // dependency list avoids rebuilding the whole plot (and orphaning the
+        // plugin's in-flight drag listeners) on every ROI/cursor move.
         qfitRoi: useApp.getState().qfitRoi,
         onRoiChange: setQfitRoi,
+        gadgetMode,
+        gadgetCursors: useApp.getState().gadgetCursors,
+        onCursorsChange: setGadgetCursors,
       }),
       displayPayload.data,
       host,
@@ -276,14 +294,16 @@ export default function PlotStage() {
       plotRef.current = null;
     };
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
-    // the cursor/drag config + plugins.
-  }, [displayPayload, yLog, xLog, xLim, yLim, y2Lim, y2Log, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, y2AxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool, integral, fwhmResult]);
+    // the cursor/drag config + plugins; gadgetMode swaps the qfit tool's plugin
+    // (ROI band vs paired cursors) — a discrete pick, not a live-drag value.
+  }, [displayPayload, yLog, xLog, xLim, yLim, y2Lim, y2Log, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, y2AxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool, integral, fwhmResult, gadgetMode]);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the
-  // drawn segment; this resets the React-side readout). Leaving the quick-fit
-  // tool clears its ROI/chip/overlay too — unlike ∫/∩, it does NOT persist
-  // across tool switches (Escape does the same via the chip's dismiss).
+  // drawn segment; this resets the React-side readout). Leaving the gadget
+  // (qfit) tool clears its ROI/cursors/chip/overlays too — unlike ∫/∩, none of
+  // the gadget modes persist across tool switches (Escape does the same via
+  // the chip's dismiss).
   useEffect(() => {
     setMeasurement(null);
     setStatsSel(null);
@@ -374,7 +394,7 @@ export default function PlotStage() {
       { separator: true },
       { label: "Integrate tool (area under curve)", run: () => s.setPlotTool("integ") },
       { label: "Peak / FWHM tool", run: () => s.setPlotTool("fwhm") },
-      { label: "Quick-fit tool (drag a region to fit)", run: () => s.setPlotTool("qfit") },
+      { label: "Gadget tool (fit/integrate/stats/differentiate/FFT/cursors)", run: () => s.setPlotTool("qfit") },
       { label: "Measure tool (Δx, Δy)", run: () => s.setPlotTool("measure") },
       { separator: true },
       { label: "Copy plotted data (TSV)", run: copyData },
@@ -421,7 +441,7 @@ export default function PlotStage() {
         fwhm={fwhmResult}
         onClearIntegral={() => setIntegral(null)}
         onClearFwhm={() => setFwhmResult(null)}
-        qfit={qfit}
+        gadget={gadget}
       />
       {displayPayload && showLegend && (
         <PlotLegend series={displayPayload.series} styleList={styleList} plotted={plotted} hidden={hidden} />
