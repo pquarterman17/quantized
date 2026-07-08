@@ -34,6 +34,23 @@ describe("useDataFilter", () => {
     expect(cols[2]).toMatchObject({ index: 1, kind: "range" }); // val (continuous)
   });
 
+  it("exposes each range column's own data bounds (RangeSlider domain), ignoring the current filter", () => {
+    const { result } = renderHook(() => useDataFilter());
+    const cols = result.current.columns;
+    expect(cols[0]).toMatchObject({ index: -1, dataMin: 0, dataMax: 11 }); // x
+    expect(cols[2]).toMatchObject({ index: 1, dataMin: 10, dataMax: 40 }); // val
+    // a categorical column carries no data range (it's a level checklist)
+    expect(cols[1].dataMin).toBeUndefined();
+    expect(cols[1].dataMax).toBeUndefined();
+  });
+
+  it("data bounds stay the FULL range even after a filter narrows the kept rows", () => {
+    const { result } = renderHook(() => useDataFilter());
+    act(() => result.current.setRange(1, 20, 30));
+    const val = result.current.columns.find((c) => c.index === 1);
+    expect(val).toMatchObject({ dataMin: 10, dataMax: 40 }); // unchanged by the active predicate
+  });
+
   it("setRange writes a range predicate and updates the kept count", () => {
     const { result } = renderHook(() => useDataFilter());
     act(() => result.current.setRange(1, 15, undefined)); // val ≥ 15

@@ -1,13 +1,18 @@
 // Distribution platform (#52) — view. A draggable ToolWindow: pick a column and
-// see its histogram, descriptive stats, and a Shapiro-Wilk normality verdict in
-// one linked panel. Bars are DOM (not canvas) so the whole panel is testable.
-// Thin — composition + fetching live in useDistribution.
+// see its histogram, a box/quantile strip, descriptive stats, an optional
+// distribution-fit overlay, and a Shapiro-Wilk normality verdict in one
+// linked panel. Bars are DOM (not canvas) so the whole panel is testable.
+// Thin — composition + fetching + brush math live in useDistribution;
+// HistogramStrip/BoxStrip are the presentational sub-components.
 
 import { fmtNum } from "../../../lib/format";
+import { DIST_FAMILIES } from "../../../lib/distpdf";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Select, StatusDot } from "../../primitives";
 import { useApp } from "../../../store/useApp";
-import { useDistribution } from "./useDistribution";
+import BoxStrip from "./BoxStrip";
+import HistogramStrip from "./HistogramStrip";
+import { type FitPick, useDistribution } from "./useDistribution";
 
 const STAT_FIELDS: { key: string; label: string }[] = [
   { key: "N", label: "N" },
@@ -18,11 +23,15 @@ const STAT_FIELDS: { key: string; label: string }[] = [
   { key: "max", label: "max" },
 ];
 
+const FIT_OPTIONS: { value: FitPick; label: string }[] = [
+  { value: "none", label: "None" },
+  ...DIST_FAMILIES.map((f) => ({ value: f, label: f })),
+];
+
 export default function DistributionPanel() {
   const setOpen = useApp((s) => s.setDistributionOpen);
   const d = useDistribution();
   const colOptions = d.columns.map((c) => ({ value: String(c.index), label: c.label }));
-  const maxCount = d.hist ? Math.max(1, ...d.hist.counts) : 1;
   const isNormal = d.norm ? d.norm.p >= 0.05 : null;
 
   return (
@@ -46,34 +55,24 @@ export default function DistributionPanel() {
             </div>
           ) : (
             <>
-              {/* Histogram — DOM bars, height ∝ count. */}
-              <div
-                className="qzk-hist"
-                aria-label="histogram"
-                style={{
-                  display: "flex",
-                  alignItems: "flex-end",
-                  gap: 1,
-                  height: 96,
-                  marginTop: 12,
-                  padding: "0 2px",
-                  borderBottom: "1px solid var(--border)",
-                }}
-              >
-                {d.hist?.counts.map((c, i) => (
-                  <div
-                    key={i}
-                    className="qzk-hist-bar"
-                    title={`[${fmtNum(d.hist!.edges[i])}, ${fmtNum(d.hist!.edges[i + 1])}): ${c}`}
-                    style={{
-                      flex: 1,
-                      height: `${(c / maxCount) * 100}%`,
-                      minHeight: c > 0 ? 1 : 0,
-                      background: "var(--series-1, var(--accent))",
-                    }}
-                  />
-                ))}
-              </div>
+              {d.hist && (
+                <HistogramStrip
+                  hist={d.hist}
+                  fitCurve={d.fitCurve}
+                  brushedBins={d.brushedBins}
+                  onBrush={d.brushBins}
+                />
+              )}
+
+              {d.desc && (
+                <BoxStrip
+                  min={Number(d.desc.min)}
+                  q1={Number(d.desc.q1)}
+                  median={Number(d.desc.median)}
+                  q3={Number(d.desc.q3)}
+                  max={Number(d.desc.max)}
+                />
+              )}
 
               {/* Descriptive stats. */}
               <div
@@ -112,6 +111,36 @@ export default function DistributionPanel() {
                   </span>
                 )}
               </div>
+
+              {/* Distribution-fit overlay (item 6b). */}
+              <label className="qzk-field-lbl" style={{ marginTop: 12 }}>
+                Distribution fit
+              </label>
+              <Select
+                options={FIT_OPTIONS}
+                value={d.fitDist}
+                onChange={(e) => d.setFitDist(e.target.value as FitPick)}
+              />
+              {d.fitDist !== "none" && (
+                <div className="qzk-ds-meta" style={{ marginTop: 6 }}>
+                  {d.fitBusy ? (
+                    "fitting…"
+                  ) : d.fitError ? (
+                    d.fitError
+                  ) : d.skippedReason ? (
+                    d.skippedReason
+                  ) : d.currentFit ? (
+                    <>
+                      {d.currentFit.dist}: AIC {fmtNum(d.currentFit.aic)}, KS p={fmtNum(d.currentFit.ks_p)}
+                      {d.bestFit && d.bestFit.dist !== d.currentFit.dist && (
+                        <> · AIC-best: {d.bestFit.dist} (p={fmtNum(d.bestFit.ks_p)})</>
+                      )}
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </div>
+              )}
             </>
           )}
         </>

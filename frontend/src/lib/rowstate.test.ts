@@ -6,6 +6,7 @@ import {
   droppedRows,
   excludedSet,
   expandToFull,
+  filteredOutSet,
   isRowExcluded,
   pruneExcluded,
   sanitizeExcluded,
@@ -108,6 +109,21 @@ describe("droppedRows (exclusion ∪ filter)", () => {
     expect([...droppedRows(mk({ filter: [{ col: 0, kind: "range", min: 30 }] }))].sort()).toEqual([0, 1]);
     const both = droppedRows(mk({ excludedRows: [3], filter: [{ col: 0, kind: "range", min: 30 }] }));
     expect([...both].sort((a, b) => a - b)).toEqual([0, 1, 3]);
+  });
+});
+
+describe("filteredOutSet (#53 residual — distinct from droppedRows)", () => {
+  const mk = (over: Partial<Dataset>): Dataset => ({ id: "d", name: "d", data: DATA, ...over });
+
+  it("is empty with no filter, even when rows are manually excluded", () => {
+    expect(filteredOutSet(mk({ excludedRows: [0, 1] })).size).toBe(0);
+    expect(filteredOutSet(null).size).toBe(0);
+  });
+
+  it("returns ONLY filter-failed rows, not manual exclusions", () => {
+    const ds = mk({ excludedRows: [3], filter: [{ col: 0, kind: "range", min: 30 }] });
+    // filter keeps rows 2,3 (value ≥30) → rows 0,1 fail; row 3's exclusion is NOT reflected here
+    expect([...filteredOutSet(ds)].sort((a, b) => a - b)).toEqual([0, 1]);
   });
 });
 

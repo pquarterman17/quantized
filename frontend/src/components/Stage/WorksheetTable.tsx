@@ -29,6 +29,11 @@ export interface WorksheetTableProps {
   xUnit: string;
   order: number[];
   masked: Set<number>;
+  /** Rows dropped by the global data filter (#53) — greyed distinctly from a
+   *  manual exclusion (still "in" the dataset, narrowed by a predicate the
+   *  user can clear from the Data Filter workshop, not an exclusion). A row
+   *  that's ALSO manually excluded renders as excluded (that styling wins). */
+  filteredOut: Set<number>;
   /** Selected original-row indices (#50 selection brush). */
   selected: Set<number>;
   channelRoles: Record<number, ChannelRole>;
@@ -61,6 +66,7 @@ export default function WorksheetTable({
   xUnit,
   order,
   masked,
+  filteredOut,
   selected,
   channelRoles,
   sortMark,
@@ -197,20 +203,29 @@ export default function WorksheetTable({
       <tbody>
         {order.slice(0, maxRows).map((r) => {
           const isMasked = masked.has(r);
+          // A row already masked renders as masked; "filtered-out only" gets
+          // its own distinct (non-strikethrough) treatment.
+          const isFilteredOut = !isMasked && filteredOut.has(r);
           const isSelected = selected.has(r);
+          const rowTitle = isMasked
+            ? "excluded row"
+            : isFilteredOut
+              ? "dropped by data filter"
+              : "click to select · shift-click a range · right-click to mask";
           return (
             <tr
               key={r}
               onContextMenu={onRowContext ? (e) => onRowContext(r, e) : undefined}
               style={{
                 ...(isMasked ? { opacity: 0.4, textDecoration: "line-through" } : {}),
+                ...(isFilteredOut ? { opacity: 0.5, fontStyle: "italic" } : {}),
                 ...(isSelected ? { background: "var(--accent-soft)" } : {}),
               }}
             >
               <td
                 className="rownum"
                 style={{ cursor: "pointer", ...(isSelected ? { color: "var(--accent)", fontWeight: 600 } : {}) }}
-                title="click to select · shift-click a range · right-click to mask"
+                title={rowTitle}
                 onClick={(e) => onRowNumClick(r, e)}
               >
                 {r + 1}

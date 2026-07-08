@@ -275,6 +275,71 @@
   accent-color: var(--accent);
 }
 
+/* ── RangeSlider (dual-thumb) ──────────────────────────────────────────── */
+.qz-range-slider {
+  position: relative;
+  height: 20px;
+  flex: 1;
+  min-width: 80px;
+}
+.qz-range-track,
+.qz-range-fill {
+  position: absolute;
+  top: 50%;
+  height: 3px;
+  border-radius: 2px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.qz-range-track {
+  left: 0;
+  right: 0;
+  background: var(--border);
+}
+.qz-range-fill {
+  left: var(--qz-range-lo, 0%);
+  right: calc(100% - var(--qz-range-hi, 100%));
+  background: var(--accent);
+}
+.qz-range-slider input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.qz-range-slider input[type="range"]::-webkit-slider-runnable-track {
+  background: transparent;
+}
+.qz-range-slider input[type="range"]::-moz-range-track {
+  background: transparent;
+  border: none;
+}
+.qz-range-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface-1, #fff);
+  cursor: pointer;
+  margin-top: -6px;
+}
+.qz-range-slider input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface-1, #fff);
+  cursor: pointer;
+}
+
 /* ── Card (collapsible inspector card) ─────────────────────────────────── */
 .qz-card {
   background: var(--surface-2);

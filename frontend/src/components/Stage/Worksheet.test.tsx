@@ -232,6 +232,47 @@ describe("Worksheet row selection (#50)", () => {
   });
 });
 
+describe("Worksheet global-filter greying (#53 residual, item 7b)", () => {
+  // Channel A (index 0) values are 10, 40, 11 — a filter keeping A >= 15
+  // drops rows 0 and 2, leaving row 1.
+  it("greys rows dropped by the global data filter, distinct from an exclusion", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "scan.dat", data, filter: [{ col: 0, kind: "range", min: 15 }] }],
+      activeId: "d1",
+    });
+    render(<Worksheet />);
+    // still visible (not the LOCAL worksheet-view filter, which would hide it)
+    expect(screen.getByText("10.0000")).toBeInTheDocument();
+    // rows 0 (A=10) and 2 (A=11) both fail the filter
+    expect(screen.getAllByTitle("dropped by data filter")).toHaveLength(2);
+  });
+
+  it("a manually-excluded row keeps the exclusion styling even if it ALSO fails the filter", () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "scan.dat",
+          data,
+          filter: [{ col: 0, kind: "range", min: 15 }],
+          excludedRows: [0],
+        },
+      ],
+      activeId: "d1",
+    });
+    render(<Worksheet />);
+    expect(screen.getByTitle("excluded row")).toBeInTheDocument();
+    // exactly one row is greyed-as-filtered (row 2, value 11) — row 0 is excluded instead
+    expect(screen.getAllByTitle("dropped by data filter")).toHaveLength(1);
+  });
+
+  it("no filter set → no row carries the filtered-out title", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data }], activeId: "d1" });
+    render(<Worksheet />);
+    expect(screen.queryByTitle("dropped by data filter")).not.toBeInTheDocument();
+  });
+});
+
 describe("Worksheet computed columns (recompute)", () => {
   const addColumn = (expr: string, name?: string) => {
     fireEvent.change(screen.getByPlaceholderText("2*A + sqrt(B)"), { target: { value: expr } });

@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { statsDescriptive } from "../../lib/api";
 import { copyText, tableToTSV } from "../../lib/clipboard";
 import { channelLetter, compileFormula } from "../../lib/formula";
-import { excludedSet } from "../../lib/rowstate";
+import { excludedSet, filteredOutSet } from "../../lib/rowstate";
 import type { CalcResult, DataStruct } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
@@ -75,6 +75,11 @@ export default function Worksheet() {
   // — NOT local component state — so it survives dataset switches, round-trips
   // .dwk, and is honored by every view (lib/rowstate is the single source).
   const masked = useMemo(() => excludedSet(active), [active]);
+
+  // Global-filter-dropped rows (#53 residual, item 7b): kept visible (greyed,
+  // distinct from a manual exclusion) so the worksheet reflects the same
+  // "linked everywhere" filter every other analysis view already honors.
+  const filteredOut = useMemo(() => filteredOutSet(active), [active]);
 
   // Selected rows — only "live" when the store selection targets the active
   // dataset (a transient brush; #50 selection dimension).
@@ -354,6 +359,7 @@ export default function Worksheet() {
         xUnit={xUnit}
         order={order}
         masked={masked}
+        filteredOut={filteredOut}
         selected={selected}
         channelRoles={channelRoles}
         sortMark={mark}
