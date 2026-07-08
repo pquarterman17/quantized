@@ -200,6 +200,13 @@ written below.
 
 ---
 
+## Follow-up debt (booked, not blocking)
+
+- `components/Stage/PlotStage.tsx` crossed the ~400-line convention during
+  items 1/4 (now ~451): extract the gadget/overlay wiring into a
+  workshop-style hook. Rolls up into PROJECT_ORGANIZATION_PLAN #7 (the
+  committed component-ceiling test) — do both together.
+
 ## Completed
 
 - ~~**8. Tabulate residuals (gap #55)**~~ (2026-07-07) — drag-drop wells and
