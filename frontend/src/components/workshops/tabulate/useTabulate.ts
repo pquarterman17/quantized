@@ -2,14 +2,17 @@
 // the distinct levels of a "by" column and shows per-group descriptive stats
 // (lib/tabulate). Reads the dataset's ANALYSIS view (lib/rowstate.analysisData)
 // so excluded rows (#50) drop from the summary. The table can be exported as a
-// new library dataset (group key → x, aggregates → channels).
+// new library dataset (group key → x, aggregates → channels) or emitted as a
+// #36 report sheet (one record per group — see toReport).
 
 import { useMemo, useState } from "react";
 
+import { reportEmit } from "../../../lib/api";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { analysisData } from "../../../lib/rowstate";
 import { AGG_KEYS, type GroupSummaryRow, tabulate } from "../../../lib/tabulate";
 import type { DataStruct } from "../../../lib/types";
+import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
 /** A selectable column: -1 is the x column, 0.. are channels. */
@@ -20,11 +23,22 @@ export interface TabulateColumn {
 
 export interface TabulateState {
   hasData: boolean;
+  /** The active dataset's id, or null — feeds the ZoneWell drop-target guard
+   *  so a channel dragged from a different dataset is rejected (v1
+   *  single-dataset, mirrors Graph Builder's wells). */
+  datasetId: string | null;
   columns: TabulateColumn[];
   groupCol: number;
   valueCol: number;
   setGroupCol: (i: number) => void;
   setValueCol: (i: number) => void;
+  /** Revert the Group/Value well to its auto-pick default. Wired to the
+   *  ZoneWell "remove chip" affordance — Tabulate always needs SOME column
+   *  assigned, so "removing" the current pick falls back to the same
+   *  categorical/continuous default used on first load rather than leaving
+   *  the well empty. */
+  removeGroupCol: () => void;
+  removeValueCol: () => void;
   rows: GroupSummaryRow[];
   groupLabel: string;
   valueLabel: string;
@@ -33,6 +47,12 @@ export interface TabulateState {
   groupIsCategorical: boolean;
   exportDataset: () => void;
   toTSV: () => string;
+  /** True while the #36 report emission is in flight (disables the button). */
+  reportBusy: boolean;
+  /** Emit the on-screen group summary as a #36 stats_table report (one
+   *  record per group: the group key + the AGG_KEYS aggregates) and land it
+   *  in the Library Reports viewer. */
+  toReport: () => Promise<void>;
 }
 
 let _seq = 0;
@@ -43,7 +63,9 @@ const colValues = (data: DataStruct, index: number): number[] =>
 export function useTabulate(): TabulateState {
   const active = useActiveDataset();
   const addDataset = useApp((s) => s.addDataset);
+  const addReport = useApp((s) => s.addReport);
   const setStatus = useApp((s) => s.setStatus);
+  const [reportBusy, setReportBusy] = useState(false);
 
   // Analysis view: excluded rows pruned so the summary matches the worksheet's.
   const data = useMemo(() => analysisData(active), [active]);
@@ -93,19 +115,61 @@ export function useTabulate(): TabulateState {
     return [header, ...body].join("\n");
   }
 
+  function removeGroupCol(): void {
+    setGroupCol(firstCategorical(active) ?? 0);
+  }
+
+  function removeValueCol(): void {
+    setValueCol(firstContinuous(active, groupCol));
+  }
+
+  async function toReport(): Promise<void> {
+    if (!rows.length || !active) return;
+    setReportBusy(true);
+    try {
+      const records = rows.map((r) => ({
+        group: r.group,
+        count: r.count,
+        mean: r.mean,
+        sd: r.sd,
+        min: r.min,
+        max: r.max,
+        median: r.median,
+      }));
+      const title = `${valueLabel} by ${groupLabel} — ${active.name}`;
+      const { report } = await reportEmit({
+        kind: "stats_table",
+        records,
+        title,
+        source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
+      });
+      addReport(title, report, active.id);
+      setStatus(`emitted ${valueLabel} by ${groupLabel} report (${rows.length} groups)`);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "report failed", "danger");
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
   return {
     hasData: !!active,
+    datasetId: active?.id ?? null,
     columns,
     groupCol,
     valueCol,
     setGroupCol,
     setValueCol,
+    removeGroupCol,
+    removeValueCol,
     rows,
     groupLabel,
     valueLabel,
     groupIsCategorical,
     exportDataset,
     toTSV,
+    reportBusy,
+    toReport,
   };
 }
 

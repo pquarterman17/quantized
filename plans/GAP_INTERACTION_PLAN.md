@@ -230,27 +230,43 @@ written below.
      (plot ghosting, Tabulate, Distribution) without mutating the
      dataset; slider and number fields stay in sync.
 
-8. **Tabulate residuals (gap #55)** — drag-drop wells and
-   report-block export for the pivot workshop.
-   *Model: sonnet (wells), haiku (report ending — the statschooser
-   pattern exists).* *Agent: ux-frontend-expert.*
-   - [ ] Replace the Group/Value Selects in
-         `frontend/src/components/workshops/tabulate/TabulatePanel.tsx`
-         with item 3's `ZoneWell` drop-zone component (Selects remain
-         as keyboard fallback); accepts the item-2 `dragchannel`
-         payloads
-   - [ ] "→ Report" ending: emit the `lib/tabulate.ts` group-summary
-         rows through `/api/report/emit` as a stats_table (the generic
-         `from_stats_table` emitter in `calc/report_emit.py` — follow
-         `workshops/statschooser/`'s existing pattern), landing in the
-         Library Reports viewer via `addReport`
-   - Acceptance: dragging a categorical column into Group and a
-     continuous one into Value builds the summary table; "→ Report"
-     produces a report sheet whose rows match the on-screen table.
-
 ---
 
 ## Completed
+
+- ~~**8. Tabulate residuals (gap #55)**~~ (2026-07-07) — drag-drop wells and
+  report-block export for the pivot workshop. The two Group/Value `<Select>`s
+  in `frontend/src/components/workshops/tabulate/TabulatePanel.tsx` are
+  replaced by item 3's `ZoneWell` (imported directly from
+  `workshops/graphbuilder/ZoneWell.tsx` — no shared-location move), each
+  passed `multiple` so its click-to-assign Select stays visible as the
+  keyboard/AT fallback even once a column is assigned (Tabulate's wells are
+  conceptually single-slot, but `onAssign` always REPLACES via
+  `setGroupCol`/`setValueCol` — `multiple` here only keeps the fallback
+  Select rendered, it doesn't enable multi-assign). `useTabulate.ts` gained
+  `datasetId` (the wells' foreign-dataset guard), `removeGroupCol`/
+  `removeValueCol` (the chip "×" affordance reverts to the same
+  categorical/continuous auto-pick used on first load, since Tabulate always
+  needs SOME column assigned — there's no "empty" grouping state, unlike
+  Graph Builder's nullable zones), and `reportBusy`/`toReport` (mirrors
+  `workshops/statschooser/useStatsChooser.ts`'s `toReport`: one `stats_table`
+  record per group — `{group, count, mean, sd, min, max, median}` — via
+  `reportEmit`/`calc/report_emit.py`'s `from_stats_table`, title
+  `"<value> by <group> — <dataset>"`, landing via `addReport`). Deviation
+  beyond the plan's scope: `ZoneWell` gained an optional `onReject(reason)`
+  prop (backward-compatible — Graph Builder's usage is unaffected) so a
+  cross-dataset (or malformed) drop can surface a toast
+  ("dropped a chip from a different dataset") instead of silently
+  no-op'ing; ZoneWell's OWN prior behavior stayed silent-by-default (matches
+  `useAxisDrop`'s documented "dragging is exploratory" philosophy) since
+  `onReject` is optional and Graph Builder doesn't pass one. 17 new tests
+  (`useTabulate.test.ts` — datasetId, remove-reverts-to-default, toReport
+  success/failure; `TabulatePanel.test.tsx` (new) — default well contents,
+  synthetic-drop reassignment, click-fallback reassignment, foreign-dataset
+  reject + toast, report emission success/failure; `ZoneWell.test.tsx` — the
+  new `onReject` callback). Frontend 1260 tests + `npm run build` green.
+  Eyeball caveat: the live drag gesture is unverified in jsdom, same as every
+  prior ZoneWell/CHANNEL_DND item — eyeball via a browser / `tools/visual`.
 
 - ~~**3. Graph Builder workshop (gap #51 phase 2)**~~ (2026-07-07) — the
   plot-spec grammar + a drop-zone workshop. New pure

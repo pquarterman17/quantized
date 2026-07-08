@@ -1,21 +1,26 @@
-// Tabulate workshop — view. A draggable ToolWindow: pick a "group by" column and
-// a value column; see per-group descriptive stats (count/mean/sd/min/max/median)
-// and export the summary as a new dataset or copy it as TSV. Thin — the group-by
-// math lives in lib/tabulate and the state in useTabulate.
+// Tabulate workshop — view. A draggable ToolWindow: drop a categorical column
+// into the Group well and a value column into the Value well (or click-to-assign
+// — the ZoneWell fallback, ORIGIN_GAP #55/#51); see per-group descriptive stats
+// (count/mean/sd/min/max/median), export the summary as a new dataset, copy it as
+// TSV, or emit it as a #36 report. Thin — the group-by math lives in lib/tabulate
+// and the state in useTabulate.
 
 import { copyText } from "../../../lib/clipboard";
 import { fmtNum } from "../../../lib/format";
 import { AGG_KEYS } from "../../../lib/tabulate";
+import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import ZoneWell from "../graphbuilder/ZoneWell";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, Select } from "../../primitives";
+import { Button } from "../../primitives";
 import { useTabulate } from "./useTabulate";
+
+const rejectForeignDrop = () => toast("dropped a chip from a different dataset", "info");
 
 export default function TabulatePanel() {
   const setOpen = useApp((s) => s.setTabulateOpen);
   const setStatus = useApp((s) => s.setStatus);
   const t = useTabulate();
-  const colOptions = t.columns.map((c) => ({ value: String(c.index), label: c.label }));
 
   async function copy(): Promise<void> {
     const ok = await copyText(t.toTSV());
@@ -30,23 +35,29 @@ export default function TabulatePanel() {
         </div>
       ) : (
         <>
-          <div style={{ display: "flex", gap: 8 }}>
-            <div style={{ flex: 1 }}>
-              <label className="qzk-field-lbl">Group by</label>
-              <Select
-                options={colOptions}
-                value={String(t.groupCol)}
-                onChange={(e) => t.setGroupCol(Number(e.target.value))}
-              />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label className="qzk-field-lbl">Value</label>
-              <Select
-                options={colOptions}
-                value={String(t.valueCol)}
-                onChange={(e) => t.setValueCol(Number(e.target.value))}
-              />
-            </div>
+          <div className="qzk-zone-wells">
+            <ZoneWell
+              title="Group by"
+              hint="categorical column"
+              datasetId={t.datasetId}
+              options={t.columns}
+              assigned={[{ channel: t.groupCol, label: t.groupLabel }]}
+              multiple
+              onAssign={(c) => t.setGroupCol(c)}
+              onRemove={() => t.removeGroupCol()}
+              onReject={rejectForeignDrop}
+            />
+            <ZoneWell
+              title="Value"
+              hint="column to summarize"
+              datasetId={t.datasetId}
+              options={t.columns}
+              assigned={[{ channel: t.valueCol, label: t.valueLabel }]}
+              multiple
+              onAssign={(c) => t.setValueCol(c)}
+              onRemove={() => t.removeValueCol()}
+              onReject={rejectForeignDrop}
+            />
           </div>
 
           {!t.groupIsCategorical && t.rows.length > 30 && (
@@ -101,6 +112,14 @@ export default function TabulatePanel() {
             </Button>
             <Button size="sm" disabled={!t.rows.length} onClick={() => void copy()} style={{ flex: 1 }}>
               Copy TSV
+            </Button>
+            <Button
+              size="sm"
+              disabled={!t.rows.length || t.reportBusy}
+              onClick={() => void t.toReport()}
+              style={{ flex: 1 }}
+            >
+              {t.reportBusy ? "Reporting…" : "→ Report"}
             </Button>
           </div>
         </>

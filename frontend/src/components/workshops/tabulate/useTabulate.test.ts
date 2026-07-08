@@ -1,9 +1,15 @@
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { reportEmit } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useTabulate } from "./useTabulate";
+
+vi.mock("../../../lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api")>()),
+  reportEmit: vi.fn(),
+}));
 
 // 12 rows: channel 0 is a 2-level categorical grouping column (nominal fires at
 // ≥12 samples / ≤8 levels); channel 1 is the continuous value column.
@@ -29,7 +35,13 @@ const DATA: DataStruct = {
 };
 
 beforeEach(() => {
-  useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", status: "" });
+  vi.clearAllMocks();
+  useApp.setState({
+    datasets: [{ id: "d1", name: "run.dat", data: DATA }],
+    activeId: "d1",
+    status: "",
+    reports: [],
+  });
 });
 
 describe("useTabulate", () => {
@@ -97,5 +109,53 @@ describe("useTabulate", () => {
     expect(lines[0]).toBe("grp\tcount\tmean\tsd\tmin\tmax\tmedian");
     expect(lines).toHaveLength(3); // header + 2 groups
     expect(lines[1].startsWith("0\t6\t15")).toBe(true);
+  });
+
+  it("exposes the active dataset id for the ZoneWell drop-target guard", () => {
+    const { result } = renderHook(() => useTabulate());
+    expect(result.current.datasetId).toBe("d1");
+  });
+
+  it("removeGroupCol/removeValueCol revert to the auto-pick default", () => {
+    const { result } = renderHook(() => useTabulate());
+    act(() => {
+      result.current.setGroupCol(1);
+      result.current.setValueCol(0);
+    });
+    expect(result.current.groupCol).toBe(1);
+    act(() => result.current.removeGroupCol());
+    expect(result.current.groupCol).toBe(0); // back to the categorical default
+    act(() => result.current.removeValueCol());
+    expect(result.current.valueCol).toBe(1); // back to the continuous default
+  });
+
+  it("toReport() emits a #36 stats_table report (one record per group) and adds it", async () => {
+    vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } });
+    const { result } = renderHook(() => useTabulate());
+    await act(async () => {
+      await result.current.toReport();
+    });
+    expect(reportEmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "stats_table",
+        title: "val by grp — run.dat",
+        records: [
+          expect.objectContaining({ group: 0, count: 6, mean: 15, min: 10, max: 20, median: 15 }),
+          expect.objectContaining({ group: 1, count: 6, mean: 35, min: 30, max: 40, median: 35 }),
+        ],
+      }),
+    );
+    expect(useApp.getState().reports).toHaveLength(1);
+    expect(useApp.getState().reports[0].datasetId).toBe("d1");
+  });
+
+  it("toReport() surfaces a failure instead of throwing", async () => {
+    vi.mocked(reportEmit).mockRejectedValue(new Error("boom"));
+    const { result } = renderHook(() => useTabulate());
+    await act(async () => {
+      await result.current.toReport();
+    });
+    expect(useApp.getState().reports).toHaveLength(0);
+    expect(result.current.reportBusy).toBe(false);
   });
 });
