@@ -4,6 +4,7 @@
 // is unit-testable without mounting the store — `store/useApp.ts` owns the
 // actual apply-to-plot-state action.
 
+import type { SpatialPanel } from "./multipanel";
 import type { Annotation, Dataset, MarkerShape, OriginCurve, OriginFigure, SeriesStyle } from "./types";
 
 const MARKER_SHAPES: ReadonlySet<string> = new Set([
@@ -180,30 +181,44 @@ export function buildOriginFigureEntries(
   }));
 }
 
+/** Every layer-entry sharing `entry`'s graph window: same import (stem),
+ *  same graph-window name — scoping to the import stops two imports of a
+ *  same-named file from inflating the family (Origin's default window names
+ *  like "Graph1" repeat across separate projects). Sorted by layer number
+ *  ascending (undecoded/absent `layer` sorts as layer 1). A nameless figure
+ *  or one with no same-window siblings returns just itself (family of 1) —
+ *  callers treat `length < 2` as "no grouping applies". Shared by
+ *  `doubleYPartner` (the 2-layer Y/Y2 idiom) and the spatial multi-panel
+ *  apply (`resolveFigurePanels` below), which handles 2-or-more. */
+export function figureLayerFamily(
+  entry: OriginFigureEntry,
+  all: OriginFigureEntry[],
+): OriginFigureEntry[] {
+  const name = entry.figure.name;
+  if (!name) return [entry];
+  const key = entry.siblingIds[0];
+  return all
+    .filter((e) => e.stem === entry.stem && e.figure.name === name && e.siblingIds[0] === key)
+    .sort((a, b) => (a.figure.layer ?? 1) - (b.figure.layer ?? 1));
+}
+
 /** The other layer's entry when `entry` is one half of a genuine Origin
- *  "double-Y" pair: same import (stem), same graph-window name, EXACTLY 2
- *  layer-entries share that name (rules out >2-layer composite/panel
- *  windows, which reuse the same multi-layer mechanism for a structurally
- *  different layout — see `figures.py`'s module docstring), both already
- *  resolved to the SAME dataset, and both carrying at least one decoded
- *  curve (partial recall must degrade, never guess). When all of that
- *  holds, `useApp.applyOriginFigure` can offer the combined view — layer-1
- *  curves on y, layer-2 curves on y2 — instead of just the clicked layer's
- *  own curves. Returns null for everything else: single-layer figures,
- *  cross-book pairs, or missing curve recall. */
+ *  "double-Y" pair: EXACTLY 2 layer-entries share the window (rules out
+ *  >2-layer composite/panel windows, which reuse the same multi-layer
+ *  mechanism for a structurally different layout — see `figures.py`'s
+ *  module docstring), both already resolved to the SAME dataset, and both
+ *  carrying at least one decoded curve (partial recall must degrade, never
+ *  guess). When all of that holds, `useApp.applyOriginFigure` can offer the
+ *  combined view — layer-1 curves on y, layer-2 curves on y2 — instead of
+ *  just the clicked layer's own curves. Returns null for everything else:
+ *  single-layer figures, cross-book pairs, missing curve recall, or a
+ *  ≥3-layer family (a spatial multi-panel candidate instead — see
+ *  `resolveFigurePanels`). */
 export function doubleYPartner(
   entry: OriginFigureEntry,
   all: OriginFigureEntry[],
 ): OriginFigureEntry | null {
-  const name = entry.figure.name;
-  if (!name) return null;
-  // Same import (siblingIds[0] is the import key), same graph-window name.
-  // Scoping to the import stops two imports of a same-named file from inflating
-  // the family past 2 and disabling the double-Y offer.
-  const key = entry.siblingIds[0];
-  const family = all.filter(
-    (e) => e.stem === entry.stem && e.figure.name === name && e.siblingIds[0] === key,
-  );
+  const family = figureLayerFamily(entry, all);
   if (family.length !== 2) return null;
   const partner = family.find((e) => e.id !== entry.id);
   if (!partner) return null;
@@ -212,6 +227,42 @@ export function doubleYPartner(
   if ((entry.figure.curves ?? []).length === 0) return null;
   if ((partner.figure.curves ?? []).length === 0) return null;
   return partner;
+}
+
+/** Per-layer dataset + channel selection + fixed axis state for a spatial
+ *  multi-panel apply (decode-plan #36), WITHOUT grid placement — pair the
+ *  result with `originPanels.computePanelLayout` over the same family's
+ *  `figure.frame` quads to get each entry's `row`/`col`. One entry per
+ *  `family` member, in the SAME order. All-or-nothing: returns `null` when
+ *  ANY layer fails to resolve (no dataset, or `figureChannelSelection`
+ *  finds nothing to plot) — a partial grid would silently drop a panel, so
+ *  the caller falls back to the single-layer apply instead. */
+export function resolveFigurePanels(
+  family: OriginFigureEntry[],
+  datasets: Dataset[],
+): Omit<SpatialPanel, "row" | "col">[] | null {
+  const out: Omit<SpatialPanel, "row" | "col">[] = [];
+  for (const entry of family) {
+    if (!entry.datasetId) return null;
+    const ds = datasets.find((d) => d.id === entry.datasetId);
+    if (!ds) return null;
+    const sel = figureChannelSelection(entry.figure, ds);
+    if (!sel) return null;
+    const fig = entry.figure;
+    out.push({
+      datasetId: entry.datasetId,
+      xKey: sel.xKey,
+      yKeys: sel.yKeys,
+      xLim: [fig.x_from, fig.x_to],
+      yLim: [fig.y_from, fig.y_to],
+      xLog: fig.x_log,
+      yLog: fig.y_log,
+      xAxisLabel: fig.x_title || undefined,
+      yAxisLabel: fig.y_title || undefined,
+      seriesStyles: sel.styles,
+    });
+  }
+  return out;
 }
 
 /** The store `annotations` an applied figure pins on the plot: every decoded

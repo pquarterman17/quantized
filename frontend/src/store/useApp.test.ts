@@ -1335,18 +1335,160 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
     expect(s.y2Keys).toBeNull(); // no combined view — partner selection failed
   });
 
-  it("does not combine when the two layers resolve to different datasets", () => {
+  it("does not COMBINE (Y/Y2) when the two layers resolve to different datasets — arranges a spatial multi-panel instead (item 4, decode-plan #36)", () => {
     useApp.setState({
       datasets: [
         { id: "d2", name: "XRD:Book2", data: doubleYData },
         { id: "d3", name: "XRD:Book3", data: doubleYData },
       ],
       originFigures: [layer1, { ...layer2, datasetId: "d3" }],
+      stackMode: false,
+      spatialPanels: null,
     });
     useApp.getState().applyOriginFigure("fig-XRD-0");
     const s = useApp.getState();
-    expect(s.yKeys).toEqual([0]);
+    // The Y/Y2 combine mechanism requires the SAME resolved dataset — it did
+    // not fire here (both layers resolved, just to different datasets), so
+    // this is NOT the "falls back to a single layer" case either: with 2
+    // layers that both resolve to a dataset + channels, the multi-panel
+    // spatial apply takes over instead.
     expect(s.y2Keys).toBeNull();
+    expect(s.stackMode).toBe(true);
+    expect(s.spatialPanels).toHaveLength(2);
+    // No decoded frame geometry on either layer -> the ordinal single-column
+    // fallback stack (layer 1 first, per figureLayerFamily's layer-ascending
+    // sort), each panel keeping its OWN layer's dataset/channels/ranges.
+    expect(s.spatialPanels?.[0]).toMatchObject({
+      datasetId: "d2",
+      xKey: null,
+      yKeys: [0],
+      xLim: [0, 10],
+      yLim: [0, 50],
+      row: 0,
+      col: 0,
+    });
+    expect(s.spatialPanels?.[1]).toMatchObject({
+      datasetId: "d3",
+      xKey: null,
+      yKeys: [1, 2],
+      xLim: [0, 10],
+      yLim: [0, 5000],
+      yAxisLabel: "Counts",
+      row: 1,
+      col: 0,
+    });
+  });
+});
+
+describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, item 4)", () => {
+  const chData = (book: string): DataStruct => ({
+    time: [0, 1, 2],
+    values: [[1], [2], [3]],
+    labels: ["ch0"],
+    units: [""],
+    metadata: { origin_book: book, x_column_name: "A", origin_column_names: ["B"] },
+  });
+
+  interface Frame {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+  }
+
+  const mkEntry = (
+    id: string,
+    layer: number,
+    datasetId: string | null,
+    book: string,
+    frame: Frame | null,
+    yRange: [number, number],
+  ) => ({
+    id,
+    stem: "Fixed Lambdas SI",
+    datasetId,
+    siblingIds: ["p1", "p2", "p3"],
+    figure: {
+      name: "Graph6",
+      layer,
+      x_from: 0,
+      x_to: 10,
+      x_log: false,
+      y_from: yRange[0],
+      y_to: yRange[1],
+      y_log: false,
+      n_curves: 1,
+      annotations: [] as string[],
+      curves: [{ book, x: "A", y: "B" }],
+      frame,
+    },
+  });
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [
+        { id: "p1", name: "Fixed Lambdas SI:Book1", data: chData("Book1") },
+        { id: "p2", name: "Fixed Lambdas SI:Book2", data: chData("Book2") },
+        { id: "p3", name: "Fixed Lambdas SI:Book3", data: chData("Book3") },
+      ],
+      activeId: null,
+      stackMode: false,
+      spatialPanels: null,
+      originFigures: [],
+    });
+  });
+
+  it("arranges a 2-layer stack using real decoded frame geometry ('Fixed Lambdas SI'!Graph6 shape)", () => {
+    const top = mkEntry("fig-0", 1, "p1", "Book1", { left: 0, top: 0, right: 995, bottom: 480 }, [0, 100]);
+    const bottom = mkEntry("fig-1", 2, "p2", "Book2", { left: 0, top: 520, right: 995, bottom: 990 }, [0, 200]);
+    useApp.setState({ originFigures: [top, bottom] });
+    useApp.getState().applyOriginFigure("fig-0");
+    const s = useApp.getState();
+    expect(s.stackMode).toBe(true);
+    expect(s.spatialPanels).toEqual([
+      expect.objectContaining({ datasetId: "p1", row: 0, col: 0, xLim: [0, 10], yLim: [0, 100] }),
+      expect.objectContaining({ datasetId: "p2", row: 1, col: 0, xLim: [0, 10], yLim: [0, 200] }),
+    ]);
+  });
+
+  it("generalizes past 2 layers: a 3-layer family arranges as a 3-panel ordinal stack (no frame geometry)", () => {
+    const l1 = mkEntry("fig-0", 1, "p1", "Book1", null, [0, 1]);
+    const l2 = mkEntry("fig-1", 2, "p2", "Book2", null, [0, 2]);
+    const l3 = mkEntry("fig-2", 3, "p3", "Book3", null, [0, 3]);
+    useApp.setState({ originFigures: [l1, l2, l3] });
+    useApp.getState().applyOriginFigure("fig-1"); // clicking the MIDDLE layer's own entry
+    const s = useApp.getState();
+    expect(s.stackMode).toBe(true);
+    expect(s.spatialPanels?.map((p) => [p.datasetId, p.row, p.col])).toEqual([
+      ["p1", 0, 0],
+      ["p2", 1, 0],
+      ["p3", 2, 0],
+    ]);
+    // The clicked layer's OWN dataset activates, even though it isn't first.
+    expect(s.activeId).toBe("p2");
+  });
+
+  it("falls back to the clicked layer's own single-layer apply when a family member's dataset never resolved", () => {
+    const l1 = mkEntry("fig-0", 1, "p1", "Book1", null, [0, 1]);
+    const l2 = mkEntry("fig-1", 2, null, "Book2", null, [0, 2]); // unresolved
+    useApp.setState({ originFigures: [l1, l2] });
+    useApp.getState().applyOriginFigure("fig-0");
+    const s = useApp.getState();
+    expect(s.spatialPanels).toBeNull(); // no multi-panel — all-or-nothing resolution failed
+    expect(s.stackMode).toBe(false); // untouched — the single-layer tail never turns it on
+    expect(s.activeId).toBe("p1"); // clicked layer's own dataset activated instead
+    expect(s.yLim).toEqual([0, 1]); // its own axis snapshot, not a panel arrangement
+  });
+
+  it("falls back to the clicked layer's own apply when a family member's channel selection is empty", () => {
+    const l1 = mkEntry("fig-0", 1, "p1", "Book1", null, [0, 1]);
+    const l2 = mkEntry("fig-1", 2, "p2", "Elsewhere", null, [0, 2]); // book mismatch -> no selection
+    useApp.setState({ originFigures: [l1, l2] });
+    useApp.getState().applyOriginFigure("fig-0");
+    const s = useApp.getState();
+    expect(s.spatialPanels).toBeNull();
+    expect(s.stackMode).toBe(false);
+    expect(s.activeId).toBe("p1");
   });
 });
 

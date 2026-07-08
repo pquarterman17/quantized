@@ -44,11 +44,15 @@ import {
   doubleYPartner,
   figureChannelSelection,
   figureLabel,
+  figureLayerFamily,
   originFigureAnnotations,
   originLegendPos,
+  resolveFigurePanels,
   type OriginFigureEntry,
 } from "../lib/originFigures";
 import { planOriginFolders } from "../lib/originFolders";
+import { computePanelLayout } from "../lib/originPanels";
+import type { SpatialPanel } from "../lib/multipanel";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
 import { buildOverlayDataset, overlayCurveStyles } from "../lib/originOverlay";
 import { applyPalette, normalizePalette } from "../lib/palettes";
@@ -253,6 +257,14 @@ interface AppState {
   plotTemplate: string; // on-screen publication template (base font + line width)
   showAxisBox: boolean; // draw a full frame around the plot area
   stackMode: boolean; // multi-panel: one stacked sub-plot per channel
+  // Spatial multi-panel apply (decode-plan #36): set by `applyOriginFigure`
+  // when a multi-layer Origin figure's layers all resolve to a dataset +
+  // plotted channels — each panel owns its OWN dataset/ranges instead of
+  // splitting the active dataset's channels (MultiPanelStage renders this
+  // in preference to the plain per-channel split when non-null). Cleared by
+  // `setStackMode` and `setActive` so a manual toggle or picking a different
+  // dataset never shows a stale spatial arrangement.
+  spatialPanels: SpatialPanel[] | null;
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
   statMode: boolean; // render the Statistics stage (box/violin/qq/histogram, gap #16)
@@ -764,6 +776,7 @@ export const useApp = create<AppState>((set, get) => ({
   plotTemplate: "screen",
   showAxisBox: false,
   stackMode: false,
+  spatialPanels: null,
   insetMode: false,
   polarMode: false,
   statMode: false,
@@ -1157,6 +1170,45 @@ export const useApp = create<AppState>((set, get) => ({
       }
       // Either layer's curves didn't map to a channel — fall back below.
     }
+    // Multi-panel spatial apply (decode-plan #36): ≥2 same-window layers
+    // that didn't (or couldn't) combine as a Y/Y2 pair — the "Fixed Lambdas
+    // SI"!Graph6-style 2-stack, or any ≥2-layer composite/panel window.
+    // Arrange each layer as its OWN panel, placed per the page's real
+    // spatial layout (`originPanels.computePanelLayout` over the family's
+    // decoded `frame` quads — falls back to a plain top-to-bottom ordinal
+    // stack when the geometry wasn't decoded), when EVERY layer resolves to
+    // a dataset + plotted channels (`resolveFigurePanels`, all-or-nothing).
+    // Falls through to the clicked layer's own single-layer apply below,
+    // with a status note, when any layer doesn't resolve.
+    const family = figureLayerFamily(entry, get().originFigures);
+    if (family.length >= 2) {
+      const panels = resolveFigurePanels(family, get().datasets);
+      if (panels) {
+        const layout = computePanelLayout(
+          family.map((e) => e.figure.frame ?? null),
+          family[0].figure.page ?? null,
+        );
+        const placed: SpatialPanel[] = panels.map((p, i) => ({
+          ...p,
+          row: layout.placements[i]?.row ?? i,
+          col: layout.placements[i]?.col ?? 0,
+        }));
+        get().setActive(entry.datasetId);
+        set({ stackMode: true, spatialPanels: placed });
+        get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
+        if (!layout.spatial) {
+          toast(
+            `applied ${placed.length} panels stacked in layer order — page geometry not decoded`,
+            "info",
+          );
+        }
+        return;
+      }
+      toast(
+        "multi-panel layout: not every layer resolved a dataset — showing this layer only",
+        "info",
+      );
+    }
     get().setActive(entry.datasetId);
     // Decoded curve bindings (partial recall, 100% precision) select the
     // actually-plotted channels; without them the default view stands.
@@ -1221,6 +1273,7 @@ export const useApp = create<AppState>((set, get) => ({
         hiddenChannels: activeDs ? originHiddenChannels(activeDs.data) : [],
         xLim: null,
         yLim: null,
+        spatialPanels: null, // decode-plan #36 — never restored from a stale figure apply
         fitOverlay: null,
         peakOverlay: null,
         baselineOverlay: null,
@@ -1262,6 +1315,10 @@ export const useApp = create<AppState>((set, get) => ({
         hiddenChannels: ds ? originHiddenChannels(ds.data) : [],
         xLim: null,
         yLim: null,
+        // A plain click on a different dataset always drops a prior spatial
+        // multi-panel arrangement (decode-plan #36) — it was built for a
+        // specific figure's layers, not whatever is now active.
+        spatialPanels: null,
         rsmPeaks: null,
         integral: null,
         fwhmResult: null,
@@ -1440,6 +1497,7 @@ export const useApp = create<AppState>((set, get) => ({
         hiddenChannels: [],
         xLim: null,
         yLim: null,
+        spatialPanels: null, // decode-plan #36 — the clone becomes active, not a figure
         rsmPeaks: null,
         integral: null,
         fwhmResult: null,
@@ -1771,7 +1829,10 @@ export const useApp = create<AppState>((set, get) => ({
   setLegendPos: (legendPos) => set({ legendPos }),
   setPlotTemplate: (plotTemplate) => set({ plotTemplate }),
   setShowAxisBox: (showAxisBox) => set({ showAxisBox }),
-  setStackMode: (stackMode) => set({ stackMode }),
+  // A manual toggle (on OR off) always drops any spatial arrangement from a
+  // prior Origin multi-panel apply — the plain per-channel split (or leaving
+  // stack mode) is what the user asked for, never a stale spatial grid.
+  setStackMode: (stackMode) => set({ stackMode, spatialPanels: null }),
   setInsetMode: (insetMode) => set({ insetMode }),
   setPolarMode: (polarMode) => set({ polarMode }),
   setStatMode: (statMode) => set({ statMode }),

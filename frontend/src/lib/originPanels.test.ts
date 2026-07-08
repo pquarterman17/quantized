@@ -1,0 +1,160 @@
+import { describe, expect, it } from "vitest";
+
+import { computePanelLayout, type FrameQuad } from "./originPanels";
+
+describe("computePanelLayout", () => {
+  it("returns nothing to place for an empty layer list", () => {
+    expect(computePanelLayout([])).toEqual({ rows: 0, cols: 0, placements: [], spatial: false });
+  });
+
+  it("places a single layer in one cell (trivially spatial)", () => {
+    const f: FrameQuad = { left: 0, top: 0, right: 100, bottom: 100 };
+    expect(computePanelLayout([f])).toEqual({
+      rows: 1,
+      cols: 1,
+      placements: [{ index: 0, row: 0, col: 0 }],
+      spatial: true,
+    });
+  });
+
+  it("2-stack: two vertically stacked frames -> 2 rows, 1 col, top-to-bottom order", () => {
+    const top: FrameQuad = { left: 0, top: 0, right: 100, bottom: 45 };
+    const bottom: FrameQuad = { left: 0, top: 55, right: 100, bottom: 100 };
+    const layout = computePanelLayout([top, bottom]);
+    expect(layout.spatial).toBe(true);
+    expect(layout.rows).toBe(2);
+    expect(layout.cols).toBe(1);
+    expect(layout.placements).toEqual([
+      { index: 0, row: 0, col: 0 },
+      { index: 1, row: 1, col: 0 },
+    ]);
+  });
+
+  it("2-stack: order-independent — the SECOND input frame being the top one still lands in row 0", () => {
+    const bottom: FrameQuad = { left: 0, top: 55, right: 100, bottom: 100 };
+    const top: FrameQuad = { left: 0, top: 0, right: 100, bottom: 45 };
+    const layout = computePanelLayout([bottom, top]); // bottom panel listed first
+    expect(layout.placements).toEqual([
+      { index: 0, row: 1, col: 0 }, // "bottom" (input 0) -> row 1
+      { index: 1, row: 0, col: 0 }, // "top" (input 1) -> row 0
+    ]);
+  });
+
+  it("horizontal 2-up: two side-by-side frames -> 1 row, 2 cols", () => {
+    const left: FrameQuad = { left: 0, top: 0, right: 45, bottom: 100 };
+    const right: FrameQuad = { left: 55, top: 0, right: 100, bottom: 100 };
+    const layout = computePanelLayout([left, right]);
+    expect(layout).toEqual({
+      rows: 1,
+      cols: 2,
+      placements: [
+        { index: 0, row: 0, col: 0 },
+        { index: 1, row: 0, col: 1 },
+      ],
+      spatial: true,
+    });
+  });
+
+  it("2x2 grid: four quadrant frames cluster into 2 rows, 2 cols", () => {
+    const tl: FrameQuad = { left: 0, top: 0, right: 45, bottom: 45 };
+    const tr: FrameQuad = { left: 55, top: 0, right: 100, bottom: 45 };
+    const bl: FrameQuad = { left: 0, top: 55, right: 45, bottom: 100 };
+    const br: FrameQuad = { left: 55, top: 55, right: 100, bottom: 100 };
+    const layout = computePanelLayout([tl, tr, bl, br]);
+    expect(layout.spatial).toBe(true);
+    expect(layout.rows).toBe(2);
+    expect(layout.cols).toBe(2);
+    expect(layout.placements).toEqual([
+      { index: 0, row: 0, col: 0 },
+      { index: 1, row: 0, col: 1 },
+      { index: 2, row: 1, col: 0 },
+      { index: 3, row: 1, col: 1 },
+    ]);
+  });
+
+  it("tolerates real-world slop in frame edges within the same page", () => {
+    // Same "2-stack" shape, but the decoded ints aren't perfectly clean.
+    const top: FrameQuad = { left: 1, top: 2, right: 99, bottom: 44 };
+    const bottom: FrameQuad = { left: 0, top: 53, right: 100, bottom: 98 };
+    const layout = computePanelLayout([top, bottom]);
+    expect(layout.spatial).toBe(true);
+    expect(layout.rows).toBe(2);
+    expect(layout.cols).toBe(1);
+  });
+
+  it("falls back to an ordinal stack when frames substantially overlap", () => {
+    const outer: FrameQuad = { left: 0, top: 0, right: 100, bottom: 100 };
+    const inner: FrameQuad = { left: 10, top: 10, right: 90, bottom: 90 }; // nested, not tiled
+    const layout = computePanelLayout([outer, inner]);
+    expect(layout.spatial).toBe(false);
+    expect(layout.rows).toBe(2);
+    expect(layout.cols).toBe(1);
+    expect(layout.placements).toEqual([
+      { index: 0, row: 0, col: 0 },
+      { index: 1, row: 1, col: 0 },
+    ]);
+  });
+
+  it("falls back when any layer's frame is missing (undecoded/composite layer)", () => {
+    const f: FrameQuad = { left: 0, top: 0, right: 100, bottom: 45 };
+    expect(computePanelLayout([f, null]).spatial).toBe(false);
+    expect(computePanelLayout([f, undefined]).spatial).toBe(false);
+    expect(computePanelLayout([null, null]).spatial).toBe(false);
+  });
+
+  it("falls back when a frame is degenerate (zero or negative width/height)", () => {
+    const f: FrameQuad = { left: 0, top: 0, right: 100, bottom: 45 };
+    const zero: FrameQuad = { left: 10, top: 10, right: 10, bottom: 50 }; // right == left
+    expect(computePanelLayout([f, zero]).spatial).toBe(false);
+  });
+
+  it("accepts frames that plausibly fit the given page (2-stack, page supplied)", () => {
+    const top: FrameQuad = { left: 0, top: 0, right: 995, bottom: 480 };
+    const bottom: FrameQuad = { left: 0, top: 520, right: 995, bottom: 990 };
+    const layout = computePanelLayout([top, bottom], { width: 1000, height: 1000 });
+    expect(layout).toEqual({
+      rows: 2,
+      cols: 1,
+      placements: [
+        { index: 0, row: 0, col: 0 },
+        { index: 1, row: 1, col: 0 },
+      ],
+      spatial: true,
+    });
+  });
+
+  it("falls back when the frames overshoot the declared page bound (frame/page disagree)", () => {
+    // The frames claim to extend well past a page that says it's only 100x100
+    // wide/tall — the decode is inconsistent, so don't trust the geometry.
+    const top: FrameQuad = { left: 0, top: 0, right: 100, bottom: 45 };
+    const bottom: FrameQuad = { left: 0, top: 55, right: 100, bottom: 900 };
+    const layout = computePanelLayout([top, bottom], { width: 100, height: 100 });
+    expect(layout.spatial).toBe(false);
+    expect(layout.rows).toBe(2);
+    expect(layout.cols).toBe(1);
+  });
+
+  it("matches the real corpus: \"Fixed Lambdas SI\"!Graph6's decoded 2-stack frames", () => {
+    // Exact frame quads read from the real corpus file via
+    // figures_opju.extract_figures_opju (2026-07-07 spot check) — page units,
+    // page size undecoded (None) for this file. Layer 1's bottom edge exactly
+    // meets layer 2's top edge (a contiguous stack, no gap).
+    const layer1: FrameQuad = { left: 1027, top: 478, right: 6435, bottom: 2272 };
+    const layer2: FrameQuad = { left: 1027, top: 2272, right: 6435, bottom: 4066 };
+    const layout = computePanelLayout([layer1, layer2]);
+    expect(layout.spatial).toBe(true);
+    expect(layout.rows).toBe(2);
+    expect(layout.cols).toBe(1);
+    expect(layout.placements).toEqual([
+      { index: 0, row: 0, col: 0 }, // layer 1 -> top panel
+      { index: 1, row: 1, col: 0 }, // layer 2 -> bottom panel
+    ]);
+  });
+
+  it("ignores a null/missing page and falls back to bbox-derived tolerance", () => {
+    const top: FrameQuad = { left: 0, top: 0, right: 100, bottom: 45 };
+    const bottom: FrameQuad = { left: 0, top: 55, right: 100, bottom: 100 };
+    expect(computePanelLayout([top, bottom], null).spatial).toBe(true);
+    expect(computePanelLayout([top, bottom], undefined).spatial).toBe(true);
+  });
+});

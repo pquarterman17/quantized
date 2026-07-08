@@ -87,6 +87,15 @@ export interface OriginFigure {
   /** 1-based layer index within the graph window (multi-layer .opj windows
    *  emit one figure per layer; absent/1 = single-layer or unknown). */
   layer?: number;
+  /** This layer's frame rect on the page, in Origin page units
+   *  (`figure_geometry.opj_layer_frame`/`opju_layer_frame`). null/absent =
+   *  undecoded (older/composite/embedded layer variants) — never guessed.
+   *  Drives the spatial multi-panel apply (`lib/originPanels.ts`). */
+  frame?: { left: number; top: number; right: number; bottom: number } | null;
+  /** The graph page's (width, height) in the SAME page units as `frame`
+   *  (`figure_geometry.opj_page_size`/`opju_page_size`). null/absent = not
+   *  decoded/implausible — never guessed. Shared by every layer of one page. */
+  page?: { width: number; height: number } | null;
 }
 
 /** Response of POST /api/plot/series — uPlot-ready column data. */
