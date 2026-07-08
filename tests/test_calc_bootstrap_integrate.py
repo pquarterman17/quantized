@@ -59,6 +59,24 @@ def test_bootstrap_errors() -> None:
         bootstrap_fit(_X, _Y, _line, [0.5, 1.0], n_boot=5)
 
 
+def test_bootstrap_return_samples_flag_default_off() -> None:
+    """return_samples defaults False (gap #29) -- the replicate matrix stays
+    off the wire unless a caller (e.g. a corner-plot export) opts in."""
+    out = bootstrap_fit(_X, _Y, _line, [0.5, 1.0], n_boot=60, seed=5)
+    assert "boot_samples" not in out
+
+
+def test_bootstrap_return_samples_flag_on_gives_the_replicate_matrix() -> None:
+    out = bootstrap_fit(_X, _Y, _line, [0.5, 1.0], n_boot=60, seed=5, return_samples=True)
+    assert "boot_samples" in out
+    samples = np.asarray(out["boot_samples"])
+    assert samples.shape == (out["n_boot"], 2)
+    # the replicate matrix's own mean/CI must match the already-reported
+    # summary stats (they're computed from the same matrix)
+    np.testing.assert_allclose(samples.mean(axis=0), out["boot_mean"])
+    np.testing.assert_allclose(samples.std(axis=0, ddof=1), out["boot_se"])
+
+
 def test_posterior_centers_on_the_fit() -> None:
     out = fit_posterior(_X, _Y, _line, [0.5, 1.0], num_steps=4000, burn_in=500, seed=11)
     assert 0.0 < out["accept_rate"] < 1.0

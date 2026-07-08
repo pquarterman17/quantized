@@ -145,7 +145,9 @@ written below.
    three.js (MIT) surface/scatter stage now. *Recommendation: (a) —
    nothing in the corpus workflow demands rotation yet; revisit on
    user pull.*
-5. **Bootstrap corner source (#29)** — expose the bootstrap replicate
+5. *(SHIPPED 2026-07-07 — the recommended opt-in flag: `return_samples`
+   on `bootstrap_fit`/`BootstrapRequest`, default `False`.)*
+   **Bootstrap corner source (#29)** — expose the bootstrap replicate
    matrix (opt-in flag on `/api/fitting/bootstrap`) so corner plots
    work for bootstrap too, or posterior-only? *Recommendation: opt-in
    flag — one-line calc change, bounded response, and it makes the
@@ -154,33 +156,6 @@ written below.
 ---
 
 ## Tier 1 — High Impact
-
-1. **Corner-plot posterior panels (gap #29 residual)** — pairwise
-   posterior/bootstrap parameter panels through the export path,
-   surfaced in the Curve Fit workshop.
-   *Model: sonnet.* *Agent: peak-fitting-expert.*
-   - [ ] New pure `src/quantized/calc/figure_corner.py` on the
-         `figure_statplots.py` template: histogram diagonals, 2-D
-         density/scatter off-diagonals, truth lines at the fitted
-         params, `figure_style` presets; matplotlib only
-   - [ ] `/api/export/corner-figure` endpoint in
-         `routes/export_figures.py` (create it per GAP_PLOTTYPES item
-         1 if not yet split — never grow `routes/export.py`)
-   - [ ] Opt-in samples flag on `bootstrap_fit` in
-         `calc/fit_bootstrap.py` (per open question 5) + pass-through
-         in `routes/fitting.py`, so bootstrap corners work like
-         posterior corners (`fit_posterior` already returns samples)
-   - [ ] Curve Fit workshop
-         (`frontend/src/components/workshops/curvefit/`): after a
-         posterior/bootstrap run, a "Corner plot…" action renders the
-         export into an img preview with a vector download (PDF
-         default)
-   - [ ] Tests: figure bytes render for 2–4 param synthetic
-         posteriors; marginal histograms consistent with the reported
-         ci68 intervals; route round-trip
-   - Acceptance: a 3-parameter Gaussian fit posterior renders a 3×3
-     corner panel whose marginals match the reported 68% intervals;
-     export is vector by default.
 
 2. **Beautiful-defaults audit (gap #11 residual)** — the booked
    eyeball pass over un-tweaked first renders vs. published journal
@@ -337,4 +312,29 @@ written below.
 
 ## Completed
 
-(empty — nothing shipped against this plan yet)
+- ~~**#1 Corner-plot posterior panels (gap #29 residual)**~~ (2026-07-07) —
+  new pure `calc/figure_corner.py` (226 lines, `figure_statplots.py`
+  template): k×k grid, marginal histograms on the diagonal, 2-D density
+  histogram panels below the diagonal, upper triangle blank, dashed
+  truth-value overlays, tick/label thinning so k up to ~6 stays readable;
+  `figure_style` presets + `calc/figure`'s `resolved_dpi` convention
+  (`dpi=None` -> the preset's calibrated dpi — this endpoint threads it
+  through correctly end-to-end, unlike its `statplot-figure`/`map-figure`
+  siblings, which is the pre-existing, separately-tracked gap noted in
+  open question 2's follow-ups). `bootstrap_fit` gained an opt-in
+  `return_samples` flag (default `False`) that adds `boot_samples` (the
+  full replicate matrix) to the result, threaded through
+  `BootstrapRequest.return_samples` in `routes/fitting.py`; `fit_posterior`
+  already returned its chain, so it needed no change. New stateless
+  `POST /api/export/corner-figure` in `routes/export_figures.py` (297
+  lines) takes posted samples + names (never re-runs a fit). Frontend:
+  `exportCornerFigure` + `CornerFigureSpec` wrapper only in `lib/api.ts` —
+  **the Curve Fit workshop "Corner plot…" action is NOT built**; that
+  UI wiring is the remaining sub-task, deferred pending the workshop
+  pairing work. Tests: `tests/test_calc_figure_corner.py` (16 cases —
+  k=2/4 renders in pdf/svg/png, Gaussian marginal-peak sanity, k=1 and
+  truths-overlay, dpi-preset resolution, shape/finite-sample error
+  paths), `tests/test_calc_bootstrap_integrate.py` (+2, flag off/on),
+  `tests/test_api_export.py` (+4, route round-trip/truths/bad-format/
+  shape-mismatch-422), `tests/test_api_fitting.py` (+1, bootstrap route
+  pass-through). Backend 1795 passed (was 1772); ruff + mypy clean.

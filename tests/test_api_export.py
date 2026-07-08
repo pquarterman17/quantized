@@ -385,6 +385,51 @@ def test_figure_hitmap_elements_and_axes() -> None:
     assert m["image"][:10]  # base64 payload present
 
 
+def _demo_corner(k: int = 2, n: int = 200) -> dict:
+    import numpy as np
+
+    rng = np.random.default_rng(3)
+    samples = rng.normal(0.0, 1.0, size=(n, k)).tolist()
+    return {"samples": samples, "param_names": [f"p{i}" for i in range(k)]}
+
+
+def test_corner_figure_pdf_roundtrip() -> None:
+    resp = client.post(
+        "/api/export/corner-figure",
+        json={**_demo_corner(4), "fmt": "pdf", "filename": "posterior corner"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.headers["content-disposition"] == (
+        'attachment; filename="posterior_corner.pdf"'
+    )
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_corner_figure_png_with_truths() -> None:
+    resp = client.post(
+        "/api/export/corner-figure",
+        json={**_demo_corner(2), "fmt": "png", "truths": [0.1, -0.2], "style": "aps"},
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_corner_figure_bad_format_is_422() -> None:
+    resp = client.post(
+        "/api/export/corner-figure", json={**_demo_corner(2), "fmt": "bmp"}
+    )
+    assert resp.status_code == 422
+
+
+def test_corner_figure_shape_mismatch_is_422_not_500() -> None:
+    """param_names length must match the samples column count."""
+    body = _demo_corner(3)
+    body["param_names"] = ["only_one"]
+    resp = client.post("/api/export/corner-figure", json=body)
+    assert resp.status_code == 422
+
+
 def test_figure_custom_legend_anchor_renders() -> None:
     ds = {
         "time": [1.0, 2.0, 3.0],
