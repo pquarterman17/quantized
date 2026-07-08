@@ -248,9 +248,13 @@ active dataset all shipped.)
 
 ### Tier 3 — Nice-to-Have
 
-10. **Plugin distribution conveniences** — `qz plugin list/enable`,
-    community index page
-    *Model: haiku. Pickup: extends `cli.py`; requires #8.*
+~~10. **Plugin distribution conveniences**~~ **CLOSED 2026-07-08** — `qz
+plugin list/enable/disable` + the `docs/plugins.md` community-index section
+shipped via `plans/GAP_ECOSYSTEM_PLAN.md` item 7 (see that plan's Completed
+entry). The one piece deliberately left open is the separate
+`quantized-plugin-template` starter repo (its own repo, out of scope for
+this codebase) — already tracked as a deliberate deferral in this plan's
+header note.
 
 ---
 

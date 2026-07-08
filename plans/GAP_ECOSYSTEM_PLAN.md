@@ -13,7 +13,7 @@ writer (#27, audited and kept deferred).
 
 **Status:** Active
 **Created:** 2026-07-07
-**Updated:** 2026-07-07
+**Updated:** 2026-07-08
 
 ---
 
@@ -397,13 +397,16 @@ written below.
          `.opj` import or a user reports one; the probe recipe lives
          in `docs/origin_re/validation_log.md`
 
-7. **Plugin distribution conveniences (gap #10)** — requires item 2.
+7. ~~**Plugin distribution conveniences (gap #10)**~~ — *SHIPPED
+   2026-07-08 (see `## Completed`); requires item 2.* the
+   `quantized-plugin-template` starter repo stays out of scope (a
+   separate repo, not this codebase) and remains open under gap #10.
    *Model: haiku.* *Agent: code-implementer.*
-   - [ ] `qz plugin list` / `qz plugin enable <name>` / `disable`
+   - [x] `qz plugin list` / `qz plugin enable <name>` / `disable`
          subcommands in `src/quantized/cli.py` (argparse subparsers;
          the file is 58 lines — ample headroom); enabled-state
          persisted in the item-1 config dir
-   - [ ] Community index page: a `docs/plugins.md` section listing
+   - [x] Community index page: a `docs/plugins.md` section listing
          known plugins + the template repo link (per open question 3,
          a docs page, not a service)
    - Acceptance: `qz plugin list` shows discovered plugins with
@@ -458,6 +461,34 @@ written below.
   **Remaining (deferred, tracked elsewhere):** the `quantized-plugin-template`
   repo → #10 / item 7; the pipeline-step route + frontend palette / batch-replay
   wiring → a later ecosystem item (v1 registers steps server-side only).
+
+- ~~**7. Plugin distribution conveniences (gap #10)**~~ (2026-07-08) — the
+  CLI-convenience half of gap #10 called out as deferred in item 2's entry
+  above. `src/quantized/plugins/loader.py` gained the mutating counterpart
+  to its existing `disabled_sources()` read accessor: `enable_plugin`/
+  `disable_plugin` (set-difference/union over the disabled list) and a
+  shared `_write_disabled_sources` that preserves unknown `plugins.json`
+  keys and creates the file on first use (both re-exported from
+  `quantized.plugins`). `src/quantized/cli.py`'s `_plugin_command` grew
+  `enable`/`disable` argparse subparsers dispatching to a new
+  `_plugin_set_enabled`: validates `<name>` against the currently
+  discoverable source identifiers (via `load_plugins()`, so an
+  already-disabled plugin still validates), exits 1 with the known-name
+  list on a miss, otherwise mutates + reloads so a following `qz plugin
+  list` reflects it immediately. Both subcommands are idempotent by
+  construction (set ops). `docs/plugins.md` "Enabling / disabling" section
+  now documents the subcommands (dropping the old "planned convenience"
+  note) and gained a new "Publishing & discovering plugins" section:
+  packaging-as-entry-point walkthrough, the disabled-list's host-side
+  (not package-side) persistence model, and a placeholder known-plugins
+  index table — the separate `quantized-plugin-template` starter repo
+  stays explicitly out of scope (referenced, not built) and is the only
+  piece of gap #10 still open. 8 new tests in `tests/test_plugins.py`
+  (disable→enable round trip incl. `.demox` registry effect, idempotence
+  + file-creation-on-first-use for both directions, unknown-name error
+  with exit code 1 in both the some-known and no-plugins-discovered
+  cases, `qz plugin list` reflecting `[disabled]` state); full suite 2030
+  passed / ruff / mypy clean.
 
 - ~~**4. Multi-panel spatial apply (decode-plan #36)**~~ (2026-07-07) —
   `OriginFigure` (`frontend/src/lib/types.ts`) gained the backend's already-

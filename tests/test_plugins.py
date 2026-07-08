@@ -289,3 +289,84 @@ def test_cli_plugin_list_output(capsys: pytest.CaptureFixture[str]) -> None:
 def test_cli_plugin_list_empty(capsys: pytest.CaptureFixture[str]) -> None:
     cli.main(["plugin", "list"])
     assert "No plugins discovered" in capsys.readouterr().out
+
+
+# ── CLI: qz plugin enable / disable ─────────────────────────────────────────
+def test_cli_plugin_disable_then_enable_round_trip(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _write_plugin("p_parser", PARSER_DS)
+    load_plugins()
+    assert ".demox" in _EXT_MAP
+
+    cli.main(["plugin", "disable", "p_parser"])
+    out = capsys.readouterr().out
+    assert "disabled" in out.lower()
+    raw = json.loads((config_dir() / "plugins.json").read_text(encoding="utf-8"))
+    assert raw["disabled"] == ["p_parser"]
+    # the CLI reloads after mutating state, so the extension drops immediately
+    assert ".demox" not in _EXT_MAP
+
+    cli.main(["plugin", "enable", "p_parser"])
+    out = capsys.readouterr().out
+    assert "enabled" in out.lower()
+    raw = json.loads((config_dir() / "plugins.json").read_text(encoding="utf-8"))
+    assert raw["disabled"] == []
+    assert ".demox" in _EXT_MAP
+
+
+def test_cli_plugin_disable_is_idempotent_and_creates_file() -> None:
+    _write_plugin("p_parser", PARSER_DS)
+    assert not (config_dir() / "plugins.json").is_file()
+
+    cli.main(["plugin", "disable", "p_parser"])
+    cli.main(["plugin", "disable", "p_parser"])  # a second disable must not raise or duplicate
+
+    raw = json.loads((config_dir() / "plugins.json").read_text(encoding="utf-8"))
+    assert raw["disabled"] == ["p_parser"]
+
+
+def test_cli_plugin_enable_is_a_no_op_when_not_disabled() -> None:
+    _write_plugin("p_parser", PARSER_DS)
+    load_plugins()
+
+    cli.main(["plugin", "enable", "p_parser"])  # already enabled -> no-op, no error
+
+    assert ".demox" in _EXT_MAP
+    raw = json.loads((config_dir() / "plugins.json").read_text(encoding="utf-8"))
+    assert raw["disabled"] == []
+
+
+def test_cli_plugin_enable_unknown_name_errors(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _write_plugin("p_parser", PARSER_DS)
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["plugin", "enable", "not_a_real_plugin"])
+    assert excinfo.value.code == 1
+
+    out = capsys.readouterr().out
+    assert "not_a_real_plugin" in out
+    assert "p_parser" in out
+    assert not (config_dir() / "plugins.json").is_file()
+
+
+def test_cli_plugin_disable_unknown_name_when_none_discovered(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["plugin", "disable", "nope"])
+    assert excinfo.value.code == 1
+    assert "no plugins" in capsys.readouterr().out.lower()
+
+
+def test_cli_plugin_list_reflects_disabled_state(capsys: pytest.CaptureFixture[str]) -> None:
+    _write_plugin("p_parser", PARSER_DS)
+    cli.main(["plugin", "disable", "p_parser"])
+    capsys.readouterr()
+
+    cli.main(["plugin", "list"])
+    out = capsys.readouterr().out
+    assert "p_parser" in out
+    assert "[disabled]" in out

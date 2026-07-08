@@ -50,6 +50,9 @@ from quantized.plugins.contract import (
 )
 
 __all__ = [
+    "disable_plugin",
+    "disabled_sources",
+    "enable_plugin",
     "ENTRY_POINT_GROUP",
     "load_plugins",
     "loaded_plugins",
@@ -80,12 +83,14 @@ def plugins_dir() -> Path:
     return directory
 
 
-def _disabled_sources() -> set[str]:
+def disabled_sources() -> set[str]:
     """Source identifiers the user has disabled (``<config_dir>/plugins.json``).
 
     Shape: ``{"disabled": ["source-name", ...]}``. Missing/corrupt -> none
     disabled. A disabled plugin is never imported (a broken plugin can be parked
-    without deleting it).
+    without deleting it). Public read accessor; see :func:`enable_plugin` /
+    :func:`disable_plugin` for the mutating counterpart used by ``qz plugin
+    enable``/``disable`` (:mod:`quantized.cli`).
     """
     path = config_dir() / _CONFIG_FILENAME
     if not path.is_file():
@@ -98,6 +103,42 @@ def _disabled_sources() -> set[str]:
     if not isinstance(disabled, list):
         return set()
     return {str(item) for item in disabled}
+
+
+def _write_disabled_sources(disabled: set[str]) -> None:
+    """Persist ``disabled`` as the ``disabled`` list in ``plugins.json``.
+
+    Preserves any other top-level keys already in the file (forward-
+    compatible with future ``plugins.json`` content) and creates the file if
+    it does not yet exist. A corrupt existing file is treated as empty rather
+    than raising, matching :func:`disabled_sources`'s own corrupt-file
+    handling.
+    """
+    path = config_dir() / _CONFIG_FILENAME
+    payload: dict[str, Any] = {}
+    if path.is_file():
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+            raw = None
+        if isinstance(raw, Mapping):
+            payload = dict(raw)
+    payload["disabled"] = sorted(disabled)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def enable_plugin(source: str) -> None:
+    """Remove ``source`` from the disabled list (idempotent — a no-op if it
+    was not disabled). Does not itself reload; call :func:`load_plugins`
+    afterwards to pick up the change."""
+    _write_disabled_sources(disabled_sources() - {source})
+
+
+def disable_plugin(source: str) -> None:
+    """Add ``source`` to the disabled list (idempotent; creates
+    ``plugins.json`` if absent). Does not itself reload; call
+    :func:`load_plugins` afterwards to pick up the change."""
+    _write_disabled_sources(disabled_sources() | {source})
 
 
 # ── Discovery ────────────────────────────────────────────────────────────────
@@ -158,7 +199,7 @@ def load_plugins() -> list[PluginInfo]:
     called again to reload. Called once at app startup (:func:`quantized.app.create_app`).
     """
     unload_plugins()
-    disabled = _disabled_sources()
+    disabled = disabled_sources()
     infos: list[PluginInfo] = []
     for source, origin, importer in _discover():
         if source in disabled:

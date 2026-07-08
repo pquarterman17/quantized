@@ -9,6 +9,7 @@ Public surface::
 
     from quantized.plugins import load_plugins, loaded_plugins, plugins_dir
     from quantized.plugins import list_steps, run_step
+    from quantized.plugins import disabled_sources, enable_plugin, disable_plugin
 """
 
 from __future__ import annotations
@@ -21,6 +22,9 @@ from quantized.plugins.contract import (
 )
 from quantized.plugins.loader import (
     ENTRY_POINT_GROUP,
+    disable_plugin,
+    disabled_sources,
+    enable_plugin,
     load_plugins,
     loaded_plugins,
     plugins_dir,
@@ -34,6 +38,9 @@ __all__ = [
     "InvalidManifest",
     "PluginInfo",
     "PluginManifest",
+    "disable_plugin",
+    "disabled_sources",
+    "enable_plugin",
     "list_steps",
     "load_plugins",
     "loaded_plugins",
