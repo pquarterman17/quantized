@@ -137,7 +137,19 @@ written below.
    TASTE calls left for the owner in the audit doc: aps height vs
    log-decade label thinning. Follow-ups booked: same dpi/tick gaps in
    figure_map/figure_statplots; frontend DPI field doesn't sync to
-   preset.)* **GLM/survival dependency shape (#30)** — (a) statsmodels +
+   preset. **CLOSED 2026-07-08** — `calc/figure_map.py` and
+   `calc/figure_statplots.py` (+ their `MapFigureRequest`/
+   `StatplotFigureRequest` routes in `routes/export_figures.py`) ported
+   both behaviors: `dpi: int | None = None` resolving to the style
+   preset's calibrated dpi (`calc.figure`'s `resolved_dpi` convention,
+   already used by the corner/ternary/field siblings), and
+   `xtick.top`/`ytick.right` mirrored to the preset's `box_on` in the rc
+   context, matching `calc/figure.py` exactly. Bundled into the same
+   pass as GAP_PLOTTYPES_PLAN item 3 (tri-contour export) since both
+   touch `figure_map.py`; see that plan's Completed entry for the full
+   test/gate tally. Still open: frontend DPI field doesn't sync to
+   preset (unchanged, out of this pass's lane).)* **GLM/survival
+   dependency shape (#30)** — (a) statsmodels +
    lifelines in a new optional `stats` extra with guarded imports (the
    `office` extra pattern; clean core install); (b) runtime deps for
    everyone; (c) hand-roll logistic/Poisson IRLS + Kaplan-Meier in

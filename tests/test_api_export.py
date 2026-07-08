@@ -254,6 +254,66 @@ def test_map_figure_degenerate_grid_is_422_not_500() -> None:
     assert resp.status_code == 422
 
 
+def _demo_points() -> dict:
+    import numpy as np
+    rng = np.random.default_rng(11)
+    x = rng.uniform(-2.0, 2.0, 60)
+    y = rng.uniform(-1.0, 3.0, 60)
+    z = 100.0 * np.exp(-(x**2 + (y - 1.0) ** 2)) + rng.normal(0.0, 0.5, 60)
+    return {"x_axis": x.tolist(), "y_axis": y.tolist(), "z_values": z.tolist()}
+
+
+def test_map_figure_scattered_tricontour_png() -> None:
+    # gap #17 last remaining piece: a raw scattered (RSM) cloud, no regridding.
+    resp = client.post(
+        "/api/export/map-figure",
+        json={**_demo_points(), "contour_source": "points", "kind": "contourf", "fmt": "png"},
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_map_figure_scattered_collinear_is_422() -> None:
+    resp = client.post(
+        "/api/export/map-figure",
+        json={
+            "x_axis": [0.0, 1.0, 2.0, 3.0], "y_axis": [0.0, 0.0, 0.0, 0.0],
+            "z_values": [1.0, 2.0, 3.0, 4.0], "contour_source": "points", "kind": "contourf",
+        },
+    )
+    assert resp.status_code == 422
+    assert "degenerate" in resp.json()["detail"]
+
+
+def test_map_figure_scattered_kind_restriction_is_422() -> None:
+    resp = client.post(
+        "/api/export/map-figure",
+        json={**_demo_points(), "contour_source": "points", "kind": "heatmap"},
+    )
+    assert resp.status_code == 422
+
+
+def test_map_figure_dpi_none_uses_style_preset() -> None:
+    web = client.post(
+        "/api/export/map-figure",
+        json={**_demo_map(), "kind": "contourf", "fmt": "png", "style": "web"},
+    )
+    aps = client.post(
+        "/api/export/map-figure",
+        json={**_demo_map(), "kind": "contourf", "fmt": "png", "style": "aps"},
+    )
+    assert web.status_code == aps.status_code == 200
+    assert len(aps.content) > len(web.content)
+
+
+def test_statplot_figure_dpi_none_uses_style_preset() -> None:
+    payload = {"kind": "histogram", "data": list(range(1, 101)), "fmt": "png"}
+    web = client.post("/api/export/statplot-figure", json={**payload, "style": "web"})
+    aps = client.post("/api/export/statplot-figure", json={**payload, "style": "aps"})
+    assert web.status_code == aps.status_code == 200
+    assert len(aps.content) > len(web.content)
+
+
 def test_figure_bad_style_is_422() -> None:
     resp = client.post(
         "/api/export/figure",

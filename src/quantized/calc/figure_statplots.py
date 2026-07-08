@@ -58,7 +58,7 @@ def render_statplot_figure(
     fit: str | None = None,
     width_in: float | None = None,
     height_in: float | None = None,
-    dpi: int = 200,
+    dpi: int | None = None,
 ) -> bytes:
     """Render a statistical plot to image bytes.
 
@@ -67,12 +67,18 @@ def render_statplot_figure(
       with a least-squares reference line.
     - ``histogram`` — one sample with a numpy bin rule (``bins``) and an
       optional distribution-fit overlay (``fit``, e.g. ``"norm"``).
+
+    ``dpi`` defaults to the style preset's calibrated resolution when not
+    given (``None``), same as ``calc.figure``'s ``resolved_dpi`` convention;
+    the preset's box-tick convention (``xtick.top``/``ytick.right`` mirrored
+    when the preset draws a closed box) is honored too.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
     if kind not in STATPLOT_KINDS:
         raise ValueError(f"kind must be one of {STATPLOT_KINDS}")
     st = figure_style(style)
+    resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
     fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
     rc: dict[str, Any] = {
@@ -81,6 +87,11 @@ def render_statplot_figure(
         "font.size": st.font_size,
         "axes.labelsize": st.font_size,
         "axes.titlesize": st.title_font_size,
+        # Mirror ticks onto the top/right spines whenever the preset draws a
+        # closed box (matches calc.figure's convention; matplotlib's default
+        # leaves top/right bare even with the full rectangular border).
+        "xtick.top": st.box_on,
+        "ytick.right": st.box_on,
     }
 
     with matplotlib.rc_context(rc):  # type: ignore[arg-type]
@@ -98,7 +109,7 @@ def render_statplot_figure(
                 ax.spines["right"].set_visible(False)
             fig.tight_layout()
             buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=dpi)
+            fig.savefig(buf, format=fmt, dpi=resolved_dpi)
             return buf.getvalue()
         finally:
             plt.close(fig)

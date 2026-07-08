@@ -50,3 +50,22 @@ def test_grouped_requires_list_of_groups() -> None:
 def test_group_with_no_finite_values_rejected() -> None:
     with pytest.raises(ValueError, match="finite value"):
         render_statplot_figure("violin", [[1.0, 2.0], [np.nan, np.inf]])
+
+
+# ── dpi preset resolution + mirrored box ticks (GAP_TIER3 item 2 follow-up) ─
+
+
+def test_dpi_none_uses_style_preset_dpi() -> None:
+    # dpi=None (the default) resolves to the style's calibrated dpi -- a
+    # raster render at the high-dpi 'aps' preset must be a larger PNG than
+    # the same plot at the low-dpi 'web' preset (mirrors test_calc_figure.py's
+    # dpi-scales-raster-output pattern and the corner/ternary/field siblings).
+    small = render_statplot_figure("histogram", _SAMPLE, fmt="png", style="web", dpi=None)
+    large = render_statplot_figure("histogram", _SAMPLE, fmt="png", style="aps", dpi=None)
+    assert len(large) > len(small)
+
+
+def test_dpi_explicit_overrides_preset() -> None:
+    at_100 = render_statplot_figure("histogram", _SAMPLE, fmt="png", dpi=100)
+    at_300 = render_statplot_figure("histogram", _SAMPLE, fmt="png", dpi=300)
+    assert len(at_300) > len(at_100)

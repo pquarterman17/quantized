@@ -165,7 +165,9 @@ class StatplotFigureRequest(BaseModel):
     title: str = ""
     x_label: str = ""
     y_label: str = ""
-    dpi: int = 200
+    # None (default) resolves to the style preset's calibrated dpi, matching
+    # calc.figure's resolved_dpi convention (see corner/ternary/field siblings).
+    dpi: int | None = None
     filename: str = "statplot"
 
 
@@ -177,7 +179,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
         raise HTTPException(
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
-    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
+    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
     from quantized.calc.figure_statplots import render_statplot_figure  # lazy: matplotlib
 
     try:
@@ -242,11 +244,19 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
 class MapFigureRequest(BaseModel):
     x_axis: list[float]
     y_axis: list[float]
-    z_grid: list[list[float]]  # (ny, nx), NaN allowed for gaps
+    # (ny, nx), NaN allowed for gaps -- required when contour_source="grid".
+    z_grid: list[list[float]] | None = None
+    # Scattered per-point z, same length as x_axis/y_axis -- required when
+    # contour_source="points" (gap #17 tri-contour: the RSM cloud shape,
+    # never regridded).
+    z_values: list[float] | None = None
+    contour_source: str = "grid"  # grid (z_grid) | points (x_axis/y_axis/z_values cloud)
     kind: str = "contourf"  # contourf|contour|heatmap|surface|scatter3d|waterfall
     fmt: str = "pdf"
     style: str = "default"
-    dpi: int = 200
+    # None (default) resolves to the style preset's calibrated dpi, matching
+    # calc.figure's resolved_dpi convention (see corner/ternary/field siblings).
+    dpi: int | None = None
     cmap: str = "viridis"
     levels: int | list[float] = 12
     level_scale: str = "linear"  # linear|log
@@ -265,18 +275,23 @@ class MapFigureRequest(BaseModel):
 
 @router.post("/map-figure")
 def export_map_figure(req: MapFigureRequest) -> Response:
-    """Render a gridded 2-D map to a publication figure: filled/line contour,
-    heatmap, or static 3-D surface/scatter/waterfall (PDF/SVG/PNG/TIFF)."""
+    """Render a 2-D map to a publication figure: filled/line contour, heatmap,
+    or static 3-D surface/scatter/waterfall (PDF/SVG/PNG/TIFF) — from either a
+    regridded ``z_grid`` (``contour_source="grid"``, default) or a raw
+    scattered ``(x_axis, y_axis, z_values)`` point cloud contoured straight
+    off a Delaunay triangulation, no regridding (``contour_source="points"``,
+    ``kind`` restricted to ``contour``/``contourf``)."""
     if req.fmt not in _FIGURE_MIME:
         raise HTTPException(
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
-    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
+    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
     from quantized.calc.figure_map import render_map_figure  # lazy: matplotlib is heavy
 
     try:
         data = render_map_figure(
             req.x_axis, req.y_axis, req.z_grid,
+            contour_source=req.contour_source, z_values=req.z_values,
             kind=req.kind, fmt=req.fmt, style=req.style, dpi=dpi, cmap=req.cmap,
             levels=req.levels, level_scale=req.level_scale,
             label_contours=req.label_contours, colorbar=req.colorbar,
