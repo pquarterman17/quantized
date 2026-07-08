@@ -5,6 +5,7 @@
 // (R / dR / resolution) etc. legible. Analysis workshops still use the first
 // channel; this controls the plot only.
 
+import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { channelModelingType } from "../../lib/modeling";
 import { defaultDenseChannels } from "../../lib/plotdata";
 import type { ChannelRole, Dataset, ModelingType } from "../../lib/types";
@@ -115,7 +116,16 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
             key={i}
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
           >
-            <label className="qz-check" style={{ flex: 1, minWidth: 0, opacity: isData ? 1 : 0.6 }}>
+            <label
+              className="qz-check"
+              style={{ flex: 1, minWidth: 0, opacity: isData ? 1 : 0.6 }}
+              draggable
+              title={`Drag onto the plot's X / Y / Y2 axis band to re-plot "${lab}" there`}
+              onDragStart={(e) => {
+                e.dataTransfer.setData(CHANNEL_DND, encodeChannelDrag({ datasetId: active.id, channel: i }));
+                e.dataTransfer.effectAllowed = "copy";
+              }}
+            >
               <input type="checkbox" checked={visible} disabled={!isData} onChange={() => toggle(i)} />
               {lab}
               {units[i] ? ` (${units[i]})` : ""}
