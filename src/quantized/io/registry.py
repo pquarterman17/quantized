@@ -19,11 +19,13 @@ from quantized.io.import_preview import parse_import
 from quantized.io.jcamp import import_jcamp
 from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl, is_ncnr_refl
 from quantized.io.netcdf import import_netcdf
+from quantized.io.opus import import_opus
 from quantized.io.origin_project import read_origin_project
 from quantized.io.qd import import_ppms, import_qd_vsm, is_ppms_dat, is_qd_file
 from quantized.io.refl1d import import_refl1d_dat, is_refl1d_dat
 from quantized.io.rigaku import import_rigaku_raw, is_rigaku_raw
 from quantized.io.sims import import_sims, is_sims_file
+from quantized.io.spc import import_spc
 from quantized.io.xrdml import import_xrdml
 
 __all__ = [
@@ -54,6 +56,14 @@ _EXT_MAP: dict[str, Parser] = {
     ".datb": import_ncnr_dat,  # .datB
     ".datc": import_ncnr_dat,  # .datC
     ".datd": import_ncnr_dat,  # .datD
+    # importSPC.m / importOxford.m / importOpus.m were never written in
+    # quantized_matlab (PORT_CHECKLIST.md line 46 — "paused, awaiting example
+    # files"); .spc and .opus below are independent implementations against
+    # the published formats, not MATLAB ports (see each module's docstring).
+    # importOxford stays unported: "format varies by software version" with
+    # no spec and no example file — nothing to implement against honestly.
+    ".spc": import_spc,  # GRAMS/Thermo spectral binary
+    ".opus": import_opus,  # Bruker OPUS FTIR/NIR/Raman binary
 }
 
 

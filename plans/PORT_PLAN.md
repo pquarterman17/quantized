@@ -190,8 +190,12 @@ MATLAB."**
     extra (pywin32). Behind a feature flag; degrades to ASCII/`.ogs` export
     elsewhere. *Untestable in CI → mock-based tests only (port the
     `MockOriginCom` idea); golden tests cover the file-export path instead.*
-15. **Paused parsers** — `importOxford`, `importOpus`, `importSPC`
-    (awaiting example files, as on the MATLAB side).
+15. **Paused parsers** — ~~`importOpus`, `importSPC`~~ ported 2026-07-08 as
+    independent implementations against each format's published spec (no
+    MATLAB source exists for either — see `PORT_CHECKLIST.md`); no golden
+    freeze is possible (nothing to freeze from). `importOxford` remains
+    fully blocked — no spec exists at all (MATLAB roadmap: "format varies
+    by software version... needs example file"), so nothing was attempted.
 
 ---
 
@@ -650,8 +654,9 @@ MATLAB."**
    unless the user reopens scope.
 2. **Optional bounded extras** — 2-D y-box for the region pick; XRDML `map2D`
    golden vs `importXRDML` (needs a reshape across scattered↔matrix shapes).
-3. **Blocked until sample files land** — `importOxford`/`importOpus`/`importSPC`,
-   Rigaku `.raw` 2-D RSM, polarized-asymmetry consolidated CSV.
+3. **Blocked until sample files land** — `importOxford` (no spec exists at
+   all; `importOpus`/`importSPC` ported 2026-07-08 without MATLAB source —
+   see item 15), Rigaku `.raw` 2-D RSM, polarized-asymmetry consolidated CSV.
 4. **Standing verification gap (partly closed 2026-06-30)** — the **2-D map
    Canvas2D render is now pixel-verified**: `mapRender.buildHeatmapImage` (extracted
    pure — colormap mapping, NaN→transparent gaps, vertical flip, log floor) has
