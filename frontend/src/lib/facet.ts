@@ -11,6 +11,15 @@
 // of derived state: a fixed x-range computed ONCE across every panel so the
 // small multiples read on the same horizontal scale (the point of faceting
 // is comparing shape across levels, not just presence).
+//
+// A FOURTH mode (gap #21's last residual) reuses `suggestBreaks`:
+// `breakPayloads` slices one series into one panel per x-segment implied by a
+// set of breaks, and the store's `breakAtGaps` action (mirrors
+// `facetByColumn`) populates `breakPanels` for `MultiPanelStage`'s paneled
+// x-break render. Breaks are the opposite sharing axis from facets: facet
+// panels are independent row-slices that share ONE x-domain (`sharedXDomain`);
+// break panels are contiguous x-slices of the SAME series that share ONE
+// y-domain (`sharedYDomain`) and each keep their OWN local x-range.
 
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
 import { buildColumns, type PlotPayload } from "./plotdata";
@@ -91,4 +100,78 @@ export function suggestBreaks(xs: readonly number[], gapFactor = 4): [number, nu
     if (gaps[i] >= median * gapFactor) breaks.push([finite[i], finite[i + 1]]);
   }
   return breaks;
+}
+
+export interface BreakPanel {
+  payload: PlotPayload;
+  /** This panel's OWN local x-domain (min/max of its finite x values within
+   *  the segment) — the per-panel `xLim` `MultiPanelStage` applies, since a
+   *  break panel's whole point is showing only its own x-slice, not the full
+   *  (elided-gap) span. */
+  xRange: [number, number];
+}
+
+/** Split `data` into one panel per contiguous x-segment implied by `breaks`
+ *  (sorted-or-not, non-overlapping `[lo, hi]` gap ranges — typically
+ *  `suggestBreaks`'s own output): everything at or below the first break's
+ *  `lo` is panel 0, everything between one break's `hi` and the next break's
+ *  `lo` is the next panel, and everything at or above the last break's `hi`
+ *  is the final panel. Each panel's payload is built via `buildColumns` from
+ *  ONLY the rows whose x falls in that segment — the same row-slicing idiom
+ *  `facetPayloads` uses. A segment with no finite x rows at all is dropped
+ *  (never renders an empty panel). `[]` when `breaks` is empty. */
+export function breakPayloads(
+  data: DataStruct,
+  xKey: number | null,
+  yChannels: number[] | null,
+  breaks: readonly [number, number][],
+): BreakPanel[] {
+  if (breaks.length === 0) return [];
+  const sorted = [...breaks].sort((a, b) => a[0] - b[0]);
+  const xs = xKey == null ? data.time : data.values.map((row) => row[xKey]);
+  const segments: [number, number][] = [];
+  let prevHi = -Infinity;
+  for (const [lo, hi] of sorted) {
+    segments.push([prevHi, lo]);
+    prevHi = hi;
+  }
+  segments.push([prevHi, Infinity]);
+
+  const panels: BreakPanel[] = [];
+  for (const [lo, hi] of segments) {
+    const rows: number[] = [];
+    for (let r = 0; r < xs.length; r++) {
+      const v = xs[r];
+      if (Number.isFinite(v) && v >= lo && v <= hi) rows.push(r);
+    }
+    if (rows.length === 0) continue;
+    const sliced: DataStruct = {
+      ...data,
+      time: rows.map((r) => data.time[r]),
+      values: rows.map((r) => data.values[r]),
+    };
+    const payload = buildColumns(sliced, null, xKey, yChannels);
+    const finiteXs = rows.map((r) => xs[r]);
+    panels.push({ payload, xRange: [Math.min(...finiteXs), Math.max(...finiteXs)] });
+  }
+  return panels;
+}
+
+/** Union y-domain across every series of a set of break panels — the fixed
+ *  `yLim` `MultiPanelStage`'s x-break mode applies to EVERY panel so the
+ *  break reads honestly (a real axis break must keep one y-scale; only x is
+ *  discontinuous). Null when no panel has any finite y value anywhere. */
+export function sharedYDomain(panels: readonly BreakPanel[]): [number, number] | null {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const p of panels) {
+    for (let s = 1; s < p.payload.data.length; s++) {
+      for (const v of p.payload.data[s] as (number | null)[]) {
+        if (v == null || !Number.isFinite(v)) continue;
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
+    }
+  }
+  return min <= max ? [min, max] : null;
 }

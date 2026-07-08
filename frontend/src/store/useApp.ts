@@ -54,7 +54,7 @@ import {
 import { planOriginFolders } from "../lib/originFolders";
 import { computePanelLayout } from "../lib/originPanels";
 import type { SpatialPanel } from "../lib/multipanel";
-import { facetPayloads, type FacetPanel } from "../lib/facet";
+import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
 import { buildOverlayDataset, overlayCurveStyles } from "../lib/originOverlay";
 import { applyPalette, normalizePalette } from "../lib/palettes";
@@ -296,6 +296,14 @@ interface AppState {
   // is a SHARED x-domain the render side computes once). Mutually exclusive
   // with `spatialPanels` — every setter that assigns one clears the other.
   facetPanels: FacetPanel[] | null;
+  // Paneled x-breaks (gap #21 last residual): set by `breakAtGaps` — one
+  // panel per contiguous x-segment implied by a set of axis breaks (a caller
+  // override or `lib/facet.suggestBreaks`'s own gap detection), sharing ONE
+  // y-domain across every panel (`lib/facet.sharedYDomain`) but each keeping
+  // its OWN local x-range (`lib/facet.breakPayloads`). A THIRD parallel field
+  // alongside `spatialPanels`/`facetPanels` — mutually exclusive with both
+  // (every setter that assigns one clears the other two).
+  breakPanels: BreakPanel[] | null;
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
   statMode: boolean; // render the Statistics stage (box/violin/qq/histogram, gap #16)
@@ -447,6 +455,15 @@ interface AppState {
   // (with a toast) when the dataset is missing or the column has no finite
   // levels to facet on.
   facetByColumn: (datasetId: string, col: number) => void;
+  // Paneled x-breaks (gap #21 last residual): mirrors `facetByColumn`'s shape
+  // but slices `datasetId`'s CURRENT x-column into contiguous segments (via
+  // `lib/facet.breakPayloads`) instead of partitioning by a category column.
+  // `breaks` is an explicit `[lo,hi]` override list; when omitted (or empty),
+  // auto-detects via `lib/facet.suggestBreaks(xs, gapFactor)`. Activates
+  // `datasetId`, turns on `stackMode`, and clears `spatialPanels`/
+  // `facetPanels`. No-op (with a toast) when the dataset is missing, has no
+  // rows in the analysis view, or no qualifying gap/override breaks exist.
+  breakAtGaps: (datasetId: string, breaks?: [number, number][], gapFactor?: number) => void;
   // Report sheets (#36): add opens the viewer on the new report.
   addReport: (name: string, report: ReportSheet, datasetId?: string | null) => void;
   removeReport: (id: string) => void;
@@ -822,6 +839,7 @@ export const useApp = create<AppState>((set, get) => ({
   stackMode: false,
   spatialPanels: null,
   facetPanels: null,
+  breakPanels: null,
   insetMode: false,
   polarMode: false,
   statMode: false,
@@ -1245,7 +1263,7 @@ export const useApp = create<AppState>((set, get) => ({
           col: layout.placements[i]?.col ?? 0,
         }));
         get().setActive(entry.datasetId);
-        set({ stackMode: true, spatialPanels: placed, facetPanels: null });
+        set({ stackMode: true, spatialPanels: placed, facetPanels: null, breakPanels: null });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         if (!layout.spatial) {
           toast(
@@ -1311,11 +1329,43 @@ export const useApp = create<AppState>((set, get) => ({
       return;
     }
     get().setActive(datasetId);
-    set({ stackMode: true, spatialPanels: null, facetPanels: panels });
+    set({ stackMode: true, spatialPanels: null, facetPanels: panels, breakPanels: null });
     get().recordMacro(
       `Facet by ${ds.data.labels[col] ?? `column ${col}`}`,
       `qz.facetByColumn(${lit(datasetId)}, ${col})`,
     );
+  },
+  // Paneled x-breaks (gap #21 last residual): see the state-field doc comment
+  // for the sharing-axis contrast with `facetByColumn`. Reads the ANALYSIS
+  // view (guard #11) so a break honors whatever rows are currently in play.
+  // The x-column and y-selection carry over ONLY when `datasetId` is already
+  // active (same rationale as `facetByColumn`); otherwise falls back to
+  // `breakPayloads`' own x=time / default-dense-channels choice.
+  breakAtGaps: (datasetId, breaks, gapFactor) => {
+    const ds = get().datasets.find((d) => d.id === datasetId);
+    if (!ds) return;
+    const data = analysisData(ds);
+    if (!data || data.time.length === 0) {
+      toast("no rows to break (all excluded or filtered out)", "danger");
+      return;
+    }
+    const sameActive = get().activeId === datasetId;
+    const xKey = sameActive ? get().xKey : null;
+    const yKeys = sameActive ? get().yKeys : null;
+    const xs = xKey == null ? data.time : data.values.map((row) => row[xKey]);
+    const useBreaks = breaks && breaks.length > 0 ? breaks : suggestBreaks(xs, gapFactor);
+    if (useBreaks.length === 0) {
+      toast("no large x-gaps found to break at", "danger");
+      return;
+    }
+    const panels = breakPayloads(data, xKey, yKeys, useBreaks);
+    if (panels.length < 2) {
+      toast("not enough data on both sides of a break to panel", "danger");
+      return;
+    }
+    get().setActive(datasetId);
+    set({ stackMode: true, spatialPanels: null, facetPanels: null, breakPanels: panels });
+    get().recordMacro(`Break x-axis at gaps`, `qz.breakAtGaps(${lit(datasetId)})`);
   },
   // Replace the whole library with a restored workspace (from a .dwk file).
   // Resets every per-dataset view (channels, styles, axis limits) and drops the
@@ -1370,6 +1420,7 @@ export const useApp = create<AppState>((set, get) => ({
         yLim: null,
         spatialPanels: null, // decode-plan #36 — never restored from a stale figure apply
         facetPanels: null, // gap #21 residual — likewise never restored from a stale facet
+        breakPanels: null, // gap #21 residual — likewise never restored from a stale break
         fitOverlay: null,
         peakOverlay: null,
         baselineOverlay: null,
@@ -1415,9 +1466,11 @@ export const useApp = create<AppState>((set, get) => ({
         // A plain click on a different dataset always drops a prior spatial
         // multi-panel arrangement (decode-plan #36) — it was built for a
         // specific figure's layers, not whatever is now active. Same logic
-        // drops a prior facet-by-column arrangement (gap #21 residual).
+        // drops a prior facet-by-column or paneled x-break arrangement
+        // (gap #21 residual).
         spatialPanels: null,
         facetPanels: null,
+        breakPanels: null,
         rsmPeaks: null,
         integral: null,
         fwhmResult: null,
@@ -1598,6 +1651,7 @@ export const useApp = create<AppState>((set, get) => ({
         yLim: null,
         spatialPanels: null, // decode-plan #36 — the clone becomes active, not a figure
         facetPanels: null, // gap #21 residual — likewise, not a facet arrangement
+        breakPanels: null, // gap #21 residual — likewise, not a break arrangement
         rsmPeaks: null,
         integral: null,
         fwhmResult: null,
@@ -1933,7 +1987,8 @@ export const useApp = create<AppState>((set, get) => ({
   // prior Origin multi-panel apply, or a prior facet-by-column arrangement
   // (gap #21 residual) — the plain per-channel split (or leaving stack mode)
   // is what the user asked for, never a stale spatial/facet grid.
-  setStackMode: (stackMode) => set({ stackMode, spatialPanels: null, facetPanels: null }),
+  setStackMode: (stackMode) =>
+    set({ stackMode, spatialPanels: null, facetPanels: null, breakPanels: null }),
   setInsetMode: (insetMode) => set({ insetMode }),
   setPolarMode: (polarMode) => set({ polarMode }),
   setStatMode: (statMode) => set({ statMode }),

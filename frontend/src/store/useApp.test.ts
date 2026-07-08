@@ -1626,6 +1626,164 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
   });
 });
 
+describe("useApp breakAtGaps (gap #21 last residual)", () => {
+  // time carries a real gap (0..9, then a jump to 60..63); channel 0 is a
+  // DELIBERATELY evenly-spaced value column (step 10 throughout) so a test
+  // can tell whether breakAtGaps used the right x source (see the
+  // carry-over tests below: an evenly-spaced x finds NO qualifying gap).
+  const breakData: DataStruct = {
+    time: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 60, 61, 62, 63],
+    values: Array.from({ length: 14 }, (_, i) => [i * 10]),
+    labels: ["y"],
+    units: [""],
+    metadata: {},
+  };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds1", data: breakData }],
+      activeId: null,
+      xKey: null,
+      yKeys: null,
+      stackMode: false,
+      spatialPanels: null,
+      facetPanels: null,
+      breakPanels: null,
+      macroRecording: false,
+      macroSteps: [],
+    });
+  });
+
+  it("auto-detects the gap, builds paneled segments, activates the dataset, and turns on stack mode", () => {
+    useApp.getState().breakAtGaps("d1");
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d1");
+    expect(s.stackMode).toBe(true);
+    expect(s.spatialPanels).toBeNull();
+    expect(s.facetPanels).toBeNull();
+    expect(s.breakPanels).toHaveLength(2);
+    expect(s.breakPanels?.[0].xRange).toEqual([0, 9]);
+    expect(s.breakPanels?.[1].xRange).toEqual([60, 63]);
+  });
+
+  it("clears a prior spatial arrangement", () => {
+    useApp.setState({
+      spatialPanels: [
+        {
+          datasetId: "other",
+          xKey: null,
+          yKeys: [0],
+          xLim: [0, 1],
+          yLim: [0, 1],
+          xLog: false,
+          yLog: false,
+          row: 0,
+          col: 0,
+        },
+      ],
+    });
+    useApp.getState().breakAtGaps("d1");
+    expect(useApp.getState().spatialPanels).toBeNull();
+  });
+
+  it("clears a prior facet arrangement", () => {
+    useApp.setState({
+      facetPanels: [
+        { label: "x", payload: { data: [[0]], series: [], xLabel: "", xUnit: "" } },
+      ],
+    });
+    useApp.getState().breakAtGaps("d1");
+    expect(useApp.getState().facetPanels).toBeNull();
+  });
+
+  it("no-ops (with a toast, no crash) when the dataset is missing", () => {
+    useApp.getState().breakAtGaps("nope");
+    const s = useApp.getState();
+    expect(s.breakPanels).toBeNull();
+    expect(s.stackMode).toBe(false);
+    expect(s.activeId).toBeNull();
+  });
+
+  it("no-ops when no qualifying gap exists (evenly spaced data)", () => {
+    const even: DataStruct = {
+      ...breakData,
+      time: Array.from({ length: 14 }, (_, i) => i),
+    };
+    useApp.setState({ datasets: [{ id: "d1", name: "ds1", data: even }] });
+    useApp.getState().breakAtGaps("d1");
+    const s = useApp.getState();
+    expect(s.breakPanels).toBeNull();
+    expect(s.stackMode).toBe(false);
+  });
+
+  it("no-ops when every row is excluded (guard #11 analysis view is empty)", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "ds1", data: breakData, excludedRows: breakData.time.map((_, i) => i) },
+      ],
+    });
+    useApp.getState().breakAtGaps("d1");
+    expect(useApp.getState().breakPanels).toBeNull();
+  });
+
+  it("honors row exclusion (guard #11) — an excluded row never enters a break panel", () => {
+    // Exclude row 0 (time=0) -- the first segment's remaining rows are 1..9.
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds1", data: breakData, excludedRows: [0] }],
+    });
+    useApp.getState().breakAtGaps("d1");
+    const s = useApp.getState();
+    expect(s.breakPanels?.[0].payload.data[0]).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it("accepts an explicit breaks override instead of auto-detecting", () => {
+    useApp.getState().breakAtGaps("d1", [[2, 8]]);
+    const s = useApp.getState();
+    expect(s.breakPanels).toHaveLength(2);
+    expect(s.breakPanels?.[0].xRange).toEqual([0, 2]);
+    expect(s.breakPanels?.[1].xRange).toEqual([8, 63]);
+  });
+
+  it("does NOT carry over the x/y channel selection of a DIFFERENT active dataset", () => {
+    // channel 0 is evenly spaced (no qualifying gap); if breakAtGaps wrongly
+    // carried over "other"'s xKey=0 selection, no break would be found.
+    useApp.setState({
+      datasets: [
+        { id: "other", name: "other", data: breakData },
+        { id: "d1", name: "ds1", data: breakData },
+      ],
+      activeId: "other",
+      xKey: 0,
+      yKeys: [0],
+    });
+    useApp.getState().breakAtGaps("d1");
+    expect(useApp.getState().breakPanels).toHaveLength(2);
+  });
+
+  it("carries over the current x/y channel selection when the dataset IS already active", () => {
+    // xKey=0 (evenly spaced) IS honored when d1 is already active -> no gap -> no-op.
+    useApp.setState({ activeId: "d1", xKey: 0, yKeys: [0] });
+    useApp.getState().breakAtGaps("d1");
+    expect(useApp.getState().breakPanels).toBeNull();
+  });
+
+  it("no-ops when the breaks would leave fewer than 2 non-empty panels", () => {
+    // [-5,-1] carves no rows out of the actual data range (everything is
+    // >= 0) -> only ONE segment ends up non-empty.
+    useApp.getState().breakAtGaps("d1", [[-5, -1]]);
+    expect(useApp.getState().breakPanels).toBeNull();
+  });
+
+  it("records a macro step while recording", () => {
+    useApp.getState().startMacro();
+    useApp.getState().breakAtGaps("d1");
+    const steps = useApp.getState().macroSteps;
+    expect(steps).toHaveLength(1);
+    expect(steps[0].code).toBe('qz.breakAtGaps("d1")');
+    expect(steps[0].label).toBe("Break x-axis at gaps");
+  });
+});
+
 describe("useApp removeDatasets (item 17 book-family filter)", () => {
   it("removes exactly the given ids, leaving the rest untouched", () => {
     useApp.setState({
