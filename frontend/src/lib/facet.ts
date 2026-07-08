@@ -1,17 +1,16 @@
 // Faceting + axis-break suggestion (ORIGIN_GAP_PLAN #21). Pure — no React /
 // store / fetch.
 //
-// LANE NOTE: `lib/multipanel.ts` / `MultiPanelStage.tsx` are owned by a
-// sibling workstream (Origin spatial apply) for this pass, so this module
-// produces facet configs WITHOUT editing either file. `facetPayloads`'
-// output ({label, payload}[]) is deliberately shaped close to
-// `multipanel.splitPayload`'s `PlotPayload[]` so a future MultiPanelStage
-// facet mode is a small, additive consume (swap `splitPayload(payload)` for
-// `facetPayloads(...).map(f => f.payload)` plus per-panel labels) — see
-// plans/GAP_PLOTTYPES_PLAN.md's Completed note for what that follow-up still
-// needs. Today's actual consumer is the Graph Builder preview
-// (GraphPreview.tsx), which is NOT sibling-owned and renders a small-
-// multiples grid directly from `facetPayloads`.
+// Two consumers: the Graph Builder preview (GraphPreview.tsx) renders a
+// small-multiples grid directly from `facetPayloads` for its own live-preview
+// canvas; the interactive MAIN stage consumes it via the store's
+// `facetByColumn` action, which populates `facetPanels` for
+// `components/Stage/MultiPanelStage.tsx`'s facet-grid render mode (a THIRD
+// mode alongside the plain per-channel stack and the Origin spatial apply —
+// see that file's module doc). `sharedXDomain` below is that mode's one bit
+// of derived state: a fixed x-range computed ONCE across every panel so the
+// small multiples read on the same horizontal scale (the point of faceting
+// is comparing shape across levels, not just presence).
 
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
 import { buildColumns, type PlotPayload } from "./plotdata";
@@ -49,6 +48,25 @@ export function facetPayloads(
     };
     return { label: labels[i], payload: buildColumns(sliced, null, xKey, yChannels) };
   });
+}
+
+/** Union x-domain across a set of facet panels — the min/max of every panel's
+ *  own finite x values. `MultiPanelStage`'s facet-grid mode uses this as a
+ *  fixed `xLim` applied to EVERY panel so the small multiples share one
+ *  horizontal scale (unlike `SpatialPanel`, where each panel legitimately
+ *  owns its own independent range). Null when no panel has any finite x
+ *  value at all — the caller then leaves each panel to autoscale. */
+export function sharedXDomain(panels: readonly FacetPanel[]): [number, number] | null {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const p of panels) {
+    for (const v of p.payload.data[0] as (number | null)[]) {
+      if (v == null || !Number.isFinite(v)) continue;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  return min <= max ? [min, max] : null;
 }
 
 /** Suggest manual axis breaks by gap detection over a (usually sorted) x

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { facetPayloads, suggestBreaks } from "./facet";
+import { facetPayloads, sharedXDomain, suggestBreaks, type FacetPanel } from "./facet";
+import type { PlotPayload } from "./plotdata";
 import type { DataStruct } from "./types";
 
 describe("facetPayloads", () => {
@@ -96,5 +97,37 @@ describe("suggestBreaks", () => {
       [2, 20],
       [22, 100],
     ]);
+  });
+});
+
+describe("sharedXDomain", () => {
+  const panel = (xs: (number | null)[]): FacetPanel => ({
+    label: "l",
+    payload: {
+      data: [xs, xs.map(() => 1)] as PlotPayload["data"],
+      series: [{ label: "y", unit: "", axis: 0 }],
+      xLabel: "x",
+      xUnit: "",
+    },
+  });
+
+  it("unions the finite x-range across every panel", () => {
+    expect(sharedXDomain([panel([0, 1, 2]), panel([5, 10])])).toEqual([0, 10]);
+  });
+
+  it("ignores non-finite values within a panel", () => {
+    expect(sharedXDomain([panel([NaN, 1, Infinity, 2]), panel([-1, 3])])).toEqual([-1, 3]);
+  });
+
+  it("returns null when no panel has any finite x value", () => {
+    expect(sharedXDomain([panel([NaN, null]), panel([])])).toBeNull();
+  });
+
+  it("returns null for an empty panel set", () => {
+    expect(sharedXDomain([])).toBeNull();
+  });
+
+  it("handles a single panel (domain = that panel's own range)", () => {
+    expect(sharedXDomain([panel([3, 1, 2])])).toEqual([1, 3]);
   });
 });

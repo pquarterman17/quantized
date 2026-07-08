@@ -852,6 +852,43 @@ export default function App() {
         run: () => s().setStatMode(!s().statMode),
       },
       {
+        id: "facet-by-column",
+        group: "Plot",
+        label: "Facet by column…",
+        run: async () => {
+          const ds = s().datasets.find((d) => d.id === s().activeId);
+          if (!ds) {
+            toast("no active dataset", "danger");
+            return;
+          }
+          if (ds.data.labels.length === 0) {
+            toast("active dataset has no columns to facet by", "danger");
+            return;
+          }
+          // Disambiguate duplicate labels (real instrument imports can repeat
+          // a column name) so the reverse `indexOf` lookup below always maps
+          // the picked option back to the SAME channel the user saw.
+          const raw = ds.data.labels.map((lab, i) => lab || `Column ${i + 1}`);
+          const counts = new Map<string, number>();
+          for (const lab of raw) counts.set(lab, (counts.get(lab) ?? 0) + 1);
+          const options = raw.map((lab, i) => (counts.get(lab)! > 1 ? `${lab} (col ${i + 1})` : lab));
+          const params = await askParams("Facet by column", [
+            {
+              key: "column",
+              label: "Column",
+              type: "select",
+              default: options[0],
+              options,
+              hint: "One small-multiples panel per distinct level, sharing the x-axis",
+            },
+          ]);
+          if (!params) return;
+          const col = options.indexOf(String(params.column));
+          if (col < 0) return;
+          s().facetByColumn(ds.id, col);
+        },
+      },
+      {
         id: "shortcuts",
         group: "Help",
         label: "Keyboard shortcuts",
