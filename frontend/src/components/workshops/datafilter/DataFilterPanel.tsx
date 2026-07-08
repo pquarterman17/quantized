@@ -8,7 +8,7 @@ import { useState } from "react";
 
 import { fmtNum } from "../../../lib/format";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, Checkbox, NumberField } from "../../primitives";
+import { Button, Checkbox, NumberField, RangeSlider } from "../../primitives";
 import { useApp } from "../../../store/useApp";
 import { type FilterColumn, useDataFilter } from "./useDataFilter";
 
@@ -46,6 +46,24 @@ export default function DataFilterPanel() {
     return v !== undefined ? String(v) : "";
   };
 
+  // The slider is the source of truth once dragged: clear any in-progress
+  // free-text edits for this column so the NumberField readouts pick up the
+  // committed value instead of a stale partial string. A thumb still parked
+  // at the column's own data extreme commits as an open bound (undefined),
+  // matching the NumberField's "blank = unconstrained" semantics — only the
+  // thumb that actually moved off the domain edge becomes an explicit predicate.
+  function onSlide(c: FilterColumn, lo: number, hi: number): void {
+    setText((t) => {
+      const next = { ...t };
+      delete next[key(c.index, "min")];
+      delete next[key(c.index, "max")];
+      return next;
+    });
+    const min = c.dataMin != null && lo <= c.dataMin ? undefined : lo;
+    const max = c.dataMax != null && hi >= c.dataMax ? undefined : hi;
+    f.setRange(c.index, min, max);
+  }
+
   return (
     <ToolWindow title="Data Filter" width={340} onClose={() => setOpen(false)}>
       {!f.hasData ? (
@@ -59,20 +77,33 @@ export default function DataFilterPanel() {
               <div key={c.index}>
                 <label className="qzk-field-lbl">{c.label}</label>
                 {c.kind === "range" ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <NumberField
-                      value={boundText(c, "min")}
-                      onChange={(v) => onRange(c, "min", v)}
-                      placeholder="min"
-                      width={80}
-                    />
-                    <span style={{ color: "var(--text-faint)" }}>–</span>
-                    <NumberField
-                      value={boundText(c, "max")}
-                      onChange={(v) => onRange(c, "max", v)}
-                      placeholder="max"
-                      width={80}
-                    />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {c.dataMin != null && c.dataMax != null && c.dataMax > c.dataMin && (
+                      <RangeSlider
+                        min={c.dataMin}
+                        max={c.dataMax}
+                        lo={c.current?.min ?? c.dataMin}
+                        hi={c.current?.max ?? c.dataMax}
+                        onChange={(lo, hi) => onSlide(c, lo, hi)}
+                        loLabel={`${c.label} minimum`}
+                        hiLabel={`${c.label} maximum`}
+                      />
+                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <NumberField
+                        value={boundText(c, "min")}
+                        onChange={(v) => onRange(c, "min", v)}
+                        placeholder="min"
+                        width={80}
+                      />
+                      <span style={{ color: "var(--text-faint)" }}>–</span>
+                      <NumberField
+                        value={boundText(c, "max")}
+                        onChange={(v) => onRange(c, "max", v)}
+                        placeholder="max"
+                        width={80}
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px" }}>

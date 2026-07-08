@@ -10,6 +10,8 @@ import type {
 } from "react";
 import clsx from "clsx";
 
+export { RangeSlider, type RangeSliderProps } from "./RangeSlider";
+
 // ── Button ────────────────────────────────────────────────────────────────
 type ButtonVariant = "default" | "primary" | "ghost" | "danger";
 

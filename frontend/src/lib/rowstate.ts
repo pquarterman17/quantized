@@ -65,6 +65,17 @@ export function droppedRows(ds: Dataset | null | undefined): Set<number> {
   return new Set([...excluded, ...filtered]);
 }
 
+/** Rows dropped by the local filter ONLY (#53) — distinct from manual
+ *  exclusion. The Worksheet greys these separately (different tooltip: a
+ *  filter-dropped row is still "in" the dataset, just narrowed out by a
+ *  predicate the user set and can clear, unlike an exclusion). Sanctioned
+ *  wrapper around lib/datafilter.filteredOutRows so callers never need to
+ *  import it directly (the architecture guard only allowlists this file). */
+export function filteredOutSet(ds: Dataset | null | undefined): Set<number> {
+  if (!ds) return new Set();
+  return filteredOutRows(ds.filter, ds.data);
+}
+
 /** The dataset's analysis view: its DataStruct with both manually-excluded rows
  *  (#50) AND filter-failed rows (#53) pruned. Fit / stat / tabulate consumers
  *  read rows through this so exclusion AND the local filter are honored

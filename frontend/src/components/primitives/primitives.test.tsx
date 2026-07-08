@@ -1,7 +1,7 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
-import { Badge, Button, Card, MetaRow, Pill, Switch } from "./index";
+import { Badge, Button, Card, MetaRow, Pill, RangeSlider, Switch } from "./index";
 
 describe("primitives", () => {
   it("Button applies the primary variant class", () => {
@@ -40,5 +40,42 @@ describe("primitives", () => {
       "aria-pressed",
       "true",
     );
+  });
+
+  describe("RangeSlider", () => {
+    it("renders two labelled thumbs at their given values", () => {
+      render(<RangeSlider min={0} max={10} lo={2} hi={8} onChange={vi.fn()} />);
+      expect(screen.getByLabelText("minimum")).toHaveValue("2");
+      expect(screen.getByLabelText("maximum")).toHaveValue("8");
+    });
+
+    it("moving the low thumb reports the clamped [lo, hi] pair", () => {
+      const onChange = vi.fn();
+      render(<RangeSlider min={0} max={10} lo={2} hi={8} onChange={onChange} />);
+      fireEvent.change(screen.getByLabelText("minimum"), { target: { value: "5" } });
+      expect(onChange).toHaveBeenCalledWith(5, 8);
+    });
+
+    it("the low thumb never crosses the current high value", () => {
+      const onChange = vi.fn();
+      render(<RangeSlider min={0} max={10} lo={2} hi={8} onChange={onChange} />);
+      fireEvent.change(screen.getByLabelText("minimum"), { target: { value: "20" } });
+      expect(onChange).toHaveBeenCalledWith(8, 8);
+    });
+
+    it("moving the high thumb reports the clamped pair and never crosses lo", () => {
+      const onChange = vi.fn();
+      render(<RangeSlider min={0} max={10} lo={2} hi={8} onChange={onChange} />);
+      fireEvent.change(screen.getByLabelText("maximum"), { target: { value: "1" } });
+      expect(onChange).toHaveBeenCalledWith(2, 2);
+    });
+
+    it("uses caller-supplied thumb labels", () => {
+      render(
+        <RangeSlider min={0} max={10} lo={2} hi={8} onChange={vi.fn()} loLabel="A min" hiLabel="A max" />,
+      );
+      expect(screen.getByLabelText("A min")).toBeInTheDocument();
+      expect(screen.getByLabelText("A max")).toBeInTheDocument();
+    });
   });
 });

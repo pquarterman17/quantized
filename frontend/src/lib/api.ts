@@ -240,6 +240,35 @@ export function statsShapiro(x: number[]): Promise<CalcResult> {
   return postJSON("/api/stats/shapiro", { x });
 }
 
+/** One family's MLE fit from /api/stats/fit-distribution — params, log-
+ *  likelihood, AIC, and a KS goodness-of-fit test against the fitted curve. */
+export interface DistFitResult {
+  dist: string;
+  params: Record<string, number>;
+  loglike: number;
+  aic: number;
+  n_params: number;
+  ks_d: number;
+  ks_p: number;
+  ks_p_approximate: boolean;
+  N: number;
+}
+
+export interface DistFitAllResponse {
+  fits: DistFitResult[];
+  best: string;
+  skipped: { dist: string; reason: string }[];
+}
+
+/** MLE-fit every curated family (ORIGIN_GAP #28: normal/lognormal/weibull/
+ *  gamma/exponential), ranked by AIC ascending (`fits[0]` = `best`).
+ *  Families whose support the data violates come back in `skipped`, not
+ *  silently dropped. The Distribution workshop's fit-overlay picker (#52
+ *  item 6b) — its first frontend consumer. */
+export function statsFitDistributions(x: number[]): Promise<DistFitAllResponse> {
+  return postJSON("/api/stats/fit-distribution", { x });
+}
+
 // ── Statistical plots — box / violin / Q-Q (gap #16, the StatStage) ────────
 // Same request/response shapes as calc.statplots.{grouped_box_stats,
 // violin_kde, qq_plot}; the interactive canvas (Stage/statRender.ts) and the

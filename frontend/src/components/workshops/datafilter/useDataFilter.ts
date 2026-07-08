@@ -20,6 +20,11 @@ export interface FilterColumn {
   levels: number[];
   /** Current predicate for this column (undefined = no constraint). */
   current?: ColumnFilter;
+  /** The column's own finite value range (range columns only) — the domain
+   *  a RangeSlider clamps into. Ignores the current filter (it's the full
+   *  data's range, not the kept subset's). */
+  dataMin?: number;
+  dataMax?: number;
 }
 
 export interface DataFilterState {
@@ -36,6 +41,18 @@ export interface DataFilterState {
 const distinctLevels = (col: number[]): number[] =>
   [...new Set(col.filter((v) => Number.isFinite(v)))].sort((a, b) => a - b);
 
+/** [min, max] of the finite values in `col`, or null if none are finite. */
+const dataRange = (col: number[]): [number, number] | null => {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const v of col) {
+    if (!Number.isFinite(v)) continue;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  return min <= max ? [min, max] : null;
+};
+
 export function useDataFilter(): DataFilterState {
   const active = useActiveDataset();
   const setDatasetFilter = useApp((s) => s.setDatasetFilter);
@@ -47,17 +64,30 @@ export function useDataFilter(): DataFilterState {
   const columns = useMemo<FilterColumn[]>(() => {
     if (!active) return [];
     const xName = String(active.data.metadata?.["x_column_name"] ?? "x");
+    const xRange = dataRange(active.data.time);
     const cols: FilterColumn[] = [
-      { index: -1, label: xName, kind: "range", levels: [], current: currentOf(-1) },
+      {
+        index: -1,
+        label: xName,
+        kind: "range",
+        levels: [],
+        current: currentOf(-1),
+        dataMin: xRange?.[0],
+        dataMax: xRange?.[1],
+      },
     ];
     for (let i = 0; i < active.data.labels.length; i++) {
       const cat = isCategorical(channelModelingType(active, i));
+      const colVals = active.data.values.map((r) => r[i]);
+      const range = cat ? null : dataRange(colVals);
       cols.push({
         index: i,
         label: active.data.labels[i],
         kind: cat ? "set" : "range",
-        levels: cat ? distinctLevels(active.data.values.map((r) => r[i])) : [],
+        levels: cat ? distinctLevels(colVals) : [],
         current: currentOf(i),
+        dataMin: range?.[0],
+        dataMax: range?.[1],
       });
     }
     return cols;

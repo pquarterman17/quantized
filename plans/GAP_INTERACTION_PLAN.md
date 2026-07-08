@@ -219,52 +219,9 @@ written below.
      at that x, clicking a marker removes it, and the candidate table,
      overlay, and fit inputs stay in sync throughout.
 
-6. **Distribution platform residuals (gap #52)** — box strip,
-   distribution-fit overlay, and histogram bar-brushing in the
-   Distribution workshop.
-   *Model: sonnet.* *Agent: ux-frontend-expert.*
-   - [ ] Box/quantile strip under the histogram in
-         `frontend/src/components/workshops/distribution/DistributionPanel.tsx`,
-         fed by `/api/statplots/box` (its first frontend consumer; add
-         the client fn in `frontend/src/lib/api.ts`)
-   - [ ] Distribution-fit overlay: family picker →
-         `/api/stats/fit-distribution` (`calc/stats_dist.py` already
-         returns the fitted pdf params and
-         `/api/statplots/histogram` accepts a `fit` overlay) — draw
-         the pdf as an SVG polyline scaled over the existing DOM bars
-         in `useDistribution.ts`'s hist shape, AIC shown
-   - [ ] Bar brushing: clicking a bar selects the rows in that bin —
-         pure bin→rows helper over the analysis values with kept-index
-         expansion back to FULL row indices (the
-         `rowstate.expandToFull` pattern), then `setRowSelection`;
-         shift-click extends; guard #11 respected (values already come
-         from `analysisData`)
-   - Acceptance: picking a family overlays its fitted pdf with AIC
-     displayed; clicking a bar highlights exactly those rows in the
-     worksheet and plot, correct even with exclusions and filters
-     active.
-
 ---
 
 ## Tier 3 — Nice-to-Have
-
-7. **Data-filter dual-thumb sliders (gap #53 residual)** — replace the
-   min/max number-field pair with a proper range slider; optionally
-   close the worksheet-reflect asymmetry.
-   *Model: sonnet.* *Agent: ux-frontend-expert.*
-   - [ ] New dual-thumb `RangeSlider` primitive in
-         `frontend/src/components/primitives/index.tsx` (keyboard
-         accessible, theme tokens, JetBrains Mono value readouts)
-   - [ ] Swap it into the range branch of
-         `frontend/src/components/workshops/datafilter/DataFilterPanel.tsx`,
-         committing through the existing `setRange` in
-         `useDataFilter.ts`; keep the NumberFields as fine-entry twins
-   - [ ] (Per open question 4) grey filter-dropped rows in the
-         worksheet via one `rowstate.droppedRows` read in
-         `frontend/src/components/Stage/WorksheetTable.tsx`
-   - Acceptance: dragging either thumb live-filters every linked view
-     (plot ghosting, Tabulate, Distribution) without mutating the
-     dataset; slider and number fields stay in sync.
 
 8. **Tabulate residuals (gap #55)** — drag-drop wells and
    report-block export for the pivot workshop.
@@ -351,3 +308,70 @@ written below.
   caveat: the real drag gesture (cursor tracking, band visuals, drop
   physically landing) is unverified in jsdom — eyeball via `tools/visual`
   or a manual browser check.
+
+- ~~**6. Distribution platform residuals (gap #52)**~~ (2026-07-07) — box/
+  quantile strip, a distribution-fit overlay, and histogram bar-brushing in
+  `workshops/distribution/`. Split into sub-components to stay under the
+  ~400-line convention: `HistogramStrip.tsx` (DOM bars + drag/click brushing
+  + an SVG fit-curve overlay) and `BoxStrip.tsx` (min/Q1/median/Q3/max
+  positioned as a % of the histogram's own domain), composed by
+  `DistributionPanel.tsx`. Box strip reads straight off the ALREADY-fetched
+  `/api/stats/descriptive` response (it already returns q1/median/q3/min/
+  max) — no new endpoint call needed. Fit overlay: `setFitDist` lazily calls
+  the new `statsFitDistributions` client fn (`/api/stats/fit-distribution`,
+  dist omitted → fits all 5 curated families in one call, ranked by AIC —
+  `fits[0]` is always the AIC-best regardless of the picked family); the
+  pdf CURVE itself is evaluated client-side by a new closed-form `lib/
+  distpdf.ts` (gammaFn via Lanczos + the 5 family pdfs + a curve sampler +
+  an SVG-points builder) from the SAME params `fit-distribution` returned —
+  deliberately NOT chained through `/api/statplots/histogram`'s own `fit=`
+  overlay, since that endpoint fits positive-support families with a free
+  `loc` while `calc/stats_dist.fit_distribution` fixes `loc=0`, which would
+  draw a curve visually disagreeing with the reported AIC/KS-p family.
+  Brushing: new pure `lib/distribution.ts` (`binRange`/`rowsInRange`/
+  `rowsInBins`, numpy.histogram-compatible half-open bins with an inclusive
+  last bin, `pctPosition` for the box strip) — `useDistribution.brushBins`
+  maps a bin (or drag-spanned range, or shift-click-extended range from a
+  remembered anchor) to PRUNED-row indices, then expands to ORIGINAL rows
+  via `rowstate.activeRowIndices(n, droppedRows(active))` before calling
+  `setRowSelection`; re-brushing the identical range clears it. Deviation:
+  did NOT add `/api/statplots/box` as a consumer (the plan's (a) option) —
+  descriptive stats already had every quantile needed, so the box call
+  would have been a redundant round-trip; used the fetched-once-per-N-
+  families "all fits" endpoint instead of one call per family swap (simpler,
+  accepted the minor redundancy of a re-fit on every family switch). 42 new
+  tests across `lib/distpdf.test.ts`, `lib/distribution.test.ts`,
+  `useDistribution.test.ts` additions, `HistogramStrip.test.tsx`,
+  `BoxStrip.test.tsx`, `DistributionPanel.test.tsx` (new). Eyeball caveat:
+  the drag-across-bars gesture is exercised in jsdom (DOM bars, unlike
+  canvas — `fireEvent.mouseDown/mouseEnter/mouseUp` all work) but the SVG
+  curve's visual alignment is unverified — eyeball via `tools/visual` or a
+  manual browser check.
+
+- ~~**7. Data-filter dual-thumb sliders (gap #53 residual)**~~ (2026-07-07)
+  — a new `RangeSlider` primitive (two overlapping `<input type="range">`,
+  CSS custom-property-driven fill bar) in its own
+  `components/primitives/RangeSlider.tsx` (re-exported from `primitives/
+  index.tsx`, which was already at 389 lines — kept the barrel under the
+  ~400 convention rather than inlining ~70 more lines into it). Crossing-
+  thumb math (a drag never pushes lo past hi or vice versa) + step-snapping
+  is a new pure `lib/rangeslider.ts` (`clampLow`/`clampHigh`/`clampRange`/
+  `snapToStep`). Wired into `DataFilterPanel.tsx`'s range branch above the
+  existing NumberField pair (kept as fine-entry twins); `useDataFilter.ts`
+  now also computes each range column's own finite `dataMin`/`dataMax`
+  (ignoring the CURRENT filter — the slider's fixed domain, not the kept
+  subset) for the slider's `min`/`max`. A thumb left at the column's data
+  extreme commits as an open bound (`undefined`), matching the NumberField's
+  blank-is-unconstrained semantics — only a thumb actually moved off the
+  domain edge becomes an explicit predicate. Worksheet-reflect half: new
+  `lib/rowstate.filteredOutSet(ds)` (a sanctioned wrapper around
+  `datafilter.filteredOutRows`, since `Worksheet.tsx` isn't on the guard's
+  `filteredOutRows(` allowlist and this avoids needing to extend it) feeds
+  a new `filteredOut` prop into `WorksheetTable.tsx`: rows dropped by the
+  global data filter grey distinctly from a manual exclusion (opacity +
+  italic, not strikethrough; title "dropped by data filter" vs "excluded
+  row"); a row that's both stays styled as excluded. Did NOT touch
+  guard-#11's allowlist in `architecture.test.ts` — confirmed green as-is.
+  24 new/changed tests across `lib/rangeslider.test.ts`,
+  `primitives.test.tsx`, `useDataFilter.test.ts`, `DataFilterPanel.test.tsx`
+  (new), `rowstate.test.ts`, `Worksheet.test.tsx` additions.
