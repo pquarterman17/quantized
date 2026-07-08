@@ -39,6 +39,14 @@ office = [
 origin-com = [
     "pywin32; sys_platform == 'win32'",
 ]
+# Advanced statistics: GLM, survival analysis, Cox PH (gap #30). BSD-3 / MIT
+# licensed. Optional so core install stays lean — calc/stats_glm.py and
+# calc/stats_survival.py guard these imports; ROC is pure numpy and always
+# available. `pip install quantized[stats]` enables GLM/survival methods.
+stats = [
+    "statsmodels>=0.14",
+    "lifelines>=0.27",
+]
 
 [dependency-groups]
 dev = [
@@ -49,6 +57,9 @@ dev = [
     # exercise the optional office exporters (#37) in CI
     "python-docx>=1.1",
     "python-pptx>=1.0",
+    # exercise the optional stats methods (GLM/survival/Cox) in CI
+    "statsmodels>=0.14",
+    "lifelines>=0.27",
 ]
 # Desktop packaging only — used by the release workflow to freeze the server
 # into a self-contained sidecar (tools/bundle/qz-server.spec). Never a runtime
@@ -86,7 +97,7 @@ strict = true
 
 [[tool.mypy.overrides]]
 # Third-party libs without bundled type stubs — skeleton-safe.
-module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*"]
+module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*", "statsmodels.*", "lifelines.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

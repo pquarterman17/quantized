@@ -1,6 +1,7 @@
-"""Thin routes: designed-experiment ANOVA + post-hoc + the test chooser.
+"""Thin routes: designed-experiment ANOVA + post-hoc + the test chooser + GLM/survival/ROC.
 
 Split from routes/stats.py (500-line module ceiling); same /api/stats prefix.
+GAP_PLAN #30 adds GLM (logistic/Poisson), survival (KM/log-rank/Cox), and ROC methods.
 """
 
 from __future__ import annotations
@@ -14,6 +15,9 @@ from pydantic import BaseModel
 from quantized.calc.stats_anova2 import adjust_pvalues, anova2, dunnett_test, tukey_hsd
 from quantized.calc.stats_anova_ext import anova2_unbalanced, repeated_measures_anova
 from quantized.calc.stats_tests import recommend_test
+from quantized.calc.stats_glm import logistic_regression, poisson_regression
+from quantized.calc.stats_survival import kaplan_meier, logrank_test, cox_proportional_hazards
+from quantized.calc.stats_roc import roc_curve, auc, youden_optimal_threshold
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
@@ -134,5 +138,164 @@ def adjust_p_route(req: AdjustPRequest) -> dict[str, Any]:
     """Bonferroni / Holm / Benjamini-Hochberg p-value adjustment."""
     try:
         return _wrap(adjust_pvalues(req.p_values, method=req.method))
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ── GLM (Logistic & Poisson) ──────────────────────────────────────────────
+
+
+class GlmRequest(BaseModel):
+    """Request for logistic or Poisson GLM."""
+    predictors: list[list[float]]
+    y: list[float]
+    alpha: float = 0.05
+
+
+@router.post("/glm-logistic")
+def glm_logistic_route(req: GlmRequest) -> dict[str, Any]:
+    """Logistic regression with coefficients, SEs, z-stats, p-values, AIC."""
+    try:
+        return _wrap(logistic_regression(req.predictors, np.asarray(req.y, dtype=float), alpha=req.alpha))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/glm-poisson")
+def glm_poisson_route(req: GlmRequest) -> dict[str, Any]:
+    """Poisson regression with coefficients, SEs, z-stats, p-values, AIC."""
+    try:
+        return _wrap(poisson_regression(req.predictors, np.asarray(req.y, dtype=float), alpha=req.alpha))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ── Survival Analysis ─────────────────────────────────────────────────────
+
+
+class SurvivalRequest(BaseModel):
+    """Request for Kaplan-Meier or log-rank test."""
+    time: list[float]
+    event: list[float]
+
+
+class KaplanMeierRequest(SurvivalRequest):
+    """Kaplan-Meier curve request."""
+    pass
+
+
+class LogRankRequest(BaseModel):
+    """Request for log-rank test between two groups."""
+    time1: list[float]
+    event1: list[float]
+    time2: list[float]
+    event2: list[float]
+
+
+class CoxRequest(BaseModel):
+    """Request for Cox proportional-hazards model."""
+    time: list[float]
+    event: list[float]
+    predictors: list[list[float]]
+
+
+@router.post("/kaplan-meier")
+def kaplan_meier_route(req: KaplanMeierRequest) -> dict[str, Any]:
+    """Kaplan-Meier survival curve with Greenwood CIs."""
+    try:
+        return _wrap(kaplan_meier(np.asarray(req.time, dtype=float), np.asarray(req.event, dtype=float)))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/logrank")
+def logrank_route(req: LogRankRequest) -> dict[str, Any]:
+    """Log-rank test comparing two survival curves."""
+    try:
+        return _wrap(
+            logrank_test(
+                np.asarray(req.time1, dtype=float), np.asarray(req.event1, dtype=float),
+                np.asarray(req.time2, dtype=float), np.asarray(req.event2, dtype=float),
+            )
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/cox-ph")
+def cox_ph_route(req: CoxRequest) -> dict[str, Any]:
+    """Cox proportional-hazards model."""
+    try:
+        return _wrap(
+            cox_proportional_hazards(
+                np.asarray(req.time, dtype=float), np.asarray(req.event, dtype=float),
+                req.predictors,
+            )
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ── ROC & AUC ─────────────────────────────────────────────────────────────
+
+
+class RocRequest(BaseModel):
+    """Request for ROC curve."""
+    y_true: list[float]
+    y_score: list[float]
+
+
+class AucRequest(BaseModel):
+    """Request for AUC computation."""
+    fpr: list[float]
+    tpr: list[float]
+
+
+class YoudenRequest(BaseModel):
+    """Request for Youden optimal threshold."""
+    fpr: list[float]
+    tpr: list[float]
+    thresholds: list[float]
+
+
+@router.post("/roc-curve")
+def roc_curve_route(req: RocRequest) -> dict[str, Any]:
+    """ROC curve points (FPR, TPR) at all thresholds."""
+    try:
+        return _wrap(roc_curve(np.asarray(req.y_true, dtype=float), np.asarray(req.y_score, dtype=float)))
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/auc")
+def auc_route(req: AucRequest) -> dict[str, Any]:
+    """Area Under the ROC Curve (trapezoidal rule)."""
+    try:
+        auc_val = auc(np.asarray(req.fpr, dtype=float), np.asarray(req.tpr, dtype=float))
+        return _wrap({"auc": auc_val})
+    except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/youden-threshold")
+def youden_route(req: YoudenRequest) -> dict[str, Any]:
+    """Youden J-statistic optimal threshold selection."""
+    try:
+        return _wrap(
+            youden_optimal_threshold(
+                np.asarray(req.fpr, dtype=float), np.asarray(req.tpr, dtype=float),
+                np.asarray(req.thresholds, dtype=float),
+            )
+        )
     except (ValueError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
