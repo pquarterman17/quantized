@@ -30,9 +30,13 @@ _FORMATS = ("pdf", "svg", "png", "tiff")
 _LINESTYLE = {"solid": "-", "dashed": "--", "dotted": ":"}
 
 
-def _plot_kwargs(default_lw: float, spec: Mapping[str, Any] | None) -> dict[str, Any]:
+def _plot_kwargs(
+    default_lw: float, default_marker_size: float, spec: Mapping[str, Any] | None
+) -> dict[str, Any]:
     """Translate a per-series style spec (color/width/line/marker[/marker_size])
-    into matplotlib ``plot`` kwargs, so the export matches the on-screen styling."""
+    into matplotlib ``plot`` kwargs, so the export matches the on-screen styling.
+    ``default_marker_size`` is the active preset's calibrated marker size,
+    used only when a marker is requested without an explicit per-series size."""
     kw: dict[str, Any] = {"linewidth": default_lw}
     if not spec:
         return kw
@@ -47,7 +51,7 @@ def _plot_kwargs(default_lw: float, spec: Mapping[str, Any] | None) -> dict[str,
         kw["linestyle"] = _LINESTYLE[line]
     if spec.get("marker"):
         kw["marker"] = "o"
-        kw["markersize"] = spec.get("marker_size") or 5
+        kw["markersize"] = spec.get("marker_size") or default_marker_size
     return kw
 
 
@@ -65,7 +69,7 @@ def _render_impl(
     series_styles: Sequence[Mapping[str, Any] | None] | None = None,
     width_in: float | None = None,
     height_in: float | None = None,
-    dpi: int = 200,
+    dpi: int | None = None,
     overrides: Mapping[str, Any] | None = None,
     collect_map: bool = False,
 ) -> bytes | dict[str, Any]:
@@ -74,20 +78,24 @@ def _render_impl(
     ``fmt`` is ``pdf`` / ``svg`` (vector) or ``png`` / ``tiff`` (raster, sized by
     ``dpi``). ``style`` names a publication preset (``aps`` / ``report`` / ``web``
     / …) that sets font, line width, figure geometry, grid, and legend; pass
-    ``width_in`` / ``height_in`` to override the preset's size. ``title`` /
-    ``x_label`` / ``y_label`` are optional (empty = omit). ``series_styles``
-    (aligned 1:1 with ``series``) carries per-series color/width/line/marker so
-    the export matches the on-screen plot. A legend is drawn only for multiple
-    series. ``overrides`` (gap #11 — every property UI-reachable) patches the
-    preset per-figure: see :func:`_apply_overrides`; unknown keys are ignored,
-    invalid values raise ``ValueError``. Raises ``ValueError`` on an unknown
-    format or style.
+    ``width_in`` / ``height_in`` to override the preset's size. ``dpi`` defaults
+    to the preset's own calibrated resolution (e.g. ``aps`` / ``nature`` -> 600,
+    matching journal raster requirements) when not given explicitly; pass a
+    value to override it. ``title`` / ``x_label`` / ``y_label`` are optional
+    (empty = omit). ``series_styles`` (aligned 1:1 with ``series``) carries
+    per-series color/width/line/marker so the export matches the on-screen
+    plot. A legend is drawn only for multiple series, at the preset's
+    ``legend_location``. ``overrides`` (gap #11 — every property UI-reachable)
+    patches the preset per-figure: see :func:`_apply_overrides`; unknown keys
+    are ignored, invalid values raise ``ValueError``. Raises ``ValueError`` on
+    an unknown format or style.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
     st = figure_style(style)
     ov = dict(overrides or {})
     _validate_overrides(ov)
+    resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
 
     # rc_context scopes typography to this render; the named font is given a
     # generic fallback so matplotlib stays silent when Helvetica/Arial/Times
@@ -107,6 +115,12 @@ def _render_impl(
         "ytick.labelsize": font_size,
         "xtick.direction": tick_dir,
         "ytick.direction": tick_dir,
+        # Mirror ticks onto the top/right spines whenever the box is drawn
+        # (the journal "closed box, inward ticks on all four sides" look) --
+        # matplotlib's own default leaves top/right bare even with the full
+        # rectangular border, which reads as an unfinished box.
+        "xtick.top": st.box_on,
+        "ytick.right": st.box_on,
     }
     tick_len = ov.get("ticks", {}).get("len")
     if tick_len is not None:
@@ -120,7 +134,7 @@ def _render_impl(
         try:
             for i, (label, y) in enumerate(series):
                 spec = series_styles[i] if series_styles and i < len(series_styles) else None
-                kw = _plot_kwargs(st.line_width, spec)
+                kw = _plot_kwargs(st.line_width, st.marker_size, spec)
                 ax.plot(xv, np.asarray(y, dtype=float), label=label, **kw)
             if x_log:
                 ax.set_xscale("log")
@@ -136,8 +150,14 @@ def _render_impl(
                 ax.spines["top"].set_visible(False)
                 ax.spines["right"].set_visible(False)
             if len(series) > 1 and "legend" not in ov:
-                # All presets place the legend at "best" (matplotlib's default loc).
-                ax.legend(frameon=st.legend_box, fontsize=st.legend_font_size)
+                # legend_location is a plain str (FigureStyle field), not matplotlib's
+                # Literal[...] loc union -- mypy can't narrow it; every preset's value
+                # is one of matplotlib's accepted location strings.
+                ax.legend(  # type: ignore[call-overload]
+                    frameon=st.legend_box,
+                    fontsize=st.legend_font_size,
+                    loc=st.legend_location,
+                )
             if st.grid_alpha > 0:
                 ax.grid(True, alpha=st.grid_alpha)
             else:
@@ -146,9 +166,9 @@ def _render_impl(
             if not ov.get("margins"):
                 fig.tight_layout()
             if collect_map:
-                return _collect_map(fig, ax, n_series=len(series), dpi=dpi)
+                return _collect_map(fig, ax, n_series=len(series), dpi=resolved_dpi)
             buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=dpi)
+            fig.savefig(buf, format=fmt, dpi=resolved_dpi)
             return buf.getvalue()
         finally:
             plt.close(fig)

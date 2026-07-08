@@ -45,6 +45,10 @@ CLAUDE.local.md
 # Built SPA (vite build output, served by FastAPI in prod)
 src/quantized/web/
 
+# Beautiful-defaults audit renders (tools/audit_defaults.py) -- regenerate
+# locally, never commit the PNG grid
+tools/audit_defaults_out/
+
 # OneDrive conflict copies — when two machines edit the same file, OneDrive
 # saves a duplicate named "<file>-<Device>.<ext>". Never commit these.
 *MacBook*
