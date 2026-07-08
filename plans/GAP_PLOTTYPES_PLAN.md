@@ -292,4 +292,12 @@ in `plans/GAP_TIER3_PLAN.md`)
 
 ## Completed
 
+- ~~**1. Split routes/export.py (guard red)**~~ (2026-07-07) — split into
+  `export.py` (280 lines, data exporters) + `export_figures.py` (244,
+  figure endpoints) + `_export_common.py` (27, shared helpers);
+  `test_no_god_modules` green again. Merge fix-up: the split had been
+  cut from a pre-#13 base and dropped the #11 `overrides` passthrough
+  on /figure + /figure-hitmap — restored (field + both kwargs). Full
+  suite 1769 green.
+
 (empty — nothing shipped against this plan yet)
