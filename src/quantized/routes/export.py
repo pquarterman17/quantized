@@ -1,14 +1,14 @@
-"""Thin export routes: DataStruct -> downloadable file (XRD CSV / HDF5).
+"""Thin export routes: DataStruct -> downloadable file (data formats).
 
-Wraps ``io.xrd_csv`` (pure in-memory text) and ``io.hdf5`` (writes a binary
-file; we stage it in a temp dir and stream the bytes back). No formatting logic
-here — the writers own it. The user-supplied filename is sanitized before it
-reaches the Content-Disposition header (no header injection / path traversal).
+Wraps data exporters: ``io.xrd_csv`` (pure in-memory text), ``io.hdf5``
+(writes a binary file; staged in temp dir), and ``io.origin`` (LabTalk scripts
+for Origin). No formatting logic here — writers own it. Figure rendering is
+in ``routes.export_figures``. Filenames are sanitized before the
+Content-Disposition header.
 """
 
 from __future__ import annotations
 
-import re
 import tempfile
 import zipfile
 from datetime import UTC, datetime
@@ -26,22 +26,9 @@ from quantized.io.origin import GraphSpec, format_origin_project_script, format_
 from quantized.io.origin_com import com_available, send_to_origin
 from quantized.io.origin_project.writer import opj_bytes
 from quantized.io.xrd_csv import format_xrd_csv
+from quantized.routes._export_common import _attachment, _safe_name
 
 router = APIRouter(prefix="/api/export", tags=["export"])
-
-
-def _safe_name(name: str, ext: str) -> str:
-    """Filename safe for a Content-Disposition header: keep only word chars,
-    dot, dash; guarantee the extension. Prevents CRLF/quote injection +
-    path traversal."""
-    base = re.sub(r"[^A-Za-z0-9._-]", "_", name).strip("._") or "export"
-    if not base.lower().endswith(ext):
-        base += ext
-    return base
-
-
-def _attachment(name: str) -> dict[str, str]:
-    return {"Content-Disposition": f'attachment; filename="{name}"'}
 
 
 class XrdCsvRequest(BaseModel):
@@ -202,239 +189,6 @@ def export_consolidated(req: ConsolidatedRequest) -> Response:
         content=text,
         media_type="text/csv",
         headers=_attachment(_safe_name(req.filename, ".csv")),
-    )
-
-
-class FigureRequest(BaseModel):
-    dataset: dict[str, Any]
-    x_key: int | str | None = None
-    y_keys: list[int | str] | None = None
-    x_log: bool = False
-    y_log: bool = False
-    fmt: str = "pdf"
-    style: str = "default"  # publication preset: aps / report / web / …
-    dpi: int = 200  # raster (png/tiff) resolution; ignored by vector formats
-    title: str = ""  # optional figure title
-    x_label: str | None = None  # override the auto-derived axis labels (None = derive)
-    y_label: str | None = None
-    # Per-series style (aligned to the plotted y_keys order): color/width/line/marker.
-    series_styles: list[dict[str, Any] | None] | None = None
-    # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
-    # limits / margins / grid / annotations — validated in calc.
-    overrides: dict[str, Any] | None = None
-    filename: str = "figure"
-
-
-_FIGURE_MIME = {
-    "pdf": "application/pdf",
-    "svg": "image/svg+xml",
-    "png": "image/png",
-    "tiff": "image/tiff",
-}
-_DPI_MIN, _DPI_MAX = 50, 1200  # clamp: guards against absurd allocations
-
-
-@router.post("/figure")
-def export_figure(req: FigureRequest) -> Response:
-    """Render the dataset (selected channels + log scales) to a publication
-    figure: PDF / SVG (vector) or PNG / TIFF (raster, at ``dpi``)."""
-    if req.fmt not in _FIGURE_MIME:
-        raise HTTPException(
-            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
-        )
-    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
-    # Lazy import: matplotlib is heavy — only pay it when a figure is exported.
-    from quantized.calc.figure import render_figure
-    from quantized.calc.plotting import PlotState, build_series
-
-    try:
-        ds = DataStruct.from_dict(req.dataset)
-        state = PlotState(
-            x_key=req.x_key,
-            y_keys=tuple(req.y_keys) if req.y_keys is not None else None,
-            x_log=req.x_log,
-            y_log=req.y_log,
-        )
-        plot = build_series(ds, state)
-        # Caller-supplied labels override the auto-derived "label (unit)" strings.
-        x_label = req.x_label
-        if x_label is None:
-            x_label = f"{plot.x_label} ({plot.x_unit})" if plot.x_unit else plot.x_label
-        y_label = req.y_label
-        if y_label is None:
-            y_label = ""
-            if len(plot.series) == 1:
-                only = plot.series[0]
-                y_label = f"{only.label} ({only.unit})" if only.unit else only.label
-        series = [
-            (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series
-        ]
-        data = render_figure(
-            plot.x,
-            series,
-            title=req.title,
-            x_label=x_label,
-            y_label=y_label,
-            x_log=req.x_log,
-            y_log=req.y_log,
-            fmt=req.fmt,
-            style=req.style,
-            series_styles=req.series_styles,
-            dpi=dpi,
-            overrides=req.overrides,
-        )
-    except (ValueError, KeyError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return Response(
-        content=data,
-        media_type=_FIGURE_MIME[req.fmt],
-        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
-    )
-
-
-@router.post("/figure-hitmap")
-def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
-    """Preview render + element hit-map (gap #13): base64 PNG, per-artist
-    pixel boxes (title/labels/legend/series/annotations), and the axes rect
-    with data limits — the client hit-tests the preview and maps drags back
-    to data coordinates. ``fmt`` is ignored (always PNG at ``dpi``)."""
-    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
-    from quantized.calc.figure import render_figure_map
-    from quantized.calc.plotting import PlotState, build_series
-
-    try:
-        ds = DataStruct.from_dict(req.dataset)
-        state = PlotState(
-            x_key=req.x_key,
-            y_keys=tuple(req.y_keys) if req.y_keys is not None else None,
-            x_log=req.x_log,
-            y_log=req.y_log,
-        )
-        plot = build_series(ds, state)
-        x_label = req.x_label
-        if x_label is None:
-            x_label = f"{plot.x_label} ({plot.x_unit})" if plot.x_unit else plot.x_label
-        y_label = req.y_label
-        if y_label is None:
-            y_label = ""
-            if len(plot.series) == 1:
-                only = plot.series[0]
-                y_label = f"{only.label} ({only.unit})" if only.unit else only.label
-        series = [
-            (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series
-        ]
-        return render_figure_map(
-            plot.x,
-            series,
-            title=req.title,
-            x_label=x_label,
-            y_label=y_label,
-            x_log=req.x_log,
-            y_log=req.y_log,
-            style=req.style,
-            series_styles=req.series_styles,
-            dpi=dpi,
-            overrides=req.overrides,
-        )
-    except (ValueError, KeyError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-
-class StatplotFigureRequest(BaseModel):
-    kind: str  # box|violin|qq|probability|histogram
-    data: list[list[float]] | list[float]  # groups (box/violin) or one sample
-    labels: list[str] | None = None
-    fmt: str = "pdf"
-    style: str = "default"
-    dist: str = "norm"
-    bins: str | int = "fd"
-    fit: str | None = None
-    title: str = ""
-    x_label: str = ""
-    y_label: str = ""
-    dpi: int = 200
-    filename: str = "statplot"
-
-
-@router.post("/statplot-figure")
-def export_statplot_figure(req: StatplotFigureRequest) -> Response:
-    """Render a statistical plot (box/violin/Q-Q/histogram) to a publication
-    figure (PDF/SVG/PNG/TIFF)."""
-    if req.fmt not in _FIGURE_MIME:
-        raise HTTPException(
-            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
-        )
-    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
-    from quantized.calc.figure_statplots import render_statplot_figure  # lazy: matplotlib
-
-    try:
-        data: Any = req.data
-        data = [list(g) for g in data] if req.kind in ("box", "violin") else list(data)
-        img = render_statplot_figure(
-            req.kind, data, labels=req.labels, fmt=req.fmt, style=req.style,
-            dist=req.dist, bins=req.bins, fit=req.fit,
-            title=req.title, x_label=req.x_label, y_label=req.y_label, dpi=dpi,
-        )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return Response(
-        content=img,
-        media_type=_FIGURE_MIME[req.fmt],
-        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
-    )
-
-
-class MapFigureRequest(BaseModel):
-    x_axis: list[float]
-    y_axis: list[float]
-    z_grid: list[list[float]]  # (ny, nx), NaN allowed for gaps
-    kind: str = "contourf"  # contourf|contour|heatmap|surface|scatter3d|waterfall
-    fmt: str = "pdf"
-    style: str = "default"
-    dpi: int = 200
-    cmap: str = "viridis"
-    levels: int | list[float] = 12
-    level_scale: str = "linear"  # linear|log
-    label_contours: bool = True
-    colorbar: bool = True
-    title: str = ""
-    x_label: str = ""
-    y_label: str = ""
-    z_label: str = ""
-    width_in: float | None = None
-    height_in: float | None = None
-    view_elev: float = 30.0
-    view_azim: float = -60.0
-    filename: str = "map"
-
-
-@router.post("/map-figure")
-def export_map_figure(req: MapFigureRequest) -> Response:
-    """Render a gridded 2-D map to a publication figure: filled/line contour,
-    heatmap, or static 3-D surface/scatter/waterfall (PDF/SVG/PNG/TIFF)."""
-    if req.fmt not in _FIGURE_MIME:
-        raise HTTPException(
-            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
-        )
-    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
-    from quantized.calc.figure_map import render_map_figure  # lazy: matplotlib is heavy
-
-    try:
-        data = render_map_figure(
-            req.x_axis, req.y_axis, req.z_grid,
-            kind=req.kind, fmt=req.fmt, style=req.style, dpi=dpi, cmap=req.cmap,
-            levels=req.levels, level_scale=req.level_scale,
-            label_contours=req.label_contours, colorbar=req.colorbar,
-            title=req.title, x_label=req.x_label, y_label=req.y_label, z_label=req.z_label,
-            width_in=req.width_in, height_in=req.height_in,
-            view_elev=req.view_elev, view_azim=req.view_azim,
-        )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return Response(
-        content=data,
-        media_type=_FIGURE_MIME[req.fmt],
-        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
     )
 
 

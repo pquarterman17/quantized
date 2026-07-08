@@ -26,6 +26,7 @@ from quantized.routes import (
     electrical,
     electrochemistry,
     export,
+    export_figures,
     fitting,
     import_wizard,
     magnetic,
@@ -131,6 +132,7 @@ def create_app() -> FastAPI:
     application.include_router(statplots.router)
     application.include_router(reference.router)
     application.include_router(export.router)
+    application.include_router(export_figures.router)
     application.include_router(report_export.router)
     application.include_router(magnetometry.router)
     application.include_router(peaks.router)
