@@ -213,26 +213,26 @@ written below.
    *Model: haiku (wrappers + tests per the master plan's routing);
    sonnet only if the optional-dep gating gets designy.* *Agent:
    code-implementer.*
-   - [ ] Dependency shape per open question 2: statsmodels (BSD-3) +
+   - [x] Dependency shape per open question 2: statsmodels (BSD-3) +
          lifelines (MIT) in a new optional `stats` extra in
          `pyproject.toml` (mirroring the `office` extra + guarded
          imports of `io/report_export.py`), added to the dev group so
          CI exercises them; the GPL guard in
          `tests/test_repo_integrity.py` already scans extras
-   - [ ] New pure modules beside `calc/stats.py` (each <500 lines):
+   - [x] New pure modules beside `calc/stats.py` (each <500 lines):
          `calc/stats_glm.py` (logistic/Poisson via statsmodels GLM,
          result dict shaped like `stats_multivar.multiple_regression`),
          `calc/stats_survival.py` (KM curve, log-rank, Cox PH via
          lifelines), `calc/stats_roc.py` (pure-numpy ROC/AUC +
          Youden J — no sklearn)
-   - [ ] Thin routes in `src/quantized/routes/stats_design.py` (138
+   - [x] Thin routes in `src/quantized/routes/stats_design.py` (138
          lines — room; `routes/stats.py` is at 418, leave it);
          graceful 501-style error naming the extra when deps are
          absent
-   - [ ] Report-sheet endings through the generic `from_stats_table`
+   - [x] Report-sheet endings through the generic `from_stats_table`
          emitter (`calc/report_emit.py`); optional: surface in the
          Test-chooser workshop as a later follow-up, not this item
-   - [ ] Reference-value tests: a textbook logistic worked example
+   - [x] Reference-value tests: a textbook logistic worked example
          reproduced to published coefficients, lifelines' documented
          KM/log-rank example, and a hand-computed small-N ROC/AUC
    - Acceptance: all three modules reproduce their published

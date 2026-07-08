@@ -231,15 +231,15 @@ active dataset all shipped.)
    *Model: opus (API contract + discovery/versioning design), sonnet
    (template repo, examples). Pickup: `io/registry.py` is the in-repo
    discovery pattern; fit models register like `calc/fit_models.py`.*
-   - [ ] Contract v1 (pure functions only): parser (path → DataStruct),
+   - [x] Contract v1 (pure functions only): parser (path → DataStruct),
          step (DataStruct + params → DataStruct), fit model (params, x
          → y, plus an auto-guess hook); metadata (name, version,
          `api_version`) — plugins cannot reach routes or violate the
          no-eval guard
-   - [ ] Discovery: plugins dir (e.g. `~/.quantized/plugins/`) +
+   - [x] Discovery: plugins dir (e.g. `~/.quantized/plugins/`) +
          package entry points; a broken plugin logs + skips, never
          crashes startup
-   - [ ] Plugin parsers register through `io/registry.py` (single
+   - [x] Plugin parsers register through `io/registry.py` (single
          registration preserved); plugin steps appear in #6's step
          palette
    - [ ] `quantized-plugin-template` repo: one worked example of each
@@ -452,11 +452,11 @@ figure blocks — lands naturally with the #31 wizard's report page.)*
     *Model: sonnet. Pickup: mirror fermiviewer's run/packaging model
     (`qz` serves API + SPA); CI matrix already builds on
     ubuntu/win/mac.*
-    - [ ] PyPI publish workflow (built SPA bundled in the wheel);
+    - [x] PyPI publish workflow (built SPA bundled in the wheel);
           `pipx install quantized` → `qz` works
-    - [ ] Standalone installers (PyInstaller or Tauri-wrapped) for
+    - [x] Standalone installers (PyInstaller or Tauri-wrapped) for
           win/mac, built + attached by a tag-triggered release workflow
-    - [ ] First-run experience: sample dataset + a "try this" pointer
+    - [x] First-run experience: sample dataset + a "try this" pointer
     - [ ] Acceptance: fresh machine, no dev tools → install → open →
           import a CSV within 2 minutes
 
@@ -504,7 +504,7 @@ figure blocks — lands naturally with the #31 wizard's report page.)*
           m3learning file now imports [1827×255] with Qx/Qz and renders
           through `/api/plot/map`. NOTE: goes BEYOND MATLAB — the
           reference's `ttSame` check rejects both of these layouts
-    - [ ] Pole figures (Phi scans × Psi steps) import flat; decide a
+    - [x] Pole figures (Phi scans × Psi steps) import flat; decide a
           representation (2-D map vs multi-column)
     - [x] 2-D golden freeze vs MATLAB (2026-07-01) — after back-porting
           the cloud support to MATLAB (`aee70d1`), ALL THREE mesh kinds
