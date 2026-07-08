@@ -7,9 +7,16 @@ so the shared infrastructure is **copy-vendored** (ported file-by-file with an
 origin header), not a shared npm package. This plan defines the "platform
 library" subtree quantized adopts and how to keep it traceable to its source.
 
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-06-21
-**Updated:** 2026-06-21
+**Updated:** 2026-07-08
+
+> **Archived 2026-07-08.** The fermiviewer copy-vendor inventory is fully
+> executed — `ToolWindow`, `CommandPalette`, `fuzzy.ts`, the command registry,
+> param dialogs, tooltip/results overlays and the rest were ported into
+> `frontend/src/` with origin headers. `PORT_CHECKLIST.md` + the `GAP_*` plans
+> are the live frontend trackers now; unchecked boxes here are drift. Kept for
+> history.
 
 ---
 

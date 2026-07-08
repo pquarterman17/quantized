@@ -108,9 +108,11 @@ cd frontend && npm run build
   `plan-format.md` conventions; keep a `## Completed` log.
 - `plans/PORT_CHECKLIST.md` — exhaustive feature inventory (created with
   W1); check an item only when ported **and** golden-verified.
-- `plans/ui-implementation-plan.md` — frontend (W7) tiers.
-- `plans/frontend-reuse-library.md` — the fermiviewer-port inventory
-  (which platform modules to copy-vendor, and how).
+- `plans/archive/ui-implementation-plan.md` — frontend (W7) foundation
+  tiers. **Complete/archived 2026-07-08**; the live frontend trackers are
+  `PORT_CHECKLIST.md` + the `GAP_*` plans.
+- `plans/archive/frontend-reuse-library.md` — the fermiviewer-port
+  inventory (copy-vendor plan). **Complete/archived 2026-07-08.**
 - `plans/design/` — the Claude Design "Quantized Design System" handoff
   (DESIGN_HANDOFF / DESIGN_GUIDE + token CSS); the authority for the UI.
 

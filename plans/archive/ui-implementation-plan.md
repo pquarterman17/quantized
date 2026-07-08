@@ -9,9 +9,16 @@ DataWorkspace worksheet, fitting workshops, and DiraCulator. Design references
 live in `plans/design/` (copied from the handoff kit); the authoritative spec is
 `plans/design/DESIGN_HANDOFF.md` + `DESIGN_GUIDE.md`.
 
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-06-21
-**Updated:** 2026-06-21
+**Updated:** 2026-07-08
+
+> **Archived 2026-07-08.** Superseded by `PORT_CHECKLIST.md` + the `GAP_*` plans
+> as the frontend source of truth. Every foundation item here — the Vite/React 19
+> scaffold, vendored design tokens, `qz-*` primitives, the app shell, and the
+> Analysis Workbench with its live uPlot plot — shipped (the app releases at
+> v0.4.0 with the full frontend built and 1500+ frontend tests green). The
+> remaining unchecked boxes are drift, not open work. Kept for history.
 
 ---
 
