@@ -138,10 +138,11 @@ MATLAB."**
 2. **Enforcement tests** — port `fermiviewer/tests/test_repo_integrity.py`:
    no-GPL-runtime-deps, 500-line god-module ceiling, pure-layer import guard.
    - [x] Backend `test_repo_integrity.py`
-   - [ ] Frontend component-size test (~400-line `.tsx` ceiling) — NOT built yet;
-     `architecture.test.ts` only guards row-state, not line count. (Same item as
-     PROJECT_ORGANIZATION_PLAN's `.tsx`-ceiling vitest; CLAUDE.md wrongly claims
-     it exists.)
+   - [x] Frontend component-size test (~400-line `.tsx` ceiling) — built
+     2026-07-08 in `architecture.test.ts` ("component-ceiling ratchet (#7)"): a
+     global 400 ceiling + 3 grandfathered pins (App/PlotStage/ThinFilmTab),
+     ratchet-down only. (Same item as PROJECT_ORGANIZATION_PLAN #7; CLAUDE.md's
+     claim is now correct.)
 3. **CLI + run model** — `qz` serves API+SPA + opens browser + auto-shutdown
    on last-tab-close; `qz --desktop` native window (**pywebview**);
    `qz --dev` Vite HMR + reloading backend. (Tauri packaging deferred to W8.)

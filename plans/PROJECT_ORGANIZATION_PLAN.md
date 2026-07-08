@@ -80,10 +80,23 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
 
 ## Tier 3 — Nice-to-Have
 
-7. **Enforce the component max-lines ceiling** — the ~400-line rule has no
-   committed test (only a skill grep); the new tree UI could silently bloat.
-   - [ ] Add a vitest that fails any `.tsx` over the ceiling; fix current
-         over-ceiling files or record explicit exemptions.
+~~7. **Enforce the component max-lines ceiling**~~ **CLOSED 2026-07-08** — the
+   ~400-line rule is now test-enforced (was only a skill grep).
+   - [x] `architecture.test.ts` "component-ceiling ratchet (#7)": a global 400
+         ceiling for every `.tsx`; three files grandfathered at their EXACT
+         current size (`App.tsx` 987, `PlotStage.tsx` 491, `ThinFilmTab.tsx`
+         442) so they can only shrink, never grow; a new `.tsx` over 400 fails,
+         and a pinned file that drops under 400 must lose its pin (honesty
+         check). Extractions booked as #10.
+
+10. **Decompose the 3 grandfathered over-ceiling components** — ratchet the
+    `architecture.test.ts` exemptions down to zero.
+    - [ ] `App.tsx` (987) — root orchestrator; extract command-registry / menu
+          wiring into hooks (the biggest offender)
+    - [ ] `components/Stage/PlotStage.tsx` (491) — extract plot-tool / overlay
+          wiring (grew with the peak-marker, xCategories, and facet gates)
+    - [ ] `components/workshops/calculators/ThinFilmTab.tsx` (442) — split the
+          calculator sub-tabs
 
 8. **Folder-level bulk operations** — export all in a folder, apply
    corrections/template to a folder, bulk move/remove by folder.

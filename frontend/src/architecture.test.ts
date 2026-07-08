@@ -32,6 +32,56 @@ function offenders(re: RegExp, allow: string[]): string[] {
     .filter((p) => !allow.some((a) => p.endsWith(a)));
 }
 
+// Component-ceiling ratchet (PROJECT_ORGANIZATION_PLAN #7 / PORT_PLAN W7).
+// Convention: a .tsx component is <=400 lines; heavy features decompose via the
+// workshop pattern (state hook + view + sub-components). This is a RATCHET, not
+// a hard wall on day one: the three files that already exceed 400 are pinned at
+// their CURRENT size so they can only SHRINK, never grow (identical spirit to
+// the backend 500-line test and the MATLAB "never raise the ceiling" rule). A
+// NEW .tsx over 400 fails. When a pinned file is extracted below 400, the
+// honesty check tells you to delete its pin. Counting matches the guard below:
+// src.split("\n").length.
+const TSX_CEILING = 400;
+// path-suffix -> grandfathered max (exact current line count). RATCHET DOWN ONLY.
+const GRANDFATHERED: Record<string, number> = {
+  "/App.tsx": 987, // root orchestrator; decompose (PROJECT_ORGANIZATION_PLAN)
+  "/components/Stage/PlotStage.tsx": 491, // extract plot-tool wiring next
+  "/components/workshops/calculators/ThinFilmTab.tsx": 442, // split calc tabs
+};
+
+describe("component-ceiling ratchet (#7)", () => {
+  const tsx = sources().filter(([p]) => p.endsWith(".tsx"));
+
+  it("no .tsx component exceeds its ceiling (400, or its grandfathered pin)", () => {
+    const over: string[] = [];
+    for (const [p, src] of tsx) {
+      const lines = src.split("\n").length;
+      const pinKey = Object.keys(GRANDFATHERED).find((k) => p.endsWith(k));
+      const ceiling = pinKey ? GRANDFATHERED[pinKey] : TSX_CEILING;
+      if (lines > ceiling) over.push(`${p}: ${lines} > ${ceiling}`);
+    }
+    expect(
+      over,
+      "decompose via the workshop pattern (hook + view + sub-components); do NOT raise the ceiling",
+    ).toEqual([]);
+  });
+
+  it("grandfathered pins stay honest — a file that dropped under 400 must lose its pin", () => {
+    const stale: string[] = [];
+    for (const key of Object.keys(GRANDFATHERED)) {
+      const entry = tsx.find(([p]) => p.endsWith(key));
+      if (!entry) {
+        stale.push(`${key}: no longer exists — remove its pin`);
+        continue;
+      }
+      if (entry[1].split("\n").length <= TSX_CEILING) {
+        stale.push(`${key}: now <=${TSX_CEILING} — remove its pin (ratchet down)`);
+      }
+    }
+    expect(stale, "the grandfathered list must shrink as files are extracted").toEqual([]);
+  });
+});
+
 describe("row-state model guard (#50 universal linking)", () => {
   it("only the row-state model reads/writes Dataset.excludedRows", () => {
     // rowstate = the exclusion primitives; workspace = .dwk (de)serialize;
