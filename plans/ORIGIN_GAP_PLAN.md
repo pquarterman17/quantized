@@ -23,9 +23,10 @@ preset height taste call in plans/design/DEFAULTS_AUDIT.md, PyPI Trusted
 Publisher registration per RELEASE.md, corpus-publish licensing sign-off
 #45) and deliberate deferrals (#22 WebGL 3-D, decode-plan #27 .opju
 writer, #10's separate plugin-template repo). Booked follow-up debt lives
-in the GAP_* plans (PlotStage/statRender size splits, facet-by-group
-MultiPanelStage integration, Graph Builder export button + .dwk spec
-persistence, tri-contour export, frontend DPI-preset sync).
+in the GAP_* plans (PlotStage/statRender size splits, Graph Builder export
+button + .dwk spec persistence, tri-contour export, frontend DPI-preset
+sync); facet-by-group MultiPanelStage integration shipped 2026-07-08 —
+see #21 below.
 
 ---
 
@@ -678,15 +679,21 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
   `calc/figure_categorical.py` export. Booked: horizontal (bar vs
   column) orientation.
 - ~~**#21 Axis break + faceting**~~ (2026-07-07 export-side + facet
-  preview; interactive facet/break in the main Stage BOOKED) — see
-  `plans/GAP_PLOTTYPES_PLAN.md` item 5's Completed entry. Export breaks
+  preview; facet-by-group in the main Stage shipped 2026-07-08; paneled
+  x-breaks still BOOKED) — see `plans/GAP_PLOTTYPES_PLAN.md` item 5's
+  Completed entry + its 2026-07-08 follow-up note. Export breaks
   (`overrides.x_breaks`, `calc/figure_break.py`, twinned panels + break
   glyphs) and facet export (`calc/figure_facets.py`) shipped; `lib/
   facet.ts` (pure splitter + gap-detection `suggestBreaks`) and a Graph
   Builder facet-zone small-multiples preview (xy family) shipped.
-  Facet-by-group / paneled x-breaks in `MultiPanelStage.tsx` itself did
-  NOT ship — that file was reserved for a sibling workstream this pass
-  with no facet/break seam exposed yet.
+  Facet-by-group in `MultiPanelStage.tsx` itself shipped 2026-07-08 once
+  that file's lane opened up: a `facetByColumn` store action + a new
+  `facetPanels` field drive a third MultiPanelStage render mode (sqrt-
+  balanced grid, shared x-domain, per-panel level titles), reachable via
+  a `⌘K` "Facet by column…" command. Still booked: paneled x-breaks as
+  a MultiPanelStage mode, and the Graph Builder's own facet zone sending
+  through to this new mode on "Send to Stage" (today it still only
+  facets its own preview).
 - ~~**#13 Click-to-select + #14 in-place editing**~~ (2026-07-07) —
   `calc/figure.render_figure_map` + `/api/export/figure-hitmap`: the
   preview PNG plus per-artist pixel boxes (title/labels/legend/series/

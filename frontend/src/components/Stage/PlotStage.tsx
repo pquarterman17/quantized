@@ -101,6 +101,10 @@ export default function PlotStage() {
   // active dataset" gate below doesn't apply — a spatial arrangement can be
   // shown even with 0/1 channels selected on whatever is active.
   const spatialPanels = useApp((s) => s.spatialPanels);
+  // Set by `facetByColumn` (gap #21 residual): same reasoning as above — a
+  // facet arrangement is its own explicit-intent gate, independent of the
+  // active dataset's plotted-channel count.
+  const facetPanels = useApp((s) => s.facetPanels);
   const insetMode = useApp((s) => s.insetMode);
   const polarMode = useApp((s) => s.polarMode);
   const statMode = useApp((s) => s.statMode);
@@ -403,7 +407,11 @@ export default function PlotStage() {
   const nPlotted = plotted.length;
   if (polarMode && active) return <PolarStage />;
   if (statMode && active) return <StatStage />;
-  if (stackMode && (nPlotted >= 2 || (spatialPanels?.length ?? 0) >= 2)) return <MultiPanelStage />;
+  if (
+    stackMode &&
+    (nPlotted >= 2 || (spatialPanels?.length ?? 0) >= 2 || (facetPanels?.length ?? 0) >= 1)
+  )
+    return <MultiPanelStage />;
 
   // Right-click anywhere on the plot background → axes/view actions (the parity
   // surface for the MATLAB axes uicontextmenu). Legend right-clicks stop their own

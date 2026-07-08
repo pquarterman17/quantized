@@ -1,4 +1,4 @@
-// Multi-panel plot, two modes sharing one host:
+// Multi-panel plot, three modes sharing one host:
 //  1) Plain per-channel stack: each plotted channel of the ACTIVE dataset
 //     gets its own vertically-stacked uPlot panel sharing the x-axis.
 //     Box-zoom/pan on any panel syncs the x-range to the others (setScale
@@ -10,6 +10,18 @@
 //     axis state in a CSS grid per the source page's layout
 //     (`lib/originPanels.computePanelLayout`). Panels are independent — no
 //     x-sync, since they may plot entirely unrelated datasets/quantities.
+//  3) Facet grid (gap #21 residual): `store.facetPanels`, set by the
+//     `facetByColumn` action, arranges one small-multiples panel per distinct
+//     level of a chosen column in a sqrt-balanced CSS grid
+//     (`lib/multipanel.facetGridSize`). Unlike spatial panels, every facet
+//     panel is a ROW-FILTERED SLICE of the SAME dataset/channels — already
+//     materialized as a `PlotPayload` by `lib/facet.facetPayloads`, so this
+//     mode needs no fetch — and shares ONE x-domain across all panels
+//     (`lib/facet.sharedXDomain`), with box-zoom/pan sync like the plain
+//     stack (same idiom, since the x AXIS means the same thing in every
+//     panel). Each panel's uPlot `title` shows its facet level.
+//  Precedence when more than one is populated (the store keeps them mutually
+//  exclusive, but render defensively): spatial > facet > plain stack.
 // Self-contained — fetches its own series; overlays/waterfall stay single-view.
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -17,8 +29,16 @@ import uPlot from "uplot";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import "uplot/dist/uPlot.min.css";
 
+import { sharedXDomain } from "../../lib/facet";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
-import { panelHeights, spatialGridSize, splitPayload } from "../../lib/multipanel";
+import {
+  cellSize,
+  facetGridSize,
+  panelHeights,
+  spatialGridSize,
+  splitPayload,
+  xZoomSyncHook,
+} from "../../lib/multipanel";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -30,6 +50,7 @@ export default function MultiPanelStage() {
   const active = useActiveDataset();
   const datasets = useApp((s) => s.datasets);
   const rawSpatialPanels = useApp((s) => s.spatialPanels);
+  const facetPanels = useApp((s) => s.facetPanels);
   const yLog = useApp((s) => s.yLog);
   const xLog = useApp((s) => s.xLog);
   const xLim = useApp((s) => s.xLim);
@@ -61,20 +82,33 @@ export default function MultiPanelStage() {
   const spatial = panels.length > 0;
   const grid = useMemo(() => spatialGridSize(panels), [panels]);
 
+  // Facet grid (gap #21 residual): spatial takes precedence if somehow both
+  // are populated (the store keeps them mutually exclusive; this is just
+  // defensive render-side ordering).
+  const facet = !spatial && (facetPanels?.length ?? 0) > 0;
+  const facetGrid = useMemo(() => facetGridSize(facetPanels?.length ?? 0), [facetPanels]);
+  // The explicit store xLim (a manual override / prior zoom) wins; otherwise
+  // the union domain across every panel — computed once so all panels share
+  // ONE horizontal scale, the point of faceting.
+  const facetXLim = useMemo(
+    () => (facet ? (xLim ?? sharedXDomain(facetPanels!)) : null),
+    [facet, facetPanels, xLim],
+  );
+
   // Channels actually drawn (y selection minus the x-axis channel), in order
   // — the plain per-channel stack mode only.
   const plotted = useMemo(
     () =>
-      !spatial && active
+      !spatial && !facet && active
         ? effectiveChannels(active.data, yKeys, xKey, active.channelRoles, seriesOrder)
         : [],
-    [spatial, active, yKeys, xKey, seriesOrder],
+    [spatial, facet, active, yKeys, xKey, seriesOrder],
   );
   const styleList = useMemo(() => plotted.map((ch) => seriesStyles[ch]), [plotted, seriesStyles]);
 
   useEffect(() => {
     let cancelled = false;
-    if (spatial || !active) {
+    if (spatial || facet || !active) {
       setPayload(null);
       return;
     }
@@ -84,7 +118,7 @@ export default function MultiPanelStage() {
     return () => {
       cancelled = true;
     };
-  }, [spatial, active, yLog, xLog, plotted, y2Keys, xKey]);
+  }, [spatial, facet, active, yLog, xLog, plotted, y2Keys, xKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,8 +159,7 @@ export default function MultiPanelStage() {
       host.replaceChildren();
       const w = host.clientWidth || 600;
       const h = host.clientHeight || 400;
-      const cellW = Math.max(1, Math.floor((w - (grid.cols - 1) * GRID_GAP) / grid.cols));
-      const cellH = Math.max(1, Math.floor((h - (grid.rows - 1) * GRID_GAP) / grid.rows));
+      const { cellW, cellH } = cellSize(w, h, grid, GRID_GAP);
       panels.forEach((p, i) => {
         const pp = spatialPayloads[i];
         if (!pp) return;
@@ -159,8 +192,57 @@ export default function MultiPanelStage() {
       const ro = new ResizeObserver(() => {
         const width = host.clientWidth || w;
         const height = host.clientHeight || h;
-        const cw = Math.max(1, Math.floor((width - (grid.cols - 1) * GRID_GAP) / grid.cols));
-        const ch = Math.max(1, Math.floor((height - (grid.rows - 1) * GRID_GAP) / grid.rows));
+        const { cellW: cw, cellH: ch } = cellSize(width, height, grid, GRID_GAP);
+        plotsRef.current.forEach((u) => u.setSize({ width: cw, height: ch }));
+      });
+      ro.observe(host);
+      return () => {
+        ro.disconnect();
+        destroyAll();
+      };
+    }
+
+    if (facet) {
+      const fPanels = facetPanels ?? [];
+      if (fPanels.length === 0) {
+        destroyAll();
+        return;
+      }
+      destroyAll();
+      host.replaceChildren();
+      const w = host.clientWidth || 600;
+      const h = host.clientHeight || 400;
+      const { cellW, cellH } = cellSize(w, h, facetGrid, GRID_GAP);
+      // Same x-zoom/pan sync idiom as the plain per-channel stack below (one
+      // shared hook instance for the whole panel set — the x axis means the
+      // same thing in every facet panel too).
+      const onSetScale = xZoomSyncHook(() => plotsRef.current);
+      fPanels.forEach((p) => {
+        const div = document.createElement("div");
+        host.appendChild(div);
+        const opts = buildOpts(p.payload, {
+          width: cellW,
+          height: cellH,
+          yLog,
+          xLog,
+          xLim: facetXLim,
+          xFmt,
+          yFmt,
+          showGrid,
+          tool,
+          onReadout: setReadout,
+          title: p.label,
+          linearPaths: LINEAR_PATHS,
+          pointsPaths: POINTS_PATHS,
+        });
+        opts.cursor = { ...opts.cursor, sync: { key: SYNC_KEY } };
+        opts.hooks = { setScale: [onSetScale] };
+        plotsRef.current.push(new uPlot(opts, p.payload.data, div));
+      });
+      const ro = new ResizeObserver(() => {
+        const width = host.clientWidth || w;
+        const height = host.clientHeight || h;
+        const { cellW: cw, cellH: ch } = cellSize(width, height, facetGrid, GRID_GAP);
         plotsRef.current.forEach((u) => u.setSize({ width: cw, height: ch }));
       });
       ro.observe(host);
@@ -180,7 +262,8 @@ export default function MultiPanelStage() {
     const stackedPanels = splitPayload(payload);
     const w = host.clientWidth || 600;
     const heights = panelHeights(stackedPanels.length, host.clientHeight || 400);
-    let syncing = false;
+    // Propagate an x-zoom on one panel to all the others.
+    const onSetScale = xZoomSyncHook(() => plotsRef.current);
 
     stackedPanels.forEach((pp, i) => {
       const div = document.createElement("div");
@@ -202,21 +285,7 @@ export default function MultiPanelStage() {
         pointsPaths: POINTS_PATHS,
       });
       opts.cursor = { ...opts.cursor, sync: { key: SYNC_KEY } };
-      // Propagate an x-zoom on one panel to all the others.
-      opts.hooks = {
-        setScale: [
-          (u: uPlot, key: string) => {
-            if (key !== "x" || syncing) return;
-            const { min, max } = u.scales.x;
-            if (min == null || max == null) return;
-            syncing = true;
-            for (const other of plotsRef.current) {
-              if (other !== u) other.setScale("x", { min, max });
-            }
-            syncing = false;
-          },
-        ],
-      };
+      opts.hooks = { setScale: [onSetScale] };
       // Blank the x tick labels on every panel but the bottom (keep the axis so
       // the plot areas stay the same width and the panels line up).
       const isBottom = i === stackedPanels.length - 1;
@@ -241,6 +310,10 @@ export default function MultiPanelStage() {
     spatialPayloads,
     panels,
     grid,
+    facet,
+    facetPanels,
+    facetGrid,
+    facetXLim,
     payload,
     yLog,
     xLog,
@@ -269,7 +342,16 @@ export default function MultiPanelStage() {
                 gridTemplateRows: `repeat(${grid.rows}, 1fr)`,
                 gridTemplateColumns: `repeat(${grid.cols}, 1fr)`,
               }
-            : { position: "absolute", inset: 8, display: "flex", flexDirection: "column", gap: 8 }
+            : facet
+              ? {
+                  position: "absolute",
+                  inset: 8,
+                  display: "grid",
+                  gap: GRID_GAP,
+                  gridTemplateRows: `repeat(${facetGrid.rows}, 1fr)`,
+                  gridTemplateColumns: `repeat(${facetGrid.cols}, 1fr)`,
+                }
+              : { position: "absolute", inset: 8, display: "flex", flexDirection: "column", gap: 8 }
         }
       />
       <div className="qzk-glass qzk-float-tools">

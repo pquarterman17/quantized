@@ -1494,6 +1494,138 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
   });
 });
 
+describe("useApp facetByColumn (gap #21 residual)", () => {
+  const facetData: DataStruct = {
+    time: [0, 1, 2, 3, 4, 5],
+    values: [
+      [1, 10],
+      [1, 20],
+      [2, 30],
+      [2, 40],
+      [1, 50],
+      [2, 60],
+    ],
+    labels: ["grp", "y"],
+    units: ["", ""],
+    metadata: {},
+  };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds1", data: facetData }],
+      activeId: null,
+      stackMode: false,
+      spatialPanels: null,
+      facetPanels: null,
+      macroRecording: false,
+      macroSteps: [],
+    });
+  });
+
+  it("builds one panel per distinct level, activates the dataset, and turns on stack mode", () => {
+    useApp.getState().facetByColumn("d1", 0);
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d1");
+    expect(s.stackMode).toBe(true);
+    expect(s.spatialPanels).toBeNull();
+    expect(s.facetPanels).toHaveLength(2);
+    expect(s.facetPanels?.map((p) => p.label)).toEqual(["1", "2"]);
+  });
+
+  it("clears a prior spatial arrangement", () => {
+    useApp.setState({
+      spatialPanels: [
+        {
+          datasetId: "other",
+          xKey: null,
+          yKeys: [0],
+          xLim: [0, 1],
+          yLim: [0, 1],
+          xLog: false,
+          yLog: false,
+          row: 0,
+          col: 0,
+        },
+      ],
+    });
+    useApp.getState().facetByColumn("d1", 0);
+    expect(useApp.getState().spatialPanels).toBeNull();
+  });
+
+  it("no-ops (with a toast, no crash) when the dataset is missing", () => {
+    useApp.getState().facetByColumn("nope", 0);
+    const s = useApp.getState();
+    expect(s.facetPanels).toBeNull();
+    expect(s.stackMode).toBe(false);
+    expect(s.activeId).toBeNull();
+  });
+
+  it("no-ops when the column has no finite levels", () => {
+    const allNaN: DataStruct = { ...facetData, values: facetData.values.map((r) => [NaN, r[1]]) };
+    useApp.setState({ datasets: [{ id: "d1", name: "ds1", data: allNaN }] });
+    useApp.getState().facetByColumn("d1", 0);
+    const s = useApp.getState();
+    expect(s.facetPanels).toBeNull();
+    expect(s.stackMode).toBe(false);
+  });
+
+  it("no-ops when every row is excluded (guard #11 analysis view is empty)", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds1", data: facetData, excludedRows: [0, 1, 2, 3, 4, 5] }],
+    });
+    useApp.getState().facetByColumn("d1", 0);
+    expect(useApp.getState().facetPanels).toBeNull();
+  });
+
+  it("honors row exclusion (guard #11) — an excluded row never enters a facet panel", () => {
+    // Exclude row 0 (time=0, grp=1, y=10) — level "1"'s remaining rows are 1,4.
+    // Pin yKeys to just channel 1 ("y") so data[1] is unambiguous.
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds1", data: facetData, excludedRows: [0] }],
+      activeId: "d1",
+      yKeys: [1],
+    });
+    useApp.getState().facetByColumn("d1", 0);
+    const level1 = useApp.getState().facetPanels?.find((p) => p.label === "1");
+    expect(level1?.payload.data[0]).toEqual([1, 4]);
+    expect(level1?.payload.data[1]).toEqual([20, 50]);
+  });
+
+  it("does NOT carry over the x/y channel selection of a DIFFERENT active dataset", () => {
+    // xKey=1 ("y") only makes sense for whatever dataset is currently active;
+    // facetByColumn targets d1 while "other" is active, so it must fall back
+    // to facetPayloads' own default (x = time) rather than misapplying it.
+    useApp.setState({
+      datasets: [
+        { id: "other", name: "other", data: facetData },
+        { id: "d1", name: "ds1", data: facetData },
+      ],
+      activeId: "other",
+      xKey: 1,
+      yKeys: [0],
+    });
+    useApp.getState().facetByColumn("d1", 0);
+    const s = useApp.getState();
+    expect(s.facetPanels?.[0].payload.xLabel).not.toBe("y");
+  });
+
+  it("carries over the current x/y channel selection when the dataset IS already active", () => {
+    useApp.setState({ activeId: "d1", xKey: null, yKeys: [1] });
+    useApp.getState().facetByColumn("d1", 0);
+    const s = useApp.getState();
+    expect(s.facetPanels?.[0].payload.series.map((ser) => ser.label)).toEqual(["y"]);
+  });
+
+  it("records a macro step while recording", () => {
+    useApp.getState().startMacro();
+    useApp.getState().facetByColumn("d1", 0);
+    const steps = useApp.getState().macroSteps;
+    expect(steps).toHaveLength(1);
+    expect(steps[0].code).toBe('qz.facetByColumn("d1", 0)');
+    expect(steps[0].label).toBe("Facet by grp");
+  });
+});
+
 describe("useApp removeDatasets (item 17 book-family filter)", () => {
   it("removes exactly the given ids, leaving the rest untouched", () => {
     useApp.setState({

@@ -54,6 +54,7 @@ import {
 import { planOriginFolders } from "../lib/originFolders";
 import { computePanelLayout } from "../lib/originPanels";
 import type { SpatialPanel } from "../lib/multipanel";
+import { facetPayloads, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
 import { buildOverlayDataset, overlayCurveStyles } from "../lib/originOverlay";
 import { applyPalette, normalizePalette } from "../lib/palettes";
@@ -283,6 +284,18 @@ interface AppState {
   // `setStackMode` and `setActive` so a manual toggle or picking a different
   // dataset never shows a stale spatial arrangement.
   spatialPanels: SpatialPanel[] | null;
+  // Facet-by-column (gap #21 residual): set by `facetByColumn` — one
+  // small-multiples panel per distinct level of a chosen column, built from
+  // the active dataset's ANALYSIS view (guard #11) via `lib/facet.facetPayloads`.
+  // A PARALLEL field to `spatialPanels`, not a reuse of it: a spatial panel is
+  // a reference (datasetId + xKey/yKeys) MultiPanelStage fetches and gives its
+  // OWN fixed axis state, because it can point at a wholly different dataset
+  // per panel; a facet panel is a ROW-FILTERED SLICE of ONE dataset that
+  // `facetPayloads` already materializes as a `PlotPayload` (no dataset
+  // reference to fetch, no per-panel axis state — the whole point of faceting
+  // is a SHARED x-domain the render side computes once). Mutually exclusive
+  // with `spatialPanels` — every setter that assigns one clears the other.
+  facetPanels: FacetPanel[] | null;
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
   statMode: boolean; // render the Statistics stage (box/violin/qq/histogram, gap #16)
@@ -426,6 +439,14 @@ interface AppState {
   // Apply a stored figure's plot-state snapshot: activates its resolved
   // dataset and sets the axis ranges + log flags. No-op if unresolved.
   applyOriginFigure: (id: string) => void;
+  // Facet-by-column (gap #21 residual): partitions `datasetId`'s analysis-view
+  // rows into one small-multiples panel per distinct level of `col` (via
+  // `lib/facet.facetPayloads`) and populates `facetPanels` for MultiPanelStage
+  // to render. Activates `datasetId`, turns on `stackMode`, and clears any
+  // prior `spatialPanels` arrangement (the two are mutually exclusive). No-op
+  // (with a toast) when the dataset is missing or the column has no finite
+  // levels to facet on.
+  facetByColumn: (datasetId: string, col: number) => void;
   // Report sheets (#36): add opens the viewer on the new report.
   addReport: (name: string, report: ReportSheet, datasetId?: string | null) => void;
   removeReport: (id: string) => void;
@@ -800,6 +821,7 @@ export const useApp = create<AppState>((set, get) => ({
   showAxisBox: false,
   stackMode: false,
   spatialPanels: null,
+  facetPanels: null,
   insetMode: false,
   polarMode: false,
   statMode: false,
@@ -1223,7 +1245,7 @@ export const useApp = create<AppState>((set, get) => ({
           col: layout.placements[i]?.col ?? 0,
         }));
         get().setActive(entry.datasetId);
-        set({ stackMode: true, spatialPanels: placed });
+        set({ stackMode: true, spatialPanels: placed, facetPanels: null });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         if (!layout.spatial) {
           toast(
@@ -1258,6 +1280,42 @@ export const useApp = create<AppState>((set, get) => ({
         : {}),
     });
     get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
+  },
+  // Facet-by-column (gap #21 residual): see the state-field doc comment for
+  // why `facetPanels` is a parallel field rather than a reuse of
+  // `spatialPanels`. Reads the ANALYSIS view (guard #11 — exclusion #50 ∪
+  // filter #53) so faceting honors whatever rows are currently in play, the
+  // same contract `plotspec.specToRender`'s facet path already follows. The
+  // current x/y channel selection carries over ONLY when `datasetId` is
+  // already active (it's a per-dataset choice, meaningless applied to a
+  // different dataset's column indices); otherwise `facetPayloads` falls
+  // back to its own x=time / default-dense-channels choice, same as a fresh
+  // `setActive` would.
+  facetByColumn: (datasetId, col) => {
+    const ds = get().datasets.find((d) => d.id === datasetId);
+    if (!ds) return;
+    const data = analysisData(ds);
+    if (!data || data.time.length === 0) {
+      toast("no rows to facet (all excluded or filtered out)", "danger");
+      return;
+    }
+    const sameActive = get().activeId === datasetId;
+    const panels = facetPayloads(
+      data,
+      col,
+      sameActive ? get().xKey : null,
+      sameActive ? get().yKeys : null,
+    );
+    if (panels.length === 0) {
+      toast("that column has no finite levels to facet on", "danger");
+      return;
+    }
+    get().setActive(datasetId);
+    set({ stackMode: true, spatialPanels: null, facetPanels: panels });
+    get().recordMacro(
+      `Facet by ${ds.data.labels[col] ?? `column ${col}`}`,
+      `qz.facetByColumn(${lit(datasetId)}, ${col})`,
+    );
   },
   // Replace the whole library with a restored workspace (from a .dwk file).
   // Resets every per-dataset view (channels, styles, axis limits) and drops the
@@ -1311,6 +1369,7 @@ export const useApp = create<AppState>((set, get) => ({
         xLim: null,
         yLim: null,
         spatialPanels: null, // decode-plan #36 — never restored from a stale figure apply
+        facetPanels: null, // gap #21 residual — likewise never restored from a stale facet
         fitOverlay: null,
         peakOverlay: null,
         baselineOverlay: null,
@@ -1355,8 +1414,10 @@ export const useApp = create<AppState>((set, get) => ({
         yLim: null,
         // A plain click on a different dataset always drops a prior spatial
         // multi-panel arrangement (decode-plan #36) — it was built for a
-        // specific figure's layers, not whatever is now active.
+        // specific figure's layers, not whatever is now active. Same logic
+        // drops a prior facet-by-column arrangement (gap #21 residual).
         spatialPanels: null,
+        facetPanels: null,
         rsmPeaks: null,
         integral: null,
         fwhmResult: null,
@@ -1536,6 +1597,7 @@ export const useApp = create<AppState>((set, get) => ({
         xLim: null,
         yLim: null,
         spatialPanels: null, // decode-plan #36 — the clone becomes active, not a figure
+        facetPanels: null, // gap #21 residual — likewise, not a facet arrangement
         rsmPeaks: null,
         integral: null,
         fwhmResult: null,
@@ -1868,9 +1930,10 @@ export const useApp = create<AppState>((set, get) => ({
   setPlotTemplate: (plotTemplate) => set({ plotTemplate }),
   setShowAxisBox: (showAxisBox) => set({ showAxisBox }),
   // A manual toggle (on OR off) always drops any spatial arrangement from a
-  // prior Origin multi-panel apply — the plain per-channel split (or leaving
-  // stack mode) is what the user asked for, never a stale spatial grid.
-  setStackMode: (stackMode) => set({ stackMode, spatialPanels: null }),
+  // prior Origin multi-panel apply, or a prior facet-by-column arrangement
+  // (gap #21 residual) — the plain per-channel split (or leaving stack mode)
+  // is what the user asked for, never a stale spatial/facet grid.
+  setStackMode: (stackMode) => set({ stackMode, spatialPanels: null, facetPanels: null }),
   setInsetMode: (insetMode) => set({ insetMode }),
   setPolarMode: (polarMode) => set({ polarMode }),
   setStatMode: (statMode) => set({ statMode }),

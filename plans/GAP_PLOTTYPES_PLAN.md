@@ -372,6 +372,35 @@ in `plans/GAP_TIER3_PLAN.md`)
   + `test_api_export.py` additions), frontend +~30 tests (`facet.test.ts`
   new, `figureOverrides.test.ts`, `plotspec.test.ts`). Full suites green
   (backend 2024 passed / 3 skipped, frontend 1479), `npm run build` green.
+  **Follow-up (2026-07-08) — closes booked item (a):** the `multipanel.ts`/
+  `MultiPanelStage.tsx` lane opened up once the Origin spatial-apply work
+  merged, so facet-by-group in the MAIN stacked-panel Stage shipped: a new
+  store action `facetByColumn(datasetId, col)` runs `lib/facet.facetPayloads`
+  (through the analysis view, guard #11) and populates a NEW `facetPanels`
+  field — deliberately PARALLEL to `spatialPanels`, not a reuse of it (a
+  spatial panel is a dataset+channel *reference* `MultiPanelStage` fetches
+  and gives independent axis state; a facet panel is an already-materialized,
+  row-filtered `PlotPayload` slice of ONE dataset, and the whole point of
+  faceting is a x-domain SHARED once across every panel, not independent
+  per-panel state — see the field's doc comment in `store/useApp.ts`).
+  `MultiPanelStage.tsx` gained a third render mode (facet grid, sqrt-balanced
+  CSS grid via new `lib/multipanel.facetGridSize`, shared x-domain via new
+  `lib/facet.sharedXDomain`, per-panel uPlot `title` = the facet level,
+  box-zoom/pan sync reusing the SAME idiom the plain per-channel stack uses
+  — both now share one extracted `lib/multipanel.xZoomSyncHook` factory
+  instead of two near-duplicate inline hooks, plus a shared `cellSize` helper
+  replacing 4x-duplicated grid-cell math, keeping the component back under
+  the ~400-line convention after the new mode's DOM-building code). A
+  "Facet by column…" `⌘K` command palette entry (`App.tsx`) prompts for the
+  column via `askParams` and calls the action on the active dataset.
+  `PlotStage.tsx`'s stack-mode gate now also fires on `facetPanels`.
+  Frontend +~35 tests (`facet.test.ts`, `multipanel.test.ts`,
+  `useApp.test.ts`'s new `facetByColumn` describe block); full suite green
+  (1570), `npm run build` green. **Still booked, now genuinely optional (the
+  blocker is gone, not lane-forbidden):** (b) interactive x-breaks as paneled
+  sub-views, and (c) the Graph Builder's "Send to Stage" carrying a facet
+  spec through to this new mode (today it still only sends xy/box/violin/bar
+  — the facet zone stays a Graph-Builder-preview-only feature on send).
   **Code-health note:** `Stage/statRender.ts` (539 lines) and
   `Stage/useStatStage.ts` (416 lines) are now past the informal ~400-line
   mark — neither is a `.tsx` component (the enforced convention's literal
