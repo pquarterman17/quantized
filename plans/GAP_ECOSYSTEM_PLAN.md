@@ -304,10 +304,24 @@ written below.
 ## Tier 3 — Nice-to-Have
 
 5. **`.otp`/`.otpu` templates → style presets (decode-plan #21)** —
-   import Origin graph templates as quantized graph templates.
+   *(Backend half SHIPPED 2026-07-07: recon confirmed both extensions are
+   the SAME CPY family §2 already documents (no new container RE); the
+   shipped `figures.py`/`figures_opju.py` decoders already read a
+   template's axis/log/title/legend/frame directly off its raw bytes for
+   4 of the 5 corpus files with zero new code; curve style needed a
+   template-SCOPED reuse of `curve_style_color.py`'s record decoders
+   (`io/origin_project/templates.py`, 314 lines) since the real-project
+   curve→column binders always find an empty id map for a template (no
+   workbook to build one from) and silently drop every curve — style
+   lives entirely in the curve's own record, independent of that binding.
+   One corpus file (`PNR.otpu`) has a genuinely new, undocumented axis-
+   record shape (documented, not chased); it degrades to a styles-only
+   partial rather than failing or guessing. Findings + the full decode
+   table are in `docs/origin_project_format.md` §6.4. Frontend hook-in
+   remains, booked below.)*
    *Model: sonnet.* *Agent: general-purpose (format recon), then
    code-implementer.*
-   - [ ] Recon first: the 5 corpus templates
+   - [x] Recon first: the 5 corpus templates
          (`../test-data/origin/`, local only, never pushed) through
          the existing container walker — `.otp` is CPYA-family /
          `.otpu` CPYUA-family without data; determine which
@@ -315,19 +329,27 @@ written below.
          decoders already read (per the samples-not-standards
          directive: general grammar, synthetic fixtures, document
          what doesn't decode — never guess)
-   - [ ] Map decoded template properties → a GraphTemplate
+   - [x] Map decoded template properties → a GraphTemplate
          (`frontend/src/lib/figuredoc.ts`: preset + overrides +
          series styles), honestly partial — undecoded properties stay
-         absent
-   - [ ] Import surface: a dedicated thin route (template files are
-         NOT DataStruct parsers — keep them out of `_EXT_MAP`; the
-         single-registry rule is about data parsers) + a frontend
-         open-file branch landing the result in the saved graph
-         templates store
-   - Acceptance: importing a corpus `.otp` yields a saved graph
-     template whose decoded properties (axis scales, series styles)
-     apply to a plotted dataset; undecodable properties are absent,
-     never guessed.
+         absent (`io/origin_project/templates.py::read_origin_template`;
+         21 synthetic + realdata tests in `tests/test_io_origin_templates.py`)
+   - [x] Import surface (backend): a dedicated thin route
+         (`routes/import_template.py`: `GET /api/import/template` (path)
+         + `POST /api/import/template/upload`) — template files are NOT
+         DataStruct parsers, kept out of `io/registry.py`'s `_EXT_MAP`
+         (single-registry rule preserved); 10 route tests
+         (`tests/test_api_import_template.py`). **DEFERRED** (owner-scoped
+         out for this pass, booked here): the frontend `api.ts` client
+         method + an "Import Origin template…" open-file branch landing
+         the result in the saved graph-templates store.
+   - Acceptance: **backend-verified, frontend half open.** Importing any
+     of the 5 corpus templates via `read_origin_template`/the route
+     yields a decoded GraphTemplate dict — 4/5 with full axis scales +
+     series styles, 1/5 (`PNR.otpu`) styles-only (documented partial);
+     undecodable properties are absent, never guessed. The full
+     acceptance ("applies to a plotted dataset") needs the deferred
+     frontend hook-in.
 
 6. **`.opju` writer (decode-plan #27) — keep deferred.** Audit
    2026-07-07: no `write_opju` exists; the `.opj` writer loads in real

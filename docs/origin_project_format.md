@@ -40,6 +40,7 @@ written (annotated inline below).
    - 6.2 [`.opju` figures](#62-opju-figures)
      - 6.2.1 [Curve→column binding (item 35, `.opju` only, CLOSED)](#621-curvecolumn-binding-item-35-opju-only-closed)
    - 6.3 [Origin → quantized figure mapping + gap list](#63-origin--quantized-figure-mapping--gap-list)
+   - 6.4 [Graph templates (`.otp`/`.otpu`) → quantized `GraphTemplate`](#64-graph-templates-otpotpu--quantized-graphtemplate-decode-plan-21-gap-ecosystem-item-5)
 7. [Notes windows & results-log recovery](#7-notes-windows--results-log-recovery)
 8. [Export: writing Origin projects](#8-export-writing-origin-projects)
 9. [Testing & corpus](#9-testing--corpus)
@@ -1676,6 +1677,117 @@ yet):
   longer a gap): `.opj` payload offset 98/99 (§6.1) and `.opju`'s real-form
   Y flag before the `00 10 10 00` marker (§6.2) are both exact, `01 00`
   linear / `08 01` log10, validated against >300 layers corpus-wide.
+
+### 6.4 Graph templates (`.otp`/`.otpu`) → quantized `GraphTemplate` (decode-plan #21, gap-ecosystem item 5)
+
+**Container: confirmed, not a new family.** `io/origin_project/templates.py`.
+Both template extensions are the SAME CPY container family §2 already
+documents — `.otp` opens with `CPYA` (the corpus's `SLD_DoubleY.otp` is
+`CPYA 4.3227`, an older sub-version of the family the `.opj` reader already
+handles), `.otpu` with `CPYUA` (all four corpus `.otpu` files are
+`CPYUA 4.3380`, byte-identical preamble to a real `.opju` up through the
+`PrvwOPJU` preview preamble of §2.2). No new container RE was needed.
+
+**What decodes with ZERO new byte-level RE — the existing figure decoders,
+pointed at a template's raw bytes.** `figures.extract_figures`/
+`figures_opju.extract_figures_opju` take raw file bytes, not a parsed
+workbook — a template's graph window(s) are laid out exactly like a
+project's own, so axis ranges, log flags, titles, legend text/labels, frame
+and page geometry all decode verbatim against 4 of the 5 corpus templates
+(`SLD_DoubleY.otp`, `PNR-SF.otpu`, `SLDdouble.otpu`, `UnpolFresnelNR.otpu`).
+
+**What does NOT decode via the existing curve-binding path: curve style —
+solved differently.** A template carries no workbook columns, so
+`opj_curves.extract_curves`/`opju_figure_curves.extract_curves_by_id` (which
+bind a curve to `(book, x, y)` via a global column-id lookup built by
+scanning the project's OWN column-storage blocks — §6.1.1/§6.2.1) always
+find an empty id map for a template file, silently dropping every curve
+even though its raw style record is present and fully decodable on disk.
+Confirmed by direct byte-level recon: every corpus template carries real
+`curve_style_color.style_fields`-decodable records (explicit RGB colors,
+line/scatter, line width, symbol size) with **no book/column resolution
+required at all** — the style lives entirely inside the curve's own anchor
+record (`.otp`) / sparse id token (`.otpu`), the identical record
+`curve_style_color.py` already decodes for real projects. `templates.py`
+reuses ONLY the style half of those two decoders — `_template_curve_styles_opj`
+scans for the same `01 00 00 00 <id>` anchor + DataPlot-magic pairing
+§6.1.1 documents but skips the `id_map`/`x_columns` binding step entirely;
+`_template_curve_styles_opju` finds every `opju_figure_curves._CURVE_TOKEN`
+match and reconstructs its style record via the existing
+`curve_style_color.opju_style_record`, independent of
+`opju_figure_curves.column_id_table` (empty for a template by construction —
+no workbook column ever assigns the token's id). Book/x/y stay permanently
+absent for a template's curves by design, not by gap — there is no dataset
+for them to name.
+
+**One corpus file's axis record is a genuinely new, undecoded shape —
+`PNR.otpu`.** Its single axis anchor (`03 00 00 1f`) parses as `None` under
+all three known `.opju` axis-record forms (specimen §6.2's default-dialog
+form, real §6.2's "Real corpus" form, and the hybrid fallback) — a 4th
+record shape this pass does not characterize. Per the "conservative first
+decoder" scope for this item, it is left undecoded and documented here
+rather than chased with a new RE pass. Its curve-style tokens (6 of them)
+decode independently and fine (the tell that style really doesn't depend on
+the axis record at all) — `read_origin_template` degrades this ONE file to
+a styles-only partial (`overrides: null`, `seriesStyles` populated) rather
+than failing the whole import or guessing an axis record.
+
+**Mapping to `GraphTemplate` (`frontend/src/lib/figuredoc.ts`) — honestly
+partial.** `name` is the file stem; `style` stays the fixed string
+`"default"` (Origin templates carry no quantized preset concept to
+recover). `overrides` (`FigureOverrides`) comes from the template's FIRST
+decoded graph layer only:
+
+| Decoded (figure-layer dict) | `FigureOverrides` key | Notes |
+|---|---|---|
+| `x_from`/`x_to` | `x_lim` | only when both finite and distinct |
+| `y_from`/`y_to` | `y_lim` | only when both finite and distinct |
+| `legend_labels`/`legend_pos` | `legend.show`/`legend.loc` | `loc` = nearest-quadrant string (`"upper right"` etc.), mirroring `frontend/src/lib/originFigures.ts`'s `originLegendPos` |
+
+A template with >1 layer (a double-Y style like `SLD_DoubleY.otp`/
+`SLDdouble.otpu`) has no way to carry its 2nd layer's own Y range in this
+shape — `GraphTemplate` itself has no multi-layer/y2 concept — so that
+layer's style is simply not represented; this is a target-**shape**
+limitation, not a decode failure. Every other `FigureOverrides` key (`grid`,
+`ticks`, `spines`, `margins`, `font_size`/`font_name`, `annotations`) has no
+isolated on-disk field this codebase decodes (§6.3's permanent-gaps list
+already covers grid/ticks/font) and stays absent.
+
+`seriesStyles` (`ExportSeriesStyle[]`) is built from EVERY decoded curve
+style record found in the file, in on-disk order — since `GraphTemplate.
+seriesStyles` is already one flat list with no per-layer grouping, collapsing
+a multi-layer template's curves into one file-wide list matches the target
+shape's own limitation rather than adding a new one:
+
+| Decoded (`curve_style_color.style_fields`) | `ExportSeriesStyle` key | Notes |
+|---|---|---|
+| `style == "scatter"` | `marker: true, width: 0` | hides the connecting line, mirrors `originCurveSeriesStyle` |
+| `style == "line"` | `width: 1.5` | overridden by a decoded `lineWidth` below |
+| `color` (`#RRGGBB`) | `color` | direct |
+| `symbol` (any shape) | `marker: true` | **no shape field exists in `ExportSeriesStyle`** — a decoded marker glyph (square/circle/triangle/…) only turns the marker on; the glyph itself is a genuine, permanent target-shape gap |
+| `lineWidth` (pt) | `width` | only when `style != "scatter"` |
+| `symbolSize` (pt) | `marker_size` | only once a marker is already on |
+
+**Corpus summary (5 template files, all local-only, never committed):**
+
+| File | Container | Layer(s) decoded | Curve styles decoded | Notes |
+|---|---|---|---|---|
+| `SLD_DoubleY.otp` | CPYA 4.3227 | 2 (double-Y) | 5 | full template |
+| `PNR.otpu` | CPYUA 4.3380 | 0 | 6 | axis record: new, undecoded shape — styles-only partial |
+| `PNR-SF.otpu` | CPYUA 4.3380 | 1 | 12 | full template |
+| `SLDdouble.otpu` | CPYUA 4.3380 | 1 | 5 | full template |
+| `UnpolFresnelNR.otpu` | CPYUA 4.3380 | 1 | 3 | full template, legend position resolved |
+
+**Import surface.** `GET /api/import/template?path=...` (server-visible
+path, same containment guard as `routes/parsers.py`'s `/import`) and
+`POST /api/import/template/upload` (`routes/import_template.py`) — a
+SEPARATE surface from `routes/parsers.py`'s dataset importers, since a
+template carries no `DataStruct` at all; `.otp`/`.otpu` are deliberately
+**never** registered in `io/registry.py` (the single-registry rule governs
+data parsers, not style presets). The frontend wrapper (an `api.ts` client
+method + an "Import Origin template…" UI hook-in landing the result in the
+saved graph-templates store) is explicitly out of scope for this item and
+stays booked in `plans/GAP_ECOSYSTEM_PLAN.md`.
 
 ---
 
