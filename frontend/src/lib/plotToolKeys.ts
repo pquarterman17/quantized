@@ -2,6 +2,10 @@
 // Pure so the mapping is unit-testable; App.tsx wires the global keydown to it.
 // "Pick peak" (P) opens the Peaks workshop rather than selecting a dock tool, so
 // it is handled separately in App — it isn't one of these persistent tools.
+// The quick-fit gadget (#33, "qfit") has NO hotkey here: its obvious letter (F)
+// is already bound in App.tsx's own switch to the Curve Fit workshop, which
+// runs BEFORE this mapping is ever consulted — adding `case "f"` here would be
+// dead code. Select it via the toolbar (≈) or the plot's right-click menu.
 
 import type { PlotTool } from "./uplotOpts";
 
