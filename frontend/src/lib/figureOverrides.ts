@@ -15,6 +15,11 @@ export interface FigureOverrides {
   margins?: { left?: number; right?: number; top?: number; bottom?: number };
   grid?: boolean;
   annotations?: { x: number; y: number; text: string }[];
+  /** Manual axis breaks (gap #21, export-side): elided `[lo, hi]` x-ranges,
+   *  rendered as twinned panels with diagonal break glyphs
+   *  (`calc.figure._render_impl`). `lib/facet.suggestBreaks` proposes
+   *  candidates from a gap scan of the x column. */
+  x_breaks?: [number, number][];
 }
 
 export const LEGEND_LOCS = [
@@ -44,8 +49,8 @@ export function compactOverrides(ov: FigureOverrides): FigureOverrides | null {
   for (const [k, v] of Object.entries(ov)) {
     if (v === undefined) continue;
     if (Array.isArray(v)) {
-      // limits: keep only when at least one bound is set; annotations: non-empty
-      if (k === "annotations" && v.length === 0) continue;
+      // limits: keep only when at least one bound is set; annotations/breaks: non-empty
+      if ((k === "annotations" || k === "x_breaks") && v.length === 0) continue;
       if ((k === "x_lim" || k === "y_lim") && v.every((b) => b === null)) continue;
       out[k] = v;
     } else if (typeof v === "object" && v !== null) {

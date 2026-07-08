@@ -129,8 +129,18 @@ export function useGraphBuilder(): GraphBuilderState {
       setStatus(`sent ${spec.mark} plot to the stat stage`);
       return;
     }
-    // bar — the categorical bar renderer is deferred (GAP_PLOTTYPES #4)
-    toast("Bar charts land with categorical plots (plot-types item 4).", "info");
+    // mark === "bar" (gap #20): the stat stage's bar mode reads its series
+    // from the main plot's Y selection (mirrors box/violin's own fallback —
+    // see useStatStage's barValueChannels), so valueCol here is really just a
+    // placeholder the seed shape requires; groupCol is the real payload.
+    const x = spec.zones.x;
+    const groupCol = x && isCategorical(channelModelingType(active, x.channel)) ? x.channel : null;
+    if (groupCol === null) {
+      toast("Bar charts need a categorical X column.", "info");
+      return;
+    }
+    seedStatStage({ mode: "bar", groupCol, valueCol: spec.zones.y[0]?.channel ?? 0 });
+    setStatus("sent bar chart to the stat stage");
   }
 
   return {

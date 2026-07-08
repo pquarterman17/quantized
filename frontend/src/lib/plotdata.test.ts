@@ -530,6 +530,58 @@ describe("maskExcludedPayload", () => {
   });
 });
 
+describe("xCategories (gap #20 contract — additive, untouched numeric path)", () => {
+  // The regression this guards: every existing transform must leave a
+  // numeric-only payload (xCategories undefined) completely alone, and must
+  // PRESERVE xCategories when a producer sets it (they all spread `...payload`).
+  const numeric: PlotPayload = {
+    data: [
+      [0, 1, 2, 3],
+      [10, 20, 30, 40],
+    ],
+    series: [{ label: "y", unit: "emu" }],
+    xLabel: "x",
+    xUnit: "",
+  };
+  const categorical: PlotPayload = { ...numeric, xCategories: ["Low", "Mid", "High", "Extreme"] };
+
+  it("is absent by default on every plain-numeric payload", () => {
+    expect(numeric.xCategories).toBeUndefined();
+    expect(buildColumns({ time: [0, 1], values: [[1], [2]], labels: ["A"], units: [""], metadata: {} }).xCategories).toBeUndefined();
+  });
+
+  it("maskExcludedPayload preserves xCategories when present, omits it when absent", () => {
+    expect(maskExcludedPayload(numeric, new Set([1]), "hide").xCategories).toBeUndefined();
+    expect(maskExcludedPayload(categorical, new Set([1]), "hide").xCategories).toEqual(categorical.xCategories);
+  });
+
+  it("applyWaterfall / withFitOverlay / highlightSelectedPayload all preserve xCategories", () => {
+    expect(applyWaterfall({ ...categorical, series: [{ label: "a", unit: "" }, { label: "b", unit: "" }], data: [categorical.data[0], categorical.data[1], categorical.data[1]] as PlotPayload["data"] }, 0.5).xCategories).toEqual(categorical.xCategories);
+    expect(withFitOverlay(categorical, { datasetId: "d1", y: [1, 2, 3, 4] }, "d1").xCategories).toEqual(categorical.xCategories);
+    expect(highlightSelectedPayload(categorical, new Set([0])).xCategories).toEqual(categorical.xCategories);
+  });
+
+  it("composeDisplayPayload preserves xCategories through the full layer stack", () => {
+    const out = composeDisplayPayload(categorical, {
+      id: "d1",
+      waterfall: 0,
+      dropped: new Set([0]),
+      excludedDisplay: "hide",
+      fitOverlay: null,
+      baselineOverlay: null,
+      peakOverlay: null,
+      derivOverlay: null,
+      selection: null,
+    });
+    expect(out.xCategories).toEqual(categorical.xCategories);
+  });
+
+  it("dropTrailingEmptyRows preserves xCategories (per-level labels, not per-row)", () => {
+    const withTail: PlotPayload = { ...categorical, data: [[0, 1, 2, 3, null], [10, 20, 30, 40, null]] as PlotPayload["data"] };
+    expect(dropTrailingEmptyRows(withTail).xCategories).toEqual(categorical.xCategories);
+  });
+});
+
 describe("rowsInXRange (#50 plot-brush)", () => {
   const xs = [0, 1, 2, 3, 4];
   it("returns original indices whose x falls within the band (endpoints in any order)", () => {

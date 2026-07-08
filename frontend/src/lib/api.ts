@@ -1311,6 +1311,35 @@ export function exportStatplotFigure(body: StatplotFigureSpec): Promise<void> {
   return postDownload("/api/export/statplot-figure", body, `statplot.${body.fmt ?? "pdf"}`);
 }
 
+// ── Categorical (bar/column) plots — gap #20 ────────────────────────────────
+// Same category x series matrix the interactive stat stage's "bar" mode
+// computes locally (lib/barlayout.buildBarMatrix): `values[group][series]` is
+// the mean, `errors[group][series]` the SEM (null = no error bar for that
+// cell), so the exported figure matches the on-screen bars exactly.
+
+/** A grouped/stacked bar-chart export request (StatStage bar mode's "Export
+ *  figure" button). */
+export interface CategoricalFigureSpec {
+  groups: string[]; // category tick labels, in axis order
+  series: string[]; // series (legend) labels, in stack/cluster order
+  values: number[][]; // [group][series] bar height (mean)
+  errors: (number | null)[][]; // [group][series] SEM (null = no whisker)
+  stacked?: boolean;
+  fmt?: string;
+  style?: string;
+  title?: string;
+  x_label?: string;
+  y_label?: string;
+  dpi?: number;
+  filename?: string;
+}
+
+/** Render a grouped/stacked bar chart server-side (matplotlib) and download
+ *  it (gap #20). */
+export function exportCategoricalFigure(body: CategoricalFigureSpec): Promise<void> {
+  return postDownload("/api/export/categorical-figure", body, `bar.${body.fmt ?? "pdf"}`);
+}
+
 // ── Magnetometry ────────────────────────────────────────────────────────────
 /** Analyze an M-H loop -> Hc / Mr / Ms / squareness / loop area / SFD. */
 export function hysteresisAnalysis(body: {

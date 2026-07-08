@@ -162,7 +162,7 @@ export interface ReflectivitySeed {
  *  consumes it once and clears it. `groupCol` = the categorical column to group
  *  by (null = per-plotted-channel fallback); `valueCol` = the value channel. */
 export interface StatStageSeed {
-  mode: "box" | "violin";
+  mode: "box" | "violin" | "bar";
   groupCol: number | null;
   valueCol: number;
 }

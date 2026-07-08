@@ -167,68 +167,9 @@ written below.
 
 ## Tier 2 — Medium Impact
 
-4. **Categorical plots (gap #20)** — grouped/stacked bar & column with
-   error bars over a categorical x-axis. The payload-shape change is
-   the risk: call it out, isolate it, test it.
-   *Model: sonnet (the payload contract + interactive); haiku for the
-   export renderer once the pattern lands.* *Agent:
-   ux-frontend-expert.*
-   - [ ] The contract piece FIRST, reviewed on its own: extend
-         `PlotPayload` in `frontend/src/lib/plotdata.ts` with an
-         optional categorical x concept (category labels + ordinal x
-         positions) such that every existing consumer
-         (`composeDisplayPayload` chain, overlays, waterfall,
-         multipanel splitter) ignores it safely when absent —
-         regression-test the untouched numeric path explicitly
-   - [ ] Category detection via `lib/modeling.ts` `isCategorical`;
-         labels per open question 3 (metadata text labels, formatted
-         numeric levels as fallback)
-   - [ ] Bar rendering: add uPlot's bars path factory to
-         `frontend/src/lib/uplotPaths.ts`; ordinal tick formatting in
-         `lib/uplotOpts.ts` `buildOpts`; new pure
-         `frontend/src/lib/barlayout.ts` for grouped offsets/widths
-         and stacked cumulative sums — unit-tested; error bars reuse
-         `errorBarsPlugin` from `lib/uplotOverlays.ts`
-   - [ ] Grouped/stacked toggle + orientation (bar/column) as store
-         state surfaced in the Channels/Inspector cards
-   - [ ] Export: new pure `calc/figure_categorical.py` (grouped/
-         stacked bar via matplotlib, `figure_style` presets — the
-         `figure_statplots.py` template) + endpoint in
-         `routes/export_figures.py`
-   - Acceptance: a worksheet with a nominal x column renders grouped
-     bars with category tick labels and error bars; the stack toggle
-     restacks; the exported PDF matches the on-screen arrangement;
-     all existing numeric-plot tests still pass untouched.
-
-5. **Axis breaks + faceting (gap #21)** — manual/automatic axis
-   breaks and a trellis/faceted multi-panel generator, both
-   interactive and export-side.
-   *Model: sonnet.* *Agent: ux-frontend-expert.*
-   - [ ] Facet-by-group interactive: extend
-         `frontend/src/lib/multipanel.ts` with a facet splitter —
-         panels keyed on a nominal column
-         (`lib/statschooser.ts` `groupsByCategory`) or on library
-         group (`lib/grouping.ts` `groupDatasets`) instead of
-         per-channel; `MultiPanelStage.tsx` renders the facet grid
-         with the existing x-sync (setScale hook + cursor sync);
-         facet picker in the Inspector
-   - [ ] Interactive x-break per open question 4: two side-by-side
-         synced sub-panels with break glyphs, sharing the multipanel
-         machinery; break ranges as store state; automatic break
-         suggestion (gap detection over the x column) in a pure lib
-         fn
-   - [ ] Export-side breaks: twinned matplotlib axes with
-         broken-axis marks and shared labels — in `calc/figure.py` if
-         it fits the 154-line headroom, else a new
-         `calc/figure_break.py` sibling (the guard decides)
-   - [ ] Facet export: new `calc/figure_facets.py` (grid of axes from
-         grouped series, shared scales/labels, `figure_style`
-         presets) + endpoint in `routes/export_figures.py`
-   - [ ] Graph Builder's facet zone (GAP_INTERACTION item 3) consumes
-         the facet splitter — keep its API pure and spec-driven
-   - Acceptance: a manual x-break renders on-screen and exports with
-     break marks; facet-by-group produces small multiples with shared
-     axes both interactively and in the exported vector PDF.
+(items 4 and 5 shipped 2026-07-07 — see Completed for the full outcome,
+including two deliberate deviations from the bullets below and the
+lane-blocked remainders booked for a future pass)
 
 ---
 
@@ -314,3 +255,120 @@ in `plans/GAP_TIER3_PLAN.md`)
   as the now-narrowed Tier 1 item 3. Frontend 1270 tests green (+21 new:
   17 in `contour.test.ts`, 2 added to `mapRender.test.ts`, 2 in the new
   `MapCard.test.tsx`), `npm run build` green.
+
+- ~~**4. Categorical plots (gap #20)**~~ (2026-07-07) — the contract piece
+  first, reviewed in isolation: `PlotPayload.xCategories?: string[]` added to
+  `lib/plotdata.ts` (additive; every existing transform already spreads
+  `{...payload}` so it passes through for free — regression-tested explicitly
+  in `plotdata.test.ts`'s new "xCategories (gap #20 contract)" block covering
+  `maskExcludedPayload`/`applyWaterfall`/`withFitOverlay`/
+  `highlightSelectedPayload`/`composeDisplayPayload`/`dropTrailingEmptyRows`).
+  Ordinal tick formatting landed in `lib/uplotOpts.ts`
+  (`categoricalTickFormatter`, wins over an explicit numeric `xFmt` on the x
+  axis) — this consumer is real and tested but has **no producer yet** in
+  this pass (see deviation below); it's ready scaffolding for a future
+  "categorical X on the ordinary uPlot plot" feature.
+  New pure `lib/barlayout.ts` (category level/label resolution — an Origin
+  `metadata.origin_text_columns` column when one consistently labels every
+  level, RESOLVED decision b, else formatted numeric levels, decision a;
+  mean±SEM per series; grouped sub-slot offsets; stacked cumulative
+  segments), unit-tested standalone.
+  **Deviation from the plan's literal bullets (documented, not silent):**
+  bar rendering did NOT use uPlot's native `bars()` path factory in the main
+  plot. Investigated it (uPlot's `disp.x0`/`size`/`y0`/`y1` facets + `bands`
+  config can do grouped/stacked bars, confirmed by reading the bundled
+  source), but wiring it through the shared, everywhere-used
+  `uplotOpts.buildOpts` was high blast-radius for a feature the codebase
+  already has a lighter, precedented home for: the categorical mark family
+  (box/violin/bar, `lib/plotspec.ts`'s own `CATEGORICAL_MARKS`) already
+  renders through the Canvas2D stat stage (gap #16). Bar joined it as a 5th
+  `StatMode`: `lib/statstage.ts` (`StatMode` +
+  `barValueDomain` — a signed zero-anchored domain, unlike the existing
+  `zeroBasedDomain`), `Stage/statRender.ts` (`drawBar` — grouped clustered
+  bars OR one stacked bar per category, SEM error whiskers, reusing the
+  box/violin `categorySlots` axis geometry), `Stage/useStatStage.ts` (a
+  `barData` matrix computed locally — no backend round-trip needed for the
+  interactive path — + a grouped/stacked `barStack` toggle), `Stage/
+  StatStage.tsx` ("Bar" mode option + a Grouped/Stacked segmented control).
+  `lib/plotspec.ts`'s `specToRender` now returns a real `{kind: "bar", ...}`
+  (was a permanent deferred `note`); `GraphPreview.tsx` draws it via the same
+  `statRender.draw` dispatcher; `useGraphBuilder.ts`'s `sendToStage` seeds the
+  stat stage for bar the same way it already does for box/violin
+  (`seedStatStage`) — completing the mark end-to-end, Graph Builder → stage.
+  **Known limitation** (documented inline): the stat stage's bar series come
+  from the MAIN plot's Y selection (mirrors box/violin's own pre-existing
+  fallback), not necessarily the Graph Builder's own Y-zone picks when they
+  differ from what's currently plotted.
+  **Booked, not shipped:** horizontal bar orientation (bar vs column) — only
+  vertical columns; a legend inside the Stat Stage's own Canvas2D bar view
+  (series colors are visible but unlabeled there — the exported figure DOES
+  carry a legend).
+  Export: new pure `calc/figure_categorical.py` (grouped/stacked bar via
+  matplotlib, `figure_style` presets, mean±SEM whiskers, always-visible zero
+  baseline for mixed-sign data) + `POST /api/export/categorical-figure` in
+  `routes/export_figures.py` (421 lines, still under the ceiling). Backend
+  +43 tests (`test_calc_figure_categorical.py` + `test_api_export.py`
+  additions), frontend +~90 tests across `barlayout.test.ts` (new),
+  `statstage.test.ts`, `statRender.test.ts`, `plotspec.test.ts`,
+  `uplotOpts.test.ts`. Full suites green (backend 2024, frontend 1479),
+  `npm run build` green.
+
+- ~~**5. Axis breaks + faceting (gap #21)**~~ (2026-07-07) — export-side
+  breaks shipped first (per the plan's own dependency note, "it's
+  unambiguous"), as an `overrides.x_breaks: [[lo,hi],...]` on the EXISTING
+  `render_figure`/`POST /api/export/figure` (no new endpoint): validated in
+  `calc/figure._validate_overrides` (non-empty, `[lo,hi]` pairs, `lo<hi`,
+  sorted + non-overlapping). The renderer itself split into a new sibling
+  `calc/figure_break.py` (twinned matplotlib panels, `sharey`, diagonal break
+  glyphs at each seam, hidden inner spines, per-panel `set_xlim` clipping —
+  the paneled representation the plan's RESOLVED decision required, never a
+  discontinuous-tick trick) — `figure.py` was at 509 lines with the break
+  logic inline (over the 500-line ceiling), so the guard decided the split,
+  exactly per the plan's own fallback clause. Scoped deliberately smaller
+  than the single-axes path: breaks combine with the plot + title/labels/
+  basic legend/grid only, not the full gap #11 `_apply_overrides` sweep
+  (legend/spines/limits/margins target ONE axes; a broken figure has
+  several) — and not with the figure-hitmap collector (single-axes pixel
+  harvesting). `lib/figureOverrides.ts`'s `FigureOverrides` gained `x_breaks`
+  (type-only; `compactOverrides` drops an empty list) so a future UI control
+  can pass it type-safely — no such control was built this pass (booked).
+  Facet export shipped: new pure `calc/figure_facets.py` (grid of
+  pre-split panels, `sharex`/`sharey`, per-panel titles, unused trailing
+  grid cells hidden, `figure_style` presets) + a NEW
+  `routes/export_facets.py` (`POST /api/export/facets-figure`) — kept
+  separate from `export_figures.py` (already at 421 lines after item 4's
+  bar endpoint) rather than risk the ceiling again.
+  Interactive: new pure `lib/facet.ts` — `facetPayloads` (row-partition
+  splitter; category labels resolve through `lib/barlayout.resolveCategoryLabels`,
+  the same text-column-then-numeric rule bar charts use) shaped close to
+  `lib/multipanel.ts`'s `splitPayload` output (`PlotPayload[]`) so a future
+  `MultiPanelStage` facet mode is a small additive consume; `suggestBreaks`
+  (pure gap-detection over the x column: any adjacent gap ≥4× the median
+  gap is a candidate break) — unit-tested, NOT wired into any UI yet.
+  Graph Builder's facet zone is now a real, thin consume for the **xy family
+  only** (scatter/line): `lib/plotspec.ts`'s `SpecRender` xy variant gained
+  an optional `facets` field (additive; regression-tested that it's absent
+  when `zones.facet` is unset); `GraphPreview.tsx` renders a small-multiples
+  grid (one mini xy panel per facet level, own label, `sqrt`-balanced
+  rows/cols) instead of one panel when facets are present. Box/violin/bar
+  don't facet (the categorical-x-facet cross-product was out of scope).
+  **Booked (LANE-BLOCKED, not a scope choice):** this pass's lane forbade
+  editing `lib/multipanel.ts` / `MultiPanelStage.tsx` beyond consuming an
+  already-existing prop — neither file exposes a facet/break config seam
+  today, so three interactive pieces from the original bullets could not
+  ship: (a) facet-by-group in the MAIN stacked-panel Stage (would need a new
+  prop on `MultiPanelStage`), (b) interactive x-breaks as paneled sub-views
+  "sharing the multipanel machinery" (same blocker), (c) the Graph Builder's
+  "Send to Stage" carrying a facet spec to the main plot (today it only
+  toasts that group-split is preview-only). `lib/facet.ts`'s output shape is
+  the hand-off point for whoever owns `multipanel.ts` next.
+  Backend +43 tests (`test_calc_figure_break.py`, `test_calc_figure_facets.py`
+  + `test_api_export.py` additions), frontend +~30 tests (`facet.test.ts`
+  new, `figureOverrides.test.ts`, `plotspec.test.ts`). Full suites green
+  (backend 2024 passed / 3 skipped, frontend 1479), `npm run build` green.
+  **Code-health note:** `Stage/statRender.ts` (539 lines) and
+  `Stage/useStatStage.ts` (416 lines) are now past the informal ~400-line
+  mark — neither is a `.tsx` component (the enforced convention's literal
+  scope) and no test fails, but both are candidates for a future split (e.g.
+  bar drawing into its own sibling file, mirroring the `calc/figure_break.py`
+  precedent) rather than growing further untouched.

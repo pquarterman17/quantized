@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildOpts, tickFormatter, xIsAscending } from "./uplotOpts";
+import { buildOpts, categoricalTickFormatter, tickFormatter, xIsAscending } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
 
 const payload: PlotPayload = {
@@ -305,6 +305,44 @@ describe("buildOpts defaultTrace", () => {
     expect(sci?.(null as never, [1500], 0, 0, 0)).toEqual(["1.5e+3"]);
     expect(tickFormatter({ mode: "auto", digits: 2 })).toBeUndefined();
     expect(tickFormatter(undefined)).toBeUndefined();
+  });
+
+  it("categoricalTickFormatter maps in-range integer splits to labels, blanks the rest", () => {
+    const fmt = categoricalTickFormatter(["Low", "Mid", "High"]);
+    expect(fmt(null as never, [0, 1, 2], 0, 0, 0)).toEqual(["Low", "Mid", "High"]);
+    expect(fmt(null as never, [0.5, -1, 3, null as unknown as number], 0, 0, 0)).toEqual([
+      "",
+      "",
+      "",
+      null,
+    ]);
+  });
+
+  it("a categorical payload (xCategories) attaches the ordinal tick formatter to the x axis only", () => {
+    const cat: PlotPayload = { ...payload, xCategories: ["A", "B", "C"] };
+    const opts = buildOpts(cat, { ...base, yLog: false, tool: "zoom" });
+    expect(typeof opts.axes?.[0]?.values).toBe("function");
+    const fn = opts.axes?.[0]?.values as unknown as (u: never, splits: number[]) => unknown[];
+    expect(fn(null as never, [0, 1, 2])).toEqual(["A", "B", "C"]);
+    // The y axis is untouched (no xFmt/yFmt supplied).
+    expect(opts.axes?.[1]?.values).toBeUndefined();
+  });
+
+  it("xCategories wins over an explicit numeric xFmt on the x axis", () => {
+    const cat: PlotPayload = { ...payload, xCategories: ["A", "B", "C"] };
+    const opts = buildOpts(cat, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      xFmt: { mode: "fixed", digits: 2 },
+    });
+    const fn = opts.axes?.[0]?.values as unknown as (u: never, splits: number[]) => unknown[];
+    expect(fn(null as never, [0, 1])).toEqual(["A", "B"]); // not "0.00"/"1.00"
+  });
+
+  it("a plain numeric payload (no xCategories) is completely unaffected", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    expect(opts.axes?.[0]?.values).toBeUndefined();
   });
 
   it("attaches the tick formatter to the x/y axes (and omits it for auto)", () => {

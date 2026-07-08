@@ -12,12 +12,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { buildBarMatrix, seriesStat, type BarChartData } from "../../lib/barlayout";
 import {
+  exportCategoricalFigure,
   exportStatplotFigure,
   statsBox,
   statsHistogram,
   statsQQ,
   statsViolin,
+  type CategoricalFigureSpec,
   type StatplotFigureSpec,
 } from "../../lib/api";
 import { effectiveChannels } from "../../lib/plotdata";
@@ -61,6 +64,10 @@ export interface StatStageState {
   setBins: (b: string) => void;
   fit: string | null;
   setFit: (f: string | null) => void;
+  /** Bar mode only (gap #20): grouped (false, clustered side-by-side) vs
+   *  stacked (true, one bar per category). */
+  barStack: boolean;
+  setBarStack: (s: boolean) => void;
   busy: boolean;
   error: string | null;
   /** Non-fatal note (e.g. an offline degrade) shown alongside the plot. */
@@ -110,6 +117,7 @@ export function useStatStage(): StatStageState {
   const [dist, setDist] = useState("norm");
   const [bins, setBins] = useState<string>("fd");
   const [fit, setFit] = useState<string | null>(null);
+  const [barStack, setBarStack] = useState(false);
 
   // Re-derive the default picks whenever the active dataset changes — a
   // channel index from the PREVIOUS dataset would silently mis-group.
@@ -147,6 +155,33 @@ export function useStatStage(): StatStageState {
   const valueLabel = columns.find((c) => c.index === valueCol)?.label ?? (valueCol < 0 ? "x" : "value");
   const groupLabel =
     groupCol != null ? (columns.find((c) => c.index === groupCol)?.label ?? "group") : "channel";
+
+  // Bar mode (gap #20): a category x series matrix, not a 1-D group list —
+  // when a categorical column is picked, every PLOTTED channel becomes its
+  // own clustered/stacked series within each category (buildBarMatrix);
+  // otherwise fall back to one category per plotted channel (mirrors box/
+  // violin's own fallback), each holding a single series. Purely local math
+  // (lib/barlayout), no backend round-trip needed.
+  const barValueChannels = useMemo(
+    () => (plotted.length ? plotted : [valueCol]),
+    [plotted, valueCol],
+  );
+  const barValueLabel = useMemo(() => {
+    if (barValueChannels.length > 1) return "value";
+    return columns.find((c) => c.index === barValueChannels[0])?.label ?? valueLabel;
+  }, [barValueChannels, columns, valueLabel]);
+  const barData = useMemo<BarChartData | null>(() => {
+    if (!data || mode !== "bar") return null;
+    if (groupCol != null) {
+      const labels = barValueChannels.map((c) => columns.find((col) => col.index === c)?.label ?? `col ${c}`);
+      return buildBarMatrix(data, groupCol, barValueChannels, labels);
+    }
+    const fallbackGroups = resolveGroups(data, null, valueCol, plotted);
+    return {
+      groups: fallbackGroups.map((g) => ({ label: g.label, series: [seriesStat(g.values)] })),
+      seriesLabels: [barValueLabel],
+    };
+  }, [data, mode, groupCol, barValueChannels, columns, valueCol, plotted, barValueLabel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -206,6 +241,14 @@ export function useStatStage(): StatStageState {
           })
           .finally(() => !cancelled && setBusy(false));
       }
+    } else if (mode === "bar") {
+      // Local/synchronous — no backend call, so no busy/cancelled bookkeeping.
+      if (!barData || barData.groups.length === 0) {
+        setDrawData(null);
+        setError("no finite values to group");
+        return;
+      }
+      setDrawData({ mode: "bar", data: barData, valueLabel: barValueLabel, groupLabel, stacked: barStack });
     } else if (mode === "qq") {
       const finite = finiteOf(data, valueCol);
       if (finite.length < 3) {
@@ -267,10 +310,27 @@ export function useStatStage(): StatStageState {
     return () => {
       cancelled = true;
     };
-  }, [data, mode, groups, valueCol, dist, bins, fit, valueLabel, groupLabel]);
+  }, [data, mode, groups, valueCol, dist, bins, fit, valueLabel, groupLabel, barData, barValueLabel, barStack]);
 
   async function exportFigure(fmt: string): Promise<void> {
     if (!data) return;
+    if (mode === "bar") {
+      if (!barData || barData.groups.length === 0) return;
+      const spec: CategoricalFigureSpec = {
+        groups: barData.groups.map((g) => g.label),
+        series: barData.seriesLabels,
+        values: barData.groups.map((g) => g.series.map((s) => s.mean)),
+        errors: barData.groups.map((g) => g.series.map((s) => (Number.isFinite(s.sem) ? s.sem : null))),
+        stacked: barStack,
+        fmt,
+        title: `${barValueLabel} by ${groupLabel}`,
+        x_label: groupLabel,
+        y_label: barValueLabel,
+        filename: `bar_${barValueLabel}`,
+      };
+      await exportCategoricalFigure(spec);
+      return;
+    }
     const spec = buildExportSpec(mode, data, groups, valueCol, valueLabel, groupLabel, dist, bins, fit, fmt);
     if (spec) await exportStatplotFigure(spec);
   }
@@ -291,6 +351,8 @@ export function useStatStage(): StatStageState {
     setBins,
     fit,
     setFit,
+    barStack,
+    setBarStack,
     busy,
     error,
     note,

@@ -129,7 +129,35 @@ def _render_impl(
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
 
     xv: NDArray[np.float64] = np.asarray(x, dtype=float)
+    x_breaks = ov.get("x_breaks")
     with matplotlib.rc_context(rc):  # type: ignore[arg-type]
+        # Manual axis breaks (gap #21): a distinct, twinned-panel rendering
+        # path — not compatible with the hit-map collector (collect_map is
+        # figure-hitmap's single-axes pixel harvesting) or the full
+        # `_apply_overrides` sweep (legend/spines/limits/margins apply to a
+        # SINGLE axes; a broken figure has several). Breaks render the plot +
+        # title/labels/basic legend/grid honestly; other overrides are simply
+        # not applied together with x_breaks in this pass.
+        if x_breaks and not collect_map:
+            # Lazy import: split out purely to stay under the 500-line ceiling.
+            from quantized.calc.figure_break import render_breaks_impl
+
+            return render_breaks_impl(
+                xv,
+                series,
+                breaks=[(float(b[0]), float(b[1])) for b in x_breaks],
+                x_log=x_log,
+                y_log=y_log,
+                title=title,
+                x_label=x_label,
+                y_label=y_label,
+                fmt=fmt,
+                st=st,
+                ov=ov,
+                dpi=resolved_dpi,
+                figsize=figsize,
+                series_styles=series_styles,
+            )
         fig, ax = plt.subplots(figsize=figsize)
         try:
             for i, (label, y) in enumerate(series):
@@ -294,6 +322,20 @@ def _validate_overrides(ov: Mapping[str, Any]) -> None:
             v = margins.get(side)
             if v is not None and not 0.0 <= float(v) <= 1.0:
                 raise ValueError("margins are figure fractions in [0, 1]")
+    breaks = ov.get("x_breaks")
+    if breaks is not None:
+        if not isinstance(breaks, (list, tuple)) or len(breaks) == 0:
+            raise ValueError("x_breaks must be a non-empty list of [lo, hi] pairs")
+        prev_hi: float | None = None
+        for b in breaks:
+            if not isinstance(b, (list, tuple)) or len(b) != 2:
+                raise ValueError("each x_breaks entry must be a [lo, hi] pair")
+            lo, hi = float(b[0]), float(b[1])
+            if not lo < hi:
+                raise ValueError("each x_breaks entry must have lo < hi")
+            if prev_hi is not None and lo < prev_hi:
+                raise ValueError("x_breaks entries must be sorted and non-overlapping")
+            prev_hi = hi
 
 
 def _apply_overrides(

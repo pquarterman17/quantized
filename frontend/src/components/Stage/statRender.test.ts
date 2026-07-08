@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BoxStat } from "../../lib/statstage";
+import { seriesStat, type BarChartData } from "../../lib/barlayout";
 import { draw, fmt, type StatDrawData, type ViolinGroup } from "./statRender";
 
 describe("fmt", () => {
@@ -109,6 +110,38 @@ const VIOLIN_A: ViolinGroup = {
         fit: { dist: "norm", x: [0, 1, 2, 3, 4], pdf: [0.05, 0.2, 0.3, 0.15, 0.02] },
       }),
     ).toBe(true);
+  });
+
+  it("bar mode (grouped) paints clustered bars with error whiskers", () => {
+    const data: BarChartData = {
+      groups: [
+        { label: "Low", series: [seriesStat([1, 2, 3]), seriesStat([4, 5, 6])] },
+        { label: "High", series: [seriesStat([10, 12]), seriesStat([-3, -1])] },
+      ],
+      seriesLabels: ["A", "B"],
+    };
+    expect(
+      paints({ mode: "bar", data, valueLabel: "value", groupLabel: "group", stacked: false }),
+    ).toBe(true);
+  });
+
+  it("bar mode (stacked) paints cumulative segments", () => {
+    const data: BarChartData = {
+      groups: [{ label: "Low", series: [seriesStat([1, 2, 3]), seriesStat([4, 5, 6])] }],
+      seriesLabels: ["A", "B"],
+    };
+    expect(
+      paints({ mode: "bar", data, valueLabel: "value", groupLabel: "group", stacked: true }),
+    ).toBe(true);
+  });
+
+  it("bar mode does not throw on an empty-groups payload (defensive guard)", () => {
+    const host = document.createElement("div");
+    const canvas = document.createElement("canvas");
+    const empty: BarChartData = { groups: [], seriesLabels: [] };
+    expect(() =>
+      draw(canvas, host, { mode: "bar", data: empty, valueLabel: "v", groupLabel: "g", stacked: false }),
+    ).not.toThrow();
   });
 
   it("renders nothing but leaves the canvas clear for a null payload", () => {
