@@ -147,37 +147,21 @@ written below.
    - Acceptance: `test_no_god_modules` passes; all `/api/export/*`
      endpoints respond byte-identically to before the split.
 
-3. **Interactive contour layer + tri-contour export (gap #17
-   remaining)** — labeled isolines over the live 2-D map; scattered
-   (cloud) RSM contours export-side without regridding.
-   *Model: sonnet.* *Agent: ux-frontend-expert (stage/Inspector);
-   code-implementer for the tri-contour backend sub-task.*
-   - [ ] Add `d3-contour` (ISC) to `frontend/package.json` (per open
-         question 1); new pure `frontend/src/lib/contour.ts` —
-         threshold generation (count / lin / log, mirroring
-         `_contour_levels` in `calc/figure_map.py`) and
-         MapPayload→d3-contour input adapting (zGrid flat + nx/ny);
-         unit-tested against known grids
-   - [ ] Contour overlay canvas in
-         `frontend/src/components/Stage/MapStage.tsx`, layered over
-         the heatmap blit (the same host-div layering the cut-drag
-         preview uses); isoline labels along paths; keep
-         `Stage/mapRender.ts` pure
-   - [ ] Level controls in
-         `frontend/src/components/Inspector/MapCard.tsx`: contour
-         on/off, level count, lin/log spacing, label toggle —
-         store-backed like `mapMethod`/`mapRes` (persisted prefs)
-   - [ ] Tri-contour export: extend `calc/figure_map.py` (199 lines,
-         plenty of headroom) with a scattered-points input path
-         (matplotlib tricontour/tricontourf over raw x/y/z arrays);
-         extend the map-figure request model in the item-1
-         `routes/export_figures.py`; RSM cloud data
-         (`io/xrdml.py` snapshot/coupled mesh kinds) is the driving
-         case — synthetic + realdata tests
-   - Acceptance: an RSM map shows labeled isolines tracking the level
-     controls; exporting the same view produces matching contours; a
-     scattered-cloud RSM exports via tricontour with no regridding
-     artifacts.
+3. **Tri-contour export (gap #17 last remaining piece)** — scattered
+   (cloud) RSM contours rendered export-side straight off the raw
+   points, without regridding. The interactive half of this item (the
+   d3-contour overlay + Inspector level controls) shipped 2026-07-07
+   — see Completed.
+   *Model: sonnet.* *Agent: code-implementer.*
+   - [ ] Extend `calc/figure_map.py` (199 lines, plenty of headroom)
+         with a scattered-points input path (matplotlib
+         `tricontour`/`tricontourf` over raw x/y/z arrays)
+   - [ ] Extend the map-figure request model in the item-1
+         `routes/export_figures.py`; RSM cloud data (`io/xrdml.py`
+         snapshot/coupled mesh kinds) is the driving case — synthetic
+         + realdata tests
+   - Acceptance: a scattered-cloud RSM exports via tricontour with no
+     regridding artifacts.
 
 ---
 
@@ -291,3 +275,42 @@ in `plans/GAP_TIER3_PLAN.md`)
   `groupDatasets`" sub-bullet was NOT implemented — out of the task's
   explicit scope (per-dataset grouping only); left for a follow-up if
   wanted. Frontend 1204 tests green (+31 new), `npm run build` green.
+
+- ~~**3. Interactive contour layer (gap #17 interactive half)**~~
+  (2026-07-07) — `lib/contour.ts` (pure): `contourLevels` ports
+  `calc/figure_map.py::_contour_levels`'s count/explicit-list, lin/log
+  semantics field-for-field (including the log-floor rule), cross-checked
+  numerically against the Python function; `computeContours` is a thin
+  typed wrapper over `d3-contour` (added as a runtime dep — ISC, plus its
+  transitive `d3-array`/`internmap`, both ISC; `@types/d3-contour` +
+  transitive `@types/d3-array`/`@types/geojson` are MIT dev-only — no GPL
+  anywhere, confirmed via `npm view ... license` on every package that
+  landed in `package-lock.json`) turning a MapPayload grid into polygon
+  rings in DATA coordinates (documents and inverts d3-contour's
+  cell-centred `i+0.5` index convention); `ringToCanvas` reuses the same
+  rect/axis-extent transform `mapRender.ts` already uses for peak markers.
+  17 unit tests: hand-computed level cases (incl. log floor), a 3x3
+  grid cross-checked against a raw `d3-contour` probe run, a synthetic
+  Gaussian-bump grid (half-max ring radius/centroid match the analytic
+  value), null-cell (gap) handling, and degenerate-input non-throwing.
+  Wired into `Stage/mapRender.ts` (`drawContours`, ink-coloured lines —
+  not per-level colormap samples, which would blend into same-hue
+  heatmap cells right where contrast matters most — clipped to the plot
+  rect, `ContourOptions` threaded through `draw()`'s existing optional-arg
+  tail so old positional call sites are untouched) and `MapStage.tsx`
+  (a `∿` toolbar quick-toggle beside `log`, contour state read from the
+  store). Level controls live in `Inspector/MapCard.tsx` (on/off, level
+  count, lin/log spacing) backed by new store fields `contourOn`/
+  `contourLevelCount`/`contourScale` (session state, same non-localStorage
+  pattern as `mapMethod`/`mapRes` — persists across dataset switches
+  within a session, not across reloads). Isoline labels were skipped per
+  the plan's "optional, skip if it bloats" — export already labels via
+  `clabel`; filled contours (contourf) also deferred, lines only for now.
+  Real-raster tests added to `mapRender.test.ts` (the `CANVAS_OK`-gated
+  node-canvas pattern) confirm the overlay actually paints distinct
+  pixels and that an all-null map draws no lines without throwing.
+  **Remaining on gap #17: tri-contour export** (scattered-point RSM
+  contours without regridding) — stays export-side per the plan; tracked
+  as the now-narrowed Tier 1 item 3. Frontend 1270 tests green (+21 new:
+  17 in `contour.test.ts`, 2 added to `mapRender.test.ts`, 2 in the new
+  `MapCard.test.tsx`), `npm run build` green.

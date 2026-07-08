@@ -29,6 +29,11 @@ export default function MapStage() {
   const method = useApp((s) => s.mapMethod);
   const res = useApp((s) => s.mapRes);
   const antialias = useApp((s) => s.antialias); // Preferences ▸ Plot ▸ Antialias
+  // Contour overlay (Inspector "2-D map" card; ORIGIN_GAP_PLAN #17 remaining half).
+  const contourOn = useApp((s) => s.contourOn);
+  const contourLevelCount = useApp((s) => s.contourLevelCount);
+  const contourScale = useApp((s) => s.contourScale);
+  const setContourOn = useApp((s) => s.setContourOn);
   const [readout, setReadout] = useState<Readout | null>(null);
   // x/y/z channel picks, local to this view (default the first three channels).
   const [keys, setKeys] = useState<[number, number, number]>([0, 1, 2]);
@@ -85,13 +90,26 @@ export default function MapStage() {
     if (!host || !canvas) return;
     // Show peak markers only when they belong to the active dataset.
     const markers = rsmPeaks && rsmPeaks.datasetId === active?.id ? rsmPeaks.peaks : null;
-    const paint = () => draw(canvas, host, payload, cmap, logZ, markers, antialias);
+    const contour = { on: contourOn, levelCount: contourLevelCount, scale: contourScale };
+    const paint = () => draw(canvas, host, payload, cmap, logZ, markers, antialias, contour);
     paint();
     const ro = new ResizeObserver(paint);
     ro.observe(host);
     return () => ro.disconnect();
     // theme/accent in deps so the frame/axis ink recolors from fresh tokens.
-  }, [payload, cmap, logZ, theme, accent, rsmPeaks, active, antialias]);
+  }, [
+    payload,
+    cmap,
+    logZ,
+    theme,
+    accent,
+    rsmPeaks,
+    active,
+    antialias,
+    contourOn,
+    contourLevelCount,
+    contourScale,
+  ]);
 
   function hitAt(ev: React.MouseEvent<HTMLCanvasElement>): {
     r: Readout | null;
@@ -225,6 +243,13 @@ export default function MapStage() {
             onClick={() => setLogZ((v) => !v)}
           >
             log
+          </button>
+          <button
+            className={`qzk-tool-btn${contourOn ? " active" : ""}`}
+            title="Contour lines (level count + lin/log spacing live in the Inspector's 2-D map card)"
+            onClick={() => setContourOn(!contourOn)}
+          >
+            ∿
           </button>
           {cutSpace != null && (
             <>

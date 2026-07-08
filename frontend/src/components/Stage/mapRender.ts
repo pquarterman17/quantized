@@ -5,11 +5,22 @@
 // transparent (gaps), matching uPlot's null = gap for 1-D.
 
 import { COLORMAPS, type ColormapName, colormapCss, normalize, sampleColormap } from "../../lib/colormap";
+import { computeContours, contourLevels, type LevelScale, ringToCanvas } from "../../lib/contour";
 import type { MapPayload } from "../../lib/mapdata";
 import { niceTicks } from "../../lib/ticks";
 import type { RsmPeak } from "../../lib/types";
 
 const MARGIN = { left: 58, right: 78, top: 14, bottom: 42 };
+
+/** Interactive contour overlay controls (Inspector "2-D map" card; store
+ *  fields `contourOn`/`contourLevelCount`/`contourScale`). Mirrors
+ *  `calc/figure_map.py::_contour_levels`'s `levels`/`level_scale` — see
+ *  `lib/contour.ts`. */
+export interface ContourOptions {
+  on: boolean;
+  levelCount: number;
+  scale: LevelScale;
+}
 
 export interface Readout {
   x: number;
@@ -136,6 +147,7 @@ export function draw(
   logZ: boolean,
   peaks: RsmPeak[] | null = null,
   smooth = true,
+  contour: ContourOptions | null = null,
 ) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return; // jsdom / headless — nothing to paint
@@ -178,9 +190,56 @@ export function draw(
   ctx.lineWidth = 1;
   ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w, rect.h);
 
+  if (contour?.on) drawContours(ctx, p, rect, contour, ink);
   drawAxes(ctx, p, rect, ink, muted);
   drawColorbar(ctx, p, rect, W, cmap, lo, hi, logZ, ink, muted);
   if (peaks && peaks.length) drawPeaks(ctx, p, rect, peaks, ink);
+}
+
+/** Stroke the isolines from `lib/contour.ts` over the heatmap. Every level
+ *  uses a single ink-coloured line (not a per-level colormap sample):
+ *  sampling the active colormap at a level's own value would put the line in
+ *  a hue close to the surrounding cells at that value -- exactly where
+ *  contrast is needed most (viridis's dark end over a dark heatmap region,
+ *  for instance). A fixed contrasting stroke (the theme's `--text` colour,
+ *  the same convention matplotlib's default contour uses over any colormap)
+ *  reads reliably regardless of the colormap or theme. Clipped to the plot
+ *  rect -- `lib/contour.ts` documents that a ring can overshoot the grid
+ *  edge by half a cell (d3-contour's cell-centred sampling convention). */
+function drawContours(
+  ctx: CanvasRenderingContext2D,
+  p: MapPayload,
+  rect: { x: number; y: number; w: number; h: number },
+  contour: ContourOptions,
+  ink: string,
+) {
+  if (p.zMin == null || p.zMax == null) return;
+  let levels: number[];
+  try {
+    levels = contourLevels(p.zMin, p.zMax, contour.levelCount, contour.scale);
+  } catch {
+    return; // degenerate z-range (all-null map, zero span, …) — no lines to draw
+  }
+  const lines = computeContours(p.xAxis, p.yAxis, p.zGrid, levels);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x, rect.y, rect.w, rect.h);
+  ctx.clip();
+  ctx.strokeStyle = ink;
+  ctx.globalAlpha = 0.8;
+  ctx.lineWidth = 1;
+  ctx.lineJoin = "round";
+  for (const line of lines) {
+    for (const ring of line.rings) {
+      if (ring.length < 2) continue;
+      const px = ringToCanvas(ring, p.xAxis, p.yAxis, rect);
+      ctx.beginPath();
+      ctx.moveTo(px[0][0], px[0][1]);
+      for (let k = 1; k < px.length; k++) ctx.lineTo(px[k][0], px[k][1]);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 function drawPeaks(
