@@ -14,7 +14,7 @@ concept in the shared plot payload).
 
 **Status:** Active
 **Created:** 2026-07-07
-**Updated:** 2026-07-07
+**Updated:** 2026-07-08
 
 ---
 
@@ -147,21 +147,8 @@ written below.
    - Acceptance: `test_no_god_modules` passes; all `/api/export/*`
      endpoints respond byte-identically to before the split.
 
-3. **Tri-contour export (gap #17 last remaining piece)** — scattered
-   (cloud) RSM contours rendered export-side straight off the raw
-   points, without regridding. The interactive half of this item (the
-   d3-contour overlay + Inspector level controls) shipped 2026-07-07
-   — see Completed.
-   *Model: sonnet.* *Agent: code-implementer.*
-   - [ ] Extend `calc/figure_map.py` (199 lines, plenty of headroom)
-         with a scattered-points input path (matplotlib
-         `tricontour`/`tricontourf` over raw x/y/z arrays)
-   - [ ] Extend the map-figure request model in the item-1
-         `routes/export_figures.py`; RSM cloud data (`io/xrdml.py`
-         snapshot/coupled mesh kinds) is the driving case — synthetic
-         + realdata tests
-   - Acceptance: a scattered-cloud RSM exports via tricontour with no
-     regridding artifacts.
+(item 3, tri-contour export, shipped 2026-07-08 — see Completed; gap #17 is
+now fully closed, interactive + export halves both shipped)
 
 ---
 
@@ -372,3 +359,34 @@ in `plans/GAP_TIER3_PLAN.md`)
   scope) and no test fails, but both are candidates for a future split (e.g.
   bar drawing into its own sibling file, mirroring the `calc/figure_break.py`
   precedent) rather than growing further untouched.
+
+- ~~**3. Tri-contour export (gap #17 last remaining piece)**~~ (2026-07-08) —
+  `calc/figure_map.py` (199 → 281 lines, still well under the ceiling) gained
+  a scattered-points path selected by a new `contour_source: "grid"|"points"`
+  parameter (default `"grid"`, byte-identical to the pre-existing call
+  convention — regression-tested explicitly). In `"points"` mode, `x_axis`/
+  `y_axis`/`z_values` are raw equal-length scattered arrays (the RSM
+  point-cloud shape `io/_xrdml_scan.py`'s snapshot/coupled layouts produce,
+  never regridded); the cloud is Delaunay-triangulated
+  (`matplotlib.tri.Triangulation`) and drawn with `tricontour`/`tricontourf`,
+  restricted to `kind` `"contour"`/`"contourf"` (no scattered analogue for
+  heatmap/3-D). Same level semantics as the grid path — `_contour_levels` is
+  shared verbatim. Degenerate input (collinear points -> qhull `RuntimeError`)
+  is caught and re-raised as a clean `ValueError` (-> 422, never a matplotlib
+  internals leak); fewer than 3 finite points, mismatched array lengths, a
+  missing `z_values`, and an unsupported `kind` in points mode all raise
+  their own targeted `ValueError`s. `routes/export_figures.py`'s
+  `MapFigureRequest` extended minimally: `z_grid` became optional (required
+  only for `contour_source="grid"`), plus new `z_values`/`contour_source`
+  fields — no new endpoint. Bundled in the same pass: the booked
+  `GAP_TIER3_PLAN.md` item 2 follow-up (preset-dpi + mirrored-tick parity for
+  `figure_map.py`/`figure_statplots.py`, see that plan's Completed entry).
+  Tests: `tests/test_calc_figure_map.py` (+18 — tricontour render across
+  kind×format, level-count-changes-output, collinear/too-few-points/
+  mismatched-length/missing-z_values/bad-kind 422-shaped `ValueError`s, an
+  explicit grid-default-matches-explicit-contour_source byte-identity
+  regression, dpi-preset resolution, a `realdata`-marked corpus RSM-cloud
+  render), `tests/test_calc_figure_statplots.py` (+2, dpi-preset resolution),
+  `tests/test_api_export.py` (+5 — scattered tricontour PNG, collinear 422,
+  kind-restriction 422, map/statplot dpi-preset-resolution round trips).
+  Backend 2049 passed (was 2024), 3 skipped (realdata); ruff + mypy clean.
