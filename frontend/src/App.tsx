@@ -804,6 +804,12 @@ export default function App() {
         run: () => s().setStackMode(!s().stackMode),
       },
       {
+        id: "statMode",
+        group: "Plot",
+        label: "Toggle statistics view (box / violin / Q-Q / histogram)",
+        run: () => s().setStatMode(!s().statMode),
+      },
+      {
         id: "shortcuts",
         group: "Help",
         label: "Keyboard shortcuts",

@@ -229,6 +229,7 @@ interface AppState {
   stackMode: boolean; // multi-panel: one stacked sub-plot per channel
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
+  statMode: boolean; // render the Statistics stage (box/violin/qq/histogram, gap #16)
   xLim: [number, number] | null; // explicit X range (null = autoscale)
   yLim: [number, number] | null; // explicit Y range (null = autoscale)
   xFmt: AxisFormat; // X-axis tick number format
@@ -402,6 +403,7 @@ interface AppState {
   setStackMode: (stackMode: boolean) => void;
   setInsetMode: (insetMode: boolean) => void;
   setPolarMode: (polarMode: boolean) => void;
+  setStatMode: (statMode: boolean) => void;
   setXLim: (xLim: [number, number] | null) => void;
   setYLim: (yLim: [number, number] | null) => void;
   setXFmt: (xFmt: AxisFormat) => void;
@@ -674,6 +676,7 @@ export const useApp = create<AppState>((set, get) => ({
   stackMode: false,
   insetMode: false,
   polarMode: false,
+  statMode: false,
   xLim: null,
   yLim: null,
   xFmt: { mode: "auto", digits: 2 },
@@ -1536,6 +1539,7 @@ export const useApp = create<AppState>((set, get) => ({
   setStackMode: (stackMode) => set({ stackMode }),
   setInsetMode: (insetMode) => set({ insetMode }),
   setPolarMode: (polarMode) => set({ polarMode }),
+  setStatMode: (statMode) => set({ statMode }),
   setXLim: (xLim) => set({ xLim }),
   setYLim: (yLim) => set({ yLim }),
   setXFmt: (xFmt) => set({ xFmt }),

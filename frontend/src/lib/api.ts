@@ -240,6 +240,74 @@ export function statsShapiro(x: number[]): Promise<CalcResult> {
   return postJSON("/api/stats/shapiro", { x });
 }
 
+// ── Statistical plots — box / violin / Q-Q (gap #16, the StatStage) ────────
+// Same request/response shapes as calc.statplots.{grouped_box_stats,
+// violin_kde, qq_plot}; the interactive canvas (Stage/statRender.ts) and the
+// matplotlib export (exportStatplotFigure below) both read these numbers, so
+// on-screen and exported statistics always agree.
+
+/** One group's box-and-whisker stats (matplotlib.cbook.boxplot_stats-compatible). */
+export interface BoxStatWire {
+  q1: number;
+  median: number;
+  q3: number;
+  iqr: number;
+  whislo: number;
+  whishi: number;
+  mean: number;
+  n: number;
+  fliers: number[];
+  whis: number | string;
+  label: string;
+}
+
+export interface BoxStatsResponse {
+  boxes: BoxStatWire[];
+  n_groups: number;
+}
+
+/** Box/whisker stats for one or more groups. */
+export function statsBox(
+  groups: number[][],
+  labels?: string[] | null,
+  whis: number | string = 1.5,
+): Promise<BoxStatsResponse> {
+  return postJSON("/api/statplots/box", { groups, labels, whis });
+}
+
+export interface ViolinResponse {
+  x: number[];
+  density: number[];
+  bandwidth: number;
+  quartiles: [number, number, number];
+  n: number;
+}
+
+/** Gaussian-KDE density for a violin plot. */
+export function statsViolin(
+  data: number[],
+  bwMethod: string | number = "scott",
+  nPoints = 128,
+  cut = 2.0,
+): Promise<ViolinResponse> {
+  return postJSON("/api/statplots/violin", { data, bw_method: bwMethod, n_points: nPoints, cut });
+}
+
+export interface QQResponse {
+  theoretical_quantiles: number[];
+  sample_quantiles: number[];
+  slope: number;
+  intercept: number;
+  r_squared: number;
+  dist: string;
+  n: number;
+}
+
+/** Quantile-quantile / probability-plot coordinates against a distribution. */
+export function statsQQ(data: number[], dist = "norm"): Promise<QQResponse> {
+  return postJSON("/api/statplots/qq", { data, dist });
+}
+
 export function statsRegression(body: {
   x: number[];
   y: number[];
@@ -1120,6 +1188,32 @@ export interface CornerFigureSpec {
  *  and download it (gap #29). */
 export function exportCornerFigure(body: CornerFigureSpec): Promise<void> {
   return postDownload("/api/export/corner-figure", body, `corner.${body.fmt ?? "pdf"}`);
+}
+
+/** A statistical-plot export request (StatStage's "Export figure" button):
+ *  `data` is a list of groups for box/violin, or one flat sample for
+ *  qq/histogram — the SAME raw values the interactive stats/box, /violin,
+ *  /qq, /histogram calls saw, so the exported figure matches the stage. */
+export interface StatplotFigureSpec {
+  kind: "box" | "violin" | "qq" | "probability" | "histogram";
+  data: number[][] | number[];
+  labels?: string[] | null;
+  fmt?: string;
+  style?: string;
+  dist?: string;
+  bins?: string | number;
+  fit?: string | null;
+  title?: string;
+  x_label?: string;
+  y_label?: string;
+  dpi?: number;
+  filename?: string;
+}
+
+/** Render a statistical plot (box/violin/Q-Q/histogram) server-side
+ *  (matplotlib) and download it (gap #16). */
+export function exportStatplotFigure(body: StatplotFigureSpec): Promise<void> {
+  return postDownload("/api/export/statplot-figure", body, `statplot.${body.fmt ?? "pdf"}`);
 }
 
 // ── Magnetometry ────────────────────────────────────────────────────────────
