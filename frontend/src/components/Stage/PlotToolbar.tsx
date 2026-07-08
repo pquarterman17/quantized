@@ -46,6 +46,8 @@ export default function PlotToolbar({
   const setInsetMode = useApp((s) => s.setInsetMode);
   const polarMode = useApp((s) => s.polarMode);
   const setPolarMode = useApp((s) => s.setPolarMode);
+  const statMode = useApp((s) => s.statMode);
+  const setStatMode = useApp((s) => s.setStatMode);
 
   return (
     <div className="qzk-glass qzk-float-tools">
@@ -107,6 +109,13 @@ export default function PlotToolbar({
         onClick={() => setPolarMode(true)}
       >
         ✺
+      </button>
+      <button
+        className={`qzk-tool-btn${statMode ? " active" : ""}`}
+        title="Statistics (box / violin / Q-Q / histogram)"
+        onClick={() => setStatMode(true)}
+      >
+        ▦
       </button>
     </div>
   );

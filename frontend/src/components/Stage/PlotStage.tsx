@@ -36,6 +36,7 @@ import PlotReadouts from "./PlotReadouts";
 import PlotResultChips from "./PlotResultChips";
 import PlotToolbar from "./PlotToolbar";
 import PolarStage from "./PolarStage";
+import StatStage from "./StatStage";
 import { useAxisDrop } from "./useAxisDrop";
 import { useQuickFitChip } from "./useQuickFitChip";
 
@@ -93,6 +94,7 @@ export default function PlotStage() {
   const stackMode = useApp((s) => s.stackMode);
   const insetMode = useApp((s) => s.insetMode);
   const polarMode = useApp((s) => s.polarMode);
+  const statMode = useApp((s) => s.statMode);
   const fitOverlay = useApp((s) => s.fitOverlay);
   const peakOverlay = useApp((s) => s.peakOverlay);
   const baselineOverlay = useApp((s) => s.baselineOverlay);
@@ -346,9 +348,10 @@ export default function PlotStage() {
     });
   }
 
-  // Alternate render modes (each self-contained; polar wins, then stack).
+  // Alternate render modes (each self-contained; polar wins, then stats, then stack).
   const nPlotted = plotted.length;
   if (polarMode && active) return <PolarStage />;
+  if (statMode && active) return <StatStage />;
   if (stackMode && nPlotted >= 2) return <MultiPanelStage />;
 
   // Right-click anywhere on the plot background → axes/view actions (the parity

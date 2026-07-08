@@ -147,41 +147,6 @@ written below.
    - Acceptance: `test_no_god_modules` passes; all `/api/export/*`
      endpoints respond byte-identically to before the split.
 
-2. **Interactive statistical plot stage (gap #16 remaining)** —
-   box/whisker, grouped box, and violin as a live stage; Q-Q and
-   histogram-with-fit through the normal uPlot path.
-   *Model: sonnet.* *Agent: ux-frontend-expert.*
-   - [ ] New `frontend/src/components/Stage/StatStage.tsx` on the
-         `PolarStage.tsx` Canvas2D precedent (do NOT grow
-         `PlotStage.tsx`, at 405 lines): store boolean `statMode` +
-         early-return gate, toolbar toggle in
-         `frontend/src/components/Stage/PlotToolbar.tsx` (per open
-         question 2)
-   - [ ] Grouping: nominal column via `lib/modeling.ts`
-         `channelModelingType` + `lib/statschooser.ts`
-         `groupsByCategory`; group-by-dataset via
-         `lib/grouping.ts` `groupDatasets`; all values from
-         `rowstate.analysisData` (guard #11)
-   - [ ] Stats via `/api/statplots/box` and `/violin` (their first
-         frontend consumers — add client fns in
-         `frontend/src/lib/api.ts`); a new pure
-         `frontend/src/lib/statplotdata.ts` holds the box-stats
-         client fallback (quartiles/whiskers/fliers so the stage
-         works offline) and the canvas layout math — unit-tested;
-         violin honestly requires the backend (KDE) and degrades to
-         box offline
-   - [ ] Q-Q and histogram+fit rendered as ordinary uPlot payloads
-         (scatter + line series) built in `statplotdata.ts` from
-         `/api/statplots/qq` / `/histogram`
-   - [ ] Export buttons wire `/api/export/statplot-figure` via a new
-         postDownload helper in `lib/api.ts` (the `exportFigure`
-         pattern); same stats feed both paths so export ==
-         interactive
-   - Acceptance (carried from the gap item): a grouped box and violin
-     of a multi-sample worksheet render interactively and the vector
-     export shows identical stats (quartiles/whiskers/fliers) because
-     both derive from `calc/statplots.py`.
-
 3. **Interactive contour layer + tri-contour export (gap #17
    remaining)** — labeled isolines over the live 2-D map; scattered
    (cloud) RSM contours export-side without regridding.
@@ -300,4 +265,29 @@ in `plans/GAP_TIER3_PLAN.md`)
   on /figure + /figure-hitmap — restored (field + both kwargs). Full
   suite 1769 green.
 
-(empty — nothing shipped against this plan yet)
+- ~~**2. Interactive statistical plot stage (gap #16 remaining)**~~
+  (2026-07-07) — `Stage/StatStage.tsx` (Canvas2D, the `PolarStage.tsx`
+  precedent) + `Stage/statRender.ts` (pure draw fns, `mapRender.ts`
+  precedent) + `Stage/useStatStage.ts` (state hook) + `lib/statstage.ts`
+  (pure grouping/box-stats-offline-fallback/scale-layout math, unit
+  tested — cross-checked a hand oracle against
+  `calc.statplots.box_stats` bit-for-bit). All 4 modes (Box/Violin/Q-Q/
+  Histogram+fit) render on ONE Canvas2D stage per the owner's explicit
+  direction (a deliberate deviation from this item's original
+  "Q-Q/histogram via ordinary uPlot payloads" bullet — keeps it one
+  self-contained stage, matching PolarStage). `statMode` store boolean +
+  `▦` toggle in `PlotToolbar.tsx` + early-return in `PlotStage.tsx`
+  (mirrors `polarMode`/`stackMode`); also wired into the `⌘K` command
+  palette (`App.tsx`, alongside "Toggle stacked layout"). Grouping reuses
+  `lib/statschooser.ts` (`groupsByCategory`/`groupsFromColumns`) and
+  `lib/modeling.ts` (`channelModelingType`/`isCategorical`) rather than
+  reinventing them; rows through `rowstate.analysisData` (guard #11).
+  Box has an offline client fallback; Violin degrades to Box rather than
+  ever fabricating a KDE; Q-Q/Histogram surface an inline error when the
+  backend is unreachable. `lib/api.ts` gained `statsBox`/`statsViolin`/
+  `statsQQ`/`exportStatplotFigure` (first frontend callers of
+  `/api/statplots/box`+`/violin`, and of `/api/export/statplot-figure`).
+  Scope note: the plan's "group-by-dataset via `lib/grouping.ts`
+  `groupDatasets`" sub-bullet was NOT implemented — out of the task's
+  explicit scope (per-dataset grouping only); left for a follow-up if
+  wanted. Frontend 1204 tests green (+31 new), `npm run build` green.

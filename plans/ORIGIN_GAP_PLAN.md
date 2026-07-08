@@ -15,8 +15,8 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-07 (SIXTEEN items closed today: #36, #26, #31,
-#32, #6, #7, #2, #3, #1, #4, #5, #11, #12, #15, #13, #14. **W1, W2
+**Updated:** 2026-07-07 (SEVENTEEN items closed today: #36, #26, #31,
+#32, #6, #7, #2, #3, #1, #4, #5, #11, #12, #15, #13, #14, #16. **W1, W2
 Tier 1, W3 (all), W5 Tier 1, W6 headline, and W7 are complete.**)
 
 ---
@@ -286,28 +286,10 @@ routes through #11's config object, never a parallel path.)
 
 ### Tier 1 — High Impact
 
-16. **Statistical plots** — box/whisker, grouped box, violin, Q-Q,
-    probability plot, histogram with distribution-fit overlay
-    (interactive + matplotlib export)
-    *Model: sonnet. Pickup: stats math is pure calc; interactive
-    rendering follows the `PolarStage` Canvas2D precedent where uPlot
-    can't express the mark.*
-    - [x] New pure module `calc/statplots.py`: box stats (quartiles +
-          Tukey-1.5·IQR / range whiskers, fliers — matches
-          `matplotlib.cbook.boxplot_stats` exactly), Gaussian-KDE violins
-          (scipy), Blom-position Q-Q/probability (line cross-checked vs
-          `scipy.stats.probplot`), histogram binning (numpy fd/sturges/
-          scott/rice/sqrt/auto + optional dist-fit overlay); thin
-          `/api/statplots/{box,violin,qq,histogram}` routes (2026-07-03)
-    - [ ] Interactive: box/violin stage over grouped columns (group by
-          a label column or by dataset); Q-Q/histogram fit through the
-          normal uPlot path
-    - [x] Export: `calc/figure_statplots.render_statplot_figure`
-          (box/violin/Q-Q/probability/histogram+fit) via matplotlib —
-          same algorithms as the calc stats, so export == interactive;
-          `/api/export/statplot-figure` (2026-07-03)
-    - [ ] Acceptance: grouped box + violin of a multi-sample worksheet
-          render interactively and export vector-identical stats
+~~16. **Statistical plots**~~ **CLOSED 2026-07-07** — see Completed
+(box/whisker, grouped box, violin, Q-Q, histogram+fit; interactive
+`StatStage.tsx` Canvas2D stage + matplotlib export, both off
+`calc/statplots.py`).
 
 17. **Filled + labeled contour** — proper contourf/contour with labels,
     including tri-contour on scattered (RSM) data; interactive + export
@@ -671,6 +653,15 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ## Completed
 
+- ~~**#16 Statistical plots**~~ (2026-07-07) — the interactive half
+  (calc + export shipped 2026-07-03): `Stage/StatStage.tsx` Canvas2D
+  stage (the `PolarStage.tsx` precedent) over box/violin/Q-Q/
+  histogram+fit, entered via a `statMode` store boolean + `▦` toolbar
+  toggle (mirrors `polarMode`/`stackMode`) — see
+  `plans/GAP_PLOTTYPES_PLAN.md` item 2's Completed entry for the full
+  breakdown (grouping reuse, offline fallbacks, export wiring). All 4
+  modes render on one Canvas2D stage (a deliberate scope call, not the
+  originally-sketched uPlot split for Q-Q/histogram).
 - ~~**#13 Click-to-select + #14 in-place editing**~~ (2026-07-07) —
   `calc/figure.render_figure_map` + `/api/export/figure-hitmap`: the
   preview PNG plus per-artist pixel boxes (title/labels/legend/series/
