@@ -114,6 +114,9 @@ class BootstrapRequest(BaseModel):
     alpha: float = 0.05
     lower: list[float] | None = None
     upper: list[float] | None = None
+    # Opt-in (gap #29): the full bootstrap replicate matrix, for corner-plot
+    # rendering. Default False keeps the ordinary response small.
+    return_samples: bool = False
 
 
 @router.post("/bootstrap")
@@ -137,6 +140,7 @@ def bootstrap(req: BootstrapRequest) -> dict[str, Any]:
                 alpha=req.alpha,
                 lower=req.lower,
                 upper=req.upper,
+                return_samples=req.return_samples,
             )
         )
     except (ValueError, IndexError) as exc:

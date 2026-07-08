@@ -1,9 +1,10 @@
 """Figure export routes: render dataset/statplot/map visualizations to PDF/SVG/PNG/TIFF.
 
 Wraps ``calc.figure`` (basic plots), ``calc.figure_statplots`` (box/violin/Q-Q/
-histogram), and ``calc.figure_map`` (gridded 2-D heatmap/contour/surface).
-No formatting logic here — renderers own it. Filenames are sanitized before
-reaching the Content-Disposition header.
+histogram), ``calc.figure_map`` (gridded 2-D heatmap/contour/surface), and
+``calc.figure_corner`` (posterior/bootstrap pairs plots). No formatting logic
+here — renderers own it. Filenames are sanitized before reaching the
+Content-Disposition header.
 """
 
 from __future__ import annotations
@@ -244,6 +245,53 @@ def export_map_figure(req: MapFigureRequest) -> Response:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(
         content=data,
+        media_type=_FIGURE_MIME[req.fmt],
+        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
+    )
+
+
+class CornerFigureRequest(BaseModel):
+    samples: list[list[float]]  # (n_samples, n_params) joint parameter draws
+    param_names: list[str]
+    truths: list[float] | None = None  # reference value per parameter (e.g. the fit)
+    fmt: str = "pdf"
+    style: str = "default"
+    # None (default) resolves to the style preset's calibrated dpi, matching
+    # calc.figure's resolved_dpi convention — unlike its statplot/map
+    # siblings above, which always pass an explicit dpi (a documented,
+    # separately-tracked gap; GAP_TIER3_PLAN open question 2 follow-ups).
+    dpi: int | None = None
+    bins: str | int = "fd"
+    title: str = ""
+    width_in: float | None = None
+    height_in: float | None = None
+    filename: str = "corner"
+
+
+@router.post("/corner-figure")
+def export_corner_figure(req: CornerFigureRequest) -> Response:
+    """Render a pairwise posterior/bootstrap corner (pairs) plot from posted
+    joint parameter samples — e.g. ``/api/fitting/posterior``'s ``samples``
+    or ``/api/fitting/bootstrap``'s ``boot_samples``
+    (``return_samples: true``). Stateless: the client posts samples it
+    already has; no fit is re-run server-side."""
+    if req.fmt not in _FIGURE_MIME:
+        raise HTTPException(
+            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
+        )
+    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
+    from quantized.calc.figure_corner import render_corner_figure  # lazy: matplotlib is heavy
+
+    try:
+        img = render_corner_figure(
+            req.samples, req.param_names, truths=req.truths,
+            title=req.title, fmt=req.fmt, style=req.style, dpi=dpi, bins=req.bins,
+            width_in=req.width_in, height_in=req.height_in,
+        )
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return Response(
+        content=img,
         media_type=_FIGURE_MIME[req.fmt],
         headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
     )

@@ -35,6 +35,7 @@ def bootstrap_fit(
     alpha: float = 0.05,
     lower: Sequence[float] | None = None,
     upper: Sequence[float] | None = None,
+    return_samples: bool = False,
 ) -> dict[str, Any]:
     """Bootstrap parameter uncertainty for a :func:`calc.fitting.curve_fit`.
 
@@ -44,6 +45,12 @@ def bootstrap_fit(
     Each replicate refits starting from the base parameters; failed refits
     are dropped and counted. Returns the base fit plus per-parameter
     bootstrap SEs and percentile (1-alpha) CIs.
+
+    ``return_samples=True`` additionally returns the full bootstrap replicate
+    matrix as ``boot_samples`` (``[n_kept x P]``) -- opt-in because it can be
+    large (``n_boot`` rows) and the summary stats above are usually enough on
+    their own; :func:`calc.figure_corner.render_corner_figure` is the main
+    consumer, mirroring how :func:`fit_posterior` already returns its chain.
     """
     if method not in ("residual", "pairs"):
         raise ValueError(f'method must be "residual" or "pairs", got "{method}"')
@@ -83,7 +90,7 @@ def bootstrap_fit(
 
     bmat = np.vstack(boots)
     lo_q, hi_q = 100.0 * alpha / 2.0, 100.0 * (1.0 - alpha / 2.0)
-    return {
+    out: dict[str, Any] = {
         "params": params,
         "boot_mean": np.asarray(bmat.mean(axis=0), dtype=float),
         "boot_se": np.asarray(bmat.std(axis=0, ddof=1), dtype=float),
@@ -98,6 +105,9 @@ def bootstrap_fit(
         "alpha": alpha,
         "seed": seed,
     }
+    if return_samples:
+        out["boot_samples"] = bmat
+    return out
 
 
 def fit_posterior(

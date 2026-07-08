@@ -72,3 +72,22 @@ def test_bootstrap_roundtrip() -> None:
     out = resp.json()
     assert out["ciLow"][0] <= 2.0 <= out["ciHigh"][0]  # Linear params are [m, b]
     assert out["n_boot"] >= 30
+
+
+def test_bootstrap_return_samples_flag() -> None:
+    """return_samples (gap #29) is opt-in and off by default; when set it
+    threads through to boot_samples, the corner-plot export's input."""
+    x = list(np.linspace(0, 5, 40))
+    y = [1.0 + 2.0 * v + 0.05 * float(np.sin(31.0 * v)) for v in x]
+    body = {"model": "Linear", "x": x, "y": y, "p0": [0.5, 1.0], "n_boot": 60, "seed": 2}
+
+    off = client.post("/api/fitting/bootstrap", json=body)
+    assert off.status_code == 200
+    assert "boot_samples" not in off.json()
+
+    on = client.post("/api/fitting/bootstrap", json={**body, "return_samples": True})
+    assert on.status_code == 200
+    out = on.json()
+    assert "boot_samples" in out
+    assert len(out["boot_samples"]) == out["n_boot"]
+    assert len(out["boot_samples"][0]) == 2  # Linear has 2 params

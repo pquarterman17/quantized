@@ -1098,6 +1098,30 @@ export async function renderFigureBlob(body: FigureSpec): Promise<Blob> {
   return res.blob();
 }
 
+/** Posted joint-parameter samples for a corner (pairs) plot — e.g.
+ *  `/api/fitting/posterior`'s `samples`, or `/api/fitting/bootstrap`'s
+ *  `boot_samples` (pass `return_samples: true` to get it). Stateless: no fit
+ *  is re-run server-side. */
+export interface CornerFigureSpec {
+  samples: number[][];
+  param_names: string[];
+  truths?: number[] | null;
+  fmt?: string;
+  style?: string;
+  dpi?: number;
+  bins?: string | number;
+  title?: string;
+  width_in?: number;
+  height_in?: number;
+  filename?: string;
+}
+
+/** Render a pairwise posterior/bootstrap corner plot server-side (matplotlib)
+ *  and download it (gap #29). */
+export function exportCornerFigure(body: CornerFigureSpec): Promise<void> {
+  return postDownload("/api/export/corner-figure", body, `corner.${body.fmt ?? "pdf"}`);
+}
+
 // ── Magnetometry ────────────────────────────────────────────────────────────
 /** Analyze an M-H loop -> Hc / Mr / Ms / squareness / loop area / SFD. */
 export function hysteresisAnalysis(body: {
