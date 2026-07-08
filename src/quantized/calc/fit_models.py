@@ -17,7 +17,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from .peakshapes import pseudo_voigt
 
-__all__ = ["FIT_MODELS", "evaluate", "model_names", "register_model"]
+__all__ = ["FIT_MODELS", "evaluate", "model_names", "register_model", "unregister_model"]
 
 _INF = float("inf")
 _EPS = float(np.finfo(float).eps)
@@ -36,6 +36,11 @@ def register_model(
         "fcn": fcn, "category": category, "paramNames": param_names,
         "p0": p0, "lb": lb, "ub": ub, "nParams": len(p0),
     }
+
+
+def unregister_model(name: str) -> None:
+    """Remove a registered model (used to unload plugin-contributed models)."""
+    FIT_MODELS.pop(name, None)
 
 
 def evaluate(name: str, x: ArrayLike, p: ArrayLike) -> NDArray[np.float64]:

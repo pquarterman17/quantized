@@ -26,7 +26,12 @@ from quantized.io.rigaku import import_rigaku_raw, is_rigaku_raw
 from quantized.io.sims import import_sims, is_sims_file
 from quantized.io.xrdml import import_xrdml
 
-__all__ = ["import_auto", "resolve_parser"]
+__all__ = [
+    "import_auto",
+    "register_parser",
+    "resolve_parser",
+    "unregister_plugin_parsers",
+]
 
 Parser = Callable[[Path], DataStruct]
 Sniffer = Callable[[Path], bool]
@@ -95,6 +100,74 @@ def _import_via_saved_filter(path: Path) -> DataStruct:
     if filt is None:  # pragma: no cover - resolve_parser only routes here on a match
         raise ValueError(f"no saved import filter matches '{path.name}'")
     return parse_import(path.read_text(encoding="latin-1"), filt.settings)
+
+
+# ── Plugin registration (single-registration path; gap #8) ──────────────────
+# Third-party plugins (see quantized.plugins) contribute parsers THROUGH this one
+# function — the same ``_EXT_MAP`` / ``_SNIFFERS`` chokepoint the built-ins use
+# above — so there is never a second dispatch path. Plugin registrations are
+# tracked separately so an idempotent reload / test isolation can remove them
+# WITHOUT ever touching a built-in entry.
+_PLUGIN_EXTS: set[str] = set()
+_PLUGIN_SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {}
+
+
+def _normalize_ext(ext: str) -> str:
+    lowered = ext.lower()
+    return lowered if lowered.startswith(".") else f".{lowered}"
+
+
+def register_parser(
+    extensions: list[str], parser: Parser, *, sniff: Sniffer | None = None
+) -> None:
+    """Register a plugin ``parser`` for one or more file ``extensions``.
+
+    Precedence discipline (identical to saved import filters): a plugin may claim
+    a NOVEL extension, but must never SHADOW a built-in one.
+
+    - ``sniff is None`` (unambiguous claim): the extension maps straight to
+      ``parser``. Refused with ``ValueError`` when the extension is already known
+      — a built-in ``_EXT_MAP`` entry *or* an ambiguous ``_SNIFFERS`` extension.
+      This is the "a plugin cannot shadow ``.jdx``" rule.
+    - ``sniff`` given (content sniff): ``(sniff, parser)`` is APPENDED to the
+      extension's sniffer chain, so built-in sniffers keep precedence and a
+      plugin sniffer can only ever act as a fallback.
+    """
+    for raw in extensions:
+        ext = _normalize_ext(raw)
+        if sniff is None:
+            if ext in _EXT_MAP or ext in _SNIFFERS:
+                raise ValueError(
+                    f"extension '{ext}' is already claimed by a built-in parser "
+                    "(plugins may not shadow built-in extensions)"
+                )
+            _EXT_MAP[ext] = parser
+            _PLUGIN_EXTS.add(ext)
+        else:
+            _SNIFFERS.setdefault(ext, []).append((sniff, parser))
+            _PLUGIN_SNIFFERS.setdefault(ext, []).append((sniff, parser))
+
+
+def unregister_plugin_parsers() -> None:
+    """Remove every plugin-registered parser, restoring the built-in registry.
+
+    Used by :func:`quantized.plugins.load_plugins` for an idempotent reload and
+    by tests for isolation; built-in ``_EXT_MAP`` / ``_SNIFFERS`` entries are
+    never touched.
+    """
+    for ext in _PLUGIN_EXTS:
+        _EXT_MAP.pop(ext, None)
+    _PLUGIN_EXTS.clear()
+    for ext, entries in _PLUGIN_SNIFFERS.items():
+        chain = _SNIFFERS.get(ext)
+        if chain is None:
+            continue
+        for entry in entries:
+            if entry in chain:
+                chain.remove(entry)
+        if not chain:
+            _SNIFFERS.pop(ext, None)
+    _PLUGIN_SNIFFERS.clear()
 
 
 def resolve_parser(path: Path) -> Parser:

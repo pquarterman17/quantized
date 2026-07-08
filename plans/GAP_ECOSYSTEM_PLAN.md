@@ -191,42 +191,49 @@ written below.
      the next file matching its glob imports correctly with zero
      dialogs, through both the GUI and `quantized.api` headless.
 
-2. **Python plugin API v1 (gap #8)** — drop-in `.py` modules and
-   entry-point packages contributing parsers, pipeline steps, and fit
-   models through a stable, documented, pure contract.
+2. ~~**Python plugin API v1 (gap #8)**~~ — *SHIPPED 2026-07-07 (see
+   `## Completed`); the two open sub-tasks below are deferred and tracked
+   elsewhere (template repo → #10 / item 7; step route + frontend palette →
+   a later item).* drop-in `.py` modules and entry-point packages
+   contributing parsers, pipeline steps, and fit models through a stable,
+   documented, pure contract.
    *Model: opus (contract + discovery/versioning design), sonnet
    (wiring, template repo).* *Agent: general-purpose (contract
    design), code-implementer (wiring).*
-   - [ ] Contract v1 in a new pure `src/quantized/plugins/` package
-         (bound by the pure-layer guard): three contribution types —
-         parser (path → DataStruct), step (DataStruct + params →
-         DataStruct), fit model (delegates to the existing public
-         `register_model` in `calc/fit_models.py`); plugin metadata
-         (name, version, `api_version`) with a compatibility check;
-         plugins can never reach routes
-   - [ ] Discovery: the config-dir plugins folder (reuses item 1's
+   - [x] Contract v1 in a new pure `src/quantized/plugins/` package
+         (bound by the pure-layer guard — added to `PURE_LAYERS`): three
+         contribution types — parser (path → DataStruct-or-dict), step
+         (DataStruct + params → DataStruct), fit model (delegates to the
+         existing public `register_model` in `calc/fit_models.py`); plugin
+         metadata (`QZ_PLUGIN` = name, version, `api_version`) with a
+         compatibility check; plugins can never reach routes
+   - [x] Discovery: the config-dir plugins folder (reuses item 1's
          platformdirs seam) + `importlib.metadata` entry points
-         (group name versioned); a broken plugin logs and skips —
-         startup never crashes; trust model per open question 4,
-         documented bluntly
-   - [ ] Parser registration: add the registry's first public
-         register function to `src/quantized/io/registry.py`
-         (extension or sniffer + parser), used by BOTH plugins and
-         item 1's filter hook — single registration preserved
-   - [ ] Plugin steps: thin `src/quantized/routes/plugins.py` (list
-         plugins, run a step on posted data); frontend `plugin` step
-         kind added to `frontend/src/lib/pipeline.ts` + dispatch in
-         `frontend/src/components/workshops/pipeline/executeSteps.ts`
-         so plugin steps appear in the pipeline palette and replay in
-         templates/batches
-   - [ ] `quantized-plugin-template` repo: one worked example per
-         contribution type + CI pinned against a quantized version;
-         `docs/plugins.md` documents the contract and the trust model
+         (group `quantized.plugins`); a broken plugin / bad manifest /
+         shadowed extension logs and skips — startup never crashes; trust
+         model per open question 4, documented bluntly in `docs/plugins.md`
+   - [x] Parser registration: added the registry's first public
+         register function (`register_parser` + `unregister_plugin_parsers`)
+         to `src/quantized/io/registry.py` — single registration preserved,
+         precedence discipline enforced (a plugin cannot shadow a built-in
+         unambiguous extension)
+   - [x] Plugin steps: registered + listable server-side
+         (`src/quantized/plugins/steps.py`). DEFERRED to a later item: the
+         thin `routes/plugins.py` runner + the frontend `plugin` step kind
+         (`lib/pipeline.ts` / `executeSteps.ts`) so steps surface in the
+         pipeline palette and replay in templates/batches — v1 registers
+         steps server-side only, per the item's scope
+   - [ ] `quantized-plugin-template` repo (DEFERRED → #10 / item 7): one
+         worked example per contribution type + CI pinned against a
+         quantized version. `docs/plugins.md` (contract + worked single-file
+         example of each contribution type + trust statement) **DONE**;
+         the separate template repo stays open
    - Acceptance: a demo plugin dropped into the plugins dir
      contributes a parser (imports via `import_auto`), a fit model
-     (listed by `/api/fitting/models`), and a step (appears in the
-     pipeline palette and replays in a batch); a deliberately broken
-     plugin logs + skips without breaking startup.
+     (listed by `/api/fitting/models`), and a step (registered + listable);
+     a deliberately broken plugin logs + skips without breaking startup.
+     *(Met — 14 tests in `tests/test_plugins.py`; the pipeline-palette leg of
+     the step acceptance rides with the deferred frontend wiring.)*
 
 3. **Packaging residuals: PyPI + first-run (gap #41 remaining)** —
    *(SHIPPED 2026-07-07: hatch sdist/wheel scoping — found+fixed the
@@ -349,4 +356,21 @@ written below.
 
 ## Completed
 
-(empty — nothing shipped against this plan yet)
+- ~~**2. Python plugin API v1 (gap #8)**~~ (2026-07-07) — the contract-defining
+  ecosystem item. New pure `src/quantized/plugins/` package (`contract.py`
+  manifest + validation + `PluginInfo`; `loader.py` discovery/registration;
+  `steps.py` step registry), added to the pure-layer guard. v1 contract:
+  `QZ_PLUGIN = {name, version, api_version: 1}` + optional `PARSERS` /
+  `FIT_MODELS` / `STEPS`. Dual discovery (config-dir `plugins/` folder +
+  `quantized.plugins` entry points); per-plugin AND per-contribution isolation
+  (broken import / bad manifest / shadowed extension → logged-and-skipped,
+  startup never crashes); idempotent reload. Single-registration via new
+  `io/registry.register_parser` (precedence: plugins can't shadow a built-in
+  unambiguous extension; sniffers append after built-ins) + `calc`
+  `register_model` (+ new `unregister_model`) + the step registry; `disabled`
+  list in `<config_dir>/plugins.json` respected; app-startup load in
+  `create_app`; `qz plugin list`; `docs/plugins.md`. 14 tests
+  (`tests/test_plugins.py`); gates green (1786 passed / ruff / mypy).
+  **Remaining (deferred, tracked elsewhere):** the `quantized-plugin-template`
+  repo → #10 / item 7; the pipeline-step route + frontend palette / batch-replay
+  wiring → a later ecosystem item (v1 registers steps server-side only).
