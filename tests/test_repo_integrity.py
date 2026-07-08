@@ -8,8 +8,8 @@ construction:
 1. LICENSE GUARD    — no GPL package in runtime/extra deps (this is Apache-2.0).
 2. GOD-MODULE GUARD — no source module over MAX_MODULE_LINES. Raise the
    ceiling ONLY with a written justification in the commit message.
-3. LAYERING GUARD   — datastruct/io/calc never import the web stack, so their
-   tests run server-free and business logic can't leak into transport.
+3. LAYERING GUARD   — datastruct/io/calc/plugins never import the web stack, so
+   their tests run server-free and business logic can't leak into transport.
 
 See .claude/rules/architecture-guards.md for the full rationale.
 """
@@ -28,7 +28,9 @@ SRC = ROOT / "src" / "quantized"
 # "liborigin" also blocks the "python-liborigin2" wrapper.
 GPL_PACKAGES = {"rosettasciio", "rsciio", "hyperspy", "exspy", "holospy", "liborigin", "ropj"}
 MAX_MODULE_LINES = 500
-PURE_LAYERS = ("io", "calc")
+# plugins/ is pure too: the plugin machinery (discovery, contract, registration)
+# must never reach the web stack — plugins register through io/calc, not routes.
+PURE_LAYERS = ("io", "calc", "plugins")
 FORBIDDEN_IN_PURE = ("fastapi", "pydantic", "quantized.routes", "starlette")
 
 
@@ -70,7 +72,7 @@ def test_no_god_modules() -> None:
 
 
 def test_pure_layers_do_not_import_server_stack() -> None:
-    """datastruct/io/calc must not import fastapi/pydantic/starlette/routes."""
+    """datastruct/io/calc/plugins must not import fastapi/pydantic/starlette/routes."""
     pure_files: list[Path] = [p for p in [SRC / "datastruct.py"] if p.exists()]
     for layer in PURE_LAYERS:
         pure_files.extend((SRC / layer).rglob("*.py"))

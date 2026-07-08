@@ -7,6 +7,7 @@ Composes the per-domain routers; each router is a thin adapter.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 from urllib.parse import urlparse
@@ -16,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from quantized import __version__
+from quantized.plugins import load_plugins
 from quantized.routes import (
     aggregate,
     baseline,
@@ -167,6 +169,16 @@ def create_app() -> FastAPI:
     # Client-presence WebSocket (registered before the SPA mount so the
     # catch-all StaticFiles route never shadows it).
     application.websocket("/api/ws")(_lifecycle_ws)
+
+    # Load user/third-party plugins once (gap #8). Registration is isolated
+    # per-plugin and logged; a broken plugin never crashes startup. Cheap when
+    # none are installed (an empty dir scan + entry-point lookup). Fit-model /
+    # parser routes read the shared registries at request time, so plugin
+    # contributions are visible regardless of this call's position.
+    try:
+        load_plugins()
+    except Exception:  # pragma: no cover - load_plugins already isolates per-plugin
+        logging.getLogger("quantized.plugins").exception("plugin loading failed")
 
     # Serve the built SPA at / when present (production / packaged runs). In a
     # bare dev checkout the dir is absent and the Vite dev server serves the UI.
