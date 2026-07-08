@@ -39,6 +39,7 @@ from quantized.routes import (
     reflectivity,
     report_export,
     rsm,
+    samples,
     semiconductor,
     sld,
     statplots,
@@ -56,6 +57,13 @@ __all__ = ["create_app", "app"]
 
 # Built SPA (vite build → src/quantized/web/). A build artifact, gitignored;
 # present in packaged/installed runs, absent in a bare dev checkout.
+#
+# One resolution serves both cases: Path(__file__).parent always points at
+# wherever the ``quantized`` package itself lives, so a PyPI/pipx install
+# (the built wheel bundles ``web/`` alongside app.py — see
+# [tool.hatch.build.targets.wheel] artifacts in pyproject.toml and the
+# "build frontend first" step in README.md) and a dev checkout that has run
+# ``npm run build`` resolve to the same relative path with no branching.
 _WEB_DIR = Path(__file__).parent / "web"
 
 # ── Desktop-style lifecycle (client presence over /api/ws) ──────────────────
@@ -122,6 +130,7 @@ def create_app() -> FastAPI:
         return {"status": "ok", "version": __version__}
 
     application.include_router(parsers.router)
+    application.include_router(samples.router)
     application.include_router(import_wizard.router)
     application.include_router(plot.router)
     application.include_router(corrections.router)

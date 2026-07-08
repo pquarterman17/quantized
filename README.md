@@ -15,8 +15,10 @@ magnetometry, X-ray/neutron diffraction, and generic lab data.
   that freeze MATLAB outputs as the parity oracle — so this port never
   grows the god-scripts the MATLAB original accumulated.
 
-> Status: **planning**. See [`plans/PORT_PLAN.md`](plans/PORT_PLAN.md) for
-> the detailed workstream plan, and [`CLAUDE.md`](CLAUDE.md) for the
+> Status: **active development** — backend + GUI are functional; native
+> installers and PyPI packages publish from tagged releases (see
+> [`RELEASE.md`](RELEASE.md)). See [`plans/PORT_PLAN.md`](plans/PORT_PLAN.md)
+> for the detailed workstream plan, and [`CLAUDE.md`](CLAUDE.md) for the
 > architecture hard-rules.
 
 ## Scope
@@ -27,8 +29,25 @@ scope** and lives in the separate `fermiviewer` project.
 
 ## Run it
 
-**Easiest — double-click a launcher** (builds the UI + installs deps on first
-run, then opens the app in your browser):
+**Install matrix** — pick whichever fits your workflow:
+
+| Method | Command | Notes |
+|--------|---------|-------|
+| pipx (recommended) | `pipx install quantized && qz` | isolated env, `qz` on PATH, no dev tools needed |
+| uv tool | `uv tool install quantized && qz` | same idea, via `uv` |
+| pip | `pip install quantized && qz` | into whatever env is active |
+| Native installer | download from [Releases](https://github.com/pquarterman17/quantized/releases) | Windows `.exe` (NSIS, auto-updates), macOS `.dmg`, Linux `.deb` — no Python required, see [`RELEASE.md`](RELEASE.md) |
+| From source | see below | for development |
+
+Once installed, `qz` serves the app at `http://127.0.0.1:8000` and opens a
+browser tab. An empty library shows a **"Drop files here, or use ⊞ to import
+/ ✚ for a demo"** hint — click **✚** for an instant synthetic dataset (built
+client-side), or hit `GET /api/samples/demo` for a bundled sample dataset
+parsed server-side through the normal import path — so a fresh install has
+something to plot within seconds, no data file required.
+
+**From source — double-click a launcher** (builds the UI + installs deps on
+first run, then opens the app in your browser):
 
 - **Windows:** double-click [`run.cmd`](run.cmd)
 - **macOS:** double-click [`run.command`](run.command) (first time:
@@ -46,6 +65,11 @@ uv run qz --no-browser    # headless (don't open a tab)
 ```
 
 Stop the app with **Ctrl+C** in its window.
+
+Building your own wheel/sdist (e.g. for `pip install .`)? Build the frontend
+**first** — `cd frontend && npm ci && npm run build` — before `uv build` /
+`python -m build`, or the wheel ships without a UI (`qz` still runs; it just
+prints a "UI not built" warning instead of serving one).
 
 ## Develop
 

@@ -1,12 +1,19 @@
-# Releasing Quantized (desktop installer + auto-update)
+# Releasing Quantized (desktop installer + auto-update + PyPI)
 
-Quantized ships as a native **Tauri** desktop app: a thin Rust shell window
-over the local FastAPI server, which is frozen into a self-contained
-**PyInstaller sidecar**. Releases are built and published entirely by CI
-(`.github/workflows/release.yml`) when you push a `vX.Y.Z` tag — the repo stays
-binary-free.
+Quantized ships two ways from the same `vX.Y.Z` tag, both built and published
+entirely by CI:
 
-Two update paths, both wired:
+1. A native **Tauri** desktop app: a thin Rust shell window over the local
+   FastAPI server, frozen into a self-contained **PyInstaller sidecar**
+   (`.github/workflows/release.yml`).
+2. A **PyPI package** (`pip install quantized` / `pipx install quantized` /
+   `uv tool install quantized`): a pure-Python wheel with the built SPA baked
+   in (`.github/workflows/pypi.yml`).
+
+The repo stays binary-free either way — installers and wheels are build
+artifacts, never committed.
+
+Two update paths for the desktop app, both wired:
 
 1. **In-app auto-update** — on launch (Windows), the app checks the GitHub
    Release for a newer *signed* build, prompts, then downloads + installs +
@@ -81,6 +88,25 @@ Generate Quantized-branded icons:
 npx @tauri-apps/cli@2.11.2 icon path/to/quantized-1024.png
 ```
 
+### 5. Register PyPI Trusted Publishing (`pypi.yml`)
+
+`pypi.yml` publishes via [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/)
+(OIDC) — no API token secret to generate or rotate. One-time setup on
+**both** pypi.org and test.pypi.org:
+
+1. Create the project on PyPI once manually (`twine upload` a first build,
+   or use "create a new pending publisher" if the project name is free), or
+   use PyPI's *pending publisher* flow if the project doesn't exist yet.
+2. Project → *Publishing* → *Add a new publisher* → GitHub:
+   - Repository owner / name: this repo
+   - Workflow name: `pypi.yml`
+   - Environment name: `pypi` (production) — repeat on test.pypi.org with
+     environment name `testpypi`
+3. In the GitHub repo, Settings → Environments → create `pypi` and
+   `testpypi` (empty — no secrets needed; the environment name is what
+   Trusted Publishing matches against). Optionally add required reviewers
+   on `pypi` for a manual approval gate before a tag actually publishes.
+
 ---
 
 ## Cutting a release
@@ -100,15 +126,26 @@ npx @tauri-apps/cli@2.11.2 icon path/to/quantized-1024.png
    git push origin main --tags
    ```
 
-3. CI builds Windows/macOS/Linux, smoke-tests the sidecar, signs, and attaches
-   `Quantized_x64-setup.exe` (+ `.sig`), the `.dmg`, the `.deb`, and
-   `qz-server-*.{zip,tar.gz}` to the Release — then generates and uploads
-   `latest.json`. Installed Windows apps pick up the update on next launch.
+3. The tag push fans out to **two** workflows:
+   - `release.yml` — builds Windows/macOS/Linux, smoke-tests the sidecar,
+     signs, and attaches `Quantized_x64-setup.exe` (+ `.sig`), the `.dmg`,
+     the `.deb`, and `qz-server-*.{zip,tar.gz}` to the GitHub Release, then
+     generates and uploads `latest.json`. Installed Windows apps pick up the
+     update on next launch.
+   - `pypi.yml` — builds the SPA, builds the sdist + wheel, smoke-tests the
+     wheel in a clean venv, and publishes to PyPI via Trusted Publishing.
+     `pip install quantized` / `pipx install quantized` /
+     `uv tool install quantized` pick up the new version immediately.
 
 ### Dry run (validate without releasing)
 
-Actions → *release* → *Run workflow* (manual dispatch): builds + smoke-tests +
-uploads run artifacts, but creates no Release and no tag.
+- Actions → *release* → *Run workflow* (manual dispatch): builds +
+  smoke-tests + uploads run artifacts, but creates no Release and no tag.
+- Actions → *pypi* → *Run workflow* (manual dispatch): builds +
+  smoke-tests, then publishes the build to **TestPyPI** (not PyPI) so the
+  whole pipeline — including the Trusted Publishing handshake — is
+  validated end to end without touching a real release. Install from there
+  with `pip install -i https://test.pypi.org/simple/ quantized`.
 
 ---
 

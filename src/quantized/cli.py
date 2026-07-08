@@ -19,6 +19,9 @@ from pathlib import Path
 
 import uvicorn
 
+# Same resolution as quantized.app._WEB_DIR (kept as a separate constant here
+# rather than importing app.py, so this pre-uvicorn check stays cheap — it
+# doesn't need to pull in FastAPI and every router just to print a warning).
 _WEB_DIR = Path(__file__).parent / "web"
 
 
