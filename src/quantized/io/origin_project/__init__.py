@@ -51,17 +51,20 @@ def _with_provenance(ds: DataStruct, path: Path, *, raw: bytes | None = None) ->
     first book of a multi-book read) rather than being duplicated per book.
     The file is read once and both scans run over the same bytes (``raw``
     lets a caller that already has the bytes, e.g. :func:`read_origin_books`,
-    skip a second read of the file).
+    skip a second read of the file). ``path``'s suffix lets both scans
+    restrict themselves to the structurally-derived tail on ``.opj`` (see
+    ``notes.py``'s ``_tail_scan_start``) instead of the whole file.
     """
     raw = path.read_bytes() if raw is None else raw
+    suffix = path.suffix.lower()
     extra: dict[str, object] = {}
-    log = results_log(raw)
+    log = results_log(raw, suffix=suffix)
     if log:
         extra["origin_results_log"] = log
         records = parse_results_log(log)
         if records:
             extra["origin_results_log_records"] = records
-    notes = notes_windows(raw)
+    notes = notes_windows(raw, suffix=suffix)
     if notes:
         extra["origin_notes"] = notes
     # .opj project created/modified timestamps (tree.py::opj_project_dates,
