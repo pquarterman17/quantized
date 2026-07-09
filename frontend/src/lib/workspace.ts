@@ -8,6 +8,7 @@ import { pruneOrphans } from "./foldertree";
 import type { OriginFigureEntry } from "./originFigures";
 import { sanitizeFigureDocs, type FigureDoc } from "./figuredoc";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
+import { sanitizePlotWindows, type PlotWindow } from "./plotview";
 import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeExcluded } from "./rowstate";
@@ -25,15 +26,18 @@ import type {
 export const WORKSPACE_FORMAT = "quantized-workspace";
 // v2 (project-organization plan item 2): adds the folder tree, active/selection,
 // and folder-expansion. v3 (gap #5): adds the typed pipeline steps, the recalc
-// mode, per-dataset fit specs, and reports; later also smart folders (org #9 —
-// additive-optional, no bump needed). Older docs still load — migrated on
-// parse with safe defaults.
+// mode, per-dataset fit specs, and reports; later also smart folders (org #9)
+// and the plot window layout (MULTI_PLOT_PLAN item 7) — both additive-optional,
+// no bump needed. Older docs still load — migrated on parse with safe defaults.
 export const WORKSPACE_VERSION = 3;
 
 /** The persistable slice of app state (input to serialize). The store's AppState
  *  is a structural superset, so `useApp.getState()` can be passed directly where
  *  this is expected; the extras are optional so a caller with only datasets can
- *  pass `{ datasets }`. */
+ *  pass `{ datasets }`. `plotWindows` should already carry the FOCUSED window's
+ *  live view frozen into its record (the store's `windowsForSave()` getter does
+ *  this — never pass `state.plotWindows` raw, or the focused window's on-screen
+ *  changes are lost). */
 export interface WorkspaceState {
   datasets: Dataset[];
   folders?: FolderNode[];
@@ -46,6 +50,8 @@ export interface WorkspaceState {
   macroSteps?: PipelineStep[];
   recalcMode?: RecalcMode;
   figureDocs?: FigureDoc[];
+  plotWindows?: PlotWindow[];
+  focusedWindowId?: string | null;
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -62,6 +68,8 @@ export interface LoadedWorkspace {
   macroSteps: PipelineStep[];
   recalcMode: RecalcMode;
   figureDocs: FigureDoc[];
+  plotWindows: PlotWindow[];
+  focusedWindowId: string | null;
 }
 
 interface WorkspaceDoc {
@@ -79,6 +87,8 @@ interface WorkspaceDoc {
   pipeline: PipelineStep[];
   recalcMode: RecalcMode;
   figureDocs: FigureDoc[];
+  plotWindows: PlotWindow[];
+  focusedWindowId: string | null;
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -97,6 +107,12 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     pipeline: ws.macroSteps ?? [],
     recalcMode: ws.recalcMode ?? "auto",
     figureDocs: ws.figureDocs ?? [],
+    // MULTI_PLOT_PLAN item 7: passed through VERBATIM — the caller (the
+    // store's `windowsForSave()`, per the interface doc above) is
+    // responsible for the focused window's live-view snapshot; this module
+    // stays a plain serializer, same as every other field here.
+    plotWindows: ws.plotWindows ?? [],
+    focusedWindowId: ws.focusedWindowId ?? null,
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -328,6 +344,14 @@ export function parseWorkspace(text: string): LoadedWorkspace {
   const recalcMode: RecalcMode =
     o.recalcMode === "manual" || o.recalcMode === "off" ? o.recalcMode : "auto";
   const figureDocs = sanitizeFigureDocs(o.figureDocs, dsIds);
+  // Plot window layout (MULTI_PLOT_PLAN item 7) — additive-optional, so a
+  // pre-item-7 doc (absent field) sanitizes to [] via the same
+  // undefined-input path every other sanitizer here already handles.
+  const plotWindows = sanitizePlotWindows(o.plotWindows, dsIds);
+  const focusedWindowId =
+    typeof o.focusedWindowId === "string" && plotWindows.some((w) => w.id === o.focusedWindowId)
+      ? o.focusedWindowId
+      : null;
   return {
     datasets,
     folders,
@@ -340,5 +364,7 @@ export function parseWorkspace(text: string): LoadedWorkspace {
     macroSteps,
     recalcMode,
     figureDocs,
+    plotWindows,
+    focusedWindowId,
   };
 }
