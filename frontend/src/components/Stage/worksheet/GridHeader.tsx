@@ -1,13 +1,28 @@
-// The worksheet grid's header row (WORKSHEET_PLAN items 2 + 4): the
+// The worksheet grid's header row (WORKSHEET_PLAN items 2 + 4 + 6 + 8): the
 // row-number corner + x column (both pinned — sticky left, like the gutter),
-// then the windowed slice of value/computed-column headers. Each header cell
-// shows the label, its role line (channel letter / user role / Origin
-// designation badge — item 4), a truncated Origin comment line (full text in
-// the tooltip), a sort mark, and — for computed (formula) columns — a remove
-// button. Presentational + a context-menu hook; all state lives in the
-// worksheet view hook.
+// then the windowed slice of value/computed-column headers, then (item 8) any
+// read-only Origin text columns, unvirtualized, appended at the very end.
+// Each numeric header cell shows the label, its role line (channel letter /
+// user role / Origin designation badge — item 4), a truncated Origin comment
+// line (full text in the tooltip), a sort mark, and — for computed (formula)
+// columns — a remove button.
+//
+// Column-selection gesture (item 6, owner decision D1): a header CLICK
+// selects the column (ctrl/cmd-click toggles it into a multi-selection,
+// shift-click extends a range from the last-clicked column) — sorting moved
+// OFF the click gesture entirely and lives in the column context menu
+// (worksheetMenus.columnMenuItems' "Sort ascending"/"Sort descending",
+// unchanged) plus the `sortMark` indicator already shown in the role line.
+// This is the ONE sanctioned worksheet behaviour change (WORKSHEET_PLAN item
+// 6) — Origin's own muscle memory is header-click-selects, and highlighting
+// columns is the gesture item 7's "plot the selection" feeds off of. The
+// click-modifier bookkeeping (anchor tracking for shift-range) lives in
+// GridViewport, mirroring the existing row-number click handler exactly.
+//
+// Text columns (item 8) get no click handler at all — read-only, never a
+// sort/selection/plot candidate (they have no `.values` channel index).
 
-import { columnMetaList, DESIGNATION_BADGE, type ColumnMeta } from "../../../lib/columnmeta";
+import { columnMetaList, DESIGNATION_BADGE, type ColumnMeta, type TextColumn } from "../../../lib/columnmeta";
 import { channelLetter } from "../../../lib/formula";
 import type { ChannelRole, DataStruct } from "../../../lib/types";
 
@@ -24,9 +39,13 @@ export interface GridHeaderProps {
   colWidth: number;
   gutterWidth: number;
   sortMark: (col: number) => string;
-  onToggleSort: (col: number) => void;
+  selectedCols: Set<number>;
+  onHeaderClick: (col: number, e: React.MouseEvent) => void;
   onRemoveFormula: (index: number) => void;
   onHeaderContext?: (col: number, e: React.MouseEvent) => void;
+  /** Read-only Origin text columns (item 8), unvirtualized, always appended
+   *  after the numeric/computed run (and its trailing spacer). */
+  textCols: TextColumn[];
 }
 
 /** True short-name-aware role badge for one value channel: computed columns
@@ -74,11 +93,15 @@ export default function GridHeader({
   colWidth,
   gutterWidth,
   sortMark,
-  onToggleSort,
+  selectedCols,
+  onHeaderClick,
   onRemoveFormula,
   onHeaderContext,
+  textCols,
 }: GridHeaderProps) {
   const colMeta = columnMetaList(data);
+  const selStyle = (selected: boolean): React.CSSProperties =>
+    selected ? { background: "var(--accent-soft)", borderBottomColor: "var(--accent)", borderBottomWidth: 2 } : {};
 
   return (
     <div className="qzk-grid-row qzk-grid-header" role="row" style={{ position: "sticky", top: 0, zIndex: 3 }}>
@@ -92,8 +115,8 @@ export default function GridHeader({
       <div
         role="columnheader"
         className="qzk-grid-headcell"
-        style={{ position: "sticky", left: gutterWidth, zIndex: 4, width: colWidth, flexShrink: 0 }}
-        onClick={() => onToggleSort(-1)}
+        style={{ position: "sticky", left: gutterWidth, zIndex: 4, width: colWidth, flexShrink: 0, ...selStyle(selectedCols.has(-1)) }}
+        onClick={(e) => onHeaderClick(-1, e)}
         onContextMenu={onHeaderContext ? (e) => onHeaderContext(-1, e) : undefined}
       >
         {xName}
@@ -112,8 +135,8 @@ export default function GridHeader({
             key={data.labels[c]}
             role="columnheader"
             className="qzk-grid-headcell"
-            style={{ width: colWidth, flexShrink: 0, opacity: dimmed ? 0.55 : 1 }}
-            onClick={() => onToggleSort(c)}
+            style={{ width: colWidth, flexShrink: 0, opacity: dimmed ? 0.55 : 1, ...selStyle(selectedCols.has(c)) }}
+            onClick={(e) => onHeaderClick(c, e)}
             onContextMenu={onHeaderContext ? (e) => onHeaderContext(c, e) : undefined}
             title={headerTitle(c, computed, channelRoles[c], meta)}
           >
@@ -145,6 +168,18 @@ export default function GridHeader({
         );
       })}
       {trailingSpacer > 0 && <div style={{ width: trailingSpacer, flexShrink: 0 }} aria-hidden="true" />}
+      {textCols.map((t) => (
+        <div
+          key={`text-${t.shortName}`}
+          role="columnheader"
+          className="qzk-grid-headcell"
+          style={{ width: colWidth, flexShrink: 0 }}
+          title={`${t.shortName} — read-only text column (Origin)`}
+        >
+          {t.shortName}
+          <span className="role">text</span>
+        </div>
+      ))}
     </div>
   );
 }

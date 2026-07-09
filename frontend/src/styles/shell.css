@@ -285,7 +285,8 @@ body {
 .qzk-grid-row { display: flex; }
 .qzk-grid-row:hover .qzk-grid-cell { background: var(--surface-1); }
 .qzk-grid-cell, .qzk-grid-headcell { border: 1px solid var(--border-soft); padding: 3px 10px; text-align: right; color: var(--text-dim); box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.qzk-grid-headcell { border-color: var(--border); background: var(--surface-2); color: var(--text-dim); font-weight: var(--weight-medium); cursor: default; white-space: normal; }
+.qzk-grid-headcell { border-color: var(--border); background: var(--surface-2); color: var(--text-dim); font-weight: var(--weight-medium); cursor: pointer; white-space: normal; }
+.qzk-grid-footer .qzk-grid-headcell, .qzk-grid-header .qzk-grid-rownum { cursor: default; }
 .qzk-grid-headcell .role { display: block; font-size: var(--type-nano); color: var(--accent-text); text-transform: uppercase; letter-spacing: var(--tracking-label); }
 .qzk-grid-headcell .comment { display: block; font-size: var(--type-nano); color: var(--text-faint); font-weight: var(--weight-regular); text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-grid-rownum { background: var(--surface-1); color: var(--text-faint); text-align: center; cursor: pointer; }

@@ -9,13 +9,26 @@
 // lib/rowstate (excludedSet/filteredOutSet) — never the dataset's persistent
 // exclusion field directly — so the architecture guard (#50 universal
 // linking) stays green.
+//
+// Column selection (item 6) is a SEPARATE, session-transient dimension from
+// the store's row selection (#50, above) — a Set of column indices (-1 = the
+// pinned x/time column, 0..N-1 = value channels, the SAME numbering
+// `toggleSort`/`lib/columnmeta` already use), never persisted, cleared on a
+// dataset switch or Escape. Selection→plot (item 7) maps it onto the
+// EXISTING setXKey/setYKeys/setErrKey store actions via the pure
+// `lib/selectionplot.resolveSelectionPlot` — no new plotting pathway, so
+// macro recording and row-state honoring come free (setXKey/setYKeys already
+// record macro steps; the plotted result already reads through
+// lib/rowstate's analysisData/droppedRows via the existing plot pipeline).
 
 import { useEffect, useMemo, useState } from "react";
 
 import { statsDescriptive } from "../../../lib/api";
 import { copyText, tableToTSV } from "../../../lib/clipboard";
 import { channelLetter, compileFormula } from "../../../lib/formula";
+import { originTextColumns, type TextColumn } from "../../../lib/columnmeta";
 import { excludedSet, filteredOutSet } from "../../../lib/rowstate";
+import { resolveSelectionPlot } from "../../../lib/selectionplot";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
@@ -101,6 +114,23 @@ export interface WorksheetView {
   yKeys: number[] | null;
   setXKey: (col: number) => void;
   setYKeys: (cols: number[]) => void;
+
+  // Column selection model (item 6) + selection→plot (item 7).
+  selectedCols: Set<number>;
+  toggleColSelected: (col: number) => void;
+  setColSelection: (cols: number[]) => void;
+  clearColSelection: () => void;
+  /** Apply the designation-aware mapping over an EXPLICIT column list (used
+   *  by the context menu's single-column fallback when nothing is
+   *  selected) — "replace" is "Plot selection", "add" is "Add to plot". */
+  plotCols: (cols: number[], mode: "replace" | "add") => void;
+  /** Convenience wrappers over the CURRENT selection, for the toolbar. */
+  plotSelection: () => void;
+  addSelectionToPlot: () => void;
+
+  // Text-sheet rendering (item 8) — read-only, appended after numeric/computed
+  // columns; never editable, never in stats, never a selection→plot candidate.
+  textCols: TextColumn[];
 }
 
 export function useWorksheetView(ds: Dataset): WorksheetView {
@@ -113,6 +143,7 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
   const setXKey = useApp((s) => s.setXKey);
   const yKeys = useApp((s) => s.yKeys);
   const setYKeys = useApp((s) => s.setYKeys);
+  const setErrKey = useApp((s) => s.setErrKey);
   const toggleRowExcluded = useApp((s) => s.toggleRowExcluded);
   const clearRowExclusions = useApp((s) => s.clearRowExclusions);
   const selection = useApp((s) => s.selection);
@@ -133,6 +164,48 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
   const [filterOp, setFilterOp] = useState(">");
   const [filterV1, setFilterV1] = useState("");
   const [filterV2, setFilterV2] = useState("");
+  const [selectedCols, setSelectedCols] = useState<Set<number>>(new Set());
+
+  // Clear the column selection on a dataset switch (sheet tab, book switcher,
+  // Library click, …) — a selection keyed by column INDEX is meaningless once
+  // the underlying columns can be entirely different.
+  useEffect(() => {
+    setSelectedCols(new Set());
+  }, [ds.id]);
+
+  // Esc clears the column selection while one exists (mirrors useGadgetChip's
+  // "listen only while there's something to dismiss" pattern).
+  useEffect(() => {
+    if (selectedCols.size === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedCols(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedCols.size]);
+
+  const toggleColSelected = (col: number) =>
+    setSelectedCols((s) => {
+      const next = new Set(s);
+      if (next.has(col)) next.delete(col);
+      else next.add(col);
+      return next;
+    });
+  const setColSelection = (cols: number[]) => setSelectedCols(new Set(cols));
+  const clearColSelection = () => setSelectedCols(new Set());
+
+  function plotCols(cols: number[], mode: "replace" | "add") {
+    const result = resolveSelectionPlot(ds.data, new Set(cols), { xKey, yKeys }, mode);
+    for (const action of result.actions) {
+      if (action.kind === "setXKey") setXKey(action.xKey);
+      else if (action.kind === "setYKeys") setYKeys(action.yKeys);
+      else setErrKey(action.channel, action.errChannel);
+    }
+    setStatus(result.summary);
+  }
+
+  const plotSelection = () => plotCols([...selectedCols], "replace");
+  const addSelectionToPlot = () => plotCols([...selectedCols], "add");
 
   // Masked (excluded) original-row indices: kept visible (greyed) but dropped
   // from analysis. Sourced from the persistent per-dataset row-state model
@@ -148,8 +221,16 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
     [selection, ds.id],
   );
 
+  // Text-sheet columns (item 8): read-only, appended after numeric/computed
+  // columns. A text-only book has zero numeric rows (`ds.data.time.length ===
+  // 0`) but non-empty text rows — the effective row count is the LARGER of
+  // the two so those rows aren't silently dropped ("text columns are the
+  // whole grid" for such a book).
+  const textCols = useMemo(() => originTextColumns(ds.data), [ds.data]);
+  const textRowCount = useMemo(() => textCols.reduce((m, t) => Math.max(m, t.rows.length), 0), [textCols]);
+
   const filtered = useMemo(() => {
-    const n = ds.data.time.length;
+    const n = Math.max(ds.data.time.length, textRowCount);
     const all = Array.from({ length: n }, (_, i) => i);
     if (filterCol === "") return all;
     const col = Number(filterCol);
@@ -161,7 +242,7 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
     const { time, values } = ds.data;
     const valOf = (r: number) => (col < 0 ? time[r] : values[r]?.[col]);
     return all.filter((r) => passesFilter(valOf(r), filterOp, a, b));
-  }, [ds, filterCol, filterOp, filterV1, filterV2]);
+  }, [ds, filterCol, filterOp, filterV1, filterV2, textRowCount]);
 
   const order = useMemo(() => {
     if (!sort) return filtered;
@@ -210,8 +291,8 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
   const baseCount = labels.length - (ds.formulas?.length ?? 0);
   const xName = String(metadata?.["x_column_name"] ?? "x");
   const xUnit = String(metadata?.["x_column_unit"] ?? "");
-  const filterActive = filtered.length !== time.length;
-  const canExtract = analysisRows.length > 0 && analysisRows.length !== time.length;
+  const filterActive = filtered.length !== Math.max(time.length, textRowCount);
+  const canExtract = analysisRows.length > 0 && analysisRows.length !== Math.max(time.length, textRowCount);
 
   const toggleMask = (r: number) => toggleRowExcluded(ds.id, r);
   const unmaskAll = () => clearRowExclusions(ds.id);
@@ -345,5 +426,13 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
     yKeys,
     setXKey,
     setYKeys,
+    selectedCols,
+    toggleColSelected,
+    setColSelection,
+    clearColSelection,
+    plotCols,
+    plotSelection,
+    addSelectionToPlot,
+    textCols,
   };
 }

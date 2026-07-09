@@ -1,6 +1,8 @@
 // Presentational toolbar for the Worksheet: the computed-column formula bar plus
-// the Stats / Copy / Unmask actions. All state lives in the parent (Worksheet);
-// this is a thin props-driven view so the worksheet stays under the size budget.
+// the Stats / Copy / Unmask actions, the row-selection (#50) bulk-action cluster,
+// and (WORKSHEET_PLAN items 6+7) the column-selection "Plot selection"/"Add to
+// plot" cluster. All state lives in the parent (Worksheet); this is a thin
+// props-driven view so the worksheet stays under the size budget.
 
 export interface WorksheetToolbarProps {
   formula: string;
@@ -19,6 +21,12 @@ export interface WorksheetToolbarProps {
   onKeepOnlySelected: () => void;
   onClearSelection: () => void;
   vars: string;
+  /** Column selection → plot (items 6 + 7): the "Origin gesture" toolbar
+   *  affordances, shown only while at least one column is selected. */
+  selectedColCount: number;
+  onPlotSelection: () => void;
+  onAddSelectionToPlot: () => void;
+  onClearColSelection: () => void;
 }
 
 export default function WorksheetToolbar({
@@ -37,6 +45,10 @@ export default function WorksheetToolbar({
   onKeepOnlySelected,
   onClearSelection,
   vars,
+  selectedColCount,
+  onPlotSelection,
+  onAddSelectionToPlot,
+  onClearColSelection,
 }: WorksheetToolbarProps) {
   return (
     <div
@@ -107,6 +119,30 @@ export default function WorksheetToolbar({
           </button>
           <button className="qz-btn" onClick={onClearSelection} title="Clear the selection">
             Deselect
+          </button>
+        </>
+      )}
+      {selectedColCount > 0 && (
+        <>
+          <span className="qzk-ds-meta" style={{ color: "var(--accent)" }}>
+            {selectedColCount} column{selectedColCount === 1 ? "" : "s"} selected
+          </span>
+          <button
+            className="qz-btn"
+            onClick={onPlotSelection}
+            title="Plot the selected columns (designation-aware — replaces the current Y set)"
+          >
+            Plot selection
+          </button>
+          <button
+            className="qz-btn"
+            onClick={onAddSelectionToPlot}
+            title="Add the selected columns to the current plot"
+          >
+            Add to plot
+          </button>
+          <button className="qz-btn" onClick={onClearColSelection} title="Clear the column selection">
+            Deselect columns
           </button>
         </>
       )}

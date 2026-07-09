@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { originBookFamilies, originSheetGroups } from "./grouping";
+import { bookLabel, familyBooks, originBookFamilies, originSheetGroups } from "./grouping";
 import type { Dataset } from "./types";
 
 const ds = (id: string): Dataset => ({
@@ -115,5 +115,62 @@ describe("originSheetGroups", () => {
     const insertionOrderIds = items.slice(0, 3).map((d) => d.id);
     const groups = originSheetGroups(items);
     expect(groups[0].members.map((d) => d.id)).toEqual(insertionOrderIds);
+  });
+});
+
+describe("bookLabel", () => {
+  it("strips the '<stem>:' prefix", () => {
+    expect(bookLabel(book("b1", "XRD:Book1", "Book1"))).toBe("Book1");
+  });
+
+  it("falls back to the whole name when there's no colon", () => {
+    expect(bookLabel(ds("plain"))).toBe("plain");
+  });
+});
+
+describe("familyBooks (item 9)", () => {
+  it("lists each distinct book once, in first-appearance order", () => {
+    const members = [
+      book("b1", "XRD:Book1", "Book1"),
+      book("b2", "XRD:Book2", "Book2"),
+      book("b3", "XRD:Book3", "Book3"),
+    ];
+    const books = familyBooks(members);
+    expect(books.map((b) => b.book)).toEqual(["Book1", "Book2", "Book3"]);
+    expect(books.map((b) => b.representative.id)).toEqual(["b1", "b2", "b3"]);
+  });
+
+  it("collapses a multi-sheet book's sheet pseudo-books to ONE entry (the sheet-tab strip's job, not the switcher's)", () => {
+    // Same fixture shape as the originSheetGroups test above: 3 sheets of ONE
+    // book, all sharing the "XRD" stem — must NOT read as 3 distinct books.
+    const members = [
+      book("s1", "XRD:Book4", "Book4"),
+      book("s2", "XRD:Book4 — Book4 (sheet 2)", "Book4@2"),
+      book("s3", "XRD:Book4 — Book4 (sheet 3)", "Book4@3"),
+    ];
+    const books = familyBooks(members);
+    expect(books).toHaveLength(1);
+    expect(books[0].book).toBe("Book4");
+  });
+
+  it("picks the EARLIEST sheet as a book's representative regardless of list order", () => {
+    const members = [
+      book("s2", "XRD:Book4@2", "Book4@2"),
+      book("s1", "XRD:Book4", "Book4"), // sheet 1, listed second
+    ];
+    expect(familyBooks(members)[0].representative.id).toBe("s1");
+  });
+
+  it("a mixed family (some multi-sheet books, some single-sheet) still reports one entry per distinct book", () => {
+    const members = [
+      book("a1", "XRD:Book4", "Book4"),
+      book("a2", "XRD:Book4@2", "Book4@2"),
+      book("b1", "XRD:Book7", "Book7"),
+    ];
+    expect(familyBooks(members).map((b) => b.book)).toEqual(["Book4", "Book7"]);
+  });
+
+  it("excludes datasets without origin_book metadata", () => {
+    expect(familyBooks([ds("a"), ds("b")])).toEqual([]);
   });
 });
