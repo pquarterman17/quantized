@@ -313,7 +313,7 @@ describe("useApp applyCorrectionsToMany", () => {
 });
 
 describe("useApp duplicateDataset", () => {
-  it("inserts an independent copy right after the source and activates it", () => {
+  it("inserts an independent copy right after the source and activates it", async () => {
     useApp.setState({
       datasets: [
         { id: "d1", name: "first.dat", data: raw },
@@ -322,7 +322,7 @@ describe("useApp duplicateDataset", () => {
       activeId: "d2",
     });
 
-    useApp.getState().duplicateDataset("d1");
+    await useApp.getState().duplicateDataset("d1");
 
     const ds = useApp.getState().datasets;
     expect(ds.map((d) => d.name)).toEqual(["first.dat", "first.dat (copy)", "second.dat"]);
@@ -334,7 +334,7 @@ describe("useApp duplicateDataset", () => {
     expect(copy.data.values).not.toBe(raw.values);
   });
 
-  it("carries raw / corrections / bgRef onto the copy", () => {
+  it("carries raw / corrections / bgRef onto the copy", async () => {
     const corrected = { ...raw, values: [[5], [15], [25]] };
     useApp.setState({
       datasets: [
@@ -350,7 +350,7 @@ describe("useApp duplicateDataset", () => {
       activeId: "d1",
     });
 
-    useApp.getState().duplicateDataset("d1");
+    await useApp.getState().duplicateDataset("d1");
     const copy = useApp.getState().datasets[1];
     expect(copy.raw).toEqual(raw);
     expect(copy.corrections).toEqual({ yOff: 5 });
@@ -358,10 +358,33 @@ describe("useApp duplicateDataset", () => {
     expect(copy.corrections).not.toBe(useApp.getState().datasets[0].corrections); // independent
   });
 
-  it("is a no-op for an unknown id", () => {
+  it("is a no-op for an unknown id", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1" });
-    useApp.getState().duplicateDataset("ghost");
+    await useApp.getState().duplicateDataset("ghost");
     expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
+  it("resolves a still-pending source before cloning, so the copy isn't stuck on the preview", async () => {
+    const full: DataStruct = { time: [1, 2, 3, 4], values: [[1], [2], [3], [4]], labels: ["m"], units: ["emu"], metadata: {} };
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "book.opj",
+          data: { time: [1, 2], values: [[1], [2]], labels: ["m"], units: ["emu"], metadata: {} },
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 4, cols: 1 },
+        },
+      ],
+      activeId: "d1",
+    });
+    vi.mocked(fetchBookData).mockResolvedValue(full);
+
+    await useApp.getState().duplicateDataset("d1");
+
+    const copy = useApp.getState().datasets[1];
+    expect(copy.data.time).toEqual(full.time);
+    expect(copy.pending).toBeUndefined();
+    expect(useApp.getState().datasets[0].pending).toBeUndefined(); // the source resolved too
   });
 });
 
@@ -1172,6 +1195,148 @@ describe("useApp lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38)", () => {
     const ds = useApp.getState().datasets.find((d) => d.name === "Legacy:Book9")!;
     expect(ds.pending).toBeUndefined();
     expect(ds.data.time).toEqual(raw.time);
+  });
+
+  // The general-purpose resolve helper closing the #38 "deferred edge" — every
+  // compute/export entry point (corrections, dataset math, exports, batch
+  // ops, macro replay, fitting workshops) awaits this instead of reading
+  // `.data` straight off a possibly-still-pending dataset.
+  describe("resolveDataset / resolveDatasets (#38 compute/export guard)", () => {
+    it("resolveDataset is a same-tick no-op for a non-pending dataset", async () => {
+      useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }] });
+      const ds = await useApp.getState().resolveDataset("d1");
+      expect(ds?.data).toEqual(raw);
+      expect(fetchBookData).not.toHaveBeenCalled();
+    });
+
+    it("resolveDataset fetches + clears pending for a lazy dataset", async () => {
+      useApp.setState({
+        datasets: [
+          {
+            id: "d1",
+            name: "book.opj",
+            data: previewData,
+            pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5000, cols: 1 },
+          },
+        ],
+      });
+      vi.mocked(fetchBookData).mockResolvedValue(raw);
+      const ds = await useApp.getState().resolveDataset("d1");
+      expect(ds?.data).toEqual(raw);
+      expect(ds?.pending).toBeUndefined();
+    });
+
+    it("resolveDataset returns undefined for an unknown id without fetching", async () => {
+      useApp.setState({ datasets: [] });
+      const ds = await useApp.getState().resolveDataset("ghost");
+      expect(ds).toBeUndefined();
+      expect(fetchBookData).not.toHaveBeenCalled();
+    });
+
+    it("resolveDataset rejects on fetch failure, leaving pending set (retryable)", async () => {
+      useApp.setState({
+        datasets: [
+          {
+            id: "d1",
+            name: "book.opj",
+            data: previewData,
+            pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5000, cols: 1 },
+          },
+        ],
+      });
+      vi.mocked(fetchBookData).mockRejectedValue(new Error("network down"));
+      await expect(useApp.getState().resolveDataset("d1")).rejects.toThrow("network down");
+      expect(useApp.getState().datasets[0].pending).toBeDefined();
+    });
+
+    it("resolveDatasets resolves every pending id with bounded concurrency and drops unknown ids", async () => {
+      useApp.setState({
+        datasets: [
+          { id: "d1", name: "a", data: raw },
+          {
+            id: "d2",
+            name: "book.opj",
+            data: previewData,
+            pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5000, cols: 1 },
+          },
+        ],
+      });
+      vi.mocked(fetchBookData).mockResolvedValue(raw);
+      const out = await useApp.getState().resolveDatasets(["d1", "d2", "ghost"]);
+      expect(out.map((d) => d.id)).toEqual(["d1", "d2"]);
+      expect(useApp.getState().datasets.find((d) => d.id === "d2")!.pending).toBeUndefined();
+    });
+
+    it("resolveDatasets rejects if any fetch fails", async () => {
+      useApp.setState({
+        datasets: [
+          {
+            id: "ok",
+            name: "ok",
+            data: previewData,
+            pending: { kind: "path", path: "/ok.opj", bookId: "BookOK", rows: 10, cols: 1 },
+          },
+          {
+            id: "bad",
+            name: "bad",
+            data: previewData,
+            pending: { kind: "path", path: "/bad.opj", bookId: "BookBad", rows: 10, cols: 1 },
+          },
+        ],
+      });
+      vi.mocked(fetchBookData).mockImplementation(async (source) =>
+        source.bookId === "BookBad" ? Promise.reject(new Error("gone")) : raw,
+      );
+      await expect(useApp.getState().resolveDatasets(["ok", "bad"])).rejects.toThrow("gone");
+    });
+  });
+
+  describe("mergeSelected resolves pending picks first (#38)", () => {
+    it("resolves a still-pending selected dataset before merging", async () => {
+      useApp.setState({
+        datasets: [
+          { id: "d1", name: "a", data: raw },
+          {
+            id: "d2",
+            name: "book.opj",
+            data: previewData,
+            pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 3, cols: 1 },
+          },
+        ],
+        selectedIds: ["d1", "d2"],
+        status: "",
+      });
+      vi.mocked(fetchBookData).mockResolvedValue(raw);
+
+      await useApp.getState().mergeSelected();
+
+      expect(useApp.getState().datasets.find((d) => d.id === "d2")!.pending).toBeUndefined();
+      const merged = useApp.getState().datasets.find((d) => d.name.startsWith("merged"));
+      expect(merged).toBeDefined();
+      expect(merged!.data.time.length).toBe(raw.time.length * 2); // both sides used the FULL 3-row data
+    });
+
+    it("a pending-resolve failure aborts the merge — no partial merged dataset lands", async () => {
+      useApp.setState({
+        datasets: [
+          { id: "d1", name: "a", data: raw },
+          {
+            id: "d2",
+            name: "book.opj",
+            data: previewData,
+            pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 3, cols: 1 },
+          },
+        ],
+        selectedIds: ["d1", "d2"],
+        status: "",
+      });
+      vi.mocked(fetchBookData).mockRejectedValue(new Error("network down"));
+
+      await useApp.getState().mergeSelected();
+
+      expect(useApp.getState().datasets.some((d) => d.name.startsWith("merged"))).toBe(false);
+      expect(useApp.getState().status).toContain("network down");
+    });
   });
 });
 

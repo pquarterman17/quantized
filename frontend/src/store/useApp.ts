@@ -594,6 +594,22 @@ interface AppState {
   // path/token that may not exist on another machine or after a restart).
   // Rejects if any fetch fails (the caller should abort the save and toast).
   resolvePendingDatasets: () => Promise<void>;
+  // Resolve ONE dataset's full data if it's still a lazy-book preview (#38's
+  // deferred edge: a compute or export entry point must never silently run
+  // on the small preview). No-op — resolves immediately with the dataset
+  // as-is — when it isn't pending (or doesn't exist, returning undefined).
+  // Toasts only if the fetch is still running past a short grace period (the
+  // common cached-parse case resolves in ~20ms, not worth interrupting for).
+  // Rejects on fetch failure so the caller's existing error handling (every
+  // compute/export entry already has a catch → setError/toast) aborts the
+  // operation instead of falling through to the preview.
+  resolveDataset: (id: string) => Promise<Dataset | undefined>;
+  // Bounded-concurrency batch version of resolveDataset — batch export/
+  // folder ops/macro replay can touch dozens of never-activated datasets at
+  // once; this caps simultaneous fetches rather than firing them all. Missing
+  // ids are silently dropped from the result; a fetch failure rejects (same
+  // "abort, don't proceed on a preview" contract as resolveDataset).
+  resolveDatasets: (ids: string[]) => Promise<Dataset[]>;
   // "Save workspace (.dwk)…" (App.tsx's File menu command): resolves every
   // pending lazy book first (see `resolvePendingDatasets`'s doc), then
   // serializes + downloads. Owns its own status/toast messaging so the
@@ -673,8 +689,14 @@ interface AppState {
   // state) — the File ▸ Remove all command; reuses loadWorkspace's reset.
   clearAll: () => void;
   // Concatenate the multi-selected datasets (≥2) row-wise into a new dataset.
-  mergeSelected: () => void;
-  duplicateDataset: (id: string) => void;
+  // Resolves any still-pending picks first (#38) — a batch of arbitrary
+  // selected datasets is exactly the "never activated" risk case.
+  mergeSelected: () => Promise<void>;
+  // Resolves a still-pending source first (#38): `pending` isn't copied onto
+  // the clone, so without this the copy would silently become a SEPARATE
+  // dataset permanently stuck on the small preview (nothing would ever
+  // trigger its own fetch).
+  duplicateDataset: (id: string) => Promise<void>;
   moveDataset: (id: string, dir: -1 | 1) => void;
   renameDataset: (id: string, name: string) => void;
   setCellValue: (id: string, row: number, col: number, value: number) => void;
@@ -1387,6 +1409,35 @@ export const useApp = create<AppState>((set, get) => ({
     const pending = get().datasets.filter((d) => d.pending);
     await Promise.all(pending.map((d) => installBookData(d.id, d.pending!)));
   },
+  resolveDataset: async (id) => {
+    const ds = get().datasets.find((d) => d.id === id);
+    if (!ds?.pending) return ds;
+    // Slow-path notice only — a toast on every activation would be noise
+    // since the common cached-parse fetch resolves in ~20ms.
+    const timer = setTimeout(() => {
+      toast(`fetching full data for "${ds.name}"…`);
+    }, 400);
+    try {
+      await installBookData(id, ds.pending);
+    } finally {
+      clearTimeout(timer);
+    }
+    return get().datasets.find((d) => d.id === id);
+  },
+  resolveDatasets: async (ids) => {
+    const CONCURRENCY = 6;
+    const results: (Dataset | undefined)[] = new Array(ids.length);
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const i = cursor++;
+        if (i >= ids.length) return;
+        results[i] = await get().resolveDataset(ids[i]);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker));
+    return results.filter((d): d is Dataset => d != null);
+  },
   saveWorkspaceToFile: async () => {
     const all = get().datasets;
     if (all.length === 0) {
@@ -2049,16 +2100,22 @@ export const useApp = create<AppState>((set, get) => ({
 
   // Concatenate the selected datasets (in selection order) row-wise into one new
   // library dataset. Needs ≥2 with a matching column count (mergeDatasets guards).
-  mergeSelected: () => {
+  mergeSelected: async () => {
     const s = get();
-    const picks = s.selectedIds
-      .map((id) => s.datasets.find((d) => d.id === id))
-      .filter((d): d is Dataset => d != null);
-    if (picks.length < 2) {
+    const pickIds = s.selectedIds.filter((id) => s.datasets.some((d) => d.id === id));
+    if (pickIds.length < 2) {
       get().setStatus("select ≥2 datasets to merge");
       return;
     }
     try {
+      // #38 deferred edge: any of the selected datasets can be a never-
+      // activated, still-pending Origin book — resolve them all first
+      // (bounded concurrency) rather than silently merging previews.
+      const picks = await get().resolveDatasets(pickIds);
+      if (picks.length < 2) {
+        get().setStatus("select ≥2 datasets to merge");
+        return;
+      }
       const data = mergeDatasets(
         picks.map((d) => d.data),
         picks.map((d) => d.name),
@@ -2076,7 +2133,8 @@ export const useApp = create<AppState>((set, get) => ({
   // Deep-copy a dataset (incl. raw/corrections/bgRef) as an independent "(copy)"
   // — for trying different corrections/formulas while keeping the original.
   // Lands right after the source and becomes active, resetting per-dataset view.
-  duplicateDataset: (id) =>
+  duplicateDataset: async (id) => {
+    await get().resolveDataset(id);
     set((s) => {
       const idx = s.datasets.findIndex((d) => d.id === id);
       if (idx < 0) return {};
@@ -2135,7 +2193,8 @@ export const useApp = create<AppState>((set, get) => ({
         gadgetCursors: null,
         gadgetCursorResult: null,
       };
-    }),
+    });
+  },
   // Reorder the library by swapping a dataset with its neighbor (dir -1 = up,
   // +1 = down). No-op at the ends or for an unknown id. Order drives the list and
   // the consolidated-export column order; the active selection is unaffected.
@@ -2336,21 +2395,24 @@ export const useApp = create<AppState>((set, get) => ({
   // (step 4 of the pipeline): we forward its CURRENT `data` + the interp method
   // so the golden /api/corrections/apply does the interpolated subtraction.
   applyCorrections: async (id, params, bg) => {
-    const ds = get().datasets.find((d) => d.id === id);
-    if (!ds) return;
-    const raw = ds.raw ?? ds.data;
-    // Resolve the background only if it points at a real, different dataset.
-    const bgDs =
-      bg && bg.datasetId !== id
-        ? get().datasets.find((d) => d.id === bg.datasetId)
-        : undefined;
-    const bgRef = bgDs ? { datasetId: bgDs.id, interp: bg!.interp } : undefined;
-    const req: CorrectionsRequest = { dataset: raw, params };
-    if (bgDs) {
-      req.bg_dataset = bgDs.data;
-      req.bg_interp = bg!.interp;
-    }
     try {
+      // #38 deferred edge: corrections must never compute on a still-pending
+      // (preview-only) dataset — resolve the target AND any bg reference to
+      // full data first. A resolve failure lands in the catch below, reusing
+      // the existing "corrections failed" status/toast rather than silently
+      // falling through to the preview.
+      const ds = await get().resolveDataset(id);
+      if (!ds) return;
+      const raw = ds.raw ?? ds.data;
+      // Resolve the background only if it points at a real, different dataset.
+      const bgDs =
+        bg && bg.datasetId !== id ? await get().resolveDataset(bg.datasetId) : undefined;
+      const bgRef = bgDs ? { datasetId: bgDs.id, interp: bg!.interp } : undefined;
+      const req: CorrectionsRequest = { dataset: raw, params };
+      if (bgDs) {
+        req.bg_dataset = bgDs.data;
+        req.bg_interp = bg!.interp;
+      }
       const corrected = await applyCorrectionsApi(req);
       // excludedRows are raw row INDICES into ds.data; an xTrim shrinks/shifts
       // the rows (corrections.py step 1), so carrying stale indices forward would

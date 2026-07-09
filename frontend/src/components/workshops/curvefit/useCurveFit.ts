@@ -62,16 +62,25 @@ export function useCurveFit(): CurveFitState {
   }, [active]);
 
   async function run(kind: "guess" | "fit"): Promise<void> {
-    if (!active || !xy) return;
+    if (!active) return;
     setBusy(true);
     setError(null);
     try {
+      // #38 deferred edge: never guess/fit against the small preview —
+      // resolve the active dataset's full data first (no-op if it isn't
+      // pending). Re-derive x/y from the RESOLVED dataset, not the possibly
+      // stale `xy` memo captured before the await.
+      const ds = await useApp.getState().resolveDataset(active.id);
+      if (!ds) return;
+      const d = analysisData(ds);
+      if (!d) return;
+      const localXy = { x: d.time, y: d.values.map((row) => row[0]) };
       if (kind === "guess") {
-        const g = await autoGuess(modelName, xy.x, xy.y);
+        const g = await autoGuess(modelName, localXy.x, localXy.y);
         setResult({ params: g.p0 });
         setGuessOnly(true);
       } else {
-        const r = await fitModel({ model: modelName, x: xy.x, y: xy.y });
+        const r = await fitModel({ model: modelName, x: localXy.x, y: localXy.y });
         setResult(r);
         setGuessOnly(false);
         // Recorded as a typed step so the pipeline view (#6) can edit the
@@ -82,16 +91,16 @@ export function useCurveFit(): CurveFitState {
         });
         // Durable fit spec: the recalc graph (#1) re-runs / stales this fit
         // when the dataset's data changes.
-        useApp.getState().setFitSpec(active.id, { model: modelName });
+        useApp.getState().setFitSpec(ds.id, { model: modelName });
         const yFit = r.yFit as (number | null)[] | undefined;
         if (Array.isArray(yFit)) {
           // yFit aligns to the pruned analysis x; expand it back to the full row
           // count (null at dropped rows) so it stays in register with the
           // full-length plot x, whether excluded rows are hidden or greyed.
-          const n = active.data.time.length;
-          const kept = activeRowIndices(n, droppedRows(active));
+          const n = ds.data.time.length;
+          const kept = activeRowIndices(n, droppedRows(ds));
           const y = kept.length === n ? yFit : expandToFull(yFit, kept, n);
-          setFitOverlay({ datasetId: active.id, y });
+          setFitOverlay({ datasetId: ds.id, y });
         }
       }
     } catch (e) {

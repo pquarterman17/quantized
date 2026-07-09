@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { findPeaks, fitMultiPeak, fitPeak } from "../../../lib/api";
+import { fetchBookData, findPeaks, fitMultiPeak, fitPeak } from "../../../lib/api";
 import type { DataStruct, MultiFitResult, Peak, SinglePeakFit } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { usePeaks } from "./usePeaks";
@@ -10,6 +10,7 @@ vi.mock("../../../lib/api", () => ({
   findPeaks: vi.fn(),
   fitMultiPeak: vi.fn(),
   fitPeak: vi.fn(),
+  fetchBookData: vi.fn(),
 }));
 
 const DATA: DataStruct = {
@@ -74,6 +75,58 @@ describe("usePeaks find", () => {
     await waitFor(() => expect(result.current.peaks).toHaveLength(2));
     expect(findPeaks).toHaveBeenCalledOnce();
     expect(useApp.getState().peakOverlay?.datasetId).toBe("d1");
+  });
+
+  it("resolves a still-pending active dataset before auto-finding (#38)", async () => {
+    const full: DataStruct = {
+      time: [0, 1, 2, 3, 4, 5, 6],
+      values: [[1], [5], [2], [6], [2], [1], [1]],
+      labels: ["I"],
+      units: ["cps"],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "book.opj",
+          data: { time: [0, 1], values: [[1], [5]], labels: ["I"], units: ["cps"], metadata: {} },
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 7, cols: 1 },
+        },
+      ],
+      activeId: "d1",
+      peakOverlay: null,
+    });
+    vi.mocked(fetchBookData).mockResolvedValue(full);
+
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    const body = vi.mocked(findPeaks).mock.calls[0][0];
+    expect(body.x).toEqual(full.time); // ran against the RESOLVED data, not the 2-point preview
+    expect(useApp.getState().datasets[0].pending).toBeUndefined();
+  });
+
+  it("a pending-resolve failure surfaces an error and never calls findPeaks", async () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "book.opj",
+          data: { time: [0, 1], values: [[1], [5]], labels: ["I"], units: ["cps"], metadata: {} },
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 7, cols: 1 },
+        },
+      ],
+      activeId: "d1",
+      peakOverlay: null,
+    });
+    vi.mocked(fetchBookData).mockRejectedValue(new Error("network down"));
+
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    expect(findPeaks).not.toHaveBeenCalled();
+    expect(result.current.peaks).toHaveLength(0);
   });
 });
 

@@ -108,6 +108,15 @@ export function useStatsChooser(): StatsChooserState {
 
   async function recommend(): Promise<void> {
     if (groups.length === 0) return;
+    // #38 deferred edge: `groups` derives from the possibly-preview `active`
+    // dataset — self-corrects on the next render once the fetch lands, but a
+    // click BEFORE that would silently recommend/run a test against the
+    // incomplete preview. Abort (kick the fetch, ask the user to retry).
+    if (active?.pending) {
+      useApp.getState().ensureBookData(active.id);
+      setError("still loading full data — try again in a moment");
+      return;
+    }
     setBusy(true);
     setError(null);
     setTestResult(null);

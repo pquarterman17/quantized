@@ -68,9 +68,12 @@ export function useRsm(): RsmState {
     setError(null);
     setStrain(null);
     try {
-      const res = await analyzeRsm({ dataset: active.data, n_peaks: nPeaks });
+      // #38 deferred edge: resolve the active dataset's full data first.
+      const ds = await useApp.getState().resolveDataset(active.id);
+      if (!ds) return;
+      const res = await analyzeRsm({ dataset: ds.data, n_peaks: nPeaks });
       setPeaks(res.peaks);
-      setRsmPeaks(res.peaks.length ? { datasetId: active.id, peaks: res.peaks } : null);
+      setRsmPeaks(res.peaks.length ? { datasetId: ds.id, peaks: res.peaks } : null);
       if (res.n_peaks_found === 0) setError("No peaks found above threshold.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "RSM analysis failed");

@@ -17,7 +17,9 @@ trustworthy (W7). Gap analysis: see Context.
 import testing: the four triage fix batches — perf quick wins, zero-tail
 wrap-around prune, log tick steps, y2/legend/multi-panel fidelity — all
 MERGED and recorded in Completed; **#38 lazy per-book transport CLOSED**
-(84.72 MB → 3.84 MB import response, see Completed); **#40 CLOSED** — the
+(84.72 MB → 3.84 MB import response, see Completed — its own deferred
+compute/export-on-preview edge was closed same day, see Completed);
+**#40 CLOSED** — the
 `#39` gallery run's 6 invisible merge-window graphs were a 3rd,
 previously-unrecognized layer head byte (`0x5f`), now decoded; #42
 investigated, root cause narrowed for both halves (an undecoded per-curve
@@ -466,16 +468,55 @@ the shipped contract)
   persists a `pending` ref, since a reload just re-triggers the fetch when
   that dataset is next shown (an upload-sourced token won't survive a
   server restart — degrades to an error toast + re-import, not a crash).
-  Deferred/known edges: export and the corrections pipeline don't
-  explicitly guard against running on a still-pending (preview-sized)
-  dataset — they'd silently compute on the small preview rather than erring;
-  the worksheet's kept/total row-count footer briefly reflects the preview's
-  count during the loading window (self-corrects once the fetch lands).
+  Deferred/known edges (CLOSED 2026-07-09): export and the corrections
+  pipeline did NOT guard against running on a still-pending (preview-sized)
+  dataset — they'd silently compute on the small preview rather than
+  erring. Closed via two new store actions in `useApp.ts` —
+  `resolveDataset(id)` (single dataset; no-op unless `pending`, toasts only
+  on a slow fetch, rejects on failure so the caller's existing error
+  handling aborts) and `resolveDatasets(ids)` (bounded-concurrency batch
+  version, 6 in flight at once, for the "many never-activated datasets"
+  case) — that every compute/export entry point now awaits before touching
+  `.data`. Guarded: `applyCorrections` (+ its bg-dataset reference, so
+  `applyCorrectionsToMany`/folder bulk-corrections and the pipeline's
+  `correction`/`reset` steps inherit it for free), `executeSteps` (the
+  shared macro/pipeline/template-batch/folder-batch replay core — resolves
+  once up front, marks every step failed rather than partially executing on
+  wrong data if the fetch fails), `mergeSelected`, `duplicateDataset`
+  (a pending source's clone previously got silently and PERMANENTLY stuck
+  on the preview, since `pending` isn't copied), the dataset-math workshop
+  (both picks), the App.tsx export commands (CSV/HDF5/figure/Origin/.ogs —
+  extracted to `lib/exportActive.ts` to stay under the App.tsx line
+  ceiling), Send-to-Origin and Export-consolidated-CSV (batch), the folder
+  bulk ops' CSV export, the fitting/baseline/peak/hysteresis/magtools/rsm/
+  peak-wizard workshops (both the auto-run effects and the manual
+  fit/subtract actions), Tabulate/Stats-chooser (abort-and-retry on a click
+  mid-fetch, since their derived rows/groups self-correct on the NEXT
+  render but a click before that would export/report the incomplete
+  summary), the worksheet's Extract and Copy-rows/Copy-row actions (same
+  abort-and-retry — a pending dataset's rows are a min/max-DECIMATED
+  SAMPLE, not a prefix, so a row index computed against the preview matches
+  no real row once the full data lands), the Waterfall stack (a render path
+  this plan's original audit missed entirely — now triggers
+  `ensureBookData` per included dataset like the other Stage consumers,
+  plus resolves the whole stack before CSV export), and the Figure Builder's
+  live (non-frozen) export. No backend change was needed or made — pending
+  is a purely frontend/Zustand construct; every backend route always
+  serves/receives full data. Still deferred (cosmetic, fine to leave): the
+  worksheet's kept/total row-count footer briefly reflects the preview's
+  count during the loading window (self-corrects once the fetch lands);
+  `useReflView`'s two-frame pairing is a pure render derivation with no
+  export button, so it wasn't wired to `ensureBookData` (self-corrects
+  reactively, same as the footer).
   Tests: backend `test_io_origin_preview.py` (8) + `test_api_books.py` (16);
   frontend `useApp.test.ts` (+16), `workspace.test.ts` (+5),
   `DatasetRow.test.tsx` (+2), `WorksheetPane.test.tsx` (new, 2),
   `WindowCanvas.test.tsx` (+1). Backend 1930 (+177 realdata) + frontend
-  2008 + build green.
+  2008 + build green. Closure batch added frontend `useApp.test.ts` (+8:
+  resolveDataset/resolveDatasets + mergeSelected pending/failure paths),
+  `useCurveFit.test.ts` (+2), `usePeaks.test.ts` (+2),
+  `useBaseline.test.ts` (+1), `useWaterfall.test.ts` (+1),
+  `useFigureBuilder.test.ts` (+1) — frontend 2024 tests + build green.
 
 - ~~**PNR-triage import-perf batch (unbooked side-work)**~~ (2026-07-09)
   — merged to main as `917802a` (commits `16080ad`/`09e1ac1`/`d097c39`):

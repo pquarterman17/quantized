@@ -38,21 +38,26 @@ export function useHysteresis(): HysteresisState {
     setError(null);
     if (!active) return;
     setBusy(true);
-    // Analysis view (excluded/filtered rows dropped, #50/#53) so a masked outlier
-    // point doesn't skew Hc/Mr/Ms.
-    const src = analysisData(active) ?? active.data;
-    const h = src.time;
-    const m = src.values.map((row) => row[0]);
-    hysteresisAnalysis({ h, m })
-      .then((r) => {
+    const activeId = active.id;
+    void (async () => {
+      try {
+        // #38 deferred edge: auto-analysis must never run on the small
+        // preview — resolve the active dataset's full data first.
+        const ds = await useApp.getState().resolveDataset(activeId);
+        if (cancelled || !ds) return;
+        // Analysis view (excluded/filtered rows dropped, #50/#53) so a masked
+        // outlier point doesn't skew Hc/Mr/Ms.
+        const src = analysisData(ds) ?? ds.data;
+        const h = src.time;
+        const m = src.values.map((row) => row[0]);
+        const r = await hysteresisAnalysis({ h, m });
         if (!cancelled) setResult(r);
-      })
-      .catch((e: unknown) => {
+      } catch (e: unknown) {
         if (!cancelled) setError(e instanceof Error ? e.message : "analysis failed");
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setBusy(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -66,19 +71,22 @@ export function useHysteresis(): HysteresisState {
     setBgBusy(true);
     setError(null);
     try {
-      const src = analysisData(active) ?? active.data;
+      // #38 deferred edge: resolve the active dataset's full data first.
+      const ds = await useApp.getState().resolveDataset(active.id);
+      if (!ds) return;
+      const src = analysisData(ds) ?? ds.data;
       const h = src.time;
       const m = src.values.map((row) => row[0]);
       const res = await subtractHysteresisBackground({ h, m });
       const data: DataStruct = {
-        ...active.data,
+        ...ds.data,
         time: h,
         values: res.corrected.map((v) => [v ?? Number.NaN]),
-        labels: [active.data.labels[0] ?? "Moment"],
-        units: [active.data.units[0] ?? ""],
-        metadata: { ...active.data.metadata, hysteresis_bg_subtracted: true },
+        labels: [ds.data.labels[0] ?? "Moment"],
+        units: [ds.data.units[0] ?? ""],
+        metadata: { ...ds.data.metadata, hysteresis_bg_subtracted: true },
       };
-      const stem = active.name.replace(/\.[^.]+$/, "");
+      const stem = ds.name.replace(/\.[^.]+$/, "");
       addDataset({ id: `hystbg-${++_bgCounter}`, name: `${stem} (bg-sub)`, data });
       setStatus(
         res.slope === 0 && res.offset === 0

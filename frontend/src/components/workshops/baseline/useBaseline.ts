@@ -45,7 +45,7 @@ export interface BaselineState {
   setMethod: (m: BaselineMethod) => void;
   setParams: (patch: Partial<BaselineParams>) => void;
   compute: () => Promise<void>;
-  subtract: () => void;
+  subtract: () => Promise<void>;
   clear: () => void;
   /** Arm the plot's rubber-band so the next drag fills the region box edges. */
   pickRegion: () => void;
@@ -120,11 +120,15 @@ export function useBaseline(): BaselineState {
     setBusy(true);
     setError(null);
     try {
-      const x = active.data.time;
-      const y = active.data.values.map((row) => row[0]);
+      // #38 deferred edge: never estimate a baseline against the small
+      // preview — resolve the active dataset's full data first.
+      const ds = await useApp.getState().resolveDataset(active.id);
+      if (!ds) return;
+      const x = ds.data.time;
+      const y = ds.data.values.map((row) => row[0]);
       const res = await callBaseline(method, x, y, params);
       setBaseline(res.baseline);
-      setBaselineOverlay({ datasetId: active.id, y: res.baseline });
+      setBaselineOverlay({ datasetId: ds.id, y: res.baseline });
     } catch (e) {
       setError(e instanceof Error ? e.message : "baseline failed");
     } finally {
@@ -132,9 +136,11 @@ export function useBaseline(): BaselineState {
     }
   }
 
-  function subtract(): void {
+  async function subtract(): Promise<void> {
     if (!active || !baseline) return;
-    const src = active.data;
+    const ds = await useApp.getState().resolveDataset(active.id);
+    if (!ds) return;
+    const src = ds.data;
     const values = src.values.map((row, i) => {
       const b = baseline[i];
       const next = [...row];
@@ -146,7 +152,7 @@ export function useBaseline(): BaselineState {
       values,
       metadata: { ...src.metadata, baseline_subtracted: method },
     };
-    const stem = active.name.replace(/\.[^.]+$/, "");
+    const stem = ds.name.replace(/\.[^.]+$/, "");
     addDataset({ id: `bgsub-${++_subCounter}`, name: `${stem} (bg-sub)`, data });
     setStatus(`subtracted ${method} baseline`);
   }

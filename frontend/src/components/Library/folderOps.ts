@@ -41,11 +41,15 @@ export async function exportFolderCsv(folder: FolderNode): Promise<void> {
   const members = folderContents(folder.id);
   if (members.length === 0) return;
   try {
+    // #38 deferred edge: a folder subtree very often includes datasets that
+    // were never activated/rendered — resolve them all first (bounded
+    // concurrency) rather than silently exporting previews.
+    const resolved = await useApp.getState().resolveDatasets(members.map((d) => d.id));
     await exportConsolidated({
-      datasets: members.map((d) => ({ dataset: d.data, name: d.name })),
+      datasets: resolved.map((d) => ({ dataset: d.data, name: d.name })),
       filename: `${folder.name.replace(/[^A-Za-z0-9._-]/g, "_")}.csv`,
     });
-    toast(`exported ${members.length} dataset(s) from "${folder.name}"`);
+    toast(`exported ${resolved.length} dataset(s) from "${folder.name}"`);
   } catch (e) {
     const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;
     useApp.getState().setStatus(msg);

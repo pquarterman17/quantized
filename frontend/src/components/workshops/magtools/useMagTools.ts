@@ -71,14 +71,17 @@ export function useMagTools(): MagToolsState {
     setError(null);
     setWarning(null);
     try {
-      const temperature = active.data.time;
-      const moment = active.data.values.map((row) => row[0]);
+      // #38 deferred edge: resolve the active dataset's full data first.
+      const ds = await useApp.getState().resolveDataset(active.id);
+      if (!ds) return;
+      const temperature = ds.data.time;
+      const moment = ds.data.values.map((row) => row[0]);
       const res = await subtractMagBackground({ temperature, moment, auto_fraction: autoFraction });
       setFit({ slope: res.slope, intercept: res.intercept });
       const data: DataStruct = {
-        ...active.data,
+        ...ds.data,
         values: res.corrected.map((v) => [v ?? Number.NaN]),
-        metadata: { ...active.data.metadata, mag_bg_subtracted: true },
+        metadata: { ...ds.data.metadata, mag_bg_subtracted: true },
       };
       addDataset({ id: `magbg-${++_counter}`, name: `${stem()} (bg-sub)`, data });
       setStatus(`subtracted high-T background (slope ${res.slope.toExponential(2)})`);
@@ -95,8 +98,11 @@ export function useMagTools(): MagToolsState {
     setError(null);
     setWarning(null);
     try {
-      const x = active.data.time;
-      const y = active.data.values.map((row) => row[0]);
+      // #38 deferred edge: resolve the active dataset's full data first.
+      const ds = await useApp.getState().resolveDataset(active.id);
+      if (!ds) return;
+      const x = ds.data.time;
+      const y = ds.data.values.map((row) => row[0]);
       const res = await convertMagUnits({
         x,
         y,
@@ -111,11 +117,11 @@ export function useMagTools(): MagToolsState {
       const data: DataStruct = {
         time: res.x.map((v) => v ?? Number.NaN),
         values: res.y.map((v) => [v ?? Number.NaN]),
-        labels: [active.data.labels[0] ?? "Moment"],
+        labels: [ds.data.labels[0] ?? "Moment"],
         units: [res.y_unit],
         metadata: {
-          ...active.data.metadata,
-          x_column_name: active.data.metadata?.["x_column_name"] ?? "Field",
+          ...ds.data.metadata,
+          x_column_name: ds.data.metadata?.["x_column_name"] ?? "Field",
           x_column_unit: res.x_unit,
         },
       };

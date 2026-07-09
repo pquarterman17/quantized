@@ -1,12 +1,14 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { fetchBookData } from "../../../lib/api";
 import { saveBlob } from "../../../lib/download";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useWaterfall } from "./useWaterfall";
 
 vi.mock("../../../lib/download", () => ({ saveBlob: vi.fn() }));
+vi.mock("../../../lib/api", () => ({ fetchBookData: vi.fn() }));
 
 const mk = (rChannelVals: number[]): DataStruct => ({
   time: [10, 20, 30],
@@ -65,14 +67,51 @@ describe("useWaterfall", () => {
     expect(result.current.aligned.ys[1][0]).toBeCloseTo(104); // 4 + 100
   });
 
-  it("export writes a CSV blob (with and without offset)", () => {
+  it("export writes a CSV blob (with and without offset)", async () => {
     const { result } = renderHook(() => useWaterfall());
-    act(() => result.current.exportCSV(true));
-    act(() => result.current.exportCSV(false));
+    await act(async () => {
+      await result.current.exportCSV(true);
+    });
+    await act(async () => {
+      await result.current.exportCSV(false);
+    });
     expect(saveBlob).toHaveBeenCalledTimes(2);
     const [, withName] = vi.mocked(saveBlob).mock.calls[0];
     const [, rawName] = vi.mocked(saveBlob).mock.calls[1];
     expect(withName).toContain("offset");
     expect(rawName).toContain("raw");
+  });
+
+  it("resolves every included dataset before exporting (#38)", async () => {
+    const full: DataStruct = {
+      time: [10, 20, 30, 40],
+      values: [[7], [8], [9], [10]],
+      labels: ["R"],
+      units: ["cts"],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "5K.dat", data: mk([1, 2, 3]) },
+        {
+          id: "d2",
+          name: "book.opj",
+          data: { time: [10], values: [[4]], labels: ["R"], units: ["cts"], metadata: {} },
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 4, cols: 1 },
+        },
+      ],
+      activeId: "d1",
+      selectedIds: ["d1", "d2"],
+      status: "",
+    });
+    vi.mocked(fetchBookData).mockResolvedValue(full);
+    const { result } = renderHook(() => useWaterfall());
+
+    await act(async () => {
+      await result.current.exportCSV(true);
+    });
+
+    expect(useApp.getState().datasets[1].pending).toBeUndefined();
+    expect(saveBlob).toHaveBeenCalledTimes(1);
   });
 });

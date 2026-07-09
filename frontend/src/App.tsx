@@ -55,34 +55,12 @@ import { loadSampleDataset } from "./lib/sampleDataset";
 import { clearAutosave } from "./lib/autosave";
 import { useWorkspaceAutosave } from "./useWorkspaceAutosave";
 import { buildExportStyles } from "./lib/exportStyles";
+import { exportActive } from "./lib/exportActive";
 import { IMPORT_ACCEPT, openFilePicker } from "./lib/openFilePicker";
 import { toolForKey } from "./lib/plotToolKeys";
 import { parseWorkspace } from "./lib/workspace";
 import { toast } from "./store/toasts";
 import { useApp } from "./store/useApp";
-
-type StoreGet = typeof useApp.getState;
-
-/** Export the active dataset via `fn`, surfacing failures in the status bar. */
-function exportActive(
-  s: StoreGet,
-  fn: (stem: string, ds: ReturnType<StoreGet>["datasets"][number]) => Promise<void>,
-): void {
-  const ds = s().datasets.find((d) => d.id === s().activeId);
-  if (!ds) {
-    s().setStatus("no dataset to export");
-    toast("no dataset to export", "danger");
-    return;
-  }
-  const stem = ds.name.replace(/\.[^.]+$/, "");
-  fn(stem, ds)
-    .then(() => toast(`exported ${stem}`, "ok"))
-    .catch((e: unknown) => {
-      const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;
-      s().setStatus(msg);
-      toast(msg, "danger");
-    });
-}
 
 let demoCounter = 0;
 let sampleCounter = 0;
@@ -682,7 +660,7 @@ export default function App() {
         id: "send-to-origin",
         group: "File",
         label: "Send to Origin (COM)…",
-        run: () => {
+        run: async () => {
           // Selected datasets when a multi-selection exists, else the active one.
           const all = s().datasets;
           const sel = all.filter((d) => s().selectedIds.includes(d.id));
@@ -692,48 +670,57 @@ export default function App() {
             toast("no dataset to send", "danger");
             return;
           }
-          originComStatus()
-            .then(({ available }) => {
-              if (!available) {
-                const msg =
-                  "Origin COM unavailable (needs Windows + QZ_ORIGIN_COM=1 + a running Origin) — use Export Origin (.ogs) instead";
-                s().setStatus(msg);
-                toast(msg, "danger");
-                return;
-              }
-              return sendToOrigin({
-                datasets: targets.map((d) => ({
-                  dataset: d.data,
-                  name: d.name.replace(/\.[^.]+$/, ""),
-                })),
-              }).then((r) => {
-                const msg = `sent to Origin: ${r.books.join(", ")}`;
-                s().setStatus(msg);
-                toast(msg, "ok");
-              });
-            })
-            .catch((e: unknown) => {
-              const msg = `send failed: ${e instanceof Error ? e.message : "error"}`;
+          try {
+            const { available } = await originComStatus();
+            if (!available) {
+              const msg =
+                "Origin COM unavailable (needs Windows + QZ_ORIGIN_COM=1 + a running Origin) — use Export Origin (.ogs) instead";
               s().setStatus(msg);
               toast(msg, "danger");
+              return;
+            }
+            // #38 deferred edge: a multi-selection can include datasets never
+            // activated/rendered — resolve every target's full data first
+            // (bounded concurrency) rather than silently sending previews.
+            const resolved = await s().resolveDatasets(targets.map((d) => d.id));
+            const r = await sendToOrigin({
+              datasets: resolved.map((d) => ({
+                dataset: d.data,
+                name: d.name.replace(/\.[^.]+$/, ""),
+              })),
             });
+            const msg = `sent to Origin: ${r.books.join(", ")}`;
+            s().setStatus(msg);
+            toast(msg, "ok");
+          } catch (e: unknown) {
+            const msg = `send failed: ${e instanceof Error ? e.message : "error"}`;
+            s().setStatus(msg);
+            toast(msg, "danger");
+          }
         },
       },
       {
         id: "export-consolidated",
         group: "File",
         label: "Export consolidated CSV…",
-        run: () => {
+        run: async () => {
           const all = s().datasets;
           if (all.length === 0) {
             s().setStatus("no datasets to consolidate");
             return;
           }
-          exportConsolidated({
-            datasets: all.map((d) => ({ dataset: d.data, name: d.name })),
-          }).catch((e: unknown) =>
-            s().setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`),
-          );
+          try {
+            // #38 deferred edge: consolidate touches EVERY loaded dataset,
+            // including ones never activated/rendered — resolve them all
+            // first (bounded concurrency) rather than silently exporting
+            // previews.
+            const resolved = await s().resolveDatasets(all.map((d) => d.id));
+            await exportConsolidated({
+              datasets: resolved.map((d) => ({ dataset: d.data, name: d.name })),
+            });
+          } catch (e: unknown) {
+            s().setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
+          }
         },
       },
       {

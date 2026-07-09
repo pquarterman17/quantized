@@ -105,7 +105,7 @@ export default function BaselinePanel() {
         <Button variant="primary" size="sm" disabled={!active || busy} onClick={() => void compute()}>
           {busy ? "Estimating…" : "Estimate"}
         </Button>
-        <Button size="sm" disabled={!baseline} onClick={subtract}>
+        <Button size="sm" disabled={!baseline} onClick={() => void subtract()}>
           Subtract →
         </Button>
       </div>

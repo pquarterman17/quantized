@@ -2,7 +2,14 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { autoGuess, bootstrapFit, exportCornerFigure, fitModel, listFitModels } from "../../../lib/api";
+import {
+  autoGuess,
+  bootstrapFit,
+  exportCornerFigure,
+  fetchBookData,
+  fitModel,
+  listFitModels,
+} from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useCurveFit } from "./useCurveFit";
@@ -13,6 +20,7 @@ vi.mock("../../../lib/api", () => ({
   listFitModels: vi.fn(),
   bootstrapFit: vi.fn(),
   exportCornerFigure: vi.fn(),
+  fetchBookData: vi.fn(),
 }));
 
 const DATA: DataStruct = {
@@ -88,6 +96,64 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
       await result.current.run("guess");
     });
     expect(autoGuess).toHaveBeenCalledWith("Linear", [1, 2, 3], [20, 30, 40]);
+  });
+
+  it("resolves a still-pending active dataset before fitting (#38)", async () => {
+    const full: DataStruct = {
+      time: [0, 1, 2, 3, 4],
+      values: [[10], [20], [30], [40], [50]],
+      labels: ["y"],
+      units: [""],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "book.opj",
+          data: { time: [0, 1], values: [[10], [20]], labels: ["y"], units: [""], metadata: {} },
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5, cols: 1 },
+        },
+      ],
+      activeId: "d1",
+      fitOverlay: null,
+    });
+    vi.mocked(fetchBookData).mockResolvedValue(full);
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41, 51] });
+    const { result } = renderHook(() => useCurveFit());
+
+    await act(async () => {
+      await result.current.run("fit");
+    });
+
+    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: full.time, y: [10, 20, 30, 40, 50] });
+    expect(useApp.getState().datasets[0].pending).toBeUndefined();
+    expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [11, 21, 31, 41, 51] });
+  });
+
+  it("a pending-resolve failure aborts the fit without calling fitModel", async () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "book.opj",
+          data: { time: [0, 1], values: [[10], [20]], labels: ["y"], units: [""], metadata: {} },
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5, cols: 1 },
+        },
+      ],
+      activeId: "d1",
+      fitOverlay: null,
+    });
+    vi.mocked(fetchBookData).mockRejectedValue(new Error("network down"));
+    const { result } = renderHook(() => useCurveFit());
+
+    await act(async () => {
+      await result.current.run("fit");
+    });
+
+    expect(fitModel).not.toHaveBeenCalled();
+    expect(result.current.error).toContain("network down");
+    expect(useApp.getState().datasets[0].pending).toBeDefined(); // retryable
   });
 });
 

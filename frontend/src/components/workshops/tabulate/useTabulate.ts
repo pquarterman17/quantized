@@ -94,8 +94,20 @@ export function useTabulate(): TabulateState {
   const valueLabel = labelOf(valueCol);
   const groupIsCategorical = !!active && groupCol >= 0 && isCategorical(channelModelingType(active, groupCol));
 
+  // #38 deferred edge: `rows` is derived from the possibly-preview `active`
+  // dataset — self-corrects on the next render once the fetch lands, but a
+  // click BEFORE that would silently export/report the incomplete summary.
+  // Abort (kick the fetch, ask the user to retry) rather than proceed.
+  function pendingGuard(action: string): boolean {
+    if (!active?.pending) return false;
+    useApp.getState().ensureBookData(active.id);
+    setStatus(`still loading full data — try ${action} again in a moment`);
+    return true;
+  }
+
   function exportDataset(): void {
     if (!rows.length) return;
+    if (pendingGuard("Export")) return;
     const data: DataStruct = {
       time: rows.map((r) => r.group),
       values: rows.map((r) => [r.count, r.mean, r.sd, r.min, r.max, r.median]),
@@ -125,6 +137,7 @@ export function useTabulate(): TabulateState {
 
   async function toReport(): Promise<void> {
     if (!rows.length || !active) return;
+    if (pendingGuard("report")) return;
     setReportBusy(true);
     try {
       const records = rows.map((r) => ({

@@ -270,12 +270,24 @@ export function useFigureBuilder() {
     }
   }
 
-  function exportNow(): void {
+  async function exportNow(): Promise<void> {
     if (!spec) return;
-    const stem = (active?.name ?? "figure").replace(/\.[^.]+$/, "");
-    exportFigure({ ...spec, fmt, dpi, filename: stem })
-      .then(() => setStatus(`exported ${stem}.${fmt}`))
-      .catch((e) => setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`));
+    try {
+      // #38 deferred edge: a LIVE (non-frozen) spec tracks the active
+      // dataset — resolve its full data first rather than silently exporting
+      // the small preview. A frozen doc's dataSnapshot is untouched (it was
+      // deliberately captured as-is).
+      let dataset = spec.dataset;
+      if (!frozenData && active?.pending) {
+        const ds = await useApp.getState().resolveDataset(active.id);
+        if (ds) dataset = ds.data;
+      }
+      const stem = (active?.name ?? "figure").replace(/\.[^.]+$/, "");
+      await exportFigure({ ...spec, dataset, fmt, dpi, filename: stem });
+      setStatus(`exported ${stem}.${fmt}`);
+    } catch (e) {
+      setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
+    }
   }
 
   return {

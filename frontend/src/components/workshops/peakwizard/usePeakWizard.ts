@@ -167,28 +167,34 @@ export function usePeakWizard(): PeakWizardState {
     }
     let cancelled = false;
     setBaselineBusy(true);
+    const activeId = active.id;
     const b = recipe.baseline;
-    const call =
-      b.method === "als"
-        ? baselineALS({ y: segment.y, lam: b.lam, p: b.p })
-        : b.method === "rollingball"
-          ? baselineRollingBall({ y: segment.y, radius: b.radius })
-          : baselineModPoly({ y: segment.y, order: b.order });
-    call
-      .then((res) => {
+    void (async () => {
+      try {
+        // #38 deferred edge: auto-baseline must never run on the small
+        // preview — resolve the active dataset's full data first (a no-op
+        // if it isn't pending). The working `segment` itself is unaffected
+        // (recomputed reactively once `active` swaps), so this only guards
+        // the eagerly-fired first step.
+        const ds = await useApp.getState().resolveDataset(activeId);
+        if (cancelled || !ds) return;
+        const res = await (b.method === "als"
+          ? baselineALS({ y: segment.y, lam: b.lam, p: b.p })
+          : b.method === "rollingball"
+            ? baselineRollingBall({ y: segment.y, radius: b.radius })
+            : baselineModPoly({ y: segment.y, order: b.order }));
         if (cancelled) return;
         setBaseline(res.baseline);
         setBaselineOverlay({
-          datasetId: active.id,
-          y: expandToFullRows(res.baseline, segment.kept, active.data.time.length),
+          datasetId: ds.id,
+          y: expandToFullRows(res.baseline, segment.kept, ds.data.time.length),
         });
-      })
-      .catch((e: unknown) => {
+      } catch (e: unknown) {
         if (!cancelled) setBaselineError(e instanceof Error ? e.message : "baseline failed");
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setBaselineBusy(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };

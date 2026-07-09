@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { exportFigure, renderFigureHitmap } from "../../../lib/api";
+import { exportFigure, fetchBookData, renderFigureHitmap } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { FIGURE_STYLE_DPI, useFigureBuilder } from "./useFigureBuilder";
@@ -16,6 +16,7 @@ vi.mock("../../../lib/api", () => ({
     elements: [{ id: "title", x0: 1, y0: 1, x1: 2, y1: 2 }],
     axes: { x0: 0, y0: 0, x1: 600, y1: 400, xlim: [0, 1], ylim: [0, 1], xlog: false, ylog: false },
   }),
+  fetchBookData: vi.fn(),
 }));
 
 const DATA: DataStruct = {
@@ -53,25 +54,65 @@ describe("useFigureBuilder", () => {
     expect(result.current.hitmap?.elements[0].id).toBe("title");
   });
 
-  it("exports at the chosen format/DPI with the dataset stem as filename", () => {
+  it("exports at the chosen format/DPI with the dataset stem as filename", async () => {
     const { result } = renderHook(() => useFigureBuilder());
     act(() => {
       result.current.setFmt("svg");
       result.current.setTitle("My Figure");
     });
-    act(() => result.current.exportNow());
+    await act(async () => {
+      await result.current.exportNow();
+    });
     const body = vi.mocked(exportFigure).mock.calls[0][0];
     expect(body.fmt).toBe("svg");
     expect(body.title).toBe("My Figure");
     expect(body.filename).toBe("scan"); // extension stripped
   });
 
-  it("is inert with no active dataset", () => {
+  it("is inert with no active dataset", async () => {
     useApp.setState({ datasets: [], activeId: null });
     const { result } = renderHook(() => useFigureBuilder());
-    act(() => result.current.exportNow());
+    await act(async () => {
+      await result.current.exportNow();
+    });
     expect(exportFigure).not.toHaveBeenCalled();
     expect(result.current.preview).toBeNull();
+  });
+
+  it("resolves a still-pending active dataset before exporting (#38)", async () => {
+    const full: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [1, 9],
+        [2, 8],
+        [3, 7],
+        [4, 6],
+      ],
+      labels: ["A", "B"],
+      units: ["u", "v"],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "book.opj",
+          data: { time: [0], values: [[1, 9]], labels: ["A", "B"], units: ["u", "v"], metadata: {} },
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 4, cols: 2 },
+        },
+      ],
+      activeId: "d1",
+    });
+    vi.mocked(fetchBookData).mockResolvedValue(full);
+    const { result } = renderHook(() => useFigureBuilder());
+
+    await act(async () => {
+      await result.current.exportNow();
+    });
+
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.dataset).toEqual(full);
+    expect(useApp.getState().datasets[0].pending).toBeUndefined();
   });
 
   it("syncs DPI to the preset's calibrated value when the style changes", () => {

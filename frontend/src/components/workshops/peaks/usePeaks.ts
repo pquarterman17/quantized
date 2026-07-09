@@ -64,24 +64,30 @@ export function usePeaks(): PeaksState {
       return;
     }
     setBusy(true);
-    const { x, y } = xy(active);
-    findPeaks({ x, y })
-      .then((res) => {
+    const activeId = active.id;
+    void (async () => {
+      try {
+        // #38 deferred edge: auto-find must never run on the small preview —
+        // resolve the active dataset's full data first (no-op if it isn't
+        // pending).
+        const ds = await useApp.getState().resolveDataset(activeId);
+        if (cancelled || !ds) return;
+        const { x, y } = xy(ds);
+        const res = await findPeaks({ x, y });
         if (cancelled) return;
         setPeaks(res.peaks);
         // Overlay on the FULL time (not the pruned x) so markers align with the
         // full-length plot; peak centers land on their nearest full-x point.
         setPeakOverlay({
-          datasetId: active.id,
-          y: peakOverlayArray(active.data.time, res.peaks.map((p) => ({ center: p.center, height: p.height }))),
+          datasetId: ds.id,
+          y: peakOverlayArray(ds.data.time, res.peaks.map((p) => ({ center: p.center, height: p.height }))),
         });
-      })
-      .catch((e: unknown) => {
+      } catch (e: unknown) {
         if (!cancelled) setError(e instanceof Error ? e.message : "peak find failed");
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setBusy(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -108,13 +114,17 @@ export function usePeaks(): PeaksState {
       setFitting(true);
       setFitError(null);
       try {
-        const { x, y } = xy(active);
+        // #38 deferred edge: resolve the active dataset's full data before
+        // fitting (a no-op if it isn't pending).
+        const ds = await useApp.getState().resolveDataset(active.id);
+        if (!ds) return;
+        const { x, y } = xy(ds);
         const res = await fitMultiPeak({
           x, y, peaks: seedsFrom(peaks), model: opts.model,
           bg_degree: opts.bgDegree, constrain: opts.constrain, link_mode: opts.linkMode,
         });
         setFitResult(res);
-        overlayFitted(active, res.peaks);
+        overlayFitted(ds, res.peaks);
       } catch (e: unknown) {
         setFitError(e instanceof Error ? e.message : "simultaneous fit failed");
       } finally {
@@ -133,7 +143,11 @@ export function usePeaks(): PeaksState {
       setFitting(true);
       setFitError(null);
       try {
-        const { x, y } = xy(active);
+        // #38 deferred edge: resolve the active dataset's full data before
+        // fitting (a no-op if it isn't pending).
+        const ds = await useApp.getState().resolveDataset(active.id);
+        if (!ds) return;
+        const { x, y } = xy(ds);
         const fitted: FittedPeak[] = [];
         for (const p of peaks) {
           const half = (Number.isFinite(p.fwhm) && p.fwhm > 0 ? p.fwhm : 1) * 3;
@@ -153,7 +167,7 @@ export function usePeaks(): PeaksState {
           nPeaks: fitted.length, model: opts.model,
         };
         setFitResult(result);
-        if (fitted.length > 0) overlayFitted(active, fitted);
+        if (fitted.length > 0) overlayFitted(ds, fitted);
         if (fitted.length === 0) setFitError("No peaks could be fit individually.");
       } catch (e: unknown) {
         setFitError(e instanceof Error ? e.message : "per-peak fit failed");

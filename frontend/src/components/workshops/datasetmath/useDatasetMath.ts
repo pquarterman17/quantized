@@ -53,15 +53,25 @@ export function useDatasetMath(): DatasetMathState {
   const [error, setError] = useState<string | null>(null);
 
   async function compute(): Promise<void> {
-    const a = datasets.find((d) => d.id === idA);
-    const b = datasets.find((d) => d.id === idB);
-    if (!a || !b) {
+    const pickA = datasets.find((d) => d.id === idA);
+    const pickB = datasets.find((d) => d.id === idB);
+    if (!pickA || !pickB) {
       setError("pick two datasets");
       return;
     }
     setBusy(true);
     setError(null);
     try {
+      // #38 deferred edge: either pick can be a never-activated, still-
+      // pending Origin book — resolve both to full data before combining.
+      const [a, b] = await Promise.all([
+        useApp.getState().resolveDataset(idA),
+        useApp.getState().resolveDataset(idB),
+      ]);
+      if (!a || !b) {
+        setError("pick two datasets");
+        return;
+      }
       const data = await datasetAlgebra({
         dataset_a: a.data,
         dataset_b: b.data,

@@ -3,7 +3,7 @@
 // consolidated CSV with or without the offset baked in. Pure math lives in
 // lib/waterfall.ts; this hook just holds the controls + derives the traces.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { saveBlob } from "../../../lib/download";
 import {
@@ -40,7 +40,7 @@ export interface WaterfallState {
   setMode: (m: OffsetMode) => void;
   setReverse: (on: boolean) => void;
   setLogY: (on: boolean) => void;
-  exportCSV: (baked: boolean) => void;
+  exportCSV: (baked: boolean) => Promise<void>;
 }
 
 export function useWaterfall(): WaterfallState {
@@ -57,6 +57,19 @@ export function useWaterfall(): WaterfallState {
   });
 
   const included = datasets.filter((d) => !excluded.has(d.id));
+
+  // The waterfall stack is a render path #38's original audit missed
+  // (PlotStage/WindowCanvas/useMultiPanelStage/WorksheetPane were wired, this
+  // wasn't) — trigger the fetch for every included-but-pending dataset so the
+  // stack converges on full data instead of silently stacking previews.
+  // ensureBookData is single-flight/idempotent, so re-checking on every
+  // datasets/excluded change is harmless.
+  useEffect(() => {
+    for (const d of datasets) {
+      if (!excluded.has(d.id) && d.pending) useApp.getState().ensureBookData(d.id);
+    }
+  }, [datasets, excluded]);
+
   const channels = useMemo(() => commonChannels(included.map((d) => d.data)), [included]);
   const [channel, setChannelRaw] = useState(channels[0] ?? "");
   const [autoSpace, setAutoSpace] = useState(true);
@@ -90,15 +103,22 @@ export function useWaterfall(): WaterfallState {
       return next;
     });
 
-  const exportCSV = (baked: boolean) => {
+  const exportCSV = async (baked: boolean): Promise<void> => {
     if (series.length === 0) {
       setStatus("waterfall: no datasets to export");
       return;
     }
-    const csv = waterfallToCSV(series, opts, activeChannel, baked);
+    // #38 deferred edge: the stacked set defaults to the WHOLE library —
+    // resolve every included dataset's full data first (bounded concurrency)
+    // rather than silently exporting previews for the never-activated ones.
+    const resolved = await useApp.getState().resolveDatasets(included.map((d) => d.id));
+    const resolvedSeries = activeChannel
+      ? resolved.map((d) => extractSeries(d.data, d.id, d.name, activeChannel))
+      : [];
+    const csv = waterfallToCSV(resolvedSeries, opts, activeChannel, baked);
     const tag = baked ? "offset" : "raw";
     saveBlob(new Blob([csv], { type: "text/csv" }), `waterfall_${activeChannel}_${tag}.csv`);
-    setStatus(`exported waterfall CSV (${baked ? "with" : "without"} offset) — ${series.length} datasets`);
+    setStatus(`exported waterfall CSV (${baked ? "with" : "without"} offset) — ${resolvedSeries.length} datasets`);
   };
 
   return {

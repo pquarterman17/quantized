@@ -35,6 +35,22 @@ export async function executeSteps(
   const fits: CalcResult[] = [];
   const store = () => useApp.getState();
 
+  // #38 deferred edge: a still-pending (preview-only) target must resolve to
+  // full data before ANY step runs, or every step below would silently
+  // compute on the small preview. This is the shared core for the interactive
+  // pipeline run, the file batch, AND the folder batch (runTemplateOnFolder)
+  // — the most dangerous case, since folder members are often datasets that
+  // were never activated/rendered. Abort the whole run (no partial output)
+  // rather than let some steps execute against wrong data.
+  try {
+    await store().resolveDataset(targetId);
+  } catch (e) {
+    const note = `couldn't load full data — ${e instanceof Error ? e.message : "error"}`;
+    for (const step of steps) log[step.id] = { status: "failed", note };
+    onProgress?.({ ...log });
+    return { log, fits };
+  }
+
   for (const step of steps) {
     if (!step.enabled) {
       log[step.id] = { status: "skipped", note: "disabled" };

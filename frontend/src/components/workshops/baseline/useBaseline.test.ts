@@ -7,6 +7,7 @@ import {
   baselineModPoly,
   baselineRegion,
   baselineRollingBall,
+  fetchBookData,
 } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -18,6 +19,7 @@ vi.mock("../../../lib/api", () => ({
   baselineModPoly: vi.fn(),
   baselineRegion: vi.fn(),
   baselineRollingBall: vi.fn(),
+  fetchBookData: vi.fn(),
 }));
 
 const raw: DataStruct = {
@@ -158,7 +160,9 @@ describe("useBaseline", () => {
     await act(async () => {
       await result.current.compute();
     });
-    act(() => result.current.subtract());
+    await act(async () => {
+      await result.current.subtract();
+    });
 
     const ds = useApp.getState().datasets;
     expect(ds).toHaveLength(2);
@@ -168,10 +172,43 @@ describe("useBaseline", () => {
     expect(sub.data.metadata.baseline_subtracted).toBe("modpoly");
   });
 
-  it("subtract is a no-op before an estimate exists", () => {
+  it("subtract is a no-op before an estimate exists", async () => {
     const { result } = renderHook(() => useBaseline());
-    act(() => result.current.subtract());
+    await act(async () => {
+      await result.current.subtract();
+    });
     expect(useApp.getState().datasets).toHaveLength(1); // nothing added
+  });
+
+  it("compute resolves a still-pending active dataset before estimating", async () => {
+    vi.mocked(baselineALS).mockResolvedValue({ baseline: [1, 1, 1, 1] });
+    const full: DataStruct = {
+      time: [1, 2, 3, 4, 5],
+      values: [[10], [12], [11], [13], [14]],
+      labels: ["I"],
+      units: ["cps"],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "book.opj",
+          data: { time: [1, 2], values: [[10], [12]], labels: ["I"], units: ["cps"], metadata: {} },
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5, cols: 1 },
+        },
+      ],
+      activeId: "d1",
+    });
+    vi.mocked(fetchBookData).mockResolvedValue(full);
+    const { result } = renderHook(() => useBaseline());
+
+    await act(async () => {
+      await result.current.compute();
+    });
+
+    expect(baselineALS).toHaveBeenCalledWith({ y: full.values.map((r) => r[0]), lam: 1e6, p: 0.01 });
+    expect(useApp.getState().datasets[0].pending).toBeUndefined();
   });
 
   it("surfaces an estimation error and sets no overlay", async () => {

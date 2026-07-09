@@ -297,8 +297,21 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
   const toggleMask = (r: number) => toggleRowExcluded(ds.id, r);
   const unmaskAll = () => clearRowExclusions(ds.id);
 
+  // #38 deferred edge: a still-pending dataset's rows are a min/max-DECIMATED
+  // SAMPLE of the true data, not a prefix — a row index computed against the
+  // preview doesn't correspond to any real row once the full data lands, so
+  // extract/copy abort (kick the fetch, tell the user to retry) rather than
+  // produce a permanently-wrong subset or clipboard payload.
+  function pendingGuard(action: string): boolean {
+    if (!ds.pending) return false;
+    useApp.getState().ensureBookData(ds.id);
+    setStatus(`still loading full data — try ${action} again in a moment`);
+    return true;
+  }
+
   function extractSubset() {
     if (!canExtract) return;
+    if (pendingGuard("Extract")) return;
     const data: DataStruct = {
       time: analysisRows.map((r) => time[r]),
       values: analysisRows.map((r) => values[r]),
@@ -319,6 +332,7 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
   }
 
   function copyRows() {
+    if (pendingGuard("Copy")) return;
     const rows = order.filter((r) => !masked.has(r));
     const data = rows.map((r) => [time[r], ...labels.map((_, c) => values[r]?.[c])]);
     copyText(tableToTSV(tsvHeaders(), data)).then((ok) =>
@@ -327,6 +341,7 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
   }
 
   function copyRow(r: number) {
+    if (pendingGuard("Copy")) return;
     const data = [[time[r], ...labels.map((_, c) => values[r]?.[c])]];
     copyText(tableToTSV(tsvHeaders(), data)).then((ok) =>
       setStatus(ok ? `copied row ${r + 1}` : "clipboard unavailable"),
