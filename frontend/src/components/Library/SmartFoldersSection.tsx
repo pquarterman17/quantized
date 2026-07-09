@@ -82,7 +82,10 @@ export default function SmartFoldersSection({ onFilterTag }: Props) {
             <div style={{ display: "flex", alignItems: "stretch" }}>
               <button
                 className="qzk-group-head"
-                style={{ flex: 1 }}
+                // minWidth 0 lets the name span shrink + ellipsize inside the
+                // flex row instead of pushing the ✎/× buttons out of it (a
+                // real-layout bug jsdom can't surface — caught by tools/visual).
+                style={{ flex: 1, minWidth: 0 }}
                 title={sf.query ? `query: ${sf.query}` : "empty query — matches everything"}
                 onClick={() => toggle(sf.id)}
               >
