@@ -3,7 +3,10 @@
 // source reference didn't resolve to any imported book renders disabled, with
 // the reason in its tooltip (never guesses at the wrong book). Shared by the
 // flat FiguresSection (no-folders mode) and the folder tree, where the figure
-// nests under its project folder at `depth` (plan item 5).
+// nests under its project folder at `depth` (plan item 5). The "⊞" button
+// (item 9, MULTI_PLOT_PLAN) opens the SAME apply into a brand-new window
+// instead of overwriting the focused one — the payoff for an `.opj` import
+// with many graph windows.
 
 import { figureLabel, type OriginFigureEntry } from "../../lib/originFigures";
 import { useApp } from "../../store/useApp";
@@ -16,15 +19,25 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
     ? `${entry.stem} — restore axis ranges (${n} curve${n === 1 ? "" : "s"})`
     : `unresolved source "${entry.figure.source_hint || "unknown"}" — no matching imported book`;
   return (
-    <button
-      className="qzk-fig-item"
-      disabled={!resolved}
-      title={title}
-      style={depth ? { marginLeft: depth * 14 } : undefined}
-      onClick={() => applyOriginFigure(entry.id)}
-    >
-      <span className="qzk-fig-name">{figureLabel(entry)}</span>
-      <span className="qzk-fig-meta">{entry.stem}</span>
-    </button>
+    <div style={{ display: "flex", gap: 4, alignItems: "stretch" }}>
+      <button
+        className="qzk-fig-item"
+        disabled={!resolved}
+        title={title}
+        style={depth ? { marginLeft: depth * 14 } : undefined}
+        onClick={() => applyOriginFigure(entry.id)}
+      >
+        <span className="qzk-fig-name">{figureLabel(entry)}</span>
+        <span className="qzk-fig-meta">{entry.stem}</span>
+      </button>
+      <button
+        className="qz-icon-btn"
+        title="Open in a new graph window"
+        disabled={!resolved}
+        onClick={() => applyOriginFigure(entry.id, { newWindow: true })}
+      >
+        ⊞
+      </button>
+    </div>
   );
 }

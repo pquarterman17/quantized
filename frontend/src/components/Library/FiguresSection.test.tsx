@@ -93,6 +93,36 @@ describe("FiguresSection", () => {
     expect(item.title).toContain("Sheet9");
   });
 
+  it("'Open in a new graph window' (item 9) opens + focuses a new window instead of the active one", () => {
+    useApp.setState({
+      originFigures: [
+        {
+          id: "fig-XRD-0",
+          stem: "XRD",
+          datasetId: "d1",
+          siblingIds: ["d1"],
+          figure: {
+            name: "Graph1",
+            x_from: 18,
+            x_to: 100,
+            x_log: false,
+            y_from: 1,
+            y_to: 1e6,
+            y_log: true,
+            n_curves: 3,
+            annotations: ["Si (004)"],
+          },
+        },
+      ],
+    });
+    const before = useApp.getState().plotWindows.length;
+    render(<FiguresSection />);
+    fireEvent.click(screen.getByTitle("Open in a new graph window"));
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(before + 1);
+    expect(s.plotWindows.find((w) => w.id === s.focusedWindowId)?.datasetId).toBe("d1");
+  });
+
   it("collapses/expands via the section header", () => {
     useApp.setState({
       originFigures: [

@@ -79,6 +79,27 @@ describe("SavedFiguresSection", () => {
     expect(useApp.getState().figureDocSeed?.id).toBe("b");
   });
 
+  it("'open in a new graph window' (item 9) opens + focuses a new window bound to the doc's dataset", () => {
+    useApp.setState({ figureDocs: [doc({ config: { ...doc().config, yLog: true, title: "Doc Title" } })] });
+    const before = useApp.getState().plotWindows.length;
+    render(<SavedFiguresSection />);
+    fireEvent.click(screen.getByTitle("open in a new graph window"));
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(before + 1);
+    const created = s.plotWindows.find((w) => w.id === s.focusedWindowId)!;
+    expect(created.datasetId).toBe("d1");
+    expect(s.yLog).toBe(true);
+    expect(s.plotTitle).toBe("Doc Title");
+  });
+
+  it("disables 'open in a new graph window' for a frozen doc (no live dataset binding)", () => {
+    useApp.setState({
+      figureDocs: [doc({ id: "frozen", name: "frozen", datasetId: null, live: false, dataSnapshot: d1.data })],
+    });
+    render(<SavedFiguresSection />);
+    expect(screen.getByTitle(/only a live figure/)).toBeDisabled();
+  });
+
   it("duplicate and delete edit the doc list; dataset removal nulls refs", () => {
     useApp.setState({ figureDocs: [doc()] });
     render(<SavedFiguresSection />);
