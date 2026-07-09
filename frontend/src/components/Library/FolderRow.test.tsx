@@ -6,7 +6,7 @@
 // dataTransfer, dispatched via RTL's low-level fireEvent, plus a mocked
 // getBoundingClientRect.
 
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import FolderRow from "./FolderRow";
@@ -167,5 +167,65 @@ describe("FolderRow — folder drop (project-organization plan item 3b)", () => 
     expect(row).not.toHaveClass("dropinto");
     expect(row).not.toHaveClass("drop-above");
     expect(row).not.toHaveClass("drop-below");
+  });
+});
+
+describe("FolderRow — bulk-ops context menu (project-organization plan item 8)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [ds("d1", "grp"), ds("d2", "grp"), ds("d3")],
+      folders: [fld("grp", null, 0)],
+      activeId: "d3",
+      selectedIds: ["d3"],
+      expandedFolders: [],
+    });
+    localStorage.clear();
+  });
+
+  const open = (folder: FolderNode, count: number) => {
+    const { container } = render(<FolderRow folder={folder} depth={0} count={count} expanded={false} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-folder-head")!);
+  };
+
+  it("offers the bulk ops; 'Select all' replaces the selection without moving the plot", () => {
+    open(fld("grp", null, 0), 2);
+    expect(screen.getByText("Export folder as consolidated CSV")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Select all in folder (2)"));
+    expect(useApp.getState().selectedIds).toEqual(["d1", "d2"]);
+    expect(useApp.getState().activeId).toBe("d3"); // plot unaffected
+  });
+
+  it("'Delete folder + N dataset(s)' destroys the folder and its datasets", () => {
+    open(fld("grp", null, 0), 2);
+    fireEvent.click(screen.getByText("Delete folder + 2 dataset(s)"));
+    const s = useApp.getState();
+    expect(s.datasets.map((d) => d.id)).toEqual(["d3"]);
+    expect(s.folders).toEqual([]);
+  });
+
+  it("gates the bulk items on an empty folder", () => {
+    useApp.setState({ datasets: [], folders: [fld("empty", null, 0)] });
+    open(fld("empty", null, 0), 0);
+    expect(screen.getByRole("button", { name: "Select all in folder (0)" })).toBeDisabled();
+    expect(screen.queryByText(/Delete folder \+/)).not.toBeInTheDocument();
+    // No corrections on the active dataset / no saved templates → gated items absent.
+    expect(screen.queryByText(/Apply active corrections/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Run analysis template/)).not.toBeInTheDocument();
+  });
+
+  it("offers the template run only when a saved template exists", () => {
+    localStorage.setItem(
+      "qz.analysisTemplates",
+      JSON.stringify([
+        {
+          version: 1,
+          name: "T",
+          steps: [{ id: "", kind: "fit", label: "Fit", code: "qz.fit()", params: { model: "Linear" } }],
+          outputs: ["R2"],
+        },
+      ]),
+    );
+    open(fld("grp", null, 0), 2);
+    expect(screen.getByText("Run analysis template on folder…")).toBeInTheDocument();
   });
 });

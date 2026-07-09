@@ -8,12 +8,13 @@
 
 import { useCallback, useState } from "react";
 
-import { executeSteps } from "./executeSteps";
-import { listFitModels, reportEmit, uploadFile } from "../../../lib/api";
+import { runTemplateOnDataset } from "./runTemplate";
+import { listFitModels, uploadFile } from "../../../lib/api";
 import { saveBlob } from "../../../lib/download";
 import type { PipelineStep } from "../../../lib/pipeline";
 import {
   deleteTemplate,
+  extractOutputs,
   loadTemplates,
   parseTemplate,
   saveTemplate,
@@ -23,7 +24,6 @@ import {
   type AnalysisTemplate,
   type BatchRow,
 } from "../../../lib/template";
-import type { CalcResult } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 
@@ -62,22 +62,11 @@ async function deriveOutputs(steps: readonly PipelineStep[]): Promise<string[]> 
   }
 }
 
-/** Pull the declared outputs out of a fit result (params by declared order). */
-function extractOutputs(outputs: readonly string[], fit: CalcResult | undefined): number[] {
-  if (!fit) return outputs.map(() => Number.NaN);
-  const params = (fit.params as number[] | undefined) ?? [];
-  return outputs.map((name, i) => {
-    if (name === "R2") return typeof fit.R2 === "number" ? fit.R2 : Number.NaN;
-    return typeof params[i] === "number" ? params[i] : Number.NaN;
-  });
-}
-
 export function useTemplates(): TemplatesState {
   const [templates, setTemplates] = useState<AnalysisTemplate[]>(() => loadTemplates());
   const [batch, setBatch] = useState<BatchProgress | null>(null);
   const loadSteps = useApp((s) => s.loadSteps);
   const addDataset = useApp((s) => s.addDataset);
-  const addReport = useApp((s) => s.addReport);
   const setPipelineRunning = useApp((s) => s.setPipelineRunning);
 
   const saveCurrent = useCallback(async (name: string): Promise<string | null> => {
@@ -139,33 +128,10 @@ export function useTemplates(): TemplatesState {
             const data = await uploadFile(file);
             const id = `tplb-${Date.now().toString(36)}-${++_seq}`;
             addDataset({ id, name: file.name, data });
-            const { fits, log } = await executeSteps(t.steps, id);
-            const failedSteps = Object.values(log).filter((l) => l.status === "failed");
-            const lastFit = fits[fits.length - 1];
-            rows.push({
-              file: file.name,
-              values: extractOutputs(t.outputs, lastFit),
-              ...(failedSteps.length
-                ? { failed: failedSteps.map((l) => l.note ?? "step failed").join("; ") }
-                : {}),
-            });
-            if (failedSteps.length) failures.push(file.name);
-            // Per-file report sheet (#3) from the last fit, when one ran.
-            if (lastFit) {
-              const nParams = ((lastFit.params as number[] | undefined) ?? []).length;
-              const names = t.outputs.filter((o) => o !== "R2");
-              const { report } = await reportEmit({
-                kind: "curve_fit",
-                result: lastFit as Record<string, unknown>,
-                param_names:
-                  names.length === nParams
-                    ? names
-                    : Array.from({ length: nParams }, (_, k) => `p${k}`),
-                title: `${t.name} — ${file.name}`,
-                source_refs: [{ kind: "dataset", id, name: file.name }],
-              });
-              addReport(`${t.name} — ${file.name}`, report, id);
-            }
+            // Shared core: steps + output extraction + the per-file #36 report.
+            const row = await runTemplateOnDataset(t, id, file.name);
+            rows.push(row);
+            if (row.failed) failures.push(file.name);
           } catch (e) {
             // One bad file yields a flagged row, never a dead batch (#3).
             const note = e instanceof Error ? e.message : "import failed";
@@ -189,7 +155,7 @@ export function useTemplates(): TemplatesState {
         setBatch(null);
       }
     },
-    [addDataset, addReport, setPipelineRunning],
+    [addDataset, setPipelineRunning],
   );
 
   return { templates, batch, saveCurrent, load, remove, exportFile, importFile, runBatch };

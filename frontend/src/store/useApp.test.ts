@@ -452,6 +452,19 @@ describe("useApp multi-select + removeSelected", () => {
     useApp.getState().removeDataset("d2");
     expect(useApp.getState().selectedIds).toEqual(["d1", "d3"]);
   });
+
+  it("selectIds replaces the selection without moving the active dataset (item 8)", () => {
+    useApp.setState({ datasets: three(), activeId: "d1", selectedIds: ["d1"] });
+    useApp.getState().selectIds(["d2", "d3"]);
+    expect(useApp.getState().selectedIds).toEqual(["d2", "d3"]);
+    expect(useApp.getState().activeId).toBe("d1"); // plot unaffected
+  });
+
+  it("selectIds de-duplicates and drops ids that aren't loaded", () => {
+    useApp.setState({ datasets: three(), activeId: "d1", selectedIds: [] });
+    useApp.getState().selectIds(["d2", "d2", "ghost", "d1"]);
+    expect(useApp.getState().selectedIds).toEqual(["d2", "d1"]);
+  });
 });
 
 describe("useApp renameDataset", () => {

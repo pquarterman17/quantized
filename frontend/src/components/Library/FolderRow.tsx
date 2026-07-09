@@ -15,9 +15,17 @@
 
 import { useState } from "react";
 
+import {
+  applyActiveCorrectionsToFolder,
+  exportFolderCsv,
+  removeFolderWithDatasets,
+  runTemplateOnFolder,
+  selectFolderContents,
+} from "./folderOps";
 import { DATASET_DND, FOLDER_DND } from "./useLibraryTree";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { childFolders, dropZoneAt, resolveDropBeforeId, type DropZone3 } from "../../lib/foldertree";
+import { loadTemplates } from "../../lib/template";
 import type { FolderNode } from "../../lib/types";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
@@ -51,25 +59,69 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
     if (!expanded) toggle(folder.id);
   };
 
-  const items: ContextMenuItem[] = [
-    {
-      label: "New subfolder",
-      run: () => {
-        createFolder(folder.id, "New Folder");
-        expand();
+  // Built only while the menu is open — the bulk-op gates read live store
+  // state + the saved-template list, which shouldn't run on every row render.
+  const buildMenu = (): ContextMenuItem[] => {
+    const s = useApp.getState();
+    const activeDs = s.datasets.find((d) => d.id === s.activeId);
+    const hasTemplates = loadTemplates().length > 0;
+    return [
+      {
+        label: "New subfolder",
+        run: () => {
+          createFolder(folder.id, "New Folder");
+          expand();
+        },
       },
-    },
-    { label: "Rename…", run: () => setRename(folder.name) },
-    { separator: true },
-    {
-      label: "Delete folder",
-      run: () => {
-        deleteFolder(folder.id); // reparent: contents move up; datasets are never deleted
-        toast(`deleted folder "${folder.name}"`);
+      { label: "Rename…", run: () => setRename(folder.name) },
+      // ── bulk ops over the whole subtree (item 8) ──────────────────────────
+      { separator: true },
+      {
+        label: `Select all in folder (${count})`,
+        run: () => selectFolderContents(folder),
+        disabled: count === 0,
       },
-      danger: true,
-    },
-  ];
+      {
+        label: "Export folder as consolidated CSV",
+        run: () => void exportFolderCsv(folder),
+        disabled: count === 0,
+      },
+      ...(activeDs?.corrections && count > 0
+        ? [
+            {
+              label: `Apply active corrections to folder (${count})`,
+              run: () => void applyActiveCorrectionsToFolder(folder),
+            } as ContextMenuItem,
+          ]
+        : []),
+      ...(hasTemplates && count > 0
+        ? [
+            {
+              label: "Run analysis template on folder…",
+              run: () => void runTemplateOnFolder(folder),
+            } as ContextMenuItem,
+          ]
+        : []),
+      { separator: true },
+      {
+        label: "Delete folder",
+        run: () => {
+          deleteFolder(folder.id); // reparent: contents move up; datasets are never deleted
+          toast(`deleted folder "${folder.name}"`);
+        },
+        danger: true,
+      },
+      ...(count > 0
+        ? [
+            {
+              label: `Delete folder + ${count} dataset(s)`,
+              run: () => removeFolderWithDatasets(folder),
+              danger: true,
+            } as ContextMenuItem,
+          ]
+        : []),
+    ];
+  };
 
   return (
     <div
@@ -129,7 +181,9 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
         }
       }}
     >
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={items} onClose={() => setMenu(null)} />}
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} items={buildMenu()} onClose={() => setMenu(null)} />
+      )}
       <span className="qzk-group-caret">{expanded ? "▾" : "▸"}</span>
       {rename != null ? (
         <input

@@ -107,6 +107,11 @@ export default function DatasetRow({
   const { selectedIds } = useApp.getState();
   const selectedCount = selectedIds.length;
   const allIds = useApp.getState().datasets.map((x) => x.id);
+  // Move acts on the whole multi-selection when this row is part of one (bulk
+  // move — item 8); otherwise on this row alone.
+  const moveIds = selected && selectedCount > 1 ? selectedIds : [d.id];
+  const moveLabel = (dest: string) =>
+    moveIds.length > 1 ? `Move ${moveIds.length} selected to ${dest}` : `Move to ${dest}`;
   const menuItems: ContextMenuItem[] = [
     { label: "Plot (make active)", run: () => setActive(d.id), disabled: active },
     { label: "Duplicate", run: () => duplicateDataset(d.id) },
@@ -118,13 +123,18 @@ export default function DatasetRow({
     { separator: true },
     ...folders.map(
       (f): ContextMenuItem => ({
-        label: `Move to "${f.name}"`,
-        run: () => moveDatasetToFolder(d.id, f.id),
-        disabled: d.folderId === f.id,
+        label: moveLabel(`"${f.name}"`),
+        run: () => moveIds.forEach((id) => moveDatasetToFolder(id, f.id)),
+        disabled: moveIds.length === 1 && d.folderId === f.id,
       }),
     ),
-    ...(d.folderId
-      ? [{ label: "Move to top level", run: () => moveDatasetToFolder(d.id, null) } as ContextMenuItem]
+    ...(d.folderId || moveIds.length > 1
+      ? [
+          {
+            label: moveLabel("top level"),
+            run: () => moveIds.forEach((id) => moveDatasetToFolder(id, null)),
+          } as ContextMenuItem,
+        ]
       : []),
     {
       label: "New folder with this…",

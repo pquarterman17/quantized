@@ -44,6 +44,26 @@ export function subtreeIds(folders: FolderNode[], id: string): Set<string> {
   return ids;
 }
 
+/**
+ * Every dataset anywhere in folder `id`'s subtree, in tree RENDER order (each
+ * level emits its child folders' subtrees first, then its own datasets —
+ * matching useLibraryTree's buildTreeRows), so a folder bulk op (item 8) walks
+ * datasets in the same order the Library shows them.
+ */
+export function subtreeDatasets(
+  folders: FolderNode[],
+  datasets: Dataset[],
+  id: string,
+): Dataset[] {
+  const out: Dataset[] = [];
+  const emit = (fid: string) => {
+    for (const c of childFolders(folders, fid)) emit(c.id);
+    out.push(...folderDatasets(datasets, fid));
+  };
+  emit(id);
+  return out;
+}
+
 /** Is `target` the folder `id` itself or one of its descendants? Used to reject
  *  a move that would create a cycle (a folder into its own subtree). */
 export function isSelfOrDescendant(

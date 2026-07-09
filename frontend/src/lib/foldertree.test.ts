@@ -14,6 +14,7 @@ import {
   pruneOrphans,
   renameFolder,
   resolveDropBeforeId,
+  subtreeDatasets,
   subtreeIds,
 } from "./foldertree";
 import type { Dataset, FolderNode } from "./types";
@@ -67,6 +68,40 @@ describe("queries", () => {
     expect(isSelfOrDescendant(nested, "a", "a1x")).toBe(true);
     expect(isSelfOrDescendant(nested, "a", "b")).toBe(false);
     expect(isSelfOrDescendant(nested, "a", null)).toBe(false);
+  });
+});
+
+describe("subtreeDatasets (folder bulk ops, item 8)", () => {
+  // a ── a1 ── a1x        d-a1x lives in a1x, d-a1 in a1, d-a2/d-a1st in a,
+  // b                     d-b in b, d-root at the root.
+  const folders = [fld("a", null, 0), fld("a1", "a", 0), fld("a1x", "a1", 0), fld("b", null, 1)];
+  const datasets = [
+    ds("d-a2", "a", 1),
+    ds("d-a1st", "a", 0),
+    ds("d-a1", "a1", 0),
+    ds("d-a1x", "a1x", 0),
+    ds("d-b", "b", 0),
+    ds("d-root"),
+  ];
+
+  it("collects the whole subtree in tree render order (subfolders first, then own)", () => {
+    expect(subtreeDatasets(folders, datasets, "a").map((d) => d.id)).toEqual([
+      "d-a1x", // deepest subfolder's contents surface first (render order)
+      "d-a1",
+      "d-a1st", // then the folder's own datasets, sorted by order
+      "d-a2",
+    ]);
+  });
+
+  it("excludes datasets outside the subtree (siblings and root)", () => {
+    const got = subtreeDatasets(folders, datasets, "a").map((d) => d.id);
+    expect(got).not.toContain("d-b");
+    expect(got).not.toContain("d-root");
+  });
+
+  it("returns [] for an empty folder and ignores expansion state entirely", () => {
+    expect(subtreeDatasets(folders, datasets, "a1x").map((d) => d.id)).toEqual(["d-a1x"]);
+    expect(subtreeDatasets([fld("empty", null, 0)], datasets, "empty")).toEqual([]);
   });
 });
 

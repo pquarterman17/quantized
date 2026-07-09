@@ -12,9 +12,8 @@ away on import and re-approximated from name prefixes.
 
 **Status:** Active
 **Created:** 2026-07-04
-**Updated:** 2026-07-08 (items 3, 4, 6 complete — drop-between DnD reorder/reparent
-shipped (3b) and the legacy `group` string is fully migrated into folders (6),
-closing item 4's last box too; only Tier 3 nice-to-haves remain open)
+**Updated:** 2026-07-08 (item 8 complete — folder-level bulk operations; open:
+9 (smart folders) and 10 (decompose the 3 grandfathered components))
 
 ---
 
@@ -98,9 +97,6 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
     - [ ] `components/workshops/calculators/ThinFilmTab.tsx` (442) — split the
           calculator sub-tabs
 
-8. **Folder-level bulk operations** — export all in a folder, apply
-   corrections/template to a folder, bulk move/remove by folder.
-
 9. **Tags / smart-folders (complementary secondary view)** — saved
    tag/name/format queries as cross-cutting "smart folders" layered on top
    of the containment tree (a dataset can appear in several). Deliberately
@@ -110,6 +106,26 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
 
 ## Completed
 
+- ~~**8. Folder-level bulk operations**~~ (2026-07-08) — the FolderRow context
+  menu gains whole-subtree bulk ops over a new pure
+  `lib/foldertree.subtreeDatasets` (tree render order, so ops walk datasets in
+  the order the Library shows them): **Select all in folder** (new
+  `useApp.selectIds` — explicit-list selection that never moves the plotted
+  dataset, which makes every existing selection-based op — merge, remove,
+  apply-to-selected — folder-wise for free), **Export folder as consolidated
+  CSV** (named for the folder), **Apply active corrections to folder** (rides
+  `applyCorrectionsToMany`), **Run analysis template on folder…** (askParams
+  picker → per-dataset #36 reports + one summary worksheet — the folder-scoped
+  twin of the #3 file batch), and a danger **Delete folder + N dataset(s)**
+  (`removeDatasets` + cascade — distinct from the re-homing "Delete folder").
+  Bulk move completed on the other surface: DatasetRow's "Move to …" items act
+  on the whole multi-selection when the row is part of one ("Move N selected
+  to …" / "… to top level"). Ops live in `components/Library/folderOps.ts`
+  (module-level helpers over `getState`, no new state); the template run
+  reuses a shared `workshops/pipeline/runTemplate.runTemplateOnDataset` core
+  extracted from `useTemplates.runBatch` — the extraction also fixed a latent
+  batch bug where a failed report emit double-flagged an already-pushed row.
+  +23 tests (frontend 1694 green).
 - ~~**6. Migrate the flat `group` string → folders**~~ (2026-07-08) —
   `lib/foldertree.migrateGroupsToFolders` (pure, idempotent): for every
   un-foldered dataset carrying a non-blank `.group`, create-or-reuse (by name)

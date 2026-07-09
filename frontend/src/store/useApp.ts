@@ -486,6 +486,9 @@ interface AppState {
   setActive: (id: string) => void;
   toggleSelected: (id: string) => void;
   selectRange: (id: string) => void;
+  // Replace the multi-selection with an explicit id list (folder bulk ops,
+  // item 8) — like ctrl-click, it never moves the plotted/active dataset.
+  selectIds: (ids: string[]) => void;
   removeDataset: (id: string) => void;
   removeSelected: () => void;
   // Bulk-remove by explicit id list (item 17's book-family filter dialog) —
@@ -1507,6 +1510,13 @@ export const useApp = create<AppState>((set, get) => ({
       if (a < 0 || b < 0) return { selectedIds: [id] };
       const [lo, hi] = a <= b ? [a, b] : [b, a];
       return { selectedIds: order.slice(lo, hi + 1) };
+    }),
+  // Explicit-list selection (folder "Select all" — item 8): de-duplicated and
+  // clamped to live datasets; the plotted/active dataset stays put.
+  selectIds: (ids) =>
+    set((s) => {
+      const live = new Set(s.datasets.map((d) => d.id));
+      return { selectedIds: [...new Set(ids)].filter((id) => live.has(id)) };
     }),
   removeDataset: (id) =>
     set((s) => {

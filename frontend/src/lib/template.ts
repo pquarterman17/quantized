@@ -5,7 +5,7 @@
 // (localStorage) and exports/imports as a standalone .json file. Pure.
 
 import { makeStep, type PipelineStep, type StepKind } from "./pipeline";
-import type { DataStruct } from "./types";
+import type { CalcResult, DataStruct } from "./types";
 
 export interface AnalysisTemplate {
   version: 1;
@@ -126,6 +126,18 @@ export function deleteTemplate(name: string): AnalysisTemplate[] {
 }
 
 // ── Batch summary sheet (#3) ────────────────────────────────────────────────
+
+/** Pull the declared outputs out of a fit result (params by declared order;
+ *  "R2" maps to the goodness-of-fit). NaN where the fit is absent or short. */
+export function extractOutputs(outputs: readonly string[], fit: CalcResult | undefined): number[] {
+  if (!fit) return outputs.map(() => Number.NaN);
+  const params = (fit.params as number[] | undefined) ?? [];
+  return outputs.map((name, i) => {
+    if (name === "R2") return typeof fit.R2 === "number" ? fit.R2 : Number.NaN;
+    return typeof params[i] === "number" ? params[i] : Number.NaN;
+  });
+}
+
 /** One processed file's extracted outputs (NaN for a failed/missing value). */
 export interface BatchRow {
   file: string;

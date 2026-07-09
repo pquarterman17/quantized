@@ -168,3 +168,55 @@ describe("DatasetRow drop-between reorder", () => {
     expect(row).not.toHaveClass("drop-below");
   });
 });
+
+describe("DatasetRow bulk move (project-organization plan item 8)", () => {
+  const a: Dataset = { id: "a", name: "a", data: plain.data };
+  const b: Dataset = { id: "b", name: "b", data: plain.data };
+  const c: Dataset = { id: "c", name: "c", data: plain.data };
+  const grp = { id: "grp", name: "Grp", parentId: null, order: 0 };
+
+  it("moves the whole multi-selection into the picked folder", () => {
+    useApp.setState({
+      datasets: [a, b, c],
+      folders: [grp],
+      activeId: "a",
+      selectedIds: ["a", "b"],
+    });
+    const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    fireEvent.click(screen.getByText('Move 2 selected to "Grp"'));
+    const s = useApp.getState();
+    expect(s.datasets.find((d) => d.id === "a")!.folderId).toBe("grp");
+    expect(s.datasets.find((d) => d.id === "b")!.folderId).toBe("grp");
+    expect(s.datasets.find((d) => d.id === "c")!.folderId).toBeUndefined();
+  });
+
+  it("a lone row keeps the single-dataset move label and behavior", () => {
+    useApp.setState({ datasets: [a, b], folders: [grp], activeId: "a", selectedIds: ["a"] });
+    const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    fireEvent.click(screen.getByText('Move to "Grp"'));
+    const s = useApp.getState();
+    expect(s.datasets.find((d) => d.id === "a")!.folderId).toBe("grp");
+    expect(s.datasets.find((d) => d.id === "b")!.folderId).toBeUndefined();
+  });
+
+  it("offers 'Move N selected to top level' for a multi-selection of foldered rows", () => {
+    useApp.setState({
+      datasets: [
+        { ...a, folderId: "grp" },
+        { ...b, folderId: "grp" },
+      ],
+      folders: [grp],
+      activeId: "a",
+      selectedIds: ["a", "b"],
+    });
+    const { container } = render(
+      <DatasetRow dataset={{ ...a, folderId: "grp" }} {...baseProps} selected />,
+    );
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    fireEvent.click(screen.getByText("Move 2 selected to top level"));
+    const s = useApp.getState();
+    expect(s.datasets.every((d) => d.folderId === undefined)).toBe(true);
+  });
+});
