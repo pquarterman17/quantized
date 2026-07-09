@@ -2,11 +2,17 @@
 
 import { useMemo } from "react";
 
+import { downsampleMinMax } from "../../lib/downsample";
 import { primaryChannel } from "../../lib/plotdata";
 import type { DataStruct } from "../../lib/types";
 
 const W = 180;
 const H = 26;
+// ~2x the thumbnail's pixel width: enough resolution that a bucket never
+// spans more than half a pixel, so downsampling is visually lossless while
+// capping the SVG path at a couple hundred points instead of tens of
+// thousands (Library.tsx mounts one of these per row, up to ~120+ at once).
+const MAX_BUCKETS = W * 2;
 
 export default function Sparkline({ data }: { data: DataStruct }) {
   const path = useMemo(() => {
@@ -20,28 +26,17 @@ export default function Sparkline({ data }: { data: DataStruct }) {
     const xs = data.time;
     const n = Math.min(xs.length, ys.length);
     if (n < 2) return "";
-    let xMin = Infinity;
-    let xMax = -Infinity;
-    let yMin = Infinity;
-    let yMax = -Infinity;
-    for (let i = 0; i < n; i++) {
-      const x = xs[i];
-      const y = ys[i];
-      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-      if (x < xMin) xMin = x;
-      if (x > xMax) xMax = x;
-      if (y < yMin) yMin = y;
-      if (y > yMax) yMax = y;
-    }
+    // Downsample BEFORE path-building (min/max-per-bucket, never plain
+    // stride — a stride sample can step clean over a spike): the same pass
+    // that picks each bucket's extremes also tracks the exact global x/y
+    // bounds, so there's no separate full-resolution bounds pass either.
+    const { xs: dxs, ys: dys, xMin, xMax, yMin, yMax } = downsampleMinMax(xs, ys, n, MAX_BUCKETS);
     const xSpan = xMax - xMin || 1;
     const ySpan = yMax - yMin || 1;
     const pts: string[] = [];
-    for (let i = 0; i < n; i++) {
-      const x = xs[i];
-      const y = ys[i];
-      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-      const px = ((x - xMin) / xSpan) * (W - 2) + 1;
-      const py = H - 1 - ((y - yMin) / ySpan) * (H - 2);
+    for (let i = 0; i < dxs.length; i++) {
+      const px = ((dxs[i] - xMin) / xSpan) * (W - 2) + 1;
+      const py = H - 1 - ((dys[i] - yMin) / ySpan) * (H - 2);
       pts.push(`${px.toFixed(1)},${py.toFixed(1)}`);
     }
     return "M" + pts.join(" L");
