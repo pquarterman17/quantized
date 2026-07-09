@@ -2452,3 +2452,49 @@ describe("useApp removeFormula column remap", () => {
     expect(ds.filter).toEqual([{ col: 1, kind: "range", min: 0 }]);
   });
 });
+
+describe("useApp smart folders (org #9)", () => {
+  it("addSmartFolder trims and appends; blank name is a no-op", () => {
+    useApp.setState({ smartFolders: [] });
+    useApp.getState().addSmartFolder("  Loops  ", " tag:mvsh ");
+    useApp.getState().addSmartFolder("   ", "tag:x"); // blank -> no-op
+    const sf = useApp.getState().smartFolders;
+    expect(sf).toHaveLength(1);
+    expect(sf[0].name).toBe("Loops");
+    expect(sf[0].query).toBe("tag:mvsh");
+    expect(sf[0].id).toBeTruthy();
+  });
+
+  it("updateSmartFolder edits name+query; a blank name keeps the old one", () => {
+    useApp.setState({ smartFolders: [{ id: "s1", name: "Loops", query: "tag:mvsh" }] });
+    useApp.getState().updateSmartFolder("s1", "", "format:qd");
+    expect(useApp.getState().smartFolders[0]).toEqual({
+      id: "s1",
+      name: "Loops",
+      query: "format:qd",
+    });
+    useApp.getState().updateSmartFolder("s1", "QD", "format:qd");
+    expect(useApp.getState().smartFolders[0].name).toBe("QD");
+  });
+
+  it("removeSmartFolder drops by id (datasets untouched)", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      smartFolders: [{ id: "s1", name: "Loops", query: "" }],
+    });
+    useApp.getState().removeSmartFolder("s1");
+    expect(useApp.getState().smartFolders).toEqual([]);
+    expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
+  it("loadWorkspace restores saved smart folders and clears them when absent", () => {
+    useApp.setState({ smartFolders: [] });
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      smartFolders: [{ id: "s1", name: "Loops", query: "tag:mvsh" }],
+    });
+    expect(useApp.getState().smartFolders).toHaveLength(1);
+    useApp.getState().loadWorkspace({ datasets: [] }); // e.g. clearAll's reset
+    expect(useApp.getState().smartFolders).toEqual([]);
+  });
+});

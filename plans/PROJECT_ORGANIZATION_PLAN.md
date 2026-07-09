@@ -12,8 +12,9 @@ away on import and re-approximated from name prefixes.
 
 **Status:** Active
 **Created:** 2026-07-04
-**Updated:** 2026-07-08 (item 8 complete — folder-level bulk operations; open:
-9 (smart folders) and 10 (decompose the 3 grandfathered components))
+**Updated:** 2026-07-08 (items 8 + 9 complete — folder bulk ops and
+tags/smart-folders; the only open item is 10, decomposing the 3
+grandfathered over-ceiling components — App.tsx already ratcheted 987→954)
 
 ---
 
@@ -97,15 +98,32 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
     - [ ] `components/workshops/calculators/ThinFilmTab.tsx` (442) — split the
           calculator sub-tabs
 
-9. **Tags / smart-folders (complementary secondary view)** — saved
-   tag/name/format queries as cross-cutting "smart folders" layered on top
-   of the containment tree (a dataset can appear in several). Deliberately
-   secondary to the folder tree, not a replacement.
-
 ---
 
 ## Completed
 
+- ~~**9. Tags / smart-folders (complementary secondary view)**~~ (2026-07-08) —
+  saved tag/name/format queries as cross-cutting Library sections over the
+  containment tree. Pure `lib/smartfolders.ts` owns the grammar + matcher
+  (whitespace terms AND-ed, case-insensitive substring; bare term = name OR
+  tag — the filter box's historical behavior — and `tag:` / `name:` /
+  `format:` narrow to one field, where format = `metadata.parser_name`, e.g.
+  `format:qd` ⊂ `import_qd_vsm`). The Library filter box now runs the SAME
+  matcher, so a query proven live can be saved as a smart folder via a new ☆
+  button beside it; `SmartFoldersSection` renders each saved query collapsed
+  with a derived member count (members are computed per render —
+  `smartFolderMembers` — never stored, so a dataset can sit in several smart
+  folders AND its containment folder, and membership can't drift stale),
+  expanding to full `DatasetRow`s; ✎/＋ edit/create through the shared
+  `askParams` dialog, × deletes the query only. Store carries only
+  `smartFolders: SmartFolder[]` (add/update/remove); persists through `.dwk`
+  (additive-optional field on v3, `sanitizeSmartFolders` at the untrusted
+  boundary, defaults `[]` for older docs) and the localStorage autosave (the
+  subscription now watches `smartFolders` identity too). Side effect: the
+  App.tsx autosave wiring moved to `src/useWorkspaceAutosave.ts` because the
+  +2-line subscription edit tripped the component-ceiling ratchet — the
+  extraction ratcheted App.tsx's pin 987→954 (a down-payment on item 10).
+  +29 tests (frontend 1723 green).
 - ~~**8. Folder-level bulk operations**~~ (2026-07-08) — the FolderRow context
   menu gains whole-subtree bulk ops over a new pure
   `lib/foldertree.subtreeDatasets` (tree render order, so ops walk datasets in

@@ -44,7 +44,7 @@ function offenders(re: RegExp, allow: string[]): string[] {
 const TSX_CEILING = 400;
 // path-suffix -> grandfathered max (exact current line count). RATCHET DOWN ONLY.
 const GRANDFATHERED: Record<string, number> = {
-  "/App.tsx": 987, // root orchestrator; decompose (PROJECT_ORGANIZATION_PLAN)
+  "/App.tsx": 954, // root orchestrator; decompose (PROJECT_ORGANIZATION_PLAN)
   "/components/Stage/PlotStage.tsx": 491, // extract plot-tool wiring next
   "/components/workshops/calculators/ThinFilmTab.tsx": 442, // split calc tabs
 };

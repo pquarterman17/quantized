@@ -14,12 +14,15 @@ import FiguresSection from "./FiguresSection";
 import FolderRow from "./FolderRow";
 import ReportsSection from "./ReportsSection";
 import SavedFiguresSection from "./SavedFiguresSection";
+import SmartFoldersSection from "./SmartFoldersSection";
 import { useLibraryTree } from "./useLibraryTree";
 import { makeDemoDataset } from "../../lib/demo";
 import { originSheetGroups, originSheetNumber } from "../../lib/grouping";
 import { IMPORT_ACCEPT, openFilePicker } from "../../lib/openFilePicker";
+import { matchesQuery, parseQuery } from "../../lib/smartfolders";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { askParams } from "../overlays/ParamDialog";
 
 let demoSeq = 0;
 const ACCEPT = IMPORT_ACCEPT;
@@ -32,6 +35,7 @@ export default function Library() {
   const importFiles = useApp((s) => s.importFiles);
   const folders = useApp((s) => s.folders);
   const createFolder = useApp((s) => s.createFolder);
+  const addSmartFolder = useApp((s) => s.addSmartFolder);
   const treeRows = useLibraryTree();
   const [query, setQuery] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -54,13 +58,13 @@ export default function Library() {
     if (files.length) void importFiles(files);
   };
 
-  // Filter matches the dataset name OR any of its tags (so typing a tag — or
-  // clicking a tag chip, which sets the query — narrows the library to it).
-  const q = query.toLowerCase();
-  const shown = datasets.filter(
-    (d) =>
-      d.name.toLowerCase().includes(q) || (d.tags ?? []).some((t) => t.toLowerCase().includes(q)),
-  );
+  // Filter through the shared smart-folder grammar (lib/smartfolders): a bare
+  // term matches the dataset name OR any tag (the historical behavior — a tag
+  // chip click still just sets the query), while tag:/name:/format: terms
+  // narrow to one field. The SAME matcher powers saved smart folders, so a
+  // query proven here can be saved as one via the ☆ button (item 9).
+  const terms = parseQuery(query);
+  const shown = datasets.filter((d) => matchesQuery(d, terms));
   // Reorder is the flat manual-order tool; it operates on the global list, so it
   // only makes sense when the list isn't filtered or organized into folders (the
   // tree has its own drag reorder — item 3b — plus its menu ordering).
@@ -157,17 +161,36 @@ export default function Library() {
         </div>
       </div>
 
-      <input
-        className="qz-input"
-        placeholder="⌕ Filter…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <div style={{ display: "flex", gap: 4 }}>
+        <input
+          className="qz-input"
+          style={{ flex: 1 }}
+          placeholder="⌕ Filter… (tag:… format:…)"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {query.trim() !== "" && (
+          <button
+            className="qz-icon-btn"
+            title="Save this filter as a smart folder…"
+            onClick={() => {
+              void askParams("Save filter as smart folder", [
+                { key: "name", label: "Name", type: "text", default: query.trim() },
+              ]).then((p) => {
+                if (p && String(p.name).trim()) addSmartFolder(String(p.name), query);
+              });
+            }}
+          >
+            ☆
+          </button>
+        )}
+      </div>
 
       {!inTree && <FiguresSection />}
       <SavedFiguresSection />
       <ReportsSection />
       <BookFamiliesSection />
+      <SmartFoldersSection onFilterTag={setQuery} />
 
       {body}
 

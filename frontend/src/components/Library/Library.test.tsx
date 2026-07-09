@@ -4,7 +4,7 @@
 // in tree mode, that the flat Figures section is hidden then (no duplication),
 // and that it reappears in the flat no-folders mode.
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import Library from "./Library";
@@ -43,6 +43,7 @@ beforeEach(() => {
     folders: [],
     expandedFolders: [],
     originFigures: [],
+    smartFolders: [],
     activeId: null,
     selectedIds: [],
   });
@@ -125,5 +126,46 @@ describe("Library — group-chip UI retired (item 6)", () => {
     expect(screen.getByText("F1")).toBeInTheDocument(); // folder header renders
     expect(screen.getByText("a")).toBeInTheDocument(); // un-foldered dataset still shown at root
     expect(screen.getByText("b")).toBeInTheDocument(); // foldered dataset shown nested
+  });
+});
+
+describe("Library — smart-folder query grammar in the filter box (item 9)", () => {
+  const tagged = (id: string, tags: string[]): Dataset => ({ ...dsWith(id), tags });
+
+  it("a bare term still matches name OR tag (historical behavior)", () => {
+    useApp.setState({ datasets: [tagged("loop.dat", ["MvsH"]), dsWith("xrd.raw")] });
+    render(<Library />);
+    const input = screen.getByPlaceholderText(/Filter/);
+    fireEvent.change(input, { target: { value: "mvsh" } });
+    expect(screen.getByText("loop.dat")).toBeInTheDocument();
+    expect(screen.queryByText("xrd.raw")).not.toBeInTheDocument();
+  });
+
+  it("tag: narrows to tags only", () => {
+    useApp.setState({
+      datasets: [tagged("loop.dat", ["MvsH"]), dsWith("mvsh-named-but-untagged.dat")],
+    });
+    render(<Library />);
+    fireEvent.change(screen.getByPlaceholderText(/Filter/), { target: { value: "tag:mvsh" } });
+    expect(screen.getByText("loop.dat")).toBeInTheDocument();
+    expect(screen.queryByText("mvsh-named-but-untagged.dat")).not.toBeInTheDocument();
+  });
+
+  it("offers ☆ save-as-smart-folder only while a query is typed", () => {
+    useApp.setState({ datasets: [dsWith("a")], smartFolders: [] });
+    render(<Library />);
+    expect(screen.queryByTitle(/Save this filter/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/Filter/), { target: { value: "tag:x" } });
+    expect(screen.getByTitle(/Save this filter/)).toBeInTheDocument();
+  });
+
+  it("renders the smart-folders section when saved queries exist", () => {
+    useApp.setState({
+      datasets: [tagged("loop.dat", ["MvsH"])],
+      smartFolders: [{ id: "s1", name: "Loops", query: "tag:mvsh" }],
+    });
+    render(<Library />);
+    expect(screen.getByText("Smart folders")).toBeInTheDocument();
+    expect(screen.getByText("☆ Loops")).toBeInTheDocument();
   });
 });

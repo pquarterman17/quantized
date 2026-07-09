@@ -473,3 +473,26 @@ describe("workspace figure documents (#12)", () => {
     expect(loaded.figureDocs[1].dataSnapshot).toEqual(datasets[0].data);
   });
 });
+
+describe("workspace smart folders (org #9)", () => {
+  it("round-trips saved queries (additive-optional — no version bump)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const smartFolders = [
+      { id: "s1", name: "Loops", query: "tag:mvsh" },
+      { id: "s2", name: "QD data", query: "format:qd" },
+    ];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, smartFolders }));
+    expect(loaded.smartFolders).toEqual(smartFolders);
+  });
+
+  it("sanitizes malformed entries on load and defaults to [] for older docs", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(serializeWorkspace({ datasets })) as Record<string, unknown>;
+    doc.smartFolders = [{ id: "ok", name: "Fine", query: "" }, { id: 7, name: "bad" }, "junk"];
+    expect(parseWorkspace(JSON.stringify(doc)).smartFolders).toEqual([
+      { id: "ok", name: "Fine", query: "" },
+    ]);
+    delete doc.smartFolders; // a pre-#9 v3 doc
+    expect(parseWorkspace(JSON.stringify(doc)).smartFolders).toEqual([]);
+  });
+});

@@ -11,6 +11,7 @@ import { sanitizeSteps, type PipelineStep } from "./pipeline";
 import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeExcluded } from "./rowstate";
+import { sanitizeSmartFolders, type SmartFolder } from "./smartfolders";
 import type {
   ChannelRole,
   ComputedColumn,
@@ -24,8 +25,9 @@ import type {
 export const WORKSPACE_FORMAT = "quantized-workspace";
 // v2 (project-organization plan item 2): adds the folder tree, active/selection,
 // and folder-expansion. v3 (gap #5): adds the typed pipeline steps, the recalc
-// mode, per-dataset fit specs, and reports. Older docs still load — migrated
-// on parse with safe defaults.
+// mode, per-dataset fit specs, and reports; later also smart folders (org #9 —
+// additive-optional, no bump needed). Older docs still load — migrated on
+// parse with safe defaults.
 export const WORKSPACE_VERSION = 3;
 
 /** The persistable slice of app state (input to serialize). The store's AppState
@@ -39,6 +41,7 @@ export interface WorkspaceState {
   selectedIds?: string[];
   expandedFolders?: string[];
   originFigures?: OriginFigureEntry[];
+  smartFolders?: SmartFolder[];
   reports?: ReportEntry[];
   macroSteps?: PipelineStep[];
   recalcMode?: RecalcMode;
@@ -54,6 +57,7 @@ export interface LoadedWorkspace {
   selectedIds: string[];
   expandedFolders: string[];
   originFigures: OriginFigureEntry[];
+  smartFolders: SmartFolder[];
   reports: ReportEntry[];
   macroSteps: PipelineStep[];
   recalcMode: RecalcMode;
@@ -70,6 +74,7 @@ interface WorkspaceDoc {
   selectedIds: string[];
   expandedFolders: string[];
   originFigures: OriginFigureEntry[];
+  smartFolders: SmartFolder[];
   reports: ReportEntry[];
   pipeline: PipelineStep[];
   recalcMode: RecalcMode;
@@ -87,6 +92,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     selectedIds: ws.selectedIds ?? [],
     expandedFolders: ws.expandedFolders ?? [],
     originFigures: ws.originFigures ?? [],
+    smartFolders: ws.smartFolders ?? [],
     reports: ws.reports ?? [],
     pipeline: ws.macroSteps ?? [],
     recalcMode: ws.recalcMode ?? "auto",
@@ -316,6 +322,7 @@ export function parseWorkspace(text: string): LoadedWorkspace {
     typeof o.activeId === "string" && dsIds.has(o.activeId) ? o.activeId : (datasets[0]?.id ?? null);
   const expandedFolders = stringsIn(o.expandedFolders, folderIds);
   const originFigures = parseOriginFigures(o.originFigures, dsIds);
+  const smartFolders = sanitizeSmartFolders(o.smartFolders);
   const reports = sanitizeReports(o.reports, dsIds);
   const macroSteps = sanitizeSteps(o.pipeline);
   const recalcMode: RecalcMode =
@@ -328,6 +335,7 @@ export function parseWorkspace(text: string): LoadedWorkspace {
     selectedIds,
     expandedFolders,
     originFigures,
+    smartFolders,
     reports,
     macroSteps,
     recalcMode,

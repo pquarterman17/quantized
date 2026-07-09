@@ -52,7 +52,8 @@ import {
 } from "./lib/api";
 import { makeDemoDataset } from "./lib/demo";
 import { loadSampleDataset } from "./lib/sampleDataset";
-import { clearAutosave, loadAutosave, saveAutosave } from "./lib/autosave";
+import { clearAutosave } from "./lib/autosave";
+import { useWorkspaceAutosave } from "./useWorkspaceAutosave";
 import { saveBlob } from "./lib/download";
 import { buildExportStyles } from "./lib/exportStyles";
 import { IMPORT_ACCEPT, openFilePicker } from "./lib/openFilePicker";
@@ -122,43 +123,9 @@ export default function App() {
       .catch(() => setStatus("offline — demo mode"));
   }, [setStatus]);
 
-  // Restore the autosaved library once on startup (before any new import).
-  useEffect(() => {
-    const restored = loadAutosave();
-    if (restored?.datasets.length) {
-      useApp.getState().loadWorkspace(restored);
-      const n = restored.datasets.length;
-      setStatus(`restored ${n} dataset${n === 1 ? "" : "s"} from autosave`);
-    }
-  }, [setStatus]);
-
-  // Debounced autosave whenever the library changes (datasets identity).
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const unsub = useApp.subscribe((state, prev) => {
-      // Persist on any change to the workspace slice — datasets OR the folder
-      // tree / expansion / active / selection (all part of .dwk v2).
-      if (
-        state.datasets === prev.datasets &&
-        state.folders === prev.folders &&
-        state.expandedFolders === prev.expandedFolders &&
-        state.activeId === prev.activeId &&
-        state.selectedIds === prev.selectedIds
-      ) {
-        return;
-      }
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (!saveAutosave(useApp.getState())) {
-          useApp.getState().setStatus("autosave skipped (storage full or unavailable)");
-        }
-      }, 800);
-    });
-    return () => {
-      clearTimeout(timer);
-      unsub();
-    };
-  }, []);
+  // Restore the autosaved library on startup + debounce-save workspace changes
+  // (extracted — component-ceiling ratchet).
+  useWorkspaceAutosave();
 
   // ── trap browser back/forward (mouse back button, ⌫ in old browsers) ──
   // The app is a single-page view with no in-app navigation, so a "back"

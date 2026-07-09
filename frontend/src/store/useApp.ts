@@ -39,6 +39,7 @@ import {
 } from "../lib/foldertree";
 import { is2DMap } from "../lib/mapdata";
 import { mergeDatasets } from "../lib/merge";
+import type { SmartFolder } from "../lib/smartfolders";
 import type { WorkspaceState } from "../lib/workspace";
 import {
   buildOriginFigureEntries,
@@ -248,6 +249,10 @@ interface AppState {
   // Expanded folder ids (Library tree UI state); persisted so a project reopens
   // with the same folders open. Round-trips .dwk v2.
   expandedFolders: string[];
+  // Smart folders (item 9): saved tag/name/format queries rendered as
+  // cross-cutting Library sections. Membership is DERIVED at render time
+  // (lib/smartfolders) — only the queries persist (.dwk).
+  smartFolders: SmartFolder[];
   leftCollapsed: boolean;
   rightCollapsed: boolean;
   stageTab: StageTab;
@@ -517,6 +522,10 @@ interface AppState {
   moveFolder: (id: string, newParentId: string | null, beforeId?: string) => void;
   moveDatasetToFolder: (id: string, folderId: string | null, beforeId?: string) => void;
   toggleFolderExpanded: (id: string) => void;
+  // Smart folders (item 9): saved queries only — membership is derived.
+  addSmartFolder: (name: string, query: string) => void;
+  updateSmartFolder: (id: string, name: string, query: string) => void;
+  removeSmartFolder: (id: string) => void;
   applyCorrections: (
     id: string,
     params: CorrectionParams,
@@ -814,6 +823,7 @@ export const useApp = create<AppState>((set, get) => ({
   staleFits: [],
   folders: [],
   expandedFolders: [],
+  smartFolders: [],
   leftCollapsed: false,
   rightCollapsed: false,
   stageTab: "plot",
@@ -1399,6 +1409,7 @@ export const useApp = create<AppState>((set, get) => ({
         activeId: active,
         selectedIds: selected.length ? selected : active ? [active] : [],
         originFigures: ws.originFigures ?? [], // restored from the .dwk (v2 persists them)
+        smartFolders: ws.smartFolders ?? [], // saved queries (item 9) — .dwk persists them
         reports: ws.reports ?? [], // report sheets (#36) — .dwk v2 persists them
         openReportId: null,
         macroSteps: ws.macroSteps ?? [], // typed pipeline (#6) — .dwk v3
@@ -1848,6 +1859,29 @@ export const useApp = create<AppState>((set, get) => ({
         ? s.expandedFolders.filter((x) => x !== id)
         : [...s.expandedFolders, id],
     })),
+
+  // ── Smart folders (project-organization plan item 9) ────────────────────
+  // Saved queries, nothing else — members are derived per render by
+  // lib/smartfolders, so there is no membership state to keep in sync.
+  addSmartFolder: (name, query) =>
+    set((s) => {
+      const nm = name.trim();
+      if (!nm) return {};
+      return {
+        smartFolders: [
+          ...s.smartFolders,
+          { id: `smf-${Date.now().toString(36)}-${++_idSeq}`, name: nm, query: query.trim() },
+        ],
+      };
+    }),
+  updateSmartFolder: (id, name, query) =>
+    set((s) => ({
+      smartFolders: s.smartFolders.map((f) =>
+        f.id === id ? { ...f, name: name.trim() || f.name, query: query.trim() } : f,
+      ),
+    })),
+  removeSmartFolder: (id) =>
+    set((s) => ({ smartFolders: s.smartFolders.filter((f) => f.id !== id) })),
 
   // Corrections always apply to the pristine `raw`, never to an already-
   // corrected `data` (the MATLAB pipeline is replace, not accumulate). The
