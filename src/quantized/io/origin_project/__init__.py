@@ -17,8 +17,20 @@ import numpy as np
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project.container import OriginProjectError
 from quantized.io.origin_project.notes import notes_windows, parse_results_log, results_log
-from quantized.io.origin_project.opj import read_opj, read_opj_books
-from quantized.io.origin_project.opju import read_opju, read_opju_books
+from quantized.io.origin_project.opj import (
+    build_opj_books,
+    build_opj_primary,
+    parse_opj,
+    read_opj,
+    read_opj_books,
+)
+from quantized.io.origin_project.opju import (
+    build_opju_books,
+    build_opju_primary,
+    parse_opju,
+    read_opju,
+    read_opju_books,
+)
 from quantized.io.origin_project.tree import opj_folder_paths, opj_project_dates
 from quantized.io.origin_project.tree_opju import opju_folder_paths
 
@@ -28,6 +40,7 @@ __all__ = [
     "drop_nonactionable_figures",
     "read_origin_books",
     "read_origin_project",
+    "read_origin_project_all",
 ]
 
 
@@ -107,6 +120,59 @@ def read_origin_books(path: Path) -> list[DataStruct]:
     books[0] = _with_provenance(books[0], path, raw=raw)
     folder_paths = opju_folder_paths(raw) if is_opju else opj_folder_paths(raw)
     return [_with_folder_path(b, folder_paths) for b in books]
+
+
+def read_origin_project_all(
+    path: Path, *, raw: bytes | None = None
+) -> tuple[DataStruct, list[DataStruct]]:
+    """Parse an Origin project ONCE and return both ``read_origin_project``'s
+    primary DataStruct (with provenance) and ``read_origin_books``'s full
+    per-book list (with folder paths + book[0] provenance) — the combined
+    result of calling both entry points, without the redundant second
+    ``parse_opj``/``parse_opju`` (and repeated file reads) each independently
+    performs today.
+
+    Used by the ``/api/parsers`` import route: profiling a 122-book /
+    8.5M-cell project (``PNR.opj``, 121.56 MB) showed the duplicated
+    project-wide parse dominating the ~4s round-trip (2026-07-09) — calling
+    ``import_auto`` (-> ``read_origin_project`` -> a full parse) and then
+    ``read_origin_books`` (-> another full parse) back to back reads the file
+    from disk repeatedly and decodes every column twice.
+
+    Primary-book construction (``build_opj*_primary``) and all-books
+    construction (``build_opj*_books``) stay independent calls sharing only
+    the parsed intermediate — mirroring ``read_opj``/``read_opj_books``'s
+    separation — so a decode issue confined to one non-primary book still
+    degrades the book list to ``[]`` without taking down the primary import,
+    exactly as ``routes.parsers._import_with_books`` behaved before (its
+    ``except OriginProjectError`` around ``read_origin_books`` only ever
+    guarded against that isolated-book-build failure, since a shared-parse
+    failure would already have surfaced on the first, unguarded call).
+    """
+    is_opju = path.suffix.lower() == ".opju"
+    raw = path.read_bytes() if raw is None else raw
+
+    books: list[DataStruct]
+    if is_opju:
+        opju_parsed = parse_opju(path, raw=raw)
+        primary = _with_provenance(build_opju_primary(opju_parsed), path, raw=raw)
+        try:
+            books = build_opju_books(opju_parsed)
+        except OriginProjectError:
+            books = []
+    else:
+        opj_parsed = parse_opj(path, raw=raw)
+        primary = _with_provenance(build_opj_primary(opj_parsed), path, raw=raw)
+        try:
+            books = build_opj_books(opj_parsed)
+        except OriginProjectError:
+            books = []
+
+    if books:
+        books[0] = _with_provenance(books[0], path, raw=raw)
+        folder_paths = opju_folder_paths(raw) if is_opju else opj_folder_paths(raw)
+        books = [_with_folder_path(b, folder_paths) for b in books]
+    return primary, books
 
 
 def drop_empty_library_books(books: list[DataStruct]) -> list[DataStruct]:

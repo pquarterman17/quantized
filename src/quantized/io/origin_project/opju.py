@@ -41,7 +41,13 @@ from quantized.io.origin_project.opju_reports import scan_report_columns
 from quantized.io.origin_project.windows import BookMeta
 from quantized.io.origin_project.windows_opju import opju_window_metadata
 
-__all__ = ["read_opju", "read_opju_books"]
+__all__ = [
+    "build_opju_books",
+    "build_opju_primary",
+    "parse_opju",
+    "read_opju",
+    "read_opju_books",
+]
 
 _ParseResult = tuple[
     OrderedDict[str, Columns],
@@ -51,8 +57,12 @@ _ParseResult = tuple[
 ]
 
 
-def _parse(path: Path) -> _ParseResult:
-    b = path.read_bytes()
+def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
+    """Decode the project once. ``raw`` lets a caller that already has the
+    file's bytes (e.g. :func:`parse_opju`'s callers in
+    ``origin_project/__init__.py``) skip a second disk read; ``None`` (the
+    default) reads ``path`` itself, unchanged from before."""
+    b = path.read_bytes() if raw is None else raw
     if not b.startswith(b"CPYUA"):
         raise fallback(path, f"'{path.name}' does not look like a CPYUA .opju (bad header).")
     columns = scan_columns(b)
@@ -64,11 +74,27 @@ def _parse(path: Path) -> _ParseResult:
     return books, report_books, books_meta, _inventory(books, books_meta, report_books)
 
 
-def read_opju(path: Path) -> DataStruct:
-    """The single-DataStruct contract: the largest workbook (inventory in metadata)."""
-    books, report_books, books_meta, inventory = _parse(path)
+def _primary_key(books: OrderedDict[str, Columns]) -> str:
+    """The book :func:`read_opju`/:func:`build_opju_primary` treat as *the*
+    primary dataset — see ``opj._primary_key`` (identical selection rule,
+    duplicated here since the two containers' ``Columns`` groupings are
+    built independently)."""
     primary_pool = [k for k in books if "@" not in k] or list(books)
-    primary = max(primary_pool, key=lambda k: sum(len(v) for _, v in books[k]))
+    return max(primary_pool, key=lambda k: sum(len(v) for _, v in books[k]))
+
+
+def parse_opju(path: Path, *, raw: bytes | None = None) -> _ParseResult:
+    """Public single-parse entry point — see ``opj.parse_opj``. Lets a caller
+    that needs both the primary book (:func:`build_opju_primary`) and every
+    book (:func:`build_opju_books`) parse the project once."""
+    return _parse(path, raw=raw)
+
+
+def build_opju_primary(parsed: _ParseResult) -> DataStruct:
+    """Build the primary book's DataStruct from an already-:func:`parse_opju`'d
+    project — see ``opj.build_opj_primary``."""
+    books, report_books, books_meta, inventory = parsed
+    primary = _primary_key(books)
     return _build_book(
         primary,
         books[primary],
@@ -79,15 +105,16 @@ def read_opju(path: Path) -> DataStruct:
     )
 
 
-def read_opju_books(path: Path) -> list[DataStruct]:
-    """Every workbook in the project as its own DataStruct (plan item 3/16).
+def build_opju_books(parsed: _ParseResult) -> list[DataStruct]:
+    """Build every book's DataStruct from an already-:func:`parse_opju`'d
+    project — see ``opj.build_opj_books``.
 
     A sheet made entirely of report-sheet columns (plan item 4) has no
     plausible-numeric columns, so it never appears in ``books`` — the union
     with ``report_books`` below still surfaces it as its own pseudo-book
     (see ``_build_book``'s empty-``cols`` branch).
     """
-    books, report_books, books_meta, inventory = _parse(path)
+    books, report_books, books_meta, inventory = parsed
     keys = list(books) + [k for k in report_books if k not in books]
     return [
         _build_book(
@@ -101,3 +128,19 @@ def read_opju_books(path: Path) -> list[DataStruct]:
         for k in keys
         if books.get(k) or report_books.get(k)
     ]
+
+
+def read_opju(path: Path) -> DataStruct:
+    """The single-DataStruct contract: the largest workbook (inventory in metadata)."""
+    return build_opju_primary(_parse(path))
+
+
+def read_opju_books(path: Path) -> list[DataStruct]:
+    """Every workbook in the project as its own DataStruct (plan item 3/16).
+
+    A sheet made entirely of report-sheet columns (plan item 4) has no
+    plausible-numeric columns, so it never appears in ``books`` — the union
+    with ``report_books`` below still surfaces it as its own pseudo-book
+    (see ``_build_book``'s empty-``cols`` branch).
+    """
+    return build_opju_books(_parse(path))
