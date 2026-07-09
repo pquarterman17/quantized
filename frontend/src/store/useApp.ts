@@ -56,11 +56,17 @@ import { planOriginFolders } from "../lib/originFolders";
 import { computePanelLayout } from "../lib/originPanels";
 import {
   cascadeGeometry,
+  cascadeLayout,
+  dedupeWindowTitle,
   defaultPlotView,
+  displayedWindowTitle,
   hydrateView,
+  sanitizePlotWindows,
   snapshotView,
+  tileLayout,
   type PlotView,
   type PlotWindow,
+  type WinState,
 } from "../lib/plotview";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
@@ -416,6 +422,11 @@ interface AppState {
   // null while any window exists.
   plotWindows: PlotWindow[];
   focusedWindowId: string | null;
+  // The Plot tab's current on-screen canvas size (item 6 — Tile/Cascade need
+  // real pixel bounds to compute a layout; the WindowCanvas ResizeObserver is
+  // the sole writer, via `setPlotCanvasBounds`). Null while the Plot tab
+  // isn't mounted (Tile/Cascade fall back to a sane default size then).
+  plotCanvasBounds: { width: number; height: number } | null;
   plotTool: PlotTool;
   // Last x-range picked by the region rubber-band ([x_min,x_max]); the baseline
   // workshop consumes it then resets to null. Drag direction is normalized away.
@@ -534,7 +545,12 @@ interface AppState {
   addOriginFigures: (stem: string, figures: OriginFigure[], datasetIds: string[]) => void;
   // Apply a stored figure's plot-state snapshot: activates its resolved
   // dataset and sets the axis ranges + log flags. No-op if unresolved.
-  applyOriginFigure: (id: string) => void;
+  // `opts.newWindow` (item 9) opens a fresh window (bound to the figure's
+  // dataset) and focuses it FIRST, so the rest of the apply logic — already
+  // scoped to "the focused window" via `setActive`/the singleton `set()`
+  // calls — lands on the new window instead of overwriting whatever was
+  // focused before.
+  applyOriginFigure: (id: string, opts?: { newWindow?: boolean }) => void;
   // Facet-by-column (gap #21 residual): partitions `datasetId`'s analysis-view
   // rows into one small-multiples panel per distinct level of `col` (via
   // `lib/facet.facetPayloads`) and populates `facetPanels` for MultiPanelStage
@@ -565,6 +581,12 @@ interface AppState {
   renameFigureDoc: (id: string, name: string) => void;
   duplicateFigureDoc: (id: string) => void;
   openFigureDoc: (id: string) => void;
+  // Item 9's figure-doc half: opens a NEW window bound to the doc's dataset
+  // and applies its channel/scale/label config (xKey/yKeys/log flags/titles)
+  // onto it. Live docs with a resolved dataset only — a frozen doc's data
+  // snapshot isn't a live `Dataset` a window can bind to (that's Tier 3 item
+  // 11's "snapshot-as-window" kind); a no-op otherwise.
+  openFigureDocInWindow: (id: string) => void;
   clearFigureDocSeed: () => void;
   setRecalcMode: (mode: RecalcMode) => void;
   touchDataset: (id: string) => void;
@@ -691,13 +713,49 @@ interface AppState {
   // does — see the field doc above). `closeWindow` is a no-op on the LAST
   // window (the ≥1-window invariant). `datasetId`/`view` default to the
   // current active dataset / a fresh `defaultPlotView()` when omitted.
-  createWindow: (datasetId?: string | null, view?: PlotView) => string;
+  // `title` (item 10) overrides the computed default (dataset name, deduped
+  // against what's already showing) — omit it to get that default.
+  createWindow: (datasetId?: string | null, view?: PlotView, title?: string) => string;
   closeWindow: (id: string) => void;
   focusWindow: (id: string) => void;
   duplicateWindow: (id: string) => string | null;
   moveWindow: (id: string, x: number, y: number) => void;
   resizeWindow: (id: string, w: number, h: number) => void;
   raiseWindow: (id: string) => void;
+  // The Plot tab's live canvas size (item 6) — written by WindowCanvas's own
+  // ResizeObserver; read by tileWindows/cascadeWindows so their layout math
+  // uses real pixel bounds instead of a guess.
+  setPlotCanvasBounds: (bounds: { width: number; height: number } | null) => void;
+  // Tile / Cascade (item 6): re-lay-out every NON-minimized window (any that
+  // were maximized become "normal" so they actually show side by side/
+  // cascaded); minimized windows are untouched (still docked in the strip —
+  // item 8). Falls back to a sane default size when the canvas bounds aren't
+  // known yet (e.g. called from the palette before the Plot tab ever mounted).
+  tileWindows: () => void;
+  cascadeWindows: () => void;
+  // Minimize / maximize / restore (item 8). Minimizing the FOCUSED window
+  // hands focus to the top-z remaining VISIBLE (non-minimized) window — same
+  // refocus contract `closeWindow` uses, but the window stays in
+  // `plotWindows` (docked in the strip) rather than being removed. Restoring
+  // a minimized window un-minimizes it AND focuses it in one step (clicking
+  // a strip entry is "bring this back and make it live", matching a taskbar
+  // button). `toggleMaximizeWindow` flips normal<->maximized (a no-op on a
+  // minimized window); double-clicking a title BAR (not its text — that
+  // renames, see `renameWindow`) calls it.
+  minimizeWindow: (id: string) => void;
+  restoreWindow: (id: string) => void;
+  toggleMaximizeWindow: (id: string) => void;
+  // Rename (item 10): sets the window's explicit title verbatim — never
+  // deduped (that's only for computed defaults at creation).
+  renameWindow: (id: string, title: string) => void;
+  // Item 7 (.dwk + autosave persistence): `plotWindows` as it should be
+  // SAVED — the focused window's LIVE view frozen into its record via the
+  // same `snapshotView` chokepoint `focusWindow`/`closeWindow` use (the
+  // plan's "save is one of the three sanctioned snapshot points"). A pure
+  // read (doesn't mutate the store); the Save-workspace command and the
+  // autosave effect both call it instead of reading `plotWindows` raw, so
+  // neither ever persists a stale view for whichever window is focused.
+  windowsForSave: () => PlotWindow[];
   setPlotTool: (tool: PlotTool) => void;
   setRegionPicked: (range: [number, number] | null) => void;
   setIntegral: (integral: IntegralResult | null) => void;
@@ -981,6 +1039,7 @@ export const useApp = create<AppState>((set, get) => ({
   waterfall: 0,
   plotWindows: [_mainWindow],
   focusedWindowId: _mainWindow.id,
+  plotCanvasBounds: null,
   plotTool: "zoom",
   regionPicked: null,
   selection: null,
@@ -1260,9 +1319,25 @@ export const useApp = create<AppState>((set, get) => ({
       const entries = buildOriginFigureEntries(stem, figures, candidates);
       return { originFigures: [...s.originFigures, ...entries] };
     }),
-  applyOriginFigure: (id) => {
+  applyOriginFigure: (id, opts) => {
     const entry = get().originFigures.find((f) => f.id === id);
     if (!entry?.datasetId) return;
+    // Item 9: open a NEW window for this figure instead of overwriting the
+    // focused one. Creating (bound to the figure's dataset) then focusing
+    // BEFORE any of the apply logic below runs means every `setActive`/
+    // singleton `set()` call further down — already scoped to "the focused
+    // window" by construction — lands on this new window. Title comes from
+    // the figure's own label (deduped against what's already showing), per
+    // item 9's "window title from figureLabel / doc name".
+    if (opts?.newWindow) {
+      const s = get();
+      const title = dedupeWindowTitle(
+        figureLabel(entry),
+        s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
+      );
+      const winId = s.createWindow(entry.datasetId, undefined, title);
+      s.focusWindow(winId);
+    }
     const fig = entry.figure;
     // Cross-book figures (curves spanning ≥2 workbooks) materialize as an
     // overlay dataset (owner decision) so the combined graph Origin showed is
@@ -1532,12 +1607,32 @@ export const useApp = create<AppState>((set, get) => ({
           : (datasets[0]?.id ?? null);
       const activeDs = active ? (datasets.find((d) => d.id === active) ?? null) : null;
       const selected = (ws.selectedIds ?? []).filter((id) => datasets.some((d) => d.id === id));
-      // Plot windows (MULTI_PLOT_PLAN item 2): a fresh workspace has no window
-      // layout to restore yet (item 7 wires `.dwk` persistence) — collapse
+      // Plot windows (item 7): restore a persisted layout when the doc has
+      // one (validated at the untrusted-boundary via `sanitizePlotWindows` —
+      // clamps dead dataset refs/geometry, never throws); otherwise (a v1-v6
+      // doc with no `plotWindows`, or a genuinely fresh workspace) collapse
       // back to the ≥1-window invariant's single maximized window, bound to
-      // the newly-restored active dataset, with a fresh view (matching the
-      // singleton-field reset below).
+      // the newly-restored active dataset, with a fresh view — unchanged
+      // from before item 7.
       const win = mainWindow(active);
+      const dsIds = new Set(datasets.map((d) => d.id));
+      const restored = sanitizePlotWindows(ws.plotWindows, dsIds);
+      const plotWindows = restored.length ? restored : [win];
+      const focusedWindowId =
+        restored.length && ws.focusedWindowId && plotWindows.some((w) => w.id === ws.focusedWindowId)
+          ? ws.focusedWindowId
+          : plotWindows[0].id;
+      // A restored layout carries its own PlotView per window — hydrate the
+      // FOCUSED one into the live singleton fields immediately so it renders
+      // right away, the same "focused window's live view ≡ singletons"
+      // invariant `focusWindow`/`closeWindow` already uphold. Null in the
+      // legacy/fresh case, so every singleton field below falls through to
+      // EXACTLY today's reset (including the errKeys/hiddenChannels smart
+      // defaults derived from the active dataset) — zero behavior change
+      // when there's no persisted layout to restore.
+      const restoredView = restored.length
+        ? hydrateView(plotWindows.find((w) => w.id === focusedWindowId)!.view)
+        : null;
       return {
         datasets,
         folders: migrated.folders,
@@ -1555,22 +1650,26 @@ export const useApp = create<AppState>((set, get) => ({
         staleDatasets: [],
         staleFits: [],
         stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
-        xKey: null,
-        yKeys: null,
-        y2Keys: null,
-      y2Lim: null,
-      y2Log: null,
-      y2Step: null,
-      y2AxisLabel: "",
-        seriesStyles: {},
-        seriesLabels: {},
-        errKeys: activeDs ? defaultErrKeys(activeDs.data) : {},
-        seriesOrder: null,
-        hiddenChannels: activeDs ? originHiddenChannels(activeDs.data) : [],
-        xLim: null,
-        yLim: null,
-        xStep: null,
-        yStep: null,
+        xKey: restoredView ? restoredView.xKey : null,
+        yKeys: restoredView ? restoredView.yKeys : null,
+        y2Keys: restoredView ? restoredView.y2Keys : null,
+        y2Lim: restoredView ? restoredView.y2Lim : null,
+        y2Log: restoredView ? restoredView.y2Log : null,
+        y2Step: restoredView ? restoredView.y2Step : null,
+        y2AxisLabel: restoredView ? restoredView.y2AxisLabel : "",
+        seriesStyles: restoredView ? restoredView.seriesStyles : {},
+        seriesLabels: restoredView ? restoredView.seriesLabels : {},
+        errKeys: restoredView ? restoredView.errKeys : activeDs ? defaultErrKeys(activeDs.data) : {},
+        seriesOrder: restoredView ? restoredView.seriesOrder : null,
+        hiddenChannels: restoredView
+          ? restoredView.hiddenChannels
+          : activeDs
+            ? originHiddenChannels(activeDs.data)
+            : [],
+        xLim: restoredView ? restoredView.xLim : null,
+        yLim: restoredView ? restoredView.yLim : null,
+        xStep: restoredView ? restoredView.xStep : null,
+        yStep: restoredView ? restoredView.yStep : null,
         spatialPanels: null, // decode-plan #36 — never restored from a stale figure apply
         facetPanels: null, // gap #21 residual — likewise never restored from a stale facet
         breakPanels: null, // gap #21 residual — likewise never restored from a stale break
@@ -1593,8 +1692,35 @@ export const useApp = create<AppState>((set, get) => ({
         gadgetFftPreview: null,
         gadgetCursors: null,
         gadgetCursorResult: null,
-        plotWindows: [win],
-        focusedWindowId: win.id,
+        plotWindows,
+        focusedWindowId,
+        // The rest of the PlotView cluster (item 7) — only touched when
+        // restoring an actual persisted layout; the legacy/fresh path never
+        // wrote these here before item 7, so they're left alone (whatever
+        // the pre-load session had) exactly as before.
+        ...(restoredView
+          ? {
+              yLog: restoredView.yLog,
+              xLog: restoredView.xLog,
+              showGrid: restoredView.showGrid,
+              showLegend: restoredView.showLegend,
+              legendPos: restoredView.legendPos,
+              plotTemplate: restoredView.plotTemplate,
+              showAxisBox: restoredView.showAxisBox,
+              stackMode: restoredView.stackMode,
+              insetMode: restoredView.insetMode,
+              polarMode: restoredView.polarMode,
+              statMode: restoredView.statMode,
+              xFmt: restoredView.xFmt,
+              yFmt: restoredView.yFmt,
+              plotTitle: restoredView.plotTitle,
+              xAxisLabel: restoredView.xAxisLabel,
+              yAxisLabel: restoredView.yAxisLabel,
+              refLines: restoredView.refLines,
+              annotations: restoredView.annotations,
+              waterfall: restoredView.waterfall,
+            }
+          : {}),
         status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}`,
       };
     }),
@@ -2422,14 +2548,27 @@ export const useApp = create<AppState>((set, get) => ({
   // facade contract. Geometry/z/winState render via `components/windows/`
   // (item 3): `WindowCanvas`/`PlotWindowFrame` read `plotWindows` directly
   // and drive these same actions from pointer drag/resize/focus gestures.
-  createWindow: (datasetId, view) => {
+  createWindow: (datasetId, view, title) => {
     const id = nextWindowId();
     set((s) => {
+      const boundId = datasetId !== undefined ? datasetId : s.activeId;
+      // Item 10: a computed default title (the bound dataset's name, or
+      // "Untitled graph") deduped against every window's CURRENT displayed
+      // title, so a second window on the same dataset reads "Foo (2)"
+      // instead of an indistinguishable second "Foo". An explicit `title`
+      // (e.g. from applyOriginFigure's newWindow path, keyed off the
+      // figure's own label) skips this computation entirely.
+      const resolvedTitle =
+        title ??
+        dedupeWindowTitle(
+          boundId ? (s.datasets.find((d) => d.id === boundId)?.name ?? "Untitled graph") : "Untitled graph",
+          s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
+        );
       const win: PlotWindow = {
         id,
         kind: "plot",
-        title: "",
-        datasetId: datasetId !== undefined ? datasetId : s.activeId,
+        title: resolvedTitle,
+        datasetId: boundId,
         geometry: cascadeGeometry(s.plotWindows.length),
         z: maxZ(s.plotWindows) + 1,
         winState: "normal",
@@ -2498,10 +2637,17 @@ export const useApp = create<AppState>((set, get) => ({
     // Duplicating the FOCUSED window: its record is stale (the live view
     // lives in the singleton fields), so snapshot those instead of `src.view`.
     const view = src.id === s.focusedWindowId ? snapshotView(s) : src.view;
+    // Item 10: try the source's OWN displayed title first, deduped against
+    // every window's current display — "Comparison" duplicated once becomes
+    // "Comparison (2)", not an indistinguishable second "Comparison".
+    const title = dedupeWindowTitle(
+      displayedWindowTitle(src, s.datasets),
+      s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
+    );
     const dup: PlotWindow = {
       id: newId,
       kind: "plot",
-      title: src.title,
+      title,
       datasetId: src.datasetId,
       geometry: cascadeGeometry(s.plotWindows.length),
       z: maxZ(s.plotWindows) + 1,
@@ -2527,6 +2673,116 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({
       plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, z: maxZ(s.plotWindows) + 1 } : w)),
     })),
+  setPlotCanvasBounds: (plotCanvasBounds) => set({ plotCanvasBounds }),
+  // Tile / Cascade (item 6): only re-lay-out VISIBLE (non-minimized)
+  // windows — any that were maximized become "normal" so they actually show
+  // side by side/cascaded; minimized windows stay minimized (docked in the
+  // strip — item 8). Falls back to a default canvas size when the real
+  // bounds aren't known yet (e.g. invoked from the palette before the Plot
+  // tab ever mounted). A no-op with fewer than 2 visible windows (nothing to
+  // arrange).
+  tileWindows: () =>
+    set((s) => {
+      const visible = s.plotWindows.filter((w) => w.winState !== "minimized");
+      if (visible.length < 2) return {};
+      const bounds = s.plotCanvasBounds ?? { width: 1200, height: 800 };
+      const geoms = tileLayout(visible.length, bounds);
+      let i = 0;
+      return {
+        plotWindows: s.plotWindows.map((w) => {
+          if (w.winState === "minimized") return w;
+          const placed = { ...w, winState: "normal" as WinState, geometry: geoms[i], z: i + 1 };
+          i++;
+          return placed;
+        }),
+      };
+    }),
+  cascadeWindows: () =>
+    set((s) => {
+      const visible = s.plotWindows.filter((w) => w.winState !== "minimized");
+      if (visible.length < 2) return {};
+      const geoms = cascadeLayout(visible.length);
+      let i = 0;
+      return {
+        plotWindows: s.plotWindows.map((w) => {
+          if (w.winState === "minimized") return w;
+          const placed = { ...w, winState: "normal" as WinState, geometry: geoms[i], z: i + 1 };
+          i++;
+          return placed;
+        }),
+      };
+    }),
+  // Minimizing the FOCUSED window hands focus to the top-z remaining VISIBLE
+  // window — `closeWindow`'s exact refocus formula, but the window stays IN
+  // `plotWindows` (docked in the strip) rather than being removed. A no-op
+  // if there's no other visible window to hand focus to (focus just stays
+  // put on the now-hidden window — the ≥1-window invariant is about array
+  // length, not visibility, so this is a valid, if unusual, state).
+  minimizeWindow: (id) =>
+    set((s) => {
+      const target = s.plotWindows.find((w) => w.id === id);
+      if (!target || target.winState === "minimized") return {};
+      const plotWindows = s.plotWindows.map((w) =>
+        w.id === id
+          ? { ...w, winState: "minimized" as WinState, view: id === s.focusedWindowId ? snapshotView(s) : w.view }
+          : w,
+      );
+      if (s.focusedWindowId !== id) return { plotWindows };
+      const candidates = plotWindows.filter((w) => w.id !== id && w.winState !== "minimized");
+      if (candidates.length === 0) return { plotWindows };
+      const next = candidates.reduce((a, b) => (b.z > a.z ? b : a));
+      return {
+        plotWindows,
+        focusedWindowId: next.id,
+        activeId: next.datasetId,
+        selectedIds: next.datasetId ? [next.datasetId] : [],
+        ...hydrateView(next.view),
+        ...focusTransientReset(),
+      };
+    }),
+  // Restore + focus a minimized window in one step — clicking a strip entry
+  // is "bring this back and make it live" (a taskbar button, not just an
+  // inert un-minimize), the same snapshot-outgoing/hydrate-incoming contract
+  // `focusWindow` uses, plus the winState flip.
+  restoreWindow: (id) =>
+    set((s) => {
+      const target = s.plotWindows.find((w) => w.id === id);
+      if (!target || target.winState !== "minimized") return {};
+      const raised = maxZ(s.plotWindows) + 1;
+      const plotWindows = s.plotWindows.map((w) => {
+        if (w.id === id) return { ...w, winState: "normal" as WinState, z: raised };
+        if (w.id === s.focusedWindowId) return { ...w, view: snapshotView(s) };
+        return w;
+      });
+      return {
+        plotWindows,
+        focusedWindowId: id,
+        activeId: target.datasetId,
+        selectedIds: target.datasetId ? [target.datasetId] : [],
+        ...hydrateView(target.view),
+        ...focusTransientReset(),
+      };
+    }),
+  // Origin habit: double-clicking a window's title BAR (not its editable
+  // title text — that renames, see `renameWindow`) toggles normal<->
+  // maximized. A no-op on a minimized window (it has no on-canvas frame to
+  // toggle).
+  toggleMaximizeWindow: (id) =>
+    set((s) => {
+      const target = s.plotWindows.find((w) => w.id === id);
+      if (!target || target.winState === "minimized") return {};
+      const winState: WinState = target.winState === "maximized" ? "normal" : "maximized";
+      return { plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, winState } : w)) };
+    }),
+  renameWindow: (id, title) =>
+    set((s) => ({
+      plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, title } : w)),
+    })),
+  windowsForSave: () => {
+    const s = get();
+    if (s.focusedWindowId === null) return s.plotWindows;
+    return s.plotWindows.map((w) => (w.id === s.focusedWindowId ? { ...w, view: snapshotView(s) } : w));
+  },
   setPlotTool: (plotTool) => set({ plotTool }),
   setRegionPicked: (regionPicked) => set({ regionPicked }),
   setIntegral: (integral) => set({ integral }),
@@ -2855,6 +3111,36 @@ export const useApp = create<AppState>((set, get) => ({
     if (!doc || !docRenderable(doc)) return;
     if (doc.live && doc.datasetId) get().setActive(doc.datasetId);
     set({ figureDocSeed: doc, figureBuilderOpen: true });
+  },
+  // Item 9's figure-doc half: a live doc only (a frozen doc's snapshot isn't
+  // a live `Dataset` a window can bind to — that gap is Tier 3 item 11's
+  // "snapshot-as-window"). Creates + focuses a new window bound to the doc's
+  // dataset, then applies the config's channel/scale/label fields — NOT its
+  // `seriesStyles` (a `FigureConfig` carries the EXPORT style shape,
+  // `ExportSeriesStyle[]`, which has no inverse back to the live
+  // `Record<number,SeriesStyle>`; the window opens with default series
+  // styling, same as any other fresh window).
+  openFigureDocInWindow: (id) => {
+    const doc = get().figureDocs.find((f) => f.id === id);
+    if (!doc || !doc.live || !doc.datasetId) return;
+    const s = get();
+    const title = dedupeWindowTitle(
+      doc.name,
+      s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
+    );
+    const winId = s.createWindow(doc.datasetId, undefined, title);
+    s.focusWindow(winId);
+    const c = doc.config;
+    set({
+      xKey: c.xKey,
+      yKeys: c.yKeys,
+      xLog: c.xLog,
+      yLog: c.yLog,
+      plotTitle: c.title,
+      xAxisLabel: c.xLabel,
+      yAxisLabel: c.yLabel,
+    });
+    get().recordMacro(`Open figure "${doc.name}" in new window`, `qz.openFigureDocInWindow(${lit(id)})`);
   },
   clearFigureDocSeed: () => set({ figureDocSeed: null }),
   // ── Recalc engine (#1) ───────────────────────────────────────────────────

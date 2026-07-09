@@ -282,6 +282,84 @@ function sanitizeView(v: unknown): PlotView {
 
 const WIN_STATES: readonly WinState[] = ["normal", "minimized", "maximized"];
 
+// ── Tile / Cascade / z-order-aware focus cycling (item 6) ──────────────────
+
+const TILE_GUTTER = 6;
+const TILE_MIN_W = 200;
+const TILE_MIN_H = 140;
+
+/** An even grid layout for `count` windows inside `bounds` (roughly square —
+ *  cols = ceil(sqrt(count))) — the pure geometry behind the "Tile Windows"
+ *  command. Fills row-major; an incomplete last row simply leaves its unused
+ *  cells empty (standard grid-tile behaviour) rather than stretching cells to
+ *  fill the gap. Cell size is floored at a sane minimum so a large `count`
+ *  against a small `bounds` degrades to overlapping-but-usable cells instead
+ *  of collapsing to zero. */
+export function tileLayout(count: number, bounds: { width: number; height: number }): WindowGeometry[] {
+  if (count <= 0) return [];
+  const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
+  const rows = Math.max(1, Math.ceil(count / cols));
+  const cellW = Math.max(TILE_MIN_W, (bounds.width - TILE_GUTTER * (cols + 1)) / cols);
+  const cellH = Math.max(TILE_MIN_H, (bounds.height - TILE_GUTTER * (rows + 1)) / rows);
+  return Array.from({ length: count }, (_, i) => {
+    const row = Math.floor(i / cols);
+    const col = i % cols;
+    return {
+      x: TILE_GUTTER + col * (cellW + TILE_GUTTER),
+      y: TILE_GUTTER + row * (cellH + TILE_GUTTER),
+      w: cellW,
+      h: cellH,
+    };
+  });
+}
+
+/** A cascade layout for ALL `count` windows at once (item 6's "Cascade
+ *  Windows" command) — distinct from `cascadeGeometry` above, which places
+ *  only ONE new window at a given index. Reuses the same offset step so
+ *  cascading N windows looks identical to N windows each freshly created in
+ *  turn via `cascadeGeometry`. */
+export function cascadeLayout(count: number): WindowGeometry[] {
+  return Array.from({ length: count }, (_, i) => cascadeGeometry(i));
+}
+
+/** Window ids in Z-order, back-to-front (ascending z) — the item-6 upgrade to
+ *  focus cycling, replacing v1's plain creation-order input to `cycleWindow`.
+ *  A stable sort, so windows that have never been raised (equal z) keep their
+ *  creation order — identical to v1 in the common case where nothing has
+ *  been raised yet. */
+export function zOrderIds(windows: readonly PlotWindow[]): string[] {
+  return [...windows].sort((a, b) => a.z - b.z).map((w) => w.id);
+}
+
+// ── Default window titles + rename dedupe (item 10) ─────────────────────────
+
+/** The title a window CURRENTLY displays — matches `PlotWindowFrame`'s own
+ *  fallback chain (explicit title, else its bound dataset's name, else
+ *  "Untitled graph") so a fresh window's computed default can be deduped
+ *  against what's already showing. */
+export function displayedWindowTitle(
+  win: Pick<PlotWindow, "title" | "datasetId">,
+  datasets: readonly { id: string; name: string }[],
+): string {
+  if (win.title) return win.title;
+  const name = win.datasetId ? datasets.find((d) => d.id === win.datasetId)?.name : undefined;
+  return name || "Untitled graph";
+}
+
+/** A default title for a NEW window named `baseName`, deduped against
+ *  `existingTitles` (each already resolved via `displayedWindowTitle`) by
+ *  appending " (2)", " (3)", … — so two windows that would otherwise show the
+ *  identical name (e.g. two windows bound to the same dataset) are
+ *  distinguishable at a glance (item 10). A user's own explicit rename
+ *  (`renameWindow`) is never deduped — this only applies to computed
+ *  defaults at creation time. */
+export function dedupeWindowTitle(baseName: string, existingTitles: readonly string[]): string {
+  if (!existingTitles.includes(baseName)) return baseName;
+  let n = 2;
+  while (existingTitles.includes(`${baseName} (${n})`)) n++;
+  return `${baseName} (${n})`;
+}
+
 /** Validate persisted plot windows (drop malformed entries; clamp dead
  *  dataset refs to null — never drop the window itself, see decision #4;
  *  clamp geometry to finite, non-negative numbers). Never throws. */

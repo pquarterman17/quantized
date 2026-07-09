@@ -131,4 +131,57 @@ describe("PlotWindowFrame", () => {
     expect(g.x).toBeLessThanOrEqual(300);
     expect(g.y).toBeLessThanOrEqual(200);
   });
+
+  it("double-clicking the title BAR toggles maximize/restore (item 8 — Origin habit)", () => {
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w1", winState: "normal" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const titlebar = container.querySelector(".qzk-plotwin-titlebar")!;
+    fireEvent.doubleClick(titlebar);
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.winState).toBe("maximized");
+    fireEvent.doubleClick(titlebar);
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.winState).toBe("normal");
+  });
+
+  it("double-clicking the title TEXT renames inline instead of toggling maximize (item 10)", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1", title: "Old Name" }), win({ id: "w2" })], focusedWindowId: "w1" });
+    const { container, getByDisplayValue } = render(
+      <PlotWindowFrame win={win({ id: "w1", title: "Old Name" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    fireEvent.doubleClick(container.querySelector(".qzk-plotwin-title")!);
+    // Maximize must NOT have fired — the title-text handler stops propagation.
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.winState).toBe("normal");
+    const input = getByDisplayValue("Old Name");
+    fireEvent.change(input, { target: { value: "New Name" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.title).toBe("New Name");
+    expect(container.querySelector(".qzk-plotwin-rename")).toBeNull(); // editor closed
+  });
+
+  it("Escape cancels a rename in progress without committing", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1", title: "Old Name" }), win({ id: "w2" })], focusedWindowId: "w1" });
+    const { container, getByDisplayValue } = render(
+      <PlotWindowFrame win={win({ id: "w1", title: "Old Name" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    fireEvent.doubleClick(container.querySelector(".qzk-plotwin-title")!);
+    const input = getByDisplayValue("Old Name");
+    fireEvent.change(input, { target: { value: "Discarded" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.title).toBe("Old Name");
+  });
+
+  it("renders the item-10 channel-count/rows badge when `datasetMeta` is given", () => {
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1" datasetMeta={{ channels: 3, rows: 120 }}>
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    expect(container.querySelector(".qzk-plotwin-meta")?.textContent).toBe("3ch · 120pts");
+  });
 });

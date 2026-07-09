@@ -334,7 +334,7 @@ export default function App() {
             s().setStatus("no datasets to save");
             return;
           }
-          saveBlob(new Blob([serializeWorkspace(s())], { type: "application/json" }), "workspace.dwk");
+          saveBlob(new Blob([serializeWorkspace({ ...s(), plotWindows: s().windowsForSave() })], { type: "application/json" }), "workspace.dwk");
           const msg = `saved workspace — ${all.length} dataset${all.length === 1 ? "" : "s"}`;
           s().setStatus(msg);
           toast(msg, "ok");

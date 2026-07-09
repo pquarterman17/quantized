@@ -6,11 +6,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   cascadeGeometry,
+  cascadeLayout,
   cycleWindow,
+  dedupeWindowTitle,
   defaultPlotView,
+  displayedWindowTitle,
   hydrateView,
   sanitizePlotWindows,
   snapshotView,
+  tileLayout,
+  zOrderIds,
   type PlotView,
   type PlotWindow,
 } from "./plotview";
@@ -150,5 +155,83 @@ describe("sanitizePlotWindows", () => {
     );
     expect(sanitizePlotWindows(null, new Set())).toEqual([]);
     expect(sanitizePlotWindows(undefined, new Set())).toEqual([]);
+  });
+});
+
+describe("tileLayout (item 6 — Tile Windows)", () => {
+  it("returns one cell per window, all fitting inside bounds with no overlap in a 2x1 case", () => {
+    const geoms = tileLayout(2, { width: 800, height: 400 });
+    expect(geoms).toHaveLength(2);
+    const [a, b] = geoms;
+    expect(a.x).toBeLessThan(b.x); // side by side
+    expect(a.y).toBe(b.y);
+    expect(a.x + a.w).toBeLessThanOrEqual(800);
+    expect(b.x + b.w).toBeLessThanOrEqual(800);
+  });
+
+  it("arranges 4 windows in a 2x2 grid", () => {
+    const geoms = tileLayout(4, { width: 800, height: 600 });
+    expect(geoms).toHaveLength(4);
+    // Rows: 0,1 share y; 2,3 share a lower y. Cols: 0,2 share x; 1,3 share x.
+    expect(geoms[0].y).toBe(geoms[1].y);
+    expect(geoms[2].y).toBe(geoms[3].y);
+    expect(geoms[2].y).toBeGreaterThan(geoms[0].y);
+    expect(geoms[0].x).toBe(geoms[2].x);
+  });
+
+  it("floors cell size at a sane minimum instead of collapsing to zero", () => {
+    const geoms = tileLayout(9, { width: 100, height: 100 });
+    for (const g of geoms) {
+      expect(g.w).toBeGreaterThanOrEqual(200);
+      expect(g.h).toBeGreaterThanOrEqual(140);
+    }
+  });
+
+  it("returns [] for a non-positive count", () => {
+    expect(tileLayout(0, { width: 800, height: 600 })).toEqual([]);
+    expect(tileLayout(-1, { width: 800, height: 600 })).toEqual([]);
+  });
+});
+
+describe("cascadeLayout (item 6 — Cascade Windows)", () => {
+  it("matches cascadeGeometry applied to each index in turn", () => {
+    const geoms = cascadeLayout(3);
+    expect(geoms).toEqual([cascadeGeometry(0), cascadeGeometry(1), cascadeGeometry(2)]);
+  });
+
+  it("returns [] for zero windows", () => {
+    expect(cascadeLayout(0)).toEqual([]);
+  });
+});
+
+describe("zOrderIds (item 6 — z-order-aware focus cycling)", () => {
+  it("sorts back-to-front by ascending z", () => {
+    const wins = [win({ id: "a", z: 5 }), win({ id: "b", z: 1 }), win({ id: "c", z: 3 })];
+    expect(zOrderIds(wins)).toEqual(["b", "c", "a"]);
+  });
+
+  it("is a stable sort — equal-z windows keep their creation (array) order", () => {
+    const wins = [win({ id: "a", z: 0 }), win({ id: "b", z: 0 }), win({ id: "c", z: 0 })];
+    expect(zOrderIds(wins)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("displayedWindowTitle / dedupeWindowTitle (item 10 — default titles)", () => {
+  const datasets = [{ id: "d1", name: "MyData" }];
+
+  it("prefers the window's own explicit title over its dataset's name", () => {
+    expect(displayedWindowTitle(win({ title: "Custom", datasetId: "d1" }), datasets)).toBe("Custom");
+  });
+
+  it("falls back to the bound dataset's name, then to 'Untitled graph'", () => {
+    expect(displayedWindowTitle(win({ title: "", datasetId: "d1" }), datasets)).toBe("MyData");
+    expect(displayedWindowTitle(win({ title: "", datasetId: null }), datasets)).toBe("Untitled graph");
+    expect(displayedWindowTitle(win({ title: "", datasetId: "gone" }), datasets)).toBe("Untitled graph");
+  });
+
+  it("dedupeWindowTitle leaves a unique name alone and suffixes a taken one", () => {
+    expect(dedupeWindowTitle("MyData", ["Other"])).toBe("MyData");
+    expect(dedupeWindowTitle("MyData", ["MyData"])).toBe("MyData (2)");
+    expect(dedupeWindowTitle("MyData", ["MyData", "MyData (2)"])).toBe("MyData (3)");
   });
 });

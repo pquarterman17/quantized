@@ -6,6 +6,7 @@ import {
   parseImportText,
   uploadFile,
 } from "../lib/api";
+import { defaultErrKeys } from "../lib/errorbars";
 import { effectiveChannels } from "../lib/plotdata";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import type { Dataset, DataStruct } from "../lib/types";
@@ -2835,5 +2836,413 @@ describe("useApp plot windows — item 4 focused-window routing", () => {
     expect(s.activeId).toBe("d1");
     expect(s.selectedIds).toEqual(["d1"]);
     expect(s.integral).toBeNull();
+  });
+});
+
+describe("useApp plot windows — item 6 (Tile/Cascade + canvas bounds)", () => {
+  const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
+    id: "w1",
+    kind: "plot",
+    title: "",
+    datasetId: null,
+    geometry: { x: 0, y: 0, w: 480, h: 360 },
+    z: 0,
+    winState: "normal",
+    view: defaultPlotView(),
+    ...over,
+  });
+
+  it("setPlotCanvasBounds stores the Plot tab's current canvas size", () => {
+    useApp.getState().setPlotCanvasBounds({ width: 900, height: 500 });
+    expect(useApp.getState().plotCanvasBounds).toEqual({ width: 900, height: 500 });
+    useApp.getState().setPlotCanvasBounds(null);
+    expect(useApp.getState().plotCanvasBounds).toBeNull();
+  });
+
+  it("tileWindows is a no-op with fewer than 2 visible windows", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: "w1" });
+    const before = useApp.getState().plotWindows;
+    useApp.getState().tileWindows();
+    expect(useApp.getState().plotWindows).toBe(before);
+  });
+
+  it("tileWindows arranges visible windows into a grid, skips minimized ones, and un-maximizes maximized ones", () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", winState: "maximized" }),
+        win({ id: "w2" }),
+        win({ id: "w3", winState: "minimized", geometry: { x: 1, y: 2, w: 3, h: 4 } }),
+      ],
+      focusedWindowId: "w1",
+      plotCanvasBounds: { width: 800, height: 400 },
+    });
+    useApp.getState().tileWindows();
+    const s = useApp.getState();
+    const w1 = s.plotWindows.find((w) => w.id === "w1")!;
+    const w2 = s.plotWindows.find((w) => w.id === "w2")!;
+    const w3 = s.plotWindows.find((w) => w.id === "w3")!;
+    expect(w1.winState).toBe("normal"); // was maximized
+    expect(w2.winState).toBe("normal");
+    expect(w1.geometry).not.toEqual({ x: 0, y: 0, w: 480, h: 360 });
+    expect(w3.winState).toBe("minimized"); // untouched
+    expect(w3.geometry).toEqual({ x: 1, y: 2, w: 3, h: 4 });
+  });
+
+  it("cascadeWindows staggers visible windows and falls back to a default size without known bounds", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "w2" })],
+      focusedWindowId: "w1",
+      plotCanvasBounds: null,
+    });
+    useApp.getState().cascadeWindows();
+    const s = useApp.getState();
+    const w1 = s.plotWindows.find((w) => w.id === "w1")!;
+    const w2 = s.plotWindows.find((w) => w.id === "w2")!;
+    expect(w2.geometry.x).toBeGreaterThan(w1.geometry.x);
+    expect(w2.geometry.y).toBeGreaterThan(w1.geometry.y);
+  });
+});
+
+describe("useApp plot windows — item 7 (.dwk + autosave persistence)", () => {
+  const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
+    id: "w1",
+    kind: "plot",
+    title: "",
+    datasetId: "d1",
+    geometry: { x: 10, y: 20, w: 480, h: 360 },
+    z: 0,
+    winState: "normal",
+    view: defaultPlotView(),
+    ...over,
+  });
+
+  it("windowsForSave freezes the FOCUSED window's LIVE view into its record without mutating the store", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", view: { ...defaultPlotView(), plotTitle: "stale" } }), win({ id: "w2" })],
+      focusedWindowId: "w1",
+      plotTitle: "live on-screen title",
+    });
+    const saved = useApp.getState().windowsForSave();
+    expect(saved.find((w) => w.id === "w1")?.view.plotTitle).toBe("live on-screen title");
+    // A pure read: the store's own plotWindows record is untouched.
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.view.plotTitle).toBe("stale");
+  });
+
+  it("loadWorkspace restores a persisted layout and hydrates the focused window's view into the live singletons", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      plotWindows: [win({ id: "old" })],
+      focusedWindowId: "old",
+    });
+    const persisted = [
+      win({ id: "p1", geometry: { x: 5, y: 5, w: 300, h: 200 }, view: { ...defaultPlotView(), yLog: true, plotTitle: "restored" } }),
+      win({ id: "p2", z: 3 }),
+    ];
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      activeId: "d1",
+      plotWindows: persisted,
+      focusedWindowId: "p1",
+    });
+    const s = useApp.getState();
+    expect(s.plotWindows.map((w) => w.id)).toEqual(["p1", "p2"]);
+    expect(s.focusedWindowId).toBe("p1");
+    expect(s.yLog).toBe(true); // hydrated from p1's persisted view
+    expect(s.plotTitle).toBe("restored");
+  });
+
+  it("loadWorkspace clamps a dead dataset ref on a persisted window (never drops it) via sanitizePlotWindows", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      activeId: "d1",
+      plotWindows: [win({ id: "p1", datasetId: "gone" })],
+      focusedWindowId: "p1",
+    });
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(1);
+    expect(s.plotWindows[0].datasetId).toBeNull();
+  });
+
+  it("loadWorkspace with NO persisted layout keeps today's single-maximized-window default + dataset-derived smart defaults", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      activeId: "d1",
+    });
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(1);
+    expect(s.plotWindows[0].winState).toBe("maximized");
+    expect(s.errKeys).toEqual(defaultErrKeys(raw));
+  });
+
+  it("loadWorkspace falls back to the first restored window when the persisted focusedWindowId doesn't match any", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      activeId: "d1",
+      plotWindows: [win({ id: "p1" }), win({ id: "p2" })],
+      focusedWindowId: "ghost",
+    });
+    expect(useApp.getState().focusedWindowId).toBe("p1");
+  });
+});
+
+describe("useApp plot windows — item 8 (minimize/maximize/restore)", () => {
+  const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
+    id: "w1",
+    kind: "plot",
+    title: "",
+    datasetId: "d1",
+    geometry: { x: 0, y: 0, w: 480, h: 360 },
+    z: 0,
+    winState: "normal",
+    view: defaultPlotView(),
+    ...over,
+  });
+
+  it("minimizing an UNFOCUSED window just flips its winState", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1" }), win({ id: "w2" })], focusedWindowId: "w1" });
+    useApp.getState().minimizeWindow("w2");
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "w2")?.winState).toBe("minimized");
+    expect(s.focusedWindowId).toBe("w1"); // untouched
+  });
+
+  it("minimizing the FOCUSED window hands focus to the top-z remaining VISIBLE window", () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", z: 0, view: { ...defaultPlotView(), plotTitle: "w1" } }),
+        win({ id: "w2", z: 5, view: { ...defaultPlotView(), plotTitle: "w2" } }),
+        win({ id: "w3", z: 9, winState: "minimized", view: { ...defaultPlotView(), plotTitle: "w3" } }),
+      ],
+      focusedWindowId: "w1",
+      plotTitle: "live",
+    });
+    useApp.getState().minimizeWindow("w1");
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "w1")?.winState).toBe("minimized");
+    expect(s.focusedWindowId).toBe("w2"); // top-z among VISIBLE survivors (w3 is minimized, excluded)
+    expect(s.plotTitle).toBe("w2"); // hydrated
+  });
+
+  it("minimizing the only visible window with no other candidate leaves focus in place (still 'focused', just hidden)", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: "w1" });
+    useApp.getState().minimizeWindow("w1");
+    const s = useApp.getState();
+    expect(s.plotWindows[0].winState).toBe("minimized");
+    expect(s.focusedWindowId).toBe("w1");
+  });
+
+  it("restoreWindow un-minimizes AND focuses in one step, hydrating its view", () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", view: { ...defaultPlotView(), plotTitle: "w1" } }),
+        win({ id: "w2", winState: "minimized", view: { ...defaultPlotView(), plotTitle: "w2" } }),
+      ],
+      focusedWindowId: "w1",
+      plotTitle: "live w1",
+    });
+    useApp.getState().restoreWindow("w2");
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "w2")?.winState).toBe("normal");
+    expect(s.focusedWindowId).toBe("w2");
+    expect(s.plotTitle).toBe("w2"); // hydrated
+    expect(s.plotWindows.find((w) => w.id === "w1")?.view.plotTitle).toBe("live w1"); // snapshotted
+  });
+
+  it("restoreWindow is a no-op on a window that isn't minimized", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: "w1" });
+    const before = useApp.getState().plotWindows;
+    useApp.getState().restoreWindow("w1");
+    expect(useApp.getState().plotWindows).toBe(before);
+  });
+
+  it("toggleMaximizeWindow flips normal<->maximized and is a no-op on a minimized window", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "minimized" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().toggleMaximizeWindow("w1");
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.winState).toBe("maximized");
+    useApp.getState().toggleMaximizeWindow("w1");
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.winState).toBe("normal");
+    useApp.getState().toggleMaximizeWindow("w2");
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w2")?.winState).toBe("minimized");
+  });
+});
+
+describe("useApp plot windows — item 9 (Origin figures / figure docs into new windows)", () => {
+  const figureEntry = {
+    id: "fig-1",
+    stem: "XRD",
+    datasetId: "d2",
+    siblingIds: ["d2"],
+    figure: {
+      name: "Graph1",
+      x_from: 18,
+      x_to: 100,
+      x_log: false,
+      y_from: 1,
+      y_to: 1e6,
+      y_log: true,
+      n_curves: 3,
+      annotations: [] as string[],
+    },
+  };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "XRD:Book1", data: raw },
+        { id: "d2", name: "XRD:Book2", data: raw },
+      ],
+      activeId: "d1",
+      originFigures: [figureEntry],
+    });
+  });
+
+  it("applyOriginFigure({newWindow:true}) opens + focuses a NEW window instead of overwriting the previously-focused one", () => {
+    const before = useApp.getState().plotWindows.length;
+    useApp.getState().applyOriginFigure("fig-1", { newWindow: true });
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(before + 1);
+    const created = s.plotWindows.find((w) => w.datasetId === "d2" && s.focusedWindowId === w.id);
+    expect(created).toBeDefined();
+    expect(s.focusedWindowId).toBe(created!.id);
+    expect(s.xLim).toEqual([18, 100]); // the apply logic landed on the NEW window
+    expect(s.yLog).toBe(true);
+  });
+
+  it("applyOriginFigure({newWindow:true}) titles the new window from the figure's label", () => {
+    useApp.getState().applyOriginFigure("fig-1", { newWindow: true });
+    const s = useApp.getState();
+    const created = s.plotWindows.find((w) => w.id === s.focusedWindowId)!;
+    expect(created.title).toContain("Graph1");
+  });
+
+  it("applyOriginFigure without newWindow keeps applying to the focused window (unchanged v1 behavior)", () => {
+    const before = useApp.getState().plotWindows.length;
+    useApp.getState().applyOriginFigure("fig-1");
+    expect(useApp.getState().plotWindows).toHaveLength(before);
+  });
+
+  it("openFigureDocInWindow opens a new window bound to a LIVE doc's dataset and applies its channel/scale config", () => {
+    useApp.getState().addFigureDoc({
+      id: "doc-1",
+      name: "My Figure",
+      datasetId: "d2",
+      live: true,
+      config: {
+        xKey: null,
+        yKeys: [0],
+        xLog: false,
+        yLog: true,
+        title: "Doc Title",
+        xLabel: "X",
+        yLabel: "Y",
+        style: "default",
+        fmt: "pdf",
+        dpi: 200,
+        overrides: null,
+        seriesStyles: null,
+      },
+    });
+    const before = useApp.getState().plotWindows.length;
+    useApp.getState().openFigureDocInWindow("doc-1");
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(before + 1);
+    const created = s.plotWindows.find((w) => w.id === s.focusedWindowId)!;
+    expect(created.datasetId).toBe("d2");
+    expect(created.title).toBe("My Figure");
+    expect(s.yLog).toBe(true);
+    expect(s.plotTitle).toBe("Doc Title");
+  });
+
+  it("openFigureDocInWindow is a no-op for a frozen doc or one with no resolved dataset", () => {
+    useApp.getState().addFigureDoc({
+      id: "doc-frozen",
+      name: "Frozen",
+      datasetId: null,
+      live: false,
+      dataSnapshot: raw,
+      config: {
+        xKey: null,
+        yKeys: null,
+        xLog: false,
+        yLog: false,
+        title: "",
+        xLabel: "",
+        yLabel: "",
+        style: "default",
+        fmt: "pdf",
+        dpi: 200,
+        overrides: null,
+        seriesStyles: null,
+      },
+    });
+    const before = useApp.getState().plotWindows.length;
+    useApp.getState().openFigureDocInWindow("doc-frozen");
+    expect(useApp.getState().plotWindows).toHaveLength(before);
+  });
+});
+
+describe("useApp plot windows — item 10 (default titles, dedupe, rename)", () => {
+  const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
+    id: "w1",
+    kind: "plot",
+    title: "",
+    datasetId: "d1",
+    geometry: { x: 0, y: 0, w: 480, h: 360 },
+    z: 0,
+    winState: "normal",
+    view: defaultPlotView(),
+    ...over,
+  });
+
+  it("createWindow defaults the title to the bound dataset's name", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "MyData", data: raw }],
+      plotWindows: [win({ id: "w0", datasetId: null })],
+      focusedWindowId: "w0",
+    });
+    const id = useApp.getState().createWindow("d1");
+    expect(useApp.getState().plotWindows.find((w) => w.id === id)?.title).toBe("MyData");
+  });
+
+  it("createWindow dedupes against a window already showing the same name", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "MyData", data: raw }],
+      plotWindows: [win({ id: "w1", datasetId: "d1" })],
+      focusedWindowId: "w1",
+    });
+    const id = useApp.getState().createWindow("d1");
+    expect(useApp.getState().plotWindows.find((w) => w.id === id)?.title).toBe("MyData (2)");
+  });
+
+  it("createWindow uses an explicit title verbatim, skipping the computed default", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "MyData", data: raw }],
+      plotWindows: [win({ id: "w1", datasetId: "d1" })],
+      focusedWindowId: "w1",
+    });
+    const id = useApp.getState().createWindow("d1", undefined, "Custom Name");
+    expect(useApp.getState().plotWindows.find((w) => w.id === id)?.title).toBe("Custom Name");
+  });
+
+  it("duplicateWindow dedupes the source's OWN displayed title", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      plotWindows: [win({ id: "w1", title: "Comparison" })],
+      focusedWindowId: "w1",
+    });
+    const id = useApp.getState().duplicateWindow("w1");
+    expect(useApp.getState().plotWindows.find((w) => w.id === id)?.title).toBe("Comparison (2)");
+  });
+
+  it("renameWindow sets an explicit title verbatim (never deduped)", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", title: "A" }), win({ id: "w2", title: "A" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().renameWindow("w2", "A"); // colliding on purpose — a user's explicit choice
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w2")?.title).toBe("A");
   });
 });

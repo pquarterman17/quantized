@@ -231,36 +231,11 @@ pipeline, are in the app today). See `## Completed` below for items 3–5
 
 ## Tier 2 — Medium Impact
 
-6. **Tile / Cascade / cycle focus** — (M) the MDI arrangement commands.
-   - [ ] Pure tiling/cascade geometry in `lib/plotview.ts` (grid split +
-         cascade offsets, unit-tested)
-   - [ ] Commands: Tile, Cascade, Ctrl+Tab / Ctrl+Shift+Tab focus cycling
-         (z-order aware), in the Window menu + palette
-
-7. **Window layout persistence (`.dwk` + autosave)** — (M) round-trip
-   `plotWindows` + `focusedWindowId` (snapshot the focused view on save).
-   - [ ] `lib/workspace.ts`: serialize + `sanitizePlotWindows` on parse
-         (clamp dataset refs/geometry); additive-optional, v3 stays
-   - [ ] `useWorkspaceAutosave` subscription watches the windows slice
-   - [ ] Legacy docs (and the visual-harness seam) load as one maximized
-         window — identity with today verified
-
-8. **Minimize / maximize + window strip** — (M) manage many windows.
-   - [ ] `winState`: normal / minimized / maximized; minimized windows
-         unmount their uPlot (perf) and dock to a strip at the canvas
-         bottom; maximize toggles full-bleed
-   - [ ] Double-click title = maximize/restore (Origin habit)
-
-9. **Open Origin figures / figure docs in new windows** — (M) the payoff
-   for `.opj` imports with many graph windows.
-   - [ ] `applyOriginFigure` gains an "open in new window" path (new window
-         + apply, instead of overwriting the focused view); Library
-         Figures / FigureDoc context menus get "Open in New Window"
-   - [ ] Window title from `figureLabel` / doc name
-
-10. **Window titles, rename, dataset badge** — (S) chrome polish: title
-    defaults to dataset name, double-click-to-rename (askParams), a small
-    JetBrains Mono channel-count/rows badge.
+**All 5 items shipped 2026-07-09 — Tier 2 is complete** (Tile/Cascade/
+z-order-aware cycling, `.dwk`+autosave persistence, minimize/maximize +
+window strip, Origin-figure/figure-doc "open in new window", and title/
+rename/badge chrome are all in the app today). See `## Completed` below for
+items 6–10.
 
 ## Tier 3 — Nice-to-Have
 
@@ -466,3 +441,179 @@ pipeline, are in the app today). See `## Completed` below for items 3–5
   usable v1 the plan set out to deliver: ≥2 simultaneous movable, resizable,
   focusable plot windows fed by the existing plot pipeline. Frontend 1872
   green; `npm run build` (tsc + vite) green.
+- ~~**6. Tile / Cascade / cycle focus**~~ (2026-07-09) — three pure helpers in
+  `lib/plotview.ts`: `tileLayout` (grid split — cols = `ceil(sqrt(count))`,
+  cells floored at a 200×140 minimum so a large count against a small canvas
+  degrades to overlapping-but-usable cells rather than collapsing to zero),
+  `cascadeLayout` (N windows via `cascadeGeometry` in turn — the "Cascade"
+  command's re-lay-out-ALL-windows counterpart to that helper's
+  one-new-window placement), and `zOrderIds` (stable-sorts by ascending z —
+  replaces v1's plain creation-order input to `cycleWindow`, identical to v1
+  whenever no window has been raised). `store/useApp.ts` gained the
+  `plotCanvasBounds` field + `setPlotCanvasBounds` (the Plot tab's live pixel
+  size — `WindowCanvas`'s ResizeObserver is the sole writer) and
+  `tileWindows`/`cascadeWindows` actions (only re-lay-out VISIBLE windows;
+  any that were maximized become "normal" so they actually show side by
+  side/cascaded; minimized windows are untouched; a no-op below 2 visible
+  windows; falls back to a default 1200×800 size when bounds aren't known
+  yet). `useWindowCommands.ts`'s `cycleFocus` now feeds `zOrderIds` instead
+  of plain array order, and gained "Tile Windows"/"Cascade Windows" (Window
+  menu + palette, no keybinding). **A real behavioral interaction surfaced by
+  this change**: `focusWindow` (unchanged since Tier 1) raises the newly-
+  focused window's z on every switch, so repeated Ctrl+Tab/Ctrl+Shift+Tab
+  presses reshuffle the stack as you go — cycling forward then immediately
+  back is no longer a plain reversal once z differs (a real MDI/Alt-Tab
+  trait, not a bug); the pre-existing Tier-1 "Ctrl+Tab...Ctrl+Shift+Tab"
+  keyboard test needed its expected id updated to match (traced by hand:
+  w1→w2 raises w2's z, so the very next "previous" step lands on w3, not
+  back on w1). +19 pure tests (`lib/plotview.test.ts`: tileLayout grid/
+  minimum-floor/empty cases, cascadeLayout, zOrderIds stable-sort) + 6
+  `useApp.test.ts` cases (bounds setter, tile/cascade no-op and real
+  rearrange, skip-minimized, un-maximize) + 3 `useWindowCommands.test.ts`
+  cases (z-order-aware forward/backward cycling distinct from creation
+  order, Tile/Cascade command effects) + updated the 7-command registry
+  assertion and one existing keyboard-shortcut expectation.
+- ~~**7. Window layout persistence (`.dwk` + autosave)**~~ (2026-07-09) —
+  `lib/workspace.ts` gained `plotWindows`/`focusedWindowId` on
+  `WorkspaceState`/`LoadedWorkspace`/the doc shape — passed through
+  VERBATIM by `serializeWorkspace` (this module stays a plain serializer;
+  the focused-view snapshot is the CALLER's job, per the interface doc) and
+  validated on parse via the item-2 `sanitizePlotWindows` boundary
+  validator (clamps dead dataset refs/malformed geometry, drops malformed
+  entries, never throws) plus a `focusedWindowId` clamp to a surviving
+  window id or null. `store/useApp.ts` gained `windowsForSave()` — a pure
+  getter (not a mutation) that freezes the FOCUSED window's LIVE view into
+  its record via the same `snapshotView` chokepoint `focusWindow`/
+  `closeWindow` use; this is the plan's "save is one of the three sanctioned
+  snapshot points" — the File▸Save command (`App.tsx`, kept to the SAME
+  line so the 954-line pin never moves) and `useWorkspaceAutosave`'s save
+  effect both call it instead of ever passing `state.plotWindows` raw.
+  `loadWorkspace` restores a persisted layout when present (hydrating the
+  restored FOCUSED window's view into the live singleton fields — the same
+  invariant `focusWindow`/`closeWindow` uphold) while a legacy/fresh
+  workspace (no `plotWindows` field) falls through to EXACTLY today's
+  per-field reset, including the dataset-derived `errKeys`/
+  `originHiddenChannels` smart defaults — verified with a dedicated
+  regression test, zero behavior change on that path.
+  `useWorkspaceAutosave.ts`'s subscribe comparison now also watches
+  `plotWindows`/`focusedWindowId` (the "windows slice", exactly as the plan
+  names it) alongside the pre-existing datasets/folders/active/selection/
+  smartFolders set — a live-view-only edit with no accompanying window-
+  structural change doesn't reset the debounce by itself, the same
+  documented tradeoff `figureDocs`/`reports`/`macroSteps` already have here;
+  an explicit Save always captures the live view regardless. +5
+  `workspace.test.ts` cases (round-trip + focus id, dead-dataset clamp,
+  focus-id clamp, pre-item-7-doc defaults to `[]`/`null`, malformed-entry
+  drop) + 5 `useApp.test.ts` cases (`windowsForSave` freezes without
+  mutating, restore-and-hydrate, dead-ref clamp via load, legacy-path smart
+  defaults preserved, unmatched `focusedWindowId` falls back to the first
+  restored window).
+- ~~**8. Minimize / maximize + window strip**~~ (2026-07-09) — `WinState`
+  already had "minimized" (item 2); `store/useApp.ts` gained
+  `minimizeWindow` (flips winState; minimizing the FOCUSED window hands
+  focus to the top-z remaining VISIBLE survivor — `closeWindow`'s exact
+  refocus formula, but the window stays IN `plotWindows`, docked in the
+  strip, rather than being removed; a no-op candidate-wise state — focus
+  just stays put on the now-hidden window — when there's no other visible
+  window, since the ≥1-window invariant is about array length, not
+  visibility), `restoreWindow` (un-minimizes AND focuses in one atomic step
+  — clicking a strip entry is "bring this back and make it live", a taskbar
+  button, not an inert un-minimize), and `toggleMaximizeWindow` (flips
+  normal<->maximized; a no-op on a minimized window). `components/windows/
+  WindowCanvas.tsx` now partitions `plotWindows` into `visible` (renders a
+  `PlotWindowFrame`, exactly as before) and `minimized` (renders NEITHER a
+  frame NOR a `PlotStage`/`BackgroundPlotWindow` — fully unmounted, the
+  plan's perf risk note — just one `qzk-winstrip-item` button in a new
+  `qzk-winstrip` dock along the canvas bottom; click = `restoreWindow`).
+  `shell.css` restructured `.qzk-wincanvas` into a flex-COLUMN outer wrapper
+  around a new `.qzk-wincanvas-frames` inner box (the actual frame host —
+  a maximized frame's `inset:0` fills only this inner box, never covering
+  the strip sibling below it) plus the new `.qzk-winstrip`/`.qzk-winstrip-
+  item` classes (tokens only). `PlotWindowFrame.tsx`'s title bar gained
+  `onDoubleClick` → `toggleMaximizeWindow` (the Origin habit) — this
+  coexists with item 10's rename-on-double-click-the-TEXT because the title
+  text's own double-click handler stops propagation before it ever reaches
+  the bar's handler. **Verified the migration guarantee still holds**: a
+  temporary worktree at `ce58ed9` (pre-Tier-2 main) built + the visual
+  harness shot all 4 canonical shots (`multiseries_baseline`,
+  `double_y_render`, `trailing_null_x_repro`, `library_folder_tree`) —
+  sha256 BYTE-IDENTICAL to the same 4 shots off this branch; the 5th,
+  Tier-1-added `mdi_two_window_layout` shot differs ONLY by the new item-10
+  channel/rows badge text now visible in each title bar (a deliberate,
+  expected new-feature diff, not a regression — confirmed by eye). +6
+  `useApp.test.ts` cases (minimize unfocused/focused-with-refocus/no-
+  candidate, restore un-minimizes+focuses+hydrates, restore no-op when not
+  minimized, maximize toggle + no-op on minimized) + 3 `WindowCanvas.test.tsx`
+  cases (minimized window renders no frame/no plot + one strip entry, strip
+  click restores+focuses, no strip when nothing's minimized) + 1
+  `PlotWindowFrame.test.tsx` case (double-click the title BAR toggles
+  maximize/restore).
+- ~~**9. Open Origin figures / figure docs in new windows**~~ (2026-07-09) —
+  `applyOriginFigure` gained an `opts?: { newWindow?: boolean }` param: when
+  set, it creates + focuses a new window (bound to the figure's dataset,
+  titled from `figureLabel(entry)` deduped via item 10's `dedupeWindowTitle`)
+  BEFORE any of the existing apply logic runs — since that logic already
+  acts entirely through `setActive`/singleton `set()` calls scoped to "the
+  focused window" by construction, the rest of the (large, multi-branch)
+  function needed ZERO changes to land on the new window instead of
+  overwriting whatever was focused before. `store/useApp.ts` also gained
+  `openFigureDocInWindow` (the figure-doc half): a LIVE doc with a resolved
+  dataset only (a frozen doc's data snapshot isn't a live `Dataset` a v1
+  window can bind to — documented as Tier 3 item 11's "snapshot-as-window"
+  gap, not silently faked) creates + focuses a new window and applies its
+  `FigureConfig`'s `xKey`/`yKeys`/log flags/title/axis labels onto it —
+  deliberately NOT its `seriesStyles` (a `FigureConfig` carries the export-
+  shape `ExportSeriesStyle[]`, which has no inverse back to the live
+  `Record<number,SeriesStyle>`; `buildExportStyles` only goes the other
+  way — the window opens with default series styling, same as any other
+  fresh window). UI wiring: `Library/FigureRow.tsx` gained a second "⊞" icon
+  button ("Open in a new graph window", enabled iff the figure resolved) —
+  `SavedFiguresSection.tsx` gained the same for figure docs (enabled iff
+  live + a resolved `datasetId`; otherwise a disabled button whose tooltip
+  says why). Neither uses a right-click `ContextMenu` (the plan's own
+  wording) — both rows' existing convention is an inline icon-button row
+  (SavedFiguresSection already had duplicate/delete buttons this way;
+  FigureRow gained its first), so the new action matches its neighbors
+  instead of introducing a second interaction pattern for the same rows.
+  +2 `useApp.test.ts` describe blocks (newWindow opens+focuses+titles from
+  the figure label, non-newWindow unchanged, openFigureDocInWindow applies
+  config + no-ops for frozen/unbound docs) + 1 `FiguresSection.test.tsx`
+  case (the button opens a new window bound to the entry's dataset) + 2
+  `SavedFiguresSection.test.tsx` cases (opens + applies config, disabled for
+  a frozen doc).
+- ~~**10. Window titles, rename, dataset badge**~~ (2026-07-09) — two pure
+  helpers in `lib/plotview.ts`: `displayedWindowTitle` (a window's own title,
+  else its bound dataset's name, else "Untitled graph" — mirrors
+  `PlotWindowFrame`'s existing render-time fallback chain exactly) and
+  `dedupeWindowTitle` (appends " (2)", " (3)", … against a supplied
+  existing-titles list). `createWindow` gained an optional `title` param
+  (an explicit title, e.g. from item 9's figure-label path, is used
+  VERBATIM — no dedup on top of a caller's own already-resolved choice);
+  omitted, it computes the bound dataset's name deduped against every
+  window's CURRENT displayed title, so a second window on the same dataset
+  reads "Foo (2)" instead of an indistinguishable second "Foo".
+  `duplicateWindow` dedupes the SOURCE's own displayed title the same way
+  ("Comparison" duplicated once → "Comparison (2)"). New `renameWindow`
+  action sets an explicit title verbatim — never deduped, a user's rename is
+  never second-guessed. `PlotWindowFrame.tsx`'s title span gained the
+  DatasetRow/FolderRow inline-rename pattern (double-click → an `<input>`,
+  Enter commits, Escape cancels, blur commits) — its own `onDoubleClick`
+  stops propagation so it never ALSO triggers item 8's maximize toggle on
+  the title bar beneath it (the plan named both "double-click the title" —
+  resolved by scoping item 8's toggle to the BAR background and item 10's
+  rename to the TEXT specifically, the ubiquitous title-bar-vs-title-text
+  split most window managers already use). The existing dataset-name badge
+  (item 3) is joined by a new JetBrains Mono channel-count/rows `Badge`
+  (`{n}ch · {n}pts`, `tone="accent"` — reuses the `Badge` primitive
+  DatasetRow already uses, which sets `font-mono` itself) fed by a new
+  `datasetMeta` prop `WindowCanvas` computes from the bound `Dataset`. +6
+  `lib/plotview.test.ts` cases (fallback chain, dedupe uniqueness/suffix) +
+  5 `useApp.test.ts` cases (createWindow default/dedupe/explicit-verbatim,
+  duplicateWindow dedupes the source's own title, renameWindow never
+  dedupes even on a deliberate collision) + 3 `PlotWindowFrame.test.tsx`
+  cases (rename commits on Enter and doesn't also maximize, Escape
+  cancels, the meta badge renders `{n}ch · {n}pts`) + 1 `WindowCanvas.test.tsx`
+  case (the badge text appears for a window bound to a live dataset).
+  **Tier 2 is now fully complete** (items 6–10 all shipped 2026-07-09).
+  Frontend 1927 green (+55 over Tier 1's 1872); `tsc -b --noEmit` and
+  `npm run build` (tsc + vite) both green.

@@ -153,4 +153,55 @@ describe("WindowCanvas — ≥2 windows (MDI chrome + focused-window routing)", 
     await waitFor(() => expect(created.length).toBe(1)); // only the focused (bound) window plots
     expect(container.textContent).toContain("No dataset");
   });
+
+  it("shows a channel-count/rows badge (item 10) for a window bound to a live dataset", async () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(2));
+    expect(container.textContent).toContain("1ch");
+    expect(container.textContent).toContain("4pts");
+  });
+});
+
+describe("WindowCanvas — minimized windows (item 8)", () => {
+  it("a minimized window renders NEITHER a frame NOR a live plot — only a strip entry", async () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "minimized" })],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(1)); // only w1 (visible) plots — w2 fully unmounted
+    const frames = container.querySelectorAll(".qzk-plotwin");
+    expect(frames).toHaveLength(1); // no frame at all for the minimized window
+    const strip = container.querySelector(".qzk-winstrip");
+    expect(strip).not.toBeNull();
+    expect(strip!.querySelectorAll(".qzk-winstrip-item")).toHaveLength(1);
+  });
+
+  it("clicking a strip entry restores + focuses that window", async () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "minimized" })],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const item = container.querySelector(".qzk-winstrip-item") as HTMLButtonElement;
+    item.click();
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "w2")?.winState).toBe("normal");
+    expect(s.focusedWindowId).toBe("w2");
+  });
+
+  it("no strip renders when nothing is minimized", async () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(2));
+    expect(container.querySelector(".qzk-winstrip")).toBeNull();
+  });
 });

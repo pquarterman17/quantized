@@ -56,13 +56,15 @@ afterEach(() => {
 });
 
 describe("useWindowCommands — published registry entries", () => {
-  it("publishes exactly the 5 Window-group commands with the documented shortcuts", () => {
+  it("publishes exactly the 7 Window-group commands (item 6 adds Tile/Cascade) with the documented shortcuts", () => {
     renderHook(() => useWindowCommands());
     const ids = useCommands.getState().menuCommands.map((c) => c.id);
     expect(ids).toEqual([
       "window-new",
       "window-duplicate",
       "window-close",
+      "window-tile",
+      "window-cascade",
       "window-focus-next",
       "window-focus-prev",
     ]);
@@ -106,7 +108,12 @@ describe("useWindowCommands — published registry entries", () => {
     expect(useApp.getState().plotWindows).toHaveLength(1);
   });
 
-  it("'Focus Next/Previous Window' cycle by creation order, wrapping", () => {
+  it("'Focus Next/Previous Window' matches v1's creation-order cycle for a SINGLE step when all z are equal", () => {
+    // Chaining several steps would compound with focusWindow's own "raise
+    // the target to the top z" side effect (unchanged since Tier 1) — that
+    // interaction is covered by its own dedicated test below, and by the
+    // "Ctrl+Tab...Ctrl+Shift+Tab" keyboard test. A single step from a
+    // freshly-set, all-equal-z state stays identical to v1.
     useApp.setState({
       plotWindows: [win({ id: "w1" }), win({ id: "w2" }), win({ id: "w3" })],
       focusedWindowId: "w1",
@@ -114,10 +121,45 @@ describe("useWindowCommands — published registry entries", () => {
     renderHook(() => useWindowCommands());
     act(() => action("window-focus-next").run());
     expect(useApp.getState().focusedWindowId).toBe("w2");
+  });
+
+  it("'Focus Next/Previous Window' is Z-ORDER aware (item 6) — NOT creation order when z differs", () => {
+    // Creation order is w1,w2,w3, but z-order (back-to-front) is w3,w1,w2.
+    useApp.setState({
+      plotWindows: [win({ id: "w1", z: 5 }), win({ id: "w2", z: 9 }), win({ id: "w3", z: 1 })],
+      focusedWindowId: "w3", // lowest z — first in z-order
+    });
+    renderHook(() => useWindowCommands());
+    act(() => action("window-focus-next").run());
+    expect(useApp.getState().focusedWindowId).toBe("w1"); // next by z, not by creation order (which would be w2)
+  });
+
+  it("'Focus Previous Window' cycles backward by z-order, wrapping", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", z: 5 }), win({ id: "w2", z: 9 }), win({ id: "w3", z: 1 })],
+      focusedWindowId: "w3", // lowest z — first in z-order, so "previous" wraps to the last
+    });
+    renderHook(() => useWindowCommands());
     act(() => action("window-focus-prev").run());
-    expect(useApp.getState().focusedWindowId).toBe("w1");
-    act(() => action("window-focus-prev").run()); // wraps backward
-    expect(useApp.getState().focusedWindowId).toBe("w3");
+    expect(useApp.getState().focusedWindowId).toBe("w2"); // highest z — last in z-order
+  });
+
+  it("'Tile Windows' / 'Cascade Windows' are published and re-lay-out the visible windows", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "w2" })],
+      focusedWindowId: "w1",
+      plotCanvasBounds: { width: 800, height: 400 },
+    });
+    renderHook(() => useWindowCommands());
+    act(() => action("window-tile").run());
+    const tiled = useApp.getState().plotWindows;
+    expect(tiled.find((w) => w.id === "w1")!.geometry).not.toEqual(tiled.find((w) => w.id === "w2")!.geometry);
+
+    act(() => action("window-cascade").run());
+    const cascaded = useApp.getState().plotWindows;
+    const w1 = cascaded.find((w) => w.id === "w1")!;
+    const w2 = cascaded.find((w) => w.id === "w2")!;
+    expect(w2.geometry.x).toBeGreaterThan(w1.geometry.x);
   });
 });
 
@@ -142,13 +184,18 @@ describe("useWindowCommands — keyboard shortcuts", () => {
     renderHook(() => useWindowCommands());
     act(() => press("Tab", { ctrl: true }));
     expect(useApp.getState().focusedWindowId).toBe("w2");
+    // Each Tab press is a committed `focusWindow` call, which (unchanged
+    // since Tier 1) also RAISES the target to the top z — so cycling
+    // backward from here is z-order-aware (item 6) over a stack w2 just
+    // reshuffled, not a plain reversal back to "w1". With w2 now on top,
+    // the back-to-front order is w1,w3,w2 — one step back from w2 is w3.
     act(() => press("Tab", { ctrl: true, shift: true }));
-    expect(useApp.getState().focusedWindowId).toBe("w1");
+    expect(useApp.getState().focusedWindowId).toBe("w3");
 
     // Cmd+Tab (macOS app switcher) must never be hijacked — Meta alone isn't
     // Ctrl, so this is a deliberate no-op.
     act(() => press("Tab", { meta: true }));
-    expect(useApp.getState().focusedWindowId).toBe("w1");
+    expect(useApp.getState().focusedWindowId).toBe("w3");
   });
 
   it("removes its keydown listener on unmount", () => {

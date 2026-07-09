@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { OriginFigureEntry } from "./originFigures";
+import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { ReportEntry } from "./report";
 import type { Dataset, OriginFigure } from "./types";
 import { parseWorkspace, serializeWorkspace, WORKSPACE_FORMAT } from "./workspace";
@@ -494,5 +495,64 @@ describe("workspace smart folders (org #9)", () => {
     ]);
     delete doc.smartFolders; // a pre-#9 v3 doc
     expect(parseWorkspace(JSON.stringify(doc)).smartFolders).toEqual([]);
+  });
+});
+
+describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, no version bump)", () => {
+  const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
+    id: "w1",
+    kind: "plot",
+    title: "My Graph",
+    datasetId: "a",
+    geometry: { x: 10, y: 20, w: 480, h: 360 },
+    z: 1,
+    winState: "normal",
+    view: { ...defaultPlotView(), yLog: true, plotTitle: "restored view" },
+    ...over,
+  });
+
+  it("round-trips a window layout and the focused window id", () => {
+    const datasets = [makeDataset("a", "first")];
+    const plotWindows = [win({ id: "w1" }), win({ id: "w2", z: 2 })];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, plotWindows, focusedWindowId: "w2" }));
+    expect(loaded.plotWindows).toHaveLength(2);
+    expect(loaded.plotWindows[0].title).toBe("My Graph");
+    expect(loaded.plotWindows[0].view.yLog).toBe(true);
+    expect(loaded.plotWindows[0].view.plotTitle).toBe("restored view");
+    expect(loaded.focusedWindowId).toBe("w2");
+  });
+
+  it("clamps a window's dangling dataset ref to null (never drops the window itself)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(
+      serializeWorkspace({ datasets, plotWindows: [win({ id: "w1", datasetId: "gone" })], focusedWindowId: "w1" }),
+    );
+    expect(loaded.plotWindows).toHaveLength(1);
+    expect(loaded.plotWindows[0].datasetId).toBeNull();
+  });
+
+  it("clamps a focusedWindowId that doesn't match any surviving window to null", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets, plotWindows: [win({ id: "w1" })], focusedWindowId: "w1" }),
+    ) as Record<string, unknown>;
+    doc.focusedWindowId = "ghost";
+    expect(parseWorkspace(JSON.stringify(doc)).focusedWindowId).toBeNull();
+  });
+
+  it("defaults to an empty layout + null focus for a pre-item-7 doc (no plotWindows field)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets }));
+    expect(loaded.plotWindows).toEqual([]);
+    expect(loaded.focusedWindowId).toBeNull();
+  });
+
+  it("drops a malformed window entry without throwing", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets, plotWindows: [win({ id: "w1" })], focusedWindowId: "w1" }),
+    ) as Record<string, unknown>;
+    doc.plotWindows = [win({ id: "w1" }), { id: "bad" }, null, "nope"];
+    expect(parseWorkspace(JSON.stringify(doc)).plotWindows).toHaveLength(1);
   });
 });
