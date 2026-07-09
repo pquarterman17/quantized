@@ -224,42 +224,10 @@ Owner decisions (resolved 2026-07-09):
 
 ## Tier 1 — High Impact
 
-3. **Window chrome: `components/windows/` subtree** — (M) the MDI frame
-   and canvas, tokens-only styling.
-   - [ ] `PlotWindowFrame.tsx`: controlled title bar (drag), resize grip,
-         close button, focus-on-pointerdown, z from store; `qzk-win*`
-         family extended in `shell.css` (focused-title accent variant,
-         resize grip) — design tokens only, unicode glyphs not emoji
-   - [ ] `WindowCanvas.tsx`: hosts frames inside the stage cell (own
-         stacking context, below workshop `ToolWindow`s); one maximized
-         window renders borderless full-bleed (today's look)
-   - [ ] `Stage.tsx`: Plot tab renders `WindowCanvas`; Map/Worksheet tabs
-         untouched
-   - [ ] Geometry clamped to the canvas (no lost off-screen windows);
-         canvas-resize reflow keeps title bars reachable
-
-4. **Focused-window routing + background rendering** — (M) the behaviour
-   contract that makes N windows coherent.
-   - [ ] Focused frame renders `PlotStage` (full tools/overlays/readouts/
-         legend/toolbar); background frames render `PlotViewport` from
-         their `PlotView` snapshot — live data, no tool plugins,
-         pointerdown focuses first
-   - [ ] `setActive` scopes its rebind + view reset to the focused window;
-         unfocused windows keep pinned datasets; `removeDataset`/`clearAll`
-         null/reset window bindings
-   - [ ] Tool/gadget/overlay singleton state stays focused-only; switching
-         focus clears transient tool state exactly as switching datasets
-         does today
-   - [ ] Row-state proof test: two windows on one dataset both reflect an
-         exclusion toggle (no `architecture.test.ts` allowlist change)
-
-5. **Window commands v1** — (S) New Graph Window, Duplicate Window, Close
-   Window; menu + ⌘K entries wired through `store/commands.ts` / extracted
-   hooks — zero lines added to `App.tsx` (954 pin).
-   - [ ] Commands + shortcuts registered in the command registry; a Window
-         menu section in `MenuBar`
-   - [ ] "New Graph Window" clones the focused view onto the focused
-         dataset by default (fast compare workflow)
+**All 5 items shipped 2026-07-09 — Tier 1 is complete** (≥2 simultaneous
+movable, resizable, focusable plot windows, fed by the existing plot
+pipeline, are in the app today). See `## Completed` below for items 3–5
+(1–2 landed earlier the same day).
 
 ## Tier 2 — Medium Impact
 
@@ -389,3 +357,102 @@ Owner decisions (resolved 2026-07-09):
   no-op, dataset-removal nulling across all three remove actions,
   `duplicateWindow` snapshot-if-focused + unknown-id, geometry/z actions).
   Frontend 1797 green.
+- ~~**3. Window chrome: `components/windows/` subtree**~~ (2026-07-09) — new
+  `components/windows/PlotWindowFrame.tsx` (218 lines: controlled title bar
+  with drag-move, resize grip, close button, `qzk-plotwin*` — a distinct
+  prefix in the `qzk-win*` naming FAMILY, sharing tokens/conventions with
+  `overlays/ToolWindow`'s `qzk-win*` without colliding class names, per Key
+  Decision 3; geometry/z mutate ONLY through the existing
+  `moveWindow`/`resizeWindow`/`raiseWindow`/`focusWindow` store actions,
+  rAF-throttled — a `scheduledRef` boolean gates the pending flush rather than
+  the rAF id itself, so a test's synchronous rAF stub can't have its own
+  reset-to-null clobbered by the real (always-async) return-value assignment;
+  ANY pointerdown anywhere in an unfocused frame focuses it first, implemented
+  ONCE via a single capture-phase handler on the frame root — runs before
+  uPlot's own native mousedown listeners on the canvas beneath, satisfying
+  item 4's "background pointerdown focuses" contract for free) and
+  `WindowCanvas.tsx` (66 lines: hosts N frames in its own stacking context,
+  below workshop `ToolWindow`s; the single-maximized-window case renders
+  `PlotStage` ALONE — no host div, no chrome — verified pixel-identical, see
+  item 4's harness note). `Stage.tsx`'s Plot tab now renders `WindowCanvas`
+  (Map/Worksheet untouched). Geometry clamping (canvas-resize reflow keeps
+  title bars reachable) is a `bounds` prop from `WindowCanvas`'s own
+  `ResizeObserver`, applied both live during a drag and reactively on a
+  canvas-size change — a dragged/reflowed window always keeps ≥80×28px of its
+  title bar on-canvas, never lost off-screen. `shell.css` gained the
+  `qzk-plotwin*` family (focused-title `--accent` highlight, a
+  gradient-drawn resize grip corner — no glyph/emoji). +7 component tests
+  (`PlotWindowFrame.test.tsx`: drag, resize + min-size clamp, no grip when
+  maximized, close-via-store, focus-on-unfocused-pointerdown, no-op when
+  already focused, canvas-resize reflow) — landed atop the same-day
+  WORKSHEET_PLAN Tier 1 merge (main at 1836 tests going in); running total
+  after items 3–5 together is at item 5's entry below.
+- ~~**4. Focused-window routing + background rendering**~~ (2026-07-09) — new
+  `components/windows/BackgroundPlotWindow.tsx` (120 lines: the SAME
+  `usePlotPayload` → `PlotViewport` pipeline the focused window uses, fed by
+  the window's OWN `PlotView` snapshot instead of the live singleton fields —
+  no toolbar/legend/readouts/context-menu, no on-plot tool plugins
+  (`tool="zoom"`, `wheelZoom=false`, `fitOverlay`/`baselineOverlay`/
+  `peakOverlay`/`derivOverlay` all forced `null` regardless of what the
+  singleton happens to hold — decision #2), empty "no dataset" state for a
+  null/removed binding). `WindowCanvas` dispatches: the focused window renders
+  `PlotStage`, every other window renders `BackgroundPlotWindow`.
+  `store/useApp.ts` closes the routing gaps item 2 left open: `setActive` and
+  `addDataset` now ALSO rebind the FOCUSED window's `datasetId` (previously
+  only the live singleton fields moved, so the window record's binding went
+  stale until the next focus switch); `focusWindow`/`closeWindow`'s refocus
+  now also retarget `activeId`/`selectedIds` to the newly-focused window's
+  dataset (null → the empty state, matching decision #4 — "the window follows
+  the Library, and vice versa") and clear the SAME transient tool/gadget/
+  overlay fields `setActive` already clears for a dataset switch
+  (`focusTransientReset`, a new shared helper — decision #2's "switching
+  focus clears transient state exactly as switching datasets does today").
+  **The migration guarantee (decision #6), verified via `tools/visual`:** a
+  temporary baseline worktree at the pre-item-3 commit vs. the current build
+  — all 4 existing harness shots (`multiseries_baseline`, `double_y_render`,
+  `trailing_null_x_repro`, `library_folder_tree`) are BYTE-IDENTICAL (sha256)
+  before vs. after items 3–5. **Row-state proof (item 4's own requirement):**
+  a new `WindowCanvas.test.tsx` case renders two windows bound to the SAME
+  dataset and toggles row exclusion — both windows' composed payloads null
+  out the excluded row, with NO `architecture.test.ts` allowlist edit (the
+  new files call `usePlotPayload`/`lib/rowstate`'s existing chokepoint, never
+  touch `Dataset.excludedRows` raw). +4 `WindowCanvas.test.tsx` cases
+  (single-maximized passthrough, ≥2-window chrome + focused-vs-background
+  dispatch, the row-state proof, an unbound background window's empty state)
+  + 4 `BackgroundPlotWindow.test.tsx` cases (empty state, no tool plugin,
+  ignores the singleton's overlay state, honors its OWN view's `yLog`) + 6
+  `store/useApp.test.ts` cases (setActive/addDataset window-binding sync,
+  focusWindow's activeId/selectedIds retarget + empty-state case, the
+  transient-reset contract, closeWindow's refocus following the same
+  contract) — running total after item 5 below.
+- ~~**5. Window commands v1**~~ (2026-07-09) — new
+  `components/windows/useWindowCommands.ts` (128 lines): New Graph Window
+  (⌘⇧N — clones the focused view onto the focused dataset via
+  `createWindow(activeId, snapshotView(state))` then focuses it),
+  Duplicate Window (⌘⇧D — `duplicateWindow(focusedWindowId)` + focus the
+  copy), Close Window (⌘⇧W — `closeWindow(focusedWindowId)`, a no-op on the
+  last survivor), Focus Next/Previous Window (⌃Tab / ⌃⇧Tab — deliberately
+  Ctrl-only, never Cmd, so macOS's app switcher is never hijacked; cycles via
+  a new pure `lib/plotview.cycleWindow` helper, by creation order — item 6's
+  Tier-2 Ctrl+Tab upgrade makes this z-order-aware instead). Published into
+  the EXISTING `store/commands.ts` registry (`useCommands.setMenuCommands`) —
+  previously-unused scaffolding wired for the first time — rather than
+  App.tsx's curated list, so App.tsx gained ZERO lines (954 pin honored, per
+  the plan's own dependency-map rule). `MenuBar.tsx` now merges
+  `useCommands().menuCommands` into what each menu displays (it previously
+  only showed the curated `actions` prop), which is also how the new "Window"
+  menu section (added to `MENUS`) gets its entries — the ⌘K palette already
+  did this merge. `useWindowCommands()` is mounted from `Stage.tsx` (always
+  mounted regardless of the active Stage tab), not `WindowCanvas` (Plot-tab-
+  only) or `App.tsx` (pinned). `lib/shortcuts.ts` gained a "Window" cheat-
+  sheet group and the mac/non-mac translator now also rewrites `⌃`→"Ctrl"
+  (previously only `⌘`). +9 `useWindowCommands.test.ts` cases (the 5 published
+  actions + shortcuts, each command's store effects, the ≥1-window no-op,
+  forward/backward/wrapping cycling, Cmd+Tab is untouched, listener cleanup
+  on unmount) + 4 pure `cycleWindow` tests (`lib/plotview.test.ts`) + 2
+  `MenuBar.test.tsx` cases (eight-menu structure, registry-published entries
+  render in their menu) + 1 `lib/shortcuts.test.ts` case (the `⌃` rewrite).
+  **Tier 1 is now fully complete** (items 1–5 all shipped 2026-07-09) — the
+  usable v1 the plan set out to deliver: ≥2 simultaneous movable, resizable,
+  focusable plot windows fed by the existing plot pipeline. Frontend 1872
+  green; `npm run build` (tsc + vite) green.
