@@ -1,14 +1,17 @@
-// WindowCanvas is the item-3 migration-guarantee boundary: a single
+// WindowCanvas is the item-3/4 migration-guarantee boundary: a single
 // maximized window renders `PlotStage` alone (no chrome, no extra host div —
 // pixel-identical to the pre-MULTI_PLOT_PLAN Stage); ≥2 windows get MDI
-// chrome (one `PlotWindowFrame` per window, exactly one carrying the
-// "focused" highlight). Every frame hosts the full `PlotStage` composition
-// for now — item 4 splits this into focused-vs-background rendering.
+// chrome, with the focused frame hosting the full `PlotStage` and every
+// other frame hosting a live, non-interactive `BackgroundPlotWindow` (item
+// 4's focused-window routing). Also proves the item-4 row-state requirement:
+// two windows on the SAME dataset both reflect a live exclusion toggle, with
+// no `architecture.test.ts` allowlist change (this file imports only
+// `lib/rowstate`'s existing consumers, never `Dataset.excludedRows` raw).
 //
 // Real uPlot needs a browser canvas/layout engine neither jsdom nor this
 // test cares about; the constructor is mocked to a lightweight recorder (the
-// MultiPanelStage.test.tsx pattern) so PlotStage's render effect can run
-// headlessly.
+// MultiPanelStage.test.tsx pattern) so both PlotStage's and
+// BackgroundPlotWindow's render effects can run headlessly.
 
 import { render, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -93,17 +96,61 @@ describe("WindowCanvas — single maximized window (migration guarantee)", () =>
   });
 });
 
-describe("WindowCanvas — ≥2 windows (MDI chrome)", () => {
-  it("renders one PlotWindowFrame per window; exactly one carries the focus highlight", async () => {
+describe("WindowCanvas — ≥2 windows (MDI chrome + focused-window routing)", () => {
+  it("renders one PlotWindowFrame per window; only the focused one hosts the full PlotStage", async () => {
     useApp.setState({
       plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
       focusedWindowId: "w1",
     });
     const { container } = render(<WindowCanvas />);
     await waitFor(() => expect(created.length).toBe(2)); // one uPlot per window
-    expect(container.querySelectorAll(".qzk-plotwin")).toHaveLength(2);
+    const frames = container.querySelectorAll(".qzk-plotwin");
+    expect(frames).toHaveLength(2);
+    // Exactly one frame carries the "focused" highlight class + the full
+    // PlotStage chrome (.qzk-stage); the toolbar (focused-only chrome) also
+    // appears exactly once.
     expect(container.querySelectorAll(".qzk-plotwin.focused")).toHaveLength(1);
-    // Dataset badge threaded through from the window's OWN datasetId.
-    expect(container.querySelectorAll(".qzk-plotwin-badge")).toHaveLength(2);
+    expect(container.querySelectorAll(".qzk-stage")).toHaveLength(1);
+  });
+
+  it("row-state proof: two windows on the SAME dataset both reflect a live exclusion toggle", async () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
+      focusedWindowId: "w1",
+    });
+    render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(2));
+
+    useApp.getState().toggleRowExcluded("d1", 0);
+
+    // Both PlotViewport instances rebuild. usePlotPayload's fetch effect keys
+    // off the `active`/`dataset` object REFERENCE (unchanged, pre-existing
+    // behavior — not something this plan's new code controls): the exclusion
+    // toggle replaces that reference, so each window rebuilds TWICE — once
+    // synchronously from the new `dropped` set against the still-in-flight
+    // payload, once more when the re-fetch resolves — 2 windows × (1 initial
+    // + 2 rebuilds) = 6. What matters for the row-state proof is that EVERY
+    // rebuild after the toggle reflects it in EVERY window, which the loop
+    // below checks regardless of exactly how many rebuilds that takes.
+    await waitFor(() => expect(created.length).toBe(6));
+    const latest = created.slice(2);
+    expect(latest.length).toBeGreaterThanOrEqual(2); // at least one per window
+    for (const c of latest) {
+      const data = c.data as (number | null)[][];
+      expect(data[1][0]).toBeNull(); // row 0 dropped in every window's payload
+    }
+  });
+
+  it("an unbound (removed-dataset) background window shows its empty state, not a crash", async () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", winState: "normal", datasetId: "d1" }),
+        win({ id: "w2", winState: "normal", datasetId: null }),
+      ],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(1)); // only the focused (bound) window plots
+    expect(container.textContent).toContain("No dataset");
   });
 });

@@ -20237,6 +20237,196 @@
      "fm"
     ]
    }
+  },
+  {
+   "name": "mdi_two_window_layout",
+   "dataset": {
+    "id": "mdi1",
+    "name": "MDI demo",
+    "data": {
+     "time": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+     ],
+     "values": [
+      [
+       0,
+       10
+      ],
+      [
+       0.84,
+       12.1
+      ],
+      [
+       0.91,
+       14.9
+      ],
+      [
+       0.14,
+       17.2
+      ],
+      [
+       -0.76,
+       19.8
+      ],
+      [
+       -0.96,
+       22.1
+      ],
+      [
+       -0.28,
+       24.9
+      ],
+      [
+       0.66,
+       27
+      ]
+     ],
+     "labels": [
+      "sine",
+      "ramp"
+     ],
+     "units": [
+      "V",
+      "K"
+     ],
+     "metadata": {}
+    }
+   },
+   "state": {
+    "plotWindows": [
+     {
+      "id": "mdi-w1",
+      "kind": "plot",
+      "title": "Sine view",
+      "datasetId": "mdi1",
+      "geometry": {
+       "x": 20,
+       "y": 20,
+       "w": 360,
+       "h": 260
+      },
+      "z": 1,
+      "winState": "normal",
+      "view": {
+       "yLog": false,
+       "xLog": false,
+       "showGrid": true,
+       "showLegend": true,
+       "legendPos": "ne",
+       "plotTemplate": "screen",
+       "showAxisBox": false,
+       "stackMode": false,
+       "insetMode": false,
+       "polarMode": false,
+       "statMode": false,
+       "xLim": null,
+       "yLim": null,
+       "xStep": null,
+       "yStep": null,
+       "xFmt": {
+        "mode": "auto",
+        "digits": 2
+       },
+       "yFmt": {
+        "mode": "auto",
+        "digits": 2
+       },
+       "plotTitle": "Sine view",
+       "xAxisLabel": "",
+       "yAxisLabel": "",
+       "xKey": null,
+       "yKeys": [
+        0
+       ],
+       "y2Keys": null,
+       "y2Lim": null,
+       "y2Log": null,
+       "y2Step": null,
+       "y2AxisLabel": "",
+       "refLines": [],
+       "annotations": [],
+       "seriesStyles": {},
+       "seriesLabels": {},
+       "errKeys": {},
+       "seriesOrder": null,
+       "hiddenChannels": [],
+       "waterfall": 0
+      }
+     },
+     {
+      "id": "mdi-w2",
+      "kind": "plot",
+      "title": "Ramp view",
+      "datasetId": "mdi1",
+      "geometry": {
+       "x": 400,
+       "y": 60,
+       "w": 360,
+       "h": 260
+      },
+      "z": 0,
+      "winState": "normal",
+      "view": {
+       "yLog": false,
+       "xLog": false,
+       "showGrid": true,
+       "showLegend": true,
+       "legendPos": "ne",
+       "plotTemplate": "screen",
+       "showAxisBox": false,
+       "stackMode": false,
+       "insetMode": false,
+       "polarMode": false,
+       "statMode": false,
+       "xLim": null,
+       "yLim": null,
+       "xStep": null,
+       "yStep": null,
+       "xFmt": {
+        "mode": "auto",
+        "digits": 2
+       },
+       "yFmt": {
+        "mode": "auto",
+        "digits": 2
+       },
+       "plotTitle": "Ramp view",
+       "xAxisLabel": "",
+       "yAxisLabel": "",
+       "xKey": null,
+       "yKeys": [
+        1
+       ],
+       "y2Keys": null,
+       "y2Lim": null,
+       "y2Log": null,
+       "y2Step": null,
+       "y2AxisLabel": "",
+       "refLines": [],
+       "annotations": [],
+       "seriesStyles": {},
+       "seriesLabels": {},
+       "errKeys": {},
+       "seriesOrder": null,
+       "hiddenChannels": [],
+       "waterfall": 0
+      }
+     }
+    ],
+    "focusedWindowId": "mdi-w1",
+    "yKeys": [
+     0
+    ],
+    "plotTitle": "Sine view"
+   },
+   "target": ".qzk-wincanvas"
   }
  ]
 }

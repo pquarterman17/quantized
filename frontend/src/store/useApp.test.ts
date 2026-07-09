@@ -2723,3 +2723,117 @@ describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)
     expect(w1.z).toBeGreaterThan(3);
   });
 });
+
+describe("useApp plot windows — item 4 focused-window routing", () => {
+  const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
+    id: "w1",
+    kind: "plot",
+    title: "",
+    datasetId: null,
+    geometry: { x: 0, y: 0, w: 480, h: 360 },
+    z: 0,
+    winState: "normal",
+    view: defaultPlotView(),
+    ...over,
+  });
+
+  it("setActive rebinds ONLY the focused window's datasetId; an unfocused window keeps its pin", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      plotWindows: [win({ id: "w1", datasetId: "d1" }), win({ id: "w2", datasetId: "d1" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().setActive("d2");
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("d2"); // focused → rebound
+    expect(s.plotWindows.find((w) => w.id === "w2")?.datasetId).toBe("d1"); // unfocused → pinned
+  });
+
+  it("addDataset binds the FOCUSED window to the freshly-imported dataset", () => {
+    useApp.setState({
+      datasets: [],
+      plotWindows: [win({ id: "w1", datasetId: null }), win({ id: "w2", datasetId: null })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().addDataset({ id: "new1", name: "fresh.dat", data: raw });
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("new1");
+    expect(s.plotWindows.find((w) => w.id === "w2")?.datasetId).toBeNull();
+  });
+
+  it("focusWindow retargets activeId/selectedIds to the newly-focused window's dataset (the window follows the Library, and vice versa)", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      activeId: "d1",
+      selectedIds: ["d1"],
+      plotWindows: [win({ id: "w1", datasetId: "d1" }), win({ id: "w2", datasetId: "d2" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().focusWindow("w2");
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d2");
+    expect(s.selectedIds).toEqual(["d2"]);
+  });
+
+  it("focusWindow onto an UNBOUND window clears activeId/selectedIds (the empty state)", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      activeId: "d1",
+      selectedIds: ["d1"],
+      plotWindows: [win({ id: "w1", datasetId: "d1" }), win({ id: "w2", datasetId: null })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().focusWindow("w2");
+    const s = useApp.getState();
+    expect(s.activeId).toBeNull();
+    expect(s.selectedIds).toEqual([]);
+  });
+
+  it("focusWindow clears transient tool/gadget/overlay state exactly as setActive does for a dataset switch", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      plotWindows: [win({ id: "w1", datasetId: "d1" }), win({ id: "w2", datasetId: "d2" })],
+      focusedWindowId: "w1",
+      integral: { xlo: 0, xhi: 1, area: 1 },
+      qfitRoi: [0, 1],
+      qfitBusy: true,
+      gadgetBusy: true,
+    });
+    useApp.getState().focusWindow("w2");
+    const s = useApp.getState();
+    expect(s.integral).toBeNull();
+    expect(s.qfitRoi).toBeNull();
+    expect(s.qfitBusy).toBe(false);
+    expect(s.gadgetBusy).toBe(false);
+  });
+
+  it("closeWindow's refocus follows the same activeId/transient-reset contract as focusWindow", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      plotWindows: [
+        win({ id: "w1", datasetId: "d1", z: 0 }),
+        win({ id: "w2", datasetId: "d2", z: 5 }),
+      ],
+      focusedWindowId: "w2",
+      integral: { xlo: 0, xhi: 1, area: 1 },
+    });
+    useApp.getState().closeWindow("w2");
+    const s = useApp.getState();
+    expect(s.focusedWindowId).toBe("w1");
+    expect(s.activeId).toBe("d1");
+    expect(s.selectedIds).toEqual(["d1"]);
+    expect(s.integral).toBeNull();
+  });
+});

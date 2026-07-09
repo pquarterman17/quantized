@@ -9,14 +9,15 @@
 // MDI chrome (title bar / resize grip / dataset badge) appears the moment
 // there are ≥2 windows, or the sole window is explicitly restored down.
 //
-// Every window renders the full `PlotStage` composition for now (item 4
-// splits this into a focused/background dispatch, so only one window is
-// ever fully interactive at a time).
+// The focused window renders the full interactive `PlotStage` composition;
+// every other window renders a live, non-interactive `BackgroundPlotWindow`
+// (item 4, Key Decision 2).
 
 import { useEffect, useRef, useState } from "react";
 
 import { useApp } from "../../store/useApp";
 import PlotStage from "../Stage/PlotStage";
+import BackgroundPlotWindow from "./BackgroundPlotWindow";
 import PlotWindowFrame from "./PlotWindowFrame";
 
 export default function WindowCanvas() {
@@ -52,16 +53,11 @@ export default function WindowCanvas() {
   return (
     <div className="qzk-wincanvas" ref={hostRef}>
       {plotWindows.map((win) => {
-        const dataset = win.datasetId ? datasets.find((d) => d.id === win.datasetId) : undefined;
+        const focused = win.id === focusedWindowId;
+        const dataset = win.datasetId ? (datasets.find((d) => d.id === win.datasetId) ?? null) : null;
         return (
-          <PlotWindowFrame
-            key={win.id}
-            win={win}
-            focused={win.id === focusedWindowId}
-            datasetName={dataset?.name}
-            bounds={bounds}
-          >
-            <PlotStage />
+          <PlotWindowFrame key={win.id} win={win} focused={focused} datasetName={dataset?.name} bounds={bounds}>
+            {focused ? <PlotStage /> : <BackgroundPlotWindow dataset={dataset} view={win.view} />}
           </PlotWindowFrame>
         );
       })}

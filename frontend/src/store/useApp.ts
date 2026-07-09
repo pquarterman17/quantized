@@ -146,6 +146,37 @@ function mainWindow(datasetId: string | null): PlotWindow {
   };
 }
 
+/** Transient tool/gadget/overlay singleton state cleared on any FOCUS switch
+ *  (an explicit `focusWindow`, or the refocus `closeWindow` does when it
+ *  drops the currently-focused window) — MULTI_PLOT_PLAN item 4: "switching
+ *  focus clears transient tool state exactly as switching datasets does
+ *  today". Deliberately the SAME field list `setActive` clears (not more) —
+ *  `fitOverlay`/`peakOverlay`/`baselineOverlay`/`derivOverlay` are NOT here
+ *  because `setActive` doesn't clear them either (they carry their own
+ *  `datasetId` and self-filter in `composeDisplayPayload`). */
+function focusTransientReset(): Partial<AppState> {
+  return {
+    spatialPanels: null,
+    facetPanels: null,
+    breakPanels: null,
+    rsmPeaks: null,
+    integral: null,
+    fwhmResult: null,
+    qfitRoi: null,
+    qfitResult: null,
+    qfitBusy: false,
+    qfitError: null,
+    gadgetBusy: false,
+    gadgetError: null,
+    gadgetIntegrateResult: null,
+    gadgetStatsResult: null,
+    gadgetDerivResult: null,
+    gadgetFftPreview: null,
+    gadgetCursors: null,
+    gadgetCursorResult: null,
+  };
+}
+
 // Names successive clipboard pastes "pasted data 1", "pasted data 2", … (gap #47).
 let _pasteSeq = 0;
 
@@ -1020,6 +1051,13 @@ export const useApp = create<AppState>((set, get) => ({
       datasets: [...s.datasets, ds],
       activeId: ds.id,
       selectedIds: [ds.id], // a fresh import is the sole selection
+      // MULTI_PLOT_PLAN item 4: activeId IS the focused window's dataset
+      // binding — keep plotWindows in sync so a later focus-away/back (or a
+      // .dwk save) sees the newly-imported dataset, not whatever was bound
+      // before this import.
+      plotWindows: s.plotWindows.map((w) =>
+        w.id === s.focusedWindowId ? { ...w, datasetId: ds.id } : w,
+      ),
       stageTab: nextStageTab(ds, s.stageTab), // 2-D maps open in the Map view
       xKey: null, // new dataset → x-axis back to .time
       yKeys: null, // new dataset → plot all its channels
@@ -1566,6 +1604,12 @@ export const useApp = create<AppState>((set, get) => ({
       return {
         activeId: id,
         selectedIds: [id], // plain click collapses the selection to this one row
+        // MULTI_PLOT_PLAN item 4: setActive is scoped to the FOCUSED window —
+        // it rebinds that window's dataset (unfocused windows keep whatever
+        // they're pinned to, decision #4).
+        plotWindows: s.plotWindows.map((w) =>
+          w.id === s.focusedWindowId ? { ...w, datasetId: id } : w,
+        ),
         stageTab: ds ? nextStageTab(ds, s.stageTab) : s.stageTab,
         xKey: null,
         yKeys: null,
@@ -2375,8 +2419,9 @@ export const useApp = create<AppState>((set, get) => ({
     get().recordMacro(`Waterfall → ${waterfall}`, `qz.setWaterfall(${waterfall})`);
   },
   // Plot windows (MULTI_PLOT_PLAN item 2) — see the field doc above for the
-  // facade contract. Geometry/z/winState have no rendering consumer yet
-  // (item 3); these actions establish the model + invariant only.
+  // facade contract. Geometry/z/winState render via `components/windows/`
+  // (item 3): `WindowCanvas`/`PlotWindowFrame` read `plotWindows` directly
+  // and drive these same actions from pointer drag/resize/focus gestures.
   createWindow: (datasetId, view) => {
     const id = nextWindowId();
     set((s) => {
@@ -2397,7 +2442,10 @@ export const useApp = create<AppState>((set, get) => ({
   // Never drops below one window (the ≥1-window invariant) — a no-op on the
   // last surviving window. Closing the FOCUSED window refocuses the top-z
   // survivor, hydrating its stored view into the live singleton fields (one
-  // of only two hydrateView call sites — the other is focusWindow).
+  // of only two hydrateView call sites — the other is focusWindow) and
+  // following the same "focus switch" contract focusWindow does below
+  // (activeId/selectedIds track the new focus's dataset; transient tool
+  // state clears — item 4).
   closeWindow: (id) =>
     set((s) => {
       if (s.plotWindows.length <= 1) return {};
@@ -2405,12 +2453,23 @@ export const useApp = create<AppState>((set, get) => ({
       if (remaining.length === s.plotWindows.length) return {}; // id not found
       if (s.focusedWindowId !== id) return { plotWindows: remaining };
       const next = remaining.reduce((a, b) => (b.z > a.z ? b : a));
-      return { plotWindows: remaining, focusedWindowId: next.id, ...hydrateView(next.view) };
+      return {
+        plotWindows: remaining,
+        focusedWindowId: next.id,
+        activeId: next.datasetId,
+        selectedIds: next.datasetId ? [next.datasetId] : [],
+        ...hydrateView(next.view),
+        ...focusTransientReset(),
+      };
     }),
   // The ONLY snapshot+hydrate caller besides closeWindow: freeze the
   // currently-focused window's LIVE view into its record, then hydrate the
   // target window's stored view onto the live singleton fields. A no-op when
-  // `id` is already focused, or doesn't exist.
+  // `id` is already focused, or doesn't exist. Item 4: the window follows the
+  // Library (decision #4) — activeId/selectedIds track the newly-focused
+  // window's dataset binding (null → the "select a dataset" empty state) —
+  // and transient tool/gadget/overlay state clears exactly as a dataset
+  // switch does today (`focusTransientReset`, decision #2).
   focusWindow: (id) =>
     set((s) => {
       if (id === s.focusedWindowId) return {};
@@ -2422,7 +2481,14 @@ export const useApp = create<AppState>((set, get) => ({
         if (w.id === id) return { ...w, z: raised };
         return w;
       });
-      return { plotWindows, focusedWindowId: id, ...hydrateView(target.view) };
+      return {
+        plotWindows,
+        focusedWindowId: id,
+        activeId: target.datasetId,
+        selectedIds: target.datasetId ? [target.datasetId] : [],
+        ...hydrateView(target.view),
+        ...focusTransientReset(),
+      };
     }),
   duplicateWindow: (id) => {
     const s = get();
