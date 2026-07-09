@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   cascadeGeometry,
+  cycleWindow,
   defaultPlotView,
   hydrateView,
   sanitizePlotWindows,
@@ -70,6 +71,27 @@ describe("cascadeGeometry", () => {
     const g = cascadeGeometry(-5);
     expect(g.x).toBeGreaterThanOrEqual(0);
     expect(g.y).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("cycleWindow (item 5 — Focus Next/Previous)", () => {
+  const ids = ["a", "b", "c"];
+
+  it("cycles forward and wraps past the end", () => {
+    expect(cycleWindow(ids, "a", 1)).toBe("b");
+    expect(cycleWindow(ids, "c", 1)).toBe("a");
+  });
+
+  it("cycles backward and wraps past the start", () => {
+    expect(cycleWindow(ids, "b", -1)).toBe("a");
+    expect(cycleWindow(ids, "a", -1)).toBe("c");
+  });
+
+  it("returns null with fewer than 2 windows, a null current id, or an unknown current id", () => {
+    expect(cycleWindow(["a"], "a", 1)).toBeNull();
+    expect(cycleWindow([], null, 1)).toBeNull();
+    expect(cycleWindow(ids, null, 1)).toBeNull();
+    expect(cycleWindow(ids, "ghost", 1)).toBeNull();
   });
 });
 

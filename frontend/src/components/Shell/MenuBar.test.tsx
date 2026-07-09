@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MenuBar from "./MenuBar";
-import type { Action } from "../../store/commands";
+import { useCommands, type Action } from "../../store/commands";
 
 const actions: Action[] = [
   { id: "imp", group: "File", label: "Import data…", run: vi.fn() },
@@ -13,12 +13,24 @@ const actions: Action[] = [
   { id: "thm", group: "View", label: "Toggle theme", run: vi.fn() },
 ];
 
+beforeEach(() => useCommands.setState({ menuCommands: [] }));
+afterEach(() => useCommands.setState({ menuCommands: [] }));
+
 describe("MenuBar", () => {
-  it("renders the seven-menu structure (File·Edit·Data·Plot·Analyze·View + Help)", () => {
+  it("renders the eight-menu structure (File·Edit·Data·Plot·Analyze·Window·View + Help)", () => {
     render(<MenuBar actions={actions} onOpenPalette={vi.fn()} />);
-    for (const m of ["File", "Edit", "Data", "Plot", "Analyze", "View", "Help"]) {
+    for (const m of ["File", "Edit", "Data", "Plot", "Analyze", "Window", "View", "Help"]) {
       expect(screen.getByText(m)).toBeInTheDocument();
     }
+  });
+
+  it("merges published command-registry entries (e.g. Window commands) into the matching menu", () => {
+    useCommands.setState({
+      menuCommands: [{ id: "window-new", group: "Window", label: "New Graph Window", run: vi.fn() }],
+    });
+    render(<MenuBar actions={actions} onOpenPalette={vi.fn()} />);
+    fireEvent.click(screen.getByText("Window"));
+    expect(screen.getByText("New Graph Window")).toBeInTheDocument();
   });
 
   it("opens a menu and runs an item, scoped to that group", () => {

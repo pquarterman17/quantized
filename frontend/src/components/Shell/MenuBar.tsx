@@ -4,22 +4,26 @@
 // right opens the palette. The File menu also lists Recent imports (#20); the
 // Help menu surfaces Help-group actions (e.g. the keyboard-shortcuts sheet).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { Action } from "../../store/commands";
+import { mergeCommands, useCommands, type Action } from "../../store/commands";
 import { IMPORT_ACCEPT, openFilePicker } from "../../lib/openFilePicker";
 import { relativeTime } from "../../lib/recentFiles";
 import { useApp } from "../../store/useApp";
 
 // Top-level menus and the action group each shows. "Help" is built in below.
 // Order mirrors the design handoff's menubar (File · Edit · Data · Plot ·
-// Analyze · View · Help). Empty groups simply don't open.
+// Analyze · Window · View · Help). Empty groups simply don't open. "Window"
+// (MULTI_PLOT_PLAN item 5) has no entries in App.tsx's curated list — it's
+// populated entirely by `useCommands().menuCommands` (see the merge below),
+// published by `windows/useWindowCommands` — zero lines added to App.tsx.
 const MENUS: { label: string; group: string }[] = [
   { label: "File", group: "File" },
   { label: "Edit", group: "Edit" },
   { label: "Data", group: "Data" },
   { label: "Plot", group: "Plot" },
   { label: "Analyze", group: "Analyze" },
+  { label: "Window", group: "Window" },
   { label: "View", group: "View" },
 ];
 
@@ -36,6 +40,12 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
   const recent = useApp((s) => s.recent);
   const clearRecent = useApp((s) => s.clearRecent);
   const importFiles = useApp((s) => s.importFiles);
+  // App's curated list PLUS anything published into the shared command
+  // registry (e.g. the Window menu's commands — see MULTI_PLOT_PLAN item 5)
+  // — the same merge the ⌘K palette does, so a menu entry and a palette
+  // entry are always the same set.
+  const menuCmds = useCommands((s) => s.menuCommands);
+  const allActions = useMemo(() => mergeCommands(actions, menuCmds), [actions, menuCmds]);
 
   useEffect(() => {
     if (!open) return;
@@ -80,7 +90,7 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
   return (
     <nav className="qzk-menubar" ref={navRef}>
       {MENUS.map((m) => {
-        const items = actions.filter((a) => a.group === m.group);
+        const items = allActions.filter((a) => a.group === m.group);
         const isFile = m.group === "File";
         return (
           <div key={m.label} className="qzk-menu-wrap">
@@ -136,7 +146,7 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
         {title("Help")}
         {open === "Help" && (
           <div className="qzk-menu-pop">
-            {actions
+            {allActions
               .filter((a) => a.group === "Help")
               .map((a) => (
                 <button

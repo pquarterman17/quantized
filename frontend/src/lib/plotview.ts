@@ -174,6 +174,22 @@ export function cascadeGeometry(index: number): WindowGeometry {
   };
 }
 
+/** The next/previous window id in `ids` order, wrapping — the pure cycling
+ *  step behind the "Focus Next/Previous Window" commands (item 5). v1 cycles
+ *  by array (creation) order; item 6's Tier-2 Ctrl+Tab upgrade makes this
+ *  z-order-aware instead. Returns null when there's nothing to cycle to
+ *  (fewer than 2 windows, or `currentId` isn't among `ids`). */
+export function cycleWindow(
+  ids: readonly string[],
+  currentId: string | null,
+  direction: 1 | -1,
+): string | null {
+  if (ids.length < 2 || currentId === null) return null;
+  const i = ids.indexOf(currentId);
+  if (i < 0) return null;
+  return ids[(i + direction + ids.length) % ids.length];
+}
+
 // ── .dwk / untrusted-boundary sanitizer (wired by item 7) ──────────────────
 
 function num(v: unknown, d: number): number {

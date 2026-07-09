@@ -64,13 +64,27 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "P", desc: "Find peaks" },
     ],
   },
+  {
+    title: "Window",
+    items: [
+      { keys: "⌘ ⇧ N", desc: "New graph window" },
+      { keys: "⌘ ⇧ D", desc: "Duplicate window" },
+      { keys: "⌘ ⇧ W", desc: "Close window" },
+      { keys: "⌃ Tab", desc: "Focus next window" },
+      { keys: "⌃ ⇧ Tab", desc: "Focus previous window" },
+      { keys: "Click", desc: "Focus a background window" },
+    ],
+  },
 ];
 
-/** macOS uses ⌘; everything else shows Ctrl. Pure so the dialog can localize. */
+/** macOS uses ⌘; everything else shows Ctrl. Pure so the dialog can localize.
+ *  `⌃` (the literal Control key — item 5's window-cycling shortcuts are Ctrl
+ *  ONLY, never Cmd, so they don't collide with the macOS app switcher) reads
+ *  the same as `⌘` once translated: both mean "Ctrl" outside macOS. */
 export function shortcutGroupsFor(isMac: boolean): ShortcutGroup[] {
   if (isMac) return SHORTCUT_GROUPS;
   return SHORTCUT_GROUPS.map((g) => ({
     ...g,
-    items: g.items.map((s) => ({ ...s, keys: s.keys.replace(/⌘/g, "Ctrl") })),
+    items: g.items.map((s) => ({ ...s, keys: s.keys.replace(/⌘|⌃/g, "Ctrl") })),
   }));
 }

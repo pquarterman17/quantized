@@ -35,4 +35,12 @@ describe("shortcutGroupsFor", () => {
     expect(all).not.toContain("⌘");
     expect(all).toContain("Ctrl");
   });
+
+  it("also rewrites ⌃ (the literal Control glyph — window focus-cycling) → Ctrl off mac", () => {
+    const mac = shortcutGroupsFor(true);
+    expect(mac.flatMap((x) => x.items.map((s) => s.keys)).some((k) => k.includes("⌃"))).toBe(true);
+    const off = shortcutGroupsFor(false);
+    const all = off.flatMap((x) => x.items.map((s) => s.keys)).join(" ");
+    expect(all).not.toContain("⌃");
+  });
 });
