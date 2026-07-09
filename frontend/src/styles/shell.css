@@ -271,14 +271,25 @@ body {
 .qzk-graph-preview-approx { position: absolute; left: 6px; bottom: 4px; font-size: var(--type-nano); color: var(--text-faint); }
 .qzk-graph-actions { display: flex; gap: 8px; margin-top: 10px; }
 
-/* worksheet */
-.qzk-sheet { flex: 1; overflow: auto; background: var(--surface-0); }
-.qzk-sheet table { border-collapse: collapse; width: 100%; font-family: var(--font-mono); font-size: var(--font-size-sm); }
-.qzk-sheet th { position: sticky; top: 0; background: var(--surface-2); color: var(--text-dim); font-weight: var(--weight-medium); border: 1px solid var(--border); padding: 4px 10px; text-align: right; }
-.qzk-sheet th .role { display: block; font-size: var(--type-nano); color: var(--accent-text); text-transform: uppercase; letter-spacing: var(--tracking-label); }
-.qzk-sheet td { border: 1px solid var(--border-soft); padding: 3px 10px; text-align: right; color: var(--text-dim); }
-.qzk-sheet td.rownum { background: var(--surface-1); color: var(--text-faint); text-align: center; }
-.qzk-sheet tr:hover td { background: var(--surface-1); }
+/* worksheet — the pane wraps a chrome (toolbar/filter bar) column above the
+   virtualized grid, which owns its own scroll region (GridViewport). */
+.qzk-sheet { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--surface-0); }
+
+/* virtualized grid (components/Stage/worksheet/GridViewport) — a div-based
+   ARIA grid, NOT a <table>: fixed row height / uniform column width (plan key
+   decision 1) let scroll position be windowed by pure arithmetic
+   (lib/gridwindow) instead of measuring real rows. Cell positioning (sticky
+   top/left offsets, widths) is computed in JS and applied inline since it's
+   data-driven; these classes only carry the look. */
+.qzk-grid { flex: 1; overflow: auto; min-height: 0; font-family: var(--font-mono); font-size: var(--font-size-sm); }
+.qzk-grid-row { display: flex; }
+.qzk-grid-row:hover .qzk-grid-cell { background: var(--surface-1); }
+.qzk-grid-cell, .qzk-grid-headcell { border: 1px solid var(--border-soft); padding: 3px 10px; text-align: right; color: var(--text-dim); box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.qzk-grid-headcell { border-color: var(--border); background: var(--surface-2); color: var(--text-dim); font-weight: var(--weight-medium); cursor: default; white-space: normal; }
+.qzk-grid-headcell .role { display: block; font-size: var(--type-nano); color: var(--accent-text); text-transform: uppercase; letter-spacing: var(--tracking-label); }
+.qzk-grid-headcell .comment { display: block; font-size: var(--type-nano); color: var(--text-faint); font-weight: var(--weight-regular); text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qzk-grid-rownum { background: var(--surface-1); color: var(--text-faint); text-align: center; cursor: pointer; }
+.qzk-grid-footer .qzk-grid-rownum { cursor: default; }
 
 /* ── inspector ── */
 .qzk-inspector { background: var(--surface-1); border-left: 1px solid var(--border-soft); overflow-y: auto; padding: var(--pad); display: flex; flex-direction: column; gap: var(--pad); }

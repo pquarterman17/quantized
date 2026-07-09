@@ -11,8 +11,8 @@
 // clicking/dragging bars maps the bin range back to ORIGINAL row indices
 // (rowstate's kept-index helpers) and writes the shared #50 `selection` so
 // the worksheet + plot highlight the same rows. A second brush of the exact
-// same bin range clears it (mirrors WorksheetTable's shift-click-range
-// anchor pattern).
+// same bin range clears it (mirrors the worksheet grid's shift-click-range
+// anchor pattern, components/Stage/worksheet/GridViewport).
 
 import { useEffect, useMemo, useState } from "react";
 
