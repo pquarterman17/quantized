@@ -405,6 +405,57 @@ describe("workspace report persistence (#36)", () => {
   });
 });
 
+describe("workspace pending lazy-book reference (ORIGIN_FILE_DECODE_PLAN #38)", () => {
+  it("round-trips a pending dataset's BookSource (path-sourced)", () => {
+    const ds = makeDataset("a", "lazy book");
+    ds.pending = { kind: "path", path: "/data/PNR.opj", bookId: "Book2", rows: 5000, cols: 4 };
+    const [restored] = parse(ser([ds]));
+    expect(restored.pending).toEqual(ds.pending);
+  });
+
+  it("round-trips a pending dataset's BookSource (upload-sourced)", () => {
+    const ds = makeDataset("a", "lazy book");
+    ds.pending = { kind: "upload", token: "abc123", bookId: "Book2", rows: 5000, cols: 4 };
+    const [restored] = parse(ser([ds]));
+    expect(restored.pending).toEqual(ds.pending);
+  });
+
+  it("omits pending when absent (the normal, fully-resolved case)", () => {
+    const [restored] = parse(ser([makeDataset("a", "normal")]));
+    expect(restored.pending).toBeUndefined();
+    expect(ser([makeDataset("a", "normal")])).not.toContain("pending");
+  });
+
+  it("drops a malformed pending ref rather than restoring garbage", () => {
+    // Deliberately malformed payloads (missing/wrong-typed fields) — loosely
+    // typed (`pending: unknown`) since a real BookSource can't express them.
+    const doc = JSON.parse(ser([makeDataset("a", "x")])) as {
+      datasets: (Omit<Dataset, "pending"> & { pending?: unknown })[];
+    };
+    // missing bookId
+    doc.datasets[0].pending = { kind: "path", path: "/p.opj", rows: 1, cols: 1 };
+    expect(parseWorkspace(JSON.stringify(doc)).datasets[0].pending).toBeUndefined();
+    // kind "path" but no path string
+    doc.datasets[0].pending = { kind: "path", bookId: "B1", rows: 1, cols: 1 };
+    expect(parseWorkspace(JSON.stringify(doc)).datasets[0].pending).toBeUndefined();
+    // kind "upload" but no token string
+    doc.datasets[0].pending = { kind: "upload", bookId: "B1", rows: 1, cols: 1 };
+    expect(parseWorkspace(JSON.stringify(doc)).datasets[0].pending).toBeUndefined();
+    // unknown kind
+    doc.datasets[0].pending = { kind: "carrier-pigeon", bookId: "B1" };
+    expect(parseWorkspace(JSON.stringify(doc)).datasets[0].pending).toBeUndefined();
+  });
+
+  it("defaults rows/cols to 0 when a legacy/hand-edited pending omits them", () => {
+    const doc = JSON.parse(ser([makeDataset("a", "x")])) as {
+      datasets: (Omit<Dataset, "pending"> & { pending?: unknown })[];
+    };
+    doc.datasets[0].pending = { kind: "path", path: "/p.opj", bookId: "B1" };
+    const restored = parseWorkspace(JSON.stringify(doc)).datasets[0].pending;
+    expect(restored).toEqual({ kind: "path", path: "/p.opj", bookId: "B1", rows: 0, cols: 0 });
+  });
+});
+
 describe("workspace v3 (gap #5): pipeline + recalc mode + fit specs", () => {
   it("round-trips the typed pipeline, recalc mode, and per-dataset fit specs", () => {
     const datasets = [makeDataset("a", "first")];

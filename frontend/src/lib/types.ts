@@ -7,12 +7,82 @@ export interface DataStruct {
   labels: string[];
   units: string[];
   metadata: Record<string, unknown>;
-  /** Origin projects only: every workbook, when the file holds more than one. */
-  books?: DataStruct[];
+  /** Origin projects only: every workbook, when the file holds more than one.
+   *  Each entry is EITHER a full `DataStruct` (the `full_books=true` escape
+   *  hatch, or any entry under it) OR one of the two lazy-transport shapes
+   *  below (ORIGIN_FILE_DECODE_PLAN #38, the default) — see `BookEntry`. */
+  books?: BookEntry[];
+  /** Present alongside a lazy `books[]` (absent under `full_books=true`): the
+   *  reference `POST /api/parsers/books/data` needs (with a book's `id`) to
+   *  fetch that book's full data on its first activation in the UI. */
+  book_source?: BookSourceRef;
   /** Origin `.opj` projects only: every graph window as a plot-state snapshot
    *  (`figures.extract_figures`, plan items 12/13/18). `.opju` figures are not
    *  extracted yet (item 14). */
   figures?: OriginFigure[];
+}
+
+/** The `books[]` entry for the book already returned in full at the payload's
+ *  top level (ORIGIN_FILE_DECODE_PLAN #38) — carries no data of its own; the
+ *  frontend builds this book's Dataset from the top-level payload instead. */
+export interface PrimaryBookMarker {
+  lazy: false;
+  primary: true;
+  id: string;
+  labels: string[];
+  units: string[];
+  metadata: Record<string, unknown>;
+  rows: number;
+  cols: number;
+}
+
+/** A non-primary book's lightweight inventory entry (ORIGIN_FILE_DECODE_PLAN
+ *  #38): real labels/units/metadata (so the Library folder tree, tags, and
+ *  book name all resolve immediately) plus a downsampled preview series (so
+ *  a Library sparkline renders without the full column data) — never the
+ *  full `time`/`values`. `rows`/`cols` are the TRUE (pre-decimation) counts. */
+export interface LazyBookEntry {
+  lazy: true;
+  id: string;
+  labels: string[];
+  units: string[];
+  metadata: Record<string, unknown>;
+  rows: number;
+  cols: number;
+  preview: { time: number[]; values: number[][] };
+}
+
+/** One `books[]` entry: a full `DataStruct` (under the `full_books=true`
+ *  escape hatch), the primary book's marker, or another book's lazy preview. */
+export type BookEntry = DataStruct | PrimaryBookMarker | LazyBookEntry;
+
+/** `DataStruct.book_source` — the PROJECT-level reference (no book id yet;
+ *  combine with a `BookEntry`'s `id` to get the per-dataset `BookSource`
+ *  a pending `Dataset` carries — see `types.ts`'s `BookSource`). */
+export interface BookSourceRef {
+  kind: "path" | "upload";
+  path?: string;
+  token?: string;
+}
+
+/** A pending `Dataset`'s fetch reference: `POST /api/parsers/books/data`'s
+ *  request body once `book_id: bookId` is added — everything `api.fetchBookData`
+ *  needs to retrieve this ONE book's full data. `rows`/`cols` are carried
+ *  along (from the `LazyBookEntry` this was built from) purely for display —
+ *  so a Library row can show the book's TRUE size while `data` is still just
+ *  the small preview. */
+export interface BookSource extends BookSourceRef {
+  bookId: string;
+  rows: number;
+  cols: number;
+}
+
+export function isLazyBookEntry(b: BookEntry): b is LazyBookEntry {
+  return (b as LazyBookEntry).lazy === true;
+}
+
+export function isPrimaryBookMarker(b: BookEntry): b is PrimaryBookMarker {
+  return (b as PrimaryBookMarker).primary === true;
 }
 
 /** One graph window recovered from an Origin project — a plot-state snapshot:
@@ -247,6 +317,17 @@ export interface Dataset {
    *  the analysis view (lib/rowstate.analysisData folds filter-failed rows in
    *  with excludedRows). Serializable; round-trips .dwk. */
   filter?: DataFilter;
+  /** Lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38): set for a non-primary
+   *  Origin book whose full data hasn't been fetched yet — `data` above is
+   *  the small downsampled preview (a real, if truncated, DataStruct: every
+   *  consumer that only reads `.time`/`.values`/`.labels`/`.units`/`.metadata`
+   *  keeps working, just on fewer rows, until the fetch lands). Cleared (and
+   *  `data` replaced with the full DataStruct) by `useApp.ensureBookData`.
+   *  Round-trips through autosave (so a reload restores the same not-yet-
+   *  loaded state) but NEVER through an explicit "Save workspace (.dwk)…" —
+   *  that command resolves every pending dataset first
+   *  (`useApp.resolvePendingDatasets`) so an exported .dwk is self-contained. */
+  pending?: BookSource;
 }
 
 /** A folder in the Library's project tree (project-organization plan, Approach

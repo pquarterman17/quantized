@@ -275,11 +275,16 @@ export default function DatasetRow({
       </div>
       <Sparkline data={d.data} />
       <div className="qzk-ds-foot">
-        <span className="qzk-ds-meta">
-          {d.data.time.length} pts · {d.data.units[0] || "—"}
+        <span className="qzk-ds-meta" title={d.pending ? "full data loads on first view" : undefined}>
+          {/* #38: a pending dataset's `data` is just the small downsampled
+           *  preview — show the TRUE row/channel counts (carried on the
+           *  pending ref) instead of the preview's, so the Library never
+           *  under-reports a book's real size while it's still lazy. */}
+          {d.pending ? d.pending.rows : d.data.time.length} pts · {d.data.units[0] || "—"}
+          {d.pending && " · …"}
         </span>
         <span className="qzk-ds-actions">
-          <Badge tone="accent">{d.data.labels.length}ch</Badge>
+          <Badge tone="accent">{d.pending ? d.pending.cols : d.data.labels.length}ch</Badge>
           {showReorder && (
             <>
               <button

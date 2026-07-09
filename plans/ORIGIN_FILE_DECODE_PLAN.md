@@ -13,16 +13,17 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-09 (booked #38 lazy per-book transport + #39
-side-by-side comparison campaign from the owner's PNR.opj import testing;
-the four 2026-07-09 triage fix batches — perf quick wins, zero-tail
-wrap-around prune, log tick steps, y2/legend/multi-panel fidelity — land
-via feature branches and will be recorded in Completed on merge; same day,
-item 40 CLOSED — the `#39` gallery run's 6 invisible merge-window graphs
-were a 3rd, previously-unrecognized layer head byte (`0x5f`), now decoded;
-item 42 investigated, root cause narrowed for both halves (an undecoded
-per-curve hidden flag; a real but unprovable-by-byte axis-unit-conversion
-gap), neither fixed — see item text + `docs/origin_project_format.md`)
+**Updated:** 2026-07-09 (a single-day campaign from the owner's PNR.opj
+import testing: the four triage fix batches — perf quick wins, zero-tail
+wrap-around prune, log tick steps, y2/legend/multi-panel fidelity — all
+MERGED and recorded in Completed; **#38 lazy per-book transport CLOSED**
+(84.72 MB → 3.84 MB import response, see Completed); **#40 CLOSED** — the
+`#39` gallery run's 6 invisible merge-window graphs were a 3rd,
+previously-unrecognized layer head byte (`0x5f`), now decoded; #42
+investigated, root cause narrowed for both halves (an undecoded per-curve
+hidden flag; a real but unprovable-by-byte axis-unit-conversion gap),
+neither fixed — see item text + `docs/origin_project_format.md`; #39
+gallery tooling merged, oracle re-export in progress)
 Previous: 2026-07-07 (item 34 CLOSED — the native `.opj` writer now
 loads in real Origin and re-exports value-exact, see Completed; item 35's
 stale W3 body text reconciled — the item was already CLOSED 2026-07-04 at
@@ -339,16 +340,8 @@ the shipped contract)
 ~~37. **y2 axis label from layer 2's decoded title**~~ **CLOSED
 2026-07-07** — see Completed.
 
-38. **Lazy per-book data transport** — (L) import returns the full book
-    inventory + downsampled sparkline previews (~2 MB for PNR.opj vs
-    today's ~85 MB JSON); each book's full data fetches on first
-    activation. Owner-approved 2026-07-09 — preserves the import-all
-    Library UX (every book still listed immediately). Follow-up to the
-    2026-07-09 perf quick wins.
-    - [ ] Inventory + downsampled-preview payload shape (backend, thin route)
-    - [ ] On-demand per-book data route + frontend fetch-on-activate
-    - [ ] Loading states (Library row, Worksheet, figure apply) + `.dwk`
-          interaction (a workspace referencing an unfetched book)
+~~38. **Lazy per-book data transport**~~ **CLOSED 2026-07-09** — see
+    Completed.
 
 ---
 
@@ -426,6 +419,63 @@ the shipped contract)
   (`tests/test_io_origin_project.py`). Backend/origin suite green
   (439 passed, 3 skipped). Frontend unaffected (generic figure-family
   code, no changes needed).
+
+- ~~**#38 Lazy per-book data transport**~~ (2026-07-09) — import returns the
+  PRIMARY book's data in full plus a lightweight inventory (name/metadata/
+  folder path/labels/units/true row+col counts) + a ~200-point min/max-
+  decimated preview series (`io/origin_project/preview.decimate_datastruct`,
+  row-picked so every channel of a kept row moves together) for every OTHER
+  book; each book's full data fetches on demand via a new
+  `POST /api/parsers/books/data` (`routes/books.py`) the first time it's
+  actually shown. Measured on PNR.opj (122 books): import response
+  84.72 MB → 3.84 MB (22×) and 1.60 s → 0.80 s; a lazily-activated book's
+  first fetch is ~21 ms (the import route primes a small path+mtime-keyed
+  LRU cache — `routes/_bookcache.py`, bound 4 projects — with the SAME parse
+  it already did, so the common case never re-reads the file). Upload-
+  sourced projects stage their bytes persistently (bounded LRU, 8 uploads —
+  `routes/_uploadcache.py`) instead of the ephemeral per-request temp dir,
+  so a later book fetch still has bytes to re-parse if the cache misses.
+  Trimmed the (pre-existing, unrelated-to-#38) `origin_books` per-project
+  inventory metadata key from every wire payload — write-only/unconsumed,
+  but duplicated ~10-15 KB per book — since without it the response
+  couldn't get anywhere near the target. Escape hatch: `full_books=true`
+  (query/body param on both `/import` and `/upload`) reproduces the
+  pre-#38 shape byte-for-byte, for tooling with no fetch-on-activate flow;
+  `tools/visual/origin_figures.mjs` (which injects `payload.books[i].data`
+  straight into the store, bypassing the frontend's fetch machinery) opts
+  into it and was re-run live against the real PNR.opj through a full
+  backend + headless-Chrome pass: 122 datasets, 85 graph windows, 83/85
+  fully resolved, 0 mismatches — unchanged from before this landed.
+  Frontend: `Dataset.pending` (a `BookSource` ref) marks a lazy dataset;
+  `data` holds the small preview meanwhile (a real DataStruct, so nothing
+  crashes — worksheet/plot/Library all render it as-is until the fetch
+  lands). `useApp.ensureBookData` (single-flight, module-level in-flight
+  map) fetches + swaps in the full data on success, clears stale
+  `excludedRows`/`filter` (row indices meant the preview rows, not the real
+  ones), and toasts + leaves `pending` set on failure (retryable — the same
+  render-side trigger fires again next time that dataset is shown). Wired
+  at every place that actually READS a dataset's data: `PlotStage`,
+  `WindowCanvas` (every visible MDI window), `useMultiPanelStage` (each
+  spatial panel owns its own dataset), and `WorksheetPane` (+ a "loading
+  full data (N rows × M channels)" banner); `DatasetRow` shows the TRUE
+  row/channel counts from `pending` rather than the preview's. `.dwk`
+  policy: an explicit "Save workspace…" resolves every pending dataset
+  FIRST (`resolvePendingDatasets`, awaited by the new `saveWorkspaceToFile`
+  store action) so an exported file is always self-contained; autosave
+  (localStorage, same serializer) is the one path that legitimately still
+  persists a `pending` ref, since a reload just re-triggers the fetch when
+  that dataset is next shown (an upload-sourced token won't survive a
+  server restart — degrades to an error toast + re-import, not a crash).
+  Deferred/known edges: export and the corrections pipeline don't
+  explicitly guard against running on a still-pending (preview-sized)
+  dataset — they'd silently compute on the small preview rather than erring;
+  the worksheet's kept/total row-count footer briefly reflects the preview's
+  count during the loading window (self-corrects once the fetch lands).
+  Tests: backend `test_io_origin_preview.py` (8) + `test_api_books.py` (16);
+  frontend `useApp.test.ts` (+16), `workspace.test.ts` (+5),
+  `DatasetRow.test.tsx` (+2), `WorksheetPane.test.tsx` (new, 2),
+  `WindowCanvas.test.tsx` (+1). Backend 1930 (+177 realdata) + frontend
+  2008 + build green.
 
 - ~~**PNR-triage import-perf batch (unbooked side-work)**~~ (2026-07-09)
   — merged to main as `917802a` (commits `16080ad`/`09e1ac1`/`d097c39`):

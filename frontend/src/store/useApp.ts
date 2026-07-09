@@ -6,6 +6,7 @@ import { create } from "zustand";
 import type { CorrectionsRequest, FftSpectralResult, IntegrateResponse } from "../lib/api";
 import {
   applyCorrections as applyCorrectionsApi,
+  fetchBookData,
   fftSpectral,
   fitModel,
   guessImportSettings,
@@ -40,7 +41,8 @@ import {
 import { is2DMap } from "../lib/mapdata";
 import { mergeDatasets } from "../lib/merge";
 import type { SmartFolder } from "../lib/smartfolders";
-import type { WorkspaceState } from "../lib/workspace";
+import { serializeWorkspace, type WorkspaceState } from "../lib/workspace";
+import { saveBlob } from "../lib/download";
 import {
   buildOriginFigureEntries,
   doubleYPartner,
@@ -88,10 +90,12 @@ import {
   type RecentFile,
 } from "../lib/recentFiles";
 import { toast } from "./toasts";
+import { isLazyBookEntry, isPrimaryBookMarker } from "../lib/types";
 import type {
   Annotation,
   AxisFormat,
   BaselineOverlay,
+  BookSource,
   CalcResult,
   ChannelRole,
   ComputedColumn,
@@ -133,6 +137,46 @@ const nextWindowId = (): string => `win-${Date.now().toString(36)}-${++_idSeq}`;
  *  every action that raises a window (focus/raise/create/duplicate). */
 const maxZ = (windows: readonly PlotWindow[]): number =>
   windows.reduce((m, w) => Math.max(m, w.z), 0);
+
+/** In-flight lazy-book fetches (ORIGIN_FILE_DECODE_PLAN #38), single-flight
+ *  and keyed by dataset id — a book bound into two places at once (e.g. two
+ *  plot windows) triggers exactly one HTTP fetch. Module scope, not store
+ *  state: a Promise has no business flowing through Zustand subscribers or
+ *  (accidentally) a .dwk serialize. */
+const _bookFetches = new Map<string, Promise<void>>();
+
+/** Fetch one dataset's full data and install it, single-flight. Resolves
+ *  (not rejects) once the swap lands — `ensureBookData` (fire-and-forget UI
+ *  trigger) attaches its own `.catch` for the toast; `resolvePendingDatasets`
+ *  (the .dwk pre-save resolver) awaits the SAME promise and lets a failure
+ *  propagate so the caller can abort the save. */
+function installBookData(id: string, source: BookSource): Promise<void> {
+  const inFlight = _bookFetches.get(id);
+  if (inFlight) return inFlight;
+  const p = fetchBookData(source)
+    .then((full) => {
+      useApp.setState((s) => ({
+        datasets: s.datasets.map((d) =>
+          d.id === id
+            ? {
+                ...d,
+                data: full,
+                pending: undefined,
+                // Row-state indices were against the PREVIEW rows (#50/#53)
+                // — they no longer mean anything against the real data.
+                excludedRows: undefined,
+                filter: undefined,
+              }
+            : d,
+        ),
+      }));
+    })
+    .finally(() => {
+      _bookFetches.delete(id);
+    });
+  _bookFetches.set(id, p);
+  return p;
+}
 
 /** A brand-new sole main window — the ≥1-window invariant's default: one
  *  MAXIMIZED window bound to `datasetId`, with a fresh view (MULTI_PLOT_PLAN
@@ -534,6 +578,27 @@ interface AppState {
   // importFiles (separate datasets + a toast) on a shape mismatch or an Origin
   // multi-workbook file, so it never produces a dead import.
   importFilesAppended: (files: File[]) => Promise<void>;
+  // Lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38): fire-and-forget fetch
+  // of a pending dataset's full data (no-op if it isn't pending, or a fetch
+  // for it is already in flight — single-flight, see `installBookData`).
+  // Swaps `data` to the fetched full DataStruct and clears `pending` on
+  // success; toasts and leaves `pending` set on failure (so the next call —
+  // e.g. the user retrying, or simply re-activating the dataset — retries).
+  // Call this from any view that's about to READ a dataset's `.data` for
+  // real (not just list it): setActive, a plot window binding, a multi-panel
+  // cell, the worksheet.
+  ensureBookData: (id: string) => void;
+  // Awaited version for a caller that needs every pending dataset FULLY
+  // resolved before proceeding — the "Save workspace (.dwk)…" command, so an
+  // exported .dwk is always self-contained (never references a book by a
+  // path/token that may not exist on another machine or after a restart).
+  // Rejects if any fetch fails (the caller should abort the save and toast).
+  resolvePendingDatasets: () => Promise<void>;
+  // "Save workspace (.dwk)…" (App.tsx's File menu command): resolves every
+  // pending lazy book first (see `resolvePendingDatasets`'s doc), then
+  // serializes + downloads. Owns its own status/toast messaging so the
+  // command itself stays a thin `run: () => s().saveWorkspaceToFile()`.
+  saveWorkspaceToFile: () => Promise<void>;
   // Import the OS clipboard's text through the shared paste/import-wizard text
   // engine (`/api/import/guess` + `/parse`, gap #47) into a new dataset named
   // "pasted data N". Tab/comma/semicolon/whitespace tables with or without a
@@ -1164,14 +1229,50 @@ export const useApp = create<AppState>((set, get) => ({
         delete data.figures;
         const newIds: string[] = [];
         if (data.books && data.books.length > 1) {
-          // Origin project: import every workbook as its own dataset.
+          // Origin project: import every workbook as its own dataset. Per
+          // ORIGIN_FILE_DECODE_PLAN #38, `book` is one of three shapes: the
+          // PRIMARY book's no-data marker (its real time/values are at the
+          // top-level `data` instead), another book's lazy preview (small
+          // preview time/values now, full data fetched on first activation —
+          // `pending` records how), or — only under the `full_books` escape
+          // hatch, never requested here — a full inline DataStruct.
+          const bookSource = data.book_source;
           for (const book of data.books) {
             const meta = (book.metadata ?? {}) as Record<string, unknown>;
             const short = String(meta.origin_book ?? "Book");
             const long = String(meta.origin_book_long ?? "");
             const label = long && long !== short ? `${short} — ${long}` : short;
             const id = nextDatasetId();
-            get().addDataset({ id, name: `${stem}:${label}`, data: book });
+            if (isPrimaryBookMarker(book)) {
+              get().addDataset({
+                id,
+                name: `${stem}:${label}`,
+                data: {
+                  time: data.time,
+                  values: data.values,
+                  labels: book.labels,
+                  units: book.units,
+                  metadata: book.metadata,
+                },
+              });
+            } else if (isLazyBookEntry(book)) {
+              get().addDataset({
+                id,
+                name: `${stem}:${label}`,
+                data: {
+                  time: book.preview.time,
+                  values: book.preview.values,
+                  labels: book.labels,
+                  units: book.units,
+                  metadata: book.metadata,
+                },
+                ...(bookSource
+                  ? { pending: { ...bookSource, bookId: book.id, rows: book.rows, cols: book.cols } }
+                  : {}),
+              });
+            } else {
+              get().addDataset({ id, name: `${stem}:${label}`, data: book });
+            }
             newIds.push(id);
           }
           // item 4: organize the imported books into a project folder that mirrors
@@ -1189,6 +1290,7 @@ export const useApp = create<AppState>((set, get) => ({
           }));
         } else {
           delete data.books;
+          delete data.book_source;
           const id = nextDatasetId();
           get().addDataset({ id, name: file.name, data });
           newIds.push(id);
@@ -1269,6 +1371,52 @@ export const useApp = create<AppState>((set, get) => ({
     // Degrade to N separate datasets rather than a dead import.
     toast(`${failReason} — importing separately instead`, "danger");
     await get().importFiles(files);
+  },
+
+  ensureBookData: (id) => {
+    const ds = get().datasets.find((d) => d.id === id);
+    if (!ds?.pending) return;
+    installBookData(id, ds.pending).catch((e) => {
+      toast(
+        `couldn't load full data for "${ds.name}" — ${e instanceof Error ? e.message : "error"}`,
+        "danger",
+      );
+    });
+  },
+  resolvePendingDatasets: async () => {
+    const pending = get().datasets.filter((d) => d.pending);
+    await Promise.all(pending.map((d) => installBookData(d.id, d.pending!)));
+  },
+  saveWorkspaceToFile: async () => {
+    const all = get().datasets;
+    if (all.length === 0) {
+      get().setStatus("no datasets to save");
+      return;
+    }
+    // A .dwk must be self-contained (#38): resolve every pending lazy book
+    // FIRST — an exported file never references a book by a path/token that
+    // may not exist on another machine or after a server restart.
+    const pendingCount = all.filter((d) => d.pending).length;
+    if (pendingCount > 0) {
+      get().setStatus(`fetching ${pendingCount} book${pendingCount === 1 ? "" : "s"} before saving…`);
+      try {
+        await get().resolvePendingDatasets();
+      } catch (e) {
+        const msg = `save failed — couldn't load full data for every book: ${e instanceof Error ? e.message : "error"}`;
+        get().setStatus(msg);
+        toast(msg, "danger");
+        return;
+      }
+    }
+    saveBlob(
+      new Blob([serializeWorkspace({ ...get(), plotWindows: get().windowsForSave() })], {
+        type: "application/json",
+      }),
+      "workspace.dwk",
+    );
+    const msg = `saved workspace — ${all.length} dataset${all.length === 1 ? "" : "s"}`;
+    get().setStatus(msg);
+    toast(msg, "ok");
   },
 
   // Import the OS clipboard's text (gap #47) through the same guess/parse text
@@ -1724,7 +1872,7 @@ export const useApp = create<AppState>((set, get) => ({
         status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}`,
       };
     }),
-  setActive: (id) =>
+  setActive: (id) => {
     set((s) => {
       const ds = s.datasets.find((d) => d.id === id);
       return {
@@ -1777,7 +1925,13 @@ export const useApp = create<AppState>((set, get) => ({
         gadgetCursors: null,
         gadgetCursorResult: null,
       };
-    }),
+    });
+    // ORIGIN_FILE_DECODE_PLAN #38: a plain click covers the common "activate
+    // a lazy book" path; the render-side hooks (PlotStage/WindowCanvas/
+    // MultiPanelStage/WorksheetPane) cover the rest (multi-panel siblings,
+    // whatever `addDataset` left active after a bulk import, a .dwk reload).
+    get().ensureBookData(id);
+  },
   // Ctrl/Cmd-click: add or remove a row from the multi-selection WITHOUT changing
   // the plotted/active dataset (the plot only follows a plain click).
   toggleSelected: (id) =>

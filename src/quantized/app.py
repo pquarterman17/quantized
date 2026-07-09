@@ -21,6 +21,7 @@ from quantized.plugins import load_plugins
 from quantized.routes import (
     aggregate,
     baseline,
+    books,
     calc,
     corrections,
     crystallography,
@@ -135,6 +136,7 @@ def create_app() -> FastAPI:
         return {"status": "ok", "version": __version__}
 
     application.include_router(parsers.router)
+    application.include_router(books.router)
     application.include_router(samples.router)
     application.include_router(import_wizard.router)
     application.include_router(import_template.router)
