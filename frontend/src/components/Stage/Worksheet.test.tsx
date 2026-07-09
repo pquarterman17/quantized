@@ -310,6 +310,62 @@ describe("Worksheet computed columns (recompute)", () => {
   });
 });
 
+describe("Worksheet Origin designation + comment headers (item 4)", () => {
+  const header = (i: number) => screen.getAllByRole("columnheader")[i];
+
+  // A book shaped like the reflectometry corpus: A (unused here) is X, R++ is
+  // Y with a comment, dR++ is its Y-error pair.
+  const originData: DataStruct = {
+    time: [1, 2],
+    values: [
+      [10, 0.5],
+      [20, 0.6],
+    ],
+    labels: ["R++", "dR++"],
+    units: ["a.u.", "a.u."],
+    metadata: {
+      origin_column_names: ["R++", "dR++"],
+      column_designations: { A: "X", "R++": "Y", "dR++": "Y-error" },
+      column_comments: { "R++": "spin-up reflectivity" },
+    },
+  };
+
+  it("shows the Origin designation badge instead of the bare channel letter", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: originData }], activeId: "d1" });
+    render(<Worksheet />);
+    expect(header(2).textContent).toContain("Y"); // R++ -> Y, not "A"
+    expect(header(3).textContent).toContain("yEr"); // dR++ -> Y-error, not "B"
+  });
+
+  it("shows a comment as a second header line with the full text in the tooltip", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: originData }], activeId: "d1" });
+    render(<Worksheet />);
+    expect(screen.getByText("spin-up reflectivity")).toBeInTheDocument();
+    expect(header(2).getAttribute("title") ?? "").toContain("spin-up reflectivity");
+  });
+
+  it("dims a Label/Disregard-designated column like a channelRoles column is dimmed today", () => {
+    const labelData: DataStruct = {
+      ...originData,
+      labels: ["Sample", "dR++"],
+      metadata: {
+        origin_column_names: ["Sample", "dR++"],
+        column_designations: { A: "X", Sample: "Label", "dR++": "Y-error" },
+      },
+    };
+    useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: labelData }], activeId: "d1" });
+    render(<Worksheet />);
+    expect(header(2).textContent).toContain("Label");
+    expect(header(2)).toHaveStyle({ opacity: "0.55" });
+  });
+
+  it("non-Origin datasets show no badge noise (bare channel letter unchanged)", () => {
+    render(<Worksheet />); // default `data` fixture — no Origin metadata at all
+    expect(header(2).textContent).toContain("A");
+    expect(header(3).textContent).toContain("B");
+  });
+});
+
 describe("Worksheet cell editing", () => {
   it("double-click → edit → Enter commits to the active dataset", () => {
     render(<Worksheet />);

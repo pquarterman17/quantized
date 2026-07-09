@@ -1,10 +1,13 @@
-// The worksheet grid's header row (WORKSHEET_PLAN item 2): the row-number
-// corner + x column (both pinned — sticky left, like the gutter), then the
-// windowed slice of value/computed-column headers. Each header cell shows the
-// label, its role line (channel letter or user role), a sort mark, and — for
-// computed (formula) columns — a remove button. Presentational + a
-// context-menu hook; all state lives in the worksheet view hook.
+// The worksheet grid's header row (WORKSHEET_PLAN items 2 + 4): the
+// row-number corner + x column (both pinned — sticky left, like the gutter),
+// then the windowed slice of value/computed-column headers. Each header cell
+// shows the label, its role line (channel letter / user role / Origin
+// designation badge — item 4), a truncated Origin comment line (full text in
+// the tooltip), a sort mark, and — for computed (formula) columns — a remove
+// button. Presentational + a context-menu hook; all state lives in the
+// worksheet view hook.
 
+import { columnMetaList, DESIGNATION_BADGE, type ColumnMeta } from "../../../lib/columnmeta";
 import { channelLetter } from "../../../lib/formula";
 import type { ChannelRole, DataStruct } from "../../../lib/types";
 
@@ -26,6 +29,39 @@ export interface GridHeaderProps {
   onHeaderContext?: (col: number, e: React.MouseEvent) => void;
 }
 
+/** True short-name-aware role badge for one value channel: computed columns
+ *  always show "ƒx"; an explicit channelRole (label/ignore) always wins next
+ *  (a stronger, user-set signal); otherwise an Origin designation badge
+ *  stands in for the bare formula-engine letter when one is decoded (item 4
+ *  — the letter can disagree with Origin's own short name once an early
+ *  column is consumed as X); plain data falls back to the letter, unchanged
+ *  from before item 4. */
+function roleText(
+  col: number,
+  computed: boolean,
+  role: ChannelRole | undefined,
+  meta: ColumnMeta | undefined,
+): string {
+  if (computed) return "ƒx";
+  if (role) return role;
+  if (meta?.designation) return DESIGNATION_BADGE[meta.designation];
+  return channelLetter(col);
+}
+
+function headerTitle(
+  col: number,
+  computed: boolean,
+  role: ChannelRole | undefined,
+  meta: ColumnMeta | undefined,
+): string {
+  const base = computed
+    ? `${channelLetter(col)} — computed column`
+    : role
+      ? `${channelLetter(col)} — ${role} column`
+      : channelLetter(col);
+  return meta?.comment ? `${base}\n${meta.comment}` : base;
+}
+
 export default function GridHeader({
   data,
   xName,
@@ -42,6 +78,8 @@ export default function GridHeader({
   onRemoveFormula,
   onHeaderContext,
 }: GridHeaderProps) {
+  const colMeta = columnMetaList(data);
+
   return (
     <div className="qzk-grid-row qzk-grid-header" role="row" style={{ position: "sticky", top: 0, zIndex: 3 }}>
       <div
@@ -67,21 +105,17 @@ export default function GridHeader({
       {leadingSpacer > 0 && <div style={{ width: leadingSpacer, flexShrink: 0 }} aria-hidden="true" />}
       {visibleCols.map((c) => {
         const computed = c >= baseCount;
+        const meta = colMeta[c];
+        const dimmed = Boolean(channelRoles[c]) || meta?.designation === "Label" || meta?.designation === "Disregard";
         return (
           <div
             key={data.labels[c]}
             role="columnheader"
             className="qzk-grid-headcell"
-            style={{ width: colWidth, flexShrink: 0, opacity: channelRoles[c] ? 0.55 : 1 }}
+            style={{ width: colWidth, flexShrink: 0, opacity: dimmed ? 0.55 : 1 }}
             onClick={() => onToggleSort(c)}
             onContextMenu={onHeaderContext ? (e) => onHeaderContext(c, e) : undefined}
-            title={
-              computed
-                ? `${channelLetter(c)} — computed column`
-                : channelRoles[c]
-                  ? `${channelLetter(c)} — ${channelRoles[c]} column`
-                  : channelLetter(c)
-            }
+            title={headerTitle(c, computed, channelRoles[c], meta)}
           >
             {data.labels[c]}
             {computed && (
@@ -98,10 +132,15 @@ export default function GridHeader({
               </button>
             )}
             <span className="role">
-              {computed ? "ƒx" : (channelRoles[c] ?? channelLetter(c))}
+              {roleText(c, computed, channelRoles[c], meta)}
               {data.units[c] ? ` · ${data.units[c]}` : ""}
               {sortMark(c)}
             </span>
+            {meta?.comment && (
+              <span className="comment" title={meta.comment}>
+                {meta.comment}
+              </span>
+            )}
           </div>
         );
       })}
