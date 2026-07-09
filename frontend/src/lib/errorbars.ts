@@ -4,6 +4,7 @@
 // row — no backend involvement. This module is the pure, testable core; the
 // canvas drawing lives in uplotOverlays.errorBarsPlugin.
 
+import { columnMetaList } from "./columnmeta";
 import type { DataStruct } from "./types";
 
 /** Per-display-column error magnitudes, keyed by the uPlot data-column index
@@ -56,15 +57,11 @@ export function defaultErrKeys(ds: DataStruct): Record<number, number> {
 }
 
 export function originErrKeys(ds: DataStruct): Record<number, number> {
-  const meta = ds.metadata ?? {};
-  const desig = meta["column_designations"];
-  const names = meta["origin_column_names"];
-  if (typeof desig !== "object" || desig === null || !Array.isArray(names)) return {};
-  const byName = desig as Record<string, unknown>;
+  const list = columnMetaList(ds); // the shared alignment (lib/columnmeta) — never re-derived here
   const out: Record<number, number> = {};
   let lastY: number | null = null;
-  for (let i = 0; i < names.length; i++) {
-    const g = byName[String(names[i])];
+  for (let i = 0; i < list.length; i++) {
+    const g = list[i]?.designation;
     if (g === "Y") lastY = i;
     else if (g === "Y-error" && lastY !== null) out[lastY] = i;
   }
@@ -83,14 +80,10 @@ export function originErrKeys(ds: DataStruct): Record<number, number> {
  *  Hidden channels stay in the legend (toggleable) and still feed the whiskers
  *  via errKeys. Empty for non-Origin data (no designations). */
 export function originHiddenChannels(ds: DataStruct): number[] {
-  const meta = ds.metadata ?? {};
-  const desig = meta["column_designations"];
-  const names = meta["origin_column_names"];
-  if (typeof desig !== "object" || desig === null || !Array.isArray(names)) return [];
-  const byName = desig as Record<string, unknown>;
+  const list = columnMetaList(ds); // the shared alignment (lib/columnmeta) — never re-derived here
   const out: number[] = [];
-  for (let i = 0; i < names.length; i++) {
-    const g = byName[String(names[i])];
+  for (let i = 0; i < list.length; i++) {
+    const g = list[i]?.designation;
     if (g === "Y-error" || g === "X-error" || g === "X") out.push(i);
   }
   return out;
