@@ -5,6 +5,13 @@
 // raiseWindow/focusWindow — Key Decision 3), rAF-throttled so a fast native
 // drag doesn't fire a store update (and a React re-render) per pointermove.
 //
+// Item 8 adds double-click-the-title-BAR to toggle maximize/restore (the
+// Origin habit); item 10 adds double-click-the-title-TEXT to rename inline
+// (DatasetRow/FolderRow's pattern) and a channel-count/rows badge next to
+// the existing dataset-name badge. The two double-clicks don't collide: the
+// title text's own handler stops propagation, so a double-click that starts
+// on the editable text never also reaches the title bar's maximize toggle.
+//
 // A separate component from `overlays/ToolWindow` (the 24-consumer workshop
 // floating panel): that one is deliberately store-decoupled with fixed width
 // and no resize/persistence; this one is store-controlled geometry with
@@ -12,10 +19,11 @@
 // It shares the `qzk-win*` naming FAMILY (see shell.css) under a distinct
 // `qzk-plotwin*` prefix so the two don't collide in the stylesheet.
 
-import { type ReactNode, useCallback, useEffect, useRef } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import type { PlotWindow } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
+import { Badge } from "../primitives";
 
 export interface PlotWindowFrameProps {
   win: PlotWindow;
@@ -23,6 +31,9 @@ export interface PlotWindowFrameProps {
   /** Dataset display name for the title-bar badge (undefined = unbound /
    *  removed dataset — see MULTI_PLOT_PLAN decision #4). */
   datasetName: string | undefined;
+  /** Channel-count/row-count for the item-10 mono badge (undefined = unbound
+   *  window, matching `datasetName`). */
+  datasetMeta?: { channels: number; rows: number };
   /** The hosting canvas's current size (from `WindowCanvas`'s own
    *  ResizeObserver) — used to keep the title bar reachable (never fully
    *  off-canvas), both live while dragging and reactively when the canvas
@@ -63,6 +74,7 @@ export default function PlotWindowFrame({
   win,
   focused,
   datasetName,
+  datasetMeta,
   bounds,
   children,
 }: PlotWindowFrameProps) {
@@ -70,6 +82,17 @@ export default function PlotWindowFrame({
   const resizeWindow = useApp((s) => s.resizeWindow);
   const focusWindow = useApp((s) => s.focusWindow);
   const closeWindow = useApp((s) => s.closeWindow);
+  const toggleMaximizeWindow = useApp((s) => s.toggleMaximizeWindow);
+  const renameWindow = useApp((s) => s.renameWindow);
+
+  // Item 10: double-click the title TEXT (not the bar) to rename inline —
+  // null = not editing (DatasetRow/FolderRow's own inline-rename pattern).
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const displayTitle = win.title || datasetName || "Untitled graph";
+  const commitRename = () => {
+    if (renaming != null && renaming.trim()) renameWindow(win.id, renaming.trim());
+    setRenaming(null);
+  };
 
   // Canvas-resize reflow: whenever the hosting canvas changes size, re-clamp
   // this window's position so its title bar stays reachable (a browser-
@@ -194,9 +217,42 @@ export default function PlotWindowFrame({
       style={style}
       onPointerDownCapture={onFrameCapture}
     >
-      <div className="qzk-plotwin-titlebar" onPointerDown={beginDrag("move")}>
-        <span className="qzk-plotwin-title">{win.title || datasetName || "Untitled graph"}</span>
+      <div
+        className="qzk-plotwin-titlebar"
+        onPointerDown={beginDrag("move")}
+        onDoubleClick={() => toggleMaximizeWindow(win.id)}
+      >
+        {renaming != null ? (
+          <input
+            className="qz-input qzk-plotwin-rename"
+            autoFocus
+            value={renaming}
+            onPointerDown={(e) => e.stopPropagation()}
+            onChange={(e) => setRenaming(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitRename();
+              if (e.key === "Escape") setRenaming(null);
+            }}
+          />
+        ) : (
+          <span
+            className="qzk-plotwin-title"
+            title={`${displayTitle} — double-click to rename`}
+            onDoubleClick={(e) => {
+              e.stopPropagation(); // renames, never also toggles maximize
+              setRenaming(displayTitle);
+            }}
+          >
+            {displayTitle}
+          </span>
+        )}
         {datasetName && <span className="qzk-plotwin-badge">{datasetName}</span>}
+        {datasetMeta && (
+          <Badge tone="accent" className="qzk-plotwin-meta">
+            {datasetMeta.channels}ch · {datasetMeta.rows}pts
+          </Badge>
+        )}
         <button
           type="button"
           className="qzk-plotwin-close"

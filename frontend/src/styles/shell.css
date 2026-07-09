@@ -336,21 +336,41 @@ body {
    but is a separate, store-controlled-geometry component (PlotWindowFrame,
    Key Decision 3) — distinct qzk-plotwin* prefix so the two stylesheets
    never collide. WindowCanvas hosts these in its OWN stacking context,
-   below workshop ToolWindows (which float above the whole app via qzk-win). */
-.qzk-wincanvas { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--axes-bg); }
+   below workshop ToolWindows (which float above the whole app via qzk-win).
+   qzk-wincanvas is a flex COLUMN (item 8): qzk-wincanvas-frames is the
+   position:relative frame host (a maximized frame's inset:0 fills only this
+   inner box, never covering the strip below it); qzk-winstrip is the
+   minimized-windows dock, a flex-row sibling with a fixed height. */
+.qzk-wincanvas { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.qzk-wincanvas-frames { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--axes-bg); }
 .qzk-plotwin { position: absolute; display: flex; flex-direction: column; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); overflow: hidden; }
 /* Focus highlight — --accent only (design tokens, never a hardcoded colour). */
 .qzk-plotwin.focused { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
 .qzk-plotwin-titlebar { display: flex; align-items: center; gap: 8px; height: 28px; flex-shrink: 0; padding: 0 6px 0 10px; background: var(--surface-2); border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); color: var(--text-dim); cursor: default; user-select: none; touch-action: none; }
 .qzk-plotwin.focused .qzk-plotwin-titlebar { background: var(--accent-soft); color: var(--accent-text); }
 .qzk-plotwin-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
+/* Item 10 — inline rename input, sized to sit flush in the 28px title bar. */
+.qzk-plotwin-rename { flex: 1; height: 20px; padding: 0 4px; font-size: var(--font-size-sm); }
 .qzk-plotwin-badge { font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
 .qzk-plotwin.focused .qzk-plotwin-badge { color: var(--accent-text); }
+/* Item 10 — channel-count/rows badge (Badge primitive; qz-badge already sets
+   font-mono for numbers). flex-shrink:0 keeps it from being squeezed out by
+   a long title before the badge itself elides. */
+.qzk-plotwin-meta { flex-shrink: 0; }
 .qzk-plotwin-close { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-3); cursor: default; padding: 0; flex-shrink: 0; }
 .qzk-plotwin-close:hover { background: var(--danger); border-color: var(--danger); }
 .qzk-plotwin-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 /* Resize grip — a diagonal-stripe corner drawn from tokens, no glyph/emoji. */
 .qzk-plotwin-resize { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; touch-action: none; background: linear-gradient(135deg, transparent 0 50%, var(--border-strong) 50% 60%, transparent 60% 70%, var(--border-strong) 70% 80%, transparent 80% 100%); }
+
+/* ── Minimized-window strip (item 8) — docked along the stage-cell bottom;
+   only rendered while ≥1 window is minimized. Each entry restores + focuses
+   its window (see WindowCanvas/restoreWindow); minimized windows unmount
+   their uPlot instance entirely (no frame, no PlotStage/BackgroundPlotWindow
+   in the DOM) while docked here — perf, per the plan's risk note. */
+.qzk-winstrip { display: flex; align-items: center; gap: 6px; flex-shrink: 0; height: 30px; padding: 0 8px; overflow-x: auto; background: var(--surface-2); border-top: 1px solid var(--border-soft); }
+.qzk-winstrip-item { display: flex; align-items: center; max-width: 160px; padding: 3px 10px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-3); color: var(--text-dim); font-size: var(--font-size-sm); cursor: default; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+.qzk-winstrip-item:hover { border-color: var(--accent); color: var(--text); }
 
 .qzk-param-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: var(--font-size-sm); }
 .qzk-param-table th { text-align: right; color: var(--text-faint); font-weight: var(--weight-medium); border-bottom: 1px solid var(--border-soft); padding: 3px 6px; }

@@ -1,17 +1,21 @@
 // The Stage cell's plot-window host (MULTI_PLOT_PLAN item 3): renders every
-// `plotWindows[]` entry, each z-stacked among the others inside THIS
-// element's own stacking context — below workshop `ToolWindow` overlays,
-// which float above the whole app rather than just the stage cell (Key
-// Decision 3). The single-maximized-window case (today's only state, and
-// every fresh workspace's default per decision #6) renders `PlotStage`
-// ALONE, with none of this file's chrome in the DOM — pixel-identical to
-// the pre-MULTI_PLOT_PLAN Stage (the visual-harness migration guarantee).
-// MDI chrome (title bar / resize grip / dataset badge) appears the moment
-// there are ≥2 windows, or the sole window is explicitly restored down.
+// VISIBLE (non-minimized) `plotWindows[]` entry, each z-stacked among the
+// others inside the frames host's own stacking context — below workshop
+// `ToolWindow` overlays, which float above the whole app rather than just
+// the stage cell (Key Decision 3). The single-maximized-window case (every
+// fresh workspace's default per decision #6) renders `PlotStage` ALONE, with
+// none of this file's chrome in the DOM — pixel-identical to the
+// pre-MULTI_PLOT_PLAN Stage (the visual-harness migration guarantee). MDI
+// chrome (title bar / resize grip / dataset badge) appears the moment there
+// are ≥2 windows (of any winState), or the sole window is explicitly
+// restored down.
 //
 // The focused window renders the full interactive `PlotStage` composition;
-// every other window renders a live, non-interactive `BackgroundPlotWindow`
-// (item 4, Key Decision 2).
+// every other VISIBLE window renders a live, non-interactive
+// `BackgroundPlotWindow` (item 4, Key Decision 2). A MINIMIZED window (item
+// 8) renders NEITHER — it's fully unmounted (no uPlot instance at all, per
+// the plan's perf risk note) and instead gets one entry in the `qzk-winstrip`
+// dock along the canvas bottom; clicking it restores + focuses the window.
 
 import { useEffect, useRef, useState } from "react";
 
@@ -24,23 +28,33 @@ export default function WindowCanvas() {
   const plotWindows = useApp((s) => s.plotWindows);
   const focusedWindowId = useApp((s) => s.focusedWindowId);
   const datasets = useApp((s) => s.datasets);
+  const restoreWindow = useApp((s) => s.restoreWindow);
+  const setPlotCanvasBounds = useApp((s) => s.setPlotCanvasBounds);
 
   const hostRef = useRef<HTMLDivElement>(null);
   const [bounds, setBounds] = useState<{ width: number; height: number } | undefined>(undefined);
 
-  // Track the canvas's own size (never the window's) so PlotWindowFrame can
-  // keep every title bar reachable across a browser/panel resize — see its
-  // `bounds` prop doc.
+  // Track the frames host's own size (never the window's, and never
+  // including the winstrip below it) so PlotWindowFrame can keep every title
+  // bar reachable across a browser/panel resize (its `bounds` prop doc), and
+  // so item 6's Tile/Cascade commands have a real pixel size to lay out
+  // against (`plotCanvasBounds` — the store's sole writer is this effect).
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     const ro = new ResizeObserver(([entry]) => {
       const box = entry?.contentRect;
-      if (box) setBounds({ width: box.width, height: box.height });
+      if (box) {
+        setBounds({ width: box.width, height: box.height });
+        setPlotCanvasBounds({ width: box.width, height: box.height });
+      }
     });
     ro.observe(host);
-    return () => ro.disconnect();
-  }, []);
+    return () => {
+      ro.disconnect();
+      setPlotCanvasBounds(null);
+    };
+  }, [setPlotCanvasBounds]);
 
   // Decision #6 — the migration guarantee: a single maximized window is
   // PIXEL-IDENTICAL to the pre-MULTI_PLOT_PLAN Stage (no chrome at all, and
@@ -50,17 +64,51 @@ export default function WindowCanvas() {
     return <PlotStage />;
   }
 
+  const visible = plotWindows.filter((w) => w.winState !== "minimized");
+  const minimized = plotWindows.filter((w) => w.winState === "minimized");
+
   return (
-    <div className="qzk-wincanvas" ref={hostRef}>
-      {plotWindows.map((win) => {
-        const focused = win.id === focusedWindowId;
-        const dataset = win.datasetId ? (datasets.find((d) => d.id === win.datasetId) ?? null) : null;
-        return (
-          <PlotWindowFrame key={win.id} win={win} focused={focused} datasetName={dataset?.name} bounds={bounds}>
-            {focused ? <PlotStage /> : <BackgroundPlotWindow dataset={dataset} view={win.view} />}
-          </PlotWindowFrame>
-        );
-      })}
+    <div className="qzk-wincanvas">
+      <div className="qzk-wincanvas-frames" ref={hostRef}>
+        {visible.map((win) => {
+          const focused = win.id === focusedWindowId;
+          const dataset = win.datasetId ? (datasets.find((d) => d.id === win.datasetId) ?? null) : null;
+          const datasetMeta = dataset
+            ? { channels: dataset.data.labels.length, rows: dataset.data.time.length }
+            : undefined;
+          return (
+            <PlotWindowFrame
+              key={win.id}
+              win={win}
+              focused={focused}
+              datasetName={dataset?.name}
+              datasetMeta={datasetMeta}
+              bounds={bounds}
+            >
+              {focused ? <PlotStage /> : <BackgroundPlotWindow dataset={dataset} view={win.view} />}
+            </PlotWindowFrame>
+          );
+        })}
+      </div>
+      {minimized.length > 0 && (
+        <div className="qzk-winstrip">
+          {minimized.map((win) => {
+            const dataset = win.datasetId ? (datasets.find((d) => d.id === win.datasetId) ?? null) : null;
+            const title = win.title || dataset?.name || "Untitled graph";
+            return (
+              <button
+                key={win.id}
+                type="button"
+                className="qzk-winstrip-item"
+                title={`Restore "${title}"`}
+                onClick={() => restoreWindow(win.id)}
+              >
+                {title}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
