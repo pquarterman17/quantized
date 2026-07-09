@@ -487,6 +487,19 @@ export function applyWaterfall(payload: PlotPayload, fraction: number): PlotPayl
  * vertical-line symptom). A row with no drawable point is safe to drop; interior
  * gaps are left in place (uPlot draws them as gaps) so plot-brush row indices stay
  * aligned with the source rows.
+ *
+ * A THIRD Origin artifact (byte-verified across ~10 books, e.g. Book6 rows
+ * 160-179 of 180): over-allocated worksheet storage whose unfilled tail rows
+ * read exactly 0.0 in EVERY column simultaneously — a "point", not a gap, so
+ * the check above doesn't catch it. Trailing zero rows break x-ascending
+ * (dQ resets to 0) and draw a wrap-around line back to the origin on a
+ * hysteresis-loop-style plot. A row is ALSO prunable when x is exactly 0 and
+ * every plotted y at that row is a finite exact 0 — any NaN or non-zero finite
+ * y disqualifies it (a mixed NaN+zero row is left to the rule above instead,
+ * never newly pruned by this one). Trade-off: a series that legitimately ends
+ * on a single real (0,0) sample is indistinguishable from padding and gets
+ * pruned too — accepted, since the padding artifact is common and far worse
+ * left in, while a genuine (0,0) tail point is rare.
  */
 export function dropTrailingEmptyRows(payload: PlotPayload): PlotPayload {
   const cols = payload.data as (number | null)[][];
@@ -499,9 +512,17 @@ export function dropTrailingEmptyRows(payload: PlotPayload): PlotPayload {
     for (let c = 1; c < cols.length; c++) if (finite(cols[c][i])) return true;
     return false; // x present but every y empty → nothing to draw at this row
   };
+  // Over-allocated-storage padding: x AND every plotted y simultaneously an
+  // exact finite 0. `v !== 0` disqualifies null/NaN/non-zero in one check.
+  const allZeroRow = (i: number): boolean => {
+    if (!hasY) return false; // an x-only zero sample is real data, never padding
+    if (x[i] !== 0) return false;
+    for (let c = 1; c < cols.length; c++) if (cols[c][i] !== 0) return false;
+    return true;
+  };
   let end = x.length;
-  while (end > 0 && !plottable(end - 1)) end--;
-  if (end === x.length) return payload; // no trailing empty tail — fast path
+  while (end > 0 && (!plottable(end - 1) || allZeroRow(end - 1))) end--;
+  if (end === x.length) return payload; // no trailing prunable tail — fast path
   const data = cols.map((col) => col.slice(0, end));
   return { ...payload, data: data as uPlot.AlignedData };
 }
