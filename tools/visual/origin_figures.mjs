@@ -179,7 +179,15 @@ async function main() {
     const form = new FormData();
     form.append("file", new Blob([bytes]), basename(OPJ_PATH));
     const t0 = Date.now();
-    const uploadRes = await fetch(`${baseUrl}/api/parsers/upload`, { method: "POST", body: form });
+    // ORIGIN_FILE_DECODE_PLAN #38: this script injects `payload.books[i].data`
+    // straight into the store (below) — it has no fetch-on-activate flow for
+    // the lazy default's preview-only non-primary entries, so it opts into
+    // the pre-#38 `full_books` escape hatch to keep getting every book's
+    // data inline, byte-for-byte the same shape this script always consumed.
+    const uploadRes = await fetch(`${baseUrl}/api/parsers/upload?full_books=true`, {
+      method: "POST",
+      body: form,
+    });
     if (!uploadRes.ok) {
       throw new Error(`upload failed: ${uploadRes.status} ${await uploadRes.text()}`);
     }

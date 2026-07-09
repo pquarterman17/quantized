@@ -154,6 +154,23 @@ describe("WindowCanvas — ≥2 windows (MDI chrome + focused-window routing)", 
     expect(container.textContent).toContain("No dataset");
   });
 
+  it("ORIGIN_FILE_DECODE_PLAN #38: fetches full data for a background window's pending dataset", async () => {
+    const pendingDs: Dataset = {
+      id: "d2",
+      name: "lazy",
+      data: { time: [0, 1], values: [[1], [2]], labels: ["a"], units: [""], metadata: {} },
+      pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 999, cols: 1 },
+    };
+    useApp.setState({ datasets: [DATASET, pendingDs] });
+    const spy = vi.spyOn(useApp.getState(), "ensureBookData").mockImplementation(() => {});
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal", datasetId: "d2" })],
+      focusedWindowId: "w1",
+    });
+    render(<WindowCanvas />);
+    await waitFor(() => expect(spy).toHaveBeenCalledWith("d2"));
+  });
+
   it("shows a channel-count/rows badge (item 10) for a window bound to a live dataset", async () => {
     useApp.setState({
       plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],

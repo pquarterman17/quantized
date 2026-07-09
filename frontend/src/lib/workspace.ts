@@ -14,6 +14,7 @@ import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeExcluded } from "./rowstate";
 import { sanitizeSmartFolders, type SmartFolder } from "./smartfolders";
 import type {
+  BookSource,
   ChannelRole,
   ComputedColumn,
   CorrectionParams,
@@ -135,6 +136,15 @@ export function serializeWorkspace(ws: WorkspaceState): string {
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
       ...(d.fitSpec ? { fitSpec: d.fitSpec } : {}),
+      // ORIGIN_FILE_DECODE_PLAN #38: an explicit "Save workspace (.dwk)…"
+      // resolves every pending dataset FIRST (App.tsx's save command calls
+      // `resolvePendingDatasets` before this runs), so `d.pending` is never
+      // set in a real exported .dwk — only autosave (lib/autosave.ts, which
+      // reuses this same serializer for its localStorage snapshot) can
+      // legitimately still have one, and it's fine for that round-trip to
+      // carry it: the render-side ensureBookData hooks re-fetch it the next
+      // time that dataset is shown after a reload.
+      ...(d.pending ? { pending: d.pending } : {}),
     })),
   };
   return JSON.stringify(doc, null, 2);
@@ -205,6 +215,24 @@ function parseOriginFigures(v: unknown, dsIds: Set<string>): OriginFigureEntry[]
 
 function isNumberArray(v: unknown): v is number[] {
   return Array.isArray(v) && v.every((x) => typeof x === "number");
+}
+
+/** Validate a persisted `Dataset.pending` (#38) — a stale/hand-edited value
+ *  degrades to "not pending" (the dataset then just shows whatever rows its
+ *  `data` happens to carry) rather than throwing. */
+function parsePending(v: unknown): BookSource | null {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v as Record<string, unknown>;
+  if (typeof o.bookId !== "string" || !o.bookId) return null;
+  const rows = typeof o.rows === "number" && Number.isFinite(o.rows) ? o.rows : 0;
+  const cols = typeof o.cols === "number" && Number.isFinite(o.cols) ? o.cols : 0;
+  if (o.kind === "path" && typeof o.path === "string" && o.path) {
+    return { kind: "path", path: o.path, bookId: o.bookId, rows, cols };
+  }
+  if (o.kind === "upload" && typeof o.token === "string" && o.token) {
+    return { kind: "upload", token: o.token, bookId: o.bookId, rows, cols };
+  }
+  return null;
 }
 
 /** Structural check that `v` is a DataStruct (time/values/labels/units/metadata). */
@@ -322,6 +350,11 @@ export function parseWorkspace(text: string): LoadedWorkspace {
     ) {
       ds.fitSpec = { model: (dd.fitSpec as { model: string }).model };
     }
+    // Lazy per-book reference (#38) — only ever present in an autosave
+    // snapshot (a real "Save workspace" export always resolves it first);
+    // validated the same defensive way as every other optional field here.
+    const pending = parsePending(dd.pending);
+    if (pending) ds.pending = pending;
     if (typeof dd.folderId === "string") ds.folderId = dd.folderId;
     if (typeof dd.order === "number" && Number.isFinite(dd.order)) ds.order = dd.order;
     return ds;

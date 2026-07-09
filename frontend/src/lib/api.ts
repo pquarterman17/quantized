@@ -9,6 +9,7 @@ import type { FigureHitmap } from "./previewmap";
 import type { ReportSheet } from "./report";
 import type { Recommendation } from "./statschooser";
 import type {
+  BookSource,
   CalcResult,
   CorrectionParams,
   DataStruct,
@@ -75,6 +76,22 @@ export async function uploadFile(file: File): Promise<DataStruct> {
   form.append("file", file, file.name);
   const res = await fetch("/api/parsers/upload", { method: "POST", body: form });
   return unwrap<DataStruct>(res);
+}
+
+/** Fetch one Origin book's full data (ORIGIN_FILE_DECODE_PLAN #38 — the lazy
+ *  per-book import transport's on-demand fetch): `POST /api/parsers/books/data`
+ *  with `source`'s project-level reference (path or upload token) plus the
+ *  book's own id. Called by `useApp.ensureBookData` the first time a pending
+ *  Dataset is actually shown (activated, bound into a plot window/panel, or
+ *  opened in the worksheet) — never eagerly for every book at import time. */
+export function fetchBookData(source: BookSource): Promise<DataStruct> {
+  // Mirrors quantized.routes.books.BookDataRequest exactly (book_id + EITHER
+  // path OR token) — `kind`/`rows`/`cols` are frontend-only bookkeeping, not
+  // sent.
+  return postJSON<DataStruct>("/api/parsers/books/data", {
+    book_id: source.bookId,
+    ...(source.kind === "path" ? { path: source.path } : { token: source.token }),
+  });
 }
 
 /** The bundled first-run demo dataset (a synthetic VSM-like hysteresis loop,

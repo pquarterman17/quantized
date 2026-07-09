@@ -56,6 +56,19 @@ export default function WindowCanvas() {
     };
   }, [setPlotCanvasBounds]);
 
+  // ORIGIN_FILE_DECODE_PLAN #38: every VISIBLE window's bound dataset gets
+  // its full data fetched (if it's still a lazy Origin book) — covers the
+  // background (non-focused) windows a plain click never activates. The
+  // focused window's own fetch is triggered by PlotStage's identical effect;
+  // ensureBookData is single-flight, so covering it again here is harmless.
+  useEffect(() => {
+    for (const win of plotWindows) {
+      if (win.winState === "minimized" || !win.datasetId) continue;
+      const ds = datasets.find((d) => d.id === win.datasetId);
+      if (ds?.pending) useApp.getState().ensureBookData(ds.id);
+    }
+  }, [plotWindows, datasets]);
+
   // Decision #6 — the migration guarantee: a single maximized window is
   // PIXEL-IDENTICAL to the pre-MULTI_PLOT_PLAN Stage (no chrome at all, and
   // no extra host div — PlotStage keeps rendering directly into the

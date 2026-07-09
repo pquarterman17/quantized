@@ -52,6 +52,26 @@ describe("DatasetRow sheet affordance", () => {
   });
 });
 
+describe("DatasetRow pending lazy book (ORIGIN_FILE_DECODE_PLAN #38)", () => {
+  it("shows the TRUE row/channel counts from `pending`, not the small preview's", () => {
+    const lazy: Dataset = {
+      id: "lazy1",
+      name: "PNR:Book2",
+      data: { time: [0, 1], values: [[1], [2]], labels: ["A"], units: ["Oe"], metadata: {} },
+      pending: { kind: "path", path: "/PNR.opj", bookId: "Book2", rows: 42180, cols: 4 },
+    };
+    render(<DatasetRow dataset={lazy} {...baseProps} />);
+    expect(screen.getByText(/42180 pts/)).toBeInTheDocument();
+    expect(screen.getByText("4ch")).toBeInTheDocument();
+  });
+
+  it("shows the real (preview) counts for a fully-loaded dataset", () => {
+    render(<DatasetRow dataset={plain} {...baseProps} />);
+    expect(screen.getByText(/1 pts/)).toBeInTheDocument();
+    expect(screen.getByText("1ch")).toBeInTheDocument();
+  });
+});
+
 // project-organization plan item 3b: drop-between reorder. jsdom has no real
 // DnD or layout (see AxisDropZones.test.tsx's header note for the same
 // workaround this borrows: a hand-built DragEvent with clientX/clientY +

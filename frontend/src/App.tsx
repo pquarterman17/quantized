@@ -54,11 +54,10 @@ import { makeDemoDataset } from "./lib/demo";
 import { loadSampleDataset } from "./lib/sampleDataset";
 import { clearAutosave } from "./lib/autosave";
 import { useWorkspaceAutosave } from "./useWorkspaceAutosave";
-import { saveBlob } from "./lib/download";
 import { buildExportStyles } from "./lib/exportStyles";
 import { IMPORT_ACCEPT, openFilePicker } from "./lib/openFilePicker";
 import { toolForKey } from "./lib/plotToolKeys";
-import { parseWorkspace, serializeWorkspace } from "./lib/workspace";
+import { parseWorkspace } from "./lib/workspace";
 import { toast } from "./store/toasts";
 import { useApp } from "./store/useApp";
 
@@ -328,17 +327,10 @@ export default function App() {
         id: "save-workspace",
         group: "File",
         label: "Save workspace (.dwk)…",
-        run: () => {
-          const all = s().datasets;
-          if (all.length === 0) {
-            s().setStatus("no datasets to save");
-            return;
-          }
-          saveBlob(new Blob([serializeWorkspace({ ...s(), plotWindows: s().windowsForSave() })], { type: "application/json" }), "workspace.dwk");
-          const msg = `saved workspace — ${all.length} dataset${all.length === 1 ? "" : "s"}`;
-          s().setStatus(msg);
-          toast(msg, "ok");
-        },
+        // Resolving pending lazy books (#38) before serializing lives in the
+        // store (saveWorkspaceToFile) — not here, so this stays a thin command
+        // like every other one in this list.
+        run: () => s().saveWorkspaceToFile(),
       },
       {
         id: "open-workspace",

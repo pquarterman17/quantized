@@ -148,6 +148,14 @@ export default function PlotStage() {
     if (tool !== "qfit") useApp.getState().clearQfit();
   }, [tool, active]);
 
+  // ORIGIN_FILE_DECODE_PLAN #38: the active dataset may still be a lazy Origin
+  // book (its `data` is just a small preview) — fetch its full data the
+  // moment it's actually shown here. No-op if it isn't pending, or a fetch
+  // for it is already in flight (ensureBookData is single-flight).
+  useEffect(() => {
+    if (active?.pending) useApp.getState().ensureBookData(active.id);
+  }, [active?.id, active?.pending]);
+
   const { resetView, smartScale, savePng, copyData, snapshot } = usePlotStageActions(
     plotRef,
     displayPayload,

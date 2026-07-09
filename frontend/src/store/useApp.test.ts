@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   applyCorrections as applyCorrectionsApi,
+  fetchBookData,
   guessImportSettings,
   parseImportText,
   uploadFile,
 } from "../lib/api";
 import { defaultErrKeys } from "../lib/errorbars";
+import { saveBlob } from "../lib/download";
 import { effectiveChannels } from "../lib/plotdata";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import type { Dataset, DataStruct } from "../lib/types";
@@ -15,9 +17,12 @@ import { useApp } from "./useApp";
 vi.mock("../lib/api", () => ({
   applyCorrections: vi.fn(),
   uploadFile: vi.fn(),
+  fetchBookData: vi.fn(),
   guessImportSettings: vi.fn(),
   parseImportText: vi.fn(),
 }));
+
+vi.mock("../lib/download", () => ({ saveBlob: vi.fn() }));
 
 const raw: DataStruct = {
   time: [1, 2, 3],
@@ -920,6 +925,253 @@ describe("useApp importFiles", () => {
     });
     await useApp.getState().importFiles([fakeFile("XRD.opj")]);
     expect(useApp.getState().originFigures[0].datasetId).toBeNull();
+  });
+});
+
+describe("useApp lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38)", () => {
+  const fakeFile = (name: string) => new File(["x"], name);
+
+  const primaryMarker = {
+    lazy: false as const,
+    primary: true as const,
+    id: "Book1",
+    labels: ["m"],
+    units: ["emu"],
+    metadata: { origin_book: "Book1" },
+    rows: 3,
+    cols: 1,
+  };
+  const lazyEntry = {
+    lazy: true as const,
+    id: "Book2",
+    labels: ["m"],
+    units: ["emu"],
+    metadata: { origin_book: "Book2" },
+    rows: 5000,
+    cols: 1,
+    preview: { time: [1, 2], values: [[10], [20]] },
+  };
+  // A pending dataset's `data` in the store, matching what importFiles builds
+  // for a lazy entry: a real (small) DataStruct, metadata included.
+  const previewData: DataStruct = {
+    time: [1, 2],
+    values: [[10], [20]],
+    labels: ["m"],
+    units: ["emu"],
+    metadata: { origin_book: "Book2" },
+  };
+
+  it("builds the primary dataset from the top-level payload, not pending", async () => {
+    vi.mocked(uploadFile).mockResolvedValue({
+      ...raw,
+      books: [primaryMarker, lazyEntry],
+      book_source: { kind: "path", path: "/data/PNR.opj" },
+    });
+    await useApp.getState().importFiles([fakeFile("PNR.opj")]);
+
+    const st = useApp.getState();
+    const primary = st.datasets.find((d) => d.name === "PNR:Book1")!;
+    expect(primary.pending).toBeUndefined();
+    expect(primary.data.time).toEqual(raw.time); // the top-level (full) payload
+    expect(primary.data.values).toEqual(raw.values);
+  });
+
+  it("builds a pending dataset from a lazy entry's preview + book_source", async () => {
+    vi.mocked(uploadFile).mockResolvedValue({
+      ...raw,
+      books: [primaryMarker, lazyEntry],
+      book_source: { kind: "path", path: "/data/PNR.opj" },
+    });
+    await useApp.getState().importFiles([fakeFile("PNR.opj")]);
+
+    const st = useApp.getState();
+    const lazy = st.datasets.find((d) => d.name === "PNR:Book2")!;
+    expect(lazy.pending).toEqual({
+      kind: "path",
+      path: "/data/PNR.opj",
+      bookId: "Book2",
+      rows: 5000,
+      cols: 1,
+    });
+    // the small preview stands in as `data` until fetched — a real DataStruct,
+    // just fewer rows, so every consumer that reads .time/.values still works.
+    expect(lazy.data.time).toEqual([1, 2]);
+    expect(lazy.data.values).toEqual([[10], [20]]);
+    expect(lazy.data.metadata.origin_book).toBe("Book2");
+  });
+
+  it("ensureBookData fetches, installs the full data, and clears pending", async () => {
+    vi.mocked(uploadFile).mockResolvedValue({
+      ...raw,
+      books: [primaryMarker, lazyEntry],
+      book_source: { kind: "path", path: "/data/PNR.opj" },
+    });
+    await useApp.getState().importFiles([fakeFile("PNR.opj")]);
+    const lazyId = useApp.getState().datasets.find((d) => d.name === "PNR:Book2")!.id;
+
+    const full: DataStruct = {
+      time: [1, 2, 3, 4, 5],
+      values: [[1], [2], [3], [4], [5]],
+      labels: ["m"],
+      units: ["emu"],
+      metadata: { origin_book: "Book2" },
+    };
+    vi.mocked(fetchBookData).mockResolvedValue(full);
+
+    useApp.getState().ensureBookData(lazyId);
+    await vi.waitFor(() => expect(useApp.getState().datasets.find((d) => d.id === lazyId)!.pending).toBeUndefined());
+
+    const resolved = useApp.getState().datasets.find((d) => d.id === lazyId)!;
+    expect(resolved.data).toEqual(full);
+    expect(fetchBookData).toHaveBeenCalledWith({
+      kind: "path",
+      path: "/data/PNR.opj",
+      bookId: "Book2",
+      rows: 5000,
+      cols: 1,
+    });
+  });
+
+  it("ensureBookData clears stale row-state (indices were against the preview)", async () => {
+    const id = "ds-preview-1";
+    useApp.setState({
+      datasets: [
+        {
+          id,
+          name: "lazy",
+          data: previewData,
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5000, cols: 1 },
+          excludedRows: [0],
+          filter: [{ col: 0, kind: "range", min: 0, max: 1 }],
+        },
+      ],
+    });
+    vi.mocked(fetchBookData).mockResolvedValue(raw);
+    useApp.getState().ensureBookData(id);
+    await vi.waitFor(() => expect(useApp.getState().datasets[0].pending).toBeUndefined());
+    expect(useApp.getState().datasets[0].excludedRows).toBeUndefined();
+    expect(useApp.getState().datasets[0].filter).toBeUndefined();
+  });
+
+  it("ensureBookData is a no-op for a dataset that isn't pending", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }] });
+    useApp.getState().ensureBookData("d1");
+    expect(fetchBookData).not.toHaveBeenCalled();
+  });
+
+  it("ensureBookData is single-flight — two calls in flight fetch once", async () => {
+    const id = "ds-preview-2";
+    useApp.setState({
+      datasets: [
+        {
+          id,
+          name: "lazy",
+          data: previewData,
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5000, cols: 1 },
+        },
+      ],
+    });
+    let resolveFetch: (v: DataStruct) => void;
+    vi.mocked(fetchBookData).mockReturnValue(new Promise((res) => (resolveFetch = res)));
+    useApp.getState().ensureBookData(id);
+    useApp.getState().ensureBookData(id);
+    expect(fetchBookData).toHaveBeenCalledTimes(1);
+    resolveFetch!(raw);
+    await vi.waitFor(() => expect(useApp.getState().datasets[0].pending).toBeUndefined());
+  });
+
+  it("ensureBookData toasts on failure and leaves pending set (retry affordance)", async () => {
+    const id = "ds-preview-3";
+    useApp.setState({
+      datasets: [
+        {
+          id,
+          name: "lazy book",
+          data: previewData,
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5000, cols: 1 },
+        },
+      ],
+    });
+    vi.mocked(fetchBookData).mockRejectedValue(new Error("network down"));
+    useApp.getState().ensureBookData(id);
+    await vi.waitFor(() => expect(fetchBookData).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0)); // let the rejection settle
+    expect(useApp.getState().datasets[0].pending).toBeDefined(); // still pending — retryable
+  });
+
+  it("setActive triggers a fetch for a newly-active pending dataset", async () => {
+    useApp.setState({
+      datasets: [
+        { id: "a", name: "a", data: raw },
+        {
+          id: "b",
+          name: "b lazy",
+          data: previewData,
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5000, cols: 1 },
+        },
+      ],
+      plotWindows: [],
+      focusedWindowId: null,
+    });
+    vi.mocked(fetchBookData).mockResolvedValue(raw);
+    useApp.getState().setActive("b");
+    await vi.waitFor(() => expect(fetchBookData).toHaveBeenCalled());
+  });
+
+  it("resolvePendingDatasets awaits every pending dataset and lets a failure propagate", async () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "ok",
+          name: "ok",
+          data: previewData,
+          pending: { kind: "path", path: "/ok.opj", bookId: "BookOK", rows: 10, cols: 1 },
+        },
+        {
+          id: "bad",
+          name: "bad",
+          data: previewData,
+          pending: { kind: "path", path: "/bad.opj", bookId: "BookBad", rows: 10, cols: 1 },
+        },
+      ],
+    });
+    vi.mocked(fetchBookData).mockImplementation(async (source) =>
+      source.bookId === "BookBad" ? Promise.reject(new Error("gone")) : raw,
+    );
+    await expect(useApp.getState().resolvePendingDatasets()).rejects.toThrow("gone");
+    expect(useApp.getState().datasets.find((d) => d.id === "ok")!.pending).toBeUndefined();
+  });
+
+  it("saveWorkspaceToFile resolves pending datasets before serializing", async () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "lazy1",
+          name: "lazy1",
+          data: previewData,
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5000, cols: 1 },
+        },
+      ],
+      plotWindows: [],
+      focusedWindowId: null,
+    });
+    vi.mocked(fetchBookData).mockResolvedValue(raw);
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(useApp.getState().datasets[0].pending).toBeUndefined();
+    expect(saveBlob).toHaveBeenCalledTimes(1);
+    const [blob] = vi.mocked(saveBlob).mock.calls[0];
+    const text = await blob.text();
+    expect(text).not.toContain('"pending"');
+  });
+
+  it("full_books escape-hatch shape (a plain DataStruct, no lazy/primary marker) imports as full data", async () => {
+    const fullBook = { ...raw, metadata: { origin_book: "Book9" } };
+    vi.mocked(uploadFile).mockResolvedValue({ ...raw, books: [fullBook, { ...raw, metadata: { origin_book: "Book10" } }] });
+    await useApp.getState().importFiles([fakeFile("Legacy.opj")]);
+    const ds = useApp.getState().datasets.find((d) => d.name === "Legacy:Book9")!;
+    expect(ds.pending).toBeUndefined();
+    expect(ds.data.time).toEqual(raw.time);
   });
 });
 

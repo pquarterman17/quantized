@@ -22,7 +22,7 @@
 // 11 asks for: the worksheet half of item 17's precondition (a mountable,
 // dataset-agnostic container) is satisfied by this component as it stands.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { hasOriginReportSheets } from "../../../lib/columnmeta";
 import type { Dataset } from "../../../lib/types";
@@ -57,6 +57,13 @@ export default function WorksheetPane({ datasetId }: WorksheetPaneProps) {
 function WorksheetPaneView({ ds }: { ds: Dataset }) {
   const view = useWorksheetView(ds);
   const [menu, setMenu] = useState<{ kind: "col" | "row"; target: number; x: number; y: number } | null>(null);
+
+  // ORIGIN_FILE_DECODE_PLAN #38: opening the worksheet on a still-lazy Origin
+  // book fetches its full data (the grid below renders the preview rows
+  // until then — a real DataStruct, just fewer of them, so nothing crashes).
+  useEffect(() => {
+    if (ds.pending) useApp.getState().ensureBookData(ds.id);
+  }, [ds.id, ds.pending]);
 
   const openMenu = (kind: "col" | "row") => (target: number, e: React.MouseEvent) => {
     e.preventDefault();
@@ -111,6 +118,12 @@ function WorksheetPaneView({ ds }: { ds: Dataset }) {
         canExtract={view.canExtract}
         onExtract={view.extractSubset}
       />
+      {ds.pending && (
+        <div className="qzk-ds-meta" style={{ padding: "4px 8px", color: "var(--text-faint)" }}>
+          Loading full data ({ds.pending.rows} rows × {ds.pending.cols} channels) — showing a preview
+          for now.
+        </div>
+      )}
       {view.err && (
         <div className="qzk-ds-meta" style={{ padding: "4px 8px", color: "var(--danger)" }}>
           {view.err}

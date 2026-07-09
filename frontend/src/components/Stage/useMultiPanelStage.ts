@@ -124,6 +124,11 @@ export function useMultiPanelStage(): MultiPanelStageState {
       setPayload(null);
       return;
     }
+    // ORIGIN_FILE_DECODE_PLAN #38: the active dataset may still be a lazy
+    // Origin book — trigger its full-data fetch; the payload below renders
+    // from whatever `active.data` currently is (preview now, full once the
+    // fetch lands and this effect re-runs off the `active` dependency).
+    if (active.pending) useApp.getState().ensureBookData(active.id);
     fetchPlot(active.data, yLog, xLog, plotted, y2Keys, xKey).then((p) => {
       if (!cancelled) setPayload(p);
     });
@@ -148,6 +153,11 @@ export function useMultiPanelStage(): MultiPanelStageState {
     Promise.all(
       panels.map((p) => {
         const ds = datasets.find((d) => d.id === p.datasetId);
+        // Each panel owns its OWN dataset (decode-plan #36) — a spatial
+        // multi-panel apply can bind several lazy books at once, so every
+        // panel's own book needs its own fetch trigger (#38), not just the
+        // "active" one.
+        if (ds?.pending) useApp.getState().ensureBookData(ds.id);
         return ds ? fetchPlot(ds.data, p.yLog, p.xLog, p.yKeys, null, p.xKey) : Promise.resolve(null);
       }),
     ).then((ps) => {
