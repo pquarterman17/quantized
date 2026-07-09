@@ -18,10 +18,9 @@ from pydantic import BaseModel
 
 from quantized.io import import_auto
 from quantized.io.origin_project import (
-    OriginProjectError,
     drop_empty_library_books,
     drop_nonactionable_figures,
-    read_origin_books,
+    read_origin_project_all,
 )
 from quantized.io.origin_project.figures import extract_figures
 from quantized.io.origin_project.figures_opju import extract_figures_opju
@@ -54,19 +53,25 @@ def _import_with_books(path: Path) -> dict[str, Any]:
 
     A multi-book project adds ``"books": [payload, …]`` so the frontend can
     import all books (the locked import-all UX); other formats are untouched.
+
+    Origin projects (``.opj``/``.opju``) are parsed ONCE via
+    ``read_origin_project_all``: the primary dataset and the full book list
+    used to come from two independent full-project parses (``import_auto`` ->
+    ``read_origin_project``, then a separate ``read_origin_books``), each
+    re-reading the file from disk and re-decoding every column; that
+    redundant parse dominated the ~4s round-trip on a 121.56 MB / 8.5M-cell
+    project (profiled 2026-07-09). The same already-read bytes are reused
+    below for the figures scan too, instead of a third disk read.
     """
-    ds = import_auto(path)
-    payload = datastruct_payload(ds)
-    if Path(path).suffix.lower() in (".opj", ".opju"):
-        try:
-            books = drop_empty_library_books(read_origin_books(Path(path)))
-        except OriginProjectError:
-            books = []
+    suffix = path.suffix.lower()
+    if suffix in (".opj", ".opju"):
+        raw = path.read_bytes()
+        ds, all_books = read_origin_project_all(path, raw=raw)
+        payload = datastruct_payload(ds)
+        books = drop_empty_library_books(all_books)
         if len(books) > 1:
             payload["books"] = [datastruct_payload(b) for b in books]
-        suffix = Path(path).suffix.lower()
         try:
-            raw = Path(path).read_bytes()
             if suffix == ".opj":
                 figs = extract_figures(raw)
             else:
@@ -81,7 +86,10 @@ def _import_with_books(path: Path) -> dict[str, Any]:
             figs = []
         if figs:
             payload["figures"] = figs
-    return payload
+        return payload
+
+    ds = import_auto(path)
+    return datastruct_payload(ds)
 
 
 @router.post("/import")

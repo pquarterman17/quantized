@@ -56,6 +56,8 @@ from __future__ import annotations
 
 import re
 
+from quantized.io.origin_project.tree import _find_tail_start, _TailParseError
+
 __all__ = ["notes_windows", "parse_results_log", "results_log"]
 
 # One timestamped operation-record header, e.g. `[5/6/2019 15:16:34 "" (2458609)]`.
@@ -76,17 +78,67 @@ _NOTE_JUNK = (b"OriginStorage", b"ColumnInfo", b"ImportFile", b"CDATA", b"</", b
 _MAX_NOTES = 64  # sane cap on notes windows per project
 _MAX_NOTE_LEN = 100_000  # a note is free-form prose; bounded, not a 250-byte cap
 
+_WINDOW_MARK = re.compile(rb"\x93")
 
-def results_log(b: bytes) -> str:
+# Safety cushion (bytes) subtracted from the structurally-derived tail
+# boundary (`tree._find_tail_start`) before scanning a `.opj` for a results
+# log / notes window (see `_tail_scan_start`). Never a hardcoded byte offset
+# or file-size percentage -- always relative to THIS file's own computed
+# block-stream-end position. Sized against the real corpus
+# (`../test-data/origin`): every project there with a results log has its
+# first match within ~550 bytes of that boundary (XMCD.opj, the largest hit,
+# is 521 bytes past it), so 2 MiB leaves a wide cushion while still skipping
+# the ~90%+ of a large project (PNR.opj: 127 MB file, 116.5 MB boundary)
+# that is bulk float data and structurally cannot contain a match.
+_TAIL_SAFETY_MARGIN = 2 * 1024 * 1024
+
+
+def _tail_scan_start(b: bytes, suffix: str) -> int:
+    """Where `results_log`/`notes_windows` should start scanning ``b``.
+
+    Restricted to ``.opj`` (CPYA): its block-stream framing lets
+    `tree._find_tail_start` locate exactly where the free-text tail begins
+    (results-log records and notes windows both live there -- see the
+    module docstring's ``_skip_notes`` reference), and the real corpus
+    confirms every match sits within a few hundred bytes of that boundary.
+
+    ``.opju`` (CPYUA) uses a different, FPC-compressed column codec with no
+    equivalent boundary function, and the corpus has no full-size `.opju`
+    results-log specimen to verify a tail-only property against (its two
+    notes-window specimens are ~4 KB, too small for a restriction to matter)
+    -- so it (and any other/unknown suffix) keeps the full-buffer scan.
+    ``suffix=""`` (the default on both public functions) always full-scans,
+    so direct callers that don't know/care about the container type --
+    including every synthetic-bytes test in ``test_io_origin_project.py`` --
+    are unaffected.
+
+    Never raises: a tail that fails to parse (older/corrupt/unexpected
+    containers) degrades to a full scan, same "degrade, never guess"
+    convention as `tree.opj_project_dates`/`tree.opj_folder_paths`.
+    """
+    if suffix != ".opj":
+        return 0
+    try:
+        tail = _find_tail_start(b)
+    except _TailParseError:
+        return 0
+    return max(0, tail - _TAIL_SAFETY_MARGIN)
+
+
+def results_log(b: bytes, *, suffix: str = "") -> str:
     """The project's results-log text, or ``""`` when none is present.
 
     Only printable runs containing a timestamped record header qualify —
     OriginStorage XML, LabTalk scripts, and other internal text never match
-    the record shape, so nothing is scraped speculatively.
+    the record shape, so nothing is scraped speculatively. ``suffix`` (e.g.
+    ``".opj"``) restricts the scan to the structurally-derived tail where a
+    match can actually occur (see `_tail_scan_start`); omit it (or pass
+    ``""``) to scan the whole buffer.
     """
+    start = _tail_scan_start(b, suffix)
     parts: list[str] = []
     total = 0
-    for m in _RUN.finditer(b):
+    for m in _RUN.finditer(b, start):
         run = m.group(0)
         if not _RECORD.search(run):
             continue
@@ -138,18 +190,20 @@ def _decode_note(raw: bytes) -> str | None:
     return None
 
 
-def notes_windows(b: bytes) -> dict[str, str]:
+def notes_windows(b: bytes, *, suffix: str = "") -> dict[str, str]:
     """Map notes-window name -> its free text (``\\r\\n`` normalized to ``\\n``).
 
     Recognizes only the exact contiguous ``93 <nl> <name> 00 0a <tl> <text>
     00`` framing (see module docstring). Every candidate must pass a
     printable-character + internal-junk-token filter, so OriginStorage XML
     and storage blobs never masquerade as user notes. Returns ``{}`` when no
-    notes window is present.
+    notes window is present. ``suffix`` restricts the scan the same way
+    `results_log` does -- see `_tail_scan_start`.
     """
     out: dict[str, str] = {}
     n = len(b)
-    for m in re.finditer(rb"\x93", b):
+    start = _tail_scan_start(b, suffix)
+    for m in _WINDOW_MARK.finditer(b, start):
         p = m.start()
         if p + 2 >= n:
             continue

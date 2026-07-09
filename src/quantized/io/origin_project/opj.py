@@ -42,7 +42,13 @@ from quantized.io.origin_project.container import (
 )
 from quantized.io.origin_project.windows import BookMeta, ColumnMeta, window_metadata
 
-__all__ = ["read_opj", "read_opj_books"]
+__all__ = [
+    "build_opj_books",
+    "build_opj_primary",
+    "parse_opj",
+    "read_opj",
+    "read_opj_books",
+]
 
 _V = TypeVar("_V")
 
@@ -317,8 +323,13 @@ _ParseResult = tuple[
 ]
 
 
-def _parse(path: Path) -> _ParseResult:
-    b = path.read_bytes()
+def _parse(path: Path, *, raw: bytes | None = None) -> _ParseResult:
+    """Decode the project once: numeric/text/report column groups + window
+    metadata. ``raw`` lets a caller that already has the file's bytes (e.g.
+    :func:`parse_opj`'s callers in ``origin_project/__init__.py``) skip a
+    second disk read; ``None`` (the default) reads ``path`` itself, unchanged
+    from before."""
+    b = path.read_bytes() if raw is None else raw
     if not b.startswith(b"CPYA"):
         raise fallback(path, f"'{path.name}' does not look like a CPYA .opj (bad header).")
     columns, text_columns, report_columns = _columns(b)
@@ -331,15 +342,37 @@ def _parse(path: Path) -> _ParseResult:
     return books, text_books, report_books, books_meta, _inventory(books, books_meta, report_books)
 
 
-def read_opj(path: Path) -> DataStruct:
-    """The single-DataStruct contract: the largest workbook (inventory in metadata).
+def _primary_key(books: OrderedDict[str, Columns]) -> str:
+    """The book :func:`read_opj`/:func:`build_opj_primary` treat as *the*
+    primary dataset: the largest workbook by total (pre-padding) column
+    length, never a sheet pseudo-book (``Book@N``) unless every book is one.
 
-    Extra-sheet pseudo-books (``Book@N`` — often fit tables/curves) never win
-    the primary slot over measured sheet-1 data, however large they are.
+    Extracted from ``read_opj`` so a single :func:`_parse`/:func:`parse_opj`
+    result can serve both the primary DataStruct and the full per-book list
+    (:func:`build_opj_books`) without parsing the project twice — the routes
+    import path (``read_origin_project_all``) needs both.
     """
-    books, text_books, report_books, books_meta, inventory = _parse(path)
     primary_pool = [k for k in books if "@" not in k] or list(books)
-    primary = max(primary_pool, key=lambda k: sum(len(v) for _, v in books[k]))
+    return max(primary_pool, key=lambda k: sum(len(v) for _, v in books[k]))
+
+
+def parse_opj(path: Path, *, raw: bytes | None = None) -> _ParseResult:
+    """Public single-parse entry point: the same intermediate :func:`_parse`
+    produces, exposed so a caller that needs BOTH the primary book
+    (:func:`build_opj_primary`) and every book (:func:`build_opj_books`) —
+    the routes import path — can parse the project once and build each
+    independently, instead of each of :func:`read_opj`/:func:`read_opj_books`
+    parsing it on their own."""
+    return _parse(path, raw=raw)
+
+
+def build_opj_primary(parsed: _ParseResult) -> DataStruct:
+    """Build the primary (largest) book's DataStruct from an already-
+    :func:`parse_opj`'d project — the same selection :func:`read_opj`
+    performs, factored out so it can share a parse with
+    :func:`build_opj_books`."""
+    books, text_books, report_books, books_meta, inventory = parsed
+    primary = _primary_key(books)
     return _build_book(
         primary,
         books[primary],
@@ -350,8 +383,10 @@ def read_opj(path: Path) -> DataStruct:
     )
 
 
-def read_opj_books(path: Path) -> list[DataStruct]:
-    """Every workbook in the project as its own DataStruct (plan item 3).
+def build_opj_books(parsed: _ParseResult) -> list[DataStruct]:
+    """Build every book's DataStruct from an already-:func:`parse_opj`'d
+    project — identical construction (and order) to :func:`read_opj_books`,
+    factored out so it can share a parse with :func:`build_opj_primary`.
 
     A sheet made entirely of report-sheet columns (plan item 4 — e.g. a fit's
     "FitNL1" report) has no plausible-numeric columns at all, so it never
@@ -359,7 +394,7 @@ def read_opj_books(path: Path) -> list[DataStruct]:
     ``text_books``, for the analogous inline-text case) below still surfaces
     it as its own pseudo-book rather than dropping the whole sheet.
     """
-    books, text_books, report_books, books_meta, inventory = _parse(path)
+    books, text_books, report_books, books_meta, inventory = parsed
     keys = list(books)
     keys += [k for k in text_books if k not in books and k not in keys]
     keys += [k for k in report_books if k not in books and k not in keys]
@@ -375,3 +410,24 @@ def read_opj_books(path: Path) -> list[DataStruct]:
         for k in keys
         if books.get(k) or text_books.get(k) or report_books.get(k)
     ]
+
+
+def read_opj(path: Path) -> DataStruct:
+    """The single-DataStruct contract: the largest workbook (inventory in metadata).
+
+    Extra-sheet pseudo-books (``Book@N`` — often fit tables/curves) never win
+    the primary slot over measured sheet-1 data, however large they are.
+    """
+    return build_opj_primary(_parse(path))
+
+
+def read_opj_books(path: Path) -> list[DataStruct]:
+    """Every workbook in the project as its own DataStruct (plan item 3).
+
+    A sheet made entirely of report-sheet columns (plan item 4 — e.g. a fit's
+    "FitNL1" report) has no plausible-numeric columns at all, so it never
+    appears as a key in ``books``; the union with ``report_books`` (and
+    ``text_books``, for the analogous inline-text case) below still surfaces
+    it as its own pseudo-book rather than dropping the whole sheet.
+    """
+    return build_opj_books(_parse(path))

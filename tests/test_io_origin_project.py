@@ -1912,6 +1912,81 @@ def test_notes_windows_recovered_from_synthetic() -> None:
     assert len(long_body.encode("utf-8")) > 127  # exercises the 2-byte varint path
 
 
+def test_tail_scan_start_excludes_bulk_region_before_margin() -> None:
+    """Synthetic proof that the ``.opj`` tail restriction (perf fix: restrict
+    provenance scans to the window tail) actually excludes a match placed
+    deep inside the bulk-data block stream -- well before the structurally-
+    derived tail boundary minus its safety margin -- while still finding a
+    match placed after the true tail boundary. A no-op restriction (or one
+    that silently full-scans) would make ``"early_op" not in restricted``
+    fail; a too-aggressive cut would make ``"late_op" in restricted`` fail.
+    """
+    from quantized.io.origin_project.notes import _TAIL_SAFETY_MARGIN, results_log
+    from quantized.io.origin_project.tree import _find_tail_start
+
+    early = (
+        b'[1/1/2001 0:00:00 "" (0)]\r\n'
+        b"early_op(early_op)\r\n"
+        b'  Input\r\n    iy(Input) = [Book1]Sheet1!(C"H",M)\r\n'
+    )
+    late = (
+        b'[1/2/2001 0:00:00 "" (1)]\r\n'
+        b"late_op(late_op)\r\n"
+        b'  Input\r\n    iy(Input) = [Book1]Sheet1!(C"H",M)\r\n'
+    )
+    # One oversized (bigger than the safety margin) CPYA block holding `early`
+    # near its start; `late` is appended AFTER the block closes, breaking the
+    # block-stream framing so `_find_tail_start` stops exactly there.
+    bulk_len = _TAIL_SAFETY_MARGIN + 512 * 1024
+    bulk_payload = b"\x00" * 64 + early + b"\x00" * (bulk_len - 64 - len(early))
+    blob = b"CPYA 4.3380 188 W64 #\n" + _block(bulk_payload) + late
+
+    tail = _find_tail_start(blob)
+    early_pos = blob.index(early)
+    late_pos = blob.index(late)
+    assert early_pos < tail - _TAIL_SAFETY_MARGIN  # sanity: truly outside the scan window
+    assert late_pos >= tail  # sanity: truly inside the free-text tail
+
+    full = results_log(blob, suffix="")
+    assert "early_op" in full and "late_op" in full  # unrestricted scan sees both
+
+    restricted = results_log(blob, suffix=".opj")
+    assert "late_op" in restricted
+    assert "early_op" not in restricted
+
+
+def test_tail_scan_start_full_scan_for_opju_and_unknown_suffix() -> None:
+    """``.opju`` (no equivalent block-stream boundary function) and any other
+    suffix always scan the whole buffer -- only ``.opj`` gets the tail
+    restriction (see ``notes.py``'s ``_tail_scan_start`` docstring)."""
+    from quantized.io.origin_project.notes import _tail_scan_start
+
+    blob = b"CPYA 4.3380 188 W64 #\n" + _block(b"\x00" * (3 * 1024 * 1024)) + b"tail marker"
+    assert _tail_scan_start(blob, ".opju") == 0
+    assert _tail_scan_start(blob, "") == 0
+    assert _tail_scan_start(blob, ".unknown") == 0
+
+
+def test_tail_scan_start_clamps_to_zero_for_small_files() -> None:
+    """A ``.opj`` file smaller than the safety margin always scans from byte
+    0 (``tail - margin`` would go negative) -- covers every small synthetic
+    ``.opj`` blob built elsewhere in this test module."""
+    from quantized.io.origin_project.notes import _tail_scan_start
+
+    assert _tail_scan_start(_synthetic_opj(), ".opj") == 0
+
+
+def test_tail_scan_start_falls_back_to_full_scan_on_unparseable_tail() -> None:
+    """A buffer with no header line at all (so ``tree._find_tail_start`` can't
+    even locate the block stream) degrades to a full scan rather than
+    raising -- the same "degrade, never guess" contract as
+    ``tree.opj_project_dates``/``tree.opj_folder_paths``."""
+    from quantized.io.origin_project.notes import _tail_scan_start
+
+    assert _tail_scan_start(b"no newline anywhere in this buffer at all", ".opj") == 0
+    assert _tail_scan_start(b"", ".opj") == 0
+
+
 @pytest.mark.realdata
 def test_realdata_notes_probe_specimen() -> None:
     """The known-content notes specimen recovers its exact planted text and
