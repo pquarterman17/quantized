@@ -291,6 +291,15 @@ body {
 .qzk-grid-rownum { background: var(--surface-1); color: var(--text-faint); text-align: center; cursor: pointer; }
 .qzk-grid-footer .qzk-grid-rownum { cursor: default; }
 
+/* sheet tab strip (components/Stage/worksheet/SheetTabs) — Origin's own
+   bottom worksheet-tab convention for a multi-sheet workbook; hidden entirely
+   for non-Origin / single-sheet datasets. */
+.qzk-sheet-tabs { display: flex; align-items: center; gap: 2px; background: var(--surface-1); border-top: 1px solid var(--border-soft); padding: 0 var(--pad); height: 26px; overflow-x: auto; flex-shrink: 0; }
+.qzk-sheet-tab { display: flex; align-items: center; gap: 5px; padding: 3px 10px; font-size: var(--font-size-sm); color: var(--text-faint); border: none; border-top: 2px solid transparent; background: none; cursor: pointer; white-space: nowrap; }
+.qzk-sheet-tab:hover { color: var(--text-dim); }
+.qzk-sheet-tab.active { color: var(--text); border-top-color: var(--accent); background: var(--surface-0); }
+.qzk-sheet-tab-num { font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-faint); }
+
 /* ── inspector ── */
 .qzk-inspector { background: var(--surface-1); border-left: 1px solid var(--border-soft); overflow-y: auto; padding: var(--pad); display: flex; flex-direction: column; gap: var(--pad); }
 .qzk-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: var(--font-size-sm); color: var(--text-dim); padding: 2px 0; }

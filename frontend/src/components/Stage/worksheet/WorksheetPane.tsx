@@ -14,6 +14,7 @@ import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import ContextMenu from "../../overlays/ContextMenu";
 import GridViewport from "./GridViewport";
+import SheetTabs from "./SheetTabs";
 import { useWorksheetView } from "./useWorksheetView";
 import WorksheetFilterBar from "./WorksheetFilterBar";
 import WorksheetToolbar from "./WorksheetToolbar";
@@ -142,6 +143,8 @@ function WorksheetPaneView({ ds }: { ds: Dataset }) {
           }
         />
       )}
+
+      <SheetTabs datasetId={ds.id} />
     </div>
   );
 }
