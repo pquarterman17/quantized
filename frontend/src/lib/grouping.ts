@@ -61,6 +61,19 @@ export interface OriginSheetGroup {
   members: Dataset[];
 }
 
+/** The import "family" a dataset belongs to, for SCOPING a grouping key only
+ *  (never displayed): the `"<stem>:"` prefix `useApp.importFiles` gives each
+ *  book of a multi-book Origin import (see `originBookFamilies`), or the
+ *  dataset's own name when there's no such prefix — which is unique per
+ *  dataset, so an ungrouped dataset never collides with anything. This is
+ *  what stops two DIFFERENT Origin imports that both happen to contain a
+ *  "Book1" (Origin's own default naming) from merging into one sheet group
+ *  (WORKSHEET_PLAN item 5 hardening / "originSheetGroups keying collision"). */
+function importStem(d: Dataset): string {
+  const i = d.name.indexOf(":");
+  return i < 0 ? d.name : d.name.slice(0, i);
+}
+
 /** The sheet number encoded in a dataset's `origin_book` metadata:
  *  `"Book4"` → 1 (the base book, i.e. sheet 1), `"Book4@3"` → 3. Datasets
  *  with no `origin_book` metadata (not part of any Origin import) → 1. */
@@ -80,22 +93,27 @@ export function originSheetNumber(d: Dataset): number {
 export function originSheetGroups(items: Dataset[]): OriginSheetGroup[] {
   const order: string[] = [];
   const buckets = new Map<string, Dataset[]>();
+  const parentOf = new Map<string, string>(); // bucket key -> displayed parent name
   for (const d of items) {
     const raw = (d.data.metadata as Record<string, unknown> | undefined)?.origin_book;
     if (typeof raw !== "string" || !raw) continue;
     const parent = raw.split("@")[0] || raw;
-    let bucket = buckets.get(parent);
+    // Scope the bucket by import stem too — "Book1" from one .opj and
+    // "Book1" from an unrelated .opj must stay two separate groups.
+    const key = `${importStem(d)}::${parent}`;
+    let bucket = buckets.get(key);
     if (!bucket) {
       bucket = [];
-      buckets.set(parent, bucket);
-      order.push(parent);
+      buckets.set(key, bucket);
+      parentOf.set(key, parent);
+      order.push(key);
     }
     bucket.push(d);
   }
   return order
-    .map((parent) => ({
-      parent,
-      members: [...buckets.get(parent)!].sort((a, b) => originSheetNumber(a) - originSheetNumber(b)),
+    .map((key) => ({
+      parent: parentOf.get(key)!,
+      members: [...buckets.get(key)!].sort((a, b) => originSheetNumber(a) - originSheetNumber(b)),
     }))
     .filter((g) => g.members.length > 1);
 }

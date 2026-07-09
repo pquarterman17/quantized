@@ -178,86 +178,14 @@ Selection→plot (Stage C):
   batched endpoint only if it hurts.
 - **`originSheetGroups` keying collision:** two different imported projects
   can both contain a "Book1" — the sheet groups would merge across
-  projects. Item 5 hardens the grouping (scope the parent key by import
-  stem) with a regression test in `grouping.test`.
+  projects. **RESOLVED** (see Completed #5) — the bucket key is now scoped
+  by import stem, with a regression test in `grouping.test`.
 
 ---
 
 ## Tier 1 — High Impact
 
-1. **Pure windowing math + column-metadata helpers** — (M) the two
-   dependency-free libraries everything else builds on.
-   - [ ] `lib/gridwindow.ts`: scroll offsets + viewport size + fixed row
-         height / column width → visible index ranges, translate offsets,
-         spacer dimensions; overscan; degenerate-viewport (jsdom) fallback;
-         unit tests for boundaries (top/bottom, exact-fit, tiny viewport)
-   - [ ] `lib/columnmeta.ts`: per-value-column designation / comment /
-         Origin short name aligned by `origin_column_names` (null-safe for
-         non-Origin data); unit tests incl. missing/partial metadata
-   - [ ] Refactor `lib/errorbars.ts` (`originErrKeys`,
-         `originHiddenChannels`) to read alignment through `columnmeta` —
-         behaviour-identical, existing `errorbars.test.ts` stays green
-
-2. **Virtualized grid subtree — kill `MAX_ROWS`** — (L) replace
-   `WorksheetTable.tsx` with `components/Stage/worksheet/` (the workshop
-   pattern), every existing grid feature preserved, each file ≤400 lines.
-   - [ ] `GridViewport.tsx`: scroll container, spacer, windowed layer,
-         sticky header / row-number gutter / corner; row + column windowing
-         from `lib/gridwindow`; ARIA grid roles
-   - [ ] `GridHeader.tsx`: header cells (labels, units, sort marks, ƒx +
-         remove button, context-menu hook) — designation/comment display
-         lands in item 4
-   - [ ] `useCellEdit.ts` + row/cell rendering: double-click edit →
-         `setCellValue`, Enter/Esc/blur semantics, computed-column
-         read-only dimming, mask (#50) / filter-out (#53) / selection
-         styling via `lib/rowstate` reads ONLY
-   - [ ] `GridStatsFooter.tsx`: sticky footer, stats over `analysisRows`
-         (unchanged fetch), "ignore"-role blanking preserved
-   - [ ] Remove `MAX_ROWS` + the "showing N of M" banner; TSV copy still
-         materializes ALL kept rows (data op, not DOM)
-   - [ ] `Worksheet.test.tsx` green (role queries adjusted, no coverage
-         lost) + new tests: windowed rendering, edit-in-window, scroll math
-         via the pure lib
-
-3. **Container split: `useWorksheetView` + prop-driven `WorksheetPane`** —
-   (M) thin the 395-line container BEFORE items 4–7 add to it; this split
-   is also most of Stage D's mountability (item 11 verifies it).
-   - [ ] `useWorksheetView.ts`: filter/sort/order/analysisRows/stats state
-         + the extract/copy actions, taking the dataset as an argument
-   - [ ] `worksheetMenus.ts` (or equivalent): column/row context-menu item
-         builders extracted
-   - [ ] `WorksheetPane.tsx` renders toolbar + filter bar + grid for an
-         explicit `datasetId` prop; `Worksheet.tsx` becomes the thin
-         stage-tab wrapper feeding `activeId` — no `useActiveDataset` reads
-         inside the subtree
-   - [ ] Relocate `WorksheetToolbar` / `WorksheetFilterBar` into the
-         subtree (git mv, keep history); all files ≤400, no new pins
-
-4. **Origin designation + comment display in headers** — (S) the decoded
-   metadata finally visible where Origin users look for it.
-   - [ ] Designation badge in the header role line (X · Y · yEr · xEr ·
-         Label · Disregard) from `lib/columnmeta`, replacing the bare
-         channel letter when an Origin short name exists (true short name,
-         not the formula letter); x column keeps its X badge
-   - [ ] Column comment as a second header line, truncated, full text in
-         the tooltip; "Disregard"/"Label" columns dimmed like `channelRoles`
-         columns are today
-   - [ ] Tests: designation/comment rendering, non-Origin datasets
-         unchanged (no badge noise)
-
-5. **Sheet tab strip (book container)** — (M) Origin book families
-   navigable inside the Worksheet tab, composing over sibling datasets.
-   - [ ] `SheetTabs.tsx` in the subtree: bottom strip listing the active
-         dataset's `originSheetGroups` siblings (sheet number + long-name
-         note from `origin_book_long`); active sheet highlighted; click →
-         `setActive` (verified: stage tab stays "worksheet"; plot view
-         reset = today's Library-click semantics, documented)
-   - [ ] Hidden for non-Origin / single-sheet datasets; per-sheet
-         masks/filters/formulas naturally per-Dataset (no shared state)
-   - [ ] Harden `grouping.ts` sheet-group keying against same-named books
-         from different imports (scope by import stem) + regression test
-   - [ ] Tests: strip presence/absence, switch updates `activeId`, grid
-         re-renders the new sheet
+(all shipped — see `## Completed`)
 
 ## Tier 2 — Medium Impact
 
@@ -331,3 +259,35 @@ Selection→plot (Stage C):
     question is asked once, with usage evidence, not re-litigated ad hoc.
 
 ## Completed
+
+- ~~**#1 Pure windowing math + column-metadata helpers**~~ (2026-07-09) —
+  `lib/gridwindow.ts` (visible-plus-overscan window per axis, degenerate-
+  viewport fallback, unit-tested boundaries) + `lib/columnmeta.ts` (shared
+  designation/comment/short-name alignment); `lib/errorbars.ts` refactored to
+  read through it — `errorbars.test.ts` unchanged and green.
+- ~~**#2 Virtualized grid subtree — kill `MAX_ROWS`**~~ (2026-07-09) —
+  `WorksheetTable.tsx` replaced by `components/Stage/worksheet/`
+  (GridViewport/GridHeader/GridRow/GridStatsFooter/useCellEdit), div-based
+  ARIA grid, fixed row height (`--row-h` token) + uniform column width,
+  double leading/trailing spacer (no absolute positioning needed). All 28
+  existing `Worksheet.test.tsx` cases pass with zero changes; added
+  `GridViewport.test.tsx` (windowed rendering, scroll-driven windowing,
+  edit-in-window against a real measured viewport).
+- ~~**#3 Container split**~~ (2026-07-09) — `useWorksheetView.ts` (state) +
+  `worksheetMenus.ts` (menu builders) + `WorksheetPane(datasetId)` (thin,
+  no `useActiveDataset` reads in the subtree); `Worksheet.tsx` is now a
+  ~15-line stage-tab wrapper. `WorksheetToolbar`/`WorksheetFilterBar`
+  relocated via `git mv` (history kept). Landed in the same commit as #2 —
+  the split IS how the new grid wires into the app.
+- ~~**#4 Origin designation + comment display in headers**~~ (2026-07-09) —
+  `GridHeader` shows a designation badge (X/Y/yEr/xEr/Label/Disregard) in
+  place of the bare channel letter when `columnmeta` decodes one, plus a
+  truncated comment line (full text in the tooltip); `channelRoles` still
+  wins display priority; non-Origin datasets unchanged (no badge noise).
+  Read-only per owner decision D2.
+- ~~**#5 Sheet tab strip**~~ (2026-07-09) — `SheetTabs.tsx`: bottom strip
+  over `originSheetGroups` siblings, click → `setActive`, hidden for
+  non-Origin/single-sheet datasets. Also hardened `grouping.ts`'s sheet-group
+  bucket key (scoped by import stem via a new `importStem` helper) so two
+  unrelated imports sharing Origin's default "Book1" name can't merge into
+  one group — regression test added.

@@ -81,6 +81,23 @@ describe("originSheetGroups", () => {
     expect(originSheetGroups(items).map((g) => g.parent)).toEqual(["Book4", "Book7"]);
   });
 
+  it("keeps two imports' same-named books ('Book1') as separate groups (item 5 hardening)", () => {
+    // Origin's own default naming means two unrelated .opj files can each
+    // contain a literal "Book4" — the groups must not merge across imports.
+    const items = [
+      book("a1", "XRD:Book4", "Book4"),
+      book("a2", "XRD:Book4 (sheet 2)", "Book4@2"),
+      book("b1", "Moke:Book4", "Book4"),
+      book("b2", "Moke:Book4 (sheet 2)", "Book4@2"),
+    ];
+    const groups = originSheetGroups(items);
+    expect(groups).toHaveLength(2);
+    expect(groups[0].parent).toBe("Book4");
+    expect(groups[0].members.map((d) => d.id)).toEqual(["a1", "a2"]);
+    expect(groups[1].parent).toBe("Book4");
+    expect(groups[1].members.map((d) => d.id)).toEqual(["b1", "b2"]);
+  });
+
   it("keeps a group's sheets adjacent when the list is already in import order", () => {
     // useApp.importFiles appends `data.books` in the backend's order, which
     // already lists sheet 1 before sheet 2/3 of the same workbook (verified
