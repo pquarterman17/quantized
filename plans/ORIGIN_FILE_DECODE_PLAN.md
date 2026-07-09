@@ -256,9 +256,30 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 2 — Medium Impact
 
+(items 40-42 booked 2026-07-09 from the first #39 gallery run on PNR.opj)
+
+40. **Unresolved figure families** — (M) 6 oracle-exported graphs have no
+    quantized family (`Graph30`–`Graph33`, `PNRDWMerge`, `PNRmerge_Jan16`)
+    and 2 families (`0p023`, `Graph46`) fail to resolve on an unmatched
+    `"Pd"` source hint (a book that never maps to an imported dataset).
+    Diagnose the family-resolution gap; likely one root cause.
+
+41. **Layer-region shading + composite title objects** — (M) `Graph1`
+    (SLD profile) renders the step curves but drops the coloured layer
+    bands (SiO2/Pt/YIG/Py/Pt/Air region rectangles) and the composite
+    title annotation — a graphic-object record class we don't decode.
+
+42. **Graph25 anomalies: extra curves + ~10× x-range** — (M) quantized
+    plots 2 series Origin's own render hides (undecoded per-curve hidden
+    flag?) and the x-range differs ~10× despite the identical
+    "Q (nm⁻¹)" label (suspect nm⁻¹/Å⁻¹ handling or the wrong layer's
+    axis record). INVESTIGATE before fixing — the structural checker
+    can't catch this class (it verifies our apply-wiring, not decode
+    correctness vs Origin ground truth).
+
 ### Tier 3 — Nice-to-Have
 
-(all W3 items shipped — see Completed)
+(all prior W3 items shipped — see Completed)
 ~~35. **Figure curve→dataset binding**~~ **CLOSED 2026-07-04** — see
 Completed. (The multi-day decode trail — anchor-record discovery, oracle
 rework, near-miss exclusions, and the 0x01-subtype close — lives in
