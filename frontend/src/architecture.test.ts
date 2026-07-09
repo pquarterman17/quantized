@@ -45,7 +45,9 @@ const TSX_CEILING = 400;
 // path-suffix -> grandfathered max (exact current line count). RATCHET DOWN ONLY.
 const GRANDFATHERED: Record<string, number> = {
   "/App.tsx": 954, // root orchestrator; decompose (PROJECT_ORGANIZATION_PLAN)
-  "/components/Stage/PlotStage.tsx": 491, // extract plot-tool wiring next
+  // PlotStage.tsx's pin is GONE (MULTI_PLOT_PLAN #1, 2026-07-09): the uPlot
+  // lifecycle + fetch/compose pipeline moved to PlotViewport.tsx /
+  // usePlotPayload.ts, dropping it to 312 lines — under the generic ceiling.
   "/components/workshops/calculators/ThinFilmTab.tsx": 442, // split calc tabs
 };
 

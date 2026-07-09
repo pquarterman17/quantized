@@ -1,27 +1,19 @@
-// The hero canvas: a uPlot instance wired to the active dataset via the
-// backend /api/plot/series route (offline fallback builds columns locally).
+// The hero canvas: the focused-window composition over the render core
+// (PlotViewport) — reads the ~40 singleton plot-view fields from the store,
+// runs the fetch/compose pipeline (usePlotPayload), and renders the toolbar /
+// legend / readouts / context menu chrome around the uPlot instance.
 // Re-styles on theme/accent change; resizes to its container.
+// (MULTI_PLOT_PLAN item 1 / PROJECT_ORGANIZATION_PLAN #10: the uPlot lifecycle
+// and the fetch+compose pipeline now live in PlotViewport.tsx / usePlotPayload.ts
+// — this file is the thin store-reading wrapper around them.)
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import uPlot from "uplot";
-import "uplot/dist/uPlot.min.css";
+import { useEffect, useRef, useState } from "react";
+import type uPlot from "uplot";
 
-import {
-  categoricalXPayload,
-  clampPlottedRange,
-  composeDisplayPayload,
-  effectiveChannels,
-  fetchPlot,
-  rowsInXRange,
-  type PlotPayload,
-} from "../../lib/plotdata";
-import { channelModelingType } from "../../lib/modeling";
-import { droppedRows } from "../../lib/rowstate";
-import { buildErrorColumns } from "../../lib/errorbars";
+import { clampPlottedRange, rowsInXRange } from "../../lib/plotdata";
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { resolveTemplate } from "../../lib/plotTemplates";
-import { buildOpts } from "../../lib/uplotOpts";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -33,10 +25,12 @@ import PlotLegend from "./PlotLegend";
 import PlotReadouts from "./PlotReadouts";
 import PlotResultChips from "./PlotResultChips";
 import PlotToolbar from "./PlotToolbar";
+import PlotViewport from "./PlotViewport";
 import PolarStage from "./PolarStage";
 import StatStage from "./StatStage";
 import { useAxisDrop } from "./useAxisDrop";
 import { useGadgetChip } from "./useGadgetChip";
+import { usePlotPayload } from "./usePlotPayload";
 import { usePlotStageActions } from "./usePlotStageActions";
 
 export default function PlotStage() {
@@ -115,226 +109,32 @@ export default function PlotStage() {
   // Peak wizard click-on-plot marker editing (item 5) — non-null only while
   // the wizard's step ② is live (see usePeakWizard's store bridge).
   const peakWizardEdit = useApp((s) => s.peakWizardEdit);
-  const hostRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
-  const [payload, setPayload] = useState<PlotPayload | null>(null);
   const [readout, setReadout] = useState<Readout | null>(null);
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
   const [statsSel, setStatsSel] = useState<RegionStats | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
-  // Rows dropped from the plot: manually excluded (#50) ∪ filter-failed (#53).
-  const dropped = useMemo(() => droppedRows(active), [active]);
-
-  // Fold overlays + exclusion mask + selection brush in (see composeDisplayPayload).
-  const displayPayload = useMemo(
-    () =>
-      payload
-        ? composeDisplayPayload(payload, {
-            id: active?.id ?? null,
-            waterfall,
-            dropped,
-            excludedDisplay,
-            fitOverlay,
-            baselineOverlay,
-            peakOverlay,
-            derivOverlay,
-            selection,
-          })
-        : null,
-    [
-      payload,
-      fitOverlay,
-      peakOverlay,
-      baselineOverlay,
-      derivOverlay,
-      waterfall,
-      active,
-      dropped,
-      excludedDisplay,
-      selection,
-    ],
-  );
-
-  // Channels actually drawn (y selection minus the x-axis channel), in order.
-  const plotted = useMemo(
-    () => (active ? effectiveChannels(active.data, yKeys, xKey, active.channelRoles, seriesOrder) : []),
-    [active, yKeys, xKey, seriesOrder],
-  );
-
-  // Map each display-series back to its dataset channel so the per-channel style
-  // overrides land on the right line. Plotted channels come first (in yKeys order,
-  // matching the backend), overlays after — those get `undefined` (defaults).
-  const styleList = useMemo(() => {
-    if (!displayPayload) return undefined;
-    return displayPayload.series.map((_, i) =>
-      i < plotted.length ? seriesStyles[plotted[i]] : undefined,
-    );
-  }, [displayPayload, plotted, seriesStyles]);
-
-  // Legend-rename overrides, aligned 1:1 with the display series (overlays keep
-  // their default labels). Drives the uPlot series label → legend, cursor
-  // readout, and solo-axis label all read the renamed string.
-  const labelList = useMemo(() => {
-    if (!displayPayload) return undefined;
-    return displayPayload.series.map((_, i) =>
-      i < plotted.length ? seriesLabels[plotted[i]] : undefined,
-    );
-  }, [displayPayload, plotted, seriesLabels]);
-
-  // Error-bar magnitudes per plotted series (keyed by uPlot data column = p+1).
-  const errorBars = useMemo(
-    () => (active ? buildErrorColumns(active.data, plotted, errKeys) : new Map<number, (number | null)[]>()),
-    [active, plotted, errKeys],
-  );
-
-  // Interactive-legend visibility, aligned 1:1 with the display series (overlays
-  // — index ≥ plotted.length — are never hidden).
-  const hidden = useMemo(
-    () =>
-      displayPayload?.series.map((_, i) => i < plotted.length && hiddenChannels.includes(plotted[i])) ??
-      undefined,
-    [displayPayload, plotted, hiddenChannels],
-  );
-
-  // Fetch series whenever the active dataset, scale, or channel roles change.
-  useEffect(() => {
-    let cancelled = false;
-    if (!active) {
-      setPayload(null);
-      return;
-    }
-    fetchPlot(active.data, yLog, xLog, plotted, y2Keys, xKey).then((p) => {
-      if (cancelled) return;
-      // xCategories producer (gap #20 residual): a categorical-typed x
-      // channel (nominal/ordinal — user override or inferred, see
-      // lib/modeling.ts) gets ordinal x positions + resolved category labels
-      // so lib/uplotOpts.ts's categoricalTickFormatter draws real tick names
-      // instead of the raw channel numbers. No-op for a continuous x/time axis
-      // (xKey === null, the time column, is never modeled/categorical).
-      const xType = xKey == null ? "continuous" : channelModelingType(active, xKey);
-      setPayload(categoricalXPayload(p, active.data, xKey, xType));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [active, yLog, xLog, plotted, y2Keys, xKey]);
-
-  // (Re)create the uPlot instance when payload / size / theme change.
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host || !displayPayload) {
-      plotRef.current?.destroy();
-      plotRef.current = null;
-      return;
-    }
-    const w = host.clientWidth || 600;
-    // uPlot's title div sits above the plot and its height is NOT counted in the
-    // height we pass, so reserve room for it (matches the .u-title CSS height) to
-    // keep the x-axis inside the overflow-hidden host.
-    const titleH = plotTitle.trim() ? 24 : 0;
-    const h = (host.clientHeight || 400) - titleH;
-    plotRef.current?.destroy();
-    plotRef.current = new uPlot(
-      buildOpts(displayPayload, {
-        width: w,
-        height: h,
-        yLog,
-        xLog,
-        xLim,
-        yLim,
-        xStep,
-        yStep,
-        y2Lim,
-        y2Log,
-        y2Step,
-        xFmt,
-        yFmt,
-        showGrid,
-        axisBox: showAxisBox,
-        fontSize: resolveTemplate(plotTemplate).fontSize,
-        // A publication template sets its own line width; the "screen" default
-        // defers to the user's Preferences default line width.
-        baseLineWidth:
-          plotTemplate === "screen" ? defaultLineWidth : resolveTemplate(plotTemplate).lineWidth,
-        defaultTrace,
-        steppedPaths: STEPPED_PATHS,
-        linearPaths: LINEAR_PATHS,
-        pointsPaths: POINTS_PATHS,
-        wheelZoom,
-        title: plotTitle,
-        xAxisLabel,
-        yAxisLabel,
-        y2AxisLabel,
-        refLines,
-        onRefLineMove: updateRefLine,
-        annotations,
-        seriesStyles: styleList,
-        seriesLabels: labelList,
-        errorBars,
-        hidden,
-        tool,
-        onReadout: setReadout,
-        onRegionSelect: (x0, x1) => {
-          // Clamp to the plotted x-extent → baseline workshop; then exit the mode.
-          const range = clampPlottedRange(displayPayload.data[0] as (number | null)[], x0, x1);
-          if (range) setRegionPicked(range);
-          setPlotTool("zoom");
-        },
-        // Plot-brush: dragged x-band → row indices (original order → worksheet).
-        onRangeSelect: (x0, x1) =>
-          setRowSelection(rowsInXRange(displayPayload.data[0] as (number | null)[], x0, x1)),
-        onMeasure: setMeasurement,
-        onStats: setStatsSel,
-        integral,
-        fwhmResult,
-        onIntegrate: setIntegral,
-        onFwhm: setFwhmResult,
-        // Read imperatively (not a reactive dependency below) — the plugin's
-        // own instance-local state tracks live drag moves between rebuilds;
-        // this only seeds a FRESH instance after some OTHER dep triggers one
-        // (e.g. a debounced fit landing). Keeping qfitRoi/gadgetCursors off the
-        // dependency list avoids rebuilding the whole plot (and orphaning the
-        // plugin's in-flight drag listeners) on every ROI/cursor move.
-        qfitRoi: useApp.getState().qfitRoi,
-        onRoiChange: setQfitRoi,
-        gadgetMode,
-        gadgetCursors: useApp.getState().gadgetCursors,
-        onCursorsChange: setGadgetCursors,
-        // Unlike qfitRoi/gadgetCursors, this is a normal reactive dep (below):
-        // it only changes on discrete add/remove clicks, not a live drag, so a
-        // plot rebuild per change (fresh marker positions in the plugin
-        // closure) is correct and cheap — see usePeakWizard's store bridge.
-        // The store bridge names its callbacks after the wizard functions
-        // they ARE (addPeakAt/removePeak); buildOpts uses this file's own
-        // on*-callback convention (onRoiChange, onCursorsChange, …) — adapt
-        // at this one narrow seam rather than picking one name across layers.
-        peakWizardEdit: peakWizardEdit && {
-          markers: peakWizardEdit.markers,
-          onAdd: peakWizardEdit.addPeakAt,
-          onRemove: peakWizardEdit.removePeak,
-        },
-      }),
-      displayPayload.data,
-      host,
-    );
-
-    const ro = new ResizeObserver(() => {
-      plotRef.current?.setSize({
-        width: host.clientWidth || w,
-        height: (host.clientHeight || 400) - titleH,
-      });
-    });
-    ro.observe(host);
-    return () => {
-      ro.disconnect();
-      plotRef.current?.destroy();
-      plotRef.current = null;
-    };
-    // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
-    // the cursor/drag config + plugins; gadgetMode swaps the qfit tool's plugin
-    // (ROI band vs paired cursors) — a discrete pick, not a live-drag value.
-  }, [displayPayload, yLog, xLog, xLim, yLim, xStep, yStep, y2Lim, y2Log, y2Step, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, y2AxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool, integral, fwhmResult, gadgetMode, peakWizardEdit]);
+  const { displayPayload, plotted, styleList, labelList, errorBars, hidden } = usePlotPayload({
+    active,
+    yLog,
+    xLog,
+    xKey,
+    yKeys,
+    y2Keys,
+    seriesOrder,
+    seriesStyles,
+    seriesLabels,
+    errKeys,
+    hiddenChannels,
+    waterfall,
+    excludedDisplay,
+    fitOverlay,
+    baselineOverlay,
+    peakOverlay,
+    derivOverlay,
+    selection,
+  });
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the
@@ -399,7 +199,78 @@ export default function PlotStage() {
       onContextMenu={onStageContextMenu}
       onAxisDrop={onAxisDrop}
     >
-      <div ref={hostRef} style={{ position: "absolute", inset: 8 }} />
+      <PlotViewport
+        plotRef={plotRef}
+        displayPayload={displayPayload}
+        theme={theme}
+        accent={accent}
+        yLog={yLog}
+        xLog={xLog}
+        xLim={xLim}
+        yLim={yLim}
+        xStep={xStep}
+        yStep={yStep}
+        y2Lim={y2Lim}
+        y2Log={y2Log}
+        y2Step={y2Step}
+        xFmt={xFmt}
+        yFmt={yFmt}
+        showGrid={showGrid}
+        axisBox={showAxisBox}
+        fontSize={resolveTemplate(plotTemplate).fontSize}
+        // A publication template sets its own line width; the "screen" default
+        // defers to the user's Preferences default line width.
+        baseLineWidth={plotTemplate === "screen" ? defaultLineWidth : resolveTemplate(plotTemplate).lineWidth}
+        defaultTrace={defaultTrace}
+        steppedPaths={STEPPED_PATHS}
+        linearPaths={LINEAR_PATHS}
+        pointsPaths={POINTS_PATHS}
+        wheelZoom={wheelZoom}
+        title={plotTitle}
+        xAxisLabel={xAxisLabel}
+        yAxisLabel={yAxisLabel}
+        y2AxisLabel={y2AxisLabel}
+        refLines={refLines}
+        onRefLineMove={updateRefLine}
+        annotations={annotations}
+        seriesStyles={styleList}
+        seriesLabels={labelList}
+        errorBars={errorBars}
+        hidden={hidden}
+        tool={tool}
+        onReadout={setReadout}
+        onRegionSelect={(x0, x1) => {
+          // Clamp to the plotted x-extent → baseline workshop; then exit the mode.
+          if (!displayPayload) return;
+          const range = clampPlottedRange(displayPayload.data[0] as (number | null)[], x0, x1);
+          if (range) setRegionPicked(range);
+          setPlotTool("zoom");
+        }}
+        // Plot-brush: dragged x-band → row indices (original order → worksheet).
+        onRangeSelect={(x0, x1) => {
+          if (!displayPayload) return;
+          setRowSelection(rowsInXRange(displayPayload.data[0] as (number | null)[], x0, x1));
+        }}
+        onMeasure={setMeasurement}
+        onStats={setStatsSel}
+        integral={integral}
+        fwhmResult={fwhmResult}
+        onIntegrate={setIntegral}
+        onFwhm={setFwhmResult}
+        // Read imperatively (not a reactive dependency in PlotViewport) — the
+        // plugin's own instance-local state tracks live drag moves between
+        // rebuilds; this only seeds a FRESH instance after some OTHER dep
+        // triggers one (e.g. a debounced fit landing). Keeping qfitRoi/
+        // gadgetCursors off PlotViewport's dependency list avoids rebuilding
+        // the whole plot (and orphaning the plugin's in-flight drag
+        // listeners) on every ROI/cursor move.
+        qfitRoi={useApp.getState().qfitRoi}
+        onRoiChange={setQfitRoi}
+        gadgetMode={gadgetMode}
+        gadgetCursors={useApp.getState().gadgetCursors}
+        onCursorsChange={setGadgetCursors}
+        peakWizardEdit={peakWizardEdit}
+      />
       {menu && <ContextMenu x={menu.x} y={menu.y} items={axesMenuItems()} onClose={() => setMenu(null)} />}
 
       {displayPayload && (
