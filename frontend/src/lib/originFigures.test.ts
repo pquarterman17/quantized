@@ -473,6 +473,23 @@ describe("originFigureAnnotations", () => {
     expect(anns.map((a) => a.text)).toEqual(["on layer 1", "on layer 2"]);
     expect(anns.map((a) => a.id)).toEqual(["figann-fig-0-0-0", "figann-fig-0-1-0"]);
   });
+
+  // Fix #3: the double-Y apply tags the UPPER layer's marks so they plot on
+  // y2 rather than the primary axis.
+  it("tags the upper layer's marks axis:1 when an axes array is given", () => {
+    const l1 = figure({ annotation_marks: [{ text: "lower", x: 1, y: 2 }] });
+    const l2 = figure({ annotation_marks: [{ text: "upper", x: 3, y: 4 }] });
+    const anns = originFigureAnnotations([l1, l2], "fig-0", [0, 1]);
+    expect(anns[0].axis).toBeUndefined(); // lower layer: primary axis, untagged
+    expect(anns[1].axis).toBe(1);
+  });
+
+  it("leaves every mark untagged (primary) when no axes array is given", () => {
+    const l1 = figure({ annotation_marks: [{ text: "lower", x: 1, y: 2 }] });
+    const l2 = figure({ annotation_marks: [{ text: "upper", x: 3, y: 4 }] });
+    const anns = originFigureAnnotations([l1, l2], "fig-0");
+    expect(anns.every((a) => a.axis === undefined)).toBe(true);
+  });
 });
 
 describe("originLegendPos", () => {

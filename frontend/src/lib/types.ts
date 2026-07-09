@@ -388,12 +388,19 @@ export type ChannelRole = "label" | "ignore";
 export type ModelingType = "continuous" | "ordinal" | "nominal";
 
 /** A text annotation pinned at a data coordinate (label a peak, a feature, a
- *  transition…). Drawn by the uPlot annotationPlugin as a dot + label. */
+ *  transition…). Drawn by the uPlot annotationPlugin as a dot + label.
+ *  `y` is always in the coordinate space named by `axis`. */
 export interface Annotation {
   id: string;
   x: number;
   y: number;
   text: string;
+  /** Which Y scale `y` is expressed in: 0/undefined = primary, 1 = secondary
+   *  (y2). Only ever set for the upper layer's marks in an Origin double-Y
+   *  apply (`originFigureAnnotations`); manual annotations never set it, so
+   *  they always plot on the primary axis. Ignored (falls back to the
+   *  primary axis) when the plot has no y2 scale. */
+  axis?: 0 | 1;
 }
 
 /** Axis tick number format. `auto` = uPlot's default; `fixed` = `toFixed(digits)`;

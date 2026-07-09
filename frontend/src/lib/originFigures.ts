@@ -272,11 +272,27 @@ export function resolveFigurePanels(
  *  ids). `applyOriginFigure` REPLACES the store's annotations with this —
  *  never accumulates — so switching or re-applying figures can't stack
  *  stale marks. Figures without marks yield [], which clears the plot. */
-export function originFigureAnnotations(figures: OriginFigure[], key: string): Annotation[] {
+export function originFigureAnnotations(
+  figures: OriginFigure[],
+  key: string,
+  /** Per-figure Y-scale tag (parallel to `figures`), for the double-Y apply:
+   *  `axes[i] === 1` routes figures[i]'s marks to the plot's y2 scale (see
+   *  `Annotation.axis` / `uplotOverlays.annotationPlugin`). Omitted/undefined
+   *  entries stay on the primary axis — the single-layer/spatial-panel apply
+   *  never passes this, so their marks are always untagged (primary). */
+  axes?: (0 | 1)[],
+): Annotation[] {
   const out: Annotation[] = [];
   figures.forEach((f, fi) => {
+    const axisTag = axes?.[fi];
     (f.annotation_marks ?? []).forEach((m, mi) => {
-      out.push({ id: `figann-${key}-${fi}-${mi}`, x: m.x, y: m.y, text: m.text });
+      out.push({
+        id: `figann-${key}-${fi}-${mi}`,
+        x: m.x,
+        y: m.y,
+        text: m.text,
+        ...(axisTag === 1 ? { axis: 1 as const } : {}),
+      });
     });
   });
   return out;
