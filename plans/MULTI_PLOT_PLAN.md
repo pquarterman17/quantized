@@ -292,6 +292,16 @@ pipeline, are in the app today). See `## Completed` below for items 3–5
     Worksheet stage tabs to window kinds so any document type can float
     in the canvas (the confirmed long-term direction); builds on item
     15's view-driven render modes — the endgame, schedule last.
+    - Cross-reference (plan hygiene, no duplicate booking): the worksheet
+      half of this item's mountability precondition is ALREADY satisfied —
+      `WORKSHEET_PLAN.md` item 11 (closed 2026-07-09) audited
+      `components/Stage/worksheet/` and confirmed `WorksheetPane(datasetId)`
+      has zero `useActiveDataset`/`s.activeId` reads in the subtree (only the
+      outer `Worksheet.tsx` wrapper, outside the subtree, supplies
+      `datasetId` from `activeId` today). The pre-existing `xKey`/`yKeys`/
+      `selection` singleton reads are a deliberate exception, unaffected by
+      that audit — making THOSE window-scoped is still this plan's item 15's
+      job. The actual window-kind promotion (this item) is still unbuilt.
 
 ## Completed
 
