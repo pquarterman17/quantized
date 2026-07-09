@@ -17,7 +17,12 @@ trustworthy (W7). Gap analysis: see Context.
 side-by-side comparison campaign from the owner's PNR.opj import testing;
 the four 2026-07-09 triage fix batches — perf quick wins, zero-tail
 wrap-around prune, log tick steps, y2/legend/multi-panel fidelity — land
-via feature branches and will be recorded in Completed on merge)
+via feature branches and will be recorded in Completed on merge; same day,
+item 40 CLOSED — the `#39` gallery run's 6 invisible merge-window graphs
+were a 3rd, previously-unrecognized layer head byte (`0x5f`), now decoded;
+item 42 investigated, root cause narrowed for both halves (an undecoded
+per-curve hidden flag; a real but unprovable-by-byte axis-unit-conversion
+gap), neither fixed — see item text + `docs/origin_project_format.md`)
 Previous: 2026-07-07 (item 34 CLOSED — the native `.opj` writer now
 loads in real Origin and re-exports value-exact, see Completed; item 35's
 stale W3 body text reconciled — the item was already CLOSED 2026-07-04 at
@@ -256,26 +261,44 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ### Tier 2 — Medium Impact
 
-(items 40-42 booked 2026-07-09 from the first #39 gallery run on PNR.opj)
-
-40. **Unresolved figure families** — (M) 6 oracle-exported graphs have no
-    quantized family (`Graph30`–`Graph33`, `PNRDWMerge`, `PNRmerge_Jan16`)
-    and 2 families (`0p023`, `Graph46`) fail to resolve on an unmatched
-    `"Pd"` source hint (a book that never maps to an imported dataset).
-    Diagnose the family-resolution gap; likely one root cause.
+(items 40-42 booked 2026-07-09 from the first #39 gallery run on PNR.opj;
+item 40 CLOSED same day, see Completed)
 
 41. **Layer-region shading + composite title objects** — (M) `Graph1`
     (SLD profile) renders the step curves but drops the coloured layer
     bands (SiO2/Pt/YIG/Py/Pt/Air region rectangles) and the composite
     title annotation — a graphic-object record class we don't decode.
 
-42. **Graph25 anomalies: extra curves + ~10× x-range** — (M) quantized
-    plots 2 series Origin's own render hides (undecoded per-curve hidden
-    flag?) and the x-range differs ~10× despite the identical
-    "Q (nm⁻¹)" label (suspect nm⁻¹/Å⁻¹ handling or the wrong layer's
-    axis record). INVESTIGATE before fixing — the structural checker
-    can't catch this class (it verifies our apply-wiring, not decode
-    correctness vs Origin ground truth).
+42. **Graph25 anomalies: extra curves + ~10× x-range** — (M) INVESTIGATED
+    2026-07-09, root cause narrowed for both halves, neither fixed (no
+    byte-provable mechanism found for either — see
+    `docs/origin_project_format.md` §6.3's two new gap entries for the
+    full evidence trail).
+    - **Extra curves**: real. `Graph25`'s book carries 6 curve anchors
+      per layer; 2 (`dR++`/`dR--`, `Y-error`-designated) are already
+      correctly hidden by the existing dataset-level
+      `originHiddenChannels` mechanism (unrelated to this item); the
+      other 2 (`T++`/`T--`, plain `Y`-designated `style="line"` curves)
+      are genuinely drawn by quantized but hidden in Origin's own render
+      (legend-only swatches) — confirmed on multiple sibling graphs
+      (`40Oe`, `7kOe`), not just `Graph25`. Searched the curve-anchor
+      record (group-role byte, style byte, symbol-kind, two exploratory
+      offsets) against both the confirmed-hidden pair AND an independent
+      confirmed-VISIBLE `style="line"` control (`Graph1`'s 4-curve SLD
+      profile) — no byte separates hidden from visible. Undecoded; needs
+      a dedicated RE pass with broader hidden-vs-visible ground truth.
+    - **~10× x-range**: real (re-verified by a direct zoomed-pixel read
+      of the oracle PNG's tick labels, ruling out an initial misreading
+      of that same image) — NOT a wrong-layer/wrong-offset bug (the
+      axis-range offsets are oracle-verified exact elsewhere in the
+      corpus). The book's raw Q column is natively Å⁻¹ (`x_unit`
+      metadata `"A-1"`) while the graph's own typed `x_title` reads
+      `"Q (nm⁻¹)"` — a real, project-wide unit-label mismatch — and
+      Origin's real render is ~10× wider than our raw-column plot,
+      exactly the Å⁻¹→nm⁻¹ conversion factor. No scale-factor byte field
+      was found in the layer record to decode this generally; a blind
+      "always ×10" heuristic keyed off the two text strings was
+      considered and rejected as unproven/overfit for this one project.
 
 ### Tier 3 — Nice-to-Have
 
@@ -379,6 +402,30 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**40. Unresolved figure families**~~ (2026-07-09) — one root cause,
+  fully diagnosed and fixed for the decodable half: `PNR.opj`'s 6
+  "missing" graphs (`Graph30`-`Graph33`/`PNRDWMerge`/`PNRmerge_Jan16`) are
+  Origin "Merge Graph Windows" results whose layer-continuation blocks
+  carry head byte `0x5f` (not `0x1f`/`0x17`), which `extract_figures`'s
+  window-vs-worksheet gate didn't recognize — the whole window produced
+  zero figures. Fixed: `_LAYER_HEAD_BYTES` now accepts `0x5f`
+  (`src/quantized/io/origin_project/figures.py`); all 6 now decode with
+  sane per-layer axis ranges/frames and curves that bind to real,
+  currently-imported books (verified via the independent `extract_curves`
+  anchor scan, not just axis-shaped numbers). The `"Pd"` unmatched-hint
+  half (`0p023`/`Graph46`) is NOT a decode bug: a full raw-file window
+  scan (223 headers) confirms no book named `"Pd"` exists anywhere in the
+  project — these two graphs' source workbook was deleted after they
+  were created, a genuine dangling Origin reference our decoder
+  correctly surfaces as unresolved rather than guesses at. See
+  `docs/origin_project_format.md` §6.1 (the `0x5f` finding) and §6.3 (the
+  `"Pd"` stale-reference finding) for the full evidence trail. New tests:
+  `test_synthetic_opj_merge_window_layer_head_byte_recognized` +
+  `test_realdata_pnr_merge_windows_recovered`
+  (`tests/test_io_origin_project.py`). Backend/origin suite green
+  (439 passed, 3 skipped). Frontend unaffected (generic figure-family
+  code, no changes needed).
 
 - ~~**PNR-triage import-perf batch (unbooked side-work)**~~ (2026-07-09)
   — merged to main as `917802a` (commits `16080ad`/`09e1ac1`/`d097c39`):

@@ -213,17 +213,36 @@ def _y_scale_flag(payload: bytes) -> bool | None:
 # structural evidence, not (yet) a generalized "any byte works" heuristic:
 # only these two exact values are recognized; anything else falls through
 # and is not treated as a layer boundary.
-_LAYER_HEAD_BYTES = (0x1F, 0x17)
+#
+# A THIRD value, 0x1f | 0x40 = 0x5f, marks every layer of an Origin "Merge
+# Graph Windows" result (decode-plan item 40, isolated 2026-07-09 on
+# PNR.opj's ``Graph30``-``Graph33``/``PNRDWMerge``/``PNRmerge_Jan16`` --
+# these 6 graph windows were previously invisible to `extract_figures`
+# entirely, since their FIRST post-header block already reads 0x5f, so the
+# window-vs-worksheet gate in `extract_figures` rejected them outright).
+# Every merged window's 0x5f blocks decode with the SAME fixed-offset axis
+# record `_build_layer` already reads (x/y from-to-step, the y-scale flag,
+# the source_hint cstring) -- confirmed by cross-checking the independent
+# `extract_curves` anchor scan over each window's span, which resolves real
+# curves against real, currently-imported books (e.g. `PNRDWMerge`'s 48
+# curves all bind to `DW*` books; `Graph31`'s 18 curves all bind to
+# `Book35`/`Book36`/`Book37`) -- not synthetic axis-shaped garbage. A merge
+# window's own layer count (2-9 in this corpus) is the total layer count
+# across every graph merged into it, exactly the existing multi-layer/
+# multi-panel model already built for genuine double-Y and stacked-panel
+# windows (`_build_layer` is agnostic to *why* a layer boundary exists).
+_LAYER_HEAD_BYTES = (0x1F, 0x17, 0x5F)
 
 
 def _is_layer_block(payload: bytes) -> bool:
-    """A layer-continuation block: head ``00 00 <0x1f|0x17> 00``, ≥90 B (the
-    axis-range triples' fixed offsets need at least that much). Graph windows
-    repeat this block once per layer (see module docstring); this same
-    detector both identifies a window header as a *graph* header (checked
-    against the block right after it -- always the first layer, always
-    0x1f) and finds every subsequent layer boundary inside one (0x1f or the
-    rarer 0x17 -- see ``_LAYER_HEAD_BYTES``)."""
+    """A layer-continuation block: head ``00 00 <0x1f|0x17|0x5f> 00``, ≥90 B
+    (the axis-range triples' fixed offsets need at least that much). Graph
+    windows repeat this block once per layer (see module docstring); this
+    same detector both identifies a window header as a *graph* header
+    (checked against the block right after it -- the first layer, 0x1f for
+    an ordinary graph or 0x5f for every layer of a merged one) and finds
+    every subsequent layer boundary inside one (0x1f, the rarer 0x17, or
+    0x5f -- see ``_LAYER_HEAD_BYTES``)."""
     return (
         len(payload) >= 90
         and payload[0] == 0

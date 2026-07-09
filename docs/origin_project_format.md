@@ -784,7 +784,7 @@ a window's span (from its header to the next window header, of either
 kind) now yields its own figure dict, with a new 1-based `"layer"` key;
 `"name"` repeats the window name across all its layers.
 
-*Layer-record repetition — two head-byte values, not one.* The
+*Layer-record repetition — three head-byte values, not one.* The
 layer-continuation block's 3rd payload byte is normally `0x1f` — every
 window's first layer, AND every subsequent **overlaid** layer (a double-Y
 graph's 2nd Y-axis on the *same* panel: validated on Moke's `Graph7`, both
@@ -798,12 +798,36 @@ on the same axes) — isolated on Moke's `Graph4`: layer 1 head `0x1f`
 every local `.opj` (Moke, XRD, SuperlatticeFits, PNR, hc2convert, XMCD,
 MnN_Diffusion_PNR) finds `0x17` nowhere except those 2 exact occurrences
 (`Graph4` and its copy inside the composite `Graph10`) — never outside a
-graph window's own span, and no third head-byte value anywhere. Both
-values decode identically otherwise (same axis-triple/hint/Y-scale-flag
-offsets); `figures.py`'s `_is_layer_block` accepts exactly `{0x1f, 0x17}`
-and nothing else — a window's first layer is always `0x1f` (used to
-distinguish a graph header from a worksheet header in the first place),
-so this widening cannot affect that detection.
+graph window's own span.
+
+A THIRD value, `0x5f` (= `0x1f | 0x40`), marks **every** layer of an
+Origin "Merge Graph Windows" result (decode-plan item 40, isolated
+2026-07-09 on `PNR.opj`) — unlike `0x17`, which only ever appears as a
+*subsequent* layer, `0x5f` appears as the FIRST post-header block too, so
+before this was recognized the window-vs-worksheet gate in
+`extract_figures` rejected these windows outright (their first
+post-header block didn't look like a layer at all) and they produced
+**zero** figures — the real-corpus gap behind `Graph30`-`Graph33`/
+`PNRDWMerge`/`PNRmerge_Jan16` (6 graph windows, invisible end to end).
+Confirmed genuine (not axis-shaped noise) two ways: the decoded axis
+ranges are physically sane reflectivity ranges (Q 0-0.15/0.18, log R
+1e-7/1e-10 to 2/10) and tile into a non-overlapping page-frame grid
+(`opj_layer_frame`'s existing plausibility gate), AND the independent
+`extract_curves` anchor scan resolves every merged layer's curves against
+REAL, currently-imported books (e.g. `PNRDWMerge`'s 48 curves all bind to
+`DW*` books; `Graph31`'s 18 curves all bind to `Book35`/`Book36`/
+`Book37`) — not synthetic garbage. `_LAYER_HEAD_BYTES` now accepts
+`{0x1f, 0x17, 0x5f}`; all three decode identically otherwise (same
+axis-triple/hint/Y-scale-flag offsets). A merge window's `source_hint`
+(the layer-continuation payload's cstring at offset 208) is NOT
+meaningful — every merge window in the corpus reads the same stray `"Pd"`
+(see §6.3's per-curve/source-hint gap note below), consistent with a
+merge having no single "source book" of its own; the per-curve book
+binding (§6.1.1) is what actually resolves each merged panel. `figures.py`'s
+`_is_layer_block` accepts exactly `{0x1f, 0x17, 0x5f}` and nothing else —
+a window's first layer is always one of these three (used to distinguish
+a graph header from a worksheet header in the first place), so this
+widening cannot affect that detection.
 
 *Curve/text/annotation attribution — positional, validated exactly.*
 Layer records and curve anchors are sequential within a window's block
@@ -1600,6 +1624,20 @@ figure's `source_hint` to an actual imported dataset is a heuristic
 (`lib/originFigures.resolveFigureDataset`); an unresolved figure shows
 disabled with the hint in its tooltip rather than guessing.
 
+**A stale `source_hint` is a genuine dangling reference, not a decode
+bug (decode-plan item 40, confirmed 2026-07-09).** `PNR.opj`'s `0p023`
+and `Graph46` both decode a clean, isolated, correctly-NUL-terminated
+`source_hint` of `"Pd"` (no garbage around it) that never resolves to any
+imported dataset. Confirmed genuinely unresolvable, not a decode error: a
+full scan of every window header in the raw file (223 total, both graph
+and worksheet) finds no book or sheet named `"Pd"` or containing it
+anywhere, in this or any other window — the source book these two graphs
+were built from was deleted from the project after the graphs were made
+(Origin does not purge a graph's own stale display-name field when its
+source worksheet goes away), and their curve anchors don't resolve either
+(their column ids no longer exist in `column_id_map`). Correctly
+surfaces as unresolved in the Library; nothing to fix.
+
 **Proposed mapping** (design target for a richer FigureDoc entity, per
 `ORIGIN_GAP_PLAN.md` #12 — partially realized by the shipped
 plot-state-snapshot dicts above):
@@ -1666,6 +1704,56 @@ yet):
   axis breaks) — not representable.
 - **Per-curve fill-under, drop lines, split symbol edge/fill, connect
   style** (spline/step/B-spline) — partially or not modelled.
+- **Per-curve hidden/visibility flag (`.opj`) — investigated 2026-07-09,
+  UNRESOLVED (decode-plan item 42).** `PNR.opj`'s reflectivity graphs
+  (`Graph25` and its `40Oe`/`7kOe`/etc. siblings, all built from the same
+  `R++`/`R--`/`T++`/`T--` book layout) each carry 6 curve anchors per
+  layer (`C`=R++, `E`=R--, both `style="scatter"`, genuinely plotted;
+  `D`=dR++, `F`=dR--, `Y-error`-designated, correctly hidden already by
+  the dataset-level `originHiddenChannels`/`Y-error` mechanism, unrelated
+  to this gap; `G`=T++, `H`=T--, plain `Y`-designated `style="line"`
+  curves that Origin's own render does NOT draw at all — visible only as
+  a flat legend swatch — confirmed against the live-Origin PNG oracle on
+  multiple siblings, not just `Graph25`). quantized currently plots `G`/`H`
+  as two extra visible series since nothing marks them hidden. Searched
+  for a byte-level flag by diffing the confirmed-hidden `G`/`H` anchor
+  records against the confirmed-visible `C`/`D`/`E`/`F` anchors in the
+  same layer, AND against 5 confirmed-visible `style="line"` curves
+  elsewhere in the same file (`Graph1`'s 4-layer SLD profile, oracle
+  labelled "Nuclear SLD" and genuinely drawn) as an independent positive
+  control: the group-role byte (offset 6), the style byte (offset 76,
+  already the decoded line/scatter field), symbol-kind (offset 23), and
+  two exploratory bytes (offsets 15/17) were all checked — none separates
+  hidden from visible (offset 17 read `0x01` on BOTH the hidden `G`/`H`
+  pair AND every visible `Graph1` line curve, ruling it out). No
+  byte-proven mechanism found; left undecoded rather than guessed. A
+  future pass needs more independent hidden-vs-visible ground truth
+  (ideally a COM oracle querying `layer.plotN` visibility across many
+  curves) to isolate the real flag.
+- **Axis-title unit vs. worksheet-column unit mismatch (`.opj`) —
+  investigated 2026-07-09, UNRESOLVED (decode-plan item 42).** The same
+  `PNR.opj` reflectivity graphs' decoded X range (e.g. `Graph25`:
+  `(0.0005, 0.15)`) is exactly the book's own raw `Q` column values
+  (`origin_column_names`' X column, metadata `x_unit = "A-1"`, i.e.
+  Å⁻¹) — but the figure's own manually-typed `x_title` reads
+  `"Q (nm⁻¹)"`, and the live-Origin PNG oracle's real rendered axis
+  spans roughly 10× wider (~0-1.6, confirmed by a direct zoomed-pixel
+  read of the tick labels, ruling out an initial misreading of the same
+  image) — exactly the Å⁻¹→nm⁻¹ conversion factor (1 Å⁻¹ = 10 nm⁻¹).
+  The decoded axis-range OFFSETS themselves (15/23 X, 58/66 Y) are not in
+  question — they are oracle-verified exact on Moke/XRD/hc2convert, and
+  a project-wide grep confirms the `x_unit`/`x_title` mismatch is
+  consistent (real Å⁻¹ data, an nm⁻¹-labelled axis) across this whole
+  PNR project. Origin evidently renders using a real unit conversion
+  quantized does not apply; no scale-factor byte field was found in the
+  layer-continuation record to decode this generally (the two candidate
+  numbers, from-worksheet-unit-string and from-axis-title-string, are
+  both plain text, not a binary field), and a blind "always ×10 when the
+  unit strings look like a length mismatch" heuristic was rejected as
+  unproven/overfit for a single project rather than shipped. Left
+  undecoded; the plan item narrows to this evidenced-but-unfixed root
+  cause rather than "wrong layer"/"wrong offset", both of which are ruled
+  out.
 - **Arrow/box/region annotations with arrowheads** — quantized `refLines`
   are axis-parallel only.
 - **X-scale type bit (`.opj` only)** — still heuristic-only there: no

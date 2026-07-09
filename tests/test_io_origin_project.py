@@ -602,6 +602,46 @@ def test_realdata_xrd_axis_titles_and_legend_labels() -> None:
     assert "Intensity" not in " ".join(by_name["Si-YIG-Co"]["annotations"])
 
 
+@pytest.mark.realdata
+@pytest.mark.skipif(
+    not (_CORPUS / "PNR.opj").exists(), reason="127 MB PNR.opj not in local corpus"
+)
+def test_realdata_pnr_merge_windows_recovered() -> None:
+    """Decode-plan item 40: PNR.opj's 6 "Merge Graph Windows" results
+    (`Graph30`-`Graph33`/`PNRDWMerge`/`PNRmerge_Jan16`) were previously
+    entirely absent from `extract_figures` -- their layer-continuation
+    blocks carry head byte 0x5f, which the graph-vs-worksheet gate didn't
+    recognize as a layer at all, so the whole window was skipped as "not a
+    figure" (see `figures.py`'s `_LAYER_HEAD_BYTES`). Each now yields
+    several per-layer plot-state dicts with sane reflectivity axis ranges
+    (Q in nm⁻¹, log R) and real curve bindings."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    figs = extract_figures((_CORPUS / "PNR.opj").read_bytes())
+    names = {f["name"] for f in figs}
+    merge_names = {"Graph30", "Graph31", "Graph32", "Graph33", "PNRDWMerge", "PNRmerge_Jan16"}
+    assert merge_names <= names
+
+    dw = [f for f in figs if f["name"] == "PNRDWMerge"]
+    assert len(dw) == 8  # 8 merged reflectivity panels
+    assert [x["layer"] for x in dw] == list(range(1, 9))
+    assert all(x["x_from"] == 0.0 for x in dw)
+    assert all(0.14 < x["x_to"] < 0.16 for x in dw)
+    assert all(x["y_from"] == pytest.approx(1e-7) for x in dw)
+    assert all(x["y_log"] is True for x in dw)  # log-R reflectivity
+    # curve anchors bind to REAL, currently-imported books, not garbage
+    dw_books = {c["book"] for x in dw for c in x["curves"]}
+    assert dw_books  # at least one curve resolved per merged window
+    assert dw_books <= {
+        "DW150G", "DW15G", "DW15Gfrom700m", "DW300G", "DW40G", "DW450G", "DW650G", "DW7kOe",
+    }
+
+    g31 = [f for f in figs if f["name"] == "Graph31"]
+    assert len(g31) == 3
+    g31_books = {c["book"] for x in g31 for c in x["curves"]}
+    assert g31_books <= {"Book35", "Book36", "Book37"}
+
+
 def test_figures_absent_on_plain_synthetic(tmp_path) -> None:
     from quantized.io.origin_project.figures import extract_figures
 
@@ -776,6 +816,36 @@ def test_synthetic_opj_stacked_panel_layer_head_byte_recognized() -> None:
     assert (figs[0]["y_from"], figs[0]["y_to"]) == (-50.0, 3000.0)
     assert (figs[1]["y_from"], figs[1]["y_to"]) == (400.0, 1500.0)
     assert figs[0]["n_curves"] == 2 and figs[1]["n_curves"] == 2
+
+
+def test_synthetic_opj_merge_window_layer_head_byte_recognized() -> None:
+    """Decode-plan item 40: a "Merge Graph Windows" result's layer-
+    continuation blocks all carry head byte 0x5f (0x1f | 0x40), including
+    the FIRST one right after the window header -- unlike 0x17, which only
+    ever appears as a subsequent layer. Before this byte was recognized,
+    `extract_figures` rejected the whole window at the graph-vs-worksheet
+    gate (the first post-header block didn't look like a layer at all), so
+    the window produced NO figures whatsoever -- the real-corpus gap behind
+    PNR.opj's `Graph30`-`Graph33`/`PNRDWMerge`/`PNRmerge_Jan16` (see
+    `figures.py`'s `_LAYER_HEAD_BYTES`)."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("MergedGraph")
+        + _fig_layer_block(0.0, 0.15, 1e-7, 2.0, hint="Pd", head=0x5F)
+        + _fig_curve_block()
+        + _fig_layer_block(0.0, 0.15, 1e-7, 2.0, hint="Pd", head=0x5F)
+        + _fig_curve_block()
+        + _fig_curve_block()
+    )
+    figs = extract_figures(blob)
+    assert [f["name"] for f in figs] == ["MergedGraph", "MergedGraph"]
+    assert [f["layer"] for f in figs] == [1, 2]
+    assert figs[0]["n_curves"] == 1 and figs[1]["n_curves"] == 2
+    assert (figs[0]["x_from"], figs[0]["x_to"]) == (0.0, 0.15)
+    assert (figs[0]["y_from"], figs[0]["y_to"]) == (1e-7, 2.0)
 
 
 def test_synthetic_opj_multiple_figures_and_log_heuristic() -> None:
