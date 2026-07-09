@@ -17,7 +17,7 @@
 
 import { useEffect } from "react";
 
-import { cycleWindow, snapshotView } from "../../lib/plotview";
+import { cycleWindow, snapshotView, zOrderIds } from "../../lib/plotview";
 import { useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
 
@@ -54,16 +54,27 @@ function closeFocusedWindow(): void {
   if (s.focusedWindowId) s.closeWindow(s.focusedWindowId);
 }
 
-/** Focus Next/Previous: cycles by creation order (v1 — item 6's Tier-2
- *  Ctrl+Tab upgrade makes this z-order-aware instead). */
+/** Focus Next/Previous: z-order-aware cycling (item 6 — supersedes v1's
+ *  plain creation-order cycle by feeding `cycleWindow` ids sorted back-to-
+ *  front instead of the raw array order; identical to v1 whenever no window
+ *  has ever been raised, since `zOrderIds` is a stable sort). */
 function cycleFocus(direction: 1 | -1): void {
   const s = useApp.getState();
-  const next = cycleWindow(
-    s.plotWindows.map((w) => w.id),
-    s.focusedWindowId,
-    direction,
-  );
+  const next = cycleWindow(zOrderIds(s.plotWindows), s.focusedWindowId, direction);
   if (next) s.focusWindow(next);
+}
+
+/** Tile Windows (item 6): re-lay-out every visible window into an even grid
+ *  sized to the Plot tab's current canvas. A no-op with fewer than 2 visible
+ *  windows (the store action itself guards this too). */
+function tileWindows(): void {
+  useApp.getState().tileWindows();
+}
+
+/** Cascade Windows (item 6): re-lay-out every visible window in a staggered
+ *  cascade (same offset step as placing new windows in turn). */
+function cascadeWindows(): void {
+  useApp.getState().cascadeWindows();
 }
 
 export function useWindowCommands(): void {
@@ -78,6 +89,8 @@ export function useWindowCommands(): void {
         run: duplicateFocusedWindow,
       },
       { id: "window-close", group: "Window", label: "Close Window", shortcut: "⌘⇧W", run: closeFocusedWindow },
+      { id: "window-tile", group: "Window", label: "Tile Windows", run: tileWindows },
+      { id: "window-cascade", group: "Window", label: "Cascade Windows", run: cascadeWindows },
       {
         id: "window-focus-next",
         group: "Window",
