@@ -330,6 +330,28 @@ body {
 .qzk-win-close:hover { background: var(--danger); border-color: var(--danger); }
 .qzk-win-body { overflow-y: auto; padding: var(--pad-lg); display: flex; flex-direction: column; gap: var(--pad); }
 .qzk-win-section { font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-faint); border-bottom: 1px solid var(--border-soft); padding-bottom: 3px; margin-top: 4px; }
+
+/* ── MDI plot windows (MULTI_PLOT_PLAN item 3 — components/windows/) ──
+   Shares the qzk-win* NAMING family above (title bar / close button / body)
+   but is a separate, store-controlled-geometry component (PlotWindowFrame,
+   Key Decision 3) — distinct qzk-plotwin* prefix so the two stylesheets
+   never collide. WindowCanvas hosts these in its OWN stacking context,
+   below workshop ToolWindows (which float above the whole app via qzk-win). */
+.qzk-wincanvas { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--axes-bg); }
+.qzk-plotwin { position: absolute; display: flex; flex-direction: column; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); overflow: hidden; }
+/* Focus highlight — --accent only (design tokens, never a hardcoded colour). */
+.qzk-plotwin.focused { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+.qzk-plotwin-titlebar { display: flex; align-items: center; gap: 8px; height: 28px; flex-shrink: 0; padding: 0 6px 0 10px; background: var(--surface-2); border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); color: var(--text-dim); cursor: default; user-select: none; touch-action: none; }
+.qzk-plotwin.focused .qzk-plotwin-titlebar { background: var(--accent-soft); color: var(--accent-text); }
+.qzk-plotwin-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
+.qzk-plotwin-badge { font-family: var(--font-mono); font-size: var(--type-nano); color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+.qzk-plotwin.focused .qzk-plotwin-badge { color: var(--accent-text); }
+.qzk-plotwin-close { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-3); cursor: default; padding: 0; flex-shrink: 0; }
+.qzk-plotwin-close:hover { background: var(--danger); border-color: var(--danger); }
+.qzk-plotwin-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+/* Resize grip — a diagonal-stripe corner drawn from tokens, no glyph/emoji. */
+.qzk-plotwin-resize { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; touch-action: none; background: linear-gradient(135deg, transparent 0 50%, var(--border-strong) 50% 60%, transparent 60% 70%, var(--border-strong) 70% 80%, transparent 80% 100%); }
+
 .qzk-param-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: var(--font-size-sm); }
 .qzk-param-table th { text-align: right; color: var(--text-faint); font-weight: var(--weight-medium); border-bottom: 1px solid var(--border-soft); padding: 3px 6px; }
 .qzk-param-table th:first-child { text-align: left; }

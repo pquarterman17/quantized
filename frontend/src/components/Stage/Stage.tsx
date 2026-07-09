@@ -1,10 +1,13 @@
-// Stage cell: tab strip (Plot · Worksheet) over the active view. The Worksheet
-// is a read-only preview for this slice; the full interactive grid is Tier 2.
+// Stage cell: tab strip (Plot · Map · Worksheet) over the active view. The
+// Plot tab renders `WindowCanvas` (MULTI_PLOT_PLAN item 3) — the MDI plot-
+// window host; it collapses to today's single-window full-bleed `PlotStage`
+// with no chrome whenever there's exactly one maximized window (the item-3/4
+// migration guarantee).
 
 import MapStage from "./MapStage";
-import PlotStage from "./PlotStage";
 import Worksheet from "./Worksheet";
 import { useApp } from "../../store/useApp";
+import WindowCanvas from "../windows/WindowCanvas";
 
 const TABS = [
   { id: "plot", label: "Plot" },
@@ -29,7 +32,7 @@ export default function Stage() {
           </span>
         ))}
       </div>
-      {stageTab === "plot" ? <PlotStage /> : stageTab === "map" ? <MapStage /> : <Worksheet />}
+      {stageTab === "plot" ? <WindowCanvas /> : stageTab === "map" ? <MapStage /> : <Worksheet />}
     </section>
   );
 }
