@@ -13,7 +13,12 @@ trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
 **Created:** 2026-07-03
-**Updated:** 2026-07-07 (item 34 CLOSED — the native `.opj` writer now
+**Updated:** 2026-07-09 (booked #38 lazy per-book transport + #39
+side-by-side comparison campaign from the owner's PNR.opj import testing;
+the four 2026-07-09 triage fix batches — perf quick wins, zero-tail
+wrap-around prune, log tick steps, y2/legend/multi-panel fidelity — land
+via feature branches and will be recorded in Completed on merge)
+Previous: 2026-07-07 (item 34 CLOSED — the native `.opj` writer now
 loads in real Origin and re-exports value-exact, see Completed; item 35's
 stale W3 body text reconciled — the item was already CLOSED 2026-07-04 at
 100%/100% per this header + Completed + the format doc, but its open-item
@@ -290,6 +295,17 @@ the shipped contract)
 ~~37. **y2 axis label from layer 2's decoded title**~~ **CLOSED
 2026-07-07** — see Completed.
 
+38. **Lazy per-book data transport** — (L) import returns the full book
+    inventory + downsampled sparkline previews (~2 MB for PNR.opj vs
+    today's ~85 MB JSON); each book's full data fetches on first
+    activation. Owner-approved 2026-07-09 — preserves the import-all
+    Library UX (every book still listed immediately). Follow-up to the
+    2026-07-09 perf quick wins.
+    - [ ] Inventory + downsampled-preview payload shape (backend, thin route)
+    - [ ] On-demand per-book data route + frontend fetch-on-activate
+    - [ ] Loading states (Library row, Worksheet, figure apply) + `.dwk`
+          interaction (a workspace referencing an unfetched book)
+
 ---
 
 ## W5 — Hardening & docs
@@ -324,6 +340,17 @@ the shipped contract)
 ## W7 — Testing hardening (both directions)
 
 ### Tier 1 — High Impact
+
+39. **Side-by-side Origin↔quantized figure comparison campaign** — (M)
+    COM script exports every corpus graph window as PNG (live-run
+    discipline; the headless page-limit silent-hang trap applies — use
+    timeouts); `tools/visual` gains a per-imported-figure screenshot
+    mode; an HTML gallery pairs Origin PNG vs quantized render with a
+    per-figure checklist (scales / ticks / legend / colours / markers /
+    annotations / panel layout) for the owner to eyeball. Every mismatch
+    gets booked as a numbered item here. Structural assertions (decoded
+    axis range / log flag / tick step vs applied store state via the
+    harness seam) form the automatable layer. Owner-approved 2026-07-09.
 
 ### Tier 2 — Medium Impact
 
