@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildOpts, categoricalTickFormatter, tickFormatter, xIsAscending } from "./uplotOpts";
+import {
+  buildOpts,
+  categoricalTickFormatter,
+  fixedLogAxisSplits,
+  niceLinearStep,
+  tickFormatter,
+  xIsAscending,
+} from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
 
 const payload: PlotPayload = {
@@ -566,5 +573,119 @@ describe("buildOpts y2 axis state (Origin double-Y apply, 13.2 #6)", () => {
     const opts = buildOpts(dual, { ...base, yLog: true, tool: "zoom" });
     expect(opts.scales?.y2?.distr).toBe(3);
     expect(opts.scales?.y2?.range).toBeUndefined();
+  });
+});
+
+describe("niceLinearStep", () => {
+  it("picks a 1/2/5 x 10^n step aiming for ~5 ticks across the span", () => {
+    expect(niceLinearStep(1)).toBeCloseTo(0.2); // 1/5 = 0.2 exactly
+    expect(niceLinearStep(10)).toBeCloseTo(2); // 10/5 = 2 exactly
+    expect(niceLinearStep(0.5)).toBeCloseTo(0.1); // 0.5/5 = 0.1 exactly
+  });
+
+  it("degenerates to 1 for a non-positive span", () => {
+    expect(niceLinearStep(0)).toBe(1);
+    expect(niceLinearStep(-5)).toBe(1);
+  });
+});
+
+describe("fixedLogAxisSplits", () => {
+  it("returns [] for a degenerate range (non-positive or inverted)", () => {
+    expect(fixedLogAxisSplits(0, 10)).toEqual([]);
+    expect(fixedLogAxisSplits(-1, 10)).toEqual([]);
+    expect(fixedLogAxisSplits(10, 5)).toEqual([]);
+    expect(fixedLogAxisSplits(5, 5)).toEqual([]);
+  });
+
+  it("gives pure powers-of-10 ticks for a multi-decade span (a normal reflectivity view)", () => {
+    expect(fixedLogAxisSplits(1, 1e6)).toEqual([1, 10, 100, 1000, 1e4, 1e5, 1e6]);
+  });
+
+  it("gives pure powers-of-10 ticks even for an unrounded multi-decade span", () => {
+    // PNR.opj "7kOe": y in [1e-10, 10.0], 11 decades — bounds already land on
+    // decade boundaries, but the generator must never sneak the raw min/max
+    // in as an extra non-decade tick the way uPlot's own logAxisSplits would.
+    expect(fixedLogAxisSplits(1e-10, 10)).toEqual([
+      1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1, 10,
+    ]);
+  });
+
+  // Real PNR.opj sub-decade log figures (byte-verified via extract_figures):
+  // Graph50 y in [0.713912526706576, 1.2731814642573132], y_step 0.1;
+  // Graph52 y in [0.9772255479678681, 1.2916288117909744], y_step 0.05.
+  it("Graph50: steps by the decoded LINEAR increment, not a decade multiplier", () => {
+    expect(fixedLogAxisSplits(0.713912526706576, 1.2731814642573132, 0.1)).toEqual([
+      0.8, 0.9, 1.0, 1.1, 1.2,
+    ]);
+  });
+
+  it("Graph52: a different decoded step gives a different clean sequence", () => {
+    expect(fixedLogAxisSplits(0.9772255479678681, 1.2916288117909744, 0.05)).toEqual([
+      1.0, 1.05, 1.1, 1.15, 1.2, 1.25,
+    ]);
+  });
+
+  it("falls back to a nice-number step for a sub-decade range with no decoded step", () => {
+    const out = fixedLogAxisSplits(0.7, 1.3, null);
+    // niceLinearStep(0.6) -> 0.1; ticks land on clean 0.1 multiples.
+    expect(out).toEqual([0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3]);
+  });
+
+  it("ignores a non-positive decoded step (falls back to nice-number)", () => {
+    expect(fixedLogAxisSplits(0.7, 1.3, 0)).toEqual(fixedLogAxisSplits(0.7, 1.3, null));
+    expect(fixedLogAxisSplits(0.7, 1.3, -0.1)).toEqual(fixedLogAxisSplits(0.7, 1.3, null));
+  });
+});
+
+describe("buildOpts fixed log-range ticks (plot-fidelity fix)", () => {
+  it("supplies a custom splits function on a log Y axis with a fixed yLim", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: true,
+      tool: "zoom",
+      yLim: [0.7139, 1.2732],
+      yStep: 0.1,
+    });
+    const splits = opts.axes?.[1].splits;
+    expect(typeof splits).toBe("function");
+    const fn = splits as (u: uPlot, i: number, min: number, max: number) => number[];
+    expect(fn(null as unknown as uPlot, 1, 0.7139, 1.2732)).toEqual([0.8, 0.9, 1.0, 1.1, 1.2]);
+  });
+
+  it("leaves splits undefined on a log Y axis with NO fixed range (autoscale)", () => {
+    const opts = buildOpts(payload, { ...base, yLog: true, tool: "zoom" });
+    expect(opts.axes?.[1].splits).toBeUndefined();
+  });
+
+  it("leaves splits undefined on a fixed but LINEAR axis", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", yLim: [0, 100] });
+    expect(opts.axes?.[1].splits).toBeUndefined();
+  });
+
+  it("supplies splits on the secondary axis using y2Step when y2 has a fixed log range", () => {
+    const dual: PlotPayload = {
+      ...payload,
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+        [0.9, 1.0, 1.1],
+      ] as PlotPayload["data"],
+      series: [
+        { label: "M", unit: "emu", axis: 0 },
+        { label: "T", unit: "K", axis: 1 },
+      ],
+    };
+    const opts = buildOpts(dual, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      y2Lim: [0.9772, 1.2916],
+      y2Log: true,
+      y2Step: 0.05,
+    });
+    const splits = opts.axes?.[2].splits;
+    expect(typeof splits).toBe("function");
+    const fn = splits as (u: uPlot, i: number, min: number, max: number) => number[];
+    expect(fn(null as unknown as uPlot, 2, 0.9772, 1.2916)).toEqual([1.0, 1.05, 1.1, 1.15, 1.2, 1.25]);
   });
 });

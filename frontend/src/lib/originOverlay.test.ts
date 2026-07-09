@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { originErrKeys, originHiddenChannels } from "./errorbars";
-import { buildOverlayDataset, overlayBooks, overlayCurveStyles } from "./originOverlay";
+import { buildOverlayDataset, overlayBooks, overlayCurveLabels, overlayCurveStyles } from "./originOverlay";
 import type { Dataset, OriginFigure } from "./types";
 
 const figure = (curves: OriginFigure["curves"]): OriginFigure => ({
@@ -102,6 +102,45 @@ describe("buildOverlayDataset", () => {
   it("overlayCurveStyles is empty for a non-overlay dataset", () => {
     expect(overlayCurveStyles(b1.data)).toEqual({});
     expect(overlayCurveStyles(null)).toEqual({});
+  });
+
+  // Fix #4: decoded legend_labels stamped in overlay column order, recoverable
+  // via overlayCurveLabels — mirrors the style-stamping tests above.
+  it("stamps decoded legend labels in column order, recoverable via overlayCurveLabels", () => {
+    const fig = {
+      ...figure([
+        { book: "Book2", x: "A", y: "B" }, // overlay col 0
+        { book: "Book1", x: "A", y: "B" }, // overlay col 1
+      ]),
+      legend_labels: ["Nb", "Nb/Al"],
+    };
+    const ds = buildOverlayDataset(fig, [b1, b2]);
+    expect(ds).not.toBeNull();
+    expect(ds!.metadata.origin_curve_labels).toEqual(["Nb", "Nb/Al"]);
+    expect(overlayCurveLabels(ds)).toEqual({ 0: "Nb", 1: "Nb/Al" });
+  });
+
+  it("leaves a gap (null) for an undecoded/blank legend slot, so that column keeps its default label", () => {
+    const fig = {
+      ...figure([
+        { book: "Book2", x: "A", y: "B" },
+        { book: "Book1", x: "A", y: "B" },
+      ]),
+      legend_labels: ["Nb"], // only the first curve's caption decoded
+    };
+    const ds = buildOverlayDataset(fig, [b1, b2]);
+    expect(ds!.metadata.origin_curve_labels).toEqual(["Nb", null]);
+    expect(overlayCurveLabels(ds)).toEqual({ 0: "Nb" }); // col 1 absent
+  });
+
+  it("overlayCurveLabels is empty for a non-overlay dataset or an absent legend", () => {
+    expect(overlayCurveLabels(b1.data)).toEqual({});
+    expect(overlayCurveLabels(null)).toEqual({});
+    const fig = figure([
+      { book: "Book2", x: "A", y: "B" },
+      { book: "Book1", x: "A", y: "B" },
+    ]); // no legend_labels at all
+    expect(overlayCurveLabels(buildOverlayDataset(fig, [b1, b2]))).toEqual({});
   });
 
   it("stamps per-column designations so error columns hide + pair on the overlay", () => {

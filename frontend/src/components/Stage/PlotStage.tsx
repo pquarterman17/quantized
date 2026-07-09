@@ -17,18 +17,14 @@ import {
 } from "../../lib/plotdata";
 import { channelModelingType } from "../../lib/modeling";
 import { droppedRows } from "../../lib/rowstate";
-import { copyImage, copyText, payloadToTSV } from "../../lib/clipboard";
 import { buildErrorColumns } from "../../lib/errorbars";
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
-import { exportPlotPng, plotPngBlob } from "../../lib/plotExport";
-import { suggestLogScale } from "../../lib/autoscale";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import { buildOpts } from "../../lib/uplotOpts";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
-import { toast } from "../../store/toasts";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import AxisDropZones from "./AxisDropZones";
 import InsetPlot from "./InsetPlot";
@@ -41,6 +37,7 @@ import PolarStage from "./PolarStage";
 import StatStage from "./StatStage";
 import { useAxisDrop } from "./useAxisDrop";
 import { useGadgetChip } from "./useGadgetChip";
+import { usePlotStageActions } from "./usePlotStageActions";
 
 export default function PlotStage() {
   const active = useActiveDataset();
@@ -48,6 +45,8 @@ export default function PlotStage() {
   const xLog = useApp((s) => s.xLog);
   const xLim = useApp((s) => s.xLim);
   const yLim = useApp((s) => s.yLim);
+  const xStep = useApp((s) => s.xStep);
+  const yStep = useApp((s) => s.yStep);
   const xFmt = useApp((s) => s.xFmt);
   const yFmt = useApp((s) => s.yFmt);
   const plotTitle = useApp((s) => s.plotTitle);
@@ -74,6 +73,7 @@ export default function PlotStage() {
   const y2Keys = useApp((s) => s.y2Keys);
   const y2Lim = useApp((s) => s.y2Lim);
   const y2Log = useApp((s) => s.y2Log);
+  const y2Step = useApp((s) => s.y2Step);
   const errKeys = useApp((s) => s.errKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const hiddenChannels = useApp((s) => s.hiddenChannels);
@@ -243,8 +243,11 @@ export default function PlotStage() {
         xLog,
         xLim,
         yLim,
+        xStep,
+        yStep,
         y2Lim,
         y2Log,
+        y2Step,
         xFmt,
         yFmt,
         showGrid,
@@ -331,7 +334,7 @@ export default function PlotStage() {
     // theme/accent in deps so the plot recolors from fresh tokens; tool rebuilds
     // the cursor/drag config + plugins; gadgetMode swaps the qfit tool's plugin
     // (ROI band vs paired cursors) — a discrete pick, not a live-drag value.
-  }, [displayPayload, yLog, xLog, xLim, yLim, y2Lim, y2Log, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, y2AxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool, integral, fwhmResult, gadgetMode, peakWizardEdit]);
+  }, [displayPayload, yLog, xLog, xLim, yLim, xStep, yStep, y2Lim, y2Log, y2Step, xFmt, yFmt, showGrid, showAxisBox, plotTemplate, defaultTrace, defaultLineWidth, wheelZoom, plotTitle, xAxisLabel, yAxisLabel, y2AxisLabel, refLines, annotations, styleList, labelList, errorBars, hidden, theme, accent, tool, integral, fwhmResult, gadgetMode, peakWizardEdit]);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the
@@ -345,63 +348,11 @@ export default function PlotStage() {
     if (tool !== "qfit") useApp.getState().clearQfit();
   }, [tool, active]);
 
-  function resetView() {
-    if (plotRef.current && displayPayload) {
-      plotRef.current.setData(displayPayload.data, true); // resetScales = re-fit
-    }
-  }
-
-  // Smart auto-scale: pick log vs linear per axis from the plotted data's dynamic
-  // range, then clear manual limits so the view re-fits. (#17)
-  function smartScale() {
-    if (!displayPayload) return;
-    const cols = displayPayload.data as (number | null)[][];
-    const xVals = cols[0] ?? [];
-    const yVals: (number | null)[] = [];
-    for (let s = 1; s < cols.length; s++) yVals.push(...cols[s]);
-    const st = useApp.getState();
-    st.setXLog(suggestLogScale(xVals));
-    st.setYLog(suggestLogScale(yVals));
-    st.setXLim(null);
-    st.setYLim(null);
-    st.setStatus("smart auto-scaled");
-  }
-
-  function savePng() {
-    if (!plotRef.current) return;
-    const stem = active?.name.replace(/\.[^.]+$/, "") ?? "plot";
-    exportPlotPng(plotRef.current, `${stem}.png`);
-  }
-
-  // Copy exactly what's plotted (x + series, honoring x-channel / waterfall /
-  // overlays) as TSV — paste straight into Origin / Excel / a notebook.
-  function copyData() {
-    if (!displayPayload) return;
-    const nRows = displayPayload.data[0]?.length ?? 0;
-    const nCols = displayPayload.series.length + 1; // + the x column
-    copyText(payloadToTSV(displayPayload)).then((ok) =>
-      useApp.getState().setStatus(
-        ok ? `copied ${nRows}×${nCols} to clipboard` : "clipboard unavailable",
-      ),
-    );
-  }
-
-  // Snapshot: copy exactly what's on screen to the clipboard as a PNG — a quick
-  // raster grab for pasting into notes/chat (distinct from the TSV copy and the
-  // server-rendered vector Figure export). Falls back to a toast where the async
-  // clipboard image API is unavailable (Firefox / insecure context).
-  function snapshot() {
-    const u = plotRef.current;
-    if (!u) return;
-    plotPngBlob(u).then(async (blob) => {
-      if (!blob) {
-        toast("snapshot failed", "danger");
-        return;
-      }
-      const ok = await copyImage(blob);
-      toast(ok ? "plot copied to clipboard" : "clipboard image unavailable", ok ? "ok" : "danger");
-    });
-  }
+  const { resetView, smartScale, savePng, copyData, snapshot } = usePlotStageActions(
+    plotRef,
+    displayPayload,
+    active,
+  );
 
   // Alternate render modes (each self-contained; polar wins, then stats, then stack).
   const nPlotted = plotted.length;

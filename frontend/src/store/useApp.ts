@@ -56,7 +56,7 @@ import { computePanelLayout } from "../lib/originPanels";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
-import { buildOverlayDataset, overlayCurveStyles } from "../lib/originOverlay";
+import { buildOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
@@ -309,6 +309,14 @@ interface AppState {
   statMode: boolean; // render the Statistics stage (box/violin/qq/histogram, gap #16)
   xLim: [number, number] | null; // explicit X range (null = autoscale)
   yLim: [number, number] | null; // explicit Y range (null = autoscale)
+  // Origin's decoded major-tick increment for a FIXED log axis (plot-fidelity
+  // fix #2) — only meaningful alongside xLim/yLim/y2Lim; see
+  // `lib/uplotOpts.fixedLogAxisSplits`'s doc. null = undecoded (falls back to
+  // a "nice number" step). Reset whenever the paired *Lim is reset/replaced
+  // by anything other than an Origin figure apply, so a stale step never
+  // leaks onto an unrelated manual range.
+  xStep: number | null;
+  yStep: number | null;
   xFmt: AxisFormat; // X-axis tick number format
   yFmt: AxisFormat; // Y-axis tick number format (also applied to the secondary axis)
   plotTitle: string; // chart title rendered above the plot ("" = none)
@@ -319,6 +327,7 @@ interface AppState {
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
   y2Lim: [number, number] | null; // fixed secondary-Y range (Origin double-Y apply)
   y2Log: boolean | null; // secondary-Y log scale (null = inherit yLog)
+  y2Step: number | null; // decoded major-tick increment for y2Lim (see xStep/yStep)
   y2AxisLabel: string; // override for the secondary y-axis label ("" = auto)
   refLines: RefLine[]; // fixed X/Y marker lines on the plot
   annotations: Annotation[]; // text labels pinned at data coordinates
@@ -845,6 +854,8 @@ export const useApp = create<AppState>((set, get) => ({
   statMode: false,
   xLim: null,
   yLim: null,
+  xStep: null,
+  yStep: null,
   xFmt: { mode: "auto", digits: 2 },
   yFmt: { mode: "auto", digits: 2 },
   plotTitle: "",
@@ -855,6 +866,7 @@ export const useApp = create<AppState>((set, get) => ({
   y2Keys: null,
   y2Lim: null,
   y2Log: null,
+  y2Step: null,
   y2AxisLabel: "",
   refLines: [],
   annotations: [],
@@ -940,6 +952,7 @@ export const useApp = create<AppState>((set, get) => ({
       y2Keys: null,
       y2Lim: null,
       y2Log: null, // and reset the secondary-axis assignment
+      y2Step: null,
       y2AxisLabel: "",
       seriesStyles: {}, // styles are keyed by channel index → reset per dataset
       seriesLabels: {}, // legend renames are channel-keyed → reset per dataset
@@ -948,6 +961,8 @@ export const useApp = create<AppState>((set, get) => ({
       hiddenChannels: originHiddenChannels(ds.data), // hide Origin error + secondary-X columns
       xLim: null, // and autoscale both axes
       yLim: null,
+      xStep: null,
+      yStep: null,
       integral: null, // on-plot analysis results are tied to the old data → clear
       fwhmResult: null,
       qfitRoi: null,
@@ -1170,12 +1185,15 @@ export const useApp = create<AppState>((set, get) => ({
         set({
           xLim: [fig.x_from, fig.x_to],
           yLim: [fig.y_from, fig.y_to],
+          xStep: fig.x_step ?? null,
+          yStep: fig.y_step ?? null,
           xLog: fig.x_log,
           yLog: fig.y_log,
           xKey: null,
           yKeys: Array.from({ length: n }, (_, i) => i),
-          // Restore each overlay column's decoded line/scatter look.
+          // Restore each overlay column's decoded line/scatter look + legend caption.
           seriesStyles: overlayCurveStyles(src),
+          seriesLabels: overlayCurveLabels(src),
           // Origin's real axis titles ("" falls back to the data-derived label).
           xAxisLabel: fig.x_title ?? "",
           yAxisLabel: fig.y_title ?? "",
@@ -1208,6 +1226,8 @@ export const useApp = create<AppState>((set, get) => ({
         set({
           xLim: [lower.figure.x_from, lower.figure.x_to],
           yLim: [lower.figure.y_from, lower.figure.y_to],
+          xStep: lower.figure.x_step ?? null,
+          yStep: lower.figure.y_step ?? null,
           xLog: lower.figure.x_log,
           yLog: lower.figure.y_log,
           xKey: baseSel.xKey,
@@ -1224,12 +1244,16 @@ export const useApp = create<AppState>((set, get) => ({
           // log flag, and title (falls back to auto when undecoded).
           y2Lim: [upper.figure.y_from, upper.figure.y_to],
           y2Log: upper.figure.y_log,
+          y2Step: upper.figure.y_step ?? null,
           y2AxisLabel: upper.figure.y_title ?? "",
           seriesStyles: { ...baseSel.styles, ...partnerSel.styles },
+          seriesLabels: { ...baseSel.labels, ...partnerSel.labels },
           xAxisLabel: lower.figure.x_title ?? "",
           yAxisLabel: lower.figure.y_title ?? "",
-          // Both layers' marks (lower first) — REPLACE, never stack.
-          annotations: originFigureAnnotations([lower.figure, upper.figure], entry.id),
+          // Both layers' marks (lower first) — REPLACE, never stack. The upper
+          // layer's marks are tagged axis:1 so they land on y2 (fix #3), not
+          // the primary axis lower.figure's own marks stay on.
+          annotations: originFigureAnnotations([lower.figure, upper.figure], entry.id, [0, 1]),
           ...(originLegendPos(lower.figure)
             ? { legendPos: originLegendPos(lower.figure)! }
             : {}),
@@ -1286,6 +1310,8 @@ export const useApp = create<AppState>((set, get) => ({
     set({
       xLim: [fig.x_from, fig.x_to],
       yLim: [fig.y_from, fig.y_to],
+      xStep: fig.x_step ?? null,
+      yStep: fig.y_step ?? null,
       xLog: fig.x_log,
       yLog: fig.y_log,
       xAxisLabel: fig.x_title ?? "",
@@ -1294,7 +1320,12 @@ export const useApp = create<AppState>((set, get) => ({
       annotations: originFigureAnnotations([fig], entry.id),
       ...(originLegendPos(fig) ? { legendPos: originLegendPos(fig)! } : {}),
       ...(selection
-        ? { xKey: selection.xKey, yKeys: selection.yKeys, seriesStyles: selection.styles }
+        ? {
+            xKey: selection.xKey,
+            yKeys: selection.yKeys,
+            seriesStyles: selection.styles,
+            seriesLabels: selection.labels,
+          }
         : {}),
     });
     get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
@@ -1410,6 +1441,7 @@ export const useApp = create<AppState>((set, get) => ({
         y2Keys: null,
       y2Lim: null,
       y2Log: null,
+      y2Step: null,
       y2AxisLabel: "",
         seriesStyles: {},
         seriesLabels: {},
@@ -1418,6 +1450,8 @@ export const useApp = create<AppState>((set, get) => ({
         hiddenChannels: activeDs ? originHiddenChannels(activeDs.data) : [],
         xLim: null,
         yLim: null,
+        xStep: null,
+        yStep: null,
         spatialPanels: null, // decode-plan #36 — never restored from a stale figure apply
         facetPanels: null, // gap #21 residual — likewise never restored from a stale facet
         breakPanels: null, // gap #21 residual — likewise never restored from a stale break
@@ -1455,6 +1489,7 @@ export const useApp = create<AppState>((set, get) => ({
         y2Keys: null,
       y2Lim: null,
       y2Log: null,
+      y2Step: null,
       y2AxisLabel: "",
         seriesStyles: {},
         seriesLabels: {},
@@ -1463,6 +1498,8 @@ export const useApp = create<AppState>((set, get) => ({
         hiddenChannels: ds ? originHiddenChannels(ds.data) : [],
         xLim: null,
         yLim: null,
+        xStep: null,
+        yStep: null,
         // A plain click on a different dataset always drops a prior spatial
         // multi-panel arrangement (decode-plan #36) — it was built for a
         // specific figure's layers, not whatever is now active. Same logic
@@ -1643,12 +1680,15 @@ export const useApp = create<AppState>((set, get) => ({
         y2Keys: null,
       y2Lim: null,
       y2Log: null,
+      y2Step: null,
       y2AxisLabel: "",
         seriesStyles: {},
         errKeys: {},
         hiddenChannels: [],
         xLim: null,
         yLim: null,
+        xStep: null,
+        yStep: null,
         spatialPanels: null, // decode-plan #36 — the clone becomes active, not a figure
         facetPanels: null, // gap #21 residual — likewise, not a facet arrangement
         breakPanels: null, // gap #21 residual — likewise, not a break arrangement
@@ -1992,8 +2032,11 @@ export const useApp = create<AppState>((set, get) => ({
   setInsetMode: (insetMode) => set({ insetMode }),
   setPolarMode: (polarMode) => set({ polarMode }),
   setStatMode: (statMode) => set({ statMode }),
-  setXLim: (xLim) => set({ xLim }),
-  setYLim: (yLim) => set({ yLim }),
+  // Clears the paired decoded step too: a manual/Inspector range (or the
+  // smart auto-scale reset to null) is no longer the Origin figure that
+  // produced xStep/yStep, so a stale step must never leak onto it.
+  setXLim: (xLim) => set({ xLim, xStep: null }),
+  setYLim: (yLim) => set({ yLim, yStep: null }),
   setXFmt: (xFmt) => set({ xFmt }),
   setYFmt: (yFmt) => set({ yFmt }),
   setPlotTitle: (plotTitle) => {
@@ -2012,7 +2055,7 @@ export const useApp = create<AppState>((set, get) => ({
     get().recordMacro(`Y channels → ${yKeys ? yKeys.join(",") : "all"}`, `qz.setYKeys(${lit(yKeys)})`);
   },
   setY2Keys: (y2Keys) => {
-    set({ y2Keys, ...(y2Keys ? {} : { y2Lim: null, y2Log: null, y2AxisLabel: "" }) });
+    set({ y2Keys, ...(y2Keys ? {} : { y2Lim: null, y2Log: null, y2Step: null, y2AxisLabel: "" }) });
     get().recordMacro(
       `Y2 channels → ${y2Keys ? y2Keys.join(",") : "none"}`,
       `qz.setY2Keys(${lit(y2Keys)})`,

@@ -75,8 +75,17 @@ export interface OriginFigure {
   /** Secondary-Y axis title (double-Y graphs); decoded but not yet wired. */
   y2_title?: string;
   /** Per-curve legend labels (1-based curve order), including hand-edited
-   *  overrides. Decoded; wiring into seriesLabels is a follow-up. */
+   *  overrides. Decoded; wired into seriesLabels by `figureChannelSelection`
+   *  (curve-binding order, count-compatible prefix only — see its doc). */
   legend_labels?: string[];
+  /** Origin's decoded major-tick increment for this axis
+   *  (`io/origin_project/figures.py`/`figures_opju.py`, oracle-verified). On a
+   *  LOG axis this is a LINEAR value step, not a log10/decade multiplier
+   *  (verified against PNR.opj Graph50: y in [0.7139, 1.2732], y_step 0.1 ->
+   *  ticks 0.8/0.9/1.0/1.1/1.2). null/absent = undecoded; `fixedLogAxisSplits`
+   *  then falls back to a "nice number" linear step. */
+  x_step?: number | null;
+  y_step?: number | null;
   /** The Origin legend box's top-left corner at DATA coordinates (same
    *  position model as annotation_marks; log axes decoded in log10 space).
    *  null/absent = no legend or position not decoded (never guessed).

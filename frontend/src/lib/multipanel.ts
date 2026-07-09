@@ -5,7 +5,7 @@
 import type uPlot from "uplot";
 
 import type { PlotPayload } from "./plotdata";
-import type { SeriesStyle } from "./types";
+import type { Annotation, SeriesStyle } from "./types";
 
 /** One payload per plotted series: each keeps the shared x column + a single
  *  y-series, so each renders in its own stacked panel against the same x. */
@@ -46,6 +46,16 @@ export interface SpatialPanel {
   xAxisLabel?: string;
   yAxisLabel?: string;
   seriesStyles?: Record<number, SeriesStyle>;
+  /** Per-channel legend-label overrides (Origin's decoded `legend_labels`,
+   *  fix #4), same channel-index keying as `seriesStyles`. */
+  seriesLabels?: Record<number, string>;
+  /** Origin's decoded major-tick increment for this panel's OWN x/y axes
+   *  (see `fixedLogAxisSplits`'s doc) — null/absent = undecoded. */
+  xStep?: number | null;
+  yStep?: number | null;
+  /** This panel's OWN layer's floating text marks, in its own data coords
+   *  (fix #5 — a multi-panel apply used to drop every layer's annotations). */
+  annotations?: Annotation[];
   row: number;
   col: number;
 }
