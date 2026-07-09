@@ -187,6 +187,7 @@ export function useMultiPanelStage(): MultiPanelStageState {
         div.style.gridColumn = `${p.col + 1}`;
         host.appendChild(div);
         const cellStyles = p.yKeys.map((ch) => p.seriesStyles?.[ch]);
+        const cellLabels = p.yKeys.map((ch) => p.seriesLabels?.[ch]);
         const opts = buildOpts(pp, {
           width: cellW,
           height: cellH,
@@ -194,14 +195,20 @@ export function useMultiPanelStage(): MultiPanelStageState {
           xLog: p.xLog,
           xLim: p.xLim,
           yLim: p.yLim,
+          xStep: p.xStep,
+          yStep: p.yStep,
           xFmt,
           yFmt,
           showGrid,
           tool,
           onReadout: setReadout,
           seriesStyles: cellStyles,
+          seriesLabels: cellLabels,
           xAxisLabel: p.xAxisLabel,
           yAxisLabel: p.yAxisLabel,
+          // Each panel's OWN layer's floating text (fix #5 — a multi-panel
+          // apply used to drop every layer's annotations).
+          annotations: p.annotations,
           linearPaths: LINEAR_PATHS,
           pointsPaths: POINTS_PATHS,
         });

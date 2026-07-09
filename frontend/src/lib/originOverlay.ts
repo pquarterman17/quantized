@@ -54,6 +54,20 @@ export function overlayCurveStyles(data: DataStruct | null | undefined): Record<
   return out;
 }
 
+/** Recover the per-column decoded legend captions stamped by
+ *  buildOverlayDataset into an overlay's metadata, as a channel-index →
+ *  label map ready for the store's `seriesLabels` (fix #4). Empty for a
+ *  non-overlay dataset or one whose figure had no legend_labels. */
+export function overlayCurveLabels(data: DataStruct | null | undefined): Record<number, string> {
+  const arr = (data?.metadata ?? {})["origin_curve_labels"];
+  if (!Array.isArray(arr)) return {};
+  const out: Record<number, string> = {};
+  arr.forEach((s, i) => {
+    if (s) out[i] = s as string;
+  });
+  return out;
+}
+
 export function buildOverlayDataset(
   figure: OriginFigure,
   datasets: Dataset[],
@@ -70,16 +84,21 @@ export function buildOverlayDataset(
     unit: string;
     style: SeriesStyle | null; // decoded line/scatter, per curve
     designation: string; // the source column's Origin designation (Y / Y-error / …)
+    legendLabel: string | undefined; // decoded legend caption (fix #4), if any
   }
+  const legend = figure.legend_labels ?? [];
   const bound: Bound[] = [];
-  for (const c of figure.curves ?? []) {
+  // curveIdx tracks this curve's position among ALL of figure.curves (even
+  // ones skipped below for an unresolved book/channel) — the SAME "\l(n)"
+  // numbering Origin's legend uses across the whole layer, not per-book.
+  figure.curves?.forEach((c, curveIdx) => {
     const ds = books.find(
       (d) => String((d.data.metadata ?? {}).origin_book ?? "") === c.book,
     );
-    if (!ds) continue;
+    if (!ds) return;
     const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
     const yCh = channelOf(meta, c.y);
-    if (yCh < 0) continue; // dropped/undecoded column — skip honestly
+    if (yCh < 0) return; // dropped/undecoded column — skip honestly
     const xCh = c.x ? channelOf(meta, c.x) : -2;
     const label = ds.data.labels[yCh] || c.y;
     const cd = meta.column_designations as Record<string, unknown> | undefined;
@@ -91,8 +110,9 @@ export function buildOverlayDataset(
       unit: ds.data.units[yCh] ?? "",
       style: originCurveSeriesStyle(c),
       designation: cd ? String(cd[c.y] ?? "Y") : "Y",
+      legendLabel: curveIdx < legend.length && legend[curveIdx] ? legend[curveIdx] : undefined,
     });
-  }
+  });
   if (bound.length < 2) return null;
 
   // One x-block per participating dataset, in first-curve order.
@@ -146,6 +166,9 @@ export function buildOverlayDataset(
       // so applyOriginFigure can restore the figure's look — carried in metadata
       // so it survives the overlay-reuse path too.
       origin_curve_styles: bound.map((b) => b.style),
+      // Per-column decoded legend caption (fix #4), same null-where-undecoded
+      // shape as origin_curve_styles — read back via overlayCurveLabels.
+      origin_curve_labels: bound.map((b) => b.legendLabel ?? null),
       // Carry each column's source Origin designation (as synthetic per-column
       // keys), so the same error/secondary-X hiding the default view applies runs
       // on the overlay too (setActive → originHiddenChannels): an error column

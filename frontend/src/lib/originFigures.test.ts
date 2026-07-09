@@ -175,12 +175,12 @@ describe("figureChannelSelection", () => {
 
   it("maps curve y letters onto value-channel indices", () => {
     const fig = figure({ curves: [{ book: "Co", x: "A", y: "C" }] });
-    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [1], styles: {} });
+    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [1], styles: {}, labels: {} });
   });
 
   it("selects a non-default x channel when the curve's x is not the dataset x", () => {
     const fig = figure({ curves: [{ book: "Co", x: "B", y: "C" }] });
-    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: 0, yKeys: [1], styles: {} });
+    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: 0, yKeys: [1], styles: {}, labels: {} });
   });
 
   it("collects multiple curves, deduplicated", () => {
@@ -191,7 +191,7 @@ describe("figureChannelSelection", () => {
         { book: "Co", x: "A", y: "C" },
       ],
     });
-    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [0, 1], styles: {} });
+    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [0, 1], styles: {}, labels: {} });
   });
 
   it("maps decoded line/scatter styles onto the plotted channels", () => {
@@ -205,6 +205,7 @@ describe("figureChannelSelection", () => {
       xKey: null,
       yKeys: [0, 1],
       styles: { 0: { marker: true, width: 0 }, 1: { width: 1.5 } },
+      labels: {},
     });
   });
 
@@ -218,6 +219,7 @@ describe("figureChannelSelection", () => {
       xKey: null,
       yKeys: [0],
       styles: { 0: { marker: true, width: 0, color: "#F14040", markerShape: "triangle" } },
+      labels: {},
     });
   });
 
@@ -239,7 +241,61 @@ describe("figureChannelSelection", () => {
         { book: "Co", x: "A", y: "B" },
       ],
     });
-    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [0], styles: {} });
+    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [0], styles: {}, labels: {} });
+  });
+
+  // Fix #4: decoded legend_labels wired into per-channel seriesLabels.
+  it("maps decoded legend labels onto the bound curves, in curve-binding order", () => {
+    const fig = figure({
+      legend_labels: ["Nb", "Nb/Al"],
+      curves: [
+        { book: "Co", x: "A", y: "B" },
+        { book: "Co", x: "A", y: "C" },
+      ],
+    });
+    expect(figureChannelSelection(fig, ds)).toEqual({
+      xKey: null,
+      yKeys: [0, 1],
+      styles: {},
+      labels: { 0: "Nb", 1: "Nb/Al" },
+    });
+  });
+
+  it("applies only the matching prefix when the legend list is shorter than the bound curves (never crashes)", () => {
+    const fig = figure({
+      legend_labels: ["Nb"], // only the first curve's caption decoded
+      curves: [
+        { book: "Co", x: "A", y: "B" },
+        { book: "Co", x: "A", y: "C" },
+      ],
+    });
+    expect(figureChannelSelection(fig, ds)).toEqual({
+      xKey: null,
+      yKeys: [0, 1],
+      styles: {},
+      labels: { 0: "Nb" }, // channel 1 (curve 2) keeps its default label
+    });
+  });
+
+  it("skips a blank legend slot (a gap in Origin's \\l(n) numbering) without an empty-string override", () => {
+    const fig = figure({
+      legend_labels: ["", "Nb/Au"], // slot 1 undecoded
+      curves: [
+        { book: "Co", x: "A", y: "B" },
+        { book: "Co", x: "A", y: "C" },
+      ],
+    });
+    expect(figureChannelSelection(fig, ds)).toEqual({
+      xKey: null,
+      yKeys: [0, 1],
+      styles: {},
+      labels: { 1: "Nb/Au" },
+    });
+  });
+
+  it("ignores an absent/empty legend_labels list entirely (no override)", () => {
+    const fig = figure({ curves: [{ book: "Co", x: "A", y: "B" }] });
+    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [0], styles: {}, labels: {} });
   });
 });
 
@@ -422,9 +478,40 @@ describe("resolveFigurePanels", () => {
     });
     const panels = resolveFigurePanels([l1, l2], [ds1, ds2]);
     expect(panels).toEqual([
-      { datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 10], yLim: [0, 50], xLog: false, yLog: true, xAxisLabel: "Time", yAxisLabel: "V", seriesStyles: {} },
-      { datasetId: "d2", xKey: null, yKeys: [0], xLim: [0, 20], yLim: [-1, 1], xLog: false, yLog: false, xAxisLabel: undefined, yAxisLabel: undefined, seriesStyles: {} },
+      { datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 10], yLim: [0, 50], xLog: false, yLog: true, xAxisLabel: "Time", yAxisLabel: "V", seriesStyles: {}, seriesLabels: {}, xStep: null, yStep: null, annotations: [] },
+      { datasetId: "d2", xKey: null, yKeys: [0], xLim: [0, 20], yLim: [-1, 1], xLog: false, yLog: false, xAxisLabel: undefined, yAxisLabel: undefined, seriesStyles: {}, seriesLabels: {}, xStep: null, yStep: null, annotations: [] },
     ]);
+  });
+
+  it("carries each layer's decoded x_step/y_step and its OWN annotation_marks (fixes #2 + #5)", () => {
+    const l1 = entry("f1", 1, "d1", {
+      x_from: 0, x_to: 10, y_from: 0, y_to: 50, x_step: 2, y_step: 10,
+      curves: [{ book: "Book1", x: "A", y: "B" }],
+      annotation_marks: [{ text: "panel 1 label", x: 5, y: 25 }],
+    });
+    const l2 = entry("f2", 2, "d2", {
+      x_from: 0, x_to: 20, y_from: -1, y_to: 1,
+      curves: [{ book: "Book2", x: "A", y: "B" }],
+      // no x_step/y_step/marks decoded on this layer
+    });
+    const panels = resolveFigurePanels([l1, l2], [ds1, ds2]);
+    expect(panels?.[0].xStep).toBe(2);
+    expect(panels?.[0].yStep).toBe(10);
+    expect(panels?.[0].annotations).toEqual([
+      { id: "figann-f1-0-0", x: 5, y: 25, text: "panel 1 label" },
+    ]);
+    expect(panels?.[1].xStep).toBeNull();
+    expect(panels?.[1].yStep).toBeNull();
+    expect(panels?.[1].annotations).toEqual([]);
+  });
+
+  it("carries each layer's decoded legend_labels into its own seriesLabels", () => {
+    const l1 = entry("f1", 1, "d1", {
+      legend_labels: ["Field-cooled"],
+      curves: [{ book: "Book1", x: "A", y: "B" }],
+    });
+    const panels = resolveFigurePanels([l1, entry("f2", 2, "d2", { curves: [{ book: "Book2", x: "A", y: "B" }] })], [ds1, ds2]);
+    expect(panels?.[0].seriesLabels).toEqual({ 0: "Field-cooled" });
   });
 
   it("returns null (all-or-nothing) when ANY family member has no resolved dataset", () => {
@@ -472,6 +559,23 @@ describe("originFigureAnnotations", () => {
     const anns = originFigureAnnotations([l1, l2], "fig-0");
     expect(anns.map((a) => a.text)).toEqual(["on layer 1", "on layer 2"]);
     expect(anns.map((a) => a.id)).toEqual(["figann-fig-0-0-0", "figann-fig-0-1-0"]);
+  });
+
+  // Fix #3: the double-Y apply tags the UPPER layer's marks so they plot on
+  // y2 rather than the primary axis.
+  it("tags the upper layer's marks axis:1 when an axes array is given", () => {
+    const l1 = figure({ annotation_marks: [{ text: "lower", x: 1, y: 2 }] });
+    const l2 = figure({ annotation_marks: [{ text: "upper", x: 3, y: 4 }] });
+    const anns = originFigureAnnotations([l1, l2], "fig-0", [0, 1]);
+    expect(anns[0].axis).toBeUndefined(); // lower layer: primary axis, untagged
+    expect(anns[1].axis).toBe(1);
+  });
+
+  it("leaves every mark untagged (primary) when no axes array is given", () => {
+    const l1 = figure({ annotation_marks: [{ text: "lower", x: 1, y: 2 }] });
+    const l2 = figure({ annotation_marks: [{ text: "upper", x: 3, y: 4 }] });
+    const anns = originFigureAnnotations([l1, l2], "fig-0");
+    expect(anns.every((a) => a.axis === undefined)).toBe(true);
   });
 });
 

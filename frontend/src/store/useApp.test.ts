@@ -1143,6 +1143,36 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(s.yLog).toBe(true);
   });
 
+  // Fix #2: Origin's decoded major-tick increment threads through to xStep/
+  // yStep (consumed by lib/uplotOpts.fixedLogAxisSplits for a fixed log range).
+  it("carries the figure's decoded x_step/y_step, and clears them when absent", () => {
+    useApp.setState({
+      originFigures: [
+        { ...figureEntry, figure: { ...figureEntry.figure, x_step: 10, y_step: 0.1 } },
+      ],
+      xStep: 999, // stale from a prior apply
+      yStep: 999,
+    });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    expect(useApp.getState().xStep).toBe(10);
+    expect(useApp.getState().yStep).toBe(0.1);
+
+    // Re-applying a figure with NO decoded step must clear the stale value,
+    // never leave the previous figure's step behind.
+    useApp.setState({ originFigures: [figureEntry] });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    expect(useApp.getState().xStep).toBeNull();
+    expect(useApp.getState().yStep).toBeNull();
+  });
+
+  it("setXLim/setYLim clear a stale decoded step (a manual range is not the Origin figure that produced it)", () => {
+    useApp.setState({ xStep: 5, yStep: 7 });
+    useApp.getState().setXLim([0, 1]);
+    useApp.getState().setYLim([0, 1]);
+    expect(useApp.getState().xStep).toBeNull();
+    expect(useApp.getState().yStep).toBeNull();
+  });
+
   it("applies Origin's decoded axis titles to the axis labels", () => {
     useApp.setState({
       originFigures: [
@@ -1325,6 +1355,24 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
     expect(s.y2Log).toBe(false);
     // W4 #37: layer 2's decoded title becomes the y2 axis label override
     expect(s.y2AxisLabel).toBe("Counts");
+  });
+
+  // Fixes #2 + #4: lower layer drives xStep/yStep, upper layer drives y2Step;
+  // both layers' decoded legend labels merge into one seriesLabels map.
+  it("merges xStep/yStep (from the lower layer) + y2Step (from the upper layer) + both layers' legend labels", () => {
+    useApp.setState({
+      originFigures: [
+        { ...layer1, figure: { ...layer1.figure, x_step: 2, y_step: 5, legend_labels: ["ZFC"] } },
+        { ...layer2, figure: { ...layer2.figure, y_step: 500, legend_labels: ["FC", "Difference"] } },
+      ],
+    });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    const s = useApp.getState();
+    expect(s.xStep).toBe(2);
+    expect(s.yStep).toBe(5);
+    expect(s.y2Step).toBe(500);
+    // channel 0 <- layer1 curve "B"; channels 1,2 <- layer2 curves "C","D".
+    expect(s.seriesLabels).toEqual({ 0: "ZFC", 1: "FC", 2: "Difference" });
   });
 
   it("applying layer 2 (the other entry) offers the same combined view", () => {

@@ -132,7 +132,15 @@ export function resolveFigureDataset(figure: OriginFigure, candidates: Dataset[]
 export function figureChannelSelection(
   figure: OriginFigure,
   ds: Dataset,
-): { xKey: number | null; yKeys: number[]; styles: Record<number, SeriesStyle> } | null {
+): {
+  xKey: number | null;
+  yKeys: number[];
+  styles: Record<number, SeriesStyle>;
+  /** Decoded per-curve legend captions (`legend_labels`), mapped onto the
+   *  bound channel that curve plots — see the loop below for the mapping
+   *  rule. Ready for the store's `seriesLabels`. */
+  labels: Record<number, string>;
+} | null {
   const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
   const book = String(meta.origin_book ?? "");
   const letters = Array.isArray(meta.origin_column_names)
@@ -144,7 +152,16 @@ export function figureChannelSelection(
   const xLetter = String(meta.x_column_name ?? "");
   const yKeys: number[] = [];
   const styles: Record<number, SeriesStyle> = {};
+  const labels: Record<number, string> = {};
+  const legend = figure.legend_labels ?? [];
   let xKey: number | null = null;
+  // legend_labels is a dense 1-based list, one entry per curve in the SAME
+  // order Origin's "\l(n)" legend numbering plots them — curveIdx tracks that
+  // position among THIS book's bound curves. A shorter (or empty) legend list
+  // is count-compatible only up to its own length: the matching prefix of
+  // curves gets a label, the rest keep their default — never guessed, never
+  // a crash on a mismatched count.
+  let curveIdx = 0;
   for (const curve of mine) {
     const yIdx = letters.indexOf(curve.y);
     if (yIdx < 0) continue; // e.g. a text/dropped column — skip, never guess
@@ -155,8 +172,10 @@ export function figureChannelSelection(
       const xIdx = letters.indexOf(curve.x);
       if (xIdx >= 0) xKey = xIdx; // plot against a non-default x channel
     }
+    if (curveIdx < legend.length && legend[curveIdx]) labels[yIdx] = legend[curveIdx];
+    curveIdx++;
   }
-  return yKeys.length > 0 ? { xKey, yKeys, styles } : null;
+  return yKeys.length > 0 ? { xKey, yKeys, styles, labels } : null;
 }
 
 /** Build the Library entries for one import's figures, tagged with the
@@ -260,6 +279,13 @@ export function resolveFigurePanels(
       xAxisLabel: fig.x_title || undefined,
       yAxisLabel: fig.y_title || undefined,
       seriesStyles: sel.styles,
+      seriesLabels: sel.labels,
+      xStep: fig.x_step ?? null,
+      yStep: fig.y_step ?? null,
+      // Each panel's OWN layer's marks, in that layer's own data coords —
+      // annotation_marks are already recorded per-layer, so no coordinate
+      // transform is needed (fix #5: multi-panel figures used to drop them).
+      annotations: originFigureAnnotations([fig], entry.id),
     });
   }
   return out;
@@ -272,11 +298,27 @@ export function resolveFigurePanels(
  *  ids). `applyOriginFigure` REPLACES the store's annotations with this —
  *  never accumulates — so switching or re-applying figures can't stack
  *  stale marks. Figures without marks yield [], which clears the plot. */
-export function originFigureAnnotations(figures: OriginFigure[], key: string): Annotation[] {
+export function originFigureAnnotations(
+  figures: OriginFigure[],
+  key: string,
+  /** Per-figure Y-scale tag (parallel to `figures`), for the double-Y apply:
+   *  `axes[i] === 1` routes figures[i]'s marks to the plot's y2 scale (see
+   *  `Annotation.axis` / `uplotOverlays.annotationPlugin`). Omitted/undefined
+   *  entries stay on the primary axis — the single-layer/spatial-panel apply
+   *  never passes this, so their marks are always untagged (primary). */
+  axes?: (0 | 1)[],
+): Annotation[] {
   const out: Annotation[] = [];
   figures.forEach((f, fi) => {
+    const axisTag = axes?.[fi];
     (f.annotation_marks ?? []).forEach((m, mi) => {
-      out.push({ id: `figann-${key}-${fi}-${mi}`, x: m.x, y: m.y, text: m.text });
+      out.push({
+        id: `figann-${key}-${fi}-${mi}`,
+        x: m.x,
+        y: m.y,
+        text: m.text,
+        ...(axisTag === 1 ? { axis: 1 as const } : {}),
+      });
     });
   });
   return out;

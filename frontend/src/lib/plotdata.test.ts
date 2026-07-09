@@ -816,4 +816,65 @@ describe("dropTrailingEmptyRows", () => {
     const out = dropTrailingEmptyRows(mk([0, null, 2, 3]));
     expect(out.data[0]).toEqual([0, null, 2, 3]);
   });
+
+  // Fix #1: over-allocated Origin worksheet storage (Book6 rows 160-179 of
+  // 180, and ~10 sibling books) — trailing rows where x AND every y read
+  // exactly 0.0 SIMULTANEOUSLY. Unlike a null/NaN tail, these are "points",
+  // so the plottable() check above doesn't catch them; left in, they break
+  // x-ascending (a swept quantity resetting to 0) and draw a wrap-around line
+  // back to the origin.
+  it("trims a trailing run where x and every y are simultaneously an exact 0 (over-allocated storage)", () => {
+    const out = dropTrailingEmptyRows(
+      mkXY([0.01, 0.02, 0.03, 0, 0], [1.1, 2.2, 3.3, 0, 0], [5, 6, 7, 0, 0]),
+    );
+    expect(out.data[0]).toEqual([0.01, 0.02, 0.03]);
+    expect(out.data[1]).toEqual([1.1, 2.2, 3.3]);
+    expect(out.data[2]).toEqual([5, 6, 7]);
+  });
+
+  it("prunes a series that legitimately ends on a single real (0,0) point (documented trade-off)", () => {
+    // Indistinguishable from the padding artifact above — accepted, since a
+    // genuine (0,0) tail sample is rare and the padding case is common.
+    const p: PlotPayload = {
+      data: [
+        [1, 2, 0],
+        [5, 6, 0],
+      ] as PlotPayload["data"],
+      series: [{ label: "y", unit: "", axis: 0 }],
+      xLabel: "x",
+      xUnit: "",
+    };
+    const out = dropTrailingEmptyRows(p);
+    expect(out.data[0]).toEqual([1, 2]);
+    expect(out.data[1]).toEqual([5, 6]);
+  });
+
+  it("leaves an INTERIOR all-zero row in place — only a trailing run is pruned", () => {
+    const p: PlotPayload = {
+      data: [
+        [1, 0, 3, 4],
+        [5, 0, 7, 8],
+      ] as PlotPayload["data"],
+      series: [{ label: "y", unit: "", axis: 0 }],
+      xLabel: "x",
+      xUnit: "",
+    };
+    const out = dropTrailingEmptyRows(p);
+    expect(out.data[0]).toEqual([1, 0, 3, 4]);
+    expect(out.data[1]).toEqual([5, 0, 7, 8]);
+  });
+
+  it("does not newly-prune a mixed NaN+zero trailing row (follows the existing null-tail rule only)", () => {
+    // y1 is NaN at the last row (disqualifies the strict all-finite-zero
+    // rule); y2 is a finite 0 there, so the OLD null-tail rule already keeps
+    // the row (some finite y present) — the new rule must not override that.
+    const out = dropTrailingEmptyRows(mkXY([1, 2, 0], [1.1, 2.2, NaN], [5, 6, 0]));
+    expect(out.data[0]).toEqual([1, 2, 0]);
+  });
+
+  it("does not prune a trailing x=0 row in an x-only payload (no y series to be 'all zero')", () => {
+    const p: PlotPayload = { data: [[1, 2, 0]] as PlotPayload["data"], series: [], xLabel: "x", xUnit: "" };
+    const out = dropTrailingEmptyRows(p);
+    expect(out.data[0]).toEqual([1, 2, 0]);
+  });
 });

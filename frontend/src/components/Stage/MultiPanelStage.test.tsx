@@ -106,6 +106,82 @@ describe("MultiPanelStage — mode regressions", () => {
     await waitFor(() => expect(created.length).toBe(1));
   });
 
+  // Fix #5: a spatial panel's OWN annotation marks must render (previously
+  // silently dropped by the multi-panel apply path). The default "zoom" tool
+  // with no other decorations adds zero plugins on its own, so one plugin
+  // present is exactly the annotation plugin buildOpts adds for a non-empty
+  // `annotations` list.
+  it("spatial-apply mode threads a panel's OWN annotations through (fix #5)", async () => {
+    useApp.setState({
+      spatialPanels: [
+        {
+          datasetId: "d1",
+          xKey: null,
+          yKeys: [0],
+          xLim: [0, 3],
+          yLim: [0, 40],
+          xLog: false,
+          yLog: false,
+          row: 0,
+          col: 0,
+          annotations: [{ id: "a1", x: 1, y: 20, text: "peak" }],
+        },
+      ],
+    });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const opts = created[0] as { opts: { plugins: unknown[] } };
+    expect(opts.opts.plugins.length).toBe(1);
+  });
+
+  // Fix #4: a spatial panel's decoded legend label overrides the series name.
+  it("spatial-apply mode threads a panel's seriesLabels through to the series label", async () => {
+    useApp.setState({
+      spatialPanels: [
+        {
+          datasetId: "d1",
+          xKey: null,
+          yKeys: [0],
+          xLim: [0, 3],
+          yLim: [0, 40],
+          xLog: false,
+          yLog: false,
+          row: 0,
+          col: 0,
+          seriesLabels: { 0: "Field-cooled" },
+        },
+      ],
+    });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const opts = created[0] as { opts: { series: { label?: string }[] } };
+    expect(opts.opts.series[1].label).toBe("Field-cooled");
+  });
+
+  // Fix #2: a panel's decoded step drives fixed log-axis ticks.
+  it("spatial-apply mode threads a panel's yStep through to the y-axis splits", async () => {
+    useApp.setState({
+      spatialPanels: [
+        {
+          datasetId: "d1",
+          xKey: null,
+          yKeys: [0],
+          xLim: [0, 3],
+          yLim: [0.7139, 1.2732],
+          xLog: false,
+          yLog: true,
+          row: 0,
+          col: 0,
+          yStep: 0.1,
+        },
+      ],
+    });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const opts = created[0] as { opts: { axes: { splits?: unknown }[] } };
+    expect(typeof opts.opts.axes[1].splits).toBe("function");
+  });
+
   it("paneled x-break mode renders one uPlot per segment (gap #21 residual)", async () => {
     useApp.getState().breakAtGaps("d1", [[1, 2]]);
     const expected = useApp.getState().breakPanels?.length ?? 0;

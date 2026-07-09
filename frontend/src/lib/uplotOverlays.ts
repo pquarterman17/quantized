@@ -160,7 +160,13 @@ export function axisBoxPlugin(color: string): uPlot.Plugin {
 }
 
 /** Draw text annotations (a small dot + label) pinned at data coordinates,
- *  clipped to the plot area so off-screen labels don't bleed into the axes. */
+ *  clipped to the plot area so off-screen labels don't bleed into the axes.
+ *  A mark tagged `axis: 1` (an Origin double-Y apply's upper-layer marks —
+ *  see `originFigureAnnotations`) plots against the SECONDARY (y2) scale
+ *  instead of the primary one, but only when this plot actually has a y2
+ *  scale — a y2-tagged mark surviving onto a single-axis plot (e.g. after
+ *  y2Keys was cleared) falls back to the primary scale rather than reading
+ *  `u.scales.y2` as undefined. */
 export function annotationPlugin(
   annotations: Annotation[],
   color: string,
@@ -171,14 +177,16 @@ export function annotationPlugin(
       draw: (u: uPlot) => {
         const { ctx } = u;
         const { left, top, width, height } = u.bbox;
+        const hasY2 = u.scales.y2 != null;
         ctx.save();
         ctx.fillStyle = color;
         ctx.font = font;
         ctx.textBaseline = "bottom";
         for (const a of annotations) {
           if (!Number.isFinite(a.x) || !Number.isFinite(a.y)) continue;
+          const yScale = a.axis === 1 && hasY2 ? "y2" : "y";
           const px = u.valToPos(a.x, "x", true);
-          const py = u.valToPos(a.y, "y", true);
+          const py = u.valToPos(a.y, yScale, true);
           if (px < left || px > left + width || py < top || py > top + height) continue;
           ctx.beginPath();
           ctx.arc(px, py, 3, 0, Math.PI * 2);

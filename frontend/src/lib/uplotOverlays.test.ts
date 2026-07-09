@@ -94,8 +94,11 @@ describe("pickRefLine (drag hit-test)", () => {
   });
 });
 
-/** Stub recording fillText + arc calls for the annotation plugin. */
-function fakeAnnU() {
+/** Stub recording fillText + arc calls for the annotation plugin. `hasY2`
+ *  seeds `u.scales.y2` (present/absent) so tests can exercise the y2-gate;
+ *  its valToPos gives "y2" a DIFFERENT offset than "y" so a test can tell
+ *  which scale a mark actually resolved against. */
+function fakeAnnU(hasY2 = false) {
   const texts: { text: string; x: number; y: number }[] = [];
   const dots: { x: number; y: number }[] = [];
   const ctx = {
@@ -113,13 +116,15 @@ function fakeAnnU() {
     font: "",
     textBaseline: "" as CanvasTextBaseline,
   };
-  const valToPos = (v: number, scale: string) => (scale === "x" ? v : 100 - v);
-  const u = { ctx, bbox: { left: 10, top: 5, width: 100, height: 80 }, valToPos };
+  const valToPos = (v: number, scale: string) =>
+    scale === "x" ? v : scale === "y2" ? 200 - v : 100 - v;
+  const scales = hasY2 ? { x: {}, y: {}, y2: {} } : { x: {}, y: {} };
+  const u = { ctx, bbox: { left: 10, top: 5, width: 100, height: 80 }, valToPos, scales };
   return { u, texts, dots };
 }
 
-function drawAnn(anns: Annotation[]) {
-  const { u, texts, dots } = fakeAnnU();
+function drawAnn(anns: Annotation[], hasY2 = false) {
+  const { u, texts, dots } = fakeAnnU(hasY2);
   const plugin = annotationPlugin(anns, "#fff", "11px mono");
   // @ts-expect-error — minimal stub stands in for a real uPlot instance
   plugin.hooks.draw?.(u);
@@ -150,5 +155,22 @@ describe("annotationPlugin", () => {
     ]);
     expect(dots).toHaveLength(1); // only the finite one
     expect(texts).toHaveLength(0); // empty text → no fillText
+  });
+
+  // Fix #3: an Origin double-Y apply's upper-layer marks are tagged axis:1
+  // and must land on the SECONDARY (y2) scale, not the primary one.
+  it("routes an axis:1 mark to the y2 scale when the plot has one", () => {
+    const { dots } = drawAnn([{ id: "a", x: 50, y: 150, text: "y2 mark", axis: 1 }], true);
+    expect(dots).toEqual([{ x: 50, y: 50 }]); // y2 valToPos: 200-150
+  });
+
+  it("falls back to the primary y scale for an axis:1 mark when the plot has no y2 scale", () => {
+    const { dots } = drawAnn([{ id: "a", x: 50, y: 30, text: "y2 mark", axis: 1 }], false);
+    expect(dots).toEqual([{ x: 50, y: 70 }]); // y valToPos: 100-30, never 200-30
+  });
+
+  it("keeps an untagged (primary) annotation on y even when the plot HAS a y2 scale", () => {
+    const { dots } = drawAnn([{ id: "a", x: 50, y: 30, text: "primary" }], true);
+    expect(dots).toEqual([{ x: 50, y: 70 }]);
   });
 });

@@ -90,6 +90,71 @@ export function categoricalTickFormatter(categories: readonly string[]): TickVal
     });
 }
 
+/** A "nice" linear tick step (1/2/5 × 10^n) for a span with no decoded Origin
+ *  increment to anchor to — the classic tick-step heuristic, aiming for
+ *  roughly `targetTicks` ticks across the span. Used by `fixedLogAxisSplits`
+ *  for the sub-decade case when `step` is undecoded. */
+export function niceLinearStep(span: number, targetTicks = 5): number {
+  if (!(span > 0)) return 1;
+  const raw = span / Math.max(1, targetTicks);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const residual = raw / mag;
+  const nice = residual < 1.5 ? 1 : residual < 3 ? 2 : residual < 7 ? 5 : 10;
+  return nice * mag;
+}
+
+/** Undo float noise from `n * step` accumulation (e.g. `0.1 * 8` reading as
+ *  `0.7999999999999999`) so a generated tick prints as the clean decimal it
+ *  is meant to be. Ticks are display values, not analysis inputs, so this
+ *  precision is more than enough. */
+function cleanStepValue(v: number): number {
+  return Number(v.toPrecision(12));
+}
+
+/** Log-axis tick positions for a FIXED [min, max] range — an applied Origin
+ *  figure's saved axis bounds, or a hand-typed Inspector AxisLimits range.
+ *  Supplied as uPlot's `axis.splits` OVERRIDE (see `buildOpts`) so it never
+ *  falls through to uPlot's own internal log-splits generator, which anchors
+ *  its first tick at the raw (unrounded) scaleMin — correct for an
+ *  autoscaled range (`rangeLog` rounds the bounds to a decade first), but
+ *  wrong for a FIXED range, whose bounds are whatever the figure/user typed
+ *  (e.g. Origin's real sub-decade views "Graph50"/"Graph52" in PNR.opj:
+ *  y in [0.7139, 1.2732] and [0.9772, 1.2916]) — the plot-fidelity bug this
+ *  fixes (ticks like [0.7139, 0.8, 0.9, 1] instead of [0.8, 0.9, 1, 1.1, 1.2]).
+ *
+ *  - Span ≥ 1 decade: pure powers-of-10 within [min, max] — the same ticks a
+ *    rangeLog-rounded autoscale would show (a normal multi-decade
+ *    reflectivity view keeps its 1/10/100/... ticks, nothing else).
+ *  - Span < 1 decade: ticks stepped arithmetically in LINEAR y-space. `step`
+ *    (Origin's decoded major-tick increment) is a LINEAR increment on a log
+ *    axis, not a log10/decade multiplier — verified against PNR.opj's
+ *    Graph50 (step 0.1 -> ticks 0.8/0.9/1.0/1.1/1.2) and Graph52 (step 0.05).
+ *    No decoded step -> `niceLinearStep` picks one.
+ *
+ *  Degenerate ranges (non-positive, or inverted/zero-width) return `[]`
+ *  (uPlot draws the axis line with no ticks rather than garbage). */
+export function fixedLogAxisSplits(min: number, max: number, step?: number | null): number[] {
+  if (!(min > 0) || !(max > min)) return [];
+  const EPS = 1e-9;
+  const decades = Math.log10(max / min);
+  if (decades >= 1 - EPS) {
+    const lo = Math.floor(Math.log10(min) + EPS);
+    const hi = Math.ceil(Math.log10(max) - EPS);
+    const out: number[] = [];
+    for (let k = lo; k <= hi; k++) {
+      const v = Math.pow(10, k);
+      if (v >= min * (1 - EPS) && v <= max * (1 + EPS)) out.push(v);
+    }
+    return out;
+  }
+  const s = step && step > 0 ? step : niceLinearStep(max - min);
+  const n0 = Math.ceil(min / s - EPS);
+  const n1 = Math.floor(max / s + EPS);
+  const out: number[] = [];
+  for (let n = n0; n <= n1; n++) out.push(cleanStepValue(n * s));
+  return out;
+}
+
 /** Is the x column sorted ascending? uPlot's x scale defaults to `sorted: 1`,
  *  meaning it derives the scale range from the *endpoints* (a binary-search
  *  optimization) instead of scanning. That assumption breaks for non-monotonic x
@@ -237,6 +302,14 @@ export interface BuildOptsArgs {
   /** Override the secondary y-axis label (Origin double-Y apply carries layer
    *  2's decoded title here); same blank/undefined semantics as yAxisLabel. */
   y2AxisLabel?: string;
+  /** Origin's decoded major-tick increment for each axis (see
+   *  `fixedLogAxisSplits`'s doc) — only consulted when that axis is BOTH log
+   *  AND has a fixed range (xLim/yLim/y2Lim), which is when uPlot's own
+   *  decade-snapping is bypassed and this module must supply ticks itself.
+   *  null/undefined = undecoded (a "nice number" step fills in instead). */
+  xStep?: number | null;
+  yStep?: number | null;
+  y2Step?: number | null;
 }
 
 /** Full-scan [min, max] of the finite values across every visible series on one
@@ -452,9 +525,37 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     ? categoricalTickFormatter(payload.xCategories)
     : tickFormatter(xFmt);
   const yValues = tickFormatter(yFmt);
+  // A FIXED range (xLim/yLim/y2Lim — an applied Origin figure or a hand-typed
+  // Inspector AxisLimits value) bypasses uPlot's own rangeLog decade-snapping
+  // on a log axis, so supply our own splits generator there (see
+  // fixedLogAxisSplits's doc for why + the sub-decade Origin-step behaviour).
+  // Autoscaled log axes (no fixed range) are untouched — uPlot's own splits
+  // already do the right thing once rangeLog has rounded the bounds.
+  const splitsFor = (
+    isLog: boolean,
+    lim: [number, number] | null | undefined,
+    step: number | null | undefined,
+  ): uPlot.Axis.Splits | undefined =>
+    isLog && lim
+      ? (_u: uPlot, _axisIdx: number, scaleMin: number, scaleMax: number): number[] =>
+          fixedLogAxisSplits(scaleMin, scaleMax, step ?? null)
+      : undefined;
+  const xSplits = splitsFor(xLog, xLim, args.xStep);
+  const ySplits = splitsFor(yLog, yLim, args.yStep);
   const axes: uPlot.Axis[] = [
-    { ...axis, label: xLabel, ...(xValues ? { values: xValues } : {}) },
-    { ...axis, size: 60, label: soloLabel(0), ...(yValues ? { values: yValues } : {}) },
+    {
+      ...axis,
+      label: xLabel,
+      ...(xValues ? { values: xValues } : {}),
+      ...(xSplits ? { splits: xSplits } : {}),
+    },
+    {
+      ...axis,
+      size: 60,
+      label: soloLabel(0),
+      ...(yValues ? { values: yValues } : {}),
+      ...(ySplits ? { splits: ySplits } : {}),
+    },
   ];
   if (hasY2) {
     const y2Lim = args.y2Lim ?? null;
@@ -462,6 +563,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       distr: y2LogEff ? 3 : 1,
       ...(y2Lim ? { range: y2Lim } : loopY2 ? { range: () => loopY2 } : {}),
     };
+    const y2Splits = splitsFor(y2LogEff, y2Lim, args.y2Step);
     // Secondary axis on the right; hide its grid so the two grids don't overlap.
     axes.push({
       ...axis,
@@ -471,6 +573,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       label: soloLabel(1),
       grid: { show: false },
       ...(yValues ? { values: yValues } : {}),
+      ...(y2Splits ? { splits: y2Splits } : {}),
     });
   }
 
