@@ -359,6 +359,20 @@ the shipped contract)
 
 ## Completed
 
+- ~~**PNR-triage plot-fidelity batch (unbooked side-work)**~~ (2026-07-09)
+  — from the owner's PNR.opj import testing; merged to main as `7b5aa50`
+  (commits `3928965`/`25d746b`/`bf6512f`): trailing all-zero-padding row
+  prune in `dropTrailingEmptyRows` (over-allocated Origin storage drew a
+  wrap-around line via the hysteresis loop-path); decade/step-snapped tick
+  splits for fixed log ranges (the decoded `x_step`/`y_step` — oracle-exact
+  — were being dropped at the `OriginFigure` type boundary; now threaded
+  through all apply paths, verified Graph50 → 0.8..1.2 by 0.1); y2-layer
+  annotation marks routed to the y2 scale (`Annotation.axis`); Origin
+  `legend_labels` wired into `seriesLabels` in all four apply paths incl.
+  cross-book overlay; multi-panel figures now carry annotations / labels /
+  steps per panel. `PlotStage.tsx` 491→441 via `usePlotStageActions`
+  extraction. Frontend 1761 tests + build green post-merge.
+
 - ~~**#37 y2 axis label from layer 2's decoded title**~~ (2026-07-07) —
   `applyOriginFigure`'s double-Y path sets a new `y2AxisLabel` store
   override from `upper.figure.y_title`; consumed by `uplotOpts.soloLabel`
