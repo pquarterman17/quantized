@@ -12,9 +12,11 @@ away on import and re-approximated from name prefixes.
 
 **Status:** Active
 **Created:** 2026-07-04
-**Updated:** 2026-07-08 (items 8 + 9 complete — folder bulk ops and
+**Updated:** 2026-07-09 (items 8 + 9 complete — folder bulk ops and
 tags/smart-folders; the only open item is 10, decomposing the 3
-grandfathered over-ceiling components — App.tsx already ratcheted 987→954)
+grandfathered over-ceiling components — App.tsx already ratcheted 987→954,
+and the `PlotStage.tsx` sub-task closed as a side-effect of MULTI_PLOT_PLAN
+#1 — its pin is gone entirely, not just ratcheted)
 
 ---
 
@@ -93,8 +95,11 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
     `architecture.test.ts` exemptions down to zero.
     - [ ] `App.tsx` (987) — root orchestrator; extract command-registry / menu
           wiring into hooks (the biggest offender)
-    - [ ] `components/Stage/PlotStage.tsx` (491) — extract plot-tool / overlay
-          wiring (grew with the peak-marker, xCategories, and facet gates)
+    - [x] ~~`components/Stage/PlotStage.tsx` (491)~~ — done as MULTI_PLOT_PLAN
+          #1, 2026-07-09: split into `usePlotPayload.ts` (fetch/compose) +
+          `PlotViewport.tsx` (uPlot lifecycle, no store reads); PlotStage.tsx
+          is now 312 lines. Pin REMOVED from `architecture.test.ts` (was 491,
+          now under the generic 400 ceiling).
     - [ ] `components/workshops/calculators/ThinFilmTab.tsx` (442) — split the
           calculator sub-tabs
 

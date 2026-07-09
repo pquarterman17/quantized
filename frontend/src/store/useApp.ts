@@ -54,6 +54,14 @@ import {
 } from "../lib/originFigures";
 import { planOriginFolders } from "../lib/originFolders";
 import { computePanelLayout } from "../lib/originPanels";
+import {
+  cascadeGeometry,
+  defaultPlotView,
+  hydrateView,
+  snapshotView,
+  type PlotView,
+  type PlotWindow,
+} from "../lib/plotview";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -113,6 +121,30 @@ let _idSeq = 0;
 const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
 const nextFolderId = (): string => `fld-${Date.now().toString(36)}-${++_idSeq}`;
 const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_idSeq}`;
+const nextWindowId = (): string => `win-${Date.now().toString(36)}-${++_idSeq}`;
+
+/** The highest z among a window list (0 if empty) — z-order helper shared by
+ *  every action that raises a window (focus/raise/create/duplicate). */
+const maxZ = (windows: readonly PlotWindow[]): number =>
+  windows.reduce((m, w) => Math.max(m, w.z), 0);
+
+/** A brand-new sole main window — the ≥1-window invariant's default: one
+ *  MAXIMIZED window bound to `datasetId`, with a fresh view (MULTI_PLOT_PLAN
+ *  decision #6 — pixel-identical to today's single-plot Stage). Used at store
+ *  init and whenever `loadWorkspace` resets the whole view (a fresh workspace
+ *  has no windows to restore yet — item 7 wires `.dwk` persistence). */
+function mainWindow(datasetId: string | null): PlotWindow {
+  return {
+    id: nextWindowId(),
+    kind: "plot",
+    title: "",
+    datasetId,
+    geometry: cascadeGeometry(0),
+    z: 0,
+    winState: "maximized",
+    view: defaultPlotView(),
+  };
+}
 
 // Names successive clipboard pastes "pasted data 1", "pasted data 2", … (gap #47).
 let _pasteSeq = 0;
@@ -342,6 +374,17 @@ interface AppState {
   seriesOrder: number[] | null; // explicit plotted-channel draw order (null = natural/yKeys order)
   hiddenChannels: number[]; // channels toggled off via the interactive legend (kept in payload, not drawn)
   waterfall: number; // waterfall offset as a fraction of the y-span (0 = off)
+  // Plot windows (MULTI_PLOT_PLAN item 2) — the "focused-window facade": every
+  // field ABOVE this comment (xKey … waterfall, the PlotView cluster) is the
+  // FOCUSED window's LIVE view; `plotWindows[]` holds each window's geometry/
+  // z/winState/dataset-binding plus its OWN view snapshot (stale while
+  // focused — the live singleton fields win). `focusWindow`/`closeWindow` are
+  // the ONLY actions that move a view between "live" and "at rest", via
+  // `lib/plotview`'s `snapshotView`/`hydrateView`. Always ≥1 window (the
+  // startup/load invariant — see `mainWindow`); `focusedWindowId` is never
+  // null while any window exists.
+  plotWindows: PlotWindow[];
+  focusedWindowId: string | null;
   plotTool: PlotTool;
   // Last x-range picked by the region rubber-band ([x_min,x_max]); the baseline
   // workshop consumes it then resets to null. Drag direction is normalized away.
@@ -612,6 +655,18 @@ interface AppState {
   // switcher's engine — kept in the store so it's testable.
   soloChannel: (channel: number | null) => void;
   setWaterfall: (waterfall: number) => void;
+  // Plot windows (MULTI_PLOT_PLAN item 2). `createWindow`/`duplicateWindow`
+  // return the new window's id; neither changes focus (only `focusWindow`
+  // does — see the field doc above). `closeWindow` is a no-op on the LAST
+  // window (the ≥1-window invariant). `datasetId`/`view` default to the
+  // current active dataset / a fresh `defaultPlotView()` when omitted.
+  createWindow: (datasetId?: string | null, view?: PlotView) => string;
+  closeWindow: (id: string) => void;
+  focusWindow: (id: string) => void;
+  duplicateWindow: (id: string) => string | null;
+  moveWindow: (id: string, x: number, y: number) => void;
+  resizeWindow: (id: string, w: number, h: number) => void;
+  raiseWindow: (id: string) => void;
   setPlotTool: (tool: PlotTool) => void;
   setRegionPicked: (range: [number, number] | null) => void;
   setIntegral: (integral: IntegralResult | null) => void;
@@ -818,6 +873,10 @@ function syncPrefs(s: AppState): void {
 
 const _initialPrefs = loadPrefs();
 
+// The ≥1-window invariant's startup value (MULTI_PLOT_PLAN item 2): a single
+// maximized main window bound to no dataset yet (activeId starts null).
+const _mainWindow = mainWindow(null);
+
 export const useApp = create<AppState>((set, get) => ({
   datasets: [],
   activeId: null,
@@ -889,6 +948,8 @@ export const useApp = create<AppState>((set, get) => ({
   seriesOrder: null,
   hiddenChannels: [],
   waterfall: 0,
+  plotWindows: [_mainWindow],
+  focusedWindowId: _mainWindow.id,
   plotTool: "zoom",
   regionPicked: null,
   selection: null,
@@ -1433,6 +1494,12 @@ export const useApp = create<AppState>((set, get) => ({
           : (datasets[0]?.id ?? null);
       const activeDs = active ? (datasets.find((d) => d.id === active) ?? null) : null;
       const selected = (ws.selectedIds ?? []).filter((id) => datasets.some((d) => d.id === id));
+      // Plot windows (MULTI_PLOT_PLAN item 2): a fresh workspace has no window
+      // layout to restore yet (item 7 wires `.dwk` persistence) — collapse
+      // back to the ≥1-window invariant's single maximized window, bound to
+      // the newly-restored active dataset, with a fresh view (matching the
+      // singleton-field reset below).
+      const win = mainWindow(active);
       return {
         datasets,
         folders: migrated.folders,
@@ -1488,6 +1555,8 @@ export const useApp = create<AppState>((set, get) => ({
         gadgetFftPreview: null,
         gadgetCursors: null,
         gadgetCursorResult: null,
+        plotWindows: [win],
+        focusedWindowId: win.id,
         status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}`,
       };
     }),
@@ -1578,7 +1647,13 @@ export const useApp = create<AppState>((set, get) => ({
       const figureDocs = s.figureDocs.map((f) =>
         f.datasetId && removed.has(f.datasetId) ? { ...f, datasetId: null } : f,
       );
-      return { datasets, activeId, selectedIds, originFigures, reports, figureDocs };
+      // A removed dataset nulls any window bound to it (MULTI_PLOT_PLAN
+      // decision #4) — the window shows an empty "dataset removed" state,
+      // never force-closed (same treatment as figureDocs above).
+      const plotWindows = s.plotWindows.map((w) =>
+        w.datasetId && removed.has(w.datasetId) ? { ...w, datasetId: null } : w,
+      );
+      return { datasets, activeId, selectedIds, originFigures, reports, figureDocs, plotWindows };
     }),
   // Delete key: remove every selected dataset (falling back to the active one if
   // nothing is multi-selected); reselect the first survivor so the plot recovers.
@@ -1596,6 +1671,9 @@ export const useApp = create<AppState>((set, get) => ({
       const figureDocs = s.figureDocs.map((f) =>
         f.datasetId && ids.has(f.datasetId) ? { ...f, datasetId: null } : f,
       );
+      const plotWindows = s.plotWindows.map((w) =>
+        w.datasetId && ids.has(w.datasetId) ? { ...w, datasetId: null } : w,
+      );
       return {
         datasets,
         activeId,
@@ -1603,6 +1681,7 @@ export const useApp = create<AppState>((set, get) => ({
         originFigures,
         reports,
         figureDocs,
+        plotWindows,
       };
     }),
   // Bulk-remove by explicit id list (item 17's "manage books" dialog) — unlike
@@ -1620,7 +1699,10 @@ export const useApp = create<AppState>((set, get) => ({
       const figureDocs = s.figureDocs.map((f) =>
         f.datasetId && drop.has(f.datasetId) ? { ...f, datasetId: null } : f,
       );
-      return { datasets, activeId, selectedIds, originFigures, reports, figureDocs };
+      const plotWindows = s.plotWindows.map((w) =>
+        w.datasetId && drop.has(w.datasetId) ? { ...w, datasetId: null } : w,
+      );
+      return { datasets, activeId, selectedIds, originFigures, reports, figureDocs, plotWindows };
     }),
 
   // Wipe the entire library. Reuses loadWorkspace's "replace everything" reset
@@ -2292,6 +2374,93 @@ export const useApp = create<AppState>((set, get) => ({
     set({ waterfall });
     get().recordMacro(`Waterfall → ${waterfall}`, `qz.setWaterfall(${waterfall})`);
   },
+  // Plot windows (MULTI_PLOT_PLAN item 2) — see the field doc above for the
+  // facade contract. Geometry/z/winState have no rendering consumer yet
+  // (item 3); these actions establish the model + invariant only.
+  createWindow: (datasetId, view) => {
+    const id = nextWindowId();
+    set((s) => {
+      const win: PlotWindow = {
+        id,
+        kind: "plot",
+        title: "",
+        datasetId: datasetId !== undefined ? datasetId : s.activeId,
+        geometry: cascadeGeometry(s.plotWindows.length),
+        z: maxZ(s.plotWindows) + 1,
+        winState: "normal",
+        view: view ?? defaultPlotView(),
+      };
+      return { plotWindows: [...s.plotWindows, win] };
+    });
+    return id;
+  },
+  // Never drops below one window (the ≥1-window invariant) — a no-op on the
+  // last surviving window. Closing the FOCUSED window refocuses the top-z
+  // survivor, hydrating its stored view into the live singleton fields (one
+  // of only two hydrateView call sites — the other is focusWindow).
+  closeWindow: (id) =>
+    set((s) => {
+      if (s.plotWindows.length <= 1) return {};
+      const remaining = s.plotWindows.filter((w) => w.id !== id);
+      if (remaining.length === s.plotWindows.length) return {}; // id not found
+      if (s.focusedWindowId !== id) return { plotWindows: remaining };
+      const next = remaining.reduce((a, b) => (b.z > a.z ? b : a));
+      return { plotWindows: remaining, focusedWindowId: next.id, ...hydrateView(next.view) };
+    }),
+  // The ONLY snapshot+hydrate caller besides closeWindow: freeze the
+  // currently-focused window's LIVE view into its record, then hydrate the
+  // target window's stored view onto the live singleton fields. A no-op when
+  // `id` is already focused, or doesn't exist.
+  focusWindow: (id) =>
+    set((s) => {
+      if (id === s.focusedWindowId) return {};
+      const target = s.plotWindows.find((w) => w.id === id);
+      if (!target) return {};
+      const raised = maxZ(s.plotWindows) + 1;
+      const plotWindows = s.plotWindows.map((w) => {
+        if (w.id === s.focusedWindowId) return { ...w, view: snapshotView(s) };
+        if (w.id === id) return { ...w, z: raised };
+        return w;
+      });
+      return { plotWindows, focusedWindowId: id, ...hydrateView(target.view) };
+    }),
+  duplicateWindow: (id) => {
+    const s = get();
+    const src = s.plotWindows.find((w) => w.id === id);
+    if (!src) return null;
+    const newId = nextWindowId();
+    // Duplicating the FOCUSED window: its record is stale (the live view
+    // lives in the singleton fields), so snapshot those instead of `src.view`.
+    const view = src.id === s.focusedWindowId ? snapshotView(s) : src.view;
+    const dup: PlotWindow = {
+      id: newId,
+      kind: "plot",
+      title: src.title,
+      datasetId: src.datasetId,
+      geometry: cascadeGeometry(s.plotWindows.length),
+      z: maxZ(s.plotWindows) + 1,
+      winState: "normal",
+      view,
+    };
+    set({ plotWindows: [...s.plotWindows, dup] });
+    return newId;
+  },
+  moveWindow: (id, x, y) =>
+    set((s) => ({
+      plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, geometry: { ...w.geometry, x, y } } : w)),
+    })),
+  resizeWindow: (id, w, h) =>
+    set((s) => ({
+      plotWindows: s.plotWindows.map((win) =>
+        win.id === id
+          ? { ...win, geometry: { ...win.geometry, w: Math.max(1, w), h: Math.max(1, h) } }
+          : win,
+      ),
+    })),
+  raiseWindow: (id) =>
+    set((s) => ({
+      plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, z: maxZ(s.plotWindows) + 1 } : w)),
+    })),
   setPlotTool: (plotTool) => set({ plotTool }),
   setRegionPicked: (regionPicked) => set({ regionPicked }),
   setIntegral: (integral) => set({ integral }),

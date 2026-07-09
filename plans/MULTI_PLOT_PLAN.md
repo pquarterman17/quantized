@@ -169,14 +169,13 @@ Key decisions (cross-cutting, kept out of the tiers):
   3 + 4; item 15 requires 1 + 4 and touches everything — do last; item 16
   requires 7; item 17 requires 15 (the long-horizon endgame — schedule
   after everything else).
-- **PROJECT_ORGANIZATION_PLAN #10 interplay:** item 1 here IS the
-  `PlotStage.tsx` sub-task of org #10 — when it lands, close that sub-task
-  there as a side-effect completion (plan-hygiene cross-reference) and
-  ratchet the 491 pin down/out. The `App.tsx` sub-task of org #10 neither
-  blocks nor is blocked by this plan, but item 5 must wire the Window
-  commands through the command registry / extracted hooks, never inline in
-  `App.tsx` — its 954 pin cannot rise. Recommended sequencing: start this
-  plan now; do not wait for the rest of org #10.
+- **PROJECT_ORGANIZATION_PLAN #10 interplay:** item 1 here WAS the
+  `PlotStage.tsx` sub-task of org #10 — closed there as a side-effect
+  completion (2026-07-09), and its 491 pin is REMOVED (not just lowered;
+  312 ≤ 400, `architecture.test.ts`'s generic ceiling). The `App.tsx`
+  sub-task of org #10 neither blocks nor is blocked by this plan, but item 5
+  must wire the Window commands through the command registry / extracted
+  hooks, never inline in `App.tsx` — its 954 pin cannot rise.
 
 ### Risks & open questions
 
@@ -224,37 +223,6 @@ Owner decisions (resolved 2026-07-09):
 ---
 
 ## Tier 1 — High Impact
-
-1. **Extract the plot render core from `PlotStage`** — (L) hook + view
-   split so a plot can render from an explicit view object instead of
-   store singletons; this is also the `PlotStage.tsx` half of org-plan #10.
-   - [ ] `components/Stage/usePlotPayload.ts`: the fetch + compose pipeline
-         (`fetchPlot` → `categoricalXPayload` → `composeDisplayPayload` +
-         `droppedRows`) parameterized by (dataset, view) — rows read
-         through `lib/rowstate` only
-   - [ ] `components/Stage/PlotViewport.tsx` (≤400): the uPlot
-         create/resize/destroy effect driven by props (payload, view,
-         size, plugin set), no store reads
-   - [ ] `PlotStage.tsx` becomes the thin focused-window composition
-         (singleton reads → props); ratchet its `architecture.test.ts` pin
-         down; close the org #10 `PlotStage` box as a side-effect
-         completion
-   - [ ] Visual-harness run: existing `spec.example.json` shots unchanged
-
-2. **`PlotView` model + window-manager store slice** — (M) the per-window
-   state shape and the facade swap machinery.
-   - [ ] `lib/plotview.ts`: `PlotView` (the singleton view-field cluster as
-         one type), `defaultPlotView`, `snapshotView`/`hydrateView`
-         (pure, round-trip-tested), `sanitizePlotWindows`, and window
-         geometry types (`{x,y,w,h}`, z, `winState`, `kind: "plot"`)
-   - [ ] `useApp` slice: `plotWindows`, `focusedWindowId`; actions
-         `createWindow` / `closeWindow` / `focusWindow` (the ONLY
-         snapshot/hydrate caller) / `duplicateWindow` / `moveWindow` /
-         `resizeWindow` / `raiseWindow`
-   - [ ] Startup/load invariant: ≥1 window always exists (implicit
-         maximized main window bound to `activeId`)
-   - [ ] Store tests: focus-swap preserves both views; close of focused
-         window refocuses top-z; dataset removal nulls bindings
 
 3. **Window chrome: `components/windows/` subtree** — (M) the MDI frame
    and canvas, tokens-only styling.
@@ -358,3 +326,66 @@ Owner decisions (resolved 2026-07-09):
     15's view-driven render modes — the endgame, schedule last.
 
 ## Completed
+
+- ~~**1. Extract the plot render core from `PlotStage`**~~ (2026-07-09) — split
+  the 441-line singleton `PlotStage.tsx` into `components/Stage/
+  usePlotPayload.ts` (the fetch → `categoricalXPayload` → `composeDisplayPayload`
+  pipeline plus the per-channel style/label/error/hidden mappings, parameterized
+  over explicit params — no store reads) and `components/Stage/PlotViewport.tsx`
+  (the uPlot create/resize/destroy effect + its `ResizeObserver`, driven
+  entirely by props — `displayPayload`, a controlled `plotRef`, `theme`/
+  `accent`, and `Omit<BuildOptsArgs,"width"|"height"|"peakWizardEdit">`; zero
+  store imports). `PlotStage.tsx` is now the thin 312-line focused-window
+  composition: the ~40 singleton `useApp` selectors + `usePlotPayload` +
+  `<PlotViewport>` + the toolbar/legend/readouts/context-menu chrome. Kept the
+  uPlot-rebuild effect's dependency list field-for-field identical to the
+  original (not a naively-memoized single `args` object) to avoid a rebuild-
+  frequency regression from callback-prop identity churn; `qfitRoi`/
+  `gadgetCursors` stay imperative reads (never a PlotViewport dependency);
+  `peakWizardEdit` is threaded as its own RAW prop (not the transformed
+  `{markers,onAdd,onRemove}` shape) so the effect keys off the stable
+  store-selected reference, not a fresh wrapper object. Verified pixel-identical
+  via `tools/visual`: all 4 harness shots (`multiseries_baseline`,
+  `double_y_render`, `trailing_null_x_repro`, `library_folder_tree`) are
+  BYTE-IDENTICAL (sha256) before vs. after the split. This IS the
+  `PlotStage.tsx` half of `PROJECT_ORGANIZATION_PLAN` #10 — closed there as a
+  side-effect completion, and the `architecture.test.ts` grandfathered pin
+  (491) is REMOVED entirely (312 ≤ 400, the generic ceiling). +0 net test
+  count change (all 1772 pre-existing tests pass unchanged — no new tests
+  needed since behavior is provably identical). Frontend 1772 green.
+- ~~**2. `PlotView` model + window-manager store slice**~~ (2026-07-09) — new
+  `lib/plotview.ts`: the `PlotView` type (the ~35 singleton plot-view fields —
+  `xKey/yKeys/y2Keys/y2Lim/y2Log/y2Step/y2AxisLabel`, `xLog/yLog`,
+  `xLim/yLim/xStep/yStep/xFmt/yFmt`, `plotTitle/xAxisLabel/yAxisLabel`,
+  `seriesStyles/seriesLabels/errKeys/seriesOrder/hiddenChannels`, `waterfall`,
+  `refLines/annotations`, `showGrid/showLegend/legendPos/plotTemplate/
+  showAxisBox`, and `stackMode/insetMode/polarMode/statMode` — deliberately
+  EXCLUDING tool/gadget/overlay transient state and global Preferences
+  defaults, per the plan's "Key decisions" #1/#2), `defaultPlotView()`,
+  `snapshotView`/`hydrateView` (pure field-pick + fresh-copy; round-trip
+  IDENTITY unit-tested), `sanitizePlotWindows` (untrusted-.dwk-boundary
+  validator, per-field fallback like `loadPrefs`/`sanitizeFigureDocs`; wired by
+  item 7, not called from any live path yet), `WindowGeometry`/`WinState`/
+  `PlotWindow` types, and `cascadeGeometry` (new-window placement offset).
+  `store/useApp.ts` gained the `plotWindows: PlotWindow[]` /
+  `focusedWindowId: string | null` slice and 7 actions — `createWindow` /
+  `closeWindow` / `focusWindow` (the ONLY two `snapshotView`/`hydrateView`
+  callers) / `duplicateWindow` / `moveWindow` / `resizeWindow` / `raiseWindow`.
+  The ≥1-window invariant holds at module init (a single `maximized` window,
+  bound to `null`, computed once before `create()`) and after `loadWorkspace`
+  (collapses back to one maximized window bound to the restored active
+  dataset — window persistence itself is item 7); `closeWindow` is a no-op on
+  the last surviving window. `removeDataset`/`removeSelected`/`removeDatasets`
+  null a window's `datasetId` (never force-close — decision #4), matching the
+  existing `figureDocs`/`originFigures` ref-pruning pattern. Deliberately did
+  NOT touch `setActive`/`addDataset` (scoping the rebind+reset to the focused
+  window specifically is item 4's job) or wire any chrome/focus-switch UX
+  (items 3–5). +12 pure tests (`lib/plotview.test.ts`: default shape,
+  round-trip identity, a superset-object snapshot pick, `cascadeGeometry`
+  monotonicity, `sanitizePlotWindows` malformed/geometry/view/winState
+  handling) + 14 store tests (`store/useApp.test.ts`: the invariant, load
+  reset, `createWindow` default/override, `focusWindow` snapshot+hydrate +
+  no-op cases, `closeWindow` top-z refocus / unfocused-drop / last-window
+  no-op, dataset-removal nulling across all three remove actions,
+  `duplicateWindow` snapshot-if-focused + unknown-id, geometry/z actions).
+  Frontend 1797 green.

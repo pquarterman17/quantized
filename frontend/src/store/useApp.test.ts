@@ -7,6 +7,7 @@ import {
   uploadFile,
 } from "../lib/api";
 import { effectiveChannels } from "../lib/plotdata";
+import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import type { Dataset, DataStruct } from "../lib/types";
 import { useApp } from "./useApp";
 
@@ -2544,5 +2545,181 @@ describe("useApp smart folders (org #9)", () => {
     expect(useApp.getState().smartFolders).toHaveLength(1);
     useApp.getState().loadWorkspace({ datasets: [] }); // e.g. clearAll's reset
     expect(useApp.getState().smartFolders).toEqual([]);
+  });
+});
+
+describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)", () => {
+  const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
+    id: "w1",
+    kind: "plot",
+    title: "",
+    datasetId: "d1",
+    geometry: { x: 0, y: 0, w: 480, h: 360 },
+    z: 0,
+    winState: "normal",
+    view: defaultPlotView(),
+    ...over,
+  });
+
+  it("the ≥1-window invariant holds at all times (whatever prior tests left behind)", () => {
+    const s = useApp.getState();
+    expect(s.plotWindows.length).toBeGreaterThanOrEqual(1);
+    expect(s.plotWindows.some((w) => w.id === s.focusedWindowId)).toBe(true);
+  });
+
+  it("loadWorkspace resets to exactly one maximized window bound to the restored active dataset", () => {
+    useApp.setState({ plotWindows: [win({ id: "stale" }), win({ id: "stale2" })], focusedWindowId: "stale" });
+    useApp.getState().loadWorkspace({ datasets: [{ id: "d9", name: "a", data: raw }], activeId: "d9" });
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(1);
+    expect(s.plotWindows[0].winState).toBe("maximized");
+    expect(s.plotWindows[0].datasetId).toBe("d9");
+    expect(s.focusedWindowId).toBe(s.plotWindows[0].id);
+  });
+
+  it("createWindow adds a window bound to the active dataset by default and does not move focus", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      activeId: "d1",
+      plotWindows: [win({ id: "w1" })],
+      focusedWindowId: "w1",
+    });
+    const newId = useApp.getState().createWindow();
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(2);
+    expect(s.plotWindows.find((w) => w.id === newId)?.datasetId).toBe("d1");
+    expect(s.focusedWindowId).toBe("w1"); // unchanged — only focusWindow moves focus
+  });
+
+  it("createWindow accepts an explicit datasetId/view override", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: "w1", activeId: "d1" });
+    const view = { ...defaultPlotView(), plotTitle: "seeded" };
+    const newId = useApp.getState().createWindow("d2", view);
+    const created = useApp.getState().plotWindows.find((w) => w.id === newId);
+    expect(created?.datasetId).toBe("d2");
+    expect(created?.view.plotTitle).toBe("seeded");
+  });
+
+  it("focusWindow snapshots the outgoing window's LIVE view and hydrates the incoming one", () => {
+    const w1 = win({ id: "w1", view: { ...defaultPlotView(), plotTitle: "stale w1 record" } });
+    const w2 = win({ id: "w2", datasetId: "d2", view: { ...defaultPlotView(), plotTitle: "w2 title" } });
+    useApp.setState({
+      plotWindows: [w1, w2],
+      focusedWindowId: "w1",
+      plotTitle: "live w1 title", // the LIVE singleton diverged from w1's stale record
+    });
+    useApp.getState().focusWindow("w2");
+    const s = useApp.getState();
+    expect(s.focusedWindowId).toBe("w2");
+    expect(s.plotTitle).toBe("w2 title"); // hydrated from w2's stored view
+    expect(s.plotWindows.find((w) => w.id === "w1")?.view.plotTitle).toBe("live w1 title"); // snapshotted
+  });
+
+  it("focusWindow is a no-op when the target is already focused or unknown", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: "w1", plotTitle: "keep" });
+    useApp.getState().focusWindow("w1");
+    useApp.getState().focusWindow("ghost");
+    const s = useApp.getState();
+    expect(s.focusedWindowId).toBe("w1");
+    expect(s.plotTitle).toBe("keep");
+  });
+
+  it("closeWindow refocuses the top-z survivor and hydrates its view", () => {
+    const w1 = win({ id: "w1", z: 0, view: { ...defaultPlotView(), plotTitle: "w1" } });
+    const w2 = win({ id: "w2", z: 5, view: { ...defaultPlotView(), plotTitle: "w2" } });
+    const w3 = win({ id: "w3", z: 2, view: { ...defaultPlotView(), plotTitle: "w3" } });
+    useApp.setState({ plotWindows: [w1, w2, w3], focusedWindowId: "w2" });
+    useApp.getState().closeWindow("w2");
+    const s = useApp.getState();
+    expect(s.plotWindows.map((w) => w.id)).toEqual(["w1", "w3"]);
+    expect(s.focusedWindowId).toBe("w3"); // top-z among the survivors
+    expect(s.plotTitle).toBe("w3"); // hydrated
+  });
+
+  it("closeWindow on an unfocused window drops it without touching focus or the live view", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "w2" })],
+      focusedWindowId: "w1",
+      plotTitle: "unchanged",
+    });
+    useApp.getState().closeWindow("w2");
+    const s = useApp.getState();
+    expect(s.plotWindows.map((w) => w.id)).toEqual(["w1"]);
+    expect(s.focusedWindowId).toBe("w1");
+    expect(s.plotTitle).toBe("unchanged");
+  });
+
+  it("closeWindow never drops below one window (the ≥1-window invariant)", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: "w1" });
+    useApp.getState().closeWindow("w1");
+    expect(useApp.getState().plotWindows).toHaveLength(1);
+    expect(useApp.getState().plotWindows[0].id).toBe("w1");
+  });
+
+  it("removeDataset nulls a window's binding without closing it", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      activeId: "d1",
+      plotWindows: [win({ id: "w1", datasetId: "d1" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().removeDataset("d1");
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(1);
+    expect(s.plotWindows[0].datasetId).toBeNull();
+  });
+
+  it("removeDatasets/removeSelected also null window bindings for the removed ids", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: raw },
+      ],
+      activeId: "d1",
+      selectedIds: ["d2"],
+      plotWindows: [win({ id: "w1", datasetId: "d1" }), win({ id: "w2", datasetId: "d2" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().removeSelected(); // removes d2 (the selection)
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w2")?.datasetId).toBeNull();
+
+    useApp.getState().removeDatasets(["d1"]);
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.datasetId).toBeNull();
+  });
+
+  it("duplicateWindow clones a window at a new id, snapshotting the LIVE view if it's focused", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", datasetId: "d1" })],
+      focusedWindowId: "w1",
+      plotTitle: "live title",
+    });
+    const newId = useApp.getState().duplicateWindow("w1");
+    const s = useApp.getState();
+    expect(newId).not.toBeNull();
+    expect(s.plotWindows).toHaveLength(2);
+    const dup = s.plotWindows.find((w) => w.id === newId);
+    expect(dup?.datasetId).toBe("d1");
+    expect(dup?.view.plotTitle).toBe("live title");
+  });
+
+  it("duplicateWindow returns null for an unknown id", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: "w1" });
+    expect(useApp.getState().duplicateWindow("ghost")).toBeNull();
+  });
+
+  it("moveWindow/resizeWindow update geometry only; raiseWindow bumps z above the rest", () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", z: 0, geometry: { x: 0, y: 0, w: 480, h: 360 } }),
+        win({ id: "w2", z: 3, geometry: { x: 10, y: 10, w: 480, h: 360 } }),
+      ],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().moveWindow("w1", 50, 60);
+    useApp.getState().resizeWindow("w1", 600, 400);
+    useApp.getState().raiseWindow("w1");
+    const w1 = useApp.getState().plotWindows.find((w) => w.id === "w1")!;
+    expect(w1.geometry).toEqual({ x: 50, y: 60, w: 600, h: 400 });
+    expect(w1.z).toBeGreaterThan(3);
   });
 });
