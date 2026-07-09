@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { columnMetaAt, columnMetaList, DESIGNATION_BADGE } from "./columnmeta";
+import {
+  columnMetaAt,
+  columnMetaList,
+  DESIGNATION_BADGE,
+  hasOriginReportSheets,
+  originTextColumns,
+} from "./columnmeta";
 import type { DataStruct } from "./types";
 
 /** An Origin-shaped DataStruct carrying only the metadata columnmeta reads. */
@@ -109,5 +115,53 @@ describe("DESIGNATION_BADGE", () => {
       Label: "Label",
       Disregard: "Disregard",
     });
+  });
+});
+
+describe("originTextColumns (item 8)", () => {
+  it("is empty when the metadata carries no text columns", () => {
+    expect(originTextColumns(plain)).toEqual([]);
+  });
+
+  it("reads short name + row strings, sorted by Origin short-name order", () => {
+    const ds: DataStruct = {
+      ...plain,
+      metadata: { origin_text_columns: { B: ["hi", "lo"], A: ["x", "y"] } },
+    };
+    expect(originTextColumns(ds)).toEqual([
+      { shortName: "A", rows: ["x", "y"] },
+      { shortName: "B", rows: ["hi", "lo"] },
+    ]);
+  });
+
+  it("a text-only book has text columns longer than the (empty) numeric row count", () => {
+    const ds: DataStruct = {
+      time: [],
+      values: [],
+      labels: [],
+      units: [],
+      metadata: { origin_text_columns: { A: ["NaN", "NaN", "NaN"] } },
+    };
+    expect(originTextColumns(ds)[0].rows).toHaveLength(3);
+  });
+
+  it("ignores a malformed origin_text_columns value defensively", () => {
+    const ds: DataStruct = { ...plain, metadata: { origin_text_columns: "not an object" } };
+    expect(originTextColumns(ds)).toEqual([]);
+  });
+});
+
+describe("hasOriginReportSheets (item 8)", () => {
+  it("is false when the metadata carries no report sheets", () => {
+    expect(hasOriginReportSheets(plain)).toBe(false);
+  });
+
+  it("is false for an empty report-sheets object", () => {
+    expect(hasOriginReportSheets({ ...plain, metadata: { origin_report_sheets: {} } })).toBe(false);
+  });
+
+  it("is true when at least one report-sheet column is present", () => {
+    const ds: DataStruct = { ...plain, metadata: { origin_report_sheets: { C: ["cell://Notes.Equation"] } } };
+    expect(hasOriginReportSheets(ds)).toBe(true);
   });
 });

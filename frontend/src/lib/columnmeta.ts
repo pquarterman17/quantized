@@ -89,3 +89,42 @@ export const DESIGNATION_BADGE: Record<OriginDesignation, string> = {
   Label: "Label",
   Disregard: "Disregard",
 };
+
+/** One Origin inline-text column (`metadata.origin_text_columns`, decoded by
+ *  `io/origin_project/opj.py` plan item 4): a "Text & Numeric" worksheet
+ *  column whose cells never enter `.values` (the data contract is numeric).
+ *  WORKSHEET_PLAN item 8 renders these as read-only string columns appended
+ *  after the numeric/computed ones — never editable, never in stats, never a
+ *  selection→plot candidate (item 7 only ever looks at `.values` channel
+ *  indices, so a text column simply has no index to select). */
+export interface TextColumn {
+  /** The Origin short column name ("A", "B", …) — display only; text columns
+   *  have no channel index (see module doc above). */
+  shortName: string;
+  /** Cell strings in row order. May be SHORTER (or longer) than
+   *  `ds.time.length` — a text-only book (no numeric columns at all) has
+   *  `time.length === 0`, so the text columns ARE the whole grid. */
+  rows: string[];
+}
+
+/** `metadata.origin_text_columns` as an ordered list (Origin short-name sort:
+ *  length-then-lex, so "A".."Z" then "AA".."AZ", …), or `[]` when the sheet
+ *  carries none (every non-Origin dataset, and most Origin sheets). */
+export function originTextColumns(ds: DataStruct): TextColumn[] {
+  const raw = (ds.metadata ?? {})["origin_text_columns"];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  return Object.entries(raw as Record<string, unknown>)
+    .filter((entry): entry is [string, unknown[]] => Array.isArray(entry[1]))
+    .sort(([a], [b]) => a.length - b.length || a.localeCompare(b))
+    .map(([shortName, rows]) => ({ shortName, rows: rows.map(String) }));
+}
+
+/** True when the sheet carries any `metadata.origin_report_sheets` columns
+ *  (FitLinear/NLFit report residue — unresolved `cell://…` reference
+ *  strings). These stay Inspector-only (`OriginProvenanceCard` already
+ *  renders them); WORKSHEET_PLAN item 8 just needs to know whether to show a
+ *  one-line pointer to the Inspector from the worksheet itself. */
+export function hasOriginReportSheets(ds: DataStruct): boolean {
+  const raw = (ds.metadata ?? {})["origin_report_sheets"];
+  return !!raw && typeof raw === "object" && !Array.isArray(raw) && Object.keys(raw).length > 0;
+}

@@ -4,8 +4,10 @@
 // windowed/visible range) — this component only renders the fetched values,
 // stacked as one sticky block pinned to the bottom of the grid's scroll
 // region. "ignore"-role columns blank their stats (out of analysis), matching
-// the old WorksheetTable behaviour.
+// the old WorksheetTable behaviour. Text columns (item 8) always blank ("—")
+// — read-only, never in stats.
 
+import type { TextColumn } from "../../../lib/columnmeta";
 import type { CalcResult, ChannelRole } from "../../../lib/types";
 import { fmtNum } from "../../../lib/format";
 
@@ -29,6 +31,7 @@ export interface GridStatsFooterProps {
   colWidth: number;
   gutterWidth: number;
   rowHeight: number;
+  textCols: TextColumn[];
 }
 
 export default function GridStatsFooter({
@@ -41,6 +44,7 @@ export default function GridStatsFooter({
   colWidth,
   gutterWidth,
   rowHeight,
+  textCols,
 }: GridStatsFooterProps) {
   if (statsErr) {
     return (
@@ -85,6 +89,11 @@ export default function GridStatsFooter({
             </div>
           ))}
           {trailingSpacer > 0 && <div style={{ width: trailingSpacer, flexShrink: 0 }} aria-hidden="true" />}
+          {textCols.map((t) => (
+            <div key={`text-${t.shortName}`} role="gridcell" className="qzk-grid-cell" style={{ width: colWidth, flexShrink: 0 }}>
+              —
+            </div>
+          ))}
         </div>
       ))}
     </div>

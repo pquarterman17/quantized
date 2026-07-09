@@ -12,9 +12,16 @@
 // `computeAxisWindow`'s degenerate fallback renders a generous fixed window —
 // every existing test dataset (a handful of rows/columns) still renders in
 // full (key decision 2).
+//
+// Column-selection click handling (item 6) mirrors the row-number click
+// handler below exactly: a local `colAnchor` tracks the last plain/ctrl click
+// for shift-range extension. Text columns (item 8) are unvirtualized —
+// appended once, in full, past the numeric window on every axis (header/row/
+// footer), never part of the row/column windowing math.
 
 import { useLayoutEffect, useRef, useState } from "react";
 
+import type { TextColumn } from "../../../lib/columnmeta";
 import {
   computeAxisWindow,
   DEFAULT_COL_OVERSCAN,
@@ -43,7 +50,9 @@ export interface GridViewportProps {
   selected: Set<number>;
   channelRoles: Record<number, ChannelRole>;
   sortMark: (col: number) => string;
-  onToggleSort: (col: number) => void;
+  selectedCols: Set<number>;
+  onToggleColSelect: (col: number) => void;
+  onSelectColRange: (cols: number[]) => void;
   onToggleSelect: (r: number) => void;
   onSelectRange: (rows: number[]) => void;
   onEditCell: (row: number, col: number, value: number) => void;
@@ -55,6 +64,8 @@ export interface GridViewportProps {
   statsErr: boolean;
   onHeaderContext?: (col: number, e: React.MouseEvent) => void;
   onRowContext?: (row: number, e: React.MouseEvent) => void;
+  /** Read-only Origin text columns (item 8) — see module doc above. */
+  textCols: TextColumn[];
 }
 
 /** The row height token, read once per mount (and on resize, in case a
@@ -76,7 +87,9 @@ export default function GridViewport({
   selected,
   channelRoles,
   sortMark,
-  onToggleSort,
+  selectedCols,
+  onToggleColSelect,
+  onSelectColRange,
   onToggleSelect,
   onSelectRange,
   onEditCell,
@@ -87,12 +100,16 @@ export default function GridViewport({
   statsErr,
   onHeaderContext,
   onRowContext,
+  textCols,
 }: GridViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState({ top: 0, left: 0 });
   const [metrics, setMetrics] = useState({ width: 0, height: 0, rowHeight: DEFAULT_ROW_HEIGHT });
   // Anchor row for shift-click range selection (an original row index).
   const [anchor, setAnchor] = useState<number | null>(null);
+  // Anchor COLUMN for shift-click range selection (item 6) — same pattern,
+  // one axis over. -1 (the pinned x/time column) is a valid anchor.
+  const [colAnchor, setColAnchor] = useState<number | null>(null);
   const cellEdit = useCellEdit(onEditCell);
 
   useLayoutEffect(() => {
@@ -152,6 +169,27 @@ export default function GridViewport({
     setAnchor(r);
   };
 
+  // Header click: plain click selects ONLY that column (replaces the
+  // selection); ctrl/cmd-click toggles it into a multi-selection; shift-click
+  // extends a range from the last-clicked anchor. Column indices are stable
+  // (channel order, not DOM position), so the selection survives scrolling.
+  const onHeaderClick = (col: number, e: React.MouseEvent) => {
+    if (e.shiftKey && colAnchor != null) {
+      const [lo, hi] = colAnchor <= col ? [colAnchor, col] : [col, colAnchor];
+      const range: number[] = [];
+      for (let c = lo; c <= hi; c++) range.push(c);
+      onSelectColRange(range);
+      return;
+    }
+    if (e.ctrlKey || e.metaKey) {
+      onToggleColSelect(col);
+      setColAnchor(col);
+      return;
+    }
+    onSelectColRange([col]);
+    setColAnchor(col);
+  };
+
   return (
     <div className="qzk-grid" ref={scrollRef} onScroll={onScroll} role="grid">
       <GridHeader
@@ -166,9 +204,11 @@ export default function GridViewport({
         colWidth={colWidth}
         gutterWidth={gutterWidth}
         sortMark={sortMark}
-        onToggleSort={onToggleSort}
+        selectedCols={selectedCols}
+        onHeaderClick={onHeaderClick}
         onRemoveFormula={onRemoveFormula}
         onHeaderContext={onHeaderContext}
+        textCols={textCols}
       />
       {leadingRowSpacer > 0 && <div style={{ height: leadingRowSpacer }} aria-hidden="true" />}
       {visibleRows.map((r) => (
@@ -187,9 +227,11 @@ export default function GridViewport({
           isMasked={masked.has(r)}
           isFilteredOut={!masked.has(r) && filteredOut.has(r)}
           isSelected={selected.has(r)}
+          selectedCols={selectedCols}
           onRowNumClick={onRowNumClick}
           onRowContext={onRowContext}
           cellEdit={cellEdit}
+          textCols={textCols}
         />
       ))}
       {trailingRowSpacer > 0 && <div style={{ height: trailingRowSpacer }} aria-hidden="true" />}
@@ -204,6 +246,7 @@ export default function GridViewport({
           colWidth={colWidth}
           gutterWidth={gutterWidth}
           rowHeight={metrics.rowHeight}
+          textCols={textCols}
         />
       )}
     </div>

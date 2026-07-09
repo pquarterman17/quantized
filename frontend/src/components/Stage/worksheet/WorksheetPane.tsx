@@ -2,14 +2,29 @@
 // prop-driven — takes an explicit `datasetId` (never `useActiveDataset()` or
 // another singleton-view read), delegates state to `useWorksheetView` and
 // layout to the toolbar / filter bar / virtualized grid / sheet-tab-strip
-// subtree. This is most of Stage D's future mountability: a `WorksheetPane`
-// with no reads of the globally-active dataset can, in principle, be mounted
-// as MDI window content for ANY dataset (item 11 audits this contract;
-// `plans/MULTI_PLOT_PLAN.md` item 17 owns the actual window-kind work — not
-// built here).
+// subtree.
+//
+// Stage D mount contract (item 11 — audited 2026-07-09): every module under
+// `components/Stage/worksheet/` takes its dataset EXPLICITLY (a `datasetId`
+// prop here, threaded down as a resolved `Dataset`/`DataStruct` everywhere
+// below) and reads NO `useActiveDataset()` / `s.activeId` singleton anywhere
+// in the subtree — grep-verified clean. The one exception, BY DESIGN, is the
+// pre-existing plot-view singletons (`xKey`/`yKeys`/`selection`, read via
+// `useWorksheetView`): those are the CURRENT globally-shared plot/row-
+// selection state the column context menu and selection→plot (item 7)
+// legitimately read/write today, same as Tier 1's "Set as X axis"/"Plot as
+// Y" did before this item — they are not a "which dataset am I showing"
+// decision, so they don't violate the mountability contract. Making THOSE
+// window-scoped (so N worksheet windows could each show a different plot
+// view) is `plans/MULTI_PLOT_PLAN.md` item 15's job; promoting the worksheet
+// itself to a floatable MDI window kind is item 17's — both explicitly
+// OUT of scope here. This comment is the plan-hygiene cross-reference item
+// 11 asks for: the worksheet half of item 17's precondition (a mountable,
+// dataset-agnostic container) is satisfied by this component as it stands.
 
 import { useState } from "react";
 
+import { hasOriginReportSheets } from "../../../lib/columnmeta";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import ContextMenu from "../../overlays/ContextMenu";
@@ -48,6 +63,12 @@ function WorksheetPaneView({ ds }: { ds: Dataset }) {
     setMenu({ kind, target, x: e.clientX, y: e.clientY });
   };
 
+  // Right-clicking a column that's already part of a multi-column selection
+  // acts on the WHOLE selection (matching the toolbar's "N selected" buttons);
+  // right-clicking an unselected column acts on just that one — the usual
+  // spreadsheet convention for an ad hoc single-column plot/replot.
+  const effectiveCols = (target: number) => (view.selectedCols.has(target) ? [...view.selectedCols] : [target]);
+
   return (
     <div className="qzk-sheet">
       <WorksheetToolbar
@@ -66,6 +87,10 @@ function WorksheetPaneView({ ds }: { ds: Dataset }) {
         onKeepOnlySelected={view.keepOnlySelectedRows}
         onClearSelection={view.clearRowSelection}
         vars={view.vars}
+        selectedColCount={view.selectedCols.size}
+        onPlotSelection={view.plotSelection}
+        onAddSelectionToPlot={view.addSelectionToPlot}
+        onClearColSelection={view.clearColSelection}
       />
 
       <WorksheetFilterBar
@@ -91,6 +116,11 @@ function WorksheetPaneView({ ds }: { ds: Dataset }) {
           {view.err}
         </div>
       )}
+      {hasOriginReportSheets(ds.data) && (
+        <div className="qzk-ds-meta" style={{ padding: "4px 8px", color: "var(--text-faint)" }}>
+          This sheet has Origin report-sheet columns not shown here — see Inspector › Origin provenance.
+        </div>
+      )}
 
       <GridViewport
         data={view.data}
@@ -102,7 +132,9 @@ function WorksheetPaneView({ ds }: { ds: Dataset }) {
         selected={view.selected}
         channelRoles={view.channelRoles}
         sortMark={view.sortMark}
-        onToggleSort={view.toggleSort}
+        selectedCols={view.selectedCols}
+        onToggleColSelect={view.toggleColSelected}
+        onSelectColRange={view.setColSelection}
         onToggleSelect={view.toggleRowSelected}
         onSelectRange={view.setRowSelection}
         onEditCell={view.onEditCell}
@@ -113,6 +145,7 @@ function WorksheetPaneView({ ds }: { ds: Dataset }) {
         statsErr={view.statsErr}
         onHeaderContext={openMenu("col")}
         onRowContext={openMenu("row")}
+        textCols={view.textCols}
       />
 
       {menu && (
@@ -133,6 +166,8 @@ function WorksheetPaneView({ ds }: { ds: Dataset }) {
                   onNewColumn: () => void view.promptColumn(),
                   showStats: view.showStats,
                   onToggleStats: () => view.setShowStats((v) => !v),
+                  onPlotSelection: () => view.plotCols(effectiveCols(menu.target), "replace"),
+                  onAddSelectionToPlot: () => view.plotCols(effectiveCols(menu.target), "add"),
                 })
               : rowMenuItems(menu.target, {
                   masked: view.masked,

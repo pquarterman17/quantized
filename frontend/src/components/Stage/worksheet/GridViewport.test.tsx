@@ -38,7 +38,9 @@ function renderGrid(nRows: number, onEditCell: (row: number, col: number, value:
       selected={new Set()}
       channelRoles={{}}
       sortMark={() => ""}
-      onToggleSort={noop}
+      selectedCols={new Set()}
+      onToggleColSelect={noop}
+      onSelectColRange={noop}
       onToggleSelect={noop}
       onSelectRange={noop}
       onEditCell={onEditCell}
@@ -47,6 +49,7 @@ function renderGrid(nRows: number, onEditCell: (row: number, col: number, value:
       showStats={false}
       colStats={null}
       statsErr={false}
+      textCols={[]}
     />,
   );
   const scrollEl = utils.container.querySelector(".qzk-grid") as HTMLElement;

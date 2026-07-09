@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { statsDescriptive } from "../../lib/api";
@@ -363,6 +363,266 @@ describe("Worksheet Origin designation + comment headers (item 4)", () => {
     render(<Worksheet />); // default `data` fixture — no Origin metadata at all
     expect(header(2).textContent).toContain("A");
     expect(header(3).textContent).toContain("B");
+  });
+});
+
+describe("Worksheet column selection (item 6)", () => {
+  // Header cells in order: [ #, x(time), A, B ].
+  const header = (i: number) => screen.getAllByRole("columnheader")[i];
+  const dataRow = (i: number) => screen.getAllByRole("row")[i + 1];
+
+  it("clicking a header selects that column", () => {
+    render(<Worksheet />);
+    fireEvent.click(header(2)); // channel A
+    expect(screen.getByText("1 column selected")).toBeInTheDocument();
+    expect(header(2).getAttribute("style") ?? "").toContain("accent-soft");
+  });
+
+  it("clicking a different header REPLACES the selection (plain click is not additive)", () => {
+    render(<Worksheet />);
+    fireEvent.click(header(2));
+    fireEvent.click(header(3));
+    expect(screen.getByText("1 column selected")).toBeInTheDocument();
+  });
+
+  it("ctrl-click adds a column to a multi-selection", () => {
+    render(<Worksheet />);
+    fireEvent.click(header(2));
+    fireEvent.click(header(3), { ctrlKey: true });
+    expect(screen.getByText("2 columns selected")).toBeInTheDocument();
+  });
+
+  it("ctrl-click on an already-selected column removes it", () => {
+    render(<Worksheet />);
+    fireEvent.click(header(2));
+    fireEvent.click(header(3), { ctrlKey: true });
+    fireEvent.click(header(2), { ctrlKey: true });
+    expect(screen.getByText("1 column selected")).toBeInTheDocument();
+  });
+
+  it("shift-click selects a contiguous range of columns, including the pinned x column", () => {
+    render(<Worksheet />);
+    fireEvent.click(header(1)); // x/time column (col -1), anchor
+    fireEvent.click(header(3), { shiftKey: true }); // channel B (col 1)
+    expect(screen.getByText("3 columns selected")).toBeInTheDocument(); // x, A, B
+  });
+
+  it("selection is keyed by column index, not DOM position — survives being re-derived after a re-render", () => {
+    const { rerender } = render(<Worksheet />);
+    fireEvent.click(header(3)); // channel B
+    rerender(<Worksheet />);
+    expect(screen.getByText("1 column selected")).toBeInTheDocument();
+  });
+
+  it("Escape clears the column selection", () => {
+    render(<Worksheet />);
+    fireEvent.click(header(2));
+    expect(screen.getByText("1 column selected")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByText(/columns? selected/)).not.toBeInTheDocument();
+  });
+
+  it("switching the viewed dataset clears the column selection", async () => {
+    render(<Worksheet />);
+    fireEvent.click(header(2));
+    expect(screen.getByText("1 column selected")).toBeInTheDocument();
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "scan.dat", data },
+        { id: "d2", name: "other.dat", data },
+      ],
+      activeId: "d2",
+    });
+    // The clear runs in a useEffect keyed on ds.id — give it a tick to flush.
+    await waitFor(() => expect(screen.queryByText(/columns? selected/)).not.toBeInTheDocument());
+  });
+
+  it("the 'Deselect columns' button clears the selection", () => {
+    render(<Worksheet />);
+    fireEvent.click(header(2));
+    fireEvent.click(screen.getByRole("button", { name: "Deselect columns" }));
+    expect(screen.queryByText(/columns? selected/)).not.toBeInTheDocument();
+  });
+
+  // The one sanctioned behaviour change (WORKSHEET_PLAN item 6, owner decision
+  // D1): header click used to sort; it now selects. Sort moved to the column
+  // context menu (already there) — verified still works, right below.
+  it("SANCTIONED BEHAVIOUR CHANGE: a header click no longer sorts the rows", () => {
+    render(<Worksheet />);
+    fireEvent.click(header(2)); // channel A: values 10, 40, 11 in natural row order
+    expect(dataRow(0).textContent).toContain("10.0000");
+    expect(dataRow(1).textContent).toContain("40.0000");
+    expect(dataRow(2).textContent).toContain("11.0000");
+    expect(header(2).textContent).not.toMatch(/[▲▼]/); // no sort glyph either
+  });
+
+  it("sort is still reachable via the column context menu (relocated, not removed)", () => {
+    render(<Worksheet />);
+    fireEvent.contextMenu(header(2)); // channel A
+    fireEvent.click(screen.getByText("Sort ascending"));
+    // A's values are 10, 40, 11 -> ascending order is original rows [0, 2, 1].
+    expect(dataRow(0).textContent).toContain("10.0000");
+    expect(dataRow(1).textContent).toContain("11.0000");
+    expect(dataRow(2).textContent).toContain("40.0000");
+    expect(header(2).textContent).toMatch(/▲/); // the sort-direction glyph shows
+  });
+
+  it("right-click still opens the column context menu regardless of the click-selects change", () => {
+    render(<Worksheet />);
+    fireEvent.contextMenu(header(2));
+    expect(screen.getByText("Set as X axis")).toBeInTheDocument();
+  });
+});
+
+describe("Worksheet selection → plot (item 7)", () => {
+  // A reflectometry-shaped Origin book: R++ (Y, col 0) with dR++ (Y-error, col 1).
+  const originData: DataStruct = {
+    time: [1, 2],
+    values: [
+      [10, 0.5],
+      [20, 0.6],
+    ],
+    labels: ["R++", "dR++"],
+    units: ["a.u.", "a.u."],
+    metadata: {
+      origin_column_names: ["R++", "dR++"],
+      column_designations: { A: "X", "R++": "Y", "dR++": "Y-error" },
+    },
+  };
+  const header = (i: number) => screen.getAllByRole("columnheader")[i];
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "scan.dat", data: originData }],
+      activeId: "d1",
+      xKey: null,
+      yKeys: null,
+      errKeys: {},
+      macroRecording: false,
+      macroSteps: [],
+    });
+  });
+
+  it("Plot selection: a selected Y + its Y-error pairs the error and plots the Y — never the error", () => {
+    render(<Worksheet />);
+    fireEvent.click(header(2)); // R++ (col 0)
+    fireEvent.click(header(3), { ctrlKey: true }); // dR++ (col 1)
+    fireEvent.click(screen.getByRole("button", { name: "Plot selection" }));
+    expect(useApp.getState().yKeys).toEqual([0]);
+    expect(useApp.getState().errKeys).toEqual({ 0: 1 });
+  });
+
+  it("Add to plot unions the selection into the CURRENT yKeys instead of replacing it", () => {
+    useApp.setState({ yKeys: [] }); // an explicit (empty) current selection to union into
+    render(<Worksheet />);
+    fireEvent.click(header(2)); // R++
+    fireEvent.click(screen.getByRole("button", { name: "Add to plot" }));
+    expect(useApp.getState().yKeys).toEqual([0]);
+  });
+
+  it("selecting only the Y-error column (no preceding selected Y) plots nothing", () => {
+    render(<Worksheet />);
+    fireEvent.click(header(3)); // dR++ alone
+    fireEvent.click(screen.getByRole("button", { name: "Plot selection" }));
+    expect(useApp.getState().yKeys).toBeNull(); // unchanged
+    expect(useApp.getState().status).toBe("nothing plottable in the selection");
+  });
+
+  it("Plot selection via the column context menu acts on just the right-clicked column when nothing is selected", () => {
+    render(<Worksheet />);
+    fireEvent.contextMenu(header(2)); // R++, nothing selected
+    fireEvent.click(screen.getByText("Plot selection"));
+    expect(useApp.getState().yKeys).toEqual([0]);
+  });
+
+  it("the context menu's plot actions act on the WHOLE selection when the right-clicked column is already selected", () => {
+    render(<Worksheet />);
+    fireEvent.click(header(2)); // R++
+    fireEvent.click(header(3), { ctrlKey: true }); // dR++, still selected together
+    fireEvent.contextMenu(header(3)); // right-click the already-selected dR++
+    // Both the toolbar ("N selected") and the open context menu offer "Plot
+    // selection" text now — scope the click to the menu portal.
+    const menu = document.querySelector(".qzk-ctx") as HTMLElement;
+    fireEvent.click(within(menu).getByText("Plot selection"));
+    expect(useApp.getState().yKeys).toEqual([0]); // R++ plotted, error paired — same as the toolbar path
+    expect(useApp.getState().errKeys).toEqual({ 0: 1 });
+  });
+
+  it("records a macro step for free — Plot selection goes through the SAME setYKeys the Channels card uses", () => {
+    useApp.setState({ macroRecording: true });
+    render(<Worksheet />);
+    fireEvent.click(header(2)); // R++
+    fireEvent.click(screen.getByRole("button", { name: "Plot selection" }));
+    const codes = useApp.getState().macroSteps.map((s) => s.code);
+    expect(codes).toContain("qz.setYKeys([0])");
+  });
+
+  it("row-state proof: Plot selection never touches exclusions — the plotted result still honors them via the existing plot pipeline", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "scan.dat", data: originData, excludedRows: [1] }],
+      activeId: "d1",
+    });
+    render(<Worksheet />);
+    fireEvent.click(header(2)); // R++
+    fireEvent.click(screen.getByRole("button", { name: "Plot selection" }));
+    expect(useApp.getState().yKeys).toEqual([0]);
+    // Row exclusion (#50) is an entirely separate dimension — untouched by the plot action.
+    expect(useApp.getState().datasets[0].excludedRows).toEqual([1]);
+  });
+});
+
+describe("Worksheet text-sheet rendering (item 8)", () => {
+  const textData: DataStruct = {
+    time: [1, 2, 3],
+    values: [[10], [20], [30]],
+    labels: ["A"],
+    units: [""],
+    metadata: { origin_text_columns: { C: ["alpha", "beta", "gamma"] } },
+  };
+
+  it("appends a read-only text column after the numeric ones", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: textData }], activeId: "d1" });
+    render(<Worksheet />);
+    const headers = screen.getAllByRole("columnheader");
+    expect(headers[headers.length - 1].textContent).toContain("C");
+    expect(screen.getByText("alpha")).toBeInTheDocument();
+    expect(screen.getByText("beta")).toBeInTheDocument();
+    expect(screen.getByText("gamma")).toBeInTheDocument();
+  });
+
+  it("a text-only book (no numeric columns at all) renders its rows entirely from the text columns", () => {
+    const textOnly: DataStruct = {
+      time: [],
+      values: [],
+      labels: [],
+      units: [],
+      metadata: { origin_text_columns: { A: ["NaN", "NaN", "NaN"] } },
+    };
+    useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: textOnly }], activeId: "d1" });
+    render(<Worksheet />);
+    expect(screen.getAllByText("NaN")).toHaveLength(3);
+    expect(screen.getByText("1")).toBeInTheDocument(); // row-number gutter
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("does not offer double-click-to-edit on a text cell (read-only)", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: textData }], activeId: "d1" });
+    render(<Worksheet />);
+    fireEvent.doubleClick(screen.getByText("alpha"));
+    expect(screen.queryByDisplayValue("alpha")).not.toBeInTheDocument();
+  });
+
+  it("shows a one-line hint pointing to the Inspector when the sheet carries report-sheet columns", () => {
+    const ds: DataStruct = { ...data, metadata: { origin_report_sheets: { C: ["cell://Notes.Equation"] } } };
+    useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: ds }], activeId: "d1" });
+    render(<Worksheet />);
+    expect(screen.getByText(/Origin report-sheet columns/)).toBeInTheDocument();
+  });
+
+  it("shows no hint when the sheet carries no report-sheet columns", () => {
+    render(<Worksheet />);
+    expect(screen.queryByText(/Origin report-sheet columns/)).not.toBeInTheDocument();
   });
 });
 

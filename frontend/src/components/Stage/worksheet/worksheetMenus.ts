@@ -19,9 +19,17 @@ export interface ColumnMenuContext {
   onNewColumn: () => void;
   showStats: boolean;
   onToggleStats: () => void;
+  /** Selection→plot (item 7): apply the designation-aware mapping over the
+   *  CURRENT column selection (or, when nothing is selected, just the
+   *  right-clicked column — see `WorksheetPane.effectiveCols`).
+   *  "Plot selection" replaces yKeys; "Add to plot" unions it in. */
+  onPlotSelection: () => void;
+  onAddSelectionToPlot: () => void;
 }
 
-/** Items for a right-clicked column header (`col` is -1 for the x column). */
+/** Items for a right-clicked column header (`col` is -1 for the x column).
+ *  Sort lives here ONLY (owner decision D1, item 6) — the header click
+ *  gesture selects a column instead of sorting it. */
 export function columnMenuItems(col: number, ctx: ColumnMenuContext): ContextMenuItem[] {
   const items: ContextMenuItem[] = [
     { label: "Sort ascending", run: () => ctx.sortAsc(col) },
@@ -46,6 +54,9 @@ export function columnMenuItems(col: number, ctx: ColumnMenuContext): ContextMen
         : { label: "Plot as Y", run: () => ctx.setYKeys([...plotted, col].sort((a, b) => a - b)) },
     );
   }
+  items.push({ separator: true });
+  items.push({ label: "Plot selection", run: ctx.onPlotSelection });
+  items.push({ label: "Add selection to plot", run: ctx.onAddSelectionToPlot });
   items.push({ separator: true });
   items.push({ label: "New column from formula…", run: ctx.onNewColumn });
   items.push({
