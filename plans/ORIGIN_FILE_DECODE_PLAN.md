@@ -359,6 +359,20 @@ the shipped contract)
 
 ## Completed
 
+- ~~**PNR-triage import-perf batch (unbooked side-work)**~~ (2026-07-09)
+  — merged to main as `917802a` (commits `16080ad`/`09e1ac1`/`d097c39`):
+  parse-once import (`read_origin_project_all` — the route previously
+  parsed the whole project twice and read the file 5×), provenance regex
+  scans tail-restricted for `.opj` via `tree._find_tail_start` − 2 MiB
+  margin (structurally derived, `.opju` deliberately kept full-scan — no
+  verifiable boundary), Library sparklines min/max-bucket downsampled
+  (`lib/downsample.ts`, 43k→~360 points per thumbnail). Measured on
+  PNR.opj: upload round-trip ~4.0 s → ~2.1 s. Old-vs-new provenance
+  outputs byte-identical across all 104 corpus files. Remaining known
+  cost: ~1.5 s JSON serialization of the ~85 MB payload → #38 (lazy
+  per-book transport). Backend 2083 + frontend 1772 + build green
+  post-merge.
+
 - ~~**PNR-triage plot-fidelity batch (unbooked side-work)**~~ (2026-07-09)
   — from the owner's PNR.opj import testing; merged to main as `7b5aa50`
   (commits `3928965`/`25d746b`/`bf6512f`): trailing all-zero-padding row
