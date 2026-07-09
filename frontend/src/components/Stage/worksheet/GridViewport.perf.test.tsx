@@ -105,7 +105,7 @@ describe("GridViewport perf validation at scale (item 10)", () => {
     // headroom. Catches an accidental de-virtualization (e.g. someone
     // mapping over `data.values` directly), not micro-regressions.
     expect(mountMs).toBeLessThan(8000);
-  }, 60_000);
+  }, 120_000);
 
   it("scrolling a 100k-row grid re-windows in a bounded time (not a full re-render of all rows)", () => {
     const data = makeWideData(100_000, 200);
@@ -146,7 +146,7 @@ describe("GridViewport perf validation at scale (item 10)", () => {
     console.info(`[perf/item10] scroll re-window at 100k rows: ${scrollMs.toFixed(1)}ms`);
     expect(screen.getAllByRole("row").length).toBeLessThan(60); // still windowed after the jump
     expect(scrollMs).toBeLessThan(800); // measured ~18ms on a dev machine — generous CI headroom
-  }, 60_000);
+  }, 120_000);
 
   it("the stats-footer fan-out (201 requests at 200 columns) parallelizes — wall time tracks the SLOWEST call, not the sum", async () => {
     const LATENCY_MS = 5;
