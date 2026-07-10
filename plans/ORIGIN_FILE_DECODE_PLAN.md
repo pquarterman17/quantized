@@ -29,7 +29,15 @@ gallery tooling merged, oracle re-export in progress; **#43 CLOSED** — the
 owner's two live-testing annotation-placement repros (PNR/Book15 label
 over a tick, PNR/Book14 Graph11 multi-panel labels clipped on the y axis)
 were ONE frontend `ctx.textAlign` inheritance bug, not a decode fault — see
-Completed)
+Completed; **#44 CLOSED** — the multi-panel path never applied Origin's
+error-column pairing/hidden-channel suppression at all (PNR/Book14
+Graph11's `dSA` rendered as a spurious series), now fixed at the
+`figureChannelSelection`/`useMultiPanelStage` chokepoint for both the
+spatial and plain-stack modes; **#45 CLOSED** — the owner's "lack of
+bounding walls" request: shared-x stacked panels (same repro, Graph11) now
+render flush with per-panel walls and bottom-only x labels, plus an
+Origin layer's explicitly-blank title no longer gets a synthesized
+fallback — see Completed)
 Previous: 2026-07-07 (item 34 CLOSED — the native `.opj` writer now
 loads in real Origin and re-exports value-exact, see Completed; item 35's
 stale W3 body text reconciled — the item was already CLOSED 2026-07-04 at
@@ -401,6 +409,85 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**45. Shared-x stacked panels sit flush with per-panel walls (owner
+  "bounding walls" request)**~~ (2026-07-09) — owner: "the bigger issue is
+  the lack of bounding walls around the plot to enable shared axis plots
+  that are not directly overlaid" (PNR.opj Book14 `Graph11`, the same
+  8-panel spin-asymmetry repro as #43/#44). Fixed generally, not keyed to
+  Graph11:
+  - New pure `frontend/src/lib/panelLayout.ts`: `sharesXWithPanelBelow` /
+    `rowBoundaryGaps` detect which row boundaries in a spatial grid COLUMN
+    are flush (both panels' `xLim` match within tolerance) — scoped to
+    vertical adjacency only, so side-by-side columns that happen to share
+    an x-range are never fused; `suppressedXIndices` marks every panel
+    with a flush neighbor below it (reusing the existing "blank x tick
+    values/title" idiom the plain per-channel stack mode already had);
+    `columnWidths`/`rowHeights`/`cumulativeOffsets` replace CSS Grid's
+    `1fr` + one uniform `gap` (which can't express a flush 0px boundary
+    next to a normal one) with explicit pixel placement.
+  - `useMultiPanelStage.ts`'s spatial branch switched from CSS Grid to
+    this pixel placement; every panel stays fully boxed (`showAxisBox`,
+    already defaulted on) — the shared edge reads as one "wall".
+  - Faithful per-layer x title: `fig.x_title === ""` (the owner
+    hand-deleted a redundant per-panel label in Origin) now maps to
+    `xAxisLabel: null`, which `buildOpts` renders as NO title — distinct
+    from an undecoded title (`undefined`, which still auto-derives
+    "channel (unit)"). Scoped to x only (y axes untouched, matching the
+    single per-panel `y_title`/legend-swatch convention already in place).
+  - Verified against the live COM oracle PNG
+    (`test-data/origin/_exports/PNR/Graph11.png`): quantized's re-render
+    now matches — flush 2×4 grid, only the bottom row shows x ticks/title,
+    every panel boxed. Re-ran `tools/visual/origin_figures.mjs` over the
+    full PNR.opj corpus (101 graph-window families): totals unchanged
+    (99 resolved / 91 fully consistent / 8 with mismatches) — the 8 are a
+    PRE-EXISTING `panel_count`-vs-raw-layer-count harness limitation from
+    the earlier same-day y2-merge feature (item #S7/`b59edb1`), not a
+    regression (confirmed: none of the 8 mismatch reasons mention
+    error-bars/hidden-channels/x-titles/flush-stacking, and this fix never
+    touches row/col/range/log/step computation). Spot-checked several
+    other shared-x figures (`PNRDWMerge`) render flush too, generalizing
+    beyond Graph11; a genuinely different-axis 2-panel figure (`Graph24`,
+    Reflectivity above a real-space SLD profile) correctly stays
+    un-fused.
+  - Tests: new `lib/panelLayout.test.ts` (pure math — tolerance matching,
+    conservative ragged-grid boundary handling, gap/offset arithmetic);
+    `uplotOpts.test.ts` + `originFigures.test.ts` cases for the
+    null-vs-undefined title fidelity; `MultiPanelStage.test.tsx` cases for
+    end-to-end suppression wiring. Frontend 2217 passed + `npm run build`
+    green.
+
+- ~~**44. Origin "Y-error" columns render as spurious series in
+  multi-panel views**~~ (2026-07-09) — owner repro: PNR.opj Book14
+  `Graph11` (8-panel spin asymmetry) showed `dSA` (worksheet-designated
+  "Y-error") as its own yellow point+line series instead of whiskers on
+  its paired `SA` channel. Root cause (the mechanism, not the instance):
+  the single-plot path already had error-column pairing + hidden-channel
+  suppression (`errorbars.originErrKeys`/`originHiddenChannels`, store
+  `errKeys`/`hiddenChannels`), but the multi-panel path (both the spatial
+  Origin-figure grid AND the plain per-channel stack mode) never applied
+  either.
+  - `originFigures.figureChannelSelection` now also returns
+    `errKeys`/`hiddenChannels` for the book, threaded through
+    `SpatialPanel` by `resolveFigurePanels`.
+  - `useMultiPanelStage.ts`: the spatial branch drops hidden channels from
+    what's fetched/plotted (`multipanel.spatialPlottedChannels` — no
+    per-panel legend exists to toggle them back on, unlike the
+    single-plot view) and builds whiskers via `errorbars.buildErrorColumns`;
+    the plain per-channel stack mode gets the identical treatment reading
+    the store's existing `errKeys`/`hiddenChannels` fields (any
+    Origin-imported book manually stacked hit the same bug, not just an
+    applied multi-layer figure).
+  - Verified against the live COM oracle PNG: quantized's re-render of
+    Graph11 now shows teal SA points with whiskers and the black theory
+    line, no yellow series — matching Origin's own render. Full-corpus
+    sweep (see item #45's entry — the two fixes were verified together)
+    shows zero regressions.
+  - Tests: `originFigures.test.ts` (errKeys/hiddenChannels threading
+    through `figureChannelSelection`/`resolveFigurePanels`),
+    `multipanel.test.ts` (`spatialPlottedChannels`), `MultiPanelStage.test.tsx`
+    (end-to-end error-bar wiring + a no-op regression case). Frontend
+    2217 passed + `npm run build` green.
 
 - ~~**43. Annotation text-label placement (owner PNR.opj repros)**~~
   (2026-07-09) — both live-testing repros traced to ONE frontend rendering
