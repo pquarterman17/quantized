@@ -14,6 +14,7 @@ import { clampPlottedRange, rowsInXRange } from "../../lib/plotdata";
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { resolveTemplate } from "../../lib/plotTemplates";
+import { resolvePlotBg } from "../../lib/uplotOpts";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -73,6 +74,14 @@ export default function PlotStage() {
   const hiddenChannels = useApp((s) => s.hiddenChannels);
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
+  // Item 18 (per-window background override): PlotStage always renders the
+  // FOCUSED window (whether the sole maximized default, or the focused frame
+  // inside an MDI canvas — see WindowCanvas), so its own `bg` is looked up by
+  // the CURRENT focusedWindowId rather than threaded in as a prop. A derived
+  // string selector — re-renders only when the RESULT changes, same idiom as
+  // `nPlotted` below, not a `plotWindows` array-identity dependency.
+  const winBg = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.bg);
+  const { axesBg, inkColor, isDark: isDarkBg } = resolvePlotBg(winBg);
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
   const setRegionPicked = useApp((s) => s.setRegionPicked);
@@ -204,6 +213,12 @@ export default function PlotStage() {
   return (
     <AxisDropZones
       className={`qzk-stage tool-${tool}`}
+      // "theme" (the default — no override on this window) omits the style
+      // prop entirely, so the sole-maximized-window default path stays
+      // byte-identical to pre-item-18 markup (decision #6's migration
+      // guarantee); only an explicit "light"/"dark" pin renders an inline
+      // background, painting over the `--axes-bg` the CSS class supplies.
+      style={winBg && winBg !== "theme" ? { background: axesBg } : undefined}
       onContextMenu={onStageContextMenu}
       onAxisDrop={onAxisDrop}
     >
@@ -212,6 +227,7 @@ export default function PlotStage() {
         displayPayload={displayPayload}
         theme={theme}
         accent={accent}
+        bg={winBg}
         yLog={yLog}
         xLog={xLog}
         xLim={xLim}
@@ -313,7 +329,14 @@ export default function PlotStage() {
         gadget={gadget}
       />
       {displayPayload && showLegend && (
-        <PlotLegend series={displayPayload.series} styleList={styleList} plotted={plotted} hidden={hidden} />
+        <PlotLegend
+          series={displayPayload.series}
+          styleList={styleList}
+          plotted={plotted}
+          hidden={hidden}
+          isDarkBg={isDarkBg}
+          inkColor={inkColor}
+        />
       )}
     </AxisDropZones>
   );

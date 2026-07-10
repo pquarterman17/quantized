@@ -60,6 +60,7 @@ const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
   z: 0,
   winState: "normal",
   view: defaultPlotView(),
+  bg: "theme",
   ...over,
 });
 

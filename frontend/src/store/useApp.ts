@@ -66,6 +66,7 @@ import {
   sanitizePlotWindows,
   snapshotView,
   tileLayout,
+  type PlotBg,
   type PlotView,
   type PlotWindow,
   type WinState,
@@ -193,6 +194,7 @@ function mainWindow(datasetId: string | null): PlotWindow {
     z: 0,
     winState: "maximized",
     view: defaultPlotView(),
+    bg: "theme",
   };
 }
 
@@ -835,6 +837,9 @@ interface AppState {
   // Rename (item 10): sets the window's explicit title verbatim — never
   // deduped (that's only for computed defaults at creation).
   renameWindow: (id: string, title: string) => void;
+  // Per-window background override (item 18, owner request 2026-07-09): a
+  // no-op for an unknown id. See `PlotBg`'s doc in `lib/plotview.ts`.
+  setWindowBg: (id: string, bg: PlotBg) => void;
   // Item 7 (.dwk + autosave persistence): `plotWindows` as it should be
   // SAVED — the focused window's LIVE view frozen into its record via the
   // same `snapshotView` chokepoint `focusWindow`/`closeWindow` use (the
@@ -2789,6 +2794,7 @@ export const useApp = create<AppState>((set, get) => ({
         z: maxZ(s.plotWindows) + 1,
         winState: "normal",
         view: view ?? defaultPlotView(),
+        bg: "theme",
       };
       return { plotWindows: [...s.plotWindows, win] };
     });
@@ -2869,6 +2875,7 @@ export const useApp = create<AppState>((set, get) => ({
       z: maxZ(s.plotWindows) + 1,
       winState: "normal",
       view,
+      bg: src.bg,
     };
     set({ plotWindows: [...s.plotWindows, dup] });
     return newId;
@@ -2993,6 +3000,10 @@ export const useApp = create<AppState>((set, get) => ({
   renameWindow: (id, title) =>
     set((s) => ({
       plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, title } : w)),
+    })),
+  setWindowBg: (id, bg) =>
+    set((s) => ({
+      plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, bg } : w)),
     })),
   windowsForSave: () => {
     const s = get();

@@ -2976,6 +2976,7 @@ describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)
     z: 0,
     winState: "normal",
     view: defaultPlotView(),
+    bg: "theme",
     ...over,
   });
 
@@ -3125,6 +3126,31 @@ describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)
     expect(useApp.getState().duplicateWindow("ghost")).toBeNull();
   });
 
+  it("createWindow defaults bg to 'theme' (item 18)", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: "w1", activeId: "d1" });
+    const newId = useApp.getState().createWindow();
+    expect(useApp.getState().plotWindows.find((w) => w.id === newId)?.bg).toBe("theme");
+  });
+
+  it("duplicateWindow inherits the source window's bg override (item 18)", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1", bg: "light" })], focusedWindowId: "w1" });
+    const newId = useApp.getState().duplicateWindow("w1");
+    expect(useApp.getState().plotWindows.find((w) => w.id === newId)?.bg).toBe("light");
+  });
+
+  it("setWindowBg sets one window's background override without touching others; no-op for an unknown id", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", bg: "theme" }), win({ id: "w2", bg: "theme" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().setWindowBg("w1", "dark");
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "w1")?.bg).toBe("dark");
+    expect(s.plotWindows.find((w) => w.id === "w2")?.bg).toBe("theme");
+    useApp.getState().setWindowBg("ghost", "light");
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.bg).toBe("dark"); // unchanged
+  });
+
   it("moveWindow/resizeWindow update geometry only; raiseWindow bumps z above the rest", () => {
     useApp.setState({
       plotWindows: [
@@ -3152,6 +3178,7 @@ describe("useApp plot windows — item 4 focused-window routing", () => {
     z: 0,
     winState: "normal",
     view: defaultPlotView(),
+    bg: "theme",
     ...over,
   });
 
@@ -3266,6 +3293,7 @@ describe("useApp plot windows — item 6 (Tile/Cascade + canvas bounds)", () => 
     z: 0,
     winState: "normal",
     view: defaultPlotView(),
+    bg: "theme",
     ...over,
   });
 
@@ -3330,6 +3358,7 @@ describe("useApp plot windows — item 7 (.dwk + autosave persistence)", () => {
     z: 0,
     winState: "normal",
     view: defaultPlotView(),
+    bg: "theme",
     ...over,
   });
 
@@ -3412,6 +3441,7 @@ describe("useApp plot windows — item 8 (minimize/maximize/restore)", () => {
     z: 0,
     winState: "normal",
     view: defaultPlotView(),
+    bg: "theme",
     ...over,
   });
 
@@ -3611,6 +3641,7 @@ describe("useApp plot windows — item 10 (default titles, dedupe, rename)", () 
     z: 0,
     winState: "normal",
     view: defaultPlotView(),
+    bg: "theme",
     ...over,
   });
 

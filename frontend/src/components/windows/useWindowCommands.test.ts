@@ -20,6 +20,7 @@ const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
   z: 0,
   winState: "normal",
   view: defaultPlotView(),
+  bg: "theme",
   ...over,
 });
 
@@ -56,7 +57,7 @@ afterEach(() => {
 });
 
 describe("useWindowCommands — published registry entries", () => {
-  it("publishes exactly the 7 Window-group commands (item 6 adds Tile/Cascade) with the documented shortcuts", () => {
+  it("publishes exactly the 8 Window-group commands (item 18 adds Window Background) with the documented shortcuts", () => {
     renderHook(() => useWindowCommands());
     const ids = useCommands.getState().menuCommands.map((c) => c.id);
     expect(ids).toEqual([
@@ -65,6 +66,7 @@ describe("useWindowCommands — published registry entries", () => {
       "window-close",
       "window-tile",
       "window-cascade",
+      "window-bg-cycle",
       "window-focus-next",
       "window-focus-prev",
     ]);
@@ -160,6 +162,26 @@ describe("useWindowCommands — published registry entries", () => {
     const w1 = cascaded.find((w) => w.id === "w1")!;
     const w2 = cascaded.find((w) => w.id === "w2")!;
     expect(w2.geometry.x).toBeGreaterThan(w1.geometry.x);
+  });
+
+  it("'Window Background' (item 18) cycles the FOCUSED window's bg, leaving other windows untouched", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", bg: "theme" }), win({ id: "w2", bg: "theme" })],
+      focusedWindowId: "w1",
+    });
+    renderHook(() => useWindowCommands());
+    act(() => action("window-bg-cycle").run());
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")!.bg).toBe("light");
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w2")!.bg).toBe("theme");
+    act(() => action("window-bg-cycle").run());
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")!.bg).toBe("dark");
+  });
+
+  it("'Window Background' is a no-op with no focused window", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: null });
+    renderHook(() => useWindowCommands());
+    expect(() => act(() => action("window-bg-cycle").run())).not.toThrow();
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")!.bg).toBe("theme");
   });
 });
 

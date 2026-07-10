@@ -148,3 +148,21 @@
   --accent-text: oklch(0.83 0.11 12);
   --series-1: oklch(0.72 0.16 12);
 }
+
+/* ── Per-window plot-background override tokens (owner request 2026-07-09,
+   MULTI_PLOT_PLAN item 18 "graph page" toggle) — MODE-scoped, not THEME-
+   scoped: same value regardless of the app's global [data-theme], so a
+   window pinned to "light"/"dark" renders correctly even when that differs
+   from the surrounding chrome's theme (Origin's white-page-in-a-dark-app
+   model). "dark" mode reuses --axes-bg/--grid-line above (already
+   theme-invariant, "stays dark in both themes"); ink needs its own
+   theme-invariant pair here since --text/--text-dim DO follow the global
+   theme. Consumed by `lib/uplotOpts.ts`'s `resolvePlotBg`. ─────────────── */
+:root {
+  --ink-on-dark: oklch(0.93 0.005 280);
+  --ink-dim-on-dark: oklch(0.72 0.008 280);
+  --axes-bg-light: oklch(0.98 0.004 280);
+  --grid-line-light: oklch(0.86 0.006 280);
+  --ink-on-light: oklch(0.22 0.01 280);
+  --ink-dim-on-light: oklch(0.42 0.01 280);
+}

@@ -5,10 +5,12 @@ import {
   categoricalTickFormatter,
   fixedLogAxisSplits,
   niceLinearStep,
+  resolvePlotBg,
   tickFormatter,
   xIsAscending,
 } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
+import type { SeriesStyle } from "./types";
 
 const payload: PlotPayload = {
   data: [
@@ -687,5 +689,91 @@ describe("buildOpts fixed log-range ticks (plot-fidelity fix)", () => {
     expect(typeof splits).toBe("function");
     const fn = splits as (u: uPlot, i: number, min: number, max: number) => number[];
     expect(fn(null as unknown as uPlot, 2, 0.9772, 1.2916)).toEqual([1.0, 1.05, 1.1, 1.15, 1.2, 1.25]);
+  });
+});
+
+describe("resolvePlotBg", () => {
+  it("defaults to the dark ('theme') mode when bg is omitted", () => {
+    const tokens = resolvePlotBg(undefined);
+    expect(tokens.isDark).toBe(true);
+  });
+
+  it("'theme' and 'dark' resolve to the same (always-dark) tokens", () => {
+    expect(resolvePlotBg("theme")).toEqual(resolvePlotBg("dark"));
+  });
+
+  it("'light' resolves to a non-dark background", () => {
+    const tokens = resolvePlotBg("light");
+    expect(tokens.isDark).toBe(false);
+  });
+});
+
+describe("buildOpts literal-colour contrast substitution (dark-lines-on-dark-mode fix)", () => {
+  const blackStyle: Record<number, SeriesStyle> = { 0: { color: "black" } };
+  const whiteStyle: Record<number, SeriesStyle> = { 0: { color: "white" } };
+  const violetStyle: Record<number, SeriesStyle> = { 0: { color: "#8b5cf6" } };
+
+  it("substitutes a literal black series stroke on the default (dark) background", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", seriesStyles: blackStyle });
+    const series = opts.series?.[1] as { stroke?: string };
+    expect(series.stroke).not.toBe("black");
+  });
+
+  it("keeps a literal black series stroke when the window is pinned to 'light'", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      seriesStyles: blackStyle,
+      bg: "light",
+    });
+    const series = opts.series?.[1] as { stroke?: string };
+    expect(series.stroke).toBe("black");
+  });
+
+  it("substitutes a literal white series stroke when the window is pinned to 'light'", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      seriesStyles: whiteStyle,
+      bg: "light",
+    });
+    const series = opts.series?.[1] as { stroke?: string };
+    expect(series.stroke).not.toBe("white");
+  });
+
+  it("keeps a literal white series stroke on the default (dark) background", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", seriesStyles: whiteStyle });
+    const series = opts.series?.[1] as { stroke?: string };
+    expect(series.stroke).toBe("white");
+  });
+
+  it("leaves a visible literal colour unchanged in either mode", () => {
+    const dark = buildOpts(payload, { ...base, yLog: false, tool: "zoom", seriesStyles: violetStyle });
+    const light = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      seriesStyles: violetStyle,
+      bg: "light",
+    });
+    expect((dark.series?.[1] as { stroke?: string }).stroke).toBe("#8b5cf6");
+    expect((light.series?.[1] as { stroke?: string }).stroke).toBe("#8b5cf6");
+  });
+
+  it("leaves the default palette (token) colour untouched when no override is given", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const series = opts.series?.[1] as { stroke?: string };
+    // jsdom has no stylesheet loaded, so the palette token falls back to the
+    // hardcoded default in `seriesColor` — the point of this assertion is
+    // just that it ISN'T silently replaced by the ink-substitution path.
+    expect(series.stroke).toBe("#8b5cf6");
+  });
+
+  it("axis stroke/grid colours flip between the dark and light mode tokens", () => {
+    const dark = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const light = buildOpts(payload, { ...base, yLog: false, tool: "zoom", bg: "light" });
+    expect(dark.axes?.[0].stroke).not.toBe(light.axes?.[0].stroke);
   });
 });

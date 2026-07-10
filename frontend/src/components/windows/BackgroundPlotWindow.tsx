@@ -16,7 +16,7 @@
 import { useRef } from "react";
 import type uPlot from "uplot";
 
-import type { PlotView } from "../../lib/plotview";
+import type { PlotBg, PlotView } from "../../lib/plotview";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import type { Dataset } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths";
@@ -29,9 +29,14 @@ export interface BackgroundPlotWindowProps {
    *  — MULTI_PLOT_PLAN decision #4's "empty state", never force-closed). */
   dataset: Dataset | null;
   view: PlotView;
+  /** This window's background override (item 18) — undefined defaults to
+   *  "theme" (today's always-dark canvas), matching a window record that
+   *  predates the field (`sanitizePlotWindows` also defaults it the same
+   *  way for a persisted `.dwk`). */
+  bg?: PlotBg;
 }
 
-export default function BackgroundPlotWindow({ dataset, view }: BackgroundPlotWindowProps) {
+export default function BackgroundPlotWindow({ dataset, view, bg }: BackgroundPlotWindowProps) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const defaultTrace = useApp((s) => s.defaultTrace);
@@ -115,6 +120,7 @@ export default function BackgroundPlotWindow({ dataset, view }: BackgroundPlotWi
       tool="zoom"
       onReadout={() => {}}
       peakWizardEdit={null}
+      bg={bg}
     />
   );
 }

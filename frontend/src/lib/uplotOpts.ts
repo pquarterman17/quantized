@@ -3,9 +3,11 @@
 
 import type uPlot from "uplot";
 
+import { resolveDrawColor } from "./contrastColor";
 import { FILLED_SHAPES, markerPaths } from "./markers";
 import type { Measurement } from "./measure";
 import type { FwhmResult } from "./peakwidth";
+import type { PlotBg } from "./plotview";
 import type { PlotPayload } from "./plotdata";
 import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
@@ -37,6 +39,49 @@ export type PlotTool =
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/** The concrete design-token values a plot window's EFFECTIVE background
+ *  resolves to (item 18, owner request 2026-07-09): the canvas background
+ *  colour (for the hosting DOM element's inline style — uPlot itself has no
+ *  "background" option; it draws on a transparent canvas over whatever CSS
+ *  supplies), the grid/ink colours `buildOpts` draws axes/overlays with, and
+ *  whether that background reads as dark (feeds `resolveDrawColor`'s
+ *  contrast math below). "theme" (default) reproduces today's behaviour —
+ *  the plot canvas stays dark regardless of the app's global light/dark
+ *  theme (see `styles/colors.css`'s `--axes-bg` doc) — until a window is
+ *  explicitly pinned to "light" (Origin's white graph page) or "dark". The
+ *  "dark"/"light" token pairs are MODE-scoped, not theme-scoped (same value
+ *  regardless of the app's `[data-theme]` — see colors.css), so a window
+ *  stays correctly readable even when its own override disagrees with the
+ *  surrounding chrome's theme. The single resolution chokepoint: both
+ *  `buildOpts` (canvas draw colours) and the window-chrome components
+ *  (`PlotStage`/`PlotWindowFrame`, inline container background) call this. */
+export interface PlotBgTokens {
+  axesBg: string;
+  gridColor: string;
+  inkColor: string;
+  inkDimColor: string;
+  isDark: boolean;
+}
+
+export function resolvePlotBg(bg?: PlotBg): PlotBgTokens {
+  if ((bg ?? "theme") === "light") {
+    return {
+      axesBg: cssVar("--axes-bg-light") || "#f7f7fa",
+      gridColor: cssVar("--grid-line-light") || "#ccc",
+      inkColor: cssVar("--ink-on-light") || "#222",
+      inkDimColor: cssVar("--ink-dim-on-light") || "#555",
+      isDark: false,
+    };
+  }
+  return {
+    axesBg: cssVar("--axes-bg") || "#13131a",
+    gridColor: cssVar("--grid-line") || "#333",
+    inkColor: cssVar("--ink-on-dark") || "#eee",
+    inkDimColor: cssVar("--ink-dim-on-dark") || "#aaa",
+    isDark: true,
+  };
 }
 
 export const SERIES_VARS = [
@@ -310,6 +355,11 @@ export interface BuildOptsArgs {
   xStep?: number | null;
   yStep?: number | null;
   y2Step?: number | null;
+  /** This window's background override (item 18) — "theme" (default)
+   *  matches today's always-dark plot canvas; "light"/"dark" pin THIS plot
+   *  to a fixed background regardless of the app's theme. Resolved via
+   *  `resolvePlotBg`. */
+  bg?: PlotBg;
 }
 
 /** Full-scan [min, max] of the finite values across every visible series on one
@@ -375,8 +425,12 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     if (p.paths) return { ...p, paths: fullPoints(p.paths) };
     return args.pointsPaths ? { ...p, paths: fullPoints(args.pointsPaths) } : p;
   };
-  const axisColor = cssVar("--text-dim") || "#aaa";
-  const gridColor = cssVar("--grid-line") || "#333";
+  // This window's EFFECTIVE background (item 18) drives both the axis/grid/
+  // ink colours below AND the contrast check on literal per-series colours
+  // (`resolveDrawColor` calls further down) — NOT the app's global theme,
+  // since a per-window override can disagree with the surrounding chrome.
+  const { gridColor, inkColor, inkDimColor, isDark: isDarkBg } = resolvePlotBg(args.bg);
+  const axisColor = inkDimColor;
   const accentColor = cssVar("--accent") || "#8b5cf6";
   const accentSoftColor = cssVar("--accent-soft") || "rgba(139,92,246,0.18)";
   const captureSoftColor = cssVar("--capture-soft") || "rgba(200,160,80,0.16)";
@@ -465,20 +519,20 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     // Dragging only in the non-gesture tools (zoom/cursor); pan/measure/region
     // own the pointer-drag, so reference lines stay static there.
     plugins.push(
-      refLinePlugin(refLines, cssVar("--text-dim") || "#888", {
+      refLinePlugin(refLines, inkDimColor, {
         onMove: args.onRefLineMove,
         interactive: tool === "zoom" || tool === "cursor",
       }),
     );
   }
   if (annotations && annotations.length > 0) {
-    plugins.push(annotationPlugin(annotations, cssVar("--text") || "#ddd", font));
+    plugins.push(annotationPlugin(annotations, inkColor, font));
   }
   if (args.errorBars && args.errorBars.size > 0) {
-    plugins.push(errorBarsPlugin(args.errorBars, cssVar("--text-dim") || "#888"));
+    plugins.push(errorBarsPlugin(args.errorBars, inkDimColor));
   }
   if (args.axisBox) {
-    plugins.push(axisBoxPlugin(cssVar("--text-dim") || "#888"));
+    plugins.push(axisBoxPlugin(inkDimColor));
   }
   // Wheel-to-zoom is independent of the active tool (it's a navigation aid, not a
   // drag gesture), so it composes with any tool when the pref is on.
@@ -614,7 +668,15 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       { sorted: xAscending ? 1 : 0 },
       ...payload.series.map((s, i) => {
         const style = seriesStyles?.[i];
-        const stroke = seriesColor(i, style);
+        // Literal per-series overrides (e.g. an Origin-imported figure's
+        // saved line colour) are checked for contrast against THIS window's
+        // effective background and swapped for the ink token when they'd be
+        // invisible (a literal black stroke on our dark canvas, or literal
+        // white on a "light" override) — never mutates the stored style, so
+        // a theme/background switch re-resolves live. Default palette
+        // colours (`--series-N`) pass through unchanged (already
+        // theme-designed for contrast; see `resolveDrawColor`'s doc).
+        const stroke = resolveDrawColor(seriesColor(i, style), isDarkBg, inkColor);
         const label = labels[i];
         const scale = (s.axis ?? 0) === 1 ? "y2" : "y";
         const show = !args.hidden?.[i]; // interactive legend visibility
@@ -624,8 +686,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         }
         // Muted "excluded" companion (grey mode): faint hollow markers, no line.
         if (s.muted) {
-          const grey = cssVar("--text-faint") || cssVar("--text-dim") || "#888";
-          return { label, scale, stroke: grey, width: 0, points: loopPoints({ show: true, size: 5 }), show };
+          return { label, scale, stroke: inkDimColor, width: 0, points: loopPoints({ show: true, size: 5 }), show };
         }
         // Peak markers: points only, no connecting line.
         if (s.kind === "points") {
