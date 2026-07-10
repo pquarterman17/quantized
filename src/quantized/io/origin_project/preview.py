@@ -22,20 +22,81 @@ from quantized.datastruct import DataStruct
 __all__ = ["decimate_datastruct"]
 
 
+def _trim_trailing_padding(ds: DataStruct) -> DataStruct:
+    """Drop trailing rows that carry no real data, mirroring the frontend's
+    ``dropTrailingEmptyRows`` (``frontend/src/lib/plotdata.ts``). Origin's
+    over-allocated worksheet storage leaves "allocated but unfilled" rows at
+    the END of a book (verified byte-for-byte across ~10 PNR-corpus books,
+    e.g. Book15: 19 of 180 rows), in two shapes:
+
+      - not plottable at all -- ``.time`` is non-finite, or (when there are
+        value channels) every value in the row is also non-finite, or
+      - over-allocated-storage padding -- ``.time`` AND every value in the
+        row read exactly finite ``0.0`` simultaneously. This is a "point", not
+        a gap, so the rule above doesn't catch it, and left in, it resets the
+        independent axis back to 0 at the tail (breaking x-ascending) and
+        collapses a sparkline/preview built from the raw row order.
+
+    Only trims a contiguous run off the END; interior gaps are left in place.
+    Returns ``ds`` unchanged (same object) when there is no prunable tail.
+    """
+    n = ds.n_points
+    if n == 0:
+        return ds
+    time = ds.time
+    values = ds.values
+    has_y = ds.n_channels > 0
+
+    def plottable(i: int) -> bool:
+        if not np.isfinite(time[i]):
+            return False
+        if not has_y:
+            return True
+        return bool(np.any(np.isfinite(values[i, :])))
+
+    def all_zero_row(i: int) -> bool:
+        if not has_y:
+            return False
+        if time[i] != 0:
+            return False
+        return bool(np.all(values[i, :] == 0))
+
+    end = n
+    while end > 0 and (not plottable(end - 1) or all_zero_row(end - 1)):
+        end -= 1
+    if end == n:
+        return ds
+    return DataStruct(
+        time=ds.time[:end],
+        values=ds.values[:end, :],
+        labels=ds.labels,
+        units=ds.units,
+        metadata=ds.metadata,
+    )
+
+
 def decimate_datastruct(ds: DataStruct, target_points: int = 200) -> DataStruct:
     """Row-decimate ``ds`` to about ``target_points`` rows.
 
-    Buckets the row range into ``target_points // 2`` contiguous spans and
-    keeps, from each span, the row holding the MINIMUM and the row holding the
-    MAXIMUM value of the densest channel (most finite values) -- so a sparkline
-    built from the result still shows real spikes/dips a plain stride sample
-    would step over. Every retained row keeps ALL of its channels (they were
-    picked together), so the output is a normal, if smaller, ``DataStruct``.
+    First prunes a trailing "allocated but unfilled" padding run (see
+    :func:`_trim_trailing_padding`) so a pending dataset's preview never
+    carries the padding into the thumbnail -- the fix for a preview whose
+    sparkline collapsed toward (0, 0) instead of tracing the real curve.
 
-    Returns ``ds`` unchanged when it already has at most ``target_points`` rows
-    or has no channels at all (an empty-data pseudo-book -- nothing to pick
-    extrema from, and nothing to save by decimating zero columns).
+    Then buckets the (pruned) row range into ``target_points // 2``
+    contiguous spans and keeps, from each span, the row holding the MINIMUM
+    and the row holding the MAXIMUM value of the densest channel (most finite
+    values) -- so a sparkline built from the result still shows real
+    spikes/dips a plain stride sample would step over. Every retained row
+    keeps ALL of its channels (they were picked together), so the output is a
+    normal, if smaller, ``DataStruct``.
+
+    Returns the (possibly padding-trimmed) ``ds`` unchanged when it already
+    has at most ``target_points`` rows or has no channels at all (an
+    empty-data pseudo-book -- nothing to pick extrema from, and nothing to
+    save by decimating zero columns).
     """
+    ds = _trim_trailing_padding(ds)
     n = ds.n_points
     if n <= target_points or ds.n_channels == 0:
         return ds
