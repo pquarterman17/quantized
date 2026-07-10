@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import type { FrozenPlotBundle } from "./plotsnapshot";
 import {
   cascadeGeometry,
   cascadeLayout,
@@ -174,6 +175,65 @@ describe("sanitizePlotWindows", () => {
     expect(out[1].bg).toBe("dark");
     expect(out[2].bg).toBe("theme");
     expect(out[3].bg).toBe("theme");
+  });
+});
+
+describe("sanitizePlotWindows — snapshot windows (item 11)", () => {
+  const bundle = (): FrozenPlotBundle => ({
+    payload: {
+      data: [
+        [0, 1],
+        [5, 6],
+      ] as FrozenPlotBundle["payload"]["data"],
+      series: [{ label: "m", unit: "emu" }],
+      xLabel: "x",
+      xUnit: "",
+    },
+    styleList: null,
+    labelList: null,
+    errorBars: [[1, [0.1, null]]],
+    hidden: null,
+  });
+
+  it("round-trips a valid snapshot window — kind + frozen bundle survive; datasetId is forced null", () => {
+    const out = sanitizePlotWindows(
+      [win({ id: "s1", kind: "snapshot", snapshot: bundle(), datasetId: "d1" })],
+      new Set(["d1"]),
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].kind).toBe("snapshot");
+    expect(out[0].datasetId).toBeNull(); // frozen means frozen — never dataset-bound
+    expect(out[0].snapshot!.payload.data).toEqual([
+      [0, 1],
+      [5, 6],
+    ]);
+    expect(out[0].snapshot!.payload.series).toEqual([{ label: "m", unit: "emu" }]);
+    expect(out[0].snapshot!.errorBars).toEqual([[1, [0.1, null]]]);
+  });
+
+  it("drops a snapshot window whose frozen bundle is missing or malformed — plot siblings survive", () => {
+    const out = sanitizePlotWindows(
+      [
+        win({ id: "p1" }),
+        win({ id: "s1", kind: "snapshot" }), // no bundle at all
+        win({
+          id: "s2",
+          kind: "snapshot",
+          snapshot: { payload: { data: "nope", series: [] } } as unknown as FrozenPlotBundle,
+        }),
+        win({
+          id: "s3",
+          kind: "snapshot",
+          // column count breaks the data = [x, ...series] contract
+          snapshot: {
+            ...bundle(),
+            payload: { ...bundle().payload, series: [] },
+          } as FrozenPlotBundle,
+        }),
+      ],
+      new Set(["d1"]),
+    );
+    expect(out.map((w) => w.id)).toEqual(["p1"]);
   });
 });
 

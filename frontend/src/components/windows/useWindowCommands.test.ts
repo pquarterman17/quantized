@@ -6,6 +6,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { publishLivePlotSnapshot, type LivePlotSnapshot } from "../../lib/plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import { useCommands } from "../../store/commands";
 import { useApp } from "../../store/useApp";
@@ -54,16 +55,18 @@ beforeEach(() => {
 afterEach(() => {
   useCommands.setState({ menuCommands: [] });
   useApp.setState({ plotWindows: [win({ id: "w1", winState: "maximized" })], focusedWindowId: "w1" });
+  publishLivePlotSnapshot(null); // never leak a seam bundle across tests
 });
 
 describe("useWindowCommands — published registry entries", () => {
-  it("publishes exactly the 8 Window-group commands (item 18 adds Window Background) with the documented shortcuts", () => {
+  it("publishes exactly the 9 Window-group commands (item 11 adds Snapshot to New Window) with the documented shortcuts", () => {
     renderHook(() => useWindowCommands());
     const ids = useCommands.getState().menuCommands.map((c) => c.id);
     expect(ids).toEqual([
       "window-new",
       "window-duplicate",
       "window-close",
+      "window-snapshot",
       "window-tile",
       "window-cascade",
       "window-bg-cycle",
@@ -182,6 +185,61 @@ describe("useWindowCommands — published registry entries", () => {
     renderHook(() => useWindowCommands());
     expect(() => act(() => action("window-bg-cycle").run())).not.toThrow();
     expect(useApp.getState().plotWindows.find((w) => w.id === "w1")!.bg).toBe("theme");
+  });
+});
+
+describe("useWindowCommands — Snapshot to New Window (item 11)", () => {
+  const liveBundle = (): LivePlotSnapshot => ({
+    payload: {
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+      ] as LivePlotSnapshot["payload"]["data"],
+      series: [{ label: "m", unit: "emu" }],
+      xLabel: "t",
+      xUnit: "s",
+    },
+    styleList: undefined,
+    labelList: undefined,
+    errorBars: new Map(),
+    hidden: undefined,
+  });
+
+  it("freezes the seam's live bundle into a kind:'snapshot' window — WITHOUT moving focus", () => {
+    const live = liveBundle();
+    publishLivePlotSnapshot(live);
+    renderHook(() => useWindowCommands());
+    act(() => action("window-snapshot").run());
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(3);
+    const snap = s.plotWindows.find((w) => !["w1", "w2"].includes(w.id))!;
+    expect(snap.kind).toBe("snapshot");
+    expect(snap.datasetId).toBeNull(); // never dataset-bound — frozen means frozen
+    expect(snap.title.startsWith("Snapshot — ")).toBe(true);
+    expect(s.focusedWindowId).toBe("w1"); // snapshots can never take focus
+    // Deep copy, not a reference: the frozen data equals what was live but
+    // shares no arrays with it.
+    expect(snap.snapshot!.payload.data).toEqual(live.payload.data);
+    expect(snap.snapshot!.payload.data[1]).not.toBe(live.payload.data[1]);
+  });
+
+  it("is a no-op while no live payload is published (empty plot / alt mode / other tab)", () => {
+    publishLivePlotSnapshot(null);
+    renderHook(() => useWindowCommands());
+    act(() => action("window-snapshot").run());
+    expect(useApp.getState().plotWindows).toHaveLength(2);
+  });
+
+  it("focus cycling skips snapshot windows", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "w2", kind: "snapshot" }), win({ id: "w3" })],
+      focusedWindowId: "w1",
+    });
+    renderHook(() => useWindowCommands());
+    act(() => action("window-focus-next").run());
+    // Creation/z order would say w2 next — but w2 is a snapshot, so the
+    // cycle lands on w3.
+    expect(useApp.getState().focusedWindowId).toBe("w3");
   });
 });
 

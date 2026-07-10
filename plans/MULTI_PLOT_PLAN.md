@@ -11,7 +11,7 @@ working unchanged while extra windows render alongside.
 
 **Status:** Active
 **Created:** 2026-07-09
-**Updated:** 2026-07-09
+**Updated:** 2026-07-10
 
 ---
 
@@ -251,10 +251,6 @@ items 6–10.
     owner planning session.
 
 ## Tier 3 — Nice-to-Have
-
-11. **Snapshot-as-window** — (M) freeze the focused window's current
-    display payload into a static compare window (the ⎘ tool's natural
-    upgrade; `FigureDoc` frozen-data precedent).
 
 12. **Edge / grid snapping** — (S) snap frames to canvas edges and
     sibling window edges while dragging.
@@ -703,3 +699,41 @@ items 6–10.
   context-menu feature, `a214fea`); the lone `GridViewport.perf.test.tsx`
   timing case is pre-existing/load-dependent flake unrelated to this item —
   passes in isolation; `npm run build` green.
+- ~~**11. Snapshot-as-window**~~ (2026-07-10) — the ⎘ tool's in-app upgrade: a
+  "Snapshot to New Window" command (Window menu + ⌘K via the registry, plus a
+  ⊞ toolbar button beside the existing ⎘ clipboard snapshot; deliberately NO
+  keyboard shortcut — the natural ⌘⇧S-family combos collide with browser/app
+  save conventions) freezes the focused window's CURRENT composed display
+  payload into a static `kind:"snapshot"` compare window. New
+  `lib/plotsnapshot.ts`: the LIVE seam (`publishLivePlotSnapshot`/
+  `readLivePlotSnapshot` — a module-scope ref written from a `PlotStage`
+  effect, zero store churn; publishes null while an alternate render mode
+  (polar/stat/stack) is actually showing so the command no-ops instead of
+  freezing the hidden XY bundle), `freezePlotSnapshot` (deep copy + JSON-safe
+  normalization: `Map` error bars → entries, `undefined` holes → null), the
+  `thaw*` inverses, and `sanitizeFrozenBundle` (untrusted-.dwk validator —
+  a malformed bundle drops the whole window entry, never throws).
+  `PlotWindow.kind` widens to `"plot" | "snapshot"` with an appended optional
+  `snapshot` field; a snapshot window carries a frozen copy of the live view
+  and is NEVER dataset-bound (`datasetId` always null — frozen means frozen).
+  Store contract: snapshots are never the view-facade focus target —
+  `focusWindow` on one raises z ONLY (no snapshot/hydrate, no
+  `activeId`/`selectedIds` retarget), `focusedWindowId` always points at a
+  plot window, Ctrl+Tab cycling skips them, and the ≥1-window invariant is
+  refined to "≥1 PLOT window" (`closeWindow` refuses the last plot window
+  even when snapshots remain; snapshots always close freely; minimize's
+  focus hand-off skips visible snapshots; restore un-minimizes + raises a
+  snapshot without focusing it; duplicate carries kind + bundle). Rendering:
+  `WindowCanvas` dispatches snapshots to a new `SnapshotPlotWindow.tsx`
+  (`PlotViewport` fed straight from the frozen bundle — no fetch, no
+  rowstate, no tool plugins); `PlotWindowFrame` shows a "⎘ frozen" accent
+  `Badge`. Persistence rides the `.dwk` `plotWindows` field unchanged; the
+  `focusedWindowId` clamps (workspace.ts parse AND `loadWorkspace`) never
+  land on a snapshot (fall back to the first plot window), and a doc whose
+  surviving windows are ALL snapshots gets a fresh main window appended. THE
+  frozen-means-frozen proof (`SnapshotPlotWindow.test.tsx`): toggling row
+  exclusion on the source dataset rebuilds the live window (row nulled)
+  while the snapshot never rebuilds and its bundle is byte-untouched. +30
+  tests (9 `lib/plotsnapshot` + 2 `plotview` sanitize + 9 `useApp` + 3
+  `workspace` + 4 component + 3 `useWindowCommands`); frontend 2247 green
+  (from 2217); `npm run build` (tsc + vite) green.

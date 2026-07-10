@@ -10,6 +10,7 @@ import {
 import { defaultErrKeys } from "../lib/errorbars";
 import { saveBlob } from "../lib/download";
 import { effectiveChannels } from "../lib/plotdata";
+import type { FrozenPlotBundle } from "../lib/plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import type { Dataset, DataStruct } from "../lib/types";
 import { useApp } from "./useApp";
@@ -3885,5 +3886,188 @@ describe("useApp plot windows — item 10 (default titles, dedupe, rename)", () 
     });
     useApp.getState().renameWindow("w2", "A"); // colliding on purpose — a user's explicit choice
     expect(useApp.getState().plotWindows.find((w) => w.id === "w2")?.title).toBe("A");
+  });
+});
+
+describe("useApp plot windows — item 11 (snapshot-as-window)", () => {
+  const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
+    id: "w1",
+    kind: "plot",
+    title: "",
+    datasetId: "d1",
+    geometry: { x: 0, y: 0, w: 480, h: 360 },
+    z: 0,
+    winState: "normal",
+    view: defaultPlotView(),
+    bg: "theme",
+    ...over,
+  });
+
+  const bundle = (): FrozenPlotBundle => ({
+    payload: {
+      data: [
+        [1, 2, 3],
+        [10, 20, 30],
+      ] as FrozenPlotBundle["payload"]["data"],
+      series: [{ label: "m", unit: "emu" }],
+      xLabel: "t",
+      xUnit: "s",
+    },
+    styleList: null,
+    labelList: null,
+    errorBars: [],
+    hidden: null,
+  });
+
+  it("createSnapshotWindow freezes the live view onto a kind:'snapshot' window on top — focus/active untouched", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "alpha", data: raw }],
+      activeId: "d1",
+      plotWindows: [win({ id: "w1", bg: "light" })],
+      focusedWindowId: "w1",
+      yLog: true,
+      plotTitle: "live title",
+    });
+    const b = bundle();
+    const id = useApp.getState().createSnapshotWindow(b);
+    const s = useApp.getState();
+    const snap = s.plotWindows.find((w) => w.id === id)!;
+    expect(snap.kind).toBe("snapshot");
+    expect(snap.datasetId).toBeNull(); // never dataset-bound
+    expect(snap.title).toBe("Snapshot — alpha");
+    expect(snap.snapshot).toBe(b);
+    expect(snap.view.yLog).toBe(true); // frozen from the LIVE singletons
+    expect(snap.view.plotTitle).toBe("live title");
+    expect(snap.bg).toBe("light"); // inherits the source window's override
+    expect(snap.z).toBeGreaterThan(s.plotWindows.find((w) => w.id === "w1")!.z);
+    expect(s.focusedWindowId).toBe("w1"); // snapshots never take focus
+    expect(s.activeId).toBe("d1");
+  });
+
+  it("createSnapshotWindow dedupes successive titles and returns null with no focused window", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "alpha", data: raw }],
+      plotWindows: [win({ id: "w1" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().createSnapshotWindow(bundle());
+    const second = useApp.getState().createSnapshotWindow(bundle());
+    expect(useApp.getState().plotWindows.find((w) => w.id === second)?.title).toBe(
+      "Snapshot — alpha (2)",
+    );
+    useApp.setState({ focusedWindowId: null });
+    expect(useApp.getState().createSnapshotWindow(bundle())).toBeNull();
+  });
+
+  it("focusWindow on a snapshot raises its z ONLY — no focus move, no view swap, no activeId retarget", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "alpha", data: raw }],
+      activeId: "d1",
+      selectedIds: ["d1"],
+      plotWindows: [
+        win({ id: "w1", z: 5, view: { ...defaultPlotView(), plotTitle: "w1 record" } }),
+        win({ id: "s1", kind: "snapshot", datasetId: null, z: 1, snapshot: bundle() }),
+      ],
+      focusedWindowId: "w1",
+      plotTitle: "live title",
+    });
+    useApp.getState().focusWindow("s1");
+    const s = useApp.getState();
+    expect(s.focusedWindowId).toBe("w1"); // still the plot window
+    expect(s.plotTitle).toBe("live title"); // live singletons untouched
+    expect(s.activeId).toBe("d1");
+    expect(s.selectedIds).toEqual(["d1"]);
+    // The outgoing plot window's record was NOT snapshot-swapped …
+    expect(s.plotWindows.find((w) => w.id === "w1")?.view.plotTitle).toBe("w1 record");
+    // … but the snapshot window did rise to the top.
+    expect(s.plotWindows.find((w) => w.id === "s1")!.z).toBeGreaterThan(
+      s.plotWindows.find((w) => w.id === "w1")!.z,
+    );
+  });
+
+  it("closeWindow: the last PLOT window can't close while snapshots remain; the snapshot itself can", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "s1", kind: "snapshot", datasetId: null, snapshot: bundle() })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().closeWindow("w1"); // no-op — w1 is the last plot window
+    expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w1", "s1"]);
+    useApp.getState().closeWindow("s1"); // snapshots always close freely
+    expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w1"]);
+    expect(useApp.getState().focusedWindowId).toBe("w1");
+  });
+
+  it("restoreWindow on a minimized snapshot un-minimizes + raises WITHOUT focusing it", () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", z: 5 }),
+        win({ id: "s1", kind: "snapshot", datasetId: null, z: 1, winState: "minimized", snapshot: bundle() }),
+      ],
+      focusedWindowId: "w1",
+      plotTitle: "live title",
+    });
+    useApp.getState().restoreWindow("s1");
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "s1")?.winState).toBe("normal");
+    expect(s.plotWindows.find((w) => w.id === "s1")!.z).toBeGreaterThan(5);
+    expect(s.focusedWindowId).toBe("w1"); // unlike a plot window's restore
+    expect(s.plotTitle).toBe("live title");
+  });
+
+  it("minimizing the focused plot window skips a visible snapshot when handing off focus", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "s1", kind: "snapshot", datasetId: null, snapshot: bundle() })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().minimizeWindow("w1");
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "w1")?.winState).toBe("minimized");
+    expect(s.focusedWindowId).toBe("w1"); // no plot candidate — focus stays put
+  });
+
+  it("duplicateWindow on a snapshot yields another snapshot carrying the same frozen bundle", () => {
+    const b = bundle();
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "s1", kind: "snapshot", datasetId: null, title: "Snap", snapshot: b })],
+      focusedWindowId: "w1",
+    });
+    const id = useApp.getState().duplicateWindow("s1");
+    const dup = useApp.getState().plotWindows.find((w) => w.id === id)!;
+    expect(dup.kind).toBe("snapshot");
+    expect(dup.snapshot).toBe(b);
+    expect(dup.datasetId).toBeNull();
+  });
+
+  it("loadWorkspace round-trips a snapshot window and never lands focus on it", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      activeId: "d1",
+      plotWindows: [
+        win({ id: "s1", kind: "snapshot", datasetId: null, snapshot: bundle() }),
+        win({ id: "p1", datasetId: "d1" }),
+      ],
+      focusedWindowId: "s1", // a hand-edited doc pointing focus at the snapshot
+    });
+    const s = useApp.getState();
+    expect(s.plotWindows.map((w) => w.id)).toEqual(["s1", "p1"]);
+    expect(s.plotWindows.find((w) => w.id === "s1")?.snapshot?.payload.data).toEqual([
+      [1, 2, 3],
+      [10, 20, 30],
+    ]);
+    expect(s.focusedWindowId).toBe("p1"); // clamped to the first PLOT window
+  });
+
+  it("loadWorkspace appends a fresh main window when the doc's windows are ALL snapshots", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      activeId: "d1",
+      plotWindows: [win({ id: "s1", kind: "snapshot", datasetId: null, snapshot: bundle() })],
+      focusedWindowId: "s1",
+    });
+    const s = useApp.getState();
+    expect(s.plotWindows.some((w) => w.kind === "plot")).toBe(true);
+    expect(s.plotWindows.find((w) => w.id === "s1")?.kind).toBe("snapshot"); // the snapshot survives
+    const focused = s.plotWindows.find((w) => w.id === s.focusedWindowId);
+    expect(focused?.kind).toBe("plot");
   });
 });

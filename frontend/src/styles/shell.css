@@ -375,6 +375,9 @@ body {
    font-mono for numbers). flex-shrink:0 keeps it from being squeezed out by
    a long title before the badge itself elides. */
 .qzk-plotwin-meta { flex-shrink: 0; }
+/* Item 11 — the snapshot window's "frozen" indicator (a Badge primitive
+   wrapped in a span for its tooltip); never squeezed out of the title bar. */
+.qzk-plotwin-frozen { flex-shrink: 0; display: inline-flex; }
 /* Item 18 — per-window background-override toggle (◐ cycles theme/light/
    dark); a plain glyph button, distinct from the circular close button. */
 .qzk-plotwin-bg { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 3px; border: none; background: transparent; color: var(--text-faint); cursor: default; padding: 0; flex-shrink: 0; font-size: 11px; line-height: 1; }
