@@ -75,6 +75,36 @@ export function originLegendPos(
   return `${fy >= 0.5 ? "n" : "s"}${fx >= 0.5 ? "e" : "w"}` as "ne" | "nw" | "se" | "sw";
 }
 
+// A leading swatch marker Origin's own legend text carries per curve
+// (`\l(n)`) — our legend already draws its own colour/marker swatch, so this
+// code (plus any whitespace right after it) is always dropped, never shown.
+const LEGEND_SWATCH_RE = /\\l\(\d+\)\s*/g;
+// The plain auto-template placeholder — "the display name of the nth plot in
+// this layer". Deliberately digit-only: a modifier form like `%(7,@LG)` (seen
+// live in Hc2 data.opju's Graph40) does NOT match, so it falls through to the
+// literal-passthrough branch below instead of being mis-resolved by a guess
+// at what the modifier means.
+const LEGEND_CODE_RE = /%\((\d+)\)/g;
+
+/** Resolve an Origin legend template string (one `legend_labels` entry) to
+ *  display text: strip the `\l(n)` swatch marker Origin prepends (our legend
+ *  draws its own swatch), then substitute every `%(n)` placeholder with the
+ *  nth bound curve's display name (`curveNames[n - 1]`, 1-based to match
+ *  Origin's own numbering). A curve name that isn't available (index out of
+ *  range, or that curve never resolved to a bound channel) — or any other
+ *  code this grammar doesn't recognize (an `@`-modifier, a future variant) —
+ *  is left as the original literal text: a wrong guess is worse than showing
+ *  the raw code. Hand-typed legend text (no `%(n)`/`\l(n)` at all) passes
+ *  through unchanged. Pure — no store/dataset access, so it's unit-testable
+ *  on plain strings. */
+export function resolveLegendTemplate(
+  template: string,
+  curveNames: readonly (string | undefined)[],
+): string {
+  const stripped = template.replace(LEGEND_SWATCH_RE, "");
+  return stripped.replace(LEGEND_CODE_RE, (raw, n: string) => curveNames[Number(n) - 1] || raw);
+}
+
 /** One figure attached to an import "family" (one file's worth of books).
  *  `datasetId` is the best-effort resolved target, or null if the figure's
  *  loose `source_hint` didn't match any book created by this import — the
@@ -137,9 +167,11 @@ export function figureChannelSelection(
   xKey: number | null;
   yKeys: number[];
   styles: Record<number, SeriesStyle>;
-  /** Decoded per-curve legend captions (`legend_labels`), mapped onto the
-   *  bound channel that curve plots — see the loop below for the mapping
-   *  rule. Ready for the store's `seriesLabels`. */
+  /** Per-curve legend captions (`legend_labels`, resolved via
+   *  `resolveLegendTemplate` — `%(n)` -> the nth curve's display name,
+   *  `\l(n)` swatch stripped), mapped onto the bound channel that curve
+   *  plots — see the loop below for the mapping rule. Ready for the store's
+   *  `seriesLabels`. */
   labels: Record<number, string>;
 } | null {
   const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
@@ -155,6 +187,13 @@ export function figureChannelSelection(
   const styles: Record<number, SeriesStyle> = {};
   const labels: Record<number, string> = {};
   const legend = figure.legend_labels ?? [];
+  // The nth bound curve's display name (1-based Origin numbering minus one),
+  // for resolveLegendTemplate's `%(n)` substitution — same "only curves that
+  // actually resolved a channel count" filter as the curveIdx loop below, so
+  // a template's index lines up with the curve curveIdx is currently on.
+  const curveNames: (string | undefined)[] = mine
+    .filter((c) => letters.indexOf(c.y) >= 0)
+    .map((c) => ds.data.labels[letters.indexOf(c.y)] || c.y);
   let xKey: number | null = null;
   // legend_labels is a dense 1-based list, one entry per curve in the SAME
   // order Origin's "\l(n)" legend numbering plots them — curveIdx tracks that
@@ -173,7 +212,9 @@ export function figureChannelSelection(
       const xIdx = letters.indexOf(curve.x);
       if (xIdx >= 0) xKey = xIdx; // plot against a non-default x channel
     }
-    if (curveIdx < legend.length && legend[curveIdx]) labels[yIdx] = legend[curveIdx];
+    if (curveIdx < legend.length && legend[curveIdx]) {
+      labels[yIdx] = resolveLegendTemplate(legend[curveIdx], curveNames);
+    }
     curveIdx++;
   }
   return yKeys.length > 0 ? { xKey, yKeys, styles, labels } : null;

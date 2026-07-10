@@ -11,7 +11,7 @@
 // point order intact and render correctly through the existing loop-safe
 // plot machinery (sorted=0 + full-range path builders).
 
-import { originCurveSeriesStyle } from "./originFigures";
+import { originCurveSeriesStyle, resolveLegendTemplate } from "./originFigures";
 import type { Dataset, DataStruct, OriginFigure, SeriesStyle } from "./types";
 
 /** Letter -> 0-based value-channel index via origin_column_names, or -1;
@@ -54,10 +54,13 @@ export function overlayCurveStyles(data: DataStruct | null | undefined): Record<
   return out;
 }
 
-/** Recover the per-column decoded legend captions stamped by
- *  buildOverlayDataset into an overlay's metadata, as a channel-index →
- *  label map ready for the store's `seriesLabels` (fix #4). Empty for a
- *  non-overlay dataset or one whose figure had no legend_labels. */
+/** Recover the per-column legend captions stamped by buildOverlayDataset into
+ *  an overlay's metadata, as a channel-index → label map ready for the
+ *  store's `seriesLabels` (fix #4). Already resolved via
+ *  `resolveLegendTemplate` at build time (`%(n)` -> the nth curve's display
+ *  name, `\l(n)` swatch stripped) — this is just the read-back, no further
+ *  substitution here. Empty for a non-overlay dataset or one whose figure had
+ *  no legend_labels. */
 export function overlayCurveLabels(data: DataStruct | null | undefined): Record<number, string> {
   const arr = (data?.metadata ?? {})["origin_curve_labels"];
   if (!Array.isArray(arr)) return {};
@@ -87,6 +90,18 @@ export function buildOverlayDataset(
     legendLabel: string | undefined; // decoded legend caption (fix #4), if any
   }
   const legend = figure.legend_labels ?? [];
+  // The nth entry of figure.curves' own display name (undefined where the
+  // book/channel never resolved) — a pre-pass so resolveLegendTemplate's
+  // `%(n)` substitution can look up ANY curve in the layer, not just the one
+  // currently being bound (a legend entry is not required to reference only
+  // itself). Same "book:channel" resolution the main loop below repeats to
+  // build each Bound entry; kept as a light separate pass for that reason.
+  const curveNames: (string | undefined)[] = (figure.curves ?? []).map((c) => {
+    const ds = books.find((d) => String((d.data.metadata ?? {}).origin_book ?? "") === c.book);
+    if (!ds) return undefined;
+    const yCh = channelOf((ds.data.metadata ?? {}) as Record<string, unknown>, c.y);
+    return yCh >= 0 ? ds.data.labels[yCh] || c.y : undefined;
+  });
   const bound: Bound[] = [];
   // curveIdx tracks this curve's position among ALL of figure.curves (even
   // ones skipped below for an unresolved book/channel) — the SAME "\l(n)"
@@ -110,7 +125,10 @@ export function buildOverlayDataset(
       unit: ds.data.units[yCh] ?? "",
       style: originCurveSeriesStyle(c),
       designation: cd ? String(cd[c.y] ?? "Y") : "Y",
-      legendLabel: curveIdx < legend.length && legend[curveIdx] ? legend[curveIdx] : undefined,
+      legendLabel:
+        curveIdx < legend.length && legend[curveIdx]
+          ? resolveLegendTemplate(legend[curveIdx], curveNames)
+          : undefined,
     });
   });
   if (bound.length < 2) return null;

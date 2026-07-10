@@ -13,6 +13,7 @@ import {
   type OriginFigureEntry,
   resolveFigureDataset,
   resolveFigurePanels,
+  resolveLegendTemplate,
   resolveSpatialPanels,
 } from "./originFigures";
 import type { Dataset, OriginCurve, OriginFigure } from "./types";
@@ -298,6 +299,100 @@ describe("figureChannelSelection", () => {
   it("ignores an absent/empty legend_labels list entirely (no override)", () => {
     const fig = figure({ curves: [{ book: "Co", x: "A", y: "B" }] });
     expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [0], styles: {}, labels: {} });
+  });
+
+  // Owner repro (PNR.opj live import): untouched auto-template legend text
+  // ("%(1)"/"%(2)") must resolve to the bound column's own display name, not
+  // show the raw Origin code.
+  it("resolves an auto-template legend_labels entry (%(n)) to the bound curve's column long name", () => {
+    const dsNamed: Dataset = {
+      id: "b9",
+      name: "XAS:Co",
+      data: {
+        time: [0],
+        values: [[1, 2]],
+        labels: ["Temperature (K)", "Resistance (Ohm)"],
+        units: ["K", "Ohm"],
+        metadata: { origin_book: "Co", x_column_name: "A", origin_column_names: ["B", "C"] },
+      },
+    };
+    const fig = figure({
+      legend_labels: ["%(1)", "%(2)"],
+      curves: [
+        { book: "Co", x: "A", y: "B" },
+        { book: "Co", x: "A", y: "C" },
+      ],
+    });
+    expect(figureChannelSelection(fig, dsNamed)).toEqual({
+      xKey: null,
+      yKeys: [0, 1],
+      styles: {},
+      labels: { 0: "Temperature (K)", 1: "Resistance (Ohm)" },
+    });
+  });
+
+  it("falls back to the column short name for %(n) when the dataset has no long name for that channel", () => {
+    const dsNoLongNames: Dataset = {
+      id: "b10",
+      name: "XAS:Co",
+      data: {
+        time: [0],
+        values: [[1, 2]],
+        labels: ["", ""], // no long name decoded for either column
+        units: ["", ""],
+        metadata: { origin_book: "Co", x_column_name: "A", origin_column_names: ["B", "C"] },
+      },
+    };
+    const fig = figure({
+      legend_labels: ["%(1)", "%(2)"],
+      curves: [
+        { book: "Co", x: "A", y: "B" },
+        { book: "Co", x: "A", y: "C" },
+      ],
+    });
+    expect(figureChannelSelection(fig, dsNoLongNames)).toEqual({
+      xKey: null,
+      yKeys: [0, 1],
+      styles: {},
+      labels: { 0: "B", 1: "C" }, // short (column-letter) fallback
+    });
+  });
+});
+
+describe("resolveLegendTemplate", () => {
+  // curveNames[n - 1] = the nth curve's display name; index 2 (curve 3) is
+  // deliberately undefined — an unresolved/unbound curve.
+  const names = ["Temperature (K)", "Resistance (Ohm)", undefined, "Field (Oe)"];
+
+  it("resolves a plain %(n) template to the nth curve's name", () => {
+    expect(resolveLegendTemplate("%(1)", names)).toBe("Temperature (K)");
+    expect(resolveLegendTemplate("%(2)", names)).toBe("Resistance (Ohm)");
+    expect(resolveLegendTemplate("%(4)", names)).toBe("Field (Oe)");
+  });
+
+  it("resolves multiple %(n) codes within one string", () => {
+    expect(resolveLegendTemplate("%(1) vs %(2)", names)).toBe("Temperature (K) vs Resistance (Ohm)");
+  });
+
+  it("strips a leading \\l(n) swatch marker (and its trailing whitespace) before resolving", () => {
+    expect(resolveLegendTemplate("\\l(1) %(1)", names)).toBe("Temperature (K)");
+    expect(resolveLegendTemplate("\\l(2)%(2)", names)).toBe("Resistance (Ohm)"); // no space either
+  });
+
+  it("passes through hand-typed literal legend text unchanged", () => {
+    expect(resolveLegendTemplate("Nb/Al", names)).toBe("Nb/Al");
+    expect(resolveLegendTemplate("R↑↑", names)).toBe("R↑↑"); // "R↑↑", hc2/PNR corpus form
+    expect(resolveLegendTemplate("", names)).toBe("");
+  });
+
+  it("leaves a %(n) code unresolved (raw) when that curve's name is unavailable", () => {
+    expect(resolveLegendTemplate("%(3)", names)).toBe("%(3)"); // names[2] is undefined
+    expect(resolveLegendTemplate("%(11)", names)).toBe("%(11)"); // out of range entirely
+  });
+
+  it("leaves an @-modifier template unresolved rather than guessing its meaning (seen live in Hc2 data.opju Graph40)", () => {
+    expect(resolveLegendTemplate("%(7,@LG)", names)).toBe("%(7,@LG)");
+    expect(resolveLegendTemplate("\\l(7) %(7,@LG)", names)).toBe("%(7,@LG)"); // swatch still stripped
   });
 });
 

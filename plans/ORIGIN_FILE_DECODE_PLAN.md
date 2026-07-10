@@ -398,6 +398,45 @@ the shipped contract)
 
 ## Completed
 
+- ~~**Origin legend `%(n)` template resolution (owner repro, follow-up to the
+  plot-fidelity batch below)**~~ (2026-07-09) — from the owner's PNR.opj live
+  import testing: "The legends... show '%(1)' '%(2)' which I know is the raw
+  text Origin uses... that is Origin shorthand to link to the column." The
+  PNR-triage plot-fidelity batch (below) wired decoded `legend_labels` into
+  `seriesLabels` LITERALLY, so an untouched Origin auto-template showed its
+  raw code instead of the column name. Cataloged every code form actually in
+  the corpus (`figures.py::extract_figures` against `PNR.opj` + a full
+  `.opj`/`.opju` sweep): plain `%(n)` (by far the common case, e.g. PNR.opj's
+  `Graph2`-`Graph49`), hand-typed literal text (`"Nb"`, `"R↑↑"`, PUA glyph
+  pairs), blank slots (`""`, a skipped error/secondary-X column), and one
+  `@`-modifier form seen live, `%(7,@LG)` (`Hc2 data.opju` Graph40) — NOT
+  implemented (no oracle for what the modifier changes; left as literal
+  per-instructions rather than guessed, and the digit-only match regex
+  naturally excludes it). No literal `\l(n)` swatch code reaches the frontend
+  today (the backend's `_parse_legend_labels` already strips it per-curve),
+  but the resolver strips a leading `\l(n)` (+ trailing whitespace) anyway for
+  robustness/generality. New pure function `resolveLegendTemplate(template,
+  curveNames)` in `frontend/src/lib/originFigures.ts`, wired at both existing
+  application sites: `figureChannelSelection` (single-book) and
+  `buildOverlayDataset` (cross-book overlay, resolved at build time so
+  `overlayCurveLabels`'s read-back needs no change). `curveNames[n-1]` = the
+  nth curve's column long name (`data.labels`), falling back to the column
+  short name, then leaving the raw code if that curve never resolved a
+  channel — a wrong guess is worse than a raw code. Example:
+  `"%(1)"` + curve 1 bound to column `B` (long name "R++") -> `"R++"`;
+  `"%(7,@LG)"` -> unchanged; `"Nb/Al"` -> unchanged. Verified live (not just
+  unit tests): scripted the real `uv run qz` backend + a headless-Chrome
+  `?harness=1` page (same seam `tools/visual/origin_figures.mjs` uses) to
+  import the actual `PNR.opj` and apply `Graph2` — real `seriesLabels` came
+  back `{1: "R++", 3: "R--", 5: "Theory ++", 6: "Theory --"}` from raw
+  `legend_labels: ["%(1)","%(2)","%(3)","%(4)"]`, matching the dataset's own
+  decoded column labels exactly. New unit tests: grammar coverage in
+  `originFigures.test.ts` (every corpus form + out-of-range index + the
+  `@LG` passthrough) and integration tests in both `originFigures.test.ts`
+  (`figureChannelSelection`) and `originOverlay.test.ts`
+  (`buildOverlayDataset`/`overlayCurveLabels`, incl. a cross-curve reference
+  to a curve that never bound). Frontend 2140 tests + build green.
+
 - ~~**40. Unresolved figure families**~~ (2026-07-09) — one root cause,
   fully diagnosed and fixed for the decodable half: `PNR.opj`'s 6
   "missing" graphs (`Graph30`-`Graph33`/`PNRDWMerge`/`PNRmerge_Jan16`) are
