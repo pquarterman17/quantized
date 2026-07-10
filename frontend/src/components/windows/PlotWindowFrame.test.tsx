@@ -357,6 +357,30 @@ describe("PlotWindowFrame — item 14 (drop-to-rebind + pin toggle)", () => {
     expect(frame).not.toHaveClass("dropping");
   });
 
+  it("a SNAPSHOT frame never advertises a rebind: no dragover highlight, drop falls through", () => {
+    // rebindWindow no-ops on snapshots ("frozen means frozen") — so the frame
+    // must not light up or swallow the drop; without preventDefault the drop
+    // falls through to the canvas beneath, which opens a NEW window instead.
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "s1", kind: "snapshot", datasetId: null })],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(
+      <PlotWindowFrame
+        win={win({ id: "s1", kind: "snapshot", datasetId: null })}
+        focused={false}
+        datasetName={undefined}
+      >
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const frame = container.querySelector(".qzk-plotwin")!;
+    fireDrag(frame, "dragover", datasetTransfer("d2"));
+    expect(frame).not.toHaveClass("dropping");
+    fireDrag(frame, "drop", datasetTransfer("d2"));
+    expect(useApp.getState().plotWindows.find((w) => w.id === "s1")?.datasetId).toBeNull();
+  });
+
   it("ignores an unrelated drag type (no highlight, no rebind)", () => {
     useApp.setState({
       plotWindows: [win({ id: "w1" }), win({ id: "w2", datasetId: "d1" })],

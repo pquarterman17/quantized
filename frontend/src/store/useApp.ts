@@ -3036,8 +3036,9 @@ export const useApp = create<AppState>((set, get) => ({
       winState: "normal",
       view: snapshotView(s),
       bg: src.bg,
-      // A frozen snapshot starts unlinked (item 13): cursor/x-sync is a live
-      // comparison affordance; opting a static window in stays a user choice.
+      // Always unlinked (item 13): a snapshot viewport is never wired into
+      // the sync registry, and the ⧟ toggle is hidden on snapshot frames
+      // (WindowTitleButtons) — there is no opt-in path, by design.
       linkGroup: null,
       // Never dataset-bound, so the pin (item 14) is meaningless on it —
       // false forever (retarget candidates are kind-guarded anyway).

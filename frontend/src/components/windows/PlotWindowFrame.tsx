@@ -271,13 +271,17 @@ export default function PlotWindowFrame({
       onPointerDownCapture={onFrameCapture}
       onContextMenuCapture={onFrameContextMenu}
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(DATASET_DND)) return;
+        // A snapshot frame never advertises a rebind it would silently
+        // ignore ("frozen means frozen" — rebindWindow no-ops on snapshots):
+        // no highlight, no preventDefault, so the drop falls through to the
+        // canvas beneath (which opens a NEW window for it instead).
+        if (win.kind === "snapshot" || !e.dataTransfer.types.includes(DATASET_DND)) return;
         e.preventDefault(); // required every dragover to keep the drop legal
         if (!dropping) setDropping(true);
       }}
       onDragLeave={() => setDropping(false)}
       onDrop={(e) => {
-        if (!e.dataTransfer.types.includes(DATASET_DND)) return;
+        if (win.kind === "snapshot" || !e.dataTransfer.types.includes(DATASET_DND)) return;
         e.preventDefault();
         e.stopPropagation(); // a frame drop must never ALSO create a canvas window
         setDropping(false);

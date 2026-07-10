@@ -493,8 +493,14 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
       winState: WIN_STATES.includes(o.winState as WinState) ? (o.winState as WinState) : "normal",
       view: sanitizeView(o.view),
       bg: PLOT_BGS.includes(o.bg as PlotBg) ? (o.bg as PlotBg) : "theme",
+      // Only plot windows can sync, and only groups 1..MAX_LINK_GROUP exist —
+      // a hand-edited .dwk can't smuggle in a ⧟7 badge or a "linked" snapshot.
       linkGroup:
-        typeof o.linkGroup === "number" && Number.isInteger(o.linkGroup) && o.linkGroup >= 1
+        kind === "plot" &&
+        typeof o.linkGroup === "number" &&
+        Number.isInteger(o.linkGroup) &&
+        o.linkGroup >= 1 &&
+        o.linkGroup <= MAX_LINK_GROUP
           ? o.linkGroup
           : null,
       pinned: boolOrDefault(o.pinned, false),

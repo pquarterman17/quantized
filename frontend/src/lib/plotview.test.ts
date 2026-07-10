@@ -180,10 +180,22 @@ describe("sanitizePlotWindows", () => {
         win({ id: "d", linkGroup: 1.5 as unknown as number }),
         win({ id: "e", linkGroup: 0 as unknown as number }),
         win({ id: "f", linkGroup: "1" as unknown as number }),
+        win({ id: "g", linkGroup: 7 }), // beyond MAX_LINK_GROUP — a hand-edited .dwk
       ],
       new Set(["d1"]),
     );
-    expect(out.map((w) => w.linkGroup)).toEqual([2, null, null, null, null, null]);
+    expect(out.map((w) => w.linkGroup)).toEqual([2, null, null, null, null, null, null]);
+  });
+
+  it("forces linkGroup to null on non-plot kinds — only plot windows can sync", () => {
+    const out = sanitizePlotWindows(
+      [
+        win({ id: "wk", kind: "worksheet", linkGroup: 2 }),
+        win({ id: "mp", kind: "map", linkGroup: 1 }),
+      ],
+      new Set(["d1"]),
+    );
+    expect(out.map((w) => w.linkGroup)).toEqual([null, null]);
   });
 
   it("round-trips the pin flag and falls back to false for a missing/invalid value (item 14)", () => {
