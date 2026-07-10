@@ -724,6 +724,22 @@ describe("resolveFigurePanels", () => {
     expect(panels?.[1].errKeys).toEqual({});
     expect(panels?.[1].hiddenChannels).toEqual([]);
   });
+
+  // Item B (decode-plan #36 residual, PNR.opj Graph11): an EXPLICITLY blank
+  // decoded x_title ("" — the owner hand-deleted a redundant per-panel
+  // label) must come through as `null` (force blank), distinct from an
+  // UNDECODED one (undefined — auto-derive stays the fallback). yAxisLabel
+  // keeps the pre-existing `|| undefined` behaviour (item B scopes the
+  // title-fidelity fix to x only).
+  it("maps an explicitly blank decoded x_title to null, distinct from an undecoded one", () => {
+    const l1 = entry("f1", 1, "d1", { x_title: "", curves: [{ book: "Book1", x: "A", y: "B" }] });
+    const l2 = entry("f2", 2, "d2", { curves: [{ book: "Book2", x: "A", y: "B" }] }); // x_title never set
+    const l3 = entry("f3", 3, "d1", { x_title: "Q (nm-1)", curves: [{ book: "Book1", x: "A", y: "B" }] });
+    const panels = resolveFigurePanels([l1, l2, l3], [ds1, ds2, ds1]);
+    expect(panels?.[0].xAxisLabel).toBeNull(); // explicit blank -> force nothing
+    expect(panels?.[1].xAxisLabel).toBeUndefined(); // undecoded -> auto-derive stands
+    expect(panels?.[2].xAxisLabel).toBe("Q (nm-1)"); // real text passes through
+  });
 });
 
 describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual — PNR/S7/Book33 repro)", () => {

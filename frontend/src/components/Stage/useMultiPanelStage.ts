@@ -25,6 +25,13 @@ import {
   splitPayload,
   xZoomSyncHook,
 } from "../../lib/multipanel";
+import {
+  columnWidths,
+  cumulativeOffsets,
+  rowBoundaryGaps,
+  rowHeights,
+  suppressedXIndices,
+} from "../../lib/panelLayout";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotTools";
@@ -238,15 +245,31 @@ export function useMultiPanelStage(): MultiPanelStageState {
       host.replaceChildren();
       const w = host.clientWidth || 600;
       const h = host.clientHeight || 400;
-      const { cellW, cellH } = cellSize(w, h, grid, GRID_GAP);
+      // Item B (decode-plan #36 residual, PNR.opj Graph11): row boundaries
+      // vary per-pair (0 = flush shared-x "wall" seam, GRID_GAP otherwise) —
+      // CSS Grid's `gap` is one uniform value, so the grid switched to
+      // explicit pixel placement (`panelLayout`'s column/row math +
+      // cumulative offsets) instead of `gridTemplateRows`/`gridTemplateColumns`
+      // auto-sizing. Columns stay uniformly spaced (unchanged).
+      const colW = columnWidths(grid.cols, w, GRID_GAP);
+      const rowGaps = rowBoundaryGaps(panels, grid.rows, GRID_GAP);
+      const rowH = rowHeights(grid.rows, h, rowGaps);
+      const colLefts = cumulativeOffsets(colW, GRID_GAP);
+      const rowTops = cumulativeOffsets(rowH, rowGaps);
+      const suppressed = suppressedXIndices(panels);
+      const divs: HTMLDivElement[] = [];
       panels.forEach((p, i) => {
         const entry = spatialPayloads[i];
         if (!entry) return;
         const { payload: pp, errorBars } = entry;
         const div = document.createElement("div");
-        div.style.gridRow = `${p.row + 1}`;
-        div.style.gridColumn = `${p.col + 1}`;
+        div.style.position = "absolute";
+        div.style.left = `${colLefts[p.col]}px`;
+        div.style.top = `${rowTops[p.row]}px`;
+        div.style.width = `${colW[p.col]}px`;
+        div.style.height = `${rowH[p.row]}px`;
         host.appendChild(div);
+        divs.push(div);
         // Item A: styles/labels line up with the SAME hidden-filtered channel
         // order the payload was fetched in (`spatialPlottedChannels`), not
         // the raw `p.yKeys` (which still includes a dropped error column).
@@ -254,8 +277,8 @@ export function useMultiPanelStage(): MultiPanelStageState {
         const cellStyles = plottedChannels.map((ch) => p.seriesStyles?.[ch]);
         const cellLabels = plottedChannels.map((ch) => p.seriesLabels?.[ch]);
         const opts = buildOpts(pp, {
-          width: cellW,
-          height: cellH,
+          width: colW[p.col],
+          height: rowH[p.row],
           yLog: p.yLog,
           xLog: p.xLog,
           xLim: p.xLim,
@@ -281,6 +304,8 @@ export function useMultiPanelStage(): MultiPanelStageState {
           // panel's Y-error-designated columns instead of the multi-panel
           // path silently rendering them (or, pre-fix, nothing at all).
           errorBars,
+          // Item B: faithful per-layer x title (null = Origin decoded an
+          // explicitly blank title — force blank, never synthesize).
           xAxisLabel: p.xAxisLabel,
           yAxisLabel: p.yAxisLabel,
           // Each panel's OWN layer's floating text (fix #5 — a multi-panel
@@ -290,13 +315,33 @@ export function useMultiPanelStage(): MultiPanelStageState {
           pointsPaths: POINTS_PATHS,
         });
         opts.cursor = { ...opts.cursor, sync: { key: SYNC_KEY } };
+        // Item B: blank x tick values + title on every panel with a flush
+        // shared-x neighbor directly below it (only the run's bottom panel
+        // keeps them) — same idiom the plain per-channel stack mode already
+        // uses for its own bottom-panel-only x labels.
+        if (suppressed.has(i) && opts.axes?.[0]) {
+          opts.axes[0] = { ...opts.axes[0], label: undefined, values: (_u, splits) => splits.map(() => "") };
+        }
         plotsRef.current.push(new uPlot(opts, pp.data, div));
       });
       const ro = new ResizeObserver(() => {
         const width = host.clientWidth || w;
         const height = host.clientHeight || h;
-        const { cellW: cw, cellH: ch } = cellSize(width, height, grid, GRID_GAP);
-        plotsRef.current.forEach((u) => u.setSize({ width: cw, height: ch }));
+        const cw = columnWidths(grid.cols, width, GRID_GAP);
+        const rg = rowBoundaryGaps(panels, grid.rows, GRID_GAP);
+        const rh = rowHeights(grid.rows, height, rg);
+        const cl = cumulativeOffsets(cw, GRID_GAP);
+        const rt = cumulativeOffsets(rh, rg);
+        panels.forEach((p, idx) => {
+          const div = divs[idx];
+          const u = plotsRef.current[idx];
+          if (!div || !u) return;
+          div.style.left = `${cl[p.col]}px`;
+          div.style.top = `${rt[p.row]}px`;
+          div.style.width = `${cw[p.col]}px`;
+          div.style.height = `${rh[p.row]}px`;
+          u.setSize({ width: cw[p.col], height: rh[p.row] });
+        });
       });
       ro.observe(host);
       return () => {
@@ -496,14 +541,13 @@ export function useMultiPanelStage(): MultiPanelStageState {
   ]);
 
   const hostStyle: CSSProperties = spatial
-    ? {
-        position: "absolute",
-        inset: 8,
-        display: "grid",
-        gap: GRID_GAP,
-        gridTemplateRows: `repeat(${grid.rows}, 1fr)`,
-        gridTemplateColumns: `repeat(${grid.cols}, 1fr)`,
-      }
+    ? // Item B: children are now explicitly pixel-positioned (`panelLayout`'s
+      // column/row math), not CSS Grid `1fr` auto-sizing — CSS Grid's `gap`
+      // is one uniform value and can't express a flush (0px) row boundary
+      // next to a normal one. `position: absolute` here still establishes
+      // the containing block the child divs' own `position: absolute`
+      // resolves against.
+      { position: "absolute", inset: 8 }
     : breakMode
       ? { position: "absolute", inset: 8, display: "flex", flexDirection: "row" }
       : facet

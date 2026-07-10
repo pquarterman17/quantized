@@ -333,7 +333,14 @@ export function resolveFigurePanels(
       yLim: [fig.y_from, fig.y_to],
       xLog: fig.x_log,
       yLog: fig.y_log,
-      xAxisLabel: fig.x_title || undefined,
+      // Item B (decode-plan #36 residual, PNR.opj Graph11): distinguish an
+      // EXPLICITLY blank decoded x_title ("" — the owner hand-deleted a
+      // redundant per-panel label in Origin) from an UNDECODED one
+      // (undefined — the field never resolved at all). `null` tells
+      // buildOpts to force blank rather than fall back to a synthesized
+      // "channel (unit)" label; undefined still auto-derives, unchanged.
+      // yAxisLabel is untouched — item B keeps y axes "as-is".
+      xAxisLabel: fig.x_title === undefined ? undefined : fig.x_title || null,
       yAxisLabel: fig.y_title || undefined,
       seriesStyles: sel.styles,
       seriesLabels: sel.labels,

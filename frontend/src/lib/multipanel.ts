@@ -43,7 +43,13 @@ export interface SpatialPanel {
   yLim: [number, number];
   xLog: boolean;
   yLog: boolean;
-  xAxisLabel?: string;
+  /** `null` = Origin decoded an EXPLICITLY blank title for this layer (never
+   *  synthesize one, item B); `undefined` = undecoded, derive from the data
+   *  as before. See `uplotOpts.BuildOptsArgs.xAxisLabel`'s doc for the full
+   *  contract. yAxisLabel keeps its plain `string | undefined` shape — item
+   *  B scopes the shared-axis/title-fidelity work to x only ("keep y axes
+   *  per-panel as-is"). */
+  xAxisLabel?: string | null;
   yAxisLabel?: string;
   seriesStyles?: Record<number, SeriesStyle>;
   /** Per-channel legend-label overrides (Origin's decoded `legend_labels`,

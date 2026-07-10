@@ -9,12 +9,20 @@
 //  2) Spatial multi-panel (decode-plan #36): `store.spatialPanels`, set by
 //     `applyOriginFigure` when a multi-layer Origin figure's layers all
 //     resolve, arranges EACH panel's OWN dataset + channel selection + fixed
-//     axis state in a CSS grid per the source page's layout
-//     (`lib/originPanels.computePanelLayout`). Panels are independent — no
-//     x-sync, since they may plot entirely unrelated datasets/quantities.
-//     Each panel also draws its own Origin Y-error whiskers
-//     (`lib/errorbars.buildErrorColumns`, item A — a "Y-error"-designated
-//     column like PNR.opj's `dSA` used to render as a spurious series).
+//     axis state per the source page's layout (`lib/originPanels.
+//     computePanelLayout` for row/col placement; `lib/panelLayout` for the
+//     pixel geometry). Panels are independent — no x-sync, since they may
+//     plot entirely unrelated datasets/quantities. Each panel also draws its
+//     own Origin Y-error whiskers (`lib/errorbars.buildErrorColumns`,
+//     item A — a "Y-error"-designated column like PNR.opj's `dSA` used to
+//     render as a spurious series). Panels vertically adjacent in the same
+//     grid column that share an x-range (item B, PNR.opj Graph11's 8-panel
+//     spin-asymmetry figure) sit FLUSH — no gap, every panel still fully
+//     boxed (`showAxisBox`) — with x tick values/title shown only on the
+//     bottom panel of each such run (`lib/panelLayout.rowBoundaryGaps` /
+//     `suppressedXIndices`); an Origin layer's own EXPLICITLY blank x_title
+//     renders as no title rather than a synthesized one (see
+//     `originFigures.resolveFigurePanels`'s `xAxisLabel` doc).
 //  3) Facet grid (gap #21 residual): `store.facetPanels`, set by the
 //     `facetByColumn` action, arranges one small-multiples panel per distinct
 //     level of a chosen column in a sqrt-balanced CSS grid
