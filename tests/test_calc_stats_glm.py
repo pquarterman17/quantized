@@ -68,15 +68,23 @@ def test_glm_logistic_binary_check():
 
 
 def test_glm_logistic_nan_deletion():
-    """Logistic regression drops rows with NaN (listwise deletion)."""
+    """Logistic regression drops rows with NaN (listwise deletion).
+
+    The data must stay comfortably NON-degenerate: the original 5-row version
+    left 4 complete rows for a 3-parameter fit, and whether that near-singular
+    IRLS solve converged depended on the runner's BLAS build (it raised
+    "Singular matrix" on ubuntu CI while passing locally, 2026-07-10). This
+    test's subject is listwise deletion, not numerics — use enough
+    well-conditioned, non-separable rows that the fit is robust everywhere.
+    """
     from quantized.calc.stats_glm import logistic_regression
 
-    x1 = [1.0, 2.0, 3.0, 4.0, 5.0]
-    x2 = [2.0, np.nan, 4.0, 5.0, 3.0]
-    y = [0.0, 1.0, 1.0, 0.0, 1.0]
+    x1 = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+    x2 = [2.0, np.nan, 4.0, 5.0, 3.0, 6.0, 5.5, 7.0, 6.5]
+    y = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0]
 
     result = logistic_regression([x1, x2], y)
-    assert result["N"] == 4  # One row dropped
+    assert result["N"] == 8  # One row dropped
 
 
 def test_glm_logistic_spector_reference():
