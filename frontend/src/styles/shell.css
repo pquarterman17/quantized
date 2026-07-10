@@ -379,6 +379,13 @@ body {
    dark); a plain glyph button, distinct from the circular close button. */
 .qzk-plotwin-bg { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 3px; border: none; background: transparent; color: var(--text-faint); cursor: default; padding: 0; flex-shrink: 0; font-size: 11px; line-height: 1; }
 .qzk-plotwin-bg:hover { background: var(--surface-3); color: var(--text); }
+/* Item 13 — cross-window link-group toggle (⧟ cycles 1/2/3/off); lights the
+   accent and shows the group digit (mono, the number convention) while
+   linked. Same quiet-glyph-button family as .qzk-plotwin-bg above. */
+.qzk-plotwin-link { display: flex; align-items: center; justify-content: center; gap: 1px; height: 18px; min-width: 18px; border-radius: 3px; border: none; background: transparent; color: var(--text-faint); cursor: default; padding: 0 2px; flex-shrink: 0; font-size: 11px; line-height: 1; }
+.qzk-plotwin-link:hover { background: var(--surface-3); color: var(--text); }
+.qzk-plotwin-link.linked { color: var(--accent); }
+.qzk-plotwin-link-n { font-family: var(--font-mono); font-size: 10px; }
 .qzk-plotwin-close { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-3); cursor: default; padding: 0; flex-shrink: 0; }
 .qzk-plotwin-close:hover { background: var(--danger); border-color: var(--danger); }
 .qzk-plotwin-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }

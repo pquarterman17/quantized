@@ -22,6 +22,7 @@ const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
   winState: "normal",
   view: defaultPlotView(),
   bg: "theme",
+  linkGroup: null,
   ...over,
 });
 
@@ -108,6 +109,50 @@ describe("PlotWindowFrame", () => {
     const button = getByLabelText("Cycle window background");
     fireEvent.click(button);
     expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.bg).toBe("light");
+  });
+
+  it("the ⧟ link button cycles this window's link group (off -> 1 -> 2 -> 3 -> off) via the store (item 13)", () => {
+    const { getByLabelText } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    fireEvent.click(getByLabelText("Cycle window link group"));
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.linkGroup).toBe(1);
+    // Other windows are untouched — linking is strictly per-window opt-in.
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w2")?.linkGroup).toBeNull();
+  });
+
+  it("the link button shows the current group digit while linked (and no digit when off)", () => {
+    const unlinked = render(
+      <PlotWindowFrame win={win({ id: "w1", linkGroup: null })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    expect(unlinked.container.querySelector(".qzk-plotwin-link-n")).toBeNull();
+    expect(unlinked.container.querySelector(".qzk-plotwin-link.linked")).toBeNull();
+    unlinked.unmount();
+
+    const linked = render(
+      <PlotWindowFrame win={win({ id: "w1", linkGroup: 2 })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    expect(linked.container.querySelector(".qzk-plotwin-link-n")?.textContent).toBe("2");
+    expect(linked.container.querySelector(".qzk-plotwin-link.linked")).not.toBeNull();
+  });
+
+  it("clicking the link button does not also start a title-bar drag", () => {
+    const { getByLabelText } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const before = geomOf("w1");
+    fireEvent.pointerDown(getByLabelText("Cycle window link group"), { clientX: 5, clientY: 5, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 50, clientY: 50 });
+    fireEvent.pointerUp(window, { clientX: 50, clientY: 50 });
+    expect(geomOf("w1")).toEqual(before);
   });
 
   it("clicking the background button does not also start a title-bar drag", () => {

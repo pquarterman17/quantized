@@ -61,6 +61,7 @@ const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
   winState: "normal",
   view: defaultPlotView(),
   bg: "theme",
+  linkGroup: null,
   ...over,
 });
 
@@ -181,6 +182,63 @@ describe("WindowCanvas — ≥2 windows (MDI chrome + focused-window routing)", 
     await waitFor(() => expect(created.length).toBe(2));
     expect(container.textContent).toContain("1ch");
     expect(container.textContent).toContain("4pts");
+  });
+});
+
+describe("WindowCanvas — cross-window link groups (item 13)", () => {
+  type SyncOpts = {
+    cursor: { sync?: { key: string } };
+    hooks?: { setScale?: unknown[]; setSelect?: unknown[] };
+  };
+
+  it("same-group windows get the SAME uPlot cursor-sync key + an x-range sync hook — focused AND background alike", async () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", winState: "normal", linkGroup: 1 }),
+        win({ id: "w2", winState: "normal", linkGroup: 1 }),
+      ],
+      focusedWindowId: "w1",
+    });
+    render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(2));
+    for (const c of created) {
+      const opts = c.opts as SyncOpts;
+      expect(opts.cursor.sync?.key).toBe("qz-win-link-1");
+      expect(opts.hooks?.setScale).toHaveLength(1);
+      // buildOpts's own setSelect hook is APPENDED to, never clobbered.
+      expect(opts.hooks?.setSelect).toHaveLength(1);
+    }
+  });
+
+  it("windows in DIFFERENT groups get different sync keys (no cross-group coupling)", async () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", winState: "normal", linkGroup: 1 }),
+        win({ id: "w2", winState: "normal", linkGroup: 2 }),
+      ],
+      focusedWindowId: "w1",
+    });
+    render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(2));
+    const keys = created.map((c) => (c.opts as SyncOpts).cursor.sync?.key);
+    expect(keys).toContain("qz-win-link-1");
+    expect(keys).toContain("qz-win-link-2");
+  });
+
+  it("unlinked windows get NO sync patch at all — linking is opt-in, never automatic same-dataset coupling", async () => {
+    // Both windows show the SAME dataset (d1) yet stay unsynced: the owner
+    // decision pinned in MULTI_PLOT_PLAN's "Key decisions".
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
+      focusedWindowId: "w1",
+    });
+    render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(2));
+    for (const c of created) {
+      const opts = c.opts as SyncOpts;
+      expect(opts.cursor.sync).toBeUndefined();
+      expect(opts.hooks?.setScale).toBeUndefined();
+    }
   });
 });
 

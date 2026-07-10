@@ -20,6 +20,7 @@ import type { PlotBg, PlotView } from "../../lib/plotview";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import type { Dataset } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths";
+import { windowSyncKey } from "../../lib/windowsync";
 import { useApp } from "../../store/useApp";
 import PlotViewport from "../Stage/PlotViewport";
 import { usePlotPayload } from "../Stage/usePlotPayload";
@@ -34,9 +35,19 @@ export interface BackgroundPlotWindowProps {
    *  predates the field (`sanitizePlotWindows` also defaults it the same
    *  way for a persisted `.dwk`). */
   bg?: PlotBg;
+  /** This window's cross-window link group (item 13) — null/undefined =
+   *  unlinked. A LINKED background window still participates in cursor +
+   *  x-range sync (that's the whole point: compare it against the focused
+   *  window point-by-point); it stays non-interactive otherwise. */
+  linkGroup?: number | null;
 }
 
-export default function BackgroundPlotWindow({ dataset, view, bg }: BackgroundPlotWindowProps) {
+export default function BackgroundPlotWindow({
+  dataset,
+  view,
+  bg,
+  linkGroup,
+}: BackgroundPlotWindowProps) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const defaultTrace = useApp((s) => s.defaultTrace);
@@ -121,6 +132,7 @@ export default function BackgroundPlotWindow({ dataset, view, bg }: BackgroundPl
       onReadout={() => {}}
       peakWizardEdit={null}
       bg={bg}
+      syncKey={windowSyncKey(linkGroup)}
     />
   );
 }

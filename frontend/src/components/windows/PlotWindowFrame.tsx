@@ -98,6 +98,7 @@ export default function PlotWindowFrame({
   const toggleMaximizeWindow = useApp((s) => s.toggleMaximizeWindow);
   const renameWindow = useApp((s) => s.renameWindow);
   const setWindowBg = useApp((s) => s.setWindowBg);
+  const cycleWindowLinkGroup = useApp((s) => s.cycleWindowLinkGroup);
 
   // Item 10: double-click the title TEXT (not the bar) to rename inline —
   // null = not editing (DatasetRow/FolderRow's own inline-rename pattern).
@@ -302,6 +303,21 @@ export default function PlotWindowFrame({
             {datasetMeta.channels}ch · {datasetMeta.rows}pts
           </Badge>
         )}
+        <button
+          type="button"
+          className={`qzk-plotwin-link${win.linkGroup != null ? " linked" : ""}`}
+          title={
+            win.linkGroup != null
+              ? `Link group ${win.linkGroup} — crosshair + x-range sync with same-group windows; click to cycle (1 / 2 / 3 / off)`
+              : "Not linked — click to cycle this window's link group (1 / 2 / 3 / off)"
+          }
+          aria-label="Cycle window link group"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => cycleWindowLinkGroup(win.id)}
+        >
+          ⧟
+          {win.linkGroup != null && <span className="qzk-plotwin-link-n">{win.linkGroup}</span>}
+        </button>
         <button
           type="button"
           className="qzk-plotwin-bg"

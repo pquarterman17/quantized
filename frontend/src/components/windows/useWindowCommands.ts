@@ -91,6 +91,17 @@ function cycleWindowBg(): void {
   s.setWindowBg(win.id, nextPlotBg(win.bg));
 }
 
+/** Link Window Group (item 13): cycles the FOCUSED window's cross-window
+ *  link group (off -> 1 -> 2 -> 3 -> off) — the registry/⌘K counterpart to
+ *  the per-window title-bar ⧟ toggle, needed for exactly the same reason
+ *  item 18's Window Background command exists: the sole maximized default
+ *  window has no title bar to click. A no-op with no focused window. */
+function cycleFocusedWindowLinkGroup(): void {
+  const s = useApp.getState();
+  if (!s.focusedWindowId) return;
+  s.cycleWindowLinkGroup(s.focusedWindowId);
+}
+
 export function useWindowCommands(): void {
   useEffect(() => {
     const actions: Action[] = [
@@ -110,6 +121,12 @@ export function useWindowCommands(): void {
         group: "Window",
         label: "Window Background (Theme / Light / Dark)",
         run: cycleWindowBg,
+      },
+      {
+        id: "window-link-cycle",
+        group: "Window",
+        label: "Link Window Group (1 / 2 / 3 / Off)",
+        run: cycleFocusedWindowLinkGroup,
       },
       {
         id: "window-focus-next",
