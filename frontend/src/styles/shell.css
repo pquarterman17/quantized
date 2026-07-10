@@ -102,6 +102,19 @@ body {
 /* Right-click context menu: a fixed-position variant of the menubar popup. */
 .qzk-ctx { position: fixed; top: auto; left: auto; min-width: 180px; }
 .qzk-ctx-sep { height: 1px; margin: 4px 6px; background: var(--glass-border); }
+/* Non-interactive section label (e.g. the hit-tested series name). */
+.qzk-ctx-header { padding: 4px 9px 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+/* Submenu affordance + toggle check glyph, pinned to the item's right edge. */
+.qzk-ctx-arrow { margin-left: auto; opacity: 0.7; }
+.qzk-ctx-check { margin-left: auto; color: var(--accent); }
+.qzk-ctx-hassub { justify-content: space-between; }
+.qzk-ctx-subwrap { position: relative; display: flex; }
+.qzk-ctx-subwrap > .qzk-menu-item { width: 100%; }
+/* Compact horizontal colour-swatch row. */
+.qzk-ctx-swatches { display: flex; flex-wrap: wrap; gap: 4px; padding: 5px 9px; max-width: 200px; }
+.qzk-ctx-swatch { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--border); padding: 0; cursor: default; }
+.qzk-ctx-swatch:hover { outline: 1px solid var(--accent); outline-offset: 1px; }
+.qzk-ctx-swatch.active { border: 2px solid var(--text); }
 
 /* ── library ── */
 .qzk-library { background: var(--surface-1); border-right: 1px solid var(--border-soft); overflow-y: auto; padding: var(--pad); display: flex; flex-direction: column; gap: var(--pad); }

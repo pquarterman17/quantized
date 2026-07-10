@@ -220,11 +220,21 @@ export default function PlotWindowFrame({
         zIndex: win.z,
       };
 
+  // A right-click on a BACKGROUND window only focuses it (via the pointerdown
+  // capture above) — the focused window's own PlotStage owns the plot context
+  // menu. Suppress the native browser menu here so a background right-click
+  // never flashes one before/around the focus swap. A focused window is left
+  // alone: PlotStage (or the title bar) manages its own contextmenu.
+  const onFrameContextMenu = (e: React.MouseEvent) => {
+    if (!focused) e.preventDefault();
+  };
+
   return (
     <div
       className={`qzk-plotwin${focused ? " focused" : ""}`}
       style={style}
       onPointerDownCapture={onFrameCapture}
+      onContextMenuCapture={onFrameContextMenu}
     >
       <div
         className="qzk-plotwin-titlebar"

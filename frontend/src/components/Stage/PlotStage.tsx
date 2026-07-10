@@ -18,10 +18,10 @@ import { resolvePlotBg } from "../../lib/uplotOpts";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
-import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import AxisDropZones from "./AxisDropZones";
 import InsetPlot from "./InsetPlot";
 import MultiPanelStage from "./MultiPanelStage";
+import PlotContextMenu from "./PlotContextMenu";
 import PlotLegend from "./PlotLegend";
 import PlotReadouts from "./PlotReadouts";
 import PlotResultChips from "./PlotResultChips";
@@ -181,33 +181,16 @@ export default function PlotStage() {
   )
     return <MultiPanelStage />;
 
-  // Right-click anywhere on the plot background → axes/view actions (the parity
-  // surface for the MATLAB axes uicontextmenu). Legend right-clicks stop their own
-  // propagation, so they don't fall through to this.
+  // Right-click anywhere on the plot canvas → the series/axis/plot editing menu
+  // (PlotContextMenu hit-tests the nearest curve + the axis zone). Legend
+  // right-clicks stop their own propagation, so they don't fall through here.
+  // Skip while a left-button drag is live (a plot tool mid-gesture): `buttons`
+  // carries bit 1 when the primary button is still down.
   const onStageContextMenu = (e: React.MouseEvent) => {
     if (!displayPayload) return;
     e.preventDefault();
+    if (e.buttons & 1) return;
     setMenu({ x: e.clientX, y: e.clientY });
-  };
-  const axesMenuItems = (): ContextMenuItem[] => {
-    const s = useApp.getState();
-    return [
-      { label: "Reset view (autoscale)", run: resetView },
-      { separator: true },
-      { label: xLog ? "Linear X axis" : "Log X axis", run: () => s.setXLog(!xLog) },
-      { label: yLog ? "Linear Y axis" : "Log Y axis", run: () => s.setYLog(!yLog) },
-      { label: showGrid ? "Hide grid" : "Show grid", run: () => s.setShowGrid(!showGrid) },
-      { label: showLegend ? "Hide legend" : "Show legend", run: () => s.setShowLegend(!showLegend) },
-      { separator: true },
-      { label: "Integrate tool (area under curve)", run: () => s.setPlotTool("integ") },
-      { label: "Peak / FWHM tool", run: () => s.setPlotTool("fwhm") },
-      { label: "Gadget tool (fit/integrate/stats/differentiate/FFT/cursors)", run: () => s.setPlotTool("qfit") },
-      { label: "Measure tool (Δx, Δy)", run: () => s.setPlotTool("measure") },
-      { separator: true },
-      { label: "Copy plotted data (TSV)", run: copyData },
-      { label: "Copy plot image (PNG)", run: snapshot },
-      { label: "Save plot as PNG", run: savePng },
-    ];
   };
 
   return (
@@ -295,7 +278,18 @@ export default function PlotStage() {
         onCursorsChange={setGadgetCursors}
         peakWizardEdit={peakWizardEdit}
       />
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={axesMenuItems()} onClose={() => setMenu(null)} />}
+      {menu && displayPayload && (
+        <PlotContextMenu
+          x={menu.x}
+          y={menu.y}
+          plotRef={plotRef}
+          payload={displayPayload}
+          plotted={plotted}
+          hidden={hidden}
+          actions={{ resetView, smartScale, savePng, copyData, snapshot }}
+          onClose={() => setMenu(null)}
+        />
+      )}
 
       {displayPayload && (
         <PlotToolbar

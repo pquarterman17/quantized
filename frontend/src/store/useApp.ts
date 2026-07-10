@@ -752,6 +752,11 @@ interface AppState {
   setStatMode: (statMode: boolean) => void;
   setXLim: (xLim: [number, number] | null) => void;
   setYLim: (yLim: [number, number] | null) => void;
+  // Secondary (right) Y axis: expose the already-rendered y2Log/y2Lim fields so
+  // the plot context menu can edit an Origin double-Y import's right axis. Only
+  // meaningful when y2Keys is non-empty (otherwise there is no y2 scale).
+  setY2Log: (y2Log: boolean | null) => void;
+  setY2Lim: (y2Lim: [number, number] | null) => void;
   setXFmt: (xFmt: AxisFormat) => void;
   setYFmt: (yFmt: AxisFormat) => void;
   setPlotTitle: (plotTitle: string) => void;
@@ -2554,6 +2559,10 @@ export const useApp = create<AppState>((set, get) => ({
   // produced xStep/yStep, so a stale step must never leak onto it.
   setXLim: (xLim) => set({ xLim, xStep: null }),
   setYLim: (yLim) => set({ yLim, yStep: null }),
+  // A manual y2 range is no longer the Origin figure that decoded y2Step, so
+  // drop the stale step alongside it (mirrors setYLim / yStep above).
+  setY2Log: (y2Log) => set({ y2Log }),
+  setY2Lim: (y2Lim) => set({ y2Lim, y2Step: null }),
   setXFmt: (xFmt) => set({ xFmt }),
   setYFmt: (yFmt) => set({ yFmt }),
   setPlotTitle: (plotTitle) => {

@@ -49,4 +49,44 @@ describe("ContextMenu", () => {
     expect(container.querySelector(".qzk-ctx")).toBeNull();
     expect(document.body.querySelector(".qzk-ctx")).toBeInTheDocument();
   });
+
+  it("renders a header, a checked action, and a swatch row", () => {
+    const pick = vi.fn();
+    render(
+      <ContextMenu
+        x={0}
+        y={0}
+        onClose={vi.fn()}
+        items={[
+          { header: "Series A" },
+          { label: "Grid", run: vi.fn(), checked: true },
+          { swatches: [{ key: "s1", title: "Series 1", css: "var(--series-1)", active: true, run: pick }] },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Series A")).toHaveClass("qzk-ctx-header");
+    expect(document.querySelector(".qzk-ctx-check")).toBeInTheDocument();
+    const sw = screen.getByTitle("Series 1");
+    expect(sw).toHaveClass("active");
+    fireEvent.click(sw);
+    expect(pick).toHaveBeenCalledOnce();
+  });
+
+  it("opens a submenu flyout on hover and runs a nested leaf (then closes)", () => {
+    const leaf = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <ContextMenu
+        x={0}
+        y={0}
+        onClose={onClose}
+        items={[{ label: "More", submenu: [{ label: "Deep", run: leaf }] }]}
+      />,
+    );
+    expect(screen.queryByText("Deep")).toBeNull(); // closed until hovered
+    fireEvent.mouseEnter(screen.getByText("More").closest(".qzk-ctx-subwrap")!);
+    fireEvent.click(screen.getByText("Deep"));
+    expect(leaf).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
 });
