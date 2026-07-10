@@ -12,6 +12,7 @@
 import { type CSSProperties, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 
+import { buildErrorColumns } from "../../lib/errorbars";
 import { sharedXDomain, sharedYDomain } from "../../lib/facet";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import {
@@ -20,6 +21,7 @@ import {
   facetGridSize,
   panelHeights,
   spatialGridSize,
+  spatialPlottedChannels,
   splitPayload,
   xZoomSyncHook,
 } from "../../lib/multipanel";
@@ -43,6 +45,14 @@ function makeBreakGlyph(width: number): HTMLDivElement {
     "background-image:repeating-linear-gradient(65deg, var(--border) 0 2px, transparent 2px 9px);" +
     "opacity:0.7;";
   return glyph;
+}
+
+/** One spatial panel's fetched series plus its own error-bar map (built at
+ *  fetch time — needs the panel's full DataStruct, not just the plotted
+ *  payload — see the fetch effect below). */
+interface SpatialFetch {
+  payload: PlotPayload;
+  errorBars: Map<number, (number | null)[]>;
 }
 
 export interface MultiPanelStageState {
@@ -71,6 +81,13 @@ export function useMultiPanelStage(): MultiPanelStageState {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
+  // Item A (PNR.opj Book14 Graph11 repro): the same "Y-error"-designated
+  // column bug also hits the plain per-channel stack mode (any Origin book
+  // manually stacked, not just an applied multi-layer figure) — these are
+  // the SAME store fields PlotStage/usePlotPayload already read for the
+  // single-plot view, just threaded into this mode's own fetch/render below.
+  const errKeys = useApp((s) => s.errKeys);
+  const hiddenChannels = useApp((s) => s.hiddenChannels);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const tool = useApp((s) => s.plotTool);
   const theme = useApp((s) => s.theme);
@@ -78,7 +95,7 @@ export function useMultiPanelStage(): MultiPanelStageState {
   const hostRef = useRef<HTMLDivElement>(null);
   const plotsRef = useRef<uPlot[]>([]);
   const [payload, setPayload] = useState<PlotPayload | null>(null);
-  const [spatialPayloads, setSpatialPayloads] = useState<(PlotPayload | null)[]>([]);
+  const [spatialPayloads, setSpatialPayloads] = useState<(SpatialFetch | null)[]>([]);
   const [readout, setReadout] = useState<Readout | null>(null);
 
   // Spatial panels whose dataset still exists (a removed dataset degrades to
@@ -113,11 +130,20 @@ export function useMultiPanelStage(): MultiPanelStageState {
   const plotted = useMemo(
     () =>
       !spatial && !facet && !breakMode && active
-        ? effectiveChannels(active.data, yKeys, xKey, active.channelRoles, seriesOrder)
+        ? effectiveChannels(active.data, yKeys, xKey, active.channelRoles, seriesOrder).filter(
+            (c) => !hiddenChannels.includes(c),
+          )
         : [],
-    [spatial, facet, breakMode, active, yKeys, xKey, seriesOrder],
+    [spatial, facet, breakMode, active, yKeys, xKey, seriesOrder, hiddenChannels],
   );
   const styleList = useMemo(() => plotted.map((ch) => seriesStyles[ch]), [plotted, seriesStyles]);
+  // One error-bar map per stacked panel (each panel is a single-series uPlot
+  // instance, so its own column index is always 1 — see `buildErrorColumns`'s
+  // 1-based keying). Mirrors `usePlotPayload.errorBars`, scoped per panel.
+  const errorBarsList = useMemo(
+    () => (active ? plotted.map((ch) => buildErrorColumns(active.data, [ch], errKeys)) : []),
+    [active, plotted, errKeys],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -159,13 +185,30 @@ export function useMultiPanelStage(): MultiPanelStageState {
         // panel's own book needs its own fetch trigger (#38), not just the
         // "active" one.
         if (ds?.pending) useApp.getState().ensureBookData(ds.id);
+        if (!ds) return Promise.resolve(null);
+        // Item A (PNR.opj Book14 Graph11 repro): drop this panel's Origin-
+        // hidden channels (a "Y-error" column like dSA) from what's actually
+        // fetched/plotted — the spatial grid has no per-panel legend to keep
+        // them toggle-able, unlike the single-plot path (see
+        // `multipanel.spatialPlottedChannels`'s doc). y2Keys is filtered the
+        // same way for consistency, though a hidden channel is never itself
+        // curve-bound to y2 in practice.
+        const plottedChannels = spatialPlottedChannels(p);
+        const y2 = p.y2Keys ? p.y2Keys.filter((ch) => plottedChannels.includes(ch)) : null;
         // A panel carrying a merged y2 overlay (decode-plan #36 residual —
         // `originFigures.resolveSpatialPanels`) passes its OWN y2Keys so the
         // fetched payload tags those series `axis: 1`, same as the single-
         // plot double-Y apply.
-        return ds
-          ? fetchPlot(ds.data, p.yLog, p.xLog, p.yKeys, p.y2Keys ?? null, p.xKey)
-          : Promise.resolve(null);
+        return fetchPlot(ds.data, p.yLog, p.xLog, plottedChannels, y2, p.xKey).then(
+          (fetched): SpatialFetch => ({
+            payload: fetched,
+            // Error-bar magnitudes for THIS panel's own dataset/designations
+            // (`originFigures.figureChannelSelection` populated `p.errKeys`),
+            // keyed to the SAME plottedChannels order the payload's series
+            // are in.
+            errorBars: buildErrorColumns(ds.data, plottedChannels, p.errKeys ?? {}),
+          }),
+        );
       }),
     ).then((ps) => {
       if (!cancelled) setSpatialPayloads(ps);
@@ -197,14 +240,19 @@ export function useMultiPanelStage(): MultiPanelStageState {
       const h = host.clientHeight || 400;
       const { cellW, cellH } = cellSize(w, h, grid, GRID_GAP);
       panels.forEach((p, i) => {
-        const pp = spatialPayloads[i];
-        if (!pp) return;
+        const entry = spatialPayloads[i];
+        if (!entry) return;
+        const { payload: pp, errorBars } = entry;
         const div = document.createElement("div");
         div.style.gridRow = `${p.row + 1}`;
         div.style.gridColumn = `${p.col + 1}`;
         host.appendChild(div);
-        const cellStyles = p.yKeys.map((ch) => p.seriesStyles?.[ch]);
-        const cellLabels = p.yKeys.map((ch) => p.seriesLabels?.[ch]);
+        // Item A: styles/labels line up with the SAME hidden-filtered channel
+        // order the payload was fetched in (`spatialPlottedChannels`), not
+        // the raw `p.yKeys` (which still includes a dropped error column).
+        const plottedChannels = spatialPlottedChannels(p);
+        const cellStyles = plottedChannels.map((ch) => p.seriesStyles?.[ch]);
+        const cellLabels = plottedChannels.map((ch) => p.seriesLabels?.[ch]);
         const opts = buildOpts(pp, {
           width: cellW,
           height: cellH,
@@ -229,6 +277,10 @@ export function useMultiPanelStage(): MultiPanelStageState {
           onReadout: setReadout,
           seriesStyles: cellStyles,
           seriesLabels: cellLabels,
+          // Item A (PNR.opj Book14 Graph11 repro): draw whiskers for this
+          // panel's Y-error-designated columns instead of the multi-panel
+          // path silently rendering them (or, pre-fix, nothing at all).
+          errorBars,
           xAxisLabel: p.xAxisLabel,
           yAxisLabel: p.yAxisLabel,
           // Each panel's OWN layer's floating text (fix #5 — a multi-panel
@@ -387,6 +439,10 @@ export function useMultiPanelStage(): MultiPanelStageState {
         tool,
         onReadout: setReadout,
         seriesStyles: styleList ? [styleList[i]] : undefined,
+        // Item A: same class of fix as the spatial multi-panel path — an
+        // Origin "Y-error" column is already dropped from `plotted` above, so
+        // its paired Y channel's own panel draws whiskers instead.
+        errorBars: errorBarsList[i],
         linearPaths: LINEAR_PATHS,
         pointsPaths: POINTS_PATHS,
       });
@@ -433,6 +489,7 @@ export function useMultiPanelStage(): MultiPanelStageState {
     showAxisBox,
     refLines,
     styleList,
+    errorBarsList,
     tool,
     theme,
     accent,

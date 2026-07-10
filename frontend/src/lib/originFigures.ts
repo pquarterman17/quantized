@@ -4,6 +4,7 @@
 // is unit-testable without mounting the store — `store/useApp.ts` owns the
 // actual apply-to-plot-state action.
 
+import { originErrKeys, originHiddenChannels } from "./errorbars";
 import type { SpatialPanel } from "./multipanel";
 import { computePanelLayout, framesCoincide } from "./originPanels";
 import type { Annotation, Dataset, MarkerShape, OriginCurve, OriginFigure, SeriesStyle } from "./types";
@@ -173,6 +174,19 @@ export function figureChannelSelection(
    *  plots — see the loop below for the mapping rule. Ready for the store's
    *  `seriesLabels`. */
   labels: Record<number, string>;
+  /** This book's Origin Y-error pairings (`errorbars.originErrKeys`) — a
+   *  value channel -> the channel holding its ± error. Dataset-level (every
+   *  curve on this book shares the same worksheet column designations), so
+   *  it's independent of which curves this figure actually binds. Threaded
+   *  through so a spatial multi-panel apply can draw error bars instead of a
+   *  bare series for a designated error column (fix: the multi-panel path
+   *  never applied error pairing, so a "Y-error" column rendered as its own
+   *  spurious series — see `resolveFigurePanels`). */
+  errKeys: Record<number, number>;
+  /** This book's Origin-hidden channels (`errorbars.originHiddenChannels`) —
+   *  paired error / secondary-X columns Origin itself never draws as their
+   *  own curve. Same dataset-level scope as `errKeys`. */
+  hiddenChannels: number[];
 } | null {
   const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
   const book = String(meta.origin_book ?? "");
@@ -217,7 +231,8 @@ export function figureChannelSelection(
     }
     curveIdx++;
   }
-  return yKeys.length > 0 ? { xKey, yKeys, styles, labels } : null;
+  if (yKeys.length === 0) return null;
+  return { xKey, yKeys, styles, labels, errKeys: originErrKeys(ds.data), hiddenChannels: originHiddenChannels(ds.data) };
 }
 
 /** Build the Library entries for one import's figures, tagged with the
@@ -322,6 +337,8 @@ export function resolveFigurePanels(
       yAxisLabel: fig.y_title || undefined,
       seriesStyles: sel.styles,
       seriesLabels: sel.labels,
+      errKeys: sel.errKeys,
+      hiddenChannels: sel.hiddenChannels,
       xStep: fig.x_step ?? null,
       yStep: fig.y_step ?? null,
       // Each panel's OWN layer's marks, in that layer's own data coords —

@@ -12,6 +12,9 @@
 //     axis state in a CSS grid per the source page's layout
 //     (`lib/originPanels.computePanelLayout`). Panels are independent — no
 //     x-sync, since they may plot entirely unrelated datasets/quantities.
+//     Each panel also draws its own Origin Y-error whiskers
+//     (`lib/errorbars.buildErrorColumns`, item A — a "Y-error"-designated
+//     column like PNR.opj's `dSA` used to render as a spurious series).
 //  3) Facet grid (gap #21 residual): `store.facetPanels`, set by the
 //     `facetByColumn` action, arranges one small-multiples panel per distinct
 //     level of a chosen column in a sqrt-balanced CSS grid

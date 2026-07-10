@@ -260,3 +260,52 @@ describe("MultiPanelStage — per-panel axis box (item 4)", () => {
     }
   });
 });
+
+// Item A (PNR.opj Book14 Graph11 repro): a "Y-error"-designated column (e.g.
+// dSA) must never render as its own spurious series in the spatial
+// multi-panel path — it's dropped from the plotted set and instead drives
+// error-bar whiskers on its paired Y channel.
+describe("MultiPanelStage — spatial error bars (item A)", () => {
+  it("drops a hidden (Y-error) channel from the panel's series and draws whiskers instead", async () => {
+    useApp.setState({
+      spatialPanels: [
+        {
+          datasetId: "d1",
+          xKey: null,
+          yKeys: [0, 1], // channel 1 ("b") is dSA — Y-error for channel 0
+          xLim: [0, 3],
+          yLim: [0, 400],
+          xLog: false,
+          yLog: false,
+          row: 0,
+          col: 0,
+          hiddenChannels: [1],
+          errKeys: { 0: 1 },
+        },
+      ],
+    });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const c = created[0] as { opts: { series: unknown[]; plugins: unknown[] }; data: unknown[] };
+    // Only ONE real series (channel 0) — channel 1 (hidden) never became its
+    // own series. `opts.series` is [x-descriptor, ...dataSeries].
+    expect(c.opts.series).toHaveLength(2);
+    expect(c.data).toHaveLength(2); // x column + 1 plotted column
+    // The errorBarsPlugin is the only plugin (tool defaults to no-op here,
+    // showAxisBox is off) — same "one plugin = the thing under test" idiom
+    // the fix #5 annotations regression above uses.
+    expect(c.opts.plugins.length).toBe(1);
+  });
+
+  it("draws no error-bar plugin when the panel has no errKeys (regression: today's behaviour unaffected)", async () => {
+    useApp.setState({
+      spatialPanels: [
+        { datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 3], yLim: [0, 40], xLog: false, yLog: false, row: 0, col: 0 },
+      ],
+    });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const c = created[0] as { opts: { plugins: unknown[] } };
+    expect(c.opts.plugins.length).toBe(0);
+  });
+});
