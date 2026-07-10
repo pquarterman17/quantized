@@ -6,14 +6,23 @@
 // (defensive — the store keeps `spatialPanels`/`breakPanels`/`facetPanels`
 // mutually exclusive, see their doc comments in `store/useApp.ts`). See
 // `MultiPanelStage.tsx`'s module doc for what each mode means; this file owns
-// the store reads, the payload-building effects, and the one DOM-manipulating
-// uPlot-instance effect.
+// the payload-building effects and the one DOM-manipulating uPlot-instance
+// effect.
+//
+// Parameterized over explicit params rather than store reads (MULTI_PLOT_PLAN
+// item 15, the usePlotPayload precedent): the focused `MultiPanelStage` view
+// feeds it the live singleton fields (byte-identical behavior — the params
+// are the exact store-selected references this hook used to read itself),
+// while a background window feeds ONLY the plain per-channel stack mode from
+// its own `PlotView` snapshot (`windows/BackgroundAltModes.tsx` — spatial/
+// facet/break arrangements are transient singleton state and stay
+// focused-only). ZERO store value imports (types only).
 
 import { type CSSProperties, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 
 import { buildErrorColumns } from "../../lib/errorbars";
-import { sharedXDomain, sharedYDomain } from "../../lib/facet";
+import { sharedXDomain, sharedYDomain, type BreakPanel, type FacetPanel } from "../../lib/facet";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import {
   breakPanelWidths,
@@ -24,6 +33,7 @@ import {
   spatialPlottedChannels,
   splitPayload,
   xZoomSyncHook,
+  type SpatialPanel,
 } from "../../lib/multipanel";
 import {
   columnWidths,
@@ -32,12 +42,18 @@ import {
   rowHeights,
   suppressedXIndices,
 } from "../../lib/panelLayout";
+import type { PlotBg } from "../../lib/plotview";
+import type { AxisFormat, Dataset, RefLine, SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotTools";
-import { useActiveDataset, useApp } from "../../store/useApp";
+import type { Accent, PlotTool, Theme } from "../../store/useApp";
 
-const SYNC_KEY = "qz-multipanel";
+/** The focused stage's uPlot cursor-sync group (all its panels crosshair
+ *  together). A background stack window passes its OWN per-window key instead
+ *  so N windows' panel sets never cross-sync implicitly (cross-window linking
+ *  stays the opt-in item-13 XY feature). */
+export const MULTIPANEL_SYNC_KEY = "qz-multipanel";
 const GRID_GAP = 8;
 const BREAK_GLYPH_W = 20;
 
@@ -69,36 +85,90 @@ export interface MultiPanelStageState {
   tool: string;
 }
 
-export function useMultiPanelStage(): MultiPanelStageState {
-  const active = useActiveDataset();
-  const datasets = useApp((s) => s.datasets);
-  const rawSpatialPanels = useApp((s) => s.spatialPanels);
-  const facetPanels = useApp((s) => s.facetPanels);
-  const breakPanels = useApp((s) => s.breakPanels);
-  const yLog = useApp((s) => s.yLog);
-  const xLog = useApp((s) => s.xLog);
-  const xLim = useApp((s) => s.xLim);
-  const yLim = useApp((s) => s.yLim);
-  const xFmt = useApp((s) => s.xFmt);
-  const yFmt = useApp((s) => s.yFmt);
-  const showGrid = useApp((s) => s.showGrid);
-  const showAxisBox = useApp((s) => s.showAxisBox);
-  const refLines = useApp((s) => s.refLines);
-  const seriesStyles = useApp((s) => s.seriesStyles);
-  const xKey = useApp((s) => s.xKey);
-  const yKeys = useApp((s) => s.yKeys);
-  const y2Keys = useApp((s) => s.y2Keys);
+export interface MultiPanelStageParams {
+  /** The dataset under the plain per-channel stack (the focused view passes
+   *  the ACTIVE dataset; a background window passes its own bound dataset). */
+  active: Dataset | null;
+  /** Spatial-panel dataset lookup only — a background window (which never
+   *  renders spatial arrangements) passes a stable empty list. */
+  datasets: Dataset[];
+  /** The three transient panel arrangements (decode-plan #36 / gap #21) —
+   *  focused-only singleton state; background windows pass null for all. */
+  spatialPanels: SpatialPanel[] | null;
+  facetPanels: FacetPanel[] | null;
+  breakPanels: BreakPanel[] | null;
+  yLog: boolean;
+  xLog: boolean;
+  xLim: [number, number] | null;
+  yLim: [number, number] | null;
+  xFmt: AxisFormat;
+  yFmt: AxisFormat;
+  showGrid: boolean;
+  showAxisBox: boolean;
+  refLines: RefLine[];
+  seriesStyles: Record<number, SeriesStyle>;
+  xKey: number | null;
+  yKeys: number[] | null;
+  y2Keys: number[] | null;
   // Item A (PNR.opj Book14 Graph11 repro): the same "Y-error"-designated
   // column bug also hits the plain per-channel stack mode (any Origin book
   // manually stacked, not just an applied multi-layer figure) — these are
-  // the SAME store fields PlotStage/usePlotPayload already read for the
+  // the SAME fields PlotStage/usePlotPayload already read for the
   // single-plot view, just threaded into this mode's own fetch/render below.
-  const errKeys = useApp((s) => s.errKeys);
-  const hiddenChannels = useApp((s) => s.hiddenChannels);
-  const seriesOrder = useApp((s) => s.seriesOrder);
-  const tool = useApp((s) => s.plotTool);
-  const theme = useApp((s) => s.theme);
-  const accent = useApp((s) => s.accent);
+  errKeys: Record<number, number>;
+  hiddenChannels: number[];
+  seriesOrder: number[] | null;
+  /** The focused view passes the live plot tool; a background window passes
+   *  the inert "zoom" default (Key Decision 2 — non-interactive). */
+  tool: PlotTool;
+  theme: Theme;
+  accent: Accent;
+  /** This instance's uPlot cursor-sync group (`MULTIPANEL_SYNC_KEY` for the
+   *  focused stage; a per-window key for a background stack window). */
+  syncKey: string;
+  /** Item-18 per-window background override, threaded into every panel's
+   *  `buildOpts` so axis/grid/ink resolve against the window's actual page
+   *  colour. The focused view passes undefined (≡ "theme" — byte-identical
+   *  to the pre-item-15 calls, which never passed `bg`). */
+  bg?: PlotBg;
+  /** ORIGIN_FILE_DECODE_PLAN #38 lazy-book fetch trigger. A STORE ACTION
+   *  (stable reference), called imperatively inside the fetch effects —
+   *  deliberately NOT a dependency anywhere, mirroring the pre-item-15
+   *  `useApp.getState().ensureBookData` idiom so every dependency list stays
+   *  field-for-field identical. */
+  ensureBookData: (id: string) => void;
+}
+
+export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelStageState {
+  const {
+    active,
+    datasets,
+    spatialPanels: rawSpatialPanels,
+    facetPanels,
+    breakPanels,
+    yLog,
+    xLog,
+    xLim,
+    yLim,
+    xFmt,
+    yFmt,
+    showGrid,
+    showAxisBox,
+    refLines,
+    seriesStyles,
+    xKey,
+    yKeys,
+    y2Keys,
+    errKeys,
+    hiddenChannels,
+    seriesOrder,
+    tool,
+    theme,
+    accent,
+    syncKey,
+    bg,
+    ensureBookData,
+  } = params;
   const hostRef = useRef<HTMLDivElement>(null);
   const plotsRef = useRef<uPlot[]>([]);
   const [payload, setPayload] = useState<PlotPayload | null>(null);
@@ -162,7 +232,7 @@ export function useMultiPanelStage(): MultiPanelStageState {
     // Origin book — trigger its full-data fetch; the payload below renders
     // from whatever `active.data` currently is (preview now, full once the
     // fetch lands and this effect re-runs off the `active` dependency).
-    if (active.pending) useApp.getState().ensureBookData(active.id);
+    if (active.pending) ensureBookData(active.id);
     fetchPlot(active.data, yLog, xLog, plotted, y2Keys, xKey).then((p) => {
       if (!cancelled) setPayload(p);
     });
@@ -191,7 +261,7 @@ export function useMultiPanelStage(): MultiPanelStageState {
         // multi-panel apply can bind several lazy books at once, so every
         // panel's own book needs its own fetch trigger (#38), not just the
         // "active" one.
-        if (ds?.pending) useApp.getState().ensureBookData(ds.id);
+        if (ds?.pending) ensureBookData(ds.id);
         if (!ds) return Promise.resolve(null);
         // Item A (PNR.opj Book14 Graph11 repro): drop this panel's Origin-
         // hidden channels (a "Y-error" column like dSA) from what's actually
@@ -311,10 +381,11 @@ export function useMultiPanelStage(): MultiPanelStageState {
           // Each panel's OWN layer's floating text (fix #5 — a multi-panel
           // apply used to drop every layer's annotations).
           annotations: p.annotations,
+          bg,
           linearPaths: LINEAR_PATHS,
           pointsPaths: POINTS_PATHS,
         });
-        opts.cursor = { ...opts.cursor, sync: { key: SYNC_KEY } };
+        opts.cursor = { ...opts.cursor, sync: { key: syncKey } };
         // Item B: blank x tick values + title on every panel with a flush
         // shared-x neighbor directly below it (only the run's bottom panel
         // keeps them) — same idiom the plain per-channel stack mode already
@@ -383,10 +454,11 @@ export function useMultiPanelStage(): MultiPanelStageState {
           axisBox: showAxisBox,
           tool,
           onReadout: setReadout,
+          bg,
           linearPaths: LINEAR_PATHS,
           pointsPaths: POINTS_PATHS,
         });
-        opts.cursor = { ...opts.cursor, sync: { key: SYNC_KEY } };
+        opts.cursor = { ...opts.cursor, sync: { key: syncKey } };
         opts.hooks = { setScale: [onSetScale] };
         plotsRef.current.push(new uPlot(opts, p.payload.data, div));
       });
@@ -434,10 +506,11 @@ export function useMultiPanelStage(): MultiPanelStageState {
           tool,
           onReadout: setReadout,
           title: p.label,
+          bg,
           linearPaths: LINEAR_PATHS,
           pointsPaths: POINTS_PATHS,
         });
-        opts.cursor = { ...opts.cursor, sync: { key: SYNC_KEY } };
+        opts.cursor = { ...opts.cursor, sync: { key: syncKey } };
         opts.hooks = { setScale: [onSetScale] };
         plotsRef.current.push(new uPlot(opts, p.payload.data, div));
       });
@@ -488,10 +561,11 @@ export function useMultiPanelStage(): MultiPanelStageState {
         // Origin "Y-error" column is already dropped from `plotted` above, so
         // its paired Y channel's own panel draws whiskers instead.
         errorBars: errorBarsList[i],
+        bg,
         linearPaths: LINEAR_PATHS,
         pointsPaths: POINTS_PATHS,
       });
-      opts.cursor = { ...opts.cursor, sync: { key: SYNC_KEY } };
+      opts.cursor = { ...opts.cursor, sync: { key: syncKey } };
       opts.hooks = { setScale: [onSetScale] };
       // Blank the x tick labels on every panel but the bottom (keep the axis so
       // the plot areas stay the same width and the panels line up).
@@ -538,6 +612,11 @@ export function useMultiPanelStage(): MultiPanelStageState {
     tool,
     theme,
     accent,
+    // Item 15 additions — constant for the focused stage (MULTIPANEL_SYNC_KEY
+    // / undefined) so its rebuild frequency is untouched; stable per
+    // background window, where a bg-toggle SHOULD rebuild (item 18).
+    syncKey,
+    bg,
   ]);
 
   const hostStyle: CSSProperties = spatial

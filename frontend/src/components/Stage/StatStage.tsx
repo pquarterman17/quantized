@@ -5,14 +5,20 @@
 // PolarStage's self-contained Canvas2D structure; MapStage's own floating
 // picker toolbar is the precedent for the mode/column controls. Thin: all
 // state lives in useStatStage, all math in lib/statstage + statRender.
+//
+// This file is the thin FOCUSED-window wrapper (MULTI_PLOT_PLAN item 15): it
+// feeds `useStatStage` the live singleton store fields and owns the
+// mode/column toolbar; the canvas lifecycle lives in `StatStageCanvas` (the
+// props-driven core a background window renders from its own `PlotView`
+// snapshot — `windows/BackgroundAltModes.tsx`).
 
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import type { StatMode } from "../../lib/statstage";
-import { useApp } from "../../store/useApp";
+import { useActiveDataset, useApp } from "../../store/useApp";
 import { Button, SegmentedControl, Select } from "../primitives";
-import { draw } from "./statRender";
+import StatStageCanvas from "./StatStageCanvas";
 import { BIN_RULES, DISTRIBUTIONS, useStatStage } from "./useStatStage";
 
 const MODE_OPTIONS: { value: StatMode; label: string }[] = [
@@ -32,22 +38,21 @@ export default function StatStage() {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const setStatMode = useApp((s) => s.setStatMode);
-  const st = useStatStage();
-  const hostRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const active = useActiveDataset();
+  const yKeys = useApp((s) => s.yKeys);
+  const xKey = useApp((s) => s.xKey);
+  const seriesOrder = useApp((s) => s.seriesOrder);
+  const statStageSeed = useApp((s) => s.statStageSeed);
+  const clearStatStageSeed = useApp((s) => s.clearStatStageSeed);
+  const st = useStatStage({
+    active,
+    yKeys,
+    xKey,
+    seriesOrder,
+    seed: statStageSeed,
+    onSeedConsumed: clearStatStageSeed,
+  });
   const [exporting, setExporting] = useState(false);
-
-  useEffect(() => {
-    const host = hostRef.current;
-    const canvas = canvasRef.current;
-    if (!host || !canvas) return;
-    const paint = () => draw(canvas, host, st.draw);
-    paint();
-    const ro = new ResizeObserver(paint);
-    ro.observe(host);
-    return () => ro.disconnect();
-    // theme/accent so the plot recolors from fresh design tokens (PolarStage's pattern).
-  }, [st.draw, theme, accent]);
 
   async function onExport() {
     setExporting(true);
@@ -69,9 +74,7 @@ export default function StatStage() {
 
   return (
     <div className="qzk-stage">
-      <div ref={hostRef} style={{ position: "absolute", inset: 8 }}>
-        <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" }} />
-      </div>
+      <StatStageCanvas data={st.draw} theme={theme} accent={accent} />
 
       <div
         className="qzk-glass qzk-float-tools"

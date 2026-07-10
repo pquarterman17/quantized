@@ -9,6 +9,13 @@
 // algorithm as calc.statplots.box_stats); Violin/Q-Q/Histogram need the
 // backend and surface an error otherwise — Violin specifically degrades to
 // Box rather than ever fabricating a KDE offline.
+//
+// Parameterized over explicit params rather than store reads (MULTI_PLOT_PLAN
+// item 15, the usePlotPayload precedent): the focused `StatStage` wrapper
+// feeds it the live singleton fields (byte-identical behavior — the params
+// are the exact store-selected references it used to read itself), while a
+// background window feeds it the window's OWN `PlotView` snapshot
+// (`windows/BackgroundAltModes.tsx`). ZERO store value imports (types only).
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -33,13 +40,29 @@ import {
   resolveGroups,
   type StatMode,
 } from "../../lib/statstage";
-import type { DataStruct } from "../../lib/types";
-import { useActiveDataset, useApp } from "../../store/useApp";
+import type { DataStruct, Dataset } from "../../lib/types";
+import type { StatStageSeed } from "../../store/useApp";
 import type { StatDrawData } from "./statRender";
 
 export interface StatColumn {
   index: number;
   label: string;
+}
+
+export interface UseStatStageParams {
+  /** The dataset under analysis (the focused wrapper passes the ACTIVE
+   *  dataset; a background window passes its own bound dataset). */
+  active: Dataset | null;
+  yKeys: number[] | null;
+  xKey: number | null;
+  seriesOrder: number[] | null;
+  /** Graph Builder "send to stage" cross-panel seed — a FOCUSED-stage
+   *  concern: the wrapper passes the live `statStageSeed`; background
+   *  windows pass null (seeding always targets the focused stage). */
+  seed: StatStageSeed | null;
+  /** Called once a non-null `seed` has been applied (the focused wrapper
+   *  passes `clearStatStageSeed`; background windows pass a no-op). */
+  onSeedConsumed: () => void;
 }
 
 export const DISTRIBUTIONS = ["norm", "logistic", "laplace", "uniform"] as const;
@@ -88,11 +111,8 @@ function numArr(v: unknown): number[] {
   return Array.isArray(v) ? v.map((x) => Number(x)) : [];
 }
 
-export function useStatStage(): StatStageState {
-  const active = useActiveDataset();
-  const yKeys = useApp((s) => s.yKeys);
-  const xKey = useApp((s) => s.xKey);
-  const seriesOrder = useApp((s) => s.seriesOrder);
+export function useStatStage(params: UseStatStageParams): StatStageState {
+  const { active, yKeys, xKey, seriesOrder, seed, onSeedConsumed } = params;
 
   const data = useMemo(() => analysisData(active), [active]);
 
@@ -132,15 +152,13 @@ export function useStatStage(): StatStageState {
   // Cross-panel hook: the Graph Builder hands over the mode + pickers for a
   // box/violin spec it "sent to stage" (mirrors the reflectivity SLD seed).
   // Declared AFTER the active-id reset so a same-dataset send wins over it.
-  const statStageSeed = useApp((s) => s.statStageSeed);
-  const clearStatStageSeed = useApp((s) => s.clearStatStageSeed);
   useEffect(() => {
-    if (!statStageSeed) return;
-    setMode(statStageSeed.mode);
-    setGroupColState(statStageSeed.groupCol);
-    setValueCol(statStageSeed.valueCol);
-    clearStatStageSeed();
-  }, [statStageSeed, clearStatStageSeed]);
+    if (!seed) return;
+    setMode(seed.mode);
+    setGroupColState(seed.groupCol);
+    setValueCol(seed.valueCol);
+    onSeedConsumed();
+  }, [seed, onSeedConsumed]);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

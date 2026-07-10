@@ -44,15 +44,74 @@
 //  exclusive, but the hook renders defensively): spatial > break > facet >
 //  plain stack.
 // Self-contained — fetches its own series; overlays/waterfall stay single-view.
+//
+// This file is the thin FOCUSED-window wrapper (MULTI_PLOT_PLAN item 15): it
+// reads the live singleton store fields and feeds them to the parameterized
+// `useMultiPanelStage` — a background window feeds ONLY the plain stack mode
+// from its own `PlotView` snapshot (`windows/BackgroundAltModes.tsx`).
 
 import "uplot/dist/uPlot.min.css";
 
-import { useApp } from "../../store/useApp";
-import { useMultiPanelStage } from "./useMultiPanelStage";
+import { useActiveDataset, useApp } from "../../store/useApp";
+import { MULTIPANEL_SYNC_KEY, useMultiPanelStage } from "./useMultiPanelStage";
 
 export default function MultiPanelStage() {
   const setStackMode = useApp((s) => s.setStackMode);
-  const { hostRef, hostStyle, readout, tool } = useMultiPanelStage();
+  const active = useActiveDataset();
+  const datasets = useApp((s) => s.datasets);
+  const spatialPanels = useApp((s) => s.spatialPanels);
+  const facetPanels = useApp((s) => s.facetPanels);
+  const breakPanels = useApp((s) => s.breakPanels);
+  const yLog = useApp((s) => s.yLog);
+  const xLog = useApp((s) => s.xLog);
+  const xLim = useApp((s) => s.xLim);
+  const yLim = useApp((s) => s.yLim);
+  const xFmt = useApp((s) => s.xFmt);
+  const yFmt = useApp((s) => s.yFmt);
+  const showGrid = useApp((s) => s.showGrid);
+  const showAxisBox = useApp((s) => s.showAxisBox);
+  const refLines = useApp((s) => s.refLines);
+  const seriesStyles = useApp((s) => s.seriesStyles);
+  const xKey = useApp((s) => s.xKey);
+  const yKeys = useApp((s) => s.yKeys);
+  const y2Keys = useApp((s) => s.y2Keys);
+  const errKeys = useApp((s) => s.errKeys);
+  const hiddenChannels = useApp((s) => s.hiddenChannels);
+  const seriesOrder = useApp((s) => s.seriesOrder);
+  const plotTool = useApp((s) => s.plotTool);
+  const theme = useApp((s) => s.theme);
+  const accent = useApp((s) => s.accent);
+  const ensureBookData = useApp((s) => s.ensureBookData);
+  const { hostRef, hostStyle, readout, tool } = useMultiPanelStage({
+    active,
+    datasets,
+    spatialPanels,
+    facetPanels,
+    breakPanels,
+    yLog,
+    xLog,
+    xLim,
+    yLim,
+    xFmt,
+    yFmt,
+    showGrid,
+    showAxisBox,
+    refLines,
+    seriesStyles,
+    xKey,
+    yKeys,
+    y2Keys,
+    errKeys,
+    hiddenChannels,
+    seriesOrder,
+    tool: plotTool,
+    theme,
+    accent,
+    syncKey: MULTIPANEL_SYNC_KEY,
+    // bg deliberately omitted (≡ "theme"): the focused stack keeps rendering
+    // exactly as before item 15 — see the item-18 note in MULTI_PLOT_PLAN.
+    ensureBookData,
+  });
 
   return (
     <div className="qzk-stage">

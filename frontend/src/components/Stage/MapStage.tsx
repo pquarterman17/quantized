@@ -10,12 +10,24 @@ import { COLORMAPS, type ColormapName } from "../../lib/colormap";
 import { cutSpaceForKeys } from "../../lib/mapcuts";
 import { fetchMap, hasQSpace, rsmAxisKeys, type MapPayload } from "../../lib/mapdata";
 import { exportCanvasPng } from "../../lib/plotExport";
+import type { Dataset } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { draw, fmt, hitTest, type Readout } from "./mapRender";
 import { useMapCuts } from "./useMapCuts";
 
-export default function MapStage() {
-  const active = useActiveDataset();
+export interface MapStageProps {
+  /** Item-17 prep (MULTI_PLOT_PLAN item 15's MapStage note): bind the map to
+   *  an EXPLICIT dataset instead of the Library-active one — the
+   *  `WorksheetPane(datasetId)` shape a future map window kind needs.
+   *  Omitted (the Stage Map tab today) = follow the active dataset, exactly
+   *  as before. The remaining singleton reads (gridding/contour settings,
+   *  theme, RSM peaks) are app-wide by design, not per-window view state. */
+  dataset?: Dataset | null;
+}
+
+export default function MapStage({ dataset }: MapStageProps) {
+  const storeActive = useActiveDataset();
+  const active = dataset !== undefined ? dataset : storeActive;
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const rsmPeaks = useApp((s) => s.rsmPeaks);

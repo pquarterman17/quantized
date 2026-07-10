@@ -174,6 +174,27 @@ describe("WindowCanvas — ≥2 windows (MDI chrome + focused-window routing)", 
     await waitFor(() => expect(spy).toHaveBeenCalledWith("d2"));
   });
 
+  it("item 15: a background window whose view carries polarMode renders the polar core, not an XY plot", async () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", winState: "normal" }),
+        win({ id: "w2", winState: "normal", view: { ...defaultPlotView(), polarMode: true } }),
+      ],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(<WindowCanvas />);
+    // Only the focused XY window builds a uPlot instance; w2's polar mode is
+    // Canvas2D. (The live singleton polarMode stays false throughout — w2
+    // renders from its OWN view.)
+    await waitFor(() => expect(created.length).toBe(1));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(created).toHaveLength(1);
+    expect(useApp.getState().polarMode).toBe(false);
+    const frames = container.querySelectorAll(".qzk-plotwin");
+    expect(frames[1]!.querySelector("canvas")).not.toBeNull(); // w2's polar canvas
+    expect(frames[0]!.querySelector("canvas")).toBeNull(); // w1 is XY (mocked uPlot adds no DOM)
+  });
+
   it("shows a channel-count/rows badge (item 10) for a window bound to a live dataset", async () => {
     useApp.setState({
       plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],

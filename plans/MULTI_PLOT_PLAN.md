@@ -149,8 +149,9 @@ Key decisions (cross-cutting, kept out of the tiers):
    direction is full Origin-style MDI (item 17), but Map and Worksheet
    stay stage tabs until then, and the alternate render modes
    (polar/stat/stack/inset) work only in the focused window in v1 (they
-   read the singleton store directly today). EM-style tooling remains out
-   of scope entirely.
+   read the singleton store directly today — since closed by item 15,
+   2026-07-10: background windows render them from their own `PlotView`).
+   EM-style tooling remains out of scope entirely.
 8. **Persistence is additive-optional on `.dwk` v3** (the `smartFolders`
    precedent — no version bump): `plotWindows` + `focusedWindowId`, with a
    `sanitizePlotWindows` boundary validator clamping dataset refs and
@@ -252,15 +253,11 @@ items 6–10.
 
 ## Tier 3 — Nice-to-Have
 
-15. **Alternate render modes in background windows** — (L) make
-    polar/stat/stack/map render from a `PlotView` instead of store
-    singletons so any window can hold any mode; touches `PolarStage`,
-    `StatStage`, `MultiPanelStage`, `MapStage` — do last.
-
 17. **Worksheet / map window kinds (full MDI)** — (L) promote the Map and
     Worksheet stage tabs to window kinds so any document type can float
     in the canvas (the confirmed long-term direction); builds on item
-    15's view-driven render modes — the endgame, schedule last.
+    15's view-driven render modes (shipped 2026-07-10 — that dependency
+    is now satisfied) — the endgame, schedule last.
     - Cross-reference (plan hygiene, no duplicate booking): the worksheet
       half of this item's mountability precondition is ALREADY satisfied —
       `WORKSHEET_PLAN.md` item 11 (closed 2026-07-09) audited
@@ -269,8 +266,12 @@ items 6–10.
       outer `Worksheet.tsx` wrapper, outside the subtree, supplies
       `datasetId` from `activeId` today). The pre-existing `xKey`/`yKeys`/
       `selection` singleton reads are a deliberate exception, unaffected by
-      that audit — making THOSE window-scoped is still this plan's item 15's
-      job. The actual window-kind promotion (this item) is still unbuilt.
+      that audit — and deliberately NOT touched by item 15 either (it scoped
+      itself to the plot-window render modes); making those window-scoped
+      lands with this item's worksheet window kind. The map half's
+      mountability precondition IS now satisfied: item 15 gave `MapStage` an
+      explicit `dataset` prop (the `WorksheetPane(datasetId)` shape). The
+      actual window-kind promotion (this item) is still unbuilt.
 
 ## Completed
 
@@ -872,3 +873,61 @@ items 6–10.
   (a snapshot is never dataset-bound and its static viewport isn't in the
   sync registry); `createSnapshotWindow` sets `linkGroup: null` +
   `pinned: false`. Post-merge frontend 2310 green; `npm run build` green.
+- ~~**15. Alternate render modes in background windows**~~ (2026-07-10) — a
+  background window whose `PlotView` carries `polarMode`/`statMode`/
+  `stackMode`/`insetMode` now renders THAT mode from its OWN view (previously
+  it silently rendered plain XY — the alternate stages read the singleton
+  store, so they could only ever show the FOCUSED window's state). Each
+  alternate stage was decomposed the way item 1 decomposed PlotStage — a
+  props-driven core with ZERO store value imports plus a thin store-connected
+  focused wrapper whose effect dependency lists stay field-for-field
+  identical to pre-item-15: `Stage/PolarStageCore.tsx` (Canvas2D host + paint
+  effect + the draw routine; `PolarStage.tsx` is now the wrapper owning the
+  toolbar/empty state), `Stage/StatStageCanvas.tsx` (the canvas lifecycle
+  over an already-computed `StatDrawData`) + `useStatStage(params)`
+  (parameterized over active/yKeys/xKey/seriesOrder and the Graph Builder
+  seed — the focused wrapper passes the exact store-selected references the
+  hook used to read itself; background windows pass `seed: null`), and
+  `useMultiPanelStage(params)` (all ~24 store reads become params;
+  `MultiPanelStage.tsx` is the store wrapper; `ensureBookData` is threaded as
+  a param called imperatively and kept OFF every dependency list, mirroring
+  the old `useApp.getState()` idiom; the only true additions are a `syncKey`
+  param — `MULTIPANEL_SYNC_KEY` on the focused path — and a `bg`
+  pass-through into every panel's `buildOpts`, both constant/undefined for
+  the focused stage so its rebuild frequency is untouched).
+  `windows/BackgroundPlotWindow.tsx` is now the mode DISPATCHER (empty state
+  → polar → stat → stack → plain XY — the exact precedence of PlotStage's
+  focused early-returns; the stack gate mirrors its `nPlotted >= 2`, while
+  the spatial/facet/break arrangements stay focused-only transient singleton
+  state) over new `windows/BackgroundAltModes.tsx` wrappers; always
+  non-interactive per Key Decision 2 (no mode toolbars/pickers,
+  `tool="zoom"`, overlays stay null) and item-13 link groups stay XY-ONLY —
+  a background stack window's panels cursor/x-sync among THEMSELVES via a
+  per-window `qz-win-stack-<id>` key, never with the focused stage's
+  `qz-multipanel` group or another window (documented at the dispatcher).
+  The XY background path also gained the previously-dropped `insetMode`
+  magnifier. Row state matches each mode's FOCUSED path exactly, so N
+  windows on one dataset stay mutually consistent: stat reads
+  `lib/rowstate.analysisData` inside `useStatStage` (the tested propagation
+  path); polar and the plain stack read the dataset raw, exactly as their
+  focused twins always have — no `architecture.test.ts` allowlist change.
+  Known scope note: stat picker state (box/violin/…, group/value columns) is
+  LOCAL hook state, not part of `PlotView`, so a background stat window
+  shows the dataset's DEFAULT statistical view (the same reset the focused
+  stage undergoes on unmount today). MapStage (item-17 prep): its only
+  per-window-varying singleton read was the ACTIVE dataset — now an optional
+  `dataset` prop (the `WorksheetPane(datasetId)` shape item 17's
+  cross-reference cites); a full store-free core was judged disproportionate
+  since its remaining reads (gridding/contour settings, theme, RSM peaks)
+  are app-wide by design and a future map WINDOW is a fully interactive
+  document, not a background preview. +7 tests: 6 `BackgroundPlotWindow.
+  test.tsx` (per-mode view-vs-singleton proofs in BOTH directions — window
+  view flags on while singletons are off, and all singleton flags lit while
+  the view says plain XY; the stat row-exclusion propagation through a
+  store-bound dataset; stack per-window sync key + zero tool plugins; the
+  <2-channel stack→XY fallback; inset) + 1 `WindowCanvas.test.tsx`
+  (end-to-end: a polar-view background window renders its Canvas2D core
+  beside the focused XY window, singletons untouched). All pre-existing
+  PolarStage/StatStage/MultiPanelStage tests pass unchanged (no import
+  edits needed — the store wrappers keep the components' public shape).
+  Frontend 2317 green (from 2310); `npm run build` (tsc + vite) green.
