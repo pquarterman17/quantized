@@ -237,6 +237,19 @@ window strip, Origin-figure/figure-doc "open in new window", and title/
 rename/badge chrome are all in the app today). See `## Completed` below for
 items 6–10.
 
+19. **Pop any book/plot out into a window (PLAN WITH OWNER FIRST)** —
+    (M?) owner request 2026-07-09 (live testing, verbatim): "how do I pop
+    out books that are already plots? I need an easy way to window all
+    books and plots… I just want it to enter the plot." Open design
+    questions to settle together before any implementation: what "pop
+    out" means for a BOOK (a plot window of its default channels? the
+    worksheet as window content — item 17's territory? both?); the
+    gesture (Library row button like the Figures ⊞? context-menu entry?
+    drag a row onto the window canvas — Tier 3 item 14's cousin?); and
+    "window ALL books and plots" (a bulk command — one window per
+    selected/all Library rows + auto-tile?). Do NOT start without the
+    owner planning session.
+
 ## Tier 3 — Nice-to-Have
 
 11. **Snapshot-as-window** — (M) freeze the focused window's current
