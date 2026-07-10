@@ -1635,6 +1635,10 @@ export const useApp = create<AppState>((set, get) => ({
         const src = existing?.data ?? overlay;
         const n = src?.labels.length ?? 0;
         set({
+          // Origin draws every layer with a full 4-side frame box; the
+          // decoded figure carries no separate "border on/off" flag, so an
+          // applied figure defaults to boxed (owner-routing item 4).
+          showAxisBox: true,
           xLim: [fig.x_from, fig.x_to],
           yLim: [fig.y_from, fig.y_to],
           xStep: fig.x_step ?? null,
@@ -1676,6 +1680,7 @@ export const useApp = create<AppState>((set, get) => ({
       if (baseSel && partnerSel) {
         get().setActive(entry.datasetId);
         set({
+          showAxisBox: true, // Origin layers are boxed by default (item 4)
           xLim: [lower.figure.x_from, lower.figure.x_to],
           yLim: [lower.figure.y_from, lower.figure.y_to],
           xStep: lower.figure.x_step ?? null,
@@ -1735,7 +1740,15 @@ export const useApp = create<AppState>((set, get) => ({
       if (spatialResult) {
         const { panels: placed, spatial } = spatialResult;
         get().setActive(entry.datasetId);
-        set({ stackMode: true, spatialPanels: placed, facetPanels: null, breakPanels: null });
+        // showAxisBox is the SINGLETON flag `useMultiPanelStage` reads for
+        // every spatial panel (item 4) — Origin layers are boxed by default.
+        set({
+          stackMode: true,
+          spatialPanels: placed,
+          facetPanels: null,
+          breakPanels: null,
+          showAxisBox: true,
+        });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         if (!spatial) {
           toast(
@@ -1756,6 +1769,7 @@ export const useApp = create<AppState>((set, get) => ({
     const ds = get().datasets.find((d) => d.id === entry.datasetId);
     const selection = ds ? figureChannelSelection(fig, ds) : null;
     set({
+      showAxisBox: true, // Origin layers are boxed by default (item 4)
       xLim: [fig.x_from, fig.x_to],
       yLim: [fig.y_from, fig.y_to],
       xStep: fig.x_step ?? null,

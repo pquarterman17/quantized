@@ -1682,6 +1682,26 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(s.yLog).toBe(true);
   });
 
+  // Owner-routing item 4 ("none of the sub plots are boxed in"): Origin
+  // draws every layer with a full 4-side frame, and the decoded figure
+  // carries no separate border on/off flag — so an applied figure defaults
+  // to boxed, even when the user had previously turned it off for a native
+  // (non-Origin) plot.
+  it("defaults showAxisBox on (item 4) — Origin layers are boxed unless a native plot turned it off first", () => {
+    useApp.setState({ showAxisBox: false });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    expect(useApp.getState().showAxisBox).toBe(true);
+  });
+
+  // Owner-routing item 1 ("have to remember to toggle up"): applying a
+  // figure is always plot-intent, so it must surface the Plot tab even when
+  // the user was parked on Worksheet or Map beforehand.
+  it("forces the Plot tab (item 1) even when the user was on the Worksheet tab", () => {
+    useApp.setState({ stageTab: "worksheet" });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    expect(useApp.getState().stageTab).toBe("plot");
+  });
+
   // Fix #2: Origin's decoded major-tick increment threads through to xStep/
   // yStep (consumed by lib/uplotOpts.fixedLogAxisSplits for a fixed log range).
   it("carries the figure's decoded x_step/y_step, and clears them when absent", () => {
@@ -1878,9 +1898,12 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
   });
 
   it("applying layer 1 plots the UNION of both layers, y2Keys tags layer 2's on the right", () => {
+    useApp.setState({ showAxisBox: false });
     useApp.getState().applyOriginFigure("fig-XRD-0");
     const s = useApp.getState();
     expect(s.activeId).toBe("d2");
+    // Item 4: a double-Y apply is still an Origin layer — boxed by default.
+    expect(s.showAxisBox).toBe(true);
     // yKeys is the union (layer 1 first, then layer 2) so layer-2 curves render;
     // y2Keys tags which of them sit on the right axis. effectiveChannels (the
     // real plotted set) derives from yKeys, so it must include 1 and 2.
@@ -2043,7 +2066,7 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
   it("arranges a 2-layer stack using real decoded frame geometry ('Fixed Lambdas SI'!Graph6 shape)", () => {
     const top = mkEntry("fig-0", 1, "p1", "Book1", { left: 0, top: 0, right: 995, bottom: 480 }, [0, 100]);
     const bottom = mkEntry("fig-1", 2, "p2", "Book2", { left: 0, top: 520, right: 995, bottom: 990 }, [0, 200]);
-    useApp.setState({ originFigures: [top, bottom] });
+    useApp.setState({ originFigures: [top, bottom], showAxisBox: false });
     useApp.getState().applyOriginFigure("fig-0");
     const s = useApp.getState();
     expect(s.stackMode).toBe(true);
@@ -2051,6 +2074,9 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
       expect.objectContaining({ datasetId: "p1", row: 0, col: 0, xLim: [0, 10], yLim: [0, 100] }),
       expect.objectContaining({ datasetId: "p2", row: 1, col: 0, xLim: [0, 10], yLim: [0, 200] }),
     ]);
+    // Owner-routing item 4: the singleton flag useMultiPanelStage reads for
+    // every spatial panel — Origin layers are boxed by default.
+    expect(s.showAxisBox).toBe(true);
   });
 
   it("generalizes past 2 layers: a 3-layer family arranges as a 3-panel ordinal stack (no frame geometry)", () => {
@@ -2763,6 +2789,47 @@ describe("stage routing (2-D map auto-open)", () => {
     useApp.setState({ stageTab: "worksheet" });
     useApp.getState().addDataset({ id: "m1", name: "rsm.xrdml", data: map2d });
     expect(useApp.getState().stageTab).toBe("worksheet");
+  });
+});
+
+// Owner-routing item 1 (2026-07-09, "it's a bit confusing when I'm opening a
+// plot vs workbook and then have to remember to toggle up"): unlike passive
+// activation (addDataset/loadWorkspace, tested above), setActive IS the
+// plot-intent primitive — it must ALWAYS surface the Plot tab (or Map, for a
+// 2-D dataset), even from the Worksheet tab.
+describe("stage routing — plot-intent forces the Plot tab off Worksheet (item 1)", () => {
+  const map2d: DataStruct = {
+    time: [0, 1, 2, 3],
+    values: [
+      [0, 0, 1],
+      [1, 0, 2],
+      [0, 1, 3],
+      [1, 1, 4],
+    ],
+    labels: ["2Theta", "Omega", "Intensity"],
+    units: ["deg", "deg", "cps"],
+    metadata: { is2D: true },
+  };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "scan.dat", data: raw },
+        { id: "m1", name: "rsm.xrdml", data: map2d },
+      ],
+      activeId: "d1",
+      stageTab: "worksheet",
+    });
+  });
+
+  it("setActive forces the Plot tab even when currently on Worksheet", () => {
+    useApp.getState().setActive("d1");
+    expect(useApp.getState().stageTab).toBe("plot");
+  });
+
+  it("setActive still routes a 2-D map to the Map tab, not Plot, off Worksheet", () => {
+    useApp.getState().setActive("m1");
+    expect(useApp.getState().stageTab).toBe("map");
   });
 });
 
@@ -3663,6 +3730,10 @@ describe("useApp plot windows — item 9 (Origin figures / figure docs into new 
       ],
       activeId: "d1",
       originFigures: [figureEntry],
+      // Owner-routing item 1: every test in this block starts parked on
+      // Worksheet so "opens a new window" assertions also cover "and
+      // surfaces the Plot tab" without needing a separate fixture.
+      stageTab: "worksheet",
     });
   });
 
@@ -3676,6 +3747,7 @@ describe("useApp plot windows — item 9 (Origin figures / figure docs into new 
     expect(s.focusedWindowId).toBe(created!.id);
     expect(s.xLim).toEqual([18, 100]); // the apply logic landed on the NEW window
     expect(s.yLog).toBe(true);
+    expect(s.stageTab).toBe("plot"); // item 1: surfaced even though we started on Worksheet
   });
 
   it("applyOriginFigure({newWindow:true}) titles the new window from the figure's label", () => {
@@ -3721,6 +3793,7 @@ describe("useApp plot windows — item 9 (Origin figures / figure docs into new 
     expect(created.title).toBe("My Figure");
     expect(s.yLog).toBe(true);
     expect(s.plotTitle).toBe("Doc Title");
+    expect(s.stageTab).toBe("plot"); // item 1: surfaced even though we started on Worksheet
   });
 
   it("openFigureDocInWindow is a no-op for a frozen doc or one with no resolved dataset", () => {

@@ -63,6 +63,7 @@ beforeEach(() => {
     spatialPanels: null,
     facetPanels: null,
     breakPanels: null,
+    showAxisBox: false,
   });
 });
 
@@ -188,5 +189,74 @@ describe("MultiPanelStage — mode regressions", () => {
     expect(expected).toBe(2);
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(expected));
+  });
+});
+
+// Owner-routing item 4 ("none of the sub plots are boxed in"): the singleton
+// `showAxisBox` flag must reach EVERY panel mode's `buildOpts` call, not just
+// the single-plot PlotStage. Same "one plugin = the thing under test" idiom
+// as the fix #5 annotations regression above — the default "zoom" tool with
+// no other decorations adds zero plugins on its own, so a bare boolean flip
+// isolates exactly the axis-box plugin.
+describe("MultiPanelStage — per-panel axis box (item 4)", () => {
+  it("plain per-channel stack mode adds the axis-box plugin to every panel when showAxisBox is on", async () => {
+    useApp.setState({ showAxisBox: true });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(2));
+    for (const c of created as { opts: { plugins: unknown[] } }[]) {
+      expect(c.opts.plugins.length).toBe(1);
+    }
+  });
+
+  it("spatial-apply mode adds the axis-box plugin per panel when showAxisBox is on", async () => {
+    useApp.setState({
+      showAxisBox: true,
+      spatialPanels: [
+        {
+          datasetId: "d1",
+          xKey: null,
+          yKeys: [0],
+          xLim: [0, 3],
+          yLim: [0, 40],
+          xLog: false,
+          yLog: false,
+          row: 0,
+          col: 0,
+        },
+      ],
+    });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const opts = created[0] as { opts: { plugins: unknown[] } };
+    expect(opts.opts.plugins.length).toBe(1);
+  });
+
+  it("paneled x-break mode adds the axis-box plugin per panel when showAxisBox is on", async () => {
+    useApp.setState({ showAxisBox: true });
+    useApp.getState().breakAtGaps("d1", [[1, 2]]);
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(2));
+    for (const c of created as { opts: { plugins: unknown[] } }[]) {
+      expect(c.opts.plugins.length).toBe(1);
+    }
+  });
+
+  it("facet-by-column mode adds the axis-box plugin per panel when showAxisBox is on", async () => {
+    useApp.setState({ showAxisBox: true });
+    useApp.getState().facetByColumn("d1", 0);
+    const expected = useApp.getState().facetPanels?.length ?? 0;
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(expected));
+    for (const c of created as { opts: { plugins: unknown[] } }[]) {
+      expect(c.opts.plugins.length).toBe(1);
+    }
+  });
+
+  it("adds no axis-box plugin when showAxisBox is off (default)", async () => {
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(2));
+    for (const c of created as { opts: { plugins: unknown[] } }[]) {
+      expect(c.opts.plugins.length).toBe(0);
+    }
   });
 });
