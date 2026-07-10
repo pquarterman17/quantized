@@ -18,6 +18,21 @@
 //                  "stageTab": "plot",          // plot | map | worksheet
 //                  "state": { "yKeys":[0,1], "y2Keys":[1], ... } } ] }
 //
+// MDI (multi-window) shots (MULTI_PLOT_PLAN item 16) — instead of the single
+// top-level `dataset`, a shot may describe a whole window layout:
+//   { "name": "mdi_tile",
+//     "datasets": [ <dataset>, ... ],           // same shape as `dataset` above
+//     "windows": [ { "dataset": 0,              // index into `datasets`
+//                    "view": { "yKeys":[0], "plotTitle":"…" },  // partial view
+//                    "geometry": { "x":6,"y":6,"w":540,"h":300 },
+//                    "winState": "normal" | "minimized" | "maximized",
+//                    "title": "…" } , ... ],
+//     "focusedIndex": 0,                        // default: last visible window
+//     "state": { "leftCollapsed": true } }      // optional post-apply overrides
+// Windows are built through the REAL store actions (createWindow/moveWindow/
+// resizeWindow/focusWindow/minimizeWindow) via the main.tsx seam helper, and
+// the harness waits for EVERY visible window's canvas before screenshotting.
+//
 // No browser download: puppeteer-core points at the system Chrome.
 
 import { createServer } from "node:http";
@@ -127,8 +142,18 @@ for (const shot of spec.shots) {
       selectedIds: [],
       originFigures: [],
     });
+    // Reset the window canvas too (one maximized unbound window — the store's
+    // startup shape) so a previous shot's MDI layout never leaks into this one.
+    window.__qz.harnessResetWindows();
     const api = useApp.getState();
-    if (s.tree) {
+    if (s.windows) {
+      // MDI layout (MULTI_PLOT_PLAN item 16): datasets + windows built through
+      // the REAL store actions via the main.tsx seam helper — addDataset per
+      // dataset, createWindow with geometry + view, focus the right one.
+      window.__qz.harnessApplyWindows(s.datasets || [], s.windows, s.focusedIndex);
+      if (s.stageTab) useApp.getState().setStageTab(s.stageTab);
+      if (s.state) useApp.setState(s.state);
+    } else if (s.tree) {
       // Build a folder tree: addDataset for each (inits view state), then set the
       // folders + per-dataset folderId + expansion directly (rendering reads them).
       for (const d of s.tree.datasets) api.addDataset(d);
@@ -158,27 +183,64 @@ for (const shot of spec.shots) {
     }
   }, shot);
 
-  // Screenshot target: the plot canvas by default, or an explicit selector (e.g.
-  // ".qzk-library" for the folder tree).
-  const target = shot.target || ".qzk-stage";
+  // Screenshot target: the plot canvas by default (the whole window canvas
+  // for MDI shots), or an explicit selector (e.g. ".qzk-library").
+  const isMdi = Array.isArray(shot.windows);
+  const target = shot.target || (isMdi ? ".qzk-wincanvas" : ".qzk-stage");
   const isPlot = target === ".qzk-stage";
   await page.waitForSelector(target, { timeout: 6000 }).catch(() => {});
-  await new Promise((r) => setTimeout(r, isPlot ? 500 : 250));
+  // MDI shots: wait until EVERY visible window's uPlot canvas exists with real
+  // pixels — the focused PlotStage plus each background PlotViewport — before
+  // screenshotting (one canvas per non-minimized window).
+  const expectedCanvases = isMdi
+    ? shot.windows.filter((w) => w.winState !== "minimized").length
+    : 0;
+  if (isMdi) {
+    await page
+      .waitForFunction(
+        (n) => {
+          const cs = [...document.querySelectorAll(".qzk-stage-cell canvas")];
+          return cs.length >= n && cs.every((c) => c.width > 0 && c.height > 0);
+        },
+        { timeout: 8000 },
+        expectedCanvases,
+      )
+      .catch(() => {});
+  }
+  await new Promise((r) => setTimeout(r, isPlot || isMdi ? 500 : 250));
 
   const el = (await page.$(target)) || (await page.$(".qzk-stage-cell"));
   const outPath = join(outDir, `${shot.name}.png`);
   if (el) await el.screenshot({ path: outPath });
   else await page.screenshot({ path: outPath }); // fallback: full page
 
-  // For plot shots, confirm a canvas with real dimensions rendered.
+  // For plot shots, confirm a canvas with real dimensions rendered. For MDI
+  // shots, confirm ALL expected canvases drew, plus the chrome (frames /
+  // focused highlight / minimized-window strip) the layout implies.
   const canvasInfo = isPlot
     ? await page.evaluate(() => {
         const c = document.querySelector(".qzk-stage canvas");
         return c ? { canvas: true, w: c.width, h: c.height } : { canvas: false };
       })
-    : { canvas: "n/a" };
+    : isMdi
+      ? await page.evaluate((n) => {
+          const cs = [...document.querySelectorAll(".qzk-stage-cell canvas")];
+          return {
+            canvas: cs.length >= n && cs.every((c) => c.width > 0 && c.height > 0),
+            canvases: cs.length,
+            frames: document.querySelectorAll(".qzk-plotwin").length,
+            focusedFrames: document.querySelectorAll(".qzk-plotwin.focused").length,
+            stripItems: document.querySelectorAll(".qzk-winstrip-item").length,
+          };
+        }, expectedCanvases)
+      : { canvas: "n/a" };
   results.push({ name: shot.name, out: outPath, ...canvasInfo });
-  console.log(`shot ${shot.name}: target=${target} canvas=${canvasInfo.canvas} ${canvasInfo.w || ""} -> ${outPath}`);
+  const mdiNote = isMdi
+    ? ` canvases=${canvasInfo.canvases}/${expectedCanvases} frames=${canvasInfo.frames} focused=${canvasInfo.focusedFrames} strip=${canvasInfo.stripItems}`
+    : "";
+  console.log(
+    `shot ${shot.name}: target=${target} canvas=${canvasInfo.canvas} ${canvasInfo.w || ""}${mdiNote} -> ${outPath}`,
+  );
 }
 
 await writeFile(join(outDir, "console.log"), logs.join("\n"), "utf8");

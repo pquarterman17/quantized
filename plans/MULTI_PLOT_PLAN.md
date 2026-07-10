@@ -11,7 +11,7 @@ working unchanged while extra windows render alongside.
 
 **Status:** Active
 **Created:** 2026-07-09
-**Updated:** 2026-07-09
+**Updated:** 2026-07-10
 
 ---
 
@@ -272,10 +272,6 @@ items 6–10.
     singletons so any window can hold any mode; touches `PolarStage`,
     `StatStage`, `MultiPanelStage`, `MapStage` — do last.
 
-16. **Visual-harness multi-window specs** — (S) `tools/visual` spec gains
-    a `windows[]` shape so MDI layouts (tile, overlap, focus highlight)
-    get screenshot coverage.
-
 17. **Worksheet / map window kinds (full MDI)** — (L) promote the Map and
     Worksheet stage tabs to window kinds so any document type can float
     in the canvas (the confirmed long-term direction); builds on item
@@ -293,6 +289,36 @@ items 6–10.
 
 ## Completed
 
+- ~~**16. Visual-harness multi-window specs**~~ (2026-07-10) — a harness shot
+  may now describe a whole MDI layout: `{ datasets: [...], windows: [{ dataset:
+  <index into datasets>, view?: <partial PlotView, the same vocabulary as the
+  single-window `state`>, geometry?: {x,y,w,h}, winState?, title? }],
+  focusedIndex?, state? }`. The layout is built through the REAL store actions
+  (`addDataset` → `createWindow` → `moveWindow`/`resizeWindow` →
+  `focusWindow` → `minimizeWindow`/`toggleMaximizeWindow`) via two small typed
+  helpers on the `?harness` seam (`frontend/src/main.tsx`:
+  `harnessApplyWindows`, plus `harnessResetWindows` — the store's startup
+  single-maximized-window shape, called before EVERY shot so no shot inherits a
+  previous shot's layout; windows get explicit titles at create time because
+  the transient pre-shot window would otherwise pollute `dedupeWindowTitle`
+  with a "Foo (2)" artifact no user sees). `tools/visual/shoot.mjs` waits for
+  ALL expected canvases (one per non-minimized window: the focused `PlotStage`
+  + each `BackgroundPlotWindow` viewport) to exist with real pixels before
+  screenshotting, defaults the MDI screenshot target to `.qzk-wincanvas`
+  (frames + window strip), and reports canvases/frames/focused/strip counts
+  per shot. Three committed synthetic (sine/cosine-family, corpus-free)
+  example shots in `spec.example.json`: `mdi_tile_2x2` (four tiled windows,
+  focused top-left), `mdi_overlap_focus` (two overlapping windows, `--accent`
+  focused-title highlight visible above the grey background window),
+  `mdi_minimized_strip` (two side-by-side + one minimized window docked in the
+  bottom `qzk-winstrip`); all three collapse the Library/Inspector panels via
+  the shot-level `state` override for canvas room. **Backwards compatibility
+  verified byte-exactly:** all 5 pre-existing shots (incl. the raw-`state`
+  `mdi_two_window_layout`) are sha256-IDENTICAL before vs. after the change
+  (and the harness itself was confirmed run-to-run deterministic first).
+  Frontend build green; test suite green but for the known load-dependent
+  `GridViewport.perf.test.tsx` timing flake (passes in isolation, documented
+  at item 18).
 - ~~**1. Extract the plot render core from `PlotStage`**~~ (2026-07-09) — split
   the 441-line singleton `PlotStage.tsx` into `components/Stage/
   usePlotPayload.ts` (the fetch → `categoricalXPayload` → `composeDisplayPayload`

@@ -34,6 +34,47 @@ A spec is `{ "shots": [ { name, dataset, stageTab?, state? } ] }`:
   `xLim`, `plotTitle`, …).
 - `stageTab` — `plot` (default) | `map` | `worksheet`.
 
+### MDI (multi-window) shots
+
+A shot may instead describe a whole window layout (MULTI_PLOT_PLAN item 16):
+
+```json
+{ "name": "mdi_tile_2x2",
+  "datasets": [ { "id": "a", "name": "Sine", "data": { … } }, … ],
+  "windows": [
+    { "dataset": 0,
+      "view": { "yKeys": [0], "plotTitle": "Sine" },
+      "geometry": { "x": 8, "y": 8, "w": 483, "h": 317 },
+      "winState": "normal",
+      "title": "…" },
+    …
+  ],
+  "focusedIndex": 0,
+  "state": { "leftCollapsed": true, "rightCollapsed": true } }
+```
+
+- `datasets` — shot-level list, same shape as a single-window shot's
+  `dataset`; each window binds one by index (two windows may share an index).
+- `windows[]` — per window: `dataset` (index), optional partial `view` (the
+  same vocabulary as `state` — merged over a fresh `defaultPlotView()`),
+  optional `geometry` `{x,y,w,h}` in canvas px, optional `winState`
+  (`normal` default | `minimized` — docks into the bottom window strip |
+  `maximized`), optional `title` (defaults to the dataset name).
+- `focusedIndex` — which window is focused (default: the last non-minimized
+  one). The focused window renders the full interactive `PlotStage` with the
+  `--accent` title highlight; the others render background viewports.
+- `state` — optional overrides applied after the layout (e.g. collapse the
+  Library/Inspector panels for more canvas room, as above).
+
+The layout is built through the REAL store actions (`addDataset` →
+`createWindow` → `moveWindow`/`resizeWindow` → `focusWindow` →
+`minimizeWindow`/`toggleMaximizeWindow`) via the `main.tsx` seam helper —
+never raw `setState` window records — and the harness waits for EVERY visible
+window's uPlot canvas to draw before screenshotting. The default screenshot
+target for MDI shots is `.qzk-wincanvas` (frames + window strip). Existing
+single-window shots are unaffected (`mdi_tile_2x2`, `mdi_overlap_focus`, and
+`mdi_minimized_strip` in `spec.example.json` are the committed examples).
+
 `spec.example.json` is corpus-free and committed. To verify against real Origin
 data, generate a local `spec.json` from `../../../test-data` (gitignored, never
 committed — see `.gitignore`); `shoot.mjs` prefers it automatically.
