@@ -21,7 +21,14 @@
 
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
-import { nextPlotBg, type PlotBg, type PlotWindow } from "../../lib/plotview";
+import {
+  nextPlotBg,
+  snapMovePosition,
+  snapResizeSize,
+  type PlotBg,
+  type PlotWindow,
+  type WindowGeometry,
+} from "../../lib/plotview";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { useApp } from "../../store/useApp";
 import { Badge } from "../primitives";
@@ -72,6 +79,8 @@ interface DragState {
   origY: number;
   origW: number;
   origH: number;
+  /** Sibling snap targets (item 12) — captured once per gesture. */
+  siblings: WindowGeometry[];
 }
 
 export default function PlotWindowFrame({
@@ -158,11 +167,25 @@ export default function PlotWindowFrame({
       if (!drag) return;
       const dx = e.clientX - drag.startX;
       const dy = e.clientY - drag.startY;
+      // Item 12: snap to canvas + sibling edges while dragging; holding Alt
+      // bypasses it (the WM convention). Math lives in lib/plotview.
       if (drag.mode === "move") {
-        const p = clampPos(drag.origX + dx, drag.origY + dy, bounds);
+        let x = drag.origX + dx;
+        let y = drag.origY + dy;
+        if (!e.altKey) {
+          ({ x, y } = snapMovePosition({ x, y, w: drag.origW, h: drag.origH }, bounds, drag.siblings));
+        }
+        const p = clampPos(x, y, bounds);
         schedule(p.x, p.y);
       } else {
-        schedule(Math.max(MIN_W, drag.origW + dx), Math.max(MIN_H, drag.origH + dy));
+        let w = Math.max(MIN_W, drag.origW + dx);
+        let h = Math.max(MIN_H, drag.origH + dy);
+        if (!e.altKey) {
+          const s = snapResizeSize({ x: drag.origX, y: drag.origY, w, h }, bounds, drag.siblings);
+          w = Math.max(MIN_W, s.w);
+          h = Math.max(MIN_H, s.h);
+        }
+        schedule(w, h);
       }
     },
     [schedule, bounds],
@@ -194,6 +217,13 @@ export default function PlotWindowFrame({
       origY: win.geometry.y,
       origW: win.geometry.w,
       origH: win.geometry.h,
+      // Every OTHER visible window's rect — read non-subscribing (getState)
+      // so the drag handlers never re-bind mid-gesture (siblings can't move
+      // during OUR drag anyway).
+      siblings: useApp
+        .getState()
+        .plotWindows.filter((w) => w.id !== win.id && w.winState !== "minimized")
+        .map((w) => w.geometry),
     };
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);

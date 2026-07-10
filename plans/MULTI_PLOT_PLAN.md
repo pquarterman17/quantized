@@ -11,7 +11,7 @@ working unchanged while extra windows render alongside.
 
 **Status:** Active
 **Created:** 2026-07-09
-**Updated:** 2026-07-09
+**Updated:** 2026-07-10
 
 ---
 
@@ -255,9 +255,6 @@ items 6–10.
 11. **Snapshot-as-window** — (M) freeze the focused window's current
     display payload into a static compare window (the ⎘ tool's natural
     upgrade; `FigureDoc` frozen-data precedent).
-
-12. **Edge / grid snapping** — (S) snap frames to canvas edges and
-    sibling window edges while dragging.
 
 13. **Cross-window crosshair + x-range linking** — (M) opt-in link groups
     using uPlot sync groups (the `MultiPanelStage` idiom) so cursors/zoom
@@ -703,3 +700,26 @@ items 6–10.
   context-menu feature, `a214fea`); the lone `GridViewport.perf.test.tsx`
   timing case is pre-existing/load-dependent flake unrelated to this item —
   passes in isolation; `npm run build` green.
+- ~~**12. Edge / grid snapping**~~ (2026-07-10) — frames snap to the canvas
+  edges AND sibling window edges (both align-same-edge and abut) while
+  dragging and resizing, 8 px threshold; holding Alt during the gesture
+  bypasses it (the standard WM convention). All math is pure in
+  `lib/plotview.ts`: `SNAP_THRESHOLD`, `snapMovePosition(proposed, bounds,
+  siblings, threshold?)` (either edge per axis may pull x/y; axes
+  independent) and `snapResizeSize(...)` (only the MOVING right/bottom
+  edges — matching the frame's single bottom-right grip — pull w/h), both
+  over one flat per-axis line pool (canvas edges + both edges of every
+  sibling rect) so align and abut fall out of the same nearest-candidate
+  comparison. `PlotWindowFrame.tsx` wiring stayed lean (~20 lines, 338
+  total): sibling rects (visible non-minimized, non-self) are captured ONCE
+  per gesture at `beginDrag` via non-subscribing `useApp.getState()` — so
+  the drag handlers never re-bind mid-gesture (the item-3 listener-cleanup
+  effect would otherwise drop the live listeners) — and the snap is applied
+  inside `onPointerMove` before the existing clamp + rAF-throttled store
+  write, gated on `!e.altKey`. +9 `plotview.test.ts` cases (all four canvas
+  edges, sibling align, abut both directions, at/outside threshold,
+  nearest-candidate wins, axis independence, resize moving-edges-only +
+  sibling abut, no-lines passthrough) + 4 `PlotWindowFrame.test.tsx` cases
+  (drag lands exactly on the canvas edge, Alt-held drag doesn't snap, drag
+  abuts a sibling's left edge, resize snaps onto the canvas edge). Frontend
+  2230 green; `npm run build` green.

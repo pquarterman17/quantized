@@ -209,4 +209,60 @@ describe("PlotWindowFrame", () => {
     );
     expect(container.querySelector(".qzk-plotwin-meta")?.textContent).toBe("3ch · 120pts");
   });
+
+  // ── Item 12: edge/sibling snapping while dragging ─────────────────────────
+  // The sibling w2 sits at the top-right so its edges (x 640/740, y 20/60)
+  // never interfere with the canvas-edge cases below.
+  const renderSnapFrame = () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "w2", geometry: { x: 640, y: 20, w: 100, h: 40 } })],
+      focusedWindowId: "w1",
+    });
+    return render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused bounds={{ width: 800, height: 600 }} datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+  };
+
+  it("a drag ending near a canvas edge snaps exactly onto it (item 12)", async () => {
+    const { container } = renderSnapFrame();
+    const titlebar = container.querySelector(".qzk-plotwin-titlebar")!;
+    fireEvent.pointerDown(titlebar, { clientX: 100, clientY: 100, button: 0 });
+    // Raw position would be x=7 — inside the 8px zone around the left edge.
+    fireEvent.pointerMove(window, { clientX: 7, clientY: 150 });
+    fireEvent.pointerUp(window, { clientX: 7, clientY: 150 });
+    await waitFor(() => expect(geomOf("w1")).toEqual({ x: 0, y: 130, w: 480, h: 360 }));
+  });
+
+  it("holding Alt during the drag disables snapping (item 12)", async () => {
+    const { container } = renderSnapFrame();
+    const titlebar = container.querySelector(".qzk-plotwin-titlebar")!;
+    fireEvent.pointerDown(titlebar, { clientX: 100, clientY: 100, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 7, clientY: 150, altKey: true });
+    fireEvent.pointerUp(window, { clientX: 7, clientY: 150, altKey: true });
+    await waitFor(() => expect(geomOf("w1")).toEqual({ x: 7, y: 130, w: 480, h: 360 }));
+  });
+
+  it("a drag snaps the right edge to abut a sibling's left edge (item 12)", async () => {
+    const { container } = renderSnapFrame();
+    const titlebar = container.querySelector(".qzk-plotwin-titlebar")!;
+    fireEvent.pointerDown(titlebar, { clientX: 100, clientY: 100, button: 0 });
+    // Raw right edge would be 163+480 = 643 — 3px from w2's left edge (640).
+    fireEvent.pointerMove(window, { clientX: 163, clientY: 100 });
+    fireEvent.pointerUp(window, { clientX: 163, clientY: 100 });
+    await waitFor(() => expect(geomOf("w1")).toEqual({ x: 160, y: 80, w: 480, h: 360 }));
+  });
+
+  it("a resize snaps the moving right edge onto the canvas edge (item 12)", async () => {
+    const { container } = renderSnapFrame();
+    const grip = container.querySelector(".qzk-plotwin-resize")!;
+    fireEvent.pointerDown(grip, { clientX: 0, clientY: 0, button: 0 });
+    // Raw size would be 695×400: right edge 795 → snaps to 800 (w 700);
+    // bottom edge 480 is far from every line, so h stays 400 — the axes
+    // snap independently.
+    fireEvent.pointerMove(window, { clientX: 215, clientY: 40 });
+    fireEvent.pointerUp(window, { clientX: 215, clientY: 40 });
+    await waitFor(() => expect(geomOf("w1")).toEqual({ x: 100, y: 80, w: 700, h: 400 }));
+  });
 });
