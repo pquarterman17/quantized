@@ -66,10 +66,17 @@ describe("buildOpts publication template (fontSize + baseLineWidth)", () => {
     expect((opts.series?.[1] as { width?: number }).width).toBe(3);
   });
 
-  it("defaults to 11px / 1.5 when no template args are given", () => {
+  it("defaults to 12px / 1.5 when no template args are given (item 2, was 11px)", () => {
     const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
-    expect(opts.axes?.[0].font).toContain("11px");
+    expect(opts.axes?.[0].font).toContain("12px");
     expect((opts.series?.[1] as { width?: number }).width).toBe(1.5);
+  });
+
+  it("sizes the axis title 2px over the tick font and grows label/tick room to match", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", fontSize: 18 });
+    expect(opts.axes?.[0].labelFont).toContain("20px");
+    expect(opts.axes?.[0].labelSize).toBeGreaterThan(30);
+    expect(opts.axes?.[1].size as number).toBeGreaterThan(60);
   });
 });
 
