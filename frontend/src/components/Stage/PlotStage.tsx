@@ -16,6 +16,7 @@ import type { RegionStats } from "../../lib/regionStats";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths";
+import { windowSyncKey } from "../../lib/windowsync";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import AxisDropZones from "./AxisDropZones";
@@ -82,6 +83,13 @@ export default function PlotStage() {
   // `nPlotted` below, not a `plotWindows` array-identity dependency.
   const winBg = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.bg);
   const { axesBg, inkColor, isDark: isDarkBg } = resolvePlotBg(winBg);
+  // Item 13 (cross-window link groups): the FOCUSED window's own link group,
+  // looked up the same way as `winBg` above (a derived primitive selector,
+  // never a `plotWindows` array-identity dependency). Resolved to the uPlot
+  // sync key (or undefined = unlinked) for PlotViewport.
+  const winLinkGroup = useApp(
+    (s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.linkGroup ?? null,
+  );
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
   const setRegionPicked = useApp((s) => s.setRegionPicked);
@@ -211,6 +219,7 @@ export default function PlotStage() {
         theme={theme}
         accent={accent}
         bg={winBg}
+        syncKey={windowSyncKey(winLinkGroup)}
         yLog={yLog}
         xLog={xLog}
         xLim={xLim}

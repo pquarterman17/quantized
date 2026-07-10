@@ -12,6 +12,7 @@ import {
   defaultPlotView,
   displayedWindowTitle,
   hydrateView,
+  nextLinkGroup,
   nextPlotBg,
   sanitizePlotWindows,
   snapshotView,
@@ -113,6 +114,7 @@ function win(over: Partial<PlotWindow> = {}): PlotWindow {
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    linkGroup: null,
     ...over,
   };
 }
@@ -160,6 +162,21 @@ describe("sanitizePlotWindows", () => {
     expect(sanitizePlotWindows(undefined, new Set())).toEqual([]);
   });
 
+  it("round-trips a valid linkGroup and clamps a missing/malformed one to null (item 13)", () => {
+    const out = sanitizePlotWindows(
+      [
+        win({ id: "a", linkGroup: 2 }),
+        win({ id: "b", linkGroup: null }),
+        { ...win({ id: "c" }), linkGroup: undefined },
+        win({ id: "d", linkGroup: 1.5 as unknown as number }),
+        win({ id: "e", linkGroup: 0 as unknown as number }),
+        win({ id: "f", linkGroup: "1" as unknown as number }),
+      ],
+      new Set(["d1"]),
+    );
+    expect(out.map((w) => w.linkGroup)).toEqual([2, null, null, null, null, null]);
+  });
+
   it("round-trips a valid bg override and falls back to 'theme' for a missing/invalid value (item 18)", () => {
     const out = sanitizePlotWindows(
       [
@@ -182,6 +199,19 @@ describe("nextPlotBg (item 18 — per-window background toggle)", () => {
     expect(nextPlotBg("theme")).toBe("light");
     expect(nextPlotBg("light")).toBe("dark");
     expect(nextPlotBg("dark")).toBe("theme");
+  });
+});
+
+describe("nextLinkGroup (item 13 — cross-window link-group toggle)", () => {
+  it("cycles null -> 1 -> 2 -> 3 -> null", () => {
+    expect(nextLinkGroup(null)).toBe(1);
+    expect(nextLinkGroup(1)).toBe(2);
+    expect(nextLinkGroup(2)).toBe(3);
+    expect(nextLinkGroup(3)).toBeNull();
+  });
+
+  it("clamps an out-of-range group straight back to null (defensive — sanitize should prevent it)", () => {
+    expect(nextLinkGroup(99)).toBeNull();
   });
 });
 

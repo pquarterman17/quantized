@@ -161,6 +161,20 @@ export function nextPlotBg(current: PlotBg): PlotBg {
   return PLOT_BG_CYCLE[(PLOT_BG_CYCLE.indexOf(current) + 1) % PLOT_BG_CYCLE.length];
 }
 
+/** The highest cross-window link group (item 13) — three groups is the
+ *  Origin-ish sweet spot: enough for two or three simultaneous comparisons,
+ *  few enough that a single toggle button can cycle through all of them. */
+const MAX_LINK_GROUP = 3;
+
+/** The next link group in the title-bar toggle's cycle
+ *  (null -> 1 -> 2 -> 3 -> null -> ...) — item 13's `nextPlotBg` analogue.
+ *  Pure; used by both the per-window ⧟ button (`PlotWindowFrame`) and the
+ *  "Link Window Group" command (`useWindowCommands`). */
+export function nextLinkGroup(current: number | null): number | null {
+  if (current === null) return 1;
+  return current >= MAX_LINK_GROUP ? null : current + 1;
+}
+
 /** A plot window's persistent record: geometry/z/winState (the MDI chrome
  *  state — item 3), a dataset binding (by id; nulled, never force-closed, when
  *  that dataset is removed — MULTI_PLOT_PLAN decision #4), its own `PlotView`
@@ -178,6 +192,13 @@ export interface PlotWindow {
   winState: WinState;
   view: PlotView;
   bg: PlotBg;
+  /** Cross-window link group (item 13, opt-in per the owner decision — never
+   *  automatic same-dataset coupling): windows sharing the same non-null
+   *  group share a uPlot cursor-sync group (crosshair tracks across them)
+   *  and an x-zoom/pan sync; y-scales stay per-window. null = unlinked (the
+   *  default). Like `bg`, a per-window display choice on the record itself,
+   *  not part of the swapped `PlotView`. Wired in `lib/windowsync.ts`. */
+  linkGroup: number | null;
 }
 
 const DEFAULT_WIDTH = 480;
@@ -416,6 +437,10 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
       winState: WIN_STATES.includes(o.winState as WinState) ? (o.winState as WinState) : "normal",
       view: sanitizeView(o.view),
       bg: PLOT_BGS.includes(o.bg as PlotBg) ? (o.bg as PlotBg) : "theme",
+      linkGroup:
+        typeof o.linkGroup === "number" && Number.isInteger(o.linkGroup) && o.linkGroup >= 1
+          ? o.linkGroup
+          : null,
     });
   }
   return out;

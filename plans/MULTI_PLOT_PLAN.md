@@ -11,7 +11,7 @@ working unchanged while extra windows render alongside.
 
 **Status:** Active
 **Created:** 2026-07-09
-**Updated:** 2026-07-09
+**Updated:** 2026-07-10
 
 ---
 
@@ -258,10 +258,6 @@ items 6–10.
 
 12. **Edge / grid snapping** — (S) snap frames to canvas edges and
     sibling window edges while dragging.
-
-13. **Cross-window crosshair + x-range linking** — (M) opt-in link groups
-    using uPlot sync groups (the `MultiPanelStage` idiom) so cursors/zoom
-    track across windows showing comparable x-axes.
 
 14. **Drag-and-drop dataset onto a window** — (M) drop a Library row onto
     a frame to rebind it (onto empty canvas = new window); companion
@@ -703,3 +699,51 @@ items 6–10.
   context-menu feature, `a214fea`); the lone `GridViewport.perf.test.tsx`
   timing case is pre-existing/load-dependent flake unrelated to this item —
   passes in isolation; `npm run build` green.
+- ~~**13. Cross-window crosshair + x-range linking**~~ (2026-07-10) — opt-in
+  link groups (the owner decision: never automatic same-dataset coupling).
+  Model: `PlotWindow` gained `linkGroup: number | null` (default null;
+  appended at every construction site — `mainWindow`/`createWindow`/
+  `duplicateWindow`, the last INHERITING the source's group exactly like
+  `bg`; `sanitizePlotWindows` clamps a missing/malformed value to null so a
+  pre-item-13 `.dwk` loads unlinked; persistence rides the existing item-7
+  `plotWindows` path for free — round-trip-tested) + a pure `nextLinkGroup`
+  cycle (null→1→2→3→null, `nextPlotBg`'s analogue) and a
+  `cycleWindowLinkGroup(id)` store action beside `setWindowBg`. Sync engine:
+  new `lib/windowsync.ts` — `windowSyncKey(n)` → `qz-win-link-<n>`;
+  same-group windows share that uPlot CURSOR-sync key (crosshair tracks via
+  uPlot's own sync registry) plus an x-zoom/pan `setScale` hook, the exact
+  `MultiPanelStage` idiom (`opts.cursor={...opts.cursor,sync:{key}}` + a
+  propagating setScale hook) lifted across window boundaries via a tiny
+  module-level instance registry (`registerSyncPlot`) — with the
+  re-entrancy guard moved from per-hook-closure to PER GROUP, since each
+  window builds its own hook instance (a per-instance flag would bounce
+  A→B→A forever). Y-scales stay per-window — only cursor + x-range sync,
+  what the multipanel idiom gives its panels. Threading: `PlotViewport`
+  gained an optional `syncKey` prop, patched onto `buildOpts`'s RESULT
+  (appending to `hooks.setScale`, never clobbering the existing
+  `setSelect`) so `buildOpts` itself and its other callers (MultiPanelStage/
+  WaterfallView/ReflPanel/InsetPlot) are untouched; the FOCUSED window
+  threads it from a derived `focusedWindowId→linkGroup` selector in
+  `PlotStage`, background windows via a `linkGroup` prop through
+  `WindowCanvas`→`BackgroundPlotWindow` — so focused and background windows
+  participate alike. Chrome: a ⧟ title-bar button (glyph, never emoji)
+  beside item 18's ◐, showing the group digit (JetBrains Mono) +
+  `--accent` highlight while linked, tooltipped with the cycle; and a
+  "Link Window Group (1 / 2 / 3 / Off)" command (`useWindowCommands`, 9th
+  Window-group entry, no shortcut) cycling the FOCUSED window's group via
+  the registry/⌘K — needed for the sole maximized default window, which
+  has no title bar (item 18's exact precedent). +6 `windowsync.test.ts`
+  (key mapping, same-group propagation, cross-group isolation, non-x/null-
+  range guards, the GROUP-level re-entrancy proof, unregister cleanup) + 3
+  `plotview.test.ts` (cycle, out-of-range clamp, sanitize round-trip) + 3
+  `useApp.test.ts` (create default, duplicate inherits, cycle action +
+  unknown-id no-op) + 1 `workspace.test.ts` (linkGroup `.dwk` round-trip +
+  pre-item-13 doc → null) + 3 `PlotWindowFrame.test.tsx` (⧟ cycles via the
+  store, digit/accent while linked, no drag started) + 2
+  `useWindowCommands.test.ts` (focused-only cycle, no-focus no-op; registry
+  assertion now 9) + 3 `WindowCanvas.test.tsx` (same-group key on focused
+  AND background opts + setSelect preserved, different-group keys,
+  unlinked-same-dataset windows get NO patch — the opt-in proof) + 1
+  `BackgroundPlotWindow.test.tsx` (linkGroup prop → cursor.sync.key,
+  null → no patch). Frontend 2239 green (+22 over the pre-item baseline
+  2217); `npm run build` green.

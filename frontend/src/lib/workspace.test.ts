@@ -560,6 +560,7 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     winState: "normal",
     view: { ...defaultPlotView(), yLog: true, plotTitle: "restored view" },
     bg: "theme",
+    linkGroup: null,
     ...over,
   });
 
@@ -606,5 +607,25 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     ) as Record<string, unknown>;
     doc.plotWindows = [win({ id: "w1" }), { id: "bad" }, null, "nope"];
     expect(parseWorkspace(JSON.stringify(doc)).plotWindows).toHaveLength(1);
+  });
+
+  it("round-trips a window's linkGroup and defaults it to null for a pre-item-13 doc (item 13)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(
+      serializeWorkspace({
+        datasets,
+        plotWindows: [win({ id: "w1", linkGroup: 2 }), win({ id: "w2" })],
+        focusedWindowId: "w1",
+      }),
+    );
+    expect(loaded.plotWindows[0].linkGroup).toBe(2);
+    expect(loaded.plotWindows[1].linkGroup).toBeNull();
+
+    // A doc saved before item 13 has no linkGroup field at all — loads unlinked.
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets, plotWindows: [win({ id: "w1" })], focusedWindowId: "w1" }),
+    ) as Record<string, unknown>;
+    (doc.plotWindows as Record<string, unknown>[]).forEach((w) => delete w.linkGroup);
+    expect(parseWorkspace(JSON.stringify(doc)).plotWindows[0].linkGroup).toBeNull();
   });
 });

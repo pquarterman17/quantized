@@ -89,4 +89,25 @@ describe("BackgroundPlotWindow", () => {
     const opts = created[0].opts as { scales: { y: { distr: number } } };
     expect(opts.scales.y.distr).toBe(3); // uPlot's log-scale distr code
   });
+
+  it("a linkGroup joins the uPlot cursor-sync group + x-range sync hook (item 13); no group = no sync patch", async () => {
+    render(<BackgroundPlotWindow dataset={DATASET} view={defaultPlotView()} linkGroup={2} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    const linked = created[0].opts as {
+      cursor: { sync?: { key: string } };
+      hooks?: { setScale?: unknown[] };
+    };
+    expect(linked.cursor.sync?.key).toBe("qz-win-link-2");
+    expect(linked.hooks?.setScale).toHaveLength(1);
+
+    created.length = 0;
+    render(<BackgroundPlotWindow dataset={DATASET} view={defaultPlotView()} linkGroup={null} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    const unlinked = created[0].opts as {
+      cursor: { sync?: unknown };
+      hooks?: { setScale?: unknown[] };
+    };
+    expect(unlinked.cursor.sync).toBeUndefined();
+    expect(unlinked.hooks?.setScale).toBeUndefined();
+  });
 });

@@ -15,6 +15,7 @@ import "uplot/dist/uPlot.min.css";
 
 import type { PlotPayload } from "../../lib/plotdata";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
+import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 import type { Accent, PeakWizardEditBridge, Theme } from "../../store/useApp";
 
 export interface PlotViewportProps extends Omit<BuildOptsArgs, "width" | "height" | "peakWizardEdit"> {
@@ -35,6 +36,14 @@ export interface PlotViewportProps extends Omit<BuildOptsArgs, "width" | "height
    *  instead of a fresh wrapper object that would otherwise be reconstructed
    *  (and compare unequal) on every render. */
   peakWizardEdit: PeakWizardEditBridge | null;
+  /** Cross-window link group (MULTI_PLOT_PLAN item 13): when set, this
+   *  instance joins the uPlot cursor-sync group `syncKey` AND the module
+   *  x-range sync registry (`lib/windowsync`) — the MultiPanelStage sync
+   *  idiom, patched onto `buildOpts`'s result rather than widening
+   *  `buildOpts` itself, so its other callers (MultiPanelStage,
+   *  WaterfallView, ReflPanel, InsetPlot) are untouched. Undefined (the
+   *  default, and every pre-item-13 caller) applies no patch at all. */
+  syncKey?: string;
 }
 
 /** The uPlot host + its create/resize/destroy effect. Renders a single
@@ -42,7 +51,7 @@ export interface PlotViewportProps extends Omit<BuildOptsArgs, "width" | "height
  *  every other Stage chrome (toolbar, legend, readouts, context menu) is a
  *  sibling owned by the caller. */
 export default function PlotViewport(props: PlotViewportProps) {
-  const { displayPayload, plotRef, theme, accent, peakWizardEdit, ...args } = props;
+  const { displayPayload, plotRef, theme, accent, peakWizardEdit, syncKey, ...args } = props;
   const hostRef = useRef<HTMLDivElement>(null);
 
   // (Re)create the uPlot instance when payload / size / theme change.
@@ -60,20 +69,31 @@ export default function PlotViewport(props: PlotViewportProps) {
     const titleH = args.title?.trim() ? 24 : 0;
     const h = (host.clientHeight || 400) - titleH;
     plotRef.current?.destroy();
-    plotRef.current = new uPlot(
-      buildOpts(displayPayload, {
-        ...args,
-        width: w,
-        height: h,
-        peakWizardEdit: peakWizardEdit && {
-          markers: peakWizardEdit.markers,
-          onAdd: peakWizardEdit.addPeakAt,
-          onRemove: peakWizardEdit.removePeak,
-        },
-      }),
-      displayPayload.data,
-      host,
-    );
+    const opts = buildOpts(displayPayload, {
+      ...args,
+      width: w,
+      height: h,
+      peakWizardEdit: peakWizardEdit && {
+        markers: peakWizardEdit.markers,
+        onAdd: peakWizardEdit.addPeakAt,
+        onRemove: peakWizardEdit.removePeak,
+      },
+    });
+    if (syncKey) {
+      // Item 13 (cross-window link groups) — the MultiPanelStage sync idiom,
+      // applied POST-buildOpts so no other buildOpts caller changes: cursor
+      // sync via uPlot's own registry keyed by `syncKey`; x-zoom/pan sync via
+      // the `lib/windowsync` group registry (its hook APPENDS to any hooks
+      // buildOpts set — never clobbers `setSelect`).
+      opts.cursor = { ...opts.cursor, sync: { key: syncKey } };
+      opts.hooks = {
+        ...opts.hooks,
+        setScale: [...(opts.hooks?.setScale ?? []), windowXSyncHook(syncKey)],
+      };
+    }
+    const plot = new uPlot(opts, displayPayload.data, host);
+    plotRef.current = plot;
+    const unregister = syncKey ? registerSyncPlot(syncKey, plot) : null;
 
     const ro = new ResizeObserver(() => {
       plotRef.current?.setSize({
@@ -84,6 +104,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     ro.observe(host);
     return () => {
       ro.disconnect();
+      unregister?.();
       plotRef.current?.destroy();
       plotRef.current = null;
     };
@@ -133,6 +154,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.fwhmResult,
     args.gadgetMode,
     args.bg,
+    syncKey,
   ]);
 
   return <div ref={hostRef} style={{ position: "absolute", inset: 8 }} />;

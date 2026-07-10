@@ -63,6 +63,7 @@ import {
   defaultPlotView,
   displayedWindowTitle,
   hydrateView,
+  nextLinkGroup,
   sanitizePlotWindows,
   snapshotView,
   tileLayout,
@@ -195,6 +196,7 @@ function mainWindow(datasetId: string | null): PlotWindow {
     winState: "maximized",
     view: defaultPlotView(),
     bg: "theme",
+    linkGroup: null,
   };
 }
 
@@ -891,6 +893,11 @@ interface AppState {
   // Per-window background override (item 18, owner request 2026-07-09): a
   // no-op for an unknown id. See `PlotBg`'s doc in `lib/plotview.ts`.
   setWindowBg: (id: string, bg: PlotBg) => void;
+  // Cross-window link groups (item 13): cycles one window's `linkGroup`
+  // null -> 1 -> 2 -> 3 -> null (the `nextLinkGroup` pure cycle). Same-group
+  // windows share a uPlot cursor-sync + x-range sync (`lib/windowsync.ts`).
+  // A no-op for an unknown id, mirroring `setWindowBg`.
+  cycleWindowLinkGroup: (id: string) => void;
   // Item 7 (.dwk + autosave persistence): `plotWindows` as it should be
   // SAVED — the focused window's LIVE view frozen into its record via the
   // same `snapshotView` chokepoint `focusWindow`/`closeWindow` use (the
@@ -2919,6 +2926,7 @@ export const useApp = create<AppState>((set, get) => ({
         winState: "normal",
         view: view ?? defaultPlotView(),
         bg: "theme",
+        linkGroup: null,
       };
       return { plotWindows: [...s.plotWindows, win] };
     });
@@ -3000,6 +3008,9 @@ export const useApp = create<AppState>((set, get) => ({
       winState: "normal",
       view,
       bg: src.bg,
+      // Item 13: a duplicate joins the source's link group (matching how it
+      // inherits `bg` — "clone this window" includes its comparison links).
+      linkGroup: src.linkGroup,
     };
     set({ plotWindows: [...s.plotWindows, dup] });
     return newId;
@@ -3128,6 +3139,12 @@ export const useApp = create<AppState>((set, get) => ({
   setWindowBg: (id, bg) =>
     set((s) => ({
       plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, bg } : w)),
+    })),
+  cycleWindowLinkGroup: (id) =>
+    set((s) => ({
+      plotWindows: s.plotWindows.map((w) =>
+        w.id === id ? { ...w, linkGroup: nextLinkGroup(w.linkGroup) } : w,
+      ),
     })),
   windowsForSave: () => {
     const s = get();

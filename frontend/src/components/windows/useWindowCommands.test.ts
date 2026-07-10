@@ -21,6 +21,7 @@ const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
   winState: "normal",
   view: defaultPlotView(),
   bg: "theme",
+  linkGroup: null,
   ...over,
 });
 
@@ -57,7 +58,7 @@ afterEach(() => {
 });
 
 describe("useWindowCommands — published registry entries", () => {
-  it("publishes exactly the 8 Window-group commands (item 18 adds Window Background) with the documented shortcuts", () => {
+  it("publishes exactly the 9 Window-group commands (item 13 adds Link Window Group) with the documented shortcuts", () => {
     renderHook(() => useWindowCommands());
     const ids = useCommands.getState().menuCommands.map((c) => c.id);
     expect(ids).toEqual([
@@ -67,6 +68,7 @@ describe("useWindowCommands — published registry entries", () => {
       "window-tile",
       "window-cascade",
       "window-bg-cycle",
+      "window-link-cycle",
       "window-focus-next",
       "window-focus-prev",
     ]);
@@ -182,6 +184,26 @@ describe("useWindowCommands — published registry entries", () => {
     renderHook(() => useWindowCommands());
     expect(() => act(() => action("window-bg-cycle").run())).not.toThrow();
     expect(useApp.getState().plotWindows.find((w) => w.id === "w1")!.bg).toBe("theme");
+  });
+
+  it("'Link Window Group' (item 13) cycles the FOCUSED window's link group, leaving other windows untouched", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "w2" })],
+      focusedWindowId: "w1",
+    });
+    renderHook(() => useWindowCommands());
+    act(() => action("window-link-cycle").run());
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")!.linkGroup).toBe(1);
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w2")!.linkGroup).toBeNull();
+    act(() => action("window-link-cycle").run());
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")!.linkGroup).toBe(2);
+  });
+
+  it("'Link Window Group' is a no-op with no focused window", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: null });
+    renderHook(() => useWindowCommands());
+    expect(() => act(() => action("window-link-cycle").run())).not.toThrow();
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")!.linkGroup).toBeNull();
   });
 });
 

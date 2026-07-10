@@ -163,6 +163,7 @@ describe("activateFromLibrary (WORKSHEET_PLAN item 15 — origin book click open
     z: 0,
     winState: "normal",
     bg: "theme",
+    linkGroup: null,
     view: defaultPlotView(),
   };
 
@@ -3164,6 +3165,7 @@ describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    linkGroup: null,
     ...over,
   });
 
@@ -3338,6 +3340,37 @@ describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)
     expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.bg).toBe("dark"); // unchanged
   });
 
+  it("createWindow defaults linkGroup to null — linking is opt-in, never automatic (item 13)", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: "w1", activeId: "d1" });
+    const newId = useApp.getState().createWindow();
+    expect(useApp.getState().plotWindows.find((w) => w.id === newId)?.linkGroup).toBeNull();
+  });
+
+  it("duplicateWindow inherits the source window's linkGroup (item 13 — matches bg inheritance)", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1", linkGroup: 2 })], focusedWindowId: "w1" });
+    const newId = useApp.getState().duplicateWindow("w1");
+    expect(useApp.getState().plotWindows.find((w) => w.id === newId)?.linkGroup).toBe(2);
+  });
+
+  it("cycleWindowLinkGroup cycles one window null -> 1 -> 2 -> 3 -> null without touching others; no-op for an unknown id (item 13)", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "w2", linkGroup: 3 })],
+      focusedWindowId: "w1",
+    });
+    const groupOf = (id: string) => useApp.getState().plotWindows.find((w) => w.id === id)?.linkGroup;
+    useApp.getState().cycleWindowLinkGroup("w1");
+    expect(groupOf("w1")).toBe(1);
+    useApp.getState().cycleWindowLinkGroup("w1");
+    expect(groupOf("w1")).toBe(2);
+    useApp.getState().cycleWindowLinkGroup("w1");
+    expect(groupOf("w1")).toBe(3);
+    useApp.getState().cycleWindowLinkGroup("w1");
+    expect(groupOf("w1")).toBeNull();
+    expect(groupOf("w2")).toBe(3); // untouched throughout
+    useApp.getState().cycleWindowLinkGroup("ghost");
+    expect(groupOf("w1")).toBeNull(); // unchanged
+  });
+
   it("moveWindow/resizeWindow update geometry only; raiseWindow bumps z above the rest", () => {
     useApp.setState({
       plotWindows: [
@@ -3366,6 +3399,7 @@ describe("useApp plot windows — item 4 focused-window routing", () => {
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    linkGroup: null,
     ...over,
   });
 
@@ -3481,6 +3515,7 @@ describe("useApp plot windows — item 6 (Tile/Cascade + canvas bounds)", () => 
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    linkGroup: null,
     ...over,
   });
 
@@ -3546,6 +3581,7 @@ describe("useApp plot windows — item 7 (.dwk + autosave persistence)", () => {
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    linkGroup: null,
     ...over,
   });
 
@@ -3629,6 +3665,7 @@ describe("useApp plot windows — item 8 (minimize/maximize/restore)", () => {
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    linkGroup: null,
     ...over,
   });
 
@@ -3835,6 +3872,7 @@ describe("useApp plot windows — item 10 (default titles, dedupe, rename)", () 
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    linkGroup: null,
     ...over,
   });
 
