@@ -38,6 +38,7 @@ import {
   moveFolder as treeMoveFolder,
   renameFolder as treeRenameFolder,
 } from "../lib/foldertree";
+import { isOriginBookDataset } from "../lib/grouping";
 import { is2DMap } from "../lib/mapdata";
 import { mergeDatasets } from "../lib/merge";
 import type { SmartFolder } from "../lib/smartfolders";
@@ -247,6 +248,12 @@ export type StageTab = "plot" | "map" | "worksheet";
 /** How excluded/filtered rows (#50/#53) render on the plot: "hide" drops them
  *  (gaps); "grey" draws them as muted markers. Fits exclude them either way. */
 export type ExcludedDisplay = "hide" | "grey";
+/** WORKSHEET_PLAN item 15 ("origin book click opens…"): what a Library click
+ *  on an Origin-project dataset does — "worksheet" (default, Origin's own
+ *  model: opening a workbook never touches your graphs) or "plot" (the
+ *  pre-item-12 behavior — restores the unconditional plot-intent activation
+ *  for every dataset, Origin or not). See `useApp.activateFromLibrary`. */
+export type OriginBookClickOpens = "worksheet" | "plot";
 export type PlotTool =
   | "zoom"
   | "pan"
@@ -323,7 +330,8 @@ export type PrefKey =
   | "sigFigs"
   | "notation"
   | "confirmRemove"
-  | "excludedDisplay";
+  | "excludedDisplay"
+  | "originBookClickOpens";
 
 interface AppState {
   datasets: Dataset[];
@@ -331,6 +339,16 @@ interface AppState {
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
   // "primary"; ctrl/shift-click extend `selectedIds` without changing the plot.
   selectedIds: string[];
+  // WORKSHEET_PLAN item 15 ("origin book click opens…"): the Worksheet tab's
+  // dataset override, set by `activateFromLibrary`'s worksheet-intent path
+  // instead of `activeId` — `activeId` stays the FOCUSED plot window's bound
+  // dataset (PlotStage/Inspector/every workshop read `activeId` and MUST
+  // keep doing so unchanged, per MULTI_PLOT_PLAN's facade), so switching
+  // Worksheet content here can never rebind or reset the plot. null = "no
+  // override" — `Worksheet.tsx` falls back to `activeId`, today's behavior.
+  // Cleared by `setActive` (any full plot-intent activation drops it — the
+  // plot it now shows is the worksheet's again, via the `activeId` fallback).
+  worksheetId: string | null;
   // Origin project figures (plan item 18): every graph window recovered from
   // an imported .opj, tagged with the import's file stem and (best-effort)
   // the dataset id it plots. `datasetId` is null when the figure's loose
@@ -385,6 +403,7 @@ interface AppState {
   notation: Notation;
   confirmRemove: boolean;
   excludedDisplay: ExcludedDisplay;
+  originBookClickOpens: OriginBookClickOpens;
   prefsOpen: boolean;
   yLog: boolean;
   xLog: boolean;
@@ -675,6 +694,21 @@ interface AppState {
   setFitSpec: (id: string, spec: { model: string } | null) => void;
   loadWorkspace: (ws: WorkspaceState) => void;
   setActive: (id: string) => void;
+  // WORKSHEET_PLAN item 15: the routed Library-click entry point — EVERY
+  // "click/select a row" site (DatasetRow's plain click + pre-menu select,
+  // the Library arrow-key nav, the worksheet's own sheet/book-switcher tabs)
+  // calls THIS, never `setActive` directly, so they all honor the
+  // `originBookClickOpens` preference the same way. Routes to a worksheet-
+  // intent path (sets `worksheetId`, switches to the Worksheet tab, leaves
+  // the focused plot window and its view untouched) for an Origin-project
+  // dataset when the pref is "worksheet" (default); falls through to
+  // `setActive` (unconditional plot-intent) for every non-Origin dataset,
+  // and for an Origin one when the pref is "plot". `setActive` itself stays
+  // the unconditional plot-intent primitive on purpose — explicit "Plot
+  // (make active)", figure apply, and the worksheet's own Plot-selection/
+  // Add-to-plot rebind (`lib/selectionplot` via `useWorksheetView.plotCols`)
+  // all call it directly.
+  activateFromLibrary: (id: string) => void;
   toggleSelected: (id: string) => void;
   selectRange: (id: string) => void;
   // Replace the multi-selection with an explicit id list (folder bulk ops,
@@ -961,7 +995,10 @@ interface Prefs {
   notation: Notation;
   confirmRemove: boolean;
   excludedDisplay: ExcludedDisplay;
+  originBookClickOpens: OriginBookClickOpens;
 }
+
+const ORIGIN_BOOK_CLICK_OPENS = ["worksheet", "plot"];
 
 const PREF_DEFAULTS: Prefs = {
   theme: "dark",
@@ -978,6 +1015,7 @@ const PREF_DEFAULTS: Prefs = {
   notation: "auto",
   confirmRemove: false,
   excludedDisplay: "hide",
+  originBookClickOpens: "worksheet",
 };
 
 function loadPrefs(): Prefs {
@@ -1002,6 +1040,9 @@ function loadPrefs(): Prefs {
       notation: NOTATIONS.includes(p.notation as string) ? (p.notation as Notation) : fb.notation,
       confirmRemove: bool(p.confirmRemove, fb.confirmRemove),
       excludedDisplay: p.excludedDisplay === "grey" ? "grey" : fb.excludedDisplay,
+      originBookClickOpens: ORIGIN_BOOK_CLICK_OPENS.includes(p.originBookClickOpens as string)
+        ? (p.originBookClickOpens as OriginBookClickOpens)
+        : fb.originBookClickOpens,
     };
   } catch {
     return fb;
@@ -1025,6 +1066,7 @@ function prefsOf(s: AppState): Prefs {
     notation: s.notation,
     confirmRemove: s.confirmRemove,
     excludedDisplay: s.excludedDisplay,
+    originBookClickOpens: s.originBookClickOpens,
   };
 }
 
@@ -1056,6 +1098,7 @@ const _mainWindow = mainWindow(null);
 export const useApp = create<AppState>((set, get) => ({
   datasets: [],
   activeId: null,
+  worksheetId: null,
   selectedIds: [],
   originFigures: [],
   reports: [],
@@ -1082,6 +1125,7 @@ export const useApp = create<AppState>((set, get) => ({
   defaultGrid: _initialPrefs.defaultGrid,
   antialias: _initialPrefs.antialias,
   excludedDisplay: _initialPrefs.excludedDisplay,
+  originBookClickOpens: _initialPrefs.originBookClickOpens,
   sigFigs: _initialPrefs.sigFigs,
   notation: _initialPrefs.notation,
   confirmRemove: _initialPrefs.confirmRemove,
@@ -1837,6 +1881,9 @@ export const useApp = create<AppState>((set, get) => ({
         folders: migrated.folders,
         expandedFolders: [...new Set([...(ws.expandedFolders ?? []), ...migrated.createdFolderIds])],
         activeId: active,
+        // item 15: never round-trips (transient UI, like `stageTab`) — a
+        // fresh load always falls back to `activeId`.
+        worksheetId: null,
         selectedIds: selected.length ? selected : active ? [active] : [],
         originFigures: ws.originFigures ?? [], // restored from the .dwk (v2 persists them)
         smartFolders: ws.smartFolders ?? [], // saved queries (item 9) — .dwk persists them
@@ -1928,6 +1975,12 @@ export const useApp = create<AppState>((set, get) => ({
       const ds = s.datasets.find((d) => d.id === id);
       return {
         activeId: id,
+        // A full plot-intent activation always drops any worksheet-only
+        // override (item 15) — the plot it now shows IS `id`, so the
+        // Worksheet tab's `worksheetId ?? activeId` fallback already tracks
+        // it; a stale override would otherwise strand the worksheet on the
+        // PREVIOUS browse target.
+        worksheetId: null,
         selectedIds: [id], // plain click collapses the selection to this one row
         // MULTI_PLOT_PLAN item 4: setActive is scoped to the FOCUSED window —
         // it rebinds that window's dataset (unfocused windows keep whatever
@@ -1983,6 +2036,33 @@ export const useApp = create<AppState>((set, get) => ({
     // whatever `addDataset` left active after a bulk import, a .dwk reload).
     get().ensureBookData(id);
   },
+  // WORKSHEET_PLAN item 15 ("origin book click opens…" — owner: "clicking the
+  // books tries to plot it all rather than open a spreadsheet like in
+  // Origin"). An Origin-project dataset (`isOriginBookDataset`) routes to a
+  // worksheet-intent activation — under the default pref: just switches the
+  // Worksheet tab to `id` and collapses the row selection, WITHOUT touching
+  // `activeId`, `plotWindows`, or any of the singleton view fields (Origin's
+  // own model: opening a workbook never touches your graphs). Everything
+  // else (a non-Origin dataset, or the pref set to "plot") falls through to
+  // `setActive` — the unconditional plot-intent activation, unchanged.
+  activateFromLibrary: (id) => {
+    const s = get();
+    const ds = s.datasets.find((d) => d.id === id);
+    if (ds && isOriginBookDataset(ds) && s.originBookClickOpens === "worksheet") {
+      set({
+        worksheetId: id,
+        selectedIds: [id], // plain click collapses the selection, same as setActive
+        stageTab: "worksheet",
+      });
+      // #38: WorksheetPane's own pending-effect covers the render-side
+      // fetch once mounted; kick it here too (single-flight — harmless if
+      // it's already in flight) so Library/Inspector consumers keying off
+      // `pending` update without waiting for a mount.
+      get().ensureBookData(id);
+      return;
+    }
+    get().setActive(id);
+  },
   // Ctrl/Cmd-click: add or remove a row from the multi-selection WITHOUT changing
   // the plotted/active dataset (the plot only follows a plain click).
   toggleSelected: (id) =>
@@ -2015,6 +2095,9 @@ export const useApp = create<AppState>((set, get) => ({
       const datasets = s.datasets.filter((d) => d.id !== id);
       const activeId =
         s.activeId === id ? (datasets[0]?.id ?? null) : s.activeId;
+      // item 15: drop a worksheet-only override pointing at the removed
+      // dataset — else the Worksheet tab would strand on a dead id.
+      const worksheetId = s.worksheetId === id ? null : s.worksheetId;
       const selectedIds = s.selectedIds.filter((x) => x !== id);
       const removed = new Set([id]);
       const originFigures = pruneOriginFigureRefs(s.originFigures, removed);
@@ -2028,7 +2111,7 @@ export const useApp = create<AppState>((set, get) => ({
       const plotWindows = s.plotWindows.map((w) =>
         w.datasetId && removed.has(w.datasetId) ? { ...w, datasetId: null } : w,
       );
-      return { datasets, activeId, selectedIds, originFigures, reports, figureDocs, plotWindows };
+      return { datasets, activeId, worksheetId, selectedIds, originFigures, reports, figureDocs, plotWindows };
     }),
   // Delete key: remove every selected dataset (falling back to the active one if
   // nothing is multi-selected); reselect the first survivor so the plot recovers.
@@ -2041,6 +2124,7 @@ export const useApp = create<AppState>((set, get) => ({
       const datasets = s.datasets.filter((d) => !ids.has(d.id));
       const activeId =
         s.activeId && !ids.has(s.activeId) ? s.activeId : (datasets[0]?.id ?? null);
+      const worksheetId = s.worksheetId && ids.has(s.worksheetId) ? null : s.worksheetId;
       const originFigures = pruneOriginFigureRefs(s.originFigures, ids);
       const reports = pruneReportRefs(s.reports, ids);
       const figureDocs = s.figureDocs.map((f) =>
@@ -2052,6 +2136,7 @@ export const useApp = create<AppState>((set, get) => ({
       return {
         datasets,
         activeId,
+        worksheetId,
         selectedIds: activeId ? [activeId] : [],
         originFigures,
         reports,
@@ -2068,6 +2153,7 @@ export const useApp = create<AppState>((set, get) => ({
       const datasets = s.datasets.filter((d) => !drop.has(d.id));
       const activeId =
         s.activeId && !drop.has(s.activeId) ? s.activeId : (datasets[0]?.id ?? null);
+      const worksheetId = s.worksheetId && drop.has(s.worksheetId) ? null : s.worksheetId;
       const selectedIds = s.selectedIds.filter((x) => !drop.has(x));
       const originFigures = pruneOriginFigureRefs(s.originFigures, drop);
       const reports = pruneReportRefs(s.reports, drop);
@@ -2077,7 +2163,7 @@ export const useApp = create<AppState>((set, get) => ({
       const plotWindows = s.plotWindows.map((w) =>
         w.datasetId && drop.has(w.datasetId) ? { ...w, datasetId: null } : w,
       );
-      return { datasets, activeId, selectedIds, originFigures, reports, figureDocs, plotWindows };
+      return { datasets, activeId, worksheetId, selectedIds, originFigures, reports, figureDocs, plotWindows };
     }),
 
   // Wipe the entire library. Reuses loadWorkspace's "replace everything" reset
@@ -2158,6 +2244,7 @@ export const useApp = create<AppState>((set, get) => ({
       return {
         datasets,
         activeId: clone.id,
+        worksheetId: null, // item 15: the clone becomes the plot AND worksheet target
         selectedIds: [clone.id],
         stageTab: nextStageTab(clone, s.stageTab),
         xKey: null,

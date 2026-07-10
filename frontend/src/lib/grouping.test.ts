@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { bookLabel, familyBooks, originBookFamilies, originSheetGroups } from "./grouping";
+import { bookLabel, familyBooks, isOriginBookDataset, originBookFamilies, originSheetGroups } from "./grouping";
 import type { Dataset } from "./types";
 
 const ds = (id: string): Dataset => ({
@@ -15,6 +15,25 @@ const book = (id: string, name: string, originBook = "Book1"): Dataset => ({
   id,
   name,
   data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: { origin_book: originBook } },
+});
+
+describe("isOriginBookDataset", () => {
+  it("is true for a dataset stamped with origin_book metadata", () => {
+    expect(isOriginBookDataset(book("b1", "XRD:Book1"))).toBe(true);
+  });
+
+  it("is false for an ordinary (non-Origin) dataset", () => {
+    expect(isOriginBookDataset(ds("plain"))).toBe(false);
+  });
+
+  it("is false for a dataset with no metadata object at all", () => {
+    const noMeta: Dataset = { id: "x", name: "x", data: { ...ds("x").data, metadata: undefined as unknown as Record<string, unknown> } };
+    expect(isOriginBookDataset(noMeta)).toBe(false);
+  });
+
+  it("doesn't false-positive on a name containing a colon (needs the metadata, not the name)", () => {
+    expect(isOriginBookDataset(ds("a:1"))).toBe(false);
+  });
 });
 
 describe("originBookFamilies", () => {

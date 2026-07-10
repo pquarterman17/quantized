@@ -43,6 +43,25 @@ describe("ContextMenu", () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
+  // A portaled child's synthetic click still bubbles through the REACT tree
+  // (not the DOM tree) to whatever rendered <ContextMenu> — e.g. a Library
+  // row's own onClick. Without stopPropagation, clicking a menu item would
+  // ALSO fire the host's click handler (WORKSHEET_PLAN item 15 surfaced this
+  // via "Plot (make active)" spuriously re-triggering the row's own click
+  // routing right after).
+  it("an item click does not bubble to an ancestor's onClick (React-tree portal bubbling)", () => {
+    const run = vi.fn();
+    const hostClick = vi.fn();
+    render(
+      <div onClick={hostClick}>
+        <ContextMenu x={0} y={0} items={[{ label: "Go", run }]} onClose={vi.fn()} />
+      </div>,
+    );
+    fireEvent.click(screen.getByText("Go"));
+    expect(run).toHaveBeenCalledOnce();
+    expect(hostClick).not.toHaveBeenCalled();
+  });
+
   it("portals to document.body (escapes overflow-clipped panels)", () => {
     const { container } = render(<ContextMenu x={0} y={0} items={items} onClose={vi.fn()} />);
     // The menu is not a descendant of the render container — it lives on body.

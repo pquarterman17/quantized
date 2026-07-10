@@ -180,14 +180,20 @@ export default function App() {
             return;
           case "ArrowUp":
           case "ArrowDown": {
-            // Previous / next dataset (wraps); plain click semantics.
+            // Previous / next dataset (wraps); plain click semantics — routes
+            // through `activateFromLibrary` (WORKSHEET_PLAN item 15), same as
+            // a Library row click, so stepping onto an Origin book opens its
+            // Worksheet rather than rebinding the plot. Steps from whatever's
+            // currently browsed (`worksheetId ?? activeId`), not just the
+            // plotted dataset, so repeated arrow presses walk the list in
+            // order even while a worksheet-intent override is in play.
             if (s.datasets.length < 2) return;
             e.preventDefault();
             const n = s.datasets.length;
-            const cur = s.datasets.findIndex((d) => d.id === s.activeId);
+            const cur = s.datasets.findIndex((d) => d.id === (s.worksheetId ?? s.activeId));
             const base = cur < 0 ? 0 : cur;
             const delta = e.key === "ArrowDown" ? 1 : -1;
-            s.setActive(s.datasets[(((base + delta) % n) + n) % n].id);
+            s.activateFromLibrary(s.datasets[(((base + delta) % n) + n) % n].id);
             return;
           }
           case "p":

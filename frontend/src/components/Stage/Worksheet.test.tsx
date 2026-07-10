@@ -32,8 +32,32 @@ beforeEach(() => {
   useApp.setState({
     datasets: [{ id: "d1", name: "scan.dat", data }],
     activeId: "d1",
+    worksheetId: null, // item 15: no lingering override from an earlier test
     status: "",
     selection: null,
+  });
+});
+
+describe("Worksheet worksheetId override (WORKSHEET_PLAN item 15)", () => {
+  it("shows worksheetId's dataset instead of activeId's when both are set", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "scan.dat", data },
+        { id: "d2", name: "other.dat", data: { ...data, labels: ["X", "Y"] } },
+      ],
+      activeId: "d1",
+      worksheetId: "d2",
+    });
+    render(<Worksheet />);
+    const headers = screen.getAllByRole("columnheader");
+    // Header cells: [ #, x(time), <first channel>, … ] — d2's is "X", not "A".
+    expect(headers[2].textContent).toContain("X");
+  });
+
+  it("falls back to activeId when worksheetId is null (today's behavior)", () => {
+    render(<Worksheet />);
+    const headers = screen.getAllByRole("columnheader");
+    expect(headers[2].textContent).toContain("A");
   });
 });
 
@@ -568,6 +592,35 @@ describe("Worksheet selection → plot (item 7)", () => {
     expect(useApp.getState().yKeys).toEqual([0]);
     // Row exclusion (#50) is an entirely separate dimension — untouched by the plot action.
     expect(useApp.getState().datasets[0].excludedRows).toEqual([1]);
+  });
+
+  // WORKSHEET_PLAN item 15: a worksheet-intent Library click can leave the
+  // worksheet showing a dataset the focused plot window ISN'T bound to
+  // (`worksheetId` overrides `activeId` — see `Worksheet.tsx`). Plot
+  // selection/Add to plot are explicit plot-intent, so they must rebind the
+  // focused window to the worksheet's dataset FIRST, deliberately — the
+  // Origin workflow this whole feature is FOR: "open book as sheet → select
+  // columns → Plot selection → focused window shows it".
+  it("Plot selection rebinds the focused window to the worksheet's dataset when they differ", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "scan.dat", data: originData },
+        { id: "other", name: "other.dat", data },
+      ],
+      activeId: "other", // the focused plot window is bound to a DIFFERENT dataset
+      worksheetId: "d1", // …while the worksheet shows d1 (worksheet-intent)
+      xKey: null,
+      yKeys: null,
+      errKeys: {},
+    });
+    render(<Worksheet />);
+    fireEvent.click(header(2)); // R++ (col 0 of d1)
+    fireEvent.click(screen.getByRole("button", { name: "Plot selection" }));
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d1"); // rebound — plot-intent, deliberate
+    expect(s.worksheetId).toBeNull(); // setActive's usual reset cleared the override
+    expect(s.yKeys).toEqual([0]); // R++ plotted, exactly as the non-rebind case above
+    expect(s.errKeys).toEqual({ 0: 1 }); // dR++ paired as its error, never plotted itself
   });
 });
 

@@ -187,6 +187,18 @@ export default function PreferencesDialog() {
                   Drag the plot to box-zoom; double-click to autoscale. Right-click the plot, a
                   dataset, a legend entry, or a worksheet column for context actions.
                 </div>
+                <PrefRow
+                  label="Origin book click opens"
+                  hint="clicking an imported Origin workbook in the Library"
+                >
+                  <SegmentedControl
+                    options={["Worksheet", "Plot"]}
+                    value={p.originBookClickOpens === "plot" ? "Plot" : "Worksheet"}
+                    onChange={(v) =>
+                      setPref("originBookClickOpens", v === "Plot" ? "plot" : "worksheet")
+                    }
+                  />
+                </PrefRow>
                 <PrefRow label="Confirm before removing data">
                   <Switch
                     checked={p.confirmRemove}

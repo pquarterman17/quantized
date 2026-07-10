@@ -11,6 +11,7 @@ afterEach(() => {
   s.setPref("reduceMotion", false);
   s.setPref("confirmRemove", false);
   s.setPref("excludedDisplay", "hide");
+  s.setPref("originBookClickOpens", "worksheet");
 });
 
 describe("preferences", () => {
@@ -41,5 +42,12 @@ describe("preferences", () => {
     useApp.getState().setPref("excludedDisplay", "grey");
     expect(useApp.getState().excludedDisplay).toBe("grey");
     expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").excludedDisplay).toBe("grey");
+  });
+
+  it("originBookClickOpens (WORKSHEET_PLAN item 15) defaults to worksheet and persists when changed to plot", () => {
+    expect(useApp.getState().originBookClickOpens).toBe("worksheet");
+    useApp.getState().setPref("originBookClickOpens", "plot");
+    expect(useApp.getState().originBookClickOpens).toBe("plot");
+    expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").originBookClickOpens).toBe("plot");
   });
 });

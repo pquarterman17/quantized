@@ -195,7 +195,19 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
   const clearColSelection = () => setSelectedCols(new Set());
 
   function plotCols(cols: number[], mode: "replace" | "add") {
-    const result = resolveSelectionPlot(ds.data, new Set(cols), { xKey, yKeys }, mode);
+    // Plot-intent (WORKSHEET_PLAN item 15 "origin book click opens…"):
+    // "Plot selection"/"Add to plot" mean PUT THIS ON THE GRAPH. If the
+    // worksheet is showing a dataset the focused plot window ISN'T bound to
+    // (a worksheet-intent Library click, `useApp.activateFromLibrary`,
+    // deliberately left the window alone), rebind the focused window to
+    // THIS dataset first — mirrors Origin's "select columns, then Plot"
+    // landing on the active graph. Re-reads xKey/yKeys AFTER the rebind
+    // (`setActive` resets them) rather than trusting the closured values
+    // above, which would otherwise describe the PREVIOUS plot's axes.
+    const store = useApp.getState();
+    if (store.activeId !== ds.id) store.setActive(ds.id);
+    const cur = useApp.getState();
+    const result = resolveSelectionPlot(ds.data, new Set(cols), { xKey: cur.xKey, yKeys: cur.yKeys }, mode);
     for (const action of result.actions) {
       if (action.kind === "setXKey") setXKey(action.xKey);
       else if (action.kind === "setYKeys") setYKeys(action.yKeys);

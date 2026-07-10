@@ -68,7 +68,17 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
             key={it.label}
             className={`qzk-menu-item${it.danger ? " danger" : ""}`}
             disabled={it.disabled}
-            onClick={() => {
+            onClick={(e) => {
+              // `createPortal` moves the DOM node to <body>, but a React
+              // synthetic event still bubbles through the REACT tree (the
+              // menu's JSX parent — e.g. a Library row) regardless of DOM
+              // placement. Without this, an item click also fires whatever
+              // onClick the host it's rendered inside owns (harmless when
+              // that handler happened to do the same thing the menu item
+              // did, but a real bug once they can diverge — WORKSHEET_PLAN
+              // item 15's "Plot (make active)" vs. a plain row click is the
+              // case that surfaced it).
+              e.stopPropagation();
               onClose();
               it.run();
             }}
