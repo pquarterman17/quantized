@@ -133,6 +133,35 @@ describe("buildOverlayDataset", () => {
     expect(overlayCurveLabels(ds)).toEqual({ 0: "Nb" }); // col 1 absent
   });
 
+  // Owner repro (PNR.opj live import): "%(1)"/"%(2)" auto-template codes must
+  // resolve to the bound curve's own column long name, not show raw.
+  it("resolves an auto-template legend_labels entry (%(n)) to the bound curve's column long name", () => {
+    const fig = {
+      ...figure([
+        { book: "Book2", x: "A", y: "B" }, // overlay col 0
+        { book: "Book1", x: "A", y: "B" }, // overlay col 1
+      ]),
+      legend_labels: ["%(1)", "%(2)"],
+    };
+    const ds = buildOverlayDataset(fig, [b1, b2]);
+    expect(ds!.metadata.origin_curve_labels).toEqual(["B-long", "B-long"]);
+    expect(overlayCurveLabels(ds)).toEqual({ 0: "B-long", 1: "B-long" });
+  });
+
+  it("leaves a %(n) template unresolved (raw) when it references a curve whose book/channel never bound", () => {
+    const fig = {
+      ...figure([
+        { book: "Book2", x: "A", y: "B" }, // curveIdx 0 -> overlay col 0
+        { book: "Missing", x: "A", y: "B" }, // curveIdx 1 -> never resolves (unknown book)
+        { book: "Book1", x: "A", y: "B" }, // curveIdx 2 -> overlay col 1
+      ]),
+      legend_labels: ["%(1)", "", "%(2)"], // curve 3's caption cross-references curve 2 (unresolved)
+    };
+    const ds = buildOverlayDataset(fig, [b1, b2]);
+    expect(ds!.metadata.origin_curve_labels).toEqual(["B-long", "%(2)"]);
+    expect(overlayCurveLabels(ds)).toEqual({ 0: "B-long", 1: "%(2)" });
+  });
+
   it("overlayCurveLabels is empty for a non-overlay dataset or an absent legend", () => {
     expect(overlayCurveLabels(b1.data)).toEqual({});
     expect(overlayCurveLabels(null)).toEqual({});

@@ -144,9 +144,13 @@ export interface OriginFigure {
   y_title?: string;
   /** Secondary-Y axis title (double-Y graphs); decoded but not yet wired. */
   y2_title?: string;
-  /** Per-curve legend labels (1-based curve order), including hand-edited
-   *  overrides. Decoded; wired into seriesLabels by `figureChannelSelection`
-   *  (curve-binding order, count-compatible prefix only — see its doc). */
+  /** Per-curve legend labels (1-based curve order): either hand-edited
+   *  literal text, or Origin's auto template (`%(n)`, optionally prefixed by
+   *  a `\l(n)` swatch marker) — resolved to the bound curve's display name by
+   *  `resolveLegendTemplate` before it reaches `seriesLabels`, in
+   *  `figureChannelSelection` (curve-binding order, count-compatible prefix
+   *  only — see its doc) and the cross-book overlay (`buildOverlayDataset`/
+   *  `overlayCurveLabels`). */
   legend_labels?: string[];
   /** Origin's decoded major-tick increment for this axis
    *  (`io/origin_project/figures.py`/`figures_opju.py`, oracle-verified). On a
