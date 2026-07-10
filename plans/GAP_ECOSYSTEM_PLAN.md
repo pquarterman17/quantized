@@ -13,7 +13,7 @@ writer (#27, audited and kept deferred).
 
 **Status:** Active
 **Created:** 2026-07-07
-**Updated:** 2026-07-08
+**Updated:** 2026-07-09
 
 ---
 
@@ -521,3 +521,52 @@ written below.
   click-through-the-app + canvas screenshot pass (`tools/visual` headless-
   Chrome harness) was not run this pass — the geometry math and store wiring
   are test-proven, the rendered pixels are not.
+
+  **Residual fix (2026-07-09) — frame-coincident y2-in-panel pairing:**
+  the deferred eyeball caveat above was exactly the gap: the owner's live
+  testing of `PNR.opj` (folder `S7`, curves bound to `Book33`, graph window
+  `Graph24`) found a 3-layer graph rendering as a bogus 1x3 ordinal column
+  instead of a 2-panel layout with a right-Y overlay on the bottom panel.
+  Root cause confirmed by direct backend decode: layers 2 (Nuclear SLD,
+  `y_from/y_to = -1/10`) and 3 (Magnetic SLD, `y_from/y_to = -0.5/2.5`,
+  `y2_title` set) decode BYTE-IDENTICAL frame quads
+  (`{left:867,top:2701,right:6686,bottom:4256}`) — a double-Y overlay pair —
+  while layer 1 (Reflectivity) sits in its own distinct frame. Every pair
+  of frames `computePanelLayout` sees overlap on trips its "frames overlap
+  rather than tile the page" guard for the WHOLE figure, collapsing the
+  real 2-panel shape to the 1xN ordinal fallback. Fix: `originFigures.ts`
+  gained `figureFrameY2Pairs` (detects a coincident-frame pair via the new
+  `originPanels.framesCoincide` predicate — near-total MUTUAL overlap,
+  distinct from the partial/one-sided overlap that still means "untrusted
+  geometry" — gated by the same-dataset/curves-present checks
+  `doubleYPartner` uses PLUS a distinct-y-range/matching-x-range guard so a
+  coincidentally-identical pair of REAL panels never false-positives) and
+  `resolveSpatialPanels` (merges a detected pair into ONE panel — the y2
+  layer's channels/range/log/step/label move to new `SpatialPanel` y2
+  fields, mirroring the 2-layer double-Y apply — BEFORE handing the reduced
+  frame set to `computePanelLayout`, so the merged y2 frame never reaches
+  the clusterer as a second cell; a genuine non-double-Y coincidence among
+  the REMAINING frames still correctly bails to the ordinal fallback,
+  `computePanelLayout` itself untouched). `multipanel.ts`'s `SpatialPanel`
+  gained `y2Keys`/`y2Lim`/`y2Log`/`y2Step`/`y2AxisLabel`;
+  `useMultiPanelStage.ts` wires them through `fetchPlot`/`buildOpts` per
+  panel. `useApp.ts`'s spatial-apply block now calls `resolveSpatialPanels`
+  in place of the old inline `resolveFigurePanels` + `computePanelLayout`
+  pairing. Verified against the real corpus via `tools/visual/
+  origin_figures.mjs` on the full `PNR.opj` (101 graph-window families):
+  Graph24 now renders 2 panels (bottom carries Nuclear SLD left-axis +
+  Magnetic SLD right-axis, `y2AxisLabel` sourced from the y2 layer's
+  `y2_title` — the field `types.ts` flagged "decoded but not yet wired",
+  now wired for this merge path only) — pixel-matches the Origin COM oracle
+  export's panel/axis layout. The SAME fix applies to 7 other real
+  multi-layer families in this one corpus (`Graph27`, `Graph40`, `Graph14`,
+  `Graph49`, `CoMainFigMerged` — 2 pairs, `Graph34`, `Cosupplementalfig700mT`),
+  confirming the general (non-special-cased) heuristic; a full before/after
+  manifest diff over all 101 families shows ONLY those 8 changed (in
+  `structural_pass`, not `layers`/`mode`/`dataset`/`folder`) — the
+  harness's `panel_count === family.length` comparator predates the merge
+  and doesn't know about it (its own docstring already says mismatches are
+  gap-register data, not CI failures; left unmodified, out of this fix's
+  surface). 18 new unit tests (`originPanels.test.ts` `framesCoincide` ×6,
+  `originFigures.test.ts` `figureFrameY2Pairs`/`resolveSpatialPanels` ×12);
+  frontend 173 files / 2042 tests green; `npm run build` green.

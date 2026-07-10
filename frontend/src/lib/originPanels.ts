@@ -49,6 +49,37 @@ const CLUSTER_TOL_FRACTION = 0.08;
  *  report a bogus grid. */
 const OVERLAP_TOL_FRACTION = 0.02;
 
+/** Overlap fraction — relative to BOTH frames' own areas — above which two
+ *  frames are considered to occupy essentially the SAME page rectangle.
+ *  Origin's double-Y idiom draws a y2 overlay layer at its host's EXACT
+ *  frame (verified against the PNR/S7/Book33 corpus figure: layers 2 and 3
+ *  decode byte-identical frame quads), so near-total MUTUAL overlap is a
+ *  "same panel" signal — structurally different from the partial/one-sided
+ *  overlap `OVERLAP_TOL_FRACTION` guards against above (a real multi-panel
+ *  layout whose decoded frames disagree, which should still bail to the
+ *  ordinal fallback). Consumed by `originFigures.figureFrameY2Pairs`, which
+ *  also checks the figure-level y2-ness heuristics (dataset/curves/y-range/
+ *  x-range) before treating a coincident pair as a real double-Y overlay —
+ *  this predicate is pure geometry only, so a caller wanting the full
+ *  picture must not skip that further check. */
+const COINCIDENT_OVERLAP_FRACTION = 0.9;
+
+/** True when `a` and `b` occupy (near enough) the same page rectangle: BOTH
+ *  directions of overlap-vs-own-area must clear `COINCIDENT_OVERLAP_FRACTION`,
+ *  so a large frame that merely CONTAINS a much smaller one (an inset/legend
+ *  box, or the "nested, not tiled" shape `computePanelLayout`'s own fallback
+ *  test already covers) never counts as coincidence. Degenerate frames never
+ *  coincide. */
+export function framesCoincide(a: FrameQuad, b: FrameQuad): boolean {
+  if (isDegenerate(a) || isDegenerate(b)) return false;
+  const ov = overlapArea(a, b);
+  if (ov <= 0) return false;
+  const aArea = area(a);
+  const bArea = area(b);
+  if (aArea <= 0 || bArea <= 0) return false;
+  return ov / aArea > COINCIDENT_OVERLAP_FRACTION && ov / bArea > COINCIDENT_OVERLAP_FRACTION;
+}
+
 function isDegenerate(f: FrameQuad): boolean {
   return !(f.right > f.left) || !(f.bottom > f.top);
 }

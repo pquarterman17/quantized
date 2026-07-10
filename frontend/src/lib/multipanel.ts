@@ -56,6 +56,19 @@ export interface SpatialPanel {
   /** This panel's OWN layer's floating text marks, in its own data coords
    *  (fix #5 — a multi-panel apply used to drop every layer's annotations). */
   annotations?: Annotation[];
+  /** Secondary (right) Y axis for THIS panel — set when a frame-coincident
+   *  y2 overlay layer merged into it (decode-plan #36 residual: the
+   *  PNR/S7/Book33 repro, where a 3-layer graph rendered as a bogus 1x3
+   *  ordinal stack instead of 2 panels with the second carrying a right-Y
+   *  overlay — see `originFigures.figureFrameY2Pairs`/`resolveSpatialPanels`).
+   *  Mirrors the store's own single-plot double-Y apply fields
+   *  (`y2Keys`/`y2Lim`/`y2Log`/`y2Step`/`y2AxisLabel`) but scoped to this one
+   *  panel instead of the whole plot. Absent/null on an ordinary panel. */
+  y2Keys?: number[] | null;
+  y2Lim?: [number, number] | null;
+  y2Log?: boolean | null;
+  y2Step?: number | null;
+  y2AxisLabel?: string;
   row: number;
   col: number;
 }
