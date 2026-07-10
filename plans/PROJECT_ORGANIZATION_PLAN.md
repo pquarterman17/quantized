@@ -12,7 +12,7 @@ away on import and re-approximated from name prefixes.
 
 **Status:** Active
 **Created:** 2026-07-04
-**Updated:** 2026-07-09 (items 8 + 9 complete — folder bulk ops and
+**Updated:** 2026-07-10 (booked item 11 — useApp.ts window-slice extraction; 2026-07-09: items 8 + 9 complete — folder bulk ops and
 tags/smart-folders; the only open item is 10, decomposing the 3
 grandfathered over-ceiling components — App.tsx already ratcheted 987→954,
 and the `PlotStage.tsx` sub-task closed as a side-effect of MULTI_PLOT_PLAN
@@ -102,6 +102,14 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
           now under the generic 400 ceiling).
     - [ ] `components/workshops/calculators/ThinFilmTab.tsx` (442) — split the
           calculator sub-tabs
+
+11. **Extract the window-management slice from `store/useApp.ts`** — the
+    2026-07-10 guards review flagged `useApp.ts` at ~3,900 lines (+~450 from
+    the MULTI_PLOT Tier-3 batch); the window slice (create/close/focus/
+    rebind/link/pin/snapshot/document actions + their helpers) is
+    self-contained and the natural first extraction (a Zustand slice file or
+    a `store/windows.ts` composed in). No test enforces store size today —
+    consider a ratchet like #7's once split.
 
 ---
 
