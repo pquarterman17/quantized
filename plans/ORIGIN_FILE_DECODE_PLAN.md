@@ -28,8 +28,12 @@ neither fixed — see item text + `docs/origin_project_format.md`; #39
 gallery tooling merged, oracle re-export in progress; **#43 CLOSED** — the
 owner's two live-testing annotation-placement repros (PNR/Book15 label
 over a tick, PNR/Book14 Graph11 multi-panel labels clipped on the y axis)
-were ONE frontend `ctx.textAlign` inheritance bug, not a decode fault — see
-Completed)
+were ONE frontend `ctx.textAlign` inheritance bug, not a decode fault; **#44
+CLOSED** — the owner's rich-text-escape axis-label repro (same session)
+traced to column Long Name/Unit/Comment + book titles never running
+through `clean_richtext` (axis titles themselves were already correct);
+fixed at `opj._build_book`, the one chokepoint shared by `.opj`/`.opju` —
+see Completed)
 Previous: 2026-07-07 (item 34 CLOSED — the native `.opj` writer now
 loads in real Origin and re-exports value-exact, see Completed; item 35's
 stale W3 body text reconciled — the item was already CLOSED 2026-07-04 at
@@ -401,6 +405,76 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**44. Rich-text escapes leaking into axis labels (owner PNR.opj repro,
+  Book14/Graph11 + elsewhere)**~~ (2026-07-09) — the owner's live-testing
+  report ("the x-axis label is weird — some have `(A(A-1)` and others have
+  `(Q(nm-1)`, also the superscript is broken on ALL") from the same PNR.opj
+  session as #43. Two separate findings, both corpus-swept:
+  - **Graph titles/legends/annotations were already correct.** Direct
+    extraction (`figures.extract_figures` against `PNR.opj`, byte-hex
+    verified) shows the existing `origin_richtext.clean_richtext`
+    (2026-07-05) already decodes every axis title in the corpus correctly —
+    e.g. `Q (nm\+(-1))` → `"Q (nm⁻¹)"`, nesting (`\g(\i(m))\-(0)\i(H) (T)` →
+    `"μ₀H (T)"`) already resolves inside-out. The owner's report likely
+    predates that fix or reflects the sibling gap below, seen "elsewhere" in
+    the same file.
+  - **The real, corpus-confirmed gap: column Long Name/Unit/Comment and book
+    display titles were NEVER translated.** `opj._label_for`/`_book_long_name`
+    /the `.units`/`x_unit`/`x_column_unit`/`column_comments` fields read the
+    windows-section metadata verbatim — no `clean_richtext` call. Confirmed
+    live: `MnN_Diffusion_PNR.opj`'s "Nuclear SLD" books carry a column Unit
+    of literal `10\+(-6) A\+(-2)` (20 leaking strings across the file, 0
+    exceptions). This leaked straight into the frontend's
+    `${label} (${unit})` axis/legend composition (`uplotOpts.ts`,
+    `PlotLegend.tsx`, `PlotContextMenu.tsx`, `clipboard.ts`) whenever a
+    graph's own axis title is blank (Origin's "Auto" title, which falls back
+    to the bound column's Long Name + Unit — several `PNR.opj` `Graph11`
+    panels have exactly this blank-title shape) — the likely actual
+    mechanism behind the report.
+  - **Fix, one chokepoint:** `opj.py`'s `_build_book`/`_label_for`/
+    `_book_long_name`/`_inventory` now run every column/book label field
+    through `clean_richtext` — shared verbatim by `.opju` (`opju.py` reuses
+    `_build_book`), so both containers fix at once. Zero frontend changes
+    (translation happens backend-side, at extraction).
+  - **Corpus sweep** (all 12 real `.opj`/`.opju` files, figures +
+    column/book metadata, 84,075 display strings post-fix): 0 leaked
+    backslashes anywhere (`sup \+(...)` 291, `bold \b(...)` 125,
+    `greek \g(...)` 93, `char-code hex \(xHHHH)` 78, `sub \-(...)` 65,
+    `italic \i(...)` 10, `char-code decimal \(NNN)` 6 — all resolved
+    cleanly); 10 strings with genuine control-inside-control nesting
+    (`Hc2 data.opju`/`hc2convert.opj`'s `\g(\i(m))\-(0)\i(H)...`), all
+    correct; exactly 1 unrecognized control form seen (`\ad(A)`,
+    `MnN_Diffusion_PNR.opj`), degrading safely to its inner text via the
+    existing unknown-control fallback (no raise, no leaked escape) — logged
+    in `docs/origin_project_format.md` as an honest undecoded-meaning gap,
+    not guessed.
+  - **Two authoring inconsistencies found, deliberately NOT "fixed"**
+    (byte-hex confirmed, not decode bugs — see docs for the hex dump): (1)
+    `MnN_Diffusion_PNR.opj` spells its Nuclear-SLD unit as a literal ASCII
+    `A` in most books, the proper `\(197)` Å escape in a few, and plain
+    unescaped `"A-1"` text in others — genuine hand-typing drift across
+    duplicated graphs in the source project, decoded faithfully either way.
+    (2) same file's `Q`/`dQ` units mix escaped `A\+(-1)` and literal `A-1` —
+    same story. Per the Graph25-heuristic-rejected precedent, no guessing.
+  - **Tests:** `test_io_origin_project.py` — 6 new `test_clean_richtext`
+    parametrize cases (nested `\g(\i(...))`, the real `\ad(` unknown-control
+    form, a numbered-colour control); `test_build_book_translates_column_richtext`
+    (synthetic `_build_book` with escaped `ColumnMeta`/`BookMeta`, asserts
+    `.labels`/`.units`/`x_column_long`/`x_unit`/`x_column_unit`/
+    `origin_book_long`/`column_comments` all decoded); `test_inventory_translates_book_long_name`
+    (the `_inventory` listing, both branches); `realdata`-marked
+    `test_realdata_mnn_diffusion_column_unit_richtext_translated` anchoring
+    the exact owner-adjacent corpus strings. `test_io_origin_ground_truth.py`
+    updated: the live-Origin COM oracle CSV (`expASC`) exports the RAW
+    LabTalk label (Origin's ASCII export doesn't render rich text either),
+    so the long-name/unit membership checks now `clean_richtext` the oracle
+    side too — a fair "do we match Origin" comparison now that our reader
+    intentionally decodes instead of leaking.
+  - **Gates:** `ruff check src tests && mypy src && pytest -q` — 460 origin
+    tests green (was 453; +7 net after dedup), full suite green. No frontend
+    changes (translation is backend-only, at extraction) — no frontend gate
+    needed. Golden tests untouched (figure/label text isn't golden-frozen).
 
 - ~~**43. Annotation text-label placement (owner PNR.opj repros)**~~
   (2026-07-09) — both live-testing repros traced to ONE frontend rendering

@@ -18,6 +18,19 @@ gets a second try via `container.decode_report_strings` — a wider,
 column-specific record width — attaching to
 `origin_report_sheets: {short_name: [str, ...]}`. Whatever fits neither
 shape keeps the honest drop.
+
+Column long names/units/comments and book display titles are Origin
+LabTalk *label* fields — the exact same rich-text escape syntax as graph
+axis titles (`figures.py`/`origin_richtext.py`), since Origin lets a user
+type ``\\+(...)``/``\\g(...)``/etc. into a column's Long Name or Unit row
+just as freely as into an axis title. Confirmed live in the corpus
+(`MnN_Diffusion_PNR.opj`'s "Nuclear SLD" books carry a Unit of
+``10\\+(-6) A\\+(-2)``): every such field is decoded through
+`clean_richtext` here, at the one `_build_book` shared by both `.opj`
+and `.opju` (`opju.py` reuses it verbatim) — the single chokepoint that
+also feeds every frontend consumer of `.labels`/`.units`/
+`x_column_unit`/`origin_book_long` (axis labels, per-series legends,
+the worksheet header, the Inspector).
 """
 
 from __future__ import annotations
@@ -40,6 +53,7 @@ from quantized.io.origin_project.container import (
     salvage_column,
     walk_blocks,
 )
+from quantized.io.origin_project.origin_richtext import clean_richtext
 from quantized.io.origin_project.windows import BookMeta, ColumnMeta, window_metadata
 
 __all__ = [
@@ -125,7 +139,10 @@ def _looks_textual(payload: bytes) -> bool:
 
 
 def _label_for(col: str, meta: ColumnMeta | None) -> str:
-    return meta.long_name if meta is not None and meta.long_name else col
+    """The display label for a value column: its decoded Long Name (Origin
+    rich-text escapes translated — see the module docstring) when the windows
+    section resolved one, else the bare Origin short designation (A, B, …)."""
+    return clean_richtext(meta.long_name) if meta is not None and meta.long_name else col
 
 
 Columns = list[tuple[str, NDArray[np.float64]]]
@@ -166,7 +183,7 @@ def _inventory(
     out = [
         {
             "name": k,
-            "long_name": books_meta[k].long_name if k in books_meta else k,
+            "long_name": clean_richtext(books_meta[k].long_name) if k in books_meta else k,
             "ncols": len(v),
             "nrows": max((len(a) for _, a in v), default=0),
         }
@@ -178,7 +195,7 @@ def _inventory(
         out.append(
             {
                 "name": k,
-                "long_name": books_meta[k].long_name if k in books_meta else k,
+                "long_name": clean_richtext(books_meta[k].long_name) if k in books_meta else k,
                 "ncols": len(v),
                 "nrows": max((len(rows) for _, rows in v), default=0),
             }
@@ -187,10 +204,13 @@ def _inventory(
 
 
 def _book_long_name(book: str, books_meta: dict[str, BookMeta]) -> str:
+    """The book's display title (Origin rich-text escapes translated — see
+    the module docstring), with a "(sheet N)" suffix for an extra-sheet
+    pseudo-book (``Book@N``)."""
     base_book, _, sheet_no = book.partition("@")
     if sheet_no and base_book in books_meta:
-        return f"{books_meta[base_book].long_name} (sheet {sheet_no})"
-    return books_meta[book].long_name if book in books_meta else book
+        return f"{clean_richtext(books_meta[base_book].long_name)} (sheet {sheet_no})"
+    return clean_richtext(books_meta[book].long_name) if book in books_meta else book
 
 
 def _build_book(
@@ -286,8 +306,10 @@ def _build_book(
         # `x_unit` is the Origin-subsystem key (writer/COM read it); also emit
         # the canonical `x_column_unit` every other parser uses so the plot +
         # .ogs export layers (which read `x_column_unit`) show the x-axis unit.
-        "x_unit": x_meta.unit if x_meta is not None else "",
-        "x_column_unit": x_meta.unit if x_meta is not None else "",
+        # Both translated (rich-text escapes — see module docstring): a Unit
+        # row is exactly as free-form as a Long Name.
+        "x_unit": clean_richtext(x_meta.unit) if x_meta is not None else "",
+        "x_column_unit": clean_richtext(x_meta.unit) if x_meta is not None else "",
         # False when `.time` is a synthetic row index substituted because the
         # designated X column could not be decoded (its long name, when known,
         # is in ``x_column_unrecovered``); True when `.time` is the real X.
@@ -296,7 +318,9 @@ def _build_book(
         # figure's curve->column binding (opju_curves) map onto `.values`.
         "origin_column_names": value_cols,
         "column_designations": {c: m.designation for c, m in col_meta.items()},
-        "column_comments": {c: m.comment for c, m in col_meta.items() if m.comment},
+        "column_comments": {
+            c: clean_richtext(m.comment) for c, m in col_meta.items() if m.comment
+        },
         "origin_text_columns": {c: rows for c, rows in (text_cols or [])},
         "origin_report_sheets": {c: rows for c, rows in (report_cols or [])},
     }
@@ -309,7 +333,9 @@ def _build_book(
         time=time,
         values=values,
         labels=tuple(_label_for(c, col_meta.get(c)) for c in value_cols),
-        units=tuple(col_meta[c].unit if c in col_meta else "" for c in value_cols),
+        units=tuple(
+            clean_richtext(col_meta[c].unit) if c in col_meta else "" for c in value_cols
+        ),
         metadata=meta,
     )
 
