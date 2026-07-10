@@ -11,6 +11,7 @@ import type { PlotBg } from "./plotview";
 import type { PlotPayload } from "./plotdata";
 import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
+import { pow10 } from "./ticks";
 import type { Annotation, AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
 import { annotationPlugin, axisBoxPlugin, errorBarsPlugin, refLinePlugin } from "./uplotOverlays";
 import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
@@ -142,7 +143,7 @@ export function categoricalTickFormatter(categories: readonly string[]): TickVal
 export function niceLinearStep(span: number, targetTicks = 5): number {
   if (!(span > 0)) return 1;
   const raw = span / Math.max(1, targetTicks);
-  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const mag = pow10(Math.floor(Math.log10(raw)));
   const residual = raw / mag;
   const nice = residual < 1.5 ? 1 : residual < 3 ? 2 : residual < 7 ? 5 : 10;
   return nice * mag;
@@ -187,7 +188,10 @@ export function fixedLogAxisSplits(min: number, max: number, step?: number | nul
     const hi = Math.ceil(Math.log10(max) - EPS);
     const out: number[] = [];
     for (let k = lo; k <= hi; k++) {
-      const v = Math.pow(10, k);
+      // pow10, not Math.pow: decade ticks must be the EXACT double for 10^k
+      // on every platform (V8's pow drifts on some builds — the CI-only
+      // 9.999999999999999e-6 failure of 2026-07-10).
+      const v = pow10(k);
       if (v >= min * (1 - EPS) && v <= max * (1 + EPS)) out.push(v);
     }
     return out;

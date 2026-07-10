@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { niceTicks } from "./ticks";
+import { niceTicks, pow10 } from "./ticks";
 
 describe("niceTicks", () => {
   it("produces round 1-2-5 values inside the range", () => {
@@ -33,5 +33,22 @@ describe("niceTicks", () => {
     for (const v of niceTicks(60, 62)) {
       expect(Number.isInteger(v * 2)).toBe(true); // multiples of 0.5
     }
+  });
+});
+
+describe("pow10 (exact integer decades)", () => {
+  it("returns the correctly-rounded double for every integer exponent, matching the decimal literal", () => {
+    // Math.pow(10, k) is not correctly-rounded per spec and drifts on some
+    // V8 builds (the 2026-07-10 ubuntu-CI-only 9.999999999999999e-6). The
+    // decimal-literal parse IS correctly rounded everywhere — pin that.
+    for (let k = -12; k <= 12; k++) {
+      expect(pow10(k)).toBe(Number(`1e${k}`));
+    }
+    expect(pow10(-5)).toBe(0.00001);
+    expect(pow10(-4)).toBe(0.0001);
+  });
+
+  it("falls back to Math.pow for fractional exponents", () => {
+    expect(pow10(0.5)).toBeCloseTo(Math.sqrt(10), 12);
   });
 });

@@ -2,10 +2,19 @@
 // classic algorithm (Heckbert). Pure + used by the 2-D map axes; keeps tick
 // labels human (60, 60.5, 61 …) instead of raw fractional linspace endpoints.
 
+/** Exact 10^k for integer k. `Math.pow(10, k)` is NOT correctly-rounded per
+ *  spec and differs across V8 builds (ubuntu CI returned 9.999999999999999e-6
+ *  for k=-5 where local Windows returned 1e-5); parsing the decimal literal
+ *  IS correctly rounded everywhere, so decade tick values stay exact on every
+ *  platform. */
+export function pow10(k: number): number {
+  return Number.isInteger(k) ? Number(`1e${k}`) : Math.pow(10, k);
+}
+
 /** A nice round step >= raw, snapped to 1/2/5/10 × 10^n. */
 function niceStep(raw: number): number {
   if (raw <= 0 || !Number.isFinite(raw)) return 1;
-  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const mag = pow10(Math.floor(Math.log10(raw)));
   const norm = raw / mag; // 1..10
   const snapped = norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10;
   return snapped * mag;
