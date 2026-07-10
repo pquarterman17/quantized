@@ -33,6 +33,19 @@ describe("PreferencesDialog", () => {
     expect(document.documentElement.dataset.theme).toBe("light");
   });
 
+  it("Origin book click opens (WORKSHEET_PLAN item 15) defaults to Worksheet and can switch to Plot", () => {
+    useApp.getState().setPrefsOpen(true);
+    render(<PreferencesDialog />);
+    fireEvent.click(screen.getByText("Interaction"));
+    expect(useApp.getState().originBookClickOpens).toBe("worksheet");
+    const worksheetBtn = screen.getByRole("tab", { name: "Worksheet" });
+    expect(worksheetBtn).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("tab", { name: "Plot" }));
+    expect(useApp.getState().originBookClickOpens).toBe("plot");
+    fireEvent.click(worksheetBtn);
+    expect(useApp.getState().originBookClickOpens).toBe("worksheet");
+  });
+
   it("closes via Done and Escape", () => {
     useApp.getState().setPrefsOpen(true);
     const { rerender } = render(<PreferencesDialog />);

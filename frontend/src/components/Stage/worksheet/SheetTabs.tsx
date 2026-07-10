@@ -6,15 +6,20 @@
 // the viewed dataset's book has more than one sheet — `originSheetGroups`).
 // Either, both, or neither can apply; the strip renders null only when
 // NEITHER does, so a non-Origin / single-book / single-sheet dataset costs
-// nothing. Composes ONLY over `lib/grouping` + the store's `setActive` — no
-// new store slice, no persistence (the active sheet/book IS `activeId`,
-// already round-tripped via `.dwk`).
+// nothing. Composes ONLY over `lib/grouping` + the store's
+// `activateFromLibrary` — no new store slice.
 //
-// Clicking a tab or choosing a book calls `setActive`, verified safe here:
-// `nextStageTab` returns `current` when the stage tab is already "worksheet",
-// so switching sheets/books can never yank the user to the Plot/Map tab (it
-// DOES reset the singleton plot view block, identical to a Library click
-// today — acceptable and consistent).
+// Clicking a tab or choosing a book calls `activateFromLibrary` — "identical
+// to a Library click," which since item 15 means it routes through the
+// `originBookClickOpens` pref like any other row: every member here IS an
+// Origin book/sheet (that's what makes a sheet/book group exist at all), so
+// under the default "worksheet" pref this only moves `worksheetId` + the
+// worksheet's own `datasetId` prop — the focused plot window and its view
+// are left exactly as they were, never yanked or reset, switching sheets is
+// pure browsing. (`nextStageTab`'s "stay on worksheet" guard, from before
+// item 15, is now moot for this call site specifically — worksheet-intent
+// never touches `stageTab` away from "worksheet" in the first place — but
+// still applies if the pref is "plot".)
 
 import { bookLabel, familyBooks, originBookFamilies, originSheetGroups, originSheetNumber } from "../../../lib/grouping";
 import type { Dataset } from "../../../lib/types";
@@ -40,7 +45,7 @@ function currentBaseBook(members: Dataset[], datasetId: string): string | undefi
 
 export default function SheetTabs({ datasetId }: SheetTabsProps) {
   const datasets = useApp((s) => s.datasets);
-  const setActive = useApp((s) => s.setActive);
+  const activateFromLibrary = useApp((s) => s.activateFromLibrary);
 
   const family = originBookFamilies(datasets).find((f) => f.members.some((m) => m.id === datasetId));
   const books = family ? familyBooks(family.members) : [];
@@ -59,7 +64,7 @@ export default function SheetTabs({ datasetId }: SheetTabsProps) {
           value={currentBook ?? ""}
           onChange={(e) => {
             const entry = books.find((b) => b.book === e.target.value);
-            if (entry) setActive(entry.representative.id);
+            if (entry) activateFromLibrary(entry.representative.id);
           }}
           title="Jump to another book in this Origin project"
         >
@@ -83,7 +88,7 @@ export default function SheetTabs({ datasetId }: SheetTabsProps) {
             aria-selected={active}
             className={`qzk-sheet-tab${active ? " active" : ""}`}
             title={long || m.name}
-            onClick={() => setActive(m.id)}
+            onClick={() => activateFromLibrary(m.id)}
           >
             <span className="qzk-sheet-tab-num">{n}</span>
             <span className="qzk-sheet-tab-name">{long || `sheet ${n}`}</span>

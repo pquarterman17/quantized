@@ -72,6 +72,60 @@ describe("DatasetRow pending lazy book (ORIGIN_FILE_DECODE_PLAN #38)", () => {
   });
 });
 
+describe("DatasetRow activation routing (WORKSHEET_PLAN item 15 — origin book click opens…)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [plain, sheet1],
+      activeId: null,
+      worksheetId: null,
+      selectedIds: [],
+      stageTab: "plot",
+      originBookClickOpens: "worksheet",
+    });
+  });
+
+  it("a plain click on a non-Origin row activates it exactly as before (plot-intent)", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
+    fireEvent.click(container.querySelector(".qzk-ds")!);
+    const s = useApp.getState();
+    expect(s.activeId).toBe("plain");
+    expect(s.worksheetId).toBeNull();
+  });
+
+  it("a plain click on an Origin book row opens the Worksheet instead of plotting it (default pref)", () => {
+    const { container } = render(<DatasetRow dataset={sheet1} {...baseProps} />);
+    fireEvent.click(container.querySelector(".qzk-ds")!);
+    const s = useApp.getState();
+    expect(s.worksheetId).toBe("sheet1");
+    expect(s.stageTab).toBe("worksheet");
+    expect(s.activeId).toBeNull(); // the plot (nothing, here) is untouched
+  });
+
+  it("right-clicking an unselected Origin book row also routes through the worksheet-intent path", () => {
+    const { container } = render(<DatasetRow dataset={sheet1} {...baseProps} selected={false} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    expect(useApp.getState().worksheetId).toBe("sheet1");
+    expect(useApp.getState().activeId).toBeNull();
+  });
+
+  it("'Plot (make active)' in the context menu ALWAYS forces the plot, even for an Origin book", () => {
+    const { container } = render(<DatasetRow dataset={sheet1} {...baseProps} selected />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    fireEvent.click(screen.getByText("Plot (make active)"));
+    const s = useApp.getState();
+    expect(s.activeId).toBe("sheet1");
+    expect(s.worksheetId).toBeNull();
+  });
+
+  it("the 'plot' preference restores click-to-plot for an Origin book too", () => {
+    useApp.setState({ originBookClickOpens: "plot" });
+    const { container } = render(<DatasetRow dataset={sheet1} {...baseProps} />);
+    fireEvent.click(container.querySelector(".qzk-ds")!);
+    expect(useApp.getState().activeId).toBe("sheet1");
+    expect(useApp.getState().worksheetId).toBeNull();
+  });
+});
+
 // project-organization plan item 3b: drop-between reorder. jsdom has no real
 // DnD or layout (see AxisDropZones.test.tsx's header note for the same
 // workaround this borrows: a hand-built DragEvent with clientX/clientY +

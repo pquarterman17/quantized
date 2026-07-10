@@ -37,10 +37,12 @@ beforeEach(() => {
   useApp.setState({
     datasets: [],
     activeId: null,
+    worksheetId: null, // item 15 — no lingering override from an earlier test
     status: "",
     originFigures: [],
     folders: [],
     expandedFolders: [],
+    originBookClickOpens: "worksheet", // item 15 — reset the pref between tests
   });
 });
 
@@ -138,6 +140,123 @@ describe("Origin error-bar defaults on activation", () => {
   it("leaves errKeys empty for non-Origin data", () => {
     useApp.getState().addDataset({ id: "plain", name: "p", data: raw });
     expect(useApp.getState().errKeys).toEqual({});
+  });
+});
+
+describe("activateFromLibrary (WORKSHEET_PLAN item 15 — origin book click opens…)", () => {
+  // A dataset shaped like one book of an imported Origin project.
+  const book = (id: string, name = `XRD:${id}`): Dataset => ({
+    id,
+    name,
+    data: { time: [0, 1], values: [[1], [2]], labels: ["A"], units: [""], metadata: { origin_book: id } },
+  });
+  const plain: Dataset = { id: "csv", name: "scan.dat", data: raw };
+  // A single, deterministic focused window bound to "csv" — so "does the
+  // plot rebind" assertions don't depend on whatever earlier tests in this
+  // file left `plotWindows` holding.
+  const focusedWin: PlotWindow = {
+    id: "w1",
+    kind: "plot",
+    title: "",
+    datasetId: "csv",
+    geometry: { x: 0, y: 0, w: 480, h: 360 },
+    z: 0,
+    winState: "normal",
+    view: defaultPlotView(),
+  };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [book("b1"), plain],
+      activeId: "csv",
+      worksheetId: null,
+      selectedIds: ["csv"],
+      stageTab: "plot",
+      xKey: 0, // a non-default view value, so we can prove it's untouched
+      originBookClickOpens: "worksheet",
+      plotWindows: [focusedWin],
+      focusedWindowId: "w1",
+    });
+  });
+
+  it("an Origin book (default pref) opens the Worksheet WITHOUT touching activeId/plotWindows/view", () => {
+    const before = useApp.getState().plotWindows;
+    useApp.getState().activateFromLibrary("b1");
+    const s = useApp.getState();
+    expect(s.worksheetId).toBe("b1");
+    expect(s.stageTab).toBe("worksheet");
+    expect(s.selectedIds).toEqual(["b1"]); // the clicked row still highlights (selected)
+    // The plot itself never moved: still "csv", axis view untouched.
+    expect(s.activeId).toBe("csv");
+    expect(s.xKey).toBe(0);
+    expect(s.plotWindows).toBe(before); // same reference — no window rebind at all
+    expect(s.plotWindows[0].datasetId).toBe("csv");
+  });
+
+  it("a non-Origin dataset behaves exactly like setActive (plot-intent, unaffected by item 15)", () => {
+    useApp.getState().activateFromLibrary("csv");
+    const s = useApp.getState();
+    expect(s.activeId).toBe("csv");
+    expect(s.worksheetId).toBeNull();
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("csv");
+  });
+
+  it("the pref set to 'plot' restores the pre-item-15 behavior for an Origin book too", () => {
+    useApp.setState({ originBookClickOpens: "plot" });
+    useApp.getState().activateFromLibrary("b1");
+    const s = useApp.getState();
+    expect(s.activeId).toBe("b1"); // rebound, unlike the worksheet-intent case above
+    expect(s.worksheetId).toBeNull();
+    expect(s.xKey).toBeNull(); // setActive's usual view reset ran
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("b1"); // window DID rebind
+  });
+
+  it("setActive (the explicit plot-intent primitive) clears a prior worksheetId override", () => {
+    useApp.getState().activateFromLibrary("b1"); // sets worksheetId = "b1"
+    expect(useApp.getState().worksheetId).toBe("b1");
+    useApp.getState().setActive("csv");
+    expect(useApp.getState().worksheetId).toBeNull();
+  });
+
+  it("kicks ensureBookData for a still-pending Origin book on the worksheet-intent path", () => {
+    const pendingBook: Dataset = { ...book("b2"), pending: { kind: "path", path: "/x.opj", bookId: "b2", rows: 10, cols: 1 } };
+    useApp.setState({ datasets: [pendingBook, plain] });
+    const spy = vi.spyOn(useApp.getState(), "ensureBookData").mockImplementation(() => {});
+    try {
+      useApp.getState().activateFromLibrary("b2");
+      expect(spy).toHaveBeenCalledWith("b2");
+    } finally {
+      // Restore explicitly — vi.clearAllMocks() (the module beforeEach) only
+      // clears call history, not a spied-on store METHOD's replacement
+      // implementation, which would otherwise leak into every later test in
+      // this file (they all share the one `useApp` store instance).
+      spy.mockRestore();
+    }
+  });
+
+  it("falls back to setActive for an unknown id (never found in datasets)", () => {
+    useApp.getState().activateFromLibrary("nope");
+    expect(useApp.getState().activeId).toBe("nope"); // same as calling setActive("nope") directly
+    expect(useApp.getState().worksheetId).toBeNull();
+  });
+
+  it("removeDataset drops a worksheetId override pointing at the removed dataset", () => {
+    useApp.getState().activateFromLibrary("b1");
+    useApp.getState().removeDataset("b1");
+    expect(useApp.getState().worksheetId).toBeNull();
+  });
+
+  it("removeSelected drops a worksheetId override among the removed ids", () => {
+    useApp.getState().activateFromLibrary("b1");
+    useApp.setState({ selectedIds: ["b1"] });
+    useApp.getState().removeSelected();
+    expect(useApp.getState().worksheetId).toBeNull();
+  });
+
+  it("removeDatasets drops a worksheetId override among the removed ids", () => {
+    useApp.getState().activateFromLibrary("b1");
+    useApp.getState().removeDatasets(["b1"]);
+    expect(useApp.getState().worksheetId).toBeNull();
   });
 });
 

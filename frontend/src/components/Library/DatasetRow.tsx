@@ -55,6 +55,7 @@ export default function DatasetRow({
   const staleFits = useApp((s) => s.staleFits);
   const recalcNow = useApp((s) => s.recalcNow);
   const setActive = useApp((s) => s.setActive);
+  const activateFromLibrary = useApp((s) => s.activateFromLibrary);
   const toggleSelected = useApp((s) => s.toggleSelected);
   const selectRange = useApp((s) => s.selectRange);
   const removeDataset = useApp((s) => s.removeDataset);
@@ -89,18 +90,22 @@ export default function DatasetRow({
 
   // Plain click activates (and collapses the selection); ctrl/cmd toggles this row
   // in the multi-selection; shift selects a range from the anchor — neither moves
-  // the plotted dataset.
+  // the plotted dataset. Routes through `activateFromLibrary` (item 15), not
+  // `setActive` directly, so an Origin-project row opens its Worksheet instead
+  // of rebinding the focused plot window, per the `originBookClickOpens` pref.
   const onRowClick = (e: React.MouseEvent) => {
     if (e.shiftKey) selectRange(d.id);
     else if (e.ctrlKey || e.metaKey) toggleSelected(d.id);
-    else setActive(d.id);
+    else activateFromLibrary(d.id);
   };
 
   // Right-click: if this row isn't already in the selection, select it first so
-  // the menu acts on what the user sees highlighted, then open the menu.
+  // the menu acts on what the user sees highlighted, then open the menu. Same
+  // routing as a plain click (item 15) — selecting a row for its context menu
+  // shouldn't itself plot an Origin book any more than clicking it does.
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!selected) setActive(d.id);
+    if (!selected) activateFromLibrary(d.id);
     setMenu({ x: e.clientX, y: e.clientY });
   };
 
@@ -113,6 +118,9 @@ export default function DatasetRow({
   const moveLabel = (dest: string) =>
     moveIds.length > 1 ? `Move ${moveIds.length} selected to ${dest}` : `Move to ${dest}`;
   const menuItems: ContextMenuItem[] = [
+    // Explicit plot-intent (item 15) — unlike the row click, this ALWAYS
+    // rebinds the focused plot window, even for an Origin book under the
+    // "worksheet" pref; it says "Plot" right there in the label.
     { label: "Plot (make active)", run: () => setActive(d.id), disabled: active },
     { label: "Duplicate", run: () => duplicateDataset(d.id) },
     { label: "Rename…", run: () => setRename(d.name) },

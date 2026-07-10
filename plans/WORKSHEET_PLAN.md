@@ -10,7 +10,7 @@ value without creating a second god-component or a second plotting pathway.
 
 **Status:** Active
 **Created:** 2026-07-09
-**Updated:** 2026-07-09 (Tier 2, items 6-11, closed same day)
+**Updated:** 2026-07-09 (Tier 2, items 6-11, closed same day; item 15 added + closed same day)
 
 ---
 
@@ -113,6 +113,11 @@ Selection→plot (Stage C):
 - Item 11 (Stage D readiness) requires 3 + 5 — cross-references
   MULTI_PLOT_PLAN item 17, which owns the actual window-kind work.
 - Items 12–14 are independent polish on top of Tier 1/2.
+- Item 15 (origin book click opens…) requires 3 (Worksheet takes an explicit
+  `datasetId`) + item 7 (Plot selection is what rebinds the focused window
+  back onto the worksheet's dataset) + `MULTI_PLOT_PLAN`'s focused-window
+  facade (the reason `worksheetId` must be a field SEPARATE from `activeId`,
+  not a reuse of it). Independent of 12–14.
 
 ### Key decisions (made here, kept out of the tiers)
 
@@ -143,6 +148,10 @@ Selection→plot (Stage C):
    `setActive`. No book container object, no store slice, no persistence
    (the active sheet IS `activeId`, already in `.dwk`). Hidden entirely for
    non-Origin / single-sheet datasets — zero cost to the common case.
+   **Superseded by item 15 (below):** clicking now calls
+   `activateFromLibrary`, not `setActive` directly — same "no book container
+   object, no persistence" shape, but the active sheet/book is `worksheetId`
+   (falling back to `activeId`) under the default pref, not always `activeId`.
 5. **Selection→plot feeds existing actions only.** The mapping produces
    arguments for `setXKey`/`setYKeys` and the errKeys store action —
    exactly what the column context menu and GraphBuilder already call — so
@@ -153,6 +162,24 @@ Selection→plot (Stage C):
    matching today's behaviour (formulas/roles/masks persist via the
    Dataset; the active sheet persists as `activeId`). Revisit only if the
    owner asks (item 14 is the deliberate re-opening point).
+7. **item 15's `worksheetId` overrides `activeId` for the Worksheet tab
+   ONLY — NOT for Inspector.** The owner brief for item 15 asked for a
+   "worksheet-intent" activation that "the worksheet + Inspector read,"
+   but `MULTI_PLOT_PLAN`'s facade design (Key decision 1 there) makes
+   `activeId` + the ~40 singleton view fields the FOCUSED plot window's
+   actual rendered content (`PlotStage`'s `active = useActiveDataset()`
+   IS what gets fetched/drawn) — every Inspector card (Axes/Titles/
+   RefLines/Annotations/SeriesStyle) edits that SAME live view, by design,
+   so it cannot read a different "browsed" dataset without either drawing
+   the wrong dataset's plot (if `activeId` moved) or editing the wrong
+   dataset's view state (if only some cards moved). Rerouting the
+   dataset-CONTENT cards (Notes/Channels/Corrections/Stats/Metadata/
+   OriginProvenance) alone while leaving the view cards on `activeId`
+   was considered and rejected as a two-tier Inspector split not worth
+   the complexity for this change. `worksheetId` is therefore scoped to
+   `Worksheet.tsx` alone; Inspector keeps showing the focused window's
+   dataset exactly as before. Revisit only as part of a deliberate
+   Inspector redesign, not as a side effect of this item.
 
 ### Risks / open decision items (owner input wanted)
 
@@ -342,3 +369,41 @@ Selection→plot (Stage C):
   `plans/MULTI_PLOT_PLAN.md` item 17 annotated with the cross-reference (its
   worksheet-mountability precondition is satisfied here; the window-kind
   promotion itself stays owned there, unbuilt).
+- ~~**#15 Origin book click opens Worksheet, not Plot**~~ (2026-07-09) —
+  owner: "clicking the books tries to plot it all rather than open a
+  spreadsheet like in Origin." New `useApp.activateFromLibrary(id)` routes
+  every Library-click-style activation (`DatasetRow`'s plain click + its
+  pre-menu right-click select, the Library arrow-key nav, `SheetTabs`' sheet/
+  book switcher — all of them, not just the row click) between plot-intent
+  (`setActive`, unchanged) and a new worksheet-intent path for an
+  Origin-project dataset (`lib/grouping.isOriginBookDataset`, the canonical
+  `metadata.origin_book` predicate) under a new `originBookClickOpens` pref
+  (Preferences ▸ Interaction, default "worksheet"). Worksheet-intent sets a
+  NEW `worksheetId` field + switches `stageTab` to "worksheet" — critically,
+  it does NOT touch `activeId`, `plotWindows`, or any of the ~40 singleton
+  view fields, so the focused plot window keeps showing whatever it was
+  (Origin's own model: opening a workbook never touches your graphs).
+  `Worksheet.tsx` reads `worksheetId ?? activeId` (falls back to today's
+  behavior when null); `setActive` clears `worksheetId` (any full plot-intent
+  activation drops the override), as do `removeDataset`/`removeSelected`/
+  `removeDatasets` (dropped id) and `loadWorkspace` (transient, like
+  `stageTab` — never persisted to `.dwk`). A FIGURE apply and the explicit
+  "Plot (make active)" context-menu item still call `setActive` directly,
+  unaffected — figures/explicit-plot stay plot-intent exactly as before; a
+  non-Origin dataset click is likewise unaffected (falls straight through to
+  `setActive`). The worksheet's own "Plot selection"/"Add to plot"
+  (`useWorksheetView.plotCols`) are explicit plot-intent, so they now
+  deliberately rebind the focused window to the worksheet's dataset FIRST
+  when it differs (re-reading xKey/yKeys fresh after the rebind, not the
+  stale pre-rebind closure) — completing the actual Origin workflow: open
+  book as sheet → select columns → Plot selection → focused window shows it.
+  See Key decision 7 (above) for the deliberate scope call that Inspector
+  stays on `activeId` (the focused window), NOT `worksheetId` — the
+  MULTI_PLOT_PLAN facade makes Inspector's Axes/Titles/RefLines/Annotations/
+  SeriesStyle cards inseparable from the live plot view. Two pre-existing
+  `SheetTabs.test.tsx` cases that asserted `activeId` changed on a sheet/book
+  click were updated deliberately (now assert `worksheetId` under the default
+  pref, plus a new case for the "plot" pref restoring the old assertion).
+  17 new tests across `grouping.test.ts`, `useApp.test.ts`,
+  `DatasetRow.test.tsx`, `Worksheet.test.tsx`, `SheetTabs.test.tsx`,
+  `PreferencesDialog.test.tsx`, and `prefs.test.ts`.

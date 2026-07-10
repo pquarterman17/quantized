@@ -77,6 +77,16 @@ function PopupBox({
       className="qzk-menu-pop qzk-ctx"
       style={{ position: "fixed", left: pos.x, top: pos.y, zIndex: 1000 }}
       onContextMenu={(e) => e.preventDefault()}
+      onClick={(e) => {
+        // `createPortal` moves the DOM node to <body>, but a React synthetic
+        // event still bubbles through the REACT tree (the menu's JSX parent —
+        // e.g. a Library row) regardless of DOM placement. Item handlers have
+        // already run by the time the event bubbles up here, so stopping it
+        // at the popup root prevents an item click from ALSO firing the host
+        // row's onClick (a real bug once the two can diverge — the
+        // "Plot (make active)" menu item vs. a plain row click).
+        e.stopPropagation();
+      }}
     >
       {children}
     </div>

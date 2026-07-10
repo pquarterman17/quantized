@@ -12,6 +12,17 @@
 
 import type { Dataset } from "./types";
 
+/** Does `d` come from an imported Origin project — a book or sheet the
+ *  importer stamped with `metadata.origin_book` (`"Book4"`, `"Book4@2"`, …)?
+ *  The canonical single-dataset predicate underlying `originBookFamilies`/
+ *  `originSheetGroups` below, factored out for callers that just need a yes/no
+ *  (WORKSHEET_PLAN item 15 — routing a Library click between plot-intent and
+ *  worksheet-intent activation off exactly this check, `useApp.activateFromLibrary`). */
+export function isOriginBookDataset(d: Dataset): boolean {
+  const meta = d.data.metadata as Record<string, unknown> | undefined;
+  return meta?.origin_book != null;
+}
+
 /** A family of datasets fanned out from the same multi-book Origin project
  *  (plan item 17): `useApp.importFiles` names each book `"<stem>:<label>"` and
  *  stamps its metadata with `origin_book`. Detecting the family off that

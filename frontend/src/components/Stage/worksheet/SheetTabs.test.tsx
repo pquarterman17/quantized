@@ -57,10 +57,30 @@ describe("SheetTabs", () => {
     expect(tabs[2]).toHaveAttribute("aria-selected", "false");
   });
 
-  it("clicking a tab activates that sheet's dataset (setActive)", () => {
+  // WORKSHEET_PLAN item 15: every member here IS an Origin sheet (that's what
+  // makes a sheet group exist), so this now routes through
+  // `activateFromLibrary` — under the default "worksheet" pref it moves
+  // `worksheetId`, NOT `activeId` (the focused plot window is left alone,
+  // same as any other Origin-book Library click).
+  it("clicking a tab activates that sheet's dataset via worksheetId (default pref)", () => {
     useApp.setState({
       datasets: [sheet("s1", "XRD:Book4", "Book4"), sheet("s2", "XRD:Book4@2", "Book4@2")],
       activeId: "s1",
+      worksheetId: null,
+      originBookClickOpens: "worksheet",
+    });
+    render(<SheetTabs datasetId="s1" />);
+    fireEvent.click(screen.getAllByRole("tab")[1]);
+    expect(useApp.getState().worksheetId).toBe("s2");
+    expect(useApp.getState().activeId).toBe("s1"); // unchanged — the plot never moved
+  });
+
+  it("honors the 'plot' pref by rebinding activeId instead (opt back into the old behavior)", () => {
+    useApp.setState({
+      datasets: [sheet("s1", "XRD:Book4", "Book4"), sheet("s2", "XRD:Book4@2", "Book4@2")],
+      activeId: "s1",
+      worksheetId: null,
+      originBookClickOpens: "plot",
     });
     render(<SheetTabs datasetId="s1" />);
     fireEvent.click(screen.getAllByRole("tab")[1]);
@@ -97,14 +117,19 @@ describe("SheetTabs book switcher (item 9)", () => {
     expect(screen.getAllByRole("option")).toHaveLength(3);
   });
 
-  it("choosing a book activates its representative dataset (setActive)", () => {
+  // item 15: same routing as the sheet-tab click above — a book choice moves
+  // `worksheetId` under the default pref, leaving the focused plot alone.
+  it("choosing a book activates its representative dataset via worksheetId (default pref)", () => {
     useApp.setState({
       datasets: [sheet("b1", "XRD:Book1", "Book1"), sheet("b2", "XRD:Book2", "Book2")],
       activeId: "b1",
+      worksheetId: null,
+      originBookClickOpens: "worksheet",
     });
     render(<SheetTabs datasetId="b1" />);
     fireEvent.change(screen.getByLabelText("switch book"), { target: { value: "Book2" } });
-    expect(useApp.getState().activeId).toBe("b2");
+    expect(useApp.getState().worksheetId).toBe("b2");
+    expect(useApp.getState().activeId).toBe("b1"); // unchanged
   });
 
   it("does NOT show a book dropdown for a multi-SHEET single-book family (that's the sheet strip's job)", () => {
