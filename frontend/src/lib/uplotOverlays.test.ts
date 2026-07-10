@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Annotation, RefLine } from "./types";
-import { annotationPlugin, pickRefLine, refLinePlugin } from "./uplotOverlays";
+import { annotationPlugin, clampAnnotationLabelX, pickRefLine, refLinePlugin } from "./uplotOverlays";
 
 /** Minimal uPlot stub: a recording 2D context + a linear valToPos. */
 function fakeU() {
@@ -97,9 +97,16 @@ describe("pickRefLine (drag hit-test)", () => {
 /** Stub recording fillText + arc calls for the annotation plugin. `hasY2`
  *  seeds `u.scales.y2` (present/absent) so tests can exercise the y2-gate;
  *  its valToPos gives "y2" a DIFFERENT offset than "y" so a test can tell
- *  which scale a mark actually resolved against. */
+ *  which scale a mark actually resolved against. `textAlign` starts as
+ *  `"right"` — mimicking the state uPlot's own axis-label draw leaves on the
+ *  real shared canvas context (its left Y-axis right-aligns tick labels and
+ *  never resets before firing draw hooks; see `annotationPlugin`'s
+ *  docstring) — so a test can confirm the plugin sets it back explicitly
+ *  rather than relying on whatever the canvas already had. `measureText`
+ *  returns a fixed 6px/char estimate, just enough for the clamp math to have
+ *  a non-zero width to work with. */
 function fakeAnnU(hasY2 = false) {
-  const texts: { text: string; x: number; y: number }[] = [];
+  const texts: { text: string; x: number; y: number; align: CanvasTextAlign }[] = [];
   const dots: { x: number; y: number }[] = [];
   const ctx = {
     save() {},
@@ -109,12 +116,16 @@ function fakeAnnU(hasY2 = false) {
     arc(x: number, y: number) {
       dots.push({ x, y });
     },
+    measureText(text: string) {
+      return { width: text.length * 6 } as TextMetrics;
+    },
     fillText(text: string, x: number, y: number) {
-      texts.push({ text, x, y });
+      texts.push({ text, x, y, align: ctx.textAlign });
     },
     fillStyle: "",
     font: "",
     textBaseline: "" as CanvasTextBaseline,
+    textAlign: "right" as CanvasTextAlign,
   };
   const valToPos = (v: number, scale: string) =>
     scale === "x" ? v : scale === "y2" ? 200 - v : 100 - v;
@@ -138,6 +149,52 @@ describe("annotationPlugin", () => {
     expect(texts).toHaveLength(1);
     expect(texts[0].text).toBe("Tc");
     expect(texts[0].x).toBeGreaterThan(50); // label offset to the right of the dot
+  });
+
+  // Regression (Origin PNR.opj repro): uPlot's own left-Y-axis label draw
+  // leaves `ctx.textAlign = "right"` resident on the shared canvas context
+  // (see annotationPlugin's docstring); the plugin must set "left" itself on
+  // every draw rather than inherit whatever's already there — the fakeAnnU
+  // stub starts `textAlign` at "right" specifically to catch a regression
+  // back to "relies on the ambient value".
+  it("always sets textAlign explicitly instead of inheriting the canvas's ambient value", () => {
+    const { texts } = drawAnn([{ id: "a1", x: 50, y: 30, text: "Tc" }]);
+    expect(texts[0].align).toBe("left");
+  });
+
+  // Regression: a mark near the LEFT edge of its panel (Origin habitually
+  // pins these little curve labels bottom-left — the PNR/Book15 "15 G from
+  // 40 G" repro, and every sub-panel of the PNR/Book14 spin-asymmetry
+  // multi-panel spread) must still anchor left-of-dot-grows-rightward, not
+  // get flipped/clamped just because it's close to the axis.
+  it("keeps a near-left-edge label anchored to the right of its dot", () => {
+    // bbox left=10; dot at px=12 (2px inside the left edge).
+    const { texts } = drawAnn([{ id: "a1", x: 12, y: 30, text: "15 G from 40 G" }]);
+    expect(texts[0].align).toBe("left");
+    expect(texts[0].x).toBe(18); // px + 6, unclamped — plenty of room to the right
+  });
+
+  // Regression: a mark near the RIGHT edge whose label would overflow past
+  // `left + width` flips to a right-anchor mirrored to the left of the dot,
+  // rather than bleeding off the panel's own edge (invisible on a
+  // multi-panel's separately-canvased instance).
+  it("flips a near-right-edge label to the left of its dot when it would overflow", () => {
+    // bbox left=10,width=100 -> right edge 110. Dot at px=105, a 14-char
+    // label (84px at the stub's 6px/char) would run to 105+6+84=195, way
+    // past 110, so it must flip.
+    const { texts } = drawAnn([{ id: "a1", x: 105, y: 30, text: "a fourteen chr" }]);
+    expect(texts[0].align).toBe("right");
+    expect(texts[0].x).toBe(99); // px - 6
+  });
+
+  // Regression: a mark near the very TOP of the panel must not push its
+  // (bottom-anchored) label above the plot area.
+  it("clamps a near-top-edge label's baseline so it stays on-panel", () => {
+    // bbox top=5; dot at py=6 (1px below the top edge) -> naive py-2=4 < top,
+    // so the clamp must push the baseline down to top + lineHeight
+    // (fontPx("11px mono") * 1.3 = 14.3) instead.
+    const { texts } = drawAnn([{ id: "a1", x: 50, y: 94, text: "top" }]); // 100-94=6
+    expect(texts[0].y).toBeCloseTo(19.3);
   });
 
   it("clips annotations outside the plot area", () => {
@@ -172,5 +229,34 @@ describe("annotationPlugin", () => {
   it("keeps an untagged (primary) annotation on y even when the plot HAS a y2 scale", () => {
     const { dots } = drawAnn([{ id: "a", x: 50, y: 30, text: "primary" }], true);
     expect(dots).toEqual([{ x: 50, y: 70 }]);
+  });
+});
+
+describe("clampAnnotationLabelX", () => {
+  // bbox convention matching fakeAnnU above: left=10, width=100 -> right=110.
+  const LEFT = 10;
+  const WIDTH = 100;
+
+  it("left-anchors to the right of the dot when the label fits", () => {
+    expect(clampAnnotationLabelX(50, 20, 6, LEFT, WIDTH)).toEqual({ x: 56, align: "left" });
+  });
+
+  it("flips to a right-anchor left of the dot when the right side would overflow", () => {
+    // 105 + 6 + 40 = 151 > 110 (overflow right); 105 - 6 - 40 = 59 >= 10 (fits left).
+    expect(clampAnnotationLabelX(105, 40, 6, LEFT, WIDTH)).toEqual({ x: 99, align: "right" });
+  });
+
+  it("clamps inward when the label overflows BOTH sides (wider than the panel)", () => {
+    // A 200px label can't fit fully on either side of a 100px-wide panel from
+    // a dot pinned at the very left edge -- clamp so its start stays visible
+    // rather than bleeding off entirely.
+    const { x, align } = clampAnnotationLabelX(LEFT, 200, 6, LEFT, WIDTH);
+    expect(align).toBe("left");
+    expect(x).toBe(LEFT); // right - textWidth (110-200=-90) clamps up to `left`
+  });
+
+  it("is exact at the boundary — fits exactly flush with the right edge", () => {
+    // 50 + 6 + 54 = 110 === right: the <= boundary keeps it a normal left-anchor.
+    expect(clampAnnotationLabelX(50, 54, 6, LEFT, WIDTH)).toEqual({ x: 56, align: "left" });
   });
 });

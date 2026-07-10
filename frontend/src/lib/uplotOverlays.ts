@@ -159,6 +159,49 @@ export function axisBoxPlugin(color: string): uPlot.Plugin {
   };
 }
 
+/** The leading `<n>px` in a CSS font shorthand (uplotOpts always builds one,
+ *  e.g. `"11px monospace"`), or 11 when it can't be parsed — used to estimate
+ *  a label's line height for the vertical clamp below (no canvas access
+ *  needed, so it stays plain math). */
+function fontPx(font: string): number {
+  const m = /(\d+(?:\.\d+)?)px/.exec(font);
+  return m ? parseFloat(m[1]) : 11;
+}
+
+/** Where to draw one annotation's label text and which side to anchor it
+ *  from, given the dot's already-clipped pixel x (`px`), the label's
+ *  measured pixel width, the intended offset from the dot, and the plot
+ *  area's horizontal bounds `[left, left + width]`.
+ *
+ *  Left-anchors at `px + offset` (the label sitting to the right of its dot,
+ *  the normal case) unless that would run the label past the panel's right
+ *  edge, in which case it flips to a right-anchor at `px - offset` (mirrored
+ *  to the LEFT of the dot) — and if even that overflows the opposite edge
+ *  (a label wider than the whole panel, or a dot pinned hard against one
+ *  side), clamps the left-anchor position inward so the label's start stays
+ *  on-panel rather than bleeding off it entirely.
+ *
+ *  Pure math, no canvas access — unit-testable without a 2D-context stub.
+ *  Every mark drawn near a panel's left edge (any single-book figure's
+ *  bottom-left-corner label, or every sub-panel of a multi-panel spread —
+ *  each its own separately-canvased uPlot instance, so text spilling past
+ *  ITS OWN left edge is simply invisible, not merely close to another
+ *  panel's content) needs this: see `annotationPlugin`'s docstring for the
+ *  root cause this replaces (an inherited `textAlign` that put the label
+ *  BEHIND the dot instead of after it). */
+export function clampAnnotationLabelX(
+  px: number,
+  textWidth: number,
+  offset: number,
+  left: number,
+  width: number,
+): { x: number; align: "left" | "right" } {
+  const right = left + width;
+  if (px + offset + textWidth <= right) return { x: px + offset, align: "left" };
+  if (px - offset - textWidth >= left) return { x: px - offset, align: "right" };
+  return { x: Math.max(left, Math.min(px + offset, right - textWidth)), align: "left" };
+}
+
 /** Draw text annotations (a small dot + label) pinned at data coordinates,
  *  clipped to the plot area so off-screen labels don't bleed into the axes.
  *  A mark tagged `axis: 1` (an Origin double-Y apply's upper-layer marks —
@@ -166,7 +209,28 @@ export function axisBoxPlugin(color: string): uPlot.Plugin {
  *  instead of the primary one, but only when this plot actually has a y2
  *  scale — a y2-tagged mark surviving onto a single-axis plot (e.g. after
  *  y2Keys was cleared) falls back to the primary scale rather than reading
- *  `u.scales.y2` as undefined. */
+ *  `u.scales.y2` as undefined.
+ *
+ *  `ctx.textAlign` is set explicitly on every draw (never left implicit):
+ *  uPlot's own axis-label pass (`setFontStyle` in uPlot.esm.js) writes
+ *  `textAlign`/`textBaseline` straight onto the shared canvas context with no
+ *  save/restore, and never resets them before firing "draw" hooks — so
+ *  whichever axis it drew LAST (typically the left Y-axis, which right-
+ *  aligns its tick labels) leaves `textAlign: "right"` resident. An unset
+ *  `textAlign` here silently inherited that, so `fillText(text, px + 6, …)`
+ *  anchored the label's RIGHT edge at `px + 6` instead of its left — the
+ *  label was drawn BEHIND its dot (extending leftward), not after it. For any
+ *  mark sitting near a panel's left edge (Origin authors habitually pin these
+ *  little curve labels bottom-left, and a multi-panel spread's per-layer
+ *  marks are typically that same near-the-axis position in every panel) the
+ *  label then ran into the y-axis title/tick-label gutter in a single plot,
+ *  or clean off the edge of its own (separately canvased) panel in a
+ *  multi-panel spread — invisible, not merely crowded. Confirmed against the
+ *  live-COM oracle render of PNR.opj's `1p5mT`/`700mT` figures (Book15/
+ *  Book14): the decoded mark position already matches where Origin itself
+ *  puts the label (bottom-left, deliberately overlapping its own tick-label
+ *  row) — the position was never wrong, only which direction the text grew
+ *  from it. */
 export function annotationPlugin(
   annotations: Annotation[],
   color: string,
@@ -178,6 +242,7 @@ export function annotationPlugin(
         const { ctx } = u;
         const { left, top, width, height } = u.bbox;
         const hasY2 = u.scales.y2 != null;
+        const lineHeight = fontPx(font) * 1.3;
         ctx.save();
         ctx.fillStyle = color;
         ctx.font = font;
@@ -191,7 +256,16 @@ export function annotationPlugin(
           ctx.beginPath();
           ctx.arc(px, py, 3, 0, Math.PI * 2);
           ctx.fill();
-          if (a.text) ctx.fillText(a.text, px + 6, py - 2);
+          if (a.text) {
+            const textWidth = ctx.measureText(a.text).width;
+            const { x: tx, align } = clampAnnotationLabelX(px, textWidth, 6, left, width);
+            // Keep the label's top edge on-panel too — a mark near the very
+            // top of the range would otherwise push a bottom-anchored line
+            // above the plot area.
+            const ty = Math.max(py - 2, top + lineHeight);
+            ctx.textAlign = align;
+            ctx.fillText(a.text, tx, ty);
+          }
         }
         ctx.restore();
       },

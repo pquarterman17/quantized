@@ -25,7 +25,11 @@ previously-unrecognized layer head byte (`0x5f`), now decoded; #42
 investigated, root cause narrowed for both halves (an undecoded per-curve
 hidden flag; a real but unprovable-by-byte axis-unit-conversion gap),
 neither fixed — see item text + `docs/origin_project_format.md`; #39
-gallery tooling merged, oracle re-export in progress)
+gallery tooling merged, oracle re-export in progress; **#43 CLOSED** — the
+owner's two live-testing annotation-placement repros (PNR/Book15 label
+over a tick, PNR/Book14 Graph11 multi-panel labels clipped on the y axis)
+were ONE frontend `ctx.textAlign` inheritance bug, not a decode fault — see
+Completed)
 Previous: 2026-07-07 (item 34 CLOSED — the native `.opj` writer now
 loads in real Origin and re-exports value-exact, see Completed; item 35's
 stale W3 body text reconciled — the item was already CLOSED 2026-07-04 at
@@ -397,6 +401,60 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**43. Annotation text-label placement (owner PNR.opj repros)**~~
+  (2026-07-09) — both live-testing repros traced to ONE frontend rendering
+  bug, NOT a backend decode fault:
+  - Root cause: `uplotOverlays.annotationPlugin`'s draw hook never set
+    `ctx.textAlign` explicitly, so it silently inherited whatever uPlot's own
+    last axis-label draw left on the shared canvas context — `setFontStyle`
+    in `uPlot.esm.js` writes `textAlign`/`textBaseline` straight onto `ctx`
+    with no save/restore and never resets before firing "draw" hooks; the
+    left Y-axis right-aligns its own tick labels, so `ctx.textAlign` was
+    `"right"` by the time our overlay ran. `fillText(text, px + 6, …)` then
+    anchored the label's RIGHT edge at `px + 6` instead of its left — every
+    label grew BACKWARD (behind its dot) instead of forward.
+  - Repro 1 (Book15/`1p5mT`, "15 G from 40 G" "weirdly in the bottom-left
+    over a label"): the DECODED POSITION is correct — cross-checked against
+    the live-COM oracle PNG (`1p5mT.png`/`700mT.png`), Origin itself pins
+    this label at that exact bottom-left spot, deliberately overlapping its
+    own x-tick row (confirmed on multiple figures, not a one-off). The
+    backward-grown label additionally overlapped the Y-axis title/tick
+    gutter to its left; fixed by the textAlign correction (before/after
+    screenshots: session record).
+  - Repro 2 (Book14/`Graph11`, 8-panel spin-asymmetry spread, "labels
+    randomly appear clipped on the y axis"): every panel's mark sits near
+    ITS OWN left axis (Origin's habitual bottom-left curve label, e.g. "40
+    Oe from 7 kOe"), and each spatial panel is a separately-canvased `uPlot`
+    instance (`useMultiPanelStage.ts`) — a label growing backward from a
+    point 1-2% in from the left ran clean off that panel's OWN canvas
+    (invisible, not merely crowded), leaving only its tail visible (e.g.
+    "from 7 kOe" with "40 Oe " gone). Confirmed before/after via
+    `tools/visual/origin_figures.mjs`: all 8 panels now show their full
+    label text.
+  - Fix (`frontend/src/lib/uplotOverlays.ts`): `annotationPlugin` sets
+    `ctx.textAlign` explicitly on every draw; a new pure
+    `clampAnnotationLabelX` helper flips the label to a mirrored
+    right-anchor when a left-anchor would overflow the panel's right edge,
+    clamping inward as a last resort for a label wider than the panel; a
+    small vertical clamp keeps a near-top mark's label from poking above the
+    plot area.
+  - No backend change: `annotation_marks.py`'s fraction→data decode was
+    re-verified against both repros' actual figures (`PNR.opj` via a
+    scratchpad probe against `extract_figures`) and is correct — the
+    module's documented "non-zero attach mode" gap remains an open,
+    unencountered residual, not the cause here.
+  - Tests: 10 new cases in `uplotOverlays.test.ts` — a regression stub whose
+    fake canvas starts `textAlign: "right"` (mirroring uPlot's real leaked
+    state) catches any future regression back to implicit inheritance, plus
+    near-left/near-right/near-top clamp behavior; 4 new pure-math cases for
+    `clampAnnotationLabelX` covering the fits/flips/both-overflow/boundary
+    cases. Full re-render of the live PNR.opj corpus (208 figure entries,
+    101 graph-window families) through `origin_figures.mjs` before/after:
+    identical structural totals (101/99/91/8), confirming zero regression to
+    apply-routing — only the label pixels changed.
+  - Gates: frontend `npm test` (2138 passed) + `npm run build` green.
+    Backend untouched, no backend gate needed.
 
 - ~~**40. Unresolved figure families**~~ (2026-07-09) — one root cause,
   fully diagnosed and fixed for the decodable half: `PNR.opj`'s 6
