@@ -5,6 +5,7 @@
 // actual apply-to-plot-state action.
 
 import type { SpatialPanel } from "./multipanel";
+import { computePanelLayout, framesCoincide } from "./originPanels";
 import type { Annotation, Dataset, MarkerShape, OriginCurve, OriginFigure, SeriesStyle } from "./types";
 
 const MARKER_SHAPES: ReadonlySet<string> = new Set([
@@ -289,6 +290,162 @@ export function resolveFigurePanels(
     });
   }
   return out;
+}
+
+/** A relative-tolerance range-equality check (both endpoints) — used to tell
+ *  a shared x-axis (double-Y) from a distinct one, and a distinct y-range
+ *  from a coincidentally-identical one. Tolerance scales off the range's own
+ *  span so it stays meaningful whether the axis reads in nm or in Q (nm⁻¹). */
+function rangesEqual(aFrom: number, aTo: number, bFrom: number, bTo: number): boolean {
+  const tol = 1e-6 * Math.max(1, Math.abs(aTo - aFrom));
+  return Math.abs(aFrom - bFrom) <= tol && Math.abs(aTo - bTo) <= tol;
+}
+
+/** True when `candidate` looks like a genuine Origin double-Y overlay of
+ *  `host` — the SAME idiom `doubleYPartner` detects for an exactly-2-layer
+ *  graph window, occurring instead as one pair INSIDE a ≥2-layer spatial
+ *  multi-panel family (decode-plan #36 residual — the PNR/S7/Book33 repro:
+ *  a 3-layer graph rendered as a bogus 1x3 ordinal stack because two of its
+ *  layers decode BYTE-IDENTICAL frame quads, which `computePanelLayout`'s
+ *  own "frames overlap rather than tile the page" guard read as an
+ *  untrustworthy geometry decode for the WHOLE figure). All of the
+ *  following must hold, so a false positive never merges two genuinely
+ *  separate panels that happen to share a page rectangle:
+ *   - both layers' decoded `frame` quads occupy the same page rectangle
+ *     (`originPanels.framesCoincide` — near-total MUTUAL overlap, distinct
+ *     from the partial/one-sided overlap that still means "untrusted
+ *     geometry");
+ *   - both resolved to the SAME dataset and both carry at least one curve
+ *     (`doubleYPartner`'s own checks — a genuine double-Y always shares a
+ *     book);
+ *   - their Y ranges are genuinely DIFFERENT (an overlay reads a different
+ *     scale than its host; two real panels that happen to decode with
+ *     identical frames but the SAME y-range are not a double-Y pair); and
+ *   - their X ranges MATCH (an overlay shares its host's x axis; two
+ *     independent panels do not). */
+function isFrameCoincidentY2Overlay(host: OriginFigureEntry, candidate: OriginFigureEntry): boolean {
+  const hf = host.figure;
+  const cf = candidate.figure;
+  if (!hf.frame || !cf.frame) return false;
+  if (!framesCoincide(hf.frame, cf.frame)) return false;
+  if (!host.datasetId || !candidate.datasetId || host.datasetId !== candidate.datasetId) return false;
+  if ((hf.curves ?? []).length === 0 || (cf.curves ?? []).length === 0) return false;
+  if (rangesEqual(hf.y_from, hf.y_to, cf.y_from, cf.y_to)) return false; // must DIFFER
+  return rangesEqual(hf.x_from, hf.x_to, cf.x_from, cf.x_to); // must MATCH
+}
+
+/** One detected frame-coincident double-Y pair within a spatial family, as
+ *  indices into that same `family` array. `hostIndex` always names the
+ *  LOWER layer number (mirrors `applyOriginFigure`'s 2-layer doubleY
+ *  convention: axis state comes from the lower layer). */
+export interface SpatialY2Pair {
+  hostIndex: number;
+  y2Index: number;
+}
+
+/** Detect every frame-coincident double-Y pair within a ≥2-layer spatial
+ *  family (`isFrameCoincidentY2Overlay`, above). Greedy, family order (a
+ *  triple-overlay isn't a real Origin shape, so each layer pairs into AT
+ *  MOST one merge); members that don't pair are simply absent from the
+ *  result — callers treat every family index not named here as its own,
+ *  ordinary spatial panel. */
+export function figureFrameY2Pairs(family: OriginFigureEntry[]): SpatialY2Pair[] {
+  const used = new Set<number>();
+  const pairs: SpatialY2Pair[] = [];
+  for (let i = 0; i < family.length; i++) {
+    if (used.has(i)) continue;
+    for (let j = i + 1; j < family.length; j++) {
+      if (used.has(j)) continue;
+      if (!isFrameCoincidentY2Overlay(family[i], family[j])) continue;
+      const iLayer = family[i].figure.layer ?? 1;
+      const jLayer = family[j].figure.layer ?? 1;
+      const [hostIndex, y2Index] = iLayer <= jLayer ? [i, j] : [j, i];
+      pairs.push({ hostIndex, y2Index });
+      used.add(i);
+      used.add(j);
+      break;
+    }
+  }
+  return pairs;
+}
+
+/** Combine a resolved host panel with its frame-coincident y2 overlay panel
+ *  into ONE panel: the host's own selection stays primary; the y2 panel's
+ *  channels/range/log/step move to the secondary axis, mirroring
+ *  `applyOriginFigure`'s 2-layer double-Y apply (`yKeys` becomes the union
+ *  so the y2 channels still render; `y2Keys` tags which of them are
+ *  secondary). The y2 side's own annotation marks — built untagged by
+ *  `resolveFigurePanels` (a lone panel has no secondary axis to tag onto) —
+ *  are re-tagged `axis: 1` here. `y2AxisLabel` prefers the y2 layer's
+ *  decoded `y2_title` (Origin's own secondary-axis title text — "decoded
+ *  but not yet wired" per `types.ts`; this is that wiring) over its
+ *  `y_title` (the field the existing 2-layer apply reads, which is often
+ *  blank on a real y2 layer — the PNR/S7/Book33 repro's layer 3 is exactly
+ *  this: `y_title: ""`, `y2_title: "Magnetic SLD …"` — so preferring
+ *  `y2_title` costs nothing when it's unset). */
+function mergePanelWithY2(
+  host: Omit<SpatialPanel, "row" | "col">,
+  y2: Omit<SpatialPanel, "row" | "col">,
+  y2Figure: OriginFigure,
+): Omit<SpatialPanel, "row" | "col"> {
+  return {
+    ...host,
+    yKeys: [...host.yKeys, ...y2.yKeys.filter((k) => !host.yKeys.includes(k))],
+    seriesStyles: { ...host.seriesStyles, ...y2.seriesStyles },
+    seriesLabels: { ...host.seriesLabels, ...y2.seriesLabels },
+    y2Keys: y2.yKeys,
+    y2Lim: y2.yLim,
+    y2Log: y2.yLog,
+    y2Step: y2.yStep,
+    y2AxisLabel: y2Figure.y2_title || y2Figure.y_title || "",
+    annotations: [
+      ...(host.annotations ?? []),
+      ...(y2.annotations ?? []).map((a) => ({ ...a, axis: 1 as const })),
+    ],
+  };
+}
+
+/** Full spatial multi-panel resolution for `applyOriginFigure` (decode-plan
+ *  #36, residual fix — PNR/S7/Book33 repro): resolves every family member
+ *  (`resolveFigurePanels`, all-or-nothing — unchanged), then collapses any
+ *  frame-coincident double-Y pair (`figureFrameY2Pairs`) into ONE merged
+ *  panel (`mergePanelWithY2`) BEFORE handing frames to
+ *  `originPanels.computePanelLayout` — so a y2 overlay's frame never even
+ *  reaches the clusterer as a second cell (the bug: two layers occupying the
+ *  SAME page rectangle tripped `computePanelLayout`'s own "frames overlap
+ *  rather than tile the page" bail-out for the WHOLE figure, collapsing a
+ *  real 2-panel layout to a 1xN ordinal stack). A genuine, non-double-Y
+ *  coincidence/overlap among the REMAINING (post-merge) frames still
+ *  correctly falls back — `computePanelLayout` itself is untouched. Returns
+ *  `null` when `resolveFigurePanels` does (nothing resolved); `spatial`
+ *  mirrors the underlying layout's own flag (false = geometry undecoded or
+ *  untrustworthy, ordinal stack). */
+export function resolveSpatialPanels(
+  family: OriginFigureEntry[],
+  datasets: Dataset[],
+): { panels: SpatialPanel[]; spatial: boolean } | null {
+  const resolved = resolveFigurePanels(family, datasets);
+  if (!resolved) return null;
+  const pairs = figureFrameY2Pairs(family);
+  const y2ByHost = new Map(pairs.map((p) => [p.hostIndex, p.y2Index]));
+  const consumed = new Set(pairs.map((p) => p.y2Index));
+  const reducedIndices = family.map((_, i) => i).filter((i) => !consumed.has(i));
+  const reducedPanels = reducedIndices.map((i) => {
+    const y2Index = y2ByHost.get(i);
+    return y2Index == null
+      ? resolved[i]
+      : mergePanelWithY2(resolved[i], resolved[y2Index], family[y2Index].figure);
+  });
+  const layout = computePanelLayout(
+    reducedIndices.map((i) => family[i].figure.frame ?? null),
+    family[0].figure.page ?? null,
+  );
+  const panels: SpatialPanel[] = reducedPanels.map((p, pos) => ({
+    ...p,
+    row: layout.placements[pos]?.row ?? pos,
+    col: layout.placements[pos]?.col ?? 0,
+  }));
+  return { panels, spatial: layout.spatial };
 }
 
 /** The store `annotations` an applied figure pins on the plot: every decoded

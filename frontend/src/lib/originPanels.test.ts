@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computePanelLayout, type FrameQuad } from "./originPanels";
+import { computePanelLayout, framesCoincide, type FrameQuad } from "./originPanels";
 
 describe("computePanelLayout", () => {
   it("returns nothing to place for an empty layer list", () => {
@@ -156,5 +156,47 @@ describe("computePanelLayout", () => {
     const bottom: FrameQuad = { left: 0, top: 55, right: 100, bottom: 100 };
     expect(computePanelLayout([top, bottom], null).spatial).toBe(true);
     expect(computePanelLayout([top, bottom], undefined).spatial).toBe(true);
+  });
+});
+
+describe("framesCoincide", () => {
+  it("is true for byte-identical frames (the PNR/S7/Book33 repro shape)", () => {
+    // Exact frame quads read from PNR.opj's Graph24 layers 2/3 (2026-07-09):
+    // a Nuclear-SLD host layer and its Magnetic-SLD y2 overlay share the
+    // EXACT same page rectangle.
+    const host: FrameQuad = { left: 867, top: 2701, right: 6686, bottom: 4256 };
+    const y2: FrameQuad = { left: 867, top: 2701, right: 6686, bottom: 4256 };
+    expect(framesCoincide(host, y2)).toBe(true);
+  });
+
+  it("is true for near-identical frames within rounding slop", () => {
+    const a: FrameQuad = { left: 867, top: 2701, right: 6686, bottom: 4256 };
+    const b: FrameQuad = { left: 870, top: 2699, right: 6680, bottom: 4250 };
+    expect(framesCoincide(a, b)).toBe(true);
+  });
+
+  it("is false for a nested (contained-but-smaller) frame — an inset, not a same-panel overlay", () => {
+    const outer: FrameQuad = { left: 0, top: 0, right: 100, bottom: 100 };
+    const inner: FrameQuad = { left: 10, top: 10, right: 90, bottom: 90 };
+    expect(framesCoincide(outer, inner)).toBe(false);
+  });
+
+  it("is false for two tiled (non-overlapping) panels", () => {
+    const top: FrameQuad = { left: 0, top: 0, right: 100, bottom: 45 };
+    const bottom: FrameQuad = { left: 0, top: 55, right: 100, bottom: 100 };
+    expect(framesCoincide(top, bottom)).toBe(false);
+  });
+
+  it("is false for a partial (non-coincident) overlap", () => {
+    const a: FrameQuad = { left: 0, top: 0, right: 60, bottom: 60 };
+    const b: FrameQuad = { left: 40, top: 40, right: 100, bottom: 100 };
+    expect(framesCoincide(a, b)).toBe(false);
+  });
+
+  it("is false when either frame is degenerate", () => {
+    const zero: FrameQuad = { left: 10, top: 10, right: 10, bottom: 50 };
+    const f: FrameQuad = { left: 10, top: 10, right: 100, bottom: 50 };
+    expect(framesCoincide(zero, f)).toBe(false);
+    expect(framesCoincide(f, zero)).toBe(false);
   });
 });

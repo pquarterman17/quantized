@@ -4,6 +4,7 @@ import {
   buildOriginFigureEntries,
   doubleYPartner,
   figureChannelSelection,
+  figureFrameY2Pairs,
   figureLabel,
   figureLayerFamily,
   originCurveSeriesStyle,
@@ -12,6 +13,7 @@ import {
   type OriginFigureEntry,
   resolveFigureDataset,
   resolveFigurePanels,
+  resolveSpatialPanels,
 } from "./originFigures";
 import type { Dataset, OriginCurve, OriginFigure } from "./types";
 
@@ -524,6 +526,163 @@ describe("resolveFigurePanels", () => {
     const l1 = entry("f1", 1, "d1", { curves: [{ book: "Book1", x: "A", y: "B" }] });
     const l2 = entry("f2", 2, "d2", { curves: [{ book: "Elsewhere", x: "A", y: "B" }] }); // wrong book -> no selection
     expect(resolveFigurePanels([l1, l2], [ds1, ds2])).toBeNull();
+  });
+});
+
+describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual — PNR/S7/Book33 repro)", () => {
+  // Same dataset for every entry in these tests: a real double-Y pair always
+  // shares a book (`doubleYPartner`'s own check, reused here).
+  const ds = book("d1", "PNR:Book33", {
+    origin_book: "Book33",
+    x_column_name: "A",
+    origin_column_names: ["B", "C", "D"],
+  });
+
+  const entry = (
+    id: string,
+    layer: number,
+    figOverrides: Partial<OriginFigure>,
+    datasetId: string | null = "d1",
+  ): OriginFigureEntry => ({
+    id,
+    stem: "PNR",
+    datasetId,
+    siblingIds: [datasetId ?? "none"],
+    figure: figure({ name: "Graph24", layer, curves: [{ book: "Book33", x: "A", y: "B" }], ...figOverrides }),
+  });
+
+  // Exact frame quads from the real repro (PNR.opj Graph24, 2026-07-09):
+  // layer 1 (Reflectivity) sits in its own top frame; layers 2 (Nuclear SLD,
+  // host) and 3 (Magnetic SLD, y2) decode BYTE-IDENTICAL frames.
+  const topFrame = { left: 867, top: 667, right: 6686, bottom: 2222 };
+  const bottomFrame = { left: 867, top: 2701, right: 6686, bottom: 4256 };
+  const page = { width: 7582, height: 5127 };
+
+  const reflectivity = entry("f1", 1, {
+    frame: topFrame,
+    page,
+    x_from: 0.008, x_to: 0.075, x_log: false,
+    y_from: 8e-6, y_to: 2.0, y_log: true,
+  });
+  const nuclearSld = entry("f2", 2, {
+    frame: bottomFrame,
+    page,
+    x_from: 2950, x_to: 3550, x_log: false,
+    y_from: -1, y_to: 10, y_log: false,
+    y_title: "Nuclear SLD",
+    curves: [{ book: "Book33", x: "A", y: "C" }], // channel index 1
+  });
+  const magneticSld = entry("f3", 3, {
+    frame: bottomFrame,
+    page,
+    x_from: 2950, x_to: 3550, x_log: false, // SAME x-range as the host — shares its x axis
+    y_from: -0.5, y_to: 2.5, y_log: false, // DIFFERENT y-range — a distinct scale
+    y_title: "",
+    y2_title: "Magnetic SLD",
+    curves: [{ book: "Book33", x: "A", y: "D" }], // channel index 2 — distinct from the host's
+  });
+
+  describe("figureFrameY2Pairs", () => {
+    it("pairs the frame-coincident host/y2 layers, host = lower layer number", () => {
+      const pairs = figureFrameY2Pairs([reflectivity, nuclearSld, magneticSld]);
+      expect(pairs).toEqual([{ hostIndex: 1, y2Index: 2 }]);
+    });
+
+    it("does not pair when the y-ranges are the same (two real panels, not a double-Y)", () => {
+      const sameY = entry("f3", 3, { frame: bottomFrame, page, x_from: 2950, x_to: 3550, y_from: -1, y_to: 10 });
+      expect(figureFrameY2Pairs([nuclearSld, sameY])).toEqual([]);
+    });
+
+    it("does not pair when the x-ranges differ (not sharing the host's x axis)", () => {
+      const differentX = entry("f3", 3, {
+        frame: bottomFrame, page, x_from: 0, x_to: 100, y_from: -0.5, y_to: 2.5,
+      });
+      expect(figureFrameY2Pairs([nuclearSld, differentX])).toEqual([]);
+    });
+
+    it("does not pair across different datasets", () => {
+      const otherDs = entry("f3", 3, { frame: bottomFrame, page, x_from: 2950, x_to: 3550, y_from: -0.5, y_to: 2.5 }, "d2");
+      expect(figureFrameY2Pairs([nuclearSld, otherDs])).toEqual([]);
+    });
+
+    it("does not pair when either layer has no decoded curves", () => {
+      const noCurves = { ...magneticSld, figure: { ...magneticSld.figure, curves: [] } };
+      expect(figureFrameY2Pairs([nuclearSld, noCurves])).toEqual([]);
+    });
+
+    it("does not pair frames that merely overlap, rather than coincide (a real geometry conflict)", () => {
+      const partiallyOverlapping = entry("f3", 3, {
+        frame: { left: 867, top: 3000, right: 6686, bottom: 4500 }, // shifted down — partial overlap only
+        page, x_from: 2950, x_to: 3550, y_from: -0.5, y_to: 2.5,
+      });
+      expect(figureFrameY2Pairs([nuclearSld, partiallyOverlapping])).toEqual([]);
+    });
+
+    it("returns [] for a fully spatially-distinct family (no coincident frames at all)", () => {
+      const third = entry("f3", 3, {
+        frame: { left: 867, top: 4300, right: 6686, bottom: 5000 },
+        page, x_from: 0, x_to: 1, y_from: 0, y_to: 1,
+      });
+      expect(figureFrameY2Pairs([reflectivity, nuclearSld, third])).toEqual([]);
+    });
+  });
+
+  describe("resolveSpatialPanels", () => {
+    it("collapses the PNR/S7/Book33 repro to 2 SPATIAL panels, the second carrying a y2 overlay", () => {
+      const result = resolveSpatialPanels([reflectivity, nuclearSld, magneticSld], [ds]);
+      expect(result).not.toBeNull();
+      expect(result!.spatial).toBe(true);
+      expect(result!.panels).toHaveLength(2); // NOT 3 — layer 3 merged into layer 2's panel
+      const [top, bottom] = result!.panels;
+      expect(top.row).toBe(0);
+      expect(bottom.row).toBe(1); // still a top/bottom 2-stack, not a 1x3 ordinal column
+      // The bottom panel carries BOTH layers' channels (Nuclear SLD = C =
+      // channel 1, Magnetic SLD = D = channel 2); y2Keys tags layer 3's.
+      expect(bottom.yKeys).toEqual([1, 2]);
+      expect(bottom.y2Keys).toEqual([2]);
+      expect(bottom.y2Lim).toEqual([-0.5, 2.5]);
+      expect(bottom.y2Log).toBe(false);
+      // Prefers the y2 layer's own y2_title over its (blank) y_title.
+      expect(bottom.y2AxisLabel).toBe("Magnetic SLD");
+      expect(top.y2Keys ?? null).toBeNull();
+    });
+
+    it("leaves a fully spatially-distinct ≥2-layer family as one panel per layer (unmerged, unaffected)", () => {
+      const l1 = entry("f1", 1, { frame: { left: 0, top: 0, right: 100, bottom: 45 }, page: { width: 100, height: 100 } });
+      const l2 = entry("f2", 2, { frame: { left: 0, top: 55, right: 100, bottom: 100 }, page: { width: 100, height: 100 } });
+      const result = resolveSpatialPanels([l1, l2], [ds]);
+      expect(result).not.toBeNull();
+      expect(result!.panels).toHaveLength(2);
+      expect(result!.spatial).toBe(true);
+      expect(result!.panels.every((p) => (p.y2Keys ?? null) === null)).toBe(true);
+    });
+
+    it("falls back to the ordinal stack (unchanged) when frames are missing/degenerate — no merge applies", () => {
+      const l1 = entry("f1", 1, { frame: null });
+      const l2 = entry("f2", 2, { frame: null });
+      const l3 = entry("f3", 3, { frame: null });
+      const result = resolveSpatialPanels([l1, l2, l3], [ds]);
+      expect(result).not.toBeNull();
+      expect(result!.spatial).toBe(false);
+      expect(result!.panels).toHaveLength(3); // nothing to merge — degenerate geometry, not a real y2 pair
+    });
+
+    it("still bails to the ordinal fallback for a genuine (non-double-Y) frame conflict among 3 layers", () => {
+      // layer 2/3 coincide in frame but have the SAME y-range (two real panels
+      // that happen to decode identically) — not a valid y2 pair, so the
+      // reduced set still hands computePanelLayout a coincident pair, which
+      // bails to the ordinal stack exactly as it did before this fix.
+      const conflictingPair = entry("f3", 3, { frame: bottomFrame, page, x_from: 2950, x_to: 3550, y_from: -1, y_to: 10 });
+      const result = resolveSpatialPanels([reflectivity, nuclearSld, conflictingPair], [ds]);
+      expect(result).not.toBeNull();
+      expect(result!.panels).toHaveLength(3); // no merge -> nothing removed from the layout input
+      expect(result!.spatial).toBe(false); // computePanelLayout's own overlap guard still fires
+    });
+
+    it("returns null (all-or-nothing, unchanged) when any layer fails to resolve a dataset", () => {
+      const unresolved = entry("f3", 3, { frame: bottomFrame, page, x_from: 2950, x_to: 3550, y_from: -0.5, y_to: 2.5 }, null);
+      expect(resolveSpatialPanels([reflectivity, nuclearSld, unresolved], [ds])).toBeNull();
+    });
   });
 });
 

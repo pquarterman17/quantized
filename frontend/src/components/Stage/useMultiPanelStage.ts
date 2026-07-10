@@ -158,7 +158,13 @@ export function useMultiPanelStage(): MultiPanelStageState {
         // panel's own book needs its own fetch trigger (#38), not just the
         // "active" one.
         if (ds?.pending) useApp.getState().ensureBookData(ds.id);
-        return ds ? fetchPlot(ds.data, p.yLog, p.xLog, p.yKeys, null, p.xKey) : Promise.resolve(null);
+        // A panel carrying a merged y2 overlay (decode-plan #36 residual —
+        // `originFigures.resolveSpatialPanels`) passes its OWN y2Keys so the
+        // fetched payload tags those series `axis: 1`, same as the single-
+        // plot double-Y apply.
+        return ds
+          ? fetchPlot(ds.data, p.yLog, p.xLog, p.yKeys, p.y2Keys ?? null, p.xKey)
+          : Promise.resolve(null);
       }),
     ).then((ps) => {
       if (!cancelled) setSpatialPayloads(ps);
@@ -207,6 +213,13 @@ export function useMultiPanelStage(): MultiPanelStageState {
           yLim: p.yLim,
           xStep: p.xStep,
           yStep: p.yStep,
+          // This panel's OWN merged y2 overlay, when one was paired in
+          // (decode-plan #36 residual) — mirrors the single-plot double-Y
+          // apply's y2Lim/y2Log/y2Step/y2AxisLabel, scoped to this cell.
+          y2Lim: p.y2Lim ?? null,
+          y2Log: p.y2Log ?? null,
+          y2Step: p.y2Step ?? null,
+          y2AxisLabel: p.y2AxisLabel,
           xFmt,
           yFmt,
           showGrid,

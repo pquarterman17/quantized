@@ -51,11 +51,10 @@ import {
   figureLayerFamily,
   originFigureAnnotations,
   originLegendPos,
-  resolveFigurePanels,
+  resolveSpatialPanels,
   type OriginFigureEntry,
 } from "../lib/originFigures";
 import { planOriginFolders } from "../lib/originFolders";
-import { computePanelLayout } from "../lib/originPanels";
 import {
   cascadeGeometry,
   cascadeLayout,
@@ -1658,29 +1657,25 @@ export const useApp = create<AppState>((set, get) => ({
     // that didn't (or couldn't) combine as a Y/Y2 pair — the "Fixed Lambdas
     // SI"!Graph6-style 2-stack, or any ≥2-layer composite/panel window.
     // Arrange each layer as its OWN panel, placed per the page's real
-    // spatial layout (`originPanels.computePanelLayout` over the family's
-    // decoded `frame` quads — falls back to a plain top-to-bottom ordinal
-    // stack when the geometry wasn't decoded), when EVERY layer resolves to
-    // a dataset + plotted channels (`resolveFigurePanels`, all-or-nothing).
-    // Falls through to the clicked layer's own single-layer apply below,
-    // with a status note, when any layer doesn't resolve.
+    // spatial layout (`originFigures.resolveSpatialPanels`, which resolves
+    // every layer, ALSO collapses a frame-coincident double-Y pair into one
+    // merged panel before handing the rest to
+    // `originPanels.computePanelLayout` — the PNR/S7/Book33 fix: a y2
+    // overlay's frame used to trip the whole figure into a bogus 1xN
+    // ordinal stack — falling back to a plain top-to-bottom stack only when
+    // the (post-merge) geometry wasn't decoded), when EVERY layer resolves
+    // to a dataset + plotted channels (all-or-nothing). Falls through to the
+    // clicked layer's own single-layer apply below, with a status note, when
+    // any layer doesn't resolve.
     const family = figureLayerFamily(entry, get().originFigures);
     if (family.length >= 2) {
-      const panels = resolveFigurePanels(family, get().datasets);
-      if (panels) {
-        const layout = computePanelLayout(
-          family.map((e) => e.figure.frame ?? null),
-          family[0].figure.page ?? null,
-        );
-        const placed: SpatialPanel[] = panels.map((p, i) => ({
-          ...p,
-          row: layout.placements[i]?.row ?? i,
-          col: layout.placements[i]?.col ?? 0,
-        }));
+      const spatialResult = resolveSpatialPanels(family, get().datasets);
+      if (spatialResult) {
+        const { panels: placed, spatial } = spatialResult;
         get().setActive(entry.datasetId);
         set({ stackMode: true, spatialPanels: placed, facetPanels: null, breakPanels: null });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
-        if (!layout.spatial) {
+        if (!spatial) {
           toast(
             `applied ${placed.length} panels stacked in layer order — page geometry not decoded`,
             "info",

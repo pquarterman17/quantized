@@ -546,6 +546,25 @@ the shipped contract)
   steps per panel. `PlotStage.tsx` 491→441 via `usePlotStageActions`
   extraction. Frontend 1761 tests + build green post-merge.
 
+- ~~**PNR-triage multi-panel y2-in-panel pairing fix (unbooked side-work,
+  item 36 residual)**~~ (2026-07-09) — another bug from the SAME owner
+  PNR.opj testing session as the plot-fidelity batch above, reported
+  separately: folder `S7`, curves bound to `Book33` (`Graph24`, a 3-layer
+  window) rendered as a bogus 1x3 ordinal column instead of a 2-panel
+  layout with a right-Y overlay on the bottom panel — "I think this was
+  probably meant to be a right y axis on the middle plot but is instead a
+  1 by 3 column plot." Root cause: layers 2/3 decode BYTE-IDENTICAL frame
+  quads (a double-Y overlay pair), which tripped `computePanelLayout`'s own
+  "frames overlap rather than tile the page" guard for the WHOLE figure.
+  Fixed generally (frame-coincidence → y2 pairing inside the spatial
+  clusterer, gated by the same heuristics `doubleYPartner` uses to decide
+  y2-ness PLUS a distinct-y-range/matching-x-range guard against false
+  positives) — applies to 7 other real families in this same corpus, not
+  special-cased to Graph24. Full writeup + numbers in
+  `plans/GAP_ECOSYSTEM_PLAN.md`'s item 4 Completed entry (same
+  cross-reference convention as item 36 itself, above). Frontend 173 files
+  / 2042 tests green; `npm run build` green.
+
 - ~~**#37 y2 axis label from layer 2's decoded title**~~ (2026-07-07) —
   `applyOriginFigure`'s double-Y path sets a new `y2AxisLabel` store
   override from `upper.figure.y_title`; consumed by `uplotOpts.soloLabel`
