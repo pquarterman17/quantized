@@ -422,6 +422,20 @@ describe("buildOpts defaultTrace", () => {
     expect(auto.axes?.[0]?.label).toBe("Field (Oe)"); // payload.xLabel + xUnit
   });
 
+  // Item B (decode-plan #36 residual, PNR.opj Graph11): `null` forces NO x
+  // title even though data is present — an Origin layer whose decoded
+  // x_title is genuinely blank (the owner hand-deleted a redundant
+  // per-panel label) must render nothing, never a synthesized fallback.
+  // `""`/undefined keep deriving (the pre-existing, store-wide convention —
+  // see `store/useApp.ts`'s `xAxisLabel` doc).
+  it("null forces a blank x-axis title instead of deriving one", () => {
+    const forced = buildOpts(payload, { ...base, yLog: false, tool: "zoom", xAxisLabel: null });
+    expect(forced.axes?.[0]?.label).toBe("");
+    // "" still means "no override" (today's store-wide convention), unaffected.
+    const blankString = buildOpts(payload, { ...base, yLog: false, tool: "zoom", xAxisLabel: "" });
+    expect(blankString.axes?.[0]?.label).toBe("Field (Oe)");
+  });
+
   it("overrides the primary y-axis label and forces it to show with >1 series", () => {
     const two: PlotPayload = { ...payload, series: [...payload.series, { label: "B", unit: "T" }] };
     // Without an override, >1 series leaves the axis label to the legend (undefined).

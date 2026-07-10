@@ -341,8 +341,17 @@ export interface BuildOptsArgs {
   axisBox?: boolean;
   /** Chart title rendered above the plot (blank/undefined = none). */
   title?: string;
-  /** Override the x-axis label (blank/undefined = derive from the data). */
-  xAxisLabel?: string;
+  /** Override the x-axis label: a non-empty string shows verbatim; blank
+   *  (`""`) or `undefined` derives from the data (today's default, and the
+   *  single-plot store convention — see `store/useApp.ts`'s `xAxisLabel`
+   *  doc). `null` forces NO title even though data is present — the Origin-
+   *  fidelity case (item B, decode-plan #36 residual — PNR.opj Graph11): a
+   *  layer whose decoded `x_title` is genuinely `""` (the owner hand-deleted
+   *  a redundant per-panel label in Origin) must show nothing, never a
+   *  synthesized "channel (unit)" fallback. Only the spatial multi-panel
+   *  path (`originFigures.resolveFigurePanels`) ever passes `null`; every
+   *  other caller's plain string/undefined behaves exactly as before. */
+  xAxisLabel?: string | null;
   /** Override the primary y-axis label; when set it shows even with >1 series
    *  (blank/undefined = the solo-series auto label). */
   yAxisLabel?: string;
@@ -452,10 +461,14 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const font = `${tickPx}px ${cssVar("--font-mono") || "monospace"}`;
   const titlePx = tickPx + 2;
   const labelFont = `600 ${titlePx}px ${cssVar("--font-ui") || "system-ui, sans-serif"}`;
-  // X-axis label: an explicit override wins, else "name (unit)" from the data.
+  // X-axis label: an explicit override wins; `null` forces blank (item B —
+  // an Origin layer's own DECODED-EMPTY title must never be re-synthesized);
+  // blank/undefined derives "name (unit)" from the data (today's default).
   const xLabel =
-    args.xAxisLabel?.trim() ||
-    (payload.xUnit ? `${payload.xLabel} (${payload.xUnit})` : payload.xLabel);
+    args.xAxisLabel === null
+      ? ""
+      : args.xAxisLabel?.trim() ||
+        (payload.xUnit ? `${payload.xLabel} (${payload.xUnit})` : payload.xLabel);
   // Resolved display label per series: an explicit rename wins, else "label (unit)".
   const labels = payload.series.map((s, i) =>
     args.seriesLabels?.[i] ?? (s.unit ? `${s.label} (${s.unit})` : s.label),

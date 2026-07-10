@@ -43,12 +43,30 @@ export interface SpatialPanel {
   yLim: [number, number];
   xLog: boolean;
   yLog: boolean;
-  xAxisLabel?: string;
+  /** `null` = Origin decoded an EXPLICITLY blank title for this layer (never
+   *  synthesize one, item B); `undefined` = undecoded, derive from the data
+   *  as before. See `uplotOpts.BuildOptsArgs.xAxisLabel`'s doc for the full
+   *  contract. yAxisLabel keeps its plain `string | undefined` shape — item
+   *  B scopes the shared-axis/title-fidelity work to x only ("keep y axes
+   *  per-panel as-is"). */
+  xAxisLabel?: string | null;
   yAxisLabel?: string;
   seriesStyles?: Record<number, SeriesStyle>;
   /** Per-channel legend-label overrides (Origin's decoded `legend_labels`,
    *  fix #4), same channel-index keying as `seriesStyles`. */
   seriesLabels?: Record<number, string>;
+  /** This panel's Origin Y-error pairings (value channel -> error channel),
+   *  from `originFigures.figureChannelSelection`'s dataset-level
+   *  `errorbars.originErrKeys` — draws whiskers via `buildErrorColumns`
+   *  instead of a bare series for the error column (item A fix: the spatial
+   *  multi-panel path never applied error pairing at all). */
+  errKeys?: Record<number, number>;
+  /** This panel's Origin-hidden channels (`errorbars.originHiddenChannels`)
+   *  — paired error / secondary-X columns Origin never draws as their own
+   *  curve. Unlike the single-plot path (which keeps them in the legend,
+   *  toggleable), the spatial grid has no per-panel legend, so
+   *  `spatialPlottedChannels` drops them outright. */
+  hiddenChannels?: number[];
   /** Origin's decoded major-tick increment for this panel's OWN x/y axes
    *  (see `fixedLogAxisSplits`'s doc) — null/absent = undecoded. */
   xStep?: number | null;
@@ -71,6 +89,21 @@ export interface SpatialPanel {
   y2AxisLabel?: string;
   row: number;
   col: number;
+}
+
+/** The channels a spatial panel actually plots: its `yKeys` minus any
+ *  Origin-hidden ones (item A fix, PNR.opj Book14 Graph11 repro — a
+ *  "Y-error"-designated column like `dSA` rendered as a spurious point+line
+ *  series because the spatial multi-panel path never dropped/paired it).
+ *  Unlike the single-plot path (`usePlotPayload`'s `hidden` boolean array,
+ *  which keeps a hidden channel in the legend for interactive toggling), a
+ *  spatial grid cell has no per-panel legend to toggle it back on, so it's
+ *  simplest — and matches Origin's own rendering — to drop it outright
+ *  rather than fetch+hide it. Pure so the mapping is unit-testable without a
+ *  dataset/store. */
+export function spatialPlottedChannels(panel: Pick<SpatialPanel, "yKeys" | "hiddenChannels">): number[] {
+  const hidden = panel.hiddenChannels;
+  return hidden && hidden.length > 0 ? panel.yKeys.filter((ch) => !hidden.includes(ch)) : panel.yKeys;
 }
 
 /** Grid dimensions spanned by a set of spatial panels (1x1 for an empty or

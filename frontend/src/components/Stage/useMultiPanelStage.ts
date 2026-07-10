@@ -12,6 +12,7 @@
 import { type CSSProperties, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 
+import { buildErrorColumns } from "../../lib/errorbars";
 import { sharedXDomain, sharedYDomain } from "../../lib/facet";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import {
@@ -20,9 +21,17 @@ import {
   facetGridSize,
   panelHeights,
   spatialGridSize,
+  spatialPlottedChannels,
   splitPayload,
   xZoomSyncHook,
 } from "../../lib/multipanel";
+import {
+  columnWidths,
+  cumulativeOffsets,
+  rowBoundaryGaps,
+  rowHeights,
+  suppressedXIndices,
+} from "../../lib/panelLayout";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotTools";
@@ -43,6 +52,14 @@ function makeBreakGlyph(width: number): HTMLDivElement {
     "background-image:repeating-linear-gradient(65deg, var(--border) 0 2px, transparent 2px 9px);" +
     "opacity:0.7;";
   return glyph;
+}
+
+/** One spatial panel's fetched series plus its own error-bar map (built at
+ *  fetch time — needs the panel's full DataStruct, not just the plotted
+ *  payload — see the fetch effect below). */
+interface SpatialFetch {
+  payload: PlotPayload;
+  errorBars: Map<number, (number | null)[]>;
 }
 
 export interface MultiPanelStageState {
@@ -71,6 +88,13 @@ export function useMultiPanelStage(): MultiPanelStageState {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
+  // Item A (PNR.opj Book14 Graph11 repro): the same "Y-error"-designated
+  // column bug also hits the plain per-channel stack mode (any Origin book
+  // manually stacked, not just an applied multi-layer figure) — these are
+  // the SAME store fields PlotStage/usePlotPayload already read for the
+  // single-plot view, just threaded into this mode's own fetch/render below.
+  const errKeys = useApp((s) => s.errKeys);
+  const hiddenChannels = useApp((s) => s.hiddenChannels);
   const seriesOrder = useApp((s) => s.seriesOrder);
   const tool = useApp((s) => s.plotTool);
   const theme = useApp((s) => s.theme);
@@ -78,7 +102,7 @@ export function useMultiPanelStage(): MultiPanelStageState {
   const hostRef = useRef<HTMLDivElement>(null);
   const plotsRef = useRef<uPlot[]>([]);
   const [payload, setPayload] = useState<PlotPayload | null>(null);
-  const [spatialPayloads, setSpatialPayloads] = useState<(PlotPayload | null)[]>([]);
+  const [spatialPayloads, setSpatialPayloads] = useState<(SpatialFetch | null)[]>([]);
   const [readout, setReadout] = useState<Readout | null>(null);
 
   // Spatial panels whose dataset still exists (a removed dataset degrades to
@@ -113,11 +137,20 @@ export function useMultiPanelStage(): MultiPanelStageState {
   const plotted = useMemo(
     () =>
       !spatial && !facet && !breakMode && active
-        ? effectiveChannels(active.data, yKeys, xKey, active.channelRoles, seriesOrder)
+        ? effectiveChannels(active.data, yKeys, xKey, active.channelRoles, seriesOrder).filter(
+            (c) => !hiddenChannels.includes(c),
+          )
         : [],
-    [spatial, facet, breakMode, active, yKeys, xKey, seriesOrder],
+    [spatial, facet, breakMode, active, yKeys, xKey, seriesOrder, hiddenChannels],
   );
   const styleList = useMemo(() => plotted.map((ch) => seriesStyles[ch]), [plotted, seriesStyles]);
+  // One error-bar map per stacked panel (each panel is a single-series uPlot
+  // instance, so its own column index is always 1 — see `buildErrorColumns`'s
+  // 1-based keying). Mirrors `usePlotPayload.errorBars`, scoped per panel.
+  const errorBarsList = useMemo(
+    () => (active ? plotted.map((ch) => buildErrorColumns(active.data, [ch], errKeys)) : []),
+    [active, plotted, errKeys],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -159,13 +192,30 @@ export function useMultiPanelStage(): MultiPanelStageState {
         // panel's own book needs its own fetch trigger (#38), not just the
         // "active" one.
         if (ds?.pending) useApp.getState().ensureBookData(ds.id);
+        if (!ds) return Promise.resolve(null);
+        // Item A (PNR.opj Book14 Graph11 repro): drop this panel's Origin-
+        // hidden channels (a "Y-error" column like dSA) from what's actually
+        // fetched/plotted — the spatial grid has no per-panel legend to keep
+        // them toggle-able, unlike the single-plot path (see
+        // `multipanel.spatialPlottedChannels`'s doc). y2Keys is filtered the
+        // same way for consistency, though a hidden channel is never itself
+        // curve-bound to y2 in practice.
+        const plottedChannels = spatialPlottedChannels(p);
+        const y2 = p.y2Keys ? p.y2Keys.filter((ch) => plottedChannels.includes(ch)) : null;
         // A panel carrying a merged y2 overlay (decode-plan #36 residual —
         // `originFigures.resolveSpatialPanels`) passes its OWN y2Keys so the
         // fetched payload tags those series `axis: 1`, same as the single-
         // plot double-Y apply.
-        return ds
-          ? fetchPlot(ds.data, p.yLog, p.xLog, p.yKeys, p.y2Keys ?? null, p.xKey)
-          : Promise.resolve(null);
+        return fetchPlot(ds.data, p.yLog, p.xLog, plottedChannels, y2, p.xKey).then(
+          (fetched): SpatialFetch => ({
+            payload: fetched,
+            // Error-bar magnitudes for THIS panel's own dataset/designations
+            // (`originFigures.figureChannelSelection` populated `p.errKeys`),
+            // keyed to the SAME plottedChannels order the payload's series
+            // are in.
+            errorBars: buildErrorColumns(ds.data, plottedChannels, p.errKeys ?? {}),
+          }),
+        );
       }),
     ).then((ps) => {
       if (!cancelled) setSpatialPayloads(ps);
@@ -195,19 +245,40 @@ export function useMultiPanelStage(): MultiPanelStageState {
       host.replaceChildren();
       const w = host.clientWidth || 600;
       const h = host.clientHeight || 400;
-      const { cellW, cellH } = cellSize(w, h, grid, GRID_GAP);
+      // Item B (decode-plan #36 residual, PNR.opj Graph11): row boundaries
+      // vary per-pair (0 = flush shared-x "wall" seam, GRID_GAP otherwise) —
+      // CSS Grid's `gap` is one uniform value, so the grid switched to
+      // explicit pixel placement (`panelLayout`'s column/row math +
+      // cumulative offsets) instead of `gridTemplateRows`/`gridTemplateColumns`
+      // auto-sizing. Columns stay uniformly spaced (unchanged).
+      const colW = columnWidths(grid.cols, w, GRID_GAP);
+      const rowGaps = rowBoundaryGaps(panels, grid.rows, GRID_GAP);
+      const rowH = rowHeights(grid.rows, h, rowGaps);
+      const colLefts = cumulativeOffsets(colW, GRID_GAP);
+      const rowTops = cumulativeOffsets(rowH, rowGaps);
+      const suppressed = suppressedXIndices(panels);
+      const divs: HTMLDivElement[] = [];
       panels.forEach((p, i) => {
-        const pp = spatialPayloads[i];
-        if (!pp) return;
+        const entry = spatialPayloads[i];
+        if (!entry) return;
+        const { payload: pp, errorBars } = entry;
         const div = document.createElement("div");
-        div.style.gridRow = `${p.row + 1}`;
-        div.style.gridColumn = `${p.col + 1}`;
+        div.style.position = "absolute";
+        div.style.left = `${colLefts[p.col]}px`;
+        div.style.top = `${rowTops[p.row]}px`;
+        div.style.width = `${colW[p.col]}px`;
+        div.style.height = `${rowH[p.row]}px`;
         host.appendChild(div);
-        const cellStyles = p.yKeys.map((ch) => p.seriesStyles?.[ch]);
-        const cellLabels = p.yKeys.map((ch) => p.seriesLabels?.[ch]);
+        divs.push(div);
+        // Item A: styles/labels line up with the SAME hidden-filtered channel
+        // order the payload was fetched in (`spatialPlottedChannels`), not
+        // the raw `p.yKeys` (which still includes a dropped error column).
+        const plottedChannels = spatialPlottedChannels(p);
+        const cellStyles = plottedChannels.map((ch) => p.seriesStyles?.[ch]);
+        const cellLabels = plottedChannels.map((ch) => p.seriesLabels?.[ch]);
         const opts = buildOpts(pp, {
-          width: cellW,
-          height: cellH,
+          width: colW[p.col],
+          height: rowH[p.row],
           yLog: p.yLog,
           xLog: p.xLog,
           xLim: p.xLim,
@@ -229,6 +300,12 @@ export function useMultiPanelStage(): MultiPanelStageState {
           onReadout: setReadout,
           seriesStyles: cellStyles,
           seriesLabels: cellLabels,
+          // Item A (PNR.opj Book14 Graph11 repro): draw whiskers for this
+          // panel's Y-error-designated columns instead of the multi-panel
+          // path silently rendering them (or, pre-fix, nothing at all).
+          errorBars,
+          // Item B: faithful per-layer x title (null = Origin decoded an
+          // explicitly blank title — force blank, never synthesize).
           xAxisLabel: p.xAxisLabel,
           yAxisLabel: p.yAxisLabel,
           // Each panel's OWN layer's floating text (fix #5 — a multi-panel
@@ -238,13 +315,33 @@ export function useMultiPanelStage(): MultiPanelStageState {
           pointsPaths: POINTS_PATHS,
         });
         opts.cursor = { ...opts.cursor, sync: { key: SYNC_KEY } };
+        // Item B: blank x tick values + title on every panel with a flush
+        // shared-x neighbor directly below it (only the run's bottom panel
+        // keeps them) — same idiom the plain per-channel stack mode already
+        // uses for its own bottom-panel-only x labels.
+        if (suppressed.has(i) && opts.axes?.[0]) {
+          opts.axes[0] = { ...opts.axes[0], label: undefined, values: (_u, splits) => splits.map(() => "") };
+        }
         plotsRef.current.push(new uPlot(opts, pp.data, div));
       });
       const ro = new ResizeObserver(() => {
         const width = host.clientWidth || w;
         const height = host.clientHeight || h;
-        const { cellW: cw, cellH: ch } = cellSize(width, height, grid, GRID_GAP);
-        plotsRef.current.forEach((u) => u.setSize({ width: cw, height: ch }));
+        const cw = columnWidths(grid.cols, width, GRID_GAP);
+        const rg = rowBoundaryGaps(panels, grid.rows, GRID_GAP);
+        const rh = rowHeights(grid.rows, height, rg);
+        const cl = cumulativeOffsets(cw, GRID_GAP);
+        const rt = cumulativeOffsets(rh, rg);
+        panels.forEach((p, idx) => {
+          const div = divs[idx];
+          const u = plotsRef.current[idx];
+          if (!div || !u) return;
+          div.style.left = `${cl[p.col]}px`;
+          div.style.top = `${rt[p.row]}px`;
+          div.style.width = `${cw[p.col]}px`;
+          div.style.height = `${rh[p.row]}px`;
+          u.setSize({ width: cw[p.col], height: rh[p.row] });
+        });
       });
       ro.observe(host);
       return () => {
@@ -387,6 +484,10 @@ export function useMultiPanelStage(): MultiPanelStageState {
         tool,
         onReadout: setReadout,
         seriesStyles: styleList ? [styleList[i]] : undefined,
+        // Item A: same class of fix as the spatial multi-panel path — an
+        // Origin "Y-error" column is already dropped from `plotted` above, so
+        // its paired Y channel's own panel draws whiskers instead.
+        errorBars: errorBarsList[i],
         linearPaths: LINEAR_PATHS,
         pointsPaths: POINTS_PATHS,
       });
@@ -433,20 +534,20 @@ export function useMultiPanelStage(): MultiPanelStageState {
     showAxisBox,
     refLines,
     styleList,
+    errorBarsList,
     tool,
     theme,
     accent,
   ]);
 
   const hostStyle: CSSProperties = spatial
-    ? {
-        position: "absolute",
-        inset: 8,
-        display: "grid",
-        gap: GRID_GAP,
-        gridTemplateRows: `repeat(${grid.rows}, 1fr)`,
-        gridTemplateColumns: `repeat(${grid.cols}, 1fr)`,
-      }
+    ? // Item B: children are now explicitly pixel-positioned (`panelLayout`'s
+      // column/row math), not CSS Grid `1fr` auto-sizing — CSS Grid's `gap`
+      // is one uniform value and can't express a flush (0px) row boundary
+      // next to a normal one. `position: absolute` here still establishes
+      // the containing block the child divs' own `position: absolute`
+      // resolves against.
+      { position: "absolute", inset: 8 }
     : breakMode
       ? { position: "absolute", inset: 8, display: "flex", flexDirection: "row" }
       : facet

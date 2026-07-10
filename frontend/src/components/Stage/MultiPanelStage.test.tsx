@@ -9,6 +9,7 @@
 import { render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { SpatialPanel } from "../../lib/multipanel";
 import type { DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import MultiPanelStage from "./MultiPanelStage";
@@ -258,5 +259,94 @@ describe("MultiPanelStage — per-panel axis box (item 4)", () => {
     for (const c of created as { opts: { plugins: unknown[] } }[]) {
       expect(c.opts.plugins.length).toBe(0);
     }
+  });
+});
+
+// Item A (PNR.opj Book14 Graph11 repro): a "Y-error"-designated column (e.g.
+// dSA) must never render as its own spurious series in the spatial
+// multi-panel path — it's dropped from the plotted set and instead drives
+// error-bar whiskers on its paired Y channel.
+describe("MultiPanelStage — spatial error bars (item A)", () => {
+  it("drops a hidden (Y-error) channel from the panel's series and draws whiskers instead", async () => {
+    useApp.setState({
+      spatialPanels: [
+        {
+          datasetId: "d1",
+          xKey: null,
+          yKeys: [0, 1], // channel 1 ("b") is dSA — Y-error for channel 0
+          xLim: [0, 3],
+          yLim: [0, 400],
+          xLog: false,
+          yLog: false,
+          row: 0,
+          col: 0,
+          hiddenChannels: [1],
+          errKeys: { 0: 1 },
+        },
+      ],
+    });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const c = created[0] as { opts: { series: unknown[]; plugins: unknown[] }; data: unknown[] };
+    // Only ONE real series (channel 0) — channel 1 (hidden) never became its
+    // own series. `opts.series` is [x-descriptor, ...dataSeries].
+    expect(c.opts.series).toHaveLength(2);
+    expect(c.data).toHaveLength(2); // x column + 1 plotted column
+    // The errorBarsPlugin is the only plugin (tool defaults to no-op here,
+    // showAxisBox is off) — same "one plugin = the thing under test" idiom
+    // the fix #5 annotations regression above uses.
+    expect(c.opts.plugins.length).toBe(1);
+  });
+
+  it("draws no error-bar plugin when the panel has no errKeys (regression: today's behaviour unaffected)", async () => {
+    useApp.setState({
+      spatialPanels: [
+        { datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 3], yLim: [0, 40], xLog: false, yLog: false, row: 0, col: 0 },
+      ],
+    });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const c = created[0] as { opts: { plugins: unknown[] } };
+    expect(c.opts.plugins.length).toBe(0);
+  });
+});
+
+// Item B (decode-plan #36 residual, PNR.opj Graph11): panels vertically
+// adjacent in the same grid column that share an x-range sit flush, with x
+// tick values/title shown ONLY on the bottom panel of the run.
+describe("MultiPanelStage — shared-x flush stacking (item B)", () => {
+  const sharedXPanels: SpatialPanel[] = [
+    { datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 3], yLim: [0, 40], xLog: false, yLog: false, row: 0, col: 0 },
+    { datasetId: "d1", xKey: null, yKeys: [1], xLim: [0, 3], yLim: [0, 400], xLog: false, yLog: false, row: 1, col: 0 },
+  ];
+
+  it("suppresses x tick values on the TOP panel of a flush run, keeps the BOTTOM panel's default ticks", async () => {
+    useApp.setState({ spatialPanels: sharedXPanels });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(2));
+    const [top, bottom] = created as { opts: { axes: { label?: string; values?: unknown }[] } }[];
+    expect(top.opts.axes[0].label).toBeUndefined();
+    expect(typeof top.opts.axes[0].values).toBe("function"); // forced-blank formatter
+    expect((top.opts.axes[0].values as (u: unknown, s: unknown[]) => unknown[])(null, [1, 2, 3])).toEqual([
+      "",
+      "",
+      "",
+    ]);
+    // The bottom panel keeps uPlot's own default x formatting (no override).
+    expect(bottom.opts.axes[0].values).toBeUndefined();
+  });
+
+  it("does NOT suppress independent (non-shared-x) panels — same-shape grid, different x-ranges", async () => {
+    useApp.setState({
+      spatialPanels: [
+        { ...sharedXPanels[0] },
+        { ...sharedXPanels[1], xLim: [0, 999] }, // no longer shares the top panel's x-range
+      ],
+    });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(2));
+    const [top, bottom] = created as { opts: { axes: { values?: unknown }[] } }[];
+    expect(top.opts.axes[0].values).toBeUndefined();
+    expect(bottom.opts.axes[0].values).toBeUndefined();
   });
 });

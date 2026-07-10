@@ -178,12 +178,26 @@ describe("figureChannelSelection", () => {
 
   it("maps curve y letters onto value-channel indices", () => {
     const fig = figure({ curves: [{ book: "Co", x: "A", y: "C" }] });
-    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [1], styles: {}, labels: {} });
+    expect(figureChannelSelection(fig, ds)).toEqual({
+      xKey: null,
+      yKeys: [1],
+      styles: {},
+      labels: {},
+      errKeys: {},
+      hiddenChannels: [],
+    });
   });
 
   it("selects a non-default x channel when the curve's x is not the dataset x", () => {
     const fig = figure({ curves: [{ book: "Co", x: "B", y: "C" }] });
-    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: 0, yKeys: [1], styles: {}, labels: {} });
+    expect(figureChannelSelection(fig, ds)).toEqual({
+      xKey: 0,
+      yKeys: [1],
+      styles: {},
+      labels: {},
+      errKeys: {},
+      hiddenChannels: [],
+    });
   });
 
   it("collects multiple curves, deduplicated", () => {
@@ -194,7 +208,14 @@ describe("figureChannelSelection", () => {
         { book: "Co", x: "A", y: "C" },
       ],
     });
-    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [0, 1], styles: {}, labels: {} });
+    expect(figureChannelSelection(fig, ds)).toEqual({
+      xKey: null,
+      yKeys: [0, 1],
+      styles: {},
+      labels: {},
+      errKeys: {},
+      hiddenChannels: [],
+    });
   });
 
   it("maps decoded line/scatter styles onto the plotted channels", () => {
@@ -209,6 +230,8 @@ describe("figureChannelSelection", () => {
       yKeys: [0, 1],
       styles: { 0: { marker: true, width: 0 }, 1: { width: 1.5 } },
       labels: {},
+      errKeys: {},
+      hiddenChannels: [],
     });
   });
 
@@ -223,6 +246,8 @@ describe("figureChannelSelection", () => {
       yKeys: [0],
       styles: { 0: { marker: true, width: 0, color: "#F14040", markerShape: "triangle" } },
       labels: {},
+      errKeys: {},
+      hiddenChannels: [],
     });
   });
 
@@ -244,7 +269,14 @@ describe("figureChannelSelection", () => {
         { book: "Co", x: "A", y: "B" },
       ],
     });
-    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [0], styles: {}, labels: {} });
+    expect(figureChannelSelection(fig, ds)).toEqual({
+      xKey: null,
+      yKeys: [0],
+      styles: {},
+      labels: {},
+      errKeys: {},
+      hiddenChannels: [],
+    });
   });
 
   // Fix #4: decoded legend_labels wired into per-channel seriesLabels.
@@ -261,6 +293,8 @@ describe("figureChannelSelection", () => {
       yKeys: [0, 1],
       styles: {},
       labels: { 0: "Nb", 1: "Nb/Al" },
+      errKeys: {},
+      hiddenChannels: [],
     });
   });
 
@@ -277,6 +311,8 @@ describe("figureChannelSelection", () => {
       yKeys: [0, 1],
       styles: {},
       labels: { 0: "Nb" }, // channel 1 (curve 2) keeps its default label
+      errKeys: {},
+      hiddenChannels: [],
     });
   });
 
@@ -293,12 +329,21 @@ describe("figureChannelSelection", () => {
       yKeys: [0, 1],
       styles: {},
       labels: { 1: "Nb/Au" },
+      errKeys: {},
+      hiddenChannels: [],
     });
   });
 
   it("ignores an absent/empty legend_labels list entirely (no override)", () => {
     const fig = figure({ curves: [{ book: "Co", x: "A", y: "B" }] });
-    expect(figureChannelSelection(fig, ds)).toEqual({ xKey: null, yKeys: [0], styles: {}, labels: {} });
+    expect(figureChannelSelection(fig, ds)).toEqual({
+      xKey: null,
+      yKeys: [0],
+      styles: {},
+      labels: {},
+      errKeys: {},
+      hiddenChannels: [],
+    });
   });
 
   // Owner repro (PNR.opj live import): untouched auto-template legend text
@@ -328,6 +373,8 @@ describe("figureChannelSelection", () => {
       yKeys: [0, 1],
       styles: {},
       labels: { 0: "Temperature (K)", 1: "Resistance (Ohm)" },
+      errKeys: {},
+      hiddenChannels: [],
     });
   });
 
@@ -355,6 +402,42 @@ describe("figureChannelSelection", () => {
       yKeys: [0, 1],
       styles: {},
       labels: { 0: "B", 1: "C" }, // short (column-letter) fallback
+      errKeys: {},
+      hiddenChannels: [],
+    });
+  });
+
+  // Item A (PNR.opj Book14 Graph11 repro): the multi-panel path never
+  // applied error pairing / hidden-channel suppression at all — this is the
+  // chokepoint that now threads a book's Origin worksheet designations
+  // (errorbars.originErrKeys/originHiddenChannels) into the resolved
+  // selection, so `resolveFigurePanels` can build whiskers instead of a
+  // spurious series for a "Y-error" column.
+  it("threads a book's Origin Y-error pairing + hidden channels into the resolved selection", () => {
+    const dsErr: Dataset = {
+      id: "b11",
+      name: "PNR:Book14",
+      data: {
+        time: [0],
+        values: [[1, 2]], // SA, dSA
+        labels: ["SA", "dSA"],
+        units: ["", ""],
+        metadata: {
+          origin_book: "Book14",
+          x_column_name: "A",
+          origin_column_names: ["B", "C"], // B=SA (value ch 0), C=dSA (value ch 1)
+          column_designations: { B: "Y", C: "Y-error" },
+        },
+      },
+    };
+    const fig = figure({ curves: [{ book: "Book14", x: "A", y: "B" }] });
+    expect(figureChannelSelection(fig, dsErr)).toEqual({
+      xKey: null,
+      yKeys: [0],
+      styles: {},
+      labels: {},
+      errKeys: { 0: 1 }, // SA (channel 0) <- dSA (channel 1)
+      hiddenChannels: [1], // dSA never plots as its own series
     });
   });
 });
@@ -575,8 +658,8 @@ describe("resolveFigurePanels", () => {
     });
     const panels = resolveFigurePanels([l1, l2], [ds1, ds2]);
     expect(panels).toEqual([
-      { datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 10], yLim: [0, 50], xLog: false, yLog: true, xAxisLabel: "Time", yAxisLabel: "V", seriesStyles: {}, seriesLabels: {}, xStep: null, yStep: null, annotations: [] },
-      { datasetId: "d2", xKey: null, yKeys: [0], xLim: [0, 20], yLim: [-1, 1], xLog: false, yLog: false, xAxisLabel: undefined, yAxisLabel: undefined, seriesStyles: {}, seriesLabels: {}, xStep: null, yStep: null, annotations: [] },
+      { datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 10], yLim: [0, 50], xLog: false, yLog: true, xAxisLabel: "Time", yAxisLabel: "V", seriesStyles: {}, seriesLabels: {}, errKeys: {}, hiddenChannels: [], xStep: null, yStep: null, annotations: [] },
+      { datasetId: "d2", xKey: null, yKeys: [0], xLim: [0, 20], yLim: [-1, 1], xLog: false, yLog: false, xAxisLabel: undefined, yAxisLabel: undefined, seriesStyles: {}, seriesLabels: {}, errKeys: {}, hiddenChannels: [], xStep: null, yStep: null, annotations: [] },
     ]);
   });
 
@@ -621,6 +704,41 @@ describe("resolveFigurePanels", () => {
     const l1 = entry("f1", 1, "d1", { curves: [{ book: "Book1", x: "A", y: "B" }] });
     const l2 = entry("f2", 2, "d2", { curves: [{ book: "Elsewhere", x: "A", y: "B" }] }); // wrong book -> no selection
     expect(resolveFigurePanels([l1, l2], [ds1, ds2])).toBeNull();
+  });
+
+  // Item A (PNR.opj Book14 Graph11 repro): each panel carries its OWN book's
+  // errKeys/hiddenChannels through from `figureChannelSelection`.
+  it("carries each panel's own book errKeys/hiddenChannels through", () => {
+    const dsErr = book("d3", "PNR:Book14", {
+      origin_book: "Book14",
+      x_column_name: "A",
+      origin_column_names: ["B", "C"], // B=SA (ch 0), C=dSA (ch 1)
+      column_designations: { B: "Y", C: "Y-error" },
+    });
+    const l1 = entry("f1", 1, "d3", { curves: [{ book: "Book14", x: "A", y: "B" }] });
+    const l2 = entry("f2", 2, "d2", { curves: [{ book: "Book2", x: "A", y: "B" }] });
+    const panels = resolveFigurePanels([l1, l2], [dsErr, ds2]);
+    expect(panels?.[0].errKeys).toEqual({ 0: 1 });
+    expect(panels?.[0].hiddenChannels).toEqual([1]);
+    // ds2 has no column_designations metadata — no error pairing to carry.
+    expect(panels?.[1].errKeys).toEqual({});
+    expect(panels?.[1].hiddenChannels).toEqual([]);
+  });
+
+  // Item B (decode-plan #36 residual, PNR.opj Graph11): an EXPLICITLY blank
+  // decoded x_title ("" — the owner hand-deleted a redundant per-panel
+  // label) must come through as `null` (force blank), distinct from an
+  // UNDECODED one (undefined — auto-derive stays the fallback). yAxisLabel
+  // keeps the pre-existing `|| undefined` behaviour (item B scopes the
+  // title-fidelity fix to x only).
+  it("maps an explicitly blank decoded x_title to null, distinct from an undecoded one", () => {
+    const l1 = entry("f1", 1, "d1", { x_title: "", curves: [{ book: "Book1", x: "A", y: "B" }] });
+    const l2 = entry("f2", 2, "d2", { curves: [{ book: "Book2", x: "A", y: "B" }] }); // x_title never set
+    const l3 = entry("f3", 3, "d1", { x_title: "Q (nm-1)", curves: [{ book: "Book1", x: "A", y: "B" }] });
+    const panels = resolveFigurePanels([l1, l2, l3], [ds1, ds2, ds1]);
+    expect(panels?.[0].xAxisLabel).toBeNull(); // explicit blank -> force nothing
+    expect(panels?.[1].xAxisLabel).toBeUndefined(); // undecoded -> auto-derive stands
+    expect(panels?.[2].xAxisLabel).toBe("Q (nm-1)"); // real text passes through
   });
 });
 

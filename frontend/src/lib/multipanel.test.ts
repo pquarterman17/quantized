@@ -6,6 +6,7 @@ import {
   cellSize,
   facetGridSize,
   panelHeights,
+  spatialPlottedChannels,
   splitPayload,
   xZoomSyncHook,
 } from "./multipanel";
@@ -82,6 +83,25 @@ describe("facetGridSize", () => {
   it("falls back to 1x1 for a degenerate count", () => {
     expect(facetGridSize(0)).toEqual({ rows: 1, cols: 1 });
     expect(facetGridSize(-3)).toEqual({ rows: 1, cols: 1 });
+  });
+});
+
+// Item A (PNR.opj Book14 Graph11 repro): the spatial multi-panel path has no
+// per-panel legend to toggle a hidden channel back on (unlike the
+// single-plot path's `hidden` boolean array), so a "Y-error"-designated
+// column is dropped from the plotted set outright.
+describe("spatialPlottedChannels", () => {
+  it("drops hidden channels from yKeys", () => {
+    expect(spatialPlottedChannels({ yKeys: [0, 1, 2], hiddenChannels: [1] })).toEqual([0, 2]);
+  });
+
+  it("passes yKeys through unchanged when there are no hidden channels", () => {
+    expect(spatialPlottedChannels({ yKeys: [0, 1], hiddenChannels: [] })).toEqual([0, 1]);
+    expect(spatialPlottedChannels({ yKeys: [0, 1] })).toEqual([0, 1]); // hiddenChannels absent entirely
+  });
+
+  it("can drop every channel (all designated hidden)", () => {
+    expect(spatialPlottedChannels({ yKeys: [1], hiddenChannels: [1] })).toEqual([]);
   });
 });
 
