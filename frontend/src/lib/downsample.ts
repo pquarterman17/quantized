@@ -11,6 +11,31 @@
 // pass as the bucketing), so a caller never needs a second full pass over
 // the raw data just to scale the plot.
 
+/**
+ * Trailing-padding index for an (xs, ys) pair, mirroring `lib/plotdata.ts`'s
+ * `dropTrailingEmptyRows` (kept as a standalone twin here rather than a
+ * cross-import, since a sparkline computes its own single-channel x/y pair
+ * straight off a `DataStruct` instead of a full uPlot `PlotPayload`). Origin's
+ * over-allocated worksheet storage leaves trailing "allocated but unfilled"
+ * rows — either non-finite, or (rarer, verified across ~10 PNR-corpus books)
+ * an exact simultaneous `x === 0 && y === 0` "point" that isn't a gap at all.
+ * Left in, either resets the x-axis back toward 0 at the tail, collapsing a
+ * sparkline built from the raw row order toward the origin instead of
+ * tracing the real curve.
+ *
+ * Returns the new count of leading rows to keep (i.e. the caller should treat
+ * indices `[0, returned)` as the real series and pass that as `n` to
+ * `downsampleMinMax`); `n` unchanged when there is no prunable tail. Only
+ * trims a contiguous run off the END — interior gaps are left in place.
+ */
+export function trimTrailingPadding(xs: ArrayLike<number>, ys: ArrayLike<number>, n: number): number {
+  const plottable = (i: number): boolean => Number.isFinite(xs[i]) && Number.isFinite(ys[i]);
+  const allZeroRow = (i: number): boolean => xs[i] === 0 && ys[i] === 0;
+  let end = n;
+  while (end > 0 && (!plottable(end - 1) || allZeroRow(end - 1))) end--;
+  return end;
+}
+
 export interface DownsampledSeries {
   xs: number[];
   ys: number[];

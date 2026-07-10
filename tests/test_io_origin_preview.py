@@ -5,6 +5,7 @@ decimated preview behind the lazy per-book import transport
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project.preview import decimate_datastruct
@@ -86,3 +87,78 @@ def test_bucket_with_no_finite_values_keeps_a_placeholder_row() -> None:
     ds = DataStruct(time=np.arange(n, dtype=float), values=y.reshape(-1, 1))
     out = decimate_datastruct(ds, target_points=100)
     assert out.n_points > 0
+    assert out.n_points <= 100
+
+
+# Trailing-padding pruning (Library thumbnail-mismatch fix, PNR Book15): Origin
+# over-allocated worksheet storage leaves rows at the END of a book that are
+# either non-finite everywhere or an exact simultaneous 0.0 across time+every
+# channel. Verified byte-for-byte against PNR.opj Book15 (180 rows, 19
+# trailing all-zero -- Q collapses back to 0.0, breaking x-ascending and
+# dragging the sparkline toward the origin instead of tracing the real curve).
+
+
+def test_prunes_trailing_all_zero_rows_before_decimating() -> None:
+    n = 180
+    time = np.linspace(0.005, 0.14, 161)
+    time = np.concatenate([time, np.zeros(n - 161)])
+    values = np.column_stack(
+        [
+            np.linspace(0.0009, 0.0013, 161),  # dQ-like: never touches 0 in real data
+            np.linspace(1.0, 0.5, 161),  # R++-like
+        ]
+    )
+    values = np.concatenate([values, np.zeros((n - 161, 2))])
+    ds = DataStruct(time=time, values=values, labels=("dQ", "R++"))
+    out = decimate_datastruct(ds, target_points=200)  # 180 <= 200: passthrough path
+    assert out.n_points == 161
+    assert float(out.time.min()) > 0.0
+    assert float(out.time.max()) == pytest.approx(0.14)
+    assert np.all(np.diff(out.time) >= 0)
+
+
+def test_prunes_trailing_padding_then_decimates_when_still_over_target() -> None:
+    n = 10_000
+    real_n = 9_500
+    real_time = np.linspace(0, 100, real_n)
+    real_values = (real_time + 1.0).reshape(-1, 1)  # always >= 1, never touches 0
+    time = np.concatenate([real_time, np.zeros(n - real_n)])
+    values = np.concatenate([real_values, np.zeros((n - real_n, 1))])
+    ds = DataStruct(time=time, values=values, labels=("y",))
+    out = decimate_datastruct(ds, target_points=200)
+    assert out.n_points <= 200
+    assert float(out.time.max()) <= 100.0 + 1e-9
+    assert float(np.min(out.values)) >= 1.0  # no zero-padding row survived decimation
+
+
+def test_prunes_trailing_all_nan_rows() -> None:
+    time = np.concatenate([np.arange(80, dtype=float), np.full(20, np.nan)])
+    values = np.concatenate([np.arange(80, dtype=float), np.full(20, np.nan)]).reshape(-1, 1)
+    ds = DataStruct(time=time, values=values, labels=("y",))
+    out = decimate_datastruct(ds, target_points=200)
+    assert out.n_points == 80
+
+
+def test_leaves_interior_all_zero_row_in_place() -> None:
+    n = 50
+    time = np.arange(n, dtype=float)
+    values = np.arange(n, dtype=float).reshape(-1, 1)
+    time[25] = 0.0
+    values[25, 0] = 0.0
+    ds = DataStruct(time=time, values=values, labels=("y",))
+    out = decimate_datastruct(ds, target_points=200)
+    assert out.n_points == n  # interior zero row is not the trailing tail
+
+
+def test_no_trailing_padding_returns_identity() -> None:
+    ds = _ds(50)
+    out = decimate_datastruct(ds, target_points=200)
+    assert out is ds
+
+
+def test_does_not_prune_a_genuine_zero_only_x_column() -> None:
+    # No value channels at all -- an all-zero `.time` alone is real data, not
+    # padding (mirrors the frontend's x-only-payload carve-out).
+    ds = DataStruct(time=np.zeros(50), values=np.empty((50, 0)))
+    out = decimate_datastruct(ds, target_points=200)
+    assert out.n_points == 50

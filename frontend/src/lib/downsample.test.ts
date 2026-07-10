@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { downsampleMinMax } from "./downsample";
+import { downsampleMinMax, trimTrailingPadding } from "./downsample";
 
 describe("downsampleMinMax", () => {
   it("passes a short series (n <= buckets) through untouched", () => {
@@ -119,5 +119,53 @@ describe("downsampleMinMax", () => {
     const r = downsampleMinMax(xs, ys, xs.length, 2);
     expect(r.xs).toEqual([2, 3]);
     expect(r.ys).toEqual([5, 10]);
+  });
+});
+
+describe("trimTrailingPadding", () => {
+  it("trims trailing non-finite x or y", () => {
+    const xs = [0, 1, 2, 3, NaN];
+    const ys = [10, 20, 30, 40, 50];
+    expect(trimTrailingPadding(xs, ys, xs.length)).toBe(4);
+    const xs2 = [0, 1, 2, 3, 4];
+    const ys2 = [10, 20, 30, 40, NaN];
+    expect(trimTrailingPadding(xs2, ys2, xs2.length)).toBe(4);
+  });
+
+  it("trims a trailing run where x and y are simultaneously exact 0 (Origin over-allocated storage)", () => {
+    // PNR Book15 shape: real Q/R data followed by allocated-but-unfilled rows.
+    const xs = [0.005, 0.01, 0.14, 0, 0, 0];
+    const ys = [1.0, 0.8, 0.5, 0, 0, 0];
+    expect(trimTrailingPadding(xs, ys, xs.length)).toBe(3);
+  });
+
+  it("returns n unchanged when there is no prunable tail", () => {
+    const xs = [1, 2, 3];
+    const ys = [4, 5, 6];
+    expect(trimTrailingPadding(xs, ys, xs.length)).toBe(3);
+  });
+
+  it("leaves an interior all-zero point in place — only a trailing run is pruned", () => {
+    const xs = [1, 0, 3, 4];
+    const ys = [5, 0, 7, 8];
+    expect(trimTrailingPadding(xs, ys, xs.length)).toBe(4);
+  });
+
+  it("does not newly-prune a mixed NaN+zero trailing point (the non-finite rule already covers it)", () => {
+    const xs = [1, 2, 0];
+    const ys = [1.1, 2.2, NaN];
+    expect(trimTrailingPadding(xs, ys, xs.length)).toBe(2);
+  });
+
+  it("handles n=0", () => {
+    expect(trimTrailingPadding([], [], 0)).toBe(0);
+  });
+
+  it("prunes a series that legitimately ends on a single real (0,0) point (documented trade-off)", () => {
+    // Indistinguishable from the padding artifact — accepted (mirrors
+    // lib/plotdata.ts's dropTrailingEmptyRows trade-off).
+    const xs = [1, 2, 0];
+    const ys = [5, 6, 0];
+    expect(trimTrailingPadding(xs, ys, xs.length)).toBe(2);
   });
 });
