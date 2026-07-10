@@ -245,6 +245,12 @@ def main() -> int:
                      help="soft wall-clock budget in seconds; the script exits "
                           "cleanly near this cap so it can be re-run to resume "
                           "(default: %(default)s)")
+    ap.add_argument("--skip", action="append", default=[], metavar="NAME",
+                     help="graph short name to skip permanently (repeatable). "
+                          "For graphs that reliably hang Origin's own export "
+                          "(e.g. PNR.opj's Graph18) — recorded in the manifest "
+                          "as status 'skipped' so downstream tooling sees an "
+                          "honest gap instead of an eternal retry.")
     args = ap.parse_args()
 
     project = args.project.resolve()
@@ -352,6 +358,14 @@ def main() -> int:
         n_ok = n_err = n_suspicious = n_skipped = n_processed = 0
         for i, g in enumerate(graphs, 1):
             hb.beat()
+            if g in args.skip:
+                entry = manifest["graphs"].get(g) or {"short_name": g}
+                entry["status"] = "skipped"
+                entry["error"] = "skipped via --skip (reliably hangs Origin's export)"
+                manifest["graphs"][g] = entry
+                write_manifest(manifest_path, manifest)
+                n_skipped += 1
+                continue
             existing = manifest["graphs"].get(g)
             if (
                 existing
