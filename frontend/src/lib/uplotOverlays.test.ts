@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Annotation, RefLine } from "./types";
-import { annotationPlugin, pickRefLine, refLinePlugin } from "./uplotOverlays";
+import { annotationPlugin, errorBarsPlugin, pickRefLine, refLinePlugin } from "./uplotOverlays";
 
 /** Minimal uPlot stub: a recording 2D context + a linear valToPos. */
 function fakeU() {
@@ -172,5 +172,66 @@ describe("annotationPlugin", () => {
   it("keeps an untagged (primary) annotation on y even when the plot HAS a y2 scale", () => {
     const { dots } = drawAnn([{ id: "a", x: 50, y: 30, text: "primary" }], true);
     expect(dots).toEqual([{ x: 50, y: 70 }]);
+  });
+});
+
+describe("errorBarsPlugin (item 3: cap width defaults to zero)", () => {
+  // x = [0, 1]; column 1's y = [10, 20], error magnitude = [2, 3]. Same
+  // linear valToPos convention as fakeU (x identity, y: 100 - value).
+  function draw(capHalfWidth?: number) {
+    const segs: { from: [number, number]; to: [number, number] }[] = [];
+    let pen: [number, number] = [0, 0];
+    const ctx = {
+      save() {},
+      restore() {},
+      beginPath() {},
+      rect() {},
+      clip() {},
+      stroke() {},
+      moveTo(x: number, y: number) {
+        pen = [x, y];
+      },
+      lineTo(x: number, y: number) {
+        segs.push({ from: pen, to: [x, y] });
+      },
+      strokeStyle: "",
+      lineWidth: 0,
+    };
+    const valToPos = (v: number, scale: string) => (scale === "x" ? v : 100 - v);
+    const u = {
+      ctx,
+      bbox: { left: 0, top: 0, width: 200, height: 100 },
+      valToPos,
+      data: [
+        [0, 1],
+        [10, 20],
+      ],
+      series: [{}, {}],
+    };
+    const errorsByCol = new Map<number, (number | null)[]>([[1, [2, 3]]]);
+    const plugin =
+      capHalfWidth === undefined
+        ? errorBarsPlugin(errorsByCol, "#abc")
+        : errorBarsPlugin(errorsByCol, "#abc", capHalfWidth);
+    // @ts-expect-error — minimal stub stands in for a real uPlot instance
+    plugin.hooks.draw?.(u);
+    return segs;
+  }
+
+  it("draws only the vertical whisker (no cap cross-strokes) when no cap width is given", () => {
+    const segs = draw();
+    expect(segs).toHaveLength(2); // one vertical segment per point, no caps
+    expect(segs[0]).toEqual({ from: [0, 92], to: [0, 88] }); // y±e = [8,12] -> pos [92,88]
+  });
+
+  it("still draws caps when a positive capHalfWidth is passed explicitly", () => {
+    const segs = draw(3);
+    expect(segs).toHaveLength(6); // vertical + 2 caps, per point, × 2 points
+    // point 0's high cap: pHi = 88, spanning px ± 3
+    expect(segs).toContainEqual({ from: [-3, 88], to: [3, 88] });
+  });
+
+  it("draws no caps when capHalfWidth is explicitly zero (same as the default)", () => {
+    expect(draw(0)).toHaveLength(2);
   });
 });

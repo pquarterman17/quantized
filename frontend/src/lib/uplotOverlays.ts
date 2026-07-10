@@ -199,14 +199,21 @@ export function annotationPlugin(
   };
 }
 
-/** Draw vertical error-bar whiskers (y ± e) with end caps for selected data
- *  columns. `errorsByCol` is keyed by uPlot data-column index (1-based); each
- *  value is the per-point error magnitude (null = no bar there). Each column's
- *  whiskers use that series' own y scale (primary or secondary). Clipped to the
- *  plot area so off-range whiskers don't bleed into the axes. */
+/** Draw vertical error-bar whiskers (y ± e) for selected data columns, with
+ *  optional end caps. `errorsByCol` is keyed by uPlot data-column index
+ *  (1-based); each value is the per-point error magnitude (null = no bar
+ *  there). Each column's whiskers use that series' own y scale (primary or
+ *  secondary). Clipped to the plot area so off-range whiskers don't bleed
+ *  into the axes.
+ *
+ *  `capHalfWidth` (CSS px) defaults to 0 — bars only, no cross-stroke caps
+ *  (owner 2026-07-09, item 3: "default is have the error bar cap width to
+ *  zero"). The drawing still fully supports non-zero caps for a caller that
+ *  opts in (e.g. a future per-plot preference) — only the DEFAULT changed. */
 export function errorBarsPlugin(
   errorsByCol: Map<number, (number | null)[]>,
   color: string,
+  capHalfWidth = 0,
 ): uPlot.Plugin {
   return {
     hooks: {
@@ -235,10 +242,12 @@ export function errorBarsPlugin(
             ctx.beginPath();
             ctx.moveTo(px, pLo);
             ctx.lineTo(px, pHi);
-            ctx.moveTo(px - 3, pHi);
-            ctx.lineTo(px + 3, pHi);
-            ctx.moveTo(px - 3, pLo);
-            ctx.lineTo(px + 3, pLo);
+            if (capHalfWidth > 0) {
+              ctx.moveTo(px - capHalfWidth, pHi);
+              ctx.lineTo(px + capHalfWidth, pHi);
+              ctx.moveTo(px - capHalfWidth, pLo);
+              ctx.lineTo(px + capHalfWidth, pLo);
+            }
             ctx.stroke();
           }
         }
