@@ -146,8 +146,10 @@ Key decisions (cross-cutting, kept out of the tiers):
 7. **Scope v1: XY plot windows only.** Window records carry a
    `kind: "plot"` discriminator so worksheet/map/figure window types can
    be added later without a model change. The confirmed long-term
-   direction is full Origin-style MDI (item 17), but Map and Worksheet
-   stay stage tabs until then, and the alternate render modes
+   direction is full Origin-style MDI (item 17 — since closed 2026-07-10:
+   `"worksheet"`/`"map"` document window kinds shipped; the Map/Worksheet
+   STAGE TABS STAY alongside them — removing tabs is a later owner
+   decision), and the alternate render modes
    (polar/stat/stack/inset) work only in the focused window in v1 (they
    read the singleton store directly today — since closed by item 15,
    2026-07-10: background windows render them from their own `PlotView`).
@@ -253,25 +255,10 @@ items 6–10.
 
 ## Tier 3 — Nice-to-Have
 
-17. **Worksheet / map window kinds (full MDI)** — (L) promote the Map and
-    Worksheet stage tabs to window kinds so any document type can float
-    in the canvas (the confirmed long-term direction); builds on item
-    15's view-driven render modes (shipped 2026-07-10 — that dependency
-    is now satisfied) — the endgame, schedule last.
-    - Cross-reference (plan hygiene, no duplicate booking): the worksheet
-      half of this item's mountability precondition is ALREADY satisfied —
-      `WORKSHEET_PLAN.md` item 11 (closed 2026-07-09) audited
-      `components/Stage/worksheet/` and confirmed `WorksheetPane(datasetId)`
-      has zero `useActiveDataset`/`s.activeId` reads in the subtree (only the
-      outer `Worksheet.tsx` wrapper, outside the subtree, supplies
-      `datasetId` from `activeId` today). The pre-existing `xKey`/`yKeys`/
-      `selection` singleton reads are a deliberate exception, unaffected by
-      that audit — and deliberately NOT touched by item 15 either (it scoped
-      itself to the plot-window render modes); making those window-scoped
-      lands with this item's worksheet window kind. The map half's
-      mountability precondition IS now satisfied: item 15 gave `MapStage` an
-      explicit `dataset` prop (the `WorksheetPane(datasetId)` shape). The
-      actual window-kind promotion (this item) is still unbuilt.
+**All Tier 3 items shipped — Tier 3 is complete** (items 11–18, closing
+with the item-17 full-MDI endgame on 2026-07-10). See `## Completed`
+below. The plan's only remaining open item is Tier 2's item 19, which is
+gated on an owner planning session.
 
 ## Completed
 
@@ -931,3 +918,76 @@ items 6–10.
   PolarStage/StatStage/MultiPanelStage tests pass unchanged (no import
   edits needed — the store wrappers keep the components' public shape).
   Frontend 2317 green (from 2310); `npm run build` (tsc + vite) green.
+- ~~**17. Worksheet / map window kinds (full MDI)**~~ (2026-07-10) — the
+  endgame: any document type can float in the window canvas.
+  `PlotWindow.kind` widens to `"plot" | "snapshot" | "worksheet" | "map"`
+  (a named `WindowKind` in `lib/plotview.ts`); the two new kinds are LIVE
+  document windows hosting the SAME components the stage tabs mount —
+  `WindowCanvas` dispatches them to a new
+  `components/windows/DocumentWindow.tsx` (`WorksheetWindow` →
+  `WorksheetPane(datasetId)`, fully interactive: editing/sorting/context
+  menus work, it IS the tab's component; `MapWindow` → `MapStage` via its
+  item-15 `dataset` prop; a null binding renders the decision-#4 "No
+  dataset" empty state, never force-closed). **The stage tabs STAY** (the
+  pinned decision — removing them is a later owner call) and the
+  single-maximized-window migration guarantee is untouched. **Focus model =
+  the snapshot model**, generalized: every store `kind` check became
+  `!== "plot"` / `=== "plot"` — `focusedWindowId` only ever points at plot
+  windows, `focusWindow`/`restoreWindow` on a document window raise-only
+  (no facade swap, no activeId/selectedIds retarget), Ctrl+Tab cycling and
+  minimize's focus hand-off skip them, and the ≥1-window invariant is
+  literally "≥1 PLOT window" (`closeWindow` refuses only the last plot
+  window; document windows always close freely — the old guard would have
+  wrongly refused them). **Dataset binding is LIVE** (unlike snapshots):
+  removal nulls it (all three remove actions were already kind-agnostic);
+  `rebindWindow` gained kind handling — an explicit drop on a document
+  frame retargets `datasetId` ONLY (no view reset, no focus/live-singleton
+  touch), and a drop on a snapshot frame is now an explicit no-op
+  (previously it would have silently half-rebound the frozen window);
+  document windows are never passive-retarget candidates (item 14's
+  `kind === "plot"` guard, now proven by a test that forces the
+  no-candidate create path). **Entry points (command-first v1):**
+  `createDocumentWindow(kind, datasetId)` store action (cascade placement,
+  item-10 title dedupe, top z, unknown dataset id → unbound rather than a
+  dangling ref) + two Window-menu/⌘K commands — "Open Worksheet in Window" /
+  "Open Map in Window" — acting on the ACTIVE dataset (no-op without one),
+  creating + raising the window and switching to the Plot stage tab (the
+  window canvas only renders there; a window you can't see reads as a
+  silent failure). A DatasetRow per-row button was considered per item 9's
+  precedent and SKIPPED: `DatasetRow.tsx` sits at 398/400 (architecture
+  ratchet), so the button costs a row extraction — disproportionate for
+  v1. **Chrome:** "▦ sheet" / "▩ map" title-bar badges (the "⎘ frozen"
+  pattern — glyphs, never emoji; tokens only); the link ⧟ + pin ⚲ buttons
+  tightened from `kind !== "snapshot"` to `kind === "plot"`; the bg ◐
+  toggle is plot/snapshot-only (documents draw their own surfaces).
+  **Persistence** rides `.dwk` unchanged: `sanitizePlotWindows` accepts the
+  new kinds (live datasetId clamp, no frozen bundle required), both focus
+  clamps (workspace.ts parse AND `loadWorkspace`) already keyed on
+  `kind === "plot"`, and a doc whose surviving windows are ALL documents
+  gets a fresh main plot window appended. `PlotView` on document windows
+  stays `defaultPlotView()` (required by the model, unused). **Documented
+  v1 warts (deliberate, commented at `DocumentWindow.tsx` /
+  `WorksheetPane.tsx` / `MapStage.tsx`, not fixed here):** (1) the
+  worksheet's plotted-column highlight (`xKey`/`yKeys`) and row `selection`
+  still read the SINGLETON store fields — N worksheet windows SHARE them,
+  tracking the focused plot window's view; (2) `MapStage`'s
+  gridding/contour settings (`mapMethod`/`mapRes`/`contour*`) are app-wide
+  Inspector state — two map windows share them (only the dataset binding
+  and the local channel picks are per-window). +24 tests: 3
+  `plotview.test.ts` (document-kind sanitize round-trip / dead-ref clamp /
+  view default; plus the old unknown-kind probe re-aimed at a
+  genuinely-invalid value, since "worksheet" became real) + 2
+  `workspace.test.ts` (.dwk round-trip incl. dead-ref clamp;
+  document-focus clamp to null) + 11 `useApp.test.ts` (create /
+  unknown-dataset-unbound / raise-only focus / close invariant / removal
+  nulling / document-rebind isolation / snapshot-rebind no-op /
+  pin-retarget exclusion / minimize skip / restore raise-only /
+  loadWorkspace all-documents append) + 4 `WindowCanvas.test.tsx`
+  (per-kind dispatch via component stubs recording the bound dataset,
+  empty state, kind badges, chrome gating) + 4 `useWindowCommands.test.ts`
+  (open-worksheet/open-map incl. the stage-tab switch + raise-only focus,
+  no-active no-op, Ctrl+Tab skips documents; registry assertion now 13
+  commands). Frontend 2341 green (from 2317); `npm run build` (tsc + vite)
+  green. **Tier 3 is now fully complete** — the plan's only open item is
+  Tier 2's item 19 (owner planning session required), so the plan stays
+  un-archived.

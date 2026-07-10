@@ -36,6 +36,22 @@ const { created, MockUPlot } = vi.hoisted(() => {
 });
 vi.mock("uplot", () => ({ default: MockUPlot }));
 
+// Item 17: the document-window content components are the REAL WorksheetPane/
+// MapStage the stage tabs mount — far too heavy for a dispatch test (grids,
+// canvases, fetches). Stubbed to recorders so the tests assert WHAT the
+// canvas mounted and WHICH dataset it was bound to, mirroring the uPlot mock
+// above.
+vi.mock("../Stage/worksheet/WorksheetPane", () => ({
+  default: ({ datasetId }: { datasetId: string }) => (
+    <div data-testid="worksheet-pane">sheet:{datasetId}</div>
+  ),
+}));
+vi.mock("../Stage/MapStage", () => ({
+  default: ({ dataset }: { dataset?: { id: string } | null }) => (
+    <div data-testid="map-stage">map:{dataset?.id ?? "none"}</div>
+  ),
+}));
+
 class MockResizeObserver {
   observe(): void {}
   disconnect(): void {}
@@ -381,5 +397,71 @@ describe("WindowCanvas — minimized windows (item 8)", () => {
     const { container } = render(<WindowCanvas />);
     await waitFor(() => expect(created.length).toBe(2));
     expect(container.querySelector(".qzk-winstrip")).toBeNull();
+  });
+});
+
+describe("WindowCanvas — item 17 (worksheet/map document windows)", () => {
+  it("dispatches kind:'worksheet' to WorksheetPane bound to the WINDOW's dataset, with the ▦ badge", async () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", winState: "normal" }),
+        win({ id: "ws1", kind: "worksheet", winState: "normal" }),
+      ],
+      focusedWindowId: "w1",
+    });
+    const { container, getByTestId } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(1)); // only the plot window builds a uPlot
+    expect(getByTestId("worksheet-pane").textContent).toBe("sheet:d1");
+    expect(container.textContent).toContain("▦ sheet"); // the kind badge (glyph, never emoji)
+  });
+
+  it("dispatches kind:'map' to MapStage with the window's dataset, with the ▩ badge", async () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", winState: "normal" }),
+        win({ id: "m1", kind: "map", winState: "normal" }),
+      ],
+      focusedWindowId: "w1",
+    });
+    const { container, getByTestId } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(1));
+    expect(getByTestId("map-stage").textContent).toBe("map:d1");
+    expect(container.textContent).toContain("▩ map");
+  });
+
+  it("a document window whose dataset was removed shows the decision-#4 empty state, not a crash", async () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", winState: "normal" }),
+        win({ id: "ws1", kind: "worksheet", winState: "normal", datasetId: null }),
+      ],
+      focusedWindowId: "w1",
+    });
+    const { container, queryByTestId } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(1));
+    expect(queryByTestId("worksheet-pane")).toBeNull(); // nothing to mount
+    expect(container.textContent).toContain("No dataset");
+  });
+
+  it("chrome gating: a document frame keeps close but has NO link (⧟) / pin (⚲) / bg (◐) buttons", async () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", winState: "normal" }),
+        win({ id: "ws1", kind: "worksheet", winState: "normal" }),
+      ],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const frames = container.querySelectorAll(".qzk-plotwin");
+    const [plotFrame, wsFrame] = [frames[0]!, frames[1]!]; // render order follows plotWindows
+    expect(wsFrame.querySelector(".qzk-plotwin-close")).not.toBeNull();
+    expect(wsFrame.querySelector(".qzk-plotwin-link")).toBeNull();
+    expect(wsFrame.querySelector(".qzk-plotwin-pin")).toBeNull();
+    expect(wsFrame.querySelector(".qzk-plotwin-bg")).toBeNull();
+    // … while the plot frame keeps all of them (tightened, not removed).
+    expect(plotFrame.querySelector(".qzk-plotwin-link")).not.toBeNull();
+    expect(plotFrame.querySelector(".qzk-plotwin-pin")).not.toBeNull();
+    expect(plotFrame.querySelector(".qzk-plotwin-bg")).not.toBeNull();
   });
 });

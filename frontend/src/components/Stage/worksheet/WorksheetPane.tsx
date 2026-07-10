@@ -14,13 +14,16 @@
 // selection state the column context menu and selection→plot (item 7)
 // legitimately read/write today, same as Tier 1's "Set as X axis"/"Plot as
 // Y" did before this item — they are not a "which dataset am I showing"
-// decision, so they don't violate the mountability contract. Making THOSE
-// window-scoped (so N worksheet windows could each show a different plot
-// view) is `plans/MULTI_PLOT_PLAN.md` item 15's job; promoting the worksheet
-// itself to a floatable MDI window kind is item 17's — both explicitly
-// OUT of scope here. This comment is the plan-hygiene cross-reference item
-// 11 asks for: the worksheet half of item 17's precondition (a mountable,
-// dataset-agnostic container) is satisfied by this component as it stands.
+// decision, so they don't violate the mountability contract.
+//
+// MULTI_PLOT_PLAN item 17 (2026-07-10) promoted this component to a
+// floatable MDI window kind (`kind:"worksheet"` —
+// components/windows/DocumentWindow.tsx mounts it inside a PlotWindowFrame).
+// The singleton `xKey`/`yKeys`/`selection` reads above are that item's
+// DOCUMENTED v1 wart, deliberately not fixed there: N worksheet windows
+// SHARE the plotted-column highlight and the row selection (they track the
+// FOCUSED plot window's view). Making those window-scoped is a future item,
+// not booked yet.
 
 import { useEffect, useState } from "react";
 

@@ -17,10 +17,13 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
 
   return (
     <>
-      {/* Items 13 + 14: link + pin only make sense on LIVE plot windows —
-          a snapshot is never dataset-bound (pin is meaningless) and its
-          static viewport isn't wired into the sync registry. */}
-      {win.kind !== "snapshot" && (
+      {/* Items 13 + 14 (tightened by 17): link + pin only make sense on the
+          kind:"plot" window — a snapshot is never dataset-bound (pin is
+          meaningless) and its static viewport isn't wired into the sync
+          registry; a worksheet/map document window has no XY axes to sync
+          and is never a passive-retarget candidate (kind-guarded in the
+          store), so pinning it would be a dead toggle. */}
+      {win.kind === "plot" && (
         <button
           type="button"
           className={`qzk-plotwin-link${win.linkGroup != null ? " linked" : ""}`}
@@ -37,7 +40,7 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
           {win.linkGroup != null && <span className="qzk-plotwin-link-n">{win.linkGroup}</span>}
         </button>
       )}
-      {win.kind !== "snapshot" && (
+      {win.kind === "plot" && (
         <button
           type="button"
           className={`qzk-plotwin-pin${win.pinned ? " pinned" : ""}`}
@@ -54,16 +57,22 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
           ⚲
         </button>
       )}
-      <button
-        type="button"
-        className="qzk-plotwin-bg"
-        title={`Window background: ${BG_LABEL[win.bg]} — click to cycle (Theme / Light / Dark)`}
-        aria-label="Cycle window background"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => setWindowBg(win.id, nextPlotBg(win.bg))}
-      >
-        ◐
-      </button>
+      {/* Item 18's ◐ background toggle applies to the plot PAGE (canvas draw
+          colours) — plot + snapshot windows only. Worksheet/map document
+          windows (item 17) draw their own surfaces, so the toggle is hidden
+          rather than shipped as a no-op. */}
+      {(win.kind === "plot" || win.kind === "snapshot") && (
+        <button
+          type="button"
+          className="qzk-plotwin-bg"
+          title={`Window background: ${BG_LABEL[win.bg]} — click to cycle (Theme / Light / Dark)`}
+          aria-label="Cycle window background"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setWindowBg(win.id, nextPlotBg(win.bg))}
+        >
+          ◐
+        </button>
+      )}
       <button
         type="button"
         className="qzk-plotwin-close"

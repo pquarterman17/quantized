@@ -67,6 +67,23 @@ export function snapshotToNewWindow(): void {
   useApp.getState().createSnapshotWindow(freezePlotSnapshot(live));
 }
 
+/** Open Worksheet in Window / Open Map in Window (item 17 — full MDI): float
+ *  the ACTIVE dataset's worksheet / 2-D map as a document window — the same
+ *  component the stage tab mounts, live-bound to the dataset. A no-op without
+ *  an active dataset. The new window is created on top and "focused" (=
+ *  raised — document windows are never the view-facade focus target), and
+ *  the stage switches to the Plot tab: the window canvas only renders there,
+ *  so opening a floating window anywhere else would look like a silent
+ *  failure. The Map/Worksheet stage tabs themselves STAY (the plan's pinned
+ *  decision — removing them is a later owner call). */
+function openDocumentWindow(kind: "worksheet" | "map"): void {
+  const s = useApp.getState();
+  if (!s.activeId) return;
+  const id = s.createDocumentWindow(kind, s.activeId);
+  s.focusWindow(id); // raise-only for a non-plot kind
+  s.setStageTab("plot");
+}
+
 /** Focus Next/Previous: z-order-aware cycling (item 6 — supersedes v1's
  *  plain creation-order cycle by feeding `cycleWindow` ids sorted back-to-
  *  front instead of the raw array order; identical to v1 whenever no window
@@ -147,6 +164,18 @@ export function useWindowCommands(): void {
         group: "Window",
         label: "Snapshot to New Window",
         run: snapshotToNewWindow,
+      },
+      {
+        id: "window-worksheet",
+        group: "Window",
+        label: "Open Worksheet in Window",
+        run: () => openDocumentWindow("worksheet"),
+      },
+      {
+        id: "window-map",
+        group: "Window",
+        label: "Open Map in Window",
+        run: () => openDocumentWindow("map"),
       },
       { id: "window-tile", group: "Window", label: "Tile Windows", run: tileWindows },
       { id: "window-cascade", group: "Window", label: "Cascade Windows", run: cascadeWindows },

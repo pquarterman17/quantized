@@ -256,7 +256,10 @@ export default function PlotWindowFrame({
   // capture above) — the focused window's own PlotStage owns the plot context
   // menu. Suppress the native browser menu here so a background right-click
   // never flashes one before/around the focus swap. A focused window is left
-  // alone: PlotStage (or the title bar) manages its own contextmenu.
+  // alone: PlotStage (or the title bar) manages its own contextmenu. Item-17
+  // document windows (never focused) also take this path — harmless, since
+  // preventDefault doesn't stop propagation: WorksheetPane's own column/row
+  // context menus (which preventDefault themselves) still open normally.
   const onFrameContextMenu = (e: React.MouseEvent) => {
     if (!focused) e.preventDefault();
   };
@@ -321,6 +324,21 @@ export default function PlotWindowFrame({
             title="Frozen snapshot — captured at freeze time; does not follow the source dataset"
           >
             <Badge tone="accent">⎘ frozen</Badge>
+          </span>
+        )}
+        {win.kind === "worksheet" && (
+          // Item 17: the document-kind indicator (glyphs, never emoji) — the
+          // snapshot "⎘ frozen" badge's sibling for the live document kinds.
+          <span
+            className="qzk-plotwin-kind"
+            title="Worksheet window — the bound dataset's live, editable sheet"
+          >
+            <Badge tone="accent">▦ sheet</Badge>
+          </span>
+        )}
+        {win.kind === "map" && (
+          <span className="qzk-plotwin-kind" title="Map window — 2-D map of the bound dataset">
+            <Badge tone="accent">▩ map</Badge>
           </span>
         )}
         {datasetName && <span className="qzk-plotwin-badge">{datasetName}</span>}

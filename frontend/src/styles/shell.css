@@ -384,6 +384,9 @@ body {
 /* Item 11 — the snapshot window's "frozen" indicator (a Badge primitive
    wrapped in a span for its tooltip); never squeezed out of the title bar. */
 .qzk-plotwin-frozen { flex-shrink: 0; display: inline-flex; }
+/* Item 17 — the worksheet/map document-kind indicator ("▦ sheet" / "▩ map"),
+   the frozen badge's sibling for the live document window kinds. */
+.qzk-plotwin-kind { flex-shrink: 0; display: inline-flex; }
 /* Item 18 — per-window background-override toggle (◐ cycles theme/light/
    dark); a plain glyph button, distinct from the circular close button. */
 .qzk-plotwin-bg { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 3px; border: none; background: transparent; color: var(--text-faint); cursor: default; padding: 0; flex-shrink: 0; font-size: 11px; line-height: 1; }

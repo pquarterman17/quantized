@@ -138,8 +138,10 @@ describe("sanitizePlotWindows", () => {
   });
 
   it("drops malformed entries without throwing", () => {
+    // "worksheet" became a REAL kind with item 17, so the unknown-kind probe
+    // here uses a genuinely-invalid value.
     const out = sanitizePlotWindows(
-      [win(), { id: "bad" }, null, "nope", { kind: "worksheet", id: "w3" }],
+      [win(), { id: "bad" }, null, "nope", { kind: "notebook", id: "w3" }],
       new Set(["d1"]),
     );
     expect(out).toHaveLength(1);
@@ -270,6 +272,32 @@ describe("sanitizePlotWindows — snapshot windows (item 11)", () => {
       new Set(["d1"]),
     );
     expect(out.map((w) => w.id)).toEqual(["p1"]);
+  });
+});
+
+describe("sanitizePlotWindows — worksheet/map document windows (item 17)", () => {
+  it("round-trips the document kinds with a LIVE dataset binding — no snapshot bundle required", () => {
+    const out = sanitizePlotWindows(
+      [win({ id: "ws1", kind: "worksheet" }), win({ id: "m1", kind: "map" })],
+      new Set(["d1"]),
+    );
+    expect(out.map((w) => w.kind)).toEqual(["worksheet", "map"]);
+    // Unlike a snapshot, the binding survives (live documents, decision #4).
+    expect(out.map((w) => w.datasetId)).toEqual(["d1", "d1"]);
+  });
+
+  it("clamps a document window's dead dataset ref to null without dropping the window", () => {
+    const out = sanitizePlotWindows([win({ id: "ws1", kind: "worksheet", datasetId: "gone" })], new Set(["d1"]));
+    expect(out).toHaveLength(1);
+    expect(out[0].datasetId).toBeNull(); // the "dataset removed" empty state
+  });
+
+  it("defaults a document window's malformed view to defaultPlotView() (required but unused)", () => {
+    const out = sanitizePlotWindows(
+      [win({ id: "m1", kind: "map", view: { bogus: 1 } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view).toEqual(defaultPlotView());
   });
 });
 

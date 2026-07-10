@@ -709,4 +709,33 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     delete doc.plotWindows[0].pinned;
     expect(parseWorkspace(JSON.stringify(doc)).plotWindows[0].pinned).toBe(false);
   });
+
+  it("round-trips worksheet/map document windows with their LIVE dataset binding (item 17)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const plotWindows = [
+      win({ id: "w1" }),
+      win({ id: "ws1", kind: "worksheet", title: "first" }),
+      win({ id: "m1", kind: "map", title: "first (2)" }),
+    ];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, plotWindows, focusedWindowId: "w1" }));
+    expect(loaded.plotWindows.map((w) => w.kind)).toEqual(["plot", "worksheet", "map"]);
+    // Live documents keep their binding (unlike snapshots) — and a dead ref
+    // clamps to null instead of dropping the window (decision #4).
+    expect(loaded.plotWindows.map((w) => w.datasetId)).toEqual(["a", "a", "a"]);
+    const dead = parseWorkspace(
+      serializeWorkspace({
+        datasets,
+        plotWindows: [win({ id: "w1" }), win({ id: "ws1", kind: "worksheet", datasetId: "gone" })],
+        focusedWindowId: "w1",
+      }),
+    );
+    expect(dead.plotWindows[1].datasetId).toBeNull();
+  });
+
+  it("clamps a focusedWindowId pointing at a document window to null (item 17 — only plot windows hold focus)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const plotWindows = [win({ id: "w1" }), win({ id: "ws1", kind: "worksheet" })];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, plotWindows, focusedWindowId: "ws1" }));
+    expect(loaded.focusedWindowId).toBeNull(); // the store's load path falls back to a plot window
+  });
 });

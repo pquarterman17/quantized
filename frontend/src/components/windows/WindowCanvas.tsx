@@ -23,6 +23,7 @@ import { useApp } from "../../store/useApp";
 import { DATASET_DND } from "../Library/useLibraryTree";
 import PlotStage from "../Stage/PlotStage";
 import BackgroundPlotWindow from "./BackgroundPlotWindow";
+import { MapWindow, WorksheetWindow } from "./DocumentWindow";
 import PlotWindowFrame from "./PlotWindowFrame";
 import SnapshotPlotWindow from "./SnapshotPlotWindow";
 
@@ -136,6 +137,13 @@ export default function WindowCanvas() {
                 // statically — never focused (the store guarantees it), so
                 // this branch is checked before the focused dispatch.
                 <SnapshotPlotWindow frozen={win.snapshot} view={win.view} bg={win.bg} />
+              ) : win.kind === "worksheet" ? (
+                // Item 17: a document window mounts the SAME component the
+                // stage tab does, live-bound to ITS dataset — also never the
+                // focus target, so before the focused dispatch.
+                <WorksheetWindow dataset={dataset} />
+              ) : win.kind === "map" ? (
+                <MapWindow dataset={dataset} />
               ) : focused ? (
                 <PlotStage />
               ) : (

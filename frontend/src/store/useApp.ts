@@ -968,6 +968,16 @@ interface AppState {
   // a frozen copy of the live singletons at freeze time. Returns the new id,
   // or null when no window is focused.
   createSnapshotWindow: (frozen: FrozenPlotBundle) => string | null;
+  // Item 17 (full MDI) — a floating DOCUMENT window hosting the same
+  // component the stage tab mounts (WorksheetPane / MapStage), LIVE-bound to
+  // `datasetId` (unlike a snapshot: dataset removal nulls the binding, an
+  // explicit drop rebinds it). Like every non-plot kind it can never hold
+  // the view-facade focus (focusWindow only raises it); its required `view`
+  // stays `defaultPlotView()`, unused. Cascade placement, title = dataset
+  // name deduped (item 10), created on top. Returns the new id; a dataset id
+  // that isn't in the store creates an UNBOUND window (the decision-#4 empty
+  // state) rather than a dangling ref.
+  createDocumentWindow: (kind: "worksheet" | "map", datasetId: string) => string;
   // Item 14 — drop a Library row onto EMPTY canvas: `createWindow` bound to
   // `datasetId`, then re-placed at the drop point (clamped inside the live
   // canvas bounds via `dropGeometry`). Returns the new id; like
@@ -2017,11 +2027,11 @@ export const useApp = create<AppState>((set, get) => ({
       const win = mainWindow(active);
       const dsIds = new Set(datasets.map((d) => d.id));
       const restored = sanitizePlotWindows(ws.plotWindows, dsIds);
-      // Item 11: the ≥1-window invariant is specifically ≥1 PLOT window —
-      // snapshot windows can't hold focus, so a doc whose surviving windows
-      // are all snapshots still gets the fresh maximized main window
-      // appended; and the restored focus id must land on a plot window
-      // (falling back to the first one), never on a snapshot.
+      // Items 11/17: the ≥1-window invariant is specifically ≥1 PLOT window —
+      // non-plot kinds (snapshot / worksheet / map) can't hold focus, so a
+      // doc whose surviving windows are all non-plot still gets the fresh
+      // maximized main window appended; and the restored focus id must land
+      // on a plot window (falling back to the first one), never elsewhere.
       const restoredHasPlot = restored.some((w) => w.kind === "plot");
       const plotWindows = restoredHasPlot ? restored : [...restored, win];
       const focusedWindowId =
@@ -3037,6 +3047,36 @@ export const useApp = create<AppState>((set, get) => ({
     set({ plotWindows: [...s.plotWindows, win] });
     return id;
   },
+  // Worksheet/map document windows (item 17). The bound dataset is validated
+  // here (an unknown id → unbound, never a dangling ref the next sanitize
+  // pass would silently null anyway); the #38 lazy-book fetch is covered by
+  // WindowCanvas's per-window effect (and WorksheetPane's own), not here.
+  createDocumentWindow: (kind, datasetId) => {
+    const s = get();
+    const ds = s.datasets.find((d) => d.id === datasetId) ?? null;
+    const id = nextWindowId();
+    const title = dedupeWindowTitle(
+      ds?.name ?? "Untitled",
+      s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
+    );
+    const win: PlotWindow = {
+      id,
+      kind,
+      title,
+      datasetId: ds ? ds.id : null,
+      geometry: cascadeGeometry(s.plotWindows.length),
+      z: maxZ(s.plotWindows) + 1,
+      winState: "normal",
+      // Required by the model, unused by a document window (the mounted
+      // WorksheetPane/MapStage never read a PlotView) — see WindowKind's doc.
+      view: defaultPlotView(),
+      bg: "theme", // no ◐ toggle on document kinds — they draw their own surfaces
+      linkGroup: null, // cursor/x-range sync (item 13) is XY-plot-only
+      pinned: false, // never a passive-retarget candidate anyway (kind-guarded)
+    };
+    set({ plotWindows: [...s.plotWindows, win] });
+    return id;
+  },
   createWindowAt: (datasetId, x, y) => {
     // Reuses createWindow wholesale (title dedupe, z, defaults) and only
     // re-places the result at the drop point — clamped against the live
@@ -3056,6 +3096,20 @@ export const useApp = create<AppState>((set, get) => ({
     const s = get();
     const win = s.plotWindows.find((w) => w.id === windowId);
     if (!win || !s.datasets.some((d) => d.id === datasetId)) return;
+    // A snapshot window is never dataset-bound (frozen means frozen) — a
+    // drop on its frame is a no-op, never a silent half-rebind.
+    if (win.kind === "snapshot") return;
+    if (win.kind === "worksheet" || win.kind === "map") {
+      // Item 17: a document window has no PlotView to reset — the explicit
+      // drop just retargets which dataset the mounted WorksheetPane/MapStage
+      // shows. It's also never the focus target, so focus/activeId/the live
+      // singleton fields are all untouched.
+      set((st) => ({
+        plotWindows: st.plotWindows.map((w) => (w.id === windowId ? { ...w, datasetId } : w)),
+      }));
+      get().ensureBookData(datasetId); // #38 — same activation-shaped fetch as below
+      return;
+    }
     if (windowId === s.focusedWindowId) {
       // The focused window's live view IS the singleton fields — apply the
       // exact setActive patch (shared helper), deliberately skipping the
@@ -3089,7 +3143,10 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => {
       const target = s.plotWindows.find((w) => w.id === id);
       if (!target) return {}; // id not found
-      if (target.kind !== "snapshot" && s.plotWindows.filter((w) => w.kind === "plot").length <= 1)
+      // Only the last PLOT window is uncloseable — every non-plot kind
+      // (snapshot / worksheet / map) closes freely, since none of them can
+      // be the view-facade focus survivor.
+      if (target.kind === "plot" && s.plotWindows.filter((w) => w.kind === "plot").length <= 1)
         return {};
       const remaining = s.plotWindows.filter((w) => w.id !== id);
       if (s.focusedWindowId !== id) return { plotWindows: remaining };
@@ -3116,12 +3173,12 @@ export const useApp = create<AppState>((set, get) => ({
       if (id === s.focusedWindowId) return {};
       const target = s.plotWindows.find((w) => w.id === id);
       if (!target) return {};
-      // A snapshot window (item 11) is never the view-facade focus target:
-      // a focus request (e.g. PlotWindowFrame's pointerdown-capture) only
-      // raises its z. focusedWindowId stays on the current plot window, the
-      // live singleton fields are untouched, and activeId/selectedIds never
-      // retarget — frozen means frozen.
-      if (target.kind === "snapshot") {
+      // A non-plot window — snapshot (item 11) or worksheet/map document
+      // (item 17) — is never the view-facade focus target: a focus request
+      // (e.g. PlotWindowFrame's pointerdown-capture) only raises its z.
+      // focusedWindowId stays on the current plot window, the live singleton
+      // fields are untouched, and activeId/selectedIds never retarget.
+      if (target.kind !== "plot") {
         const top = maxZ(s.plotWindows) + 1;
         return { plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, z: top } : w)) };
       }
@@ -3275,10 +3332,11 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => {
       const target = s.plotWindows.find((w) => w.id === id);
       if (!target || target.winState !== "minimized") return {};
-      // Item 11: restoring a snapshot window un-minimizes + raises it but
-      // never focuses it (snapshots can't hold focus — no snapshot/hydrate,
-      // no activeId/selectedIds retarget).
-      if (target.kind === "snapshot") {
+      // Items 11/17: restoring a non-plot window (snapshot / worksheet /
+      // map) un-minimizes + raises it but never focuses it (only plot
+      // windows can hold focus — no snapshot/hydrate, no activeId/
+      // selectedIds retarget).
+      if (target.kind !== "plot") {
         const top = maxZ(s.plotWindows) + 1;
         return {
           plotWindows: s.plotWindows.map((w) =>

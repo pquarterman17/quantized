@@ -16,12 +16,14 @@ import { draw, fmt, hitTest, type Readout } from "./mapRender";
 import { useMapCuts } from "./useMapCuts";
 
 export interface MapStageProps {
-  /** Item-17 prep (MULTI_PLOT_PLAN item 15's MapStage note): bind the map to
-   *  an EXPLICIT dataset instead of the Library-active one — the
-   *  `WorksheetPane(datasetId)` shape a future map window kind needs.
-   *  Omitted (the Stage Map tab today) = follow the active dataset, exactly
-   *  as before. The remaining singleton reads (gridding/contour settings,
-   *  theme, RSM peaks) are app-wide by design, not per-window view state. */
+  /** Bind the map to an EXPLICIT dataset instead of the Library-active one
+   *  (added as item-17 prep by MULTI_PLOT_PLAN item 15; consumed since item
+   *  17 by the `kind:"map"` document window —
+   *  components/windows/DocumentWindow.tsx). Omitted (the Stage Map tab) =
+   *  follow the active dataset, exactly as before. The remaining singleton
+   *  reads (gridding/contour settings, theme, RSM peaks) are app-wide by
+   *  design — item 17's DOCUMENTED v1 wart: two map windows share them; only
+   *  the dataset binding and the local channel picks are per-window. */
   dataset?: Dataset | null;
 }
 

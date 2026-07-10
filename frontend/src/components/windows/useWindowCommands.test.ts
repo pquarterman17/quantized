@@ -61,7 +61,7 @@ afterEach(() => {
 });
 
 describe("useWindowCommands — published registry entries", () => {
-  it("publishes exactly the 11 Window-group commands (items 11/13/14 add Snapshot, Link Group, Pin) with the documented shortcuts", () => {
+  it("publishes exactly the 13 Window-group commands (item 17 adds the worksheet/map document-window pair) with the documented shortcuts", () => {
     renderHook(() => useWindowCommands());
     const ids = useCommands.getState().menuCommands.map((c) => c.id);
     expect(ids).toEqual([
@@ -69,6 +69,8 @@ describe("useWindowCommands — published registry entries", () => {
       "window-duplicate",
       "window-close",
       "window-snapshot",
+      "window-worksheet",
+      "window-map",
       "window-tile",
       "window-cascade",
       "window-bg-cycle",
@@ -115,6 +117,48 @@ describe("useWindowCommands — published registry entries", () => {
     renderHook(() => useWindowCommands());
     act(() => action("window-close").run());
     expect(useApp.getState().plotWindows).toHaveLength(1);
+  });
+
+  it("'Open Worksheet in Window' (item 17) creates + raises a worksheet window on the ACTIVE dataset — focus stays on the plot window, stage switches to Plot", () => {
+    useApp.setState({ stageTab: "worksheet" });
+    renderHook(() => useWindowCommands());
+    act(() => action("window-worksheet").run());
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(3);
+    const doc = s.plotWindows.find((w) => !["w1", "w2"].includes(w.id))!;
+    expect(doc.kind).toBe("worksheet");
+    expect(doc.datasetId).toBe("d1");
+    expect(doc.z).toBe(Math.max(...s.plotWindows.map((w) => w.z))); // raised on top
+    expect(s.focusedWindowId).toBe("w1"); // document windows never take the view-facade focus
+    expect(s.stageTab).toBe("plot"); // the window canvas only renders on the Plot tab
+  });
+
+  it("'Open Map in Window' (item 17) does the same with kind:'map'", () => {
+    renderHook(() => useWindowCommands());
+    act(() => action("window-map").run());
+    const s = useApp.getState();
+    const doc = s.plotWindows.find((w) => !["w1", "w2"].includes(w.id))!;
+    expect(doc.kind).toBe("map");
+    expect(doc.datasetId).toBe("d1");
+    expect(s.focusedWindowId).toBe("w1");
+  });
+
+  it("both document-window commands are a no-op without an active dataset", () => {
+    useApp.setState({ activeId: null });
+    renderHook(() => useWindowCommands());
+    act(() => action("window-worksheet").run());
+    act(() => action("window-map").run());
+    expect(useApp.getState().plotWindows).toHaveLength(2); // just w1/w2 — nothing created
+  });
+
+  it("Ctrl+Tab cycling skips document windows (item 17 — they can never hold focus)", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "ws1", kind: "worksheet" }), win({ id: "w2" })],
+      focusedWindowId: "w1",
+    });
+    renderHook(() => useWindowCommands());
+    act(() => press("Tab", { ctrl: true }));
+    expect(useApp.getState().focusedWindowId).toBe("w2"); // straight past ws1
   });
 
   it("'Focus Next/Previous Window' matches v1's creation-order cycle for a SINGLE step when all z are equal", () => {

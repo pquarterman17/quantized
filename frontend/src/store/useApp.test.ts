@@ -4384,3 +4384,211 @@ describe("useApp plot windows — item 14 (drag-drop rebind + per-window pin)", 
     expect(useApp.getState().plotWindows.map((w) => w.pinned)).toEqual([false, false]);
   });
 });
+
+describe("useApp plot windows — item 17 (worksheet/map document windows, full MDI)", () => {
+  const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
+    id: "w1",
+    kind: "plot",
+    title: "",
+    datasetId: "d1",
+    geometry: { x: 0, y: 0, w: 480, h: 360 },
+    z: 0,
+    winState: "normal",
+    view: defaultPlotView(),
+    bg: "theme",
+    linkGroup: null,
+    pinned: false,
+    ...over,
+  });
+
+  const seed = () =>
+    useApp.setState({
+      datasets: [{ id: "d1", name: "alpha", data: raw }],
+      activeId: "d1",
+      selectedIds: ["d1"],
+      plotWindows: [win({ id: "w1" })],
+      focusedWindowId: "w1",
+    });
+
+  it("createDocumentWindow adds a live-bound document window on top — focus/active untouched, title deduped", () => {
+    seed();
+    const id = useApp.getState().createDocumentWindow("worksheet", "d1");
+    const s = useApp.getState();
+    const doc = s.plotWindows.find((w) => w.id === id)!;
+    expect(doc.kind).toBe("worksheet");
+    expect(doc.datasetId).toBe("d1"); // LIVE binding — unlike a snapshot
+    // w1 (untitled, bound to d1) already displays "alpha" → the new window
+    // dedupes to "alpha (2)" (item 10's convention).
+    expect(doc.title).toBe("alpha (2)");
+    expect(doc.winState).toBe("normal");
+    expect(doc.z).toBeGreaterThan(s.plotWindows.find((w) => w.id === "w1")!.z);
+    expect(doc.view).toEqual(defaultPlotView()); // required by the model, unused
+    expect(s.focusedWindowId).toBe("w1"); // document windows never take focus
+    expect(s.activeId).toBe("d1");
+  });
+
+  it("createDocumentWindow with an unknown dataset id creates an UNBOUND window, never a dangling ref", () => {
+    seed();
+    const id = useApp.getState().createDocumentWindow("map", "ghost");
+    const doc = useApp.getState().plotWindows.find((w) => w.id === id)!;
+    expect(doc.kind).toBe("map");
+    expect(doc.datasetId).toBeNull(); // the decision-#4 empty state
+  });
+
+  it("focusWindow on a document window raises its z ONLY — no focus move, no view swap, no activeId retarget", () => {
+    seed();
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", z: 5, view: { ...defaultPlotView(), plotTitle: "w1 record" } }),
+        win({ id: "ws1", kind: "worksheet", z: 1 }),
+      ],
+      focusedWindowId: "w1",
+      plotTitle: "live title",
+    });
+    useApp.getState().focusWindow("ws1");
+    const s = useApp.getState();
+    expect(s.focusedWindowId).toBe("w1"); // still the plot window
+    expect(s.plotTitle).toBe("live title"); // live singletons untouched
+    expect(s.activeId).toBe("d1");
+    // The outgoing plot window's record was NOT snapshot-swapped …
+    expect(s.plotWindows.find((w) => w.id === "w1")?.view.plotTitle).toBe("w1 record");
+    // … but the document window did rise to the top.
+    expect(s.plotWindows.find((w) => w.id === "ws1")!.z).toBeGreaterThan(
+      s.plotWindows.find((w) => w.id === "w1")!.z,
+    );
+  });
+
+  it("closeWindow: a document window always closes; the last PLOT window can't close while documents remain", () => {
+    seed();
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "ws1", kind: "worksheet" }), win({ id: "m1", kind: "map" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().closeWindow("w1"); // no-op — w1 is the last plot window
+    expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w1", "ws1", "m1"]);
+    useApp.getState().closeWindow("ws1"); // documents always close freely
+    useApp.getState().closeWindow("m1");
+    expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w1"]);
+    expect(useApp.getState().focusedWindowId).toBe("w1");
+  });
+
+  it("removeDataset nulls a document window's binding without closing it (LIVE binding, decision #4)", () => {
+    seed();
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "ws1", kind: "worksheet" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().removeDataset("d1");
+    const s = useApp.getState();
+    expect(s.plotWindows.map((w) => w.id)).toEqual(["w1", "ws1"]); // neither force-closed
+    expect(s.plotWindows.find((w) => w.id === "ws1")?.datasetId).toBeNull();
+  });
+
+  it("rebindWindow on a document window retargets the binding ONLY — view, focus, and live singletons untouched", () => {
+    seed();
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "alpha", data: raw },
+        { id: "d2", name: "beta", data: raw },
+      ],
+      plotWindows: [win({ id: "w1" }), win({ id: "ws1", kind: "worksheet" })],
+      focusedWindowId: "w1",
+      plotTitle: "live title",
+    });
+    const viewBefore = useApp.getState().plotWindows.find((w) => w.id === "ws1")!.view;
+    useApp.getState().rebindWindow("ws1", "d2");
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "ws1")?.datasetId).toBe("d2");
+    expect(s.plotWindows.find((w) => w.id === "ws1")?.view).toBe(viewBefore); // no view reset (same object)
+    expect(s.focusedWindowId).toBe("w1");
+    expect(s.activeId).toBe("d1");
+    expect(s.plotTitle).toBe("live title");
+  });
+
+  it("rebindWindow on a snapshot window is a no-op (frozen means frozen — a drop never half-rebinds it)", () => {
+    seed();
+    const bundle: FrozenPlotBundle = {
+      payload: {
+        data: [[0], [1]] as FrozenPlotBundle["payload"]["data"],
+        series: [{ label: "m", unit: "" }],
+        xLabel: "x",
+        xUnit: "",
+      },
+      styleList: null,
+      labelList: null,
+      errorBars: [],
+      hidden: null,
+    };
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "s1", kind: "snapshot", datasetId: null, snapshot: bundle })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().rebindWindow("s1", "d1");
+    expect(useApp.getState().plotWindows.find((w) => w.id === "s1")?.datasetId).toBeNull();
+  });
+
+  it("a pinned focused window's PASSIVE rebind never retargets a document window — it creates a fresh plot window", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "alpha", data: raw },
+        { id: "d2", name: "beta", data: raw },
+      ],
+      activeId: "d1",
+      selectedIds: ["d1"],
+      // The ONLY other visible window is a worksheet document — kind-guarded
+      // out of the candidate set, so the retarget must create a new window.
+      plotWindows: [win({ id: "w1", pinned: true }), win({ id: "ws1", kind: "worksheet" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().setActive("d2");
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(3);
+    const created = s.plotWindows.find((w) => !["w1", "ws1"].includes(w.id))!;
+    expect(created.kind).toBe("plot");
+    expect(s.focusedWindowId).toBe(created.id);
+    expect(created.datasetId).toBe("d2");
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("d1"); // the pin held
+    expect(s.plotWindows.find((w) => w.id === "ws1")?.datasetId).toBe("d1"); // the document untouched
+  });
+
+  it("minimizing the focused plot window skips a visible document window when handing off focus", () => {
+    seed();
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "ws1", kind: "worksheet" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().minimizeWindow("w1");
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "w1")?.winState).toBe("minimized");
+    expect(s.focusedWindowId).toBe("w1"); // no plot candidate — focus stays put
+  });
+
+  it("restoreWindow on a minimized document window un-minimizes + raises WITHOUT focusing it", () => {
+    seed();
+    useApp.setState({
+      plotWindows: [win({ id: "w1", z: 5 }), win({ id: "ws1", kind: "worksheet", z: 1, winState: "minimized" })],
+      focusedWindowId: "w1",
+      plotTitle: "live title",
+    });
+    useApp.getState().restoreWindow("ws1");
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "ws1")?.winState).toBe("normal");
+    expect(s.plotWindows.find((w) => w.id === "ws1")!.z).toBeGreaterThan(5);
+    expect(s.focusedWindowId).toBe("w1"); // unlike a plot window's restore
+    expect(s.plotTitle).toBe("live title");
+  });
+
+  it("loadWorkspace round-trips a document window's live binding and appends a fresh main window when ALL windows are documents", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      activeId: "d1",
+      plotWindows: [win({ id: "ws1", kind: "worksheet" })],
+      focusedWindowId: "ws1", // a hand-edited doc pointing focus at the document
+    });
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "ws1")?.kind).toBe("worksheet"); // survives
+    expect(s.plotWindows.find((w) => w.id === "ws1")?.datasetId).toBe("d1"); // binding restored
+    const focused = s.plotWindows.find((w) => w.id === s.focusedWindowId);
+    expect(focused?.kind).toBe("plot"); // the appended main window took focus
+  });
+});

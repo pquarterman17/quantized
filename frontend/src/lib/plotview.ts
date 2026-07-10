@@ -176,19 +176,28 @@ export function nextLinkGroup(current: number | null): number | null {
   return current >= MAX_LINK_GROUP ? null : current + 1;
 }
 
+/** The window-kind discriminator (item 17 completes the set): `"plot"` is the
+ *  live XY graph window (the only kind that can hold the view-facade focus);
+ *  `"snapshot"` (item 11) is a static frozen-payload compare window;
+ *  `"worksheet"` / `"map"` (item 17 — full Origin-style MDI) are floating
+ *  DOCUMENT windows hosting the same components the stage tabs mount
+ *  (`WorksheetPane` / `MapStage`), LIVE-bound to a dataset (unlike a
+ *  snapshot: dataset removal nulls the binding, an explicit drop rebinds).
+ *  Every non-plot kind follows the snapshot focus model — `focusedWindowId`
+ *  always points at a `kind:"plot"` window; `focusWindow` on the others only
+ *  raises their z, and Ctrl+Tab cycling skips them. */
+export type WindowKind = "plot" | "snapshot" | "worksheet" | "map";
+
 /** A plot window's persistent record: geometry/z/winState (the MDI chrome
  *  state — item 3), a dataset binding (by id; nulled, never force-closed, when
  *  that dataset is removed — MULTI_PLOT_PLAN decision #4), its own `PlotView`
- *  (swapped with the live singleton fields only while focused), and its own
- *  background override (`bg`, item 18). The `kind` discriminator carries the
- *  door open for future window kinds (worksheet/map — item 17) without a
- *  model change; item 11 adds the first extra kind, `"snapshot"` — a static
- *  frozen-payload compare window that is NEVER the view-facade focus target
- *  (`focusedWindowId` always points at a `kind:"plot"` window; `focusWindow`
- *  on a snapshot only raises its z). */
+ *  (swapped with the live singleton fields only while focused; REQUIRED but
+ *  unused — kept at `defaultPlotView()` — on the item-17 worksheet/map
+ *  document kinds), and its own background override (`bg`, item 18). See
+ *  `WindowKind` above for the kind semantics. */
 export interface PlotWindow {
   id: string;
-  kind: "plot" | "snapshot";
+  kind: WindowKind;
   title: string;
   datasetId: string | null;
   geometry: WindowGeometry;
@@ -365,6 +374,7 @@ function sanitizeView(v: unknown): PlotView {
 
 const WIN_STATES: readonly WinState[] = ["normal", "minimized", "maximized"];
 const PLOT_BGS: readonly PlotBg[] = ["theme", "light", "dark"];
+const WINDOW_KINDS: readonly WindowKind[] = ["plot", "snapshot", "worksheet", "map"];
 
 // ── Tile / Cascade / z-order-aware focus cycling (item 6) ──────────────────
 
@@ -453,12 +463,15 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
   for (const e of v) {
     if (typeof e !== "object" || e === null) continue;
     const o = e as Record<string, unknown>;
-    if (typeof o.id !== "string" || (o.kind !== "plot" && o.kind !== "snapshot")) continue;
+    if (typeof o.id !== "string" || !WINDOW_KINDS.includes(o.kind as WindowKind)) continue;
+    const kind = o.kind as WindowKind;
     // A snapshot window (item 11) IS its at-rest frozen bundle — with nothing
     // live to fall back to, a malformed bundle drops the whole entry (still
-    // never throws; the per-field-fallback discipline applies inside).
-    const snapshot = o.kind === "snapshot" ? sanitizeFrozenBundle(o.snapshot) : null;
-    if (o.kind === "snapshot" && !snapshot) continue;
+    // never throws; the per-field-fallback discipline applies inside). The
+    // item-17 worksheet/map kinds carry no bundle — they're LIVE documents,
+    // so the ordinary datasetId clamp below is all they need.
+    const snapshot = kind === "snapshot" ? sanitizeFrozenBundle(o.snapshot) : null;
+    if (kind === "snapshot" && !snapshot) continue;
     const g = (typeof o.geometry === "object" && o.geometry !== null ? o.geometry : {}) as Record<
       string,
       unknown
@@ -466,10 +479,10 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
     const datasetId = typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
     out.push({
       id: o.id,
-      kind: o.kind,
+      kind,
       title: strOrDefault(o.title, ""),
       // A snapshot window is never dataset-bound (frozen means frozen).
-      datasetId: o.kind === "snapshot" ? null : datasetId,
+      datasetId: kind === "snapshot" ? null : datasetId,
       geometry: {
         x: num(g.x, 0),
         y: num(g.y, 0),
