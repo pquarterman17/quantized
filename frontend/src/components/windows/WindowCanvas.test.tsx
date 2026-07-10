@@ -13,7 +13,7 @@
 // MultiPanelStage.test.tsx pattern) so both PlotStage's and
 // BackgroundPlotWindow's render effects can run headlessly.
 
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
@@ -62,6 +62,7 @@ const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
   view: defaultPlotView(),
   bg: "theme",
   linkGroup: null,
+  pinned: false,
   ...over,
 });
 
@@ -239,6 +240,86 @@ describe("WindowCanvas — cross-window link groups (item 13)", () => {
       expect(opts.cursor.sync).toBeUndefined();
       expect(opts.hooks?.setScale).toBeUndefined();
     }
+  });
+});
+
+// Item 14 — jsdom DnD harness (the FolderRow.test.tsx pattern): hand-built
+// events with a stub dataTransfer + explicit client coordinates.
+function datasetTransfer(id: string) {
+  return {
+    types: ["application/x-qz-dataset"], // DATASET_DND (useLibraryTree)
+    getData: (t: string) => (t === "application/x-qz-dataset" ? id : ""),
+    setData: () => {},
+  };
+}
+
+function fireDrag(
+  el: Element,
+  type: "dragover" | "dragleave" | "drop",
+  dataTransfer: unknown,
+  at: { x: number; y: number } = { x: 0, y: 0 },
+) {
+  const evt = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(evt, "clientX", { value: at.x, configurable: true });
+  Object.defineProperty(evt, "clientY", { value: at.y, configurable: true });
+  Object.defineProperty(evt, "dataTransfer", { value: dataTransfer, configurable: true });
+  fireEvent(el, evt);
+}
+
+describe("WindowCanvas — item 14 (drop a dataset onto empty canvas = new window)", () => {
+  it("a dataset drop on the canvas background creates + focuses a new window at the drop point", async () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(2));
+    const host = container.querySelector(".qzk-wincanvas-frames")!;
+    // jsdom rects are all zeros, so client coords ARE canvas coords; the
+    // store's plotCanvasBounds is null (mock RO never fires) → the 1200×800
+    // fallback, well clear of clamping for this drop point.
+    fireDrag(host, "drop", datasetTransfer("d1"), { x: 200, y: 150 });
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(3);
+    const dropped = s.plotWindows.find((w) => !["w1", "w2"].includes(w.id))!;
+    expect(dropped.datasetId).toBe("d1");
+    expect(dropped.geometry).toMatchObject({ x: 200, y: 150 });
+    expect(s.focusedWindowId).toBe(dropped.id); // drop-created windows focus immediately
+  });
+
+  it("highlights the canvas during a dataset dragover and clears it on dragleave", async () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(2));
+    const host = container.querySelector(".qzk-wincanvas-frames")!;
+    fireDrag(host, "dragover", datasetTransfer("d1"));
+    expect(host).toHaveClass("dropping");
+    fireDrag(host, "dragleave", datasetTransfer("d1"));
+    expect(host).not.toHaveClass("dropping");
+    // An unrelated drag type never lights it up.
+    fireDrag(host, "dragover", { types: ["Files"], getData: () => "", setData: () => {} });
+    expect(host).not.toHaveClass("dropping");
+  });
+
+  it("a drop on a FRAME rebinds that window and does NOT also create a canvas window", async () => {
+    const d2: Dataset = { id: "d2", name: "ds2", data: DATA };
+    useApp.setState({
+      datasets: [DATASET, d2],
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(2));
+    const frames = container.querySelectorAll(".qzk-plotwin");
+    const background = frames[1]!; // w2's frame (render order follows plotWindows)
+    fireDrag(background, "drop", datasetTransfer("d2"), { x: 10, y: 10 });
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(2); // stopPropagation — no new window
+    expect(s.plotWindows.find((w) => w.id === "w2")?.datasetId).toBe("d2"); // rebound instead
+    expect(s.focusedWindowId).toBe("w1");
   });
 });
 

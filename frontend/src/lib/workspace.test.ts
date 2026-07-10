@@ -562,6 +562,7 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     view: { ...defaultPlotView(), yLog: true, plotTitle: "restored view" },
     bg: "theme",
     linkGroup: null,
+    pinned: false,
     ...over,
   });
 
@@ -688,5 +689,24 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     ) as Record<string, unknown>;
     doc.plotWindows = [win({ id: "w1" }), win({ id: "s1", kind: "snapshot" })]; // no bundle
     expect(parseWorkspace(JSON.stringify(doc)).plotWindows.map((w) => w.id)).toEqual(["w1"]);
+  });
+
+  it("round-trips the per-window pin flag; a pre-item-14 doc defaults it to false", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(
+      serializeWorkspace({
+        datasets,
+        plotWindows: [win({ id: "w1", pinned: true }), win({ id: "w2" })],
+        focusedWindowId: "w1",
+      }),
+    );
+    expect(loaded.plotWindows.map((w) => w.pinned)).toEqual([true, false]);
+
+    // A doc saved before item 14 has no `pinned` field at all → false.
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets, plotWindows: [win({ id: "w1" })], focusedWindowId: "w1" }),
+    ) as { plotWindows: Record<string, unknown>[] };
+    delete doc.plotWindows[0].pinned;
+    expect(parseWorkspace(JSON.stringify(doc)).plotWindows[0].pinned).toBe(false);
   });
 });

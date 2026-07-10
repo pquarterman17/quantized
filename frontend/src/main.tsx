@@ -46,6 +46,7 @@ function harnessResetWindows(): void {
     view: defaultPlotView(),
     bg: "theme",
     linkGroup: null,
+    pinned: false,
   };
   useApp.setState({ plotWindows: [win], focusedWindowId: win.id });
 }

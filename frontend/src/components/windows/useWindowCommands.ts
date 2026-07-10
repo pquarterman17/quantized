@@ -120,6 +120,16 @@ function cycleFocusedWindowLinkGroup(): void {
   s.cycleWindowLinkGroup(s.focusedWindowId);
 }
 
+/** Pin Window (item 14): toggles the FOCUSED window's pin — the command-
+ *  registry counterpart to the title-bar ⚲ button, needed for the sole-
+ *  maximized-window case (no title bar to click). While pinned, Library
+ *  clicks/imports retarget another window instead of rebinding this one;
+ *  an explicit drop still rebinds. A no-op with no focused window. */
+function togglePinFocusedWindow(): void {
+  const s = useApp.getState();
+  if (s.focusedWindowId) s.toggleWindowPin(s.focusedWindowId);
+}
+
 export function useWindowCommands(): void {
   useEffect(() => {
     const actions: Action[] = [
@@ -151,6 +161,12 @@ export function useWindowCommands(): void {
         group: "Window",
         label: "Link Window Group (1 / 2 / 3 / Off)",
         run: cycleFocusedWindowLinkGroup,
+      },
+      {
+        id: "window-pin",
+        group: "Window",
+        label: "Pin Window (toggle)",
+        run: togglePinFocusedWindow,
       },
       {
         id: "window-focus-next",

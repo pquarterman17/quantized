@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
+import { DATASET_DND } from "../Library/useLibraryTree";
 import PlotWindowFrame from "./PlotWindowFrame";
 
 const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
@@ -23,6 +24,7 @@ const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
   view: defaultPlotView(),
   bg: "theme",
   linkGroup: null,
+  pinned: false,
   ...over,
 });
 
@@ -309,5 +311,133 @@ describe("PlotWindowFrame", () => {
     fireEvent.pointerMove(window, { clientX: 215, clientY: 40 });
     fireEvent.pointerUp(window, { clientX: 215, clientY: 40 });
     await waitFor(() => expect(geomOf("w1")).toEqual({ x: 100, y: 80, w: 700, h: 400 }));
+  });
+});
+
+// ── Item 14: drop-a-Library-row-to-rebind + the per-window pin toggle ──────
+// jsdom has no real DnD — hand-built events with a stub dataTransfer, the
+// FolderRow.test.tsx / DatasetRow.test.tsx harness this borrows.
+
+function datasetTransfer(id: string) {
+  return {
+    types: [DATASET_DND],
+    getData: (t: string) => (t === DATASET_DND ? id : ""),
+    setData: () => {},
+  };
+}
+
+function fireDrag(el: Element, type: "dragover" | "dragleave" | "drop", dataTransfer: unknown) {
+  const evt = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(evt, "dataTransfer", { value: dataTransfer, configurable: true });
+  fireEvent(el, evt);
+}
+
+describe("PlotWindowFrame — item 14 (drop-to-rebind + pin toggle)", () => {
+  const data = { time: [1], values: [[1]], labels: ["m"], units: [""], metadata: {} };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data },
+        { id: "d2", name: "b", data },
+      ],
+    });
+  });
+
+  it("highlights the frame while a dataset drag hovers it, and clears on dragleave", () => {
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w2" })} focused={false} datasetName={undefined}>
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const frame = container.querySelector(".qzk-plotwin")!;
+    fireDrag(frame, "dragover", datasetTransfer("d2"));
+    expect(frame).toHaveClass("dropping");
+    fireDrag(frame, "dragleave", datasetTransfer("d2"));
+    expect(frame).not.toHaveClass("dropping");
+  });
+
+  it("ignores an unrelated drag type (no highlight, no rebind)", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "w2", datasetId: "d1" })],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w2", datasetId: "d1" })} focused={false} datasetName="a">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const frame = container.querySelector(".qzk-plotwin")!;
+    const foreign = { types: ["Files"], getData: () => "", setData: () => {} };
+    fireDrag(frame, "dragover", foreign);
+    expect(frame).not.toHaveClass("dropping");
+    fireDrag(frame, "drop", foreign);
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w2")?.datasetId).toBe("d1");
+  });
+
+  it("a drop rebinds THIS window via the store (background target — focus untouched)", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "w2", datasetId: "d1" })],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w2", datasetId: "d1" })} focused={false} datasetName="a">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    fireDrag(container.querySelector(".qzk-plotwin")!, "drop", datasetTransfer("d2"));
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "w2")?.datasetId).toBe("d2");
+    expect(s.focusedWindowId).toBe("w1"); // an explicit drop rebinds, it doesn't focus
+    expect(container.querySelector(".qzk-plotwin")).not.toHaveClass("dropping"); // highlight cleared
+  });
+
+  it("a drop rebinds even a PINNED window (the explicit gesture beats the passive pin)", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", datasetId: "d1", pinned: true }), win({ id: "w2" })],
+      focusedWindowId: "w1",
+    });
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w1", datasetId: "d1", pinned: true })} focused datasetName="a">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    fireDrag(container.querySelector(".qzk-plotwin")!, "drop", datasetTransfer("d2"));
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("d2"); // rebound despite the pin
+    expect(s.plotWindows).toHaveLength(2); // no retarget window spawned
+  });
+
+  it("the ⚲ pin button toggles this window's pin via the store (pressed state follows)", () => {
+    const { getByLabelText, rerender } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="a">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    fireEvent.click(getByLabelText("Pin window"));
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.pinned).toBe(true);
+    // Re-render with the updated record (the prop is a snapshot in this harness).
+    rerender(
+      <PlotWindowFrame win={win({ id: "w1", pinned: true })} focused datasetName="a">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const unpin = getByLabelText("Unpin window");
+    expect(unpin).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(unpin);
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.pinned).toBe(false);
+  });
+
+  it("clicking the pin button does not also start a title-bar drag", () => {
+    const { getByLabelText } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="a">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const before = geomOf("w1");
+    fireEvent.pointerDown(getByLabelText("Pin window"), { clientX: 5, clientY: 5, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 50, clientY: 50 });
+    fireEvent.pointerUp(window, { clientX: 50, clientY: 50 });
+    expect(geomOf("w1")).toEqual(before);
   });
 });

@@ -77,6 +77,7 @@ const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
   view: defaultPlotView(),
   bg: "theme",
   linkGroup: null,
+  pinned: false,
   ...over,
 });
 

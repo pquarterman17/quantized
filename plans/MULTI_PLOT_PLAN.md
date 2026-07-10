@@ -252,10 +252,6 @@ items 6–10.
 
 ## Tier 3 — Nice-to-Have
 
-14. **Drag-and-drop dataset onto a window** — (M) drop a Library row onto
-    a frame to rebind it (onto empty canvas = new window); companion
-    per-window pin toggle to opt out of Library-follows behaviour.
-
 15. **Alternate render modes in background windows** — (L) make
     polar/stat/stack/map render from a `PlotView` instead of store
     singletons so any window can hold any mode; touches `PolarStage`,
@@ -827,3 +823,52 @@ items 6–10.
   tests (9 `lib/plotsnapshot` + 2 `plotview` sanitize + 9 `useApp` + 3
   `workspace` + 4 component + 3 `useWindowCommands`); frontend 2247 green
   (from 2217); `npm run build` (tsc + vite) green.
+- ~~**14. Drag-and-drop dataset onto a window + per-window pin toggle**~~
+  (2026-07-10) — the Tier-3 companion pair (the pin is the promised opt-out
+  from the "setActive retarget UX" risk note / owner decision 1). **Drop:**
+  `PlotWindowFrame` + `WindowCanvas` are now `DATASET_DND` drop targets
+  (REUSING the Library row drag `useLibraryTree` already emits — one gesture,
+  no second dataTransfer type): dropping on a FRAME calls the new store
+  action `rebindWindow(windowId, datasetId)` — focused target ≡ `setActive`'s
+  exact semantics (proved by a state-for-state parity test), background
+  target rebinds the record + resets its stored `PlotView` to the same
+  dataset-derived defaults WITHOUT touching focus/activeId/live view;
+  dropping on EMPTY canvas calls `createWindowAt` (new pure
+  `plotview.dropGeometry` clamps the default-size frame inside the canvas
+  bounds) then focuses it. Accent-token highlight (`.dropping` on frame +
+  canvas) during dragover. The smart-defaults derivation was HOISTED out of
+  `setActive` into shared module helpers (`datasetViewDefaults` +
+  `focusedRebindPatch`, also reused by `addDataset`) — one derivation, three
+  callers, zero duplication. **Pin:** `PlotWindow.pinned: boolean` (default
+  false at all construction sites; `sanitizePlotWindows` + `.dwk` round-trip
+  tested). While the FOCUSED window is pinned, a PASSIVE rebind (`setActive`
+  Library click or `addDataset` import — one shared `retargetPassiveRebind`
+  helper) focuses the top-z unpinned VISIBLE plot window instead (kind-
+  guarded for future window kinds; minimized excluded) and rebinds THAT; with
+  no candidate it creates + focuses a fresh cascade-placed window (title
+  seeded from the import name, deduped). An EXPLICIT drop / `rebindWindow`
+  still rebinds a pinned window — deliberate beats passive. Chrome: ⚲ glyph
+  toggle in the title bar (`.qzk-plotwin-pin`, aria-pressed, tokens-only
+  pressed state) + a "Pin Window (toggle)" command (`useWindowCommands`, 9th
+  Window-group entry, no shortcut) for the maximized-no-titlebar case.
+  +27 tests: 10 `useApp.test.ts` (rebind focused=setActive parity incl.
+  errKeys smart defaults, background rebind isolation, unknown-id no-ops,
+  explicit-beats-pin, createWindowAt clamp, pinned Library-click retargets
+  top-z unpinned visible, no-candidate creates+focuses, addDataset honors
+  pin ×2, toggle) + 5 `plotview.test.ts` (pinned sanitize, dropGeometry ×4)
+  + 1 `workspace.test.ts` (.dwk pin round-trip + pre-item-14 default) + 6
+  `PlotWindowFrame.test.tsx` (dragover highlight, foreign-type ignore, drop
+  rebinds background, drop beats pin, ⚲ toggles + pressed state, no
+  drag-start from the button) + 3 `WindowCanvas.test.tsx` (canvas drop
+  creates+focuses at point, canvas highlight, frame drop stops propagation)
+  + 2 `useWindowCommands.test.ts` (toggle via command, no-focus no-op).
+  Frontend 2245 green; `npm run build` green.
+  MERGE NOTE (2026-07-10): items 11+12+13+14+16 landed the same day from
+  parallel worktrees; the combined title-bar chrome pushed
+  `PlotWindowFrame.tsx` to 411 > 400, tripping `architecture.test.ts` —
+  resolved by extracting the button cluster (link/pin/bg/close) verbatim
+  into `components/windows/WindowTitleButtons.tsx` (76 lines; frame back to
+  349). The link (⧟) and pin (⚲) buttons are gated to `kind != "snapshot"`
+  (a snapshot is never dataset-bound and its static viewport isn't in the
+  sync registry); `createSnapshotWindow` sets `linkGroup: null` +
+  `pinned: false`. Post-merge frontend 2310 green; `npm run build` green.

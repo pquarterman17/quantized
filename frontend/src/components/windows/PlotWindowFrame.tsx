@@ -22,19 +22,16 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  nextPlotBg,
   snapMovePosition,
   snapResizeSize,
-  type PlotBg,
   type PlotWindow,
   type WindowGeometry,
 } from "../../lib/plotview";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { useApp } from "../../store/useApp";
+import { DATASET_DND } from "../Library/useLibraryTree";
 import { Badge } from "../primitives";
-
-/** Tooltip label per background mode (item 18's title-bar toggle). */
-const BG_LABEL: Record<PlotBg, string> = { theme: "Theme", light: "Light", dark: "Dark" };
+import WindowTitleButtons from "./WindowTitleButtons";
 
 export interface PlotWindowFrameProps {
   win: PlotWindow;
@@ -94,11 +91,15 @@ export default function PlotWindowFrame({
   const moveWindow = useApp((s) => s.moveWindow);
   const resizeWindow = useApp((s) => s.resizeWindow);
   const focusWindow = useApp((s) => s.focusWindow);
-  const closeWindow = useApp((s) => s.closeWindow);
   const toggleMaximizeWindow = useApp((s) => s.toggleMaximizeWindow);
   const renameWindow = useApp((s) => s.renameWindow);
-  const setWindowBg = useApp((s) => s.setWindowBg);
-  const cycleWindowLinkGroup = useApp((s) => s.cycleWindowLinkGroup);
+  const rebindWindow = useApp((s) => s.rebindWindow);
+
+  // Item 14: this frame is a drop target for a Library dataset drag
+  // (DATASET_DND — the SAME dataTransfer type DatasetRow sets, so a row
+  // dragged over a window and a row dragged over a folder are one gesture).
+  // True while such a drag hovers the frame — drives the accent highlight.
+  const [dropping, setDropping] = useState(false);
 
   // Item 10: double-click the title TEXT (not the bar) to rename inline —
   // null = not editing (DatasetRow/FolderRow's own inline-rename pattern).
@@ -262,10 +263,25 @@ export default function PlotWindowFrame({
 
   return (
     <div
-      className={`qzk-plotwin${focused ? " focused" : ""}`}
+      className={`qzk-plotwin${focused ? " focused" : ""}${dropping ? " dropping" : ""}`}
       style={style}
       onPointerDownCapture={onFrameCapture}
       onContextMenuCapture={onFrameContextMenu}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(DATASET_DND)) return;
+        e.preventDefault(); // required every dragover to keep the drop legal
+        if (!dropping) setDropping(true);
+      }}
+      onDragLeave={() => setDropping(false)}
+      onDrop={(e) => {
+        if (!e.dataTransfer.types.includes(DATASET_DND)) return;
+        e.preventDefault();
+        e.stopPropagation(); // a frame drop must never ALSO create a canvas window
+        setDropping(false);
+        const droppedId = e.dataTransfer.getData(DATASET_DND);
+        // The explicit gesture — rebinds even a pinned window (item 14).
+        if (droppedId) rebindWindow(win.id, droppedId);
+      }}
     >
       <div
         className="qzk-plotwin-titlebar"
@@ -313,38 +329,7 @@ export default function PlotWindowFrame({
             {datasetMeta.channels}ch · {datasetMeta.rows}pts
           </Badge>
         )}
-        <button
-          type="button"
-          className={`qzk-plotwin-link${win.linkGroup != null ? " linked" : ""}`}
-          title={
-            win.linkGroup != null
-              ? `Link group ${win.linkGroup} — crosshair + x-range sync with same-group windows; click to cycle (1 / 2 / 3 / off)`
-              : "Not linked — click to cycle this window's link group (1 / 2 / 3 / off)"
-          }
-          aria-label="Cycle window link group"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => cycleWindowLinkGroup(win.id)}
-        >
-          ⧟
-          {win.linkGroup != null && <span className="qzk-plotwin-link-n">{win.linkGroup}</span>}
-        </button>
-        <button
-          type="button"
-          className="qzk-plotwin-bg"
-          title={`Window background: ${BG_LABEL[win.bg]} — click to cycle (Theme / Light / Dark)`}
-          aria-label="Cycle window background"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => setWindowBg(win.id, nextPlotBg(win.bg))}
-        >
-          ◐
-        </button>
-        <button
-          type="button"
-          className="qzk-plotwin-close"
-          aria-label="Close window"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => closeWindow(win.id)}
-        />
+        <WindowTitleButtons win={win} />
       </div>
       <div
         className="qzk-plotwin-body"
