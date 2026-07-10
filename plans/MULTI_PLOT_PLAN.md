@@ -686,6 +686,7 @@ items 6–10.
   focused window only, no-op with no focus) + 2 `PlotWindowFrame.test.tsx`
   cases (the ◐ button cycles + doesn't also start a drag) + 3
   `PlotLegend.test.tsx` cases (substitutes per mode, token override
-  untouched). Frontend 2061 green (2059 after the one pre-existing flaky
-  `GridViewport.perf.test.tsx` timing case, load-dependent, unrelated —
-  passes in isolation); `npm run build` green.
+  untouched). Frontend 2087 green (merged same-day with the plot right-click
+  context-menu feature, `a214fea`); the lone `GridViewport.perf.test.tsx`
+  timing case is pre-existing/load-dependent flake unrelated to this item —
+  passes in isolation; `npm run build` green.

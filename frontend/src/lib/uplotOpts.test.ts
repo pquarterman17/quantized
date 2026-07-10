@@ -709,9 +709,12 @@ describe("resolvePlotBg", () => {
 });
 
 describe("buildOpts literal-colour contrast substitution (dark-lines-on-dark-mode fix)", () => {
-  const blackStyle: Record<number, SeriesStyle> = { 0: { color: "black" } };
-  const whiteStyle: Record<number, SeriesStyle> = { 0: { color: "white" } };
-  const violetStyle: Record<number, SeriesStyle> = { 0: { color: "#8b5cf6" } };
+  // BuildOptsArgs.seriesStyles is an array aligned 1:1 with payload.series
+  // (not the store's Record<number, SeriesStyle> — that's PlotView's shape,
+  // resolved to this array form by usePlotPayload before reaching buildOpts).
+  const blackStyle: (SeriesStyle | undefined)[] = [{ color: "black" }];
+  const whiteStyle: (SeriesStyle | undefined)[] = [{ color: "white" }];
+  const violetStyle: (SeriesStyle | undefined)[] = [{ color: "#8b5cf6" }];
 
   it("substitutes a literal black series stroke on the default (dark) background", () => {
     const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", seriesStyles: blackStyle });
