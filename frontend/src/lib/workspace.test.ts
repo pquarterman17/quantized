@@ -559,6 +559,7 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     z: 1,
     winState: "normal",
     view: { ...defaultPlotView(), yLog: true, plotTitle: "restored view" },
+    bg: "theme",
     ...over,
   });
 

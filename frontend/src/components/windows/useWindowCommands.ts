@@ -17,7 +17,7 @@
 
 import { useEffect } from "react";
 
-import { cycleWindow, snapshotView, zOrderIds } from "../../lib/plotview";
+import { cycleWindow, nextPlotBg, snapshotView, zOrderIds } from "../../lib/plotview";
 import { useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
 
@@ -77,6 +77,20 @@ function cascadeWindows(): void {
   useApp.getState().cascadeWindows();
 }
 
+/** Window Background (item 18, owner request 2026-07-09): cycles the
+ *  FOCUSED window's background override (theme -> light -> dark -> theme),
+ *  the command-registry / ⌘K counterpart to the per-window title-bar toggle
+ *  (`PlotWindowFrame`'s ◐ button) — works even for the sole maximized
+ *  default window, which has no title bar to click. A no-op if there's
+ *  somehow no focused window. */
+function cycleWindowBg(): void {
+  const s = useApp.getState();
+  if (!s.focusedWindowId) return;
+  const win = s.plotWindows.find((w) => w.id === s.focusedWindowId);
+  if (!win) return;
+  s.setWindowBg(win.id, nextPlotBg(win.bg));
+}
+
 export function useWindowCommands(): void {
   useEffect(() => {
     const actions: Action[] = [
@@ -91,6 +105,12 @@ export function useWindowCommands(): void {
       { id: "window-close", group: "Window", label: "Close Window", shortcut: "⌘⇧W", run: closeFocusedWindow },
       { id: "window-tile", group: "Window", label: "Tile Windows", run: tileWindows },
       { id: "window-cascade", group: "Window", label: "Cascade Windows", run: cascadeWindows },
+      {
+        id: "window-bg-cycle",
+        group: "Window",
+        label: "Window Background (Theme / Light / Dark)",
+        run: cycleWindowBg,
+      },
       {
         id: "window-focus-next",
         group: "Window",

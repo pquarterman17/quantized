@@ -8,6 +8,7 @@ import { useState } from "react";
 
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
+import { resolveDrawColor } from "../../lib/contrastColor";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import type { SeriesStyle } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -20,9 +21,26 @@ interface PlotLegendProps {
   plotted: number[];
   /** Per-display-series visibility (true = hidden), 1:1 with series. */
   hidden?: boolean[];
+  /** Whether the plot's EFFECTIVE background (item 18) reads as dark — feeds
+   *  the same `resolveDrawColor` contrast check the canvas stroke uses, so a
+   *  legend swatch never shows an invisible literal colour the canvas line
+   *  itself already substituted. */
+  isDarkBg?: boolean;
+  /** The achromatic ink token to substitute a low-contrast literal swatch
+   *  colour with (see `resolveDrawColor`) — the live `resolvePlotBg` token,
+   *  not a hardcoded default, so it re-themes/re-resolves on a background
+   *  switch exactly like the canvas does. */
+  inkColor?: string;
 }
 
-export default function PlotLegend({ series, styleList, plotted, hidden }: PlotLegendProps) {
+export default function PlotLegend({
+  series,
+  styleList,
+  plotted,
+  hidden,
+  isDarkBg = true,
+  inkColor,
+}: PlotLegendProps) {
   const active = useActiveDataset();
   const hiddenChannels = useApp((s) => s.hiddenChannels);
   const toggleHidden = useApp((s) => s.toggleHidden);
@@ -63,11 +81,15 @@ export default function PlotLegend({ series, styleList, plotted, hidden }: PlotL
     <div className={`qzk-glass qzk-legend ${legendPos}`}>
       {series.map((s, i) => {
         // Keep the CSS token for default series (re-themes); use the resolved
-        // override color when one is set, so the legend matches the line.
+        // override color when one is set, so the legend matches the line. A
+        // literal (non-token) override runs through the SAME contrast check
+        // the canvas stroke uses (`buildOpts`'s `resolveDrawColor` call), so
+        // a literal black swatch on our dark canvas doesn't go invisible in
+        // the legend even though the plotted line itself was substituted.
         const override = styleList?.[i]?.color;
         const swatch =
           override && !override.startsWith("--")
-            ? override
+            ? resolveDrawColor(override, isDarkBg, inkColor)
             : override
               ? `var(${override})`
               : `var(--series-${(i % 8) + 1})`;

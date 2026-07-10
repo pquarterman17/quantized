@@ -138,12 +138,36 @@ export interface WindowGeometry {
 
 export type WinState = "normal" | "minimized" | "maximized";
 
+/** A plot window's background override (owner request 2026-07-09, item 18):
+ *  "theme" (default) follows the app's plot canvas as it renders today —
+ *  which stays dark regardless of the app's own light/dark theme (see
+ *  `styles/colors.css`'s `--axes-bg` doc); "light"/"dark" pin THIS ONE
+ *  window to a fixed page background instead, independent of every other
+ *  window and the surrounding chrome — Origin's "white graph page in a dark
+ *  app" model. Lives on the window record itself (not the swapped
+ *  `PlotView`): it's a per-window display choice like `title`/`geometry`,
+ *  not part of the focused-window "live view" swap (see the module doc's
+ *  "deliberately EXCLUDED" list — same reasoning applies here). Resolved
+ *  into concrete colours by `lib/uplotOpts.ts`'s `resolvePlotBg`. */
+export type PlotBg = "theme" | "light" | "dark";
+
+const PLOT_BG_CYCLE: readonly PlotBg[] = ["theme", "light", "dark"];
+
+/** The next background mode in the title-bar toggle's cycle
+ *  (theme -> light -> dark -> theme -> ...). Pure; used by both the
+ *  per-window toggle button (`PlotWindowFrame`) and the "Window Background"
+ *  command (`useWindowCommands`). */
+export function nextPlotBg(current: PlotBg): PlotBg {
+  return PLOT_BG_CYCLE[(PLOT_BG_CYCLE.indexOf(current) + 1) % PLOT_BG_CYCLE.length];
+}
+
 /** A plot window's persistent record: geometry/z/winState (the MDI chrome
  *  state — item 3), a dataset binding (by id; nulled, never force-closed, when
- *  that dataset is removed — MULTI_PLOT_PLAN decision #4), and its own
- *  `PlotView` (swapped with the live singleton fields only while focused). The
- *  `kind` discriminator carries the door open for future window kinds
- *  (worksheet/map — item 17) without a model change. */
+ *  that dataset is removed — MULTI_PLOT_PLAN decision #4), its own `PlotView`
+ *  (swapped with the live singleton fields only while focused), and its own
+ *  background override (`bg`, item 18). The `kind` discriminator carries the
+ *  door open for future window kinds (worksheet/map — item 17) without a
+ *  model change. */
 export interface PlotWindow {
   id: string;
   kind: "plot";
@@ -153,6 +177,7 @@ export interface PlotWindow {
   z: number;
   winState: WinState;
   view: PlotView;
+  bg: PlotBg;
 }
 
 const DEFAULT_WIDTH = 480;
@@ -281,6 +306,7 @@ function sanitizeView(v: unknown): PlotView {
 }
 
 const WIN_STATES: readonly WinState[] = ["normal", "minimized", "maximized"];
+const PLOT_BGS: readonly PlotBg[] = ["theme", "light", "dark"];
 
 // ── Tile / Cascade / z-order-aware focus cycling (item 6) ──────────────────
 
@@ -389,6 +415,7 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
       z: num(o.z, 0),
       winState: WIN_STATES.includes(o.winState as WinState) ? (o.winState as WinState) : "normal",
       view: sanitizeView(o.view),
+      bg: PLOT_BGS.includes(o.bg as PlotBg) ? (o.bg as PlotBg) : "theme",
     });
   }
   return out;

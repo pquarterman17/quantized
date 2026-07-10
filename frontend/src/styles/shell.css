@@ -371,6 +371,10 @@ body {
    font-mono for numbers). flex-shrink:0 keeps it from being squeezed out by
    a long title before the badge itself elides. */
 .qzk-plotwin-meta { flex-shrink: 0; }
+/* Item 18 — per-window background-override toggle (◐ cycles theme/light/
+   dark); a plain glyph button, distinct from the circular close button. */
+.qzk-plotwin-bg { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 3px; border: none; background: transparent; color: var(--text-faint); cursor: default; padding: 0; flex-shrink: 0; font-size: 11px; line-height: 1; }
+.qzk-plotwin-bg:hover { background: var(--surface-3); color: var(--text); }
 .qzk-plotwin-close { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-3); cursor: default; padding: 0; flex-shrink: 0; }
 .qzk-plotwin-close:hover { background: var(--danger); border-color: var(--danger); }
 .qzk-plotwin-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }

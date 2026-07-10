@@ -21,6 +21,7 @@ const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
   z: 0,
   winState: "normal",
   view: defaultPlotView(),
+  bg: "theme",
   ...over,
 });
 
@@ -96,6 +97,30 @@ describe("PlotWindowFrame", () => {
     );
     fireEvent.click(getByLabelText("Close window"));
     expect(useApp.getState().plotWindows.map((w) => w.id)).toEqual(["w1"]);
+  });
+
+  it("the ◐ background button cycles this window's bg (theme -> light -> dark) via the store (item 18)", () => {
+    const { getByLabelText } = render(
+      <PlotWindowFrame win={win({ id: "w1", bg: "theme" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const button = getByLabelText("Cycle window background");
+    fireEvent.click(button);
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.bg).toBe("light");
+  });
+
+  it("clicking the background button does not also start a title-bar drag", () => {
+    const { getByLabelText } = render(
+      <PlotWindowFrame win={win({ id: "w1", bg: "theme" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const before = geomOf("w1");
+    fireEvent.pointerDown(getByLabelText("Cycle window background"), { clientX: 5, clientY: 5, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 50, clientY: 50 });
+    fireEvent.pointerUp(window, { clientX: 50, clientY: 50 });
+    expect(geomOf("w1")).toEqual(before);
   });
 
   it("any pointerdown on an UNFOCUSED frame focuses it first (capture phase)", () => {

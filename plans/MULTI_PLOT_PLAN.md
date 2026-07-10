@@ -617,3 +617,76 @@ items 6–10.
   **Tier 2 is now fully complete** (items 6–10 all shipped 2026-07-09).
   Frontend 1927 green (+55 over Tier 1's 1872); `tsc -b --noEmit` and
   `npm run build` (tsc + vite) both green.
+- ~~**18. Per-window background override + literal-colour contrast fix**~~
+  (2026-07-09, owner request) — two related fixes, shipped together since the
+  second's render path is the first's chokepoint:
+  1. **Dark-lines-on-dark-mode fix.** New `lib/contrastColor.ts`:
+     `parseColor` (hex 3/4/6/8-digit, `rgb()`/`rgba()`, `hsl()`/`hsla()`, a
+     basic CSS named-colour table — deliberately DOM-free, unlike
+     `lib/color.ts`'s canvas-based `resolveToHex`, so it behaves identically
+     in jsdom and the browser) + `resolveDrawColor(color, isDarkBg, inkColor?)`
+     (WCAG relative luminance vs. two canonical reference background
+     luminances, contrast ratio < 2.2 → substitute the achromatic ink token,
+     never a hue shift — matches/exceeds AA-for-small-text headroom for a
+     thin plot stroke). Wired into `lib/uplotOpts.ts`'s `buildOpts` at every
+     literal-colour draw site (series stroke/fill/markers/points-only via the
+     single `stroke` computation, ref lines, annotations, error bars, the
+     axis-box frame, the "excluded" muted-series grey) and into
+     `PlotLegend.tsx`'s swatch colour (the DOM-side legend now matches
+     whatever the canvas actually drew) — render-time only, never mutates a
+     stored `SeriesStyle`/`RefLine`/`Annotation` colour, so light mode keeps
+     a TRUE black line and a theme/background switch re-resolves live.
+  2. **Per-window background override** ("could we toggle just one window to
+     white/black" — Origin's white-graph-page-in-a-dark-app model). New
+     `PlotBg` type (`"theme" | "light" | "dark"`) + `bg: PlotBg` field on
+     `PlotWindow` (`lib/plotview.ts`; required, defaulted to `"theme"` at
+     all three construction sites — `mainWindow`/`createWindow`/
+     `duplicateWindow`, the last INHERITING the source's `bg` — and by
+     `sanitizePlotWindows` for a persisted `.dwk`/malformed value; rides the
+     existing window persistence for free, no `workspace.ts` change needed)
+     + `nextPlotBg` (the theme→light→dark→theme toggle cycle, pure).
+     `lib/uplotOpts.ts` gained `resolvePlotBg(bg?)` — THE resolution
+     chokepoint both `buildOpts` (axis/grid/ink draw colours + the
+     `isDarkBg` fed to `resolveDrawColor`) and the window-chrome components
+     (inline container background) call; "theme"/"dark" reuse the existing
+     always-dark `--axes-bg`/`--grid-line` tokens (already theme-invariant),
+     "light" and both modes' ink use 6 NEW theme-invariant tokens added to
+     `colors.css` (`--axes-bg-light`, `--grid-line-light`, `--ink-on-dark`/
+     `--ink-dim-on-dark`, `--ink-on-light`/`--ink-dim-on-light` — mode-scoped,
+     not theme-scoped, so a window's override stays correct even when it
+     disagrees with the surrounding chrome's global theme). Rendering:
+     `PlotStage.tsx` looks up the FOCUSED window's `bg` (a derived string
+     selector, not a `plotWindows`-array dependency) and applies it to
+     `AxisDropZones`'s new optional `style` prop (undefined for the default
+     "theme" case → no `style` attribute at all, byte-identical to
+     pre-item-18 markup — decision #6's migration guarantee) and to
+     `PlotViewport`/`PlotLegend`; `PlotWindowFrame.tsx` applies the same
+     resolved background to `.qzk-plotwin-body` for BACKGROUND (unfocused)
+     windows. UI: a small ◐ glyph button in `PlotWindowFrame`'s title bar
+     (new `.qzk-plotwin-bg` style in `shell.css`) cycling this ONE window's
+     mode, tooltipped with the current state; a "Window Background" command
+     (`useWindowCommands.ts`, 8th Window-group entry, no shortcut) cycles the
+     FOCUSED window's mode via the registry/⌘K — works even for the sole
+     maximized default window, which has no title bar. Multi-panel
+     (`MultiPanelStage`/`useMultiPanelStage`) and every other `buildOpts`
+     caller (`WaterfallView`, `ReflPanel`, `InsetPlot`) inherit the contrast
+     fix for free (they call `buildOpts` without a `bg` arg, which defaults
+     to "theme" → the always-dark tokens, matching their actual rendered
+     background) — no per-caller change needed.
+  +15 `contrastColor.test.ts` (parse forms, black→ink/white→ink per mode,
+  true-black-stays-black on light / true-white-stays-white on dark, mid-greys
+  and saturated colours pass through both modes, invalid input passthrough,
+  near-black coloured stroke → achromatic not hue-shifted, built-in fallback
+  ink) + 10 `uplotOpts.test.ts` cases (`resolvePlotBg` default/theme≡dark/
+  light, literal black/white substitution per mode, visible literal colour
+  unchanged, default palette token untouched, axis stroke flips per mode) + 2
+  `plotview.test.ts` cases (bg sanitize round-trip/fallback, `nextPlotBg`
+  cycle) + 3 `useApp.test.ts` cases (createWindow default, duplicateWindow
+  inherits, `setWindowBg`) + 2 `useWindowCommands.test.ts` cases (cycles the
+  focused window only, no-op with no focus) + 2 `PlotWindowFrame.test.tsx`
+  cases (the ◐ button cycles + doesn't also start a drag) + 3
+  `PlotLegend.test.tsx` cases (substitutes per mode, token override
+  untouched). Frontend 2087 green (merged same-day with the plot right-click
+  context-menu feature, `a214fea`); the lone `GridViewport.perf.test.tsx`
+  timing case is pre-existing/load-dependent flake unrelated to this item —
+  passes in isolation; `npm run build` green.

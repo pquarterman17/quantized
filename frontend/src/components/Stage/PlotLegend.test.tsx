@@ -59,3 +59,50 @@ describe("PlotLegend drag-to-axis (#49)", () => {
     expect(items[0]).toHaveAttribute("draggable", "false");
   });
 });
+
+describe("PlotLegend swatch contrast (dark-lines-on-dark-mode fix, item 18)", () => {
+  it("substitutes a literal black override's swatch on a dark background", () => {
+    const { container } = render(
+      <PlotLegend
+        series={series}
+        styleList={[{ color: "black" }, undefined]}
+        plotted={[0, 1]}
+        hidden={[false, false]}
+        isDarkBg
+        inkColor="#eef0f6"
+      />,
+    );
+    const swatch = container.querySelector(".qzk-legend .it .ln") as HTMLElement;
+    expect(swatch.style.background).not.toBe("black");
+    expect(swatch.style.background).toContain("238, 240, 246"); // #eef0f6 as rgb()
+  });
+
+  it("keeps a literal black override's swatch on a light background", () => {
+    const { container } = render(
+      <PlotLegend
+        series={series}
+        styleList={[{ color: "black" }, undefined]}
+        plotted={[0, 1]}
+        hidden={[false, false]}
+        isDarkBg={false}
+        inkColor="#1e1e26"
+      />,
+    );
+    const swatch = container.querySelector(".qzk-legend .it .ln") as HTMLElement;
+    expect(swatch.style.background).toBe("black");
+  });
+
+  it("leaves a token ('--series-N') override as a var() reference, untouched by the contrast check", () => {
+    const { container } = render(
+      <PlotLegend
+        series={series}
+        styleList={[{ color: "--series-3" }, undefined]}
+        plotted={[0, 1]}
+        hidden={[false, false]}
+        isDarkBg
+      />,
+    );
+    const swatch = container.querySelector(".qzk-legend .it .ln") as HTMLElement;
+    expect(swatch.style.background).toBe("var(--series-3)");
+  });
+});

@@ -93,7 +93,9 @@ export default function PlotViewport(props: PlotViewportProps) {
     // live-drag value. qfitRoi/gadgetCursors are read imperatively by the
     // caller (NOT reactive deps here) so a live drag never tears this
     // instance down; peakWizardEdit IS a normal reactive dep — a discrete
-    // add/remove click, not a live drag.
+    // add/remove click, not a live drag. args.bg (item 18) rebuilds so a
+    // window's background-override toggle re-resolves axis/grid/ink colours
+    // and the literal-colour contrast substitution immediately.
   }, [
     displayPayload,
     theme,
@@ -130,6 +132,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.integral,
     args.fwhmResult,
     args.gadgetMode,
+    args.bg,
   ]);
 
   return <div ref={hostRef} style={{ position: "absolute", inset: 8 }} />;

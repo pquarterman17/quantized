@@ -18,6 +18,12 @@ import { CHANNEL_DND, decodeChannelDrag, resolveAxisZone, type AxisZone } from "
 
 interface Props {
   className: string;
+  /** Inline style passthrough (item 18 — a per-window background override
+   *  paints THIS window's plot area a fixed colour, independent of the
+   *  `--axes-bg` the CSS class already sets). Omitted/undefined renders no
+   *  `style` attribute at all — the default ("theme") path stays
+   *  byte-identical to pre-item-18 markup. */
+  style?: React.CSSProperties;
   onContextMenu: (e: React.MouseEvent) => void;
   /** Fires once per valid drop with the decoded payload. A drop in the dead
    *  interior (no zone) or a malformed/foreign payload never reaches here. */
@@ -25,7 +31,7 @@ interface Props {
   children: React.ReactNode;
 }
 
-export default function AxisDropZones({ className, onContextMenu, onAxisDrop, children }: Props) {
+export default function AxisDropZones({ className, style, onContextMenu, onAxisDrop, children }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   // Nested-element enter/leave counter (the standard DnD pattern): entering
   // any descendant bubbles dragenter to us too, so depth only reaches 0 when
@@ -48,6 +54,7 @@ export default function AxisDropZones({ className, onContextMenu, onAxisDrop, ch
     <div
       ref={ref}
       className={className}
+      style={style}
       onContextMenu={onContextMenu}
       onDragEnter={(e) => {
         if (!isChannelDrag(e)) return;

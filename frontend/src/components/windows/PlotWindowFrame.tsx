@@ -21,9 +21,13 @@
 
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
-import type { PlotWindow } from "../../lib/plotview";
+import { nextPlotBg, type PlotBg, type PlotWindow } from "../../lib/plotview";
+import { resolvePlotBg } from "../../lib/uplotOpts";
 import { useApp } from "../../store/useApp";
 import { Badge } from "../primitives";
+
+/** Tooltip label per background mode (item 18's title-bar toggle). */
+const BG_LABEL: Record<PlotBg, string> = { theme: "Theme", light: "Light", dark: "Dark" };
 
 export interface PlotWindowFrameProps {
   win: PlotWindow;
@@ -84,11 +88,16 @@ export default function PlotWindowFrame({
   const closeWindow = useApp((s) => s.closeWindow);
   const toggleMaximizeWindow = useApp((s) => s.toggleMaximizeWindow);
   const renameWindow = useApp((s) => s.renameWindow);
+  const setWindowBg = useApp((s) => s.setWindowBg);
 
   // Item 10: double-click the title TEXT (not the bar) to rename inline —
   // null = not editing (DatasetRow/FolderRow's own inline-rename pattern).
   const [renaming, setRenaming] = useState<string | null>(null);
   const displayTitle = win.title || datasetName || "Untitled graph";
+  // Item 18: this window's own background override, resolved to a concrete
+  // colour for the body's inline style — the SAME chokepoint `buildOpts`
+  // uses for canvas draw colours (`lib/uplotOpts.ts`'s `resolvePlotBg`).
+  const { axesBg } = resolvePlotBg(win.bg);
   const commitRename = () => {
     if (renaming != null && renaming.trim()) renameWindow(win.id, renaming.trim());
     setRenaming(null);
@@ -265,13 +274,28 @@ export default function PlotWindowFrame({
         )}
         <button
           type="button"
+          className="qzk-plotwin-bg"
+          title={`Window background: ${BG_LABEL[win.bg]} — click to cycle (Theme / Light / Dark)`}
+          aria-label="Cycle window background"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setWindowBg(win.id, nextPlotBg(win.bg))}
+        >
+          ◐
+        </button>
+        <button
+          type="button"
           className="qzk-plotwin-close"
           aria-label="Close window"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => closeWindow(win.id)}
         />
       </div>
-      <div className="qzk-plotwin-body">{children}</div>
+      <div
+        className="qzk-plotwin-body"
+        style={win.bg !== "theme" ? { background: axesBg } : undefined}
+      >
+        {children}
+      </div>
       {!maximized && (
         <div
           className="qzk-plotwin-resize"

@@ -98,7 +98,7 @@ export default function WindowCanvas() {
               datasetMeta={datasetMeta}
               bounds={bounds}
             >
-              {focused ? <PlotStage /> : <BackgroundPlotWindow dataset={dataset} view={win.view} />}
+              {focused ? <PlotStage /> : <BackgroundPlotWindow dataset={dataset} view={win.view} bg={win.bg} />}
             </PlotWindowFrame>
           );
         })}

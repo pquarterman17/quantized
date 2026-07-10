@@ -12,10 +12,12 @@ import {
   defaultPlotView,
   displayedWindowTitle,
   hydrateView,
+  nextPlotBg,
   sanitizePlotWindows,
   snapshotView,
   tileLayout,
   zOrderIds,
+  type PlotBg,
   type PlotView,
   type PlotWindow,
 } from "./plotview";
@@ -110,6 +112,7 @@ function win(over: Partial<PlotWindow> = {}): PlotWindow {
     z: 0,
     winState: "normal",
     view: defaultPlotView(),
+    bg: "theme",
     ...over,
   };
 }
@@ -155,6 +158,30 @@ describe("sanitizePlotWindows", () => {
     );
     expect(sanitizePlotWindows(null, new Set())).toEqual([]);
     expect(sanitizePlotWindows(undefined, new Set())).toEqual([]);
+  });
+
+  it("round-trips a valid bg override and falls back to 'theme' for a missing/invalid value (item 18)", () => {
+    const out = sanitizePlotWindows(
+      [
+        win({ id: "a", bg: "light" }),
+        win({ id: "b", bg: "dark" }),
+        win({ id: "c", bg: "sepia" as PlotBg }),
+        { ...win({ id: "d" }), bg: undefined },
+      ],
+      new Set(["d1"]),
+    );
+    expect(out[0].bg).toBe("light");
+    expect(out[1].bg).toBe("dark");
+    expect(out[2].bg).toBe("theme");
+    expect(out[3].bg).toBe("theme");
+  });
+});
+
+describe("nextPlotBg (item 18 — per-window background toggle)", () => {
+  it("cycles theme -> light -> dark -> theme", () => {
+    expect(nextPlotBg("theme")).toBe("light");
+    expect(nextPlotBg("light")).toBe("dark");
+    expect(nextPlotBg("dark")).toBe("theme");
   });
 });
 
