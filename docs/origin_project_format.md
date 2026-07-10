@@ -921,10 +921,58 @@ text escapes (public OriginLab syntax, cited as fact, not GPL source):
 | `\+(...)` | superscript |
 | `\-(...)` | subscript |
 | `\g(...)` | Greek/Symbol font (`\g(q)` = θ) |
-| `\(NN)` | character by code |
+| `\b(...)`, `\i(...)`, `\u(...)` | bold / italic / underline |
+| `\f:Name(...)` | font |
+| `\c<n>(...)` | numbered colour |
+| `\(NN)` | character by decimal code (ANSI/Latin-1, e.g. `\(197)` = Å) |
+| `\(xHHHH)` | character by hex code — Origin's Unicode escape (`.opj` Save-As form, e.g. `\(x2225)` = ∥) |
 | `%(?X)`, `%(?Y)`, `%(?Z)` | auto axis title from the X/Y/Z dataset |
 | `%(n)`, `%(layer.plot)` | auto legend text for a curve |
 | `\l(n)`, `\l(layer.plot)` | legend line/symbol sample for a curve |
+
+Decoded by `origin_richtext.clean_richtext` (2026-07-05, extended
+2026-07-09) — a small recursive-descent renderer, not a regex table, so
+nested runs resolve inside-out (`\g(\i(m))` → italic-of-nothing "m" →
+Greek-mapped "μ", seen live in `Hc2 data.opju`'s
+`\g(\i(m))\-(0)\i(H) (T)` x-title). Styling escapes (`\b`/`\i`/`\u`/
+`\f:`/`\c<n>`) drop the formatting and keep the inner text — canvas
+`fillText` can't style a substring, and content matters more than
+markup. **Any run whose control code isn't recognized degrades the same
+way** (keep the inner text, drop the wrapper) rather than raising or
+leaking the raw escape — confirmed live on `MnN_Diffusion_PNR.opj`'s
+`\ad(A)` (an undocumented 2-letter control, meaning not identified; degrades
+to bare "A", matching the plain-"A" spelling used elsewhere in the same
+project for the same unit — see the authoring-inconsistency note below).
+
+Column Long Name / Unit / Comment (§4) and a book's own display title are
+the *same* LabTalk label syntax as an axis title — Origin lets a user type
+these escapes into a worksheet's column properties exactly as freely as
+into a graph's axis title. Both containers decode them through this one
+`clean_richtext` call, at `opj.py`'s `_build_book`/`_label_for`/
+`_book_long_name`/`_inventory` (shared verbatim by `.opju` — the single
+chokepoint feeds `.labels`, `.units`, `x_unit`/`x_column_unit`,
+`x_column_long`, `origin_book_long`, and `column_comments`, i.e. every
+frontend axis-label/legend/worksheet/Inspector consumer). Confirmed live:
+`MnN_Diffusion_PNR.opj`'s "Nuclear SLD" books carry a column Unit of
+`10\+(-6) A\+(-2)` — before 2026-07-09 this leaked the raw escape straight
+into the frontend's `${label} (${unit})` axis/legend text composition
+(`uplotOpts.ts`, `PlotLegend.tsx`, `clipboard.ts`) whenever a graph's own
+axis title was blank (Origin's "Auto" title, which falls back to the
+bound column's Long Name + Unit) — the likely source of the "raw escape
+codes in the axis label" bug report that prompted this fix.
+
+**Authoring inconsistency, not a decode bug:** the same
+`MnN_Diffusion_PNR.opj` project spells "Å⁻¹" three different ways across
+sibling books/columns for the identical physical unit — a literal ASCII
+`A` (byte-hex confirmed: `0x41`, not `0xC5`) in most Nuclear-SLD units,
+the proper `\(197)` char-code escape in a few, and plain unescaped text
+(`"A-1"`, no backslash at all) in a couple of `Q`-column units. This is
+the source file's own inconsistent hand-typing (or copy/paste drift)
+across duplicated graphs, not a container/decode issue — the byte-level
+evidence rules out a mis-decoded high-byte character (see git history for
+the hex dump). Per the "samples are not standards" / "don't guess a
+heuristic Graph25 already rejected" precedent, this is decoded faithfully
+(whatever the project actually stored) and not "corrected" to Å.
 
 **Legend.** A `type=0x00` object named `Legend`; one line per curve, e.g.
 `\l(1) %(1)\r\n\l(2) %(2)\r\n\l(3) %(3)` (single-layer) or

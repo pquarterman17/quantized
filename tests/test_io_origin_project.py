@@ -13,6 +13,7 @@ Format: see docs/origin_project_format.md.
 from __future__ import annotations
 
 import struct
+from collections import OrderedDict
 from pathlib import Path
 
 import numpy as np
@@ -415,6 +416,34 @@ def test_realdata_moke_all_books_recovered() -> None:
     assert len(books) >= 5 and len(set(names)) == len(names)
     # book display titles (sample names) recovered
     assert any("MnN" in b.metadata["origin_book_long"] for b in books)
+
+
+@pytest.mark.realdata
+@pytest.mark.skipif(
+    not (_CORPUS / "MnN_Diffusion_PNR.opj").exists(), reason="MnN_Diffusion_PNR.opj not in corpus"
+)
+def test_realdata_mnn_diffusion_column_unit_richtext_translated() -> None:
+    """Owner repro anchor (2026-07-09): the "Nuclear SLD" books' column Unit
+    is stored as the literal LabTalk escape ``10\\+(-6) A\\+(-2)`` (byte-hex
+    verified: a plain ASCII 'A', not an Angstrom ring — an authoring
+    inconsistency in the source project, not a decode bug; some sibling books
+    instead use the proper ``\\(197)`` char-code escape and read "Å"). Either
+    way, no raw backslash escape may ever reach `.units`/`x_unit`/
+    `x_column_unit` — this was leaking verbatim before the column-metadata
+    richtext fix (`opj._build_book`)."""
+    from quantized.io.origin_project import read_origin_books
+
+    books = read_origin_books(_CORPUS / "MnN_Diffusion_PNR.opj")
+    seen_units = {u for ds in books for u in ds.units}
+    assert "10⁻⁶ A⁻²" in seen_units
+    assert "A⁻¹" in seen_units
+    assert not any("\\" in u for ds in books for u in ds.units)
+    assert not any("\\" in lbl for ds in books for lbl in ds.labels)
+    assert not any(
+        "\\" in str(ds.metadata.get(k, ""))
+        for ds in books
+        for k in ("x_unit", "x_column_unit", "x_column_long", "origin_book_long")
+    )
 
 
 @pytest.mark.realdata
@@ -2180,6 +2209,18 @@ def test_build_book_no_designations_keeps_first_col_default() -> None:
         (r"H\-(c2\(x22A5)) (T)", "Hc₂⊥ (T)"),  # ⊥ nested in a subscript run
         (r"\(xZZ)", "(xZZ)"),  # malformed hex body → literal-paren degrade
         (r"\(x110000)", "(x110000)"),  # out of Unicode range → degrade, never chr() crash
+        # control-inside-control nesting (seen live: Hc2 data.opju's
+        # "\g(\i(m))\-(0)\i(H) (T)" x_title) — the inner \i(...) run must
+        # resolve (dropping its own styling) BEFORE the outer \g(...) maps
+        # the result through the Symbol-font table.
+        (r"\g(\i(m))\-(0)\i(H) (T)", "μ₀H (T)"),
+        (r"\g(\i(m))\-(0)\i(H)\-(c2\(x22A5)) (T)", "μ₀Hc₂⊥ (T)"),
+        # An unrecognized 2-letter control (real corpus form, MnN_Diffusion_PNR
+        # .opj: "\ad(A)", intended meaning undecoded/undocumented) must degrade
+        # like every other unknown control — drop the wrapper, keep the inner
+        # text — never raise and never leak the literal escape.
+        (r"10\+(-6) \ad(A)\+(-2)", "10⁻⁶ A⁻²"),
+        (r"\c3(red text)", "red text"),  # numbered colour control → text kept
         ("", ""),
     ],
 )
@@ -2197,6 +2238,61 @@ def test_clean_richtext_malformed_degrades_gracefully() -> None:
     assert clean_richtext("no escapes here") == "no escapes here"
     # unterminated run: must not raise, and must not lose the visible text
     assert "tail" in clean_richtext(r"\g(q tail")
+
+
+def test_build_book_translates_column_richtext() -> None:
+    """Column Long Name / Unit / Comment and the book's own display title are
+    Origin LabTalk *label* fields exactly like a graph axis title — a user can
+    type the same ``\\+(...)``/``\\g(...)`` escapes into any of them. Confirmed
+    live in the corpus: ``MnN_Diffusion_PNR.opj``'s "Nuclear SLD" books carry a
+    Unit of ``10\\+(-6) A\\+(-2)``, which used to leak straight through
+    `.units` (and `x_unit`/`x_column_unit`) into the frontend's
+    ``${label} (${unit})`` axis/legend composition — the raw-escape bug this
+    test pins shut, at the single `_build_book` chokepoint shared by ``.opj``
+    and ``.opju`` (`opju.py` reuses it verbatim)."""
+    from quantized.io.origin_project.opj import _build_book
+    from quantized.io.origin_project.windows import BookMeta, ColumnMeta
+
+    meta = BookMeta(
+        short="Book1",
+        long_name=r"Sample \g(g) run",  # book display title can carry escapes too
+        columns={
+            "A": ColumnMeta("A", "X", r"Q (nm\+(-1))", r"nm\+(-1)", ""),
+            "B": ColumnMeta(
+                "B", "Y", "Nuclear SLD", r"10\+(-6) A\+(-2)", r"\i(fit) residual"
+            ),
+        },
+    )
+    cols = [("A", np.array([0.1, 0.2])), ("B", np.array([1.0, 2.0]))]
+    ds = _build_book("Book1", cols, {"Book1": meta}, [], "origin_opj")
+
+    assert ds.labels == ("Nuclear SLD",)
+    assert ds.units == ("10⁻⁶ A⁻²",)
+    assert ds.metadata["x_column_long"] == "Q (nm⁻¹)"
+    assert ds.metadata["x_unit"] == "nm⁻¹"
+    assert ds.metadata["x_column_unit"] == "nm⁻¹"
+    assert ds.metadata["origin_book_long"] == "Sample γ run"
+    assert ds.metadata["column_comments"]["B"] == "fit residual"
+
+
+def test_inventory_translates_book_long_name() -> None:
+    """`_inventory` (the per-book listing in ``metadata["origin_books"]``,
+    read by the Library/worksheet tabs) must decode a book's display title
+    the same as `_build_book`'s own `origin_book_long` — one book's raw
+    LabTalk title should never show cleaned in one place and escaped in
+    another."""
+    from quantized.io.origin_project.opj import _group, _inventory
+    from quantized.io.origin_project.windows import BookMeta
+
+    meta = BookMeta(short="Book1", long_name=r"Sample \g(g) run", columns={})
+    books = _group([("Book1_A", np.array([1.0, 2.0]))])
+    inventory = _inventory(books, {"Book1": meta})
+    assert inventory[0]["long_name"] == "Sample γ run"
+
+    # the report-sheet-only branch (a pseudo-book with zero plausible-numeric
+    # columns) uses the same lookup and must decode identically.
+    inventory2 = _inventory(OrderedDict(), {"Book1": meta}, report_only={"Book1": []})
+    assert inventory2[0]["long_name"] == "Sample γ run"
 
 
 def _mk_book(name: str, *, values: np.ndarray, labels: list[str], **meta: object) -> DataStruct:

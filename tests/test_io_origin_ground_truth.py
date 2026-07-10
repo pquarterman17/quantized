@@ -34,6 +34,7 @@ from quantized.io.origin_project import (
     drop_empty_library_books,
     read_origin_books,
 )
+from quantized.io.origin_project.origin_richtext import clean_richtext
 
 
 def _resolve_corpus_dir() -> Path:
@@ -280,15 +281,23 @@ def test_reader_matches_origin_ground_truth(stem: str) -> None:
                 f"decoded column"
             )
             checked_cols += 1
-        # every non-empty oracle long name must appear among our labels/x
+        # every non-empty oracle long name must appear among our labels/x.
+        # expASC's ASCII export writes the RAW LabTalk label (rich-text
+        # escapes intact, e.g. "10\+(-6) A\+(-2)") -- it does not render rich
+        # text the way Origin's own worksheet UI does. Our reader decodes
+        # those escapes (`opj._label_for`/`.units`, see its module docstring),
+        # so the oracle side needs the same `clean_richtext` pass for a fair
+        # comparison; asserting the raw oracle string would fail the moment
+        # the reader stops leaking escapes (MnN_Diffusion_PNR/SuperlatticeFits
+        # both carry escaped column Units live in the corpus).
         our_names = set(ds.labels) | {ds.metadata.get("x_column_long", "")}
         for nm in names:
             if nm and not nm.startswith(("Unnamed", "Sheet")):
-                assert nm in our_names, f"{stem}/{name}: long name {nm!r} missing"
+                assert clean_richtext(nm) in our_names, f"{stem}/{name}: long name {nm!r} missing"
         our_units = set(ds.units) | {ds.metadata.get("x_unit", "")}
         for un in units:
             if un:
-                assert un in our_units, f"{stem}/{name}: unit {un!r} missing"
+                assert clean_richtext(un) in our_units, f"{stem}/{name}: unit {un!r} missing"
         checked_books += 1
     if checked_books == 0:
         pytest.skip(f"{stem}: no comparable books (all multi-sheet/non-dataset)")
