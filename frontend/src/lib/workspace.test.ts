@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { OriginFigureEntry } from "./originFigures";
+import type { FrozenPlotBundle } from "./plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { ReportEntry } from "./report";
 import type { Dataset, OriginFigure } from "./types";
@@ -627,5 +628,65 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     ) as Record<string, unknown>;
     (doc.plotWindows as Record<string, unknown>[]).forEach((w) => delete w.linkGroup);
     expect(parseWorkspace(JSON.stringify(doc)).plotWindows[0].linkGroup).toBeNull();
+  });
+
+  it("round-trips a kind:'snapshot' window with its frozen bundle (item 11)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const snapshot: FrozenPlotBundle = {
+      payload: {
+        data: [
+          [0, 1],
+          [10, null],
+        ] as FrozenPlotBundle["payload"]["data"],
+        series: [{ label: "m", unit: "emu" }],
+        xLabel: "t",
+        xUnit: "s",
+      },
+      styleList: [{ color: "#ff0000" }, null],
+      labelList: ["moment", null],
+      errorBars: [[1, [0.1, null]]],
+      hidden: [false],
+    };
+    const plotWindows = [
+      win({ id: "w1" }),
+      win({ id: "s1", kind: "snapshot", datasetId: null, title: "Snapshot — first", snapshot }),
+    ];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, plotWindows, focusedWindowId: "w1" }));
+    expect(loaded.plotWindows).toHaveLength(2);
+    const s1 = loaded.plotWindows.find((w) => w.id === "s1")!;
+    expect(s1.kind).toBe("snapshot");
+    expect(s1.snapshot).toEqual(snapshot);
+    expect(s1.datasetId).toBeNull();
+  });
+
+  it("clamps a focusedWindowId pointing at a snapshot window to null (item 11 — snapshots never hold focus)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const snapshot: FrozenPlotBundle = {
+      payload: {
+        data: [[0], [1]] as FrozenPlotBundle["payload"]["data"],
+        series: [{ label: "m", unit: "" }],
+        xLabel: "x",
+        xUnit: "",
+      },
+      styleList: null,
+      labelList: null,
+      errorBars: [],
+      hidden: null,
+    };
+    const plotWindows = [
+      win({ id: "w1" }),
+      win({ id: "s1", kind: "snapshot", datasetId: null, snapshot }),
+    ];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, plotWindows, focusedWindowId: "s1" }));
+    expect(loaded.focusedWindowId).toBeNull(); // the store's load path falls back to a plot window
+  });
+
+  it("drops a snapshot window whose frozen bundle is missing/malformed — plot siblings survive", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets, plotWindows: [win({ id: "w1" })], focusedWindowId: "w1" }),
+    ) as Record<string, unknown>;
+    doc.plotWindows = [win({ id: "w1" }), win({ id: "s1", kind: "snapshot" })]; // no bundle
+    expect(parseWorkspace(JSON.stringify(doc)).plotWindows.map((w) => w.id)).toEqual(["w1"]);
   });
 });

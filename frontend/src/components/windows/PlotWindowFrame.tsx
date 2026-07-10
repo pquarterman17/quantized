@@ -297,6 +297,16 @@ export default function PlotWindowFrame({
             {displayTitle}
           </span>
         )}
+        {win.kind === "snapshot" && (
+          // Item 11: the "frozen" indicator — a snapshot window's data was
+          // captured at freeze time and does not follow the source dataset.
+          <span
+            className="qzk-plotwin-frozen"
+            title="Frozen snapshot — captured at freeze time; does not follow the source dataset"
+          >
+            <Badge tone="accent">⎘ frozen</Badge>
+          </span>
+        )}
         {datasetName && <span className="qzk-plotwin-badge">{datasetName}</span>}
         {datasetMeta && (
           <Badge tone="accent" className="qzk-plotwin-meta">

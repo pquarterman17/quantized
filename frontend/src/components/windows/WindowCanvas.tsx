@@ -23,6 +23,7 @@ import { useApp } from "../../store/useApp";
 import PlotStage from "../Stage/PlotStage";
 import BackgroundPlotWindow from "./BackgroundPlotWindow";
 import PlotWindowFrame from "./PlotWindowFrame";
+import SnapshotPlotWindow from "./SnapshotPlotWindow";
 
 export default function WindowCanvas() {
   const plotWindows = useApp((s) => s.plotWindows);
@@ -98,7 +99,12 @@ export default function WindowCanvas() {
               datasetMeta={datasetMeta}
               bounds={bounds}
             >
-              {focused ? (
+              {win.kind === "snapshot" && win.snapshot ? (
+                // Item 11: a snapshot window renders its FROZEN bundle
+                // statically — never focused (the store guarantees it), so
+                // this branch is checked before the focused dispatch.
+                <SnapshotPlotWindow frozen={win.snapshot} view={win.view} bg={win.bg} />
+              ) : focused ? (
                 <PlotStage />
               ) : (
                 <BackgroundPlotWindow

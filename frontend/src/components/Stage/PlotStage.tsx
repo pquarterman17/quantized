@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import type uPlot from "uplot";
 
 import { clampPlottedRange, rowsInXRange } from "../../lib/plotdata";
+import { publishLivePlotSnapshot } from "../../lib/plotsnapshot";
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { resolveTemplate } from "../../lib/plotTemplates";
@@ -19,6 +20,7 @@ import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths"
 import { windowSyncKey } from "../../lib/windowsync";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import { snapshotToNewWindow } from "../windows/useWindowCommands";
 import AxisDropZones from "./AxisDropZones";
 import InsetPlot from "./InsetPlot";
 import MultiPanelStage from "./MultiPanelStage";
@@ -179,6 +181,27 @@ export default function PlotStage() {
     active,
   );
 
+  // Item 11 (snapshot-as-window): publish the CURRENT composed display bundle
+  // through the module-scope seam so the "Snapshot to New Window" command can
+  // freeze exactly what's on screen. An imperative ref write, not store state
+  // — zero re-renders/store churn. Publish null while an alternate render
+  // mode is actually showing (the same gates as the early returns below):
+  // the XY bundle computed here isn't what's on screen then, so the command
+  // no-ops instead of freezing the wrong thing. Cleared on unmount (the Plot
+  // tab switching away).
+  const altModeShowing =
+    (!!active && (polarMode || statMode)) ||
+    (stackMode &&
+      (plotted.length >= 2 || (spatialPanels?.length ?? 0) >= 2 || (facetPanels?.length ?? 0) >= 1));
+  useEffect(() => {
+    publishLivePlotSnapshot(
+      displayPayload && !altModeShowing
+        ? { payload: displayPayload, styleList, labelList, errorBars, hidden }
+        : null,
+    );
+    return () => publishLivePlotSnapshot(null);
+  }, [displayPayload, styleList, labelList, errorBars, hidden, altModeShowing]);
+
   // Alternate render modes (each self-contained; polar wins, then stats, then stack).
   const nPlotted = plotted.length;
   if (polarMode && active) return <PolarStage />;
@@ -307,6 +330,7 @@ export default function PlotStage() {
           onSavePng={savePng}
           onCopyData={copyData}
           onSnapshot={snapshot}
+          onSnapshotWindow={snapshotToNewWindow}
         />
       )}
 

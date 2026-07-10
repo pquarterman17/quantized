@@ -17,6 +17,7 @@
 
 import { useEffect } from "react";
 
+import { freezePlotSnapshot, readLivePlotSnapshot } from "../../lib/plotsnapshot";
 import { cycleWindow, nextPlotBg, snapshotView, zOrderIds } from "../../lib/plotview";
 import { useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
@@ -54,13 +55,30 @@ function closeFocusedWindow(): void {
   if (s.focusedWindowId) s.closeWindow(s.focusedWindowId);
 }
 
+/** Snapshot to New Window (item 11): freeze the focused window's CURRENT
+ *  composed display payload — read from the PlotStage seam
+ *  (lib/plotsnapshot) — into a static kind:"snapshot" compare window. A
+ *  no-op when no live XY payload is showing (no dataset, an alternate render
+ *  mode, or the Plot tab isn't mounted). Exported so PlotToolbar's ⊞ button
+ *  (next to the existing ⎘ raster snapshot) can trigger the same action. */
+export function snapshotToNewWindow(): void {
+  const live = readLivePlotSnapshot();
+  if (!live) return;
+  useApp.getState().createSnapshotWindow(freezePlotSnapshot(live));
+}
+
 /** Focus Next/Previous: z-order-aware cycling (item 6 — supersedes v1's
  *  plain creation-order cycle by feeding `cycleWindow` ids sorted back-to-
  *  front instead of the raw array order; identical to v1 whenever no window
- *  has ever been raised, since `zOrderIds` is a stable sort). */
+ *  has ever been raised, since `zOrderIds` is a stable sort). Snapshot
+ *  windows (item 11) are skipped — they can never hold focus. */
 function cycleFocus(direction: 1 | -1): void {
   const s = useApp.getState();
-  const next = cycleWindow(zOrderIds(s.plotWindows), s.focusedWindowId, direction);
+  const next = cycleWindow(
+    zOrderIds(s.plotWindows.filter((w) => w.kind === "plot")),
+    s.focusedWindowId,
+    direction,
+  );
   if (next) s.focusWindow(next);
 }
 
@@ -114,6 +132,12 @@ export function useWindowCommands(): void {
         run: duplicateFocusedWindow,
       },
       { id: "window-close", group: "Window", label: "Close Window", shortcut: "⌘⇧W", run: closeFocusedWindow },
+      {
+        id: "window-snapshot",
+        group: "Window",
+        label: "Snapshot to New Window",
+        run: snapshotToNewWindow,
+      },
       { id: "window-tile", group: "Window", label: "Tile Windows", run: tileWindows },
       { id: "window-cascade", group: "Window", label: "Cascade Windows", run: cascadeWindows },
       {

@@ -16,6 +16,7 @@
 // decisions" #2), and global Preferences-dialog defaults (defaultTrace,
 // wheelZoom, excludedDisplay, sigFigs, … — app-wide, not per-window).
 
+import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
 import type { Annotation, AxisFormat, RefLine, SeriesStyle } from "./types";
 
 export type LegendPos = "ne" | "nw" | "se" | "sw";
@@ -181,10 +182,13 @@ export function nextLinkGroup(current: number | null): number | null {
  *  (swapped with the live singleton fields only while focused), and its own
  *  background override (`bg`, item 18). The `kind` discriminator carries the
  *  door open for future window kinds (worksheet/map — item 17) without a
- *  model change. */
+ *  model change; item 11 adds the first extra kind, `"snapshot"` — a static
+ *  frozen-payload compare window that is NEVER the view-facade focus target
+ *  (`focusedWindowId` always points at a `kind:"plot"` window; `focusWindow`
+ *  on a snapshot only raises its z). */
 export interface PlotWindow {
   id: string;
-  kind: "plot";
+  kind: "plot" | "snapshot";
   title: string;
   datasetId: string | null;
   geometry: WindowGeometry;
@@ -199,6 +203,12 @@ export interface PlotWindow {
    *  default). Like `bg`, a per-window display choice on the record itself,
    *  not part of the swapped `PlotView`. Wired in `lib/windowsync.ts`. */
   linkGroup: number | null;
+  /** kind:"snapshot" only (item 11): the frozen composed display bundle this
+   *  window renders VERBATIM — no fetch, no rowstate, no live dataset binding
+   *  (a snapshot window's `datasetId` is always null; frozen means frozen).
+   *  Its `view` is a frozen copy of the source's live view at freeze time.
+   *  Absent on `kind:"plot"` windows. */
+  snapshot?: FrozenPlotBundle;
 }
 
 const DEFAULT_WIDTH = 480;
@@ -416,7 +426,12 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
   for (const e of v) {
     if (typeof e !== "object" || e === null) continue;
     const o = e as Record<string, unknown>;
-    if (typeof o.id !== "string" || o.kind !== "plot") continue;
+    if (typeof o.id !== "string" || (o.kind !== "plot" && o.kind !== "snapshot")) continue;
+    // A snapshot window (item 11) IS its at-rest frozen bundle — with nothing
+    // live to fall back to, a malformed bundle drops the whole entry (still
+    // never throws; the per-field-fallback discipline applies inside).
+    const snapshot = o.kind === "snapshot" ? sanitizeFrozenBundle(o.snapshot) : null;
+    if (o.kind === "snapshot" && !snapshot) continue;
     const g = (typeof o.geometry === "object" && o.geometry !== null ? o.geometry : {}) as Record<
       string,
       unknown
@@ -424,9 +439,10 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
     const datasetId = typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
     out.push({
       id: o.id,
-      kind: "plot",
+      kind: o.kind,
       title: strOrDefault(o.title, ""),
-      datasetId,
+      // A snapshot window is never dataset-bound (frozen means frozen).
+      datasetId: o.kind === "snapshot" ? null : datasetId,
       geometry: {
         x: num(g.x, 0),
         y: num(g.y, 0),
@@ -441,6 +457,7 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
         typeof o.linkGroup === "number" && Number.isInteger(o.linkGroup) && o.linkGroup >= 1
           ? o.linkGroup
           : null,
+      ...(snapshot ? { snapshot } : {}),
     });
   }
   return out;

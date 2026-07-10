@@ -381,8 +381,13 @@ export function parseWorkspace(text: string): LoadedWorkspace {
   // pre-item-7 doc (absent field) sanitizes to [] via the same
   // undefined-input path every other sanitizer here already handles.
   const plotWindows = sanitizePlotWindows(o.plotWindows, dsIds);
+  // The focus id must land on a kind:"plot" window — a snapshot window
+  // (MULTI_PLOT_PLAN item 11) can never hold focus, so a doc pointing at one
+  // clamps to null (the store's load path then falls back to the first plot
+  // window).
   const focusedWindowId =
-    typeof o.focusedWindowId === "string" && plotWindows.some((w) => w.id === o.focusedWindowId)
+    typeof o.focusedWindowId === "string" &&
+    plotWindows.some((w) => w.id === o.focusedWindowId && w.kind === "plot")
       ? o.focusedWindowId
       : null;
   return {

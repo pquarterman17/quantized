@@ -33,6 +33,9 @@ interface Props {
   onSavePng: () => void;
   onCopyData: () => void;
   onSnapshot: () => void;
+  /** Item 11: freeze the current plot into a static compare window (the ⎘
+   *  clipboard snapshot's in-app sibling). */
+  onSnapshotWindow: () => void;
 }
 
 export default function PlotToolbar({
@@ -41,6 +44,7 @@ export default function PlotToolbar({
   onSavePng,
   onCopyData,
   onSnapshot,
+  onSnapshotWindow,
 }: Props) {
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
@@ -91,6 +95,13 @@ export default function PlotToolbar({
       </button>
       <button className="qzk-tool-btn" title="Copy plot image to clipboard (PNG)" onClick={onSnapshot}>
         ⎘
+      </button>
+      <button
+        className="qzk-tool-btn"
+        title="Snapshot to a new window (frozen compare)"
+        onClick={onSnapshotWindow}
+      >
+        ⊞
       </button>
       <span className="qzk-tool-sep" />
       <button

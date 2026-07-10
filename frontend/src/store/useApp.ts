@@ -72,6 +72,7 @@ import {
   type PlotWindow,
   type WinState,
 } from "../lib/plotview";
+import type { FrozenPlotBundle } from "../lib/plotsnapshot";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -858,6 +859,13 @@ interface AppState {
   // `title` (item 10) overrides the computed default (dataset name, deduped
   // against what's already showing) — omit it to get that default.
   createWindow: (datasetId?: string | null, view?: PlotView, title?: string) => string;
+  // Snapshot-as-window (item 11): freeze the FOCUSED window's current
+  // composed display bundle (the caller reads it from the PlotStage seam —
+  // lib/plotsnapshot) into a static kind:"snapshot" compare window. Never
+  // focusable (focusWindow only raises it), never dataset-bound; its view is
+  // a frozen copy of the live singletons at freeze time. Returns the new id,
+  // or null when no window is focused.
+  createSnapshotWindow: (frozen: FrozenPlotBundle) => string | null;
   closeWindow: (id: string) => void;
   focusWindow: (id: string) => void;
   duplicateWindow: (id: string) => string | null;
@@ -1899,11 +1907,19 @@ export const useApp = create<AppState>((set, get) => ({
       const win = mainWindow(active);
       const dsIds = new Set(datasets.map((d) => d.id));
       const restored = sanitizePlotWindows(ws.plotWindows, dsIds);
-      const plotWindows = restored.length ? restored : [win];
+      // Item 11: the ≥1-window invariant is specifically ≥1 PLOT window —
+      // snapshot windows can't hold focus, so a doc whose surviving windows
+      // are all snapshots still gets the fresh maximized main window
+      // appended; and the restored focus id must land on a plot window
+      // (falling back to the first one), never on a snapshot.
+      const restoredHasPlot = restored.some((w) => w.kind === "plot");
+      const plotWindows = restoredHasPlot ? restored : [...restored, win];
       const focusedWindowId =
-        restored.length && ws.focusedWindowId && plotWindows.some((w) => w.id === ws.focusedWindowId)
+        restoredHasPlot &&
+        ws.focusedWindowId &&
+        plotWindows.some((w) => w.id === ws.focusedWindowId && w.kind === "plot")
           ? ws.focusedWindowId
-          : plotWindows[0].id;
+          : (plotWindows.find((w) => w.kind === "plot") ?? plotWindows[0]).id;
       // A restored layout carries its own PlotView per window — hydrate the
       // FOCUSED one into the live singleton fields immediately so it renders
       // right away, the same "focused window's live view ≡ singletons"
@@ -1912,7 +1928,7 @@ export const useApp = create<AppState>((set, get) => ({
       // EXACTLY today's reset (including the errKeys/hiddenChannels smart
       // defaults derived from the active dataset) — zero behavior change
       // when there's no persisted layout to restore.
-      const restoredView = restored.length
+      const restoredView = restoredHasPlot
         ? hydrateView(plotWindows.find((w) => w.id === focusedWindowId)!.view)
         : null;
       return {
@@ -2932,20 +2948,57 @@ export const useApp = create<AppState>((set, get) => ({
     });
     return id;
   },
-  // Never drops below one window (the ≥1-window invariant) — a no-op on the
-  // last surviving window. Closing the FOCUSED window refocuses the top-z
-  // survivor, hydrating its stored view into the live singleton fields (one
-  // of only two hydrateView call sites — the other is focusWindow) and
-  // following the same "focus switch" contract focusWindow does below
-  // (activeId/selectedIds track the new focus's dataset; transient tool
-  // state clears — item 4).
+  // Snapshot-as-window (item 11): a static compare window carrying the
+  // focused plot's frozen display bundle. Titled "Snapshot — <source's
+  // displayed title>" (deduped like every other computed default — item 10),
+  // placed on top like a new window, inheriting the source's bg override.
+  // The view is snapshotted from the LIVE singleton fields (the focused
+  // window's record is stale while focused) — a frozen copy, never swapped.
+  createSnapshotWindow: (frozen) => {
+    const s = get();
+    const src = s.plotWindows.find((w) => w.id === s.focusedWindowId);
+    if (!src) return null;
+    const id = nextWindowId();
+    const title = dedupeWindowTitle(
+      `Snapshot — ${displayedWindowTitle(src, s.datasets)}`,
+      s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
+    );
+    const win: PlotWindow = {
+      id,
+      kind: "snapshot",
+      title,
+      datasetId: null,
+      geometry: cascadeGeometry(s.plotWindows.length),
+      z: maxZ(s.plotWindows) + 1,
+      winState: "normal",
+      view: snapshotView(s),
+      bg: src.bg,
+      // A frozen snapshot starts unlinked (item 13): cursor/x-sync is a live
+      // comparison affordance; opting a static window in stays a user choice.
+      linkGroup: null,
+      snapshot: frozen,
+    };
+    set({ plotWindows: [...s.plotWindows, win] });
+    return id;
+  },
+  // Never drops below one PLOT window (item 11 refines the ≥1-window
+  // invariant: the last kind:"plot" window can't close even when snapshot
+  // windows remain — a snapshot can never hold focus, so it can't be the
+  // survivor; snapshot windows themselves always close freely). Closing the
+  // FOCUSED window refocuses the top-z surviving PLOT window, hydrating its
+  // stored view into the live singleton fields (one of only two hydrateView
+  // call sites — the other is focusWindow) and following the same "focus
+  // switch" contract focusWindow does below (activeId/selectedIds track the
+  // new focus's dataset; transient tool state clears — item 4).
   closeWindow: (id) =>
     set((s) => {
-      if (s.plotWindows.length <= 1) return {};
+      const target = s.plotWindows.find((w) => w.id === id);
+      if (!target) return {}; // id not found
+      if (target.kind !== "snapshot" && s.plotWindows.filter((w) => w.kind === "plot").length <= 1)
+        return {};
       const remaining = s.plotWindows.filter((w) => w.id !== id);
-      if (remaining.length === s.plotWindows.length) return {}; // id not found
       if (s.focusedWindowId !== id) return { plotWindows: remaining };
-      const next = remaining.reduce((a, b) => (b.z > a.z ? b : a));
+      const next = remaining.filter((w) => w.kind === "plot").reduce((a, b) => (b.z > a.z ? b : a));
       return {
         plotWindows: remaining,
         focusedWindowId: next.id,
@@ -2968,6 +3021,15 @@ export const useApp = create<AppState>((set, get) => ({
       if (id === s.focusedWindowId) return {};
       const target = s.plotWindows.find((w) => w.id === id);
       if (!target) return {};
+      // A snapshot window (item 11) is never the view-facade focus target:
+      // a focus request (e.g. PlotWindowFrame's pointerdown-capture) only
+      // raises its z. focusedWindowId stays on the current plot window, the
+      // live singleton fields are untouched, and activeId/selectedIds never
+      // retarget — frozen means frozen.
+      if (target.kind === "snapshot") {
+        const top = maxZ(s.plotWindows) + 1;
+        return { plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, z: top } : w)) };
+      }
       const raised = maxZ(s.plotWindows) + 1;
       const plotWindows = s.plotWindows.map((w) => {
         if (w.id === s.focusedWindowId) return { ...w, view: snapshotView(s) };
@@ -3000,7 +3062,10 @@ export const useApp = create<AppState>((set, get) => ({
     );
     const dup: PlotWindow = {
       id: newId,
-      kind: "plot",
+      // Item 11: duplicating a snapshot window yields another snapshot
+      // (kind + frozen bundle carried over) — never a live plot window
+      // conjured from frozen data.
+      kind: src.kind,
       title,
       datasetId: src.datasetId,
       geometry: cascadeGeometry(s.plotWindows.length),
@@ -3011,6 +3076,7 @@ export const useApp = create<AppState>((set, get) => ({
       // Item 13: a duplicate joins the source's link group (matching how it
       // inherits `bg` — "clone this window" includes its comparison links).
       linkGroup: src.linkGroup,
+      ...(src.snapshot ? { snapshot: src.snapshot } : {}),
     };
     set({ plotWindows: [...s.plotWindows, dup] });
     return newId;
@@ -3086,7 +3152,11 @@ export const useApp = create<AppState>((set, get) => ({
           : w,
       );
       if (s.focusedWindowId !== id) return { plotWindows };
-      const candidates = plotWindows.filter((w) => w.id !== id && w.winState !== "minimized");
+      // Item 11: only a PLOT window can receive the handed-off focus — a
+      // visible snapshot window is skipped (focus stays put if nothing else).
+      const candidates = plotWindows.filter(
+        (w) => w.id !== id && w.winState !== "minimized" && w.kind === "plot",
+      );
       if (candidates.length === 0) return { plotWindows };
       const next = candidates.reduce((a, b) => (b.z > a.z ? b : a));
       return {
@@ -3106,6 +3176,17 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => {
       const target = s.plotWindows.find((w) => w.id === id);
       if (!target || target.winState !== "minimized") return {};
+      // Item 11: restoring a snapshot window un-minimizes + raises it but
+      // never focuses it (snapshots can't hold focus — no snapshot/hydrate,
+      // no activeId/selectedIds retarget).
+      if (target.kind === "snapshot") {
+        const top = maxZ(s.plotWindows) + 1;
+        return {
+          plotWindows: s.plotWindows.map((w) =>
+            w.id === id ? { ...w, winState: "normal" as WinState, z: top } : w,
+          ),
+        };
+      }
       const raised = maxZ(s.plotWindows) + 1;
       const plotWindows = s.plotWindows.map((w) => {
         if (w.id === id) return { ...w, winState: "normal" as WinState, z: raised };
