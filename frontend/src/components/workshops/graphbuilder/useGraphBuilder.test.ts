@@ -45,6 +45,9 @@ beforeEach(() => {
     spatialPanels: null,
     facetPanels: null,
     breakPanels: null,
+    // Owner-routing item 1: starts parked on Worksheet so "sendToStage
+    // surfaces the Plot tab" assertions below don't need a separate fixture.
+    stageTab: "worksheet",
   });
 });
 
@@ -114,6 +117,26 @@ describe("useGraphBuilder — send to stage", () => {
     act(() => result.current.sendToStage());
     expect(useApp.getState().statStageSeed).toEqual({ mode: "box", groupCol: 2, valueCol: 1 });
     expect(useApp.getState().statMode).toBe(true);
+  });
+
+  // Owner-routing item 1 ("have to remember to toggle up"): every branch of
+  // sendToStage renders inside the Plot tab (scatter/line on the canvas,
+  // box/violin/bar via StatStage), so it must surface that tab regardless of
+  // where the user currently is.
+  it("forces the Plot tab even when starting on Worksheet — scatter/line", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.sendToStage());
+    expect(useApp.getState().stageTab).toBe("plot");
+  });
+
+  it("forces the Plot tab even when starting on Worksheet — box/violin", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("x", 2));
+    act(() => result.current.sendToStage());
+    expect(useApp.getState().stageTab).toBe("plot");
   });
 
   it("scatter/line WITH a facet zone enters the main Stage's facet grid (gap #21 residual)", () => {

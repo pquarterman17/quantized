@@ -315,6 +315,19 @@ export function nextStageTab(d: Dataset, current: StageTab): StageTab {
   if (current === "worksheet") return current;
   return is2DMap(d.data) ? "map" : "plot";
 }
+
+/** Stage tab for a PLOT-INTENT action — applying an Origin figure or figure
+ *  doc, "Plot (make active)", worksheet "Plot selection"/"Add to plot",
+ *  GraphBuilder "Send to Stage" (owner 2026-07-09: "it's a bit confusing when
+ *  I'm opening a plot... and have to remember to toggle up"). The complement
+ *  of `nextStageTab`'s "stay on Worksheet" guard, which exists for passive/
+ *  ambiguous activation (a fresh import, restoring a workspace) — these
+ *  actions always mean "show me the plot", so a 2-D map dataset still opens
+ *  the Map view (never regress that routing) but everything else FORCES
+ *  "plot" regardless of which tab the user is currently on. */
+export function plotIntentStageTab(d: Dataset): StageTab {
+  return is2DMap(d.data) ? "map" : "plot";
+}
 export type LegendPos = "ne" | "nw" | "se" | "sw";
 // Keys the Preferences dialog can set through the generic setPref action.
 export type PrefKey =
@@ -1993,7 +2006,13 @@ export const useApp = create<AppState>((set, get) => ({
         plotWindows: s.plotWindows.map((w) =>
           w.id === s.focusedWindowId ? { ...w, datasetId: id } : w,
         ),
-        stageTab: ds ? nextStageTab(ds, s.stageTab) : s.stageTab,
+        // setActive IS the plot-intent primitive (item 15's DatasetRow "Plot
+        // (make active)", every applyOriginFigure branch, a plain Library
+        // click on a non-Origin dataset, …) — unlike a fresh import/workspace
+        // restore, it always means "show me the plot", so it uses
+        // `plotIntentStageTab` (never sticks on a stale Worksheet tab; see
+        // that function's doc, owner-routing item 1).
+        stageTab: ds ? plotIntentStageTab(ds) : s.stageTab,
         xKey: null,
         yKeys: null,
         y2Keys: null,
@@ -3449,7 +3468,11 @@ export const useApp = create<AppState>((set, get) => ({
     const winId = s.createWindow(doc.datasetId, undefined, title);
     s.focusWindow(winId);
     const c = doc.config;
+    const targetDs = s.datasets.find((d) => d.id === doc.datasetId);
     set({
+      // Plot-intent (item 1): "open in new window" always means look at the
+      // plot, so surface it regardless of which tab was showing.
+      ...(targetDs ? { stageTab: plotIntentStageTab(targetDs) } : {}),
       xKey: c.xKey,
       yKeys: c.yKeys,
       xLog: c.xLog,

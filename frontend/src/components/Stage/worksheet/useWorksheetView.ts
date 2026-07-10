@@ -30,7 +30,7 @@ import { originTextColumns, type TextColumn } from "../../../lib/columnmeta";
 import { excludedSet, filteredOutSet } from "../../../lib/rowstate";
 import { resolveSelectionPlot } from "../../../lib/selectionplot";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
-import { useApp } from "../../../store/useApp";
+import { plotIntentStageTab, useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
 
 /** Does value `v` pass `op` against `a` (and `b` for "between")? Non-finite fails. */
@@ -206,6 +206,13 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
     // above, which would otherwise describe the PREVIOUS plot's axes.
     const store = useApp.getState();
     if (store.activeId !== ds.id) store.setActive(ds.id);
+    // Owner-routing item 1: `ds` is ALREADY active often enough (the common
+    // "worksheet + plot bound to the same dataset" case) that `setActive`
+    // above never runs — so its stageTab fix alone doesn't cover this call
+    // site. Force the Plot tab here too, whenever it isn't already showing.
+    const afterActivate = useApp.getState();
+    const wantTab = plotIntentStageTab(ds);
+    if (afterActivate.stageTab !== wantTab) useApp.setState({ stageTab: wantTab });
     const cur = useApp.getState();
     const result = resolveSelectionPlot(ds.data, new Set(cols), { xKey: cur.xKey, yKeys: cur.yKeys }, mode);
     for (const action of result.actions) {
