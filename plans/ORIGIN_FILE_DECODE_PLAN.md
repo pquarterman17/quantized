@@ -517,6 +517,33 @@ the shipped contract)
   `useCurveFit.test.ts` (+2), `usePeaks.test.ts` (+2),
   `useBaseline.test.ts` (+1), `useWaterfall.test.ts` (+1),
   `useFigureBuilder.test.ts` (+1) — frontend 2024 tests + build green.
+  **Known-edge fix (2026-07-09):** the owner's live PNR.opj testing found a
+  Library thumbnail that "looks NOTHING like the plot it holds"
+  (`PNR:Book15`) — the Sparkline path reads a dataset's raw `.time`/
+  `.values` directly, bypassing every fix already made to the main-plot
+  path (`dropTrailingEmptyRows`), so it inherited #38's preview padding
+  uncaught. Root cause on the real file (Book15: 180 rows, 19 trailing
+  Origin over-allocated-storage rows — `.time` AND every channel exactly
+  0.0): (1) the padding was never pruned, in either
+  `decimate_datastruct` (the #38 preview) or the sparkline itself; (2) the
+  density heuristic (`primaryChannel`) can't tell an Origin Y-error/X-error
+  column from real Y data once padding makes every channel equally
+  "dense" — Book15's sparkline drew `dQ` (X-error, near-flat) instead of
+  `R++` (the real reflectivity curve). Fixed: `decimate_datastruct` gained
+  `_trim_trailing_padding` (prune before decimating);
+  `Sparkline.tsx` now picks the first Origin Y-designated channel
+  (`lib/columnmeta.columnMetaList`, falling back to `primaryChannel` for
+  non-Origin data), prunes via a new `lib/downsample.trimTrailingPadding`
+  twin of `dropTrailingEmptyRows`, and sorts sampled points by x (defensive;
+  a no-op on Book15's own already-ascending data, but needed generally for
+  an unsorted X column). Verified against the real PNR.opj: Book15 raw is
+  180 rows (Q range `[0.0, 0.140]`, padding included); the fixed preview is
+  161 rows (Q range `[0.00503, 0.140]`, monotonic ascending, no zero-row
+  left). Both the pending-preview and full-fetch states render through the
+  same fixed Sparkline code, so the thumbnail no longer jumps when the full
+  data replaces the preview. Tests: `test_io_origin_preview.py` (+6),
+  `downsample.test.ts` (+7), new `Sparkline.test.tsx` (7). Backend 2115 +
+  frontend 2144/178 files + build green.
 
 - ~~**PNR-triage import-perf batch (unbooked side-work)**~~ (2026-07-09)
   — merged to main as `917802a` (commits `16080ad`/`09e1ac1`/`d097c39`):
