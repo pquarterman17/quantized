@@ -10,7 +10,7 @@ value without creating a second god-component or a second plotting pathway.
 
 **Status:** Active
 **Created:** 2026-07-09
-**Updated:** 2026-07-09 (Tier 2, items 6-11, closed same day; item 15 added + closed same day)
+**Updated:** 2026-07-09 (Tier 2, items 6-11, closed same day; items 15-16 added + closed same day)
 
 ---
 
@@ -407,3 +407,24 @@ Selection→plot (Stage C):
   17 new tests across `grouping.test.ts`, `useApp.test.ts`,
   `DatasetRow.test.tsx`, `Worksheet.test.tsx`, `SheetTabs.test.tsx`,
   `PreferencesDialog.test.tsx`, and `prefs.test.ts`.
+- ~~**#16 Plot-intent actions auto-route to the Plot tab**~~ (2026-07-09) —
+  item 15's complement, same-day owner follow-up: "it's a bit confusing when
+  I'm opening a plot vs workbook and then have to remember to toggle up."
+  Item 15 covered the book-click → Worksheet direction; this covers the
+  reverse — a PLOT-intent action fired while parked on Worksheet (or Map)
+  left `stageTab` untouched, so `setActive`'s own `nextStageTab` call (whose
+  "stay on Worksheet" guard exists for PASSIVE activation — a fresh import,
+  a restored workspace) was silently swallowing the tab switch for what item
+  15's own comment already called "the explicit plot-intent primitive". New
+  `useApp.plotIntentStageTab(d)` — `nextStageTab` without that guard, still
+  routing a 2-D map to "map" so that routing never regresses — wired through
+  `setActive` (covers "Plot (make active)" and every `applyOriginFigure`
+  branch for free), `openFigureDocInWindow` (didn't call `setActive` at all,
+  needed its own patch), `useWorksheetView.plotCols` ("Plot selection"/"Add
+  to plot" — the interesting gap: `setActive` is skipped entirely when the
+  worksheet's dataset is ALREADY the focused window's dataset, so the fix
+  has to force the tab directly there too), and `useGraphBuilder.sendToStage`
+  ("Send to Stage" — every mark family renders inside the Plot tab, scatter/
+  line on the canvas, box/violin/bar via StatStage). Tests: `useApp.test.ts`
+  (`setActive`/`applyOriginFigure`/`openFigureDocInWindow` cases),
+  `useWorksheetView.test.ts` (new file), `useGraphBuilder.test.ts`.
