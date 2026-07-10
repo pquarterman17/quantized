@@ -396,16 +396,12 @@ the shipped contract)
 
 ### Tier 1 — High Impact
 
-39. **Side-by-side Origin↔quantized figure comparison campaign** — (M)
-    COM script exports every corpus graph window as PNG (live-run
-    discipline; the headless page-limit silent-hang trap applies — use
-    timeouts); `tools/visual` gains a per-imported-figure screenshot
-    mode; an HTML gallery pairs Origin PNG vs quantized render with a
-    per-figure checklist (scales / ticks / legend / colours / markers /
-    annotations / panel layout) for the owner to eyeball. Every mismatch
-    gets booked as a numbered item here. Structural assertions (decoded
-    axis range / log flag / tick step vs applied store state via the
-    harness seam) form the automatable layer. Owner-approved 2026-07-09.
+~~39. **Side-by-side Origin↔quantized figure comparison campaign**~~
+    **CLOSED 2026-07-09** — see Completed. Tooling shipped
+    (`tools/origin_compare/export_origin_graphs.py` + `tools/visual/
+    origin_figures.mjs`/`gallery.mjs`); final gallery + structural report
+    in `../test-data/origin/_exports/PNR/`. Owner eyeball of the gallery
+    remains the standing human step; new mismatches get booked here.
 
 ### Tier 2 — Medium Impact
 
@@ -413,6 +409,34 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**39. Side-by-side Origin↔quantized figure comparison campaign**~~
+  (2026-07-09) — the full loop shipped and ran end-to-end the same day it
+  was booked. Origin side: `tools/origin_compare/export_origin_graphs.py`
+  (COM, watchdog-guarded, manifest-checkpointed, resumable, `--skip` for
+  reliable hangers) exported **50 of the 52 graph pages the licensed
+  Origin loads** from PNR.opj (2 honest skips: `Graph18` reliably hangs
+  Origin's own exporter — quantized renders it fine — and `spark`, an
+  auto-generated per-column sparkline page, not a user figure).
+  KEY FINDING: the student-license page limit caps what Origin loads at
+  52 pages — the raw file contains **101 graph windows, all decoded by
+  quantized** (post-#40 0x5f fix); the clean-room reader recovers more of
+  the owner's own project than the licensed vendor app will show. The
+  ~49 quantized-only figures (incl. the whole /PNR/S11 subtree) are
+  therefore *unverifiable against a COM oracle*, not unpaired bugs.
+  quantized side: `tools/visual/origin_figures.mjs` (imports via the real
+  backend, applies each Library figure family, screenshots the stage) +
+  `gallery.mjs` (side-by-side HTML gallery with persisted per-figure
+  eyeball-checklist chips) + `structural_report.json` (decoded axis
+  range/log/step vs applied store state). FINAL RUN (after the day's full
+  fix set — #43-46, walls, error bars, legends, fonts): 101 figures, 99
+  resolved (2 dangling "Pd" refs, correct), **91 fully consistent**, 8
+  known harness panel-count artifacts from the y2-merge feature;
+  **paired=50, originOnly=0** — every Origin-exportable graph has a
+  quantized twin. Deliverable: `../test-data/origin/_exports/PNR/
+  gallery.html` (sample-derived — NEVER commit). Owner eyeball = the
+  standing human step; each finding it produced today was booked and
+  fixed same-day (#40-46 trail).
 
 - ~~**44. Rich-text escapes leaking into axis labels (owner PNR.opj repro,
   Book14/Graph11 + elsewhere)**~~ (2026-07-09) — the owner's live-testing
