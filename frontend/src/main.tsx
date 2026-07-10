@@ -45,6 +45,7 @@ function harnessResetWindows(): void {
     winState: "maximized",
     view: defaultPlotView(),
     bg: "theme",
+    linkGroup: null,
   };
   useApp.setState({ plotWindows: [win], focusedWindowId: win.id });
 }
