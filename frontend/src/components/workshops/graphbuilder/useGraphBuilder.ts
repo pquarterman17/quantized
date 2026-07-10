@@ -33,7 +33,7 @@ import {
   type ZoneName,
 } from "../../../lib/plotspec";
 import { toast } from "../../../store/toasts";
-import { useActiveDataset, useApp } from "../../../store/useApp";
+import { plotIntentStageTab, useActiveDataset, useApp } from "../../../store/useApp";
 import type { WellChip, WellOption } from "./ZoneWell";
 
 export interface GraphBuilderState {
@@ -65,6 +65,7 @@ export function useGraphBuilder(): GraphBuilderState {
   const seedStatStage = useApp((s) => s.seedStatStage);
   const facetByColumn = useApp((s) => s.facetByColumn);
   const setStatus = useApp((s) => s.setStatus);
+  const setStageTab = useApp((s) => s.setStageTab);
 
   const [spec, setSpec] = useState<PlotSpec>(emptySpec);
 
@@ -119,6 +120,12 @@ export function useGraphBuilder(): GraphBuilderState {
 
   function sendToStage(): void {
     if (!active) return;
+    // Owner-routing item 1: "Send to Stage" always means look at the plot
+    // (every branch below renders inside the Plot tab — scatter/line/facet
+    // on the main canvas, box/violin/bar via StatStage), so surface it
+    // regardless of which tab the user is currently on.
+    const wantTab = plotIntentStageTab(active);
+    if (useApp.getState().stageTab !== wantTab) setStageTab(wantTab);
     if (spec.mark === "scatter" || spec.mark === "line") {
       setXKey(spec.zones.x?.channel ?? null);
       setYKeys(spec.zones.y.map((r) => r.channel));

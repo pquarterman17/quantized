@@ -65,6 +65,7 @@ export function useMultiPanelStage(): MultiPanelStageState {
   const xFmt = useApp((s) => s.xFmt);
   const yFmt = useApp((s) => s.yFmt);
   const showGrid = useApp((s) => s.showGrid);
+  const showAxisBox = useApp((s) => s.showAxisBox);
   const refLines = useApp((s) => s.refLines);
   const seriesStyles = useApp((s) => s.seriesStyles);
   const xKey = useApp((s) => s.xKey);
@@ -223,6 +224,7 @@ export function useMultiPanelStage(): MultiPanelStageState {
           xFmt,
           yFmt,
           showGrid,
+          axisBox: showAxisBox,
           tool,
           onReadout: setReadout,
           seriesStyles: cellStyles,
@@ -281,6 +283,7 @@ export function useMultiPanelStage(): MultiPanelStageState {
           xFmt,
           yFmt,
           showGrid,
+          axisBox: showAxisBox,
           tool,
           onReadout: setReadout,
           linearPaths: LINEAR_PATHS,
@@ -330,6 +333,7 @@ export function useMultiPanelStage(): MultiPanelStageState {
           xFmt,
           yFmt,
           showGrid,
+          axisBox: showAxisBox,
           tool,
           onReadout: setReadout,
           title: p.label,
@@ -378,6 +382,7 @@ export function useMultiPanelStage(): MultiPanelStageState {
         xFmt,
         yFmt,
         showGrid,
+        axisBox: showAxisBox,
         refLines,
         tool,
         onReadout: setReadout,
@@ -425,6 +430,7 @@ export function useMultiPanelStage(): MultiPanelStageState {
     xFmt,
     yFmt,
     showGrid,
+    showAxisBox,
     refLines,
     styleList,
     tool,

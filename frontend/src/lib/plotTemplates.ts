@@ -11,7 +11,11 @@ export interface PlotTemplate {
 }
 
 export const PLOT_TEMPLATES: PlotTemplate[] = [
-  { value: "screen", label: "Screen (default)", fontSize: 11, lineWidth: 1.5 },
+  // Item 2 (owner 2026-07-09, "up the default x/y axis legend and label
+  // size"): 11 -> 12px — keep in sync with uplotOpts.buildOpts's own
+  // `args.fontSize ?? 12` fallback (reached when a caller builds opts
+  // without going through a template, e.g. a bare test).
+  { value: "screen", label: "Screen (default)", fontSize: 12, lineWidth: 1.5 },
   { value: "aps", label: "APS (compact)", fontSize: 9, lineWidth: 1.0 },
   { value: "nature", label: "Nature", fontSize: 9, lineWidth: 1.2 },
   { value: "thesis", label: "Thesis", fontSize: 11, lineWidth: 1.5 },

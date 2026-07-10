@@ -248,7 +248,11 @@ body {
 .qzk-legend.nw { top: 12px; left: 12px; }
 .qzk-legend.se { bottom: 12px; right: 12px; }
 .qzk-legend.sw { bottom: 12px; left: 12px; }
-.qzk-legend .it { display: flex; align-items: center; gap: 7px; font-size: var(--font-size-sm); color: var(--text-dim); }
+/* Owner 2026-07-09 (item 2, "up the default x/y axis legend and label
+   size"): one step up the density-scaled type ramp from --font-size-sm
+   (was 11px @ regular) to --font-size (13px @ regular / 12 compact / 14
+   comfy) — still density-aware, no new preference. */
+.qzk-legend .it { display: flex; align-items: center; gap: 7px; font-size: var(--font-size); color: var(--text-dim); }
 .qzk-legend .ln { width: 16px; height: 3px; border-radius: 2px; }
 .qzk-legend .ln.dash { background: none !important; border-top: 2px dashed var(--capture); height: 0; }
 

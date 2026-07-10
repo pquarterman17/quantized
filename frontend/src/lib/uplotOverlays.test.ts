@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Annotation, RefLine } from "./types";
-import { annotationPlugin, clampAnnotationLabelX, pickRefLine, refLinePlugin } from "./uplotOverlays";
+import { annotationPlugin, clampAnnotationLabelX, errorBarsPlugin, pickRefLine, refLinePlugin } from "./uplotOverlays";
 
 /** Minimal uPlot stub: a recording 2D context + a linear valToPos. */
 function fakeU() {
@@ -258,5 +258,66 @@ describe("clampAnnotationLabelX", () => {
   it("is exact at the boundary — fits exactly flush with the right edge", () => {
     // 50 + 6 + 54 = 110 === right: the <= boundary keeps it a normal left-anchor.
     expect(clampAnnotationLabelX(50, 54, 6, LEFT, WIDTH)).toEqual({ x: 56, align: "left" });
+  });
+});
+
+describe("errorBarsPlugin (item 3: cap width defaults to zero)", () => {
+  // x = [0, 1]; column 1's y = [10, 20], error magnitude = [2, 3]. Same
+  // linear valToPos convention as fakeU (x identity, y: 100 - value).
+  function draw(capHalfWidth?: number) {
+    const segs: { from: [number, number]; to: [number, number] }[] = [];
+    let pen: [number, number] = [0, 0];
+    const ctx = {
+      save() {},
+      restore() {},
+      beginPath() {},
+      rect() {},
+      clip() {},
+      stroke() {},
+      moveTo(x: number, y: number) {
+        pen = [x, y];
+      },
+      lineTo(x: number, y: number) {
+        segs.push({ from: pen, to: [x, y] });
+      },
+      strokeStyle: "",
+      lineWidth: 0,
+    };
+    const valToPos = (v: number, scale: string) => (scale === "x" ? v : 100 - v);
+    const u = {
+      ctx,
+      bbox: { left: 0, top: 0, width: 200, height: 100 },
+      valToPos,
+      data: [
+        [0, 1],
+        [10, 20],
+      ],
+      series: [{}, {}],
+    };
+    const errorsByCol = new Map<number, (number | null)[]>([[1, [2, 3]]]);
+    const plugin =
+      capHalfWidth === undefined
+        ? errorBarsPlugin(errorsByCol, "#abc")
+        : errorBarsPlugin(errorsByCol, "#abc", capHalfWidth);
+    // @ts-expect-error — minimal stub stands in for a real uPlot instance
+    plugin.hooks.draw?.(u);
+    return segs;
+  }
+
+  it("draws only the vertical whisker (no cap cross-strokes) when no cap width is given", () => {
+    const segs = draw();
+    expect(segs).toHaveLength(2); // one vertical segment per point, no caps
+    expect(segs[0]).toEqual({ from: [0, 92], to: [0, 88] }); // y±e = [8,12] -> pos [92,88]
+  });
+
+  it("still draws caps when a positive capHalfWidth is passed explicitly", () => {
+    const segs = draw(3);
+    expect(segs).toHaveLength(6); // vertical + 2 caps, per point, × 2 points
+    // point 0's high cap: pHi = 88, spanning px ± 3
+    expect(segs).toContainEqual({ from: [-3, 88], to: [3, 88] });
+  });
+
+  it("draws no caps when capHalfWidth is explicitly zero (same as the default)", () => {
+    expect(draw(0)).toHaveLength(2);
   });
 });

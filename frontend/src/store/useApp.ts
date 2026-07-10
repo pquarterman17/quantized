@@ -315,6 +315,19 @@ export function nextStageTab(d: Dataset, current: StageTab): StageTab {
   if (current === "worksheet") return current;
   return is2DMap(d.data) ? "map" : "plot";
 }
+
+/** Stage tab for a PLOT-INTENT action — applying an Origin figure or figure
+ *  doc, "Plot (make active)", worksheet "Plot selection"/"Add to plot",
+ *  GraphBuilder "Send to Stage" (owner 2026-07-09: "it's a bit confusing when
+ *  I'm opening a plot... and have to remember to toggle up"). The complement
+ *  of `nextStageTab`'s "stay on Worksheet" guard, which exists for passive/
+ *  ambiguous activation (a fresh import, restoring a workspace) — these
+ *  actions always mean "show me the plot", so a 2-D map dataset still opens
+ *  the Map view (never regress that routing) but everything else FORCES
+ *  "plot" regardless of which tab the user is currently on. */
+export function plotIntentStageTab(d: Dataset): StageTab {
+  return is2DMap(d.data) ? "map" : "plot";
+}
 export type LegendPos = "ne" | "nw" | "se" | "sw";
 // Keys the Preferences dialog can set through the generic setPref action.
 export type PrefKey =
@@ -1622,6 +1635,10 @@ export const useApp = create<AppState>((set, get) => ({
         const src = existing?.data ?? overlay;
         const n = src?.labels.length ?? 0;
         set({
+          // Origin draws every layer with a full 4-side frame box; the
+          // decoded figure carries no separate "border on/off" flag, so an
+          // applied figure defaults to boxed (owner-routing item 4).
+          showAxisBox: true,
           xLim: [fig.x_from, fig.x_to],
           yLim: [fig.y_from, fig.y_to],
           xStep: fig.x_step ?? null,
@@ -1663,6 +1680,7 @@ export const useApp = create<AppState>((set, get) => ({
       if (baseSel && partnerSel) {
         get().setActive(entry.datasetId);
         set({
+          showAxisBox: true, // Origin layers are boxed by default (item 4)
           xLim: [lower.figure.x_from, lower.figure.x_to],
           yLim: [lower.figure.y_from, lower.figure.y_to],
           xStep: lower.figure.x_step ?? null,
@@ -1722,7 +1740,15 @@ export const useApp = create<AppState>((set, get) => ({
       if (spatialResult) {
         const { panels: placed, spatial } = spatialResult;
         get().setActive(entry.datasetId);
-        set({ stackMode: true, spatialPanels: placed, facetPanels: null, breakPanels: null });
+        // showAxisBox is the SINGLETON flag `useMultiPanelStage` reads for
+        // every spatial panel (item 4) — Origin layers are boxed by default.
+        set({
+          stackMode: true,
+          spatialPanels: placed,
+          facetPanels: null,
+          breakPanels: null,
+          showAxisBox: true,
+        });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         if (!spatial) {
           toast(
@@ -1743,6 +1769,7 @@ export const useApp = create<AppState>((set, get) => ({
     const ds = get().datasets.find((d) => d.id === entry.datasetId);
     const selection = ds ? figureChannelSelection(fig, ds) : null;
     set({
+      showAxisBox: true, // Origin layers are boxed by default (item 4)
       xLim: [fig.x_from, fig.x_to],
       yLim: [fig.y_from, fig.y_to],
       xStep: fig.x_step ?? null,
@@ -1993,7 +2020,13 @@ export const useApp = create<AppState>((set, get) => ({
         plotWindows: s.plotWindows.map((w) =>
           w.id === s.focusedWindowId ? { ...w, datasetId: id } : w,
         ),
-        stageTab: ds ? nextStageTab(ds, s.stageTab) : s.stageTab,
+        // setActive IS the plot-intent primitive (item 15's DatasetRow "Plot
+        // (make active)", every applyOriginFigure branch, a plain Library
+        // click on a non-Origin dataset, …) — unlike a fresh import/workspace
+        // restore, it always means "show me the plot", so it uses
+        // `plotIntentStageTab` (never sticks on a stale Worksheet tab; see
+        // that function's doc, owner-routing item 1).
+        stageTab: ds ? plotIntentStageTab(ds) : s.stageTab,
         xKey: null,
         yKeys: null,
         y2Keys: null,
@@ -3449,7 +3482,11 @@ export const useApp = create<AppState>((set, get) => ({
     const winId = s.createWindow(doc.datasetId, undefined, title);
     s.focusWindow(winId);
     const c = doc.config;
+    const targetDs = s.datasets.find((d) => d.id === doc.datasetId);
     set({
+      // Plot-intent (item 1): "open in new window" always means look at the
+      // plot, so surface it regardless of which tab was showing.
+      ...(targetDs ? { stageTab: plotIntentStageTab(targetDs) } : {}),
       xKey: c.xKey,
       yKeys: c.yKeys,
       xLog: c.xLog,

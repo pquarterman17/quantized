@@ -312,7 +312,9 @@ export interface BuildOptsArgs {
   yFmt?: AxisFormat;
   /** Draw grid lines (default true). */
   showGrid?: boolean;
-  /** Base axis tick/label font size in px (publication template; default 11). */
+  /** Base axis tick/label font size in px (publication template; default 12
+   *  as of item 2, 2026-07-09 — was 11). The axis TITLE renders 2px larger
+   *  still; see `buildOpts`'s `titlePx`. */
   fontSize?: number;
   /** Default series stroke width when no per-series override (template; default 1.5). */
   baseLineWidth?: number;
@@ -434,7 +436,22 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const accentColor = cssVar("--accent") || "#8b5cf6";
   const accentSoftColor = cssVar("--accent-soft") || "rgba(139,92,246,0.18)";
   const captureSoftColor = cssVar("--capture-soft") || "rgba(200,160,80,0.16)";
-  const font = `${args.fontSize ?? 11}px ${cssVar("--font-mono") || "monospace"}`;
+  // Owner 2026-07-09 (item 2, "up the default x/y axis legend and label
+  // size"): tick-value font 11px -> 12px default (JetBrains Mono kept —
+  // ticks are DATA, per typography.css's mono/UI split). The axis TITLE
+  // (e.g. "Temperature (K)") is prose, not data, so it gets the UI font
+  // instead, explicitly sized (uPlot's own unstyled default was a fixed,
+  // un-themed "bold 12px system-ui…" that never tracked a template's
+  // fontSize at all) — 2px over the tick value so it SCALES with whichever
+  // plot template is active: the screen default lands exactly on the
+  // design tokens' --type-title (14px), while a compact export style
+  // (APS/Nature) or a large one (Presentation/Poster) keeps its title
+  // legibly bigger than its own ticks instead of a fixed size that would
+  // look mismatched at those templates' more extreme fontSize choices.
+  const tickPx = args.fontSize ?? 12;
+  const font = `${tickPx}px ${cssVar("--font-mono") || "monospace"}`;
+  const titlePx = tickPx + 2;
+  const labelFont = `600 ${titlePx}px ${cssVar("--font-ui") || "system-ui, sans-serif"}`;
   // X-axis label: an explicit override wins, else "name (unit)" from the data.
   const xLabel =
     args.xAxisLabel?.trim() ||
@@ -453,9 +470,17 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   };
   const hasY2 = payload.series.some((s) => (s.axis ?? 0) === 1);
 
+  // labelSize is the px height/width uPlot reserves for the axis TITLE
+  // (shared by x/y/y2 below) — must grow with `titlePx` so a bigger
+  // template's title never clips against the plot area (item 2). Floored at
+  // uPlot's own prior default (30) for the same never-shrink reason as
+  // xAxisSize/yAxisSize below.
+  const labelSize = Math.max(30, titlePx + 20);
   const axis = {
     stroke: axisColor,
     font,
+    labelFont,
+    labelSize,
     grid: showGrid === false ? { show: false } : { stroke: gridColor, width: 1 },
     ticks: { stroke: gridColor, width: 1 },
   };
@@ -596,16 +621,28 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       : undefined;
   const xSplits = splitsFor(xLog, xLim, args.xStep);
   const ySplits = splitsFor(yLog, yLim, args.yStep);
+  // Tick-area `size` (excludes the label, see uPlot's doc) scales with the
+  // tick font too — x is a single text line (height-bound, uPlot's own
+  // default 50 already has headroom for the +1px bump) so only a small
+  // bump; y must additionally fit WIDER digit strings at the bigger font,
+  // hence the larger bump (item 2's "must grow with the font" clause). The
+  // `Math.max` floors both at the PRE-item-2 widths (uPlot's own 50 for x;
+  // our prior flat 60 for y) so a smaller publication template (APS/Nature,
+  // fontSize 9) never shrinks below what already rendered fine — this only
+  // grows room for a bigger font, never takes it away.
+  const xAxisSize = Math.max(50, tickPx + 42);
+  const yAxisSize = Math.max(60, tickPx * 4 + 16);
   const axes: uPlot.Axis[] = [
     {
       ...axis,
+      size: xAxisSize,
       label: xLabel,
       ...(xValues ? { values: xValues } : {}),
       ...(xSplits ? { splits: xSplits } : {}),
     },
     {
       ...axis,
-      size: 60,
+      size: yAxisSize,
       label: soloLabel(0),
       ...(yValues ? { values: yValues } : {}),
       ...(ySplits ? { splits: ySplits } : {}),
@@ -623,7 +660,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       ...axis,
       scale: "y2",
       side: 1,
-      size: 60,
+      size: yAxisSize,
       label: soloLabel(1),
       grid: { show: false },
       ...(yValues ? { values: yValues } : {}),
