@@ -20,6 +20,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useApp } from "../../store/useApp";
+import { DATASET_DND } from "../Library/useLibraryTree";
 import PlotStage from "../Stage/PlotStage";
 import BackgroundPlotWindow from "./BackgroundPlotWindow";
 import PlotWindowFrame from "./PlotWindowFrame";
@@ -30,9 +31,14 @@ export default function WindowCanvas() {
   const datasets = useApp((s) => s.datasets);
   const restoreWindow = useApp((s) => s.restoreWindow);
   const setPlotCanvasBounds = useApp((s) => s.setPlotCanvasBounds);
+  const createWindowAt = useApp((s) => s.createWindowAt);
+  const focusWindow = useApp((s) => s.focusWindow);
 
   const hostRef = useRef<HTMLDivElement>(null);
   const [bounds, setBounds] = useState<{ width: number; height: number } | undefined>(undefined);
+  // Item 14: a Library dataset drag hovering the EMPTY canvas background
+  // (drops on a frame stop propagation, so this never double-lights).
+  const [dropping, setDropping] = useState(false);
 
   // Track the frames host's own size (never the window's, and never
   // including the winstrip below it) so PlotWindowFrame can keep every title
@@ -82,7 +88,33 @@ export default function WindowCanvas() {
 
   return (
     <div className="qzk-wincanvas">
-      <div className="qzk-wincanvas-frames" ref={hostRef}>
+      <div
+        className={`qzk-wincanvas-frames${dropping ? " dropping" : ""}`}
+        ref={hostRef}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes(DATASET_DND)) return;
+          e.preventDefault(); // required every dragover to keep the drop legal
+          if (!dropping) setDropping(true);
+        }}
+        onDragLeave={() => setDropping(false)}
+        onDrop={(e) => {
+          if (!e.dataTransfer.types.includes(DATASET_DND)) return;
+          e.preventDefault();
+          setDropping(false);
+          const droppedId = e.dataTransfer.getData(DATASET_DND);
+          if (!droppedId) return;
+          // Item 14: a drop on EMPTY canvas (frames stopPropagation their
+          // own drops) opens a NEW window at the drop point, then focuses
+          // it — Origin's "drag data out to make a graph" gesture.
+          const rect = hostRef.current?.getBoundingClientRect();
+          const id = createWindowAt(
+            droppedId,
+            e.clientX - (rect?.left ?? 0),
+            e.clientY - (rect?.top ?? 0),
+          );
+          focusWindow(id);
+        }}
+      >
         {visible.map((win) => {
           const focused = win.id === focusedWindowId;
           const dataset = win.datasetId ? (datasets.find((d) => d.id === win.datasetId) ?? null) : null;

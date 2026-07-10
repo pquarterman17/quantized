@@ -24,6 +24,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { nextPlotBg, type PlotBg, type PlotWindow } from "../../lib/plotview";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { useApp } from "../../store/useApp";
+import { DATASET_DND } from "../Library/useLibraryTree";
 import { Badge } from "../primitives";
 
 /** Tooltip label per background mode (item 18's title-bar toggle). */
@@ -89,6 +90,14 @@ export default function PlotWindowFrame({
   const toggleMaximizeWindow = useApp((s) => s.toggleMaximizeWindow);
   const renameWindow = useApp((s) => s.renameWindow);
   const setWindowBg = useApp((s) => s.setWindowBg);
+  const toggleWindowPin = useApp((s) => s.toggleWindowPin);
+  const rebindWindow = useApp((s) => s.rebindWindow);
+
+  // Item 14: this frame is a drop target for a Library dataset drag
+  // (DATASET_DND — the SAME dataTransfer type DatasetRow sets, so a row
+  // dragged over a window and a row dragged over a folder are one gesture).
+  // True while such a drag hovers the frame — drives the accent highlight.
+  const [dropping, setDropping] = useState(false);
 
   // Item 10: double-click the title TEXT (not the bar) to rename inline —
   // null = not editing (DatasetRow/FolderRow's own inline-rename pattern).
@@ -231,10 +240,25 @@ export default function PlotWindowFrame({
 
   return (
     <div
-      className={`qzk-plotwin${focused ? " focused" : ""}`}
+      className={`qzk-plotwin${focused ? " focused" : ""}${dropping ? " dropping" : ""}`}
       style={style}
       onPointerDownCapture={onFrameCapture}
       onContextMenuCapture={onFrameContextMenu}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(DATASET_DND)) return;
+        e.preventDefault(); // required every dragover to keep the drop legal
+        if (!dropping) setDropping(true);
+      }}
+      onDragLeave={() => setDropping(false)}
+      onDrop={(e) => {
+        if (!e.dataTransfer.types.includes(DATASET_DND)) return;
+        e.preventDefault();
+        e.stopPropagation(); // a frame drop must never ALSO create a canvas window
+        setDropping(false);
+        const droppedId = e.dataTransfer.getData(DATASET_DND);
+        // The explicit gesture — rebinds even a pinned window (item 14).
+        if (droppedId) rebindWindow(win.id, droppedId);
+      }}
     >
       <div
         className="qzk-plotwin-titlebar"
@@ -272,6 +296,21 @@ export default function PlotWindowFrame({
             {datasetMeta.channels}ch · {datasetMeta.rows}pts
           </Badge>
         )}
+        <button
+          type="button"
+          className={`qzk-plotwin-pin${win.pinned ? " pinned" : ""}`}
+          title={
+            win.pinned
+              ? "Pinned — Library clicks won't retarget this window (an explicit drop still rebinds it)"
+              : "Pin window — keep its dataset when clicking the Library"
+          }
+          aria-label={win.pinned ? "Unpin window" : "Pin window"}
+          aria-pressed={win.pinned}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => toggleWindowPin(win.id)}
+        >
+          ⚲
+        </button>
         <button
           type="button"
           className="qzk-plotwin-bg"

@@ -361,9 +361,15 @@ body {
    minimized-windows dock, a flex-row sibling with a fixed height. */
 .qzk-wincanvas { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 .qzk-wincanvas-frames { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--axes-bg); }
+/* Item 14 — a Library dataset drag hovering the empty canvas ("drop = new
+   window"); inset dashed accent ring, tokens only. */
+.qzk-wincanvas-frames.dropping { outline: 1px dashed var(--accent); outline-offset: -3px; }
 .qzk-plotwin { position: absolute; display: flex; flex-direction: column; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); overflow: hidden; }
 /* Focus highlight — --accent only (design tokens, never a hardcoded colour). */
 .qzk-plotwin.focused { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+/* Item 14 — a Library dataset drag hovering THIS frame ("drop = rebind");
+   stronger than the focus ring so the target reads unambiguously mid-drag. */
+.qzk-plotwin.dropping { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
 .qzk-plotwin-titlebar { display: flex; align-items: center; gap: 8px; height: 28px; flex-shrink: 0; padding: 0 6px 0 10px; background: var(--surface-2); border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); color: var(--text-dim); cursor: default; user-select: none; touch-action: none; }
 .qzk-plotwin.focused .qzk-plotwin-titlebar { background: var(--accent-soft); color: var(--accent-text); }
 .qzk-plotwin-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
@@ -379,6 +385,11 @@ body {
    dark); a plain glyph button, distinct from the circular close button. */
 .qzk-plotwin-bg { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 3px; border: none; background: transparent; color: var(--text-faint); cursor: default; padding: 0; flex-shrink: 0; font-size: 11px; line-height: 1; }
 .qzk-plotwin-bg:hover { background: var(--surface-3); color: var(--text); }
+/* Item 14 — per-window pin toggle (⚲); same glyph-button family as -bg,
+   with a token-based pressed state while the window is pinned. */
+.qzk-plotwin-pin { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 3px; border: none; background: transparent; color: var(--text-faint); cursor: default; padding: 0; flex-shrink: 0; font-size: 11px; line-height: 1; }
+.qzk-plotwin-pin:hover { background: var(--surface-3); color: var(--text); }
+.qzk-plotwin-pin.pinned { background: var(--accent-soft); color: var(--accent); }
 .qzk-plotwin-close { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-3); cursor: default; padding: 0; flex-shrink: 0; }
 .qzk-plotwin-close:hover { background: var(--danger); border-color: var(--danger); }
 .qzk-plotwin-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }

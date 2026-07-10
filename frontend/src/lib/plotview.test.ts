@@ -11,6 +11,7 @@ import {
   dedupeWindowTitle,
   defaultPlotView,
   displayedWindowTitle,
+  dropGeometry,
   hydrateView,
   nextPlotBg,
   sanitizePlotWindows,
@@ -113,6 +114,7 @@ function win(over: Partial<PlotWindow> = {}): PlotWindow {
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    pinned: false,
     ...over,
   };
 }
@@ -158,6 +160,19 @@ describe("sanitizePlotWindows", () => {
     );
     expect(sanitizePlotWindows(null, new Set())).toEqual([]);
     expect(sanitizePlotWindows(undefined, new Set())).toEqual([]);
+  });
+
+  it("round-trips the pin flag and falls back to false for a missing/invalid value (item 14)", () => {
+    const out = sanitizePlotWindows(
+      [
+        win({ id: "a", pinned: true }),
+        win({ id: "b", pinned: false }),
+        win({ id: "c", pinned: "yes" as unknown as boolean }),
+        { ...win({ id: "d" }), pinned: undefined },
+      ],
+      new Set(["d1"]),
+    );
+    expect(out.map((w) => w.pinned)).toEqual([true, false, false, false]);
   });
 
   it("round-trips a valid bg override and falls back to 'theme' for a missing/invalid value (item 18)", () => {
@@ -260,5 +275,31 @@ describe("displayedWindowTitle / dedupeWindowTitle (item 10 — default titles)"
     expect(dedupeWindowTitle("MyData", ["Other"])).toBe("MyData");
     expect(dedupeWindowTitle("MyData", ["MyData"])).toBe("MyData (2)");
     expect(dedupeWindowTitle("MyData", ["MyData", "MyData (2)"])).toBe("MyData (3)");
+  });
+});
+
+describe("dropGeometry (item 14 — drop onto empty canvas)", () => {
+  const bounds = { width: 1200, height: 800 };
+
+  it("places a default-sized window with its top-left at the drop point", () => {
+    expect(dropGeometry(100, 60, bounds)).toEqual({ x: 100, y: 60, w: 480, h: 360 });
+  });
+
+  it("clamps a near-edge drop so the whole frame stays inside the bounds", () => {
+    const g = dropGeometry(1190, 790, bounds);
+    expect(g.x).toBe(1200 - 480);
+    expect(g.y).toBe(800 - 360);
+  });
+
+  it("clamps a negative drop point to the origin", () => {
+    const g = dropGeometry(-50, -50, bounds);
+    expect(g.x).toBe(0);
+    expect(g.y).toBe(0);
+  });
+
+  it("degrades to the origin when the canvas is smaller than the default window", () => {
+    const g = dropGeometry(100, 100, { width: 300, height: 200 });
+    expect(g.x).toBe(0);
+    expect(g.y).toBe(0);
   });
 });

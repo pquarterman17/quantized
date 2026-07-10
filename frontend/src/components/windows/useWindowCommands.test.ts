@@ -21,6 +21,7 @@ const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
   winState: "normal",
   view: defaultPlotView(),
   bg: "theme",
+  pinned: false,
   ...over,
 });
 
@@ -57,7 +58,7 @@ afterEach(() => {
 });
 
 describe("useWindowCommands — published registry entries", () => {
-  it("publishes exactly the 8 Window-group commands (item 18 adds Window Background) with the documented shortcuts", () => {
+  it("publishes exactly the 9 Window-group commands (item 18 adds Window Background, item 14 adds Pin) with the documented shortcuts", () => {
     renderHook(() => useWindowCommands());
     const ids = useCommands.getState().menuCommands.map((c) => c.id);
     expect(ids).toEqual([
@@ -67,6 +68,7 @@ describe("useWindowCommands — published registry entries", () => {
       "window-tile",
       "window-cascade",
       "window-bg-cycle",
+      "window-pin",
       "window-focus-next",
       "window-focus-prev",
     ]);
@@ -182,6 +184,23 @@ describe("useWindowCommands — published registry entries", () => {
     renderHook(() => useWindowCommands());
     expect(() => act(() => action("window-bg-cycle").run())).not.toThrow();
     expect(useApp.getState().plotWindows.find((w) => w.id === "w1")!.bg).toBe("theme");
+  });
+
+  it("'Pin Window' (item 14) toggles the FOCUSED window's pin — the no-title-bar (maximized) escape hatch", () => {
+    renderHook(() => useWindowCommands());
+    expect(action("window-pin").shortcut).toBeUndefined(); // menu/palette only, per the plan
+    act(() => action("window-pin").run());
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")!.pinned).toBe(true);
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w2")!.pinned).toBe(false);
+    act(() => action("window-pin").run());
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")!.pinned).toBe(false);
+  });
+
+  it("'Pin Window' is a no-op with no focused window", () => {
+    useApp.setState({ plotWindows: [win({ id: "w1" })], focusedWindowId: null });
+    renderHook(() => useWindowCommands());
+    expect(() => act(() => action("window-pin").run())).not.toThrow();
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")!.pinned).toBe(false);
   });
 });
 

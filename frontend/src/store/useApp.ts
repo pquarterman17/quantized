@@ -62,6 +62,7 @@ import {
   dedupeWindowTitle,
   defaultPlotView,
   displayedWindowTitle,
+  dropGeometry,
   hydrateView,
   sanitizePlotWindows,
   snapshotView,
@@ -195,6 +196,7 @@ function mainWindow(datasetId: string | null): PlotWindow {
     winState: "maximized",
     view: defaultPlotView(),
     bg: "theme",
+    pinned: false,
   };
 }
 
@@ -227,6 +229,106 @@ function focusTransientReset(): Partial<AppState> {
     gadgetCursors: null,
     gadgetCursorResult: null,
   };
+}
+
+/** The dataset-derived "smart defaults" a rebind resets a view to — the ONE
+ *  derivation shared by `setActive` (via `focusedRebindPatch`), `addDataset`,
+ *  and `rebindWindow`'s background-window path (item 14), so a window
+ *  rebound by drop carries exactly the view a Library click would produce.
+ *  Channel-keyed state (keys/styles/labels/order/hidden) resets because it
+ *  indexes the OLD dataset's columns; axis limits reset to autoscale; errKeys/
+ *  hiddenChannels seed from the dataset (Origin Y-error designations + parser
+ *  hints — see lib/errorbars). Display config that survives a dataset switch
+ *  (log axes, grid, legend, template, title, annotations, …) is deliberately
+ *  absent — same as `setActive` has always behaved. */
+function datasetViewDefaults(ds: Dataset | undefined): Partial<PlotView> {
+  return {
+    xKey: null, // new dataset → x-axis back to .time
+    yKeys: null, // new dataset → plot all its channels
+    y2Keys: null,
+    y2Lim: null,
+    y2Log: null, // and reset the secondary-axis assignment
+    y2Step: null,
+    y2AxisLabel: "",
+    seriesStyles: {}, // styles are keyed by channel index → reset per dataset
+    seriesLabels: {}, // legend renames are channel-keyed → reset per dataset
+    errKeys: ds ? defaultErrKeys(ds.data) : {}, // Origin Y-error + parser hints
+    seriesOrder: null, // draw order is channel-keyed → reset per dataset
+    hiddenChannels: ds ? originHiddenChannels(ds.data) : [], // hide Origin error + secondary-X columns
+    xLim: null, // and autoscale both axes
+    yLim: null,
+    xStep: null,
+    yStep: null,
+  };
+}
+
+/** The full state patch for rebinding the FOCUSED window to dataset `id` —
+ *  `setActive`'s entire body, hoisted so `rebindWindow`'s focused-target path
+ *  (item 14) applies the IDENTICAL semantics without the pin pre-step (an
+ *  explicit drop beats the passive pin). See `setActive`'s own doc for the
+ *  per-field reasoning that used to live inline here. */
+function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
+  const ds = s.datasets.find((d) => d.id === id);
+  return {
+    activeId: id,
+    // A full plot-intent activation always drops any worksheet-only override
+    // (item 15) — the plot it now shows IS `id`, so the Worksheet tab's
+    // `worksheetId ?? activeId` fallback already tracks it; a stale override
+    // would otherwise strand the worksheet on the PREVIOUS browse target.
+    worksheetId: null,
+    selectedIds: [id], // plain click collapses the selection to this one row
+    // MULTI_PLOT_PLAN item 4: scoped to the FOCUSED window — it rebinds that
+    // window's dataset (unfocused windows keep whatever they're pinned to,
+    // decision #4).
+    plotWindows: s.plotWindows.map((w) =>
+      w.id === s.focusedWindowId ? { ...w, datasetId: id } : w,
+    ),
+    // setActive IS the plot-intent primitive (item 15's DatasetRow "Plot
+    // (make active)", every applyOriginFigure branch, a plain Library click
+    // on a non-Origin dataset, …) — unlike a fresh import/workspace restore,
+    // it always means "show me the plot", so it uses `plotIntentStageTab`
+    // (never sticks on a stale Worksheet tab; owner-routing item 1).
+    stageTab: ds ? plotIntentStageTab(ds) : s.stageTab,
+    ...datasetViewDefaults(ds),
+    // A plain click on a different dataset always drops a prior spatial
+    // multi-panel arrangement (decode-plan #36) — it was built for a specific
+    // figure's layers, not whatever is now active. Same for facet/x-break
+    // panels (gap #21 residual) and the rest of the transient tool state —
+    // the exact list `focusWindow` clears on a focus switch.
+    ...focusTransientReset(),
+  };
+}
+
+/** Item 14's pin opt-out, shared by `setActive` and `addDataset` (the two
+ *  PASSIVE rebind entry points): when the FOCUSED window is pinned, hand
+ *  focus to the top-z unpinned VISIBLE plot window first — the caller's
+ *  normal focused-window rebind then lands there. With no candidate (every
+ *  other window pinned/minimized, or none), create + focus a fresh window
+ *  (cascade placement) bound to `datasetId` instead. `titleBase` covers the
+ *  import case, where the dataset isn't in the store yet so `createWindow`
+ *  couldn't compute its name-derived default title (still deduped here, item
+ *  10). A no-op when the focused window isn't pinned. `rebindWindow` (the
+ *  EXPLICIT gesture) deliberately never calls this. */
+function retargetPassiveRebind(s: AppState, datasetId: string, titleBase?: string): void {
+  const focused = s.plotWindows.find((w) => w.id === s.focusedWindowId);
+  if (!focused?.pinned) return;
+  // Only plot windows are retarget candidates — future window kinds (item
+  // 17's worksheets/maps, item 11's snapshots) never absorb a plot intent.
+  const candidates = s.plotWindows.filter(
+    (w) => w.kind === "plot" && w.id !== focused.id && !w.pinned && w.winState !== "minimized",
+  );
+  if (candidates.length > 0) {
+    s.focusWindow(candidates.reduce((a, b) => (b.z > a.z ? b : a)).id);
+    return;
+  }
+  const title =
+    titleBase !== undefined
+      ? dedupeWindowTitle(
+          titleBase,
+          s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
+        )
+      : undefined;
+  s.focusWindow(s.createWindow(datasetId, undefined, title));
 }
 
 // Names successive clipboard pastes "pasted data 1", "pasted data 2", … (gap #47).
@@ -856,6 +958,19 @@ interface AppState {
   // `title` (item 10) overrides the computed default (dataset name, deduped
   // against what's already showing) — omit it to get that default.
   createWindow: (datasetId?: string | null, view?: PlotView, title?: string) => string;
+  // Item 14 — drop a Library row onto EMPTY canvas: `createWindow` bound to
+  // `datasetId`, then re-placed at the drop point (clamped inside the live
+  // canvas bounds via `dropGeometry`). Returns the new id; like
+  // createWindow, does NOT move focus (the drop handler focuses explicitly).
+  createWindowAt: (datasetId: string, x: number, y: number) => string;
+  // Item 14 — the EXPLICIT rebind gesture (drop a Library row onto a frame).
+  // Focused target: exactly `setActive`'s semantics (rebind + smart-defaults
+  // view reset + transient clear), but WITHOUT the pin pre-step — a
+  // deliberate drop rebinds even a pinned window. Background target: rebinds
+  // the record + resets its stored view to the same dataset-derived defaults,
+  // never touching focus or the live singleton fields. A no-op for an
+  // unknown window or dataset id.
+  rebindWindow: (windowId: string, datasetId: string) => void;
   closeWindow: (id: string) => void;
   focusWindow: (id: string) => void;
   duplicateWindow: (id: string) => string | null;
@@ -891,6 +1006,10 @@ interface AppState {
   // Per-window background override (item 18, owner request 2026-07-09): a
   // no-op for an unknown id. See `PlotBg`'s doc in `lib/plotview.ts`.
   setWindowBg: (id: string, bg: PlotBg) => void;
+  // Item 14's pin toggle — see `PlotWindow.pinned`'s doc in lib/plotview.ts
+  // for the semantics (passive rebinds retarget; explicit drops still land).
+  // A no-op for an unknown id.
+  toggleWindowPin: (id: string) => void;
   // Item 7 (.dwk + autosave persistence): `plotWindows` as it should be
   // SAVED — the focused window's LIVE view frozen into its record via the
   // same `snapshotView` chokepoint `focusWindow`/`closeWindow` use (the
@@ -1258,7 +1377,12 @@ export const useApp = create<AppState>((set, get) => ({
   pipelineRunning: false,
   status: "starting…",
 
-  addDataset: (ds) =>
+  addDataset: (ds) => {
+    // Item 14 pin opt-out: an import is a passive rebind, same as a Library
+    // click — a pinned focused window never absorbs it (shared helper;
+    // `ds.name` seeds the title when a fresh window must be created, since
+    // the dataset isn't in the store yet for createWindow to look up).
+    retargetPassiveRebind(get(), ds.id, ds.name);
     set((s) => ({
       datasets: [...s.datasets, ds],
       activeId: ds.id,
@@ -1271,22 +1395,7 @@ export const useApp = create<AppState>((set, get) => ({
         w.id === s.focusedWindowId ? { ...w, datasetId: ds.id } : w,
       ),
       stageTab: nextStageTab(ds, s.stageTab), // 2-D maps open in the Map view
-      xKey: null, // new dataset → x-axis back to .time
-      yKeys: null, // new dataset → plot all its channels
-      y2Keys: null,
-      y2Lim: null,
-      y2Log: null, // and reset the secondary-axis assignment
-      y2Step: null,
-      y2AxisLabel: "",
-      seriesStyles: {}, // styles are keyed by channel index → reset per dataset
-      seriesLabels: {}, // legend renames are channel-keyed → reset per dataset
-      errKeys: defaultErrKeys(ds.data), // Origin Y-error + parser hints (e.g. refl R←dR)
-      seriesOrder: null, // draw order is channel-keyed → reset per dataset
-      hiddenChannels: originHiddenChannels(ds.data), // hide Origin error + secondary-X columns
-      xLim: null, // and autoscale both axes
-      yLim: null,
-      xStep: null,
-      yStep: null,
+      ...datasetViewDefaults(ds), // the shared rebind view reset (item 14 hoist)
       integral: null, // on-plot analysis results are tied to the old data → clear
       fwhmResult: null,
       qfitRoi: null,
@@ -1301,7 +1410,8 @@ export const useApp = create<AppState>((set, get) => ({
       gadgetFftPreview: null,
       gadgetCursors: null,
       gadgetCursorResult: null,
-    })),
+    }));
+  },
 
   // Upload + parse each picked/dropped file; add to the library (continues on a
   // per-file error so one bad file doesn't abort the batch).
@@ -2003,71 +2113,13 @@ export const useApp = create<AppState>((set, get) => ({
       };
     }),
   setActive: (id) => {
-    set((s) => {
-      const ds = s.datasets.find((d) => d.id === id);
-      return {
-        activeId: id,
-        // A full plot-intent activation always drops any worksheet-only
-        // override (item 15) — the plot it now shows IS `id`, so the
-        // Worksheet tab's `worksheetId ?? activeId` fallback already tracks
-        // it; a stale override would otherwise strand the worksheet on the
-        // PREVIOUS browse target.
-        worksheetId: null,
-        selectedIds: [id], // plain click collapses the selection to this one row
-        // MULTI_PLOT_PLAN item 4: setActive is scoped to the FOCUSED window —
-        // it rebinds that window's dataset (unfocused windows keep whatever
-        // they're pinned to, decision #4).
-        plotWindows: s.plotWindows.map((w) =>
-          w.id === s.focusedWindowId ? { ...w, datasetId: id } : w,
-        ),
-        // setActive IS the plot-intent primitive (item 15's DatasetRow "Plot
-        // (make active)", every applyOriginFigure branch, a plain Library
-        // click on a non-Origin dataset, …) — unlike a fresh import/workspace
-        // restore, it always means "show me the plot", so it uses
-        // `plotIntentStageTab` (never sticks on a stale Worksheet tab; see
-        // that function's doc, owner-routing item 1).
-        stageTab: ds ? plotIntentStageTab(ds) : s.stageTab,
-        xKey: null,
-        yKeys: null,
-        y2Keys: null,
-      y2Lim: null,
-      y2Log: null,
-      y2Step: null,
-      y2AxisLabel: "",
-        seriesStyles: {},
-        seriesLabels: {},
-        errKeys: ds ? defaultErrKeys(ds.data) : {},
-        seriesOrder: null,
-        hiddenChannels: ds ? originHiddenChannels(ds.data) : [],
-        xLim: null,
-        yLim: null,
-        xStep: null,
-        yStep: null,
-        // A plain click on a different dataset always drops a prior spatial
-        // multi-panel arrangement (decode-plan #36) — it was built for a
-        // specific figure's layers, not whatever is now active. Same logic
-        // drops a prior facet-by-column or paneled x-break arrangement
-        // (gap #21 residual).
-        spatialPanels: null,
-        facetPanels: null,
-        breakPanels: null,
-        rsmPeaks: null,
-        integral: null,
-        fwhmResult: null,
-        qfitRoi: null,
-        qfitResult: null,
-        qfitBusy: false,
-        qfitError: null,
-        gadgetBusy: false,
-        gadgetError: null,
-        gadgetIntegrateResult: null,
-        gadgetStatsResult: null,
-        gadgetDerivResult: null,
-        gadgetFftPreview: null,
-        gadgetCursors: null,
-        gadgetCursorResult: null,
-      };
-    });
+    // Item 14 pin opt-out: a pinned focused window never follows a passive
+    // plot intent — retarget it first (focus swap, or a fresh window), then
+    // the normal focused-window rebind below lands on the new focus. The
+    // rebind itself lives in `focusedRebindPatch` (hoisted, module level) so
+    // `rebindWindow`'s explicit-drop path shares it verbatim.
+    retargetPassiveRebind(get(), id);
+    set((s) => focusedRebindPatch(s, id));
     // ORIGIN_FILE_DECODE_PLAN #38: a plain click covers the common "activate
     // a lazy book" path; the render-side hooks (PlotStage/WindowCanvas/
     // MultiPanelStage/WorksheetPane) cover the rest (multi-panel siblings,
@@ -2919,10 +2971,50 @@ export const useApp = create<AppState>((set, get) => ({
         winState: "normal",
         view: view ?? defaultPlotView(),
         bg: "theme",
+        pinned: false,
       };
       return { plotWindows: [...s.plotWindows, win] };
     });
     return id;
+  },
+  createWindowAt: (datasetId, x, y) => {
+    // Reuses createWindow wholesale (title dedupe, z, defaults) and only
+    // re-places the result at the drop point — clamped against the live
+    // canvas bounds (same fallback size tileWindows uses when the Plot tab
+    // hasn't reported real bounds yet).
+    const id = get().createWindow(datasetId);
+    set((s) => ({
+      plotWindows: s.plotWindows.map((w) =>
+        w.id === id
+          ? { ...w, geometry: dropGeometry(x, y, s.plotCanvasBounds ?? { width: 1200, height: 800 }) }
+          : w,
+      ),
+    }));
+    return id;
+  },
+  rebindWindow: (windowId, datasetId) => {
+    const s = get();
+    const win = s.plotWindows.find((w) => w.id === windowId);
+    if (!win || !s.datasets.some((d) => d.id === datasetId)) return;
+    if (windowId === s.focusedWindowId) {
+      // The focused window's live view IS the singleton fields — apply the
+      // exact setActive patch (shared helper), deliberately skipping the
+      // pin pre-step: an explicit drop rebinds even a pinned window.
+      set((st) => focusedRebindPatch(st, datasetId));
+    } else {
+      // A background window's view is at rest in its record: rebind + reset
+      // it to the same dataset-derived defaults, leaving focus, activeId,
+      // and the live singleton fields untouched.
+      const ds = s.datasets.find((d) => d.id === datasetId);
+      set((st) => ({
+        plotWindows: st.plotWindows.map((w) =>
+          w.id === windowId ? { ...w, datasetId, view: { ...w.view, ...datasetViewDefaults(ds) } } : w,
+        ),
+      }));
+    }
+    // #38: a drop is an activation-shaped gesture — cover the lazy-book
+    // fetch for a background target too (single-flight, harmless if live).
+    get().ensureBookData(datasetId);
   },
   // Never drops below one window (the ≥1-window invariant) — a no-op on the
   // last surviving window. Closing the FOCUSED window refocuses the top-z
@@ -3000,6 +3092,10 @@ export const useApp = create<AppState>((set, get) => ({
       winState: "normal",
       view,
       bg: src.bg,
+      // A duplicate starts UNPINNED (item 14): pin is per-window protection
+      // intent, not display config — inheriting it would silently grow an
+      // all-pinned set where every Library click spawns a new window.
+      pinned: false,
     };
     set({ plotWindows: [...s.plotWindows, dup] });
     return newId;
@@ -3128,6 +3224,10 @@ export const useApp = create<AppState>((set, get) => ({
   setWindowBg: (id, bg) =>
     set((s) => ({
       plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, bg } : w)),
+    })),
+  toggleWindowPin: (id) =>
+    set((s) => ({
+      plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, pinned: !w.pinned } : w)),
     })),
   windowsForSave: () => {
     const s = get();

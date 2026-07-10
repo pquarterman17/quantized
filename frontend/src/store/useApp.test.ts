@@ -163,6 +163,7 @@ describe("activateFromLibrary (WORKSHEET_PLAN item 15 — origin book click open
     z: 0,
     winState: "normal",
     bg: "theme",
+    pinned: false,
     view: defaultPlotView(),
   };
 
@@ -3164,6 +3165,7 @@ describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    pinned: false,
     ...over,
   });
 
@@ -3366,6 +3368,7 @@ describe("useApp plot windows — item 4 focused-window routing", () => {
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    pinned: false,
     ...over,
   });
 
@@ -3481,6 +3484,7 @@ describe("useApp plot windows — item 6 (Tile/Cascade + canvas bounds)", () => 
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    pinned: false,
     ...over,
   });
 
@@ -3546,6 +3550,7 @@ describe("useApp plot windows — item 7 (.dwk + autosave persistence)", () => {
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    pinned: false,
     ...over,
   });
 
@@ -3629,6 +3634,7 @@ describe("useApp plot windows — item 8 (minimize/maximize/restore)", () => {
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    pinned: false,
     ...over,
   });
 
@@ -3835,6 +3841,7 @@ describe("useApp plot windows — item 10 (default titles, dedupe, rename)", () 
     winState: "normal",
     view: defaultPlotView(),
     bg: "theme",
+    pinned: false,
     ...over,
   });
 
@@ -3885,5 +3892,270 @@ describe("useApp plot windows — item 10 (default titles, dedupe, rename)", () 
     });
     useApp.getState().renameWindow("w2", "A"); // colliding on purpose — a user's explicit choice
     expect(useApp.getState().plotWindows.find((w) => w.id === "w2")?.title).toBe("A");
+  });
+});
+
+describe("useApp plot windows — item 14 (drag-drop rebind + per-window pin)", () => {
+  const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
+    id: "w1",
+    kind: "plot",
+    title: "",
+    datasetId: "d1",
+    geometry: { x: 0, y: 0, w: 480, h: 360 },
+    z: 0,
+    winState: "normal",
+    view: defaultPlotView(),
+    bg: "theme",
+    pinned: false,
+    ...over,
+  });
+
+  // A dataset whose parser hint makes `defaultErrKeys` non-trivial, so the
+  // "smart defaults" half of a rebind is distinguishable from a plain reset.
+  const errData: DataStruct = {
+    time: [1, 2, 3],
+    values: [
+      [10, 1],
+      [20, 2],
+      [30, 3],
+    ],
+    labels: ["R", "dR"],
+    units: ["", ""],
+    metadata: { error_channels: { "0": 1 } },
+  };
+
+  const seedTwoDatasets = () =>
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data: raw },
+        { id: "d2", name: "b", data: errData },
+      ],
+      activeId: "d1",
+      selectedIds: ["d1"],
+    });
+
+  it("rebindWindow on the FOCUSED window produces the SAME state as setActive (smart-defaults parity)", () => {
+    const seed = () => {
+      seedTwoDatasets();
+      useApp.setState({
+        plotWindows: [win({ id: "w1", datasetId: "d1" }), win({ id: "w2", datasetId: "d1" })],
+        focusedWindowId: "w1",
+        xLim: [0, 1],
+        seriesStyles: { 0: { color: "#fff" } },
+        plotTitle: "kept across rebinds",
+        errKeys: {},
+        stageTab: "worksheet",
+        worksheetId: "d1",
+      });
+    };
+    const pick = (s: ReturnType<typeof useApp.getState>) => ({
+      activeId: s.activeId,
+      selectedIds: s.selectedIds,
+      worksheetId: s.worksheetId,
+      stageTab: s.stageTab,
+      bindings: s.plotWindows.map((w) => [w.id, w.datasetId]),
+      xLim: s.xLim,
+      xKey: s.xKey,
+      seriesStyles: s.seriesStyles,
+      errKeys: s.errKeys,
+      hiddenChannels: s.hiddenChannels,
+      plotTitle: s.plotTitle,
+    });
+
+    seed();
+    useApp.getState().setActive("d2");
+    const viaSetActive = pick(useApp.getState());
+
+    seed();
+    useApp.getState().rebindWindow("w1", "d2");
+    const viaRebind = pick(useApp.getState());
+
+    expect(viaRebind).toEqual(viaSetActive);
+    // And both really produced the d2-derived smart defaults + resets.
+    expect(viaRebind.errKeys).toEqual(defaultErrKeys(errData));
+    expect(viaRebind.xLim).toBeNull();
+    expect(viaRebind.seriesStyles).toEqual({});
+    expect(viaRebind.plotTitle).toBe("kept across rebinds"); // titles survive a dataset switch
+    expect(viaRebind.bindings).toEqual([
+      ["w1", "d2"],
+      ["w2", "d1"], // the unfocused window kept its binding
+    ]);
+  });
+
+  it("rebindWindow on a BACKGROUND window rebinds + resets its stored view, never touching focus or the live view", () => {
+    seedTwoDatasets();
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", datasetId: "d1" }),
+        win({
+          id: "w2",
+          datasetId: "d1",
+          view: {
+            ...defaultPlotView(),
+            xLim: [0, 1],
+            seriesStyles: { 0: { color: "#fff" } },
+            plotTitle: "w2 title",
+          },
+        }),
+      ],
+      focusedWindowId: "w1",
+      xLim: [5, 6],
+      plotTitle: "live w1",
+    });
+    useApp.getState().rebindWindow("w2", "d2");
+    const s = useApp.getState();
+    expect(s.focusedWindowId).toBe("w1"); // focus unchanged
+    expect(s.activeId).toBe("d1"); // Library selection unchanged
+    expect(s.xLim).toEqual([5, 6]); // live singleton view untouched
+    expect(s.plotTitle).toBe("live w1");
+    const w2 = s.plotWindows.find((w) => w.id === "w2")!;
+    expect(w2.datasetId).toBe("d2");
+    expect(w2.view.xLim).toBeNull(); // same dataset-derived reset setActive applies
+    expect(w2.view.seriesStyles).toEqual({});
+    expect(w2.view.errKeys).toEqual(defaultErrKeys(errData));
+    expect(w2.view.plotTitle).toBe("w2 title"); // display config survives, like setActive
+  });
+
+  it("rebindWindow is a no-op for an unknown window or dataset id", () => {
+    seedTwoDatasets();
+    useApp.setState({ plotWindows: [win({ id: "w1", datasetId: "d1" })], focusedWindowId: "w1" });
+    const before = useApp.getState().plotWindows;
+    useApp.getState().rebindWindow("ghost", "d2");
+    useApp.getState().rebindWindow("w1", "no-such-dataset");
+    expect(useApp.getState().plotWindows).toBe(before);
+    expect(useApp.getState().plotWindows[0].datasetId).toBe("d1");
+  });
+
+  it("an explicit rebindWindow rebinds even a PINNED focused window (deliberate beats passive)", () => {
+    seedTwoDatasets();
+    useApp.setState({
+      plotWindows: [win({ id: "w1", datasetId: "d1", pinned: true }), win({ id: "w2", datasetId: "d1" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().rebindWindow("w1", "d2");
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(2); // no retarget, no new window
+    expect(s.focusedWindowId).toBe("w1");
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("d2");
+    expect(s.plotWindows.find((w) => w.id === "w1")?.pinned).toBe(true); // still pinned
+    expect(s.plotWindows.find((w) => w.id === "w2")?.datasetId).toBe("d1");
+  });
+
+  it("createWindowAt places the new window at the drop point, clamped to the canvas bounds", () => {
+    seedTwoDatasets();
+    useApp.setState({
+      plotWindows: [win({ id: "w1" })],
+      focusedWindowId: "w1",
+      plotCanvasBounds: { width: 800, height: 600 },
+    });
+    const id = useApp.getState().createWindowAt("d2", 790, 590); // near the corner
+    const created = useApp.getState().plotWindows.find((w) => w.id === id)!;
+    expect(created.datasetId).toBe("d2");
+    expect(created.geometry).toEqual({ x: 800 - 480, y: 600 - 360, w: 480, h: 360 });
+    expect(useApp.getState().focusedWindowId).toBe("w1"); // placement ≠ focus (the drop handler focuses)
+
+    const id2 = useApp.getState().createWindowAt("d2", -10, -10);
+    expect(useApp.getState().plotWindows.find((w) => w.id === id2)!.geometry).toMatchObject({ x: 0, y: 0 });
+  });
+
+  it("a Library click while the focused window is PINNED retargets the top-z unpinned VISIBLE window", () => {
+    seedTwoDatasets();
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", datasetId: "d1", pinned: true, z: 10 }),
+        win({ id: "w2", datasetId: "d1", z: 1 }),
+        win({ id: "w3", datasetId: "d1", z: 5 }),
+        win({ id: "w4", datasetId: "d1", z: 9, winState: "minimized" }), // top-z but hidden
+      ],
+      focusedWindowId: "w1",
+      plotTitle: "pinned live view",
+    });
+    useApp.getState().setActive("d2");
+    const s = useApp.getState();
+    expect(s.focusedWindowId).toBe("w3"); // top-z among unpinned VISIBLE (w4 minimized, w2 lower)
+    expect(s.plotWindows.find((w) => w.id === "w3")?.datasetId).toBe("d2");
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("d1"); // the pin held
+    expect(s.plotWindows.find((w) => w.id === "w1")?.pinned).toBe(true);
+    // Focus-away snapshotted the pinned window's live view into its record.
+    expect(s.plotWindows.find((w) => w.id === "w1")?.view.plotTitle).toBe("pinned live view");
+    expect(s.activeId).toBe("d2");
+  });
+
+  it("a Library click with NO unpinned visible candidate creates + focuses a fresh window on the dataset", () => {
+    seedTwoDatasets();
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", datasetId: "d1", pinned: true }),
+        win({ id: "w2", datasetId: "d1", pinned: true }),
+        win({ id: "w3", datasetId: "d1", winState: "minimized" }), // unpinned but hidden
+      ],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().setActive("d2");
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(4);
+    const created = s.plotWindows.find((w) => !["w1", "w2", "w3"].includes(w.id))!;
+    expect(s.focusedWindowId).toBe(created.id);
+    expect(created.datasetId).toBe("d2");
+    expect(created.pinned).toBe(false);
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("d1"); // both pins held
+    expect(s.plotWindows.find((w) => w.id === "w2")?.datasetId).toBe("d1");
+  });
+
+  it("setActive with the focused window UNPINNED behaves exactly as before (no retarget, no new window)", () => {
+    seedTwoDatasets();
+    useApp.setState({
+      plotWindows: [win({ id: "w1", datasetId: "d1" }), win({ id: "w2", datasetId: "d1" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().setActive("d2");
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(2);
+    expect(s.focusedWindowId).toBe("w1");
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("d2");
+  });
+
+  it("addDataset honors the pin: the import lands in the retargeted window, never the pinned one", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      plotWindows: [win({ id: "w1", datasetId: "d1", pinned: true }), win({ id: "w2", datasetId: "d1" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().addDataset({ id: "new1", name: "fresh.dat", data: raw });
+    const s = useApp.getState();
+    expect(s.focusedWindowId).toBe("w2");
+    expect(s.plotWindows.find((w) => w.id === "w2")?.datasetId).toBe("new1");
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("d1"); // the pin held
+    expect(s.activeId).toBe("new1");
+  });
+
+  it("addDataset with NO candidate creates + focuses a fresh window titled after the import", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      plotWindows: [win({ id: "w1", datasetId: "d1", pinned: true })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().addDataset({ id: "new1", name: "fresh.dat", data: raw });
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(2);
+    const created = s.plotWindows.find((w) => w.id !== "w1")!;
+    expect(s.focusedWindowId).toBe(created.id);
+    expect(created.datasetId).toBe("new1");
+    expect(created.title).toBe("fresh.dat"); // named from the import (dataset not in store at create time)
+    expect(s.plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("d1");
+  });
+
+  it("toggleWindowPin flips one window's pin; unknown id is a no-op", () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "w2" })],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().toggleWindowPin("w1");
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.pinned).toBe(true);
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w2")?.pinned).toBe(false);
+    useApp.getState().toggleWindowPin("w1");
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.pinned).toBe(false);
+    useApp.getState().toggleWindowPin("ghost");
+    expect(useApp.getState().plotWindows.map((w) => w.pinned)).toEqual([false, false]);
   });
 });

@@ -178,6 +178,14 @@ export interface PlotWindow {
   winState: WinState;
   view: PlotView;
   bg: PlotBg;
+  /** Item 14's pin toggle — the opt-out for the "focused window follows the
+   *  Library" model (Key Decision 4's promised companion): while the FOCUSED
+   *  window is pinned, a passive rebind (Library click / fresh import)
+   *  retargets the top-z unpinned visible window (or a new one) instead of
+   *  this one. An EXPLICIT gesture (drop onto the frame / `rebindWindow`)
+   *  still rebinds a pinned window — deliberate beats passive. Like `bg`,
+   *  this is per-window chrome state, not part of the swapped `PlotView`. */
+  pinned: boolean;
 }
 
 const DEFAULT_WIDTH = 480;
@@ -194,6 +202,25 @@ export function cascadeGeometry(index: number): WindowGeometry {
   return {
     x: CASCADE_ORIGIN + n * CASCADE_STEP,
     y: CASCADE_ORIGIN + n * CASCADE_STEP,
+    w: DEFAULT_WIDTH,
+    h: DEFAULT_HEIGHT,
+  };
+}
+
+/** Geometry for a window created by DROPPING a dataset onto empty canvas
+ *  (item 14): a default-sized window whose top-left lands at the drop point,
+ *  clamped so the whole frame stays inside `bounds` (a drop near the right/
+ *  bottom edge slides back on-canvas rather than spawning half off-screen;
+ *  a canvas smaller than the default size degrades to 0,0). Pure — the
+ *  store's `createWindowAt` applies it against the live canvas bounds. */
+export function dropGeometry(
+  x: number,
+  y: number,
+  bounds: { width: number; height: number },
+): WindowGeometry {
+  return {
+    x: Math.min(Math.max(0, x), Math.max(0, bounds.width - DEFAULT_WIDTH)),
+    y: Math.min(Math.max(0, y), Math.max(0, bounds.height - DEFAULT_HEIGHT)),
     w: DEFAULT_WIDTH,
     h: DEFAULT_HEIGHT,
   };
@@ -416,6 +443,7 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
       winState: WIN_STATES.includes(o.winState as WinState) ? (o.winState as WinState) : "normal",
       view: sanitizeView(o.view),
       bg: PLOT_BGS.includes(o.bg as PlotBg) ? (o.bg as PlotBg) : "theme",
+      pinned: boolOrDefault(o.pinned, false),
     });
   }
   return out;
