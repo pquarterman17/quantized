@@ -162,6 +162,7 @@ describe("activateFromLibrary (WORKSHEET_PLAN item 15 — origin book click open
     geometry: { x: 0, y: 0, w: 480, h: 360 },
     z: 0,
     winState: "normal",
+    bg: "theme",
     view: defaultPlotView(),
   };
 
