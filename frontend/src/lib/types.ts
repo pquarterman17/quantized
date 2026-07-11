@@ -535,9 +535,18 @@ export interface Annotation {
   axis?: 0 | 1;
 }
 
-/** Axis tick number format. `auto` = uPlot's default; `fixed` = `toFixed(digits)`;
- *  `sci` = `toExponential(digits)`. `digits` is the decimal/mantissa count. */
-export type TickMode = "auto" | "fixed" | "sci";
+/** Axis tick number format. `auto` = increment-aware locale-grouped labels
+ *  (MAIN #20: overrides uPlot's own default formatter, which caps at 3
+ *  fraction digits regardless of the actual tick spacing — see
+ *  `uplotOpts.ts`'s `autoTickValues` doc for the owner bug this fixes);
+ *  `fixed` = `toFixed(digits)`; `sci` = `toExponential(digits)`; `eng` =
+ *  engineering notation (mantissa in [1,1000), exponent a multiple of 3,
+ *  e.g. `12.3e-6`). `digits` is the decimal/mantissa count for
+ *  fixed/sci/eng — ignored (uPlot-style adaptive) for `auto`. Every
+ *  non-auto mode still FLOORS its decimal/mantissa count at whatever the
+ *  actual tick increment needs, so `digits` sets a minimum, not an exact
+ *  count (`tickFormatter`'s `Math.max(digits, decimalsForIncrement(...))`). */
+export type TickMode = "auto" | "fixed" | "sci" | "eng";
 
 export interface AxisFormat {
   mode: TickMode;

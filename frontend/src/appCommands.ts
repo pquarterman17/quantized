@@ -23,7 +23,7 @@ import { exportActive, type StoreGet } from "./lib/exportActive";
 import { runExportFigureCommand } from "./lib/exportFigureCommand";
 import { IMPORT_ACCEPT, openFilePicker } from "./lib/openFilePicker";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "./lib/originTemplate";
-import { cycleAxisScale } from "./lib/plotview";
+import { cycleAxisScale, cycleTickMode } from "./lib/plotview";
 import { parseWorkspace, type LoadedWorkspace } from "./lib/workspace";
 import type { Action } from "./store/commands";
 import { toast } from "./store/toasts";
@@ -176,6 +176,12 @@ export function buildAppActions(s: StoreGet): Action[] {
       group: "Plot",
       label: "Cycle Y axis scale (linear/log/reciprocal)",
       run: () => s().setYScale(cycleAxisScale(s().yScale)),
+    },
+    {
+      id: "yTickFormat", // MAIN #20: cycles auto -> fixed -> sci -> eng -> auto
+      group: "Plot",
+      label: "Cycle Y tick format (auto/fixed/sci/eng)",
+      run: () => s().setYFmt({ ...s().yFmt, mode: cycleTickMode(s().yFmt.mode) }),
     },
     {
       id: "density",
@@ -540,6 +546,12 @@ export function buildAppActions(s: StoreGet): Action[] {
       group: "Plot",
       label: "Cycle X axis scale (linear/log/reciprocal)",
       run: () => s().setXScale(cycleAxisScale(s().xScale)),
+    },
+    {
+      id: "xTickFormat", // see the "yTickFormat" command above — same cycle, X axis
+      group: "Plot",
+      label: "Cycle X tick format (auto/fixed/sci/eng)",
+      run: () => s().setXFmt({ ...s().xFmt, mode: cycleTickMode(s().xFmt.mode) }),
     },
     {
       id: "grid",

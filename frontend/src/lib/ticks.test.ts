@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { niceTicks, pow10 } from "./ticks";
+import { decimalsForIncrement, niceTicks, pow10 } from "./ticks";
 
 describe("niceTicks", () => {
   it("produces round 1-2-5 values inside the range", () => {
@@ -50,5 +50,40 @@ describe("pow10 (exact integer decades)", () => {
 
   it("falls back to Math.pow for fractional exponents", () => {
     expect(pow10(0.5)).toBeCloseTo(Math.sqrt(10), 12);
+  });
+});
+
+// MAIN #20 (owner bug report): the floor under any fixed-decimal axis tick
+// formatter, so a dense M-H moment axis (splits 0.0001 apart) never renders
+// fewer decimals than the increment needs to keep every tick's label
+// distinct — see uplotOpts.ts's tickFormatter/autoTickValues for the
+// consumer side.
+describe("decimalsForIncrement (MAIN #20)", () => {
+  it("derives decimals from the log10 order of magnitude for power-of-10 increments", () => {
+    expect(decimalsForIncrement(1)).toBe(0);
+    expect(decimalsForIncrement(10)).toBe(0);
+    expect(decimalsForIncrement(0.1)).toBe(1);
+    expect(decimalsForIncrement(0.01)).toBe(2);
+    expect(decimalsForIncrement(0.0001)).toBe(4); // the owner's dense-tick spacing
+  });
+
+  it("round-trips upward for non-power-of-10 'nice' steps (0.25, 1.25, 2.5e-n)", () => {
+    // -log10(0.25) alone implies 1 decimal, which rounds 0.25 to "0.3" —
+    // wrong. The round-trip check bumps to the 2 decimals 0.25 actually needs.
+    expect(decimalsForIncrement(0.25)).toBe(2);
+    expect(decimalsForIncrement(1.25)).toBe(2);
+    expect(decimalsForIncrement(0.0025)).toBe(4);
+    expect(decimalsForIncrement(0.5)).toBe(1); // 0.5 prints exactly at 1 decimal
+  });
+
+  it("returns 0 (no floor) for a non-positive or non-finite increment", () => {
+    expect(decimalsForIncrement(0)).toBe(0);
+    expect(decimalsForIncrement(-1)).toBe(0);
+    expect(decimalsForIncrement(NaN)).toBe(0);
+    expect(decimalsForIncrement(Infinity)).toBe(0);
+  });
+
+  it("never exceeds maxDecimals", () => {
+    expect(decimalsForIncrement(1e-30, 6)).toBeLessThanOrEqual(6);
   });
 });
