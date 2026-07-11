@@ -13,6 +13,7 @@ import { loadCustomModels, type CustomFitModel } from "../../../lib/fitmodels";
 import { fmtNum as fmt } from "../../../lib/format";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import BumpsSection from "./BumpsSection";
 import EquationModelPanel from "./EquationModelPanel";
 import { useCurveFit } from "./useCurveFit";
 
@@ -175,6 +176,9 @@ export default function CurveFitPanel() {
           </Button>
         </div>
       )}
+
+      {/* Optional bumps engine (GOTO #10) — self-contained; parity stays default. */}
+      <BumpsSection modelName={modelName} />
     </ToolWindow>
   );
 }

@@ -32,8 +32,10 @@ from quantized.routes import (
     export_facets,
     export_figures,
     fitting,
+    fitting_bumps,
     import_template,
     import_wizard,
+    jobs_api,
     magnetic,
     magnetometry,
     optics,
@@ -144,6 +146,8 @@ def create_app() -> FastAPI:
     application.include_router(plot.router)
     application.include_router(corrections.router)
     application.include_router(fitting.router)
+    application.include_router(fitting_bumps.router)
+    application.include_router(jobs_api.router)
     application.include_router(baseline.router)
     application.include_router(stats.router)
     application.include_router(stats_design.router)
