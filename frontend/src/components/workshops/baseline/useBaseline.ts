@@ -265,6 +265,30 @@ export function useBaseline(): BaselineState {
     if (!active || anchors.length < 2) return;
     const ds = await useApp.getState().resolveDataset(active.id);
     if (!ds) return;
+    // Preview-consistency guard (review 2026-07-11): anchors are picked on
+    // the DISPLAYED curve, but the correction replay runs at pipeline step 3
+    // against RAW data - before smoothing/normalization/yOff, and silently
+    // superseding an existing bgSlope/bgPoly. When any of those are active,
+    // the replayed result would not match the preview; subtract the previewed
+    // baseline from the displayed data into a new dataset instead (the same
+    // path every data-derived method uses - preview-exact by construction).
+    const c = ds.corrections ?? {};
+    const displayTransformed =
+      c.normMethod != null ||
+      c.smoothEnabled === true ||
+      (c.yOff != null && c.yOff !== 0) ||
+      (c.bgSlope != null && c.bgSlope !== 0) ||
+      (c.bgPoly != null && c.bgPoly.length > 0);
+    if (displayTransformed) {
+      if (baseline) {
+        await subtract();
+        setAnchors([]);
+        setStatus("subtracted anchor baseline (new dataset - prior corrections active)");
+      } else {
+        setError("prior corrections active: wait for the preview, then Apply again");
+      }
+      return;
+    }
     const params_: CorrectionParams = {
       ...(ds.corrections ?? {}),
       bgAnchors: anchors,

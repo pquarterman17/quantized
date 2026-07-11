@@ -459,7 +459,10 @@ def test_realdata_legend_positions_match_com_oracle() -> None:
     if ok == 0 and wrong == 0 and miss == 0:
         pytest.skip("graph_extras oracle not present on this machine")
     assert wrong == 0, f"{wrong} legend positions decoded WRONG"
-    assert ok >= 50, f"legend-position coverage regressed ({ok} exact, {miss} missed)"
+    # Floor re-ratcheted 50 -> 55 (review finding: the frac_match acceptance
+    # added for the two attach-unit legends widened the oracle for ALL
+    # legends; the higher floor claws back the slack the OR introduced).
+    assert ok >= 55, f"legend-position coverage regressed ({ok} exact, {miss} missed)"
 
 
 # ── §13.2 #4 (2026-07-06): the expanded 111-instance oracle sweep ─────────────

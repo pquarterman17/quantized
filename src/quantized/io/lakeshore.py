@@ -101,7 +101,27 @@ def import_lake_shore(
         y_idx = [c for c in range(n_cols) if c != x_idx]
     else:
         specs: list[str | int] = [y_axis] if isinstance(y_axis, (str, int)) else list(y_axis)
-        y_idx = [resolve_column(s, col_names, _LS_SHORTHAND, "y-axis") for s in specs]
+        # resolve_column raises KeyError for an unresolvable name and returns
+        # NO_COLUMN (-1) for empty specs - the latter would silently index the
+        # LAST column as the signal (latent while the parser was unregistered;
+        # reachable via import_auto since MAIN #7). Normalize both to a clean
+        # ValueError like every other unresolved-column path.
+        y_idx = []
+        unresolved: list[str] = []
+        for spec in specs:
+            try:
+                idx = resolve_column(spec, col_names, _LS_SHORTHAND, "y-axis")
+            except KeyError:
+                unresolved.append(str(spec))
+                continue
+            if idx == NO_COLUMN:
+                unresolved.append(str(spec))
+            else:
+                y_idx.append(idx)
+        if unresolved:
+            raise ValueError(
+                "y-axis column(s) could not be resolved: " + ", ".join(unresolved)
+            )
     if not y_idx:
         raise ValueError("no y-axis columns resolved")
 
@@ -132,4 +152,12 @@ def is_lakeshore_file(path: Path) -> bool:
         text = Path(path).read_text(encoding="latin-1", errors="replace")[:2048]
     except Exception:  # noqa: BLE001
         return False
-    return "lake shore" in text.lower()
+    lower = text.lower()
+    # Vendor marker must sit in the PREAMBLE (the instrument titles the file),
+    # not merely appear anywhere - a generic CSV mentioning "Lake Shore" in a
+    # comment or data column must NOT reroute away from import_csv. And the
+    # header region must actually carry a resolvable instrument column.
+    head_lines = [ln.strip().lower() for ln in lower.splitlines()[:3]]
+    if not any("lake shore" in ln for ln in head_lines):
+        return False
+    return any(col in lower for col in ("temperature", "moment", "magnetic field"))

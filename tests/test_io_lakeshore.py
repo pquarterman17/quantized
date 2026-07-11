@@ -56,3 +56,34 @@ def test_import_auto_routes_lakeshore_csv(fixtures_dir: Path) -> None:
     ds = import_auto(fixtures_dir / "lakeshore_synth.csv")
     assert ds.labels == ("Moment",)
     assert ds.metadata.get("all_column_names") == ["Temperature", "Magnetic Field", "Moment"]
+
+
+def test_sniffer_rejects_vendor_mention_outside_preamble(tmp_path: Path) -> None:
+    """Review finding: 'Lake Shore' in a comment/data column must not reroute
+    a generic CSV away from import_csv — the marker must title the file."""
+    from quantized.io.lakeshore import is_lakeshore_file
+
+    mention = tmp_path / "mention.csv"
+    mention.write_text(
+        "a,b,c\n1,2,3\n4,5,6\n# exported near a Lake Shore 8600\n", encoding="utf-8"
+    )
+    assert not is_lakeshore_file(mention)
+    # Preamble marker but NO instrument columns anywhere -> still not claimed.
+    bare = tmp_path / "bare.csv"
+    bare.write_text("Lake Shore note\nx,y\n1,2\n", encoding="utf-8")
+    assert not is_lakeshore_file(bare)
+
+
+def test_unresolvable_moment_column_raises(tmp_path: Path) -> None:
+    """Review finding: NO_COLUMN=-1 used to silently import the LAST column."""
+    import pytest as _pytest
+
+    from quantized.io.lakeshore import import_lake_shore
+
+    f = tmp_path / "ls.csv"
+    f.write_text(
+        "Lake Shore VSM Measurement\nTemperature (K),Voltage (V)\n300,1\n200,2\n",
+        encoding="utf-8",
+    )
+    with _pytest.raises(ValueError, match="could not be resolved"):
+        import_lake_shore(f)
