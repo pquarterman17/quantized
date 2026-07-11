@@ -1856,6 +1856,29 @@ yet):
   future pass needs more independent hidden-vs-visible ground truth
   (ideally a COM oracle querying `layer.plotN` visibility across many
   curves) to isolate the real flag.
+  - **Re-investigated 2026-07-11, still UNRESOLVED, confound now proven
+    total.** A far larger controlled byte-diff: gathered *every* resolved
+    curve anchor in `PNR.opj` (1096) and bucketed the reflectivity ones by
+    the visual oracle into HIDDEN-LINE (`T++`/`T--`, 218 anchors),
+    VISIBLE-SCATTER (`R++`/`R--`, 218) and VISIBLE-LINE (`Graph1`'s SLD
+    profile, 5) — the style byte @76 confirms line=`0xC8` for both line
+    groups, scatter=`0xC9`, so style is controlled. The decisive test: a
+    real visibility flag must read one value for HIDDEN and the SAME other
+    value for BOTH visible groups (regardless of style/book). **No anchor
+    byte (0–518) passes it** — every offset that separates HIDDEN-LINE from
+    VISIBLE-LINE (12, 27, 29–31, 105, and the colour region 306–314) is
+    confounded: VISIBLE-SCATTER matches HIDDEN there, so those bytes track
+    book-family or style, not visibility. The colour fields are the
+    strongest single difference (HIDDEN `T++`/`T--` symbol-colour u32 @306 =
+    `0x00000000`, VISIBLE-LINE @306 = the `0xFFFFFFF7` auto sentinel) but
+    are unusable as a flag: HIDDEN-LINE and VISIBLE-LINE coincide *exactly*
+    with book-family (every hidden line is a `T`-column in a reflectivity
+    book; every visible line is an SLD column in a profile book), so nothing
+    in the corpus separates "hidden" from "which book authored it". Remains
+    an honest gap: no fix ships without ground truth that breaks the
+    book/visibility confound (a `layer.plotN.show` COM sweep, or a project
+    with a hidden line-curve in a profile book / a visible line-curve in a
+    reflectivity book).
 - **Axis-title unit vs. worksheet-column unit mismatch (`.opj`) —
   investigated 2026-07-09, UNRESOLVED (decode-plan item 42).** The same
   `PNR.opj` reflectivity graphs' decoded X range (e.g. `Graph25`:
@@ -1880,6 +1903,29 @@ yet):
   undecoded; the plan item narrows to this evidenced-but-unfixed root
   cause rather than "wrong layer"/"wrong offset", both of which are ruled
   out.
+  - **Re-investigated 2026-07-11, still UNRESOLVED, "no stored factor" now
+    proven.** Two exhaustive scans closed the two remaining places a rescale
+    could hide. (1) Every LE float64 in the layer-continuation block was
+    enumerated for `Graph25`/`40Oe`/`7kOe`: the block holds *only* the raw
+    Å⁻¹ range (@15/@23) and step — no double reads the rendered range
+    (~1.5–1.7 nm⁻¹) and none reads a bare ×10 (the `10.0` at layer offset 66
+    is the *Y* range, e.g. `40Oe` Y=(1e-8, 10)). (2) The `__BCO2` axis-config
+    storage (the 546-byte block) *does* contain a literal `10.0` (@368) and a
+    `1.5` (@48) — but a byte-diff proved them CONSTANT boilerplate: they read
+    identically in non-rescaled controls (`Moke`'s Oe-axis `Graph3`, `XRD`'s
+    2θ `Graph1`), and the two 546-byte blocks are byte-identical in every
+    double field between a rescaled and a non-rescaled graph — no field
+    encodes a per-graph factor. This is the exact "mistook a constant for a
+    scale" trap the line-width RE already documented. Conclusion: Origin
+    renders the ×10 from the axis UNIT itself (its built-in Å↔nm knowledge:
+    the column is `A-1`, the axis title is typed `nm⁻¹`), not from any stored
+    numeric field. Recovering it would require a unit-string→factor
+    conversion table keyed off those two text strings — precisely the blind
+    heuristic rejected above and by the Graph25-×10 precedent — so nothing
+    ships. Note the same Å↔nm rescale also affects `Graph1` (Z stored in Å
+    `2950–3700`, rendered ~295–370 nm, i.e. ÷10) — it is a project-wide unit
+    convention, not a `Graph25` quirk, reinforcing that a per-graph byte was
+    never the mechanism.
 - **Arrow/line annotations with arrowheads** — quantized `refLines` are
   axis-parallel only; `Line*` objects (type `0x22`) ship their text (if
   any) but not their geometry. ~~Box/region annotations~~ — **decoded
