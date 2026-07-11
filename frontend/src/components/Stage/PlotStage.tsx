@@ -20,6 +20,7 @@ import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths"
 import { windowSyncKey } from "../../lib/windowsync";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import ContextMenu from "../overlays/ContextMenu";
 import { snapshotToNewWindow } from "../windows/useWindowCommands";
 import AxisDropZones from "./AxisDropZones";
 import InsetPlot from "./InsetPlot";
@@ -32,6 +33,7 @@ import PlotToolbar from "./PlotToolbar";
 import PlotViewport from "./PlotViewport";
 import PolarStage from "./PolarStage";
 import StatStage from "./StatStage";
+import { useAnnotationEdit } from "./useAnnotationEdit";
 import { useAxisDrop } from "./useAxisDrop";
 import { useGadgetChip } from "./useGadgetChip";
 import { usePlotPayload } from "./usePlotPayload";
@@ -95,6 +97,8 @@ export default function PlotStage() {
   );
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
+  // MAIN #18: pointer-mode annotation select/drag/resize/edit/menu bridge.
+  const { bridge: annotationEdit, menu: annotationMenu, closeMenu: closeAnnotationMenu } = useAnnotationEdit(tool);
   const setRegionPicked = useApp((s) => s.setRegionPicked);
   const selection = useApp((s) => s.selection);
   const setRowSelection = useApp((s) => s.setRowSelection);
@@ -276,6 +280,7 @@ export default function PlotStage() {
         refLines={refLines}
         onRefLineMove={updateRefLine}
         annotations={annotations}
+        annotationEdit={annotationEdit}
         regionShades={regionShades}
         seriesStyles={styleList}
         plotted={plotted}
@@ -328,6 +333,14 @@ export default function PlotStage() {
           hidden={hidden}
           actions={{ resetView, smartScale, savePng, copyData, snapshot }}
           onClose={() => setMenu(null)}
+        />
+      )}
+      {annotationMenu && (
+        <ContextMenu
+          x={annotationMenu.x}
+          y={annotationMenu.y}
+          items={annotationMenu.items}
+          onClose={closeAnnotationMenu}
         />
       )}
 

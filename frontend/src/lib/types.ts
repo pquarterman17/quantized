@@ -533,6 +533,12 @@ export interface Annotation {
    *  they always plot on the primary axis. Ignored (falls back to the
    *  primary axis) when the plot has no y2 scale. */
   axis?: 0 | 1;
+  /** Font size override, px (MAIN #18 — the pointer tool's corner-handle
+   *  resize gesture). Absent = the plot's default annotation font size (the
+   *  axis tick font — see `uplotOpts.buildOpts`'s `font`). Clamped to
+   *  [MIN_ANNOTATION_SIZE, MAX_ANNOTATION_SIZE] (`lib/uplotOverlays.ts`)
+   *  wherever it's set. */
+  size?: number;
 }
 
 /** Axis tick number format. `auto` = increment-aware locale-grouped labels

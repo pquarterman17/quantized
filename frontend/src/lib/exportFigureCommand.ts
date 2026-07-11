@@ -11,6 +11,7 @@ import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api";
 import { buildExportStyles } from "./exportStyles";
 import { exportActive, type StoreGet } from "./exportActive";
+import { compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
 
 export async function runExportFigureCommand(s: StoreGet): Promise<void> {
   const params = await askParams("Export figure", [
@@ -66,7 +67,28 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
       x_label: xl || undefined,
       y_label: yl || undefined,
       series_styles: buildExportStyles(plotted, s().seriesStyles),
+      overrides: liveViewOverrides(s),
       filename: stem,
     });
   });
+}
+
+/** Screen-parity overrides (MAIN #18): annotations (with their pointer-tool
+ *  `size` override) + the legend's screen position — free `legendXY`
+ *  (fractions) maps to matplotlib's `loc: "custom"` + `anchor`
+ *  (`calc.figure_overrides`' pre-existing #14 drag-to-place handling); a
+ *  corner `legendPos` maps through `legendPosToLoc`. Everything else this
+ *  command already sends (title/labels/scales/styles) — this only adds the
+ *  two screen-state pieces that had no export path before. */
+export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
+  const st = s();
+  const legend: FigureOverrides["legend"] = st.showLegend
+    ? st.legendXY
+      ? { show: true, loc: "custom", anchor: st.legendXY }
+      : { show: true, loc: legendPosToLoc(st.legendPos) }
+    : { show: false };
+  const annotations = st.annotations
+    .filter((a) => Number.isFinite(a.x) && Number.isFinite(a.y))
+    .map((a) => ({ x: a.x, y: a.y, text: a.text, ...(a.size ? { size: a.size } : {}) }));
+  return compactOverrides({ legend, annotations }) ?? undefined;
 }

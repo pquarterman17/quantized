@@ -1,0 +1,66 @@
+// store/pointerTool — the MAIN #18 slice: free legend position + the
+// annotation-edit commit action. Exercised through the composed useApp store
+// (same convention as history.test.ts/reductions' own slice tests) since the
+// factory itself needs `s.annotations` from the main store literal.
+
+import { afterEach, describe, expect, it } from "vitest";
+
+import { MAX_ANNOTATION_SIZE, MIN_ANNOTATION_SIZE } from "../lib/uplotOverlays";
+import { useApp } from "./useApp";
+
+const ORIGINAL = useApp.getState();
+
+afterEach(() => {
+  useApp.setState(ORIGINAL, true);
+});
+
+describe("legendXY (MAIN #18 — free legend position)", () => {
+  it("defaults to null", () => {
+    expect(useApp.getState().legendXY).toBeNull();
+  });
+
+  it("setLegendXY sets and clears it", () => {
+    useApp.getState().setLegendXY([0.2, 0.8]);
+    expect(useApp.getState().legendXY).toEqual([0.2, 0.8]);
+    useApp.getState().setLegendXY(null);
+    expect(useApp.getState().legendXY).toBeNull();
+  });
+});
+
+describe("selectedAnnotationId (MAIN #18 — pointer-mode selection)", () => {
+  it("defaults to null and round-trips through the setter", () => {
+    expect(useApp.getState().selectedAnnotationId).toBeNull();
+    useApp.getState().setSelectedAnnotationId("ann-3");
+    expect(useApp.getState().selectedAnnotationId).toBe("ann-3");
+  });
+});
+
+describe("updateAnnotation (MAIN #18 — commit-once drag/resize/text-edit)", () => {
+  it("patches x/y/text on the matching annotation, leaving others untouched", () => {
+    useApp.setState({
+      annotations: [
+        { id: "a1", x: 1, y: 2, text: "Tc" },
+        { id: "a2", x: 3, y: 4, text: "Hc" },
+      ],
+    });
+    useApp.getState().updateAnnotation("a1", { x: 10, y: 20 });
+    expect(useApp.getState().annotations).toEqual([
+      { id: "a1", x: 10, y: 20, text: "Tc" },
+      { id: "a2", x: 3, y: 4, text: "Hc" },
+    ]);
+  });
+
+  it("clamps a size patch to [MIN_ANNOTATION_SIZE, MAX_ANNOTATION_SIZE]", () => {
+    useApp.setState({ annotations: [{ id: "a1", x: 1, y: 2, text: "Tc" }] });
+    useApp.getState().updateAnnotation("a1", { size: 999 });
+    expect(useApp.getState().annotations[0].size).toBe(MAX_ANNOTATION_SIZE);
+    useApp.getState().updateAnnotation("a1", { size: -5 });
+    expect(useApp.getState().annotations[0].size).toBe(MIN_ANNOTATION_SIZE);
+  });
+
+  it("is a no-op for an unknown id", () => {
+    useApp.setState({ annotations: [{ id: "a1", x: 1, y: 2, text: "Tc" }] });
+    useApp.getState().updateAnnotation("ghost", { x: 99 });
+    expect(useApp.getState().annotations).toEqual([{ id: "a1", x: 1, y: 2, text: "Tc" }]);
+  });
+});

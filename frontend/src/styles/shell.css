@@ -61,8 +61,12 @@ body {
 .qzk-menu-label { padding: 3px 9px; font-size: var(--font-size-sm); text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-faint); }
 .qzk-menu-trunc { overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 
-/* Per-tool plot cursors (H/Z/D/M tool model). uPlot's .u-over is the interactive
-   layer; set the cursor there (and on the stage) to reflect the active tool. */
+/* Per-tool plot cursors (pointer/H/Z/D/M tool model). uPlot's .u-over is the
+   interactive layer; set the cursor there (and on the stage) to reflect the
+   active tool. Pointer (MAIN #18, the default) is a plain arrow — the
+   interactive annotationPlugin/refLinePlugin override it to "move"/resize
+   cursors on hover over a draggable object; this is only the base state. */
+.qzk-stage.tool-pointer .u-over { cursor: default; }
 .qzk-stage.tool-pan,
 .qzk-stage.tool-pan .u-over { cursor: grab; }
 .qzk-stage.tool-pan .u-over:active { cursor: grabbing; }
@@ -243,6 +247,12 @@ body {
 .qzk-gadget-chip { flex-wrap: wrap; max-width: min(92vw, 560px); padding: 5px 6px 5px 10px; gap: 6px; }
 .qzk-gadget-chip .qz-select { font-size: var(--font-size-sm); padding: 2px 6px; }
 .qzk-legend { padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+/* MAIN #18: dragging the legend box in pointer mode (free legendXY position)
+   — a "move" affordance on the box background only; per-row items keep their
+   own click/rename/drag cursor untouched (the box handler ignores mousedown
+   bubbled from a child .it row — see PlotLegend's onBoxMouseDown). */
+.qzk-stage.tool-pointer .qzk-legend { cursor: move; }
+.qzk-stage.tool-pointer .qzk-legend .it { cursor: default; }
 /* Floating-legend corner placement (Inspector "Legend position"). */
 .qzk-legend.ne { top: 12px; right: 12px; }
 .qzk-legend.nw { top: 12px; left: 12px; }

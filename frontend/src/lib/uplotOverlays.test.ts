@@ -1,12 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type uPlot from "uplot";
 
 import type { ColorScatterSpec } from "./colorscatter";
 import type { Annotation, RefLine } from "./types";
 import {
+  annotationBox,
+  annotationFont,
+  annotationLayout,
   annotationPlugin,
   clampAnnotationLabelX,
+  clampAnnotationSize,
   colorScatterPlugin,
   errorBarsPlugin,
+  MAX_ANNOTATION_SIZE,
+  MIN_ANNOTATION_SIZE,
   pickRefLine,
   refLinePlugin,
   REGION_SHADE_ALPHA,
@@ -141,7 +148,12 @@ function fakeAnnU(hasY2 = false) {
   const valToPos = (v: number, scale: string) =>
     scale === "x" ? v : scale === "y2" ? 200 - v : 100 - v;
   const scales = hasY2 ? { x: {}, y: {}, y2: {} } : { x: {}, y: {} };
-  const u = { ctx, bbox: { left: 10, top: 5, width: 100, height: 80 }, valToPos, scales };
+  const raw = { ctx, bbox: { left: 10, top: 5, width: 100, height: 80 }, valToPos, scales };
+  // Cast once here (not per call site): `annotationLayout` below only needs
+  // this Pick<uPlot, ...> subset and type-checks it for real, unlike the
+  // plugin.hooks.draw?.(u) calls elsewhere in this file, which stand in for
+  // the FULL uPlot type and so still need their own @ts-expect-error.
+  const u = raw as unknown as Pick<uPlot, "valToPos" | "ctx" | "bbox" | "scales">;
   return { u, texts, dots };
 }
 
@@ -471,5 +483,239 @@ describe("colorScatterPlugin (MAIN #14)", () => {
       [5, { channel: 2, z: [0, 5, 10], colormap: "gray", lo: 0, hi: 10 }],
     ]);
     expect(draw(specs)).toHaveLength(0);
+  });
+});
+
+describe("annotationFont / clampAnnotationSize (MAIN #18)", () => {
+  it("substitutes the leading px size, keeping the font family", () => {
+    expect(annotationFont("11px monospace", 24)).toBe("24px monospace");
+  });
+
+  it("returns the base font unchanged when size is absent or zero", () => {
+    expect(annotationFont("11px monospace")).toBe("11px monospace");
+    expect(annotationFont("11px monospace", 0)).toBe("11px monospace");
+  });
+
+  it("clamps to [MIN_ANNOTATION_SIZE, MAX_ANNOTATION_SIZE] and rounds", () => {
+    expect(clampAnnotationSize(3)).toBe(MIN_ANNOTATION_SIZE);
+    expect(clampAnnotationSize(999)).toBe(MAX_ANNOTATION_SIZE);
+    expect(clampAnnotationSize(24.6)).toBe(25);
+  });
+});
+
+describe("annotationLayout / annotationBox (MAIN #18 shared draw/hit-test geometry)", () => {
+  it("matches the draw loop's own px/py/tx/align math for a plain annotation", () => {
+    const { u } = fakeAnnU();
+    const layout = annotationLayout(u, { id: "a1", x: 50, y: 30, text: "Tc" }, "11px mono");
+    expect(layout).not.toBeNull();
+    expect(layout!.px).toBe(50);
+    expect(layout!.py).toBe(70); // y valToPos: 100-30
+    expect(layout!.align).toBe("left");
+    expect(layout!.tx).toBe(56); // px + 6 offset
+  });
+
+  it("returns null for a non-finite annotation (same skip the draw loop applies)", () => {
+    const { u } = fakeAnnU();
+    expect(annotationLayout(u, { id: "a", x: Number.NaN, y: 1, text: "x" }, "11px mono")).toBeNull();
+  });
+
+  it("a larger `size` increases the computed line height", () => {
+    const { u } = fakeAnnU();
+    const small = annotationLayout(u, { id: "a", x: 50, y: 30, text: "Tc" }, "11px mono")!;
+    const big = annotationLayout(u, { id: "a", x: 50, y: 30, text: "Tc", size: 40 }, "11px mono")!;
+    expect(big.lineHeight).toBeGreaterThan(small.lineHeight);
+  });
+
+  it("derives a left-anchored box starting at tx, right-anchored ending at tx", () => {
+    const { u } = fakeAnnU();
+    const left = annotationLayout(u, { id: "a", x: 50, y: 30, text: "Tc" }, "11px mono")!;
+    const leftBox = annotationBox(left);
+    expect(leftBox).toEqual({ left: 56, top: left.ty - left.lineHeight, width: 12, height: left.lineHeight });
+
+    const right = annotationLayout(u, { id: "a", x: 105, y: 30, text: "a fourteen chr" }, "11px mono")!;
+    const rightBox = annotationBox(right);
+    expect(rightBox.left + rightBox.width).toBe(right.tx);
+  });
+});
+
+// Pointer-mode interactive gesture contract (MAIN #18), driven through jsdom
+// mouse events on a stubbed uPlot — the SAME `makeU`/`ready`/`mouse` idiom
+// uplotAnchors.test.ts uses for anchorEditPlugin. `over`'s getBoundingClientRect
+// is jsdom's default all-zero rect (no real layout engine), so client coords
+// ARE local coords here, same assumption uplotAnchors.test.ts relies on.
+function makeInteractiveU() {
+  const over = document.createElement("div");
+  document.body.appendChild(over);
+  const ctx = {
+    font: "",
+    measureText: (t: string) => ({ width: t.length * 6 }) as TextMetrics,
+  };
+  // x: identity; y: 100 - value — self-inverse, so posToVal reuses the same
+  // formula (valid for this convention only, matching fakeAnnU above).
+  const conv = (v: number, scale: string) => (scale === "x" ? v : 100 - v);
+  const u = {
+    over,
+    ctx,
+    bbox: { left: 0, top: 0, width: 100, height: 100 },
+    scales: { x: {}, y: {} },
+    valToPos: conv,
+    posToVal: conv,
+    redraw: vi.fn(),
+  } as unknown as uPlot;
+  return { u, over };
+}
+
+function readyAnn(plugin: uPlot.Plugin, u: uPlot) {
+  (plugin.hooks.ready as (u: uPlot) => void)(u);
+}
+
+const annMouse = (type: string, x: number, y: number) =>
+  new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true, cancelable: true });
+
+afterEach(() => {
+  document.body.innerHTML = "";
+});
+
+describe("annotationPlugin — pointer-mode interactive (MAIN #18)", () => {
+  const ann = (over: Partial<Annotation> = {}): Annotation => ({ id: "a1", x: 50, y: 30, text: "Tc", ...over });
+
+  it("a non-interactive instance (opts.interactive absent, every pre-#18 call site) attaches no listeners", () => {
+    const plugin = annotationPlugin([ann()], "#fff", "11px mono");
+    expect(plugin.hooks.ready).toBeUndefined();
+  });
+
+  it("click on empty canvas calls onSelect(null) — box zoom passes through untouched", () => {
+    const { u, over } = makeInteractiveU();
+    const onSelect = vi.fn();
+    const plugin = annotationPlugin([ann()], "#fff", "11px mono", { interactive: true, selectedId: null, onSelect });
+    readyAnn(plugin, u);
+    over.dispatchEvent(annMouse("mousedown", 5, 5));
+    document.dispatchEvent(annMouse("mouseup", 6, 5)); // < CLICK_PX travel
+    expect(onSelect).toHaveBeenCalledWith(null);
+  });
+
+  it("mousedown on an annotation's dot selects it without committing a move", () => {
+    const { u, over } = makeInteractiveU();
+    const onSelect = vi.fn();
+    const onMove = vi.fn();
+    const plugin = annotationPlugin([ann()], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: null,
+      onSelect,
+      onMove,
+    });
+    readyAnn(plugin, u);
+    over.dispatchEvent(annMouse("mousedown", 50, 70)); // dot: px=50, py=100-30=70
+    document.dispatchEvent(annMouse("mouseup", 50, 70)); // no movement — a plain click
+    expect(onSelect).toHaveBeenCalledWith("a1");
+    expect(onMove).not.toHaveBeenCalled(); // select-only click is not a no-op move commit
+  });
+
+  it("dragging an annotation commits onMove ONCE with the delta-based released position", () => {
+    const { u, over } = makeInteractiveU();
+    const onMove = vi.fn();
+    const plugin = annotationPlugin([ann()], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: null,
+      onSelect: vi.fn(),
+      onMove,
+    });
+    readyAnn(plugin, u);
+    over.dispatchEvent(annMouse("mousedown", 50, 70));
+    document.dispatchEvent(annMouse("mousemove", 58, 70));
+    document.dispatchEvent(annMouse("mousemove", 60, 70));
+    document.dispatchEvent(annMouse("mouseup", 60, 70));
+    expect(onMove).toHaveBeenCalledTimes(1);
+    // x: posToVal(60)-posToVal(50) = 10 -> 50+10 = 60; y: no vertical travel -> 30
+    expect(onMove).toHaveBeenCalledWith("a1", 60, 30);
+  });
+
+  it("a second mousedown on the SAME annotation within the double-click window edits text, not a drag", () => {
+    const { u, over } = makeInteractiveU();
+    const onEditText = vi.fn();
+    const onMove = vi.fn();
+    const plugin = annotationPlugin([ann()], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: null,
+      onSelect: vi.fn(),
+      onMove,
+      onEditText,
+    });
+    readyAnn(plugin, u);
+    over.dispatchEvent(annMouse("mousedown", 50, 70));
+    document.dispatchEvent(annMouse("mouseup", 50, 70));
+    over.dispatchEvent(annMouse("mousedown", 50, 70)); // immediately after — a double-click
+    document.dispatchEvent(annMouse("mouseup", 50, 70));
+    expect(onEditText).toHaveBeenCalledWith("a1");
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it("dragging the selected annotation's corner handle commits onResize ONCE, clamped to MAX_ANNOTATION_SIZE", () => {
+    const { u, over } = makeInteractiveU();
+    const onResize = vi.fn();
+    const plugin = annotationPlugin([ann()], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: "a1",
+      onSelect: vi.fn(),
+      onResize,
+    });
+    readyAnn(plugin, u);
+    // Handle sits at the label box's bottom-right corner: px=50,py=70,
+    // tx=56 (align left, "Tc"=12px wide), lineHeight=fontPx("11px mono")*1.3=14.3,
+    // ty=max(py-2,top+lineHeight)=68 -> box {left:56,top:53.7,width:12,height:14.3}
+    // -> handle (68, 68).
+    over.dispatchEvent(annMouse("mousedown", 68, 68));
+    document.dispatchEvent(annMouse("mousemove", 68, 468)); // large downward drag -> clamps
+    document.dispatchEvent(annMouse("mouseup", 68, 468));
+    expect(onResize).toHaveBeenCalledTimes(1);
+    expect(onResize).toHaveBeenCalledWith("a1", MAX_ANNOTATION_SIZE);
+  });
+
+  it("a plain click on the handle (no drag) commits nothing", () => {
+    const { u, over } = makeInteractiveU();
+    const onResize = vi.fn();
+    const plugin = annotationPlugin([ann()], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: "a1",
+      onSelect: vi.fn(),
+      onResize,
+    });
+    readyAnn(plugin, u);
+    over.dispatchEvent(annMouse("mousedown", 68, 68));
+    document.dispatchEvent(annMouse("mouseup", 68, 68));
+    expect(onResize).not.toHaveBeenCalled();
+  });
+
+  it("right-click on an annotation selects it and opens the object menu, suppressing the plot's own menu", () => {
+    const { u, over } = makeInteractiveU();
+    const onContextMenu = vi.fn();
+    const onSelect = vi.fn();
+    const plugin = annotationPlugin([ann()], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: null,
+      onSelect,
+      onContextMenu,
+    });
+    readyAnn(plugin, u);
+    const ev = annMouse("contextmenu", 50, 70);
+    const notPrevented = over.dispatchEvent(ev); // false when preventDefault() was called
+    expect(onSelect).toHaveBeenCalledWith("a1");
+    expect(onContextMenu).toHaveBeenCalledWith("a1", 50, 70);
+    expect(notPrevented).toBe(false);
+  });
+
+  it("right-click on empty canvas leaves the default menu alone", () => {
+    const { u, over } = makeInteractiveU();
+    const onContextMenu = vi.fn();
+    const plugin = annotationPlugin([ann()], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: null,
+      onSelect: vi.fn(),
+      onContextMenu,
+    });
+    readyAnn(plugin, u);
+    const notPrevented = over.dispatchEvent(annMouse("contextmenu", 5, 5));
+    expect(onContextMenu).not.toHaveBeenCalled();
+    expect(notPrevented).toBe(true);
   });
 });

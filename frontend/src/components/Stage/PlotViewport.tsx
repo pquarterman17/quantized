@@ -160,6 +160,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.y2AxisLabel,
     args.refLines,
     args.annotations,
+    args.annotationEdit,
     args.regionShades,
     args.seriesStyles,
     args.plotted,

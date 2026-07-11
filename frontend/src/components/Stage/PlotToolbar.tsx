@@ -6,8 +6,13 @@
 
 import { useApp } from "../../store/useApp";
 
-// Navigation + inspection tools (zoom/pan/cursor/measure/stats).
+// Navigation + inspection tools (pointer/zoom/pan/cursor/measure/stats).
+// Pointer is FIRST and the store default (MAIN #18, owner directive from
+// live testing): a plain arrow cursor with no dashed crosshair, for
+// selecting/arranging plot objects (annotations, legend, ref lines) — the
+// data-reading/measurement tools that follow it keep their crosshair.
 const TOOLS = [
+  { id: "pointer", glyph: "➤", tip: "Pointer (select & arrange)" },
   { id: "zoom", glyph: "⛶", tip: "Box zoom" },
   { id: "pan", glyph: "✥", tip: "Pan" },
   { id: "cursor", glyph: "✛", tip: "Data cursor" },

@@ -23,6 +23,7 @@ import {
   errorBarsPlugin,
   refLinePlugin,
   regionShadePlugin,
+  type AnnotationEditOpts,
 } from "./uplotOverlays";
 import { richLabelsPlugin } from "./uplotRichLabels";
 import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
@@ -39,6 +40,7 @@ import {
 } from "./uplotTools";
 
 export type PlotTool =
+  | "pointer"
   | "zoom"
   | "pan"
   | "cursor"
@@ -522,6 +524,17 @@ export interface BuildOptsArgs {
   onRefLineMove?: (id: string, value: number) => void;
   /** Text annotations pinned at data coordinates. */
   annotations?: Annotation[];
+  /** Pointer-tool direct manipulation (MAIN #18): select/drag-move/corner-
+   *  resize/double-click-edit/right-click-menu for `annotations`. Non-null
+   *  only while the pointer tool is active — see `PlotStage`'s
+   *  `useAnnotationEdit` hook, which supplies it. Unlike `anchorEdit`'s
+   *  live-getter bridge (baseline anchors churn every animation frame during
+   *  a fit preview), an annotation edit is a rare, discrete gesture — a
+   *  plain commit-once callback bridge is enough: the store commit rebuilds
+   *  this uPlot instance once per GESTURE (same as `onRefLineMove` already
+   *  does), never once per pixel (the plugin's own live-drag override in
+   *  `annotationPlugin` handles that). */
+  annotationEdit?: Omit<AnnotationEditOpts, "interactive"> | null;
   /** Filled region bands (Origin Rect* shades, decode-plan #41), drawn
    *  translucently behind the grid/data by regionShadePlugin. */
   regionShades?: RegionShade[];
@@ -832,17 +845,28 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     }
   }
   if (refLines && refLines.length > 0) {
-    // Dragging only in the non-gesture tools (zoom/cursor); pan/measure/region
-    // own the pointer-drag, so reference lines stay static there.
+    // Dragging in the non-gesture tools (pointer/zoom/cursor); pan/measure/
+    // region own the pointer-drag, so reference lines stay static there.
     plugins.push(
       refLinePlugin(refLines, inkDimColor, {
         onMove: args.onRefLineMove,
-        interactive: tool === "zoom" || tool === "cursor",
+        interactive: tool === "pointer" || tool === "zoom" || tool === "cursor",
       }),
     );
   }
   if (annotations && annotations.length > 0) {
-    plugins.push(annotationPlugin(annotations, inkColor, font));
+    plugins.push(
+      annotationPlugin(annotations, inkColor, font, {
+        interactive: tool === "pointer" && !!args.annotationEdit,
+        selectColor: accentColor,
+        selectedId: args.annotationEdit?.selectedId ?? null,
+        onSelect: args.annotationEdit?.onSelect,
+        onMove: args.annotationEdit?.onMove,
+        onResize: args.annotationEdit?.onResize,
+        onEditText: args.annotationEdit?.onEditText,
+        onContextMenu: args.annotationEdit?.onContextMenu,
+      }),
+    );
   }
   if (args.regionShades && args.regionShades.length > 0) {
     plugins.push(regionShadePlugin(args.regionShades));
@@ -1088,13 +1112,20 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     width,
     height,
     ...(args.title?.trim() ? { title: args.title.trim() } : {}),
-    // Box-zoom only in zoom mode; region drags an x-band without rescaling
+    // Box-zoom in zoom AND pointer mode (MAIN #18 — empty-canvas drag keeps
+    // the muscle-memory box-zoom gesture even in the new default tool; an
+    // object hit takes capture-phase priority over it, see annotationPlugin/
+    // refLinePlugin); region drags an x-band without rescaling
     // (setScale:false), so setSelect can read it back; pan/cursor disable drag.
+    // Pointer mode ALSO suppresses uPlot's own dashed crosshair (x/y: false)
+    // — the owner's "reads as measurement mode" complaint — while every
+    // other tool keeps it (uPlot's default, unset here).
     cursor: {
       drag:
         tool === "region" || tool === "select"
           ? { x: true, y: false, setScale: false, uni: 1 }
-          : { x: tool === "zoom", y: tool === "zoom", uni: 1 },
+          : { x: tool === "zoom" || tool === "pointer", y: tool === "zoom" || tool === "pointer", uni: 1 },
+      ...(tool === "pointer" ? { x: false, y: false } : {}),
     },
     // Region / select rubber-band: on drag end, hand the two data-x edges to the
     // matching caller. posToVal does the pixel->data mapping (linear or log x);

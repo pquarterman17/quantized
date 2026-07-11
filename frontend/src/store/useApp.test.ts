@@ -48,6 +48,19 @@ beforeEach(() => {
   });
 });
 
+describe("useApp plot tool default (MAIN #18)", () => {
+  it("defaults to 'pointer' — the new default, not the old 'zoom'", () => {
+    expect(useApp.getState().plotTool).toBe("pointer");
+  });
+
+  it("setPlotTool still round-trips to any other tool", () => {
+    useApp.getState().setPlotTool("zoom");
+    expect(useApp.getState().plotTool).toBe("zoom");
+    useApp.getState().setPlotTool("pointer");
+    expect(useApp.getState().plotTool).toBe("pointer");
+  });
+});
+
 describe("useApp reflectivity seed (SLD→reflectivity hook)", () => {
   beforeEach(() => useApp.setState({ reflectivitySeed: null, reflectivityOpen: false }));
 

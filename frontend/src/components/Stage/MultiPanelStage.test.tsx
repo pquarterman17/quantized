@@ -109,9 +109,11 @@ describe("MultiPanelStage — mode regressions", () => {
   });
 
   // Fix #5: a spatial panel's OWN annotation marks must render (previously
-  // silently dropped by the multi-panel apply path). The default "zoom" tool
-  // with no other decorations adds zero plugins on its own, so one plugin
-  // present is exactly the annotation plugin buildOpts adds for a non-empty
+  // silently dropped by the multi-panel apply path). The default "pointer"
+  // tool (MAIN #18) with no `annotationEdit` bridge (MultiPanelStage doesn't
+  // wire one — pointer-mode direct manipulation is a PlotStage-only surface)
+  // adds zero plugins on its own, same as "zoom" did, so one plugin present
+  // is exactly the annotation plugin buildOpts adds for a non-empty
   // `annotations` list.
   it("spatial-apply mode threads a panel's OWN annotations through (fix #5)", async () => {
     useApp.setState({
@@ -196,9 +198,9 @@ describe("MultiPanelStage — mode regressions", () => {
 // Owner-routing item 4 ("none of the sub plots are boxed in"): the singleton
 // `showAxisBox` flag must reach EVERY panel mode's `buildOpts` call, not just
 // the single-plot PlotStage. Same "one plugin = the thing under test" idiom
-// as the fix #5 annotations regression above — the default "zoom" tool with
-// no other decorations adds zero plugins on its own, so a bare boolean flip
-// isolates exactly the axis-box plugin.
+// as the fix #5 annotations regression above — the default "pointer" tool
+// (MAIN #18) with no other decorations adds zero plugins on its own, same as
+// "zoom" did, so a bare boolean flip isolates exactly the axis-box plugin.
 describe("MultiPanelStage — per-panel axis box (item 4)", () => {
   it("plain per-channel stack mode adds the axis-box plugin to every panel when showAxisBox is on", async () => {
     useApp.setState({ showAxisBox: true });

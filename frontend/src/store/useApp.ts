@@ -83,6 +83,8 @@ import { createReductionsSlice, type ReductionsSlice } from "./reductions";
 import { createReimportSlice, type ReimportSlice } from "./reimport";
 // Multi-dataset panel/overlay composite windows (MAIN_PLAN #19 v1), composed the same way.
 import { createPanelsSlice, type PanelsSlice } from "./panels";
+// The pointer tool's free-legend-position + annotation-update slice (MAIN #18).
+import { createPointerToolSlice, type PointerToolSlice } from "./pointerTool";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -222,6 +224,7 @@ export type ExcludedDisplay = "hide" | "grey";
  *  for every dataset, Origin or not). See `useApp.activateFromLibrary`. */
 export type OriginBookClickOpens = "worksheet" | "plot";
 export type PlotTool =
+  | "pointer"
   | "zoom"
   | "pan"
   | "cursor"
@@ -310,7 +313,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -1040,6 +1043,8 @@ export const useApp = create<AppState>((set, get) => ({
   ...createReductionsSlice(set),
   ...createReimportSlice(set, get),
   ...createPanelsSlice(set),
+  // Pointer tool: free legend position + annotation edits (MAIN #18, ./pointerTool).
+  ...createPointerToolSlice(set),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1113,7 +1118,7 @@ export const useApp = create<AppState>((set, get) => ({
   seriesOrder: null,
   hiddenChannels: [],
   waterfall: 0,
-  plotTool: "zoom",
+  plotTool: "pointer",
   regionPicked: null,
   selection: null,
   integral: null,
@@ -1895,6 +1900,7 @@ export const useApp = create<AppState>((set, get) => ({
               showGrid: restoredView.showGrid,
               showLegend: restoredView.showLegend,
               legendPos: restoredView.legendPos,
+              legendXY: restoredView.legendXY,
               plotTemplate: restoredView.plotTemplate,
               showAxisBox: restoredView.showAxisBox,
               stackMode: restoredView.stackMode,
