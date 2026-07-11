@@ -801,3 +801,89 @@ describe("buildOpts literal-colour contrast substitution (dark-lines-on-dark-mod
     expect(dark.axes?.[0].stroke).not.toBe(light.axes?.[0].stroke);
   });
 });
+
+describe("buildOpts rich-text labels (GOTO #5)", () => {
+  it("blanks the plain x label (band still reserved) and adds the rich plugin", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      xAxisLabel: "$\mu_0H$ (T)",
+    });
+    expect(opts.axes?.[0]?.label).toBe("");
+    expect(opts.plugins).toHaveLength(1);
+  });
+
+  it("keeps uPlot's plain draw for INVALID markup (literal fallback, no plugin)", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", xAxisLabel: "$\foo$" });
+    expect(opts.axes?.[0]?.label).toBe("$\foo$");
+    expect(opts.plugins).toHaveLength(0);
+  });
+
+  it("keeps today's fast path exactly for $-free labels", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", xAxisLabel: "H (kOe)" });
+    expect(opts.axes?.[0]?.label).toBe("H (kOe)");
+    expect(opts.plugins).toHaveLength(0);
+  });
+
+  it("blanks a rich y-label override and pushes the plugin", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      yAxisLabel: "$M_{s}$ (emu)",
+    });
+    expect(opts.axes?.[1]?.label).toBe("");
+    expect(opts.plugins).toHaveLength(1);
+  });
+
+  it("a rich AUTO solo-series label engages too (derived labels can be rich)", () => {
+    const richAuto: PlotPayload = {
+      data: [
+        [0, 1],
+        [1, 2],
+      ],
+      series: [{ label: "$\chi''$", unit: "emu" }],
+      xLabel: "T",
+      xUnit: "K",
+    };
+    const opts = buildOpts(richAuto, { ...base, yLog: false, tool: "zoom" });
+    expect(opts.axes?.[1]?.label).toBe("");
+    expect(opts.plugins).toHaveLength(1);
+  });
+
+  it("blanks a rich y2 label on the secondary axis", () => {
+    const dual: PlotPayload = {
+      data: [
+        [0, 1],
+        [1, 2],
+        [3, 4],
+      ],
+      series: [
+        { label: "M", unit: "emu" },
+        { label: "R", unit: "ohm", axis: 1 },
+      ],
+      xLabel: "T",
+      xUnit: "K",
+    };
+    const opts = buildOpts(dual, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      y2AxisLabel: "$H_{c2}$ (T)",
+    });
+    expect(opts.axes?.[2]?.label).toBe("");
+    expect(opts.plugins).toHaveLength(1);
+  });
+
+  it("keeps the raw title string (the plugin swaps the DOM content at init)", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      title: "$\Delta T$ sweep",
+    });
+    expect(opts.title).toBe("$\Delta T$ sweep");
+    expect(opts.plugins).toHaveLength(1);
+  });
+});

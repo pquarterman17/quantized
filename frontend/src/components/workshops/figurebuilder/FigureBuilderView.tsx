@@ -8,7 +8,7 @@ import { useState } from "react";
 import PreviewOverlay from "./PreviewOverlay";
 import PropertyPanels from "./PropertyPanels";
 import ToolWindow from "../../overlays/ToolWindow";
-import { Button, Checkbox, NumberField, Select } from "../../primitives";
+import { Button, Checkbox, NumberField, RichLabelInput, Select } from "../../primitives";
 import { useApp } from "../../../store/useApp";
 import { FIGURE_FORMATS, FIGURE_STYLES, useFigureBuilder } from "./useFigureBuilder";
 
@@ -42,27 +42,14 @@ export default function FigureBuilderView() {
             />
             <label className="qzk-field-lbl">DPI (raster)</label>
             <NumberField value={f.dpi} onChange={(v) => f.setDpi(Number(v) || 300)} width={90} />
+            {/* Rich-text labels (GOTO #5): `$...$` math renders in the export
+                via matplotlib mathtext; Ω opens the symbol palette. */}
             <label className="qzk-field-lbl">Title</label>
-            <input
-              className="qz-input"
-              value={f.title}
-              placeholder="(none)"
-              onChange={(e) => f.setTitle(e.target.value)}
-            />
+            <RichLabelInput live value={f.title} placeholder="(none)" onCommit={f.setTitle} />
             <label className="qzk-field-lbl">X label</label>
-            <input
-              className="qz-input"
-              value={f.xLabel}
-              placeholder="auto"
-              onChange={(e) => f.setXLabel(e.target.value)}
-            />
+            <RichLabelInput live value={f.xLabel} placeholder="auto" onCommit={f.setXLabel} />
             <label className="qzk-field-lbl">Y label</label>
-            <input
-              className="qz-input"
-              value={f.yLabel}
-              placeholder="auto"
-              onChange={(e) => f.setYLabel(e.target.value)}
-            />
+            <RichLabelInput live value={f.yLabel} placeholder="auto" onCommit={f.setYLabel} />
             {/* #11: every export property, panel-grouped, one config object */}
             <PropertyPanels
               overrides={f.overrides}

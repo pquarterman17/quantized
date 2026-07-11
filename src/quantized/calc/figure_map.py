@@ -27,6 +27,7 @@ import numpy as np  # noqa: E402
 from mpl_toolkits.mplot3d import Axes3D  # noqa: E402,F401  (registers the 3d projection)
 from numpy.typing import ArrayLike, NDArray  # noqa: E402
 
+from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_styles import figure_style  # noqa: E402
 
 __all__ = ["MAP_KINDS", "render_map_figure"]
@@ -125,6 +126,11 @@ def render_map_figure(
         raise ValueError(f"kind must be one of {MAP_KINDS}")
     if contour_source not in _CONTOUR_SOURCES:
         raise ValueError(f"contour_source must be one of {_CONTOUR_SOURCES}")
+    # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never raises.
+    title = safe_mathtext_label(title)
+    x_label = safe_mathtext_label(x_label)
+    y_label = safe_mathtext_label(y_label)
+    z_label = safe_mathtext_label(z_label)
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
 

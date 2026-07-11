@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from numpy.typing import ArrayLike  # noqa: E402
 
+from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_styles import figure_style  # noqa: E402
 from quantized.calc.statplots import histogram as _histogram  # noqa: E402
 from quantized.calc.statplots import qq_plot as _qq_plot  # noqa: E402
@@ -77,6 +78,11 @@ def render_statplot_figure(
         raise ValueError(f"fmt must be one of {_FORMATS}")
     if kind not in STATPLOT_KINDS:
         raise ValueError(f"kind must be one of {STATPLOT_KINDS}")
+    # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never raises.
+    title = safe_mathtext_label(title)
+    x_label = safe_mathtext_label(x_label)
+    y_label = safe_mathtext_label(y_label)
+    labels = [safe_mathtext_label(str(g)) for g in labels] if labels else labels
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)

@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt  # noqa: E402  (must follow matplotlib.use)
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_styles import figure_style  # noqa: E402
 
 __all__ = ["render_figure"]
@@ -92,6 +93,15 @@ def _render_impl(
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
+    # Rich-text labels (GOTO #5): valid $...$ mathtext passes through to
+    # matplotlib untouched; INVALID mathtext is de-mathed here so it renders
+    # literally instead of raising inside savefig (an export must never 500).
+    # Sanitizing at entry also covers the figure_break branch below, which
+    # receives these same strings.
+    title = safe_mathtext_label(title)
+    x_label = safe_mathtext_label(x_label)
+    y_label = safe_mathtext_label(y_label)
+    series = [(safe_mathtext_label(label), y) for label, y in series]
     st = figure_style(style)
     ov = dict(overrides or {})
     _validate_overrides(ov)
@@ -393,7 +403,7 @@ def _apply_overrides(
 
     for ann in ov.get("annotations", []):
         ax.annotate(
-            str(ann.get("text", "")),
+            safe_mathtext_label(str(ann.get("text", ""))),
             xy=(float(ann.get("x", 0.0)), float(ann.get("y", 0.0))),
             fontsize=float(ov.get("font_size", st.font_size)),
         )

@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from numpy.typing import ArrayLike  # noqa: E402
 
+from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_styles import figure_style  # noqa: E402
 
 __all__ = ["render_field_figure"]
@@ -62,6 +63,10 @@ def render_field_figure(
         raise ValueError(f"fmt must be one of {_FORMATS}")
     if kind not in ("quiver", "streamline"):
         raise ValueError("kind must be 'quiver' or 'streamline'")
+    # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never raises.
+    title = safe_mathtext_label(title)
+    x_label = safe_mathtext_label(x_label)
+    y_label = safe_mathtext_label(y_label)
 
     x_arr = np.asarray(x_axis, dtype=float)
     y_arr = np.asarray(y_axis, dtype=float)

@@ -11,6 +11,7 @@ import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { resolveDrawColor } from "../../lib/contrastColor";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import type { SeriesStyle } from "../../lib/types";
+import { RichText } from "../primitives";
 import { useActiveDataset, useApp } from "../../store/useApp";
 
 interface PlotLegendProps {
@@ -175,7 +176,8 @@ export default function PlotLegend({
               className="ln"
               style={{ display: "inline-block", width: 14, height: 2, background: swatch }}
             />
-            {text}
+            {/* Rich-text rename support (GOTO #5): `$...$` renders as math. */}
+            <RichText text={text} />
             {isChannel && plotted.length > 1 && (
               <span style={{ marginLeft: 6, display: "inline-flex", gap: 2 }}>
                 <button
