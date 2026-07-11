@@ -8,6 +8,7 @@
 // the figure-builder pattern applied to N panels.
 
 import { useEffect, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import {
   exportFigurePage,
@@ -33,9 +34,9 @@ import {
   type PageSlot,
   type PanelSource,
 } from "../../../lib/figurepage";
-import { displayedWindowTitle } from "../../../lib/plotview";
+import { displayedWindowTitle, type PlotView } from "../../../lib/plotview";
 import type { DataStruct } from "../../../lib/types";
-import { useApp } from "../../../store/useApp";
+import { useApp, type AppState } from "../../../store/useApp";
 import { FIGURE_STYLE_DPI } from "../figurebuilder/useFigureBuilder";
 
 const PREVIEW_DPI = 90; // screen-resolution page preview; export uses the chosen DPI
@@ -104,6 +105,60 @@ async function panelFigure(source: PanelSource): Promise<FigureSpec | null> {
   };
 }
 
+/** Preview invalidation (MAIN #8g): the flattened store inputs the assigned
+ *  panels render from — EXACTLY the state `panelFigure` reads through the
+ *  store (keep the two in sync), flattened so `useShallow` can compare it.
+ *  Keying the preview effect on this re-renders the on-screen preview when
+ *  the state under a slot changes (dataset corrected/recomputed, view
+ *  edited, window closed/unbound, saved figure edited/deleted) and ONLY
+ *  then — unrelated store churn (window moves/z, other datasets, selection)
+ *  leaves the array shallow-equal and never re-fetches. This is the preview
+ *  half of buildSpec's export-time guard (review 2026-07-11), which re-reads
+ *  the same store state at export time. */
+function panelRenderInputs(slots: PageSlot[], s: AppState): unknown[] {
+  const parts: unknown[] = [];
+  for (const { source } of slots) {
+    if (!source) continue;
+    if (source.kind === "window") {
+      const win = s.plotWindows.find((w) => w.id === source.id);
+      if (!win || win.kind !== "plot" || !win.datasetId) {
+        parts.push("gone"); // dead source — re-render so the guard surfaces it
+        continue;
+      }
+      // The FOCUSED window's record view is stale (store/windows.ts): its
+      // live view rides the top-level singleton fields — the same swap
+      // windowsForSave() makes for panelFigure. Only the view fields the
+      // panel payload serializes matter (xLim/zoom etc. deliberately don't).
+      const v: PlotView = win.id === s.focusedWindowId ? s : win.view;
+      parts.push(
+        win.datasetId,
+        s.datasets.find((d) => d.id === win.datasetId)?.data,
+        v.xKey,
+        v.yKeys,
+        v.xLog,
+        v.yLog,
+        v.plotTitle,
+        v.xAxisLabel,
+        v.yAxisLabel,
+        v.seriesStyles,
+      );
+    } else {
+      const doc = s.figureDocs.find((d) => d.id === source.id);
+      if (!doc) {
+        parts.push("gone");
+        continue;
+      }
+      parts.push(
+        doc, // records are immutable — any config/name edit replaces it
+        doc.live && doc.datasetId
+          ? s.datasets.find((d) => d.id === doc.datasetId)?.data
+          : null,
+      );
+    }
+  }
+  return parts;
+}
+
 export function useFigurePage() {
   const plotWindows = useApp((s) => s.plotWindows);
   const datasets = useApp((s) => s.datasets);
@@ -139,6 +194,11 @@ export function useFigurePage() {
 
   /** Per-slot preview labels (auto sequence in row-major order, overrides win). */
   const labels = useMemo(() => slotLabels(slots, labelFormat), [slots, labelFormat]);
+
+  // #8g: the store state the assigned panels render from (see
+  // panelRenderInputs) — useShallow keeps the reference stable until one of
+  // those inputs actually changes, so it can key the preview effect below.
+  const renderInputs = useApp(useShallow((s) => panelRenderInputs(slots, s)));
 
   function setGrid(nextRows: number, nextCols: number): void {
     const r = Math.max(1, Math.min(PAGE_MAX_GRID, Math.round(nextRows)));
@@ -209,7 +269,9 @@ export function useFigurePage() {
     return { rows, cols, panels, style, label_format: labelFormat, label_pos: labelPos };
   }
 
-  // Debounced low-DPI PNG preview — re-renders on any page-shape change.
+  // Debounced low-DPI PNG preview — re-renders on any page-shape change AND
+  // when the store state an assigned panel renders from changes underneath
+  // it (#8g — renderInputs), so the preview never goes silently stale.
   useEffect(() => {
     let cancelled = false;
     if (filledCount(slots) === 0) {
@@ -246,9 +308,12 @@ export function useFigurePage() {
       cancelled = true;
       clearTimeout(timer);
     };
-    // buildSpec reads only state listed here (slots/rows/cols/style/labels).
+    // buildSpec reads slots/rows/cols/style/labels from local state plus the
+    // panels' windows/datasets/docs THROUGH the store — renderInputs is the
+    // fingerprint of exactly those store reads (#8g); the 400 ms debounce
+    // absorbs any churn while they settle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots, rows, cols, style, labelFormat, labelPos]);
+  }, [slots, rows, cols, style, labelFormat, labelPos, renderInputs]);
 
   async function exportNow(): Promise<void> {
     try {
