@@ -149,7 +149,7 @@ describe("GridViewport perf validation at scale (item 10)", () => {
   }, 120_000);
 
   it("the stats-footer fan-out (201 requests at 200 columns) parallelizes — wall time tracks the SLOWEST call, not the sum", async () => {
-    const LATENCY_MS = 5;
+    const LATENCY_MS = 15;
     vi.mocked(statsDescriptive).mockImplementation(
       (col: number[]) =>
         new Promise((resolve) =>
@@ -167,11 +167,13 @@ describe("GridViewport perf validation at scale (item 10)", () => {
 
     // eslint-disable-next-line no-console
     console.info(`[perf/item10] stats fan-out (201 parallel calls @ ${LATENCY_MS}ms simulated latency): ${fanoutMs.toFixed(1)}ms`);
-    // If the 201 calls were serialized (a bug), this would be >= 201*5 = 1005ms.
-    // Promise.all already parallelizes them client-side (measured ~108ms on a
-    // dev machine) — 700ms leaves ~6x CI headroom while staying safely below
-    // the 1005ms serialized floor, so this still catches an accidental
-    // serialization regression.
-    expect(fanoutMs).toBeLessThan(700);
+    // If the 201 calls were serialized (a bug), this would be >= 201*15 = 3015ms.
+    // Promise.all already parallelizes them client-side (measured ~120ms on a
+    // dev machine). Under full-suite parallel vitest workers the wall clock
+    // inflates ~8x regardless of parallelism (876ms was measured at the old
+    // 5ms latency / 700ms bound — a load flake, not a serialization). 2000ms
+    // stays 33% below the serialized floor while giving that inflation 2.5x
+    // headroom, so the assertion still only trips on real serialization.
+    expect(fanoutMs).toBeLessThan(2000);
   });
 });
