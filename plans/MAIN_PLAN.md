@@ -98,6 +98,14 @@ GOTO #11 drift (implemented but listed open).
     reuse); Origin's color-by-Z scatter for e.g. field/temperature
     encoding.
 
+17. **Rich-text formatting shortcuts** (owner request 2026-07-11) —
+    keyboard shortcuts in `RichLabelInput` for the shipped micro-syntax:
+    wrap-selection italic (Ctrl/Cmd+I), subscript (Ctrl+=), superscript
+    (Ctrl+Shift+=), open the symbol palette from the keyboard; empty
+    selection inserts an empty token with the cursor inside. Documented
+    in the TextFormatHelp sheet. (Today only the Ω palette button +
+    Enter/Escape exist.)
+
 ~~1. **Decompose App.tsx + ThinFilmTab.tsx**~~ COMPLETED 2026-07-11 (see Completed).
 ~~2. **Extract the useApp window slice**~~ COMPLETED 2026-07-11 (see Completed).
 ~~3. **Worksheet per-column widths + drag resize**~~ ✅ completed 2026-07-11 (see Completed).

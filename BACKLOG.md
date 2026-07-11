@@ -24,6 +24,7 @@ campaigns never enumerated)
 | 29 | Color-mapped scatter (z → point color) | MAIN #14 | S |
 | 30 | Find X↔Y on a fitted curve | MAIN #15 | S |
 | 31 | Append/merge a second `.dwk` | MAIN #16 | S |
+| 32 | Rich-text formatting shortcuts in label inputs (italic / sub / sup / palette) | MAIN #17 | S |
 
 ## Owner actions & owner-gated decisions
 
