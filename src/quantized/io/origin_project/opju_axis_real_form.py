@@ -39,7 +39,7 @@ its relationship to the marker). Validated exact against all 14 real-corpus
 anchors (RockingCurve's 3 log-Y layers read ``08 01``; XAS 3 + UnpolPlots 4
 + "Fixed Lambdas SI" 4, all linear-Y, read ``01 00``) -- see
 ``docs/origin_project_format.md`` §6.2 for the full byte-level trail. This
-mirrors the independently-discovered ``.opj`` flag (``figures.py``'s
+mirrors the independently-discovered ``.opj`` flag (``figure_layers.py``'s
 ``_y_scale_flag``, same two byte values, different fixed offset) -- strong
 cross-container corroboration that both are real, not coincidental.
 

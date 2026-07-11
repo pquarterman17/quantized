@@ -1032,7 +1032,7 @@ def test_parse_legend_labels_multiple_entries_on_one_line() -> None:
     """Several ``\\l(n)`` entries can share one line with no newline between
     them (Hc2 data.opju Graph3: ``\\l(4) Nb\\l(5) Nb/Al\\l(6) Nb/Au``) -- each
     still parses as its own label instead of mangling into one caption."""
-    from quantized.io.origin_project.figures import _parse_legend_labels
+    from quantized.io.origin_project.figure_text import _parse_legend_labels
 
     got = _parse_legend_labels([r"\l(1) %(1)", r"\l(4) Nb\l(5) Nb/Al\l(6) Nb/Au"])
     assert got == ["%(1)", "", "", "Nb", "Nb/Al", "Nb/Au"]

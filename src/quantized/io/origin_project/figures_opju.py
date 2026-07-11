@@ -69,7 +69,7 @@ A span whose fills disagree is dropped, never guessed.
 real-corpus proof): see ``opju_axis_real_form.py``'s ``_real_y_log_flag`` /
 ``_real_x_log_flag`` for the byte-level trails. Both use the same two byte
 values (``01 00``-family = linear, ``08 01`` = log10) as the independently-
-discovered ``.opj`` Y flag (``figures.py``'s ``_y_scale_flag``) — strong
+discovered ``.opj`` Y flag (``figure_layers.py``'s ``_y_scale_flag``) — strong
 cross-container corroboration. ``x_log``/``y_log`` use these flags when
 present, decade heuristic only otherwise (e.g. the six Hc2 records whose X
 field reads an unrecognized ``02``).
@@ -128,8 +128,8 @@ from typing import Any
 from quantized.io.origin_project.annotation_marks import _AUTO_TITLE
 from quantized.io.origin_project.annotation_marks import _clean_annotations as _drop_internal_noise
 from quantized.io.origin_project.figure_geometry import opju_layer_frame, opju_page_size
+from quantized.io.origin_project.figure_layers import _log_heuristic
 from quantized.io.origin_project.figure_text import _LEGEND_RE, _texts_in
-from quantized.io.origin_project.figures import _log_heuristic
 from quantized.io.origin_project.opju_axis_real_form import (
     _TAG_SEARCH_SPAN,
     _Y_TRANSITION,
