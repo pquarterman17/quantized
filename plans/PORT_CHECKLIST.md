@@ -8,6 +8,17 @@ golden-verified against the MATLAB output** (per `CLAUDE.md`).
 Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 `../quantized_matlab/`.
 
+**Status:** Active (the live per-feature parity tracker — PORT_PLAN's
+tiers defer to this file)
+**Updated:** 2026-07-10 (reconciliation audit: marker key below. The
+remaining `[ ]`/`[~]` lines with real work are: `importOxford` (blocked,
+no spec), Rigaku 2-D RSM (blocked, no sample), the consolidated-CSV
+polarized-asymmetry path (needs ++/−− metadata). Every other `[~]` is
+either done-as-far-as-possible by design — Opus/SPC/COM have no MATLAB
+truth to golden-freeze — or a deliberately-deferred tail noted inline:
+crystal cache, crystal bond angles, BG-region 2-D y-box, per-dataset
+view-config promotion, density↔SLD toggle, user plot templates.)
+
 ---
 
 ## W1 — Parsers & I/O (`io/`)

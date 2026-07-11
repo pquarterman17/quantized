@@ -372,6 +372,12 @@ the shipped contract)
 21. **Templates (`.otp`/`.otpu`)** — same CPY family; a graph template
     could import as a quantized style preset
     *Model: sonnet · needs 1 + 11.*
+    **BACKEND SHIPPED 2026-07-07** via `plans/GAP_ECOSYSTEM_PLAN.md`
+    item 5 (`io/origin_project/templates.py` + `routes/import_template.py`,
+    21+10 tests). Remaining (tracked THERE, not here): the frontend
+    hook-in — `api.ts` client method + an "Import Origin template…"
+    open-file branch landing the result in the saved graph-templates
+    store.
 
 ---
 

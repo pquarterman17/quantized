@@ -13,7 +13,11 @@ cheap-model task.
 
 **Status:** Active
 **Created:** 2026-07-07
-**Updated:** 2026-07-08
+**Updated:** 2026-07-10 (reconciliation: item 3 GLM/survival/ROC was
+shipped 2026-07-07/08 but never formally closed — moved to Completed;
+item 2's checkboxes re-synced with the shipped `tools/audit_defaults.py`
+tooling — what remains is the owner eyeball, the interactive-side shots,
+and the frontend DPI-sync follow-up)
 
 ---
 
@@ -189,27 +193,30 @@ written below.
    figures, with a written procedure so it's repeatable per preset.
    *Model: sonnet (harnessing + fixes; the eyeball verdicts are the
    owner's).* *Agent: materials-science-expert.*
-   - [ ] Build the four reference cases with ZERO overrides: M-H
-         hysteresis loop, XRD θ–2θ (log y), R(Q) reflectivity
-         (log-log), RSM map — from corpus/realdata via the figure
-         builder
-   - [ ] Export-side contact sheet: a small headless script (new
-         `tools/figure_audit/`) driving `calc/figure.render_figure` /
-         `figure_map.render_map_figure` across every
-         `calc/figure_styles.py` preset (default/aps/nature/thesis/
-         presentation at minimum) into a PNG grid — the `tools/visual`
-         harness cannot see the matplotlib path, so this script is the
-         export-side eye
-   - [ ] Interactive-side shots of the same four datasets via
-         `tools/visual/` (the `?harness` seam + spec file)
-   - [ ] Owner eyeball vs. published APS/Nature figures → a concrete
-         defect list (tick density, minor ticks, legend framing,
-         margins, marker sizes, math-text rendering, colorbar
-         defaults)
-   - [ ] Fix each accepted defect as a `figure_styles.py` /
-         `render_figure` default change (annotate intentional values
-         as do-not-"fix"), regenerate the sheet, keep before/after in
-         the item's close-out note
+   *(2026-07-10 reconciliation: the tooling + fix halves shipped
+   2026-07-07/08 — `tools/audit_defaults.py` (`603f044`) is the
+   export-side contact sheet (32 renders, reference cases × every
+   preset; supersedes the proposed `tools/figure_audit/`), findings are
+   written up in `plans/design/DEFAULTS_AUDIT.md`, and the
+   declared-but-dead `dpi`/`legend_location`/`marker_size` fields +
+   mirrored box ticks were fixed in `figure_styles.py`/`render_figure`
+   with the same dpi/tick parity ported to `figure_map.py`/
+   `figure_statplots.py`. Checkboxes below re-synced to match.)*
+   - [x] Export-side contact sheet — shipped as `tools/audit_defaults.py`
+         + `plans/design/DEFAULTS_AUDIT.md` (2026-07-07)
+   - [x] Fix accepted mechanical defects as preset/default changes —
+         dead dpi/legend/marker fields honored, mirrored box ticks,
+         map/statplot parity (2026-07-07/08)
+   - [ ] Interactive-side shots of the same reference datasets via
+         `tools/visual/` (the `?harness` seam + spec file) — not run;
+         the shipped audit covered only the matplotlib export path
+   - [ ] OWNER: eyeball the contact sheet vs. published APS/Nature
+         figures and rule on the taste calls left open in
+         `DEFAULTS_AUDIT.md` (aps preset height vs. log-decade label
+         thinning; data-aware legend placement) → accept/reject each,
+         fix accepted ones as preset changes
+   - [ ] Frontend follow-up: the export-dialog DPI field doesn't sync
+         to the selected preset's calibrated dpi
    - Acceptance: a written defect list with before/after renders;
      every accepted defect fixed as a preset/default change; the four
      reference figures reach journal-grade with zero per-figure
@@ -219,37 +226,7 @@ written below.
 
 ## Tier 2 — Medium Impact
 
-3. **GLM, survival analysis, ROC (gap #30)** — logistic/Poisson GLM,
-   Kaplan-Meier + log-rank + Cox PH, and ROC/AUC, all with
-   published-reference-value tests (the calculator-domain pattern).
-   *Model: haiku (wrappers + tests per the master plan's routing);
-   sonnet only if the optional-dep gating gets designy.* *Agent:
-   code-implementer.*
-   - [x] Dependency shape per open question 2: statsmodels (BSD-3) +
-         lifelines (MIT) in a new optional `stats` extra in
-         `pyproject.toml` (mirroring the `office` extra + guarded
-         imports of `io/report_export.py`), added to the dev group so
-         CI exercises them; the GPL guard in
-         `tests/test_repo_integrity.py` already scans extras
-   - [x] New pure modules beside `calc/stats.py` (each <500 lines):
-         `calc/stats_glm.py` (logistic/Poisson via statsmodels GLM,
-         result dict shaped like `stats_multivar.multiple_regression`),
-         `calc/stats_survival.py` (KM curve, log-rank, Cox PH via
-         lifelines), `calc/stats_roc.py` (pure-numpy ROC/AUC +
-         Youden J — no sklearn)
-   - [x] Thin routes in `src/quantized/routes/stats_design.py` (138
-         lines — room; `routes/stats.py` is at 418, leave it);
-         graceful 501-style error naming the extra when deps are
-         absent
-   - [x] Report-sheet endings through the generic `from_stats_table`
-         emitter (`calc/report_emit.py`); optional: surface in the
-         Test-chooser workshop as a later follow-up, not this item
-   - [x] Reference-value tests: a textbook logistic worked example
-         reproduced to published coefficients, lifelines' documented
-         KM/log-rank example, and a hand-computed small-N ROC/AUC
-   - Acceptance: all three modules reproduce their published
-     reference values exactly; a clean install without the extra
-     fails with an actionable message, never an ImportError traceback.
+*(none open — item 3 shipped 2026-07-07/08, see Completed)*
 
 ---
 
@@ -268,6 +245,22 @@ written below.
 ---
 
 ## Completed
+
+- ~~**#3 GLM, survival analysis, ROC (gap #30)**~~ (2026-07-07/08) — all
+  five sub-tasks landed but the item was never formally closed; struck
+  2026-07-10 in a reconciliation pass. Shipped as `calc/stats_glm.py`
+  (logistic/Poisson via statsmodels), `calc/stats_survival.py` (KM +
+  log-rank + Cox PH via lifelines), `calc/stats_roc.py` (pure-numpy
+  ROC/AUC + Youden J), thin routes in `routes/stats_design.py`, and the
+  optional `stats` extra (statsmodels BSD-3 + lifelines MIT — GPL-guard
+  clean) with a graceful install-hint error when absent (`95a12aa` /
+  `6767287`, repaired in `4bdcd19` after the first agent shipped
+  untested code — the repair pass with the extras actually installed
+  found numpy-2 trapz, ndarray-vs-Series results, a silent pseudo-R²
+  saturation, missing discrete-model deviance, and a Cox p-value
+  double-transform; reference tests use Spector&Mazzeo, RAND HIE, and
+  Rossi recidivism; +59 tests). Follow-up `0f2d225` (2026-07-10)
+  hardened the GLM NaN-deletion test with well-conditioned data.
 
 - ~~**#5 Structured clipboard paste + multi-file append import (gap #47)**~~
   (2026-07-08) — built simpler than the item's original sketch, per the

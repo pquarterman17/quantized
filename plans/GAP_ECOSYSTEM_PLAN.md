@@ -13,7 +13,11 @@ writer (#27, audited and kept deferred).
 
 **Status:** Active
 **Created:** 2026-07-07
-**Updated:** 2026-07-09
+**Updated:** 2026-07-10 (reconciliation: item 3 struck — shipped except
+the OWNER PyPI Trusted Publisher registration. The plan's one open
+deliverable is item 5's frontend half — the `.otp` template import
+hook-in; item 6 (.opju writer) stays a deferred decision gate, and the
+`quantized-plugin-template` starter repo stays an out-of-repo deferral.)
 
 ---
 
@@ -239,7 +243,12 @@ written below.
      *(Met — 14 tests in `tests/test_plugins.py`; the pipeline-palette leg of
      the step acceptance rides with the deferred frontend wiring.)*
 
-3. **Packaging residuals: PyPI + first-run (gap #41 remaining)** —
+~~3. **Packaging residuals: PyPI + first-run (gap #41 remaining)**~~
+   **CLOSED 2026-07-07/08 except the owner action** (struck 2026-07-10
+   in a reconciliation pass — all four sub-tasks were checked; the only
+   remainder is the OWNER's one-time PyPI Trusted Publisher registration
+   per RELEASE.md, plus the fresh-machine acceptance run, both tracked
+   at ORIGIN_GAP #41 and in `BACKLOG.md`) —
    *(SHIPPED 2026-07-07: hatch sdist/wheel scoping — found+fixed the
    from-sdist wheel silently dropping the gitignored SPA; wheel verified
    to serve the UI + demo from a fresh venv; `.github/workflows/pypi.yml`

@@ -12,11 +12,12 @@ away on import and re-approximated from name prefixes.
 
 **Status:** Active
 **Created:** 2026-07-04
-**Updated:** 2026-07-10 (booked item 11 — useApp.ts window-slice extraction; 2026-07-09: items 8 + 9 complete — folder bulk ops and
-tags/smart-folders; the only open item is 10, decomposing the 3
-grandfathered over-ceiling components — App.tsx already ratcheted 987→954,
-and the `PlotStage.tsx` sub-task closed as a side-effect of MULTI_PLOT_PLAN
-#1 — its pin is gone entirely, not just ratcheted)
+**Updated:** 2026-07-10 (booked item 11 — useApp.ts window-slice
+extraction; 2026-07-09: items 8 + 9 complete — folder bulk ops and
+tags/smart-folders. Open items: **10** (partial — the `PlotStage.tsx`
+sub-task closed as a side-effect of MULTI_PLOT_PLAN #1, its pin gone
+entirely; `App.tsx`, already ratcheted 987→954, and `ThinFilmTab.tsx`
+442 remain) and **11** (window-slice extraction, not started))
 
 ---
 
@@ -91,10 +92,10 @@ Key design decisions (kept out of the tiers as they are cross-cutting):
          and a pinned file that drops under 400 must lose its pin (honesty
          check). Extractions booked as #10.
 
-10. **Decompose the 3 grandfathered over-ceiling components** — ratchet the
-    `architecture.test.ts` exemptions down to zero.
-    - [ ] `App.tsx` (987) — root orchestrator; extract command-registry / menu
-          wiring into hooks (the biggest offender)
+10. **Decompose the 3 grandfathered over-ceiling components** (2 remain) —
+    ratchet the `architecture.test.ts` exemptions down to zero.
+    - [ ] `App.tsx` (954, ratcheted from 987) — root orchestrator; extract
+          command-registry / menu wiring into hooks (the biggest offender)
     - [x] ~~`components/Stage/PlotStage.tsx` (491)~~ — done as MULTI_PLOT_PLAN
           #1, 2026-07-09: split into `usePlotPayload.ts` (fetch/compose) +
           `PlotViewport.tsx` (uPlot lifecycle, no store reads); PlotStage.tsx

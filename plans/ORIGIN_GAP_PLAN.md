@@ -15,7 +15,15 @@ has that Origin lacks.
 
 **Status:** Active
 **Created:** 2026-07-01
-**Updated:** 2026-07-08 (CAMPAIGN COMPLETE — every buildable item in this
+**Updated:** 2026-07-10 (reconciliation pass: the item bodies below are
+now struck to match the header's 2026-07-08 "campaign complete" claim —
+#17/#23/#24/#29/#30/#33/#34/#46/#47/#49/#50/#51/#52/#53 each carry a
+cross-reference to the GAP_* plan whose Completed entry records the
+ship. Still genuinely open: #41's fresh-machine acceptance run + the
+PyPI Trusted Publisher owner registration, #45's licensing-gated corpus
+publish, #8's out-of-repo plugin-template starter (deferred), and #22
+WebGL 3-D (deferred).)
+2026-07-08 (CAMPAIGN COMPLETE — every buildable item in this
 plan and the four GAP_* endgame plans is shipped and merged: W1-W9 all
 closed. Gates: backend 2024 + frontend 1544 tests green. Remaining, by
 design: owner actions (browser gesture eyeball via tools/visual, the aps
@@ -161,9 +169,9 @@ Status key: ✅ done · 🟡 backend done, frontend/UI remains · ⬜ open.
 | 36–37 | Report sheets + docx/pptx export | W7 | ✅ COMPLETE — schema + emitters + exports 2026-07-03; viewer + Library section + .dwk round-trip 2026-07-07 |
 | 11–15 | Property panels + figure docs + direct manipulation | W3 | ✅ **W3 COMPLETE 2026-07-07** — #11/#12/#13/#14/#15 all shipped (defaults audit = eyeball residual) |
 | 40 | Generic import wizard + saved filters | W8 | ✅ COMPLETE 2026-07-07 — preview/parse engine 2026-07-03; filter persistence + registry hook + wizard UI (`GAP_ECOSYSTEM_PLAN.md` item 1) 2026-07-07 |
-| 41 | Packaging & installers | W8 | ⬜ zero-friction first run gates all OSS adoption |
-| 46–47 | Test-data corpus + PIXcel3D audit | W8 | ✅ mostly done; only pole-figure representation open |
-| 49–50 | Drag-to-axis + row states | W9 | 🟡 #50 row-state model SHIPPED in full (foundation + cross-view + selection + guard #11, 2026-07-03; index-staleness fixes 2026-07-05 `4113104`) — #49 drag-to-axis still open |
+| 41 | Packaging & installers | W8 | ✅ built 2026-07-08 (PyPI workflow + installers + first-run); remaining: fresh-machine acceptance run + OWNER PyPI Trusted Publisher registration |
+| 45–46 | Test-data corpus + PIXcel3D audit | W8 | ✅ #46 COMPLETE (pole figures shipped 2026-07-07 via GAP_TIER3 #6); #45 publish gated on OWNER licensing sign-off |
+| 49–50 | Drag-to-axis + row states | W9 | ✅ COMPLETE — #50 shipped in full 2026-07-03 (+ staleness fixes `4113104`); #49 drag-to-axis shipped 2026-07-07 via GAP_INTERACTION |
 
 Also landed 2026-07-03 (beyond the table): #16 statistical-plot math + export,
 #17 contour export, #19 3-D export, #35 batch peak integration, #9 headless
@@ -245,7 +253,9 @@ active dataset all shipped.)
          palette
    - [ ] `quantized-plugin-template` repo: one worked example of each
          contribution type + CI that runs the plugin against a pinned
-         quantized version
+         quantized version — **DEFERRED**: a separate repo, out of
+         scope for this codebase (the header + #10's closure both
+         record the deferral); this is the ONLY reason #8 stays open
 
 ### Tier 3 — Nice-to-Have
 
@@ -305,17 +315,13 @@ routes through #11's config object, never a parallel path.)
 `StatStage.tsx` Canvas2D stage + matplotlib export, both off
 `calc/statplots.py`).
 
-17. **Filled + labeled contour** — proper contourf/contour with labels,
-    including tri-contour on scattered (RSM) data; interactive + export
-    *Model: sonnet. EXPORT SHIPPED 2026-07-03 (see Completed):
-    `figure_map.render_map_figure` contourf/contour (inline labels,
-    lin/log/explicit levels) + `/api/export/map-figure`. INTERACTIVE
-    layer SHIPPED 2026-07-07 (see `plans/GAP_PLOTTYPES_PLAN.md`
-    Completed item 3): `lib/contour.ts` (d3-contour, ISC) over gridded
-    MapData in `MapStage.tsx`, level controls (on/off, count, lin/log)
-    in the Inspector 2-D map card. Remaining: tri-contour on raw
-    scattered points (export currently contours the regridded MapData)
-    — tracked as `plans/GAP_PLOTTYPES_PLAN.md` Tier 1 item 3.*
+~~17. **Filled + labeled contour**~~ **CLOSED 2026-07-08** — export
+    shipped 2026-07-03 (`figure_map.render_map_figure` contourf/contour
+    + `/api/export/map-figure`); interactive layer 2026-07-07
+    (`lib/contour.ts`, d3-contour, in `MapStage.tsx` + Inspector level
+    controls); the last piece, tri-contour on raw scattered points,
+    2026-07-08 — see `plans/archive/GAP_PLOTTYPES_PLAN.md` Completed
+    items 3 (both halves).
 
 ### Tier 2 — Medium Impact
 
@@ -347,8 +353,11 @@ whoever owns that file next.
     regl, MIT); only after #19 proves demand
     *Model: opus if built (new rendering subsystem); defer.*
 
-23. **Ternary diagrams; quiver/streamline plots**
-    *Model: haiku (export-only via matplotlib/python-ternary MIT).*
+~~23. **Ternary diagrams; quiver/streamline plots**~~ **CLOSED
+    2026-07-08** — shipped via `plans/GAP_TIER3_PLAN.md` item 4:
+    `calc/figure_ternary.py` (hand-rolled barycentric, no new dep) +
+    `calc/figure_field.py` (quiver/streamline) + two thin export
+    routes; see that plan's Completed entry.
 
 ---
 
@@ -363,10 +372,13 @@ the same field names.)*
 
 ### Tier 1 — High Impact
 
-24. **Two-way + repeated-measures ANOVA with post-hoc** — Tukey,
-    Bonferroni, Dunnett; formatted report-sheet output (#36)
+~~24. **Two-way + repeated-measures ANOVA with post-hoc**~~ **CLOSED
+    2026-07-03** (struck 2026-07-10 in a reconciliation pass — all five
+    sub-tasks were checked but the item was never formally closed; the
+    last residual note, "report-sheet output still pending #36", went
+    stale when #36 itself closed 2026-07-07)
     *Model: sonnet. CORE SHIPPED 2026-07-01 (see Completed): balanced
-    two-way + Tukey HSD + Dunnett, scipy-only. Remaining below.*
+    two-way + Tukey HSD + Dunnett, scipy-only.*
     - [x] Balanced two-way with interaction (Montgomery battery-life
           table reproduced exactly); Tukey + Dunnett post-hoc (2026-07-01)
     - [x] Unbalanced designs (Type II/III sums, pure-numpy effect-coded
@@ -389,16 +401,21 @@ chooser workshop front door (2026-07-07) all shipped.
 
 ### Tier 2 — Medium Impact
 
-29. **Bootstrap + MCMC uncertainty** — CORE SHIPPED 2026-07-02 (see
-    Completed): bootstrap CIs (residual/pairs) + MCMC fit posteriors
-    over the ported `calc/mcmc.py` sampler (no emcee dep needed).
-    *Remaining: corner-style posterior panels through the export path
-    (UI/figure work — pairs naturally with the fitting workshop).*
+~~29. **Bootstrap + MCMC uncertainty**~~ **CLOSED 2026-07-08** — core
+    shipped 2026-07-02 (bootstrap CIs + MCMC posteriors over
+    `calc/mcmc.py`); the corner-plot residual shipped via
+    `plans/GAP_TIER3_PLAN.md` item 1 (2026-07-07, `calc/figure_corner.py`
+    + `/api/export/corner-figure` + the Curve Fit workshop "Corner
+    plot…" button wired 2026-07-08); see that plan's Completed entry.
 
 ### Tier 3 — Nice-to-Have
 
-30. **GLM (logistic/Poisson), survival analysis (lifelines, MIT), ROC**
-    *Model: haiku.*
+~~30. **GLM (logistic/Poisson), survival analysis (lifelines, MIT),
+    ROC**~~ **CLOSED 2026-07-07/08** — shipped via
+    `plans/GAP_TIER3_PLAN.md` item 3: `calc/stats_glm.py` /
+    `calc/stats_survival.py` / `calc/stats_roc.py` + the optional
+    `stats` extra (statsmodels BSD-3 + lifelines MIT); see that plan's
+    Completed entry.
 
 ---
 
@@ -417,19 +434,16 @@ editing waits for the #33 gadget's plot-interaction plumbing.)
 (regions auto-derived from found/fitted peaks at ×FWHM width,
 `/api/peaks/integrate`, → #36 integrate report). See Completed.
 
-33. **Quick-fit gadget** — drag an ROI rectangle on the live plot →
-    fit of that region recomputes live as the ROI moves
-    *Model: sonnet (gui-interaction work). Pickup: the draggable
-    ref-line plugin + region-select tool (`lib/regionSelect.ts`) are
-    the primitives; debounce ROI-move → `/api/fitting` → overlay +
-    floating result chip (model picker: linear/gaussian/exp).*
+~~33. **Quick-fit gadget**~~ **CLOSED 2026-07-07** — shipped via
+    `plans/archive/GAP_INTERACTION_PLAN.md` (drag-ROI → live refit →
+    result chip); see that plan's Completed entry.
 
 ### Tier 2 — Medium Impact
 
-34. **More gadgets** — integrate, statistics, FFT, differentiate within
-    an ROI; paired cursors with Δx/Δy/slope readout
-    *Model: haiku once #33 lands (same ROI pattern, different calc
-    call — the gadget frame generalizes).*
+~~34. **More gadgets**~~ **CLOSED 2026-07-07/08** — the ROI gadget
+    family (integrate / statistics / FFT / differentiate + paired
+    cursors) shipped via `plans/archive/GAP_INTERACTION_PLAN.md`; see
+    that plan's Completed entry.
 
 ---
 
@@ -463,7 +477,10 @@ figure blocks — lands naturally with the #31 wizard's report page.)*
           win/mac, built + attached by a tag-triggered release workflow
     - [x] First-run experience: sample dataset + a "try this" pointer
     - [ ] Acceptance: fresh machine, no dev tools → install → open →
-          import a CSV within 2 minutes
+          import a CSV within 2 minutes (manual run, pairs with the
+          OWNER one-time PyPI Trusted Publisher registration per
+          RELEASE.md — both must happen before the first tagged
+          PyPI publish)
 
 ### Tier 2 — Medium Impact
 
@@ -482,11 +499,14 @@ figure blocks — lands naturally with the #31 wizard's report page.)*
     - [x] `corpus_dir` fixture in `tests/conftest.py` + realdata smoke
           test (`test_realdata_corpus.py`, one file per vendor) (2026-07-01)
 
-46. **PIXcel3D XRDML coverage audit** — run every corpus PANalytical
-    file through `io/xrdml.py`; classify what the PIXcel3D detector
-    actually emits (1-D receiving-slit-equivalent scans, scanning-line
-    1-D, RSM mesh, area frames) and extend the parser for whatever
-    fails
+~~46. **PIXcel3D XRDML coverage audit**~~ **CLOSED 2026-07-07** (struck
+    2026-07-10 in a reconciliation pass — all five sub-tasks were
+    checked but the item was never formally closed; the last one, the
+    pole-figure representation, shipped 2026-07-07 via
+    `plans/GAP_TIER3_PLAN.md` item 6: `mesh_kind="pole"` classifier in
+    `io/_xrdml_scan.py`, renders through the Map tab. The
+    beam-attenuation correction stays tracked on PORT_CHECKLIST, out of
+    scope here.)
     *Model: sonnet. Pickup: `io/xrdml.py` handles 1-D +
     `_build_2d` RSM-mesh detection today; the checklist's pending
     items — the 2-D mesh golden freeze and the beam-attenuation
@@ -519,9 +539,12 @@ figure blocks — lands naturally with the #31 wizard's report page.)*
 
 ### Tier 3 — Nice-to-Have
 
-47. **Structured clipboard paste; multi-file append import; database
-    connectors**
-    *Model: haiku (paste/append); defer connectors.*
+~~47. **Structured clipboard paste; multi-file append import**~~
+    **CLOSED 2026-07-08** — paste + append shipped via
+    `plans/GAP_TIER3_PLAN.md` item 5 ("Paste data" ⌘V + "Import &
+    append as one dataset…" commands over the existing import-wizard
+    backend); see that plan's Completed entry. **Database connectors
+    stay deferred** (the item's original call — revisit on user pull).
 
 ---
 
@@ -534,16 +557,17 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
 
 ### Tier 1 — High Impact
 
-49. **Drag-to-axis (Graph Builder phase 1)** — drag a channel chip from
-    the Channels card / legend onto the plot's X, Y, or Y2 axis region
-    to re-plot instantly; nominal chips dropped on X produce a
-    categorical axis
-    *Model: sonnet (gui-interaction work). Pickup: axis picks already
-    exist as store state (`x_key`/`y2_keys`, ChannelsCard) — this adds
-    HTML5 drag + axis-region drop targets on the Stage that call the
-    same actions; no new plot machinery.*
+~~49. **Drag-to-axis (Graph Builder phase 1)**~~ **CLOSED 2026-07-07**
+    — shipped via `plans/archive/GAP_INTERACTION_PLAN.md` (channel-chip
+    drag onto X/Y/Y2 axis drop regions over the existing store
+    actions); see that plan's Completed entry.
 
-50. **Row-state model + linked brushing** — one shared per-row state
+~~50. **Row-state model + linked brushing**~~ **CLOSED — shipped in
+    full 2026-07-03** (struck 2026-07-10 in a reconciliation pass; the
+    cross-cutting table already said "SHIPPED in full". The two
+    carve-outs are intentional design, not gaps: baseline correction
+    and RSM 2-D still fit full data by design. Index-staleness
+    hardening followed 2026-07-05, `4113104`.) — one shared per-row state
     (selected / excluded / labeled) on the active dataset, consumed by
     every view: rubber-band or click-select points in the plot →
     same rows highlight in the worksheet (and vice versa); excluded
@@ -587,27 +611,20 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
           `rowstate.analysisData`. Extending the allowlist is the review
           checkpoint. Every later view (#51–55, gadgets) complies from birth.
 
-51. **Graph Builder workshop (phase 2)** — a drop-zone canvas (X, Y,
-    Group/Color, Facet) that morphs the mark as columns land: two
-    continuous → scatter/line; nominal X + continuous Y → box → violin
-    → bar (cycle); Facet → small multiples; live preview, one-click
-    "send to Stage / export"
-    *Model: opus (the plot-spec model — a small grammar mapping zone
-    contents + modeling types → mark + scales; #49/#16/#21 all feed
-    it), sonnet (the workshop UI). Pickup: workshop pattern
-    (state hook + view + zone components <400 lines); marks reuse #16's
-    statistical-plot renderers and #21's faceting; spec serializes so
-    figures/templates/macros can replay it.*
+~~51. **Graph Builder workshop (phase 2)**~~ **CLOSED 2026-07-07/08** —
+    shipped via `plans/archive/GAP_INTERACTION_PLAN.md` (drop-zone
+    canvas over `lib/plotspec`, mark morphing, live preview, send to
+    Stage); see that plan's Completed entry. Booked follow-up debt
+    (export button + `.dwk` spec persistence) is recorded there and in
+    `BACKLOG.md`'s deferred list.
 
 ### Tier 2 — Medium Impact
 
-52. **Distribution platform** — click a column → histogram +
-    box/quantiles + normality verdict + optional distribution fit in
-    one linked panel, one panel per selected column
-    *Model: sonnet. Pickup: pure composition of #16 statplots math,
-    the shipped `calc/stats_tests.py` wrappers (Shapiro/AD), and #28
-    distribution fitting; brushing (#50) makes its histogram selection
-    highlight rows everywhere.*
+~~52. **Distribution platform**~~ **CLOSED 2026-07-07/08** — core
+    shipped 2026-07-03 (Distribution ToolWindow); the residuals
+    (box/quantile strip, distribution-fit overlay, histogram-bar
+    selection brushing) shipped via `plans/archive/GAP_INTERACTION_PLAN.md`;
+    see that plan's Completed entry.
     *CORE SHIPPED 2026-07-03: Distribution ToolWindow
     (`workshops/distribution`) — pick a column → DOM-bar histogram +
     descriptive stats + Shapiro-Wilk normality verdict, composed over
@@ -618,12 +635,14 @@ auto-detected modeling types; re-tier if the owner disagrees.)*
     distribution-fit overlay (#28), and #50 selection-brushing to
     highlight rows from a histogram-bar pick.*
 
-53. **Local data filter** — sidebar widget: per-column checkboxes
-    (nominal) or range sliders (continuous) that live-filter every
-    linked view without mutating the dataset
-    *Model: sonnet. Pickup: emits a derived row mask through #50's
-    row-state model; filter definition is serializable (a future
-    pipeline step, #6).*
+~~53. **Local data filter**~~ **CLOSED 2026-07-08/09** — core shipped
+    2026-07-03 (Data Filter ToolWindow over `Dataset.filter` +
+    `rowstate.analysisData`); the dual-thumb range sliders shipped via
+    `plans/archive/GAP_INTERACTION_PLAN.md` (2026-07-08); the
+    "worksheet doesn't reflect the global filter" residual is closed by
+    the WORKSHEET_PLAN worksheet (2026-07-09), which reads both
+    dimensions through `lib/rowstate` (`excludedSet`/`filteredOutSet`
+    in `worksheet/useWorksheetView.ts`).
     *CORE SHIPPED 2026-07-03: Data Filter ToolWindow
     (`workshops/datafilter`) — a min/max range per continuous column and a
     level checklist per categorical column. The filter is a serializable

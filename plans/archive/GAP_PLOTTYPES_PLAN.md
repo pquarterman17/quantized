@@ -12,9 +12,14 @@ this plan is connecting existing pure backends to new interactive
 surfaces, plus the one genuine contract change (a categorical x-axis
 concept in the shared plot payload).
 
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-07-07
-**Updated:** 2026-07-08
+**Updated:** 2026-07-10 (archived — all tiers shipped by 2026-07-08.
+Accepted residuals recorded inside the Completed entries, carried to
+`BACKLOG.md`'s deferred list: horizontal bar orientation, an in-canvas
+legend for the Stat Stage bar view, `payloadToTSV` exporting ordinal
+positions instead of category labels, and the `statRender.ts`/
+`useStatStage.ts` ~400-line split candidates)
 
 ---
 

@@ -7,8 +7,20 @@ the codebase never accretes the god-scripts the MATLAB original did.
 
 **Status:** Active
 **Created:** 2026-06-21
-**Updated:** 2026-07-05 (W0 checkboxes reconciled against code — all shipped
-except the frontend component-size test; W1–W9 not re-reconciled this pass)
+**Updated:** 2026-07-10 (full W0–W9 reconciliation against
+`PORT_CHECKLIST.md` + the code: every shipped item is now struck below
+with a pointer to the checklist section that records it. Genuinely open
+after this pass: #3 run-model residue (auto-shutdown / `--dev` /
+`--desktop` — pywebview-vs-Tauri intent is an OWNER decision), #7
+WebSocket job queue (unbuilt; client-side step-executor batch shipped
+instead — decide if still wanted), #19 reductions (Williamson-Hall /
+FFT thickness / spin asymmetry — unported), #12's polarized-asymmetry
+consolidated-CSV path, W8 packaging closure (#46/#49; #47/#48 largely
+shipped via ORIGIN_GAP #41), W9 #52/#53 nice-to-haves, and the
+blocked-on-samples pair (Rigaku 2-D RSM `.raw`, `importOxford`). See
+`BACKLOG.md` for the cross-plan dashboard.)
+Previous: 2026-07-05 (W0 checkboxes reconciled against code — all shipped
+except the frontend component-size test; W1–W9 not re-reconciled that pass)
 
 ---
 
@@ -146,51 +158,66 @@ MATLAB."**
 3. **CLI + run model** — `qz` serves API+SPA + opens browser + auto-shutdown
    on last-tab-close; `qz --desktop` native window (**pywebview**);
    `qz --dev` Vite HMR + reloading backend. (Tauri packaging deferred to W8.)
-4. **Golden-test harness** — `tests/golden/` + `manifest.json` (source
-   commit), `tools/matlab/freeze_reference_values.m`, pytest markers
-   (`golden`, `realdata`), conftest fixtures pointing at
-   `../quantized_matlab/+test_datasets/`.
+   **PARTIAL (= M1 PR6):** serve + browser + `--port`/`--no-browser` +
+   launchers shipped; auto-shutdown, `--dev`, `--desktop` still open —
+   and `--desktop`'s pywebview framing may be superseded by the W8 Tauri
+   shell (`src-tauri/` now exists): OWNER call.
+~~4. **Golden-test harness**~~ ✅ shipped (M1 PR4, `fb3efe2`) — harness +
+   manifest + markers live; every checklist "golden" tag runs through it.
 5. **CI workflow** — pytest + ruff + mypy + frontend vitest + build +
    integrity gates. Self-hosted runner for golden tests that need MATLAB.
    - [x] Backend CI — `.github/workflows/ci.yml` (ubuntu, uv sync, ruff +
      mypy + pytest). Goldens/fixtures committed → no MATLAB needed; the
      repo-integrity guard (pure-layer + 500-line) runs in pytest.
    - [x] Frontend vitest + build — CI `frontend` job runs `npm test` + `npm run build`
-6. **`DataStruct`** — frozen dataclass + validation + JSON (de)serialization
-   for the route boundary.
+~~6. **`DataStruct`**~~ ✅ shipped (M1 PR3, `10f4e7f`) — frozen dataclass +
+   validation + JSON boundary (`datastruct.py`).
 7. **WebSocket job-queue infrastructure** — `routes/jobs` (submit → progress
    → cancel), mirroring fermiviewer `jobs_api`. Pure work runs in `calc/`;
    the queue is the thin transport. *Lands before M2 batch features, not M1.*
+   **STILL UNBUILT (2026-07-10):** no `routes/jobs.py` exists. The batch
+   features it was meant to gate shipped anyway — template batch runs
+   CLIENT-SIDE through the shared step executor (ORIGIN_GAP #3's
+   deliberate deviation) and `calc/batch_fit`/`global_fit` are pure +
+   synchronous. Decide whether a WS queue is still wanted (long
+   fits/exports on big corpora) or close as superseded: OWNER call.
 
 ---
 
 ## W1 — Data I/O & parsers
 
 ### Tier 1 — High Impact
-8. **Parser registry** — `io/registry.py` single extension map + content
-   sniffers for ambiguous `.dat`; `io/base.py` helpers (delimiter / header /
-   data-start / unit auto-detection).
-9. **Quantum Design** — `importQDVSM` / `importPPMS` (PPMS/VSM/DynaCool/
-   MPMS) incl. column shorthands (`field`/`moment`/`temp`/`time`/`stderr`/`all`).
+~~8. **Parser registry**~~ ✅ shipped & golden — `io/registry.py` +
+   `io/base.py`; see PORT_CHECKLIST W1.
+~~9. **Quantum Design**~~ ✅ shipped & golden (QD VSM / PPMS / MPMS +
+   column shorthands); see PORT_CHECKLIST W1.
 10. **XRD** — Rigaku, XRDML (incl. **2D area-detector** map extension:
     `is2D`, `map2D.intensity/axis/Qx/Qz`), PANalytical. (Bruker → fermiviewer:
     its .brml/.raw are 2D-detector/RSM image data, not line data.)
-11. **Other lab data** — Lake Shore VSM, NCNR neutron reflectometry,
-    SIMS depth profile, generic CSV/Excel/TSV with auto-detection +
-    column-mapper fallback.
+    **PARTIAL:** XRDML/PANalytical 1-D + all three 2-D mesh kinds + pole
+    figures shipped & golden; Rigaku 1-D binary golden. **Rigaku 2-D RSM
+    `.raw` BLOCKED** — no ω field in the reverse-engineered header and no
+    multi-range RSM sample in the corpus (see PORT_CHECKLIST W1).
+~~11. **Other lab data**~~ ✅ shipped & golden (Lake Shore, NCNR PNR/refl/
+    `.dat`, refl1d `.dat`, SIMS, CSV/Excel + auto-detect); see
+    PORT_CHECKLIST W1.
 
 ### Tier 2 — Medium Impact
 12. **Export writers** — Standard CSV + **Origin-ASCII** + **`.ogs` LabTalk
     import script** (cross-platform Origin path), multi-row headers, HDF5,
     reflectivity/neutron consolidated CSV (role-based columns, not R/dR
     assumptions).
-13. **Session I/O** — save/load a full session (datasets + state).
+    **PARTIAL:** everything shipped & golden except the consolidated
+    CSV's **polarized-asymmetry path** (shared-Q interp + ++/−− spin
+    asymmetry) — needs ++/−− polarization metadata (see PORT_CHECKLIST
+    W1 export writers; ties into #19's spin-asymmetry reduction).
+~~13. **Session I/O**~~ ✅ shipped — the `.dwk` workspace (v1→v3
+    migrations) + localStorage autosave; see PORT_CHECKLIST W5.
 
 ### Tier 3 — Nice-to-Have
-14. **Live Send-to-Origin (COM)** — OS-gated, **Windows-only optional**
-    extra (pywin32). Behind a feature flag; degrades to ASCII/`.ogs` export
-    elsewhere. *Untestable in CI → mock-based tests only (port the
-    `MockOriginCom` idea); golden tests cover the file-export path instead.*
+~~14. **Live Send-to-Origin (COM)**~~ ✅ shipped as designed —
+    `io/origin_com.py` + 16 mock tests; no golden possible BY DESIGN
+    (the mock model is the agreed acceptance); see PORT_CHECKLIST W1.
 15. **Paused parsers** — ~~`importOpus`, `importSPC`~~ ported 2026-07-08 as
     independent implementations against each format's published spec (no
     MATLAB source exists for either — see `PORT_CHECKLIST.md`); no golden
@@ -203,85 +230,99 @@ MATLAB."**
 ## W2 — Corrections & processing
 
 ### Tier 1 — High Impact
-16. **Corrections pipeline** — offsets (X/Y), background (slope/intercept/
-    polynomial order), trim, field/thickness units, magnetometry
-    mass/dimension normalization, counts/s. Parser-aware config
-    (the `applyParserAnalysisConfig` equivalent).
+~~16. **Corrections pipeline**~~ ✅ shipped & golden — `calc/corrections.py`
+    8-step pipeline + magnetometry units/background; see PORT_CHECKLIST W2.
+    (`applyParserAnalysisConfig` was GUI relabeling only — not ported,
+    documented there.)
 17. ~~**BG-from-file** subtraction + fit-BG-from-region~~ — shipped (see Completed).
 
 ### Tier 2 — Medium Impact
-18. **Processing utilities** — smoothing, normalize, resample,
-    2D interpolation, baseline estimation, unit conversion, dataset
-    math / algebra, merge.
+~~18. **Processing utilities**~~ ✅ shipped & golden — smoothing / FFT /
+    normalize / resample / units / algebra / merge / baselines; see
+    PORT_CHECKLIST W2.
 19. **Reductions** — neutron spin asymmetry; reflectivity FFT / FFT
     thickness; Williamson-Hall.
+    **OPEN — unported (2026-07-10 audit):** no `calc/` module exists for
+    any of the three; only a TODO note in `io/consolidated.py`. The last
+    genuinely unstarted backend-parity item.
 
 ---
 
 ## W3 — Fitting
 
 ### Tier 1 — High Impact
-20. **Curve-fitting engine** — models + bounds + parameter errors +
-    custom-equation parser (dispatch table, **no eval**).
-21. **Model library** — port the `+fitting` catalogue: standard models +
-    peak shapes (pseudo-Voigt, split Pearson VII, TCH), hysteresis models,
-    reflectivity SLD presets, surface/2D models.
-22. **Peak fitting** — Lorentzian, auto-find peaks, baseline, multi-peak,
-    constrained widths, peak tracking.
+~~20. **Curve-fitting engine**~~ ✅ shipped & golden ("W3 fitting fully
+    ported" 2026-06-30); see PORT_CHECKLIST W3.
+~~21. **Model library**~~ ✅ shipped & golden — all 29 models @1e-9; see
+    PORT_CHECKLIST W3.
+~~22. **Peak fitting**~~ ✅ shipped & golden — incl. multi-peak
+    simultaneous fit + linked widths + tracking + workshop UI; see
+    PORT_CHECKLIST W3.
 
 ### Tier 2 — Medium Impact
-23. **Advanced & batch fitting** (via W0 #7 job queue) — batch / global /
-    shared-parameter fits, fit comparison (AIC/BIC/F-test), residual
-    diagnostics, confidence/prediction bands, MCMC sampling, ODR;
-    **reflectivity fitting** (Parratt, SLD profile/spline, profile→layers),
-    **RSM** analyze/strain, surface/2D fitting, Pawley refinement, peak
-    tracking. (Full catalogue in `PORT_CHECKLIST.md`.)
+~~23. **Advanced & batch fitting**~~ ✅ shipped & golden — batch/global/
+    ODR/diagnostics/bands/MCMC/reflectivity/RSM all in PORT_CHECKLIST W3;
+    the "via W0 #7 job queue" framing was superseded (batch runs
+    synchronously / client-side — see #7's note).
 
 ---
 
 ## W4 — Calculators (DiraCulator parity)
 
 ### Tier 1 — High Impact
-24. **Calc framework** — panel/registry pattern; pure functions in
-    `calc/`; cross-panel data hand-off contract; headless-API equivalent.
-25. **X-ray & neutron** — d-spacing, Q↔2θ, SLD, reflectivity builder.
-26. **Crystal/CIF, optics, superconductor.**
+~~24. **Calc framework**~~ ✅ shipped — calculators workshop tabs +
+    cross-panel hand-off hooks + headless `calc/registry.py` (89 ops);
+    see PORT_CHECKLIST W4.
+~~25. **X-ray & neutron**~~ ✅ shipped — d-spacing / Q↔2θ / SLD-from-
+    formula / reflectivity builder; see PORT_CHECKLIST W4.
+~~26. **Crystal/CIF, optics, superconductor.**~~ ✅ shipped — see
+    PORT_CHECKLIST W4. (Two by-design deferrals recorded there: crystal
+    *bond angles* need CIF atomic coordinates; the stateful *crystal
+    cache* awaits a session-layer need.)
 
 ### Tier 2 — Medium Impact
-27. **Semiconductor, electrical/transport, magnetic, thermal/diffusion.**
-28. **Vacuum, electrochemistry, periodic table, substrates, favorites,
-    history.**
+~~27. **Semiconductor, electrical/transport, magnetic, thermal/diffusion.**~~
+    ✅ shipped — see PORT_CHECKLIST W4.
+~~28. **Vacuum, electrochemistry, periodic table, substrates, favorites,
+    history.**~~ ✅ shipped — incl. the History/Favorites/Home meta panels;
+    see PORT_CHECKLIST W4.
 
 ---
 
 ## W5 — DataWorkspace
 
 ### Tier 1 — High Impact
-29. **WorkspaceModel** — datasets, columns, column roles.
-30. **Formula engine** — column formulas (no eval) + computed-column
-    snapshots + recompute.
+~~29. **WorkspaceModel**~~ ✅ shipped — the store is the model; column
+    roles live on `Dataset` and round-trip `.dwk`. (By-design residual
+    recorded in PORT_CHECKLIST W5: promote more per-dataset view config
+    — x-key/styles/limits — only if users ask.)
+~~30. **Formula engine**~~ ✅ shipped — `lib/formula` recursive-descent
+    evaluator (no eval) + live computed columns; see PORT_CHECKLIST W5.
 
 ### Tier 2 — Medium Impact
-31. **Sort / filter / descriptive stats / masking.**
-32. **Workspace file format + autosave.**
+~~31. **Sort / filter / descriptive stats / masking.**~~ ✅ shipped — see
+    PORT_CHECKLIST W5.
+~~32. **Workspace file format + autosave.**~~ ✅ shipped — `.dwk` +
+    localStorage autosave; see PORT_CHECKLIST W5.
 
 ---
 
 ## W6 — Plotting & render
 
 ### Tier 1 — High Impact
-34. **Interactive render contract** — DataStruct → uPlot series (1D shipped);
-    2D maps → **Canvas2D** (WebGL only if RSM maps demand it). **2D backend +
-    minimal Canvas2D viewer shipped** (`calc/map.MapData`/`build_map` +
-    `/api/plot/map`; `Stage/MapStage.tsx` heatmap + colormaps/colorbar/cursor +
-    lin/log scale + "Map" tab; verified on real RSM `.xrdml` meshes).
-    **Remaining:** axis ticks, Inspector gridding controls, a 2-D area-detector
-    (RSM) parser to feed it natively.
+~~34. **Interactive render contract**~~ ✅ shipped — 1-D uPlot + 2-D
+    Canvas2D map viewer, axis ticks, Inspector gridding controls, and the
+    XRDML 2-D area-detector parser (all three mesh kinds + pole figures)
+    all landed; see PORT_CHECKLIST W6. The only remainder is the
+    **Rigaku `.raw` 2-D RSM parser — BLOCKED** on a sample file (tracked
+    at #10; the old "Remaining: axis ticks / gridding / 2-D parser" note
+    here was stale).
 
 ### Tier 2 — Medium Impact
-36. **Plot features** — insets, polar, multi-panel / figure builder —
-    **remaining** (waterfall, overlays/unified legend, reference lines,
-    annotations all shipped → Completed).
+~~36. **Plot features**~~ ✅ shipped — insets, polar, multi-panel, AND the
+    figure builder all landed (the "remaining" note here had gone stale;
+    PORT_CHECKLIST W6 marks every sub-feature ✓, waterfall/overlays/
+    ref-lines/annotations were already in Completed).
 
 > Items 33 and 35 shipped — see `## Completed`. Per-feature detail (with
 > source mapping + golden status) lives in `PORT_CHECKLIST.md`'s W6 section.
@@ -291,25 +332,26 @@ MATLAB."**
 ## W7 — Frontend shell & UI revamp
 
 ### Tier 1 — High Impact
-37. **App scaffold** — React + Vite + Zustand stores (datasets, plot,
-    selection, theme); reuse fermiviewer `Shell/` chrome + `lib/` api client.
-38. **Theme system** — Dark/Light/Auto, shared tokens with fermiviewer.
-39. **Library panel** — dataset list, import, drag-add, groups, search.
-40. **Stage** — plot canvas (uPlot) + 2D map viewer.
-41. **Inspector** — corrections, axes, appearance controls (the revamped
-    analysis panel — no monolith).
+~~37. **App scaffold**~~ ✅ shipped (M1 PR7) — see PORT_CHECKLIST W7.
+~~38. **Theme system**~~ ✅ shipped (M1 PR7) — see PORT_CHECKLIST W7.
+~~39. **Library panel**~~ ✅ shipped — incl. tags, groups, duplicate,
+    reorder, and (later) the PROJECT_ORGANIZATION folder tree; see
+    PORT_CHECKLIST W7.
+~~40. **Stage**~~ ✅ shipped (M1 PR9 + map viewer) — see PORT_CHECKLIST W7.
+~~41. **Inspector**~~ ✅ shipped — all cards; see PORT_CHECKLIST W7.
 
 ### Tier 2 — Medium Impact
-42. **Workshops** — curve fit, peak, hysteresis, reflectivity, **graph
-    digitizer** (React workshop pattern: state hook + view + sub-components,
-    each under the component ceiling).
-43. **DataWorkspace UI** — spreadsheet view.
-44. **DiraCulator UI** — calculator panels.
+~~42. **Workshops**~~ ✅ shipped — curve fit / peak / hysteresis /
+    reflectivity / RSM / graph digitizer; see PORT_CHECKLIST W7.
+~~43. **DataWorkspace UI**~~ ✅ shipped — worksheet + formula bar +
+    editable grid (and the 2026-07-09 WORKSHEET_PLAN full-window rebuild
+    on top); see PORT_CHECKLIST W7.
+~~44. **DiraCulator UI**~~ ✅ shipped — calculators workshop, all tabs;
+    see PORT_CHECKLIST W4/W7.
 
 ### Tier 3 — Nice-to-Have
-45. **Macro record/export** — record API actions → emit a reproducible
-    Python script (the MATLAB macro recorder's equivalent; backend action
-    log + frontend toggle).
+~~45. **Macro record/export**~~ ✅ shipped — store macro slice +
+    `lib/macro.ts` + Inspector MacroCard (`446cad7`); see PORT_CHECKLIST W7.
 
 ---
 
@@ -318,11 +360,28 @@ MATLAB."**
 ### Tier 2 — Medium Impact
 46. **Desktop packaging** — Tauri shell + Python sidecar (the polished
     distribution path; pywebview already covers dev/daily use from W0 #3).
+    **STARTED (2026-07-10 audit):** `src-tauri/` is committed and
+    populated (Tauri v2 config at v0.6.0, updater plugin, NSIS install
+    hooks) — this plan previously understated W8 as untouched. Remaining:
+    declare the shell done or list what's missing (sidecar lifecycle,
+    menus, signing) — reconcile with the session that built it.
 47. **Installers** — Windows / macOS; signing considerations.
+    **LARGELY SHIPPED** via ORIGIN_GAP #41 / GAP_ECOSYSTEM #3
+    (standalone installers built + attached by the tag-triggered release
+    workflow). Open: code signing.
 48. **Distribution** — `uv tool install` path / PyPI; versioning.
+    **LARGELY SHIPPED** via ORIGIN_GAP #41 (PyPI publish workflow, SPA
+    bundled in the wheel, versioned releases — v0.6.0 tagged
+    2026-07-10). Open: the OWNER one-time PyPI Trusted Publisher
+    registration + first tagged publish, and the fresh-machine
+    acceptance run (both tracked at ORIGIN_GAP #41).
 
 ### Tier 3 — Nice-to-Have
 49. **Auto-update / release workflow.**
+    **STARTED:** release workflow exists (RELEASE.md, tagged releases
+    through v0.6.0); the Tauri updater endpoint is configured in
+    `src-tauri/`. Open: end-to-end auto-update verification once #46
+    closes.
 
 ---
 
@@ -331,8 +390,9 @@ MATLAB."**
 ### Tier 1 — High Impact
 50. **Golden parity sweep** — freeze MATLAB outputs across parsers / calc /
     fitting; assert in CI. (Write the golden test as each feature lands.)
-51. **`PORT_CHECKLIST.md`** — exhaustive feature inventory; check an item
-    only when ported **and** golden-verified.
+    **CONTINUOUS by design** — broadly populated; never "closes".
+~~51. **`PORT_CHECKLIST.md`**~~ ✅ created with W1 and maintained since —
+    it is the live per-feature tracker this plan now defers to.
 
 ### Tier 3 — Nice-to-Have
 52. **Parameterized parser tests** — every parser × every corpus file.

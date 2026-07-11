@@ -5,14 +5,21 @@ architecture end-to-end before breadth work begins. Covers `PORT_PLAN.md`
 M1 (W0 #1–#6, W1 #8–#9, W6 #33–#34, W7 #37–#40) **plus a minimal
 corrections subset** so "load → correct → plot" is genuinely complete.
 
-**Status:** Active — substantially complete (2026-06-22 reconciliation:
+**Status:** Complete (archived 2026-07-10 — the sprint is long over; the
+app shipped far past M1, through v0.6.0. PR1–PR5 and PR7–PR11 all DONE.
+PR6's run-model residue — auto-shutdown on last-tab-close, `qz --dev`,
+`qz --desktop` — is NOT closed here; it is carried to and tracked at
+**PORT_PLAN #3**, including the open owner question of whether
+`--desktop`'s pywebview framing is superseded by the W8 Tauri shell.
+This file is a point-in-time record, not a live tracker.)
+Previous: Active — substantially complete (2026-06-22 reconciliation:
 PR1–PR5, PR7–PR11 done; only PR6's full run model is partial). The backend
 has already overshot M1 into M2 breadth (fitting, baselines, stats, spectral,
 sld, reflectivity, calculators — all golden-tested), and those calc modules
 are now being exposed through thin routes (`/api/{fitting,baseline,stats,
 reference,corrections}`).
 **Created:** 2026-06-21
-**Updated:** 2026-06-22
+**Updated:** 2026-07-10
 
 ---
 

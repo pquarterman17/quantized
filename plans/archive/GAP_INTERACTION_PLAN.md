@@ -10,9 +10,12 @@ the region-tool plugins, the overlay-series mechanism, the row-state
 chokepoint, and the typed pipeline steps — and this plan names those
 seams file-by-file so implementers extend rather than reinvent.
 
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-07-07
-**Updated:** 2026-07-08
+**Updated:** 2026-07-10 (archived — every tier shipped by 2026-07-08;
+the one booked follow-up debt, PlotStage.tsx over the ~400-line
+convention, was closed 2026-07-09 by MULTI_PLOT_PLAN #1's split into
+`usePlotPayload.ts` + `PlotViewport.tsx`, PlotStage now ~312 lines)
 
 ---
 
@@ -150,10 +153,13 @@ written below.
 
 ## Follow-up debt (booked, not blocking)
 
-- `components/Stage/PlotStage.tsx` crossed the ~400-line convention during
+- ~~`components/Stage/PlotStage.tsx` crossed the ~400-line convention during
   items 1/4 (now ~451): extract the gadget/overlay wiring into a
   workshop-style hook. Rolls up into PROJECT_ORGANIZATION_PLAN #7 (the
-  committed component-ceiling test) — do both together.
+  committed component-ceiling test) — do both together.~~ (2026-07-09) —
+  closed as a side-effect of MULTI_PLOT_PLAN #1: PlotStage split into
+  `usePlotPayload.ts` + `PlotViewport.tsx`, now ~312 lines; the
+  PROJECT_ORGANIZATION #10 exemption pin for it was removed.
 
 ## Completed
 
