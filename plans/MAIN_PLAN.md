@@ -53,18 +53,7 @@ GOTO #11 drift (implemented but listed open).
 
 *(items 9–11 booked from the 2026-07-11 Origin-parity surface audit)*
 
-9. **Undo/redo stack** — Origin-parity CORE, absent entirely (no undo
-   anywhere; the worksheet is cell-editable and datasets/corrections
-   mutate destructively — autosave/.dwk are recovery, not undo).
-   - [ ] Design: action-set inventory + inverse-patch vs snapshot
-     decision (the store is large — whole-library snapshots per edit
-     won't fly; likely per-action inverse patches on a bounded stack)
-   - [ ] Store history slice + Ctrl+Z / Ctrl+Shift+Z + Edit-menu
-     entries; scope which actions participate (data-mutating yes;
-     cheap view toggles optional)
-   - [ ] Tests per action class (cell edit, remove/rename dataset,
-     corrections apply/reset, formula add/remove, row exclusion,
-     channel roles); store-size ratchet respected
+~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
 10. **Re-import from source file** — one-click refresh of a dataset
     from its origin file, riding the recalc DAG so corrections / fits /
@@ -89,22 +78,11 @@ GOTO #11 drift (implemented but listed open).
     linear/log (transport/relaxation figures; pairs with the shipped
     VFT/Arrhenius calc in `calc/relaxation.py`).
 
-13. **Fill between / under curves** — series fill-to-baseline and
-    fill-between-two-series (region shades only cover x-band boxes
-    today); export side included (matplotlib `fill_between`).
+~~13. **Fill between / under curves**~~ COMPLETED 2026-07-11 (see Completed).
 
-14. **Color-mapped scatter** — a third column drives point color
-    (uPlot custom points draw + the map stage's colorbar/colormap
-    reuse); Origin's color-by-Z scatter for e.g. field/temperature
-    encoding.
+~~14. **Color-mapped scatter**~~ COMPLETED 2026-07-11 (see Completed).
 
-17. **Rich-text formatting shortcuts** (owner request 2026-07-11) —
-    keyboard shortcuts in `RichLabelInput` for the shipped micro-syntax:
-    wrap-selection italic (Ctrl/Cmd+I), subscript (Ctrl+=), superscript
-    (Ctrl+Shift+=), open the symbol palette from the keyboard; empty
-    selection inserts an empty token with the cursor inside. Documented
-    in the TextFormatHelp sheet. (Today only the Ω palette button +
-    Enter/Escape exist.)
+~~17. **Rich-text formatting shortcuts**~~ COMPLETED 2026-07-11 (see Completed).
 
 ~~1. **Decompose App.tsx + ThinFilmTab.tsx**~~ COMPLETED 2026-07-11 (see Completed).
 ~~2. **Extract the useApp window slice**~~ COMPLETED 2026-07-11 (see Completed).
@@ -120,8 +98,8 @@ GOTO #11 drift (implemented but listed open).
 
 ## Tier 3 — Nice-to-Have
 
-15. **Find X from Y / Y from X on a fitted curve** — inverse-evaluate
-    the stored fit overlay (small fit-workshop affordance).
+~~15. **Find X from Y / Y from X on a fitted curve**~~ COMPLETED
+    2026-07-11 (see Completed).
 
 16. **Append/merge workspace** — merge a second `.dwk` into the
     current library (id-collision strategy) instead of replace-only
@@ -173,6 +151,38 @@ GOTO #11 drift (implemented but listed open).
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#9 Undo/redo stack**~~ (2026-07-11, sonnet agent) — snapshot
+  history slice `store/history.ts` (depth 50; Zustand structural
+  sharing makes snapshots pointer copies), ~24 data-mutating actions
+  record labeled entries (imports/remove/rename/merge, cell edits,
+  corrections, formulas, exclusions, roles, tags, notes); Ctrl+Z /
+  Ctrl+Shift+Z with a focus guard preserving native text undo;
+  reactive "Undo <label>" Edit-menu entries (command registry now
+  merges per-source). View/window state deliberately excluded. useApp
+  pin 3292→3335 WITH written justification (24 non-compressible
+  recorder lines — the documented escape). +28 tests. Known limits
+  documented: no job-cancel on undo; window bindings don't participate.
+- ~~**#13 Fill under/between curves**~~ (2026-07-11, sonnet agent) —
+  `SeriesStyle.fill` none/under/{vs channel}; uPlot native series.fill
+  + bands on screen, matplotlib fill_between at export via shared
+  `calc/plotting.resolve_style_channels`; figure.py split
+  (`figure_overrides.py`) to stay under the 500 ceiling.
+- ~~**#14 Color-mapped scatter**~~ (2026-07-11, sonnet agent) —
+  `SeriesStyle.colorBy` + colormap (lib/colormap reuse); draw-hook
+  plugin paints per-point colors in the canvas-pixel frame; matplotlib
+  scatter(c=z)+colorbar at export. Bonus: fixed a latent figure-hitmap
+  misalignment (ax.lines indexing broke after any scatter series).
+- ~~**#15 Find X↔Y on a fitted curve**~~ (2026-07-11, sonnet agent) —
+  `calc/fit_findxy.py` (dense-grid bracketing + brentq, returns ALL
+  crossings) + thin `POST /api/fitting/find-xy` covering registry
+  models AND saved custom equations; FindXYSection in both fit panels.
+- ~~**#17 Rich-text formatting shortcuts**~~ (2026-07-11, sonnet agent)
+  — wrap-selection Ctrl/Cmd+I italic, Ctrl+= subscript (Ctrl-only;
+  Cmd+= is the macOS zoom key), Ctrl+Shift+= superscript, Ctrl/Cmd+.
+  opens the palette; emission grammar-verified (`$_{x}$` parses;
+  whole-`$…$` selections bail to the safe fallback, regression-pinned);
+  documented in TextFormatHelp.
 
 - ~~**#8 Post-review consolidation batch**~~ (2026-07-11) — all 9 sub-items,
   4 parallel workstreams (3 worktree agents + direct), zero merge conflicts:
