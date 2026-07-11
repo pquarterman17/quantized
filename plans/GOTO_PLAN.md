@@ -133,13 +133,8 @@ Interactive WebGL 3-D stays a deferred gate pending Q4.
    - [ ] `calc/baseline.py` Shirley (pure, iterate-to-tolerance)
    - [ ] Baseline UI entry + route plumbing
 
-4. **Multi-panel figure page composer** — arrange N *different* plots
-   onto one page (grid, panel labels (a)…(d), shared captions), exported
-   as a single vector PDF/SVG; the "Figure 1" workflow with zero
-   post-processing
-   - [ ] Page spec model + server-side matplotlib composition
-   - [ ] Composer UI (pick plot windows/figure docs → grid slots)
-   - [ ] Export dialog integration (vector default, style presets)
+~~4. **Multi-panel figure page composer**~~ ✅ completed 2026-07-11 (see
+   Completed).
 
 ~~5. **Rich-text labels**~~ ✅ completed 2026-07-11 (see Completed).
 
@@ -178,6 +173,18 @@ Interactive WebGL 3-D stays a deferred gate pending Q4.
 worksheet reshape, 3-D, and date-time axes land here if confirmed)*
 
 ## Completed
+
+- ~~**#4 Multi-panel figure page composer**~~ (2026-07-11) — the Fig
+  1(a)-(d) workflow: `calc/figure_page.py` (gridspec + spans, auto
+  panel labels incl. style variants + rollover, journal-width presets
+  from figure_styles, panels render pixel-identical to single-figure
+  export via the extracted `draw_series_axes`), thin
+  `POST /api/export/figure-page` (vector PDF default, 422 on bad
+  specs), `workshops/figurepage/` (sources = live plot windows + Library
+  figures, drag/assign SlotGrid, debounced PNG preview, export). All
+  text through the #5 rich-text guard. +29 backend / +18 frontend
+  tests. v1 UI caps grid at 4x4 and hides spans (backend supports 8x8 +
+  spans — booked follow-up note in-source).
 
 - ~~**#6 AICc model quick-scan**~~ (2026-07-11) — `calc/fit_scan.py`
   (AICc + delta + Akaike weights, registry + saved-equation candidates

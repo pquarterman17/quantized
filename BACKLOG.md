@@ -26,7 +26,6 @@ in the same commit). Every edit here must have a matching plan edit.
 | 11 | W8 closure: reconcile the Tauri shell's actual state (committed `src-tauri/`, updater, NSIS hooks) into PORT_PLAN #46, verify auto-update end-to-end (#49), code signing (#47) | PORT_PLAN #46/#47/#49 | M |
 | 14 | Anchor-point baseline (click anchors → interp baseline → recalc-DAG subtract step) | GOTO #2 | M |
 | 15 | Shirley XPS/XAS background in the baseline picker | GOTO #3 | S |
-| 16 | Multi-panel figure page composer (N plots → one vector PDF/SVG page, panel labels) | GOTO #4 | L |
 | 19 | XRD low-angle background + XRR/NR footprint correction; analytic baseline UI completion | GOTO #7/#8 | S–M |
 
 ## Owner actions & owner-gated decisions
@@ -72,6 +71,6 @@ the root; every active plan below is its declared sub-plan.
 |------|--------|-----------|
 | `plans/MAIN_PLAN.md` | Active (ROOT) | #1–#7 + owner gates + deferrals |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #46–49 (partial), #50 (continuous) |
-| `plans/GOTO_PLAN.md` | Active | #2–#4, #7–#8 open (#1/#5/#6/#9/#10/#11 shipped 2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
+| `plans/GOTO_PLAN.md` | Active | #2–#3, #7–#8 open (#1/#4/#5/#6/#9/#10/#11 shipped 2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #41, #42; #27 deferred |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |
