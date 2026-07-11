@@ -208,12 +208,7 @@ export function buildAppActions(s: StoreGet): Action[] {
       shortcut: "⌘]",
       run: () => s().toggleRight(),
     },
-    {
-      id: "curvefit",
-      group: "Analyze",
-      label: "Curve fit…",
-      run: () => s().setCurveFitOpen(true),
-    },
+    { id: "curvefit", group: "Analyze", label: "Curve fit…", run: () => s().setCurveFitOpen(true) },
     {
       id: "hysteresis",
       group: "Analyze",
@@ -270,6 +265,10 @@ export function buildAppActions(s: StoreGet): Action[] {
       label: "Graph digitizer (trace a curve from an image)…",
       run: () => s().setDigitizerOpen(true),
     },
+    // Reductions (MAIN_PLAN #11): one ToolWindow, pre-set to the picked method.
+    { id: "reductions-wh", group: "Analyze", label: "Williamson-Hall…", run: () => s().openReductions("williamson-hall") },
+    { id: "reductions-fft", group: "Analyze", label: "Film thickness (FFT)…", run: () => s().openReductions("fft-thickness") },
+    { id: "reductions-reflfft", group: "Analyze", label: "Reflectivity FFT…", run: () => s().openReductions("reflectivity-fft") },
     {
       id: "dataset-math",
       group: "Data",

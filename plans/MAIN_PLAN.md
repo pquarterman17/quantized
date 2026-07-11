@@ -66,12 +66,6 @@ GOTO #11 drift (implemented but listed open).
       place (keep id/roles/exclusions where shapes still match, else
       reset with a toast)
 
-11. **Reductions GUI** — Boson analysis dialogs for Williamson-Hall,
-    FFT film thickness, and reflectivity FFT over the shipped golden
-    routes (`/api/reductions/*`; was the PORT_CHECKLIST W2 deferral
-    tail — refiled as actionable: these are core-profile XRD/XRR/NR
-    analyses a GUI-first user reaches through dialogs in Origin).
-
 ## Tier 2 — Medium Impact
 
 12. **Reciprocal (Arrhenius) axis scale** — 1/x axis option beyond
@@ -183,6 +177,26 @@ GOTO #11 drift (implemented but listed open).
   opens the palette; emission grammar-verified (`$_{x}$` parses;
   whole-`$…$` selections bail to the safe fallback, regression-pinned);
   documented in TextFormatHelp.
+- ~~**#11 Reductions GUI**~~ (2026-07-11) — one workshop,
+  `components/workshops/reductions/`: a method-picker ToolWindow
+  (Williamson-Hall / FFT film thickness / Reflectivity FFT) over the
+  already-golden `/api/reductions/*` routes, plus three Analyze-menu
+  entries (`appCommands.ts`'s `openReductions`) that open it pre-set to
+  a method via a new `store/reductions.ts` slice (kept the store-size
+  and command-registry ratchets intact — two boolean-field pairs
+  merged onto shared lines to hold `useApp.ts`/`appCommands.ts` at
+  their pins). W-H peak entry is manual (2θ/FWHM editable rows,
+  add/remove) — the Peaks workshop's fitted peaks live only in its own
+  component state, never published to the store, so there is no
+  durable prefill source without new cross-workshop plumbing (noted
+  follow-up, not built). FFT thickness / reflectivity FFT read the
+  active dataset through `lib/rowstate.analysisData` (#50/#53) and
+  offer "→ Library" to save the FFT magnitude spectrum as a new
+  dataset. Spin asymmetry stays OUT of the GUI — blocked on polarized
+  (++/−−) metadata, same gap as the pair-discovery item above it.
+  13 new tests (hooks + view + command registry); frontend 2657/2657,
+  build clean; backend untouched (`test_api_reductions.py` +
+  `test_calc_reductions.py` sanity-checked, still 28/28).
 
 - ~~**#8 Post-review consolidation batch**~~ (2026-07-11) — all 9 sub-items,
   4 parallel workstreams (3 worktree agents + direct), zero merge conflicts:

@@ -32,6 +32,7 @@ import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
 import MagToolsPanel from "./components/workshops/magtools/MagToolsPanel";
 import PeaksPanel from "./components/workshops/peaks/PeaksPanel";
 import ReflectivityPanel from "./components/workshops/reflectivity/ReflectivityPanel";
+import ReductionsPanel from "./components/workshops/reductions/ReductionsPanel";
 import RsmPanel from "./components/workshops/rsm/RsmPanel";
 import DigitizerView from "./components/workshops/digitizer/DigitizerView";
 import WaterfallView from "./components/workshops/waterfall/WaterfallView";
@@ -46,6 +47,7 @@ export default function AppOverlays() {
   const baselineOpen = useApp((s) => s.baselineOpen);
   const calculatorsOpen = useApp((s) => s.calculatorsOpen);
   const rsmOpen = useApp((s) => s.rsmOpen);
+  const reductionsOpen = useApp((s) => s.reductionsOpen);
   const digitizerOpen = useApp((s) => s.digitizerOpen);
   const magToolsOpen = useApp((s) => s.magToolsOpen);
   const datasetMathOpen = useApp((s) => s.datasetMathOpen);
@@ -77,6 +79,7 @@ export default function AppOverlays() {
       {calculatorsOpen && <CalculatorsPanel />}
       {magToolsOpen && <MagToolsPanel />}
       {rsmOpen && <RsmPanel />}
+      {reductionsOpen && <ReductionsPanel />}
       {digitizerOpen && <DigitizerView />}
       {datasetMathOpen && <DatasetMathPanel />}
       {tabulateOpen && <TabulatePanel />}
