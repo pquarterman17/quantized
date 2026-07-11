@@ -75,6 +75,17 @@ GOTO #11 drift (implemented but listed open).
     DESIGN WITH OWNER — decision round pending (selection source,
     result target, layout flow, overlay axis semantics).
 
+20. **Axis tick-label precision + engineering notation** (owner bug
+    report w/ screenshot, 2026-07-11) — a dense M-H moment axis
+    (±0.002, ~0.0001 ticks) rendered 3-decimal labels → runs of
+    duplicate "0.001"/"0"/"−0.001" and a "−0". REPRODUCE FIRST via
+    `tools/visual` (don't guess auto-vs-fixed source), then fix the
+    CLASS: any fixed-decimals path floors its precision at what the
+    tick increment needs; negative-zero labels normalized; add `eng`
+    (engineering ×10³ⁿ) mode to AxisFormat with easy toggling from the
+    Axes card + command palette (axis right-click menu deferred until
+    #18's pointer context-menu lands — same file, agent in flight).
+
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
 ~~10. **Re-import from source file**~~ COMPLETED 2026-07-11 (see Completed).

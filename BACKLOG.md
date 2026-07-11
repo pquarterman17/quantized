@@ -20,6 +20,7 @@ campaigns never enumerated; MAIN #10 re-import-from-source shipped same day)
 |---|------|-------------|------|
 | 33 | Pointer tool default + direct-manipulation annotations/legend (owner testing directive) | MAIN #18 | M |
 | 34 | Multi-plot panel builder (design round with owner pending) | MAIN #19 | L |
+| 35 | Axis tick precision fix (duplicate-label runs, −0) + engineering notation toggle | MAIN #20 | S |
 
 *(audit items #9–#17 all shipped 2026-07-11; #18–#19 booked from the
 owner's first hands-on testing session)*
