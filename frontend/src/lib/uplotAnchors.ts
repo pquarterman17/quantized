@@ -28,8 +28,13 @@ export function anchorPixels(
 ): (AnchorPoint & { px: number; py: number })[] {
   return anchors.map((a) => ({
     ...a,
-    px: u.valToPos(a.x, "x", true),
-    py: u.valToPos(a.y, "y", true),
+    // CSS px relative to u.over — the SAME frame as the pointer coords the
+    // hit tests use (clientX - rect.left). The `true` canvas-pixel form is
+    // DPR-scaled + bbox-offset and belongs only in ctx draw code (review
+    // 2026-07-11: with `true` here, click-on-marker missed by the axis
+    // gutter and every remove/drag gesture was unreachable).
+    px: u.valToPos(a.x, "x"),
+    py: u.valToPos(a.y, "y"),
   }));
 }
 

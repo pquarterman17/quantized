@@ -159,6 +159,16 @@ def _rank(ok: list[dict[str, Any]]) -> None:
             e["deltaAICc"] = 0.0 if hit else math.inf
             e["weight"] = 1.0 / perfect if hit else 0.0
         return
+    if not math.isfinite(best):
+        # Every survivor has AICc == +inf (n - k - 1 <= 0 for all of them,
+        # e.g. a 3-point dataset scanned with only custom 2-param models):
+        # AICc cannot discriminate, so share the weight uniformly like the
+        # perfect-fit branch above (review 2026-07-11: inf - inf gave NaN
+        # deltas and a 0.0/0.0 ZeroDivisionError -> HTTP 500).
+        for e in ok:
+            e["deltaAICc"] = 0.0
+            e["weight"] = 1.0 / len(ok)
+        return
     rel: list[float] = []
     for e in ok:
         delta = _aicc_key(e) - best

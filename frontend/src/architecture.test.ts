@@ -89,7 +89,7 @@ describe("component-ceiling ratchet (#7)", () => {
 // ceilings: the pin only RATCHETS DOWN — when the store grows, extract the
 // next cohesive slice (windows.ts is the template), never raise the number.
 const STORE_PINS: Record<string, number> = {
-  "/store/useApp.ts": 3287, // post-#2 split, recalibrated at the Wave-A merge (anchor bridge + figure-page flag + GB seed landed in parallel); next candidates: corrections/importing slices
+  "/store/useApp.ts": 3292, // post-#2 split; +4 non-compressible bug-fix lines from the 2026-07-11 review (applyCorrections success returns + anchor-strip in applyToMany) - justification per the raise rule; next candidates: corrections/importing slices
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

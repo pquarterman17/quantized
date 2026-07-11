@@ -149,7 +149,15 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
     try {
       const bg =
         form.bgId !== NO_BG ? { datasetId: form.bgId, interp: form.bgInterp } : undefined;
-      await applyCorrections(active.id, buildParams(form), bg);
+      // Preserve the anchor-baseline step the Baseline workshop owns —
+      // buildParams rebuilds only the card's own fields, and the store
+      // stores corrections as a FULL replacement (review 2026-07-11).
+      const prior = active.corrections ?? {};
+      const anchorFields =
+        prior.bgAnchors && prior.bgAnchors.length >= 2
+          ? { bgAnchors: prior.bgAnchors, bgAnchorMethod: prior.bgAnchorMethod }
+          : {};
+      await applyCorrections(active.id, { ...buildParams(form), ...anchorFields }, bg);
     } finally {
       setBusy(false);
     }

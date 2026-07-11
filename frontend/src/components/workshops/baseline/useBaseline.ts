@@ -278,7 +278,12 @@ export function useBaseline(): BaselineState {
       c.smoothEnabled === true ||
       (c.yOff != null && c.yOff !== 0) ||
       (c.bgSlope != null && c.bgSlope !== 0) ||
-      (c.bgPoly != null && c.bgPoly.length > 0);
+      (c.bgPoly != null && c.bgPoly.length > 0) ||
+      // derivative + magnetometry unit conversion also run AFTER the anchor
+      // step, so the displayed curve differs from what step 3 subtracts from
+      // (review follow-up 2026-07-11).
+      (c.derivativeMode != null && c.derivativeMode !== "none") ||
+      c.isMag === true;
     if (displayTransformed) {
       if (baseline) {
         await subtract();
@@ -295,7 +300,12 @@ export function useBaseline(): BaselineState {
       bgAnchorMethod: params.anchorMethod,
     };
     const bg = ds.bgRef ? { datasetId: ds.bgRef.datasetId, interp: ds.bgRef.interp } : undefined;
-    await useApp.getState().applyCorrections(ds.id, params_, bg);
+    const ok = await useApp.getState().applyCorrections(ds.id, params_, bg);
+    if (!ok) {
+      // Store already posted the failure status; keep the anchors so the
+      // user can adjust and retry instead of re-tracing (review 2026-07-11).
+      return;
+    }
     setBaselineOverlay(null);
     setBaseline(null);
     setAnchors([]);

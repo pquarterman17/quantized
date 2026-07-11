@@ -721,7 +721,7 @@ export interface AppState extends WindowsSlice {
     id: string,
     params: CorrectionParams,
     bg?: { datasetId: string; interp: string },
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   resetCorrections: (id: string) => void;
   // Copy `sourceId`'s correction params (+ bg reference) onto every target id,
   // re-deriving each from its own raw. Batch parity with MATLAB "Apply to All".
@@ -2393,7 +2393,7 @@ export const useApp = create<AppState>((set, get) => ({
       // the existing "corrections failed" status/toast rather than silently
       // falling through to the preview.
       const ds = await get().resolveDataset(id);
-      if (!ds) return;
+      if (!ds) return false;
       const raw = ds.raw ?? ds.data;
       // Resolve the background only if it points at a real, different dataset.
       const bgDs =
@@ -2438,10 +2438,12 @@ export const useApp = create<AppState>((set, get) => ({
         { kind: "correction", params: { params, bg } },
       );
       get().touchDataset(id); // recalc graph (#1): data changed
+      return true;
     } catch (e) {
       get().setStatus(
         `corrections failed: ${e instanceof Error ? e.message : "error"}`,
       );
+      return false; // callers can see failure (review 2026-07-11)
     }
   },
   resetCorrections: (id) => {
@@ -2484,7 +2486,10 @@ export const useApp = create<AppState>((set, get) => ({
       if (id === sourceId) continue;
       // Don't subtract a dataset from itself if it's the shared bg reference.
       const useBg = bg && bg.datasetId !== id ? bg : undefined;
-      await get().applyCorrections(id, src.corrections, useBg);
+      const transferable = { ...src.corrections }; // anchors are hand-traced on the SOURCE curve - not transferable
+      delete transferable.bgAnchors;
+      delete transferable.bgAnchorMethod;
+      await get().applyCorrections(id, transferable, useBg);
       n += 1;
     }
     get().setStatus(`applied ${src.name}'s corrections to ${n} dataset${n === 1 ? "" : "s"}`);

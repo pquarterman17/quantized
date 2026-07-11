@@ -41,8 +41,12 @@ export function peakMarkerPixels(
 ): (PeakMarkerCandidate & { x: number; y: number })[] {
   return markers.map((m) => ({
     ...m,
-    x: u.valToPos(m.center, "x", true),
-    y: u.valToPos(m.height, "y", true),
+    // CSS px relative to u.over (same frame as the pointer's clientX-rect
+    // math) — NOT the `true` canvas-pixel form, which is DPR-scaled and
+    // bbox-offset (review 2026-07-11: same fix as uplotAnchors; this file
+    // was the template the bug was cloned from).
+    x: u.valToPos(m.center, "x"),
+    y: u.valToPos(m.height, "y"),
   }));
 }
 

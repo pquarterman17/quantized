@@ -16,6 +16,7 @@ job that reports progress cancels promptly without extra plumbing.
 from __future__ import annotations
 
 import threading
+import time
 import uuid
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -42,6 +43,7 @@ class Job:
     message: str = ""
     result: Any = None
     error: str = ""
+    finished_at: float | None = None  # time.monotonic() at terminal transition
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _abort: threading.Event = field(default_factory=threading.Event, repr=False)
 
@@ -97,7 +99,17 @@ class JobStore:
         with self._lock:
             # Bound the registry: drop the oldest finished jobs past 100.
             if len(self._jobs) > 100:
-                finished = [k for k, j in self._jobs.items() if j.status in _TERMINAL]
+                # Grace window (review 2026-07-11): the poll protocol is two
+                # requests (status -> result); never evict a job that JUST
+                # finished or its unread result 404s between the two.
+                now = time.monotonic()
+                finished = [
+                    k
+                    for k, j in self._jobs.items()
+                    if j.status in _TERMINAL
+                    and j.finished_at is not None
+                    and now - j.finished_at > 30.0
+                ]
                 for k in finished[:50]:
                     del self._jobs[k]
             self._jobs[job.id] = job
@@ -106,6 +118,7 @@ class JobStore:
             with job._lock:
                 if job._abort.is_set():
                     job.status = "cancelled"
+                    job.finished_at = time.monotonic()
                     return
                 job.status = "running"
             try:
@@ -117,13 +130,16 @@ class JobStore:
                         job.result = result
                         job.progress = 1.0
                         job.status = "done"
+                    job.finished_at = time.monotonic()
             except JobCancelled:
                 with job._lock:
                     job.status = "cancelled"
+                    job.finished_at = time.monotonic()
             except Exception as e:  # noqa: BLE001 — surfaced to the polling client
                 with job._lock:
                     job.error = str(e)
                     job.status = "error"
+                    job.finished_at = time.monotonic()
 
         self._pool.submit(run)
         return job.id

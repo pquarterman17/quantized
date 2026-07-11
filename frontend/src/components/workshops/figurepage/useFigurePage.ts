@@ -190,7 +190,13 @@ export function useFigurePage() {
       const slot = slots[i];
       if (!slot.source) continue;
       const figure = await panelFigure(slot.source);
-      if (!figure) continue;
+      if (!figure) {
+        // A dead source (window closed, dataset gone) must FAIL the build,
+        // not silently drop the panel and re-letter the rest (review
+        // 2026-07-11: export no longer matched the last-rendered preview).
+        setError(`slot ${i + 1}: source "${slot.source.name}" no longer exists - clear or reassign it`);
+        return null;
+      }
       panels.push({
         figure,
         row: Math.floor(i / cols),

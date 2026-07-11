@@ -40,10 +40,17 @@ export function useColResize(
     cleanup.current = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      window.removeEventListener("blur", up);
       cleanup.current = null;
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    // Releasing outside the browser window (or an OS pen/touch cancel) never
+    // delivers pointerup - without these the drag stays armed and the column
+    // keeps resizing on re-entry with no button held (review 2026-07-11).
+    window.addEventListener("pointercancel", up);
+    window.addEventListener("blur", up);
   };
 
   return { startResize };

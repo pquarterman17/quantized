@@ -13,7 +13,9 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000",
+        // qz --dev passes the backend port through (review 2026-07-11:
+        // hardcoding 8000 proxied /api to the wrong server under --port).
+        target: `http://127.0.0.1:${process.env.QZ_BACKEND_PORT ?? "8000"}`,
         ws: true,
       },
     },

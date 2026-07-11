@@ -184,10 +184,26 @@ def _run_dev(host: str, port: int) -> None:
         print(f"[qz] --dev requires a source checkout; frontend/ not found at {frontend}")
         raise SystemExit(2)
     npm = "npm.cmd" if os.name == "nt" else "npm"
-    vite = subprocess.Popen([npm, "run", "dev"], cwd=frontend)
+    # Tell the Vite proxy which backend port to target (vite.config.ts reads
+    # QZ_BACKEND_PORT; review 2026-07-11: it was hardcoded to 8000, so
+    # `qz --dev --port 9000` silently proxied /api to the WRONG server).
+    env = dict(os.environ, QZ_BACKEND_PORT=str(port))
+    vite = subprocess.Popen([npm, "run", "dev"], cwd=frontend, env=env)
     _open_browser_later("http://localhost:5173")
     try:
         uvicorn.run("quantized.app:app", host=host, port=port, reload=True)
     finally:
-        vite.terminate()
-        vite.wait(timeout=10)
+        # Windows: terminate() only kills the npm.cmd wrapper and orphans the
+        # node/Vite child holding :5173 (review 2026-07-11) - kill the tree.
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(vite.pid)],
+                capture_output=True,
+                check=False,
+            )
+        else:
+            vite.terminate()
+        try:
+            vite.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass  # never mask the real exit path from inside finally
