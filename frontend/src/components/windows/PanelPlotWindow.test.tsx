@@ -8,7 +8,7 @@
 // cares about — the constructor is mocked to a lightweight recorder (the
 // WindowCanvas.test.tsx / BackgroundPlotWindow.test.tsx pattern).
 
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
@@ -141,5 +141,122 @@ describe("PanelPlotWindow — empty state", () => {
   it("shows the placeholder for a panel window with no panel field at all", () => {
     const { getByText } = render(<PanelPlotWindow win={win({ panel: undefined })} datasets={[A, B]} />);
     expect(getByText(/every dataset in this panel was removed/i)).toBeInTheDocument();
+  });
+});
+
+// Drag-to-rearrange follow-up: jsdom has no real DragEvent/DnD (same
+// workaround as DatasetRow.test.tsx / ZoneWell.test.tsx's header notes) — a
+// hand-built Event + a real setData/getData-backed dataTransfer, dispatched
+// via RTL's low-level fireEvent. Unlike those two, THIS drag round-trips
+// through the component's own onDragStart (it calls dataTransfer.setData
+// itself), so the fake needs actual storage, not a hardcoded getData().
+//
+// The window under test is created through the real `createPanelWindow`
+// store action (not a bare object literal) so its id lives in
+// `useApp.getState().plotWindows` — `PanelCell`'s reorder/remove calls look
+// the window up there, exactly like the live app would.
+class FakeDataTransfer {
+  private store = new Map<string, string>();
+  types: string[] = [];
+  effectAllowed = "";
+  setData(type: string, data: string) {
+    this.store.set(type, data);
+    if (!this.types.includes(type)) this.types.push(type);
+  }
+  getData(type: string) {
+    return this.store.get(type) ?? "";
+  }
+}
+
+function fireDrag(el: Element, type: string, dataTransfer: unknown) {
+  const evt = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(evt, "dataTransfer", { value: dataTransfer, configurable: true });
+  fireEvent(el, evt);
+}
+
+function currentWin(id: string) {
+  return useApp.getState().plotWindows.find((w) => w.id === id)!;
+}
+
+describe("PanelPlotWindow — drag cell headers to rearrange", () => {
+  it("dropping cell A's header on cell C's header splices A into C's slot", async () => {
+    const id = useApp.getState().createPanelWindow(["a", "b", "c"], "grid");
+    const { container, rerender } = render(<PanelPlotWindow win={currentWin(id)} datasets={[A, B, C]} />);
+    await waitFor(() => expect(container.querySelectorAll(".qzk-panel-cell-hd")).toHaveLength(3));
+
+    const headers = container.querySelectorAll(".qzk-panel-cell-hd");
+    expect([...headers].map((h) => h.querySelector(".qzk-panel-cell-title")?.textContent)).toEqual([
+      "Alpha",
+      "Beta",
+      "Gamma",
+    ]);
+
+    const dt = new FakeDataTransfer();
+    fireDrag(headers[0], "dragstart", dt); // grab Alpha (index 0)
+    fireDrag(headers[2], "dragover", dt); // hover Gamma (index 2)
+    fireDrag(headers[2], "drop", dt); // drop on Gamma
+
+    expect(currentWin(id).panel?.datasetIds).toEqual(["b", "c", "a"]); // Alpha spliced into Gamma's slot
+
+    rerender(<PanelPlotWindow win={currentWin(id)} datasets={[A, B, C]} />);
+    const reordered = container.querySelectorAll(".qzk-panel-cell-hd");
+    expect([...reordered].map((h) => h.querySelector(".qzk-panel-cell-title")?.textContent)).toEqual([
+      "Beta",
+      "Gamma",
+      "Alpha",
+    ]);
+  });
+
+  it("shows a drop-target highlight on dragover, clears it on dragleave", async () => {
+    const id = useApp.getState().createPanelWindow(["a", "b"], "row");
+    const { container } = render(<PanelPlotWindow win={currentWin(id)} datasets={[A, B]} />);
+    await waitFor(() => expect(container.querySelectorAll(".qzk-panel-cell-hd")).toHaveLength(2));
+
+    const cells = container.querySelectorAll(".qzk-panel-cell");
+    const headers = container.querySelectorAll(".qzk-panel-cell-hd");
+    const dt = new FakeDataTransfer();
+    fireDrag(headers[0], "dragstart", dt);
+    expect(cells[0]).toHaveClass("dragging");
+
+    fireDrag(headers[1], "dragover", dt);
+    expect(cells[1]).toHaveClass("drop-target");
+    fireEvent.dragLeave(headers[1]);
+    expect(cells[1]).not.toHaveClass("drop-target");
+  });
+
+  it("dropping a header onto itself is a no-op", async () => {
+    const id = useApp.getState().createPanelWindow(["a", "b", "c"], "grid");
+    const { container } = render(<PanelPlotWindow win={currentWin(id)} datasets={[A, B, C]} />);
+    await waitFor(() => expect(container.querySelectorAll(".qzk-panel-cell-hd")).toHaveLength(3));
+
+    const headers = container.querySelectorAll(".qzk-panel-cell-hd");
+    const dt = new FakeDataTransfer();
+    fireDrag(headers[1], "dragstart", dt);
+    fireDrag(headers[1], "drop", dt);
+
+    expect(currentWin(id).panel?.datasetIds).toEqual(["a", "b", "c"]);
+  });
+
+  it("ignores a foreign drag (e.g. an OS file drop) — no highlight, no reorder", async () => {
+    const id = useApp.getState().createPanelWindow(["a", "b"], "row");
+    const { container } = render(<PanelPlotWindow win={currentWin(id)} datasets={[A, B]} />);
+    await waitFor(() => expect(container.querySelectorAll(".qzk-panel-cell-hd")).toHaveLength(2));
+
+    const cells = container.querySelectorAll(".qzk-panel-cell");
+    const headers = container.querySelectorAll(".qzk-panel-cell-hd");
+    const foreign = { types: ["Files"], getData: () => "", setData: () => {} };
+    fireDrag(headers[1], "dragover", foreign);
+    expect(cells[1]).not.toHaveClass("drop-target");
+    fireDrag(headers[1], "drop", foreign);
+    expect(currentWin(id).panel?.datasetIds).toEqual(["a", "b"]);
+  });
+
+  it("the x chip removes a dataset from the panel", async () => {
+    const id = useApp.getState().createPanelWindow(["a", "b", "c"], "grid");
+    const { container } = render(<PanelPlotWindow win={currentWin(id)} datasets={[A, B, C]} />);
+    await waitFor(() => expect(container.querySelectorAll(".qzk-panel-cell-remove")).toHaveLength(3));
+
+    fireEvent.click(container.querySelectorAll(".qzk-panel-cell-remove")[1]); // remove Beta
+    expect(currentWin(id).panel?.datasetIds).toEqual(["a", "c"]);
   });
 });

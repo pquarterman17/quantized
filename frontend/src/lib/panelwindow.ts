@@ -85,6 +85,96 @@ export function sanitizePanelLayout(v: unknown): PanelLayout {
   return (PANEL_LAYOUTS as readonly string[]).includes(v as string) ? (v as PanelLayout) : "grid";
 }
 
+// ── Drag-to-rearrange cells within a composite window (MAIN_PLAN #19
+// drag-follow-up) ────────────────────────────────────────────────────────
+// The grab surface is each PanelCell's header row (window furniture, like an
+// MDI title bar — NOT the uPlot canvas, which keeps its normal box-zoom/pan
+// in every tool mode). Same dataTransfer-payload idiom as `dragaxis.
+// encodeChannelDrag`/`decodeChannelDrag` and `useLibraryTree.DATASET_DND`:
+// a JSON payload behind its own MIME type so a drop target can tell this
+// drag apart from a channel-chip drag, a Library row drag, or an OS file
+// drop via `dataTransfer.types`.
+
+/** dataTransfer MIME type for an internal panel-cell reorder drag. Distinct
+ *  from `CHANNEL_DND` (dragaxis.ts), `DATASET_DND` (useLibraryTree.ts), and
+ *  `PANEL_SOURCE_MIME` (figurepage/SlotGrid.tsx). */
+export const PANEL_CELL_DND = "application/x-qz-panel-cell";
+
+/** What's dragged: one cell of one composite panel window, identified by its
+ *  POSITION in `panel.datasetIds` (a cell's identity for reordering purposes
+ *  IS its slot, not the dataset id — two cells never share a dataset).
+ *  `windowId` guards a drag that somehow survives into a DIFFERENT panel
+ *  window (e.g. two composite windows open at once) from being misapplied
+ *  there. */
+export interface PanelCellDragPayload {
+  windowId: string;
+  fromIndex: number;
+}
+
+/** JSON-encode a payload onto dataTransfer (structured data needs a MIME
+ *  string, not an object — same idiom as `dragaxis.encodeChannelDrag`). */
+export function encodePanelCellDrag(payload: PanelCellDragPayload): string {
+  return JSON.stringify(payload);
+}
+
+/** Parses a panel-cell drag payload; null for anything malformed (a stale/
+ *  foreign string, corrupted JSON, an OS file drop, …) so callers can safely
+ *  ignore it rather than throw mid-drop. */
+export function decodePanelCellDrag(raw: string): PanelCellDragPayload | null {
+  if (!raw) return null;
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (
+      v !== null &&
+      typeof v === "object" &&
+      typeof (v as Record<string, unknown>).windowId === "string" &&
+      typeof (v as Record<string, unknown>).fromIndex === "number" &&
+      Number.isInteger((v as Record<string, unknown>).fromIndex)
+    ) {
+      return v as PanelCellDragPayload;
+    }
+  } catch {
+    // not our payload — fall through to null
+  }
+  return null;
+}
+
+/** Reorder-insert splice: moves the id at `fromIndex` to sit at `toIndex`'s
+ *  slot, shifting the ids between the two over by one — dropping cell A on
+ *  cell B splices A INTO B's position (B and everything between shift
+ *  toward A's old slot), it never swaps the pair. Self-drop
+ *  (`fromIndex === toIndex`) and any out-of-range index are no-ops (return a
+ *  same-order copy rather than throwing or silently clamping into a
+ *  different move). */
+export function reorderPanelDatasetIds(
+  ids: readonly string[],
+  fromIndex: number,
+  toIndex: number,
+): string[] {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    fromIndex >= ids.length ||
+    toIndex < 0 ||
+    toIndex >= ids.length
+  ) {
+    return [...ids];
+  }
+  const next = [...ids];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+}
+
+/** Drops one dataset id out of a panel's list (the header ✕ chip bonus) — a
+ *  plain filter; no "last one" special case, since the render layer already
+ *  tolerates a panel shrinking to 1 or 0 cells (PanelPlotWindow's empty-state
+ *  placeholder / single-cell case, same tolerance dataset-removal pruning
+ *  relies on). A missing id is a no-op. */
+export function removePanelDatasetId(ids: readonly string[], id: string): string[] {
+  return ids.filter((x) => x !== id);
+}
+
 /** First-appearance-order unit families across every series about to be
  *  plotted, plus whether a 3rd+ family had to double up on the left axis —
  *  the owner-decided dual-Y rule (MAIN_PLAN #19): same units share the left

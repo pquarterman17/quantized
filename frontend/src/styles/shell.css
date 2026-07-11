@@ -435,9 +435,26 @@ body {
    overlay is a single full-bleed viewport. Each cell needs its own stacking
    context + finite size for PlotViewport's absolutely-positioned inner div. */
 .qzk-panel-grid { flex: 1; min-height: 0; display: grid; gap: 4px; padding: 4px; }
-.qzk-panel-cell { position: relative; min-width: 60px; min-height: 60px; background: var(--axes-bg); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); overflow: hidden; }
+.qzk-panel-cell { position: relative; min-width: 60px; min-height: 60px; display: flex; flex-direction: column; background: var(--axes-bg); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); overflow: hidden; }
 .qzk-panel-overlay { position: relative; flex: 1; min-height: 0; }
 .qzk-panel-empty { flex: 1; display: grid; place-items: center; text-align: center; padding: 16px; color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-nano); }
+
+/* Drag-to-rearrange follow-up: the cell header is the ONLY grab surface — the
+   plot canvas below (`.qzk-panel-cell-body`) keeps its normal box-zoom/pan in
+   every tool mode, matching the MDI title-bar precedent. `grab`/`grabbing`
+   are a deliberate exception to the app's usual flat `cursor: default`
+   buttons — same spirit as the resize grip's directional cursor. */
+.qzk-panel-cell-hd { display: flex; align-items: center; gap: 4px; height: 22px; padding: 0 4px 0 6px; flex-shrink: 0; background: var(--surface-2); border-bottom: 1px solid var(--border-soft); cursor: grab; }
+.qzk-panel-cell-hd:active { cursor: grabbing; }
+.qzk-panel-cell-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-nano); font-weight: var(--weight-semibold); color: var(--text-dim); }
+.qzk-panel-cell-remove { flex-shrink: 0; width: 16px; height: 16px; display: grid; place-items: center; padding: 0; border: none; border-radius: var(--radius-sm); background: none; color: var(--text-faint); font-size: 13px; line-height: 1; cursor: default; }
+.qzk-panel-cell-remove:hover { background: var(--surface-3); color: var(--text); }
+.qzk-panel-cell-body { position: relative; flex: 1; min-height: 0; }
+/* Dragged cell dims; the hovered drop target gets an accent border (same
+   inset box-shadow idiom as `.qzk-ds.drop-above/-below`) without perturbing
+   layout. */
+.qzk-panel-cell.dragging { opacity: 0.45; }
+.qzk-panel-cell.drop-target { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 
 /* Resize grip — a diagonal-stripe corner drawn from tokens, no glyph/emoji. */
 .qzk-plotwin-resize { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; touch-action: none; background: linear-gradient(135deg, transparent 0 50%, var(--border-strong) 50% 60%, transparent 60% 70%, var(--border-strong) 70% 80%, transparent 80% 100%); }

@@ -9,9 +9,14 @@ import {
   assignUnitFamilies,
   axisForUnit,
   buildOverlayPayload,
+  decodePanelCellDrag,
+  encodePanelCellDrag,
   panelGridShape,
   panelSyncKey,
   panelWindowTitle,
+  PANEL_CELL_DND,
+  removePanelDatasetId,
+  reorderPanelDatasetIds,
   sanitizePanelDatasetIds,
   sanitizePanelLayout,
 } from "./panelwindow";
@@ -170,5 +175,64 @@ describe("buildOverlayPayload", () => {
     expect(payload.data[0]).toEqual([]);
     expect(payload.series).toEqual([]);
     expect(families).toEqual([]);
+  });
+});
+
+describe("reorderPanelDatasetIds (drag-to-rearrange follow-up)", () => {
+  it("moves the dragged id from the start to the end", () => {
+    expect(reorderPanelDatasetIds(["a", "b", "c", "d"], 0, 3)).toEqual(["b", "c", "d", "a"]);
+  });
+  it("moves the dragged id from the end to the start", () => {
+    expect(reorderPanelDatasetIds(["a", "b", "c", "d"], 3, 0)).toEqual(["d", "a", "b", "c"]);
+  });
+  it("moves a middle id forward, splicing it into the target's slot", () => {
+    expect(reorderPanelDatasetIds(["a", "b", "c", "d"], 1, 2)).toEqual(["a", "c", "b", "d"]);
+  });
+  it("moves a middle id backward", () => {
+    expect(reorderPanelDatasetIds(["a", "b", "c", "d"], 2, 1)).toEqual(["a", "c", "b", "d"]);
+  });
+  it("self-drop (fromIndex === toIndex) is a no-op", () => {
+    const ids = ["a", "b", "c"];
+    expect(reorderPanelDatasetIds(ids, 1, 1)).toEqual(["a", "b", "c"]);
+  });
+  it("an out-of-range fromIndex or toIndex is a no-op, never throws", () => {
+    const ids = ["a", "b", "c"];
+    expect(reorderPanelDatasetIds(ids, -1, 1)).toEqual(ids);
+    expect(reorderPanelDatasetIds(ids, 1, 99)).toEqual(ids);
+    expect(reorderPanelDatasetIds(ids, 99, 0)).toEqual(ids);
+  });
+  it("never mutates the input array", () => {
+    const ids = ["a", "b", "c"];
+    reorderPanelDatasetIds(ids, 0, 2);
+    expect(ids).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("removePanelDatasetId", () => {
+  it("drops the matching id, keeps the rest in order", () => {
+    expect(removePanelDatasetId(["a", "b", "c"], "b")).toEqual(["a", "c"]);
+  });
+  it("a missing id is a no-op", () => {
+    expect(removePanelDatasetId(["a", "b"], "gone")).toEqual(["a", "b"]);
+  });
+  it("removing down to zero is fine (the render layer's empty state handles it)", () => {
+    expect(removePanelDatasetId(["a"], "a")).toEqual([]);
+  });
+});
+
+describe("encodePanelCellDrag / decodePanelCellDrag", () => {
+  it("round-trips a valid payload", () => {
+    const payload = { windowId: "pw1", fromIndex: 2 };
+    expect(decodePanelCellDrag(encodePanelCellDrag(payload))).toEqual(payload);
+  });
+  it("rejects malformed JSON, wrong shapes, and empty strings without throwing", () => {
+    expect(decodePanelCellDrag("")).toBeNull();
+    expect(decodePanelCellDrag("not json")).toBeNull();
+    expect(decodePanelCellDrag(JSON.stringify({ windowId: "pw1" }))).toBeNull(); // missing fromIndex
+    expect(decodePanelCellDrag(JSON.stringify({ windowId: 5, fromIndex: 1 }))).toBeNull(); // wrong type
+    expect(decodePanelCellDrag(JSON.stringify({ windowId: "pw1", fromIndex: 1.5 }))).toBeNull(); // non-integer
+  });
+  it("PANEL_CELL_DND is distinct from the other internal drag MIME types", () => {
+    expect(PANEL_CELL_DND).toBe("application/x-qz-panel-cell");
   });
 });

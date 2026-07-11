@@ -13,6 +13,13 @@
 // across them by default — distinct from the cross-WINDOW link groups
 // (item 13), which stay XY-plot-only and are irrelevant to a composite
 // window (it has no single `linkGroup` of its own in v1).
+//
+// Drag-to-rearrange follow-up: each PanelCell gets `windowId` + its `index`
+// (the cell's RAW position in `win.panel.datasetIds`, found via `ids.
+// indexOf` rather than the post-filter `resolved` array's own index) so a
+// drag/drop always splices against the actual store array position even if
+// a stale id sits between two live cells mid-render (see the file-header
+// comment above on why a stale id can transiently survive one render).
 
 import { panelGridShape, panelSyncKey } from "../../lib/panelwindow";
 import type { PanelLayout, PlotWindow } from "../../lib/plotview";
@@ -55,7 +62,13 @@ export default function PanelPlotWindow({ win, datasets }: PanelPlotWindowProps)
       style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}
     >
       {resolved.map((ds) => (
-        <PanelCell key={ds.id} dataset={ds} syncKey={panelSyncKey(win.id)} />
+        <PanelCell
+          key={ds.id}
+          dataset={ds}
+          syncKey={panelSyncKey(win.id)}
+          windowId={win.id}
+          index={ids.indexOf(ds.id)}
+        />
       ))}
     </div>
   );

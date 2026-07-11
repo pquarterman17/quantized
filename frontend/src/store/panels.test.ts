@@ -126,4 +126,83 @@ describe(".dwk persistence round-trip", () => {
     expect(win).toBeDefined(); // never dropped, just emptied of the stale id
     expect(win?.panel?.datasetIds).toEqual(["a"]);
   });
+
+  it("a reordered panel's datasetIds survive serialize -> parse (drag-to-rearrange follow-up)", () => {
+    const id = useApp.getState().createPanelWindow(["a", "b", "c"], "grid");
+    useApp.getState().reorderPanelDatasets(id, 0, 2); // a -> c's slot: [b, c, a]
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === id)?.panel?.datasetIds).toEqual(["b", "c", "a"]);
+    const text = serializeWorkspace({ datasets: s.datasets, plotWindows: s.windowsForSave() });
+    const loaded = parseWorkspace(text);
+    const win = loaded.plotWindows.find((w) => w.id === id);
+    expect(win?.panel).toEqual({ datasetIds: ["b", "c", "a"], layout: "grid" });
+  });
+});
+
+describe("reorderPanelDatasets (drag-to-rearrange follow-up)", () => {
+  it("splices the dragged id into the target's slot", () => {
+    const id = useApp.getState().createPanelWindow(["a", "b", "c"], "grid");
+    useApp.getState().reorderPanelDatasets(id, 0, 2);
+    const win = useApp.getState().plotWindows.find((w) => w.id === id);
+    expect(win?.panel?.datasetIds).toEqual(["b", "c", "a"]);
+  });
+
+  it("self-drop is a no-op", () => {
+    const id = useApp.getState().createPanelWindow(["a", "b", "c"], "grid");
+    useApp.getState().reorderPanelDatasets(id, 1, 1);
+    const win = useApp.getState().plotWindows.find((w) => w.id === id);
+    expect(win?.panel?.datasetIds).toEqual(["a", "b", "c"]);
+  });
+
+  it("an unknown window id is a no-op, never throws", () => {
+    useApp.getState().createPanelWindow(["a", "b", "c"], "grid");
+    expect(() => useApp.getState().reorderPanelDatasets("nope", 0, 1)).not.toThrow();
+  });
+
+  it("a non-panel window is untouched (its own reorder would be meaningless)", () => {
+    const before = useApp.getState().plotWindows[0];
+    useApp.getState().reorderPanelDatasets(before.id, 0, 1);
+    const after = useApp.getState().plotWindows.find((w) => w.id === before.id);
+    expect(after).toEqual(before);
+  });
+
+  it("only touches the targeted window, leaves sibling panel windows alone", () => {
+    const id1 = useApp.getState().createPanelWindow(["a", "b"], "grid");
+    const id2 = useApp.getState().createPanelWindow(["a", "c"], "row");
+    useApp.getState().reorderPanelDatasets(id1, 0, 1);
+    const s = useApp.getState();
+    expect(s.plotWindows.find((w) => w.id === id1)?.panel?.datasetIds).toEqual(["b", "a"]);
+    expect(s.plotWindows.find((w) => w.id === id2)?.panel?.datasetIds).toEqual(["a", "c"]);
+  });
+});
+
+describe("removeFromPanel (cell header's x chip)", () => {
+  it("drops the dataset id, keeps the window open", () => {
+    const id = useApp.getState().createPanelWindow(["a", "b", "c"], "grid");
+    useApp.getState().removeFromPanel(id, "b");
+    const win = useApp.getState().plotWindows.find((w) => w.id === id);
+    expect(win).toBeDefined();
+    expect(win?.panel?.datasetIds).toEqual(["a", "c"]);
+  });
+
+  it("removing down to a single cell is fine", () => {
+    const id = useApp.getState().createPanelWindow(["a", "b"], "grid");
+    useApp.getState().removeFromPanel(id, "b");
+    expect(useApp.getState().plotWindows.find((w) => w.id === id)?.panel?.datasetIds).toEqual(["a"]);
+  });
+
+  it("removing the last id empties the panel without closing the window", () => {
+    const id = useApp.getState().createPanelWindow(["a"], "grid");
+    useApp.getState().removeFromPanel(id, "a");
+    const win = useApp.getState().plotWindows.find((w) => w.id === id);
+    expect(win).toBeDefined();
+    expect(win?.panel?.datasetIds).toEqual([]);
+  });
+
+  it("an unknown window id or dataset id is a no-op, never throws", () => {
+    const id = useApp.getState().createPanelWindow(["a", "b"], "grid");
+    expect(() => useApp.getState().removeFromPanel("nope", "a")).not.toThrow();
+    useApp.getState().removeFromPanel(id, "gone");
+    expect(useApp.getState().plotWindows.find((w) => w.id === id)?.panel?.datasetIds).toEqual(["a", "b"]);
+  });
 });
