@@ -322,6 +322,35 @@ export function fitEquation(req: EquationFitRequest): Promise<CalcResult> {
   return postJSON("/api/fitting/equation/fit", req);
 }
 
+// ── Find X from Y / Y from X on a fitted curve (MAIN #15) ──────────────────
+export interface FindXYRequest {
+  /** Exactly one of model / equation. */
+  model?: string;
+  equation?: string;
+  params: number[];
+  x_min: number;
+  x_max: number;
+  /** Exactly one of x (find Y) / y (find X, all crossings). */
+  x?: number;
+  y?: number;
+  grid_points?: number;
+}
+
+export interface FindXYResult {
+  /** Present when `x` was posted. */
+  y?: number | null;
+  /** Present when `y` was posted — every crossing in [x_min, x_max]; an
+   *  empty array is a valid "no crossing" answer, not an error. */
+  x?: number[];
+}
+
+/** Inverse-evaluate a fit already held by the UI (model/equation + fitted
+ *  params) — no re-fit. Works for a registry model OR a saved custom
+ *  equation, the same `fcn(x, p) -> y` shape either way. */
+export function findXY(req: FindXYRequest): Promise<FindXYResult> {
+  return postJSON("/api/fitting/find-xy", req);
+}
+
 // ── AICc model quick-scan (GOTO #6) ─────────────────────────────────────────
 export interface ScanEquationCandidate {
   name: string;

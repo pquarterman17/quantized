@@ -25,6 +25,9 @@ export interface CurveFitState {
    *  remaining UI leg. Requires a completed (non-guess) fit result. */
   runCornerPlot: () => Promise<void>;
   cornerBusy: boolean;
+  /** [min, max] of the fitted x data — the domain Find X/Y (MAIN #15)
+   *  searches over; null when there's no analysis data yet. */
+  xRange: { min: number; max: number } | null;
 }
 
 export function useCurveFit(): CurveFitState {
@@ -60,6 +63,13 @@ export function useCurveFit(): CurveFitState {
     if (!d) return null;
     return { x: d.time, y: d.values.map((row) => row[0]) };
   }, [active]);
+
+  const xRange = useMemo(() => {
+    if (!xy) return null;
+    const finite = xy.x.filter((v) => Number.isFinite(v));
+    if (finite.length === 0) return null;
+    return { min: Math.min(...finite), max: Math.max(...finite) };
+  }, [xy]);
 
   async function run(kind: "guess" | "fit"): Promise<void> {
     if (!active) return;
@@ -166,5 +176,6 @@ export function useCurveFit(): CurveFitState {
     clear,
     runCornerPlot,
     cornerBusy,
+    xRange,
   };
 }

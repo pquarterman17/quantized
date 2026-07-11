@@ -5,7 +5,7 @@
 // (lib/fitmodels). Mirrors useCurveFit's row-state discipline: fits the
 // analysis view (#50/#53) and expands the overlay back to full length.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { fitEquation, validateEquation } from "../../../lib/api";
 import {
@@ -45,6 +45,9 @@ export interface EquationFitState {
   setModelName: (name: string) => void;
   save: () => CustomFitModel[] | null;
   remove: (name: string) => CustomFitModel[];
+  /** [min, max] of the fitted x data — the domain Find X/Y (MAIN #15)
+   *  searches over; null when there's no analysis data yet. */
+  xRange: { min: number; max: number } | null;
 }
 
 function freshRows(params: string[], prev: EquationParamRow[]): EquationParamRow[] {
@@ -91,6 +94,14 @@ export function useEquationFit(
   // doesn't re-fire (and re-validate) on every guess keystroke.
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
+
+  const xRange = useMemo(() => {
+    const d = analysisData(active);
+    if (!d) return null;
+    const finite = d.time.filter((v) => Number.isFinite(v));
+    if (finite.length === 0) return null;
+    return { min: Math.min(...finite), max: Math.max(...finite) };
+  }, [active]);
 
   useEffect(() => {
     if (!equation.trim()) {
@@ -234,5 +245,6 @@ export function useEquationFit(
     setModelName,
     save,
     remove,
+    xRange,
   };
 }

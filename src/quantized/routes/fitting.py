@@ -8,6 +8,7 @@ registry (no eval); the curve_fit ``model_fcn`` is a closure over ``evaluate``.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -18,10 +19,13 @@ from pydantic import BaseModel
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_bootstrap import bootstrap_fit, fit_posterior
 from quantized.calc.fit_equation import default_guesses, equation_model
+from quantized.calc.fit_findxy import find_x, find_y
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_scan import scan_models
 from quantized.calc.fitting import curve_fit
 from quantized.routes._payload import to_jsonable
+
+ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
 
 router = APIRouter(prefix="/api/fitting", tags=["fitting"])
 
@@ -301,4 +305,75 @@ def posterior(req: PosteriorRequest) -> dict[str, Any]:
             )
         )
     except (ValueError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ── Find X from Y / Y from X on a fitted curve (MAIN #15) ──────────────────
+# Inverse-evaluates a fit result the UI already holds (model/equation name +
+# fitted params) -- no re-fit involved. Accepts EITHER a registry ``model``
+# name or a saved custom ``equation`` string (mutually exclusive): both
+# resolve to the same ``fcn(x, p) -> y`` shape (calc.fit_models.evaluate /
+# calc.fit_equation.equation_model), so custom-equation fits get find-X/Y
+# for free, not just registry models.
+
+
+class FindXYRequest(BaseModel):
+    model: str | None = None
+    equation: str | None = None
+    params: list[float]
+    x_min: float
+    x_max: float
+    # Exactly one of x (find Y) / y (find X, all crossings) must be set.
+    x: float | None = None
+    y: float | None = None
+    grid_points: int = 2000
+
+
+@router.post("/find-xy")
+def find_xy(req: FindXYRequest) -> dict[str, Any]:
+    """Find Y at a given X, or every X where the fitted curve equals a given Y.
+
+    ``x`` set -> ``{"y": <float | null>}`` (a single evaluation).
+    ``y`` set -> ``{"x": [<float>, ...]}`` (every crossing within
+    ``[x_min, x_max]``; an empty list is a valid "no crossing" answer, not
+    an error).
+    """
+    if (req.model is None) == (req.equation is None):
+        raise HTTPException(
+            status_code=422, detail="specify exactly one of model or equation"
+        )
+    if (req.x is None) == (req.y is None):
+        raise HTTPException(
+            status_code=422, detail="specify exactly one of x (find Y) or y (find X)"
+        )
+    if req.x_max <= req.x_min:
+        raise HTTPException(status_code=422, detail="x_max must be greater than x_min")
+
+    fcn: ModelFn
+    if req.model is not None:
+        model_name = req.model
+        _require_model(model_name)
+
+        def fcn(xa: NDArray[np.float64], pp: NDArray[np.float64]) -> NDArray[np.float64]:
+            return evaluate(model_name, xa, pp)
+    else:
+        equation = req.equation
+        assert equation is not None  # narrowed by the "exactly one" check above
+        try:
+            fcn, names = equation_model(equation)
+        except (ValueError, IndexError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if len(req.params) != len(names):
+            raise HTTPException(
+                status_code=422,
+                detail=f"expected {len(names)} params for this equation, got {len(req.params)}",
+            )
+
+    try:
+        if req.x is not None:
+            return {"y": to_jsonable(find_y(fcn, req.params, req.x))}
+        assert req.y is not None  # narrowed by the "exactly one" check above
+        xs = find_x(fcn, req.params, req.y, req.x_min, req.x_max, grid_points=req.grid_points)
+        return {"x": to_jsonable(xs)}
+    except (ValueError, IndexError, ZeroDivisionError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
