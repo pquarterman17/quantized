@@ -9,6 +9,7 @@ import { MARKER_SHAPES } from "../../lib/markers";
 import type { Dataset, LineStyle, MarkerShape, SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { Card, Checkbox, IconButton, NumberField, SegmentedControl, Select } from "../primitives";
+import SeriesFillColorControls from "./SeriesFillColorControls";
 
 const PALETTE = [1, 2, 3, 4, 5, 6, 7, 8];
 const LINE_OPTS: { value: LineStyle; label: string }[] = [
@@ -27,10 +28,14 @@ const TRACE_OPTS: { value: TraceMode; label: string }[] = [
 function StyleRow({
   channel,
   label,
+  labels,
   naturalErr,
 }: {
   channel: number;
   label: string;
+  /** Every channel's label, dataset-channel-index order — the fill `vs`
+   *  channel picker's source (SeriesFillColorControls). */
+  labels: readonly string[];
   naturalErr?: number;
 }) {
   const style: SeriesStyle = useApp((s) => s.seriesStyles[channel]) ?? {};
@@ -191,6 +196,13 @@ function StyleRow({
             </>
           )}
         </div>
+
+        <SeriesFillColorControls
+          channel={channel}
+          style={style}
+          labels={labels}
+          setSeriesStyle={setSeriesStyle}
+        />
       </div>
     </details>
   );
@@ -206,7 +218,13 @@ export default function SeriesStyleCard({ active }: { active: Dataset | null }) 
   return (
     <Card title="Series style" count={styled || undefined} defaultOpen={false}>
       {active.data.labels.map((lab, i) => (
-        <StyleRow key={i} channel={i} label={lab} naturalErr={natErr[i]} />
+        <StyleRow
+          key={i}
+          channel={i}
+          label={lab}
+          labels={active.data.labels}
+          naturalErr={natErr[i]}
+        />
       ))}
     </Card>
   );

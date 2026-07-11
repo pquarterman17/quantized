@@ -39,7 +39,10 @@ class FigureRequest(BaseModel):
     title: str = ""  # optional figure title
     x_label: str | None = None  # override the auto-derived axis labels (None = derive)
     y_label: str | None = None
-    # Per-series style (aligned to the plotted y_keys order): color/width/line/marker.
+    # Per-series style (aligned to the plotted y_keys order): color/width/line/
+    # marker, plus MAIN #13's `fill` ("under" or `{"vs": <channel>}` — a
+    # channel index, resolved against `dataset` by
+    # `calc.plotting.resolve_style_channels`, called from `_figure_series`).
     series_styles: list[dict[str, Any] | None] | None = None
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
     # limits / margins / grid / annotations — validated in calc.
@@ -47,12 +50,19 @@ class FigureRequest(BaseModel):
     filename: str = "figure"
 
 
-def _figure_series(req: FigureRequest) -> tuple[Any, list[tuple[str, Any]], str, str]:
+def _figure_series(
+    req: FigureRequest,
+) -> tuple[Any, list[tuple[str, Any]], str, str, list[dict[str, Any] | None] | None]:
     """Resolve a ``FigureRequest``'s dataset + channel picks into the
-    renderer's ``(x, series, x_label, y_label)`` — shared by ``/figure``,
-    ``/figure-hitmap``, and the figure-page route (``routes.export_page``).
-    Caller-supplied labels override the auto-derived "label (unit)" strings."""
-    from quantized.calc.plotting import PlotState, build_series
+    renderer's ``(x, series, x_label, y_label, series_styles)`` — shared by
+    ``/figure``, ``/figure-hitmap``, and the figure-page route
+    (``routes.export_page``). Caller-supplied labels override the
+    auto-derived "label (unit)" strings. ``series_styles`` is
+    ``req.series_styles`` resolved against ``ds``/the plotted channel order
+    (MAIN #13's ``fill`` channel reference —
+    ``calc.plotting.resolve_style_channels``) — the ONLY place this
+    resolution happens, so every figure-export route gets it for free."""
+    from quantized.calc.plotting import PlotState, build_series, resolve_style_channels
 
     ds = DataStruct.from_dict(req.dataset)
     state = PlotState(
@@ -74,7 +84,8 @@ def _figure_series(req: FigureRequest) -> tuple[Any, list[tuple[str, Any]], str,
     series: list[tuple[str, Any]] = [
         (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series
     ]
-    return plot.x, series, x_label, y_label
+    styles = resolve_style_channels(ds, req.y_keys, req.series_styles)
+    return plot.x, series, x_label, y_label, styles
 
 
 @router.post("/figure")
@@ -90,7 +101,7 @@ def export_figure(req: FigureRequest) -> Response:
     from quantized.calc.figure import render_figure
 
     try:
-        x, series, x_label, y_label = _figure_series(req)
+        x, series, x_label, y_label, styles = _figure_series(req)
         data = render_figure(
             x,
             series,
@@ -101,7 +112,7 @@ def export_figure(req: FigureRequest) -> Response:
             y_log=req.y_log,
             fmt=req.fmt,
             style=req.style,
-            series_styles=req.series_styles,
+            series_styles=styles,
             dpi=dpi,
             overrides=req.overrides,
         )
@@ -124,7 +135,7 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
     from quantized.calc.figure import render_figure_map
 
     try:
-        x, series, x_label, y_label = _figure_series(req)
+        x, series, x_label, y_label, styles = _figure_series(req)
         return render_figure_map(
             x,
             series,
@@ -134,7 +145,7 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
             x_log=req.x_log,
             y_log=req.y_log,
             style=req.style,
-            series_styles=req.series_styles,
+            series_styles=styles,
             dpi=dpi,
             overrides=req.overrides,
         )

@@ -31,6 +31,7 @@ function live(): LivePlotSnapshot {
     styleList: [{ color: "#ff0000" } as SeriesStyle, undefined],
     labelList: ["moment", undefined],
     errorBars: new Map([[1, [0.1, 0.2, null]]]),
+    plotted: [0],
     hidden: [false, true],
   };
 }
@@ -54,6 +55,7 @@ describe("freezePlotSnapshot", () => {
     expect(frozen.errorBars).toEqual([[1, [0.1, 0.2, null]]]);
     expect(frozen.styleList).toEqual([{ color: "#ff0000" }, null]);
     expect(frozen.labelList).toEqual(["moment", null]);
+    expect(frozen.plotted).toEqual([0]);
     expect(frozen.hidden).toEqual([false, true]);
     // The whole bundle must survive a JSON round-trip unchanged (it rides
     // the .dwk plotWindows persistence).
@@ -145,5 +147,7 @@ describe("sanitizeFrozenBundle (the untrusted-.dwk boundary)", () => {
     expect(out!.labelList).toEqual([null, "ok"]);
     expect(out!.errorBars).toEqual([[1, [0.5]]]);
     expect(out!.hidden).toEqual([false, true]);
+    // Absent plotted degrades to empty, never drops the bundle.
+    expect(out!.plotted).toEqual([]);
   });
 });

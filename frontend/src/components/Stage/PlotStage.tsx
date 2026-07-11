@@ -200,11 +200,11 @@ export default function PlotStage() {
   useEffect(() => {
     publishLivePlotSnapshot(
       displayPayload && !altModeShowing
-        ? { payload: displayPayload, styleList, labelList, errorBars, hidden }
+        ? { payload: displayPayload, styleList, labelList, errorBars, plotted, hidden }
         : null,
     );
     return () => publishLivePlotSnapshot(null);
-  }, [displayPayload, styleList, labelList, errorBars, hidden, altModeShowing]);
+  }, [displayPayload, styleList, labelList, errorBars, plotted, hidden, altModeShowing]);
 
   // Alternate render modes (each self-contained; polar wins, then stats, then stack).
   const nPlotted = plotted.length;
@@ -278,6 +278,7 @@ export default function PlotStage() {
         annotations={annotations}
         regionShades={regionShades}
         seriesStyles={styleList}
+        plotted={plotted}
         seriesLabels={labelList}
         errorBars={errorBars}
         hidden={hidden}

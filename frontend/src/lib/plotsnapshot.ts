@@ -31,6 +31,9 @@ export interface LivePlotSnapshot {
   styleList: (SeriesStyle | undefined)[] | undefined;
   labelList: (string | undefined)[] | undefined;
   errorBars: Map<number, (number | null)[]>;
+  /** Dataset-channel index per plotted display-series — needed to resolve a
+   *  fill `{vs: channel}` band the same way the live plot does (MAIN #13). */
+  plotted: number[];
   hidden: boolean[] | undefined;
 }
 
@@ -42,6 +45,7 @@ export interface FrozenPlotBundle {
   styleList: (SeriesStyle | null)[] | null;
   labelList: (string | null)[] | null;
   errorBars: [number, (number | null)[]][];
+  plotted: number[];
   hidden: boolean[] | null;
 }
 
@@ -79,6 +83,7 @@ export function freezePlotSnapshot(s: LivePlotSnapshot): FrozenPlotBundle {
     styleList: s.styleList ? s.styleList.map((st) => (st ? { ...st } : null)) : null,
     labelList: s.labelList ? s.labelList.map((l) => l ?? null) : null,
     errorBars: [...s.errorBars.entries()].map(([k, col]) => [k, [...col]]),
+    plotted: [...s.plotted],
     hidden: s.hidden ? [...s.hidden] : null,
   };
 }
@@ -148,6 +153,9 @@ export function sanitizeFrozenBundle(v: unknown): FrozenPlotBundle | null {
       }
     }
   }
+  const plotted = Array.isArray(o.plotted)
+    ? o.plotted.filter((n): n is number => typeof n === "number")
+    : [];
   return {
     payload: {
       data: data as PlotPayload["data"],
@@ -165,6 +173,7 @@ export function sanitizeFrozenBundle(v: unknown): FrozenPlotBundle | null {
       ? o.labelList.map((l) => (typeof l === "string" ? l : null))
       : null,
     errorBars,
+    plotted,
     hidden: Array.isArray(o.hidden) ? o.hidden.map((h) => h === true) : null,
   };
 }

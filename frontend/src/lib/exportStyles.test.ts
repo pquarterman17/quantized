@@ -21,4 +21,20 @@ describe("buildExportStyles", () => {
     expect(out[0]?.marker).toBeUndefined();
     expect(out[0]?.marker_size).toBeUndefined();
   });
+
+  // ── MAIN #13: fill under/between ────────────────────────────────────────
+  it("carries fill: 'under' through unchanged", () => {
+    const out = buildExportStyles([0], { 0: { fill: "under" } });
+    expect(out[0]?.fill).toBe("under");
+  });
+
+  it("carries fill: {vs: channel} as a dataset channel index (not a display position)", () => {
+    const out = buildExportStyles([2, 0], { 2: { fill: { vs: 0 } } });
+    expect(out[0]?.fill).toEqual({ vs: 0 });
+  });
+
+  it("omits fill when it's 'none' (the default, no wire noise)", () => {
+    const out = buildExportStyles([0], { 0: { fill: "none" } });
+    expect(out[0]?.fill).toBeUndefined();
+  });
 });

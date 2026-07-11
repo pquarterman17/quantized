@@ -6,14 +6,16 @@ routes layer's job. No fastapi/pydantic imports.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
 from quantized.datastruct import DataStruct
 
-__all__ = ["PlotData", "PlotSeries", "PlotState", "build_series"]
+__all__ = ["PlotData", "PlotSeries", "PlotState", "build_series", "resolve_style_channels"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,3 +92,46 @@ def build_series(ds: DataStruct, state: PlotState | None = None) -> PlotData:
         x_log=state.x_log,
         y_log=state.y_log,
     )
+
+
+def resolve_style_channels(
+    ds: DataStruct,
+    y_keys: Sequence[int | str] | None,
+    series_styles: Sequence[Mapping[str, Any] | None] | None,
+) -> list[dict[str, Any] | None] | None:
+    """Resolve per-series style CHANNEL REFERENCES (MAIN #13's ``fill: {"vs":
+    <channel>}``) against ``ds`` and the actual plotted channel order -- so
+    ``calc.figure`` (and ``calc.figure_page``) never touch the raw
+    ``DataStruct``, only resolved values (they stay format-only: numbers in,
+    bytes out).
+
+    ``fill.vs`` (a dataset channel index -- the SAME semantic the frontend's
+    ``SeriesStyle.fill`` uses) resolves to the DISPLAY POSITION of that
+    channel among the plotted series -- dropped silently (no band) when the
+    channel isn't currently plotted, mirroring uPlot's own band mechanism,
+    which can only fill between two DRAWN series (see the frontend's
+    ``lib/uplotFill.ts``).
+
+    ``None`` (no styles requested) passes through unchanged; a malformed
+    style dict entry is left as-is (rendering degrades gracefully -- an
+    export must never 500 on a bad style hint).
+    """
+    if series_styles is None:
+        return None
+    plotted = list(range(ds.n_channels)) if y_keys is None else [_resolve(ds, k) for k in y_keys]
+    out: list[dict[str, Any] | None] = []
+    for spec in series_styles:
+        if not spec:
+            out.append(None)
+            continue
+        resolved: dict[str, Any] = dict(spec)  # shallow copy -- never mutate the caller's dict
+        fill = resolved.get("fill")
+        if isinstance(fill, Mapping) and "vs" in fill:
+            try:
+                vs_pos = plotted.index(int(fill["vs"]))
+            except (ValueError, TypeError):
+                resolved.pop("fill", None)
+            else:
+                resolved["fill"] = {"vs": vs_pos}
+        out.append(resolved)
+    return out

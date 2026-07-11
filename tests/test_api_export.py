@@ -358,6 +358,57 @@ def test_figure_bad_format_is_422() -> None:
     assert resp.status_code == 422
 
 
+def _three_channel_dataset() -> dict[str, Any]:
+    return {
+        "time": [1.0, 2.0, 3.0, 4.0],
+        "values": [[1.0, 2.0, 5.0], [4.0, 3.0, 4.0], [9.0, 5.0, 3.0], [16.0, 7.0, 2.0]],
+        "labels": ["a", "b", "c"],
+        "units": ["V", "V", "K"],
+        "metadata": {},
+    }
+
+
+# ── MAIN #13: fill under/between curves (wire-level channel resolution) ─────
+def test_figure_fill_under_download() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "png", "series_styles": [{"fill": "under"}]},
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_figure_fill_between_channels_download() -> None:
+    # y_keys=["a", "c"] -> display series 0="a", 1="c"; fill.vs=2 (channel "c")
+    # must resolve to display position 1, matching the frontend's own
+    # channel-index semantic for SeriesStyle.fill.
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _three_channel_dataset(),
+            "fmt": "pdf",
+            "y_keys": [0, 2],
+            "series_styles": [{"fill": {"vs": 2}}, None],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_figure_fill_vs_unplotted_channel_degrades_gracefully() -> None:
+    # channel 1 ("b") is never plotted here -> no band, but no 500 either.
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _three_channel_dataset(),
+            "fmt": "pdf",
+            "y_keys": [0],
+            "series_styles": [{"fill": {"vs": 1}}],
+        },
+    )
+    assert resp.status_code == 200
+
+
 def test_export_opj_roundtrips_through_our_reader(tmp_path):
     """POST /api/export/opj -> a CPYA project our own Origin reader re-opens."""
     from quantized.io.origin_project import read_origin_books

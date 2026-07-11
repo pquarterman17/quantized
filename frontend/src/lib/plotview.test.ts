@@ -242,6 +242,7 @@ describe("sanitizePlotWindows — snapshot windows (item 11)", () => {
     styleList: null,
     labelList: null,
     errorBars: [[1, [0.1, null]]],
+    plotted: [0],
     hidden: null,
   });
 

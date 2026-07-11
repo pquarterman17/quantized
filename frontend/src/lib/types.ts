@@ -542,6 +542,18 @@ export interface SeriesStyle {
   marker?: boolean; // draw markers at each data point
   markerSize?: number; // marker diameter in px (default 5); only when marker
   markerShape?: MarkerShape; // marker glyph (default circle); only when marker
+  /** Fill under/between curves (MAIN #13). `"none"`/undefined = no fill
+   *  (default). `"under"` fills from the line down to a ZERO y baseline —
+   *  uPlot's native `series.fill`/`fillTo` on screen, matplotlib
+   *  `fill_between(x, y, 0)` on export. `{vs: <channel>}` fills the band
+   *  BETWEEN this series and another plotted channel — uPlot's native
+   *  `opts.bands` on screen, `fill_between(x, y, other)` on export. `vs` is
+   *  always a dataset *channel index* (the same space `errKeys` uses); a
+   *  channel not currently plotted silently drops the band (both uPlot
+   *  bands and the export resolver can only fill between two DRAWN series).
+   *  Fill colour is always derived from the series' own resolved stroke
+   *  colour at a fixed translucency — never a separate stored colour. */
+  fill?: "none" | "under" | { vs: number };
 }
 
 /** One element row from the reference table. */

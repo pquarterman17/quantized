@@ -36,8 +36,9 @@ import matplotlib.pyplot as plt  # noqa: E402  (must follow matplotlib.use)
 import numpy as np  # noqa: E402
 from numpy.typing import ArrayLike  # noqa: E402
 
-from quantized.calc.figure import _validate_overrides, draw_series_axes, style_rc  # noqa: E402
+from quantized.calc.figure import draw_series_axes, style_rc  # noqa: E402
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
+from quantized.calc.figure_overrides import _validate_overrides  # noqa: E402
 from quantized.calc.figure_styles import FigureStyle, figure_style  # noqa: E402
 
 __all__ = ["PagePanel", "panel_label", "render_figure_page"]

@@ -907,3 +907,56 @@ describe("buildOpts rich-text labels (GOTO #5)", () => {
     expect(opts.plugins).toHaveLength(1);
   });
 });
+
+describe("buildOpts fill under/between curves (MAIN #13)", () => {
+  const two: PlotPayload = { ...payload, series: [...payload.series, { label: "B", unit: "T" }] };
+
+  it("sets series.fill/fillTo=0 for fill: 'under', derived (translucent) from its stroke", () => {
+    const styles: (SeriesStyle | undefined)[] = [{ fill: "under", color: "#8b5cf6" }];
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", seriesStyles: styles });
+    const s = opts.series?.[1] as { fill?: string; fillTo?: number };
+    expect(s.fill).toBe("color-mix(in oklab, #8b5cf6 25%, transparent)");
+    expect(s.fillTo).toBe(0);
+  });
+
+  it("leaves fill/fillTo unset for 'none' or no style at all", () => {
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const s = opts.series?.[1] as { fill?: string; fillTo?: number };
+    expect(s.fill).toBeUndefined();
+    expect(s.fillTo).toBeUndefined();
+  });
+
+  it("adds an opts.bands entry for fill: {vs: channel}, resolved via `plotted`", () => {
+    // plotted = [0, 1]: display series 0 = channel 0 ("A"), 1 = channel 1 ("B").
+    const styles: (SeriesStyle | undefined)[] = [{ fill: { vs: 1 }, color: "#ff0000" }, undefined];
+    const opts = buildOpts(two, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      seriesStyles: styles,
+      plotted: [0, 1],
+    });
+    expect(opts.bands).toEqual([
+      { series: [1, 2], fill: "color-mix(in oklab, #ff0000 25%, transparent)" },
+    ]);
+    // The banding series itself carries no per-series fill (bands are opts-level).
+    expect((opts.series?.[1] as { fill?: string }).fill).toBeUndefined();
+  });
+
+  it("omits bands entirely when nothing requests one", () => {
+    const opts = buildOpts(two, { ...base, yLog: false, tool: "zoom", plotted: [0, 1] });
+    expect(opts.bands).toBeUndefined();
+  });
+
+  it("drops a fill: {vs} band whose target channel isn't in `plotted`", () => {
+    const styles: (SeriesStyle | undefined)[] = [{ fill: { vs: 5 } }];
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      seriesStyles: styles,
+      plotted: [0],
+    });
+    expect(opts.bands).toBeUndefined();
+  });
+});

@@ -162,6 +162,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.annotations,
     args.regionShades,
     args.seriesStyles,
+    args.plotted,
     args.seriesLabels,
     args.errorBars,
     args.hidden,

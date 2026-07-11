@@ -115,6 +115,53 @@ def test_extra_or_missing_series_styles_are_safe() -> None:
     assert out[:5] == b"%PDF-"
 
 
+# ── Fill under/between curves (MAIN #13) ─────────────────────────────────────
+def test_fill_under_renders_and_changes_output() -> None:
+    x = np.linspace(0, 10, 30)
+    plain = render_figure(x, [("y", np.sin(x))], fmt="png")
+    filled = render_figure(x, [("y", np.sin(x))], fmt="png", series_styles=[{"fill": "under"}])
+    assert filled[:8] == b"\x89PNG\r\n\x1a\n"
+    assert filled != plain
+
+
+def test_fill_under_svg_contains_a_fill_path() -> None:
+    x = np.linspace(0, 10, 20)
+    out = render_figure(
+        x, [("y", x)], fmt="svg", series_styles=[{"fill": "under", "color": "#112233"}]
+    )
+    svg = out.decode("utf-8", "ignore")
+    # fill_between's patch renders as a filled (non-"none") path in the SVG.
+    assert "#112233" in svg
+
+
+def test_fill_between_two_series_renders() -> None:
+    x = np.linspace(0, 10, 20)
+    # {"vs": 1} is already a DISPLAY INDEX here — this is the pure render
+    # layer, downstream of calc.plotting.resolve_style_channels.
+    out = render_figure(
+        x,
+        [("a", x), ("b", x + 2)],
+        fmt="pdf",
+        series_styles=[{"fill": {"vs": 1}}, None],
+    )
+    assert out[:5] == b"%PDF-"
+
+
+def test_fill_between_out_of_range_vs_is_ignored_not_error() -> None:
+    x = np.linspace(0, 10, 10)
+    out = render_figure(
+        x, [("a", x)], fmt="pdf", series_styles=[{"fill": {"vs": 99}}]
+    )
+    assert out[:5] == b"%PDF-"
+
+
+def test_fill_none_is_a_no_op() -> None:
+    x = np.linspace(0, 10, 10)
+    a = render_figure(x, [("y", x)], fmt="png", series_styles=[{"fill": "none"}])
+    b = render_figure(x, [("y", x)], fmt="png")
+    assert a == b
+
+
 # ── Property overrides (gap #11) ─────────────────────────────────────────────
 class TestOverrides:
     X = [1.0, 2.0, 3.0, 4.0]
