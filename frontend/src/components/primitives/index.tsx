@@ -11,6 +11,14 @@ import type {
 import clsx from "clsx";
 
 export { RangeSlider, type RangeSliderProps } from "./RangeSlider";
+export { default as RichText } from "./RichText";
+export { default as RichLabelInput } from "./RichLabelInput";
+export {
+  default as SymbolPalette,
+  insertLabelToken,
+  countUnescapedDollars,
+  type PaletteEntry,
+} from "./SymbolPalette";
 
 // ── Button ────────────────────────────────────────────────────────────────
 type ButtonVariant = "default" | "primary" | "ghost" | "danger";
