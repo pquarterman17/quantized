@@ -140,11 +140,11 @@ test corpus) — exactly quantized's domain. The go-to bar is therefore
 
 1. **Custom fit models:** ✅ ANSWERED 2026-07-10 — build the in-app
    equation builder AND the AICc quick-scan (→ GOTO_PLAN #1, #6).
-   ALSO RAISED: how hard would pulling fit engines/models from **bumps**
-   be, if installed? **Discuss before implementing** — owner-gated
-   discussion item (BSD-3, so license-compatible as an optional extra;
-   would be an *additional* engine, never replacing the MATLAB-parity
-   fitters the goldens lock).
+   ALSO RAISED + RESOLVED same day: pull fit engines from **bumps** when
+   installed — GO as an optional extra (BSD-3), an *additional* engine
+   never replacing the MATLAB-parity fitters the goldens lock, with
+   **DREAM runs submitted to a poll-model background job runner so the
+   window never locks** (→ GOTO_PLAN #9, #10).
 2. **Baselines:** ✅ ANSWERED 2026-07-10 — anchor-point AND Shirley,
    plus explicit analytic backgrounds (linear, quadratic, …) and
    domain-specific ones: XRD low-angle background and XRR/NR footprint
@@ -168,6 +168,52 @@ test corpus) — exactly quantized's domain. The go-to bar is therefore
    doing 100% in quantized, Origin closed — e.g. re-doing the YIG
    magnetometry + PNR + XRD figures end-to-end? (That project's
    friction list becomes the acceptance test for "go-to".)
+
+   **Protocol (elaborated 2026-07-10; owner still picks the project +
+   start timing):**
+
+   *Why a project, not a feature list.* Feature checklists measure
+   coverage; a committed project measures **sufficiency**. Any gap that
+   actually matters surfaces as friction within minutes of hitting it
+   in real work; a gap that never surfaces never mattered. The trigger
+   project converts "is quantized good enough to switch?" from opinion
+   into an empirical log with time-costs attached.
+
+   *Candidate.* The YIG-Co-Py study is the natural pick — its three
+   Origin projects (`Magnetometry_YIG-Co-Py.opj`, `PNR.opj`, `XRD.opj`)
+   are the owner's actual recent work and jointly exercise import,
+   corrections, hysteresis analysis, reflectivity fitting, XRD peaks,
+   worksheets, publication export, AND most GOTO Tier-1 items (the fig
+   composer for the multi-panel figure, rich text for µ₀H / Å⁻¹ axes,
+   anchor baselines).
+
+   *Rules.*
+   1. Enumerate the deliverables up front: the exact final figure set
+      (and tables) the paper/report needs, listed before starting.
+   2. **Origin stays closed for the whole project.** On hitting a wall,
+      do not switch — log it and find a quantized-native workaround.
+      Only a hard blocker (deliverable impossible, not just painful)
+      permits a one-artifact fallback, and that entry becomes the
+      loudest line in the log.
+   3. Keep a running **friction log** (`FRICTION_LOG.md` in the project
+      dir): what happened, where, the workaround, minutes lost, and a
+      gut S/M/L fix estimate. Log paper-cuts too.
+   4. Afterwards, triage: **blockers** (couldn't do it) and the top
+      **detours** (did it painfully) become the next GOTO tier —
+      re-ranking the survey's predictions with real evidence;
+      **paper-cuts** batch into a single polish item.
+   5. **Exit criteria for "go-to":** the full deliverable set produced
+      from raw instrument files with zero Origin opens and zero
+      post-processing outside quantized (the vector-export pillar), and
+      a friction log converged to paper-cuts only. Repeat on the next
+      project until the log is boring — that is "go-to", empirically.
+
+   *Timing recommendation.* Don't wait for GOTO Tier 1 to finish: run
+   the magnetometry + XRD halves NOW (those pipelines are the most
+   complete) so the friction log re-ranks the plan before the big
+   builds; hold the PNR multi-panel-figure half until the composer (#4)
+   and rich text (#5) land, then finish the set as their acceptance
+   test.
 
 ## 5. Explicit non-goals
 

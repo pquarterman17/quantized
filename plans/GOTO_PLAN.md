@@ -37,14 +37,19 @@ panel refs + labels) → server-side matplotlib page → one PDF/SVG.
 - Item 5 (rich text) touches every label surface — schedule alone
 - Item 6 requires item 1 (scan set includes saved custom models)
 - Items 7, 8 extend item 2's baseline-picker surface
-- The bumps discussion (owner gate) may reshape item 6's engine choice —
-  discuss before starting 6
+- Item 10 (bumps): fast engines are independent; the DREAM path
+  requires item 9 (job runner). Item 6 can use either engine.
+
+### Resolved decisions
+- **bumps as an optional fit engine — GO (2026-07-10).** BSD-3 →
+  license-safe optional extra; an ADDITIONAL engine behind a guarded
+  import, never replacing the MATLAB-parity fitters the goldens lock.
+  Long DREAM runs must NOT lock the window → they submit through the
+  poll-model background job runner (item 9), whose shape follows the
+  PORT_PLAN #7 reference correction (polled ThreadPool store, no
+  WebSocket). Fast engines (amoeba/LM/DE) stay synchronous.
 
 ### Owner gates (decide before/while building)
-- **bumps as an optional fit engine** — owner wants a feasibility
-  discussion FIRST (do not implement). BSD-3 → license-safe optional
-  extra; would be an additional engine behind guarded import, never
-  replacing the MATLAB-parity fitters the goldens lock.
 - Survey questions still open: 3-D (Q4), worksheet reshape (Q6),
   date-time axes (Q7), signal-processing non-goal (Q8), and the
   switch-trigger acceptance project (Q9).
@@ -99,6 +104,27 @@ panel refs + labels) → server-side matplotlib page → one PDF/SVG.
 8. **Analytic baseline completion** — explicit linear/quadratic/poly-n
    choices surfaced in the baseline picker (BG-from-region polyfit math
    exists; this is the UI surface)
+
+9. **Background job runner for long fits** — the poll-model store from
+   the PORT_PLAN #7 audit (mirror fermiviewer `jobs.py` +
+   `routes/jobs_api.py`: ThreadPool + GET-poll; cancel as a checked
+   flag; no WebSocket). Progress fraction from iteration callbacks so
+   the window never locks. First consumers: DREAM (#10) and the
+   existing `calc/mcmc.py` posterior runs.
+   - [ ] `quantized/jobs.py` Job/JobStore (package root — threading is
+     barred from calc/io by the pure-layer guard)
+   - [ ] `routes/jobs_api.py` submit/status/result/cancel (thin)
+   - [ ] `lib/jobs.ts` poll client + progress/cancel UI in the fit
+     workshop (poll only while a job is live)
+
+10. **bumps optional fit engine** — `quantized[bumps]` extra (BSD-3,
+    pin a floor version), `calc/fit_bumps.py` adapter (registry + saved
+    custom models → `Curve`/`FitProblem`; popt / uncertainties / χ²
+    back), "Engine" dropdown in the fit workshop with the MATLAB-parity
+    engine as default. Fast engines (amoeba/LM/DE) synchronous; **DREAM
+    submits through #9** with iteration progress + cancel, posterior +
+    corner-plot handoff on completion; uncertainties labeled by origin
+    (posterior vs Hessian).
 
 ## Tier 3 — Nice-to-Have
 

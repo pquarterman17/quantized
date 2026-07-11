@@ -34,6 +34,8 @@ GAP_PLOTTYPES, and M1_SPRINT archived as complete)
 | 17 | Rich-text labels: shared AST rendered by uPlot on-screen + matplotlib mathtext in export, symbol palette | GOTO #5 | M |
 | 18 | AICc model quick-scan (after #13; engine choice may await the bumps discussion) | GOTO #6 | S |
 | 19 | XRD low-angle background + XRR/NR footprint correction; analytic baseline UI completion | GOTO #7/#8 | S–M |
+| 20 | Background job runner for long fits — poll-model store (fermiviewer `jobs.py` mirror: ThreadPool + GET-poll + cancel flag), progress in fit workshop; first consumers DREAM + `calc/mcmc.py` | GOTO #9 | M |
+| 21 | bumps optional fit engine — `quantized[bumps]` extra, `calc/fit_bumps.py` adapter, Engine dropdown (parity engine stays default); DREAM submits through the job runner | GOTO #10 | M |
 
 ## Owner actions & owner-gated decisions
 
@@ -46,8 +48,7 @@ GAP_PLOTTYPES, and M1_SPRINT archived as complete)
 | **Pop-out books/plots into windows** — PLAN WITH OWNER FIRST (gesture, "pop out a BOOK" semantics, bulk "window everything" command) | MULTI_PLOT #19 |
 | **Worksheet view-state persistence** — decide once, with usage evidence, whether sort/widths/selection persist per-dataset in `.dwk` (default: no) | WORKSHEET #14 |
 | **Apache-2.0 copyright holder line** for LICENSE/NOTICE | PORT_PLAN #1 |
-| **bumps as an optional fit engine** — feasibility discussion FIRST (owner request 2026-07-10, do not implement); would be an additional engine, never replacing the MATLAB-parity fitters | GOTO (gate) |
-| **Go-to survey open questions** — 3-D (Q4), worksheet reshape (Q6), date-time axes (Q7), signal-processing non-goal (Q8), switch-trigger acceptance project (Q9); see `plans/design/ORIGIN_GOTO_SURVEY.md` | GOTO (gate) |
+| **Go-to survey open questions** — 3-D (Q4), worksheet reshape (Q6), date-time axes (Q7), signal-processing non-goal (Q8), switch-trigger project pick + start timing (Q9 — protocol now written up in the survey doc) | GOTO (gate) |
 
 ## Blocked on external samples / specs
 
@@ -74,7 +75,7 @@ GAP_PLOTTYPES, and M1_SPRINT archived as complete)
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/GOTO_PLAN.md` | Active | #1–#8 (owner-decided 2026-07-10); Tier 3 empty pending survey Q4/Q6/Q7/Q8/Q9 + bumps gate |
+| `plans/GOTO_PLAN.md` | Active | #1–#10 (owner-decided 2026-07-10, incl. bumps + job runner); Tier 3 empty pending survey Q4/Q6/Q7/Q8/Q9 |
 | `plans/PORT_PLAN.md` | Active | #10+#15 (blocked), #12 (partial), #46–49 (partial), #50 (continuous), #52–53 |
 | `plans/PORT_CHECKLIST.md` | Active (live parity tracker) | 3 real-work lines (2 blocked + 1 partial) + inline deferral tails |
 | `plans/MULTI_PLOT_PLAN.md` | Active | #19 only (owner planning session first) |

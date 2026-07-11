@@ -465,6 +465,10 @@ MATLAB."**
   fermiviewer `jobs_api` is a polled ThreadPool store, not a WebSocket —
   so if ever reopened, mirror the poll model (~2 small files at package
   root, threading barred from calc/io by the pure-layer guard).
+  **Sequel (2026-07-10, same day):** the predicted workload arrived —
+  long bumps DREAM fits must not lock the window — so a poll-model job
+  runner following exactly this reference correction was booked as
+  **GOTO_PLAN #9** (new scope, new consumer; this closure stands).
 
 - ~~**#33 Plot state model**~~ (2026-06-25) — axes/limits/scales (lin/log),
   dual-Y, tick formats (Auto/Fixed/Sci), and per-series styling (color/width/
