@@ -6,7 +6,6 @@
 
 import { useState } from "react";
 
-import { Button, NumberField } from "../../primitives";
 import {
   magneticCurieWeiss,
   magneticDemag,
@@ -14,65 +13,18 @@ import {
   magneticLangevin,
   magneticMomentConvert,
 } from "../../../lib/api";
-import { fmtNum } from "../../../lib/format";
-import { useCalcHistory } from "../../../store/calcHistory";
+import {
+  Button,
+  Card,
+  Field,
+  ROW,
+  fmtNum,
+  makeCardRunner,
+  resultLine,
+  type CardResult,
+} from "./shared";
 
-const DOMAIN = "Magnetic";
-
-/** A titled group of inputs + a result line, mirroring the MATLAB cards. */
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        border: "1px solid var(--border-soft)",
-        borderRadius: 6,
-        padding: "8px 10px",
-        marginTop: 10,
-      }}
-    >
-      <div className="qzk-field-lbl" style={{ marginTop: 0, marginBottom: 6 }}>
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  width = 84,
-  unit,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  width?: number;
-  unit?: string;
-}) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <span className="qzk-field-lbl" style={{ margin: 0 }}>
-        {label}
-      </span>
-      <NumberField value={value} width={width} onChange={onChange} unit={unit} />
-    </span>
-  );
-}
-
-const ROW: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
-};
-const RESULT: React.CSSProperties = {
-  marginTop: 8,
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--font-size-lg)",
-};
-const ERR: React.CSSProperties = { marginTop: 8, color: "var(--danger)" };
+const run = makeCardRunner("Magnetic");
 
 const MOMENT_UNITS = ["emu", "Am2", "memu", "uemu"];
 const DEMAG_SHAPES = [
@@ -89,44 +41,27 @@ export default function MagneticTab() {
   const [momUnit, setMomUnit] = useState("emu");
   const [momVol, setMomVol] = useState("0");
   const [momAtoms, setMomAtoms] = useState("0");
-  const [c1, setC1] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c1, setC1] = useState<CardResult>(null);
 
   // Card 2 — demagnetizing factors.
   const [shape, setShape] = useState("Sphere");
-  const [c2, setC2] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c2, setC2] = useState<CardResult>(null);
 
   // Card 3 — Curie-Weiss.
   const [cwC, setCwC] = useState("4.375");
   const [cwTheta, setCwTheta] = useState("-50");
-  const [c3, setC3] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c3, setC3] = useState<CardResult>(null);
 
   // Card 4 — Langevin.
   const [langMu, setLangMu] = useState("1e-16");
   const [langH, setLangH] = useState("10000");
   const [langT, setLangT] = useState("300");
-  const [c4, setC4] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c4, setC4] = useState<CardResult>(null);
 
   // Card 5 — domain wall.
   const [dwA, setDwA] = useState("2e-6");
   const [dwK, setDwK] = useState("4.8e6");
-  const [c5, setC5] = useState<{ text: string; err?: boolean } | null>(null);
-
-  async function run(
-    setter: (r: { text: string; err?: boolean } | null) => void,
-    label: string,
-    fn: () => Promise<string>,
-  ): Promise<void> {
-    try {
-      const text = await fn();
-      setter({ text });
-      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
-    } catch (e) {
-      setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
-    }
-  }
-
-  const result = (r: { text: string; err?: boolean } | null) =>
-    r && <div style={r.err ? ERR : RESULT}>{r.text}</div>;
+  const [c5, setC5] = useState<CardResult>(null);
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -172,7 +107,7 @@ export default function MagneticTab() {
             Convert
           </Button>
         </div>
-        {result(c1)}
+        {resultLine(c1)}
       </Card>
 
       <Card title="Demagnetization factors">
@@ -204,7 +139,7 @@ export default function MagneticTab() {
             Calculate
           </Button>
         </div>
-        {result(c2)}
+        {resultLine(c2)}
       </Card>
 
       <Card title="Curie-Weiss law">
@@ -224,7 +159,7 @@ export default function MagneticTab() {
             Calculate
           </Button>
         </div>
-        {result(c3)}
+        {resultLine(c3)}
       </Card>
 
       <Card title="Langevin / superparamagnetism">
@@ -245,7 +180,7 @@ export default function MagneticTab() {
             Calculate
           </Button>
         </div>
-        {result(c4)}
+        {resultLine(c4)}
       </Card>
 
       <Card title="Domain wall & anisotropy">
@@ -265,7 +200,7 @@ export default function MagneticTab() {
             Calculate
           </Button>
         </div>
-        {result(c5)}
+        {resultLine(c5)}
       </Card>
     </div>
   );

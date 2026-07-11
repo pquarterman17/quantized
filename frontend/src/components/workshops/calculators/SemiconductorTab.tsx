@@ -8,7 +8,6 @@
 
 import { useState } from "react";
 
-import { Button, NumberField } from "../../primitives";
 import {
   semiconductorBuiltInPotential,
   semiconductorCarrierConc,
@@ -23,10 +22,18 @@ import {
   semiconductorSheetCarrierDensity,
   semiconductorThermalVelocity,
 } from "../../../lib/api";
-import { fmtNum } from "../../../lib/format";
-import { useCalcHistory } from "../../../store/calcHistory";
+import {
+  Button,
+  Card,
+  Field,
+  ROW,
+  fmtNum,
+  makeCardRunner,
+  resultLine,
+  type CardResult,
+} from "./shared";
 
-const DOMAIN = "Semiconductor";
+const runCard = makeCardRunner("Semiconductor");
 
 // Material presets (300 K) mirrored from calc.semiconductor.materialPresets so
 // the dropdowns auto-fill without a round-trip. Eg [eV], eps_r, me*, mh*.
@@ -41,15 +48,6 @@ const MATERIALS: Record<string, { Eg: number; eps_r: number; me: number; mh: num
 const MAT_NAMES = Object.keys(MATERIALS);
 const NM_TO_CM = 1e-7;
 
-const ROW: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" };
-const RESULT: React.CSSProperties = {
-  marginTop: 8,
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--font-size-lg)",
-};
-const ERR: React.CSSProperties = { marginTop: 8, color: "var(--danger)" };
-
-type Res = { text: string; err?: boolean } | null;
 type Vals = Record<string, string>;
 /** Picks one preset field into a form field, optionally transformed. */
 type Fill = { from: keyof (typeof MATERIALS)["Si"]; to: string }[];
@@ -226,20 +224,17 @@ const DEFAULTS: Vals = Object.fromEntries(
 
 export default function SemiconductorTab() {
   const [vals, setVals] = useState<Vals>(DEFAULTS);
-  const [results, setResults] = useState<Record<number, Res>>({});
+  const [results, setResults] = useState<Record<number, CardResult>>({});
 
   const set = (id: string) => (v: string) => setVals((s) => ({ ...s, [id]: v }));
   const num = (id: string) => Number(vals[id]);
 
-  async function run(idx: number, card: CardSpec): Promise<void> {
-    try {
-      const text = await card.compute(num);
-      setResults((s) => ({ ...s, [idx]: { text } }));
-      useCalcHistory.getState().record({ domain: DOMAIN, label: card.title, summary: text });
-    } catch (e) {
-      const text = e instanceof Error ? e.message : "calculation failed";
-      setResults((s) => ({ ...s, [idx]: { text, err: true } }));
-    }
+  function run(idx: number, card: CardSpec): Promise<void> {
+    return runCard(
+      (r) => setResults((s) => ({ ...s, [idx]: r })),
+      card.title,
+      () => card.compute(num),
+    );
   }
 
   function pickMaterial(card: CardSpec, name: string): void {
@@ -255,18 +250,7 @@ export default function SemiconductorTab() {
   return (
     <div style={{ marginTop: 12 }}>
       {CARDS.map((card, idx) => (
-        <div
-          key={card.title}
-          style={{
-            border: "1px solid var(--border-soft)",
-            borderRadius: 6,
-            padding: "8px 10px",
-            marginTop: 10,
-          }}
-        >
-          <div className="qzk-field-lbl" style={{ marginTop: 0, marginBottom: 6 }}>
-            {card.title}
-          </div>
+        <Card key={card.title} title={card.title}>
           <div style={ROW}>
             {card.material && (
               <select
@@ -284,26 +268,21 @@ export default function SemiconductorTab() {
               </select>
             )}
             {card.fields.map((f) => (
-              <span key={f.id} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span className="qzk-field-lbl" style={{ margin: 0 }}>
-                  {f.label}
-                </span>
-                <NumberField
-                  value={vals[f.id]}
-                  width={f.width ?? 84}
-                  onChange={set(f.id)}
-                  unit={f.unit}
-                />
-              </span>
+              <Field
+                key={f.id}
+                label={f.label}
+                value={vals[f.id]}
+                onChange={set(f.id)}
+                width={f.width}
+                unit={f.unit}
+              />
             ))}
             <Button variant="primary" size="sm" onClick={() => void run(idx, card)}>
               =
             </Button>
           </div>
-          {results[idx] && (
-            <div style={results[idx]?.err ? ERR : RESULT}>{results[idx]?.text}</div>
-          )}
-        </div>
+          {resultLine(results[idx] ?? null)}
+        </Card>
       ))}
     </div>
   );

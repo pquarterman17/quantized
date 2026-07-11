@@ -5,106 +5,41 @@
 
 import { useState } from "react";
 
-import { Button, NumberField } from "../../primitives";
 import {
   diffusionArrhenius,
   diffusionFickFlux,
   diffusionLength,
 } from "../../../lib/api";
-import { fmtNum } from "../../../lib/format";
-import { useCalcHistory } from "../../../store/calcHistory";
+import {
+  Button,
+  Card,
+  Field,
+  ROW,
+  fmtNum,
+  makeCardRunner,
+  resultLine,
+  type CardResult,
+} from "./shared";
 
-const DOMAIN = "Diffusion";
-
-/** A titled group of inputs + a result line, mirroring the MATLAB cards. */
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        border: "1px solid var(--border-soft)",
-        borderRadius: 6,
-        padding: "8px 10px",
-        marginTop: 10,
-      }}
-    >
-      <div className="qzk-field-lbl" style={{ marginTop: 0, marginBottom: 6 }}>
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  width = 84,
-  unit,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  width?: number;
-  unit?: string;
-}) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <span className="qzk-field-lbl" style={{ margin: 0 }}>
-        {label}
-      </span>
-      <NumberField value={value} width={width} onChange={onChange} unit={unit} />
-    </span>
-  );
-}
-
-const ROW: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
-};
-const RESULT: React.CSSProperties = {
-  marginTop: 8,
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--font-size-lg)",
-};
-const ERR: React.CSSProperties = { marginTop: 8, color: "var(--danger)" };
+const run = makeCardRunner("Diffusion");
 
 export default function DiffusionTab() {
   // Card 1 — Arrhenius diffusion coefficient.
   const [d0, setD0] = useState("0.1");
   const [ea, setEa] = useState("1.0");
   const [arrT, setArrT] = useState("1000");
-  const [c1, setC1] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c1, setC1] = useState<CardResult>(null);
 
   // Card 2 — diffusion length.
   const [dlD, setDlD] = useState("1e-12");
   const [dlT, setDlT] = useState("3600");
-  const [c2, setC2] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c2, setC2] = useState<CardResult>(null);
 
   // Card 3 — Fick's first law (flux).
   const [fickD, setFickD] = useState("1e-12");
   const [fickDC, setFickDC] = useState("1e18");
   const [fickDx, setFickDx] = useState("1e-5");
-  const [c3, setC3] = useState<{ text: string; err?: boolean } | null>(null);
-
-  async function run(
-    setter: (r: { text: string; err?: boolean } | null) => void,
-    label: string,
-    fn: () => Promise<string>,
-  ): Promise<void> {
-    try {
-      const text = await fn();
-      setter({ text });
-      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
-    } catch (e) {
-      setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
-    }
-  }
-
-  const result = (r: { text: string; err?: boolean } | null) =>
-    r && <div style={r.err ? ERR : RESULT}>{r.text}</div>;
+  const [c3, setC3] = useState<CardResult>(null);
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -126,7 +61,7 @@ export default function DiffusionTab() {
             =
           </Button>
         </div>
-        {result(c1)}
+        {resultLine(c1)}
       </Card>
 
       <Card title="Diffusion length">
@@ -146,7 +81,7 @@ export default function DiffusionTab() {
             =
           </Button>
         </div>
-        {result(c2)}
+        {resultLine(c2)}
       </Card>
 
       <Card title="Fick's first law (flux)">
@@ -167,7 +102,7 @@ export default function DiffusionTab() {
             =
           </Button>
         </div>
-        {result(c3)}
+        {resultLine(c3)}
       </Card>
     </div>
   );

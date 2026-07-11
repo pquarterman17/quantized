@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 
-import { Button, NumberField, Select } from "../../primitives";
+import { Select } from "../../primitives";
 import {
   vacuumGasFlow,
   vacuumKnudsen,
@@ -14,73 +14,18 @@ import {
   vacuumPumpDownTime,
   vacuumSputterYield,
 } from "../../../lib/api";
-import { fmtNum } from "../../../lib/format";
-import { useCalcHistory } from "../../../store/calcHistory";
+import {
+  Button,
+  Card,
+  Field,
+  ROW,
+  fmtNum,
+  makeCardRunner,
+  resultLine,
+  type CardResult,
+} from "./shared";
 
-const DOMAIN = "Vacuum";
-
-/** A titled group of inputs + a result line, mirroring the MATLAB cards. */
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        border: "1px solid var(--border-soft)",
-        borderRadius: 6,
-        padding: "8px 10px",
-        marginTop: 10,
-      }}
-    >
-      <div className="qzk-field-lbl" style={{ marginTop: 0, marginBottom: 6 }}>
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  width = 84,
-  unit,
-  numeric = true,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  width?: number;
-  unit?: string;
-  numeric?: boolean;
-}) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <span className="qzk-field-lbl" style={{ margin: 0 }}>
-        {label}
-      </span>
-      <NumberField
-        value={value}
-        width={width}
-        onChange={onChange}
-        unit={unit}
-        numeric={numeric}
-      />
-    </span>
-  );
-}
-
-const ROW: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
-};
-const RESULT: React.CSSProperties = {
-  marginTop: 8,
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--font-size-lg)",
-};
-const ERR: React.CSSProperties = { marginTop: 8, color: "var(--danger)" };
+const run = makeCardRunner("Vacuum");
 
 // Molecular diameter (m) per gas species — sets d in λ = kT/(√2 π d² P).
 const GAS_OPTIONS = [
@@ -98,53 +43,36 @@ export default function VacuumTab() {
   const [mfpP, setMfpP] = useState("1e-4");
   const [mfpT, setMfpT] = useState("300");
   const [mfpGas, setMfpGas] = useState("3.64e-10");
-  const [c1, setC1] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c1, setC1] = useState<CardResult>(null);
 
   // Card 2 — monolayer formation time.
   const [monoP, setMonoP] = useState("1.33e-4");
-  const [c2, setC2] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c2, setC2] = useState<CardResult>(null);
 
   // Card 3 — sputter yield (lookup).
   const [syMat, setSyMat] = useState("Si");
   const [syIon, setSyIon] = useState("Ar");
   const [syE, setSyE] = useState("500");
-  const [c3, setC3] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c3, setC3] = useState<CardResult>(null);
 
   // Card 4 — pump-down estimate.
   const [pV, setPV] = useState("50");
   const [pS, setPS] = useState("100");
   const [pP0, setPP0] = useState("1e5");
   const [pPf, setPPf] = useState("1e-4");
-  const [c4, setC4] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c4, setC4] = useState<CardResult>(null);
 
   // Card 5 — Knudsen number.
   const [knMfp, setKnMfp] = useState("1e-4");
   const [knL, setKnL] = useState("0.025");
-  const [c5, setC5] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c5, setC5] = useState<CardResult>(null);
 
   // Card 6 — gas-flow conductance (tube).
   const [gfP1, setGfP1] = useState("1e-3");
   const [gfP2, setGfP2] = useState("1e-5");
   const [gfD, setGfD] = useState("0.025");
   const [gfL, setGfL] = useState("0.5");
-  const [c6, setC6] = useState<{ text: string; err?: boolean } | null>(null);
-
-  async function run(
-    setter: (r: { text: string; err?: boolean } | null) => void,
-    label: string,
-    fn: () => Promise<string>,
-  ): Promise<void> {
-    try {
-      const text = await fn();
-      setter({ text });
-      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
-    } catch (e) {
-      setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
-    }
-  }
-
-  const result = (r: { text: string; err?: boolean } | null) =>
-    r && <div style={r.err ? ERR : RESULT}>{r.text}</div>;
+  const [c6, setC6] = useState<CardResult>(null);
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -175,7 +103,7 @@ export default function VacuumTab() {
             Calculate
           </Button>
         </div>
-        {result(c1)}
+        {resultLine(c1)}
       </Card>
 
       <Card title="Monolayer formation time">
@@ -194,7 +122,7 @@ export default function VacuumTab() {
             Calculate
           </Button>
         </div>
-        {result(c2)}
+        {resultLine(c2)}
       </Card>
 
       <Card title="Sputter yield (lookup)">
@@ -217,7 +145,7 @@ export default function VacuumTab() {
             Calculate
           </Button>
         </div>
-        {result(c3)}
+        {resultLine(c3)}
       </Card>
 
       <Card title="Pump-down estimate">
@@ -246,7 +174,7 @@ export default function VacuumTab() {
             Calculate
           </Button>
         </div>
-        {result(c4)}
+        {resultLine(c4)}
       </Card>
 
       <Card title="Knudsen number">
@@ -266,7 +194,7 @@ export default function VacuumTab() {
             Calculate
           </Button>
         </div>
-        {result(c5)}
+        {resultLine(c5)}
       </Card>
 
       <Card title="Gas-flow conductance (tube)">
@@ -297,7 +225,7 @@ export default function VacuumTab() {
             Calculate
           </Button>
         </div>
-        {result(c6)}
+        {resultLine(c6)}
       </Card>
     </div>
   );

@@ -13,7 +13,18 @@ import {
   thinFilmDoseToConcentration,
   thinFilmSputterRate,
 } from "../../../../lib/api";
-import { Button, Card, Field, ROW, fmtNum, resultLine, runCalc, type CardResult } from "./shared";
+import {
+  Button,
+  Card,
+  Field,
+  ROW,
+  fmtNum,
+  makeCardRunner,
+  resultLine,
+  type CardResult,
+} from "../shared";
+
+const runCalc = makeCardRunner("Thin Film");
 
 /** Card 1 — deposition rate. */
 export function DepositionRateCard() {

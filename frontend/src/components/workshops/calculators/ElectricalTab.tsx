@@ -5,7 +5,6 @@
 
 import { useState } from "react";
 
-import { Button, NumberField } from "../../primitives";
 import {
   electricalConductivity,
   electricalCurrentDensity,
@@ -14,65 +13,18 @@ import {
   electricalResistivity,
   electricalSheetResistance,
 } from "../../../lib/api";
-import { fmtNum } from "../../../lib/format";
-import { useCalcHistory } from "../../../store/calcHistory";
+import {
+  Button,
+  Card,
+  Field,
+  ROW,
+  fmtNum,
+  makeCardRunner,
+  resultLine,
+  type CardResult,
+} from "./shared";
 
-const DOMAIN = "Electrical";
-
-/** A titled group of inputs + a result line, mirroring the MATLAB cards. */
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        border: "1px solid var(--border-soft)",
-        borderRadius: 6,
-        padding: "8px 10px",
-        marginTop: 10,
-      }}
-    >
-      <div className="qzk-field-lbl" style={{ marginTop: 0, marginBottom: 6 }}>
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  width = 84,
-  unit,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  width?: number;
-  unit?: string;
-}) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <span className="qzk-field-lbl" style={{ margin: 0 }}>
-        {label}
-      </span>
-      <NumberField value={value} width={width} onChange={onChange} unit={unit} />
-    </span>
-  );
-}
-
-const ROW: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
-};
-const RESULT: React.CSSProperties = {
-  marginTop: 8,
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--font-size-lg)",
-};
-const ERR: React.CSSProperties = { marginTop: 8, color: "var(--danger)" };
+const run = makeCardRunner("Electrical");
 
 const NM_TO_CM = 1e-7;
 
@@ -81,45 +33,28 @@ export default function ElectricalTab() {
   const [rs, setRs] = useState("100");
   const [thick, setThick] = useState("10");
   const [rho1, setRho1] = useState("1e-4");
-  const [c1, setC1] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c1, setC1] = useState<CardResult>(null);
 
   // Card 2 — conductivity.
   const [rho2, setRho2] = useState("1e-4");
-  const [c2, setC2] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c2, setC2] = useState<CardResult>(null);
 
   // Card 3 — mobility.
   const [rho3, setRho3] = useState("1e-2");
   const [n3, setN3] = useState("1e17");
-  const [c3, setC3] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c3, setC3] = useState<CardResult>(null);
 
   // Card 4 — current density.
   const [cur, setCur] = useState("1e-3");
   const [area, setArea] = useState("1");
-  const [c4, setC4] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c4, setC4] = useState<CardResult>(null);
 
   // Card 5 — Hall effect (t in nm).
   const [vH, setVH] = useState("1e-3");
   const [hallI, setHallI] = useState("1e-3");
   const [hallB, setHallB] = useState("1");
   const [hallT, setHallT] = useState("100");
-  const [c5, setC5] = useState<{ text: string; err?: boolean } | null>(null);
-
-  async function run(
-    setter: (r: { text: string; err?: boolean } | null) => void,
-    label: string,
-    fn: () => Promise<string>,
-  ): Promise<void> {
-    try {
-      const text = await fn();
-      setter({ text });
-      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
-    } catch (e) {
-      setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
-    }
-  }
-
-  const result = (r: { text: string; err?: boolean } | null) =>
-    r && <div style={r.err ? ERR : RESULT}>{r.text}</div>;
+  const [c5, setC5] = useState<CardResult>(null);
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -153,7 +88,7 @@ export default function ElectricalTab() {
             ρ → Rs
           </Button>
         </div>
-        {result(c1)}
+        {resultLine(c1)}
       </Card>
 
       <Card title="Conductivity">
@@ -172,7 +107,7 @@ export default function ElectricalTab() {
             =
           </Button>
         </div>
-        {result(c2)}
+        {resultLine(c2)}
       </Card>
 
       <Card title="Mobility">
@@ -192,7 +127,7 @@ export default function ElectricalTab() {
             =
           </Button>
         </div>
-        {result(c3)}
+        {resultLine(c3)}
       </Card>
 
       <Card title="Current density">
@@ -212,7 +147,7 @@ export default function ElectricalTab() {
             =
           </Button>
         </div>
-        {result(c4)}
+        {resultLine(c4)}
       </Card>
 
       <Card title="Hall effect">
@@ -243,7 +178,7 @@ export default function ElectricalTab() {
             =
           </Button>
         </div>
-        {result(c5)}
+        {resultLine(c5)}
       </Card>
     </div>
   );

@@ -5,7 +5,6 @@
 
 import { useState } from "react";
 
-import { Button, NumberField } from "../../primitives";
 import {
   electrochemButlerVolmer,
   electrochemDoubleLayer,
@@ -13,111 +12,47 @@ import {
   electrochemOhmicDrop,
   electrochemTafel,
 } from "../../../lib/api";
-import { fmtNum } from "../../../lib/format";
-import { useCalcHistory } from "../../../store/calcHistory";
+import {
+  Button,
+  Card,
+  Field,
+  ROW,
+  fmtNum,
+  makeCardRunner,
+  resultLine,
+  type CardResult,
+} from "./shared";
 
-const DOMAIN = "Electrochemistry";
-
-/** A titled group of inputs + a result line, mirroring the MATLAB cards. */
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        border: "1px solid var(--border-soft)",
-        borderRadius: 6,
-        padding: "8px 10px",
-        marginTop: 10,
-      }}
-    >
-      <div className="qzk-field-lbl" style={{ marginTop: 0, marginBottom: 6 }}>
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  width = 84,
-  unit,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  width?: number;
-  unit?: string;
-}) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <span className="qzk-field-lbl" style={{ margin: 0 }}>
-        {label}
-      </span>
-      <NumberField value={value} width={width} onChange={onChange} unit={unit} />
-    </span>
-  );
-}
-
-const ROW: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
-};
-const RESULT: React.CSSProperties = {
-  marginTop: 8,
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--font-size-lg)",
-};
-const ERR: React.CSSProperties = { marginTop: 8, color: "var(--danger)" };
+const run = makeCardRunner("Electrochemistry");
 
 export default function ElectrochemistryTab() {
   // Card 1 — Nernst potential.
   const [e0, setE0] = useState("0.77");
   const [nerN, setNerN] = useState("1");
   const [nerQ, setNerQ] = useState("0.01");
-  const [c1, setC1] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c1, setC1] = useState<CardResult>(null);
 
   // Card 2 — Butler-Volmer.
   const [j0, setJ0] = useState("1e-3");
   const [eta, setEta] = useState("0.1");
   const [bvAlpha, setBvAlpha] = useState("0.5");
-  const [c2, setC2] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c2, setC2] = useState<CardResult>(null);
 
   // Card 3 — Tafel slope.
   const [tafAlpha, setTafAlpha] = useState("0.5");
   const [tafT, setTafT] = useState("298.15");
-  const [c3, setC3] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c3, setC3] = useState<CardResult>(null);
 
   // Card 4 — Double-layer capacitance.
   const [eps, setEps] = useState("78");
   const [dlcD, setDlcD] = useState("0.5");
   const [dlcA, setDlcA] = useState("1");
-  const [c4, setC4] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c4, setC4] = useState<CardResult>(null);
 
   // Card 5 — Ohmic drop (iR).
   const [irI, setIrI] = useState("1e-3");
   const [irR, setIrR] = useState("50");
-  const [c5, setC5] = useState<{ text: string; err?: boolean } | null>(null);
-
-  async function run(
-    setter: (r: { text: string; err?: boolean } | null) => void,
-    label: string,
-    fn: () => Promise<string>,
-  ): Promise<void> {
-    try {
-      const text = await fn();
-      setter({ text });
-      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
-    } catch (e) {
-      setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
-    }
-  }
-
-  const result = (r: { text: string; err?: boolean } | null) =>
-    r && <div style={r.err ? ERR : RESULT}>{r.text}</div>;
+  const [c5, setC5] = useState<CardResult>(null);
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -139,7 +74,7 @@ export default function ElectrochemistryTab() {
             =
           </Button>
         </div>
-        {result(c1)}
+        {resultLine(c1)}
       </Card>
 
       <Card title="Butler-Volmer">
@@ -164,7 +99,7 @@ export default function ElectrochemistryTab() {
             =
           </Button>
         </div>
-        {result(c2)}
+        {resultLine(c2)}
       </Card>
 
       <Card title="Tafel slope">
@@ -184,7 +119,7 @@ export default function ElectrochemistryTab() {
             =
           </Button>
         </div>
-        {result(c3)}
+        {resultLine(c3)}
       </Card>
 
       <Card title="Double-layer capacitance">
@@ -205,7 +140,7 @@ export default function ElectrochemistryTab() {
             =
           </Button>
         </div>
-        {result(c4)}
+        {resultLine(c4)}
       </Card>
 
       <Card title="Ohmic drop (iR)">
@@ -225,7 +160,7 @@ export default function ElectrochemistryTab() {
             =
           </Button>
         </div>
-        {result(c5)}
+        {resultLine(c5)}
       </Card>
     </div>
   );
