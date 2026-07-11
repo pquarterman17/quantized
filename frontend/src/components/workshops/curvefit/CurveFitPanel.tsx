@@ -15,6 +15,7 @@ import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import BumpsSection from "./BumpsSection";
 import EquationModelPanel from "./EquationModelPanel";
+import FindXYSection from "./FindXYSection";
 import ModelScanSection from "./ModelScanSection";
 import { useCurveFit } from "./useCurveFit";
 import { useModelScan } from "./useModelScan";
@@ -40,6 +41,7 @@ export default function CurveFitPanel() {
     clear,
     runCornerPlot,
     cornerBusy,
+    xRange,
   } = useCurveFit();
 
   // AICc quick-scan (GOTO #6) — hook lives here so ranked results survive the
@@ -184,6 +186,11 @@ export default function CurveFitPanel() {
             {cornerBusy ? "Bootstrapping…" : "Corner plot…"}
           </Button>
         </div>
+      )}
+
+      {/* Find X from Y / Y from X (MAIN #15) — inverse-evaluate the fit. */}
+      {result && !guessOnly && xRange && (
+        <FindXYSection target={{ model: modelName, params, xMin: xRange.min, xMax: xRange.max }} />
       )}
 
       {/* AICc quick-scan (GOTO #6) — rank all plausible models; click applies. */}

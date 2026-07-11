@@ -58,12 +58,61 @@ export function insertLabelToken(
   return { value: before + raw + after, cursor: selStart + raw.length - back };
 }
 
-const SCRIPTS: PaletteEntry[] = [
-  { glyph: "x₂", math: "_{}", caretBack: 1, title: "Subscript  _{ }" },
-  { glyph: "x²", math: "^{}", caretBack: 1, title: "Superscript  ^{ }" },
-  { glyph: "𝑎𝑏", math: "\\mathit{}", caretBack: 1, title: "Italic  \\mathit{ }" },
-  { glyph: "ab", math: "\\mathrm{}", caretBack: 1, title: "Upright  \\mathrm{ }" },
-];
+/** Wrap the CURRENT SELECTION in `entry`'s open/close markup (split at
+ *  `entry.caretBack` from the end of `entry.math` — the same convention
+ *  `insertLabelToken` uses to land the caret between empty braces: for
+ *  `"_{}"` with `caretBack: 1` that's `open = "_{"`, `close = "}"`).
+ *  Math-region aware like `insertLabelToken`: wraps bare (no `$...$`) when
+ *  the selection already sits inside a math region, self-contained
+ *  (`$open<sel>close$`) otherwise — so keyboard shortcuts never emit a
+ *  redundant/nested `$` the parser would reject.
+ *
+ *  A selection containing ANY unescaped `$` — whether it straddles a
+ *  region boundary (odd count) or encloses a whole `$...$` pair (even
+ *  count, e.g. selecting all of "$x^2$") — can't be wrapped without
+ *  fragmenting a region (the parser segments on every `$` regardless of
+ *  nesting, so sandwiching a self-contained region inside more markup
+ *  splits the wrapper's own command across segments). Falls back to
+ *  `insertLabelToken`'s empty-token insert at the selection start —
+ *  always-valid markup over a best-effort guess. Empty selections
+ *  delegate to `insertLabelToken` unchanged (its caret-between-braces
+ *  idiom is exactly the "cursor placed inside the braces" behaviour). */
+export function wrapLabelSelection(
+  value: string,
+  selStart: number,
+  selEnd: number,
+  entry: PaletteEntry,
+): { value: string; cursor: number } {
+  if (selStart === selEnd) return insertLabelToken(value, selStart, selEnd, entry);
+  const before = value.slice(0, selStart);
+  const sel = value.slice(selStart, selEnd);
+  const after = value.slice(selEnd);
+  if (countUnescapedDollars(sel) > 0) {
+    return insertLabelToken(value, selStart, selStart, entry);
+  }
+  const inMath = countUnescapedDollars(before) % 2 === 1;
+  const raw = entry.math ?? entry.text ?? "";
+  const splitAt = entry.caretBack != null ? raw.length - entry.caretBack : raw.length;
+  const open = raw.slice(0, splitAt);
+  const close = raw.slice(splitAt);
+  const body = inMath ? `${open}${sel}${close}` : `$${open}${sel}${close}$`;
+  return { value: before + body + after, cursor: before.length + body.length };
+}
+
+export const SUBSCRIPT_ENTRY: PaletteEntry = {
+  glyph: "x₂", math: "_{}", caretBack: 1, title: "Subscript  _{ }  (Ctrl+=)",
+};
+export const SUPERSCRIPT_ENTRY: PaletteEntry = {
+  glyph: "x²", math: "^{}", caretBack: 1, title: "Superscript  ^{ }  (Ctrl+Shift+=)",
+};
+export const ITALIC_ENTRY: PaletteEntry = {
+  glyph: "𝑎𝑏", math: "\\mathit{}", caretBack: 1, title: "Italic  \\mathit{ }  (Ctrl/Cmd+I)",
+};
+const UPRIGHT_ENTRY: PaletteEntry = {
+  glyph: "ab", math: "\\mathrm{}", caretBack: 1, title: "Upright  \\mathrm{ }",
+};
+
+const SCRIPTS: PaletteEntry[] = [SUBSCRIPT_ENTRY, SUPERSCRIPT_ENTRY, ITALIC_ENTRY, UPRIGHT_ENTRY];
 
 const GREEK_NAMES: [string, string][] = [
   ["α", "alpha"], ["β", "beta"], ["γ", "gamma"], ["δ", "delta"], ["ε", "varepsilon"],

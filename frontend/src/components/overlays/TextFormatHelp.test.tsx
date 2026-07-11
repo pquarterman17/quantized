@@ -86,6 +86,15 @@ describe("TextFormatHelp", () => {
     expect(text).toContain("upright");
   });
 
+  it("documents the label-editor keyboard shortcuts (MAIN #17)", () => {
+    open();
+    const text = screen.getByTestId("tfh-shortcuts").textContent ?? "";
+    expect(text).toContain("Ctrl / Cmd + I");
+    expect(text).toContain("Ctrl + =");
+    expect(text).toContain("Ctrl + Shift + =");
+    expect(text).toContain("Ctrl / Cmd + .");
+  });
+
   it("cross-references the symbol palette and the literal fallback", () => {
     open();
     expect(screen.getByText("Symbol palette")).toBeInTheDocument();

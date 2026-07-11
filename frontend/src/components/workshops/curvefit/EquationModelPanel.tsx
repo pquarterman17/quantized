@@ -10,6 +10,7 @@
 import { Button, DataTable, NumberField } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import type { CustomFitModel } from "../../../lib/fitmodels";
+import FindXYSection from "./FindXYSection";
 import { useEquationFit } from "./useEquationFit";
 
 interface Props {
@@ -145,6 +146,13 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
         <div style={{ marginTop: 8 }}>
           <DataTable columns={["stat", "value"]} rows={statRows} />
         </div>
+      )}
+
+      {/* Find X from Y / Y from X (MAIN #15) — inverse-evaluate the fit. */}
+      {eq.result && eq.xRange && (
+        <FindXYSection
+          target={{ equation: eq.equation, params, xMin: eq.xRange.min, xMax: eq.xRange.max }}
+        />
       )}
 
       <label className="qzk-field-lbl" style={{ marginTop: 12 }}>
