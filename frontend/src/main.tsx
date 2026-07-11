@@ -2,11 +2,13 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import App from "./App";
+import CalcOnlyApp from "./CalcOnlyApp";
 import { installErrLog } from "./lib/errlog";
 import { connectLifecycle } from "./lib/lifecycle";
 import { defaultPlotView } from "./lib/plotview";
 import type { PlotView, PlotWindow, WindowGeometry, WinState } from "./lib/plotview";
 import type { Dataset } from "./lib/types";
+import { isCalcOnlyView } from "./lib/viewMode";
 import { useApp } from "./store/useApp";
 import "./styles/index.css";
 
@@ -101,8 +103,14 @@ if (new URLSearchParams(window.location.search).has("harness")) {
   ).__qz = { useApp, harnessResetWindows, harnessApplyWindows };
 }
 
+// ── ?view=calc — standalone DiraCulator launcher (MAIN_PLAN #22) ───────────
+// Read once at startup, no router: mounts the calc-only shell (calculators
+// content, full-window, no Library/Stage/Inspector/menubar) instead of the
+// full App shell.
+const RootShell = isCalcOnlyView() ? CalcOnlyApp : App;
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <RootShell />
   </StrictMode>,
 );

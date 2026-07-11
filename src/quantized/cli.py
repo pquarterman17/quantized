@@ -7,9 +7,18 @@
     qz --no-browser     don't open a browser (headless / CI; never auto-exits)
     qz --dev            Vite dev server (HMR) + auto-reloading backend
     qz --desktop        native window (pywebview; pip install quantized[desktop])
+    qz --calc           calculator-only view (DiraCulator materials calculators),
+                        opens /?view=calc; combine with --desktop for a small
+                        native window titled "DiraCulator" (also: `diraculator`
+                        console-script alias runs this by default)
     qz plugin list      list discovered plugins and what they contribute
     qz plugin enable <name>    re-enable a previously disabled plugin
     qz plugin disable <name>   disable a plugin without deleting it
+
+If the requested port is busy and ``--port`` was NOT given explicitly, qz
+falls back to a free ephemeral port automatically (the main app is often
+already running on 8000) and prints a note. An explicit ``--port`` that's
+busy still errors as before.
 
 The UI is served from the Vite build output (``src/quantized/web``). On a bare
 dev checkout that directory is absent — build it once with
@@ -26,7 +35,7 @@ from pathlib import Path
 
 import uvicorn
 
-from quantized.server_launch import _open_when_healthy, _run_desktop, _run_dev
+from quantized.server_launch import _open_when_healthy, _resolve_port, _run_desktop, _run_dev
 
 # Same resolution as quantized.app._WEB_DIR (kept as a separate constant here
 # rather than importing app.py, so this pre-uvicorn check stays cheap — it
@@ -43,13 +52,34 @@ def main(argv: list[str] | None = None) -> None:
     _serve(args)
 
 
+def main_calc(argv: list[str] | None = None) -> None:
+    """``diraculator`` console-script entry point — the same as ``qz --calc``.
+
+    Injects ``--calc`` ahead of the caller's args and delegates to ``main``;
+    ``--desktop``/``--port``/etc. all still compose normally (e.g.
+    ``diraculator --desktop``)."""
+    args = list(sys.argv[1:] if argv is None else argv)
+    main(["--calc", *args])
+
+
 def _serve(argv: list[str]) -> None:
     """Parse serve args, (optionally) schedule the browser, and run the server."""
     parser = argparse.ArgumentParser(prog="qz", description="Launch the quantized app.")
     parser.add_argument("--host", default="127.0.0.1", help="bind host (default 127.0.0.1)")
-    parser.add_argument("--port", type=int, default=8000, help="bind port (default 8000)")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="bind port (default 8000; falls back to a free port if that's "
+        "busy and --port wasn't given explicitly)",
+    )
     parser.add_argument(
         "--no-browser", action="store_true", help="do not open a browser tab"
+    )
+    parser.add_argument(
+        "--calc",
+        action="store_true",
+        help="calculator-only view (DiraCulator) — opens /?view=calc",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -60,14 +90,23 @@ def _serve(argv: list[str]) -> None:
     )
     args = parser.parse_args(argv)
 
+    explicit_port = args.port is not None
+    port = _resolve_port(args.host, args.port if explicit_port else 8000, explicit=explicit_port)
+    calc_path = "/?view=calc" if args.calc else ""
+
     if args.dev:
-        _run_dev(args.host, args.port)
+        _run_dev(args.host, port)
         return
     if args.desktop:
-        _run_desktop(args.host, args.port)
+        if args.calc:
+            _run_desktop(
+                args.host, port, title="DiraCulator", width=520, height=680, path=calc_path
+            )
+        else:
+            _run_desktop(args.host, port)
         return
 
-    url = f"http://{args.host}:{args.port}"
+    url = f"http://{args.host}:{port}{calc_path}"
     if not _WEB_DIR.is_dir():
         print(
             f"[qz] UI not built ({_WEB_DIR} missing). "
@@ -83,10 +122,10 @@ def _serve(argv: list[str]) -> None:
         os.environ.setdefault("QZ_AUTO_SHUTDOWN", "1")
         # Open the tab once /api/health answers (a fixed delay races the cold
         # numpy/scipy/matplotlib import); daemon thread, so Ctrl+C still exits.
-        _open_when_healthy(url, args.host, args.port)
+        _open_when_healthy(url, args.host, port)
 
     print(f"[qz] quantized -> {url}   (press Ctrl+C to stop)")
-    uvicorn.run("quantized.app:app", host=args.host, port=args.port, log_level="warning")
+    uvicorn.run("quantized.app:app", host=args.host, port=port, log_level="warning")
 
 
 def _plugin_command(argv: list[str]) -> None:

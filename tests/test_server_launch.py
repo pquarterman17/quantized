@@ -36,6 +36,57 @@ def test_bind_returns_socket_then_none_when_taken() -> None:
         first.close()
 
 
+# ── port fallback (MAIN_PLAN #22 — the main app is often already on 8000) ──
+
+
+def test_resolve_port_returns_free_port_unchanged() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    assert server_launch._resolve_port("127.0.0.1", port, explicit=False) == port
+
+
+def test_resolve_port_falls_back_when_busy_and_not_explicit(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    occupied = server_launch._bind("127.0.0.1", 0)
+    assert occupied is not None
+    try:
+        port = occupied.getsockname()[1]
+        fallback = server_launch._resolve_port("127.0.0.1", port, explicit=False)
+        assert fallback != port
+        # The fallback must itself be bindable (it's a real free port, not
+        # just a number that happened to differ).
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as check:
+            check.bind(("127.0.0.1", fallback))
+        assert f"port {port} is busy" in capsys.readouterr().out
+    finally:
+        occupied.close()
+
+
+def test_resolve_port_explicit_busy_port_is_returned_unchanged() -> None:
+    """An explicit --port that's busy must NOT fall back — the caller's own
+    bind/uvicorn.run raises the usual 'address already in use' error, same
+    as before this feature existed."""
+    occupied = server_launch._bind("127.0.0.1", 0)
+    assert occupied is not None
+    try:
+        port = occupied.getsockname()[1]
+        assert server_launch._resolve_port("127.0.0.1", port, explicit=True) == port
+    finally:
+        occupied.close()
+
+
+def test_resolve_port_explicit_skips_bind_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """explicit=True must not touch a socket at all (cheap, deterministic)."""
+
+    def _boom(*a: object, **k: object) -> None:
+        raise AssertionError("_bind should not be called when explicit=True")
+
+    monkeypatch.setattr(server_launch, "_bind", _boom)
+    assert server_launch._resolve_port("127.0.0.1", 12345, explicit=True) == 12345
+
+
 def test_open_when_healthy_opens_once_server_answers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -154,3 +205,47 @@ def test_run_desktop_refuses_foreign_app_on_port(
     monkeypatch.setattr(server_launch, "_health_ok", lambda *a, **k: False)  # not ours
     server_launch._run_desktop("127.0.0.1", 8000)
     assert "in use by another app" in capsys.readouterr().out
+
+
+def test_run_desktop_default_title_and_geometry_unchanged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Plain `qz --desktop` (no title/width/height/path args) keeps the exact
+    window it always has — the DiraCulator kwargs below must not perturb it."""
+    monkeypatch.setattr(server_launch, "_WEB_DIR", tmp_path)
+    webview = MagicMock()
+    monkeypatch.setitem(sys.modules, "webview", webview)
+    monkeypatch.setattr(server_launch, "_bind", lambda *a: None)  # reuse-if-healthy path
+    monkeypatch.setattr(server_launch, "_health_ok", lambda *a, **k: True)  # our own instance
+    server_launch._run_desktop("127.0.0.1", 8000)
+    webview.create_window.assert_called_once_with(
+        "Quantized",
+        "http://127.0.0.1:8000",
+        width=1440,
+        height=920,
+        background_color="#121116",
+    )
+    webview.start.assert_called_once()
+
+
+def test_run_desktop_calc_combo_uses_diraculator_title_and_geometry(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`qz --calc --desktop` (MAIN_PLAN #22): a small window titled
+    "DiraCulator" pointed at /?view=calc, not the default 1440x920 window."""
+    monkeypatch.setattr(server_launch, "_WEB_DIR", tmp_path)
+    webview = MagicMock()
+    monkeypatch.setitem(sys.modules, "webview", webview)
+    monkeypatch.setattr(server_launch, "_bind", lambda *a: None)  # reuse-if-healthy path
+    monkeypatch.setattr(server_launch, "_health_ok", lambda *a, **k: True)  # our own instance
+    server_launch._run_desktop(
+        "127.0.0.1", 8000, title="DiraCulator", width=520, height=680, path="/?view=calc"
+    )
+    webview.create_window.assert_called_once_with(
+        "DiraCulator",
+        "http://127.0.0.1:8000/?view=calc",
+        width=520,
+        height=680,
+        background_color="#121116",
+    )
+    webview.start.assert_called_once()

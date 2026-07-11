@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import socket as _socket
 
-__all__ = ["_open_when_healthy", "_run_desktop", "_run_dev"]
+__all__ = ["_open_when_healthy", "_resolve_port", "_run_desktop", "_run_dev"]
 
 # Built SPA — same resolution as quantized.app._WEB_DIR / cli._WEB_DIR.
 _WEB_DIR = Path(__file__).parent / "web"
@@ -74,6 +74,35 @@ def _bind(host: str, port: int) -> _socket.socket | None:
         return None
 
 
+def _resolve_port(host: str, port: int, *, explicit: bool) -> int:
+    """Return the port to actually bind: ``port`` unchanged if it's free (or
+    if the caller passed ``--port`` explicitly — an explicit port that's busy
+    still errors the same way it does today, via the caller's own bind /
+    ``uvicorn.run``). Otherwise (default port, busy — the main app is often
+    already running on 8000, MAIN_PLAN #22) probe for a free OS-assigned
+    ephemeral port and return that instead, printing a note so the user
+    knows where the server actually came up.
+
+    Skips the bind probe entirely when ``explicit`` is set, so passing an
+    explicit ``--port`` never touches a socket here.
+    """
+    if explicit:
+        return port
+
+    sock = _bind(host, port)
+    if sock is not None:
+        sock.close()
+        return port
+
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as free:
+        free.bind((host, 0))
+        fallback = int(free.getsockname()[1])
+    print(f"[qz] port {port} is busy - using {fallback} instead")
+    return fallback
+
+
 def _open_browser_later(url: str, delay: float = 2.0) -> None:
     """Fixed-delay browser open — used only for the dev path, where the
     target is the Vite server (no /api/health to poll)."""
@@ -109,10 +138,23 @@ _WEBVIEW_HINT = (
 )
 
 
-def _run_desktop(host: str, port: int) -> None:
+def _run_desktop(
+    host: str,
+    port: int,
+    *,
+    title: str = "Quantized",
+    width: int = 1440,
+    height: int = 920,
+    path: str = "",
+) -> None:
     """Native window: uvicorn in a thread, pywebview on top — pure Python, no
     Rust toolchain (the Tauri shell in src-tauri/ is the packaged path).
-    Closing the window stops the server."""
+    Closing the window stops the server.
+
+    ``title``/``width``/``height``/``path`` let the ``--calc`` combo
+    (MAIN_PLAN #22) open a smaller window titled "DiraCulator" at
+    ``/?view=calc`` instead of the default full-app window; defaults are
+    the plain ``qz --desktop`` window unchanged."""
     if not _WEB_DIR.is_dir():
         print(
             f"[qz] UI not built ({_WEB_DIR} missing). "
@@ -156,10 +198,10 @@ def _run_desktop(host: str, port: int) -> None:
 
     try:
         webview.create_window(
-            "Quantized",
-            f"http://{host}:{port}",
-            width=1440,
-            height=920,
+            title,
+            f"http://{host}:{port}{path}",
+            width=width,
+            height=height,
             background_color="#121116",  # dark --surface-0 (oklch 0.16 0.008 280)
         )
         webview.start()

@@ -3,7 +3,7 @@
 // a one-click jump to that tab. Reuses TAB_GROUPS so the two never drift.
 
 import { Button } from "../../primitives";
-import { TAB_GROUPS } from "./CalculatorsPanel";
+import { TAB_GROUPS } from "./CalculatorsContent";
 import type { CalcTab } from "./useCalculators";
 
 export default function HomeTab({ onPick }: { onPick: (tab: CalcTab) => void }) {

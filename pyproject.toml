@@ -23,6 +23,7 @@ dependencies = [
 [project.scripts]
 qz = "quantized.cli:main"
 quantized = "quantized.cli:main"
+diraculator = "quantized.cli:main_calc"
 
 [project.optional-dependencies]
 # Word/PowerPoint report export (#37). MIT-licensed, pure-python. Optional so

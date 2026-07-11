@@ -9,6 +9,8 @@ import type { SldProbe } from "../../../lib/api";
 import { useApp } from "../../../store/useApp";
 import { Button, NumberField, Pill } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
+import { isCalcOnlyView } from "../../../lib/viewMode";
+import { toast } from "../../../store/toasts";
 import {
   NEUTRON_WAVELENGTHS,
   SLD_PRESETS,
@@ -61,9 +63,16 @@ export default function SldTab({ c }: { c: CalculatorsState }) {
   const r = c.sldResult;
   const seedReflectivityLayer = useApp((s) => s.seedReflectivityLayer);
   // SLD → reflectivity: hand a probe's SLD (×10⁻⁶ Å⁻² → Å⁻²) to the reflectivity
-  // workshop as a new manual-SLD layer, opening the workshop.
-  const sendToReflectivity = (sldReal: number, probe: string): void =>
+  // workshop as a new manual-SLD layer, opening the workshop. In calc-only mode
+  // (?view=calc, MAIN_PLAN #22) the reflectivity workshop isn't mounted — opening
+  // it would silently update state nothing renders, so no-op with a toast instead.
+  const sendToReflectivity = (sldReal: number, probe: string): void => {
+    if (isCalcOnlyView()) {
+      toast("open the full app for this");
+      return;
+    }
     seedReflectivityLayer({ sld: sldReal * 1e-6, label: `${r?.formula ?? "SLD"} ${probe}` });
+  };
   return (
     <div style={{ marginTop: 12 }}>
       {/* Material presets (formula + density) */}

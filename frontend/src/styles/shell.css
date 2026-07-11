@@ -20,6 +20,10 @@ body {
 .qzk-main.lc { grid-template-columns: 0 1fr var(--rw, 296px); }
 .qzk-main.rc { grid-template-columns: var(--lw, 210px) 1fr 0; }
 
+/* ── calc-only shell (?view=calc — MAIN_PLAN #22 standalone DiraCulator) ── */
+.qzk-calc-app { display: grid; grid-template-rows: 38px 1fr; height: 100%; }
+.qzk-calc-body { overflow-y: auto; padding: var(--pad-lg); max-width: 480px; margin: 0 auto; width: 100%; }
+
 /* ── titlebar ── */
 .qzk-titlebar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; background: var(--surface-1); border-bottom: 1px solid var(--border-soft); padding: 0 var(--pad-lg); }
 .qzk-brand { display: flex; align-items: center; gap: 9px; }
