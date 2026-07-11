@@ -56,6 +56,31 @@ plan's direct items are residue-sized by construction)*
    Completed).
 ~~7. **Register import_lake_shore**~~ COMPLETED 2026-07-11 (see Completed).
 
+8. **Post-review consolidation batch** (booked from the 2026-07-11
+   adversarial review — cleanup findings, deliberately NOT rushed
+   pre-release):
+   - [ ] Generic point-hit/drag gesture core: `uplotAnchors` +
+     `peakMarkerHit` are near-clones (and shared the pixel-frame bug —
+     one core would have needed the fix once)
+   - [ ] Export `unwrap`/`postForm` from `lib/api.ts` (4 drifting copies
+     of the error-detail extraction incl. `originTemplate.ts`)
+   - [ ] Shared `_iterative_clip_fit` helper (`baseline_modpoly` +
+     `xrd_low_angle_background` duplicate the Lieber loop)
+   - [ ] Calculators-level card kit (9 tabs carry private Card/Field
+     copies; `thinfilm/shared.tsx` was created one directory too deep)
+   - [ ] `figure_text._parse_legend_labels` delegates to the layered
+     parser (two parsers over one grammar)
+   - [ ] Anchor-edit bridge via ref/getter so anchor add/move/remove
+     stops rebuilding the uPlot instance twice per gesture (+ cache
+     `anchorPixels` per scale in the cursor handler)
+   - [ ] Figure-page preview invalidation when store state changes under
+     an assigned slot (export guard shipped; preview can still stale)
+   - [ ] `io/origin_project/figures.py` at 499/500 — split BEFORE the
+     next edit
+   - [ ] UX judgment: `openInGraphBuilder` rides `setActive`'s
+     plot-intent path (can spawn a window + flip the stage tab as a
+     side effect of opening an overlay) — decide if that precedent fits
+
 ## Tier 3 — Nice-to-Have
 
 *(empty — candidates arrive via GOTO owner gates Q4/Q6/Q7/Q8)*

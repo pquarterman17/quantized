@@ -15,6 +15,8 @@ in the same commit). Every edit here must have a matching plan edit.
 | # | Item | Plan / item | Size |
 |---|------|-------------|------|
 
+| 23 | Post-review consolidation batch (9 sub-items: gesture core, api unwrap, clip-fit helper, card kit, legend parser, anchor-bridge perf, preview invalidation, figures.py split, openInGraphBuilder UX call) | MAIN #8 | M |
+
 ## Owner actions & owner-gated decisions
 
 | Item | Plan / item |
@@ -57,7 +59,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | no open dev items — owner gates + deferrals only |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | #8 (post-review consolidation batch) + owner gates + deferrals |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9; Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence |
