@@ -27,9 +27,7 @@ in the same commit). Every edit here must have a matching plan edit.
 | 14 | Anchor-point baseline (click anchors → interp baseline → recalc-DAG subtract step) | GOTO #2 | M |
 | 15 | Shirley XPS/XAS background in the baseline picker | GOTO #3 | S |
 | 16 | Multi-panel figure page composer (N plots → one vector PDF/SVG page, panel labels) | GOTO #4 | L |
-| 18 | AICc model quick-scan over registry + saved custom models (builder #1 shipped; both engines available) | GOTO #6 | S |
 | 19 | XRD low-angle background + XRR/NR footprint correction; analytic baseline UI completion | GOTO #7/#8 | S–M |
-| 22 | Text-formatting help tab (documents #5's syntax, live examples; after #5 — also seeds the Help-menu revisit) | GOTO #11 | S |
 
 ## Owner actions & owner-gated decisions
 
@@ -74,6 +72,6 @@ the root; every active plan below is its declared sub-plan.
 |------|--------|-----------|
 | `plans/MAIN_PLAN.md` | Active (ROOT) | #1–#7 + owner gates + deferrals |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #46–49 (partial), #50 (continuous) |
-| `plans/GOTO_PLAN.md` | Active | #2–#4, #6–#8, #11 open (#1/#5/#9/#10 shipped 2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
+| `plans/GOTO_PLAN.md` | Active | #2–#4, #7–#8 open (#1/#5/#6/#9/#10/#11 shipped 2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #41, #42; #27 deferred |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |

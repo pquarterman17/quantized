@@ -145,8 +145,7 @@ Interactive WebGL 3-D stays a deferred gate pending Q4.
 
 ## Tier 2 — Medium Impact
 
-6. **AICc model quick-scan** — "fit all plausible models, rank by AICc"
-   over a candidate set (registry + saved custom models); requires #1
+~~6. **AICc model quick-scan**~~ ✅ completed 2026-07-11 (see Completed).
 
 7. **Domain backgrounds/corrections** — XRD low-angle background model;
    XRR/NR beam-footprint correction (geometry-based) as a corrections
@@ -179,6 +178,20 @@ Interactive WebGL 3-D stays a deferred gate pending Q4.
 worksheet reshape, 3-D, and date-time axes land here if confirmed)*
 
 ## Completed
+
+- ~~**#6 AICc model quick-scan**~~ (2026-07-11) — `calc/fit_scan.py`
+  (AICc + delta + Akaike weights, registry + saved-equation candidates
+  through the EXISTING fit engines, per-candidate failures as error
+  entries), `POST /api/fitting/scan`, `ModelScanSection` in the fit
+  workshop (row click applies the model; results survive the
+  registry<->custom flip). +22 backend / +18 frontend tests.
+- ~~**#11 Text-formatting help tab**~~ (2026-07-11) — `TextFormatHelp`
+  overlay (ShortcutsDialog conventions), examples rendered LIVE through
+  `RichText` so the sheet cannot drift from the parser; Help-group
+  command entry. Feed for the Help-menu revisit captured in the plan
+  gate note below: About/palette items are hardcoded in MenuBar.tsx
+  (bypass the command registry), no in-app about/version dialog, and
+  accumulating modal sheets want a single tabbed Help window.
 
 - ~~**#5 Rich-text labels**~~ (2026-07-11) — mathtext-subset micro-syntax
   (`$...$`: sub/sup w/ nesting, Greek both cases incl. var-forms, `\AA`,
