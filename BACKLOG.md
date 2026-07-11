@@ -17,14 +17,11 @@ day; MAIN #20 tick-precision/eng-notation shipped same day)
 
 | # | Item | Plan / item | Size |
 |---|------|-------------|------|
-| # | Item | Plan / item | Size |
-|---|------|-------------|------|
 | 33 | Pointer tool default + direct-manipulation annotations/legend (owner testing directive) | MAIN #18 | M |
-| 34 | Multi-plot panel builder (design round with owner pending) | MAIN #19 | L |
+| 34 | Multi-plot panel builder (design decided with owner; v1 agent in flight) | MAIN #19 | L |
 
-*(audit items #9–#17 all shipped 2026-07-11; MAIN #20 shipped 2026-07-11
-same day; #18–#19 booked from the
-owner's first hands-on testing session)*
+*(audit items #9–#17 + #20 all shipped 2026-07-11; #18–#19 booked from
+the owner's first hands-on testing session, agents in flight)*
 
 ## Owner actions & owner-gated decisions
 
@@ -68,7 +65,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only — audit items #9–#17 ALL shipped 2026-07-11 |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | #18 #19 (owner-testing items, agents in flight) + owner gates + deferrals; #9–#17 + #20 shipped 2026-07-11 |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence |
