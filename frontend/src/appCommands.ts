@@ -530,6 +530,29 @@ export function buildAppActions(s: StoreGet): Action[] {
     },
     { id: "duplicate", group: "Data", label: "Duplicate active dataset", run: () => { const id = s().activeId; if (id) s().duplicateDataset(id); } },
     { id: "reimport", group: "Data", label: "Re-import active dataset", run: () => { const id = s().activeId; if (id) void s().reimportDataset(id); } },
+    // Panel/overlay composite windows over the current selection (MAIN_PLAN
+    // #19 v1) — the command-palette counterparts of the Library's quick
+    // picks (lib/panelMenu.ts), acting on the live multi-selection.
+    ...(
+      [
+        ["panel-row", "Panel: side by side", "row"],
+        ["panel-column", "Panel: stacked", "column"],
+        ["panel-grid", "Panel: grid", "grid"],
+        ["panel-overlay", "Overlay in one plot", "overlay"],
+      ] as const
+    ).map(([id, label, layout]) => ({
+      id,
+      group: "Data",
+      label,
+      run: () => {
+        const ids = s().selectedIds;
+        if (ids.length < 2) {
+          toast("select at least 2 datasets first", "danger");
+          return;
+        }
+        s().focusWindow(s().createPanelWindow(ids, layout));
+      },
+    })),
     // ── Plot ──
     {
       id: "autoscale",

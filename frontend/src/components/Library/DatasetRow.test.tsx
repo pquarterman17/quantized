@@ -313,3 +313,59 @@ describe("DatasetRow bulk move (project-organization plan item 8)", () => {
     expect(s.datasets.every((d) => d.folderId === undefined)).toBe(true);
   });
 });
+
+describe("DatasetRow panel/overlay quick picks (MAIN_PLAN #19 v1)", () => {
+  const a: Dataset = { id: "a", name: "A", data: plain.data };
+  const b: Dataset = { id: "b", name: "B", data: plain.data };
+
+  // Reset plotWindows to the ≥1-window invariant's singleton default before
+  // each test — otherwise a panel window opened by one test would linger and
+  // be mistaken for the next test's window.
+  beforeEach(() => {
+    const s = useApp.getState();
+    useApp.setState({ plotWindows: [s.plotWindows[0]], focusedWindowId: s.plotWindows[0].id });
+  });
+
+  it("is absent for a single selection (gated at >=2)", () => {
+    useApp.setState({ datasets: [a], activeId: "a", selectedIds: ["a"] });
+    const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    expect(screen.queryByText("Panel: side by side")).not.toBeInTheDocument();
+    expect(screen.queryByText("Overlay in one plot")).not.toBeInTheDocument();
+  });
+
+  it("offers all 4 quick picks for a >=2 multi-selection", () => {
+    useApp.setState({ datasets: [a, b], activeId: "a", selectedIds: ["a", "b"] });
+    const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    expect(screen.getByText("Panel: side by side")).toBeInTheDocument();
+    expect(screen.getByText("Panel: stacked")).toBeInTheDocument();
+    expect(screen.getByText("Panel: grid")).toBeInTheDocument();
+    expect(screen.getByText("Overlay in one plot")).toBeInTheDocument();
+  });
+
+  it("'Overlay in one plot' opens a new kind:'panel' overlay window over the selection, raised on top", () => {
+    useApp.setState({ datasets: [a, b], activeId: "a", selectedIds: ["a", "b"] });
+    const before = useApp.getState().plotWindows.length;
+    const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    fireEvent.click(screen.getByText("Overlay in one plot"));
+    const s = useApp.getState();
+    expect(s.plotWindows).toHaveLength(before + 1);
+    const win = s.plotWindows.find((w) => w.kind === "panel")!;
+    expect(win.panel).toEqual({ datasetIds: ["a", "b"], layout: "overlay" });
+    // A panel window (like snapshot/worksheet/map) can never hold the
+    // view-facade focus — the quick pick's focusWindow call only RAISES it
+    // (highest z), matching every other non-plot window kind.
+    expect(win.z).toBe(Math.max(...s.plotWindows.map((w) => w.z)));
+  });
+
+  it("'Panel: grid' opens a grid-layout composite window", () => {
+    useApp.setState({ datasets: [a, b], activeId: "a", selectedIds: ["a", "b"] });
+    const { container } = render(<DatasetRow dataset={a} {...baseProps} selected />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    fireEvent.click(screen.getByText("Panel: grid"));
+    const win = useApp.getState().plotWindows.find((w) => w.kind === "panel")!;
+    expect(win.panel?.layout).toBe("grid");
+  });
+});

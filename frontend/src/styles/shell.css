@@ -419,6 +419,16 @@ body {
 .qzk-plotwin-close { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-3); cursor: default; padding: 0; flex-shrink: 0; }
 .qzk-plotwin-close:hover { background: var(--danger); border-color: var(--danger); }
 .qzk-plotwin-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Panel/overlay composite window content (MAIN_PLAN #19 v1) — row/column/
+   grid layouts tile PanelCell in a CSS grid (panelGridShape picks rows/cols);
+   overlay is a single full-bleed viewport. Each cell needs its own stacking
+   context + finite size for PlotViewport's absolutely-positioned inner div. */
+.qzk-panel-grid { flex: 1; min-height: 0; display: grid; gap: 4px; padding: 4px; }
+.qzk-panel-cell { position: relative; min-width: 60px; min-height: 60px; background: var(--axes-bg); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); overflow: hidden; }
+.qzk-panel-overlay { position: relative; flex: 1; min-height: 0; }
+.qzk-panel-empty { flex: 1; display: grid; place-items: center; text-align: center; padding: 16px; color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-nano); }
+
 /* Resize grip — a diagonal-stripe corner drawn from tokens, no glyph/emoji. */
 .qzk-plotwin-resize { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; touch-action: none; background: linear-gradient(135deg, transparent 0 50%, var(--border-strong) 50% 60%, transparent 60% 70%, var(--border-strong) 70% 80%, transparent 80% 100%); }
 
