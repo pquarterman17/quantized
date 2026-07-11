@@ -255,6 +255,11 @@ body {
 .qzk-legend .it { display: flex; align-items: center; gap: 7px; font-size: var(--font-size); color: var(--text-dim); }
 .qzk-legend .ln { width: 16px; height: 3px; border-radius: 2px; }
 .qzk-legend .ln.dash { background: none !important; border-top: 2px dashed var(--capture); height: 0; }
+/* Colorbar chip (MAIN #14, color-mapped scatter): a minimal inline legend
+   affordance — colormap gradient strip + min/max labels — for each series
+   whose points are coloured by a third channel. */
+.qzk-colorbar-grad { display: inline-block; width: 48px; height: 8px; border-radius: 2px; border: 1px solid var(--glass-border); }
+.qzk-colorbar-lbl { font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-faint); }
 
 /* ── drag-to-axis (gap #49) ── */
 /* Band sizing MUST match lib/dragaxis.ts's resolveAxisZone (X_BAND_FRACTION/

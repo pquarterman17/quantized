@@ -100,10 +100,10 @@ def resolve_style_channels(
     series_styles: Sequence[Mapping[str, Any] | None] | None,
 ) -> list[dict[str, Any] | None] | None:
     """Resolve per-series style CHANNEL REFERENCES (MAIN #13's ``fill: {"vs":
-    <channel>}``) against ``ds`` and the actual plotted channel order -- so
-    ``calc.figure`` (and ``calc.figure_page``) never touch the raw
-    ``DataStruct``, only resolved values (they stay format-only: numbers in,
-    bytes out).
+    <channel>}`` and MAIN #14's ``color_by: <channel>``) against ``ds`` and
+    the actual plotted channel order -- so ``calc.figure`` (and
+    ``calc.figure_page``) never touch the raw ``DataStruct``, only resolved
+    values (they stay format-only: numbers in, bytes out).
 
     ``fill.vs`` (a dataset channel index -- the SAME semantic the frontend's
     ``SeriesStyle.fill`` uses) resolves to the DISPLAY POSITION of that
@@ -111,6 +111,10 @@ def resolve_style_channels(
     channel isn't currently plotted, mirroring uPlot's own band mechanism,
     which can only fill between two DRAWN series (see the frontend's
     ``lib/uplotFill.ts``).
+
+    ``color_by`` (a dataset channel index) resolves to that channel's
+    concrete value array -- any channel, not required to be otherwise
+    plotted, since it's an auxiliary z-column, not an x/y series pick.
 
     ``None`` (no styles requested) passes through unchanged; a malformed
     style dict entry is left as-is (rendering degrades gracefully -- an
@@ -133,5 +137,11 @@ def resolve_style_channels(
                 resolved.pop("fill", None)
             else:
                 resolved["fill"] = {"vs": vs_pos}
+        color_by = resolved.get("color_by")
+        if isinstance(color_by, int) and not isinstance(color_by, bool):
+            if 0 <= color_by < ds.n_channels:
+                resolved["color_by"] = ds.values[:, color_by].tolist()
+            else:
+                resolved.pop("color_by", None)
         out.append(resolved)
     return out

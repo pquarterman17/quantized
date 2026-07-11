@@ -409,6 +409,35 @@ def test_figure_fill_vs_unplotted_channel_degrades_gracefully() -> None:
     assert resp.status_code == 200
 
 
+# ── MAIN #14: colour-mapped scatter (wire-level channel index) ──────────────
+def test_figure_color_by_channel_download() -> None:
+    # color_by=2 names channel "c" (never itself plotted as x/y) as the
+    # per-point colour source for series "a".
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _three_channel_dataset(),
+            "fmt": "png",
+            "y_keys": [0],
+            "series_styles": [{"color_by": 2, "colormap": "magma"}],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_figure_color_by_out_of_range_is_safe_not_500() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "png",
+            "series_styles": [{"color_by": 99}],
+        },
+    )
+    assert resp.status_code == 200
+
+
 def test_export_opj_roundtrips_through_our_reader(tmp_path):
     """POST /api/export/opj -> a CPYA project our own Origin reader re-opens."""
     from quantized.io.origin_project import read_origin_books

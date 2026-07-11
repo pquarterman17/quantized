@@ -16,6 +16,7 @@ import { useMemo, useRef } from "react";
 import type uPlot from "uplot";
 
 import {
+  thawColorByColumns,
   thawErrorBars,
   thawLabelList,
   thawStyleList,
@@ -50,6 +51,7 @@ export default function SnapshotPlotWindow({ frozen, view, bg }: SnapshotPlotWin
   const errorBars = useMemo(() => thawErrorBars(frozen.errorBars), [frozen]);
   const styleList = useMemo(() => thawStyleList(frozen.styleList), [frozen]);
   const labelList = useMemo(() => thawLabelList(frozen.labelList), [frozen]);
+  const colorByColumns = useMemo(() => thawColorByColumns(frozen.colorByColumns), [frozen]);
   const hidden = useMemo(() => frozen.hidden ?? undefined, [frozen]);
 
   return (
@@ -93,6 +95,7 @@ export default function SnapshotPlotWindow({ frozen, view, bg }: SnapshotPlotWin
       plotted={frozen.plotted}
       seriesLabels={labelList}
       errorBars={errorBars}
+      colorByColumns={colorByColumns}
       hidden={hidden}
       tool="zoom"
       onReadout={() => {}}

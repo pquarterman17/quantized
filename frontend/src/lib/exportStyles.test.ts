@@ -37,4 +37,21 @@ describe("buildExportStyles", () => {
     const out = buildExportStyles([0], { 0: { fill: "none" } });
     expect(out[0]?.fill).toBeUndefined();
   });
+
+  // ── MAIN #14: colour-mapped scatter ─────────────────────────────────────
+  it("carries color_by + colormap (defaulting to viridis)", () => {
+    const out = buildExportStyles([0], { 0: { colorBy: 2 } });
+    expect(out[0]).toMatchObject({ color_by: 2, colormap: "viridis" });
+  });
+
+  it("respects an explicit colormap override", () => {
+    const out = buildExportStyles([0], { 0: { colorBy: 2, colormap: "magma" } });
+    expect(out[0]?.colormap).toBe("magma");
+  });
+
+  it("omits color_by/colormap when colorBy is unset", () => {
+    const out = buildExportStyles([0], { 0: { width: 2 } });
+    expect(out[0]?.color_by).toBeUndefined();
+    expect(out[0]?.colormap).toBeUndefined();
+  });
 });

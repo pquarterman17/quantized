@@ -21,6 +21,7 @@
 // Pure lib module — no store import (the command layer in
 // `components/windows/useWindowCommands.ts` wires the two ends together).
 
+import type { ColorScatterSpec } from "./colorscatter";
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
 import type { SeriesStyle } from "./types";
 
@@ -34,6 +35,10 @@ export interface LivePlotSnapshot {
   /** Dataset-channel index per plotted display-series — needed to resolve a
    *  fill `{vs: channel}` band the same way the live plot does (MAIN #13). */
   plotted: number[];
+  /** Colour-mapped-scatter specs (MAIN #14) — without these, a frozen
+   *  `colorBy` series would draw nothing at all (its native points are
+   *  hidden and nothing would supply the plugin's per-point colours). */
+  colorByColumns: Map<number, ColorScatterSpec>;
   hidden: boolean[] | undefined;
 }
 
@@ -46,6 +51,7 @@ export interface FrozenPlotBundle {
   labelList: (string | null)[] | null;
   errorBars: [number, (number | null)[]][];
   plotted: number[];
+  colorByColumns: [number, ColorScatterSpec][];
   hidden: boolean[] | null;
 }
 
@@ -84,12 +90,23 @@ export function freezePlotSnapshot(s: LivePlotSnapshot): FrozenPlotBundle {
     labelList: s.labelList ? s.labelList.map((l) => l ?? null) : null,
     errorBars: [...s.errorBars.entries()].map(([k, col]) => [k, [...col]]),
     plotted: [...s.plotted],
+    colorByColumns: [...s.colorByColumns.entries()].map(([k, spec]) => [
+      k,
+      { ...spec, z: [...spec.z] },
+    ]),
     hidden: s.hidden ? [...s.hidden] : null,
   };
 }
 
 /** Frozen error-bar entries back to the `Map` shape `PlotViewport` expects. */
 export function thawErrorBars(entries: FrozenPlotBundle["errorBars"]): Map<number, (number | null)[]> {
+  return new Map(entries);
+}
+
+/** Frozen colour-scatter entries back to the `Map` shape `PlotViewport` expects. */
+export function thawColorByColumns(
+  entries: FrozenPlotBundle["colorByColumns"],
+): Map<number, ColorScatterSpec> {
   return new Map(entries);
 }
 
@@ -156,6 +173,38 @@ export function sanitizeFrozenBundle(v: unknown): FrozenPlotBundle | null {
   const plotted = Array.isArray(o.plotted)
     ? o.plotted.filter((n): n is number => typeof n === "number")
     : [];
+  const colorByColumns: [number, ColorScatterSpec][] = [];
+  if (Array.isArray(o.colorByColumns)) {
+    for (const e of o.colorByColumns) {
+      if (
+        Array.isArray(e) &&
+        e.length === 2 &&
+        typeof e[0] === "number" &&
+        typeof e[1] === "object" &&
+        e[1] !== null
+      ) {
+        const spec = e[1] as Record<string, unknown>;
+        if (
+          Array.isArray(spec.z) &&
+          typeof spec.channel === "number" &&
+          typeof spec.colormap === "string" &&
+          typeof spec.lo === "number" &&
+          typeof spec.hi === "number"
+        ) {
+          colorByColumns.push([
+            e[0],
+            {
+              channel: spec.channel,
+              colormap: spec.colormap as ColorScatterSpec["colormap"],
+              lo: spec.lo,
+              hi: spec.hi,
+              z: (spec.z as unknown[]).map((cell) => (isCell(cell) ? cell : null)),
+            },
+          ]);
+        }
+      }
+    }
+  }
   return {
     payload: {
       data: data as PlotPayload["data"],
@@ -174,6 +223,7 @@ export function sanitizeFrozenBundle(v: unknown): FrozenPlotBundle | null {
       : null,
     errorBars,
     plotted,
+    colorByColumns,
     hidden: Array.isArray(o.hidden) ? o.hidden.map((h) => h === true) : null,
   };
 }

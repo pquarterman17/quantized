@@ -165,6 +165,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.plotted,
     args.seriesLabels,
     args.errorBars,
+    args.colorByColumns,
     args.hidden,
     args.tool,
     args.integral,

@@ -3987,6 +3987,7 @@ describe("useApp plot windows — item 11 (snapshot-as-window)", () => {
     labelList: null,
     errorBars: [],
     plotted: [0],
+    colorByColumns: [],
     hidden: null,
   });
 
@@ -4542,6 +4543,7 @@ describe("useApp plot windows — item 17 (worksheet/map document windows, full 
       labelList: null,
       errorBars: [],
       plotted: [0],
+      colorByColumns: [],
       hidden: null,
     };
     useApp.setState({

@@ -647,6 +647,7 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
       labelList: ["moment", null],
       errorBars: [[1, [0.1, null]]],
       plotted: [0],
+      colorByColumns: [],
       hidden: [false],
     };
     const plotWindows = [
@@ -674,6 +675,7 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
       labelList: null,
       errorBars: [],
       plotted: [],
+      colorByColumns: [],
       hidden: null,
     };
     const plotWindows = [

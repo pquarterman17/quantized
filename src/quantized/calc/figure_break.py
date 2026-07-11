@@ -18,10 +18,10 @@ full ``_apply_overrides`` sweep (legend/spines/limits/margins) targets ONE
 axes and a broken figure has several, so breaks combine with the plot itself
 + title/labels/basic legend/grid only — not the rest of gap #11's property
 panel. Also not compatible with the figure-hitmap collector (`collect_map`),
-which harvests pixel boxes off a single axes. Same scope limit for MAIN #13:
-a `series_styles` entry's `fill` key is silently ignored here (each panel
-draws a plain line) -- fill-under/-between is a single-axes feature, like the
-rest of gap #11.
+which harvests pixel boxes off a single axes. Same scope limit for MAIN
+#13/#14: a `series_styles` entry's `fill`/`color_by` keys are silently
+ignored here (each panel draws a plain line) -- fill-under/-between and
+colour-mapped scatter are single-axes features, like the rest of gap #11.
 """
 
 from __future__ import annotations

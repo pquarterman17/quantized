@@ -1,5 +1,7 @@
 // Wire types mirroring the FastAPI backend payloads (src/quantized/routes).
 
+import type { ColormapName } from "./colormap";
+
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
 export interface DataStruct {
   time: number[];
@@ -548,12 +550,25 @@ export interface SeriesStyle {
    *  `fill_between(x, y, 0)` on export. `{vs: <channel>}` fills the band
    *  BETWEEN this series and another plotted channel — uPlot's native
    *  `opts.bands` on screen, `fill_between(x, y, other)` on export. `vs` is
-   *  always a dataset *channel index* (the same space `errKeys` uses); a
-   *  channel not currently plotted silently drops the band (both uPlot
-   *  bands and the export resolver can only fill between two DRAWN series).
-   *  Fill colour is always derived from the series' own resolved stroke
-   *  colour at a fixed translucency — never a separate stored colour. */
+   *  always a dataset *channel index* (the same space `errKeys`/`colorBy`
+   *  use); a channel not currently plotted silently drops the band (both
+   *  uPlot bands and the export resolver can only fill between two DRAWN
+   *  series). Fill colour is always derived from the series' own resolved
+   *  stroke colour at a fixed translucency — never a separate stored colour. */
   fill?: "none" | "under" | { vs: number };
+  /** Colour-mapped scatter (MAIN #14): colour each plotted point by a THIRD
+   *  channel's value instead of a flat series colour. A dataset *channel
+   *  index* (any channel, not required to be otherwise plotted) or
+   *  null/undefined = off (the normal flat-colour line/marker rendering).
+   *  When set, the line AND native points are hidden — a dedicated draw-hook
+   *  plugin (`uplotOverlays.colorScatterPlugin`) paints coloured points
+   *  keyed to this series' displayed x/y + the channel's values; the export
+   *  path draws matplotlib `scatter(c=z, cmap=...)` + a colourbar instead of
+   *  `ax.plot`. */
+  colorBy?: number | null;
+  /** Colormap for `colorBy` (`lib/colormap.ts`'s named maps — viridis/magma/
+   *  gray). Only consulted when `colorBy` is set; default `"viridis"`. */
+  colormap?: ColormapName;
 }
 
 /** One element row from the reference table. */

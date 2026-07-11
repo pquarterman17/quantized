@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from quantized.calc.figure import render_figure
+from quantized.calc.figure import render_figure, render_figure_map
 
 
 def test_pdf_has_pdf_signature() -> None:
@@ -160,6 +160,72 @@ def test_fill_none_is_a_no_op() -> None:
     a = render_figure(x, [("y", x)], fmt="png", series_styles=[{"fill": "none"}])
     b = render_figure(x, [("y", x)], fmt="png")
     assert a == b
+
+
+# ── Colour-mapped scatter (MAIN #14) ─────────────────────────────────────────
+def test_color_by_scatter_renders() -> None:
+    x = np.linspace(0, 10, 25)
+    z = np.cos(x)
+    out = render_figure(
+        x, [("y", np.sin(x))], fmt="png", series_styles=[{"color_by": z.tolist()}]
+    )
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_color_by_scatter_differs_from_plain_line() -> None:
+    x = np.linspace(0, 10, 25)
+    z = np.cos(x)
+    plain = render_figure(x, [("y", np.sin(x))], fmt="pdf")
+    scattered = render_figure(
+        x, [("y", np.sin(x))], fmt="pdf", series_styles=[{"color_by": z.tolist()}]
+    )
+    assert scattered != plain
+
+
+def test_color_by_scatter_honors_colormap_name() -> None:
+    x = np.linspace(0, 10, 25)
+    z = np.linspace(0, 1, 25)
+    viridis = render_figure(
+        x, [("y", x)], fmt="pdf", series_styles=[{"color_by": z.tolist(), "colormap": "viridis"}]
+    )
+    magma = render_figure(
+        x, [("y", x)], fmt="pdf", series_styles=[{"color_by": z.tolist(), "colormap": "magma"}]
+    )
+    assert viridis != magma
+
+
+def test_color_by_scatter_mixed_with_plain_series() -> None:
+    # One colour-mapped series alongside a normal line series — exercises the
+    # draw_series_axes branch that must handle both artist kinds in one pass.
+    x = np.linspace(0, 10, 15)
+    out = render_figure(
+        x,
+        [("a", x), ("b", 2 * x)],
+        fmt="pdf",
+        series_styles=[{"color_by": np.sin(x).tolist()}, None],
+    )
+    assert out[:5] == b"%PDF-"
+
+
+def test_color_by_scatter_hitmap_keeps_series_indices_aligned() -> None:
+    # Regression guard: a colour-mapped series draws via ax.scatter, so it has
+    # NO entry in ax.lines -- _collect_map must key off draw_series_axes's
+    # returned artist list, not `ax.lines[:n_series]`, or the SECOND (plain
+    # line) series' hit-box would silently point at the wrong artist.
+    x = np.linspace(0, 10, 12)
+    out = render_figure_map(
+        x,
+        [("a", x), ("b", 2 * x)],
+        series_styles=[{"color_by": np.sin(x).tolist()}, None],
+        dpi=100,
+    )
+    ids = {e["id"] for e in out["elements"]}
+    assert {"series:0", "series:1"} <= ids
+    boxes = {e["id"]: e for e in out["elements"]}
+    # Both hit-boxes are real (non-degenerate, on-image) regions.
+    for sid in ("series:0", "series:1"):
+        b = boxes[sid]
+        assert b["x0"] < b["x1"] and b["y0"] < b["y1"]
 
 
 # ── Property overrides (gap #11) ─────────────────────────────────────────────

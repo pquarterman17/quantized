@@ -40,9 +40,9 @@ class FigureRequest(BaseModel):
     x_label: str | None = None  # override the auto-derived axis labels (None = derive)
     y_label: str | None = None
     # Per-series style (aligned to the plotted y_keys order): color/width/line/
-    # marker, plus MAIN #13's `fill` ("under" or `{"vs": <channel>}` — a
-    # channel index, resolved against `dataset` by
-    # `calc.plotting.resolve_style_channels`, called from `_figure_series`).
+    # marker, plus MAIN #13's `fill` ("under" or `{"vs": <channel>}`) and MAIN
+    # #14's `color_by`/`colormap` (channel indices — resolved against `dataset`
+    # by `calc.plotting.resolve_style_channels`, called from `_figure_series`).
     series_styles: list[dict[str, Any] | None] | None = None
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
     # limits / margins / grid / annotations — validated in calc.
@@ -59,7 +59,7 @@ def _figure_series(
     (``routes.export_page``). Caller-supplied labels override the
     auto-derived "label (unit)" strings. ``series_styles`` is
     ``req.series_styles`` resolved against ``ds``/the plotted channel order
-    (MAIN #13's ``fill`` channel reference —
+    (MAIN #13/#14's ``fill``/``color_by`` channel references —
     ``calc.plotting.resolve_style_channels``) — the ONLY place this
     resolution happens, so every figure-export route gets it for free."""
     from quantized.calc.plotting import PlotState, build_series, resolve_style_channels

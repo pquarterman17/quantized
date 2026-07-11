@@ -8,7 +8,10 @@ import { useState } from "react";
 
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
+import { colorScaleLegendEntries, type ColorScatterSpec } from "../../lib/colorscatter";
+import { colormapCss } from "../../lib/colormap";
 import { resolveDrawColor } from "../../lib/contrastColor";
+import { fmtNum } from "../../lib/format";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import type { SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
@@ -22,6 +25,10 @@ interface PlotLegendProps {
   plotted: number[];
   /** Per-display-series visibility (true = hidden), 1:1 with series. */
   hidden?: boolean[];
+  /** Colour-mapped-scatter specs (MAIN #14) — drives the colorbar chip below
+   *  the series list (min/max labels + a colormap gradient strip) whenever at
+   *  least one series is colour-mapped. */
+  colorByColumns?: Map<number, ColorScatterSpec>;
   /** Whether the plot's EFFECTIVE background (item 18) reads as dark — feeds
    *  the same `resolveDrawColor` contrast check the canvas stroke uses, so a
    *  legend swatch never shows an invisible literal colour the canvas line
@@ -39,6 +46,7 @@ export default function PlotLegend({
   styleList,
   plotted,
   hidden,
+  colorByColumns,
   isDarkBg = true,
   inkColor,
 }: PlotLegendProps) {
@@ -62,6 +70,15 @@ export default function PlotLegend({
     else set.add(channel);
     setY2Keys(set.size ? [...set] : null);
   };
+
+  // Colorbar chip (MAIN #14): one row per colour-mapped series, a minimal
+  // inline affordance (gradient strip + min/max) — there's no map-stage
+  // canvas colorbar to reuse here (that renderer's rect math is tied to its
+  // OWN canvas layout, not this DOM legend), so this is deliberately simple.
+  const colorScales =
+    active && colorByColumns && colorByColumns.size > 0
+      ? colorScaleLegendEntries(active.data, colorByColumns)
+      : [];
 
   const defaultLabel = (s: PlotSeriesSpec) => (s.unit ? `${s.label} (${s.unit})` : s.label);
   const commit = () => {
@@ -207,6 +224,21 @@ export default function PlotLegend({
           </div>
         );
       })}
+      {colorScales.map((cs, i) => (
+        <div className="it qzk-colorbar" key={`cbar-${i}`} title={`colour = ${cs.label}`}>
+          <span
+            className="qzk-colorbar-grad"
+            style={{
+              background: `linear-gradient(90deg, ${Array.from({ length: 9 }, (_, s) =>
+                colormapCss(cs.colormap, s / 8),
+              ).join(", ")})`,
+            }}
+          />
+          <span className="qzk-colorbar-lbl">{fmtNum(cs.lo)}</span>
+          <span className="qzk-colorbar-lbl">–</span>
+          <span className="qzk-colorbar-lbl">{fmtNum(cs.hi)}</span>
+        </div>
+      ))}
       {menu && (
         <ContextMenu
           x={menu.x}

@@ -960,3 +960,39 @@ describe("buildOpts fill under/between curves (MAIN #13)", () => {
     expect(opts.bands).toBeUndefined();
   });
 });
+
+describe("buildOpts colour-mapped scatter (MAIN #14)", () => {
+  it("hides the native line/points for a series with a colorByColumns entry", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      colorByColumns: new Map([[1, { channel: 1, z: [1, 2, 3], colormap: "viridis", lo: 1, hi: 3 }]]),
+    });
+    const s = opts.series?.[1] as { width?: number; points?: { show?: boolean } };
+    expect(s.width).toBe(0);
+    expect(s.points?.show).toBe(false);
+  });
+
+  it("registers the colour-scatter draw plugin only when colorByColumns is non-empty", () => {
+    const withColorBy = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      colorByColumns: new Map([[1, { channel: 1, z: [1], colormap: "viridis", lo: 1, hi: 1 }]]),
+    });
+    const plain = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    expect(withColorBy.plugins?.length).toBe((plain.plugins?.length ?? 0) + 1);
+  });
+
+  it("leaves a series with no colorByColumns entry drawn normally", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom",
+      colorByColumns: new Map(), // empty -> no series affected
+    });
+    const s = opts.series?.[1] as { width?: number };
+    expect(s.width).toBe(1.5); // the ordinary default line width
+  });
+});

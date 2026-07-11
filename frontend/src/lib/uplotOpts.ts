@@ -3,6 +3,7 @@
 
 import type uPlot from "uplot";
 
+import type { ColorScatterSpec } from "./colorscatter";
 import { resolveDrawColor } from "./contrastColor";
 import { FILLED_SHAPES, markerPaths } from "./markers";
 import type { Measurement } from "./measure";
@@ -18,6 +19,7 @@ import { resolveFillBands, seriesFillProps } from "./uplotFill";
 import {
   annotationPlugin,
   axisBoxPlugin,
+  colorScatterPlugin,
   errorBarsPlugin,
   refLinePlugin,
   regionShadePlugin,
@@ -330,8 +332,8 @@ export interface BuildOptsArgs {
    *  (undefined entries — e.g. overlays — keep the defaults). */
   seriesStyles?: (SeriesStyle | undefined)[];
   /** Dataset-channel index for each plotted display-series (`usePlotPayload`'s
-   *  `plotted` array — the same space `SeriesStyle.fill`'s `vs` is expressed
-   *  in). Only needed to resolve a `fill: {vs: channel}`
+   *  `plotted` array — the same space `SeriesStyle.fill`'s `vs` and `colorBy`
+   *  are expressed in). Only needed to resolve a `fill: {vs: channel}`
    *  override to the OTHER series' display position (see
    *  `uplotFill.resolveFillBands`); undefined = no bands resolved. */
   plotted?: number[];
@@ -341,6 +343,10 @@ export interface BuildOptsArgs {
   /** Error-bar magnitudes keyed by uPlot data-column index (1-based). Draws
    *  vertical y±e whiskers for the mapped plotted series. */
   errorBars?: Map<number, (number | null)[]>;
+  /** Colour-mapped-scatter specs (MAIN #14), keyed by uPlot data-column index
+   *  (1-based) — see `colorscatter.buildColorByColumns`. A series present here
+   *  has its native line/points hidden; `colorScatterPlugin` draws it instead. */
+  colorByColumns?: Map<number, ColorScatterSpec>;
   /** Per-display-series visibility (aligned 1:1 with `payload.series`); `true`
    *  hides that series (interactive legend). Undefined = all visible. */
   hidden?: boolean[];
@@ -626,6 +632,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (args.errorBars && args.errorBars.size > 0) {
     plugins.push(errorBarsPlugin(args.errorBars, inkDimColor));
   }
+  if (args.colorByColumns && args.colorByColumns.size > 0) {
+    plugins.push(colorScatterPlugin(args.colorByColumns));
+  }
   if (args.axisBox) {
     plugins.push(axisBoxPlugin(inkDimColor));
   }
@@ -791,6 +800,14 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       // Peak markers: points only, no connecting line.
       if (s.kind === "points") {
         return { label, scale, stroke, fill: stroke, width: 0, points: loopPoints({ show: true, size: 8 }), show };
+      }
+      // Colour-mapped scatter (MAIN #14): `colorScatterPlugin` (registered
+      // above whenever `args.colorByColumns` is non-empty) draws every point
+      // for this column itself, keyed to the z channel — so the native line
+      // AND points are hidden entirely here to avoid double-drawing. No fill
+      // (a fill-under/between a colour-mapped point cloud isn't meaningful).
+      if (args.colorByColumns?.has(i + 1)) {
+        return { label, scale, stroke, width: 0, points: { show: false }, show };
       }
       // Default trace shape (Preferences) when the series has no explicit style:
       // Scatter = markers, no line; Line + markers = both; Step = stepped line.
