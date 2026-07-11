@@ -249,6 +249,38 @@ export function bootstrapFit(req: BootstrapRequest): Promise<BootstrapResult> {
   return postJSON("/api/fitting/bootstrap", req);
 }
 
+// ── Custom equation models (GOTO #1) ────────────────────────────────────────
+export interface EquationValidateResult {
+  ok: boolean;
+  params: string[];
+  error?: string;
+}
+
+/** Validate a custom fit equation. Always 200 with ok/params/error — the
+ *  live-validation shape (the fit endpoint is the one that 422s). */
+export function validateEquation(equation: string): Promise<EquationValidateResult> {
+  return postJSON("/api/fitting/equation/validate", { equation });
+}
+
+export interface EquationFitRequest {
+  equation: string;
+  x: number[];
+  y: number[];
+  guesses?: number[];
+  /** Per-parameter bounds; null entries = unbounded on that side. */
+  lower?: (number | null)[];
+  upper?: (number | null)[];
+  weights?: number[];
+  calc_errors?: boolean;
+}
+
+/** Fit a custom equation model — the SAME result shape as `fitModel`
+ *  (params/errors/R2/chiSqRed/RMSE/AIC/yFit) plus `paramNames`, so the
+ *  standard fit-stats display works unchanged. */
+export function fitEquation(req: EquationFitRequest): Promise<CalcResult> {
+  return postJSON("/api/fitting/equation/fit", req);
+}
+
 // ── Baseline ────────────────────────────────────────────────────────────────
 type BaselineResult = { baseline: (number | null)[] };
 type BaselineWithInfo = BaselineResult & { info: CalcResult };

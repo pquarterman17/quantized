@@ -9,10 +9,16 @@ import { useState } from "react";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, DataTable, Select } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
+import { loadCustomModels, type CustomFitModel } from "../../../lib/fitmodels";
 import { fmtNum as fmt } from "../../../lib/format";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import EquationModelPanel from "./EquationModelPanel";
 import { useCurveFit } from "./useCurveFit";
+
+// Custom-model picker values are namespaced "custom:<name>"; the bare prefix
+// is the blank "type a new equation" entry (GOTO #1).
+const CUSTOM_PREFIX = "custom:";
 
 export default function CurveFitPanel() {
   const setOpen = useApp((s) => s.setCurveFitOpen);
@@ -32,6 +38,22 @@ export default function CurveFitPanel() {
     runCornerPlot,
     cornerBusy,
   } = useCurveFit();
+
+  // Saved custom equation models (GOTO #1) — listed alongside registry models.
+  const [customModels, setCustomModels] = useState<CustomFitModel[]>(() => loadCustomModels());
+  const isCustom = modelName.startsWith(CUSTOM_PREFIX);
+  const customName = isCustom ? modelName.slice(CUSTOM_PREFIX.length) : "";
+  const currentCustom = customModels.find((m) => m.name === customName) ?? null;
+  const modelOptions = [
+    ...models.map((m) => ({ value: m.name, label: m.name })),
+    { value: CUSTOM_PREFIX, label: "Custom equation…" },
+    ...customModels.map((m) => ({ value: `${CUSTOM_PREFIX}${m.name}`, label: `ƒ ${m.name}` })),
+  ];
+  const onSavedChange = (list: CustomFitModel[]) => {
+    setCustomModels(list);
+    // Deleting the loaded model orphans the picker value — fall back to blank.
+    if (customName && !list.some((m) => m.name === customName)) setModelName(CUSTOM_PREFIX);
+  };
 
   const close = () => {
     clear();
@@ -79,11 +101,31 @@ export default function CurveFitPanel() {
           ["AIC", fmt(result.AIC)],
         ];
 
+  // Custom-equation mode: same window + picker, the equation panel below
+  // (new sub-component — the registry-model body stays untouched).
+  if (isCustom) {
+    return (
+      <ToolWindow title="Curve Fit" width={340} onClose={close}>
+        <label className="qzk-field-lbl">Model</label>
+        <Select
+          options={modelOptions}
+          value={modelName}
+          onChange={(e) => setModelName(e.target.value)}
+        />
+        <EquationModelPanel
+          key={modelName}
+          initial={currentCustom}
+          onSavedChange={onSavedChange}
+        />
+      </ToolWindow>
+    );
+  }
+
   return (
     <ToolWindow title="Curve Fit" width={340} onClose={close}>
       <label className="qzk-field-lbl">Model</label>
       <Select
-        options={models.map((m) => ({ value: m.name, label: m.name }))}
+        options={modelOptions}
         value={modelName}
         onChange={(e) => setModelName(e.target.value)}
       />
