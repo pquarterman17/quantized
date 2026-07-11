@@ -145,6 +145,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
       // carry it: the render-side ensureBookData hooks re-fetch it the next
       // time that dataset is shown after a reload.
       ...(d.pending ? { pending: d.pending } : {}),
+      ...(d.source ? { source: d.source } : {}),
     })),
   };
   return JSON.stringify(doc, null, 2);
@@ -231,6 +232,18 @@ function parsePending(v: unknown): BookSource | null {
   }
   if (o.kind === "upload" && typeof o.token === "string" && o.token) {
     return { kind: "upload", token: o.token, bookId: o.bookId, rows, cols };
+  }
+  return null;
+}
+
+/** Validate a persisted `Dataset.source` (MAIN_PLAN #10) — a stale/hand-edited
+ *  value degrades to "no source" (the dataset just falls back to "Re-import
+ *  from file…") rather than throwing. */
+function parseSource(v: unknown): { kind: "path"; path: string } | null {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v as Record<string, unknown>;
+  if (o.kind === "path" && typeof o.path === "string" && o.path) {
+    return { kind: "path", path: o.path };
   }
   return null;
 }
@@ -355,6 +368,8 @@ export function parseWorkspace(text: string): LoadedWorkspace {
     // validated the same defensive way as every other optional field here.
     const pending = parsePending(dd.pending);
     if (pending) ds.pending = pending;
+    const source = parseSource(dd.source);
+    if (source) ds.source = source;
     if (typeof dd.folderId === "string") ds.folderId = dd.folderId;
     if (typeof dd.order === "number" && Number.isFinite(dd.order)) ds.order = dd.order;
     return ds;

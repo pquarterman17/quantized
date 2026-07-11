@@ -66,16 +66,7 @@ GOTO #11 drift (implemented but listed open).
      corrections apply/reset, formula add/remove, row exclusion,
      channel roles); store-size ratchet respected
 
-10. **Re-import from source file** — one-click refresh of a dataset
-    from its origin file, riding the recalc DAG so corrections / fits /
-    plots update (Origin's "Re-import Directly"; the measurement-rerun
-    loop). Distinct from the out-of-scope watch-file auto-reload.
-    - [ ] Retain source path on `Dataset` where obtainable (desktop /
-      pywebview + lazy Origin books have real paths; browser uploads
-      degrade gracefully to a re-pick dialog)
-    - [ ] "Re-import" command + Library row affordance; refresh in
-      place (keep id/roles/exclusions where shapes still match, else
-      reset with a toast)
+~~10. **Re-import from source file**~~ COMPLETED 2026-07-11 (see Completed).
 
 11. **Reductions GUI** — Boson analysis dialogs for Williamson-Hall,
     FFT film thickness, and reflectivity FFT over the shipped golden
@@ -173,6 +164,28 @@ GOTO #11 drift (implemented but listed open).
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#10 Re-import from source file**~~ (2026-07-11) — `Dataset.source?:
+  {kind:"path", path}` (round-trips .dwk); honest matrix: real paths are
+  knowable ONLY via the path-based `/api/parsers/import` route (`api.
+  importFile`) and a lazy Origin book resolved from one — confirmed NEITHER
+  the pywebview desktop shell (no `js_api` bridge) NOR the Tauri shell
+  (`tauri-plugin-dialog` is Rust-only, never invoked from the frontend)
+  currently surface a path from the browser file-picker/drag-drop
+  (`uploadFile`/`DataTransfer.files`), so those never set `source` — matches
+  the plan's own "browser uploads degrade gracefully" call. New composed
+  slice `store/reimport.ts` (`reimportDataset`) + pure `lib/reimport.ts`
+  (Origin book-matching, shape-change detection); corrections re-applied
+  through the SAME `applyCorrectionsApi` chokepoint `useApp.applyCorrections`
+  uses, inlined so the whole op is ONE `recordHistory` entry (single-step
+  undo); row/column-indexed state (excludedRows/filter/channelRoles/
+  channelTypes/formulas) cleared + toasted only on an actual shape change,
+  kept otherwise. Library row context-menu entry + ⌘K command, both
+  label-branching to a source-less "Re-import from file…" file-picker
+  fallback. 13+8 new tests (store branches + pure helpers) green; store/
+  appCommands/component-ceiling ratchets held (net small trims, no pin
+  raised). No backend changes — reused the existing import/corrections/
+  book-data routes.
 
 - ~~**#8 Post-review consolidation batch**~~ (2026-07-11) — all 9 sub-items,
   4 parallel workstreams (3 worktree agents + direct), zero merge conflicts:

@@ -126,6 +126,25 @@ describe("DatasetRow activation routing (WORKSHEET_PLAN item 15 — origin book 
   });
 });
 
+describe("DatasetRow re-import menu entry (MAIN_PLAN #10)", () => {
+  it("labels it 'Re-import from source' and calls reimportDataset for a sourced dataset", () => {
+    const withSource: Dataset = { ...plain, id: "src1", source: { kind: "path", path: "/data/x.dat" } };
+    useApp.setState({ datasets: [withSource], activeId: null, selectedIds: [] });
+    const spy = vi.spyOn(useApp.getState(), "reimportDataset").mockResolvedValue(undefined);
+    const { container } = render(<DatasetRow dataset={withSource} {...baseProps} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    expect(screen.getByText("Re-import from source")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Re-import from source"));
+    expect(spy).toHaveBeenCalledWith("src1");
+  });
+
+  it("labels it 'Re-import from file…' for a source-less dataset", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    expect(screen.getByText("Re-import from file…")).toBeInTheDocument();
+  });
+});
+
 // project-organization plan item 3b: drop-between reorder. jsdom has no real
 // DnD or layout (see AxisDropZones.test.tsx's header note for the same
 // workaround this borrows: a hand-built DragEvent with clientX/clientY +

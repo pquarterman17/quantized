@@ -74,8 +74,9 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
-// The undo/redo snapshot-history slice (MAIN_PLAN #9), composed the same way.
+// Undo/redo (#9) + re-import-from-source (#10) slices, composed the same way.
 import { createHistorySlice, type HistorySlice } from "./history";
+import { createReimportSlice, type ReimportSlice } from "./reimport";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -303,7 +304,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReimportSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -1025,12 +1026,10 @@ function syncPrefs(s: AppState): void {
 const _initialPrefs = loadPrefs();
 
 export const useApp = create<AppState>((set, get) => ({
-  // The MDI window slice (state + actions) composes into this ONE store
-  // instance (MAIN_PLAN #2) — selectors like useApp((s) => s.plotWindows)
-  // are untouched by the split.
+  // Windows (#2, ./windows), undo/redo (#9, ./history), re-import (#10, ./reimport).
   ...createWindowsSlice(set, get),
-  // Undo/redo (MAIN_PLAN #9) — see store/history.ts for the snapshot design.
   ...createHistorySlice(set),
+  ...createReimportSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,

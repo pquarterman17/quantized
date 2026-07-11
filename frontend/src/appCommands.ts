@@ -560,15 +560,8 @@ export function buildAppActions(s: StoreGet): Action[] {
       label: "Merge selected datasets",
       run: () => s().mergeSelected(),
     },
-    {
-      id: "duplicate",
-      group: "Data",
-      label: "Duplicate active dataset",
-      run: () => {
-        const id = s().activeId;
-        if (id) s().duplicateDataset(id);
-      },
-    },
+    { id: "duplicate", group: "Data", label: "Duplicate active dataset", run: () => { const id = s().activeId; if (id) s().duplicateDataset(id); } },
+    { id: "reimport", group: "Data", label: "Re-import active dataset", run: () => { const id = s().activeId; if (id) void s().reimportDataset(id); } },
     // ── Plot ──
     {
       id: "autoscale",

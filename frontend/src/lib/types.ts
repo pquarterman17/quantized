@@ -337,6 +337,18 @@ export interface Dataset {
    *  that command resolves every pending dataset first
    *  (`useApp.resolvePendingDatasets`) so an exported .dwk is self-contained. */
   pending?: BookSource;
+  /** Where this dataset's data can be re-read from on demand (MAIN_PLAN #10,
+   *  "re-import from source" — Origin's "Re-import Directly"): a real path the
+   *  path-based `/api/parsers/import` route already validated. Set ONLY where
+   *  a real path is actually knowable — mirrors `pending`'s `BookSource.kind
+   *  === "path"` precedent. A browser file-picker/drag-drop upload never gets
+   *  one (the File API exposes no path, and neither the pywebview desktop
+   *  shell — no js_api bridge — nor the Tauri shell — `tauri-plugin-dialog`
+   *  is Rust-only, never invoked from the frontend — surface one today); a
+   *  sourceless dataset instead falls back to "Re-import from file…"
+   *  (re-picks via the browser dialog, see `store/reimport.ts`). Round-trips
+   *  through .dwk. */
+  source?: { kind: "path"; path: string };
 }
 
 /** A folder in the Library's project tree (project-organization plan, Approach
