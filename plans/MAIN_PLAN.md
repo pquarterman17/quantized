@@ -70,10 +70,19 @@ GOTO #11 drift (implemented but listed open).
       the default); double-click resets to nearest corner.
     - Export parity for annotation size + free legend position.
 
-19. **Multi-plot panel builder** (owner request) — ctrl-click multiple
-    plots → compose side-by-side / row×column grids or overlays.
-    DESIGN WITH OWNER — decision round pending (selection source,
-    result target, layout flow, overlay axis semantics).
+19. **Multi-plot panel builder** (owner request; design decided with
+    owner 2026-07-11, all four recommended options): ctrl-click
+    **Library rows** (existing multi-select) → right-click quick picks
+    (Side by side / Stack / Grid / **Overlay**) → a **new composite MDI
+    window** holding the layout, x-linked via the existing sync-group
+    machinery. Overlay = one axes, **auto dual-Y by unit family** (same
+    units share left; second family → y2; >2 families → warn), payload
+    via the union-x merge logic (reuse mergeSelected's union,
+    non-destructively). Drag-to-rearrange panels lands as a FOLLOW-UP
+    sub-item wired to #18's pointer model after it merges (same
+    interaction surface — deliberate sequencing, not scope cut):
+    - [ ] v1: quick picks → composite window (grid + overlay + linked x)
+    - [ ] after #18: drag panels to rearrange within the composite
 
 20. **Axis tick-label precision + engineering notation** (owner bug
     report w/ screenshot, 2026-07-11) — a dense M-H moment axis
