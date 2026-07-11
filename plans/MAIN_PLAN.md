@@ -38,14 +38,65 @@ every folded item below.
 - BACKLOG.md stays the derived cross-plan dashboard (plan-hygiene truth
   order unchanged: code > plan Completed sections > BACKLOG).
 
+### Origin-parity surface audit (2026-07-11)
+An independent 19-area enumeration of OriginPro's daily-driver surface
+(analysis-software-expert, this-user profile) diffed against the live
+command/route/workshop inventory. Conclusion: analysis + plotting
+coverage is genuinely complete or owner-gated, but the prior gap
+campaigns under-weighted **editor ergonomics** — items #9–#16 below are
+the found gaps (none previously booked anywhere). Also caught + fixed:
+GOTO #11 drift (implemented but listed open).
+
 ---
 
 ## Tier 1 — High Impact
 
-*(the current high-impact work lives in `GOTO_PLAN.md` #1–#10; this
-plan's direct items are residue-sized by construction)*
+*(items 9–11 booked from the 2026-07-11 Origin-parity surface audit)*
+
+9. **Undo/redo stack** — Origin-parity CORE, absent entirely (no undo
+   anywhere; the worksheet is cell-editable and datasets/corrections
+   mutate destructively — autosave/.dwk are recovery, not undo).
+   - [ ] Design: action-set inventory + inverse-patch vs snapshot
+     decision (the store is large — whole-library snapshots per edit
+     won't fly; likely per-action inverse patches on a bounded stack)
+   - [ ] Store history slice + Ctrl+Z / Ctrl+Shift+Z + Edit-menu
+     entries; scope which actions participate (data-mutating yes;
+     cheap view toggles optional)
+   - [ ] Tests per action class (cell edit, remove/rename dataset,
+     corrections apply/reset, formula add/remove, row exclusion,
+     channel roles); store-size ratchet respected
+
+10. **Re-import from source file** — one-click refresh of a dataset
+    from its origin file, riding the recalc DAG so corrections / fits /
+    plots update (Origin's "Re-import Directly"; the measurement-rerun
+    loop). Distinct from the out-of-scope watch-file auto-reload.
+    - [ ] Retain source path on `Dataset` where obtainable (desktop /
+      pywebview + lazy Origin books have real paths; browser uploads
+      degrade gracefully to a re-pick dialog)
+    - [ ] "Re-import" command + Library row affordance; refresh in
+      place (keep id/roles/exclusions where shapes still match, else
+      reset with a toast)
+
+11. **Reductions GUI** — Boson analysis dialogs for Williamson-Hall,
+    FFT film thickness, and reflectivity FFT over the shipped golden
+    routes (`/api/reductions/*`; was the PORT_CHECKLIST W2 deferral
+    tail — refiled as actionable: these are core-profile XRD/XRR/NR
+    analyses a GUI-first user reaches through dialogs in Origin).
 
 ## Tier 2 — Medium Impact
+
+12. **Reciprocal (Arrhenius) axis scale** — 1/x axis option beyond
+    linear/log (transport/relaxation figures; pairs with the shipped
+    VFT/Arrhenius calc in `calc/relaxation.py`).
+
+13. **Fill between / under curves** — series fill-to-baseline and
+    fill-between-two-series (region shades only cover x-band boxes
+    today); export side included (matplotlib `fill_between`).
+
+14. **Color-mapped scatter** — a third column drives point color
+    (uPlot custom points draw + the map stage's colorbar/colormap
+    reuse); Origin's color-by-Z scatter for e.g. field/temperature
+    encoding.
 
 ~~1. **Decompose App.tsx + ThinFilmTab.tsx**~~ COMPLETED 2026-07-11 (see Completed).
 ~~2. **Extract the useApp window slice**~~ COMPLETED 2026-07-11 (see Completed).
@@ -61,7 +112,14 @@ plan's direct items are residue-sized by construction)*
 
 ## Tier 3 — Nice-to-Have
 
-*(empty — candidates arrive via GOTO owner gates Q4/Q6/Q7/Q8)*
+15. **Find X from Y / Y from X on a fitted curve** — inverse-evaluate
+    the stored fit overlay (small fit-workshop affordance).
+
+16. **Append/merge workspace** — merge a second `.dwk` into the
+    current library (id-collision strategy) instead of replace-only
+    open; Origin's "Append Project".
+
+*(further candidates arrive via GOTO owner gates Q4/Q6/Q7/Q8)*
 
 ---
 

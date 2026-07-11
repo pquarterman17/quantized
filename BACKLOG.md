@@ -6,14 +6,24 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last regenerated:** 2026-07-11 (MAIN #8 consolidation batch shipped — the last actionable dev item; only owner gates, sample-blocked items, and deliberate deferrals remain)
+**Last regenerated:** 2026-07-11 (MAIN #8 shipped; then the Origin-parity
+surface audit booked MAIN #9–#16 — editor-ergonomics gaps the prior gap
+campaigns never enumerated)
 
 ---
 
 ## Actionable dev work (no blockers, no owner gate)
 
-*(none — exhausted 2026-07-11 with MAIN #8; new items arrive via owner
-gates, user testing, or the parity/decode monitors)*
+| # | Item | Plan / item | Size |
+|---|------|-------------|------|
+| 24 | Undo/redo stack (design + store history slice + per-action-class tests) | MAIN #9 | L |
+| 25 | Re-import from source file (source path on Dataset + refresh via recalc DAG) | MAIN #10 | M |
+| 26 | Reductions GUI dialogs (W-H / FFT thickness / refl FFT over shipped routes) | MAIN #11 | M |
+| 27 | Reciprocal (Arrhenius) axis scale | MAIN #12 | S |
+| 28 | Fill between / under curves (screen + export) | MAIN #13 | S |
+| 29 | Color-mapped scatter (z → point color) | MAIN #14 | S |
+| 30 | Find X↔Y on a fitted curve | MAIN #15 | S |
+| 31 | Append/merge a second `.dwk` | MAIN #16 | S |
 
 ## Owner actions & owner-gated decisions
 
@@ -47,7 +57,7 @@ gates, user testing, or the parity/decode monitors)*
 - **Worksheet designation editing** (MAIN deferral, was WORKSHEET D2) — read-only in v1, deferred unless requested.
 - **Graph Builder export button + `.dwk` plot-spec persistence** (booked debt from archived GAP_INTERACTION #51).
 - **Stat-stage residuals** (archived GAP_PLOTTYPES, accepted): horizontal bar orientation; in-canvas legend for the bar view; `payloadToTSV` exports ordinal positions, not category labels; `statRender.ts` (539) / `useStatStage.ts` (416) split candidates (non-`.tsx`, no guard fails).
-- **PORT_CHECKLIST tails** (all noted inline there): crystal cache (stateful), crystal bond angles (needs CIF coords), BG-region 2-D y-box, per-dataset view-config promotion (x-key/styles/limits), reflectivity density↔SLD toggle, user-defined plot templates, reductions frontend dialogs (W-H / FFT thickness / refl FFT — backend + routes shipped 2026-07-10, no Boson UI surface yet).
+- **PORT_CHECKLIST tails** (all noted inline there): crystal cache (stateful), crystal bond angles (needs CIF coords), BG-region 2-D y-box, per-dataset view-config promotion (x-key/styles/limits), reflectivity density↔SLD toggle, user-defined plot templates. (The reductions-frontend tail was refiled as actionable MAIN #11 by the 2026-07-11 audit.)
 - **CI golden-test host** — de facto resolved as committed frozen values (option a); formalize or drop the open question (PORT_PLAN "still to decide").
 
 ## Plans dashboard
@@ -57,7 +67,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only (#8 shipped 2026-07-11) |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | #9–#16 (2026-07-11 Origin-parity audit) + owner gates + deferrals |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence |
