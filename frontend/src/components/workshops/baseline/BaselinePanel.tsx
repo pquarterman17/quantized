@@ -1,7 +1,10 @@
 // Baseline workshop — view. A draggable ToolWindow: pick a method (ALS / rolling
-// ball / modpoly / SNIP), tune its key params, and estimate the background under
-// the active dataset. The baseline overlays on the plot; "Subtract" writes a new
-// background-subtracted dataset to the library. Thin — logic lives in the hook.
+// ball / modpoly / SNIP / anchors / Shirley / XRD low-angle / analytic
+// polynomials), tune its key params, and estimate the background under the
+// active dataset. The baseline overlays on the plot; "Subtract" writes a new
+// background-subtracted dataset to the library, while the anchor method's
+// "Apply −BG" subtracts through the corrections chokepoint (replayable step +
+// recalc DAG). Thin — logic lives in the hook.
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, NumberField, Select } from "../../primitives";
@@ -14,6 +17,20 @@ const METHODS: { value: BaselineMethod; label: string }[] = [
   { value: "modpoly", label: "Modified polynomial" },
   { value: "snip", label: "SNIP" },
   { value: "region", label: "Fit from region" },
+  { value: "anchor", label: "Anchor points" },
+  { value: "shirley", label: "Shirley (XPS/XAS)" },
+  { value: "xrdla", label: "XRD low-angle (1/x)" },
+  { value: "linear", label: "Linear" },
+  { value: "quadratic", label: "Quadratic" },
+  { value: "poly", label: "Polynomial (n)" },
+];
+
+// Anchor interpolation choices — the backend's calc.backgrounds.anchor_baseline
+// dispatch keys verbatim.
+const ANCHOR_METHODS = [
+  { value: "pchip", label: "pchip (shape-preserving)" },
+  { value: "linear", label: "linear" },
+  { value: "spline", label: "spline" },
 ];
 
 interface ParamField {
@@ -24,7 +41,8 @@ interface ParamField {
   placeholder?: string;
 }
 
-/** Which param fields each method exposes. */
+/** Which numeric param fields each method exposes (the anchor method's
+ *  interpolation Select is separate — it isn't a NumberField). */
 const FIELDS: Record<BaselineMethod, ParamField[]> = {
   als: [
     { label: "Smoothness λ", key: "lam" },
@@ -38,12 +56,20 @@ const FIELDS: Record<BaselineMethod, ParamField[]> = {
     { label: "Box x-max", key: "regionXMax", allowEmpty: true, placeholder: "auto" },
     { label: "Poly order", key: "order" },
   ],
+  anchor: [],
+  shirley: [{ label: "Max iterations", key: "maxIter" }],
+  xrdla: [],
+  linear: [],
+  quadratic: [],
+  poly: [{ label: "Poly order", key: "order" }],
 };
 
 export default function BaselinePanel() {
   const setOpen = useApp((s) => s.setBaselineOpen);
-  const { active, method, params, baseline, busy, error, setMethod, setParams, compute, subtract, clear, pickRegion } =
-    useBaseline();
+  const {
+    active, method, params, baseline, busy, error, anchors,
+    setMethod, setParams, compute, subtract, clear, pickRegion, clearAnchors, applyAnchors,
+  } = useBaseline();
 
   const close = () => {
     clear();
@@ -74,7 +100,7 @@ export default function BaselinePanel() {
               {f.label}
             </label>
             <NumberField
-              value={Number.isFinite(params[f.key]) ? params[f.key] : ""}
+              value={Number.isFinite(params[f.key] as number) ? (params[f.key] as number) : ""}
               width={88}
               step={f.step}
               placeholder={f.placeholder}
@@ -101,13 +127,48 @@ export default function BaselinePanel() {
         </Button>
       )}
 
+      {method === "anchor" && (
+        <>
+          <label className="qzk-field-lbl" style={{ marginTop: 10 }}>
+            Interpolation
+          </label>
+          <Select
+            options={ANCHOR_METHODS}
+            value={params.anchorMethod}
+            onChange={(e) => setParams({ anchorMethod: e.target.value })}
+          />
+          <div className="qzk-ds-meta" style={{ marginTop: 8, color: "var(--text-faint)" }}>
+            ◇ Click the plot to place anchors ({anchors.length} placed). Drag a
+            marker to move it; click one to remove it.
+          </div>
+          <Button
+            size="sm"
+            disabled={anchors.length === 0}
+            onClick={clearAnchors}
+            style={{ marginTop: 8, width: "100%" }}
+          >
+            Clear anchors
+          </Button>
+        </>
+      )}
+
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
         <Button variant="primary" size="sm" disabled={!active || busy} onClick={() => void compute()}>
           {busy ? "Estimating…" : "Estimate"}
         </Button>
-        <Button size="sm" disabled={!baseline} onClick={() => void subtract()}>
-          Subtract →
-        </Button>
+        {method === "anchor" ? (
+          <Button
+            size="sm"
+            disabled={!active || busy || anchors.length < 2}
+            onClick={() => void applyAnchors()}
+          >
+            Apply −BG
+          </Button>
+        ) : (
+          <Button size="sm" disabled={!baseline} onClick={() => void subtract()}>
+            Subtract →
+          </Button>
+        )}
       </div>
 
       {!active && (
@@ -122,7 +183,9 @@ export default function BaselinePanel() {
       )}
       {baseline && !error && (
         <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
-          Baseline overlaid — Subtract writes a new dataset.
+          {method === "anchor"
+            ? "Baseline overlaid — Apply −BG subtracts it as a correction step."
+            : "Baseline overlaid — Subtract writes a new dataset."}
         </div>
       )}
     </ToolWindow>

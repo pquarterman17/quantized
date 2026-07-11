@@ -549,6 +549,18 @@ export interface CorrectionParams {
   smoothMethod?: string;
   normMethod?: string;
   derivativeMode?: string;
+  /** GOTO #2 anchor-point baseline subtraction: user-picked (x, y) anchor
+   *  pairs + the interpolation method (linear/pchip/spline). Present with
+   *  >=2 anchors = subtracted in pipeline step 3 (beats bgPoly/slope). */
+  bgAnchors?: [number, number][];
+  bgAnchorMethod?: string;
+  /** GOTO #7b XRR/NR beam-footprint correction: beam width + sample length
+   *  (any one shared length unit — only w/L enters the geometry) and whether
+   *  x is the detector angle 2θ (then θ = x/2). Both > 0 = enabled
+   *  (pipeline step 2b; `dq` channels are skipped). */
+  footprintW?: number;
+  footprintL?: number;
+  footprintTwoTheta?: boolean;
 }
 
 // ── Import wizard (ORIGIN_GAP_PLAN #40) ─────────────────────────────────────

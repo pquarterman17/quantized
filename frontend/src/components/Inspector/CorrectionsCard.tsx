@@ -37,6 +37,11 @@ interface FormState {
   derivativeMode: string;
   bgId: string; // reference-background dataset id ("" = none)
   bgInterp: string; // interpolation method for the bg subtraction
+  // GOTO #7b beam-footprint correction (XRR/NR): geometry + axis convention.
+  footprintEnabled: boolean;
+  footprintW: string; // beam width (same length unit as L)
+  footprintL: string; // sample length
+  footprintTwoTheta: boolean; // x axis is the detector angle 2θ (θ = x/2)
 }
 
 function initialForm(active: Dataset | null): FormState {
@@ -56,6 +61,10 @@ function initialForm(active: Dataset | null): FormState {
     derivativeMode: c?.derivativeMode ?? "None",
     bgId: active?.bgRef?.datasetId ?? NO_BG,
     bgInterp: active?.bgRef?.interp ?? "linear",
+    footprintEnabled: (c?.footprintW ?? 0) > 0 && (c?.footprintL ?? 0) > 0,
+    footprintW: s(c?.footprintW),
+    footprintL: s(c?.footprintL),
+    footprintTwoTheta: c?.footprintTwoTheta ?? false,
   };
 }
 
@@ -84,6 +93,17 @@ function buildParams(f: FormState): CorrectionParams {
   }
   if (f.normMethod !== "None") p.normMethod = f.normMethod;
   if (f.derivativeMode !== "None") p.derivativeMode = f.derivativeMode;
+  // GOTO #7b: only ship the footprint geometry when enabled AND complete —
+  // the backend treats w > 0 && L > 0 as the on-switch (pipeline step 2b).
+  if (f.footprintEnabled) {
+    const w = num(f.footprintW);
+    const l = num(f.footprintL);
+    if (w !== undefined && w > 0 && l !== undefined && l > 0) {
+      p.footprintW = w;
+      p.footprintL = l;
+      if (f.footprintTwoTheta) p.footprintTwoTheta = true;
+    }
+  }
   return p;
 }
 
@@ -178,6 +198,39 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
               />
             </Field>
           )}
+        </>
+      )}
+
+      <div style={{ marginTop: 8 }}>
+        <Checkbox
+          checked={form.footprintEnabled}
+          onChange={(v) => upd("footprintEnabled", v)}
+        >
+          Footprint (XRR/NR)
+        </Checkbox>
+      </div>
+      {form.footprintEnabled && (
+        <>
+          <Field label="Beam w">
+            <NumberField
+              value={form.footprintW}
+              placeholder="mm"
+              onChange={(v) => upd("footprintW", v)}
+            />
+          </Field>
+          <Field label="Sample L">
+            <NumberField
+              value={form.footprintL}
+              placeholder="mm"
+              onChange={(v) => upd("footprintL", v)}
+            />
+          </Field>
+          <Checkbox
+            checked={form.footprintTwoTheta}
+            onChange={(v) => upd("footprintTwoTheta", v)}
+          >
+            X axis is 2θ
+          </Checkbox>
         </>
       )}
 

@@ -131,6 +131,24 @@ describe("buildOpts", () => {
       buildOpts(payload, { ...base, yLog: false, tool: "qfit", gadgetMode: "cursors" }).plugins,
     ).toHaveLength(1);
   });
+
+  it("adds the anchor-edit plugin only while the baseline anchor bridge is live (GOTO #2)", () => {
+    expect(
+      buildOpts(payload, { ...base, yLog: false, tool: "zoom", anchorEdit: null }).plugins,
+    ).toHaveLength(0);
+    const withAnchors = buildOpts(payload, {
+      ...base,
+      yLog: false,
+      tool: "zoom", // composes with any tool — workshop-scoped, not tool-scoped
+      anchorEdit: {
+        anchors: [{ index: 0, x: 1, y: 2 }],
+        onAdd: vi.fn(),
+        onMove: vi.fn(),
+        onRemove: vi.fn(),
+      },
+    });
+    expect(withAnchors.plugins).toHaveLength(1);
+  });
 });
 
 describe("buildOpts defaultTrace", () => {

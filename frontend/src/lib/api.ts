@@ -316,6 +316,38 @@ export function baselineModPoly(body: {
   return postJSON("/api/baseline/modpoly", body);
 }
 
+/** Baseline through user-picked (x, y) anchors (GOTO #2); extrapolation is
+ *  clamped to the end anchors. `method`: linear | pchip | spline. */
+export function baselineAnchor(body: {
+  x: number[];
+  y: number[];
+  anchors: [number, number][];
+  method?: string;
+}): Promise<BaselineResult> {
+  return postJSON("/api/baseline/anchor", body);
+}
+
+/** Iterative Shirley step background for XPS/XAS spectra (GOTO #3).
+ *  Non-convergence is a 422 with a clear message, never a 500. */
+export function baselineShirley(body: {
+  x: number[];
+  y: number[];
+  max_iter?: number;
+  tol?: number;
+}): Promise<BaselineWithInfo> {
+  return postJSON("/api/baseline/shirley", body);
+}
+
+/** Hyperbolic (One_on_X) low-angle air-scatter background for powder XRD
+ *  (GOTO #7a). Requires strictly positive x (2θ in degrees). */
+export function baselineXrdLowAngle(body: {
+  x: number[];
+  y: number[];
+  include_x2?: boolean;
+}): Promise<BaselineWithInfo> {
+  return postJSON("/api/baseline/xrdlowangle", body);
+}
+
 /** Fit a polynomial background from a boxed x/y region (BosonPlotter "Fit BG
  *  from Box"); returns the full-range background + coeffs + region stats. */
 export function baselineRegion(body: {

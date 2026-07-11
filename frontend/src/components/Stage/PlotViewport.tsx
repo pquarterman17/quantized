@@ -16,9 +16,10 @@ import "uplot/dist/uPlot.min.css";
 import type { PlotPayload } from "../../lib/plotdata";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
-import type { Accent, PeakWizardEditBridge, Theme } from "../../store/useApp";
+import type { Accent, AnchorEditBridge, PeakWizardEditBridge, Theme } from "../../store/useApp";
 
-export interface PlotViewportProps extends Omit<BuildOptsArgs, "width" | "height" | "peakWizardEdit"> {
+export interface PlotViewportProps
+  extends Omit<BuildOptsArgs, "width" | "height" | "peakWizardEdit" | "anchorEdit"> {
   displayPayload: PlotPayload | null;
   /** The live uPlot instance, exposed as a controlled ref so the caller can
    *  drive toolbar/context-menu actions over it (see `usePlotStageActions`). */
@@ -36,6 +37,9 @@ export interface PlotViewportProps extends Omit<BuildOptsArgs, "width" | "height
    *  instead of a fresh wrapper object that would otherwise be reconstructed
    *  (and compare unequal) on every render. */
   peakWizardEdit: PeakWizardEditBridge | null;
+  /** Anchor-point baseline editing (GOTO #2) — RAW store bridge, same
+   *  stable-reference reasoning as `peakWizardEdit` above. */
+  anchorEdit: AnchorEditBridge | null;
   /** Cross-window link group (MULTI_PLOT_PLAN item 13): when set, this
    *  instance joins the uPlot cursor-sync group `syncKey` AND the module
    *  x-range sync registry (`lib/windowsync`) — the MultiPanelStage sync
@@ -51,7 +55,8 @@ export interface PlotViewportProps extends Omit<BuildOptsArgs, "width" | "height
  *  every other Stage chrome (toolbar, legend, readouts, context menu) is a
  *  sibling owned by the caller. */
 export default function PlotViewport(props: PlotViewportProps) {
-  const { displayPayload, plotRef, theme, accent, peakWizardEdit, syncKey, ...args } = props;
+  const { displayPayload, plotRef, theme, accent, peakWizardEdit, anchorEdit, syncKey, ...args } =
+    props;
   const hostRef = useRef<HTMLDivElement>(null);
 
   // (Re)create the uPlot instance when payload / size / theme change.
@@ -77,6 +82,12 @@ export default function PlotViewport(props: PlotViewportProps) {
         markers: peakWizardEdit.markers,
         onAdd: peakWizardEdit.addPeakAt,
         onRemove: peakWizardEdit.removePeak,
+      },
+      anchorEdit: anchorEdit && {
+        anchors: anchorEdit.anchors,
+        onAdd: anchorEdit.addAnchor,
+        onMove: anchorEdit.moveAnchor,
+        onRemove: anchorEdit.removeAnchor,
       },
     });
     if (syncKey) {
@@ -122,6 +133,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     theme,
     accent,
     peakWizardEdit,
+    anchorEdit,
     args.yLog,
     args.xLog,
     args.xLim,

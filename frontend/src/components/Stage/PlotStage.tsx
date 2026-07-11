@@ -128,6 +128,9 @@ export default function PlotStage() {
   // Peak wizard click-on-plot marker editing (item 5) — non-null only while
   // the wizard's step ② is live (see usePeakWizard's store bridge).
   const peakWizardEdit = useApp((s) => s.peakWizardEdit);
+  // Anchor-point baseline editing (GOTO #2) — non-null only while the
+  // Baseline workshop's "Anchor points" method is live (useBaseline's bridge).
+  const baselineAnchorEdit = useApp((s) => s.baselineAnchorEdit);
   const plotRef = useRef<uPlot | null>(null);
   const [readout, setReadout] = useState<Readout | null>(null);
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
@@ -309,6 +312,7 @@ export default function PlotStage() {
         gadgetCursors={useApp.getState().gadgetCursors}
         onCursorsChange={setGadgetCursors}
         peakWizardEdit={peakWizardEdit}
+        anchorEdit={baselineAnchorEdit}
       />
       {menu && displayPayload && (
         <PlotContextMenu
