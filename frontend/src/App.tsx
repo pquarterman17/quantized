@@ -59,6 +59,7 @@ import { useWorkspaceAutosave } from "./useWorkspaceAutosave";
 import { buildExportStyles } from "./lib/exportStyles";
 import { exportActive } from "./lib/exportActive";
 import { IMPORT_ACCEPT, openFilePicker } from "./lib/openFilePicker";
+import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "./lib/originTemplate";
 import { toolForKey } from "./lib/plotToolKeys";
 import { parseWorkspace } from "./lib/workspace";
 import { toast } from "./store/toasts";
@@ -282,6 +283,13 @@ export default function App() {
         label: "Import wizard (guided preview + saved filters)…",
         keywords: "guess preview parse delimiter header units filter messy",
         run: () => s().setImportWizardOpen(true),
+      },
+      {
+        id: "import-origin-template",
+        group: "File",
+        label: "Import Origin template (.otp/.otpu)…",
+        keywords: "otp otpu origin graph template style preset",
+        run: () => openFilePicker((files) => void importOriginTemplateFiles(files), TEMPLATE_ACCEPT),
       },
       {
         id: "demo",

@@ -19,11 +19,13 @@
 // appended once, in full, past the numeric window on every axis (header/row/
 // footer), never part of the row/column windowing math.
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { TextColumn } from "../../../lib/columnmeta";
 import {
+  buildOffsets,
   computeAxisWindow,
+  computeAxisWindowOffsets,
   DEFAULT_COL_OVERSCAN,
   DEFAULT_COL_WIDTH,
   DEFAULT_FALLBACK_COLS,
@@ -38,6 +40,7 @@ import GridHeader from "./GridHeader";
 import GridRow from "./GridRow";
 import GridStatsFooter from "./GridStatsFooter";
 import { useCellEdit } from "./useCellEdit";
+import { useColResize } from "./useColResize";
 
 export interface GridViewportProps {
   data: DataStruct;
@@ -66,6 +69,14 @@ export interface GridViewportProps {
   onRowContext?: (row: number, e: React.MouseEvent) => void;
   /** Read-only Origin text columns (item 8) — see module doc above. */
   textCols: TextColumn[];
+  /** Per-column width overrides (MAIN_PLAN #3), keyed by column index (-1 =
+   *  the pinned x column). Session state, owned by useWorksheetView; empty →
+   *  the uniform-width fast path (windowing is one divide, no offsets). */
+  colWidths?: Record<number, number>;
+  /** Live width update during a header-edge drag. */
+  onResizeCol?: (col: number, width: number) => void;
+  /** Double-click a header edge: autofit the column to a content sample. */
+  onAutofitCol?: (col: number) => void;
 }
 
 /** The row height token, read once per mount (and on resize, in case a
@@ -101,6 +112,9 @@ export default function GridViewport({
   onHeaderContext,
   onRowContext,
   textCols,
+  colWidths = {},
+  onResizeCol = () => {},
+  onAutofitCol = () => {},
 }: GridViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState({ top: 0, left: 0 });
@@ -130,6 +144,24 @@ export default function GridViewport({
   const colWidth = DEFAULT_COL_WIDTH;
   const gutterWidth = DEFAULT_GUTTER_WIDTH;
   const colCount = data.labels.length;
+  // Per-column width resolution (MAIN_PLAN #3): resized columns override the
+  // uniform default; -1 (the pinned x column) is resizable too.
+  const widthOf = (c: number) => colWidths[c] ?? colWidth;
+  const colResize = useColResize(widthOf, onResizeCol);
+  // Any VALUE column resized? (An x-only resize doesn't affect the scrolling
+  // axis — it just widens the pinned cell — so the fast path still applies.)
+  const hasCustomCols = useMemo(
+    () => Object.keys(colWidths).some((k) => Number(k) >= 0),
+    [colWidths],
+  );
+  // Prefix-sum column offsets, built ONLY when some value column was resized
+  // (the uniform fast path needs no array at all) and rebuilt only when the
+  // widths/count change — a resize updates ONE array + the windowed slice,
+  // never the full grid (the perf tests measure this).
+  const colOffsets = useMemo(
+    () => (hasCustomCols ? buildOffsets(colCount, (c) => colWidths[c] ?? DEFAULT_COL_WIDTH) : null),
+    [hasCustomCols, colCount, colWidths],
+  );
 
   const rowWindow = computeAxisWindow(scroll.top, metrics.height, order.length, {
     itemSize: metrics.rowHeight,
@@ -138,19 +170,26 @@ export default function GridViewport({
   });
   // The gutter + x column are pinned, so only the remaining width actually
   // scrolls the value/computed columns.
-  const availableColWidth = Math.max(0, metrics.width - gutterWidth - colWidth);
-  const colWindow = computeAxisWindow(scroll.left, availableColWidth, colCount, {
-    itemSize: colWidth,
-    overscan: DEFAULT_COL_OVERSCAN,
-    fallbackCount: DEFAULT_FALLBACK_COLS,
-  });
+  const availableColWidth = Math.max(0, metrics.width - gutterWidth - widthOf(-1));
+  const colWindow = colOffsets
+    ? computeAxisWindowOffsets(scroll.left, availableColWidth, colOffsets, {
+        overscan: DEFAULT_COL_OVERSCAN,
+        fallbackCount: DEFAULT_FALLBACK_COLS,
+      })
+    : computeAxisWindow(scroll.left, availableColWidth, colCount, {
+        itemSize: colWidth,
+        overscan: DEFAULT_COL_OVERSCAN,
+        fallbackCount: DEFAULT_FALLBACK_COLS,
+      });
 
   const visibleRows = order.slice(rowWindow.start, rowWindow.end);
   const visibleCols = windowIndices(colWindow);
   const leadingRowSpacer = rowWindow.offset;
   const trailingRowSpacer = (order.length - rowWindow.end) * metrics.rowHeight;
   const leadingColSpacer = colWindow.offset;
-  const trailingColSpacer = (colCount - colWindow.end) * colWidth;
+  const trailingColSpacer = colOffsets
+    ? colWindow.totalSize - colOffsets[colWindow.end]
+    : (colCount - colWindow.end) * colWidth;
 
   // Row-number click: plain click toggles the row into the selection; a
   // shift-click extends from the last-clicked anchor across the DISPLAYED
@@ -202,10 +241,13 @@ export default function GridViewport({
         leadingSpacer={leadingColSpacer}
         trailingSpacer={trailingColSpacer}
         colWidth={colWidth}
+        widthOf={widthOf}
         gutterWidth={gutterWidth}
         sortMark={sortMark}
         selectedCols={selectedCols}
         onHeaderClick={onHeaderClick}
+        onResizeStart={colResize.startResize}
+        onAutofitCol={onAutofitCol}
         onRemoveFormula={onRemoveFormula}
         onHeaderContext={onHeaderContext}
         textCols={textCols}
@@ -221,6 +263,7 @@ export default function GridViewport({
           leadingSpacer={leadingColSpacer}
           trailingSpacer={trailingColSpacer}
           colWidth={colWidth}
+          widthOf={widthOf}
           gutterWidth={gutterWidth}
           rowHeight={metrics.rowHeight}
           baseCount={baseCount}
@@ -244,6 +287,7 @@ export default function GridViewport({
           leadingSpacer={leadingColSpacer}
           trailingSpacer={trailingColSpacer}
           colWidth={colWidth}
+          widthOf={widthOf}
           gutterWidth={gutterWidth}
           rowHeight={metrics.rowHeight}
           textCols={textCols}

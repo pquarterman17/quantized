@@ -87,6 +87,101 @@ export function windowIndices(w: Pick<AxisWindow, "start" | "end">): number[] {
   return out;
 }
 
+// ── Variable per-item sizes (MAIN_PLAN #3: per-column widths) ────────────────
+//
+// The uniform-size path above stays the fast path (windowing is one divide);
+// resized columns switch the COLUMN axis to a prefix-sum offsets array with
+// binary-search hit-testing. Rows never take this path (fixed height always).
+
+/** Prefix-sum offsets for `itemCount` items of per-item size `sizeOf(i)`:
+ *  `offsets[i]` is the pixel position where item i starts, `offsets[itemCount]`
+ *  is the total axis size. Sizes <= 0 are treated as 1px (same defensive rule
+ *  as the uniform path's itemSize). */
+export function buildOffsets(itemCount: number, sizeOf: (index: number) => number): number[] {
+  const offsets = new Array<number>(Math.max(0, itemCount) + 1);
+  offsets[0] = 0;
+  for (let i = 0; i < itemCount; i++) {
+    const size = sizeOf(i);
+    offsets[i + 1] = offsets[i] + (size > 0 ? size : 1);
+  }
+  return offsets;
+}
+
+/** Largest index i (0..itemCount-1) with `offsets[i] <= pos` — the item under
+ *  pixel position `pos`. Binary search over the prefix sums; positions past
+ *  the end clamp to the last item. */
+export function offsetIndexAt(offsets: number[], pos: number): number {
+  const count = offsets.length - 1;
+  if (count <= 0) return 0;
+  if (pos <= 0) return 0;
+  let lo = 0;
+  let hi = count - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (offsets[mid] <= pos) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+/** `computeAxisWindow`'s variable-size sibling: the visible-plus-overscan
+ *  index range for one axis whose items have per-item sizes described by a
+ *  prefix-sum `offsets` array (from `buildOffsets`). Same contract — clamped
+ *  `[start, end)`, a leading `offset`, the full `totalSize`, and the same
+ *  degenerate-viewport fallback (key decision 2). */
+export function computeAxisWindowOffsets(
+  scrollOffset: number,
+  viewportSize: number,
+  offsets: number[],
+  cfg: Pick<AxisWindowConfig, "overscan" | "fallbackCount">,
+): AxisWindow {
+  const itemCount = offsets.length - 1;
+  const totalSize = itemCount > 0 ? offsets[itemCount] : 0;
+  if (itemCount <= 0) return { start: 0, end: 0, offset: 0, totalSize: 0 };
+
+  if (viewportSize <= 0) {
+    const end = Math.min(itemCount, Math.max(0, cfg.fallbackCount ?? itemCount));
+    return { start: 0, end, offset: 0, totalSize };
+  }
+
+  const overscan = Math.max(0, Math.floor(cfg.overscan ?? 0));
+  const scroll = Math.max(0, scrollOffset);
+  const firstVisible = offsetIndexAt(offsets, scroll);
+  // Last index whose START is before the viewport's far edge (covers a
+  // partially-visible trailing item, mirroring the uniform path's +1).
+  const lastVisible = offsetIndexAt(offsets, scroll + viewportSize);
+  const start = Math.max(0, firstVisible - overscan);
+  const end = Math.min(itemCount, lastVisible + overscan + 1);
+  return { start, end, offset: offsets[start], totalSize };
+}
+
+// ── Column width bounds + autofit (MAIN_PLAN #3 drag resize) ─────────────────
+
+export const MIN_COL_WIDTH = 56;
+export const MAX_COL_WIDTH = 640;
+
+/** Clamp a dragged/derived column width into the sane range. */
+export function clampColWidth(width: number): number {
+  if (!Number.isFinite(width)) return DEFAULT_COL_WIDTH;
+  return Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, Math.round(width)));
+}
+
+// The grid renders in the mono font (`--font-mono` on .qzk-grid) at the small
+// size, so width estimation is a character count times a fixed advance plus
+// the cell's horizontal padding/border (3px 10px padding + 1px borders).
+const AUTOFIT_CHAR_PX = 7.5;
+const AUTOFIT_PAD_PX = 26;
+
+/** Estimated pixel width that fits the widest of `samples` (double-click
+ *  autofit): monospace character-count estimate, clamped to the same bounds a
+ *  drag resize gets. Empty samples fall back to the default width. */
+export function autofitColWidth(samples: readonly string[]): number {
+  let chars = 0;
+  for (const s of samples) if (s.length > chars) chars = s.length;
+  if (chars === 0) return DEFAULT_COL_WIDTH;
+  return clampColWidth(chars * AUTOFIT_CHAR_PX + AUTOFIT_PAD_PX);
+}
+
 // Fallback metrics for degenerate (jsdom / pre-measurement) viewports and the
 // pure-math defaults GridViewport falls back to before it has measured the
 // real `--row-h` CSS token. Generous enough that every existing test dataset

@@ -40,6 +40,7 @@ beforeEach(() => {
     y2Keys: null,
     statMode: false,
     statStageSeed: null,
+    graphBuilderSeed: null,
     macroRecording: false,
     stackMode: false,
     spatialPanels: null,
@@ -96,6 +97,57 @@ describe("useGraphBuilder — morphing", () => {
       });
     });
     expect(result.current.chips("y")).toHaveLength(0);
+  });
+});
+
+describe("useGraphBuilder — worksheet seed (MAIN_PLAN #4)", () => {
+  const seedFor = (datasetId: string) => ({
+    version: 1 as const,
+    zones: {
+      x: { datasetId, channel: 0 },
+      y: [{ datasetId, channel: 1 }],
+      group: null,
+      facet: null,
+    },
+    mark: "scatter" as const,
+  });
+
+  it("consumes a pending seed on mount: wells prefilled, mark re-inferred, seed cleared", () => {
+    // The worksheet handoff sets the seed BEFORE the panel mounts.
+    act(() => useApp.getState().openGraphBuilderSeeded(seedFor("d1")));
+    const { result } = renderHook(() => useGraphBuilder());
+    expect(result.current.chips("x")).toEqual([{ channel: 0, label: "x" }]);
+    expect(result.current.chips("y")).toEqual([{ channel: 1, label: "y" }]);
+    // Channel 0 is sorted-monotonic → the inferred honest default is a line.
+    expect(result.current.mark).toBe("line");
+    expect(useApp.getState().graphBuilderSeed).toBeNull(); // one-shot
+  });
+
+  it("consumes a seed handed while the panel is already open (even across a rebind)", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "run.dat", data: DATA },
+        { id: "d2", name: "other.dat", data: DATA },
+      ],
+    });
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 2)); // some prior state to overwrite
+    act(() => {
+      // The worksheet handoff for a NON-active dataset rebinds first, then
+      // seeds — the dataset-change wipe and the seed land in the same commit,
+      // and the seed (declared after the wipe) must win.
+      useApp.setState({ activeId: "d2" });
+      useApp.getState().openGraphBuilderSeeded(seedFor("d2"));
+    });
+    expect(result.current.chips("y")).toEqual([{ channel: 1, label: "y" }]);
+    expect(useApp.getState().graphBuilderSeed).toBeNull();
+  });
+
+  it("drops (and clears) a seed for a dataset that isn't active — wrong labels otherwise", () => {
+    act(() => useApp.getState().openGraphBuilderSeeded(seedFor("not-active")));
+    const { result } = renderHook(() => useGraphBuilder());
+    expect(result.current.chips("y")).toEqual([]);
+    expect(useApp.getState().graphBuilderSeed).toBeNull();
   });
 });
 

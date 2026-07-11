@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveSelectionPlot } from "./selectionplot";
+import { resolveSelectionPlot, selectionToSpec } from "./selectionplot";
 import type { DataStruct } from "./types";
 
 /** An Origin-shaped reflectometry-like book: A (consumed as time, not a value
@@ -120,5 +120,72 @@ describe("resolveSelectionPlot", () => {
     expect(r2.summary).toContain("X updated");
     const r3 = resolveSelectionPlot(plain, new Set([1]), NO_AXIS, "add");
     expect(r3.summary).toBe("Add to plot: 1 channel"); // singular, no X change (no designations at all)
+  });
+});
+
+// ── Selection → Graph Builder handoff (MAIN_PLAN #4) ─────────────────────────
+
+describe("selectionToSpec", () => {
+  it("returns null for an empty selection (the affordance disables)", () => {
+    expect(selectionToSpec(plain, "d1", [])).toBeNull();
+  });
+
+  it("a single selected column becomes Y with an empty X well (renders against the dataset x)", () => {
+    const spec = selectionToSpec(plain, "d1", [1]);
+    expect(spec).not.toBeNull();
+    expect(spec!.zones.x).toBeNull();
+    expect(spec!.zones.y).toEqual([{ datasetId: "d1", channel: 1 }]);
+    expect(spec!.zones.group).toBeNull();
+    expect(spec!.zones.facet).toBeNull();
+    expect(spec!.version).toBe(1);
+    expect(spec!.mark).toBe("scatter"); // the consumer re-infers via withInferredMark
+  });
+
+  it("two or more columns: the FIRST (ascending) takes X, the rest land in Y", () => {
+    const spec = selectionToSpec(plain, "d1", [2, 0, 1]); // non-contiguous insertion order
+    expect(spec!.zones.x).toEqual({ datasetId: "d1", channel: 0 });
+    expect(spec!.zones.y).toEqual([
+      { datasetId: "d1", channel: 1 },
+      { datasetId: "d1", channel: 2 },
+    ]);
+  });
+
+  it("non-contiguous columns keep ascending order and de-duplicate", () => {
+    const spec = selectionToSpec(plain, "d1", [2, 0, 2, 0]);
+    expect(spec!.zones.x).toEqual({ datasetId: "d1", channel: 0 });
+    expect(spec!.zones.y).toEqual([{ datasetId: "d1", channel: 2 }]);
+  });
+
+  it("selecting the pinned x/time column (-1) keeps X empty and every value column in Y", () => {
+    const spec = selectionToSpec(plain, "d1", [-1, 0, 2]);
+    expect(spec!.zones.x).toBeNull(); // empty X = the dataset's own x/time column
+    expect(spec!.zones.y).toEqual([
+      { datasetId: "d1", channel: 0 },
+      { datasetId: "d1", channel: 2 },
+    ]);
+  });
+
+  it("only the x/time column selected → null (nothing to put in a Y well)", () => {
+    expect(selectionToSpec(plain, "d1", [-1])).toBeNull();
+  });
+
+  it("an X-designated selected column wins the X well over the first-selected rule", () => {
+    const spec = selectionToSpec(originData, "d1", [0, 3]); // R++ (Y), X2 (X-designated)
+    expect(spec!.zones.x).toEqual({ datasetId: "d1", channel: 3 });
+    expect(spec!.zones.y).toEqual([{ datasetId: "d1", channel: 0 }]);
+  });
+
+  it("Label/Disregard and error columns never reach the wells (no error wells in the grammar)", () => {
+    const spec = selectionToSpec(originData, "d1", [0, 1, 2, 4]); // R++, dR++(Y-err), Sample(Label), Junk(X-err)
+    expect(spec!.zones.x).toBeNull(); // only ONE plottable column survives → single-column rule
+    expect(spec!.zones.y).toEqual([{ datasetId: "d1", channel: 0 }]);
+  });
+
+  it("only label/error columns selected → null", () => {
+    expect(selectionToSpec(originData, "d1", [1, 2, 4])).toBeNull();
+  });
+
+  it("only an X-designated column selected → null (an X with no Y renders nothing)", () => {
+    expect(selectionToSpec(originData, "d1", [3])).toBeNull();
   });
 });

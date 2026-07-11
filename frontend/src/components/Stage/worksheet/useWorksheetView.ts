@@ -27,11 +27,13 @@ import { statsDescriptive } from "../../../lib/api";
 import { copyText, tableToTSV } from "../../../lib/clipboard";
 import { channelLetter, compileFormula } from "../../../lib/formula";
 import { originTextColumns, type TextColumn } from "../../../lib/columnmeta";
+import { autofitColWidth, clampColWidth } from "../../../lib/gridwindow";
 import { excludedSet, filteredOutSet } from "../../../lib/rowstate";
-import { resolveSelectionPlot } from "../../../lib/selectionplot";
+import { resolveSelectionPlot, selectionToSpec } from "../../../lib/selectionplot";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
 import { plotIntentStageTab, useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
+import { fmtCell } from "./cellFormat";
 
 /** Does value `v` pass `op` against `a` (and `b` for "between")? Non-finite fails. */
 function passesFilter(v: number | undefined, op: string, a: number, b: number): boolean {
@@ -128,6 +130,23 @@ export interface WorksheetView {
   plotSelection: () => void;
   addSelectionToPlot: () => void;
 
+  // Per-column widths + drag resize (MAIN_PLAN #3). SESSION state only, like
+  // the column selection — reset on a dataset switch, never persisted
+  // (per-dataset .dwk persistence is an open owner gate, MAIN_PLAN
+  // "worksheet view-state persistence").
+  colWidths: Record<number, number>;
+  setColWidth: (col: number, width: number) => void;
+  /** Double-click autofit: size the column to its header + a content sample
+   *  (the first rows of the DISPLAY order, formatted exactly as rendered). */
+  autofitCol: (col: number) => void;
+
+  // Selection → Graph Builder handoff (MAIN_PLAN #4): prefill a lib/plotspec
+  // spec from an explicit column list (the context menu's effectiveCols) and
+  // open the Graph Builder workshop seeded with it.
+  openInGraphBuilder: (cols: number[]) => void;
+  /** Toolbar wrapper over the CURRENT column selection. */
+  openSelectionInGraphBuilder: () => void;
+
   // Text-sheet rendering (item 8) — read-only, appended after numeric/computed
   // columns; never editable, never in stats, never a selection→plot candidate.
   textCols: TextColumn[];
@@ -165,12 +184,15 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
   const [filterV1, setFilterV1] = useState("");
   const [filterV2, setFilterV2] = useState("");
   const [selectedCols, setSelectedCols] = useState<Set<number>>(new Set());
+  const [colWidths, setColWidths] = useState<Record<number, number>>({});
 
-  // Clear the column selection on a dataset switch (sheet tab, book switcher,
-  // Library click, …) — a selection keyed by column INDEX is meaningless once
-  // the underlying columns can be entirely different.
+  // Clear the column selection AND the per-column widths on a dataset switch
+  // (sheet tab, book switcher, Library click, …) — state keyed by column
+  // INDEX is meaningless once the underlying columns can be entirely
+  // different (the same rule the item-6 selection set already followed).
   useEffect(() => {
     setSelectedCols(new Set());
+    setColWidths({});
   }, [ds.id]);
 
   // Esc clears the column selection while one exists (mirrors useGadgetChip's
@@ -403,6 +425,46 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
     setSort((s) => (s && s.col === col ? (s.dir === 1 ? { col, dir: -1 } : null) : { col, dir: 1 }));
   const sortMark = (col: number) => (sort?.col === col ? (sort.dir === 1 ? " ▲" : " ▼") : "");
 
+  // Per-column widths (MAIN_PLAN #3): clamped on every write so a drag can
+  // never store a degenerate width.
+  const setColWidth = (col: number, width: number) =>
+    setColWidths((w) => ({ ...w, [col]: clampColWidth(width) }));
+
+  // Double-click autofit: header text + the first rows of the DISPLAY order
+  // (post filter/sort — what the user is actually looking at), formatted with
+  // the grid's own cell formatter so the estimate matches rendered text.
+  const AUTOFIT_SAMPLE_ROWS = 200;
+  function autofitCol(col: number) {
+    const samples: string[] =
+      col < 0
+        ? [xName, xUnit ? `X · ${xUnit}` : "X"]
+        : [labels[col] ?? "", units[col] ? `· ${units[col]}` : ""];
+    for (const r of order.slice(0, AUTOFIT_SAMPLE_ROWS)) {
+      samples.push(fmtCell(col < 0 ? time[r] : values[r]?.[col]));
+    }
+    setColWidth(col, autofitColWidth(samples));
+  }
+
+  // Selection → Graph Builder handoff (MAIN_PLAN #4). The Graph Builder
+  // builds against the ACTIVE dataset (its wells/options/preview all read
+  // it), so a worksheet showing a non-active dataset rebinds first — the
+  // same plot-intent precedent plotCols sets above. The seed rides the store
+  // (`openGraphBuilderSeeded`, one-shot like statStageSeed) and is consumed
+  // by useGraphBuilder the same way its other entry point (the bare
+  // command-palette open) initializes — no second spec pathway.
+  function openInGraphBuilder(cols: number[]) {
+    const spec = selectionToSpec(ds.data, ds.id, cols);
+    if (!spec) {
+      setStatus("nothing plottable in the selection");
+      return;
+    }
+    const store = useApp.getState();
+    if (store.activeId !== ds.id) store.setActive(ds.id);
+    useApp.getState().openGraphBuilderSeeded(spec);
+    setStatus("opened the selection in the Graph Builder");
+  }
+  const openSelectionInGraphBuilder = () => openInGraphBuilder([...selectedCols]);
+
   const vars = ["x", ...labels.map((_, c) => channelLetter(c))].join(" · ");
 
   return {
@@ -467,6 +529,11 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
     plotCols,
     plotSelection,
     addSelectionToPlot,
+    colWidths,
+    setColWidth,
+    autofitCol,
+    openInGraphBuilder,
+    openSelectionInGraphBuilder,
     textCols,
   };
 }

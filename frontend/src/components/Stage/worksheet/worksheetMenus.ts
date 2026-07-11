@@ -25,6 +25,9 @@ export interface ColumnMenuContext {
    *  "Plot selection" replaces yKeys; "Add to plot" unions it in. */
   onPlotSelection: () => void;
   onAddSelectionToPlot: () => void;
+  /** Selection → Graph Builder handoff (MAIN_PLAN #4): open the Graph
+   *  Builder prefilled with a spec built from the same effective columns. */
+  onOpenInGraphBuilder: () => void;
 }
 
 /** Items for a right-clicked column header (`col` is -1 for the x column).
@@ -57,6 +60,7 @@ export function columnMenuItems(col: number, ctx: ColumnMenuContext): ContextMen
   items.push({ separator: true });
   items.push({ label: "Plot selection", run: ctx.onPlotSelection });
   items.push({ label: "Add selection to plot", run: ctx.onAddSelectionToPlot });
+  items.push({ label: "Open in Graph Builder…", run: ctx.onOpenInGraphBuilder });
   items.push({ separator: true });
   items.push({ label: "New column from formula…", run: ctx.onNewColumn });
   items.push({

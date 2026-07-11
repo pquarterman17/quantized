@@ -11,6 +11,7 @@
 // and any selected value cell in this row, matching the header's highlight.
 
 import type { TextColumn } from "../../../lib/columnmeta";
+import { fmtCell } from "./cellFormat";
 import type { CellEditApi } from "./useCellEdit";
 
 export interface GridRowProps {
@@ -21,6 +22,9 @@ export interface GridRowProps {
   leadingSpacer: number;
   trailingSpacer: number;
   colWidth: number;
+  /** Per-column width (MAIN_PLAN #3) — resized columns differ from the
+   *  uniform `colWidth`, which text columns keep. -1 = the pinned x column. */
+  widthOf: (col: number) => number;
   gutterWidth: number;
   rowHeight: number;
   baseCount: number;
@@ -35,11 +39,6 @@ export interface GridRowProps {
   textCols: TextColumn[];
 }
 
-function fmt(v: number | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  return Math.abs(v) >= 1e4 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(3) : v.toFixed(4);
-}
-
 export default function GridRow({
   r,
   time,
@@ -48,6 +47,7 @@ export default function GridRow({
   leadingSpacer,
   trailingSpacer,
   colWidth,
+  widthOf,
   gutterWidth,
   rowHeight,
   baseCount,
@@ -80,7 +80,7 @@ export default function GridRow({
         role="gridcell"
         className="qzk-grid-cell"
         style={{
-          width: colWidth,
+          width: widthOf(col),
           flexShrink: 0,
           color: computed ? "var(--text-dim)" : undefined,
           ...(colSelected ? { background: "var(--accent-soft)" } : {}),
@@ -104,7 +104,7 @@ export default function GridRow({
             }}
           />
         ) : (
-          fmt(value)
+          fmtCell(value)
         )}
       </div>
     );

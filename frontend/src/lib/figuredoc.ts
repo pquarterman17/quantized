@@ -47,6 +47,11 @@ export interface GraphTemplate {
   style: string;
   overrides: FigureOverrides | null;
   seriesStyles: (ExportSeriesStyle | null)[] | null;
+  /** Where the template came from: absent = saved by the user in the Figure
+   *  Builder; "origin" = imported from an Origin .otp/.otpu graph template
+   *  (MAIN_PLAN #5 — lib/originTemplate). Extra fields survive the
+   *  localStorage round-trip (isTemplate only checks name/style). */
+  source?: string;
 }
 
 // ── .dwk sanitizers ─────────────────────────────────────────────────────────

@@ -83,6 +83,7 @@ import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
 import { effectiveChannels } from "../lib/plotdata";
 import { docRenderable, type FigureDoc } from "../lib/figuredoc";
+import type { PlotSpec } from "../lib/plotspec";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import { firstVisiblePlottedChannel, selectRoiRows, type GadgetMode } from "../lib/quickfit";
 import { activeRowIndices, analysisData, droppedRows, expandToFull, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
@@ -675,6 +676,10 @@ interface AppState {
   figureBuilderOpen: boolean;
   figurePageOpen: boolean; // the multi-panel figure page composer (GOTO #4)
   graphBuilderOpen: boolean; // the drag-columns-to-wells plot-spec builder (#51)
+  // One-shot spec handed TO the Graph Builder by the worksheet's "Open in
+  // Graph Builder" (MAIN_PLAN #4) — consumed + cleared by useGraphBuilder on
+  // open, mirroring statStageSeed's shape. null = open empty (the ⌘K path).
+  graphBuilderSeed: PlotSpec | null;
   // One-shot pickers handed from the Graph Builder to the stat stage when a
   // box/violin spec is sent (consumed + cleared by useStatStage). null = none.
   statStageSeed: StatStageSeed | null;
@@ -1095,6 +1100,10 @@ interface AppState {
   setFigureBuilderOpen: (open: boolean) => void;
   setFigurePageOpen: (open: boolean) => void;
   setGraphBuilderOpen: (open: boolean) => void;
+  // Open the Graph Builder prefilled with a spec (the worksheet handoff,
+  // MAIN_PLAN #4); clearGraphBuilderSeed drops the one-shot seed once read.
+  openGraphBuilderSeeded: (spec: PlotSpec) => void;
+  clearGraphBuilderSeed: () => void;
   // Send a box/violin Graph Builder spec to the stat stage: store the pickers +
   // switch statMode on; clearStatStageSeed drops the pending pickers once read.
   seedStatStage: (seed: StatStageSeed) => void;
@@ -1383,6 +1392,7 @@ export const useApp = create<AppState>((set, get) => ({
   figureBuilderOpen: false,
   figurePageOpen: false,
   graphBuilderOpen: false,
+  graphBuilderSeed: null,
   statStageSeed: null,
   waterfallOpen: false,
   reflViewOpen: false,
@@ -3846,6 +3856,8 @@ export const useApp = create<AppState>((set, get) => ({
   setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
   setFigurePageOpen: (figurePageOpen) => set({ figurePageOpen }),
   setGraphBuilderOpen: (graphBuilderOpen) => set({ graphBuilderOpen }),
+  openGraphBuilderSeeded: (graphBuilderSeed) => set({ graphBuilderSeed, graphBuilderOpen: true }),
+  clearGraphBuilderSeed: () => set({ graphBuilderSeed: null }),
   seedStatStage: (statStageSeed) => set({ statStageSeed, statMode: true }),
   clearStatStageSeed: () => set({ statStageSeed: null }),
   setWaterfallOpen: (waterfallOpen) => set({ waterfallOpen }),

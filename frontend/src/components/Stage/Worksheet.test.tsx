@@ -624,6 +624,53 @@ describe("Worksheet selection → plot (item 7)", () => {
   });
 });
 
+describe("Worksheet selection → Graph Builder handoff (MAIN_PLAN #4)", () => {
+  const header = (i: number) => screen.getAllByRole("columnheader")[i];
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "scan.dat", data }],
+      activeId: "d1",
+      xKey: null,
+      yKeys: null,
+      graphBuilderOpen: false,
+      graphBuilderSeed: null,
+    });
+  });
+
+  it("the toolbar's Graph Builder button (shown with a selection) seeds + opens the builder", () => {
+    render(<Worksheet />);
+    // No selection → the cluster (and thus the button) isn't offered at all.
+    expect(screen.queryByRole("button", { name: "Graph Builder" })).not.toBeInTheDocument();
+    fireEvent.click(header(2)); // A
+    fireEvent.click(header(3), { ctrlKey: true }); // B
+    fireEvent.click(screen.getByRole("button", { name: "Graph Builder" }));
+    const s = useApp.getState();
+    expect(s.graphBuilderOpen).toBe(true);
+    expect(s.graphBuilderSeed).toEqual({
+      version: 1,
+      zones: {
+        x: { datasetId: "d1", channel: 0 },
+        y: [{ datasetId: "d1", channel: 1 }],
+        group: null,
+        facet: null,
+      },
+      mark: "scatter",
+    });
+  });
+
+  it("the column context menu's entry acts on the right-clicked column when nothing is selected", () => {
+    render(<Worksheet />);
+    fireEvent.contextMenu(header(3)); // B (col 1), nothing selected
+    fireEvent.click(screen.getByText("Open in Graph Builder…"));
+    const s = useApp.getState();
+    expect(s.graphBuilderOpen).toBe(true);
+    // Single column → Y well only; X stays the dataset's own x/time column.
+    expect(s.graphBuilderSeed?.zones.x).toBeNull();
+    expect(s.graphBuilderSeed?.zones.y).toEqual([{ datasetId: "d1", channel: 1 }]);
+  });
+});
+
 describe("Worksheet text-sheet rendering (item 8)", () => {
   const textData: DataStruct = {
     time: [1, 2, 3],

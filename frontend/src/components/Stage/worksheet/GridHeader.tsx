@@ -21,6 +21,12 @@
 //
 // Text columns (item 8) get no click handler at all — read-only, never a
 // sort/selection/plot candidate (they have no `.values` channel index).
+//
+// Column resize (MAIN_PLAN #3): every numeric header cell (x + value/computed
+// columns; not text columns) carries a right-edge drag handle — drag resizes
+// (pointer bookkeeping in useColResize, width state in useWorksheetView),
+// double-click autofits to a content sample. Handles stopPropagation so the
+// select-click gesture above never fires from a resize.
 
 import { columnMetaList, DESIGNATION_BADGE, type ColumnMeta, type TextColumn } from "../../../lib/columnmeta";
 import { channelLetter } from "../../../lib/formula";
@@ -37,10 +43,17 @@ export interface GridHeaderProps {
   leadingSpacer: number;
   trailingSpacer: number;
   colWidth: number;
+  /** Per-column width (MAIN_PLAN #3); -1 = the pinned x column. Text columns
+   *  keep the uniform `colWidth`. */
+  widthOf: (col: number) => number;
   gutterWidth: number;
   sortMark: (col: number) => string;
   selectedCols: Set<number>;
   onHeaderClick: (col: number, e: React.MouseEvent) => void;
+  /** Drag handle pointerdown (useColResize.startResize). */
+  onResizeStart: (col: number, e: React.PointerEvent) => void;
+  /** Double-click the handle: autofit the column to a content sample. */
+  onAutofitCol: (col: number) => void;
   onRemoveFormula: (index: number) => void;
   onHeaderContext?: (col: number, e: React.MouseEvent) => void;
   /** Read-only Origin text columns (item 8), unvirtualized, always appended
@@ -91,10 +104,13 @@ export default function GridHeader({
   leadingSpacer,
   trailingSpacer,
   colWidth,
+  widthOf,
   gutterWidth,
   sortMark,
   selectedCols,
   onHeaderClick,
+  onResizeStart,
+  onAutofitCol,
   onRemoveFormula,
   onHeaderContext,
   textCols,
@@ -102,6 +118,24 @@ export default function GridHeader({
   const colMeta = columnMetaList(data);
   const selStyle = (selected: boolean): React.CSSProperties =>
     selected ? { background: "var(--accent-soft)", borderBottomColor: "var(--accent)", borderBottomWidth: 2 } : {};
+
+  // The right-edge resize handle (MAIN_PLAN #3). Positioned absolutely inside
+  // the header cell (the x cell is sticky, value cells get position:relative
+  // inline below — both are positioned, so the handle anchors correctly).
+  const resizeHandle = (col: number) => (
+    <span
+      className="qzk-col-resize"
+      role="separator"
+      aria-label={`resize column ${col < 0 ? xName : (data.labels[col] ?? String(col))}`}
+      title="drag to resize · double-click to autofit"
+      onPointerDown={(e) => onResizeStart(col, e)}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onAutofitCol(col);
+      }}
+      onClick={(e) => e.stopPropagation()}
+    />
+  );
 
   return (
     <div className="qzk-grid-row qzk-grid-header" role="row" style={{ position: "sticky", top: 0, zIndex: 3 }}>
@@ -115,7 +149,7 @@ export default function GridHeader({
       <div
         role="columnheader"
         className="qzk-grid-headcell"
-        style={{ position: "sticky", left: gutterWidth, zIndex: 4, width: colWidth, flexShrink: 0, ...selStyle(selectedCols.has(-1)) }}
+        style={{ position: "sticky", left: gutterWidth, zIndex: 4, width: widthOf(-1), flexShrink: 0, ...selStyle(selectedCols.has(-1)) }}
         onClick={(e) => onHeaderClick(-1, e)}
         onContextMenu={onHeaderContext ? (e) => onHeaderContext(-1, e) : undefined}
       >
@@ -124,6 +158,7 @@ export default function GridHeader({
           X{xUnit ? ` · ${xUnit}` : ""}
           {sortMark(-1)}
         </span>
+        {resizeHandle(-1)}
       </div>
       {leadingSpacer > 0 && <div style={{ width: leadingSpacer, flexShrink: 0 }} aria-hidden="true" />}
       {visibleCols.map((c) => {
@@ -135,7 +170,7 @@ export default function GridHeader({
             key={data.labels[c]}
             role="columnheader"
             className="qzk-grid-headcell"
-            style={{ width: colWidth, flexShrink: 0, opacity: dimmed ? 0.55 : 1, ...selStyle(selectedCols.has(c)) }}
+            style={{ position: "relative", width: widthOf(c), flexShrink: 0, opacity: dimmed ? 0.55 : 1, ...selStyle(selectedCols.has(c)) }}
             onClick={(e) => onHeaderClick(c, e)}
             onContextMenu={onHeaderContext ? (e) => onHeaderContext(c, e) : undefined}
             title={headerTitle(c, computed, channelRoles[c], meta)}
@@ -164,6 +199,7 @@ export default function GridHeader({
                 {meta.comment}
               </span>
             )}
+            {resizeHandle(c)}
           </div>
         );
       })}
