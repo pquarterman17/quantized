@@ -22,6 +22,16 @@ const EXAMPLES: [string, string][] = [
   ["$\\mathrm{R}$ vs $R$", "upright vs math italic"],
 ];
 
+/** Label-editor keyboard shortcuts (MAIN #17): [keys, what it does]. Wraps
+ *  the current selection (or drops an empty token with the cursor inside
+ *  the braces, same as a palette click, when nothing is selected). */
+const SHORTCUTS: [string, string][] = [
+  ["Ctrl / Cmd + I", "Wrap selection in italic — $\\mathit{...}$"],
+  ["Ctrl + =", "Wrap selection in subscript — _{...}"],
+  ["Ctrl + Shift + =", "Wrap selection in superscript — ^{...}"],
+  ["Ctrl / Cmd + .", "Open the symbol palette"],
+];
+
 /** Syntax reference: [token(s), meaning]. Shown verbatim (mono), not parsed. */
 const SYNTAX: [string, string][] = [
   ["$...$", "math region — all tokens below work only inside it"],
@@ -116,6 +126,23 @@ export default function TextFormatHelp() {
           caret position: the bare command inside a math region, a{" "}
           <code>$...$</code>-wrapped or plain-Unicode form outside.
         </p>
+
+        <h3 style={{ marginTop: 14 }}>Keyboard shortcuts</h3>
+        <p style={{ color: "var(--text-dim)", marginTop: 6 }}>
+          Select text in any label field first, then apply the shortcut to
+          wrap it. With nothing selected, the shortcut inserts an empty
+          token and leaves the cursor inside it, ready to type.
+        </p>
+        <table className="qz-table" data-testid="tfh-shortcuts">
+          <tbody>
+            {SHORTCUTS.map(([keys, desc]) => (
+              <tr key={keys}>
+                <td style={{ fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>{keys}</td>
+                <td style={{ color: "var(--text-dim)" }}>{desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
         <h3 style={{ marginTop: 14 }}>When markup is invalid</h3>
         <p style={{ color: "var(--text-dim)", marginTop: 6 }}>
