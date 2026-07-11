@@ -28,6 +28,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from numpy.typing import ArrayLike, NDArray  # noqa: E402
 
+from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_styles import figure_style  # noqa: E402
 
 __all__ = ["render_ternary_figure"]
@@ -71,6 +72,13 @@ def render_ternary_figure(
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
+    # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never raises.
+    title = safe_mathtext_label(title)
+    labels = (
+        safe_mathtext_label(str(labels[0])),
+        safe_mathtext_label(str(labels[1])),
+        safe_mathtext_label(str(labels[2])),
+    )
 
     arr = np.asarray(data, dtype=float)
     if arr.ndim != 2 or arr.shape[1] != 3:

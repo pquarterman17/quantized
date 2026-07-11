@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from quantized.calc.figure import _plot_kwargs  # noqa: E402
+from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_styles import figure_style  # noqa: E402
 
 __all__ = ["render_facets_figure"]
@@ -57,6 +58,10 @@ def render_facets_figure(
         raise ValueError(f"fmt must be one of {_FORMATS}")
     if not panels:
         raise ValueError("panels must be non-empty")
+    # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never raises.
+    title = safe_mathtext_label(title)
+    x_label = safe_mathtext_label(x_label)
+    y_label = safe_mathtext_label(y_label)
 
     st = figure_style(style)
     n = len(panels)
@@ -89,9 +94,11 @@ def render_facets_figure(
                     kw = _plot_kwargs(st.line_width, st.marker_size, None)
                     ax.plot(
                         x, np.asarray(s.get("y", []), dtype=float),
-                        label=str(s.get("label", f"s{si}")), **kw,
+                        label=safe_mathtext_label(str(s.get("label", f"s{si}"))), **kw,
                     )
-                ax.set_title(str(panel.get("label", "")), fontsize=st.font_size)
+                ax.set_title(
+                    safe_mathtext_label(str(panel.get("label", ""))), fontsize=st.font_size
+                )
                 if x_log:
                     ax.set_xscale("log")
                 if y_log:

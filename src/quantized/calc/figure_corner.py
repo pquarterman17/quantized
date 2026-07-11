@@ -28,6 +28,7 @@ import numpy as np  # noqa: E402
 from matplotlib.ticker import MaxNLocator  # noqa: E402
 from numpy.typing import ArrayLike, NDArray  # noqa: E402
 
+from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_styles import figure_style  # noqa: E402
 
 __all__ = ["render_corner_figure"]
@@ -85,7 +86,8 @@ def render_corner_figure(
     _n_samples, k = arr.shape
     if k < 1:
         raise ValueError("samples needs at least one parameter column")
-    names = list(param_names)
+    names = [safe_mathtext_label(str(nm)) for nm in param_names]
+    # (Rich-text labels, GOTO #5: de-math INVALID $...$ so savefig never raises.)
     if len(names) != k:
         raise ValueError(f"param_names has {len(names)} entries, samples has {k} columns")
     if truths is not None and len(truths) != k:
@@ -96,6 +98,7 @@ def render_corner_figure(
         raise ValueError("need at least 2 finite joint samples to render a corner plot")
     tr = np.asarray(truths, dtype=float) if truths is not None else None
 
+    title = safe_mathtext_label(title)
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
     figsize = (width_in or _PANEL_IN * k, height_in or _PANEL_IN * k)

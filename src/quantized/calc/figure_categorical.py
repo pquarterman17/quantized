@@ -20,6 +20,7 @@ matplotlib.use("Agg")  # headless
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_styles import figure_style  # noqa: E402
 
 __all__ = ["render_categorical_figure"]
@@ -86,6 +87,12 @@ def render_categorical_figure(
         raise ValueError("groups must be non-empty")
     if not series:
         raise ValueError("series must be non-empty")
+    # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never raises.
+    title = safe_mathtext_label(title)
+    x_label = safe_mathtext_label(x_label)
+    y_label = safe_mathtext_label(y_label)
+    groups = [safe_mathtext_label(str(g)) for g in groups]
+    series = [safe_mathtext_label(str(s)) for s in series]
     n_groups, n_series = len(groups), len(series)
     vals = _to_matrix(values, n_groups, n_series, "values")
     errs = _to_error_matrix(errors, n_groups, n_series)
