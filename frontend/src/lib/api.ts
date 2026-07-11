@@ -1314,6 +1314,61 @@ export async function renderFigureBlob(body: FigureSpec): Promise<Blob> {
   return res.blob();
 }
 
+/** One figure-page panel (GOTO #4): a single-figure payload + its grid cell.
+ *  The nested figure's own fmt/style/dpi/filename are ignored (page-level). */
+export interface PagePanelSpec {
+  figure: FigureSpec;
+  row: number;
+  col: number;
+  row_span?: number;
+  col_span?: number;
+  /** Explicit label; omit = auto "(a)", "(b)", … in placement order; "" = none. */
+  label?: string;
+  /** Per-panel title override; omit = the nested figure payload's title. */
+  title?: string;
+}
+
+/** Multi-panel figure page request (GOTO #4): N plots -> ONE exported page. */
+export interface FigurePageSpec {
+  rows: number;
+  cols: number;
+  panels: PagePanelSpec[];
+  fmt?: string; // pdf (default) / svg vector; png / tiff raster — vector-first
+  style?: string;
+  dpi?: number;
+  width_in?: number;
+  height_in?: number;
+  label_format?: string; // (a) | a) | a. | (A) | A) | A. | none
+  label_pos?: string; // nw | ne | outside
+  filename?: string;
+}
+
+/** Compose N plots onto one publication page server-side and download it. */
+export function exportFigurePage(body: FigurePageSpec): Promise<void> {
+  return postDownload("/api/export/figure-page", body, `figure_page.${body.fmt ?? "pdf"}`);
+}
+
+/** Render the page and return the raw image bytes — the composer UI's
+ *  low-DPI PNG preview (same pattern as renderFigureBlob above). */
+export async function renderFigurePageBlob(body: FigurePageSpec): Promise<Blob> {
+  const res = await fetch("/api/export/figure-page", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = `${res.status} ${res.statusText}`;
+    try {
+      const j = (await res.json()) as { detail?: string };
+      if (j.detail) detail = j.detail;
+    } catch {
+      /* non-JSON error body — keep the status line */
+    }
+    throw new Error(detail);
+  }
+  return res.blob();
+}
+
 /** Posted joint-parameter samples for a corner (pairs) plot — e.g.
  *  `/api/fitting/posterior`'s `samples`, or `/api/fitting/bootstrap`'s
  *  `boot_samples` (pass `return_samples: true` to get it). Stateless: no fit

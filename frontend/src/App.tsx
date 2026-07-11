@@ -30,6 +30,7 @@ import PipelinePanel from "./components/workshops/pipeline/PipelinePanel";
 import DataFilterPanel from "./components/workshops/datafilter/DataFilterPanel";
 import ColumnSwitcher from "./components/workshops/switcher/ColumnSwitcher";
 import FigureBuilderView from "./components/workshops/figurebuilder/FigureBuilderView";
+import FigurePageView from "./components/workshops/figurepage/FigurePageView";
 import GraphBuilderPanel from "./components/workshops/graphbuilder/GraphBuilderPanel";
 import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
 import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
@@ -83,6 +84,7 @@ export default function App() {
   const dataFilterOpen = useApp((s) => s.dataFilterOpen);
   const columnSwitcherOpen = useApp((s) => s.columnSwitcherOpen);
   const figureBuilderOpen = useApp((s) => s.figureBuilderOpen);
+  const figurePageOpen = useApp((s) => s.figurePageOpen);
   const graphBuilderOpen = useApp((s) => s.graphBuilderOpen);
   const waterfallOpen = useApp((s) => s.waterfallOpen);
   const reflViewOpen = useApp((s) => s.reflViewOpen);
@@ -570,6 +572,12 @@ export default function App() {
         run: () => s().setFigureBuilderOpen(true),
       },
       {
+        id: "figure-page",
+        group: "File",
+        label: "Figure page (multi-panel)…",
+        run: () => s().setFigurePageOpen(true),
+      },
+      {
         id: "waterfall",
         group: "Plot",
         label: "Waterfall (stack datasets)…",
@@ -927,6 +935,7 @@ export default function App() {
       {openReportId && <ReportPanel />}
       {columnSwitcherOpen && <ColumnSwitcher />}
       {figureBuilderOpen && <FigureBuilderView />}
+      {figurePageOpen && <FigurePageView />}
       {graphBuilderOpen && <GraphBuilderPanel />}
       {waterfallOpen && <WaterfallView />}
       {reflViewOpen && <ReflView />}
