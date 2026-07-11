@@ -62,6 +62,15 @@ GOTO #11 drift (implemented but listed open).
 
 ~~21. **Page-anchored annotations**~~ COMPLETED 2026-07-11 (see Completed).
 
+22. **Standalone DiraCulator launcher** (owner request 2026-07-11) —
+    launch the materials calculators alone, without the full app UI:
+    `qz --calc` (+ a `diraculator` console-script alias) serves the
+    same backend and opens a calculator-only SPA view (`?view=calc`
+    renders the calculators content full-window, minimal chrome, theme
+    intact); `--desktop` combo = small pywebview window titled
+    DiraCulator; port-in-use falls back to a free port automatically
+    (the main app may already be running on 8000).
+
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
 ~~20. **Axis tick-label precision + engineering notation**~~ COMPLETED

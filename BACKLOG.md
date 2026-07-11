@@ -15,8 +15,12 @@ day; MAIN #20 tick-precision/eng-notation shipped same day)
 
 ## Actionable dev work (no blockers, no owner gate)
 
-*(none — MAIN #9–#21 ALL shipped 2026-07-11. New items arrive via owner
-gates, user testing, or the parity/decode monitors)*
+| # | Item | Plan / item | Size |
+|---|------|-------------|------|
+| 37 | Standalone DiraCulator launcher (`qz --calc` + `diraculator` alias, calc-only view) | MAIN #22 | S |
+
+*(MAIN #9–#21 all shipped 2026-07-11; #22 booked from continued owner
+testing, agent in flight)*
 
 ## Owner actions & owner-gated decisions
 
