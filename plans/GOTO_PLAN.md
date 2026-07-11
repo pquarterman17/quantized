@@ -139,16 +139,10 @@ Interactive WebGL 3-D stays a deferred gate pending Q4.
 
 ~~8. **Analytic baseline completion**~~ ✅ completed 2026-07-11 (see Completed).
 
-11. **Text-formatting help tab** (booked 2026-07-11, not yet
-    implemented) — a Help surface documenting the rich-text
-    micro-syntax shipped by #5: the `$...$` subset (italics, sub/sup,
-    Greek, `\AA`/°, `\mathrm`), a worked-examples table (µ₀H, Å⁻¹,
-    χ″, 2θ) with live rendered previews, and the symbol palette
-    cross-reference. Do after #5 lands (documents the final syntax).
-    **Owner note:** this is also the seed for a broader **Help
-    dropdown-menu revisit** — the menu's current contents should be
-    rethought when this tab is designed (scope that revisit then, not
-    now).
+~~11. **Text-formatting help tab**~~ ✅ completed 2026-07-11 (see
+    Completed — `TextFormatHelp` overlay verified in-tree; this line was
+    stale drift caught by the 2026-07-11 reconciliation. The **Help
+    dropdown-menu revisit** owner note lives in the Completed entry).
 
 ~~9. **Background job runner for long fits**~~ ✅ completed 2026-07-11
    (see Completed).
