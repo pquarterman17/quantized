@@ -79,13 +79,18 @@ carries the object's own name as a plain NUL-terminated ASCII cstring at a
 (XRD/Moke/SuperlatticeFits/PNR/hc2convert/XMCD/MnN_Diffusion_PNR, several
 hundred header blocks) via ``_cstring(payload, 70, 24)``: axis-title objects
 are named ``YL``/``XB``/``YR``/``XT`` (Y-left, X-bottom, Y-right/secondary,
-X-top), the legend object is always named ``Legend``, floating textbox/line
-annotations are ``Text``/``TextN``/``Line``/``LineN``, and everything else
+X-top), the legend object is named ``Legend`` — or lowercase ``legend`` on
+every composite/multi-layer window in the corpus, matched case-insensitively
+since 2026-07-11 (item 41) — floating textbox/line annotations are
+``Text``/``TextN``/``Line``/``LineN``, region-shape objects are ``Rect*``
+(their typed headers, ``payload[2] == 0x31``, are decoded into
+``region_shades`` by ``opj_shapes.py`` — item 41 — before name routing
+runs), and everything else
 (``__LayerInfoStorage``/``__BCO2``/``__FRAMESRCDATAINFOS``/``3D`` — internal
 storage/config objects; ``OB``/``OL``/``OR``/``X1``/``X2`` — composite-layout
-axis-break sub-objects seen only in double-Y/stacked graphs; ``Rect*``/
-``Circle*`` — box/region shapes; ``RLX*``/``RLY*`` — reference lines) is a
-different, unrelated object, not routed anywhere.
+axis-break sub-objects seen only in double-Y/stacked graphs;
+``RLX*``/``RLY*`` — reference lines) is a different, unrelated object, not
+routed anywhere.
 
 ``_build_layer`` now tracks which named object is "current" while walking a
 layer's block span and routes each recovered text run accordingly: ``YL`` →
@@ -129,6 +134,15 @@ the cross-container validation (every state-matched graph shared between
 module reuses ``_object_bucket``/``_first_title``/``_parse_legend_labels``/
 ``_clean_annotations`` from here so the two containers' cleanup pipelines
 cannot drift.
+
+**Composite (multi-layer) legends — solved 2026-07-11 (item 41).** A
+double-Y/merge window carries ONE legend object (lowercase ``legend`` in
+every corpus instance) whose dotted ``\\l(layer.plot)`` entries caption
+EVERY layer's curves; ``extract_figures`` distributes them across the
+window's layer dicts after building them — grammar, re-indexing rule, and
+the never-overwrite guarantee live in
+``figure_text.distribute_legend_layers``'s docstring. ``.opju`` needs no
+equivalent (corpus-wide sweep: dotted entries occur in no real ``.opju``).
 """
 
 from __future__ import annotations
@@ -142,9 +156,7 @@ from quantized.io.origin_project.annotation_marks import (
     _clean_annotations,
     build_mark,
     frac_to_data,
-    opj_object_box,
-    opj_text_fractions,
-    page_point_fractions,
+    opj_object_fractions,
 )
 from quantized.io.origin_project.container import walk_blocks
 from quantized.io.origin_project.figure_geometry import opj_layer_frame, opj_page_size
@@ -155,8 +167,10 @@ from quantized.io.origin_project.figure_text import (
     _object_text,
     _parse_legend_labels,
     _texts_in,
+    distribute_legend_layers,
 )
 from quantized.io.origin_project.opj_curves import book_x_columns, column_id_map, extract_curves
+from quantized.io.origin_project.opj_shapes import SHAPE_TYPE, build_region_shade
 from quantized.io.origin_project.origin_richtext import clean_richtext
 from quantized.io.origin_project.windows import _cstring, _is_window_header
 
@@ -320,37 +334,8 @@ def _build_layer(
     # The Legend object's own header carries the SAME position fields
     # every text object does (§13.2 #3, 2026-07-06) — box top-left.
     legend_fracs: tuple[float, float] | None = None
-
-    def _object_fractions(payload: bytes) -> tuple[float, float] | None:
-        """Anchor fractions for one object header (solved 2026-07-06 vs the
-        111-instance annotations oracle). Two independent position fields
-        exist: the FRACTION pair (the text anchor -- exact for every
-        unrotated object, bordered or not) and the page-unit bounding BOX
-        (post-rotation geometry). For a 90-degree-rotated label the fraction
-        pair stores only the PRE-rotation anchor, which lands at exactly
-        ``(+d, -d)`` page units from the box's bottom-left -- the signature
-        of rotation about the first character's baseline point (d = the font
-        ascent; measured equal-magnitude on every rotated corpus instance,
-        XRD's 46 peak labels). A bordered horizontal label's anchor sits at
-        ``(+inset, -boxheight+inset)`` instead -- never the equal-magnitude
-        diagonal -- so the test is geometric, not a corpus threshold.
-        Rotated: anchor at the box bottom-left (the text-start corner Origin
-        itself reports); everything else: the fraction pair (the
-        pre-2026-07-06 behaviour, still exact for those)."""
-        fracs = opj_text_fractions(payload)
-        if frame is None or fracs is None:
-            return fracs
-        box = opj_object_box(payload)
-        if box is None:
-            return fracs
-        fl, ft, fr, fb = frame
-        anchor_x = fl + fracs[0] * (fr - fl)
-        anchor_y = ft + fracs[1] * (fb - ft)
-        dx = anchor_x - box[0]
-        dy = anchor_y - box[3]
-        if dx > 0 > dy and abs(dx + dy) <= 0.25 * dx:
-            return page_point_fractions(box[0], box[3], frame)
-        return fracs
+    # Region-shape objects (Rect* bands, item 41 — see opj_shapes.py).
+    shades: list[dict[str, Any]] = []
 
     def _flush_mark() -> None:
         nonlocal mark_fracs
@@ -367,14 +352,27 @@ def _build_layer(
         if size == 133 and len(payload) > 2 and payload[2] == 0x07:
             n_curves += 1  # the curve counter only -- does not touch `bucket` (see docstring)
             continue
+        if size == 133 and len(payload) > 2 and payload[2] == SHAPE_TYPE:
+            # A closed-shape graphic object (Rect* region band, item 41):
+            # its geometry + fill live in the body block right after the
+            # header — decoded via opj_shapes; its header still ends any
+            # open annotation grouping exactly like other named headers.
+            bucket = "ignore"
+            _flush_mark()
+            mark_active = False
+            body = blocks[k + 1][1] if k + 1 < end else b""
+            shade = build_region_shade(body, x_from, x_to, y_from, y_to, x_log, y_log_final)
+            if shade is not None:
+                shades.append(shade)
+            continue
         if size == 133 and len(payload) > 2:
             bucket = _object_bucket(_cstring(payload, _OBJ_NAME_OFFSET, _OBJ_NAME_LIMIT))
             _flush_mark()
             mark_active = bucket == "annotations"
             if mark_active:
-                mark_fracs = _object_fractions(payload)
+                mark_fracs = opj_object_fractions(payload, frame)
             if bucket == "legend" and legend_fracs is None:
-                legend_fracs = _object_fractions(payload)
+                legend_fracs = opj_object_fractions(payload, frame)
             # Never text-scan the header block itself: its geometry floats can
             # contain printable accidents that would land in the just-set
             # bucket (hc2convert's Graph13-18 all surfaced a bogus y_title
@@ -428,10 +426,16 @@ def _build_layer(
         # Positioned floating text (box top-left, data coords) — only objects
         # whose header fractions decoded; the rest stay text-only above.
         "annotation_marks": marks,
+        # Filled region-shape objects (Rect* bands) in data coords (item 41).
+        "region_shades": shades,
         "x_title": _first_title(bucket_texts["x_title"]),
         "y_title": _first_title(bucket_texts["y_title"]),
         "y2_title": _first_title(bucket_texts["y2_title"]),
         "legend_labels": _parse_legend_labels(bucket_texts["legend"]),
+        # Raw legend lines for the WINDOW-level composite-legend pass
+        # (`distribute_legend_layers` — dotted ``\\l(layer.plot)`` entries
+        # belong to other layers' dicts); popped before figures ship.
+        "_legend_raw": list(bucket_texts["legend"]),
         # Legend box top-left in data coords, or None (never guessed).
         "legend_pos": (
             dict(
@@ -478,12 +482,18 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
         win_end = j
         layer_starts = [k for k in range(i + 1, win_end) if _is_layer_block(blocks[k][1])]
         page = opj_page_size(blocks[i][1])
+        window_figs: list[dict[str, Any]] = []
         for pos, layer_start in enumerate(layer_starts):
             layer_end = layer_starts[pos + 1] if pos + 1 < len(layer_starts) else win_end
             fig = _build_layer(blocks, id_map, x_columns, name, pos + 1, layer_start, layer_end)
             # Page size (u16 pair @35 of the window header): with the layer
             # frame quad this places every panel of a multi-panel page.
             fig["page"] = page
-            figures.append(fig)
+            window_figs.append(fig)
+        # Composite (multi-layer) legends: dotted ``\l(layer.plot)`` entries
+        # live in ONE legend object but caption every layer's curves —
+        # distribute them across this window's dicts (item 41).
+        distribute_legend_layers(window_figs)
+        figures.extend(window_figs)
         i = win_end
     return figures

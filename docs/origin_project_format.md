@@ -753,10 +753,16 @@ record. Byte at payload offset 2 is a type tag:
 
 | type@2 | meaning | examples |
 |-------:|---------|----------|
-| `0x00` | text / axis-title / legend | `Text*`, `XB`,`XT`,`YL`,`YR`, `Legend` |
+| `0x00` | text / axis-title / legend | `Text*`, `XB`,`XT`,`YL`,`YR`, `Legend`/`legend` |
+| `0x06` | composite-layout axis-break sub-object | `OB`, `OL`, `OR`, `X1`, `X2` |
 | `0x07` | curve / DataPlot | `_202`, `_232` |
 | `0x22` | line/arrow annotation | `Line`, `Line1` |
 | `0x23` | storage/config object | `__LayerInfoStorage`, `__BCO2` |
+| `0x31` | filled region-shape object (decoded — see "Region-shape objects" below) | `Rect`, `Rect1`… |
+
+Two further tag values are observed but uncharacterized (their objects are
+skipped, never guessed): `0x21` (MnN_Diffusion_PNR, 23 instances) and
+`0x10` (XMCD, 25 instances).
 
 Object name is an ASCII run near offset ~64; two `float64`s at offsets 19
 and 27 hold its position — axis-title objects carry it in **data
@@ -980,6 +986,77 @@ heuristic Graph25 already rejected" precedent, this is decoded faithfully
 indexing — the authoritative curve enumeration and the cleanest way to
 count curves per layer). Entries can be hand-edited to literal text
 (overriding the `%(n)` auto text) — seen as XRD sample-temperature labels.
+
+**Composite (multi-layer) legends — decoded 2026-07-11 (decode-plan item
+41).** Every multi-layer window in the corpus that captions several
+layers' curves does it with ONE legend object that is (a) named lowercase
+`legend` (20 instances across PNR/Moke/MnN_Diffusion_PNR/SLD_DoubleY.otp —
+the exact-match `Legend` routing silently dropped them all) and (b)
+written in the dotted `\l(layer.plot)` form. Both are now decoded: the
+object-name match is case-insensitive, and `extract_figures` runs a
+window-level pass (`figure_text.distribute_legend_layers`) that groups
+dotted entries per layer, re-indexes same-layer auto templates to the
+target layer's own curve ordinals (`%(2.1)` → `%(1)`, so the existing
+per-figure `%(n)` resolver applies unchanged), and fills each layer dict's
+empty `legend_labels` — never overwriting a plain-parsed one. Validated on
+PNR.opj `Graph1` (layer 1 `["%(1)"]`, layer 2 `["%(1)".."%(4)"]`) and
+Moke's `Graph4`/`Graph7`/`Graph10` (incl. hand-edited dotted entries,
+"As-deposited"/"525"). Corpus impact: 49 figures gained legend labels, 19
+gained a legend position (the lowercase objects' header fractions now
+route to `legend_pos`); zero other field changes corpus-wide.
+
+Two of those newly-decoded legend positions (Moke's stacked-panel `Graph4`
+L1 and its `Graph10` L3 copy) exposed an **attach-unit mode**: the COM
+oracle reports their `Legend.x1/y1` in LAYER FRACTIONS (x from the left, y
+from the top), not data coords — the decoded data-coord point maps back to
+the oracle fraction to 4-5 significant figures on both instances, i.e. the
+same visual position in a different unit. The oracle comparison test
+accepts either interpretation (`test_realdata_legend_positions_match_com_oracle`,
+now 55 exact / 0 wrong / 0 missed).
+
+**What `%(n)` resolves to — column Comment first.** Origin's auto legend
+text for a curve substitutes the bound Y column's **Comment** when one is
+set, falling back to the Long Name: PNR.opj `Graph1`'s rendered legend
+(live-COM PNG oracle) reads "Nuclear SLD" / "700 mT" / "1.5 mT from
+700mT" — all column Comments (`\A149` in the windows-section series
+records; the Long Names are `rho`/`rhoM`). The frontend resolver follows
+the same chain (comment → long name → short name).
+
+**Region-shape objects (`Rect*`) — decoded 2026-07-11 (decode-plan item
+41).** A filled rectangle dropped on a layer (the corpus uses them as
+film-stack region bands — PNR.opj `Graph1`'s SiO2/Pt/YIG/Py/Ru/Air
+vertical bands): a 133-byte object header with type tag **`0x31`** and
+name `Rect`/`RectN`, followed by a **130-byte body** and a 1-byte
+terminator. Body layout (`opj_shapes.py`):
+
+| offset | field |
+|-------:|-------|
+| 7 | fill colour low byte (mirrors the u32 at 66 for palette fills) |
+| 10 (f64) | left edge, layer-frame fraction (== header fraction @19) |
+| 18 (f64) | top edge fraction, measured from the frame TOP |
+| 26 (f64) | width fraction |
+| 34 (f64) | height fraction |
+| 66 (u32) | fill **ocolor**: high byte `0x00` = 0-based classic-palette index (same disk convention as curve colours), `0x01` = direct COLORREF `0x01BBGGRR` |
+
+Corpus evidence: 329 instances across 4 files (PNR 156, SuperlatticeFits
+151, MnN_Diffusion_PNR 16, SLD_DoubleY.otp 6) — every one named `Rect*`,
+every body exactly 130 bytes, every fraction quad plausible; the width
+fraction reproduces the header's page-unit box width / frame width exactly
+(Graph1 `Rect5`: 207/4913 = 0.04213 = the offset-26 double). Fills
+validated 6/6 against the live-Origin PNG oracle on `Graph1` (Ru=1 red,
+Air/SiO2=0x12 light gray, Py=0x0b olive, YIG=3 blue, Pt=0x0e orange,
+0-based); 29 corpus instances are direct-COLORREF (e.g. `0x012DAFE6` →
+#E6AF2D). Shipped per layer as `region_shades: [{x1,x2,y1,y2,fill}]` in
+data coordinates (`frac_to_data`, log axes in log10 space). **Honest
+gaps:** no fill-transparency field could be isolated (all instances in any
+one graph share whatever it is; no body byte reads like an alpha across
+files) — render opacity is a documented frontend presentation choice; the
+rare non-zero bytes at body offsets 49-65 (6 instances) and the 3-value
+u16 at 114-115 are uncharacterized; no `Circle*`/other shape name exists
+anywhere in the corpus, and no real `.opju` carries shape objects at all
+(only the `SLDdouble.otpu` template twin) — the CPYUA framing of this
+record is therefore not decoded (no real-corpus instance to validate
+against).
 
 **Curves (DataPlots).** A `type=0x07` object (auto-named `_NNN`) + a
 427-byte style block + one or more **DataPlot records** ("X-blocks"),
@@ -1700,8 +1777,9 @@ plot-state-snapshot dicts above):
 | X/Y range | axis limits |
 | X/Y scale log | axis log flag (exact where solved, heuristic otherwise) |
 | Axis title | axis label (Origin escapes stripped) |
-| Legend | series labels / curve count |
+| Legend | series labels / curve count (incl. composite `\l(layer.plot)` legends, distributed per layer — §6.1) |
 | Text/line annotations | annotation list |
+| `Rect*` region shapes | per-layer `region_shades` (data-coord extents + fill — §6.1) |
 
 **Permanent gaps** (Origin features quantized cannot express / recover
 yet):
@@ -1802,8 +1880,12 @@ yet):
   undecoded; the plan item narrows to this evidenced-but-unfixed root
   cause rather than "wrong layer"/"wrong offset", both of which are ruled
   out.
-- **Arrow/box/region annotations with arrowheads** — quantized `refLines`
-  are axis-parallel only.
+- **Arrow/line annotations with arrowheads** — quantized `refLines` are
+  axis-parallel only; `Line*` objects (type `0x22`) ship their text (if
+  any) but not their geometry. ~~Box/region annotations~~ — **decoded
+  2026-07-11** (item 41, `Rect*` type-`0x31` region shapes → per-layer
+  `region_shades`, see §6.1); fill *transparency* remains undecoded
+  (render-side presentation choice, documented in §6.1).
 - **X-scale type bit (`.opj` only)** — still heuristic-only there: no
   `.opj` log-x graph exists in the corpus and Origin ≥2023 can't write
   `.opj` to make one, so the `.opju` X flag's twin (if any) can't be

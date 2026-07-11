@@ -55,6 +55,7 @@ __all__ = [
     "build_mark",
     "frac_to_data",
     "opj_object_box",
+    "opj_object_fractions",
     "opj_text_fractions",
     "opju_text_fractions",
     "page_point_fractions",
@@ -203,6 +204,41 @@ def opj_text_fractions(payload: bytes) -> tuple[float, float] | None:
     if not (_plausible(frac_a) and _plausible(frac_b)):
         return None
     return frac_a, frac_b
+
+
+def opj_object_fractions(
+    payload: bytes, frame: tuple[int, int, int, int] | None
+) -> tuple[float, float] | None:
+    """Anchor fractions for one ``.opj`` object header (solved 2026-07-06 vs
+    the 111-instance annotations oracle; hoisted out of ``figures.py``
+    2026-07-11, unchanged). Two independent position fields exist: the
+    FRACTION pair (the text anchor — exact for every unrotated object,
+    bordered or not) and the page-unit bounding BOX (post-rotation
+    geometry). For a 90-degree-rotated label the fraction pair stores only
+    the PRE-rotation anchor, which lands at exactly ``(+d, -d)`` page units
+    from the box's bottom-left — the signature of rotation about the first
+    character's baseline point (d = the font ascent; measured
+    equal-magnitude on every rotated corpus instance, XRD's 46 peak
+    labels). A bordered horizontal label's anchor sits at
+    ``(+inset, -boxheight+inset)`` instead — never the equal-magnitude
+    diagonal — so the test is geometric, not a corpus threshold. Rotated:
+    anchor at the box bottom-left (the text-start corner Origin itself
+    reports); everything else: the fraction pair (the pre-2026-07-06
+    behaviour, still exact for those)."""
+    fracs = opj_text_fractions(payload)
+    if frame is None or fracs is None:
+        return fracs
+    box = opj_object_box(payload)
+    if box is None:
+        return fracs
+    fl, ft, fr, fb = frame
+    anchor_x = fl + fracs[0] * (fr - fl)
+    anchor_y = ft + fracs[1] * (fb - ft)
+    dx = anchor_x - box[0]
+    dy = anchor_y - box[3]
+    if dx > 0 > dy and abs(dx + dy) <= 0.25 * dx:
+        return page_point_fractions(box[0], box[3], frame)
+    return fracs
 
 
 def opju_text_fractions(b: bytes, header_pos: int) -> tuple[float, float] | None:
