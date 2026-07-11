@@ -85,12 +85,15 @@ describe("useWorksheetView — Open in Graph Builder (MAIN_PLAN #4)", () => {
     });
   });
 
-  it("rebinds the active dataset first when the worksheet shows a non-active one", () => {
+  it("#8i: does NOT rebind the active dataset when the worksheet shows a non-active one", () => {
     useApp.setState({ activeId: "other", datasets: [ds, { ...ds, id: "other" }] });
     const { result } = renderHook(() => useWorksheetView(ds));
     act(() => result.current.openInGraphBuilder([1]));
     const s = useApp.getState();
-    expect(s.activeId).toBe("d1"); // the Graph Builder reads the ACTIVE dataset
+    // Opening an overlay is not a plot intent: the plot/windows/view stay
+    // put; the builder BINDS to the seed's dataset and its sendToStage lands
+    // setActive when the user commits (see useGraphBuilder's #8i note).
+    expect(s.activeId).toBe("other");
     expect(s.graphBuilderOpen).toBe(true);
     expect(s.graphBuilderSeed?.zones.y).toEqual([{ datasetId: "d1", channel: 1 }]);
   });

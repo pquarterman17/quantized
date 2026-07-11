@@ -83,7 +83,7 @@ describe("useGraphBuilder — morphing", () => {
     expect(result.current.mark).toBe("box");
   });
 
-  it("resets the spec when the active dataset changes", () => {
+  it("#8i: a BOUND session survives an active-dataset change (Send restores its dataset)", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("y", 1));
     expect(result.current.chips("y")).toHaveLength(1);
@@ -96,7 +96,25 @@ describe("useGraphBuilder — morphing", () => {
         activeId: "d2",
       });
     });
+    // The spec's channel refs bind the builder to d1; moving the active
+    // dataset elsewhere no longer destroys the session (see the #8i note in
+    // useGraphBuilder — the wipe fires only when the BOUND dataset vanishes).
+    expect(result.current.chips("y")).toHaveLength(1);
+    expect(result.current.datasetId).toBe("d1");
+  });
+
+  it("wipes the spec when its bound dataset no longer exists", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 1));
+    expect(result.current.chips("y")).toHaveLength(1);
+    act(() => {
+      useApp.setState({
+        datasets: [{ id: "d2", name: "other.dat", data: DATA }],
+        activeId: "d2",
+      });
+    });
     expect(result.current.chips("y")).toHaveLength(0);
+    expect(result.current.datasetId).toBe("d2"); // empty spec follows active again
   });
 });
 
@@ -143,8 +161,26 @@ describe("useGraphBuilder — worksheet seed (MAIN_PLAN #4)", () => {
     expect(useApp.getState().graphBuilderSeed).toBeNull();
   });
 
-  it("drops (and clears) a seed for a dataset that isn't active — wrong labels otherwise", () => {
-    act(() => useApp.getState().openGraphBuilderSeeded(seedFor("not-active")));
+  it("#8i: accepts a seed for an existing NON-active dataset — wells bind to ITS labels", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "run.dat", data: DATA },
+        { id: "d2", name: "other.dat", data: { ...DATA, labels: ["t", "sig", "g", "f"] } },
+      ],
+      activeId: "d1",
+    });
+    act(() => useApp.getState().openGraphBuilderSeeded(seedFor("d2")));
+    const { result } = renderHook(() => useGraphBuilder());
+    // Bound to d2: labels resolve from d2, NOT the active d1 — and the
+    // handoff never fired setActive's plot-intent side effects.
+    expect(result.current.datasetId).toBe("d2");
+    expect(result.current.chips("y")).toEqual([{ channel: 1, label: "sig" }]);
+    expect(useApp.getState().activeId).toBe("d1");
+    expect(useApp.getState().graphBuilderSeed).toBeNull();
+  });
+
+  it("drops (and clears) a seed for a dataset that doesn't exist — a stale/misrouted producer", () => {
+    act(() => useApp.getState().openGraphBuilderSeeded(seedFor("missing")));
     const { result } = renderHook(() => useGraphBuilder());
     expect(result.current.chips("y")).toEqual([]);
     expect(useApp.getState().graphBuilderSeed).toBeNull();
@@ -160,6 +196,35 @@ describe("useGraphBuilder — send to stage", () => {
     expect(useApp.getState().xKey).toBe(0);
     expect(useApp.getState().yKeys).toEqual([1]);
     expect(useApp.getState().statMode).toBe(false);
+  });
+
+  it("#8i: a builder bound to a NON-active dataset rebinds active at SEND time, not before", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "run.dat", data: DATA },
+        { id: "d2", name: "other.dat", data: DATA },
+      ],
+      activeId: "d1",
+    });
+    act(() =>
+      useApp.getState().openGraphBuilderSeeded({
+        version: 1,
+        zones: {
+          x: { datasetId: "d2", channel: 0 },
+          y: [{ datasetId: "d2", channel: 1 }],
+          group: null,
+          facet: null,
+        },
+        mark: "scatter",
+      }),
+    );
+    const { result } = renderHook(() => useGraphBuilder());
+    expect(useApp.getState().activeId).toBe("d1"); // open moved nothing
+    act(() => result.current.sendToStage());
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d2"); // the plot intent landed with the commit
+    expect(s.xKey).toBe(0);
+    expect(s.yKeys).toEqual([1]);
   });
 
   it("box/violin seeds the stat stage pickers and switches stat mode on", () => {

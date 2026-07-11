@@ -71,25 +71,45 @@ export function useGraphBuilder(): GraphBuilderState {
 
   const [spec, setSpec] = useState<PlotSpec>(emptySpec);
 
-  // A channel from the previous dataset would reference the wrong columns — wipe
-  // the spec whenever the active dataset changes.
+  // MAIN #8i: the builder's WORKING dataset. An empty spec follows the active
+  // dataset (the bare command-palette open, unchanged); a spec with channel
+  // refs is BOUND to their dataset — which lets the worksheet handoff seed a
+  // non-active dataset's columns without `setActive`'s plot-intent side
+  // effects (window rebind, view reset, worksheet-tab flip) firing at
+  // overlay-OPEN time. The plot intent lands in sendToStage instead, where
+  // the user actually commits to plotting.
+  const boundId = specDatasetId(spec);
+  const ds = useMemo(
+    () => (boundId !== null ? (datasets.find((d) => d.id === boundId) ?? null) : active),
+    [boundId, datasets, active],
+  );
+
+  // A channel ref into a vanished dataset would reference the wrong columns —
+  // wipe the spec when its dataset no longer resolves. An active-dataset
+  // change alone no longer wipes a BOUND session (#8i): the builder holds a
+  // spec for ITS dataset; Send brings that dataset back active.
   useEffect(() => {
-    setSpec(emptySpec());
+    setSpec((prev) => {
+      const bound = specDatasetId(prev);
+      const exists =
+        bound !== null && useApp.getState().datasets.some((d) => d.id === bound);
+      return exists ? prev : emptySpec();
+    });
   }, [active?.id]);
 
   // One-shot seed (MAIN_PLAN #4 — the worksheet's "Open in Graph Builder"):
   // consume + clear a store-handed spec, mirroring how useStatStage consumes
-  // statStageSeed. Declared AFTER the dataset-change wipe above so a handoff
-  // that also rebound the active dataset lands the seed, not the wipe (both
-  // effects run in the same commit, in declaration order). A seed for a
-  // dataset that ISN'T active (a stale or misrouted producer) is dropped —
-  // the wells/options below all read the ACTIVE dataset, so applying it
-  // would show the wrong labels.
+  // statStageSeed. Declared AFTER the vanished-dataset wipe above so a
+  // handoff that also changed the active dataset lands the seed, not the
+  // wipe (both effects run in the same commit, in declaration order). The
+  // seed's dataset need not be active (#8i) — wells/options read the BOUND
+  // dataset — but it must exist; a stale/misrouted producer's seed is
+  // dropped.
   const seed = useApp((s) => s.graphBuilderSeed);
   useEffect(() => {
     if (!seed) return;
-    const activeNow = useApp.getState().activeId;
-    if (activeNow !== null && specDatasetId(seed) === activeNow) {
+    const sid = specDatasetId(seed);
+    if (sid !== null && useApp.getState().datasets.some((d) => d.id === sid)) {
       // The seed's "scatter" is a placeholder, not a user choice — take the
       // family DEFAULT (line for a monotonic x, box for a categorical x)
       // rather than inferMark's sticky keep-if-valid rule.
@@ -105,12 +125,11 @@ export function useGraphBuilder(): GraphBuilderState {
   const family = useMemo(() => markFamily(spec, ctx), [spec, ctx]);
 
   const options = useMemo<WellOption[]>(
-    () => (active ? active.data.labels.map((label, index) => ({ index, label })) : []),
-    [active],
+    () => (ds ? ds.data.labels.map((label, index) => ({ index, label })) : []),
+    [ds],
   );
 
-  const labelOf = (channel: number): string =>
-    active?.data.labels[channel] ?? `col ${channel}`;
+  const labelOf = (channel: number): string => ds?.data.labels[channel] ?? `col ${channel}`;
 
   const chips = (zone: ZoneName): WellChip[] => {
     const z = spec.zones;
@@ -120,8 +139,8 @@ export function useGraphBuilder(): GraphBuilderState {
   };
 
   const assign = (zone: ZoneName, channel: number) => {
-    if (!active) return;
-    const ref: ChannelRef = { datasetId: active.id, channel };
+    if (!ds) return;
+    const ref: ChannelRef = { datasetId: ds.id, channel };
     setSpec((prev) => {
       const next = assignZone(prev, zone, ref);
       return withInferredMark(next, markContext(next, datasets));
@@ -130,7 +149,7 @@ export function useGraphBuilder(): GraphBuilderState {
 
   const remove = (zone: ZoneName, channel: number) => {
     setSpec((prev) => {
-      const ref: ChannelRef = { datasetId: prev.zones.y[0]?.datasetId ?? active?.id ?? "", channel };
+      const ref: ChannelRef = { datasetId: prev.zones.y[0]?.datasetId ?? ds?.id ?? "", channel };
       const next = clearZone(prev, zone, zone === "y" ? ref : undefined);
       return withInferredMark(next, markContext(next, datasets));
     });
@@ -143,12 +162,18 @@ export function useGraphBuilder(): GraphBuilderState {
   const canSend = family !== null; // there's a value to plot
 
   function sendToStage(): void {
-    if (!active) return;
+    if (!ds) return;
+    // MAIN #8i: the plot intent lands HERE — the moment the user commits to
+    // plotting — not at overlay-open. A builder bound to a non-active dataset
+    // (the worksheet handoff) rebinds now; every store action below then acts
+    // on the freshly-active dataset. setActive is the deliberate plot-intent
+    // primitive (window rebind / view reset / worksheet-override clear).
+    if (useApp.getState().activeId !== ds.id) useApp.getState().setActive(ds.id);
     // Owner-routing item 1: "Send to Stage" always means look at the plot
     // (every branch below renders inside the Plot tab — scatter/line/facet
     // on the main canvas, box/violin/bar via StatStage), so surface it
     // regardless of which tab the user is currently on.
-    const wantTab = plotIntentStageTab(active);
+    const wantTab = plotIntentStageTab(ds);
     if (useApp.getState().stageTab !== wantTab) setStageTab(wantTab);
     if (spec.mark === "scatter" || spec.mark === "line") {
       setXKey(spec.zones.x?.channel ?? null);
@@ -163,7 +188,7 @@ export function useGraphBuilder(): GraphBuilderState {
       // when the dataset is already active" rule picks up exactly the
       // channels just assigned.
       if (spec.zones.facet) {
-        facetByColumn(active.id, spec.zones.facet.channel);
+        facetByColumn(ds.id, spec.zones.facet.channel);
         setStatus(`sent ${spec.mark} to the plot, faceted by ${labelOf(spec.zones.facet.channel)}`);
         return;
       }
@@ -172,7 +197,7 @@ export function useGraphBuilder(): GraphBuilderState {
     }
     if (spec.mark === "box" || spec.mark === "violin") {
       const x = spec.zones.x;
-      const groupCol = x && isCategorical(channelModelingType(active, x.channel)) ? x.channel : null;
+      const groupCol = x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel : null;
       seedStatStage({ mode: spec.mark, groupCol, valueCol: spec.zones.y[0].channel });
       setStatus(`sent ${spec.mark} plot to the stat stage`);
       return;
@@ -182,7 +207,7 @@ export function useGraphBuilder(): GraphBuilderState {
     // see useStatStage's barValueChannels), so valueCol here is really just a
     // placeholder the seed shape requires; groupCol is the real payload.
     const x = spec.zones.x;
-    const groupCol = x && isCategorical(channelModelingType(active, x.channel)) ? x.channel : null;
+    const groupCol = x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel : null;
     if (groupCol === null) {
       toast("Bar charts need a categorical X column.", "info");
       return;
@@ -192,8 +217,8 @@ export function useGraphBuilder(): GraphBuilderState {
   }
 
   return {
-    hasData: !!active,
-    datasetId: active?.id ?? null,
+    hasData: !!ds,
+    datasetId: ds?.id ?? null,
     spec,
     mark: spec.mark,
     family,

@@ -451,21 +451,21 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
     setColWidth(col, autofitColWidth(samples));
   }
 
-  // Selection → Graph Builder handoff (MAIN_PLAN #4). The Graph Builder
-  // builds against the ACTIVE dataset (its wells/options/preview all read
-  // it), so a worksheet showing a non-active dataset rebinds first — the
-  // same plot-intent precedent plotCols sets above. The seed rides the store
-  // (`openGraphBuilderSeeded`, one-shot like statStageSeed) and is consumed
-  // by useGraphBuilder the same way its other entry point (the bare
-  // command-palette open) initializes — no second spec pathway.
+  // Selection → Graph Builder handoff (MAIN_PLAN #4). The seed rides the
+  // store (`openGraphBuilderSeeded`, one-shot like statStageSeed) and is
+  // consumed by useGraphBuilder the same way its other entry point (the bare
+  // command-palette open) initializes — no second spec pathway. Deliberately
+  // NO `setActive` here (MAIN #8i): opening an overlay must not fire the
+  // plot-intent side effects (window rebind, view reset, worksheet-override
+  // clear) before the user commits — the builder BINDS to the seed's
+  // dataset and its sendToStage lands the plot intent instead. (Contrast
+  // plotCols above, where "Plot selection" IS the explicit plot intent.)
   function openInGraphBuilder(cols: number[]) {
     const spec = selectionToSpec(ds.data, ds.id, cols);
     if (!spec) {
       setStatus("nothing plottable in the selection");
       return;
     }
-    const store = useApp.getState();
-    if (store.activeId !== ds.id) store.setActive(ds.id);
     useApp.getState().openGraphBuilderSeeded(spec);
     setStatus("opened the selection in the Graph Builder");
   }
