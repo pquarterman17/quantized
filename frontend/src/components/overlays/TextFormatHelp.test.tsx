@@ -2,8 +2,8 @@
 // LIVE through the RichText primitive (so the sheet cannot drift from the
 // lib/richtext parser), the syntax reference covers the shipped subset, the
 // dialog follows ShortcutsDialog dismiss conventions, and the Help-menu
-// command registry entry exists in App.tsx (source-scan, architecture.test
-// style — App itself is too heavy to render in jsdom).
+// command registry entry exists in appCommands.ts (source-scan,
+// architecture.test style — the App tree is too heavy to render in jsdom).
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -112,20 +112,25 @@ describe("TextFormatHelp", () => {
 });
 
 describe("Help-menu command registry entry (GOTO #11)", () => {
-  // App.tsx's curated actions array IS the command registry (MenuBar and the
-  // ⌘K palette both consume it). App is too heavy to render in jsdom, so
-  // assert on its source — the same pattern architecture.test.ts uses.
-  const appSrc = Object.values(
-    import.meta.glob("../../App.tsx", { query: "?raw", import: "default", eager: true }),
+  // appCommands.ts's curated actions array IS the command registry (MenuBar
+  // and the ⌘K palette both consume it, via App). The App tree is too heavy
+  // to render in jsdom, so assert on the registry's source — the same
+  // pattern architecture.test.ts uses. (Extracted from App.tsx, MAIN_PLAN #1;
+  // the overlay mounts live in AppOverlays.tsx.)
+  const commandsSrc = Object.values(
+    import.meta.glob("../../appCommands.ts", { query: "?raw", import: "default", eager: true }),
+  )[0] as string;
+  const overlaysSrc = Object.values(
+    import.meta.glob("../../AppOverlays.tsx", { query: "?raw", import: "default", eager: true }),
   )[0] as string;
 
-  it("App.tsx registers the Text formatting command in the Help group", () => {
-    expect(appSrc).toContain('id: "text-format-help"');
-    expect(appSrc).toContain('label: "Text formatting"');
-    expect(appSrc).toContain("setTextFormatHelpOpen(true)");
+  it("appCommands.ts registers the Text formatting command in the Help group", () => {
+    expect(commandsSrc).toContain('id: "text-format-help"');
+    expect(commandsSrc).toContain('label: "Text formatting"');
+    expect(commandsSrc).toContain("setTextFormatHelpOpen(true)");
   });
 
-  it("App.tsx mounts the dialog", () => {
-    expect(appSrc).toContain("<TextFormatHelp />");
+  it("AppOverlays.tsx mounts the dialog", () => {
+    expect(overlaysSrc).toContain("<TextFormatHelp />");
   });
 });

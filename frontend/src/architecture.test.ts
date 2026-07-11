@@ -35,21 +35,20 @@ function offenders(re: RegExp, allow: string[]): string[] {
 // Component-ceiling ratchet (PROJECT_ORGANIZATION_PLAN #7 / PORT_PLAN W7).
 // Convention: a .tsx component is <=400 lines; heavy features decompose via the
 // workshop pattern (state hook + view + sub-components). This is a RATCHET, not
-// a hard wall on day one: the three files that already exceed 400 are pinned at
-// their CURRENT size so they can only SHRINK, never grow (identical spirit to
-// the backend 500-line test and the MATLAB "never raise the ceiling" rule). A
+// a hard wall on day one: files that already exceed 400 get pinned at their
+// CURRENT size so they can only SHRINK, never grow (identical spirit to the
+// backend 500-line test and the MATLAB "never raise the ceiling" rule). A
 // NEW .tsx over 400 fails. When a pinned file is extracted below 400, the
 // honesty check tells you to delete its pin. Counting matches the guard below:
 // src.split("\n").length.
 const TSX_CEILING = 400;
 // path-suffix -> grandfathered max (exact current line count). RATCHET DOWN ONLY.
-const GRANDFATHERED: Record<string, number> = {
-  "/App.tsx": 954, // root orchestrator; decompose (PROJECT_ORGANIZATION_PLAN)
-  // PlotStage.tsx's pin is GONE (MULTI_PLOT_PLAN #1, 2026-07-09): the uPlot
-  // lifecycle + fetch/compose pipeline moved to PlotViewport.tsx /
-  // usePlotPayload.ts, dropping it to 312 lines — under the generic ceiling.
-  "/components/workshops/calculators/ThinFilmTab.tsx": 442, // split calc tabs
-};
+// The pins have ratcheted to ZERO (MAIN_PLAN #1, 2026-07-11): App.tsx (954)
+// decomposed into appCommands.ts / useGlobalShortcuts.ts / AppOverlays.tsx;
+// ThinFilmTab.tsx (442) into thinfilm/ card sub-components; PlotStage.tsx's
+// pin went earlier (MULTI_PLOT_PLAN #1, 2026-07-09 — PlotViewport.tsx /
+// usePlotPayload.ts). Every .tsx now meets the 400 ceiling — keep it that way.
+const GRANDFATHERED: Record<string, number> = {};
 
 describe("component-ceiling ratchet (#7)", () => {
   const tsx = sources().filter(([p]) => p.endsWith(".tsx"));
