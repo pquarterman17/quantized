@@ -141,12 +141,7 @@ Interactive WebGL 3-D stays a deferred gate pending Q4.
    - [ ] Composer UI (pick plot windows/figure docs → grid slots)
    - [ ] Export dialog integration (vector default, style presets)
 
-5. **Rich-text labels** — sub/superscript, Greek, italics rendered
-   identically on-screen (uPlot) and in vector export (matplotlib
-   mathtext), plus a symbol palette in label editors
-   - [ ] Label micro-syntax → shared AST → uPlot canvas renderer
-   - [ ] Same AST → matplotlib mathtext at export
-   - [ ] Symbol palette + docs in axis/legend/annotation editors
+~~5. **Rich-text labels**~~ ✅ completed 2026-07-11 (see Completed).
 
 ## Tier 2 — Medium Impact
 
@@ -184,6 +179,20 @@ Interactive WebGL 3-D stays a deferred gate pending Q4.
 worksheet reshape, 3-D, and date-time axes land here if confirmed)*
 
 ## Completed
+
+- ~~**#5 Rich-text labels**~~ (2026-07-11) — mathtext-subset micro-syntax
+  (`$...$`: sub/sup w/ nesting, Greek both cases incl. var-forms, `\AA`,
+  `\circ 	imes \cdot \pm \prime`, `\mathrm/\mathit`; invalid markup →
+  whole-string literal fallback on BOTH sides, never a 500). Shared AST
+  (`lib/richtext.ts`) → canvas renderer (uPlot axis labels via one
+  `buildOpts` chokepoint + plugin) + React renderer (DOM legend, editors).
+  `SymbolPalette` + `RichLabelInput` in TitlesCard/FigureBuilder. Export:
+  passthrough + `figure_labels._safe_label` guard applied across ALL 8
+  figure_* modules. Owner requirements (italics/sub/sup/Greek/special
+  chars) all shipped. Known WYSIWYG approximations documented in-source
+  (fixed 0.7x script metrics vs font metrics; sequential not stacked
+  `x^2_3`; screen-vs-DejaVu fonts). +12 backend / +~50 frontend tests;
+  a `` form-feed escape trap in one spec caught at the parent gate.
 
 - ~~**#1 Custom fit equation builder**~~ (2026-07-11) — validate + fit
   endpoints over the no-eval parser (`/api/fitting/equation/*`, same
