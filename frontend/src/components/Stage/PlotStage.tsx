@@ -249,6 +249,7 @@ export default function PlotStage() {
         displayPayload={displayPayload}
         theme={theme}
         accent={accent}
+        insetTop={52}
         bg={winBg}
         syncKey={windowSyncKey(winLinkGroup)}
         yScale={yScale}

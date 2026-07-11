@@ -51,6 +51,14 @@ export interface PlotViewportProps
    *  WaterfallView, ReflPanel, InsetPlot) are untouched. Undefined (the
    *  default, and every pre-item-13 caller) applies no patch at all. */
   syncKey?: string;
+  /** Top inset (px) of the plot host, default 8. The MAIN stage passes a
+   *  larger value to reserve the floating tool-dock's band — the dock is an
+   *  overlay at top-center, and without the reservation a centered plot
+   *  title rendered exactly behind it (owner report 2026-07-11: "titles get
+   *  lost, covered by the top menu"). Window consumers (panel cells,
+   *  snapshot/background windows) have title bars instead of docks and keep
+   *  the default. */
+  insetTop?: number;
 }
 
 /** The uPlot host + its create/resize/destroy effect. Renders a single
@@ -58,7 +66,7 @@ export interface PlotViewportProps
  *  every other Stage chrome (toolbar, legend, readouts, context menu) is a
  *  sibling owned by the caller. */
 export default function PlotViewport(props: PlotViewportProps) {
-  const { displayPayload, plotRef, theme, accent, peakWizardEdit, anchorEdit, syncKey, ...args } =
+  const { displayPayload, plotRef, theme, accent, peakWizardEdit, anchorEdit, syncKey, insetTop, ...args } =
     props;
   const hostRef = useRef<HTMLDivElement>(null);
 
@@ -176,5 +184,5 @@ export default function PlotViewport(props: PlotViewportProps) {
     syncKey,
   ]);
 
-  return <div ref={hostRef} style={{ position: "absolute", inset: 8 }} />;
+  return <div ref={hostRef} style={{ position: "absolute", inset: 8, top: insetTop ?? 8 }} />;
 }
