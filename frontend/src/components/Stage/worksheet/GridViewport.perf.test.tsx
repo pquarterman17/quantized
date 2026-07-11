@@ -148,6 +148,55 @@ describe("GridViewport perf validation at scale (item 10)", () => {
     expect(scrollMs).toBeLessThan(800); // measured ~18ms on a dev machine — generous CI headroom
   }, 120_000);
 
+  it("resizing one column re-windows in a bounded time — no full-grid rebuild (MAIN_PLAN #3)", () => {
+    const data = makeWideData(100_000, 200);
+    const props = (colWidths: Record<number, number>) => (
+      <GridViewport
+        data={data}
+        xName="x"
+        xUnit=""
+        order={data.time.map((_, i) => i)}
+        masked={new Set()}
+        filteredOut={new Set()}
+        selected={new Set()}
+        channelRoles={{}}
+        sortMark={() => ""}
+        selectedCols={new Set()}
+        onToggleColSelect={noop}
+        onSelectColRange={noop}
+        onToggleSelect={noop}
+        onSelectRange={noop}
+        onEditCell={noop}
+        baseCount={200}
+        onRemoveFormula={noop}
+        showStats={false}
+        colStats={null}
+        statsErr={false}
+        textCols={[]}
+        colWidths={colWidths}
+      />
+    );
+    const { container, rerender } = render(props({}));
+    const scrollEl = container.querySelector(".qzk-grid") as HTMLElement;
+    measureAs(scrollEl, 900, 600);
+
+    // A live drag is a stream of width updates — measure a few consecutive
+    // ones (each rebuilds ONE prefix-sum array + the windowed slice, never
+    // the 100k-row backing data).
+    const t0 = performance.now();
+    rerender(props({ 5: 200 }));
+    rerender(props({ 5: 260 }));
+    rerender(props({ 5: 320 }));
+    const resizeMs = performance.now() - t0;
+
+    // eslint-disable-next-line no-console
+    console.info(`[perf/main3] 3 resize re-renders at 100k×200: ${resizeMs.toFixed(1)}ms`);
+    expect(screen.getAllByRole("row").length).toBeLessThan(60); // still windowed
+    // Generous CI ceiling (same discipline as the scroll case above —
+    // measured ~10-40ms per re-render on a dev machine).
+    expect(resizeMs).toBeLessThan(2400);
+  }, 120_000);
+
   it("the stats-footer fan-out (201 requests at 200 columns) parallelizes — wall time tracks the SLOWEST call, not the sum", async () => {
     const LATENCY_MS = 15;
     vi.mocked(statsDescriptive).mockImplementation(

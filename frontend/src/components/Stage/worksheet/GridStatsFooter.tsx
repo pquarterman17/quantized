@@ -29,6 +29,9 @@ export interface GridStatsFooterProps {
   leadingSpacer: number;
   trailingSpacer: number;
   colWidth: number;
+  /** Per-column width (MAIN_PLAN #3); -1 = the pinned x column. Text columns
+   *  keep the uniform `colWidth`. */
+  widthOf: (col: number) => number;
   gutterWidth: number;
   rowHeight: number;
   textCols: TextColumn[];
@@ -42,6 +45,7 @@ export default function GridStatsFooter({
   leadingSpacer,
   trailingSpacer,
   colWidth,
+  widthOf,
   gutterWidth,
   rowHeight,
   textCols,
@@ -78,13 +82,13 @@ export default function GridStatsFooter({
           <div
             role="gridcell"
             className="qzk-grid-cell"
-            style={{ position: "sticky", left: gutterWidth, zIndex: 3, background: "var(--surface-2)", width: colWidth, flexShrink: 0 }}
+            style={{ position: "sticky", left: gutterWidth, zIndex: 3, background: "var(--surface-2)", width: widthOf(-1), flexShrink: 0 }}
           >
             {colStats ? fmtNum(colStats[0]?.[key]) : "…"}
           </div>
           {leadingSpacer > 0 && <div style={{ width: leadingSpacer, flexShrink: 0 }} aria-hidden="true" />}
           {visibleCols.map((c) => (
-            <div key={c} role="gridcell" className="qzk-grid-cell" style={{ width: colWidth, flexShrink: 0 }}>
+            <div key={c} role="gridcell" className="qzk-grid-cell" style={{ width: widthOf(c), flexShrink: 0 }}>
               {channelRoles[c] === "ignore" ? "—" : colStats ? fmtNum(colStats[c + 1]?.[key]) : "…"}
             </div>
           ))}

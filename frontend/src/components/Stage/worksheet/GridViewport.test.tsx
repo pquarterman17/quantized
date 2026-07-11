@@ -111,3 +111,138 @@ describe("GridViewport windowed rendering", () => {
     expect(onEditCell).toHaveBeenCalledWith(1, -1, 42);
   });
 });
+
+// ── Per-column widths + drag resize (MAIN_PLAN #3) ───────────────────────────
+
+function renderResizableGrid(
+  colWidths: Record<number, number>,
+  onResizeCol: (col: number, width: number) => void = noop,
+  onAutofitCol: (col: number) => void = noop,
+) {
+  const data = makeData(10);
+  const utils = render(
+    <GridViewport
+      data={data}
+      xName="x"
+      xUnit=""
+      order={data.time.map((_, i) => i)}
+      masked={new Set()}
+      filteredOut={new Set()}
+      selected={new Set()}
+      channelRoles={{}}
+      sortMark={() => ""}
+      selectedCols={new Set()}
+      onToggleColSelect={noop}
+      onSelectColRange={noop}
+      onToggleSelect={noop}
+      onSelectRange={noop}
+      onEditCell={noop}
+      baseCount={1}
+      onRemoveFormula={noop}
+      showStats={false}
+      colStats={null}
+      statsErr={false}
+      textCols={[]}
+      colWidths={colWidths}
+      onResizeCol={onResizeCol}
+      onAutofitCol={onAutofitCol}
+    />,
+  );
+  return utils;
+}
+
+describe("GridViewport column resize (MAIN_PLAN #3)", () => {
+  it("applies a custom width to the column's header cell and data cells", () => {
+    renderResizableGrid({ 0: 240 });
+    const header = screen.getAllByRole("columnheader").find((h) => h.textContent?.includes("A"))!;
+    expect(header.style.width).toBe("240px");
+    // A data cell in that column gets the same width (continuous column).
+    const cells = screen.getAllByRole("gridcell");
+    expect(cells.some((c) => c.style.width === "240px")).toBe(true);
+  });
+
+  it("dragging a header edge streams clamped widths through onResizeCol", () => {
+    const onResizeCol = vi.fn();
+    renderResizableGrid({}, onResizeCol);
+    const handle = screen.getByLabelText("resize column A");
+    fireEvent.pointerDown(handle, { clientX: 100 });
+    fireEvent.pointerMove(window, { clientX: 160 });
+    // Started from the default 120 → +60 = 180.
+    expect(onResizeCol).toHaveBeenLastCalledWith(0, 180);
+    // A huge negative drag clamps at the minimum, never a negative width.
+    fireEvent.pointerMove(window, { clientX: -10_000 });
+    const [, lastWidth] = onResizeCol.mock.calls[onResizeCol.mock.calls.length - 1] as [number, number];
+    expect(lastWidth).toBeGreaterThan(0);
+    expect(lastWidth).toBeLessThan(120);
+    fireEvent.pointerUp(window);
+    // After release, further moves do nothing (listeners removed).
+    const calls = onResizeCol.mock.calls.length;
+    fireEvent.pointerMove(window, { clientX: 500 });
+    expect(onResizeCol.mock.calls.length).toBe(calls);
+  });
+
+  it("double-clicking a header edge autofits instead of selecting the column", () => {
+    const onAutofitCol = vi.fn();
+    renderResizableGrid({}, noop, onAutofitCol);
+    fireEvent.doubleClick(screen.getByLabelText("resize column A"));
+    expect(onAutofitCol).toHaveBeenCalledWith(0);
+  });
+
+  it("the pinned x column is resizable too", () => {
+    const onResizeCol = vi.fn();
+    renderResizableGrid({}, onResizeCol);
+    fireEvent.pointerDown(screen.getByLabelText("resize column x"), { clientX: 0 });
+    fireEvent.pointerMove(window, { clientX: 30 });
+    expect(onResizeCol).toHaveBeenLastCalledWith(-1, 150);
+    fireEvent.pointerUp(window);
+  });
+
+  it("variable widths still window a wide grid (offsets path, not the uniform one)", () => {
+    // 100 columns, one resized very wide: the windowed slice must respect the
+    // prefix-sum offsets (leading columns shifted by the wide one) and still
+    // render a bounded subset.
+    const nCols = 100;
+    const data: import("../../../lib/types").DataStruct = {
+      time: [0, 1],
+      values: [Array.from({ length: nCols }, (_, c) => c), Array.from({ length: nCols }, (_, c) => c + 1)],
+      labels: Array.from({ length: nCols }, (_, c) => `C${c}`),
+      units: Array.from({ length: nCols }, () => ""),
+      metadata: {},
+    };
+    const { container } = render(
+      <GridViewport
+        data={data}
+        xName="x"
+        xUnit=""
+        order={[0, 1]}
+        masked={new Set()}
+        filteredOut={new Set()}
+        selected={new Set()}
+        channelRoles={{}}
+        sortMark={() => ""}
+        selectedCols={new Set()}
+        onToggleColSelect={noop}
+        onSelectColRange={noop}
+        onToggleSelect={noop}
+        onSelectRange={noop}
+        onEditCell={noop}
+        baseCount={nCols}
+        onRemoveFormula={noop}
+        showStats={false}
+        colStats={null}
+        statsErr={false}
+        textCols={[]}
+        colWidths={{ 0: 400 }}
+      />,
+    );
+    const scrollEl = container.querySelector(".qzk-grid") as HTMLElement;
+    measureAs(scrollEl, 900, 300);
+    const headers = screen.getAllByRole("columnheader");
+    // Bounded window: nowhere near all 100 value columns render.
+    expect(headers.length).toBeLessThan(30);
+    // Scrolling right past the wide column shifts the window.
+    Object.defineProperty(scrollEl, "scrollLeft", { configurable: true, value: 5000 });
+    fireEvent.scroll(scrollEl);
+    expect(screen.queryByText("C0")).not.toBeInTheDocument();
+  });
+});

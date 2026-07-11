@@ -309,6 +309,14 @@ body {
 .qzk-grid-rownum { background: var(--surface-1); color: var(--text-faint); text-align: center; cursor: pointer; }
 .qzk-grid-footer .qzk-grid-rownum { cursor: default; }
 
+/* column resize handle (MAIN_PLAN #3): a slim hit zone hugging each numeric
+   header cell's right edge — drag to resize, double-click to autofit. The
+   visible affordance is the hover/active accent stripe; at rest it's
+   invisible so the header stays clean. */
+.qzk-col-resize { position: absolute; top: 0; right: 0; bottom: 0; width: 7px; cursor: col-resize; z-index: 5; touch-action: none; }
+.qzk-col-resize::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 2px; background: transparent; }
+.qzk-col-resize:hover::after, .qzk-col-resize:active::after { background: var(--accent); }
+
 /* sheet tab strip (components/Stage/worksheet/SheetTabs) — Origin's own
    bottom worksheet-tab convention for a multi-sheet workbook; hidden entirely
    for non-Origin / single-sheet datasets. */
