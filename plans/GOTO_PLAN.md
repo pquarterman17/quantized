@@ -122,16 +122,9 @@ Interactive WebGL 3-D stays a deferred gate pending Q4.
 ~~1. **Custom fit equation builder**~~ ✅ completed 2026-07-11 (see
    Completed).
 
-2. **Anchor-point baseline** — click N anchors on the curve, interpolated
-   baseline through them (linear/pchip/spline), live preview, subtract as
-   a recalc-DAG step
-   - [ ] `calc/baseline.py` anchor interpolation (pure)
-   - [ ] Plot gesture + preview overlay + step-executor wiring
+~~2. **Anchor-point baseline**~~ ✅ completed 2026-07-11 (see Completed).
 
-3. **Shirley background** — iterative XPS/XAS step background in the
-   baseline picker
-   - [ ] `calc/baseline.py` Shirley (pure, iterate-to-tolerance)
-   - [ ] Baseline UI entry + route plumbing
+~~3. **Shirley background**~~ ✅ completed 2026-07-11 (see Completed).
 
 ~~4. **Multi-panel figure page composer**~~ ✅ completed 2026-07-11 (see
    Completed).
@@ -142,13 +135,9 @@ Interactive WebGL 3-D stays a deferred gate pending Q4.
 
 ~~6. **AICc model quick-scan**~~ ✅ completed 2026-07-11 (see Completed).
 
-7. **Domain backgrounds/corrections** — XRD low-angle background model;
-   XRR/NR beam-footprint correction (geometry-based) as a corrections
-   step
+~~7. **Domain backgrounds/corrections**~~ ✅ completed 2026-07-11 (see Completed).
 
-8. **Analytic baseline completion** — explicit linear/quadratic/poly-n
-   choices surfaced in the baseline picker (BG-from-region polyfit math
-   exists; this is the UI surface)
+~~8. **Analytic baseline completion**~~ ✅ completed 2026-07-11 (see Completed).
 
 11. **Text-formatting help tab** (booked 2026-07-11, not yet
     implemented) — a Help surface documenting the rich-text
@@ -173,6 +162,18 @@ Interactive WebGL 3-D stays a deferred gate pending Q4.
 worksheet reshape, 3-D, and date-time axes land here if confirmed)*
 
 ## Completed
+
+- ~~**#2/#3/#7/#8 Baseline & background suite**~~ (2026-07-11) — new pure
+  `calc/backgrounds.py` (+37 tests, literature refs in docstrings):
+  anchor baseline (linear/pchip/spline, clamped extrapolation; click/
+  drag/remove gesture via `lib/uplotAnchors` plugin, live preview, apply
+  through the SAME `applyCorrections` chokepoint/recalc DAG); Shirley
+  (PRB 5, 4709; non-convergence → 422); XRD low-angle 1/x (TOPAS
+  One_on_X + Lieber clipping); XRR/NR footprint factor as corrections
+  step 2b (Gibaud & Vignaud); linear/quadratic/poly-n picker methods
+  dispatching onto the existing region-fit calc. Only the parametric
+  anchor method is corrections-replayable — data-derived baselines keep
+  the subtract-to-new-dataset path (documented).
 
 - ~~**#4 Multi-panel figure page composer**~~ (2026-07-11) — the Fig
   1(a)-(d) workflow: `calc/figure_page.py` (gridspec + spans, auto

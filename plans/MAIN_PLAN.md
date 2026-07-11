@@ -53,14 +53,9 @@ plan's direct items are residue-sized by construction)*
 2. **Extract the window-management slice from `store/useApp.ts`**
    (~3,900 lines) into `store/windows.ts` (was PROJECT_ORGANIZATION
    #11) — consider a store-size ratchet.
-3. **Worksheet per-column widths + drag resize** (was WORKSHEET #12) —
-   `lib/gridwindow` prefix-sum offsets.
-4. **Worksheet selection → Graph Builder handoff** (was WORKSHEET #13)
-   — "Open in Graph Builder" prefills a `lib/plotspec` spec.
-5. **`.otp`/`.otpu` template import, frontend half** (was
-   GAP_ECOSYSTEM #5) — `api.ts` method + "Import Origin template…"
-   open-file branch → saved graph-templates store (backend shipped
-   2026-07-07).
+~~3. **Worksheet per-column widths + drag resize**~~ ✅ completed 2026-07-11 (see Completed).
+~~4. **Worksheet selection → Graph Builder handoff**~~ ✅ completed 2026-07-11 (see Completed).
+~~5. **`.otp`/`.otpu` template import, frontend half**~~ ✅ completed 2026-07-11 (see Completed).
 6. **Defaults-audit residuals** (was GAP_TIER3 #2 residual) —
    interactive-side shots via `tools/visual/` + export-dialog DPI field
    syncing to the preset's calibrated dpi.
@@ -115,6 +110,17 @@ plan's direct items are residue-sized by construction)*
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#3 Worksheet column widths**~~ (2026-07-11) — variable widths via
+  gridwindow prefix-sum + binary search (uniform fast path kept),
+  header-edge drag + double-click autofit; session-only state (the .dwk
+  persistence owner gate respected); resize perf case added.
+- ~~**#4 Selection → Graph Builder**~~ (2026-07-11) — designation-aware
+  `selectionToSpec` + one-shot store seed; toolbar button + context
+  menu; rows via the rowstate chokepoint (allowlist untouched).
+- ~~**#5 .otp template import (frontend)**~~ (2026-07-11) —
+  `lib/originTemplate.ts` upload client → tagged, never-clobber entries
+  in the graph-templates store; File-menu command.
 
 - ~~**Fold-up restructure**~~ (2026-07-10) — created this root plan;
   absorbed the open residue of MULTI_PLOT, WORKSHEET,
