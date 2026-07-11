@@ -15,12 +15,8 @@ day; MAIN #20 tick-precision/eng-notation shipped same day)
 
 ## Actionable dev work (no blockers, no owner gate)
 
-| # | Item | Plan / item | Size |
-|---|------|-------------|------|
-| 36 | Page-anchored annotations (pin text to the page through zoom/pan) | MAIN #21 | S |
-
-*(MAIN #9–#20 all shipped 2026-07-11; #21 booked from continued owner
-testing, agent in flight)*
+*(none — MAIN #9–#21 ALL shipped 2026-07-11. New items arrive via owner
+gates, user testing, or the parity/decode monitors)*
 
 ## Owner actions & owner-gated decisions
 

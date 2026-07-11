@@ -60,14 +60,7 @@ GOTO #11 drift (implemented but listed open).
 ~~19. **Multi-plot panel builder**~~ COMPLETED 2026-07-11 (see
     Completed — v1 + the drag-rearrange follow-up both shipped).
 
-21. **Page-anchored annotations** (owner request 2026-07-11, follows the
-    margin-annotation fix): an annotation may pin to the PAGE (canvas
-    fractions — stays put through zoom/pan, Origin's page-text model)
-    instead of data coords. `Annotation.anchor?: "data"|"page"` (default
-    data, back-compat); right-click toggle "Pin to page / Pin to data"
-    converts coords in place (no jump); drag/hit/resize ride the same
-    layout branch; `.dwk` sanitize + matplotlib export parity (figure
-    fraction, y flipped) included.
+~~21. **Page-anchored annotations**~~ COMPLETED 2026-07-11 (see Completed).
 
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
@@ -152,6 +145,18 @@ GOTO #11 drift (implemented but listed open).
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#21 Page-anchored annotations**~~ (2026-07-11, sonnet agent) —
+  `Annotation.anchor?: "data"|"page"` (page = canvas fractions, default
+  data = full back-compat); right-click "Pin to page / Pin to data"
+  toggle converts coords IN PLACE via `annotationAnchorConversions`
+  (round-trip-exact, y2-scale aware; `canvasToOverCss` = the documented
+  inverse of `overPointerToCanvas`); page drags move in fraction space
+  with the same on-canvas clamp; sanitizeView gained real
+  `sanitizeAnnotations` validation (was a bare cast); export renders
+  page text via `ax.annotate(xycoords="figure fraction")` with the
+  canvas-vs-matplotlib y-flip, verified against real matplotlib output.
+  +~30 tests (frontend 2983 / backend 2766 green on its branch).
 
 - ~~**#19 Multi-plot panel builder**~~ (2026-07-11, two sonnet agents;
   design decided with owner — Library-row selection, composite MDI
