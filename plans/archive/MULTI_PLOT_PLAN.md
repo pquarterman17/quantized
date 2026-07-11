@@ -9,7 +9,7 @@ state" (today ~40 singleton fields in `store/useApp.ts`) from "the plot"
 facade, so the existing Inspector / tools / shortcuts / workshops keep
 working unchanged while extra windows render alongside.
 
-**Status:** Active
+**Status:** Complete — residue absorbed into MAIN_PLAN.md (2026-07-10 fold-up; open items moved with provenance, Completed history preserved below)
 **Created:** 2026-07-09
 **Updated:** 2026-07-10
 

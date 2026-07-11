@@ -6,6 +6,7 @@ built on the clean architecture of the sibling `fermiviewer` project so
 the codebase never accretes the god-scripts the MATLAB original did.
 
 **Status:** Active
+**Parent:** MAIN_PLAN.md
 **Created:** 2026-06-21
 **Updated:** 2026-07-10 (full W0–W9 reconciliation against
 `PORT_CHECKLIST.md` + the code: every shipped item is now struck below

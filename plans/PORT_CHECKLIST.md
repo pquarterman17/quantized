@@ -9,6 +9,7 @@ Grouped by the `PORT_PLAN.md` workstreams. Source paths are relative to
 `../quantized_matlab/`.
 
 **Status:** Active (the live per-feature parity tracker — PORT_PLAN's
+**Parent:** PORT_PLAN.md (appendix; root: MAIN_PLAN.md)
 tiers defer to this file)
 **Updated:** 2026-07-10 (reconciliation audit: marker key below. The
 remaining `[ ]`/`[~]` lines with real work are: `importOxford` (blocked,

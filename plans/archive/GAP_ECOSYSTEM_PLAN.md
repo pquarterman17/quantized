@@ -11,7 +11,7 @@ what remains is PyPI + first-run), and the three
 (#36), `.otp`/`.otpu` templates as style presets (#21), and the `.opju`
 writer (#27, audited and kept deferred).
 
-**Status:** Active
+**Status:** Complete — residue absorbed into MAIN_PLAN.md (2026-07-10 fold-up; open items moved with provenance, Completed history preserved below)
 **Created:** 2026-07-07
 **Updated:** 2026-07-10 (reconciliation: item 3 struck — shipped except
 the OWNER PyPI Trusted Publisher registration. The plan's one open

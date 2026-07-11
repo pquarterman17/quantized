@@ -8,6 +8,7 @@ doc for the initiative (the survey draft was absorbed and deleted per the
 plan-consolidation rule; full text in git history @ `4e97e6d`).
 
 **Status:** Active
+**Parent:** MAIN_PLAN.md
 **Created:** 2026-07-10
 **Updated:** 2026-07-10
 

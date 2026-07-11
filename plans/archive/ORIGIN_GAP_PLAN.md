@@ -13,7 +13,7 @@ site deprioritized for now). W9 adds JMP-inspired interactive
 exploration (Graph Builder drag-drop, linked brushing) — strengths JMP
 has that Origin lacks.
 
-**Status:** Active
+**Status:** Complete — residue absorbed into MAIN_PLAN.md (2026-07-10 fold-up; open items moved with provenance, Completed history preserved below)
 **Created:** 2026-07-01
 **Updated:** 2026-07-10 (reconciliation pass: the item bodies below are
 now struck to match the header's 2026-07-08 "campaign complete" claim —

@@ -12,6 +12,7 @@ to Origin users (W6) — plus the testing hardening that makes either
 trustworthy (W7). Gap analysis: see Context.
 
 **Status:** Active
+**Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
 **Updated:** 2026-07-09 (a single-day campaign from the owner's PNR.opj
 import testing: the four triage fix batches — perf quick wins, zero-tail

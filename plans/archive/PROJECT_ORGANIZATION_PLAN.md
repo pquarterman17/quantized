@@ -10,7 +10,7 @@ like Origin?" gap surfaced by the Origin-import work — where the
 project→book→sheet→graph hierarchy we already decode is currently thrown
 away on import and re-approximated from name prefixes.
 
-**Status:** Active
+**Status:** Complete — residue absorbed into MAIN_PLAN.md (2026-07-10 fold-up; open items moved with provenance, Completed history preserved below)
 **Created:** 2026-07-04
 **Updated:** 2026-07-10 (booked item 11 — useApp.ts window-slice
 extraction; 2026-07-09: items 8 + 9 complete — folder bulk ops and

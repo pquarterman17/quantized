@@ -11,7 +11,7 @@ decision). These are individually small; the value of this plan is
 naming the exact seams so each can be dispatched as a self-contained
 cheap-model task.
 
-**Status:** Active
+**Status:** Complete — residue absorbed into MAIN_PLAN.md (2026-07-10 fold-up; open items moved with provenance, Completed history preserved below)
 **Created:** 2026-07-07
 **Updated:** 2026-07-10 (reconciliation: item 3 GLM/survival/ROC was
 shipped 2026-07-07/08 but never formally closed — moved to Completed;

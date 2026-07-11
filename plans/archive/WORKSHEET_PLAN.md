@@ -8,7 +8,7 @@ the Worksheet stage tab, and add Origin's "highlight columns → plot" gesture
 feeding the existing plot store actions. Staged so each tier ships working
 value without creating a second god-component or a second plotting pathway.
 
-**Status:** Active
+**Status:** Complete — residue absorbed into MAIN_PLAN.md (2026-07-10 fold-up; open items moved with provenance, Completed history preserved below)
 **Created:** 2026-07-09
 **Updated:** 2026-07-09 (Tier 2, items 6-11, closed same day; items 15-16 added + closed same day)
 
