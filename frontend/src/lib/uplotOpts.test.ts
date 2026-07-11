@@ -83,17 +83,58 @@ describe("buildOpts publication template (fontSize + baseLineWidth)", () => {
 });
 
 describe("buildOpts", () => {
-  it("enables box-zoom drag only in zoom mode", () => {
+  it("enables box-zoom drag in zoom AND pointer mode (MAIN #18 — muscle-memory box zoom)", () => {
     const zoom = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(zoom.cursor?.drag).toMatchObject({ x: true, y: true });
+    const pointer = buildOpts(payload, { ...base, yScale: "linear", tool: "pointer" });
+    expect(pointer.cursor?.drag).toMatchObject({ x: true, y: true });
     const pan = buildOpts(payload, { ...base, yScale: "linear", tool: "pan" });
     expect(pan.cursor?.drag).toMatchObject({ x: false, y: false });
   });
 
-  it("adds one plugin for pan and cursor, none for zoom", () => {
+  it("suppresses the dashed crosshair ONLY in pointer mode (MAIN #18)", () => {
+    const pointer = buildOpts(payload, { ...base, yScale: "linear", tool: "pointer" });
+    expect(pointer.cursor).toMatchObject({ x: false, y: false });
+    const zoom = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
+    expect((zoom.cursor as { x?: unknown }).x).toBeUndefined();
+    expect((zoom.cursor as { y?: unknown }).y).toBeUndefined();
+  });
+
+  it("adds one plugin for pan and cursor, none for zoom or pointer (no annotations/refLines)", () => {
     expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" }).plugins).toHaveLength(0);
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "pointer" }).plugins).toHaveLength(0);
     expect(buildOpts(payload, { ...base, yScale: "linear", tool: "pan" }).plugins).toHaveLength(1);
     expect(buildOpts(payload, { ...base, yScale: "linear", tool: "cursor" }).plugins).toHaveLength(1);
+  });
+
+  it("refLine dragging is interactive in pointer mode too (MAIN #18)", () => {
+    const onRefLineMove = vi.fn();
+    // refLinePlugin's own `interactive` flag isn't directly readable off the
+    // built Options — assert indirectly via the ready hook's presence, which
+    // refLinePlugin only sets when interactive+onMove are both supplied.
+    const opts = buildOpts(payload, {
+      ...base,
+      yScale: "linear",
+      tool: "pointer",
+      refLines: [{ id: "r1", axis: "x", value: 1 }],
+      onRefLineMove,
+    });
+    const plugin = opts.plugins?.[0] as { hooks: { ready?: unknown } };
+    expect(plugin.hooks.ready).toBeDefined();
+  });
+
+  it("annotationPlugin is interactive ONLY when both tool='pointer' AND annotationEdit is supplied", () => {
+    const annotations = [{ id: "a1", x: 1, y: 2, text: "Tc" }];
+    const bridge = { selectedId: null, onSelect: vi.fn(), onMove: vi.fn(), onResize: vi.fn(), onEditText: vi.fn(), onContextMenu: vi.fn() };
+    const withBridge = buildOpts(payload, { ...base, yScale: "linear", tool: "pointer", annotations, annotationEdit: bridge });
+    const passive = buildOpts(payload, { ...base, yScale: "linear", tool: "pointer", annotations });
+    const wrongTool = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", annotations, annotationEdit: bridge });
+    const p1 = withBridge.plugins?.[0] as { hooks: { ready?: unknown } };
+    const p2 = passive.plugins?.[0] as { hooks: { ready?: unknown } };
+    const p3 = wrongTool.plugins?.[0] as { hooks: { ready?: unknown } };
+    expect(p1.hooks.ready).toBeDefined();
+    expect(p2.hooks.ready).toBeUndefined();
+    expect(p3.hooks.ready).toBeUndefined();
   });
 
   it("adds the stats plugin only in the stats tool", () => {
