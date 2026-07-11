@@ -83,6 +83,34 @@ describe("component-ceiling ratchet (#7)", () => {
   });
 });
 
+// Store-size ratchet (MAIN_PLAN #2). store/useApp.ts is the composed app
+// store; the MDI window slice was extracted to store/windows.ts (2026-07-11),
+// dropping useApp.ts to the pin below. Same iron rule as the component
+// ceilings: the pin only RATCHETS DOWN — when the store grows, extract the
+// next cohesive slice (windows.ts is the template), never raise the number.
+const STORE_PINS: Record<string, number> = {
+  "/store/useApp.ts": 3272, // post-#2 split; next candidates: corrections/importing slices
+};
+
+describe("store-size ratchet (MAIN_PLAN #2)", () => {
+  it("pinned store modules only shrink — extract a slice, never raise the pin", () => {
+    const over: string[] = [];
+    for (const [key, ceiling] of Object.entries(STORE_PINS)) {
+      const entry = sources().find(([p]) => p.endsWith(key));
+      if (!entry) {
+        over.push(`${key}: missing — update or remove its pin`);
+        continue;
+      }
+      const lines = entry[1].split("\n").length;
+      if (lines > ceiling) over.push(`${key}: ${lines} > ${ceiling}`);
+    }
+    expect(
+      over,
+      "extract another slice (see store/windows.ts for the pattern); do NOT raise the pin",
+    ).toEqual([]);
+  });
+});
+
 describe("row-state model guard (#50 universal linking)", () => {
   it("only the row-state model reads/writes Dataset.excludedRows", () => {
     // rowstate = the exclusion primitives; workspace = .dwk (de)serialize;
