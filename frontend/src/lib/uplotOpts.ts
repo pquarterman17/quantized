@@ -11,9 +11,11 @@ import type { PlotBg } from "./plotview";
 import type { PlotPayload } from "./plotdata";
 import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
+import { richLabelAst } from "./richtext";
 import { pow10 } from "./ticks";
 import type { Annotation, AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
 import { annotationPlugin, axisBoxPlugin, errorBarsPlugin, refLinePlugin } from "./uplotOverlays";
+import { richLabelsPlugin } from "./uplotRichLabels";
 import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
 import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
 import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
@@ -464,7 +466,8 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const tickPx = args.fontSize ?? 12;
   const font = `${tickPx}px ${cssVar("--font-mono") || "monospace"}`;
   const titlePx = tickPx + 2;
-  const labelFont = `600 ${titlePx}px ${cssVar("--font-ui") || "system-ui, sans-serif"}`;
+  const uiFamily = cssVar("--font-ui") || "system-ui, sans-serif";
+  const labelFont = `600 ${titlePx}px ${uiFamily}`;
   // X-axis label: an explicit override wins; `null` forces blank (item B —
   // an Origin layer's own DECODED-EMPTY title must never be re-synthesized);
   // blank/undefined derives "name (unit)" from the data (today's default).
@@ -486,6 +489,22 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     return idxs.length === 1 ? labels[idxs[0]] : undefined;
   };
   const hasY2 = payload.series.some((s) => (s.axis ?? 0) === 1);
+
+  // Rich-text labels (GOTO #5): a label with a VALID `$...$` math region
+  // parses to an AST here — the single chokepoint, so EVERY plot window that
+  // builds through uplotOpts (stage, snapshot/pinned, multi-panel, waterfall,
+  // refl, inset) renders it. The plain uPlot label is blanked below
+  // (label: "" still reserves the labelSize band) and richLabelsPlugin draws
+  // the AST in that band; the DOM title is swapped in the plugin's init hook.
+  // An invalid or $-free label returns null and keeps uPlot's own plain draw
+  // byte-identical to before — the same literal fallback the export side
+  // applies (calc/figure_labels.py).
+  const xRich = richLabelAst(xLabel);
+  const yLabelText = soloLabel(0);
+  const yRich = richLabelAst(yLabelText);
+  const y2LabelText = hasY2 ? soloLabel(1) : undefined;
+  const y2Rich = hasY2 ? richLabelAst(y2LabelText) : null;
+  const titleRich = richLabelAst(args.title?.trim());
 
   // labelSize is the px height/width uPlot reserves for the axis TITLE
   // (shared by x/y/y2 below) — must grow with `titlePx` so a bigger
@@ -587,6 +606,15 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     const { markers, onAdd, onRemove } = args.peakWizardEdit;
     plugins.push(peakMarkerEditPlugin(markers, { onAdd, onRemove }));
   }
+  // Rich axis labels / title (GOTO #5) — see the AST block above the plugins.
+  if (xRich || yRich || y2Rich || titleRich) {
+    plugins.push(
+      richLabelsPlugin(
+        { x: xRich, y: yRich, y2: y2Rich, title: titleRich },
+        { px: titlePx, family: uiFamily, color: axisColor, weight: "600" },
+      ),
+    );
+  }
 
   // A static [min,max] tuple fixes the scale (Origin-style); omit it to autoscale.
   // time:false is CRITICAL — uPlot defaults the x scale to time mode, which
@@ -653,14 +681,15 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     {
       ...axis,
       size: xAxisSize,
-      label: xLabel,
+      // Rich label: blank uPlot's plain draw but keep the band reserved.
+      label: xRich ? "" : xLabel,
       ...(xValues ? { values: xValues } : {}),
       ...(xSplits ? { splits: xSplits } : {}),
     },
     {
       ...axis,
       size: yAxisSize,
-      label: soloLabel(0),
+      label: yRich ? "" : yLabelText,
       ...(yValues ? { values: yValues } : {}),
       ...(ySplits ? { splits: ySplits } : {}),
     },
@@ -678,7 +707,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       scale: "y2",
       side: 1,
       size: yAxisSize,
-      label: soloLabel(1),
+      label: y2Rich ? "" : y2LabelText,
       grid: { show: false },
       ...(yValues ? { values: yValues } : {}),
       ...(y2Splits ? { splits: y2Splits } : {}),
