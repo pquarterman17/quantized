@@ -3,6 +3,8 @@
 // lands as a render_figure override, no side channels. `compact` strips
 // untouched values so requests stay lean and old backends keep working. Pure.
 
+import type { LegendPos } from "./plotview";
+
 export interface FigureOverrides {
   font_size?: number;
   font_name?: string;
@@ -14,7 +16,11 @@ export interface FigureOverrides {
   y_lim?: [number | null, number | null];
   margins?: { left?: number; right?: number; top?: number; bottom?: number };
   grid?: boolean;
-  annotations?: { x: number; y: number; text: string }[];
+  /** `size` (MAIN #18 — export parity for the pointer tool's font-size
+   *  resize): a per-annotation override, falling back to `font_size` (or
+   *  the style preset's own font size) on the backend when absent — see
+   *  `calc.figure_overrides._apply_overrides`. */
+  annotations?: { x: number; y: number; text: string; size?: number }[];
   /** Manual axis breaks (gap #21, export-side): elided `[lo, hi]` x-ranges,
    *  rendered as twinned panels with diagonal break glyphs
    *  (`calc.figure._render_impl`). `lib/facet.suggestBreaks` proposes
@@ -35,6 +41,21 @@ export const LEGEND_LOCS = [
   "outside right",
   "outside top",
 ] as const;
+
+/** The screen's corner-preset legend position (`ne`/`nw`/`se`/`sw`) as a
+ *  matplotlib `loc` string — MAIN #18's export-parity mapping for the
+ *  non-free-position case (a free `legendXY` uses `loc: "custom"` +
+ *  `anchor` instead, matching `calc.figure_overrides`' existing #14
+ *  drag-to-place handling verbatim). */
+export function legendPosToLoc(pos: LegendPos): string {
+  const loc: Record<LegendPos, string> = {
+    ne: "upper right",
+    nw: "upper left",
+    se: "lower right",
+    sw: "lower left",
+  };
+  return loc[pos];
+}
 
 const emptyObject = (v: unknown): boolean =>
   typeof v === "object" &&
