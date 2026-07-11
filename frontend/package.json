@@ -27,12 +27,12 @@
     "@types/d3-contour": "^3.0.6",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "^6.0.2",
+    "@vitejs/plugin-react": "^6.0.3",
     "eslint": "^10.7.0",
     "jsdom": "^29.1.1",
     "typescript": "~5.9.2",
-    "vite": "^8.0.16",
-    "vitest": "^4.1.9"
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10"
   },
   "engines": {
     "node": ">=20"
