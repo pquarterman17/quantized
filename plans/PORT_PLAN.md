@@ -346,17 +346,15 @@ MATLAB."**
 ## W8 — Packaging & distribution
 
 ### Tier 2 — Medium Impact
-46. **Desktop packaging** — Tauri shell + Python sidecar (the polished
-    distribution path; pywebview already covers dev/daily use from W0 #3).
-    **STARTED (2026-07-10 audit):** `src-tauri/` is committed and
-    populated (Tauri v2 config at v0.6.0, updater plugin, NSIS install
-    hooks) — this plan previously understated W8 as untouched. Remaining:
-    declare the shell done or list what's missing (sidecar lifecycle,
-    menus, signing) — reconcile with the session that built it.
-47. **Installers** — Windows / macOS; signing considerations.
-    **LARGELY SHIPPED** via ORIGIN_GAP #41 / GAP_ECOSYSTEM #3
-    (standalone installers built + attached by the tag-triggered release
-    workflow). Open: code signing.
+~~46. **Desktop packaging**~~ ✅ reconciled complete 2026-07-11 — the
+    shell is BUILT: `src-tauri/` Tauri v2, sidecar lifecycle verified in
+    `main.rs` (PyInstaller `qz-server` resolution for installed + dev
+    layouts), updater plugin configured (endpoints + minisign pubkey),
+    NSIS install hooks. pywebview covers dev/daily (W0 #3); Tauri is the
+    packaged path.
+47. **Installers** — SHIPPED except **code signing** (OWNER: needs a
+    signing certificate; moved to the MAIN_PLAN owner-gates table
+    2026-07-11).
 48. **Distribution** — `uv tool install` path / PyPI; versioning.
     **LARGELY SHIPPED** via ORIGIN_GAP #41 (PyPI publish workflow, SPA
     bundled in the wheel, versioned releases — v0.6.0 tagged
@@ -365,11 +363,11 @@ MATLAB."**
     acceptance run (both tracked at ORIGIN_GAP #41).
 
 ### Tier 3 — Nice-to-Have
-49. **Auto-update / release workflow.**
-    **STARTED:** release workflow exists (RELEASE.md, tagged releases
-    through v0.6.0); the Tauri updater endpoint is configured in
-    `src-tauri/`. Open: end-to-end auto-update verification once #46
-    closes.
+49. **Auto-update / release workflow.** Workflow + updater config
+    shipped; the remaining step — end-to-end auto-update verification —
+    requires TWO consecutive signed published releases, so it is gated
+    on #47's certificate (OWNER; noted in the MAIN_PLAN owner-gates
+    table 2026-07-11).
 
 ---
 

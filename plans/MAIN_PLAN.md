@@ -88,6 +88,9 @@ plan's direct items are residue-sized by construction)*
   calls in `plans/design/DEFAULTS_AUDIT.md`.
 - **Apache-2.0 copyright holder line** for LICENSE/NOTICE (PORT_PLAN
   #1 residue — lives with its sub-plan, listed here for visibility).
+- **Code-signing certificate + auto-update E2E** (PORT_PLAN #47/#49
+  residue, reconciled 2026-07-11): obtain a cert, sign a release, then
+  verify updater end-to-end across two consecutive signed releases.
 
 ## Deferrals (decision gates — revisit on demand)
 
