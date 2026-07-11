@@ -27,6 +27,13 @@ GAP_PLOTTYPES, and M1_SPRINT archived as complete)
 | 9 | Defaults audit — interactive-side shots via `tools/visual/` + the export-dialog DPI field syncing to the preset's calibrated dpi | GAP_TIER3 #2 (residual) | S |
 | 11 | W8 closure: reconcile the Tauri shell's actual state (committed `src-tauri/`, updater, NSIS hooks) into PORT_PLAN #46, verify auto-update end-to-end (#49), code signing (#47) | PORT_PLAN #46/#47/#49 | M |
 | 12 | W9 nice-to-haves: parameterized parser tests (every parser × corpus file); performance baselines | PORT_PLAN #52/#53 | M |
+| 13 | Custom fit equation builder (route + fit-workshop UI + saved named models over `calc/fit_equation.py`) | GOTO #1 | M |
+| 14 | Anchor-point baseline (click anchors → interp baseline → recalc-DAG subtract step) | GOTO #2 | M |
+| 15 | Shirley XPS/XAS background in the baseline picker | GOTO #3 | S |
+| 16 | Multi-panel figure page composer (N plots → one vector PDF/SVG page, panel labels) | GOTO #4 | L |
+| 17 | Rich-text labels: shared AST rendered by uPlot on-screen + matplotlib mathtext in export, symbol palette | GOTO #5 | M |
+| 18 | AICc model quick-scan (after #13; engine choice may await the bumps discussion) | GOTO #6 | S |
+| 19 | XRD low-angle background + XRR/NR footprint correction; analytic baseline UI completion | GOTO #7/#8 | S–M |
 
 ## Owner actions & owner-gated decisions
 
@@ -39,6 +46,8 @@ GAP_PLOTTYPES, and M1_SPRINT archived as complete)
 | **Pop-out books/plots into windows** — PLAN WITH OWNER FIRST (gesture, "pop out a BOOK" semantics, bulk "window everything" command) | MULTI_PLOT #19 |
 | **Worksheet view-state persistence** — decide once, with usage evidence, whether sort/widths/selection persist per-dataset in `.dwk` (default: no) | WORKSHEET #14 |
 | **Apache-2.0 copyright holder line** for LICENSE/NOTICE | PORT_PLAN #1 |
+| **bumps as an optional fit engine** — feasibility discussion FIRST (owner request 2026-07-10, do not implement); would be an additional engine, never replacing the MATLAB-parity fitters | GOTO (gate) |
+| **Go-to survey open questions** — 3-D (Q4), worksheet reshape (Q6), date-time axes (Q7), signal-processing non-goal (Q8), switch-trigger acceptance project (Q9); see `plans/design/ORIGIN_GOTO_SURVEY.md` | GOTO (gate) |
 
 ## Blocked on external samples / specs
 
@@ -65,6 +74,7 @@ GAP_PLOTTYPES, and M1_SPRINT archived as complete)
 
 | Plan | Status | Open items |
 |------|--------|-----------|
+| `plans/GOTO_PLAN.md` | Active | #1–#8 (owner-decided 2026-07-10); Tier 3 empty pending survey Q4/Q6/Q7/Q8/Q9 + bumps gate |
 | `plans/PORT_PLAN.md` | Active | #10+#15 (blocked), #12 (partial), #46–49 (partial), #50 (continuous), #52–53 |
 | `plans/PORT_CHECKLIST.md` | Active (live parity tracker) | 3 real-work lines (2 blocked + 1 partial) + inline deferral tails |
 | `plans/MULTI_PLOT_PLAN.md` | Active | #19 only (owner planning session first) |
