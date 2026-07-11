@@ -15,6 +15,7 @@ import ConfirmDialog, { askConfirm } from "./components/overlays/ConfirmDialog";
 import ParamDialog, { askParams } from "./components/overlays/ParamDialog";
 import PreferencesDialog from "./components/overlays/PreferencesDialog";
 import ShortcutsDialog from "./components/overlays/ShortcutsDialog";
+import TextFormatHelp from "./components/overlays/TextFormatHelp";
 import Toaster from "./components/overlays/Toaster";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import BaselinePanel from "./components/workshops/baseline/BaselinePanel";
@@ -888,6 +889,8 @@ export default function App() {
         shortcut: "?",
         run: () => s().setShortcutsOpen(true),
       },
+      // GOTO #11: the rich-text label micro-syntax reference (Help menu + ⌘K).
+      { id: "text-format-help", group: "Help", label: "Text formatting", run: () => s().setTextFormatHelpOpen(true) },
     ];
   }, []);
 
@@ -931,6 +934,7 @@ export default function App() {
       {waterfallOpen && <WaterfallView />}
       {reflViewOpen && <ReflView />}
       <ShortcutsDialog />
+      <TextFormatHelp />
       <PreferencesDialog />
       <Toaster />
     </div>
