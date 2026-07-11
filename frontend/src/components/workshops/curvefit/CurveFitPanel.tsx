@@ -15,7 +15,9 @@ import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import BumpsSection from "./BumpsSection";
 import EquationModelPanel from "./EquationModelPanel";
+import ModelScanSection from "./ModelScanSection";
 import { useCurveFit } from "./useCurveFit";
+import { useModelScan } from "./useModelScan";
 
 // Custom-model picker values are namespaced "custom:<name>"; the bare prefix
 // is the blank "type a new equation" entry (GOTO #1).
@@ -39,6 +41,12 @@ export default function CurveFitPanel() {
     runCornerPlot,
     cornerBusy,
   } = useCurveFit();
+
+  // AICc quick-scan (GOTO #6) — hook lives here so ranked results survive the
+  // registry<->custom mode flip; a row click applies the model to the picker.
+  const modelScan = useModelScan();
+  const applyScanned = (kind: "registry" | "equation", name: string) =>
+    setModelName(kind === "equation" ? `${CUSTOM_PREFIX}${name}` : name);
 
   // Saved custom equation models (GOTO #1) — listed alongside registry models.
   const [customModels, setCustomModels] = useState<CustomFitModel[]>(() => loadCustomModels());
@@ -118,6 +126,7 @@ export default function CurveFitPanel() {
           initial={currentCustom}
           onSavedChange={onSavedChange}
         />
+        <ModelScanSection state={modelScan} onApply={applyScanned} />
       </ToolWindow>
     );
   }
@@ -176,6 +185,9 @@ export default function CurveFitPanel() {
           </Button>
         </div>
       )}
+
+      {/* AICc quick-scan (GOTO #6) — rank all plausible models; click applies. */}
+      <ModelScanSection state={modelScan} onApply={applyScanned} />
 
       {/* Optional bumps engine (GOTO #10) — self-contained; parity stays default. */}
       <BumpsSection modelName={modelName} />

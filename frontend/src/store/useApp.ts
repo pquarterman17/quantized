@@ -681,6 +681,7 @@ interface AppState {
   reflViewOpen: boolean;
   columnSwitcherOpen: boolean; // the JMP-style solo-a-channel flipper (#54)
   shortcutsOpen: boolean;
+  textFormatHelpOpen: boolean; // Help ▸ Text formatting (GOTO #11)
   // Recent-imports history (File ▸ Recent); persisted via lib/recentFiles.
   recent: RecentFile[];
   fitOverlay: FitOverlay | null;
@@ -1100,6 +1101,7 @@ interface AppState {
   setReflViewOpen: (open: boolean) => void;
   setColumnSwitcherOpen: (open: boolean) => void;
   setShortcutsOpen: (open: boolean) => void;
+  setTextFormatHelpOpen: (open: boolean) => void;
   // Record a successful import in the recent list; clearRecent empties it.
   pushRecent: (name: string, size: number) => void;
   clearRecent: () => void;
@@ -1383,6 +1385,7 @@ export const useApp = create<AppState>((set, get) => ({
   reflViewOpen: false,
   columnSwitcherOpen: false,
   shortcutsOpen: false,
+  textFormatHelpOpen: false,
   recent: loadRecent(),
   fitOverlay: null,
   peakOverlay: null,
@@ -3845,6 +3848,7 @@ export const useApp = create<AppState>((set, get) => ({
   setReflViewOpen: (reflViewOpen) => set({ reflViewOpen }),
   setColumnSwitcherOpen: (columnSwitcherOpen) => set({ columnSwitcherOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+  setTextFormatHelpOpen: (textFormatHelpOpen) => set({ textFormatHelpOpen }),
   pushRecent: (name, size) =>
     set((s) => {
       const next = addRecentEntry(s.recent, { name, size, at: new Date().toISOString() });
