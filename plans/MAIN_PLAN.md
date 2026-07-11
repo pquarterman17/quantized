@@ -65,6 +65,15 @@ GOTO #11 drift (implemented but listed open).
 ~~22. **Standalone DiraCulator launcher**~~ COMPLETED 2026-07-11 (see
     Completed).
 
+23. **DiraCulator Start Menu shortcut in the installer** (owner request
+    2026-07-11, extends #22): the Tauri/NSIS installer adds a second
+    Start Menu entry "DiraCulator" → `Quantized.exe --calc`; the Rust
+    shell gains the `--calc` arg (webview URL `?view=calc`, title
+    DiraCulator, ~520×680 window, same sidecar dance); uninstall hook
+    removes the shortcut; honest gap: full installer build needs the
+    release toolchain, so local verification = cargo check + hook
+    review against the existing NSIS_HOOK pattern.
+
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
 ~~20. **Axis tick-label precision + engineering notation**~~ COMPLETED
