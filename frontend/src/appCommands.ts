@@ -10,7 +10,6 @@ import { askConfirm } from "./components/overlays/ConfirmDialog";
 import { askParams } from "./components/overlays/ParamDialog";
 import {
   exportConsolidated,
-  exportFigure,
   exportHdf5,
   exportOrigin,
   exportXrdCsv,
@@ -20,16 +19,37 @@ import {
 import { makeDemoDataset } from "./lib/demo";
 import { loadSampleDataset } from "./lib/sampleDataset";
 import { clearAutosave } from "./lib/autosave";
-import { buildExportStyles } from "./lib/exportStyles";
 import { exportActive, type StoreGet } from "./lib/exportActive";
+import { runExportFigureCommand } from "./lib/exportFigureCommand";
 import { IMPORT_ACCEPT, openFilePicker } from "./lib/openFilePicker";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "./lib/originTemplate";
-import { parseWorkspace } from "./lib/workspace";
+import { parseWorkspace, type LoadedWorkspace } from "./lib/workspace";
 import type { Action } from "./store/commands";
 import { toast } from "./store/toasts";
 
 let demoCounter = 0;
 let sampleCounter = 0;
+
+/** Shared Open/Append-workspace flow (the only difference between the two
+ *  File commands): pick a .dwk, parse it, and hand the result to `dispatch`
+ *  (`loadWorkspace` or `appendWorkspace`). */
+function openWorkspaceCommand(
+  s: StoreGet,
+  verb: string,
+  dispatch: (ws: LoadedWorkspace) => void,
+): () => void {
+  return () =>
+    openFilePicker((files) => {
+      const file = files[0];
+      if (!file) return;
+      file
+        .text()
+        .then((text) => dispatch(parseWorkspace(text)))
+        .catch((e: unknown) =>
+          s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),
+        );
+    }, ".dwk,.json");
+}
 
 /** Build the curated palette actions against the live store handle
  *  (`useApp.getState`) — store setters are stable, so callers build once. */
@@ -103,17 +123,14 @@ export function buildAppActions(s: StoreGet): Action[] {
       id: "open-workspace",
       group: "File",
       label: "Open workspace (.dwk)…",
-      run: () =>
-        openFilePicker((files) => {
-          const file = files[0];
-          if (!file) return;
-          file
-            .text()
-            .then((text) => s().loadWorkspace(parseWorkspace(text)))
-            .catch((e: unknown) =>
-              s().setStatus(`open failed: ${e instanceof Error ? e.message : "error"}`),
-            );
-        }, ".dwk,.json"),
+      run: openWorkspaceCommand(s, "open", (ws) => s().loadWorkspace(ws)),
+    },
+    {
+      id: "append-workspace",
+      group: "File",
+      label: "Append workspace (.dwk)…",
+      keywords: "merge combine import project origin append second library",
+      run: openWorkspaceCommand(s, "append", (ws) => s().appendWorkspace(ws)),
     },
     {
       id: "clear-autosave",
@@ -368,64 +385,9 @@ export function buildAppActions(s: StoreGet): Action[] {
       id: "export-figure",
       group: "File",
       label: "Export figure…",
-      run: async () => {
-        const params = await askParams("Export figure", [
-          {
-            key: "fmt",
-            label: "Format",
-            type: "select",
-            default: "pdf",
-            options: ["pdf", "svg", "png", "tiff"],
-            hint: "PDF / SVG are vector; PNG / TIFF are raster",
-          },
-          {
-            key: "style",
-            label: "Style",
-            type: "select",
-            default: "default",
-            options: ["default", "aps", "nature", "thesis", "report", "web", "presentation", "poster"],
-            hint: "Publication preset: sets font, size, line width, grid",
-          },
-          {
-            key: "dpi",
-            label: "DPI (raster)",
-            type: "number",
-            default: 300,
-            hint: "Resolution for PNG / TIFF (50–1200); ignored by vector",
-          },
-          { key: "title", label: "Title", type: "text", default: "" },
-          {
-            key: "x_label",
-            label: "X label",
-            type: "text",
-            default: "",
-            hint: "Blank = derive from the data column",
-          },
-          { key: "y_label", label: "Y label", type: "text", default: "" },
-        ]);
-        if (!params) return;
-        // Blank label fields mean "derive from the data" → send undefined, not "".
-        const xl = (params.x_label as string).trim();
-        const yl = (params.y_label as string).trim();
-        exportActive(s, (stem, ds) => {
-          // Per-series styles in plotted order so the figure matches the screen.
-          const plotted = s().yKeys ?? ds.data.labels.map((_, i) => i);
-          return exportFigure({
-            dataset: ds.data,
-            y_keys: s().yKeys ?? undefined,
-            x_log: s().xLog,
-            y_log: s().yLog,
-            fmt: params.fmt as string,
-            style: params.style as string,
-            dpi: params.dpi as number,
-            title: (params.title as string).trim(),
-            x_label: xl || undefined,
-            y_label: yl || undefined,
-            series_styles: buildExportStyles(plotted, s().seriesStyles),
-            filename: stem,
-          });
-        });
-      },
+      // Body lives in lib/exportFigureCommand (store-size ratchet offset for
+      // MAIN_PLAN #16's Append workspace command — see that file's doc).
+      run: () => runExportFigureCommand(s),
     },
     {
       id: "export-origin",

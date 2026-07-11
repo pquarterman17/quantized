@@ -13,6 +13,7 @@ import { effectiveChannels } from "../lib/plotdata";
 import type { FrozenPlotBundle } from "../lib/plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import type { Dataset, DataStruct } from "../lib/types";
+import type { LoadedWorkspace } from "../lib/workspace";
 import { useApp } from "./useApp";
 
 vi.mock("../lib/api", () => ({
@@ -2588,6 +2589,78 @@ describe("useApp loadWorkspace", () => {
     const second = useApp.getState();
     expect(second.folders).toHaveLength(1); // still just one — no duplicate
     expect(second.folders[0].id).toBe(first.folders[0].id);
+  });
+});
+
+describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
+  // A minimal LoadedWorkspace wrapper — appendWorkspace only ever reads
+  // `.datasets` off it (see lib/workspace.mergeWorkspace's doc).
+  function asLoaded(datasets: Dataset[]): LoadedWorkspace {
+    return {
+      datasets,
+      folders: [],
+      activeId: null,
+      selectedIds: [],
+      expandedFolders: [],
+      originFigures: [],
+      smartFolders: [],
+      reports: [],
+      macroSteps: [],
+      recalcMode: "auto",
+      figureDocs: [],
+      plotWindows: [],
+      focusedWindowId: null,
+    };
+  }
+
+  it("appends the incoming datasets without touching activeId, plotWindows, or view state", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "existing", data: raw }],
+      activeId: "d1",
+      yKeys: [0],
+      xLim: [1, 2],
+    });
+    const pre = useApp.getState();
+    const preExisting = pre.datasets[0];
+
+    useApp.getState().appendWorkspace(
+      asLoaded([
+        { id: "n1", name: "new one", data: raw },
+        { id: "n2", name: "new two", data: raw },
+      ]),
+    );
+
+    const s = useApp.getState();
+    expect(s.datasets.map((d) => d.id)).toEqual(["d1", "n1", "n2"]);
+    expect(s.datasets[0]).toBe(preExisting); // the existing dataset object is untouched
+    expect(s.activeId).toBe(pre.activeId);
+    expect(s.yKeys).toBe(pre.yKeys);
+    expect(s.xLim).toBe(pre.xLim);
+    expect(s.plotWindows).toBe(pre.plotWindows);
+    expect(s.status).toBe("appended 2 datasets (0 renamed)");
+  });
+
+  it("remaps a colliding id and suffixes a colliding name, reporting the renamed count", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "sample", data: raw }], activeId: "d1" });
+
+    useApp.getState().appendWorkspace(asLoaded([{ id: "d1", name: "sample", data: raw }]));
+
+    const s = useApp.getState();
+    expect(s.datasets).toHaveLength(2);
+    expect(s.datasets[0].id).toBe("d1"); // existing untouched
+    expect(s.datasets[1].id).not.toBe("d1"); // incoming id collided -> remapped
+    expect(s.datasets[1].name).toBe("sample (2)"); // Origin-style name suffix
+    expect(s.status).toBe("appended 1 dataset (1 renamed)");
+  });
+
+  it("is a no-op (no history entry, no status change) for a workspace with no datasets", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "a", data: raw }], history: [], status: "" });
+
+    useApp.getState().appendWorkspace(asLoaded([]));
+
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().status).toBe("");
   });
 });
 

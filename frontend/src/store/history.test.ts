@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import type { DataStruct } from "../lib/types";
+import type { LoadedWorkspace } from "../lib/workspace";
 import { useApp } from "./useApp";
 
 vi.mock("../lib/api", () => ({
@@ -232,6 +233,40 @@ describe("per-action-class undo/redo coverage", () => {
 
     useApp.getState().undo();
     expect(useApp.getState().datasets).toEqual(pre);
+
+    useApp.getState().redo();
+    expect(useApp.getState().datasets).toEqual(post);
+  });
+
+  it("append workspace (appendWorkspace, MAIN_PLAN #16)", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "a", data: raw }],
+      activeId: "d1",
+    });
+    const pre = useApp.getState().datasets;
+    const incoming: LoadedWorkspace = {
+      datasets: [{ id: "d2", name: "b", data: raw }],
+      folders: [],
+      activeId: null,
+      selectedIds: [],
+      expandedFolders: [],
+      originFigures: [],
+      smartFolders: [],
+      reports: [],
+      macroSteps: [],
+      recalcMode: "auto",
+      figureDocs: [],
+      plotWindows: [],
+      focusedWindowId: null,
+    };
+
+    useApp.getState().appendWorkspace(incoming);
+    expect(useApp.getState().datasets).toHaveLength(2); // a, + the appended b
+    const post = useApp.getState().datasets;
+
+    useApp.getState().undo();
+    expect(useApp.getState().datasets).toEqual(pre);
+    expect(useApp.getState().activeId).toBe("d1"); // untouched by the append, restored by undo
 
     useApp.getState().redo();
     expect(useApp.getState().datasets).toEqual(post);

@@ -41,8 +41,7 @@ import {
 import { isOriginBookDataset } from "../lib/grouping";
 import { mergeDatasets } from "../lib/merge";
 import type { SmartFolder } from "../lib/smartfolders";
-import { serializeWorkspace, type WorkspaceState } from "../lib/workspace";
-import { saveBlob } from "../lib/download";
+import { mergeWorkspace, type LoadedWorkspace, type WorkspaceState } from "../lib/workspace";
 import {
   buildOriginFigureEntries,
   doubleYPartner,
@@ -76,6 +75,8 @@ import {
 } from "./windows";
 // The undo/redo snapshot-history slice (MAIN_PLAN #9), composed the same way.
 import { createHistorySlice, type HistorySlice } from "./history";
+// Save-workspace-to-file (#38 + MAIN_PLAN #16 ratchet offset) — see its doc.
+import { runSaveWorkspaceToFile } from "./workspaceIO";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -660,6 +661,12 @@ export interface AppState extends WindowsSlice, HistorySlice {
   recalcNow: () => Promise<void>;
   setFitSpec: (id: string, spec: { model: string } | null) => void;
   loadWorkspace: (ws: WorkspaceState) => void;
+  // Append a second .dwk's datasets into the CURRENT library (Origin's
+  // "Append Project", MAIN_PLAN #16) — the additive opposite of
+  // loadWorkspace: only the flat dataset list joins (collision-free ids +
+  // names, see lib/workspace.mergeWorkspace); activeId, plotWindows, every
+  // view-state field, and the existing datasets are left completely alone.
+  appendWorkspace: (ws: LoadedWorkspace) => void;
   setActive: (id: string) => void;
   // WORKSHEET_PLAN item 15: the routed Library-click entry point — EVERY
   // "click/select a row" site (DatasetRow's plain click + pre-menu select,
@@ -1414,37 +1421,9 @@ export const useApp = create<AppState>((set, get) => ({
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker));
     return results.filter((d): d is Dataset => d != null);
   },
-  saveWorkspaceToFile: async () => {
-    const all = get().datasets;
-    if (all.length === 0) {
-      get().setStatus("no datasets to save");
-      return;
-    }
-    // A .dwk must be self-contained (#38): resolve every pending lazy book
-    // FIRST — an exported file never references a book by a path/token that
-    // may not exist on another machine or after a server restart.
-    const pendingCount = all.filter((d) => d.pending).length;
-    if (pendingCount > 0) {
-      get().setStatus(`fetching ${pendingCount} book${pendingCount === 1 ? "" : "s"} before saving…`);
-      try {
-        await get().resolvePendingDatasets();
-      } catch (e) {
-        const msg = `save failed — couldn't load full data for every book: ${e instanceof Error ? e.message : "error"}`;
-        get().setStatus(msg);
-        toast(msg, "danger");
-        return;
-      }
-    }
-    saveBlob(
-      new Blob([serializeWorkspace({ ...get(), plotWindows: get().windowsForSave() })], {
-        type: "application/json",
-      }),
-      "workspace.dwk",
-    );
-    const msg = `saved workspace — ${all.length} dataset${all.length === 1 ? "" : "s"}`;
-    get().setStatus(msg);
-    toast(msg, "ok");
-  },
+  // Body lives in ./workspaceIO (store-size ratchet offset for MAIN_PLAN
+  // #16's appendWorkspace — see that file's doc).
+  saveWorkspaceToFile: () => runSaveWorkspaceToFile(get),
 
   // Import the OS clipboard's text (gap #47) through the same guess/parse text
   // engine that backs the import wizard, so a pasted Excel/Origin selection or
@@ -1934,6 +1913,18 @@ export const useApp = create<AppState>((set, get) => ({
         status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}`,
       };
     }),
+  appendWorkspace: (ws) => {
+    const n = ws.datasets.length;
+    if (n === 0) {
+      toast("workspace has no datasets to append", "danger");
+      return;
+    }
+    get().recordHistory("append workspace");
+    const { datasets, renamed } = mergeWorkspace(get().datasets, ws, nextDatasetId);
+    const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)`;
+    set({ datasets, status: msg });
+    toast(msg, "ok");
+  },
   setActive: (id) => {
     // Item 14 pin opt-out: a pinned focused window never follows a passive
     // plot intent — retarget it first (focus swap, or a fresh window), then
