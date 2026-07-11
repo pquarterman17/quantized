@@ -54,21 +54,8 @@ GOTO #11 drift (implemented but listed open).
 *(items 9–11 booked from the 2026-07-11 Origin-parity surface audit;
 18–19 from the owner's first hands-on testing session, same day)*
 
-18. **Pointer tool as the DEFAULT + direct-manipulation plot objects**
-    (owner directive, see `quantized-pointer-default-ux` memory) —
-    - New tool id `pointer`, the new default: regular arrow cursor, NO
-      dashed crosshair (crosshair stays only on the explicit data tools);
-      empty-canvas drag keeps box-zoom.
-    - Annotations (incl. Origin-imported PNR text overlays) become
-      selectable/movable/resizable in pointer mode: click select, drag
-      move (commit-on-release, refLine/anchors pattern), corner handle +
-      context menu resize (`Annotation.size` font px), double-click edit
-      text, right-click menu (edit/size/delete), Escape deselects.
-    - Ref lines stay draggable in pointer mode.
-    - Legend draggable in pointer mode → free position (fraction coords
-      overriding the ne/nw/se/sw preset; Origin-imported positions stay
-      the default); double-click resets to nearest corner.
-    - Export parity for annotation size + free legend position.
+~~18. **Pointer tool as the DEFAULT + direct-manipulation plot
+    objects**~~ COMPLETED 2026-07-11 (see Completed).
 
 19. **Multi-plot panel builder** (owner request; design decided with
     owner 2026-07-11, all four recommended options): ctrl-click
@@ -173,6 +160,26 @@ GOTO #11 drift (implemented but listed open).
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#18 Pointer tool default + direct-manipulation objects**~~
+  (2026-07-11, sonnet agent) — `pointer` tool (glyph ➤, toolbar-first)
+  is the NEW DEFAULT: no crosshair (`cursor:{x:false,y:false}`), arrow
+  cursor, empty-drag still box-zooms; every other tool pixel-identical.
+  Annotations: click-select / drag-move / corner-handle resize
+  (`Annotation.size` 6–72px) / double-click edit (hand-rolled 400ms
+  detector — uPlot owns native dblclick for autoscale) / right-click
+  object menu / Escape deselect; hit-test = point-first then
+  measureText rect (`lib/annotationHit.ts`), geometry shared with the
+  draw pass so they can't drift. Ref-line drag gate extended to
+  pointer. Legend: drag → `legendXY` fractions (rAF-throttled)
+  overriding `legendPos`; double-click snaps to nearest corner. Export
+  parity COMPLETE (annotations w/ size + legend loc/anchor through
+  `liveViewOverrides` → the #14 bbox_to_anchor path; verified against
+  real matplotlib hitmap output). New `store/pointerTool.ts` slice;
+  all ratchets held (PlotStage 392/400 via useAnnotationEdit
+  extraction; windows.ts untouched at 750/751 — the focus-reset was
+  deliberately omitted, documented: annotation ids never recycle so a
+  stale selection matches nothing). +~50 tests.
 
 - ~~**#20 Axis tick-label precision + engineering notation**~~
   (2026-07-11, sonnet agent) — REPRODUCED first via `tools/visual`
