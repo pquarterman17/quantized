@@ -19,11 +19,13 @@ import {
   Field,
   ROW,
   fmtNum,
+  makeCardRunner,
   parseList,
   resultLine,
-  runCalc,
   type CardResult,
-} from "./shared";
+} from "../shared";
+
+const runCalc = makeCardRunner("Thin Film");
 
 /** Card 6 — Kiessig thickness. */
 export function KiessigCard() {

@@ -1,14 +1,13 @@
-// Shared primitives for the Thin Film calculator cards (extracted from
-// ThinFilmTab.tsx — MAIN_PLAN #1, component-ceiling ratchet): the Card/Field
-// layout pieces, the row/result styles, the calc-history-recording runner,
-// and the numeric-list parser. Each card component owns its own local state
-// (exactly as the monolithic tab did) and composes these.
+// Shared card kit for ALL calculator tabs (MAIN_PLAN #8 consolidation —
+// hoisted from thinfilm/shared.tsx, which itself was extracted from
+// ThinFilmTab.tsx): the Card/Field layout pieces, the row/result styles, the
+// calc-history-recording runner factory, and the numeric-list parser. Each
+// tab owns its own local state (exactly as the per-tab copies did) and
+// composes these. The rendered DOM is identical to the former private copies.
 
-import { Button, NumberField } from "../../../primitives";
-import { fmtNum } from "../../../../lib/format";
-import { useCalcHistory } from "../../../../store/calcHistory";
-
-export const DOMAIN = "Thin Film";
+import { Button, NumberField } from "../../primitives";
+import { fmtNum } from "../../../lib/format";
+import { useCalcHistory } from "../../../store/calcHistory";
 
 export type CardResult = { text: string; err?: boolean } | null;
 
@@ -31,6 +30,7 @@ export function Card({ title, children }: { title: string; children: React.React
   );
 }
 
+/** A labelled NumberField (numeric by default — pass numeric={false} for text). */
 export function Field({
   label,
   value,
@@ -83,20 +83,23 @@ export function parseList(s: string): number[] {
     .map(Number);
 }
 
-/** Run one card's calculation: success records to the calc history; failure
- *  surfaces the API error inline (never a toast — matches the MATLAB cards). */
-export async function runCalc(
-  setter: (r: CardResult) => void,
-  label: string,
-  fn: () => Promise<string>,
-): Promise<void> {
-  try {
-    const text = await fn();
-    setter({ text });
-    useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
-  } catch (e) {
-    setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
-  }
+/** Build one tab's card-calculation runner, bound to its history domain:
+ *  success records to the calc history; failure surfaces the API error
+ *  inline (never a toast — matches the MATLAB cards). */
+export function makeCardRunner(domain: string) {
+  return async function runCalc(
+    setter: (r: CardResult) => void,
+    label: string,
+    fn: () => Promise<string>,
+  ): Promise<void> {
+    try {
+      const text = await fn();
+      setter({ text });
+      useCalcHistory.getState().record({ domain, label, summary: text });
+    } catch (e) {
+      setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
+    }
+  };
 }
 
 export const resultLine = (r: CardResult) => r && <div style={r.err ? ERR : RESULT}>{r.text}</div>;

@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { getSubstrates, substrateMismatch } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
 import { useCalcHistory } from "../../../store/calcHistory";
+import { Card, resultLine, type CardResult } from "./shared";
 
 const DOMAIN = "Substrates";
 
@@ -45,13 +46,6 @@ const SCALAR_FIELDS: [string, keyof SubstrateInfo, string][] = [
   ["ε_r", "dielectric", ""],
 ];
 
-const RESULT: React.CSSProperties = {
-  marginTop: 8,
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--font-size-lg)",
-};
-const ERR: React.CSSProperties = { marginTop: 8, color: "var(--danger)" };
-
 export default function SubstratesTab() {
   const [subs, setSubs] = useState<SubstrateInfo[] | null>(null);
   const [error, setError] = useState(false);
@@ -60,7 +54,7 @@ export default function SubstratesTab() {
 
   // Lattice-mismatch mini-calculator (substrate a_sub = selected.a).
   const [aFilm, setAFilm] = useState("3.876");
-  const [mm, setMm] = useState<{ text: string; err?: boolean } | null>(null);
+  const [mm, setMm] = useState<CardResult>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,17 +189,7 @@ export default function SubstratesTab() {
           ))}
 
           {!isAmorphous && (
-            <div
-              style={{
-                border: "1px solid var(--border-soft)",
-                borderRadius: 6,
-                padding: "8px 10px",
-                marginTop: 10,
-              }}
-            >
-              <div className="qzk-field-lbl" style={{ marginTop: 0, marginBottom: 6 }}>
-                Lattice mismatch vs {selected.name}
-              </div>
+            <Card title={`Lattice mismatch vs ${selected.name}`}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <span className="qzk-field-lbl" style={{ margin: 0 }}>
                   a_film
@@ -224,8 +208,8 @@ export default function SubstratesTab() {
                   Mismatch
                 </button>
               </span>
-              {mm && <div style={mm.err ? ERR : RESULT}>{mm.text}</div>}
-            </div>
+              {resultLine(mm)}
+            </Card>
           )}
         </div>
       )}

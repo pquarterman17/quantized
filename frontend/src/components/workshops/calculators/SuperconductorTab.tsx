@@ -7,7 +7,6 @@
 
 import { useState } from "react";
 
-import { Button, NumberField } from "../../primitives";
 import {
   scBcsGap,
   scCoherenceLength,
@@ -16,10 +15,18 @@ import {
   scGlParameter,
   scLondonDepth,
 } from "../../../lib/api";
-import { fmtNum } from "../../../lib/format";
-import { useCalcHistory } from "../../../store/calcHistory";
+import {
+  Button,
+  Card,
+  Field,
+  ROW,
+  fmtNum,
+  makeCardRunner,
+  resultLine,
+  type CardResult,
+} from "./shared";
 
-const DOMAIN = "Superconductor";
+const run = makeCardRunner("Superconductor");
 
 // lambda0 / xi0 in nm, Hc0 in Oe, Tc in K — port of materialPresets.m.
 const PRESETS: Record<
@@ -37,93 +44,39 @@ const PRESETS: Record<
 };
 const MATERIALS = Object.keys(PRESETS);
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        border: "1px solid var(--border-soft)",
-        borderRadius: 6,
-        padding: "8px 10px",
-        marginTop: 10,
-      }}
-    >
-      <div className="qzk-field-lbl" style={{ marginTop: 0, marginBottom: 6 }}>
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  width = 84,
-  unit,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  width?: number;
-  unit?: string;
-}) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <span className="qzk-field-lbl" style={{ margin: 0 }}>
-        {label}
-      </span>
-      <NumberField value={value} width={width} onChange={onChange} unit={unit} />
-    </span>
-  );
-}
-
-const ROW: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
-};
-const RESULT: React.CSSProperties = {
-  marginTop: 8,
-  fontFamily: "var(--font-mono)",
-  fontSize: "var(--font-size-lg)",
-};
-const ERR: React.CSSProperties = { marginTop: 8, color: "var(--danger)" };
-
 const fmtOe = (v: number) => (Number.isNaN(v) ? "—" : `${fmtNum(v)} Oe`);
 
 export default function SuperconductorTab() {
   // Card 1 — BCS gap.
   const [gTc, setGTc] = useState("9.25");
   const [gT, setGT] = useState("4.2");
-  const [c1, setC1] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c1, setC1] = useState<CardResult>(null);
 
   // Card 2 — London penetration depth.
   const [lMat, setLMat] = useState("Nb");
   const [lLam0, setLLam0] = useState("39");
   const [lTc, setLTc] = useState("9.25");
   const [lT, setLT] = useState("4.2");
-  const [c2, setC2] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c2, setC2] = useState<CardResult>(null);
 
   // Card 3 — coherence length.
   const [xMat, setXMat] = useState("Nb");
   const [xXi0, setXXi0] = useState("38");
   const [xTc, setXTc] = useState("9.25");
   const [xT, setXT] = useState("4.2");
-  const [c3, setC3] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c3, setC3] = useState<CardResult>(null);
 
   // Card 4 — Ginzburg-Landau parameter.
   const [kLam, setKLam] = useState("39");
   const [kXi, setKXi] = useState("38");
-  const [c4, setC4] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c4, setC4] = useState<CardResult>(null);
 
   // Card 5 — critical fields.
   const [hMat, setHMat] = useState("Nb");
   const [hHc0, setHHc0] = useState("1980");
   const [hTc, setHTc] = useState("9.25");
   const [hT, setHT] = useState("4.2");
-  const [c5, setC5] = useState<{ text: string; err?: boolean } | null>(null);
+  const [c5, setC5] = useState<CardResult>(null);
 
   // Card 6 — depairing current.
   const [dMat, setDMat] = useState("Nb");
@@ -131,24 +84,7 @@ export default function SuperconductorTab() {
   const [dLam0, setDLam0] = useState("39");
   const [dTc, setDTc] = useState("9.25");
   const [dT, setDT] = useState("4.2");
-  const [c6, setC6] = useState<{ text: string; err?: boolean } | null>(null);
-
-  async function run(
-    setter: (r: { text: string; err?: boolean } | null) => void,
-    label: string,
-    fn: () => Promise<string>,
-  ): Promise<void> {
-    try {
-      const text = await fn();
-      setter({ text });
-      useCalcHistory.getState().record({ domain: DOMAIN, label, summary: text });
-    } catch (e) {
-      setter({ text: e instanceof Error ? e.message : "calculation failed", err: true });
-    }
-  }
-
-  const result = (r: { text: string; err?: boolean } | null) =>
-    r && <div style={r.err ? ERR : RESULT}>{r.text}</div>;
+  const [c6, setC6] = useState<CardResult>(null);
 
   function MatSelect({
     value,
@@ -200,7 +136,7 @@ export default function SuperconductorTab() {
             Calculate
           </Button>
         </div>
-        {result(c1)}
+        {resultLine(c1)}
       </Card>
 
       <Card title="London penetration depth">
@@ -229,7 +165,7 @@ export default function SuperconductorTab() {
             Calculate
           </Button>
         </div>
-        {result(c2)}
+        {resultLine(c2)}
       </Card>
 
       <Card title="Coherence length">
@@ -258,7 +194,7 @@ export default function SuperconductorTab() {
             Calculate
           </Button>
         </div>
-        {result(c3)}
+        {resultLine(c3)}
       </Card>
 
       <Card title="Ginzburg-Landau parameter κ = λ/ξ">
@@ -278,7 +214,7 @@ export default function SuperconductorTab() {
             Calculate
           </Button>
         </div>
-        {result(c4)}
+        {resultLine(c4)}
       </Card>
 
       <Card title="Critical fields">
@@ -314,7 +250,7 @@ export default function SuperconductorTab() {
             Calculate
           </Button>
         </div>
-        {result(c5)}
+        {resultLine(c5)}
       </Card>
 
       <Card title="Depairing current density">
@@ -350,7 +286,7 @@ export default function SuperconductorTab() {
             Calculate
           </Button>
         </div>
-        {result(c6)}
+        {resultLine(c6)}
       </Card>
     </div>
   );
