@@ -72,8 +72,10 @@ def test_run_dev_spawns_vite_and_reloading_uvicorn(
 ) -> None:
     monkeypatch.setattr(server_launch, "_frontend_dir", lambda: tmp_path)
     vite = MagicMock()
+    vite.pid = 4242
     with (
         patch("subprocess.Popen", return_value=vite) as popen,
+        patch("subprocess.run") as sprun,
         patch("uvicorn.run") as run,
         patch.object(server_launch, "_open_browser_later"),
     ):
@@ -81,9 +83,20 @@ def test_run_dev_spawns_vite_and_reloading_uvicorn(
     argv = popen.call_args.args[0]
     assert argv[0].startswith("npm") and argv[1:] == ["run", "dev"]
     assert popen.call_args.kwargs["cwd"] == tmp_path
+    # The Vite proxy must learn the backend port (review 2026-07-11).
+    assert popen.call_args.kwargs["env"]["QZ_BACKEND_PORT"] == "9001"
     kwargs = run.call_args.kwargs
     assert kwargs == {"host": "127.0.0.1", "port": 9001, "reload": True}
-    vite.terminate.assert_called_once()  # Ctrl+C on uvicorn must not orphan Vite
+    # Cleanup must reach the PROCESS TREE: on Windows terminate() orphans the
+    # node child, so the code taskkills /T; POSIX keeps plain terminate().
+    import os as _os
+
+    if _os.name == "nt":
+        assert sprun.call_args.args[0][:3] == ["taskkill", "/T", "/F"]
+        assert str(vite.pid) in sprun.call_args.args[0]
+    else:
+        vite.terminate.assert_called_once()
+    vite.wait.assert_called_once()
 
 
 def test_run_dev_stops_vite_when_uvicorn_dies(
@@ -91,14 +104,22 @@ def test_run_dev_stops_vite_when_uvicorn_dies(
 ) -> None:
     monkeypatch.setattr(server_launch, "_frontend_dir", lambda: tmp_path)
     vite = MagicMock()
+    vite.pid = 4242
     with (
         patch("subprocess.Popen", return_value=vite),
+        patch("subprocess.run") as sprun,
         patch("uvicorn.run", side_effect=KeyboardInterrupt),
         patch.object(server_launch, "_open_browser_later"),
         pytest.raises(KeyboardInterrupt),
     ):
         server_launch._run_dev("127.0.0.1", 8000)
-    vite.terminate.assert_called_once()
+    import os as _os
+
+    if _os.name == "nt":
+        assert sprun.called  # tree kill still runs on the interrupt path
+    else:
+        vite.terminate.assert_called_once()
+    vite.wait.assert_called_once()
 
 
 # ── --desktop ────────────────────────────────────────────────────────────────
