@@ -229,11 +229,9 @@ MATLAB."**
 ~~18. **Processing utilities**~~ ✅ shipped & golden — smoothing / FFT /
     normalize / resample / units / algebra / merge / baselines; see
     PORT_CHECKLIST W2.
-19. **Reductions** — neutron spin asymmetry; reflectivity FFT / FFT
-    thickness; Williamson-Hall.
-    **OPEN — unported (2026-07-10 audit):** no `calc/` module exists for
-    any of the three; only a TODO note in `io/consolidated.py`. The last
-    genuinely unstarted backend-parity item.
+~~19. **Reductions**~~ ✅ completed 2026-07-10 (see Completed) — all four
+    reductions ported + golden (`calc/reductions.py` + `calc/reductions_fft.py`,
+    `/api/reductions/*`).
 
 ---
 
@@ -437,6 +435,16 @@ MATLAB."**
 > golden-verified — see `PORT_CHECKLIST.md` for the authoritative per-item state.
 > This log is being backfilled starting with the W6 plotting work.
 
+- ~~**#19 Reductions**~~ (2026-07-10) — the last unstarted backend-parity
+  item shipped + golden-verified (`calc_reductions.json`, 8 sub-cases):
+  Williamson-Hall (`calc/reductions.py`), FFT Laue-fringe thickness +
+  Kiessig reflectivity FFT with superlattice analysis
+  (`calc/reductions_fft.py` — split for the 500-line ceiling), neutron
+  spin asymmetry with exact error propagation. The FFT goldens ran the
+  real MATLAB dialog functions headless in `-batch`, so parity is against
+  the actual GUI code path. Thin routes at `/api/reductions/*`; frontend
+  dialogs left as a checklist deferral tail; the consolidated-CSV
+  polarized path stays blocked on ++/−− sample files (W1 #12).
 - ~~**#3 CLI + run model**~~ (2026-07-10) — run-model residue shipped,
   closing the item: default `qz` now arms `QZ_AUTO_SHUTDOWN=1` (app-like
   exit on last-tab-close, refresh-safe; `setdefault` so an explicit `=0`

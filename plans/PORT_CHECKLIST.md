@@ -126,6 +126,12 @@ files"), so there is no behavioural truth to freeze golden values from.
 ### Error propagation
 - [x] add/mul/div/func + `errorProp` (linear + Monte Carlo) — `calc/errors.py` — add/mul/div golden, func unit-tested; **`errorProp` ported**: linear method (central-difference partials + full-covariance/correlation, vector-valued) golden `calc_errorprop.json` (scalar / fully-correlated / vector-valued / single-input — **exact 0.0 abs diff** vs MATLAB); Monte Carlo (Cholesky correlated sampling, percentile CI) is RNG-based so invariant-tested (std↔analytic, CI brackets nominal, seeded-reproducible), not frozen
 
+### Reductions (PORT_PLAN #19, all golden `calc_reductions.json` @ 2026-07-10)
+- [x] Williamson-Hall — `+calc/+crystal/williamsonHall.m` → `calc/reductions.py` — golden (basic + instrumental-broadening quadrature w/ 1e-16 clamp); NaN grain size on non-positive intercept, degenerate-R² = 1
+- [x] FFT film thickness (Laue fringes) — `+bosonPlotter/peakTools.m fftThickness` → `calc/reductions_fft.py` — golden; the MATLAB *dialog function* runs headless in `-batch` so frozen values went through the real GUI code path (auto-compute-on-open). pchip→uniform-Q, Hann/Blackman/none (MATLAB formulas, not scipy windows), 4× zero-pad, bin-4+ search, FWHM/2 uncertainty
+- [x] Reflectivity FFT (Kiessig + superlattice) — `peakTools.m reflectivityFFT` → `calc/reductions_fft.py` — golden ×4 (neutron single / 3-order superlattice / cross-term case / XRR 2θ→Q); log(R)·log(RQ⁴)/R/RQ⁴ preprocess, linear detrend, multi-peak + flanking-min prominence, superlattice harmonic scoring with MATLAB-round parity (`_ml_round`, half-away-from-zero). Found: log preprocess regenerates a "suppressed" order via fringe cross-terms — real algorithm behaviour, locked by the `refl_neutron_suppressed` golden; true suppression unit-tested with linear-R preprocess
+- [x] Neutron spin asymmetry — `+bosonPlotter/computeAsymmetryForExport.m` formula → `calc/reductions.py` — golden (positivity/NaN validity mask + exact error propagation; formula inlined in the freeze — the wrapper needs the GUI AppState). Pair *discovery* + consolidated-CSV wiring remain with the blocked polarized-CSV item (needs ++/−− metadata samples). Thin routes: `POST /api/reductions/{williamson-hall,fft-thickness,reflectivity-fft,spin-asymmetry}`. *Deferral tail: no frontend dialogs yet (Boson analysis-tool surface for W-H / FFT thickness / refl FFT).*
+
 ---
 
 ## W3 — Fitting (`calc/fitting/`)

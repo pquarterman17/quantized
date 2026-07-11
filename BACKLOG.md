@@ -24,7 +24,6 @@ GAP_PLOTTYPES, and M1_SPRINT archived as complete)
 | 5 | `.otp`/`.otpu` template import — the frontend half (`api.ts` method + "Import Origin template…" open-file branch → saved graph-templates store; backend shipped 2026-07-07) | GAP_ECOSYSTEM #5 | S |
 | 6 | Origin decode: layer-region shading + composite title objects (`Graph1` SLD-profile bands — an undecoded graphic-object record class) | ORIGIN_FILE_DECODE #41 | M |
 | 7 | Origin decode: Graph25 anomalies — extra hidden `T++/T--` curves + ~10× x-range; root cause narrowed 2026-07-09, needs a dedicated RE pass (no heuristic guessing) | ORIGIN_FILE_DECODE #42 | M |
-| 8 | Reductions: Williamson-Hall, reflectivity FFT thickness, neutron spin asymmetry — the last unstarted backend-parity item (no `calc/` module yet) | PORT_PLAN #19 | M |
 | 9 | Defaults audit — interactive-side shots via `tools/visual/` + the export-dialog DPI field syncing to the preset's calibrated dpi | GAP_TIER3 #2 (residual) | S |
 | 11 | W8 closure: reconcile the Tauri shell's actual state (committed `src-tauri/`, updater, NSIS hooks) into PORT_PLAN #46, verify auto-update end-to-end (#49), code signing (#47) | PORT_PLAN #46/#47/#49 | M |
 | 12 | W9 nice-to-haves: parameterized parser tests (every parser × corpus file); performance baselines | PORT_PLAN #52/#53 | M |
@@ -59,14 +58,14 @@ GAP_PLOTTYPES, and M1_SPRINT archived as complete)
 - **Worksheet designation editing** (WORKSHEET D2) — read-only in v1, deferred unless requested.
 - **Graph Builder export button + `.dwk` plot-spec persistence** (booked debt from archived GAP_INTERACTION #51).
 - **Stat-stage residuals** (archived GAP_PLOTTYPES, accepted): horizontal bar orientation; in-canvas legend for the bar view; `payloadToTSV` exports ordinal positions, not category labels; `statRender.ts` (539) / `useStatStage.ts` (416) split candidates (non-`.tsx`, no guard fails).
-- **PORT_CHECKLIST tails** (all noted inline there): crystal cache (stateful), crystal bond angles (needs CIF coords), BG-region 2-D y-box, per-dataset view-config promotion (x-key/styles/limits), reflectivity density↔SLD toggle, user-defined plot templates.
+- **PORT_CHECKLIST tails** (all noted inline there): crystal cache (stateful), crystal bond angles (needs CIF coords), BG-region 2-D y-box, per-dataset view-config promotion (x-key/styles/limits), reflectivity density↔SLD toggle, user-defined plot templates, reductions frontend dialogs (W-H / FFT thickness / refl FFT — backend + routes shipped 2026-07-10, no Boson UI surface yet).
 - **CI golden-test host** — de facto resolved as committed frozen values (option a); formalize or drop the open question (PORT_PLAN "still to decide").
 
 ## Plans dashboard
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/PORT_PLAN.md` | Active | #10+#15 (blocked), #12 (partial), #19, #46–49 (partial), #50 (continuous), #52–53 |
+| `plans/PORT_PLAN.md` | Active | #10+#15 (blocked), #12 (partial), #46–49 (partial), #50 (continuous), #52–53 |
 | `plans/PORT_CHECKLIST.md` | Active (live parity tracker) | 3 real-work lines (2 blocked + 1 partial) + inline deferral tails |
 | `plans/MULTI_PLOT_PLAN.md` | Active | #19 only (owner planning session first) |
 | `plans/WORKSHEET_PLAN.md` | Active | #12, #13, #14 (decision) |

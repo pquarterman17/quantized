@@ -715,6 +715,10 @@ function freeze_calc_values()
     %   across centering rules + crystal-system inference (Pawley dependency).
     writeJson(psFreeze(), fullfile(goldenDir, 'calc_planespacings.json'));
 
+    % ── Reductions (PORT_PLAN #19): Williamson-Hall, FFT thickness, ────────
+    %   reflectivity FFT (Kiessig + superlattice), spin asymmetry.
+    writeJson(redFreeze(), fullfile(goldenDir, 'calc_reductions.json'));
+
     fprintf('Done.\n');
 end
 
@@ -1197,4 +1201,104 @@ function p = packPS(r)
     p = struct('hkl', r.hkl, 'd', r.d(:).', 'twoTheta', r.twoTheta(:).', ...
         'multiplicity', r.multiplicity(:).', 'centering', r.centering, ...
         'system', r.system, 'lambda', r.lambda, 'nReflections', r.nReflections);
+end
+
+% ════════════════════════════════════════════════════════════════════════
+%  Reductions freeze (PORT_PLAN #19)
+% ════════════════════════════════════════════════════════════════════════
+function out = redFreeze()
+    % ── Williamson-Hall: direct call (pure function) ──────────────────────
+    tt4 = [30.1; 35.5; 43.2; 57.0];
+    fw4 = [0.25; 0.26; 0.28; 0.32];
+    whBasic = calc.crystal.williamsonHall(tt4, fw4);
+    out.wh_basic = struct('input', struct('twoTheta', tt4.', 'fwhm', fw4.'), ...
+        'output', whBasic);
+    whInst = calc.crystal.williamsonHall(tt4, fw4, ...
+        Wavelength_A=1.5406, KFactor=0.94, InstrumentalBroadening=0.08);
+    out.wh_instrument = struct('input', struct('twoTheta', tt4.', 'fwhm', fw4.', ...
+        'kFactor', 0.94, 'instBroadening', 0.08), 'output', whInst);
+
+    % ── FFT thickness (Laue fringes): real GUI function in -batch ────────
+    %   fftThickness auto-computes on open and returns; the uifigure is
+    %   created off-screen in -batch and closed below. 80 nm film, Cu Ka.
+    %   Flat-ish envelope so the fringes dominate the spectrum (a Gaussian
+    %   film-peak envelope buries the fringe peak under its own broad
+    %   low-frequency lobe — verified: MATLAB then reports the lobe, 0.53 nm).
+    lam = 1.5406;
+    ttL = linspace(15, 35, 601).';
+    QL  = (4*pi/lam) * sind(ttL/2);
+    IL  = 500 * (1 + 0.45*cos(QL * 800)) + 0.5*ttL + 50;
+    dsL = struct('corrData', [], 'data', struct('time', ttL, 'values', IL));
+    rFT = bosonPlotter.peakTools.fftThickness(dsL, lam, AxisLimits=[15 35]);
+    close all force;
+    out.fft_thickness = struct('input', struct('twoTheta', ttL.', 'intensity', IL.', ...
+        'wavelength_A', lam, 'range', [15 35]), 'output', rFT);
+
+    % ── Reflectivity FFT: neutron single film (120 nm) ────────────────────
+    Qn = linspace(0.01, 0.12, 351).';
+    Rn = (max(Qn, 1e-3)).^-4 .* (1 + 0.4*cos(Qn * 1200));
+    Rn = Rn / max(Rn);
+    dsN = struct('corrData', [], 'parserName', 'importNCNRRefl', ...
+        'data', struct('time', Qn, 'values', Rn));
+    rN = bosonPlotter.peakTools.reflectivityFFT(dsN, AxisLimits=[0.01 0.12]);
+    close all force;
+    out.refl_neutron_single = struct('input', struct('Q', Qn.', 'R', Rn.'), ...
+        'output', rN);
+
+    % ── Reflectivity FFT: neutron superlattice, orders 1..3 present ──────
+    Rs = (max(Qn, 1e-3)).^-4 .* (1 + 0.35*cos(Qn*300) + 0.25*cos(Qn*600) ...
+        + 0.18*cos(Qn*900));
+    Rs = Rs / max(Rs);
+    dsS = struct('corrData', [], 'parserName', 'importNCNRRefl', ...
+        'data', struct('time', Qn, 'values', Rs));
+    rS = bosonPlotter.peakTools.reflectivityFFT(dsS, AxisLimits=[0.01 0.12]);
+    close all force;
+    out.refl_neutron_superlattice = struct('input', struct('Q', Qn.', 'R', Rs.'), ...
+        'output', rS);
+
+    % ── Reflectivity FFT: suppressed order 2 (equal sublayers) ───────────
+    Rp = (max(Qn, 1e-3)).^-4 .* (1 + 0.35*cos(Qn*300) + 0.20*cos(Qn*900) ...
+        + 0.15*cos(Qn*1200));
+    Rp = Rp / max(Rp);
+    dsP = struct('corrData', [], 'parserName', 'importNCNRRefl', ...
+        'data', struct('time', Qn, 'values', Rp));
+    rP = bosonPlotter.peakTools.reflectivityFFT(dsP, AxisLimits=[0.01 0.12]);
+    close all force;
+    out.refl_neutron_suppressed = struct('input', struct('Q', Qn.', 'R', Rp.'), ...
+        'output', rP);
+
+    % ── Reflectivity FFT: XRR mode (2theta -> Q via wavelength, 90 nm) ───
+    ttX = linspace(0.5, 6, 401).';
+    QX  = (4*pi/lam) * sind(ttX/2);
+    RX  = (max(QX, 1e-3)).^-4 .* (1 + 0.4*cos(QX * 900));
+    RX  = RX / max(RX);
+    dsX = struct('corrData', [], 'parserName', 'importPanalytical', ...
+        'data', struct('time', ttX, 'values', RX));
+    rX = bosonPlotter.peakTools.reflectivityFFT(dsX, WavelengthA=lam, ...
+        AxisLimits=[0.5 6]);
+    close all force;
+    out.refl_xrr_single = struct('input', struct('twoTheta', ttX.', 'R', RX.', ...
+        'wavelength_A', lam), 'output', rX);
+
+    % ── Spin asymmetry: formula inlined from computeAsymmetryForExport.m ─
+    %   lines 62-70 (the function itself needs the GUI AppState + the
+    %   BosonPlotter-local findPolarizationPairs, so the reduction formula
+    %   is frozen directly; includes non-positive and NaN points to lock
+    %   the validity mask).
+    RPP  = [0.95; 0.80; 0.60; 0.40; 0.25; 0.10; 0.05; -0.01; NaN;  0.02];
+    RMM  = [0.90; 0.70; 0.45; 0.30; 0.15; 0.08; 0.06;  0.03; 0.01; NaN];
+    dRPP = 0.02  * ones(10, 1);
+    dRMM = 0.015 * ones(10, 1);
+    valid = RPP > 0 & RMM > 0 & ~isnan(RPP) & ~isnan(RMM);
+    asymVal = NaN(size(RPP));
+    asymErr = NaN(size(RPP));
+    sumR = RPP + RMM;
+    asymVal(valid) = (RPP(valid) - RMM(valid)) ./ sumR(valid);
+    dA_dRPP = 2 * RMM(valid) ./ (sumR(valid).^2);
+    dA_dRMM = -2 * RPP(valid) ./ (sumR(valid).^2);
+    asymErr(valid) = sqrt((dA_dRPP .* dRPP(valid)).^2 + (dA_dRMM .* dRMM(valid)).^2);
+    out.spin_asymmetry = struct( ...
+        'input', struct('RPP', RPP.', 'RMM', RMM.', 'dRPP', dRPP.', 'dRMM', dRMM.'), ...
+        'output', struct('asymmetry', asymVal.', 'dAsymmetry', asymErr.', ...
+            'nValid', sum(valid)));
 end
