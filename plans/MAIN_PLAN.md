@@ -47,12 +47,8 @@ plan's direct items are residue-sized by construction)*
 
 ## Tier 2 — Medium Impact
 
-1. **Decompose `App.tsx` (954) + `ThinFilmTab.tsx` (442)** (was
-   PROJECT_ORGANIZATION #10) — ratchet the component-ceiling pins to
-   zero.
-2. **Extract the window-management slice from `store/useApp.ts`**
-   (~3,900 lines) into `store/windows.ts` (was PROJECT_ORGANIZATION
-   #11) — consider a store-size ratchet.
+~~1. **Decompose App.tsx + ThinFilmTab.tsx**~~ COMPLETED 2026-07-11 (see Completed).
+~~2. **Extract the useApp window slice**~~ COMPLETED 2026-07-11 (see Completed).
 ~~3. **Worksheet per-column widths + drag resize**~~ ✅ completed 2026-07-11 (see Completed).
 ~~4. **Worksheet selection → Graph Builder handoff**~~ ✅ completed 2026-07-11 (see Completed).
 ~~5. **`.otp`/`.otpu` template import, frontend half**~~ ✅ completed 2026-07-11 (see Completed).
@@ -112,6 +108,17 @@ plan's direct items are residue-sized by construction)*
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#1 Decompose App.tsx + ThinFilmTab.tsx**~~ (2026-07-11) — App.tsx
+  960 -> 74 (appCommands.ts registry + useGlobalShortcuts + AppOverlays),
+  ThinFilmTab 441 -> 40 (workshop split); GRANDFATHERED component pins
+  ratcheted to ZERO (mechanism kept); verbatim-move diff proofs; the two
+  ?raw source-scanning tests repointed with intent preserved.
+- ~~**#2 useApp window slice**~~ (2026-07-11) — 22 window actions + MDI
+  state -> store/windows.ts (750) as a composed Zustand slice, ONE store
+  instance so every selector survives; useApp 3,960 -> ~3,290; NEW
+  store-size ratchet added (pin recalibrated to the Wave-A-merged
+  baseline 3287); #50 row-state allowlist untouched.
 
 - ~~**#6 Defaults-audit residuals**~~ (2026-07-11) — DPI-preset sync
   verified ALREADY SHIPPED in `useFigureBuilder.ts` (audit-referencing
