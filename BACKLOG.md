@@ -16,8 +16,6 @@ in the same commit). Every edit here must have a matching plan edit.
 |---|------|-------------|------|
 | 1 | Decompose `App.tsx` (954) + `ThinFilmTab.tsx` (442) — ratchet the component-ceiling pins to zero | MAIN #1 (was PROJ_ORG #10) | M |
 | 2 | Extract the window-management slice from `store/useApp.ts` (~3,900 lines) into `store/windows.ts`; consider a store-size ratchet | MAIN #2 (was PROJ_ORG #11) | M |
-| 6 | Origin decode: layer-region shading + composite title objects (`Graph1` SLD-profile bands — an undecoded graphic-object record class) | ORIGIN_FILE_DECODE #41 | M |
-| 7 | Origin decode: Graph25 anomalies — extra hidden `T++/T--` curves + ~10× x-range; root cause narrowed 2026-07-09, needs a dedicated RE pass (no heuristic guessing) | ORIGIN_FILE_DECODE #42 | M |
 | 10 | Register `import_lake_shore` in the registry (content sniffer + corpus routing sweep; found by the #52 matrix) | MAIN #7 | S |
 
 ## Owner actions & owner-gated decisions
@@ -65,5 +63,5 @@ the root; every active plan below is its declared sub-plan.
 | `plans/MAIN_PLAN.md` | Active (ROOT) | #1, #2, #7 + owner gates + deferrals |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9; Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
-| `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #41, #42; #27 deferred |
+| `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |

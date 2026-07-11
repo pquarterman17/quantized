@@ -284,41 +284,29 @@ no documented real-Origin validation procedure for the trial window (31).
 (items 40-42 booked 2026-07-09 from the first #39 gallery run on PNR.opj;
 item 40 CLOSED same day, see Completed)
 
-41. **Layer-region shading + composite title objects** — (M) `Graph1`
-    (SLD profile) renders the step curves but drops the coloured layer
-    bands (SiO2/Pt/YIG/Py/Pt/Air region rectangles) and the composite
-    title annotation — a graphic-object record class we don't decode.
+~~41. **Layer-region shading + composite title objects**~~ COMPLETED
+    2026-07-11 -- Rect* object class decoded (new header type tag 0x31 +
+    130-byte body: fraction quad + two-type ocolor fill) in new
+    io/origin_project/opj_shapes.py; composite multi-layer legends
+    (case-insensitive legend routing, dotted layer.plot entries
+    distributed + re-indexed) + comment-first legend text (PNG-oracle
+    validated). Rendered as data via regionShadePlugin (drawClear,
+    behind data) on all 3 surfaces + .dwk round-trip. Corpus sweep: 323
+    shades decode with fill, zero failures; 49 figures gained legend
+    labels; zero unrelated field changes. Transparency byte undecoded ->
+    fixed 0.25 alpha, documented.
 
-42. **Graph25 anomalies: extra curves + ~10× x-range** — (M) INVESTIGATED
-    2026-07-09, root cause narrowed for both halves, neither fixed (no
-    byte-provable mechanism found for either — see
-    `docs/origin_project_format.md` §6.3's two new gap entries for the
-    full evidence trail).
-    - **Extra curves**: real. `Graph25`'s book carries 6 curve anchors
-      per layer; 2 (`dR++`/`dR--`, `Y-error`-designated) are already
-      correctly hidden by the existing dataset-level
-      `originHiddenChannels` mechanism (unrelated to this item); the
-      other 2 (`T++`/`T--`, plain `Y`-designated `style="line"` curves)
-      are genuinely drawn by quantized but hidden in Origin's own render
-      (legend-only swatches) — confirmed on multiple sibling graphs
-      (`40Oe`, `7kOe`), not just `Graph25`. Searched the curve-anchor
-      record (group-role byte, style byte, symbol-kind, two exploratory
-      offsets) against both the confirmed-hidden pair AND an independent
-      confirmed-VISIBLE `style="line"` control (`Graph1`'s 4-curve SLD
-      profile) — no byte separates hidden from visible. Undecoded; needs
-      a dedicated RE pass with broader hidden-vs-visible ground truth.
-    - **~10× x-range**: real (re-verified by a direct zoomed-pixel read
-      of the oracle PNG's tick labels, ruling out an initial misreading
-      of that same image) — NOT a wrong-layer/wrong-offset bug (the
-      axis-range offsets are oracle-verified exact elsewhere in the
-      corpus). The book's raw Q column is natively Å⁻¹ (`x_unit`
-      metadata `"A-1"`) while the graph's own typed `x_title` reads
-      `"Q (nm⁻¹)"` — a real, project-wide unit-label mismatch — and
-      Origin's real render is ~10× wider than our raw-column plot,
-      exactly the Å⁻¹→nm⁻¹ conversion factor. No scale-factor byte field
-      was found in the layer record to decode this generally; a blind
-      "always ×10" heuristic keyed off the two text strings was
-      considered and rejected as unproven/overfit for this one project.
+~~42. **Graph25 anomalies**~~ CLOSED as DOCUMENTED GAPS 2026-07-11
+    (second dedicated RE pass; the not-fixing outcome per the
+    samples-not-standards rule). Hidden T++/T-- curves: PNG oracles
+    confirm legend-only; exhaustive 1096-anchor byte scan (0-518) finds
+    NO flag separating hidden from both visible groups -- the
+    book/visibility confound is total with this corpus. x10 x-range:
+    layer doubles + __BCO2 axis-config byte-diff (rescaled vs not) are
+    byte-identical -- Origin derives the x10 from the axis UNIT STRING,
+    a project-wide convention (also Graph1's /10). Evidence:
+    docs/origin_project_format.md section 6.3. Reopen ONLY with a
+    specimen where visibility and book membership decouple.
 
 ### Tier 3 — Nice-to-Have
 
