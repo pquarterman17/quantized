@@ -1,10 +1,12 @@
 """Correction pipeline for a dataset. Port of bosonPlotter.applyCorrections.
 
-Pure calc layer. Applies, in order: trim -> x-offset -> background subtraction
-(+ y-offset, or neutron R-scale) -> optional reference-background subtraction ->
-magnetometry unit conversion -> smoothing -> normalization -> derivative. Composes
-the already-ported processing/units helpers; operates on a DataStruct + a params
-dict mirroring the MATLAB ``params`` struct.
+Pure calc layer. Applies, in order: trim -> x-offset -> beam-footprint scale
+(GOTO #7b) -> background subtraction (+ y-offset, or neutron R-scale; an
+anchor-point baseline (GOTO #2) beats the polynomial/slope forms) -> optional
+reference-background subtraction -> magnetometry unit conversion -> smoothing
+-> normalization -> derivative. Composes the already-ported processing/units
+helpers; operates on a DataStruct + a params dict mirroring the MATLAB
+``params`` struct (the GOTO additions are new keys, absent from MATLAB).
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from typing import Any
 import numpy as np
 
 from ..datastruct import DataStruct
+from .backgrounds import anchor_baseline, footprint_factor
 from .processing import (
     cumulative_integral,
     derivative,
@@ -60,7 +63,11 @@ def apply_corrections(
     ``params`` keys (all optional, with sensible defaults): xOff, yOff, bgSlope,
     bgInt, bgPoly, xTrimMin, xTrimMax, isNeutron, isMag, fieldUnit, momentUnit,
     sampleMass, sampleVolume, smoothEnabled, smoothWindow, smoothMethod,
-    normMethod, derivativeMode. Returns a new DataStruct.
+    normMethod, derivativeMode. GOTO additions (new, beyond MATLAB parity):
+    bgAnchors + bgAnchorMethod (anchor-point baseline subtraction, #2) and
+    footprintW + footprintL + footprintTwoTheta (XRR/NR beam-footprint scale,
+    #7b — skips channels labelled ``dq``, like the neutron R-scale). Returns a
+    new DataStruct.
     """
     time = np.asarray(data.time, dtype=float).copy()
     values = np.asarray(data.values, dtype=float).copy()
@@ -81,6 +88,19 @@ def apply_corrections(
     # 2. X offset.
     time = time - params.get("xOff", 0.0)
 
+    # 2b. XRR/NR beam-footprint scale (GOTO #7b): divide by the illuminated
+    # fraction below the spill-over angle, unity above. Applied before any
+    # background handling (it corrects the RAW measured intensity); skips
+    # resolution channels labelled "dq" like the neutron R-scale below.
+    fp_w = params.get("footprintW", 0.0)
+    fp_l = params.get("footprintL", 0.0)
+    if fp_w > 0 and fp_l > 0:
+        theta = time / 2.0 if params.get("footprintTwoTheta", False) else time
+        factor = footprint_factor(theta, beam_width=fp_w, sample_length=fp_l)
+        for k in range(values.shape[1]):
+            if labels[k].lower() != "dq":
+                values[:, k] = values[:, k] / factor
+
     # 3. Neutron R-scale, or background subtraction + y-offset.
     y_off = params.get("yOff", 0.0)
     if params.get("isNeutron", False):
@@ -88,6 +108,18 @@ def apply_corrections(
             if labels[k].lower() != "dq":
                 values[:, k] = values[:, k] * y_off
     else:
+        # An anchor-point baseline (GOTO #2) beats the polynomial/slope forms.
+        bg_anchors = params.get("bgAnchors")
+        anchor_bg = (
+            anchor_baseline(
+                time,
+                values[:, 0] if values.shape[1] else time,
+                bg_anchors,
+                method=str(params.get("bgAnchorMethod", "pchip")),
+            )
+            if bg_anchors is not None and len(bg_anchors) >= 2
+            else None
+        )
         bg_poly = params.get("bgPoly")
         poly_coeffs = (
             np.asarray(bg_poly, dtype=float)
@@ -95,7 +127,9 @@ def apply_corrections(
             else None
         )
         for k in range(values.shape[1]):
-            if poly_coeffs is not None:
+            if anchor_bg is not None:
+                y_bg = anchor_bg
+            elif poly_coeffs is not None:
                 y_bg = np.polyval(poly_coeffs, time)
             else:
                 y_bg = params.get("bgSlope", 0.0) * time + params.get("bgInt", 0.0)

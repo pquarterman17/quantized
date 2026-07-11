@@ -73,3 +73,41 @@ describe("CorrectionsCard background picker", () => {
     expect(screen.queryByRole("option", { name: "— none —" })).not.toBeInTheDocument();
   });
 });
+
+describe("CorrectionsCard beam footprint (GOTO #7b)", () => {
+  it("hides the geometry fields until the footprint checkbox is on", () => {
+    render(<CorrectionsCard active={d1} />);
+    expect(screen.queryByText("Beam w")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Footprint (XRR/NR)"));
+    expect(screen.getByText("Beam w")).toBeInTheDocument();
+    expect(screen.getByText("Sample L")).toBeInTheDocument();
+  });
+
+  it("ships footprintW/L (+ 2θ flag) only when enabled and complete", async () => {
+    render(<CorrectionsCard active={d1} />);
+    fireEvent.click(screen.getByLabelText("Footprint (XRR/NR)"));
+    const [wField, lField] = screen.getAllByPlaceholderText("mm");
+    fireEvent.change(wField, { target: { value: "0.2" } });
+    fireEvent.change(lField, { target: { value: "10" } });
+    fireEvent.click(screen.getByLabelText("X axis is 2θ"));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() =>
+      expect(applyCorrectionsApi).toHaveBeenCalledWith({
+        dataset: sample,
+        params: { footprintW: 0.2, footprintL: 10, footprintTwoTheta: true },
+      }),
+    );
+  });
+
+  it("omits the footprint params when the geometry is incomplete", async () => {
+    render(<CorrectionsCard active={d1} />);
+    fireEvent.click(screen.getByLabelText("Footprint (XRR/NR)"));
+    const [wField] = screen.getAllByPlaceholderText("mm");
+    fireEvent.change(wField, { target: { value: "0.2" } }); // no sample length
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(applyCorrectionsApi).toHaveBeenCalled());
+    expect(applyCorrectionsApi).toHaveBeenCalledWith({ dataset: sample, params: {} });
+  });
+});

@@ -176,6 +176,7 @@ function BackgroundXYWindow({
         tool="zoom"
         onReadout={() => {}}
         peakWizardEdit={null}
+        anchorEdit={null}
         bg={bg}
         syncKey={windowSyncKey(linkGroup)}
       />

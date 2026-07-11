@@ -414,6 +414,20 @@ export interface PeakWizardEditBridge {
   removePeak: (index: number) => void;
 }
 
+/** Anchor-point baseline click/drag editing (GOTO #2) — the bridge PlotStage
+ *  reads to wire `anchorEditPlugin` (lib/uplotAnchors.ts). `useBaseline` is
+ *  the sole owner of the anchor list and the mutators; this is the same THIN
+ *  live-bridge shape as PeakWizardEditBridge, pushed into the store only
+ *  while the Baseline workshop's "Anchor points" method is live — null the
+ *  rest of the time (panel closed or another method selected). Anchors are
+ *  (x, y) DATA coords. */
+export interface AnchorEditBridge {
+  anchors: { index: number; x: number; y: number }[];
+  addAnchor: (x: number, y: number) => void;
+  moveAnchor: (index: number, x: number, y: number) => void;
+  removeAnchor: (index: number) => void;
+}
+
 /** Default stage tab for a newly-activated dataset: a 2-D map (XRDML RSM) opens
  *  in the Map view, a 1-D scan in the Plot view — but never override an explicit
  *  Worksheet choice (the user is inspecting the data grid). */
@@ -695,6 +709,8 @@ interface AppState {
   baselineOverlay: BaselineOverlay | null;
   // Peak wizard click-on-plot marker editing (item 5) — see PeakWizardEditBridge.
   peakWizardEdit: PeakWizardEditBridge | null;
+  // Anchor-point baseline editing (GOTO #2) — see AnchorEditBridge.
+  baselineAnchorEdit: AnchorEditBridge | null;
   rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null; // markers on the 2D map
   mapMethod: string; // 2D-map regrid interpolation (natural/linear/nearest/idw)
   mapRes: number; // 2D-map grid resolution (nx = ny)
@@ -1120,6 +1136,7 @@ interface AppState {
   setPeakOverlay: (overlay: PeakOverlay | null) => void;
   setBaselineOverlay: (overlay: BaselineOverlay | null) => void;
   setPeakWizardEdit: (edit: PeakWizardEditBridge | null) => void;
+  setBaselineAnchorEdit: (edit: AnchorEditBridge | null) => void;
   setRsmPeaks: (rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null) => void;
   setMapMethod: (method: string) => void;
   setMapRes: (res: number) => void;
@@ -1404,6 +1421,7 @@ export const useApp = create<AppState>((set, get) => ({
   peakOverlay: null,
   baselineOverlay: null,
   peakWizardEdit: null,
+  baselineAnchorEdit: null,
   rsmPeaks: null,
   // 'linear' default: fast (~50 ms) and bit-exact MATLAB parity. 'natural'
   // (true Sibson) is correct but does a per-query Voronoi cavity walk (seconds
@@ -2114,6 +2132,9 @@ export const useApp = create<AppState>((set, get) => ({
         peakOverlay: null,
         baselineOverlay: null,
         peakWizardEdit: null,
+        // NOT baselineAnchorEdit: the useBaseline hook owns it and re-pushes
+        // (with a cleared anchor list) on dataset change — nulling it here
+        // would fight that effect's cleanup ordering.
         rsmPeaks: null,
         integral: null,
         fwhmResult: null,
@@ -3880,6 +3901,7 @@ export const useApp = create<AppState>((set, get) => ({
   setPeakOverlay: (peakOverlay) => set({ peakOverlay }),
   setBaselineOverlay: (baselineOverlay) => set({ baselineOverlay }),
   setPeakWizardEdit: (peakWizardEdit) => set({ peakWizardEdit }),
+  setBaselineAnchorEdit: (baselineAnchorEdit) => set({ baselineAnchorEdit }),
   setRsmPeaks: (rsmPeaks) => set({ rsmPeaks }),
   setMapMethod: (mapMethod) => set({ mapMethod }),
   setMapRes: (mapRes) => set({ mapRes }),

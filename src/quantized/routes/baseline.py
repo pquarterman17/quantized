@@ -1,8 +1,9 @@
 """Thin baseline routes: estimate a slowly-varying background under a signal.
 
-Wraps ``calc.baseline``. ALS / rolling-ball / modpoly operate on ``y`` alone;
-``estimate`` (SNIP / polynomial) needs ``x`` too. Rolling-ball and modpoly also
-return an ``info`` dict (chosen window / iteration count).
+Wraps ``calc.baseline`` + ``calc.backgrounds``. ALS / rolling-ball / modpoly
+operate on ``y`` alone; ``estimate`` (SNIP / polynomial), Shirley, the anchor
+baseline and the XRD low-angle model need ``x`` too. Methods with iteration
+state also return an ``info`` dict (chosen window / iteration count / coeffs).
 """
 
 from __future__ import annotations
@@ -13,6 +14,11 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from quantized.calc.backgrounds import (
+    anchor_baseline,
+    shirley_background,
+    xrd_low_angle_background,
+)
 from quantized.calc.baseline import (
     baseline_als,
     baseline_modpoly,
@@ -68,6 +74,29 @@ class RegionBackgroundRequest(BaseModel):
     order: int = 1
 
 
+class AnchorRequest(BaseModel):
+    x: list[float]
+    y: list[float]
+    anchors: list[list[float]]  # (x, y) pairs picked on the plot
+    method: str = "pchip"
+
+
+class ShirleyRequest(BaseModel):
+    x: list[float]
+    y: list[float]
+    max_iter: int = 50
+    tol: float = 1e-6
+    edge_average: int = 1
+
+
+class XrdLowAngleRequest(BaseModel):
+    x: list[float]
+    y: list[float]
+    include_x2: bool = True
+    max_iter: int = 100
+    tol: float = 1e-6
+
+
 @router.post("/estimate")
 def estimate(req: EstimateRequest) -> dict[str, Any]:
     """SNIP / polynomial background, optionally peak-masked and refined."""
@@ -120,6 +149,44 @@ def modpoly(req: ModPolyRequest) -> dict[str, Any]:
     try:
         bg, info = baseline_modpoly(
             req.y, order=req.order, max_iter=req.max_iter, tol=req.tol
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"baseline": jsonify(bg), "info": to_jsonable(info)}
+
+
+@router.post("/anchor")
+def anchor(req: AnchorRequest) -> dict[str, Any]:
+    """Baseline through user-picked (x, y) anchors (GOTO #2); extrapolation
+    clamps to the end anchors."""
+    try:
+        bg = anchor_baseline(req.x, req.y, req.anchors, method=req.method)
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"baseline": jsonify(bg)}
+
+
+@router.post("/shirley")
+def shirley(req: ShirleyRequest) -> dict[str, Any]:
+    """Iterative Shirley step background (GOTO #3). Non-convergence is a 422
+    (the calc raises ValueError), never a 500."""
+    try:
+        bg, info = shirley_background(
+            req.x, req.y, max_iter=req.max_iter, tol=req.tol,
+            edge_average=req.edge_average,
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"baseline": jsonify(bg), "info": to_jsonable(info)}
+
+
+@router.post("/xrdlowangle")
+def xrd_low_angle(req: XrdLowAngleRequest) -> dict[str, Any]:
+    """Hyperbolic (One_on_X) low-angle air-scatter background (GOTO #7a)."""
+    try:
+        bg, info = xrd_low_angle_background(
+            req.x, req.y, include_x2=req.include_x2,
+            max_iter=req.max_iter, tol=req.tol,
         )
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

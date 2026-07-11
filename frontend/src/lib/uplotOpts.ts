@@ -18,6 +18,7 @@ import { annotationPlugin, axisBoxPlugin, errorBarsPlugin, refLinePlugin } from 
 import { richLabelsPlugin } from "./uplotRichLabels";
 import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
 import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
+import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
 import { fwhmPlugin, integratePlugin } from "./uplotRegionTools";
 import {
   measurePlugin,
@@ -284,6 +285,17 @@ export interface BuildOptsArgs {
   peakWizardEdit?: {
     markers: PeakMarkerCandidate[];
     onAdd: (x: number) => void;
+    onRemove: (index: number) => void;
+  } | null;
+  /** Anchor-point baseline editing (GOTO #2): non-null only while the
+   *  Baseline workshop's "Anchor points" method is live (see PlotStage's
+   *  `baselineAnchorEdit` store read). Composes with any tool like
+   *  peakWizardEdit — plain clicks add/remove anchors, dragging a marker
+   *  moves it (capture-phase beats box-zoom for that gesture only). */
+  anchorEdit?: {
+    anchors: AnchorPoint[];
+    onAdd: (x: number, y: number) => void;
+    onMove: (index: number, x: number, y: number) => void;
     onRemove: (index: number) => void;
   } | null;
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
@@ -605,6 +617,12 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (args.peakWizardEdit) {
     const { markers, onAdd, onRemove } = args.peakWizardEdit;
     plugins.push(peakMarkerEditPlugin(markers, { onAdd, onRemove }));
+  }
+  // Anchor-point baseline editing (GOTO #2): also tool-independent —
+  // workshop-scoped, not toolbar-tool-scoped (see BuildOptsArgs.anchorEdit).
+  if (args.anchorEdit) {
+    const { anchors, onAdd, onMove, onRemove } = args.anchorEdit;
+    plugins.push(anchorEditPlugin(anchors, { onAdd, onMove, onRemove, color: accentColor }));
   }
   // Rich axis labels / title (GOTO #5) — see the AST block above the plugins.
   if (xRich || yRich || y2Rich || titleRich) {

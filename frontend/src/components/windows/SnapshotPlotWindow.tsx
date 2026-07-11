@@ -90,6 +90,7 @@ export default function SnapshotPlotWindow({ frozen, view, bg }: SnapshotPlotWin
       tool="zoom"
       onReadout={() => {}}
       peakWizardEdit={null}
+      anchorEdit={null}
       bg={bg}
     />
   );
