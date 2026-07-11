@@ -10,7 +10,7 @@ plan-consolidation rule; full text in git history @ `4e97e6d`).
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-10
-**Updated:** 2026-07-10
+**Updated:** 2026-07-11
 
 ---
 
@@ -117,12 +117,8 @@ Interactive WebGL 3-D stays a deferred gate pending Q4.
 
 ## Tier 1 — High Impact
 
-1. **Custom fit equation builder** — type `y = f(x, p…)` in the fit
-   workshop; validate via `parse_equation`, fit, save as a named
-   reusable model alongside registry models
-   - [ ] Route: validate + fit an equation model (thin, over existing calc)
-   - [ ] Fit-workshop UI: equation field, param table with guesses/bounds
-   - [ ] Persist named custom models (prefs or workspace) + reuse in fits
+~~1. **Custom fit equation builder**~~ ✅ completed 2026-07-11 (see
+   Completed).
 
 2. **Anchor-point baseline** — click N anchors on the curve, interpolated
    baseline through them (linear/pchip/spline), live preview, subtract as
@@ -163,26 +159,11 @@ Interactive WebGL 3-D stays a deferred gate pending Q4.
    choices surfaced in the baseline picker (BG-from-region polyfit math
    exists; this is the UI surface)
 
-9. **Background job runner for long fits** — the poll-model store from
-   the PORT_PLAN #7 audit (mirror fermiviewer `jobs.py` +
-   `routes/jobs_api.py`: ThreadPool + GET-poll; cancel as a checked
-   flag; no WebSocket). Progress fraction from iteration callbacks so
-   the window never locks. First consumers: DREAM (#10) and the
-   existing `calc/mcmc.py` posterior runs.
-   - [ ] `quantized/jobs.py` Job/JobStore (package root — threading is
-     barred from calc/io by the pure-layer guard)
-   - [ ] `routes/jobs_api.py` submit/status/result/cancel (thin)
-   - [ ] `lib/jobs.ts` poll client + progress/cancel UI in the fit
-     workshop (poll only while a job is live)
+~~9. **Background job runner for long fits**~~ ✅ completed 2026-07-11
+   (see Completed).
 
-10. **bumps optional fit engine** — `quantized[bumps]` extra (BSD-3,
-    pin a floor version), `calc/fit_bumps.py` adapter (registry + saved
-    custom models → `Curve`/`FitProblem`; popt / uncertainties / χ²
-    back), "Engine" dropdown in the fit workshop with the MATLAB-parity
-    engine as default. Fast engines (amoeba/LM/DE) synchronous; **DREAM
-    submits through #9** with iteration progress + cancel, posterior +
-    corner-plot handoff on completion; uncertainties labeled by origin
-    (posterior vs Hessian).
+~~10. **bumps optional fit engine**~~ ✅ completed 2026-07-11 (see
+    Completed).
 
 ## Tier 3 — Nice-to-Have
 
@@ -191,4 +172,27 @@ worksheet reshape, 3-D, and date-time axes land here if confirmed)*
 
 ## Completed
 
-*(none yet)*
+- ~~**#1 Custom fit equation builder**~~ (2026-07-11) — validate + fit
+  endpoints over the no-eval parser (`/api/fitting/equation/*`, same
+  result shape as registry fits + `paramNames`; parse-time arity +
+  unknown-function errors added to `parse_equation`; injection rejected
+  at 422, never executed). Fit-workshop `EquationModelPanel` +
+  `useEquationFit` + saved named models (`lib/fitmodels.ts`,
+  `qz.customFitModels`, listed in the picker as `ƒ name`). E2E-verified
+  live: exact recovery of a·exp(−x/t)+c. Known tail: equation fits
+  record a script-only macro step (no typed `fitSpec` for the recalc
+  DAG — candidate follow-up).
+- ~~**#9 Background job runner**~~ (2026-07-11) — `quantized/jobs.py`
+  (Job/JobStore, ThreadPool, pending/running/done/error/cancelled,
+  cooperative cancel via `JobCancelled` + `abort_check`, registry
+  bounded ~100) + thin `/api/jobs/*` (GET-poll; result 409-until-done,
+  422-on-failed; no WebSocket, no generic submit) + `lib/jobs.ts` poll
+  client. E2E-verified: DREAM progress 0→0.85→1.0 polled live, cancel
+  lands mid-run, unknown id 404.
+- ~~**#10 bumps optional fit engine**~~ (2026-07-11) — `quantized[bumps]`
+  extra (bumps 1.0.5 verified live, BSD-3), `calc/fit_bumps.py` adapter
+  (registry model → `Curve`/`FitProblem` via synthesized signature),
+  `/api/fitting/bumps`: amoeba/lm/de synchronous, dream → job queue.
+  Uncertainties labeled hessian-vs-posterior; `BumpsSection` in the fit
+  workshop; parity engine stays default. E2E-verified: amoeba exact
+  recovery [2.5, 1.8, 0.7]; dream posterior through the job runner.

@@ -24,15 +24,12 @@ in the same commit). Every edit here must have a matching plan edit.
 | 9 | Defaults audit — interactive-side shots via `tools/visual/` + the export-dialog DPI field syncing to the preset's calibrated dpi | MAIN #6 (was GAP_TIER3 #2 residual) | S |
 | 11 | W8 closure: reconcile the Tauri shell's actual state (committed `src-tauri/`, updater, NSIS hooks) into PORT_PLAN #46, verify auto-update end-to-end (#49), code signing (#47) | PORT_PLAN #46/#47/#49 | M |
 | 12 | W9 nice-to-haves: parameterized parser tests (every parser × corpus file); performance baselines | PORT_PLAN #52/#53 | M |
-| 13 | Custom fit equation builder (route + fit-workshop UI + saved named models over `calc/fit_equation.py`) | GOTO #1 | M |
 | 14 | Anchor-point baseline (click anchors → interp baseline → recalc-DAG subtract step) | GOTO #2 | M |
 | 15 | Shirley XPS/XAS background in the baseline picker | GOTO #3 | S |
 | 16 | Multi-panel figure page composer (N plots → one vector PDF/SVG page, panel labels) | GOTO #4 | L |
 | 17 | Rich-text labels: shared AST rendered by uPlot on-screen + matplotlib mathtext in export, symbol palette | GOTO #5 | M |
-| 18 | AICc model quick-scan (after #13; engine choice may await the bumps discussion) | GOTO #6 | S |
+| 18 | AICc model quick-scan over registry + saved custom models (builder #1 shipped; both engines available) | GOTO #6 | S |
 | 19 | XRD low-angle background + XRR/NR footprint correction; analytic baseline UI completion | GOTO #7/#8 | S–M |
-| 20 | Background job runner for long fits — poll-model store (fermiviewer `jobs.py` mirror: ThreadPool + GET-poll + cancel flag), progress in fit workshop; first consumers DREAM + `calc/mcmc.py` | GOTO #9 | M |
-| 21 | bumps optional fit engine — `quantized[bumps]` extra, `calc/fit_bumps.py` adapter, Engine dropdown (parity engine stays default); DREAM submits through the job runner | GOTO #10 | M |
 
 ## Owner actions & owner-gated decisions
 
@@ -77,6 +74,6 @@ the root; every active plan below is its declared sub-plan.
 |------|--------|-----------|
 | `plans/MAIN_PLAN.md` | Active (ROOT) | #1–#6 (folded residue) + owner gates + deferrals |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #46–49 (partial), #50 (continuous), #52–53 |
-| `plans/GOTO_PLAN.md` | Active | #1–#10 (owner-decided 2026-07-10); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
+| `plans/GOTO_PLAN.md` | Active | #2–#8 open (#1/#9/#10 shipped 2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #41, #42; #27 deferred |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |
