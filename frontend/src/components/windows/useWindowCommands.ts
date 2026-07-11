@@ -212,7 +212,7 @@ export function useWindowCommands(): void {
         run: () => cycleFocus(-1),
       },
     ];
-    useCommands.getState().setMenuCommands(actions);
+    useCommands.getState().setMenuCommands("windows", actions);
   }, []);
 
   useEffect(() => {
