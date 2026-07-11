@@ -7,6 +7,7 @@ registry (no eval); the curve_fit ``model_fcn`` is a closure over ``evaluate``.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -16,6 +17,7 @@ from pydantic import BaseModel
 
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_bootstrap import bootstrap_fit, fit_posterior
+from quantized.calc.fit_equation import default_guesses, equation_model
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fitting import curve_fit
 from quantized.routes._payload import to_jsonable
@@ -145,6 +147,79 @@ def bootstrap(req: BootstrapRequest) -> dict[str, Any]:
         )
     except (ValueError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ── Custom equation models (GOTO #1) ────────────────────────────────────────
+# The equation text is the model; calc.fit_equation parses it with the no-eval
+# RPN interpreter (the ONLY equation-evaluation path) and the fit runs through
+# the same curve_fit engine as registry models, so the result shape (params/
+# errors/R2/chiSqRed/RMSE/AIC/yFit) is identical.
+
+
+class EquationValidateRequest(BaseModel):
+    equation: str
+
+
+class EquationFitRequest(BaseModel):
+    equation: str
+    x: list[float]
+    y: list[float]
+    guesses: list[float] | None = None
+    # Bounds may hold null entries = unbounded on that side (JSON cannot
+    # carry Infinity); mapped to -inf/+inf before curve_fit.
+    lower: list[float | None] | None = None
+    upper: list[float | None] | None = None
+    weights: list[float] | None = None
+    fixed: list[bool] | None = None
+    calc_errors: bool = True
+
+
+@router.post("/equation/validate")
+def equation_validate(req: EquationValidateRequest) -> dict[str, Any]:
+    """Validate a custom fit equation; 200 with ok/params[]/error (live UI)."""
+    try:
+        _, names = equation_model(req.equation)
+    except (ValueError, IndexError) as exc:
+        return {"ok": False, "params": [], "error": str(exc)}
+    return {"ok": True, "params": names}
+
+
+@router.post("/equation/fit")
+def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
+    """Fit a custom equation model to (x, y); same result shape as /fit."""
+    try:
+        fcn, names = equation_model(req.equation)
+        if not names:
+            raise ValueError("equation has no free parameters to fit")
+        p0 = req.guesses if req.guesses is not None else default_guesses(names)
+        if len(p0) != len(names):
+            raise ValueError(f"expected {len(names)} guesses, got {len(p0)}")
+        lower = (
+            [-math.inf if v is None else v for v in req.lower]
+            if req.lower is not None
+            else None
+        )
+        upper = (
+            [math.inf if v is None else v for v in req.upper]
+            if req.upper is not None
+            else None
+        )
+        result = curve_fit(
+            req.x,
+            req.y,
+            fcn,
+            p0,
+            lower=lower,
+            upper=upper,
+            weights=req.weights,
+            fixed=req.fixed,
+            calc_errors=req.calc_errors,
+        )
+    except (ValueError, KeyError, IndexError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    out: dict[str, Any] = to_jsonable(result)
+    out["paramNames"] = names
+    return out
 
 
 class PosteriorRequest(BaseModel):

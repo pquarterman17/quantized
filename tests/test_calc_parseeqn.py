@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from quantized.calc.fit_equation import parse_equation
+from quantized.calc.fit_equation import default_guesses, equation_model, parse_equation
 
 
 @pytest.mark.golden
@@ -65,3 +65,54 @@ def test_parse_equation_functions() -> None:
     fcn, names = parse_equation("sqrt(abs(x))")
     assert names == []
     assert_allclose(fcn(np.array([4.0, 9.0]), []), [2.0, 3.0])
+
+
+# ── malformed-expression detection (arity check; GOTO #1) ────────────────────
+# MATLAB's parseEquation compiled via str2func so malformed input errored at
+# compile time; the RPN interpreter needs an explicit well-formedness check.
+
+
+def test_parse_equation_rejects_dangling_operator() -> None:
+    with pytest.raises(ValueError, match="missing an operand"):
+        parse_equation("a +")
+
+
+def test_parse_equation_rejects_adjacent_values() -> None:
+    # "a b" would previously eval to just "a" (leftover stack) — now an error.
+    with pytest.raises(ValueError, match="malformed expression"):
+        parse_equation("a b")
+
+
+def test_parse_equation_rejects_unknown_function() -> None:
+    with pytest.raises(ValueError, match='Unknown function "foo"'):
+        parse_equation("a*foo(x)")
+
+
+def test_parse_equation_rejects_x_called_as_function() -> None:
+    with pytest.raises(ValueError, match='"x" cannot be called as a function'):
+        parse_equation("a*x(b)")
+
+
+def test_parse_equation_rejects_empty_parens_function() -> None:
+    with pytest.raises(ValueError, match="missing its argument"):
+        parse_equation("exp()")
+
+
+# ── equation_model / default_guesses (the fit-path bridge; GOTO #1) ─────────
+
+
+def test_equation_model_returns_fit_ready_callable() -> None:
+    fcn, names = equation_model("y = a*exp(-x/t) + c")
+    assert names == ["a", "t", "c"]
+    y = fcn(np.array([0.0]), [2.0, 1.0, 0.5])
+    assert y[0] == pytest.approx(2.5)
+
+
+def test_equation_model_rejects_underscore_leading_param() -> None:
+    with pytest.raises(ValueError, match="invalid parameter name"):
+        equation_model("__import__ + x")
+
+
+def test_default_guesses_are_ones() -> None:
+    assert default_guesses(["a", "t", "c"]) == [1.0, 1.0, 1.0]
+    assert default_guesses([]) == []
