@@ -159,10 +159,10 @@ MATLAB."**
    on last-tab-close; `qz --desktop` native window (**pywebview**);
    `qz --dev` Vite HMR + reloading backend. (Tauri packaging deferred to W8.)
    **PARTIAL (= M1 PR6):** serve + browser + `--port`/`--no-browser` +
-   launchers shipped; auto-shutdown, `--dev`, `--desktop` still open —
-   and `--desktop`'s pywebview framing may be superseded by the W8 Tauri
-   shell (`src-tauri/` now exists): OWNER call (note fermiviewer ships
-   BOTH deliberately — pywebview for dev/daily, Tauri for packaging).
+   launchers shipped; auto-shutdown, `--dev`, `--desktop` still open.
+   **`--desktop` OWNER call resolved 2026-07-10: ship BOTH like
+   fermiviewer** — `--desktop` = pywebview (dev/daily native window);
+   Tauri stays the packaging/distribution path (W8 #46).
    **Smaller than it looks (2026-07-10 code audit):** auto-shutdown is
    ~90% built — `app.py:75-118` already has the `/api/ws` presence
    socket + refresh-grace + exit, gated on env `QZ_AUTO_SHUTDOWN=1`
@@ -183,24 +183,8 @@ MATLAB."**
    - [x] Frontend vitest + build — CI `frontend` job runs `npm test` + `npm run build`
 ~~6. **`DataStruct`**~~ ✅ shipped (M1 PR3, `10f4e7f`) — frozen dataclass +
    validation + JSON boundary (`datastruct.py`).
-7. **WebSocket job-queue infrastructure** — `routes/jobs` (submit → progress
-   → cancel), mirroring fermiviewer `jobs_api`. Pure work runs in `calc/`;
-   the queue is the thin transport. *Lands before M2 batch features, not M1.*
-   **STILL UNBUILT (2026-07-10):** no `routes/jobs.py` exists. The batch
-   features it was meant to gate shipped anyway — template batch runs
-   CLIENT-SIDE through the shared step executor (ORIGIN_GAP #3's
-   deliberate deviation) and `calc/batch_fit`/`global_fit` are pure +
-   synchronous. Decide whether a queue is still wanted (long
-   fits/exports on big corpora) or close as superseded: OWNER call.
-   **Reference correction (2026-07-10 code audit):** the cited
-   fermiviewer `jobs_api` is NOT a WebSocket — it's a polled
-   ThreadPool store (`jobs.py` Job/JobStore + `routes/jobs_api.py`
-   GET-poll; zero WS code, no cancel). So if built, pick: (a) mirror
-   the reference (poll model, ~2 near-verbatim files + a small
-   `lib/jobs.ts`, cancel as a flag-check extension — fastest), or
-   (b) honor this item's literal WS wording (more code, diverges from
-   the reference). Infra would live at package root (`quantized/jobs.py`,
-   threading is barred from calc/io by the pure-layer guard).
+~~7. **WebSocket job-queue infrastructure**~~ — closed 2026-07-10 as
+   superseded (owner decision; see Completed).
 
 ---
 
@@ -426,10 +410,14 @@ MATLAB."**
   OS-gated optional** (W1 #14); cross-platform path is **Origin-ASCII +
   `.ogs`** export (W1 #12). COM is untestable in CI → mock-based tests
   only; goldens cover the file path.
-- **Long-running jobs** → **WebSocket job queue** (W0 #7), mirroring
-  fermiviewer `jobs_api`. Lands for M2 batch features.
+- **Long-running jobs** → ~~WebSocket job queue (W0 #7)~~ **closed as
+  superseded (2026-07-10)**: every feature it was meant to gate shipped
+  without it — template batch runs client-side through the shared step
+  executor, `calc/batch_fit`/`global_fit` are pure + synchronous. Reopen
+  only if long fits/exports on big corpora actually block the UI.
 - **Delivery** → **pywebview desktop now** (W0 #3) + **Tauri packaging
-  later** (W8 #46).
+  later** (W8 #46). Reaffirmed 2026-07-10: ship BOTH like fermiviewer —
+  pywebview for dev/daily, Tauri for packaged distribution.
 - **2D map rendering** → **Canvas2D first** (W6 #34); add WebGL only if
   XRD reciprocal-space maps demand it.
 - **`plans/` tracking** → **tracked** (founding doc). Revisit the sibling
@@ -463,6 +451,15 @@ MATLAB."**
 > stats, fitting engine/models/diagnostics, reflectivity) is largely landed and
 > golden-verified — see `PORT_CHECKLIST.md` for the authoritative per-item state.
 > This log is being backfilled starting with the W6 plotting work.
+
+- ~~**#7 WebSocket job-queue infrastructure**~~ (2026-07-10) — closed as
+  superseded, owner decision: no queue built, none needed. The batch
+  features it was meant to gate all shipped without it (client-side step
+  executor per ORIGIN_GAP #3; `calc/batch_fit`/`global_fit` pure +
+  synchronous). The 2026-07-10 code audit also corrected the reference:
+  fermiviewer `jobs_api` is a polled ThreadPool store, not a WebSocket —
+  so if ever reopened, mirror the poll model (~2 small files at package
+  root, threading barred from calc/io by the pure-layer guard).
 
 - ~~**#33 Plot state model**~~ (2026-06-25) — axes/limits/scales (lin/log),
   dual-Y, tick formats (Auto/Fixed/Sci), and per-series styling (color/width/
