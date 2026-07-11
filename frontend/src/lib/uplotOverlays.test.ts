@@ -213,19 +213,28 @@ describe("annotationPlugin", () => {
   // Regression: a mark near the very TOP of the panel must not push its
   // (bottom-anchored) label above the plot area.
   it("clamps a near-top-edge label's baseline so it stays on-panel", () => {
-    // bbox top=5; dot at py=6 (1px below the top edge) -> naive py-2=4 < top,
-    // so the clamp must push the baseline down to top + lineHeight
-    // (fontPx("11px mono") * 1.3 = 14.3) instead.
+    // Dot at py=6 -> naive py-2=4 < lineHeight, so the clamp pushes the
+    // baseline down to the CANVAS-top floor (fontPx("11px mono") * 1.3 =
+    // 14.3). Margin placement is legal since 2026-07-11 (labels may live
+    // outside the axes bbox), so the floor is the canvas, not bbox top.
     const { texts } = drawAnn([{ id: "a1", x: 50, y: 94, text: "top" }]); // 100-94=6
-    expect(texts[0].y).toBeCloseTo(19.3);
+    expect(texts[0].y).toBeCloseTo(14.3);
   });
 
-  it("clips annotations outside the plot area", () => {
+  it("clips annotations outside the CANVAS (not the axes bbox)", () => {
     const { dots } = drawAnn([
       { id: "a", x: 999, y: 30, text: "off-x" },
-      { id: "b", x: 50, y: -50, text: "off-y" }, // py = 150 > bottom
+      { id: "b", x: 50, y: -50, text: "off-y" }, // py = 150 > canvas bottom
     ]);
     expect(dots).toHaveLength(0);
+  });
+
+  it("REGRESSION 2026-07-11: a margin-placed annotation (outside the bbox, on the canvas) still draws", () => {
+    // bbox left=10: px=4 sits in the left axes margin. Dragging a label there
+    // used to make it vanish (the old clip tested the bbox, not the canvas).
+    const { dots, texts } = drawAnn([{ id: "m", x: 4, y: 30, text: "700 mT" }]);
+    expect(dots).toHaveLength(1);
+    expect(texts).toHaveLength(1);
   });
 
   it("skips non-finite coordinates and draws no text when empty", () => {
@@ -544,16 +553,23 @@ describe("annotationLayout / annotationBox (MAIN #18 shared draw/hit-test geomet
 // is jsdom's default all-zero rect (no real layout engine), so client coords
 // ARE local coords here, same assumption uplotAnchors.test.ts relies on.
 function makeInteractiveU() {
+  // root wraps over (the real uPlot DOM shape): interaction listeners live on
+  // root since 2026-07-11 so margin-placed labels stay reachable; events
+  // dispatched on `over` bubble up to it.
+  const root = document.createElement("div");
   const over = document.createElement("div");
-  document.body.appendChild(over);
+  root.appendChild(over);
+  document.body.appendChild(root);
   const ctx = {
     font: "",
+    canvas: { width: 100, height: 100 },
     measureText: (t: string) => ({ width: t.length * 6 }) as TextMetrics,
   };
   // x: identity; y: 100 - value — self-inverse, so posToVal reuses the same
   // formula (valid for this convention only, matching fakeAnnU above).
   const conv = (v: number, scale: string) => (scale === "x" ? v : 100 - v);
   const u = {
+    root,
     over,
     ctx,
     bbox: { left: 0, top: 0, width: 100, height: 100 },
@@ -561,8 +577,9 @@ function makeInteractiveU() {
     valToPos: conv,
     posToVal: conv,
     redraw: vi.fn(),
+    setData: vi.fn(),
   } as unknown as uPlot;
-  return { u, over };
+  return { u, over, root };
 }
 
 function readyAnn(plugin: uPlot.Plugin, u: uPlot) {

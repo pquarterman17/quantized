@@ -219,13 +219,17 @@ export function annotationLayout(
   const yScale = a.axis === 1 && hasY2 ? "y2" : "y";
   const px = u.valToPos(a.x, "x", true);
   const py = u.valToPos(a.y, yScale, true);
-  const { left, top, width } = u.bbox;
   const font = annotationFont(baseFont, a.size);
   u.ctx.font = font;
   const textWidth = a.text ? u.ctx.measureText(a.text).width : 0;
-  const { x: tx, align } = clampAnnotationLabelX(px, textWidth, 6, left, width);
+  // Label clamping bounds are the whole CANVAS, not the axes bbox: a dragged
+  // annotation may legitimately live in the margins (Origin's model — owner
+  // report 2026-07-11: dragging the "700 mT" label outside the axes box made
+  // it vanish). Fall back to the bbox for stub contexts without a canvas.
+  const canvasW = u.ctx.canvas?.width ?? u.bbox.left + u.bbox.width;
+  const { x: tx, align } = clampAnnotationLabelX(px, textWidth, 6, 0, canvasW);
   const lineHeight = fontPx(font) * 1.3;
-  const ty = Math.max(py - 2, top + lineHeight);
+  const ty = Math.max(py - 2, lineHeight);
   return { px, py, tx, ty, textWidth, align, lineHeight };
 }
 
@@ -400,32 +404,61 @@ export function annotationPlugin(
                   : { x: g.layout.px + 10, y: g.layout.py + 10 };
               };
 
-              // Pointer events arrive in CSS px relative to `over`; the
-              // layout geometry is CANVAS px (DPR-scaled + bbox-offset). Every
-              // hit test converts the POINTER into the canvas frame — see
-              // overPointerToCanvas's doc for the owner-reported bug this
-              // fixes (unhittable labels at Windows 125–150% scaling).
+              // Interaction surface = u.root (the WHOLE plot, axes margins
+              // included) — a label dragged into the margin must stay
+              // reachable (owner report 2026-07-11: outside the axes box it
+              // "just is gone"). Pointer events arrive in CSS px relative to
+              // root; the layout geometry is CANVAS px. root spans the canvas
+              // exactly, so the conversion is overPointerToCanvas with the
+              // full-canvas frame — see its doc for the DPR bug it fixes.
+              const root = u.root;
               const canvasPointer = (rect: DOMRect, cssX: number, cssY: number) =>
-                overPointerToCanvas(u.bbox, rect, cssX, cssY);
+                overPointerToCanvas(
+                  { left: 0, top: 0, width: u.ctx.canvas.width, height: u.ctx.canvas.height },
+                  rect,
+                  cssX,
+                  cssY,
+                );
+              // Clamp a dragged dot's DATA coords so its canvas position stays
+              // on-canvas (pad px) — the drag can place a label in the margin
+              // but never fully off the plot.
+              const clampToCanvas = (x: number, y: number): { x: number; y: number } => {
+                const pad = 6;
+                const cw = u.ctx.canvas.width;
+                const chh = u.ctx.canvas.height;
+                if (cw <= 0 || chh <= 0) return { x, y };
+                const rootRect = root.getBoundingClientRect();
+                const overRect = over.getBoundingClientRect();
+                const s = rootRect.width > 0 ? cw / rootRect.width : 1;
+                const px = Math.min(Math.max(u.valToPos(x, "x", true), pad), cw - pad);
+                const py = Math.min(Math.max(u.valToPos(y, "y", true), pad), chh - pad);
+                const cssX = px / s - (overRect.left - rootRect.left);
+                const cssY = py / s - (overRect.top - rootRect.top);
+                return { x: u.posToVal(cssX, "x"), y: u.posToVal(cssY, "y") };
+              };
+              const setCursor = (c: string) => {
+                root.style.cursor = c === "default" ? "" : c;
+                over.style.cursor = c;
+              };
 
-              over.addEventListener("mousemove", (e: MouseEvent) => {
+              root.addEventListener("mousemove", (e: MouseEvent) => {
                 if (dragMove || dragResize) return; // cursor fixed while a drag owns the pointer
-                const rect = over.getBoundingClientRect();
+                const rect = root.getBoundingClientRect();
                 const p = canvasPointer(rect, e.clientX - rect.left, e.clientY - rect.top);
                 const gs = geoms();
                 const selId = o.selectedId ?? null;
                 if (selId && hitTestAnnotationHandle(handleFor(selId, gs), p, 8 * p.scale)) {
-                  over.style.cursor = "nwse-resize";
+                  setCursor("nwse-resize");
                   return;
                 }
-                over.style.cursor = hitTestAnnotationBody(hitGeoms(gs), p, 8 * p.scale) ? "move" : "default";
+                setCursor(hitTestAnnotationBody(hitGeoms(gs), p, 8 * p.scale) ? "move" : "default");
               });
 
-              over.addEventListener(
+              root.addEventListener(
                 "mousedown",
                 (e: MouseEvent) => {
                   if (e.button !== 0) return;
-                  const rect = over.getBoundingClientRect();
+                  const rect = root.getBoundingClientRect();
                   const down = { x: e.clientX - rect.left, y: e.clientY - rect.top };
                   const downCanvas = canvasPointer(rect, down.x, down.y);
                   const gs = geoms();
@@ -523,15 +556,22 @@ export function annotationPlugin(
 
                   const a = annotations.find((x) => x.id === hit)!;
                   dragMove = { id: hit, x: a.x, y: a.y };
+                  // posToVal expects CSS px relative to `over` (the plot area),
+                  // not `root` — and the distinction MATTERS on log/reciprocal
+                  // scales where posToVal isn't affine.
+                  const overRect = over.getBoundingClientRect();
+                  const downOver = { x: e.clientX - overRect.left, y: e.clientY - overRect.top };
                   const onMoveEv = (ev: MouseEvent) => {
-                    const nowX = ev.clientX - rect.left;
-                    const nowY = ev.clientY - rect.top;
+                    const nowX = ev.clientX - overRect.left;
+                    const nowY = ev.clientY - overRect.top;
                     // Delta-based (not absolute posToVal-of-pointer): grabbing
                     // anywhere on the label keeps that grab point under the
-                    // cursor, instead of snapping the dot to it.
-                    const dxData = u.posToVal(nowX, "x") - u.posToVal(down.x, "x");
-                    const dyData = u.posToVal(nowY, "y") - u.posToVal(down.y, "y");
-                    dragMove = { id: hit, x: a.x + dxData, y: a.y + dyData };
+                    // cursor, instead of snapping the dot to it. Clamped so the
+                    // label can reach the margins but never leave the canvas.
+                    const dxData = u.posToVal(nowX, "x") - u.posToVal(downOver.x, "x");
+                    const dyData = u.posToVal(nowY, "y") - u.posToVal(downOver.y, "y");
+                    const clamped = clampToCanvas(a.x + dxData, a.y + dyData);
+                    dragMove = { id: hit, x: clamped.x, y: clamped.y };
                     u.redraw();
                   };
                   const onUp = (ev: MouseEvent) => {
@@ -554,10 +594,10 @@ export function annotationPlugin(
                 { capture: true },
               );
 
-              over.addEventListener(
+              root.addEventListener(
                 "contextmenu",
                 (e: MouseEvent) => {
-                  const rect = over.getBoundingClientRect();
+                  const rect = root.getBoundingClientRect();
                   const p = canvasPointer(rect, e.clientX - rect.left, e.clientY - rect.top);
                   const hit = hitTestAnnotationBody(hitGeoms(geoms()), p, 8 * p.scale);
                   if (hit) {
@@ -573,7 +613,11 @@ export function annotationPlugin(
           : undefined,
       draw: (u: uPlot) => {
         const { ctx } = u;
-        const { left, top, width, height } = u.bbox;
+        // Visibility bound = the CANVAS, not the axes bbox: margin-placed
+        // labels (dragged there in pointer mode) must stay visible — only a
+        // truly off-canvas anchor (e.g. far off-range after a zoom) skips.
+        const cw = ctx.canvas?.width ?? u.bbox.left + u.bbox.width;
+        const chh = ctx.canvas?.height ?? u.bbox.top + u.bbox.height;
         ctx.save();
         ctx.fillStyle = color;
         ctx.textBaseline = "bottom";
@@ -582,7 +626,7 @@ export function annotationPlugin(
           const layout = annotationLayout(u, a, font);
           if (!layout) continue;
           const { px, py, tx, ty, align } = layout;
-          if (px < left || px > left + width || py < top || py > top + height) continue;
+          if (px < 0 || px > cw || py < 0 || py > chh) continue;
           ctx.beginPath();
           ctx.arc(px, py, 3, 0, Math.PI * 2);
           ctx.fill();
