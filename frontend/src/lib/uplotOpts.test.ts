@@ -808,15 +808,17 @@ describe("buildOpts rich-text labels (GOTO #5)", () => {
       ...base,
       yLog: false,
       tool: "zoom",
-      xAxisLabel: "$\mu_0H$ (T)",
+      // NOTE: "\\mu" — in a TS string "\m" silently drops the backslash and
+      // "\f" is a form feed; both would test the wrong input.
+      xAxisLabel: "$\\mu_0H$ (T)",
     });
     expect(opts.axes?.[0]?.label).toBe("");
     expect(opts.plugins).toHaveLength(1);
   });
 
   it("keeps uPlot's plain draw for INVALID markup (literal fallback, no plugin)", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", xAxisLabel: "$\foo$" });
-    expect(opts.axes?.[0]?.label).toBe("$\foo$");
+    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", xAxisLabel: "$\\foo$" });
+    expect(opts.axes?.[0]?.label).toBe("$\\foo$");
     expect(opts.plugins).toHaveLength(0);
   });
 
