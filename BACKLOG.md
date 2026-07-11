@@ -8,7 +8,7 @@ in the same commit). Every edit here must have a matching plan edit.
 
 **Last regenerated:** 2026-07-11 (MAIN #8 shipped; then the Origin-parity
 surface audit booked MAIN #9–#16 — editor-ergonomics gaps the prior gap
-campaigns never enumerated)
+campaigns never enumerated; MAIN #10 re-import-from-source shipped same day)
 
 ---
 
@@ -16,7 +16,6 @@ campaigns never enumerated)
 
 | # | Item | Plan / item | Size |
 |---|------|-------------|------|
-| 25 | Re-import from source file (source path on Dataset + refresh via recalc DAG) | MAIN #10 | M |
 | 27 | Reciprocal (Arrhenius) axis scale | MAIN #12 | S |
 
 ## Owner actions & owner-gated decisions
@@ -61,7 +60,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | #10 #12 (agents in flight) + owner gates + deferrals; #9/#11/#13–#17 shipped 2026-07-11 |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | #12 (agent in flight) + owner gates + deferrals; #9/#10/#11/#13–#17 shipped 2026-07-11 |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence |

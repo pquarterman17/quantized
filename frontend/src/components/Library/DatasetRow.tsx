@@ -70,6 +70,7 @@ export default function DatasetRow({
   const moveDatasetToFolder = useApp((s) => s.moveDatasetToFolder);
   const createFolder = useApp((s) => s.createFolder);
   const folders = useApp((s) => s.folders);
+  const reimportDataset = useApp((s) => s.reimportDataset);
 
   // Inline editors (null = not editing); rename allows an empty draft.
   const [rename, setRename] = useState<string | null>(null);
@@ -125,6 +126,7 @@ export default function DatasetRow({
     { label: "Duplicate", run: () => duplicateDataset(d.id) },
     { label: "Rename…", run: () => setRename(d.name) },
     { label: "Add tag…", run: () => setTag("") },
+    { label: d.source ? "Re-import from source" : "Re-import from file…", run: () => void reimportDataset(d.id) },
     // Move into a folder (project-organization item 3). Flat list of folders +
     // an out-to-root option + create-a-new-folder-with-this. (Drag onto a folder
     // header does the same.)

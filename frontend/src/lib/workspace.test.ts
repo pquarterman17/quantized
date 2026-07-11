@@ -463,6 +463,36 @@ describe("workspace pending lazy-book reference (ORIGIN_FILE_DECODE_PLAN #38)", 
   });
 });
 
+describe("workspace source reference (MAIN_PLAN #10, re-import from source)", () => {
+  it("round-trips a dataset's source path", () => {
+    const ds = makeDataset("a", "x");
+    ds.source = { kind: "path", path: "/data/sample.dat" };
+    const restored = parse(ser([ds]))[0];
+    expect(restored.source).toEqual(ds.source);
+  });
+
+  it("omits source when absent (a browser upload never has one)", () => {
+    const restored = parse(ser([makeDataset("a", "normal")]))[0];
+    expect(restored.source).toBeUndefined();
+    const doc = JSON.parse(ser([makeDataset("a", "normal")])) as { datasets: Record<string, unknown>[] };
+    expect("source" in doc.datasets[0]).toBe(false);
+  });
+
+  it("drops a malformed source rather than restoring garbage", () => {
+    const doc = JSON.parse(ser([makeDataset("a", "x")])) as {
+      datasets: (Omit<Dataset, "source"> & { source?: unknown })[];
+    };
+    doc.datasets[0].source = { kind: "upload" }; // wrong kind
+    expect(parseWorkspace(JSON.stringify(doc)).datasets[0].source).toBeUndefined();
+
+    doc.datasets[0].source = { kind: "path" }; // missing path
+    expect(parseWorkspace(JSON.stringify(doc)).datasets[0].source).toBeUndefined();
+
+    doc.datasets[0].source = { kind: "path", path: "" }; // empty path
+    expect(parseWorkspace(JSON.stringify(doc)).datasets[0].source).toBeUndefined();
+  });
+});
+
 describe("workspace v3 (gap #5): pipeline + recalc mode + fit specs", () => {
   it("round-trips the typed pipeline, recalc mode, and per-dataset fit specs", () => {
     const datasets = [makeDataset("a", "first")];
