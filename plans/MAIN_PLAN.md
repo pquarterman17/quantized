@@ -57,25 +57,8 @@ GOTO #11 drift (implemented but listed open).
 ~~18. **Pointer tool as the DEFAULT + direct-manipulation plot
     objects**~~ COMPLETED 2026-07-11 (see Completed).
 
-19. **Multi-plot panel builder** (owner request; design decided with
-    owner 2026-07-11, all four recommended options): ctrl-click
-    **Library rows** (existing multi-select) → right-click quick picks
-    (Side by side / Stack / Grid / **Overlay**) → a **new composite MDI
-    window** holding the layout, x-linked via the existing sync-group
-    machinery. Overlay = one axes, **auto dual-Y by unit family** (same
-    units share left; second family → y2; >2 families → warn), payload
-    via the union-x merge logic (reuse mergeSelected's union,
-    non-destructively). Drag-to-rearrange panels lands as a FOLLOW-UP
-    sub-item wired to #18's pointer model after it merges (same
-    interaction surface — deliberate sequencing, not scope cut):
-    - [x] v1: quick picks → composite window (grid + overlay + linked x)
-      — SHIPPED 2026-07-11 (`ccd91d8`): `panel` window kind (+
-      `store/panels.ts` slice), pure `lib/panelwindow.ts` (union-x
-      overlay via the rowstate chokepoint, unit-family y2 assignment,
-      grid tiling reusing facetGridSize), per-window sync group,
-      DatasetRow quick picks + ⌘K commands; +68 tests, all ratchets
-      held (windows.ts net-zero, DatasetRow offset via lib/panelMenu).
-    - [ ] after #18: drag panels to rearrange within the composite
+~~19. **Multi-plot panel builder**~~ COMPLETED 2026-07-11 (see
+    Completed — v1 + the drag-rearrange follow-up both shipped).
 
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
@@ -160,6 +143,21 @@ GOTO #11 drift (implemented but listed open).
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#19 Multi-plot panel builder**~~ (2026-07-11, two sonnet agents;
+  design decided with owner — Library-row selection, composite MDI
+  window, quick picks, auto dual-Y) — v1 (`ccd91d8`): `panel` window
+  kind + `store/panels.ts`; pure `lib/panelwindow.ts` (union-x overlay
+  through the rowstate chokepoint, unit-family y2 assignment w/
+  3+-family toast, grid tiling via facetGridSize); per-window x-sync
+  group; DatasetRow quick picks (Side by side / Stack / Grid / Overlay)
+  + ⌘K commands; removed datasets prune from panels
+  (`pruneWindowDatasetRefs`); +68 tests, every ratchet held. Follow-up
+  (`edac315`): drag the panel-cell HEADER (window furniture — works in
+  any tool; canvas drag stays box-zoom) to splice-reorder
+  `panel.datasetIds`, accent drop-target indicator, dragged cell dims,
+  ✕ chip removes a dataset from the panel; header replaced uPlot's
+  internal title so no canvas re-render on hover; +~30 tests.
 
 - ~~**#18 Pointer tool default + direct-manipulation objects**~~
   (2026-07-11, sonnet agent) — `pointer` tool (glyph ➤, toolbar-first)

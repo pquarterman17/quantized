@@ -15,12 +15,9 @@ day; MAIN #20 tick-precision/eng-notation shipped same day)
 
 ## Actionable dev work (no blockers, no owner gate)
 
-| # | Item | Plan / item | Size |
-|---|------|-------------|------|
-| 34 | Panel drag-to-rearrange (MAIN #19 follow-up — unblocked now that #18's pointer model shipped) | MAIN #19 | S |
-
-*(#9–#18 + #20 all shipped 2026-07-11; #19 v1 shipped same day — only
-its drag-rearrange follow-up remains)*
+*(none — MAIN #9–#20 ALL shipped 2026-07-11: the Origin-parity audit
+items, the owner-testing items, and every follow-up. New items arrive
+via owner gates, user testing, or the parity/decode monitors)*
 
 ## Owner actions & owner-gated decisions
 
@@ -64,7 +61,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | #19 drag-rearrange follow-up + owner gates + deferrals; #9–#18 + #20 shipped 2026-07-11 |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only — MAIN #9–#20 ALL shipped 2026-07-11 |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence |
