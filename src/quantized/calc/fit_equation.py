@@ -5,18 +5,22 @@ via the shunting-yard algorithm, and evaluates by **interpreting the RPN stack**
 NO eval/exec/str2func (per the no-eval rule; this is safer than the MATLAB source
 which compiled via str2func). Parameters are the free identifiers (not x / known
 functions / constants), returned in order of first appearance.
+
+``equation_model`` / ``default_guesses`` bridge a parsed equation into the
+standard bounded-NLLS fit path (``calc.fitting.curve_fit``) for the custom
+fit-model builder (GOTO #1).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.special import erf, erfc
 
-__all__ = ["parse_equation"]
+__all__ = ["default_guesses", "equation_model", "parse_equation"]
 
 
 def _coth(a: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -69,7 +73,22 @@ def _tokenize(s: str) -> tuple[list[dict[str, Any]], list[str]]:
             if name in _FUNCS:
                 tokens.append({"type": "function", "value": name})
                 prev = "function"
-            elif name in _CONSTS:
+                continue
+            # A non-function identifier directly followed by "(" is a call of
+            # an unknown symbol (there is no implicit multiplication in this
+            # grammar) -- reject it with a clear message instead of letting it
+            # fail the arity check with a generic one.
+            look = pos
+            while look < n and s[look] in " \t":
+                look += 1
+            if look < n and s[look] == "(":
+                if name in _CONSTS or name == "x":
+                    raise ValueError(f'"{name}" cannot be called as a function')
+                raise ValueError(
+                    f'Unknown function "{name}". Known functions: '
+                    + ", ".join(sorted(_FUNCS))
+                )
+            if name in _CONSTS:
                 tokens.append({"type": "number", "value": _CONSTS[name]})
                 prev = "value"
             elif name == "x":
@@ -141,6 +160,29 @@ def _to_rpn(tokens: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rpn
 
 
+def _check_arity(rpn: list[dict[str, Any]]) -> None:
+    """Reject RPN that would under/overflow the eval stack (e.g. ``a +`` or
+    ``a b``). MATLAB's parseEquation compiled via str2func, so malformed input
+    errored there at compile time; erroring at parse time matches that intent
+    (the interpreter would otherwise crash or silently drop operands)."""
+    depth = 0
+    for tok in rpn:
+        ttype = tok["type"]
+        if ttype in ("number", "x", "param"):
+            depth += 1
+        elif ttype == "operator":
+            if depth < 2:
+                raise ValueError(
+                    f'operator "{tok["value"]}" is missing an operand'
+                )
+            depth -= 1
+        elif ttype == "function":
+            if depth < 1:
+                raise ValueError(f'function "{tok["value"]}" is missing its argument')
+    if depth != 1:
+        raise ValueError("malformed expression (check operators and parentheses)")
+
+
 def _eval_rpn(rpn: list[dict[str, Any]], x: NDArray[np.float64], p: NDArray[np.float64]) -> Any:
     stack: list[Any] = []
     for tok in rpn:
@@ -185,6 +227,7 @@ def parse_equation(
         raise ValueError("Equation string is empty.")
     tokens, param_names = _tokenize(expr)
     rpn = _to_rpn(tokens)
+    _check_arity(rpn)
 
     def fcn(x: ArrayLike, p: ArrayLike) -> NDArray[np.float64]:
         xv = np.asarray(x, dtype=float).ravel()
@@ -194,3 +237,28 @@ def parse_equation(
         return np.asarray(out, dtype=float).copy()
 
     return fcn, param_names
+
+
+def equation_model(
+    eqn_str: str,
+) -> tuple[Callable[[ArrayLike, ArrayLike], NDArray[np.float64]], list[str]]:
+    """Parse ``eqn_str`` and vet it as a *fit model*: ``(model_fcn, param_names)``.
+
+    On top of ``parse_equation`` this rejects parameter names that start with
+    an underscore (MATLAB identifiers cannot, and it shuts the door on dunder
+    junk like ``__import__`` ever naming a parameter). The returned callable
+    plugs straight into ``calc.fitting.curve_fit`` as ``model_fcn``.
+    """
+    fcn, param_names = parse_equation(eqn_str)
+    for name in param_names:
+        if name.startswith("_"):
+            raise ValueError(
+                f'invalid parameter name "{name}": parameters must start with a letter'
+            )
+    return fcn, param_names
+
+
+def default_guesses(param_names: Sequence[str]) -> list[float]:
+    """Default starting guesses for an equation model: 1.0 per parameter
+    (the conventional neutral start when nothing is known about scale)."""
+    return [1.0] * len(param_names)
