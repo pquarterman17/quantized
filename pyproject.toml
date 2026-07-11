@@ -153,4 +153,5 @@ ignore_missing_imports = true
 markers = [
     "golden: compares output against frozen quantized_matlab reference values",
     "realdata: needs the local-only instrument corpus (auto-skips when absent)",
+    "perf: wall-time regression tripwires with generous ceilings (not benchmarks)",
 ]
