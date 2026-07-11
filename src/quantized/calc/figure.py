@@ -23,9 +23,9 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_styles import figure_style  # noqa: E402
+from quantized.calc.figure_styles import FigureStyle, figure_style  # noqa: E402
 
-__all__ = ["render_figure"]
+__all__ = ["draw_series_axes", "render_figure", "style_rc"]
 
 _FORMATS = ("pdf", "svg", "png", "tiff")
 _LINESTYLE = {"solid": "-", "dashed": "--", "dotted": ":"}
@@ -54,6 +54,99 @@ def _plot_kwargs(
         kw["marker"] = "o"
         kw["markersize"] = spec.get("marker_size") or default_marker_size
     return kw
+
+
+def style_rc(st: FigureStyle, ov: Mapping[str, Any]) -> dict[str, Any]:
+    """The rc-param dict a preset (+ optional font/tick overrides) resolves to.
+
+    Scoped to one render via ``matplotlib.rc_context`` by the callers (the
+    single-figure renderer below and the page composer in ``figure_page``).
+    The named font is given a generic fallback so matplotlib stays silent when
+    Helvetica/Arial/Times aren't installed on the host.
+    """
+    fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
+    font_size = float(ov.get("font_size", st.font_size))
+    font_name = str(ov.get("font_name", st.font_name))
+    tick_dir = str(ov.get("ticks", {}).get("dir", st.tick_dir))
+    rc: dict[str, Any] = {
+        "font.family": st.font_generic,
+        f"font.{st.font_generic}": [font_name, fallback],
+        "font.size": font_size,
+        "axes.labelsize": font_size,
+        "axes.titlesize": float(ov.get("title_size", st.title_font_size)),
+        "xtick.labelsize": font_size,
+        "ytick.labelsize": font_size,
+        "xtick.direction": tick_dir,
+        "ytick.direction": tick_dir,
+        # Mirror ticks onto the top/right spines whenever the box is drawn
+        # (the journal "closed box, inward ticks on all four sides" look) --
+        # matplotlib's own default leaves top/right bare even with the full
+        # rectangular border, which reads as an unfinished box.
+        "xtick.top": st.box_on,
+        "ytick.right": st.box_on,
+    }
+    tick_len = ov.get("ticks", {}).get("len")
+    if tick_len is not None:
+        rc["xtick.major.size"] = float(tick_len)
+        rc["ytick.major.size"] = float(tick_len)
+    return rc
+
+
+def draw_series_axes(
+    fig: Any,
+    ax: Any,
+    xv: NDArray[np.float64],
+    series: Sequence[tuple[str, ArrayLike]],
+    *,
+    st: FigureStyle,
+    ov: Mapping[str, Any],
+    x_log: bool = False,
+    y_log: bool = False,
+    title: str = "",
+    x_label: str = "",
+    y_label: str = "",
+    series_styles: Sequence[Mapping[str, Any] | None] | None = None,
+) -> None:
+    """Plot ``series`` into an EXISTING Axes: lines, scales, labels, spines,
+    legend, grid, and the per-figure override sweep (:func:`_apply_overrides`).
+
+    The single per-axes rendering body, shared by the single-figure renderer
+    (``_render_impl``) and the multi-panel page composer
+    (``figure_page.render_figure_page``) so a panel on a page looks exactly
+    like its single-figure export. Callers own the figure lifecycle (rc
+    context, layout, savefig, close) and must have sanitized every
+    user-supplied string through ``safe_mathtext_label`` already.
+    """
+    for i, (label, y) in enumerate(series):
+        spec = series_styles[i] if series_styles and i < len(series_styles) else None
+        kw = _plot_kwargs(st.line_width, st.marker_size, spec)
+        ax.plot(xv, np.asarray(y, dtype=float), label=label, **kw)
+    if x_log:
+        ax.set_xscale("log")
+    if y_log:
+        ax.set_yscale("log")
+    if title:
+        ax.set_title(title)
+    if x_label:
+        ax.set_xlabel(x_label)
+    if y_label:
+        ax.set_ylabel(y_label)
+    if not st.box_on:
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+    if len(series) > 1 and "legend" not in ov:
+        # legend_location is a plain str (FigureStyle field); every preset's
+        # value is one of matplotlib's accepted location strings.
+        ax.legend(
+            frameon=st.legend_box,
+            fontsize=st.legend_font_size,
+            loc=st.legend_location,
+        )
+    if st.grid_alpha > 0:
+        ax.grid(True, alpha=st.grid_alpha)
+    else:
+        ax.grid(False)
+    _apply_overrides(fig, ax, st, ov, n_series=len(series))
 
 
 def _render_impl(
@@ -107,35 +200,10 @@ def _render_impl(
     _validate_overrides(ov)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
 
-    # rc_context scopes typography to this render; the named font is given a
-    # generic fallback so matplotlib stays silent when Helvetica/Arial/Times
-    # aren't installed on the host. (matplotlib's RcParams Literal-key type is
-    # impractical with the dynamic font.<generic> key, hence the targeted ignore.)
-    fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
-    font_size = float(ov.get("font_size", st.font_size))
-    font_name = str(ov.get("font_name", st.font_name))
-    tick_dir = str(ov.get("ticks", {}).get("dir", st.tick_dir))
-    rc: dict[str, Any] = {
-        "font.family": st.font_generic,
-        f"font.{st.font_generic}": [font_name, fallback],
-        "font.size": font_size,
-        "axes.labelsize": font_size,
-        "axes.titlesize": float(ov.get("title_size", st.title_font_size)),
-        "xtick.labelsize": font_size,
-        "ytick.labelsize": font_size,
-        "xtick.direction": tick_dir,
-        "ytick.direction": tick_dir,
-        # Mirror ticks onto the top/right spines whenever the box is drawn
-        # (the journal "closed box, inward ticks on all four sides" look) --
-        # matplotlib's own default leaves top/right bare even with the full
-        # rectangular border, which reads as an unfinished box.
-        "xtick.top": st.box_on,
-        "ytick.right": st.box_on,
-    }
-    tick_len = ov.get("ticks", {}).get("len")
-    if tick_len is not None:
-        rc["xtick.major.size"] = float(tick_len)
-        rc["ytick.major.size"] = float(tick_len)
+    # rc_context scopes typography to this render (see style_rc). (matplotlib's
+    # RcParams Literal-key type is impractical with the dynamic font.<generic>
+    # key, hence the targeted ignore at the context below.)
+    rc = style_rc(st, ov)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
 
     xv: NDArray[np.float64] = np.asarray(x, dtype=float)
@@ -170,37 +238,20 @@ def _render_impl(
             )
         fig, ax = plt.subplots(figsize=figsize)
         try:
-            for i, (label, y) in enumerate(series):
-                spec = series_styles[i] if series_styles and i < len(series_styles) else None
-                kw = _plot_kwargs(st.line_width, st.marker_size, spec)
-                ax.plot(xv, np.asarray(y, dtype=float), label=label, **kw)
-            if x_log:
-                ax.set_xscale("log")
-            if y_log:
-                ax.set_yscale("log")
-            if title:
-                ax.set_title(title)
-            if x_label:
-                ax.set_xlabel(x_label)
-            if y_label:
-                ax.set_ylabel(y_label)
-            if not st.box_on:
-                ax.spines["top"].set_visible(False)
-                ax.spines["right"].set_visible(False)
-            if len(series) > 1 and "legend" not in ov:
-                # legend_location is a plain str (FigureStyle field), not matplotlib's
-                # Literal[...] loc union -- mypy can't narrow it; every preset's value
-                # is one of matplotlib's accepted location strings.
-                ax.legend(  # type: ignore[call-overload]
-                    frameon=st.legend_box,
-                    fontsize=st.legend_font_size,
-                    loc=st.legend_location,
-                )
-            if st.grid_alpha > 0:
-                ax.grid(True, alpha=st.grid_alpha)
-            else:
-                ax.grid(False)
-            _apply_overrides(fig, ax, st, ov, n_series=len(series))
+            draw_series_axes(
+                fig,
+                ax,
+                xv,
+                series,
+                st=st,
+                ov=ov,
+                x_log=x_log,
+                y_log=y_log,
+                title=title,
+                x_label=x_label,
+                y_label=y_label,
+                series_styles=series_styles,
+            )
             if not ov.get("margins"):
                 fig.tight_layout()
             if collect_map:
