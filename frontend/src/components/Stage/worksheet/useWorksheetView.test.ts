@@ -35,6 +35,8 @@ beforeEach(() => {
     stageTab: "worksheet",
     xKey: null,
     yKeys: null,
+    graphBuilderOpen: false,
+    graphBuilderSeed: null,
   });
 });
 
@@ -61,5 +63,82 @@ describe("useWorksheetView — plot-intent stage routing (item 1)", () => {
     const s = useApp.getState();
     expect(s.activeId).toBe("d1");
     expect(s.stageTab).toBe("plot");
+  });
+});
+
+describe("useWorksheetView — Open in Graph Builder (MAIN_PLAN #4)", () => {
+  it("seeds the store with the selection's spec and opens the builder", () => {
+    const { result } = renderHook(() => useWorksheetView(ds));
+    act(() => result.current.setColSelection([0, 1]));
+    act(() => result.current.openSelectionInGraphBuilder());
+    const s = useApp.getState();
+    expect(s.graphBuilderOpen).toBe(true);
+    expect(s.graphBuilderSeed).toEqual({
+      version: 1,
+      zones: {
+        x: { datasetId: "d1", channel: 0 },
+        y: [{ datasetId: "d1", channel: 1 }],
+        group: null,
+        facet: null,
+      },
+      mark: "scatter",
+    });
+  });
+
+  it("rebinds the active dataset first when the worksheet shows a non-active one", () => {
+    useApp.setState({ activeId: "other", datasets: [ds, { ...ds, id: "other" }] });
+    const { result } = renderHook(() => useWorksheetView(ds));
+    act(() => result.current.openInGraphBuilder([1]));
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d1"); // the Graph Builder reads the ACTIVE dataset
+    expect(s.graphBuilderOpen).toBe(true);
+    expect(s.graphBuilderSeed?.zones.y).toEqual([{ datasetId: "d1", channel: 1 }]);
+  });
+
+  it("an unplottable selection never opens the builder (status message instead)", () => {
+    const { result } = renderHook(() => useWorksheetView(ds));
+    act(() => result.current.openInGraphBuilder([-1])); // only the x/time column
+    const s = useApp.getState();
+    expect(s.graphBuilderOpen).toBe(false);
+    expect(s.graphBuilderSeed).toBeNull();
+    expect(s.status).toBe("nothing plottable in the selection");
+  });
+
+  it("row state is untouched by a handoff (the spec renders through rowstate.analysisData)", () => {
+    useApp.setState({
+      datasets: [{ ...ds, excludedRows: [1] }],
+    });
+    const withExclusion = useApp.getState().datasets[0];
+    const { result } = renderHook(() => useWorksheetView(withExclusion));
+    act(() => result.current.openInGraphBuilder([0, 1]));
+    expect(useApp.getState().datasets[0].excludedRows).toEqual([1]);
+  });
+});
+
+describe("useWorksheetView — per-column widths (MAIN_PLAN #3)", () => {
+  it("setColWidth clamps into the sane range and stores per column", () => {
+    const { result } = renderHook(() => useWorksheetView(ds));
+    act(() => result.current.setColWidth(0, 240));
+    act(() => result.current.setColWidth(1, 5)); // clamps up to the minimum
+    expect(result.current.colWidths[0]).toBe(240);
+    expect(result.current.colWidths[1]).toBeGreaterThan(5);
+  });
+
+  it("autofitCol derives a width from the column's rendered content", () => {
+    const { result } = renderHook(() => useWorksheetView(ds));
+    act(() => result.current.autofitCol(0));
+    expect(result.current.colWidths[0]).toBeGreaterThan(0);
+  });
+
+  it("widths are session state, reset on a dataset switch", () => {
+    const other = { ...ds, id: "d2" };
+    useApp.setState({ datasets: [ds, other] });
+    const { result, rerender } = renderHook(({ d }) => useWorksheetView(d), {
+      initialProps: { d: ds },
+    });
+    act(() => result.current.setColWidth(0, 300));
+    expect(result.current.colWidths[0]).toBe(300);
+    rerender({ d: other });
+    expect(result.current.colWidths).toEqual({});
   });
 });

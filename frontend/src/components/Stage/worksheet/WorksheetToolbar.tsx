@@ -26,6 +26,9 @@ export interface WorksheetToolbarProps {
   selectedColCount: number;
   onPlotSelection: () => void;
   onAddSelectionToPlot: () => void;
+  /** Selection → Graph Builder handoff (MAIN_PLAN #4) — same cluster, so it
+   *  is only offered (and thus never enabled) with a non-empty selection. */
+  onOpenInGraphBuilder: () => void;
   onClearColSelection: () => void;
 }
 
@@ -48,6 +51,7 @@ export default function WorksheetToolbar({
   selectedColCount,
   onPlotSelection,
   onAddSelectionToPlot,
+  onOpenInGraphBuilder,
   onClearColSelection,
 }: WorksheetToolbarProps) {
   return (
@@ -140,6 +144,13 @@ export default function WorksheetToolbar({
             title="Add the selected columns to the current plot"
           >
             Add to plot
+          </button>
+          <button
+            className="qz-btn"
+            onClick={onOpenInGraphBuilder}
+            title="Open the selected columns in the Graph Builder (prefills the X/Y wells)"
+          >
+            Graph Builder
           </button>
           <button className="qz-btn" onClick={onClearColSelection} title="Clear the column selection">
             Deselect columns

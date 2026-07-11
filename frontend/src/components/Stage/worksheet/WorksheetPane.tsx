@@ -100,6 +100,7 @@ function WorksheetPaneView({ ds }: { ds: Dataset }) {
         selectedColCount={view.selectedCols.size}
         onPlotSelection={view.plotSelection}
         onAddSelectionToPlot={view.addSelectionToPlot}
+        onOpenInGraphBuilder={view.openSelectionInGraphBuilder}
         onClearColSelection={view.clearColSelection}
       />
 
@@ -162,6 +163,9 @@ function WorksheetPaneView({ ds }: { ds: Dataset }) {
         onHeaderContext={openMenu("col")}
         onRowContext={openMenu("row")}
         textCols={view.textCols}
+        colWidths={view.colWidths}
+        onResizeCol={view.setColWidth}
+        onAutofitCol={view.autofitCol}
       />
 
       {menu && (
@@ -184,6 +188,7 @@ function WorksheetPaneView({ ds }: { ds: Dataset }) {
                   onToggleStats: () => view.setShowStats((v) => !v),
                   onPlotSelection: () => view.plotCols(effectiveCols(menu.target), "replace"),
                   onAddSelectionToPlot: () => view.plotCols(effectiveCols(menu.target), "add"),
+                  onOpenInGraphBuilder: () => view.openInGraphBuilder(effectiveCols(menu.target)),
                 })
               : rowMenuItems(menu.target, {
                   masked: view.masked,
