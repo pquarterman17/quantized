@@ -141,7 +141,7 @@ describe("buildOpts", () => {
       yLog: false,
       tool: "zoom", // composes with any tool — workshop-scoped, not tool-scoped
       anchorEdit: {
-        anchors: [{ index: 0, x: 1, y: 2 }],
+        getAnchors: () => [{ index: 0, x: 1, y: 2 }],
         onAdd: vi.fn(),
         onMove: vi.fn(),
         onRemove: vi.fn(),

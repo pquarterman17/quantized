@@ -1,80 +1,48 @@
 // Anchor-point baseline gesture (GOTO #2): while the Baseline workshop's
 // "Anchor points" method is live, a plain click on the plot places a baseline
 // anchor at the clicked (x, y); a click ON an anchor removes it; dragging an
-// anchor moves it. Structurally the 2-D sibling of peakMarkerHit's click
-// gesture, plus refLinePlugin's capture-phase drag (a mousedown that hits a
-// marker beats uPlot's own box-zoom drag; empty-canvas drags pass through so
-// zoom/pan keep working). Live drag state is plugin-local (canvas redraw
-// only) and commits ONCE on mouseup — the store bridge then refreshes the
-// debounced baseline preview overlay. Markers are drawn here (diamonds);
-// the interpolated baseline curve itself rides the shared baselineOverlay
-// series, not this plugin.
+// anchor moves it. Rides the shared point-gesture core (lib/pointGesture) for
+// pixel-frame conversion + hit testing, plus refLinePlugin's capture-phase
+// drag (a mousedown that hits a marker beats uPlot's own box-zoom drag;
+// empty-canvas drags pass through so zoom/pan keep working). Live drag state
+// is plugin-local (canvas redraw only) and commits ONCE on mouseup — the
+// store bridge then refreshes the debounced baseline preview overlay.
+// Markers are drawn here (diamonds); the interpolated baseline curve itself
+// rides the shared baselineOverlay series, not this plugin.
+//
+// MAIN #8f: the plugin reads the anchor list through a GETTER, not a captured
+// snapshot — the bridge object stays identity-stable across anchor edits, so
+// PlotViewport's rebuild effect (keyed on the bridge) no longer tears the
+// uPlot instance down twice per gesture (once for the bridge, once for the
+// debounced preview). The plugin self-redraws after each commit instead.
 
 import type uPlot from "uplot";
 
+import { CLICK_PX, hitTestPoints, pointPixels, type GesturePoint } from "./pointGesture";
+
 /** One placed anchor in DATA coords, tagged with its index into the
- *  workshop's anchor list (what onMove/onRemove expect). */
-export interface AnchorPoint {
-  index: number;
-  x: number;
-  y: number;
-}
-
-/** Anchor data coords → plot pixels via `valToPos` — separately testable with
- *  a minimal `{valToPos}` stub (the sibling plugins' `fakeU` idiom). */
-export function anchorPixels(
-  u: Pick<uPlot, "valToPos">,
-  anchors: readonly AnchorPoint[],
-): (AnchorPoint & { px: number; py: number })[] {
-  return anchors.map((a) => ({
-    ...a,
-    // CSS px relative to u.over — the SAME frame as the pointer coords the
-    // hit tests use (clientX - rect.left). The `true` canvas-pixel form is
-    // DPR-scaled + bbox-offset and belongs only in ctx draw code (review
-    // 2026-07-11: with `true` here, click-on-marker missed by the axis
-    // gutter and every remove/drag gesture was unreachable).
-    px: u.valToPos(a.x, "x"),
-    py: u.valToPos(a.y, "y"),
-  }));
-}
-
-/** Which anchor (in PIXELS, from `anchorPixels`) the pointer is nearest to,
- *  within `tol` px (Euclidean — an anchor is a point, so the tolerance is a
- *  circle). Nearest wins; ties keep the earlier index. Null when nothing is
- *  within tolerance. */
-export function hitTestAnchors(
-  anchors: readonly { index: number; px: number; py: number }[],
-  pointer: { x: number; y: number },
-  tol = 8,
-): number | null {
-  let best: number | null = null;
-  let bestDist = Infinity;
-  for (const a of anchors) {
-    if (!Number.isFinite(a.px) || !Number.isFinite(a.py)) continue;
-    const d = Math.hypot(a.px - pointer.x, a.py - pointer.y);
-    if (d <= tol && d < bestDist) {
-      bestDist = d;
-      best = a.index;
-    }
-  }
-  return best;
-}
+ *  workshop's anchor list (what onMove/onRemove expect) — the shared
+ *  gesture-point shape. */
+export type AnchorPoint = GesturePoint;
 
 /**
  * Workshop-scoped plot plugin (composes with whatever toolbar tool is active,
  * like peakMarkerEditPlugin / wheelZoomPlugin — the Baseline workshop's
  * anchor mode gates it via the store bridge, see PlotStage):
  *
- * - plain click (< 6 px movement) on empty canvas → `onAdd(x, y)` at the
+ * - plain click (< CLICK_PX movement) on empty canvas → `onAdd(x, y)` at the
  *   clicked DATA coords;
  * - plain click on an anchor marker → `onRemove(index)`;
  * - drag an anchor marker → live plugin-local redraw, `onMove(index, x, y)`
  *   committed once on release (capture-phase mousedown beats uPlot's
  *   box-zoom for that gesture only);
  * - drag on empty canvas → untouched (box zoom / pan proceed normally).
+ *
+ * `getAnchors` must return the CURRENT list on every call (a ref read, not a
+ * snapshot) — see the module header for why.
  */
 export function anchorEditPlugin(
-  anchors: readonly AnchorPoint[],
+  getAnchors: () => readonly AnchorPoint[],
   opts: {
     onAdd: (x: number, y: number) => void;
     onMove: (index: number, x: number, y: number) => void;
@@ -85,9 +53,40 @@ export function anchorEditPlugin(
 ): uPlot.Plugin {
   // Live override while dragging one anchor (null = not dragging).
   let drag: { index: number; x: number; y: number } | null = null;
+  let destroyed = false;
+
+  // MAIN #8f: anchor pixels recompute only when the anchor list identity or
+  // the scale window / plot size changes — not on every pointer move (the
+  // cursor handler previously ran valToPos over the whole list per event).
+  let cache: {
+    anchors: readonly AnchorPoint[];
+    key: string;
+    pixels: (GesturePoint & { px: number; py: number })[];
+  } | null = null;
+  const pixels = (u: uPlot) => {
+    const anchors = getAnchors();
+    const { x, y } = u.scales;
+    const key = `${x.min},${x.max},${y.min},${y.max},${u.over.clientWidth},${u.over.clientHeight}`;
+    if (!cache || cache.anchors !== anchors || cache.key !== key) {
+      cache = { anchors, key, pixels: pointPixels(u, anchors) };
+    }
+    return cache.pixels;
+  };
+
+  // A commit mutates React state; the owner's re-render refreshes what
+  // `getAnchors()` returns AFTER the current event flushes, so redraw on the
+  // next animation frame (the draw hook reads the getter fresh) instead of
+  // synchronously repainting the stale list.
+  const redrawSoon = (u: uPlot) =>
+    requestAnimationFrame(() => {
+      if (!destroyed) u.redraw();
+    });
 
   return {
     hooks: {
+      destroy: () => {
+        destroyed = true;
+      },
       ready: (u: uPlot) => {
         const over = u.over;
         over.style.cursor = "copy";
@@ -96,7 +95,7 @@ export function anchorEditPlugin(
           if (drag) return; // cursor fixed while a drag owns the pointer
           const rect = over.getBoundingClientRect();
           const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-          const hit = hitTestAnchors(anchorPixels(u, anchors), pointer, tol);
+          const hit = hitTestPoints(pixels(u), pointer, tol);
           over.style.cursor = hit != null ? "pointer" : "copy";
         });
 
@@ -106,7 +105,7 @@ export function anchorEditPlugin(
             if (e.button !== 0) return;
             const rect = over.getBoundingClientRect();
             const down = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-            const hit = hitTestAnchors(anchorPixels(u, anchors), down, tol);
+            const hit = hitTestPoints(pixels(u), down, tol);
 
             if (hit == null) {
               // Empty canvas: don't block uPlot's own drag (zoom/pan). Commit
@@ -114,8 +113,9 @@ export function anchorEditPlugin(
               const onUp = (ev: MouseEvent) => {
                 document.removeEventListener("mouseup", onUp);
                 const up = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
-                if (Math.hypot(up.x - down.x, up.y - down.y) >= 6) return;
+                if (Math.hypot(up.x - down.x, up.y - down.y) >= CLICK_PX) return;
                 opts.onAdd(u.posToVal(up.x, "x"), u.posToVal(up.y, "y"));
+                redrawSoon(u);
               };
               document.addEventListener("mouseup", onUp);
               return;
@@ -124,7 +124,7 @@ export function anchorEditPlugin(
             // On a marker: own the gesture (capture-phase beats uPlot's drag).
             e.preventDefault();
             e.stopPropagation();
-            const a = anchors.find((p) => p.index === hit)!;
+            const a = getAnchors().find((p) => p.index === hit)!;
             drag = { index: hit, x: a.x, y: a.y };
             const onMove = (ev: MouseEvent) => {
               drag = {
@@ -139,12 +139,13 @@ export function anchorEditPlugin(
               document.removeEventListener("mouseup", onUp);
               const up = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
               drag = null;
-              if (Math.hypot(up.x - down.x, up.y - down.y) < 6) {
+              if (Math.hypot(up.x - down.x, up.y - down.y) < CLICK_PX) {
                 opts.onRemove(hit); // a click on the marker, not a drag
               } else {
                 opts.onMove(hit, u.posToVal(up.x, "x"), u.posToVal(up.y, "y"));
               }
-              u.redraw();
+              u.redraw(); // clear the plugin-local drag override now …
+              redrawSoon(u); // … and repaint the committed list post-flush
             };
             document.addEventListener("mousemove", onMove);
             document.addEventListener("mouseup", onUp);
@@ -153,6 +154,7 @@ export function anchorEditPlugin(
         );
       },
       draw: (u: uPlot) => {
+        const anchors = getAnchors();
         if (anchors.length === 0 && !drag) return;
         const { ctx } = u;
         const { left, top, width, height } = u.bbox;

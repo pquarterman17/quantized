@@ -9,7 +9,7 @@
 // pipeline. The estimators are golden vs MATLAB in calc.baseline (the GOTO
 // additions are reference-value tested); this hook is just orchestration.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   baselineALS,
@@ -156,6 +156,14 @@ export function useBaseline(): BaselineState {
   // anchors without holding compute() in its dependency list (a fresh closure
   // every render would defeat the debounce) — the shared plugin-bridge idiom.
   const computeRef = useRef<() => Promise<void>>(async () => {});
+  // MAIN #8f: the bridge exposes anchors through a GETTER so the bridge's own
+  // identity can stay stable across edits (PlotViewport tears down + rebuilds
+  // the uPlot instance whenever the bridge reference changes). The memo keeps
+  // the array identity stable per `anchors` state so the plugin's per-scale
+  // pixel cache holds across unrelated re-renders.
+  const anchorPoints = useMemo(() => anchors.map(([x, y], index) => ({ index, x, y })), [anchors]);
+  const anchorPointsRef = useRef(anchorPoints);
+  anchorPointsRef.current = anchorPoints;
 
   // A new active dataset invalidates the current estimate + its overlay (and
   // the anchors — they're coordinates on the OLD data).
@@ -208,21 +216,25 @@ export function useBaseline(): BaselineState {
 
   // Anchor mode (#2): publish the click/drag bridge for the plot's
   // anchorEditPlugin while the method is live; null it otherwise (the same
-  // wizard-scoped bridge idiom as usePeakWizard's peakWizardEdit).
+  // wizard-scoped bridge idiom as usePeakWizard's peakWizardEdit). Unlike
+  // that bridge it is published ONCE per activation — `anchors` is
+  // deliberately NOT a dependency; the plugin reads the live list through
+  // `getAnchors` (see the AnchorEditBridge identity contract, MAIN #8f), so
+  // an anchor edit no longer republishes the bridge and rebuilds the plot.
   useEffect(() => {
     if (method !== "anchor" || !active) {
       setBaselineAnchorEdit(null);
       return;
     }
     setBaselineAnchorEdit({
-      anchors: anchors.map(([x, y], index) => ({ index, x, y })),
+      getAnchors: () => anchorPointsRef.current,
       addAnchor: (x, y) => setAnchors((a) => [...a, [x, y]]),
       moveAnchor: (index, x, y) =>
         setAnchors((a) => a.map((pt, i) => (i === index ? ([x, y] as [number, number]) : pt))),
       removeAnchor: (index) => setAnchors((a) => a.filter((_, i) => i !== index)),
     });
     return () => setBaselineAnchorEdit(null);
-  }, [method, anchors, active, setBaselineAnchorEdit]);
+  }, [method, active, setBaselineAnchorEdit]);
 
   // Anchor mode (#2): live preview — re-estimate (debounced) as anchors are
   // placed/dragged; drop the overlay when there aren't enough anchors yet.

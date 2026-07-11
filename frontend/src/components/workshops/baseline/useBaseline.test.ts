@@ -319,12 +319,26 @@ describe("useBaseline anchor method (GOTO #2)", () => {
     act(() => result.current.setMethod("anchor"));
     const bridge = useApp.getState().baselineAnchorEdit;
     expect(bridge).not.toBeNull();
-    expect(bridge!.anchors).toEqual([]);
+    expect(bridge!.getAnchors()).toEqual([]);
 
     act(() => bridge!.addAnchor(2, 11));
     expect(result.current.anchors).toEqual([[2, 11]]);
-    // The re-published bridge carries the updated, index-tagged anchor list.
-    expect(useApp.getState().baselineAnchorEdit!.anchors).toEqual([{ index: 0, x: 2, y: 11 }]);
+    // The getter sees the updated, index-tagged anchor list.
+    expect(useApp.getState().baselineAnchorEdit!.getAnchors()).toEqual([{ index: 0, x: 2, y: 11 }]);
+  });
+
+  it("#8f: the bridge stays IDENTITY-STABLE across anchor edits (no per-gesture republish)", () => {
+    const { result } = renderHook(() => useBaseline());
+    act(() => result.current.setMethod("anchor"));
+    const bridge = useApp.getState().baselineAnchorEdit;
+
+    act(() => bridge!.addAnchor(1, 10));
+    act(() => bridge!.moveAnchor(0, 1.5, 10.5));
+    // Same object in the store: PlotViewport keys its uPlot rebuild on this
+    // reference, so a republish here would tear the plot down per gesture.
+    expect(useApp.getState().baselineAnchorEdit).toBe(bridge);
+    // …while the getter serves the fresh list through the stable bridge.
+    expect(bridge!.getAnchors()).toEqual([{ index: 0, x: 1.5, y: 10.5 }]);
   });
 
   it("bridge move/remove edit the anchor list in place", () => {
