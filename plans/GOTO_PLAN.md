@@ -54,6 +54,8 @@ DREAM fit → job submit → GET-poll progress → posterior + corner plot.
 - Items 7, 8 extend item 2's baseline-picker surface
 - Item 10 (bumps): fast engines are independent; the DREAM path
   requires item 9 (job runner). Item 6 can use either engine.
+- Item 11 (help tab) documents item 5's shipped syntax — strictly
+  after #5; it also opens the Help-menu revisit discussion.
 
 ### Resolved decisions
 - **Custom fit models (2026-07-10):** build the in-app equation builder
@@ -158,6 +160,17 @@ Interactive WebGL 3-D stays a deferred gate pending Q4.
 8. **Analytic baseline completion** — explicit linear/quadratic/poly-n
    choices surfaced in the baseline picker (BG-from-region polyfit math
    exists; this is the UI surface)
+
+11. **Text-formatting help tab** (booked 2026-07-11, not yet
+    implemented) — a Help surface documenting the rich-text
+    micro-syntax shipped by #5: the `$...$` subset (italics, sub/sup,
+    Greek, `\AA`/°, `\mathrm`), a worked-examples table (µ₀H, Å⁻¹,
+    χ″, 2θ) with live rendered previews, and the symbol palette
+    cross-reference. Do after #5 lands (documents the final syntax).
+    **Owner note:** this is also the seed for a broader **Help
+    dropdown-menu revisit** — the menu's current contents should be
+    rethought when this tab is designed (scope that revisit then, not
+    now).
 
 ~~9. **Background job runner for long fits**~~ ✅ completed 2026-07-11
    (see Completed).

@@ -30,6 +30,7 @@ in the same commit). Every edit here must have a matching plan edit.
 | 17 | Rich-text labels: shared AST rendered by uPlot on-screen + matplotlib mathtext in export, symbol palette | GOTO #5 | M |
 | 18 | AICc model quick-scan over registry + saved custom models (builder #1 shipped; both engines available) | GOTO #6 | S |
 | 19 | XRD low-angle background + XRR/NR footprint correction; analytic baseline UI completion | GOTO #7/#8 | S–M |
+| 22 | Text-formatting help tab (documents #5's syntax, live examples; after #5 — also seeds the Help-menu revisit) | GOTO #11 | S |
 
 ## Owner actions & owner-gated decisions
 
