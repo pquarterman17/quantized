@@ -45,8 +45,8 @@ export function usePlotStageActions(
     const yVals: (number | null)[] = [];
     for (let s = 1; s < cols.length; s++) yVals.push(...cols[s]);
     const st = useApp.getState();
-    st.setXLog(suggestLogScale(xVals));
-    st.setYLog(suggestLogScale(yVals));
+    st.setXScale(suggestLogScale(xVals) ? "log" : "linear");
+    st.setYScale(suggestLogScale(yVals) ? "log" : "linear");
     st.setXLim(null);
     st.setYLim(null);
     st.setStatus("smart auto-scaled");

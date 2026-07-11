@@ -9,7 +9,7 @@
 import type { ContextMenuItem, Swatch } from "../components/overlays/ContextMenu";
 import { MARKER_SHAPES } from "./markers";
 import type { AxisZone } from "./plotHitTest";
-import type { LineStyle, MarkerShape, SeriesStyle } from "./types";
+import type { AxisScale, LineStyle, MarkerShape, SeriesStyle } from "./types";
 
 export type LegendCorner = "ne" | "nw" | "se" | "sw";
 
@@ -34,10 +34,10 @@ export interface PlotMenuContext {
   canHide: boolean;
 
   // ── axis + plot view state (for checkmarks / label wording) ──
-  xLog: boolean;
-  yLog: boolean;
-  /** Effective y2 log (y2Log ?? yLog), already resolved by the caller. */
-  y2Log: boolean;
+  xScale: AxisScale;
+  yScale: AxisScale;
+  /** Effective y2 scale (y2Scale ?? yScale), already resolved by the caller. */
+  y2Scale: AxisScale;
   showGrid: boolean;
   showLegend: boolean;
   legendPos: LegendCorner;
@@ -53,9 +53,9 @@ export interface PlotMenuContext {
   toggleY2: (channel: number) => void;
 
   // ── axis actions ──
-  setXLog: (v: boolean) => void;
-  setYLog: (v: boolean) => void;
-  setY2Log: (v: boolean) => void;
+  setXScale: (v: AxisScale) => void;
+  setYScale: (v: AxisScale) => void;
+  setY2Scale: (v: AxisScale) => void;
   autoscaleX: () => void;
   autoscaleY: () => void;
   autoscaleY2: () => void;
@@ -112,16 +112,31 @@ function colorSwatches(s: MenuSeries, ctx: PlotMenuContext): Swatch[] {
   }));
 }
 
-/** The X/Y/Y2 sub-entries (log toggle + autoscale + set-limits) for one axis. */
+/** MAIN #12: the Axes-card idiom (a 3-way Linear/Log/Reciprocal pick) mirrored
+ *  as a submenu, same pattern as the "Line style" submenu above. */
+const SCALE_OPTS: { value: AxisScale; label: string }[] = [
+  { value: "linear", label: "Linear" },
+  { value: "log", label: "Log" },
+  { value: "reciprocal", label: "Reciprocal" },
+];
+
+/** The X/Y/Y2 sub-entries (scale submenu + autoscale + set-limits) for one axis. */
 function axisItems(
   name: string,
-  log: boolean,
-  setLog: (v: boolean) => void,
+  scale: AxisScale,
+  setScale: (v: AxisScale) => void,
   autoscale: () => void,
   limits: () => void,
 ): ContextMenuItem[] {
   return [
-    { label: `Log ${name} scale`, run: () => setLog(!log), checked: log },
+    {
+      label: `${name} scale`,
+      submenu: SCALE_OPTS.map((o) => ({
+        label: o.label,
+        run: () => setScale(o.value),
+        checked: scale === o.value,
+      })),
+    },
     { label: `Autoscale ${name}`, run: autoscale },
     { label: `Set ${name} limits…`, run: limits },
   ];
@@ -176,9 +191,9 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   }
 
   // 2 ── Axes (which axis depends on the cursor zone) ────────────────────────
-  const xItems = axisItems("X", ctx.xLog, ctx.setXLog, ctx.autoscaleX, ctx.limitsX);
-  const yItems = axisItems("Y", ctx.yLog, ctx.setYLog, ctx.autoscaleY, ctx.limitsY);
-  const y2Items = axisItems("Y2", ctx.y2Log, ctx.setY2Log, ctx.autoscaleY2, ctx.limitsY2);
+  const xItems = axisItems("X", ctx.xScale, ctx.setXScale, ctx.autoscaleX, ctx.limitsX);
+  const yItems = axisItems("Y", ctx.yScale, ctx.setYScale, ctx.autoscaleY, ctx.limitsY);
+  const y2Items = axisItems("Y2", ctx.y2Scale, ctx.setY2Scale, ctx.autoscaleY2, ctx.limitsY2);
   if (ctx.zone === "x") {
     items.push({ header: "X axis" }, ...xItems);
   } else if (ctx.zone === "y") {

@@ -16,7 +16,9 @@ campaigns never enumerated; MAIN #10 re-import-from-source shipped same day)
 
 | # | Item | Plan / item | Size |
 |---|------|-------------|------|
-| 27 | Reciprocal (Arrhenius) axis scale | MAIN #12 | S |
+*(none — the 2026-07-11 Origin-parity audit items #9–#17 ALL shipped the
+same day; new items arrive via owner gates, user testing, or the
+parity/decode monitors)*
 
 ## Owner actions & owner-gated decisions
 
@@ -60,7 +62,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | #12 (agent in flight) + owner gates + deferrals; #9/#10/#11/#13–#17 shipped 2026-07-11 |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only — audit items #9–#17 ALL shipped 2026-07-11 |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence |

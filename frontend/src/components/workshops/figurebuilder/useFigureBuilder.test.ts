@@ -37,8 +37,8 @@ beforeEach(() => {
     datasets: [{ id: "d1", name: "scan.dat", data: DATA }],
     activeId: "d1",
     yKeys: null,
-    xLog: false,
-    yLog: false,
+    xScale: "linear",
+    yScale: "linear",
     seriesStyles: {},
     status: "",
   });

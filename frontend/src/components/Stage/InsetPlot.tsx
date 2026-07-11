@@ -35,8 +35,8 @@ export default function InsetPlot({ payload, styleList }: Props) {
     const opts = buildOpts(payload, {
       width: w,
       height: h,
-      yLog: false,
-      xLog: false,
+      yScale: "linear",
+      xScale: "linear",
       showGrid: true,
       tool: "zoom", // drag to re-zoom the inset
       onReadout: () => {},

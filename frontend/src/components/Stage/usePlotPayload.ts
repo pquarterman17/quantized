@@ -22,12 +22,12 @@ import {
   type PlotPayload,
 } from "../../lib/plotdata";
 import { droppedRows } from "../../lib/rowstate";
-import type { BaselineOverlay, Dataset, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
+import type { AxisScale, BaselineOverlay, Dataset, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
 
 export interface PlotPayloadParams {
   active: Dataset | null | undefined;
-  yLog: boolean;
-  xLog: boolean;
+  yScale: AxisScale;
+  xScale: AxisScale;
   xKey: number | null;
   yKeys: number[] | null;
   y2Keys: number[] | null;
@@ -162,7 +162,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       setPayload(null);
       return;
     }
-    fetchPlot(active.data, p.yLog, p.xLog, plotted, p.y2Keys, p.xKey).then((raw) => {
+    fetchPlot(active.data, p.yScale === "log", p.xScale === "log", plotted, p.y2Keys, p.xKey).then((raw) => {
       if (cancelled) return;
       // xCategories producer (gap #20 residual): a categorical-typed x
       // channel (nominal/ordinal — user override or inferred, see
@@ -176,7 +176,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     return () => {
       cancelled = true;
     };
-  }, [active, p.yLog, p.xLog, plotted, p.y2Keys, p.xKey]);
+  }, [active, p.yScale, p.xScale, plotted, p.y2Keys, p.xKey]);
 
   return { payload, displayPayload, plotted, styleList, labelList, errorBars, colorByColumns, hidden };
 }

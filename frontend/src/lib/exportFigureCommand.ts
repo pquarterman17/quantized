@@ -57,8 +57,8 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
     return exportFigure({
       dataset: ds.data,
       y_keys: s().yKeys ?? undefined,
-      x_log: s().xLog,
-      y_log: s().yLog,
+      x_scale: s().xScale,
+      y_scale: s().yScale,
       fmt: params.fmt as string,
       style: params.style as string,
       dpi: params.dpi as number,

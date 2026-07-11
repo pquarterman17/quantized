@@ -5,6 +5,8 @@ import {
   categoricalTickFormatter,
   fixedLogAxisSplits,
   niceLinearStep,
+  reciprocalAxisSplits,
+  reciprocalTransform,
   resolvePlotBg,
   tickFormatter,
   xIsAscending,
@@ -22,7 +24,7 @@ const payload: PlotPayload = {
   xUnit: "Oe",
 };
 
-const base = { width: 600, height: 400, xLog: false, onReadout: vi.fn() };
+const base = { width: 600, height: 400, xScale: "linear" as const, onReadout: vi.fn() };
 
 describe("buildOpts non-monotonic x (hysteresis loop) x-range", () => {
   // Field sweeps up then back down, starting and ending near the SAME value —
@@ -38,7 +40,7 @@ describe("buildOpts non-monotonic x (hysteresis loop) x-range", () => {
   };
 
   it("supplies a full-scan x range covering the whole sweep, not the collapsed endpoints", () => {
-    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(loop, { ...base, yScale: "linear", tool: "zoom" });
     const xr = (opts.scales?.x as { range?: unknown }).range;
     expect(typeof xr).toBe("function");
     const [lo, hi] = (xr as () => [number, number])();
@@ -48,32 +50,32 @@ describe("buildOpts non-monotonic x (hysteresis loop) x-range", () => {
   });
 
   it("leaves the x range to uPlot (no function) when x is monotonic", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect((opts.scales?.x as { range?: unknown }).range).toBeUndefined();
   });
 
   it("an explicit xLim still wins over the loop x-range", () => {
-    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom", xLim: [-50, 50] });
+    const opts = buildOpts(loop, { ...base, yScale: "linear", tool: "zoom", xLim: [-50, 50] });
     expect((opts.scales?.x as { range?: unknown }).range).toEqual([-50, 50]);
   });
 });
 
 describe("buildOpts publication template (fontSize + baseLineWidth)", () => {
   it("applies the template font size to the axes and base width to series", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", fontSize: 18, baseLineWidth: 3 });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", fontSize: 18, baseLineWidth: 3 });
     expect(opts.axes?.[0].font).toContain("18px");
     // series[0] is the x series; the first data series is index 1.
     expect((opts.series?.[1] as { width?: number }).width).toBe(3);
   });
 
   it("defaults to 12px / 1.5 when no template args are given (item 2, was 11px)", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(opts.axes?.[0].font).toContain("12px");
     expect((opts.series?.[1] as { width?: number }).width).toBe(1.5);
   });
 
   it("sizes the axis title 2px over the tick font and grows label/tick room to match", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", fontSize: 18 });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", fontSize: 18 });
     expect(opts.axes?.[0].labelFont).toContain("20px");
     expect(opts.axes?.[0].labelSize).toBeGreaterThan(30);
     expect(opts.axes?.[1].size as number).toBeGreaterThan(60);
@@ -82,30 +84,30 @@ describe("buildOpts publication template (fontSize + baseLineWidth)", () => {
 
 describe("buildOpts", () => {
   it("enables box-zoom drag only in zoom mode", () => {
-    const zoom = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const zoom = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(zoom.cursor?.drag).toMatchObject({ x: true, y: true });
-    const pan = buildOpts(payload, { ...base, yLog: false, tool: "pan" });
+    const pan = buildOpts(payload, { ...base, yScale: "linear", tool: "pan" });
     expect(pan.cursor?.drag).toMatchObject({ x: false, y: false });
   });
 
   it("adds one plugin for pan and cursor, none for zoom", () => {
-    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom" }).plugins).toHaveLength(0);
-    expect(buildOpts(payload, { ...base, yLog: false, tool: "pan" }).plugins).toHaveLength(1);
-    expect(buildOpts(payload, { ...base, yLog: false, tool: "cursor" }).plugins).toHaveLength(1);
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" }).plugins).toHaveLength(0);
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "pan" }).plugins).toHaveLength(1);
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "cursor" }).plugins).toHaveLength(1);
   });
 
   it("adds the stats plugin only in the stats tool", () => {
     expect(
-      buildOpts(payload, { ...base, yLog: false, tool: "stats", onStats: vi.fn() }).plugins,
+      buildOpts(payload, { ...base, yScale: "linear", tool: "stats", onStats: vi.fn() }).plugins,
     ).toHaveLength(1);
-    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom" }).plugins).toHaveLength(0);
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" }).plugins).toHaveLength(0);
   });
 
   it("adds the reference-line plugin only when ref lines exist", () => {
-    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom", refLines: [] }).plugins).toHaveLength(0);
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", refLines: [] }).plugins).toHaveLength(0);
     const withRefs = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       refLines: [{ id: "r1", axis: "x", value: 1 }],
     });
@@ -113,32 +115,32 @@ describe("buildOpts", () => {
   });
 
   it("adds the wheel-zoom plugin only when the pref is on", () => {
-    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom" }).plugins).toHaveLength(0);
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" }).plugins).toHaveLength(0);
     expect(
-      buildOpts(payload, { ...base, yLog: false, tool: "zoom", wheelZoom: true }).plugins,
+      buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", wheelZoom: true }).plugins,
     ).toHaveLength(1);
   });
 
   it("the qfit tool adds the ROI-band gadget plugin by default (fit/integrate/stats/differentiate/fft)", () => {
-    expect(buildOpts(payload, { ...base, yLog: false, tool: "qfit" }).plugins).toHaveLength(1);
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "qfit" }).plugins).toHaveLength(1);
     expect(
-      buildOpts(payload, { ...base, yLog: false, tool: "qfit", gadgetMode: "integrate" }).plugins,
+      buildOpts(payload, { ...base, yScale: "linear", tool: "qfit", gadgetMode: "integrate" }).plugins,
     ).toHaveLength(1);
   });
 
   it("the qfit tool swaps to the paired-cursors plugin in cursors mode (gap #34)", () => {
     expect(
-      buildOpts(payload, { ...base, yLog: false, tool: "qfit", gadgetMode: "cursors" }).plugins,
+      buildOpts(payload, { ...base, yScale: "linear", tool: "qfit", gadgetMode: "cursors" }).plugins,
     ).toHaveLength(1);
   });
 
   it("adds the anchor-edit plugin only while the baseline anchor bridge is live (GOTO #2)", () => {
     expect(
-      buildOpts(payload, { ...base, yLog: false, tool: "zoom", anchorEdit: null }).plugins,
+      buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", anchorEdit: null }).plugins,
     ).toHaveLength(0);
     const withAnchors = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom", // composes with any tool — workshop-scoped, not tool-scoped
       anchorEdit: {
         getAnchors: () => [{ index: 0, x: 1, y: 2 }],
@@ -154,7 +156,7 @@ describe("buildOpts", () => {
 describe("buildOpts defaultTrace", () => {
   type S = { width?: number; points?: { show?: boolean }; paths?: unknown };
   const series = (trace: string): S =>
-    buildOpts(payload, { ...base, yLog: false, tool: "zoom", defaultTrace: trace }).series?.[1] as S;
+    buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", defaultTrace: trace }).series?.[1] as S;
 
   it("Line: line only, no markers, no custom paths (default)", () => {
     const s = series("Line");
@@ -179,7 +181,7 @@ describe("buildOpts defaultTrace", () => {
     const fn = vi.fn();
     const s = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       defaultTrace: "Step",
       steppedPaths: fn as unknown as Parameters<typeof buildOpts>[1]["steppedPaths"],
@@ -190,29 +192,39 @@ describe("buildOpts defaultTrace", () => {
   it("disables time mode on the x scale (physics axes are never timestamps)", () => {
     // uPlot defaults scales.x.time = true, which formats Qz/2θ/field as dates
     // ("12/31/69", ":00.040") and blanks negative x. Must be explicitly false.
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(opts.scales?.x?.time).toBe(false);
   });
 
-  it("sets the log distribution on the y scale when yLog", () => {
-    expect(buildOpts(payload, { ...base, yLog: true, tool: "zoom" }).scales?.y?.distr).toBe(3);
-    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom" }).scales?.y?.distr).toBe(1);
+  it("sets the log distribution on the y scale when yScale is log", () => {
+    expect(buildOpts(payload, { ...base, yScale: "log", tool: "zoom" }).scales?.y?.distr).toBe(3);
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" }).scales?.y?.distr).toBe(1);
   });
 
-  it("sets the log distribution on the x scale when xLog", () => {
-    expect(buildOpts(payload, { ...base, xLog: true, yLog: false, tool: "zoom" }).scales?.x?.distr).toBe(3);
-    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom" }).scales?.x?.distr).toBe(1);
+  it("sets the log distribution on the x scale when xScale is log", () => {
+    expect(buildOpts(payload, { ...base, xScale: "log", yScale: "linear", tool: "zoom" }).scales?.x?.distr).toBe(3);
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" }).scales?.x?.distr).toBe(1);
+  });
+
+  it("sets the custom (100) distribution + fwd/bwd transform on a reciprocal scale", () => {
+    const xOpts = buildOpts(payload, { ...base, xScale: "reciprocal", yScale: "linear", tool: "zoom" });
+    expect(xOpts.scales?.x?.distr).toBe(100);
+    expect(xOpts.scales?.x?.fwd).toBeTypeOf("function");
+    expect(xOpts.scales?.x?.bwd).toBeTypeOf("function");
+    expect(xOpts.scales?.x?.fwd?.(2)).toBeCloseTo(0.5, 12);
+    const yOpts = buildOpts(payload, { ...base, yScale: "reciprocal", tool: "zoom" });
+    expect(yOpts.scales?.y?.distr).toBe(100);
   });
 
   it("labels the y series with its unit", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(opts.series[1].label).toBe("M (emu)");
   });
 
   it("applies a legend-rename override to the series label and solo-axis label", () => {
     const opts = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       seriesLabels: ["Moment"],
     });
@@ -224,7 +236,7 @@ describe("buildOpts defaultTrace", () => {
     const two: PlotPayload = { ...payload, series: [...payload.series, { label: "B", unit: "T" }] };
     const opts = buildOpts(two, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       seriesLabels: [undefined, "renamed"],
     });
@@ -233,17 +245,17 @@ describe("buildOpts defaultTrace", () => {
   });
 
   it("labels the y axis when a single series is shown", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(opts.axes?.[1]?.label).toBe("M (emu)");
     const two: PlotPayload = { ...payload, series: [...payload.series, { label: "B", unit: "" }] };
     // With >1 series the legend names them, so the axis label is omitted.
-    expect(buildOpts(two, { ...base, yLog: false, tool: "zoom" }).axes?.[1]?.label).toBeUndefined();
+    expect(buildOpts(two, { ...base, yScale: "linear", tool: "zoom" }).axes?.[1]?.label).toBeUndefined();
   });
 
   it("applies explicit axis limits as static scale ranges", () => {
     const opts = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       xLim: [0, 5],
       yLim: [-1, 10],
@@ -253,13 +265,13 @@ describe("buildOpts defaultTrace", () => {
   });
 
   it("omits the range (autoscale) when no limits are given", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(opts.scales?.x?.range).toBeUndefined();
     expect(opts.scales?.y?.range).toBeUndefined();
   });
 
   it("has no secondary axis when all series are on the primary", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(opts.scales?.y2).toBeUndefined();
     expect(opts.axes).toHaveLength(2); // x + primary y only
   });
@@ -267,7 +279,7 @@ describe("buildOpts defaultTrace", () => {
   it("applies a per-series color / width / line-style override", () => {
     const opts = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       seriesStyles: [{ color: "#ff0000", width: 3, line: "dashed" }],
     });
@@ -279,14 +291,14 @@ describe("buildOpts defaultTrace", () => {
   it("shows circular markers (with size) when the style enables them", () => {
     const withMarkers = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       seriesStyles: [{ marker: true, markerSize: 7 }],
     });
     expect(withMarkers.series[1].points).toMatchObject({ show: true, size: 7 });
     const noMarkers = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       seriesStyles: [{ width: 2 }],
     });
@@ -296,14 +308,14 @@ describe("buildOpts defaultTrace", () => {
   it("maps the dotted line style and leaves solid/unset dash-free", () => {
     const dotted = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       seriesStyles: [{ line: "dotted" }],
     });
     expect(dotted.series[1].dash).toEqual([2, 4]);
     const solid = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       seriesStyles: [{ line: "solid" }],
     });
@@ -313,7 +325,7 @@ describe("buildOpts defaultTrace", () => {
   it("falls back to default width when the style entry is undefined", () => {
     const opts = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       seriesStyles: [undefined],
     });
@@ -322,13 +334,13 @@ describe("buildOpts defaultTrace", () => {
   });
 
   it("hides grid lines when showGrid is false, draws them otherwise", () => {
-    const off = buildOpts(payload, { ...base, yLog: false, tool: "zoom", showGrid: false });
+    const off = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", showGrid: false });
     expect((off.axes?.[0]?.grid as { show?: boolean }).show).toBe(false);
     expect((off.axes?.[1]?.grid as { show?: boolean }).show).toBe(false);
-    const on = buildOpts(payload, { ...base, yLog: false, tool: "zoom", showGrid: true });
+    const on = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", showGrid: true });
     expect((on.axes?.[1]?.grid as { stroke?: string }).stroke).toBeDefined();
     // default (undefined) keeps the grid
-    const dflt = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const dflt = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect((dflt.axes?.[1]?.grid as { show?: boolean }).show).not.toBe(false);
   });
 
@@ -354,7 +366,7 @@ describe("buildOpts defaultTrace", () => {
 
   it("a categorical payload (xCategories) attaches the ordinal tick formatter to the x axis only", () => {
     const cat: PlotPayload = { ...payload, xCategories: ["A", "B", "C"] };
-    const opts = buildOpts(cat, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(cat, { ...base, yScale: "linear", tool: "zoom" });
     expect(typeof opts.axes?.[0]?.values).toBe("function");
     const fn = opts.axes?.[0]?.values as unknown as (u: never, splits: number[]) => unknown[];
     expect(fn(null as never, [0, 1, 2])).toEqual(["A", "B", "C"]);
@@ -366,7 +378,7 @@ describe("buildOpts defaultTrace", () => {
     const cat: PlotPayload = { ...payload, xCategories: ["A", "B", "C"] };
     const opts = buildOpts(cat, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       xFmt: { mode: "fixed", digits: 2 },
     });
@@ -375,28 +387,28 @@ describe("buildOpts defaultTrace", () => {
   });
 
   it("a plain numeric payload (no xCategories) is completely unaffected", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(opts.axes?.[0]?.values).toBeUndefined();
   });
 
   it("attaches the tick formatter to the x/y axes (and omits it for auto)", () => {
     const formatted = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       xFmt: { mode: "fixed", digits: 1 },
       yFmt: { mode: "sci", digits: 2 },
     });
     expect(typeof formatted.axes?.[0]?.values).toBe("function");
     expect(typeof formatted.axes?.[1]?.values).toBe("function");
-    const auto = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const auto = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(auto.axes?.[0]?.values).toBeUndefined();
     expect(auto.axes?.[1]?.values).toBeUndefined();
   });
 
   it("marks the x series ascending for sorted x (keeps uPlot's fast path)", () => {
     // base payload x = [0, 1, 2] is sorted ascending.
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(opts.series[0].sorted).toBe(1);
   });
 
@@ -412,7 +424,7 @@ describe("buildOpts defaultTrace", () => {
       ],
       series: [{ label: "M", unit: "emu" }],
     };
-    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(loop, { ...base, yScale: "linear", tool: "zoom" });
     expect(opts.series[0].sorted).toBe(0);
   });
 
@@ -425,18 +437,18 @@ describe("buildOpts defaultTrace", () => {
   });
 
   it("sets the chart title only when a non-blank title is given", () => {
-    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom", title: "Run 42" }).title).toBe(
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", title: "Run 42" }).title).toBe(
       "Run 42",
     );
     // blank / whitespace / unset -> no title key (uPlot draws no title bar)
-    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom", title: "  " }).title).toBeUndefined();
-    expect(buildOpts(payload, { ...base, yLog: false, tool: "zoom" }).title).toBeUndefined();
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", title: "  " }).title).toBeUndefined();
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" }).title).toBeUndefined();
   });
 
   it("overrides the x-axis label, else derives it from the data", () => {
-    const over = buildOpts(payload, { ...base, yLog: false, tool: "zoom", xAxisLabel: "H (kOe)" });
+    const over = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", xAxisLabel: "H (kOe)" });
     expect(over.axes?.[0]?.label).toBe("H (kOe)");
-    const auto = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const auto = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(auto.axes?.[0]?.label).toBe("Field (Oe)"); // payload.xLabel + xUnit
   });
 
@@ -447,19 +459,19 @@ describe("buildOpts defaultTrace", () => {
   // `""`/undefined keep deriving (the pre-existing, store-wide convention —
   // see `store/useApp.ts`'s `xAxisLabel` doc).
   it("null forces a blank x-axis title instead of deriving one", () => {
-    const forced = buildOpts(payload, { ...base, yLog: false, tool: "zoom", xAxisLabel: null });
+    const forced = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", xAxisLabel: null });
     expect(forced.axes?.[0]?.label).toBe("");
     // "" still means "no override" (today's store-wide convention), unaffected.
-    const blankString = buildOpts(payload, { ...base, yLog: false, tool: "zoom", xAxisLabel: "" });
+    const blankString = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", xAxisLabel: "" });
     expect(blankString.axes?.[0]?.label).toBe("Field (Oe)");
   });
 
   it("overrides the primary y-axis label and forces it to show with >1 series", () => {
     const two: PlotPayload = { ...payload, series: [...payload.series, { label: "B", unit: "T" }] };
     // Without an override, >1 series leaves the axis label to the legend (undefined).
-    expect(buildOpts(two, { ...base, yLog: false, tool: "zoom" }).axes?.[1]?.label).toBeUndefined();
+    expect(buildOpts(two, { ...base, yScale: "linear", tool: "zoom" }).axes?.[1]?.label).toBeUndefined();
     // With an override it shows regardless of series count.
-    const over = buildOpts(two, { ...base, yLog: false, tool: "zoom", yAxisLabel: "Moment (emu)" });
+    const over = buildOpts(two, { ...base, yScale: "linear", tool: "zoom", yAxisLabel: "Moment (emu)" });
     expect(over.axes?.[1]?.label).toBe("Moment (emu)");
   });
 
@@ -476,7 +488,7 @@ describe("buildOpts defaultTrace", () => {
         { label: "T", unit: "K", axis: 1 },
       ],
     };
-    const opts = buildOpts(dual, { ...base, yLog: true, tool: "zoom" });
+    const opts = buildOpts(dual, { ...base, yScale: "log", tool: "zoom" });
     expect(opts.scales?.y2?.distr).toBe(3); // y2 follows the log toggle
     expect(opts.axes).toHaveLength(3);
     expect(opts.axes?.[2]?.scale).toBe("y2");
@@ -490,7 +502,7 @@ describe("buildOpts defaultTrace", () => {
 
 describe("buildOpts select tool (#50 plot-brush)", () => {
   it("drags an x-band without rescaling (like region, unlike zoom)", () => {
-    const sel = buildOpts(payload, { ...base, yLog: false, tool: "select" });
+    const sel = buildOpts(payload, { ...base, yScale: "linear", tool: "select" });
     expect(sel.cursor?.drag).toMatchObject({ x: true, y: false, setScale: false });
   });
 
@@ -499,7 +511,7 @@ describe("buildOpts select tool (#50 plot-brush)", () => {
     const onRegionSelect = vi.fn();
     const opts = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "select",
       onRangeSelect,
       onRegionSelect,
@@ -513,7 +525,7 @@ describe("buildOpts select tool (#50 plot-brush)", () => {
 
   it("ignores a zero-width (click) select", () => {
     const onRangeSelect = vi.fn();
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "select", onRangeSelect });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "select", onRangeSelect });
     const u = { select: { left: 100, width: 0 }, posToVal: (px: number) => px / 100 };
     opts.hooks?.setSelect?.[0]?.(u as never);
     expect(onRangeSelect).not.toHaveBeenCalled();
@@ -535,14 +547,14 @@ describe("buildOpts non-monotonic x (hysteresis loops)", () => {
   const spyPoints = vi.fn(() => null);
 
   it("declares the x series unsorted and sorted data ascending", () => {
-    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(loop, { ...base, yScale: "linear", tool: "zoom" });
     expect((opts.series?.[0] as { sorted?: number }).sorted).toBe(0);
-    const asc = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const asc = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect((asc.series?.[0] as { sorted?: number }).sorted).toBe(1);
   });
 
   it("wraps the line paths to draw the full acquisition order", () => {
-    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom", linearPaths: spyLinear });
+    const opts = buildOpts(loop, { ...base, yScale: "linear", tool: "zoom", linearPaths: spyLinear });
     const s = opts.series?.[1] as { paths?: (u: unknown, si: number, i0: number, i1: number) => unknown };
     expect(s.paths).toBeDefined();
     // uPlot would call with a collapsed window (e.g. 2..2); the wrapper must
@@ -553,13 +565,13 @@ describe("buildOpts non-monotonic x (hysteresis loops)", () => {
   });
 
   it("does NOT override paths when x is ascending", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", linearPaths: spyLinear });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", linearPaths: spyLinear });
     expect((opts.series?.[1] as { paths?: unknown }).paths).toBeUndefined();
   });
 
   it("wraps marker points the same way", () => {
     const opts = buildOpts(loop, {
-      ...base, yLog: false, tool: "zoom", defaultTrace: "Scatter", pointsPaths: spyPoints,
+      ...base, yScale: "linear", tool: "zoom", defaultTrace: "Scatter", pointsPaths: spyPoints,
     });
     const pts = (opts.series?.[1] as { points?: { paths?: (u: unknown, si: number, i0: number, i1: number, f?: unknown) => unknown } }).points;
     expect(pts?.paths).toBeDefined();
@@ -569,7 +581,7 @@ describe("buildOpts non-monotonic x (hysteresis loops)", () => {
   });
 
   it("supplies a full-scan y range (uPlot's own scan window is collapsed)", () => {
-    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(loop, { ...base, yScale: "linear", tool: "zoom" });
     const range = opts.scales?.y?.range;
     expect(typeof range).toBe("function");
     const [lo, hi] = (range as () => [number, number])();
@@ -578,7 +590,7 @@ describe("buildOpts non-monotonic x (hysteresis loops)", () => {
   });
 
   it("keeps an explicit yLim over the full-scan range", () => {
-    const opts = buildOpts(loop, { ...base, yLog: false, tool: "zoom", yLim: [-5, 5] });
+    const opts = buildOpts(loop, { ...base, yScale: "linear", tool: "zoom", yLim: [-5, 5] });
     expect(opts.scales?.y?.range).toEqual([-5, 5]);
   });
 });
@@ -597,21 +609,21 @@ describe("buildOpts y2 axis state (Origin double-Y apply, 13.2 #6)", () => {
     ],
   };
 
-  it("fixes the y2 range from y2Lim and scales it with y2Log", () => {
+  it("fixes the y2 range from y2Lim and scales it with y2Scale", () => {
     const opts = buildOpts(dual, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       y2Lim: [400, 1500],
-      y2Log: true,
+      y2Scale: "log",
     });
     expect(opts.scales?.y2?.range).toEqual([400, 1500]);
-    expect(opts.scales?.y2?.distr).toBe(3); // its own log flag, not yLog's
+    expect(opts.scales?.y2?.distr).toBe(3); // its own scale, not yScale's
     expect(opts.scales?.y?.distr).toBe(1); // primary stays linear
   });
 
-  it("inherits yLog and autoscales when y2 state is absent (legacy behaviour)", () => {
-    const opts = buildOpts(dual, { ...base, yLog: true, tool: "zoom" });
+  it("inherits yScale and autoscales when y2 state is absent (legacy behaviour)", () => {
+    const opts = buildOpts(dual, { ...base, yScale: "log", tool: "zoom" });
     expect(opts.scales?.y2?.distr).toBe(3);
     expect(opts.scales?.y2?.range).toBeUndefined();
   });
@@ -678,11 +690,75 @@ describe("fixedLogAxisSplits", () => {
   });
 });
 
+describe("reciprocalTransform (MAIN #12)", () => {
+  it("is 1/v for positive v", () => {
+    expect(reciprocalTransform(2)).toBe(0.5);
+    expect(reciprocalTransform(0.25)).toBe(4);
+    expect(reciprocalTransform(1)).toBe(1);
+  });
+
+  it("is self-inverse for positive v — fwd(fwd(v)) === v, so one function serves as both fwd and bwd", () => {
+    for (const v of [1, 2, 5, 100, 0.001, 300]) {
+      expect(reciprocalTransform(reciprocalTransform(v))).toBeCloseTo(v, 9);
+    }
+  });
+
+  it("degrades non-positive input to NaN — the same domain restriction the log scale already has", () => {
+    expect(Number.isNaN(reciprocalTransform(0))).toBe(true);
+    expect(Number.isNaN(reciprocalTransform(-5))).toBe(true);
+  });
+});
+
+describe("reciprocalAxisSplits (MAIN #12)", () => {
+  it("returns [] for a degenerate range (non-positive or inverted)", () => {
+    expect(reciprocalAxisSplits(0, 10)).toEqual([]);
+    expect(reciprocalAxisSplits(-1, 10)).toEqual([]);
+    expect(reciprocalAxisSplits(10, 5)).toEqual([]);
+    expect(reciprocalAxisSplits(5, 5)).toEqual([]);
+  });
+
+  it("every returned tick lies within [min, max], sorted ascending", () => {
+    const out = reciprocalAxisSplits(100, 300);
+    expect(out.length).toBeGreaterThan(2);
+    for (const v of out) {
+      expect(v).toBeGreaterThanOrEqual(100);
+      expect(v).toBeLessThanOrEqual(300);
+    }
+    expect(out).toEqual([...out].sort((a, b) => a - b));
+  });
+
+  it("ticks are evenly spaced IN RECIPROCAL SPACE (the defining property), even though the raw values aren't", () => {
+    const out = reciprocalAxisSplits(100, 300);
+    const recips = out.map((v) => 1 / v);
+    const steps = recips.slice(1).map((r, i) => r - recips[i]);
+    for (const s of steps) expect(s).toBeCloseTo(steps[0], 9); // constant step in 1/x
+    // ...but the raw tick values are NOT evenly spaced — that's the whole
+    // point of a reciprocal axis (labels read the natural variable, e.g. T
+    // in Kelvin, while spacing follows 1/T — Origin's "Reciprocal" axis
+    // convention referenced in the task brief).
+    const rawSteps = out.slice(1).map((v, i) => v - out[i]);
+    expect(new Set(rawSteps.map((s) => s.toFixed(6))).size).toBeGreaterThan(1);
+  });
+
+  it("lands on both endpoints when they sit on the reciprocal step grid", () => {
+    // 1/50 = 0.02, 1/200 = 0.005 — a clean 0.005 reciprocal step lands on both.
+    const out = reciprocalAxisSplits(50, 200);
+    expect(out[0]).toBeCloseTo(50, 6);
+    expect(out[out.length - 1]).toBeCloseTo(200, 6);
+  });
+
+  it("a bigger targetTicks never yields FEWER ticks than a smaller one", () => {
+    const few = reciprocalAxisSplits(100, 1000, 2);
+    const many = reciprocalAxisSplits(100, 1000, 10);
+    expect(many.length).toBeGreaterThanOrEqual(few.length);
+  });
+});
+
 describe("buildOpts fixed log-range ticks (plot-fidelity fix)", () => {
   it("supplies a custom splits function on a log Y axis with a fixed yLim", () => {
     const opts = buildOpts(payload, {
       ...base,
-      yLog: true,
+      yScale: "log",
       tool: "zoom",
       yLim: [0.7139, 1.2732],
       yStep: 0.1,
@@ -694,12 +770,12 @@ describe("buildOpts fixed log-range ticks (plot-fidelity fix)", () => {
   });
 
   it("leaves splits undefined on a log Y axis with NO fixed range (autoscale)", () => {
-    const opts = buildOpts(payload, { ...base, yLog: true, tool: "zoom" });
+    const opts = buildOpts(payload, { ...base, yScale: "log", tool: "zoom" });
     expect(opts.axes?.[1].splits).toBeUndefined();
   });
 
   it("leaves splits undefined on a fixed but LINEAR axis", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", yLim: [0, 100] });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", yLim: [0, 100] });
     expect(opts.axes?.[1].splits).toBeUndefined();
   });
 
@@ -718,16 +794,71 @@ describe("buildOpts fixed log-range ticks (plot-fidelity fix)", () => {
     };
     const opts = buildOpts(dual, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       y2Lim: [0.9772, 1.2916],
-      y2Log: true,
+      y2Scale: "log",
       y2Step: 0.05,
     });
     const splits = opts.axes?.[2].splits;
     expect(typeof splits).toBe("function");
     const fn = splits as (u: uPlot, i: number, min: number, max: number) => number[];
     expect(fn(null as unknown as uPlot, 2, 0.9772, 1.2916)).toEqual([1.0, 1.05, 1.1, 1.15, 1.2, 1.25]);
+  });
+});
+
+describe("buildOpts reciprocal-scale ticks (MAIN #12)", () => {
+  it("supplies a custom splits function on a reciprocal X axis EVEN with no fixed range (autoscale)", () => {
+    // Unlike log (which can rely on uPlot's own rangeLog-anchored splits when
+    // autoscaled), reciprocal has no uPlot-native locator at all — the
+    // splits function must be present unconditionally.
+    const opts = buildOpts(payload, { ...base, xScale: "reciprocal", yScale: "linear", tool: "zoom" });
+    const splits = opts.axes?.[0].splits;
+    expect(typeof splits).toBe("function");
+    const fn = splits as (u: uPlot, i: number, min: number, max: number) => number[];
+    expect(fn(null as unknown as uPlot, 0, 100, 300)).toEqual(reciprocalAxisSplits(100, 300));
+  });
+
+  it("also supplies splits on a reciprocal X axis WITH a fixed xLim", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      xScale: "reciprocal",
+      yScale: "linear",
+      tool: "zoom",
+      xLim: [100, 300],
+    });
+    const splits = opts.axes?.[0].splits;
+    expect(typeof splits).toBe("function");
+    const fn = splits as (u: uPlot, i: number, min: number, max: number) => number[];
+    expect(fn(null as unknown as uPlot, 0, 100, 300)).toEqual(reciprocalAxisSplits(100, 300));
+  });
+
+  it("leaves splits undefined on a linear axis (no regression)", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
+    expect(opts.axes?.[0].splits).toBeUndefined();
+  });
+
+  it("supplies splits on the secondary axis when y2 is reciprocal", () => {
+    const dual: PlotPayload = {
+      ...payload,
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+        [100, 150, 200],
+      ] as PlotPayload["data"],
+      series: [
+        { label: "M", unit: "emu", axis: 0 },
+        { label: "T", unit: "K", axis: 1 },
+      ],
+    };
+    const opts = buildOpts(dual, {
+      ...base,
+      yScale: "linear",
+      tool: "zoom",
+      y2Scale: "reciprocal",
+    });
+    expect(typeof opts.axes?.[2].splits).toBe("function");
+    expect(opts.scales?.y2?.distr).toBe(100);
   });
 });
 
@@ -756,7 +887,7 @@ describe("buildOpts literal-colour contrast substitution (dark-lines-on-dark-mod
   const violetStyle: (SeriesStyle | undefined)[] = [{ color: "#8b5cf6" }];
 
   it("substitutes a literal black series stroke on the default (dark) background", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", seriesStyles: blackStyle });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", seriesStyles: blackStyle });
     const series = opts.series?.[1] as { stroke?: string };
     expect(series.stroke).not.toBe("black");
   });
@@ -764,7 +895,7 @@ describe("buildOpts literal-colour contrast substitution (dark-lines-on-dark-mod
   it("keeps a literal black series stroke when the window is pinned to 'light'", () => {
     const opts = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       seriesStyles: blackStyle,
       bg: "light",
@@ -776,7 +907,7 @@ describe("buildOpts literal-colour contrast substitution (dark-lines-on-dark-mod
   it("substitutes a literal white series stroke when the window is pinned to 'light'", () => {
     const opts = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       seriesStyles: whiteStyle,
       bg: "light",
@@ -786,16 +917,16 @@ describe("buildOpts literal-colour contrast substitution (dark-lines-on-dark-mod
   });
 
   it("keeps a literal white series stroke on the default (dark) background", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", seriesStyles: whiteStyle });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", seriesStyles: whiteStyle });
     const series = opts.series?.[1] as { stroke?: string };
     expect(series.stroke).toBe("white");
   });
 
   it("leaves a visible literal colour unchanged in either mode", () => {
-    const dark = buildOpts(payload, { ...base, yLog: false, tool: "zoom", seriesStyles: violetStyle });
+    const dark = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", seriesStyles: violetStyle });
     const light = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       seriesStyles: violetStyle,
       bg: "light",
@@ -805,7 +936,7 @@ describe("buildOpts literal-colour contrast substitution (dark-lines-on-dark-mod
   });
 
   it("leaves the default palette (token) colour untouched when no override is given", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     const series = opts.series?.[1] as { stroke?: string };
     // jsdom has no stylesheet loaded, so the palette token falls back to the
     // hardcoded default in `seriesColor` — the point of this assertion is
@@ -814,8 +945,8 @@ describe("buildOpts literal-colour contrast substitution (dark-lines-on-dark-mod
   });
 
   it("axis stroke/grid colours flip between the dark and light mode tokens", () => {
-    const dark = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
-    const light = buildOpts(payload, { ...base, yLog: false, tool: "zoom", bg: "light" });
+    const dark = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
+    const light = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", bg: "light" });
     expect(dark.axes?.[0].stroke).not.toBe(light.axes?.[0].stroke);
   });
 });
@@ -824,7 +955,7 @@ describe("buildOpts rich-text labels (GOTO #5)", () => {
   it("blanks the plain x label (band still reserved) and adds the rich plugin", () => {
     const opts = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       // NOTE: "\\mu" — in a TS string "\m" silently drops the backslash and
       // "\f" is a form feed; both would test the wrong input.
@@ -835,13 +966,13 @@ describe("buildOpts rich-text labels (GOTO #5)", () => {
   });
 
   it("keeps uPlot's plain draw for INVALID markup (literal fallback, no plugin)", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", xAxisLabel: "$\\foo$" });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", xAxisLabel: "$\\foo$" });
     expect(opts.axes?.[0]?.label).toBe("$\\foo$");
     expect(opts.plugins).toHaveLength(0);
   });
 
   it("keeps today's fast path exactly for $-free labels", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", xAxisLabel: "H (kOe)" });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", xAxisLabel: "H (kOe)" });
     expect(opts.axes?.[0]?.label).toBe("H (kOe)");
     expect(opts.plugins).toHaveLength(0);
   });
@@ -849,7 +980,7 @@ describe("buildOpts rich-text labels (GOTO #5)", () => {
   it("blanks a rich y-label override and pushes the plugin", () => {
     const opts = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       yAxisLabel: "$M_{s}$ (emu)",
     });
@@ -867,7 +998,7 @@ describe("buildOpts rich-text labels (GOTO #5)", () => {
       xLabel: "T",
       xUnit: "K",
     };
-    const opts = buildOpts(richAuto, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(richAuto, { ...base, yScale: "linear", tool: "zoom" });
     expect(opts.axes?.[1]?.label).toBe("");
     expect(opts.plugins).toHaveLength(1);
   });
@@ -888,7 +1019,7 @@ describe("buildOpts rich-text labels (GOTO #5)", () => {
     };
     const opts = buildOpts(dual, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       y2AxisLabel: "$H_{c2}$ (T)",
     });
@@ -899,7 +1030,7 @@ describe("buildOpts rich-text labels (GOTO #5)", () => {
   it("keeps the raw title string (the plugin swaps the DOM content at init)", () => {
     const opts = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       title: "$\Delta T$ sweep",
     });
@@ -913,14 +1044,14 @@ describe("buildOpts fill under/between curves (MAIN #13)", () => {
 
   it("sets series.fill/fillTo=0 for fill: 'under', derived (translucent) from its stroke", () => {
     const styles: (SeriesStyle | undefined)[] = [{ fill: "under", color: "#8b5cf6" }];
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom", seriesStyles: styles });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", seriesStyles: styles });
     const s = opts.series?.[1] as { fill?: string; fillTo?: number };
     expect(s.fill).toBe("color-mix(in oklab, #8b5cf6 25%, transparent)");
     expect(s.fillTo).toBe(0);
   });
 
   it("leaves fill/fillTo unset for 'none' or no style at all", () => {
-    const opts = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     const s = opts.series?.[1] as { fill?: string; fillTo?: number };
     expect(s.fill).toBeUndefined();
     expect(s.fillTo).toBeUndefined();
@@ -931,7 +1062,7 @@ describe("buildOpts fill under/between curves (MAIN #13)", () => {
     const styles: (SeriesStyle | undefined)[] = [{ fill: { vs: 1 }, color: "#ff0000" }, undefined];
     const opts = buildOpts(two, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       seriesStyles: styles,
       plotted: [0, 1],
@@ -944,7 +1075,7 @@ describe("buildOpts fill under/between curves (MAIN #13)", () => {
   });
 
   it("omits bands entirely when nothing requests one", () => {
-    const opts = buildOpts(two, { ...base, yLog: false, tool: "zoom", plotted: [0, 1] });
+    const opts = buildOpts(two, { ...base, yScale: "linear", tool: "zoom", plotted: [0, 1] });
     expect(opts.bands).toBeUndefined();
   });
 
@@ -952,7 +1083,7 @@ describe("buildOpts fill under/between curves (MAIN #13)", () => {
     const styles: (SeriesStyle | undefined)[] = [{ fill: { vs: 5 } }];
     const opts = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       seriesStyles: styles,
       plotted: [0],
@@ -965,7 +1096,7 @@ describe("buildOpts colour-mapped scatter (MAIN #14)", () => {
   it("hides the native line/points for a series with a colorByColumns entry", () => {
     const opts = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       colorByColumns: new Map([[1, { channel: 1, z: [1, 2, 3], colormap: "viridis", lo: 1, hi: 3 }]]),
     });
@@ -977,18 +1108,18 @@ describe("buildOpts colour-mapped scatter (MAIN #14)", () => {
   it("registers the colour-scatter draw plugin only when colorByColumns is non-empty", () => {
     const withColorBy = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       colorByColumns: new Map([[1, { channel: 1, z: [1], colormap: "viridis", lo: 1, hi: 1 }]]),
     });
-    const plain = buildOpts(payload, { ...base, yLog: false, tool: "zoom" });
+    const plain = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
     expect(withColorBy.plugins?.length).toBe((plain.plugins?.length ?? 0) + 1);
   });
 
   it("leaves a series with no colorByColumns entry drawn normally", () => {
     const opts = buildOpts(payload, {
       ...base,
-      yLog: false,
+      yScale: "linear",
       tool: "zoom",
       colorByColumns: new Map(), // empty -> no series affected
     });

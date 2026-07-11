@@ -130,16 +130,16 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
         if (Number.isFinite(lo) && Number.isFinite(hi) && lo !== hi) setter([Math.min(lo, hi), Math.max(lo, hi)]);
       });
     };
-    const y2LogEff = st.y2Log ?? st.yLog;
+    const y2ScaleEff = st.y2Scale ?? st.yScale;
 
     return buildPlotMenu({
       series,
       zone,
       hasY2,
       canHide: visibleCount > 1,
-      xLog: st.xLog,
-      yLog: st.yLog,
-      y2Log: y2LogEff,
+      xScale: st.xScale,
+      yScale: st.yScale,
+      y2Scale: y2ScaleEff,
       showGrid: st.showGrid,
       showLegend: st.showLegend,
       legendPos: st.legendPos as LegendCorner,
@@ -152,9 +152,9 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       toggleHidden: st.toggleHidden,
       rename,
       toggleY2,
-      setXLog: st.setXLog,
-      setYLog: st.setYLog,
-      setY2Log: st.setY2Log,
+      setXScale: st.setXScale,
+      setYScale: st.setYScale,
+      setY2Scale: st.setY2Scale,
       autoscaleX: () => st.setXLim(null),
       autoscaleY: () => st.setYLim(null),
       autoscaleY2: () => st.setY2Lim(null),

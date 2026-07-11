@@ -24,7 +24,7 @@ interface HarnessWindowSpec {
   /** Index into the shot-level `datasets` list. */
   dataset: number;
   /** Partial view overrides — the same vocabulary as a single-window shot's
-   *  `state` (`yKeys`, `plotTitle`, `yLog`, …), merged over a fresh view. */
+   *  `state` (`yKeys`, `plotTitle`, `yScale`, …), merged over a fresh view. */
   view?: Partial<PlotView>;
   geometry?: WindowGeometry;
   winState?: WinState;

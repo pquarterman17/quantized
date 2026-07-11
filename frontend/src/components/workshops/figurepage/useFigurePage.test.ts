@@ -54,8 +54,8 @@ const FROZEN_DOC: FigureDoc = {
   config: {
     xKey: null,
     yKeys: [0],
-    xLog: false,
-    yLog: true,
+    xScale: "linear",
+    yScale: "log",
     title: "doc title",
     xLabel: "",
     yLabel: "",
@@ -77,7 +77,7 @@ beforeEach(() => {
       win({
         id: "w1",
         title: "Loop A",
-        view: { ...defaultPlotView(), yKeys: [1], xLog: true, plotTitle: "W title" },
+        view: { ...defaultPlotView(), yKeys: [1], xScale: "log", plotTitle: "W title" },
       }),
       win({ id: "w2", title: "Unbound", datasetId: null }), // no dataset -> not a source
       win({ id: "w3", kind: "worksheet", title: "Sheet" }), // not a plot -> not a source

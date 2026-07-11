@@ -120,8 +120,8 @@ describe("BackgroundPlotWindow", () => {
     expect(data).toHaveLength(2);
   });
 
-  it("reflects the window's OWN view (e.g. yLog) rather than the live singleton", async () => {
-    const view = { ...defaultPlotView(), yLog: true };
+  it("reflects the window's OWN view (e.g. yScale) rather than the live singleton", async () => {
+    const view = { ...defaultPlotView(), yScale: "log" as const };
     render(<BackgroundPlotWindow dataset={DATASET} view={view} />);
     await waitFor(() => expect(created).toHaveLength(1));
     const opts = created[0].opts as { scales: { y: { distr: number } } };

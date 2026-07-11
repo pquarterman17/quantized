@@ -32,8 +32,8 @@ export default function ReflPanel({ payload, yLog, height, label }: Props) {
     const opts = buildOpts(payload, {
       width: w,
       height,
-      yLog,
-      xLog: false,
+      yScale: yLog ? "log" : "linear",
+      xScale: "linear",
       showGrid: true,
       tool: "zoom",
       onReadout: () => {},

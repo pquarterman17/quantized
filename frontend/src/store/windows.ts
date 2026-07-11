@@ -117,7 +117,7 @@ export function datasetViewDefaults(ds: Dataset | undefined): Partial<PlotView> 
     yKeys: null, // new dataset → plot all its channels
     y2Keys: null,
     y2Lim: null,
-    y2Log: null, // and reset the secondary-axis assignment
+    y2Scale: null, // and reset the secondary-axis assignment
     y2Step: null,
     y2AxisLabel: "",
     seriesStyles: {}, // styles are keyed by channel index → reset per dataset

@@ -3,6 +3,7 @@
 
 import AnnotationsCard from "./AnnotationsCard";
 import AxisLimits from "./AxisLimits";
+import AxisScaleControls from "./AxisScaleControls";
 import ChannelsCard from "./ChannelsCard";
 import CorrectionsCard from "./CorrectionsCard";
 import MacroCard from "./MacroCard";
@@ -22,10 +23,6 @@ import { useActiveDataset, useApp, type LegendPos } from "../../store/useApp";
 export default function Inspector() {
   const active = useActiveDataset();
   const stageTab = useApp((s) => s.stageTab);
-  const yLog = useApp((s) => s.yLog);
-  const setYLog = useApp((s) => s.setYLog);
-  const xLog = useApp((s) => s.xLog);
-  const setXLog = useApp((s) => s.setXLog);
   const showGrid = useApp((s) => s.showGrid);
   const setShowGrid = useApp((s) => s.setShowGrid);
   const showLegend = useApp((s) => s.showLegend);
@@ -54,22 +51,7 @@ export default function Inspector() {
       <OriginProvenanceCard active={active} />
 
       <Card title="Axes" defaultOpen={false}>
-        <label className="qz-check">
-          <input
-            type="checkbox"
-            checked={xLog}
-            onChange={(e) => setXLog(e.target.checked)}
-          />
-          Log X axis
-        </label>
-        <label className="qz-check">
-          <input
-            type="checkbox"
-            checked={yLog}
-            onChange={(e) => setYLog(e.target.checked)}
-          />
-          Log Y axis
-        </label>
+        <AxisScaleControls />
         <label className="qz-check">
           <input
             type="checkbox"

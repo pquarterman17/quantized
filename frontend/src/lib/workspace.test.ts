@@ -544,7 +544,7 @@ describe("workspace figure documents (#12)", () => {
   it("round-trips docs and clamps a dead dataset ref (frozen keeps its snapshot)", () => {
     const datasets = [makeDataset("a", "first")];
     const config = {
-      xKey: null, yKeys: [0], xLog: false, yLog: true, title: "t",
+      xKey: null, yKeys: [0], xScale: "linear" as const, yScale: "log" as const, title: "t",
       xLabel: "", yLabel: "", style: "aps", fmt: "pdf", dpi: 300,
       overrides: { font_size: 9 }, seriesStyles: null,
     };
@@ -595,7 +595,7 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     geometry: { x: 10, y: 20, w: 480, h: 360 },
     z: 1,
     winState: "normal",
-    view: { ...defaultPlotView(), yLog: true, plotTitle: "restored view" },
+    view: { ...defaultPlotView(), yScale: "log", plotTitle: "restored view" },
     bg: "theme",
     linkGroup: null,
     pinned: false,
@@ -608,7 +608,7 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     const loaded = parseWorkspace(serializeWorkspace({ datasets, plotWindows, focusedWindowId: "w2" }));
     expect(loaded.plotWindows).toHaveLength(2);
     expect(loaded.plotWindows[0].title).toBe("My Graph");
-    expect(loaded.plotWindows[0].view.yLog).toBe(true);
+    expect(loaded.plotWindows[0].view.yScale).toBe("log");
     expect(loaded.plotWindows[0].view.plotTitle).toBe("restored view");
     expect(loaded.focusedWindowId).toBe("w2");
   });

@@ -9,6 +9,7 @@ import type { FigureHitmap } from "./previewmap";
 import type { ReportSheet } from "./report";
 import type { Recommendation } from "./statschooser";
 import type {
+  AxisScale,
   BookSource,
   CalcResult,
   CorrectionParams,
@@ -1420,6 +1421,11 @@ export interface FigureSpec {
   y_keys?: (number | string)[];
   x_log?: boolean;
   y_log?: boolean;
+  /** Axis scale (MAIN #12: linear/log/reciprocal) — takes precedence over
+   *  `x_log`/`y_log` on the backend when present; those stay as the
+   *  back-compat fallback for any older caller that only sets the boolean. */
+  x_scale?: AxisScale;
+  y_scale?: AxisScale;
   fmt?: string;
   style?: string;
   dpi?: number;

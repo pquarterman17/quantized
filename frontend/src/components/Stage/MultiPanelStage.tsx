@@ -62,8 +62,8 @@ export default function MultiPanelStage() {
   const spatialPanels = useApp((s) => s.spatialPanels);
   const facetPanels = useApp((s) => s.facetPanels);
   const breakPanels = useApp((s) => s.breakPanels);
-  const yLog = useApp((s) => s.yLog);
-  const xLog = useApp((s) => s.xLog);
+  const yScale = useApp((s) => s.yScale);
+  const xScale = useApp((s) => s.xScale);
   const xLim = useApp((s) => s.xLim);
   const yLim = useApp((s) => s.yLim);
   const xFmt = useApp((s) => s.xFmt);
@@ -88,8 +88,8 @@ export default function MultiPanelStage() {
     spatialPanels,
     facetPanels,
     breakPanels,
-    yLog,
-    xLog,
+    yScale,
+    xScale,
     xLim,
     yLim,
     xFmt,

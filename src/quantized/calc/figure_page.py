@@ -106,6 +106,10 @@ class PagePanel:
     y_label: str = ""
     x_log: bool = False
     y_log: bool = False
+    # MAIN #12: linear/log/reciprocal, source of truth when set; x_log/y_log
+    # are the back-compat fallback (see figure_scale.resolve_axis_scale).
+    x_scale: str | None = None
+    y_scale: str | None = None
     series_styles: Sequence[Mapping[str, Any] | None] | None = None
     overrides: Mapping[str, Any] | None = None
     label: str | None = None
@@ -239,6 +243,8 @@ def render_figure_page(
                     ov=dict(p.overrides or {}),
                     x_log=p.x_log,
                     y_log=p.y_log,
+                    x_scale=p.x_scale,
+                    y_scale=p.y_scale,
                     title=safe_mathtext_label(p.title),
                     x_label=safe_mathtext_label(p.x_label),
                     y_label=safe_mathtext_label(p.y_label),

@@ -21,7 +21,7 @@ import {
   pxToFigureFraction,
   type FigureHitmap,
 } from "../../../lib/previewmap";
-import type { DataStruct } from "../../../lib/types";
+import type { AxisScale, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
 let _docSeq = 0;
@@ -57,8 +57,8 @@ export function useFigureBuilder() {
   const active = useActiveDataset();
   const yKeys = useApp((s) => s.yKeys);
   const xKey = useApp((s) => s.xKey);
-  const xLog = useApp((s) => s.xLog);
-  const yLog = useApp((s) => s.yLog);
+  const xScale = useApp((s) => s.xScale);
+  const yScale = useApp((s) => s.yScale);
   const seriesStyles = useApp((s) => s.seriesStyles);
   const setStatus = useApp((s) => s.setStatus);
   const figureDocSeed = useApp((s) => s.figureDocSeed);
@@ -77,7 +77,7 @@ export function useFigureBuilder() {
   // (#12) restores its own picks without touching the live plot state.
   const [docXKey, setDocXKey] = useState<number | null | undefined>(undefined);
   const [docYKeys, setDocYKeys] = useState<number[] | null | undefined>(undefined);
-  const [docLogs, setDocLogs] = useState<{ x: boolean; y: boolean } | undefined>(undefined);
+  const [docScales, setDocScales] = useState<{ x: AxisScale; y: AxisScale } | undefined>(undefined);
   // Frozen doc (#12): render from its data snapshot instead of the live dataset.
   const [frozenData, setFrozenData] = useState<DataStruct | null>(null);
   // User graph templates (#15).
@@ -98,7 +98,7 @@ export function useFigureBuilder() {
     setOverrides(c.overrides ?? {});
     setDocXKey(c.xKey);
     setDocYKeys(c.yKeys);
-    setDocLogs({ x: c.xLog, y: c.yLog });
+    setDocScales({ x: c.xScale, y: c.yScale });
     setFrozenData(!figureDocSeed.live ? (figureDocSeed.dataSnapshot ?? null) : null);
     clearFigureDocSeed();
   }, [figureDocSeed, clearFigureDocSeed]);
@@ -125,8 +125,8 @@ export function useFigureBuilder() {
   const data = frozenData ?? active?.data ?? null;
   const effXKey = docXKey !== undefined ? docXKey : (xKey ?? null);
   const effYKeys = docYKeys !== undefined ? docYKeys : yKeys;
-  const effXLog = docLogs?.x ?? xLog;
-  const effYLog = docLogs?.y ?? yLog;
+  const effXScale = docScales?.x ?? xScale;
+  const effYScale = docScales?.y ?? yScale;
   const spec = useMemo<FigureSpec | null>(() => {
     if (!data) return null;
     const plotted = effYKeys ?? data.labels.map((_, i) => i);
@@ -134,8 +134,10 @@ export function useFigureBuilder() {
       dataset: data,
       x_key: effXKey ?? undefined,
       y_keys: effYKeys ?? undefined,
-      x_log: effXLog,
-      y_log: effYLog,
+      x_log: effXScale === "log",
+      y_log: effYScale === "log",
+      x_scale: effXScale,
+      y_scale: effYScale,
       style,
       overrides: compactOverrides(overrides),
       title: title.trim(),
@@ -143,7 +145,19 @@ export function useFigureBuilder() {
       y_label: yLabel.trim() || undefined,
       series_styles: buildExportStyles(plotted, seriesStyles),
     };
-  }, [data, effYKeys, effXKey, effXLog, effYLog, style, title, xLabel, yLabel, seriesStyles, overrides]);
+  }, [
+    data,
+    effYKeys,
+    effXKey,
+    effXScale,
+    effYScale,
+    style,
+    title,
+    xLabel,
+    yLabel,
+    seriesStyles,
+    overrides,
+  ]);
 
   // Save the current configuration as a named FigureDoc (#12). Live docs
   // reference the dataset by id; frozen docs carry the data snapshot.
@@ -159,8 +173,8 @@ export function useFigureBuilder() {
       config: {
         xKey: effXKey,
         yKeys: effYKeys,
-        xLog: effXLog,
-        yLog: effYLog,
+        xScale: effXScale,
+        yScale: effYScale,
         title,
         xLabel,
         yLabel,

@@ -42,8 +42,8 @@ export default function WaterfallView() {
     const opts = buildOpts(payload, {
       width,
       height,
-      yLog: w.logY,
-      xLog: false,
+      yScale: w.logY ? "log" : "linear",
+      xScale: "linear",
       showGrid: true,
       tool: "zoom",
       onReadout: () => {},

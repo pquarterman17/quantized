@@ -14,7 +14,7 @@ import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst } from "./richtext";
 import { pow10 } from "./ticks";
-import type { Annotation, AxisFormat, LineStyle, RefLine, RegionShade, SeriesStyle } from "./types";
+import type { Annotation, AxisFormat, AxisScale, LineStyle, RefLine, RegionShade, SeriesStyle } from "./types";
 import { resolveFillBands, seriesFillProps } from "./uplotFill";
 import {
   annotationPlugin,
@@ -216,6 +216,68 @@ export function fixedLogAxisSplits(min: number, max: number, step?: number | nul
   return out;
 }
 
+// ── Reciprocal (1/x) scale — MAIN #12, Arrhenius-style plots ────────────────
+//
+// uPlot has no built-in reciprocal distribution; its custom-scale mechanism
+// (`scales.<key>.distr: 100` + `fwd`/`bwd` transform callbacks — the
+// `Scale.Distr.Custom` value in uplot's own types) is the sanctioned hook for
+// exactly this (see the doc on `Scale.fwd`/`Scale.bwd`). `fwd` maps a DATA
+// value to the internal linear-positioning space uPlot pixel-interpolates in
+// (`pct = (fwd(val) - fwd(scaleMin)) / (fwd(scaleMax) - fwd(scaleMin))`);
+// `bwd` is its inverse, used for `posToVal` (cursor/rubber-band) and value
+// readback. 1/x is its own inverse (f(f(x)) = x for x != 0), so ONE function
+// serves both roles — verified against uplot's source: `getValPct` computes
+// `pct` from `fwd` alone and is affine in `fwd(val)`, so it stays correctly
+// monotonic (low DATA value at the low-pct/left edge, same left-to-right
+// ordering as linear/log) even though `1/x` itself is a DECREASING function
+// on x>0 — the endpoints just aren't evenly spaced in between, which is
+// exactly the desired Arrhenius-plot effect (tick density piles up at one
+// end). This is why `scale.min`/`scale.max` stay plain data-space extents,
+// same as any other axis: no separate "reciprocal range" convention needed.
+
+/** The reciprocal transform: `fwd` AND `bwd` for a uPlot `distr: 100` scale
+ *  (self-inverse). Non-positive input degrades gracefully to `NaN` (uPlot /
+ *  the browser canvas simply skip a NaN pixel position) rather than `Infinity`
+ *  — the SAME domain restriction the log scale already has (see
+ *  `fullXExtents`/`fullYExtents`'s `log && v <= 0` guard, reused verbatim for
+ *  `reciprocal`): physically this covers the Arrhenius case (T in Kelvin is
+ *  always positive) without needing to reason about a pole-in-range sign
+ *  flip for data that legitimately straddles zero. */
+export function reciprocalTransform(v: number): number {
+  return v > 0 ? 1 / v : NaN;
+}
+
+/** Reciprocal-axis tick positions for a `[min, max]` data-space range: pick
+ *  "nice" round values EVENLY SPACED IN 1/x SPACE (mirroring
+ *  `fixedLogAxisSplits`'s decade/step logic, but for the reciprocal
+ *  transform), then map each back to its ORIGINAL x value — so the ticks
+ *  render at reciprocal-spaced pixel positions while the LABEL reads the
+ *  natural variable (e.g. T in Kelvin), matching Origin's "Reciprocal" axis
+ *  type convention referenced in the task brief. `targetTicks` is the same
+ *  "aim for about N ticks" knob `niceLinearStep` takes. Degenerate ranges
+ *  (non-positive, or inverted/zero-width — same domain as `fixedLogAxisSplits`)
+ *  return `[]`. */
+export function reciprocalAxisSplits(min: number, max: number, targetTicks = 5): number[] {
+  if (!(min > 0) || !(max > min)) return [];
+  const r0 = reciprocalTransform(min); // larger (smaller x -> larger 1/x)
+  const r1 = reciprocalTransform(max); // smaller
+  const rLo = Math.min(r0, r1);
+  const rHi = Math.max(r0, r1);
+  if (!(rHi > rLo)) return [min, max];
+  const step = niceLinearStep(rHi - rLo, targetTicks);
+  const EPS = 1e-9;
+  const n0 = Math.ceil(rLo / step - EPS);
+  const n1 = Math.floor(rHi / step + EPS);
+  const out: number[] = [];
+  for (let n = n0; n <= n1; n++) {
+    const r = cleanStepValue(n * step);
+    if (r === 0) continue; // 1/0 is undefined — skip the (rare) exact-zero tick
+    const v = cleanStepValue(reciprocalTransform(r));
+    if (v >= min * (1 - EPS) && v <= max * (1 + EPS)) out.push(v);
+  }
+  return out.sort((a, b) => a - b);
+}
+
 /** Is the x column sorted ascending? uPlot's x scale defaults to `sorted: 1`,
  *  meaning it derives the scale range from the *endpoints* (a binary-search
  *  optimization) instead of scanning. That assumption breaks for non-monotonic x
@@ -245,8 +307,12 @@ export function seriesColor(i: number, style?: SeriesStyle): string {
 export interface BuildOptsArgs {
   width: number;
   height: number;
-  yLog: boolean;
-  xLog: boolean;
+  /** Axis scale (MAIN #12 — linear/log/reciprocal), replacing the old
+   *  `yLog`/`xLog` booleans as the source of truth. `"reciprocal"` positions
+   *  by 1/value (uPlot custom `distr: 100`) with tick labels in the original
+   *  data units — see `reciprocalTransform`/`reciprocalAxisSplits` above. */
+  yScale: AxisScale;
+  xScale: AxisScale;
   tool: PlotTool;
   onReadout: (r: Readout | null) => void;
   /** In `region` tool: called with the two data-x edges of a completed drag
@@ -313,11 +379,11 @@ export interface BuildOptsArgs {
   /** Explicit axis ranges (null = uPlot autoscale). Fix the axis Origin-style. */
   xLim?: [number, number] | null;
   yLim?: [number, number] | null;
-  /** Secondary (right) Y axis: explicit range + log scale. An applied Origin
+  /** Secondary (right) Y axis: explicit range + scale. An applied Origin
    *  double-Y figure carries layer 2's own axis state here; null/undefined =
-   *  autoscale / inherit yLog (the pre-2026-07-06 behaviour). */
+   *  autoscale / inherit yScale (the pre-2026-07-06 behaviour). */
   y2Lim?: [number, number] | null;
-  y2Log?: boolean | null;
+  y2Scale?: AxisScale | null;
   /** Reference lines to draw at fixed X/Y values. */
   refLines?: RefLine[];
   /** Commit a dragged reference line's new value (zoom/cursor tools only — the
@@ -419,26 +485,28 @@ export interface BuildOptsArgs {
 /** Full-scan [min, max] of the finite values across every visible series on one
  *  scale — the manual counterpart of uPlot's auto-range for non-monotonic x,
  *  where uPlot's own scan window (derived from a binary search over x) is
- *  meaningless. Log scales consider positive values only. Returns null when
- *  nothing qualifies (leave uPlot's default behaviour alone). */
+ *  meaningless. Log AND reciprocal scales consider positive values only (MAIN
+ *  #12 — reciprocal has the same domain restriction as log; see
+ *  `reciprocalTransform`'s doc). Returns null when nothing qualifies (leave
+ *  uPlot's default behaviour alone). */
 function fullYExtents(
   payload: PlotPayload,
   hidden: boolean[] | undefined,
   axis: 0 | 1,
-  log: boolean,
+  positiveOnly: boolean,
 ): [number, number] | null {
   let min = Infinity;
   let max = -Infinity;
   payload.series.forEach((s, i) => {
     if ((s.axis ?? 0) !== axis || hidden?.[i]) return;
     for (const v of payload.data[i + 1] ?? []) {
-      if (v == null || !Number.isFinite(v) || (log && v <= 0)) continue;
+      if (v == null || !Number.isFinite(v) || (positiveOnly && v <= 0)) continue;
       if (v < min) min = v;
       if (v > max) max = v;
     }
   });
   if (min > max) return null;
-  if (log) return [min / 1.1, max * 1.1];
+  if (positiveOnly) return [min / 1.1, max * 1.1];
   const pad = (max - min || Math.abs(max) || 1) * 0.1; // mirror uPlot's soft pad
   return [min - pad, max + pad];
 }
@@ -447,24 +515,43 @@ function fullYExtents(
  *  counterpart of fullYExtents. For non-monotonic x (a hysteresis loop sweeps
  *  field up then down, so it starts and ends near the SAME saturation), uPlot's
  *  binary-search autorange collapses the axis to [first, last] — a sliver near
- *  one end. Scanning restores the true sweep width. Log considers positive x
- *  only. Null when nothing qualifies (leave uPlot's default alone). */
-function fullXExtents(xs: readonly (number | null)[], log: boolean): [number, number] | null {
+ *  one end. Scanning restores the true sweep width. Log AND reciprocal
+ *  consider positive x only. Null when nothing qualifies (leave uPlot's
+ *  default alone). */
+function fullXExtents(xs: readonly (number | null)[], positiveOnly: boolean): [number, number] | null {
   let min = Infinity;
   let max = -Infinity;
   for (const v of xs) {
-    if (v == null || !Number.isFinite(v) || (log && v <= 0)) continue;
+    if (v == null || !Number.isFinite(v) || (positiveOnly && v <= 0)) continue;
     if (v < min) min = v;
     if (v > max) max = v;
   }
   if (min > max) return null;
-  if (log) return [min / 1.1, max * 1.1];
+  if (positiveOnly) return [min / 1.1, max * 1.1];
   const pad = (max - min || Math.abs(max) || 1) * 0.02; // slim x margin, avoid edge clipping
   return [min - pad, max + pad];
 }
 
+/** Whether `scale` requires positive-only data (log AND reciprocal share the
+ *  domain restriction — see `reciprocalTransform`'s doc). */
+function isPositiveOnlyScale(scale: AxisScale): boolean {
+  return scale === "log" || scale === "reciprocal";
+}
+
+/** The uPlot `Scale` distribution props for one axis's scale (MAIN #12):
+ *  `"log"` -> `distr: 3` (uPlot's own logarithmic distribution); `"reciprocal"`
+ *  -> `distr: 100` (uPlot's custom-scale hook) + the `fwd`/`bwd` transform;
+ *  `"linear"` -> `distr: 1` (uPlot's default, spelled out for clarity). */
+function scaleDistrProps(
+  scale: AxisScale,
+): Pick<uPlot.Scale, "distr" | "fwd" | "bwd"> {
+  if (scale === "log") return { distr: 3 };
+  if (scale === "reciprocal") return { distr: 100, fwd: reciprocalTransform, bwd: reciprocalTransform };
+  return { distr: 1 };
+}
+
 export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
-  const { width, height, yLog, xLog, tool, onReadout, xLim, yLim, refLines, seriesStyles } = args;
+  const { width, height, yScale, xScale, tool, onReadout, xLim, yLim, refLines, seriesStyles } = args;
   const { xFmt, yFmt, annotations, showGrid, onRegionSelect } = args;
   const xAscending = xIsAscending(payload.data[0] as (number | null)[]);
   // Non-monotonic x: wrap a path builder so it ignores uPlot's (collapsed)
@@ -674,20 +761,24 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // collapsed index window), so supply full-scan extents. A range *function*
   // is only consulted when no explicit scale is pending, so box/wheel zoom and
   // a fixed yLim still win; double-click reset re-ranges back to the extents.
-  const y2LogEff = args.y2Log ?? yLog;
-  const loopY = !xAscending && !yLim ? fullYExtents(payload, args.hidden, 0, yLog) : null;
-  const loopY2 = !xAscending ? fullYExtents(payload, args.hidden, 1, y2LogEff) : null;
+  const y2ScaleEff: AxisScale = args.y2Scale ?? yScale;
+  const loopY = !xAscending && !yLim ? fullYExtents(payload, args.hidden, 0, isPositiveOnlyScale(yScale)) : null;
+  const loopY2 = !xAscending
+    ? fullYExtents(payload, args.hidden, 1, isPositiveOnlyScale(y2ScaleEff))
+    : null;
   // …and its x auto-range collapses to a sliver for the same reason — scan the
   // x column for the true sweep width (a range function, so zoom/xLim still win).
-  const loopX = !xAscending && !xLim ? fullXExtents(payload.data[0] as (number | null)[], xLog) : null;
+  const loopX = !xAscending && !xLim
+    ? fullXExtents(payload.data[0] as (number | null)[], isPositiveOnlyScale(xScale))
+    : null;
   const scales: uPlot.Scales = {
     x: {
       time: false,
-      distr: xLog ? 3 : 1,
+      ...scaleDistrProps(xScale),
       ...(xLim ? { range: xLim } : loopX ? { range: () => loopX } : {}),
     },
     y: {
-      distr: yLog ? 3 : 1,
+      ...scaleDistrProps(yScale),
       ...(yLim ? { range: yLim } : loopY ? { range: () => loopY } : {}),
     },
   };
@@ -703,18 +794,28 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // on a log axis, so supply our own splits generator there (see
   // fixedLogAxisSplits's doc for why + the sub-decade Origin-step behaviour).
   // Autoscaled log axes (no fixed range) are untouched — uPlot's own splits
-  // already do the right thing once rangeLog has rounded the bounds.
+  // already do the right thing once rangeLog has rounded the bounds. A
+  // reciprocal axis has NO built-in uPlot locator at all (unlike log's
+  // rangeLog-anchored logAxisSplits) — supply reciprocalAxisSplits
+  // UNCONDITIONALLY (fixed range or autoscaled), or uPlot falls through to
+  // its generic linear numAxisSplits, which spaces ticks evenly in RAW x —
+  // wrong for this scale (see reciprocalAxisSplits's doc).
   const splitsFor = (
-    isLog: boolean,
+    scale: AxisScale,
     lim: [number, number] | null | undefined,
     step: number | null | undefined,
-  ): uPlot.Axis.Splits | undefined =>
-    isLog && lim
+  ): uPlot.Axis.Splits | undefined => {
+    if (scale === "reciprocal") {
+      return (_u: uPlot, _axisIdx: number, scaleMin: number, scaleMax: number): number[] =>
+        reciprocalAxisSplits(scaleMin, scaleMax);
+    }
+    return scale === "log" && lim
       ? (_u: uPlot, _axisIdx: number, scaleMin: number, scaleMax: number): number[] =>
           fixedLogAxisSplits(scaleMin, scaleMax, step ?? null)
       : undefined;
-  const xSplits = splitsFor(xLog, xLim, args.xStep);
-  const ySplits = splitsFor(yLog, yLim, args.yStep);
+  };
+  const xSplits = splitsFor(xScale, xLim, args.xStep);
+  const ySplits = splitsFor(yScale, yLim, args.yStep);
   // Tick-area `size` (excludes the label, see uPlot's doc) scales with the
   // tick font too — x is a single text line (height-bound, uPlot's own
   // default 50 already has headroom for the +1px bump) so only a small
@@ -746,10 +847,10 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (hasY2) {
     const y2Lim = args.y2Lim ?? null;
     scales.y2 = {
-      distr: y2LogEff ? 3 : 1,
+      ...scaleDistrProps(y2ScaleEff),
       ...(y2Lim ? { range: y2Lim } : loopY2 ? { range: () => loopY2 } : {}),
     };
-    const y2Splits = splitsFor(y2LogEff, y2Lim, args.y2Step);
+    const y2Splits = splitsFor(y2ScaleEff, y2Lim, args.y2Step);
     // Secondary axis on the right; hide its grid so the two grids don't overlap.
     axes.push({
       ...axis,

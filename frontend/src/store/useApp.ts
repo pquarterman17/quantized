@@ -59,7 +59,7 @@ import {
   dedupeWindowTitle,
   displayedWindowTitle,
   hydrateView,
-  sanitizePlotWindows,
+  sanitizePlotWindows, scaleFromLog,
 } from "../lib/plotview";
 import { nextStageTab, plotIntentStageTab, type StageTab } from "../lib/stagetab";
 // The MDI window-management slice (MAIN_PLAN #2): state + actions live in
@@ -104,7 +104,7 @@ import { toast } from "./toasts";
 import { isLazyBookEntry, isPrimaryBookMarker } from "../lib/types";
 import type {
   Annotation,
-  AxisFormat,
+  AxisFormat, AxisScale,
   BaselineOverlay,
   BookSource,
   CalcResult,
@@ -379,8 +379,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   excludedDisplay: ExcludedDisplay;
   originBookClickOpens: OriginBookClickOpens;
   prefsOpen: boolean;
-  yLog: boolean;
-  xLog: boolean;
+  yScale: AxisScale; // Y axis scale (MAIN #12: linear/log/reciprocal)
+  xScale: AxisScale; // X axis scale
   showGrid: boolean; // draw the plot grid lines
   showLegend: boolean; // show the floating legend overlay
   legendPos: LegendPos; // which corner the floating legend pins to
@@ -437,7 +437,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   yKeys: number[] | null; // which value channels to plot (null = all)
   y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
   y2Lim: [number, number] | null; // fixed secondary-Y range (Origin double-Y apply)
-  y2Log: boolean | null; // secondary-Y log scale (null = inherit yLog)
+  y2Scale: AxisScale | null; // secondary-Y scale (null = inherit yScale)
   y2Step: number | null; // decoded major-tick increment for y2Lim (see xStep/yStep)
   y2AxisLabel: string; // override for the secondary y-axis label ("" = auto)
   refLines: RefLine[]; // fixed X/Y marker lines on the plot
@@ -743,8 +743,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // Generic pref setter (used by the Preferences dialog); applies + persists.
   setPref: (key: PrefKey, value: string | number | boolean) => void;
   setPrefsOpen: (open: boolean) => void;
-  setYLog: (yLog: boolean) => void;
-  setXLog: (xLog: boolean) => void;
+  setYScale: (yScale: AxisScale) => void;
+  setXScale: (xScale: AxisScale) => void;
   setShowGrid: (showGrid: boolean) => void;
   setShowLegend: (showLegend: boolean) => void;
   setLegendPos: (pos: LegendPos) => void;
@@ -756,10 +756,10 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setStatMode: (statMode: boolean) => void;
   setXLim: (xLim: [number, number] | null) => void;
   setYLim: (yLim: [number, number] | null) => void;
-  // Secondary (right) Y axis: expose the already-rendered y2Log/y2Lim fields so
-  // the plot context menu can edit an Origin double-Y import's right axis. Only
-  // meaningful when y2Keys is non-empty (otherwise there is no y2 scale).
-  setY2Log: (y2Log: boolean | null) => void;
+  // Secondary (right) Y axis: expose the already-rendered y2Scale/y2Lim fields
+  // so the plot context menu can edit an Origin double-Y import's right axis.
+  // Only meaningful when y2Keys is non-empty (otherwise there is no y2 scale).
+  setY2Scale: (y2Scale: AxisScale | null) => void;
   setY2Lim: (y2Lim: [number, number] | null) => void;
   setXFmt: (xFmt: AxisFormat) => void;
   setYFmt: (yFmt: AxisFormat) => void;
@@ -1070,8 +1070,8 @@ export const useApp = create<AppState>((set, get) => ({
   notation: _initialPrefs.notation,
   confirmRemove: _initialPrefs.confirmRemove,
   prefsOpen: false,
-  yLog: false,
-  xLog: false,
+  yScale: "linear",
+  xScale: "linear",
   showGrid: _initialPrefs.defaultGrid,
   showLegend: true,
   legendPos: "ne",
@@ -1097,7 +1097,7 @@ export const useApp = create<AppState>((set, get) => ({
   yKeys: null,
   y2Keys: null,
   y2Lim: null,
-  y2Log: null,
+  y2Scale: null,
   y2Step: null,
   y2AxisLabel: "",
   refLines: [],
@@ -1530,8 +1530,8 @@ export const useApp = create<AppState>((set, get) => ({
           yLim: [fig.y_from, fig.y_to],
           xStep: fig.x_step ?? null,
           yStep: fig.y_step ?? null,
-          xLog: fig.x_log,
-          yLog: fig.y_log,
+          xScale: scaleFromLog(fig.x_log), // Origin's own axis type is boolean-only
+          yScale: scaleFromLog(fig.y_log),
           xKey: null,
           yKeys: Array.from({ length: n }, (_, i) => i),
           // Restore each overlay column's decoded line/scatter look + legend caption.
@@ -1575,8 +1575,8 @@ export const useApp = create<AppState>((set, get) => ({
           yLim: [lower.figure.y_from, lower.figure.y_to],
           xStep: lower.figure.x_step ?? null,
           yStep: lower.figure.y_step ?? null,
-          xLog: lower.figure.x_log,
-          yLog: lower.figure.y_log,
+          xScale: scaleFromLog(lower.figure.x_log),
+          yScale: scaleFromLog(lower.figure.y_log),
           xKey: baseSel.xKey,
           // The plotted-channel list derives from yKeys ALONE (y2Keys only tags
           // which of them sit on the right axis), so yKeys must be the UNION of
@@ -1590,7 +1590,7 @@ export const useApp = create<AppState>((set, get) => ({
           // Layer 2's own axis state -> the secondary axis (13.2 #6): range,
           // log flag, and title (falls back to auto when undecoded).
           y2Lim: [upper.figure.y_from, upper.figure.y_to],
-          y2Log: upper.figure.y_log,
+          y2Scale: scaleFromLog(upper.figure.y_log),
           y2Step: upper.figure.y_step ?? null,
           y2AxisLabel: upper.figure.y_title ?? "",
           seriesStyles: { ...baseSel.styles, ...partnerSel.styles },
@@ -1670,8 +1670,8 @@ export const useApp = create<AppState>((set, get) => ({
       yLim: [fig.y_from, fig.y_to],
       xStep: fig.x_step ?? null,
       yStep: fig.y_step ?? null,
-      xLog: fig.x_log,
-      yLog: fig.y_log,
+      xScale: scaleFromLog(fig.x_log),
+      yScale: scaleFromLog(fig.y_log),
       xAxisLabel: fig.x_title ?? "",
       yAxisLabel: fig.y_title ?? "",
       // Pin the figure's decoded floating text; REPLACE, never stack.
@@ -1837,7 +1837,7 @@ export const useApp = create<AppState>((set, get) => ({
         yKeys: restoredView ? restoredView.yKeys : null,
         y2Keys: restoredView ? restoredView.y2Keys : null,
         y2Lim: restoredView ? restoredView.y2Lim : null,
-        y2Log: restoredView ? restoredView.y2Log : null,
+        y2Scale: restoredView ? restoredView.y2Scale : null,
         y2Step: restoredView ? restoredView.y2Step : null,
         y2AxisLabel: restoredView ? restoredView.y2AxisLabel : "",
         seriesStyles: restoredView ? restoredView.seriesStyles : {},
@@ -1886,8 +1886,8 @@ export const useApp = create<AppState>((set, get) => ({
         // the pre-load session had) exactly as before.
         ...(restoredView
           ? {
-              yLog: restoredView.yLog,
-              xLog: restoredView.xLog,
+              yScale: restoredView.yScale,
+              xScale: restoredView.xScale,
               showGrid: restoredView.showGrid,
               showLegend: restoredView.showLegend,
               legendPos: restoredView.legendPos,
@@ -2160,7 +2160,7 @@ export const useApp = create<AppState>((set, get) => ({
         yKeys: null,
         y2Keys: null,
       y2Lim: null,
-      y2Log: null,
+      y2Scale: null,
       y2Step: null,
       y2AxisLabel: "",
         seriesStyles: {},
@@ -2540,13 +2540,13 @@ export const useApp = create<AppState>((set, get) => ({
     syncPrefs(get());
   },
   setPrefsOpen: (prefsOpen) => set({ prefsOpen }),
-  setYLog: (yLog) => {
-    set({ yLog });
-    get().recordMacro(`Y axis ${yLog ? "log" : "linear"}`, `qz.setYLog(${yLog})`);
+  setYScale: (yScale) => {
+    set({ yScale });
+    get().recordMacro(`Y axis ${yScale}`, `qz.setYScale(${lit(yScale)})`);
   },
-  setXLog: (xLog) => {
-    set({ xLog });
-    get().recordMacro(`X axis ${xLog ? "log" : "linear"}`, `qz.setXLog(${xLog})`);
+  setXScale: (xScale) => {
+    set({ xScale });
+    get().recordMacro(`X axis ${xScale}`, `qz.setXScale(${lit(xScale)})`);
   },
   setShowGrid: (showGrid) => set({ showGrid }),
   setShowLegend: (showLegend) => set({ showLegend }),
@@ -2569,7 +2569,7 @@ export const useApp = create<AppState>((set, get) => ({
   setYLim: (yLim) => set({ yLim, yStep: null }),
   // A manual y2 range is no longer the Origin figure that decoded y2Step, so
   // drop the stale step alongside it (mirrors setYLim / yStep above).
-  setY2Log: (y2Log) => set({ y2Log }),
+  setY2Scale: (y2Scale) => set({ y2Scale }),
   setY2Lim: (y2Lim) => set({ y2Lim, y2Step: null }),
   setXFmt: (xFmt) => set({ xFmt }),
   setYFmt: (yFmt) => set({ yFmt }),
@@ -2589,7 +2589,7 @@ export const useApp = create<AppState>((set, get) => ({
     get().recordMacro(`Y channels → ${yKeys ? yKeys.join(",") : "all"}`, `qz.setYKeys(${lit(yKeys)})`);
   },
   setY2Keys: (y2Keys) => {
-    set({ y2Keys, ...(y2Keys ? {} : { y2Lim: null, y2Log: null, y2Step: null, y2AxisLabel: "" }) });
+    set({ y2Keys, ...(y2Keys ? {} : { y2Lim: null, y2Scale: null, y2Step: null, y2AxisLabel: "" }) });
     get().recordMacro(
       `Y2 channels → ${y2Keys ? y2Keys.join(",") : "none"}`,
       `qz.setY2Keys(${lit(y2Keys)})`,
@@ -3149,8 +3149,8 @@ export const useApp = create<AppState>((set, get) => ({
       ...(targetDs ? { stageTab: plotIntentStageTab(targetDs) } : {}),
       xKey: c.xKey,
       yKeys: c.yKeys,
-      xLog: c.xLog,
-      yLog: c.yLog,
+      xScale: c.xScale,
+      yScale: c.yScale,
       plotTitle: c.title,
       xAxisLabel: c.xLabel,
       yAxisLabel: c.yLabel,
