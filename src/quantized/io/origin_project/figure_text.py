@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from typing import Any
 
 from quantized.io.origin_project.origin_richtext import clean_richtext
 
@@ -24,7 +25,9 @@ __all__ = [
     "_object_bucket",
     "_object_text",
     "_parse_legend_labels",
+    "_parse_legend_layers",
     "_texts_in",
+    "distribute_legend_layers",
 ]
 
 # A legend entry's swatch marker — counts curves (``n_curves``) and detects
@@ -79,18 +82,27 @@ def _object_bucket(name: str | None) -> str:
     """Which recovered-text bucket a graph-child object's own name routes to
     (see ``figures.py``): ``YL``/``XB``/``YR`` are the Y/X/secondary-Y axis
     titles, ``Legend`` is the per-curve legend text, ``Text*``/``Line*`` are
-    genuine floating annotations. Everything else — ``XT`` (the rarely-used
-    top-X axis), internal storage/config objects (``__LayerInfoStorage``,
-    ``__BCO2``, ``__FRAMESRCDATAINFOS``, ``3D``), composite-layout axis-break
-    sub-objects (``OB``/``OL``/``OR``/``X1``/``X2``), box/region shapes
-    (``Rect*``/``Circle*``), reference lines (``RLX*``/``RLY*``), or an
-    unresolved name — is deliberately routed to ``"ignore"``: dropped, never
-    guessed into the wrong bucket.
+    genuine floating annotations. The legend object's name is matched
+    case-insensitively: composite (multi-layer) graph windows name it
+    lowercase ``legend`` (20 corpus instances across PNR/Moke/
+    MnN_Diffusion_PNR/SLD_DoubleY.otp, 2026-07-11 sweep — always the dotted
+    ``\\l(layer.plot)`` legend of a double-Y/merge window), which the old
+    exact match silently routed to "ignore", dropping the whole legend.
+    Everything else — ``XT`` (the rarely-used top-X axis), internal
+    storage/config objects (``__LayerInfoStorage``, ``__BCO2``,
+    ``__FRAMESRCDATAINFOS``, ``3D``), composite-layout axis-break
+    sub-objects (``OB``/``OL``/``OR``/``X1``/``X2``), reference lines
+    (``RLX*``/``RLY*``), or an unresolved name — is deliberately routed to
+    ``"ignore"``: dropped, never guessed into the wrong bucket. (Region
+    shapes, ``Rect*``, are no longer a text concern at all — their typed
+    headers (0x31) are decoded by ``opj_shapes`` before name routing runs.)
     """
     if name is None:
         return "ignore"
     if name in _TITLE_OBJECT_BUCKETS:
         return _TITLE_OBJECT_BUCKETS[name]
+    if name.lower() == "legend":
+        return "legend"
     if name.startswith("Text") or name.startswith("Line"):
         return "annotations"
     return "ignore"
@@ -115,7 +127,15 @@ _LEGEND_LINE_RE = re.compile(r"\\l\((\d+)\)\s*(.*)")
 # between them (Origin only needs the \l(n) swatch marker, not a line break —
 # seen live in Hc2 data.opju Graph3: ``\l(4) Nb\l(5) Nb/Al\l(6) Nb/Au``), so
 # split each line into per-entry segments at every \l(n) boundary first.
-_LEGEND_SEG_RE = re.compile(r"(?=\\l\(\d+\))")
+# The boundary also matches the composite (multi-layer) dotted form
+# ``\l(layer.plot)`` so `_parse_legend_layers` sees clean segments; the
+# plain `_LEGEND_LINE_RE` above still ignores dotted entries by design.
+_LEGEND_SEG_RE = re.compile(r"(?=\\l\(\d+(?:\.\d+)?\))")
+# Composite (multi-layer) legend entry: ``\l(layer.plot) <label>`` — the
+# `layer.plot` indexing Origin uses whenever ONE legend object captions a
+# multi-layer window's curves (double-Y overlays, merge windows). See
+# `_parse_legend_layers`.
+_LEGEND_DOTTED_RE = re.compile(r"\\l\((\d+)\.(\d+)\)\s*(.*)")
 
 
 def _parse_legend_labels(texts: Sequence[str]) -> list[str]:
@@ -137,6 +157,57 @@ def _parse_legend_labels(texts: Sequence[str]) -> list[str]:
     if not labels:
         return []
     return [labels.get(i, "") for i in range(1, max(labels) + 1)]
+
+
+def _parse_legend_layers(texts: Sequence[str]) -> dict[int, list[str]]:
+    """Per-LAYER legend captions from a composite legend's dotted
+    ``\\l(layer.plot) <label>`` entries (item 41 — the multi-layer legend
+    object of a double-Y/merge window, e.g. PNR.opj Graph1's
+    ``\\l(1.1) %(1.1)  \\l(2.1) %(2.1) …``). Returns ``{layer: dense
+    1-based label list}``; plain ``\\l(n)`` entries land in layer 1 (a
+    single-layer legend's implied layer). An auto template referencing the
+    SAME dotted slot (``%(layer.plot)``) is re-indexed to the target
+    layer's own curve ordinal (``%(plot)``) so the per-figure ``%(n)``
+    resolver applies unchanged; a template referencing a DIFFERENT layer is
+    left verbatim — a raw code is better than a wrong guess. Missing slots
+    stay ``""``, never fabricated."""
+    per: dict[int, dict[int, str]] = {}
+    for t in texts:
+        for seg in _LEGEND_SEG_RE.split(t):
+            m = _LEGEND_DOTTED_RE.match(seg)
+            if m:
+                lyr, plot = int(m.group(1)), int(m.group(2))
+                label = m.group(3).strip()
+                label = re.sub(rf"%\({lyr}\.(\d+)\)", r"%(\1)", label)
+                per.setdefault(lyr, {})[plot] = clean_richtext(label)
+                continue
+            m2 = _LEGEND_LINE_RE.match(seg)
+            if m2:
+                per.setdefault(1, {})[int(m2.group(1))] = clean_richtext(m2.group(2).strip())
+    return {lyr: [d.get(i, "") for i in range(1, max(d) + 1)] for lyr, d in per.items() if d}
+
+
+def distribute_legend_layers(figures: list[dict[str, Any]]) -> None:
+    """Window-level composite-legend pass (item 41): one graph window's
+    figure dicts (one per layer, each carrying its private ``_legend_raw``
+    lines) share ONE legend object, but its dotted ``\\l(layer.plot)``
+    entries caption OTHER layers' curves — the per-layer span parse alone
+    leaves every layer's ``legend_labels`` empty. Pops ``_legend_raw`` from
+    every dict (the private key never ships), and — only when a dotted
+    entry exists anywhere in the window — fills each layer's EMPTY
+    ``legend_labels`` from the layered parse. A layer whose own plain
+    ``\\l(n)`` legend already parsed is never overwritten."""
+    raw: list[str] = []
+    for f in figures:
+        raw.extend(f.pop("_legend_raw", []))
+    if not any(_LEGEND_DOTTED_RE.match(seg) for t in raw for seg in _LEGEND_SEG_RE.split(t)):
+        return
+    layered = _parse_legend_layers(raw)
+    for f in figures:
+        if not f.get("legend_labels"):
+            entries = layered.get(int(f.get("layer", 1)))
+            if entries:
+                f["legend_labels"] = entries
 
 
 def _object_text(payload: bytes) -> str | None:

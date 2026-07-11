@@ -390,9 +390,18 @@ def test_opju_legend_position_tag_variant_85_1f_at_header_minus_33() -> None:
 @pytest.mark.realdata
 def test_realdata_legend_positions_match_com_oracle() -> None:
     """Decoded figure `legend_pos` vs the graph_extras.json oracle
-    (Legend.x1/.y1 = the box top-left in data coords) across BOTH
-    containers: every decoded position must sit within 0.5% of the axis
-    span; the 2026-07-06 baseline is 53 exact / 0 wrong / 2 honest misses."""
+    (Legend.x1/.y1 = the box top-left) across BOTH containers: every decoded
+    position must sit within 0.5% of the axis span. The 2026-07-06 baseline
+    was 53 exact / 0 wrong / 2 honest misses; 2026-07-11 (item 41's
+    case-insensitive legend-object routing) the 2 misses — Moke's
+    stacked-panel `Graph4` L1 and its `Graph10` L3 copy, whose legend object
+    is named lowercase ``legend`` — now decode too, giving 55 exact. Those
+    two legends report their oracle x1/y1 in LAYER-FRACTION attach units (x
+    from the left, y from the TOP), not data coords — the decoded data-coord
+    point maps back to the oracle fraction to 4-5 significant figures on
+    both instances ((1.329-0.9)/2.2 = 0.19500 = the oracle's 0.195 exactly),
+    i.e. the SAME visual position in a different unit mode — so the compare
+    accepts either interpretation, never a looser tolerance."""
     from quantized.io.origin_project.figures import extract_figures
     from quantized.io.origin_project.figures_opju import extract_figures_opju
 
@@ -432,10 +441,18 @@ def test_realdata_legend_positions_match_com_oracle() -> None:
                     continue
                 xspan = abs(lay["x_to"] - lay["x_from"]) or 1.0
                 yspan = abs(lay["y_to"] - lay["y_from"]) or 1.0
-                if (
+                data_match = (
                     abs(got["x"] - leg["x1"]) / xspan < 0.005
                     and abs(got["y"] - leg["y1"]) / yspan < 0.005
-                ):
+                )
+                # Layer-fraction attach units (see docstring): the oracle's
+                # x1/y1 ARE the fractions our decoded data point maps back to.
+                frac_x = (got["x"] - lay["x_from"]) / (lay["x_to"] - lay["x_from"])
+                frac_y = (lay["y_to"] - got["y"]) / (lay["y_to"] - lay["y_from"])
+                frac_match = (
+                    abs(frac_x - leg["x1"]) < 0.005 and abs(frac_y - leg["y1"]) < 0.005
+                )
+                if data_match or frac_match:
                     ok += 1
                 else:
                     wrong += 1

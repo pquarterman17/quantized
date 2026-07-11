@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import type { Annotation, RefLine } from "./types";
-import { annotationPlugin, clampAnnotationLabelX, errorBarsPlugin, pickRefLine, refLinePlugin } from "./uplotOverlays";
+import {
+  annotationPlugin,
+  clampAnnotationLabelX,
+  errorBarsPlugin,
+  pickRefLine,
+  refLinePlugin,
+  REGION_SHADE_ALPHA,
+  regionShadePlugin,
+} from "./uplotOverlays";
+import type { RegionShade } from "./types";
 
 /** Minimal uPlot stub: a recording 2D context + a linear valToPos. */
 function fakeU() {
@@ -319,5 +328,75 @@ describe("errorBarsPlugin (item 3: cap width defaults to zero)", () => {
 
   it("draws no caps when capHalfWidth is explicitly zero (same as the default)", () => {
     expect(draw(0)).toHaveLength(2);
+  });
+});
+
+/** Stub recording fillRect + clip calls for the region-shade plugin. Same
+ *  valToPos convention as fakeAnnU: "x" -> v, "y" -> 100 - v, "y2" -> 200 - v
+ *  (a different offset so a test can tell which scale resolved). */
+function fakeShadeU(hasY2 = false) {
+  const rects: { x: number; y: number; w: number; h: number; fill: string; alpha: number }[] = [];
+  let clipped = false;
+  const ctx = {
+    save() {},
+    restore() {},
+    beginPath() {},
+    rect() {},
+    clip() {
+      clipped = true;
+    },
+    fillRect(x: number, y: number, w: number, h: number) {
+      rects.push({ x, y, w, h, fill: ctx.fillStyle, alpha: ctx.globalAlpha });
+    },
+    fillStyle: "",
+    globalAlpha: 1,
+  };
+  const valToPos = (v: number, scale: string) =>
+    scale === "x" ? v : scale === "y2" ? 200 - v : 100 - v;
+  const scales = hasY2 ? { x: {}, y: {}, y2: {} } : { x: {}, y: {} };
+  const u = { ctx, bbox: { left: 10, top: 5, width: 100, height: 80 }, valToPos, scales };
+  return { u, rects, isClipped: () => clipped };
+}
+
+function drawShades(shades: RegionShade[], hasY2 = false) {
+  const { u, rects, isClipped } = fakeShadeU(hasY2);
+  const plugin = regionShadePlugin(shades);
+  // @ts-expect-error — minimal stub stands in for a real uPlot instance
+  plugin.hooks.drawClear?.(u);
+  return { rects, isClipped };
+}
+
+describe("regionShadePlugin (Origin Rect* bands, decode-plan #41)", () => {
+  it("fills each shade's rect at the fixed translucent alpha, clipped to the plot area", () => {
+    const { rects, isClipped } = drawShades([
+      { id: "s1", x1: 20, x2: 40, y1: 10, y2: 90, fill: "#FF8000" },
+    ]);
+    expect(isClipped()).toBe(true);
+    expect(rects).toHaveLength(1);
+    // x: 20..40 px; y: valToPos(90)=10 (top) .. valToPos(10)=90 (bottom).
+    expect(rects[0]).toEqual({ x: 20, y: 10, w: 20, h: 80, fill: "#FF8000", alpha: REGION_SHADE_ALPHA });
+  });
+
+  it("draws in the drawClear hook (behind grid and data), not draw", () => {
+    const plugin = regionShadePlugin([]);
+    expect(plugin.hooks.drawClear).toBeDefined();
+    expect(plugin.hooks.draw).toBeUndefined();
+  });
+
+  it("skips a shade with a non-finite extent", () => {
+    const { rects } = drawShades([
+      { id: "s1", x1: NaN, x2: 40, y1: 10, y2: 90, fill: "#FF8000" },
+      { id: "s2", x1: 20, x2: 40, y1: 10, y2: 90, fill: "#0000FF" },
+    ]);
+    expect(rects).toHaveLength(1);
+    expect(rects[0].fill).toBe("#0000FF");
+  });
+
+  it("maps an axis:1 shade through the y2 scale when the plot has one, and falls back otherwise", () => {
+    const withY2 = drawShades([{ id: "s", x1: 0, x2: 10, y1: 10, y2: 90, axis: 1, fill: "#FF0000" }], true);
+    // y2 scale: valToPos(90)=110 (top), valToPos(10)=190 -> height 80.
+    expect(withY2.rects[0].y).toBe(110);
+    const noY2 = drawShades([{ id: "s", x1: 0, x2: 10, y1: 10, y2: 90, axis: 1, fill: "#FF0000" }], false);
+    expect(noY2.rects[0].y).toBe(10); // primary-scale fallback
   });
 });

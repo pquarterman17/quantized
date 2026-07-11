@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildOriginFigureEntries,
+  curveDisplayName,
   doubleYPartner,
   figureChannelSelection,
   figureFrameY2Pairs,
@@ -10,6 +11,7 @@ import {
   originCurveSeriesStyle,
   originFigureAnnotations,
   originLegendPos,
+  originRegionShades,
   type OriginFigureEntry,
   resolveFigureDataset,
   resolveFigurePanels,
@@ -979,5 +981,82 @@ describe("originLegendPos", () => {
     expect(
       originLegendPos({ ...base, x_from: 5, x_to: 5, legend_pos: { x: 5, y: 50 } }),
     ).toBeNull();
+  });
+});
+
+describe("originRegionShades (decode-plan #41)", () => {
+  const shades = [
+    { x1: 2950, x2: 3000, y1: -1, y2: 10, fill: "#C0C0C0" },
+    { x1: 3000, x2: 3090, y1: -1, y2: 10, fill: "#FF8000" },
+  ];
+
+  it("maps decoded region_shades to store RegionShades with generated ids", () => {
+    const got = originRegionShades([figure({ region_shades: shades })], "fig-key");
+    expect(got).toHaveLength(2);
+    expect(got[0]).toEqual({
+      id: "figshade-fig-key-0-0",
+      x1: 2950, x2: 3000, y1: -1, y2: 10, fill: "#C0C0C0",
+    });
+    expect(new Set(got.map((s2) => s2.id)).size).toBe(2);
+  });
+
+  it("skips a shade whose fill never decoded (never guessed) or with a non-finite extent", () => {
+    const got = originRegionShades(
+      [figure({ region_shades: [
+        { x1: 0, x2: 1, y1: 0, y2: 1, fill: null },
+        { x1: 0, x2: NaN, y1: 0, y2: 1, fill: "#FF0000" },
+        { x1: 0, x2: 1, y1: 0, y2: 1, fill: "#0000FF" },
+      ] })],
+      "k",
+    );
+    expect(got).toHaveLength(1);
+    expect(got[0].fill).toBe("#0000FF");
+  });
+
+  it("returns [] for figures without shades (clears the plot on apply)", () => {
+    expect(originRegionShades([figure()], "k")).toEqual([]);
+    expect(originRegionShades([figure({ region_shades: [] })], "k")).toEqual([]);
+  });
+
+  it("tags the upper layer's shades axis:1 in a double-Y apply", () => {
+    const l1 = figure({ region_shades: [shades[0]] });
+    const l2 = figure({ region_shades: [shades[1]] });
+    const got = originRegionShades([l1, l2], "fig-0", [0, 1]);
+    expect(got[0].axis).toBeUndefined();
+    expect(got[1].axis).toBe(1);
+  });
+});
+
+describe("curveDisplayName (Origin %(n) resolution — comment first)", () => {
+  // Validated on PNR.opj Graph1 (live-COM PNG oracle): Origin's auto legend
+  // shows the bound column's COMMENT ("Nuclear SLD"/"1.5 mT from 700mT"),
+  // not its long name ("rho"/"rhoM") — see curveDisplayName's doc.
+  const ds = book("b1", "PNR:Book4", {
+    origin_book: "Book4",
+    x_column_name: "A",
+    origin_column_names: ["B", "C", "D"],
+    column_comments: { B: "Nuclear SLD", D: "1.5 mT from 700mT" },
+  });
+  ds.data.labels = ["rho", "drho", "rhoM"];
+
+  it("prefers the column comment, falls back to the long name, then the letter", () => {
+    expect(curveDisplayName(ds, "B", 0)).toBe("Nuclear SLD");
+    expect(curveDisplayName(ds, "C", 1)).toBe("drho"); // no comment -> long name
+    expect(curveDisplayName(ds, "D", 2)).toBe("1.5 mT from 700mT");
+  });
+
+  it("falls back to the column letter when neither comment nor label exists", () => {
+    const bare = book("b2", "X", { origin_column_names: ["B"] });
+    bare.data.labels = [""];
+    expect(curveDisplayName(bare, "B", 0)).toBe("B");
+  });
+
+  it("threads comments into figureChannelSelection's %(n) resolution", () => {
+    const fig = figure({
+      curves: [{ book: "Book4", x: "A", y: "D" }],
+      legend_labels: ["%(1)"],
+    });
+    const sel = figureChannelSelection(fig, ds);
+    expect(sel?.labels).toEqual({ 2: "1.5 mT from 700mT" });
   });
 });

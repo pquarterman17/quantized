@@ -671,6 +671,46 @@ def test_realdata_pnr_merge_windows_recovered() -> None:
     assert g31_books <= {"Book35", "Book36", "Book37"}
 
 
+@pytest.mark.realdata
+@pytest.mark.skipif(not _CORPUS.exists(), reason="local Origin corpus not present")
+def test_realdata_pnr_graph1_region_shades_and_composite_legend() -> None:
+    """Decode-plan item 41 anchor: PNR.opj Graph1 (the SLD-profile double-Y
+    window) carries 6 `Rect*` film-stack bands on layer 1 — extents
+    partitioning the x range, fills matching the live-Origin PNG oracle
+    exactly (Ru=red, Air/SiO2=light gray, Py=olive, YIG=blue, Pt=orange) —
+    and ONE composite lowercase-`legend` object whose dotted entries caption
+    both layers (`%(1.1)` -> layer 1, `%(2.1)`-`%(2.4)` -> layer 2)."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    figs = extract_figures((_CORPUS / "PNR.opj").read_bytes())
+    g1 = [f for f in figs if f["name"] == "Graph1"]
+    assert [f["layer"] for f in g1] == [1, 2]
+    l1, l2 = g1
+
+    shades = l1["region_shades"]
+    assert len(shades) == 6
+    # fills in block-stream order: Rect5(Ru) Rect4(Air) Rect3(Py) Rect2(YIG)
+    # Rect1(Pt) Rect(SiO2) — 6/6 against the COM-exported PNG oracle.
+    assert [s["fill"] for s in shades] == [
+        "#FF0000", "#C0C0C0", "#008000", "#0000FF", "#FF8000", "#C0C0C0",
+    ]
+    # bands span (nearly) the full y range and tile the x range [2950, 3700]
+    for s in shades:
+        assert s["y1"] < -0.9 and s["y2"] > 9.9
+        assert 2949 < s["x1"] < s["x2"] < 3701
+    xs = sorted((s["x1"], s["x2"]) for s in shades)
+    assert xs[0][0] == pytest.approx(2950, abs=1)
+    assert xs[-1][1] == pytest.approx(3700, abs=1)
+    for (_, prev_hi), (nxt_lo, _) in zip(xs, xs[1:], strict=False):
+        assert nxt_lo == pytest.approx(prev_hi, abs=2)  # adjacent, no holes
+
+    # the composite legend distributed across both layers, re-indexed
+    assert l1["legend_labels"] == ["%(1)"]
+    assert l2["legend_labels"] == ["%(1)", "%(2)", "%(3)", "%(4)"]
+    # layer 2 has no bands of its own (all six Rects sit in layer 1's span)
+    assert l2["region_shades"] == []
+
+
 def test_figures_absent_on_plain_synthetic(tmp_path) -> None:
     from quantized.io.origin_project.figures import extract_figures
 
@@ -996,6 +1036,175 @@ def test_parse_legend_labels_multiple_entries_on_one_line() -> None:
 
     got = _parse_legend_labels([r"\l(1) %(1)", r"\l(4) Nb\l(5) Nb/Al\l(6) Nb/Au"])
     assert got == ["%(1)", "", "", "Nb", "Nb/Al", "Nb/Au"]
+
+
+def _fig_shape_object(
+    left: float,
+    top: float,
+    width: float,
+    height: float,
+    *,
+    color: int = 0x12,
+    name: str = "Rect",
+) -> bytes:
+    """A region-shape graphic object (decode-plan item 41): the 133-byte
+    header with type tag 0x31 + its name, then the 130-byte geometry+fill
+    body (layer-frame fraction doubles at 10/18/26/34, the fill ocolor u32
+    at 66 and its low-byte mirror at 7), then the 1-byte terminator — the
+    exact three-block shape every one of the 329 corpus instances has (see
+    ``opj_shapes.py``'s module docstring)."""
+    header = bytearray(133)
+    header[2] = 0x31
+    nb = name.encode("latin1")
+    header[70 : 70 + len(nb)] = nb
+    body = bytearray(130)
+    body[7] = color & 0xFF
+    struct.pack_into("<d", body, 10, left)
+    struct.pack_into("<d", body, 18, top)
+    struct.pack_into("<d", body, 26, width)
+    struct.pack_into("<d", body, 34, height)
+    struct.pack_into("<I", body, 66, color)
+    return _block(bytes(header)) + _block(bytes(body)) + _block(b"\x00")
+
+
+def test_synthetic_opj_region_shape_decodes_extent_and_fill() -> None:
+    """Item 41 (the general shape): a `Rect*` object (header type 0x31 + the
+    130-byte body) decodes into `region_shades` — extents converted from
+    layer-frame fractions to DATA coordinates via the confirmed
+    `frac_to_data` model (top fraction measured from the axis TOP), fill via
+    the on-disk ocolor (0-based classic palette / direct COLORREF)."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph1")
+        + _fig_layer_block(0.0, 10.0, 0.0, 100.0, hint="Book1")
+        # left=0.1, top=0.0, width=0.2, height=1.0 on x=[0,10], y=[0,100]:
+        # x1=1, x2=3, full y span. Palette 0x0e (0-based) = orange #FF8000.
+        + _fig_shape_object(0.1, 0.0, 0.2, 1.0, color=0x0E)
+        # A direct-COLORREF fill (0x01BBGGRR): 0x012DAFE6 -> #E6AF2D.
+        + _fig_shape_object(0.5, 0.25, 0.1, 0.5, color=0x012DAFE6)
+        + _fig_curve_block()
+    )
+    figs = extract_figures(blob)
+    assert len(figs) == 1
+    shades = figs[0]["region_shades"]
+    assert len(shades) == 2
+    s0, s1 = shades
+    assert (s0["x1"], s0["x2"]) == (pytest.approx(1.0), pytest.approx(3.0))
+    assert (s0["y1"], s0["y2"]) == (pytest.approx(0.0), pytest.approx(100.0))
+    assert s0["fill"] == "#FF8000"
+    assert (s1["x1"], s1["x2"]) == (pytest.approx(5.0), pytest.approx(6.0))
+    # top 0.25..0.75 measured from the axis TOP
+    assert (s1["y1"], s1["y2"]) == (pytest.approx(25.0), pytest.approx(75.0))
+    assert s1["fill"] == "#E6AF2D"
+    # the shape's binary body never leaks into the text buckets
+    assert figs[0]["annotations"] == []
+    assert figs[0]["n_curves"] == 1
+
+
+def test_synthetic_opj_region_shape_bad_body_dropped_never_guessed() -> None:
+    """A shape body whose geometry doubles are implausible yields NO shade at
+    all — dropped, never guessed; an unrecognized fill ocolor type ships the
+    extent with `fill: None` rather than a guessed colour."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    bad_header = bytearray(133)
+    bad_header[2] = 0x31
+    bad_header[70:75] = b"Rect\x00"
+    junk_body = bytearray(130)
+    struct.pack_into("<d", junk_body, 10, 1e300)  # implausible fraction
+    unknown_color = 0x7F000001  # neither palette (0x00) nor COLORREF (0x01)
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph2")
+        + _fig_layer_block(0.0, 1.0, 0.0, 1.0)
+        + _block(bytes(bad_header))
+        + _block(bytes(junk_body))
+        + _block(b"\x00")
+        + _fig_shape_object(0.2, 0.0, 0.2, 1.0, color=unknown_color)
+    )
+    figs = extract_figures(blob)
+    assert len(figs) == 1
+    shades = figs[0]["region_shades"]
+    assert len(shades) == 1  # the junk body produced nothing
+    assert shades[0]["fill"] is None  # extent kept, colour never guessed
+
+
+def test_synthetic_opj_composite_legend_distributes_across_layers() -> None:
+    """Item 41 (the composite-legend class): ONE legend object — named
+    lowercase `legend`, as every corpus composite window spells it — carries
+    dotted ``\\l(layer.plot)`` entries for BOTH layers of a double-Y window
+    (the PNR.opj Graph1 shape). Each layer's dict gets its own slice, with
+    the auto template re-indexed to that layer's own curve ordinals
+    (``%(2.1)`` -> ``%(1)``); hand-edited literal entries pass through."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph1")
+        + _fig_layer_block(0.0, 10.0, 0.0, 100.0, hint="Book1")
+        + _fig_named_header("legend")
+        + _fig_format_block()
+        + _fig_text_block("\\l(1.1) %(1.1)   \\l(2.1) %(2.1)   \\l(2.2) Hand label")
+        + _fig_curve_block()
+        + _fig_layer_block(0.0, 10.0, -1.0, 1.0, hint="Book1")
+        + _fig_curve_block()
+        + _fig_curve_block()
+    )
+    figs = extract_figures(blob)
+    assert [f["layer"] for f in figs] == [1, 2]
+    assert figs[0]["legend_labels"] == ["%(1)"]
+    assert figs[1]["legend_labels"] == ["%(1)", "Hand label"]
+    # the private distribution key never ships
+    assert all("_legend_raw" not in f for f in figs)
+
+
+def test_synthetic_opj_lowercase_legend_plain_entries_still_parse() -> None:
+    """The legend-name match is case-insensitive (the composite windows name
+    the object `legend`); a lowercase legend holding PLAIN ``\\l(n)`` entries
+    parses exactly like the capitalized one — per-layer, no distribution."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph3")
+        + _fig_layer_block(0.0, 1.0, 0.0, 1.0)
+        + _fig_named_header("legend")
+        + _fig_format_block()
+        + _fig_text_block("\\l(1) Nb\r\n\\l(2) %(2)")
+        + _fig_curve_block()
+    )
+    figs = extract_figures(blob)
+    assert len(figs) == 1
+    assert figs[0]["legend_labels"] == ["Nb", "%(2)"]
+
+
+def test_synthetic_opj_plain_legend_never_overwritten_by_distribution() -> None:
+    """A layer whose own plain legend already parsed keeps it even when the
+    window also carries dotted entries somewhere (never clobbered)."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    blob = (
+        b"CPYA 4.3380 188 W64 #\n"
+        + _zero()
+        + _fig_window_header("Graph4")
+        + _fig_layer_block(0.0, 1.0, 0.0, 1.0)
+        + _fig_named_header("Legend")
+        + _fig_format_block()
+        + _fig_text_block("\\l(1) Mine")
+        + _fig_layer_block(0.0, 1.0, -1.0, 1.0)
+        + _fig_named_header("legend")
+        + _fig_format_block()
+        + _fig_text_block("\\l(1.1) Stolen\\l(2.1) Theirs")
+    )
+    figs = extract_figures(blob)
+    assert figs[0]["legend_labels"] == ["Mine"]  # plain parse wins
+    assert figs[1]["legend_labels"] == ["Theirs"]
 
 
 def test_synthetic_opj_figure_unnamed_header_falls_back_to_annotations() -> None:

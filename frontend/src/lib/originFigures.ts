@@ -7,7 +7,15 @@
 import { originErrKeys, originHiddenChannels } from "./errorbars";
 import type { SpatialPanel } from "./multipanel";
 import { computePanelLayout, framesCoincide } from "./originPanels";
-import type { Annotation, Dataset, MarkerShape, OriginCurve, OriginFigure, SeriesStyle } from "./types";
+import type {
+  Annotation,
+  Dataset,
+  MarkerShape,
+  OriginCurve,
+  OriginFigure,
+  RegionShade,
+  SeriesStyle,
+} from "./types";
 
 const MARKER_SHAPES: ReadonlySet<string> = new Set([
   "circle", "square", "triangle", "downtriangle", "diamond", "plus", "cross", "star",
@@ -86,6 +94,20 @@ const LEGEND_SWATCH_RE = /\\l\(\d+\)\s*/g;
 // literal-passthrough branch below instead of being mis-resolved by a guess
 // at what the modifier means.
 const LEGEND_CODE_RE = /%\((\d+)\)/g;
+
+/** The display name Origin's `%(n)` auto legend substitutes for a bound
+ *  curve: the Y column's COMMENT when one is set, falling back to the column
+ *  long name, then the short column letter. Validated against the live-COM
+ *  PNG oracle on PNR.opj Graph1 (decode-plan #41): its rendered legend reads
+ *  "Nuclear SLD" / "700 mT" / "1.5 mT from 700mT" — all column Comments
+ *  (`metadata.column_comments`), while the long names are just "rho"/"rhoM".
+ *  Columns without a comment keep resolving exactly as before. */
+export function curveDisplayName(ds: Dataset, yLetter: string, yIdx: number): string {
+  const meta = (ds.data.metadata ?? {}) as Record<string, unknown>;
+  const comments = meta.column_comments as Record<string, unknown> | undefined;
+  const comment = comments && typeof comments === "object" ? String(comments[yLetter] ?? "") : "";
+  return comment || ds.data.labels[yIdx] || yLetter;
+}
 
 /** Resolve an Origin legend template string (one `legend_labels` entry) to
  *  display text: strip the `\l(n)` swatch marker Origin prepends (our legend
@@ -207,7 +229,7 @@ export function figureChannelSelection(
   // a template's index lines up with the curve curveIdx is currently on.
   const curveNames: (string | undefined)[] = mine
     .filter((c) => letters.indexOf(c.y) >= 0)
-    .map((c) => ds.data.labels[letters.indexOf(c.y)] || c.y);
+    .map((c) => curveDisplayName(ds, c.y, letters.indexOf(c.y)));
   let xKey: number | null = null;
   // legend_labels is a dense 1-based list, one entry per curve in the SAME
   // order Origin's "\l(n)" legend numbering plots them — curveIdx tracks that
@@ -539,6 +561,40 @@ export function originFigureAnnotations(
         x: m.x,
         y: m.y,
         text: m.text,
+        ...(axisTag === 1 ? { axis: 1 as const } : {}),
+      });
+    });
+  });
+  return out;
+}
+
+/** The store `regionShades` an applied figure pins on the plot: every decoded
+ *  `Rect*` region band (`region_shades`, data coords — decode-plan #41) of
+ *  the given figure layer(s), mapped to the plot RegionShade shape with ids
+ *  generated from `key` (the figure entry id). Mirrors
+ *  `originFigureAnnotations` exactly: `applyOriginFigure` REPLACES the
+ *  store's shades with this — figures without shades yield [], clearing the
+ *  plot. A shade whose fill never decoded, or with a non-finite extent, is
+ *  skipped (never guessed). */
+export function originRegionShades(
+  figures: OriginFigure[],
+  key: string,
+  /** Per-figure Y-scale tag (parallel to `figures`), for the double-Y apply —
+   *  same convention as `originFigureAnnotations`. */
+  axes?: (0 | 1)[],
+): RegionShade[] {
+  const out: RegionShade[] = [];
+  figures.forEach((f, fi) => {
+    const axisTag = axes?.[fi];
+    (f.region_shades ?? []).forEach((s, si) => {
+      if (!s.fill || ![s.x1, s.x2, s.y1, s.y2].every(Number.isFinite)) return;
+      out.push({
+        id: `figshade-${key}-${fi}-${si}`,
+        x1: s.x1,
+        x2: s.x2,
+        y1: s.y1,
+        y2: s.y2,
+        fill: s.fill,
         ...(axisTag === 1 ? { axis: 1 as const } : {}),
       });
     });

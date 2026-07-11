@@ -179,6 +179,11 @@ export interface OriginFigure {
    *  (`figure_geometry.opj_page_size`/`opju_page_size`). null/absent = not
    *  decoded/implausible — never guessed. Shared by every layer of one page. */
   page?: { width: number; height: number } | null;
+  /** Filled region-shape objects (`Rect*` bands, decode-plan #41) at DATA
+   *  coordinates, `.opj` only (`io/origin_project/opj_shapes.py`). `fill`
+   *  is "#RRGGBB" or null (colour undecoded — such shades are skipped by
+   *  `originRegionShades`, never guessed). */
+  region_shades?: { x1: number; x2: number; y1: number; y2: number; fill?: string | null }[];
 }
 
 /** Response of POST /api/plot/series — uPlot-ready column data. */
@@ -454,6 +459,25 @@ export interface RefLine {
   id: string;
   axis: "x" | "y";
   value: number;
+}
+
+/** A filled rectangular region pinned at data coordinates (Origin `Rect*`
+ *  region bands — film-stack shading on an SLD profile, decode-plan #41).
+ *  Drawn translucently BEHIND the data by the uPlot regionShadePlugin
+ *  (Origin's fill-transparency field is undecoded — the render alpha is a
+ *  fixed presentation choice, see the plugin). `x1 < x2`, `y1 < y2`. */
+export interface RegionShade {
+  id: string;
+  x1: number;
+  x2: number;
+  y1: number;
+  y2: number;
+  /** Fill colour "#RRGGBB", decoded from Origin's ocolor — shades whose
+   *  colour didn't decode are never mapped into the store (no guessing). */
+  fill: string;
+  /** Which Y scale y1/y2 are expressed in: 0/undefined = primary, 1 =
+   *  secondary (y2) — same convention as `Annotation.axis`. */
+  axis?: 0 | 1;
 }
 
 /** Per-channel line style (solid/dashed/dotted) — maps to a uPlot dash array. */

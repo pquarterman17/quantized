@@ -62,6 +62,7 @@ export default function PlotStage() {
   const refLines = useApp((s) => s.refLines);
   const updateRefLine = useApp((s) => s.updateRefLine);
   const annotations = useApp((s) => s.annotations);
+  const regionShades = useApp((s) => s.regionShades);
   const seriesStyles = useApp((s) => s.seriesStyles);
   const seriesLabels = useApp((s) => s.seriesLabels);
   const waterfall = useApp((s) => s.waterfall);
@@ -275,6 +276,7 @@ export default function PlotStage() {
         refLines={refLines}
         onRefLineMove={updateRefLine}
         annotations={annotations}
+        regionShades={regionShades}
         seriesStyles={styleList}
         seriesLabels={labelList}
         errorBars={errorBars}

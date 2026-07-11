@@ -11,7 +11,7 @@
 // point order intact and render correctly through the existing loop-safe
 // plot machinery (sorted=0 + full-range path builders).
 
-import { originCurveSeriesStyle, resolveLegendTemplate } from "./originFigures";
+import { curveDisplayName, originCurveSeriesStyle, resolveLegendTemplate } from "./originFigures";
 import type { Dataset, DataStruct, OriginFigure, SeriesStyle } from "./types";
 
 /** Letter -> 0-based value-channel index via origin_column_names, or -1;
@@ -100,7 +100,10 @@ export function buildOverlayDataset(
     const ds = books.find((d) => String((d.data.metadata ?? {}).origin_book ?? "") === c.book);
     if (!ds) return undefined;
     const yCh = channelOf((ds.data.metadata ?? {}) as Record<string, unknown>, c.y);
-    return yCh >= 0 ? ds.data.labels[yCh] || c.y : undefined;
+    // Comment-first (curveDisplayName): Origin's %(n) auto text substitutes
+    // the bound column's Comment when set — validated on PNR.opj Graph1's
+    // cross-book layer ("700 mT"/"1.5 mT from 700mT" are Comments).
+    return yCh >= 0 ? curveDisplayName(ds, c.y, yCh) : undefined;
   });
   const bound: Bound[] = [];
   // curveIdx tracks this curve's position among ALL of figure.curves (even
