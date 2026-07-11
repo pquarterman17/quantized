@@ -51,7 +51,29 @@ GOTO #11 drift (implemented but listed open).
 
 ## Tier 1 — High Impact
 
-*(items 9–11 booked from the 2026-07-11 Origin-parity surface audit)*
+*(items 9–11 booked from the 2026-07-11 Origin-parity surface audit;
+18–19 from the owner's first hands-on testing session, same day)*
+
+18. **Pointer tool as the DEFAULT + direct-manipulation plot objects**
+    (owner directive, see `quantized-pointer-default-ux` memory) —
+    - New tool id `pointer`, the new default: regular arrow cursor, NO
+      dashed crosshair (crosshair stays only on the explicit data tools);
+      empty-canvas drag keeps box-zoom.
+    - Annotations (incl. Origin-imported PNR text overlays) become
+      selectable/movable/resizable in pointer mode: click select, drag
+      move (commit-on-release, refLine/anchors pattern), corner handle +
+      context menu resize (`Annotation.size` font px), double-click edit
+      text, right-click menu (edit/size/delete), Escape deselects.
+    - Ref lines stay draggable in pointer mode.
+    - Legend draggable in pointer mode → free position (fraction coords
+      overriding the ne/nw/se/sw preset; Origin-imported positions stay
+      the default); double-click resets to nearest corner.
+    - Export parity for annotation size + free legend position.
+
+19. **Multi-plot panel builder** (owner request) — ctrl-click multiple
+    plots → compose side-by-side / row×column grids or overlays.
+    DESIGN WITH OWNER — decision round pending (selection source,
+    result target, layout flow, overlay axis semantics).
 
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 

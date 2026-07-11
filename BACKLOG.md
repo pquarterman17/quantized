@@ -16,9 +16,13 @@ campaigns never enumerated; MAIN #10 re-import-from-source shipped same day)
 
 | # | Item | Plan / item | Size |
 |---|------|-------------|------|
-*(none — the 2026-07-11 Origin-parity audit items #9–#17 ALL shipped the
-same day; new items arrive via owner gates, user testing, or the
-parity/decode monitors)*
+| # | Item | Plan / item | Size |
+|---|------|-------------|------|
+| 33 | Pointer tool default + direct-manipulation annotations/legend (owner testing directive) | MAIN #18 | M |
+| 34 | Multi-plot panel builder (design round with owner pending) | MAIN #19 | L |
+
+*(audit items #9–#17 all shipped 2026-07-11; #18–#19 booked from the
+owner's first hands-on testing session)*
 
 ## Owner actions & owner-gated decisions
 
