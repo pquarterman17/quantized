@@ -65,14 +65,9 @@ GOTO #11 drift (implemented but listed open).
 ~~22. **Standalone DiraCulator launcher**~~ COMPLETED 2026-07-11 (see
     Completed).
 
-23. **DiraCulator Start Menu shortcut in the installer** (owner request
-    2026-07-11, extends #22): the Tauri/NSIS installer adds a second
-    Start Menu entry "DiraCulator" → `Quantized.exe --calc`; the Rust
-    shell gains the `--calc` arg (webview URL `?view=calc`, title
-    DiraCulator, ~520×680 window, same sidecar dance); uninstall hook
-    removes the shortcut; honest gap: full installer build needs the
-    release toolchain, so local verification = cargo check + hook
-    review against the existing NSIS_HOOK pattern.
+~~23. **DiraCulator Start Menu shortcut in the installer**~~ COMPLETED
+    2026-07-11 (see Completed). ⚠ Installer-path verification pending
+    the next real release build (noted in the Completed entry).
 
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
@@ -157,6 +152,21 @@ GOTO #11 drift (implemented but listed open).
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#23 DiraCulator Start Menu shortcut**~~ (2026-07-11, sonnet agent)
+  — Tauri shell `--calc` mode (pure unit-tested `shell_mode`/
+  `webview_url` helpers; retitles/resizes the config-defined "main"
+  window to DiraCulator 520×680; sidecar logic byte-identical both
+  modes; cargo check/test 7/7/clippy clean) + NSIS POSTINSTALL/
+  POSTUNINSTALL hooks grounded in the TAG-PINNED tauri-bundler
+  template source (tauri-cli-v2.11.2): `$SMPROGRAMS\DiraCulator.lnk` →
+  `$INSTDIR\${MAINBINARYNAME}.exe --calc` (MAINBINARYNAME, not a
+  hardcoded exe name — the binary is quantized-shell.exe), ambient
+  SHCTX matches Tauri's own shortcut, uninstall gated on
+  `$UpdateMode <> 1` + UnpinShortcut so upgrades never delete it.
+  HONEST GAP: hooks verified by construction only — the full
+  install/upgrade/uninstall path runs at the next real release build
+  (pair it with the signing-cert owner gate's E2E).
 
 - ~~**#22 Standalone DiraCulator launcher**~~ (2026-07-11, sonnet agent)
   — `qz --calc` + `diraculator` console-script alias (`cli.main_calc`);

@@ -15,12 +15,10 @@ day; MAIN #20 tick-precision/eng-notation shipped same day)
 
 ## Actionable dev work (no blockers, no owner gate)
 
-| # | Item | Plan / item | Size |
-|---|------|-------------|------|
-| 38 | DiraCulator Start Menu shortcut (installer + Tauri `--calc` shell mode) | MAIN #23 | S |
-
-*(MAIN #9–#22 all shipped 2026-07-11; #23 booked from continued owner
-testing, agent in flight)*
+*(none — MAIN #9–#23 ALL shipped 2026-07-11. The #23 installer hooks
+get their real-world verification at the next release build, alongside
+the signing-cert gate's updater E2E. New items arrive via owner gates,
+user testing, or the parity/decode monitors)*
 
 ## Owner actions & owner-gated decisions
 
