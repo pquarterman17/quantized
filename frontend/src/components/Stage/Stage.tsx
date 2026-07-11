@@ -7,10 +7,13 @@
 // `App.tsx` (its curated-actions list is line-pinned) — Stage stays mounted
 // for the app's whole lifetime regardless of which tab is active, so the
 // Window menu/⌘K entries and their keyboard shortcuts always work.
+// `useHistoryCommands` (MAIN_PLAN #9, undo/redo) is mounted here for the
+// identical reason — Ctrl+Z must work no matter which stage tab is showing.
 
 import MapStage from "./MapStage";
 import Worksheet from "./Worksheet";
 import { useApp } from "../../store/useApp";
+import { useHistoryCommands } from "../history/useHistoryCommands";
 import { useWindowCommands } from "../windows/useWindowCommands";
 import WindowCanvas from "../windows/WindowCanvas";
 
@@ -24,6 +27,7 @@ export default function Stage() {
   const stageTab = useApp((s) => s.stageTab);
   const setStageTab = useApp((s) => s.setStageTab);
   useWindowCommands();
+  useHistoryCommands();
 
   return (
     <section className="qzk-stage-cell">

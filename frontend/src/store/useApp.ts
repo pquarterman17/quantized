@@ -74,6 +74,8 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
+// The undo/redo snapshot-history slice (MAIN_PLAN #9), composed the same way.
+import { createHistorySlice, type HistorySlice } from "./history";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -301,7 +303,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice {
+export interface AppState extends WindowsSlice, HistorySlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -1027,6 +1029,8 @@ export const useApp = create<AppState>((set, get) => ({
   // instance (MAIN_PLAN #2) — selectors like useApp((s) => s.plotWindows)
   // are untouched by the split.
   ...createWindowsSlice(set, get),
+  // Undo/redo (MAIN_PLAN #9) — see store/history.ts for the snapshot design.
+  ...createHistorySlice(set),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1170,6 +1174,10 @@ export const useApp = create<AppState>((set, get) => ({
   status: "starting…",
 
   addDataset: (ds) => {
+    // MAIN_PLAN #9: the single entry point for import/paste/demo/merge — one
+    // call site covers all of them (mergeSelected/importFilesAppended/
+    // pasteDataFromClipboard all route through here).
+    get().recordHistory("add dataset");
     // Item 14 pin opt-out: an import is a passive rebind, same as a Library
     // click — a pinned focused window never absorbs it (shared helper;
     // `ds.name` seeds the title when a fresh window must be created, since
@@ -1994,7 +2002,8 @@ export const useApp = create<AppState>((set, get) => ({
       const live = new Set(s.datasets.map((d) => d.id));
       return { selectedIds: [...new Set(ids)].filter((id) => live.has(id)) };
     }),
-  removeDataset: (id) =>
+  removeDataset: (id) => {
+    get().recordHistory("remove dataset");
     set((s) => {
       const datasets = s.datasets.filter((d) => d.id !== id);
       const activeId =
@@ -2016,10 +2025,12 @@ export const useApp = create<AppState>((set, get) => ({
         w.datasetId && removed.has(w.datasetId) ? { ...w, datasetId: null } : w,
       );
       return { datasets, activeId, worksheetId, selectedIds, originFigures, reports, figureDocs, plotWindows };
-    }),
+    });
+  },
   // Delete key: remove every selected dataset (falling back to the active one if
   // nothing is multi-selected); reselect the first survivor so the plot recovers.
-  removeSelected: () =>
+  removeSelected: () => {
+    get().recordHistory("remove selected datasets");
     set((s) => {
       const ids = new Set(
         s.selectedIds.length ? s.selectedIds : s.activeId ? [s.activeId] : [],
@@ -2047,10 +2058,12 @@ export const useApp = create<AppState>((set, get) => ({
         figureDocs,
         plotWindows,
       };
-    }),
+    });
+  },
   // Bulk-remove by explicit id list (item 17's "manage books" dialog) — unlike
   // removeSelected, this doesn't touch/depend on the transient row selection.
-  removeDatasets: (ids) =>
+  removeDatasets: (ids) => {
+    get().recordHistory("remove datasets");
     set((s) => {
       if (ids.length === 0) return {};
       const drop = new Set(ids);
@@ -2068,13 +2081,15 @@ export const useApp = create<AppState>((set, get) => ({
         w.datasetId && drop.has(w.datasetId) ? { ...w, datasetId: null } : w,
       );
       return { datasets, activeId, worksheetId, selectedIds, originFigures, reports, figureDocs, plotWindows };
-    }),
+    });
+  },
 
   // Wipe the entire library. Reuses loadWorkspace's "replace everything" reset
   // (clears per-dataset view state, overlays, styles, folders, figures) with an
   // empty workspace, so nothing stale survives; autosave self-clears on the
   // resulting empty-datasets state.
   clearAll: () => {
+    get().recordHistory("remove all");
     get().loadWorkspace({
       datasets: [],
       folders: [],
@@ -2125,6 +2140,7 @@ export const useApp = create<AppState>((set, get) => ({
   // Lands right after the source and becomes active, resetting per-dataset view.
   duplicateDataset: async (id) => {
     await get().resolveDataset(id);
+    get().recordHistory("duplicate dataset");
     set((s) => {
       const idx = s.datasets.findIndex((d) => d.id === id);
       if (idx < 0) return {};
@@ -2189,7 +2205,8 @@ export const useApp = create<AppState>((set, get) => ({
   // Reorder the library by swapping a dataset with its neighbor (dir -1 = up,
   // +1 = down). No-op at the ends or for an unknown id. Order drives the list and
   // the consolidated-export column order; the active selection is unaffected.
-  moveDataset: (id, dir) =>
+  moveDataset: (id, dir) => {
+    get().recordHistory("reorder datasets");
     set((s) => {
       const i = s.datasets.findIndex((d) => d.id === id);
       const j = i + dir;
@@ -2197,13 +2214,16 @@ export const useApp = create<AppState>((set, get) => ({
       const datasets = [...s.datasets];
       [datasets[i], datasets[j]] = [datasets[j], datasets[i]];
       return { datasets };
-    }),
-  renameDataset: (id, name) =>
+    });
+  },
+  renameDataset: (id, name) => {
+    get().recordHistory("rename dataset");
     set((s) => ({
       datasets: s.datasets.map((d) =>
         d.id === id ? { ...d, name: name.trim() || d.name } : d,
       ),
-    })),
+    }));
+  },
   // Edit a single worksheet cell in place (col < 0 = the x/time column). Rebuilds
   // the dataset's arrays immutably (DataStruct stays frozen-by-contract) so the
   // plot + stats recompute live. Computed columns (the last `formulas.length`)
@@ -2215,6 +2235,7 @@ export const useApp = create<AppState>((set, get) => ({
     if (!ds) return;
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
     if (col >= baseCount) return; // computed column — read-only
+    get().recordHistory("cell edit");
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id) return d;
@@ -2241,6 +2262,7 @@ export const useApp = create<AppState>((set, get) => ({
   // Strips the OLD computed columns first, then reapplies the grown list.
   addFormula: (id, name, expr) => {
     const ds = get().datasets.find((d) => d.id === id);
+    get().recordHistory("add column");
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id) return d;
@@ -2260,6 +2282,7 @@ export const useApp = create<AppState>((set, get) => ({
   // Remove the computed column at `index` (in the formulas list). Strips the OLD
   // computed columns, then reapplies the shrunk list (NaN-stable indices).
   removeFormula: (id, index) => {
+    get().recordHistory("remove column");
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id || !d.formulas) return d;
@@ -2298,14 +2321,17 @@ export const useApp = create<AppState>((set, get) => ({
   },
   // Attach free-text notes to a dataset (blank clears). Per-dataset, so it lives
   // on the object (round-trips through .dwk) rather than the transient view state.
-  setDatasetNotes: (id, notes) =>
+  setDatasetNotes: (id, notes) => {
+    get().recordHistory("edit notes");
     set((s) => ({
       datasets: s.datasets.map((d) =>
         d.id === id ? { ...d, notes: notes.trim() ? notes : undefined } : d,
       ),
-    })),
+    }));
+  },
   // Add a trimmed, de-duplicated tag to a dataset (blank or duplicate = no-op).
-  addDatasetTag: (id, tag) =>
+  addDatasetTag: (id, tag) => {
+    get().recordHistory("add tag");
     set((s) => {
       const t = tag.trim();
       if (!t) return {};
@@ -2316,23 +2342,28 @@ export const useApp = create<AppState>((set, get) => ({
           return tags.includes(t) ? d : { ...d, tags: [...tags, t] };
         }),
       };
-    }),
+    });
+  },
   // Remove a tag; the list drops to undefined when it empties (keeps .dwk clean).
-  removeDatasetTag: (id, tag) =>
+  removeDatasetTag: (id, tag) => {
+    get().recordHistory("remove tag");
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id || !d.tags) return d;
         const tags = d.tags.filter((x) => x !== tag);
         return { ...d, tags: tags.length ? tags : undefined };
       }),
-    })),
+    }));
+  },
   // Assign a dataset to a (trimmed) group; blank clears it back to Ungrouped.
-  setDatasetGroup: (id, group) =>
+  setDatasetGroup: (id, group) => {
+    get().recordHistory("set group");
     set((s) => ({
       datasets: s.datasets.map((d) =>
         d.id === id ? { ...d, group: group.trim() ? group.trim() : undefined } : d,
       ),
-    })),
+    }));
+  },
 
   // ── Folder tree (project-organization plan item 1) ──────────────────────
   // All five delegate to the pure lib/foldertree ops; the store only supplies
@@ -2411,6 +2442,7 @@ export const useApp = create<AppState>((set, get) => ({
       // the row count changes rather than corrupt the analysis view.
       const rowsChanged = corrected.time.length !== ds.data.time.length;
       // Recompute any computed columns from the freshly-corrected base.
+      get().recordHistory("apply corrections");
       set((s) => ({
         datasets: s.datasets.map((d) =>
           d.id === id
@@ -2448,6 +2480,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
   resetCorrections: (id) => {
     const ds = get().datasets.find((d) => d.id === id);
+    get().recordHistory("reset corrections");
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id || !d.raw) return d;
@@ -2618,6 +2651,7 @@ export const useApp = create<AppState>((set, get) => ({
   setChannelRole: (channel, role) => {
     const id = get().activeId;
     if (id == null) return;
+    get().recordHistory("channel role");
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id) return d;
@@ -2638,6 +2672,7 @@ export const useApp = create<AppState>((set, get) => ({
   setChannelType: (channel, t) => {
     const id = get().activeId;
     if (id == null) return;
+    get().recordHistory("channel type");
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id) return d;
@@ -2655,28 +2690,34 @@ export const useApp = create<AppState>((set, get) => ({
   // Row state (#50): the single source of truth for per-row exclusion. Excluded
   // rows persist on the dataset (round-trip .dwk) so every view can honor them —
   // no view should keep its own local row mask.
-  toggleRowExcluded: (id, row) =>
+  toggleRowExcluded: (id, row) => {
+    get().recordHistory("row exclusion");
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id) return d;
         const next = toggleExcluded(d.excludedRows, row);
         return { ...d, excludedRows: next.length ? next : undefined };
       }),
-    })),
-  setRowsExcluded: (id, rows) =>
+    }));
+  },
+  setRowsExcluded: (id, rows) => {
+    get().recordHistory("row exclusion");
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id) return d;
         const clean = sanitizeExcluded(rows, d.data.time.length);
         return { ...d, excludedRows: clean.length ? clean : undefined };
       }),
-    })),
-  clearRowExclusions: (id) =>
+    }));
+  },
+  clearRowExclusions: (id) => {
+    get().recordHistory("clear row exclusions");
     set((s) => ({
       datasets: s.datasets.map((d) =>
         d.id === id ? { ...d, excludedRows: undefined } : d,
       ),
-    })),
+    }));
+  },
   setDatasetFilter: (id, filter) =>
     set((s) => ({
       datasets: s.datasets.map((d) => {
@@ -2711,6 +2752,7 @@ export const useApp = create<AppState>((set, get) => ({
     const id = get().activeId;
     const sel = get().selection;
     if (id == null || sel?.datasetId !== id || !sel.rows.length) return;
+    get().recordHistory("row exclusion");
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id) return d;
@@ -2724,6 +2766,7 @@ export const useApp = create<AppState>((set, get) => ({
     const id = get().activeId;
     const sel = get().selection;
     if (id == null || sel?.datasetId !== id || !sel.rows.length) return;
+    get().recordHistory("row exclusion");
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id) return d;

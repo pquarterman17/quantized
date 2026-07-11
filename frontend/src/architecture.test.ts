@@ -89,7 +89,21 @@ describe("component-ceiling ratchet (#7)", () => {
 // ceilings: the pin only RATCHETS DOWN — when the store grows, extract the
 // next cohesive slice (windows.ts is the template), never raise the number.
 const STORE_PINS: Record<string, number> = {
-  "/store/useApp.ts": 3292, // post-#2 split; +4 non-compressible bug-fix lines from the 2026-07-11 review (applyCorrections success returns + anchor-strip in applyToMany) - justification per the raise rule; next candidates: corrections/importing slices
+  // 3292 -> 3335 (MAIN_PLAN #9, undo/redo): every data-mutating action in the
+  // undoable set (worksheet cell edits, formula add/remove, dataset add/
+  // remove/remove-all/rename/duplicate/reorder/tag/group/notes edits,
+  // corrections apply/reset, row exclusion changes + clear, channel role/
+  // type changes) needs its own one-line `get().recordHistory("label")` call
+  // BEFORE its `set()` so the pushed snapshot is the pre-mutation state —
+  // there is no single chokepoint to hoist it to (unlike windows.ts's
+  // `focusTransientReset`, these mutations don't share one call site). ~24
+  // call sites, several needing an arrow-expression -> block-body rewrite
+  // to fit the extra line before the existing `set(...)`. The slice itself
+  // (state, undo/redo, restore guards) lives in the new store/history.ts,
+  // composed in exactly like windows.ts — this is ONLY the per-action
+  // recorder lines, already at the practical floor; next candidates:
+  // corrections/importing slices (unchanged from the prior note).
+  "/store/useApp.ts": 3335,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
