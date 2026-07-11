@@ -14,6 +14,8 @@ from scipy import sparse
 from scipy.interpolate import interp1d
 from scipy.sparse.linalg import spsolve
 
+from quantized.calc._clipfit import _iterative_clip_fit
+
 __all__ = [
     "baseline_als",
     "baseline_modpoly",
@@ -334,22 +336,14 @@ def baseline_modpoly(
     poly_ord = min(order, n - 1)
     x = np.arange(1, n + 1, dtype=float)
     xn = (x - float(np.mean(x))) / max(float(np.std(x, ddof=1)), _EPS)
-    y_mod = yv.copy()
     y_range = max(float(np.max(yv) - np.min(yv)), _EPS)
 
-    converged = False
-    n_iter = 0
-    coeffs = np.polyfit(xn, y_mod, poly_ord)
-    for it in range(1, max_iter + 1):
-        n_iter = it
-        coeffs = np.polyfit(xn, y_mod, poly_ord)
-        fit = np.polyval(coeffs, xn)
-        y_new = np.minimum(y_mod, fit)
-        rms = math.sqrt(float(np.mean((y_new - y_mod) ** 2)))
-        y_mod = y_new
-        if rms / y_range < tol:
-            converged = True
-            break
+    def _fit(y_work: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        c = np.asarray(np.polyfit(xn, y_work, poly_ord), dtype=float)
+        return c, np.asarray(np.polyval(c, xn), dtype=float)
 
-    baseline = np.asarray(np.minimum(np.polyval(coeffs, xn), yv), dtype=float)
-    return baseline, {"order": poly_ord, "nIter": n_iter, "converged": converged}
+    # `init` preserves the pre-refactor pre-loop fit: with max_iter < 1 the
+    # returned coefficients are the plain polyfit of the unclipped signal.
+    res = _iterative_clip_fit(yv, _fit, max_iter=max_iter, tol=tol, y_range=y_range, init=_fit(yv))
+    baseline = np.asarray(np.minimum(np.polyval(res.coeffs, xn), yv), dtype=float)
+    return baseline, {"order": poly_ord, "nIter": res.n_iter, "converged": res.converged}

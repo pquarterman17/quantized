@@ -24,6 +24,8 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.calc._clipfit import _iterative_clip_fit
+
 __all__ = [
     "anchor_baseline",
     "footprint_correction",
@@ -257,29 +259,26 @@ def xrd_low_angle_background(
         cols.append(1.0 / xv**2)
     basis = np.column_stack(cols)
 
-    y_work = yv.copy()
     y_range = max(float(np.ptp(yv)), _EPS)
-    coeffs = np.zeros(n_terms)
-    bg = np.zeros(n)
-    converged = False
-    n_iter = 0
-    for it in range(1, max_iter + 1):
-        n_iter = it
-        coeffs, *_ = np.linalg.lstsq(basis, y_work, rcond=None)
-        bg = np.asarray(basis @ coeffs, dtype=float)
-        y_new = np.asarray(np.minimum(y_work, bg), dtype=float)
-        rms = math.sqrt(float(np.mean((y_new - y_work) ** 2)))
-        y_work = y_new
-        if rms / y_range < tol:
-            converged = True
-            break
 
+    def _fit(y_work: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        c, *_ = np.linalg.lstsq(basis, y_work, rcond=None)
+        return np.asarray(c, dtype=float), np.asarray(basis @ c, dtype=float)
+
+    res = _iterative_clip_fit(
+        yv,
+        _fit,
+        max_iter=max_iter,
+        tol=tol,
+        y_range=y_range,
+        init=(np.zeros(n_terms), np.zeros(n)),
+    )
     info = {
-        "coeffs": [float(c) for c in coeffs],
-        "nIter": n_iter,
-        "converged": converged,
+        "coeffs": [float(c) for c in res.coeffs],
+        "nIter": res.n_iter,
+        "converged": res.converged,
     }
-    return np.asarray(bg, dtype=float), info
+    return np.asarray(res.fit, dtype=float), info
 
 
 def footprint_factor(
