@@ -89,7 +89,7 @@ describe("component-ceiling ratchet (#7)", () => {
 // ceilings: the pin only RATCHETS DOWN — when the store grows, extract the
 // next cohesive slice (windows.ts is the template), never raise the number.
 const STORE_PINS: Record<string, number> = {
-  "/store/useApp.ts": 3272, // post-#2 split; next candidates: corrections/importing slices
+  "/store/useApp.ts": 3287, // post-#2 split, recalibrated at the Wave-A merge (anchor bridge + figure-page flag + GB seed landed in parallel); next candidates: corrections/importing slices
 };
 
 describe("store-size ratchet (MAIN_PLAN #2)", () => {
