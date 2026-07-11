@@ -83,6 +83,7 @@ export default function SnapshotPlotWindow({ frozen, view, bg }: SnapshotPlotWin
       y2AxisLabel={view.y2AxisLabel}
       refLines={view.refLines}
       annotations={view.annotations}
+      regionShades={view.regionShades}
       seriesStyles={styleList}
       seriesLabels={labelList}
       errorBars={errorBars}
