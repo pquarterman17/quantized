@@ -673,6 +673,7 @@ interface AppState {
   importWizardOpen: boolean; // guess/preview/parse over a saved-filter (#40)
   pipelineOpen: boolean; // the editable pipeline view (#6)
   figureBuilderOpen: boolean;
+  figurePageOpen: boolean; // the multi-panel figure page composer (GOTO #4)
   graphBuilderOpen: boolean; // the drag-columns-to-wells plot-spec builder (#51)
   // One-shot pickers handed from the Graph Builder to the stat stage when a
   // box/violin spec is sent (consumed + cleared by useStatStage). null = none.
@@ -1092,6 +1093,7 @@ interface AppState {
   setImportWizardOpen: (open: boolean) => void;
   setPipelineOpen: (open: boolean) => void;
   setFigureBuilderOpen: (open: boolean) => void;
+  setFigurePageOpen: (open: boolean) => void;
   setGraphBuilderOpen: (open: boolean) => void;
   // Send a box/violin Graph Builder spec to the stat stage: store the pickers +
   // switch statMode on; clearStatStageSeed drops the pending pickers once read.
@@ -1379,6 +1381,7 @@ export const useApp = create<AppState>((set, get) => ({
   importWizardOpen: false,
   pipelineOpen: false,
   figureBuilderOpen: false,
+  figurePageOpen: false,
   graphBuilderOpen: false,
   statStageSeed: null,
   waterfallOpen: false,
@@ -3841,6 +3844,7 @@ export const useApp = create<AppState>((set, get) => ({
     })),
   setDataFilterOpen: (dataFilterOpen) => set({ dataFilterOpen }),
   setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
+  setFigurePageOpen: (figurePageOpen) => set({ figurePageOpen }),
   setGraphBuilderOpen: (graphBuilderOpen) => set({ graphBuilderOpen }),
   seedStatStage: (statStageSeed) => set({ statStageSeed, statMode: true }),
   clearStatStageSeed: () => set({ statStageSeed: null }),

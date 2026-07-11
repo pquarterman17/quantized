@@ -47,6 +47,36 @@ class FigureRequest(BaseModel):
     filename: str = "figure"
 
 
+def _figure_series(req: FigureRequest) -> tuple[Any, list[tuple[str, Any]], str, str]:
+    """Resolve a ``FigureRequest``'s dataset + channel picks into the
+    renderer's ``(x, series, x_label, y_label)`` — shared by ``/figure``,
+    ``/figure-hitmap``, and the figure-page route (``routes.export_page``).
+    Caller-supplied labels override the auto-derived "label (unit)" strings."""
+    from quantized.calc.plotting import PlotState, build_series
+
+    ds = DataStruct.from_dict(req.dataset)
+    state = PlotState(
+        x_key=req.x_key,
+        y_keys=tuple(req.y_keys) if req.y_keys is not None else None,
+        x_log=req.x_log,
+        y_log=req.y_log,
+    )
+    plot = build_series(ds, state)
+    x_label = req.x_label
+    if x_label is None:
+        x_label = f"{plot.x_label} ({plot.x_unit})" if plot.x_unit else plot.x_label
+    y_label = req.y_label
+    if y_label is None:
+        y_label = ""
+        if len(plot.series) == 1:
+            only = plot.series[0]
+            y_label = f"{only.label} ({only.unit})" if only.unit else only.label
+    series: list[tuple[str, Any]] = [
+        (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series
+    ]
+    return plot.x, series, x_label, y_label
+
+
 @router.post("/figure")
 def export_figure(req: FigureRequest) -> Response:
     """Render the dataset (selected channels + log scales) to a publication
@@ -58,32 +88,11 @@ def export_figure(req: FigureRequest) -> Response:
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
     # Lazy import: matplotlib is heavy — only pay it when a figure is exported.
     from quantized.calc.figure import render_figure
-    from quantized.calc.plotting import PlotState, build_series
 
     try:
-        ds = DataStruct.from_dict(req.dataset)
-        state = PlotState(
-            x_key=req.x_key,
-            y_keys=tuple(req.y_keys) if req.y_keys is not None else None,
-            x_log=req.x_log,
-            y_log=req.y_log,
-        )
-        plot = build_series(ds, state)
-        # Caller-supplied labels override the auto-derived "label (unit)" strings.
-        x_label = req.x_label
-        if x_label is None:
-            x_label = f"{plot.x_label} ({plot.x_unit})" if plot.x_unit else plot.x_label
-        y_label = req.y_label
-        if y_label is None:
-            y_label = ""
-            if len(plot.series) == 1:
-                only = plot.series[0]
-                y_label = f"{only.label} ({only.unit})" if only.unit else only.label
-        series = [
-            (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series
-        ]
+        x, series, x_label, y_label = _figure_series(req)
         data = render_figure(
-            plot.x,
+            x,
             series,
             title=req.title,
             x_label=x_label,
@@ -113,31 +122,11 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
     to data coordinates. ``fmt`` is ignored (always PNG at ``dpi``)."""
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
     from quantized.calc.figure import render_figure_map
-    from quantized.calc.plotting import PlotState, build_series
 
     try:
-        ds = DataStruct.from_dict(req.dataset)
-        state = PlotState(
-            x_key=req.x_key,
-            y_keys=tuple(req.y_keys) if req.y_keys is not None else None,
-            x_log=req.x_log,
-            y_log=req.y_log,
-        )
-        plot = build_series(ds, state)
-        x_label = req.x_label
-        if x_label is None:
-            x_label = f"{plot.x_label} ({plot.x_unit})" if plot.x_unit else plot.x_label
-        y_label = req.y_label
-        if y_label is None:
-            y_label = ""
-            if len(plot.series) == 1:
-                only = plot.series[0]
-                y_label = f"{only.label} ({only.unit})" if only.unit else only.label
-        series = [
-            (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series
-        ]
+        x, series, x_label, y_label = _figure_series(req)
         return render_figure_map(
-            plot.x,
+            x,
             series,
             title=req.title,
             x_label=x_label,
