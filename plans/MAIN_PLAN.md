@@ -54,11 +54,7 @@ plan's direct items are residue-sized by construction)*
 ~~5. **`.otp`/`.otpu` template import, frontend half**~~ ✅ completed 2026-07-11 (see Completed).
 ~~6. **Defaults-audit residuals**~~ ✅ completed 2026-07-11 (see
    Completed).
-7. **Register `import_lake_shore` in `io/registry.py`** (found by the
-   PORT #52 parser matrix, 2026-07-11) — the parser exists but
-   `import_auto` routes Lake Shore CSVs to generic `import_csv`; needs a
-   content sniffer and a corpus sweep since this CHANGES routing
-   behavior for `.csv`/`.txt` (deliberate review, not a drive-by).
+~~7. **Register import_lake_shore**~~ COMPLETED 2026-07-11 (see Completed).
 
 ## Tier 3 — Nice-to-Have
 
@@ -108,6 +104,11 @@ plan's direct items are residue-sized by construction)*
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#7 Lake Shore registration**~~ (2026-07-11) — preamble sniffer
+  (first 2KB contains "Lake Shore"), .csv chain after SIMS + .dat chain
+  after QD/refl1d/PPMS; corpus sweep = exactly 1 claim (the fixture),
+  parser matrix green, zero real-file routing changes.
 
 - ~~**#1 Decompose App.tsx + ThinFilmTab.tsx**~~ (2026-07-11) — App.tsx
   960 -> 74 (appCommands.ts registry + useGlobalShortcuts + AppOverlays),
