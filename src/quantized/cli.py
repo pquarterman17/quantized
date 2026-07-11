@@ -1,8 +1,12 @@
 """``qz`` — launch the quantized app (API + built SPA) and open the browser.
 
-    qz                  serve http://127.0.0.1:8000 and open a browser tab
+    qz                  serve http://127.0.0.1:8000, open a browser tab, and
+                        exit when the last tab closes (app-like run model;
+                        pre-set QZ_AUTO_SHUTDOWN=0 to opt out)
     qz --port 9000      use a different port
-    qz --no-browser     don't open a browser (headless / CI)
+    qz --no-browser     don't open a browser (headless / CI; never auto-exits)
+    qz --dev            Vite dev server (HMR) + auto-reloading backend
+    qz --desktop        native window (pywebview; pip install quantized[desktop])
     qz plugin list      list discovered plugins and what they contribute
     qz plugin enable <name>    re-enable a previously disabled plugin
     qz plugin disable <name>   disable a plugin without deleting it
@@ -16,12 +20,13 @@ which builds on first use.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
-import threading
-import webbrowser
 from pathlib import Path
 
 import uvicorn
+
+from quantized.server_launch import _open_when_healthy, _run_desktop, _run_dev
 
 # Same resolution as quantized.app._WEB_DIR (kept as a separate constant here
 # rather than importing app.py, so this pre-uvicorn check stays cheap — it
@@ -46,7 +51,21 @@ def _serve(argv: list[str]) -> None:
     parser.add_argument(
         "--no-browser", action="store_true", help="do not open a browser tab"
     )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--dev", action="store_true", help="Vite dev server (HMR) + reloading backend"
+    )
+    mode.add_argument(
+        "--desktop", action="store_true", help="native window (pywebview)"
+    )
     args = parser.parse_args(argv)
+
+    if args.dev:
+        _run_dev(args.host, args.port)
+        return
+    if args.desktop:
+        _run_desktop(args.host, args.port)
+        return
 
     url = f"http://{args.host}:{args.port}"
     if not _WEB_DIR.is_dir():
@@ -56,15 +75,15 @@ def _serve(argv: list[str]) -> None:
         )
 
     if not args.no_browser:
-        # The server needs a moment to bind before the first request succeeds;
-        # open the tab shortly after uvicorn starts (a daemon timer, so Ctrl+C
-        # still exits cleanly).
-        def _open() -> None:
-            webbrowser.open(url)
-
-        timer = threading.Timer(1.5, _open)
-        timer.daemon = True
-        timer.start()
+        # App-like run model: the SPA holds /api/ws open per tab, and app.py
+        # exits when the last tab closes (past a refresh grace window) — armed
+        # here, before uvicorn imports quantized.app by string, so the module-
+        # level env read sees it. setdefault so an explicit QZ_AUTO_SHUTDOWN=0
+        # in the user's environment wins. Headless (--no-browser) never arms.
+        os.environ.setdefault("QZ_AUTO_SHUTDOWN", "1")
+        # Open the tab once /api/health answers (a fixed delay races the cold
+        # numpy/scipy/matplotlib import); daemon thread, so Ctrl+C still exits.
+        _open_when_healthy(url, args.host, args.port)
 
     print(f"[qz] quantized -> {url}   (press Ctrl+C to stop)")
     uvicorn.run("quantized.app:app", host=args.host, port=args.port, log_level="warning")

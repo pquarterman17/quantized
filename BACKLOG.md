@@ -26,7 +26,6 @@ GAP_PLOTTYPES, and M1_SPRINT archived as complete)
 | 7 | Origin decode: Graph25 anomalies — extra hidden `T++/T--` curves + ~10× x-range; root cause narrowed 2026-07-09, needs a dedicated RE pass (no heuristic guessing) | ORIGIN_FILE_DECODE #42 | M |
 | 8 | Reductions: Williamson-Hall, reflectivity FFT thickness, neutron spin asymmetry — the last unstarted backend-parity item (no `calc/` module yet) | PORT_PLAN #19 | M |
 | 9 | Defaults audit — interactive-side shots via `tools/visual/` + the export-dialog DPI field syncing to the preset's calibrated dpi | GAP_TIER3 #2 (residual) | S |
-| 10 | Run-model residue: auto-shutdown is ~90% built (backend socket + frontend lifecycle exist — the CLI just never arms `QZ_AUTO_SHUTDOWN`); `qz --dev`/`--desktop` are near drop-ins of fermiviewer `server_launch.py`. `--desktop` decided 2026-07-10: pywebview (ship both like fermiviewer; Tauri stays the packaging path, #46) | PORT_PLAN #3 | S |
 | 11 | W8 closure: reconcile the Tauri shell's actual state (committed `src-tauri/`, updater, NSIS hooks) into PORT_PLAN #46, verify auto-update end-to-end (#49), code signing (#47) | PORT_PLAN #46/#47/#49 | M |
 | 12 | W9 nice-to-haves: parameterized parser tests (every parser × corpus file); performance baselines | PORT_PLAN #52/#53 | M |
 
@@ -67,7 +66,7 @@ GAP_PLOTTYPES, and M1_SPRINT archived as complete)
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/PORT_PLAN.md` | Active | #3 (partial), #10+#15 (blocked), #12 (partial), #19, #46–49 (partial), #50 (continuous), #52–53 |
+| `plans/PORT_PLAN.md` | Active | #10+#15 (blocked), #12 (partial), #19, #46–49 (partial), #50 (continuous), #52–53 |
 | `plans/PORT_CHECKLIST.md` | Active (live parity tracker) | 3 real-work lines (2 blocked + 1 partial) + inline deferral tails |
 | `plans/MULTI_PLOT_PLAN.md` | Active | #19 only (owner planning session first) |
 | `plans/WORKSHEET_PLAN.md` | Active | #12, #13, #14 (decision) |

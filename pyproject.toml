@@ -40,6 +40,13 @@ office = [
 origin-com = [
     "pywin32; sys_platform == 'win32'",
 ]
+# `qz --desktop` native window (PORT_PLAN #3): pure-Python pywebview shell for
+# dev/daily use; the Tauri shell (src-tauri/) stays the packaged path (W8).
+# BSD-3 licensed. server_launch.py guards the import — without this extra,
+# `qz --desktop` prints an install hint and every other mode works normally.
+desktop = [
+    "pywebview>=5.1",
+]
 # Advanced statistics: GLM, survival analysis, Cox PH (gap #30). BSD-3 / MIT
 # licensed. Optional so core install stays lean — calc/stats_glm.py and
 # calc/stats_survival.py guard these imports; ROC is pure numpy and always
@@ -130,7 +137,7 @@ strict = true
 
 [[tool.mypy.overrides]]
 # Third-party libs without bundled type stubs — skeleton-safe.
-module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*", "statsmodels.*", "lifelines.*", "pandas.*"]
+module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*", "statsmodels.*", "lifelines.*", "pandas.*", "webview.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

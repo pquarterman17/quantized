@@ -155,24 +155,9 @@ MATLAB."**
      global 400 ceiling + 3 grandfathered pins (App/PlotStage/ThinFilmTab),
      ratchet-down only. (Same item as PROJECT_ORGANIZATION_PLAN #7; CLAUDE.md's
      claim is now correct.)
-3. **CLI + run model** — `qz` serves API+SPA + opens browser + auto-shutdown
-   on last-tab-close; `qz --desktop` native window (**pywebview**);
-   `qz --dev` Vite HMR + reloading backend. (Tauri packaging deferred to W8.)
-   **PARTIAL (= M1 PR6):** serve + browser + `--port`/`--no-browser` +
-   launchers shipped; auto-shutdown, `--dev`, `--desktop` still open.
-   **`--desktop` OWNER call resolved 2026-07-10: ship BOTH like
-   fermiviewer** — `--desktop` = pywebview (dev/daily native window);
-   Tauri stays the packaging/distribution path (W8 #46).
-   **Smaller than it looks (2026-07-10 code audit):** auto-shutdown is
-   ~90% built — `app.py:75-118` already has the `/api/ws` presence
-   socket + refresh-grace + exit, gated on env `QZ_AUTO_SHUTDOWN=1`
-   (read at import time), and `frontend/src/lib/lifecycle.ts` already
-   connects with reconnect backoff; the CLI just never arms the env
-   var. `--dev`/`--desktop` are near drop-ins of fermiviewer
-   `server_launch.py` `_run_dev`/`_run_desktop` (new
-   `server_launch.py` module to respect the 500-line ceiling; pywebview
-   as a new `desktop` optional-dep group; quantized lacks fermiviewer's
-   `netprobe.py` — a ~15-line `/api/health` poll suffices).
+~~3. **CLI + run model**~~ ✅ completed 2026-07-10 (see Completed) —
+   full run model shipped: auto-shutdown armed by default browser mode,
+   `--dev`, `--desktop` (pywebview; Tauri stays the W8 packaging path).
 ~~4. **Golden-test harness**~~ ✅ shipped (M1 PR4, `fb3efe2`) — harness +
    manifest + markers live; every checklist "golden" tag runs through it.
 5. **CI workflow** — pytest + ruff + mypy + frontend vitest + build +
@@ -452,6 +437,18 @@ MATLAB."**
 > golden-verified — see `PORT_CHECKLIST.md` for the authoritative per-item state.
 > This log is being backfilled starting with the W6 plotting work.
 
+- ~~**#3 CLI + run model**~~ (2026-07-10) — run-model residue shipped,
+  closing the item: default `qz` now arms `QZ_AUTO_SHUTDOWN=1` (app-like
+  exit on last-tab-close, refresh-safe; `setdefault` so an explicit `=0`
+  wins; `--no-browser` never arms) and opens the browser via an
+  `/api/health` poll instead of a fixed timer; new `server_launch.py`
+  (fermiviewer `server_launch.py`+`netprobe.py` adapted, 500-line ceiling
+  respected) adds `--dev` (Vite HMR + reloading uvicorn, vite terminated
+  on exit) and `--desktop` (pywebview via new `desktop` optional-dep
+  group, bind-up-front port handling, reuses a healthy sibling instance).
+  E2E-verified on live processes: self-exit rc=0, refresh survives grace,
+  `--no-browser` persists, no orphans after `--dev` teardown. Serve/
+  browser/`--port` half shipped earlier as M1 PR6.
 - ~~**#7 WebSocket job-queue infrastructure**~~ (2026-07-10) — closed as
   superseded, owner decision: no queue built, none needed. The batch
   features it was meant to gate all shipped without it (client-side step

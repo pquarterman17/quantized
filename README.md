@@ -61,10 +61,15 @@ cd frontend && npm install && npm run build && cd ..
 
 uv run qz                 # serve on :8000 and open a browser tab
 uv run qz --port 9000     # different port
-uv run qz --no-browser    # headless (don't open a tab)
+uv run qz --no-browser    # headless (don't open a tab; never auto-exits)
+uv run qz --desktop       # native window (needs: pip install quantized[desktop])
+uv run qz --dev           # contributor mode: Vite HMR + reloading backend
 ```
 
-Stop the app with **Ctrl+C** in its window.
+The default mode behaves like an app: closing the last browser tab shuts
+the server down (a page refresh doesn't). Set `QZ_AUTO_SHUTDOWN=0` to opt
+out, use `--no-browser` for a persistent/headless server, or stop any mode
+with **Ctrl+C** in its window.
 
 Building your own wheel/sdist (e.g. for `pip install .`)? Build the frontend
 **first** — `cd frontend && npm ci && npm run build` — before `uv build` /
