@@ -81,7 +81,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
         panels = []
         for spec in req.panels:
             f = spec.figure
-            x, series, x_label, y_label = _figure_series(f)
+            x, series, x_label, y_label, styles = _figure_series(f)
             panels.append(
                 PagePanel(
                     x=x,
@@ -95,7 +95,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                     y_label=y_label,
                     x_log=f.x_log,
                     y_log=f.y_log,
-                    series_styles=f.series_styles,
+                    series_styles=styles,
                     overrides=f.overrides,
                     label=spec.label,
                 )

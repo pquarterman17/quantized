@@ -3,6 +3,7 @@
 
 import type uPlot from "uplot";
 
+import type { ColorScatterSpec } from "./colorscatter";
 import { resolveDrawColor } from "./contrastColor";
 import { FILLED_SHAPES, markerPaths } from "./markers";
 import type { Measurement } from "./measure";
@@ -14,9 +15,11 @@ import type { RegionStats } from "./regionStats";
 import { richLabelAst } from "./richtext";
 import { pow10 } from "./ticks";
 import type { Annotation, AxisFormat, LineStyle, RefLine, RegionShade, SeriesStyle } from "./types";
+import { resolveFillBands, seriesFillProps } from "./uplotFill";
 import {
   annotationPlugin,
   axisBoxPlugin,
+  colorScatterPlugin,
   errorBarsPlugin,
   refLinePlugin,
   regionShadePlugin,
@@ -328,12 +331,22 @@ export interface BuildOptsArgs {
   /** Per-display-series style overrides, aligned 1:1 with `payload.series`
    *  (undefined entries — e.g. overlays — keep the defaults). */
   seriesStyles?: (SeriesStyle | undefined)[];
+  /** Dataset-channel index for each plotted display-series (`usePlotPayload`'s
+   *  `plotted` array — the same space `SeriesStyle.fill`'s `vs` and `colorBy`
+   *  are expressed in). Only needed to resolve a `fill: {vs: channel}`
+   *  override to the OTHER series' display position (see
+   *  `uplotFill.resolveFillBands`); undefined = no bands resolved. */
+  plotted?: number[];
   /** Per-display-series display-name overrides (legend rename), aligned 1:1 with
    *  `payload.series` (undefined entries keep the dataset's own label + unit). */
   seriesLabels?: (string | undefined)[];
   /** Error-bar magnitudes keyed by uPlot data-column index (1-based). Draws
    *  vertical y±e whiskers for the mapped plotted series. */
   errorBars?: Map<number, (number | null)[]>;
+  /** Colour-mapped-scatter specs (MAIN #14), keyed by uPlot data-column index
+   *  (1-based) — see `colorscatter.buildColorByColumns`. A series present here
+   *  has its native line/points hidden; `colorScatterPlugin` draws it instead. */
+  colorByColumns?: Map<number, ColorScatterSpec>;
   /** Per-display-series visibility (aligned 1:1 with `payload.series`); `true`
    *  hides that series (interactive legend). Undefined = all visible. */
   hidden?: boolean[];
@@ -619,6 +632,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (args.errorBars && args.errorBars.size > 0) {
     plugins.push(errorBarsPlugin(args.errorBars, inkDimColor));
   }
+  if (args.colorByColumns && args.colorByColumns.size > 0) {
+    plugins.push(colorScatterPlugin(args.colorByColumns));
+  }
   if (args.axisBox) {
     plugins.push(axisBoxPlugin(inkDimColor));
   }
@@ -747,6 +763,95 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     });
   }
 
+  // Resolved stroke per display series, populated during the series build
+  // below — captured here (rather than recomputed) so the post-loop band
+  // resolution (`resolveFillBands`) can derive a band's fill colour from the
+  // EXACT stroke its "from" series draws with, including the literal-colour
+  // contrast substitution above.
+  const strokes: string[] = [];
+  const seriesArr: uPlot.Series[] = [
+    // x series: declare its sort order so uPlot autoscales correctly. Ascending
+    // (the common case: temperature/2θ/time) keeps the fast endpoint path;
+    // non-monotonic x (hysteresis loops, swept-back scans) must scan all points.
+    { sorted: xAscending ? 1 : 0 },
+    ...payload.series.map((s, i) => {
+      const style = seriesStyles?.[i];
+      // Literal per-series overrides (e.g. an Origin-imported figure's
+      // saved line colour) are checked for contrast against THIS window's
+      // effective background and swapped for the ink token when they'd be
+      // invisible (a literal black stroke on our dark canvas, or literal
+      // white on a "light" override) — never mutates the stored style, so
+      // a theme/background switch re-resolves live. Default palette
+      // colours (`--series-N`) pass through unchanged (already
+      // theme-designed for contrast; see `resolveDrawColor`'s doc).
+      const stroke = resolveDrawColor(seriesColor(i, style), isDarkBg, inkColor);
+      strokes[i] = stroke;
+      const label = labels[i];
+      const scale = (s.axis ?? 0) === 1 ? "y2" : "y";
+      const show = !args.hidden?.[i]; // interactive legend visibility
+      // Selected companion (#50 brush): accent, filled larger markers, no line.
+      if (s.selected) {
+        return { label, scale, stroke: accentColor, fill: accentColor, width: 0, points: loopPoints({ show: true, size: 7 }), show };
+      }
+      // Muted "excluded" companion (grey mode): faint hollow markers, no line.
+      if (s.muted) {
+        return { label, scale, stroke: inkDimColor, width: 0, points: loopPoints({ show: true, size: 5 }), show };
+      }
+      // Peak markers: points only, no connecting line.
+      if (s.kind === "points") {
+        return { label, scale, stroke, fill: stroke, width: 0, points: loopPoints({ show: true, size: 8 }), show };
+      }
+      // Colour-mapped scatter (MAIN #14): `colorScatterPlugin` (registered
+      // above whenever `args.colorByColumns` is non-empty) draws every point
+      // for this column itself, keyed to the z channel — so the native line
+      // AND points are hidden entirely here to avoid double-drawing. No fill
+      // (a fill-under/between a colour-mapped point cloud isn't meaningful).
+      if (args.colorByColumns?.has(i + 1)) {
+        return { label, scale, stroke, width: 0, points: { show: false }, show };
+      }
+      // Default trace shape (Preferences) when the series has no explicit style:
+      // Scatter = markers, no line; Line + markers = both; Step = stepped line.
+      const trace = args.defaultTrace ?? "Line";
+      const scatter = trace === "Scatter";
+      const width = style?.width ?? (scatter ? 0 : (args.baseLineWidth ?? 1.5));
+      const dash = style?.line ? DASH[style.line] : undefined;
+      // Optional markers. Default is a filled circle (uPlot built-in); other
+      // glyphs supply a custom paths builder. Open glyphs (+/✕/✳) stroke only;
+      // closed glyphs fill with the series colour.
+      let points: uPlot.Series.Points = { show: false };
+      if (style?.marker) {
+        const size = style.markerSize ?? 5;
+        const shape = style.markerShape ?? "circle";
+        const paths = markerPaths(shape, size);
+        points = paths
+          ? { show: true, size, paths, stroke, ...(FILLED_SHAPES.has(shape) ? { fill: stroke } : {}) }
+          : { show: true, size };
+      } else if (scatter || trace === "Line + markers") {
+        points = { show: true, size: 5 };
+      }
+      // Fill-under (MAIN #13): uPlot's native `series.fill`/`fillTo`, derived
+      // from this series' own resolved stroke. `{vs}` band fills are NOT a
+      // per-series prop — see `resolveFillBands` below (opts.bands).
+      const def: uPlot.Series = {
+        label, scale, stroke, width, dash, points: loopPoints(points), show,
+        ...seriesFillProps(style?.fill, stroke),
+      };
+      // Stepped trace: apply the caller-supplied step-after path builder (there's
+      // no per-series line-shape override, so it's a global default).
+      if (trace === "Step" && !style?.line && args.steppedPaths) {
+        def.paths = xAscending ? args.steppedPaths : fullLine(args.steppedPaths);
+      } else if (!xAscending && width > 0 && args.linearPaths) {
+        // Loop rendering: draw the line over every point in acquisition order.
+        def.paths = fullLine(args.linearPaths);
+      }
+      return def;
+    }),
+  ];
+  // Fill-between (MAIN #13): a top-level uPlot Band per series requesting
+  // `fill: {vs: channel}` — see uplotFill.resolveFillBands's doc for the
+  // "vs must be currently plotted" fallback.
+  const bands = resolveFillBands(args.plotted ?? [], seriesStyles ?? [], (i) => strokes[i] ?? accentColor);
+
   return {
     width,
     height,
@@ -777,68 +882,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     legend: { show: false },
     scales,
     axes,
-    series: [
-      // x series: declare its sort order so uPlot autoscales correctly. Ascending
-      // (the common case: temperature/2θ/time) keeps the fast endpoint path;
-      // non-monotonic x (hysteresis loops, swept-back scans) must scan all points.
-      { sorted: xAscending ? 1 : 0 },
-      ...payload.series.map((s, i) => {
-        const style = seriesStyles?.[i];
-        // Literal per-series overrides (e.g. an Origin-imported figure's
-        // saved line colour) are checked for contrast against THIS window's
-        // effective background and swapped for the ink token when they'd be
-        // invisible (a literal black stroke on our dark canvas, or literal
-        // white on a "light" override) — never mutates the stored style, so
-        // a theme/background switch re-resolves live. Default palette
-        // colours (`--series-N`) pass through unchanged (already
-        // theme-designed for contrast; see `resolveDrawColor`'s doc).
-        const stroke = resolveDrawColor(seriesColor(i, style), isDarkBg, inkColor);
-        const label = labels[i];
-        const scale = (s.axis ?? 0) === 1 ? "y2" : "y";
-        const show = !args.hidden?.[i]; // interactive legend visibility
-        // Selected companion (#50 brush): accent, filled larger markers, no line.
-        if (s.selected) {
-          return { label, scale, stroke: accentColor, fill: accentColor, width: 0, points: loopPoints({ show: true, size: 7 }), show };
-        }
-        // Muted "excluded" companion (grey mode): faint hollow markers, no line.
-        if (s.muted) {
-          return { label, scale, stroke: inkDimColor, width: 0, points: loopPoints({ show: true, size: 5 }), show };
-        }
-        // Peak markers: points only, no connecting line.
-        if (s.kind === "points") {
-          return { label, scale, stroke, fill: stroke, width: 0, points: loopPoints({ show: true, size: 8 }), show };
-        }
-        // Default trace shape (Preferences) when the series has no explicit style:
-        // Scatter = markers, no line; Line + markers = both; Step = stepped line.
-        const trace = args.defaultTrace ?? "Line";
-        const scatter = trace === "Scatter";
-        const width = style?.width ?? (scatter ? 0 : (args.baseLineWidth ?? 1.5));
-        const dash = style?.line ? DASH[style.line] : undefined;
-        // Optional markers. Default is a filled circle (uPlot built-in); other
-        // glyphs supply a custom paths builder. Open glyphs (+/✕/✳) stroke only;
-        // closed glyphs fill with the series colour.
-        let points: uPlot.Series.Points = { show: false };
-        if (style?.marker) {
-          const size = style.markerSize ?? 5;
-          const shape = style.markerShape ?? "circle";
-          const paths = markerPaths(shape, size);
-          points = paths
-            ? { show: true, size, paths, stroke, ...(FILLED_SHAPES.has(shape) ? { fill: stroke } : {}) }
-            : { show: true, size };
-        } else if (scatter || trace === "Line + markers") {
-          points = { show: true, size: 5 };
-        }
-        const def: uPlot.Series = { label, scale, stroke, width, dash, points: loopPoints(points), show };
-        // Stepped trace: apply the caller-supplied step-after path builder (there's
-        // no per-series line-shape override, so it's a global default).
-        if (trace === "Step" && !style?.line && args.steppedPaths) {
-          def.paths = xAscending ? args.steppedPaths : fullLine(args.steppedPaths);
-        } else if (!xAscending && width > 0 && args.linearPaths) {
-          // Loop rendering: draw the line over every point in acquisition order.
-          def.paths = fullLine(args.linearPaths);
-        }
-        return def;
-      }),
-    ],
+    series: seriesArr,
+    ...(bands.length > 0 ? { bands } : {}),
   };
 }

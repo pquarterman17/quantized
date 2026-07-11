@@ -13,6 +13,18 @@ export interface ExportSeriesStyle {
   line?: string;
   marker?: boolean;
   marker_size?: number;
+  /** Fill under/between curves (MAIN #13) — mirrors `SeriesStyle.fill`, but
+   *  `vs` here is still a dataset *channel index* (the SAME semantic as the
+   *  screen side); the backend resolves it against the request's `y_keys`
+   *  (`calc/plotting.resolve_style_channels`), matching the frontend's own
+   *  "only a currently-plotted channel resolves" fallback. */
+  fill?: "under" | { vs: number };
+  /** Colour-mapped scatter (MAIN #14) — a dataset channel index; the backend
+   *  resolves it to the channel's concrete value array server-side (it
+   *  already has the full dataset in the request), so this wire field is
+   *  just the index, same as the screen-side `SeriesStyle.colorBy`. */
+  color_by?: number;
+  colormap?: string;
 }
 
 /** `plotted` = the channel indices being drawn (yKeys ?? all channels), in order.
@@ -31,6 +43,11 @@ export function buildExportStyles(
     if (st?.marker) {
       spec.marker = true;
       if (st.markerSize != null) spec.marker_size = st.markerSize;
+    }
+    if (st?.fill && st.fill !== "none") spec.fill = st.fill;
+    if (st?.colorBy != null) {
+      spec.color_by = st.colorBy;
+      spec.colormap = st.colormap ?? "viridis";
     }
     return Object.keys(spec).length > 0 ? spec : null;
   });

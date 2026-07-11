@@ -23,12 +23,17 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
+from quantized.calc.figure_overrides import _apply_overrides, _validate_overrides  # noqa: E402
 from quantized.calc.figure_styles import FigureStyle, figure_style  # noqa: E402
 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
 
 _FORMATS = ("pdf", "svg", "png", "tiff")
 _LINESTYLE = {"solid": "-", "dashed": "--", "dotted": ":"}
+# Fixed fill translucency for MAIN #13 (fill under/between curves) — matches
+# the screen side's `uplotFill.ts` FILL_ALPHA_PCT (25%) so an exported figure
+# reads the same as its on-screen counterpart.
+_FILL_ALPHA = 0.25
 
 
 def _plot_kwargs(
@@ -54,6 +59,65 @@ def _plot_kwargs(
         kw["marker"] = "o"
         kw["markersize"] = spec.get("marker_size") or default_marker_size
     return kw
+
+
+def _apply_fill(
+    ax: Any,
+    xv: NDArray[np.float64],
+    yv: NDArray[np.float64],
+    series: Sequence[tuple[str, ArrayLike]],
+    idx: int,
+    spec: Mapping[str, Any] | None,
+    color: Any,
+) -> None:
+    """Fill under (to a zero baseline) or between this series and another
+    plotted one (MAIN #13), via matplotlib ``fill_between`` -- the export
+    counterpart of the screen's native uPlot fill/band mechanism. ``color``
+    is the series' OWN drawn line colour (whatever ``ax.plot`` resolved to,
+    explicit or matplotlib's auto cycle) -- a fill is always derived from it,
+    never a separately stored colour. ``spec["fill"]["vs"]`` is already
+    resolved to a DISPLAY POSITION within ``series`` by
+    ``calc.plotting.resolve_style_channels`` -- this function never sees a
+    raw channel index."""
+    if not spec:
+        return
+    fill = spec.get("fill")
+    if fill == "under":
+        ax.fill_between(xv, yv, 0.0, color=color, alpha=_FILL_ALPHA)
+    elif isinstance(fill, Mapping):
+        vs = fill.get("vs")
+        if isinstance(vs, int) and 0 <= vs < len(series) and vs != idx:
+            other = np.asarray(series[vs][1], dtype=float)
+            n = min(len(xv), len(yv), len(other))
+            if n > 0:
+                ax.fill_between(xv[:n], yv[:n], other[:n], color=color, alpha=_FILL_ALPHA)
+
+
+def _draw_color_scatter(
+    fig: Any,
+    ax: Any,
+    xv: NDArray[np.float64],
+    yv: NDArray[np.float64],
+    label: str,
+    spec: Mapping[str, Any],
+    st: FigureStyle,
+) -> Any:
+    """Colour-mapped scatter (MAIN #14): each point coloured by a THIRD
+    channel's value -- ``spec["color_by"]``, already resolved by
+    ``calc.plotting.resolve_style_channels`` to a concrete per-row array (this
+    module never sees a raw channel index). Replaces the normal line draw
+    entirely for this series -- screen-side parity: ``uplotOpts.ts`` hides the
+    native line/points the same way whenever a series' ``colorBy`` is set.
+    Adds a colourbar so the mapping is legible. Returns the ``PathCollection``
+    artist (for the figure-hitmap element collector)."""
+    z = np.asarray(spec["color_by"], dtype=float)
+    n = min(len(xv), len(yv), len(z))
+    size = float(spec.get("marker_size") or st.marker_size) ** 2
+    sc = ax.scatter(
+        xv[:n], yv[:n], c=z[:n], cmap=str(spec.get("colormap") or "viridis"), s=size, label=label
+    )
+    fig.colorbar(sc, ax=ax)
+    return sc
 
 
 def style_rc(st: FigureStyle, ov: Mapping[str, Any]) -> dict[str, Any]:
@@ -106,9 +170,12 @@ def draw_series_axes(
     x_label: str = "",
     y_label: str = "",
     series_styles: Sequence[Mapping[str, Any] | None] | None = None,
-) -> None:
+) -> list[Any]:
     """Plot ``series`` into an EXISTING Axes: lines, scales, labels, spines,
     legend, grid, and the per-figure override sweep (:func:`_apply_overrides`).
+    Returns the per-series drawn artist (a ``Line2D`` normally, or a
+    ``PathCollection`` for a colour-mapped-scatter series -- MAIN #14), in
+    ``series`` order, for the figure-hitmap element collector (:func:`_collect_map`).
 
     The single per-axes rendering body, shared by the single-figure renderer
     (``_render_impl``) and the multi-panel page composer
@@ -116,11 +183,26 @@ def draw_series_axes(
     like its single-figure export. Callers own the figure lifecycle (rc
     context, layout, savefig, close) and must have sanitized every
     user-supplied string through ``safe_mathtext_label`` already.
+
+    Per-series ``series_styles`` (MAIN #13/#14, resolved against the raw
+    ``DataStruct`` by ``calc.plotting.resolve_style_channels`` -- this
+    function only ever sees resolved values): ``fill: "under"`` or
+    ``{"vs": <display index>}`` draws a translucent fill derived from the
+    series' own colour (:func:`_apply_fill`); ``color_by: <array>`` replaces
+    the normal line draw with a colour-mapped scatter + colourbar
+    (:func:`_draw_color_scatter`) instead.
     """
+    artists: list[Any] = []
     for i, (label, y) in enumerate(series):
         spec = series_styles[i] if series_styles and i < len(series_styles) else None
+        yv = np.asarray(y, dtype=float)
+        if spec and spec.get("color_by") is not None:
+            artists.append(_draw_color_scatter(fig, ax, xv, yv, label, spec, st))
+            continue
         kw = _plot_kwargs(st.line_width, st.marker_size, spec)
-        ax.plot(xv, np.asarray(y, dtype=float), label=label, **kw)
+        (line,) = ax.plot(xv, yv, label=label, **kw)
+        _apply_fill(ax, xv, yv, series, i, spec, line.get_color())
+        artists.append(line)
     if x_log:
         ax.set_xscale("log")
     if y_log:
@@ -147,6 +229,7 @@ def draw_series_axes(
     else:
         ax.grid(False)
     _apply_overrides(fig, ax, st, ov, n_series=len(series))
+    return artists
 
 
 def _render_impl(
@@ -178,11 +261,16 @@ def _render_impl(
     value to override it. ``title`` / ``x_label`` / ``y_label`` are optional
     (empty = omit). ``series_styles`` (aligned 1:1 with ``series``) carries
     per-series color/width/line/marker so the export matches the on-screen
-    plot. A legend is drawn only for multiple series, at the preset's
-    ``legend_location``. ``overrides`` (gap #11 — every property UI-reachable)
-    patches the preset per-figure: see :func:`_apply_overrides`; unknown keys
-    are ignored, invalid values raise ``ValueError``. Raises ``ValueError`` on
-    an unknown format or style.
+    plot, plus MAIN #13's ``fill`` (translucent fill under/between curves —
+    see :func:`_apply_fill`) and MAIN #14's ``color_by`` (colour-mapped
+    scatter + colourbar, replacing the line entirely for that series — see
+    :func:`_draw_color_scatter`); both expect values already resolved by
+    ``calc.plotting.resolve_style_channels`` (a raw channel index never
+    reaches this function). A legend is drawn only for multiple series, at
+    the preset's ``legend_location``. ``overrides`` (gap #11 — every property
+    UI-reachable) patches the preset per-figure: see :func:`_apply_overrides`;
+    unknown keys are ignored, invalid values raise ``ValueError``. Raises
+    ``ValueError`` on an unknown format or style.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -238,7 +326,7 @@ def _render_impl(
             )
         fig, ax = plt.subplots(figsize=figsize)
         try:
-            draw_series_axes(
+            artists = draw_series_axes(
                 fig,
                 ax,
                 xv,
@@ -255,7 +343,7 @@ def _render_impl(
             if not ov.get("margins"):
                 fig.tight_layout()
             if collect_map:
-                return _collect_map(fig, ax, n_series=len(series), dpi=resolved_dpi)
+                return _collect_map(fig, ax, series_artists=artists, dpi=resolved_dpi)
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=resolved_dpi)
             return buf.getvalue()
@@ -299,8 +387,36 @@ def _bbox_to_pixels(bbox: Any, height: float) -> dict[str, float]:
     }
 
 
-def _collect_map(fig: Any, ax: Any, *, n_series: int, dpi: int) -> dict[str, Any]:
-    """Draw at ``dpi`` and harvest artist extents in image-pixel coords."""
+def _artist_window_extent(artist: Any, renderer: Any) -> Any:
+    """``artist.get_window_extent(renderer)``, with a workaround for
+    matplotlib's ``Collection`` (what ``ax.scatter`` -- MAIN #14's colour-
+    mapped scatter -- returns): ``Collection.get_window_extent`` calls
+    ``get_datalim(IdentityTransform())`` instead of transforming to display
+    space, which returns a degenerate all-``inf`` bbox for a plain scatter.
+    Detected via ``get_offsets``/``get_offset_transform`` (present on any
+    ``Collection`` with point offsets, scatter included) -- compute the real
+    screen-space bbox from the transformed offsets instead. Falls through to
+    the artist's own ``get_window_extent`` for everything else (``Line2D``,
+    ``Text``, ``Legend``, ...)."""
+    get_offsets = getattr(artist, "get_offsets", None)
+    get_offset_transform = getattr(artist, "get_offset_transform", None)
+    if get_offsets is not None and get_offset_transform is not None:
+        pts = get_offset_transform().transform(get_offsets())
+        if len(pts):
+            from matplotlib.transforms import Bbox
+
+            return Bbox([pts.min(axis=0), pts.max(axis=0)])
+    return artist.get_window_extent(renderer)
+
+
+def _collect_map(fig: Any, ax: Any, *, series_artists: Sequence[Any], dpi: int) -> dict[str, Any]:
+    """Draw at ``dpi`` and harvest artist extents in image-pixel coords.
+    ``series_artists`` is ``draw_series_axes``'s return value (one artist per
+    series, in order -- a ``Line2D`` normally, a ``PathCollection`` for a
+    colour-mapped-scatter series) rather than re-derived from ``ax.lines``:
+    a colour-mapped series draws via ``ax.scatter``, so it has NO entry in
+    ``ax.lines`` at all -- indexing `ax.lines[:n_series]` would silently
+    misalign every series hit-box after it."""
     import base64
 
     fig.set_dpi(dpi)
@@ -312,7 +428,7 @@ def _collect_map(fig: Any, ax: Any, *, n_series: int, dpi: int) -> dict[str, Any
 
     def add(el_id: str, artist: Any) -> None:
         try:
-            bbox = artist.get_window_extent(renderer)
+            bbox = _artist_window_extent(artist, renderer)
         except (RuntimeError, AttributeError):
             return
         if bbox.width <= 0 or bbox.height <= 0:
@@ -327,8 +443,8 @@ def _collect_map(fig: Any, ax: Any, *, n_series: int, dpi: int) -> dict[str, Any
         add("ylabel", ax.yaxis.label)
     if ax.get_legend() is not None:
         add("legend", ax.get_legend())
-    for i, line in enumerate(ax.lines[:n_series]):
-        add(f"series:{i}", line)
+    for i, artist in enumerate(series_artists):
+        add(f"series:{i}", artist)
     for i, txt in enumerate(ax.texts):
         add(f"ann:{i}", txt)
 
@@ -348,122 +464,3 @@ def _collect_map(fig: Any, ax: Any, *, n_series: int, dpi: int) -> dict[str, Any
             "ylog": ax.get_yscale() == "log",
         },
     }
-
-# ── Figure property overrides (gap #11) ─────────────────────────────────────
-# The one config object behind the property panels: every export property the
-# UI exposes lands here, patching the preset per-figure. Plain dict (calc stays
-# pydantic-free); unknown keys are ignored so old clients keep working.
-
-_LEGEND_LOCS = frozenset({
-    "best", "upper right", "upper left", "lower left", "lower right",
-    "right", "center left", "center right", "lower center", "upper center",
-    "center", "outside right", "outside top", "custom",
-})
-
-
-def _validate_overrides(ov: Mapping[str, Any]) -> None:
-    """Raise ``ValueError`` on invalid override values (bad keys are ignored)."""
-    legend = ov.get("legend")
-    if legend is not None:
-        loc = legend.get("loc")
-        if loc is not None and loc not in _LEGEND_LOCS:
-            raise ValueError(f"legend loc must be one of {sorted(_LEGEND_LOCS)}")
-    ticks = ov.get("ticks")
-    if ticks is not None:
-        tdir = ticks.get("dir")
-        if tdir is not None and tdir not in ("in", "out"):
-            raise ValueError("ticks dir must be 'in' or 'out'")
-    for key in ("x_lim", "y_lim"):
-        lim = ov.get(key)
-        if lim is not None and (not isinstance(lim, (list, tuple)) or len(lim) != 2):
-            raise ValueError(f"{key} must be a [lo, hi] pair (null member = auto)")
-    margins = ov.get("margins")
-    if margins is not None:
-        for side in ("left", "right", "top", "bottom"):
-            v = margins.get(side)
-            if v is not None and not 0.0 <= float(v) <= 1.0:
-                raise ValueError("margins are figure fractions in [0, 1]")
-    breaks = ov.get("x_breaks")
-    if breaks is not None:
-        if not isinstance(breaks, (list, tuple)) or len(breaks) == 0:
-            raise ValueError("x_breaks must be a non-empty list of [lo, hi] pairs")
-        prev_hi: float | None = None
-        for b in breaks:
-            if not isinstance(b, (list, tuple)) or len(b) != 2:
-                raise ValueError("each x_breaks entry must be a [lo, hi] pair")
-            lo, hi = float(b[0]), float(b[1])
-            if not lo < hi:
-                raise ValueError("each x_breaks entry must have lo < hi")
-            if prev_hi is not None and lo < prev_hi:
-                raise ValueError("x_breaks entries must be sorted and non-overlapping")
-            prev_hi = hi
-
-
-def _apply_overrides(
-    fig: Any, ax: Any, st: Any, ov: Mapping[str, Any], *, n_series: int
-) -> None:
-    """Apply the post-plot override properties (legend / ticks / spines /
-    limits / margins / grid / annotations). rc-level properties (fonts, tick
-    direction/length) are folded into the rc context by the caller."""
-    legend = ov.get("legend")
-    if legend is not None:
-        show = legend.get("show")
-        if (show is None and n_series > 1) or show:
-            frame = bool(legend.get("frame", st.legend_box))
-            loc = str(legend.get("loc", "best"))
-            kw: dict[str, Any] = {"frameon": frame, "fontsize": st.legend_font_size}
-            if loc == "outside right":
-                kw.update(loc="center left", bbox_to_anchor=(1.02, 0.5))
-            elif loc == "outside top":
-                kw.update(loc="lower center", bbox_to_anchor=(0.5, 1.02), ncols=max(1, n_series))
-            elif loc == "custom":
-                # #14 drag-to-place: anchor is a figure-fraction (fx, fy).
-                anchor = legend.get("anchor") or (0.5, 0.5)
-                kw.update(
-                    loc="center",
-                    bbox_to_anchor=(float(anchor[0]), float(anchor[1])),
-                    bbox_transform=fig.transFigure,
-                )
-            else:
-                kw["loc"] = loc
-            ax.legend(**kw)
-        elif ax.get_legend() is not None:
-            ax.get_legend().remove()
-
-    ticks = ov.get("ticks")
-    if ticks is not None and ticks.get("minor"):
-        ax.minorticks_on()
-
-    spines = ov.get("spines")
-    if spines is not None:
-        for side in ("top", "right", "left", "bottom"):
-            if side in spines:
-                ax.spines[side].set_visible(bool(spines[side]))
-
-    for key, setter in (("x_lim", ax.set_xlim), ("y_lim", ax.set_ylim)):
-        lim = ov.get(key)
-        if lim is not None:
-            lo, hi = lim
-            setter(
-                None if lo is None else float(lo),
-                None if hi is None else float(hi),
-            )
-
-    if "grid" in ov:
-        ax.grid(bool(ov["grid"]), alpha=st.grid_alpha or 0.3)
-
-    for ann in ov.get("annotations", []):
-        ax.annotate(
-            safe_mathtext_label(str(ann.get("text", ""))),
-            xy=(float(ann.get("x", 0.0)), float(ann.get("y", 0.0))),
-            fontsize=float(ov.get("font_size", st.font_size)),
-        )
-
-    margins = ov.get("margins")
-    if margins is not None:
-        fig.subplots_adjust(
-            left=margins.get("left"),
-            right=None if margins.get("right") is None else 1.0 - float(margins["right"]),
-            top=None if margins.get("top") is None else 1.0 - float(margins["top"]),
-            bottom=margins.get("bottom"),
-        )

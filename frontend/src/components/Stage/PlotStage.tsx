@@ -138,7 +138,7 @@ export default function PlotStage() {
   const [statsSel, setStatsSel] = useState<RegionStats | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
-  const { displayPayload, plotted, styleList, labelList, errorBars, hidden } = usePlotPayload({
+  const { displayPayload, plotted, styleList, labelList, errorBars, colorByColumns, hidden } = usePlotPayload({
     active,
     yLog,
     xLog,
@@ -200,11 +200,11 @@ export default function PlotStage() {
   useEffect(() => {
     publishLivePlotSnapshot(
       displayPayload && !altModeShowing
-        ? { payload: displayPayload, styleList, labelList, errorBars, hidden }
+        ? { payload: displayPayload, styleList, labelList, errorBars, plotted, colorByColumns, hidden }
         : null,
     );
     return () => publishLivePlotSnapshot(null);
-  }, [displayPayload, styleList, labelList, errorBars, hidden, altModeShowing]);
+  }, [displayPayload, styleList, labelList, errorBars, plotted, colorByColumns, hidden, altModeShowing]);
 
   // Alternate render modes (each self-contained; polar wins, then stats, then stack).
   const nPlotted = plotted.length;
@@ -278,8 +278,10 @@ export default function PlotStage() {
         annotations={annotations}
         regionShades={regionShades}
         seriesStyles={styleList}
+        plotted={plotted}
         seriesLabels={labelList}
         errorBars={errorBars}
+        colorByColumns={colorByColumns}
         hidden={hidden}
         tool={tool}
         onReadout={setReadout}
@@ -367,6 +369,7 @@ export default function PlotStage() {
           styleList={styleList}
           plotted={plotted}
           hidden={hidden}
+          colorByColumns={colorByColumns}
           isDarkBg={isDarkBg}
           inkColor={inkColor}
         />

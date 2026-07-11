@@ -15,7 +15,13 @@
 import { useMemo, useRef } from "react";
 import type uPlot from "uplot";
 
-import { thawErrorBars, thawLabelList, thawStyleList, type FrozenPlotBundle } from "../../lib/plotsnapshot";
+import {
+  thawColorByColumns,
+  thawErrorBars,
+  thawLabelList,
+  thawStyleList,
+  type FrozenPlotBundle,
+} from "../../lib/plotsnapshot";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import type { PlotBg, PlotView } from "../../lib/plotview";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths";
@@ -45,6 +51,7 @@ export default function SnapshotPlotWindow({ frozen, view, bg }: SnapshotPlotWin
   const errorBars = useMemo(() => thawErrorBars(frozen.errorBars), [frozen]);
   const styleList = useMemo(() => thawStyleList(frozen.styleList), [frozen]);
   const labelList = useMemo(() => thawLabelList(frozen.labelList), [frozen]);
+  const colorByColumns = useMemo(() => thawColorByColumns(frozen.colorByColumns), [frozen]);
   const hidden = useMemo(() => frozen.hidden ?? undefined, [frozen]);
 
   return (
@@ -85,8 +92,10 @@ export default function SnapshotPlotWindow({ frozen, view, bg }: SnapshotPlotWin
       annotations={view.annotations}
       regionShades={view.regionShades}
       seriesStyles={styleList}
+      plotted={frozen.plotted}
       seriesLabels={labelList}
       errorBars={errorBars}
+      colorByColumns={colorByColumns}
       hidden={hidden}
       tool="zoom"
       onReadout={() => {}}

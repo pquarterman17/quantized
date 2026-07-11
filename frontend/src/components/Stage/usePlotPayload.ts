@@ -11,6 +11,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { buildColorByColumns, type ColorScatterSpec } from "../../lib/colorscatter";
 import { buildErrorColumns } from "../../lib/errorbars";
 import { channelModelingType } from "../../lib/modeling";
 import {
@@ -59,6 +60,8 @@ export interface PlotPayloadResult {
   labelList: (string | undefined)[] | undefined;
   /** Error-bar magnitudes keyed by uPlot data-column index (1-based). */
   errorBars: Map<number, (number | null)[]>;
+  /** Colour-mapped-scatter specs (MAIN #14) keyed by uPlot data-column index. */
+  colorByColumns: Map<number, ColorScatterSpec>;
   /** Per-display-series visibility (interactive legend), aligned 1:1 with `displayPayload.series`. */
   hidden: boolean[] | undefined;
 }
@@ -134,6 +137,15 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     [active, plotted, p.errKeys],
   );
 
+  // Colour-mapped-scatter specs per plotted series (MAIN #14), same p+1 keying.
+  const colorByColumns = useMemo(
+    () =>
+      active
+        ? buildColorByColumns(active.data, plotted, p.seriesStyles)
+        : new Map<number, ColorScatterSpec>(),
+    [active, plotted, p.seriesStyles],
+  );
+
   // Interactive-legend visibility, aligned 1:1 with the display series (overlays
   // — index ≥ plotted.length — are never hidden).
   const hidden = useMemo(
@@ -166,5 +178,5 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     };
   }, [active, p.yLog, p.xLog, plotted, p.y2Keys, p.xKey]);
 
-  return { payload, displayPayload, plotted, styleList, labelList, errorBars, hidden };
+  return { payload, displayPayload, plotted, styleList, labelList, errorBars, colorByColumns, hidden };
 }

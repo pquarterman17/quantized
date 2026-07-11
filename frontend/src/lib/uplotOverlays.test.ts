@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import type { ColorScatterSpec } from "./colorscatter";
 import type { Annotation, RefLine } from "./types";
 import {
   annotationPlugin,
   clampAnnotationLabelX,
+  colorScatterPlugin,
   errorBarsPlugin,
   pickRefLine,
   refLinePlugin,
@@ -398,5 +400,76 @@ describe("regionShadePlugin (Origin Rect* bands, decode-plan #41)", () => {
     expect(withY2.rects[0].y).toBe(110);
     const noY2 = drawShades([{ id: "s", x1: 0, x2: 10, y1: 10, y2: 90, axis: 1, fill: "#FF0000" }], false);
     expect(noY2.rects[0].y).toBe(10); // primary-scale fallback
+  });
+});
+
+describe("colorScatterPlugin (MAIN #14)", () => {
+  // x = [0, 1, 2]; column 1's y = [10, 20, 30]. Same linear valToPos
+  // convention as fakeU (x identity, y: 100 - value).
+  function draw(specs: Map<number, ColorScatterSpec>) {
+    const dots: { x: number; y: number; fillStyle: string }[] = [];
+    let fillStyle = "";
+    const ctx = {
+      save() {},
+      restore() {},
+      beginPath() {},
+      rect() {},
+      clip() {},
+      fill() {
+        dots.push({ x: lastX, y: lastY, fillStyle });
+      },
+      arc(x: number, y: number) {
+        lastX = x;
+        lastY = y;
+      },
+      set fillStyle(v: string) {
+        fillStyle = v;
+      },
+    };
+    let lastX = 0;
+    let lastY = 0;
+    const valToPos = (v: number, scale: string) => (scale === "x" ? v : 100 - v);
+    const u = {
+      ctx,
+      bbox: { left: 0, top: 0, width: 200, height: 100 },
+      valToPos,
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+      ],
+      series: [{}, {}],
+    };
+    const plugin = colorScatterPlugin(specs);
+    // @ts-expect-error — minimal stub stands in for a real uPlot instance
+    plugin.hooks.draw?.(u);
+    return dots;
+  }
+
+  it("draws one dot per finite (x,y) pair, coloured by the normalized z value", () => {
+    const specs = new Map<number, ColorScatterSpec>([
+      [1, { channel: 2, z: [0, 5, 10], colormap: "gray", lo: 0, hi: 10 }],
+    ]);
+    const dots = draw(specs);
+    expect(dots).toHaveLength(3);
+    expect(dots[0]).toEqual({ x: 0, y: 90, fillStyle: "rgb(0, 0, 0)" }); // t=0 -> gray[0,0,0]
+    expect(dots[2]).toEqual({ x: 2, y: 70, fillStyle: "rgb(255, 255, 255)" }); // t=1 -> gray[255,255,255]
+  });
+
+  it("skips a row whose z is null", () => {
+    const specs = new Map<number, ColorScatterSpec>([
+      [1, { channel: 2, z: [0, null, 10], colormap: "gray", lo: 0, hi: 10 }],
+    ]);
+    expect(draw(specs)).toHaveLength(2);
+  });
+
+  it("draws nothing for an empty specs map", () => {
+    expect(draw(new Map())).toHaveLength(0);
+  });
+
+  it("draws nothing for a column absent from u.data (out-of-range column index)", () => {
+    const specs = new Map<number, ColorScatterSpec>([
+      [5, { channel: 2, z: [0, 5, 10], colormap: "gray", lo: 0, hi: 10 }],
+    ]);
+    expect(draw(specs)).toHaveLength(0);
   });
 });

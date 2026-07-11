@@ -110,7 +110,7 @@ function BackgroundXYWindow({
   const excludedDisplay = useApp((s) => s.excludedDisplay);
   const plotRef = useRef<uPlot | null>(null);
 
-  const { displayPayload, styleList, labelList, errorBars, hidden } = usePlotPayload({
+  const { displayPayload, plotted, styleList, labelList, errorBars, colorByColumns, hidden } = usePlotPayload({
     active: dataset,
     yLog: view.yLog,
     xLog: view.xLog,
@@ -171,8 +171,10 @@ function BackgroundXYWindow({
         annotations={view.annotations}
         regionShades={view.regionShades}
         seriesStyles={styleList}
+        plotted={plotted}
         seriesLabels={labelList}
         errorBars={errorBars}
+        colorByColumns={colorByColumns}
         hidden={hidden}
         tool="zoom"
         onReadout={() => {}}

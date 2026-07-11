@@ -10,6 +10,7 @@ import {
   publishLivePlotSnapshot,
   readLivePlotSnapshot,
   sanitizeFrozenBundle,
+  thawColorByColumns,
   thawErrorBars,
   thawLabelList,
   thawStyleList,
@@ -31,6 +32,8 @@ function live(): LivePlotSnapshot {
     styleList: [{ color: "#ff0000" } as SeriesStyle, undefined],
     labelList: ["moment", undefined],
     errorBars: new Map([[1, [0.1, 0.2, null]]]),
+    plotted: [0],
+    colorByColumns: new Map([[1, { channel: 2, z: [0.1, 0.2, null], colormap: "viridis", lo: 0, hi: 1 }]]),
     hidden: [false, true],
   };
 }
@@ -54,6 +57,10 @@ describe("freezePlotSnapshot", () => {
     expect(frozen.errorBars).toEqual([[1, [0.1, 0.2, null]]]);
     expect(frozen.styleList).toEqual([{ color: "#ff0000" }, null]);
     expect(frozen.labelList).toEqual(["moment", null]);
+    expect(frozen.plotted).toEqual([0]);
+    expect(frozen.colorByColumns).toEqual([
+      [1, { channel: 2, z: [0.1, 0.2, null], colormap: "viridis", lo: 0, hi: 1 }],
+    ]);
     expect(frozen.hidden).toEqual([false, true]);
     // The whole bundle must survive a JSON round-trip unchanged (it rides
     // the .dwk plotWindows persistence).
@@ -66,9 +73,11 @@ describe("freezePlotSnapshot", () => {
     (s.payload.data[1] as (number | null)[])[0] = null; // e.g. a row exclusion re-compose
     s.payload.series[0].label = "changed";
     s.errorBars.get(1)![0] = 9.9;
+    s.colorByColumns.get(1)!.z[0] = 9.9;
     expect(frozen.payload.data[1][0]).toBe(10);
     expect(frozen.payload.series[0].label).toBe("m");
     expect(frozen.errorBars[0][1][0]).toBe(0.1);
+    expect(frozen.colorByColumns[0][1].z[0]).toBe(0.1);
   });
 
   it("freezes absent decorations as null and copies xCategories when present", () => {
@@ -93,12 +102,14 @@ describe("thaw helpers (frozen → render shapes)", () => {
     expect(thawErrorBars(frozen.errorBars)).toEqual(s.errorBars);
     expect(thawStyleList(frozen.styleList)).toEqual(s.styleList);
     expect(thawLabelList(frozen.labelList)).toEqual(s.labelList);
+    expect(thawColorByColumns(frozen.colorByColumns)).toEqual(s.colorByColumns);
   });
 
   it("thaws null decorations to undefined", () => {
     expect(thawStyleList(null)).toBeUndefined();
     expect(thawLabelList(null)).toBeUndefined();
     expect(thawErrorBars([]).size).toBe(0);
+    expect(thawColorByColumns([]).size).toBe(0);
   });
 });
 
@@ -145,5 +156,8 @@ describe("sanitizeFrozenBundle (the untrusted-.dwk boundary)", () => {
     expect(out!.labelList).toEqual([null, "ok"]);
     expect(out!.errorBars).toEqual([[1, [0.5]]]);
     expect(out!.hidden).toEqual([false, true]);
+    // Absent plotted/colorByColumns degrade to empty, never drop the bundle.
+    expect(out!.plotted).toEqual([]);
+    expect(out!.colorByColumns).toEqual([]);
   });
 });

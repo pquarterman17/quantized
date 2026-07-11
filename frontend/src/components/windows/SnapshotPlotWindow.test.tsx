@@ -63,6 +63,8 @@ const FROZEN: FrozenPlotBundle = {
   styleList: null,
   labelList: null,
   errorBars: [],
+  plotted: [0],
+  colorByColumns: [],
   hidden: null,
 };
 

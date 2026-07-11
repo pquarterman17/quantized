@@ -6,6 +6,8 @@
 
 import type uPlot from "uplot";
 
+import type { ColorScatterSpec } from "./colorscatter";
+import { colormap, normalize } from "./colormap";
 import type { Annotation, RefLine, RegionShade } from "./types";
 
 /** A reference line the pointer is over (for drag hit-testing). */
@@ -367,6 +369,60 @@ export function errorBarsPlugin(
               ctx.lineTo(px + capHalfWidth, pLo);
             }
             ctx.stroke();
+          }
+        }
+        ctx.restore();
+      },
+    },
+  };
+}
+
+/** Default colour-mapped-scatter point diameter (CSS px) — matches the
+ *  default marker size the regular per-series marker styling uses
+ *  (`SeriesStyleCard`'s `NumberField` placeholder). */
+const COLOR_SCATTER_SIZE = 5;
+
+/** Draw colour-mapped scatter points (MAIN #14) for every series in `specs`
+ *  (keyed by uPlot data-column index, 1-based — see `colorscatter.buildColorByColumns`):
+ *  each point's fill colour comes from sampling that series' colormap at its
+ *  own row's z value, normalized over the channel's full [lo, hi] range. The
+ *  series' NATIVE line/points are hidden by the caller (`buildOpts`, which
+ *  forces `width: 0, points: {show: false}` for any series with a colorBy
+ *  entry) — this plugin is the ONLY thing that draws those points, the same
+ *  "hide native, draw an overlay keyed to displayed x/y" pattern
+ *  `errorBarsPlugin`/`annotationPlugin` use above. `z` may be longer than the
+ *  plotted x (same convention as `errorBarsPlugin`'s `errsByCol` — extra tail
+ *  entries are simply unused); a null/non-finite z at a row draws no point. */
+export function colorScatterPlugin(specs: Map<number, ColorScatterSpec>): uPlot.Plugin {
+  return {
+    hooks: {
+      draw: (u: uPlot) => {
+        if (specs.size === 0) return;
+        const { ctx } = u;
+        const { left, top, width, height } = u.bbox;
+        const xs = u.data[0];
+        const r = COLOR_SCATTER_SIZE / 2;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(left, top, width, height);
+        ctx.clip();
+        for (const [col, spec] of specs) {
+          const ys = u.data[col];
+          if (!ys) continue;
+          const scaleKey = u.series[col]?.scale ?? "y";
+          for (let i = 0; i < xs.length; i++) {
+            const x = xs[i];
+            const y = ys[i];
+            if (x == null || y == null) continue;
+            const t = normalize(spec.z[i] ?? NaN, spec.lo, spec.hi, false);
+            if (t == null) continue;
+            const [rr, gg, bb] = colormap(spec.colormap, t);
+            const px = u.valToPos(x, "x", true);
+            const py = u.valToPos(y, scaleKey, true);
+            ctx.beginPath();
+            ctx.fillStyle = `rgb(${rr}, ${gg}, ${bb})`;
+            ctx.arc(px, py, r, 0, Math.PI * 2);
+            ctx.fill();
           }
         }
         ctx.restore();

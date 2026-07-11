@@ -287,6 +287,8 @@ describe("useWindowCommands — Snapshot to New Window (item 11)", () => {
     styleList: undefined,
     labelList: undefined,
     errorBars: new Map(),
+    plotted: [0],
+    colorByColumns: new Map(),
     hidden: undefined,
   });
 
