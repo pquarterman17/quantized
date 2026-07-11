@@ -1,11 +1,13 @@
 // Inspector card: text annotations pinned at data coordinates (label a peak, a
 // transition, a feature…). Enter X, Y, and text; the label renders via the uPlot
 // annotationPlugin as a dot + text. Annotations are global to the Stage (like
-// reference lines).
+// reference lines). Size (MAIN #18) is also settable here — the same field
+// the pointer tool's corner-handle drag / object-menu Size +/- write.
 
 import { useState } from "react";
 
 import { fmtNum } from "../../lib/format";
+import { clampAnnotationSize } from "../../lib/uplotOverlays";
 import { useApp } from "../../store/useApp";
 import { Button, Card, IconButton, NumberField } from "../primitives";
 
@@ -13,6 +15,7 @@ export default function AnnotationsCard() {
   const annotations = useApp((s) => s.annotations);
   const addAnnotation = useApp((s) => s.addAnnotation);
   const removeAnnotation = useApp((s) => s.removeAnnotation);
+  const updateAnnotation = useApp((s) => s.updateAnnotation);
   const [x, setX] = useState("0");
   const [y, setY] = useState("0");
   const [text, setText] = useState("");
@@ -58,9 +61,20 @@ export default function AnnotationsCard() {
               ({fmtNum(a.x)}, {fmtNum(a.y)})
             </span>
           </span>
-          <IconButton title="Remove" onClick={() => removeAnnotation(a.id)}>
-            ✕
-          </IconButton>
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <NumberField
+              value={String(a.size ?? "")}
+              width={40}
+              placeholder="px"
+              onChange={(v) => {
+                const n = Number(v);
+                if (Number.isFinite(n) && v.trim()) updateAnnotation(a.id, { size: clampAnnotationSize(n) });
+              }}
+            />
+            <IconButton title="Remove" onClick={() => removeAnnotation(a.id)}>
+              ✕
+            </IconButton>
+          </span>
         </div>
       ))}
     </Card>

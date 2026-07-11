@@ -6,6 +6,8 @@
 
 import type uPlot from "uplot";
 
+import { hitTestAnnotationBody, hitTestAnnotationHandle } from "./annotationHit";
+import { CLICK_PX } from "./pointGesture";
 import type { ColorScatterSpec } from "./colorscatter";
 import { colormap, normalize } from "./colormap";
 import type { Annotation, RefLine, RegionShade } from "./types";
@@ -164,10 +166,79 @@ export function axisBoxPlugin(color: string): uPlot.Plugin {
 /** The leading `<n>px` in a CSS font shorthand (uplotOpts always builds one,
  *  e.g. `"11px monospace"`), or 11 when it can't be parsed — used to estimate
  *  a label's line height for the vertical clamp below (no canvas access
- *  needed, so it stays plain math). */
-function fontPx(font: string): number {
+ *  needed, so it stays plain math). Exported for the pointer-mode edit
+ *  plugin's own line-height math (annotationLayout below). */
+export function fontPx(font: string): number {
   const m = /(\d+(?:\.\d+)?)px/.exec(font);
   return m ? parseFloat(m[1]) : 11;
+}
+
+/** MAIN #18's corner-handle resize clamp — shared by the plugin's live
+ *  preview, the store's `updateAnnotation` commit, and the object menu's
+ *  Size +/− entries, so the same [6, 72] px range applies everywhere a
+ *  size can be set. */
+export const MIN_ANNOTATION_SIZE = 6;
+export const MAX_ANNOTATION_SIZE = 72;
+
+export function clampAnnotationSize(v: number): number {
+  return Math.min(MAX_ANNOTATION_SIZE, Math.max(MIN_ANNOTATION_SIZE, Math.round(v)));
+}
+
+/** Per-annotation font override: `a.size` (px) replaces the base font's
+ *  leading `<n>px`, keeping the family — absent/zero returns `baseFont`
+ *  unchanged (today's behaviour for every annotation with no `size`). */
+export function annotationFont(baseFont: string, size?: number): string {
+  if (!size) return baseFont;
+  return baseFont.replace(/\d+(?:\.\d+)?px/, `${size}px`);
+}
+
+/** One annotation's on-canvas geometry — the SINGLE geometry implementation
+ *  shared by the plain draw pass and the pointer-mode hit-test/selection
+ *  outline (see `annotationHit.ts`'s header for why that matters). `tx`/`ty`
+ *  are the exact `fillText` anchor point/baseline; `align` is the
+ *  `ctx.textAlign` it was computed for. Null for a non-finite (x, y)
+ *  annotation (skip, same as the draw loop always did). Mutates
+ *  `u.ctx.font` (needed for `measureText`) — callers that also draw must
+ *  re-read/re-set it afterward if they relied on a specific prior value. */
+export interface AnnotationLayout {
+  px: number;
+  py: number;
+  tx: number;
+  ty: number;
+  textWidth: number;
+  align: "left" | "right";
+  lineHeight: number;
+}
+export function annotationLayout(
+  u: Pick<uPlot, "valToPos" | "ctx" | "bbox" | "scales">,
+  a: Annotation,
+  baseFont: string,
+): AnnotationLayout | null {
+  if (!Number.isFinite(a.x) || !Number.isFinite(a.y)) return null;
+  const hasY2 = u.scales.y2 != null;
+  const yScale = a.axis === 1 && hasY2 ? "y2" : "y";
+  const px = u.valToPos(a.x, "x", true);
+  const py = u.valToPos(a.y, yScale, true);
+  const { left, top, width } = u.bbox;
+  const font = annotationFont(baseFont, a.size);
+  u.ctx.font = font;
+  const textWidth = a.text ? u.ctx.measureText(a.text).width : 0;
+  const { x: tx, align } = clampAnnotationLabelX(px, textWidth, 6, left, width);
+  const lineHeight = fontPx(font) * 1.3;
+  const ty = Math.max(py - 2, top + lineHeight);
+  return { px, py, tx, ty, textWidth, align, lineHeight };
+}
+
+/** The label's bounding box (canvas pixels), derived from its layout — used
+ *  for the pointer-mode rect hit-test and the selection outline. Zero
+ *  width/height for an empty-text annotation (the dot-only case). */
+export function annotationBox(l: AnnotationLayout): { left: number; top: number; width: number; height: number } {
+  return {
+    left: l.align === "left" ? l.tx : l.tx - l.textWidth,
+    top: l.ty - l.lineHeight,
+    width: l.textWidth,
+    height: l.lineHeight,
+  };
 }
 
 /** Where to draw one annotation's label text and which side to anchor it
@@ -232,41 +303,280 @@ export function clampAnnotationLabelX(
  *  Book14): the decoded mark position already matches where Origin itself
  *  puts the label (bottom-left, deliberately overlapping its own tick-label
  *  row) — the position was never wrong, only which direction the text grew
- *  from it. */
+ *  from it.
+ *
+ *  MAIN #18 (pointer tool direct manipulation): `opts.interactive` composes
+ *  select/drag-move/corner-handle-resize/double-click-edit/right-click-menu
+ *  INTO this same plugin, rather than a second plugin that also draws — the
+ *  drawing and the dragging must share ONE live-override, or the dragged
+ *  annotation's dot+label (drawn here) and its selection outline (also drawn
+ *  here) would read from two different positions mid-gesture. Same
+ *  capture-phase-mousedown-beats-box-zoom + commit-once-on-release pattern as
+ *  `refLinePlugin` above and `uplotAnchors.ts`'s anchorEditPlugin (read that
+ *  file's header for the full reasoning) — the difference from refLinePlugin
+ *  is annotations need BOTH a point hit-test (the dot) and a rect hit-test
+ *  (the label extents), so the actual hit-testing lives in `annotationHit.ts`. */
+export interface AnnotationEditOpts {
+  /** Non-null id draws a selection outline + resize handle for that ONE
+   *  annotation. */
+  selectedId?: string | null;
+  /** Wires the mouse handlers below; false/absent keeps this plugin exactly
+   *  as before (every non-pointer tool — plain draw, no listeners). */
+  interactive?: boolean;
+  /** Selection outline + resize-handle colour — the design-token accent, not
+   *  the plain annotation ink colour, so a selected object visibly stands
+   *  out (defaults to `color` when omitted). */
+  selectColor?: string;
+  onSelect?: (id: string | null) => void;
+  onMove?: (id: string, x: number, y: number) => void;
+  onResize?: (id: string, size: number) => void;
+  onEditText?: (id: string) => void;
+  onContextMenu?: (id: string, clientX: number, clientY: number) => void;
+}
+
 export function annotationPlugin(
   annotations: Annotation[],
   color: string,
   font: string,
+  opts?: AnnotationEditOpts,
 ): uPlot.Plugin {
+  // Live overrides while a pointer-mode gesture owns the pointer (plugin-
+  // local canvas redraw only; the store commits ONCE on release).
+  let dragMove: { id: string; x: number; y: number } | null = null;
+  let dragResize: { id: string; size: number } | null = null;
+  let destroyed = false;
+  // Double-click-to-edit tracking (see the mousedown handler's doc for why
+  // this isn't a native "dblclick" listener).
+  let lastClickId: string | null = null;
+  let lastClickTime = 0;
+  const DBLCLICK_MS = 400;
+
+  const redrawSoon = (u: uPlot) =>
+    requestAnimationFrame(() => {
+      if (!destroyed) u.redraw();
+    });
+
+  /** The annotation actually drawn for `a` — its live drag/resize override
+   *  when one is in flight, else itself unchanged. */
+  const live = (a: Annotation): Annotation => {
+    if (dragMove?.id === a.id) return { ...a, x: dragMove.x, y: dragMove.y };
+    if (dragResize?.id === a.id) return { ...a, size: dragResize.size };
+    return a;
+  };
+
   return {
     hooks: {
+      destroy: () => {
+        destroyed = true;
+      },
+      ready:
+        opts?.interactive
+          ? (u: uPlot) => {
+              const over = u.over;
+              const o = opts;
+
+              // Current on-canvas geometry for every annotation (live-override
+              // aware) — recomputed per event, not cached: annotation counts
+              // are small (a handful of labels), so this stays cheap.
+              const geoms = () =>
+                annotations
+                  .map((a) => {
+                    const layout = annotationLayout(u, live(a), font);
+                    return layout ? { id: a.id, layout } : null;
+                  })
+                  .filter((v): v is { id: string; layout: AnnotationLayout } => v != null);
+              const hitGeoms = (gs: { id: string; layout: AnnotationLayout }[]) =>
+                gs.map((g) => ({ id: g.id, px: g.layout.px, py: g.layout.py, box: annotationBox(g.layout) }));
+              const handleFor = (id: string, gs: { id: string; layout: AnnotationLayout }[]) => {
+                const g = gs.find((x) => x.id === id);
+                if (!g) return null;
+                const box = annotationBox(g.layout);
+                return box.width > 0
+                  ? { x: box.left + box.width, y: box.top + box.height }
+                  : { x: g.layout.px + 10, y: g.layout.py + 10 };
+              };
+
+              over.addEventListener("mousemove", (e: MouseEvent) => {
+                if (dragMove || dragResize) return; // cursor fixed while a drag owns the pointer
+                const rect = over.getBoundingClientRect();
+                const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                const gs = geoms();
+                const selId = o.selectedId ?? null;
+                if (selId && hitTestAnnotationHandle(handleFor(selId, gs), pointer)) {
+                  over.style.cursor = "nwse-resize";
+                  return;
+                }
+                over.style.cursor = hitTestAnnotationBody(hitGeoms(gs), pointer) ? "move" : "default";
+              });
+
+              over.addEventListener(
+                "mousedown",
+                (e: MouseEvent) => {
+                  if (e.button !== 0) return;
+                  const rect = over.getBoundingClientRect();
+                  const down = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                  const gs = geoms();
+                  const selId = o.selectedId ?? null;
+                  const handle = selId ? handleFor(selId, gs) : null;
+
+                  // Resize handle (only live for the currently-selected annotation).
+                  if (selId && hitTestAnnotationHandle(handle, down)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const a = annotations.find((x) => x.id === selId)!;
+                    const startSize = a.size ?? fontPx(font);
+                    dragResize = { id: selId, size: startSize };
+                    const onMoveEv = (ev: MouseEvent) => {
+                      // Drag down/right grows the label, up/left shrinks it —
+                      // a plain vertical-distance-from-mousedown mapping (¼ px
+                      // of size per px of drag) is simple and predictable; the
+                      // final commit clamps to [MIN_ANNOTATION_SIZE, MAX_ANNOTATION_SIZE].
+                      const dy = ev.clientY - rect.top - down.y;
+                      dragResize = { id: selId, size: clampAnnotationSize(startSize + dy * 0.25) };
+                      u.redraw();
+                    };
+                    const onUp = (ev: MouseEvent) => {
+                      document.removeEventListener("mousemove", onMoveEv);
+                      document.removeEventListener("mouseup", onUp);
+                      const up = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+                      // A plain click on the handle (no drag) commits nothing —
+                      // same no-op-avoidance as the move gesture below.
+                      if (dragResize && Math.hypot(up.x - down.x, up.y - down.y) >= CLICK_PX) {
+                        o.onResize?.(dragResize.id, dragResize.size);
+                      }
+                      dragResize = null;
+                      u.redraw();
+                      redrawSoon(u);
+                    };
+                    document.addEventListener("mousemove", onMoveEv);
+                    document.addEventListener("mouseup", onUp);
+                    return;
+                  }
+
+                  const hit = hitTestAnnotationBody(hitGeoms(gs), down);
+                  if (hit == null) {
+                    // Empty canvas: don't block uPlot's own drag (box zoom stays
+                    // the pointer tool's muscle-memory gesture). A plain click
+                    // (no drag) deselects.
+                    const onUp = (ev: MouseEvent) => {
+                      document.removeEventListener("mouseup", onUp);
+                      const up = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+                      if (Math.hypot(up.x - down.x, up.y - down.y) < CLICK_PX) o.onSelect?.(null);
+                    };
+                    document.addEventListener("mouseup", onUp);
+                    return;
+                  }
+
+                  // On an annotation: own the gesture (capture-phase beats box zoom
+                  // AND beats uPlot's own native dblclick-reset — see below).
+                  e.preventDefault();
+                  e.stopPropagation();
+                  o.onSelect?.(hit);
+
+                  // Double-click-to-edit, detected as two mousedowns on the SAME
+                  // annotation within DBLCLICK_MS — NOT a native "dblclick"
+                  // listener: uPlot binds its own dblclick-to-autoscale handler to
+                  // this same `over` element during construction, which fires
+                  // BEFORE a plugin's `ready` hook can attach anything (at-target
+                  // listeners run in REGISTRATION order, not capture/bubble order),
+                  // so a second `dblclick` listener here could race uPlot's own and
+                  // still reset the zoom. Reusing the ALREADY-capture-phase
+                  // mousedown handler (which already preempts uPlot for this
+                  // gesture) sidesteps the race entirely.
+                  const now = Date.now();
+                  const isDblClick = lastClickId === hit && now - lastClickTime < DBLCLICK_MS;
+                  lastClickId = hit;
+                  lastClickTime = now;
+                  if (isDblClick) {
+                    o.onEditText?.(hit);
+                    return;
+                  }
+
+                  const a = annotations.find((x) => x.id === hit)!;
+                  dragMove = { id: hit, x: a.x, y: a.y };
+                  const onMoveEv = (ev: MouseEvent) => {
+                    const nowX = ev.clientX - rect.left;
+                    const nowY = ev.clientY - rect.top;
+                    // Delta-based (not absolute posToVal-of-pointer): grabbing
+                    // anywhere on the label keeps that grab point under the
+                    // cursor, instead of snapping the dot to it.
+                    const dxData = u.posToVal(nowX, "x") - u.posToVal(down.x, "x");
+                    const dyData = u.posToVal(nowY, "y") - u.posToVal(down.y, "y");
+                    dragMove = { id: hit, x: a.x + dxData, y: a.y + dyData };
+                    u.redraw();
+                  };
+                  const onUp = (ev: MouseEvent) => {
+                    document.removeEventListener("mousemove", onMoveEv);
+                    document.removeEventListener("mouseup", onUp);
+                    const up = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+                    // A plain click (already selected via onSelect above, no
+                    // actual drag) commits nothing — avoids a no-op store write
+                    // + uPlot rebuild on every simple select click.
+                    if (dragMove && Math.hypot(up.x - down.x, up.y - down.y) >= CLICK_PX) {
+                      o.onMove?.(dragMove.id, dragMove.x, dragMove.y);
+                    }
+                    dragMove = null;
+                    u.redraw();
+                    redrawSoon(u);
+                  };
+                  document.addEventListener("mousemove", onMoveEv);
+                  document.addEventListener("mouseup", onUp);
+                },
+                { capture: true },
+              );
+
+              over.addEventListener(
+                "contextmenu",
+                (e: MouseEvent) => {
+                  const rect = over.getBoundingClientRect();
+                  const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                  const hit = hitTestAnnotationBody(hitGeoms(geoms()), pointer);
+                  if (hit) {
+                    e.preventDefault();
+                    e.stopPropagation(); // don't fall through to the plot's own menu
+                    o.onSelect?.(hit);
+                    o.onContextMenu?.(hit, e.clientX, e.clientY);
+                  }
+                },
+                { capture: true },
+              );
+            }
+          : undefined,
       draw: (u: uPlot) => {
         const { ctx } = u;
         const { left, top, width, height } = u.bbox;
-        const hasY2 = u.scales.y2 != null;
-        const lineHeight = fontPx(font) * 1.3;
         ctx.save();
         ctx.fillStyle = color;
-        ctx.font = font;
         ctx.textBaseline = "bottom";
-        for (const a of annotations) {
-          if (!Number.isFinite(a.x) || !Number.isFinite(a.y)) continue;
-          const yScale = a.axis === 1 && hasY2 ? "y2" : "y";
-          const px = u.valToPos(a.x, "x", true);
-          const py = u.valToPos(a.y, yScale, true);
+        for (const a0 of annotations) {
+          const a = live(a0);
+          const layout = annotationLayout(u, a, font);
+          if (!layout) continue;
+          const { px, py, tx, ty, align } = layout;
           if (px < left || px > left + width || py < top || py > top + height) continue;
           ctx.beginPath();
           ctx.arc(px, py, 3, 0, Math.PI * 2);
           ctx.fill();
           if (a.text) {
-            const textWidth = ctx.measureText(a.text).width;
-            const { x: tx, align } = clampAnnotationLabelX(px, textWidth, 6, left, width);
-            // Keep the label's top edge on-panel too — a mark near the very
-            // top of the range would otherwise push a bottom-anchored line
-            // above the plot area.
-            const ty = Math.max(py - 2, top + lineHeight);
+            ctx.font = annotationFont(font, a.size);
             ctx.textAlign = align;
             ctx.fillText(a.text, tx, ty);
+          }
+          // Selection outline + resize handle (pointer mode only).
+          if (opts?.interactive && opts.selectedId === a0.id) {
+            const selColor = opts.selectColor ?? color;
+            const box = annotationBox(layout);
+            ctx.save();
+            ctx.strokeStyle = selColor;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 2]);
+            ctx.strokeRect(box.left - 3, box.top - 3, Math.max(box.width, 6) + 6, box.height + 6);
+            ctx.setLineDash([]);
+            const h =
+              box.width > 0 ? { x: box.left + box.width, y: box.top + box.height } : { x: px + 10, y: py + 10 };
+            ctx.fillStyle = selColor;
+            ctx.fillRect(h.x - 3, h.y - 3, 6, 6);
+            ctx.restore();
           }
         }
         ctx.restore();

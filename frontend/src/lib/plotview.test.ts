@@ -16,6 +16,7 @@ import {
   dropGeometry,
   hydrateView,
   isAxisScale,
+  nearestLegendCorner,
   nextLinkGroup,
   nextPlotBg,
   sanitizePlotWindows,
@@ -40,6 +41,7 @@ describe("defaultPlotView", () => {
     expect(v.seriesStyles).toEqual({});
     expect(v.hiddenChannels).toEqual([]);
     expect(v.legendPos).toBe("ne");
+    expect(v.legendXY).toBeNull();
     expect(v.plotTemplate).toBe("screen");
     expect(v.waterfall).toBe(0);
     expect(v.xScale).toBe("linear");
@@ -130,6 +132,47 @@ describe("sanitizeView back-compat (MAIN #12 — old .dwk boolean -> new scale e
       new Set(["d1"]),
     );
     expect(out[0].view.xScale).toBe("linear");
+  });
+});
+
+describe("sanitizeView — legendXY (MAIN #18 — free legend position)", () => {
+  it("round-trips a valid [fx, fy] pair", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), legendXY: [0.2, 0.8] } as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.legendXY).toEqual([0.2, 0.8]);
+  });
+
+  it("clamps out-of-range fractions to [0, 1]", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), legendXY: [-0.5, 1.5] } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.legendXY).toEqual([0, 1]);
+  });
+
+  it("falls back to null for a malformed value (not a 2-tuple of finite numbers)", () => {
+    for (const bad of [null, "ne", [0.5], [0.5, "x"], [0.5, NaN]]) {
+      const out = sanitizePlotWindows(
+        [win({ view: { ...defaultPlotView(), legendXY: bad } as unknown as PlotView })],
+        new Set(["d1"]),
+      );
+      expect(out[0].view.legendXY).toBeNull();
+    }
+  });
+});
+
+describe("nearestLegendCorner (MAIN #18 — double-click-to-reset)", () => {
+  it("picks the corner matching each quadrant", () => {
+    expect(nearestLegendCorner(0.9, 0.1)).toBe("ne");
+    expect(nearestLegendCorner(0.1, 0.1)).toBe("nw");
+    expect(nearestLegendCorner(0.9, 0.9)).toBe("se");
+    expect(nearestLegendCorner(0.1, 0.9)).toBe("sw");
+  });
+
+  it("resolves dead-center to a deterministic corner", () => {
+    expect(nearestLegendCorner(0.5, 0.5)).toBe("ne");
   });
 });
 

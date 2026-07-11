@@ -1,5 +1,5 @@
 import { fireEvent, render } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import PlotLegend from "./PlotLegend";
 import { CHANNEL_DND, decodeChannelDrag } from "../../lib/dragaxis";
@@ -21,8 +21,31 @@ const DATA: DataStruct = {
 };
 
 beforeEach(() => {
-  useApp.setState({ hiddenChannels: [], seriesLabels: {}, y2Keys: null, legendPos: "ne" });
+  useApp.setState({
+    hiddenChannels: [],
+    seriesLabels: {},
+    y2Keys: null,
+    legendPos: "ne",
+    legendXY: null,
+    plotTool: "pointer",
+  });
 });
+
+function setParentRect(el: Element, rect: { width: number; height: number; left?: number; top?: number }) {
+  const left = rect.left ?? 0;
+  const top = rect.top ?? 0;
+  vi.spyOn(el, "getBoundingClientRect").mockReturnValue({
+    width: rect.width,
+    height: rect.height,
+    left,
+    top,
+    right: left + rect.width,
+    bottom: top + rect.height,
+    x: left,
+    y: top,
+    toJSON: () => "",
+  } as DOMRect);
+}
 
 describe("PlotLegend position", () => {
   it("applies the store legend-position class", () => {
@@ -34,6 +57,87 @@ describe("PlotLegend position", () => {
     useApp.setState({ legendPos: "sw" });
     rerender(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
     expect(container.querySelector(".qzk-legend")).toHaveClass("sw");
+  });
+});
+
+describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
+  beforeEach(() => {
+    // jsdom's requestAnimationFrame never fires on its own (no paint loop) —
+    // stub it to run synchronously, same convention as PlotWindowFrame.test.tsx's
+    // own rAF-throttled drag.
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("positions via inline left/top % and drops the corner class when legendXY is set", () => {
+    useApp.setState({ legendXY: [0.25, 0.75] });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    expect(el).not.toHaveClass("ne");
+    expect(el.style.left).toBe("25%");
+    expect(el.style.top).toBe("75%");
+  });
+
+  it("dragging the box background commits legendXY as fractions of the parent", () => {
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    setParentRect(container, { width: 200, height: 100 });
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    fireEvent.mouseDown(el, { clientX: 50, clientY: 50, button: 0 });
+    fireEvent.mouseMove(document, { clientX: 100, clientY: 80 });
+    fireEvent.mouseUp(document, { clientX: 100, clientY: 80 });
+    expect(useApp.getState().legendXY).toEqual([0.5, 0.8]);
+  });
+
+  it("clamps the dragged fraction to [0, 1]", () => {
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    setParentRect(container, { width: 200, height: 100 });
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    fireEvent.mouseDown(el, { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.mouseMove(document, { clientX: 999, clientY: -50 });
+    fireEvent.mouseUp(document, { clientX: 999, clientY: -50 });
+    expect(useApp.getState().legendXY).toEqual([1, 0]);
+  });
+
+  it("does not start a drag outside pointer mode", () => {
+    useApp.setState({ plotTool: "zoom" });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    setParentRect(container, { width: 200, height: 100 });
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    fireEvent.mouseDown(el, { clientX: 50, clientY: 50, button: 0 });
+    fireEvent.mouseMove(document, { clientX: 100, clientY: 80 });
+    fireEvent.mouseUp(document, { clientX: 100, clientY: 80 });
+    expect(useApp.getState().legendXY).toBeNull();
+  });
+
+  it("a mousedown bubbled from a child .it row does not start a drag (item interactions stay untouched)", () => {
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    setParentRect(container, { width: 200, height: 100 });
+    const item = container.querySelector(".qzk-legend .it") as HTMLElement;
+    fireEvent.mouseDown(item, { clientX: 50, clientY: 50, button: 0 });
+    fireEvent.mouseMove(document, { clientX: 100, clientY: 80 });
+    fireEvent.mouseUp(document, { clientX: 100, clientY: 80 });
+    expect(useApp.getState().legendXY).toBeNull();
+  });
+
+  it("double-click on the box background resets to the nearest corner and clears legendXY", () => {
+    useApp.setState({ legendXY: [0.9, 0.1], legendPos: "sw" }); // near the top-right -> "ne"
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    fireEvent.doubleClick(el);
+    expect(useApp.getState().legendXY).toBeNull();
+    expect(useApp.getState().legendPos).toBe("ne");
+  });
+
+  it("double-click is a no-op when the legend has no free position to reset from", () => {
+    useApp.setState({ legendPos: "sw" });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    fireEvent.doubleClick(el);
+    expect(useApp.getState().legendPos).toBe("sw"); // untouched — nothing to reset
   });
 });
 

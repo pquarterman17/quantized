@@ -21,6 +21,17 @@ import type { Annotation, AxisFormat, AxisScale, RefLine, RegionShade, SeriesSty
 
 export type LegendPos = "ne" | "nw" | "se" | "sw";
 
+/** The corner-preset nearest a free legend position (MAIN #18's pointer-mode
+ *  drag): quadrant of the fractional position within the plot area — the
+ *  double-click-to-reset gesture's pure geometry. `[0.5, 0.5]` (dead center)
+ *  resolves to "ne" — an arbitrary but deterministic tie-break, never a
+ *  random/unstable pick. */
+export function nearestLegendCorner(fx: number, fy: number): LegendPos {
+  const n = fy <= 0.5; // <= (not <): a dead-center tie resolves north
+  const e = fx >= 0.5; // >= : a dead-center tie resolves east
+  return n ? (e ? "ne" : "nw") : e ? "se" : "sw";
+}
+
 const AXIS_SCALES: readonly AxisScale[] = ["linear", "log", "reciprocal"];
 
 /** Narrow an arbitrary value to a valid `AxisScale`. */
@@ -53,6 +64,11 @@ export interface PlotView {
   showGrid: boolean;
   showLegend: boolean;
   legendPos: LegendPos;
+  /** Free legend position (MAIN #18, pointer-mode drag): FRACTIONS [fx, fy]
+   *  of the plot area, overriding `legendPos` when set. null (the default)
+   *  keeps the corner-preset behaviour untouched — an Origin-imported
+   *  position stays a `legendPos` corner, never this. */
+  legendXY: [number, number] | null;
   plotTemplate: string;
   showAxisBox: boolean;
   stackMode: boolean;
@@ -97,6 +113,7 @@ export function defaultPlotView(): PlotView {
     showGrid: true,
     showLegend: true,
     legendPos: "ne",
+    legendXY: null,
     plotTemplate: "screen",
     showAxisBox: false,
     stackMode: false,
@@ -343,6 +360,15 @@ function isAxisFormat(v: unknown): v is AxisFormat {
 
 const LEGEND_POS: readonly LegendPos[] = ["ne", "nw", "se", "sw"];
 
+/** A `legendXY` fraction pair: a finite 2-tuple, each component clamped to
+ *  [0, 1] — a hand-edited or stale `.dwk` can't smuggle in an off-canvas
+ *  position. */
+function legendXYOrNull(v: unknown): [number, number] | null {
+  if (!isRange(v)) return null;
+  const clamp = (n: number) => Math.min(1, Math.max(0, n));
+  return [clamp(v[0]), clamp(v[1])];
+}
+
 /** Back-compat axis-scale resolver (MAIN #12): a NEW `scale` field (post-#12
  *  `.dwk`) wins when present and valid; else an OLD boolean `log` field
  *  (pre-#12 `.dwk`) maps `true` -> `"log"`, `false` -> `"linear"`; else `fb`. */
@@ -374,6 +400,7 @@ function sanitizeView(v: unknown): PlotView {
     showGrid: boolOrDefault(o.showGrid, fb.showGrid),
     showLegend: boolOrDefault(o.showLegend, fb.showLegend),
     legendPos: LEGEND_POS.includes(o.legendPos as LegendPos) ? (o.legendPos as LegendPos) : fb.legendPos,
+    legendXY: legendXYOrNull(o.legendXY),
     plotTemplate: strOrDefault(o.plotTemplate, fb.plotTemplate),
     showAxisBox: boolOrDefault(o.showAxisBox, fb.showAxisBox),
     stackMode: boolOrDefault(o.stackMode, fb.stackMode),
