@@ -24,7 +24,7 @@ import { buildExportStyles } from "./lib/exportStyles";
 import { exportActive, type StoreGet } from "./lib/exportActive";
 import { IMPORT_ACCEPT, openFilePicker } from "./lib/openFilePicker";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "./lib/originTemplate";
-import { parseWorkspace } from "./lib/workspace";
+import { cycleAxisScale } from "./lib/plotview"; import { parseWorkspace } from "./lib/workspace";
 import type { Action } from "./store/commands";
 import { toast } from "./store/toasts";
 
@@ -154,10 +154,10 @@ export function buildAppActions(s: StoreGet): Action[] {
       run: () => s().setTheme(s().theme === "dark" ? "light" : "dark"),
     },
     {
-      id: "yLog",
+      id: "yLog", // MAIN #12: cycles linear -> log -> reciprocal -> linear
       group: "Plot",
-      label: "Toggle log Y axis",
-      run: () => s().setYLog(!s().yLog),
+      label: "Cycle Y axis scale (linear/log/reciprocal)",
+      run: () => s().setYScale(cycleAxisScale(s().yScale)),
     },
     {
       id: "density",
@@ -413,8 +413,8 @@ export function buildAppActions(s: StoreGet): Action[] {
           return exportFigure({
             dataset: ds.data,
             y_keys: s().yKeys ?? undefined,
-            x_log: s().xLog,
-            y_log: s().yLog,
+            x_scale: s().xScale,
+            y_scale: s().yScale,
             fmt: params.fmt as string,
             style: params.style as string,
             dpi: params.dpi as number,
@@ -436,14 +436,14 @@ export function buildAppActions(s: StoreGet): Action[] {
           exportOrigin({
             dataset: ds.data,
             filename: stem,
-            log_x: s().xLog,
-            log_y: s().yLog,
+            log_x: s().xScale === "log", // Origin's own axis type is boolean-only
+            log_y: s().yScale === "log",
             // Current plot state -> an Origin GRAPH, not just the workbook (item 26).
             graph: {
               y_keys: s().yKeys,
               x_key: s().xKey,
-              x_log: s().xLog,
-              y_log: s().yLog,
+              x_log: s().xScale === "log",
+              y_log: s().yScale === "log",
               x_lim: s().xLim,
               y_lim: s().yLim,
               y2_keys: s().y2Keys ?? [],
@@ -581,10 +581,10 @@ export function buildAppActions(s: StoreGet): Action[] {
       },
     },
     {
-      id: "xLog",
+      id: "xLog", // see the "yLog" command above — same cycle, X axis
       group: "Plot",
-      label: "Toggle log X axis",
-      run: () => s().setXLog(!s().xLog),
+      label: "Cycle X axis scale (linear/log/reciprocal)",
+      run: () => s().setXScale(cycleAxisScale(s().xScale)),
     },
     {
       id: "grid",

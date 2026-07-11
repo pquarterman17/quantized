@@ -532,6 +532,18 @@ export interface AxisFormat {
   digits: number;
 }
 
+/** How an axis maps data values to pixel position (MAIN #12): `"linear"`
+ *  (default) positions values proportionally; `"log"` positions by
+ *  log10(value) (uPlot `distr: 3`); `"reciprocal"` positions by 1/value
+ *  (uPlot custom `distr: 100` + `fwd`/`bwd` — see `lib/uplotOpts.ts`'s
+ *  `reciprocalTransform`/`reciprocalAxisSplits`) while tick LABELS still read
+ *  the original variable — the Arrhenius-plot convention (ln(rho) or log tau
+ *  vs 1/T: the x DATA stays T, only its axis POSITIONING is 1/T-spaced).
+ *  Replaces the old `xLog`/`yLog` booleans as the axis-scale source of truth
+ *  (`lib/plotview.ts`'s `scaleFromLog` is the back-compat bridge for
+ *  persisted `true`/`false` -> `"log"`/`"linear"`). */
+export type AxisScale = "linear" | "log" | "reciprocal";
+
 /** A per-channel styling override for the plot. Keyed in the store by the
  *  dataset *channel index* (stable across show/hide). Any field left unset
  *  falls back to the default (palette color by display position, 1.5 px,

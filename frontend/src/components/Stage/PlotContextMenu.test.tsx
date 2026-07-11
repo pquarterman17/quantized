@@ -51,8 +51,8 @@ beforeEach(() => {
     showGrid: true,
     showLegend: true,
     legendPos: "ne",
-    xLog: false,
-    yLog: false,
+    xScale: "linear",
+    yScale: "linear",
   });
 });
 

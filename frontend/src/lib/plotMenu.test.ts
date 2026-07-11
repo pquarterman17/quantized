@@ -31,9 +31,9 @@ function makeCtx(over: Partial<PlotMenuContext> = {}): PlotMenuContext {
     zone: "plot",
     hasY2: false,
     canHide: true,
-    xLog: false,
-    yLog: false,
-    y2Log: false,
+    xScale: "linear",
+    yScale: "linear",
+    y2Scale: "linear",
     showGrid: true,
     showLegend: true,
     legendPos: "ne",
@@ -45,9 +45,9 @@ function makeCtx(over: Partial<PlotMenuContext> = {}): PlotMenuContext {
     toggleHidden: vi.fn(),
     rename: vi.fn(),
     toggleY2: vi.fn(),
-    setXLog: vi.fn(),
-    setYLog: vi.fn(),
-    setY2Log: vi.fn(),
+    setXScale: vi.fn(),
+    setYScale: vi.fn(),
+    setY2Scale: vi.fn(),
     autoscaleX: vi.fn(),
     autoscaleY: vi.fn(),
     autoscaleY2: vi.fn(),
@@ -101,7 +101,7 @@ describe("buildPlotMenu — sections by cursor context", () => {
     const x = buildPlotMenu(makeCtx({ zone: "x" }));
     expect(labels(x)).toContain("#X axis");
     expect(find(x, "Y axis")).toBeUndefined();
-    expect(find(x, "Log X scale")).toBeTruthy();
+    expect(find(x, "X scale")).toBeTruthy();
 
     const y2 = buildPlotMenu(makeCtx({ zone: "y2", hasY2: true }));
     expect(labels(y2)).toContain("#Y2 axis");
@@ -183,9 +183,20 @@ describe("buildPlotMenu — checkmarks + disabled state", () => {
     expect("disabled" in hide && hide.disabled).toBe(true);
   });
 
-  it("log labels carry the current-scale check", () => {
-    const items = buildPlotMenu(makeCtx({ zone: "x", xLog: true }));
-    const logX = find(items, "Log X scale")!;
-    expect("checked" in logX && logX.checked).toBe(true);
+  it("the X scale submenu checks the current scale (MAIN #12: Linear/Log/Reciprocal)", () => {
+    const items = buildPlotMenu(makeCtx({ zone: "x", xScale: "log" }));
+    const scaleSub = submenuOf(items, "X scale");
+    const logOpt = scaleSub.find((i) => "label" in i && i.label === "Log")!;
+    const linOpt = scaleSub.find((i) => "label" in i && i.label === "Linear")!;
+    expect("checked" in logOpt && logOpt.checked).toBe(true);
+    expect("checked" in linOpt && linOpt.checked).toBe(false);
+  });
+
+  it("picking Reciprocal in the X scale submenu calls setXScale", () => {
+    const ctx = makeCtx({ zone: "x" });
+    const items = buildPlotMenu(ctx);
+    const recip = submenuOf(items, "X scale").find((i) => "label" in i && i.label === "Reciprocal")!;
+    if ("run" in recip) recip.run();
+    expect(ctx.setXScale).toHaveBeenCalledWith("reciprocal");
   });
 });

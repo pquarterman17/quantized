@@ -20,8 +20,8 @@ const doc = (over: Partial<FigureDoc> = {}): FigureDoc => ({
   config: {
     xKey: null,
     yKeys: [0],
-    xLog: false,
-    yLog: false,
+    xScale: "linear",
+    yScale: "linear",
     title: "",
     xLabel: "",
     yLabel: "",
@@ -80,7 +80,7 @@ describe("SavedFiguresSection", () => {
   });
 
   it("'open in a new graph window' (item 9) opens + focuses a new window bound to the doc's dataset", () => {
-    useApp.setState({ figureDocs: [doc({ config: { ...doc().config, yLog: true, title: "Doc Title" } })] });
+    useApp.setState({ figureDocs: [doc({ config: { ...doc().config, yScale: "log", title: "Doc Title" } })] });
     const before = useApp.getState().plotWindows.length;
     render(<SavedFiguresSection />);
     fireEvent.click(screen.getByTitle("open in a new graph window"));
@@ -88,7 +88,7 @@ describe("SavedFiguresSection", () => {
     expect(s.plotWindows).toHaveLength(before + 1);
     const created = s.plotWindows.find((w) => w.id === s.focusedWindowId)!;
     expect(created.datasetId).toBe("d1");
-    expect(s.yLog).toBe(true);
+    expect(s.yScale).toBe("log");
     expect(s.plotTitle).toBe("Doc Title");
   });
 

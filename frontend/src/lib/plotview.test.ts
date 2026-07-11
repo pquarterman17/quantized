@@ -8,15 +8,18 @@ import type { FrozenPlotBundle } from "./plotsnapshot";
 import {
   cascadeGeometry,
   cascadeLayout,
+  cycleAxisScale,
   cycleWindow,
   dedupeWindowTitle,
   defaultPlotView,
   displayedWindowTitle,
   dropGeometry,
   hydrateView,
+  isAxisScale,
   nextLinkGroup,
   nextPlotBg,
   sanitizePlotWindows,
+  scaleFromLog,
   SNAP_THRESHOLD,
   snapMovePosition,
   snapResizeSize,
@@ -39,6 +42,94 @@ describe("defaultPlotView", () => {
     expect(v.legendPos).toBe("ne");
     expect(v.plotTemplate).toBe("screen");
     expect(v.waterfall).toBe(0);
+    expect(v.xScale).toBe("linear");
+    expect(v.yScale).toBe("linear");
+    expect(v.y2Scale).toBeNull();
+  });
+});
+
+describe("scaleFromLog / isAxisScale / cycleAxisScale (MAIN #12)", () => {
+  it("scaleFromLog maps the old boolean flags 1:1", () => {
+    expect(scaleFromLog(true)).toBe("log");
+    expect(scaleFromLog(false)).toBe("linear");
+  });
+
+  it("isAxisScale accepts only the three valid tokens", () => {
+    expect(isAxisScale("linear")).toBe(true);
+    expect(isAxisScale("log")).toBe(true);
+    expect(isAxisScale("reciprocal")).toBe(true);
+    expect(isAxisScale("Log")).toBe(false);
+    expect(isAxisScale(true)).toBe(false);
+    expect(isAxisScale(null)).toBe(false);
+    expect(isAxisScale(undefined)).toBe(false);
+  });
+
+  it("cycleAxisScale advances linear -> log -> reciprocal -> linear", () => {
+    expect(cycleAxisScale("linear")).toBe("log");
+    expect(cycleAxisScale("log")).toBe("reciprocal");
+    expect(cycleAxisScale("reciprocal")).toBe("linear");
+  });
+});
+
+/** A pre-#12 persisted view: has the OLD xLog/yLog/y2Log boolean fields and
+ *  NONE of the new xScale/yScale/y2Scale ones (a REAL old `.dwk` — unlike
+ *  spreading `defaultPlotView()`, which now carries the new fields and would
+ *  make "new field present" true even for a legacy fixture). */
+function legacyView(over: Record<string, unknown> = {}): unknown {
+  const v = { ...defaultPlotView(), ...over } as Record<string, unknown>;
+  delete v.xScale;
+  delete v.yScale;
+  delete v.y2Scale;
+  return v;
+}
+
+describe("sanitizeView back-compat (MAIN #12 — old .dwk boolean -> new scale enum)", () => {
+  it("a pre-#12 view (xLog/yLog/y2Log booleans, no scale fields) migrates to the enum", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: legacyView({ xLog: true, yLog: false, y2Log: true }) as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.xScale).toBe("log");
+    expect(out[0].view.yScale).toBe("linear");
+    expect(out[0].view.y2Scale).toBe("log");
+  });
+
+  it("y2Log: null (legacy 'inherit yLog') migrates to y2Scale: null", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: legacyView({ y2Log: null }) as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.y2Scale).toBeNull();
+  });
+
+  it("a post-#12 view (scale fields present) round-trips the enum directly, ignoring any stray legacy field", () => {
+    const out = sanitizePlotWindows(
+      [
+        win({
+          view: {
+            ...defaultPlotView(),
+            xScale: "reciprocal",
+            yScale: "log",
+            y2Scale: "reciprocal",
+            // A stray legacy field (e.g. hand-edited file) must never override
+            // a present, valid new field.
+            xLog: false,
+          } as unknown as PlotView,
+        }),
+      ],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.xScale).toBe("reciprocal");
+    expect(out[0].view.yScale).toBe("log");
+    expect(out[0].view.y2Scale).toBe("reciprocal");
+  });
+
+  it("an invalid scale string falls back to the default, same as any other malformed field", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), xScale: "sqrt" } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.xScale).toBe("linear");
   });
 });
 

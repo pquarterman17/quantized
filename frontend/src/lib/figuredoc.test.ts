@@ -22,8 +22,8 @@ const doc = (over: Partial<FigureDoc> = {}): FigureDoc => ({
   config: {
     xKey: null,
     yKeys: [0],
-    xLog: false,
-    yLog: true,
+    xScale: "linear",
+    yScale: "log",
     title: "M vs H",
     xLabel: "",
     yLabel: "",
@@ -56,6 +56,29 @@ describe("sanitizeFigureDocs", () => {
     expect(out).toHaveLength(1);
     expect(out[0].live).toBe(false);
     expect(out[0].dataSnapshot).toEqual(DATA);
+  });
+
+  it("migrates a pre-MAIN-#12 config (xLog/yLog booleans, no xScale/yScale) to the enum", () => {
+    const legacy = doc();
+    const legacyConfig = { ...legacy.config, xLog: true, yLog: false } as unknown as Record<
+      string,
+      unknown
+    >;
+    delete legacyConfig.xScale;
+    delete legacyConfig.yScale;
+    const out = sanitizeFigureDocs([{ ...legacy, config: legacyConfig }], new Set(["d1"]));
+    expect(out).toHaveLength(1);
+    expect(out[0].config.xScale).toBe("log");
+    expect(out[0].config.yScale).toBe("linear");
+  });
+
+  it("drops a config with NEITHER the new scale fields nor the old log booleans", () => {
+    const legacy = doc();
+    const badConfig = { ...legacy.config } as unknown as Record<string, unknown>;
+    delete badConfig.xScale;
+    delete badConfig.yScale;
+    const out = sanitizeFigureDocs([{ ...legacy, config: badConfig }], new Set(["d1"]));
+    expect(out).toHaveLength(0);
   });
 });
 

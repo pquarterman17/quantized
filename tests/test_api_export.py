@@ -131,6 +131,22 @@ def test_figure_pdf_download() -> None:
     assert resp.content[:5] == b"%PDF-"
 
 
+def test_figure_reciprocal_x_scale_renders() -> None:
+    # MAIN #12 (Arrhenius reciprocal axis): x_scale takes precedence over
+    # x_log/y_log booleans and renders without error via the FuncScale path.
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "png",
+            "x_scale": "reciprocal",
+            "filename": "arrhenius",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
 def test_figure_svg_download() -> None:
     resp = client.post("/api/export/figure", json={"dataset": _xrd_dataset(), "fmt": "svg"})
     assert resp.status_code == 200

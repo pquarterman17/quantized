@@ -33,6 +33,11 @@ class FigureRequest(BaseModel):
     y_keys: list[int | str] | None = None
     x_log: bool = False
     y_log: bool = False
+    # MAIN #12 (Arrhenius reciprocal axis): "linear"/"log"/"reciprocal", the
+    # scale source of truth when set; x_log/y_log are the back-compat
+    # fallback for an older caller (see calc.figure_scale.resolve_axis_scale).
+    x_scale: str | None = None
+    y_scale: str | None = None
     fmt: str = "pdf"
     style: str = "default"  # publication preset: aps / report / web / …
     dpi: int = 200  # raster (png/tiff) resolution; ignored by vector formats
@@ -110,6 +115,8 @@ def export_figure(req: FigureRequest) -> Response:
             y_label=y_label,
             x_log=req.x_log,
             y_log=req.y_log,
+            x_scale=req.x_scale,
+            y_scale=req.y_scale,
             fmt=req.fmt,
             style=req.style,
             series_styles=styles,
@@ -144,6 +151,8 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
             y_label=y_label,
             x_log=req.x_log,
             y_log=req.y_log,
+            x_scale=req.x_scale,
+            y_scale=req.y_scale,
             style=req.style,
             series_styles=styles,
             dpi=dpi,

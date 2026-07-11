@@ -10,14 +10,15 @@
 
 import type { FigureOverrides } from "./figureOverrides";
 import type { ExportSeriesStyle } from "./exportStyles";
-import type { DataStruct } from "./types";
+import { isAxisScale, scaleFromLog } from "./plotview";
+import type { AxisScale, DataStruct } from "./types";
 
 /** The builder configuration a FigureDoc restores (and a run re-exports). */
 export interface FigureConfig {
   xKey: number | null;
   yKeys: number[] | null;
-  xLog: boolean;
-  yLog: boolean;
+  xScale: AxisScale;
+  yScale: AxisScale;
   title: string;
   xLabel: string;
   yLabel: string;
@@ -55,16 +56,23 @@ export interface GraphTemplate {
 }
 
 // ── .dwk sanitizers ─────────────────────────────────────────────────────────
-function isConfig(v: unknown): v is FigureConfig {
-  if (typeof v !== "object" || v === null) return false;
+
+/** Validate + migrate a persisted `FigureConfig` (MAIN #12 back-compat): a
+ *  pre-#12 doc carries `xLog`/`yLog` booleans instead of `xScale`/`yScale` —
+ *  bridged via `scaleFromLog` so an old `.dwk`'s figure docs keep working
+ *  rather than silently dropping. Returns null when the object isn't
+ *  recognizably a config at all (style/fmt/title missing, or NEITHER the new
+ *  nor the old axis-scale shape is present). */
+function migrateConfig(v: unknown): FigureConfig | null {
+  if (typeof v !== "object" || v === null) return null;
   const o = v as Record<string, unknown>;
-  return (
-    typeof o.style === "string" &&
-    typeof o.fmt === "string" &&
-    typeof o.title === "string" &&
-    typeof o.xLog === "boolean" &&
-    typeof o.yLog === "boolean"
-  );
+  if (typeof o.style !== "string" || typeof o.fmt !== "string" || typeof o.title !== "string") {
+    return null;
+  }
+  const xScale = isAxisScale(o.xScale) ? o.xScale : typeof o.xLog === "boolean" ? scaleFromLog(o.xLog) : null;
+  const yScale = isAxisScale(o.yScale) ? o.yScale : typeof o.yLog === "boolean" ? scaleFromLog(o.yLog) : null;
+  if (xScale === null || yScale === null) return null;
+  return { ...(o as unknown as FigureConfig), xScale, yScale };
 }
 
 /** Validate persisted figure docs (drop malformed; clamp dead dataset refs —
@@ -75,14 +83,15 @@ export function sanitizeFigureDocs(v: unknown, dsIds: ReadonlySet<string>): Figu
   for (const e of v) {
     if (typeof e !== "object" || e === null) continue;
     const o = e as Record<string, unknown>;
-    if (typeof o.id !== "string" || typeof o.name !== "string" || !isConfig(o.config)) continue;
+    const config = migrateConfig(o.config);
+    if (typeof o.id !== "string" || typeof o.name !== "string" || !config) continue;
     const datasetId =
       typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
     const doc: FigureDoc = {
       id: o.id,
       name: o.name,
       datasetId,
-      config: o.config,
+      config,
       live: o.live !== false,
     };
     if (!doc.live && typeof o.dataSnapshot === "object" && o.dataSnapshot !== null) {

@@ -24,6 +24,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_overrides import _apply_overrides, _validate_overrides  # noqa: E402
+from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale  # noqa: E402
 from quantized.calc.figure_styles import FigureStyle, figure_style  # noqa: E402
 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
@@ -166,6 +167,8 @@ def draw_series_axes(
     ov: Mapping[str, Any],
     x_log: bool = False,
     y_log: bool = False,
+    x_scale: str | None = None,
+    y_scale: str | None = None,
     title: str = "",
     x_label: str = "",
     y_label: str = "",
@@ -183,6 +186,11 @@ def draw_series_axes(
     like its single-figure export. Callers own the figure lifecycle (rc
     context, layout, savefig, close) and must have sanitized every
     user-supplied string through ``safe_mathtext_label`` already.
+
+    ``x_scale``/``y_scale`` (MAIN #12: "linear"/"log"/"reciprocal") are the
+    axis-scale source of truth when given; ``x_log``/``y_log`` are the
+    back-compat fallback for a caller that only sets the boolean (see
+    :func:`quantized.calc.figure_scale.resolve_axis_scale`).
 
     Per-series ``series_styles`` (MAIN #13/#14, resolved against the raw
     ``DataStruct`` by ``calc.plotting.resolve_style_channels`` -- this
@@ -203,10 +211,8 @@ def draw_series_axes(
         (line,) = ax.plot(xv, yv, label=label, **kw)
         _apply_fill(ax, xv, yv, series, i, spec, line.get_color())
         artists.append(line)
-    if x_log:
-        ax.set_xscale("log")
-    if y_log:
-        ax.set_yscale("log")
+    apply_axis_scale(ax, "x", resolve_axis_scale(x_scale, x_log))
+    apply_axis_scale(ax, "y", resolve_axis_scale(y_scale, y_log))
     if title:
         ax.set_title(title)
     if x_label:
@@ -241,6 +247,8 @@ def _render_impl(
     y_label: str = "",
     x_log: bool = False,
     y_log: bool = False,
+    x_scale: str | None = None,
+    y_scale: str | None = None,
     fmt: str = "pdf",
     style: str = "default",
     series_styles: Sequence[Mapping[str, Any] | None] | None = None,
@@ -270,7 +278,9 @@ def _render_impl(
     the preset's ``legend_location``. ``overrides`` (gap #11 — every property
     UI-reachable) patches the preset per-figure: see :func:`_apply_overrides`;
     unknown keys are ignored, invalid values raise ``ValueError``. Raises
-    ``ValueError`` on an unknown format or style.
+    ``ValueError`` on an unknown format or style. ``x_scale``/``y_scale``
+    (MAIN #12) select linear/log/reciprocal; ``x_log``/``y_log`` are the
+    back-compat boolean fallback (see :func:`draw_series_axes`'s doc).
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -314,6 +324,8 @@ def _render_impl(
                 breaks=[(float(b[0]), float(b[1])) for b in x_breaks],
                 x_log=x_log,
                 y_log=y_log,
+                x_scale=x_scale,
+                y_scale=y_scale,
                 title=title,
                 x_label=x_label,
                 y_label=y_label,
@@ -335,6 +347,8 @@ def _render_impl(
                 ov=ov,
                 x_log=x_log,
                 y_log=y_log,
+                x_scale=x_scale,
+                y_scale=y_scale,
                 title=title,
                 x_label=x_label,
                 y_label=y_label,
@@ -343,7 +357,14 @@ def _render_impl(
             if not ov.get("margins"):
                 fig.tight_layout()
             if collect_map:
-                return _collect_map(fig, ax, series_artists=artists, dpi=resolved_dpi)
+                return _collect_map(
+                    fig,
+                    ax,
+                    series_artists=artists,
+                    dpi=resolved_dpi,
+                    x_scale=resolve_axis_scale(x_scale, x_log),
+                    y_scale=resolve_axis_scale(y_scale, y_log),
+                )
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=resolved_dpi)
             return buf.getvalue()
@@ -409,14 +430,21 @@ def _artist_window_extent(artist: Any, renderer: Any) -> Any:
     return artist.get_window_extent(renderer)
 
 
-def _collect_map(fig: Any, ax: Any, *, series_artists: Sequence[Any], dpi: int) -> dict[str, Any]:
+def _collect_map(
+    fig: Any, ax: Any, *, series_artists: Sequence[Any], dpi: int, x_scale: str, y_scale: str
+) -> dict[str, Any]:
     """Draw at ``dpi`` and harvest artist extents in image-pixel coords.
     ``series_artists`` is ``draw_series_axes``'s return value (one artist per
     series, in order -- a ``Line2D`` normally, a ``PathCollection`` for a
     colour-mapped-scatter series) rather than re-derived from ``ax.lines``:
     a colour-mapped series draws via ``ax.scatter``, so it has NO entry in
     ``ax.lines`` at all -- indexing `ax.lines[:n_series]` would silently
-    misalign every series hit-box after it."""
+    misalign every series hit-box after it. ``x_scale``/``y_scale`` are the
+    ALREADY-RESOLVED scale names (MAIN #12) -- not re-derived from
+    ``ax.get_xscale()``, which reports a reciprocal axis as ``"function"``
+    (matplotlib's generic custom-scale name), not ``"reciprocal"`` -- the
+    client's ``lib/previewmap.ts`` needs the real name to invert a preview
+    pixel drag back to data coordinates (``pxToData``)."""
     import base64
 
     fig.set_dpi(dpi)
@@ -460,7 +488,9 @@ def _collect_map(fig: Any, ax: Any, *, series_artists: Sequence[Any], dpi: int) 
             **axes_px,
             "xlim": [float(v) for v in ax.get_xlim()],
             "ylim": [float(v) for v in ax.get_ylim()],
-            "xlog": ax.get_xscale() == "log",
-            "ylog": ax.get_yscale() == "log",
+            "xlog": x_scale == "log",
+            "ylog": y_scale == "log",
+            "xscale": x_scale,
+            "yscale": y_scale,
         },
     }

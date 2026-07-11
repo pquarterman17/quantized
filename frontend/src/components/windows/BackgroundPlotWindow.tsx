@@ -112,8 +112,8 @@ function BackgroundXYWindow({
 
   const { displayPayload, plotted, styleList, labelList, errorBars, colorByColumns, hidden } = usePlotPayload({
     active: dataset,
-    yLog: view.yLog,
-    xLog: view.xLog,
+    yScale: view.yScale,
+    xScale: view.xScale,
     xKey: view.xKey,
     yKeys: view.yKeys,
     y2Keys: view.y2Keys,
@@ -140,14 +140,14 @@ function BackgroundXYWindow({
         displayPayload={displayPayload}
         theme={theme}
         accent={accent}
-        yLog={view.yLog}
-        xLog={view.xLog}
+        yScale={view.yScale}
+        xScale={view.xScale}
         xLim={view.xLim}
         yLim={view.yLim}
         xStep={view.xStep}
         yStep={view.yStep}
         y2Lim={view.y2Lim}
-        y2Log={view.y2Log}
+        y2Scale={view.y2Scale}
         y2Step={view.y2Step}
         xFmt={view.xFmt}
         yFmt={view.yFmt}

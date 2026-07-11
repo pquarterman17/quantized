@@ -17,15 +17,39 @@
 // wheelZoom, excludedDisplay, sigFigs, … — app-wide, not per-window).
 
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
-import type { Annotation, AxisFormat, RefLine, RegionShade, SeriesStyle } from "./types";
+import type { Annotation, AxisFormat, AxisScale, RefLine, RegionShade, SeriesStyle } from "./types";
 
 export type LegendPos = "ne" | "nw" | "se" | "sw";
+
+const AXIS_SCALES: readonly AxisScale[] = ["linear", "log", "reciprocal"];
+
+/** Narrow an arbitrary value to a valid `AxisScale`. */
+export function isAxisScale(v: unknown): v is AxisScale {
+  return typeof v === "string" && (AXIS_SCALES as readonly string[]).includes(v);
+}
+
+/** The back-compat bridge from the pre-MAIN-#12 boolean log flags to the
+ *  3-way scale enum: `true` -> `"log"`, `false` -> `"linear"`. Used wherever
+ *  an older persisted shape (a `.dwk` view, an Origin-decoded figure's own
+ *  `x_log`/`y_log`, which has no reciprocal concept) still only carries a
+ *  boolean. */
+export function scaleFromLog(log: boolean): AxisScale {
+  return log ? "log" : "linear";
+}
+
+/** The command-palette / context-menu "cycle" step (MAIN #12 #5): each
+ *  invocation advances linear -> log -> reciprocal -> linear. Pure so it's
+ *  unit-testable without the store. */
+export function cycleAxisScale(current: AxisScale): AxisScale {
+  const i = AXIS_SCALES.indexOf(current);
+  return AXIS_SCALES[(i + 1) % AXIS_SCALES.length];
+}
 
 /** One plot's full display configuration — everything that differs window to
  *  window. See the module doc above for what's deliberately excluded. */
 export interface PlotView {
-  yLog: boolean;
-  xLog: boolean;
+  yScale: AxisScale;
+  xScale: AxisScale;
   showGrid: boolean;
   showLegend: boolean;
   legendPos: LegendPos;
@@ -48,7 +72,7 @@ export interface PlotView {
   yKeys: number[] | null;
   y2Keys: number[] | null;
   y2Lim: [number, number] | null;
-  y2Log: boolean | null;
+  y2Scale: AxisScale | null;
   y2Step: number | null;
   y2AxisLabel: string;
   refLines: RefLine[];
@@ -68,8 +92,8 @@ export interface PlotView {
  *  migration guarantee in MULTI_PLOT_PLAN's decision #6. */
 export function defaultPlotView(): PlotView {
   return {
-    yLog: false,
-    xLog: false,
+    yScale: "linear",
+    xScale: "linear",
     showGrid: true,
     showLegend: true,
     legendPos: "ne",
@@ -92,7 +116,7 @@ export function defaultPlotView(): PlotView {
     yKeys: null,
     y2Keys: null,
     y2Lim: null,
-    y2Log: null,
+    y2Scale: null,
     y2Step: null,
     y2AxisLabel: "",
     refLines: [],
@@ -319,6 +343,24 @@ function isAxisFormat(v: unknown): v is AxisFormat {
 
 const LEGEND_POS: readonly LegendPos[] = ["ne", "nw", "se", "sw"];
 
+/** Back-compat axis-scale resolver (MAIN #12): a NEW `scale` field (post-#12
+ *  `.dwk`) wins when present and valid; else an OLD boolean `log` field
+ *  (pre-#12 `.dwk`) maps `true` -> `"log"`, `false` -> `"linear"`; else `fb`. */
+function axisScaleOrDefault(scale: unknown, log: unknown, fb: AxisScale): AxisScale {
+  if (isAxisScale(scale)) return scale;
+  if (typeof log === "boolean") return scaleFromLog(log);
+  return fb;
+}
+
+/** Same bridge for the secondary (y2) axis, whose scale is nullable — `null`
+ *  means "inherit the primary Y axis's scale" (both the old `y2Log: boolean |
+ *  null` and the new `y2Scale: AxisScale | null` share that convention). */
+function y2ScaleOrDefault(scale: unknown, log: unknown): AxisScale | null {
+  if (isAxisScale(scale)) return scale;
+  if (typeof log === "boolean") return scaleFromLog(log);
+  return null;
+}
+
 /** Validate a persisted view (or drop back to `defaultPlotView()` field by
  *  field) — the same per-field-fallback discipline as `loadPrefs`/
  *  `sanitizeFigureDocs`. Never throws on malformed input. */
@@ -327,8 +369,8 @@ function sanitizeView(v: unknown): PlotView {
   if (typeof v !== "object" || v === null) return fb;
   const o = v as Record<string, unknown>;
   return {
-    yLog: boolOrDefault(o.yLog, fb.yLog),
-    xLog: boolOrDefault(o.xLog, fb.xLog),
+    yScale: axisScaleOrDefault(o.yScale, o.yLog, fb.yScale),
+    xScale: axisScaleOrDefault(o.xScale, o.xLog, fb.xScale),
     showGrid: boolOrDefault(o.showGrid, fb.showGrid),
     showLegend: boolOrDefault(o.showLegend, fb.showLegend),
     legendPos: LEGEND_POS.includes(o.legendPos as LegendPos) ? (o.legendPos as LegendPos) : fb.legendPos,
@@ -351,7 +393,7 @@ function sanitizeView(v: unknown): PlotView {
     yKeys: Array.isArray(o.yKeys) ? o.yKeys.filter((n): n is number => typeof n === "number") : null,
     y2Keys: Array.isArray(o.y2Keys) ? o.y2Keys.filter((n): n is number => typeof n === "number") : null,
     y2Lim: isRange(o.y2Lim) ? o.y2Lim : null,
-    y2Log: typeof o.y2Log === "boolean" ? o.y2Log : null,
+    y2Scale: y2ScaleOrDefault(o.y2Scale, o.y2Log),
     y2Step: numOrNull(o.y2Step),
     y2AxisLabel: strOrDefault(o.y2AxisLabel, fb.y2AxisLabel),
     refLines: Array.isArray(o.refLines) ? (o.refLines as RefLine[]) : [],

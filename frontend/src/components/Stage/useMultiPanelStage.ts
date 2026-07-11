@@ -42,8 +42,8 @@ import {
   rowHeights,
   suppressedXIndices,
 } from "../../lib/panelLayout";
-import type { PlotBg } from "../../lib/plotview";
-import type { AxisFormat, Dataset, RefLine, SeriesStyle } from "../../lib/types";
+import { scaleFromLog, type PlotBg } from "../../lib/plotview";
+import type { AxisFormat, AxisScale, Dataset, RefLine, SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotTools";
@@ -97,8 +97,8 @@ export interface MultiPanelStageParams {
   spatialPanels: SpatialPanel[] | null;
   facetPanels: FacetPanel[] | null;
   breakPanels: BreakPanel[] | null;
-  yLog: boolean;
-  xLog: boolean;
+  yScale: AxisScale;
+  xScale: AxisScale;
   xLim: [number, number] | null;
   yLim: [number, number] | null;
   xFmt: AxisFormat;
@@ -146,8 +146,8 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     spatialPanels: rawSpatialPanels,
     facetPanels,
     breakPanels,
-    yLog,
-    xLog,
+    yScale,
+    xScale,
     xLim,
     yLim,
     xFmt,
@@ -233,13 +233,13 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     // from whatever `active.data` currently is (preview now, full once the
     // fetch lands and this effect re-runs off the `active` dependency).
     if (active.pending) ensureBookData(active.id);
-    fetchPlot(active.data, yLog, xLog, plotted, y2Keys, xKey).then((p) => {
+    fetchPlot(active.data, yScale === "log", xScale === "log", plotted, y2Keys, xKey).then((p) => {
       if (!cancelled) setPayload(p);
     });
     return () => {
       cancelled = true;
     };
-  }, [spatial, facet, breakMode, active, yLog, xLog, plotted, y2Keys, xKey]);
+  }, [spatial, facet, breakMode, active, yScale, xScale, plotted, y2Keys, xKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -349,17 +349,21 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         const opts = buildOpts(pp, {
           width: colW[p.col],
           height: rowH[p.row],
-          yLog: p.yLog,
-          xLog: p.xLog,
+          // This panel's axis type is Origin's own decoded boolean (no
+          // reciprocal concept — SpatialPanel stays log-only) — bridge via
+          // scaleFromLog (MAIN #12 back-compat helper), same as the
+          // single-plot Origin-apply path in store/useApp.ts.
+          yScale: scaleFromLog(p.yLog),
+          xScale: scaleFromLog(p.xLog),
           xLim: p.xLim,
           yLim: p.yLim,
           xStep: p.xStep,
           yStep: p.yStep,
           // This panel's OWN merged y2 overlay, when one was paired in
           // (decode-plan #36 residual) — mirrors the single-plot double-Y
-          // apply's y2Lim/y2Log/y2Step/y2AxisLabel, scoped to this cell.
+          // apply's y2Lim/y2Scale/y2Step/y2AxisLabel, scoped to this cell.
           y2Lim: p.y2Lim ?? null,
-          y2Log: p.y2Log ?? null,
+          y2Scale: p.y2Log != null ? scaleFromLog(p.y2Log) : null,
           y2Step: p.y2Step ?? null,
           y2AxisLabel: p.y2AxisLabel,
           xFmt,
@@ -444,8 +448,8 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         const opts = buildOpts(p.payload, {
           width: widths[i],
           height: h,
-          yLog,
-          xLog,
+          yScale,
+          xScale,
           xLim: p.xRange,
           yLim: breakYLim,
           xFmt,
@@ -496,8 +500,8 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         const opts = buildOpts(p.payload, {
           width: cellW,
           height: cellH,
-          yLog,
-          xLog,
+          yScale,
+          xScale,
           xLim: facetXLim,
           xFmt,
           yFmt,
@@ -546,8 +550,8 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       const opts = buildOpts(pp, {
         width: w,
         height: heights[i],
-        yLog,
-        xLog,
+        yScale,
+        xScale,
         xLim,
         xFmt,
         yFmt,
@@ -599,8 +603,8 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     facetGrid,
     facetXLim,
     payload,
-    yLog,
-    xLog,
+    yScale,
+    xScale,
     xLim,
     xFmt,
     yFmt,

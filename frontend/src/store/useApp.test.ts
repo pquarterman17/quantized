@@ -1693,8 +1693,8 @@ describe("useApp applyOriginFigure (item 18)", () => {
       originFigures: [figureEntry],
       xLim: null,
       yLim: null,
-      xLog: false,
-      yLog: false,
+      xScale: "linear",
+      yScale: "linear",
     });
   });
 
@@ -1704,8 +1704,8 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(s.activeId).toBe("d2");
     expect(s.xLim).toEqual([18, 100]);
     expect(s.yLim).toEqual([1, 1e6]);
-    expect(s.xLog).toBe(false);
-    expect(s.yLog).toBe(true);
+    expect(s.xScale).toBe("linear");
+    expect(s.yScale).toBe("log");
   });
 
   // Owner-routing item 4 ("none of the sub plots are boxed in"): Origin
@@ -1916,8 +1916,8 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
       originFigures: [layer1, layer2],
       xLim: null,
       yLim: null,
-      xLog: false,
-      yLog: false,
+      xScale: "linear",
+      yScale: "linear",
       yKeys: null,
       y2Keys: null,
     });
@@ -1940,7 +1940,7 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
     expect(s.yLim).toEqual([0, 50]); // layer 1's own range, not layer 2's
     // 13.2 #6: layer 2's own axis state reaches the secondary axis
     expect(s.y2Lim).toEqual([0, 5000]);
-    expect(s.y2Log).toBe(false);
+    expect(s.y2Scale).toBe("linear");
     // W4 #37: layer 2's decoded title becomes the y2 axis label override
     expect(s.y2AxisLabel).toBe("Counts");
   });
@@ -2735,16 +2735,16 @@ describe("useApp macro recorder", () => {
   });
 
   it("records nothing while paused (the gate lives in recordMacro)", () => {
-    useApp.getState().setYLog(true);
+    useApp.getState().setYScale("log");
     expect(useApp.getState().macroSteps).toHaveLength(0);
   });
 
   it("captures curated actions once recording", () => {
     useApp.getState().startMacro();
-    useApp.getState().setYLog(true);
+    useApp.getState().setYScale("log");
     useApp.getState().setXKey(2);
     const steps = useApp.getState().macroSteps;
-    expect(steps.map((s) => s.code)).toEqual(["qz.setYLog(true)", "qz.setXKey(2)"]);
+    expect(steps.map((s) => s.code)).toEqual(['qz.setYScale("log")', "qz.setXKey(2)"]);
     expect(steps[0].label).toBe("Y axis log");
   });
 
@@ -2760,7 +2760,7 @@ describe("useApp macro recorder", () => {
 
   it("clear empties the log and stops recording", () => {
     useApp.getState().startMacro();
-    useApp.getState().setYLog(true);
+    useApp.getState().setYScale("log");
     useApp.getState().clearMacro();
     expect(useApp.getState().macroSteps).toHaveLength(0);
     expect(useApp.getState().macroRecording).toBe(false);
@@ -3633,7 +3633,7 @@ describe("useApp plot windows — item 7 (.dwk + autosave persistence)", () => {
       focusedWindowId: "old",
     });
     const persisted = [
-      win({ id: "p1", geometry: { x: 5, y: 5, w: 300, h: 200 }, view: { ...defaultPlotView(), yLog: true, plotTitle: "restored" } }),
+      win({ id: "p1", geometry: { x: 5, y: 5, w: 300, h: 200 }, view: { ...defaultPlotView(), yScale: "log", plotTitle: "restored" } }),
       win({ id: "p2", z: 3 }),
     ];
     useApp.getState().loadWorkspace({
@@ -3645,7 +3645,7 @@ describe("useApp plot windows — item 7 (.dwk + autosave persistence)", () => {
     const s = useApp.getState();
     expect(s.plotWindows.map((w) => w.id)).toEqual(["p1", "p2"]);
     expect(s.focusedWindowId).toBe("p1");
-    expect(s.yLog).toBe(true); // hydrated from p1's persisted view
+    expect(s.yScale).toBe("log"); // hydrated from p1's persisted view
     expect(s.plotTitle).toBe("restored");
   });
 
@@ -3813,7 +3813,7 @@ describe("useApp plot windows — item 9 (Origin figures / figure docs into new 
     expect(created).toBeDefined();
     expect(s.focusedWindowId).toBe(created!.id);
     expect(s.xLim).toEqual([18, 100]); // the apply logic landed on the NEW window
-    expect(s.yLog).toBe(true);
+    expect(s.yScale).toBe("log");
     expect(s.stageTab).toBe("plot"); // item 1: surfaced even though we started on Worksheet
   });
 
@@ -3839,8 +3839,8 @@ describe("useApp plot windows — item 9 (Origin figures / figure docs into new 
       config: {
         xKey: null,
         yKeys: [0],
-        xLog: false,
-        yLog: true,
+        xScale: "linear",
+        yScale: "log",
         title: "Doc Title",
         xLabel: "X",
         yLabel: "Y",
@@ -3858,7 +3858,7 @@ describe("useApp plot windows — item 9 (Origin figures / figure docs into new 
     const created = s.plotWindows.find((w) => w.id === s.focusedWindowId)!;
     expect(created.datasetId).toBe("d2");
     expect(created.title).toBe("My Figure");
-    expect(s.yLog).toBe(true);
+    expect(s.yScale).toBe("log");
     expect(s.plotTitle).toBe("Doc Title");
     expect(s.stageTab).toBe("plot"); // item 1: surfaced even though we started on Worksheet
   });
@@ -3873,8 +3873,8 @@ describe("useApp plot windows — item 9 (Origin figures / figure docs into new 
       config: {
         xKey: null,
         yKeys: null,
-        xLog: false,
-        yLog: false,
+        xScale: "linear",
+        yScale: "linear",
         title: "",
         xLabel: "",
         yLabel: "",
@@ -3997,7 +3997,7 @@ describe("useApp plot windows — item 11 (snapshot-as-window)", () => {
       activeId: "d1",
       plotWindows: [win({ id: "w1", bg: "light" })],
       focusedWindowId: "w1",
-      yLog: true,
+      yScale: "log",
       plotTitle: "live title",
     });
     const b = bundle();
@@ -4008,7 +4008,7 @@ describe("useApp plot windows — item 11 (snapshot-as-window)", () => {
     expect(snap.datasetId).toBeNull(); // never dataset-bound
     expect(snap.title).toBe("Snapshot — alpha");
     expect(snap.snapshot).toBe(b);
-    expect(snap.view.yLog).toBe(true); // frozen from the LIVE singletons
+    expect(snap.view.yScale).toBe("log"); // frozen from the LIVE singletons
     expect(snap.view.plotTitle).toBe("live title");
     expect(snap.bg).toBe("light"); // inherits the source window's override
     expect(snap.z).toBeGreaterThan(s.plotWindows.find((w) => w.id === "w1")!.z);

@@ -47,6 +47,31 @@ describe("pxToData", () => {
     const la = { ...AXES, ylog: true };
     expect(pxToData(la, 100, 200).y).toBeCloseTo(10); // halfway between 1 and 100
   });
+
+  // MAIN #12: a reciprocal-scaled preview axis must invert differently from
+  // log — the "xlog"/"ylog" booleans alone can't express it, hence "xscale"/
+  // "yscale" as the scale-name source of truth.
+  it("maps a reciprocal axis in 1/x space (round-trips the endpoints exactly)", () => {
+    const ra: AxesInfo = { ...AXES, xlim: [100, 300], xscale: "reciprocal" };
+    expect(pxToData(ra, ra.x0, 200).x).toBeCloseTo(100, 6); // left edge = xlim[0]
+    expect(pxToData(ra, ra.x1, 200).x).toBeCloseTo(300, 6); // right edge = xlim[1]
+    // Midpoint in PIXEL space is NOT the midpoint in DATA space for a
+    // reciprocal axis (it's the midpoint in 1/x space instead).
+    const midPx = (ra.x0 + ra.x1) / 2;
+    const midX = pxToData(ra, midPx, 200).x;
+    expect(midX).not.toBeCloseTo((100 + 300) / 2, 0);
+    expect(midX).toBeCloseTo(1 / ((1 / 100 + 1 / 300) / 2), 6); // harmonic mean
+  });
+
+  it("falls back to xlog/ylog when xscale/yscale is absent (older backend response)", () => {
+    const legacy: AxesInfo = { ...AXES, ylim: [1, 100], ylog: true };
+    expect(pxToData(legacy, 100, 200).y).toBeCloseTo(10);
+  });
+
+  it("xscale, when present, wins over a stale/mismatched xlog", () => {
+    const mixed: AxesInfo = { ...AXES, xlim: [100, 300], xscale: "reciprocal", xlog: true };
+    expect(pxToData(mixed, mixed.x0, 200).x).toBeCloseTo(100, 6);
+  });
 });
 
 describe("pxToFigureFraction", () => {

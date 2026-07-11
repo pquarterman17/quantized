@@ -55,6 +55,17 @@ def test_page_default_is_vector_pdf() -> None:
     assert resp.headers["content-disposition"].endswith('filename="figure_page.pdf"')
 
 
+def test_page_panel_reciprocal_x_scale_renders() -> None:
+    # MAIN #12: a panel's x_scale flows through _figure_series -> PagePanel
+    # -> draw_series_axes, the same shared chokepoint the single-figure route
+    # uses -- reciprocal support "for free" on the page composer.
+    page = _page_2x2(fmt="png")
+    page["panels"][0]["figure"]["x_scale"] = "reciprocal"
+    resp = client.post("/api/export/figure-page", json=page)
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
 def test_page_png_preview_render() -> None:
     # The composer UI's preview path: PNG at a low DPI.
     resp = client.post("/api/export/figure-page", json=_page_2x2(fmt="png", dpi=72))

@@ -18,8 +18,8 @@ beforeEach(() => {
     originFigures: [],
     xLim: null,
     yLim: null,
-    xLog: false,
-    yLog: false,
+    xScale: "linear",
+    yScale: "linear",
   });
 });
 
@@ -60,8 +60,8 @@ describe("FiguresSection", () => {
     expect(s.activeId).toBe("d1");
     expect(s.xLim).toEqual([18, 100]);
     expect(s.yLim).toEqual([1, 1e6]);
-    expect(s.xLog).toBe(false);
-    expect(s.yLog).toBe(true);
+    expect(s.xScale).toBe("linear");
+    expect(s.yScale).toBe("log");
   });
 
   it("disables a figure whose source hint never resolved, with the hint in its tooltip", () => {

@@ -95,6 +95,8 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                     y_label=y_label,
                     x_log=f.x_log,
                     y_log=f.y_log,
+                    x_scale=f.x_scale,
+                    y_scale=f.y_scale,
                     series_styles=styles,
                     overrides=f.overrides,
                     label=spec.label,

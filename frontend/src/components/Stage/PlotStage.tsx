@@ -39,8 +39,8 @@ import { usePlotStageActions } from "./usePlotStageActions";
 
 export default function PlotStage() {
   const active = useActiveDataset();
-  const yLog = useApp((s) => s.yLog);
-  const xLog = useApp((s) => s.xLog);
+  const yScale = useApp((s) => s.yScale);
+  const xScale = useApp((s) => s.xScale);
   const xLim = useApp((s) => s.xLim);
   const yLim = useApp((s) => s.yLim);
   const xStep = useApp((s) => s.xStep);
@@ -71,7 +71,7 @@ export default function PlotStage() {
   const yKeys = useApp((s) => s.yKeys);
   const y2Keys = useApp((s) => s.y2Keys);
   const y2Lim = useApp((s) => s.y2Lim);
-  const y2Log = useApp((s) => s.y2Log);
+  const y2Scale = useApp((s) => s.y2Scale);
   const y2Step = useApp((s) => s.y2Step);
   const errKeys = useApp((s) => s.errKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
@@ -140,8 +140,8 @@ export default function PlotStage() {
 
   const { displayPayload, plotted, styleList, labelList, errorBars, colorByColumns, hidden } = usePlotPayload({
     active,
-    yLog,
-    xLog,
+    yScale,
+    xScale,
     xKey,
     yKeys,
     y2Keys,
@@ -247,14 +247,14 @@ export default function PlotStage() {
         accent={accent}
         bg={winBg}
         syncKey={windowSyncKey(winLinkGroup)}
-        yLog={yLog}
-        xLog={xLog}
+        yScale={yScale}
+        xScale={xScale}
         xLim={xLim}
         yLim={yLim}
         xStep={xStep}
         yStep={yStep}
         y2Lim={y2Lim}
-        y2Log={y2Log}
+        y2Scale={y2Scale}
         y2Step={y2Step}
         xFmt={xFmt}
         yFmt={yFmt}

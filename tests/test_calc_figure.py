@@ -274,3 +274,82 @@ class TestOverrides:
 
     def test_unknown_keys_are_ignored(self):
         assert self._png(some_future_key=1)[:4] == b"\x89PNG"
+
+
+# ── Reciprocal (1/x) axis scale (MAIN #12 -- Arrhenius-style plots) ─────────
+def test_reciprocal_x_scale_renders() -> None:
+    t = np.linspace(100.0, 300.0, 30)  # T in Kelvin -- always positive
+    out = render_figure(t, [("rate", np.exp(-1000.0 / t))], fmt="png", x_scale="reciprocal")
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_reciprocal_y_scale_renders() -> None:
+    x = np.linspace(1.0, 10.0, 20)
+    out = render_figure(x, [("y", x)], fmt="pdf", y_scale="reciprocal")
+    assert out[:5] == b"%PDF-"
+
+
+def test_reciprocal_scale_hitmap_reports_the_resolved_scale_name() -> None:
+    # The figure-hitmap axes block (gap #13) carries the RESOLVED scale name
+    # (not derived from ax.get_xscale(), which reports a reciprocal axis as
+    # the generic "function" -- see _collect_map's doc) so the client's
+    # lib/previewmap.ts can invert a preview pixel drag correctly.
+    t = np.linspace(100.0, 300.0, 20)
+    out = render_figure_map(t, [("rate", np.exp(-1000.0 / t))], x_scale="reciprocal", dpi=100)
+    assert out["axes"]["xscale"] == "reciprocal"
+    assert out["axes"]["yscale"] == "linear"
+    assert out["axes"]["xlog"] is False  # back-compat field: reciprocal != log
+
+
+def test_log_scale_hitmap_sets_both_the_legacy_and_new_fields() -> None:
+    x = np.linspace(1.0, 10.0, 20)
+    out = render_figure_map(x, [("y", x)], y_scale="log", dpi=100)
+    assert out["axes"]["yscale"] == "log"
+    assert out["axes"]["ylog"] is True
+
+
+def test_reciprocal_scale_differs_from_linear() -> None:
+    t = np.linspace(100.0, 300.0, 30)
+    y = np.exp(-1000.0 / t)
+    linear = render_figure(t, [("rate", y)], fmt="pdf")
+    reciprocal = render_figure(t, [("rate", y)], fmt="pdf", x_scale="reciprocal")
+    assert linear != reciprocal
+
+
+def test_x_scale_takes_precedence_over_legacy_x_log() -> None:
+    # x_scale, when given, wins over x_log (MAIN #12 back-compat contract).
+    t = np.linspace(100.0, 300.0, 20)
+    y = np.exp(-1000.0 / t)
+    a = render_figure(t, [("y", y)], fmt="pdf", x_log=True, x_scale="reciprocal")
+    b = render_figure(t, [("y", y)], fmt="pdf", x_scale="reciprocal")
+    assert a == b
+
+
+def test_legacy_x_log_still_works_when_x_scale_absent() -> None:
+    x = np.linspace(1.0, 100.0, 20)
+    y = x**2
+    via_log = render_figure(x, [("y", y)], fmt="pdf", x_log=True)
+    via_scale = render_figure(x, [("y", y)], fmt="pdf", x_scale="log")
+    assert via_log == via_scale
+
+
+def test_reciprocal_scale_with_x_breaks_does_not_crash() -> None:
+    # The manual-axis-break renderer (figure_break) also threads x_scale/
+    # y_scale through -- exercise that path too, not just the plain axes one.
+    t = np.linspace(50.0, 400.0, 40)
+    y = np.exp(-1000.0 / t)
+    out = render_figure(
+        t, [("rate", y)], fmt="png", x_scale="reciprocal",
+        overrides={"x_breaks": [[150.0, 200.0]]},
+    )
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_reciprocal_scale_on_figure_page() -> None:
+    from quantized.calc.figure_page import PagePanel, render_figure_page
+
+    t = np.linspace(100.0, 300.0, 20)
+    y = np.exp(-1000.0 / t)
+    panel = PagePanel(x=t, series=[("rate", y)], row=0, col=0, x_scale="reciprocal")
+    out = render_figure_page([panel], rows=1, cols=1, fmt="png")
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"

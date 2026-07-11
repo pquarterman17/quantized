@@ -85,10 +85,6 @@ GOTO #11 drift (implemented but listed open).
 
 ## Tier 2 — Medium Impact
 
-12. **Reciprocal (Arrhenius) axis scale** — 1/x axis option beyond
-    linear/log (transport/relaxation figures; pairs with the shipped
-    VFT/Arrhenius calc in `calc/relaxation.py`).
-
 13. **Fill between / under curves** — series fill-to-baseline and
     fill-between-two-series (region shades only cover x-band boxes
     today); export side included (matplotlib `fill_between`).
@@ -174,6 +170,30 @@ GOTO #11 drift (implemented but listed open).
 
 ## Completed
 
+- ~~**#12 Reciprocal (Arrhenius) axis scale**~~ (2026-07-11) — `xLog`/`yLog`
+  booleans promoted to an `AxisScale` ("linear"/"log"/"reciprocal") enum
+  across `PlotView`/store/`.dwk` (back-compat: `scaleFromLog` bridges old
+  boolean saves; y2 nullable-inherit preserved). Screen: uPlot custom
+  `distr: 100` + self-inverse `fwd`/`bwd` (`reciprocalTransform`), tick
+  positions evenly spaced in 1/x with labels in the original units
+  (`reciprocalAxisSplits`, always-supplied splits since uPlot has no native
+  reciprocal locator). Export: matplotlib has no reciprocal scale either —
+  `calc/figure_scale.py` (new, <500-line ceiling) applies it via
+  `ax.set_xscale("function", functions=(f, f))` + a matching tick locator,
+  wired through the shared `draw_series_axes` chokepoint so single-figure,
+  paneled-break, and figure-page export all get it for free. Inspector Axes
+  card: two checkboxes → `AxisScaleControls.tsx` (Linear/Log/Reciprocal
+  `Select`s, extracted per the card's existing AxisLimits/TickFormat
+  pattern). Command palette "Toggle log X/Y axis" → cycle
+  linear→log→reciprocal→linear. Context menu axis submenu mirrors the
+  3-way pick. Figure-hitmap preview-drag inversion (`lib/previewmap.ts`)
+  also fixed for reciprocal (a real "missed consumer" caught by the sweep —
+  the backend's `_collect_map` now reports the resolved scale name, not
+  `ax.get_xscale()`, which reports a reciprocal axis as the generic
+  `"function"`). Origin-decode paths (`SpatialPanel`, `OriginFigure`,
+  Origin GRAPH/.ogs export) stay boolean-only by design — Origin has no
+  reciprocal axis type; `scaleFromLog`/`=== "log"` bridges at each
+  boundary. Backend 2757 tests green (+34), frontend 2706 green (+~60).
 - ~~**#8 Post-review consolidation batch**~~ (2026-07-11) — all 9 sub-items,
   4 parallel workstreams (3 worktree agents + direct), zero merge conflicts:
   - Point-gesture core: `lib/pointGesture.ts` (pixel-frame conversion + hit
