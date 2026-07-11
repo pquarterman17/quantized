@@ -55,6 +55,13 @@ stats = [
     "statsmodels>=0.14",
     "lifelines>=0.27",
 ]
+# Optional bumps fit engine (GOTO #10). BSD-3 licensed. calc/fit_bumps.py
+# guards the import — the MATLAB-parity fitter (calc/fitting.py, golden-locked)
+# stays the default engine everywhere; bumps adds amoeba/lm/de/dream as an
+# ADDITIONAL engine. `pip install quantized[bumps]` enables it.
+bumps = [
+    "bumps>=1.0",
+]
 
 [dependency-groups]
 dev = [
@@ -68,6 +75,8 @@ dev = [
     # exercise the optional stats methods (GLM/survival/Cox) in CI
     "statsmodels>=0.14",
     "lifelines>=0.27",
+    # exercise the optional bumps fit engine (GOTO #10) in CI
+    "bumps>=1.0",
 ]
 # Desktop packaging only — used by the release workflow to freeze the server
 # into a self-contained sidecar (tools/bundle/qz-server.spec). Never a runtime
@@ -137,7 +146,7 @@ strict = true
 
 [[tool.mypy.overrides]]
 # Third-party libs without bundled type stubs — skeleton-safe.
-module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*", "statsmodels.*", "lifelines.*", "pandas.*", "webview.*"]
+module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*", "periodictable.*", "docx.*", "pptx.*", "mpl_toolkits.*", "win32com.*", "statsmodels.*", "lifelines.*", "pandas.*", "webview.*", "bumps.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
