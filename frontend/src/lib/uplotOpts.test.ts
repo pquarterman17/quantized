@@ -344,13 +344,110 @@ describe("buildOpts defaultTrace", () => {
     expect((dflt.axes?.[1]?.grid as { show?: boolean }).show).not.toBe(false);
   });
 
-  it("formats ticks fixed/sci and leaves auto to uPlot", () => {
+  it("formats ticks fixed/sci at the configured digits when the increment needs no more", () => {
     const fixed = tickFormatter({ mode: "fixed", digits: 2 });
-    expect(fixed?.(null as never, [1.5, 2], 0, 0, 0)).toEqual(["1.50", "2.00"]);
+    expect(fixed(null as never, [1.5, 2], 0, 0, 0)).toEqual(["1.50", "2.00"]);
     const sci = tickFormatter({ mode: "sci", digits: 1 });
-    expect(sci?.(null as never, [1500], 0, 0, 0)).toEqual(["1.5e+3"]);
-    expect(tickFormatter({ mode: "auto", digits: 2 })).toBeUndefined();
-    expect(tickFormatter(undefined)).toBeUndefined();
+    expect(sci(null as never, [1500], 0, 0, 0)).toEqual(["1.5e+3"]);
+  });
+
+  // MAIN #20 (owner bug report): a dense M-H moment axis (+-0.002, ticks
+  // ~0.0001 apart) rendered 3-decimal labels -> duplicate "0.001"/"0"/
+  // "-0.001" runs and a bare "-0". Reproduced via tools/visual with `yFmt`
+  // untouched at {mode:"auto"} (see uplotOpts.ts's autoTickValues doc) —
+  // uPlot's OWN default formatter (Intl.NumberFormat with no options, capped
+  // at 3 fraction digits) is the confirmed mechanism, independent of the
+  // `fixed`-mode path. Both are covered below: `fixed` PROVABLY duplicates
+  // via bare toFixed(2) at this spacing (regression for the class, whether
+  // or not the owner's plot ever used fixed mode); `auto` is the actual
+  // repro mechanism, fixed by tickFormatter no longer deferring to uPlot.
+  describe("increment-aware precision floor (MAIN #20)", () => {
+    const denseSplits = [-0.0002, -0.0001, 0, 0.0001, 0.0002]; // 0.0001 apart
+
+    it("bare toFixed(2)/(3) at this spacing PROVABLY duplicates — the mechanism class, independent of the fix", () => {
+      // Documents why an increment floor is needed at all: plain toFixed at
+      // a digit count below what 0.0001-apart splits need collapses every
+      // value in the run to the same string, REGARDLESS of whether this
+      // exact code path is what produced the owner's screenshot (that's a
+      // separate question — see the "auto mode reproduces" case below,
+      // which is the confirmed mechanism via tools/visual).
+      const raw2 = denseSplits.map((v) => v.toFixed(2));
+      expect(new Set(raw2).size).toBeLessThan(denseSplits.length);
+      const raw3 = denseSplits.map((v) => v.toFixed(3));
+      expect(new Set(raw3).size).toBeLessThan(denseSplits.length);
+    });
+
+    it("fixed mode: the increment floor keeps every dense-tick label distinct", () => {
+      const fmt = tickFormatter({ mode: "fixed", digits: 2 });
+      const labels = fmt(null as never, denseSplits, 0, 0, 0.0001);
+      expect(labels).toEqual(["-0.0002", "-0.0001", "0.0000", "0.0001", "0.0002"]);
+      expect(new Set(labels).size).toBe(denseSplits.length);
+    });
+
+    it("auto mode: the override formats the SAME dense splits without duplicates or a bare digit collapse", () => {
+      const fmt = tickFormatter({ mode: "auto", digits: 2 });
+      const labels = fmt(null as never, denseSplits, 0, 0, 0.0001);
+      expect(new Set(labels).size).toBe(denseSplits.length);
+      expect(labels).toContain("0"); // exact zero still renders bare, not "0.0000"
+    });
+
+    it("auto mode reproduces the SAME duplicate-run shape without a fixed/sci path involved (repro proof)", () => {
+      // The owner's exact scenario: default {mode:"auto"} (no fixed/sci ever
+      // configured) on a dense axis. This asserts the fix, but the shape of
+      // the bug (pre-fix) was independently confirmed via tools/visual.
+      const fmt = tickFormatter(undefined);
+      const labels = fmt(null as never, denseSplits, 0, 0, 0.0001);
+      expect(new Set(labels).size).toBe(denseSplits.length);
+    });
+
+    it("never renders a bare negative zero after rounding (fixed mode)", () => {
+      const fmt = tickFormatter({ mode: "fixed", digits: 2 });
+      // A split just below zero that ROUNDS to zero at 2 decimals must not
+      // print "-0.00" — it's not meaningful data. foundIncr=0.01 needs
+      // exactly 2 decimals, so the floor doesn't shift the digit count.
+      expect(fmt(null as never, [-0.0004], 0, 0, 0.01)).toEqual(["0.00"]);
+    });
+
+    it("never renders a bare negative zero after rounding (auto mode)", () => {
+      const fmt = tickFormatter({ mode: "auto", digits: 2 });
+      expect(fmt(null as never, [-0.0000001], 0, 0, 1000)).toEqual(["0"]);
+    });
+
+    it("auto mode leaves a healthy large-integer range's labels byte-identical to uPlot's own Intl-grouped output", () => {
+      // Field axis from the owner's screenshot: -15,000..15,000, no fraction
+      // digits needed. decimalsForIncrement(5000) floors to 0, matching the
+      // Intl.NumberFormat default's own effective output at this magnitude
+      // (no regression on the healthy axis the owner's report showed).
+      const fmt = tickFormatter(undefined);
+      const labels = fmt(null as never, [-15000, -10000, -5000, 0, 5000, 10000, 15000], 0, 0, 5000);
+      expect(labels).toEqual(["-15,000", "-10,000", "-5,000", "0", "5,000", "10,000", "15,000"]);
+    });
+
+    it("sci mode floors mantissa digits so same-decade dense ticks stay distinct", () => {
+      const fmt = tickFormatter({ mode: "sci", digits: 1 });
+      const labels = fmt(null as never, [1.1e-3, 1.2e-3, 1.3e-3], 0, 0, 0.0001);
+      expect(new Set(labels).size).toBe(3);
+      expect(labels).toEqual(["1.1e-3", "1.2e-3", "1.3e-3"]);
+    });
+
+    it("eng mode: mantissa in [1,1000), exponent a multiple of 3, sci-style suffix", () => {
+      const fmt = tickFormatter({ mode: "eng", digits: 1 });
+      expect(fmt(null as never, [0.0012], 0, 0, 0)).toEqual(["1.2e-3"]);
+      expect(fmt(null as never, [-0.0012], 0, 0, 0)).toEqual(["-1.2e-3"]);
+      expect(fmt(null as never, [0], 0, 0, 0)).toEqual(["0"]);
+      expect(fmt(null as never, [12345], 0, 0, 0)).toEqual(["12.3e+3"]);
+    });
+
+    it("eng mode floors mantissa digits so dense same-exponent ticks stay distinct", () => {
+      const fmt = tickFormatter({ mode: "eng", digits: 0 });
+      const labels = fmt(null as never, [1.1e-3, 1.2e-3, 1.3e-3], 0, 0, 0.0001);
+      expect(new Set(labels).size).toBe(3);
+    });
+
+    it("eng mode renormalizes when the mantissa rounds up to 1000", () => {
+      const fmt = tickFormatter({ mode: "eng", digits: 0 });
+      expect(fmt(null as never, [999.9996], 0, 0, 0)).toEqual(["1e+3"]);
+    });
   });
 
   it("categoricalTickFormatter maps in-range integer splits to labels, blanks the rest", () => {
@@ -364,14 +461,15 @@ describe("buildOpts defaultTrace", () => {
     ]);
   });
 
-  it("a categorical payload (xCategories) attaches the ordinal tick formatter to the x axis only", () => {
+  it("a categorical payload (xCategories) attaches the ordinal tick formatter to the x axis, auto-override to y", () => {
     const cat: PlotPayload = { ...payload, xCategories: ["A", "B", "C"] };
     const opts = buildOpts(cat, { ...base, yScale: "linear", tool: "zoom" });
     expect(typeof opts.axes?.[0]?.values).toBe("function");
     const fn = opts.axes?.[0]?.values as unknown as (u: never, splits: number[]) => unknown[];
     expect(fn(null as never, [0, 1, 2])).toEqual(["A", "B", "C"]);
-    // The y axis is untouched (no xFmt/yFmt supplied).
-    expect(opts.axes?.[1]?.values).toBeUndefined();
+    // The y axis gets the increment-aware auto override (MAIN #20) — no
+    // xFmt/yFmt was supplied, but "auto" no longer means "uPlot's own".
+    expect(typeof opts.axes?.[1]?.values).toBe("function");
   });
 
   it("xCategories wins over an explicit numeric xFmt on the x axis", () => {
@@ -386,12 +484,12 @@ describe("buildOpts defaultTrace", () => {
     expect(fn(null as never, [0, 1])).toEqual(["A", "B"]); // not "0.00"/"1.00"
   });
 
-  it("a plain numeric payload (no xCategories) is completely unaffected", () => {
+  it("a plain numeric payload (no xCategories) still gets the increment-aware auto formatter", () => {
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
-    expect(opts.axes?.[0]?.values).toBeUndefined();
+    expect(typeof opts.axes?.[0]?.values).toBe("function");
   });
 
-  it("attaches the tick formatter to the x/y axes (and omits it for auto)", () => {
+  it("attaches the tick formatter to the x/y axes for every mode, including auto (MAIN #20)", () => {
     const formatted = buildOpts(payload, {
       ...base,
       yScale: "linear",
@@ -401,9 +499,11 @@ describe("buildOpts defaultTrace", () => {
     });
     expect(typeof formatted.axes?.[0]?.values).toBe("function");
     expect(typeof formatted.axes?.[1]?.values).toBe("function");
+    // "auto" (no xFmt/yFmt at all) no longer means "defer to uPlot's own
+    // formatter" — see uplotOpts.ts's autoTickValues doc for why.
     const auto = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
-    expect(auto.axes?.[0]?.values).toBeUndefined();
-    expect(auto.axes?.[1]?.values).toBeUndefined();
+    expect(typeof auto.axes?.[0]?.values).toBe("function");
+    expect(typeof auto.axes?.[1]?.values).toBe("function");
   });
 
   it("marks the x series ascending for sorted x (keeps uPlot's fast path)", () => {

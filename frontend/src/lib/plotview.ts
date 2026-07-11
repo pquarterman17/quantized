@@ -17,11 +17,12 @@
 // wheelZoom, excludedDisplay, sigFigs, … — app-wide, not per-window).
 
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
-import type { Annotation, AxisFormat, AxisScale, RefLine, RegionShade, SeriesStyle } from "./types";
+import type { Annotation, AxisFormat, AxisScale, RefLine, RegionShade, SeriesStyle, TickMode } from "./types";
 
 export type LegendPos = "ne" | "nw" | "se" | "sw";
 
 const AXIS_SCALES: readonly AxisScale[] = ["linear", "log", "reciprocal"];
+const TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng"];
 
 /** Narrow an arbitrary value to a valid `AxisScale`. */
 export function isAxisScale(v: unknown): v is AxisScale {
@@ -43,6 +44,14 @@ export function scaleFromLog(log: boolean): AxisScale {
 export function cycleAxisScale(current: AxisScale): AxisScale {
   const i = AXIS_SCALES.indexOf(current);
   return AXIS_SCALES[(i + 1) % AXIS_SCALES.length];
+}
+
+/** The command-palette "cycle tick format" step (MAIN #20): each invocation
+ *  advances auto -> fixed -> sci -> eng -> auto. Same pure/unit-testable
+ *  shape as `cycleAxisScale`. */
+export function cycleTickMode(current: TickMode): TickMode {
+  const i = TICK_MODES.indexOf(current);
+  return TICK_MODES[(i + 1) % TICK_MODES.length];
 }
 
 /** One plot's full display configuration — everything that differs window to

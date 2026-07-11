@@ -332,8 +332,16 @@ describe("MultiPanelStage — shared-x flush stacking (item B)", () => {
       "",
       "",
     ]);
-    // The bottom panel keeps uPlot's own default x formatting (no override).
-    expect(bottom.opts.axes[0].values).toBeUndefined();
+    // The bottom panel keeps buildOpts's own default x formatting — the
+    // increment-aware auto override (MAIN #20), not the item-B blank
+    // formatter the top panel gets (a DIFFERENT, later override — see
+    // useMultiPanelStage.ts's flush-run block).
+    expect(typeof bottom.opts.axes[0].values).toBe("function");
+    expect((bottom.opts.axes[0].values as (u: unknown, s: unknown[]) => unknown[])(null, [1, 2, 3])).not.toEqual([
+      "",
+      "",
+      "",
+    ]);
   });
 
   it("does NOT suppress independent (non-shared-x) panels — same-shape grid, different x-ranges", async () => {
@@ -346,7 +354,14 @@ describe("MultiPanelStage — shared-x flush stacking (item B)", () => {
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(2));
     const [top, bottom] = created as { opts: { axes: { values?: unknown }[] } }[];
-    expect(top.opts.axes[0].values).toBeUndefined();
-    expect(bottom.opts.axes[0].values).toBeUndefined();
+    // Neither panel is flush-stacked here, so both keep buildOpts's own
+    // increment-aware auto formatter (MAIN #20) rather than the item-B
+    // blank-label override (which only applies to a shared-x flush run) —
+    // assert on BEHAVIOUR, not just "is a function" (the blank override is
+    // also a function), so this stays a real suppression regression check.
+    for (const panel of [top, bottom]) {
+      const fn = panel.opts.axes[0].values as (u: unknown, s: unknown[]) => unknown[];
+      expect(fn(null, [1, 2, 3])).not.toEqual(["", "", ""]);
+    }
   });
 });

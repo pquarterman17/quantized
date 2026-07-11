@@ -13,7 +13,7 @@ import type { PlotPayload } from "./plotdata";
 import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst } from "./richtext";
-import { pow10 } from "./ticks";
+import { decimalsForIncrement, pow10 } from "./ticks";
 import type { Annotation, AxisFormat, AxisScale, LineStyle, RefLine, RegionShade, SeriesStyle } from "./types";
 import { resolveFillBands, seriesFillProps } from "./uplotFill";
 import {
@@ -124,13 +124,144 @@ type TickValues = (
   foundIncr: number,
 ) => (string | number | null)[];
 
-/** Build a uPlot axis `values` formatter for a tick mode; `auto` returns
- *  undefined so uPlot keeps its own (locale-aware, span-adaptive) labels. */
-export function tickFormatter(fmt?: AxisFormat): TickValues | undefined {
-  if (!fmt || fmt.mode === "auto") return undefined;
-  const d = Math.max(0, Math.min(20, Math.round(fmt.digits)));
-  const fn = fmt.mode === "sci" ? (v: number) => v.toExponential(d) : (v: number) => v.toFixed(d);
-  return (_u, splits) => splits.map((v) => (v == null ? null : fn(v)));
+/** The smallest positive gap between consecutive (sorted, finite, non-null)
+ *  tick SPLITS — the increment that actually governs label precision,
+ *  independent of which generator produced the splits. uPlot's own
+ *  `foundIncr` (the 5th `values` argument) reflects a generic linear-
+ *  increment search over `[scaleMin, scaleMax]` that ALWAYS runs internally,
+ *  even when this module supplies a custom `axis.splits` override
+ *  (`fixedLogAxisSplits`/`reciprocalAxisSplits` above) — so `foundIncr` can
+ *  silently disagree with the spacing of the splits actually drawn there.
+ *  Deriving the increment directly from the splits array is correct
+ *  regardless of scale/override, and is the primary source; `foundIncr` is
+ *  only a fallback for the (single-split, no diffable pair) degenerate
+ *  case. */
+function splitsIncrement(splits: readonly (number | null | undefined)[], foundIncr: number): number {
+  const vals = splits
+    .filter((v): v is number => v != null && Number.isFinite(v))
+    .slice()
+    .sort((a, b) => a - b);
+  let min = Infinity;
+  for (let i = 1; i < vals.length; i++) {
+    const gap = vals[i] - vals[i - 1];
+    if (gap > 0 && gap < min) min = gap;
+  }
+  return Number.isFinite(min) ? min : foundIncr;
+}
+
+/** Strip a rounded-to-zero value's leading minus sign: a legitimately
+ *  non-zero split (e.g. -0.00003) can still format as "-0"/"-0.000"/
+ *  "-0.0e+0" once rounded to the tick's display precision, which is never
+ *  meaningful data (MAIN #20 — the owner's screenshot showed a bare "-0"
+ *  tick label on a dense M-H moment axis). Works after ANY formatter
+ *  (toFixed/toExponential/Intl.NumberFormat) by re-parsing the FORMATTED
+ *  string rather than inspecting the pre-format float, so it's agnostic to
+ *  locale grouping separators / exponent suffixes. */
+function stripNegZero(formatted: string): string {
+  if (!formatted.startsWith("-")) return formatted;
+  const bare = formatted.slice(1);
+  return Number(bare.replace(/,/g, "")) === 0 ? bare : formatted;
+}
+
+const autoNumberFormatCache = new Map<number, Intl.NumberFormat>();
+function autoNumberFormat(maxFrac: number): Intl.NumberFormat {
+  const key = Math.max(0, Math.min(20, maxFrac));
+  let nf = autoNumberFormatCache.get(key);
+  if (!nf) {
+    nf = new Intl.NumberFormat(undefined, { maximumFractionDigits: key });
+    autoNumberFormatCache.set(key, nf);
+  }
+  return nf;
+}
+
+/** uPlot's OWN default axis `values` formatter (`numAxisVals` in its
+ *  source, `dist/uPlot.esm.js`) is `splits.map(v => fmtNum(v))`, where
+ *  `fmtNum` is a bare `Intl.NumberFormat(locale).format(v)` with NO options
+ *  — the ECMA-402 spec default caps `maximumFractionDigits` at 3
+ *  REGARDLESS of the actual tick increment, and never consults `foundIncr`
+ *  at all. This is the confirmed mechanism behind the owner's dense M-H
+ *  moment-axis bug report (Moment (emu), range +-0.002, ticks ~0.0001
+ *  apart -> every label rounds to 3 decimals -> long duplicate runs:
+ *  "0.001"x8, "0"x5, "-0.001"x9, plus a bare "-0" — reproduced via
+ *  `tools/visual` with `yFmt` still at the untouched default
+ *  `{mode:"auto"}`, no fixed/sci path involved; the healthy X axis in the
+ *  same screenshot (Field, integer Oe values) never needed >0 fraction
+ *  digits, so it never showed the bug). This replaces `undefined` (defer to
+ *  uPlot's own formatter) as the "auto" mode's `values` callback: SAME
+ *  Intl locale-grouping behaviour uPlot already provides (so a healthy
+ *  range renders byte-identical — see uplotOpts.test.ts's auto-mode
+ *  regression case), but with a `splitsIncrement`-derived floor instead of
+ *  a hardcoded 3. */
+const autoTickValues: TickValues = (_u, splits, _axisIdx, _foundSpace, foundIncr) => {
+  const incr = splitsIncrement(splits, foundIncr);
+  const nf = autoNumberFormat(decimalsForIncrement(incr));
+  return splits.map((v) => (v == null ? null : stripNegZero(nf.format(v))));
+};
+
+/** Decimal places needed for a value's MANTISSA (sci/eng modes) so that two
+ *  ticks `incr` apart in the SAME decade never format to the same digits —
+ *  `incr` is rescaled into the mantissa's own units (divided by the same
+ *  `10^exp` the value itself is) before flooring via `decimalsForIncrement`. */
+function mantissaDecimalFloor(incr: number, exp: number): number {
+  return incr > 0 ? decimalsForIncrement(incr / pow10(exp)) : 0;
+}
+
+/** Engineering notation: mantissa in [1, 1000), exponent a multiple of 3
+ *  (e.g. `1.2e-3`, `12.3e-6`, `500e-6`) — matches `sci` mode's plain
+ *  `toExponential`-family string style (no rich ×10^n markup; see the
+ *  BuildOptsArgs doc for why the rich-text axis pipeline isn't coupled in
+ *  here). `v === 0` has no meaningful exponent, so it renders bare "0"
+ *  rather than e.g. "0e+0". A mantissa that rounds up to >= 1000 (e.g.
+ *  999.9996 at 0 mantissa decimals) bumps the exponent by 3 and re-divides,
+ *  keeping the mantissa in-range. */
+function formatEng(v: number, digits: number, incr: number): string {
+  if (v === 0) return "0";
+  const sign = v < 0 ? "-" : "";
+  const av = Math.abs(v);
+  let exp = Math.floor(Math.floor(Math.log10(av)) / 3) * 3;
+  const d = Math.max(digits, mantissaDecimalFloor(incr, exp));
+  let mantissa = av / pow10(exp);
+  let mStr = mantissa.toFixed(Math.min(20, d));
+  if (Number(mStr) >= 1000) {
+    exp += 3;
+    mantissa = av / pow10(exp);
+    mStr = mantissa.toFixed(Math.min(20, d));
+  }
+  return stripNegZero(`${sign}${mStr}e${exp >= 0 ? "+" : ""}${exp}`);
+}
+
+/** Build a uPlot axis `values` formatter for a tick mode. `auto` no longer
+ *  defers to uPlot's own formatter (see `autoTickValues`'s doc for why);
+ *  `fixed`/`sci`/`eng` each floor their configured `digits` at what the
+ *  actual tick increment (`splitsIncrement`) needs, so a dense axis can
+ *  never render two different ticks with the same label. */
+export function tickFormatter(fmt?: AxisFormat): TickValues {
+  const mode = fmt?.mode ?? "auto";
+  if (mode === "auto") return autoTickValues;
+  const digits = fmt ? Math.max(0, Math.min(20, Math.round(fmt.digits))) : 2;
+  if (mode === "sci") {
+    return (_u, splits, _axisIdx, _foundSpace, foundIncr) => {
+      const incr = splitsIncrement(splits, foundIncr);
+      return splits.map((v) => {
+        if (v == null) return null;
+        const exp = v === 0 ? 0 : Math.floor(Math.log10(Math.abs(v)));
+        const d = Math.max(digits, mantissaDecimalFloor(incr, exp));
+        return stripNegZero(v.toExponential(Math.min(20, d)));
+      });
+    };
+  }
+  if (mode === "eng") {
+    return (_u, splits, _axisIdx, _foundSpace, foundIncr) => {
+      const incr = splitsIncrement(splits, foundIncr);
+      return splits.map((v) => (v == null ? null : formatEng(v, digits, incr)));
+    };
+  }
+  // fixed
+  return (_u, splits, _axisIdx, _foundSpace, foundIncr) => {
+    const incr = splitsIncrement(splits, foundIncr);
+    const d = Math.max(digits, decimalsForIncrement(incr));
+    return splits.map((v) => (v == null ? null : stripNegZero(v.toFixed(Math.min(20, d)))));
+  };
 }
 
 /** Build a uPlot axis `values` formatter for a categorical x-axis

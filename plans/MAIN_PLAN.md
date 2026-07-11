@@ -84,18 +84,10 @@ GOTO #11 drift (implemented but listed open).
     - [ ] v1: quick picks → composite window (grid + overlay + linked x)
     - [ ] after #18: drag panels to rearrange within the composite
 
-20. **Axis tick-label precision + engineering notation** (owner bug
-    report w/ screenshot, 2026-07-11) — a dense M-H moment axis
-    (±0.002, ~0.0001 ticks) rendered 3-decimal labels → runs of
-    duplicate "0.001"/"0"/"−0.001" and a "−0". REPRODUCE FIRST via
-    `tools/visual` (don't guess auto-vs-fixed source), then fix the
-    CLASS: any fixed-decimals path floors its precision at what the
-    tick increment needs; negative-zero labels normalized; add `eng`
-    (engineering ×10³ⁿ) mode to AxisFormat with easy toggling from the
-    Axes card + command palette (axis right-click menu deferred until
-    #18's pointer context-menu lands — same file, agent in flight).
-
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
+
+~~20. **Axis tick-label precision + engineering notation**~~ COMPLETED
+    2026-07-11 (see Completed).
 
 ~~10. **Re-import from source file**~~ COMPLETED 2026-07-11 (see Completed).
 
@@ -176,6 +168,38 @@ GOTO #11 drift (implemented but listed open).
 
 ## Completed
 
+- ~~**#20 Axis tick-label precision + engineering notation**~~
+  (2026-07-11, sonnet agent) — REPRODUCED first via `tools/visual`
+  (new committed `dense_moment_axis_tick_repro` shot in
+  `spec.example.json`): the mechanism is uPlot's OWN default axis
+  `values` formatter (`numAxisVals` -> bare `Intl.NumberFormat` with no
+  options -> spec-default 3-fraction-digit cap, `foundIncr` never
+  consulted) — reproduced with `yFmt` untouched at `{mode:"auto"}`, no
+  fixed/sci path involved (the fixed-mode `toFixed` duplicate was also
+  independently proven, as a documented mechanism-class regression, but
+  isn't what produced the owner's screenshot). Fix: `tickFormatter`
+  (`lib/uplotOpts.ts`) no longer returns `undefined` for "auto" —
+  `autoTickValues` overrides it with the same Intl locale-grouping
+  behaviour but a `splitsIncrement`-derived (`lib/ticks.ts`'s
+  `decimalsForIncrement`) precision floor instead of a hardcoded 3;
+  `fixed`/`sci` modes get the same floor (`Math.max(digits, floor)`);
+  a new `eng` `TickMode` (mantissa in [1,1000), exponent a multiple of
+  3, sci-style `1.2e-3` suffix); `stripNegZero` normalizes any
+  rounds-to-zero label (fixes the bare "−0"). Wired: Axes card's
+  `TickFormat.tsx` Auto/Fixed/Sci/Eng segmented control; command
+  palette "Cycle X/Y tick format" (`appCommands.ts`, `cycleTickMode` in
+  `plotview.ts`); `.dwk` persistence rides the existing `AxisFormat`
+  field for free (`isAxisFormat` only checks `mode` is a string).
+  Export parity: audited — `xFmt`/`yFmt` don't flow to the matplotlib
+  export path AT ALL today (only `x_scale`/`y_scale` do), a pre-existing
+  gap, not a regression; left as an honest gap, not built new scope.
+  Axis right-click menu deferred (owner directive: #18's pointer
+  context-menu agent was actively editing `plotMenu.ts`/
+  `PlotContextMenu.tsx` concurrently — untouched here). +139 new/changed
+  frontend tests (uplotOpts/ticks/TickFormat/appCommands/
+  MultiPanelStage), harness before/after screenshots prove the fix and
+  no regression on a healthy large-integer axis (byte-identical
+  Intl-grouped output). Frontend 216 files / 2799 tests green.
 - ~~**#9 Undo/redo stack**~~ (2026-07-11, sonnet agent) — snapshot
   history slice `store/history.ts` (depth 50; Zustand structural
   sharing makes snapshots pointer copies), ~24 data-mutating actions

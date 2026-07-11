@@ -1,7 +1,11 @@
 // Inspector control: axis tick number format (the last piece of the W6 plot-
-// state model). Auto = uPlot's adaptive labels; Fixed = N decimals; Sci = N-digit
-// exponential. Per X and Y; the Y format also drives the secondary axis. Applied
-// in uplotOpts via axes[].values. Lives in the Axes card next to AxisLimits.
+// state model). Auto = increment-aware adaptive labels (MAIN #20: our own
+// override of uPlot's default formatter, which duplicated dense-tick labels —
+// see uplotOpts.ts's autoTickValues doc); Fixed = N decimals; Sci = N-digit
+// exponential; Eng = engineering notation (exponent a multiple of 3). Per X
+// and Y; the Y format also drives the secondary axis. Applied in uplotOpts
+// via axes[].values. Lives in the Axes card next to AxisLimits. Command-
+// palette "Cycle X/Y tick format" (appCommands.ts) steps through all four.
 
 import type { AxisFormat, TickMode } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -11,6 +15,7 @@ const MODES: { value: TickMode; label: string }[] = [
   { value: "auto", label: "Auto" },
   { value: "fixed", label: "Fixed" },
   { value: "sci", label: "Sci" },
+  { value: "eng", label: "Eng" },
 ];
 
 export default function TickFormat() {
