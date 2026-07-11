@@ -15,7 +15,7 @@ import numpy as np
 from quantized.datastruct import DataStruct
 from quantized.io.base import NO_COLUMN, parse_col_header, resolve_column
 
-__all__ = ["import_lake_shore"]
+__all__ = ["import_lake_shore", "is_lakeshore_file"]
 
 _LS_SHORTHAND: dict[str, str] = {
     "temp": "Temperature",
@@ -120,3 +120,16 @@ def import_lake_shore(
         units=[col_units[i] for i in y_idx],
         metadata=metadata,
     )
+
+
+def is_lakeshore_file(path: Path) -> bool:
+    """Content sniffer for ambiguous ``.csv``/``.dat``: True for a Lake Shore
+    VSM export — the instrument writes a "Lake Shore" preamble line above the
+    column-header row (see the module docstring). Tight on purpose: a generic
+    CSV only matches if it self-identifies as Lake Shore in its first 2 KB.
+    A sniffer must never raise; unreadable -> not Lake Shore."""
+    try:
+        text = Path(path).read_text(encoding="latin-1", errors="replace")[:2048]
+    except Exception:  # noqa: BLE001
+        return False
+    return "lake shore" in text.lower()

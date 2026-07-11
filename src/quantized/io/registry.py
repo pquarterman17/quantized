@@ -17,6 +17,7 @@ from quantized.io.excel import import_excel
 from quantized.io.import_filters import match_filter
 from quantized.io.import_preview import parse_import
 from quantized.io.jcamp import import_jcamp
+from quantized.io.lakeshore import import_lake_shore, is_lakeshore_file
 from quantized.io.ncnr import import_ncnr_dat, import_ncnr_pnr, import_ncnr_refl, is_ncnr_refl
 from quantized.io.netcdf import import_netcdf
 from quantized.io.opus import import_opus
@@ -78,6 +79,7 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
         (is_qd_file, import_qd_vsm),
         (is_refl1d_dat, import_refl1d_dat),
         (is_ppms_dat, import_ppms),
+        (is_lakeshore_file, import_lake_shore),
     ],
     # .refl is reductus (JSON "columns" header) for the whole corpus, but refl1d
     # also exports .refl (a "Q (1/A) R dR" column header below # metadata): route
@@ -92,7 +94,14 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
     ".raw": [(is_rigaku_raw, import_rigaku_raw), (is_bruker_raw, import_bruker_raw)],
     # SIMS depth profiles share .csv/.tsv/.xlsx with generic tables: sniff for the
     # SIMS layout first, else fall back to the generic delimited / Excel parser.
-    ".csv": [(is_sims_file, import_sims), (_accept_any, import_csv)],
+    # Lake Shore VSM self-identifies in its preamble (MAIN_PLAN #7 — the
+    # parser existed unregistered; the #52 matrix surfaced it). SIMS keeps
+    # precedence (established chain order).
+    ".csv": [
+        (is_sims_file, import_sims),
+        (is_lakeshore_file, import_lake_shore),
+        (_accept_any, import_csv),
+    ],
     ".tsv": [(is_sims_file, import_sims), (_accept_any, import_csv)],
     ".xlsx": [(is_sims_file, import_sims), (_accept_any, import_excel)],
     ".xlsm": [(is_sims_file, import_sims), (_accept_any, import_excel)],
