@@ -63,6 +63,29 @@ describe("useApp reflectivity seed (SLD→reflectivity hook)", () => {
   });
 });
 
+describe("useApp graph-builder seed (MAIN_PLAN #4 — worksheet handoff)", () => {
+  beforeEach(() => useApp.setState({ graphBuilderSeed: null, graphBuilderOpen: false }));
+
+  const spec = {
+    version: 1 as const,
+    zones: { x: null, y: [{ datasetId: "d1", channel: 0 }], group: null, facet: null },
+    mark: "scatter" as const,
+  };
+
+  it("openGraphBuilderSeeded stores the one-shot spec and opens the panel", () => {
+    useApp.getState().openGraphBuilderSeeded(spec);
+    expect(useApp.getState().graphBuilderSeed).toEqual(spec);
+    expect(useApp.getState().graphBuilderOpen).toBe(true);
+  });
+
+  it("clearGraphBuilderSeed drops the seed once consumed (the panel stays open)", () => {
+    useApp.getState().openGraphBuilderSeeded(spec);
+    useApp.getState().clearGraphBuilderSeed();
+    expect(useApp.getState().graphBuilderSeed).toBeNull();
+    expect(useApp.getState().graphBuilderOpen).toBe(true);
+  });
+});
+
 describe("clearAll (File ▸ Remove all)", () => {
   it("wipes datasets, folders, figures, selection, and active", () => {
     useApp.setState({

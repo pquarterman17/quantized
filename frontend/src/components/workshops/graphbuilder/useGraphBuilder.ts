@@ -19,9 +19,11 @@ import {
   assignZone,
   clearZone,
   cycleMark,
+  defaultMark,
   emptySpec,
   markContext,
   markFamily,
+  specDatasetId,
   specToRender,
   validMarks,
   withInferredMark,
@@ -74,6 +76,28 @@ export function useGraphBuilder(): GraphBuilderState {
   useEffect(() => {
     setSpec(emptySpec());
   }, [active?.id]);
+
+  // One-shot seed (MAIN_PLAN #4 — the worksheet's "Open in Graph Builder"):
+  // consume + clear a store-handed spec, mirroring how useStatStage consumes
+  // statStageSeed. Declared AFTER the dataset-change wipe above so a handoff
+  // that also rebound the active dataset lands the seed, not the wipe (both
+  // effects run in the same commit, in declaration order). A seed for a
+  // dataset that ISN'T active (a stale or misrouted producer) is dropped —
+  // the wells/options below all read the ACTIVE dataset, so applying it
+  // would show the wrong labels.
+  const seed = useApp((s) => s.graphBuilderSeed);
+  useEffect(() => {
+    if (!seed) return;
+    const activeNow = useApp.getState().activeId;
+    if (activeNow !== null && specDatasetId(seed) === activeNow) {
+      // The seed's "scatter" is a placeholder, not a user choice — take the
+      // family DEFAULT (line for a monotonic x, box for a categorical x)
+      // rather than inferMark's sticky keep-if-valid rule.
+      const ctx = markContext(seed, useApp.getState().datasets);
+      setSpec({ ...seed, mark: defaultMark(seed, ctx) });
+    }
+    useApp.getState().clearGraphBuilderSeed();
+  }, [seed]);
 
   const ctx = useMemo(() => markContext(spec, datasets), [spec, datasets]);
   const render = useMemo(() => specToRender(spec, datasets), [spec, datasets]);

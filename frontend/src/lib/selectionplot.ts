@@ -12,6 +12,7 @@
 
 import { columnMetaList } from "./columnmeta";
 import { defaultDenseChannels } from "./plotdata";
+import type { PlotSpec } from "./plotspec";
 import type { DataStruct } from "./types";
 
 export type SelectionPlotAction =
@@ -105,4 +106,67 @@ export function resolveSelectionPlot(
       ? "nothing plottable in the selection"
       : `${verb}: ${yList.length} channel${yList.length === 1 ? "" : "s"}${xKey !== undefined ? ", X updated" : ""}`;
   return { actions, summary };
+}
+
+/** Selection → Graph Builder handoff (MAIN_PLAN #4): turn a worksheet column
+ *  selection into a prefilled `lib/plotspec` PlotSpec instead of plotting
+ *  directly. Same column numbering and the same designation semantics as
+ *  `resolveSelectionPlot` above, adapted to the well grammar:
+ *  - "Label"/"Disregard" columns and error columns (X-error/Y-error) are
+ *    skipped — the spec grammar has no error wells, and labels never plot.
+ *  - An X-designated selected column wins the X well (Origin's own rule);
+ *    absent one, the FIRST selected value column takes X when two or more
+ *    are selected. A single selected column (or an explicit selection of the
+ *    pinned x/time column, -1, alongside values) leaves the X well empty —
+ *    `specToRender` then plots against the dataset's own x/time column.
+ *  - Every remaining value column lands in the Y well, ascending order.
+ *  Returns null when nothing plottable is selected (empty selection, only
+ *  the x column, or only label/error columns) — the caller disables/skips.
+ *  The mark stays the harmless "scatter" default; the consumer re-infers it
+ *  via `withInferredMark` with a live MarkContext. Row state is NOT read
+ *  here: the spec renders through `specToRender` → rowstate.analysisData, so
+ *  exclusion (#50) + filter (#53) are honored by the chokepoint (guard #11). */
+export function selectionToSpec(
+  data: DataStruct,
+  datasetId: string,
+  cols: Iterable<number>,
+): PlotSpec | null {
+  const meta = columnMetaList(data);
+  const unique = [...new Set(cols)];
+  const hasExplicitX = unique.some((c) => c < 0);
+  const valueCols = unique
+    .filter((c) => c >= 0)
+    .filter((c) => {
+      const d = meta[c]?.designation;
+      return d !== "Label" && d !== "Disregard" && d !== "X-error" && d !== "Y-error";
+    })
+    .sort((a, b) => a - b);
+  if (valueCols.length === 0) return null;
+
+  const xDesignated = valueCols.find((c) => meta[c]?.designation === "X");
+  let xChannel: number | null = null;
+  let yCols: number[];
+  if (xDesignated !== undefined) {
+    xChannel = xDesignated;
+    // Any FURTHER X-designated column is a secondary X — never its own Y
+    // series (the same rule resolveSelectionPlot applies).
+    yCols = valueCols.filter((c) => meta[c]?.designation !== "X");
+  } else if (!hasExplicitX && valueCols.length >= 2) {
+    xChannel = valueCols[0];
+    yCols = valueCols.slice(1);
+  } else {
+    yCols = valueCols;
+  }
+  if (yCols.length === 0) return null; // e.g. only an X-designated column selected
+
+  return {
+    version: 1,
+    zones: {
+      x: xChannel === null ? null : { datasetId, channel: xChannel },
+      y: yCols.map((channel) => ({ datasetId, channel })),
+      group: null,
+      facet: null,
+    },
+    mark: "scatter",
+  };
 }
