@@ -95,9 +95,7 @@ GOTO #11 drift (implemented but listed open).
 ~~15. **Find X from Y / Y from X on a fitted curve**~~ COMPLETED
     2026-07-11 (see Completed).
 
-16. **Append/merge workspace** — merge a second `.dwk` into the
-    current library (id-collision strategy) instead of replace-only
-    open; Origin's "Append Project".
+~~16. **Append/merge workspace**~~ COMPLETED 2026-07-11 (see Completed).
 
 *(further candidates arrive via GOTO owner gates Q4/Q6/Q7/Q8)*
 
@@ -177,6 +175,15 @@ GOTO #11 drift (implemented but listed open).
   opens the palette; emission grammar-verified (`$_{x}$` parses;
   whole-`$…$` selections bail to the safe fallback, regression-pinned);
   documented in TextFormatHelp.
+- ~~**#16 Append/merge workspace**~~ (2026-07-11, sonnet agent) — pure
+  `lib/workspace.mergeWorkspace` (two-pass id remap so forward bgRefs
+  resolve; Origin-style " (2)" name suffixing via the dedupeWindowTitle
+  convention; folder refs dropped-with-count — folders don't merge in
+  v1) + `appendWorkspace` store action (never touches active/view/
+  windows; undo-recorded) + File-menu "Append workspace (.dwk)…".
+  Ratchets held by EXTRACTION not raise: saveWorkspaceToFile →
+  store/workspaceIO.ts, Export-figure body → lib/exportFigureCommand.ts.
+  +13 tests.
 - ~~**#11 Reductions GUI**~~ (2026-07-11) — one workshop,
   `components/workshops/reductions/`: a method-picker ToolWindow
   (Williamson-Hall / FFT film thickness / Reflectivity FFT) over the
