@@ -1,11 +1,11 @@
 # GOTO Plan — make quantized the go-to plotting & analysis tool
 
 The owner-decided capability gaps that would still send a normal research
-day back to OriginPro, distilled from the 2026-07-10 Origin 2026b install
-survey (`plans/design/ORIGIN_GOTO_SURVEY.md` — survey evidence, the
-"already beats Origin" calibration list, non-goals, and the still-open
-questions). Deliberately not a parity checklist: these are the workflow
-gaps the owner confirmed they want.
+day back to OriginPro, plus the acceptance protocol that decides when
+"go-to" is achieved. Distilled from the 2026-07-10 Origin 2026b install
+survey and two owner decision rounds. This is the single authoritative
+doc for the initiative (the survey draft was absorbed and deleted per the
+plan-consolidation rule; full text in git history @ `4e97e6d`).
 
 **Status:** Active
 **Created:** 2026-07-10
@@ -15,22 +15,36 @@ gaps the owner confirmed they want.
 
 ## Context
 
+### Survey summary (evidence)
+Static inspection of OriginPro 2026b (305 `.fdf` fit functions, 799
+X-Functions, templates, user files — no GUI/COM), cross-checked against
+PORT_CHECKLIST, BACKLOG, and the frontend command registry. Key
+calibration: **the owner runs Origin stock** (zero custom fit functions /
+templates / Apps), and the real projects in its history
+(`Magnetometry_YIG-Co-Py.opj`, `PNR.opj`, `XRD.opj`, `XAS.opju`) are
+squarely in quantized's domain — so the bar is core workflows done
+extremely well, not Origin's long tail. quantized already leads on
+reproducible pipelines, linked row-state exploration, domain analysis
+depth, instrument import, reading/writing Origin's own formats, and
+modern statistics.
+
 ### How the pieces fit together
 Four decided themes: (a) **custom fit models** ride the existing no-eval
-equation parser (`calc/fit_equation.py`) + fit workshop
-(`frontend/src/components/workshops/fit*`); (b) **baselines** extend
-`calc/baseline.py` + the corrections step executor with interactive
-anchors, Shirley, and domain backgrounds; (c) **figure pages** compose N
-existing plot windows into one exported page via `routes/export` /
-`calc/figure.py` (matplotlib, vector-first); (d) **rich text** must render
-identically in uPlot (on-screen) and matplotlib (export) — one label AST,
-two renderers.
+equation parser (`calc/fit_equation.py`) + fit workshop; (b) **baselines**
+extend `calc/baseline.py` + the corrections step executor with
+interactive anchors, Shirley, and domain backgrounds; (c) **figure
+pages** compose N existing plots into one exported page via
+`routes/export` / `calc/figure.py` (matplotlib, vector-first); (d) **rich
+text** renders one label AST through two renderers — uPlot on-screen,
+matplotlib mathtext at export. Long fits ride a poll-model job runner
+(`quantized/jobs.py`, package root — threading is barred from calc/io).
 
 ### Data / control flow
 equation text → parse_equation → named model (persisted) → fit engine →
 same fit-stats path as registry models. Anchor clicks → (x, y) list →
 interp baseline → step-executor subtract (recalc DAG). Page spec (grid +
 panel refs + labels) → server-side matplotlib page → one PDF/SVG.
+DREAM fit → job submit → GET-poll progress → posterior + corner plot.
 
 ### Dependency map
 - Items 1, 2, 3, 4 are independent (parallelizable)
@@ -41,18 +55,62 @@ panel refs + labels) → server-side matplotlib page → one PDF/SVG.
   requires item 9 (job runner). Item 6 can use either engine.
 
 ### Resolved decisions
-- **bumps as an optional fit engine — GO (2026-07-10).** BSD-3 →
-  license-safe optional extra; an ADDITIONAL engine behind a guarded
-  import, never replacing the MATLAB-parity fitters the goldens lock.
-  Long DREAM runs must NOT lock the window → they submit through the
-  poll-model background job runner (item 9), whose shape follows the
-  PORT_PLAN #7 reference correction (polled ThreadPool store, no
+- **Custom fit models (2026-07-10):** build the in-app equation builder
+  AND the AICc quick-scan (#1, #6).
+- **Baselines (2026-07-10):** anchor-point AND Shirley, plus explicit
+  analytic backgrounds and domain-specific ones — XRD low-angle, XRR/NR
+  footprint (#2, #3, #7, #8).
+- **Paper figures (2026-07-10):** quantized owns multi-panel page
+  composition end-to-end (#4).
+- **Typography (2026-07-10):** true rich text, identical on-screen and
+  in export (#5).
+- **bumps engine (2026-07-10):** GO as an optional extra (BSD-3, pin a
+  floor version) — an ADDITIONAL engine behind a guarded import, never
+  replacing the MATLAB-parity fitters the goldens lock. Long DREAM runs
+  must NOT lock the window → they submit through the poll-model job
+  runner (#9), whose shape follows the PORT_PLAN #7 reference
+  correction (polled ThreadPool store, GET-poll, cancel flag — no
   WebSocket). Fast engines (amoeba/LM/DE) stay synchronous.
 
-### Owner gates (decide before/while building)
-- Survey questions still open: 3-D (Q4), worksheet reshape (Q6),
-  date-time axes (Q7), signal-processing non-goal (Q8), and the
-  switch-trigger acceptance project (Q9).
+### Owner gates (open questions — answer to populate Tier 3)
+- **Q4 3-D:** rotatable 3-D used for real work in the past year, or is
+  2-D map + line cuts + static 3-D export enough? (Decides the WebGL
+  deferral gate, ORIGIN_GAP #22.)
+- **Q6 Worksheet reshape:** would you actually miss stack/unstack
+  (wide↔long), split-by-values, or join-by-key?
+- **Q7 Date-time axes:** ever plot against real clock time (long
+  PPMS/MPMS runs), or always elapsed/derived quantities?
+- **Q8 Signal processing:** any real use of wavelets / Hilbert / STFT /
+  deconvolution? If no → declared non-goal.
+- **Q9 Switch-trigger project:** pick the project + start date (protocol
+  below; YIG-Co-Py recommended).
+
+### Switch-trigger acceptance protocol (Q9, elaborated 2026-07-10)
+Feature lists measure coverage; a committed project measures
+sufficiency. One real deliverable is produced 100% in quantized:
+1. Enumerate the paper's exact figure set up front — that's the finish
+   line.
+2. **Origin stays closed.** On a wall: log it, work around natively.
+   Only a hard blocker (deliverable impossible) permits a one-artifact
+   fallback — the loudest line in the log.
+3. Keep a running `FRICTION_LOG.md`: what, where, workaround, minutes
+   lost, S/M/L fix guess. Paper-cuts too.
+4. Triage after: blockers + worst detours → the next tier here
+   (re-ranking predictions with evidence); paper-cuts → one polish item.
+5. **Exit = go-to:** full figure set from raw instrument files, zero
+   Origin opens, zero post-processing outside quantized; repeat per
+   project until the log is boring.
+Timing: run the magnetometry + XRD halves now (most complete pipelines);
+hold the PNR multi-panel half until #4 + #5 land, then finish the set as
+their acceptance test.
+
+### Out of scope (declared non-goals)
+Origin Apps ecosystem; the life-science fit library (the builder covers
+rare needs); Vision/Image (→ fermiviewer by charter);
+electrophysiology/GIS/sound/legacy-import categories; LabTalk/Origin-C
+emulation (pipelines + plugins + headless API are the replacement); COM
+automation-*server* parity; stats platforms beyond the shipped W5 suite.
+Interactive WebGL 3-D stays a deferred gate pending Q4.
 
 ---
 
@@ -95,7 +153,6 @@ panel refs + labels) → server-side matplotlib page → one PDF/SVG.
 
 6. **AICc model quick-scan** — "fit all plausible models, rank by AICc"
    over a candidate set (registry + saved custom models); requires #1
-   (engine choice may await the bumps discussion)
 
 7. **Domain backgrounds/corrections** — XRD low-angle background model;
    XRR/NR beam-footprint correction (geometry-based) as a corrections
@@ -128,7 +185,7 @@ panel refs + labels) → server-side matplotlib page → one PDF/SVG.
 
 ## Tier 3 — Nice-to-Have
 
-*(intentionally empty until the open survey questions are answered —
+*(intentionally empty until the Q4/Q6/Q7/Q8 owner gates are answered —
 worksheet reshape, 3-D, and date-time axes land here if confirmed)*
 
 ## Completed

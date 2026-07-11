@@ -48,7 +48,7 @@ GAP_PLOTTYPES, and M1_SPRINT archived as complete)
 | **Pop-out books/plots into windows** — PLAN WITH OWNER FIRST (gesture, "pop out a BOOK" semantics, bulk "window everything" command) | MULTI_PLOT #19 |
 | **Worksheet view-state persistence** — decide once, with usage evidence, whether sort/widths/selection persist per-dataset in `.dwk` (default: no) | WORKSHEET #14 |
 | **Apache-2.0 copyright holder line** for LICENSE/NOTICE | PORT_PLAN #1 |
-| **Go-to survey open questions** — 3-D (Q4), worksheet reshape (Q6), date-time axes (Q7), signal-processing non-goal (Q8), switch-trigger project pick + start timing (Q9 — protocol now written up in the survey doc) | GOTO (gate) |
+| **GOTO owner gates** — 3-D (Q4), worksheet reshape (Q6), date-time axes (Q7), signal-processing non-goal (Q8), switch-trigger project pick + start timing (Q9; protocol in the plan's Context) | GOTO_PLAN Owner gates |
 
 ## Blocked on external samples / specs
 
