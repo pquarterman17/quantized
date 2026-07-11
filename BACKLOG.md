@@ -21,9 +21,9 @@ in the same commit). Every edit here must have a matching plan edit.
 | 5 | `.otp`/`.otpu` template import — the frontend half (`api.ts` method + "Import Origin template…" open-file branch → saved graph-templates store; backend shipped 2026-07-07) | MAIN #5 (was GAP_ECOSYSTEM #5) | S |
 | 6 | Origin decode: layer-region shading + composite title objects (`Graph1` SLD-profile bands — an undecoded graphic-object record class) | ORIGIN_FILE_DECODE #41 | M |
 | 7 | Origin decode: Graph25 anomalies — extra hidden `T++/T--` curves + ~10× x-range; root cause narrowed 2026-07-09, needs a dedicated RE pass (no heuristic guessing) | ORIGIN_FILE_DECODE #42 | M |
+| 10 | Register `import_lake_shore` in the registry (content sniffer + corpus routing sweep; found by the #52 matrix) | MAIN #7 | S |
 | 9 | Defaults audit — interactive-side shots via `tools/visual/` + the export-dialog DPI field syncing to the preset's calibrated dpi | MAIN #6 (was GAP_TIER3 #2 residual) | S |
 | 11 | W8 closure: reconcile the Tauri shell's actual state (committed `src-tauri/`, updater, NSIS hooks) into PORT_PLAN #46, verify auto-update end-to-end (#49), code signing (#47) | PORT_PLAN #46/#47/#49 | M |
-| 12 | W9 nice-to-haves: parameterized parser tests (every parser × corpus file); performance baselines | PORT_PLAN #52/#53 | M |
 | 14 | Anchor-point baseline (click anchors → interp baseline → recalc-DAG subtract step) | GOTO #2 | M |
 | 15 | Shirley XPS/XAS background in the baseline picker | GOTO #3 | S |
 | 16 | Multi-panel figure page composer (N plots → one vector PDF/SVG page, panel labels) | GOTO #4 | L |
@@ -72,8 +72,8 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | #1–#6 (folded residue) + owner gates + deferrals |
-| `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #46–49 (partial), #50 (continuous), #52–53 |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | #1–#7 + owner gates + deferrals |
+| `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #46–49 (partial), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | #2–#4, #6–#8, #11 open (#1/#5/#9/#10 shipped 2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #41, #42; #27 deferred |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |

@@ -64,6 +64,11 @@ plan's direct items are residue-sized by construction)*
 6. **Defaults-audit residuals** (was GAP_TIER3 #2 residual) —
    interactive-side shots via `tools/visual/` + export-dialog DPI field
    syncing to the preset's calibrated dpi.
+7. **Register `import_lake_shore` in `io/registry.py`** (found by the
+   PORT #52 parser matrix, 2026-07-11) — the parser exists but
+   `import_auto` routes Lake Shore CSVs to generic `import_csv`; needs a
+   content sniffer and a corpus sweep since this CHANGES routing
+   behavior for `.csv`/`.txt` (deliberate review, not a drive-by).
 
 ## Tier 3 — Nice-to-Have
 

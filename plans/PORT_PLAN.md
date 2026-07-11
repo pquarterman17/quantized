@@ -383,8 +383,17 @@ MATLAB."**
     it is the live per-feature tracker this plan now defers to.
 
 ### Tier 3 — Nice-to-Have
-52. **Parameterized parser tests** — every parser × every corpus file.
-53. **Performance baselines** — load / render time regression guards.
+~~52. **Parameterized parser tests**~~ ✅ completed 2026-07-11 —
+    `tests/test_parsers_matrix.py`: 330 parser×file cases (21 committed
+    fixtures in CI; 309 realdata auto-skip) + 30 registry-route cases;
+    3 xfails are pinned contracts (multi-scan .brml declined, matrix-only
+    .opju = parked codec gap). Findings: `import_spc`/`import_opus` have
+    zero corpus files (spec-written, awaiting samples); `import_lake_shore`
+    is unregistered in the registry → booked as MAIN_PLAN #7.
+~~53. **Performance baselines**~~ ✅ completed 2026-07-11 —
+    `tests/test_perf_baselines.py` (`perf` marker; warm-up + best-of-3,
+    ceilings 14–61x local so CI Windows can't flake) + `tools/bench/bench.py`
+    human timing table.
 
 ---
 
