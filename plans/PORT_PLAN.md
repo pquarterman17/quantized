@@ -161,7 +161,18 @@ MATLAB."**
    **PARTIAL (= M1 PR6):** serve + browser + `--port`/`--no-browser` +
    launchers shipped; auto-shutdown, `--dev`, `--desktop` still open —
    and `--desktop`'s pywebview framing may be superseded by the W8 Tauri
-   shell (`src-tauri/` now exists): OWNER call.
+   shell (`src-tauri/` now exists): OWNER call (note fermiviewer ships
+   BOTH deliberately — pywebview for dev/daily, Tauri for packaging).
+   **Smaller than it looks (2026-07-10 code audit):** auto-shutdown is
+   ~90% built — `app.py:75-118` already has the `/api/ws` presence
+   socket + refresh-grace + exit, gated on env `QZ_AUTO_SHUTDOWN=1`
+   (read at import time), and `frontend/src/lib/lifecycle.ts` already
+   connects with reconnect backoff; the CLI just never arms the env
+   var. `--dev`/`--desktop` are near drop-ins of fermiviewer
+   `server_launch.py` `_run_dev`/`_run_desktop` (new
+   `server_launch.py` module to respect the 500-line ceiling; pywebview
+   as a new `desktop` optional-dep group; quantized lacks fermiviewer's
+   `netprobe.py` — a ~15-line `/api/health` poll suffices).
 ~~4. **Golden-test harness**~~ ✅ shipped (M1 PR4, `fb3efe2`) — harness +
    manifest + markers live; every checklist "golden" tag runs through it.
 5. **CI workflow** — pytest + ruff + mypy + frontend vitest + build +
@@ -179,8 +190,17 @@ MATLAB."**
    features it was meant to gate shipped anyway — template batch runs
    CLIENT-SIDE through the shared step executor (ORIGIN_GAP #3's
    deliberate deviation) and `calc/batch_fit`/`global_fit` are pure +
-   synchronous. Decide whether a WS queue is still wanted (long
+   synchronous. Decide whether a queue is still wanted (long
    fits/exports on big corpora) or close as superseded: OWNER call.
+   **Reference correction (2026-07-10 code audit):** the cited
+   fermiviewer `jobs_api` is NOT a WebSocket — it's a polled
+   ThreadPool store (`jobs.py` Job/JobStore + `routes/jobs_api.py`
+   GET-poll; zero WS code, no cancel). So if built, pick: (a) mirror
+   the reference (poll model, ~2 near-verbatim files + a small
+   `lib/jobs.ts`, cancel as a flag-check extension — fastest), or
+   (b) honor this item's literal WS wording (more code, diverges from
+   the reference). Infra would live at package root (`quantized/jobs.py`,
+   threading is barred from calc/io by the pure-layer guard).
 
 ---
 

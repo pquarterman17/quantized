@@ -26,7 +26,7 @@ GAP_PLOTTYPES, and M1_SPRINT archived as complete)
 | 7 | Origin decode: Graph25 anomalies — extra hidden `T++/T--` curves + ~10× x-range; root cause narrowed 2026-07-09, needs a dedicated RE pass (no heuristic guessing) | ORIGIN_FILE_DECODE #42 | M |
 | 8 | Reductions: Williamson-Hall, reflectivity FFT thickness, neutron spin asymmetry — the last unstarted backend-parity item (no `calc/` module yet) | PORT_PLAN #19 | M |
 | 9 | Defaults audit — interactive-side shots via `tools/visual/` + the export-dialog DPI field syncing to the preset's calibrated dpi | GAP_TIER3 #2 (residual) | S |
-| 10 | Run-model residue: auto-shutdown on last-tab-close, `qz --dev` (HMR + reload) — `--desktop` waits on the pywebview-vs-Tauri owner call below | PORT_PLAN #3 | S–M |
+| 10 | Run-model residue: auto-shutdown is ~90% built (backend socket + frontend lifecycle exist — the CLI just never arms `QZ_AUTO_SHUTDOWN`); `qz --dev`/`--desktop` are near drop-ins of fermiviewer `server_launch.py` — `--desktop` waits on the pywebview-vs-Tauri owner call below | PORT_PLAN #3 | S |
 | 11 | W8 closure: reconcile the Tauri shell's actual state (committed `src-tauri/`, updater, NSIS hooks) into PORT_PLAN #46, verify auto-update end-to-end (#49), code signing (#47) | PORT_PLAN #46/#47/#49 | M |
 | 12 | W9 nice-to-haves: parameterized parser tests (every parser × corpus file); performance baselines | PORT_PLAN #52/#53 | M |
 
@@ -40,8 +40,8 @@ GAP_PLOTTYPES, and M1_SPRINT archived as complete)
 | **Origin gallery eyeball** — the standing human step of decode #39's comparison campaign (`../test-data/origin/_exports/PNR/`); new mismatches get booked in the decode plan | ORIGIN_FILE_DECODE (standing) |
 | **Pop-out books/plots into windows** — PLAN WITH OWNER FIRST (gesture, "pop out a BOOK" semantics, bulk "window everything" command) | MULTI_PLOT #19 |
 | **Worksheet view-state persistence** — decide once, with usage evidence, whether sort/widths/selection persist per-dataset in `.dwk` (default: no) | WORKSHEET #14 |
-| **WebSocket job queue** — build (long fits/exports) or close as superseded by client-side step-executor batch | PORT_PLAN #7 |
-| **`--desktop` intent** — pywebview (as planned) vs. the Tauri shell that now exists | PORT_PLAN #3/#46 |
+| **Job queue** — build (long fits/exports) or close as superseded by client-side step-executor batch. If built, also pick the shape: the cited fermiviewer reference is a POLLED ThreadPool store (no WS, no cancel — small to mirror), not the WebSocket the plan wording implies | PORT_PLAN #7 |
+| **`--desktop` intent** — pywebview (as planned) vs. the Tauri shell that now exists; note fermiviewer deliberately ships both (pywebview dev/daily, Tauri packaging) | PORT_PLAN #3/#46 |
 | **Apache-2.0 copyright holder line** for LICENSE/NOTICE | PORT_PLAN #1 |
 
 ## Blocked on external samples / specs
