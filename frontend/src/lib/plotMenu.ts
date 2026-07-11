@@ -233,10 +233,12 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     ],
   });
   items.push({ separator: true });
+  // First in the block — the owner's "I zoomed by accident, get me back"
+  // escape hatch (2026-07-11; double-click on empty canvas does it too).
+  items.push({ label: "Reset zoom (autoscale)", run: ctx.resetView });
   items.push({ label: "Copy image", run: ctx.copyImage });
   items.push({ label: "Copy data (TSV)", run: ctx.copyData });
   items.push({ label: "Save as PNG", run: ctx.savePng });
-  items.push({ label: "Reset view (autoscale)", run: ctx.resetView });
 
   return items;
 }

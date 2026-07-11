@@ -83,7 +83,7 @@ describe("buildPlotMenu — sections by cursor context", () => {
     expect(find(items, "Y axis")).toBeTruthy();
     expect(find(items, "Y2 axis")).toBeUndefined(); // no y2
     expect(find(items, "Legend")).toBeTruthy();
-    expect(find(items, "Reset view (autoscale)")).toBeTruthy();
+    expect(find(items, "Reset zoom (autoscale)")).toBeTruthy();
   });
 
   it("series present: header with the series label + editing entries", () => {

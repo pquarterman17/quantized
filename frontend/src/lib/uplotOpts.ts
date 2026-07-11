@@ -865,6 +865,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         onResize: args.annotationEdit?.onResize,
         onEditText: args.annotationEdit?.onEditText,
         onContextMenu: args.annotationEdit?.onContextMenu,
+        onResetView: args.annotationEdit?.onResetView,
       }),
     );
   }

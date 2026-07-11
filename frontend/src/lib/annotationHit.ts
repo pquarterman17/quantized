@@ -8,6 +8,28 @@
 // pointGesture.ts uses, and for the same reason its header warns about: one
 // implementation, so draw and hit-test can never silently drift apart.
 
+/** CSS pointer coords (relative to `u.over`, i.e. `clientX - rect.left`) →
+ *  the CANVAS-pixel frame `annotationLayout` lives in (DPR-scaled +
+ *  bbox-offset, because the draw pass owns that geometry). Hit tests must
+ *  compare pointer and geometry in ONE frame — the 2026-07-11 owner-reported
+ *  bug ("can't drag the 700 mT label; it box-zooms instead") was exactly this
+ *  mismatch: at Windows 125–150% display scaling the CSS pointer never landed
+ *  inside the canvas-px label box. Same bug class the same-day review fixed in
+ *  uplotAnchors (there the fix was the opposite direction: draw code keeps the
+ *  `true` form, pointer code the CSS form — either way, ONE frame per
+ *  comparison). Returns the scale so callers can convert CSS-px tolerances
+ *  too. Degenerate rects (jsdom, not laid out) fall back to scale 1. */
+export function overPointerToCanvas(
+  bbox: { left: number; top: number; width: number; height: number },
+  rect: { width: number; height: number },
+  cssX: number,
+  cssY: number,
+): { x: number; y: number; scale: number } {
+  const scale = rect.width > 0 && bbox.width > 0 ? bbox.width / rect.width : 1;
+  const sy = rect.height > 0 && bbox.height > 0 ? bbox.height / rect.height : scale;
+  return { x: bbox.left + cssX * scale, y: bbox.top + cssY * sy, scale };
+}
+
 /** One annotation's hit-test geometry, canvas pixels — the dot center plus
  *  the label's bounding box (both derived from `uplotOverlays.annotationLayout`,
  *  the SAME geometry the draw pass uses). */

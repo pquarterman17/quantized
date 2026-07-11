@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { hitTestAnnotationBody, hitTestAnnotationHandle, type AnnotationHitGeometry } from "./annotationHit";
+import { hitTestAnnotationBody, hitTestAnnotationHandle, overPointerToCanvas, type AnnotationHitGeometry } from "./annotationHit";
 
 describe("hitTestAnnotationBody", () => {
   const geoms: AnnotationHitGeometry[] = [
@@ -72,5 +72,48 @@ describe("hitTestAnnotationHandle", () => {
   it("respects a custom tolerance", () => {
     expect(hitTestAnnotationHandle({ x: 0, y: 0 }, { x: 5, y: 0 }, 3)).toBe(false);
     expect(hitTestAnnotationHandle({ x: 0, y: 0 }, { x: 5, y: 0 }, 6)).toBe(true);
+  });
+});
+
+// The 2026-07-11 owner-reported regression: pointer events are CSS px
+// (relative to u.over) but annotationLayout geometry is CANVAS px (DPR-scaled
+// + bbox-offset). At Windows 125-150% display scaling the un-converted CSS
+// pointer never landed inside a label's canvas-px box, so "drag the 700 mT
+// label" fell through to box zoom.
+describe("overPointerToCanvas (frame conversion)", () => {
+  // DPR-2 canvas with an axes gutter: plot area is 200x160 canvas px starting
+  // at canvas (40, 20); the same area is 100x80 CSS px in the over element.
+  const bbox = { left: 40, top: 20, width: 200, height: 160 };
+  const rect = { width: 100, height: 80 };
+
+  it("maps CSS px into the canvas frame (offset + scale) and reports the scale", () => {
+    const p = overPointerToCanvas(bbox, rect, 10, 10);
+    expect(p).toEqual({ x: 60, y: 40, scale: 2 });
+  });
+
+  it("is the identity at scale 1 with a zero gutter", () => {
+    const p = overPointerToCanvas({ left: 0, top: 0, width: 100, height: 80 }, rect, 33, 44);
+    expect(p).toEqual({ x: 33, y: 44, scale: 1 });
+  });
+
+  it("falls back to scale 1 on a degenerate rect (jsdom, not laid out)", () => {
+    const p = overPointerToCanvas(bbox, { width: 0, height: 0 }, 5, 7);
+    expect(p.scale).toBe(1);
+    expect(p).toEqual({ x: 45, y: 27, scale: 1 });
+  });
+
+  it("REGRESSION: at DPR 2 the converted pointer hits a label the raw CSS pointer misses", () => {
+    // A label drawn at canvas px (160, 100) with a 60x20 canvas-px box; the
+    // user clicks its CSS-space center (that is CSS (55, 35) in the over).
+    const geoms: AnnotationHitGeometry[] = [
+      { id: "field-label", px: 150, py: 90, box: { left: 160, top: 100, width: 60, height: 20 } },
+    ];
+    const cssPointer = { x: 55, y: 35 };
+    // Old behaviour (the bug): comparing CSS px straight against canvas-px
+    // geometry misses entirely.
+    expect(hitTestAnnotationBody(geoms, cssPointer)).toBeNull();
+    // Fixed behaviour: convert first, then it lands inside the box.
+    const p = overPointerToCanvas(bbox, rect, cssPointer.x, cssPointer.y);
+    expect(hitTestAnnotationBody(geoms, p, 8 * p.scale)).toBe("field-label");
   });
 });

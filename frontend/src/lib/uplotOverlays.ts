@@ -6,7 +6,7 @@
 
 import type uPlot from "uplot";
 
-import { hitTestAnnotationBody, hitTestAnnotationHandle } from "./annotationHit";
+import { hitTestAnnotationBody, hitTestAnnotationHandle, overPointerToCanvas } from "./annotationHit";
 import { CLICK_PX } from "./pointGesture";
 import type { ColorScatterSpec } from "./colorscatter";
 import { colormap, normalize } from "./colormap";
@@ -332,6 +332,9 @@ export interface AnnotationEditOpts {
   onResize?: (id: string, size: number) => void;
   onEditText?: (id: string) => void;
   onContextMenu?: (id: string, clientX: number, clientY: number) => void;
+  /** Double-click on EMPTY canvas — reset the zoom through the store (clears
+   *  committed axis limits, which uPlot's internal dblclick-autoscale can't). */
+  onResetView?: () => void;
 }
 
 export function annotationPlugin(
@@ -349,6 +352,7 @@ export function annotationPlugin(
   // this isn't a native "dblclick" listener).
   let lastClickId: string | null = null;
   let lastClickTime = 0;
+  let lastEmptyClickTime = 0;
   const DBLCLICK_MS = 400;
 
   const redrawSoon = (u: uPlot) =>
@@ -396,17 +400,25 @@ export function annotationPlugin(
                   : { x: g.layout.px + 10, y: g.layout.py + 10 };
               };
 
+              // Pointer events arrive in CSS px relative to `over`; the
+              // layout geometry is CANVAS px (DPR-scaled + bbox-offset). Every
+              // hit test converts the POINTER into the canvas frame — see
+              // overPointerToCanvas's doc for the owner-reported bug this
+              // fixes (unhittable labels at Windows 125–150% scaling).
+              const canvasPointer = (rect: DOMRect, cssX: number, cssY: number) =>
+                overPointerToCanvas(u.bbox, rect, cssX, cssY);
+
               over.addEventListener("mousemove", (e: MouseEvent) => {
                 if (dragMove || dragResize) return; // cursor fixed while a drag owns the pointer
                 const rect = over.getBoundingClientRect();
-                const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                const p = canvasPointer(rect, e.clientX - rect.left, e.clientY - rect.top);
                 const gs = geoms();
                 const selId = o.selectedId ?? null;
-                if (selId && hitTestAnnotationHandle(handleFor(selId, gs), pointer)) {
+                if (selId && hitTestAnnotationHandle(handleFor(selId, gs), p, 8 * p.scale)) {
                   over.style.cursor = "nwse-resize";
                   return;
                 }
-                over.style.cursor = hitTestAnnotationBody(hitGeoms(gs), pointer) ? "move" : "default";
+                over.style.cursor = hitTestAnnotationBody(hitGeoms(gs), p, 8 * p.scale) ? "move" : "default";
               });
 
               over.addEventListener(
@@ -415,12 +427,13 @@ export function annotationPlugin(
                   if (e.button !== 0) return;
                   const rect = over.getBoundingClientRect();
                   const down = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                  const downCanvas = canvasPointer(rect, down.x, down.y);
                   const gs = geoms();
                   const selId = o.selectedId ?? null;
                   const handle = selId ? handleFor(selId, gs) : null;
 
                   // Resize handle (only live for the currently-selected annotation).
-                  if (selId && hitTestAnnotationHandle(handle, down)) {
+                  if (selId && hitTestAnnotationHandle(handle, downCanvas, 8 * downCanvas.scale)) {
                     e.preventDefault();
                     e.stopPropagation();
                     const a = annotations.find((x) => x.id === selId)!;
@@ -453,15 +466,31 @@ export function annotationPlugin(
                     return;
                   }
 
-                  const hit = hitTestAnnotationBody(hitGeoms(gs), down);
+                  const hit = hitTestAnnotationBody(hitGeoms(gs), downCanvas, 8 * downCanvas.scale);
                   if (hit == null) {
                     // Empty canvas: don't block uPlot's own drag (box zoom stays
                     // the pointer tool's muscle-memory gesture). A plain click
-                    // (no drag) deselects.
+                    // (no drag) deselects; a DOUBLE click resets the zoom
+                    // (owner ask 2026-07-11: an accidental box-zoom needs a
+                    // fast way back) — through the store's resetView so
+                    // committed xLim/yLim (e.g. an applied Origin figure's
+                    // fixed ranges) clear too, which uPlot's own internal
+                    // dblclick-autoscale cannot do.
                     const onUp = (ev: MouseEvent) => {
                       document.removeEventListener("mouseup", onUp);
                       const up = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
-                      if (Math.hypot(up.x - down.x, up.y - down.y) < CLICK_PX) o.onSelect?.(null);
+                      if (Math.hypot(up.x - down.x, up.y - down.y) >= CLICK_PX) return;
+                      const now = Date.now();
+                      if (now - lastEmptyClickTime < DBLCLICK_MS) {
+                        lastEmptyClickTime = 0;
+                        // Internal-scale reset first (covers a limit-less box
+                        // zoom); the store callback then clears committed lims.
+                        u.setData(u.data);
+                        o.onResetView?.();
+                      } else {
+                        lastEmptyClickTime = now;
+                        o.onSelect?.(null);
+                      }
                     };
                     document.addEventListener("mouseup", onUp);
                     return;
@@ -529,8 +558,8 @@ export function annotationPlugin(
                 "contextmenu",
                 (e: MouseEvent) => {
                   const rect = over.getBoundingClientRect();
-                  const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-                  const hit = hitTestAnnotationBody(hitGeoms(geoms()), pointer);
+                  const p = canvasPointer(rect, e.clientX - rect.left, e.clientY - rect.top);
+                  const hit = hitTestAnnotationBody(hitGeoms(geoms()), p, 8 * p.scale);
                   if (hit) {
                     e.preventDefault();
                     e.stopPropagation(); // don't fall through to the plot's own menu

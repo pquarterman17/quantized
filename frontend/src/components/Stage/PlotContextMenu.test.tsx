@@ -80,7 +80,7 @@ describe("PlotContextMenu", () => {
     expect(screen.getByTitle("Series 1")).toBeInTheDocument();
     // Axis + plot sections are always present.
     expect(screen.getByText("X axis")).toBeInTheDocument();
-    expect(screen.getByText("Reset view (autoscale)")).toBeInTheDocument();
+    expect(screen.getByText("Reset zoom (autoscale)")).toBeInTheDocument();
   });
 
   it("a colour swatch dispatches setSeriesStyle for the hit-tested channel", () => {

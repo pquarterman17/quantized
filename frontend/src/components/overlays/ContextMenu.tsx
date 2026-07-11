@@ -14,6 +14,14 @@
 //   { label, submenu }       — a nested flyout (opens on hover to the right;
 //                              rendered as a DOM child so the root's
 //                              outside-click guard still contains it)
+//
+// Flyout positioning is ANCHORED (position:absolute against the hovered row),
+// never viewport-fixed: `.qzk-menu-pop`'s `backdrop-filter` makes every popup a
+// containing block for fixed descendants (CSS spec), so viewport coords inside
+// a menu silently re-resolve against the popup box — the 2026-07-11 bug where
+// scale flyouts opened "way off" and closed before the pointer could reach
+// them. Row-anchoring is immune; a layout effect only FLIPS the side / shifts
+// vertically when the flyout would overflow the viewport.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -93,21 +101,46 @@ function PopupBox({
   );
 }
 
+/** A nested flyout, anchored to its `.qzk-ctx-subwrap` row (position:absolute
+ *  — see the module header for why fixed/viewport coords are forbidden here).
+ *  Opens to the right overlapping the parent by 3px so the pointer can travel
+ *  into it without a mouseleave gap; flips to the left / shifts up only when
+ *  the viewport would clip it. */
+function FlyoutBox({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [side, setSide] = useState<"right" | "left">("right");
+  const [shiftY, setShiftY] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) return; // jsdom / not laid out yet
+    const pad = 8;
+    if (r.right > window.innerWidth - pad) setSide("left");
+    const overflowY = r.bottom - (window.innerHeight - pad);
+    if (overflowY > 0) setShiftY(-overflowY);
+  }, []);
+  const sidePos =
+    side === "right"
+      ? { left: "calc(100% - 3px)" }
+      : { right: "calc(100% - 3px)" };
+  return (
+    <div
+      ref={ref}
+      className="qzk-menu-pop qzk-ctx"
+      style={{ position: "absolute", top: -4 + shiftY, zIndex: 1001, ...sidePos }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** Renders one item list (root or a submenu). Owns which submenu is currently
  *  hovered-open. `onClose` closes the WHOLE menu after any leaf action runs. */
 function MenuList({ items, onClose }: { items: ContextMenuItem[]; onClose: () => void }) {
   const [openSub, setOpenSub] = useState<number | null>(null);
   const anchors = useRef<Record<number, HTMLElement | null>>({});
-  const [subXY, setSubXY] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-
-  const openFlyout = (i: number) => {
-    const el = anchors.current[i];
-    if (el) {
-      const r = el.getBoundingClientRect();
-      setSubXY({ x: r.right - 3, y: r.top - 4 });
-    }
-    setOpenSub(i);
-  };
 
   return (
     <>
@@ -142,7 +175,7 @@ function MenuList({ items, onClose }: { items: ContextMenuItem[]; onClose: () =>
             <div
               key={it.label}
               className="qzk-ctx-subwrap"
-              onMouseEnter={() => !it.disabled && openFlyout(i)}
+              onMouseEnter={() => !it.disabled && setOpenSub(i)}
               onMouseLeave={() => setOpenSub((s) => (s === i ? null : s))}
             >
               <button
@@ -151,7 +184,7 @@ function MenuList({ items, onClose }: { items: ContextMenuItem[]; onClose: () =>
                 }}
                 className="qzk-menu-item qzk-ctx-hassub"
                 disabled={it.disabled}
-                onClick={() => (openSub === i ? setOpenSub(null) : openFlyout(i))}
+                onClick={() => setOpenSub((s) => (s === i ? null : i))}
               >
                 <span>{it.label}</span>
                 <span className="qzk-ctx-arrow" aria-hidden="true">
@@ -159,9 +192,9 @@ function MenuList({ items, onClose }: { items: ContextMenuItem[]; onClose: () =>
                 </span>
               </button>
               {openSub === i && (
-                <PopupBox x={subXY.x} y={subXY.y}>
+                <FlyoutBox>
                   <MenuList items={it.submenu} onClose={onClose} />
-                </PopupBox>
+                </FlyoutBox>
               )}
             </div>
           );

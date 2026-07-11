@@ -109,6 +109,16 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
       onResize: (id, size) => updateAnnotation(id, { size }),
       onEditText: editText,
       onContextMenu: openMenu,
+      // Empty-canvas double-click → reset zoom (owner ask 2026-07-11). The
+      // store half: clear committed limits so an applied Origin figure's
+      // fixed ranges release too; the plugin itself re-autoscales uPlot's
+      // internal scales for limit-less box zooms.
+      onResetView: () => {
+        const st = useApp.getState();
+        st.setXLim(null);
+        st.setYLim(null);
+        st.setY2Lim(null);
+      },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool, hasAnnotations, selectedAnnotationId, setSelectedAnnotationId, updateAnnotation]);
