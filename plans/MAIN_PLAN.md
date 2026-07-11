@@ -62,14 +62,8 @@ GOTO #11 drift (implemented but listed open).
 
 ~~21. **Page-anchored annotations**~~ COMPLETED 2026-07-11 (see Completed).
 
-22. **Standalone DiraCulator launcher** (owner request 2026-07-11) —
-    launch the materials calculators alone, without the full app UI:
-    `qz --calc` (+ a `diraculator` console-script alias) serves the
-    same backend and opens a calculator-only SPA view (`?view=calc`
-    renders the calculators content full-window, minimal chrome, theme
-    intact); `--desktop` combo = small pywebview window titled
-    DiraCulator; port-in-use falls back to a free port automatically
-    (the main app may already be running on 8000).
+~~22. **Standalone DiraCulator launcher**~~ COMPLETED 2026-07-11 (see
+    Completed).
 
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
@@ -154,6 +148,20 @@ GOTO #11 drift (implemented but listed open).
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#22 Standalone DiraCulator launcher**~~ (2026-07-11, sonnet agent)
+  — `qz --calc` + `diraculator` console-script alias (`cli.main_calc`);
+  `?view=calc` mounts a 43-line `CalcOnlyApp` (titlebar + theme toggle
+  + `CalculatorsContent`, extracted from CalculatorsPanel — no
+  Library/Stage/menubar mounted); the one cross-workshop affordance
+  (SLD → Reflectivity seed) degrades to a toast in calc-only mode.
+  Port fallback went GLOBAL: a busy non-explicit port auto-falls-back
+  to an OS-assigned free port with a printed note (explicit --port
+  still errors); `--calc --desktop` = 520×680 pywebview "DiraCulator".
+  End-to-end verified live: main app on 8000 + diraculator on a
+  fallback port simultaneously, calc view 200. Honest tail: `--calc
+  --dev` accepted but ignored (dev opens the plain Vite root).
+  Frontend 2991 / backend 2779 green.
 
 - ~~**#21 Page-anchored annotations**~~ (2026-07-11, sonnet agent) —
   `Annotation.anchor?: "data"|"page"` (page = canvas fractions, default
