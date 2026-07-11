@@ -64,7 +64,8 @@ function SourceList({
 export default function FigurePageView() {
   const setOpen = useApp((s) => s.setFigurePageOpen);
   const p = useFigurePage();
-  const sel = p.selected !== null ? p.slots[p.selected] : null;
+  const selIdx = p.selected;
+  const sel = selIdx !== null ? p.slots[selIdx] : null;
 
   return (
     <ToolWindow title="Figure page (multi-panel)" width={840} onClose={() => setOpen(false)}>
@@ -105,24 +106,24 @@ export default function FigurePageView() {
           <NumberField value={p.dpi} onChange={(v) => p.setDpi(Number(v) || 300)} width={90} />
 
           {/* Per-panel overrides for the selected slot */}
-          {sel?.source && p.selected !== null && (
+          {sel?.source && selIdx !== null && (
             <>
               <label className="qzk-field-lbl" style={{ marginTop: 6 }}>
-                Panel {p.labels[p.selected] || "(selected)"}
+                Panel {p.labels[selIdx] || "(selected)"}
               </label>
               <NumberField
                 numeric={false}
                 width={120}
                 value={sel.label ?? ""}
                 placeholder="label (auto)"
-                onChange={(v) => p.setSlotLabel(p.selected!, String(v).trim() === "" ? null : String(v))}
+                onChange={(v) => p.setSlotLabel(selIdx, v.trim() === "" ? null : v)}
               />
               {/* Rich-text (GOTO #5): $...$ math renders in the export. */}
               <RichLabelInput
                 live
                 value={sel.title ?? ""}
                 placeholder="title (from source)"
-                onCommit={(v) => p.setSlotTitle(p.selected!, v.trim() === "" ? null : v)}
+                onCommit={(v) => p.setSlotTitle(selIdx, v.trim() === "" ? null : v)}
               />
             </>
           )}
