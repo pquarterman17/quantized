@@ -281,6 +281,49 @@ export function fitEquation(req: EquationFitRequest): Promise<CalcResult> {
   return postJSON("/api/fitting/equation/fit", req);
 }
 
+// ── AICc model quick-scan (GOTO #6) ─────────────────────────────────────────
+export interface ScanEquationCandidate {
+  name: string;
+  equation: string;
+  guesses?: number[];
+}
+
+/** One ranked scan entry; a failed candidate has `error` set and null
+ *  metrics (it still appears — a model that can't fit IS a scan result). */
+export interface ScanEntry {
+  name: string;
+  kind: "registry" | "equation";
+  error: string | null;
+  k: number | null;
+  params: number[] | null;
+  paramNames: string[] | null;
+  R2: number | null;
+  RMSE: number | null;
+  AIC: number | null;
+  AICc: number | null;
+  deltaAICc: number | null;
+  weight: number | null;
+}
+
+export interface ScanResponse {
+  n: number;
+  nCandidates: number;
+  results: ScanEntry[];
+}
+
+/** Fit all candidate models to (x, y) and rank by AICc. Omit `models` for
+ *  the backend's default registry set (param count < n/3); saved custom
+ *  equation models ride along in `equations`. */
+export function scanFitModels(req: {
+  x: number[];
+  y: number[];
+  dy?: number[];
+  models?: string[];
+  equations?: ScanEquationCandidate[];
+}): Promise<ScanResponse> {
+  return postJSON("/api/fitting/scan", req);
+}
+
 // ── Baseline ────────────────────────────────────────────────────────────────
 type BaselineResult = { baseline: (number | null)[] };
 type BaselineWithInfo = BaselineResult & { info: CalcResult };

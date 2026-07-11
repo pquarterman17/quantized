@@ -19,6 +19,7 @@ from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_bootstrap import bootstrap_fit, fit_posterior
 from quantized.calc.fit_equation import default_guesses, equation_model
 from quantized.calc.fit_models import FIT_MODELS, evaluate
+from quantized.calc.fit_scan import scan_models
 from quantized.calc.fitting import curve_fit
 from quantized.routes._payload import to_jsonable
 
@@ -220,6 +221,49 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
     out: dict[str, Any] = to_jsonable(result)
     out["paramNames"] = names
     return out
+
+
+# ── AICc model quick-scan (GOTO #6) ─────────────────────────────────────────
+
+
+class ScanEquationCandidate(BaseModel):
+    name: str
+    equation: str
+    guesses: list[float] | None = None
+
+
+class ScanRequest(BaseModel):
+    x: list[float]
+    y: list[float]
+    # Optional per-point 1-sigma errors -> fit weights 1/dy^2.
+    dy: list[float] | None = None
+    # None -> the default candidate set: every registry model with
+    # nParams < n/3 (calc.fit_scan.default_candidates explains the cut).
+    models: list[str] | None = None
+    # Saved custom equation models ride along as extra candidates.
+    equations: list[ScanEquationCandidate] | None = None
+
+
+@router.post("/scan")
+def scan(req: ScanRequest) -> dict[str, Any]:
+    """Fit all candidate models and rank by AICc (calc.fit_scan.scan_models).
+
+    Per-candidate failures come back as error entries in ``results`` — only
+    invalid scan INPUT (length mismatch, bad dy, too few points) is a 422.
+    """
+    try:
+        result = scan_models(
+            req.x,
+            req.y,
+            dy=req.dy,
+            models=req.models,
+            equations=(
+                [e.model_dump() for e in req.equations] if req.equations is not None else None
+            ),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return to_jsonable(result)  # type: ignore[no-any-return]
 
 
 class PosteriorRequest(BaseModel):
