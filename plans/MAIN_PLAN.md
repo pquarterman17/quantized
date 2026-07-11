@@ -10,7 +10,7 @@ via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-07-10
+**Updated:** 2026-07-11
 
 ---
 
@@ -56,30 +56,8 @@ plan's direct items are residue-sized by construction)*
    Completed).
 ~~7. **Register import_lake_shore**~~ COMPLETED 2026-07-11 (see Completed).
 
-8. **Post-review consolidation batch** (booked from the 2026-07-11
-   adversarial review — cleanup findings, deliberately NOT rushed
-   pre-release):
-   - [ ] Generic point-hit/drag gesture core: `uplotAnchors` +
-     `peakMarkerHit` are near-clones (and shared the pixel-frame bug —
-     one core would have needed the fix once)
-   - [ ] Export `unwrap`/`postForm` from `lib/api.ts` (4 drifting copies
-     of the error-detail extraction incl. `originTemplate.ts`)
-   - [ ] Shared `_iterative_clip_fit` helper (`baseline_modpoly` +
-     `xrd_low_angle_background` duplicate the Lieber loop)
-   - [ ] Calculators-level card kit (9 tabs carry private Card/Field
-     copies; `thinfilm/shared.tsx` was created one directory too deep)
-   - [ ] `figure_text._parse_legend_labels` delegates to the layered
-     parser (two parsers over one grammar)
-   - [ ] Anchor-edit bridge via ref/getter so anchor add/move/remove
-     stops rebuilding the uPlot instance twice per gesture (+ cache
-     `anchorPixels` per scale in the cursor handler)
-   - [ ] Figure-page preview invalidation when store state changes under
-     an assigned slot (export guard shipped; preview can still stale)
-   - [ ] `io/origin_project/figures.py` at 499/500 — split BEFORE the
-     next edit
-   - [ ] UX judgment: `openInGraphBuilder` rides `setActive`'s
-     plot-intent path (can spawn a window + flip the stage tab as a
-     side effect of opening an overlay) — decide if that precedent fits
+~~8. **Post-review consolidation batch**~~ COMPLETED 2026-07-11 (see
+   Completed — all 9 sub-items shipped).
 
 ## Tier 3 — Nice-to-Have
 
@@ -129,6 +107,32 @@ plan's direct items are residue-sized by construction)*
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#8 Post-review consolidation batch**~~ (2026-07-11) — all 9 sub-items,
+  4 parallel workstreams (3 worktree agents + direct), zero merge conflicts:
+  - Point-gesture core: `lib/pointGesture.ts` (pixel-frame conversion + hit
+    test); `uplotAnchors`/`peakMarkerHit` both ride it — the cloned
+    pixel-frame bug class is now un-clonable.
+  - Anchor bridge identity-stable (`getAnchors` ref read): anchor edits no
+    longer rebuild the uPlot instance twice per gesture; pixels cached per
+    list-identity + scale window; plugin-level jsdom gesture tests added.
+  - `api.ts`: private `ensureOk` + exported `unwrap`/`postForm` — SIX
+    drifted error-extraction copies found (not 4), incl. `download.ts`
+    (moved into api.ts to break a would-be cycle; download.ts is a DOM leaf).
+  - `calc/_clipfit.py` shared Lieber loop; bit-identity vs HEAD proven by
+    exact `==` over 50 trials × 18 configs (fit step + init parameterized,
+    never harmonized).
+  - Calculators card kit hoisted to `calculators/shared.tsx` (−547 lines,
+    10 tabs + thinfilm migrated, SubstratesTab included; all ≤293 lines).
+  - Legend parsers: forced delegation REJECTED (mixed dotted/plain input
+    differs by design — regression-pinned); both parsers + the dotted probe
+    now consume ONE `_iter_legend_entries` grammar walk.
+  - Figure-page preview invalidation: `panelRenderInputs` store fingerprint
+    (mirrors the export guard's reads) via `useShallow` effect dep; +3 tests.
+  - `figures.py` 499 → 210 + `figure_layers.py` 333 (verbatim move, diffed).
+  - `openInGraphBuilder` UX call: precedent REJECTED (contradicted the
+    item-15 "books never move the plot" directive) — the builder now BINDS
+    to its seed's dataset; `setActive` plot intent fires at sendToStage.
 
 - ~~**#7 Lake Shore registration**~~ (2026-07-11) — preamble sniffer
   (first 2KB contains "Lake Shore"), .csv chain after SIMS + .dat chain

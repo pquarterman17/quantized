@@ -6,16 +6,14 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last regenerated:** 2026-07-10 (plan-tree restructure: MAIN_PLAN.md created as root; six residue plans folded up + archived; rows repointed with provenance)
+**Last regenerated:** 2026-07-11 (MAIN #8 consolidation batch shipped — the last actionable dev item; only owner gates, sample-blocked items, and deliberate deferrals remain)
 
 ---
 
 ## Actionable dev work (no blockers, no owner gate)
 
-| # | Item | Plan / item | Size |
-|---|------|-------------|------|
-
-| 23 | Post-review consolidation batch (9 sub-items: gesture core, api unwrap, clip-fit helper, card kit, legend parser, anchor-bridge perf, preview invalidation, figures.py split, openInGraphBuilder UX call) | MAIN #8 | M |
+*(none — exhausted 2026-07-11 with MAIN #8; new items arrive via owner
+gates, user testing, or the parity/decode monitors)*
 
 ## Owner actions & owner-gated decisions
 
@@ -59,7 +57,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | #8 (post-review consolidation batch) + owner gates + deferrals |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only (#8 shipped 2026-07-11) |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9; Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence |
