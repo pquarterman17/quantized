@@ -19,6 +19,8 @@ _EXPECTED = {
     "integrate_peaks", "batch_integrate_peaks",
     "estimate_background", "fit_region_background", "baseline_als",
     "baseline_modpoly", "baseline_rolling_ball",
+    "anchor_baseline", "shirley_background", "xrd_low_angle_background",
+    "footprint_correction",
     "apply_corrections",
     "descriptive_stats", "lin_regress", "t_test", "anova1", "pca_analysis",
     "multiple_regression", "correlation_matrix", "partial_correlation",

@@ -47,6 +47,15 @@ class CorrectionParams(BaseModel):
     smooth_method: str | None = Field(default=None, alias="smoothMethod")
     norm_method: str | None = Field(default=None, alias="normMethod")
     derivative_mode: str | None = Field(default=None, alias="derivativeMode")
+    # GOTO additions (new features beyond MATLAB parity):
+    # #2 anchor-point baseline subtraction ((x, y) pairs + interp method).
+    bg_anchors: list[list[float]] | None = Field(default=None, alias="bgAnchors")
+    bg_anchor_method: str | None = Field(default=None, alias="bgAnchorMethod")
+    # #7b XRR/NR beam-footprint correction (beam width / sample length share
+    # one length unit; footprintTwoTheta reads x as the detector angle 2theta).
+    footprint_w: float | None = Field(default=None, alias="footprintW")
+    footprint_l: float | None = Field(default=None, alias="footprintL")
+    footprint_two_theta: bool | None = Field(default=None, alias="footprintTwoTheta")
 
 
 class CorrectionsRequest(BaseModel):

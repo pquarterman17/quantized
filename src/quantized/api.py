@@ -33,6 +33,12 @@ is heavier than ``import quantized``; the FastAPI server never imports it.
 from __future__ import annotations
 
 # ── Data contract + file loading ──────────────────────────────────────────
+from quantized.calc.backgrounds import (
+    anchor_baseline,
+    footprint_correction,
+    shirley_background,
+    xrd_low_angle_background,
+)
 from quantized.calc.baseline import (
     baseline_als,
     baseline_modpoly,
@@ -142,6 +148,11 @@ __all__ = [
     "baseline_als",
     "baseline_modpoly",
     "baseline_rolling_ball",
+    # backgrounds (GOTO #2/#3/#7 — new beyond MATLAB parity)
+    "anchor_baseline",
+    "shirley_background",
+    "xrd_low_angle_background",
+    "footprint_correction",
     # corrections
     "apply_corrections",
     # statistics — core

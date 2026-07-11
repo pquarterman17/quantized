@@ -81,3 +81,61 @@ def test_apply_y_offset_subtracts() -> None:
 def test_missing_dataset_is_validation_error() -> None:
     resp = client.post("/api/corrections/apply", json={"params": {"xOff": 1.0}})
     assert resp.status_code == 422
+
+
+def test_apply_bg_anchors_subtracts_anchor_baseline() -> None:
+    dataset = {
+        "time": [0.0, 5.0, 10.0],
+        "values": [[1.0], [2.0], [3.0]],
+        "labels": ["I"],
+        "units": ["cps"],
+        "metadata": {},
+    }
+    resp = client.post(
+        "/api/corrections/apply",
+        json={
+            "dataset": dataset,
+            "params": {
+                "bgAnchors": [[0.0, 1.0], [10.0, 3.0]],
+                "bgAnchorMethod": "linear",
+            },
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["values"] == [[0.0], [0.0], [0.0]]
+
+
+def test_apply_bad_anchors_is_422() -> None:
+    dataset = {
+        "time": [0.0, 5.0, 10.0],
+        "values": [[1.0], [2.0], [3.0]],
+        "labels": ["I"],
+        "units": ["cps"],
+        "metadata": {},
+    }
+    resp = client.post(
+        "/api/corrections/apply",
+        json={
+            "dataset": dataset,
+            "params": {"bgAnchors": [[5.0, 1.0], [5.0, 2.0]]},
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_apply_footprint_scales_low_angles() -> None:
+    dataset = {
+        "time": [0.5, 5.0],
+        "values": [[1.0], [1.0]],
+        "labels": ["R"],
+        "units": [""],
+        "metadata": {},
+    }
+    resp = client.post(
+        "/api/corrections/apply",
+        json={"dataset": dataset, "params": {"footprintW": 0.2, "footprintL": 10.0}},
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["values"][0][0] > 1.0  # below spill-over: scaled up
+    assert out["values"][1][0] == 1.0  # above spill-over: untouched
