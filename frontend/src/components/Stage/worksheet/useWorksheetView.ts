@@ -428,7 +428,13 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
   // Per-column widths (MAIN_PLAN #3): clamped on every write so a drag can
   // never store a degenerate width.
   const setColWidth = (col: number, width: number) =>
-    setColWidths((w) => ({ ...w, [col]: clampColWidth(width) }));
+    setColWidths((w) => {
+      const clamped = clampColWidth(width);
+      // Bail on identity when a drag is pinned at the min/max clamp -
+      // otherwise every pointermove forces a full grid re-render for
+      // zero visual change.
+      return w[col] === clamped ? w : { ...w, [col]: clamped };
+    });
 
   // Double-click autofit: header text + the first rows of the DISPLAY order
   // (post filter/sort — what the user is actually looking at), formatted with

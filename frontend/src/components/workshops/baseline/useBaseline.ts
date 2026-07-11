@@ -115,10 +115,20 @@ function callBaseline(
     case "poly": {
       // Default the box to the full x-range; "region" lets the user narrow it
       // to background-only, the analytic methods (#8) always fit the full range.
-      const finite = x.filter((v) => Number.isFinite(v));
+      // Loop, not Math.min(...spread): spreading a 100k+-point x array as
+      // call arguments throws RangeError above the engine's arity cap - and
+      // the analytic methods (#8) take this path on EVERY compute.
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (const v of x) {
+        if (Number.isFinite(v)) {
+          if (v < lo) lo = v;
+          if (v > hi) hi = v;
+        }
+      }
       const useBox = method === "region";
-      const xMin = useBox && Number.isFinite(p.regionXMin) ? p.regionXMin : Math.min(...finite);
-      const xMax = useBox && Number.isFinite(p.regionXMax) ? p.regionXMax : Math.max(...finite);
+      const xMin = useBox && Number.isFinite(p.regionXMin) ? p.regionXMin : lo;
+      const xMax = useBox && Number.isFinite(p.regionXMax) ? p.regionXMax : hi;
       // The region endpoint returns the polynomial as `background`; adapt to `baseline`.
       return baselineRegion({ x, y, x_min: xMin, x_max: xMax, order: regionOrder(method, p) }).then(
         (r) => ({ baseline: r.background }),
