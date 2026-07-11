@@ -1038,6 +1038,27 @@ def test_parse_legend_labels_multiple_entries_on_one_line() -> None:
     assert got == ["%(1)", "", "", "Nb", "Nb/Al", "Nb/Au"]
 
 
+def test_legend_parsers_disagree_by_design_on_mixed_dotted_and_plain_text() -> None:
+    """MAIN #8e regression: both legend parsers ride ONE grammar walk
+    (``figure_text._iter_legend_entries``) but are deliberately NOT each
+    other's projections. On a text mixing dotted ``\\l(layer.plot)`` and
+    plain ``\\l(n)`` entries, the plain parser keeps ignoring the dotted
+    entries (its by-design contract), while the layered parser files the
+    plain entry into layer 1 ALONGSIDE the re-indexed ``\\l(1.plot)``
+    entries — so layer 1 of the layered result legitimately differs from
+    the plain result on the same input. This is exactly why
+    ``_parse_legend_labels`` must never delegate to
+    ``_parse_legend_layers(...)[1]``."""
+    from quantized.io.origin_project.figure_text import (
+        _parse_legend_labels,
+        _parse_legend_layers,
+    )
+
+    mixed = [r"\l(1.1) %(1.1)\l(2) Plain\l(2.1) Other"]
+    assert _parse_legend_labels(mixed) == ["", "Plain"]
+    assert _parse_legend_layers(mixed) == {1: ["%(1)", "Plain"], 2: ["Other"]}
+
+
 def _fig_shape_object(
     left: float,
     top: float,

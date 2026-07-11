@@ -12,7 +12,7 @@ docstring for the byte-level trail these helpers were validated against.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 from quantized.io.origin_project.origin_richtext import clean_richtext
@@ -138,6 +138,31 @@ _LEGEND_SEG_RE = re.compile(r"(?=\\l\(\d+(?:\.\d+)?\))")
 _LEGEND_DOTTED_RE = re.compile(r"\\l\((\d+)\.(\d+)\)\s*(.*)")
 
 
+def _iter_legend_entries(texts: Sequence[str]) -> Iterator[tuple[int | None, int, str]]:
+    """The ONE grammar walk over legend text (MAIN #8e): split every line
+    into per-entry segments at each ``\\l(...)`` swatch boundary
+    (``_LEGEND_SEG_RE``) and yield one ``(layer, plot, raw_label)`` triple
+    per entry — ``layer`` is the dotted ``\\l(layer.plot)`` layer index, or
+    ``None`` for a plain ``\\l(n)`` entry. Labels are yielded RAW (no strip,
+    no ``%(...)`` re-indexing, no ``clean_richtext``) because the two
+    consumers below apply different label semantics — and, deliberately,
+    neither parser is the other's projection: on a text mixing ``\\l(1.1)``
+    and ``\\l(2)`` entries, layer 1 of `_parse_legend_layers` holds BOTH
+    while `_parse_legend_labels` keeps ignoring the dotted entry by design.
+    The two entry regexes are mutually exclusive (``.`` vs ``)`` after the
+    first digit run), so trying the dotted form first can never shadow a
+    plain entry."""
+    for t in texts:
+        for seg in _LEGEND_SEG_RE.split(t):
+            m = _LEGEND_DOTTED_RE.match(seg)
+            if m:
+                yield int(m.group(1)), int(m.group(2)), m.group(3)
+                continue
+            m2 = _LEGEND_LINE_RE.match(seg)
+            if m2:
+                yield None, int(m2.group(1)), m2.group(2)
+
+
 def _parse_legend_labels(texts: Sequence[str]) -> list[str]:
     """Per-curve legend captions from the Legend object's own
     ``\\l(n) <label>`` entries. ``label`` is kept verbatim — whether
@@ -146,14 +171,14 @@ def _parse_legend_labels(texts: Sequence[str]) -> list[str]:
     (``"%(2)"``) — never resolved further. Returns a dense 1-based list sized
     to the highest ``n`` seen, with ``""`` for any gap; ``[]`` when no
     ``\\l(n)`` entry was found. Never fabricated: a missing slot stays blank
-    rather than guessed.
+    rather than guessed. Dotted ``\\l(layer.plot)`` entries are ignored by
+    design (see `_iter_legend_entries` — this is NOT the layer-1 projection
+    of `_parse_legend_layers`).
     """
     labels: dict[int, str] = {}
-    for t in texts:
-        for seg in _LEGEND_SEG_RE.split(t):
-            m = _LEGEND_LINE_RE.match(seg)
-            if m:
-                labels[int(m.group(1))] = clean_richtext(m.group(2).strip())
+    for layer, plot, raw in _iter_legend_entries(texts):
+        if layer is None:
+            labels[plot] = clean_richtext(raw.strip())
     if not labels:
         return []
     return [labels.get(i, "") for i in range(1, max(labels) + 1)]
@@ -172,18 +197,12 @@ def _parse_legend_layers(texts: Sequence[str]) -> dict[int, list[str]]:
     left verbatim — a raw code is better than a wrong guess. Missing slots
     stay ``""``, never fabricated."""
     per: dict[int, dict[int, str]] = {}
-    for t in texts:
-        for seg in _LEGEND_SEG_RE.split(t):
-            m = _LEGEND_DOTTED_RE.match(seg)
-            if m:
-                lyr, plot = int(m.group(1)), int(m.group(2))
-                label = m.group(3).strip()
-                label = re.sub(rf"%\({lyr}\.(\d+)\)", r"%(\1)", label)
-                per.setdefault(lyr, {})[plot] = clean_richtext(label)
-                continue
-            m2 = _LEGEND_LINE_RE.match(seg)
-            if m2:
-                per.setdefault(1, {})[int(m2.group(1))] = clean_richtext(m2.group(2).strip())
+    for layer, plot, raw in _iter_legend_entries(texts):
+        if layer is None:
+            per.setdefault(1, {})[plot] = clean_richtext(raw.strip())
+            continue
+        label = re.sub(rf"%\({layer}\.(\d+)\)", r"%(\1)", raw.strip())
+        per.setdefault(layer, {})[plot] = clean_richtext(label)
     return {lyr: [d.get(i, "") for i in range(1, max(d) + 1)] for lyr, d in per.items() if d}
 
 
@@ -200,8 +219,8 @@ def distribute_legend_layers(figures: list[dict[str, Any]]) -> None:
     raw: list[str] = []
     for f in figures:
         raw.extend(f.pop("_legend_raw", []))
-    if not any(_LEGEND_DOTTED_RE.match(seg) for t in raw for seg in _LEGEND_SEG_RE.split(t)):
-        return
+    if all(layer is None for layer, _, _ in _iter_legend_entries(raw)):
+        return  # no dotted entry anywhere in the window
     layered = _parse_legend_layers(raw)
     for f in figures:
         if not f.get("legend_labels"):
