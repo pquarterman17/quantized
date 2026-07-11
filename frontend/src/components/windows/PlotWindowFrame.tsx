@@ -271,17 +271,20 @@ export default function PlotWindowFrame({
       onPointerDownCapture={onFrameCapture}
       onContextMenuCapture={onFrameContextMenu}
       onDragOver={(e) => {
-        // A snapshot frame never advertises a rebind it would silently
-        // ignore ("frozen means frozen" — rebindWindow no-ops on snapshots):
-        // no highlight, no preventDefault, so the drop falls through to the
-        // canvas beneath (which opens a NEW window for it instead).
-        if (win.kind === "snapshot" || !e.dataTransfer.types.includes(DATASET_DND)) return;
+        // Neither a snapshot ("frozen means frozen") nor a panel window
+        // (item 19 — its binding is `panel.datasetIds`, not this single-id
+        // field) advertises a rebind it would silently ignore: no highlight,
+        // no preventDefault, so the drop falls through to the canvas beneath
+        // (which opens a NEW window for it instead).
+        if (win.kind === "snapshot" || win.kind === "panel" || !e.dataTransfer.types.includes(DATASET_DND))
+          return;
         e.preventDefault(); // required every dragover to keep the drop legal
         if (!dropping) setDropping(true);
       }}
       onDragLeave={() => setDropping(false)}
       onDrop={(e) => {
-        if (win.kind === "snapshot" || !e.dataTransfer.types.includes(DATASET_DND)) return;
+        if (win.kind === "snapshot" || win.kind === "panel" || !e.dataTransfer.types.includes(DATASET_DND))
+          return;
         e.preventDefault();
         e.stopPropagation(); // a frame drop must never ALSO create a canvas window
         setDropping(false);
@@ -343,6 +346,17 @@ export default function PlotWindowFrame({
         {win.kind === "map" && (
           <span className="qzk-plotwin-kind" title="Map window — 2-D map of the bound dataset">
             <Badge tone="accent">▩ map</Badge>
+          </span>
+        )}
+        {win.kind === "panel" && (
+          // Item 19 v1: the composite-window indicator, mirroring the
+          // worksheet/map kind badges above — the layout name so a glance
+          // says row/column/grid/overlay.
+          <span
+            className="qzk-plotwin-kind"
+            title={`${win.panel?.layout ?? "grid"} panel — ${(win.panel?.datasetIds ?? []).length} dataset(s)`}
+          >
+            <Badge tone="accent">⊞ {win.panel?.layout ?? "grid"}</Badge>
           </span>
         )}
         {datasetName && <span className="qzk-plotwin-badge">{datasetName}</span>}

@@ -42,11 +42,11 @@ import type { AppState } from "./useApp";
 // Window ids get their own sequence (dataset/folder/report ids keep useApp's)
 // — the `win-` prefix + timestamp keeps them collision-free across both.
 let _winSeq = 0;
-const nextWindowId = (): string => `win-${Date.now().toString(36)}-${++_winSeq}`;
+export const nextWindowId = (): string => `win-${Date.now().toString(36)}-${++_winSeq}`;
 
 /** The highest z among a window list (0 if empty) — z-order helper shared by
  *  every action that raises a window (focus/raise/create/duplicate). */
-const maxZ = (windows: readonly PlotWindow[]): number =>
+export const maxZ = (windows: readonly PlotWindow[]): number =>
   windows.reduce((m, w) => Math.max(m, w.z), 0);
 
 /** A brand-new sole main window — the ≥1-window invariant's default: one
@@ -449,9 +449,9 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       const s = get();
       const win = s.plotWindows.find((w) => w.id === windowId);
       if (!win || !s.datasets.some((d) => d.id === datasetId)) return;
-      // A snapshot window is never dataset-bound (frozen means frozen) — a
-      // drop on its frame is a no-op, never a silent half-rebind.
-      if (win.kind === "snapshot") return;
+      // Neither a snapshot ("frozen means frozen") nor a panel window (item
+      // 19's binding is `panel.datasetIds`, not this field) rebinds on drop.
+      if (win.kind === "snapshot" || win.kind === "panel") return;
       if (win.kind === "worksheet" || win.kind === "map") {
         // Item 17: a document window has no PlotView to reset — the explicit
         // drop just retargets which dataset the mounted WorksheetPane/MapStage
@@ -585,7 +585,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         // intent, not display config — inheriting it would silently grow an
         // all-pinned set where every Library click spawns a new window.
         pinned: false,
-        ...(src.snapshot ? { snapshot: src.snapshot } : {}),
+        ...(src.snapshot ? { snapshot: src.snapshot } : src.panel ? { panel: src.panel } : {}),
       };
       set({ plotWindows: [...s.plotWindows, dup] });
       return newId;

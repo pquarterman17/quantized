@@ -24,6 +24,7 @@ import { DATASET_DND } from "../Library/useLibraryTree";
 import PlotStage from "../Stage/PlotStage";
 import BackgroundPlotWindow from "./BackgroundPlotWindow";
 import { MapWindow, WorksheetWindow } from "./DocumentWindow";
+import PanelPlotWindow from "./PanelPlotWindow";
 import PlotWindowFrame from "./PlotWindowFrame";
 import SnapshotPlotWindow from "./SnapshotPlotWindow";
 
@@ -144,6 +145,11 @@ export default function WindowCanvas() {
                 <WorksheetWindow dataset={dataset} />
               ) : win.kind === "map" ? (
                 <MapWindow dataset={dataset} />
+              ) : win.kind === "panel" ? (
+                // Item 19 v1: a composite multi-dataset window — also never
+                // the focus target (like snapshot/worksheet/map above), so
+                // before the focused dispatch.
+                <PanelPlotWindow win={win} datasets={datasets} />
               ) : focused ? (
                 <PlotStage />
               ) : (

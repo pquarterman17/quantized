@@ -59,6 +59,7 @@ import {
   dedupeWindowTitle,
   displayedWindowTitle,
   hydrateView,
+  pruneWindowDatasetRefs,
   sanitizePlotWindows, scaleFromLog,
 } from "../lib/plotview";
 import { nextStageTab, plotIntentStageTab, type StageTab } from "../lib/stagetab";
@@ -80,6 +81,8 @@ import { runSaveWorkspaceToFile } from "./workspaceIO";
 // The Reductions workshop's open/method slice (MAIN_PLAN #11), composed the same way.
 import { createReductionsSlice, type ReductionsSlice } from "./reductions";
 import { createReimportSlice, type ReimportSlice } from "./reimport";
+// Multi-dataset panel/overlay composite windows (MAIN_PLAN #19 v1), composed the same way.
+import { createPanelsSlice, type PanelsSlice } from "./panels";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -307,7 +310,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -1036,6 +1039,7 @@ export const useApp = create<AppState>((set, get) => ({
   // Reductions workshop open/method (MAIN_PLAN #11) — see store/reductions.ts.
   ...createReductionsSlice(set),
   ...createReimportSlice(set, get),
+  ...createPanelsSlice(set),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -2008,11 +2012,9 @@ export const useApp = create<AppState>((set, get) => ({
         f.datasetId && removed.has(f.datasetId) ? { ...f, datasetId: null } : f,
       );
       // A removed dataset nulls any window bound to it (MULTI_PLOT_PLAN
-      // decision #4) — the window shows an empty "dataset removed" state,
-      // never force-closed (same treatment as figureDocs above).
-      const plotWindows = s.plotWindows.map((w) =>
-        w.datasetId && removed.has(w.datasetId) ? { ...w, datasetId: null } : w,
-      );
+      // decision #4) / drops out of any panel window's list (item 19) — the
+      // window shows an empty state, never force-closed.
+      const plotWindows = pruneWindowDatasetRefs(s.plotWindows, removed);
       return { datasets, activeId, worksheetId, selectedIds, originFigures, reports, figureDocs, plotWindows };
     });
   },
@@ -2034,9 +2036,7 @@ export const useApp = create<AppState>((set, get) => ({
       const figureDocs = s.figureDocs.map((f) =>
         f.datasetId && ids.has(f.datasetId) ? { ...f, datasetId: null } : f,
       );
-      const plotWindows = s.plotWindows.map((w) =>
-        w.datasetId && ids.has(w.datasetId) ? { ...w, datasetId: null } : w,
-      );
+      const plotWindows = pruneWindowDatasetRefs(s.plotWindows, ids);
       return {
         datasets,
         activeId,
@@ -2066,9 +2066,7 @@ export const useApp = create<AppState>((set, get) => ({
       const figureDocs = s.figureDocs.map((f) =>
         f.datasetId && drop.has(f.datasetId) ? { ...f, datasetId: null } : f,
       );
-      const plotWindows = s.plotWindows.map((w) =>
-        w.datasetId && drop.has(w.datasetId) ? { ...w, datasetId: null } : w,
-      );
+      const plotWindows = pruneWindowDatasetRefs(s.plotWindows, drop);
       return { datasets, activeId, worksheetId, selectedIds, originFigures, reports, figureDocs, plotWindows };
     });
   },

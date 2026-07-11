@@ -16,8 +16,19 @@
 // decisions" #2), and global Preferences-dialog defaults (defaultTrace,
 // wheelZoom, excludedDisplay, sigFigs, … — app-wide, not per-window).
 
+import {
+  sanitizePanelDatasetIds,
+  sanitizePanelLayout,
+  type PanelLayout,
+} from "./panelwindow";
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
 import type { Annotation, AxisFormat, AxisScale, RefLine, RegionShade, SeriesStyle } from "./types";
+
+// Re-exported: PlotWindow.panel (below) is the only reason this module
+// depends on panelwindow.ts at all — callers that just need the window-record
+// shape (store/panels.ts, PanelPlotWindow.tsx, lib/panelMenu.ts) import the
+// type from HERE like every other PlotWindow-adjacent type, not the leaf module.
+export type { PanelLayout };
 
 export type LegendPos = "ne" | "nw" | "se" | "sw";
 
@@ -202,17 +213,21 @@ export function nextLinkGroup(current: number | null): number | null {
   return current >= MAX_LINK_GROUP ? null : current + 1;
 }
 
-/** The window-kind discriminator (item 17 completes the set): `"plot"` is the
+/** The window-kind discriminator (item 19 adds "panel"): `"plot"` is the
  *  live XY graph window (the only kind that can hold the view-facade focus);
  *  `"snapshot"` (item 11) is a static frozen-payload compare window;
  *  `"worksheet"` / `"map"` (item 17 — full Origin-style MDI) are floating
  *  DOCUMENT windows hosting the same components the stage tabs mount
  *  (`WorksheetPane` / `MapStage`), LIVE-bound to a dataset (unlike a
  *  snapshot: dataset removal nulls the binding, an explicit drop rebinds).
- *  Every non-plot kind follows the snapshot focus model — `focusedWindowId`
- *  always points at a `kind:"plot"` window; `focusWindow` on the others only
- *  raises their z, and Ctrl+Tab cycling skips them. */
-export type WindowKind = "plot" | "snapshot" | "worksheet" | "map";
+ *  `"panel"` (item 19 v1) is a composite MULTI-dataset window — the Library
+ *  quick picks' "Panel: side by side/stacked/grid" and "Overlay in one
+ *  plot" — carrying its own `panel` field instead of a single `datasetId`
+ *  (see `PlotWindow.panel`'s doc). Every non-plot kind follows the snapshot
+ *  focus model — `focusedWindowId` always points at a `kind:"plot"` window;
+ *  `focusWindow` on the others only raises their z, and Ctrl+Tab cycling
+ *  skips them. */
+export type WindowKind = "plot" | "snapshot" | "worksheet" | "map" | "panel";
 
 /** A plot window's persistent record: geometry/z/winState (the MDI chrome
  *  state — item 3), a dataset binding (by id; nulled, never force-closed, when
@@ -252,6 +267,14 @@ export interface PlotWindow {
    *  still rebinds a pinned window — deliberate beats passive. Like `bg`,
    *  this is per-window chrome state, not part of the swapped `PlotView`. */
   pinned: boolean;
+  /** kind:"panel" only (item 19 v1): the composite window's dataset ids (in
+   *  display order) + arrangement. A removed dataset drops OUT of this list
+   *  (see `store/useApp.ts`'s removal sites -> `pruneWindowDatasetRefs`)
+   *  rather than nulling a single `datasetId` — a panel window has no such
+   *  field; `datasetId` stays `null` on every panel window, matching a
+   *  snapshot's "frozen means frozen" convention. Absent on every other
+   *  kind. Mirrors `snapshot`'s "kind-specific extra payload" shape. */
+  panel?: { datasetIds: string[]; layout: PanelLayout };
 }
 
 const DEFAULT_WIDTH = 480;
@@ -419,7 +442,7 @@ function sanitizeView(v: unknown): PlotView {
 
 const WIN_STATES: readonly WinState[] = ["normal", "minimized", "maximized"];
 const PLOT_BGS: readonly PlotBg[] = ["theme", "light", "dark"];
-const WINDOW_KINDS: readonly WindowKind[] = ["plot", "snapshot", "worksheet", "map"];
+const WINDOW_KINDS: readonly WindowKind[] = ["plot", "snapshot", "worksheet", "map", "panel"];
 
 // ── Tile / Cascade / z-order-aware focus cycling (item 6) ──────────────────
 
@@ -517,6 +540,19 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
     // so the ordinary datasetId clamp below is all they need.
     const snapshot = kind === "snapshot" ? sanitizeFrozenBundle(o.snapshot) : null;
     if (kind === "snapshot" && !snapshot) continue;
+    // Item 19 v1: a panel window carries its dataset ids + layout in the
+    // `panel` field, not a single `datasetId` (see PlotWindow.panel's doc).
+    // A stale/removed dataset id simply drops out of the list (never nulls
+    // the whole window — same "never force-close" spirit as decision #4);
+    // an empty resulting list still loads (the empty-panel placeholder).
+    const rawPanel =
+      kind === "panel" && typeof o.panel === "object" && o.panel !== null
+        ? (o.panel as Record<string, unknown>)
+        : null;
+    const panel =
+      kind === "panel"
+        ? { datasetIds: sanitizePanelDatasetIds(rawPanel?.datasetIds, dsIds), layout: sanitizePanelLayout(rawPanel?.layout) }
+        : null;
     const g = (typeof o.geometry === "object" && o.geometry !== null ? o.geometry : {}) as Record<
       string,
       unknown
@@ -526,8 +562,10 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
       id: o.id,
       kind,
       title: strOrDefault(o.title, ""),
-      // A snapshot window is never dataset-bound (frozen means frozen).
-      datasetId: kind === "snapshot" ? null : datasetId,
+      // Snapshot ("frozen means frozen") and panel (its binding is the
+      // `panel.datasetIds` LIST, not a single id) windows are never
+      // dataset-bound via this field.
+      datasetId: kind === "snapshot" || kind === "panel" ? null : datasetId,
       geometry: {
         x: num(g.x, 0),
         y: num(g.y, 0),
@@ -550,9 +588,35 @@ export function sanitizePlotWindows(v: unknown, dsIds: ReadonlySet<string>): Plo
           : null,
       pinned: boolOrDefault(o.pinned, false),
       ...(snapshot ? { snapshot } : {}),
+      ...(panel ? { panel } : {}),
     });
   }
   return out;
+}
+
+/** Prune every window's dataset references when `removed` datasets are
+ *  deleted from the store — the single helper `removeDataset`/
+ *  `removeSelected`/`removeDatasets` in `store/useApp.ts` all call, so the
+ *  "never force-close a window" rule (decision #4) applies uniformly: a
+ *  plain `kind:"plot"`/`"snapshot"`-adjacent window's `datasetId` nulls out
+ *  (its existing behaviour), and a `kind:"panel"` window's `panel.
+ *  datasetIds` drops the removed ids (item 19's "a removed dataset drops
+ *  out of the panel" — the render layer already treats a missing id as an
+ *  empty slot, and an empty `datasetIds` as the whole-window empty state).
+ *  Identity (same window object) when nothing on it changed, so callers
+ *  that spread this into other patch fields don't force needless re-renders. */
+export function pruneWindowDatasetRefs(
+  windows: readonly PlotWindow[],
+  removed: ReadonlySet<string>,
+): PlotWindow[] {
+  return windows.map((w) => {
+    const patch: Partial<PlotWindow> = {};
+    if (w.datasetId && removed.has(w.datasetId)) patch.datasetId = null;
+    if (w.panel && w.panel.datasetIds.some((id) => removed.has(id))) {
+      patch.panel = { ...w.panel, datasetIds: w.panel.datasetIds.filter((id) => !removed.has(id)) };
+    }
+    return Object.keys(patch).length > 0 ? { ...w, ...patch } : w;
+  });
 }
 
 // ── Edge / sibling snapping while dragging (item 12) ────────────────────────

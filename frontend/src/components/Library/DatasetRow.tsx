@@ -14,6 +14,7 @@ import { DATASET_DND } from "./useLibraryTree";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { Badge } from "../primitives";
 import { dropEdgeAt, folderDatasets, resolveDropBeforeId, type DropEdge } from "../../lib/foldertree";
+import { multiSelectMenuItems } from "../../lib/panelMenu";
 import type { Dataset } from "../../lib/types";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
@@ -71,6 +72,8 @@ export default function DatasetRow({
   const createFolder = useApp((s) => s.createFolder);
   const folders = useApp((s) => s.folders);
   const reimportDataset = useApp((s) => s.reimportDataset);
+  const createPanelWindow = useApp((s) => s.createPanelWindow);
+  const focusWindow = useApp((s) => s.focusWindow);
 
   // Inline editors (null = not editing); rename allows an empty draft.
   const [rename, setRename] = useState<string | null>(null);
@@ -168,13 +171,8 @@ export default function DatasetRow({
             : []),
         ]
       : []),
-    // Merge the multi-selection (≥2) into one new dataset.
-    ...(selected && selectedCount > 1
-      ? [
-          { separator: true } as ContextMenuItem,
-          { label: `Merge ${selectedCount} selected`, run: mergeSelected } as ContextMenuItem,
-        ]
-      : []),
+    // Merge / panel / overlay quick picks for the multi-selection (item 19).
+    ...multiSelectMenuItems(selected, selectedCount, selectedIds, { mergeSelected, createPanelWindow, focusWindow }),
     { separator: true },
     { label: "Move up", run: () => moveDataset(d.id, -1), disabled: !canMoveUp },
     { label: "Move down", run: () => moveDataset(d.id, 1), disabled: !canMoveDown },
