@@ -60,6 +60,15 @@ GOTO #11 drift (implemented but listed open).
 ~~19. **Multi-plot panel builder**~~ COMPLETED 2026-07-11 (see
     Completed — v1 + the drag-rearrange follow-up both shipped).
 
+21. **Page-anchored annotations** (owner request 2026-07-11, follows the
+    margin-annotation fix): an annotation may pin to the PAGE (canvas
+    fractions — stays put through zoom/pan, Origin's page-text model)
+    instead of data coords. `Annotation.anchor?: "data"|"page"` (default
+    data, back-compat); right-click toggle "Pin to page / Pin to data"
+    converts coords in place (no jump); drag/hit/resize ride the same
+    layout branch; `.dwk` sanitize + matplotlib export parity (figure
+    fraction, y flipped) included.
+
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
 ~~20. **Axis tick-label precision + engineering notation**~~ COMPLETED
