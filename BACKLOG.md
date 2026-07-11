@@ -18,7 +18,6 @@ campaigns never enumerated)
 |---|------|-------------|------|
 | 24 | Undo/redo stack (design + store history slice + per-action-class tests) | MAIN #9 | L |
 | 25 | Re-import from source file (source path on Dataset + refresh via recalc DAG) | MAIN #10 | M |
-| 26 | Reductions GUI dialogs (W-H / FFT thickness / refl FFT over shipped routes) | MAIN #11 | M |
 | 27 | Reciprocal (Arrhenius) axis scale | MAIN #12 | S |
 | 28 | Fill between / under curves (screen + export) | MAIN #13 | S |
 | 29 | Color-mapped scatter (z → point color) | MAIN #14 | S |
@@ -68,7 +67,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | #9–#16 (2026-07-11 Origin-parity audit) + owner gates + deferrals |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | #9, #10, #12–#16 (2026-07-11 Origin-parity audit; #11 shipped same day) + owner gates + deferrals |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence |

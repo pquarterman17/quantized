@@ -76,6 +76,8 @@ import {
 } from "./windows";
 // The undo/redo snapshot-history slice (MAIN_PLAN #9), composed the same way.
 import { createHistorySlice, type HistorySlice } from "./history";
+// The Reductions workshop's open/method slice (MAIN_PLAN #11), composed the same way.
+import { createReductionsSlice, type ReductionsSlice } from "./reductions";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -303,7 +305,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -491,21 +493,16 @@ export interface AppState extends WindowsSlice, HistorySlice {
    *  carries the Δx/slope sign), placed/dragged by `gadgetCursorsPlugin`. */
   gadgetCursors: [number, number] | null;
   gadgetCursorResult: Measurement | null;
-  cmdkOpen: boolean;
-  curveFitOpen: boolean;
-  hysteresisOpen: boolean;
-  peaksOpen: boolean;
+  cmdkOpen: boolean; curveFitOpen: boolean;
+  hysteresisOpen: boolean; peaksOpen: boolean;
   reflectivityOpen: boolean;
   // A pending SLD layer seeded by the calculators SLD tab; consumed once by the
   // reflectivity workshop on open, then cleared (cross-panel hook).
   reflectivitySeed: ReflectivitySeed | null;
-  baselineOpen: boolean;
-  calculatorsOpen: boolean;
+  baselineOpen: boolean; calculatorsOpen: boolean;
   magToolsOpen: boolean;
-  rsmOpen: boolean;
-  digitizerOpen: boolean;
-  datasetMathOpen: boolean;
-  tabulateOpen: boolean;
+  rsmOpen: boolean; digitizerOpen: boolean;
+  datasetMathOpen: boolean; tabulateOpen: boolean;
   distributionOpen: boolean;
   dataFilterOpen: boolean;
   statsChooserOpen: boolean; // the "which test?" front door (#26)
@@ -1031,6 +1028,8 @@ export const useApp = create<AppState>((set, get) => ({
   ...createWindowsSlice(set, get),
   // Undo/redo (MAIN_PLAN #9) — see store/history.ts for the snapshot design.
   ...createHistorySlice(set),
+  // Reductions workshop open/method (MAIN_PLAN #11) — see store/reductions.ts.
+  ...createReductionsSlice(set),
   datasets: [],
   activeId: null,
   worksheetId: null,
