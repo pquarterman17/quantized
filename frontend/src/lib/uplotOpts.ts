@@ -297,9 +297,12 @@ export interface BuildOptsArgs {
    *  Baseline workshop's "Anchor points" method is live (see PlotStage's
    *  `baselineAnchorEdit` store read). Composes with any tool like
    *  peakWizardEdit — plain clicks add/remove anchors, dragging a marker
-   *  moves it (capture-phase beats box-zoom for that gesture only). */
+   *  moves it (capture-phase beats box-zoom for that gesture only).
+   *  `getAnchors` is a live getter, not a snapshot (MAIN #8f): the plugin
+   *  pulls the current list per event/draw so anchor edits don't need a
+   *  rebuild of this opts object or the uPlot instance. */
   anchorEdit?: {
-    anchors: AnchorPoint[];
+    getAnchors: () => readonly AnchorPoint[];
     onAdd: (x: number, y: number) => void;
     onMove: (index: number, x: number, y: number) => void;
     onRemove: (index: number) => void;
@@ -633,8 +636,8 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // Anchor-point baseline editing (GOTO #2): also tool-independent —
   // workshop-scoped, not toolbar-tool-scoped (see BuildOptsArgs.anchorEdit).
   if (args.anchorEdit) {
-    const { anchors, onAdd, onMove, onRemove } = args.anchorEdit;
-    plugins.push(anchorEditPlugin(anchors, { onAdd, onMove, onRemove, color: accentColor }));
+    const { getAnchors, onAdd, onMove, onRemove } = args.anchorEdit;
+    plugins.push(anchorEditPlugin(getAnchors, { onAdd, onMove, onRemove, color: accentColor }));
   }
   // Rich axis labels / title (GOTO #5) — see the AST block above the plugins.
   if (xRich || yRich || y2Rich || titleRich) {

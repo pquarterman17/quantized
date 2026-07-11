@@ -1,13 +1,16 @@
 // Peak Analyzer wizard click-on-plot marker editing (interaction plan item 5,
 // deferred from closed gap #31): hit-test the wizard's candidate markers
 // against a plot click, in PIXEL space so the tolerance stays constant across
-// zoom levels — the 2-D point-marker sibling of uplotGadgets' hitTestRoiHandles
-// / hitTestCursorHandles (1-D edges) and uplotOverlays' pickRefLine (1-D
-// lines). Kept in its own sibling lib rather than uplotGadgets.ts since it's
-// peak-wizard-specific, not generic gadget-frame infrastructure — usePeakWizard
+// zoom levels. Rides the shared point-gesture core (lib/pointGesture) for the
+// pixel-frame conversion + nearest-point hit test — this file was the template
+// the 2026-07-11 pixel-frame bug was cloned FROM, which is exactly why the
+// core now exists once (MAIN #8). What stays here is peak-wizard domain logic:
+// the visible-marker projection and the click-only edit plugin — usePeakWizard
 // is the only owner of the candidate list this hit-tests against.
 
 import type uPlot from "uplot";
+
+import { CLICK_PX, hitTestPoints, pointPixels, type GesturePoint } from "./pointGesture";
 
 /** A wizard candidate marker tagged with its index into the FULL `candidates`
  *  array (what `removePeak`/`togglePeak` expect — NOT its position among only
@@ -32,60 +35,30 @@ export function visiblePeakMarkers(
   return out;
 }
 
-/** Marker (center, height) data coords → plot PIXELS via `valToPos` — kept as
- *  a thin, separately-testable step (same idiom as the sibling gadget
- *  plugins' `fakeU`: a minimal `{valToPos}` stub stands in for uPlot). */
+/** Marker (center, height) data coords → the core's pixel-tagged gesture
+ *  points (center→x, height→y), via `pointPixels` — the CSS-px frame contract
+ *  lives there. Separately testable with a minimal `{valToPos}` stub. */
 export function peakMarkerPixels(
   u: Pick<uPlot, "valToPos">,
   markers: readonly PeakMarkerCandidate[],
-): (PeakMarkerCandidate & { x: number; y: number })[] {
-  return markers.map((m) => ({
-    ...m,
-    // CSS px relative to u.over (same frame as the pointer's clientX-rect
-    // math) — NOT the `true` canvas-pixel form, which is DPR-scaled and
-    // bbox-offset (review 2026-07-11: same fix as uplotAnchors; this file
-    // was the template the bug was cloned from).
-    x: u.valToPos(m.center, "x"),
-    y: u.valToPos(m.height, "y"),
-  }));
-}
-
-/** Which marker (given in PIXELS, from `peakMarkerPixels`) the pointer (also
- *  pixels) is nearest to, within `tol` px — Euclidean, since a marker is a
- *  POINT (not an edge/line, so the tolerance is a circle around it rather
- *  than hitTestRoiHandles/hitTestCursorHandles's 1-D band). Nearest wins; an
- *  exact-distance tie keeps the earlier (lower-index) marker. Null when
- *  nothing is within tolerance, including an empty marker list. */
-export function hitTestPeakMarkers(
-  markers: readonly { index: number; x: number; y: number }[],
-  pointer: { x: number; y: number },
-  tol = 8,
-): number | null {
-  let best: number | null = null;
-  let bestDist = Infinity;
-  for (const m of markers) {
-    if (!Number.isFinite(m.x) || !Number.isFinite(m.y)) continue;
-    const d = Math.hypot(m.x - pointer.x, m.y - pointer.y);
-    if (d <= tol && d < bestDist) {
-      bestDist = d;
-      best = m.index;
-    }
-  }
-  return best;
+): (GesturePoint & { px: number; py: number })[] {
+  return pointPixels(
+    u,
+    markers.map(({ index, center, height }) => ({ index, x: center, y: height })),
+  );
 }
 
 /**
  * Wizard-scoped plot plugin (step ② only — see PlotStage's `peakWizardEdit`
  * prop, sourced from the store bridge usePeakWizard maintains). A plain click
- * (mousedown+mouseup with < 6px movement, matching the gadget plugins'
- * click-vs-drag threshold) either removes the marker under the pointer or
- * adds a new candidate at the clicked x; a genuine drag (box zoom, pan) is
- * left alone. Markers themselves are NOT drawn here — they already ride the
- * existing `setPeakOverlay` points series (`withPeakOverlay` in
- * plotdata.ts) — this plugin only owns the click gesture plus a
- * crosshair/pointer cursor swap for affordance. Composes unconditionally of
- * `tool` (like wheelZoomPlugin), since the interaction is wizard-scoped, not
- * toolbar-tool-scoped.
+ * (mousedown+mouseup with < CLICK_PX movement, the shared click-vs-drag
+ * threshold) either removes the marker under the pointer or adds a new
+ * candidate at the clicked x; a genuine drag (box zoom, pan) is left alone.
+ * Markers themselves are NOT drawn here — they already ride the existing
+ * `setPeakOverlay` points series (`withPeakOverlay` in plotdata.ts) — this
+ * plugin only owns the click gesture plus a crosshair/pointer cursor swap for
+ * affordance. Composes unconditionally of `tool` (like wheelZoomPlugin),
+ * since the interaction is wizard-scoped, not toolbar-tool-scoped.
  */
 export function peakMarkerEditPlugin(
   markers: readonly PeakMarkerCandidate[],
@@ -103,7 +76,7 @@ export function peakMarkerEditPlugin(
           if (down) return; // fixed while a click gesture is in flight
           const rect = over.getBoundingClientRect();
           const pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-          const hit = hitTestPeakMarkers(peakMarkerPixels(u, markers), pointer, tol);
+          const hit = hitTestPoints(peakMarkerPixels(u, markers), pointer, tol);
           over.style.cursor = hit != null ? "pointer" : "crosshair";
         });
 
@@ -117,8 +90,8 @@ export function peakMarkerEditPlugin(
             const up = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
             const moved = down ? Math.hypot(up.x - down.x, up.y - down.y) : Infinity;
             down = null;
-            if (moved >= 6) return; // a drag (box zoom / pan) — not a click
-            const hit = hitTestPeakMarkers(peakMarkerPixels(u, markers), up, tol);
+            if (moved >= CLICK_PX) return; // a drag (box zoom / pan) — not a click
+            const hit = hitTestPoints(peakMarkerPixels(u, markers), up, tol);
             if (hit != null) opts.onRemove(hit);
             else opts.onAdd(u.posToVal(up.x, "x"));
           };

@@ -38,7 +38,10 @@ export interface PlotViewportProps
    *  (and compare unequal) on every render. */
   peakWizardEdit: PeakWizardEditBridge | null;
   /** Anchor-point baseline editing (GOTO #2) — RAW store bridge, same
-   *  stable-reference reasoning as `peakWizardEdit` above. */
+   *  stable-reference reasoning as `peakWizardEdit` above, but STRONGER
+   *  (MAIN #8f): the bridge is identity-stable across anchor edits (anchors
+   *  flow through its `getAnchors` getter), so this dependency only rebuilds
+   *  the plot on anchor-mode activation/deactivation — never per gesture. */
   anchorEdit: AnchorEditBridge | null;
   /** Cross-window link group (MULTI_PLOT_PLAN item 13): when set, this
    *  instance joins the uPlot cursor-sync group `syncKey` AND the module
@@ -84,7 +87,7 @@ export default function PlotViewport(props: PlotViewportProps) {
         onRemove: peakWizardEdit.removePeak,
       },
       anchorEdit: anchorEdit && {
-        anchors: anchorEdit.anchors,
+        getAnchors: anchorEdit.getAnchors,
         onAdd: anchorEdit.addAnchor,
         onMove: anchorEdit.moveAnchor,
         onRemove: anchorEdit.removeAnchor,

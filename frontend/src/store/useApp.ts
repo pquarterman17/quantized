@@ -266,14 +266,14 @@ export interface PeakWizardEditBridge {
 }
 
 /** Anchor-point baseline click/drag editing (GOTO #2) — the bridge PlotStage
- *  reads to wire `anchorEditPlugin` (lib/uplotAnchors.ts). `useBaseline` is
- *  the sole owner of the anchor list and the mutators; this is the same THIN
- *  live-bridge shape as PeakWizardEditBridge, pushed into the store only
- *  while the Baseline workshop's "Anchor points" method is live — null the
- *  rest of the time (panel closed or another method selected). Anchors are
- *  (x, y) DATA coords. */
+ *  reads to wire `anchorEditPlugin` (lib/uplotAnchors.ts). `useBaseline` owns
+ *  the anchor list + mutators; published only while the workshop's "Anchor
+ *  points" method is live, null otherwise. Anchors are (x, y) DATA coords.
+ *  IDENTITY CONTRACT (MAIN #8f): published ONCE per activation and stable
+ *  across edits — anchors flow through `getAnchors` (a ref read), because
+ *  PlotViewport keys its uPlot-rebuild effect on this object's identity. */
 export interface AnchorEditBridge {
-  anchors: { index: number; x: number; y: number }[];
+  getAnchors: () => { index: number; x: number; y: number }[];
   addAnchor: (x: number, y: number) => void;
   moveAnchor: (index: number, x: number, y: number) => void;
   removeAnchor: (index: number) => void;
