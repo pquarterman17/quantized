@@ -124,10 +124,29 @@ def _apply_overrides(
         # font_size override -- matches the screen, where each annotation's
         # OWN size (Annotation.size) always overrides the plot's base font.
         size = ann.get("size")
+        ann_kw: dict[str, Any] = {}
+        x, y = float(ann.get("x", 0.0)), float(ann.get("y", 0.0))
+        if ann.get("anchor") == "page":
+            # MAIN #21: page-anchored on screen (CANVAS fractions, x
+            # rightward/y DOWNWARD -- see Annotation.anchor's doc) -> figure
+            # fraction placement (x rightward/y UPWARD) rather than
+            # axes-data coords, so the label stays pinned to the same page
+            # position independent of the axes' data range. The Y AXIS IS
+            # FLIPPED between the two conventions -- canvas y=0 is the top,
+            # figure fraction y=0 is the bottom -- so `1 - y` is required,
+            # not optional. Canvas fractions and matplotlib figure fractions
+            # are NOT geometrically identical (the canvas includes the axes
+            # margins at a different proportion than matplotlib's own
+            # figure margins) -- this is deliberately Origin-parity-in-
+            # spirit (pin to the page, stay put through zoom/pan), not
+            # pixel-identical placement between screen and export.
+            ann_kw["xycoords"] = "figure fraction"
+            y = 1.0 - y
         ax.annotate(
             safe_mathtext_label(str(ann.get("text", ""))),
-            xy=(float(ann.get("x", 0.0)), float(ann.get("y", 0.0))),
+            xy=(x, y),
             fontsize=float(size) if size else float(ov.get("font_size", st.font_size)),
+            **ann_kw,
         )
 
     margins = ov.get("margins")

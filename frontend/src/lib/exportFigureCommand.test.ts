@@ -61,6 +61,21 @@ describe("liveViewOverrides", () => {
     expect(ov?.annotations ?? []).toHaveLength(0);
   });
 
+  it("carries a page-anchored annotation's anchor through, omitting it for a data-anchored one (MAIN #21)", () => {
+    const ov = liveViewOverrides(
+      fakeGet({
+        annotations: [
+          { id: "a1", x: 0.2, y: 0.8, text: "field", anchor: "page" },
+          { id: "a2", x: 3, y: 4, text: "Hc" },
+        ],
+      }),
+    );
+    expect(ov?.annotations).toEqual([
+      { x: 0.2, y: 0.8, text: "field", anchor: "page" },
+      { x: 3, y: 4, text: "Hc" },
+    ]);
+  });
+
   it("omits annotations entirely (not an empty array) when there are none", () => {
     const ov = liveViewOverrides(fakeGet({}));
     expect(ov).not.toHaveProperty("annotations");

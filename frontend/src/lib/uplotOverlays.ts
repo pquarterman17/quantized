@@ -6,7 +6,7 @@
 
 import type uPlot from "uplot";
 
-import { hitTestAnnotationBody, hitTestAnnotationHandle, overPointerToCanvas } from "./annotationHit";
+import { canvasToOverCss, hitTestAnnotationBody, hitTestAnnotationHandle, overPointerToCanvas } from "./annotationHit";
 import { CLICK_PX } from "./pointGesture";
 import type { ColorScatterSpec } from "./colorscatter";
 import { colormap, normalize } from "./colormap";
@@ -192,6 +192,63 @@ export function annotationFont(baseFont: string, size?: number): string {
   return baseFont.replace(/\d+(?:\.\d+)?px/, `${size}px`);
 }
 
+/** Clamp a fraction to [0, 1] — the shared clamp every page-anchor helper
+ *  below uses (same convention as `plotview.ts`'s `legendXYOrNull`). */
+function clamp01(v: number): number {
+  return Math.min(1, Math.max(0, v));
+}
+
+/** PAGE-anchor conversion (MAIN #21): a CANVAS pixel -> the fraction
+ *  `Annotation.anchor:"page"` stores, clamped into [0, 1] so an off-canvas
+ *  or margin-placed dot still converts to a valid page position. Degenerate
+ *  (zero/negative) canvas dims return `{0, 0}` rather than dividing by zero.
+ *  Pure — the exact inverse of `pageXYToCanvasPx` below (see
+ *  `uplotOverlays.test.ts`'s round-trip test), which is what makes the
+ *  data<->page toggle (`annotationAnchorConversions`) safe to compute
+ *  without a live canvas. */
+export function canvasPxToPageXY(
+  px: number,
+  py: number,
+  canvasW: number,
+  canvasH: number,
+): { x: number; y: number } {
+  if (canvasW <= 0 || canvasH <= 0) return { x: 0, y: 0 };
+  return { x: clamp01(px / canvasW), y: clamp01(py / canvasH) };
+}
+
+/** The inverse of `canvasPxToPageXY`: a page fraction -> its CANVAS pixel —
+ *  `annotationLayout`'s page branch and the toggle conversion both use this
+ *  same one implementation so draw and hit-test never disagree (the same
+ *  "one geometry source" discipline this file's header describes). */
+export function pageXYToCanvasPx(
+  page: { x: number; y: number },
+  canvasW: number,
+  canvasH: number,
+): { x: number; y: number } {
+  return { x: page.x * canvasW, y: page.y * canvasH };
+}
+
+/** Clamp a page-anchor fraction so its CANVAS pixel stays `pad` px inside the
+ *  canvas edges — the page-anchor analogue of the interactive plugin's
+ *  `clampToCanvas` (data-anchor pad), expressed directly in fraction space so
+ *  it needs no live uPlot instance. Degenerate (zero/negative) canvas dims
+ *  skip the clamp (return the fraction unchanged) rather than dividing by
+ *  zero — matching `canvasPxToPageXY`'s same-case fallback. */
+export function clampPageXY(
+  x: number,
+  y: number,
+  canvasW: number,
+  canvasH: number,
+  pad = 6,
+): { x: number; y: number } {
+  if (canvasW <= 0 || canvasH <= 0) return { x, y };
+  const loX = pad / canvasW;
+  const hiX = 1 - loX;
+  const loY = pad / canvasH;
+  const hiY = 1 - loY;
+  return { x: Math.min(hiX, Math.max(loX, x)), y: Math.min(hiY, Math.max(loY, y)) };
+}
+
 /** One annotation's on-canvas geometry — the SINGLE geometry implementation
  *  shared by the plain draw pass and the pointer-mode hit-test/selection
  *  outline (see `annotationHit.ts`'s header for why that matters). `tx`/`ty`
@@ -215,18 +272,28 @@ export function annotationLayout(
   baseFont: string,
 ): AnnotationLayout | null {
   if (!Number.isFinite(a.x) || !Number.isFinite(a.y)) return null;
-  const hasY2 = u.scales.y2 != null;
-  const yScale = a.axis === 1 && hasY2 ? "y2" : "y";
-  const px = u.valToPos(a.x, "x", true);
-  const py = u.valToPos(a.y, yScale, true);
-  const font = annotationFont(baseFont, a.size);
-  u.ctx.font = font;
-  const textWidth = a.text ? u.ctx.measureText(a.text).width : 0;
   // Label clamping bounds are the whole CANVAS, not the axes bbox: a dragged
   // annotation may legitimately live in the margins (Origin's model — owner
   // report 2026-07-11: dragging the "700 mT" label outside the axes box made
-  // it vanish). Fall back to the bbox for stub contexts without a canvas.
+  // it vanish). Fall back to the bbox for stub contexts without a canvas —
+  // also the PAGE anchor's own frame (MAIN #21: x/y are canvas fractions),
+  // so it's computed unconditionally, not just inside the label-clamp step.
   const canvasW = u.ctx.canvas?.width ?? u.bbox.left + u.bbox.width;
+  const canvasH = u.ctx.canvas?.height ?? u.bbox.top + u.bbox.height;
+  // PAGE anchor (MAIN #21, Origin's page-text model): x/y are canvas
+  // fractions, resize-stable — same one conversion `pageXYToCanvasPx` the
+  // toggle-conversion helper below inverts, so draw/hit-test/toggle can
+  // never disagree. DATA anchor (absent/"data", back-compat): x/y run
+  // through valToPos exactly as before this field existed.
+  const hasY2 = u.scales.y2 != null;
+  const yScale = a.axis === 1 && hasY2 ? "y2" : "y";
+  const { x: px, y: py } =
+    a.anchor === "page"
+      ? pageXYToCanvasPx({ x: a.x, y: a.y }, canvasW, canvasH)
+      : { x: u.valToPos(a.x, "x", true), y: u.valToPos(a.y, yScale, true) };
+  const font = annotationFont(baseFont, a.size);
+  u.ctx.font = font;
+  const textWidth = a.text ? u.ctx.measureText(a.text).width : 0;
   const { x: tx, align } = clampAnnotationLabelX(px, textWidth, 6, 0, canvasW);
   const lineHeight = fontPx(font) * 1.3;
   const ty = Math.max(py - 2, lineHeight);
@@ -335,10 +402,49 @@ export interface AnnotationEditOpts {
   onMove?: (id: string, x: number, y: number) => void;
   onResize?: (id: string, size: number) => void;
   onEditText?: (id: string) => void;
-  onContextMenu?: (id: string, clientX: number, clientY: number) => void;
+  /** `conv` (MAIN #21) is the hit annotation's data<->page anchor conversion,
+   *  precomputed at menu-open time from its CURRENT on-canvas position (see
+   *  `annotationAnchorConversions`) — the menu builder (React side) has no
+   *  live uPlot instance of its own, so it can't compute this itself. Staled
+   *  by any pan/zoom, but the menu already closes on scroll/zoom, so that's
+   *  never observable. */
+  onContextMenu?: (
+    id: string,
+    clientX: number,
+    clientY: number,
+    conv: { toPage: { x: number; y: number }; toData: { x: number; y: number } },
+  ) => void;
   /** Double-click on EMPTY canvas — reset the zoom through the store (clears
    *  committed axis limits, which uPlot's internal dblclick-autoscale can't). */
   onResetView?: () => void;
+}
+
+/** The data<->page anchor conversion for ONE annotation (MAIN #21), computed
+ *  from its CURRENT on-canvas position regardless of its CURRENT anchor —
+ *  `toPage` is what its coords would become on a data->page toggle (canvas
+ *  px divided by canvas dims, `canvasPxToPageXY`); `toData` is the reverse
+ *  (canvas px -> CSS px relative to `over` via `canvasToOverCss` ->
+ *  `u.posToVal`, on the SAME y scale (`y`/`y2`) `annotationLayout` resolved
+ *  `a.axis` against). The object-menu toggle (`useAnnotationEdit.openMenu`)
+ *  picks whichever of the two matches the requested direction, so the
+ *  label's on-screen position never jumps when the anchor flips. Exported
+ *  for its own round-trip unit test (data -> page -> data lands back at the
+ *  original coords within float tolerance). */
+export function annotationAnchorConversions(
+  u: Pick<uPlot, "ctx" | "posToVal" | "scales" | "root" | "over">,
+  a: Annotation,
+  layout: Pick<AnnotationLayout, "px" | "py">,
+): { toPage: { x: number; y: number }; toData: { x: number; y: number } } {
+  const canvasW = u.ctx.canvas?.width ?? 0;
+  const canvasH = u.ctx.canvas?.height ?? 0;
+  const toPage = canvasPxToPageXY(layout.px, layout.py, canvasW, canvasH);
+  const rootRect = u.root.getBoundingClientRect();
+  const overRect = u.over.getBoundingClientRect();
+  const overCss = canvasToOverCss({ x: layout.px, y: layout.py }, { width: canvasW, height: canvasH }, rootRect, overRect);
+  const hasY2 = u.scales.y2 != null;
+  const yScale = a.axis === 1 && hasY2 ? "y2" : "y";
+  const toData = { x: u.posToVal(overCss.x, "x"), y: u.posToVal(overCss.y, yScale) };
+  return { toPage, toData };
 }
 
 export function annotationPlugin(
@@ -562,6 +668,24 @@ export function annotationPlugin(
                   const overRect = over.getBoundingClientRect();
                   const downOver = { x: e.clientX - overRect.left, y: e.clientY - overRect.top };
                   const onMoveEv = (ev: MouseEvent) => {
+                    if (a.anchor === "page") {
+                      // MAIN #21: a page annotation has no data scale to drag
+                      // through — accumulate the delta in CANVAS px instead
+                      // (reusing `rect`/`downCanvas`, the same root-relative
+                      // canvas pointer already captured for hit-testing at
+                      // mousedown) and convert to a FRACTION delta by dividing
+                      // by the canvas dims, clamped by `clampPageXY` (the
+                      // page-space analogue of `clampToCanvas`'s pad).
+                      const nowCanvas = canvasPointer(rect, ev.clientX - rect.left, ev.clientY - rect.top);
+                      const cw = u.ctx.canvas.width;
+                      const chh = u.ctx.canvas.height;
+                      const dx = cw > 0 ? (nowCanvas.x - downCanvas.x) / cw : 0;
+                      const dy = chh > 0 ? (nowCanvas.y - downCanvas.y) / chh : 0;
+                      const clampedPage = clampPageXY(a.x + dx, a.y + dy, cw, chh);
+                      dragMove = { id: hit, x: clampedPage.x, y: clampedPage.y };
+                      u.redraw();
+                      return;
+                    }
                     const nowX = ev.clientX - overRect.left;
                     const nowY = ev.clientY - overRect.top;
                     // Delta-based (not absolute posToVal-of-pointer): grabbing
@@ -599,12 +723,19 @@ export function annotationPlugin(
                 (e: MouseEvent) => {
                   const rect = root.getBoundingClientRect();
                   const p = canvasPointer(rect, e.clientX - rect.left, e.clientY - rect.top);
-                  const hit = hitTestAnnotationBody(hitGeoms(geoms()), p, 8 * p.scale);
+                  const gs = geoms();
+                  const hit = hitTestAnnotationBody(hitGeoms(gs), p, 8 * p.scale);
                   if (hit) {
                     e.preventDefault();
                     e.stopPropagation(); // don't fall through to the plot's own menu
                     o.onSelect?.(hit);
-                    o.onContextMenu?.(hit, e.clientX, e.clientY);
+                    // MAIN #21: precompute the data<->page toggle conversion
+                    // from the hit annotation's CURRENT on-canvas position —
+                    // the React-side menu builder has no live uPlot instance
+                    // to compute this itself (see AnnotationEditOpts.onContextMenu's doc).
+                    const a = annotations.find((x) => x.id === hit)!;
+                    const g = gs.find((x) => x.id === hit)!;
+                    o.onContextMenu?.(hit, e.clientX, e.clientY, annotationAnchorConversions(u, live(a), g.layout));
                   }
                 },
                 { capture: true },

@@ -77,9 +77,12 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
  *  `size` override) + the legend's screen position — free `legendXY`
  *  (fractions) maps to matplotlib's `loc: "custom"` + `anchor`
  *  (`calc.figure_overrides`' pre-existing #14 drag-to-place handling); a
- *  corner `legendPos` maps through `legendPosToLoc`. Everything else this
- *  command already sends (title/labels/scales/styles) — this only adds the
- *  two screen-state pieces that had no export path before. */
+ *  corner `legendPos` maps through `legendPosToLoc`. A page-anchored
+ *  annotation (MAIN #21) carries `anchor: "page"` through so the backend
+ *  renders it as figure-fraction placement instead of axes-data coords —
+ *  see `calc.figure_overrides._apply_overrides`'s y-flip. Everything else
+ *  this command already sends (title/labels/scales/styles) — this only
+ *  adds the screen-state pieces that had no export path before. */
 export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
   const st = s();
   const legend: FigureOverrides["legend"] = st.showLegend
@@ -89,6 +92,12 @@ export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
     : { show: false };
   const annotations = st.annotations
     .filter((a) => Number.isFinite(a.x) && Number.isFinite(a.y))
-    .map((a) => ({ x: a.x, y: a.y, text: a.text, ...(a.size ? { size: a.size } : {}) }));
+    .map((a) => ({
+      x: a.x,
+      y: a.y,
+      text: a.text,
+      ...(a.size ? { size: a.size } : {}),
+      ...(a.anchor === "page" ? { anchor: "page" as const } : {}),
+    }));
   return compactOverrides({ legend, annotations }) ?? undefined;
 }

@@ -63,4 +63,16 @@ describe("updateAnnotation (MAIN #18 — commit-once drag/resize/text-edit)", ()
     useApp.getState().updateAnnotation("ghost", { x: 99 });
     expect(useApp.getState().annotations).toEqual([{ id: "a1", x: 1, y: 2, text: "Tc" }]);
   });
+
+  // MAIN #21: the page/data anchor toggle patches `anchor` alongside x/y in
+  // ONE commit (see useAnnotationEdit.togglePageAnchor) — the same
+  // commit-once discipline the drag/resize/text-edit patches above already
+  // exercise, extended to this new field.
+  it("patches anchor alongside x/y for the page/data toggle", () => {
+    useApp.setState({ annotations: [{ id: "a1", x: 1, y: 2, text: "Tc" }] });
+    useApp.getState().updateAnnotation("a1", { anchor: "page", x: 0.4, y: 0.6 });
+    expect(useApp.getState().annotations[0]).toEqual({ id: "a1", x: 0.4, y: 0.6, text: "Tc", anchor: "page" });
+    useApp.getState().updateAnnotation("a1", { anchor: "data", x: 1, y: 2 });
+    expect(useApp.getState().annotations[0]).toMatchObject({ anchor: "data", x: 1, y: 2 });
+  });
 });

@@ -4,16 +4,20 @@ import type uPlot from "uplot";
 import type { ColorScatterSpec } from "./colorscatter";
 import type { Annotation, RefLine } from "./types";
 import {
+  annotationAnchorConversions,
   annotationBox,
   annotationFont,
   annotationLayout,
   annotationPlugin,
+  canvasPxToPageXY,
   clampAnnotationLabelX,
   clampAnnotationSize,
+  clampPageXY,
   colorScatterPlugin,
   errorBarsPlugin,
   MAX_ANNOTATION_SIZE,
   MIN_ANNOTATION_SIZE,
+  pageXYToCanvasPx,
   pickRefLine,
   refLinePlugin,
   REGION_SHADE_ALPHA,
@@ -547,6 +551,124 @@ describe("annotationLayout / annotationBox (MAIN #18 shared draw/hit-test geomet
   });
 });
 
+describe("canvasPxToPageXY / pageXYToCanvasPx / clampPageXY (MAIN #21 page-anchor geometry)", () => {
+  it("round-trips a canvas pixel through the page fraction and back", () => {
+    const page = canvasPxToPageXY(37, 88, 200, 100);
+    expect(page).toEqual({ x: 0.185, y: 0.88 });
+    expect(pageXYToCanvasPx(page, 200, 100)).toEqual({ x: 37, y: 88 });
+  });
+
+  it("clamps an out-of-canvas pixel into [0, 1] rather than returning a negative/>1 fraction", () => {
+    expect(canvasPxToPageXY(-50, 500, 100, 100)).toEqual({ x: 0, y: 1 });
+  });
+
+  it("returns {0, 0} for a degenerate (zero/negative) canvas instead of dividing by zero", () => {
+    expect(canvasPxToPageXY(10, 10, 0, 0)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("clampPageXY keeps the fraction's canvas pixel `pad` px inside the edges", () => {
+    // canvas 100x100, pad=6 -> valid fraction range [0.06, 0.94] on both axes.
+    expect(clampPageXY(-0.5, 1.5, 100, 100)).toEqual({ x: 0.06, y: 0.94 });
+    expect(clampPageXY(0.5, 0.5, 100, 100)).toEqual({ x: 0.5, y: 0.5 }); // untouched mid-canvas
+  });
+
+  it("clampPageXY is a no-op (returns the fraction unchanged) on a degenerate canvas", () => {
+    expect(clampPageXY(2, -3, 0, 0)).toEqual({ x: 2, y: -3 });
+  });
+});
+
+describe("annotationLayout — page anchor (MAIN #21)", () => {
+  /** A minimal annotationLayout stub with an explicit (or absent) canvas —
+   *  same shape as fakeAnnU above, but lets a test control canvas dims
+   *  independently of bbox to distinguish the page branch's canvas-fraction
+   *  math from the data branch's valToPos math. */
+  function fakePageU(canvas?: { width: number; height: number }) {
+    const ctx = {
+      font: "",
+      measureText: (t: string) => ({ width: t.length * 6 }) as TextMetrics,
+      ...(canvas ? { canvas } : {}),
+    };
+    const valToPos = (v: number, scale: string) => (scale === "x" ? v : 100 - v);
+    const raw = {
+      ctx,
+      bbox: { left: 10, top: 5, width: 100, height: 80 },
+      valToPos,
+      scales: { x: {}, y: {} },
+    };
+    return raw as unknown as Pick<uPlot, "valToPos" | "ctx" | "bbox" | "scales">;
+  }
+
+  it("resolves x/y as CANVAS FRACTIONS, not data coords, when anchor is 'page'", () => {
+    const u = fakePageU({ width: 200, height: 100 });
+    const layout = annotationLayout(u, { id: "p1", x: 0.25, y: 0.5, text: "pk", anchor: "page" }, "11px mono")!;
+    expect(layout.px).toBe(50); // 0.25 * 200
+    expect(layout.py).toBe(50); // 0.5 * 100
+  });
+
+  it("never calls valToPos for a page annotation (x/y bypass the axis scale entirely)", () => {
+    const u = fakePageU({ width: 100, height: 100 });
+    // 0.9/0.1 would be off-scale nonsense as DATA coords under this stub's
+    // valToPos (100-0.1=99.9), but as PAGE fractions they're a plain *canvas.
+    const layout = annotationLayout(u, { id: "p1", x: 0.9, y: 0.1, text: "pk", anchor: "page" }, "11px mono")!;
+    expect(layout.px).toBe(90);
+    expect(layout.py).toBe(10);
+  });
+
+  it("falls back to the bbox-derived extents for a canvas-less stub context", () => {
+    const u = fakePageU(); // no ctx.canvas at all
+    const layout = annotationLayout(u, { id: "p1", x: 0.5, y: 0.5, text: "pk", anchor: "page" }, "11px mono")!;
+    // canvasW fallback = bbox.left + bbox.width = 110; canvasH fallback =
+    // bbox.top + bbox.height = 85 (the same fallback idiom the label-clamp
+    // and draw-loop visibility bound already use).
+    expect(layout.px).toBe(55);
+    expect(layout.py).toBe(42.5);
+  });
+
+  it("an absent/'data' anchor is untouched — still resolves through valToPos", () => {
+    const u = fakePageU({ width: 200, height: 100 });
+    const layout = annotationLayout(u, { id: "d1", x: 50, y: 30, text: "Tc" }, "11px mono")!;
+    expect(layout.px).toBe(50);
+    expect(layout.py).toBe(70); // 100 - 30, unaffected by the 200x100 canvas
+  });
+});
+
+// MAIN #21: the toggle conversion (annotationAnchorConversions) — round-trip
+// through the interactive harness's fake valToPos/posToVal (both driven by
+// the SAME `makeInteractiveU` helper the pointer-mode describe block below
+// defines; `function` declarations hoist, so this describe block can use it
+// even though it's textually declared later in the file).
+describe("annotationAnchorConversions — data<->page toggle round-trip (MAIN #21)", () => {
+  it("data -> page -> data lands within float tolerance of the original data coords", () => {
+    const { u } = makeInteractiveU();
+    const dataAnn: Annotation = { id: "a1", x: 37, y: 12, text: "Tc" };
+    const layout1 = annotationLayout(u, dataAnn, "11px mono")!;
+    const conv1 = annotationAnchorConversions(u, dataAnn, layout1);
+
+    // Adopt conv1.toPage as a fresh page-anchored annotation — the same
+    // "convert in place" step the object-menu toggle performs.
+    const pageAnn: Annotation = { ...dataAnn, anchor: "page", x: conv1.toPage.x, y: conv1.toPage.y };
+    const layout2 = annotationLayout(u, pageAnn, "11px mono")!;
+    const conv2 = annotationAnchorConversions(u, pageAnn, layout2);
+
+    expect(conv2.toData.x).toBeCloseTo(dataAnn.x, 9);
+    expect(conv2.toData.y).toBeCloseTo(dataAnn.y, 9);
+  });
+
+  it("page -> data -> page lands within float tolerance of the original page fraction", () => {
+    const { u } = makeInteractiveU();
+    const pageAnn: Annotation = { id: "p1", x: 0.2, y: 0.8, text: "field", anchor: "page" };
+    const layout1 = annotationLayout(u, pageAnn, "11px mono")!;
+    const conv1 = annotationAnchorConversions(u, pageAnn, layout1);
+
+    const dataAnn: Annotation = { ...pageAnn, anchor: "data", x: conv1.toData.x, y: conv1.toData.y };
+    const layout2 = annotationLayout(u, dataAnn, "11px mono")!;
+    const conv2 = annotationAnchorConversions(u, dataAnn, layout2);
+
+    expect(conv2.toPage.x).toBeCloseTo(pageAnn.x, 9);
+    expect(conv2.toPage.y).toBeCloseTo(pageAnn.y, 9);
+  });
+});
+
 // Pointer-mode interactive gesture contract (MAIN #18), driven through jsdom
 // mouse events on a stubbed uPlot — the SAME `makeU`/`ready`/`mouse` idiom
 // uplotAnchors.test.ts uses for anchorEditPlugin. `over`'s getBoundingClientRect
@@ -647,6 +769,48 @@ describe("annotationPlugin — pointer-mode interactive (MAIN #18)", () => {
     expect(onMove).toHaveBeenCalledWith("a1", 60, 30);
   });
 
+  // MAIN #21: a page-anchored annotation has no data scale to drag through —
+  // the delta accumulates in CANVAS px (divided by canvas dims) instead of
+  // posToVal's data-space delta. makeInteractiveU's canvas is 100x100 and
+  // its root/over rects are jsdom's default all-zero (scale 1), so CSS px
+  // deltas here equal canvas-px deltas directly (same identity the existing
+  // data-anchor drag test above already relies on).
+  it("dragging a PAGE-anchored annotation commits FRACTION coords, not data coords", () => {
+    const { u, over } = makeInteractiveU();
+    const onMove = vi.fn();
+    const plugin = annotationPlugin([ann({ x: 0.5, y: 0.5, anchor: "page" })], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: null,
+      onSelect: vi.fn(),
+      onMove,
+    });
+    readyAnn(plugin, u);
+    over.dispatchEvent(annMouse("mousedown", 50, 50)); // dot: 0.5 * 100 canvas px
+    document.dispatchEvent(annMouse("mousemove", 60, 50));
+    document.dispatchEvent(annMouse("mouseup", 60, 50));
+    expect(onMove).toHaveBeenCalledTimes(1);
+    // dx = (60-50)/canvasWidth(100) = 0.1 -> 0.5+0.1 = 0.6; y untouched.
+    expect(onMove).toHaveBeenCalledWith("a1", 0.6, 0.5);
+  });
+
+  it("clamps a dragged PAGE annotation's fraction so its canvas pixel stays on-canvas", () => {
+    const { u, over } = makeInteractiveU();
+    const onMove = vi.fn();
+    const plugin = annotationPlugin([ann({ x: 0.5, y: 0.5, anchor: "page" })], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: null,
+      onSelect: vi.fn(),
+      onMove,
+    });
+    readyAnn(plugin, u);
+    over.dispatchEvent(annMouse("mousedown", 50, 50));
+    document.dispatchEvent(annMouse("mousemove", 500, 50)); // way past the right edge
+    document.dispatchEvent(annMouse("mouseup", 500, 50));
+    expect(onMove).toHaveBeenCalledTimes(1);
+    // clampPageXY's default pad=6 on a 100px canvas -> hi = 1 - 6/100 = 0.94.
+    expect(onMove).toHaveBeenCalledWith("a1", 0.94, 0.5);
+  });
+
   it("a second mousedown on the SAME annotation within the double-click window edits text, not a drag", () => {
     const { u, over } = makeInteractiveU();
     const onEditText = vi.fn();
@@ -717,7 +881,15 @@ describe("annotationPlugin — pointer-mode interactive (MAIN #18)", () => {
     const ev = annMouse("contextmenu", 50, 70);
     const notPrevented = over.dispatchEvent(ev); // false when preventDefault() was called
     expect(onSelect).toHaveBeenCalledWith("a1");
-    expect(onContextMenu).toHaveBeenCalledWith("a1", 50, 70);
+    // MAIN #21: the 4th arg is the precomputed data<->page conversion for
+    // THIS annotation's current position (dot at canvas px 50,70 in a
+    // 100x100 canvas, all-zero jsdom rects -> scale 1) — toData recovers the
+    // annotation's own (data-anchored) x/y exactly, the same round-trip
+    // `annotationAnchorConversions`'s own describe block verifies directly.
+    expect(onContextMenu).toHaveBeenCalledWith("a1", 50, 70, {
+      toPage: { x: 0.5, y: 0.7 },
+      toData: { x: 50, y: 30 },
+    });
     expect(notPrevented).toBe(false);
   });
 

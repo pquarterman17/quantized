@@ -33,11 +33,15 @@ export interface PointerToolSlice {
    *  the module doc for why that's safe. */
   selectedAnnotationId: string | null;
   setSelectedAnnotationId: (id: string | null) => void;
-  /** Commit an annotation edit (drag-move, corner-handle resize, text edit)
-   *  ONCE — the refLine/anchor "plugin-local live preview, store commits on
-   *  release" pattern. `patch.size` (if present) is clamped the same way the
-   *  plugin's live preview already clamps it. No-op for an unknown id. */
-  updateAnnotation: (id: string, patch: Partial<Pick<Annotation, "x" | "y" | "text" | "size">>) => void;
+  /** Commit an annotation edit (drag-move, corner-handle resize, text edit,
+   *  MAIN #21's page/data anchor toggle) ONCE — the refLine/anchor
+   *  "plugin-local live preview, store commits on release" pattern.
+   *  `patch.size` (if present) is clamped the same way the plugin's live
+   *  preview already clamps it. No-op for an unknown id. */
+  updateAnnotation: (
+    id: string,
+    patch: Partial<Pick<Annotation, "x" | "y" | "text" | "size" | "anchor">>,
+  ) => void;
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;

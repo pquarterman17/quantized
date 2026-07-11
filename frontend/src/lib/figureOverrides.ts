@@ -18,9 +18,13 @@ export interface FigureOverrides {
   grid?: boolean;
   /** `size` (MAIN #18 — export parity for the pointer tool's font-size
    *  resize): a per-annotation override, falling back to `font_size` (or
-   *  the style preset's own font size) on the backend when absent — see
+   *  the style preset's own font size) on the backend when absent. `anchor`
+   *  (MAIN #21): `"page"` renders `x`/`y` as FIGURE-fraction placement
+   *  (`xycoords="figure fraction"`, y FLIPPED — canvas y grows downward,
+   *  matplotlib figure fraction grows upward) instead of axes-data
+   *  coordinates; absent = the pre-#21 data-coordinate behaviour. See
    *  `calc.figure_overrides._apply_overrides`. */
-  annotations?: { x: number; y: number; text: string; size?: number }[];
+  annotations?: { x: number; y: number; text: string; size?: number; anchor?: "page" }[];
   /** Manual axis breaks (gap #21, export-side): elided `[lo, hi]` x-ranges,
    *  rendered as twinned panels with diagonal break glyphs
    *  (`calc.figure._render_impl`). `lib/facet.suggestBreaks` proposes

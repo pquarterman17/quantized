@@ -163,6 +163,99 @@ describe("sanitizeView — legendXY (MAIN #18 — free legend position)", () => 
   });
 });
 
+describe("sanitizeView — annotations (MAIN #21 — page/data anchor)", () => {
+  it("round-trips a data-anchored annotation (anchor absent) unchanged", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), annotations: [{ id: "a1", x: 5, y: -3, text: "Tc" }] } as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.annotations).toEqual([{ id: "a1", x: 5, y: -3, text: "Tc" }]);
+  });
+
+  it("round-trips a valid page-anchored annotation's fraction coords and size/axis", () => {
+    const out = sanitizePlotWindows(
+      [
+        win({
+          view: {
+            ...defaultPlotView(),
+            annotations: [{ id: "a1", x: 0.25, y: 0.75, text: "field", anchor: "page", size: 24, axis: 1 }],
+          } as PlotView,
+        }),
+      ],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.annotations).toEqual([
+      { id: "a1", x: 0.25, y: 0.75, text: "field", anchor: "page", size: 24, axis: 1 },
+    ]);
+  });
+
+  it("clamps a page annotation's out-of-range fraction into [0, 1] rather than dropping it", () => {
+    const out = sanitizePlotWindows(
+      [
+        win({
+          view: {
+            ...defaultPlotView(),
+            annotations: [{ id: "a1", x: -0.5, y: 1.5, text: "field", anchor: "page" }],
+          } as unknown as PlotView,
+        }),
+      ],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.annotations).toEqual([{ id: "a1", x: 0, y: 1, text: "field", anchor: "page" }]);
+  });
+
+  it("never clamps a DATA-anchored annotation's coords (only page fractions are clamped)", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), annotations: [{ id: "a1", x: -500, y: 2000, text: "Tc" }] } as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.annotations).toEqual([{ id: "a1", x: -500, y: 2000, text: "Tc" }]);
+  });
+
+  it("falls back to anchor absent (data) for an unrecognized anchor value", () => {
+    const out = sanitizePlotWindows(
+      [
+        win({
+          view: {
+            ...defaultPlotView(),
+            annotations: [{ id: "a1", x: 5, y: 5, text: "bad", anchor: "screen" }],
+          } as unknown as PlotView,
+        }),
+      ],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.annotations).toEqual([{ id: "a1", x: 5, y: 5, text: "bad" }]);
+  });
+
+  it("drops an entry missing a finite x/y or a string id, keeping the rest", () => {
+    const out = sanitizePlotWindows(
+      [
+        win({
+          view: {
+            ...defaultPlotView(),
+            annotations: [
+              { id: "a1", x: 1, y: 2, text: "keep" },
+              { id: "a2", x: Number.NaN, y: 2, text: "drop-nan" },
+              { x: 1, y: 2, text: "drop-no-id" },
+              "not-an-object",
+            ],
+          } as unknown as PlotView,
+        }),
+      ],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.annotations).toEqual([{ id: "a1", x: 1, y: 2, text: "keep" }]);
+  });
+
+  it("falls back to an empty array for a non-array annotations field", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), annotations: "nope" } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.annotations).toEqual([]);
+  });
+});
+
 describe("nearestLegendCorner (MAIN #18 — double-click-to-reset)", () => {
   it("picks the corner matching each quadrant", () => {
     expect(nearestLegendCorner(0.9, 0.1)).toBe("ne");

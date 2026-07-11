@@ -72,15 +72,44 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
     updateAnnotation(id, { size: clampAnnotationSize((a?.size ?? DEFAULT_ANNOTATION_SIZE) + delta) });
   };
 
-  const openMenu = (id: string, clientX: number, clientY: number) => {
+  // MAIN #21: flip an annotation between "data" (moves with zoom/pan) and
+  // "page" (canvas-fraction, resize-stable) anchoring, converting x/y IN
+  // PLACE from the plugin's precomputed `conv` (see AnnotationEditOpts.
+  // onContextMenu's doc — the plugin owns the live uPlot instance this
+  // conversion needs, this hook does not) so the label's on-screen position
+  // doesn't visibly jump on the toggle.
+  const togglePageAnchor = (
+    id: string,
+    conv: { toPage: { x: number; y: number }; toData: { x: number; y: number } },
+  ) => {
+    const a = useApp.getState().annotations.find((x) => x.id === id);
+    if (a?.anchor === "page") {
+      updateAnnotation(id, { anchor: "data", x: conv.toData.x, y: conv.toData.y });
+    } else {
+      updateAnnotation(id, { anchor: "page", x: conv.toPage.x, y: conv.toPage.y });
+    }
+  };
+
+  const openMenu = (
+    id: string,
+    clientX: number,
+    clientY: number,
+    conv: { toPage: { x: number; y: number }; toData: { x: number; y: number } },
+  ) => {
     const a = useApp.getState().annotations.find((x) => x.id === id);
     const size = a?.size ?? DEFAULT_ANNOTATION_SIZE;
+    const isPage = a?.anchor === "page";
     setMenu({
       x: clientX,
       y: clientY,
       items: [
         { header: a?.text || "Annotation" },
         { label: "Edit text…", run: () => editText(id) },
+        {
+          label: isPage ? "Pin to data (follows zoom)" : "Pin to page (stays on zoom)",
+          checked: isPage,
+          run: () => togglePageAnchor(id, conv),
+        },
         { label: "Size +", run: () => bumpSize(id, MENU_SIZE_STEP), disabled: size >= MAX_ANNOTATION_SIZE },
         { label: "Size −", run: () => bumpSize(id, -MENU_SIZE_STEP), disabled: size <= MIN_ANNOTATION_SIZE },
         { separator: true },

@@ -16,6 +16,11 @@ vi.mock("../overlays/ParamDialog", async (importOriginal) => ({
 
 const mockAskParams = vi.mocked(askParams);
 
+// A stand-in conv (MAIN #21) — the shape annotationAnchorConversions
+// computes; the plugin's own round-trip is covered in uplotOverlays.test.ts,
+// this file only needs a concrete value to feed the toggle action.
+const CONV = { toPage: { x: 0.4, y: 0.6 }, toData: { x: 5, y: 9 } };
+
 beforeEach(() => {
   vi.clearAllMocks();
   useApp.setState({
@@ -83,18 +88,20 @@ describe("useAnnotationEdit — bridge callbacks", () => {
 });
 
 describe("useAnnotationEdit — object menu (right-click)", () => {
-  it("onContextMenu opens a menu with Edit/Size+/Size-/Delete", () => {
+  it("onContextMenu opens a menu with Edit/Pin/Size+/Size-/Delete", () => {
     const { result } = renderHook(() => useAnnotationEdit("pointer"));
-    act(() => result.current.bridge?.onContextMenu?.("a1", 40, 60));
+    act(() => result.current.bridge?.onContextMenu?.("a1", 40, 60, CONV));
     expect(result.current.menu).toMatchObject({ x: 40, y: 60 });
     const labels = result.current.menu?.items.map((i) => ("label" in i ? i.label : undefined));
-    expect(labels).toEqual(expect.arrayContaining(["Edit text…", "Size +", "Size −", "Delete"]));
+    expect(labels).toEqual(
+      expect.arrayContaining(["Edit text…", "Pin to page (stays on zoom)", "Size +", "Size −", "Delete"]),
+    );
   });
 
   it("the Delete entry removes the annotation and clears the selection", () => {
     useApp.setState({ selectedAnnotationId: "a1" });
     const { result } = renderHook(() => useAnnotationEdit("pointer"));
-    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0));
+    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
     const del = result.current.menu?.items.find((i) => "label" in i && i.label === "Delete");
     act(() => (del as { run: () => void }).run());
     expect(useApp.getState().annotations).toEqual([]);
@@ -103,10 +110,54 @@ describe("useAnnotationEdit — object menu (right-click)", () => {
 
   it("closeMenu clears the menu state", () => {
     const { result } = renderHook(() => useAnnotationEdit("pointer"));
-    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0));
+    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
     expect(result.current.menu).not.toBeNull();
     act(() => result.current.closeMenu());
     expect(result.current.menu).toBeNull();
+  });
+});
+
+describe("useAnnotationEdit — page/data anchor toggle (MAIN #21)", () => {
+  it("a data-anchored annotation's menu offers 'Pin to page', unchecked", () => {
+    const { result } = renderHook(() => useAnnotationEdit("pointer"));
+    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
+    const pin = result.current.menu?.items.find(
+      (i) => "label" in i && i.label.startsWith("Pin to"),
+    ) as { label: string; checked?: boolean } | undefined;
+    expect(pin?.label).toBe("Pin to page (stays on zoom)");
+    expect(pin?.checked).toBe(false);
+  });
+
+  it("a page-anchored annotation's menu offers 'Pin to data', checked", () => {
+    useApp.setState({ annotations: [{ id: "a1", x: 0.3, y: 0.4, text: "Tc", anchor: "page" }] });
+    const { result } = renderHook(() => useAnnotationEdit("pointer"));
+    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
+    const pin = result.current.menu?.items.find(
+      (i) => "label" in i && i.label.startsWith("Pin to"),
+    ) as { label: string; checked?: boolean } | undefined;
+    expect(pin?.label).toBe("Pin to data (follows zoom)");
+    expect(pin?.checked).toBe(true);
+  });
+
+  it("toggling a data annotation to page adopts conv.toPage in place", () => {
+    const { result } = renderHook(() => useAnnotationEdit("pointer"));
+    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
+    const pin = result.current.menu?.items.find((i) => "label" in i && i.label.startsWith("Pin to")) as {
+      run: () => void;
+    };
+    act(() => pin.run());
+    expect(useApp.getState().annotations[0]).toMatchObject({ anchor: "page", x: 0.4, y: 0.6 });
+  });
+
+  it("toggling a page annotation back to data adopts conv.toData in place", () => {
+    useApp.setState({ annotations: [{ id: "a1", x: 0.3, y: 0.4, text: "Tc", anchor: "page" }] });
+    const { result } = renderHook(() => useAnnotationEdit("pointer"));
+    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
+    const pin = result.current.menu?.items.find((i) => "label" in i && i.label.startsWith("Pin to")) as {
+      run: () => void;
+    };
+    act(() => pin.run());
+    expect(useApp.getState().annotations[0]).toMatchObject({ anchor: "data", x: 5, y: 9 });
   });
 });
 

@@ -539,6 +539,20 @@ export interface Annotation {
    *  [MIN_ANNOTATION_SIZE, MAX_ANNOTATION_SIZE] (`lib/uplotOverlays.ts`)
    *  wherever it's set. */
   size?: number;
+  /** Coordinate space for `x`/`y` (MAIN #21 — Origin's page-text model).
+   *  Absent/"data" (the default, back-compat with every annotation created
+   *  before this field existed): `x`/`y` are data coordinates through
+   *  `valToPos`/`posToVal` — the annotation moves with zoom/pan, exactly
+   *  today's behaviour. "page": `x`/`y` are CANVAS FRACTIONS in [0, 1] (x
+   *  rightward, y downward — canvas convention, NOT matplotlib's
+   *  figure-fraction convention, which grows upward — see
+   *  `calc/figure_overrides.py`'s y-flip for the export-parity boundary
+   *  between the two) — the annotation stays pinned to the same spot on the
+   *  PAGE through zoom/pan, resize-stable the same way `PlotView.legendXY`
+   *  is. The right-click object menu's "Pin to page/data" toggle
+   *  (`useAnnotationEdit.openMenu`) converts `x`/`y` in place when flipping
+   *  this field so the label never visibly jumps. */
+  anchor?: "data" | "page";
 }
 
 /** Axis tick number format. `auto` = increment-aware locale-grouped labels

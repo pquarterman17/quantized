@@ -82,3 +82,67 @@ def test_legend_show_override_forces_it_off_for_multiple_series() -> None:
     hidden = render_figure_map(x, [("a", x), ("b", 2 * x)], overrides={"legend": {"show": False}})
     assert _legend_box(default) is not None
     assert _legend_box(hidden) is None
+
+
+# MAIN #21 (page-anchored annotations): `anchor: "page"` renders an
+# annotation's x/y as FIGURE-fraction placement (matplotlib's
+# `xycoords="figure fraction"`) instead of axes-data coordinates, so the
+# label stays pinned to the same spot on the page independent of the axes'
+# data range -- the export-parity counterpart of the screen's canvas-
+# fraction anchor (`lib/uplotOverlays.ts`'s `annotationLayout` page branch).
+
+
+def _page_ann(x: np.ndarray, ann: dict) -> dict:
+    return render_figure_map(x, [("y", x)], overrides={"annotations": [ann]})
+
+
+def test_page_anchor_x_spreads_across_the_figure_unlike_data_coords() -> None:
+    # As DATA coords, x=0.05 and x=0.95 both sit within a whisker of the
+    # axes' left edge (the series spans x in [0, 10]) -- nearly identical
+    # pixel positions. As PAGE (figure) fractions they must spread across
+    # nearly the whole image width instead: this is the strongest signal
+    # that the "page" branch is actually engaging `xycoords="figure
+    # fraction"` rather than silently falling through to axes-data xy.
+    x = np.linspace(0, 10, 5)
+    left = _page_ann(x, {"x": 0.05, "y": 0.5, "text": "L", "anchor": "page"})
+    right = _page_ann(x, {"x": 0.95, "y": 0.5, "text": "R", "anchor": "page"})
+    left_box = _ann_box(left)
+    right_box = _ann_box(right)
+    spread = right_box["x0"] - left_box["x0"]
+    assert spread > right["width"] * 0.5  # far more than a data-coord placement could produce
+
+
+def test_page_anchor_y_is_flipped_relative_to_the_canvas_convention() -> None:
+    # Canvas y (what the screen's page anchor stores) grows DOWNWARD; figure
+    # fraction y grows UPWARD -- `_apply_overrides` must apply `1 - y`, not
+    # `y` directly. A SMALL canvas-y (near the top of the page, y=0.05) must
+    # render near the TOP of the image (a SMALL image y0, image rows count
+    # from the top); a LARGE canvas-y (y=0.95, near the bottom) must render
+    # near the BOTTOM (a LARGE image y0). Without the flip these would swap.
+    x = np.linspace(0, 10, 5)
+    near_top = _page_ann(x, {"x": 0.5, "y": 0.05, "text": "top", "anchor": "page"})
+    near_bottom = _page_ann(x, {"x": 0.5, "y": 0.95, "text": "bot", "anchor": "page"})
+    assert _ann_box(near_top)["y0"] < _ann_box(near_bottom)["y0"]
+
+
+def test_page_anchor_annotation_still_honours_a_per_annotation_size() -> None:
+    # The `size` override (MAIN #18) applies the same way regardless of
+    # anchor -- page placement only changes WHERE the label sits, not the
+    # font-size resolution.
+    x = np.linspace(0, 10, 5)
+    small = _page_ann(x, {"x": 0.5, "y": 0.5, "text": "pk", "anchor": "page", "size": 8})
+    big = _page_ann(x, {"x": 0.5, "y": 0.5, "text": "pk", "anchor": "page", "size": 40})
+    small_h = _ann_box(small)["y1"] - _ann_box(small)["y0"]
+    big_h = _ann_box(big)["y1"] - _ann_box(big)["y0"]
+    assert big_h > small_h
+
+
+def test_annotation_without_anchor_still_uses_axes_data_coords() -> None:
+    # Back-compat regression: an annotation with NO `anchor` key must render
+    # identically to the pre-#21 behaviour (plain axes-data xy, no
+    # xycoords). Compared against an explicit anchor:"page" at the SAME
+    # nominal (x, y) to confirm the two genuinely diverge.
+    x = np.linspace(0, 10, 5)
+    data = _page_ann(x, {"x": 0.5, "y": 0.5, "text": "pk"})
+    page = _page_ann(x, {"x": 0.5, "y": 0.5, "text": "pk", "anchor": "page"})
+    assert _ann_box(data) != _ann_box(page)

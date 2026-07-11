@@ -30,6 +30,34 @@ export function overPointerToCanvas(
   return { x: bbox.left + cssX * scale, y: bbox.top + cssY * sy, scale };
 }
 
+/** The inverse of `overPointerToCanvas` for the zero-offset (full-canvas)
+ *  `bbox` case `annotationPlugin`'s `ready` block always uses (`{left:0,
+ *  top:0,width:cw,height:ch}`): CANVAS px -> CSS px relative to `over` (the
+ *  frame `u.posToVal` expects). Composed of the same two steps
+ *  `annotationPlugin`'s pre-MAIN-#21 `clampToCanvas` inlined (canvas px ->
+ *  root-relative CSS via the inverse scale, then root-relative -> over-
+ *  relative by subtracting the two elements' rect offset) — factored out
+ *  here, pure (plain rect records, no live DOM), so MAIN #21's data<->page
+ *  anchor toggle can compute a page annotation's would-be data coordinate
+ *  without needing its own copy of this frame math, and so the round-trip
+ *  with `overPointerToCanvas` is unit-testable directly. `rootRect` carries
+ *  the SAME per-axis width/height this file's forward conversion does (not
+ *  the DPR-only single-scale `clampToCanvas` used before #21 factored this
+ *  out) so the two functions are true inverses on a non-square canvas. */
+export function canvasToOverCss(
+  canvasPx: { x: number; y: number },
+  canvas: { width: number; height: number },
+  rootRect: { width: number; height: number; left: number; top: number },
+  overRect: { left: number; top: number },
+): { x: number; y: number } {
+  const scale = rootRect.width > 0 && canvas.width > 0 ? canvas.width / rootRect.width : 1;
+  const sy = rootRect.height > 0 && canvas.height > 0 ? canvas.height / rootRect.height : scale;
+  return {
+    x: canvasPx.x / scale - (overRect.left - rootRect.left),
+    y: canvasPx.y / sy - (overRect.top - rootRect.top),
+  };
+}
+
 /** One annotation's hit-test geometry, canvas pixels — the dot center plus
  *  the label's bounding box (both derived from `uplotOverlays.annotationLayout`,
  *  the SAME geometry the draw pass uses). */

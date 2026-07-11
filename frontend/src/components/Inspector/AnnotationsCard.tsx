@@ -58,7 +58,7 @@ export default function AnnotationsCard() {
           <span className="qz-k" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
             {a.text}{" "}
             <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-faint)" }}>
-              ({fmtNum(a.x)}, {fmtNum(a.y)})
+              ({fmtNum(a.x)}, {fmtNum(a.y)}){a.anchor === "page" ? " (page)" : ""}
             </span>
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 4 }}>

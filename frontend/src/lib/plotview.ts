@@ -401,6 +401,47 @@ function legendXYOrNull(v: unknown): [number, number] | null {
   return [clamp(v[0]), clamp(v[1])];
 }
 
+const ANNOTATION_ANCHORS: readonly Annotation["anchor"][] = ["data", "page"];
+
+/** Validate a persisted annotation list (MAIN #21's `.anchor` field). Every
+ *  other overlay list in this sanitizer (`refLines`/`regionShades`) is a
+ *  structural "cast, don't deep-validate" passthrough — but `anchor` gets
+ *  real validation because an unrecognized value would silently change
+ *  where `annotationLayout` reads `x`/`y` FROM (data coords vs. canvas
+ *  fractions): an unknown string falls back to `undefined` (= "data", the
+ *  back-compat default) rather than being trusted verbatim. A `"page"`
+ *  entry's `x`/`y` are canvas FRACTIONS, so they're clamped into [0, 1] —
+ *  same clamp-not-drop convention as `legendXYOrNull` for the identical
+ *  fraction-coordinate shape — rather than dropping the whole annotation
+ *  for a stale/hand-edited out-of-range value. An entry missing the
+ *  required `id`/finite `x`/`y` shape is dropped (nothing sane to fall back
+ *  to for a single list entry). Never throws. */
+function sanitizeAnnotations(v: unknown): Annotation[] {
+  if (!Array.isArray(v)) return [];
+  const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+  const out: Annotation[] = [];
+  for (const e of v) {
+    if (typeof e !== "object" || e === null) continue;
+    const o = e as Record<string, unknown>;
+    if (typeof o.id !== "string" || typeof o.x !== "number" || typeof o.y !== "number") continue;
+    if (!Number.isFinite(o.x) || !Number.isFinite(o.y)) continue;
+    const anchor = ANNOTATION_ANCHORS.includes(o.anchor as Annotation["anchor"])
+      ? (o.anchor as Annotation["anchor"])
+      : undefined;
+    const isPage = anchor === "page";
+    out.push({
+      id: o.id,
+      x: isPage ? clamp01(o.x) : o.x,
+      y: isPage ? clamp01(o.y) : o.y,
+      text: typeof o.text === "string" ? o.text : "",
+      ...(o.axis === 0 || o.axis === 1 ? { axis: o.axis } : {}),
+      ...(typeof o.size === "number" && Number.isFinite(o.size) ? { size: o.size } : {}),
+      ...(anchor ? { anchor } : {}),
+    });
+  }
+  return out;
+}
+
 /** Back-compat axis-scale resolver (MAIN #12): a NEW `scale` field (post-#12
  *  `.dwk`) wins when present and valid; else an OLD boolean `log` field
  *  (pre-#12 `.dwk`) maps `true` -> `"log"`, `false` -> `"linear"`; else `fb`. */
@@ -456,7 +497,7 @@ function sanitizeView(v: unknown): PlotView {
     y2Step: numOrNull(o.y2Step),
     y2AxisLabel: strOrDefault(o.y2AxisLabel, fb.y2AxisLabel),
     refLines: Array.isArray(o.refLines) ? (o.refLines as RefLine[]) : [],
-    annotations: Array.isArray(o.annotations) ? (o.annotations as Annotation[]) : [],
+    annotations: sanitizeAnnotations(o.annotations),
     regionShades: Array.isArray(o.regionShades) ? (o.regionShades as RegionShade[]) : [],
     seriesStyles:
       typeof o.seriesStyles === "object" && o.seriesStyles !== null

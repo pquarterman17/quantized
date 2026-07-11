@@ -5,7 +5,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { hitTestAnnotationBody, hitTestAnnotationHandle, overPointerToCanvas, type AnnotationHitGeometry } from "./annotationHit";
+import {
+  canvasToOverCss,
+  hitTestAnnotationBody,
+  hitTestAnnotationHandle,
+  overPointerToCanvas,
+  type AnnotationHitGeometry,
+} from "./annotationHit";
 
 describe("hitTestAnnotationBody", () => {
   const geoms: AnnotationHitGeometry[] = [
@@ -115,5 +121,41 @@ describe("overPointerToCanvas (frame conversion)", () => {
     // Fixed behaviour: convert first, then it lands inside the box.
     const p = overPointerToCanvas(bbox, rect, cssPointer.x, cssPointer.y);
     expect(hitTestAnnotationBody(geoms, p, 8 * p.scale)).toBe("field-label");
+  });
+});
+
+// MAIN #21 (page-anchored annotations): the data<->page anchor toggle needs
+// to convert a CANVAS pixel back to the CSS px relative to `over` that
+// `u.posToVal` expects — the inverse of `overPointerToCanvas`'s ROOT-relative
+// forward conversion. Pure (plain rect records), so the round-trip is
+// unit-testable without any live layout engine.
+describe("canvasToOverCss (inverse of overPointerToCanvas)", () => {
+  it("round-trips with overPointerToCanvas when over coincides with root", () => {
+    const canvas = { width: 200, height: 160 };
+    const rootRect = { width: 100, height: 80, left: 0, top: 0 };
+    const overRect = { left: 0, top: 0 }; // over exactly coincides with root
+    const canvasPx = overPointerToCanvas({ left: 0, top: 0, ...canvas }, rootRect, 33, 44);
+    const back = canvasToOverCss({ x: canvasPx.x, y: canvasPx.y }, canvas, rootRect, overRect);
+    expect(back.x).toBeCloseTo(33);
+    expect(back.y).toBeCloseTo(44);
+  });
+
+  it("subtracts the over element's offset from root (over does NOT coincide with root)", () => {
+    const canvas = { width: 100, height: 100 };
+    const rootRect = { width: 100, height: 100, left: 10, top: 20 };
+    const overRect = { left: 15, top: 25 }; // over sits 5px right, 5px down from root
+    // canvas px (50, 50) is CSS (50, 50) relative to root at scale 1;
+    // relative to over (offset +5, +5 from root) that's (45, 45).
+    expect(canvasToOverCss({ x: 50, y: 50 }, canvas, rootRect, overRect)).toEqual({ x: 45, y: 45 });
+  });
+
+  it("falls back to scale 1 on a degenerate rect (jsdom, not laid out)", () => {
+    const back = canvasToOverCss(
+      { x: 40, y: 30 },
+      { width: 200, height: 160 },
+      { width: 0, height: 0, left: 0, top: 0 },
+      { left: 0, top: 0 },
+    );
+    expect(back).toEqual({ x: 40, y: 30 });
   });
 });
