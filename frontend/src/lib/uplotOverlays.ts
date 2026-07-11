@@ -6,7 +6,7 @@
 
 import type uPlot from "uplot";
 
-import type { Annotation, RefLine } from "./types";
+import type { Annotation, RefLine, RegionShade } from "./types";
 
 /** A reference line the pointer is over (for drag hit-testing). */
 export interface RefLineHit {
@@ -284,6 +284,50 @@ export function annotationPlugin(
  *  (owner 2026-07-09, item 3: "default is have the error bar cap width to
  *  zero"). The drawing still fully supports non-zero caps for a caller that
  *  opts in (e.g. a future per-plot preference) — only the DEFAULT changed. */
+/** The fixed render alpha for Origin region shades: Origin's own
+ *  fill-transparency field is UNDECODED (decode-plan #41 — no byte could be
+ *  isolated across the corpus, see docs/origin_project_format.md §6.1), so
+ *  this is a documented presentation choice — pale enough that data drawn
+ *  over the band stays readable, matching Origin's pastel render. */
+export const REGION_SHADE_ALPHA = 0.25;
+
+/** Draw filled region rectangles (Origin `Rect*` bands — e.g. film-stack
+ *  shading on an SLD profile, decode-plan #41) BEHIND the grid and data:
+ *  the `drawClear` hook fires right after the canvas clears, before
+ *  axes/grid/series paint over it — matching Origin, which draws these
+ *  under everything. Extents are data coords re-derived on every draw
+ *  (pinned across zoom/pan) and clipped to the plot area; a shade tagged
+ *  `axis: 1` maps its y-extent through the y2 scale when the plot has one
+ *  (same fallback rule as annotationPlugin). */
+export function regionShadePlugin(shades: RegionShade[]): uPlot.Plugin {
+  return {
+    hooks: {
+      drawClear: (u: uPlot) => {
+        const { ctx } = u;
+        const { left, top, width, height } = u.bbox;
+        const hasY2 = u.scales.y2 != null;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(left, top, width, height);
+        ctx.clip();
+        ctx.globalAlpha = REGION_SHADE_ALPHA;
+        for (const s of shades) {
+          if (![s.x1, s.x2, s.y1, s.y2].every(Number.isFinite)) continue;
+          const yScale = s.axis === 1 && hasY2 ? "y2" : "y";
+          const xa = u.valToPos(s.x1, "x", true);
+          const xb = u.valToPos(s.x2, "x", true);
+          const ya = u.valToPos(s.y1, yScale, true);
+          const yb = u.valToPos(s.y2, yScale, true);
+          if (![xa, xb, ya, yb].every(Number.isFinite)) continue;
+          ctx.fillStyle = s.fill;
+          ctx.fillRect(Math.min(xa, xb), Math.min(ya, yb), Math.abs(xb - xa), Math.abs(yb - ya));
+        }
+        ctx.restore();
+      },
+    },
+  };
+}
+
 export function errorBarsPlugin(
   errorsByCol: Map<number, (number | null)[]>,
   color: string,

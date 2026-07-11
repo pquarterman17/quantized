@@ -13,8 +13,14 @@ import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst } from "./richtext";
 import { pow10 } from "./ticks";
-import type { Annotation, AxisFormat, LineStyle, RefLine, SeriesStyle } from "./types";
-import { annotationPlugin, axisBoxPlugin, errorBarsPlugin, refLinePlugin } from "./uplotOverlays";
+import type { Annotation, AxisFormat, LineStyle, RefLine, RegionShade, SeriesStyle } from "./types";
+import {
+  annotationPlugin,
+  axisBoxPlugin,
+  errorBarsPlugin,
+  refLinePlugin,
+  regionShadePlugin,
+} from "./uplotOverlays";
 import { richLabelsPlugin } from "./uplotRichLabels";
 import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
 import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
@@ -313,6 +319,9 @@ export interface BuildOptsArgs {
   onRefLineMove?: (id: string, value: number) => void;
   /** Text annotations pinned at data coordinates. */
   annotations?: Annotation[];
+  /** Filled region bands (Origin Rect* shades, decode-plan #41), drawn
+   *  translucently behind the grid/data by regionShadePlugin. */
+  regionShades?: RegionShade[];
   /** Per-display-series style overrides, aligned 1:1 with `payload.series`
    *  (undefined entries — e.g. overlays — keep the defaults). */
   seriesStyles?: (SeriesStyle | undefined)[];
@@ -600,6 +609,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   }
   if (annotations && annotations.length > 0) {
     plugins.push(annotationPlugin(annotations, inkColor, font));
+  }
+  if (args.regionShades && args.regionShades.length > 0) {
+    plugins.push(regionShadePlugin(args.regionShades));
   }
   if (args.errorBars && args.errorBars.size > 0) {
     plugins.push(errorBarsPlugin(args.errorBars, inkDimColor));

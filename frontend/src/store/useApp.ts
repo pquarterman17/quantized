@@ -52,6 +52,7 @@ import {
   figureLayerFamily,
   originFigureAnnotations,
   originLegendPos,
+  originRegionShades,
   resolveSpatialPanels,
   type OriginFigureEntry,
 } from "../lib/originFigures";
@@ -114,6 +115,7 @@ import type {
   OriginFigure,
   PeakOverlay,
   RefLine,
+  RegionShade,
   RsmPeak,
   SeriesStyle,
 } from "../lib/types";
@@ -602,6 +604,7 @@ interface AppState {
   y2AxisLabel: string; // override for the secondary y-axis label ("" = auto)
   refLines: RefLine[]; // fixed X/Y marker lines on the plot
   annotations: Annotation[]; // text labels pinned at data coordinates
+  regionShades: RegionShade[]; // Origin Rect* region bands (decode-plan #41), replaced per figure apply
   seriesStyles: Record<number, SeriesStyle>; // per-channel color/width/line overrides
   seriesLabels: Record<number, string>; // per-channel display-name overrides (legend rename)
   errKeys: Record<number, number>; // y-channel index → channel holding its ± error (error bars)
@@ -1358,6 +1361,7 @@ export const useApp = create<AppState>((set, get) => ({
   y2AxisLabel: "",
   refLines: [],
   annotations: [],
+  regionShades: [],
   seriesStyles: {},
   seriesLabels: {},
   errKeys: {},
@@ -1825,6 +1829,9 @@ export const useApp = create<AppState>((set, get) => ({
           // Pin the figure's decoded floating text; REPLACE so re-applying
           // or switching figures never stacks stale marks.
           annotations: originFigureAnnotations([fig], entry.id),
+          // Decoded Rect* region bands (item 41) — REPLACE, same lifecycle
+          // as annotations (figures without shades clear the plot's bands).
+          regionShades: originRegionShades([fig], entry.id),
           // Origin's legend placement -> nearest corner preset (decoded box
           // top-left; only when the position decoded, never guessed).
           ...(originLegendPos(fig) ? { legendPos: originLegendPos(fig)! } : {}),
@@ -1880,6 +1887,8 @@ export const useApp = create<AppState>((set, get) => ({
           // layer's marks are tagged axis:1 so they land on y2 (fix #3), not
           // the primary axis lower.figure's own marks stay on.
           annotations: originFigureAnnotations([lower.figure, upper.figure], entry.id, [0, 1]),
+          // Both layers' region bands, the upper layer's tagged to y2 (item 41).
+          regionShades: originRegionShades([lower.figure, upper.figure], entry.id, [0, 1]),
           ...(originLegendPos(lower.figure)
             ? { legendPos: originLegendPos(lower.figure)! }
             : {}),
@@ -1917,6 +1926,10 @@ export const useApp = create<AppState>((set, get) => ({
           facetPanels: null,
           breakPanels: null,
           showAxisBox: true,
+          // Region bands are single-plot overlays; a spatial multi-panel
+          // apply clears any prior figure's bands (no per-panel shade
+          // support yet — an honest, documented gap, not a guess).
+          regionShades: [],
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         if (!spatial) {
@@ -1949,6 +1962,7 @@ export const useApp = create<AppState>((set, get) => ({
       yAxisLabel: fig.y_title ?? "",
       // Pin the figure's decoded floating text; REPLACE, never stack.
       annotations: originFigureAnnotations([fig], entry.id),
+      regionShades: originRegionShades([fig], entry.id),
       ...(originLegendPos(fig) ? { legendPos: originLegendPos(fig)! } : {}),
       ...(selection
         ? {
@@ -2176,6 +2190,7 @@ export const useApp = create<AppState>((set, get) => ({
               yAxisLabel: restoredView.yAxisLabel,
               refLines: restoredView.refLines,
               annotations: restoredView.annotations,
+              regionShades: restoredView.regionShades,
               waterfall: restoredView.waterfall,
             }
           : {}),

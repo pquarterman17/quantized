@@ -17,7 +17,7 @@
 // wheelZoom, excludedDisplay, sigFigs, … — app-wide, not per-window).
 
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
-import type { Annotation, AxisFormat, RefLine, SeriesStyle } from "./types";
+import type { Annotation, AxisFormat, RefLine, RegionShade, SeriesStyle } from "./types";
 
 export type LegendPos = "ne" | "nw" | "se" | "sw";
 
@@ -53,6 +53,7 @@ export interface PlotView {
   y2AxisLabel: string;
   refLines: RefLine[];
   annotations: Annotation[];
+  regionShades: RegionShade[];
   seriesStyles: Record<number, SeriesStyle>;
   seriesLabels: Record<number, string>;
   errKeys: Record<number, number>;
@@ -96,6 +97,7 @@ export function defaultPlotView(): PlotView {
     y2AxisLabel: "",
     refLines: [],
     annotations: [],
+    regionShades: [],
     seriesStyles: {},
     seriesLabels: {},
     errKeys: {},
@@ -354,6 +356,7 @@ function sanitizeView(v: unknown): PlotView {
     y2AxisLabel: strOrDefault(o.y2AxisLabel, fb.y2AxisLabel),
     refLines: Array.isArray(o.refLines) ? (o.refLines as RefLine[]) : [],
     annotations: Array.isArray(o.annotations) ? (o.annotations as Annotation[]) : [],
+    regionShades: Array.isArray(o.regionShades) ? (o.regionShades as RegionShade[]) : [],
     seriesStyles:
       typeof o.seriesStyles === "object" && o.seriesStyles !== null
         ? (o.seriesStyles as Record<number, SeriesStyle>)
