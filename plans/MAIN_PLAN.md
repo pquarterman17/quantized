@@ -81,7 +81,13 @@ GOTO #11 drift (implemented but listed open).
     non-destructively). Drag-to-rearrange panels lands as a FOLLOW-UP
     sub-item wired to #18's pointer model after it merges (same
     interaction surface — deliberate sequencing, not scope cut):
-    - [ ] v1: quick picks → composite window (grid + overlay + linked x)
+    - [x] v1: quick picks → composite window (grid + overlay + linked x)
+      — SHIPPED 2026-07-11 (`ccd91d8`): `panel` window kind (+
+      `store/panels.ts` slice), pure `lib/panelwindow.ts` (union-x
+      overlay via the rowstate chokepoint, unit-family y2 assignment,
+      grid tiling reusing facetGridSize), per-window sync group,
+      DatasetRow quick picks + ⌘K commands; +68 tests, all ratchets
+      held (windows.ts net-zero, DatasetRow offset via lib/panelMenu).
     - [ ] after #18: drag panels to rearrange within the composite
 
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
