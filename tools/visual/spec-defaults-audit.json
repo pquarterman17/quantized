@@ -1,0 +1,52 @@
+{
+  "shots": [
+    {
+      "name": "audit_linear_default",
+      "dataset": {
+        "id": "aud1",
+        "name": "MvsH sweep",
+        "data": {
+          "time": [-100, -80, -60, -40, -20, 0, 20, 40, 60, 80, 100],
+          "values": [[-0.98], [-0.95], [-0.85], [-0.55], [-0.2], [0.0], [0.2], [0.55], [0.85], [0.95], [0.98]],
+          "labels": ["M"],
+          "units": ["emu"],
+          "metadata": {}
+        }
+      }
+    },
+    {
+      "name": "audit_log_decades",
+      "dataset": {
+        "id": "aud2",
+        "name": "Reflectivity",
+        "data": {
+          "time": [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12],
+          "values": [[1.0], [0.31], [0.062], [0.021], [0.0084], [0.0031], [0.0012], [0.00051], [0.00019], [0.00008], [0.000031], [0.000012]],
+          "labels": ["R"],
+          "units": [""],
+          "metadata": {}
+        }
+      },
+      "state": { "yLog": true }
+    },
+    {
+      "name": "audit_richtext_labels",
+      "dataset": {
+        "id": "aud3",
+        "name": "Susceptibility",
+        "data": {
+          "time": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          "values": [[0.9], [1.8], [3.1], [4.4], [5.2], [5.9], [6.1], [6.0], [5.6], [5.1]],
+          "labels": ["chi"],
+          "units": [""],
+          "metadata": {}
+        }
+      },
+      "state": {
+        "plotTitle": "$\\chi''$ vs $\\mu_0H$",
+        "xAxisLabel": "$\\mu_0H$ (T)",
+        "yAxisLabel": "$\\chi''$ ($10^{-6}$ $\\mathrm{m^3\\,mol^{-1}}$)"
+      }
+    }
+  ]
+}

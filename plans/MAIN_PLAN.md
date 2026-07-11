@@ -56,9 +56,8 @@ plan's direct items are residue-sized by construction)*
 ~~3. **Worksheet per-column widths + drag resize**~~ ✅ completed 2026-07-11 (see Completed).
 ~~4. **Worksheet selection → Graph Builder handoff**~~ ✅ completed 2026-07-11 (see Completed).
 ~~5. **`.otp`/`.otpu` template import, frontend half**~~ ✅ completed 2026-07-11 (see Completed).
-6. **Defaults-audit residuals** (was GAP_TIER3 #2 residual) —
-   interactive-side shots via `tools/visual/` + export-dialog DPI field
-   syncing to the preset's calibrated dpi.
+~~6. **Defaults-audit residuals**~~ ✅ completed 2026-07-11 (see
+   Completed).
 7. **Register `import_lake_shore` in `io/registry.py`** (found by the
    PORT #52 parser matrix, 2026-07-11) — the parser exists but
    `import_auto` routes Lake Shore CSVs to generic `import_csv`; needs a
@@ -113,6 +112,15 @@ plan's direct items are residue-sized by construction)*
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#6 Defaults-audit residuals**~~ (2026-07-11) — DPI-preset sync
+  verified ALREADY SHIPPED in `useFigureBuilder.ts` (audit-referencing
+  comment; the new figure-page workshop carries the same convention).
+  Interactive-side shots generated via `tools/visual/`
+  (`spec-defaults-audit.json` → `out-defaults-audit/`: linear default,
+  log decades, rich-text labels — the last also visually verified GOTO
+  #5 on the real uPlot canvas). The EYEBALL on these + DEFAULTS_AUDIT.md
+  taste calls remains the owner gate above.
 
 - ~~**#3 Worksheet column widths**~~ (2026-07-11) — variable widths via
   gridwindow prefix-sum + binary search (uniform fast path kept),
