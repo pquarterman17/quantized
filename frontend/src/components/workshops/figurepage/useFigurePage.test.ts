@@ -206,4 +206,84 @@ describe("useFigurePage", () => {
     expect(body.dpi).toBe(90);
     await waitFor(() => expect(result.current.preview).toMatch(/^data:/));
   });
+
+  // MAIN #8g: the preview is keyed on the store state the panels render from
+  // (the same reads buildSpec's export-time guard makes) — a change UNDER an
+  // assigned slot re-fetches it; unrelated store churn does not.
+  describe("preview invalidation (#8g)", () => {
+    it("re-renders when the assigned dataset's data changes underneath the slot", async () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      await waitFor(() => expect(renderFigurePageBlob).toHaveBeenCalledTimes(1), {
+        timeout: 2000,
+      });
+      // The dataset is corrected/recomputed: its data object is REPLACED.
+      const corrected: DataStruct = {
+        ...DATA,
+        values: DATA.values.map((row) => row.map((v) => v * 2)),
+      };
+      act(() => {
+        useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: corrected }] });
+      });
+      await waitFor(() => expect(renderFigurePageBlob).toHaveBeenCalledTimes(2), {
+        timeout: 2000,
+      });
+      const body = vi.mocked(renderFigurePageBlob).mock.calls[1][0];
+      expect(body.panels[0].figure.dataset).toEqual(corrected);
+    });
+
+    it("re-renders on the assigned window's view change but NOT on unrelated churn", async () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      await waitFor(() => expect(renderFigurePageBlob).toHaveBeenCalledTimes(1), {
+        timeout: 2000,
+      });
+      // Unrelated churn: status message + ANOTHER window moving -> no fetch.
+      act(() => {
+        useApp.setState((s) => ({
+          status: "poke",
+          plotWindows: s.plotWindows.map((w) =>
+            w.id === "w2" ? { ...w, geometry: { ...w.geometry, x: 50 } } : w,
+          ),
+        }));
+      });
+      await new Promise((r) => setTimeout(r, 600)); // past the 400 ms debounce
+      expect(renderFigurePageBlob).toHaveBeenCalledTimes(1);
+      // The ASSIGNED window's view changes (title edited) -> re-render.
+      act(() => {
+        useApp.setState((s) => ({
+          plotWindows: s.plotWindows.map((w) =>
+            w.id === "w1" ? { ...w, view: { ...w.view, plotTitle: "renamed" } } : w,
+          ),
+        }));
+      });
+      await waitFor(() => expect(renderFigurePageBlob).toHaveBeenCalledTimes(2), {
+        timeout: 2000,
+      });
+      expect(vi.mocked(renderFigurePageBlob).mock.calls[1][0].panels[0].figure.title).toBe(
+        "renamed",
+      );
+    });
+
+    it("re-renders when an assigned saved figure (doc) is edited", async () => {
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.docSources[0]));
+      await waitFor(() => expect(renderFigurePageBlob).toHaveBeenCalledTimes(1), {
+        timeout: 2000,
+      });
+      act(() => {
+        useApp.setState((s) => ({
+          figureDocs: s.figureDocs.map((d) =>
+            d.id === "f1" ? { ...d, config: { ...d.config, title: "edited title" } } : d,
+          ),
+        }));
+      });
+      await waitFor(() => expect(renderFigurePageBlob).toHaveBeenCalledTimes(2), {
+        timeout: 2000,
+      });
+      expect(vi.mocked(renderFigurePageBlob).mock.calls[1][0].panels[0].figure.title).toBe(
+        "edited title",
+      );
+    });
+  });
 });

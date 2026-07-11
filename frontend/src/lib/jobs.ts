@@ -1,7 +1,10 @@
 // Poll client for the backend job runner (GOTO #9). No WebSocket — the SPA
 // GET-polls /api/jobs/{id} (~1 s) ONLY while a job is live and stops on the
 // first terminal state (done | error | cancelled). Mirrors the backend
-// contract in src/quantized/routes/jobs_api.py.
+// contract in src/quantized/routes/jobs_api.py. Error handling rides
+// api.ts's shared `unwrap` (MAIN #8b — no drifted copy).
+
+import { unwrap } from "./api";
 
 export type JobStatus = "pending" | "running" | "done" | "error" | "cancelled";
 
@@ -33,20 +36,6 @@ export class JobCancelledError extends Error {
     super(`job ${jobId} cancelled`);
     this.name = "JobCancelledError";
   }
-}
-
-async function unwrap<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const j = (await res.json()) as { detail?: string };
-      if (j.detail) detail = j.detail;
-    } catch {
-      /* non-JSON error body — keep the status line */
-    }
-    throw new Error(detail);
-  }
-  return (await res.json()) as T;
 }
 
 export async function jobStatus(id: string): Promise<JobSnapshot> {

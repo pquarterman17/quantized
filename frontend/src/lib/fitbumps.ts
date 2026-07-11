@@ -1,8 +1,10 @@
 // bumps optional fit engine client (GOTO #10). POST /api/fitting/bumps —
 // the fast engines (amoeba / lm / de) answer synchronously with the fit;
 // engine "dream" answers { job_id } to be polled via lib/jobs. Kept out of
-// lib/api.ts deliberately (parallel workshop work edits that file); the
-// fetch conventions match it.
+// lib/api.ts deliberately (parallel workshop work edits that file), but the
+// error handling rides api.ts's shared `unwrap` (MAIN #8b — no drifted copy).
+
+import { unwrap } from "./api";
 
 export type BumpsEngine = "amoeba" | "lm" | "de" | "dream";
 
@@ -52,15 +54,5 @@ export async function fitBumps(req: BumpsFitRequest): Promise<BumpsFitResponse> 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
   });
-  if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const j = (await res.json()) as { detail?: string };
-      if (j.detail) detail = j.detail;
-    } catch {
-      /* non-JSON error body — keep the status line */
-    }
-    throw new Error(detail);
-  }
-  return (await res.json()) as BumpsFitResponse;
+  return unwrap<BumpsFitResponse>(res);
 }

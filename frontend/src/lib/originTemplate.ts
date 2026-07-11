@@ -10,6 +10,7 @@
 // localStorage list), tagged `source: "origin"` and de-duplicated by name so
 // an import can never silently overwrite a user-saved template.
 
+import { postForm } from "./api";
 import { loadGraphTemplates, saveGraphTemplate, type GraphTemplate } from "./figuredoc";
 import type { FigureOverrides } from "./figureOverrides";
 import type { ExportSeriesStyle } from "./exportStyles";
@@ -18,23 +19,12 @@ import { toast } from "../store/toasts";
 /** File-picker filter for the "Import Origin template…" command. */
 export const TEMPLATE_ACCEPT = ".otp,.otpu";
 
-/** Upload a template file's bytes to the backend decoder (mirrors
- *  api.ts::uploadFile's FormData shape against the template route). */
-export async function uploadOriginTemplate(file: File): Promise<unknown> {
+/** Upload a template file's bytes to the backend decoder (the same FormData
+ *  shape as api.ts::uploadFile, via the shared postForm helper). */
+export function uploadOriginTemplate(file: File): Promise<unknown> {
   const form = new FormData();
   form.append("file", file, file.name);
-  const res = await fetch("/api/import/template/upload", { method: "POST", body: form });
-  if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const j = (await res.json()) as { detail?: string };
-      if (j.detail) detail = j.detail;
-    } catch {
-      /* non-JSON error body — keep the status line */
-    }
-    throw new Error(detail);
-  }
-  return (await res.json()) as unknown;
+  return postForm<unknown>("/api/import/template/upload", form);
 }
 
 /** Validate the decoder's GraphTemplate-shaped response and tag its

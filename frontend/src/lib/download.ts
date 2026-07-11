@@ -1,5 +1,6 @@
-// Trigger a browser download from a POST endpoint that returns a file body
-// (Content-Disposition attachment). Used for the export routes (CSV / HDF5).
+// DOM save-to-disk helpers (no fetching — the export routes' fetch +
+// error handling live in lib/api's postDownload, on its single ensureOk
+// error-extraction path).
 
 /** Extract the filename from a Content-Disposition header, or fall back. */
 export function filenameFromDisposition(cd: string | null, fallback: string): string {
@@ -18,30 +19,4 @@ export function saveBlob(blob: Blob, filename: string): void {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-}
-
-/** POST JSON, then download the response body as a file. Throws on !ok with the
- *  backend's error detail (so callers can surface it in the status bar). */
-export async function postDownload(
-  path: string,
-  body: unknown,
-  fallbackName: string,
-): Promise<void> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const j = (await res.json()) as { detail?: string };
-      if (j.detail) detail = j.detail;
-    } catch {
-      /* non-JSON error body — keep the status line */
-    }
-    throw new Error(detail);
-  }
-  const blob = await res.blob();
-  saveBlob(blob, filenameFromDisposition(res.headers.get("Content-Disposition"), fallbackName));
 }

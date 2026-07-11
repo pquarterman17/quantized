@@ -2,7 +2,7 @@
 // (dev: Vite proxies to uvicorn :8000; prod: same-origin static mount).
 
 import type { SubstrateInfo } from "../components/workshops/calculators/SubstratesTab";
-import { postDownload } from "./download";
+import { filenameFromDisposition, saveBlob } from "./download";
 import type { ExportSeriesStyle } from "./exportStyles";
 import type { FigureOverrides } from "./figureOverrides";
 import type { FigureHitmap } from "./previewmap";
@@ -45,7 +45,12 @@ async function deleteJSON<T>(path: string): Promise<T> {
   return unwrap<T>(await fetch(path, { method: "DELETE" }));
 }
 
-async function unwrap<T>(res: Response): Promise<T> {
+/** Pass an ok response through; throw the backend's error detail (or the
+ *  status line) otherwise. The SINGLE error-extraction path — every backend
+ *  fetch funnels through here (via `unwrap`/`postForm`/`postBlob`/
+ *  `postDownload`), so error-message behaviour can't drift between endpoints
+ *  (review 2026-07-11, MAIN #8b — four copies of this block had drifted). */
+async function ensureOk(res: Response): Promise<Response> {
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`;
     try {
@@ -56,7 +61,44 @@ async function unwrap<T>(res: Response): Promise<T> {
     }
     throw new Error(detail);
   }
-  return (await res.json()) as T;
+  return res;
+}
+
+/** ok response -> parsed JSON; !ok -> throws the backend's error detail.
+ *  Exported for the deliberately-standalone client modules (lib/jobs,
+ *  lib/fitbumps) so they share the one extraction path above. */
+export async function unwrap<T>(res: Response): Promise<T> {
+  return (await (await ensureOk(res)).json()) as T;
+}
+
+/** POST a FormData body (browser file uploads) -> JSON. Exported for the
+ *  standalone upload clients (lib/originTemplate). */
+export async function postForm<T>(path: string, form: FormData): Promise<T> {
+  return unwrap<T>(await fetch(path, { method: "POST", body: form }));
+}
+
+/** POST JSON -> raw response bytes (the server-rendered preview images). */
+async function postBlob(path: string, body: unknown): Promise<Blob> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return (await ensureOk(res)).blob();
+}
+
+/** POST JSON, then download the response body as a file (Content-Disposition
+ *  attachment) — the export routes. Lives here rather than lib/download so
+ *  its error handling rides `ensureOk`; the DOM save helpers stay in
+ *  lib/download (which does no fetching). */
+async function postDownload(path: string, body: unknown, fallbackName: string): Promise<void> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const blob = await (await ensureOk(res)).blob();
+  saveBlob(blob, filenameFromDisposition(res.headers.get("Content-Disposition"), fallbackName));
 }
 
 export async function health(): Promise<{ status: string }> {
@@ -74,8 +116,7 @@ export function importFile(path: string): Promise<DataStruct> {
 export async function uploadFile(file: File): Promise<DataStruct> {
   const form = new FormData();
   form.append("file", file, file.name);
-  const res = await fetch("/api/parsers/upload", { method: "POST", body: form });
-  return unwrap<DataStruct>(res);
+  return postForm<DataStruct>("/api/parsers/upload", form);
 }
 
 /** Fetch one Origin book's full data (ORIGIN_FILE_DECODE_PLAN #38 — the lazy
@@ -1370,23 +1411,8 @@ export function renderFigureHitmap(body: FigureSpec): Promise<FigureHitmap> {
 
 /** Render a figure and return the raw image bytes — for an in-app WYSIWYG
  *  preview (the figure builder), as opposed to exportFigure which downloads. */
-export async function renderFigureBlob(body: FigureSpec): Promise<Blob> {
-  const res = await fetch("/api/export/figure", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const j = (await res.json()) as { detail?: string };
-      if (j.detail) detail = j.detail;
-    } catch {
-      /* non-JSON error body — keep the status line */
-    }
-    throw new Error(detail);
-  }
-  return res.blob();
+export function renderFigureBlob(body: FigureSpec): Promise<Blob> {
+  return postBlob("/api/export/figure", body);
 }
 
 /** One figure-page panel (GOTO #4): a single-figure payload + its grid cell.
@@ -1425,23 +1451,8 @@ export function exportFigurePage(body: FigurePageSpec): Promise<void> {
 
 /** Render the page and return the raw image bytes — the composer UI's
  *  low-DPI PNG preview (same pattern as renderFigureBlob above). */
-export async function renderFigurePageBlob(body: FigurePageSpec): Promise<Blob> {
-  const res = await fetch("/api/export/figure-page", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const j = (await res.json()) as { detail?: string };
-      if (j.detail) detail = j.detail;
-    } catch {
-      /* non-JSON error body — keep the status line */
-    }
-    throw new Error(detail);
-  }
-  return res.blob();
+export function renderFigurePageBlob(body: FigurePageSpec): Promise<Blob> {
+  return postBlob("/api/export/figure-page", body);
 }
 
 /** Posted joint-parameter samples for a corner (pairs) plot — e.g.
