@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
+import re
+
 import numpy as np
 import pytest
 
 from quantized.calc.figure import render_figure, render_figure_map
+
+# PDF bytes embed a /CreationDate second-resolution timestamp, so two renders
+# of the SAME figure straddling a second boundary differ by those bytes alone
+# (the 2026-07-11 CI flake: passed on a fast local machine, failed on a slow
+# runner). Byte-equality assertions on PDFs must strip it first.
+_PDF_CREATION_DATE = re.compile(rb"/CreationDate \(D:[^)]*\)")
+
+
+def _stable_pdf(pdf: bytes) -> bytes:
+    return _PDF_CREATION_DATE.sub(b"/CreationDate (D:none)", pdf)
 
 
 def test_pdf_has_pdf_signature() -> None:
@@ -322,7 +334,7 @@ def test_x_scale_takes_precedence_over_legacy_x_log() -> None:
     y = np.exp(-1000.0 / t)
     a = render_figure(t, [("y", y)], fmt="pdf", x_log=True, x_scale="reciprocal")
     b = render_figure(t, [("y", y)], fmt="pdf", x_scale="reciprocal")
-    assert a == b
+    assert _stable_pdf(a) == _stable_pdf(b)
 
 
 def test_legacy_x_log_still_works_when_x_scale_absent() -> None:
@@ -330,7 +342,7 @@ def test_legacy_x_log_still_works_when_x_scale_absent() -> None:
     y = x**2
     via_log = render_figure(x, [("y", y)], fmt="pdf", x_log=True)
     via_scale = render_figure(x, [("y", y)], fmt="pdf", x_scale="log")
-    assert via_log == via_scale
+    assert _stable_pdf(via_log) == _stable_pdf(via_scale)
 
 
 def test_reciprocal_scale_with_x_breaks_does_not_crash() -> None:
