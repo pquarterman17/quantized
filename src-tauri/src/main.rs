@@ -24,6 +24,45 @@ struct ServerProc(Mutex<Option<Child>>);
 const ADDR: &str = "127.0.0.1:8000";
 const APP_URL: &str = "http://127.0.0.1:8000";
 
+/// Which window the shell opens: the normal full app, or DiraCulator — the
+/// calculator-only view launched via the Start Menu shortcut added in
+/// MAIN #23 (`Quantized.exe --calc`, see nsis-hooks.nsh). The frontend's
+/// `?view=calc` mode already exists (`frontend/src/lib/viewMode.ts`); this
+/// enum just decides how the shell presents it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Mode {
+    Normal,
+    Calc,
+}
+
+/// `--calc` anywhere in argv selects DiraCulator mode; everything else opens
+/// the normal app. Pure and unit-testable without touching a real window.
+fn shell_mode<S: AsRef<str>>(args: &[S]) -> Mode {
+    if args.iter().any(|a| a.as_ref() == "--calc") {
+        Mode::Calc
+    } else {
+        Mode::Normal
+    }
+}
+
+/// The URL the webview should navigate to for a given mode. `Mode::Normal`
+/// passes `base` through unchanged (byte-identical to today's behavior).
+/// `Mode::Calc` appends the calc-only view query, joining correctly whether
+/// `base` already carries a query string or a trailing slash (it has neither
+/// today, but this keeps the join logic honest rather than a bare concat).
+fn webview_url(base: &str, mode: Mode) -> String {
+    if mode == Mode::Normal {
+        return base.to_string();
+    }
+    if base.contains('?') {
+        format!("{base}&view=calc")
+    } else if base.ends_with('/') {
+        format!("{base}?view=calc")
+    } else {
+        format!("{base}/?view=calc")
+    }
+}
+
 fn repo_root() -> PathBuf {
     // src-tauri/ lives one level under the repo root
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -168,10 +207,13 @@ async fn check_for_update(app: tauri::AppHandle) {
 }
 
 fn main() {
+    let argv: Vec<String> = std::env::args().collect();
+    let mode = shell_mode(&argv);
+
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
-        .setup(|app| {
+        .setup(move |app| {
             let repo = repo_root();
             // a dev/leftover server may already own the port — reuse it
             let already = wait_for_health(Duration::from_millis(800));
@@ -182,6 +224,20 @@ fn main() {
             };
             app.manage(ServerProc(Mutex::new(child)));
 
+            // DiraCulator (`--calc`): the "main" window is config-defined in
+            // tauri.conf.json (title "Quantized", 1440x920) and already exists
+            // by the time this closure runs, so the least invasive way to give
+            // it a distinct identity is to retitle/resize it in place here
+            // rather than stand up a second WebviewWindowBuilder — the sidecar
+            // spawn/kill and health-poll plumbing below stay identical for
+            // both modes.
+            if mode == Mode::Calc {
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.set_title("DiraCulator");
+                    let _ = win.set_size(tauri::LogicalSize::new(520.0_f64, 680.0_f64));
+                }
+            }
+
             // The window is already showing the bundled splash. Wait for the
             // server off the UI thread, then navigate to the live app (or
             // surface a clear error if it never comes up).
@@ -190,7 +246,7 @@ fn main() {
                 let ok = already || wait_for_health(Duration::from_secs(60));
                 if let Some(win) = handle.get_webview_window("main") {
                     if ok {
-                        if let Ok(url) = APP_URL.parse() {
+                        if let Ok(url) = webview_url(APP_URL, mode).parse() {
                             let _ = win.navigate(url);
                         }
                     } else {
@@ -227,4 +283,64 @@ fn main() {
                 kill_server(app);
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_mode_defaults_to_normal() {
+        assert_eq!(shell_mode(&["Quantized.exe".to_string()]), Mode::Normal);
+        assert_eq!(shell_mode::<String>(&[]), Mode::Normal);
+    }
+
+    #[test]
+    fn shell_mode_picks_up_calc_flag_anywhere_in_argv() {
+        assert_eq!(
+            shell_mode(&["Quantized.exe".to_string(), "--calc".to_string()]),
+            Mode::Calc
+        );
+        assert_eq!(
+            shell_mode(&["--calc".to_string(), "Quantized.exe".to_string()]),
+            Mode::Calc
+        );
+    }
+
+    #[test]
+    fn shell_mode_ignores_unrelated_flags() {
+        assert_eq!(
+            shell_mode(&["Quantized.exe".to_string(), "--no-browser".to_string()]),
+            Mode::Normal
+        );
+    }
+
+    #[test]
+    fn webview_url_normal_mode_is_untouched() {
+        assert_eq!(webview_url(APP_URL, Mode::Normal), APP_URL);
+    }
+
+    #[test]
+    fn webview_url_calc_mode_appends_view_query() {
+        assert_eq!(
+            webview_url(APP_URL, Mode::Calc),
+            format!("{APP_URL}/?view=calc")
+        );
+    }
+
+    #[test]
+    fn webview_url_calc_mode_respects_trailing_slash() {
+        assert_eq!(
+            webview_url("http://127.0.0.1:8000/", Mode::Calc),
+            "http://127.0.0.1:8000/?view=calc"
+        );
+    }
+
+    #[test]
+    fn webview_url_calc_mode_extends_an_existing_query() {
+        assert_eq!(
+            webview_url("http://127.0.0.1:8000/?foo=bar", Mode::Calc),
+            "http://127.0.0.1:8000/?foo=bar&view=calc"
+        );
+    }
 }

@@ -13,6 +13,11 @@ entirely by CI:
 The repo stays binary-free either way — installers and wheels are build
 artifacts, never committed.
 
+The Windows installer creates **two** Start Menu shortcuts pointing at the
+same `Quantized.exe` — "Quantized" (full app) and "DiraCulator" (`--calc`,
+the calculator-only view) — added/removed together by
+`src-tauri/nsis-hooks.nsh`'s `NSIS_HOOK_POSTINSTALL`/`POSTUNINSTALL`.
+
 Two update paths for the desktop app, both wired:
 
 1. **In-app auto-update** — on launch (Windows), the app checks the GitHub
