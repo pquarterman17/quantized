@@ -12,10 +12,15 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { clampAnnotationSize, MAX_ANNOTATION_SIZE, MIN_ANNOTATION_SIZE } from "../../lib/uplotOverlays";
-import type { BuildOptsArgs } from "../../lib/uplotOpts";
+import { cssVar, type BuildOptsArgs } from "../../lib/uplotOpts";
+import type { Annotation } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { askAnnotationText } from "../overlays/AnnotationTextDialog";
+
+/** MAIN #27 "text box" Frame opacity submenu steps — same 25/50/75/100%
+ *  shape as the Shape object menu's Opacity submenu (`useShapeEdit`). */
+const FRAME_OPACITY_STEPS = [0.25, 0.5, 0.75, 1] as const;
 
 /** The corner-handle drag's step size for the object menu's Size +/− entries
  *  (a discrete click, unlike the drag's continuous px-to-size mapping). */
@@ -90,6 +95,15 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
     }
   };
 
+  // MAIN #27 "text box": set/replace the frame wholesale (a preset click) or
+  // patch just its opacity (the Opacity submenu, preserving any existing
+  // fill/stroke — e.g. Solid + a later opacity pick keeps the surface fill).
+  const setFrame = (id: string, frame: Annotation["frame"]) => updateAnnotation(id, { frame });
+  const setFrameOpacity = (id: string, opacity: number) => {
+    const a = useApp.getState().annotations.find((x) => x.id === id);
+    updateAnnotation(id, { frame: { ...(a?.frame ?? {}), opacity } });
+  };
+
   const openMenu = (
     id: string,
     clientX: number,
@@ -99,6 +113,7 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
     const a = useApp.getState().annotations.find((x) => x.id === id);
     const size = a?.size ?? DEFAULT_ANNOTATION_SIZE;
     const isPage = a?.anchor === "page";
+    const frameOpacity = a?.frame?.opacity ?? 1;
     setMenu({
       x: clientX,
       y: clientY,
@@ -109,6 +124,34 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
           label: isPage ? "Pin to data (follows zoom)" : "Pin to page (stays on zoom)",
           checked: isPage,
           run: () => togglePageAnchor(id, conv),
+        },
+        {
+          label: "Frame",
+          submenu: [
+            { label: "None", checked: !a?.frame, run: () => setFrame(id, undefined) },
+            {
+              label: "Subtle",
+              checked: !!a?.frame && a.frame.fill === undefined,
+              run: () => setFrame(id, { opacity: 0.15 }),
+            },
+            {
+              label: "Solid",
+              checked: !!a?.frame?.fill,
+              // A canvas fillStyle needs a RESOLVED color, not a live
+              // var(--x) reference — read the surface token NOW.
+              run: () => setFrame(id, { fill: cssVar("--surface-2") || "#2a2a33", opacity: 1 }),
+            },
+            { separator: true },
+            {
+              label: "Opacity",
+              disabled: !a?.frame,
+              submenu: FRAME_OPACITY_STEPS.map((pct) => ({
+                label: `${Math.round(pct * 100)}%`,
+                checked: Math.abs(frameOpacity - pct) < 1e-6,
+                run: () => setFrameOpacity(id, pct),
+              })),
+            },
+          ],
         },
         { label: "Size +", run: () => bumpSize(id, MENU_SIZE_STEP), disabled: size >= MAX_ANNOTATION_SIZE },
         { label: "Size −", run: () => bumpSize(id, -MENU_SIZE_STEP), disabled: size <= MIN_ANNOTATION_SIZE },

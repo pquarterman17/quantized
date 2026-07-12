@@ -13,6 +13,7 @@ import NotesCard from "./NotesCard";
 import OriginProvenanceCard from "./OriginProvenanceCard";
 import RefLinesCard from "./RefLinesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
+import ShapesCard from "./ShapesCard";
 import StatsCard from "./StatsCard";
 import TickFormat from "./TickFormat";
 import TitlesCard from "./TitlesCard";
@@ -108,6 +109,8 @@ export default function Inspector() {
       <RefLinesCard />
 
       <AnnotationsCard />
+
+      <ShapesCard />
 
       <SeriesStyleCard active={active} />
 

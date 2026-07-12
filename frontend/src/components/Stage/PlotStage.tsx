@@ -11,7 +11,6 @@ import { useEffect, useRef, useState } from "react";
 import type uPlot from "uplot";
 
 import { clampPlottedRange, rowsInXRange } from "../../lib/plotdata";
-import { publishLivePlotSnapshot } from "../../lib/plotsnapshot";
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { resolveTemplate } from "../../lib/plotTemplates";
@@ -20,15 +19,14 @@ import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths"
 import { windowSyncKey } from "../../lib/windowsync";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
-import ContextMenu from "../overlays/ContextMenu";
 import { snapshotToNewWindow } from "../windows/useWindowCommands";
 import AxisDropZones from "./AxisDropZones";
 import InsetPlot from "./InsetPlot";
 import MultiPanelStage from "./MultiPanelStage";
-import PlotContextMenu from "./PlotContextMenu";
 import PlotLegend from "./PlotLegend";
 import PlotReadouts from "./PlotReadouts";
 import PlotResultChips from "./PlotResultChips";
+import PlotStageMenus from "./PlotStageMenus";
 import PlotToolbar from "./PlotToolbar";
 import PlotViewport from "./PlotViewport";
 import PolarStage from "./PolarStage";
@@ -36,8 +34,11 @@ import StatStage from "./StatStage";
 import { useAnnotationEdit } from "./useAnnotationEdit";
 import { useAxisDrop } from "./useAxisDrop";
 import { useGadgetChip } from "./useGadgetChip";
+import { useLiveSnapshotPublish } from "./useLiveSnapshotPublish";
 import { usePlotPayload } from "./usePlotPayload";
 import { usePlotStageActions } from "./usePlotStageActions";
+import { useShapeDraw } from "./useShapeDraw";
+import { useShapeEdit } from "./useShapeEdit";
 
 export default function PlotStage() {
   const active = useActiveDataset();
@@ -64,6 +65,7 @@ export default function PlotStage() {
   const refLines = useApp((s) => s.refLines);
   const updateRefLine = useApp((s) => s.updateRefLine);
   const annotations = useApp((s) => s.annotations);
+  const shapes = useApp((s) => s.shapes);
   const regionShades = useApp((s) => s.regionShades);
   const seriesStyles = useApp((s) => s.seriesStyles);
   const seriesLabels = useApp((s) => s.seriesLabels);
@@ -99,6 +101,10 @@ export default function PlotStage() {
   const setPlotTool = useApp((s) => s.setPlotTool);
   // MAIN #18: pointer-mode annotation select/drag/resize/edit/menu bridge.
   const { bridge: annotationEdit, menu: annotationMenu, closeMenu: closeAnnotationMenu } = useAnnotationEdit(tool);
+  // MAIN #27: pointer-mode shape select/move/reshape/menu bridge + the
+  // drag-to-draw-a-new-shape mode bridge.
+  const { bridge: shapeEdit, menu: shapeMenu, closeMenu: closeShapeMenu } = useShapeEdit(tool);
+  const { shapeDraw } = useShapeDraw();
   const setRegionPicked = useApp((s) => s.setRegionPicked);
   const selection = useApp((s) => s.selection);
   const setRowSelection = useApp((s) => s.setRowSelection);
@@ -189,26 +195,24 @@ export default function PlotStage() {
     active,
   );
 
-  // Item 11 (snapshot-as-window): publish the CURRENT composed display bundle
-  // through the module-scope seam so the "Snapshot to New Window" command can
-  // freeze exactly what's on screen. An imperative ref write, not store state
-  // — zero re-renders/store churn. Publish null while an alternate render
-  // mode is actually showing (the same gates as the early returns below):
-  // the XY bundle computed here isn't what's on screen then, so the command
-  // no-ops instead of freezing the wrong thing. Cleared on unmount (the Plot
-  // tab switching away).
-  const altModeShowing =
-    (!!active && (polarMode || statMode)) ||
-    (stackMode &&
-      (plotted.length >= 2 || (spatialPanels?.length ?? 0) >= 2 || (facetPanels?.length ?? 0) >= 1));
-  useEffect(() => {
-    publishLivePlotSnapshot(
-      displayPayload && !altModeShowing
-        ? { payload: displayPayload, styleList, labelList, errorBars, plotted, colorByColumns, hidden }
-        : null,
-    );
-    return () => publishLivePlotSnapshot(null);
-  }, [displayPayload, styleList, labelList, errorBars, plotted, colorByColumns, hidden, altModeShowing]);
+  // Item 11 / MAIN #27 offset: the live-snapshot publish (see
+  // useLiveSnapshotPublish's header).
+  useLiveSnapshotPublish({
+    active,
+    polarMode,
+    statMode,
+    stackMode,
+    plottedCount: plotted.length,
+    spatialPanels,
+    facetPanels,
+    displayPayload,
+    styleList,
+    labelList,
+    errorBars,
+    plotted,
+    colorByColumns,
+    hidden,
+  });
 
   // Alternate render modes (each self-contained; polar wins, then stats, then stack).
   const nPlotted = plotted.length;
@@ -282,6 +286,9 @@ export default function PlotStage() {
         onRefLineMove={updateRefLine}
         annotations={annotations}
         annotationEdit={annotationEdit}
+        shapes={shapes}
+        shapeEdit={shapeEdit}
+        shapeDraw={shapeDraw}
         regionShades={regionShades}
         seriesStyles={styleList}
         plotted={plotted}
@@ -324,26 +331,19 @@ export default function PlotStage() {
         peakWizardEdit={peakWizardEdit}
         anchorEdit={baselineAnchorEdit}
       />
-      {menu && displayPayload && (
-        <PlotContextMenu
-          x={menu.x}
-          y={menu.y}
-          plotRef={plotRef}
-          payload={displayPayload}
-          plotted={plotted}
-          hidden={hidden}
-          actions={{ resetView, smartScale, savePng, copyData, snapshot }}
-          onClose={() => setMenu(null)}
-        />
-      )}
-      {annotationMenu && (
-        <ContextMenu
-          x={annotationMenu.x}
-          y={annotationMenu.y}
-          items={annotationMenu.items}
-          onClose={closeAnnotationMenu}
-        />
-      )}
+      <PlotStageMenus
+        menu={menu}
+        onCloseMenu={() => setMenu(null)}
+        displayPayload={displayPayload}
+        plotRef={plotRef}
+        plotted={plotted}
+        hidden={hidden}
+        actions={{ resetView, smartScale, savePng, copyData, snapshot }}
+        annotationMenu={annotationMenu}
+        onCloseAnnotationMenu={closeAnnotationMenu}
+        shapeMenu={shapeMenu}
+        onCloseShapeMenu={closeShapeMenu}
+      />
 
       {displayPayload && (
         <PlotToolbar
