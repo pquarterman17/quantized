@@ -1017,7 +1017,25 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // fontSize 9) never shrinks below what already rendered fine — this only
   // grows room for a bigger font, never takes it away.
   const xAxisSize = Math.max(50, tickPx + 42);
-  const yAxisSize = Math.max(60, tickPx * 4 + 16);
+  // Y-axis tick-value band: MEASURE the widest formatted tick label rather than
+  // assuming ~4 chars, so many-digit labels (common in Origin imports, e.g.
+  // "0.000012" or "-1234.5") don't overflow the band and overlap the axis
+  // title. uPlot calls this during layout with the drawn tick strings; we
+  // reserve their width + a generous gap, floored at the prior fixed width so a
+  // small template never shrinks below what already rendered fine.
+  const yGutterFloor = Math.max(60, tickPx * 4 + 16);
+  const yTickPad = tickPx + 12; // tick marks + label gap + breathing room
+  const yAxisSize: uPlot.Axis["size"] = (self, values) => {
+    if (!values || values.length === 0) return yGutterFloor;
+    const ctx = self.ctx;
+    const pxr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    const prevFont = ctx.font;
+    ctx.font = `${tickPx * pxr}px ${cssVar("--font-mono") || "monospace"}`;
+    let maxW = 0;
+    for (const v of values) maxW = Math.max(maxW, ctx.measureText(v).width);
+    ctx.font = prevFont;
+    return Math.max(yGutterFloor, Math.ceil(maxW / pxr + yTickPad));
+  };
   const axes: uPlot.Axis[] = [
     {
       ...axis,
