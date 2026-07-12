@@ -37,6 +37,23 @@ beforeEach(() => {
     yKeys: null,
     graphBuilderOpen: false,
     graphBuilderSeed: null,
+    originWorksheetSeed: null,
+  });
+});
+
+describe("useWorksheetView — Origin source selection (#50)", () => {
+  it("consumes the one-shot exact-column seed into the local selection", () => {
+    useApp.setState({ originWorksheetSeed: { datasetId: "d1", columns: [-1, 1] } });
+    const { result } = renderHook(() => useWorksheetView(ds));
+    expect([...result.current.selectedCols]).toEqual([-1, 1]);
+    expect(useApp.getState().originWorksheetSeed).toBeNull();
+  });
+
+  it("does not consume a seed intended for another workbook", () => {
+    useApp.setState({ originWorksheetSeed: { datasetId: "other", columns: [0] } });
+    const { result } = renderHook(() => useWorksheetView(ds));
+    expect(result.current.selectedCols.size).toBe(0);
+    expect(useApp.getState().originWorksheetSeed?.datasetId).toBe("other");
   });
 });
 

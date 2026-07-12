@@ -392,7 +392,8 @@ Official model references used for this routing:
     - Keep raw/project inventory in a project-level artifact so filtering the
       Library never destroys provenance needed by later decoders.
 
-50. **Exact source-workbook and remake actions.** Add first-class actions on
+50. **Exact source-workbook and remake actions.** **IMPLEMENTED on
+    `codex/origin-workbook-fallback`; awaiting PR review.** Add first-class actions on
     every Origin figure: **Open source workbook(s)** and **Remake in Graph
     Builder**.
     - Resolve pending books before opening; focus the actual sheet pseudo-book

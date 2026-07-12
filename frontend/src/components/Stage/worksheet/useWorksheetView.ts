@@ -163,6 +163,7 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
   const yKeys = useApp((s) => s.yKeys);
   const setYKeys = useApp((s) => s.setYKeys);
   const setErrKey = useApp((s) => s.setErrKey);
+  const originWorksheetSeed = useApp((s) => s.originWorksheetSeed);
   const toggleRowExcluded = useApp((s) => s.toggleRowExcluded);
   const clearRowExclusions = useApp((s) => s.clearRowExclusions);
   const selection = useApp((s) => s.selection);
@@ -194,6 +195,14 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
     setSelectedCols(new Set());
     setColWidths({});
   }, [ds.id]);
+
+  // Origin #50 one-shot: select the exact decoded X/Y/error columns after
+  // the requested source sheet mounts. The durable selection remains local.
+  useEffect(() => {
+    if (originWorksheetSeed?.datasetId !== ds.id) return;
+    setSelectedCols(new Set(originWorksheetSeed.columns));
+    useApp.getState().clearOriginWorksheetSeed();
+  }, [ds.id, originWorksheetSeed]);
 
   // Esc clears the column selection while one exists (mirrors useGadgetChip's
   // "listen only while there's something to dismiss" pattern).
