@@ -186,6 +186,10 @@ body {
 .qzk-fig-item:disabled { opacity: 0.45; cursor: default; }
 .qzk-fig-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-fig-meta { flex-shrink: 0; color: var(--text-faint); font-size: var(--type-nano); font-family: var(--font-mono); }
+.qzk-origin-figure-row { min-width: 0; }
+.qzk-origin-saved-preview { margin: 4px 0 8px; padding: 6px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-1); }
+.qzk-origin-saved-preview figcaption, .qzk-origin-saved-preview small { display: block; color: var(--text-faint); font-size: var(--type-nano); }
+.qzk-origin-saved-preview img { display: block; max-width: 100%; height: auto; margin: 6px auto; image-rendering: auto; }
 
 /* Test chooser (#26): plain-language assumption reasons. */
 .qzk-reason-list { list-style: none; margin: 6px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 2px; color: var(--text-dim); font-size: var(--font-size-sm); }

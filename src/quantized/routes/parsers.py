@@ -28,6 +28,10 @@ from quantized.io.origin_project.fidelity import (
 )
 from quantized.io.origin_project.figures import extract_figures
 from quantized.io.origin_project.figures_opju import extract_figures_opju
+from quantized.io.origin_project.graph_preview import (
+    PreviewDiagnostic,
+    attach_opju_graph_previews,
+)
 from quantized.io.origin_project.preview import decimate_datastruct
 from quantized.routes._bookcache import cache_project_books
 from quantized.routes._payload import datastruct_payload, jsonify
@@ -198,8 +202,10 @@ def _import_with_books(
         try:
             if suffix == ".opj":
                 raw_figs = extract_figures(raw)
+                preview_diagnostics: list[PreviewDiagnostic] = []
             else:
                 raw_figs = extract_figures_opju(raw)
+                raw_figs, preview_diagnostics = attach_opju_graph_previews(raw_figs, raw)
             source_names = {
                 str(name)
                 for book in books
@@ -213,6 +219,7 @@ def _import_with_books(
                 raw_figs,
                 container="opj" if suffix == ".opj" else "opju",
                 source_names=source_names,
+                preview_diagnostics=preview_diagnostics,
             )
         except (IndexError, ValueError, KeyError, struct.error):
             # Figures are an optional nicety; a decode hiccup on a malformed or

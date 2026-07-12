@@ -38,6 +38,12 @@ export default function OriginFidelitySection() {
                   Filtered: {m.filtered_figures.map((f) => f.name).join(", ")}
                 </div>
               )}
+              {(m.preview_diagnostics?.length ?? 0) > 0 && (
+                <div className="qzk-ds-meta">
+                  Preview inventory: {m.preview_diagnostics!.filter((item) => item.status === "workbook_thumbnail").length} workbook thumbnails excluded
+                  {m.preview_diagnostics!.some((item) => item.status === "ambiguous") ? " · ambiguous graph assets retained" : ""}
+                </div>
+              )}
             </details>
           );
         })}

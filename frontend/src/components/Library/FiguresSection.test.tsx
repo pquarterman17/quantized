@@ -189,6 +189,31 @@ describe("FiguresSection", () => {
     expect(useApp.getState().graphBuilderSeed?.zones.y).toEqual([{ datasetId: "d1", channel: 0 }]);
   });
 
+  it("toggles the file-saved Origin preview beside the editable Stage", () => {
+    useApp.setState({
+      originFigures: [{
+        id: "preview", stem: "XAS", datasetId: "d1", siblingIds: ["d1"],
+        figure: {
+          name: "GraphPreview", x_from: 0, x_to: 1, x_log: false,
+          y_from: 0, y_to: 1, y_log: false, n_curves: 1, annotations: [],
+          saved_preview: {
+            format: "png", mime: "image/png", width: 200, height: 155,
+            sha256: "a".repeat(64), data: "iVBORw0KGgo=",
+            confidence: "exact_page", page_name: "GraphPreview",
+          },
+        },
+      }],
+    });
+    render(<FiguresSection />);
+    expect(screen.queryByAltText(/Saved Origin preview of GraphPreview/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTitle("Show saved Origin preview"));
+    const image = screen.getByAltText(/Saved Origin preview of GraphPreview/);
+    expect(image).toHaveAttribute("src", "data:image/png;base64,iVBORw0KGgo=");
+    expect(screen.getByText(/may be stale or low resolution/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle("Hide saved Origin preview"));
+    expect(screen.queryByAltText(/Saved Origin preview of GraphPreview/)).not.toBeInTheDocument();
+  });
+
   it("collapses/expands via the section header", () => {
     useApp.setState({
       originFigures: [

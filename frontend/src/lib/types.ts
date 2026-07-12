@@ -43,6 +43,24 @@ export interface OriginFilteredFigure {
   reason: string;
 }
 
+export interface OriginSavedPreview {
+  format: "png";
+  mime: "image/png";
+  width: number;
+  height: number;
+  sha256: string;
+  data: string;
+  confidence: "exact_page" | "ambiguous_page";
+  page_name: string;
+}
+
+export interface OriginPreviewDiagnostic {
+  page_name: string;
+  status: "no_preview" | "ambiguous" | "workbook_thumbnail";
+  asset_count: number;
+  assets?: OriginSavedPreview[];
+}
+
 export interface OriginFidelityManifest {
   version: 1;
   container: "opj" | "opju";
@@ -52,6 +70,8 @@ export interface OriginFidelityManifest {
   graph_records_filtered: number;
   omissions: string[];
   filtered_figures: OriginFilteredFigure[];
+  /** Optional for backward compatibility with #49 workspaces. */
+  preview_diagnostics?: OriginPreviewDiagnostic[];
 }
 
 /** The `books[]` entry for the book already returned in full at the payload's
@@ -220,6 +240,9 @@ export interface OriginFigure {
    *  future saved-preview/oracle comparison gate; current imports normally
    *  report `best_effort` with explicit omissions. */
   fidelity?: OriginFigureFidelity;
+  /** Original CRC-validated PNG bytes saved inside this exact Origin graph
+   *  page. Shared by every layer of the page; never recompressed. */
+  saved_preview?: OriginSavedPreview;
 }
 
 /** Response of POST /api/plot/series — uPlot-ready column data. */
