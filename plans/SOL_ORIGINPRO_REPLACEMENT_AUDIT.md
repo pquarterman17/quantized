@@ -25,12 +25,12 @@ The highest-priority work is to establish one explicit analysis-selection contra
 > - **Hysteresis** (PR #18) — M-H analysis + bg-subtract now use plotted H/M
 >   (the headline "M-vs-H" danger: a timestamp `.time` with Field/Moment as
 >   channels).
+> - **magtools** (PR #20) — M(T) bg-subtract + field/moment unit-convert now
+>   follow the plotted X/Y (via `plottedYKey` over full data); output datasets
+>   labelled/timed from the plotted channels.
 >
-> STILL OPEN (deliberately deferred — these are NOT simple channel swaps):
-> - **magtools** (M(T) bg-subtract + unit convert) — self-contained but writes
->   a column-collapsing new dataset over FULL (unpruned) data with physics
->   metadata (`x_column_name`); doable but higher regression surface, wants its
->   own careful pass. Currently still `time`/`values[0]`.
+> STILL OPEN (deliberately deferred — these are NOT simple channel swaps, they
+> need backend/provenance work):
 > - **baseline processing** — entangled with the BACKEND corrections pipeline:
 >   the anchor method's Apply runs through `applyCorrections`'s `bgAnchors`,
 >   which subtracts from column 0. A real fix needs a channel parameter through
