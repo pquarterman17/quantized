@@ -1722,6 +1722,184 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(s.yScale).toBe("log");
   });
 
+  it("resolves every pending cross-book source before materializing an overlay (#48)", async () => {
+    const preview = (book: string): DataStruct => ({
+      time: [0],
+      values: [[-1]],
+      labels: ["signal"],
+      units: ["a.u."],
+      metadata: { origin_book: book, origin_column_names: ["B"], x_column_name: "A" },
+    });
+    const full = (book: string, time: number[], values: number[]): DataStruct => ({
+      time,
+      values: values.map((v) => [v]),
+      labels: ["signal"],
+      units: ["a.u."],
+      metadata: { origin_book: book, origin_column_names: ["B"], x_column_name: "A" },
+    });
+    useApp.setState({
+      datasets: [
+        {
+          id: "book-a",
+          name: "P:BookA",
+          data: preview("BookA"),
+          pending: { kind: "path", path: "/p.opj", bookId: "BookA", rows: 3, cols: 1 },
+        },
+        {
+          id: "book-b",
+          name: "P:BookB",
+          data: preview("BookB"),
+          pending: { kind: "path", path: "/p.opj", bookId: "BookB", rows: 2, cols: 1 },
+        },
+      ],
+      activeId: "book-a",
+      originFigures: [
+        {
+          id: "fig-cross-book",
+          stem: "P",
+          datasetId: "book-a",
+          siblingIds: ["book-a", "book-b"],
+          figure: {
+            ...figureEntry.figure,
+            curves: [
+              { book: "BookA", x: "A", y: "B" },
+              { book: "BookB", x: "A", y: "B" },
+            ],
+          },
+        },
+      ],
+    });
+    vi.mocked(fetchBookData).mockImplementation(async (source) =>
+      source.bookId === "BookA"
+        ? full("BookA", [1, 2, 3], [10, 20, 30])
+        : full("BookB", [4, 5], [40, 50]),
+    );
+
+    useApp.getState().applyOriginFigure("fig-cross-book");
+    expect(useApp.getState().datasets).toHaveLength(2); // no preview overlay
+
+    await vi.waitFor(() => {
+      expect(fetchBookData).toHaveBeenCalledTimes(2);
+      expect(useApp.getState().datasets).toHaveLength(3);
+    });
+    const overlay = useApp
+      .getState()
+      .datasets.find((d) => d.data.metadata.origin_overlay === true);
+    expect(overlay?.data.time).toEqual([1, 2, 3, 4, 5]);
+    expect(overlay?.data.values).toEqual([
+      [10, NaN],
+      [20, NaN],
+      [30, NaN],
+      [NaN, 40],
+      [NaN, 50],
+    ]);
+    expect(useApp.getState().datasets.filter((d) => d.pending)).toHaveLength(0);
+  });
+
+  it("does not create a partial overlay when one Origin source book fails (#48)", async () => {
+    const preview = (book: string): DataStruct => ({
+      time: [0],
+      values: [[-1]],
+      labels: ["signal"],
+      units: [""],
+      metadata: { origin_book: book, origin_column_names: ["B"], x_column_name: "A" },
+    });
+    useApp.setState({
+      datasets: [
+        {
+          id: "book-a",
+          name: "P:BookA",
+          data: preview("BookA"),
+          pending: { kind: "path", path: "/p.opj", bookId: "BookA", rows: 3, cols: 1 },
+        },
+        {
+          id: "book-b",
+          name: "P:BookB",
+          data: preview("BookB"),
+          pending: { kind: "path", path: "/p.opj", bookId: "BookB", rows: 3, cols: 1 },
+        },
+      ],
+      originFigures: [
+        {
+          id: "fig-cross-book",
+          stem: "P",
+          datasetId: "book-a",
+          siblingIds: ["book-a", "book-b"],
+          figure: {
+            ...figureEntry.figure,
+            curves: [
+              { book: "BookA", x: "A", y: "B" },
+              { book: "BookB", x: "A", y: "B" },
+            ],
+          },
+        },
+      ],
+    });
+    vi.mocked(fetchBookData).mockImplementation(async (source) => {
+      if (source.bookId === "BookB") throw new Error("book unavailable");
+      return raw;
+    });
+
+    useApp.getState().applyOriginFigure("fig-cross-book");
+
+    await vi.waitFor(() =>
+      expect(useApp.getState().status).toBe("couldn't apply Origin figure — book unavailable"),
+    );
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(useApp.getState().datasets.some((d) => d.data.metadata.origin_overlay === true)).toBe(false);
+  });
+
+  it("does not apply a stale figure after a newer lazy-book request wins (#48)", async () => {
+    let resolveA!: (value: DataStruct) => void;
+    let resolveB!: (value: DataStruct) => void;
+    const waitA = new Promise<DataStruct>((resolve) => {
+      resolveA = resolve;
+    });
+    const waitB = new Promise<DataStruct>((resolve) => {
+      resolveB = resolve;
+    });
+    const pending = (book: string): Dataset => ({
+      id: book,
+      name: book,
+      data: { ...raw, metadata: { origin_book: book } },
+      pending: { kind: "path", path: "/p.opj", bookId: book, rows: 3, cols: 1 },
+    });
+    useApp.setState({
+      datasets: [pending("BookA"), pending("BookB")],
+      activeId: "BookA",
+      originFigures: [
+        {
+          ...figureEntry,
+          id: "fig-a",
+          datasetId: "BookA",
+          siblingIds: ["BookA", "BookB"],
+          figure: { ...figureEntry.figure, name: "GraphA", y_from: 10, y_to: 20 },
+        },
+        {
+          ...figureEntry,
+          id: "fig-b",
+          datasetId: "BookB",
+          siblingIds: ["BookA", "BookB"],
+          figure: { ...figureEntry.figure, name: "GraphB", y_from: 30, y_to: 40 },
+        },
+      ],
+    });
+    vi.mocked(fetchBookData).mockImplementation((source) =>
+      source.bookId === "BookA" ? waitA : waitB,
+    );
+
+    useApp.getState().applyOriginFigure("fig-a");
+    useApp.getState().applyOriginFigure("fig-b");
+    resolveB(raw);
+    await vi.waitFor(() => expect(useApp.getState().yLim).toEqual([30, 40]));
+
+    resolveA(raw);
+    await waitA;
+    await Promise.resolve();
+    expect(useApp.getState().activeId).toBe("BookB");
+    expect(useApp.getState().yLim).toEqual([30, 40]);
+  });
+
   // Owner-routing item 4 ("none of the sub plots are boxed in"): Origin
   // draws every layer with a full 4-side frame, and the decoded figure
   // carries no separate border on/off flag — so an applied figure defaults

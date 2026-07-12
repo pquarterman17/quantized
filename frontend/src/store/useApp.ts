@@ -107,6 +107,7 @@ import {
   type RecentFile,
 } from "../lib/recentFiles";
 import { toast } from "./toasts";
+import { deferOriginFigureApply } from "./originFigureApply";
 import { isLazyBookEntry, isPrimaryBookMarker } from "../lib/types";
 import type {
   Annotation,
@@ -144,7 +145,6 @@ const pruneOriginFigureRefs = (figures: OriginFigureEntry[], removedIds: Readonl
 
 let _refSeq = 0;
 let _annSeq = 0;
-
 let _idSeq = 0;
 // Exported for store/split.ts (nextWindowId/panels.ts precedent) — a split
 // mints several dataset ids + one folder id from the SAME sequence used
@@ -619,8 +619,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // dataset ids that same import just created. Internal to importFiles, but a
   // named action so it's directly testable.
   addOriginFigures: (stem: string, figures: OriginFigure[], datasetIds: string[]) => void;
-  // Apply a stored figure's plot-state snapshot: activates its resolved
-  // dataset and sets the axis ranges + log flags. No-op if unresolved.
+  // Apply a stored figure after resolving lazy source books; unresolved = no-op.
   // `opts.newWindow` (item 9) opens a fresh window (bound to the figure's
   // dataset) and focuses it FIRST, so the rest of the apply logic — already
   // scoped to "the focused window" via `setActive`/the singleton `set()`
@@ -1488,6 +1487,7 @@ export const useApp = create<AppState>((set, get) => ({
   applyOriginFigure: (id, opts) => {
     const entry = get().originFigures.find((f) => f.id === id);
     if (!entry?.datasetId) return;
+    if (deferOriginFigureApply(get, entry, id, opts)) return;
     // Item 9: open a NEW window for this figure instead of overwriting the
     // focused one. Creating (bound to the figure's dataset) then focusing
     // BEFORE any of the apply logic below runs means every `setActive`/

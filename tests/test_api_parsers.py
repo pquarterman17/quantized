@@ -160,6 +160,42 @@ def test_upload_origin_project_returns_all_books(tmp_path):
     assert "books" not in resp2.json()
 
 
+def test_opj_import_filters_nonactionable_figure_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The presentation gate applies to old ``.opj`` as well as ``.opju``.
+
+    Real ``XMCD.opj`` contains dozens of internal/hintless layer anchors; they
+    belong in decoder diagnostics, not as disabled rows in the Library.
+    """
+    import numpy as np
+
+    from quantized.datastruct import DataStruct
+
+    project = tmp_path / "dead-figures.opj"
+    project.write_bytes(b"CPYA synthetic route fixture")
+    ds = DataStruct(
+        time=np.array([1.0, 2.0]),
+        values=np.array([[3.0], [4.0]]),
+        labels=("Y",),
+        units=("",),
+        metadata={"origin_book": "Book1"},
+    )
+    monkeypatch.setattr(parsers_mod, "read_origin_project_all", lambda *_args, **_kw: (ds, [ds]))
+    monkeypatch.setattr(
+        parsers_mod,
+        "extract_figures",
+        lambda _raw: [
+            {"name": "Graph1", "curves": [{"book": "Book1", "x": "A", "y": "B"}]},
+            {"name": "SYSTEM", "curves": [], "source_hint": ""},
+        ],
+    )
+
+    body = parsers_mod._import_with_books(project)
+
+    assert [f["name"] for f in body["figures"]] == ["Graph1"]
+
+
 @pytest.mark.realdata
 def test_every_origin_corpus_file_imports_without_crashing(corpus_dir: Path) -> None:
     """Every real ``.opj``/``.opju`` in the corpus must import through the route
