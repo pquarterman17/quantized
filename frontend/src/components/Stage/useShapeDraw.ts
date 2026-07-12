@@ -76,11 +76,18 @@ export function useShapeDraw(): ShapeDrawResult {
         setDrawShapeKind(null);
         setPlotTool("pointer");
         if (kind === "textbox") {
-          const id = addAnnotation(x1, y1, "");
-          updateAnnotation(id, { frame: DEFAULT_TEXTBOX_FRAME });
-          setSelectedAnnotationId(id);
+          // Bug 4 fix: create the annotation ONLY after the dialog resolves
+          // non-null (matches the guarded pattern AnnotationsCard.tsx already
+          // uses — gate addAnnotation on non-empty text). The previous
+          // synchronous addAnnotation(x1,y1,"") committed a REAL annotation
+          // before the dialog even opened, so cancelling left an orphaned
+          // blank dot behind (drawn unconditionally, listed in
+          // AnnotationsCard, and persisted to .dwk).
           void askAnnotationText("Text box", "").then((v) => {
-            if (v != null) updateAnnotation(id, { text: v });
+            if (v == null) return;
+            const id = addAnnotation(x1, y1, v);
+            updateAnnotation(id, { frame: DEFAULT_TEXTBOX_FRAME });
+            setSelectedAnnotationId(id);
           });
           return;
         }

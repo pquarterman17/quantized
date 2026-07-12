@@ -6,7 +6,14 @@
 
 import type uPlot from "uplot";
 
-import { canvasToOverCss, hitTestAnnotationBody, hitTestAnnotationHandle, overPointerToCanvas } from "./annotationHit";
+import {
+  canvasToOverCss,
+  claimCursor,
+  cursorClaimed,
+  hitTestAnnotationBody,
+  hitTestAnnotationHandle,
+  overPointerToCanvas,
+} from "./annotationHit";
 import { CLICK_PX } from "./pointGesture";
 import type { ColorScatterSpec } from "./colorscatter";
 import { colormap, normalize } from "./colormap";
@@ -269,6 +276,36 @@ export function clampPageXY(
   const loY = pad / canvasH;
   const hiY = 1 - loY;
   return { x: Math.min(hiX, Math.max(loX, x)), y: Math.min(hiY, Math.max(loY, y)) };
+}
+
+/** Clamp a DATA-space (x, y) so the CANVAS pixel it resolves to stays `pad`
+ *  px inside the canvas edges — the data-anchor analogue of `clampPageXY`
+ *  above (which clamps PAGE fractions). Bug-hunt Bug 3: an unclamped
+ *  data-anchor drag could commit off-canvas coords that become unreachable
+ *  by a later click — only the Inspector's Shapes/Annotations-card delete
+ *  could recover it. Originally a private closure inside annotationPlugin's
+ *  `ready` hook (the dragged-dot commit); lifted to a shared top-level
+ *  export so `uplotShapes.ts`'s data-anchor shape body-move AND
+ *  handle-reshape drags reuse the SAME ONE clamp rather than reimplementing
+ *  it. Degenerate (zero/negative) canvas dims skip the clamp (return x/y
+ *  unchanged), matching `clampPageXY`'s same-case fallback. */
+export function clampToCanvas(
+  u: Pick<uPlot, "valToPos" | "posToVal" | "ctx" | "root" | "over">,
+  x: number,
+  y: number,
+  pad = 6,
+): { x: number; y: number } {
+  const cw = u.ctx.canvas?.width ?? 0;
+  const chh = u.ctx.canvas?.height ?? 0;
+  if (cw <= 0 || chh <= 0) return { x, y };
+  const rootRect = u.root.getBoundingClientRect();
+  const overRect = u.over.getBoundingClientRect();
+  const s = rootRect.width > 0 ? cw / rootRect.width : 1;
+  const px = Math.min(Math.max(u.valToPos(x, "x", true), pad), cw - pad);
+  const py = Math.min(Math.max(u.valToPos(y, "y", true), pad), chh - pad);
+  const cssX = px / s - (overRect.left - rootRect.left);
+  const cssY = py / s - (overRect.top - rootRect.top);
+  return { x: u.posToVal(cssX, "x"), y: u.posToVal(cssY, "y") };
 }
 
 /** One annotation's on-canvas geometry — the SINGLE geometry implementation
@@ -605,23 +642,6 @@ export function annotationPlugin(
                   cssX,
                   cssY,
                 );
-              // Clamp a dragged dot's DATA coords so its canvas position stays
-              // on-canvas (pad px) — the drag can place a label in the margin
-              // but never fully off the plot.
-              const clampToCanvas = (x: number, y: number): { x: number; y: number } => {
-                const pad = 6;
-                const cw = u.ctx.canvas.width;
-                const chh = u.ctx.canvas.height;
-                if (cw <= 0 || chh <= 0) return { x, y };
-                const rootRect = root.getBoundingClientRect();
-                const overRect = over.getBoundingClientRect();
-                const s = rootRect.width > 0 ? cw / rootRect.width : 1;
-                const px = Math.min(Math.max(u.valToPos(x, "x", true), pad), cw - pad);
-                const py = Math.min(Math.max(u.valToPos(y, "y", true), pad), chh - pad);
-                const cssX = px / s - (overRect.left - rootRect.left);
-                const cssY = py / s - (overRect.top - rootRect.top);
-                return { x: u.posToVal(cssX, "x"), y: u.posToVal(cssY, "y") };
-              };
               const setCursor = (c: string) => {
                 root.style.cursor = c === "default" ? "" : c;
                 over.style.cursor = c;
@@ -635,9 +655,20 @@ export function annotationPlugin(
                 const selId = o.selectedId ?? null;
                 if (selId && hitTestAnnotationHandle(handleFor(selId, gs), p, 8 * p.scale)) {
                   setCursor("nwse-resize");
+                  claimCursor(e);
                   return;
                 }
-                setCursor(hitTestAnnotationBody(hitGeoms(gs), p, 8 * p.scale) ? "move" : "default");
+                // Bug 2: only WRITE a cursor on our own positive hit, or on a
+                // miss that no earlier same-event listener already claimed
+                // (shapesPlugin registers on this same root FIRST — see
+                // claimCursor's doc) — otherwise a shape's "move" cursor gets
+                // clobbered back to "default" by this plugin's own miss.
+                if (hitTestAnnotationBody(hitGeoms(gs), p, 8 * p.scale)) {
+                  setCursor("move");
+                  claimCursor(e);
+                } else if (!cursorClaimed(e)) {
+                  setCursor("default");
+                }
               });
 
               root.addEventListener(
@@ -654,7 +685,13 @@ export function annotationPlugin(
                   // Resize handle (only live for the currently-selected annotation).
                   if (selId && hitTestAnnotationHandle(handle, downCanvas, 8 * downCanvas.scale)) {
                     e.preventDefault();
-                    e.stopPropagation();
+                    // stopImmediatePropagation (not just stopPropagation): shapesPlugin
+                    // shares this SAME root node for its own capture-phase mousedown
+                    // listener — plain stopPropagation() does NOT stop a sibling
+                    // listener on the SAME node, only propagation to the NEXT node
+                    // (bug-hunt Bug 1). This branch OWNS the gesture, so it must claim
+                    // the event outright.
+                    e.stopImmediatePropagation();
                     const a = annotations.find((x) => x.id === selId)!;
                     const startSize = a.size ?? fontPx(font);
                     dragResize = { id: selId, size: startSize };
@@ -717,8 +754,13 @@ export function annotationPlugin(
 
                   // On an annotation: own the gesture (capture-phase beats box zoom
                   // AND beats uPlot's own native dblclick-reset — see below).
+                  // stopImmediatePropagation (bug-hunt Bug 1): see the resize-handle
+                  // branch's doc above — a plain stopPropagation() left this SAME
+                  // mousedown reaching a sibling shapesPlugin listener registered on
+                  // the same root, which then ran its OWN empty-hit branch (a click on
+                  // an annotation isn't a hit on any shape) and reset zoom/deselected.
                   e.preventDefault();
-                  e.stopPropagation();
+                  e.stopImmediatePropagation();
                   o.onSelect?.(hit);
 
                   // Double-click-to-edit, detected as two mousedowns on the SAME
@@ -774,7 +816,7 @@ export function annotationPlugin(
                     // label can reach the margins but never leave the canvas.
                     const dxData = u.posToVal(nowX, "x") - u.posToVal(downOver.x, "x");
                     const dyData = u.posToVal(nowY, "y") - u.posToVal(downOver.y, "y");
-                    const clamped = clampToCanvas(a.x + dxData, a.y + dyData);
+                    const clamped = clampToCanvas(u, a.x + dxData, a.y + dyData);
                     dragMove = { id: hit, x: clamped.x, y: clamped.y };
                     u.redraw();
                   };
@@ -807,7 +849,10 @@ export function annotationPlugin(
                   const hit = hitTestAnnotationBody(hitGeoms(gs), p, 8 * p.scale);
                   if (hit) {
                     e.preventDefault();
-                    e.stopPropagation(); // don't fall through to the plot's own menu
+                    // stopImmediatePropagation: don't fall through to the plot's own
+                    // menu NOR to a sibling shapesPlugin contextmenu listener sharing
+                    // this same root (bug-hunt Bug 1).
+                    e.stopImmediatePropagation();
                     o.onSelect?.(hit);
                     // MAIN #21: precompute the data<->page toggle conversion
                     // from the hit annotation's CURRENT on-canvas position —

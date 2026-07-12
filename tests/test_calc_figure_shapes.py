@@ -160,6 +160,19 @@ def test_explicit_opacity_overrides_the_kind_default() -> None:
     plt.close(fig)
 
 
+def test_explicit_width_zero_is_not_replaced_by_the_default() -> None:
+    # Bug 5 (bug-hunt batch): `width = float(sh.get("width") or _DEFAULT_WIDTH)`
+    # treated an explicit `width: 0` as falsy and silently substituted
+    # _DEFAULT_WIDTH (1.5) -- unlike the correct `opacity` idiom two lines
+    # below (`is not None`). A width of 0 is a legitimate (if unusual)
+    # explicit value and must round-trip unchanged, not warp to 1.5.
+    shape = {"kind": "line", "x1": 0, "y1": 0, "x2": 1, "y2": 1, "width": 0}
+    fig, ax = _draw({"shapes": [shape]})
+    shape_line = next(ln for ln in ax.lines if list(ln.get_xdata()) == [0.0, 1.0])
+    assert shape_line.get_linewidth() == pytest.approx(0.0)
+    plt.close(fig)
+
+
 def test_fill_defaults_to_the_shapes_own_resolved_stroke() -> None:
     shape = {"kind": "rect", "x1": 0, "y1": 0, "x2": 1, "y2": 1, "stroke": "#123456"}
     fig, ax = _draw({"shapes": [shape]})

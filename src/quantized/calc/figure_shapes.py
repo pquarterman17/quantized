@@ -80,7 +80,10 @@ def _apply_shapes(fig: Any, ax: Any, shapes: Sequence[Mapping[str, Any]] | None)
             continue
         p1, p2, transform = _shape_endpoints(sh, ax, fig)
         stroke = sh.get("stroke") or _DEFAULT_STROKE
-        width = float(sh.get("width") or _DEFAULT_WIDTH)
+        # `is not None` (not `or`): an explicit `width: 0` is falsy in Python
+        # and `... or _DEFAULT_WIDTH` was silently replacing it with the
+        # default (1.5) -- unlike the correct `opacity` idiom two lines below.
+        width = float(sh["width"]) if sh.get("width") is not None else _DEFAULT_WIDTH
         dash: Literal["-", "--"] = "--" if sh.get("dash") else "-"
         opacity = sh.get("opacity")
         opacity = float(opacity) if opacity is not None else _DEFAULT_OPACITY[kind]

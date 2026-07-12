@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type uPlot from "uplot";
 
 import { CLICK_PX } from "./pointGesture";
+import type { Annotation } from "./types";
 import type { Shape } from "./types";
+import { annotationPlugin } from "./uplotOverlays";
 import {
   defaultShapeOpacity,
   DEFAULT_SHAPE_WIDTH,
@@ -352,6 +354,56 @@ describe("shapesPlugin — SELECT/EDIT mode", () => {
     expect(y2).toBe(30);
   });
 
+  // Bug 3 REGRESSION (bug-hunt batch): a data-anchored shape dragged far
+  // outside the canvas used to commit an unclamped off-canvas coordinate,
+  // making the shape unreachable by a later click (only the Inspector's
+  // Shapes-card delete could recover it). Mirrors annotationPlugin's own
+  // page-anchor drag clamp test in uplotOverlays.test.ts.
+  it("BUG 3: clamps a data-anchored shape's body drag so committed coords stay on-canvas (pad px)", () => {
+    const { u, root } = makeInteractiveU();
+    const onMove = vi.fn();
+    const plugin = shapesPlugin([rect()], "#eee", {
+      interactive: true,
+      selectedId: null,
+      onSelect: vi.fn(),
+      onMove,
+    });
+    ready(plugin, u);
+    root.dispatchEvent(mouse("mousedown", 10, 90)); // rect's left edge
+    document.dispatchEvent(mouse("mousemove", 5000, 90)); // way past the right edge
+    document.dispatchEvent(mouse("mouseup", 5000, 90));
+    expect(onMove).toHaveBeenCalledTimes(1);
+    const [, x1, y1, x2, y2] = onMove.mock.calls[0];
+    // clampToCanvas's default pad=6 on this harness's 100px canvas -> the
+    // canvas-px hi bound is 100-6=94; this stub's x valToPos is identity,
+    // so the DATA coord itself must stay <= 94, not run off to ~5000.
+    expect(x1).toBeLessThanOrEqual(94);
+    expect(x2).toBeLessThanOrEqual(94);
+    expect(y1).toBe(10); // no vertical travel, unaffected by the x clamp
+    expect(y2).toBe(30);
+  });
+
+  // Bug 3 REGRESSION: same clamp for the corner-handle RESHAPE drag (the
+  // other unclamped data-anchor path the bug report names).
+  it("BUG 3: clamps a data-anchored shape's handle reshape so the committed corner stays on-canvas", () => {
+    const { u, root } = makeInteractiveU();
+    const onReshape = vi.fn();
+    const plugin = shapesPlugin([rect()], "#eee", {
+      interactive: true,
+      selectedId: "s1",
+      onSelect: vi.fn(),
+      onReshape,
+    });
+    ready(plugin, u);
+    // Corner handle 0 = (x1,y1) -> canvas px (10, 90).
+    root.dispatchEvent(mouse("mousedown", 10, 90));
+    document.dispatchEvent(mouse("mousemove", 5000, 90)); // way past the right edge
+    document.dispatchEvent(mouse("mouseup", 5000, 90));
+    expect(onReshape).toHaveBeenCalledTimes(1);
+    const [, patch] = onReshape.mock.calls[0];
+    expect(patch.x1).toBeLessThanOrEqual(94);
+  });
+
   it("dragging the selected shape's corner handle commits onReshape ONCE, patching only that corner's fields", () => {
     const { u, root } = makeInteractiveU();
     const onReshape = vi.fn();
@@ -431,5 +483,158 @@ describe("shapesPlugin — SELECT/EDIT mode", () => {
 describe("DEFAULT_SHAPE_WIDTH", () => {
   it("is a positive hairline default", () => {
     expect(DEFAULT_SHAPE_WIDTH).toBeGreaterThan(0);
+  });
+});
+
+// ── Bugs 1 & 2 REGRESSION (bug-hunt batch): shapesPlugin + annotationPlugin
+// coexisting on the SAME u.root — the exact scenario uplotOpts.buildOpts
+// wires up (shapes registered BETWEEN refLines and annotations). A fake
+// uPlot instance satisfying BOTH plugins' `ready` hook requirements (the
+// annotation plugin additionally needs `scales`/`setData`/`ctx.font`/
+// `ctx.measureText` — see uplotOverlays.test.ts's own makeInteractiveU,
+// which this mirrors exactly so the two plugins see literally the SAME u).
+function makeSharedRootU() {
+  const root = document.createElement("div");
+  const over = document.createElement("div");
+  root.appendChild(over);
+  document.body.appendChild(root);
+  const ctx = {
+    font: "",
+    canvas: { width: 100, height: 100 },
+    measureText: (t: string) => ({ width: t.length * 6 }) as TextMetrics,
+  };
+  const conv = (v: number, scale: string) => (scale === "x" ? v : 100 - v); // self-inverse
+  const u = {
+    root,
+    over,
+    ctx,
+    bbox: { left: 0, top: 0, width: 100, height: 100 },
+    scales: { x: {}, y: {} },
+    valToPos: conv,
+    posToVal: conv,
+    redraw: vi.fn(),
+    setData: vi.fn(),
+  } as unknown as uPlot;
+  return { u, root, over };
+}
+
+const readyHook = (plugin: uPlot.Plugin, u: uPlot) => (plugin.hooks.ready as (u: uPlot) => void)(u);
+
+describe("Bug 1 REGRESSION: shape mousedown must not fall through to a sibling annotationPlugin listener", () => {
+  const sharedRect = (): Shape => ({ id: "s1", kind: "rect", x1: 10, y1: 10, x2: 30, y2: 30 });
+  const sharedAnn = (): Annotation => ({ id: "a1", x: 80, y: 80, text: "Tc" });
+
+  it("a click that hits a shape fires the shape's onSelect and does NOT fire the annotation's onSelect(null)", () => {
+    const { u, root } = makeSharedRootU();
+    const shapeSelect = vi.fn();
+    const annSelect = vi.fn();
+    // Registration order matches uplotOpts.buildOpts: shapes BEFORE
+    // annotations — both attach a capture-phase mousedown listener to the
+    // SAME u.root, so shapes' listener runs first.
+    const shapePlugin = shapesPlugin([sharedRect()], "#eee", { interactive: true, selectedId: null, onSelect: shapeSelect });
+    const annPlugin = annotationPlugin([sharedAnn()], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: null,
+      onSelect: annSelect,
+    });
+    ready(shapePlugin, u);
+    readyHook(annPlugin, u);
+
+    // (10,90) sits on the rect's edge (data x1=10,y1=10 -> canvas px 10,90)
+    // — NOT anywhere near the annotation's dot (px 80,20).
+    root.dispatchEvent(mouse("mousedown", 10, 90));
+    document.dispatchEvent(mouse("mouseup", 10, 90));
+    expect(shapeSelect).toHaveBeenCalledWith("s1");
+    expect(annSelect).not.toHaveBeenCalled();
+  });
+
+  it("a DOUBLE mousedown on a shape must not trigger the annotation plugin's onResetView (its empty-canvas double-click branch)", () => {
+    const { u, root } = makeSharedRootU();
+    const onResetView = vi.fn();
+    const shapePlugin = shapesPlugin([sharedRect()], "#eee", { interactive: true, selectedId: null, onSelect: vi.fn() });
+    const annPlugin = annotationPlugin([], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: null,
+      onSelect: vi.fn(),
+      onResetView,
+    });
+    ready(shapePlugin, u);
+    readyHook(annPlugin, u);
+
+    root.dispatchEvent(mouse("mousedown", 10, 90));
+    document.dispatchEvent(mouse("mouseup", 10, 90));
+    root.dispatchEvent(mouse("mousedown", 10, 90)); // second click, same spot — would be a "double click" if it reached annotationPlugin
+    document.dispatchEvent(mouse("mouseup", 10, 90));
+    expect(onResetView).not.toHaveBeenCalled();
+  });
+
+  it("right-click on a shape does not also open the annotation plugin's context menu", () => {
+    const { u, root } = makeSharedRootU();
+    const shapeMenu = vi.fn();
+    const annMenu = vi.fn();
+    const shapePlugin = shapesPlugin([sharedRect()], "#eee", {
+      interactive: true,
+      selectedId: null,
+      onSelect: vi.fn(),
+      onContextMenu: shapeMenu,
+    });
+    const annPlugin = annotationPlugin([sharedAnn()], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: null,
+      onSelect: vi.fn(),
+      onContextMenu: annMenu,
+    });
+    ready(shapePlugin, u);
+    readyHook(annPlugin, u);
+
+    root.dispatchEvent(mouse("contextmenu", 10, 90));
+    expect(shapeMenu).toHaveBeenCalledTimes(1);
+    expect(annMenu).not.toHaveBeenCalled();
+  });
+});
+
+describe("Bug 2 REGRESSION: shape hover cursor must survive a sibling annotationPlugin mousemove listener", () => {
+  it("hovering a shape shows its own cursor even though an annotation plugin ALSO listens on the same root", () => {
+    const { u, root } = makeSharedRootU();
+    const shapePlugin = shapesPlugin(
+      [{ id: "s1", kind: "rect", x1: 10, y1: 10, x2: 30, y2: 30 }],
+      "#eee",
+      { interactive: true, selectedId: null, onSelect: vi.fn() },
+    );
+    const annPlugin = annotationPlugin([{ id: "a1", x: 80, y: 80, text: "Tc" }], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: null,
+      onSelect: vi.fn(),
+    });
+    ready(shapePlugin, u);
+    readyHook(annPlugin, u);
+
+    // Hover the rect's body (canvas px [10,30]x[70,90]) — far from the
+    // annotation's dot (px 80,20).
+    root.dispatchEvent(mouse("mousemove", 20, 80));
+    expect(root.style.cursor).toBe("move");
+  });
+
+  it("still resets to default when hovering neither the shape nor the annotation (no stuck cursor)", () => {
+    const { u, root } = makeSharedRootU();
+    const shapePlugin = shapesPlugin(
+      [{ id: "s1", kind: "rect", x1: 10, y1: 10, x2: 30, y2: 30 }],
+      "#eee",
+      { interactive: true, selectedId: null, onSelect: vi.fn() },
+    );
+    const annPlugin = annotationPlugin([{ id: "a1", x: 80, y: 80, text: "Tc" }], "#fff", "11px mono", {
+      interactive: true,
+      selectedId: null,
+      onSelect: vi.fn(),
+    });
+    ready(shapePlugin, u);
+    readyHook(annPlugin, u);
+
+    root.dispatchEvent(mouse("mousemove", 20, 80)); // over the shape first
+    expect(root.style.cursor).toBe("move");
+    // Then off both the shape's body ([10,30]x[70,90]) and the annotation's
+    // dot+label box (dot at px 80,20; "Tc" label box ~[86,98]x[3.7,18]).
+    root.dispatchEvent(mouse("mousemove", 50, 50));
+    expect(root.style.cursor).toBe("");
   });
 });

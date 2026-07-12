@@ -19,7 +19,15 @@ const mockAskAnnotationText = vi.mocked(askAnnotationText);
 beforeEach(() => {
   vi.clearAllMocks();
   mockAskAnnotationText.mockResolvedValue(null);
-  useApp.setState({ drawShapeKind: null, shapes: [], annotations: [], status: "", plotTool: "zoom" });
+  useApp.setState({
+    drawShapeKind: null,
+    shapes: [],
+    annotations: [],
+    status: "",
+    plotTool: "zoom",
+    selectedAnnotationId: null,
+    selectedShapeId: null,
+  });
 });
 
 describe("useShapeDraw — bridge gating", () => {
@@ -69,35 +77,53 @@ describe("useShapeDraw — committing a real shape kind", () => {
 });
 
 describe("useShapeDraw — committing a text box (MAIN #27's 'one text system')", () => {
-  it("creates an ANNOTATION (not a Shape) with a default frame, and clears the mode immediately", () => {
-    useApp.setState({ drawShapeKind: "textbox" });
+  it("clears the draw mode immediately but defers the annotation until the dialog resolves", () => {
+    // mockAskAnnotationText never resolves in this test (no await) — proves
+    // the mode-exit / auto-return-to-pointer happens SYNCHRONOUSLY on
+    // commit, independent of whether/when the dialog resolves.
+    useApp.setState({ drawShapeKind: "textbox", plotTool: "zoom" });
     const { result } = renderHook(() => useShapeDraw());
     act(() => result.current.shapeDraw?.onDrawCommit?.("textbox", 5, 6, 5, 6));
-    expect(useApp.getState().shapes).toEqual([]); // never a Shape
-    expect(useApp.getState().annotations).toHaveLength(1);
-    const ann = useApp.getState().annotations[0];
-    expect(ann).toMatchObject({ x: 5, y: 6 });
-    expect(ann.frame).toBeDefined();
     expect(useApp.getState().drawShapeKind).toBeNull();
     expect(useApp.getState().plotTool).toBe("pointer"); // auto-return
-    expect(useApp.getState().selectedAnnotationId).toBe(ann.id);
+    expect(useApp.getState().shapes).toEqual([]); // never a Shape
+    expect(useApp.getState().annotations).toEqual([]); // not created yet — dialog still open
   });
 
-  it("immediately opens the text dialog and commits the resolved text", async () => {
+  it("creates an ANNOTATION (not a Shape) with a default frame + text once the dialog resolves", async () => {
     mockAskAnnotationText.mockResolvedValue("Hc2");
     useApp.setState({ drawShapeKind: "textbox" });
     const { result } = renderHook(() => useShapeDraw());
-    act(() => result.current.shapeDraw?.onDrawCommit?.("textbox", 1, 1, 1, 1));
+    act(() => result.current.shapeDraw?.onDrawCommit?.("textbox", 5, 6, 5, 6));
     expect(mockAskAnnotationText).toHaveBeenCalledWith("Text box", "");
-    await waitFor(() => expect(useApp.getState().annotations[0].text).toBe("Hc2"));
+    await waitFor(() => expect(useApp.getState().annotations).toHaveLength(1));
+    const ann = useApp.getState().annotations[0];
+    expect(ann).toMatchObject({ x: 5, y: 6, text: "Hc2" });
+    expect(ann.frame).toBeDefined();
+    expect(useApp.getState().shapes).toEqual([]); // never a Shape
+    expect(useApp.getState().selectedAnnotationId).toBe(ann.id);
   });
 
-  it("leaves the text empty on cancel (askAnnotationText resolves null)", async () => {
+  // BUG 4 REGRESSION (bug-hunt batch): cancelling the "Text box" dialog
+  // (askAnnotationText resolving null) used to leave an orphaned BLANK dot
+  // annotation behind — the old code called addAnnotation(x1,y1,"")
+  // SYNCHRONOUSLY before the dialog even opened, so a cancel left that
+  // blank annotation permanently in the store (drawn unconditionally on the
+  // plot, listed in AnnotationsCard, and persisted to .dwk). The fix defers
+  // addAnnotation until the promise resolves non-null.
+  it("BUG 4: creates NO annotation when the dialog is cancelled (askAnnotationText resolves null)", async () => {
+    mockAskAnnotationText.mockResolvedValue(null);
     useApp.setState({ drawShapeKind: "textbox" });
     const { result } = renderHook(() => useShapeDraw());
     act(() => result.current.shapeDraw?.onDrawCommit?.("textbox", 1, 1, 1, 1));
-    await Promise.resolve();
-    expect(useApp.getState().annotations[0].text).toBe("");
+    await waitFor(() => expect(mockAskAnnotationText).toHaveBeenCalled());
+    // Flush the resolved-null .then() microtask.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(useApp.getState().annotations).toEqual([]);
+    expect(useApp.getState().shapes).toEqual([]);
+    expect(useApp.getState().selectedAnnotationId).toBeNull();
   });
 });
 

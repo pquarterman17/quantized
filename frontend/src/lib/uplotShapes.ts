@@ -25,7 +25,7 @@
 
 import type uPlot from "uplot";
 
-import { canvasToOverCss, overPointerToCanvas } from "./annotationHit";
+import { canvasToOverCss, claimCursor, cursorClaimed, overPointerToCanvas } from "./annotationHit";
 import { CLICK_PX } from "./pointGesture";
 import {
   boundingEllipse,
@@ -35,7 +35,7 @@ import {
   type ShapeGeom,
 } from "./shapeHit";
 import type { Shape } from "./types";
-import { canvasPxToPageXY, clampPageXY, pageXYToCanvasPx } from "./uplotOverlays";
+import { canvasPxToPageXY, clampPageXY, clampToCanvas, pageXYToCanvasPx } from "./uplotOverlays";
 
 /** Default whole-shape opacity (fill AND stroke, ONE knob — MAIN #27) when
  *  the shape carries no explicit override: 1 for line/arrow (a mark should
@@ -315,7 +315,13 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
                 (e: MouseEvent) => {
                   if (e.button !== 0 || !o?.drawKind) return;
                   e.preventDefault();
-                  e.stopPropagation();
+                  // stopImmediatePropagation (not just stopPropagation): annotationPlugin
+                  // may ALSO listen on this same root (draw-a-new-shape mode can be
+                  // active while the pointer tool + existing annotations are present) —
+                  // plain stopPropagation() does NOT stop a sibling listener on the SAME
+                  // node (bug-hunt Bug 1), so an in-progress shape draw could otherwise
+                  // deselect an annotation on every mousedown.
+                  e.stopImmediatePropagation();
                   const kind = o.drawKind;
                   const rect = root.getBoundingClientRect();
                   const overRect = over.getBoundingClientRect();
@@ -365,10 +371,21 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
                   const hit = hs.some((h) => Math.hypot(h.x - p.x, h.y - p.y) <= 8 * p.scale);
                   if (hit) {
                     setCursor("nwse-resize");
+                    claimCursor(e);
                     return;
                   }
                 }
-                setCursor(hitTestShapeBody(gs.map((g) => g.geom), p, 8 * p.scale) ? "move" : "default");
+                // Bug 2: only WRITE a cursor on our own positive hit, or on a
+                // miss that no earlier same-event listener already claimed
+                // (this plugin registers on root BEFORE annotationPlugin —
+                // see claimCursor's doc — so THIS branch is normally the one
+                // performing the baseline "nothing hit anywhere" reset).
+                if (hitTestShapeBody(gs.map((g) => g.geom), p, 8 * p.scale)) {
+                  setCursor("move");
+                  claimCursor(e);
+                } else if (!cursorClaimed(e)) {
+                  setCursor("default");
+                }
               });
 
               root.addEventListener(
@@ -385,7 +402,11 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
 
                   if (selId && handleIdx >= 0) {
                     e.preventDefault();
-                    e.stopPropagation();
+                    // stopImmediatePropagation: see the DRAW-NEW-SHAPE mousedown
+                    // handler's doc above (bug-hunt Bug 1) — this branch owns the
+                    // reshape gesture and must not let it reach annotationPlugin's
+                    // sibling listener on the same root.
+                    e.stopImmediatePropagation();
                     const s = shapes.find((x) => x.id === selId)!;
                     const { xField, yField } = shapeReshapeFields(s.kind, handleIdx);
                     const overRect = over.getBoundingClientRect();
@@ -400,8 +421,13 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
                         patch[xField] = Math.min(1, Math.max(0, page.x));
                         patch[yField] = Math.min(1, Math.max(0, page.y));
                       } else {
-                        patch[xField] = u.posToVal(nowOver.x, "x");
-                        patch[yField] = u.posToVal(nowOver.y, "y");
+                        // Bug 3: clamp the reshaped endpoint so a far off-canvas
+                        // drag can't commit coords unreachable by a later click
+                        // (mirrors annotationPlugin's dot-drag clamp — shared
+                        // via uplotOverlays.clampToCanvas).
+                        const c = clampToCanvas(u, u.posToVal(nowOver.x, "x"), u.posToVal(nowOver.y, "y"));
+                        patch[xField] = c.x;
+                        patch[yField] = c.y;
                       }
                       dragReshape = { id: selId, patch };
                       u.redraw();
@@ -435,7 +461,12 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
                   }
 
                   e.preventDefault();
-                  e.stopPropagation();
+                  // stopImmediatePropagation: see the DRAW-NEW-SHAPE mousedown
+                  // handler's doc above (bug-hunt Bug 1) — a shape-body click
+                  // must not also reach annotationPlugin's sibling listener on
+                  // the same root (which would otherwise treat it as an
+                  // empty-canvas click and deselect/reset-view).
+                  e.stopImmediatePropagation();
                   o.onSelect?.(hit);
                   const s = shapes.find((x) => x.id === hit)!;
                   dragMove = { id: hit, x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 };
@@ -458,7 +489,13 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
                     const nowY = ev.clientY - overRect.top;
                     const dxData = u.posToVal(nowX, "x") - u.posToVal(downOver.x, "x");
                     const dyData = u.posToVal(nowY, "y") - u.posToVal(downOver.y, "y");
-                    dragMove = { id: hit, x1: s.x1 + dxData, y1: s.y1 + dyData, x2: s.x2 + dxData, y2: s.y2 + dyData };
+                    // Bug 3: clamp each endpoint independently so a far
+                    // off-canvas drag can't commit coords unreachable by a
+                    // later click (mirrors the page-anchor branch above,
+                    // which already clamps c1/c2 independently via clampPageXY).
+                    const c1 = clampToCanvas(u, s.x1 + dxData, s.y1 + dyData);
+                    const c2 = clampToCanvas(u, s.x2 + dxData, s.y2 + dyData);
+                    dragMove = { id: hit, x1: c1.x, y1: c1.y, x2: c2.x, y2: c2.y };
                     u.redraw();
                   };
                   const onUp = (ev: MouseEvent) => {
@@ -487,7 +524,10 @@ export function shapesPlugin(shapes: Shape[], inkColor: string, opts?: ShapeEdit
                   const hit = hitTestShapeBody(gs.map((g) => g.geom), p, 8 * p.scale);
                   if (hit) {
                     e.preventDefault();
-                    e.stopPropagation();
+                    // stopImmediatePropagation: don't fall through to the plot's own
+                    // menu NOR to a sibling annotationPlugin contextmenu listener
+                    // sharing this same root (bug-hunt Bug 1).
+                    e.stopImmediatePropagation();
                     o.onSelect?.(hit);
                     const g = gs.find((x) => x.id === hit)!;
                     o.onContextMenu?.(hit, e.clientX, e.clientY, shapeAnchorConversions(u, g.geom));

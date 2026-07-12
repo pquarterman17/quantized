@@ -107,3 +107,31 @@ export function hitTestAnnotationHandle(
 ): boolean {
   return !!handle && Math.hypot(handle.x - pointer.x, handle.y - pointer.y) <= tol;
 }
+
+/** Per-dispatch mousemove "hover cursor" claim (bug-hunt Bug 2: shape/
+ *  annotation coexistence). `uplotShapes.shapesPlugin` and
+ *  `uplotOverlays.annotationPlugin` each attach an INDEPENDENT mousemove
+ *  listener to the SAME `u.root` node — every listener wants to set a
+ *  "move"/"nwse-resize" cursor on its own positive hit and reset to
+ *  "default" on a miss. Two independent listeners on one node means the
+ *  LATER-registered one's blanket "default" reset silently clobbers the
+ *  EARLIER one's positive cursor (`uplotOpts.ts` always registers shapes
+ *  before annotations, so a shape's "move" cursor was being overwritten by
+ *  annotationPlugin's own miss on every hover). Stashing a flag on the
+ *  MouseEvent instance itself — a NEW instance per dispatch, so there is no
+ *  stale-state risk across events, unlike a DOM/dataset marker that would
+ *  need explicit reset — lets a later listener know an earlier one already
+ *  claimed the cursor THIS event, so it should leave it alone rather than
+ *  reset it, while a genuine "nothing hit, restore default" still happens
+ *  correctly when NEITHER plugin claims it (each plugin only skips its OWN
+ *  default-write when the event is already claimed; the first plugin to run
+ *  in a "hit nothing" event still resets to default, so hovering off every
+ *  overlay is never stuck at a stale cursor). */
+export function claimCursor(e: MouseEvent): void {
+  (e as MouseEvent & { __qzCursorClaimed?: boolean }).__qzCursorClaimed = true;
+}
+
+/** Did an earlier same-event listener already `claimCursor`? See its doc. */
+export function cursorClaimed(e: MouseEvent): boolean {
+  return (e as MouseEvent & { __qzCursorClaimed?: boolean }).__qzCursorClaimed === true;
+}
