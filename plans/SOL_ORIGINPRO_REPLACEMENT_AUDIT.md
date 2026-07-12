@@ -14,15 +14,32 @@ The highest-priority work is to establish one explicit analysis-selection contra
 
 ### P1 — Analysis tools ignore the selected plot X/Y channels
 
-> **Partially addressed 2026-07-12:** The Curve Fit workshop (PR13 — parity
-> fit, auto-guess, model scan, custom-equation fit, bootstrap/corner, bumps)
-> AND the Peaks workshop (PR #16 — detect + fit-multi + fit-each) now use the
-> plot's selected X and primary Y through a shared `selectedFitData` bridge
-> (`lib/fitselection.ts`, which reads rows via `rowstate.analysisData` and the
-> plot's own `effectiveChannels` contract; `fullPlottedX` keeps overlays
-> aligned to the full-length plot x). STILL require migration: the Peak
-> Analyzer (peakwizard), baseline processing, pipeline execution, and the
-> magnetometry workflows (hysteresis, magtools).
+> **Mostly addressed 2026-07-12.** Migrated to the shared `selectedFitData`
+> bridge (`lib/fitselection.ts` — reads rows via `rowstate.analysisData` and
+> the plot's own `effectiveChannels` contract; `fullPlottedX` keeps overlays
+> aligned to the full-length plot x):
+> - **Curve Fit** (PR13) — parity/auto-guess/model-scan/equation/bootstrap/bumps.
+> - **Peaks** (PR #16) — detect + fit-multi + fit-each.
+> - **Peak Analyzer / peakwizard** (PR #17) — the `segment` chokepoint (baseline/
+>   find/fit/integrate) + marker overlay.
+> - **Hysteresis** (PR #18) — M-H analysis + bg-subtract now use plotted H/M
+>   (the headline "M-vs-H" danger: a timestamp `.time` with Field/Moment as
+>   channels).
+>
+> STILL OPEN (deliberately deferred — these are NOT simple channel swaps):
+> - **magtools** (M(T) bg-subtract + unit convert) — self-contained but writes
+>   a column-collapsing new dataset over FULL (unpruned) data with physics
+>   metadata (`x_column_name`); doable but higher regression surface, wants its
+>   own careful pass. Currently still `time`/`values[0]`.
+> - **baseline processing** — entangled with the BACKEND corrections pipeline:
+>   the anchor method's Apply runs through `applyCorrections`'s `bgAnchors`,
+>   which subtracts from column 0. A real fix needs a channel parameter through
+>   the corrections/recalc DAG, not a frontend-only read.
+> - **pipeline execution** (`executeSteps` fit step) — runs headless over MANY
+>   target datasets (folder batches) that may not share a column layout, so a
+>   live-view `yKey` could be out of range. The correct fix is per-step channel
+>   provenance (record `xKey`/`yKey` in the step, reproduce via `fitDataForSpec`)
+>   — a P1 #3 extension, not a live-view read.
 
 At audit time, Curve Fit analyzed `DataStruct.time` against `values[0]`, regardless of the user's selected X, Y, Y2, series ordering, or channel roles:
 
