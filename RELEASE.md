@@ -6,8 +6,8 @@ entirely by CI:
 1. A native **Tauri** desktop app: a thin Rust shell window over the local
    FastAPI server, frozen into a self-contained **PyInstaller sidecar**
    (`.github/workflows/release.yml`).
-2. A **PyPI package** (`pip install quantized` / `pipx install quantized` /
-   `uv tool install quantized`): a pure-Python wheel with the built SPA baked
+2. A **PyPI package** (`pip install quantized-lab` / `pipx install quantized-lab` /
+   `uv tool install quantized-lab`): a pure-Python wheel with the built SPA baked
    in (`.github/workflows/pypi.yml`).
 
 The repo stays binary-free either way — installers and wheels are build
@@ -96,21 +96,30 @@ npx @tauri-apps/cli@2.11.2 icon path/to/quantized-1024.png
 ### 5. Register PyPI Trusted Publishing (`pypi.yml`)
 
 `pypi.yml` publishes via [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/)
-(OIDC) — no API token secret to generate or rotate. One-time setup on
-**both** pypi.org and test.pypi.org:
+(OIDC) — no API token secret to generate or rotate.
 
-1. Create the project on PyPI once manually (`twine upload` a first build,
-   or use "create a new pending publisher" if the project name is free), or
-   use PyPI's *pending publisher* flow if the project doesn't exist yet.
-2. Project → *Publishing* → *Add a new publisher* → GitHub:
-   - Repository owner / name: this repo
+**Distribution name: `quantized-lab`** — plain `quantized` is squatted on
+PyPI by an abandoned 2019-era alpha (unrelated project). Only the
+`pip install` name differs; the import package (`quantized`), the CLI
+commands (`qz` / `quantized` / `diraculator`), and this repo's name are
+unchanged. (A PEP 541 reclamation request for the bare name can be filed
+independently; if it ever succeeds, publish under both.)
+
+One-time setup on **both** pypi.org and test.pypi.org (pending-publisher
+flow — the project doesn't exist until the first publish):
+
+1. pypi.org → log in → *Your account* → *Publishing* →
+   *Add a new pending publisher* → GitHub:
+   - PyPI project name: `quantized-lab`
+   - Owner: `pquarterman17` · Repository: `quantized`
    - Workflow name: `pypi.yml`
-   - Environment name: `pypi` (production) — repeat on test.pypi.org with
-     environment name `testpypi`
-3. In the GitHub repo, Settings → Environments → create `pypi` and
-   `testpypi` (empty — no secrets needed; the environment name is what
-   Trusted Publishing matches against). Optionally add required reviewers
-   on `pypi` for a manual approval gate before a tag actually publishes.
+   - Environment name: `pypi`
+2. test.pypi.org (separate account/login) → same form with
+   environment name `testpypi`.
+3. In the GitHub repo, Settings → Environments → `pypi` and `testpypi`
+   (empty — no secrets needed; the environment name is what Trusted
+   Publishing matches against). Optionally add required reviewers on
+   `pypi` for a manual approval gate before a tag actually publishes.
 
 ---
 
@@ -139,8 +148,8 @@ npx @tauri-apps/cli@2.11.2 icon path/to/quantized-1024.png
      update on next launch.
    - `pypi.yml` — builds the SPA, builds the sdist + wheel, smoke-tests the
      wheel in a clean venv, and publishes to PyPI via Trusted Publishing.
-     `pip install quantized` / `pipx install quantized` /
-     `uv tool install quantized` pick up the new version immediately.
+     `pip install quantized-lab` / `pipx install quantized-lab` /
+     `uv tool install quantized-lab` pick up the new version immediately.
 
 ### Dry run (validate without releasing)
 

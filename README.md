@@ -33,9 +33,9 @@ scope** and lives in the separate `fermiviewer` project.
 
 | Method | Command | Notes |
 |--------|---------|-------|
-| pipx (recommended) | `pipx install quantized && qz` | isolated env, `qz` on PATH, no dev tools needed |
-| uv tool | `uv tool install quantized && qz` | same idea, via `uv` |
-| pip | `pip install quantized && qz` | into whatever env is active |
+| pipx (recommended) | `pipx install quantized-lab && qz` | isolated env, `qz` on PATH, no dev tools needed |
+| uv tool | `uv tool install quantized-lab && qz` | same idea, via `uv` |
+| pip | `pip install quantized-lab && qz` | into whatever env is active |
 | Native installer | download from [Releases](https://github.com/pquarterman17/quantized/releases) | Windows `.exe` (NSIS, auto-updates), macOS `.dmg`, Linux `.deb` — no Python required, see [`RELEASE.md`](RELEASE.md) |
 | From source | see below | for development |
 
@@ -62,7 +62,7 @@ cd frontend && npm install && npm run build && cd ..
 uv run qz                 # serve on :8000 and open a browser tab
 uv run qz --port 9000     # different port
 uv run qz --no-browser    # headless (don't open a tab; never auto-exits)
-uv run qz --desktop       # native window (needs: pip install quantized[desktop])
+uv run qz --desktop       # native window (needs: pip install quantized-lab[desktop])
 uv run qz --dev           # contributor mode: Vite HMR + reloading backend
 ```
 

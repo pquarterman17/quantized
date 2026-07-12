@@ -2550,7 +2550,7 @@ wheels = [
 ]
 
 [[package]]
-name = "quantized"
+name = "quantized-lab"
 version = "0.7.0"
 source = { editable = "." }
 dependencies = [
