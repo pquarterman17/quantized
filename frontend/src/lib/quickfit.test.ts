@@ -5,9 +5,10 @@ import {
   formatQfitParams,
   GADGET_MODE_LABELS,
   GADGET_MODES,
+  qfitSpec,
   selectRoiRows,
 } from "./quickfit";
-import type { Dataset, DataStruct } from "./types";
+import type { CalcResult, Dataset, DataStruct } from "./types";
 
 const DATA: DataStruct = {
   time: [0, 1, 2, 3, 4, 5],
@@ -95,6 +96,25 @@ describe("firstVisiblePlottedChannel", () => {
 
   it("returns null when nothing is plotted", () => {
     expect(firstVisiblePlottedChannel([], () => false)).toBeNull();
+  });
+});
+
+describe("qfitSpec (provenance for a gadget commit, audit P1 #3)", () => {
+  it("records the first visible plotted channel + xKey + result snapshot", () => {
+    const view = { xKey: 0, yKeys: [1], seriesOrder: null, hiddenChannels: [] };
+    const result: CalcResult = { params: [1, 2], exitFlag: 1 };
+    expect(qfitSpec(mk(), view, "Linear", result)).toEqual({
+      model: "Linear",
+      xKey: 0,
+      yKey: 1,
+      params: [1, 2],
+      exitFlag: 1,
+    });
+  });
+
+  it("skips a hidden channel to the next visible plotted Y", () => {
+    const view = { xKey: null, yKeys: [0, 1], seriesOrder: null, hiddenChannels: [0] };
+    expect(qfitSpec(mk(), view, "Gauss", null).yKey).toBe(1);
   });
 });
 

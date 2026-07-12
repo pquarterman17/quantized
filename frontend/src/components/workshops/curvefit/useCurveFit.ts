@@ -8,7 +8,7 @@ import { autoGuess, bootstrapFit, exportCornerFigure, fitModel, listFitModels } 
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { selectedFitData } from "./fitSelection";
+import { fitSpecFrom, selectedFitData } from "../../../lib/fitselection";
 
 export interface CurveFitState {
   active: Dataset | null;
@@ -103,9 +103,10 @@ export function useCurveFit(): CurveFitState {
           kind: "fit",
           params: { model: modelName },
         });
-        // Durable fit spec: the recalc graph (#1) re-runs / stales this fit
-        // when the dataset's data changes.
-        useApp.getState().setFitSpec(ds.id, { model: modelName });
+        // Durable fit spec (audit P1 #3): records the plotted channels + result
+        // so the recalc graph (#1) reproduces the ORIGINAL fit's channels when
+        // the data changes, not the current plot view or time/values[0].
+        useApp.getState().setFitSpec(ds.id, fitSpecFrom(modelName, state.xKey, localXy, r));
         const yFit = r.yFit as (number | null)[] | undefined;
         if (Array.isArray(yFit)) {
           // yFit aligns to the pruned analysis x; expand it back to the full row

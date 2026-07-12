@@ -96,7 +96,8 @@ import { effectiveChannels } from "../lib/plotdata";
 import { docRenderable, type FigureDoc } from "../lib/figuredoc";
 import type { PlotSpec } from "../lib/plotspec";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
-import { firstVisiblePlottedChannel, selectRoiRows, type GadgetMode } from "../lib/quickfit";
+import { fitDataForSpec } from "../lib/fitselection";
+import { firstVisiblePlottedChannel, qfitSpec, selectRoiRows, type GadgetMode } from "../lib/quickfit";
 import { activeRowIndices, analysisData, droppedRows, expandToFull, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
 import {
   addRecentEntry,
@@ -119,7 +120,7 @@ import type {
   DataFilter,
   Dataset,
   DataStruct,
-  FitOverlay,
+  FitOverlay, FitSpec,
   FolderNode,
   ModelingType,
   OriginFigure,
@@ -666,7 +667,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setRecalcMode: (mode: RecalcMode) => void;
   touchDataset: (id: string) => void;
   recalcNow: () => Promise<void>;
-  setFitSpec: (id: string, spec: { model: string } | null) => void;
+  setFitSpec: (id: string, spec: FitSpec | null) => void;
   loadWorkspace: (ws: WorkspaceState) => void;
   // Append a second .dwk's datasets into the CURRENT library (Origin's
   // "Append Project", MAIN_PLAN #16) — the additive opposite of
@@ -2890,10 +2891,10 @@ export const useApp = create<AppState>((set, get) => ({
       kind: "fit",
       params: { model: s.qfitModel },
     });
-    // Durable fit spec: the recalc graph (#1) re-runs / stales this fit over
-    // the dataset's full analysis view when the data changes — the gadget's
-    // ROI only shaped which model + starting rows the user previewed with.
-    get().setFitSpec(active.id, { model: s.qfitModel });
+    // Durable fit spec (audit P1 #3): records the plotted channels the gadget
+    // fit (first visible plotted channel + xKey) so recompute reproduces them,
+    // not time/values[0]. The ROI only shaped which rows the user previewed.
+    get().setFitSpec(active.id, qfitSpec(active, s, s.qfitModel, s.qfitResult));
   },
   // ── ROI gadget family (#34) — generalizes the frame above ─────────────────
   // Mode switch: re-triggers a live ROI's compute for the new mode (mirrors
@@ -3215,13 +3216,11 @@ export const useApp = create<AppState>((set, get) => ({
           continue;
         }
         try {
-          const ad = analysisData(d);
-          if (!ad || ad.values.length === 0) throw new Error("no data");
-          const r = await fitModel({
-            model: d.fitSpec.model,
-            x: ad.time,
-            y: ad.values.map((row) => row[0]),
-          });
+          // Reproduce the fit's RECORDED channels (audit P1 #3), falling back
+          // to the live plotted selection for legacy specs — not time/values[0].
+          const sel = fitDataForSpec(d, d.fitSpec, get().xKey, get().yKeys, get().seriesOrder);
+          if (!sel || sel.x.length === 0) throw new Error("no data");
+          const r = await fitModel({ model: d.fitSpec.model, x: sel.x, y: sel.y });
           const yFit = r.yFit as (number | null)[] | undefined;
           // Refresh the overlay only if this dataset's fit is the one shown.
           if (Array.isArray(yFit) && get().fitOverlay?.datasetId === id) {

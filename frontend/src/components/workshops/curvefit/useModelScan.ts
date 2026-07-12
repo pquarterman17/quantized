@@ -13,7 +13,7 @@ import { useState } from "react";
 import { scanFitModels, type ScanEntry } from "../../../lib/api";
 import { loadCustomModels } from "../../../lib/fitmodels";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { selectedFitData } from "./fitSelection";
+import { selectedFitData } from "../../../lib/fitselection";
 
 export interface ModelScanState {
   hasDataset: boolean;

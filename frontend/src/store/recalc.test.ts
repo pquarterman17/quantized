@@ -111,6 +111,48 @@ describe("recalc engine (#1)", () => {
     expect(useApp.getState().staleFits).toEqual([]);
   });
 
+  const multi = (): DataStruct => ({
+    time: [0, 1, 2],
+    values: [[100, 10], [200, 20], [300, 30]],
+    labels: ["field", "moment"],
+    units: ["Oe", "emu"],
+    metadata: {},
+  });
+
+  it("recompute reproduces the spec's RECORDED channels, not the live plot (P1 #3)", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1, 0], R2: 1, yFit: [1, 2, 3] });
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [ds("a", { data: multi(), fitSpec: { model: "Linear", xKey: 0, yKey: 1 } })],
+      // Live plot points somewhere else entirely — must be IGNORED for a spec
+      // that recorded its own channels (else the recomputed fit drifts).
+      xKey: null,
+      yKeys: [0],
+      seriesOrder: null,
+      staleFits: ["a"],
+    });
+    await useApp.getState().recalcNow();
+    expect(fitModel).toHaveBeenCalledWith({
+      model: "Linear",
+      x: [100, 200, 300], // field (recorded xKey 0), not time
+      y: [10, 20, 30], // moment (recorded yKey 1), not values[0]
+    });
+  });
+
+  it("recompute of a legacy {model} spec uses the live plotted selection", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [1, 2, 3] });
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [ds("a", { data: multi(), fitSpec: { model: "Linear" } })],
+      xKey: 0,
+      yKeys: [1],
+      seriesOrder: null,
+      staleFits: ["a"],
+    });
+    await useApp.getState().recalcNow();
+    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [100, 200, 300], y: [10, 20, 30] });
+  });
+
   it("a failing fit stays stale instead of vanishing", async () => {
     vi.mocked(fitModel).mockRejectedValue(new Error("no convergence"));
     useApp.setState({
