@@ -14,10 +14,17 @@ from __future__ import annotations
 import numpy as np
 
 from quantized.calc.figure import render_figure
-from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_labels import SUPPORTED_MATHTEXT_COMMANDS, safe_mathtext_label
 
 VALID = r"$\mu_0H$ (T)"
 INVALID = r"bad $\foo$ label"  # unknown command -> mathtext parse error
+
+# Bug-hunt regression (screen/export WYSIWYG): all three are VALID raw
+# matplotlib mathtext (verified against MathTextParser directly) but use a
+# command outside frontend/src/lib/richtext.ts's strict subset -- the screen
+# renderer already refuses them (literal + "Invalid markup"), so export must
+# match, even though matplotlib itself is happy to parse them.
+OUT_OF_SUBSET = (r"$\frac{1}{2}$", r"$\sqrt{2}$", r"$\sum_{i=1}^{n}$")
 
 X = np.linspace(0.0, 10.0, 30)
 Y = np.sin(X)
@@ -51,6 +58,38 @@ def test_odd_dollar_count_is_already_literal() -> None:
 def test_unicode_labels_untouched() -> None:
     s = "2θ (°)  Å"  # 2theta (degree) Angstrom, no $ at all
     assert safe_mathtext_label(s) == s
+
+
+# -- bug-hunt regression: out-of-subset commands fall back to literal, even
+#    though raw matplotlib mathtext accepts them (screen/export WYSIWYG) ----
+
+
+def test_out_of_subset_command_falls_back_to_literal_though_matplotlib_would_accept_it() -> None:
+    for label in OUT_OF_SUBSET:
+        out = safe_mathtext_label(label)
+        # De-mathed exactly like an unknown-command failure: dollars escaped,
+        # never left as mathtext (which would render a real fraction/root/sum
+        # in the export while the screen showed literal "Invalid markup").
+        assert out == label.replace("$", r"\$")
+        assert out != label
+        # Idempotent, and never raises on a second pass.
+        assert safe_mathtext_label(out) == out
+
+
+def test_out_of_subset_command_never_raises_through_render_figure() -> None:
+    for label in OUT_OF_SUBSET:
+        out = render_figure(X, [("y", Y)], title=label, x_label=label, y_label=label, fmt="svg")
+        assert b"<svg" in out[:300]
+
+
+def test_supported_command_set_matches_richtext_ts_subset() -> None:
+    # Sanity-check the ported frozenset against the exact commands the
+    # existing "valid" fixtures below rely on -- keeps the two sides from
+    # silently drifting apart.
+    for cmd in ("mu", "AA", "chi", "mathrm", "mathit"):
+        assert cmd in SUPPORTED_MATHTEXT_COMMANDS
+    for cmd in ("frac", "sqrt", "sum", "foo"):
+        assert cmd not in SUPPORTED_MATHTEXT_COMMANDS
 
 
 # -- figure render integration ------------------------------------------------
