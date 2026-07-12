@@ -55,12 +55,16 @@ This is especially dangerous for M-vs-H, transport, and other multi-column data.
 
 ### P1 — Non-converged fits are presented as successful results
 
-> **Partially addressed 2026-07-12 (PR #14):** A shared `FitConvergenceWarning`
-> now surfaces `exitFlag=0` (a failed Nelder-Mead run) on both the standard and
-> custom-equation Curve Fit panels — the result stays inspectable but is marked
-> unreliable with a `role="alert"`. The DREAM/bumps half below is NOT yet
-> addressed: `BumpsFitResult` carries no convergence flag, so exposing R-hat /
-> ESS / multi-chain diagnostics (and sampling controls) remains the open piece.
+> **Addressed 2026-07-12 (PR #14 + PR #19).** Deterministic fits (PR #14): a
+> shared `FitConvergenceWarning` surfaces `exitFlag=0` (a failed Nelder-Mead
+> run) on both the standard and custom-equation Curve Fit panels — inspectable
+> but marked unreliable with a `role="alert"`. DREAM (PR #19): the posterior now
+> carries the Gelman-Rubin **R-hat** per parameter, `rHatMax`, a `converged`
+> verdict (R-hat < 1.1), and `nChains`; a `DreamConvergence` component warns
+> (`role="alert"`) when the chains haven't mixed and tables the diagnostics, and
+> the DREAM sample/burn/pop budget is now user-tunable. NB: bumps exposes no
+> clean effective-sample-size, so ESS is honestly omitted rather than faked from
+> cross-chain draws (documented in `fit_bumps.py`).
 
 The parity fitter returns `exitFlag=0` when optimization fails, but the frontend displays parameters, R², RMSE, and AIC without checking or showing that flag:
 
