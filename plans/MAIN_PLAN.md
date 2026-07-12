@@ -78,24 +78,20 @@ GOTO #11 drift (implemented but listed open).
 ~~26. **Split dataset by column value**~~ COMPLETED 2026-07-11 (see
     Completed).
 
-27. **Drawing shapes on plots** (owner design round 2026-07-11 — all
-    decided): arrow, line, rect, ellipse + "text box" (use: figure
-    markup — point at Hc2, box the transition region, circle an
-    outlier; used: dock shape-flyout OR Insert menu → crosshair +
-    status hint → drag to draw → auto-return to pointer;
-    discoverable: visible dock button + the hint + right-click styling
-    matching the series idiom). Style: fill/stroke color, opacity
-    (25/50/75/100 presets + custom), width, dash — via right-click
-    swatch menu + an Inspector "Shapes" card (overview/bulk delete).
-    Anchoring: DATA default (shapes mark data), page-pin toggle like
-    text. "Text box" = an ANNOTATION with new frame properties
-    (fill/stroke/opacity/padding), NOT a sixth object type — one text
-    system (rides #25's rich text). New `lib/uplotShapes.ts` plugin +
-    pointer-tool select/drag/resize via the shared gesture machinery;
-    matplotlib export parity (FancyArrow/Rectangle/Ellipse + alpha,
-    framed text via bbox). Z-order: shapes above series, below text;
-    "send behind data" = deferred note. SEQUENCED AFTER #25 merges
-    (same annotation draw surface).
+~~27. **Drawing shapes on plots**~~ COMPLETED 2026-07-12 (see Completed).
+
+28. **Widen rich-text label support: fractions, roots, sums, etc.**
+    (booked from the 2026-07-12 bug hunt; use: a researcher naturally
+    types `$\frac{M}{M_s}$`, `$\sqrt{...}$`, `$\sum$`, `$\int$` in a
+    label — today those fall back to LITERAL on BOTH screen and export
+    [the bug-hunt fix aligned them so at least they AGREE], but the
+    delightful outcome is real rendering): extend the shared richtext
+    AST + `richtextCanvas` renderer to draw fractions/roots/sums/
+    inequalities on canvas, and extend the Python `SUPPORTED_MATHTEXT_
+    COMMANDS` gate in lockstep so screen and export stay WYSIWYG. The
+    2026-07-12 fix made the two sides agree on the SUBSET boundary;
+    this moves the boundary outward with genuine rendering on both
+    sides. Medium — real canvas fraction/root layout is the work.
 
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
@@ -187,6 +183,33 @@ GOTO #11 drift (implemented but listed open).
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#27 Drawing shapes on plots**~~ (2026-07-12, sonnet agent +
+  post-merge bug-hunt batch) — arrow/line/rect/ellipse via
+  `lib/uplotShapes.ts` + `store/shapes.ts`; dock flyout + a new Insert
+  menu; draw-drag → auto-return to pointer; pointer-mode select/move/
+  reshape via the shared gesture machinery; right-click swatch/opacity/
+  width/dash menu + Inspector Shapes card; data/page anchor; "text box"
+  = an annotation `frame` (one text system, rides #25); matplotlib
+  export parity (FancyArrow/Rectangle/Ellipse + alpha; z-order by
+  matplotlib zorder, not insertion). **A 2-agent adversarial bug hunt
+  then found 9 confirmed defects the 3196-test suite missed** (none
+  shipped) — the SEVERE ones: shape clicks silently reset the plot zoom
+  (`stopPropagation` doesn't block a sibling plugin on the same DOM
+  node → `stopImmediatePropagation`); data-anchored shapes had no
+  off-canvas clamp (draggable into oblivion); split auto-tolerance
+  (#26) merged distinct setpoints with sparse data (median×8 →
+  elbow-detection on sorted gaps); split preview ≠ commit on invalid
+  tolerance text; screen-vs-export mathtext divergence (`$\frac{}{}$`
+  rendered on export but literal on screen → backend now gates on the
+  frontend's command subset). Plus cursor-clobber, text-box-cancel
+  orphan, dup-folder, export-width falsy-0. All fixed with fail-before/
+  pass-after regression tests. useApp.ts sits AT its 3335 pin (zero
+  headroom — next store feature MUST extract a slice). Known accepted
+  limitation: no single-tolerance 1-D clustering is robust to every gap
+  distribution (a periodic-jump ramp can still under-cap) — the elbow
+  heuristic fixes the confirmed sparse-setpoint case; documented in
+  `datasetsplit.ts`.
 
 - ~~**#25 Rich text in annotations**~~ (2026-07-11, sonnet agent) — the
   annotation canvas draw + hit geometry ride the SAME richtextCanvas

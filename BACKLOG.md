@@ -17,11 +17,12 @@ only the fresh-machine acceptance run remains from that gate)
 
 | # | Item | Plan / item | Size |
 |---|------|-------------|------|
-| 42 | Drawing shapes (arrow/line/rect/ellipse + framed text) — agent in flight | MAIN #27 | M-L |
+| 43 | Widen rich-text: render fractions/roots/sums (canvas + matplotlib in lockstep) | MAIN #28 | M |
 
-*(MAIN #9–#26 all shipped 2026-07-11 (the menu-survey pair: #25 rich-text
-annotations + #26 split-by-value); a shapes/drawing feature (#27) is the
-agent in flight. The #23 installer hooks BUILT into v0.8.1's setup.exe —
+*(MAIN #9–#27 all shipped 2026-07-11/12 — the menu-survey trio #25/#26/#27
+plus a 9-bug adversarial-hunt fix batch on the new features. #28 booked
+from that hunt (the "actually render `\frac`" upgrade). The #23 installer
+hooks BUILT into v0.8.1's setup.exe —
 verified by the fresh-machine acceptance run.)*
 
 ## Owner actions & owner-gated decisions
@@ -67,7 +68,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | #25 open (agent in flight) + owner gates/deferrals — MAIN #9–#24, #26 ALL shipped 2026-07-11 |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | #28 (widen rich-text) + owner gates/deferrals — MAIN #9–#27 ALL shipped 2026-07-11/12 |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence; #47 LOW-PRIORITY (recover Origin graphic objects/annotations on import — gated on MAIN #27) |
