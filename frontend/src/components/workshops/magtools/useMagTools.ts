@@ -6,8 +6,28 @@
 import { useState } from "react";
 
 import { convertMagUnits, subtractMagBackground } from "../../../lib/api";
+import { fullPlottedX, plottedYKey } from "../../../lib/fitselection";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+
+/** The plotted X (independent variable — T or field) + primary Y (moment)
+ *  CHANNELS over the FULL data (magnetometry transforms convert every row, so
+ *  no analysis-row pruning), plus the Y channel index for labelling the output
+ *  dataset. Follows the plot (audit P1 #1) instead of assuming time/values[0].
+ *  Falls back to the first channel vs time when nothing is plotted. */
+function magXY(
+  ds: Dataset,
+  xKey: number | null,
+  yKeys: number[] | null,
+  seriesOrder: number[] | null,
+): { x: number[]; y: number[]; yKey: number } {
+  const yKey = plottedYKey(ds, xKey, yKeys, seriesOrder) ?? 0;
+  return {
+    x: fullPlottedX(ds.data, xKey),
+    y: ds.data.values.map((row) => row[yKey]),
+    yKey,
+  };
+}
 
 export type MagTab = "background" | "units";
 
@@ -74,13 +94,15 @@ export function useMagTools(): MagToolsState {
       // #38 deferred edge: resolve the active dataset's full data first.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
-      const temperature = ds.data.time;
-      const moment = ds.data.values.map((row) => row[0]);
+      const st = useApp.getState();
+      const { x: temperature, y: moment, yKey } = magXY(ds, st.xKey, st.yKeys, st.seriesOrder);
       const res = await subtractMagBackground({ temperature, moment, auto_fraction: autoFraction });
       setFit({ slope: res.slope, intercept: res.intercept });
       const data: DataStruct = {
-        ...ds.data,
+        time: temperature,
         values: res.corrected.map((v) => [v ?? Number.NaN]),
+        labels: [ds.data.labels[yKey] ?? "Moment"],
+        units: [ds.data.units[yKey] ?? ""],
         metadata: { ...ds.data.metadata, mag_bg_subtracted: true },
       };
       addDataset({ id: `magbg-${++_counter}`, name: `${stem()} (bg-sub)`, data });
@@ -101,8 +123,8 @@ export function useMagTools(): MagToolsState {
       // #38 deferred edge: resolve the active dataset's full data first.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
-      const x = ds.data.time;
-      const y = ds.data.values.map((row) => row[0]);
+      const st = useApp.getState();
+      const { x, y, yKey } = magXY(ds, st.xKey, st.yKeys, st.seriesOrder);
       const res = await convertMagUnits({
         x,
         y,
@@ -117,11 +139,14 @@ export function useMagTools(): MagToolsState {
       const data: DataStruct = {
         time: res.x.map((v) => v ?? Number.NaN),
         values: res.y.map((v) => [v ?? Number.NaN]),
-        labels: [ds.data.labels[0] ?? "Moment"],
+        labels: [ds.data.labels[yKey] ?? "Moment"],
         units: [res.y_unit],
         metadata: {
           ...ds.data.metadata,
-          x_column_name: ds.data.metadata?.["x_column_name"] ?? "Field",
+          x_column_name:
+            st.xKey != null
+              ? (ds.data.labels[st.xKey] ?? "Field")
+              : (ds.data.metadata?.["x_column_name"] ?? "Field"),
           x_column_unit: res.x_unit,
         },
       };
