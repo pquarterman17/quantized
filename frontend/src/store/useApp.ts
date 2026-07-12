@@ -1896,35 +1896,12 @@ export const useApp = create<AppState>((set, get) => ({
         focusedWindowId,
         // The rest of the PlotView cluster (item 7) — only touched when
         // restoring an actual persisted layout; the legacy/fresh path never
-        // wrote these here before item 7, so they're left alone (whatever
-        // the pre-load session had) exactly as before.
-        ...(restoredView
-          ? {
-              yScale: restoredView.yScale,
-              xScale: restoredView.xScale,
-              showGrid: restoredView.showGrid,
-              showLegend: restoredView.showLegend,
-              legendPos: restoredView.legendPos,
-              legendXY: restoredView.legendXY,
-              axisLabelOffsets: restoredView.axisLabelOffsets,
-              plotTemplate: restoredView.plotTemplate,
-              showAxisBox: restoredView.showAxisBox,
-              stackMode: restoredView.stackMode,
-              insetMode: restoredView.insetMode,
-              polarMode: restoredView.polarMode,
-              statMode: restoredView.statMode,
-              xFmt: restoredView.xFmt,
-              yFmt: restoredView.yFmt,
-              plotTitle: restoredView.plotTitle,
-              xAxisLabel: restoredView.xAxisLabel,
-              yAxisLabel: restoredView.yAxisLabel,
-              refLines: restoredView.refLines,
-              annotations: restoredView.annotations,
-              regionShades: restoredView.regionShades,
-              shapes: restoredView.shapes,
-              waterfall: restoredView.waterfall,
-            }
-          : {}),
+        // wrote these here before item 7, so they're left alone (whatever the
+        // pre-load session had) exactly as before. `restoredView` is exactly
+        // the VIEW_KEYS set (hydrateView) and the store is a superset, so this
+        // spread writes the identical field set the group above re-lists on the
+        // restore path — one place to maintain as PlotView grows, not two.
+        ...(restoredView ?? {}),
         status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}`,
       };
     }),

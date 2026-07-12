@@ -795,18 +795,19 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // the common case). `label: ""` blanks uPlot's own draw for exactly the
   // plugin-drawn set.
   const off = args.axisLabelEdit?.offsets ?? {};
+  const sty = args.axisLabelEdit?.styles ?? {};
   const astOf = (text: string | undefined): RichNode[] | null =>
     text && text.trim() ? (richLabelAst(text) ?? [{ kind: "text", text, italic: false }]) : null;
   const xRealRich = richLabelAst(xLabel);
   const xRich = astOf(xLabel);
-  const xDrawn = !!xRealRich || off.x !== undefined;
+  const xDrawn = !!xRealRich || off.x !== undefined || sty.x !== undefined;
   const yLabelText = soloLabel(0);
   const yRealRich = richLabelAst(yLabelText);
   const yRich = astOf(yLabelText);
-  const yDrawn = !!yRealRich || off.y !== undefined;
+  const yDrawn = !!yRealRich || off.y !== undefined || sty.y !== undefined;
   const y2LabelText = hasY2 ? soloLabel(1) : undefined;
   const y2Rich = hasY2 ? astOf(y2LabelText) : null;
-  const y2Drawn = hasY2 && (!!richLabelAst(y2LabelText) || off.y2 !== undefined);
+  const y2Drawn = hasY2 && (!!richLabelAst(y2LabelText) || off.y2 !== undefined || sty.y2 !== undefined);
   const titleRich = richLabelAst(args.title?.trim());
 
   // labelSize is the px height/width uPlot reserves for the axis TITLE

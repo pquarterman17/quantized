@@ -139,7 +139,7 @@ describe("buildOpts", () => {
   });
 
   it("adds the axis-title drag plugin in pointer mode once the edit bridge is wired", () => {
-    const edit = { offsets: {}, interactive: true, onMove: () => {}, onReset: () => {} };
+    const edit = { offsets: {}, styles: {}, interactive: true, onMove: () => {}, onReset: () => {}, onContextMenu: () => {} };
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "pointer", axisLabelEdit: edit });
     expect(opts.plugins).toHaveLength(1);
   });
@@ -147,9 +147,11 @@ describe("buildOpts", () => {
   it("blanks uPlot's own y title once it has a drag offset — even in a non-pointer tool", () => {
     const edit = {
       offsets: { y: [-10, 4] as [number, number] },
+      styles: {},
       interactive: false,
       onMove: () => {},
       onReset: () => {},
+      onContextMenu: () => {},
     };
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", axisLabelEdit: edit });
     expect(opts.axes?.[1]?.label).toBe(""); // moved -> plugin draws it (offset renders)

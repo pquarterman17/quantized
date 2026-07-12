@@ -28,6 +28,8 @@ export interface PlotStageMenusProps {
   actions: PlotStageActions;
   annotationMenu: ObjectMenu | null;
   onCloseAnnotationMenu: () => void;
+  axisLabelMenu: ObjectMenu | null;
+  onCloseAxisLabelMenu: () => void;
   shapeMenu: ObjectMenu | null;
   onCloseShapeMenu: () => void;
 }
@@ -53,6 +55,14 @@ export default function PlotStageMenus(p: PlotStageMenusProps) {
           y={p.annotationMenu.y}
           items={p.annotationMenu.items}
           onClose={p.onCloseAnnotationMenu}
+        />
+      )}
+      {p.axisLabelMenu && (
+        <ContextMenu
+          x={p.axisLabelMenu.x}
+          y={p.axisLabelMenu.y}
+          items={p.axisLabelMenu.items}
+          onClose={p.onCloseAxisLabelMenu}
         />
       )}
       {p.shapeMenu && (

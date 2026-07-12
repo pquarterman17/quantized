@@ -102,7 +102,7 @@ export default function PlotStage() {
   const setPlotTool = useApp((s) => s.setPlotTool);
   // MAIN #18: pointer-mode annotation select/drag/resize/edit/menu bridge.
   const { bridge: annotationEdit, menu: annotationMenu, closeMenu: closeAnnotationMenu } = useAnnotationEdit(tool);
-  const axisLabelEdit = useAxisLabelEdit(tool);
+  const { bridge: axisLabelEdit, menu: axisLabelMenu, closeMenu: closeAxisLabelMenu } = useAxisLabelEdit(tool);
   // MAIN #27: pointer-mode shape select/move/reshape/menu bridge + the
   // drag-to-draw-a-new-shape mode bridge.
   const { bridge: shapeEdit, menu: shapeMenu, closeMenu: closeShapeMenu } = useShapeEdit(tool);
@@ -344,6 +344,8 @@ export default function PlotStage() {
         actions={{ resetView, smartScale, savePng, copyData, snapshot }}
         annotationMenu={annotationMenu}
         onCloseAnnotationMenu={closeAnnotationMenu}
+        axisLabelMenu={axisLabelMenu}
+        onCloseAxisLabelMenu={closeAxisLabelMenu}
         shapeMenu={shapeMenu}
         onCloseShapeMenu={closeShapeMenu}
       />

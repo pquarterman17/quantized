@@ -41,6 +41,19 @@ describe("axisLabelOffsets (draggable axis titles)", () => {
   });
 });
 
+describe("axisLabelStyles (Format menu: size/italic/bold)", () => {
+  it("defaults empty, merges patches, and drops an emptied style back to default", () => {
+    expect(useApp.getState().axisLabelStyles).toEqual({});
+    useApp.getState().setAxisLabelStyle("y", { size: 16 });
+    useApp.getState().setAxisLabelStyle("y", { italic: true });
+    expect(useApp.getState().axisLabelStyles).toEqual({ y: { size: 16, italic: true } });
+    useApp.getState().setAxisLabelStyle("y", { italic: false }); // toggle off
+    expect(useApp.getState().axisLabelStyles).toEqual({ y: { size: 16 } });
+    useApp.getState().setAxisLabelStyle("y", { size: undefined }); // reset format
+    expect(useApp.getState().axisLabelStyles).toEqual({}); // fully emptied -> removed
+  });
+});
+
 describe("selectedAnnotationId (MAIN #18 — pointer-mode selection)", () => {
   it("defaults to null and round-trips through the setter", () => {
     expect(useApp.getState().selectedAnnotationId).toBeNull();

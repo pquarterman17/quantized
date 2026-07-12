@@ -103,7 +103,11 @@ const STORE_PINS: Record<string, number> = {
   // composed in exactly like windows.ts — this is ONLY the per-action
   // recorder lines, already at the practical floor; next candidates:
   // corrections/importing slices (unchanged from the prior note).
-  "/store/useApp.ts": 3335,
+  // 3335 -> 3312 (2026-07-12, axis-label Format menu): the .dwk restore block
+  // hand-re-listed all 24 group-2 PlotView fields; replaced with a single
+  // `...(restoredView ?? {})` spread (hydrateView guarantees the field set),
+  // so a new view field (axisLabelStyles) LOWERED the pin instead of raising it.
+  "/store/useApp.ts": 3312,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

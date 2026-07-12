@@ -277,6 +277,16 @@ export type AxisKey = "x" | "y" | "y2";
  *  default position. Persisted in the plot view (`.dwk`), like `legendXY`. */
 export type AxisLabelOffsets = Partial<Record<AxisKey, [number, number]>>;
 
+/** Per-axis title text style (right-click ▸ Format). Any field absent = the
+ *  default (size = the template's title size, upright, semibold). Persisted in
+ *  the plot view (`.dwk`). */
+export interface AxisLabelStyle {
+  size?: number; // font size in CSS px
+  italic?: boolean;
+  bold?: boolean;
+}
+export type AxisLabelStyles = Partial<Record<AxisKey, AxisLabelStyle>>;
+
 /** A reproducible fit recipe + result snapshot saved on a dataset (audit P1 #3).
  *  `xKey`/`yKey` capture the channels fit at record time so a recompute
  *  reproduces the original analysis; they're absent on legacy `{model}` specs
