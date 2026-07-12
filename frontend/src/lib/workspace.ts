@@ -5,6 +5,7 @@
 
 import { sanitizeFilter } from "./datafilter";
 import { pruneOrphans } from "./foldertree";
+import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
 import { sanitizeFigureDocs, type FigureDoc } from "./figuredoc";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
@@ -24,6 +25,7 @@ import type {
   FitWeighting,
   FolderNode,
   ModelingType,
+  OriginFidelityManifest,
   WeightMode,
 } from "./types";
 
@@ -49,6 +51,7 @@ export interface WorkspaceState {
   selectedIds?: string[];
   expandedFolders?: string[];
   originFigures?: OriginFigureEntry[];
+  originFidelity?: OriginFidelityEntry[];
   smartFolders?: SmartFolder[];
   reports?: ReportEntry[];
   macroSteps?: PipelineStep[];
@@ -67,6 +70,7 @@ export interface LoadedWorkspace {
   selectedIds: string[];
   expandedFolders: string[];
   originFigures: OriginFigureEntry[];
+  originFidelity: OriginFidelityEntry[];
   smartFolders: SmartFolder[];
   reports: ReportEntry[];
   macroSteps: PipelineStep[];
@@ -86,6 +90,7 @@ interface WorkspaceDoc {
   selectedIds: string[];
   expandedFolders: string[];
   originFigures: OriginFigureEntry[];
+  originFidelity: OriginFidelityEntry[];
   smartFolders: SmartFolder[];
   reports: ReportEntry[];
   pipeline: PipelineStep[];
@@ -106,6 +111,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     selectedIds: ws.selectedIds ?? [],
     expandedFolders: ws.expandedFolders ?? [],
     originFigures: ws.originFigures ?? [],
+    originFidelity: ws.originFidelity ?? [],
     smartFolders: ws.smartFolders ?? [],
     reports: ws.reports ?? [],
     pipeline: ws.macroSteps ?? [],
@@ -213,6 +219,47 @@ function parseOriginFigures(v: unknown, dsIds: Set<string>): OriginFigureEntry[]
       datasetId,
       siblingIds,
     });
+  }
+  return out;
+}
+
+function isOriginFidelityManifest(v: unknown): v is OriginFidelityManifest {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    o.version === 1 &&
+    (o.container === "opj" || o.container === "opju") &&
+    ["exact", "best_effort", "reference_only", "unresolved"].includes(String(o.status)) &&
+    Number.isInteger(o.graph_records_total) && Number(o.graph_records_total) >= 0 &&
+    Number.isInteger(o.graph_records_actionable) && Number(o.graph_records_actionable) >= 0 &&
+    Number.isInteger(o.graph_records_filtered) && Number(o.graph_records_filtered) >= 0 &&
+    Array.isArray(o.omissions) &&
+    o.omissions.every((x) => typeof x === "string") &&
+    Array.isArray(o.filtered_figures) &&
+    o.filtered_figures.every((f) => {
+      if (typeof f !== "object" || f === null) return false;
+      const item = f as Record<string, unknown>;
+      return (
+        Number.isInteger(item.index) &&
+        typeof item.name === "string" &&
+        (item.layer === null || Number.isInteger(item.layer)) &&
+        typeof item.reason === "string"
+      );
+    })
+  );
+}
+
+function parseOriginFidelity(v: unknown, dsIds: Set<string>): OriginFidelityEntry[] {
+  if (!Array.isArray(v)) return [];
+  const out: OriginFidelityEntry[] = [];
+  for (const item of v) {
+    if (typeof item !== "object" || item === null) continue;
+    const o = item as Record<string, unknown>;
+    if (typeof o.id !== "string" || typeof o.stem !== "string") continue;
+    if (!isOriginFidelityManifest(o.manifest)) continue;
+    const siblingIds = stringsIn(o.siblingIds, dsIds);
+    if (siblingIds.length === 0) continue;
+    out.push({ id: o.id, stem: o.stem, siblingIds, manifest: o.manifest });
   }
   return out;
 }
@@ -416,6 +463,7 @@ export function parseWorkspace(text: string): LoadedWorkspace {
     typeof o.activeId === "string" && dsIds.has(o.activeId) ? o.activeId : (datasets[0]?.id ?? null);
   const expandedFolders = stringsIn(o.expandedFolders, folderIds);
   const originFigures = parseOriginFigures(o.originFigures, dsIds);
+  const originFidelity = parseOriginFidelity(o.originFidelity, dsIds);
   const smartFolders = sanitizeSmartFolders(o.smartFolders);
   const reports = sanitizeReports(o.reports, dsIds);
   const macroSteps = sanitizeSteps(o.pipeline);
@@ -442,6 +490,7 @@ export function parseWorkspace(text: string): LoadedWorkspace {
     selectedIds,
     expandedFolders,
     originFigures,
+    originFidelity,
     smartFolders,
     reports,
     macroSteps,

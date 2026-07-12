@@ -8,6 +8,7 @@
 // instead of overwriting the focused one — the payoff for an `.opj` import
 // with many graph windows.
 
+import { originFidelityLabel, originFidelityStatusLabel } from "../../lib/originFidelity";
 import { figureLabel, type OriginFigureEntry } from "../../lib/originFigures";
 import { useApp } from "../../store/useApp";
 
@@ -15,8 +16,12 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
   const applyOriginFigure = useApp((s) => s.applyOriginFigure);
   const resolved = entry.datasetId != null;
   const n = entry.figure.n_curves;
+  const fidelity = entry.figure.fidelity;
+  const fidelityText = fidelity
+    ? `${originFidelityStatusLabel(fidelity.status)}; missing ${fidelity.omissions.map(originFidelityLabel).join(", ")}`
+    : "Fidelity not assessed";
   const title = resolved
-    ? `${entry.stem} — restore axis ranges (${n} curve${n === 1 ? "" : "s"})`
+    ? `${entry.stem} — restore axis ranges (${n} curve${n === 1 ? "" : "s"}); ${fidelityText}`
     : `unresolved source "${entry.figure.source_hint || "unknown"}" — no matching imported book`;
   return (
     <div style={{ display: "flex", gap: 4, alignItems: "stretch" }}>
@@ -28,7 +33,9 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
         onClick={() => applyOriginFigure(entry.id)}
       >
         <span className="qzk-fig-name">{figureLabel(entry)}</span>
-        <span className="qzk-fig-meta">{entry.stem}</span>
+        <span className="qzk-fig-meta">
+          {entry.stem}{fidelity ? ` · ${fidelity.status === "exact" ? "=" : "≈"}` : ""}
+        </span>
       </button>
       <button
         className="qz-icon-btn"

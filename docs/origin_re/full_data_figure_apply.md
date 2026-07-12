@@ -97,17 +97,16 @@ requirement.
 
 ## Remaining work
 
-This PR does **not** complete the full #49 fidelity manifest. It does not yet
-retain filtered internal records in a project-level diagnostic artifact or
-show an "Imported with omissions" UI. It also does not implement #50's **Open
-source workbook(s)** / **Remake in Graph Builder** actions.
+The stacked `codex/origin-fidelity-manifest` branch completes #49: filtered
+records survive as a versioned project diagnostic artifact and the Library
+shows project/figure omissions. See `docs/origin_re/fidelity_manifest.md`.
+PR #25 itself still does not include that stacked change. #50's **Open source
+workbook(s)** / **Remake in Graph Builder** actions remain unimplemented.
 
 Recommended continuation order:
 
-1. Define a versioned project/graph fidelity payload outside `DataStruct`.
-2. Retain decoded-versus-filtered counts and omission reasons at import time.
-3. Surface the summary without reintroducing dead rows in the Library.
-4. Implement workbook/Graph Builder fallback using the same exact
+1. Merge/rebase the stacked #49 fidelity-manifest PR after PR #25.
+2. Implement workbook/Graph Builder fallback using the same exact
    curve-to-book resolution and pending-data preflight introduced here.
 
 The original workspace may contain an uncommitted expanded

@@ -16,6 +16,7 @@ beforeEach(() => {
     datasets: [d1],
     activeId: null,
     originFigures: [],
+    originFidelity: [],
     xLim: null,
     yLim: null,
     xScale: "linear",
@@ -62,6 +63,39 @@ describe("FiguresSection", () => {
     expect(s.yLim).toEqual([1, 1e6]);
     expect(s.xScale).toBe("linear");
     expect(s.yScale).toBe("log");
+  });
+
+  it("shows a best-effort marker and omission details on an assessed figure", () => {
+    useApp.setState({
+      originFigures: [
+        {
+          id: "fig-XRD-fidelity",
+          stem: "XRD",
+          datasetId: "d1",
+          siblingIds: ["d1"],
+          figure: {
+            name: "GraphF",
+            x_from: 0,
+            x_to: 1,
+            x_log: false,
+            y_from: 0,
+            y_to: 1,
+            y_log: false,
+            n_curves: 1,
+            annotations: [],
+            fidelity: {
+              status: "best_effort",
+              recovered: ["axis_ranges"],
+              omissions: ["graphic_objects"],
+            },
+          },
+        },
+      ],
+    });
+    render(<FiguresSection />);
+    const item = screen.getByRole("button", { name: /GraphF/ });
+    expect(item).toHaveTextContent("≈");
+    expect(item.title).toContain("drawn arrows and shapes");
   });
 
   it("disables a figure whose source hint never resolved, with the hint in its tooltip", () => {

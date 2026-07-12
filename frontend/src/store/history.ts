@@ -52,6 +52,7 @@ export interface HistorySnapshot {
   selectedIds: AppState["selectedIds"];
   worksheetId: AppState["worksheetId"];
   originFigures: AppState["originFigures"];
+  originFidelity: AppState["originFidelity"];
   reports: AppState["reports"];
   figureDocs: AppState["figureDocs"];
 }
@@ -69,6 +70,7 @@ function snapshotOf(s: AppState): HistorySnapshot {
     selectedIds: s.selectedIds,
     worksheetId: s.worksheetId,
     originFigures: s.originFigures,
+    originFidelity: s.originFidelity,
     reports: s.reports,
     figureDocs: s.figureDocs,
   };

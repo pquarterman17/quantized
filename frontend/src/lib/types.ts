@@ -22,6 +22,36 @@ export interface DataStruct {
    *  (`figures.extract_figures`, plan items 12/13/18). `.opju` figures are not
    *  extracted yet (item 14). */
   figures?: OriginFigure[];
+  /** Origin projects only: versioned, project-level graph decode fidelity.
+   *  Kept outside DataStruct metadata so it cannot masquerade as scientific
+   *  dataset metadata; consumed into the Origin fidelity store on import. */
+  origin_fidelity?: OriginFidelityManifest;
+}
+
+export type OriginFidelityStatus = "exact" | "best_effort" | "reference_only" | "unresolved";
+
+export interface OriginFigureFidelity {
+  status: OriginFidelityStatus;
+  recovered: string[];
+  omissions: string[];
+}
+
+export interface OriginFilteredFigure {
+  index: number;
+  name: string;
+  layer: number | null;
+  reason: string;
+}
+
+export interface OriginFidelityManifest {
+  version: 1;
+  container: "opj" | "opju";
+  status: OriginFidelityStatus;
+  graph_records_total: number;
+  graph_records_actionable: number;
+  graph_records_filtered: number;
+  omissions: string[];
+  filtered_figures: OriginFilteredFigure[];
 }
 
 /** The `books[]` entry for the book already returned in full at the payload's
@@ -186,6 +216,10 @@ export interface OriginFigure {
    *  is "#RRGGBB" or null (colour undecoded — such shades are skipped by
    *  `originRegionShades`, never guessed). */
   region_shades?: { x1: number; x2: number; y1: number; y2: number; fill?: string | null }[];
+  /** Conservative decoder coverage assessment. `exact` is reserved for a
+   *  future saved-preview/oracle comparison gate; current imports normally
+   *  report `best_effort` with explicit omissions. */
+  fidelity?: OriginFigureFidelity;
 }
 
 /** Response of POST /api/plot/series — uPlot-ready column data. */

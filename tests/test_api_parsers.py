@@ -194,6 +194,12 @@ def test_opj_import_filters_nonactionable_figure_records(
     body = parsers_mod._import_with_books(project)
 
     assert [f["name"] for f in body["figures"]] == ["Graph1"]
+    assert body["figures"][0]["fidelity"]["status"] == "best_effort"
+    assert body["origin_fidelity"]["version"] == 1
+    assert body["origin_fidelity"]["graph_records_total"] == 2
+    assert body["origin_fidelity"]["graph_records_actionable"] == 1
+    assert body["origin_fidelity"]["graph_records_filtered"] == 1
+    assert body["origin_fidelity"]["filtered_figures"][0]["name"] == "SYSTEM"
 
 
 @pytest.mark.realdata

@@ -43,6 +43,7 @@ beforeEach(() => {
     folders: [],
     expandedFolders: [],
     originFigures: [],
+    originFidelity: [],
     smartFolders: [],
     activeId: null,
     selectedIds: [],

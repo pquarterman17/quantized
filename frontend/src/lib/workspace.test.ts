@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { OriginFigureEntry } from "./originFigures";
+import type { OriginFidelityEntry } from "./originFidelity";
 import type { FrozenPlotBundle } from "./plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { ReportEntry } from "./report";
@@ -384,6 +385,46 @@ describe("workspace originFigures persistence", () => {
     delete doc.folders;
     const loaded = parseWorkspace(JSON.stringify(doc));
     expect(loaded.originFigures).toEqual([]);
+  });
+});
+
+describe("workspace Origin fidelity persistence", () => {
+  const fidelity: OriginFidelityEntry = {
+    id: "origin-fidelity-a-0",
+    stem: "Moke",
+    siblingIds: ["a", "b"],
+    manifest: {
+      version: 1,
+      container: "opj",
+      status: "best_effort",
+      graph_records_total: 3,
+      graph_records_actionable: 2,
+      graph_records_filtered: 1,
+      omissions: ["graphic_objects"],
+      filtered_figures: [
+        { index: 2, name: "SYSTEM", layer: null, reason: "no bound curves" },
+      ],
+    },
+  };
+
+  it("round-trips a versioned project manifest and prunes dead siblings", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(
+      serializeWorkspace({ datasets, originFidelity: [fidelity] }),
+    );
+    expect(loaded.originFidelity).toEqual([{ ...fidelity, siblingIds: ["a"] }]);
+  });
+
+  it("drops malformed/unsupported manifests and defaults missing data", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(serializeWorkspace({ datasets }));
+    doc.originFidelity = [
+      { ...fidelity, manifest: { ...fidelity.manifest, version: 99 } },
+      { ...fidelity, id: 4 },
+    ];
+    expect(parseWorkspace(JSON.stringify(doc)).originFidelity).toEqual([]);
+    delete doc.originFidelity;
+    expect(parseWorkspace(JSON.stringify(doc)).originFidelity).toEqual([]);
   });
 });
 
@@ -820,6 +861,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       selectedIds: [],
       expandedFolders: [],
       originFigures: [],
+      originFidelity: [],
       smartFolders: [],
       reports: [],
       macroSteps: [],
