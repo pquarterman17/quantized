@@ -59,6 +59,75 @@ def test_unknown_model_is_422() -> None:
     assert resp.status_code == 422
 
 
+def _outlier_linear() -> tuple[list[float], list[float]]:
+    """y = 2x + 1 on 0..10 with a single big outlier on the last point."""
+    x = list(np.linspace(0.0, 10.0, 11))
+    y = [2.0 * v + 1.0 for v in x]
+    y[-1] += 50.0  # corrupt the last point
+    return x, y
+
+
+def test_fit_dy_downweights_outlier() -> None:
+    """Weighting engages: a large dy on the outlier pulls the slope back toward
+    the true value, closer than the unweighted fit that the outlier drags up."""
+    x, y = _outlier_linear()
+    unweighted = client.post(
+        "/api/fitting/fit", json={"model": "Linear", "x": x, "y": y, "p0": [1.0, 0.0]}
+    ).json()
+    dy = [1.0] * len(x)
+    dy[-1] = 1000.0  # down-weight the corrupted point
+    weighted = client.post(
+        "/api/fitting/fit",
+        json={"model": "Linear", "x": x, "y": y, "p0": [1.0, 0.0], "dy": dy},
+    ).json()
+    # Unweighted slope is dragged well above 2; weighted recovers ~2.
+    assert abs(weighted["params"][0] - 2.0) < 0.05
+    assert abs(weighted["params"][0] - 2.0) < abs(unweighted["params"][0] - 2.0)
+
+
+def test_fit_dy_takes_precedence_over_weights() -> None:
+    """When both are sent, dy (1/dy^2) wins over the legacy raw weights vector."""
+    x, y = _outlier_linear()
+    dy = [1.0] * len(x)
+    dy[-1] = 1000.0
+    dy_only = client.post(
+        "/api/fitting/fit",
+        json={"model": "Linear", "x": x, "y": y, "p0": [1.0, 0.0], "dy": dy},
+    ).json()
+    both = client.post(
+        "/api/fitting/fit",
+        json={
+            "model": "Linear",
+            "x": x,
+            "y": y,
+            "p0": [1.0, 0.0],
+            "dy": dy,
+            "weights": [1.0] * len(x),  # contradictory raw weights, must be ignored
+        },
+    ).json()
+    assert both["params"] == dy_only["params"]
+
+
+def test_fit_dy_wrong_length_is_422() -> None:
+    x, y = _outlier_linear()
+    resp = client.post(
+        "/api/fitting/fit",
+        json={"model": "Linear", "x": x, "y": y, "dy": [1.0, 1.0]},
+    )
+    assert resp.status_code == 422
+
+
+def test_fit_dy_nonpositive_is_422() -> None:
+    x, y = _outlier_linear()
+    dy = [1.0] * len(x)
+    dy[3] = 0.0  # a zero error would demand infinite weight
+    resp = client.post(
+        "/api/fitting/fit",
+        json={"model": "Linear", "x": x, "y": y, "dy": dy},
+    )
+    assert resp.status_code == 422
+
+
 def test_bootstrap_roundtrip() -> None:
     import numpy as np
 

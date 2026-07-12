@@ -83,6 +83,23 @@ def _numerical_hessian(
     return hmat
 
 
+def weights_from_dy(dy: ArrayLike, n: int) -> NDArray[np.float64]:
+    """Per-point 1-sigma errors ``dy`` -> least-squares weights ``1/dy**2``.
+
+    The single canonical error->weight convention shared by every fit entry
+    point (``/fit``, ``/equation/fit``, ``/scan``) so "use the plotted error
+    column" means the same thing everywhere. Validates length and that every
+    entry is finite and strictly positive (a zero error would demand infinite
+    weight).
+    """
+    dyv = np.asarray(dy, dtype=float).ravel()
+    if dyv.size != n:
+        raise ValueError("dy must have the same length as x")
+    if not bool(np.all(np.isfinite(dyv))) or bool(np.any(dyv <= 0)):
+        raise ValueError("dy entries must be finite and > 0")
+    return np.asarray(1.0 / dyv**2, dtype=float)
+
+
 def curve_fit(
     x: ArrayLike,
     y: ArrayLike,

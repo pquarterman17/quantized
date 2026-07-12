@@ -3,14 +3,19 @@
 // Also the provenance bridge (audit P1 #3): `fitSpecFrom` records the fit's
 // recipe and `fitDataForSpec` reproduces it on recompute.
 
+import { dyForFit } from "./fitweights";
 import { effectiveChannels } from "./plotdata";
 import { analysisData } from "./rowstate";
-import type { CalcResult, Dataset, DataStruct, FitSpec } from "./types";
+import type { CalcResult, Dataset, DataStruct, FitSpec, FitWeighting } from "./types";
 
 export interface FitSelection {
   x: number[];
   y: number[];
   yKey: number;
+  /** 1-sigma errors for the recorded weighting (recompute path only); null/
+   *  absent = unweighted. Only `fitDataForSpec` populates it — the interactive
+   *  hook resolves weighting from the live UI state instead. */
+  dy?: number[] | null;
 }
 
 /** The FULL plotted-X column (not analysis-pruned): `time` when `xKey` is null,
@@ -66,8 +71,12 @@ export function fitSpecFrom(
   xKey: number | null,
   sel: FitSelection,
   result: CalcResult,
+  weight?: FitWeighting,
 ): FitSpec {
   const spec: FitSpec = { model, xKey, yKey: sel.yKey };
+  // Record the weighting so recompute + pipeline reproduce it (audit P1 #3);
+  // `none` is the default, so it stays absent to keep specs minimal.
+  if (weight && weight.mode !== "none") spec.weight = weight;
   const params = result.params;
   if (Array.isArray(params) && params.every((v) => typeof v === "number")) {
     spec.params = params as number[];
@@ -101,5 +110,8 @@ export function fitDataForSpec(
   const x =
     xKey == null || xKey < 0 || xKey >= width ? data.time : data.values.map((row) => row[xKey]);
   const y = data.values.map((row) => row[yKey]);
-  return { x, y, yKey };
+  if (!spec.weight) return { x, y, yKey };
+  // Reproduce the recorded weighting over the same analysis rows (Sol audit);
+  // a missing/invalid error column refits unweighted (dyForFit returns null).
+  return { x, y, yKey, dy: dyForFit(dataset, yKey, spec.weight).dy };
 }

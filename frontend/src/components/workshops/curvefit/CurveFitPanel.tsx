@@ -18,6 +18,7 @@ import EquationModelPanel from "./EquationModelPanel";
 import FitConvergenceWarning from "./FitConvergenceWarning";
 import FindXYSection from "./FindXYSection";
 import ModelScanSection from "./ModelScanSection";
+import WeightingSection from "./WeightingSection";
 import { useCurveFit } from "./useCurveFit";
 import { useModelScan } from "./useModelScan";
 
@@ -43,7 +44,25 @@ export default function CurveFitPanel() {
     runCornerPlot,
     cornerBusy,
     xRange,
+    weightMode,
+    setWeightMode,
+    manualKey,
+    setManualKey,
+    hasYErr,
+    weightNote,
   } = useCurveFit();
+
+  const weighting = (
+    <WeightingSection
+      active={active}
+      weightMode={weightMode}
+      setWeightMode={setWeightMode}
+      manualKey={manualKey}
+      setManualKey={setManualKey}
+      hasYErr={hasYErr}
+      weightNote={weightNote}
+    />
+  );
 
   // AICc quick-scan (GOTO #6) — hook lives here so ranked results survive the
   // registry<->custom mode flip; a row click applies the model to the picker.
@@ -142,6 +161,8 @@ export default function CurveFitPanel() {
         value={modelName}
         onChange={(e) => setModelName(e.target.value)}
       />
+
+      {weighting}
 
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <Button size="sm" disabled={!active || busy} onClick={() => run("guess")}>

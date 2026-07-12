@@ -22,12 +22,24 @@ from quantized.calc.fit_equation import default_guesses, equation_model
 from quantized.calc.fit_findxy import find_x, find_y
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_scan import scan_models
-from quantized.calc.fitting import curve_fit
+from quantized.calc.fitting import curve_fit, weights_from_dy
 from quantized.routes._payload import to_jsonable
 
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
 
 router = APIRouter(prefix="/api/fitting", tags=["fitting"])
+
+
+def _resolve_weights(
+    dy: list[float] | None, weights: list[float] | None, n: int
+) -> NDArray[np.float64] | list[float] | None:
+    """Fit weighting from the request: ``dy`` (1-sigma errors, the canonical
+    convention shared with ``/scan``) takes precedence and is converted to
+    ``1/dy**2``; ``weights`` is the legacy raw-vector alias kept for back-compat.
+    ``None`` -> unweighted."""
+    if dy is not None:
+        return weights_from_dy(dy, n)
+    return weights
 
 
 class GuessRequest(BaseModel):
@@ -43,6 +55,9 @@ class FitRequest(BaseModel):
     p0: list[float] | None = None
     lower: list[float] | None = None
     upper: list[float] | None = None
+    # Per-point 1-sigma errors -> weights 1/dy^2 (canonical). Takes precedence
+    # over the legacy raw `weights` vector when both are present.
+    dy: list[float] | None = None
     weights: list[float] | None = None
     fixed: list[bool] | None = None
     calc_errors: bool = True
@@ -101,7 +116,7 @@ def fit(req: FitRequest) -> dict[str, Any]:
             p0,
             lower=req.lower,
             upper=req.upper,
-            weights=req.weights,
+            weights=_resolve_weights(req.dy, req.weights, len(req.x)),
             fixed=req.fixed,
             calc_errors=req.calc_errors,
         )
@@ -174,6 +189,8 @@ class EquationFitRequest(BaseModel):
     # carry Infinity); mapped to -inf/+inf before curve_fit.
     lower: list[float | None] | None = None
     upper: list[float | None] | None = None
+    # Per-point 1-sigma errors -> weights 1/dy^2 (canonical); precedence over `weights`.
+    dy: list[float] | None = None
     weights: list[float] | None = None
     fixed: list[bool] | None = None
     calc_errors: bool = True
@@ -216,7 +233,7 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
             p0,
             lower=lower,
             upper=upper,
-            weights=req.weights,
+            weights=_resolve_weights(req.dy, req.weights, len(req.x)),
             fixed=req.fixed,
             calc_errors=req.calc_errors,
         )

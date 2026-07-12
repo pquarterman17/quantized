@@ -238,6 +238,9 @@ export interface FitRequest {
   p0?: number[];
   lower?: number[];
   upper?: number[];
+  /** Per-point 1-sigma errors -> weights 1/dy^2 (canonical). Wins over `weights`.
+   *  `null`/absent = unweighted (so a recompute can pass `sel.dy` straight through). */
+  dy?: number[] | null;
   weights?: number[];
   fixed?: boolean[];
   calc_errors?: boolean;

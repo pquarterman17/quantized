@@ -21,8 +21,10 @@ import type {
   Dataset,
   DataStruct,
   FitSpec,
+  FitWeighting,
   FolderNode,
   ModelingType,
+  WeightMode,
 } from "./types";
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
@@ -370,6 +372,20 @@ export function parseWorkspace(text: string): LoadedWorkspace {
       }
       if (typeof fs.yKey === "number" && Number.isInteger(fs.yKey) && fs.yKey >= 0) {
         spec.yKey = fs.yKey;
+      }
+      // Weighting provenance (Sol audit); validated, non-`none` only.
+      const wm = (fs.weight as Record<string, unknown> | undefined)?.mode;
+      if (
+        fs.weight &&
+        typeof fs.weight === "object" &&
+        (["yerr", "poisson", "manual"] as WeightMode[]).includes(wm as WeightMode)
+      ) {
+        const w = fs.weight as Record<string, unknown>;
+        const weight: FitWeighting = { mode: wm as WeightMode };
+        if (typeof w.errKey === "number" && Number.isInteger(w.errKey) && w.errKey >= 0) {
+          weight.errKey = w.errKey;
+        }
+        spec.weight = weight;
       }
       if (Array.isArray(fs.params) && fs.params.every((v) => typeof v === "number")) {
         spec.params = fs.params as number[];

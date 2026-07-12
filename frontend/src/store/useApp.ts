@@ -3198,7 +3198,7 @@ export const useApp = create<AppState>((set, get) => ({
           // to the live plotted selection for legacy specs — not time/values[0].
           const sel = fitDataForSpec(d, d.fitSpec, get().xKey, get().yKeys, get().seriesOrder);
           if (!sel || sel.x.length === 0) throw new Error("no data");
-          const r = await fitModel({ model: d.fitSpec.model, x: sel.x, y: sel.y });
+          const r = await fitModel({ model: d.fitSpec.model, x: sel.x, y: sel.y, dy: sel.dy });
           const yFit = r.yFit as (number | null)[] | undefined;
           // Refresh the overlay only if this dataset's fit is the one shown.
           if (Array.isArray(yFit) && get().fitOverlay?.datasetId === id) {

@@ -40,6 +40,7 @@ beforeEach(() => {
     xKey: null,
     yKeys: null,
     seriesOrder: null,
+    errKeys: {}, // reset — setState merges, so a prior test's errKeys would leak
     fitOverlay: null,
   });
 });
@@ -189,6 +190,83 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
     expect(fitModel).not.toHaveBeenCalled();
     expect(result.current.error).toContain("network down");
     expect(useApp.getState().datasets[0].pending).toBeDefined(); // retryable
+  });
+});
+
+describe("useCurveFit weighting (Sol audit — connect fitting to error columns)", () => {
+  it("sends no dy and records no weight in the default (none) mode", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41], exitFlag: 1 });
+    const { result } = renderHook(() => useCurveFit());
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
+    expect(useApp.getState().datasets[0].fitSpec?.weight).toBeUndefined();
+  });
+
+  it("threads the designated Y-error column into dy and records it in provenance", async () => {
+    const multi: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[10, 2], [20, 4], [30, 3], [40, 5]],
+      labels: ["moment", "err"],
+      units: ["emu", "emu"],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: multi }],
+      activeId: "d1",
+      xKey: null,
+      yKeys: [0],
+      seriesOrder: null,
+      errKeys: { 0: 1 }, // moment(0) -> err(1)
+      fitOverlay: null,
+    });
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41], exitFlag: 1 });
+    const { result } = renderHook(() => useCurveFit());
+    expect(result.current.hasYErr).toBe(true);
+    act(() => result.current.setWeightMode("yerr"));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(fitModel).toHaveBeenCalledWith({
+      model: "Linear",
+      x: [0, 1, 2, 3],
+      y: [10, 20, 30, 40],
+      dy: [2, 4, 3, 5],
+    });
+    expect(useApp.getState().datasets[0].fitSpec?.weight).toEqual({ mode: "yerr", errKey: 1 });
+  });
+
+  it("poisson mode sends dy = sqrt(max(|y|,1))", async () => {
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });
+    const { result } = renderHook(() => useCurveFit());
+    act(() => result.current.setWeightMode("poisson"));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(fitModel).toHaveBeenCalledWith({
+      model: "Linear",
+      x: [0, 1, 2, 3],
+      y: [10, 20, 30, 40],
+      dy: [Math.sqrt(10), Math.sqrt(20), Math.sqrt(30), Math.sqrt(40)],
+    });
+    expect(useApp.getState().datasets[0].fitSpec?.weight).toEqual({ mode: "poisson" });
+  });
+
+  it("yerr with no designated column fits unweighted and surfaces a note", async () => {
+    // default DATA has no error column and no errKeys -> hasYErr false
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });
+    const { result } = renderHook(() => useCurveFit());
+    expect(result.current.hasYErr).toBe(false);
+    act(() => result.current.setWeightMode("yerr"));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    // no dy key -> unweighted; a note explains why
+    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
+    expect(result.current.weightNote).toMatch(/no error column/);
+    // provenance honestly records that it ran unweighted
+    expect(useApp.getState().datasets[0].fitSpec?.weight).toBeUndefined();
   });
 });
 
