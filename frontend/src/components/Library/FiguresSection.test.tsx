@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Dataset } from "../../lib/types";
@@ -155,6 +155,38 @@ describe("FiguresSection", () => {
     const s = useApp.getState();
     expect(s.plotWindows).toHaveLength(before + 1);
     expect(s.plotWindows.find((w) => w.id === s.focusedWindowId)?.datasetId).toBe("d1");
+  });
+
+  it("offers exact source-workbook and Graph Builder fallback actions", async () => {
+    const source = {
+      ...d1,
+      data: {
+        ...d1.data,
+        metadata: { origin_book: "Book1", x_column_name: "A", origin_column_names: ["B"] },
+      },
+    };
+    useApp.setState({
+      datasets: [source],
+      worksheetId: null,
+      graphBuilderOpen: false,
+      graphBuilderSeed: null,
+      originFigures: [{
+        id: "fallback", stem: "XRD", datasetId: "d1", siblingIds: ["d1"],
+        figure: {
+          name: "GraphFallback", x_from: 0, x_to: 1, x_log: false,
+          y_from: 0, y_to: 1, y_log: false, n_curves: 1, annotations: [],
+          curves: [{ book: "Book1", x: "A", y: "B" }],
+        },
+      }],
+    });
+    render(<FiguresSection />);
+    fireEvent.click(screen.getByTitle(/Open source workbook Book1/));
+    await waitFor(() => expect(useApp.getState().worksheetId).toBe("d1"));
+    expect(useApp.getState().originWorksheetSeed?.columns).toEqual([-1, 0]);
+
+    fireEvent.click(screen.getByTitle("Remake in Graph Builder"));
+    await waitFor(() => expect(useApp.getState().graphBuilderOpen).toBe(true));
+    expect(useApp.getState().graphBuilderSeed?.zones.y).toEqual([{ datasetId: "d1", channel: 0 }]);
   });
 
   it("collapses/expands via the section header", () => {

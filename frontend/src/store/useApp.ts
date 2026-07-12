@@ -112,6 +112,7 @@ import {
   pruneOriginFigureRefs,
   type OriginImportSlice,
 } from "./originImport";
+import { createOriginFallbackSlice, type OriginFallbackSlice } from "./originFallback";
 import { isLazyBookEntry, isPrimaryBookMarker } from "../lib/types";
 import type {
   Annotation,
@@ -314,7 +315,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, OriginImportSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, OriginImportSlice, OriginFallbackSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -1038,6 +1039,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createSplitSlice(set, get),
   ...createShapesSlice(set),
   ...createOriginImportSlice(set),
+  ...createOriginFallbackSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,

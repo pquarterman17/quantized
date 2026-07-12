@@ -10,10 +10,17 @@
 
 import { originFidelityLabel, originFidelityStatusLabel } from "../../lib/originFidelity";
 import { figureLabel, type OriginFigureEntry } from "../../lib/originFigures";
+import { resolveOriginFigureSources } from "../../lib/originSources";
 import { useApp } from "../../store/useApp";
 
 export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEntry; depth?: number }) {
   const applyOriginFigure = useApp((s) => s.applyOriginFigure);
+  const openOriginFigureSource = useApp((s) => s.openOriginFigureSource);
+  const remakeOriginFigure = useApp((s) => s.remakeOriginFigure);
+  const figures = useApp((s) => s.originFigures);
+  const datasets = useApp((s) => s.datasets);
+  const sourceResolution = resolveOriginFigureSources(entry, figures, datasets);
+  const siblingDatasets = datasets.filter((ds) => entry.siblingIds.includes(ds.id));
   const resolved = entry.datasetId != null;
   const n = entry.figure.n_curves;
   const fidelity = entry.figure.fidelity;
@@ -45,6 +52,41 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
       >
         ⊞
       </button>
+      {sourceResolution.sources.map((source) => (
+        <button
+          key={source.datasetId}
+          className="qz-icon-btn"
+          title={`Open source workbook ${source.book}; select X/Y/error columns`}
+          onClick={() => void openOriginFigureSource(entry.id, source.datasetId)}
+        >
+          ▦
+        </button>
+      ))}
+      <button
+        className="qz-icon-btn"
+        title={sourceResolution.sources.length
+          ? `Remake in Graph Builder${sourceResolution.unresolved.length ? ` (${sourceResolution.unresolved.length} unresolved binding${sourceResolution.unresolved.length === 1 ? "" : "s"})` : ""}`
+          : `No decoded bindings; Origin hint: ${entry.figure.source_hint || "unknown"}`}
+        disabled={sourceResolution.sources.length === 0}
+        onClick={() => void remakeOriginFigure(entry.id)}
+      >
+        G
+      </button>
+      {sourceResolution.unresolved.length > 0 && siblingDatasets.length > 0 && (
+        <select
+          className="qz-select"
+          aria-label={`Choose source workbook for ${figureLabel(entry)}`}
+          title={`Unresolved Origin binding: ${sourceResolution.unresolved.map((item) => `${item.book}:${item.x},${item.y}`).join("; ")}`}
+          defaultValue=""
+          onChange={(event) => {
+            if (event.target.value) void openOriginFigureSource(entry.id, event.target.value, { manual: true });
+            event.currentTarget.value = "";
+          }}
+        >
+          <option value="" disabled>Choose source…</option>
+          {siblingDatasets.map((ds) => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
+        </select>
+      )}
     </div>
   );
 }

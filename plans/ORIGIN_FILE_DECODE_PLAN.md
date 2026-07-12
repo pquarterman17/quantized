@@ -14,9 +14,19 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-12 (booked #47: recover Origin drawn graphic
-objects + richer annotations on import — LOW PRIORITY, W3 Tier 3,
-unblocked once MAIN #25/#27 land a native target model). Prior:
+**Updated:** 2026-07-12 (#48 and #49 completed in PRs #25 and #26; #50 is
+the active delivery slice). Prior: booked the owner-prioritized **Plot Fidelity +
+Workbook Fallback campaign**, items #48–#56. Governing outcome: recover an
+Origin graph as an editable Quantized plot as exactly as the file and proven
+format knowledge allow; when any property cannot be reconstructed, preserve
+the original graph preview when available, disclose the loss explicitly, and
+offer a one-action path to the exact source workbook/columns or a pre-seeded
+Graph Builder. Plot recovery and workbook-backed remake are now higher
+priority than matrix books, reports, attachments, standalone Origin window
+formats, and `.opju` writing. Item #47 is promoted into this campaign now
+that MAIN #25/#27 provide its native target model.) Prior:
+2026-07-12 (booked #47: recover Origin drawn graphic objects + richer
+annotations on import — originally LOW PRIORITY, W3 Tier 3). Prior:
 2026-07-09 (a single-day campaign from the owner's PNR.opj
 import testing: the four triage fix batches — perf quick wins, zero-tail
 wrap-around prune, log tick steps, y2/legend/multi-panel fidelity — all
@@ -258,6 +268,226 @@ no documented real-Origin validation procedure for the trial window (31).
 
 ---
 
+## Plot Fidelity + Workbook Fallback campaign (owner priority, 2026-07-12)
+
+### Product outcome
+
+For every graph page in an imported `.opj`/`.opju` project, Quantized must
+provide the strongest available result in this order:
+
+1. **Editable reconstruction** — restore the correct workbooks, X/Y/error
+   columns, layers, axes, styles, legends, annotations, and layout into native
+   Quantized plot state.
+2. **Original visual reference** — when the project contains a saved graph
+   preview, preserve it beside the editable reconstruction so the user can
+   compare against what Origin saved rather than trust an approximate decode.
+3. **Fast remake fallback** — if reconstruction is incomplete, one action
+   opens the correct source workbook(s) and exact columns, or launches Graph
+   Builder pre-seeded with those bindings and the decoded portion of the plot.
+4. **No silent loss** — every graph receives a fidelity status and a concrete
+   list of decoded, approximated, and unsupported properties. Missing graph
+   objects never disappear without a visible warning.
+
+"Exact" therefore means pixel-referenceable plus natively editable wherever
+the binary semantics are proven. It does **not** authorize guessing proprietary
+fields from one project. A saved preview may be stale or low-resolution; label
+it as the file's saved reference, never as guaranteed-current ground truth.
+
+### Acceptance criteria
+
+- Importing any project in `../test-data/origin/` produces a graph inventory:
+  total graph pages/layers, editable graphs, preview-backed graphs, disabled
+  graphs, and per-graph omissions.
+- Applying a graph never reads a lazy/downsampled book when full source data is
+  required. Cross-book overlays contain the full source row counts and remain
+  reproducible after re-apply, workspace save/reload, and export.
+- Every curve with a proven binding opens the exact Origin book/sheet and
+  X/Y/error columns. Cross-book figures open all participating sources.
+- A graph with an incomplete reconstruction offers **Remake in Graph Builder**
+  with resolved datasets, channel roles, layer grouping, axis state, and
+  decoded styles already populated.
+- Original saved previews, where present and attributable to a graph, are
+  viewable next to or toggled against the editable reconstruction.
+- Corpus comparison reports regressions structurally and visually; no item is
+  closed from synthetic fixtures alone when a real-corpus oracle exists.
+- Unsupported data is reported, not silently omitted. Precision remains the
+  decoder invariant: omit an unproven property rather than attach it wrongly.
+
+### Codex model routing (cost-aware, verified 2026-07-12)
+
+Use the least-expensive model that can satisfy the task **correctly**, and
+escalate by evidence rather than task size. Current official guidance describes
+`gpt-5.4-mini` as the strongest mini model for coding and subagents, and
+`gpt-5.3-codex` as the most capable agentic coding model. Model availability in
+the Codex app can differ by account/rollout; if these exact names are absent,
+use the current mini coding model for **Mini** and the current strongest Codex
+coding model for **Codex**. Do not fall back to deprecated Codex models merely
+to preserve the literal names below.
+
+| Routing label | Model / effort | Use for | Do not use for |
+|---|---|---|---|
+| **Mini** | `gpt-5.4-mini`, medium by default; high for multi-file implementation | Mechanical refactors, schema plumbing from a written contract, fixtures, test expansion, corpus sweeps, report generation, docs, and straightforward UI components | Open-ended binary RE, ambiguous graph attribution, cross-store concurrency design, or deciding a new architecture |
+| **Codex** | `gpt-5.3-codex`, medium/high | Normal feature ownership across backend + frontend, async correctness, API/store integration, renderer changes with a clear target, and review of Mini work | Exhaustive RE by default; raise effort only when an ambiguity is demonstrated |
+| **Codex RE** | `gpt-5.3-codex`, xhigh | Proprietary binary-format inference, competing byte-layout hypotheses, cross-corpus attribution, high-risk architecture, and final scientific-fidelity adjudication | Boilerplate, routine tests, formatting, documentation, or running known comparison scripts |
+
+**Escalation rule:** start at the item's default below. Escalate Mini → Codex
+only after a failing test, ambiguous contract, or cross-layer design decision
+shows Mini cannot proceed safely. Escalate Codex → Codex RE only after recording
+at least two plausible interpretations, or when a wrong interpretation could
+silently attach the wrong data/graph property. Once RE produces a written byte
+contract and fixtures, route implementation and bulk tests back down to Mini.
+Do not repeat an already-negative RE hypothesis at higher effort without new
+ground truth. A Codex/Codex RE reviewer may audit Mini output without rewriting
+it when the gates are green.
+
+Per-item routing summary:
+
+| Item | Default owner | Split / escalation |
+|---|---|---|
+| **#48 Full-data figure apply** | **Codex (high)** | Async/store correctness stays Codex; Mini adds matrix tests and mechanical call-site updates after the concurrency contract is fixed. Escalate to Codex RE only if source-revision semantics require a new workspace architecture. |
+| **#49 Fidelity manifest** | **Codex (medium)** for contract, then **Mini (high)** | Codex defines project/graph diagnostics and retention semantics; Mini implements serializers, UI lists, `.opj` gate parity, corpus counts, and docs. |
+| **#50 Workbook/remake actions** | **Codex (high)** | Cross-book identity, pending resolution, and Graph Builder seeding span stores; Mini may implement isolated buttons/tests once the action payload is specified. |
+| **#51 Saved graph previews** | **Codex RE (xhigh)** for attribution, then **Mini (high)** | RE only for record boundaries and graph attribution. Image extraction, hashing, API transport, UI toggle, and fixtures return to Mini after the format contract is written. |
+| **#52 Curve/axis fidelity** | **Codex RE (xhigh)** per unknown field | Use RE only for visibility/style/axis byte inference and oracle adjudication. Each proven field becomes a small Mini implementation + test task; renderer integration needing new axis semantics uses Codex high. |
+| **#53 Graphic objects** | **Codex RE (xhigh)** for object records, then **Codex (high)** | RE establishes class/geometry/style records; Codex maps them across plot surfaces and `.dwk`; Mini expands fixtures and corpus sweeps. |
+| **#54 Layer/page layout** | **Codex RE (xhigh)** for target architecture, then **Codex (high)** | The FigureDoc/page-layer decision and ambiguous Origin geometry need the strongest model; bounded renderer components and tests can be delegated to Mini after interfaces freeze. |
+| **#55 Acceptance matrix** | **Mini (high)** | Mostly tooling, deterministic reports, corpus execution, and docs. Codex high reviews surprising diffs; Codex RE adjudicates only a disputed `exact` label or unexplained byte/visual mismatch. |
+| **#56 Campaign close** | **Codex (high)** | End-to-end audit and scientific-fidelity sign-off. Owner performs the visual acceptance gate. Codex RE is reserved for a specific remaining mismatch that blocks closure. |
+
+Official model references used for this routing:
+`https://developers.openai.com/api/docs/models/gpt-5.4-mini` and
+`https://developers.openai.com/api/docs/models/gpt-5.3-codex`.
+
+### Tier 1 — correctness and fallback first
+
+48. ~~**Resolve full source books before applying an Origin figure**~~
+    **COMPLETE 2026-07-12 (PR #25).**
+    (**P0 correctness bug**). `applyOriginFigure` currently builds a cross-book
+    overlay synchronously from sibling datasets; lazy books may still contain
+    only the 256-point import preview. The later source fetch replaces the
+    books but never rebuilds the synthetic overlay, leaving a plausible-looking
+    permanently downsampled dataset.
+    - Make figure application await every referenced pending dataset before
+      channel selection, panel resolution, or `buildOverlayDataset`.
+    - Keep the UI responsive with a busy state and a cancel/staleness guard if
+      the user applies a different figure while resolution is in flight.
+    - Never cache/reuse an overlay whose source revision or full-data state no
+      longer matches its provenance.
+    - Tests: pending cross-book books with previews shorter than full data;
+      re-apply; new-window apply; export/analysis sees full rows; fetch failure
+      leaves no partial overlay and offers the workbook fallback.
+
+49. ~~**Per-graph fidelity manifest + consistent actionable-figure gate.**~~
+    **COMPLETE 2026-07-12 (PR #26).**
+    Build a project/graph inventory at the import boundary instead of passing
+    only successful figure dicts. Each page/layer records decoded curves,
+    source resolution, preview availability, recovered property groups, known
+    omissions, and confidence (`exact`, `best_effort`, `reference_only`,
+    `unresolved`).
+    - Apply `drop_nonactionable_figures` consistently to `.opj` and `.opju`
+      presentation lists while retaining omitted/internal records in diagnostics.
+      Pin the real `XMCD.opj` regression (61 currently disabled/dead rows).
+    - Surface an **Imported with omissions** summary plus per-figure details;
+      do not flood the Library with dead system/storage anchors.
+    - Keep raw/project inventory in a project-level artifact so filtering the
+      Library never destroys provenance needed by later decoders.
+
+50. **Exact source-workbook and remake actions.** **IMPLEMENTED on
+    `codex/origin-workbook-fallback`; awaiting PR review.** Add first-class actions on
+    every Origin figure: **Open source workbook(s)** and **Remake in Graph
+    Builder**.
+    - Resolve pending books before opening; focus the actual sheet pseudo-book
+      and select the bound X/Y/Y-error columns.
+    - For cross-book figures, preserve curve order and expose all participating
+      books without resolving against same-named books from another import.
+    - Seed Graph Builder with decoded curve bindings, layer/panel grouping,
+      axes/limits/scales/titles, series styles/labels, annotations, and regions.
+    - Unresolved bindings remain visible with their raw Origin hint/id and a
+      manual source picker; never choose a similarly named book silently.
+
+51. **Recover and attribute saved graph previews.** Inventory the embedded PNG/
+    bitmap/EMF preview records already observed in both containers and attach
+    them to graph pages by proven page/window boundaries or ids.
+    - Reuse `preview.py` where the record family matches; split graph-preview
+      extraction into a bounded pure module if it does not.
+    - Preserve original bytes when safe, plus dimensions/format/hash and an
+      attribution confidence. Never recompress the reference asset.
+    - UI: original/editable toggle or side-by-side comparison, with explicit
+      `saved Origin preview` labeling and stale/low-resolution caveat.
+    - If attribution is ambiguous, keep the image in diagnostics rather than
+      attach it to the wrong graph.
+
+### Tier 2 — close corpus-visible plot mismatches
+
+52. **Curve and axis fidelity campaign.** Drive this item from the existing
+    Origin↔Quantized gallery and structural report, ordered by how many real
+    graphs visibly differ.
+    - Per-curve visibility/hidden state, using new independent ground truth;
+      do not reopen #42 from the currently confounded PNR bytes alone.
+    - Worksheet-unit→axis-unit conversion with a typed, tested dimensional
+      conversion model (including the evidenced Å↔nm cases), applied to data,
+      limits, ticks, annotations, and regions together—never title-only.
+    - Oracle-verified line width, symbol size/shape, line+symbol combinations,
+      connect mode (straight/step/spline where representable), dash, edge/fill,
+      and curve order/grouping.
+    - Axis direction, top/right axes, tick direction/format, breaks, and
+      non-log scale types only where the Quantized renderer has a truthful
+      native equivalent; otherwise record the omission and retain the preview.
+
+53. **Graphic objects and rich annotations** — this campaign's promoted form
+    of item #47. Decode Origin arrows, arbitrary lines, standalone rectangles/
+    ellipses, framed text, and callouts onto the native `Shape`/annotation
+    models. Preserve coordinate space (data/layer/page), z-order, line/fill,
+    arrowheads, and frame style where proven. Apply on single, double-Y, and
+    spatial-panel paths and round-trip through `.dwk`. Item #47 closes only
+    when this item closes; its older W3 text remains as the RE detail record.
+
+54. **Layer/page layout fidelity.** Extend the current tiled-panel + double-Y
+    recovery to free-positioned/overlapping layers, insets, independent axes,
+    and more than two Y axes without flattening the source composition.
+    - Prefer a generalized FigureDoc/page-layer model over more singleton plot
+      state branches.
+    - Preserve exact page/frame geometry for publication export.
+    - When the target cannot express a layout, show the original preview and
+      seed Graph Builder with one editable panel per recovered layer.
+
+### Tier 3 — acceptance and handoff
+
+55. **Corpus-wide plot-fidelity acceptance matrix.** Extend the existing
+    comparison tooling to emit one durable row per Origin graph: source books,
+    curves, layers, preview, fidelity status, omissions, structural diff, and
+    screenshot-review status.
+    - Run all 12 real `.opj`/`.opju` projects plus controlled specimens.
+    - Pin counts and representative screenshots without committing private
+      project bytes or exports.
+    - Owner eyeball remains required for graphs labeled `exact`; record every
+      mismatch as a numbered item rather than weakening the label.
+
+56. **Campaign close / deferred-secondary handoff.** Close only when the owner
+    can import a real project, identify the intended graph, compare it to the
+    saved Origin preview, edit/export the reconstruction, and remake it from
+    preselected source columns without reopening Origin. At close, re-rank the
+    explicitly secondary work: matrix books, report/analysis artifacts,
+    attachments/internal Excel/layout preservation not needed by graph pages,
+    standalone `.ogw(u)`/`.ogg(u)`/`.ogm(u)`, worksheet/matrix templates, and
+    `.opju` writing.
+
+### Delivery slices and estimate
+
+- **PR 1 (complete):** #48 + #49 correctness, diagnostics, corpus regressions
+  shipped as PRs #25 and #26.
+- **PR 2 (1–2 days):** #50 workbook/Graph Builder fallback.
+- **PR 3 (1–2 days):** #51 original-preview preservation and comparison UI.
+- **PR 4 (2–4 days):** #52 + #53 highest-frequency visual mismatches.
+- **PR 5 (as evidence requires):** #54 layout generalization + #55 acceptance.
+
+Expected focused campaign: **6–10 working days** for a strong corpus-validated
+result. Unknown proprietary records or missing independent oracles can extend
+individual fidelity items; they do not block the fallback contract or justify
+silent loss. Use stacked/reviewable PRs rather than one unreviewable change.
+
+---
+
 ## W1 — `.opj` data completion
 
 ### Tier 1 — High Impact
@@ -435,6 +665,17 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**#49 Per-graph fidelity manifest + actionable-figure gate**~~
+  (2026-07-12, PR #26) — added versioned project/figure fidelity diagnostics,
+  omission reporting, persistent Library status, `.dwk` round-trip support,
+  consistent `.opj`/`.opju` filtering, and the real XMCD regression that keeps
+  stale hint-only records out of the actionable figure list.
+- ~~**#48 Full-data Origin figure apply**~~ (2026-07-12, PR #25) — figure
+  application now resolves every lazy source workbook before selecting
+  channels or building cross-book overlays, with latest-request-wins safety,
+  failure atomicity, exact-import sibling scoping, and full-row regression
+  coverage.
 
 - ~~**39. Side-by-side Origin↔quantized figure comparison campaign**~~
   (2026-07-09) — the full loop shipped and ran end-to-end the same day it
