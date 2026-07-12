@@ -17,13 +17,12 @@ only the fresh-machine acceptance run remains from that gate)
 
 | # | Item | Plan / item | Size |
 |---|------|-------------|------|
-| 40 | Rich text in annotations | MAIN #25 | S |
 | 41 | Split dataset by column value (gap-cluster + live preview) | MAIN #26 | M |
 | 42 | Drawing shapes (arrow/line/rect/ellipse + framed text) — launches after #25 merges | MAIN #27 | M-L |
 
 *(MAIN #9–#24 all shipped 2026-07-11; #25–#26 booked from the owner's
-menu-survey session, agents in flight; a shapes/drawing feature (#27)
-is in its owner design round. The #23 installer hooks BUILT into
+menu-survey session, agents in flight; a shapes feature (#27) is
+launching now that #25 merged. The #23 installer hooks BUILT into
 v0.8.1's setup.exe — verified by the fresh-machine acceptance run.)*
 
 ## Owner actions & owner-gated decisions

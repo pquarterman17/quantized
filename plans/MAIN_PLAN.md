@@ -72,13 +72,8 @@ GOTO #11 drift (implemented but listed open).
 ~~24. **Axis tick formats in publication export**~~ COMPLETED 2026-07-11
     (see Completed).
 
-25. **Rich text in annotations** (owner 2026-07-11; use: label
-    transitions with real symbols — µ₀H_c2 — on the plot itself; used
-    via the SAME `$...$` syntax as titles; discoverable because the
-    annotation edit dialog becomes `RichLabelInput` w/ Ω palette + live
-    preview): canvas draw renders the rich AST (reuse the axis-label
-    canvas renderer's glyph runs), hit box measures the RENDERED runs
-    not the raw markup, export already guards via `_safe_label`.
+~~25. **Rich text in annotations**~~ COMPLETED 2026-07-11 (see
+    Completed).
 
 26. **Split dataset by column value** (owner 2026-07-11; use: one
     multi-temperature PPMS/MPMS file → per-setpoint datasets, the step
@@ -199,6 +194,17 @@ GOTO #11 drift (implemented but listed open).
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#25 Rich text in annotations**~~ (2026-07-11, sonnet agent) — the
+  annotation canvas draw + hit geometry ride the SAME richtextCanvas
+  renderer as axis labels (measureRich width in annotationLayout, so
+  hit box/outline/handle track the RENDERED runs, not raw markup;
+  ASCENT/DESCENT constants promoted to the shared module); edit dialog
+  = new AnnotationTextDialog embedding RichLabelInput (Ω palette + live
+  preview — askParams has no custom-component slot); AnnotationsCard
+  renders via RichText; export was ALREADY guarded (safe_mathtext_label
+  covers page-anchor + size), +4 behavior tests proving mathtext
+  engages. Frontend 3013 / backend 2813 green on its branch.
 
 - ~~**#24 Axis tick formats in publication export**~~ (2026-07-11, sonnet
   agent) — matplotlib mirrors the screen's `AxisFormat` (fixed/sci/eng +
