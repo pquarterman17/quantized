@@ -13,6 +13,8 @@
 //   {...}                      grouping
 //   \frac{num}{den}            stacked fraction (rendered on canvas + export)
 //   \sqrt{...}  \sqrt[n]{...}  radical, with optional root index
+//   \sum \prod                 large operator, _/^ limits stacked over/under
+//   \int \oint                 large operator, _/^ limits to the side
 //   \alpha … \omega (+ \var* forms), \Gamma … \Omega   Greek (lowercase
 //                              italic, uppercase upright — the TeX/mathtext
 //                              convention)
@@ -38,7 +40,12 @@ export type RichNode =
   | { kind: "sub"; children: RichNode[] }
   | { kind: "sup"; children: RichNode[] }
   | { kind: "frac"; num: RichNode[]; den: RichNode[] }
-  | { kind: "sqrt"; radicand: RichNode[]; index: RichNode[] | null };
+  | { kind: "sqrt"; radicand: RichNode[]; index: RichNode[] | null }
+  // A large operator. `over`/`under` are the STACKED limits of \sum/\prod
+  // (matplotlib stacks them even inline); \int/\oint keep them null and their
+  // _/^ scripts ride as ordinary sibling nodes (side limits, matplotlib's
+  // inline nolimits convention).
+  | { kind: "bigop"; op: string; over: RichNode[] | null; under: RichNode[] | null };
 
 export interface RichParseResult {
   ok: boolean;
@@ -137,6 +144,18 @@ const SYMBOLS: Record<string, string> = {
   leftarrow: "←",
   leftrightarrow: "↔",
   Rightarrow: "⇒",
+};
+
+/** Large operators (rendered at BIGOP_SCALE on canvas). `stacked` ops
+ *  (\sum, \prod) place their _/^ limits ABOVE/BELOW the glyph — matplotlib
+ *  stacks them even inline; the others (\int, \oint) keep side limits, so
+ *  their _/^ ride as ordinary sibling scripts (matplotlib inline nolimits).
+ *  Each glyph is the SAME codepoint matplotlib draws for the command. */
+const BIGOPS: Record<string, { glyph: string; stacked: boolean }> = {
+  sum: { glyph: "∑", stacked: true },
+  prod: { glyph: "∏", stacked: true },
+  int: { glyph: "∫", stacked: false },
+  oint: { glyph: "∮", stacked: false },
 };
 
 /** ASCII punctuation verified to parse in mathtext math mode. `%` and `#`
@@ -254,6 +273,31 @@ function parseCommand(cur: Cursor, nodes: RichNode[], style: MathStyle): void {
     }
     const radicand = parseGroup(cur, style, "\\sqrt");
     nodes.push({ kind: "sqrt", radicand, index });
+    return;
+  }
+  const bigop = BIGOPS[name];
+  if (bigop) {
+    let over: RichNode[] | null = null;
+    let under: RichNode[] | null = null;
+    // \sum/\prod capture their _/^ limits (stacked); \int/\oint leave them to
+    // ride as sibling scripts. Accept either order (_ then ^, or ^ then _).
+    if (bigop.stacked) {
+      for (let k = 0; k < 2; k += 1) {
+        let p = cur.pos;
+        while (p < cur.src.length && /\s/.test(cur.src[p])) p += 1;
+        const ch = cur.src[p];
+        if (ch === "_" && under === null) {
+          cur.pos = p + 1;
+          under = parseScriptOperand(cur, style);
+        } else if (ch === "^" && over === null) {
+          cur.pos = p + 1;
+          over = parseScriptOperand(cur, style);
+        } else {
+          break;
+        }
+      }
+    }
+    nodes.push({ kind: "bigop", op: bigop.glyph, over, under });
     return;
   }
   const greek = GREEK[name];
@@ -410,6 +454,10 @@ export function plainText(input: string | RichNode[]): string {
     else if (n.kind === "frac") out += `${plainText(n.num)}/${plainText(n.den)}`;
     else if (n.kind === "sqrt") {
       out += `${n.index ? plainText(n.index) : ""}√(${plainText(n.radicand)})`;
+    } else if (n.kind === "bigop") {
+      out += n.op;
+      if (n.under) out += `_${plainText(n.under)}`;
+      if (n.over) out += `^${plainText(n.over)}`;
     } else out += plainText(n.children);
   }
   return out;

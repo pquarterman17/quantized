@@ -22,6 +22,14 @@ const FRAC_NUM_STYLE: CSSProperties = { borderBottom: "1px solid currentColor", 
 const FRAC_DEN_STYLE: CSSProperties = { padding: "0 0.15em" };
 const SQRT_STYLE: CSSProperties = { whiteSpace: "nowrap" };
 const SQRT_RAD_STYLE: CSSProperties = { borderTop: "1px solid currentColor", padding: "0 0.1em" };
+const BIGOP_STYLE: CSSProperties = {
+  display: "inline-flex",
+  flexDirection: "column",
+  alignItems: "center",
+  verticalAlign: "middle",
+  lineHeight: 1,
+};
+const BIGOP_GLYPH_STYLE: CSSProperties = { fontSize: "1.3em" };
 
 function renderNodes(nodes: RichNode[], keyBase: string): ReactNode[] {
   return nodes.map((n, i) => {
@@ -49,6 +57,18 @@ function renderNodes(nodes: RichNode[], keyBase: string): ReactNode[] {
           )}
           <span aria-hidden="true">√</span>
           <span style={SQRT_RAD_STYLE}>{renderNodes(n.radicand, `${key}.r`)}</span>
+        </span>
+      );
+    }
+    if (n.kind === "bigop") {
+      // \sum/\prod stack their limits over/under; \int/\oint (no limits here)
+      // render as a lone enlarged glyph, their side limits arriving as siblings.
+      if (!n.over && !n.under) return <span key={key} style={BIGOP_GLYPH_STYLE}>{n.op}</span>;
+      return (
+        <span key={key} style={BIGOP_STYLE}>
+          {n.over && <span style={{ fontSize: "0.6em" }}>{renderNodes(n.over, `${key}.o`)}</span>}
+          <span style={BIGOP_GLYPH_STYLE}>{n.op}</span>
+          {n.under && <span style={{ fontSize: "0.6em" }}>{renderNodes(n.under, `${key}.u`)}</span>}
         </span>
       );
     }

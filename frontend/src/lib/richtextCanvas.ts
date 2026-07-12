@@ -73,6 +73,10 @@ const SQRT_LEAD_EM = 0.55; // radical-sign width before the radicand
 const SQRT_GAP_EM = 0.14; // clearance between the overline and the radicand top
 const SQRT_TAIL_EM = 0.12; // overline overhang past the radicand
 const INDEX_SCALE = 0.55; // \sqrt[n] root-index size
+// Large-operator layout.
+const BIGOP_SCALE = 1.4; // \sum/\int/\prod glyph size vs the surrounding text
+const LIMIT_SCALE = 0.6; // stacked \sum/\prod limit size
+const BIGOP_GAP_EM = 0.1; // clearance between the operator and its stacked limits
 // Rule/stroke thickness (em), floored so it never vanishes at small sizes.
 const RULE_EM = 0.055;
 
@@ -142,7 +146,50 @@ function layoutNode(
       return layoutFrac(ctx, n, font, px, x, y, draw);
     case "sqrt":
       return layoutSqrt(ctx, n, font, px, x, y, draw);
+    case "bigop":
+      return layoutBigop(ctx, n, font, px, x, y, draw);
   }
+}
+
+function layoutBigop(
+  ctx: RichTextCtx,
+  n: Extract<RichNode, { kind: "bigop" }>,
+  font: RichFont,
+  px: number,
+  x: number,
+  y: number,
+  draw: boolean,
+): RichBox {
+  const opPx = px * BIGOP_SCALE;
+  ctx.font = fontString(opPx, false, font.weight, font.family);
+  const opW = ctx.measureText(n.op).width;
+  const opAsc = ASCENT_EM * opPx;
+  const opDesc = DESCENT_EM * opPx;
+  const axis = FRAC_AXIS_EM * px;
+  // Straddle the math axis (center the glyph on y - axis) like matplotlib.
+  const yg = y - axis + (opAsc - opDesc) / 2;
+  const opTop = yg - opAsc;
+  const opBottom = yg + opDesc;
+  const limitPx = px * LIMIT_SCALE;
+  const gap = BIGOP_GAP_EM * px;
+  const overB = n.over ? layout(ctx, n.over, font, limitPx, 0, 0, false) : null;
+  const underB = n.under ? layout(ctx, n.under, font, limitPx, 0, 0, false) : null;
+  const contentW = Math.max(opW, overB?.width ?? 0, underB?.width ?? 0);
+  const overBaseline = overB ? opTop - gap - overB.descent : 0;
+  const underBaseline = underB ? opBottom + gap + underB.ascent : 0;
+  if (draw) {
+    ctx.font = fontString(opPx, false, font.weight, font.family);
+    ctx.fillText(n.op, x + (contentW - opW) / 2, yg);
+    if (n.over && overB) {
+      layout(ctx, n.over, font, limitPx, x + (contentW - overB.width) / 2, overBaseline, true);
+    }
+    if (n.under && underB) {
+      layout(ctx, n.under, font, limitPx, x + (contentW - underB.width) / 2, underBaseline, true);
+    }
+  }
+  const top = overB ? Math.min(opTop, overBaseline - overB.ascent) : opTop;
+  const bottom = underB ? Math.max(opBottom, underBaseline + underB.descent) : opBottom;
+  return { width: contentW, ascent: y - top, descent: bottom - y };
 }
 
 function layoutFrac(

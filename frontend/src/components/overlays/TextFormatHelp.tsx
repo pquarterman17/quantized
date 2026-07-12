@@ -25,6 +25,8 @@ const EXAMPLES: [string, string][] = [
   ["$\\frac{M}{M_s}$", "fraction"],
   ["$\\sqrt{x^2+y^2}$", "square root"],
   ["$\\sqrt[3]{V}$", "nth root"],
+  ["$\\sum_{i=1}^{n} x_i$", "sum (stacked limits)"],
+  ["$\\int_0^\\infty f dx$", "integral (side limits)"],
 ];
 
 /** Label-editor keyboard shortcuts (MAIN #17): [keys, what it does]. Wraps
@@ -44,6 +46,8 @@ const SYNTAX: [string, string][] = [
   ["^x   ^{...}", "superscript (single char or group; nesting supported)"],
   ["\\frac{num}{den}", "stacked fraction"],
   ["\\sqrt{...}   \\sqrt[n]{...}", "square / nth root"],
+  ["\\sum_{..}^{..}   \\prod", "large operator, limits stacked over/under"],
+  ["\\int_{..}^{..}   \\oint", "large operator, limits to the side"],
   [
     "\\alpha … \\omega",
     "lowercase Greek, italic (plus \\varepsilon \\vartheta \\varsigma \\varphi variants)",

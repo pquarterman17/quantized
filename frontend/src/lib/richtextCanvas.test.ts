@@ -192,3 +192,40 @@ describe("radicals (MAIN #28)", () => {
     expect(idx.y).toBeLessThan(50); // tucked above the baseline in the crook
   });
 });
+
+describe("large operators (MAIN #28)", () => {
+  it("draws \\sum enlarged with limits stacked above and below", () => {
+    const ctx = mockCtx();
+    drawRich(ctx, parseRichText("$\\sum_{i}^{n}$").nodes, 0, 100, FONT, "#eee");
+    const op = ctx.calls.find((c) => c.text === "∑")!;
+    const opPx = parseFloat(/(\d+(?:\.\d+)?)px/.exec(op.font)![1]);
+    expect(opPx).toBeCloseTo(1.4 * 10, 6); // BIGOP_SCALE
+    const over = ctx.calls.find((c) => c.text === "n")!;
+    const under = ctx.calls.find((c) => c.text === "i")!;
+    const limitPx = parseFloat(/(\d+(?:\.\d+)?)px/.exec(over.font)![1]);
+    expect(limitPx).toBeCloseTo(0.6 * 10, 6); // LIMIT_SCALE
+    expect(over.y).toBeLessThan(100); // upper limit above the baseline
+    expect(under.y).toBeGreaterThan(100); // lower limit below it
+    expect(under.y).toBeGreaterThan(over.y);
+  });
+
+  it("gives \\sum a taller box than a single line", () => {
+    const ctx = mockCtx();
+    const box = measureRichBox(ctx, parseRichText("$\\sum_{i=1}^{n}$").nodes, FONT);
+    expect(box.ascent).toBeGreaterThan(0.78 * 10);
+    expect(box.descent).toBeGreaterThan(0.22 * 10);
+  });
+
+  it("draws \\int enlarged with its _/^ scripts kept to the side (near baseline)", () => {
+    const ctx = mockCtx();
+    drawRich(ctx, parseRichText("$\\int_0^\\infty$").nodes, 0, 100, FONT, "#eee");
+    const op = ctx.calls.find((c) => c.text === "∫")!;
+    const opPx = parseFloat(/(\d+(?:\.\d+)?)px/.exec(op.font)![1]);
+    expect(opPx).toBeCloseTo(1.4 * 10, 6);
+    // side scripts render at the ordinary sub/sup shift (0.35 em), NOT stacked.
+    const lower = ctx.calls.find((c) => c.text === "0")!;
+    const upper = ctx.calls.find((c) => c.text === "∞")!;
+    expect(lower.y).toBeCloseTo(100 + SCRIPT_SHIFT_EM * 10, 6);
+    expect(upper.y).toBeCloseTo(100 - SCRIPT_SHIFT_EM * 10, 6);
+  });
+});

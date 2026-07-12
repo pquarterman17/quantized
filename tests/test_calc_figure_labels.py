@@ -23,8 +23,9 @@ INVALID = r"bad $\foo$ label"  # unknown command -> mathtext parse error
 # mathtext (verified against MathTextParser directly) but use a command
 # outside frontend/src/lib/richtext.ts's strict subset -- the screen renderer
 # refuses them (literal + "Invalid markup"), so export must match, even though
-# matplotlib itself is happy to parse them. (\frac and \sqrt joined the subset
-# in MAIN #28 commit 2; \sum joins in commit 3 -- these stay out.)
+# matplotlib itself is happy to parse them. (\frac \sqrt \sum \prod \int all
+# joined the subset across MAIN #28's commits; accents like \hat/\vec/\overline
+# stay out -- the frontend renderer has no node for them.)
 OUT_OF_SUBSET = (r"$\hat{x}$", r"$\vec{v}$", r"$\overline{AB}$")
 
 X = np.linspace(0.0, 10.0, 30)
@@ -87,9 +88,9 @@ def test_supported_command_set_matches_richtext_ts_subset() -> None:
     # Sanity-check the ported frozenset against the exact commands the
     # existing "valid" fixtures below rely on -- keeps the two sides from
     # silently drifting apart.
-    for cmd in ("mu", "AA", "chi", "mathrm", "mathit", "frac", "sqrt"):
+    for cmd in ("mu", "AA", "chi", "mathrm", "mathit", "frac", "sqrt", "sum", "int"):
         assert cmd in SUPPORTED_MATHTEXT_COMMANDS
-    for cmd in ("sum", "hat", "vec", "foo"):
+    for cmd in ("hat", "vec", "overline", "foo"):
         assert cmd not in SUPPORTED_MATHTEXT_COMMANDS
 
 
@@ -145,6 +146,35 @@ def test_structure_commands_render_engage_mathtext() -> None:
 
 def test_structure_commands_in_supported_set() -> None:
     for cmd in ("frac", "sqrt"):
+        assert cmd in SUPPORTED_MATHTEXT_COMMANDS
+
+
+# -- MAIN #28 commit 3: large operators (sum/prod/int/oint) joined the subset --
+
+BIGOP_LABELS = (
+    r"$\sum_{i=1}^{n} x_i$",
+    r"$\prod_{k} a_k$",
+    r"$\int_0^\infty f\,dx$",
+    r"$\oint B \cdot dl$",
+    r"$\chi^2 = \frac{1}{N}\sum_i (y_i - f_i)^2$",
+)
+
+
+def test_bigop_commands_pass_through_untouched() -> None:
+    for label in BIGOP_LABELS:
+        assert safe_mathtext_label(label) == label
+
+
+def test_bigop_commands_render_engage_mathtext() -> None:
+    for label in BIGOP_LABELS:
+        rich = render_figure(X, [("y", Y)], x_label=label, fmt="svg")
+        plain = render_figure(X, [("y", Y)], x_label="sum", fmt="svg")
+        assert b"<svg" in rich[:300]
+        assert rich != plain
+
+
+def test_bigop_commands_in_supported_set() -> None:
+    for cmd in ("sum", "prod", "int", "oint"):
         assert cmd in SUPPORTED_MATHTEXT_COMMANDS
 
 

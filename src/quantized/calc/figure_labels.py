@@ -25,8 +25,9 @@ PDF/SVG export -- a WYSIWYG violation. `_uses_only_supported_commands`
 enumerates the SAME command set the frontend parser accepts and rejects
 (falls back to literal) any ``$...$`` region using a command outside it,
 BEFORE the matplotlib trial parse below ever runs. Keep
-`SUPPORTED_MATHTEXT_COMMANDS` in sync with richtext.ts's ``GREEK``/``SYMBOLS``
-tables + ``mathrm``/``mathit``/``frac``/``sqrt`` handling.
+`SUPPORTED_MATHTEXT_COMMANDS` in sync with richtext.ts's
+``GREEK``/``SYMBOLS``/``BIGOPS`` tables + ``mathrm``/``mathit``/``frac``/
+``sqrt`` handling.
 
 Pure layer: string in -> string out. matplotlib is imported lazily (same
 convention as the figure modules -- the heavy import is paid only on export).
@@ -85,9 +86,17 @@ _STYLE_COMMANDS = frozenset({"mathrm", "mathit"})
 # `\sqrt[n]{x}` (MAIN #28). matplotlib renders these natively; the frontend
 # canvas + DOM renderers draw the matching stacked/radical layout.
 _STRUCTURE_COMMANDS = frozenset({"frac", "sqrt"})
+# Mirrors richtext.ts's `BIGOPS` table (large operators). matplotlib stacks
+# \sum/\prod limits over/under and side-scripts \int/\oint inline -- the
+# frontend canvas renderer matches that limits placement.
+_BIGOP_COMMANDS = frozenset({"sum", "prod", "int", "oint"})
 
 SUPPORTED_MATHTEXT_COMMANDS = (
-    _GREEK_COMMANDS | _SYMBOL_COMMANDS | _STYLE_COMMANDS | _STRUCTURE_COMMANDS
+    _GREEK_COMMANDS
+    | _SYMBOL_COMMANDS
+    | _STYLE_COMMANDS
+    | _STRUCTURE_COMMANDS
+    | _BIGOP_COMMANDS
 )
 
 

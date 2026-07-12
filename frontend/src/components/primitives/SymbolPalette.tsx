@@ -143,6 +143,9 @@ const STRUCTURES: PaletteEntry[] = [
   { glyph: "a/b", math: "\\frac{}{}", caretBack: 3, title: "Fraction  \\frac{ }{ }" },
   { glyph: "√", math: "\\sqrt{}", caretBack: 1, title: "Square root  \\sqrt{ }" },
   { glyph: "ⁿ√", math: "\\sqrt[]{}", caretBack: 3, title: "nth root  \\sqrt[ ]{ }" },
+  { glyph: "∑", math: "\\sum_{}^{}", caretBack: 3, title: "Sum  \\sum_{ }^{ }  (limits stacked)" },
+  { glyph: "∏", math: "\\prod_{}^{}", caretBack: 3, title: "Product  \\prod_{ }^{ }" },
+  { glyph: "∫", math: "\\int_{}^{}", caretBack: 3, title: "Integral  \\int_{ }^{ }  (side limits)" },
 ];
 
 const RELATIONS: PaletteEntry[] = [

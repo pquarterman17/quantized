@@ -192,10 +192,40 @@ describe("parseRichText — math constructs", () => {
     ]);
   });
 
+  it("stacks \\sum / \\prod limits onto the bigop node (matplotlib stacks inline)", () => {
+    expect(parseRichText("$\\sum_{i=1}^{n}$").nodes).toEqual([
+      {
+        kind: "bigop",
+        op: "∑",
+        under: [text("i", true), text("=1", false)],
+        over: [text("n", true)],
+      },
+    ]);
+    // reversed limit order (^ then _) captures the same way.
+    expect(parseRichText("$\\prod^{N}_{k}$").nodes).toEqual([
+      { kind: "bigop", op: "∏", under: [text("k", true)], over: [text("N", true)] },
+    ]);
+    // no limits -> a bare large operator.
+    expect(parseRichText("$\\sum x$").nodes).toEqual([
+      { kind: "bigop", op: "∑", over: null, under: null },
+      text("x", true),
+    ]);
+  });
+
+  it("leaves \\int / \\oint limits as SIDE scripts (matplotlib nolimits inline)", () => {
+    expect(parseRichText("$\\int_0^\\infty$").nodes).toEqual([
+      { kind: "bigop", op: "∫", over: null, under: null },
+      { kind: "sub", children: [text("0", false)] },
+      { kind: "sup", children: [text("∞", false)] },
+    ]);
+  });
+
   it("flattens to sensible plain text (a11y / tooltip)", () => {
     expect(plainText("$\\frac{M}{M_s}$")).toBe("M/Ms");
     expect(plainText("$\\sqrt{x}$")).toBe("√(x)");
     expect(plainText("$\\sqrt[3]{x}$")).toBe("3√(x)");
+    expect(plainText("$\\sum_{i=1}^{n}$")).toBe("∑_i=1^n");
+    expect(plainText("$\\int_0^1$")).toBe("∫01"); // side limits are siblings
   });
 });
 

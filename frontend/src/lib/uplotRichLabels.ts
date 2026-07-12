@@ -82,6 +82,31 @@ export function richDomFragment(nodes: RichNode[], doc: Document): DocumentFragm
       rad.appendChild(richDomFragment(n.radicand, doc));
       wrap.appendChild(rad);
       frag.appendChild(wrap);
+    } else if (n.kind === "bigop") {
+      const glyph = doc.createElement("span");
+      glyph.style.fontSize = "1.3em";
+      glyph.textContent = n.op;
+      if (!n.over && !n.under) {
+        frag.appendChild(glyph);
+      } else {
+        const col = doc.createElement("span");
+        col.style.cssText =
+          "display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;line-height:1";
+        if (n.over) {
+          const o = doc.createElement("span");
+          o.style.fontSize = "0.6em";
+          o.appendChild(richDomFragment(n.over, doc));
+          col.appendChild(o);
+        }
+        col.appendChild(glyph);
+        if (n.under) {
+          const u = doc.createElement("span");
+          u.style.fontSize = "0.6em";
+          u.appendChild(richDomFragment(n.under, doc));
+          col.appendChild(u);
+        }
+        frag.appendChild(col);
+      }
     } else {
       const el = doc.createElement(n.kind); // "sub" | "sup"
       el.style.fontSize = "0.7em"; // match the canvas SCRIPT_SCALE
