@@ -9,8 +9,9 @@ import { useRef, useState } from "react";
 
 import { fitBumps, type BumpsEngine, type BumpsFitResult } from "../../../lib/fitbumps";
 import { cancelJob, isJobSubmit, JobCancelledError, pollJob } from "../../../lib/jobs";
-import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
+import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { selectedFitData } from "./fitSelection";
 
 export type EngineChoice = "parity" | BumpsEngine;
 
@@ -56,12 +57,13 @@ export function useBumpsFit(): BumpsFitState {
       // filtered rows dropped) — same contract as the parity fit path.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
-      const d = analysisData(ds);
+      const state = useApp.getState();
+      const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
       if (!d) return;
       const resp = await fitBumps({
         model: modelName,
-        x: d.time,
-        y: d.values.map((row) => row[0]),
+        x: d.x,
+        y: d.y,
         engine,
         ...(engine === "dream" ? DREAM_BUDGET : {}),
       });
