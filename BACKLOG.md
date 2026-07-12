@@ -16,14 +16,15 @@ axis tick formats in publication export shipped same day)
 
 ## Actionable dev work (no blockers, no owner gate)
 
-*(MAIN #9–#24 all shipped 2026-07-11. The #23 installer hooks verify at
-the next release build.)*
+*(MAIN #9–#24 all shipped 2026-07-11. The #23 installer hooks BUILT
+into v0.8.1's setup.exe — human verification = install it and check
+both Start Menu entries, which the fresh-machine acceptance run covers.)*
 
 ## Owner actions & owner-gated decisions
 
 | Item | Plan / item |
 |------|-------------|
-| One-time **PyPI Trusted Publisher registration** (see RELEASE.md) + first tagged publish, then the fresh-machine acceptance run (install → import a CSV in 2 min) | MAIN gate (was ORIGIN_GAP #41) |
+| **PyPI fresh-machine acceptance run** — on a machine without dev tools: `pipx install quantized-lab` → import a CSV within 2 min; also verify the v0.8.1 installer's two Start Menu entries (#23). Registration + first publish DONE 2026-07-12 (`quantized-lab` 0.8.1 live) | MAIN gate (was ORIGIN_GAP #41) |
 | **Corpus publish licensing sign-off** — `../test-data` repo is `git init`-ed; publish gated on the licensing pass + 6 flagged public files | MAIN gate (was ORIGIN_GAP #45) |
 | **Defaults-audit eyeball** — rule on the taste calls in `plans/design/DEFAULTS_AUDIT.md` (aps preset height vs. log-decade label thinning; data-aware legend placement) | MAIN gate (was GAP_TIER3 #2) |
 | **Origin gallery eyeball** — the standing human step of decode #39's comparison campaign (`../test-data/origin/_exports/PNR/`); new mismatches get booked in the decode plan | ORIGIN_FILE_DECODE (standing) |
