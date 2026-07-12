@@ -29,7 +29,7 @@ piece of work — this script only produces the Origin-side oracle images.
 
 ```bash
 .venv/Scripts/python.exe tools/origin_compare/export_origin_graphs.py \
-    "C:\Users\patri\OneDrive\Coding\git\test-data\origin\PNR.opj"
+    "$QZ_TEST_DATA_ROOT/origin/PNR.opj"   # or any path to a local .opj/.opju
 ```
 
 Options:

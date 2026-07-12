@@ -19,11 +19,13 @@ boundary re-cut — see the validation log's "Open blocker").
 
 from __future__ import annotations
 
+import os
+
 import struct
 import sys
 from pathlib import Path
 
-CORPUS = Path(r"C:\Users\patri\OneDrive\Coding\git\test-data\origin")
+CORPUS = Path(os.environ.get("QZ_TEST_DATA_ROOT") or (Path(__file__).resolve().parents[3] / "test-data")) / "origin"
 PROBES = CORPUS / "probes"
 MOKE_TRAILER = 645420  # Parameters-section start in Moke.opj (v4.3380)
 OTP_TAIL = 90422  # global-storage epilogue start in SLD_DoubleY.otp

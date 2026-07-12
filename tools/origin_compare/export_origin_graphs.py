@@ -21,7 +21,7 @@ instance to:
 Usage::
 
     .venv/Scripts/python.exe tools/origin_compare/export_origin_graphs.py \\
-        "C:\\Users\\patri\\OneDrive\\Coding\\git\\test-data\\origin\\PNR.opj"
+        "$QZ_TEST_DATA_ROOT/origin/PNR.opj"   # or any path to a local .opj/.opju
 
 Re-running the SAME project path is idempotent/resumable: graphs already
 recorded with ``status == "ok"`` (and whose PNG still exists on disk) are

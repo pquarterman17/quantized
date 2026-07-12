@@ -30,12 +30,14 @@ Run (Windows, Origin installed):
 """
 from __future__ import annotations
 
+import os
+
 import json
 from pathlib import Path
 
 import win32com.client as wc
 
-CORPUS = Path(r"C:\Users\patri\OneDrive\Coding\git\test-data\origin")
+CORPUS = Path(os.environ.get("QZ_TEST_DATA_ROOT") or (Path(__file__).resolve().parents[3] / "test-data")) / "origin"
 GT = CORPUS / "specimens" / "ground_truth"
 FILES = [
     "hc2convert.opj",

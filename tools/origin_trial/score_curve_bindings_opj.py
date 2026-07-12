@@ -19,11 +19,13 @@ decoder change. Sibling to ``score_curve_bindings.py`` (the ``.opju`` scorer).
 
 from __future__ import annotations
 
+import os
+
 import json
 import sys
 from pathlib import Path
 
-CORPUS_ROOT = Path("C:/Users/patri/OneDrive/Coding/git/test-data/origin")
+CORPUS_ROOT = Path(os.environ.get("QZ_TEST_DATA_ROOT") or (Path(__file__).resolve().parents[3] / "test-data")) / "origin"
 GT = CORPUS_ROOT / "specimens" / "ground_truth"
 
 STEMS = ["Moke", "XRD"]

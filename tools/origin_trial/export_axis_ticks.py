@@ -7,13 +7,15 @@ Run: .venv/Scripts/python.exe tools/origin_trial/export_axis_ticks.py XRD hc2con
 """
 from __future__ import annotations
 
+import os
+
 import json
 import sys
 from pathlib import Path
 
 import win32com.client as wc
 
-CORPUS = Path(r"C:\Users\patri\OneDrive\Coding\git\test-data\origin")
+CORPUS = Path(os.environ.get("QZ_TEST_DATA_ROOT") or (Path(__file__).resolve().parents[3] / "test-data")) / "origin"
 GT = CORPUS / "specimens" / "ground_truth"
 
 
