@@ -13,9 +13,10 @@ import {
   saveCustomModel,
   type CustomFitModel,
 } from "../../../lib/fitmodels";
-import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
+import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { selectedFitData } from "./fitSelection";
 
 export interface EquationParamRow {
   name: string;
@@ -79,6 +80,9 @@ export function useEquationFit(
   const debounceMs = opts?.debounceMs ?? 350;
   const active = useActiveDataset();
   const setFitOverlay = useApp((s) => s.setFitOverlay);
+  const xKey = useApp((s) => s.xKey);
+  const yKeys = useApp((s) => s.yKeys);
+  const seriesOrder = useApp((s) => s.seriesOrder);
 
   const [equation, setEquation] = useState(initial?.equation ?? "");
   const [status, setStatus] = useState<ValidationStatus>(initial ? "ok" : "idle");
@@ -96,12 +100,12 @@ export function useEquationFit(
   rowsRef.current = rows;
 
   const xRange = useMemo(() => {
-    const d = analysisData(active);
+    const d = selectedFitData(active, xKey, yKeys, seriesOrder);
     if (!d) return null;
-    const finite = d.time.filter((v) => Number.isFinite(v));
+    const finite = d.x.filter((v) => Number.isFinite(v));
     if (finite.length === 0) return null;
     return { min: Math.min(...finite), max: Math.max(...finite) };
-  }, [active]);
+  }, [active, seriesOrder, xKey, yKeys]);
 
   useEffect(() => {
     if (!equation.trim()) {
@@ -165,16 +169,19 @@ export function useEquationFit(
       const lower = rows.map((r) => parseBound(r.min, "min", r.name));
       const upper = rows.map((r) => parseBound(r.max, "max", r.name));
 
-      // Resolve a still-pending dataset first (#38), then fit the analysis
-      // view (#50/#53) — the same rows the plot hides/greys.
+      // Resolve a still-pending dataset first (#38), then fit the plotted
+      // X/primary-Y over the analysis view (#50/#53) — the same channels + rows
+      // the plot shows. Read the selection after the await in case the plotted
+      // channels changed while a lazy Origin book resolved.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
-      const d = analysisData(ds);
+      const state = useApp.getState();
+      const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
       if (!d) return;
       const r = await fitEquation({
         equation,
-        x: d.time,
-        y: d.values.map((row) => row[0]),
+        x: d.x,
+        y: d.y,
         guesses,
         ...(lower.some((v) => v !== null) ? { lower } : {}),
         ...(upper.some((v) => v !== null) ? { upper } : {}),

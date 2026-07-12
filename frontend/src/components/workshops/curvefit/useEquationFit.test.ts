@@ -35,6 +35,9 @@ beforeEach(() => {
   useApp.setState({
     datasets: [{ id: "d1", name: "run.dat", data: DATA }],
     activeId: "d1",
+    xKey: null,
+    yKeys: null,
+    seriesOrder: null,
     fitOverlay: null,
   });
 });
@@ -142,6 +145,36 @@ describe("useEquationFit fitting", () => {
     });
     expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [11, null, 31, 41] });
     expect(result.current.result?.params).toEqual([10, 1]);
+  });
+
+  it("fits the primary plotted X/Y channels instead of time/values[0]", async () => {
+    const multi: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[100, 10, 5], [200, 20, 6], [300, 30, 7], [400, 40, 8]],
+      labels: ["field", "moment", "aux"],
+      units: ["Oe", "emu", ""],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "loop.dat", data: multi }],
+      activeId: "d1",
+      xKey: 0,
+      yKeys: [2, 1],
+      seriesOrder: [1, 2],
+      fitOverlay: null,
+    });
+    vi.mocked(fitEquation).mockResolvedValue({ params: [1, 0], yFit: [11, 21, 31, 41] });
+    const { result } = await validated();
+    await act(async () => {
+      await result.current.fit();
+    });
+    // plot X = field (channel 0); primary Y after ordering = moment (channel 1).
+    expect(fitEquation).toHaveBeenCalledWith({
+      equation: "m*x + b",
+      x: [100, 200, 300, 400],
+      y: [10, 20, 30, 40],
+      guesses: [1, 1],
+    });
   });
 
   it("posts edited guesses and bounds (empty side = null; all-empty omitted)", async () => {

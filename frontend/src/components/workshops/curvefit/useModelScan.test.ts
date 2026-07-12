@@ -46,6 +46,9 @@ beforeEach(() => {
   useApp.setState({
     datasets: [{ id: "d1", name: "run.dat", data: DATA }],
     activeId: "d1",
+    xKey: null,
+    yKeys: null,
+    seriesOrder: null,
   });
 });
 
@@ -64,6 +67,30 @@ describe("useModelScan", () => {
     expect(scanFitModels).toHaveBeenCalledWith({ x: [0, 2, 3], y: [10, 30, 40] });
     expect(result.current.results).toEqual([ENTRY]);
     expect(result.current.error).toBeNull();
+  });
+
+  it("scans the primary plotted X/Y channels instead of time/values[0]", async () => {
+    const multi: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[100, 10, 5], [200, 20, 6], [300, 30, 7], [400, 40, 8]],
+      labels: ["field", "moment", "aux"],
+      units: ["Oe", "emu", ""],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "loop.dat", data: multi }],
+      activeId: "d1",
+      xKey: 0,
+      yKeys: [2, 1],
+      seriesOrder: [1, 2],
+    });
+    vi.mocked(scanFitModels).mockResolvedValue({ n: 4, nCandidates: 1, results: [ENTRY] });
+    const { result } = renderHook(() => useModelScan());
+    await act(async () => {
+      await result.current.scan();
+    });
+    // plot X = field (channel 0); primary Y after ordering = moment (channel 1).
+    expect(scanFitModels).toHaveBeenCalledWith({ x: [100, 200, 300, 400], y: [10, 20, 30, 40] });
   });
 
   it("includes saved custom equation models as scan candidates", async () => {
