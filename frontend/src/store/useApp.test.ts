@@ -42,6 +42,7 @@ beforeEach(() => {
     worksheetId: null, // item 15 — no lingering override from an earlier test
     status: "",
     originFigures: [],
+    originFidelity: [],
     folders: [],
     expandedFolders: [],
     originBookClickOpens: "worksheet", // item 15 — reset the pref between tests
@@ -1074,6 +1075,18 @@ describe("useApp importFiles", () => {
       ...raw,
       books: [book("Book1"), book("Book2")],
       figures: [originFigure],
+      origin_fidelity: {
+        version: 1,
+        container: "opj",
+        status: "best_effort",
+        graph_records_total: 2,
+        graph_records_actionable: 1,
+        graph_records_filtered: 1,
+        omissions: ["graphic_objects"],
+        filtered_figures: [
+          { index: 1, name: "SYSTEM", layer: null, reason: "no bound curves" },
+        ],
+      },
     });
     await useApp.getState().importFiles([fakeFile("XRD.opj")]);
 
@@ -1082,8 +1095,13 @@ describe("useApp importFiles", () => {
     expect(s.originFigures[0].stem).toBe("XRD");
     const book2 = s.datasets.find((d) => d.name === "XRD:Book2");
     expect(s.originFigures[0].datasetId).toBe(book2?.id);
+    expect(s.originFidelity).toHaveLength(1);
+    expect(s.originFidelity[0].stem).toBe("XRD");
+    expect(s.originFidelity[0].manifest.graph_records_filtered).toBe(1);
+    expect(s.originFidelity[0].siblingIds).toEqual(s.datasets.map((d) => d.id));
     // figures never leak into the DataStruct payload itself (data contract).
     expect(s.datasets.every((d) => !("figures" in d.data))).toBe(true);
+    expect(s.datasets.every((d) => !("origin_fidelity" in d.data))).toBe(true);
   });
 
   it("disables a figure whose loose source hint matches no imported book", async () => {
@@ -2278,6 +2296,7 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
       stackMode: false,
       spatialPanels: null,
       originFigures: [],
+      originFidelity: [],
     });
   });
 
@@ -2794,6 +2813,7 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       selectedIds: [],
       expandedFolders: [],
       originFigures: [],
+      originFidelity: [],
       smartFolders: [],
       reports: [],
       macroSteps: [],

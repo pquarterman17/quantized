@@ -55,6 +55,7 @@ beforeEach(() => {
     worksheetId: null,
     selectedIds: [],
     originFigures: [],
+    originFidelity: [],
     reports: [],
     figureDocs: [],
     selection: null,
@@ -67,7 +68,7 @@ beforeEach(() => {
 
 describe("history slice mechanics", () => {
   it("recordHistory pushes a labeled snapshot and clears redo", () => {
-    useApp.setState({ future: [{ label: "stale", snapshot: { datasets: [], activeId: null, selectedIds: [], worksheetId: null, originFigures: [], reports: [], figureDocs: [] } }] });
+    useApp.setState({ future: [{ label: "stale", snapshot: { datasets: [], activeId: null, selectedIds: [], worksheetId: null, originFigures: [], originFidelity: [], reports: [], figureDocs: [] } }] });
     useApp.getState().recordHistory("test action");
     const { history, future } = useApp.getState();
     expect(history).toHaveLength(1);
@@ -251,6 +252,7 @@ describe("per-action-class undo/redo coverage", () => {
       selectedIds: [],
       expandedFolders: [],
       originFigures: [],
+      originFidelity: [],
       smartFolders: [],
       reports: [],
       macroSteps: [],

@@ -20,8 +20,11 @@ from quantized.datastruct import DataStruct
 from quantized.io import import_auto
 from quantized.io.origin_project import (
     drop_empty_library_books,
-    drop_nonactionable_figures,
     read_origin_project_all,
+)
+from quantized.io.origin_project.fidelity import (
+    assess_origin_figures,
+    origin_figure_decode_failure,
 )
 from quantized.io.origin_project.figures import extract_figures
 from quantized.io.origin_project.figures_opju import extract_figures_opju
@@ -194,21 +197,34 @@ def _import_with_books(
                 cache_project_books(path, books)
         try:
             if suffix == ".opj":
-                figs = extract_figures(raw)
+                raw_figs = extract_figures(raw)
             else:
-                figs = extract_figures_opju(raw)
-            # Gate out non-actionable layer anchors (internal storage/thumbnail
-            # blocks with no bound curves and no source) so the Library's Figures
-            # section shows only restorable graphs, not dead "SYSTEM" rows. Both
-            # containers can carry these records (XMCD.opj alone exposes 61).
-            figs = drop_nonactionable_figures(figs)
+                raw_figs = extract_figures_opju(raw)
+            source_names = {
+                str(name)
+                for book in books
+                for name in (
+                    book.metadata.get("origin_book", ""),
+                    book.metadata.get("origin_book_long", ""),
+                )
+                if name
+            }
+            figs, fidelity = assess_origin_figures(
+                raw_figs,
+                container="opj" if suffix == ".opj" else "opju",
+                source_names=source_names,
+            )
         except (IndexError, ValueError, KeyError, struct.error):
             # Figures are an optional nicety; a decode hiccup on a malformed or
             # truncated project must degrade to "no figures", never fail the
             # whole import (the data books already succeeded above).
             figs = []
+            fidelity = origin_figure_decode_failure(
+                container="opj" if suffix == ".opj" else "opju"
+            )
         if figs:
             payload["figures"] = figs
+        payload["origin_fidelity"] = fidelity
         return payload
 
     ds = import_auto(path)

@@ -43,7 +43,6 @@ import { mergeDatasets } from "../lib/merge";
 import type { SmartFolder } from "../lib/smartfolders";
 import { mergeWorkspace, type LoadedWorkspace, type WorkspaceState } from "../lib/workspace";
 import {
-  buildOriginFigureEntries,
   doubleYPartner,
   figureChannelSelection,
   figureLabel,
@@ -52,7 +51,6 @@ import {
   originLegendPos,
   originRegionShades,
   resolveSpatialPanels,
-  type OriginFigureEntry,
 } from "../lib/originFigures";
 import { planOriginFolders } from "../lib/originFolders";
 import {
@@ -108,6 +106,12 @@ import {
 } from "../lib/recentFiles";
 import { toast } from "./toasts";
 import { deferOriginFigureApply } from "./originFigureApply";
+import {
+  createOriginImportSlice,
+  pruneOriginFidelityRefs,
+  pruneOriginFigureRefs,
+  type OriginImportSlice,
+} from "./originImport";
 import { isLazyBookEntry, isPrimaryBookMarker } from "../lib/types";
 import type {
   Annotation,
@@ -124,7 +128,6 @@ import type {
   FitOverlay, FitSpec,
   FolderNode,
   ModelingType,
-  OriginFigure,
   PeakOverlay,
   RefLine,
   RegionShade,
@@ -136,12 +139,6 @@ import type {
  *  formulas). Routed through after any base-data mutation (cell edit, corrections). */
 const recompute = (d: Dataset): Dataset =>
   d.formulas?.length ? { ...d, data: recomputeData(d.data, d.formulas) } : d;
-
-/** Drop the resolved target on any Origin figure entry pointing at a removed
- *  dataset (the figure itself stays listed — just disabled again, same as an
- *  import whose source hint never resolved). */
-const pruneOriginFigureRefs = (figures: OriginFigureEntry[], removedIds: ReadonlySet<string>): OriginFigureEntry[] =>
-  figures.map((f) => (f.datasetId && removedIds.has(f.datasetId) ? { ...f, datasetId: null } : f));
 
 let _refSeq = 0;
 let _annSeq = 0;
@@ -317,7 +314,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, OriginImportSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -333,11 +330,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // Cleared by `setActive` (any full plot-intent activation drops it — the
   // plot it now shows is the worksheet's again, via the `activeId` fallback).
   worksheetId: string | null;
-  // Origin project figures (plan item 18): every graph window recovered from
-  // an imported .opj, tagged with the import's file stem and (best-effort)
-  // the dataset id it plots. `datasetId` is null when the figure's loose
-  // source reference didn't resolve — the Library shows those disabled.
-  originFigures: OriginFigureEntry[];
   // Report sheets (#36): named analysis reports (curve fits, peak tables,
   // stats) living in the library. `datasetId` ties one back to its source
   // dataset (nulled if that dataset is removed — the report itself stays, it
@@ -615,10 +607,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // "pasted data N". Tab/comma/semicolon/whitespace tables with or without a
   // header row all work — it's the same guesser the import wizard uses.
   pasteDataFromClipboard: () => Promise<void>;
-  // Attach one import's worth of Origin figures (item 18), matched against the
-  // dataset ids that same import just created. Internal to importFiles, but a
-  // named action so it's directly testable.
-  addOriginFigures: (stem: string, figures: OriginFigure[], datasetIds: string[]) => void;
   // Apply a stored figure after resolving lazy source books; unresolved = no-op.
   // `opts.newWindow` (item 9) opens a fresh window (bound to the figure's
   // dataset) and focuses it FIRST, so the rest of the apply logic — already
@@ -1049,11 +1037,11 @@ export const useApp = create<AppState>((set, get) => ({
   ...createPointerToolSlice(set),
   ...createSplitSlice(set, get),
   ...createShapesSlice(set),
+  ...createOriginImportSlice(set),
   datasets: [],
   activeId: null,
   worksheetId: null,
   selectedIds: [],
-  originFigures: [],
   reports: [],
   openReportId: null,
   figureDocs: [],
@@ -1242,7 +1230,9 @@ export const useApp = create<AppState>((set, get) => ({
         const data = await uploadFile(file);
         const stem = file.name.replace(/\.[^.]+$/, "");
         const figures = data.figures;
+        const fidelity = data.origin_fidelity;
         delete data.figures;
+        delete data.origin_fidelity;
         const newIds: string[] = [];
         if (data.books && data.books.length > 1) {
           // Origin project: import every workbook as its own dataset. Per
@@ -1312,6 +1302,13 @@ export const useApp = create<AppState>((set, get) => ({
           newIds.push(id);
         }
         if (figures?.length) get().addOriginFigures(stem, figures, newIds);
+        if (fidelity) {
+          get().addOriginFidelity(stem, fidelity, newIds);
+          toast(
+            `${stem}: ${fidelity.graph_records_actionable}/${fidelity.graph_records_total} Origin graph records are editable; fidelity details saved`,
+            "info",
+          );
+        }
         get().recordMacro(`Import ${file.name}`, `qz.import(${lit(file.name)})`, {
           kind: "import",
           params: { name: file.name },
@@ -1478,12 +1475,6 @@ export const useApp = create<AppState>((set, get) => ({
     }
   },
 
-  addOriginFigures: (stem, figures, datasetIds) =>
-    set((s) => {
-      const candidates = s.datasets.filter((d) => datasetIds.includes(d.id));
-      const entries = buildOriginFigureEntries(stem, figures, candidates);
-      return { originFigures: [...s.originFigures, ...entries] };
-    }),
   applyOriginFigure: (id, opts) => {
     const entry = get().originFigures.find((f) => f.id === id);
     if (!entry?.datasetId) return;
@@ -1837,6 +1828,7 @@ export const useApp = create<AppState>((set, get) => ({
         worksheetId: null,
         selectedIds: selected.length ? selected : active ? [active] : [],
         originFigures: ws.originFigures ?? [], // restored from the .dwk (v2 persists them)
+        originFidelity: ws.originFidelity ?? [],
         smartFolders: ws.smartFolders ?? [], // saved queries (item 9) — .dwk persists them
         reports: ws.reports ?? [], // report sheets (#36) — .dwk v2 persists them
         openReportId: null,
@@ -1997,6 +1989,7 @@ export const useApp = create<AppState>((set, get) => ({
       const selectedIds = s.selectedIds.filter((x) => x !== id);
       const removed = new Set([id]);
       const originFigures = pruneOriginFigureRefs(s.originFigures, removed);
+      const originFidelity = pruneOriginFidelityRefs(s.originFidelity, removed);
       const reports = pruneReportRefs(s.reports, removed);
       const figureDocs = s.figureDocs.map((f) =>
         f.datasetId && removed.has(f.datasetId) ? { ...f, datasetId: null } : f,
@@ -2005,7 +1998,7 @@ export const useApp = create<AppState>((set, get) => ({
       // decision #4) / drops out of any panel window's list (item 19) — the
       // window shows an empty state, never force-closed.
       const plotWindows = pruneWindowDatasetRefs(s.plotWindows, removed);
-      return { datasets, activeId, worksheetId, selectedIds, originFigures, reports, figureDocs, plotWindows };
+      return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, plotWindows };
     });
   },
   // Delete key: remove every selected dataset (falling back to the active one if
@@ -2022,6 +2015,7 @@ export const useApp = create<AppState>((set, get) => ({
         s.activeId && !ids.has(s.activeId) ? s.activeId : (datasets[0]?.id ?? null);
       const worksheetId = s.worksheetId && ids.has(s.worksheetId) ? null : s.worksheetId;
       const originFigures = pruneOriginFigureRefs(s.originFigures, ids);
+      const originFidelity = pruneOriginFidelityRefs(s.originFidelity, ids);
       const reports = pruneReportRefs(s.reports, ids);
       const figureDocs = s.figureDocs.map((f) =>
         f.datasetId && ids.has(f.datasetId) ? { ...f, datasetId: null } : f,
@@ -2033,6 +2027,7 @@ export const useApp = create<AppState>((set, get) => ({
         worksheetId,
         selectedIds: activeId ? [activeId] : [],
         originFigures,
+        originFidelity,
         reports,
         figureDocs,
         plotWindows,
@@ -2052,12 +2047,13 @@ export const useApp = create<AppState>((set, get) => ({
       const worksheetId = s.worksheetId && drop.has(s.worksheetId) ? null : s.worksheetId;
       const selectedIds = s.selectedIds.filter((x) => !drop.has(x));
       const originFigures = pruneOriginFigureRefs(s.originFigures, drop);
+      const originFidelity = pruneOriginFidelityRefs(s.originFidelity, drop);
       const reports = pruneReportRefs(s.reports, drop);
       const figureDocs = s.figureDocs.map((f) =>
         f.datasetId && drop.has(f.datasetId) ? { ...f, datasetId: null } : f,
       );
       const plotWindows = pruneWindowDatasetRefs(s.plotWindows, drop);
-      return { datasets, activeId, worksheetId, selectedIds, originFigures, reports, figureDocs, plotWindows };
+      return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, plotWindows };
     });
   },
 
@@ -2074,6 +2070,7 @@ export const useApp = create<AppState>((set, get) => ({
       selectedIds: [],
       expandedFolders: [],
       originFigures: [],
+      originFidelity: [],
       reports: [],
       figureDocs: [],
     });

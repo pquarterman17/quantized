@@ -11,6 +11,7 @@ import BookFamiliesSection from "./BookFamiliesSection";
 import DatasetRow from "./DatasetRow";
 import FigureRow from "./FigureRow";
 import FiguresSection from "./FiguresSection";
+import OriginFidelitySection from "./OriginFidelitySection";
 import FolderRow from "./FolderRow";
 import ReportsSection from "./ReportsSection";
 import SavedFiguresSection from "./SavedFiguresSection";
@@ -187,6 +188,7 @@ export default function Library() {
       </div>
 
       {!inTree && <FiguresSection />}
+      <OriginFidelitySection />
       <SavedFiguresSection />
       <ReportsSection />
       <BookFamiliesSection />
