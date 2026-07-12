@@ -22,6 +22,20 @@ export function fullPlottedX(data: DataStruct, xKey: number | null): number[] {
     : data.values.map((row) => row[xKey]);
 }
 
+/** The primary plotted Y CHANNEL index (first effective, after series order),
+ *  or null when nothing is plotted. Column-only (no row pruning) — for tools
+ *  that operate on the FULL data column (e.g. magnetometry transforms that
+ *  convert every row) yet must still follow the plotted channel. */
+export function plottedYKey(
+  ds: Dataset,
+  xKey: number | null,
+  yKeys: number[] | null,
+  seriesOrder: number[] | null,
+): number | null {
+  const channels = effectiveChannels(ds.data, yKeys, xKey, ds.channelRoles, seriesOrder);
+  return channels[0] ?? null;
+}
+
 export function selectedFitData(
   dataset: Dataset | null | undefined,
   xKey: number | null,

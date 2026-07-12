@@ -24,6 +24,9 @@ beforeEach(() => {
   useApp.setState({
     datasets: [{ id: "d1", name: "mt.dat", data: mvt }],
     activeId: "d1",
+    xKey: null,
+    yKeys: null,
+    seriesOrder: null,
     status: "",
   });
 });
@@ -51,6 +54,37 @@ describe("useMagTools background", () => {
     expect(ds).toHaveLength(2);
     expect(ds[1].name).toBe("mt (bg-sub)");
     expect(ds[1].data.values).toEqual([[4], [1], [0]]);
+  });
+
+  it("uses the plotted T (X) and moment (primary Y) on multi-column data (audit P1 #1)", async () => {
+    const multi: DataStruct = {
+      time: [0, 1, 2], // a timestamp — NOT the temperature
+      values: [[2, 5], [100, 2], [300, 1]], // [Temperature, Moment]
+      labels: ["Temperature", "Moment"],
+      units: ["K", "emu"],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "mt.dat", data: multi }],
+      activeId: "d1",
+      xKey: 0, // Temperature
+      yKeys: [1], // Moment
+      seriesOrder: null,
+      status: "",
+    });
+    vi.mocked(subtractMagBackground).mockResolvedValue({ corrected: [4, 1, 0], slope: -0.01, intercept: 3 });
+    const { result } = renderHook(() => useMagTools());
+    await act(async () => {
+      await result.current.subtractBackground();
+    });
+    expect(subtractMagBackground).toHaveBeenCalledWith({
+      temperature: [2, 100, 300], // Temperature channel, NOT the timestamp
+      moment: [5, 2, 1], // Moment channel, NOT values[0]=Temperature
+      auto_fraction: 0.1,
+    });
+    const ds = useApp.getState().datasets;
+    expect(ds[1].data.time).toEqual([2, 100, 300]); // output on the plotted T
+    expect(ds[1].data.labels).toEqual(["Moment"]); // labelled from the plotted Y
   });
 
   it("surfaces an error and adds no dataset", async () => {
