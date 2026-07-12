@@ -10,7 +10,7 @@ own it. Filenames are sanitized before reaching the Content-Disposition header.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
@@ -27,6 +27,16 @@ from quantized.routes._export_common import (
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 
+class TickFormatSpec(BaseModel):
+    """Wire model for the screen's `AxisFormat` (MAIN #24,
+    `frontend/src/lib/types.ts`): the tick-label number format for one axis.
+    `"auto"` (the default) leaves matplotlib's own formatter untouched --
+    see `calc.figure_ticks.axis_tick_formatter`."""
+
+    mode: Literal["auto", "fixed", "sci", "eng"] = "auto"
+    digits: float = 2
+
+
 class FigureRequest(BaseModel):
     dataset: dict[str, Any]
     x_key: int | str | None = None
@@ -38,6 +48,11 @@ class FigureRequest(BaseModel):
     # fallback for an older caller (see calc.figure_scale.resolve_axis_scale).
     x_scale: str | None = None
     y_scale: str | None = None
+    # MAIN #24: tick-label number format, mirroring the screen's xFmt/yFmt
+    # (yFmt also drives the screen's y2 axis; this backend has no y2/twinx
+    # rendering to mirror it onto). None = auto (omit to keep requests lean).
+    x_fmt: TickFormatSpec | None = None
+    y_fmt: TickFormatSpec | None = None
     fmt: str = "pdf"
     style: str = "default"  # publication preset: aps / report / web / …
     dpi: int = 200  # raster (png/tiff) resolution; ignored by vector formats
@@ -93,6 +108,13 @@ def _figure_series(
     return plot.x, series, x_label, y_label, styles
 
 
+def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:
+    """``TickFormatSpec`` (route-layer pydantic) -> the plain mapping
+    ``calc.figure_ticks.axis_tick_formatter`` expects (calc/ never imports
+    pydantic — see the layering guard)."""
+    return spec.model_dump() if spec is not None else None
+
+
 @router.post("/figure")
 def export_figure(req: FigureRequest) -> Response:
     """Render the dataset (selected channels + log scales) to a publication
@@ -122,6 +144,8 @@ def export_figure(req: FigureRequest) -> Response:
             series_styles=styles,
             dpi=dpi,
             overrides=req.overrides,
+            x_fmt=_tick_fmt(req.x_fmt),
+            y_fmt=_tick_fmt(req.y_fmt),
         )
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -157,6 +181,8 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
             series_styles=styles,
             dpi=dpi,
             overrides=req.overrides,
+            x_fmt=_tick_fmt(req.x_fmt),
+            y_fmt=_tick_fmt(req.y_fmt),
         )
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -40,6 +40,7 @@ from numpy.typing import ArrayLike, NDArray  # noqa: E402
 
 from quantized.calc.figure import _plot_kwargs  # noqa: E402
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale  # noqa: E402
+from quantized.calc.figure_ticks import apply_tick_formats  # noqa: E402
 
 __all__ = ["render_breaks_impl"]
 
@@ -62,10 +63,17 @@ def render_breaks_impl(
     dpi: int,
     figsize: tuple[float, float],
     series_styles: Sequence[Mapping[str, Any] | None] | None,
+    x_fmt: Mapping[str, Any] | None = None,
+    y_fmt: Mapping[str, Any] | None = None,
 ) -> bytes:
     """Render ``series`` against ``x`` with the x-axis elided over each
     ``[lo, hi]`` pair in ``breaks`` (already sorted/validated non-overlapping
-    by ``calc.figure._validate_overrides``)."""
+    by ``calc.figure._validate_overrides``). ``x_fmt``/``y_fmt`` (MAIN #24)
+    are applied to EVERY panel's axes (see ``figure_ticks.apply_tick_formats``);
+    a shared y-axis (``sharey``) still draws tick labels only on panel 0
+    (matplotlib's own ``sharey`` + this module's ``tick_params(left=False)``
+    on the rest), so ``y_fmt`` only visibly affects that panel, but is
+    applied uniformly for simplicity/consistency."""
     finite = x[np.isfinite(x)]
     xlo = float(finite.min()) if finite.size else 0.0
     xhi = float(finite.max()) if finite.size else 1.0
@@ -94,6 +102,7 @@ def render_breaks_impl(
             ax.set_xlim(lo, hi)
             apply_axis_scale(ax, "x", resolve_axis_scale(x_scale, x_log))
             apply_axis_scale(ax, "y", resolve_axis_scale(y_scale, y_log))
+            apply_tick_formats(ax, x_fmt, y_fmt)
             if i == 0:
                 handles, labels_out = ax.get_legend_handles_labels()
             if i > 0:

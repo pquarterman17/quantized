@@ -69,13 +69,8 @@ GOTO #11 drift (implemented but listed open).
     2026-07-11 (see Completed). ⚠ Installer-path verification pending
     the next real release build (noted in the Completed entry).
 
-24. **Axis tick formats in publication export** (owner go-ahead
-    2026-07-11; closes the gap the #20 audit put on record): xFmt/yFmt
-    (fixed/sci/eng + the increment-aware precision floor + −0
-    normalization) flow through the export request into matplotlib
-    tick formatters via the shared `draw_series_axes` chokepoint —
-    single-figure, axis-break, and figure-page export all inherit.
-    `auto` stays matplotlib's default formatter.
+~~24. **Axis tick formats in publication export**~~ COMPLETED 2026-07-11
+    (see Completed).
 
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
@@ -160,6 +155,34 @@ GOTO #11 drift (implemented but listed open).
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#24 Axis tick formats in publication export**~~ (2026-07-11, sonnet
+  agent) — matplotlib mirrors the screen's `AxisFormat` (fixed/sci/eng +
+  the increment-aware precision floor + −0 normalization) via a new
+  `calc/figure_ticks.py` (`Formatter` subclass reading
+  `self.axis.get_majorticklocs()` lazily at DRAW time, since matplotlib's
+  Formatter/Locator split has no `foundIncr`-equivalent argument);
+  `auto` stays `None` (matplotlib's own default). Threaded through all 3
+  drawing consumers: `figure.draw_series_axes` (single-figure + figure-
+  page panels), `figure_break.render_breaks_impl` (broken-axis panels,
+  applied per-panel — it draws its own axes, doesn't call
+  `draw_series_axes`), and `figure_page.PagePanel` (per-panel own
+  `x_fmt`/`y_fmt`, not one page-wide format). `figure.py` hit the
+  500-line ceiling adding the params, so `_collect_map`/
+  `_bbox_to_pixels`/`_artist_window_extent` were extracted to a new
+  sibling `calc/figure_hitmap.py` first (416 lines after, was 496).
+  Route wire model `TickFormatSpec` (routes/export_figures.py,
+  `Literal["auto","fixed","sci","eng"]`) sent only when non-`auto`
+  (`lib/types.ts`'s `axisFmtParam`) from `exportFigureCommand.ts`,
+  `useFigureBuilder`, and `useFigurePage`'s per-panel window view (a
+  saved Library-figure/FigureDoc panel has no persisted fmt to restore —
+  documented gap, exports at auto). `y_fmt` documented as also covering
+  the screen's y2 axis; the matplotlib backend has no y2/twinx rendering
+  to mirror it onto. +23 backend unit tests (real `fig.canvas.draw()` +
+  `ax.get_xticklabels()`, several ported 1:1 from
+  `uplotOpts.test.ts`'s MAIN #20 cases) + 9 integration/route tests +
+  9 frontend tests. Backend 2810 passed / frontend 2996 passed, ruff +
+  mypy --strict clean.
 
 - ~~**#23 DiraCulator Start Menu shortcut**~~ (2026-07-11, sonnet agent)
   — Tauri shell `--calc` mode (pure unit-tested `shell_mode`/

@@ -24,7 +24,7 @@ from quantized.routes._export_common import (
     _attachment,
     _safe_name,
 )
-from quantized.routes.export_figures import FigureRequest, _figure_series
+from quantized.routes.export_figures import FigureRequest, _figure_series, _tick_fmt
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -97,6 +97,8 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                     y_log=f.y_log,
                     x_scale=f.x_scale,
                     y_scale=f.y_scale,
+                    x_fmt=_tick_fmt(f.x_fmt),
+                    y_fmt=_tick_fmt(f.y_fmt),
                     series_styles=styles,
                     overrides=f.overrides,
                     label=spec.label,

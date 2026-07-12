@@ -35,7 +35,7 @@ import {
   type PanelSource,
 } from "../../../lib/figurepage";
 import { displayedWindowTitle, type PlotView } from "../../../lib/plotview";
-import type { DataStruct } from "../../../lib/types";
+import { axisFmtParam, type DataStruct } from "../../../lib/types";
 import { useApp, type AppState } from "../../../store/useApp";
 import { FIGURE_STYLE_DPI } from "../figurebuilder/useFigureBuilder";
 
@@ -73,6 +73,8 @@ async function panelFigure(source: PanelSource): Promise<FigureSpec | null> {
       y_log: v.yScale === "log",
       x_scale: v.xScale,
       y_scale: v.yScale,
+      x_fmt: axisFmtParam(v.xFmt),
+      y_fmt: axisFmtParam(v.yFmt),
       title: v.plotTitle.trim(),
       x_label: v.xAxisLabel.trim() || undefined,
       y_label: v.yAxisLabel.trim() || undefined,
@@ -93,6 +95,10 @@ async function panelFigure(source: PanelSource): Promise<FigureSpec | null> {
   // them with a 422) — strip them, keep every other saved override.
   const saved: FigureOverrides = c.overrides ?? {};
   const { x_breaks: _xb, margins: _mg, ...overrides } = saved;
+  // MAIN #24: FigureConfig (a saved Library figure) doesn't persist a tick
+  // format at all -- unlike xScale/yScale, this predates the feature, so
+  // there is no saved xFmt/yFmt to restore here; a doc-sourced panel exports
+  // at the backend's default ("auto") until FigureConfig grows the field.
   return {
     dataset: data,
     x_key: c.xKey ?? undefined,
@@ -141,6 +147,8 @@ function panelRenderInputs(slots: PageSlot[], s: AppState): unknown[] {
         v.yKeys,
         v.xScale,
         v.yScale,
+        v.xFmt,
+        v.yFmt,
         v.plotTitle,
         v.xAxisLabel,
         v.yAxisLabel,

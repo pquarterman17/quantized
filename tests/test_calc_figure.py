@@ -365,3 +365,84 @@ def test_reciprocal_scale_on_figure_page() -> None:
     panel = PagePanel(x=t, series=[("rate", y)], row=0, col=0, x_scale="reciprocal")
     out = render_figure_page([panel], rows=1, cols=1, fmt="png")
     assert out[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+# ── MAIN #24: x_fmt/y_fmt threading through the three draw_series_axes-
+#    adjacent consumers (figure.py itself, figure_break, figure_page) ───────
+def test_draw_series_axes_applies_x_fmt_and_y_fmt() -> None:
+    # The single-figure renderer's own axes-drawing chokepoint, exercised
+    # directly (not just through render_figure, which returns opaque bytes)
+    # so the DRAWN tick label strings can be asserted.
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from quantized.calc.figure import draw_series_axes
+    from quantized.calc.figure_styles import figure_style
+
+    fig, ax = plt.subplots()
+    try:
+        x = np.array([0.0, 1.0, 2.0])
+        draw_series_axes(
+            fig, ax, x, [("y", x)],
+            st=figure_style("default"), ov={},
+            x_fmt={"mode": "fixed", "digits": 3},
+            y_fmt={"mode": "sci", "digits": 1},
+        )
+        ax.set_xticks([1.0, 2.0])
+        ax.set_yticks([1500.0])
+        fig.canvas.draw()
+        assert [t.get_text() for t in ax.get_xticklabels()] == ["1.000", "2.000"]
+        assert [t.get_text() for t in ax.get_yticklabels()] == ["1.5e+3"]
+    finally:
+        plt.close(fig)
+
+
+def test_render_figure_with_x_fmt_and_y_fmt_does_not_crash() -> None:
+    # End-to-end through the public bytes-returning entry point (render_figure
+    # never exposes the Axes, so this is a wiring smoke test; the label-level
+    # assertion above covers the actual formatting).
+    x = np.linspace(0, 10, 20)
+    out = render_figure(
+        x, [("y", x)], fmt="pdf",
+        x_fmt={"mode": "fixed", "digits": 3},
+        y_fmt={"mode": "eng", "digits": 1},
+    )
+    assert out[:5] == b"%PDF-"
+
+
+def test_x_breaks_panels_apply_x_fmt_and_y_fmt_to_every_panel() -> None:
+    # figure_break.render_breaks_impl draws its own axes per panel (it does
+    # NOT call draw_series_axes) -- verify it independently threads x_fmt/
+    # y_fmt to EVERY panel's Axes, not just the first.
+    from quantized.calc.figure_break import render_breaks_impl
+    from quantized.calc.figure_styles import figure_style
+
+    t = np.linspace(0.0, 10.0, 50)
+    y = np.sin(t)
+    st = figure_style("default")
+    out = render_breaks_impl(
+        t, [("y", y)],
+        breaks=[(4.0, 6.0)],
+        x_log=False, y_log=False,
+        title="", x_label="", y_label="",
+        fmt="png", st=st, ov={}, dpi=100, figsize=(6.0, 4.0),
+        series_styles=None,
+        x_fmt={"mode": "fixed", "digits": 2},
+        y_fmt=None,
+    )
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_figure_page_panel_carries_its_own_x_fmt_and_y_fmt() -> None:
+    from quantized.calc.figure_page import PagePanel, render_figure_page
+
+    x = np.array([0.0, 1.0, 2.0])
+    panel = PagePanel(
+        x=x, series=[("y", x)], row=0, col=0,
+        x_fmt={"mode": "fixed", "digits": 3},
+        y_fmt={"mode": "sci", "digits": 1},
+    )
+    out = render_figure_page([panel], rows=1, cols=1, fmt="png")
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"

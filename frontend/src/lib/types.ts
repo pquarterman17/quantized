@@ -573,6 +573,15 @@ export interface AxisFormat {
   digits: number;
 }
 
+/** MAIN #24: an export request's `x_fmt`/`y_fmt` wire field — `undefined`
+ *  for `auto` (the default; omitting it keeps requests lean and matches
+ *  every caller that predates this field) or the format itself for an
+ *  explicit fixed/sci/eng override, mirroring `tickFormatter`'s own
+ *  `auto` short-circuit. */
+export function axisFmtParam(fmt: AxisFormat): AxisFormat | undefined {
+  return fmt.mode === "auto" ? undefined : fmt;
+}
+
 /** How an axis maps data values to pixel position (MAIN #12): `"linear"`
  *  (default) positions values proportionally; `"log"` positions by
  *  log10(value) (uPlot `distr: 3`); `"reciprocal"` positions by 1/value
