@@ -6,24 +6,23 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last regenerated:** 2026-07-11 late night (v0.8.1 RELEASED to PyPI
-as `quantized-lab` + GitHub with installers; MAIN #9–#24 all shipped;
-the PyPI trusted-publisher registration + first publish are done —
-only the fresh-machine acceptance run remains from that gate)
+**Last regenerated:** 2026-07-12 (MAIN #28 "widen rich-text" shipped —
+real `\frac`/`\sqrt`/`\sum`/`\int` + relations rendering, canvas +
+matplotlib WYSIWYG; that was the LAST open actionable dev item, so the
+actionable-work table is now empty. Everything remaining is owner-gated,
+sample-blocked, or a deliberate deferral. v0.8.1 remains the released
+version on PyPI as `quantized-lab`; the fresh-machine acceptance run is
+still the only residue of that gate.)
 
 ---
 
 ## Actionable dev work (no blockers, no owner gate)
 
-| # | Item | Plan / item | Size |
-|---|------|-------------|------|
-| 43 | Widen rich-text: render fractions/roots/sums (canvas + matplotlib in lockstep) | MAIN #28 | M |
-
-*(MAIN #9–#27 all shipped 2026-07-11/12 — the menu-survey trio #25/#26/#27
-plus a 9-bug adversarial-hunt fix batch on the new features. #28 booked
-from that hunt (the "actually render `\frac`" upgrade). The #23 installer
-hooks BUILT into v0.8.1's setup.exe —
-verified by the fresh-machine acceptance run.)*
+*(none — MAIN #9–#28 all shipped 2026-07-11/12. The final item, #28
+"widen rich-text" (real `\frac`/`\sqrt`/`\sum`/`\int` + relations,
+canvas + matplotlib in lockstep), shipped 2026-07-12 in 3 staged commits
+on `feat/richtext-widen`. Everything remaining is an owner gate, blocked
+on external samples, or a deliberate deferral — see the sections below.)*
 
 ## Owner actions & owner-gated decisions
 
@@ -68,7 +67,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | #28 (widen rich-text) + owner gates/deferrals — MAIN #9–#27 ALL shipped 2026-07-11/12 |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only — MAIN #9–#28 ALL shipped 2026-07-11/12 (zero open dev items) |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence; #47 LOW-PRIORITY (recover Origin graphic objects/annotations on import — gated on MAIN #27) |

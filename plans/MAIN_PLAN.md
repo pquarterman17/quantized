@@ -10,7 +10,7 @@ via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-07-11
+**Updated:** 2026-07-12
 
 ---
 
@@ -80,18 +80,10 @@ GOTO #11 drift (implemented but listed open).
 
 ~~27. **Drawing shapes on plots**~~ COMPLETED 2026-07-12 (see Completed).
 
-28. **Widen rich-text label support: fractions, roots, sums, etc.**
-    (booked from the 2026-07-12 bug hunt; use: a researcher naturally
-    types `$\frac{M}{M_s}$`, `$\sqrt{...}$`, `$\sum$`, `$\int$` in a
-    label — today those fall back to LITERAL on BOTH screen and export
-    [the bug-hunt fix aligned them so at least they AGREE], but the
-    delightful outcome is real rendering): extend the shared richtext
-    AST + `richtextCanvas` renderer to draw fractions/roots/sums/
-    inequalities on canvas, and extend the Python `SUPPORTED_MATHTEXT_
-    COMMANDS` gate in lockstep so screen and export stay WYSIWYG. The
-    2026-07-12 fix made the two sides agree on the SUBSET boundary;
-    this moves the boundary outward with genuine rendering on both
-    sides. Medium — real canvas fraction/root layout is the work.
+~~28. **Widen rich-text label support: fractions, roots, sums, etc.**~~
+    COMPLETED 2026-07-12 (see Completed — 3 staged commits: relations/
+    arrows/analysis glyphs, then real `\frac`/`\sqrt` canvas layout, then
+    `\sum`/`\prod`/`\int`/`\oint` big operators; screen + export WYSIWYG).
 
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
@@ -183,6 +175,36 @@ GOTO #11 drift (implemented but listed open).
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#28 Widen rich-text labels: fractions, roots, sums**~~ (2026-07-12,
+  3 staged commits on `feat/richtext-widen`) — the `$...$` label subset
+  grew from scripts+Greek+symbols to real structural math, WYSIWYG across
+  the interactive uPlot canvas AND the matplotlib vector export. **Method:**
+  every candidate command was first probed against matplotlib's own
+  `MathTextParser` (the export gate) so the frontend never accepts anything
+  export would render differently; the layout target was captured from a
+  matplotlib REFERENCE render (`$\frac$`, `$\sqrt$`, `$\sum$`, `$\int$`
+  inline) — which is where the one real design fork was resolved: matplotlib
+  STACKS `\sum`/`\prod` limits inline but SIDE-scripts `\int`/`\oint`, so the
+  renderer matches that, it doesn't guess. **(1)** relations/arrows/analysis
+  glyphs (`\leq \geq \neq \approx \propto \infty \rightarrow \partial …`) —
+  pure glyph passthrough, no renderer change. **(2)** `\frac{a}{b}`,
+  `\sqrt{x}`, `\sqrt[n]{x}` — `richtextCanvas` gained a vertical BOX model
+  (width+ascent+descent); fractions stack num/den across a stroked rule on a
+  0.28-em math axis, radicals hand-stroke a √ + overline sized to the
+  radicand with the index in the crook; DOM surfaces (legend, title, editor
+  preview) get a CSS approximation. **(3)** `\sum \prod \int \oint` big
+  operators (1.4× glyph straddling the axis; stacked vs side limits per the
+  matplotlib rule). The frontend parser stays THE gate: `\frac \sqrt \sum
+  \prod \int \oint` joined `SUPPORTED_MATHTEXT_COMMANDS` in lockstep, so an
+  accepted label always renders identically on export (out-of-subset accents
+  `\hat`/`\vec`/`\overline` remain literal-fallback). Palette gained
+  Structures + Relations sections; help sheet gained live worked examples.
+  VERIFIED on the real canvas via `tools/visual` (fractions/roots/bigops in
+  titles + rotated y-axis labels, nested `1/√(2π)`, `χ²=1/N·∑(y−f)²`) — jsdom
+  can't do canvas text metrics, so this is the load-bearing check. Full
+  frontend suite 3232 green; backend labels + repo-integrity 30 green; ruff
+  `src tests` + mypy `src` clean.
 
 - ~~**#27 Drawing shapes on plots**~~ (2026-07-12, sonnet agent +
   post-merge bug-hunt batch) — arrow/line/rect/ellipse via
