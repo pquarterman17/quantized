@@ -19,6 +19,7 @@ only the fresh-machine acceptance run remains from that gate)
 |---|------|-------------|------|
 | 40 | Rich text in annotations | MAIN #25 | S |
 | 41 | Split dataset by column value (gap-cluster + live preview) | MAIN #26 | M |
+| 42 | Drawing shapes (arrow/line/rect/ellipse + framed text) — launches after #25 merges | MAIN #27 | M-L |
 
 *(MAIN #9–#24 all shipped 2026-07-11; #25–#26 booked from the owner's
 menu-survey session, agents in flight; a shapes/drawing feature (#27)

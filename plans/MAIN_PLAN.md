@@ -90,6 +90,25 @@ GOTO #11 drift (implemented but listed open).
     placed in a Library group named after the source; source kept;
     undo-recorded.
 
+27. **Drawing shapes on plots** (owner design round 2026-07-11 — all
+    decided): arrow, line, rect, ellipse + "text box" (use: figure
+    markup — point at Hc2, box the transition region, circle an
+    outlier; used: dock shape-flyout OR Insert menu → crosshair +
+    status hint → drag to draw → auto-return to pointer;
+    discoverable: visible dock button + the hint + right-click styling
+    matching the series idiom). Style: fill/stroke color, opacity
+    (25/50/75/100 presets + custom), width, dash — via right-click
+    swatch menu + an Inspector "Shapes" card (overview/bulk delete).
+    Anchoring: DATA default (shapes mark data), page-pin toggle like
+    text. "Text box" = an ANNOTATION with new frame properties
+    (fill/stroke/opacity/padding), NOT a sixth object type — one text
+    system (rides #25's rich text). New `lib/uplotShapes.ts` plugin +
+    pointer-tool select/drag/resize via the shared gesture machinery;
+    matplotlib export parity (FancyArrow/Rectangle/Ellipse + alpha,
+    framed text via bbox). Z-order: shapes above series, below text;
+    "send behind data" = deferred note. SEQUENCED AFTER #25 merges
+    (same annotation draw surface).
+
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
 ~~20. **Axis tick-label precision + engineering notation**~~ COMPLETED
