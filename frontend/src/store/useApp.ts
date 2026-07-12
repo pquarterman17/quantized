@@ -85,6 +85,8 @@ import { createReimportSlice, type ReimportSlice } from "./reimport";
 import { createPanelsSlice, type PanelsSlice } from "./panels";
 // The pointer tool's free-legend-position + annotation-update slice (MAIN #18).
 import { createPointerToolSlice, type PointerToolSlice } from "./pointerTool";
+// Split-by-column-value dialog + action (MAIN_PLAN #26), composed the same way.
+import { createSplitSlice, type SplitSlice } from "./split";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -145,8 +147,11 @@ let _refSeq = 0;
 let _annSeq = 0;
 
 let _idSeq = 0;
-const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
-const nextFolderId = (): string => `fld-${Date.now().toString(36)}-${++_idSeq}`;
+// Exported for store/split.ts (nextWindowId/panels.ts precedent) — a split
+// mints several dataset ids + one folder id from the SAME sequence used
+// everywhere else, so they can never collide with an id minted here.
+export const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
+export const nextFolderId = (): string => `fld-${Date.now().toString(36)}-${++_idSeq}`;
 const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_idSeq}`;
 // (window ids: see store/windows.ts — the MDI slice owns its own sequence)
 
@@ -313,7 +318,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -1045,6 +1050,8 @@ export const useApp = create<AppState>((set, get) => ({
   ...createPanelsSlice(set),
   // Pointer tool: free legend position + annotation edits (MAIN #18, ./pointerTool).
   ...createPointerToolSlice(set),
+  // Split-by-column-value dialog + action (MAIN #26) — see store/split.ts.
+  ...createSplitSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,

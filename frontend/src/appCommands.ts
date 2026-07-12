@@ -530,6 +530,7 @@ export function buildAppActions(s: StoreGet): Action[] {
     },
     { id: "duplicate", group: "Data", label: "Duplicate active dataset", run: () => { const id = s().activeId; if (id) s().duplicateDataset(id); } },
     { id: "reimport", group: "Data", label: "Re-import active dataset", run: () => { const id = s().activeId; if (id) void s().reimportDataset(id); } },
+    { id: "split", group: "Data", label: "Split by column value…", run: () => { const id = s().activeId; if (id) s().openSplitDialog(id); } },
     // Panel/overlay composite windows over the current selection (MAIN_PLAN
     // #19 v1) — the command-palette counterparts of the Library's quick
     // picks (lib/panelMenu.ts), acting on the live multi-selection.

@@ -72,6 +72,7 @@ export default function DatasetRow({
   const createFolder = useApp((s) => s.createFolder);
   const folders = useApp((s) => s.folders);
   const reimportDataset = useApp((s) => s.reimportDataset);
+  const openSplitDialog = useApp((s) => s.openSplitDialog);
   const createPanelWindow = useApp((s) => s.createPanelWindow);
   const focusWindow = useApp((s) => s.focusWindow);
 
@@ -130,6 +131,7 @@ export default function DatasetRow({
     { label: "Rename…", run: () => setRename(d.name) },
     { label: "Add tag…", run: () => setTag("") },
     { label: d.source ? "Re-import from source" : "Re-import from file…", run: () => void reimportDataset(d.id) },
+    { label: "Split by column value…", run: () => openSplitDialog(d.id) },
     // Move into a folder (project-organization item 3). Flat list of folders +
     // an out-to-root option + create-a-new-folder-with-this. (Drag onto a folder
     // header does the same.)

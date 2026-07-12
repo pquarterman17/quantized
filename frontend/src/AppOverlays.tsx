@@ -9,6 +9,7 @@ import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
 import PreferencesDialog from "./components/overlays/PreferencesDialog";
 import ShortcutsDialog from "./components/overlays/ShortcutsDialog";
+import SplitDatasetDialog from "./components/overlays/SplitDatasetDialog";
 import TextFormatHelp from "./components/overlays/TextFormatHelp";
 import Toaster from "./components/overlays/Toaster";
 import TooltipLayer from "./components/overlays/TooltipLayer";
@@ -70,6 +71,7 @@ export default function AppOverlays() {
     <>
       <ParamDialog />
       <ConfirmDialog />
+      <SplitDatasetDialog />
       <TooltipLayer />
       {curveFitOpen && <CurveFitPanel />}
       {hysteresisOpen && <HysteresisPanel />}
