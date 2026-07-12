@@ -22,6 +22,7 @@ via the switch-trigger protocol (GOTO_PLAN).
 |----------|-------|------------------------------|
 | `PORT_PLAN.md` (+ appendix `PORT_CHECKLIST.md`) | MATLAB parity, packaging (W8), CI/verification (W9) | Founding doc; W0–W9 history + the exhaustive per-feature parity inventory |
 | `GOTO_PLAN.md` | The go-to capability push vs Origin (10 owner-decided items + switch-trigger protocol) | Active build campaign, own decision log |
+| `GUI_INTERACTION_PLAN.md` | Origin-parity interaction/UX campaign: undoable visual edits, unified object editing, gesture discoverability, scientific-selection correctness traps | Standing multi-tier campaign from the 2026-07-12 ChatGPT-Sol GUI audit; own owner-gate/decision log |
 | `ORIGIN_FILE_DECODE_PLAN.md` | `.opj`/`.opju` reverse-engineering + decode gaps | Large RE reference (format findings, §13 gap register) |
 
 Six residue plans were folded up into this doc and archived on

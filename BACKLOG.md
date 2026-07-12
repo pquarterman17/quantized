@@ -6,23 +6,35 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last regenerated:** 2026-07-12 (MAIN #28 "widen rich-text" shipped —
-real `\frac`/`\sqrt`/`\sum`/`\int` + relations rendering, canvas +
-matplotlib WYSIWYG; that was the LAST open actionable dev item, so the
-actionable-work table is now empty. Everything remaining is owner-gated,
-sample-blocked, or a deliberate deferral. v0.8.1 remains the released
-version on PyPI as `quantized-lab`; the fresh-machine acceptance run is
-still the only residue of that gate.)
+**Last regenerated:** 2026-07-12 (new sub-plan `GUI_INTERACTION_PLAN.md`
+adopted from the ChatGPT-Sol GUI interaction audit — a standing Origin-parity
+interaction/UX campaign; its Tier 1/2 items are now the actionable dev work.
+First item shipped same day: weighted fitting by error columns, PR #24
+`dbb0c5c`. The prior MAIN #9–#28 campaign is all shipped; MAIN itself holds
+only owner gates + deferrals. v0.8.1 remains the released version on PyPI as
+`quantized-lab`; the fresh-machine acceptance run is still that gate's residue.)
 
 ---
 
 ## Actionable dev work (no blockers, no owner gate)
 
-*(none — MAIN #9–#28 all shipped 2026-07-11/12. The final item, #28
-"widen rich-text" (real `\frac`/`\sqrt`/`\sum`/`\int` + relations,
-canvas + matplotlib in lockstep), shipped 2026-07-12 in 3 staged commits
-on `feat/richtext-widen`. Everything remaining is an owner gate, blocked
-on external samples, or a deliberate deferral — see the sections below.)*
+From `GUI_INTERACTION_PLAN.md` (see it for the full tiered list + per-item
+detail). Owner-gated items in that plan (#1 undo scopes, #2 tree scope, #5
+baseline framing) are under Owner actions below, not here.
+
+| Item | Plan / item |
+|------|-------------|
+| **Pipeline fit reproduces channels/ROI/filtering/bounds/weighting** — `executeSteps` still fits `time`/`values[0]` unweighted; thread the typed fit spec (incl. `FitSpec.weight`) | GUI_INTERACTION #6 |
+| **Make powerful gestures discoverable** — drag handles/grip dots, cursor-over-draggable, reveal drop targets on drag-start, 3-zone folder-drop feedback, a menu path for every drag | GUI_INTERACTION #3 |
+| **Plot toolbar legibility** — shared tooltips (name+behaviour+shortcut), aria-label/pressed, named flyouts, persist config | GUI_INTERACTION #7 |
+| **Context menus as a system** — context-action registry keyed by object type, keyboard-complete (`role="menu"`, arrow-nav) | GUI_INTERACTION #8 |
+| **Active-tool feedback + universal Esc-cancel** — interaction HUD/status strip; right-click cancels an unfinished gesture | GUI_INTERACTION #9 |
+| **ToolWindow clamp/reset/persist** — full-title-bar viewport clamp, `Reset window positions`, persisted positions, collapse/resize | GUI_INTERACTION #10 |
+| **Graph Builder → durable `.dwk` PlotSpec** — Save/Save As/Duplicate/Export; Stage shows the active spec + unsaved state | GUI_INTERACTION #11 |
+| **Folder organization density** — drag handle (not whole header), breadcrumbs, multi-select bar, folder Properties, undo for folder ops | GUI_INTERACTION #13 |
+| **Worksheet window-scoped selection** — key selection/highlight by worksheet-window ID | GUI_INTERACTION #14 |
+| **Real-browser (Playwright) interaction journeys** at 100/125/200% | GUI_INTERACTION #15 |
+| Larger bets / polish: unified select→edit Plot Objects tree (#2, owner-gate scope), canonical plot spec across surfaces (#12), buttons/menus/tooltips polish (#17), owner-dependent Origin gaps (#16) | GUI_INTERACTION Tier 1–3 |
 
 ## Owner actions & owner-gated decisions
 
@@ -37,6 +49,10 @@ on external samples, or a deliberate deferral — see the sections below.)*
 | **Apache-2.0 copyright holder line** for LICENSE/NOTICE | PORT_PLAN #1 |
 | **Code-signing cert + auto-update E2E** (two consecutive signed releases to verify the updater) | MAIN gate (was PORT #47/#49 residue) |
 | **GOTO owner gates** — 3-D (Q4), worksheet reshape (Q6), date-time axes (Q7), signal-processing non-goal (Q8), switch-trigger project pick + start timing (Q9; protocol in the plan's Context) | GOTO_PLAN Owner gates |
+| **Undo scopes** — one unified stack vs. scoped undo (visual/data/org) + separate zoom/pan view-history; decide before building #1 | GUI_INTERACTION #1 gate |
+| **Baseline: frontend channel-bind vs. backend corrections-DAG** — cross-audit contradiction; scope before starting #5 | GUI_INTERACTION #5 gate |
+| **Plot Objects tree scope** — full Origin-style Object Manager vs. better-signposted gestures + undo (large bet) | GUI_INTERACTION #2 gate |
+| **Shared AnalysisSelection contract timing** — when to generalize the #4 `lib/fitweights` seed into the full cross-workflow selection contract | GUI_INTERACTION gate |
 
 ## Blocked on external samples / specs
 
@@ -70,5 +86,6 @@ the root; every active plan below is its declared sub-plan.
 | `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only — MAIN #9–#28 ALL shipped 2026-07-11/12 (zero open dev items) |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
+| `plans/GUI_INTERACTION_PLAN.md` | Active | Tier 1 #1–#3,#5,#6 + Tier 2 #7–#15 + Tier 3 #16–#17 open; #4 (weighted fitting) SHIPPED 2026-07-12; 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence; #47 LOW-PRIORITY (recover Origin graphic objects/annotations on import — gated on MAIN #27) |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |
