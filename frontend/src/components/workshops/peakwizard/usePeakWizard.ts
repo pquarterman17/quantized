@@ -31,8 +31,8 @@ import {
   subtractBaseline,
   type PeakRecipe,
 } from "../../../lib/peakwizard";
+import { fullPlottedX, selectedFitData } from "../../../lib/fitselection";
 import { peakOverlayArray } from "../../../lib/plotdata";
-import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, MultiFitResult, Peak } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -110,6 +110,9 @@ export function usePeakWizard(): PeakWizardState {
   const setBaselineOverlay = useApp((s) => s.setBaselineOverlay);
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
   const setPeakWizardEdit = useApp((s) => s.setPeakWizardEdit);
+  const xKey = useApp((s) => s.xKey);
+  const yKeys = useApp((s) => s.yKeys);
+  const seriesOrder = useApp((s) => s.seriesOrder);
 
   const [step, setStep] = useState(0);
   const [recipe, setRecipe] = useState<PeakRecipe>(DEFAULT_RECIPE);
@@ -145,13 +148,14 @@ export function usePeakWizard(): PeakWizardState {
     setIntegrateResult(null);
   }, []);
 
-  // The wizard's working segment: analysis rows (x, first channel), range-cut.
+  // The wizard's working segment: the PLOTTED X + primary Y over the analysis
+  // rows (audit P1 #1), range-cut — so the whole recipe (baseline, find, fit,
+  // integrate) tracks what the user sees, not time/values[0].
   const segment = useMemo(() => {
-    const d = analysisData(active);
-    if (!d || d.time.length === 0) return null;
-    const y = d.values.map((row) => row[0]);
-    return cutRange(d.time, y, recipe.range.lo, recipe.range.hi);
-  }, [active, recipe.range.lo, recipe.range.hi]);
+    const sel = selectedFitData(active, xKey, yKeys, seriesOrder);
+    if (!sel || sel.x.length === 0) return null;
+    return cutRange(sel.x, sel.y, recipe.range.lo, recipe.range.hi);
+  }, [active, xKey, yKeys, seriesOrder, recipe.range.lo, recipe.range.hi]);
 
   // ① Baseline on the working segment; overlays onto the FULL plot x.
   useEffect(() => {
@@ -247,11 +251,11 @@ export function usePeakWizard(): PeakWizardState {
     setPeakOverlay({
       datasetId: active.id,
       y: peakOverlayArray(
-        active.data.time,
+        fullPlottedX(active.data, xKey),
         included.map((p) => ({ center: p.center, height: p.height })),
       ),
     });
-  }, [active, candidates, setPeakOverlay]);
+  }, [active, candidates, setPeakOverlay, xKey]);
 
   const togglePeak = (i: number) =>
     setCandidates((cs) => cs.map((c, j) => (j === i ? { ...c, included: !c.included } : c)));
