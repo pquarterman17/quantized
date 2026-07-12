@@ -14,7 +14,10 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-09 (a single-day campaign from the owner's PNR.opj
+**Updated:** 2026-07-12 (booked #47: recover Origin drawn graphic
+objects + richer annotations on import — LOW PRIORITY, W3 Tier 3,
+unblocked once MAIN #25/#27 land a native target model). Prior:
+2026-07-09 (a single-day campaign from the owner's PNR.opj
 import testing: the four triage fix batches — perf quick wins, zero-tail
 wrap-around prune, log tick steps, y2/legend/multi-panel fidelity — all
 MERGED and recorded in Completed; **#38 lazy per-book transport CLOSED**
@@ -309,6 +312,34 @@ item 40 CLOSED same day, see Completed)
     specimen where visibility and book membership decouple.
 
 ### Tier 3 — Nice-to-Have
+
+47. **Recover Origin drawn graphic objects + richer annotation types on
+    import** (LOW PRIORITY, booked 2026-07-12 from the owner's shapes/
+    annotations work). *Use:* an imported Origin figure that carries
+    drawn markup — arrow pointing at Tc, a line, a standalone rect/
+    ellipse circling a feature, a framed callout text box — currently
+    drops that markup (the decode recovers curves, styles, legends,
+    plain-text annotations, and Rect *fill*-shades [#41], but not
+    graphic OBJECTS or rich/framed annotation variants). Recovering them
+    means an imported figure lands complete, then editable with the
+    pointer tool. *Passive* (happens on import; no UI to discover).
+    - Newly unblocked: only worth doing now that quantized has a NATIVE
+      target model to decode onto — the `Shape` model (MAIN #27:
+      arrow/line/rect/ellipse) + rich-text/framed annotations (MAIN
+      #25/#27). Depends on both landing.
+    - Scope: decode Origin's graphic-object records (arrow/line/rect/
+      ellipse as OBJECTS, distinct from the region-fill Rect* class
+      already in `opj_shapes.py`) → map to `Shape`; decode richer text-
+      annotation variants (framed/callout) → the annotation `frame`
+      model. Apply through the SAME `applyOriginFigure` path all three
+      surfaces share.
+    - Discipline: obey `origin-import-fixes` (decode the object-record
+      CLASS, never a per-figure special case) and `samples-not-
+      standards` (a synthetic unit test for the record shape + a
+      `realdata` anchor; document object types that can't be proven from
+      the corpus as honest gaps in `docs/origin_project_format.md`,
+      don't guess). Corpus-sweep the gallery (`tools/visual/
+      origin_figures.mjs`) and report which OTHER figures gain objects.
 
 (all prior W3 items shipped — see Completed)
 ~~35. **Figure curve→dataset binding**~~ **CLOSED 2026-07-04** — see

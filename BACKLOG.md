@@ -48,6 +48,7 @@ verified by the fresh-machine acceptance run.)*
 
 ## Deliberate deferrals (decision gates — revisit on demand, don't schedule)
 
+- **Recover Origin drawn graphic objects + richer annotations on import** (LOW PRIORITY, ORIGIN_FILE_DECODE #47) — imported Origin figures currently drop arrows/lines/standalone rect-ellipse objects + framed/callout annotations (only curves, styles, legends, plain text, and Rect fill-shades recover). Unblocked once MAIN #25/#27 land a native Shape/framed-annotation target to decode onto; revisit after #27 ships.
 - **Interactive WebGL 3-D** (MAIN deferral; gate UNIFIED with GOTO Q4) — revisit when users ask to rotate views the static 3-D export can't satisfy.
 - **`.opju` writer** (MAIN deferral = ORIGIN_FILE_DECODE #27) — revisit only if a real Origin build refuses `.opj`.
 - **`quantized-plugin-template` starter repo** (MAIN deferral, was ORIGIN_GAP #8) — a separate repo, out of scope for this codebase.
@@ -69,5 +70,5 @@ the root; every active plan below is its declared sub-plan.
 | `plans/MAIN_PLAN.md` | Active (ROOT) | #25 open (agent in flight) + owner gates/deferrals — MAIN #9–#24, #26 ALL shipped 2026-07-11 |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
-| `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence |
+| `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence; #47 LOW-PRIORITY (recover Origin graphic objects/annotations on import — gated on MAIN #27) |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |
