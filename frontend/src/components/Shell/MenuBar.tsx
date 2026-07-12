@@ -13,15 +13,19 @@ import { useApp } from "../../store/useApp";
 
 // Top-level menus and the action group each shows. "Help" is built in below.
 // Order mirrors the design handoff's menubar (File · Edit · Data · Plot ·
-// Analyze · Window · View · Help). Empty groups simply don't open. "Window"
-// (MULTI_PLOT_PLAN item 5) has no entries in App.tsx's curated list — it's
-// populated entirely by `useCommands().menuCommands` (see the merge below),
-// published by `windows/useWindowCommands` — zero lines added to App.tsx.
+// Insert · Analyze · Window · View · Help). Empty groups simply don't open.
+// "Window" (MULTI_PLOT_PLAN item 5) has no entries in App.tsx's curated
+// list — it's populated entirely by `useCommands().menuCommands` (see the
+// merge below), published by `windows/useWindowCommands` — zero lines added
+// to App.tsx. "Insert" (MAIN #27) is the NEW top-level menu this repo
+// didn't have before — the drawn-shapes commands' second discoverability
+// path alongside the plot's own dock flyout (`PlotToolbar`).
 const MENUS: { label: string; group: string }[] = [
   { label: "File", group: "File" },
   { label: "Edit", group: "Edit" },
   { label: "Data", group: "Data" },
   { label: "Plot", group: "Plot" },
+  { label: "Insert", group: "Insert" },
   { label: "Analyze", group: "Analyze" },
   { label: "Window", group: "Window" },
   { label: "View", group: "View" },

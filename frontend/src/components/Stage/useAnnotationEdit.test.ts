@@ -6,6 +6,7 @@ import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askAnnotationText } from "../overlays/AnnotationTextDialog";
+import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
 import { useAnnotationEdit } from "./useAnnotationEdit";
 
@@ -156,6 +157,84 @@ describe("useAnnotationEdit — page/data anchor toggle (MAIN #21)", () => {
     };
     act(() => pin.run());
     expect(useApp.getState().annotations[0]).toMatchObject({ anchor: "data", x: 5, y: 9 });
+  });
+});
+
+describe("useAnnotationEdit — Frame preset menu (MAIN #27 text box)", () => {
+  function frameSubmenu(items: ContextMenuItem[]) {
+    const frame = items.find((i) => "submenu" in i && i.label === "Frame") as
+      | { submenu: { label: string; checked?: boolean; run?: () => void; disabled?: boolean; submenu?: unknown }[] }
+      | undefined;
+    return frame?.submenu ?? [];
+  }
+
+  it("an unframed annotation's Frame submenu shows None checked", () => {
+    const { result } = renderHook(() => useAnnotationEdit("pointer"));
+    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
+    const sub = frameSubmenu(result.current.menu?.items ?? []);
+    const none = sub.find((i) => i.label === "None");
+    expect(none?.checked).toBe(true);
+  });
+
+  it("picking Subtle sets a low-opacity frame with no explicit fill/stroke", () => {
+    const { result } = renderHook(() => useAnnotationEdit("pointer"));
+    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
+    const subtle = frameSubmenu(result.current.menu?.items ?? []).find((i) => i.label === "Subtle")!;
+    act(() => subtle.run?.());
+    expect(useApp.getState().annotations[0].frame).toEqual({ opacity: 0.15 });
+  });
+
+  it("picking Solid sets a concrete resolved fill + full opacity", () => {
+    const { result } = renderHook(() => useAnnotationEdit("pointer"));
+    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
+    const solid = frameSubmenu(result.current.menu?.items ?? []).find((i) => i.label === "Solid")!;
+    act(() => solid.run?.());
+    const frame = useApp.getState().annotations[0].frame;
+    expect(frame?.opacity).toBe(1);
+    expect(typeof frame?.fill).toBe("string");
+    expect(frame?.fill).not.toBe("");
+  });
+
+  it("picking None clears an existing frame", () => {
+    useApp.setState({ annotations: [{ id: "a1", x: 1, y: 2, text: "Tc", frame: { opacity: 0.5 } }] });
+    const { result } = renderHook(() => useAnnotationEdit("pointer"));
+    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
+    const none = frameSubmenu(result.current.menu?.items ?? []).find((i) => i.label === "None")!;
+    act(() => none.run?.());
+    expect(useApp.getState().annotations[0].frame).toBeUndefined();
+  });
+
+  it("the Opacity sub-submenu is disabled with no frame, enabled once framed", () => {
+    const { result: r1 } = renderHook(() => useAnnotationEdit("pointer"));
+    act(() => r1.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
+    const opacityDisabled = frameSubmenu(r1.current.menu?.items ?? []).find((i) => i.label === "Opacity") as {
+      disabled?: boolean;
+    };
+    expect(opacityDisabled.disabled).toBe(true);
+
+    useApp.setState({ annotations: [{ id: "a1", x: 1, y: 2, text: "Tc", frame: { opacity: 0.5 } }] });
+    const { result: r2 } = renderHook(() => useAnnotationEdit("pointer"));
+    act(() => r2.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
+    const opacityEnabled = frameSubmenu(r2.current.menu?.items ?? []).find((i) => i.label === "Opacity") as {
+      disabled?: boolean;
+    };
+    expect(opacityEnabled.disabled).toBe(false);
+  });
+
+  it("picking an Opacity step patches opacity, preserving an existing fill (Solid then 50%)", () => {
+    const { result } = renderHook(() => useAnnotationEdit("pointer"));
+    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
+    const solid = frameSubmenu(result.current.menu?.items ?? []).find((i) => i.label === "Solid")!;
+    act(() => solid.run?.());
+    const fill = useApp.getState().annotations[0].frame?.fill;
+
+    act(() => result.current.bridge?.onContextMenu?.("a1", 0, 0, CONV));
+    const opacitySub = frameSubmenu(result.current.menu?.items ?? []).find((i) => i.label === "Opacity") as {
+      submenu: { label: string; run: () => void }[];
+    };
+    const fifty = opacitySub.submenu.find((i) => i.label === "50%")!;
+    act(() => fifty.run());
+    expect(useApp.getState().annotations[0].frame).toEqual({ fill, opacity: 0.5 });
   });
 });
 

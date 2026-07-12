@@ -17,9 +17,9 @@ beforeEach(() => useCommands.setState({ menuCommands: [] }));
 afterEach(() => useCommands.setState({ menuCommands: [] }));
 
 describe("MenuBar", () => {
-  it("renders the eight-menu structure (File·Edit·Data·Plot·Analyze·Window·View + Help)", () => {
+  it("renders the nine-menu structure (File·Edit·Data·Plot·Insert·Analyze·Window·View + Help)", () => {
     render(<MenuBar actions={actions} onOpenPalette={vi.fn()} />);
-    for (const m of ["File", "Edit", "Data", "Plot", "Analyze", "Window", "View", "Help"]) {
+    for (const m of ["File", "Edit", "Data", "Plot", "Insert", "Analyze", "Window", "View", "Help"]) {
       expect(screen.getByText(m)).toBeInTheDocument();
     }
   });

@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigure } from "./api";
 import { liveViewOverrides, runExportFigureCommand } from "./exportFigureCommand";
-import type { Annotation } from "./types";
+import type { Annotation, Shape } from "./types";
 import { useApp } from "../store/useApp";
 
 vi.mock("./api", () => ({
@@ -31,12 +31,14 @@ function fakeGet(over: {
   legendPos?: "ne" | "nw" | "se" | "sw";
   legendXY?: [number, number] | null;
   annotations?: Annotation[];
+  shapes?: Shape[];
 }) {
   const state = {
     showLegend: over.showLegend ?? true,
     legendPos: over.legendPos ?? "ne",
     legendXY: over.legendXY ?? null,
     annotations: over.annotations ?? [],
+    shapes: over.shapes ?? [],
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (() => state) as any;
@@ -98,6 +100,41 @@ describe("liveViewOverrides", () => {
   it("omits annotations entirely (not an empty array) when there are none", () => {
     const ov = liveViewOverrides(fakeGet({}));
     expect(ov).not.toHaveProperty("annotations");
+  });
+
+  it("carries an annotation's frame (MAIN #27 text box) through unchanged", () => {
+    const frame = { fill: "#fff", stroke: "#000", opacity: 0.5, pad: 4 };
+    const ov = liveViewOverrides(
+      fakeGet({ annotations: [{ id: "a1", x: 1, y: 2, text: "box", frame }] }),
+    );
+    expect(ov?.annotations).toEqual([{ x: 1, y: 2, text: "box", frame }]);
+  });
+
+  it("carries drawn shapes through, omitting unset style fields (MAIN #27)", () => {
+    const ov = liveViewOverrides(
+      fakeGet({
+        shapes: [
+          { id: "s1", kind: "arrow", x1: 1, y1: 2, x2: 3, y2: 4 },
+          { id: "s2", kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1, anchor: "page", stroke: "#f00", opacity: 0.3 },
+        ],
+      }),
+    );
+    expect(ov?.shapes).toEqual([
+      { kind: "arrow", x1: 1, y1: 2, x2: 3, y2: 4 },
+      { kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1, anchor: "page", stroke: "#f00", opacity: 0.3 },
+    ]);
+  });
+
+  it("drops a non-finite shape rather than sending garbage coords", () => {
+    const ov = liveViewOverrides(
+      fakeGet({ shapes: [{ id: "s1", kind: "line", x1: Number.NaN, y1: 0, x2: 1, y2: 1 }] }),
+    );
+    expect(ov?.shapes ?? []).toHaveLength(0);
+  });
+
+  it("omits shapes entirely (not an empty array) when there are none", () => {
+    const ov = liveViewOverrides(fakeGet({}));
+    expect(ov).not.toHaveProperty("shapes");
   });
 });
 

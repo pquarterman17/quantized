@@ -24,12 +24,37 @@ export interface FigureOverrides {
    *  matplotlib figure fraction grows upward) instead of axes-data
    *  coordinates; absent = the pre-#21 data-coordinate behaviour. See
    *  `calc.figure_overrides._apply_overrides`. */
-  annotations?: { x: number; y: number; text: string; size?: number; anchor?: "page" }[];
+  annotations?: {
+    x: number;
+    y: number;
+    text: string;
+    size?: number;
+    anchor?: "page";
+    /** MAIN #27 "text box": a bbox behind the text —
+     *  `calc.figure_overrides._apply_overrides`'s `ann.get("frame")` branch. */
+    frame?: { fill?: string; stroke?: string; opacity?: number; pad?: number };
+  }[];
   /** Manual axis breaks (gap #21, export-side): elided `[lo, hi]` x-ranges,
    *  rendered as twinned panels with diagonal break glyphs
    *  (`calc.figure._render_impl`). `lib/facet.suggestBreaks` proposes
    *  candidates from a gap scan of the x column. */
   x_breaks?: [number, number][];
+  /** MAIN #27 drawn shapes (arrow/line/rect/ellipse) —
+   *  `calc.figure_shapes._apply_shapes`. Mirrors `Shape` minus the `id`
+   *  (the wire shape needs no identity, unlike the screen's editable list). */
+  shapes?: {
+    kind: "arrow" | "line" | "rect" | "ellipse";
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    anchor?: "page";
+    stroke?: string;
+    fill?: string;
+    opacity?: number;
+    width?: number;
+    dash?: boolean;
+  }[];
 }
 
 export const LEGEND_LOCS = [
@@ -74,8 +99,8 @@ export function compactOverrides(ov: FigureOverrides): FigureOverrides | null {
   for (const [k, v] of Object.entries(ov)) {
     if (v === undefined) continue;
     if (Array.isArray(v)) {
-      // limits: keep only when at least one bound is set; annotations/breaks: non-empty
-      if ((k === "annotations" || k === "x_breaks") && v.length === 0) continue;
+      // limits: keep only when at least one bound is set; annotations/breaks/shapes: non-empty
+      if ((k === "annotations" || k === "x_breaks" || k === "shapes") && v.length === 0) continue;
       if ((k === "x_lim" || k === "y_lim") && v.every((b) => b === null)) continue;
       out[k] = v;
     } else if (typeof v === "object" && v !== null) {

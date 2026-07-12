@@ -17,6 +17,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_shapes import _apply_shapes, _validate_shapes
 
 __all__ = ["_apply_overrides", "_validate_overrides"]
 
@@ -63,6 +64,7 @@ def _validate_overrides(ov: Mapping[str, Any]) -> None:
             if prev_hi is not None and lo < prev_hi:
                 raise ValueError("x_breaks entries must be sorted and non-overlapping")
             prev_hi = hi
+    _validate_shapes(ov.get("shapes"))
 
 
 def _apply_overrides(
@@ -142,6 +144,23 @@ def _apply_overrides(
             # pixel-identical placement between screen and export.
             ann_kw["xycoords"] = "figure fraction"
             y = 1.0 - y
+        frame = ann.get("frame")
+        if frame:
+            # MAIN #27 "text box": a bbox behind the annotation text. `pad`
+            # (screen CSS px around the measured text) has no exact
+            # matplotlib equivalent (`boxstyle="square,pad=N"`'s pad is in
+            # font-size units, not px) -- divided by a fixed factor so the
+            # box reads as padded rather than pixel-identical, the same
+            # "Origin-parity-in-spirit, not pixel-identical" caveat the
+            # page-anchor y-flip above documents. fc/ec default to a plain
+            # white-card-on-black-border look (independent of the screen's
+            # own dark-canvas ink default -- publication export is white-bg).
+            ann_kw["bbox"] = dict(
+                boxstyle=f"square,pad={float(frame.get('pad', 4)) / 4.0}",
+                fc=frame.get("fill") or "white",
+                ec=frame.get("stroke") or "black",
+                alpha=frame.get("opacity", 1.0),
+            )
         ax.annotate(
             safe_mathtext_label(str(ann.get("text", ""))),
             xy=(x, y),
@@ -157,3 +176,8 @@ def _apply_overrides(
             top=None if margins.get("top") is None else 1.0 - float(margins["top"]),
             bottom=margins.get("bottom"),
         )
+
+    # MAIN #27: shapes paint LAST -- on top of everything else this sweep
+    # drew (annotations included), matching export intent: shapes mark up
+    # the finished figure.
+    _apply_shapes(fig, ax, ov.get("shapes"))

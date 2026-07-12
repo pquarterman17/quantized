@@ -254,6 +254,125 @@ describe("sanitizeView — annotations (MAIN #21 — page/data anchor)", () => {
     );
     expect(out[0].view.annotations).toEqual([]);
   });
+
+  it("round-trips a `frame` (MAIN #27 text box) unchanged", () => {
+    const ann = { id: "a1", x: 1, y: 2, text: "box", frame: { fill: "#fff", stroke: "#000", opacity: 0.5, pad: 6 } };
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), annotations: [ann] } as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.annotations).toEqual([ann]);
+  });
+
+  it("clamps a frame's opacity/pad and drops non-string colors", () => {
+    const ann = {
+      id: "a1",
+      x: 1,
+      y: 2,
+      text: "box",
+      frame: { fill: 5, stroke: "#000", opacity: 3, pad: -9 },
+    };
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), annotations: [ann] } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.annotations).toEqual([
+      { id: "a1", x: 1, y: 2, text: "box", frame: { stroke: "#000", opacity: 1, pad: 0 } },
+    ]);
+  });
+
+  it("no frame key at all -> no frame field (pre-#27 back-compat)", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), annotations: [{ id: "a1", x: 1, y: 2, text: "plain" }] } as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.annotations[0]).not.toHaveProperty("frame");
+  });
+});
+
+describe("sanitizeView — shapes (MAIN #27 drawn shapes)", () => {
+  it("round-trips a data-anchored shape unchanged", () => {
+    const shape = { id: "s1", kind: "arrow" as const, x1: 1, y1: 2, x2: 3, y2: 4 };
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), shapes: [shape] } as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.shapes).toEqual([shape]);
+  });
+
+  it("round-trips a page-anchored shape's fraction coords + style fields", () => {
+    const shape = {
+      id: "s1",
+      kind: "rect" as const,
+      x1: 0.1,
+      y1: 0.2,
+      x2: 0.5,
+      y2: 0.6,
+      anchor: "page" as const,
+      stroke: "#ff0000",
+      fill: "#00ff00",
+      opacity: 0.4,
+      width: 2,
+      dash: true,
+    };
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), shapes: [shape] } as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.shapes).toEqual([shape]);
+  });
+
+  it("clamps a page shape's out-of-range fractions into [0, 1]", () => {
+    const shape = { id: "s1", kind: "ellipse" as const, x1: -0.5, y1: 1.5, x2: 2, y2: -3, anchor: "page" as const };
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), shapes: [shape] } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.shapes).toEqual([
+      { id: "s1", kind: "ellipse", x1: 0, y1: 1, x2: 1, y2: 0, anchor: "page" },
+    ]);
+  });
+
+  it("never clamps a DATA-anchored shape's coords", () => {
+    const shape = { id: "s1", kind: "line" as const, x1: -500, y1: 2000, x2: 1e6, y2: -1e6 };
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), shapes: [shape] } as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.shapes).toEqual([shape]);
+  });
+
+  it("drops an entry with an unknown kind, missing id, or a non-finite coordinate", () => {
+    const shapes = [
+      { id: "s1", kind: "arrow", x1: 1, y1: 2, x2: 3, y2: 4 },
+      { id: "s2", kind: "triangle", x1: 1, y1: 2, x2: 3, y2: 4 },
+      { kind: "line", x1: 1, y1: 2, x2: 3, y2: 4 },
+      { id: "s3", kind: "line", x1: Number.NaN, y1: 2, x2: 3, y2: 4 },
+      "not-an-object",
+    ];
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), shapes } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.shapes).toEqual([{ id: "s1", kind: "arrow", x1: 1, y1: 2, x2: 3, y2: 4 }]);
+  });
+
+  it("floors width at a hairline (0.5) rather than allowing an invisible/unclickable stroke", () => {
+    const shape = { id: "s1", kind: "line" as const, x1: 0, y1: 0, x2: 1, y2: 1, width: 0 };
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), shapes: [shape] } as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.shapes[0].width).toBe(0.5);
+  });
+
+  it("falls back to an empty array for a non-array shapes field", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), shapes: "nope" } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.shapes).toEqual([]);
+  });
 });
 
 describe("nearestLegendCorner (MAIN #18 — double-click-to-reset)", () => {

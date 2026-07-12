@@ -14,7 +14,7 @@ import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst } from "./richtext";
 import { decimalsForIncrement, pow10 } from "./ticks";
-import type { Annotation, AxisFormat, AxisScale, LineStyle, RefLine, RegionShade, SeriesStyle } from "./types";
+import type { Annotation, AxisFormat, AxisScale, LineStyle, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
 import { resolveFillBands, seriesFillProps } from "./uplotFill";
 import {
   annotationPlugin,
@@ -26,6 +26,7 @@ import {
   type AnnotationEditOpts,
 } from "./uplotOverlays";
 import { richLabelsPlugin } from "./uplotRichLabels";
+import { shapesPlugin, type ShapeEditOpts } from "./uplotShapes";
 import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
 import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
 import { anchorEditPlugin, type AnchorPoint } from "./uplotAnchors";
@@ -52,7 +53,10 @@ export type PlotTool =
   | "fwhm"
   | "qfit";
 
-function cssVar(name: string): string {
+/** Exported for `useAnnotationEdit`'s Frame "Solid" preset (MAIN #27), which
+ *  needs a concrete resolved surface color to draw behind text — a canvas
+ *  `fillStyle` can't take a live `var(--x)` reference the way DOM CSS can. */
+export function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
@@ -535,6 +539,16 @@ export interface BuildOptsArgs {
    *  does), never once per pixel (the plugin's own live-drag override in
    *  `annotationPlugin` handles that). */
   annotationEdit?: Omit<AnnotationEditOpts, "interactive"> | null;
+  /** Drawn shapes (MAIN #27: arrow/line/rect/ellipse). */
+  shapes?: Shape[];
+  /** Pointer-tool direct manipulation for `shapes` — same "non-null only in
+   *  pointer mode" convention as `annotationEdit` above (see
+   *  `useShapeEdit`, which supplies it). */
+  shapeEdit?: Omit<ShapeEditOpts, "interactive" | "drawKind" | "onDrawCommit"> | null;
+  /** Drag-to-draw a NEW shape (MAIN #27's dock flyout / Insert menu) —
+   *  independent of `tool`/pointer mode, composes like peakWizardEdit/
+   *  anchorEdit (see `useShapeDraw`, which supplies it). */
+  shapeDraw?: Pick<ShapeEditOpts, "drawKind" | "onDrawCommit"> | null;
   /** Filled region bands (Origin Rect* shades, decode-plan #41), drawn
    *  translucently behind the grid/data by regionShadePlugin. */
   regionShades?: RegionShade[];
@@ -851,6 +865,27 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       refLinePlugin(refLines, inkDimColor, {
         onMove: args.onRefLineMove,
         interactive: tool === "pointer" || tool === "zoom" || tool === "cursor",
+      }),
+    );
+  }
+  // Shapes (MAIN #27) register BETWEEN refLines and annotations: they draw
+  // above series/ref-lines but below annotation TEXT (spec's z-order) since
+  // plugin `draw` hooks paint in registration order, later = on top. Wired
+  // whenever there's something to SHOW (existing shapes) or something to DO
+  // (an active draw-new-shape mode, even with zero shapes so far).
+  const shapeKind = args.shapeDraw?.drawKind ?? null;
+  if ((args.shapes && args.shapes.length > 0) || shapeKind) {
+    plugins.push(
+      shapesPlugin(args.shapes ?? [], inkColor, {
+        interactive: tool === "pointer" && !!args.shapeEdit,
+        selectColor: accentColor,
+        selectedId: args.shapeEdit?.selectedId ?? null,
+        onSelect: args.shapeEdit?.onSelect,
+        onMove: args.shapeEdit?.onMove,
+        onReshape: args.shapeEdit?.onReshape,
+        onContextMenu: args.shapeEdit?.onContextMenu,
+        drawKind: shapeKind,
+        onDrawCommit: args.shapeDraw?.onDrawCommit,
       }),
     );
   }

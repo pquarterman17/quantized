@@ -22,7 +22,7 @@ import {
   type PanelLayout,
 } from "./panelwindow";
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
-import type { Annotation, AxisFormat, AxisScale, RefLine, RegionShade, SeriesStyle, TickMode } from "./types";
+import type { Annotation, AxisFormat, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
 
 // Re-exported: PlotWindow.panel (below) is the only reason this module
 // depends on panelwindow.ts at all — callers that just need the window-record
@@ -114,6 +114,10 @@ export interface PlotView {
   refLines: RefLine[];
   annotations: Annotation[];
   regionShades: RegionShade[];
+  /** Drawn shapes (MAIN #27: arrow/line/rect/ellipse). Global to the plot,
+   *  same "lives on PlotView, swapped per-window" convention as
+   *  `annotations`/`refLines`. */
+  shapes: Shape[];
   seriesStyles: Record<number, SeriesStyle>;
   seriesLabels: Record<number, string>;
   errKeys: Record<number, number>;
@@ -159,6 +163,7 @@ export function defaultPlotView(): PlotView {
     refLines: [],
     annotations: [],
     regionShades: [],
+    shapes: [],
     seriesStyles: {},
     seriesLabels: {},
     errKeys: {},
@@ -429,6 +434,7 @@ function sanitizeAnnotations(v: unknown): Annotation[] {
       ? (o.anchor as Annotation["anchor"])
       : undefined;
     const isPage = anchor === "page";
+    const frame = sanitizeFrame(o.frame);
     out.push({
       id: o.id,
       x: isPage ? clamp01(o.x) : o.x,
@@ -437,6 +443,73 @@ function sanitizeAnnotations(v: unknown): Annotation[] {
       ...(o.axis === 0 || o.axis === 1 ? { axis: o.axis } : {}),
       ...(typeof o.size === "number" && Number.isFinite(o.size) ? { size: o.size } : {}),
       ...(anchor ? { anchor } : {}),
+      ...(frame ? { frame } : {}),
+    });
+  }
+  return out;
+}
+
+/** Validate a persisted annotation `frame` (MAIN #27's "text box" backing
+ *  rect) — every field optional/independently defaulted at draw time, so
+ *  this only needs to drop non-string colors and clamp `opacity`/`pad` into
+ *  sane ranges; a non-object input (absent, on every pre-#27 annotation)
+ *  returns null (no frame). */
+function sanitizeFrame(
+  v: unknown,
+): { fill?: string; stroke?: string; opacity?: number; pad?: number } | null {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v as Record<string, unknown>;
+  const out: { fill?: string; stroke?: string; opacity?: number; pad?: number } = {};
+  if (typeof o.fill === "string") out.fill = o.fill;
+  if (typeof o.stroke === "string") out.stroke = o.stroke;
+  if (typeof o.opacity === "number" && Number.isFinite(o.opacity)) {
+    out.opacity = Math.min(1, Math.max(0, o.opacity));
+  }
+  if (typeof o.pad === "number" && Number.isFinite(o.pad)) out.pad = Math.max(0, o.pad);
+  return out;
+}
+
+const SHAPE_KINDS: readonly Shape["kind"][] = ["arrow", "line", "rect", "ellipse"];
+const SHAPE_ANCHORS: readonly Shape["anchor"][] = ["data", "page"];
+
+/** Validate a persisted shape list (MAIN #27) — the `Shape` analogue of
+ *  `sanitizeAnnotations` above: an entry missing its required `id`/`kind`/
+ *  finite `x1..y2` shape is dropped (nothing sane to fall back to for a
+ *  single list entry); a `"page"` anchor's coords are canvas FRACTIONS,
+ *  clamped into [0, 1] (same convention as a page-anchored annotation);
+ *  `opacity` clamps into [0, 1]; `width` floors at a hairline (0 would be
+ *  invisible AND unclickable). Never throws. */
+function sanitizeShapes(v: unknown): Shape[] {
+  if (!Array.isArray(v)) return [];
+  const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+  const out: Shape[] = [];
+  for (const e of v) {
+    if (typeof e !== "object" || e === null) continue;
+    const o = e as Record<string, unknown>;
+    if (typeof o.id !== "string" || !SHAPE_KINDS.includes(o.kind as Shape["kind"])) continue;
+    const coords = [o.x1, o.y1, o.x2, o.y2];
+    if (!coords.every((n): n is number => typeof n === "number" && Number.isFinite(n))) continue;
+    const anchor = SHAPE_ANCHORS.includes(o.anchor as Shape["anchor"])
+      ? (o.anchor as Shape["anchor"])
+      : undefined;
+    const isPage = anchor === "page";
+    out.push({
+      id: o.id,
+      kind: o.kind as Shape["kind"],
+      x1: isPage ? clamp01(o.x1 as number) : (o.x1 as number),
+      y1: isPage ? clamp01(o.y1 as number) : (o.y1 as number),
+      x2: isPage ? clamp01(o.x2 as number) : (o.x2 as number),
+      y2: isPage ? clamp01(o.y2 as number) : (o.y2 as number),
+      ...(anchor ? { anchor } : {}),
+      ...(typeof o.stroke === "string" ? { stroke: o.stroke } : {}),
+      ...(typeof o.fill === "string" ? { fill: o.fill } : {}),
+      ...(typeof o.opacity === "number" && Number.isFinite(o.opacity)
+        ? { opacity: clamp01(o.opacity) }
+        : {}),
+      ...(typeof o.width === "number" && Number.isFinite(o.width)
+        ? { width: Math.max(0.5, o.width) }
+        : {}),
+      ...(typeof o.dash === "boolean" ? { dash: o.dash } : {}),
     });
   }
   return out;
@@ -499,6 +572,7 @@ function sanitizeView(v: unknown): PlotView {
     refLines: Array.isArray(o.refLines) ? (o.refLines as RefLine[]) : [],
     annotations: sanitizeAnnotations(o.annotations),
     regionShades: Array.isArray(o.regionShades) ? (o.regionShades as RegionShade[]) : [],
+    shapes: sanitizeShapes(o.shapes),
     seriesStyles:
       typeof o.seriesStyles === "object" && o.seriesStyles !== null
         ? (o.seriesStyles as Record<number, SeriesStyle>)

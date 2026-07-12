@@ -78,15 +78,13 @@ import {
 import { createHistorySlice, type HistorySlice } from "./history";
 // Save-workspace-to-file (#38 + MAIN_PLAN #16 ratchet offset) — see its doc.
 import { runSaveWorkspaceToFile } from "./workspaceIO";
-// The Reductions workshop's open/method slice (MAIN_PLAN #11), composed the same way.
+// Composed store slices (each documented in its own file):
 import { createReductionsSlice, type ReductionsSlice } from "./reductions";
 import { createReimportSlice, type ReimportSlice } from "./reimport";
-// Multi-dataset panel/overlay composite windows (MAIN_PLAN #19 v1), composed the same way.
 import { createPanelsSlice, type PanelsSlice } from "./panels";
-// The pointer tool's free-legend-position + annotation-update slice (MAIN #18).
 import { createPointerToolSlice, type PointerToolSlice } from "./pointerTool";
-// Split-by-column-value dialog + action (MAIN_PLAN #26), composed the same way.
 import { createSplitSlice, type SplitSlice } from "./split";
+import { createShapesSlice, type ShapesSlice } from "./shapes";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -318,7 +316,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -784,7 +782,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   addRefLine: (axis: "x" | "y", value: number) => void;
   removeRefLine: (id: string) => void;
   updateRefLine: (id: string, value: number) => void;
-  addAnnotation: (x: number, y: number, text: string) => void;
+  addAnnotation: (x: number, y: number, text: string) => string;
   removeAnnotation: (id: string) => void;
   setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
   resetSeriesStyle: (channel: number) => void;
@@ -1041,17 +1039,16 @@ function syncPrefs(s: AppState): void {
 const _initialPrefs = loadPrefs();
 
 export const useApp = create<AppState>((set, get) => ({
-  // Windows (#2, ./windows), undo/redo (#9, ./history), re-import (#10, ./reimport).
+  // Composed slices (each in its own file): windows #2, history #9, reimport
+  // #10, reductions #11, panels #19, pointer #18, split #26, shapes #27.
   ...createWindowsSlice(set, get),
   ...createHistorySlice(set),
-  // Reductions workshop open/method (MAIN_PLAN #11) — see store/reductions.ts.
   ...createReductionsSlice(set),
   ...createReimportSlice(set, get),
   ...createPanelsSlice(set),
-  // Pointer tool: free legend position + annotation edits (MAIN #18, ./pointerTool).
   ...createPointerToolSlice(set),
-  // Split-by-column-value dialog + action (MAIN #26) — see store/split.ts.
   ...createSplitSlice(set, get),
+  ...createShapesSlice(set),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1922,6 +1919,7 @@ export const useApp = create<AppState>((set, get) => ({
               refLines: restoredView.refLines,
               annotations: restoredView.annotations,
               regionShades: restoredView.regionShades,
+              shapes: restoredView.shapes,
               waterfall: restoredView.waterfall,
             }
           : {}),
@@ -2612,10 +2610,12 @@ export const useApp = create<AppState>((set, get) => ({
   // Move a reference line to a new value (drag commit). No-op for an unknown id.
   updateRefLine: (id, value) =>
     set((s) => ({ refLines: s.refLines.map((r) => (r.id === id ? { ...r, value } : r)) })),
-  addAnnotation: (x, y, text) =>
-    set((s) => ({
-      annotations: [...s.annotations, { id: `ann-${++_annSeq}`, x, y, text }],
-    })),
+  // Returns the new id (MAIN #27's "text box" flyout opens its text dialog).
+  addAnnotation: (x, y, text) => {
+    const id = `ann-${++_annSeq}`;
+    set((s) => ({ annotations: [...s.annotations, { id, x, y, text }] }));
+    return id;
+  },
   removeAnnotation: (id) =>
     set((s) => ({ annotations: s.annotations.filter((a) => a.id !== id) })),
   setSeriesStyle: (channel, patch) =>

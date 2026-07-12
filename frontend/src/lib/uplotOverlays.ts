@@ -488,6 +488,45 @@ export function annotationAnchorConversions(
   return { toPage, toData };
 }
 
+/** Default frame padding (CSS px, every side) when `frame.pad` is absent —
+ *  MAIN #27's "text box". */
+export const DEFAULT_FRAME_PAD = 4;
+
+export function resolveFrameOpacity(frame: NonNullable<Annotation["frame"]>): number {
+  return frame.opacity ?? 1;
+}
+export function resolveFrameStroke(frame: NonNullable<Annotation["frame"]>, inkColor: string): string {
+  return frame.stroke ?? inkColor;
+}
+export function resolveFrameFill(frame: NonNullable<Annotation["frame"]>, inkColor: string): string {
+  return frame.fill ?? resolveFrameStroke(frame, inkColor);
+}
+
+/** Draw an annotation's `frame` (MAIN #27's "text box") — a filled+stroked
+ *  rect BEHIND its text, padded around the SAME `annotationBox` the hit-test
+ *  and selection outline use (one geometry, never drifts). A no-op for an
+ *  annotation with no `frame`. */
+function drawAnnotationFrame(
+  ctx: CanvasRenderingContext2D,
+  box: { left: number; top: number; width: number; height: number },
+  frame: NonNullable<Annotation["frame"]>,
+  inkColor: string,
+): void {
+  const pad = frame.pad ?? DEFAULT_FRAME_PAD;
+  ctx.save();
+  ctx.globalAlpha = resolveFrameOpacity(frame);
+  ctx.fillStyle = resolveFrameFill(frame, inkColor);
+  ctx.strokeStyle = resolveFrameStroke(frame, inkColor);
+  ctx.lineWidth = 1;
+  const x = box.left - pad;
+  const y = box.top - pad;
+  const w = Math.max(box.width, 1) + pad * 2;
+  const h = box.height + pad * 2;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeRect(x, y, w, h);
+  ctx.restore();
+}
+
 export function annotationPlugin(
   annotations: Annotation[],
   color: string,
@@ -799,6 +838,9 @@ export function annotationPlugin(
           if (!layout) continue;
           const { px, py, tx, ty, align } = layout;
           if (px < 0 || px > cw || py < 0 || py > chh) continue;
+          // Frame (MAIN #27 "text box") draws BEHIND the dot+text, padded
+          // around the same box the hit-test/selection outline use.
+          if (a.text && a.frame) drawAnnotationFrame(ctx, annotationBox(layout), a.frame, color);
           ctx.beginPath();
           ctx.arc(px, py, 3, 0, Math.PI * 2);
           ctx.fill();
