@@ -22,6 +22,9 @@ const EXAMPLES: [string, string][] = [
   ["$\\mathrm{R}$ vs $R$", "upright vs math italic"],
   ["$T \\leq T_c$", "relation (≤ ≥ ≠ ≈ ∝)"],
   ["$\\mu_0H \\rightarrow \\infty$", "arrows and ∞"],
+  ["$\\frac{M}{M_s}$", "fraction"],
+  ["$\\sqrt{x^2+y^2}$", "square root"],
+  ["$\\sqrt[3]{V}$", "nth root"],
 ];
 
 /** Label-editor keyboard shortcuts (MAIN #17): [keys, what it does]. Wraps
@@ -39,6 +42,8 @@ const SYNTAX: [string, string][] = [
   ["$...$", "math region — all tokens below work only inside it"],
   ["_x   _{...}", "subscript (single char or group; nesting supported)"],
   ["^x   ^{...}", "superscript (single char or group; nesting supported)"],
+  ["\\frac{num}{den}", "stacked fraction"],
+  ["\\sqrt{...}   \\sqrt[n]{...}", "square / nth root"],
   [
     "\\alpha … \\omega",
     "lowercase Greek, italic (plus \\varepsilon \\vartheta \\varsigma \\varphi variants)",

@@ -15,17 +15,18 @@ Screen/export WYSIWYG (bug-hunt fix): the frontend's parser
 (``frontend/src/lib/richtext.ts``) only accepts a STRICT SUBSET of
 mathtext -- Greek letters, the symbol/relation/arrow commands in
 ``SUPPORTED_MATHTEXT_COMMANDS`` (``\\AA \\times \\leq \\approx \\infty
-\\rightarrow`` ...), ``\\, \\mathrm \\mathit``, and literal Unicode -- and
-rejects everything else (e.g. ``\\frac``, ``\\sqrt``, ``\\sum``) as invalid
-markup, rendering it
+\\rightarrow`` ...), the structural commands ``\\frac \\sqrt`` (MAIN #28),
+``\\, \\mathrm \\mathit``, and literal Unicode -- and rejects everything else
+(e.g. ``\\hat``, ``\\vec``, ``\\overline``) as invalid markup, rendering it
 literally on screen. Raw matplotlib accepts a much larger command set, so
-without this gate a label like ``$\\frac{1}{2}$`` would render literal text
-("Invalid markup") on screen but an actual fraction in the PDF/SVG export --
-a WYSIWYG violation. `_uses_only_supported_commands` enumerates the SAME
-command set the frontend parser accepts and rejects (falls back to literal)
-any ``$...$`` region using a command outside it, BEFORE the matplotlib trial
-parse below ever runs. Keep `SUPPORTED_MATHTEXT_COMMANDS` in sync with
-richtext.ts's ``GREEK``/``SYMBOLS`` tables + ``mathrm``/``mathit`` handling.
+without this gate a label like ``$\\vec{v}$`` would render literal text
+("Invalid markup") on screen but an actual arrow-accented vector in the
+PDF/SVG export -- a WYSIWYG violation. `_uses_only_supported_commands`
+enumerates the SAME command set the frontend parser accepts and rejects
+(falls back to literal) any ``$...$`` region using a command outside it,
+BEFORE the matplotlib trial parse below ever runs. Keep
+`SUPPORTED_MATHTEXT_COMMANDS` in sync with richtext.ts's ``GREEK``/``SYMBOLS``
+tables + ``mathrm``/``mathit``/``frac``/``sqrt`` handling.
 
 Pure layer: string in -> string out. matplotlib is imported lazily (same
 convention as the figure modules -- the heavy import is paid only on export).
@@ -80,8 +81,14 @@ _SYMBOL_COMMANDS = frozenset(
 )
 # Mirrors richtext.ts's `\mathrm{...}` / `\mathit{...}` style-group handling.
 _STYLE_COMMANDS = frozenset({"mathrm", "mathit"})
+# Mirrors richtext.ts's structural nodes: `\frac{a}{b}`, `\sqrt{x}`,
+# `\sqrt[n]{x}` (MAIN #28). matplotlib renders these natively; the frontend
+# canvas + DOM renderers draw the matching stacked/radical layout.
+_STRUCTURE_COMMANDS = frozenset({"frac", "sqrt"})
 
-SUPPORTED_MATHTEXT_COMMANDS = _GREEK_COMMANDS | _SYMBOL_COMMANDS | _STYLE_COMMANDS
+SUPPORTED_MATHTEXT_COMMANDS = (
+    _GREEK_COMMANDS | _SYMBOL_COMMANDS | _STYLE_COMMANDS | _STRUCTURE_COMMANDS
+)
 
 
 def _uses_only_supported_commands(label: str) -> bool:

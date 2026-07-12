@@ -11,6 +11,8 @@
 // Subset, inside `$...$`:
 //   _x  _{...}  ^x  ^{...}     sub/superscript (nesting supported)
 //   {...}                      grouping
+//   \frac{num}{den}            stacked fraction (rendered on canvas + export)
+//   \sqrt{...}  \sqrt[n]{...}  radical, with optional root index
 //   \alpha … \omega (+ \var* forms), \Gamma … \Omega   Greek (lowercase
 //                              italic, uppercase upright — the TeX/mathtext
 //                              convention)
@@ -34,7 +36,9 @@
 export type RichNode =
   | { kind: "text"; text: string; italic: boolean }
   | { kind: "sub"; children: RichNode[] }
-  | { kind: "sup"; children: RichNode[] };
+  | { kind: "sup"; children: RichNode[] }
+  | { kind: "frac"; num: RichNode[]; den: RichNode[] }
+  | { kind: "sqrt"; radicand: RichNode[]; index: RichNode[] | null };
 
 export interface RichParseResult {
   ok: boolean;
@@ -203,9 +207,18 @@ interface Cursor {
   pos: number;
 }
 
-// (Commands are style-independent: Greek/symbols carry their own upright/
-// italic convention, and \mathrm/\mathit set the style for their group.)
-function parseCommand(cur: Cursor, nodes: RichNode[]): void {
+/** Consume a `{...}` group at `cur.pos` (which must be `{`) and return its
+ *  parsed children at `style`. */
+function parseGroup(cur: Cursor, style: MathStyle, what: string): RichNode[] {
+  if (cur.src[cur.pos] !== "{") throw new RichSyntaxError(`${what} requires a {...} group`);
+  cur.pos += 1; // consume {
+  return parseMath(cur, style, true);
+}
+
+// Most commands are style-independent (Greek/symbols carry their own upright/
+// italic convention); \mathrm/\mathit set the style for their group, while
+// \frac/\sqrt render their operands in the CURRENT style (hence the param).
+function parseCommand(cur: Cursor, nodes: RichNode[], style: MathStyle): void {
   // cur.pos sits just after the backslash.
   if (cur.src[cur.pos] === ",") {
     cur.pos += 1;
@@ -219,10 +232,28 @@ function parseCommand(cur: Cursor, nodes: RichNode[]): void {
   }
   if (!name) throw new RichSyntaxError("stray backslash in math mode");
   if (name === "mathrm" || name === "mathit") {
-    if (cur.src[cur.pos] !== "{") throw new RichSyntaxError(`\\${name} requires a {...} group`);
-    cur.pos += 1; // consume {
-    const children = parseMath(cur, name === "mathrm" ? "rm" : "it", true);
+    const children = parseGroup(cur, name === "mathrm" ? "rm" : "it", `\\${name}`);
     for (const child of children) appendNode(nodes, child);
+    return;
+  }
+  if (name === "frac") {
+    const num = parseGroup(cur, style, "\\frac numerator");
+    const den = parseGroup(cur, style, "\\frac denominator");
+    nodes.push({ kind: "frac", num, den });
+    return;
+  }
+  if (name === "sqrt") {
+    let index: RichNode[] | null = null;
+    if (cur.src[cur.pos] === "[") {
+      cur.pos += 1;
+      const close = cur.src.indexOf("]", cur.pos);
+      if (close < 0) throw new RichSyntaxError("\\sqrt[ without a closing ]");
+      const idx: Cursor = { src: cur.src.slice(cur.pos, close), pos: 0 };
+      index = parseMath(idx, style, false); // the [n] root index
+      cur.pos = close + 1;
+    }
+    const radicand = parseGroup(cur, style, "\\sqrt");
+    nodes.push({ kind: "sqrt", radicand, index });
     return;
   }
   const greek = GREEK[name];
@@ -256,7 +287,7 @@ function parseScriptOperand(cur: Cursor, style: MathStyle): RichNode[] {
   const out: RichNode[] = [];
   if (c === "\\") {
     cur.pos += 1;
-    parseCommand(cur, out);
+    parseCommand(cur, out, style);
     return out;
   }
   cur.pos += 1;
@@ -293,7 +324,7 @@ function parseMath(cur: Cursor, style: MathStyle, inGroup: boolean): RichNode[] 
     }
     if (c === "\\") {
       cur.pos += 1;
-      parseCommand(cur, nodes);
+      parseCommand(cur, nodes, style);
       continue;
     }
     cur.pos += 1;
@@ -376,7 +407,10 @@ export function plainText(input: string | RichNode[]): string {
   let out = "";
   for (const n of nodes) {
     if (n.kind === "text") out += n.text;
-    else out += plainText(n.children);
+    else if (n.kind === "frac") out += `${plainText(n.num)}/${plainText(n.den)}`;
+    else if (n.kind === "sqrt") {
+      out += `${n.index ? plainText(n.index) : ""}√(${plainText(n.radicand)})`;
+    } else out += plainText(n.children);
   }
   return out;
 }

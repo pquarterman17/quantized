@@ -149,6 +149,54 @@ describe("parseRichText — math constructs", () => {
       { kind: "sup", children: [text("n", true)] },
     ]);
   });
+
+  it("parses \\frac into a frac node (num/den in the current style)", () => {
+    expect(parseRichText("$\\frac{1}{2}$").nodes).toEqual([
+      { kind: "frac", num: [text("1", false)], den: [text("2", false)] },
+    ]);
+    // the motivating case: $\frac{M}{M_s}$ (subscript in the denominator).
+    expect(parseRichText("$\\frac{M}{M_s}$").nodes).toEqual([
+      {
+        kind: "frac",
+        num: [text("M", true)],
+        den: [text("M", true), { kind: "sub", children: [text("s", true)] }],
+      },
+    ]);
+  });
+
+  it("parses \\sqrt with and without a root index", () => {
+    expect(parseRichText("$\\sqrt{x}$").nodes).toEqual([
+      { kind: "sqrt", radicand: [text("x", true)], index: null },
+    ]);
+    expect(parseRichText("$\\sqrt[3]{x+1}$").nodes).toEqual([
+      { kind: "sqrt", radicand: [text("x", true), text("+1", false)], index: [text("3", false)] },
+    ]);
+  });
+
+  it("nests fractions and roots as script operands and inside each other", () => {
+    // a fraction whose numerator is a root, as a superscript operand.
+    const r = parseRichText("$x^\\frac{1}{\\sqrt{2}}$");
+    expect(r.ok).toBe(true);
+    expect(r.nodes).toEqual([
+      text("x", true),
+      {
+        kind: "sup",
+        children: [
+          {
+            kind: "frac",
+            num: [text("1", false)],
+            den: [{ kind: "sqrt", radicand: [text("2", false)], index: null }],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("flattens to sensible plain text (a11y / tooltip)", () => {
+    expect(plainText("$\\frac{M}{M_s}$")).toBe("M/Ms");
+    expect(plainText("$\\sqrt{x}$")).toBe("√(x)");
+    expect(plainText("$\\sqrt[3]{x}$")).toBe("3√(x)");
+  });
 });
 
 describe("parseRichText — rejection / literal fallback (never throws)", () => {
@@ -162,6 +210,11 @@ describe("parseRichText — rejection / literal fallback (never throws)", () => 
     ["$$", "empty math region"],
     ["$x_$", "dangling script"],
     ["C:\\temp $x$", "backslash outside math in a math-bearing string"],
+    ["$\\frac{1}$", "\\frac missing its denominator group"],
+    ["$\\frac 12$", "\\frac without brace groups"],
+    ["$\\sqrt x$", "\\sqrt without a brace group"],
+    ["$\\sqrt[3{x}$", "\\sqrt[ with no closing bracket"],
+    ["$\\frac{1}{2$", "\\frac denominator group unclosed"],
   ] as const;
 
   it.each(invalid)("%s -> whole-string literal fallback (%s)", (src) => {

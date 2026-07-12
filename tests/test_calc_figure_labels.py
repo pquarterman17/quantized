@@ -19,12 +19,13 @@ from quantized.calc.figure_labels import SUPPORTED_MATHTEXT_COMMANDS, safe_matht
 VALID = r"$\mu_0H$ (T)"
 INVALID = r"bad $\foo$ label"  # unknown command -> mathtext parse error
 
-# Bug-hunt regression (screen/export WYSIWYG): all three are VALID raw
-# matplotlib mathtext (verified against MathTextParser directly) but use a
-# command outside frontend/src/lib/richtext.ts's strict subset -- the screen
-# renderer already refuses them (literal + "Invalid markup"), so export must
-# match, even though matplotlib itself is happy to parse them.
-OUT_OF_SUBSET = (r"$\frac{1}{2}$", r"$\sqrt{2}$", r"$\sum_{i=1}^{n}$")
+# Bug-hunt regression (screen/export WYSIWYG): all are VALID raw matplotlib
+# mathtext (verified against MathTextParser directly) but use a command
+# outside frontend/src/lib/richtext.ts's strict subset -- the screen renderer
+# refuses them (literal + "Invalid markup"), so export must match, even though
+# matplotlib itself is happy to parse them. (\frac and \sqrt joined the subset
+# in MAIN #28 commit 2; \sum joins in commit 3 -- these stay out.)
+OUT_OF_SUBSET = (r"$\hat{x}$", r"$\vec{v}$", r"$\overline{AB}$")
 
 X = np.linspace(0.0, 10.0, 30)
 Y = np.sin(X)
@@ -86,9 +87,9 @@ def test_supported_command_set_matches_richtext_ts_subset() -> None:
     # Sanity-check the ported frozenset against the exact commands the
     # existing "valid" fixtures below rely on -- keeps the two sides from
     # silently drifting apart.
-    for cmd in ("mu", "AA", "chi", "mathrm", "mathit"):
+    for cmd in ("mu", "AA", "chi", "mathrm", "mathit", "frac", "sqrt"):
         assert cmd in SUPPORTED_MATHTEXT_COMMANDS
-    for cmd in ("frac", "sqrt", "sum", "foo"):
+    for cmd in ("sum", "hat", "vec", "foo"):
         assert cmd not in SUPPORTED_MATHTEXT_COMMANDS
 
 
@@ -114,6 +115,37 @@ def test_relation_commands_render_without_raising() -> None:
     for label in RELATION_LABELS:
         out = render_figure(X, [("y", Y)], x_label=label, y_label=label, fmt="svg")
         assert b"<svg" in out[:300]
+
+
+# -- MAIN #28 commit 2: fractions + roots joined the subset --------------------
+
+STRUCTURE_LABELS = (
+    r"$\frac{M}{M_s}$",
+    r"$\sqrt{x^2 + y^2}$",
+    r"$\sqrt[3]{V}$",
+    r"$\frac{d\sigma}{d\Omega}$",
+    r"$T_c = \frac{1}{\sqrt{2}}$",
+)
+
+
+def test_structure_commands_pass_through_untouched() -> None:
+    # In-subset AND valid mathtext -> verbatim; matplotlib renders the real
+    # stacked fraction / radical, matching the frontend canvas layout.
+    for label in STRUCTURE_LABELS:
+        assert safe_mathtext_label(label) == label
+
+
+def test_structure_commands_render_engage_mathtext() -> None:
+    for label in STRUCTURE_LABELS:
+        rich = render_figure(X, [("y", Y)], x_label=label, fmt="svg")
+        plain = render_figure(X, [("y", Y)], x_label="ratio", fmt="svg")
+        assert b"<svg" in rich[:300]
+        assert rich != plain  # mathtext produced real glyph paths
+
+
+def test_structure_commands_in_supported_set() -> None:
+    for cmd in ("frac", "sqrt"):
+        assert cmd in SUPPORTED_MATHTEXT_COMMANDS
 
 
 def test_relation_commands_in_supported_set() -> None:

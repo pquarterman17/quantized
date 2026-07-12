@@ -54,6 +54,34 @@ export function richDomFragment(nodes: RichNode[], doc: Document): DocumentFragm
       } else {
         frag.appendChild(doc.createTextNode(n.text));
       }
+    } else if (n.kind === "frac") {
+      // Stacked column with a rule (MAIN #28); mirrors RichText.tsx's CSS.
+      const col = doc.createElement("span");
+      col.style.cssText =
+        "display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;line-height:1.05;margin:0 0.15em";
+      const num = doc.createElement("span");
+      num.style.cssText = "border-bottom:1px solid currentColor;padding:0 0.15em";
+      num.appendChild(richDomFragment(n.num, doc));
+      const den = doc.createElement("span");
+      den.style.cssText = "padding:0 0.15em";
+      den.appendChild(richDomFragment(n.den, doc));
+      col.append(num, den);
+      frag.appendChild(col);
+    } else if (n.kind === "sqrt") {
+      const wrap = doc.createElement("span");
+      wrap.style.whiteSpace = "nowrap";
+      if (n.index) {
+        const sup = doc.createElement("sup");
+        sup.style.fontSize = "0.6em";
+        sup.appendChild(richDomFragment(n.index, doc));
+        wrap.appendChild(sup);
+      }
+      wrap.appendChild(doc.createTextNode("√"));
+      const rad = doc.createElement("span");
+      rad.style.cssText = "border-top:1px solid currentColor;padding:0 0.1em";
+      rad.appendChild(richDomFragment(n.radicand, doc));
+      wrap.appendChild(rad);
+      frag.appendChild(wrap);
     } else {
       const el = doc.createElement(n.kind); // "sub" | "sup"
       el.style.fontSize = "0.7em"; // match the canvas SCRIPT_SCALE

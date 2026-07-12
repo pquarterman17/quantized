@@ -139,6 +139,12 @@ const SYMBOLS: PaletteEntry[] = [
   { glyph: "′", text: "′", math: "'", title: "Prime (' in math)" },
 ];
 
+const STRUCTURES: PaletteEntry[] = [
+  { glyph: "a/b", math: "\\frac{}{}", caretBack: 3, title: "Fraction  \\frac{ }{ }" },
+  { glyph: "√", math: "\\sqrt{}", caretBack: 1, title: "Square root  \\sqrt{ }" },
+  { glyph: "ⁿ√", math: "\\sqrt[]{}", caretBack: 3, title: "nth root  \\sqrt[ ]{ }" },
+];
+
 const RELATIONS: PaletteEntry[] = [
   { glyph: "≤", text: "≤", math: "\\leq", title: "Less than or equal (\\leq)" },
   { glyph: "≥", text: "≥", math: "\\geq", title: "Greater than or equal (\\geq)" },
@@ -237,6 +243,7 @@ export default function SymbolPalette({ x, y, onInsert, onClose }: SymbolPalette
       <Section label="Insert" entries={SCRIPTS} onInsert={onInsert} cols={4} />
       <Section label="Greek" entries={GREEK} onInsert={onInsert} cols={8} />
       <Section label="Symbols" entries={SYMBOLS} onInsert={onInsert} cols={6} />
+      <Section label="Structures" entries={STRUCTURES} onInsert={onInsert} cols={6} />
       <Section label="Relations" entries={RELATIONS} onInsert={onInsert} cols={8} />
       <Section label="Snippets" entries={SNIPPETS} onInsert={onInsert} cols={2} />
     </div>,
