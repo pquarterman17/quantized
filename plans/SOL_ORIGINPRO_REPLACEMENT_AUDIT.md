@@ -36,6 +36,13 @@ This is especially dangerous for M-vs-H, transport, and other multi-column data.
 
 ### P1 — Non-converged fits are presented as successful results
 
+> **Partially addressed 2026-07-12 (PR #14):** A shared `FitConvergenceWarning`
+> now surfaces `exitFlag=0` (a failed Nelder-Mead run) on both the standard and
+> custom-equation Curve Fit panels — the result stays inspectable but is marked
+> unreliable with a `role="alert"`. The DREAM/bumps half below is NOT yet
+> addressed: `BumpsFitResult` carries no convergence flag, so exposing R-hat /
+> ESS / multi-chain diagnostics (and sampling controls) remains the open piece.
+
 The parity fitter returns `exitFlag=0` when optimization fails, but the frontend displays parameters, R², RMSE, and AIC without checking or showing that flag:
 
 - `src/quantized/calc/fitting.py:135`
@@ -78,6 +85,15 @@ The backend supports fit weights, but the normal Curve Fit UI does not pass the 
 **Required correction:** persist a complete, versioned fit recipe and result artifact. Recalculation should use the original channel selections and settings, and the workspace should distinguish a historical result from a newly recomputed result.
 
 ### P1 — Autosave does not watch every persisted artifact
+
+> **Addressed 2026-07-12 (PR #14):** Autosave now triggers off the COMPLETE
+> `.dwk`-serialized slice via a testable `shouldAutosave(state, prev)` helper
+> whose `AutosaveState` field list matches `serializeWorkspace` exactly (adds
+> reports, figure docs, macro steps, Origin figures, and recalc mode — the
+> previously-omitted fields). Regression tests prove each of those independently
+> schedules a save. (The focused-window LIVE-view edit remains a deliberate
+> pre-existing tradeoff — an explicit File ▸ Save snapshots it via
+> `windowsForSave()`; unchanged by this PR.)
 
 The autosave subscription omits reports, figure documents, macro steps, and focused-window live plot-view edits even though those fields are part of the serialized workspace:
 
