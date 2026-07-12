@@ -67,49 +67,89 @@ export function tooManyGroups(groups: readonly SplitGroup[]): boolean {
   return groups.length > SPLIT_GROUP_CAP;
 }
 
-/** Median of adjacent gaps between SORTED, ascending finite values,
- *  ignoring ZERO gaps (exact-duplicate reads, which a controller does
- *  produce occasionally) so they can't drag the estimate to 0. MEDIAN
- *  (not mean) so one genuine large excursion — a between-setpoint jump —
- *  can't itself inflate the estimate of the within-setpoint wobble it's
- *  trying to measure. Returns 0 when there are fewer than 2 finite values
- *  or every gap is 0 (nothing to measure). */
-export function medianNonZeroGap(sortedFinite: readonly number[]): number {
-  const gaps: number[] = [];
-  for (let i = 1; i < sortedFinite.length; i++) {
-    const g = sortedFinite[i] - sortedFinite[i - 1];
-    if (g > 0) gaps.push(g);
-  }
-  if (gaps.length === 0) return 0;
-  gaps.sort((a, b) => a - b);
-  const mid = Math.floor(gaps.length / 2);
-  return gaps.length % 2 ? gaps[mid] : (gaps[mid - 1] + gaps[mid]) / 2;
-}
+/** Minimum ratio between two consecutive SORTED gaps to count as a decisive
+ *  "elbow" — the boundary between a within-cluster wobble population and a
+ *  between-cluster jump population. Below this, the gap sequence reads as
+ *  homogeneous (a uniform ramp, or wobble with no second cluster at all):
+ *  there's no data-driven separation to find, so `autoTolerance` treats the
+ *  whole spread as one cluster. This gates whether a separation is
+ *  DECISIVE, not the tolerance value itself — no magic multiplier applied
+ *  to a physical unit anywhere below. */
+const ELBOW_RATIO_THRESHOLD = 3;
 
-/** Multiplier applied to the median non-zero gap to get the default
- *  tolerance. Chosen empirically against a PPMS/MPMS-style 5/10/50/100 K
- *  fixture (datasetsplit.test.ts): the wobble's median gap is ~mK-scale
- *  while the smallest between-setpoint jump is 5 K (a >1000x ratio), so
- *  anything from ~5x to ~500x threads that needle. 8x leaves comfortable
- *  margin on the wobble side without being so large it over-merges a
- *  genuinely dense, evenly-spaced sweep — see the monotonic-ramp test,
- *  where a UNIFORM gap sequence collapses to one group under ANY
- *  multiplier > 1 (median == every gap, so multiplier * median always
- *  exceeds each individual gap). That's the correct outcome for a real
- *  ramp; a small explicit tolerance (not the auto one) is what produces
- *  the many-groups case `tooManyGroups`/`SPLIT_GROUP_CAP` guards against. */
-const AUTO_TOLERANCE_MULTIPLIER = 8;
+/** A cluster boundary's "small" (wobble) side needs at least this many gaps
+ *  before they're trusted as an actual wobble POPULATION rather than one
+ *  small-but-still-real jump that merely lost a 1-vs-1 magnitude contest.
+ *  Bug-hunt repro: `[5,5,5,10,10,300]` has only 3 distinct values (2 gaps:
+ *  5 and 290) — the 5 is smaller than the 290, but nothing establishes it's
+ *  WOBBLE rather than a second, smaller jump (there is zero wobble in this
+ *  data: every repeat is an exact duplicate, gap 0, already excluded). With
+ *  only 1 gap on the small side there's no evidence either way, so
+ *  `autoTolerance` doesn't merge — see `MIN_DISTINCT_FOR_ELBOW` below for
+ *  the same reasoning applied before an elbow can even be computed. */
+const MIN_WOBBLE_POPULATION = 2;
+
+/** Minimum distinct finite values needed to even ATTEMPT elbow detection
+ *  (need at least 2 gaps to compute one ratio). Below this: 0 or 1 distinct
+ *  values have no gaps at all (nothing can ever split, any tolerance works
+ *  — see `clusterByGaps`); 2 distinct values give exactly one gap and
+ *  nothing to compare it against, so — same bias as
+ *  `MIN_WOBBLE_POPULATION` — there's no evidence to justify merging them,
+ *  and `autoTolerance` doesn't. */
+const MIN_DISTINCT_FOR_ELBOW = 3;
 
 /** Derive a default gap-clustering tolerance from the column's OWN value
  *  spacing (MAIN_PLAN #26) — deliberately no fixed constant in physical
  *  units, since a temperature column and a field column need wildly
- *  different absolute tolerances. Finite values only; fewer than 2 distinct
- *  finite values yields 0 (nothing to cluster — `clusterByGaps` then just
- *  groups by exact value, which is already "everything" when there's ≤1
- *  distinct value). */
+ *  different absolute tolerances.
+ *
+ *  ELBOW DETECTION (bug-hunt fix — replaces a median-of-all-gaps ×8
+ *  heuristic that MERGED distinct setpoints with few rows per setpoint:
+ *  with only a handful of repeats, the within-setpoint "wobble" gaps and
+ *  the between-setpoint "jump" gaps are comparable in COUNT, so the median
+ *  landed between the two populations and ×8 was enough to swallow a real
+ *  boundary — e.g. `[5, 5.001, 10, 10.002, 500]` used to merge 5 K and
+ *  10 K into one "7.5005 K" blob). Algorithm: take the adjacent gaps
+ *  between the column's SORTED DISTINCT finite values, sort THOSE gaps by
+ *  magnitude, and find the pair of consecutive sorted gaps with the
+ *  largest RATIO — that's the elbow separating the wobble population
+ *  (every gap at/below it) from the jump population (every gap at/above
+ *  it). The tolerance is the geometric mean of the two gaps straddling the
+ *  elbow (scale-appropriate for spacings that span orders of magnitude, and
+ *  strictly between the two populations by construction).
+ *
+ *  Two guards keep this from mis-firing on data that ISN'T bimodal — see
+ *  their own doc comments for the reasoning:
+ *   - `MIN_DISTINCT_FOR_ELBOW` / `MIN_WOBBLE_POPULATION`: not enough
+ *     evidence of a genuine wobble population → don't merge (tolerance 0,
+ *     every remaining distinct value becomes its own group).
+ *   - `ELBOW_RATIO_THRESHOLD`: the best ratio found isn't decisive (all
+ *     gaps comparable in magnitude) → merge everything (tolerance = the
+ *     largest gap; `clusterByGaps` only splits on a STRICT `>`, so nothing
+ *     in a homogeneous set can exceed its own max).
+ *  Finite values only; fewer than `MIN_DISTINCT_FOR_ELBOW` distinct finite
+ *  values yields 0. */
 export function autoTolerance(values: readonly number[]): number {
-  const finite = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
-  return medianNonZeroGap(finite) * AUTO_TOLERANCE_MULTIPLIER;
+  const distinct = [...new Set(values.filter((v) => Number.isFinite(v)))].sort((a, b) => a - b);
+  if (distinct.length < MIN_DISTINCT_FOR_ELBOW) return 0;
+
+  const gaps: number[] = [];
+  for (let i = 1; i < distinct.length; i++) gaps.push(distinct[i] - distinct[i - 1]);
+  const sortedGaps = [...gaps].sort((a, b) => a - b);
+
+  let bestRatio = -Infinity;
+  let bestI = -1;
+  for (let i = 0; i < sortedGaps.length - 1; i++) {
+    const r = sortedGaps[i + 1] / sortedGaps[i];
+    if (r > bestRatio) {
+      bestRatio = r;
+      bestI = i;
+    }
+  }
+
+  if (bestRatio < ELBOW_RATIO_THRESHOLD) return sortedGaps[sortedGaps.length - 1];
+  if (bestI + 1 < MIN_WOBBLE_POPULATION) return 0;
+  return Math.sqrt(sortedGaps[bestI] * sortedGaps[bestI + 1]);
 }
 
 /** Format a group's representative value for display/naming: the house
@@ -235,12 +275,23 @@ export function isCategoricalColumn(data: DataStruct, col: number): boolean {
 /** The ONE entry point the dialog + store action both call: groups `col`
  *  (x or a value channel) by value, dispatching to exact-value grouping
  *  for a categorical column (`tolerance` ignored) or gap-clustering (at
- *  `tolerance`, defaulting to `autoTolerance`) for a continuous one. */
+ *  `tolerance`, defaulting to `autoTolerance`) for a continuous one.
+ *  `tolerance` is guarded here (defense-in-depth against a bad caller, e.g.
+ *  a dialog with unvalidated numeric-field text): non-finite (`NaN`,
+ *  `Infinity`) or negative falls back to `autoTolerance` exactly like
+ *  omitting it — `tolerance ?? autoTolerance(...)` alone only catches
+ *  `null`/`undefined`, not `NaN` (a `NaN` tolerance makes every gap
+ *  comparison `> ` false, silently collapsing everything to one group) or a
+ *  negative one (every gap, even a same-value repeat's gap of exactly 0,
+ *  exceeds it, silently exploding into one group per row). */
 export function splitColumn(data: DataStruct, col: number, tolerance?: number): SplitResult {
   const values = columnValues(data, col);
   const unit = columnUnit(data, col);
   if (isCategoricalColumn(data, col)) return groupByExactValue(values, unit);
-  const tol = tolerance ?? autoTolerance(values);
+  const tol =
+    tolerance !== undefined && Number.isFinite(tolerance) && tolerance >= 0
+      ? tolerance
+      : autoTolerance(values);
   return clusterByGaps(values, tol, unit);
 }
 

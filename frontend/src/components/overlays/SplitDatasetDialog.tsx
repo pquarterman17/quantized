@@ -65,16 +65,26 @@ export default function SplitDatasetDialog() {
   const categorical = dataset ? isCategoricalColumn(dataset.data, col) : false;
   const tolerance = Number(toleranceText);
   const validTolerance = Number.isFinite(tolerance) && tolerance >= 0;
+  // Non-empty text that fails to parse (or is negative) is a hard error, not
+  // a silent "use auto" — the Confirm button is disabled for it below rather
+  // than substituting a value the label wouldn't reflect.
+  const toleranceInvalid = !categorical && toleranceText.trim() !== "" && !validTolerance;
+  // ONE canonical resolved tolerance, fed to BOTH the live preview and the
+  // commit call below — they can never disagree (bug: invalid tolerance
+  // text used to preview as "auto" but commit as the raw NaN/negative
+  // number, since `splitColumn`'s `tolerance ?? autoTolerance(...)` only
+  // catches null/undefined, not NaN/negative).
+  const resolvedTolerance = categorical || !validTolerance ? undefined : tolerance;
   const result = useMemo(() => {
     if (!dataset) return { groups: [], tolerance: null };
-    return splitColumn(dataset.data, col, categorical || !validTolerance ? undefined : tolerance);
-  }, [dataset, col, categorical, tolerance, validTolerance]);
+    return splitColumn(dataset.data, col, resolvedTolerance);
+  }, [dataset, col, resolvedTolerance]);
 
   if (!targetId || !dataset) return null;
 
   const groups = result.groups;
   const overCap = tooManyGroups(groups);
-  const canSplit = groups.length >= 2 && !overCap;
+  const canSplit = groups.length >= 2 && !overCap && !toleranceInvalid;
 
   const columnOptions = [
     { value: "-1", label: "x (time/axis)" },
@@ -83,7 +93,7 @@ export default function SplitDatasetDialog() {
 
   const runSplit = (): void => {
     if (!canSplit) return;
-    void splitDatasetByColumn(targetId, col, categorical ? undefined : tolerance);
+    void splitDatasetByColumn(targetId, col, resolvedTolerance);
   };
 
   return (
@@ -111,10 +121,16 @@ export default function SplitDatasetDialog() {
             <span className="k">Tolerance</span>
             <NumberField
               aria-label="Tolerance"
+              aria-invalid={toleranceInvalid}
               value={toleranceText}
               onChange={setToleranceText}
               unit={col >= 0 ? dataset.data.units[col] : undefined}
             />
+            {toleranceInvalid && (
+              <span className="qzk-ds-meta" style={{ color: "var(--danger, #d33)" }}>
+                enter a number ≥ 0
+              </span>
+            )}
           </div>
         )}
         <div style={{ maxHeight: 260, overflowY: "auto", marginTop: 8, display: "grid", gap: 4 }}>

@@ -8,7 +8,6 @@ import {
   formatGroupLabel,
   groupByExactValue,
   isCategoricalColumn,
-  medianNonZeroGap,
   pickDefaultSplitColumn,
   sliceDataStruct,
   SPLIT_GROUP_CAP,
@@ -24,41 +23,80 @@ function totalRows(groups: readonly SplitGroup[]): number {
   return groups.reduce((n, g) => n + g.rowIndexes.length, 0);
 }
 
-describe("medianNonZeroGap", () => {
-  it("ignores zero gaps (exact-duplicate reads) and takes the median of the rest", () => {
-    // sorted [1,2,2,2,5,10] -> gaps [1,0,0,3,5] -> nonzero [1,3,5] -> median 3
-    expect(medianNonZeroGap([1, 2, 2, 2, 5, 10])).toBe(3);
+// NOTE: `medianNonZeroGap`/`AUTO_TOLERANCE_MULTIPLIER` (and their tests, that
+// used to live here) were REMOVED with the bug-hunt fix below — the
+// median-of-all-gaps × 8 heuristic they implemented is exactly the SEVERE
+// bug: with few rows per setpoint, the within-setpoint wobble gaps and the
+// between-setpoint jump gaps are comparable in COUNT, so the median landed
+// between the two populations and ×8 was enough to swallow a real boundary
+// (see the "bug-hunt regression" describe block below for the two confirmed
+// repros). `autoTolerance` now uses elbow detection on the sorted gaps
+// instead — see its doc comment in datasetsplit.ts for the full algorithm.
+describe("autoTolerance — elbow detection (bug-hunt fix)", () => {
+  it("is 0 for fewer than 3 distinct finite values — no gaps to compute a ratio from", () => {
+    expect(autoTolerance([5, 5, 5])).toBe(0); // 1 distinct value, 0 gaps
+    expect(autoTolerance([5, 5, 10, 10])).toBe(0); // 2 distinct values, 1 gap, no ratio possible
   });
 
-  it("returns 0 for fewer than 2 values", () => {
-    expect(medianNonZeroGap([])).toBe(0);
-    expect(medianNonZeroGap([5])).toBe(0);
+  it("ignores non-finite values when collecting the distinct value set", () => {
+    const clean = [4.998, 5.0, 5.003, 9.997, 10.0, 10.003];
+    const withJunk = [...clean, NaN, Infinity, -Infinity];
+    expect(autoTolerance(withJunk)).toBe(autoTolerance(clean));
   });
 
-  it("returns 0 when every value is identical (no nonzero gap exists)", () => {
-    expect(medianNonZeroGap([5, 5, 5, 5])).toBe(0);
+  it("finds the elbow and returns the geometric mean of the two straddling gaps", () => {
+    // Distinct values 1,2,3,4 (small/uniform gaps of 1) then a jump to 100
+    // (gap 96) -- a clean, decisive elbow with a >=2-member wobble side.
+    const values = [1, 2, 3, 4, 100];
+    const tol = autoTolerance(values);
+    expect(tol).toBeCloseTo(Math.sqrt(1 * 96), 6);
+    // And using it actually separates the two populations.
+    const { groups } = clusterByGaps(values, tol);
+    expect(groups.map((g) => g.rowIndexes)).toEqual([[0, 1, 2, 3], [4]]);
   });
 
-  it("averages the two middle gaps for an even gap count", () => {
-    // sorted [0,1,3,6] -> gaps [1,2,3] -- odd count, sanity check the odd path
-    expect(medianNonZeroGap([0, 1, 3, 6])).toBe(2);
-    // sorted [0,1,3,6,10] -> gaps [1,2,3,4] -- even count -> mean of middle two (2,3)
-    expect(medianNonZeroGap([0, 1, 3, 6, 10])).toBe(2.5);
+  it("has no evidence of a wobble population when the elbow's small side has only 1 gap — doesn't merge", () => {
+    // Only 4 distinct values (3 gaps: 1, 3, 5) -- the best ratio (3/1 = 3)
+    // has just ONE gap on its small side, not enough to trust as "wobble"
+    // rather than a smaller (but still real) jump.
+    expect(autoTolerance([1, 2, 5, 10])).toBe(0);
+  });
+
+  it("collapses a uniform gap sequence (ratio never decisive) to a single-cluster tolerance", () => {
+    // All gaps equal -> every ratio is 1, well under the elbow threshold ->
+    // tolerance = the max gap itself, so nothing splits (see the
+    // "monotonic ramp" describe block below for the end-to-end check).
+    const values = [0, 1, 2, 3, 4, 5, 6, 7];
+    expect(autoTolerance(values)).toBe(1);
   });
 });
 
-describe("autoTolerance", () => {
-  it("is the median non-zero gap times the documented multiplier", () => {
-    // median non-zero gap of [1,2,2,2,5,10] is 3 (see above) -> 3 * 8
-    expect(autoTolerance([10, 2, 1, 2, 5, 2])).toBe(24);
+describe("clusterByGaps — bug-hunt regression: few rows per setpoint (SEVERE, data corruption)", () => {
+  // Confirmed repro #1: 2 setpoints (5 K, 10 K, each read twice with tiny
+  // wobble) plus a clear outlier at 500 -- the OLD median×8 heuristic merged
+  // all of this into ONE "7.5005 K" group (5 K and 10 K's wobble-scale gaps
+  // and their own between-them jump ended up comparable in count at n=5).
+  it("[5, 5.001, 10, 10.002, 500] splits into 3 groups, not merged into one blob", () => {
+    const values = [5, 5.001, 10, 10.002, 500];
+    const { groups, tolerance } = clusterByGaps(values, autoTolerance(values));
+    expect(tolerance).toBeGreaterThan(0);
+    expect(groups).toHaveLength(3);
+    expect(groups.map((g) => g.rowIndexes)).toEqual([[0, 1], [2, 3], [4]]);
+    expect(groups.map((g) => g.label)).toEqual(["5.0005", "10.001", "500"]);
+    expect(totalRows(groups)).toBe(values.length);
   });
 
-  it("ignores non-finite values", () => {
-    expect(autoTolerance([1, 2, 2, 2, 5, 10, NaN, Infinity])).toBe(24);
-  });
-
-  it("is 0 for a single distinct value (nothing to cluster)", () => {
-    expect(autoTolerance([5, 5, 5])).toBe(0);
+  // Confirmed repro #2: 3 EXACT setpoints (5, 10, 300) with no wobble at all
+  // (every repeat is an identical read) -- the OLD heuristic's single
+  // nonzero-gap median (5) × 8 = 40 exceeded the real 5->10 jump (5), so it
+  // merged two genuinely distinct setpoints and reported "nothing to split".
+  it("[5,5,5,10,10,300] splits into 3 groups (previously merged to 1: 'nothing to split')", () => {
+    const values = [5, 5, 5, 10, 10, 300];
+    const { groups } = clusterByGaps(values, autoTolerance(values));
+    expect(groups).toHaveLength(3);
+    expect(groups.map((g) => g.rowIndexes)).toEqual([[0, 1, 2], [3, 4], [5]]);
+    expect(groups.map((g) => g.label)).toEqual(["5", "10", "300"]);
+    expect(totalRows(groups)).toBe(values.length);
   });
 });
 
@@ -260,6 +298,37 @@ describe("splitColumn dispatch", () => {
     const { groups, tolerance } = splitColumn(data, 1);
     expect(tolerance).toBeNull();
     expect(groups.map((g) => g.value)).toEqual([1, 2]);
+  });
+
+  // Bug-hunt regression (preview/commit parity): `tolerance ?? autoTolerance(...)`
+  // alone only catches null/undefined, not NaN or a negative number — a bad
+  // caller (e.g. an unvalidated numeric-field string) used to reach
+  // `clusterByGaps` with garbage that either collapsed everything to one
+  // group (NaN: every `>` comparison is false) or exploded into one group
+  // per row (negative: even a same-value repeat's gap of 0 exceeds it).
+  // `splitColumn` now guards both, falling back to `autoTolerance` exactly
+  // as if the caller had passed nothing at all.
+  it("falls back to autoTolerance for a NaN tolerance (never collapses to one group)", () => {
+    const data = makeData();
+    const nanResult = splitColumn(data, 0, NaN);
+    const autoResult = splitColumn(data, 0);
+    expect(nanResult.groups.map((g) => g.rowIndexes)).toEqual(autoResult.groups.map((g) => g.rowIndexes));
+    expect(nanResult.groups.length).toBeGreaterThan(1);
+  });
+
+  it("falls back to autoTolerance for a negative tolerance (never explodes to one-row groups)", () => {
+    const data = makeData();
+    const negResult = splitColumn(data, 0, -5);
+    const autoResult = splitColumn(data, 0);
+    expect(negResult.groups.map((g) => g.rowIndexes)).toEqual(autoResult.groups.map((g) => g.rowIndexes));
+    expect(negResult.groups.every((g) => g.rowIndexes.length > 1 || g.label === "(other)")).toBe(true);
+  });
+
+  it("falls back to autoTolerance for -Infinity too (not just finite negatives)", () => {
+    const data = makeData();
+    const negInfResult = splitColumn(data, 0, -Infinity);
+    const autoResult = splitColumn(data, 0);
+    expect(negInfResult.groups.map((g) => g.rowIndexes)).toEqual(autoResult.groups.map((g) => g.rowIndexes));
   });
 });
 

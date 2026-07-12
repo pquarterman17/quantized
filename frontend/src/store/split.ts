@@ -55,6 +55,11 @@
 // organizational model is the folder tree (`Dataset.folderId`), so "group"
 // here means a FOLDER, nested under the source's own folder (or root) so
 // the split doesn't relocate the family relative to the rest of the Library.
+// RE-SPLIT REUSE (bug-hunt fix): before minting a new folder, look for an
+// existing SIBLING folder under the same parent with the same name — a
+// second split of the same source (a different tolerance, or just running
+// it again) lands its children in the ORIGINAL folder instead of a second
+// identically-named one next to it.
 //
 // Undo scope note: folder-tree mutations (createFolder et al.) are OUTSIDE
 // the undo system everywhere in this codebase (store/useApp.ts's
@@ -65,7 +70,7 @@
 // that existing entry would.
 
 import { splitColumn, sliceDataStruct, tooManyGroups } from "../lib/datasetsplit";
-import { createFolder as treeCreateFolder } from "../lib/foldertree";
+import { childFolders, createFolder as treeCreateFolder } from "../lib/foldertree";
 import { nextStageTab } from "../lib/stagetab";
 import type { Dataset } from "../lib/types";
 import { toast } from "./toasts";
@@ -121,7 +126,16 @@ export function createSplitSlice(set: SliceSet, get: SliceGet): SplitSlice {
       }
 
       get().recordHistory("split dataset");
-      const folderId = nextFolderId();
+      // Re-splitting the same source (e.g. after tweaking the tolerance)
+      // must not mint a SECOND identically-named sibling folder — reuse the
+      // existing one if a prior split already created it under the same
+      // parent. Only an exact name match counts as "the same split family";
+      // an unrelated folder that happens to share a name some other way is
+      // never touched.
+      const existingFolder = childFolders(get().folders, src.folderId ?? null).find(
+        (f) => f.name === (src.name.trim() || "New Folder"),
+      );
+      const folderId = existingFolder ? existingFolder.id : nextFolderId();
       const children: Dataset[] = groups.map((g) => {
         const child: Dataset = {
           id: nextDatasetId(),
@@ -137,7 +151,9 @@ export function createSplitSlice(set: SliceSet, get: SliceGet): SplitSlice {
       const firstChild = children[0];
 
       set((s) => ({
-        folders: treeCreateFolder(s.folders, src.folderId ?? null, src.name, folderId),
+        folders: existingFolder
+          ? s.folders
+          : treeCreateFolder(s.folders, src.folderId ?? null, src.name, folderId),
         datasets: [...s.datasets, ...children],
         activeId: firstChild.id,
         worksheetId: null,

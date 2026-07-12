@@ -102,6 +102,49 @@ describe("splitDatasetByColumn — the happy path", () => {
   });
 });
 
+describe("splitDatasetByColumn — bug-hunt regression: re-split reuses the folder (cosmetic)", () => {
+  it("splitting the same source twice reuses the ONE existing folder instead of minting a sibling duplicate", async () => {
+    useApp.setState({ datasets: [baseDataset()] });
+
+    await useApp.getState().splitDatasetByColumn("d1", 0);
+    const afterFirst = useApp.getState();
+    expect(afterFirst.folders).toHaveLength(1);
+    const folderId = afterFirst.folders[0].id;
+
+    // Re-split the SAME source (e.g. the user re-opened the dialog and hit
+    // Confirm again with a different tolerance) -- must NOT create a second
+    // "run1.dat" folder sitting next to the first.
+    await useApp.getState().splitDatasetByColumn("d1", 0);
+    const afterSecond = useApp.getState();
+
+    expect(afterSecond.folders).toHaveLength(1); // still exactly one folder
+    expect(afterSecond.folders[0].id).toBe(folderId); // the SAME folder, reused
+    expect(afterSecond.folders.filter((f) => f.name === "run1.dat")).toHaveLength(1);
+
+    // Both splits' children all landed in that one folder.
+    const children = afterSecond.datasets.filter((d) => d.id !== "d1");
+    expect(children).toHaveLength(4); // 2 groups x 2 splits
+    expect(children.every((c) => c.folderId === folderId)).toBe(true);
+  });
+
+  it("a folder with the same name under a DIFFERENT parent is not mistaken for the source's sibling", async () => {
+    useApp.setState({
+      datasets: [baseDataset()],
+      folders: [{ id: "unrelated", name: "run1.dat", parentId: "somewhere-else", order: 0 }],
+    });
+
+    await useApp.getState().splitDatasetByColumn("d1", 0);
+
+    const s = useApp.getState();
+    // A NEW root-level folder was created — the same-named folder living
+    // under a different parent is not the source's own sibling.
+    expect(s.folders).toHaveLength(2);
+    const mine = s.folders.find((f) => f.id !== "unrelated")!;
+    expect(mine.parentId).toBeNull();
+    expect(mine.name).toBe("run1.dat");
+  });
+});
+
 describe("splitDatasetByColumn — undo", () => {
   it("records exactly ONE undo entry; undo restores the pre-split library in one step", async () => {
     useApp.setState({ datasets: [baseDataset()] });

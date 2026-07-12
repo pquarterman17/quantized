@@ -93,6 +93,58 @@ describe("SplitDatasetDialog — live preview", () => {
   });
 });
 
+describe("SplitDatasetDialog — invalid tolerance text (bug-hunt regression: preview/commit parity)", () => {
+  // Previously: the preview memo fell back to `undefined` (auto) for
+  // invalid tolerance text, but `runSplit` passed the raw `Number(text)`
+  // through unguarded — "abc" (NaN) previewed the auto-tolerance groups but
+  // committed as ONE group (NaN never flushes a cluster boundary); "-5"
+  // previewed the same but committed as one-row-per-value garbage (a
+  // negative tolerance splits even exact-duplicate rows). Both are fixed by
+  // resolving ONE tolerance value shared by the preview memo and the commit
+  // call, and disabling Confirm outright for invalid non-empty text.
+
+  it("non-numeric tolerance text previews the AUTO groups (not 1) and disables Confirm", () => {
+    useApp.setState({ splitDialogTargetId: "d1" });
+    render(<SplitDatasetDialog />);
+    fireEvent.change(screen.getByLabelText("Tolerance"), { target: { value: "abc" } });
+    // Preview still shows the auto-tolerance 2-group result, not "1 group".
+    expect(screen.getByText("5 K")).toBeInTheDocument();
+    expect(screen.getByText("10 K")).toBeInTheDocument();
+    const confirm = screen.getByRole("button", { name: /Split into/ });
+    expect(confirm).toBeDisabled();
+  });
+
+  it("negative tolerance text previews the AUTO groups (not one-row-per-value) and disables Confirm", () => {
+    useApp.setState({ splitDialogTargetId: "d1" });
+    render(<SplitDatasetDialog />);
+    fireEvent.change(screen.getByLabelText("Tolerance"), { target: { value: "-5" } });
+    expect(screen.getByText("5 K")).toBeInTheDocument();
+    expect(screen.getByText("10 K")).toBeInTheDocument();
+    expect(screen.queryByText("Split into 6 datasets")).not.toBeInTheDocument();
+    const confirm = screen.getByRole("button", { name: /Split into/ });
+    expect(confirm).toBeDisabled();
+  });
+
+  it("clicking Confirm while disabled by invalid text is a true no-op (no commit, dialog stays open)", () => {
+    useApp.setState({ splitDialogTargetId: "d1" });
+    render(<SplitDatasetDialog />);
+    fireEvent.change(screen.getByLabelText("Tolerance"), { target: { value: "abc" } });
+    fireEvent.click(screen.getByRole("button", { name: /Split into/ }));
+    expect(useApp.getState().datasets).toHaveLength(1); // no children minted
+    expect(useApp.getState().splitDialogTargetId).toBe("d1"); // dialog still open
+  });
+
+  it("fixing invalid text back to a valid number re-enables Confirm", () => {
+    useApp.setState({ splitDialogTargetId: "d1" });
+    render(<SplitDatasetDialog />);
+    const field = screen.getByLabelText("Tolerance");
+    fireEvent.change(field, { target: { value: "abc" } });
+    expect(screen.getByRole("button", { name: /Split into/ })).toBeDisabled();
+    fireEvent.change(field, { target: { value: "0.5" } });
+    expect(screen.getByRole("button", { name: /Split into/ })).not.toBeDisabled();
+  });
+});
+
 describe("SplitDatasetDialog — the >cap warning path", () => {
   it("shows a warning instead of a list when the group count exceeds the cap", () => {
     const n = 60;
