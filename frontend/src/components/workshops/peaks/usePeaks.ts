@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { findPeaks, fitMultiPeak, fitPeak, type PeakSeed } from "../../../lib/api";
+import { fullPlottedX, selectedFitData } from "../../../lib/fitselection";
 import { peakOverlayArray } from "../../../lib/plotdata";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
@@ -31,12 +32,22 @@ export interface PeaksState {
   fitEach: (opts: PeakFitOptions) => Promise<void>;
 }
 
-/** First-channel (x, y) the peak tools DETECT/FIT on — the analysis view, so
- *  excluded/filtered rows (#50/#53) don't produce or bias peaks. Marker overlays
- *  are built against the FULL time array (below) so they align with the plot x. */
-function xy(ds: Dataset): { x: number[]; y: number[] } {
+/** The (x, y) the peak tools DETECT/FIT on — the PLOTTED X + primary Y over the
+ *  analysis view (audit P1 #1), so peaks track what the user sees and excluded/
+ *  filtered rows (#50/#53) don't produce or bias peaks. `fullX` is the same
+ *  channel's FULL column, for aligning marker overlays to the full-length plot
+ *  x. Falls back to the first channel when nothing is plotted. */
+function peakInputs(
+  ds: Dataset,
+  xKey: number | null,
+  yKeys: number[] | null,
+  seriesOrder: number[] | null,
+): { x: number[]; y: number[]; fullX: number[] } {
+  const fullX = fullPlottedX(ds.data, xKey);
+  const sel = selectedFitData(ds, xKey, yKeys, seriesOrder);
+  if (sel) return { x: sel.x, y: sel.y, fullX };
   const d = analysisData(ds) ?? ds.data;
-  return { x: d.time, y: d.values.map((row) => row[0]) };
+  return { x: d.time, y: d.values.map((row) => row[0]), fullX };
 }
 
 function seedsFrom(peaks: Peak[]): PeakSeed[] {
@@ -46,6 +57,9 @@ function seedsFrom(peaks: Peak[]): PeakSeed[] {
 export function usePeaks(): PeaksState {
   const active = useActiveDataset();
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
+  const xKey = useApp((s) => s.xKey);
+  const yKeys = useApp((s) => s.yKeys);
+  const seriesOrder = useApp((s) => s.seriesOrder);
   const [peaks, setPeaks] = useState<Peak[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,15 +86,15 @@ export function usePeaks(): PeaksState {
         // pending).
         const ds = await useApp.getState().resolveDataset(activeId);
         if (cancelled || !ds) return;
-        const { x, y } = xy(ds);
+        const { x, y, fullX } = peakInputs(ds, xKey, yKeys, seriesOrder);
         const res = await findPeaks({ x, y });
         if (cancelled) return;
         setPeaks(res.peaks);
-        // Overlay on the FULL time (not the pruned x) so markers align with the
-        // full-length plot; peak centers land on their nearest full-x point.
+        // Overlay on the FULL plotted x (not the pruned x) so markers align with
+        // the full-length plot; peak centers land on their nearest full-x point.
         setPeakOverlay({
           datasetId: ds.id,
-          y: peakOverlayArray(ds.data.time, res.peaks.map((p) => ({ center: p.center, height: p.height }))),
+          y: peakOverlayArray(fullX, res.peaks.map((p) => ({ center: p.center, height: p.height }))),
         });
       } catch (e: unknown) {
         if (!cancelled) setError(e instanceof Error ? e.message : "peak find failed");
@@ -91,15 +105,15 @@ export function usePeaks(): PeaksState {
     return () => {
       cancelled = true;
     };
-  }, [active, setPeakOverlay]);
+  }, [active, setPeakOverlay, xKey, yKeys, seriesOrder]);
 
   // Draw fitted peak tops (height above the local background) as the overlay,
-  // on the FULL time so markers align with the full-length plot x.
+  // on the FULL plotted x so markers align with the full-length plot x.
   const overlayFitted = useCallback(
-    (ds: Dataset, fitted: FittedPeak[]) => {
+    (ds: Dataset, fitted: FittedPeak[], fullX: number[]) => {
       setPeakOverlay({
         datasetId: ds.id,
-        y: peakOverlayArray(ds.data.time, fitted.map((p) => ({ center: p.center, height: p.height + p.bg }))),
+        y: peakOverlayArray(fullX, fitted.map((p) => ({ center: p.center, height: p.height + p.bg }))),
       });
     },
     [setPeakOverlay],
@@ -118,13 +132,14 @@ export function usePeaks(): PeaksState {
         // fitting (a no-op if it isn't pending).
         const ds = await useApp.getState().resolveDataset(active.id);
         if (!ds) return;
-        const { x, y } = xy(ds);
+        const st = useApp.getState();
+        const { x, y, fullX } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
         const res = await fitMultiPeak({
           x, y, peaks: seedsFrom(peaks), model: opts.model,
           bg_degree: opts.bgDegree, constrain: opts.constrain, link_mode: opts.linkMode,
         });
         setFitResult(res);
-        overlayFitted(ds, res.peaks);
+        overlayFitted(ds, res.peaks, fullX);
       } catch (e: unknown) {
         setFitError(e instanceof Error ? e.message : "simultaneous fit failed");
       } finally {
@@ -147,7 +162,8 @@ export function usePeaks(): PeaksState {
         // fitting (a no-op if it isn't pending).
         const ds = await useApp.getState().resolveDataset(active.id);
         if (!ds) return;
-        const { x, y } = xy(ds);
+        const st = useApp.getState();
+        const { x, y, fullX } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
         const fitted: FittedPeak[] = [];
         for (const p of peaks) {
           const half = (Number.isFinite(p.fwhm) && p.fwhm > 0 ? p.fwhm : 1) * 3;
@@ -167,7 +183,7 @@ export function usePeaks(): PeaksState {
           nPeaks: fitted.length, model: opts.model,
         };
         setFitResult(result);
-        if (fitted.length > 0) overlayFitted(ds, fitted);
+        if (fitted.length > 0) overlayFitted(ds, fitted, fullX);
         if (fitted.length === 0) setFitError("No peaks could be fit individually.");
       } catch (e: unknown) {
         setFitError(e instanceof Error ? e.message : "per-peak fit failed");

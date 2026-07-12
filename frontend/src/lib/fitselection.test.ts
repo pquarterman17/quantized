@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { CalcResult, Dataset } from "./types";
-import { fitDataForSpec, fitSpecFrom, selectedFitData } from "./fitselection";
+import { fitDataForSpec, fitSpecFrom, fullPlottedX, selectedFitData } from "./fitselection";
 
 const dataset: Dataset = {
   id: "d",
@@ -28,6 +28,14 @@ describe("selectedFitData", () => {
   it("does not select an ignored or X-role channel as Y", () => {
     const roled = { ...dataset, channelRoles: { 1: "ignore" as const } };
     expect(selectedFitData(roled, 0, [0, 1, 2], null)?.yKey).toBe(2);
+  });
+});
+
+describe("fullPlottedX", () => {
+  it("returns the xKey channel's FULL column, or time when null/out-of-range", () => {
+    expect(fullPlottedX(dataset.data, 0)).toEqual([100, 200, 300, 400]); // full, not pruned
+    expect(fullPlottedX(dataset.data, null)).toEqual([0, 1, 2, 3]); // time
+    expect(fullPlottedX(dataset.data, 9)).toEqual([0, 1, 2, 3]); // out-of-range -> time
   });
 });
 

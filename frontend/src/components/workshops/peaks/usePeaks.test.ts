@@ -61,6 +61,9 @@ beforeEach(() => {
   useApp.setState({
     datasets: [{ id: "d1", name: "x.dat", data: DATA }],
     activeId: "d1",
+    xKey: null,
+    yKeys: null,
+    seriesOrder: null,
     peakOverlay: null,
   });
   vi.mocked(findPeaks).mockResolvedValue({
@@ -162,6 +165,42 @@ describe("usePeaks exclusion honoring (#50/#53)", () => {
     const body = vi.mocked(fitMultiPeak).mock.calls[0][0];
     expect(body.x).toEqual([1, 2, 3, 4]); // rows 0 and 5 dropped
     expect(body.y).toEqual([5, 2, 6, 2]);
+  });
+});
+
+describe("usePeaks plotted-channel selection (audit P1 #1)", () => {
+  it("finds + fits the plotted X/primary-Y, not time/values[0]", async () => {
+    const multi: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[100, 10], [200, 50], [300, 20], [400, 5]],
+      labels: ["angle", "counts"],
+      units: ["deg", "cps"],
+      metadata: {},
+    };
+    vi.mocked(findPeaks).mockResolvedValue({ peaks: [pk(200, 50, 30)], background: [] });
+    vi.mocked(fitMultiPeak).mockResolvedValue(fitted(200));
+    useApp.setState({
+      datasets: [{ id: "d1", name: "xrd.dat", data: multi }],
+      activeId: "d1",
+      xKey: 0, // angle
+      yKeys: [1], // counts
+      seriesOrder: null,
+      peakOverlay: null,
+    });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(1));
+    const found = vi.mocked(findPeaks).mock.calls[0][0];
+    expect(found.x).toEqual([100, 200, 300, 400]); // angle channel, not time
+    expect(found.y).toEqual([10, 50, 20, 5]); // counts channel, not values[0]
+    // overlay aligns to the FULL plotted x (angle), length 4
+    expect(useApp.getState().peakOverlay?.y).toHaveLength(4);
+
+    await act(async () => {
+      await result.current.fitTogether(OPTS);
+    });
+    const fitBody = vi.mocked(fitMultiPeak).mock.calls[0][0];
+    expect(fitBody.x).toEqual([100, 200, 300, 400]);
+    expect(fitBody.y).toEqual([10, 50, 20, 5]);
   });
 });
 
