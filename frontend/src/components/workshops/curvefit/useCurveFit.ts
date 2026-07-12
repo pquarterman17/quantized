@@ -5,9 +5,10 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { autoGuess, bootstrapFit, exportCornerFigure, fitModel, listFitModels } from "../../../lib/api";
-import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
+import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { selectedFitData } from "./fitSelection";
 
 export interface CurveFitState {
   active: Dataset | null;
@@ -33,6 +34,9 @@ export interface CurveFitState {
 export function useCurveFit(): CurveFitState {
   const active = useActiveDataset();
   const setFitOverlay = useApp((s) => s.setFitOverlay);
+  const xKey = useApp((s) => s.xKey);
+  const yKeys = useApp((s) => s.yKeys);
+  const seriesOrder = useApp((s) => s.seriesOrder);
   const [models, setModels] = useState<FitModel[]>([]);
   const [modelName, setModelName] = useState("Linear");
   const [result, setResult] = useState<CalcResult | null>(null);
@@ -59,10 +63,8 @@ export function useCurveFit(): CurveFitState {
   // ignores them — the same rows the plot hides/greys. The overlay is then
   // expanded back to full length so it overlays the full-length plot x in register.
   const xy = useMemo(() => {
-    const d = analysisData(active);
-    if (!d) return null;
-    return { x: d.time, y: d.values.map((row) => row[0]) };
-  }, [active]);
+    return selectedFitData(active, xKey, yKeys, seriesOrder);
+  }, [active, seriesOrder, xKey, yKeys]);
 
   const xRange = useMemo(() => {
     if (!xy) return null;
@@ -82,9 +84,11 @@ export function useCurveFit(): CurveFitState {
       // stale `xy` memo captured before the await.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
-      const d = analysisData(ds);
-      if (!d) return;
-      const localXy = { x: d.time, y: d.values.map((row) => row[0]) };
+      // Read selection again after the await: the user may have changed the
+      // plotted channels while a lazy Origin book was resolving.
+      const state = useApp.getState();
+      const localXy = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
+      if (!localXy) return;
       if (kind === "guess") {
         const g = await autoGuess(modelName, localXy.x, localXy.y);
         setResult({ params: g.p0 });

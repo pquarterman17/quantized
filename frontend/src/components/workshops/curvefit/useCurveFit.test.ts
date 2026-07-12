@@ -34,7 +34,14 @@ const DATA: DataStruct = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(listFitModels).mockResolvedValue({ models: [] });
-  useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", fitOverlay: null });
+  useApp.setState({
+    datasets: [{ id: "d1", name: "run.dat", data: DATA }],
+    activeId: "d1",
+    xKey: null,
+    yKeys: null,
+    seriesOrder: null,
+    fitOverlay: null,
+  });
 });
 
 describe("useCurveFit exclusion honoring (#50/#53)", () => {
@@ -46,6 +53,34 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
     });
     expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
     expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [11, 21, 31, 41] });
+  });
+
+  it("fits the primary plotted X/Y channels instead of time/values[0]", async () => {
+    const multi: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[100, 10, 5], [200, 20, 6], [300, 30, 7], [400, 40, 8]],
+      labels: ["field", "moment", "aux"],
+      units: ["Oe", "emu", ""],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "loop.dat", data: multi }],
+      activeId: "d1",
+      xKey: 0,
+      yKeys: [2, 1],
+      seriesOrder: [1, 2],
+      fitOverlay: null,
+    });
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });
+    const { result } = renderHook(() => useCurveFit());
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(fitModel).toHaveBeenCalledWith({
+      model: "Linear",
+      x: [100, 200, 300, 400],
+      y: [10, 20, 30, 40],
+    });
   });
 
   it("fits only the kept rows and expands the overlay back to full length (row 1 excluded)", async () => {
