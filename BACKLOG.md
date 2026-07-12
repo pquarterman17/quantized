@@ -6,11 +6,10 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last regenerated:** 2026-07-11 (MAIN #8 shipped; then the Origin-parity
-surface audit booked MAIN #9–#16 — editor-ergonomics gaps the prior gap
-campaigns never enumerated; MAIN #10 re-import-from-source shipped same
-day; MAIN #20 tick-precision/eng-notation shipped same day; MAIN #24
-axis tick formats in publication export shipped same day)
+**Last regenerated:** 2026-07-11 late night (v0.8.1 RELEASED to PyPI
+as `quantized-lab` + GitHub with installers; MAIN #9–#24 all shipped;
+the PyPI trusted-publisher registration + first publish are done —
+only the fresh-machine acceptance run remains from that gate)
 
 ---
 
