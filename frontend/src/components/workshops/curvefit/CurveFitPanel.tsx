@@ -15,6 +15,7 @@ import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import BumpsSection from "./BumpsSection";
 import EquationModelPanel from "./EquationModelPanel";
+import FitConvergenceWarning from "./FitConvergenceWarning";
 import FindXYSection from "./FindXYSection";
 import ModelScanSection from "./ModelScanSection";
 import { useCurveFit } from "./useCurveFit";
@@ -161,6 +162,7 @@ export default function CurveFitPanel() {
           {error}
         </div>
       )}
+      <FitConvergenceWarning result={guessOnly ? null : result} />
 
       {paramRows.length > 0 && (
         <div style={{ marginTop: 12 }}>
