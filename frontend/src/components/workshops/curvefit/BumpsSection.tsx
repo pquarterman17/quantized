@@ -5,9 +5,17 @@
 // workshop's main Fit button stays the parity path. Uncertainties are
 // labeled by kind (Hessian vs posterior) per the GOTO #10 decision.
 
-import { Button, DataTable, Select } from "../../primitives";
+import { Button, DataTable, NumberField, Select } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
+import DreamConvergence from "./DreamConvergence";
 import { useBumpsFit, type EngineChoice } from "./useBumpsFit";
+
+/** Parse a sampling-control field to a positive int (blank/garbage -> keep the
+ *  prior value by returning NaN, which the setter ignores). */
+function posInt(v: string): number {
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) && n > 0 ? n : Number.NaN;
+}
 
 const ENGINE_OPTIONS: { value: EngineChoice; label: string }[] = [
   { value: "parity", label: "Parity (default)" },
@@ -18,8 +26,13 @@ const ENGINE_OPTIONS: { value: EngineChoice; label: string }[] = [
 ];
 
 export default function BumpsSection({ modelName }: { modelName: string }) {
-  const { hasDataset, engine, setEngine, result, busy, progress, error, run, cancel } =
+  const { hasDataset, engine, setEngine, dream, setDream, result, busy, progress, error, run, cancel } =
     useBumpsFit();
+
+  const setDreamField = (k: "samples" | "burn" | "pop") => (v: string) => {
+    const n = posInt(v);
+    if (Number.isFinite(n)) setDream({ [k]: n });
+  };
 
   const kindLabel =
     result?.uncertainty_kind === "posterior"
@@ -58,6 +71,38 @@ export default function BumpsSection({ modelName }: { modelName: string }) {
               </Button>
             )}
           </div>
+
+          {engine === "dream" && (
+            <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "center" }}>
+              <label className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+                samples{" "}
+                <NumberField
+                  value={dream.samples}
+                  onChange={setDreamField("samples")}
+                  disabled={busy}
+                  width={72}
+                />
+              </label>
+              <label className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+                burn{" "}
+                <NumberField
+                  value={dream.burn}
+                  onChange={setDreamField("burn")}
+                  disabled={busy}
+                  width={56}
+                />
+              </label>
+              <label className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+                pop{" "}
+                <NumberField
+                  value={dream.pop}
+                  onChange={setDreamField("pop")}
+                  disabled={busy}
+                  width={48}
+                />
+              </label>
+            </div>
+          )}
 
           {busy && engine === "dream" && (
             <div style={{ marginTop: 8 }}>
@@ -109,6 +154,7 @@ export default function BumpsSection({ modelName }: { modelName: string }) {
               <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
                 Uncertainties: {kindLabel}
               </div>
+              <DreamConvergence posterior={result.posterior} />
             </div>
           )}
         </>
