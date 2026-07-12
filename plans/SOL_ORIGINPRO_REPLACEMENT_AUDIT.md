@@ -62,6 +62,18 @@ The current default is a fixed budget of 10,000 samples, burn-in 100, and popula
 
 ### P1 — Fit provenance is not durable enough to reproduce an analysis
 
+> **Partially addressed 2026-07-12 (PR #15):** `fitSpec` now records a
+> reproducible RECIPE — the plotted `xKey`/`yKey` fit at record time plus a
+> `params`/`exitFlag` result snapshot — and the recalc graph reproduces those
+> exact channels on recompute (legacy `{model}` specs fall back to the live
+> plotted selection). This also fixed a leftover of P1 #1: recompute previously
+> re-ran against `time`/`values[0]`. Round-trips through `.dwk`. STILL OPEN:
+> error/weight channel, explicit fit range, starting values, parameter bounds,
+> covariance/uncertainty method, and preprocessing state — captured when the
+> weighted/equation fit paths surface them (registry fits expose no user
+> bounds); and a UI distinction between a historical result and a recomputed
+> one.
+
 A persisted `fitSpec` contains only the model name:
 
 - `frontend/src/lib/types.ts:285`
