@@ -78,7 +78,36 @@ describe("buildOpts publication template (fontSize + baseLineWidth)", () => {
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", fontSize: 18 });
     expect(opts.axes?.[0].labelFont).toContain("20px");
     expect(opts.axes?.[0].labelSize).toBeGreaterThan(30);
-    expect(opts.axes?.[1].size as number).toBeGreaterThan(60);
+    // The y tick-band size is now a measuring FUNCTION (grows with the widest
+    // label); its floor still grows past the prior flat 60 with a bigger font.
+    const ySize = opts.axes?.[1].size;
+    expect(typeof ySize).toBe("function");
+    const floor = (ySize as (s: never, v: string[] | null, i: number, c: number) => number)(
+      {} as never,
+      null,
+      1,
+      0,
+    );
+    expect(floor).toBeGreaterThan(60);
+  });
+
+  it("y tick-band grows to fit wide (many-digit) labels so they don't overlap the title", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" });
+    const ySize = opts.axes?.[1].size as (
+      s: { ctx: CanvasRenderingContext2D },
+      v: string[] | null,
+      i: number,
+      c: number,
+    ) => number;
+    // A mock ctx whose text width scales with string length (jsdom has no real
+    // metrics) — a wide label must yield a bigger band than a narrow one.
+    const ctx = {
+      font: "",
+      measureText: (t: string) => ({ width: t.length * 8 }) as TextMetrics,
+    } as CanvasRenderingContext2D;
+    const narrow = ySize({ ctx }, ["0", "1", "2"], 1, 0);
+    const wide = ySize({ ctx }, ["-0.000012", "0.000034", "0.000056"], 1, 0);
+    expect(wide).toBeGreaterThan(narrow);
   });
 });
 
