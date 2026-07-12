@@ -6,7 +6,44 @@
 import { useEffect } from "react";
 
 import { loadAutosave, saveAutosave } from "./lib/autosave";
-import { useApp } from "./store/useApp";
+import { useApp, type AppState } from "./store/useApp";
+
+/** Every store field serialized into a .dwk workspace. Keep this list in one
+ * place so autosave cannot silently omit a newly-persisted artifact. */
+export type AutosaveState = Pick<
+  AppState,
+  | "datasets"
+  | "folders"
+  | "activeId"
+  | "selectedIds"
+  | "expandedFolders"
+  | "originFigures"
+  | "smartFolders"
+  | "reports"
+  | "macroSteps"
+  | "recalcMode"
+  | "figureDocs"
+  | "plotWindows"
+  | "focusedWindowId"
+>;
+
+export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boolean {
+  return !(
+    state.datasets === prev.datasets &&
+    state.folders === prev.folders &&
+    state.activeId === prev.activeId &&
+    state.selectedIds === prev.selectedIds &&
+    state.expandedFolders === prev.expandedFolders &&
+    state.originFigures === prev.originFigures &&
+    state.smartFolders === prev.smartFolders &&
+    state.reports === prev.reports &&
+    state.macroSteps === prev.macroSteps &&
+    state.recalcMode === prev.recalcMode &&
+    state.figureDocs === prev.figureDocs &&
+    state.plotWindows === prev.plotWindows &&
+    state.focusedWindowId === prev.focusedWindowId
+  );
+}
 
 export function useWorkspaceAutosave(): void {
   const setStatus = useApp((s) => s.setStatus);
@@ -36,18 +73,9 @@ export function useWorkspaceAutosave(): void {
       // `macroSteps` already have here (this hook watches a curated subset,
       // not every persisted field); an explicit File ▸ Save always captures
       // the live view regardless, via `windowsForSave()` below.
-      if (
-        state.datasets === prev.datasets &&
-        state.folders === prev.folders &&
-        state.expandedFolders === prev.expandedFolders &&
-        state.activeId === prev.activeId &&
-        state.selectedIds === prev.selectedIds &&
-        state.smartFolders === prev.smartFolders &&
-        state.plotWindows === prev.plotWindows &&
-        state.focusedWindowId === prev.focusedWindowId
-      ) {
-        return;
-      }
+      // The helper compares the complete serialized workspace slice, including
+      // reports, figure docs, macro steps, Origin figures, and recalc mode.
+      if (!shouldAutosave(state, prev)) return;
       clearTimeout(timer);
       timer = setTimeout(() => {
         const s = useApp.getState();

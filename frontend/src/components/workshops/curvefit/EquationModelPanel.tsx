@@ -11,6 +11,7 @@ import { Button, DataTable, NumberField } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import type { CustomFitModel } from "../../../lib/fitmodels";
 import FindXYSection from "./FindXYSection";
+import FitConvergenceWarning from "./FitConvergenceWarning";
 import { useEquationFit } from "./useEquationFit";
 
 interface Props {
@@ -136,6 +137,7 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
           {eq.error}
         </div>
       )}
+      <FitConvergenceWarning result={eq.result} />
 
       {paramRows.length > 0 && (
         <div style={{ marginTop: 12 }}>
