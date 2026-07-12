@@ -72,6 +72,24 @@ GOTO #11 drift (implemented but listed open).
 ~~24. **Axis tick formats in publication export**~~ COMPLETED 2026-07-11
     (see Completed).
 
+25. **Rich text in annotations** (owner 2026-07-11; use: label
+    transitions with real symbols — µ₀H_c2 — on the plot itself; used
+    via the SAME `$...$` syntax as titles; discoverable because the
+    annotation edit dialog becomes `RichLabelInput` w/ Ω palette + live
+    preview): canvas draw renders the rich AST (reuse the axis-label
+    canvas renderer's glyph runs), hit box measures the RENDERED runs
+    not the raw markup, export already guards via `_safe_label`.
+
+26. **Split dataset by column value** (owner 2026-07-11; use: one
+    multi-temperature PPMS/MPMS file → per-setpoint datasets, the step
+    before overlays/panels/batch fits; used via right-click dataset →
+    "Split by column value…"; discoverable because the dialog previews
+    the detected groups + row counts LIVE before committing): numeric
+    columns gap-cluster with an editable tolerance (auto default),
+    text columns split by exact value; results named "src (5 K)" and
+    placed in a Library group named after the source; source kept;
+    undo-recorded.
+
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
 ~~20. **Axis tick-label precision + engineering notation**~~ COMPLETED
