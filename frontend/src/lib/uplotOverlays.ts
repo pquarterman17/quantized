@@ -10,6 +10,8 @@ import { canvasToOverCss, hitTestAnnotationBody, hitTestAnnotationHandle, overPo
 import { CLICK_PX } from "./pointGesture";
 import type { ColorScatterSpec } from "./colorscatter";
 import { colormap, normalize } from "./colormap";
+import { richLabelAst, type RichNode } from "./richtext";
+import { DESCENT_EM, drawRich, measureRich, type RichFont } from "./richtextCanvas";
 import type { Annotation, RefLine, RegionShade } from "./types";
 
 /** A reference line the pointer is over (for drag hit-testing). */
@@ -173,6 +175,16 @@ export function fontPx(font: string): number {
   return m ? parseFloat(m[1]) : 11;
 }
 
+/** The family list after the leading `<n>px` in a CSS font shorthand — the
+ *  counterpart to `fontPx` above. Used to build a `RichFont` (px + family)
+ *  for the shared rich-text canvas renderer (richtextCanvas.ts) without
+ *  widening `annotationPlugin`'s plain-CSS-string `font` parameter — MAIN
+ *  #25 reuses the GOTO #5 renderer for annotation text exactly as-is. */
+export function fontFamily(font: string): string {
+  const m = /\d+(?:\.\d+)?px\s+(.+)$/.exec(font);
+  return m ? m[1] : font;
+}
+
 /** MAIN #18's corner-handle resize clamp — shared by the plugin's live
  *  preview, the store's `updateAnnotation` commit, and the object menu's
  *  Size +/− entries, so the same [6, 72] px range applies everywhere a
@@ -190,6 +202,16 @@ export function clampAnnotationSize(v: number): number {
 export function annotationFont(baseFont: string, size?: number): string {
   if (!size) return baseFont;
   return baseFont.replace(/\d+(?:\.\d+)?px/, `${size}px`);
+}
+
+/** The RichFont (px + family) for one annotation's font override — the SAME
+ *  px `annotationFont` resolves (baseFont's leading `<n>px`, or `a.size`
+ *  when set) paired with the plain-text family from `baseFont`. Both the
+ *  hit-test width measurement (`annotationLayout`) and the rich draw pass
+ *  build their font from this ONE function, so a resized rich annotation's
+ *  hit box always matches what's actually drawn (MAIN #25). */
+function annotationRichFont(baseFont: string, size?: number): RichFont {
+  return { px: fontPx(annotationFont(baseFont, size)), family: fontFamily(baseFont) };
 }
 
 /** Clamp a fraction to [0, 1] — the shared clamp every page-anchor helper
@@ -265,6 +287,15 @@ export interface AnnotationLayout {
   textWidth: number;
   align: "left" | "right";
   lineHeight: number;
+  /** Parsed rich-text AST when `a.text` is valid `$...$` markup (GOTO #5
+   *  syntax reused for annotations, MAIN #25); null for plain text OR
+   *  invalid markup — the literal-fallback contract, same as titles/axis
+   *  labels. `textWidth` above is ALWAYS measured against this same parse
+   *  (via `measureRich` when rich, `ctx.measureText` when not), so the hit
+   *  box and the draw pass can never disagree about what's "rich" or how
+   *  wide it renders — raw `$...$` markup is longer than its rendered
+   *  glyphs, so measuring the raw string would overhang the hit box. */
+  rich: RichNode[] | null;
 }
 export function annotationLayout(
   u: Pick<uPlot, "valToPos" | "ctx" | "bbox" | "scales">,
@@ -293,11 +324,21 @@ export function annotationLayout(
       : { x: u.valToPos(a.x, "x", true), y: u.valToPos(a.y, yScale, true) };
   const font = annotationFont(baseFont, a.size);
   u.ctx.font = font;
-  const textWidth = a.text ? u.ctx.measureText(a.text).width : 0;
+  // MAIN #25: `a.text` gets the SAME `$...$` micro-syntax as titles/axis
+  // labels (GOTO #5) — richLabelAst is the one gate (hasMarkup fast-path +
+  // parse + validate) every rich surface uses, so invalid markup falls back
+  // to null (plain-text measurement/draw) exactly like the canvas/DOM/export
+  // renderers already do.
+  const rich = a.text ? richLabelAst(a.text) : null;
+  const textWidth = !a.text
+    ? 0
+    : rich
+      ? measureRich(u.ctx, rich, annotationRichFont(baseFont, a.size))
+      : u.ctx.measureText(a.text).width;
   const { x: tx, align } = clampAnnotationLabelX(px, textWidth, 6, 0, canvasW);
   const lineHeight = fontPx(font) * 1.3;
   const ty = Math.max(py - 2, lineHeight);
-  return { px, py, tx, ty, textWidth, align, lineHeight };
+  return { px, py, tx, ty, textWidth, align, lineHeight, rich };
 }
 
 /** The label's bounding box (canvas pixels), derived from its layout — used
@@ -762,9 +803,28 @@ export function annotationPlugin(
           ctx.arc(px, py, 3, 0, Math.PI * 2);
           ctx.fill();
           if (a.text) {
-            ctx.font = annotationFont(font, a.size);
-            ctx.textAlign = align;
-            ctx.fillText(a.text, tx, ty);
+            if (layout.rich) {
+              // Reuse the SAME shared canvas renderer the axis-label plugin
+              // draws with (richtextCanvas.ts) rather than a second rich
+              // draw path — styled runs (italics, sub/sup, Greek) at the
+              // annotation's own font size/color. drawRich always draws on
+              // the ALPHABETIC baseline, so `ty` (this loop's BOTTOM
+              // baseline, set via `ctx.textBaseline = "bottom"` above) is
+              // converted the same way uplotRichLabels.ts converts uPlot's
+              // bottom-anchored axis labels. Wrapped in its own save/restore
+              // — drawRich mutates fillStyle/textAlign/textBaseline/font on
+              // the SHARED canvas context, which would otherwise leak into
+              // the next (possibly plain-text) annotation's fillText call.
+              const richFont = annotationRichFont(font, a.size);
+              const drawX = align === "right" ? tx - layout.textWidth : tx;
+              ctx.save();
+              drawRich(ctx, layout.rich, drawX, ty - DESCENT_EM * richFont.px, richFont, color);
+              ctx.restore();
+            } else {
+              ctx.font = annotationFont(font, a.size);
+              ctx.textAlign = align;
+              ctx.fillText(a.text, tx, ty);
+            }
           }
           // Selection outline + resize handle (pointer mode only).
           if (opts?.interactive && opts.selectedId === a0.id) {

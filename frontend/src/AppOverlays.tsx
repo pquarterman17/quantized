@@ -5,6 +5,7 @@
 // the flag-gated workshop panels, then the sheets + toaster). CommandPalette
 // stays in App — it needs the curated actions list.
 
+import AnnotationTextDialog from "./components/overlays/AnnotationTextDialog";
 import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
 import PreferencesDialog from "./components/overlays/PreferencesDialog";
@@ -70,6 +71,7 @@ export default function AppOverlays() {
     <>
       <ParamDialog />
       <ConfirmDialog />
+      <AnnotationTextDialog />
       <TooltipLayer />
       {curveFitOpen && <CurveFitPanel />}
       {hysteresisOpen && <HysteresisPanel />}
