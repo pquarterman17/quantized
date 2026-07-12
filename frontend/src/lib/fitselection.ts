@@ -5,12 +5,21 @@
 
 import { effectiveChannels } from "./plotdata";
 import { analysisData } from "./rowstate";
-import type { CalcResult, Dataset, FitSpec } from "./types";
+import type { CalcResult, Dataset, DataStruct, FitSpec } from "./types";
 
 export interface FitSelection {
   x: number[];
   y: number[];
   yKey: number;
+}
+
+/** The FULL plotted-X column (not analysis-pruned): `time` when `xKey` is null,
+ *  else the `xKey` channel. Used by overlays that must align to the full-length
+ *  plot x while the analysis itself ran on the pruned rows. */
+export function fullPlottedX(data: DataStruct, xKey: number | null): number[] {
+  return xKey == null || xKey < 0 || xKey >= data.labels.length
+    ? data.time
+    : data.values.map((row) => row[xKey]);
 }
 
 export function selectedFitData(
