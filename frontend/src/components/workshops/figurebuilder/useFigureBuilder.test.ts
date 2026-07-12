@@ -39,6 +39,8 @@ beforeEach(() => {
     yKeys: null,
     xScale: "linear",
     yScale: "linear",
+    xFmt: { mode: "auto", digits: 2 },
+    yFmt: { mode: "auto", digits: 2 },
     seriesStyles: {},
     status: "",
   });
@@ -113,6 +115,30 @@ describe("useFigureBuilder", () => {
     const body = vi.mocked(exportFigure).mock.calls[0][0];
     expect(body.dataset).toEqual(full);
     expect(useApp.getState().datasets[0].pending).toBeUndefined();
+  });
+
+  it("omits x_fmt/y_fmt when both axes are auto (MAIN #24)", async () => {
+    const { result } = renderHook(() => useFigureBuilder());
+    await act(async () => {
+      await result.current.exportNow();
+    });
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.x_fmt).toBeUndefined();
+    expect(body.y_fmt).toBeUndefined();
+  });
+
+  it("sends the live x_fmt/y_fmt when non-auto (MAIN #24)", async () => {
+    useApp.setState({
+      xFmt: { mode: "fixed", digits: 3 },
+      yFmt: { mode: "sci", digits: 1 },
+    });
+    const { result } = renderHook(() => useFigureBuilder());
+    await act(async () => {
+      await result.current.exportNow();
+    });
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.x_fmt).toEqual({ mode: "fixed", digits: 3 });
+    expect(body.y_fmt).toEqual({ mode: "sci", digits: 1 });
   });
 
   it("syncs DPI to the preset's calibrated value when the style changes", () => {

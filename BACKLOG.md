@@ -9,18 +9,15 @@ in the same commit). Every edit here must have a matching plan edit.
 **Last regenerated:** 2026-07-11 (MAIN #8 shipped; then the Origin-parity
 surface audit booked MAIN #9–#16 — editor-ergonomics gaps the prior gap
 campaigns never enumerated; MAIN #10 re-import-from-source shipped same
-day; MAIN #20 tick-precision/eng-notation shipped same day)
+day; MAIN #20 tick-precision/eng-notation shipped same day; MAIN #24
+axis tick formats in publication export shipped same day)
 
 ---
 
 ## Actionable dev work (no blockers, no owner gate)
 
-| # | Item | Plan / item | Size |
-|---|------|-------------|------|
-| 39 | Axis tick formats in publication export (fixed/sci/eng → matplotlib) | MAIN #24 | S |
-
-*(MAIN #9–#23 all shipped 2026-07-11; #24 booked same day, agent in
-flight. The #23 installer hooks verify at the next release build)*
+*(MAIN #9–#24 all shipped 2026-07-11. The #23 installer hooks verify at
+the next release build.)*
 
 ## Owner actions & owner-gated decisions
 
@@ -64,7 +61,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only — MAIN #9–#20 ALL shipped 2026-07-11 |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only — MAIN #9–#24 ALL shipped 2026-07-11 |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence |

@@ -12,6 +12,7 @@ import { exportFigure } from "./api";
 import { buildExportStyles } from "./exportStyles";
 import { exportActive, type StoreGet } from "./exportActive";
 import { compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
+import { axisFmtParam } from "./types";
 
 export async function runExportFigureCommand(s: StoreGet): Promise<void> {
   const params = await askParams("Export figure", [
@@ -60,6 +61,8 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
       y_keys: s().yKeys ?? undefined,
       x_scale: s().xScale,
       y_scale: s().yScale,
+      x_fmt: axisFmtParam(s().xFmt),
+      y_fmt: axisFmtParam(s().yFmt),
       fmt: params.fmt as string,
       style: params.style as string,
       dpi: params.dpi as number,

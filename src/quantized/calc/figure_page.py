@@ -110,6 +110,11 @@ class PagePanel:
     # are the back-compat fallback (see figure_scale.resolve_axis_scale).
     x_scale: str | None = None
     y_scale: str | None = None
+    # MAIN #24: tick-label number format ({"mode": ..., "digits": ...},
+    # AxisFormat-shaped) -- each panel carries its OWN, mirroring the screen
+    # (a figure page composes several independently-configured plot views).
+    x_fmt: Mapping[str, Any] | None = None
+    y_fmt: Mapping[str, Any] | None = None
     series_styles: Sequence[Mapping[str, Any] | None] | None = None
     overrides: Mapping[str, Any] | None = None
     label: str | None = None
@@ -249,6 +254,8 @@ def render_figure_page(
                     x_label=safe_mathtext_label(p.x_label),
                     y_label=safe_mathtext_label(p.y_label),
                     series_styles=p.series_styles,
+                    x_fmt=p.x_fmt,
+                    y_fmt=p.y_fmt,
                 )
                 text = p.label if p.label is not None else panel_label(idx, label_format)
                 _place_label(ax, safe_mathtext_label(text), label_pos, st)

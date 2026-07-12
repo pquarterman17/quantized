@@ -151,6 +151,33 @@ describe("useFigurePage", () => {
     expect(p1.figure.y_log).toBe(true);
     expect(p1.figure.title).toBe("doc title");
     expect(p1.figure.overrides).toEqual({ grid: true });
+    // MAIN #24: both sources default to auto (no saved fmt on a doc, no
+    // configured fmt on the window's default view) -> x_fmt/y_fmt omitted.
+    expect(p0.figure.x_fmt).toBeUndefined();
+    expect(p0.figure.y_fmt).toBeUndefined();
+    expect(p1.figure.x_fmt).toBeUndefined();
+    expect(p1.figure.y_fmt).toBeUndefined();
+  });
+
+  it("threads a window panel's OWN non-auto x_fmt/y_fmt (MAIN #24 per-panel own view fmt)", async () => {
+    useApp.setState({
+      plotWindows: [
+        win({
+          id: "w1",
+          title: "Loop A",
+          view: {
+            ...defaultPlotView(),
+            xFmt: { mode: "fixed", digits: 3 },
+            yFmt: { mode: "sci", digits: 1 },
+          },
+        }),
+      ],
+    });
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.windowSources[0]));
+    const spec = await result.current.buildSpec();
+    expect(spec!.panels[0].figure.x_fmt).toEqual({ mode: "fixed", digits: 3 });
+    expect(spec!.panels[0].figure.y_fmt).toEqual({ mode: "sci", digits: 1 });
   });
 
   it("grid resize preserves assignments by position", () => {

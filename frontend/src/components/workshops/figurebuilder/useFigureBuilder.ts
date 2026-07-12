@@ -21,7 +21,7 @@ import {
   pxToFigureFraction,
   type FigureHitmap,
 } from "../../../lib/previewmap";
-import type { AxisScale, DataStruct } from "../../../lib/types";
+import { axisFmtParam, type AxisScale, type DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
 let _docSeq = 0;
@@ -59,6 +59,8 @@ export function useFigureBuilder() {
   const xKey = useApp((s) => s.xKey);
   const xScale = useApp((s) => s.xScale);
   const yScale = useApp((s) => s.yScale);
+  const xFmt = useApp((s) => s.xFmt);
+  const yFmt = useApp((s) => s.yFmt);
   const seriesStyles = useApp((s) => s.seriesStyles);
   const setStatus = useApp((s) => s.setStatus);
   const figureDocSeed = useApp((s) => s.figureDocSeed);
@@ -138,6 +140,8 @@ export function useFigureBuilder() {
       y_log: effYScale === "log",
       x_scale: effXScale,
       y_scale: effYScale,
+      x_fmt: axisFmtParam(xFmt),
+      y_fmt: axisFmtParam(yFmt),
       style,
       overrides: compactOverrides(overrides),
       title: title.trim(),
@@ -151,6 +155,8 @@ export function useFigureBuilder() {
     effXKey,
     effXScale,
     effYScale,
+    xFmt,
+    yFmt,
     style,
     title,
     xLabel,

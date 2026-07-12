@@ -9,6 +9,7 @@ import type { FigureHitmap } from "./previewmap";
 import type { ReportSheet } from "./report";
 import type { Recommendation } from "./statschooser";
 import type {
+  AxisFormat,
   AxisScale,
   BookSource,
   CalcResult,
@@ -1426,6 +1427,12 @@ export interface FigureSpec {
    *  back-compat fallback for any older caller that only sets the boolean. */
   x_scale?: AxisScale;
   y_scale?: AxisScale;
+  /** Tick-label number format (MAIN #24) — omit (or `undefined`) for auto,
+   *  the backend's own default formatter; see `types.ts`'s `axisFmtParam`.
+   *  `y_fmt` also drives the screen's y2 axis, but the matplotlib export
+   *  backend has no y2/twinx rendering to mirror it onto. */
+  x_fmt?: AxisFormat;
+  y_fmt?: AxisFormat;
   fmt?: string;
   style?: string;
   dpi?: number;

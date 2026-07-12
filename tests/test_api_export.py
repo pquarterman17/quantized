@@ -369,6 +369,67 @@ def test_figure_series_styles_applied() -> None:
     assert "#abcdef" in resp.content.decode("utf-8", "ignore")
 
 
+def test_figure_x_fmt_and_y_fmt_render_and_appear_in_svg() -> None:
+    # MAIN #24: tick-label number format threaded through the route into
+    # calc.figure_ticks -- SVG embeds tick label text literally (same
+    # precedent as test_figure_title_and_label_overrides above), so the
+    # formatted mantissa/exponent strings are checkable end-to-end, not just
+    # "renders without error".
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "svg",
+            "x_fmt": {"mode": "fixed", "digits": 3},
+            "y_fmt": {"mode": "sci", "digits": 1},
+        },
+    )
+    assert resp.status_code == 200
+    svg = resp.content.decode("utf-8", "ignore")
+    assert "10.000" in svg  # x tick at 10.0, fixed digits=3
+
+
+def test_figure_x_fmt_auto_is_omittable() -> None:
+    # The default/omitted case must still render (backward compatible with
+    # every caller that predates MAIN #24).
+    resp = client.post("/api/export/figure", json={"dataset": _xrd_dataset(), "fmt": "pdf"})
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_figure_x_fmt_bad_mode_is_422() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "pdf", "x_fmt": {"mode": "bogus", "digits": 2}},
+    )
+    assert resp.status_code == 422
+
+
+def test_figure_page_panel_x_fmt_renders() -> None:
+    # Each panel's nested figure payload carries its own x_fmt/y_fmt (the
+    # figure-page per-panel-own-view-fmt contract).
+    resp = client.post(
+        "/api/export/figure-page",
+        json={
+            "rows": 1,
+            "cols": 1,
+            "panels": [
+                {
+                    "figure": {
+                        "dataset": _xrd_dataset(),
+                        "x_fmt": {"mode": "fixed", "digits": 2},
+                    },
+                    "row": 0,
+                    "col": 0,
+                }
+            ],
+            "fmt": "pdf",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
 def test_figure_bad_format_is_422() -> None:
     resp = client.post("/api/export/figure", json={"dataset": _xrd_dataset(), "fmt": "bmp"})
     assert resp.status_code == 422

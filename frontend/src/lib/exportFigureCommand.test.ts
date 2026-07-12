@@ -1,11 +1,30 @@
 // lib/exportFigureCommand's liveViewOverrides — the MAIN #18 export-parity
 // piece: annotations (with `size`) + legend screen position, mapped into the
-// FigureOverrides shape calc.figure_overrides expects.
+// FigureOverrides shape calc.figure_overrides expects. Also covers
+// runExportFigureCommand's MAIN #24 x_fmt/y_fmt wiring (the request builder
+// under test.plan's "extend exportFigureCommand tests").
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { liveViewOverrides } from "./exportFigureCommand";
+import { exportFigure } from "./api";
+import { liveViewOverrides, runExportFigureCommand } from "./exportFigureCommand";
 import type { Annotation } from "./types";
+import { useApp } from "../store/useApp";
+
+vi.mock("./api", () => ({
+  exportFigure: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../components/overlays/ParamDialog", () => ({
+  askParams: vi.fn().mockResolvedValue({
+    fmt: "pdf",
+    style: "default",
+    dpi: 300,
+    title: "",
+    x_label: "",
+    y_label: "",
+  }),
+}));
 
 function fakeGet(over: {
   showLegend?: boolean;
@@ -79,5 +98,47 @@ describe("liveViewOverrides", () => {
   it("omits annotations entirely (not an empty array) when there are none", () => {
     const ov = liveViewOverrides(fakeGet({}));
     expect(ov).not.toHaveProperty("annotations");
+  });
+});
+
+describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(exportFigure).mockResolvedValue(undefined);
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "scan.dat",
+          data: { time: [0, 1], values: [[1], [2]], labels: ["A"], units: ["u"], metadata: {} },
+        },
+      ],
+      activeId: "d1",
+      yKeys: null,
+      xScale: "linear",
+      yScale: "linear",
+      xFmt: { mode: "auto", digits: 2 },
+      yFmt: { mode: "auto", digits: 2 },
+      seriesStyles: {},
+      status: "",
+    });
+  });
+
+  it("omits x_fmt/y_fmt when both axes are auto", async () => {
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.x_fmt).toBeUndefined();
+    expect(body.y_fmt).toBeUndefined();
+  });
+
+  it("sends the live x_fmt/y_fmt when non-auto", async () => {
+    useApp.setState({
+      xFmt: { mode: "fixed", digits: 3 },
+      yFmt: { mode: "eng", digits: 0 },
+    });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.x_fmt).toEqual({ mode: "fixed", digits: 3 });
+    expect(body.y_fmt).toEqual({ mode: "eng", digits: 0 });
   });
 });
