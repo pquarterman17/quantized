@@ -14,13 +14,15 @@ The highest-priority work is to establish one explicit analysis-selection contra
 
 ### P1 — Analysis tools ignore the selected plot X/Y channels
 
-> **Partially addressed 2026-07-12:** The entire Curve Fit workshop — parity
-> fit, auto-guess, model scan, custom-equation fit, bootstrap/corner, and the
-> optional bumps engines — now uses the plot's selected X and primary Y
-> channels through a shared `selectedFitData` bridge (which reads rows through
-> `rowstate.analysisData` and the plot's own `effectiveChannels` contract).
-> Peaks, Peak Analyzer, baseline processing, pipeline execution, and the
-> magnetometry workflows still require migration to the same contract.
+> **Partially addressed 2026-07-12:** The Curve Fit workshop (PR13 — parity
+> fit, auto-guess, model scan, custom-equation fit, bootstrap/corner, bumps)
+> AND the Peaks workshop (PR #16 — detect + fit-multi + fit-each) now use the
+> plot's selected X and primary Y through a shared `selectedFitData` bridge
+> (`lib/fitselection.ts`, which reads rows via `rowstate.analysisData` and the
+> plot's own `effectiveChannels` contract; `fullPlottedX` keeps overlays
+> aligned to the full-length plot x). STILL require migration: the Peak
+> Analyzer (peakwizard), baseline processing, pipeline execution, and the
+> magnetometry workflows (hysteresis, magtools).
 
 At audit time, Curve Fit analyzed `DataStruct.time` against `values[0]`, regardless of the user's selected X, Y, Y2, series ordering, or channel roles:
 
