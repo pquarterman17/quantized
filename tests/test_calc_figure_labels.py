@@ -92,6 +92,38 @@ def test_supported_command_set_matches_richtext_ts_subset() -> None:
         assert cmd not in SUPPORTED_MATHTEXT_COMMANDS
 
 
+# -- MAIN #28 commit 1: relations / arrows / analysis glyphs joined the subset
+
+RELATION_LABELS = (
+    r"$T \leq T_c$",
+    r"$\mu_0H \rightarrow \infty$",
+    r"$a \approx b \neq c \geq d$",
+    r"$x \propto y^2$",
+    r"$\nabla \cdot E \parallel \partial_x$",
+)
+
+
+def test_relation_commands_pass_through_untouched() -> None:
+    # In-subset AND valid mathtext -> returned verbatim (mathtext renders the
+    # same glyph richtext.ts substitutes on screen: WYSIWYG).
+    for label in RELATION_LABELS:
+        assert safe_mathtext_label(label) == label
+
+
+def test_relation_commands_render_without_raising() -> None:
+    for label in RELATION_LABELS:
+        out = render_figure(X, [("y", Y)], x_label=label, y_label=label, fmt="svg")
+        assert b"<svg" in out[:300]
+
+
+def test_relation_commands_in_supported_set() -> None:
+    for cmd in ("leq", "geq", "neq", "approx", "equiv", "sim", "propto", "ll",
+                "gg", "infty", "partial", "nabla", "perp", "parallel", "angle",
+                "cdots", "ldots", "dots", "rightarrow", "to", "leftarrow",
+                "leftrightarrow", "Rightarrow", "mp", "div"):
+        assert cmd in SUPPORTED_MATHTEXT_COMMANDS
+
+
 # -- figure render integration ------------------------------------------------
 
 

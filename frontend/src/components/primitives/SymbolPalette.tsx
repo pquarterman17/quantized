@@ -139,6 +139,17 @@ const SYMBOLS: PaletteEntry[] = [
   { glyph: "′", text: "′", math: "'", title: "Prime (' in math)" },
 ];
 
+const RELATIONS: PaletteEntry[] = [
+  { glyph: "≤", text: "≤", math: "\\leq", title: "Less than or equal (\\leq)" },
+  { glyph: "≥", text: "≥", math: "\\geq", title: "Greater than or equal (\\geq)" },
+  { glyph: "≠", text: "≠", math: "\\neq", title: "Not equal (\\neq)" },
+  { glyph: "≈", text: "≈", math: "\\approx", title: "Approximately (\\approx)" },
+  { glyph: "∝", text: "∝", math: "\\propto", title: "Proportional to (\\propto)" },
+  { glyph: "∞", text: "∞", math: "\\infty", title: "Infinity (\\infty)" },
+  { glyph: "→", text: "→", math: "\\rightarrow", title: "Right arrow (\\rightarrow)" },
+  { glyph: "∂", text: "∂", math: "\\partial", title: "Partial (\\partial)" },
+];
+
 const SNIPPETS: PaletteEntry[] = [
   { glyph: "µ₀H (T)", text: "$\\mu_0H$ (T)", title: "Applied field axis" },
   { glyph: "Å⁻¹", text: "$\\AA^{-1}$", title: "Reciprocal angstroms" },
@@ -226,6 +237,7 @@ export default function SymbolPalette({ x, y, onInsert, onClose }: SymbolPalette
       <Section label="Insert" entries={SCRIPTS} onInsert={onInsert} cols={4} />
       <Section label="Greek" entries={GREEK} onInsert={onInsert} cols={8} />
       <Section label="Symbols" entries={SYMBOLS} onInsert={onInsert} cols={6} />
+      <Section label="Relations" entries={RELATIONS} onInsert={onInsert} cols={8} />
       <Section label="Snippets" entries={SNIPPETS} onInsert={onInsert} cols={2} />
     </div>,
     document.body,

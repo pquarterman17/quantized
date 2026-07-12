@@ -13,9 +13,11 @@ error an export.
 
 Screen/export WYSIWYG (bug-hunt fix): the frontend's parser
 (``frontend/src/lib/richtext.ts``) only accepts a STRICT SUBSET of
-mathtext -- Greek letters, ``\\AA \\circ \\times \\cdot \\pm \\prime \\,
-\\mathrm \\mathit``, and literal Unicode -- and rejects everything else
-(e.g. ``\\frac``, ``\\sqrt``, ``\\sum``) as invalid markup, rendering it
+mathtext -- Greek letters, the symbol/relation/arrow commands in
+``SUPPORTED_MATHTEXT_COMMANDS`` (``\\AA \\times \\leq \\approx \\infty
+\\rightarrow`` ...), ``\\, \\mathrm \\mathit``, and literal Unicode -- and
+rejects everything else (e.g. ``\\frac``, ``\\sqrt``, ``\\sum``) as invalid
+markup, rendering it
 literally on screen. Raw matplotlib accepts a much larger command set, so
 without this gate a label like ``$\\frac{1}{2}$`` would render literal text
 ("Invalid markup") on screen but an actual fraction in the PDF/SVG export --
@@ -60,8 +62,22 @@ _GREEK_COMMANDS = frozenset(
         "Phi", "Psi", "Omega",
     }
 )
-# Mirrors richtext.ts's `SYMBOLS` table (non-Greek symbol commands).
-_SYMBOL_COMMANDS = frozenset({"AA", "circ", "times", "cdot", "pm", "prime"})
+# Mirrors richtext.ts's `SYMBOLS` table (non-Greek symbol commands): base
+# symbols + relations, analysis/geometry glyphs, and arrows. Each is verified
+# to parse in matplotlib mathtext (tools probe), so a label using them renders
+# identically on screen (richtext.ts glyph) and in export (mathtext glyph).
+_SYMBOL_COMMANDS = frozenset(
+    {
+        "AA", "circ", "times", "cdot", "pm", "mp", "div", "prime",
+        # relations
+        "leq", "geq", "neq", "approx", "equiv", "sim", "propto", "ll", "gg",
+        # analysis / geometry
+        "infty", "partial", "nabla", "perp", "parallel", "angle",
+        "cdots", "ldots", "dots",
+        # arrows
+        "rightarrow", "to", "leftarrow", "leftrightarrow", "Rightarrow",
+    }
+)
 # Mirrors richtext.ts's `\mathrm{...}` / `\mathit{...}` style-group handling.
 _STYLE_COMMANDS = frozenset({"mathrm", "mathit"})
 

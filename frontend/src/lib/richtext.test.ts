@@ -121,6 +121,22 @@ describe("parseRichText — math constructs", () => {
     ]);
   });
 
+  it("accepts relations, arrows, and analysis glyphs (MAIN #28)", () => {
+    // Each command maps to the SAME Unicode glyph matplotlib draws (probed),
+    // rendering upright and merging into one run.
+    expect(parseRichText("$a\\leq b\\geq c\\neq d$").nodes).toEqual([
+      text("a", true), text("≤", false), text("b", true), text("≥", false),
+      text("c", true), text("≠", false), text("d", true),
+    ]);
+    expect(plainText(parseRichText("$\\approx\\equiv\\sim\\propto\\ll\\gg$").nodes))
+      .toBe("≈≡∼∝≪≫");
+    expect(plainText(parseRichText("$\\infty\\partial\\nabla\\perp\\parallel\\angle$").nodes))
+      .toBe("∞∂∇⊥∥∠");
+    expect(plainText(parseRichText("$\\rightarrow\\to\\leftarrow\\leftrightarrow\\Rightarrow$").nodes))
+      .toBe("→→←↔⇒");
+    expect(plainText(parseRichText("$\\mp\\div\\cdots\\ldots\\dots$").nodes)).toBe("∓÷⋯……");
+  });
+
   it("accepts verified literal Unicode in math (°, Å, µ, Greek)", () => {
     const r = parseRichText("$µ°Åα$");
     expect(r.ok).toBe(true);

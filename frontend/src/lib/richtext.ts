@@ -14,7 +14,10 @@
 //   \alpha … \omega (+ \var* forms), \Gamma … \Omega   Greek (lowercase
 //                              italic, uppercase upright — the TeX/mathtext
 //                              convention)
-//   \AA \circ \times \cdot \pm \prime \,               symbols / thin space
+//   \AA \circ \times \cdot \pm \mp \div \prime \,       symbols / thin space
+//   \leq \geq \neq \approx \equiv \sim \propto \ll \gg  relations
+//   \infty \partial \nabla \perp \parallel \angle \cdots \ldots  analysis
+//   \rightarrow (\to) \leftarrow \leftrightarrow \Rightarrow     arrows
 //   \mathrm{...} upright, \mathit{...} italic
 //   letters → italic (mathtext convention), digits/punct → upright,
 //   `-` → true minus (U+2212), `'` → prime (U+2032), whitespace ignored
@@ -90,14 +93,46 @@ const GREEK: Record<string, [string, boolean]> = {
   Omega: ["Ω", false],
 };
 
-/** Non-Greek symbol commands (always upright). */
+/** Non-Greek symbol commands (always upright). Every entry is verified to
+ *  render in matplotlib mathtext (the export gate parses the same string), so
+ *  screen and export stay WYSIWYG. Relations/operators/arrows below map to the
+ *  SAME Unicode glyph matplotlib draws for the command. NB `\deg` is
+ *  deliberately absent: matplotlib renders it as the text "deg", not `°`. */
 const SYMBOLS: Record<string, string> = {
   AA: "Å", // Å
   circ: "∘", // ∘ (ring operator; `^\circ` is the degree idiom)
   times: "×",
   cdot: "⋅",
   pm: "±",
+  mp: "∓",
+  div: "÷",
   prime: "′",
+  // Relations / comparisons.
+  leq: "≤",
+  geq: "≥",
+  neq: "≠",
+  approx: "≈",
+  equiv: "≡",
+  sim: "∼",
+  propto: "∝",
+  ll: "≪",
+  gg: "≫",
+  // Analysis / geometry symbols.
+  infty: "∞",
+  partial: "∂",
+  nabla: "∇",
+  perp: "⊥",
+  parallel: "∥",
+  angle: "∠",
+  cdots: "⋯",
+  ldots: "…",
+  dots: "…", // alias of \ldots
+  // Arrows.
+  rightarrow: "→",
+  to: "→", // alias of \rightarrow
+  leftarrow: "←",
+  leftrightarrow: "↔",
+  Rightarrow: "⇒",
 };
 
 /** ASCII punctuation verified to parse in mathtext math mode. `%` and `#`

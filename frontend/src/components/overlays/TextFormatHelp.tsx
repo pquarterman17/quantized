@@ -20,6 +20,8 @@ const EXAMPLES: [string, string][] = [
   ["$M_{sat}$", "subscript group"],
   ["$10^{-6}$", "superscript exponent"],
   ["$\\mathrm{R}$ vs $R$", "upright vs math italic"],
+  ["$T \\leq T_c$", "relation (≤ ≥ ≠ ≈ ∝)"],
+  ["$\\mu_0H \\rightarrow \\infty$", "arrows and ∞"],
 ];
 
 /** Label-editor keyboard shortcuts (MAIN #17): [keys, what it does]. Wraps
@@ -42,7 +44,10 @@ const SYNTAX: [string, string][] = [
     "lowercase Greek, italic (plus \\varepsilon \\vartheta \\varsigma \\varphi variants)",
   ],
   ["\\Gamma … \\Omega", "uppercase Greek, upright"],
-  ["\\AA  \\circ  \\times  \\cdot  \\pm  \\prime  \\,", "Å ∘ × ⋅ ± ′ and a thin space"],
+  ["\\AA  \\circ  \\times  \\cdot  \\pm  \\mp  \\div  \\prime  \\,", "Å ∘ × ⋅ ± ∓ ÷ ′ and a thin space"],
+  ["\\leq \\geq \\neq \\approx \\equiv \\sim \\propto \\ll \\gg", "relations ≤ ≥ ≠ ≈ ≡ ∼ ∝ ≪ ≫"],
+  ["\\infty \\partial \\nabla \\perp \\parallel \\angle \\cdots \\ldots", "∞ ∂ ∇ ⊥ ∥ ∠ ⋯ …"],
+  ["\\rightarrow (\\to) \\leftarrow \\leftrightarrow \\Rightarrow", "arrows → ← ↔ ⇒"],
   ["\\mathrm{...}  \\mathit{...}", "force upright / italic for a group"],
   ["a-z 0-9", "letters render italic, digits upright (mathtext convention)"],
   ["° Å µ × ± ⋅ ∘ ′ ″ − and Greek", "literal Unicode also accepted inside math"],
