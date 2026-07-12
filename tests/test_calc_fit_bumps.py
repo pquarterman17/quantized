@@ -15,7 +15,12 @@ import sys
 import numpy as np
 import pytest
 
-from quantized.calc.fit_bumps import BUMPS_ENGINES, bumps_available, fit_bumps
+from quantized.calc.fit_bumps import (
+    BUMPS_ENGINES,
+    RHAT_THRESHOLD,
+    bumps_available,
+    fit_bumps,
+)
 
 TRUE = [2.0, 0.5, 1.2]  # Gaussian A, mu, sigma
 P0 = [1.0, 0.0, 1.0]
@@ -117,6 +122,18 @@ def test_dream_posterior_invariants() -> None:
     samples = result["samples"]
     assert samples.shape[1] == 3
     assert samples.shape[0] == post["n_draws"] > 0
+
+    # convergence diagnostics (audit P1 #2): per-parameter R-hat, its max, a
+    # boolean verdict consistent with the threshold, and the chain count.
+    rhat = post["rHat"]
+    assert len(rhat) == 3 and all(r > 0 for r in rhat)
+    assert post["rHatMax"] == max(rhat)
+    assert post["converged"] is (post["rHatMax"] < RHAT_THRESHOLD)
+    assert post["nChains"] > 0
+    # a clean, well-fit Gaussian mixes reasonably (loose bound so a marginal
+    # seed can't flake the test — the verdict-consistency check above is the
+    # deterministic invariant).
+    assert 1.0 <= post["rHatMax"] < 1.3
 
     # progress callback fired, in [0, 1), non-decreasing
     assert len(fractions) > 3

@@ -15,14 +15,22 @@ import { selectedFitData } from "../../../lib/fitselection";
 
 export type EngineChoice = "parity" | BumpsEngine;
 
-// DREAM defaults: enough draws for a usable posterior without minutes-long
-// runs; the job runner keeps the window responsive either way.
-const DREAM_BUDGET = { samples: 10_000, burn: 100, pop: 10 };
+/** DREAM sampling budget — user-tunable (audit P1 #2: allow sampling controls).
+ *  Defaults: enough draws for a usable posterior without minutes-long runs; the
+ *  job runner keeps the window responsive either way. */
+export interface DreamSettings {
+  samples: number;
+  burn: number;
+  pop: number;
+}
+const DREAM_DEFAULTS: DreamSettings = { samples: 10_000, burn: 100, pop: 10 };
 
 export interface BumpsFitState {
   hasDataset: boolean;
   engine: EngineChoice;
   setEngine: (e: EngineChoice) => void;
+  dream: DreamSettings;
+  setDream: (patch: Partial<DreamSettings>) => void;
   result: BumpsFitResult | null;
   busy: boolean;
   /** DREAM job fraction (0..1) while polling; null otherwise. */
@@ -39,12 +47,17 @@ export function useBumpsFit(): BumpsFitState {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dream, setDreamState] = useState<DreamSettings>(DREAM_DEFAULTS);
   const jobRef = useRef<string | null>(null);
 
   function setEngine(e: EngineChoice): void {
     setEngineState(e);
     setResult(null);
     setError(null);
+  }
+
+  function setDream(patch: Partial<DreamSettings>): void {
+    setDreamState((d) => ({ ...d, ...patch }));
   }
 
   async function run(modelName: string): Promise<void> {
@@ -65,7 +78,7 @@ export function useBumpsFit(): BumpsFitState {
         x: d.x,
         y: d.y,
         engine,
-        ...(engine === "dream" ? DREAM_BUDGET : {}),
+        ...(engine === "dream" ? dream : {}),
       });
       let fit: BumpsFitResult;
       if (isJobSubmit(resp)) {
@@ -110,6 +123,8 @@ export function useBumpsFit(): BumpsFitState {
     hasDataset: active != null,
     engine,
     setEngine,
+    dream,
+    setDream,
     result,
     busy,
     progress,

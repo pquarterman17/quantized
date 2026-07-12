@@ -31,6 +31,11 @@ export interface BumpsPosterior {
   /** Central 68% credible interval [lo, hi] per parameter. */
   interval68: number[][];
   n_draws: number;
+  /** Convergence diagnostics (audit P1 #2). Absent on older payloads. */
+  rHat?: number[]; // Gelman-Rubin R-hat per parameter
+  rHatMax?: number; // worst-parameter R-hat
+  converged?: boolean; // rHatMax < 1.1 (the surfaced threshold)
+  nChains?: number; // DREAM population (chains)
 }
 
 export interface BumpsFitResult {

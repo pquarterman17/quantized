@@ -39,6 +39,12 @@ AbortFn = Callable[[], bool]
 #: Supported bumps engine ids (bumps.fitters FITTERS ids).
 BUMPS_ENGINES = ("amoeba", "lm", "de", "dream")
 
+#: Gelman-Rubin R-hat at/above which DREAM chains are considered NOT converged
+#: (the widely-used 1.1 threshold; < ~1.01 is "well mixed"). Surfaced so the UI
+#: never presents posterior intervals as trustworthy when the chains haven't
+#: mixed (audit P1 #2).
+RHAT_THRESHOLD = 1.1
+
 _INSTALL_HINT = (
     "bumps is not installed - the optional fit engine needs "
     "'pip install quantized[bumps]' (or: uv sync --extra bumps)"
@@ -154,9 +160,11 @@ def fit_bumps(
     saved equation-builder models) or a raw ``f(x, p)`` callable. ``engine``
     is one of ``BUMPS_ENGINES``: amoeba / lm / de report Hessian-derived
     uncertainties (``uncertainty_kind='hessian'``); dream samples the
-    posterior (``uncertainty_kind='posterior'``) and additionally returns
-    per-parameter medians and central 68% intervals (plus the raw draw
-    matrix when ``return_samples`` — corner-plot food).
+    posterior (``uncertainty_kind='posterior'``) and additionally returns, in
+    ``result['posterior']``, per-parameter medians, central 68% intervals,
+    ``n_draws``, ``nChains``, and the convergence diagnostics ``rHat`` (per
+    parameter), ``rHatMax``, and ``converged`` (Gelman-Rubin, audit P1 #2) —
+    plus the raw draw matrix when ``return_samples`` (corner-plot food).
 
     ``samples`` / ``burn`` / ``pop`` tune dream only. ``progress_callback``
     (fraction in [0, 1)) and ``abort_check`` (True -> stop sampling early)
@@ -243,15 +251,33 @@ def fit_bumps(
     }
 
     if engine == "dream":
-        draw = driver.fitter.state.draw()
+        state = driver.fitter.state
+        draw = state.draw()
         pts = np.asarray(draw.points, dtype=float)[:, order]
         lo68, med, hi68 = (
             np.asarray(np.percentile(pts, q, axis=0), dtype=float) for q in (16.0, 50.0, 84.0)
         )
+        # Convergence diagnostics (audit P1 #2): the Gelman-Rubin potential
+        # scale reduction factor (R-hat) per parameter, so posterior intervals
+        # are never presented as trustworthy when the chains haven't mixed.
+        # (bumps also warns "Did not converge!" via a separate K-S test; R-hat
+        # is the standard, interpretable metric. bumps exposes no clean
+        # effective-sample-size, so ESS isn't faked from cross-chain draws.)
+        try:
+            rhat_all = np.asarray(state.gelman(), dtype=float)
+            rhat = [float(rhat_all[i]) for i in order]
+            rhat_max = float(np.max(rhat_all)) if rhat_all.size else float("nan")
+        except Exception:  # noqa: BLE001 — aborted/degenerate state (cf. stderr above)
+            rhat = [float("nan")] * n_params
+            rhat_max = float("nan")
         result["posterior"] = {
             "medians": [float(v) for v in med],
             "interval68": [[float(a), float(b)] for a, b in zip(lo68, hi68, strict=True)],
             "n_draws": int(pts.shape[0]),
+            "rHat": rhat,
+            "rHatMax": rhat_max,
+            "converged": bool(math.isfinite(rhat_max) and rhat_max < RHAT_THRESHOLD),
+            "nChains": int(getattr(state, "Npop", pop * n_params)),
         }
         if return_samples:
             result["samples"] = pts
