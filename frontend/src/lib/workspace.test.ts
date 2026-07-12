@@ -78,6 +78,19 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
     expect(parse(ser([legacy]))[0].fitSpec).toEqual({ model: "Gauss" });
   });
 
+  it("preserves the fit weighting provenance (Sol audit) and rejects a bad mode", () => {
+    const ds = makeDataset("a", "wfit");
+    ds.fitSpec = { model: "Linear", yKey: 1, weight: { mode: "yerr", errKey: 2 } };
+    expect(parse(ser([ds]))[0].fitSpec?.weight).toEqual({ mode: "yerr", errKey: 2 });
+    // A `poisson` weight needs no errKey; it round-trips without one.
+    ds.fitSpec = { model: "Linear", weight: { mode: "poisson" } };
+    expect(parse(ser([ds]))[0].fitSpec?.weight).toEqual({ mode: "poisson" });
+    // A garbage mode is dropped (defensive load), leaving the rest intact.
+    const bad = { ...ds, fitSpec: { model: "Linear", weight: { mode: "junk" } } } as unknown as Dataset;
+    const loaded = parseWorkspace(ser([bad])).datasets[0];
+    expect(loaded.fitSpec).toEqual({ model: "Linear" });
+  });
+
   it("preserves dataset tags (and drops an empty tag list)", () => {
     const ds = makeDataset("a", "tagged");
     ds.tags = ["MvsH", "sample-A"];

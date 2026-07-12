@@ -287,6 +287,22 @@ export interface AxisLabelStyle {
 }
 export type AxisLabelStyles = Partial<Record<AxisKey, AxisLabelStyle>>;
 
+/** Fit weighting mode (Sol GUI audit — weighting connected to error columns):
+ *  - `none`    — unweighted least squares (default)
+ *  - `yerr`    — 1-sigma errors from the plotted Y's designated error column
+ *  - `poisson` — counting statistics, dy = sqrt(max(|y|, 1))
+ *  - `manual`  — a user-picked channel holding per-point sigma
+ *  All non-`none` modes resolve to a `dy` vector (backend applies 1/dy^2). */
+export type WeightMode = "none" | "yerr" | "poisson" | "manual";
+
+/** Reproducible weighting choice, stored in FitSpec provenance so recompute +
+ *  pipeline reproduce it. `errKey` is the sigma-column channel index for `yerr`
+ *  (resolved from `errKeys` at fit time) and `manual`; absent for none/poisson. */
+export interface FitWeighting {
+  mode: WeightMode;
+  errKey?: number;
+}
+
 /** A reproducible fit recipe + result snapshot saved on a dataset (audit P1 #3).
  *  `xKey`/`yKey` capture the channels fit at record time so a recompute
  *  reproduces the original analysis; they're absent on legacy `{model}` specs
@@ -297,6 +313,8 @@ export interface FitSpec {
   xKey?: number | null;
   /** Primary plotted Y channel that was fit. */
   yKey?: number;
+  /** Weighting used at fit time; absent = unweighted (legacy + `none`). */
+  weight?: FitWeighting;
   /** Fitted parameters from the last fit/recompute (result snapshot). */
   params?: number[];
   /** Optimizer exit flag (1 = success, 0 = did not converge). */

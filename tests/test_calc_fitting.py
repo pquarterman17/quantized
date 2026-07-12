@@ -10,7 +10,22 @@ import pytest
 
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_models import FIT_MODELS
-from quantized.calc.fitting import curve_fit
+from quantized.calc.fitting import curve_fit, weights_from_dy
+
+
+def test_weights_from_dy_is_inverse_variance() -> None:
+    """The canonical error->weight convention shared by every fit endpoint."""
+    w = weights_from_dy([0.5, 1.0, 2.0], 3)
+    np.testing.assert_allclose(w, [4.0, 1.0, 0.25])
+
+
+def test_weights_from_dy_rejects_bad_input() -> None:
+    with pytest.raises(ValueError, match="same length"):
+        weights_from_dy([1.0, 1.0], 3)
+    with pytest.raises(ValueError, match="finite and > 0"):
+        weights_from_dy([1.0, 0.0, 2.0], 3)
+    with pytest.raises(ValueError, match="finite and > 0"):
+        weights_from_dy([1.0, float("nan"), 2.0], 3)
 
 
 @pytest.mark.golden

@@ -60,6 +60,16 @@ describe("fitSpecFrom (provenance recipe, audit P1 #3)", () => {
       yKey: 0,
     });
   });
+
+  it("records a non-none weighting choice and omits `none`", () => {
+    const sel = { x: [1], y: [2], yKey: 1 };
+    const result: CalcResult = { params: [1], exitFlag: 1 };
+    expect(fitSpecFrom("Linear", 0, sel, result, { mode: "yerr", errKey: 2 }).weight).toEqual({
+      mode: "yerr",
+      errKey: 2,
+    });
+    expect(fitSpecFrom("Linear", 0, sel, result, { mode: "none" }).weight).toBeUndefined();
+  });
 });
 
 describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
@@ -79,5 +89,16 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
   it("falls back to live when a stored channel no longer exists (columns changed)", () => {
     const sel = fitDataForSpec(dataset, { model: "Linear", xKey: 0, yKey: 9 }, 0, [1], null);
     expect(sel?.yKey).toBe(1); // out-of-range yKey 9 -> live selection (moment)
+  });
+
+  it("reproduces the recorded weighting as dy over the analysis rows", () => {
+    // aux(2) is the sigma column; row 1 excluded -> dy = abs([5, 7, 8]).
+    const spec = { model: "Linear", xKey: 0, yKey: 1, weight: { mode: "yerr" as const, errKey: 2 } };
+    expect(fitDataForSpec(dataset, spec, null, null, null)).toEqual({
+      x: [100, 300, 400],
+      y: [10, 30, 40],
+      yKey: 1,
+      dy: [5, 7, 8],
+    });
   });
 });

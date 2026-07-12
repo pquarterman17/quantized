@@ -31,7 +31,7 @@ from numpy.typing import ArrayLike, NDArray
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_equation import default_guesses, equation_model
 from quantized.calc.fit_models import FIT_MODELS
-from quantized.calc.fitting import curve_fit
+from quantized.calc.fitting import curve_fit, weights_from_dy
 
 __all__ = ["aicc_from_aic", "default_candidates", "scan_models"]
 
@@ -210,12 +210,7 @@ def scan_models(
 
     weights: NDArray[np.float64] | None = None
     if dy is not None:
-        dyv = np.asarray(dy, dtype=float).ravel()
-        if dyv.size != n:
-            raise ValueError("dy must have the same length as x")
-        if not bool(np.all(np.isfinite(dyv))) or bool(np.any(dyv <= 0)):
-            raise ValueError("dy entries must be finite and > 0")
-        weights = np.asarray(1.0 / dyv**2, dtype=float)
+        weights = weights_from_dy(dy, n)
 
     names = list(models) if models is not None else default_candidates(n)
     entries: list[dict[str, Any]] = []

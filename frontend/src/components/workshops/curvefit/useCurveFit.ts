@@ -6,9 +6,10 @@ import { useEffect, useMemo, useState } from "react";
 
 import { autoGuess, bootstrapFit, exportCornerFigure, fitModel, listFitModels } from "../../../lib/api";
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
-import type { CalcResult, Dataset, FitModel } from "../../../lib/types";
+import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { fitSpecFrom, selectedFitData } from "../../../lib/fitselection";
+import { dyForFit } from "../../../lib/fitweights";
 
 export interface CurveFitState {
   active: Dataset | null;
@@ -29,6 +30,17 @@ export interface CurveFitState {
   /** [min, max] of the fitted x data — the domain Find X/Y (MAIN #15)
    *  searches over; null when there's no analysis data yet. */
   xRange: { min: number; max: number } | null;
+  /** Weighting (Sol audit): mode selector + a picked sigma column for `manual`. */
+  weightMode: WeightMode;
+  setWeightMode: (m: WeightMode) => void;
+  manualKey: number | null;
+  setManualKey: (k: number | null) => void;
+  /** True when the primary fit channel has a designated error column (enables
+   *  the "Y error column" mode). */
+  hasYErr: boolean;
+  /** Non-fatal weighting note (e.g. missing/invalid error column → fit ran
+   *  unweighted); null when weighting resolved cleanly. */
+  weightNote: string | null;
 }
 
 export function useCurveFit(): CurveFitState {
@@ -37,6 +49,7 @@ export function useCurveFit(): CurveFitState {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
+  const errKeys = useApp((s) => s.errKeys);
   const [models, setModels] = useState<FitModel[]>([]);
   const [modelName, setModelName] = useState("Linear");
   const [result, setResult] = useState<CalcResult | null>(null);
@@ -44,6 +57,18 @@ export function useCurveFit(): CurveFitState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cornerBusy, setCornerBusy] = useState(false);
+  const [weightMode, setWeightMode] = useState<WeightMode>("none");
+  const [manualKey, setManualKey] = useState<number | null>(null);
+  const [weightNote, setWeightNote] = useState<string | null>(null);
+
+  /** The weighting choice for a given primary channel: `yerr` resolves its
+   *  sigma column from the view's `errKeys`; `manual` uses the picked column. */
+  function weightingFor(yKey: number): FitWeighting {
+    if (weightMode === "yerr") return { mode: "yerr", errKey: errKeys[yKey] };
+    if (weightMode === "manual")
+      return manualKey != null ? { mode: "manual", errKey: manualKey } : { mode: "manual" };
+    return { mode: weightMode };
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +98,10 @@ export function useCurveFit(): CurveFitState {
     return { min: Math.min(...finite), max: Math.max(...finite) };
   }, [xy]);
 
+  // The "Y error column" mode is only meaningful when the primary fit channel
+  // has a designated error column (from Origin designations or manual pairing).
+  const hasYErr = xy != null && errKeys[xy.yKey] != null;
+
   async function run(kind: "guess" | "fit"): Promise<void> {
     if (!active) return;
     setBusy(true);
@@ -94,7 +123,17 @@ export function useCurveFit(): CurveFitState {
         setResult({ params: g.p0 });
         setGuessOnly(true);
       } else {
-        const r = await fitModel({ model: modelName, x: localXy.x, y: localXy.y });
+        // Resolve weighting -> dy over the SAME analysis rows as the fit; a
+        // missing/invalid error column refits unweighted with a surfaced note.
+        const weight = weightingFor(localXy.yKey);
+        const { dy, issue } = dyForFit(ds, localXy.yKey, weight);
+        setWeightNote(issue ?? null);
+        const r = await fitModel({
+          model: modelName,
+          x: localXy.x,
+          y: localXy.y,
+          ...(dy ? { dy } : {}),
+        });
         setResult(r);
         setGuessOnly(false);
         // Recorded as a typed step so the pipeline view (#6) can edit the
@@ -103,10 +142,13 @@ export function useCurveFit(): CurveFitState {
           kind: "fit",
           params: { model: modelName },
         });
-        // Durable fit spec (audit P1 #3): records the plotted channels + result
-        // so the recalc graph (#1) reproduces the ORIGINAL fit's channels when
-        // the data changes, not the current plot view or time/values[0].
-        useApp.getState().setFitSpec(ds.id, fitSpecFrom(modelName, state.xKey, localXy, r));
+        // Durable fit spec (audit P1 #3): records the plotted channels + the
+        // weighting ACTUALLY used (unweighted if dy couldn't resolve) so the
+        // recalc graph (#1) reproduces the original fit, not time/values[0].
+        const effWeight: FitWeighting = dy ? weight : { mode: "none" };
+        useApp
+          .getState()
+          .setFitSpec(ds.id, fitSpecFrom(modelName, state.xKey, localXy, r, effWeight));
         const yFit = r.yFit as (number | null)[] | undefined;
         if (Array.isArray(yFit)) {
           // yFit aligns to the pruned analysis x; expand it back to the full row
@@ -129,6 +171,7 @@ export function useCurveFit(): CurveFitState {
     setResult(null);
     setGuessOnly(false);
     setError(null);
+    setWeightNote(null);
     setFitOverlay(null);
     if (active) useApp.getState().setFitSpec(active.id, null);
   }
@@ -182,5 +225,11 @@ export function useCurveFit(): CurveFitState {
     runCornerPlot,
     cornerBusy,
     xRange,
+    weightMode,
+    setWeightMode,
+    manualKey,
+    setManualKey,
+    hasYErr,
+    weightNote,
   };
 }
