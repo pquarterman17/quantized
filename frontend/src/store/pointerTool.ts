@@ -20,7 +20,7 @@
 // selection outline drawn) until the user picks again.
 
 import { clampAnnotationSize } from "../lib/uplotOverlays";
-import type { Annotation } from "../lib/types";
+import type { Annotation, AxisKey, AxisLabelOffsets } from "../lib/types";
 import type { AppState } from "./useApp";
 
 export interface PointerToolSlice {
@@ -28,6 +28,11 @@ export interface PointerToolSlice {
    *  `PlotView.legendXY`'s doc. */
   legendXY: [number, number] | null;
   setLegendXY: (xy: [number, number] | null) => void;
+  /** Per-axis title drag offsets (CSS px) — a genuine PlotView field like
+   *  `legendXY` (snapshot/hydrate/`.dwk` sanitize in lib/plotview.ts). */
+  axisLabelOffsets: AxisLabelOffsets;
+  /** Move an axis title (offset in CSS px) or reset it to default (null). */
+  setAxisLabelOffset: (axis: AxisKey, offset: [number, number] | null) => void;
   /** The annotation selected in pointer mode (click-select / drag-to-move
    *  target); null = nothing selected. Transient, not window-scoped — see
    *  the module doc for why that's safe. */
@@ -50,6 +55,14 @@ export function createPointerToolSlice(set: SliceSet): PointerToolSlice {
   return {
     legendXY: null,
     setLegendXY: (legendXY) => set({ legendXY }),
+    axisLabelOffsets: {},
+    setAxisLabelOffset: (axis, offset) =>
+      set((s) => {
+        const next = { ...s.axisLabelOffsets };
+        if (offset === null) delete next[axis];
+        else next[axis] = offset;
+        return { axisLabelOffsets: next };
+      }),
     selectedAnnotationId: null,
     setSelectedAnnotationId: (selectedAnnotationId) => set({ selectedAnnotationId }),
     updateAnnotation: (id, patch) =>

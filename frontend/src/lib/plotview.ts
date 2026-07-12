@@ -22,7 +22,7 @@ import {
   type PanelLayout,
 } from "./panelwindow";
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
-import type { Annotation, AxisFormat, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
+import type { Annotation, AxisFormat, AxisLabelOffsets, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
 
 // Re-exported: PlotWindow.panel (below) is the only reason this module
 // depends on panelwindow.ts at all — callers that just need the window-record
@@ -89,6 +89,9 @@ export interface PlotView {
    *  keeps the corner-preset behaviour untouched — an Origin-imported
    *  position stays a `legendPos` corner, never this. */
   legendXY: [number, number] | null;
+  /** Per-axis title drag offsets (CSS px). Nudges an axis title clear of long
+   *  tick labels; absent axes sit at default. Persisted like `legendXY`. */
+  axisLabelOffsets: AxisLabelOffsets;
   plotTemplate: string;
   showAxisBox: boolean;
   stackMode: boolean;
@@ -138,6 +141,7 @@ export function defaultPlotView(): PlotView {
     showLegend: true,
     legendPos: "ne",
     legendXY: null,
+    axisLabelOffsets: {},
     plotTemplate: "screen",
     showAxisBox: false,
     stackMode: false,
@@ -406,6 +410,21 @@ function legendXYOrNull(v: unknown): [number, number] | null {
   return [clamp(v[0]), clamp(v[1])];
 }
 
+/** Per-axis title offsets from a persisted view: keep only x/y/y2 keys whose
+ *  value is a finite 2-tuple, each px clamped to a sane range so a stale/hand-
+ *  edited `.dwk` can't fling a title far off-screen (mirrors `legendXYOrNull`'s
+ *  clamp-not-drop convention). */
+function axisLabelOffsetsOrDefault(v: unknown): AxisLabelOffsets {
+  const out: AxisLabelOffsets = {};
+  if (!v || typeof v !== "object") return out;
+  const clamp = (n: number) => Math.max(-2000, Math.min(2000, n));
+  for (const k of ["x", "y", "y2"] as const) {
+    const o = (v as Record<string, unknown>)[k];
+    if (isRange(o)) out[k] = [clamp(o[0]), clamp(o[1])];
+  }
+  return out;
+}
+
 const ANNOTATION_ANCHORS: readonly Annotation["anchor"][] = ["data", "page"];
 
 /** Validate a persisted annotation list (MAIN #21's `.anchor` field). Every
@@ -547,6 +566,7 @@ function sanitizeView(v: unknown): PlotView {
     showLegend: boolOrDefault(o.showLegend, fb.showLegend),
     legendPos: LEGEND_POS.includes(o.legendPos as LegendPos) ? (o.legendPos as LegendPos) : fb.legendPos,
     legendXY: legendXYOrNull(o.legendXY),
+    axisLabelOffsets: axisLabelOffsetsOrDefault(o.axisLabelOffsets),
     plotTemplate: strOrDefault(o.plotTemplate, fb.plotTemplate),
     showAxisBox: boolOrDefault(o.showAxisBox, fb.showAxisBox),
     stackMode: boolOrDefault(o.stackMode, fb.stackMode),

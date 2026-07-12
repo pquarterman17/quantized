@@ -27,6 +27,20 @@ describe("legendXY (MAIN #18 — free legend position)", () => {
   });
 });
 
+describe("axisLabelOffsets (draggable axis titles)", () => {
+  it("defaults to empty", () => {
+    expect(useApp.getState().axisLabelOffsets).toEqual({});
+  });
+
+  it("setAxisLabelOffset moves one axis and resets it (null) without touching others", () => {
+    useApp.getState().setAxisLabelOffset("y", [-12, 4]);
+    useApp.getState().setAxisLabelOffset("x", [0, 8]);
+    expect(useApp.getState().axisLabelOffsets).toEqual({ y: [-12, 4], x: [0, 8] });
+    useApp.getState().setAxisLabelOffset("y", null); // reset
+    expect(useApp.getState().axisLabelOffsets).toEqual({ x: [0, 8] });
+  });
+});
+
 describe("selectedAnnotationId (MAIN #18 — pointer-mode selection)", () => {
   it("defaults to null and round-trips through the setter", () => {
     expect(useApp.getState().selectedAnnotationId).toBeNull();

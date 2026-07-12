@@ -1906,6 +1906,7 @@ export const useApp = create<AppState>((set, get) => ({
               showLegend: restoredView.showLegend,
               legendPos: restoredView.legendPos,
               legendXY: restoredView.legendXY,
+              axisLabelOffsets: restoredView.axisLabelOffsets,
               plotTemplate: restoredView.plotTemplate,
               showAxisBox: restoredView.showAxisBox,
               stackMode: restoredView.stackMode,
