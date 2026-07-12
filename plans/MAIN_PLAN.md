@@ -121,8 +121,15 @@ GOTO #11 drift (implemented but listed open).
 - **Worksheet view-state persistence** (was WORKSHEET #14) — decide
   once, with usage evidence, whether sort/widths/selection persist
   per-dataset in `.dwk` (default: no).
-- **PyPI Trusted Publisher registration** + first tagged publish + the
-  fresh-machine acceptance run (was ORIGIN_GAP #41; see RELEASE.md).
+- **PyPI: fresh-machine acceptance run** (was ORIGIN_GAP #41) — the
+  registration + first tagged publish are DONE (2026-07-12: trusted
+  publisher registered for **`quantized-lab`** on pypi.org +
+  test.pypi.org; TestPyPI dry run green; v0.8.1 live on PyPI + GitHub
+  with correctly-named installers — v0.8.0 was cut with a
+  pyproject-only bump, the version-consistency guard caught it, its GH
+  release was deleted; the PyPI 0.8.0 wheel was correct and remains).
+  REMAINING: the acceptance run — on a machine without dev tools,
+  `pipx install quantized-lab` → import a CSV within 2 minutes.
 - **Corpus publish licensing sign-off** (was ORIGIN_GAP #45) —
   `../test-data` repo is `git init`-ed; gated on the licensing pass + 6
   flagged public files.
