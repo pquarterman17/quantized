@@ -83,9 +83,12 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
  *  corner `legendPos` maps through `legendPosToLoc`. A page-anchored
  *  annotation (MAIN #21) carries `anchor: "page"` through so the backend
  *  renders it as figure-fraction placement instead of axes-data coords —
- *  see `calc.figure_overrides._apply_overrides`'s y-flip. Everything else
- *  this command already sends (title/labels/scales/styles) — this only
- *  adds the screen-state pieces that had no export path before. */
+ *  see `calc.figure_overrides._apply_overrides`'s y-flip. MAIN #27 adds
+ *  `shapes` (drawn arrow/line/rect/ellipse marks) and an annotation's
+ *  `frame` ("text box") — see `calc.figure_shapes._apply_shapes`.
+ *  Everything else this command already sends (title/labels/scales/
+ *  styles) — this only adds the screen-state pieces that had no export
+ *  path before. */
 export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
   const st = s();
   const legend: FigureOverrides["legend"] = st.showLegend
@@ -101,6 +104,24 @@ export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
       text: a.text,
       ...(a.size ? { size: a.size } : {}),
       ...(a.anchor === "page" ? { anchor: "page" as const } : {}),
+      ...(a.frame ? { frame: a.frame } : {}),
     }));
-  return compactOverrides({ legend, annotations }) ?? undefined;
+  // MAIN #27: drawn shapes, wire-shaped (no `id` — the export request needs
+  // no identity, unlike the screen's editable list).
+  const shapes = st.shapes
+    .filter((s) => [s.x1, s.y1, s.x2, s.y2].every(Number.isFinite))
+    .map((s) => ({
+      kind: s.kind,
+      x1: s.x1,
+      y1: s.y1,
+      x2: s.x2,
+      y2: s.y2,
+      ...(s.anchor === "page" ? { anchor: "page" as const } : {}),
+      ...(s.stroke ? { stroke: s.stroke } : {}),
+      ...(s.fill ? { fill: s.fill } : {}),
+      ...(s.opacity != null ? { opacity: s.opacity } : {}),
+      ...(s.width != null ? { width: s.width } : {}),
+      ...(s.dash ? { dash: s.dash } : {}),
+    }));
+  return compactOverrides({ legend, annotations, shapes }) ?? undefined;
 }
