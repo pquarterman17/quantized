@@ -1,7 +1,7 @@
 [project]
 name = "quantized-lab"
-version = "0.8.0"
-description = "Clean-architecture Python + React port of the quantized_matlab scientific toolbox (magnetometry / XRD / lab data)."
+version = "0.8.1"
+description = "Plot, analyze, and publish lab data - magnetometry, XRD, reflectometry - with OriginPro file interop, golden-verified analysis, and reproducible pipelines."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -19,6 +19,13 @@ dependencies = [
     "periodictable>=1.7",
     "platformdirs>=4.10.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/pquarterman17/quantized"
+Documentation = "https://github.com/pquarterman17/quantized/wiki"
+Repository = "https://github.com/pquarterman17/quantized"
+Releases = "https://github.com/pquarterman17/quantized/releases"
+Issues = "https://github.com/pquarterman17/quantized/issues"
 
 [project.scripts]
 qz = "quantized.cli:main"
