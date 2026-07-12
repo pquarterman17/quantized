@@ -69,6 +69,14 @@ GOTO #11 drift (implemented but listed open).
     2026-07-11 (see Completed). ⚠ Installer-path verification pending
     the next real release build (noted in the Completed entry).
 
+24. **Axis tick formats in publication export** (owner go-ahead
+    2026-07-11; closes the gap the #20 audit put on record): xFmt/yFmt
+    (fixed/sci/eng + the increment-aware precision floor + −0
+    normalization) flow through the export request into matplotlib
+    tick formatters via the shared `draw_series_axes` chokepoint —
+    single-figure, axis-break, and figure-page export all inherit.
+    `auto` stays matplotlib's default formatter.
+
 ~~9. **Undo/redo stack**~~ COMPLETED 2026-07-11 (see Completed).
 
 ~~20. **Axis tick-label precision + engineering notation**~~ COMPLETED

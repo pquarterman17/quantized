@@ -15,10 +15,12 @@ day; MAIN #20 tick-precision/eng-notation shipped same day)
 
 ## Actionable dev work (no blockers, no owner gate)
 
-*(none — MAIN #9–#23 ALL shipped 2026-07-11. The #23 installer hooks
-get their real-world verification at the next release build, alongside
-the signing-cert gate's updater E2E. New items arrive via owner gates,
-user testing, or the parity/decode monitors)*
+| # | Item | Plan / item | Size |
+|---|------|-------------|------|
+| 39 | Axis tick formats in publication export (fixed/sci/eng → matplotlib) | MAIN #24 | S |
+
+*(MAIN #9–#23 all shipped 2026-07-11; #24 booked same day, agent in
+flight. The #23 installer hooks verify at the next release build)*
 
 ## Owner actions & owner-gated decisions
 
