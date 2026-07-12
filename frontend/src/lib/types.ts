@@ -553,6 +553,42 @@ export interface Annotation {
    *  (`useAnnotationEdit.openMenu`) converts `x`/`y` in place when flipping
    *  this field so the label never visibly jumps. */
   anchor?: "data" | "page";
+  /** A rect drawn BEHIND this annotation's text (MAIN #27's "text box" —
+   *  NOT a sixth `Shape` kind: it rides the annotation's own anchor/size/
+   *  drag, just with a filled/stroked backing rect). Absent = no frame (the
+   *  pre-#27 look). `pad` is CSS px around the measured text box on every
+   *  side; `opacity`/`fill`/`stroke` default the same way a `Shape`'s do
+   *  (see `lib/uplotShapes.ts`'s `resolveShapeOpacity`) when a preset is
+   *  picked without a custom color. */
+  frame?: { fill?: string; stroke?: string; opacity?: number; pad?: number };
+}
+
+/** A drawn shape pinned on the plot (MAIN #27): mark Hc2 with an arrow, box a
+ *  transition region, circle an outlier. `anchor` follows `Annotation`'s
+ *  convention — "data" (default) coordinates run through valToPos/posToVal
+ *  (the shape stretches/moves with zoom+pan, e.g. a rect marking a field
+ *  range); "page" coordinates are canvas fractions in [0, 1], resize-stable
+ *  like `PlotView.legendXY` / a page-anchored annotation. `opacity` is ONE
+ *  knob (0..1) for the WHOLE shape (fill AND stroke) — default 1 for
+ *  line/arrow, 0.35 for rect/ellipse (so a freshly drawn box is visibly
+ *  translucent over the data it's marking) — see `lib/uplotShapes.ts`'s
+ *  `resolveShapeOpacity`. `fill` only applies to rect/ellipse (arrow/line
+ *  ignore it); default stroke = the plot's annotation ink color, default
+ *  fill = the shape's own (resolved) stroke — both resolved at draw/export
+ *  time, never stored unless the user picks a custom color. */
+export interface Shape {
+  id: string;
+  kind: "arrow" | "line" | "rect" | "ellipse";
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  anchor?: "data" | "page";
+  stroke?: string;
+  fill?: string;
+  opacity?: number;
+  width?: number;
+  dash?: boolean;
 }
 
 /** Axis tick number format. `auto` = increment-aware locale-grouped labels

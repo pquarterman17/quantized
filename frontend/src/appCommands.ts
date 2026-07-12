@@ -660,6 +660,13 @@ export function buildAppActions(s: StoreGet): Action[] {
         s().breakAtGaps(ds.id, undefined, Number(params.gapFactor));
       },
     },
+    // ── Insert (MAIN #27: drawing shapes on plots — the menu-driven
+    // counterpart of PlotToolbar's dock flyout) ──
+    { id: "insert-arrow", group: "Insert", label: "Arrow", run: () => s().setDrawShapeKind("arrow") },
+    { id: "insert-line", group: "Insert", label: "Line", run: () => s().setDrawShapeKind("line") },
+    { id: "insert-rect", group: "Insert", label: "Rectangle", run: () => s().setDrawShapeKind("rect") },
+    { id: "insert-ellipse", group: "Insert", label: "Ellipse", run: () => s().setDrawShapeKind("ellipse") },
+    { id: "insert-textbox", group: "Insert", label: "Text box", run: () => s().setDrawShapeKind("textbox") },
     {
       id: "shortcuts",
       group: "Help",

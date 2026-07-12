@@ -43,3 +43,27 @@ describe("Cycle X/Y tick format commands (MAIN #20)", () => {
     expect(useApp.getState().yFmt.mode).toBe("auto"); // untouched
   });
 });
+
+describe("Insert commands (MAIN #27 drawing shapes — the menu-driven counterpart of the dock flyout)", () => {
+  it("registers all five entries in the Insert group", () => {
+    const ids = ["insert-arrow", "insert-line", "insert-rect", "insert-ellipse", "insert-textbox"];
+    for (const id of ids) {
+      expect(findCommand(id).group).toBe("Insert");
+    }
+  });
+
+  it("each command sets drawShapeKind to its matching kind", () => {
+    const cases: [string, string][] = [
+      ["insert-arrow", "arrow"],
+      ["insert-line", "line"],
+      ["insert-rect", "rect"],
+      ["insert-ellipse", "ellipse"],
+      ["insert-textbox", "textbox"],
+    ];
+    for (const [id, kind] of cases) {
+      useApp.setState({ drawShapeKind: null });
+      findCommand(id).run();
+      expect(useApp.getState().drawShapeKind).toBe(kind);
+    }
+  });
+});

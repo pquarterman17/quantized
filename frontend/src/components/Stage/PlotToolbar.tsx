@@ -4,7 +4,11 @@
 // view actions close over the live uPlot instance in PlotStage, so they come in
 // as props. Extracted from PlotStage to keep that component lean.
 
+import { useRef, useState } from "react";
+
 import { useApp } from "../../store/useApp";
+import ContextMenu from "../overlays/ContextMenu";
+import type { DrawShapeKind } from "./useShapeDraw";
 
 // Navigation + inspection tools (pointer/zoom/pan/cursor/measure/stats).
 // Pointer is FIRST and the store default (MAIN #18, owner directive from
@@ -31,6 +35,18 @@ const ANALYZE_TOOLS = [
     tip: "Gadget — drag a region (Fit/Integrate/Stats/Differentiate/FFT) or place cursors, live",
   },
 ] as const;
+
+// MAIN #27: the shape dock flyout — ▱ glyph family (Unicode, no emoji),
+// matching the tool dock's own icon language. "Text box" is listed here too
+// (not a Shape kind — see useShapeDraw's header) so the flyout is the ONE
+// place a first-time user discovers every drawable mark.
+const SHAPE_TOOLS: { kind: DrawShapeKind; glyph: string; label: string }[] = [
+  { kind: "arrow", glyph: "↗", label: "Arrow" },
+  { kind: "line", glyph: "╱", label: "Line" },
+  { kind: "rect", glyph: "▭", label: "Rectangle" },
+  { kind: "ellipse", glyph: "◯", label: "Ellipse" },
+  { kind: "textbox", glyph: "▤", label: "Text box" },
+];
 
 interface Props {
   onReset: () => void;
@@ -61,6 +77,10 @@ export default function PlotToolbar({
   const setPolarMode = useApp((s) => s.setPolarMode);
   const statMode = useApp((s) => s.statMode);
   const setStatMode = useApp((s) => s.setStatMode);
+  const drawShapeKind = useApp((s) => s.drawShapeKind);
+  const setDrawShapeKind = useApp((s) => s.setDrawShapeKind);
+  const [shapeFlyout, setShapeFlyout] = useState<{ x: number; y: number } | null>(null);
+  const shapeBtnRef = useRef<HTMLButtonElement>(null);
 
   return (
     <div className="qzk-glass qzk-float-tools">
@@ -85,6 +105,30 @@ export default function PlotToolbar({
           {t.glyph}
         </button>
       ))}
+      <span className="qzk-tool-sep" />
+      <button
+        ref={shapeBtnRef}
+        className={`qzk-tool-btn${drawShapeKind ? " active" : ""}`}
+        title="Draw a shape (arrow/line/rectangle/ellipse/text box)"
+        onClick={() => {
+          const r = shapeBtnRef.current?.getBoundingClientRect();
+          setShapeFlyout(r ? { x: r.left, y: r.bottom + 4 } : { x: 0, y: 0 });
+        }}
+      >
+        ▱
+      </button>
+      {shapeFlyout && (
+        <ContextMenu
+          x={shapeFlyout.x}
+          y={shapeFlyout.y}
+          items={SHAPE_TOOLS.map((t) => ({
+            label: `${t.glyph}  ${t.label}`,
+            checked: drawShapeKind === t.kind,
+            run: () => setDrawShapeKind(t.kind),
+          }))}
+          onClose={() => setShapeFlyout(null)}
+        />
+      )}
       <span className="qzk-tool-sep" />
       <button className="qzk-tool-btn" title="Reset view (or double-click the plot)" onClick={onReset}>
         ⊡
