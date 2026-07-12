@@ -5,16 +5,16 @@ import { fireEvent, renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { askParams } from "../overlays/ParamDialog";
+import { askAnnotationText } from "../overlays/AnnotationTextDialog";
 import { useApp } from "../../store/useApp";
 import { useAnnotationEdit } from "./useAnnotationEdit";
 
-vi.mock("../overlays/ParamDialog", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../overlays/ParamDialog")>()),
-  askParams: vi.fn(),
+vi.mock("../overlays/AnnotationTextDialog", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../overlays/AnnotationTextDialog")>()),
+  askAnnotationText: vi.fn(),
 }));
 
-const mockAskParams = vi.mocked(askParams);
+const mockAskAnnotationText = vi.mocked(askAnnotationText);
 
 // A stand-in conv (MAIN #21) — the shape annotationAnchorConversions
 // computes; the plugin's own round-trip is covered in uplotOverlays.test.ts,
@@ -69,17 +69,15 @@ describe("useAnnotationEdit — bridge callbacks", () => {
   });
 
   it("onEditText opens the dialog and commits the resolved text", async () => {
-    mockAskParams.mockResolvedValue({ text: "New label" });
+    mockAskAnnotationText.mockResolvedValue("New label");
     const { result } = renderHook(() => useAnnotationEdit("pointer"));
     act(() => result.current.bridge?.onEditText?.("a1"));
-    expect(mockAskParams).toHaveBeenCalledWith("Edit annotation text", [
-      expect.objectContaining({ key: "text", default: "Tc" }),
-    ]);
+    expect(mockAskAnnotationText).toHaveBeenCalledWith("Edit annotation text", "Tc");
     await waitFor(() => expect(useApp.getState().annotations[0].text).toBe("New label"));
   });
 
-  it("onEditText leaves the text untouched on cancel (askParams resolves null)", async () => {
-    mockAskParams.mockResolvedValue(null);
+  it("onEditText leaves the text untouched on cancel (askAnnotationText resolves null)", async () => {
+    mockAskAnnotationText.mockResolvedValue(null);
     const { result } = renderHook(() => useAnnotationEdit("pointer"));
     act(() => result.current.bridge?.onEditText?.("a1"));
     await Promise.resolve();

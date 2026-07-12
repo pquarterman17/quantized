@@ -32,6 +32,18 @@ export type RichTextCtx = Pick<
 export const SCRIPT_SCALE = 0.7;
 export const SCRIPT_SHIFT_EM = 0.35;
 
+/** Approximate UI-font vertical metrics (em) for converting a top/bottom
+ *  canvas-text-baseline convention into `drawRich`'s ALPHABETIC baseline
+ *  (`drawRich` always draws on alphabetic — see its doc). Shared here so
+ *  every caller that owns a top/bottom-baseline anchor (uPlot's own axis-
+ *  label pass in uplotRichLabels.ts; the annotation draw pass in
+ *  uplotOverlays.ts, which draws with `textBaseline: "bottom"`) converts
+ *  with the SAME numbers rather than redefining them per caller: bottom ->
+ *  alphabetic subtracts the descent (`y - DESCENT_EM * px`), top ->
+ *  alphabetic adds the ascent (`y + ASCENT_EM * px`). */
+export const ASCENT_EM = 0.78;
+export const DESCENT_EM = 0.22;
+
 function fontString(px: number, italic: boolean, weight: string | undefined, family: string): string {
   return `${italic ? "italic " : ""}${weight ? `${weight} ` : ""}${px}px ${family}`;
 }

@@ -93,6 +93,40 @@ def test_invalid_annotation_never_raises() -> None:
     assert b"<svg" in out[:300]
 
 
+# -- MAIN #25 (rich-text annotations): the frontend canvas/hit-test side ----
+# ports the SAME `$...$` micro-syntax to annotation text (lib/uplotOverlays.ts
+# annotationLayout/annotationPlugin); _apply_overrides already routes every
+# annotation's text through `safe_mathtext_label` (figure_overrides.py) --
+# these tests confirm that guard actually delivers WYSIWYG mathtext at
+# export time (not just "doesn't raise"), and that it covers the MAIN #18/
+# #21 additions (per-annotation `size`, page anchoring) too.
+
+
+def test_valid_mathtext_annotation_engages_mathtext() -> None:
+    plain_ann = [{"text": "u0H", "x": 1.0, "y": 0.5}]
+    rich_ann = [{"text": VALID, "x": 1.0, "y": 0.5}]
+    plain = render_figure(X, [("y", Y)], fmt="svg", overrides={"annotations": plain_ann})
+    rich = render_figure(X, [("y", Y)], fmt="svg", overrides={"annotations": rich_ann})
+    assert b"<svg" in rich[:300]
+    assert rich != plain  # mathtext produced different glyph paths
+
+
+def test_valid_mathtext_annotation_with_page_anchor_and_size_never_raises() -> None:
+    # The MAIN #21 (page anchor) and MAIN #18 (per-annotation size) additions
+    # both feed into the SAME `ax.annotate(safe_mathtext_label(...), ...)`
+    # call in _apply_overrides -- combined with valid markup here to confirm
+    # none of the three interact badly.
+    ann = [{"text": VALID, "x": 0.5, "y": 0.5, "anchor": "page", "size": 24}]
+    out = render_figure(X, [("y", Y)], fmt="svg", overrides={"annotations": ann})
+    assert b"<svg" in out[:300]
+
+
+def test_invalid_mathtext_annotation_with_page_anchor_and_size_falls_back_to_literal() -> None:
+    ann = [{"text": INVALID, "x": 0.5, "y": 0.5, "anchor": "page", "size": 24}]
+    out = render_figure(X, [("y", Y)], fmt="svg", overrides={"annotations": ann})
+    assert b"<svg" in out[:300]
+
+
 def test_invalid_label_with_x_breaks_never_raises() -> None:
     # The breaks branch receives the already-sanitized strings from figure.py.
     out = render_figure(

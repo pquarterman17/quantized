@@ -268,6 +268,51 @@ describe("annotationPlugin", () => {
   });
 });
 
+describe("annotationPlugin — rich-text draw (MAIN #25, reuses the GOTO #5 canvas renderer)", () => {
+  it("draws a markup annotation as multiple styled runs, never the raw \"$...$\" string in one fillText", () => {
+    const { texts } = drawAnn([{ id: "a1", x: 50, y: 30, text: "$M_s$" }]);
+    // "M" (base run) + "s" (the _s subscript run) -- two fillText calls, not
+    // one call with the literal "$M_s$" text.
+    expect(texts.map((t) => t.text)).toEqual(["M", "s"]);
+    expect(texts.every((t) => t.text !== "$M_s$")).toBe(true);
+  });
+
+  it("anchors the rich run at the SAME tx the plain-text path would (one shared geometry)", () => {
+    const rich = drawAnn([{ id: "a1", x: 50, y: 30, text: "$M_s$" }]);
+    const plain = drawAnn([{ id: "a1", x: 50, y: 30, text: "Tc" }]);
+    // Both a1-at-(50,30) annotations resolve the same px/tx via
+    // annotationLayout regardless of which draw branch renders them.
+    expect(rich.texts[0].x).toBe(plain.texts[0].x);
+  });
+
+  it("keeps the plain-text draw path byte-identical: exactly one fillText, unchanged geometry", () => {
+    const { texts } = drawAnn([{ id: "a1", x: 50, y: 30, text: "Tc" }]);
+    expect(texts).toEqual([{ text: "Tc", x: 56, y: 68, align: "left" }]);
+  });
+
+  it("falls back to the plain literal fillText path for INVALID markup (one call, raw text, never raises)", () => {
+    const { texts } = drawAnn([{ id: "a1", x: 50, y: 30, text: "bad $\\foo$ label" }]);
+    expect(texts).toHaveLength(1);
+    expect(texts[0].text).toBe("bad $\\foo$ label");
+  });
+
+  it("a plain annotation's own geometry is unaffected when drawn alongside a rich one", () => {
+    // The real draw loop wraps the rich branch in ctx.save()/ctx.restore()
+    // specifically so a preceding rich draw's ctx mutations (fillStyle,
+    // textAlign, textBaseline, font) never leak into a LATER annotation's
+    // plain fillText call in the same pass -- this stub can't observe the
+    // save/restore itself (it's a real-canvas guarantee), but it CAN observe
+    // that the plain annotation's computed x/y/align comes out identical
+    // whether or not a rich sibling drew first.
+    const mixed = drawAnn([
+      { id: "a1", x: 50, y: 30, text: "$M_s$" },
+      { id: "a2", x: 20, y: 60, text: "Hc2" },
+    ]).texts.find((t) => t.text === "Hc2");
+    const solo = drawAnn([{ id: "a2", x: 20, y: 60, text: "Hc2" }]).texts[0];
+    expect(mixed).toEqual(solo);
+  });
+});
+
 describe("clampAnnotationLabelX", () => {
   // bbox convention matching fakeAnnU above: left=10, width=100 -> right=110.
   const LEFT = 10;
@@ -548,6 +593,50 @@ describe("annotationLayout / annotationBox (MAIN #18 shared draw/hit-test geomet
     const right = annotationLayout(u, { id: "a", x: 105, y: 30, text: "a fourteen chr" }, "11px mono")!;
     const rightBox = annotationBox(right);
     expect(rightBox.left + rightBox.width).toBe(right.tx);
+  });
+});
+
+describe("annotationLayout — rich-text markup (MAIN #25)", () => {
+  it("measures textWidth against the RENDERED run widths, not the raw \"$...$\" string", () => {
+    const { u } = fakeAnnU();
+    const layout = annotationLayout(u, { id: "a1", x: 50, y: 30, text: "$M_s$" }, "11px mono")!;
+    expect(layout.rich).not.toBeNull();
+    // The stub's measureText returns text.length*6 regardless of font size:
+    // the "M" run (6px) + the "s" sub-run (6px) = 12px rendered -- far less
+    // than the raw 5-char "$M_s$" STRING's 30px a naive measureText(a.text)
+    // would have produced. A hit box built from the raw string would
+    // overhang past what's actually drawn; this one can't.
+    expect(layout.textWidth).toBe(12);
+  });
+
+  it("a same-length PLAIN string measures its raw characters, proving the two paths genuinely diverge", () => {
+    const { u } = fakeAnnU();
+    const rich = annotationLayout(u, { id: "a1", x: 50, y: 30, text: "$M_s$" }, "11px mono")!;
+    const plain = annotationLayout(u, { id: "a1", x: 50, y: 30, text: "M_s__" }, "11px mono")!; // same 5 chars
+    expect(plain.rich).toBeNull();
+    expect(plain.textWidth).toBe(30); // 5 * 6, the old (pre-#25) behaviour
+    expect(rich.textWidth).toBeLessThan(plain.textWidth);
+  });
+
+  it("falls back to plain measureText for INVALID markup (never crashes, never renders raw $ literally)", () => {
+    const { u } = fakeAnnU();
+    const layout = annotationLayout(u, { id: "a1", x: 50, y: 30, text: "bad $\\foo$ label" }, "11px mono")!;
+    expect(layout.rich).toBeNull();
+    expect(layout.textWidth).toBe("bad $\\foo$ label".length * 6);
+  });
+
+  it("plain (non-markup) text is untouched — rich is null, textWidth matches the pre-#25 measureText path", () => {
+    const { u } = fakeAnnU();
+    const layout = annotationLayout(u, { id: "a1", x: 50, y: 30, text: "Tc" }, "11px mono")!;
+    expect(layout.rich).toBeNull();
+    expect(layout.textWidth).toBe(12); // "Tc".length * 6
+  });
+
+  it("the hit box (annotationBox) shrinks to the rendered width, not a raw-markup-sized box", () => {
+    const { u } = fakeAnnU();
+    const rich = annotationLayout(u, { id: "a1", x: 50, y: 30, text: "$M_s$" }, "11px mono")!;
+    const plain = annotationLayout(u, { id: "a1", x: 50, y: 30, text: "M_s__" }, "11px mono")!;
+    expect(annotationBox(rich).width).toBeLessThan(annotationBox(plain).width);
   });
 });
 

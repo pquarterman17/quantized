@@ -21,7 +21,7 @@
 import type uPlot from "uplot";
 
 import type { RichNode } from "./richtext";
-import { drawRich } from "./richtextCanvas";
+import { ASCENT_EM, DESCENT_EM, drawRich } from "./richtextCanvas";
 
 export interface RichLabelAsts {
   x?: RichNode[] | null;
@@ -39,10 +39,6 @@ export interface RichLabelStyle {
   color: string;
   weight?: string;
 }
-
-/** Approximate UI-font vertical metrics (em) for baseline conversion. */
-const ASCENT_EM = 0.78;
-const DESCENT_EM = 0.22;
 
 /** AST -> DOM nodes for HTML surfaces owned imperatively (the uPlot title).
  *  React surfaces (legend, editor previews) use components/primitives/RichText

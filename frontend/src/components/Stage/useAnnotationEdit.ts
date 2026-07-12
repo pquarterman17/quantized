@@ -1,11 +1,13 @@
 // Pointer-mode annotation direct manipulation (MAIN #18) — wires the canvas
 // plugin's bridge (lib/uplotOverlays' interactive annotationPlugin) to the
-// store + the app's existing dialog convention (`askParams`, the same path
-// PlotContextMenu's "Rename series…"/"Set axis limits…" already use — there
-// is no dedicated Inspector text-edit today, so this reuses the established
-// prompt pattern rather than inventing a second one). Extracted out of
-// PlotStage to keep that component under its line ceiling — the same
-// reasoning as useGadgetChip/useAxisDrop/usePlotStageActions.
+// store + the annotation text editor. Extracted out of PlotStage to keep
+// that component under its line ceiling — the same reasoning as
+// useGadgetChip/useAxisDrop/usePlotStageActions.
+//
+// MAIN #25: `editText` opens `askAnnotationText` (the RichLabelInput-backed
+// dialog) rather than the generic `askParams` plain-text field it used
+// before — same discoverability as the title/axis-label editors (GOTO #5's
+// Ω palette + live preview + validate()), same `$...$` syntax.
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -13,7 +15,7 @@ import { clampAnnotationSize, MAX_ANNOTATION_SIZE, MIN_ANNOTATION_SIZE } from ".
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import { useApp } from "../../store/useApp";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
-import { askParams } from "../overlays/ParamDialog";
+import { askAnnotationText } from "../overlays/AnnotationTextDialog";
 
 /** The corner-handle drag's step size for the object menu's Size +/− entries
  *  (a discrete click, unlike the drag's continuous px-to-size mapping). */
@@ -60,10 +62,8 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
 
   const editText = (id: string) => {
     const a = useApp.getState().annotations.find((x) => x.id === id);
-    void askParams("Edit annotation text", [
-      { key: "text", label: "Text", type: "text", default: a?.text ?? "" },
-    ]).then((v) => {
-      if (v) updateAnnotation(id, { text: String(v.text) });
+    void askAnnotationText("Edit annotation text", a?.text ?? "").then((v) => {
+      if (v != null) updateAnnotation(id, { text: v });
     });
   };
 

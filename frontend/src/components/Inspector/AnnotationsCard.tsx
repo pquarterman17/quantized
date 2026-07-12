@@ -9,7 +9,7 @@ import { useState } from "react";
 import { fmtNum } from "../../lib/format";
 import { clampAnnotationSize } from "../../lib/uplotOverlays";
 import { useApp } from "../../store/useApp";
-import { Button, Card, IconButton, NumberField } from "../primitives";
+import { Button, Card, IconButton, NumberField, RichText } from "../primitives";
 
 export default function AnnotationsCard() {
   const annotations = useApp((s) => s.annotations);
@@ -56,7 +56,7 @@ export default function AnnotationsCard() {
           style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
           <span className="qz-k" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-            {a.text}{" "}
+            <RichText text={a.text} />{" "}
             <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-faint)" }}>
               ({fmtNum(a.x)}, {fmtNum(a.y)}){a.anchor === "page" ? " (page)" : ""}
             </span>
