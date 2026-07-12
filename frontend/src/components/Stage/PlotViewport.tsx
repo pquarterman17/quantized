@@ -169,6 +169,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.refLines,
     args.annotations,
     args.annotationEdit,
+    args.axisLabelEdit,
     args.shapes,
     args.shapeEdit,
     args.shapeDraw,

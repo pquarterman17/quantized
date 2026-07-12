@@ -269,6 +269,14 @@ export interface ColumnFilter {
 /** A dataset's local data filter — AND across its column predicates. */
 export type DataFilter = ColumnFilter[];
 
+/** The three draggable axis titles. */
+export type AxisKey = "x" | "y" | "y2";
+
+/** Per-axis title drag offsets (CSS px from the default position), so a user
+ *  can nudge an axis title clear of long tick labels. Absent axes sit at their
+ *  default position. Persisted in the plot view (`.dwk`), like `legendXY`. */
+export type AxisLabelOffsets = Partial<Record<AxisKey, [number, number]>>;
+
 /** A reproducible fit recipe + result snapshot saved on a dataset (audit P1 #3).
  *  `xKey`/`yKey` capture the channels fit at record time so a recompute
  *  reproduces the original analysis; they're absent on legacy `{model}` specs

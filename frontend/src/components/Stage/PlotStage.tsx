@@ -32,6 +32,7 @@ import PlotViewport from "./PlotViewport";
 import PolarStage from "./PolarStage";
 import StatStage from "./StatStage";
 import { useAnnotationEdit } from "./useAnnotationEdit";
+import { useAxisLabelEdit } from "./useAxisLabelEdit";
 import { useAxisDrop } from "./useAxisDrop";
 import { useGadgetChip } from "./useGadgetChip";
 import { useLiveSnapshotPublish } from "./useLiveSnapshotPublish";
@@ -101,6 +102,7 @@ export default function PlotStage() {
   const setPlotTool = useApp((s) => s.setPlotTool);
   // MAIN #18: pointer-mode annotation select/drag/resize/edit/menu bridge.
   const { bridge: annotationEdit, menu: annotationMenu, closeMenu: closeAnnotationMenu } = useAnnotationEdit(tool);
+  const axisLabelEdit = useAxisLabelEdit(tool);
   // MAIN #27: pointer-mode shape select/move/reshape/menu bridge + the
   // drag-to-draw-a-new-shape mode bridge.
   const { bridge: shapeEdit, menu: shapeMenu, closeMenu: closeShapeMenu } = useShapeEdit(tool);
@@ -286,6 +288,7 @@ export default function PlotStage() {
         onRefLineMove={updateRefLine}
         annotations={annotations}
         annotationEdit={annotationEdit}
+        axisLabelEdit={axisLabelEdit}
         shapes={shapes}
         shapeEdit={shapeEdit}
         shapeDraw={shapeDraw}

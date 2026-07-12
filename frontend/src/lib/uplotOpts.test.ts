@@ -131,9 +131,29 @@ describe("buildOpts", () => {
 
   it("adds one plugin for pan and cursor, none for zoom or pointer (no annotations/refLines)", () => {
     expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom" }).plugins).toHaveLength(0);
+    // Pointer without an axisLabelEdit bridge stays plugin-free (the axis-title
+    // drag plugin is only pushed when that bridge is wired — see PlotStage).
     expect(buildOpts(payload, { ...base, yScale: "linear", tool: "pointer" }).plugins).toHaveLength(0);
     expect(buildOpts(payload, { ...base, yScale: "linear", tool: "pan" }).plugins).toHaveLength(1);
     expect(buildOpts(payload, { ...base, yScale: "linear", tool: "cursor" }).plugins).toHaveLength(1);
+  });
+
+  it("adds the axis-title drag plugin in pointer mode once the edit bridge is wired", () => {
+    const edit = { offsets: {}, interactive: true, onMove: () => {}, onReset: () => {} };
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "pointer", axisLabelEdit: edit });
+    expect(opts.plugins).toHaveLength(1);
+  });
+
+  it("blanks uPlot's own y title once it has a drag offset — even in a non-pointer tool", () => {
+    const edit = {
+      offsets: { y: [-10, 4] as [number, number] },
+      interactive: false,
+      onMove: () => {},
+      onReset: () => {},
+    };
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", axisLabelEdit: edit });
+    expect(opts.axes?.[1]?.label).toBe(""); // moved -> plugin draws it (offset renders)
+    expect(opts.plugins).toHaveLength(1);
   });
 
   it("refLine dragging is interactive in pointer mode too (MAIN #18)", () => {

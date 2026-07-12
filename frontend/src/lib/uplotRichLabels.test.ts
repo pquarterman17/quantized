@@ -85,7 +85,7 @@ describe("richLabelsPlugin draw", () => {
   it("draws the x label centered under the plot at the axis _lpos band", () => {
     const ctx = mockCtx();
     const ast = parseRichText("$M_s$").nodes;
-    const plugin = richLabelsPlugin({ x: ast }, STYLE);
+    const plugin = richLabelsPlugin({ x: ast }, STYLE, undefined, { x: true });
     const u = stubU(ctx, [{ side: 2, _lpos: 430, labelGap: 0 }]);
     drawHook(plugin)(u);
     expect(ctx.calls.length).toBeGreaterThan(0);
@@ -103,7 +103,7 @@ describe("richLabelsPlugin draw", () => {
   it("rotates -90deg around the label band for the left y axis", () => {
     const ctx = mockCtx();
     const ast = parseRichText("$\\chi''$").nodes;
-    const plugin = richLabelsPlugin({ y: ast }, STYLE);
+    const plugin = richLabelsPlugin({ y: ast }, STYLE, undefined, { y: true });
     const u = stubU(ctx, [{ side: 2, _lpos: 430 }, { side: 3, _lpos: 12 }]);
     drawHook(plugin)(u);
     expect(ctx.ops).toContain(`translate(12,${Math.round(10 + 300 / 2)})`);
@@ -114,7 +114,7 @@ describe("richLabelsPlugin draw", () => {
   it("rotates +90deg for the right y2 axis", () => {
     const ctx = mockCtx();
     const ast = parseRichText("$T$ (K)").nodes;
-    const plugin = richLabelsPlugin({ y2: ast }, STYLE);
+    const plugin = richLabelsPlugin({ y2: ast }, STYLE, undefined, { y2: true });
     const u = stubU(ctx, [
       { side: 2, _lpos: 430 },
       { side: 3, _lpos: 12 },

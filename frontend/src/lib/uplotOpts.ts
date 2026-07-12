@@ -12,7 +12,7 @@ import type { PlotBg } from "./plotview";
 import type { PlotPayload } from "./plotdata";
 import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
-import { richLabelAst } from "./richtext";
+import { richLabelAst, type RichNode } from "./richtext";
 import { decimalsForIncrement, pow10 } from "./ticks";
 import type { Annotation, AxisFormat, AxisScale, LineStyle, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
 import { resolveFillBands, seriesFillProps } from "./uplotFill";
@@ -25,7 +25,7 @@ import {
   regionShadePlugin,
   type AnnotationEditOpts,
 } from "./uplotOverlays";
-import { richLabelsPlugin } from "./uplotRichLabels";
+import { richLabelsPlugin, type AxisLabelEditOpts } from "./uplotRichLabels";
 import { shapesPlugin, type ShapeEditOpts } from "./uplotShapes";
 import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
 import { peakMarkerEditPlugin, type PeakMarkerCandidate } from "./peakMarkerHit";
@@ -539,6 +539,9 @@ export interface BuildOptsArgs {
    *  does), never once per pixel (the plugin's own live-drag override in
    *  `annotationPlugin` handles that). */
   annotationEdit?: Omit<AnnotationEditOpts, "interactive"> | null;
+  /** Drag-to-reposition the axis titles (pointer tool). Offsets + commit
+   *  callbacks; only wired when the tool is "pointer". */
+  axisLabelEdit?: AxisLabelEditOpts | null;
   /** Drawn shapes (MAIN #27: arrow/line/rect/ellipse). */
   shapes?: Shape[];
   /** Pointer-tool direct manipulation for `shapes` — same "non-null only in
@@ -781,11 +784,29 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // An invalid or $-free label returns null and keeps uPlot's own plain draw
   // byte-identical to before — the same literal fallback the export side
   // applies (calc/figure_labels.py).
-  const xRich = richLabelAst(xLabel);
+  // Route EVERY axis title through the canvas plugin (rich AST if rich, else a
+  // plain-text node) so all titles are drag-repositionable — uPlot's own plain
+  // label is blanked below. A blank/absent label stays null (nothing drawn).
+  // The TITLE stays a DOM element (rich only), not draggable.
+  // Each axis title becomes an AST the plugin can measure/draw (rich parse, or
+  // a plain-text node so plain titles are still hit-testable + draggable). The
+  // plugin DRAWS a title only when it's rich OR has a drag offset — uPlot keeps
+  // drawing plain, unmoved titles at their default position (zero change for
+  // the common case). `label: ""` blanks uPlot's own draw for exactly the
+  // plugin-drawn set.
+  const off = args.axisLabelEdit?.offsets ?? {};
+  const astOf = (text: string | undefined): RichNode[] | null =>
+    text && text.trim() ? (richLabelAst(text) ?? [{ kind: "text", text, italic: false }]) : null;
+  const xRealRich = richLabelAst(xLabel);
+  const xRich = astOf(xLabel);
+  const xDrawn = !!xRealRich || off.x !== undefined;
   const yLabelText = soloLabel(0);
-  const yRich = richLabelAst(yLabelText);
+  const yRealRich = richLabelAst(yLabelText);
+  const yRich = astOf(yLabelText);
+  const yDrawn = !!yRealRich || off.y !== undefined;
   const y2LabelText = hasY2 ? soloLabel(1) : undefined;
-  const y2Rich = hasY2 ? richLabelAst(y2LabelText) : null;
+  const y2Rich = hasY2 ? astOf(y2LabelText) : null;
+  const y2Drawn = hasY2 && (!!richLabelAst(y2LabelText) || off.y2 !== undefined);
   const titleRich = richLabelAst(args.title?.trim());
 
   // labelSize is the px height/width uPlot reserves for the axis TITLE
@@ -933,12 +954,22 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     const { getAnchors, onAdd, onMove, onRemove } = args.anchorEdit;
     plugins.push(anchorEditPlugin(getAnchors, { onAdd, onMove, onRemove, color: accentColor }));
   }
-  // Rich axis labels / title (GOTO #5) — see the AST block above the plugins.
-  if (xRich || yRich || y2Rich || titleRich) {
+  // Axis titles / title (GOTO #5). Push the plugin when it must DRAW a title
+  // (rich or moved) or the DOM title is rich, OR — in the pointer tool — for
+  // any title, so a plain unmoved title is still grab-testable to start a drag.
+  const anyAxisLabel = !!(xRich || yRich || y2Rich);
+  const anyDrawn = xDrawn || yDrawn || y2Drawn;
+  // The plugin is needed to DRAW (rich/moved titles or a rich DOM title), or to
+  // enable dragging — but only where the drag is actually wired (`axisLabelEdit`
+  // present, pointer tool). Facet panels (MultiPanelStage) pass no edit bridge,
+  // so plain unmoved titles there stay on uPlot's draw with no extra plugin.
+  if (anyDrawn || titleRich || (tool === "pointer" && anyAxisLabel && args.axisLabelEdit)) {
     plugins.push(
       richLabelsPlugin(
         { x: xRich, y: yRich, y2: y2Rich, title: titleRich },
         { px: titlePx, family: uiFamily, color: axisColor, weight: "600" },
+        args.axisLabelEdit ?? undefined,
+        { x: xDrawn, y: yDrawn, y2: y2Drawn },
       ),
     );
   }
@@ -1040,15 +1071,16 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     {
       ...axis,
       size: xAxisSize,
-      // Rich label: blank uPlot's plain draw but keep the band reserved.
-      label: xRich ? "" : xLabel,
+      // Blank uPlot's own draw only when the plugin draws this title (rich or
+      // moved); the labelSize band stays reserved either way.
+      label: xDrawn ? "" : xLabel,
       ...(xValues ? { values: xValues } : {}),
       ...(xSplits ? { splits: xSplits } : {}),
     },
     {
       ...axis,
       size: yAxisSize,
-      label: yRich ? "" : yLabelText,
+      label: yDrawn ? "" : yLabelText,
       ...(yValues ? { values: yValues } : {}),
       ...(ySplits ? { splits: ySplits } : {}),
     },
@@ -1066,7 +1098,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       scale: "y2",
       side: 1,
       size: yAxisSize,
-      label: y2Rich ? "" : y2LabelText,
+      label: y2Drawn ? "" : y2LabelText,
       grid: { show: false },
       ...(yValues ? { values: yValues } : {}),
       ...(y2Splits ? { splits: y2Splits } : {}),

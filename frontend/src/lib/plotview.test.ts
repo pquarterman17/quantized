@@ -135,6 +135,34 @@ describe("sanitizeView back-compat (MAIN #12 — old .dwk boolean -> new scale e
   });
 });
 
+describe("sanitizeView — axisLabelOffsets (draggable axis titles)", () => {
+  it("round-trips valid per-axis px offsets, dropping malformed / clamping wild ones", () => {
+    const out = sanitizePlotWindows(
+      [
+        win({
+          view: {
+            ...defaultPlotView(),
+            axisLabelOffsets: { x: [-12, 4], y: [3000, -5], y2: [1, 2], z: [9, 9] },
+          } as unknown as PlotView,
+        }),
+      ],
+      new Set(["d1"]),
+    );
+    // valid axes kept; y clamped to the ±2000 px cap; bogus "z" key dropped.
+    expect(out[0].view.axisLabelOffsets).toEqual({ x: [-12, 4], y: [2000, -5], y2: [1, 2] });
+  });
+
+  it("defaults to empty for a missing/malformed value", () => {
+    for (const bad of [undefined, null, "x", { x: [1] }, { y: [1, "z"] }]) {
+      const out = sanitizePlotWindows(
+        [win({ view: { ...defaultPlotView(), axisLabelOffsets: bad } as unknown as PlotView })],
+        new Set(["d1"]),
+      );
+      expect(out[0].view.axisLabelOffsets).toEqual({});
+    }
+  });
+});
+
 describe("sanitizeView — legendXY (MAIN #18 — free legend position)", () => {
   it("round-trips a valid [fx, fy] pair", () => {
     const out = sanitizePlotWindows(
