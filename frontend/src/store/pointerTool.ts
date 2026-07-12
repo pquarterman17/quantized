@@ -20,7 +20,7 @@
 // selection outline drawn) until the user picks again.
 
 import { clampAnnotationSize } from "../lib/uplotOverlays";
-import type { Annotation, AxisKey, AxisLabelOffsets } from "../lib/types";
+import type { Annotation, AxisKey, AxisLabelOffsets, AxisLabelStyle, AxisLabelStyles } from "../lib/types";
 import type { AppState } from "./useApp";
 
 export interface PointerToolSlice {
@@ -33,6 +33,11 @@ export interface PointerToolSlice {
   axisLabelOffsets: AxisLabelOffsets;
   /** Move an axis title (offset in CSS px) or reset it to default (null). */
   setAxisLabelOffset: (axis: AxisKey, offset: [number, number] | null) => void;
+  /** Per-axis title text style (right-click ▸ Format). */
+  axisLabelStyles: AxisLabelStyles;
+  /** Merge a style patch onto one axis title; a patch that empties the style
+   *  removes the axis entry (back to default). */
+  setAxisLabelStyle: (axis: AxisKey, patch: Partial<AxisLabelStyle>) => void;
   /** The annotation selected in pointer mode (click-select / drag-to-move
    *  target); null = nothing selected. Transient, not window-scoped — see
    *  the module doc for why that's safe. */
@@ -62,6 +67,19 @@ export function createPointerToolSlice(set: SliceSet): PointerToolSlice {
         if (offset === null) delete next[axis];
         else next[axis] = offset;
         return { axisLabelOffsets: next };
+      }),
+    axisLabelStyles: {},
+    setAxisLabelStyle: (axis, patch) =>
+      set((s) => {
+        const merged: AxisLabelStyle = { ...s.axisLabelStyles[axis], ...patch };
+        // Drop falsy/undefined keys so an emptied style resets to default.
+        if (!merged.size) delete merged.size;
+        if (!merged.italic) delete merged.italic;
+        if (!merged.bold) delete merged.bold;
+        const next = { ...s.axisLabelStyles };
+        if (Object.keys(merged).length === 0) delete next[axis];
+        else next[axis] = merged;
+        return { axisLabelStyles: next };
       }),
     selectedAnnotationId: null,
     setSelectedAnnotationId: (selectedAnnotationId) => set({ selectedAnnotationId }),

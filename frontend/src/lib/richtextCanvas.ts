@@ -29,6 +29,9 @@ export interface RichFont {
   family: string;
   /** CSS font-weight slot (e.g. "600"); omitted = normal. */
   weight?: string;
+  /** Force italic on EVERY run (axis-title Format ▸ Italic). Individual math
+   *  runs stay italic regardless; this only italicizes the upright ones. */
+  italic?: boolean;
 }
 
 /** The ctx subset used — lets tests pass a lightweight mock. `stroke*`/path
@@ -127,7 +130,7 @@ function layoutNode(
 ): RichBox {
   switch (n.kind) {
     case "text": {
-      ctx.font = fontString(px, n.italic, font.weight, font.family);
+      ctx.font = fontString(px, n.italic || !!font.italic, font.weight, font.family);
       if (draw) ctx.fillText(n.text, x, y);
       return { width: ctx.measureText(n.text).width, ascent: ASCENT_EM * px, descent: DESCENT_EM * px };
     }

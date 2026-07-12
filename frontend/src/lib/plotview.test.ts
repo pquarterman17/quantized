@@ -163,6 +163,33 @@ describe("sanitizeView — axisLabelOffsets (draggable axis titles)", () => {
   });
 });
 
+describe("sanitizeView — axisLabelStyles (Format menu)", () => {
+  it("round-trips valid styles, clamping size to 6..96 and dropping bogus keys", () => {
+    const out = sanitizePlotWindows(
+      [
+        win({
+          view: {
+            ...defaultPlotView(),
+            axisLabelStyles: { y: { size: 200, italic: true }, x: { bold: true, size: 4 }, z: { size: 12 } },
+          } as unknown as PlotView,
+        }),
+      ],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.axisLabelStyles).toEqual({ y: { size: 96, italic: true }, x: { size: 6, bold: true } });
+  });
+
+  it("defaults to empty for a missing/malformed value", () => {
+    for (const bad of [undefined, null, "x", { y: 5 }, { y: { size: "big" } }]) {
+      const out = sanitizePlotWindows(
+        [win({ view: { ...defaultPlotView(), axisLabelStyles: bad } as unknown as PlotView })],
+        new Set(["d1"]),
+      );
+      expect(out[0].view.axisLabelStyles).toEqual({});
+    }
+  });
+});
+
 describe("sanitizeView — legendXY (MAIN #18 — free legend position)", () => {
   it("round-trips a valid [fx, fy] pair", () => {
     const out = sanitizePlotWindows(

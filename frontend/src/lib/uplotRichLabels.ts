@@ -24,7 +24,7 @@ import { claimCursor } from "./annotationHit";
 import { axisLabelRect, hitAxisLabel, type LabelRect } from "./axisLabelHit";
 import type { RichNode } from "./richtext";
 import { ASCENT_EM, DESCENT_EM, drawRich, measureRich } from "./richtextCanvas";
-import type { AxisKey, AxisLabelOffsets } from "./types";
+import type { AxisKey, AxisLabelOffsets, AxisLabelStyles } from "./types";
 
 /** Drag-to-reposition the axis titles (Origin-parity, persisted in the view).
  *  `offsets` ALWAYS apply (a moved title stays moved in every tool); the drag
@@ -32,10 +32,14 @@ import type { AxisKey, AxisLabelOffsets } from "./types";
  *  `interactive` (the pointer tool). */
 export interface AxisLabelEditOpts {
   offsets: AxisLabelOffsets;
+  /** Per-axis title text style (size/italic/bold); ALWAYS applied. */
+  styles: AxisLabelStyles;
   interactive: boolean;
   onMove: (axis: AxisKey, offset: [number, number]) => void;
   onReset: (axis: AxisKey) => void;
   onEdit?: (axis: AxisKey) => void;
+  /** Right-click a title → open the Format menu at the pointer (client px). */
+  onContextMenu: (axis: AxisKey, clientX: number, clientY: number) => void;
 }
 
 const AXIS_KEYS: readonly AxisKey[] = ["x", "y", "y2"];
@@ -187,8 +191,16 @@ export function richLabelsPlugin(
           const shiftDir = side === 0 || side === 3 ? -1 : 1;
           const lposCss = axis._lpos + (axis.labelGap ?? 0) * shiftDir;
           const lpos = Math.round(lposCss * pxr);
-          const px = style.px * pxr; // uPlot scales fonts to device px; so do we
-          const font = { px, family: style.family, weight: style.weight ?? "600" };
+          // Per-axis Format style (size/italic/bold) overrides the defaults.
+          const st = edit?.styles?.[key];
+          const labelCssPx = st?.size ?? style.px;
+          const px = labelCssPx * pxr; // uPlot scales fonts to device px; so do we
+          const font = {
+            px,
+            family: style.family,
+            weight: st?.bold ? "700" : (style.weight ?? "600"),
+            italic: st?.italic,
+          };
           const vertical = side % 2 === 1;
           // The plugin DRAWS a title only when uPlot blanked it (rich / offset)
           // or it's being dragged; otherwise uPlot draws it at default and the
@@ -212,8 +224,8 @@ export function richLabelsPlugin(
           ctx.restore();
           // Record the CSS-px grab box centered on the (offset) title.
           const cx = vertical ? lposCss + dx : cssCenterX + dx;
-          const cy = vertical ? cssCenterY + dy : lposCss + style.px * 0.5 + dy;
-          rects[key] = axisLabelRect(cx, cy, cssW, style.px, vertical);
+          const cy = vertical ? cssCenterY + dy : lposCss + labelCssPx * 0.5 + dy;
+          rects[key] = axisLabelRect(cx, cy, cssW, labelCssPx, vertical);
         });
       },
       ready: edit?.interactive
@@ -241,11 +253,10 @@ export function richLabelsPlugin(
             });
             root.addEventListener("contextmenu", (e: MouseEvent) => {
               const axis = hitAxisLabel(rects, at(e).x, at(e).y);
-              if (axis && edit.offsets[axis]) {
+              if (axis) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
-                edit.onReset(axis);
-                u.redraw();
+                edit.onContextMenu(axis, e.clientX, e.clientY);
               }
             });
             root.addEventListener("mousedown", (e: MouseEvent) => {

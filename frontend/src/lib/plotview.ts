@@ -22,7 +22,7 @@ import {
   type PanelLayout,
 } from "./panelwindow";
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
-import type { Annotation, AxisFormat, AxisLabelOffsets, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
+import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
 
 // Re-exported: PlotWindow.panel (below) is the only reason this module
 // depends on panelwindow.ts at all — callers that just need the window-record
@@ -92,6 +92,8 @@ export interface PlotView {
   /** Per-axis title drag offsets (CSS px). Nudges an axis title clear of long
    *  tick labels; absent axes sit at default. Persisted like `legendXY`. */
   axisLabelOffsets: AxisLabelOffsets;
+  /** Per-axis title text style (right-click ▸ Format: size/italic/bold). */
+  axisLabelStyles: AxisLabelStyles;
   plotTemplate: string;
   showAxisBox: boolean;
   stackMode: boolean;
@@ -142,6 +144,7 @@ export function defaultPlotView(): PlotView {
     legendPos: "ne",
     legendXY: null,
     axisLabelOffsets: {},
+    axisLabelStyles: {},
     plotTemplate: "screen",
     showAxisBox: false,
     stackMode: false,
@@ -425,6 +428,26 @@ function axisLabelOffsetsOrDefault(v: unknown): AxisLabelOffsets {
   return out;
 }
 
+/** Per-axis title styles from a persisted view: keep only x/y/y2 keys with a
+ *  sane subset of {size (clamped 6..96 px), italic, bold}; drop empties. */
+function axisLabelStylesOrDefault(v: unknown): AxisLabelStyles {
+  const out: AxisLabelStyles = {};
+  if (!v || typeof v !== "object") return out;
+  for (const k of ["x", "y", "y2"] as const) {
+    const raw = (v as Record<string, unknown>)[k];
+    if (!raw || typeof raw !== "object") continue;
+    const s = raw as Record<string, unknown>;
+    const style: { size?: number; italic?: boolean; bold?: boolean } = {};
+    if (typeof s.size === "number" && Number.isFinite(s.size)) {
+      style.size = Math.max(6, Math.min(96, s.size));
+    }
+    if (s.italic === true) style.italic = true;
+    if (s.bold === true) style.bold = true;
+    if (Object.keys(style).length) out[k] = style;
+  }
+  return out;
+}
+
 const ANNOTATION_ANCHORS: readonly Annotation["anchor"][] = ["data", "page"];
 
 /** Validate a persisted annotation list (MAIN #21's `.anchor` field). Every
@@ -567,6 +590,7 @@ function sanitizeView(v: unknown): PlotView {
     legendPos: LEGEND_POS.includes(o.legendPos as LegendPos) ? (o.legendPos as LegendPos) : fb.legendPos,
     legendXY: legendXYOrNull(o.legendXY),
     axisLabelOffsets: axisLabelOffsetsOrDefault(o.axisLabelOffsets),
+    axisLabelStyles: axisLabelStylesOrDefault(o.axisLabelStyles),
     plotTemplate: strOrDefault(o.plotTemplate, fb.plotTemplate),
     showAxisBox: boolOrDefault(o.showAxisBox, fb.showAxisBox),
     stackMode: boolOrDefault(o.stackMode, fb.stackMode),
