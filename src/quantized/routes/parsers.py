@@ -196,10 +196,12 @@ def _import_with_books(
             if suffix == ".opj":
                 figs = extract_figures(raw)
             else:
-                # Gate out non-actionable layer anchors (internal storage/thumbnail
-                # blocks with no bound curves and no source) so the Library's Figures
-                # section shows only restorable graphs, not dead "SYSTEM" rows.
-                figs = drop_nonactionable_figures(extract_figures_opju(raw))
+                figs = extract_figures_opju(raw)
+            # Gate out non-actionable layer anchors (internal storage/thumbnail
+            # blocks with no bound curves and no source) so the Library's Figures
+            # section shows only restorable graphs, not dead "SYSTEM" rows. Both
+            # containers can carry these records (XMCD.opj alone exposes 61).
+            figs = drop_nonactionable_figures(figs)
         except (IndexError, ValueError, KeyError, struct.error):
             # Figures are an optional nicety; a decode hiccup on a malformed or
             # truncated project must degrade to "no figures", never fail the
