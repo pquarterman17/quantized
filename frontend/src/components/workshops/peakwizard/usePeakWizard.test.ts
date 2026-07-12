@@ -37,6 +37,9 @@ beforeEach(() => {
   useApp.setState({
     datasets: [{ id: "d1", name: "run.dat", data: DATA }],
     activeId: "d1",
+    xKey: null,
+    yKeys: null,
+    seriesOrder: null,
     peakOverlay: null,
     baselineOverlay: null,
     peakWizardEdit: null,
@@ -158,5 +161,33 @@ describe("usePeakWizard — click-on-plot editing never triggers a find/fit call
     act(() => result.current.addPeakAt(1));
     act(() => result.current.removePeak(0));
     await waitFor(() => expect(findPeaks).not.toHaveBeenCalled());
+  });
+});
+
+describe("usePeakWizard — plotted-channel selection (audit P1 #1)", () => {
+  it("runs its working segment on the plotted X/primary-Y, not time/values[0]", async () => {
+    const { findPeaks } = await import("../../../lib/api");
+    vi.mocked(findPeaks).mockResolvedValue({ peaks: [], background: [] });
+    const multi: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[100, 10], [200, 50], [300, 20], [400, 5]],
+      labels: ["angle", "counts"],
+      units: ["deg", "cps"],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "xrd.dat", data: multi }],
+      activeId: "d1",
+      xKey: 0, // angle
+      yKeys: [1], // counts
+      seriesOrder: null,
+    });
+    const { result } = renderHook(() => usePeakWizard());
+    await act(async () => {
+      await result.current.runFind();
+    });
+    const body = vi.mocked(findPeaks).mock.calls[0][0];
+    expect(body.x).toEqual([100, 200, 300, 400]); // angle channel, not time
+    expect(body.y).toEqual([10, 50, 20, 5]); // counts channel, not values[0]
   });
 });
