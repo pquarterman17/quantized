@@ -130,7 +130,14 @@ describe("quick-fit gadget (#33)", () => {
     expect(useApp.getState().datasets[0].fitSpec).toBeUndefined();
 
     useApp.getState().commitQfit();
-    expect(useApp.getState().datasets[0].fitSpec).toEqual({ model: "Linear" });
+    // Durable recipe now records the plotted channels + result snapshot too
+    // (audit P1 #3): the single-column fixture plots channel 0 vs time.
+    expect(useApp.getState().datasets[0].fitSpec).toEqual({
+      model: "Linear",
+      xKey: null,
+      yKey: 0,
+      params: [2, 0],
+    });
     expect(useApp.getState().macroSteps.at(-1)).toEqual(
       expect.objectContaining({ kind: "fit", params: { model: "Linear" } }),
     );

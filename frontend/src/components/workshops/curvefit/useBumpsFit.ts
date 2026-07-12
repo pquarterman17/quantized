@@ -11,7 +11,7 @@ import { fitBumps, type BumpsEngine, type BumpsFitResult } from "../../../lib/fi
 import { cancelJob, isJobSubmit, JobCancelledError, pollJob } from "../../../lib/jobs";
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { selectedFitData } from "./fitSelection";
+import { selectedFitData } from "../../../lib/fitselection";
 
 export type EngineChoice = "parity" | BumpsEngine;
 

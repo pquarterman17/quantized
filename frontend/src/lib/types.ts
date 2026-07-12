@@ -269,6 +269,22 @@ export interface ColumnFilter {
 /** A dataset's local data filter — AND across its column predicates. */
 export type DataFilter = ColumnFilter[];
 
+/** A reproducible fit recipe + result snapshot saved on a dataset (audit P1 #3).
+ *  `xKey`/`yKey` capture the channels fit at record time so a recompute
+ *  reproduces the original analysis; they're absent on legacy `{model}` specs
+ *  (recompute then falls back to the live plotted selection). */
+export interface FitSpec {
+  model: string;
+  /** Plotted X channel at fit time (`null` = the dataset's `time` axis). */
+  xKey?: number | null;
+  /** Primary plotted Y channel that was fit. */
+  yKey?: number;
+  /** Fitted parameters from the last fit/recompute (result snapshot). */
+  params?: number[];
+  /** Optimizer exit flag (1 = success, 0 = did not converge). */
+  exitFlag?: number;
+}
+
 export interface Dataset {
   id: string;
   name: string;
@@ -279,10 +295,15 @@ export interface Dataset {
    *  background dataset's id + the interpolation method. Persisted so the
    *  Corrections card can re-populate and re-apply it reproducibly. */
   bgRef?: { datasetId: string; interp: string };
-  /** The last fit run on this dataset (model name) — the recalc graph (#1)
-   *  re-runs it when the data changes (auto mode) or marks it stale (manual).
-   *  Set by the Curve Fit workshop; round-trips through .dwk v3. */
-  fitSpec?: { model: string };
+  /** The last fit run on this dataset — the recalc graph (#1) re-runs it when
+   *  the data changes (auto mode) or marks it stale (manual). Set by the Curve
+   *  Fit workshop + quick-fit gadget; round-trips through .dwk v3. Carries a
+   *  reproducible recipe (audit P1 #3): the plotted `xKey`/`yKey` fit at record
+   *  time so RECOMPUTE reproduces the original channels rather than the current
+   *  plot view or `time`/`values[0]`, plus a snapshot of the produced `params`
+   *  and `exitFlag`. `xKey`/`yKey` are absent on legacy v1 (`{model}`) specs —
+   *  recompute then falls back to the live plotted selection. */
+  fitSpec?: FitSpec;
   /** Free-text user notes about this dataset (sample, conditions, caveats).
    *  Shown in the Inspector Notes card; round-trips through the .dwk workspace. */
   notes?: string;

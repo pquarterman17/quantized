@@ -62,6 +62,22 @@ describe("serializeWorkspace / parseWorkspace round-trip", () => {
     expect(restored.notes).toBeUndefined();
   });
 
+  it("preserves the full fit-spec recipe + snapshot (audit P1 #3)", () => {
+    const ds = makeDataset("a", "fit");
+    ds.fitSpec = { model: "Linear", xKey: 0, yKey: 1, params: [2, 0.5], exitFlag: 1 };
+    expect(parse(ser([ds]))[0].fitSpec).toEqual({
+      model: "Linear",
+      xKey: 0,
+      yKey: 1,
+      params: [2, 0.5],
+      exitFlag: 1,
+    });
+    // A legacy v1 {model} spec still round-trips untouched.
+    const legacy = makeDataset("b", "legacy");
+    legacy.fitSpec = { model: "Gauss" };
+    expect(parse(ser([legacy]))[0].fitSpec).toEqual({ model: "Gauss" });
+  });
+
   it("preserves dataset tags (and drops an empty tag list)", () => {
     const ds = makeDataset("a", "tagged");
     ds.tags = ["MvsH", "sample-A"];

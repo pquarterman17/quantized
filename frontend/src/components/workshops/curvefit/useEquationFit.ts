@@ -16,7 +16,7 @@ import {
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { selectedFitData } from "./fitSelection";
+import { selectedFitData } from "../../../lib/fitselection";
 
 export interface EquationParamRow {
   name: string;

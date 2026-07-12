@@ -25,6 +25,10 @@ beforeEach(() => {
   useApp.setState({
     datasets: [{ id: "d1", name: "run.dat", data: DATA }],
     activeId: "d1",
+    xKey: null,
+    yKeys: null,
+    seriesOrder: null,
+    hiddenChannels: [],
     gadgetMode: "fit",
     qfitRoi: [1, 2],
     qfitModel: "Linear",
@@ -99,7 +103,16 @@ describe("useGadgetChip — fit mode (gap #33, unchanged behavior)", () => {
   it("commit() delegates to the store's commitQfit", async () => {
     const { result } = renderHook(() => useGadgetChip());
     result.current.commit();
-    await waitFor(() => expect(useApp.getState().datasets[0].fitSpec).toEqual({ model: "Linear" }));
+    // Durable recipe now also records the plotted channels + result snapshot
+    // (audit P1 #3); single-column fixture plots channel 0 vs time.
+    await waitFor(() =>
+      expect(useApp.getState().datasets[0].fitSpec).toEqual({
+        model: "Linear",
+        xKey: null,
+        yKey: 0,
+        params: [1, 0],
+      }),
+    );
   });
 });
 

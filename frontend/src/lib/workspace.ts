@@ -20,6 +20,7 @@ import type {
   CorrectionParams,
   Dataset,
   DataStruct,
+  FitSpec,
   FolderNode,
   ModelingType,
 } from "./types";
@@ -361,7 +362,20 @@ export function parseWorkspace(text: string): LoadedWorkspace {
       typeof dd.fitSpec === "object" &&
       typeof (dd.fitSpec as Record<string, unknown>).model === "string"
     ) {
-      ds.fitSpec = { model: (dd.fitSpec as { model: string }).model };
+      const fs = dd.fitSpec as Record<string, unknown>;
+      const spec: FitSpec = { model: fs.model as string };
+      // Provenance fields (audit P1 #3), each validated; absent = legacy v1.
+      if (fs.xKey === null || (typeof fs.xKey === "number" && Number.isInteger(fs.xKey))) {
+        spec.xKey = fs.xKey as number | null;
+      }
+      if (typeof fs.yKey === "number" && Number.isInteger(fs.yKey) && fs.yKey >= 0) {
+        spec.yKey = fs.yKey;
+      }
+      if (Array.isArray(fs.params) && fs.params.every((v) => typeof v === "number")) {
+        spec.params = fs.params as number[];
+      }
+      if (typeof fs.exitFlag === "number") spec.exitFlag = fs.exitFlag;
+      ds.fitSpec = spec;
     }
     // Lazy per-book reference (#38) — only ever present in an autosave
     // snapshot (a real "Save workspace" export always resolves it first);
