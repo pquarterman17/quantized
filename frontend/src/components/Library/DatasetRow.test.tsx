@@ -145,6 +145,18 @@ describe("DatasetRow re-import menu entry (MAIN_PLAN #10)", () => {
   });
 });
 
+describe("DatasetRow split-by-column-value menu entry (MAIN_PLAN #26)", () => {
+  it("opens the split dialog for THIS row's dataset", () => {
+    useApp.setState({ datasets: [plain], activeId: null, selectedIds: [] });
+    const spy = vi.spyOn(useApp.getState(), "openSplitDialog");
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    expect(screen.getByText("Split by column value…")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Split by column value…"));
+    expect(spy).toHaveBeenCalledWith("plain");
+  });
+});
+
 // project-organization plan item 3b: drop-between reorder. jsdom has no real
 // DnD or layout (see AxisDropZones.test.tsx's header note for the same
 // workaround this borrows: a hand-built DragEvent with clientX/clientY +

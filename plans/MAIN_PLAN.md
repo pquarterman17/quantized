@@ -75,15 +75,8 @@ GOTO #11 drift (implemented but listed open).
 ~~25. **Rich text in annotations**~~ COMPLETED 2026-07-11 (see
     Completed).
 
-26. **Split dataset by column value** (owner 2026-07-11; use: one
-    multi-temperature PPMS/MPMS file → per-setpoint datasets, the step
-    before overlays/panels/batch fits; used via right-click dataset →
-    "Split by column value…"; discoverable because the dialog previews
-    the detected groups + row counts LIVE before committing): numeric
-    columns gap-cluster with an editable tolerance (auto default),
-    text columns split by exact value; results named "src (5 K)" and
-    placed in a Library group named after the source; source kept;
-    undo-recorded.
+~~26. **Split dataset by column value**~~ COMPLETED 2026-07-11 (see
+    Completed).
 
 27. **Drawing shapes on plots** (owner design round 2026-07-11 — all
     decided): arrow, line, rect, ellipse + "text box" (use: figure
@@ -205,6 +198,49 @@ GOTO #11 drift (implemented but listed open).
   renders via RichText; export was ALREADY guarded (safe_mathtext_label
   covers page-anchor + size), +4 behavior tests proving mathtext
   engages. Frontend 3013 / backend 2813 green on its branch.
+- ~~**#26 Split dataset by column value**~~ (2026-07-11, sonnet agent) —
+  one imported multi-setpoint file (M-H loops at 5/10/50/100 K in a
+  single PPMS export) → per-setpoint datasets. Pure model
+  `lib/datasetsplit.ts`: numeric (continuous, per `lib/modeling.ts`'s
+  inference) columns GAP-CLUSTER — sort, split where the gap exceeds a
+  tolerance; auto tolerance = median NON-ZERO adjacent gap × 8 (a
+  documented multiplier, empirically threading 5/10/50/100 K wobble vs.
+  jump), so a perfectly uniform ramp collapses to ONE group under the
+  auto default (median == every gap) while an explicit too-tight
+  tolerance still explodes to one-group-per-row — caught by
+  `tooManyGroups`/`SPLIT_GROUP_CAP` (50), which the dialog renders as a
+  warning instead of a 300-row list. Categorical (nominal/ordinal)
+  columns exact-group instead (no tolerance). NaN/Infinity rows land in
+  a trailing "(other)" group rather than being dropped. Store action
+  `store/split.ts`'s `splitDatasetByColumn` (own slice file — useApp.ts
+  sat at 3327/3335 lines of ratchet, zero room for an inline action;
+  matches store/reductions.ts's precedent): mints one child dataset per
+  group (sliced `data`, ONE new `set()`, ONE `recordHistory` entry) into
+  ONE new Library FOLDER named after the source (not the legacy
+  `Dataset.group` field, which lib/foldertree.ts documents as retired/
+  migration-only) nested under the source's own folder. Carries
+  formulas/channelRoles/channelTypes (column-indexed, row-slice-safe);
+  drops excludedRows/filter (row-indexed, meaningless post-slice),
+  raw/corrections/bgRef (raw's row count can diverge from data's after
+  an xTrim), and source/pending/notes/tags/fitSpec (re-import would
+  silently undo the split; the rest is source-sweep-scoped, not
+  per-setpoint). Resolves a still-pending Origin book before slicing.
+  Undo restores the pre-split `datasets` in one step but — same as the
+  existing "New folder with this…" entry — leaves the emptied folder
+  behind, since folder-tree mutations sit outside the undo system
+  everywhere in this store. Dialog `components/overlays/
+  SplitDatasetDialog.tsx` (modal, ParamDialog/ConfirmDialog convention):
+  column picker (x + every channel) with a "most setpoint-like" default
+  (fewest groups > 1, cheap per-column score), tolerance field
+  (continuous columns only, auto-seeded + editable), and a LIVE preview
+  list (value → row count) recomputed via `useMemo` on every
+  column/tolerance edit — the discoverability requirement. Entry points:
+  DatasetRow context menu "Split by column value…" (Re-import's
+  pattern) + an Analyze-menu/⌘K command on the active dataset
+  (appCommands.ts, 673→674/684 lines of ratchet). 29 pure-model + 15
+  store + 11 dialog + 1 menu-registration + 2 command-registry tests (58
+  new); frontend 3054/3054, build + typecheck clean; useApp.ts 3334/3335,
+  appCommands.ts 674/684, DatasetRow.tsx 399/400 — all ratchets held.
 
 - ~~**#24 Axis tick formats in publication export**~~ (2026-07-11, sonnet
   agent) — matplotlib mirrors the screen's `AxisFormat` (fixed/sci/eng +

@@ -17,13 +17,12 @@ only the fresh-machine acceptance run remains from that gate)
 
 | # | Item | Plan / item | Size |
 |---|------|-------------|------|
-| 41 | Split dataset by column value (gap-cluster + live preview) | MAIN #26 | M |
-| 42 | Drawing shapes (arrow/line/rect/ellipse + framed text) — launches after #25 merges | MAIN #27 | M-L |
+| 42 | Drawing shapes (arrow/line/rect/ellipse + framed text) — agent in flight | MAIN #27 | M-L |
 
-*(MAIN #9–#24 all shipped 2026-07-11; #25–#26 booked from the owner's
-menu-survey session, agents in flight; a shapes feature (#27) is
-launching now that #25 merged. The #23 installer hooks BUILT into
-v0.8.1's setup.exe — verified by the fresh-machine acceptance run.)*
+*(MAIN #9–#26 all shipped 2026-07-11 (the menu-survey pair: #25 rich-text
+annotations + #26 split-by-value); a shapes/drawing feature (#27) is the
+agent in flight. The #23 installer hooks BUILT into v0.8.1's setup.exe —
+verified by the fresh-machine acceptance run.)*
 
 ## Owner actions & owner-gated decisions
 
@@ -67,7 +66,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only — MAIN #9–#24 ALL shipped 2026-07-11 |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | #25 open (agent in flight) + owner gates/deferrals — MAIN #9–#24, #26 ALL shipped 2026-07-11 |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence |
