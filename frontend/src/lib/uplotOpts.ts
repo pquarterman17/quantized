@@ -721,6 +721,22 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     (u, sidx) => b(u, sidx, 0, u.data[0].length - 1);
   const fullPoints = (b: uPlot.Series.Points.PathBuilder): uPlot.Series.Points.PathBuilder =>
     (u, sidx, _i0, _i1, filt) => b(u, sidx, 0, u.data[0].length - 1, filt);
+  const segment2Paths: uPlot.Series.PathBuilder = (u, sidx, idx0, idx1) => {
+    const stroke = new Path2D();
+    const xs = u.data[0];
+    const ys = u.data[sidx];
+    const yScaleName = u.series[sidx].scale ?? "y";
+    const first = Math.max(0, idx0 - (idx0 % 2));
+    const last = Math.min(idx1 + 1, xs.length - 1, ys.length - 1);
+    for (let i = first; i < last; i += 2) {
+      const x0 = xs[i]; const x1 = xs[i + 1];
+      const y0 = ys[i]; const y1 = ys[i + 1];
+      if (x0 == null || x1 == null || y0 == null || y1 == null) continue;
+      stroke.moveTo(u.valToPos(x0, "x", true), u.valToPos(y0, yScaleName, true));
+      stroke.lineTo(u.valToPos(x1, "x", true), u.valToPos(y1, yScaleName, true));
+    }
+    return { stroke };
+  };
   /** Point-marker config for one series honoring the loop fix. */
   const loopPoints = (p: uPlot.Series.Points): uPlot.Series.Points => {
     if (xAscending || !p.show) return p;
@@ -1179,9 +1195,12 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         label, scale, stroke, width, dash, points: loopPoints(points), show,
         ...seriesFillProps(style?.fill, stroke),
       };
+      if (style?.connect === "segment2" && width > 0) {
+        def.paths = segment2Paths;
+      }
       // Stepped trace: apply the caller-supplied step-after path builder (there's
       // no per-series line-shape override, so it's a global default).
-      if (trace === "Step" && !style?.line && args.steppedPaths) {
+      if (!def.paths && trace === "Step" && !style?.line && args.steppedPaths) {
         def.paths = xAscending ? args.steppedPaths : fullLine(args.steppedPaths);
       } else if (!xAscending && width > 0 && args.linearPaths) {
         // Loop rendering: draw the line over every point in acquisition order.

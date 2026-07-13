@@ -156,6 +156,8 @@ export interface OriginCurve {
    *  Absent when the importer cannot recover it from the record — the default
    *  trace then stands for any unrecognized plot type. */
   style?: "line" | "scatter" | "line_symbol";
+  /** Origin line.connect: straight or independently paired 2-point segments. */
+  connect?: "straight" | "segment2";
   /** Origin's plot color as "#RRGGBB", decoded from the curve style record
    *  (io/origin_project/curve_style_color.py: direct-RGB and classic-palette
    *  ocolors). Absent for "auto/increment" colors and anything undecodable —
@@ -752,6 +754,7 @@ export interface SeriesStyle {
   color?: string;
   width?: number;
   line?: LineStyle;
+  connect?: "straight" | "segment2";
   marker?: boolean; // draw markers at each data point
   markerSize?: number; // marker diameter in px (default 5); only when marker
   markerShape?: MarkerShape; // marker glyph (default circle); only when marker

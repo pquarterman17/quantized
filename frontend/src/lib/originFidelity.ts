@@ -15,6 +15,7 @@ const LABELS: Record<string, string> = {
   graphic_objects: "drawn arrows and shapes",
   layer_geometry: "layer geometry",
   line_symbol_mode: "line + symbol mode",
+  two_point_segments: "two-point segment connections",
   line_width: "line widths",
   no_graph_records: "no graph records found",
   rich_text_run_formatting: "per-run rich-text formatting",

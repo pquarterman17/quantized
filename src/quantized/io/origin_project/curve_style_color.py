@@ -167,6 +167,8 @@ _SYMBOL_SHAPES = {
 # https://docs.originlab.com/x-function/ref/plotxy/
 # 0xe7/0xe9 remain unmapped -- never guessed.
 _CONNECT_STYLE = {0xC8: "line", 0xC9: "scatter", 0xCA: "line_symbol"}
+_LINE_CONNECT_OFF = 17
+_LINE_CONNECT = {0: "straight", 1: "segment2"}
 
 # ── auto/increment colours (2026-07-06, §13.2 #2) ────────────────────────────
 #
@@ -255,6 +257,10 @@ def style_fields(record: bytes) -> dict[str, str | float]:
     style = _CONNECT_STYLE.get(record[_STYLE_BYTE_OFF])
     if style:
         out["style"] = style
+        if style != "scatter":
+            connect = _LINE_CONNECT.get(record[_LINE_CONNECT_OFF])
+            if connect:
+                out["connect"] = connect
     shape = _SYMBOL_SHAPES.get(record[_SYMBOL_KIND_OFF])
     if shape:
         out["symbol"] = shape

@@ -421,8 +421,8 @@ Official model references used for this routing:
 
 ### Tier 2 — close corpus-visible plot mismatches
 
-52. **Curve and axis fidelity campaign.** **IN PROGRESS: first oracle-backed
-    curve-style slice on `codex/origin-curve-axis-fidelity`.** Drive this item from the existing
+52. **Curve and axis fidelity campaign.** **IN PROGRESS: plot type/width/size
+    merged in PR #29; two-point connection slice active.** Drive this item from the existing
     Origin↔Quantized gallery and structural report, ordered by how many real
     graphs visibly differ.
     - Per-curve visibility/hidden state, using new independent ground truth;

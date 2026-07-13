@@ -118,6 +118,8 @@ def _recovered_groups(fig: dict[str, Any]) -> list[str]:
             recovered.append("symbol_size")
         if any(isinstance(c, dict) and c.get("style") == "line_symbol" for c in curves):
             recovered.append("line_symbol_mode")
+        if any(isinstance(c, dict) and c.get("connect") == "segment2" for c in curves):
+            recovered.append("two_point_segments")
     return recovered
 
 

@@ -39,6 +39,22 @@ _LINESTYLE = {"solid": "-", "dashed": "--", "dotted": ":"}
 _FILL_ALPHA = 0.25
 
 
+def _segment2_data(
+    x: NDArray[np.float64], y: NDArray[np.float64]
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Insert NaN gaps after each independent pair (Origin connect=2)."""
+    n = min(len(x), len(y))
+    pairs = n // 2
+    out_x = np.full(pairs * 3, np.nan, dtype=float)
+    out_y = np.full(pairs * 3, np.nan, dtype=float)
+    for pair in range(pairs):
+        src = pair * 2
+        dst = pair * 3
+        out_x[dst : dst + 2] = x[src : src + 2]
+        out_y[dst : dst + 2] = y[src : src + 2]
+    return out_x, out_y
+
+
 def _plot_kwargs(
     default_lw: float, default_marker_size: float, spec: Mapping[str, Any] | None
 ) -> dict[str, Any]:
@@ -218,7 +234,10 @@ def draw_series_axes(
             artists.append(_draw_color_scatter(fig, ax, xv, yv, label, spec, st))
             continue
         kw = _plot_kwargs(st.line_width, st.marker_size, spec)
-        (line,) = ax.plot(xv, yv, label=label, **kw)
+        draw_x, draw_y = (xv, yv)
+        if spec and spec.get("connect") == "segment2":
+            draw_x, draw_y = _segment2_data(xv, yv)
+        (line,) = ax.plot(draw_x, draw_y, label=label, **kw)
         _apply_fill(ax, xv, yv, series, i, spec, line.get_color())
         artists.append(line)
     apply_axis_scale(ax, "x", resolve_axis_scale(x_scale, x_log))

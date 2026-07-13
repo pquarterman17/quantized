@@ -30,7 +30,10 @@ const MARKER_SHAPES: ReadonlySet<string> = new Set([
  *  marker glyph). Returns null when nothing was decoded, so callers leave that
  *  series to the default trace/palette rather than forcing a look. */
 export function originCurveSeriesStyle(
-  curve: Pick<OriginCurve, "style" | "color" | "symbol" | "lineWidth" | "symbolSize"> | undefined,
+  curve: Pick<
+    OriginCurve,
+    "style" | "connect" | "color" | "symbol" | "lineWidth" | "symbolSize"
+  > | undefined,
 ): SeriesStyle | null {
   if (!curve) return null;
   const out: SeriesStyle = {};
@@ -41,6 +44,7 @@ export function originCurveSeriesStyle(
     out.width = 1.5;
     if (curve.style === "line_symbol") out.marker = true;
   }
+  if (curve.connect) out.connect = curve.connect;
   if (curve.color && /^#[0-9a-fA-F]{6}$/.test(curve.color)) out.color = curve.color;
   if (curve.symbol && MARKER_SHAPES.has(curve.symbol)) {
     out.marker = true;
