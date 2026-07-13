@@ -272,6 +272,13 @@ def test_series_style_line_gets_a_default_width_overridden_by_decoded_one() -> N
     assert _series_style({"style": "line", "lineWidth": 2.5}) == {"width": 2.5}
 
 
+def test_series_style_line_symbol_keeps_both_encodings() -> None:
+    assert _series_style({"style": "line_symbol", "lineWidth": 2.0}) == {
+        "width": 2.0,
+        "marker": True,
+    }
+
+
 def test_series_style_symbol_turns_marker_on_without_a_shape_field() -> None:
     out = _series_style({"symbol": "circle", "symbolSize": 6.0})
     assert out == {"marker": True, "marker_size": 6.0}

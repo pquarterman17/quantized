@@ -152,10 +152,10 @@ export interface OriginCurve {
   x: string;
   y: string;
   /** Plot style decoded from the curve's style record: "line" (Origin
-   *  plot:=200) or "scatter" (plot:=201). Absent when the importer couldn't
-   *  recover it (unmapped bytes, e.g. Origin's line+symbol) — the default
-   *  trace then stands. */
-  style?: "line" | "scatter";
+   *  plot:=200), "scatter" (plot:=201), or "line_symbol" (plot:=202).
+   *  Absent when the importer cannot recover it from the record — the default
+   *  trace then stands for any unrecognized plot type. */
+  style?: "line" | "scatter" | "line_symbol";
   /** Origin's plot color as "#RRGGBB", decoded from the curve style record
    *  (io/origin_project/curve_style_color.py: direct-RGB and classic-palette
    *  ocolors). Absent for "auto/increment" colors and anything undecodable —
@@ -165,9 +165,8 @@ export interface OriginCurve {
    *  square/circle/triangle/...). Absent when the plot has no symbols or the
    *  kind is unmapped. */
   symbol?: string;
-  /** Not currently emitted: Origin's on-disk line-width/symbol-size fields
-   *  failed oracle verification (scaled-graph cases), so the backend omits
-   *  them rather than ship wrong values. Typed so a future decode flows. */
+  /** Oracle-verified point sizes from the shared curve record's 1/500-pt
+   *  fields (92/92 exact across both containers). */
   lineWidth?: number;
   symbolSize?: number;
 }

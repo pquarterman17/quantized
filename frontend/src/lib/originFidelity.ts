@@ -14,11 +14,14 @@ const LABELS: Record<string, string> = {
   filtered_internal_graph_records: "internal graph records filtered",
   graphic_objects: "drawn arrows and shapes",
   layer_geometry: "layer geometry",
+  line_symbol_mode: "line + symbol mode",
+  line_width: "line widths",
   no_graph_records: "no graph records found",
   rich_text_run_formatting: "per-run rich-text formatting",
   saved_graph_preview: "saved Origin preview",
   some_curve_colors: "some curve colors",
   some_curve_styles: "some curve styles",
+  symbol_size: "symbol sizes",
 };
 
 export function originFidelityLabel(code: string): string {

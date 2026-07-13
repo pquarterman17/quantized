@@ -130,9 +130,9 @@ describe("originCurveSeriesStyle", () => {
     ).toEqual({ marker: true, width: 0, color: "#515151", markerShape: "circle" });
   });
 
-  it("styles a curve with color/symbol but no line-vs-scatter decode", () => {
-    // e.g. Origin's line+symbol plots: style byte unmapped, but color and
-    // symbol kind decoded — apply both without forcing a trace shape.
+  it("styles a curve with color/symbol when its plot type is unknown", () => {
+    // The e7/e9 plot families remain unmapped, but independently decoded
+    // color and symbol fields still apply without forcing a trace shape.
     expect(originCurveSeriesStyle({ color: "#FF8000", symbol: "square" })).toEqual({
       color: "#FF8000",
       marker: true,
@@ -156,6 +156,14 @@ describe("originCurveSeriesStyle", () => {
     ).toEqual({ marker: true, width: 0, markerShape: "circle", markerSize: 9 });
     // symbolSize without any marker means nothing to size — ignored
     expect(originCurveSeriesStyle({ style: "line", symbolSize: 9 })).toEqual({ width: 1.5 });
+    expect(
+      originCurveSeriesStyle({
+        style: "line_symbol",
+        symbol: "triangle",
+        lineWidth: 2,
+        symbolSize: 7,
+      }),
+    ).toEqual({ marker: true, width: 2, markerShape: "triangle", markerSize: 7 });
   });
 
   it("never lets the latent stored lineWidth draw a line on a scatter plot", () => {
@@ -164,7 +172,7 @@ describe("originCurveSeriesStyle", () => {
     expect(
       originCurveSeriesStyle({ style: "scatter", lineWidth: 0.5, symbolSize: 9, symbol: "square" }),
     ).toEqual({ marker: true, width: 0, markerShape: "square", markerSize: 9 });
-    // undetermined style (line+symbol plots): decoded width still applies
+    // undetermined plot family: decoded width still applies
     expect(
       originCurveSeriesStyle({ lineWidth: 2, symbol: "circle", symbolSize: 6 }),
     ).toEqual({ width: 2, marker: true, markerShape: "circle", markerSize: 6 });

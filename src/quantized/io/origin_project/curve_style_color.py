@@ -1,4 +1,4 @@
-"""Per-curve visual style (color / symbol kind / line-vs-scatter) for Origin
+"""Per-curve visual style (color / symbol kind / plot type) for Origin
 graph curves -- shared by BOTH containers (solved 2026-07-06 against the
 4-stem ``curve_style.json`` oracle: ``hc2convert`` (.opj), ``Hc2 data``,
 ``RockingCurve``, ``UnpolPlots`` (.opju)).
@@ -33,11 +33,13 @@ variants -- the 4-byte size difference sits past offset 492):
 
 * offset 23 -- **symbol kind** (Origin's symbol-gallery index; 0 = none).
   Oracle-verified 49/49 (.opj) + 43/43 (.opju).
-* offset 76 -- the **line-vs-scatter byte** (``0xc8`` line / ``0xc9``
+* offset 76 -- the **plot-type byte** (``0xc8`` line / ``0xc9``
   scatter -- the very byte ``opju_codec.curve_plot_style``'s
   ``8f 01 <style> 83`` tag writes: that tag is this record's sparse chunk
-  for offset 76). ``0xca`` (Moke) and ``0xe7``/``0xe9`` (PNR corpus) also
-  occur; unmapped -- omitted, never guessed.
+  for offset 76). ``0xca`` is line + symbol: OriginLab's official ``plotxy``
+  reference maps plot ids 200/201/202 to line/scatter/line+symbol, matching
+  these bytes exactly. ``0xe7``/``0xe9`` (PNR corpus) remain unmapped --
+  omitted, never guessed.
 * offsets 302-305 -- a constant ``0xFFFFFFF7`` "auto" sentinel u32.
 * offsets 306-309 -- the **symbol color** (ocolor u32 LE), terminator
   ``0xff`` at 310 (the validity gate: hc2convert's 24 non-oracle anchors
@@ -160,9 +162,11 @@ _SYMBOL_SHAPES = {
     8: "star",
 }
 
-# Same byte table opju_codec._STYLE_BYTES validated (fig_pairs oracle);
-# 0xca/0xe7/0xe9 also occur in the corpus but are unmapped -- never guessed.
-_CONNECT_STYLE = {0xC8: "line", 0xC9: "scatter"}
+# Same byte table opju_codec._STYLE_BYTES validated (fig_pairs oracle).
+# 0xca = Origin plot:=202, officially documented as line + symbol:
+# https://docs.originlab.com/x-function/ref/plotxy/
+# 0xe7/0xe9 remain unmapped -- never guessed.
+_CONNECT_STYLE = {0xC8: "line", 0xC9: "scatter", 0xCA: "line_symbol"}
 
 # ── auto/increment colours (2026-07-06, §13.2 #2) ────────────────────────────
 #
@@ -241,7 +245,8 @@ def style_fields(record: bytes) -> dict[str, str | float]:
     """Decoded per-curve style keys from one curve-anchor record (raw ``.opj``
     payload or :func:`opju_style_record` reconstruction): any of ``color``
     (``"#RRGGBB"``), ``symbol`` (marker shape name), ``style``
-    (``"line"``/``"scatter"``), ``lineWidth`` / ``symbolSize`` (points, the
+    (``"line"``/``"scatter"``/``"line_symbol"``), ``lineWidth`` /
+    ``symbolSize`` (points, the
     1/500-pt u16 fields at offsets 21/25 — 92/92 oracle-exact). Undecodable
     or implausible fields are simply absent, never defaulted."""
     out: dict[str, str | float] = {}

@@ -14,8 +14,8 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-12 (#48–#50 completed in PRs #25–#27; #51 saved graph
-previews implemented on `codex/origin-saved-previews`, awaiting review). Prior:
+**Updated:** 2026-07-12 (#48–#51 completed in PRs #25–#28; #52 curve and axis
+fidelity in progress). Prior:
 booked the owner-prioritized **Plot Fidelity +
 Workbook Fallback campaign**, items #48–#56. Governing outcome: recover an
 Origin graph as an editable Quantized plot as exactly as the file and proven
@@ -406,8 +406,8 @@ Official model references used for this routing:
     - Unresolved bindings remain visible with their raw Origin hint/id and a
       manual source picker; never choose a similarly named book silently.
 
-51. **Recover and attribute saved graph previews.** **IMPLEMENTED on
-    `codex/origin-saved-previews`; awaiting PR review.** Inventory the embedded PNG/
+51. ~~**Recover and attribute saved graph previews.**~~ **COMPLETE 2026-07-12
+    (PR #28).** Inventory the embedded PNG/
     bitmap/EMF preview records already observed in both containers and attach
     them to graph pages by proven page/window boundaries or ids.
     - Reuse `preview.py` where the record family matches; split graph-preview
@@ -421,7 +421,8 @@ Official model references used for this routing:
 
 ### Tier 2 — close corpus-visible plot mismatches
 
-52. **Curve and axis fidelity campaign.** Drive this item from the existing
+52. **Curve and axis fidelity campaign.** **IN PROGRESS: first oracle-backed
+    curve-style slice on `codex/origin-curve-axis-fidelity`.** Drive this item from the existing
     Origin↔Quantized gallery and structural report, ordered by how many real
     graphs visibly differ.
     - Per-curve visibility/hidden state, using new independent ground truth;

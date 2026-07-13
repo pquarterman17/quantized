@@ -153,8 +153,8 @@ def _series_style(fields: _StyleFields) -> dict[str, Any] | None:
     already-shipped rule for applying a decoded Origin curve's style to a
     plot) but targeting the *export* style shape a saved template carries:
     "scatter" -> markers, no connecting line (``width: 0``); "line" -> a
-    solid line at the default 1.5pt width; a decoded ``lineWidth`` overrides
-    that default (never on a scatter curve -- Origin stores a latent line
+    solid line at the default 1.5pt width; "line_symbol" -> both; a decoded
+    ``lineWidth`` overrides that default (never on a scatter curve -- Origin stores a latent line
     width even on symbol-only plots); a decoded ``symbolSize`` sets
     ``marker_size`` only once a marker is already on. No ``markerShape`` key
     exists in ``ExportSeriesStyle``, so a decoded ``symbol`` only turns
@@ -167,8 +167,10 @@ def _series_style(fields: _StyleFields) -> dict[str, Any] | None:
     if style == "scatter":
         out["marker"] = True
         out["width"] = 0
-    elif style == "line":
+    elif style in ("line", "line_symbol"):
         out["width"] = 1.5
+        if style == "line_symbol":
+            out["marker"] = True
     color = fields.get("color")
     if isinstance(color, str) and _HEX_RE.match(color):
         out["color"] = color
