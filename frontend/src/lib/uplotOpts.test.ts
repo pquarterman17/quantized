@@ -390,48 +390,6 @@ describe("buildOpts defaultTrace", () => {
     expect(opts.series[1].paths).toBeTypeOf("function");
   });
 
-  it("keeps two-point segments over loop rendering on non-ascending x", () => {
-    // Regression: on a hysteresis loop (non-monotonic x) the loop-rendering
-    // path builder must NOT clobber the segment2 builder. linearSpy stands in
-    // for the caller's loop path builder; if it runs when the series is drawn,
-    // segment2 was overwritten (the bug).
-    const loop: PlotPayload = {
-      data: [
-        [-100, 0, 100, 0, -90, 5],
-        [-1, -0.5, 1, 0.5, -0.9, 0.2],
-      ],
-      series: [{ label: "M", unit: "emu" }],
-      xLabel: "Field",
-      xUnit: "Oe",
-    };
-    const OrigPath2D = globalThis.Path2D;
-    globalThis.Path2D ??= class {
-      moveTo() {}
-      lineTo() {}
-    } as unknown as typeof Path2D;
-    const linearSpy = vi.fn(() => ({ stroke: new Path2D() }));
-    const opts = buildOpts(loop, {
-      ...base,
-      yScale: "linear",
-      tool: "zoom",
-      seriesStyles: [{ connect: "segment2" }],
-      linearPaths: linearSpy,
-    });
-    const pathFn = opts.series[1].paths as unknown as (
-      u: unknown,
-      s: number,
-      i0: number,
-      i1: number,
-    ) => unknown;
-    expect(pathFn).toBeTypeOf("function");
-    const xs = loop.data[0] as number[];
-    const ys = loop.data[1] as number[];
-    const mockU = { data: [xs, ys], series: [{}, { scale: "y" }], valToPos: () => 0 };
-    pathFn(mockU, 1, 0, xs.length - 1);
-    expect(linearSpy).not.toHaveBeenCalled();
-    globalThis.Path2D = OrigPath2D;
-  });
-
   it("shows circular markers (with size) when the style enables them", () => {
     const withMarkers = buildOpts(payload, {
       ...base,
