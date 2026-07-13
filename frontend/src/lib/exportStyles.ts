@@ -11,6 +11,7 @@ export interface ExportSeriesStyle {
   color?: string;
   width?: number;
   line?: string;
+  connect?: "straight" | "segment2";
   marker?: boolean;
   marker_size?: number;
   /** Fill under/between curves (MAIN #13) — mirrors `SeriesStyle.fill`, but
@@ -40,6 +41,7 @@ export function buildExportStyles(
     if (hex) spec.color = hex;
     if (st?.width != null) spec.width = st.width;
     if (st?.line) spec.line = st.line;
+    if (st?.connect) spec.connect = st.connect;
     if (st?.marker) {
       spec.marker = true;
       if (st.markerSize != null) spec.marker_size = st.markerSize;

@@ -25,7 +25,7 @@ The fidelity manifest now reports `line_symbol_mode`, `line_width`, and
 `symbol_size` when present, so the UI and future corpus acceptance matrix do
 not understate what was recovered.
 
-## Connection-mode candidate (not yet shipped)
+## Verified connection mode
 
 A read-only comparison of 69 shared curve records against Origin COM dumps
 found zero contradictions for byte 17:
@@ -35,11 +35,10 @@ found zero contradictions for byte 17:
 | `0` | `1` | straight |
 | `1` | `2` | two-point segments |
 
-This is strong decoding evidence, but two-point segments require alternating
-pair strokes and gaps. The current uPlot series model has no native setting for
-that path. Do not expose this field until a custom path builder and publication
-renderer reproduce it in both interactive and export views. Official connection
-codes are documented at
+Two-point segments are now rendered as alternating pair strokes and gaps by a
+custom uPlot path and by NaN-separated pairs in matplotlib publication export.
+Straight remains an explicit decoded value and uses each renderer's normal line
+path. Official connection codes are documented at
 <https://docs.originlab.com/labtalk/ref/get_options_for_lines/de>.
 
 ## Remaining item 52 work

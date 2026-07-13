@@ -105,6 +105,13 @@ describe("resolveFigureDataset", () => {
 });
 
 describe("originCurveSeriesStyle", () => {
+  it("preserves Origin two-point segment connections", () => {
+    expect(originCurveSeriesStyle({ style: "line", connect: "segment2" })).toEqual({
+      width: 1.5,
+      connect: "segment2",
+    });
+  });
+
   it("maps scatter/line as before (no color/symbol decoded)", () => {
     expect(originCurveSeriesStyle({ style: "scatter" })).toEqual({ marker: true, width: 0 });
     expect(originCurveSeriesStyle({ style: "line" })).toEqual({ width: 1.5 });

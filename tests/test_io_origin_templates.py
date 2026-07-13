@@ -101,7 +101,9 @@ def test_otp_synthetic_template_decodes_axis_and_curve_style(tmp_path: Path) -> 
     assert out["name"] == "specimen"
     assert out["style"] == "default"
     assert out["overrides"] == {"x_lim": [0.0, 10.0], "y_lim": [0.0, 100.0]}
-    assert out["seriesStyles"] == [{"width": 3.0, "color": "#F14040"}]
+    assert out["seriesStyles"] == [
+        {"width": 3.0, "connect": "straight", "color": "#F14040"}
+    ]
 
 
 def test_otp_synthetic_template_no_workbook_never_needed() -> None:
@@ -253,7 +255,9 @@ def test_partial_when_curves_decode_but_no_layer(tmp_path: Path) -> None:
     path.write_bytes(blob)
     out = read_origin_template(path)
     assert out["overrides"] is None
-    assert out["seriesStyles"] == [{"width": 3.0, "color": "#F14040"}]
+    assert out["seriesStyles"] == [
+        {"width": 3.0, "connect": "straight", "color": "#F14040"}
+    ]
 
 
 # ── pure mapper unit tests ─────────────────────────────────────────────────────
