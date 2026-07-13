@@ -14,8 +14,9 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-12 (#48 and #49 completed in PRs #25 and #26; #50 is
-the active delivery slice). Prior: booked the owner-prioritized **Plot Fidelity +
+**Updated:** 2026-07-12 (#48–#50 completed in PRs #25–#27; #51 saved graph
+previews implemented on `codex/origin-saved-previews`, awaiting review). Prior:
+booked the owner-prioritized **Plot Fidelity +
 Workbook Fallback campaign**, items #48–#56. Governing outcome: recover an
 Origin graph as an editable Quantized plot as exactly as the file and proven
 format knowledge allow; when any property cannot be reconstructed, preserve
@@ -392,8 +393,8 @@ Official model references used for this routing:
     - Keep raw/project inventory in a project-level artifact so filtering the
       Library never destroys provenance needed by later decoders.
 
-50. **Exact source-workbook and remake actions.** **IMPLEMENTED on
-    `codex/origin-workbook-fallback`; awaiting PR review.** Add first-class actions on
+50. ~~**Exact source-workbook and remake actions.**~~ **COMPLETE 2026-07-12
+    (PR #27).** Add first-class actions on
     every Origin figure: **Open source workbook(s)** and **Remake in Graph
     Builder**.
     - Resolve pending books before opening; focus the actual sheet pseudo-book
@@ -405,7 +406,8 @@ Official model references used for this routing:
     - Unresolved bindings remain visible with their raw Origin hint/id and a
       manual source picker; never choose a similarly named book silently.
 
-51. **Recover and attribute saved graph previews.** Inventory the embedded PNG/
+51. **Recover and attribute saved graph previews.** **IMPLEMENTED on
+    `codex/origin-saved-previews`; awaiting PR review.** Inventory the embedded PNG/
     bitmap/EMF preview records already observed in both containers and attach
     them to graph pages by proven page/window boundaries or ids.
     - Reuse `preview.py` where the record family matches; split graph-preview
@@ -476,7 +478,7 @@ Official model references used for this routing:
 
 - **PR 1 (complete):** #48 + #49 correctness, diagnostics, corpus regressions
   shipped as PRs #25 and #26.
-- **PR 2 (1–2 days):** #50 workbook/Graph Builder fallback.
+- **PR 2 (complete):** #50 workbook/Graph Builder fallback shipped as PR #27.
 - **PR 3 (1–2 days):** #51 original-preview preservation and comparison UI.
 - **PR 4 (2–4 days):** #52 + #53 highest-frequency visual mismatches.
 - **PR 5 (as evidence requires):** #54 layout generalization + #55 acceptance.
@@ -665,6 +667,12 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**#50 Exact source-workbook and Graph Builder fallback**~~ (2026-07-12,
+  PR #27) — every decoded figure exposes its exact import-scoped source books
+  and X/Y/error columns, resolves lazy data before opening, supports explicit
+  manual binding, and seeds single-/cross-book remakes through the existing
+  provenance-stamped overlay path.
 
 - ~~**#49 Per-graph fidelity manifest + actionable-figure gate**~~
   (2026-07-12, PR #26) — added versioned project/figure fidelity diagnostics,

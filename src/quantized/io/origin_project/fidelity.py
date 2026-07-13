@@ -12,6 +12,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, Literal, TypedDict
 
+from quantized.io.origin_project.graph_preview import PreviewDiagnostic
+
 __all__ = ["assess_origin_figures", "origin_figure_decode_failure"]
 
 FidelityStatus = Literal["exact", "best_effort", "reference_only", "unresolved"]
@@ -39,6 +41,7 @@ class OriginFidelityManifest(TypedDict):
     graph_records_filtered: int
     omissions: list[str]
     filtered_figures: list[FilteredFigure]
+    preview_diagnostics: list[PreviewDiagnostic]
 
 
 def origin_figure_decode_failure(
@@ -54,11 +57,11 @@ def origin_figure_decode_failure(
         "graph_records_filtered": 0,
         "omissions": ["figure_decode_error"],
         "filtered_figures": [],
+        "preview_diagnostics": [],
     }
 
 
 _ALWAYS_OMITTED = [
-    "saved_graph_preview",
     "graphic_objects",
     "rich_text_run_formatting",
     "advanced_axis_types",
@@ -87,6 +90,8 @@ def _filter_reason(fig: dict[str, Any], sources: tuple[str, ...]) -> str | None:
 
 def _recovered_groups(fig: dict[str, Any]) -> list[str]:
     recovered = ["axis_ranges", "axis_scales"]
+    if fig.get("saved_preview"):
+        recovered.append("saved_graph_preview")
     if fig.get("curves"):
         recovered.extend(("curve_bindings", "curve_order"))
     if fig.get("x_title") is not None or fig.get("y_title") is not None:
@@ -112,6 +117,8 @@ def _recovered_groups(fig: dict[str, Any]) -> list[str]:
 
 def _figure_fidelity(fig: dict[str, Any]) -> FigureFidelity:
     omissions = list(_ALWAYS_OMITTED)
+    if not fig.get("saved_preview"):
+        omissions.append("saved_graph_preview")
     curves = fig.get("curves")
     if not curves:
         omissions.append("exact_curve_bindings")
@@ -136,6 +143,7 @@ def assess_origin_figures(
     *,
     container: Literal["opj", "opju"],
     source_names: Iterable[str] = (),
+    preview_diagnostics: list[PreviewDiagnostic] | None = None,
 ) -> tuple[list[dict[str, Any]], OriginFidelityManifest]:
     """Return actionable annotated figures plus a loss-aware project manifest."""
     actionable: list[dict[str, Any]] = []
@@ -173,5 +181,6 @@ def assess_origin_figures(
         "graph_records_filtered": len(filtered),
         "omissions": sorted(project_omissions),
         "filtered_figures": filtered,
+        "preview_diagnostics": preview_diagnostics or [],
     }
     return actionable, manifest

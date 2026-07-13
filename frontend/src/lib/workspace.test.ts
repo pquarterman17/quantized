@@ -345,6 +345,25 @@ describe("workspace originFigures persistence", () => {
     expect(loaded.originFigures[0].figure).toEqual(originFig());
   });
 
+  it("preserves original saved-preview bytes and attribution metadata", () => {
+    const saved_preview = {
+      format: "png" as const,
+      mime: "image/png" as const,
+      width: 200,
+      height: 155,
+      sha256: "b".repeat(64),
+      data: "iVBORw0KGgo=",
+      confidence: "exact_page" as const,
+      page_name: "Graph1",
+    };
+    const entry = figEntry({ figure: originFig({ saved_preview }) });
+    const loaded = parseWorkspace(serializeWorkspace({
+      datasets: [makeDataset("a", "first")],
+      originFigures: [entry],
+    }));
+    expect(loaded.originFigures[0].figure.saved_preview).toEqual(saved_preview);
+  });
+
   it("clamps a dangling datasetId to null and prunes dead siblingIds", () => {
     // Figure references dataset "gone", which is not in the library on reload.
     const datasets = [makeDataset("a", "first")];

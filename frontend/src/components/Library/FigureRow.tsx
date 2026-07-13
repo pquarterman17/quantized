@@ -8,8 +8,11 @@
 // instead of overwriting the focused one — the payoff for an `.opj` import
 // with many graph windows.
 
+import { useState } from "react";
+
 import { originFidelityLabel, originFidelityStatusLabel } from "../../lib/originFidelity";
 import { figureLabel, type OriginFigureEntry } from "../../lib/originFigures";
+import { originPreviewDataUrl } from "../../lib/originPreview";
 import { resolveOriginFigureSources } from "../../lib/originSources";
 import { useApp } from "../../store/useApp";
 
@@ -20,6 +23,8 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
   const figures = useApp((s) => s.originFigures);
   const datasets = useApp((s) => s.datasets);
   const sourceResolution = resolveOriginFigureSources(entry, figures, datasets);
+  const [showSavedPreview, setShowSavedPreview] = useState(false);
+  const savedPreviewSrc = originPreviewDataUrl(entry.figure.saved_preview);
   const siblingDatasets = datasets.filter((ds) => entry.siblingIds.includes(ds.id));
   const resolved = entry.datasetId != null;
   const n = entry.figure.n_curves;
@@ -31,7 +36,8 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
     ? `${entry.stem} — restore axis ranges (${n} curve${n === 1 ? "" : "s"}); ${fidelityText}`
     : `unresolved source "${entry.figure.source_hint || "unknown"}" — no matching imported book`;
   return (
-    <div style={{ display: "flex", gap: 4, alignItems: "stretch" }}>
+    <div className="qzk-origin-figure-row">
+      <div style={{ display: "flex", gap: 4, alignItems: "stretch" }}>
       <button
         className="qzk-fig-item"
         disabled={!resolved}
@@ -72,6 +78,16 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
       >
         G
       </button>
+      {savedPreviewSrc && (
+        <button
+          className="qz-icon-btn"
+          title={showSavedPreview ? "Hide saved Origin preview" : "Show saved Origin preview"}
+          aria-pressed={showSavedPreview}
+          onClick={() => setShowSavedPreview((shown) => !shown)}
+        >
+          ▣
+        </button>
+      )}
       {sourceResolution.unresolved.length > 0 && siblingDatasets.length > 0 && (
         <select
           className="qz-select"
@@ -86,6 +102,21 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
           <option value="" disabled>Choose source…</option>
           {siblingDatasets.map((ds) => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
         </select>
+      )}
+      </div>
+      {showSavedPreview && savedPreviewSrc && entry.figure.saved_preview && (
+        <figure className="qzk-origin-saved-preview" style={depth ? { marginLeft: depth * 14 } : undefined}>
+          <figcaption>
+            Saved Origin preview · compare with the editable graph on the Stage
+          </figcaption>
+          <img
+            src={savedPreviewSrc}
+            width={entry.figure.saved_preview.width}
+            height={entry.figure.saved_preview.height}
+            alt={`Saved Origin preview of ${figureLabel(entry)}`}
+          />
+          <small>File-saved reference; it may be stale or low resolution.</small>
+        </figure>
       )}
     </div>
   );

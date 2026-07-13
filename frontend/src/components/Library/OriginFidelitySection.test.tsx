@@ -30,6 +30,9 @@ describe("OriginFidelitySection", () => {
             filtered_figures: [
               { index: 2, name: "SYSTEM", layer: null, reason: "no bound curves" },
             ],
+            preview_diagnostics: [
+              { page_name: "Book1", status: "workbook_thumbnail", asset_count: 1 },
+            ],
           },
         },
       ],
@@ -41,6 +44,7 @@ describe("OriginFidelitySection", () => {
     expect(screen.getByText(/drawn arrows and shapes/)).toBeInTheDocument();
     expect(screen.getByText(/saved Origin preview/)).toBeInTheDocument();
     expect(screen.getByText(/Filtered: SYSTEM/)).toBeInTheDocument();
+    expect(screen.getByText(/1 workbook thumbnails excluded/)).toBeInTheDocument();
   });
 
   it("collapses the project manifests from the group header", () => {

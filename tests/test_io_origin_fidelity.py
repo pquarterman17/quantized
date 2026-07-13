@@ -64,15 +64,16 @@ def test_manifest_keeps_actionable_figures_and_summarizes_filtered_records() -> 
             "saved_graph_preview",
             "some_curve_colors",
         ],
-        "filtered_figures": [
+            "filtered_figures": [
             {
                 "index": 1,
                 "name": "SYSTEM",
                 "layer": 2,
                 "reason": "no bound curves or source hint",
-            }
-        ],
-    }
+                }
+            ],
+            "preview_diagnostics": [],
+        }
 
 
 def test_source_hint_only_figure_is_retained_but_binding_omission_is_explicit() -> None:
@@ -145,7 +146,6 @@ def test_xmcd_dead_hint_only_records_are_retained_as_diagnostics_not_figures() -
         )
         if name
     }
-
     figures, manifest = assess_origin_figures(
         extract_figures(path.read_bytes()), container="opj", source_names=source_names
     )
@@ -154,3 +154,16 @@ def test_xmcd_dead_hint_only_records_are_retained_as_diagnostics_not_figures() -
     assert manifest["graph_records_actionable"] == len(figures) == 67
     assert manifest["graph_records_filtered"] == 61
     assert all(f["reason"].startswith("source hint") for f in manifest["filtered_figures"])
+
+
+def test_saved_preview_moves_from_omissions_to_recovered() -> None:
+    raw = [{
+        "name": "Graph1",
+        "curves": [{"book": "Book1", "x": "A", "y": "B"}],
+        "saved_preview": {"format": "png", "data": "AA=="},
+    }]
+    figures, manifest = assess_origin_figures(raw, container="opju")
+    fidelity = figures[0]["fidelity"]
+    assert "saved_graph_preview" in fidelity["recovered"]
+    assert "saved_graph_preview" not in fidelity["omissions"]
+    assert "saved_graph_preview" not in manifest["omissions"]
