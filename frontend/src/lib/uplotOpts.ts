@@ -1202,7 +1202,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       // no per-series line-shape override, so it's a global default).
       if (!def.paths && trace === "Step" && !style?.line && args.steppedPaths) {
         def.paths = xAscending ? args.steppedPaths : fullLine(args.steppedPaths);
-      } else if (!xAscending && width > 0 && args.linearPaths) {
+      } else if (!def.paths && !xAscending && width > 0 && args.linearPaths) {
         // Loop rendering: draw the line over every point in acquisition order.
         def.paths = fullLine(args.linearPaths);
       }
