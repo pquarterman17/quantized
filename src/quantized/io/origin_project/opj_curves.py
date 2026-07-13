@@ -136,6 +136,7 @@ __all__ = [
     "book_x_columns",
     "column_id_map",
     "extract_curves",
+    "x_columns_from_designations",
 ]
 
 # The curve-anchor record's fixed 4-byte marker (see module docstring).
@@ -258,6 +259,27 @@ def book_column_designations(
     return order
 
 
+def x_columns_from_designations(
+    order: dict[str, list[tuple[str, int]]],
+) -> dict[str, str]:
+    """Collapse a :func:`book_column_designations` result to each book's single
+    book-level X: the first X-designated (byte ``3``) column of the primary
+    sheet, falling back to that sheet's first column when none is marked X.
+
+    Split out so a caller that already holds the ordered designations (e.g.
+    ``figures.extract_figures``, which needs the full per-curve ``col_order``
+    anyway) can derive the fallback X WITHOUT walking the block list a second
+    time -- the walk in :func:`book_column_designations` is the expensive part
+    on large projects (PNR.opj import perf)."""
+    out: dict[str, str] = {}
+    for book, cols in order.items():
+        if not cols:
+            continue
+        x_col = next((c for c, d in cols if d == _DESIGNATION_X), None)
+        out[book] = x_col if x_col is not None else cols[0][0]
+    return out
+
+
 def book_x_columns(blocks: Sequence[tuple[int, bytes]]) -> dict[str, str]:
     """book -> its designated X column's short name (structural inference).
 
@@ -268,13 +290,7 @@ def book_x_columns(blocks: Sequence[tuple[int, bytes]]) -> dict[str, str]:
     ``opju_curves.py``'s X. Retained as the columnless/last-resort fallback in
     :func:`extract_curves`; per-curve X now prefers the nearest preceding X.
     """
-    out: dict[str, str] = {}
-    for book, cols in book_column_designations(blocks).items():
-        if not cols:
-            continue
-        x_col = next((c for c, d in cols if d == _DESIGNATION_X), None)
-        out[book] = x_col if x_col is not None else cols[0][0]
-    return out
+    return x_columns_from_designations(book_column_designations(blocks))
 
 
 def _nearest_preceding_x(order: Sequence[tuple[str, int]], y_short: str) -> str | None:

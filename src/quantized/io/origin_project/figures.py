@@ -162,8 +162,8 @@ from quantized.io.origin_project.figure_layers import _build_layer, _is_layer_bl
 from quantized.io.origin_project.figure_text import distribute_legend_layers
 from quantized.io.origin_project.opj_curves import (
     book_column_designations,
-    book_x_columns,
     column_id_map,
+    x_columns_from_designations,
 )
 from quantized.io.origin_project.windows import _is_window_header
 
@@ -175,8 +175,11 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
     snapshot dict -- one dict per layer (see module docstring)."""
     blocks = [(size, payload) for size, payload in walk_blocks(b) if size]
     id_map = column_id_map(blocks)
-    x_columns = book_x_columns(blocks)
+    # One walk of the block list: the ordered per-book designations drive both
+    # the per-curve nearest-preceding-X (col_order) and the book-level fallback
+    # X (x_columns) -- deriving the latter in memory avoids a second walk.
     col_order = book_column_designations(blocks)
+    x_columns = x_columns_from_designations(col_order)
     figures: list[dict[str, Any]] = []
 
     n = len(blocks)
