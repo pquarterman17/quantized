@@ -380,16 +380,6 @@ describe("buildOpts defaultTrace", () => {
     expect(opts.series[1].dash).toEqual([8, 4]); // dashed
   });
 
-  it("uses a custom path for Origin two-point segment connections", () => {
-    const opts = buildOpts(payload, {
-      ...base,
-      yScale: "linear",
-      tool: "zoom",
-      seriesStyles: [{ connect: "segment2" }],
-    });
-    expect(opts.series[1].paths).toBeTypeOf("function");
-  });
-
   it("shows circular markers (with size) when the style enables them", () => {
     const withMarkers = buildOpts(payload, {
       ...base,

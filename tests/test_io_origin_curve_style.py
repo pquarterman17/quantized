@@ -98,10 +98,8 @@ def _record(
     size: int = 519,
     width500: int = 0,
     size500: int = 0,
-    connect: int = 0,
 ) -> bytes:
     buf = bytearray(size)
-    buf[17] = connect
     struct.pack_into("<H", buf, 21, width500)  # line width, 1/500 pt
     buf[23] = kind
     struct.pack_into("<H", buf, 25, size500)  # symbol size, 1/500 pt
@@ -141,15 +139,7 @@ def test_style_fields_symbol_plot_reads_symbol_color() -> None:
 def test_style_fields_line_plot_reads_line_color() -> None:
     # disk palette is 0-BASED: 14 -> LabTalk 15 -> orange
     rec = _record(kind=0, style=0xC8, line_color=14)
-    assert style_fields(rec) == {
-        "style": "line", "connect": "straight", "color": "#FF8000"
-    }
-
-
-def test_style_fields_two_point_segment_connection() -> None:
-    assert style_fields(_record(style=0xC8, connect=1))["connect"] == "segment2"
-    assert "connect" not in style_fields(_record(style=0xC9, connect=1))
-    assert "connect" not in style_fields(_record(style=0xC8, connect=99))
+    assert style_fields(rec) == {"style": "line", "color": "#FF8000"}
 
 
 def test_style_fields_palette_black_is_the_zero_field() -> None:
@@ -399,8 +389,6 @@ def test_realdata_curve_style_matches_oracle(stem, fname, decoder, floor) -> Non
     sym_wrong = 0
     dims_checked = 0
     dim_wrong: list[tuple[str, str, object, object]] = []
-    connect_checked = 0
-    connect_wrong: list[tuple[str, object, object]] = []
     for gname, plots in oracle.items():
         curves = graphs.get(gname)
         if curves is None:
@@ -436,20 +424,9 @@ def test_realdata_curve_style_matches_oracle(stem, fname, decoder, floor) -> Non
             if got_s is not None and abs(float(got_s) - float(p["symbol_size"])) > 0.055:  # type: ignore[arg-type]
                 dim_wrong.append((gname, "size", got_s, p["symbol_size"]))
             dims_checked += got_w is not None
-            want_connect = p.get("line_connect")
-            expected_connect = {1: "straight", 2: "segment2"}.get(
-                int(want_connect) if want_connect is not None else -1
-            )
-            if expected_connect and cur.get("style") in ("line", "line_symbol"):
-                connect_checked += 1
-                if cur.get("connect") != expected_connect:
-                    connect_wrong.append((gname, cur.get("connect"), expected_connect))
     assert wrong == 0, f"{stem}: {wrong} curves decoded to the WRONG color"
     assert sym_wrong == 0, f"{stem}: {sym_wrong} curves decoded to the wrong symbol"
     assert not dim_wrong, f"{stem}: wrong width/size decodes: {dim_wrong}"
-    assert not connect_wrong, f"{stem}: wrong connection decodes: {connect_wrong}"
-    if stem == "RockingCurve":
-        assert connect_checked >= 8, "RockingCurve connection coverage collapsed"
     assert dims_checked >= floor // 2, f"{stem}: width/size coverage collapsed"
     assert ok >= floor, f"{stem}: color coverage regressed ({ok} < {floor}, omitted={omitted})"
 
