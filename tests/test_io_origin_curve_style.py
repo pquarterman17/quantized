@@ -155,8 +155,10 @@ def test_style_fields_fail_closed_gates() -> None:
     assert "color" not in style_fields(_record(kind=2, style=0xC9, symbol_color=1, term=0x1E))
     # a disk palette index past the classic table: no color
     assert "color" not in style_fields(_record(kind=2, style=0xC9, symbol_color=24))
-    # unmapped style byte (0xca line+symbol, 0xe7) and unmapped symbol kinds
-    assert "style" not in style_fields(_record(kind=9, style=0xCA, symbol_color=1))
+    # Official Origin plot:=202 / record 0xca is line+symbol. The unknown
+    # symbol kind remains omitted independently.
+    out = style_fields(_record(kind=9, style=0xCA, symbol_color=1))
+    assert out["style"] == "line_symbol" and "symbol" not in out
     assert "symbol" not in style_fields(_record(kind=9, style=0xC8, symbol_color=1))
     # a record too short to hold the line-color field decodes nothing
     assert style_fields(b"\x00" * 100) == {}
@@ -468,6 +470,25 @@ def test_realdata_cross_container_style_matches_opj_and_opju() -> None:
                 )
             checked += 1
     assert checked >= 15, f"only {checked} curves cross-checked -- corpus changed?"
+
+
+@realdata
+def test_realdata_moke_line_symbol_family_is_recovered() -> None:
+    """Moke contains 36 shared-record 0xca curves. The 200/201/202 byte
+    sequence is the official line/scatter/line+symbol plot-id sequence."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    src = _TD / "Moke.opj"
+    if not src.exists():
+        pytest.skip("Moke corpus not present")
+    curves = [
+        curve
+        for figure in extract_figures(src.read_bytes())
+        for curve in figure.get("curves", [])
+        if curve.get("style") == "line_symbol"
+    ]
+    assert len(curves) == 36
+    assert all(curve.get("symbol") and curve.get("lineWidth") for curve in curves)
 
 
 @realdata

@@ -37,8 +37,9 @@ export function originCurveSeriesStyle(
   if (curve.style === "scatter") {
     out.marker = true;
     out.width = 0;
-  } else if (curve.style === "line") {
+  } else if (curve.style === "line" || curve.style === "line_symbol") {
     out.width = 1.5;
+    if (curve.style === "line_symbol") out.marker = true;
   }
   if (curve.color && /^#[0-9a-fA-F]{6}$/.test(curve.color)) out.color = curve.color;
   if (curve.symbol && MARKER_SHAPES.has(curve.symbol)) {

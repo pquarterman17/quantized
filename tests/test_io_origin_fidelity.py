@@ -167,3 +167,19 @@ def test_saved_preview_moves_from_omissions_to_recovered() -> None:
     assert "saved_graph_preview" in fidelity["recovered"]
     assert "saved_graph_preview" not in fidelity["omissions"]
     assert "saved_graph_preview" not in manifest["omissions"]
+
+
+def test_verified_curve_dimensions_and_line_symbol_mode_are_reported() -> None:
+    raw = [{
+        "name": "Graph1",
+        "curves": [{
+            "book": "Book1", "x": "A", "y": "B",
+            "style": "line_symbol", "symbol": "circle",
+            "lineWidth": 3.0, "symbolSize": 9.0,
+        }],
+    }]
+    figures, _manifest = assess_origin_figures(raw, container="opj")
+    recovered = figures[0]["fidelity"]["recovered"]
+    assert "line_symbol_mode" in recovered
+    assert "line_width" in recovered
+    assert "symbol_size" in recovered
