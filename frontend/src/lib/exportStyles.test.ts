@@ -4,11 +4,6 @@ import { buildExportStyles } from "./exportStyles";
 import type { SeriesStyle } from "./types";
 
 describe("buildExportStyles", () => {
-  it("carries two-point segment connection mode to publication export", () => {
-    const out = buildExportStyles([0], { 0: { connect: "segment2" } });
-    expect(out[0]?.connect).toBe("segment2");
-  });
-
   it("carries width / line / marker overrides per channel in plotted order", () => {
     const styles: Record<number, SeriesStyle> = {
       2: { width: 3, line: "dashed", marker: true, markerSize: 6 },

@@ -171,9 +171,6 @@ def _series_style(fields: _StyleFields) -> dict[str, Any] | None:
         out["width"] = 1.5
         if style == "line_symbol":
             out["marker"] = True
-    connect = fields.get("connect")
-    if connect in ("straight", "segment2") and style != "scatter":
-        out["connect"] = connect
     color = fields.get("color")
     if isinstance(color, str) and _HEX_RE.match(color):
         out["color"] = color

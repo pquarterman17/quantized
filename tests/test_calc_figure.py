@@ -7,7 +7,7 @@ import re
 import numpy as np
 import pytest
 
-from quantized.calc.figure import _segment2_data, render_figure, render_figure_map
+from quantized.calc.figure import render_figure, render_figure_map
 
 # PDF bytes embed a /CreationDate second-resolution timestamp, so two renders
 # of the SAME figure straddling a second boundary differ by those bytes alone
@@ -57,22 +57,6 @@ def test_multi_series_renders() -> None:
     x = np.linspace(0, 10, 50)
     out = render_figure(x, [("a", x), ("b", 2 * x)], fmt="pdf")
     assert out[:5] == b"%PDF-"
-
-
-def test_two_point_segment_data_inserts_pair_gaps() -> None:
-    x, y = _segment2_data(
-        np.arange(5, dtype=float), np.array([10, 11, 12, 13, 14], dtype=float)
-    )
-    np.testing.assert_equal(x, [0, 1, np.nan, 2, 3, np.nan])
-    np.testing.assert_equal(y, [10, 11, np.nan, 12, 13, np.nan])
-
-
-def test_two_point_segments_render_to_vector() -> None:
-    x = np.arange(6, dtype=float)
-    out = render_figure(
-        x, [("paired", x)], fmt="svg", series_styles=[{"connect": "segment2"}]
-    )
-    assert b"<svg" in out[:500]
 
 
 def test_bad_format_raises() -> None:

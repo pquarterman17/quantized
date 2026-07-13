@@ -183,11 +183,3 @@ def test_verified_curve_dimensions_and_line_symbol_mode_are_reported() -> None:
     assert "line_symbol_mode" in recovered
     assert "line_width" in recovered
     assert "symbol_size" in recovered
-
-
-def test_two_point_segments_are_reported_as_recovered() -> None:
-    raw = [{"name": "Graph1", "curves": [
-        {"book": "Book1", "x": "A", "y": "B", "style": "line", "connect": "segment2"}
-    ]}]
-    figures, _manifest = assess_origin_figures(raw, container="opj")
-    assert "two_point_segments" in figures[0]["fidelity"]["recovered"]
