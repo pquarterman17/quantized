@@ -1,32 +1,30 @@
 #!/usr/bin/env python3
 """Build a self-contained Origin-vs-quantized comparison gallery (Artifact-ready).
 
-Turns an ``_exports/<project>/`` directory produced by the figure-comparison
-campaign (Origin COM oracle PNGs at the top level + ``quantized/`` harness
-screenshots, see ``tools/origin_compare/`` and ``tools/visual/origin_figures.mjs``)
-into ONE self-contained HTML file: every image is inlined as a ``data:`` URI, so
-the page renders under a strict CSP with no external requests. That makes it
-publishable as a Claude Code Artifact or openable straight from disk.
+Turns an ``_exports/<project>/`` directory (Origin COM oracle PNGs at the top
+level + ``quantized/`` harness screenshots) into ONE self-contained HTML file:
+every image is inlined as a ``data:`` URI, so the page renders under a strict CSP
+with no external requests. Publishable as an Artifact or openable from disk.
 
-This is the "assemble the gallery" half that used to be done by hand each time.
-Point it at a project, get an HTML file; publish or open it.
+EVERY gallery is stamped in the header with a build timestamp, the git commit the
+quantized side was rendered at, and a human-readable version — so nobody ever
+wonders whether they're looking at a stale image (renders get overwritten in
+place; only the stamp tells you which build a snapshot froze).
 
 Usage
 -----
-    python tools/visual/build_compare_artifact.py Moke
-    python tools/visual/build_compare_artifact.py RockingCurve \
-        --only Graph1,Graph2 --title "Origin segment2 fidelity" \
-        --findings-json findings.json --stats-json stats.json --out out.html
+    QZ_TEST_DATA_ROOT=../test-data python tools/visual/build_compare_artifact.py Moke \
+        --commit $(git -C . rev-parse --short HEAD) --version 0.9.0 --out moke.html
 
-Auto-discovery: pairs ``<project>/quantized/<name>.png`` with the oracle
-``<project>/<name>.png`` of the same short name. Only matched pairs are shown.
+``--commit`` / ``--version`` default to the current git checkout; pass them
+explicitly when the render was produced from a different worktree/commit than the
+one you run this in (they should describe the RENDER, not this script's cwd).
 
-Optional JSON side-cars (both are plain lists; omit either):
-    stats.json     [{"n": "2368 pass", "k": "Full backend suite", "ok": true}, ...]
+Optional JSON side-cars (plain lists; omit either):
+    stats.json     [{"n": "2368 pass", "k": "backend suite", "ok": true}, ...]
     findings.json  [{"kind": "pass|warn|info", "title": "...", "body": "..."}, ...]
 
-Stdlib only. Image dimensions are read straight from the PNG IHDR chunk so no
-imaging library is pulled in (keeps this Apache-2.0-clean tooling tiny).
+Stdlib only. PNG dimensions read from the IHDR chunk (no imaging library).
 """
 
 from __future__ import annotations
@@ -37,7 +35,9 @@ import html
 import json
 import os
 import re
+import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -61,8 +61,30 @@ def find_exports_root(explicit: str | None) -> Path:
     )
 
 
+def git_output(*args: str) -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", *args], capture_output=True, text=True, timeout=5,
+            cwd=Path(__file__).resolve().parent,
+        )
+        return out.stdout.strip() or None if out.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def resolve_stamp(commit: str | None, version: str | None, built: str | None) -> str:
+    """The provenance line: build time · render commit · human version."""
+    ts = built or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    sha = commit or git_output("rev-parse", "--short", "HEAD") or "unknown"
+    ver = version or git_output("describe", "--tags", "--always", "--dirty") or "unversioned"
+    return (
+        f'<span class="s-item">built <b>{esc(ts)}</b></span>'
+        f'<span class="s-item">quantized @ <b>{esc(sha)}</b></span>'
+        f'<span class="s-item">version <b>{esc(ver)}</b></span>'
+    )
+
+
 def png_dims(p: Path) -> tuple[int, int]:
-    """(width, height) from the PNG IHDR chunk (bytes 16:24), big-endian u32."""
     b = p.read_bytes()
     return int.from_bytes(b[16:20], "big"), int.from_bytes(b[20:24], "big")
 
@@ -72,9 +94,7 @@ def data_uri(p: Path) -> str:
 
 
 def natural_key(name: str) -> tuple[object, ...]:
-    """Sort Graph2 < Graph10 < named pages, numerics ascending."""
-    parts = re.split(r"(\d+)", name)
-    return tuple(int(x) if x.isdigit() else x.lower() for x in parts)
+    return tuple(int(x) if x.isdigit() else x.lower() for x in re.split(r"(\d+)", name))
 
 
 def discover_pairs(
@@ -87,20 +107,18 @@ def discover_pairs(
     for qz in sorted(qz_dir.glob("*.png"), key=lambda p: natural_key(p.stem)):
         oracle = proj_dir / qz.name
         if not oracle.is_file():
-            continue  # no ground-truth for this render — skip, never invent
+            continue
         if only and qz.stem not in only:
             continue
         pairs.append((qz.stem, oracle, qz))
     if cap and len(pairs) > cap:
-        dropped = len(pairs) - cap
-        print(f"note: {len(pairs)} pairs found; embedding first {cap} "
-              f"({dropped} omitted — pass --max 0 for all or --only to pick)",
-              file=sys.stderr)
+        print(f"note: {len(pairs)} pairs; embedding first {cap} "
+              f"(--max 0 for all, or --only to pick)", file=sys.stderr)
         pairs = pairs[:cap]
     return pairs
 
 
-def esc(s: str) -> str:
+def esc(s: object) -> str:
     return html.escape(str(s), quote=True)
 
 
@@ -122,9 +140,13 @@ line-height:1.55;-webkit-font-smoothing:antialiased;}
 .wrap{max-width:1120px;margin:0 auto;padding:48px 24px 72px;}
 .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
 color:var(--accent);margin:0 0 14px;}
-h1{font-size:clamp(28px,4vw,42px);line-height:1.08;margin:0 0 12px;text-wrap:balance;letter-spacing:-.01em;}
+h1{font-size:clamp(28px,4vw,42px);line-height:1.08;margin:0 0 16px;text-wrap:balance;letter-spacing:-.01em;}
+.stamp{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 18px;padding:11px 15px;
+background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+font-family:var(--mono);font-size:12.5px;color:var(--muted);}
+.stamp b{color:var(--text);font-weight:600;}
 .lede{color:var(--muted);font-size:17px;max-width:66ch;margin:0;}
-.lede code{font-family:var(--mono);font-size:.9em;color:var(--text);}
+.lede code,.find code{font-family:var(--mono);font-size:.9em;color:var(--text);}
 section{margin-top:52px;}
 h2{font-size:13px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.14em;
 color:var(--muted);margin:0 0 20px;padding-bottom:12px;border-bottom:1px solid var(--line);}
@@ -152,7 +174,6 @@ color:var(--muted);margin:0 0 20px;padding-bottom:12px;border-bottom:1px solid v
 .mk.pass{color:var(--good);} .mk.warn{color:var(--warn);} .mk.info{color:var(--muted);}
 .find h3{margin:0 0 4px;font-size:15.5px;font-weight:600;}
 .find p{margin:0;color:var(--muted);font-size:14px;max-width:82ch;}
-.find code,.lede code{font-family:var(--mono);}
 .prov{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;
 font-size:13px;color:var(--muted);}
 @media (max-width:720px){.pair-grid{grid-template-columns:1fr;}}
@@ -160,15 +181,13 @@ font-size:13px;color:var(--muted);}
 
 
 def build_html(
-    title: str, subtitle: str, eyebrow: str,
+    title: str, subtitle: str, eyebrow: str, stamp: str,
     pairs: list[tuple[str, Path, Path]],
-    modes: dict[str, str], stats: list[dict], findings: list[dict],
-    provenance: str,
+    modes: dict[str, str], stats: list[dict], findings: list[dict], provenance: str,
 ) -> str:
     stat_html = "".join(
         f'<div class="stat"><div class="n{" ok" if s.get("ok") else ""}">{esc(s.get("n",""))}</div>'
-        f'<div class="k">{esc(s.get("k",""))}</div></div>'
-        for s in stats
+        f'<div class="k">{esc(s.get("k",""))}</div></div>' for s in stats
     )
     stats_section = (
         f'<section><h2>Test results</h2><div class="stats">{stat_html}</div></section>'
@@ -178,11 +197,10 @@ def build_html(
     for name, oracle, qz in pairs:
         ow, oh = png_dims(oracle)
         qw, qh = png_dims(qz)
-        mode = modes.get(name, "")
         pair_html.append(f"""
       <figure class="pair">
         <div class="pair-head"><span class="pair-name">{esc(name)}</span>
-          <span class="pair-mode">{esc(mode)}</span></div>
+          <span class="pair-mode">{esc(modes.get(name, ""))}</span></div>
         <div class="pair-grid">
           <div class="shot"><div class="shot-label"><span class="dot dot-truth"></span>OriginPro (ground truth)
             <span class="shot-dim">{ow}×{oh}</span></div>
@@ -195,16 +213,14 @@ def build_html(
     kinds = {"pass": "&check;", "warn": "&#9651;", "info": "i"}
     find_html = "".join(
         f'<div class="find"><div class="mk {esc(f.get("kind","info"))}">{kinds.get(f.get("kind","info"),"i")}</div>'
-        f'<div><h3>{esc(f.get("title",""))}</h3><p>{f.get("body","")}</p></div></div>'
-        for f in findings
+        f'<div><h3>{esc(f.get("title",""))}</h3><p>{f.get("body","")}</p></div></div>' for f in findings
     )
     find_section = (
         f'<section><h2>What matches, what differs</h2><div class="findings">{find_html}</div></section>'
         if findings else ""
     )
     prov_section = (
-        f'<section><h2>Provenance</h2><div class="prov">{provenance}</div></section>'
-        if provenance else ""
+        f'<section><h2>Provenance</h2><div class="prov">{provenance}</div></section>' if provenance else ""
     )
     return f"""<title>{esc(title)}</title>
 <style>{CSS}</style>
@@ -212,6 +228,7 @@ def build_html(
   <header>
     <p class="eyebrow">{esc(eyebrow)}</p>
     <h1>{esc(title)}</h1>
+    <div class="stamp">{stamp}</div>
     <p class="lede">{subtitle}</p>
   </header>
   {stats_section}
@@ -224,7 +241,6 @@ def build_html(
 
 
 def load_modes(proj_dir: Path) -> dict[str, str]:
-    """Per-graph render mode (single/doubleY/multiPanel) from structural_report.json, if present."""
     rep = proj_dir / "structural_report.json"
     if not rep.is_file():
         return {}
@@ -247,15 +263,18 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("project", help="project stem, e.g. Moke (matches _exports/<project>/)")
     ap.add_argument("--exports-root", help="override the _exports dir")
-    ap.add_argument("--out", help="output .html path (default: <project>/compare_artifact.html)")
+    ap.add_argument("--out", help="output .html (default: <project>/compare_artifact.html)")
     ap.add_argument("--only", help="comma-separated graph short-names to include")
     ap.add_argument("--max", type=int, default=12, help="cap embedded pairs (0 = all; default 12)")
     ap.add_argument("--title")
     ap.add_argument("--subtitle", help="HTML allowed (lede paragraph)")
     ap.add_argument("--eyebrow", default="Visual verification")
-    ap.add_argument("--stats-json", help="JSON list for the test-results strip")
-    ap.add_argument("--findings-json", help="JSON list for the findings section")
-    ap.add_argument("--provenance", default="", help="HTML for the provenance box")
+    ap.add_argument("--commit", help="git short-sha the render reflects (default: current HEAD)")
+    ap.add_argument("--version", help="human-readable version/release (default: git describe)")
+    ap.add_argument("--built", help="override build timestamp string")
+    ap.add_argument("--stats-json")
+    ap.add_argument("--findings-json")
+    ap.add_argument("--provenance", default="")
     args = ap.parse_args()
 
     root = find_exports_root(args.exports_root)
@@ -272,11 +291,11 @@ def main() -> None:
         f"Every graph of <code>{esc(args.project)}</code> rendered two ways — exported from "
         f"<b>OriginPro</b> and imported + drawn by <b>quantized</b> — paired by graph name."
     )
+    stamp = resolve_stamp(args.commit, args.version, args.built)
     out = Path(args.out) if args.out else proj_dir / "compare_artifact.html"
     doc = build_html(
-        title, subtitle, args.eyebrow, pairs, load_modes(proj_dir),
-        load_json_list(args.stats_json), load_json_list(args.findings_json),
-        args.provenance,
+        title, subtitle, args.eyebrow, stamp, pairs, load_modes(proj_dir),
+        load_json_list(args.stats_json), load_json_list(args.findings_json), args.provenance,
     )
     out.write_text(doc, encoding="utf-8")
     print(f"wrote {out}  ({out.stat().st_size / 1024:.0f} KB, {len(pairs)} pairs)")
