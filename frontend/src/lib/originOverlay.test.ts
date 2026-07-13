@@ -265,4 +265,32 @@ describe("buildOverlayDataset", () => {
     const ds = buildOverlayDataset(fig, [b1, b2]);
     expect(ds!.time.slice(0, 2)).toEqual([7, 8]); // Book2 block x = column C
   });
+
+  it("splits a single-book multi-X worksheet into one segment per x column", () => {
+    // One book, three field->value blocks plotted against DIFFERENT x columns:
+    // the default x (A/time) plus two value-channel X columns (E, I). This is
+    // the Moke.opj Graph3 hysteresis shape -- each curve must render against
+    // its OWN field sweep, not collapse onto column A.
+    const mx = book("d5", "Book2", [10, 20], {
+      B: [1, 2],
+      E: [30, 40],
+      H: [3, 4],
+      I: [50, 60],
+      L: [5, 6],
+    });
+    const fig = figure([
+      { book: "Book2", x: "A", y: "B" }, // x = time column (A)
+      { book: "Book2", x: "E", y: "H" }, // x = value channel E
+      { book: "Book2", x: "I", y: "L" }, // x = value channel I
+    ]);
+    const ds = buildOverlayDataset(fig, [mx]);
+    expect(ds).not.toBeNull();
+    // three segments: A(time)=[10,20], then E=[30,40], then I=[50,60]
+    expect(ds!.time).toEqual([10, 20, 30, 40, 50, 60]);
+    expect(ds!.values.map((r) => r[0])).toEqual([1, 2, NaN, NaN, NaN, NaN]);
+    expect(ds!.values.map((r) => r[1])).toEqual([NaN, NaN, 3, 4, NaN, NaN]);
+    expect(ds!.values.map((r) => r[2])).toEqual([NaN, NaN, NaN, NaN, 5, 6]);
+    // one source book, deduped even though it contributed three segments
+    expect(ds!.metadata.origin_overlay_books).toEqual(["Book2"]);
+  });
 });
