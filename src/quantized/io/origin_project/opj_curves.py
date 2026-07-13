@@ -131,7 +131,12 @@ from collections.abc import Sequence
 from quantized.io.origin_project.curve_style_color import apply_increment_colors, style_fields
 from quantized.io.origin_project.windows import _cstring, _is_window_header
 
-__all__ = ["book_x_columns", "column_id_map", "extract_curves"]
+__all__ = [
+    "book_column_designations",
+    "book_x_columns",
+    "column_id_map",
+    "extract_curves",
+]
 
 # The curve-anchor record's fixed 4-byte marker (see module docstring).
 _CURVE_PREFIX = b"\x01\x00\x00\x00"
@@ -208,18 +213,22 @@ def column_id_map(blocks: Sequence[tuple[int, bytes]]) -> dict[int, tuple[str, s
     return id_map
 
 
-def book_x_columns(blocks: Sequence[tuple[int, bytes]]) -> dict[str, str]:
-    """book -> its designated X column's short name (structural inference).
+def book_column_designations(
+    blocks: Sequence[tuple[int, bytes]],
+) -> dict[str, list[tuple[str, int]]]:
+    """book -> its primary sheet's columns as ``[(short_name, designation)]``
+    in worksheet column order.
 
-    Primary sheet only -- stops collecting for a book at the first repeated
-    short name (the same "sheet 2 restarts at column A" signal
-    ``windows.window_metadata`` uses, reimplemented here against this
-    module's more permissive column detector). Picks the column whose
-    designation byte is ``3`` (X); falls back to the sheet's first column
-    when none is explicitly marked. See module docstring: this is NOT
-    verified against any oracle, exactly like ``opju_curves.py``'s X.
-    """
-    seen: dict[str, dict[str, int]] = {}
+    Same collection as :func:`book_x_columns` (primary sheet only -- stops for
+    a book at the first repeated short name, the "sheet 2 restarts at column A"
+    signal ``windows.window_metadata`` uses), but keeps the FULL ordered list
+    rather than collapsing to a single X. This is what lets each curve resolve
+    its own X as the nearest preceding X-designated column (Origin's real
+    X<->Y pairing on a multi-X worksheet) instead of forcing every curve onto
+    the book's first X. Designation byte (offset ``0x11``): ``0``=Y, ``3``=X
+    (``windows.py``'s ``_DESIGNATION``)."""
+    order: dict[str, list[tuple[str, int]]] = {}
+    seen_names: dict[str, set[str]] = {}
     closed: set[str] = set()
     current_book: str | None = None
     in_graph = False
@@ -239,19 +248,47 @@ def book_x_columns(blocks: Sequence[tuple[int, bytes]]) -> dict[str, str]:
         if not in_graph and current_book is not None and current_book not in closed:
             short = _column_short_name(payload)
             if short is not None and len(payload) > 0x11:
-                cols = seen.setdefault(current_book, {})
-                if short in cols:
+                names = seen_names.setdefault(current_book, set())
+                if short in names:
                     closed.add(current_book)  # sheet 2 restarting at the same letters
                 else:
-                    cols[short] = payload[0x11]
+                    names.add(short)
+                    order.setdefault(current_book, []).append((short, payload[0x11]))
         i += 1
+    return order
+
+
+def book_x_columns(blocks: Sequence[tuple[int, bytes]]) -> dict[str, str]:
+    """book -> its designated X column's short name (structural inference).
+
+    The book-level X: the first X-designated (byte ``3``) column of the
+    primary sheet, falling back to that sheet's first column when none is
+    marked X. Derived from :func:`book_column_designations`. See module
+    docstring: NOT verified against any oracle, exactly like
+    ``opju_curves.py``'s X. Retained as the columnless/last-resort fallback in
+    :func:`extract_curves`; per-curve X now prefers the nearest preceding X.
+    """
     out: dict[str, str] = {}
-    for book, cols in seen.items():
+    for book, cols in book_column_designations(blocks).items():
         if not cols:
             continue
-        x_col = next((c for c, d in cols.items() if d == _DESIGNATION_X), None)
-        out[book] = x_col if x_col is not None else next(iter(cols))
+        x_col = next((c for c, d in cols if d == _DESIGNATION_X), None)
+        out[book] = x_col if x_col is not None else cols[0][0]
     return out
+
+
+def _nearest_preceding_x(order: Sequence[tuple[str, int]], y_short: str) -> str | None:
+    """The X-designated column (byte ``3``) nearest-preceding ``y_short`` in
+    worksheet column order, or ``None`` when ``y_short`` is not on this sheet
+    or no X precedes it. Origin's real rule: a Y column plots against the
+    closest X-designated column to its left."""
+    prev_x: str | None = None
+    for short, desig in order:
+        if short == y_short:
+            return prev_x
+        if desig == _DESIGNATION_X:
+            prev_x = short
+    return None
 
 
 def extract_curves(
@@ -260,13 +297,18 @@ def extract_curves(
     end: int,
     id_map: dict[int, tuple[str, str]],
     x_columns: dict[str, str],
+    col_order: dict[str, list[tuple[str, int]]] | None = None,
 ) -> list[dict[str, str | float]]:
     """Every curve's ``{book, x, y}`` binding found in ``blocks[start:end)``.
 
     ``y`` is decoded exactly via the curve anchor's own global column id (see
-    module docstring); a curve whose id doesn't resolve to a known column, or
-    whose book has no inferable X column, is silently dropped -- never
-    guessed. The anchor payload is also the curve's fixed style record
+    module docstring). ``x`` is resolved per curve as the nearest preceding
+    X-designated column on ``y``'s sheet when ``col_order`` (from
+    :func:`book_column_designations`) is supplied -- Origin's real multi-X
+    pairing -- else the book-level designated X in ``x_columns``. A curve
+    whose id doesn't resolve to a known column, or whose book has no inferable
+    X column, is silently dropped -- never guessed. The anchor payload is also
+    the curve's fixed style record
     (``curve_style_color.py``: symbol color/kind, line color, line-vs-
     scatter -- oracle-verified on ``hc2convert.opj``), so any decodable
     ``color``/``symbol``/``style`` keys ride along; undecodable fields
@@ -286,7 +328,14 @@ def extract_curves(
         if info is None:
             continue
         book, col = info
-        x = x_columns.get(book)
+        # Per-curve X: the nearest preceding X-designated column on the book's
+        # sheet (Origin's real multi-X pairing); fall back to the book-level
+        # designated X only when that can't be resolved.
+        x: str | None = None
+        if col_order is not None and book in col_order:
+            x = _nearest_preceding_x(col_order[book], col)
+        if x is None:
+            x = x_columns.get(book)
         if x is None:
             continue  # unknown/columnless book: drop, never guess
         out.append({"book": book, "x": x, "y": col, **style_fields(payload)})
