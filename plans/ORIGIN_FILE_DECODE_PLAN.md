@@ -469,6 +469,13 @@ Official model references used for this routing:
       and Moke 12/12, with zero structural/runtime failures. Free-positioned
       overlapping layers, true insets, independent axes, >2 Y axes, page
       margins/aspect, and publication-export geometry remain open.
+    - PR #47 preserves the recovered frame composition's aspect ratio in the
+      interactive stage instead of stretching it, with an independent DOM
+      letterbox oracle. Full outer-page margins were tested and deliberately
+      rejected for the fixed-size interactive view because they made dense
+      PNR pages unreadably small; exact page margins/aspect remain open for
+      publication export where typography can scale with the page. Corpus
+      gates remain PNR 99/99, MnN_Diffusion_PNR 36/36, and Moke 12/12.
 
 ### Tier 3 — acceptance and handoff
 
