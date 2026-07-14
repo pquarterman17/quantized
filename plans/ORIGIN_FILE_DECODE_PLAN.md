@@ -460,6 +460,15 @@ Official model references used for this routing:
       seed Graph Builder with one editable panel per recovered layer.
     - Native panel source-layer provenance + y2-aware acceptance checks are in
       PR #44.
+    - Trusted tiled frame geometry is preserved natively in PR #45: decoded
+      rectangles are normalized after y2 merging and carried through the
+      spatial-panel contract, retaining unequal sizes, source gaps, and panels
+      spanning grid tracks. Missing/invalid/overlapping geometry still uses
+      the ordinal equal-grid fallback. Corpus gates: PNR 99/99 (including the
+      Graph40 two-up + full-width spanning layout), MnN_Diffusion_PNR 36/36,
+      and Moke 12/12, with zero structural/runtime failures. Free-positioned
+      overlapping layers, true insets, independent axes, >2 Y axes, page
+      margins/aspect, and publication-export geometry remain open.
 
 ### Tier 3 — acceptance and handoff
 
