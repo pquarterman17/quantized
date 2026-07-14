@@ -476,6 +476,12 @@ Official model references used for this routing:
     per-graph JSON/CSV aggregation and review import/export in PR #41.**
     Runtime-error attribution/fail-closed reporting follows in PR #42.
     The resulting passive-plugin hook crash is fixed in PR #43.
+    PR #46 strengthens the rendered oracle itself: every canvas must contain
+    sampled paint variation, and every trusted decoded panel rectangle must
+    match its live normalized DOM rectangle (with only pixel-rounding
+    tolerance). This prevents canvas-count/store-self-consistency checks from
+    passing an empty or equal-grid-flattened page. PNR 99/99 and Moke 12/12
+    pass the stronger checks with zero runtime errors.
     Extend the existing
     comparison tooling to emit one durable row per Origin graph: source books,
     curves, layers, preview, fidelity status, omissions, structural diff, and
