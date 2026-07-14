@@ -502,6 +502,12 @@ Official model references used for this routing:
     advanced-axis/graphic-object/rich-text omissions are blanket capability
     declarations, not proof that each graph contains those features; they do
     not authorize speculative decoding.
+    PR #50 adds the corpus review dashboard and anchored gallery queue. It
+    exposes all 62 currently paired screenshots in one owner-review entry
+    point (Moke 8, PNR 50, RockingCurve 4), greys out projects without Origin
+    PNG oracles, and makes the corpus runner regenerate available galleries.
+    Review state remains 0/353 until the owner exports/imports gallery marks;
+    tooling completion is not visual sign-off.
     Extend the existing
     comparison tooling to emit one durable row per Origin graph: source books,
     curves, layers, preview, fidelity status, omissions, structural diff, and
