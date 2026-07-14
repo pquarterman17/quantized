@@ -208,6 +208,47 @@ export function summarizeAcceptanceRows(rows, projectCount = null) {
   };
 }
 
+function htmlEscape(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[char]);
+}
+
+/** Static corpus entry point for the owner screenshot gate. Per-project
+ * galleries retain the interactive chips/review export; this page ranks and
+ * links the remaining paired review queue without duplicating that state. */
+export function acceptanceDashboardHtml(rows, totals) {
+  const byProject = new Map();
+  for (const row of rows) {
+    if (!byProject.has(row.project)) byProject.set(row.project, []);
+    byProject.get(row.project).push(row);
+  }
+  const projects = [...byProject.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const cards = projects.map(([project, projectRows]) => {
+    const paired = projectRows.filter((row) => row.paired_screenshots).length;
+    const unresolved = projectRows.filter((row) => row.quantized_render_status === "unresolved").length;
+    const reviewed = projectRows.filter((row) => row.screenshot_review_status === "reviewed").length;
+    const content = `<strong>${htmlEscape(project)}</strong><span>${paired} paired · ${reviewed} reviewed · ${unresolved} unresolved</span>`;
+    return paired > 0
+      ? `<a class="card" href="${encodeURIComponent(project)}/gallery.html">${content}</a>`
+      : `<div class="card unavailable" title="No Origin PNG oracle is available for this project">${content}</div>`;
+  }).join("\n");
+  const queue = rows.filter((row) => row.paired_screenshots && row.screenshot_review_status !== "reviewed")
+    .sort((a, b) => a.project.localeCompare(b.project) || a.graph.localeCompare(b.graph));
+  const queueRows = queue.map((row) => {
+    const href = `${encodeURIComponent(row.project)}/gallery.html#fig-${encodeURIComponent(row.graph)}`;
+    return `<tr><td>${htmlEscape(row.project)}</td><td><a href="${href}">${htmlEscape(row.graph)}</a></td><td>${htmlEscape(row.layout_mode || "n/a")}</td><td>${htmlEscape(row.screenshot_review_status)}</td></tr>`;
+  }).join("\n");
+  return `<!doctype html><meta charset="utf-8"><title>Origin corpus review queue</title>
+<style>
+:root{color-scheme:light dark;font:14px/1.45 system-ui,sans-serif}body{max-width:1200px;margin:auto;padding:28px}h1{font-size:22px}.summary{color:#777}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:20px 0}.card{display:flex;flex-direction:column;padding:12px;border:1px solid #8886;border-radius:8px;text-decoration:none;color:inherit}.card span{color:#777;font-size:12px;margin-top:4px}.card.unavailable{opacity:.55}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 9px;border-bottom:1px solid #8884}th{position:sticky;top:0;background:Canvas}code{font-size:12px}</style>
+<h1>Origin corpus screenshot review</h1>
+<p class="summary">${totals.graphs} rows · ${totals.paired_screenshots} paired · ${totals.visually_reviewed} fully reviewed · ${totals.unresolved_graphs} unresolved. Structural checks are necessary but not visual sign-off.</p>
+<div class="cards">${cards}</div>
+<h2>Paired review queue (${queue.length})</h2>
+<table><thead><tr><th>Project</th><th>Graph</th><th>Layout</th><th>Status</th></tr></thead><tbody>${queueRows}</tbody></table>`;
+}
+
 /** Summarize sequential real-browser project runs. Unresolved graphs remain
  * explicit but are not renderer regressions; child-process failures and any
  * resolved graph whose strengthened structural checks fail are strict

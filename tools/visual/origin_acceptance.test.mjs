@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   acceptanceCsv,
+  acceptanceDashboardHtml,
   buildAcceptanceRows,
   fitNormalizedLayoutRects,
   normalizedRectsMatch,
@@ -144,4 +145,18 @@ test("acceptance evidence ledger ranks omissions deterministically", () => {
     { value: "ticks", count: 1 },
   ]);
   assert.deepEqual(totals.rankings.unresolved_projects, [{ value: "A", count: 1 }]);
+});
+
+test("review dashboard escapes labels and links directly to paired graph anchors", () => {
+  const rows = [{
+    project: "Moke & Co", graph: "Graph <1>", paired_screenshots: true,
+    screenshot_review_status: "unreviewed", quantized_render_status: "rendered", layout_mode: "single",
+  }];
+  const html = acceptanceDashboardHtml(rows, {
+    graphs: 1, paired_screenshots: 1, visually_reviewed: 0, unresolved_graphs: 0,
+  });
+  assert.match(html, /Moke &amp; Co/);
+  assert.match(html, /Graph &lt;1&gt;/);
+  assert.match(html, /Moke%20%26%20Co\/gallery\.html#fig-Graph%20%3C1%3E/);
+  assert.doesNotMatch(html, /Graph <1>/);
 });

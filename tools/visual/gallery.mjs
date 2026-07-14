@@ -106,7 +106,7 @@ async function main() {
       const q = qzFigs[name];
       const struct = structByName.get(name);
       return `
-      <div class="row" data-fig="${esc(name)}">
+      <div class="row" id="fig-${encodeURIComponent(name)}" data-fig="${esc(name)}">
         <div class="row-head">
           <h3>${esc(name)}</h3>
           <span class="folder">${esc(q.folder || o.folder || "")}</span>
