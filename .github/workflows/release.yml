@@ -55,7 +55,7 @@ jobs:
             updater-glob: ""
             server-archive: qz-server-linux.tar.gz
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Linux build deps (Tauri)
         if: runner.os == 'Linux'
