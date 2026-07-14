@@ -170,3 +170,42 @@ export function acceptanceCsv(rows) {
     .map((line) => line.map(csvCell).join(","))
     .join("\n") + "\n";
 }
+
+/** Summarize sequential real-browser project runs. Unresolved graphs remain
+ * explicit but are not renderer regressions; child-process failures and any
+ * resolved graph whose strengthened structural checks fail are strict
+ * failures. */
+export function summarizeCorpusReports(runs) {
+  const projects = runs.map(({ project, exitCode = 0, report = null }) => {
+    const figures = report?.figures || [];
+    const resolved = figures.filter((figure) => figure.resolved);
+    const failures = resolved.filter((figure) => !figure.pass).map((figure) => ({
+      graph: figure.name,
+      checks: (figure.checks || []).filter((item) => !item.pass).map((item) => item.name),
+    }));
+    return {
+      project,
+      process_exit: exitCode,
+      graphs: figures.length,
+      resolved: resolved.length,
+      unresolved: figures.length - resolved.length,
+      passed: resolved.length - failures.length,
+      failures,
+      strict_pass: exitCode === 0 && failures.length === 0 && report != null,
+    };
+  });
+  return {
+    version: 1,
+    generated: new Date().toISOString(),
+    totals: {
+      projects: projects.length,
+      graphs: projects.reduce((sum, project) => sum + project.graphs, 0),
+      resolved: projects.reduce((sum, project) => sum + project.resolved, 0),
+      unresolved: projects.reduce((sum, project) => sum + project.unresolved, 0),
+      renderer_failures: projects.reduce((sum, project) => sum + project.failures.length, 0),
+      process_failures: projects.filter((project) => project.process_exit !== 0).length,
+    },
+    projects,
+    strict_pass: projects.length > 0 && projects.every((project) => project.strict_pass),
+  };
+}
