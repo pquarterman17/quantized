@@ -4,9 +4,11 @@
   "type": "module",
   "description": "Headless-Chrome visual-verification harness for the Boson Plotter uPlot canvas (which jsdom cannot render). Isolated from the app frontend so it never touches the CI gate.",
   "scripts": {
+    "test": "node --test *.test.mjs",
     "shoot": "node shoot.mjs",
     "origin:figures": "node origin_figures.mjs",
-    "origin:gallery": "node gallery.mjs"
+    "origin:gallery": "node gallery.mjs",
+    "origin:matrix": "node acceptance_matrix.mjs"
   },
   "dependencies": {
     "puppeteer-core": "^23.11.1"

@@ -174,9 +174,10 @@ async function main() {
                    padding: 8px 14px; }
   .summary .stat b { font-size: 18px; display: block; }
   .toolbar { margin: 8px 0 20px; }
-  .toolbar button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
-                    background: var(--card); color: var(--fg); cursor: pointer; }
-  .toolbar button:hover { border-color: var(--accent); }
+  .toolbar button, .toolbar .file-button { font: inherit; padding: 6px 12px; border-radius: 6px;
+                    border: 1px solid var(--border); background: var(--card); color: var(--fg); cursor: pointer; }
+  .toolbar button:hover, .toolbar .file-button:hover { border-color: var(--accent); }
+  .toolbar input[type=file] { display: none; }
   .row { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
          padding: 14px 16px; margin-bottom: 16px; }
   .row-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -216,6 +217,8 @@ async function main() {
 </div>
 <div class="toolbar">
   <button id="reset-marks">Clear my eyeball marks for this project</button>
+  <button id="export-marks">Download review.json</button>
+  <label class="file-button">Import review.json<input id="import-marks" type="file" accept="application/json,.json"></label>
 </div>
 
 <section>
@@ -230,6 +233,7 @@ ${unpairedSection("Quantized-only (no Origin PNG)", quantizedOnly, "quantized re
 <script>
 (function () {
   var PROJECT = ${JSON.stringify(PROJECT)};
+  var CHIP_KEYS = ${JSON.stringify(CHIPS.map((chip) => chip.key))};
   var STORE_PREFIX = "qz-origin-gallery:" + PROJECT + ":";
   var STATES = ["", "ok", "bad"]; // neutral -> ok -> mismatch -> neutral
 
@@ -262,6 +266,51 @@ ${unpairedSection("Quantized-only (no Origin PNG)", quantizedOnly, "quantized re
       .filter(function (k) { return k.indexOf(STORE_PREFIX) === 0; })
       .forEach(function (k) { localStorage.removeItem(k); });
     document.querySelectorAll(".chip").forEach(function (btn) { applyState(btn, ""); });
+  });
+
+  document.getElementById("export-marks").addEventListener("click", function () {
+    var figures = {};
+    document.querySelectorAll(".chip").forEach(function (btn) {
+      var state = localStorage.getItem(chipKey(btn.dataset.fig, btn.dataset.chip)) || "";
+      if (!state) return;
+      if (!figures[btn.dataset.fig]) figures[btn.dataset.fig] = {};
+      figures[btn.dataset.fig][btn.dataset.chip] = state;
+    });
+    var payload = { version: 1, project: PROJECT, exported: new Date().toISOString(), figures: figures };
+    var blob = new Blob([JSON.stringify(payload, null, 2) + "\\n"], { type: "application/json" });
+    var link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "review.json";
+    link.click();
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 0);
+  });
+
+  document.getElementById("import-marks").addEventListener("change", async function (event) {
+    var file = event.target.files && event.target.files[0];
+    if (!file) return;
+    try {
+      var payload = JSON.parse(await file.text());
+      if (payload.version !== 1 || payload.project !== PROJECT || !payload.figures) {
+        throw new Error("review file belongs to a different project or schema");
+      }
+      Object.keys(localStorage).filter(function (key) { return key.indexOf(STORE_PREFIX) === 0; })
+        .forEach(function (key) { localStorage.removeItem(key); });
+      Object.entries(payload.figures).forEach(function (entry) {
+        var fig = entry[0], marks = entry[1] || {};
+        CHIP_KEYS.forEach(function (chip) {
+          if (marks[chip] === "ok" || marks[chip] === "bad") {
+            localStorage.setItem(chipKey(fig, chip), marks[chip]);
+          }
+        });
+      });
+      document.querySelectorAll(".chip").forEach(function (btn) {
+        applyState(btn, localStorage.getItem(chipKey(btn.dataset.fig, btn.dataset.chip)) || "");
+      });
+    } catch (error) {
+      alert("Could not import review.json: " + error.message);
+    } finally {
+      event.target.value = "";
+    }
   });
 })();
 </script>

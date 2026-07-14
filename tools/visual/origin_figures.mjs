@@ -40,6 +40,7 @@ import {
   sanitizeName,
   waitForServer,
 } from "./origin_shared.mjs";
+import { summarizeFigureFamily } from "./origin_acceptance.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.opj || !args.project) {
@@ -266,6 +267,7 @@ async function main() {
       const representative = family.find((e) => e.datasetId != null) ?? family[0];
       const shortName = name;
       const fileBase = sanitizeName(name);
+      const acceptance = summarizeFigureFamily(family);
       if (!representative.datasetId) {
         manifestFigures[shortName] = {
           short_name: shortName,
@@ -273,6 +275,7 @@ async function main() {
           file: null,
           resolved: false,
           layers: family.length,
+          ...acceptance,
           reason: representative.figure?.source_hint
             ? `unresolved source hint "${representative.figure.source_hint}"`
             : "no family member resolved a dataset",
@@ -315,12 +318,12 @@ async function main() {
         return {
           xLim: s.xLim,
           yLim: s.yLim,
-          xLog: s.xLog,
-          yLog: s.yLog,
+          xLog: s.xScale === "log",
+          yLog: s.yScale === "log",
           xStep: s.xStep,
           yStep: s.yStep,
           y2Lim: s.y2Lim,
-          y2Log: s.y2Log,
+          y2Log: (s.y2Scale ?? s.yScale) === "log",
           y2Step: s.y2Step,
           y2Keys: s.y2Keys,
           stackMode: s.stackMode,
@@ -341,6 +344,7 @@ async function main() {
         mode,
         dataset: dsInfo.name ?? null,
         structural_pass: pass,
+        ...acceptance,
       };
       reportFigures.push({ name: shortName, resolved: true, mode, pass, checks });
       console.log(`  (${shot}/${families.size}) ${name}: mode=${mode} structural=${pass ? "PASS" : "FAIL"}`);
