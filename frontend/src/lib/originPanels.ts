@@ -23,6 +23,17 @@ export interface PanelPlacement {
   index: number;
   row: number;
   col: number;
+  /** Frame rectangle normalized to the trusted tiled frames' bounding box.
+   *  Absent on ordinal fallback placements. Unlike row/col alone, this
+   *  preserves unequal sizes, page gaps, and panels spanning grid tracks. */
+  rect?: NormalizedFrameRect;
+}
+
+export interface NormalizedFrameRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 }
 
 export interface PanelLayout {
@@ -147,9 +158,16 @@ export function computePanelLayout(
   page?: PageSize | null,
 ): PanelLayout {
   const n = frames.length;
-  if (n === 0) return { rows: 0, cols: 0, placements: [], spatial: false };
+  if (n === 0) {
+    return { rows: 0, cols: 0, placements: [], spatial: false };
+  }
   if (n === 1) {
-    return { rows: 1, cols: 1, placements: [{ index: 0, row: 0, col: 0 }], spatial: true };
+    return {
+      rows: 1,
+      cols: 1,
+      placements: [{ index: 0, row: 0, col: 0, rect: { left: 0, top: 0, width: 1, height: 1 } }],
+      spatial: true,
+    };
   }
   if (frames.some((f) => !f || isDegenerate(f))) return ordinalFallback(n);
   const quads = frames as FrameQuad[];
@@ -173,10 +191,22 @@ export function computePanelLayout(
   if (bboxW <= 0 || bboxH <= 0) return ordinalFallback(n);
   const rowOf = clusterIndices(quads.map((f) => f.top), CLUSTER_TOL_FRACTION * bboxH);
   const colOf = clusterIndices(quads.map((f) => f.left), CLUSTER_TOL_FRACTION * bboxW);
+  const minLeft = Math.min(...quads.map((f) => f.left));
+  const minTop = Math.min(...quads.map((f) => f.top));
   return {
     rows: Math.max(...rowOf) + 1,
     cols: Math.max(...colOf) + 1,
-    placements: quads.map((_, i) => ({ index: i, row: rowOf[i], col: colOf[i] })),
+    placements: quads.map((frame, i) => ({
+      index: i,
+      row: rowOf[i],
+      col: colOf[i],
+      rect: {
+        left: (frame.left - minLeft) / bboxW,
+        top: (frame.top - minTop) / bboxH,
+        width: (frame.right - frame.left) / bboxW,
+        height: (frame.bottom - frame.top) / bboxH,
+      },
+    })),
     spatial: true,
   };
 }

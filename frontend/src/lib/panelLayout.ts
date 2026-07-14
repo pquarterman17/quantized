@@ -18,9 +18,9 @@
 // CSS Grid's `gap` shorthand is ONE uniform value for every row boundary, so
 // it cannot express "flush here, normal gap there" — the render layer
 // switches the spatial grid from CSS Grid auto-sizing to explicit pixel
-// rects computed from this module's `rowBoundaryGaps`/`columnWidths`/
-// `rowHeights`/`cumulativeOffsets` (a plain cumulative-sum placement, same
-// idea as a manual flexbox, just precomputed).
+// rects. Trusted decoded frames use `spatialPixelRects` so unequal sizes,
+// source gaps, and spanning panels survive; ordinal/untrusted layouts use
+// `rowBoundaryGaps`/`columnWidths`/`rowHeights`/`cumulativeOffsets`.
 
 import type { SpatialPanel } from "./multipanel";
 
@@ -43,6 +43,35 @@ function rangesMatch(a: readonly [number, number], b: readonly [number, number],
  *  narrow (`Pick`) so tests can build plain fixtures without the rest of the
  *  panel's plot-selection fields. */
 export type PanelPos = Pick<SpatialPanel, "row" | "col" | "xLim">;
+
+export interface PixelRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** Scale trusted normalized frame rectangles into the current stage. Returns
+ *  null as an all-or-nothing fail-closed signal if any panel lacks a valid
+ *  rectangle, keeping ordinal/non-Origin layouts on the equal-grid path. */
+export function spatialPixelRects(
+  panels: readonly Pick<SpatialPanel, "frameRect">[],
+  totalWidth: number,
+  totalHeight: number,
+): PixelRect[] | null {
+  if (panels.length === 0 || panels.some((panel) => {
+    const rect = panel.frameRect;
+    return !rect || ![rect.left, rect.top, rect.width, rect.height].every(Number.isFinite)
+      || rect.left < 0 || rect.top < 0 || rect.width <= 0 || rect.height <= 0
+      || rect.left + rect.width > 1 + 1e-6 || rect.top + rect.height > 1 + 1e-6;
+  })) return null;
+  return panels.map(({ frameRect: rect }) => ({
+    left: Math.round(rect!.left * totalWidth),
+    top: Math.round(rect!.top * totalHeight),
+    width: Math.max(1, Math.round(rect!.width * totalWidth)),
+    height: Math.max(1, Math.round(rect!.height * totalHeight)),
+  }));
+}
 
 /** True when `panel` shares its x-range (within tolerance) with whatever
  *  panel sits directly below it in the SAME grid column — false when

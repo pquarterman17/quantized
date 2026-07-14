@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { computePanelLayout, framesCoincide, type FrameQuad } from "./originPanels";
+import {
+  computePanelLayout,
+  framesCoincide,
+  type FrameQuad,
+  type PanelLayout,
+} from "./originPanels";
+
+const cells = (layout: PanelLayout) => layout.placements.map(({ rect: _rect, ...cell }) => cell);
 
 describe("computePanelLayout", () => {
   it("returns nothing to place for an empty layer list", () => {
@@ -12,7 +19,9 @@ describe("computePanelLayout", () => {
     expect(computePanelLayout([f])).toEqual({
       rows: 1,
       cols: 1,
-      placements: [{ index: 0, row: 0, col: 0 }],
+      placements: [{
+        index: 0, row: 0, col: 0, rect: { left: 0, top: 0, width: 1, height: 1 },
+      }],
       spatial: true,
     });
   });
@@ -24,7 +33,7 @@ describe("computePanelLayout", () => {
     expect(layout.spatial).toBe(true);
     expect(layout.rows).toBe(2);
     expect(layout.cols).toBe(1);
-    expect(layout.placements).toEqual([
+    expect(cells(layout)).toEqual([
       { index: 0, row: 0, col: 0 },
       { index: 1, row: 1, col: 0 },
     ]);
@@ -34,7 +43,7 @@ describe("computePanelLayout", () => {
     const bottom: FrameQuad = { left: 0, top: 55, right: 100, bottom: 100 };
     const top: FrameQuad = { left: 0, top: 0, right: 100, bottom: 45 };
     const layout = computePanelLayout([bottom, top]); // bottom panel listed first
-    expect(layout.placements).toEqual([
+    expect(cells(layout)).toEqual([
       { index: 0, row: 1, col: 0 }, // "bottom" (input 0) -> row 1
       { index: 1, row: 0, col: 0 }, // "top" (input 1) -> row 0
     ]);
@@ -44,15 +53,16 @@ describe("computePanelLayout", () => {
     const left: FrameQuad = { left: 0, top: 0, right: 45, bottom: 100 };
     const right: FrameQuad = { left: 55, top: 0, right: 100, bottom: 100 };
     const layout = computePanelLayout([left, right]);
-    expect(layout).toEqual({
-      rows: 1,
-      cols: 2,
-      placements: [
-        { index: 0, row: 0, col: 0 },
-        { index: 1, row: 0, col: 1 },
-      ],
-      spatial: true,
-    });
+    expect(layout.rows).toBe(1);
+    expect(layout.cols).toBe(2);
+    expect(cells(layout)).toEqual([
+      { index: 0, row: 0, col: 0 },
+      { index: 1, row: 0, col: 1 },
+    ]);
+    expect(layout.placements.map((p) => p.rect)).toEqual([
+      { left: 0, top: 0, width: 0.45, height: 1 },
+      { left: 0.55, top: 0, width: 0.45, height: 1 },
+    ]);
   });
 
   it("2x2 grid: four quadrant frames cluster into 2 rows, 2 cols", () => {
@@ -64,7 +74,7 @@ describe("computePanelLayout", () => {
     expect(layout.spatial).toBe(true);
     expect(layout.rows).toBe(2);
     expect(layout.cols).toBe(2);
-    expect(layout.placements).toEqual([
+    expect(cells(layout)).toEqual([
       { index: 0, row: 0, col: 0 },
       { index: 1, row: 0, col: 1 },
       { index: 2, row: 1, col: 0 },
@@ -112,15 +122,47 @@ describe("computePanelLayout", () => {
     const top: FrameQuad = { left: 0, top: 0, right: 995, bottom: 480 };
     const bottom: FrameQuad = { left: 0, top: 520, right: 995, bottom: 990 };
     const layout = computePanelLayout([top, bottom], { width: 1000, height: 1000 });
-    expect(layout).toEqual({
-      rows: 2,
-      cols: 1,
-      placements: [
-        { index: 0, row: 0, col: 0 },
-        { index: 1, row: 1, col: 0 },
-      ],
-      spatial: true,
-    });
+    expect(layout.rows).toBe(2);
+    expect(layout.cols).toBe(1);
+    expect(layout.spatial).toBe(true);
+    expect(cells(layout)).toEqual([
+      { index: 0, row: 0, col: 0 },
+      { index: 1, row: 1, col: 0 },
+    ]);
+  });
+
+  it("preserves unequal frame proportions, gaps, and a panel spanning both columns", () => {
+    const tl: FrameQuad = { left: 0, top: 0, right: 30, bottom: 25 };
+    const tr: FrameQuad = { left: 40, top: 0, right: 100, bottom: 25 };
+    const bottom: FrameQuad = { left: 0, top: 35, right: 100, bottom: 100 };
+    const layout = computePanelLayout([tl, tr, bottom]);
+    expect(layout.spatial).toBe(true);
+    expect(layout.placements.map((p) => p.rect)).toEqual([
+      { left: 0, top: 0, width: 0.3, height: 0.25 },
+      { left: 0.4, top: 0, width: 0.6, height: 0.25 },
+      { left: 0, top: 0.35, width: 1, height: 0.65 },
+    ]);
+  });
+
+  it("matches PNR Graph40's decoded two-up plus full-width y2-host layout", () => {
+    // Exact real-corpus frames after layers 3/4's coincident y2 merge. This
+    // shape exposed why row/col weights were insufficient: the bottom frame
+    // spans both top-row columns. Visually checked against the Origin export.
+    const layout = computePanelLayout([
+      { left: 548, top: 287, right: 3260, bottom: 2129 },
+      { left: 3450, top: 287, right: 6162, bottom: 2129 },
+      { left: 548, top: 2559, right: 6162, bottom: 4401 },
+    ]);
+    expect(layout.spatial).toBe(true);
+    expect(cells(layout)).toEqual([
+      { index: 0, row: 0, col: 0 },
+      { index: 1, row: 0, col: 1 },
+      { index: 2, row: 1, col: 0 },
+    ]);
+    expect(layout.placements[0].rect?.width).toBeCloseTo(2712 / 5614);
+    expect(layout.placements[1].rect?.left).toBeCloseTo(2902 / 5614);
+    expect(layout.placements[2].rect?.top).toBeCloseTo(2272 / 4114);
+    expect(layout.placements[2].rect?.width).toBe(1);
   });
 
   it("falls back when the frames overshoot the declared page bound (frame/page disagree)", () => {
@@ -145,7 +187,7 @@ describe("computePanelLayout", () => {
     expect(layout.spatial).toBe(true);
     expect(layout.rows).toBe(2);
     expect(layout.cols).toBe(1);
-    expect(layout.placements).toEqual([
+    expect(cells(layout)).toEqual([
       { index: 0, row: 0, col: 0 }, // layer 1 -> top panel
       { index: 1, row: 1, col: 0 }, // layer 2 -> bottom panel
     ]);
