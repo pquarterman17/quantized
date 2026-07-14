@@ -489,6 +489,12 @@ Official model references used for this routing:
     tolerance). This prevents canvas-count/store-self-consistency checks from
     passing an empty or equal-grid-flattened page. PNR 99/99 and Moke 12/12
     pass the stronger checks with zero runtime errors.
+    PR #48 adds the strict sequential corpus runner and records the first full
+    strengthened pass: 12 projects, 350 decoded graph families, 332 rendered,
+    18 explicitly unresolved Hc2/report-style entries, 0 renderer failures,
+    and 0 process failures. The regenerated acceptance matrix contains 353
+    rows because Origin-only/unpaired manifest records remain explicit. Owner
+    screenshot review is still required before this item can close.
     Extend the existing
     comparison tooling to emit one durable row per Origin graph: source books,
     curves, layers, preview, fidelity status, omissions, structural diff, and
