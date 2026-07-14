@@ -171,6 +171,43 @@ export function acceptanceCsv(rows) {
     .join("\n") + "\n";
 }
 
+function rankedCounts(values) {
+  const counts = new Map();
+  for (const value of values.filter((item) => item !== null && item !== undefined && item !== "")) {
+    counts.set(String(value), (counts.get(String(value)) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+}
+
+/** Deterministic corpus evidence ledger: stable headline totals plus ranked
+ * categories that make the next fidelity slice a data-driven choice. */
+export function summarizeAcceptanceRows(rows, projectCount = null) {
+  return {
+    projects: projectCount ?? new Set(rows.map((row) => row.project)).size,
+    graphs: rows.length,
+    paired_screenshots: rows.filter((row) => row.paired_screenshots).length,
+    structural_mismatches: rows.filter((row) =>
+      row.structural_pass === false && row.quantized_render_status !== "unresolved"
+    ).length,
+    runtime_error_graphs: rows.filter((row) => row.runtime_error_count > 0).length,
+    unresolved_graphs: rows.filter((row) => row.quantized_render_status === "unresolved").length,
+    visually_reviewed: rows.filter((row) => row.screenshot_review_status === "reviewed").length,
+    visual_mismatches: rows.filter((row) => row.screenshot_review_status === "mismatch").length,
+    rankings: {
+      fidelity_statuses: rankedCounts(rows.map((row) => row.fidelity_status)),
+      fidelity_omissions: rankedCounts(rows.flatMap((row) => row.fidelity_omissions || [])),
+      layout_modes: rankedCounts(rows.map((row) => row.layout_mode)),
+      structural_failure_checks: rankedCounts(rows.flatMap((row) => row.structural_failures || [])),
+      screenshot_review_statuses: rankedCounts(rows.map((row) => row.screenshot_review_status)),
+      unresolved_projects: rankedCounts(rows
+        .filter((row) => row.quantized_render_status === "unresolved")
+        .map((row) => row.project)),
+    },
+  };
+}
+
 /** Summarize sequential real-browser project runs. Unresolved graphs remain
  * explicit but are not renderer regressions; child-process failures and any
  * resolved graph whose strengthened structural checks fail are strict
