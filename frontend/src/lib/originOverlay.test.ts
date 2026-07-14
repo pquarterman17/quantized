@@ -265,4 +265,88 @@ describe("buildOverlayDataset", () => {
     const ds = buildOverlayDataset(fig, [b1, b2]);
     expect(ds!.time.slice(0, 2)).toEqual([7, 8]); // Book2 block x = column C
   });
+
+  it("splits a single-book multi-X worksheet into one segment per x column", () => {
+    // One book, three field->value blocks plotted against DIFFERENT x columns:
+    // the default x (A/time) plus two value-channel X columns (E, I). This is
+    // the Moke.opj Graph3 hysteresis shape -- each curve must render against
+    // its OWN field sweep, not collapse onto column A.
+    const mx = book("d5", "Book2", [10, 20], {
+      B: [1, 2],
+      E: [30, 40],
+      H: [3, 4],
+      I: [50, 60],
+      L: [5, 6],
+    });
+    const fig = figure([
+      { book: "Book2", x: "A", y: "B" }, // x = time column (A)
+      { book: "Book2", x: "E", y: "H" }, // x = value channel E
+      { book: "Book2", x: "I", y: "L" }, // x = value channel I
+    ]);
+    const ds = buildOverlayDataset(fig, [mx]);
+    expect(ds).not.toBeNull();
+    // three segments: A(time)=[10,20], then E=[30,40], then I=[50,60]
+    expect(ds!.time).toEqual([10, 20, 30, 40, 50, 60]);
+    expect(ds!.values.map((r) => r[0])).toEqual([1, 2, NaN, NaN, NaN, NaN]);
+    expect(ds!.values.map((r) => r[1])).toEqual([NaN, NaN, 3, 4, NaN, NaN]);
+    expect(ds!.values.map((r) => r[2])).toEqual([NaN, NaN, NaN, NaN, 5, 6]);
+    // one source book, deduped even though it contributed three segments
+    expect(ds!.metadata.origin_overlay_books).toEqual(["Book2"]);
+  });
+});
+
+describe("buildOverlayDataset: unresolved x-letter (partial X decode)", () => {
+  // A book whose designated first-X column ("A") failed to decode as numeric
+  // data (a real opj.py scenario: x_unrecovered when one X column's blob fails
+  // plausible_column while other X columns on the sheet decode fine). opj.py
+  // then promotes the next X-designated column ("C") to x_column_name/.time, so
+  // a curve Origin bound to x="A" now references a letter that maps to no
+  // decoded channel (channelOf -> -1). It must be DROPPED, never coerced onto
+  // the time column (-2): blocks are keyed by (dataset, xCh), so a -2 alias
+  // would plot it against an unrelated curve's x (contamination) or collapse
+  // two real curves into one block.
+  const partialX = (): Dataset => ({
+    id: "d1",
+    name: "XRD:Book1",
+    data: {
+      time: [100, 200], // column C's data (promoted default x); A was lost
+      values: [
+        [1, 30, 900],
+        [2, 40, 901],
+      ],
+      labels: ["B-long", "F-long", "H-long"],
+      units: ["cts", "cts", "cts"],
+      metadata: {
+        origin_book: "Book1",
+        x_column_name: "C", // NOT "A" -- A failed to decode
+        origin_column_names: ["B", "F", "H"], // "A" is absent
+        source_format: "origin-opj",
+      },
+    },
+  });
+
+  it("drops a curve whose x-letter is present but undecoded (no time-column alias, no contamination)", () => {
+    const fig = figure([
+      { book: "Book1", x: "A", y: "B" }, // x=A lost -> MUST be dropped, not rebound to C
+      { book: "Book1", x: "C", y: "F" }, // x=C is the time column -> block xCh=-2
+      { book: "Book1", x: "F", y: "H" }, // x=F is value channel 1 -> distinct block
+    ]);
+    const out = buildOverlayDataset(fig, [partialX()]);
+    expect(out).not.toBeNull();
+    // Only the two honestly-bound curves survive; the dropped y=B contributes
+    // no column, so B's y-values (1,2) never appear -- no contamination.
+    expect(out!.labels).toEqual(["Book1: F-long", "Book1: H-long"]);
+    // block 0 = x=C (time 100/200), block 1 = x=F (values col F = 30/40).
+    expect(out!.time).toEqual([100, 200, 30, 40]);
+    expect(out!.values.map((r) => r[0])).toEqual([30, 40, NaN, NaN]); // y=F in its C block
+    expect(out!.values.map((r) => r[1])).toEqual([NaN, NaN, 900, 901]); // y=H in its F block
+  });
+
+  it("returns null when dropping the undecoded-x curve leaves fewer than two curves", () => {
+    const fig = figure([
+      { book: "Book1", x: "A", y: "B" }, // dropped (x=A undecoded)
+      { book: "Book1", x: "C", y: "F" }, // sole survivor -> not an overlay
+    ]);
+    expect(buildOverlayDataset(fig, [partialX()])).toBeNull();
+  });
 });

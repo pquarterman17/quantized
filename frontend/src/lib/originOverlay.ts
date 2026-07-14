@@ -76,7 +76,7 @@ export function buildOverlayDataset(
   datasets: Dataset[],
 ): DataStruct | null {
   const books = overlayBooks(figure, datasets);
-  if (books.length < 2) return null;
+  if (books.length === 0) return null;
 
   // Resolve each curve to (dataset, x-channel, y-channel) up front.
   interface Bound {
@@ -118,11 +118,18 @@ export function buildOverlayDataset(
     const yCh = channelOf(meta, c.y);
     if (yCh < 0) return; // dropped/undecoded column — skip honestly
     const xCh = c.x ? channelOf(meta, c.x) : -2;
+    // An x-LETTER present in the figure but mapping to no decoded channel
+    // (channelOf -> -1) must NOT be coerced to the time column (-2): blocks are
+    // keyed by (dataset, xCh), so a -2 alias would silently plot this curve
+    // against an UNRELATED curve's x (contamination) or collapse two real
+    // curves into one block. We can't know its true x, so drop it honestly —
+    // exactly like the undecoded-y case above (never invent data).
+    if (c.x && xCh === -1) return;
     const label = ds.data.labels[yCh] || c.y;
     const cd = meta.column_designations as Record<string, unknown> | undefined;
     bound.push({
       ds,
-      xCh: xCh === -1 ? -2 : xCh,
+      xCh,
       yCh,
       label: `${c.book}: ${label}`,
       unit: ds.data.units[yCh] ?? "",
@@ -136,44 +143,61 @@ export function buildOverlayDataset(
   });
   if (bound.length < 2) return null;
 
-  // One x-block per participating dataset, in first-curve order.
-  const blocks: Dataset[] = [];
-  for (const b of bound) if (!blocks.includes(b.ds)) blocks.push(b.ds);
-  // Re-validate AFTER channel resolution: if the other book's curves all
-  // dropped (undecoded columns), the survivors can collapse onto a single
-  // book -- that's not an overlay, so fall through to plain channel selection.
+  // One x-block per distinct (dataset, x-channel), in first-curve order. A
+  // cross-book figure gets one block per book; a MULTI-X worksheet -- curves
+  // in ONE book plotted against DIFFERENT x columns (e.g. Moke's Graph3, three
+  // field sweeps A/E/I) -- gets one block per x column. Either way a curve's
+  // values live only inside its own block (NaN elsewhere); segment
+  // concatenation (never a sorted union) keeps each loop's point order intact
+  // so a non-monotonic hysteresis sweep renders correctly.
+  interface Block {
+    ds: Dataset;
+    xCh: number; // -2 = the dataset's time column
+  }
+  const blockKey = (b: Bound): string => `${b.ds.id}#${b.xCh}`;
+  const blocks: Block[] = [];
+  const blockIndex = new Map<string, number>();
+  for (const b of bound) {
+    const key = blockKey(b);
+    if (!blockIndex.has(key)) {
+      blockIndex.set(key, blocks.length);
+      blocks.push({ ds: b.ds, xCh: b.xCh });
+    }
+  }
+  // Fewer than two distinct x-blocks is not an overlay (a single-book,
+  // single-x figure) -- fall through to the plain channel-selection path.
   if (blocks.length < 2) return null;
-  const starts = new Map<string, number>();
+  const starts: number[] = [];
   let total = 0;
-  for (const d of blocks) {
-    starts.set(d.id, total);
-    total += d.data.time.length;
+  for (const blk of blocks) {
+    starts.push(total);
+    total += blk.ds.data.time.length;
   }
 
+  // Each block's x is its own column: the designated time (xCh === -2) or a
+  // value channel.
   const time: number[] = new Array(total).fill(NaN);
-  for (const d of blocks) {
-    const s = starts.get(d.id) ?? 0;
-    for (let i = 0; i < d.data.time.length; i++) time[s + i] = d.data.time[i];
-  }
+  blocks.forEach((blk, bi) => {
+    const s = starts[bi];
+    const n = blk.ds.data.time.length;
+    for (let i = 0; i < n; i++) {
+      time[s + i] =
+        blk.xCh === -2 ? blk.ds.data.time[i] : (blk.ds.data.values[i]?.[blk.xCh] ?? NaN);
+    }
+  });
   const values: number[][] = Array.from({ length: total }, () =>
     new Array(bound.length).fill(NaN),
   );
   bound.forEach((b, col) => {
-    const s = starts.get(b.ds.id) ?? 0;
+    const bi = blockIndex.get(blockKey(b)) ?? 0;
+    const s = starts[bi];
     const n = b.ds.data.time.length;
     for (let i = 0; i < n; i++) {
       values[s + i][col] = b.ds.data.values[i]?.[b.yCh] ?? NaN;
     }
-    // A curve plotted against a non-default x channel: replace this block's
-    // time with that channel (all curves of one book share a block; Origin
-    // layers virtually always share the X column, so last-writer-wins is
-    // acceptable and recorded in provenance).
-    if (b.xCh >= 0) {
-      for (let i = 0; i < n; i++) time[s + i] = b.ds.data.values[i]?.[b.xCh] ?? NaN;
-    }
   });
 
-  const first = blocks[0].data.metadata ?? {};
+  const first = blocks[0].ds.data.metadata ?? {};
   return {
     time,
     values,
@@ -196,9 +220,11 @@ export function buildOverlayDataset(
       // like dSA feeds/whiskers, never a stray line, even in a cross-book figure.
       origin_column_names: bound.map((_, i) => `c${i}`),
       column_designations: Object.fromEntries(bound.map((b, i) => [`c${i}`, b.designation])),
-      origin_overlay_books: blocks.map((d) =>
-        String((d.data.metadata ?? {}).origin_book ?? d.name),
-      ),
+      origin_overlay_books: [
+        ...new Set(
+          blocks.map((blk) => String((blk.ds.data.metadata ?? {}).origin_book ?? blk.ds.name)),
+        ),
+      ],
       x_column_name: "A",
       x_column_long: String((first as Record<string, unknown>).x_column_long ?? ""),
       x_column_unit: String((first as Record<string, unknown>).x_column_unit ?? ""),

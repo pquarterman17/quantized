@@ -149,6 +149,7 @@ def _build_layer(
     blocks: list[tuple[int, bytes]],
     id_map: dict[int, tuple[str, str]],
     x_columns: dict[str, str],
+    col_order: dict[str, list[tuple[str, int]]] | None,
     name: str,
     layer_no: int,
     start: int,
@@ -329,5 +330,5 @@ def _build_layer(
             else None
         ),
         # item 2: curves attributed positionally to THIS layer only.
-        "curves": extract_curves(blocks, start, end, id_map, x_columns),
+        "curves": extract_curves(blocks, start, end, id_map, x_columns, col_order),
     }

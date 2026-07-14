@@ -160,7 +160,11 @@ from quantized.io.origin_project.container import walk_blocks
 from quantized.io.origin_project.figure_geometry import opj_page_size
 from quantized.io.origin_project.figure_layers import _build_layer, _is_layer_block
 from quantized.io.origin_project.figure_text import distribute_legend_layers
-from quantized.io.origin_project.opj_curves import book_x_columns, column_id_map
+from quantized.io.origin_project.opj_curves import (
+    book_column_designations,
+    column_id_map,
+    x_columns_from_designations,
+)
 from quantized.io.origin_project.windows import _is_window_header
 
 __all__ = ["extract_figures"]
@@ -171,7 +175,11 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
     snapshot dict -- one dict per layer (see module docstring)."""
     blocks = [(size, payload) for size, payload in walk_blocks(b) if size]
     id_map = column_id_map(blocks)
-    x_columns = book_x_columns(blocks)
+    # One walk of the block list: the ordered per-book designations drive both
+    # the per-curve nearest-preceding-X (col_order) and the book-level fallback
+    # X (x_columns) -- deriving the latter in memory avoids a second walk.
+    col_order = book_column_designations(blocks)
+    x_columns = x_columns_from_designations(col_order)
     figures: list[dict[str, Any]] = []
 
     n = len(blocks)
@@ -196,7 +204,9 @@ def extract_figures(b: bytes) -> list[dict[str, Any]]:
         window_figs: list[dict[str, Any]] = []
         for pos, layer_start in enumerate(layer_starts):
             layer_end = layer_starts[pos + 1] if pos + 1 < len(layer_starts) else win_end
-            fig = _build_layer(blocks, id_map, x_columns, name, pos + 1, layer_start, layer_end)
+            fig = _build_layer(
+                blocks, id_map, x_columns, col_order, name, pos + 1, layer_start, layer_end
+            )
             # Page size (u16 pair @35 of the window header): with the layer
             # frame quad this places every panel of a multi-panel page.
             fig["page"] = page

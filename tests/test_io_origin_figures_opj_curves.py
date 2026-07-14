@@ -20,7 +20,12 @@ from pathlib import Path
 import pytest
 
 from quantized.io.origin_project.figures import extract_figures
-from quantized.io.origin_project.opj_curves import book_x_columns, column_id_map, extract_curves
+from quantized.io.origin_project.opj_curves import (
+    book_column_designations,
+    book_x_columns,
+    column_id_map,
+    extract_curves,
+)
 
 # ── synthetic CPYA figure + curve-anchor builder ──────────────────────────────
 
@@ -186,6 +191,78 @@ def test_extract_curves_multiple_curves_one_layer() -> None:
         {"book": "Book1", "x": "A", "y": "B"},
         {"book": "Book1", "x": "A", "y": "C"},
     ]
+
+
+def test_book_column_designations_keeps_ordered_designations() -> None:
+    """The ordered per-book (short, designation) list that lets each curve
+    resolve its own X -- the multi-X sheet exposes BOTH X columns in order."""
+    blob = _synthetic_opj(
+        _window_header("Book1"),
+        _column_block("A", cid=1, designation=3),
+        _column_block("B", cid=2, designation=0),
+        _column_block("C", cid=3, designation=3),
+        _column_block("D", cid=4, designation=0),
+    )
+    assert book_column_designations(_blocks_of(blob)) == {
+        "Book1": [("A", 3), ("B", 0), ("C", 3), ("D", 0)]
+    }
+    # book_x_columns still collapses to the FIRST X (unchanged contract)
+    assert book_x_columns(_blocks_of(blob)) == {"Book1": "A"}
+
+
+def test_extract_curves_multi_x_binds_each_y_to_nearest_preceding_x() -> None:
+    """A multi-X worksheet -- two ``field->value`` blocks side by side
+    (A|B, C|D), each with its own X-designated column. Each curve must plot
+    against its OWN nearest preceding X-designated column, not the book's
+    first X. This is the Moke.opj hysteresis regression (325/525 C loops were
+    smeared onto column A). See ``opj_curves._nearest_preceding_x``."""
+    blob = _synthetic_opj(
+        _window_header("Book1"),
+        _column_block("A", cid=1, designation=3),  # X for block 1
+        _column_block("B", cid=2, designation=0),  # Y in block 1 -> x = A
+        _column_block("C", cid=3, designation=3),  # X for block 2
+        _column_block("D", cid=4, designation=0),  # Y in block 2 -> x = C
+        _window_header("Graph1"),
+        _layer_block(0.0, 10.0, 0.0, 100.0),
+        _curve(cid=2),
+        _curve(cid=4),
+    )
+    blocks = _blocks_of(blob)
+    id_map = column_id_map(blocks)
+    x_columns = book_x_columns(blocks)
+    col_order = book_column_designations(blocks)
+    curves = extract_curves(blocks, 0, len(blocks), id_map, x_columns, col_order)
+    assert curves == [
+        {"book": "Book1", "x": "A", "y": "B"},
+        {"book": "Book1", "x": "C", "y": "D"},  # nearest preceding X is C, not A
+    ]
+    # WITHOUT col_order the old behavior is preserved (both collapse onto the
+    # book's single first X) -- the exact bug the fix corrects.
+    legacy = extract_curves(blocks, 0, len(blocks), id_map, x_columns)
+    assert legacy == [
+        {"book": "Book1", "x": "A", "y": "B"},
+        {"book": "Book1", "x": "A", "y": "D"},
+    ]
+
+
+def test_extract_curves_multi_x_y_before_any_x_falls_back_to_book_x() -> None:
+    """A Y column that precedes every X-designated column on its sheet has no
+    nearest-preceding X -- it falls back to the book-level designated X rather
+    than dropping the curve."""
+    blob = _synthetic_opj(
+        _window_header("Book1"),
+        _column_block("B", cid=2, designation=0),  # Y before any X
+        _column_block("A", cid=1, designation=3),  # the book's (only) X
+        _window_header("Graph1"),
+        _layer_block(0.0, 10.0, 0.0, 100.0),
+        _curve(cid=2),
+    )
+    blocks = _blocks_of(blob)
+    id_map = column_id_map(blocks)
+    x_columns = book_x_columns(blocks)
+    col_order = book_column_designations(blocks)
+    curves = extract_curves(blocks, 0, len(blocks), id_map, x_columns, col_order)
+    assert curves == [{"book": "Book1", "x": "A", "y": "B"}]
 
 
 def test_extract_curves_cross_book() -> None:
