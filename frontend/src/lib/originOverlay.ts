@@ -14,6 +14,40 @@
 import { curveDisplayName, originCurveSeriesStyle, resolveLegendTemplate } from "./originFigures";
 import type { Dataset, DataStruct, OriginFigure, SeriesStyle } from "./types";
 
+/** Derived-overlay schema. Increment when construction or binding semantics
+ * change so persisted workspaces cannot silently reuse older geometry. */
+export const ORIGIN_OVERLAY_VERSION = 2;
+
+/** Construct regenerated overlay geometry without carrying row/column-dependent
+ * state from the previous derivation. User organization and annotations are
+ * safe to retain because they do not reinterpret the rebuilt data. */
+export function originOverlayDataset(
+  id: string,
+  name: string,
+  data: DataStruct,
+  sourceId: string,
+  existing?: Dataset,
+): Dataset {
+  const stamped = {
+    ...data,
+    metadata: {
+      ...data.metadata,
+      origin_overlay_source: sourceId,
+      origin_overlay_version: ORIGIN_OVERLAY_VERSION,
+    },
+  };
+  return {
+    id,
+    name,
+    data: stamped,
+    ...(existing?.notes !== undefined ? { notes: existing.notes } : {}),
+    ...(existing?.tags !== undefined ? { tags: existing.tags } : {}),
+    ...(existing?.group !== undefined ? { group: existing.group } : {}),
+    ...(existing?.folderId !== undefined ? { folderId: existing.folderId } : {}),
+    ...(existing?.order !== undefined ? { order: existing.order } : {}),
+  };
+}
+
 /** Letter -> 0-based value-channel index via origin_column_names, or -1;
  *  the designation-X letter maps to the time column (-2 sentinel). */
 function channelOf(meta: Record<string, unknown>, letter: string): number {

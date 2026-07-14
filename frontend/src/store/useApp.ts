@@ -86,7 +86,7 @@ import { createShapesSlice, type ShapesSlice } from "./shapes";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
-import { buildOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
+import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
@@ -1509,24 +1509,25 @@ export const useApp = create<AppState>((set, get) => ({
     // collide across same-stem imports) so re-applying reuses only this
     // figure's own overlay.
     const siblings = get().datasets.filter((d) => entry.siblingIds.includes(d.id));
-    const existing = get().datasets.find(
-      (d) => (d.data.metadata ?? {}).origin_overlay_source === entry.id,
-    );
-    const overlay = existing ? null : buildOverlayDataset(fig, siblings);
-    if (existing || overlay) {
-      let targetId = existing?.id ?? null;
-      if (!existing && overlay) {
-        targetId = nextDatasetId();
-        const stamped = {
-          ...overlay,
-          metadata: { ...overlay.metadata, origin_overlay_source: entry.id },
-        };
-        get().addDataset({ id: targetId, name: overlayName, data: stamped });
+    const existing = get().datasets.find((d) =>
+      (d.data.metadata ?? {}).origin_overlay_source === entry.id);
+    const overlay = buildOverlayDataset(fig, siblings);
+    if (overlay) {
+      const targetId = existing?.id ?? nextDatasetId();
+      const refreshed = originOverlayDataset(targetId, overlayName, overlay, entry.id, existing);
+      if (existing) {
+        set((s) => ({
+          datasets: s.datasets.map((d) =>
+            d.id === existing.id ? refreshed : d
+          ),
+        }));
+      } else {
+        get().addDataset(refreshed);
         toast(`built overlay — ${overlay.labels.length} curves`, "ok");
       }
       if (targetId) {
         get().setActive(targetId);
-        const src = existing?.data ?? overlay;
+        const src = refreshed.data;
         const n = src?.labels.length ?? 0;
         set({
           // Origin draws every layer with a full 4-side frame box; the
