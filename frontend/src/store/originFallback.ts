@@ -91,7 +91,20 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
       let datasetId: string;
       let yColumns: number[];
       let xColumn: number | null;
-      if (layerResolution.sources.length === 1) {
+      // applyOriginFigure materializes a provenance-stamped overlay whenever
+      // one editable plot needs more than one X block: cross-book curves OR a
+      // single Origin worksheet laid out X,Y,X,Y,... . Prefer that overlay
+      // regardless of source-book count. Falling through to sources[0] for a
+      // one-book multi-X figure would collapse every Y back onto xColumns[0]
+      // and recreate the hysteresis corruption fixed by PR #38.
+      const overlayDataset = get().datasets.find(
+        (ds) => (ds.data.metadata ?? {}).origin_overlay_source === entry.id,
+      );
+      if (overlayDataset) {
+        datasetId = overlayDataset.id;
+        yColumns = overlayDataset.data.labels.map((_, index) => index);
+        xColumn = null;
+      } else if (layerResolution.sources.length === 1) {
         const source = layerResolution.sources[0];
         datasetId = source.datasetId;
         yColumns = source.yColumns;
@@ -100,16 +113,8 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
         // column; value-channel X columns use an explicit non-negative ref.
         xColumn = sourceX < 0 ? null : sourceX;
       } else {
-        const overlayDataset = get().datasets.find(
-          (ds) => (ds.data.metadata ?? {}).origin_overlay_source === entry.id,
-        );
-        if (!overlayDataset) {
-          toast("Cross-book remake could not resolve every decoded curve", "info");
-          return;
-        }
-        datasetId = overlayDataset.id;
-        yColumns = overlayDataset.data.labels.map((_, index) => index);
-        xColumn = null;
+        toast("Origin remake could not resolve every decoded curve", "info");
+        return;
       }
       const spec: PlotSpec = {
         version: 1,
@@ -119,7 +124,9 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
           group: null,
           facet: null,
         },
-        mark: entry.figure.curves?.some((curve) => curve.style === "line") ? "line" : "scatter",
+        mark: entry.figure.curves?.some(
+          (curve) => curve.style === "line" || curve.style === "line_symbol",
+        ) ? "line" : "scatter",
       };
       get().openGraphBuilderSeeded(spec);
       set({ status: `opened ${entry.figure.name || "Origin graph"} layer ${entry.figure.layer ?? 1} in Graph Builder${resolution.unresolved.length ? `; ${resolution.unresolved.length} binding${resolution.unresolved.length === 1 ? "" : "s"} unresolved` : ""}` });

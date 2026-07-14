@@ -34,6 +34,13 @@ dataset (`origin_overlay_source=<figure entry id>`), and Graph Builder receives
 the overlay channels in Origin curve order. It does not create a second remake
 overlay.
 
+The same overlay rule applies to a single worksheet containing multiple X
+blocks (`X,Y,X,Y,...`). Each Y keeps its decoded per-curve X binding from the
+import pipeline; Graph Builder receives the segmented overlay produced by
+`applyOriginFigure`, not the worksheet's first X column. This preserves
+non-monotonic sweep order and prevents remaking a corrected hysteresis figure
+into the pre-PR-38 smeared geometry.
+
 Applying first also restores every already-supported property—axis limits and
 scales, decoded steps and titles, series styles and labels, legend placement,
 annotations, regions, double-Y state, and spatial panels—before the editable

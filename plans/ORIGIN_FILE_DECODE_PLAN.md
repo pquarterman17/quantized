@@ -394,7 +394,8 @@ Official model references used for this routing:
       Library never destroys provenance needed by later decoders.
 
 50. ~~**Exact source-workbook and remake actions.**~~ **COMPLETE 2026-07-12
-    (PR #27).** Add first-class actions on
+    (PR #27; multi-X remake follow-up on
+    `codex/origin-multix-remake`).** Add first-class actions on
     every Origin figure: **Open source workbook(s)** and **Remake in Graph
     Builder**.
     - Resolve pending books before opening; focus the actual sheet pseudo-book
@@ -421,8 +422,11 @@ Official model references used for this routing:
 
 ### Tier 2 — close corpus-visible plot mismatches
 
-52. **Curve and axis fidelity campaign.** **IN PROGRESS: first oracle-backed
-    curve-style slice on `codex/origin-curve-axis-fidelity`.** Drive this item from the existing
+52. **Curve and axis fidelity campaign.** **IN PROGRESS: line/scatter/
+    line+symbol and verified dimensions merged in PR #29. The speculative
+    byte-17 segment-connect work in PRs #30/#31 was reverted by PR #32; do not
+    restore it without the independent evidence required by `AGENTS.md`.**
+    Drive this item from the existing
     Origin↔Quantized gallery and structural report, ordered by how many real
     graphs visibly differ.
     - Per-curve visibility/hidden state, using new independent ground truth;
