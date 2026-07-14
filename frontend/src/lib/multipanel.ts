@@ -36,6 +36,10 @@ export function panelHeights(n: number, total: number, gap = 8): number[] {
  *  shape, so a future non-Origin multi-panel source could produce the same
  *  contract. */
 export interface SpatialPanel {
+  /** Origin figure-entry ids represented by this native panel, primary layer
+   * first and an optional frame-coincident y2 overlay second. Audit/provenance
+   * only; rendering never branches on these ids. */
+  sourceFigureIds?: string[];
   datasetId: string;
   xKey: number | null;
   yKeys: number[];

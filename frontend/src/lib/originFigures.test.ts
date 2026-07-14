@@ -668,8 +668,8 @@ describe("resolveFigurePanels", () => {
     });
     const panels = resolveFigurePanels([l1, l2], [ds1, ds2]);
     expect(panels).toEqual([
-      { datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 10], yLim: [0, 50], xLog: false, yLog: true, xAxisLabel: "Time", yAxisLabel: "V", seriesStyles: {}, seriesLabels: {}, errKeys: {}, hiddenChannels: [], xStep: null, yStep: null, annotations: [] },
-      { datasetId: "d2", xKey: null, yKeys: [0], xLim: [0, 20], yLim: [-1, 1], xLog: false, yLog: false, xAxisLabel: undefined, yAxisLabel: undefined, seriesStyles: {}, seriesLabels: {}, errKeys: {}, hiddenChannels: [], xStep: null, yStep: null, annotations: [] },
+      { sourceFigureIds: ["f1"], datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 10], yLim: [0, 50], xLog: false, yLog: true, xAxisLabel: "Time", yAxisLabel: "V", seriesStyles: {}, seriesLabels: {}, errKeys: {}, hiddenChannels: [], xStep: null, yStep: null, annotations: [] },
+      { sourceFigureIds: ["f2"], datasetId: "d2", xKey: null, yKeys: [0], xLim: [0, 20], yLim: [-1, 1], xLog: false, yLog: false, xAxisLabel: undefined, yAxisLabel: undefined, seriesStyles: {}, seriesLabels: {}, errKeys: {}, hiddenChannels: [], xStep: null, yStep: null, annotations: [] },
     ]);
   });
 
@@ -867,6 +867,8 @@ describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual â€
       expect(bottom.y2Log).toBe(false);
       // Prefers the y2 layer's own y2_title over its (blank) y_title.
       expect(bottom.y2AxisLabel).toBe("Magnetic SLD");
+      expect(top.sourceFigureIds).toEqual(["f1"]);
+      expect(bottom.sourceFigureIds).toEqual(["f2", "f3"]);
       expect(top.y2Keys ?? null).toBeNull();
     });
 
