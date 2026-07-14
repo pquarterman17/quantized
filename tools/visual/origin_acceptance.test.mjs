@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   acceptanceCsv,
   buildAcceptanceRows,
+  normalizedRectsMatch,
   screenshotReview,
   summarizeFigureFamily,
   summarizeRuntimeErrors,
@@ -53,6 +54,23 @@ test("runtime errors are deduplicated, ordered, and bounded", () => {
     errors: [first.stack],
     truncated: true,
   });
+});
+
+test("normalized frame comparison tolerates pixel rounding but rejects flattening", () => {
+  const expected = [
+    { left: 0, top: 0, width: 0.48, height: 0.45 },
+    { left: 0.52, top: 0, width: 0.48, height: 0.45 },
+    { left: 0, top: 0.55, width: 1, height: 0.45 },
+  ];
+  const rounded = expected.map((rect) => Object.fromEntries(
+    Object.entries(rect).map(([key, value]) => [key, value + 0.001]),
+  ));
+  assert.equal(normalizedRectsMatch(expected, rounded), true);
+  const flattened = expected.map((_, index) => ({
+    left: (index % 2) * 0.5, top: Math.floor(index / 2) * 0.5, width: 0.5, height: 0.5,
+  }));
+  assert.equal(normalizedRectsMatch(expected, flattened), false);
+  assert.equal(normalizedRectsMatch(expected, expected.slice(1)), false);
 });
 
 test("acceptance rows retain unpaired graphs and structural failures", () => {

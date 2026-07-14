@@ -72,6 +72,22 @@ export function summarizeRuntimeErrors(errors, limit = 10) {
   };
 }
 
+/** Compare normalized DOM rectangles with decoded frame rectangles. Kept
+ * pure so the browser harness's geometry assertion has positive + negative
+ * controls independent of Puppeteer and the live store. */
+export function normalizedRectsMatch(expected, actual, tolerance = 0.01) {
+  if (!Array.isArray(expected) || !Array.isArray(actual) || expected.length !== actual.length) return false;
+  const keys = ["left", "top", "width", "height"];
+  return expected.every((rect, index) => {
+    const observed = actual[index];
+    return rect && observed && keys.every((key) =>
+      Number.isFinite(rect[key])
+      && Number.isFinite(observed[key])
+      && Math.abs(rect[key] - observed[key]) <= tolerance
+    );
+  });
+}
+
 /** Join the three generated reports plus optional exported eyeball marks into
  * one durable row per graph. Missing inputs become explicit states. */
 export function buildAcceptanceRows(project, originManifest, quantizedManifest, structuralReport, review) {

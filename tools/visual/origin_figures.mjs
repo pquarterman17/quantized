@@ -40,7 +40,11 @@ import {
   sanitizeName,
   waitForServer,
 } from "./origin_shared.mjs";
-import { summarizeFigureFamily, summarizeRuntimeErrors } from "./origin_acceptance.mjs";
+import {
+  normalizedRectsMatch,
+  summarizeFigureFamily,
+  summarizeRuntimeErrors,
+} from "./origin_acceptance.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.opj || !args.project) {
@@ -120,6 +124,17 @@ function compareFigureToState(family, representative, applied) {
     checks.push(
       check("canvas_count", applied.canvasCount === panels.length, `expected ${panels.length}, saw ${applied.canvasCount}`),
     );
+    const expectedRects = panels.map((panel) => panel.frameRect);
+    if (expectedRects.every(Boolean)) {
+      const geometryPass = normalizedRectsMatch(expectedRects, applied.panelRects);
+      checks.push(check(
+        "decoded_frame_geometry",
+        geometryPass,
+        geometryPass
+          ? `${expectedRects.length} panel rectangles match decoded geometry`
+          : `expected ${JSON.stringify(expectedRects)}; got ${JSON.stringify(applied.panelRects)}`,
+      ));
+    }
     return { mode: "multiPanel", checks };
   }
   const isDoubleY = family.length === 2 && Array.isArray(applied.y2Keys) && applied.y2Keys.length > 0;
@@ -336,6 +351,34 @@ async function main() {
 
       const applied = await page.evaluate(() => {
         const s = window.__qz.useApp.getState();
+        const stage = document.querySelector(".qzk-stage");
+        const host = stage?.firstElementChild;
+        const hostBox = host?.getBoundingClientRect();
+        const panelRects = hostBox && hostBox.width > 0 && hostBox.height > 0
+          ? Array.from(host.children).map((element) => {
+              const box = element.getBoundingClientRect();
+              return {
+                left: (box.left - hostBox.left) / hostBox.width,
+                top: (box.top - hostBox.top) / hostBox.height,
+                width: box.width / hostBox.width,
+                height: box.height / hostBox.height,
+              };
+            })
+          : [];
+        const canvases = Array.from(document.querySelectorAll(".qzk-stage canvas"));
+        const paintedCanvasCount = canvases.filter((canvas) => {
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          if (!ctx || canvas.width <= 0 || canvas.height <= 0) return false;
+          const rgba = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+          const stride = Math.max(4, Math.floor((canvas.width * canvas.height) / 5000) * 4);
+          let first = null;
+          for (let offset = 0; offset < rgba.length; offset += stride) {
+            const color = `${rgba[offset]},${rgba[offset + 1]},${rgba[offset + 2]},${rgba[offset + 3]}`;
+            if (first == null) first = color;
+            else if (color !== first) return true;
+          }
+          return false;
+        }).length;
         return {
           xLim: s.xLim,
           yLim: s.yLim,
@@ -349,11 +392,18 @@ async function main() {
           y2Keys: s.y2Keys,
           stackMode: s.stackMode,
           spatialPanels: s.spatialPanels,
-          canvasCount: document.querySelectorAll(".qzk-stage canvas").length,
+          canvasCount: canvases.length,
+          paintedCanvasCount,
+          panelRects,
         };
       });
 
       const { mode, checks } = compareFigureToState(family, representative, applied);
+      checks.push(check(
+        "painted_canvases",
+        applied.canvasCount > 0 && applied.paintedCanvasCount === applied.canvasCount,
+        `${applied.paintedCanvasCount}/${applied.canvasCount} canvases contain sampled paint variation`,
+      ));
       checks.push(check(
         "runtime_errors",
         runtimeErrors.count === 0,
