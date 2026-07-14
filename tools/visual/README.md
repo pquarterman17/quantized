@@ -143,6 +143,9 @@ Output (gitignored, in `_exports/<project>/`, never committed):
   leakage), not deep rendering fidelity — mismatches are data for the gap
   register, not CI failures. Log checks derive from the current typed
   `xScale`/`yScale`/`y2Scale` fields; legacy `xLog` store fields do not exist.
+  Browser exceptions are attributed to the graph being applied, deduplicated,
+  recorded in both manifests, and make that graph structurally fail even when
+  its axis/panel checks happen to pass.
 - `gallery.html` — Origin PNG | quantized PNG side by side per figure, a
   structural-pass badge, and 7 clickable eyeball-checklist chips (scales /
   ticks / legend / colours / markers / annotations / panels) that cycle

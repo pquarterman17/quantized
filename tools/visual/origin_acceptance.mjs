@@ -58,6 +58,20 @@ export function screenshotReview(review, graph) {
   return { status, reviewed_checks: reviewed, mismatch_checks: mismatches };
 }
 
+/** Normalize browser exceptions for durable reports: preserve the first-seen
+ * order, deduplicate repeated uPlot/React emissions, and cap noisy stacks. */
+export function summarizeRuntimeErrors(errors, limit = 10) {
+  const normalized = unique((errors || []).map((error) => {
+    if (typeof error === "string") return error;
+    return error?.stack || error?.message || String(error);
+  }));
+  return {
+    count: normalized.length,
+    errors: normalized.slice(0, limit),
+    truncated: normalized.length > limit,
+  };
+}
+
 /** Join the three generated reports plus optional exported eyeball marks into
  * one durable row per graph. Missing inputs become explicit states. */
 export function buildAcceptanceRows(project, originManifest, quantizedManifest, structuralReport, review) {
@@ -89,6 +103,8 @@ export function buildAcceptanceRows(project, originManifest, quantizedManifest, 
       paired_screenshots: originRendered && quantizedRendered,
       structural_pass: typeof s?.pass === "boolean" ? s.pass : null,
       structural_failures: (s?.checks || []).filter((item) => !item.pass).map((item) => item.name),
+      runtime_error_count: q?.runtime_errors?.count ?? 0,
+      runtime_errors: q?.runtime_errors?.errors || [],
       screenshot_review_status: reviewState.status,
       screenshot_reviewed_checks: reviewState.reviewed_checks,
       screenshot_mismatches: reviewState.mismatch_checks,

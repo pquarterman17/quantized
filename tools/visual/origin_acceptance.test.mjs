@@ -6,6 +6,7 @@ import {
   buildAcceptanceRows,
   screenshotReview,
   summarizeFigureFamily,
+  summarizeRuntimeErrors,
 } from "./origin_acceptance.mjs";
 
 test("family summary preserves decoded curve order and reports worst fidelity", () => {
@@ -41,6 +42,19 @@ test("review state is explicit for partial, complete, and mismatched review", ()
   assert.deepEqual(screenshotReview({ figures: { Graph1: complete } }, "Graph1").mismatch_checks, ["legend"]);
 });
 
+test("runtime errors are deduplicated, ordered, and bounded", () => {
+  const first = new Error("uPlot failed");
+  assert.deepEqual(summarizeRuntimeErrors([
+    first,
+    "plain failure",
+    first,
+  ], 1), {
+    count: 2,
+    errors: [first.stack],
+    truncated: true,
+  });
+});
+
 test("acceptance rows retain unpaired graphs and structural failures", () => {
   const rows = buildAcceptanceRows(
     "Moke",
@@ -52,6 +66,7 @@ test("acceptance rows retain unpaired graphs and structural failures", () => {
   assert.deepEqual(rows.map((row) => row.graph), ["Graph1", "OriginOnly"]);
   assert.equal(rows[0].paired_screenshots, true);
   assert.deepEqual(rows[0].structural_failures, ["y_range"]);
+  assert.equal(rows[0].runtime_error_count, 0);
   assert.equal(rows[1].quantized_render_status, "missing");
   assert.match(acceptanceCsv(rows), /"\[""Book2""\]"/);
 });
