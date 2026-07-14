@@ -897,6 +897,7 @@ describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual â€
         { left: 0, top: 0, width: 1, height: 0.25 },
         { left: 0, top: 0.35, width: 1, height: 0.65 },
       ]);
+      expect(result?.panels.map((p) => p.layoutAspect)).toEqual([0.3, 0.3]);
     });
 
     it("falls back to the ordinal stack (unchanged) when frames are missing/degenerate â€” no merge applies", () => {

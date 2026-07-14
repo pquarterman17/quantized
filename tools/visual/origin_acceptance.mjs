@@ -88,6 +88,33 @@ export function normalizedRectsMatch(expected, actual, tolerance = 0.01) {
   });
 }
 
+/** Convert layout-normalized decoded frames into host-normalized rectangles
+ * after aspect-preserving letterboxing. Independent oracle for the frontend's
+ * pixel-space `fittedLayoutRect` implementation. */
+export function fitNormalizedLayoutRects(rects, layoutAspect, hostWidth, hostHeight) {
+  if (!Number.isFinite(layoutAspect) || layoutAspect <= 0
+      || !Number.isFinite(hostWidth) || hostWidth <= 0
+      || !Number.isFinite(hostHeight) || hostHeight <= 0) return rects;
+  const hostAspect = hostWidth / hostHeight;
+  let pageLeft = 0;
+  let pageTop = 0;
+  let pageWidth = 1;
+  let pageHeight = 1;
+  if (hostAspect > layoutAspect) {
+    pageWidth = layoutAspect / hostAspect;
+    pageLeft = (1 - pageWidth) / 2;
+  } else {
+    pageHeight = hostAspect / layoutAspect;
+    pageTop = (1 - pageHeight) / 2;
+  }
+  return rects.map((rect) => ({
+    left: pageLeft + rect.left * pageWidth,
+    top: pageTop + rect.top * pageHeight,
+    width: rect.width * pageWidth,
+    height: rect.height * pageHeight,
+  }));
+}
+
 /** Join the three generated reports plus optional exported eyeball marks into
  * one durable row per graph. Missing inputs become explicit states. */
 export function buildAcceptanceRows(project, originManifest, quantizedManifest, structuralReport, review) {

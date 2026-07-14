@@ -94,9 +94,12 @@ export interface SpatialPanel {
   y2AxisLabel?: string;
   row: number;
   col: number;
-  /** Trusted decoded frame within the tiled family's bounding box. Optional
-   *  so ordinal/untrusted and non-Origin producers keep the equal-grid path. */
+  /** Trusted decoded frame within the tiled frames' bounding box. Optional so
+   *  ordinal/untrusted and non-Origin producers keep the equal-grid path. */
   frameRect?: NormalizedFrameRect;
+  /** Aspect ratio of the recovered frame composition that `frameRect` is
+   *  normalized to. */
+  layoutAspect?: number;
 }
 
 /** The channels a spatial panel actually plots: its `yKeys` minus any

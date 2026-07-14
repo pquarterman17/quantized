@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   acceptanceCsv,
   buildAcceptanceRows,
+  fitNormalizedLayoutRects,
   normalizedRectsMatch,
   screenshotReview,
   summarizeFigureFamily,
@@ -71,6 +72,19 @@ test("normalized frame comparison tolerates pixel rounding but rejects flattenin
   }));
   assert.equal(normalizedRectsMatch(expected, flattened), false);
   assert.equal(normalizedRectsMatch(expected, expected.slice(1)), false);
+});
+
+test("layout frames are independently transformed through host letterboxing", () => {
+  assert.deepEqual(fitNormalizedLayoutRects([
+    { left: 0.1, top: 0.2, width: 0.8, height: 0.6 },
+  ], 2, 1000, 800), [
+    { left: 0.1, top: 0.3125, width: 0.8, height: 0.375 },
+  ]);
+  assert.deepEqual(fitNormalizedLayoutRects([
+    { left: 0, top: 0, width: 1, height: 1 },
+  ], 0.5, 1000, 500), [
+    { left: 0.375, top: 0, width: 0.25, height: 1 },
+  ]);
 });
 
 test("acceptance rows retain unpaired graphs and structural failures", () => {
