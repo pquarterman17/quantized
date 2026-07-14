@@ -118,11 +118,18 @@ export function buildOverlayDataset(
     const yCh = channelOf(meta, c.y);
     if (yCh < 0) return; // dropped/undecoded column — skip honestly
     const xCh = c.x ? channelOf(meta, c.x) : -2;
+    // An x-LETTER present in the figure but mapping to no decoded channel
+    // (channelOf -> -1) must NOT be coerced to the time column (-2): blocks are
+    // keyed by (dataset, xCh), so a -2 alias would silently plot this curve
+    // against an UNRELATED curve's x (contamination) or collapse two real
+    // curves into one block. We can't know its true x, so drop it honestly —
+    // exactly like the undecoded-y case above (never invent data).
+    if (c.x && xCh === -1) return;
     const label = ds.data.labels[yCh] || c.y;
     const cd = meta.column_designations as Record<string, unknown> | undefined;
     bound.push({
       ds,
-      xCh: xCh === -1 ? -2 : xCh,
+      xCh,
       yCh,
       label: `${c.book}: ${label}`,
       unit: ds.data.units[yCh] ?? "",
