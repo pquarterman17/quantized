@@ -457,6 +457,11 @@ Official model references used for this routing:
       data rather than Origin's clean static legend. Pre-existing (same anchor).
       Drive legend placement + content off the decoded legend and suppress the
       interactive chrome in an applied Origin figure.
+      - **PR #51:** the renderer-level swatch mismatch is fixed independently:
+        the interactive legend now mirrors the plotted series' line-only,
+        point-only, or line+point mode plus decoded marker shape/size, line
+        width, and dash. This does not infer Origin fields or change curve
+        paths/bindings. Static Origin legend chrome/visibility remains open.
 
 53. **Graphic objects and rich annotations** — this campaign's promoted form
     of item #47. Decode Origin arrows, arbitrary lines, standalone rectangles/
