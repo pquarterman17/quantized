@@ -169,6 +169,10 @@ Output (gitignored, in `_exports/<project>/`, never committed):
   totals include deterministic ranked fidelity statuses/omissions, layout
   modes, failure checks, review states, and unresolved projects. Unresolved
   graphs are counted separately from resolved structural mismatches.
+- `_exports/review_dashboard.html` — corpus entry point listing every project
+  gallery and linking the paired, not-yet-reviewed queue directly to each
+  graph's side-by-side section. `origin_corpus.mjs` regenerates available
+  project galleries before rebuilding this dashboard.
 - `_exports/corpus_render_summary.json` â€” strict per-project renderer-run
   summary. Unresolved graphs are counted separately (they remain fallback
   work, not a renderer regression); child-process failures and any resolved

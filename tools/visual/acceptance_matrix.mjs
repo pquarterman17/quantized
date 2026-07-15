@@ -10,6 +10,7 @@ import { join, resolve } from "node:path";
 
 import {
   acceptanceCsv,
+  acceptanceDashboardHtml,
   buildAcceptanceRows,
   summarizeAcceptanceRows,
 } from "./origin_acceptance.mjs";
@@ -59,11 +60,14 @@ async function main() {
   const totals = summarizeAcceptanceRows(rows, projects.length);
   const jsonPath = join(root, "acceptance_matrix.json");
   const csvPath = join(root, "acceptance_matrix.csv");
+  const dashboardPath = join(root, "review_dashboard.html");
   await writeFile(jsonPath, JSON.stringify({ version: 1, generated: new Date().toISOString(), totals, rows }, null, 2), "utf8");
   await writeFile(csvPath, acceptanceCsv(rows), "utf8");
+  await writeFile(dashboardPath, acceptanceDashboardHtml(rows, totals), "utf8");
   console.log(`Origin acceptance matrix: ${rows.length} graph(s) across ${projects.length} project(s)`);
   console.log(`  JSON -> ${jsonPath}`);
   console.log(`  CSV  -> ${csvPath}`);
+  console.log(`  HTML -> ${dashboardPath}`);
 }
 
 main().catch((error) => {

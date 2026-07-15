@@ -65,15 +65,18 @@ async function main() {
   for (const [index, entry] of entries.entries()) {
     const projectDir = join(exportsRoot, entry.project);
     console.log(`\n=== Origin corpus ${index + 1}/${entries.length}: ${entry.project} ===`);
-    const exitCode = await runNode("origin_figures.mjs", [
+    const renderExit = await runNode("origin_figures.mjs", [
       "--opj", entry.file,
       "--project", entry.project,
       "--exports-root", projectDir,
       "--port", String(basePort + index),
     ]);
+    const galleryExit = existsSync(join(projectDir, "manifest.json"))
+      ? await runNode("gallery.mjs", ["--project", entry.project, "--exports-root", projectDir])
+      : 0;
     runs.push({
       project: entry.project,
-      exitCode,
+      exitCode: renderExit || galleryExit,
       report: await readJson(join(projectDir, "structural_report.json")),
     });
   }
