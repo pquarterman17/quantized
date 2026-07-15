@@ -8,6 +8,7 @@ import {
   normalizedRectsMatch,
   screenshotReview,
   summarizeCorpusReports,
+  summarizeAcceptanceRows,
   summarizeFigureFamily,
   summarizeRuntimeErrors,
 } from "./origin_acceptance.mjs";
@@ -125,4 +126,22 @@ test("corpus summary separates unresolved graphs from strict renderer failures",
     { graph: "Graph40", checks: ["decoded_frame_geometry"] },
   ]);
   assert.equal(summary.strict_pass, false);
+});
+
+test("acceptance evidence ledger ranks omissions deterministically", () => {
+  const rows = [
+    { project: "B", fidelity_status: "best_effort", fidelity_omissions: ["ticks", "graphics"], layout_mode: "single", structural_failures: [], quantized_render_status: "rendered", runtime_error_count: 0, screenshot_review_status: "unreviewed", paired_screenshots: true, structural_pass: true },
+    { project: "A", fidelity_status: "best_effort", fidelity_omissions: ["graphics"], layout_mode: "multiPanel", structural_failures: ["canvas"], quantized_render_status: "rendered", runtime_error_count: 1, screenshot_review_status: "mismatch", paired_screenshots: false, structural_pass: false },
+    { project: "A", fidelity_status: "unreported", fidelity_omissions: [], layout_mode: null, structural_failures: [], quantized_render_status: "unresolved", runtime_error_count: 0, screenshot_review_status: "unreviewed", paired_screenshots: false, structural_pass: false },
+  ];
+  const totals = summarizeAcceptanceRows(rows);
+  assert.equal(totals.projects, 2);
+  assert.equal(totals.runtime_error_graphs, 1);
+  assert.equal(totals.unresolved_graphs, 1);
+  assert.equal(totals.structural_mismatches, 1);
+  assert.deepEqual(totals.rankings.fidelity_omissions, [
+    { value: "graphics", count: 2 },
+    { value: "ticks", count: 1 },
+  ]);
+  assert.deepEqual(totals.rankings.unresolved_projects, [{ value: "A", count: 1 }]);
 });

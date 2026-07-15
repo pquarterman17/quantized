@@ -165,7 +165,10 @@ Output (gitignored, in `_exports/<project>/`, never committed):
 - `_exports/acceptance_matrix.json` and `.csv` — corpus-wide rows joining
   source books/curve bindings, layout, preview and fidelity omissions,
   structural failures, screenshot pairing, and exported review status. Missing
-  artifacts remain explicit (`missing`, `unreported`, or `unreviewed`).
+  artifacts remain explicit (`missing`, `unreported`, or `unreviewed`). JSON
+  totals include deterministic ranked fidelity statuses/omissions, layout
+  modes, failure checks, review states, and unresolved projects. Unresolved
+  graphs are counted separately from resolved structural mismatches.
 - `_exports/corpus_render_summary.json` â€” strict per-project renderer-run
   summary. Unresolved graphs are counted separately (they remain fallback
   work, not a renderer regression); child-process failures and any resolved

@@ -495,6 +495,13 @@ Official model references used for this routing:
     and 0 process failures. The regenerated acceptance matrix contains 353
     rows because Origin-only/unpaired manifest records remain explicit. Owner
     screenshot review is still required before this item can close.
+    PR #49 adds deterministic ranked evidence totals and separates unresolved
+    graphs from resolved renderer mismatches. Current 12-project matrix: 353
+    rows, 18 unresolved (Hc2 data), 0 resolved structural mismatches, 0 runtime
+    errors, 62 paired screenshots, and 0 owner-reviewed graphs. The 350-count
+    advanced-axis/graphic-object/rich-text omissions are blanket capability
+    declarations, not proof that each graph contains those features; they do
+    not authorize speculative decoding.
     Extend the existing
     comparison tooling to emit one durable row per Origin graph: source books,
     curves, layers, preview, fidelity status, omissions, structural diff, and

@@ -8,7 +8,11 @@ import { existsSync } from "node:fs";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import { acceptanceCsv, buildAcceptanceRows } from "./origin_acceptance.mjs";
+import {
+  acceptanceCsv,
+  buildAcceptanceRows,
+  summarizeAcceptanceRows,
+} from "./origin_acceptance.mjs";
 import { findTestDataRoot, parseArgs } from "./origin_shared.mjs";
 
 async function readJson(path, fallback = null) {
@@ -52,14 +56,7 @@ async function main() {
     .map((entry) => entry.name)
     .sort();
   const rows = (await Promise.all(projects.map((project) => projectRows(root, project)))).flat();
-  const totals = {
-    projects: projects.length,
-    graphs: rows.length,
-    paired_screenshots: rows.filter((row) => row.paired_screenshots).length,
-    structural_mismatches: rows.filter((row) => row.structural_pass === false).length,
-    visually_reviewed: rows.filter((row) => row.screenshot_review_status === "reviewed").length,
-    visual_mismatches: rows.filter((row) => row.screenshot_review_status === "mismatch").length,
-  };
+  const totals = summarizeAcceptanceRows(rows, projects.length);
   const jsonPath = join(root, "acceptance_matrix.json");
   const csvPath = join(root, "acceptance_matrix.csv");
   await writeFile(jsonPath, JSON.stringify({ version: 1, generated: new Date().toISOString(), totals, rows }, null, 2), "utf8");
