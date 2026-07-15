@@ -1814,6 +1814,66 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(useApp.getState().datasets.filter((d) => d.pending)).toHaveLength(0);
   });
 
+  it("rebuilds a persisted stale overlay in place from current source books", () => {
+    const source = (id: string, book: string, x: number, y: number): Dataset => ({
+      id, name: `P:${book}`,
+      data: {
+        time: [x], values: [[y]], labels: ["signal"], units: [""],
+        metadata: { origin_book: book, origin_column_names: ["B"], x_column_name: "A" },
+      },
+    });
+    useApp.setState({
+      datasets: [
+        source("a", "BookA", 1, 10),
+        source("b", "BookB", 2, 20),
+        {
+          id: "old-overlay", name: "stale",
+          notes: "keep this note", tags: ["reviewed"], folderId: "origin", order: 7,
+          raw: {
+            time: [998], values: [[998]], labels: ["older"], units: [""], metadata: {},
+          },
+          corrections: { xOff: 1 },
+          excludedRows: [0],
+          filter: [{ col: -1, kind: "range", min: 900 }],
+          formulas: [{ name: "stale formula", expr: "x" }],
+          data: {
+            time: [999], values: [[999]], labels: ["wrong"], units: [""],
+            metadata: { origin_overlay: true, origin_overlay_source: "fig-stale" },
+          },
+        },
+      ],
+      originFigures: [{
+        id: "fig-stale", stem: "P", datasetId: "a", siblingIds: ["a", "b"],
+        figure: {
+          ...figureEntry.figure,
+          curves: [
+            { book: "BookA", x: "A", y: "B" },
+            { book: "BookB", x: "A", y: "B" },
+          ],
+        },
+      }],
+    });
+
+    useApp.getState().applyOriginFigure("fig-stale");
+
+    const overlays = useApp.getState().datasets.filter(
+      (d) => d.data.metadata.origin_overlay_source === "fig-stale",
+    );
+    expect(overlays).toHaveLength(1);
+    expect(overlays[0].id).toBe("old-overlay");
+    expect(overlays[0].data.time).toEqual([1, 2]);
+    expect(overlays[0].data.values).toEqual([[10, NaN], [NaN, 20]]);
+    expect(overlays[0].data.metadata.origin_overlay_version).toBe(2);
+    expect(overlays[0]).toMatchObject({
+      notes: "keep this note", tags: ["reviewed"], folderId: "origin", order: 7,
+    });
+    expect(overlays[0].raw).toBeUndefined();
+    expect(overlays[0].corrections).toBeUndefined();
+    expect(overlays[0].excludedRows).toBeUndefined();
+    expect(overlays[0].filter).toBeUndefined();
+    expect(overlays[0].formulas).toBeUndefined();
+  });
+
   it("does not create a partial overlay when one Origin source book fails (#48)", async () => {
     const preview = (book: string): DataStruct => ({
       time: [0],

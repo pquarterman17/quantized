@@ -35,6 +35,13 @@ local `XMCD.opj` corpus file exposes 61 such disabled Library rows.
 5. Re-enter `applyOriginFigure` after every source swap has landed. The normal
    synchronous apply path is unchanged when no source is pending.
 
+Overlays are versioned derived data, not immutable imports. Every figure apply
+rebuilds the overlay from the currently resolved source books. When a matching
+`origin_overlay_source` dataset already exists (including one restored from an
+older workspace), its data is replaced in place and stamped with the current
+`origin_overlay_version`; its stable dataset id is preserved. Consumers such
+as the Graph Builder fallback accept only the current overlay version.
+
 A module-level sequence provides latest-request-wins behavior. If a user
 selects Graph B while Graph A's source is still loading, A may finish fetching
 and populate its source book, but it cannot overwrite the active plot. A fetch

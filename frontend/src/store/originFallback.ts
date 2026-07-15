@@ -2,6 +2,7 @@
 // Graph Builder seeding. Composed into useApp to keep the root store bounded.
 
 import { resolveOriginFigureSources, resolveOriginSourceManually } from "../lib/originSources";
+import { ORIGIN_OVERLAY_VERSION } from "../lib/originOverlay";
 import type { PlotSpec } from "../lib/plotspec";
 import type { AppState } from "./useApp";
 import { toast } from "./toasts";
@@ -98,7 +99,8 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
       // one-book multi-X figure would collapse every Y back onto xColumns[0]
       // and recreate the hysteresis corruption fixed by PR #38.
       const overlayDataset = get().datasets.find(
-        (ds) => (ds.data.metadata ?? {}).origin_overlay_source === entry.id,
+        (ds) => (ds.data.metadata ?? {}).origin_overlay_source === entry.id
+          && (ds.data.metadata ?? {}).origin_overlay_version === ORIGIN_OVERLAY_VERSION,
       );
       if (overlayDataset) {
         datasetId = overlayDataset.id;

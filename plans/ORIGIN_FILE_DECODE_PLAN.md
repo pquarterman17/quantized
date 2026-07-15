@@ -362,7 +362,8 @@ Official model references used for this routing:
 ### Tier 1 — correctness and fallback first
 
 48. ~~**Resolve full source books before applying an Origin figure**~~
-    **COMPLETE 2026-07-12 (PR #25).**
+    **COMPLETE 2026-07-12 (PR #25; derived-overlay rebuild/version follow-up
+    in PR #40).**
     (**P0 correctness bug**). `applyOriginFigure` currently builds a cross-book
     overlay synchronously from sibling datasets; lazy books may still contain
     only the 256-point import preview. The later source fetch replaces the

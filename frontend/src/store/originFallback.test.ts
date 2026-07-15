@@ -85,6 +85,7 @@ describe("Origin figure fallbacks", () => {
     const state = useApp.getState();
     const overlay = state.datasets.find((ds) => ds.data.metadata?.origin_overlay_source === "cross");
     expect(overlay).toBeDefined();
+    expect(overlay!.data.metadata.origin_overlay_version).toBe(2);
     expect(state.graphBuilderSeed?.zones.y).toEqual([
       { datasetId: overlay!.id, channel: 0 },
       { datasetId: overlay!.id, channel: 1 },
@@ -129,6 +130,7 @@ describe("Origin figure fallbacks", () => {
       (ds) => ds.data.metadata?.origin_overlay_source === "multi-x",
     );
     expect(overlay).toBeDefined();
+    expect(overlay!.data.metadata.origin_overlay_version).toBe(2);
     expect(overlay!.data.time).toEqual([10, 20, 30, 40, 50, 60]);
     expect(state.graphBuilderSeed).toEqual({
       version: 1,
