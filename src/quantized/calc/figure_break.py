@@ -118,7 +118,8 @@ def render_breaks_impl(
             if not st.box_on:
                 ax.spines["top"].set_visible(False)
             if st.grid_alpha > 0:
-                ax.grid(True, alpha=st.grid_alpha)
+                ax.grid(True, which="major", alpha=st.grid_alpha)
+                ax.grid(True, which="minor", alpha=st.grid_alpha * 0.4)
 
         # Diagonal break glyphs (matplotlib's standard broken-axis recipe):
         # short strokes angled across each seam, on both the outgoing panel's

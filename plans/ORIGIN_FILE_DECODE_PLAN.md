@@ -452,12 +452,12 @@ Official model references used for this routing:
       Autoscaled, log, and reciprocal axes retain their native locators;
       invalid or implausibly dense values fail closed. No file-byte decode,
       curve path, binding, limit, or acquisition-order behavior changed.
-    - [ ] **Log-scale minor ticks are not drawn.** A log Y (or X) axis renders
-      only the decade labels (1, 0.1, 0.01, …); the 2–9 minor subdivisions
-      Origin shows within each decade are absent. Pre-existing — untouched by
-      the #39–#50 stack (observed on single-mode `PNR700mT`, 2026-07-14, which
-      the multi-panel work never touches). Fix in the uPlot axis config
-      (minor-tick splits/format for log scales), single + multi-panel paths.
+    - [x] **Log-scale minor ticks/grid subdivisions render** (PR #53). Log X,
+      Y, and Y2 axes now retain 2–9 subdivisions while labeling decade anchors
+      only, across single, spatial multi-panel, and publication export paths.
+      The verified arithmetic ticks on sub-decade Origin log ranges remain
+      unchanged. Renderer-only: no byte decode, binding, limit, curve-path, or
+      acquisition-order behavior changed.
     - [ ] **Legend fidelity vs Origin.** Quantized draws its interactive legend
       box (reorder ▲▼ arrows, greyed error/secondary-Y entries) overlapping the
       data rather than Origin's clean static legend. Pre-existing (same anchor).

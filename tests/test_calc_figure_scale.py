@@ -120,7 +120,12 @@ def test_apply_axis_scale_log_sets_log_scale() -> None:
     fig, ax = plt.subplots()
     try:
         apply_axis_scale(ax, "y", "log")
+        ax.set_ylim(1e-3, 1e-1)
         assert ax.get_yscale() == "log"
+        minor = ax.yaxis.get_minorticklocs()
+        assert any(v == pytest.approx(2e-3) for v in minor)
+        assert any(v == pytest.approx(9e-3) for v in minor)
+        assert any(v == pytest.approx(2e-2) for v in minor)
     finally:
         plt.close(fig)
 

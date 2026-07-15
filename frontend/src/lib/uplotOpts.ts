@@ -345,9 +345,9 @@ function cleanStepValue(v: number): number {
  *  y in [0.7139, 1.2732] and [0.9772, 1.2916]) — the plot-fidelity bug this
  *  fixes (ticks like [0.7139, 0.8, 0.9, 1] instead of [0.8, 0.9, 1, 1.1, 1.2]).
  *
- *  - Span ≥ 1 decade: pure powers-of-10 within [min, max] — the same ticks a
- *    rangeLog-rounded autoscale would show (a normal multi-decade
- *    reflectivity view keeps its 1/10/100/... ticks, nothing else).
+ *  - Span ≥ 1 decade: 1–9 subdivisions within every decade. The axis label
+ *    filter below keeps text only at powers of ten; the other splits draw
+ *    Origin-style minor ticks and grid subdivisions.
  *  - Span < 1 decade: ticks stepped arithmetically in LINEAR y-space. `step`
  *    (Origin's decoded major-tick increment) is a LINEAR increment on a log
  *    axis, not a log10/decade multiplier — verified against PNR.opj's
@@ -368,8 +368,11 @@ export function fixedLogAxisSplits(min: number, max: number, step?: number | nul
       // pow10, not Math.pow: decade ticks must be the EXACT double for 10^k
       // on every platform (V8's pow drifts on some builds — the CI-only
       // 9.999999999999999e-6 failure of 2026-07-10).
-      const v = pow10(k);
-      if (v >= min * (1 - EPS) && v <= max * (1 + EPS)) out.push(v);
+      const decade = pow10(k);
+      for (let m = 1; m <= 9; m++) {
+        const v = m * decade;
+        if (v >= min * (1 - EPS) && v <= max * (1 + EPS)) out.push(v);
+      }
     }
     return out;
   }
@@ -379,6 +382,24 @@ export function fixedLogAxisSplits(min: number, max: number, step?: number | nul
   const out: number[] = [];
   for (let n = n0; n <= n1; n++) out.push(cleanStepValue(n * s));
   return out;
+}
+
+/** Keep labels only on decade anchors while retaining 2-9 subdivisions as
+ * splits for log grid lines and tick marks. Sub-decade Origin axes use their
+ * decoded arithmetic step, so every split remains a labeled major tick. */
+export function logMajorTickFilter(
+  _u: uPlot,
+  splits: number[],
+): (number | null)[] {
+  const positive = splits.filter((v) => Number.isFinite(v) && v > 0);
+  if (positive.length < 2 || positive[positive.length - 1] / positive[0] < 10 * (1 - 1e-9)) {
+    return splits;
+  }
+  return splits.map((v) => {
+    if (!(v > 0)) return null;
+    const exp = Math.log10(v);
+    return Math.abs(exp - Math.round(exp)) < 1e-9 ? v : null;
+  });
 }
 
 // ── Reciprocal (1/x) scale — MAIN #12, Arrhenius-style plots ────────────────
@@ -1044,8 +1065,8 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // Inspector AxisLimits value) bypasses uPlot's own rangeLog decade-snapping
   // on a log axis, so supply our own splits generator there (see
   // fixedLogAxisSplits's doc for why + the sub-decade Origin-step behaviour).
-  // Autoscaled log axes (no fixed range) are untouched — uPlot's own splits
-  // already do the right thing once rangeLog has rounded the bounds. A
+  // Autoscaled log axes use the same generator so their 2–9 subdivisions
+  // match fixed Origin axes after rangeLog rounds the bounds. A
   // reciprocal axis has NO built-in uPlot locator at all (unlike log's
   // rangeLog-anchored logAxisSplits) — supply reciprocalAxisSplits
   // UNCONDITIONALLY (fixed range or autoscaled), or uPlot falls through to
@@ -1064,7 +1085,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       return (_u: uPlot, _axisIdx: number, scaleMin: number, scaleMax: number): number[] =>
         fixedLinearAxisSplits(scaleMin, scaleMax, step);
     }
-    return scale === "log" && lim
+    return scale === "log"
       ? (_u: uPlot, _axisIdx: number, scaleMin: number, scaleMax: number): number[] =>
           fixedLogAxisSplits(scaleMin, scaleMax, step ?? null)
       : undefined;
@@ -1096,7 +1117,13 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     const prevFont = ctx.font;
     ctx.font = `${tickPx * pxr}px ${cssVar("--font-mono") || "monospace"}`;
     let maxW = 0;
-    for (const v of values) maxW = Math.max(maxW, ctx.measureText(v).width);
+    for (const v of values) {
+      // Log minor splits deliberately format to null/blank. They draw grid
+      // and tick marks, but must not reserve gutter width for the string
+      // coercion of `null`.
+      if (v == null || v === "") continue;
+      maxW = Math.max(maxW, ctx.measureText(v).width);
+    }
     ctx.font = prevFont;
     return Math.max(yGutterFloor, Math.ceil(maxW / pxr + yTickPad));
   };
@@ -1109,6 +1136,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       label: xDrawn ? "" : xLabel,
       ...(xValues ? { values: xValues } : {}),
       ...(xSplits ? { splits: xSplits } : {}),
+      ...(xScale === "log" ? { filter: logMajorTickFilter } : {}),
     },
     {
       ...axis,
@@ -1116,6 +1144,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       label: yDrawn ? "" : yLabelText,
       ...(yValues ? { values: yValues } : {}),
       ...(ySplits ? { splits: ySplits } : {}),
+      ...(yScale === "log" ? { filter: logMajorTickFilter } : {}),
     },
   ];
   if (hasY2) {
@@ -1135,6 +1164,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       grid: { show: false },
       ...(yValues ? { values: yValues } : {}),
       ...(y2Splits ? { splits: y2Splits } : {}),
+      ...(y2ScaleEff === "log" ? { filter: logMajorTickFilter } : {}),
     });
   }
 

@@ -186,6 +186,36 @@ describe("MultiPanelStage — mode regressions", () => {
     expect(typeof opts.opts.axes[1].splits).toBe("function");
   });
 
+  it("spatial log panels retain 2-9 minor splits and decade-only labels", async () => {
+    useApp.setState({
+      spatialPanels: [
+        {
+          datasetId: "d1",
+          xKey: null,
+          yKeys: [0],
+          xLim: [0, 3],
+          yLim: [0.001, 0.1],
+          xLog: false,
+          yLog: true,
+          row: 0,
+          col: 0,
+        },
+      ],
+    });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const axis = (created[0] as {
+      opts: { axes: {
+        splits?: (u: unknown, i: number, min: number, max: number) => number[];
+        filter?: (u: unknown, splits: number[]) => (number | null)[];
+      }[] };
+    }).opts.axes[1];
+    const splits = axis.splits?.(null, 1, 0.001, 0.1) ?? [];
+    expect(splits).toContain(0.002);
+    const labels = axis.filter?.(null, splits) ?? splits;
+    expect(labels.filter((v) => v != null)).toEqual([0.001, 0.01, 0.1]);
+  });
+
   it("paneled x-break mode renders one uPlot per segment (gap #21 residual)", async () => {
     useApp.getState().breakAtGaps("d1", [[1, 2]]);
     const expected = useApp.getState().breakPanels?.length ?? 0;

@@ -320,6 +320,34 @@ def test_log_scale_hitmap_sets_both_the_legacy_and_new_fields() -> None:
     assert out["axes"]["ylog"] is True
 
 
+def test_log_scale_draws_minor_ticks_and_grid_without_reordering_data() -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from quantized.calc.figure import draw_series_axes
+    from quantized.calc.figure_styles import figure_style
+
+    fig, ax = plt.subplots()
+    try:
+        x = np.array([0.0, 2.0, 1.0, 3.0])
+        y = np.array([1e-3, 1e-2, 2e-3, 1e-1])
+        draw_series_axes(
+            fig, ax, x, [("loop", y)], st=figure_style("default"), ov={},
+            y_scale="log",
+        )
+        ax.set_ylim(1e-3, 1e-1)
+        fig.canvas.draw()
+        assert list(ax.lines[0].get_xdata()) == [0.0, 2.0, 1.0, 3.0]
+        minor_ticks = ax.yaxis.get_minor_ticks()
+        assert any(t.tick1line.get_visible() for t in minor_ticks)
+        assert any(t.gridline.get_visible() for t in minor_ticks)
+        assert all(t.label1.get_text() == "" for t in minor_ticks)
+    finally:
+        plt.close(fig)
+
+
 def test_reciprocal_scale_differs_from_linear() -> None:
     t = np.linspace(100.0, 300.0, 30)
     y = np.exp(-1000.0 / t)

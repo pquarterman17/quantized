@@ -247,9 +247,10 @@ def draw_series_axes(
             loc=st.legend_location,
         )
     if st.grid_alpha > 0:
-        ax.grid(True, alpha=st.grid_alpha)
+        ax.grid(True, which="major", alpha=st.grid_alpha)
+        ax.grid(True, which="minor", alpha=st.grid_alpha * 0.4)
     else:
-        ax.grid(False)
+        ax.grid(False, which="both")
     _apply_overrides(fig, ax, st, ov, n_series=len(series))
     return artists
 

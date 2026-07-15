@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from matplotlib.ticker import Locator
+from matplotlib.ticker import Locator, LogLocator, NullFormatter
 from numpy.typing import NDArray
 
 __all__ = ["apply_axis_scale", "reciprocal_tick_values", "resolve_axis_scale"]
@@ -115,6 +115,9 @@ def apply_axis_scale(ax: Any, axis: str, scale: str) -> None:
     set_scale = ax.set_xscale if axis == "x" else ax.set_yscale
     if scale == "log":
         set_scale("log")
+        target = ax.xaxis if axis == "x" else ax.yaxis
+        target.set_minor_locator(LogLocator(base=10.0, subs=tuple(range(2, 10))))
+        target.set_minor_formatter(NullFormatter())
         return
     if scale == "reciprocal":
         set_scale("function", functions=(_reciprocal, _reciprocal))
