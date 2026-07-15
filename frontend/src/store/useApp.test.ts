@@ -1727,6 +1727,8 @@ describe("useApp applyOriginFigure (item 18)", () => {
       yLim: null,
       xScale: "linear",
       yScale: "linear",
+      showGrid: true, // precondition: user default grid ON
+      showAxisBox: false,
     });
   });
 
@@ -1738,6 +1740,13 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(s.yLim).toEqual([1, 1e6]);
     expect(s.xScale).toBe("linear");
     expect(s.yScale).toBe("log");
+  });
+
+  it("boxes the axes and turns OFF gridlines (Origin has none; grid undecodable)", () => {
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    const s = useApp.getState();
+    expect(s.showAxisBox).toBe(true);
+    expect(s.showGrid).toBe(false);
   });
 
   it("resolves every pending cross-book source before materializing an overlay (#48)", async () => {
