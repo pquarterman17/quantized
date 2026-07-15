@@ -188,6 +188,20 @@ describe("buildOpts", () => {
     expect(p3.hooks.ready).toBeUndefined();
   });
 
+  it("never passes undefined plugin hook callbacks into uPlot", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yScale: "linear",
+      tool: "zoom",
+      annotations: [{ id: "a1", x: 1, y: 2, text: "passive" }],
+      refLines: [{ id: "r1", axis: "x", value: 1 }],
+    });
+    expect(opts.plugins).toHaveLength(2);
+    for (const plugin of opts.plugins ?? []) {
+      expect(Object.values(plugin.hooks).every((callback) => callback !== undefined)).toBe(true);
+    }
+  });
+
   it("adds the stats plugin only in the stats tool", () => {
     expect(
       buildOpts(payload, { ...base, yScale: "linear", tool: "stats", onStats: vi.fn() }).plugins,

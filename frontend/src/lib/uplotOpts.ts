@@ -60,6 +60,16 @@ export function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+/** uPlot concatenates every plugin hook value and later calls each entry.
+ * Optional draw-only hooks are represented as `undefined` by several plugin
+ * factories; omit those keys before uPlot can turn them into `[undefined]`. */
+function compactPluginHooks(plugin: uPlot.Plugin): uPlot.Plugin {
+  const hooks = Object.fromEntries(
+    Object.entries(plugin.hooks).filter(([, callback]) => callback !== undefined),
+  ) as uPlot.Plugin["hooks"];
+  return { ...plugin, hooks };
+}
+
 /** The concrete design-token values a plot window's EFFECTIVE background
  *  resolves to (item 18, owner request 2026-07-09): the canvas background
  *  colour (for the hosting DOM element's inline style — uPlot itself has no
@@ -1228,7 +1238,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
         },
       ],
     },
-    plugins,
+    plugins: plugins.map(compactPluginHooks),
     legend: { show: false },
     scales,
     axes,

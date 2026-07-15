@@ -464,6 +464,7 @@ Official model references used for this routing:
 55. **Corpus-wide plot-fidelity acceptance matrix.** **IN PROGRESS: durable
     per-graph JSON/CSV aggregation and review import/export in PR #41.**
     Runtime-error attribution/fail-closed reporting follows in PR #42.
+    The resulting passive-plugin hook crash is fixed in PR #43.
     Extend the existing
     comparison tooling to emit one durable row per Origin graph: source books,
     curves, layers, preview, fidelity status, omissions, structural diff, and
