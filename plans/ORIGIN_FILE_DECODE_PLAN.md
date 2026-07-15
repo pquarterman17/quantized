@@ -492,6 +492,13 @@ Official model references used for this routing:
       PNR pages unreadably small; exact page margins/aspect remain open for
       publication export where typography can scale with the page. Corpus
       gates remain PNR 99/99, MnN_Diffusion_PNR 36/36, and Moke 12/12.
+    - [ ] **Origin-style page-boundary / page-size control** (owner-requested
+      2026-07-14). Add the Boson Plotter equivalent of Origin's page setup:
+      user-settable page dimensions (width/height + units) and margins. A
+      recovered multi-panel figure can then lay its frames out at true page
+      coordinates — not just the frame bounding box #47 letterboxes to — which
+      is the enabler for the deferred exact page margins/aspect and faithful
+      publication (PDF/SVG) export at a chosen page size.
 
 ### Tier 3 — acceptance and handoff
 
