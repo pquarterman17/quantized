@@ -118,7 +118,7 @@ def _apply_overrides(
             )
 
     if "grid" in ov:
-        ax.grid(bool(ov["grid"]), alpha=st.grid_alpha or 0.3)
+        ax.grid(bool(ov["grid"]), which="both", alpha=st.grid_alpha or 0.3)
 
     for ann in ov.get("annotations", []):
         # MAIN #18: a per-annotation `size` (the pointer tool's corner-handle

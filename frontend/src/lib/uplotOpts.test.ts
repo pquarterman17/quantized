@@ -5,6 +5,7 @@ import {
   categoricalTickFormatter,
   fixedLinearAxisSplits,
   fixedLogAxisSplits,
+  logMajorTickFilter,
   niceLinearStep,
   reciprocalAxisSplits,
   reciprocalTransform,
@@ -109,6 +110,26 @@ describe("buildOpts publication template (fontSize + baseLineWidth)", () => {
     const narrow = ySize({ ctx }, ["0", "1", "2"], 1, 0);
     const wide = ySize({ ctx }, ["-0.000012", "0.000034", "0.000056"], 1, 0);
     expect(wide).toBeGreaterThan(narrow);
+  });
+
+  it("does not measure blank log-minor labels as visible gutter text", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "log", tool: "zoom" });
+    const ySize = opts.axes?.[1].size as (
+      s: { ctx: CanvasRenderingContext2D },
+      v: (string | null)[],
+      i: number,
+      c: number,
+    ) => number;
+    const measured: unknown[] = [];
+    const ctx = {
+      font: "",
+      measureText: (t: unknown) => {
+        measured.push(t);
+        return { width: String(t).length * 8 } as TextMetrics;
+      },
+    } as unknown as CanvasRenderingContext2D;
+    ySize({ ctx }, ["0.001", null, null, "0.01"], 1, 0);
+    expect(measured).toEqual(["0.001", "0.01"]);
   });
 });
 
@@ -857,17 +878,25 @@ describe("fixedLogAxisSplits", () => {
     expect(fixedLogAxisSplits(5, 5)).toEqual([]);
   });
 
-  it("gives pure powers-of-10 ticks for a multi-decade span (a normal reflectivity view)", () => {
-    expect(fixedLogAxisSplits(1, 1e6)).toEqual([1, 10, 100, 1000, 1e4, 1e5, 1e6]);
+  it("gives 2-9 minor subdivisions for a multi-decade reflectivity view", () => {
+    expect(fixedLogAxisSplits(1, 100)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9,
+      10, 20, 30, 40, 50, 60, 70, 80, 90,
+      100,
+    ]);
   });
 
-  it("gives pure powers-of-10 ticks even for an unrounded multi-decade span", () => {
+  it("keeps subdivisions inside an unrounded multi-decade span", () => {
     // PNR.opj "7kOe": y in [1e-10, 10.0], 11 decades — bounds already land on
     // decade boundaries, but the generator must never sneak the raw min/max
     // in as an extra non-decade tick the way uPlot's own logAxisSplits would.
-    expect(fixedLogAxisSplits(1e-10, 10)).toEqual([
-      1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1, 10,
-    ]);
+    const out = fixedLogAxisSplits(1e-10, 10);
+    expect(out).toContain(1e-10);
+    expect(out).toContain(2e-10);
+    expect(out).toContain(9e-10);
+    expect(out).toContain(1e-9);
+    expect(out).toContain(10);
+    expect(out.every((v) => v >= 1e-10 && v <= 10)).toBe(true);
   });
 
   // Real PNR.opj sub-decade log figures (byte-verified via extract_figures):
@@ -894,6 +923,20 @@ describe("fixedLogAxisSplits", () => {
   it("ignores a non-positive decoded step (falls back to nice-number)", () => {
     expect(fixedLogAxisSplits(0.7, 1.3, 0)).toEqual(fixedLogAxisSplits(0.7, 1.3, null));
     expect(fixedLogAxisSplits(0.7, 1.3, -0.1)).toEqual(fixedLogAxisSplits(0.7, 1.3, null));
+  });
+});
+
+describe("logMajorTickFilter", () => {
+  it("labels decades and blanks the 2-9 minor subdivisions", () => {
+    const splits = fixedLogAxisSplits(0.001, 0.1);
+    const filtered = logMajorTickFilter(null as unknown as uPlot, splits);
+    expect(filtered.filter((v) => v != null)).toEqual([0.001, 0.01, 0.1]);
+    expect(filtered).toHaveLength(splits.length);
+  });
+
+  it("keeps every arithmetic tick on a sub-decade Origin range", () => {
+    const splits = fixedLogAxisSplits(0.7, 1.3, 0.1);
+    expect(logMajorTickFilter(null as unknown as uPlot, splits)).toEqual(splits);
   });
 });
 
@@ -994,9 +1037,13 @@ describe("buildOpts fixed log-range ticks (plot-fidelity fix)", () => {
     expect(fn(null as unknown as uPlot, 1, 0.7139, 1.2732)).toEqual([0.8, 0.9, 1.0, 1.1, 1.2]);
   });
 
-  it("leaves splits undefined on a log Y axis with NO fixed range (autoscale)", () => {
+  it("supplies minor-capable splits on an autoscaled log Y axis", () => {
     const opts = buildOpts(payload, { ...base, yScale: "log", tool: "zoom" });
-    expect(opts.axes?.[1].splits).toBeUndefined();
+    const splits = opts.axes?.[1].splits;
+    expect(typeof splits).toBe("function");
+    const fn = splits as (u: uPlot, i: number, min: number, max: number) => number[];
+    expect(fn(null as unknown as uPlot, 1, 0.001, 0.1)).toContain(0.002);
+    expect(opts.axes?.[1].filter).toBe(logMajorTickFilter);
   });
 
   it("leaves splits undefined on a fixed but LINEAR axis", () => {
