@@ -535,6 +535,7 @@ export function resolveSpatialPanels(
     row: layout.placements[pos]?.row ?? pos,
     col: layout.placements[pos]?.col ?? 0,
     frameRect: layout.placements[pos]?.rect,
+    layoutAspect: layout.aspectRatio,
   }));
   return { panels, spatial: layout.spatial };
 }

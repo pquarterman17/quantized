@@ -51,11 +51,23 @@ export interface PixelRect {
   height: number;
 }
 
+/** Largest recovered-layout rectangle of `aspectRatio` that fits within the host,
+ * centered on the unused axis. */
+export function fittedLayoutRect(aspectRatio: number, totalWidth: number, totalHeight: number): PixelRect {
+  const hostAspect = totalWidth / totalHeight;
+  if (hostAspect > aspectRatio) {
+    const width = totalHeight * aspectRatio;
+    return { left: (totalWidth - width) / 2, top: 0, width, height: totalHeight };
+  }
+  const height = totalWidth / aspectRatio;
+  return { left: 0, top: (totalHeight - height) / 2, width: totalWidth, height };
+}
+
 /** Scale trusted normalized frame rectangles into the current stage. Returns
  *  null as an all-or-nothing fail-closed signal if any panel lacks a valid
  *  rectangle, keeping ordinal/non-Origin layouts on the equal-grid path. */
 export function spatialPixelRects(
-  panels: readonly Pick<SpatialPanel, "frameRect">[],
+  panels: readonly Pick<SpatialPanel, "frameRect" | "layoutAspect">[],
   totalWidth: number,
   totalHeight: number,
 ): PixelRect[] | null {
@@ -65,11 +77,18 @@ export function spatialPixelRects(
       || rect.left < 0 || rect.top < 0 || rect.width <= 0 || rect.height <= 0
       || rect.left + rect.width > 1 + 1e-6 || rect.top + rect.height > 1 + 1e-6;
   })) return null;
+  const aspects = panels.map((panel) => panel.layoutAspect);
+  const aspect = aspects[0];
+  const useAspect = aspect != null && Number.isFinite(aspect) && aspect > 0
+    && aspects.every((value) => value != null && Math.abs(value - aspect) <= 1e-9);
+  const page = useAspect
+    ? fittedLayoutRect(aspect, totalWidth, totalHeight)
+    : { left: 0, top: 0, width: totalWidth, height: totalHeight };
   return panels.map(({ frameRect: rect }) => ({
-    left: Math.round(rect!.left * totalWidth),
-    top: Math.round(rect!.top * totalHeight),
-    width: Math.max(1, Math.round(rect!.width * totalWidth)),
-    height: Math.max(1, Math.round(rect!.height * totalHeight)),
+    left: Math.round(page.left + rect!.left * page.width),
+    top: Math.round(page.top + rect!.top * page.height),
+    width: Math.max(1, Math.round(rect!.width * page.width)),
+    height: Math.max(1, Math.round(rect!.height * page.height)),
   }));
 }
 

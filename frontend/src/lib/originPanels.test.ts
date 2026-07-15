@@ -22,6 +22,7 @@ describe("computePanelLayout", () => {
       placements: [{
         index: 0, row: 0, col: 0, rect: { left: 0, top: 0, width: 1, height: 1 },
       }],
+      aspectRatio: 1,
       spatial: true,
     });
   });
@@ -129,6 +130,11 @@ describe("computePanelLayout", () => {
       { index: 0, row: 0, col: 0 },
       { index: 1, row: 1, col: 0 },
     ]);
+    expect(layout.placements.map((p) => p.rect)).toEqual([
+      { left: 0, top: 0, width: 1, height: 480 / 990 },
+      { left: 0, top: 520 / 990, width: 1, height: 470 / 990 },
+    ]);
+    expect(layout.aspectRatio).toBeCloseTo(995 / 990);
   });
 
   it("preserves unequal frame proportions, gaps, and a panel spanning both columns", () => {
@@ -152,13 +158,15 @@ describe("computePanelLayout", () => {
       { left: 548, top: 287, right: 3260, bottom: 2129 },
       { left: 3450, top: 287, right: 6162, bottom: 2129 },
       { left: 548, top: 2559, right: 6162, bottom: 4401 },
-    ]);
+    ], { width: 6846, height: 4784 });
     expect(layout.spatial).toBe(true);
     expect(cells(layout)).toEqual([
       { index: 0, row: 0, col: 0 },
       { index: 1, row: 0, col: 1 },
       { index: 2, row: 1, col: 0 },
     ]);
+    expect(layout.aspectRatio).toBeCloseTo(5614 / 4114);
+    expect(layout.placements[0].rect?.left).toBe(0);
     expect(layout.placements[0].rect?.width).toBeCloseTo(2712 / 5614);
     expect(layout.placements[1].rect?.left).toBeCloseTo(2902 / 5614);
     expect(layout.placements[2].rect?.top).toBeCloseTo(2272 / 4114);

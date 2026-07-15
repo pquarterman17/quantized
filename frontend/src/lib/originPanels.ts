@@ -24,8 +24,7 @@ export interface PanelPlacement {
   row: number;
   col: number;
   /** Frame rectangle normalized to the trusted tiled frames' bounding box.
-   *  Absent on ordinal fallback placements. Unlike row/col alone, this
-   *  preserves unequal sizes, page gaps, and panels spanning grid tracks. */
+   *  Absent on ordinal fallback placements. */
   rect?: NormalizedFrameRect;
 }
 
@@ -41,6 +40,9 @@ export interface PanelLayout {
   cols: number;
   /** One entry per input frame, in the SAME order as the input array. */
   placements: PanelPlacement[];
+  /** Width / height of the recovered frame composition. Renderers use it to
+   *  letterbox the composition instead of stretching it to the stage. */
+  aspectRatio?: number;
   /** True when the arrangement came from real frame geometry; false when it
    *  is the ordinal single-column fallback (a missing/degenerate frame, or
    *  frames that overlap rather than tile the page) — callers may still
@@ -161,14 +163,6 @@ export function computePanelLayout(
   if (n === 0) {
     return { rows: 0, cols: 0, placements: [], spatial: false };
   }
-  if (n === 1) {
-    return {
-      rows: 1,
-      cols: 1,
-      placements: [{ index: 0, row: 0, col: 0, rect: { left: 0, top: 0, width: 1, height: 1 } }],
-      spatial: true,
-    };
-  }
   if (frames.some((f) => !f || isDegenerate(f))) return ordinalFallback(n);
   const quads = frames as FrameQuad[];
   for (let i = 0; i < n; i++) {
@@ -207,6 +201,7 @@ export function computePanelLayout(
         height: (frame.bottom - frame.top) / bboxH,
       },
     })),
+    aspectRatio: bboxW / bboxH,
     spatial: true,
   };
 }

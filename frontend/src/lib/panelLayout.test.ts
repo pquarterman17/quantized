@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   columnWidths,
   cumulativeOffsets,
+  fittedLayoutRect,
   type PanelPos,
   rowBoundaryGaps,
   rowHeights,
@@ -191,6 +192,19 @@ describe("spatialPixelRects", () => {
       { left: 0, top: 0, width: 300, height: 200 },
       { left: 400, top: 0, width: 600, height: 200 },
       { left: 0, top: 280, width: 1000, height: 520 },
+    ]);
+  });
+
+  it("letterboxes the decoded composition aspect ratio", () => {
+    const panels = [{
+      frameRect: { left: 0.1, top: 0.2, width: 0.8, height: 0.6 },
+      layoutAspect: 2,
+    }];
+    expect(fittedLayoutRect(2, 1000, 800)).toEqual({
+      left: 0, top: 150, width: 1000, height: 500,
+    });
+    expect(spatialPixelRects(panels, 1000, 800)).toEqual([
+      { left: 100, top: 250, width: 800, height: 300 },
     ]);
   });
 

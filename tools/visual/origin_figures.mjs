@@ -41,6 +41,7 @@ import {
   waitForServer,
 } from "./origin_shared.mjs";
 import {
+  fitNormalizedLayoutRects,
   normalizedRectsMatch,
   summarizeFigureFamily,
   summarizeRuntimeErrors,
@@ -126,13 +127,20 @@ function compareFigureToState(family, representative, applied) {
     );
     const expectedRects = panels.map((panel) => panel.frameRect);
     if (expectedRects.every(Boolean)) {
-      const geometryPass = normalizedRectsMatch(expectedRects, applied.panelRects);
+      const aspects = panels.map((panel) => panel.layoutAspect);
+      const aspect = aspects[0];
+      const useAspect = aspect != null && Number.isFinite(aspect) && aspect > 0
+        && aspects.every((value) => value != null && Math.abs(value - aspect) <= 1e-9);
+      const expectedDomRects = useAspect
+        ? fitNormalizedLayoutRects(expectedRects, aspect, applied.hostWidth, applied.hostHeight)
+        : expectedRects;
+      const geometryPass = normalizedRectsMatch(expectedDomRects, applied.panelRects);
       checks.push(check(
         "decoded_frame_geometry",
         geometryPass,
         geometryPass
           ? `${expectedRects.length} panel rectangles match decoded geometry`
-          : `expected ${JSON.stringify(expectedRects)}; got ${JSON.stringify(applied.panelRects)}`,
+          : `expected ${JSON.stringify(expectedDomRects)}; got ${JSON.stringify(applied.panelRects)}`,
       ));
     }
     return { mode: "multiPanel", checks };
@@ -395,6 +403,8 @@ async function main() {
           canvasCount: canvases.length,
           paintedCanvasCount,
           panelRects,
+          hostWidth: hostBox?.width ?? 0,
+          hostHeight: hostBox?.height ?? 0,
         };
       });
 
