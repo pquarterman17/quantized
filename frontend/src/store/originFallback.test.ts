@@ -91,4 +91,54 @@ describe("Origin figure fallbacks", () => {
     ]);
     expect(state.datasets.filter((ds) => ds.data.metadata?.origin_overlay_source === "cross")).toHaveLength(1);
   });
+
+  it("seeds a one-book multi-X remake from its segmented overlay", async () => {
+    const multiX: Dataset = {
+      id: "mx", name: "Moke:Book2",
+      data: {
+        time: [10, 20],
+        values: [[1, 30, 3, 50, 5], [2, 40, 4, 60, 6]],
+        labels: ["B", "E", "H", "I", "L"],
+        units: ["", "Oe", "", "Oe", ""],
+        metadata: {
+          origin_book: "Book2", x_column_name: "A",
+          origin_column_names: ["B", "E", "H", "I", "L"],
+        },
+      },
+    };
+    const multiFigure: OriginFigure = {
+      ...figure, name: "Graph3", n_curves: 3,
+      curves: [
+        { book: "Book2", x: "A", y: "B", style: "line_symbol" },
+        { book: "Book2", x: "E", y: "H", style: "line_symbol" },
+        { book: "Book2", x: "I", y: "L", style: "line_symbol" },
+      ],
+    };
+    useApp.setState({
+      datasets: [multiX],
+      originFigures: [{
+        id: "multi-x", stem: "Moke", figure: multiFigure,
+        datasetId: "mx", siblingIds: ["mx"],
+      }],
+    });
+
+    await useApp.getState().remakeOriginFigure("multi-x");
+
+    const state = useApp.getState();
+    const overlay = state.datasets.find(
+      (ds) => ds.data.metadata?.origin_overlay_source === "multi-x",
+    );
+    expect(overlay).toBeDefined();
+    expect(overlay!.data.time).toEqual([10, 20, 30, 40, 50, 60]);
+    expect(state.graphBuilderSeed).toEqual({
+      version: 1,
+      zones: {
+        x: null,
+        y: [0, 1, 2].map((channel) => ({ datasetId: overlay!.id, channel })),
+        group: null,
+        facet: null,
+      },
+      mark: "line",
+    });
+  });
 });
