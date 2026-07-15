@@ -63,6 +63,8 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
       y_scale: s().yScale,
       x_fmt: axisFmtParam(s().xFmt),
       y_fmt: axisFmtParam(s().yFmt),
+      x_step: s().xStep,
+      y_step: s().yStep,
       fmt: params.fmt as string,
       style: params.style as string,
       dpi: params.dpi as number,

@@ -40,7 +40,7 @@ from numpy.typing import ArrayLike, NDArray  # noqa: E402
 
 from quantized.calc.figure import _plot_kwargs  # noqa: E402
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale  # noqa: E402
-from quantized.calc.figure_ticks import apply_tick_formats  # noqa: E402
+from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps  # noqa: E402
 
 __all__ = ["render_breaks_impl"]
 
@@ -65,6 +65,8 @@ def render_breaks_impl(
     series_styles: Sequence[Mapping[str, Any] | None] | None,
     x_fmt: Mapping[str, Any] | None = None,
     y_fmt: Mapping[str, Any] | None = None,
+    x_step: float | None = None,
+    y_step: float | None = None,
 ) -> bytes:
     """Render ``series`` against ``x`` with the x-axis elided over each
     ``[lo, hi]`` pair in ``breaks`` (already sorted/validated non-overlapping
@@ -100,8 +102,11 @@ def render_breaks_impl(
                 ax.plot(x, np.asarray(y, dtype=float), label=label, **kw)
             lo, hi = bounds[i]
             ax.set_xlim(lo, hi)
-            apply_axis_scale(ax, "x", resolve_axis_scale(x_scale, x_log))
-            apply_axis_scale(ax, "y", resolve_axis_scale(y_scale, y_log))
+            resolved_x_scale = resolve_axis_scale(x_scale, x_log)
+            resolved_y_scale = resolve_axis_scale(y_scale, y_log)
+            apply_axis_scale(ax, "x", resolved_x_scale)
+            apply_axis_scale(ax, "y", resolved_y_scale)
+            apply_tick_steps(ax, x_step, y_step, resolved_x_scale, resolved_y_scale)
             apply_tick_formats(ax, x_fmt, y_fmt)
             if i == 0:
                 handles, labels_out = ax.get_legend_handles_labels()

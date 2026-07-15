@@ -1436,6 +1436,9 @@ export interface FigureSpec {
    *  backend has no y2/twinx rendering to mirror it onto. */
   x_fmt?: AxisFormat;
   y_fmt?: AxisFormat;
+  /** Saved major-tick increments (Origin figure apply); honored on linear axes. */
+  x_step?: number | null;
+  y_step?: number | null;
   fmt?: string;
   style?: string;
   dpi?: number;

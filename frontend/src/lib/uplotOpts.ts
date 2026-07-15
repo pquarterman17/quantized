@@ -308,6 +308,24 @@ export function niceLinearStep(span: number, targetTicks = 5): number {
   return nice * mag;
 }
 
+/** Major ticks for a fixed linear Origin axis. Origin stores the increment
+ * independently of the range; ticks land on integer multiples of that
+ * increment inside the visible bounds (for example -7000..7000 by 2000 ->
+ * -6000,-4000,...,6000). Invalid/inverted inputs fail closed. */
+export function fixedLinearAxisSplits(min: number, max: number, step: number): number[] {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(step)
+      || !(max > min) || !(step > 0)) return [];
+  const EPS = 1e-9;
+  const n0 = Math.ceil(min / step - EPS);
+  const n1 = Math.floor(max / step + EPS);
+  // A corrupt decode must not lock the UI by allocating millions of ticks.
+  // Returning no custom splits lets uPlot keep its safe default behavior.
+  if (n1 - n0 + 1 > 1000) return [];
+  const out: number[] = [];
+  for (let n = n0; n <= n1; n++) out.push(cleanStepValue(n * step));
+  return out;
+}
+
 /** Undo float noise from `n * step` accumulation (e.g. `0.1 * 8` reading as
  *  `0.7999999999999999`) so a generated tick prints as the clean decimal it
  *  is meant to be. Ticks are display values, not analysis inputs, so this
@@ -1041,6 +1059,10 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     if (scale === "reciprocal") {
       return (_u: uPlot, _axisIdx: number, scaleMin: number, scaleMax: number): number[] =>
         reciprocalAxisSplits(scaleMin, scaleMax);
+    }
+    if (scale === "linear" && lim && step != null && step > 0) {
+      return (_u: uPlot, _axisIdx: number, scaleMin: number, scaleMax: number): number[] =>
+        fixedLinearAxisSplits(scaleMin, scaleMax, step);
     }
     return scale === "log" && lim
       ? (_u: uPlot, _axisIdx: number, scaleMin: number, scaleMax: number): number[] =>

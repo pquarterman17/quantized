@@ -446,6 +446,12 @@ Official model references used for this routing:
     - Axis direction, top/right axes, tick direction/format, breaks, and
       non-log scale types only where the Quantized renderer has a truthful
       native equivalent; otherwise record the omission and retain the preview.
+    - [x] **Decoded linear major-tick intervals are applied** (PR #52).
+      Fixed linear Origin axes now use their existing `x_step`/`y_step` on
+      interactive uPlot axes and matplotlib figure/hitmap/break/page exports.
+      Autoscaled, log, and reciprocal axes retain their native locators;
+      invalid or implausibly dense values fail closed. No file-byte decode,
+      curve path, binding, limit, or acquisition-order behavior changed.
     - [ ] **Log-scale minor ticks are not drawn.** A log Y (or X) axis renders
       only the decade labels (1, 0.1, 0.01, …); the 2–9 minor subdivisions
       Origin shows within each decade are absent. Pre-existing — untouched by

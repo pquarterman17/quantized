@@ -36,9 +36,9 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
-from matplotlib.ticker import Formatter
+from matplotlib.ticker import Formatter, MultipleLocator
 
-__all__ = ["apply_tick_formats", "axis_tick_formatter"]
+__all__ = ["apply_tick_formats", "apply_tick_steps", "axis_tick_formatter"]
 
 _MODES = ("fixed", "sci", "eng")
 
@@ -215,3 +215,32 @@ def apply_tick_formats(
     yf = axis_tick_formatter(y_fmt)
     if yf is not None:
         ax.yaxis.set_major_formatter(yf)
+
+
+def apply_tick_steps(
+    ax: Any,
+    x_step: float | None,
+    y_step: float | None,
+    x_scale: str,
+    y_scale: str,
+) -> None:
+    """Apply saved major-tick increments to linear axes only.
+
+    Origin's decoded ``from/to/step`` triples carry a linear increment. Log
+    axes retain their scale-specific locator; reciprocal axes have their own
+    locator. Invalid or absent increments leave matplotlib's locator intact.
+    ``MultipleLocator`` anchors ticks at integer multiples of the step, the
+    same convention as the interactive ``fixedLinearAxisSplits`` helper.
+    """
+    def apply_one(axis: Any, limits: tuple[float, float], step: float | None) -> None:
+        if step is None or not math.isfinite(step) or step <= 0:
+            return
+        span = abs(float(limits[1]) - float(limits[0]))
+        if not math.isfinite(span) or span / step > 1000:
+            return
+        axis.set_major_locator(MultipleLocator(float(step)))
+
+    if x_scale == "linear":
+        apply_one(ax.xaxis, ax.get_xlim(), x_step)
+    if y_scale == "linear":
+        apply_one(ax.yaxis, ax.get_ylim(), y_step)

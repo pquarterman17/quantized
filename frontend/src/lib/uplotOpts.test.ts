@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildOpts,
   categoricalTickFormatter,
+  fixedLinearAxisSplits,
   fixedLogAxisSplits,
   niceLinearStep,
   reciprocalAxisSplits,
@@ -896,6 +897,24 @@ describe("fixedLogAxisSplits", () => {
   });
 });
 
+describe("fixedLinearAxisSplits", () => {
+  it("anchors a field sweep to integer multiples of the decoded step", () => {
+    expect(fixedLinearAxisSplits(-7000, 7000, 2000)).toEqual([-6000, -4000, -2000, 0, 2000, 4000, 6000]);
+  });
+
+  it("keeps clean decimal ticks inside an unrounded fixed range", () => {
+    expect(fixedLinearAxisSplits(0.0005, 0.15, 0.02)).toEqual([0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14]);
+  });
+
+  it("fails closed for invalid, non-positive, or inverted inputs", () => {
+    expect(fixedLinearAxisSplits(0, 1, 0)).toEqual([]);
+    expect(fixedLinearAxisSplits(0, 1, -1)).toEqual([]);
+    expect(fixedLinearAxisSplits(1, 0, 0.1)).toEqual([]);
+    expect(fixedLinearAxisSplits(0, 1, Number.NaN)).toEqual([]);
+    expect(fixedLinearAxisSplits(0, 1, 0.000_001)).toEqual([]);
+  });
+});
+
 describe("reciprocalTransform (MAIN #12)", () => {
   it("is 1/v for positive v", () => {
     expect(reciprocalTransform(2)).toBe(0.5);
@@ -1010,6 +1029,29 @@ describe("buildOpts fixed log-range ticks (plot-fidelity fix)", () => {
     expect(typeof splits).toBe("function");
     const fn = splits as (u: uPlot, i: number, min: number, max: number) => number[];
     expect(fn(null as unknown as uPlot, 2, 0.9772, 1.2916)).toEqual([1.0, 1.05, 1.1, 1.15, 1.2, 1.25]);
+  });
+});
+
+describe("buildOpts fixed linear-range ticks", () => {
+  it("uses the decoded major step on fixed X and Y axes", () => {
+    const opts = buildOpts(payload, {
+      ...base,
+      yScale: "linear",
+      tool: "zoom",
+      xLim: [-7000, 7000],
+      yLim: [-1, 1],
+      xStep: 2000,
+      yStep: 0.5,
+    });
+    const xSplits = opts.axes?.[0].splits as (u: uPlot, i: number, min: number, max: number) => number[];
+    const ySplits = opts.axes?.[1].splits as (u: uPlot, i: number, min: number, max: number) => number[];
+    expect(xSplits(null as unknown as uPlot, 0, -7000, 7000)).toEqual([-6000, -4000, -2000, 0, 2000, 4000, 6000]);
+    expect(ySplits(null as unknown as uPlot, 1, -1, 1)).toEqual([-1, -0.5, 0, 0.5, 1]);
+  });
+
+  it("does not override an autoscaled axis or one without a decoded step", () => {
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", yStep: 5 }).axes?.[1].splits).toBeUndefined();
+    expect(buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", yLim: [0, 100] }).axes?.[1].splits).toBeUndefined();
   });
 });
 

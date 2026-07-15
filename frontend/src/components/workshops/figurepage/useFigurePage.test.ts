@@ -169,6 +169,8 @@ describe("useFigurePage", () => {
             ...defaultPlotView(),
             xFmt: { mode: "fixed", digits: 3 },
             yFmt: { mode: "sci", digits: 1 },
+            xStep: 2000,
+            yStep: 0.5,
           },
         }),
       ],
@@ -178,6 +180,8 @@ describe("useFigurePage", () => {
     const spec = await result.current.buildSpec();
     expect(spec!.panels[0].figure.x_fmt).toEqual({ mode: "fixed", digits: 3 });
     expect(spec!.panels[0].figure.y_fmt).toEqual({ mode: "sci", digits: 1 });
+    expect(spec!.panels[0].figure.x_step).toBe(2000);
+    expect(spec!.panels[0].figure.y_step).toBe(0.5);
   });
 
   it("grid resize preserves assignments by position", () => {

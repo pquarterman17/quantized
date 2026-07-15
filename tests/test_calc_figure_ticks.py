@@ -18,6 +18,7 @@ matplotlib.use("Agg")  # headless
 
 import matplotlib.pyplot as plt  # noqa: E402
 import pytest  # noqa: E402
+from matplotlib.ticker import LogLocator, MultipleLocator  # noqa: E402
 
 from quantized.calc.figure_ticks import (  # noqa: E402
     _decimals_for_increment,
@@ -28,8 +29,54 @@ from quantized.calc.figure_ticks import (  # noqa: E402
     _strip_neg_zero,
     _to_exponential,
     apply_tick_formats,
+    apply_tick_steps,
     axis_tick_formatter,
 )
+
+
+def test_apply_tick_steps_uses_decoded_intervals_on_linear_axes() -> None:
+    fig, ax = plt.subplots()
+    try:
+        ax.set_xlim(-7000.0, 7000.0)
+        ax.set_ylim(-1.0, 1.0)
+        apply_tick_steps(ax, 2000.0, 0.5, "linear", "linear")
+        assert isinstance(ax.xaxis.get_major_locator(), MultipleLocator)
+        assert isinstance(ax.yaxis.get_major_locator(), MultipleLocator)
+        x_ticks = ax.xaxis.get_majorticklocs()
+        y_ticks = ax.yaxis.get_majorticklocs()
+        assert [v for v in x_ticks if -7000.0 <= v <= 7000.0] == [
+            -6000.0, -4000.0, -2000.0, 0.0, 2000.0, 4000.0, 6000.0,
+        ]
+        assert [v for v in y_ticks if -1.0 <= v <= 1.0] == [
+            -1.0, -0.5, 0.0, 0.5, 1.0,
+        ]
+    finally:
+        plt.close(fig)
+
+
+def test_apply_tick_steps_fails_closed_for_non_linear_or_invalid_steps() -> None:
+    fig, ax = plt.subplots()
+    try:
+        ax.set_xscale("log")
+        log_locator = ax.xaxis.get_major_locator()
+        y_locator = ax.yaxis.get_major_locator()
+        apply_tick_steps(ax, 2.0, -1.0, "log", "linear")
+        assert ax.xaxis.get_major_locator() is log_locator
+        assert isinstance(log_locator, LogLocator)
+        assert ax.yaxis.get_major_locator() is y_locator
+    finally:
+        plt.close(fig)
+
+
+def test_apply_tick_steps_fails_closed_for_implausibly_dense_steps() -> None:
+    fig, ax = plt.subplots()
+    try:
+        ax.set_xlim(0.0, 1.0)
+        locator = ax.xaxis.get_major_locator()
+        apply_tick_steps(ax, 0.000_001, None, "linear", "linear")
+        assert ax.xaxis.get_major_locator() is locator
+    finally:
+        plt.close(fig)
 
 
 # ── axis_tick_formatter / apply_tick_formats (dispatch) ─────────────────────
