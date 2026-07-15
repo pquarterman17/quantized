@@ -6,6 +6,7 @@ import {
   type PanelPos,
   rowBoundaryGaps,
   rowHeights,
+  spatialPixelRects,
   sharesXWithPanelBelow,
   suppressedXIndices,
 } from "./panelLayout";
@@ -176,6 +177,29 @@ describe("rowHeights", () => {
 
   it("never goes below 1px", () => {
     expect(rowHeights(5, 10, [8, 8, 8, 8])).toEqual(new Array(5).fill(1));
+  });
+});
+
+describe("spatialPixelRects", () => {
+  it("scales unequal, offset, and spanning normalized frames into the stage", () => {
+    const panels = [
+      { frameRect: { left: 0, top: 0, width: 0.3, height: 0.25 } },
+      { frameRect: { left: 0.4, top: 0, width: 0.6, height: 0.25 } },
+      { frameRect: { left: 0, top: 0.35, width: 1, height: 0.65 } },
+    ];
+    expect(spatialPixelRects(panels, 1000, 800)).toEqual([
+      { left: 0, top: 0, width: 300, height: 200 },
+      { left: 400, top: 0, width: 600, height: 200 },
+      { left: 0, top: 280, width: 1000, height: 520 },
+    ]);
+  });
+
+  it("fails closed when any panel rectangle is absent or invalid", () => {
+    expect(spatialPixelRects([{ frameRect: undefined }], 100, 100)).toBeNull();
+    expect(spatialPixelRects([
+      { frameRect: { left: 0, top: 0, width: 1.1, height: 1 } },
+    ], 100, 100)).toBeNull();
+    expect(spatialPixelRects([], 100, 100)).toBeNull();
   });
 });
 

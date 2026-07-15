@@ -882,6 +882,23 @@ describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual â€
       expect(result!.panels.every((p) => (p.y2Keys ?? null) === null)).toBe(true);
     });
 
+    it("carries unequal decoded frame proportions into the spatial panel contract", () => {
+      const l1 = entry("f1", 1, {
+        frame: { left: 0, top: 0, right: 30, bottom: 25 },
+        page: { width: 100, height: 100 },
+      });
+      const l2 = entry("f2", 2, {
+        frame: { left: 0, top: 35, right: 30, bottom: 100 },
+        page: { width: 100, height: 100 },
+      });
+      const result = resolveSpatialPanels([l1, l2], [ds]);
+      expect(result?.spatial).toBe(true);
+      expect(result?.panels.map((p) => p.frameRect)).toEqual([
+        { left: 0, top: 0, width: 1, height: 0.25 },
+        { left: 0, top: 0.35, width: 1, height: 0.65 },
+      ]);
+    });
+
     it("falls back to the ordinal stack (unchanged) when frames are missing/degenerate â€” no merge applies", () => {
       const l1 = entry("f1", 1, { frame: null });
       const l2 = entry("f2", 2, { frame: null });

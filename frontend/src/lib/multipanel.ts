@@ -4,6 +4,7 @@
 
 import type uPlot from "uplot";
 
+import type { NormalizedFrameRect } from "./originPanels";
 import type { PlotPayload } from "./plotdata";
 import type { Annotation, SeriesStyle } from "./types";
 
@@ -93,6 +94,9 @@ export interface SpatialPanel {
   y2AxisLabel?: string;
   row: number;
   col: number;
+  /** Trusted decoded frame within the tiled family's bounding box. Optional
+   *  so ordinal/untrusted and non-Origin producers keep the equal-grid path. */
+  frameRect?: NormalizedFrameRect;
 }
 
 /** The channels a spatial panel actually plots: its `yKeys` minus any

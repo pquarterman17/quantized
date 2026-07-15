@@ -40,6 +40,7 @@ import {
   cumulativeOffsets,
   rowBoundaryGaps,
   rowHeights,
+  spatialPixelRects,
   suppressedXIndices,
 } from "../../lib/panelLayout";
 import { scaleFromLog, type PlotBg } from "../../lib/plotview";
@@ -326,18 +327,22 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       const rowH = rowHeights(grid.rows, h, rowGaps);
       const colLefts = cumulativeOffsets(colW, GRID_GAP);
       const rowTops = cumulativeOffsets(rowH, rowGaps);
+      const decodedRects = spatialPixelRects(panels, w, h);
       const suppressed = suppressedXIndices(panels);
       const divs: HTMLDivElement[] = [];
       panels.forEach((p, i) => {
         const entry = spatialPayloads[i];
         if (!entry) return;
         const { payload: pp, errorBars } = entry;
+        const rect = decodedRects?.[i] ?? {
+          left: colLefts[p.col], top: rowTops[p.row], width: colW[p.col], height: rowH[p.row],
+        };
         const div = document.createElement("div");
         div.style.position = "absolute";
-        div.style.left = `${colLefts[p.col]}px`;
-        div.style.top = `${rowTops[p.row]}px`;
-        div.style.width = `${colW[p.col]}px`;
-        div.style.height = `${rowH[p.row]}px`;
+        div.style.left = `${rect.left}px`;
+        div.style.top = `${rect.top}px`;
+        div.style.width = `${rect.width}px`;
+        div.style.height = `${rect.height}px`;
         host.appendChild(div);
         divs.push(div);
         // Item A: styles/labels line up with the SAME hidden-filtered channel
@@ -347,8 +352,8 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         const cellStyles = plottedChannels.map((ch) => p.seriesStyles?.[ch]);
         const cellLabels = plottedChannels.map((ch) => p.seriesLabels?.[ch]);
         const opts = buildOpts(pp, {
-          width: colW[p.col],
-          height: rowH[p.row],
+          width: rect.width,
+          height: rect.height,
           // This panel's axis type is Origin's own decoded boolean (no
           // reciprocal concept — SpatialPanel stays log-only) — bridge via
           // scaleFromLog (MAIN #12 back-compat helper), same as the
@@ -407,15 +412,19 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         const rh = rowHeights(grid.rows, height, rg);
         const cl = cumulativeOffsets(cw, GRID_GAP);
         const rt = cumulativeOffsets(rh, rg);
+        const resizedRects = spatialPixelRects(panels, width, height);
         panels.forEach((p, idx) => {
           const div = divs[idx];
           const u = plotsRef.current[idx];
           if (!div || !u) return;
-          div.style.left = `${cl[p.col]}px`;
-          div.style.top = `${rt[p.row]}px`;
-          div.style.width = `${cw[p.col]}px`;
-          div.style.height = `${rh[p.row]}px`;
-          u.setSize({ width: cw[p.col], height: rh[p.row] });
+          const rect = resizedRects?.[idx] ?? {
+            left: cl[p.col], top: rt[p.row], width: cw[p.col], height: rh[p.row],
+          };
+          div.style.left = `${rect.left}px`;
+          div.style.top = `${rect.top}px`;
+          div.style.width = `${rect.width}px`;
+          div.style.height = `${rect.height}px`;
+          u.setSize({ width: rect.width, height: rect.height });
         });
       });
       ro.observe(host);
