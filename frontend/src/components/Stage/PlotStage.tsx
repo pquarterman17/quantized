@@ -391,6 +391,7 @@ export default function PlotStage() {
           colorByColumns={colorByColumns}
           isDarkBg={isDarkBg}
           inkColor={inkColor}
+          defaultTrace={defaultTrace}
         />
       )}
     </AxisDropZones>

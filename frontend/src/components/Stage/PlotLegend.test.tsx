@@ -176,9 +176,9 @@ describe("PlotLegend swatch contrast (dark-lines-on-dark-mode fix, item 18)", ()
         inkColor="#eef0f6"
       />,
     );
-    const swatch = container.querySelector(".qzk-legend .it .ln") as HTMLElement;
-    expect(swatch.style.background).not.toBe("black");
-    expect(swatch.style.background).toContain("238, 240, 246"); // #eef0f6 as rgb()
+    const line = container.querySelector(".qzk-legend .it .ln line") as SVGLineElement;
+    expect(line.getAttribute("stroke")).not.toBe("black");
+    expect(line.getAttribute("stroke")).toBe("#eef0f6");
   });
 
   it("keeps a literal black override's swatch on a light background", () => {
@@ -192,8 +192,8 @@ describe("PlotLegend swatch contrast (dark-lines-on-dark-mode fix, item 18)", ()
         inkColor="#1e1e26"
       />,
     );
-    const swatch = container.querySelector(".qzk-legend .it .ln") as HTMLElement;
-    expect(swatch.style.background).toBe("black");
+    const line = container.querySelector(".qzk-legend .it .ln line") as SVGLineElement;
+    expect(line.getAttribute("stroke")).toBe("black");
   });
 
   it("leaves a token ('--series-N') override as a var() reference, untouched by the contrast check", () => {
@@ -206,7 +206,44 @@ describe("PlotLegend swatch contrast (dark-lines-on-dark-mode fix, item 18)", ()
         isDarkBg
       />,
     );
-    const swatch = container.querySelector(".qzk-legend .it .ln") as HTMLElement;
-    expect(swatch.style.background).toBe("var(--series-3)");
+    const line = container.querySelector(".qzk-legend .it .ln line") as SVGLineElement;
+    expect(line.getAttribute("stroke")).toBe("var(--series-3)");
+  });
+});
+
+describe("PlotLegend trace samples", () => {
+  it("shows markers without a line for scatter series", () => {
+    const { container } = render(
+      <PlotLegend series={series} styleList={[{ marker: true, markerShape: "circle", width: 0 }]} plotted={[0, 1]} />,
+    );
+    const sample = container.querySelector(".qzk-legend .it .qzk-legend-sample") as SVGElement;
+    expect(sample).toHaveAttribute("data-line", "false");
+    expect(sample).toHaveAttribute("data-marker", "circle");
+    expect(sample.querySelector("line")).toBeNull();
+    expect(sample.querySelector("circle")).not.toBeNull();
+  });
+
+  it("shows both the decoded line and decoded marker shape", () => {
+    const { container } = render(
+      <PlotLegend
+        series={series}
+        styleList={[{ marker: true, markerShape: "diamond", markerSize: 9, width: 2, line: "dashed" }]}
+        plotted={[0, 1]}
+      />,
+    );
+    const sample = container.querySelector(".qzk-legend .it .qzk-legend-sample") as SVGElement;
+    expect(sample).toHaveAttribute("data-line", "true");
+    expect(sample).toHaveAttribute("data-marker", "diamond");
+    expect(sample.querySelector("line")).toHaveAttribute("stroke-dasharray", "6 3");
+    expect(sample.querySelector("polygon")).not.toBeNull();
+  });
+
+  it("follows the global trace fallback when no per-series style exists", () => {
+    const { container } = render(
+      <PlotLegend series={series} plotted={[0, 1]} defaultTrace="Line + markers" />,
+    );
+    const sample = container.querySelector(".qzk-legend .it .qzk-legend-sample") as SVGElement;
+    expect(sample).toHaveAttribute("data-line", "true");
+    expect(sample).toHaveAttribute("data-marker", "circle");
   });
 });

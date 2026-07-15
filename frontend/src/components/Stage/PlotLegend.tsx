@@ -17,6 +17,7 @@ import { nearestLegendCorner } from "../../lib/plotview";
 import type { SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import LegendSample from "./LegendSample";
 
 interface PlotLegendProps {
   series: PlotSeriesSpec[];
@@ -40,6 +41,8 @@ interface PlotLegendProps {
    *  not a hardcoded default, so it re-themes/re-resolves on a background
    *  switch exactly like the canvas does. */
   inkColor?: string;
+  /** Global trace fallback when a series has no explicit style. */
+  defaultTrace?: string;
 }
 
 export default function PlotLegend({
@@ -50,6 +53,7 @@ export default function PlotLegend({
   colorByColumns,
   isDarkBg = true,
   inkColor,
+  defaultTrace,
 }: PlotLegendProps) {
   const active = useActiveDataset();
   const hiddenChannels = useApp((s) => s.hiddenChannels);
@@ -181,10 +185,7 @@ export default function PlotLegend({
         if (editing && editing.channel === channel) {
           return (
             <div className="it" key={s.label}>
-              <span
-                className="ln"
-                style={{ display: "inline-block", width: 14, height: 2, background: swatch }}
-              />
+              <LegendSample color={swatch} style={styleList?.[i]} defaultTrace={defaultTrace} />
               <input
                 className="qz-input"
                 autoFocus
@@ -248,10 +249,7 @@ export default function PlotLegend({
               textDecoration: isHidden ? "line-through" : "none",
             }}
           >
-            <span
-              className="ln"
-              style={{ display: "inline-block", width: 14, height: 2, background: swatch }}
-            />
+            <LegendSample color={swatch} style={styleList?.[i]} defaultTrace={defaultTrace} />
             {/* Rich-text rename support (GOTO #5): `$...$` renders as math. */}
             <RichText text={text} />
             {isChannel && plotted.length > 1 && (
