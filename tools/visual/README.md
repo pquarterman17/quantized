@@ -103,12 +103,21 @@ node origin_figures.mjs --opj "<path>/PNR.opj" --project PNR
 #    (see ../../../test-data/origin/_exports/<project>/, produced separately
 #    by a COM export script) into one static HTML gallery.
 node gallery.mjs --project PNR
+
+# 3. Mark each visual category in gallery.html, download review.json into
+#    that project's _exports/<project>/ directory, then aggregate every
+#    available project into one durable JSON/CSV row per graph.
+node acceptance_matrix.mjs
+# or select a controlled subset:
+node acceptance_matrix.mjs --projects Moke,PNR,RockingCurve
 ```
 
-Both scripts default to `<test-data>/origin/_exports/<project>/`, found by
+The per-project scripts default to `<test-data>/origin/_exports/<project>/`, found by
 walking up from this directory for a `test-data` sibling (works from a plain
 checkout or a nested `.claude/worktrees/` agent) — override with
 `--exports-root <dir>` or `QZ_TEST_DATA_ROOT=<path to test-data>`.
+For `acceptance_matrix.mjs`, `--exports-root` names the shared `_exports`
+directory instead; its default corpus discovery is otherwise identical.
 
 `origin_figures.mjs` starts its own `uv run qz --no-browser` backend (default
 port 8793, override with `--port`) to parse the project — the SAME process
@@ -132,7 +141,8 @@ Output (gitignored, in `_exports/<project>/`, never committed):
   `applyOriginFigure` actually produced. This is a "first cut": it mostly
   validates apply-ROUTING (right axis, right panel, no stale cross-figure
   leakage), not deep rendering fidelity — mismatches are data for the gap
-  register, not CI failures.
+  register, not CI failures. Log checks derive from the current typed
+  `xScale`/`yScale`/`y2Scale` fields; legacy `xLog` store fields do not exist.
 - `gallery.html` — Origin PNG | quantized PNG side by side per figure, a
   structural-pass badge, and 7 clickable eyeball-checklist chips (scales /
   ticks / legend / colours / markers / annotations / panels) that cycle
@@ -140,3 +150,10 @@ Output (gitignored, in `_exports/<project>/`, never committed):
   re-running the generator doesn't lose marks). Unpaired figures (Origin PNG
   with no quantized match, quantized render with no Origin PNG, or an Origin
   export that never finished) get their own sections at the end.
+- `review.json` — an explicit export of the gallery's visual-review marks.
+  The gallery can import it again; keeping it beside the generated manifests
+  makes review state durable without committing private graph information.
+- `_exports/acceptance_matrix.json` and `.csv` — corpus-wide rows joining
+  source books/curve bindings, layout, preview and fidelity omissions,
+  structural failures, screenshot pairing, and exported review status. Missing
+  artifacts remain explicit (`missing`, `unreported`, or `unreviewed`).

@@ -1,0 +1,113 @@
+// Pure helpers for the corpus-wide Origin plot-fidelity acceptance matrix
+// (ORIGIN_FILE_DECODE_PLAN #55). No project bytes or screenshots are read here.
+
+export const REVIEW_KEYS = [
+  "scales", "ticks", "legend", "colours", "markers", "annotations", "panels",
+];
+
+const FIDELITY_RANK = {
+  exact: 0,
+  best_effort: 1,
+  reference_only: 2,
+  unresolved: 3,
+};
+
+function unique(values) {
+  return [...new Set(values.filter((value) => value !== null && value !== undefined && value !== ""))];
+}
+
+/** Summarize every layer in one graph-window family without guessing absent
+ * decoder fields. Source books and curves remain in decoded draw order. */
+export function summarizeFigureFamily(family) {
+  const curves = family.flatMap((entry) => entry.figure?.curves || []).map((curve) => ({
+    book: curve.book,
+    x: curve.x,
+    y: curve.y,
+    ...(curve.style ? { style: curve.style } : {}),
+  }));
+  const fidelities = family.map((entry) => entry.figure?.fidelity).filter(Boolean);
+  const statuses = fidelities.map((item) => item.status).filter((status) => status in FIDELITY_RANK);
+  const status = statuses.length
+    ? statuses.reduce((worst, value) => FIDELITY_RANK[value] > FIDELITY_RANK[worst] ? value : worst)
+    : "unreported";
+  const previews = family.map((entry) => entry.figure?.saved_preview).filter(Boolean);
+  return {
+    source_books: unique(curves.map((curve) => curve.book)),
+    curves,
+    fidelity: {
+      status,
+      recovered: unique(fidelities.flatMap((item) => item.recovered || [])),
+      omissions: unique(fidelities.flatMap((item) => item.omissions || [])),
+    },
+    preview: {
+      available: previews.length > 0,
+      confidence: unique(previews.map((preview) => preview.confidence)),
+    },
+  };
+}
+
+export function screenshotReview(review, graph) {
+  const marks = review?.figures?.[graph] || {};
+  const values = REVIEW_KEYS.map((key) => marks[key] || "");
+  const mismatches = REVIEW_KEYS.filter((key, index) => values[index] === "bad");
+  const reviewed = values.filter((value) => value === "ok" || value === "bad").length;
+  let status = "unreviewed";
+  if (mismatches.length) status = "mismatch";
+  else if (reviewed === REVIEW_KEYS.length) status = "reviewed";
+  else if (reviewed) status = "partial";
+  return { status, reviewed_checks: reviewed, mismatch_checks: mismatches };
+}
+
+/** Join the three generated reports plus optional exported eyeball marks into
+ * one durable row per graph. Missing inputs become explicit states. */
+export function buildAcceptanceRows(project, originManifest, quantizedManifest, structuralReport, review) {
+  const origin = originManifest?.graphs || {};
+  const quantized = quantizedManifest?.figures || {};
+  const structural = new Map((structuralReport?.figures || []).map((item) => [item.name, item]));
+  const names = unique([...Object.keys(origin), ...Object.keys(quantized), ...structural.keys()]).sort();
+  return names.map((graph) => {
+    const o = origin[graph];
+    const q = quantized[graph];
+    const s = structural.get(graph);
+    const reviewState = screenshotReview(review, graph);
+    const originRendered = Boolean(o?.status === "ok" && o.file);
+    const quantizedRendered = Boolean(q?.resolved && q.file);
+    return {
+      project,
+      graph,
+      folder: q?.folder || o?.folder || null,
+      source_books: q?.source_books || [],
+      curves: q?.curves || [],
+      curve_count: Array.isArray(q?.curves) ? q.curves.length : null,
+      layers: q?.layers ?? null,
+      layout_mode: q?.mode ?? null,
+      preview: q?.preview || { available: false, confidence: [] },
+      fidelity_status: q?.fidelity?.status || "unreported",
+      fidelity_omissions: q?.fidelity?.omissions || [],
+      origin_render_status: o?.status || "missing",
+      quantized_render_status: q ? (q.resolved ? (q.file ? "rendered" : "missing_screenshot") : "unresolved") : "missing",
+      paired_screenshots: originRendered && quantizedRendered,
+      structural_pass: typeof s?.pass === "boolean" ? s.pass : null,
+      structural_failures: (s?.checks || []).filter((item) => !item.pass).map((item) => item.name),
+      screenshot_review_status: reviewState.status,
+      screenshot_reviewed_checks: reviewState.reviewed_checks,
+      screenshot_mismatches: reviewState.mismatch_checks,
+      origin_screenshot: o?.file || null,
+      quantized_screenshot: q?.file || null,
+    };
+  });
+}
+
+function csvCell(value) {
+  const raw = Array.isArray(value) || (value && typeof value === "object")
+    ? JSON.stringify(value)
+    : String(value ?? "");
+  return /[",\r\n]/.test(raw) ? `"${raw.replaceAll('"', '""')}"` : raw;
+}
+
+export function acceptanceCsv(rows) {
+  const headers = rows.length ? Object.keys(rows[0]) : [];
+  return [headers, ...rows.map((row) => headers.map((header) => row[header]))]
+    .map((line) => line.map(csvCell).join(","))
+    .join("\n") + "\n";
+}
