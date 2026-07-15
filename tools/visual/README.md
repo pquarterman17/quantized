@@ -110,6 +110,12 @@ node gallery.mjs --project PNR
 node acceptance_matrix.mjs
 # or select a controlled subset:
 node acceptance_matrix.mjs --projects Moke,PNR,RockingCurve
+
+# Or run every root-level .opj/.opju sequentially, enforce the strengthened
+# renderer checks, and rebuild the matrix in one command:
+node origin_corpus.mjs
+# A focused repeat uses the same project names as the export directories:
+node origin_corpus.mjs --projects Moke,PNR
 ```
 
 The per-project scripts default to `<test-data>/origin/_exports/<project>/`, found by
@@ -138,10 +144,10 @@ Output (gitignored, in `_exports/<project>/`, never committed):
   book/dataset, single/doubleY/multiPanel mode).
 - `structural_report.json` — per-figure pass/fail comparing the decoded
   figure record (axis range, log flag, tick step) against the store state
-  `applyOriginFigure` actually produced. This is a "first cut": it mostly
-  validates apply-ROUTING (right axis, right panel, no stale cross-figure
-  leakage), not deep rendering fidelity — mismatches are data for the gap
-  register, not CI failures. Log checks derive from the current typed
+  `applyOriginFigure` actually produced, plus live canvas paint variation and
+  decoded-frame-vs-DOM geometry for trusted spatial layouts. It validates
+  apply routing and key rendered invariants, but does not replace the Origin
+  screenshot review for colour/marker/text fidelity. Log checks derive from the current typed
   `xScale`/`yScale`/`y2Scale` fields; legacy `xLog` store fields do not exist.
   Browser exceptions are attributed to the graph being applied, deduplicated,
   recorded in both manifests, and make that graph structurally fail even when
@@ -160,3 +166,9 @@ Output (gitignored, in `_exports/<project>/`, never committed):
   source books/curve bindings, layout, preview and fidelity omissions,
   structural failures, screenshot pairing, and exported review status. Missing
   artifacts remain explicit (`missing`, `unreported`, or `unreviewed`).
+- `_exports/corpus_render_summary.json` â€” strict per-project renderer-run
+  summary. Unresolved graphs are counted separately (they remain fallback
+  work, not a renderer regression); child-process failures and any resolved
+  graph failing geometry, canvas-paint, routing, or runtime checks make the
+  command exit nonzero. Projects run sequentially so the largest Origin files
+  never compete for backend/browser memory.

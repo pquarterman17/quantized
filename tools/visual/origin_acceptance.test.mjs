@@ -7,6 +7,7 @@ import {
   fitNormalizedLayoutRects,
   normalizedRectsMatch,
   screenshotReview,
+  summarizeCorpusReports,
   summarizeFigureFamily,
   summarizeRuntimeErrors,
 } from "./origin_acceptance.mjs";
@@ -101,4 +102,27 @@ test("acceptance rows retain unpaired graphs and structural failures", () => {
   assert.equal(rows[0].runtime_error_count, 0);
   assert.equal(rows[1].quantized_render_status, "missing");
   assert.match(acceptanceCsv(rows), /"\[""Book2""\]"/);
+});
+
+test("corpus summary separates unresolved graphs from strict renderer failures", () => {
+  const summary = summarizeCorpusReports([
+    { project: "Moke", report: { figures: [
+      { name: "Graph1", resolved: true, pass: true, checks: [] },
+      { name: "Internal", resolved: false, pass: false, checks: [] },
+    ] } },
+    { project: "PNR", report: { figures: [
+      { name: "Graph40", resolved: true, pass: false, checks: [
+        { name: "decoded_frame_geometry", pass: false },
+        { name: "painted_canvases", pass: true },
+      ] },
+    ] } },
+  ]);
+  assert.deepEqual(summary.totals, {
+    projects: 2, graphs: 3, resolved: 2, unresolved: 1, renderer_failures: 1, process_failures: 0,
+  });
+  assert.equal(summary.projects[0].strict_pass, true);
+  assert.deepEqual(summary.projects[1].failures, [
+    { graph: "Graph40", checks: ["decoded_frame_geometry"] },
+  ]);
+  assert.equal(summary.strict_pass, false);
 });
