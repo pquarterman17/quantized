@@ -14,7 +14,11 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-14 (Codex Origin stack #39–#50 reviewed + landed on main:
+**Updated:** 2026-07-15 (grid fidelity fix — Origin figures apply gridless via
+`ORIGIN_FIGURE_AXIS`; booked #52 legend-title placement + #54 letterbox
+space-fill from owner gallery review). Prior: 2026-07-14 (Codex stacks #39–#53
+reviewed + landed; #51–#53 legend swatches / linear steps / log minor ticks).
+Prior: 2026-07-14 (Codex Origin stack #39–#50 reviewed + landed on main:
 multi-X remake binding, versioned overlay rebuild, panel frame geometry +
 letterbox, uPlot draw-only-plugin crash fix, and the strengthened corpus audit
 tooling; #54 layout fidelity + #55 acceptance advanced. Booked #52 sub-items
@@ -468,6 +472,18 @@ Official model references used for this routing:
         point-only, or line+point mode plus decoded marker shape/size, line
         width, and dash. This does not infer Origin fields or change curve
         paths/bindings. Static Origin legend chrome/visibility remains open.
+      - [ ] **Legend TITLE placement** (e.g. RockingCurve `NbAuRocking` "Nb/Au").
+        Origin's bold legend title renders in Quantized as a misplaced stray
+        mark instead of a positioned title — needs the annotation/legend-title
+        coordinate transform. Owner-observed 2026-07-15.
+    - [x] **Background gridlines suppressed on Origin apply** (fixed 2026-07-15).
+      Origin graphs draw NO background gridlines and grid visibility is
+      undecodable, but Quantized applied its default grid (and #53's minor ticks
+      made the mismatch obvious). `applyOriginFigure` now applies
+      `showGrid: false` in all four branches via the shared `ORIGIN_FIGURE_AXIS`
+      const; tick MARKS still draw and the user can re-enable grid. Verified
+      against RockingCurve `NbAuRocking`. (Matplotlib publication export still
+      uses the chosen style preset's grid — a separate, deliberate path.)
 
 53. **Graphic objects and rich annotations** — this campaign's promoted form
     of item #47. Decode Origin arrows, arbitrary lines, standalone rectangles/
@@ -510,6 +526,11 @@ Official model references used for this routing:
       coordinates — not just the frame bounding box #47 letterboxes to — which
       is the enabler for the deferred exact page margins/aspect and faithful
       publication (PDF/SVG) export at a chosen page size.
+      - Owner-observed 2026-07-15: a wide multi-panel composition (e.g.
+        RockingCurve `Graph3`) letterboxes to preserve aspect and so fills the
+        interactive window poorly (small, lots of whitespace). Not wrong — the
+        #47 tradeoff — but a page-size/fit control (or a "fit to window vs
+        preserve aspect" toggle) is the intended remedy.
 
 ### Tier 3 — acceptance and handoff
 

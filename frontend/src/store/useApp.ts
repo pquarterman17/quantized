@@ -1027,6 +1027,9 @@ function syncPrefs(s: AppState): void {
 
 const _initialPrefs = loadPrefs();
 
+// Origin figures apply boxed + gridless (item 4; grid undecodable) — Origin's clean look, ticks still draw, user re-enables.
+const ORIGIN_FIGURE_AXIS = { showAxisBox: true, showGrid: false };
+
 export const useApp = create<AppState>((set, get) => ({
   // Composed slices (each in its own file): windows #2, history #9, reimport
   // #10, reductions #11, panels #19, pointer #18, split #26, shapes #27.
@@ -1530,10 +1533,7 @@ export const useApp = create<AppState>((set, get) => ({
         const src = refreshed.data;
         const n = src?.labels.length ?? 0;
         set({
-          // Origin draws every layer with a full 4-side frame box; the
-          // decoded figure carries no separate "border on/off" flag, so an
-          // applied figure defaults to boxed (owner-routing item 4).
-          showAxisBox: true,
+          ...ORIGIN_FIGURE_AXIS,
           xLim: [fig.x_from, fig.x_to],
           yLim: [fig.y_from, fig.y_to],
           xStep: fig.x_step ?? null,
@@ -1578,7 +1578,7 @@ export const useApp = create<AppState>((set, get) => ({
       if (baseSel && partnerSel) {
         get().setActive(entry.datasetId);
         set({
-          showAxisBox: true, // Origin layers are boxed by default (item 4)
+          ...ORIGIN_FIGURE_AXIS,
           xLim: [lower.figure.x_from, lower.figure.x_to],
           yLim: [lower.figure.y_from, lower.figure.y_to],
           xStep: lower.figure.x_step ?? null,
@@ -1647,7 +1647,7 @@ export const useApp = create<AppState>((set, get) => ({
           spatialPanels: placed,
           facetPanels: null,
           breakPanels: null,
-          showAxisBox: true,
+          ...ORIGIN_FIGURE_AXIS,
           // Region bands are single-plot overlays; a spatial multi-panel
           // apply clears any prior figure's bands (no per-panel shade
           // support yet — an honest, documented gap, not a guess).
@@ -1673,7 +1673,7 @@ export const useApp = create<AppState>((set, get) => ({
     const ds = get().datasets.find((d) => d.id === entry.datasetId);
     const selection = ds ? figureChannelSelection(fig, ds) : null;
     set({
-      showAxisBox: true, // Origin layers are boxed by default (item 4)
+      ...ORIGIN_FIGURE_AXIS,
       xLim: [fig.x_from, fig.x_to],
       yLim: [fig.y_from, fig.y_to],
       xStep: fig.x_step ?? null,
