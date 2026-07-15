@@ -40,7 +40,7 @@ import {
   sanitizeName,
   waitForServer,
 } from "./origin_shared.mjs";
-import { summarizeFigureFamily } from "./origin_acceptance.mjs";
+import { summarizeFigureFamily, summarizeRuntimeErrors } from "./origin_acceptance.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.opj || !args.project) {
@@ -222,7 +222,11 @@ async function main() {
       defaultViewport: { width: 1200, height: 820 },
     });
     const page = await browser.newPage();
-    page.on("pageerror", (e) => console.error(`[pageerror] ${e.stack || e.message}`));
+    let pageErrors = [];
+    page.on("pageerror", (error) => {
+      pageErrors.push(error.stack || error.message || String(error));
+      console.error(`[pageerror] ${error.stack || error.message}`);
+    });
 
     await page.goto(`${baseUrl}/?harness=1`, { waitUntil: "networkidle2", timeout: 30000 });
     await page.waitForFunction("window.__qz && window.__qz.useApp", { timeout: 15000 });
@@ -290,6 +294,7 @@ async function main() {
       // gap: applyOriginFigure's single/double-Y branches don't clear
       // stackMode/spatialPanels/y2*, since a normal click sequence rarely
       // crosses figure "kinds" back-to-back the way this batch does).
+      pageErrors = [];
       await page.evaluate((id) => {
         const { useApp } = window.__qz;
         useApp.setState({
@@ -307,6 +312,7 @@ async function main() {
 
       await page.waitForSelector(".qzk-stage", { timeout: 6000 }).catch(() => {});
       await new Promise((r) => setTimeout(r, 650));
+      const runtimeErrors = summarizeRuntimeErrors(pageErrors);
 
       const outPath = join(QZ_DIR, `${fileBase}.png`);
       const el = await page.$(".qzk-stage");
@@ -333,6 +339,11 @@ async function main() {
       });
 
       const { mode, checks } = compareFigureToState(family, representative, applied);
+      checks.push(check(
+        "runtime_errors",
+        runtimeErrors.count === 0,
+        runtimeErrors.count === 0 ? "none" : `${runtimeErrors.count} unique browser exception(s)`,
+      ));
       const pass = checks.every((c) => c.pass);
       const dsInfo = datasetInfo[representative.datasetId] || {};
       manifestFigures[shortName] = {
@@ -344,9 +355,10 @@ async function main() {
         mode,
         dataset: dsInfo.name ?? null,
         structural_pass: pass,
+        runtime_errors: runtimeErrors,
         ...acceptance,
       };
-      reportFigures.push({ name: shortName, resolved: true, mode, pass, checks });
+      reportFigures.push({ name: shortName, resolved: true, mode, pass, checks, runtime_errors: runtimeErrors });
       console.log(`  (${shot}/${families.size}) ${name}: mode=${mode} structural=${pass ? "PASS" : "FAIL"}`);
     }
 
