@@ -272,6 +272,7 @@ body {
    comfy) — still density-aware, no new preference. */
 .qzk-legend .it { display: flex; align-items: center; gap: 7px; font-size: var(--font-size); color: var(--text-dim); }
 .qzk-legend .ln { width: 16px; height: 3px; border-radius: 2px; }
+.qzk-legend .qzk-legend-sample { width: 24px; height: 12px; flex: 0 0 24px; overflow: visible; border-radius: 0; }
 .qzk-legend .ln.dash { background: none !important; border-top: 2px dashed var(--capture); height: 0; }
 /* Colorbar chip (MAIN #14, color-mapped scatter): a minimal inline legend
    affordance — colormap gradient strip + min/max labels — for each series
