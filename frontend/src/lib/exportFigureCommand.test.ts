@@ -156,6 +156,8 @@ describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
       yScale: "linear",
       xFmt: { mode: "auto", digits: 2 },
       yFmt: { mode: "auto", digits: 2 },
+      xStep: null,
+      yStep: null,
       seriesStyles: {},
       status: "",
     });
@@ -177,5 +179,13 @@ describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
     const body = vi.mocked(exportFigure).mock.calls[0][0];
     expect(body.x_fmt).toEqual({ mode: "fixed", digits: 3 });
     expect(body.y_fmt).toEqual({ mode: "eng", digits: 0 });
+  });
+
+  it("sends saved major-tick increments for publication parity", async () => {
+    useApp.setState({ xStep: 2000, yStep: 0.5 });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.x_step).toBe(2000);
+    expect(body.y_step).toBe(0.5);
   });
 });

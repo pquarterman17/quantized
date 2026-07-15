@@ -397,6 +397,23 @@ def test_figure_x_fmt_auto_is_omittable() -> None:
     assert resp.content[:5] == b"%PDF-"
 
 
+def test_figure_linear_tick_steps_render_and_appear_in_svg() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "svg",
+            "x_step": 0.02,
+            "y_step": 10.0,
+            "x_fmt": {"mode": "fixed", "digits": 2},
+        },
+    )
+    assert resp.status_code == 200
+    svg = resp.content.decode("utf-8", "ignore")
+    assert "10.02" in svg
+    assert "10.04" in svg
+
+
 def test_figure_x_fmt_bad_mode_is_422() -> None:
     resp = client.post(
         "/api/export/figure",
@@ -418,6 +435,30 @@ def test_figure_page_panel_x_fmt_renders() -> None:
                     "figure": {
                         "dataset": _xrd_dataset(),
                         "x_fmt": {"mode": "fixed", "digits": 2},
+                    },
+                    "row": 0,
+                    "col": 0,
+                }
+            ],
+            "fmt": "pdf",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_figure_page_panel_linear_tick_steps_render() -> None:
+    resp = client.post(
+        "/api/export/figure-page",
+        json={
+            "rows": 1,
+            "cols": 1,
+            "panels": [
+                {
+                    "figure": {
+                        "dataset": _xrd_dataset(),
+                        "x_step": 0.02,
+                        "y_step": 10.0,
                     },
                     "row": 0,
                     "col": 0,

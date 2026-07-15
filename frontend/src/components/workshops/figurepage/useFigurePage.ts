@@ -75,6 +75,8 @@ async function panelFigure(source: PanelSource): Promise<FigureSpec | null> {
       y_scale: v.yScale,
       x_fmt: axisFmtParam(v.xFmt),
       y_fmt: axisFmtParam(v.yFmt),
+      x_step: v.xStep,
+      y_step: v.yStep,
       title: v.plotTitle.trim(),
       x_label: v.xAxisLabel.trim() || undefined,
       y_label: v.yAxisLabel.trim() || undefined,

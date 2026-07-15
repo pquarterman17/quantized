@@ -99,6 +99,8 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                     y_scale=f.y_scale,
                     x_fmt=_tick_fmt(f.x_fmt),
                     y_fmt=_tick_fmt(f.y_fmt),
+                    x_step=f.x_step,
+                    y_step=f.y_step,
                     series_styles=styles,
                     overrides=f.overrides,
                     label=spec.label,

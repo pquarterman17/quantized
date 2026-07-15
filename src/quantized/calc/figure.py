@@ -27,7 +27,7 @@ from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_overrides import _apply_overrides, _validate_overrides  # noqa: E402
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale  # noqa: E402
 from quantized.calc.figure_styles import FigureStyle, figure_style  # noqa: E402
-from quantized.calc.figure_ticks import apply_tick_formats  # noqa: E402
+from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps  # noqa: E402
 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
 
@@ -177,6 +177,8 @@ def draw_series_axes(
     series_styles: Sequence[Mapping[str, Any] | None] | None = None,
     x_fmt: Mapping[str, Any] | None = None,
     y_fmt: Mapping[str, Any] | None = None,
+    x_step: float | None = None,
+    y_step: float | None = None,
 ) -> list[Any]:
     """Plot ``series`` into an EXISTING Axes: lines, scales, labels, spines,
     legend, grid, and the per-figure override sweep (:func:`_apply_overrides`).
@@ -221,8 +223,11 @@ def draw_series_axes(
         (line,) = ax.plot(xv, yv, label=label, **kw)
         _apply_fill(ax, xv, yv, series, i, spec, line.get_color())
         artists.append(line)
-    apply_axis_scale(ax, "x", resolve_axis_scale(x_scale, x_log))
-    apply_axis_scale(ax, "y", resolve_axis_scale(y_scale, y_log))
+    resolved_x_scale = resolve_axis_scale(x_scale, x_log)
+    resolved_y_scale = resolve_axis_scale(y_scale, y_log)
+    apply_axis_scale(ax, "x", resolved_x_scale)
+    apply_axis_scale(ax, "y", resolved_y_scale)
+    apply_tick_steps(ax, x_step, y_step, resolved_x_scale, resolved_y_scale)
     apply_tick_formats(ax, x_fmt, y_fmt)
     if title:
         ax.set_title(title)
@@ -270,6 +275,8 @@ def _render_impl(
     collect_map: bool = False,
     x_fmt: Mapping[str, Any] | None = None,
     y_fmt: Mapping[str, Any] | None = None,
+    x_step: float | None = None,
+    y_step: float | None = None,
 ) -> bytes | dict[str, Any]:
     """Render ``series`` (each ``(label, y)``) against ``x`` to image bytes.
 
@@ -352,6 +359,8 @@ def _render_impl(
                 series_styles=series_styles,
                 x_fmt=x_fmt,
                 y_fmt=y_fmt,
+                x_step=x_step,
+                y_step=y_step,
             )
         fig, ax = plt.subplots(figsize=figsize)
         try:
@@ -372,6 +381,8 @@ def _render_impl(
                 series_styles=series_styles,
                 x_fmt=x_fmt,
                 y_fmt=y_fmt,
+                x_step=x_step,
+                y_step=y_step,
             )
             if not ov.get("margins"):
                 fig.tight_layout()

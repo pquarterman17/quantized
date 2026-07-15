@@ -115,6 +115,8 @@ class PagePanel:
     # (a figure page composes several independently-configured plot views).
     x_fmt: Mapping[str, Any] | None = None
     y_fmt: Mapping[str, Any] | None = None
+    x_step: float | None = None
+    y_step: float | None = None
     series_styles: Sequence[Mapping[str, Any] | None] | None = None
     overrides: Mapping[str, Any] | None = None
     label: str | None = None
@@ -256,6 +258,8 @@ def render_figure_page(
                     series_styles=p.series_styles,
                     x_fmt=p.x_fmt,
                     y_fmt=p.y_fmt,
+                    x_step=p.x_step,
+                    y_step=p.y_step,
                 )
                 text = p.label if p.label is not None else panel_label(idx, label_format)
                 _place_label(ax, safe_mathtext_label(text), label_pos, st)

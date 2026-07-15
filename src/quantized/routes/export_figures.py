@@ -53,6 +53,8 @@ class FigureRequest(BaseModel):
     # rendering to mirror it onto). None = auto (omit to keep requests lean).
     x_fmt: TickFormatSpec | None = None
     y_fmt: TickFormatSpec | None = None
+    x_step: float | None = None
+    y_step: float | None = None
     fmt: str = "pdf"
     style: str = "default"  # publication preset: aps / report / web / …
     dpi: int = 200  # raster (png/tiff) resolution; ignored by vector formats
@@ -146,6 +148,8 @@ def export_figure(req: FigureRequest) -> Response:
             overrides=req.overrides,
             x_fmt=_tick_fmt(req.x_fmt),
             y_fmt=_tick_fmt(req.y_fmt),
+            x_step=req.x_step,
+            y_step=req.y_step,
         )
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -183,6 +187,8 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
             overrides=req.overrides,
             x_fmt=_tick_fmt(req.x_fmt),
             y_fmt=_tick_fmt(req.y_fmt),
+            x_step=req.x_step,
+            y_step=req.y_step,
         )
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

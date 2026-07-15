@@ -399,6 +399,31 @@ def test_draw_series_axes_applies_x_fmt_and_y_fmt() -> None:
         plt.close(fig)
 
 
+def test_draw_series_axes_applies_linear_tick_steps_without_reordering_data() -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from quantized.calc.figure import draw_series_axes
+    from quantized.calc.figure_styles import figure_style
+
+    fig, ax = plt.subplots()
+    try:
+        # Deliberately non-monotonic: tick layout must not touch acquisition order.
+        x = np.array([0.0, 2.0, 1.0, 3.0])
+        draw_series_axes(
+            fig, ax, x, [("loop", x)],
+            st=figure_style("default"), ov={},
+            x_step=1.0, y_step=0.5,
+        )
+        line = ax.lines[0]
+        assert list(line.get_xdata()) == [0.0, 2.0, 1.0, 3.0]
+        assert [v for v in ax.get_xticks() if 0.0 <= v <= 3.0] == [0.0, 1.0, 2.0, 3.0]
+    finally:
+        plt.close(fig)
+
+
 def test_render_figure_with_x_fmt_and_y_fmt_does_not_crash() -> None:
     # End-to-end through the public bytes-returning entry point (render_figure
     # never exposes the Axes, so this is a wiring smoke test; the label-level
@@ -409,6 +434,12 @@ def test_render_figure_with_x_fmt_and_y_fmt_does_not_crash() -> None:
         x_fmt={"mode": "fixed", "digits": 3},
         y_fmt={"mode": "eng", "digits": 1},
     )
+    assert out[:5] == b"%PDF-"
+
+
+def test_render_figure_with_linear_tick_steps_does_not_crash() -> None:
+    x = np.linspace(0, 10, 20)
+    out = render_figure(x, [("y", x)], fmt="pdf", x_step=2.0, y_step=0.5)
     assert out[:5] == b"%PDF-"
 
 
@@ -435,6 +466,21 @@ def test_x_breaks_panels_apply_x_fmt_and_y_fmt_to_every_panel() -> None:
     assert out[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_x_breaks_panels_accept_linear_tick_steps() -> None:
+    from quantized.calc.figure_break import render_breaks_impl
+    from quantized.calc.figure_styles import figure_style
+
+    t = np.linspace(0.0, 10.0, 50)
+    out = render_breaks_impl(
+        t, [("y", np.sin(t))], breaks=[(4.0, 6.0)],
+        x_log=False, y_log=False, title="", x_label="", y_label="",
+        fmt="png", st=figure_style("default"), ov={}, dpi=100,
+        figsize=(6.0, 4.0), series_styles=None,
+        x_step=2.0, y_step=0.5,
+    )
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"
+
+
 def test_figure_page_panel_carries_its_own_x_fmt_and_y_fmt() -> None:
     from quantized.calc.figure_page import PagePanel, render_figure_page
 
@@ -443,6 +489,18 @@ def test_figure_page_panel_carries_its_own_x_fmt_and_y_fmt() -> None:
         x=x, series=[("y", x)], row=0, col=0,
         x_fmt={"mode": "fixed", "digits": 3},
         y_fmt={"mode": "sci", "digits": 1},
+    )
+    out = render_figure_page([panel], rows=1, cols=1, fmt="png")
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_figure_page_panel_carries_its_own_linear_tick_steps() -> None:
+    from quantized.calc.figure_page import PagePanel, render_figure_page
+
+    x = np.array([0.0, 1.0, 2.0])
+    panel = PagePanel(
+        x=x, series=[("y", x)], row=0, col=0,
+        x_step=0.5, y_step=0.25,
     )
     out = render_figure_page([panel], rows=1, cols=1, fmt="png")
     assert out[:8] == b"\x89PNG\r\n\x1a\n"
