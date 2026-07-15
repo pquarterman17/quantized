@@ -14,7 +14,12 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-12 (#48–#51 completed in PRs #25–#28; #52 curve and axis
+**Updated:** 2026-07-14 (Codex Origin stack #39–#50 reviewed + landed on main:
+multi-X remake binding, versioned overlay rebuild, panel frame geometry +
+letterbox, uPlot draw-only-plugin crash fix, and the strengthened corpus audit
+tooling; #54 layout fidelity + #55 acceptance advanced. Booked #52 sub-items
+log-scale minor ticks + legend fidelity and new #57 overlay-edit confirm).
+Prior: 2026-07-12 (#48–#51 completed in PRs #25–#28; #52 curve and axis
 fidelity in progress). Prior:
 booked the owner-prioritized **Plot Fidelity +
 Workbook Fallback campaign**, items #48–#56. Governing outcome: recover an
@@ -441,6 +446,17 @@ Official model references used for this routing:
     - Axis direction, top/right axes, tick direction/format, breaks, and
       non-log scale types only where the Quantized renderer has a truthful
       native equivalent; otherwise record the omission and retain the preview.
+    - [ ] **Log-scale minor ticks are not drawn.** A log Y (or X) axis renders
+      only the decade labels (1, 0.1, 0.01, …); the 2–9 minor subdivisions
+      Origin shows within each decade are absent. Pre-existing — untouched by
+      the #39–#50 stack (observed on single-mode `PNR700mT`, 2026-07-14, which
+      the multi-panel work never touches). Fix in the uPlot axis config
+      (minor-tick splits/format for log scales), single + multi-panel paths.
+    - [ ] **Legend fidelity vs Origin.** Quantized draws its interactive legend
+      box (reorder ▲▼ arrows, greyed error/secondary-Y entries) overlapping the
+      data rather than Origin's clean static legend. Pre-existing (same anchor).
+      Drive legend placement + content off the decoded legend and suppress the
+      interactive chrome in an applied Origin figure.
 
 53. **Graphic objects and rich annotations** — this campaign's promoted form
     of item #47. Decode Origin arrows, arbitrary lines, standalone rectangles/
@@ -526,6 +542,16 @@ Official model references used for this routing:
     attachments/internal Excel/layout preservation not needed by graph pages,
     standalone `.ogw(u)`/`.ogg(u)`/`.ogm(u)`, worksheet/matrix templates, and
     `.opju` writing.
+
+57. **Confirm before an Origin figure re-apply discards overlay edits.**
+    PR #40 makes `applyOriginFigure` rebuild an existing derived overlay from
+    its source books on every apply, intentionally clearing row/column-indexed
+    state (corrections, formulas, row filters, excluded rows, fits) that would
+    misalign on the rebuilt geometry; it preserves the dataset id + user
+    organization (notes/tags/folder/order). Workspace load does NOT re-apply,
+    so saved overlays are never silently wiped. Owner-approved follow-up
+    (2026-07-14): warn/confirm before discarding user edits on an explicit
+    re-apply (a small guard, not a blocker).
 
 ### Delivery slices and estimate
 
