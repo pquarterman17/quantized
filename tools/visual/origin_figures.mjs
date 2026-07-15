@@ -87,23 +87,38 @@ function compareFigureToState(family, representative, applied) {
   const isMultiPanel = applied.stackMode && Array.isArray(applied.spatialPanels) && applied.spatialPanels.length >= 2;
   if (isMultiPanel) {
     const panels = applied.spatialPanels;
-    checks.push(check("panel_count", panels.length === family.length, `expected ${family.length}, got ${panels.length}`));
-    family.forEach((entry, i) => {
-      const p = panels[i];
+    const expectedSources = family.map((entry) => entry.id).sort();
+    const actualSources = panels.flatMap((panel) => panel.sourceFigureIds || []).sort();
+    checks.push(check(
+      "source_layer_coverage",
+      JSON.stringify(actualSources) === JSON.stringify(expectedSources),
+      `expected ${expectedSources.join(",")}; got ${actualSources.join(",")}`,
+    ));
+    panels.forEach((p, i) => {
+      const sourceIds = p.sourceFigureIds || [];
+      const entry = family.find((candidate) => candidate.id === sourceIds[0]);
+      checks.push(check(`panel_${i}_primary_source`, !!entry, sourceIds[0] || "missing provenance"));
+      if (!entry) return;
       const fig = entry.figure;
-      if (!p) {
-        checks.push(check(`panel_${i}_present`, false, "panel missing at this index"));
-        return;
-      }
       checks.push(check(`panel_${i}_xrange`, approxEq(p.xLim?.[0], fig.x_from) && approxEq(p.xLim?.[1], fig.x_to)));
       checks.push(check(`panel_${i}_yrange`, approxEq(p.yLim?.[0], fig.y_from) && approxEq(p.yLim?.[1], fig.y_to)));
       checks.push(check(`panel_${i}_xlog`, p.xLog === fig.x_log));
       checks.push(check(`panel_${i}_ylog`, p.yLog === fig.y_log));
       checks.push(check(`panel_${i}_xstep`, approxEq(p.xStep ?? null, fig.x_step ?? null)));
       checks.push(check(`panel_${i}_ystep`, approxEq(p.yStep ?? null, fig.y_step ?? null)));
+      if (sourceIds.length > 1) {
+        const y2Entry = family.find((candidate) => candidate.id === sourceIds[1]);
+        checks.push(check(`panel_${i}_y2_source`, !!y2Entry, sourceIds[1]));
+        if (y2Entry) {
+          const y2 = y2Entry.figure;
+          checks.push(check(`panel_${i}_y2range`, approxEq(p.y2Lim?.[0], y2.y_from) && approxEq(p.y2Lim?.[1], y2.y_to)));
+          checks.push(check(`panel_${i}_y2log`, p.y2Log === y2.y_log));
+          checks.push(check(`panel_${i}_y2step`, approxEq(p.y2Step ?? null, y2.y_step ?? null)));
+        }
+      }
     });
     checks.push(
-      check("canvas_count", applied.canvasCount === family.length, `expected ${family.length}, saw ${applied.canvasCount}`),
+      check("canvas_count", applied.canvasCount === panels.length, `expected ${panels.length}, saw ${applied.canvasCount}`),
     );
     return { mode: "multiPanel", checks };
   }

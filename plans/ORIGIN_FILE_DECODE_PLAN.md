@@ -458,6 +458,8 @@ Official model references used for this routing:
     - Preserve exact page/frame geometry for publication export.
     - When the target cannot express a layout, show the original preview and
       seed Graph Builder with one editable panel per recovered layer.
+    - Native panel source-layer provenance + y2-aware acceptance checks are in
+      PR #44.
 
 ### Tier 3 — acceptance and handoff
 

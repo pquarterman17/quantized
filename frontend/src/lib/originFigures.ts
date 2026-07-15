@@ -349,6 +349,7 @@ export function resolveFigurePanels(
     if (!sel) return null;
     const fig = entry.figure;
     out.push({
+      sourceFigureIds: [entry.id],
       datasetId: entry.datasetId,
       xKey: sel.xKey,
       yKeys: sel.yKeys,
@@ -478,6 +479,7 @@ function mergePanelWithY2(
 ): Omit<SpatialPanel, "row" | "col"> {
   return {
     ...host,
+    sourceFigureIds: [...(host.sourceFigureIds ?? []), ...(y2.sourceFigureIds ?? [])],
     yKeys: [...host.yKeys, ...y2.yKeys.filter((k) => !host.yKeys.includes(k))],
     seriesStyles: { ...host.seriesStyles, ...y2.seriesStyles },
     seriesLabels: { ...host.seriesLabels, ...y2.seriesLabels },
