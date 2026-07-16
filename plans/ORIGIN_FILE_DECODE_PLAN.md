@@ -14,7 +14,8 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-15 (grid fidelity fix — Origin figures apply gridless via
+**Updated:** 2026-07-16 (#57 overlay-edit re-apply confirm SHIPPED, merged
+`4fa2b5a`). Prior: 2026-07-15 (grid fidelity fix — Origin figures apply gridless via
 `ORIGIN_FIGURE_AXIS`; booked #52 legend-title placement + #54 letterbox
 space-fill from owner gallery review). Prior: 2026-07-14 (Codex stacks #39–#53
 reviewed + landed; #51–#53 legend swatches / linear steps / log minor ticks).
@@ -582,15 +583,23 @@ Official model references used for this routing:
     standalone `.ogw(u)`/`.ogg(u)`/`.ogm(u)`, worksheet/matrix templates, and
     `.opju` writing.
 
-57. **Confirm before an Origin figure re-apply discards overlay edits.**
-    PR #40 makes `applyOriginFigure` rebuild an existing derived overlay from
-    its source books on every apply, intentionally clearing row/column-indexed
-    state (corrections, formulas, row filters, excluded rows, fits) that would
-    misalign on the rebuilt geometry; it preserves the dataset id + user
-    organization (notes/tags/folder/order). Workspace load does NOT re-apply,
-    so saved overlays are never silently wiped. Owner-approved follow-up
-    (2026-07-14): warn/confirm before discarding user edits on an explicit
-    re-apply (a small guard, not a blocker).
+57. ~~**Confirm before an Origin figure re-apply discards overlay edits.**~~
+    **COMPLETE 2026-07-16 (merged `4fa2b5a`).** Background: PR #40 makes
+    `applyOriginFigure` rebuild an existing derived overlay from its source
+    books on every apply, intentionally clearing row/column-indexed state that
+    would misalign on the rebuilt geometry (workspace load does NOT re-apply,
+    so saved overlays were never silently wiped; the loss window was only an
+    explicit re-apply). Now `confirmOriginReapplyDiscard`
+    (`store/originFigureApply.ts`) gates the apply ahead of BOTH window
+    creation and the lazy book fetch: when the figure's existing overlay
+    carries user edits — corrections/bgRef, formulas, row filter, excluded
+    rows, fit; exactly the fields `originOverlayDataset` drops — a
+    danger-styled confirm names them; cancel = zero state change, confirm
+    re-enters with `discardConfirmed`. Shares the module's `applySeq`
+    latest-request-wins counter, so confirming a stale dialog after applying
+    a different figure does nothing instead of clobbering it (tested). First
+    applies and edit-free re-applies stay silent. +6 store tests; frontend
+    3362 green on the merged tree.
 
 ### Delivery slices and estimate
 

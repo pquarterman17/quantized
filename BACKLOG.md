@@ -6,13 +6,15 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last regenerated:** 2026-07-12 (new sub-plan `GUI_INTERACTION_PLAN.md`
-adopted from the ChatGPT-Sol GUI interaction audit — a standing Origin-parity
-interaction/UX campaign; its Tier 1/2 items are now the actionable dev work.
-First item shipped same day: weighted fitting by error columns, PR #24
-`dbb0c5c`. The prior MAIN #9–#28 campaign is all shipped; MAIN itself holds
-only owner gates + deferrals. v0.8.1 remains the released version on PyPI as
-`quantized-lab`; the fresh-machine acceptance run is still that gate's residue.)
+**Last regenerated:** 2026-07-16 (GUI_INTERACTION #6 pipeline-fit-spec +
+ORIGIN_FILE_DECODE #57 re-apply confirm both SHIPPED today, `7d49fd9`/`4fa2b5a`.
+Folded in the 2026-07-14/15 decode-campaign bookings that post-dated the last
+regeneration: #52 legend residue (chrome suppression + legend-title placement)
+and #54 page-boundary/page-size control are now dashboarded; the #55 owner
+screenshot-review gate points at the corpus review dashboard (62 paired
+screenshots, 0/353 reviewed). v0.10.0 is the current release. Prior context:
+GUI_INTERACTION adopted 2026-07-12 from the ChatGPT-Sol audit; MAIN holds only
+owner gates + deferrals; the fresh-machine PyPI acceptance run is still open.)
 
 ---
 
@@ -34,6 +36,9 @@ baseline framing) are under Owner actions below, not here.
 | **Worksheet window-scoped selection** — key selection/highlight by worksheet-window ID | GUI_INTERACTION #14 |
 | **Real-browser (Playwright) interaction journeys** at 100/125/200% | GUI_INTERACTION #15 |
 | Larger bets / polish: unified select→edit Plot Objects tree (#2, owner-gate scope), canonical plot spec across surfaces (#12), buttons/menus/tooltips polish (#17), owner-dependent Origin gaps (#16) | GUI_INTERACTION Tier 1–3 |
+| **Origin legend fidelity residue** — suppress interactive legend chrome (reorder arrows, greyed entries, data overlap) on applied Origin figures; fix legend-TITLE placement (RockingCurve "Nb/Au" renders as a stray mark) | ORIGIN_FILE_DECODE #52 |
+| **Origin-style page-boundary/page-size control** — user-settable page dimensions + margins (owner-requested 2026-07-14); enabler for true page-coordinate multi-panel layout + a fit-to-window vs preserve-aspect toggle | ORIGIN_FILE_DECODE #54 |
+| **Origin graphic objects / rich annotations decode** — arrows, lines, standalone rects/ellipses, framed text, callouts onto native Shape/annotation models (RE-heavy; Codex-routed per the plan) | ORIGIN_FILE_DECODE #53 |
 
 ## Owner actions & owner-gated decisions
 
@@ -42,7 +47,7 @@ baseline framing) are under Owner actions below, not here.
 | **PyPI fresh-machine acceptance run** — on a machine without dev tools: `pipx install quantized-lab` → import a CSV within 2 min; also verify the v0.8.1 installer's two Start Menu entries (#23). Registration + first publish DONE 2026-07-12 (`quantized-lab` 0.8.1 live) | MAIN gate (was ORIGIN_GAP #41) |
 | **Corpus publish licensing sign-off** — `../test-data` repo is `git init`-ed; publish gated on the licensing pass + 6 flagged public files | MAIN gate (was ORIGIN_GAP #45) |
 | **Defaults-audit eyeball** — rule on the taste calls in `plans/design/DEFAULTS_AUDIT.md` (aps preset height vs. log-decade label thinning; data-aware legend placement) | MAIN gate (was GAP_TIER3 #2) |
-| **Origin gallery eyeball** — the standing human step of decode #39's comparison campaign (`../test-data/origin/_exports/PNR/`); new mismatches get booked in the decode plan | ORIGIN_FILE_DECODE (standing) |
+| **Origin corpus screenshot review** — the #55 review dashboard exposes 62 paired Origin↔Quantized screenshots (Moke 8, PNR 50, RockingCurve 4); review state is 0/353 until the owner exports gallery marks. The campaign (#56) closes only on this visual sign-off; new mismatches get booked in the decode plan | ORIGIN_FILE_DECODE #55/#56 gate |
 | **Pop-out books/plots into windows** — PLAN WITH OWNER FIRST (gesture, "pop out a BOOK" semantics, bulk "window everything" command) | MAIN gate (was MULTI_PLOT #19) |
 | **Worksheet view-state persistence** — decide once, with usage evidence, whether sort/widths/selection persist per-dataset in `.dwk` (default: no) | MAIN gate (was WORKSHEET #14) |
 | **Apache-2.0 copyright holder line** for LICENSE/NOTICE | PORT_PLAN #1 |
@@ -86,5 +91,5 @@ the root; every active plan below is its declared sub-plan.
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | Tier 1 #1–#3,#5 + Tier 2 #7–#15 + Tier 3 #16–#17 open; #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16; 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
-| `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence; #47 LOW-PRIORITY (recover Origin graphic objects/annotations on import — gated on MAIN #27) |
+| `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#51 complete, #57 SHIPPED 2026-07-16; open = #52 residue (legend chrome + title), #53 graphic objects (subsumes #47), #54 layout (incl. page-size control); #55/#56 close on the owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |
