@@ -4,6 +4,8 @@
 // runner can drive it per file; callers own the pipelineRunning flag.
 
 import { fitModel } from "../../../lib/api";
+import { fitDataForSpec, fitSpecFromStepParams } from "../../../lib/fitselection";
+import { dyForFit } from "../../../lib/fitweights";
 import { validateExpression, type PipelineStep } from "../../../lib/pipeline";
 import { analysisData } from "../../../lib/rowstate";
 import type { CalcResult, CorrectionParams } from "../../../lib/types";
@@ -86,15 +88,41 @@ export async function executeSteps(
         case "fit": {
           const ds = store().datasets.find((d) => d.id === targetId);
           const d = analysisData(ds);
-          if (!d || d.values.length === 0) throw new Error("no data to fit");
-          const r = await fitModel({
-            model: String(step.params.model ?? "Linear"),
-            x: d.time,
-            y: d.values.map((row) => row[0]),
-          });
+          if (!ds || !d || d.values.length === 0) throw new Error("no data to fit");
+          const spec = fitSpecFromStepParams(step.params);
+          let x: number[];
+          let y: number[];
+          let dy: number[] | null | undefined;
+          let wnote = "";
+          if (spec.yKey === undefined) {
+            // Legacy {model}-only step (pre-#6 templates): fit time vs values[0]
+            // unweighted, deliberately — a saved template's outputs must not
+            // change when replayed under the new channel-aware path.
+            x = d.time;
+            y = d.values.map((row) => row[0]);
+          } else {
+            // Reproduce the recorded channels + weighting over the TARGET's
+            // analysis rows. analysisData(ds) already honors the TARGET's
+            // exclusion∪filter — the correct semantics for cross-dataset batch
+            // replay (source row indices would be meaningless on another file).
+            // Same live-fallback + unweighted-on-missing-column semantics as the
+            // recalc-graph recompute (store.recalc, fitDataForSpec).
+            const st = store();
+            const sel = fitDataForSpec(ds, spec, st.xKey, st.yKeys, st.seriesOrder);
+            if (!sel || sel.x.length === 0) throw new Error("no data to fit");
+            x = sel.x;
+            y = sel.y;
+            dy = sel.dy;
+            if (spec.weight && spec.weight.mode !== "none" && sel.dy === null) {
+              // Weighting was recorded but the target's error column can't
+              // resolve; fit unweighted and SAY SO — folder batches need it.
+              wnote = ` (${dyForFit(ds, sel.yKey, spec.weight).issue ?? "weight column missing"})`;
+            }
+          }
+          const r = await fitModel({ model: spec.model, x, y, ...(dy ? { dy } : {}) });
           fits.push(r);
           const r2 = typeof r.R2 === "number" ? ` R²=${r.R2.toFixed(4)}` : "";
-          log[step.id] = { status: "ok", note: `fit${r2}` };
+          log[step.id] = { status: "ok", note: `fit${r2}${wnote}` };
           break;
         }
         default:
