@@ -1,12 +1,15 @@
 // Async preflight for applying an imported Origin figure (#48). Keeps lazy
 // source resolution and latest-request-wins coordination out of useApp.ts.
 
+import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { figureLayerFamily, type OriginFigureEntry } from "../lib/originFigures";
+import { excludedSet } from "../lib/rowstate";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
 import { toast } from "./toasts";
 
 type GetApp = () => AppState;
+type ApplyOpts = { newWindow?: boolean; discardConfirmed?: boolean };
 
 let applySeq = 0;
 
@@ -49,7 +52,7 @@ export function deferOriginFigureApply(
   get: GetApp,
   entry: OriginFigureEntry,
   id: string,
-  opts?: { newWindow?: boolean },
+  opts?: ApplyOpts,
 ): boolean {
   const requestSeq = ++applySeq;
   const sourceIds = sourceDatasetIds(entry, get().originFigures, get().datasets);
@@ -73,5 +76,73 @@ export function deferOriginFigureApply(
       get().setStatus(`couldn't apply Origin figure — ${message}`);
       toast(`couldn't apply Origin figure — ${message}`, "danger");
     });
+  return true;
+}
+
+/** Human-readable list of the user edits `originOverlayDataset` would drop on
+ *  a rebuild, or null when the existing overlay carries none. Mirrors exactly
+ *  the fields that function does NOT carry forward (it only preserves id/
+ *  name/data plus notes/tags/group/folderId/order) — corrections (folded
+ *  bgRef counts as the same edit), worksheet formulas, the row filter,
+ *  excluded rows, and a recorded fit. `raw`/`channelRoles`/`channelTypes`/
+ *  `pending`/`source` are also dropped but are bookkeeping, not user work,
+ *  so they're not called out here. */
+function discardedEdits(d: Dataset): string[] | null {
+  const parts: string[] = [];
+  if (d.corrections || d.bgRef) parts.push("corrections");
+  if (d.formulas?.length) {
+    parts.push(`${d.formulas.length} formula${d.formulas.length === 1 ? "" : "s"}`);
+  }
+  if (d.filter?.length) parts.push("row filter");
+  if (excludedSet(d).size > 0) parts.push("excluded rows"); // via rowstate — guard #50
+  if (d.fitSpec) parts.push("fit");
+  return parts.length > 0 ? parts : null;
+}
+
+/** Gate item #57: re-applying a figure that already has a materialized
+ *  overlay rebuilds it from source (see originOverlayDataset), silently
+ *  discarding any row/column-indexed edits on the existing dataset. Ask
+ *  first when there is something to lose; a first-ever apply or a re-apply
+ *  of an edit-free overlay stays silent.
+ *
+ *  Runs BEFORE deferOriginFigureApply: the edit check needs no source
+ *  resolution, so confirming first is both correct (a cancelled re-apply
+ *  never starts a book fetch) and cheaper.
+ *
+ *  Sequence counter: this shares `applySeq` with deferOriginFigureApply so a
+ *  pending confirm participates in the same latest-request-wins ordering —
+ *  applying a DIFFERENT figure (or the same one again) while this dialog is
+ *  open bumps `applySeq` again (via this function or deferOriginFigureApply,
+ *  whichever the newer call reaches), so an eventual "confirm" on the stale
+ *  dialog is detected as superseded and silently does nothing instead of
+ *  clobbering the newer apply.
+ *
+ *  Returns true when a confirm was launched (the apply, if any, happens
+ *  later via the `discardConfirmed` re-entry); false to proceed synchronously
+ *  right now. */
+export function confirmOriginReapplyDiscard(
+  get: GetApp,
+  entry: OriginFigureEntry,
+  id: string,
+  opts?: ApplyOpts,
+): boolean {
+  if (opts?.discardConfirmed) return false;
+  const existing = get().datasets.find(
+    (d) => (d.data.metadata ?? {}).origin_overlay_source === entry.id,
+  );
+  if (!existing) return false;
+  const edits = discardedEdits(existing);
+  if (!edits) return false;
+
+  const requestSeq = ++applySeq;
+  void askConfirm(
+    "Re-apply Origin figure?",
+    `"${existing.name}" has user edits that will be discarded: ${edits.join(", ")}.`,
+    "Re-apply",
+    true,
+  ).then((ok) => {
+    if (!ok || applySeq !== requestSeq) return;
+    get().applyOriginFigure(id, { ...opts, discardConfirmed: true });
+  });
   return true;
 }

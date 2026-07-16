@@ -7,6 +7,7 @@ import {
   parseImportText,
   uploadFile,
 } from "../lib/api";
+import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { defaultErrKeys } from "../lib/errorbars";
 import { saveBlob } from "../lib/download";
 import { effectiveChannels } from "../lib/plotdata";
@@ -25,6 +26,8 @@ vi.mock("../lib/api", () => ({
 }));
 
 vi.mock("../lib/download", () => ({ saveBlob: vi.fn() }));
+
+vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 const raw: DataStruct = {
   time: [1, 2, 3],
@@ -1823,7 +1826,11 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(useApp.getState().datasets.filter((d) => d.pending)).toHaveLength(0);
   });
 
-  it("rebuilds a persisted stale overlay in place from current source books", () => {
+  // #57: re-applying rebuilds the existing overlay from source, clearing any
+  // row/column-indexed edits on it — so a re-apply that would actually
+  // discard something asks first. The shared `source`/overlay-fixture shape
+  // is reused (with small variations) by the confirm-guard tests below.
+  const staleOverlaySetup = () => {
     const source = (id: string, book: string, x: number, y: number): Dataset => ({
       id, name: `P:${book}`,
       data: {
@@ -1862,15 +1869,60 @@ describe("useApp applyOriginFigure (item 18)", () => {
         },
       }],
     });
+  };
+
+  it("first-ever apply never asks (no existing overlay to lose edits from)", () => {
+    // "resolves every pending cross-book source..." above already covers the
+    // lazy-book variant of a first apply; this is the plain synchronous one.
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    expect(askConfirm).not.toHaveBeenCalled();
+  });
+
+  it("re-applying an edit-free overlay never asks and rebuilds immediately", () => {
+    staleOverlaySetup();
+    useApp.setState({
+      datasets: useApp.getState().datasets.map((d) =>
+        d.id === "old-overlay"
+          ? { id: d.id, name: d.name, data: d.data } // strip every edit field
+          : d,
+      ),
+    });
 
     useApp.getState().applyOriginFigure("fig-stale");
+
+    expect(askConfirm).not.toHaveBeenCalled();
+    const overlay = useApp.getState().datasets.find((d) => d.id === "old-overlay");
+    expect(overlay?.data.time).toEqual([1, 2]); // rebuilt synchronously
+  });
+
+  it("re-apply with edits: asks, then rebuilds on confirm, clearing edit fields but preserving id/notes/tags/folder/order (#57)", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    staleOverlaySetup();
+
+    useApp.getState().applyOriginFigure("fig-stale");
+
+    expect(askConfirm).toHaveBeenCalledTimes(1);
+    expect(askConfirm).toHaveBeenCalledWith(
+      "Re-apply Origin figure?",
+      // corrections, 1 formula, row filter, excluded rows -- this overlay set
+      // no fitSpec, so "fit" is correctly absent from the list.
+      '"stale" has user edits that will be discarded: corrections, 1 formula, row filter, excluded rows.',
+      "Re-apply",
+      true,
+    );
+    // Nothing rebuilt yet -- still awaiting the confirm promise to resolve.
+    expect(useApp.getState().datasets.find((d) => d.id === "old-overlay")?.data.time).toEqual([999]);
+
+    await vi.waitFor(() => {
+      const overlay = useApp.getState().datasets.find((d) => d.id === "old-overlay");
+      expect(overlay?.data.time).toEqual([1, 2]);
+    });
 
     const overlays = useApp.getState().datasets.filter(
       (d) => d.data.metadata.origin_overlay_source === "fig-stale",
     );
     expect(overlays).toHaveLength(1);
     expect(overlays[0].id).toBe("old-overlay");
-    expect(overlays[0].data.time).toEqual([1, 2]);
     expect(overlays[0].data.values).toEqual([[10, NaN], [NaN, 20]]);
     expect(overlays[0].data.metadata.origin_overlay_version).toBe(2);
     expect(overlays[0]).toMatchObject({
@@ -1881,6 +1933,91 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(overlays[0].excludedRows).toBeUndefined();
     expect(overlays[0].filter).toBeUndefined();
     expect(overlays[0].formulas).toBeUndefined();
+  });
+
+  it("re-apply with edits: user cancels -> zero state changes (no rebuild, no window, no status, nothing touched) (#57)", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    staleOverlaySetup();
+    useApp.setState({ status: "" });
+    const before = useApp.getState();
+
+    useApp.getState().applyOriginFigure("fig-stale");
+    expect(askConfirm).toHaveBeenCalledTimes(1);
+
+    // Flush the resolved-false promise chain; nothing should change.
+    await new Promise((r) => setTimeout(r, 0));
+
+    const after = useApp.getState();
+    expect(after.datasets).toBe(before.datasets); // same array reference -> no set() ran
+    expect(after.plotWindows).toBe(before.plotWindows);
+    expect(after.status).toBe(before.status);
+    expect(after.annotations).toBe(before.annotations);
+  });
+
+  it("a stale confirmed re-apply never clobbers a newer apply issued while its dialog was open (#57)", async () => {
+    let resolveConfirm!: (ok: boolean) => void;
+    vi.mocked(askConfirm).mockImplementation(
+      () => new Promise((res) => { resolveConfirm = res; }),
+    );
+    staleOverlaySetup();
+    useApp.setState({
+      datasets: [
+        ...useApp.getState().datasets,
+        { id: "d3", name: "XRD:Book3", data: raw },
+      ],
+      originFigures: [
+        ...useApp.getState().originFigures,
+        { id: "fig-simple", stem: "XRD", datasetId: "d3", siblingIds: ["d3"], figure: figureEntry.figure },
+      ],
+    });
+
+    // A's re-apply asks and waits (dialog open, unresolved).
+    useApp.getState().applyOriginFigure("fig-stale");
+    expect(askConfirm).toHaveBeenCalledTimes(1);
+
+    // The user applies a DIFFERENT (edit-free) figure before answering A's dialog.
+    useApp.getState().applyOriginFigure("fig-simple");
+    expect(useApp.getState().activeId).toBe("d3");
+
+    // A's dialog now resolves "confirm" -- too late, B already won.
+    resolveConfirm(true);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(useApp.getState().activeId).toBe("d3"); // NOT reverted to fig-stale's dataset
+    const overlay = useApp.getState().datasets.find((d) => d.id === "old-overlay");
+    expect(overlay?.data.time).toEqual([999]); // stale overlay never rebuilt
+  });
+
+  it("composes with the pending-book defer path: confirms first, THEN resolves lazy source books (#57)", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    staleOverlaySetup();
+    useApp.setState({
+      datasets: useApp.getState().datasets.map((d) =>
+        d.id === "a" || d.id === "b"
+          ? { ...d, pending: { kind: "path" as const, path: "/p.opj", bookId: d.id === "a" ? "BookA" : "BookB", rows: 1, cols: 1 } }
+          : d,
+      ),
+    });
+    vi.mocked(fetchBookData).mockImplementation(async (source) =>
+      source.bookId === "BookA"
+        ? { time: [1, 2], values: [[10], [20]], labels: ["signal"], units: [""], metadata: { origin_book: "BookA", origin_column_names: ["B"], x_column_name: "A" } }
+        : { time: [3], values: [[30]], labels: ["signal"], units: [""], metadata: { origin_book: "BookB", origin_column_names: ["B"], x_column_name: "A" } },
+    );
+
+    useApp.getState().applyOriginFigure("fig-stale");
+
+    expect(askConfirm).toHaveBeenCalledTimes(1);
+    expect(fetchBookData).not.toHaveBeenCalled(); // confirm gate ran BEFORE any source fetch
+
+    await vi.waitFor(() => {
+      expect(fetchBookData).toHaveBeenCalledTimes(2);
+    });
+    await vi.waitFor(() => {
+      const overlay = useApp.getState().datasets.find((d) => d.id === "old-overlay");
+      expect(overlay?.data.time).toEqual([1, 2, 3]);
+    });
+    const overlay = useApp.getState().datasets.find((d) => d.id === "old-overlay");
+    expect(overlay?.corrections).toBeUndefined();
   });
 
   it("does not create a partial overlay when one Origin source book fails (#48)", async () => {
