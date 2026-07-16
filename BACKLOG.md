@@ -24,7 +24,6 @@ baseline framing) are under Owner actions below, not here.
 
 | Item | Plan / item |
 |------|-------------|
-| **Pipeline fit reproduces channels/ROI/filtering/bounds/weighting** — `executeSteps` still fits `time`/`values[0]` unweighted; thread the typed fit spec (incl. `FitSpec.weight`) | GUI_INTERACTION #6 |
 | **Make powerful gestures discoverable** — drag handles/grip dots, cursor-over-draggable, reveal drop targets on drag-start, 3-zone folder-drop feedback, a menu path for every drag | GUI_INTERACTION #3 |
 | **Plot toolbar legibility** — shared tooltips (name+behaviour+shortcut), aria-label/pressed, named flyouts, persist config | GUI_INTERACTION #7 |
 | **Context menus as a system** — context-action registry keyed by object type, keyboard-complete (`role="menu"`, arrow-nav) | GUI_INTERACTION #8 |
@@ -86,6 +85,6 @@ the root; every active plan below is its declared sub-plan.
 | `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only — MAIN #9–#28 ALL shipped 2026-07-11/12 (zero open dev items) |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
-| `plans/GUI_INTERACTION_PLAN.md` | Active | Tier 1 #1–#3,#5,#6 + Tier 2 #7–#15 + Tier 3 #16–#17 open; #4 (weighted fitting) SHIPPED 2026-07-12; 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
+| `plans/GUI_INTERACTION_PLAN.md` | Active | Tier 1 #1–#3,#5 + Tier 2 #7–#15 + Tier 3 #16–#17 open; #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16; 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | #27 deferred; #42 reopens only on new corpus evidence; #47 LOW-PRIORITY (recover Origin graphic objects/annotations on import — gated on MAIN #27) |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |

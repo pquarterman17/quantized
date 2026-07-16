@@ -11,7 +11,7 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-12
+**Updated:** 2026-07-16
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -108,13 +108,6 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
    - [ ] OWNER GATE: the OriginPro audit frames baseline as a BACKEND corrections/
          recalc-DAG change (`bgAnchors`/`applyCorrections`), not a frontend read —
          scope which before starting (see Owner gates).
-
-6. **Pipeline fit execution reproduces the interactive fit** — `pipeline/
-   executeSteps.ts` still fits `time`/`values[0]` unweighted, so a recorded
-   pipeline can't reproduce the fit it came from. (Correctness/reproducibility.)
-   - [ ] Store + execute the same typed fit spec: X, Y, row filters, ROI, model,
-         bounds, and **weighting** (the #4 `FitSpec.weight` already exists — thread
-         it through the macro step params, which today carry only `{model}`).
 
 ## Tier 2 — Medium Impact
 
@@ -219,6 +212,22 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
 ---
 
 ## Completed
+
+- ~~**#6 Pipeline fit execution reproduces the interactive fit**~~ (2026-07-16,
+  Opus worktree agent, merged `7d49fd9`) — recorded "fit" steps now carry the
+  typed recipe via `lib/fitselection.fitStepParams`/`fitSpecFromStepParams`
+  (model + xKey/yKey + non-`none` weight; the result snapshot is never encoded
+  — a step is a recipe, not a result), and `executeSteps` replays it through
+  the SAME `fitDataForSpec` path the recalc graph uses: target's analysis rows
+  (exclusion∪filter) honored, unresolvable weight column fits unweighted with
+  the `dyForFit` issue surfaced in the step log note (folder batches see it).
+  Legacy `{model}`-only template steps deliberately keep the old
+  `time`/`values[0]` unweighted behavior so saved templates' outputs never
+  silently change (regression-pinned). Scope check: the interactive registry
+  fit sends only model/x/y/dy — no ROI (quickfit ROI is preview-only by
+  documented decision) and no bounds to thread; custom-equation fits remain
+  the separately-booked follow-up. Frontend 3357 green; useApp.ts held at
+  3311/3312.
 
 - ~~**#4 Weighted fitting by plotted error columns**~~ (2026-07-12, PR #24
   `dbb0c5c`) — Curve Fit workshop weighting selector (none / Y-error column /
