@@ -94,7 +94,7 @@ import { effectiveChannels } from "../lib/plotdata";
 import { docRenderable, type FigureDoc } from "../lib/figuredoc";
 import type { PlotSpec } from "../lib/plotspec";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
-import { fitDataForSpec } from "../lib/fitselection";
+import { fitDataForSpec, fitStepParams } from "../lib/fitselection";
 import { firstVisiblePlottedChannel, qfitSpec, selectRoiRows, type GadgetMode } from "../lib/quickfit";
 import { activeRowIndices, analysisData, droppedRows, expandToFull, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
 import {
@@ -2863,16 +2863,16 @@ export const useApp = create<AppState>((set, get) => ({
     const s = get();
     const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
     if (!active || !s.qfitResult) return;
-    // Recorded like the Curve Fit workshop's own commit (lib/pipeline "fit"
-    // step) so the pipeline view can edit/replay it identically.
+    // Durable fit spec (audit P1 #3): records the plotted channels the gadget
+    // fit (first visible plotted channel + xKey), reused as the step params so
+    // a template batch replays those channels, not time/values[0]. The ROI only
+    // shaped which rows the user previewed (preview-only — never encoded).
+    const spec = qfitSpec(active, s, s.qfitModel, s.qfitResult);
     get().recordMacro(`Fit ${s.qfitModel}`, `qz.fit(${lit(s.qfitModel)})`, {
       kind: "fit",
-      params: { model: s.qfitModel },
+      params: fitStepParams(s.qfitModel, spec),
     });
-    // Durable fit spec (audit P1 #3): records the plotted channels the gadget
-    // fit (first visible plotted channel + xKey) so recompute reproduces them,
-    // not time/values[0]. The ROI only shaped which rows the user previewed.
-    get().setFitSpec(active.id, qfitSpec(active, s, s.qfitModel, s.qfitResult));
+    get().setFitSpec(active.id, spec);
   },
   // ── ROI gadget family (#34) — generalizes the frame above ─────────────────
   // Mode switch: re-triggers a live ROI's compute for the new mode (mirrors

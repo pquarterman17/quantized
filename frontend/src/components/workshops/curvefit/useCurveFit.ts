@@ -8,7 +8,7 @@ import { autoGuess, bootstrapFit, exportCornerFigure, fitModel, listFitModels } 
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { fitSpecFrom, selectedFitData } from "../../../lib/fitselection";
+import { fitSpecFrom, fitStepParams, selectedFitData } from "../../../lib/fitselection";
 import { dyForFit } from "../../../lib/fitweights";
 
 export interface CurveFitState {
@@ -136,19 +136,19 @@ export function useCurveFit(): CurveFitState {
         });
         setResult(r);
         setGuessOnly(false);
-        // Recorded as a typed step so the pipeline view (#6) can edit the
-        // model and re-run the fit.
-        useApp.getState().recordMacro(`Fit ${modelName}`, `qz.fit("${modelName}")`, {
-          kind: "fit",
-          params: { model: modelName },
-        });
         // Durable fit spec (audit P1 #3): records the plotted channels + the
         // weighting ACTUALLY used (unweighted if dy couldn't resolve) so the
         // recalc graph (#1) reproduces the original fit, not time/values[0].
         const effWeight: FitWeighting = dy ? weight : { mode: "none" };
-        useApp
-          .getState()
-          .setFitSpec(ds.id, fitSpecFrom(modelName, state.xKey, localXy, r, effWeight));
+        const spec = fitSpecFrom(modelName, state.xKey, localXy, r, effWeight);
+        // Same recipe into the typed step (#6) so a template/pipeline batch
+        // replays THESE channels + weighting, and the pipeline view can edit
+        // the model without losing the provenance.
+        useApp.getState().recordMacro(`Fit ${modelName}`, `qz.fit("${modelName}")`, {
+          kind: "fit",
+          params: fitStepParams(modelName, spec),
+        });
+        useApp.getState().setFitSpec(ds.id, spec);
         const yFit = r.yFit as (number | null)[] | undefined;
         if (Array.isArray(yFit)) {
           // yFit aligns to the pruned analysis x; expand it back to the full row
