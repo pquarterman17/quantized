@@ -105,7 +105,7 @@ import {
   type RecentFile,
 } from "../lib/recentFiles";
 import { toast } from "./toasts";
-import { deferOriginFigureApply } from "./originFigureApply";
+import { confirmOriginReapplyDiscard, deferOriginFigureApply } from "./originFigureApply";
 import {
   createOriginImportSlice,
   pruneOriginFidelityRefs,
@@ -614,7 +614,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // scoped to "the focused window" via `setActive`/the singleton `set()`
   // calls — lands on the new window instead of overwriting whatever was
   // focused before.
-  applyOriginFigure: (id: string, opts?: { newWindow?: boolean }) => void;
+  applyOriginFigure: (id: string, opts?: { newWindow?: boolean; discardConfirmed?: boolean }) => void;
   // Facet-by-column (gap #21 residual): partitions `datasetId`'s analysis-view
   // rows into one small-multiples panel per distinct level of `col` (via
   // `lib/facet.facetPayloads`) and populates `facetPanels` for MultiPanelStage
@@ -1483,7 +1483,7 @@ export const useApp = create<AppState>((set, get) => ({
   applyOriginFigure: (id, opts) => {
     const entry = get().originFigures.find((f) => f.id === id);
     if (!entry?.datasetId) return;
-    if (deferOriginFigureApply(get, entry, id, opts)) return;
+    if (confirmOriginReapplyDiscard(get, entry, id, opts) || deferOriginFigureApply(get, entry, id, opts)) return; // #57 confirm-then-defer
     // Item 9: open a NEW window for this figure instead of overwriting the
     // focused one. Creating (bound to the figure's dataset) then focusing
     // BEFORE any of the apply logic below runs means every `setActive`/
