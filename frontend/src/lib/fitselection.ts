@@ -6,7 +6,14 @@
 import { dyForFit } from "./fitweights";
 import { effectiveChannels } from "./plotdata";
 import { analysisData } from "./rowstate";
-import type { CalcResult, Dataset, DataStruct, FitSpec, FitWeighting } from "./types";
+import type {
+  CalcResult,
+  Dataset,
+  DataStruct,
+  FitSpec,
+  FitWeighting,
+  WeightMode,
+} from "./types";
 
 export interface FitSelection {
   x: number[];
@@ -82,6 +89,57 @@ export function fitSpecFrom(
     spec.params = params as number[];
   }
   if (typeof result.exitFlag === "number") spec.exitFlag = result.exitFlag;
+  return spec;
+}
+
+// ── Pipeline fit-step params bridge (#6) ───────────────────────────────────
+// A recorded "fit" step must carry the SAME recipe as the FitSpec so a template
+// batch reproduces the interactive fit's channels + weighting, not time/
+// values[0]. These are the pure encoder/decoder between a FitSpec and the
+// step's untrusted `params` bag (round-trips through localStorage
+// `qz.analysisTemplates` + saved .dwk workspaces — validate, never cast).
+
+const WEIGHT_MODES: readonly WeightMode[] = ["none", "yerr", "poisson", "manual"];
+
+function decodeWeight(v: unknown): FitWeighting | undefined {
+  if (typeof v !== "object" || v === null) return undefined;
+  const o = v as Record<string, unknown>;
+  if (typeof o.mode !== "string" || !WEIGHT_MODES.includes(o.mode as WeightMode)) return undefined;
+  const mode = o.mode as WeightMode;
+  if (mode === "none") return undefined; // `none` = unweighted; keep specs minimal
+  const weight: FitWeighting = { mode };
+  if (typeof o.errKey === "number" && Number.isInteger(o.errKey)) weight.errKey = o.errKey;
+  return weight;
+}
+
+/** Encode a FitSpec into a fit step's `params` object. Minimal + mirrors
+ *  `fitSpecFrom`: the channels the fit used plus a non-`none` weighting; the
+ *  result snapshot (`params`/`exitFlag`) is NEVER encoded — a step is a recipe,
+ *  not a result. Absent channels are omitted (legacy `{model}` shape). */
+export function fitStepParams(model: string, spec: FitSpec): Record<string, unknown> {
+  const params: Record<string, unknown> = { model };
+  if (spec.yKey !== undefined) {
+    params.yKey = spec.yKey;
+    if (spec.xKey !== undefined) params.xKey = spec.xKey; // `null` (time axis) round-trips
+  }
+  if (spec.weight && spec.weight.mode !== "none") params.weight = spec.weight;
+  return params;
+}
+
+/** Decode an untrusted fit-step `params` bag back into a FitSpec. A step with no
+ *  numeric `yKey` decodes to a legacy `{model}` recipe (no channels) so the
+ *  executor keeps the old time/values[0] behavior; a valid `yKey` restores the
+ *  recorded channels + weighting. Every field is type-checked (never cast). */
+export function fitSpecFromStepParams(params: Record<string, unknown>): FitSpec {
+  const spec: FitSpec = { model: typeof params.model === "string" ? params.model : "Linear" };
+  if (typeof params.yKey !== "number" || !Number.isInteger(params.yKey)) return spec;
+  spec.yKey = params.yKey;
+  spec.xKey =
+    params.xKey === null || (typeof params.xKey === "number" && Number.isInteger(params.xKey))
+      ? (params.xKey as number | null)
+      : null;
+  const weight = decodeWeight(params.weight);
+  if (weight) spec.weight = weight;
   return spec;
 }
 

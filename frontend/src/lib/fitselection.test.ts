@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import type { CalcResult, Dataset } from "./types";
-import { fitDataForSpec, fitSpecFrom, fullPlottedX, selectedFitData } from "./fitselection";
+import {
+  fitDataForSpec,
+  fitSpecFrom,
+  fitSpecFromStepParams,
+  fitStepParams,
+  fullPlottedX,
+  selectedFitData,
+} from "./fitselection";
 
 const dataset: Dataset = {
   id: "d",
@@ -100,5 +107,54 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
       yKey: 1,
       dy: [5, 7, 8],
     });
+  });
+});
+
+describe("fitStepParams / fitSpecFromStepParams (pipeline fit-step recipe #6)", () => {
+  it("encodes channels + non-none weighting, never the result snapshot", () => {
+    const spec = fitSpecFrom(
+      "Gaussian",
+      0,
+      { x: [1], y: [2], yKey: 1 },
+      { params: [1, 2, 3], exitFlag: 1 },
+      { mode: "yerr", errKey: 2 },
+    );
+    expect(fitStepParams("Gaussian", spec)).toEqual({
+      model: "Gaussian",
+      xKey: 0,
+      yKey: 1,
+      weight: { mode: "yerr", errKey: 2 },
+    });
+  });
+
+  it("omits weight when mode is none and round-trips a null xKey (time axis)", () => {
+    const spec = fitSpecFrom("Linear", null, { x: [1], y: [2], yKey: 0 }, { params: [1] });
+    const params = fitStepParams("Linear", spec);
+    expect(params).toEqual({ model: "Linear", xKey: null, yKey: 0 });
+    expect(fitSpecFromStepParams(params)).toEqual({ model: "Linear", xKey: null, yKey: 0 });
+  });
+
+  it("decodes a legacy {model}-only step to a channel-less recipe", () => {
+    // No yKey -> executor keeps time/values[0] (legacy behavior).
+    expect(fitSpecFromStepParams({ model: "Linear" })).toEqual({ model: "Linear" });
+  });
+
+  it("defends against malformed params (non-string model, junk channels/weight)", () => {
+    expect(fitSpecFromStepParams({})).toEqual({ model: "Linear" }); // model default
+    // yKey present but xKey junk -> xKey coerced to null (time axis).
+    expect(fitSpecFromStepParams({ model: "Linear", yKey: 1, xKey: "0" })).toEqual({
+      model: "Linear",
+      yKey: 1,
+      xKey: null,
+    });
+    // non-integer yKey is rejected -> legacy recipe.
+    expect(fitSpecFromStepParams({ model: "Linear", yKey: 1.5 })).toEqual({ model: "Linear" });
+    // a `none` / malformed weight is dropped.
+    expect(
+      fitSpecFromStepParams({ model: "Linear", yKey: 0, xKey: 0, weight: { mode: "none" } }).weight,
+    ).toBeUndefined();
+    expect(
+      fitSpecFromStepParams({ model: "Linear", yKey: 0, xKey: 0, weight: { mode: "bogus" } }).weight,
+    ).toBeUndefined();
   });
 });
