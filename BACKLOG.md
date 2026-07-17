@@ -29,7 +29,6 @@ baseline framing) are under Owner actions below, not here.
 | Item | Plan / item |
 |------|-------------|
 | **Make powerful gestures discoverable** — drag handles/grip dots, cursor-over-draggable, reveal drop targets on drag-start, 3-zone folder-drop feedback, a menu path for every drag | GUI_INTERACTION #3 |
-| **Plot toolbar legibility** — shared tooltips (name+behaviour+shortcut), aria-label/pressed, named flyouts, persist config | GUI_INTERACTION #7 |
 | **Context menus as a system** — context-action registry keyed by object type, keyboard-complete (`role="menu"`, arrow-nav) | GUI_INTERACTION #8 |
 | **Active-tool feedback + universal Esc-cancel** — interaction HUD/status strip; right-click cancels an unfinished gesture | GUI_INTERACTION #9 |
 | **Graph Builder → durable `.dwk` PlotSpec** — Save/Save As/Duplicate/Export; Stage shows the active spec + unsaved state | GUI_INTERACTION #11 |
@@ -88,6 +87,6 @@ the root; every active plan below is its declared sub-plan.
 | `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only — MAIN #9–#28 ALL shipped 2026-07-11/12 (zero open dev items) |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
-| `plans/GUI_INTERACTION_PLAN.md` | Active | Tier 1 #1–#3,#5 + Tier 2 #7–#9,#11–#13,#15 + Tier 3 #16–#17 open; #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #10+#14 SHIPPED 2026-07-17 (docking deferred); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
+| `plans/GUI_INTERACTION_PLAN.md` | Active | Tier 1 #1–#3,#5 + Tier 2 #8,#9,#11–#13,#15 + Tier 3 #16–#17 open; #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #7+#10+#14 SHIPPED 2026-07-17 (#10 docking deferred); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#51 complete; #52 FULLY SHIPPED 2026-07-16 + #57 same day; #54 page-setup control + its spatial-export residual BOTH SHIPPED 2026-07-17 (fit modes + PageSetup + export at page size, single-figure AND spatial); open = #53 graphic objects (subsumes #47), #54's remaining layout generality (free-positioned layers/insets/>2Y); #55/#56 close on the owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |

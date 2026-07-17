@@ -111,12 +111,6 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
 
 ## Tier 2 — Medium Impact
 
-7. **Plot toolbar legibility** — ~2 dozen glyph-only buttons with `title`-only hints.
-   - [ ] Shared tooltip component: name + one-line behaviour + shortcut.
-   - [ ] `aria-label`/`aria-pressed`/focus styles on every icon button.
-   - [ ] Split into named flyouts: Navigate / Inspect / Analyze / Annotate / View /
-         Export; persist toolbar config; disable impossible actions with a reason.
-
 8. **Context menus as a complete system** — one **context-action registry** keyed
    by selected object type, reused in right-click menus, the Plot Objects tree
    (#2), Command Palette, and an optional mini-toolbar.
@@ -202,6 +196,29 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
 ---
 
 ## Completed
+
+- ~~**#7 Plot toolbar legibility**~~ (2026-07-17) — the shared `TooltipLayer`
+  (already mounted app-wide) now renders a bold NAME + one-line BEHAVIOUR
+  description + optional keyboard SHORTCUT, shows on keyboard focus (not just
+  hover, via delegated focusin/focusout) and dismisses on Esc. Every
+  `PlotToolbar` button carries `aria-label` + `aria-pressed` (toggle/tool-
+  select buttons) sourced from a single `{tool: key}` table
+  (`lib/plotToolKeys.ts`'s new `keyForTool`, the exact inverse of the existing
+  `toolForKey`, so the tooltip can't drift from the real handler). Buttons
+  regrouped into six named ARIA groups (Navigate/Inspect/Analyze/Annotate/
+  View/Export, new `PlotToolbarGroup`) with a subtle uppercase caption
+  toggleable from a new "..." flyout — persisted via `store/prefs.ts`'s
+  `loadToolbarPrefs`/`saveToolbarPrefs` (own `qz.toolbarPrefs` key,
+  deliberately NOT `store/useApp.ts`, which sits at its ratchet ceiling with
+  zero headroom). No button moved behind a flyout — pointer/zoom/pan/
+  autoscale stay one click away. Two buttons disable with a real reason:
+  Reset View when `xLim`/`yLim` are both null (mirrors the "A" key's own
+  no-op guard), and Copy Image when `clipboardImageSupported()` is false (the
+  same condition `usePlotStageActions`' `snapshot()` already falls back on).
+  Data lives in the new pure `lib/plotToolbarDefs.ts`; `PlotToolbar.tsx` stays
+  at 255 lines, `PlotStage.tsx` (already at its exact 400-line ceiling) and
+  `store/useApp.ts` (3239/3240) untouched. Frontend 258 files / 3534 tests
+  green; build green.
 
 - ~~**#14 Worksheet windows: scope selection state**~~ (2026-07-17) — an MDI
   worksheet document window's row selection now lives in its own entry in the
