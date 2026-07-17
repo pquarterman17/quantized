@@ -14,8 +14,11 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-16 (#57 overlay-edit re-apply confirm SHIPPED, merged
-`4fa2b5a`). Prior: 2026-07-15 (grid fidelity fix — Origin figures apply gridless via
+**Updated:** 2026-07-16 (#52 legend residue SHIPPED `eb48aed`: static-legend
+mode on Origin apply + provable `legend_title` decode; "Nb/Au" proven a
+floating annotation, not a title — faithful in-frame legend placement booked
+as the owner-call residual. Same day: #57 overlay-edit re-apply confirm
+SHIPPED, merged `4fa2b5a`). Prior: 2026-07-15 (grid fidelity fix — Origin figures apply gridless via
 `ORIGIN_FIGURE_AXIS`; booked #52 legend-title placement + #54 letterbox
 space-fill from owner gallery review). Prior: 2026-07-14 (Codex stacks #39–#53
 reviewed + landed; #51–#53 legend swatches / linear steps / log minor ticks).
@@ -463,20 +466,49 @@ Official model references used for this routing:
       The verified arithmetic ticks on sub-decade Origin log ranges remain
       unchanged. Renderer-only: no byte decode, binding, limit, curve-path, or
       acquisition-order behavior changed.
-    - [ ] **Legend fidelity vs Origin.** Quantized draws its interactive legend
-      box (reorder ▲▼ arrows, greyed error/secondary-Y entries) overlapping the
-      data rather than Origin's clean static legend. Pre-existing (same anchor).
-      Drive legend placement + content off the decoded legend and suppress the
-      interactive chrome in an applied Origin figure.
+    - [x] **Legend fidelity vs Origin** (chrome half SHIPPED 2026-07-16,
+      merged `eb48aed`). New general `legendStatic` PlotView mode (default
+      off; `.dwk` round-trips; context-menu toggle to revert): no reorder
+      ▲▼ arrows, no row click/rename/drag/context handlers, hidden
+      error/secondary channels omitted entirely instead of greyed — every
+      `applyOriginFigure` branch enables it via the shared
+      `ORIGIN_FIGURE_AXIS` spread (the gridless-apply mechanism). Verified
+      on the real canvas: RockingCurve 4/4 structural PASS, NbAuRocking
+      renders Origin's clean two-entry legend. Placement stays
+      corner-snap: decoded `legend_pos` is a data-frame fraction while
+      `legendXY` is a stage-container fraction — the axis-gutter offset is
+      only known at uPlot render time, so faithful conversion is
+      unreliable (documented; see open sub-item below).
       - **PR #51:** the renderer-level swatch mismatch is fixed independently:
         the interactive legend now mirrors the plotted series' line-only,
         point-only, or line+point mode plus decoded marker shape/size, line
         width, and dash. This does not infer Origin fields or change curve
-        paths/bindings. Static Origin legend chrome/visibility remains open.
-      - [ ] **Legend TITLE placement** (e.g. RockingCurve `NbAuRocking` "Nb/Au").
-        Origin's bold legend title renders in Quantized as a misplaced stray
-        mark instead of a positioned title — needs the annotation/legend-title
-        coordinate transform. Owner-observed 2026-07-15.
+        paths/bindings.
+      - [x] **Legend TITLE placement** — RESOLVED 2026-07-16 with a
+        falsified premise: decode of the real specimen proved RockingCurve
+        `NbAuRocking`'s "Nb/Au" is NOT a legend title — the Legend object
+        holds only its two `\l(n)` entries; "Nb/Au" is a separate floating
+        Text annotation at its own correctly-decoded position (sibling
+        Graph1 carries the same label with no legend at all — the Origin
+        PNG oracle proves it's a sample-name annotation). Proximity-based
+        reclassification REJECTED as unproven (Graph25 precedent). The
+        provable structural class IS implemented: a Legend object's own
+        non-swatch header line decodes to a new `legend_title` field
+        (`.opju` only — `.opj`'s heuristic legend bucket admits noise a
+        title parse can't separate, 2 corpus false positives, honest gap),
+        rendered as a bold header in the static legend and as
+        `ax.legend(title=…)` in vector export; fidelity manifest tracks
+        it. Corpus sweep 618 figures: purely additive, 0 mark/label
+        deltas. Findings in `docs/origin_project_format.md`.
+      - [ ] **Faithful in-frame legend placement** (owner call, follow-up
+        from the 2026-07-16 work): place the applied legend at Origin's
+        actual decoded position by expressing it in the uPlot data-frame
+        coordinate system (not the stage container), eliminating the
+        corner-snap approximation — the remaining gap behind the
+        "Nb/Au looks detached from the legend" impression. Alternative
+        (also owner call): an explicit proximity heuristic grouping
+        adjacent text objects into the legend — a taste decision, not a
+        provable decode. Judge via the #55 gallery first.
     - [x] **Background gridlines suppressed on Origin apply** (fixed 2026-07-15).
       Origin graphs draw NO background gridlines and grid visibility is
       undecodable, but Quantized applied its default grid (and #53's minor ticks
