@@ -85,6 +85,7 @@ import { createSplitSlice, type SplitSlice } from "./split";
 import { createShapesSlice, type ShapesSlice } from "./shapes";
 import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel";
 import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
+import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -95,7 +96,6 @@ import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
 import { effectiveChannels } from "../lib/plotdata";
 import { docRenderable, type FigureDoc } from "../lib/figuredoc";
-import type { PlotSpec } from "../lib/plotspec";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import { fitDataForSpec, fitStepParams } from "../lib/fitselection";
 import { firstVisiblePlottedChannel, qfitSpec, selectRoiRows, type GadgetMode } from "../lib/quickfit";
@@ -321,7 +321,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -526,11 +526,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   pipelineOpen: boolean; // the editable pipeline view (#6)
   figureBuilderOpen: boolean;
   figurePageOpen: boolean; // the multi-panel figure page composer (GOTO #4)
-  graphBuilderOpen: boolean; // the drag-columns-to-wells plot-spec builder (#51)
-  // One-shot spec handed TO the Graph Builder by the worksheet's "Open in
-  // Graph Builder" (MAIN_PLAN #4) — consumed + cleared by useGraphBuilder on
-  // open, mirroring statStageSeed's shape. null = open empty (the ⌘K path).
-  graphBuilderSeed: PlotSpec | null;
+  // graphBuilderOpen/graphBuilderSeed/savedPlotSpecs/activePlotSpecId now live
+  // on GraphBuilderSlice (store/graphBuilder.ts) — see AppState's extends list.
   // One-shot pickers handed from the Graph Builder to the stat stage when a
   // box/violin spec is sent (consumed + cleared by useStatStage). null = none.
   statStageSeed: StatStageSeed | null;
@@ -875,11 +872,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setPipelineOpen: (open: boolean) => void;
   setFigureBuilderOpen: (open: boolean) => void;
   setFigurePageOpen: (open: boolean) => void;
-  setGraphBuilderOpen: (open: boolean) => void;
-  // Open the Graph Builder prefilled with a spec (the worksheet handoff,
-  // MAIN_PLAN #4); clearGraphBuilderSeed drops the one-shot seed once read.
-  openGraphBuilderSeeded: (spec: PlotSpec) => void;
-  clearGraphBuilderSeed: () => void;
   // Send a box/violin Graph Builder spec to the stat stage: store the pickers +
   // switch statMode on; clearStatStageSeed drops the pending pickers once read.
   seedStatStage: (seed: StatStageSeed) => void;
@@ -962,6 +954,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createOriginImportSlice(set),
   ...createOriginFallbackSlice(set, get),
   ...createLibraryPanelSlice(set, _initialPrefs.libraryPanelWidth),
+  ...createGraphBuilderSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1080,8 +1073,6 @@ export const useApp = create<AppState>((set, get) => ({
   pipelineOpen: false,
   figureBuilderOpen: false,
   figurePageOpen: false,
-  graphBuilderOpen: false,
-  graphBuilderSeed: null,
   statStageSeed: null,
   waterfallOpen: false,
   reflViewOpen: false,
@@ -1762,6 +1753,8 @@ export const useApp = create<AppState>((set, get) => ({
         recalcMode: ws.recalcMode ?? "auto", // recalc engine (#1) — .dwk v3
         figureDocs: ws.figureDocs ?? [], // figure documents (#12) — .dwk v3
         figureDocSeed: null,
+        savedPlotSpecs: ws.savedPlotSpecs ?? [], // named graphs (#11) — .dwk v3
+        activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
         staleDatasets: [],
         staleFits: [],
         stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
@@ -3155,9 +3148,6 @@ export const useApp = create<AppState>((set, get) => ({
   setDataFilterOpen: (dataFilterOpen) => set({ dataFilterOpen }),
   setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
   setFigurePageOpen: (figurePageOpen) => set({ figurePageOpen }),
-  setGraphBuilderOpen: (graphBuilderOpen) => set({ graphBuilderOpen }),
-  openGraphBuilderSeeded: (graphBuilderSeed) => set({ graphBuilderSeed, graphBuilderOpen: true }),
-  clearGraphBuilderSeed: () => set({ graphBuilderSeed: null }),
   seedStatStage: (statStageSeed) => set({ statStageSeed, statMode: true }),
   clearStatStageSeed: () => set({ statStageSeed: null }),
   setWaterfallOpen: (waterfallOpen) => set({ waterfallOpen }),

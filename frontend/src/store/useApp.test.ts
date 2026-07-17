@@ -3081,6 +3081,7 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       plotWindows: [],
       focusedWindowId: null,
       toolWindowLayout: {},
+      savedPlotSpecs: [],
     };
   }
 

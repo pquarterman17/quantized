@@ -480,3 +480,58 @@ export function deserializePlotSpec(raw: string): PlotSpec | null {
     return null;
   }
 }
+
+// ── Saved specs (GUI_INTERACTION_PLAN #11 — "Graph Builder → durable
+// artifact") ─────────────────────────────────────────────────────────────
+//
+// A SavedPlotSpec names + timestamps a PlotSpec so the Graph Builder's output
+// survives close/reopen and round-trips through the `.dwk` workspace
+// (lib/workspace.ts's `savedPlotSpecs`, additive-optional — a legacy file
+// with no such field loads with an empty list). The store slice
+// (store/graphBuilder.ts) owns the CRUD; this module only types + validates.
+
+/** A named, saved PlotSpec. `id` is opaque (never shown to the user);
+ *  `createdAt`/`modifiedAt` are ISO timestamps, `modifiedAt` bumped on every
+ *  Save. */
+export interface SavedPlotSpec {
+  id: string;
+  name: string;
+  createdAt: string;
+  modifiedAt: string;
+  spec: PlotSpec;
+}
+
+function isSavedPlotSpecShape(
+  v: unknown,
+): v is { id: string; name: string; createdAt: string; modifiedAt: string; spec: unknown } {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.id === "string" &&
+    typeof o.name === "string" &&
+    typeof o.createdAt === "string" &&
+    typeof o.modifiedAt === "string"
+  );
+}
+
+/** Validate persisted saved-spec entries from a .dwk — drops malformed ones,
+ *  normalizes each `spec` via validatePlotSpec (never throws on a stale/
+ *  hand-edited payload); mirrors lib/report.sanitizeReports' shape. */
+export function sanitizeSavedPlotSpecs(v: unknown): SavedPlotSpec[] {
+  if (!Array.isArray(v)) return [];
+  const out: SavedPlotSpec[] = [];
+  for (const e of v) {
+    if (!isSavedPlotSpecShape(e)) continue;
+    const spec = validatePlotSpec(e.spec);
+    if (!spec) continue;
+    out.push({ id: e.id, name: e.name, createdAt: e.createdAt, modifiedAt: e.modifiedAt, spec });
+  }
+  return out;
+}
+
+/** Structural equality for the Graph Builder's unsaved-changes indicator:
+ *  compares NORMALIZED specs (via the same serializer .dwk uses), so field
+ *  order or an undefined-vs-absent zone never false-flags a spec as dirty. */
+export function plotSpecsEqual(a: PlotSpec, b: PlotSpec): boolean {
+  return serializePlotSpec(a) === serializePlotSpec(b);
+}

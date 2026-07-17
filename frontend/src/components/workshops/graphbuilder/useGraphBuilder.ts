@@ -1,19 +1,30 @@
-// Graph Builder (ORIGIN_GAP_PLAN #51 phase 2) — state hook. Holds a PlotSpec
-// (lib/plotspec.ts — the grammar), morphs the mark as channels land in the
-// wells, renders a live preview off the ANALYSIS view (guard #11, via
-// specToRender → rowstate.analysisData), and "sends" the spec to the main stage:
-// scatter/line through the ordinary axis store actions (setXKey/setYKeys — which
-// record their own macro steps), box/violin through the stat-stage seed
-// (seedStatStage → useStatStage pickers). When the Facet zone is also filled
-// (scatter/line only — box/violin/bar don't facet, see plotspec.ts), sendToStage
-// enters the main Stage's facet-grid mode (store.facetByColumn) instead of the
-// flat plot: setXKey/setYKeys run FIRST so facetByColumn's own "carry the
-// current x/y selection when the dataset is already active" rule picks them up
-// (gap #21 residual — closes GAP_PLOTTYPES_PLAN item 5's booked (c)). Thin: all
+// Graph Builder (ORIGIN_GAP_PLAN #51 phase 2, durable artifact GUI_INTERACTION
+// #11) — state hook. Holds a PlotSpec (lib/plotspec.ts — the grammar), morphs
+// the mark as channels land in the wells, renders a live preview off the
+// ANALYSIS view (guard #11, via specToRender → rowstate.analysisData), and
+// "sends" the spec to the main stage: scatter/line through the ordinary axis
+// store actions (setXKey/setYKeys — which record their own macro steps),
+// box/violin through the stat-stage seed (seedStatStage → useStatStage
+// pickers). When the Facet zone is also filled (scatter/line only —
+// box/violin/bar don't facet, see plotspec.ts), sendToStage enters the main
+// Stage's facet-grid mode (store.facetByColumn) instead of the flat plot:
+// setXKey/setYKeys run FIRST so facetByColumn's own "carry the current x/y
+// selection when the dataset is already active" rule picks them up (gap #21
+// residual — closes GAP_PLOTTYPES_PLAN item 5's booked (c)). Thin: all
 // grammar lives in lib/plotspec.
+//
+// #11 "durable artifact": the CRUD (save/duplicate/rename/delete) lives in
+// store/graphBuilder.ts; this hook only wraps it with the live builder spec +
+// the divergence ("dirty") check, and owns re-binding `activePlotSpecId` to
+// null whenever the live spec stops corresponding to ANY saved payload
+// (Reset, the vanished-dataset wipe, a fresh worksheet seed) so the
+// unsaved-changes indicator never lies. `exportPlot` reuses the ordinary
+// "Export figure…" File command (lib/exportFigureCommand) for the xy family —
+// see its own doc for why box/violin/bar isn't wired the same way yet.
 
 import { useEffect, useMemo, useState } from "react";
 
+import { runExportFigureCommand } from "../../../lib/exportFigureCommand";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import {
   assignZone,
@@ -23,6 +34,7 @@ import {
   emptySpec,
   markContext,
   markFamily,
+  plotSpecsEqual,
   specDatasetId,
   specToRender,
   validMarks,
@@ -31,6 +43,7 @@ import {
   type MarkFamily,
   type PlotMark,
   type PlotSpec,
+  type SavedPlotSpec,
   type SpecRender,
   type ZoneName,
 } from "../../../lib/plotspec";
@@ -53,9 +66,36 @@ export interface GraphBuilderState {
   assign: (zone: ZoneName, channel: number) => void;
   remove: (zone: ZoneName, channel: number) => void;
   cycle: () => void;
+  /** Clears the wells AND unbinds from any saved spec — a fresh graph. */
   reset: () => void;
   canSend: boolean;
   sendToStage: () => void;
+
+  // ── Saved PlotSpecs (#11) ──────────────────────────────────────────────
+  /** Every saved graph, most-recently-modified first. */
+  savedSpecs: SavedPlotSpec[];
+  /** The saved spec this session is bound to, or null (unsaved/new). */
+  activeSpec: SavedPlotSpec | null;
+  /** True when the live builder spec structurally diverges from
+   *  `activeSpec.spec` — always false when nothing is active (there's
+   *  nothing to diverge FROM; that state reads as "unsaved", not "dirty"). */
+  dirty: boolean;
+  /** Update-in-place under the active spec; a no-op if nothing is active
+   *  (the panel falls back to prompting a Save-As name in that case). */
+  saveActive: () => void;
+  /** Always creates a new saved entry from the live spec and binds to it. */
+  saveAs: (name: string) => void;
+  /** Load a saved entry's spec into the builder, replacing any live edits. */
+  openSpec: (id: string) => void;
+  /** Copy a saved entry's STORED payload under an auto-numbered name, and
+   *  load the copy into the builder. */
+  duplicateSpec: (id: string) => void;
+  renameSpec: (id: string, name: string) => void;
+  deleteSpec: (id: string) => void;
+  /** Send the current spec to the Stage, then export via the SAME path the
+   *  File menu's "Export figure…" command uses (xy family only — see the
+   *  module doc). */
+  exportPlot: () => Promise<void>;
 }
 
 export function useGraphBuilder(): GraphBuilderState {
@@ -68,6 +108,8 @@ export function useGraphBuilder(): GraphBuilderState {
   const facetByColumn = useApp((s) => s.facetByColumn);
   const setStatus = useApp((s) => s.setStatus);
   const setStageTab = useApp((s) => s.setStageTab);
+  const savedSpecs = useApp((s) => s.savedPlotSpecs);
+  const activeSpecId = useApp((s) => s.activePlotSpecId);
 
   const [spec, setSpec] = useState<PlotSpec>(emptySpec);
 
@@ -87,14 +129,21 @@ export function useGraphBuilder(): GraphBuilderState {
   // A channel ref into a vanished dataset would reference the wrong columns —
   // wipe the spec when its dataset no longer resolves. An active-dataset
   // change alone no longer wipes a BOUND session (#8i): the builder holds a
-  // spec for ITS dataset; Send brings that dataset back active.
+  // spec for ITS dataset; Send brings that dataset back active. Reads `spec`
+  // from the closure (not a functional setSpec updater) so the #11
+  // activePlotSpecId clear below is computed from the SAME snapshot, not a
+  // React-internals-timing-dependent updater invocation.
   useEffect(() => {
-    setSpec((prev) => {
-      const bound = specDatasetId(prev);
-      const exists =
-        bound !== null && useApp.getState().datasets.some((d) => d.id === bound);
-      return exists ? prev : emptySpec();
-    });
+    const bound = specDatasetId(spec);
+    const exists = bound !== null && useApp.getState().datasets.some((d) => d.id === bound);
+    if (bound !== null && !exists) {
+      setSpec(emptySpec());
+      // #11: a wiped spec can no longer correspond to whatever saved entry
+      // this session was bound to.
+      useApp.getState().setActivePlotSpecId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires only on
+    // active-dataset change, by design (#8i); `spec`/`datasets` read fresh.
   }, [active?.id]);
 
   // One-shot seed (MAIN_PLAN #4 — the worksheet's "Open in Graph Builder"):
@@ -115,6 +164,9 @@ export function useGraphBuilder(): GraphBuilderState {
       // rather than inferMark's sticky keep-if-valid rule.
       const ctx = markContext(seed, useApp.getState().datasets);
       setSpec({ ...seed, mark: defaultMark(seed, ctx) });
+      // #11: a worksheet-handed seed starts as a fresh, unsaved graph — it
+      // never carries a saved-spec id to bind to.
+      useApp.getState().setActivePlotSpecId(null);
     }
     useApp.getState().clearGraphBuilderSeed();
   }, [seed]);
@@ -157,7 +209,13 @@ export function useGraphBuilder(): GraphBuilderState {
 
   const cycle = () => setSpec((prev) => ({ ...prev, mark: cycleMark(prev, markContext(prev, datasets)) }));
 
-  const reset = () => setSpec(emptySpec());
+  // #11: a Reset is a fresh start — it also unbinds from whatever saved spec
+  // this session was editing, so the (now cleared) wells don't read as a
+  // "dirty" divergence from a graph the user no longer intends to touch.
+  const reset = () => {
+    setSpec(emptySpec());
+    useApp.getState().setActivePlotSpecId(null);
+  };
 
   const canSend = family !== null; // there's a value to plot
 
@@ -216,6 +274,78 @@ export function useGraphBuilder(): GraphBuilderState {
     setStatus("sent bar chart to the stat stage");
   }
 
+  // ── Saved PlotSpecs (#11) ─────────────────────────────────────────────────
+  const activeSpec = useMemo(
+    () => savedSpecs.find((p) => p.id === activeSpecId) ?? null,
+    [savedSpecs, activeSpecId],
+  );
+  const dirty = activeSpec !== null && !plotSpecsEqual(spec, activeSpec.spec);
+
+  const saveActive = (): void => {
+    const id = useApp.getState().savePlotSpec(spec);
+    if (!id) return; // nothing active — the panel falls back to saveAs
+    const nm = useApp.getState().savedPlotSpecs.find((p) => p.id === id)?.name ?? "";
+    setStatus(`saved "${nm}"`);
+  };
+
+  const saveAs = (name: string): void => {
+    const id = useApp.getState().saveAsPlotSpec(name, spec);
+    const nm = useApp.getState().savedPlotSpecs.find((p) => p.id === id)?.name ?? name;
+    setStatus(`saved "${nm}"`);
+  };
+
+  // Loads a saved entry's spec verbatim into the builder (item 3: "reopening
+  // a saved spec restores the builder state exactly") — re-inferring the mark
+  // guards against a dataset whose column types changed since the save.
+  const openSpec = (id: string): void => {
+    const saved = useApp.getState().savedPlotSpecs.find((p) => p.id === id);
+    if (!saved) return;
+    setSpec(withInferredMark(saved.spec, markContext(saved.spec, useApp.getState().datasets)));
+    useApp.getState().setActivePlotSpecId(id);
+    setStatus(`opened "${saved.name}"`);
+  };
+
+  const duplicateSpec = (id: string): void => {
+    const newId = useApp.getState().duplicatePlotSpec(id);
+    if (!newId) return;
+    const saved = useApp.getState().savedPlotSpecs.find((p) => p.id === newId);
+    if (!saved) return;
+    setSpec(withInferredMark(saved.spec, markContext(saved.spec, useApp.getState().datasets)));
+    setStatus(`duplicated as "${saved.name}"`);
+  };
+
+  const renameSpec = (id: string, name: string): void => useApp.getState().renamePlotSpec(id, name);
+
+  const deleteSpec = (id: string): void => {
+    const saved = useApp.getState().savedPlotSpecs.find((p) => p.id === id);
+    useApp.getState().deletePlotSpec(id);
+    if (saved) setStatus(`deleted "${saved.name}"`);
+  };
+
+  // Item 6: reuse the EXISTING export path — never a bespoke pipeline.
+  // sendToStage() first, so Export works even if the user never clicked
+  // "Send to Stage" themselves; the xy family (scatter/line) then renders
+  // through the exact command the File menu's "Export figure…" runs
+  // (lib/exportFigureCommand), reading the live xKey/yKeys it just set.
+  // box/violin/bar render through the Stat Stage's OWN hook-local exporter
+  // (useStatStage.exportFigure — it needs live UI state like the histogram
+  // bin rule/fit distribution that only exists once that view is mounted),
+  // which isn't reachable from here without duplicating that pipeline — so
+  // this hands off with a toast instead of silently exporting the wrong
+  // (flat xy) figure. Faceted specs share the same known gap: facetByColumn
+  // resets the live xKey/yKeys (baked into facetPanels instead), so an
+  // exported facet spec falls back to the plot's default channel selection
+  // — tracked as a residual alongside "finish faceting" (GUI_INTERACTION #11).
+  const exportPlot = async (): Promise<void> => {
+    if (!ds || !canSend) return;
+    sendToStage();
+    if (spec.mark === "scatter" || spec.mark === "line") {
+      await runExportFigureCommand(useApp.getState);
+      return;
+    }
+    toast(`${spec.mark} exports from the Stat Stage's own Export button (now showing).`, "info");
+  };
+
   return {
     hasData: !!ds,
     datasetId: ds?.id ?? null,
@@ -232,5 +362,15 @@ export function useGraphBuilder(): GraphBuilderState {
     reset,
     canSend,
     sendToStage,
+    savedSpecs,
+    activeSpec,
+    dirty,
+    saveActive,
+    saveAs,
+    openSpec,
+    duplicateSpec,
+    renameSpec,
+    deleteSpec,
+    exportPlot,
   };
 }

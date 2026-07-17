@@ -9,6 +9,7 @@ import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
 import { sanitizeFigureDocs, type FigureDoc } from "./figuredoc";
 import { sanitizeSteps, type PipelineStep } from "./pipeline";
+import { sanitizeSavedPlotSpecs, type SavedPlotSpec } from "./plotspec";
 import { sanitizePlotWindows, type PlotWindow } from "./plotview";
 import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
@@ -64,6 +65,8 @@ export interface WorkspaceState {
   /** GUI_INTERACTION_PLAN #10 item 3 — every floating ToolWindow's persisted
    *  position/size/collapsed, keyed by its `id` prop. */
   toolWindowLayout?: Record<string, ToolWindowLayout>;
+  /** GUI_INTERACTION_PLAN #11 — every named saved Graph Builder spec. */
+  savedPlotSpecs?: SavedPlotSpec[];
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -84,6 +87,7 @@ export interface LoadedWorkspace {
   plotWindows: PlotWindow[];
   focusedWindowId: string | null;
   toolWindowLayout: Record<string, ToolWindowLayout>;
+  savedPlotSpecs: SavedPlotSpec[];
 }
 
 interface WorkspaceDoc {
@@ -105,6 +109,7 @@ interface WorkspaceDoc {
   plotWindows: PlotWindow[];
   focusedWindowId: string | null;
   toolWindowLayout: Record<string, ToolWindowLayout>;
+  savedPlotSpecs: SavedPlotSpec[];
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -131,6 +136,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     plotWindows: ws.plotWindows ?? [],
     focusedWindowId: ws.focusedWindowId ?? null,
     toolWindowLayout: ws.toolWindowLayout ?? {},
+    savedPlotSpecs: ws.savedPlotSpecs ?? [],
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -516,6 +522,10 @@ export function parseWorkspace(
   // a laptop the moment it's restored, not just lazily whenever a given
   // window is later reopened.
   const toolWindowLayout = sanitizeToolWindowLayout(o.toolWindowLayout, viewport);
+  // GUI_INTERACTION_PLAN #11: additive-optional, so a pre-#11 doc (absent
+  // field) sanitizes to [] via the same undefined-input path every other
+  // sanitizer here already handles — a legacy .dwk loads unchanged.
+  const savedPlotSpecs = sanitizeSavedPlotSpecs(o.savedPlotSpecs);
   return {
     datasets,
     folders,
@@ -532,6 +542,7 @@ export function parseWorkspace(
     plotWindows,
     focusedWindowId,
     toolWindowLayout,
+    savedPlotSpecs,
   };
 }
 
@@ -543,7 +554,8 @@ export function parseWorkspace(
 // `datasets[]` list is merged in; every workspace-LEVEL structure on the
 // incoming doc (folders, originFigures, smartFolders, reports, macroSteps,
 // figureDocs, plotWindows, activeId, selectedIds, expandedFolders,
-// recalcMode, focusedWindowId) is deliberately never read here — the store
+// recalcMode, focusedWindowId, savedPlotSpecs) is deliberately never read
+// here — the store
 // action built on top of this (`useApp.appendWorkspace`) doesn't touch the
 // destination folder tree, view state, or window layout either, so merging
 // those in would create structures the store then silently ignores.

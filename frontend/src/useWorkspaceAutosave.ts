@@ -25,6 +25,7 @@ export type AutosaveState = Pick<
   | "figureDocs"
   | "plotWindows"
   | "focusedWindowId"
+  | "savedPlotSpecs"
 >;
 
 export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boolean {
@@ -41,7 +42,8 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.recalcMode === prev.recalcMode &&
     state.figureDocs === prev.figureDocs &&
     state.plotWindows === prev.plotWindows &&
-    state.focusedWindowId === prev.focusedWindowId
+    state.focusedWindowId === prev.focusedWindowId &&
+    state.savedPlotSpecs === prev.savedPlotSpecs
   );
 }
 
