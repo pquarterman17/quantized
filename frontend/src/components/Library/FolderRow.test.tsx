@@ -6,7 +6,7 @@
 // dataTransfer, dispatched via RTL's low-level fireEvent, plus a mocked
 // getBoundingClientRect.
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import FolderRow from "./FolderRow";
@@ -294,6 +294,99 @@ describe("FolderRow — bulk-ops context menu (project-organization plan item 8)
     );
     open(fld("grp", null, 0), 2);
     expect(screen.getByText("Run analysis template on folder…")).toBeInTheDocument();
+  });
+});
+
+describe("FolderRow — 'Move to …' menu (GUI_INTERACTION #3 sub-item 4: a menu path for folder reorder)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [],
+      folders: [fld("a", null, 0), fld("b", null, 1), fld("child", "a", 0)],
+      expandedFolders: [],
+    });
+  });
+
+  it("offers every other folder, excluding itself and its own descendants", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-folder-head")!);
+    expect(screen.getByText('Move to "b"')).toBeInTheDocument();
+    // Not offered: itself, or its own child (would create a cycle).
+    expect(screen.queryByText('Move to "a"')).not.toBeInTheDocument();
+    expect(screen.queryByText('Move to "child"')).not.toBeInTheDocument();
+  });
+
+  it("moves the folder under the chosen target", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-folder-head")!);
+    fireEvent.click(screen.getByText('Move to "b"'));
+    expect(useApp.getState().folders.find((f) => f.id === "a")!.parentId).toBe("b");
+  });
+
+  it("offers 'Move to top level' only when the folder isn't already at the root", () => {
+    const { container } = render(<FolderRow folder={fld("child", "a", 0)} {...baseProps} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-folder-head")!);
+    fireEvent.click(screen.getByText("Move to top level"));
+    expect(useApp.getState().folders.find((f) => f.id === "child")!.parentId).toBeNull();
+  });
+
+  it("hides the 'Move to …' block entirely when there's nowhere to go", () => {
+    useApp.setState({ folders: [fld("solo", null, 0)] });
+    const { container } = render(<FolderRow folder={fld("solo", null, 0)} {...baseProps} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-folder-head")!);
+    expect(screen.queryByText(/^Move to /)).not.toBeInTheDocument();
+  });
+});
+
+describe("FolderRow — drop-candidate resting highlight + floating drop label (GUI_INTERACTION #3 sub-items 2b/3)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [ds("d1")],
+      folders: [fld("a", null, 0), fld("b", null, 1)],
+      expandedFolders: [],
+      activeDrag: null,
+    });
+  });
+
+  it("gets the resting 'drop-candidate' class the moment a dataset drag starts elsewhere", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    expect(row).not.toHaveClass("drop-candidate");
+    act(() => useApp.setState({ activeDrag: { kind: "dataset", id: "d1" } }));
+    expect(row).toHaveClass("drop-candidate");
+    act(() => useApp.setState({ activeDrag: null }));
+    expect(row).not.toHaveClass("drop-candidate");
+  });
+
+  it("does not mark itself, or a dragged folder's own descendant, as a candidate", () => {
+    useApp.setState({ folders: [fld("parent", null, 0), fld("child", "parent", 0)] });
+    const { container } = render(<FolderRow folder={fld("child", "parent", 0)} {...baseProps} />);
+    act(() => useApp.setState({ activeDrag: { kind: "folder", id: "parent" } }));
+    expect(container.querySelector(".qzk-folder-head")).not.toHaveClass("drop-candidate");
+  });
+
+  it("floats a zone-specific label near the pointer while a folder drag hovers it", () => {
+    const { container } = render(<FolderRow folder={fld("b", null, 1)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    setRowRect(row);
+    fireDrag(row, "dragover", 105, folderTransfer("a")); // top edge → "above"
+    expect(screen.getByText("Place before b")).toBeInTheDocument();
+  });
+
+  it("removes the label once the drag leaves the row", () => {
+    const { container } = render(<FolderRow folder={fld("b", null, 1)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    setRowRect(row);
+    fireDrag(row, "dragover", 120, folderTransfer("a")); // middle → "into"
+    expect(screen.getByText("Move inside b")).toBeInTheDocument();
+    fireEvent.dragLeave(row);
+    expect(screen.queryByText("Move inside b")).not.toBeInTheDocument();
+  });
+
+  it("labels a dataset drop as 'Move inside' the target folder", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    fireDrag(row, "dragover", 0, datasetTransfer("d1"));
+    expect(screen.getByText("Move inside a")).toBeInTheDocument();
   });
 });
 

@@ -5,7 +5,7 @@
 // to invoke its callback synchronously — the store update then lands within
 // the same `fireEvent`-wrapped `act()` and can be asserted immediately.
 
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
@@ -460,6 +460,115 @@ describe("PlotWindowFrame — item 14 (drop-to-rebind + pin toggle)", () => {
     );
     const before = geomOf("w1");
     fireEvent.pointerDown(getByLabelText("Pin window"), { clientX: 5, clientY: 5, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 50, clientY: 50 });
+    fireEvent.pointerUp(window, { clientX: 50, clientY: 50 });
+    expect(geomOf("w1")).toEqual(before);
+  });
+});
+
+// ── GUI_INTERACTION #3 sub-item 2b: reveal every eligible drop target the
+// moment a dataset drag starts, not only the one the pointer happens to hover.
+
+describe("PlotWindowFrame — resting 'drop-candidate' highlight (GUI_INTERACTION #3 sub-item 2b)", () => {
+  const data = { time: [1], values: [[1]], labels: ["m"], units: [""], metadata: {} };
+
+  beforeEach(() => {
+    useApp.setState({ datasets: [{ id: "d1", name: "a", data }], activeDrag: null });
+  });
+
+  it("lights up the moment a dataset drag starts elsewhere — the pointer never has to hover it", () => {
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused={false} datasetName={undefined}>
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const frame = container.querySelector(".qzk-plotwin")!;
+    expect(frame).not.toHaveClass("drop-candidate");
+    act(() => useApp.setState({ activeDrag: { kind: "dataset", id: "d1" } }));
+    expect(frame).toHaveClass("drop-candidate");
+    act(() => useApp.setState({ activeDrag: null }));
+    expect(frame).not.toHaveClass("drop-candidate");
+  });
+
+  it("never candidate-highlights a snapshot/panel window — same guard the real drop uses", () => {
+    useApp.setState({ activeDrag: { kind: "dataset", id: "d1" } });
+    const { container } = render(
+      <PlotWindowFrame
+        win={win({ id: "s1", kind: "snapshot", datasetId: null })}
+        focused={false}
+        datasetName={undefined}
+      >
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    expect(container.querySelector(".qzk-plotwin")).not.toHaveClass("drop-candidate");
+  });
+
+  it("doesn't double up with the stronger 'dropping' highlight on the actually-hovered frame", () => {
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused={false} datasetName={undefined}>
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const frame = container.querySelector(".qzk-plotwin")!;
+    fireDrag(frame, "dragover", datasetTransfer("d1"));
+    expect(frame).toHaveClass("dropping");
+    expect(frame).not.toHaveClass("drop-candidate");
+  });
+});
+
+// ── GUI_INTERACTION #3 sub-item 4: a menu path for the rebind gesture — until
+// this landed, dropping a Library row on a frame was the ONLY way to rebind.
+
+describe("PlotWindowFrame — 'Rebind to…' menu path (GUI_INTERACTION #3 sub-item 4)", () => {
+  const data = { time: [1], values: [[1]], labels: ["m"], units: [""], metadata: {} };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a", data },
+        { id: "d2", name: "b", data },
+      ],
+    });
+  });
+
+  it("opens a picker listing every dataset (current binding disabled) and rebinds on pick", () => {
+    const { getByLabelText, getByRole } = render(
+      <PlotWindowFrame win={win({ id: "w1", datasetId: "d1" })} focused datasetName="a">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    fireEvent.click(getByLabelText("Rebind window to another dataset"));
+    expect(getByRole("menuitem", { name: "a" })).toBeDisabled();
+    fireEvent.click(getByRole("menuitem", { name: "b" }));
+    expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.datasetId).toBe("d2");
+  });
+
+  it("is absent for a snapshot/panel window — same guard the drag gesture uses", () => {
+    const { queryByLabelText } = render(
+      <PlotWindowFrame
+        win={win({ id: "s1", kind: "snapshot", datasetId: null })}
+        focused={false}
+        datasetName={undefined}
+      >
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    expect(queryByLabelText("Rebind window to another dataset")).not.toBeInTheDocument();
+  });
+
+  it("clicking it does not also start a title-bar drag", () => {
+    const { getByLabelText } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="a">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const before = geomOf("w1");
+    fireEvent.pointerDown(getByLabelText("Rebind window to another dataset"), {
+      clientX: 5,
+      clientY: 5,
+      button: 0,
+    });
     fireEvent.pointerMove(window, { clientX: 50, clientY: 50 });
     fireEvent.pointerUp(window, { clientX: 50, clientY: 50 });
     expect(geomOf("w1")).toEqual(before);

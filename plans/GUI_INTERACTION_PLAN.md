@@ -91,15 +91,6 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
    - [ ] Multi-select: align, distribute, group, shared styling for graphic objects.
    - [ ] Large bet — size it deliberately; reuses #8's action registry.
 
-3. **Make powerful gestures discoverable** — advertise drag/drop and double-click
-   affordances in the resting UI.
-   - [ ] Drag handles / grip dots on draggable rows + legend entries.
-   - [ ] Cursor changes over draggable/editable objects; reveal valid drop targets
-         the moment a drag begins (not only after).
-   - [ ] 3-zone folder drop: insertion line for before/after + filled highlight for
-         "move inside", with a temporary `Move inside Results` label.
-   - [ ] Every drag action gets an equivalent menu/button path — never drag-only.
-
 5. **Baseline analysis honors the plotted X/Y channels** — the baseline workshop
    still computes on `time`/`values[0]` and subtracts into `values[0]`, diverging
    from the displayed channels. (Correctness trap.)
@@ -288,6 +279,58 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
 ---
 
 ## Completed
+
+- ~~**#3 Make powerful gestures discoverable**~~ (2026-07-17) — closed as a
+  gap-audit-and-fill: sibling work landed earlier the SAME day already
+  delivered most of it — #13 (grip-dot drag handles + hover "⋯" menu cue on
+  dataset/folder rows) and #8 (keyboard-complete context menus + the
+  `lib/contextActions.ts` registry) — this pass audited every OTHER drag
+  surface and closed the remaining gaps against the item's 4 sub-boxes.
+  (1) **Drag handles**: Library rows already had `.qzk-drag-handle`; legend
+  rows + the Channels-card row (both channel→axis-band drags) got
+  `cursor: grab` via a `[draggable="true"]` CSS selector (a dedicated handle
+  doesn't fit a checkbox/legend-entry row — the existing hover tooltips
+  cover the rest); the panel-cell/plot-window/tool-window title-bar drag
+  surfaces got discoverability tooltips (PanelCell already had
+  `cursor: grab`; MDI/ToolWindow title bars deliberately KEEP
+  `cursor: default`, matching real OS title-bar convention — changing that
+  would be the actual regression). (2) **Cursor + drop-target reveal**:
+  audited every plot-canvas draggable object (annotations, shapes, ref
+  lines, axis titles, the legend box) — all already show grab/move/resize
+  cursors on hover, zero gap found there. Added a `store/libraryPanel.ts`
+  `activeDrag` field (set on a dataset/folder row's `.qzk-drag-handle`
+  dragstart, cleared on dragend) so EVERY eligible drop target gets a
+  resting `.drop-candidate` dashed-outline tint the MOMENT a drag starts,
+  not only the one the pointer happens to hover — wired into FolderRow (the
+  named primary case) and PlotWindowFrame (the window-rebind case, same
+  `DATASET_DND` gesture, second real drop-target family). `AxisDropZones`'
+  pre-existing "reveal all 3 axis bands once the drag enters the stage" was
+  left as-is — a partial but reasonable implementation of the same idea;
+  making it fire on drag-START across every mounted plot window would be a
+  materially bigger lift for a lower-traffic gesture, noted rather than
+  silently skipped. (3) **3-zone drop label**: a small `.qzk-drop-label`
+  floating near the pointer, positioned/updated on every `FolderRow`
+  dragover, reading `Move inside X` / `Place before X` / `Place after X`.
+  (4) **A menu path for every drag** (audit table): dataset→folder =
+  pre-existing (folder-row menu's dynamic "Move to …" list); **folder
+  reorder = ADDED** (`folderRowMenu.ts`'s new "Move to …" list, mirroring
+  the dataset one, built from the newly-split `folderCoreActions`/
+  `folderBulkActions`/`folderDeleteActions` groups); legend/curve reorder =
+  pre-existing (PlotLegend's own arrows + hand-built menu) **+ ADDED** to
+  the shared `curveActions` registry so the plot-canvas right-click curve
+  menu offers "Move earlier/later" too, not just the legend's own menu;
+  channel→X/Y/Y2 = pre-existing (Channels card checkboxes/Select/Y2 pill —
+  reachable from the plot side, not just the worksheet); annotation/shape
+  **nudge = ADDED** — precise X/Y (Shapes: x1/y1/x2/y2) edit fields on their
+  Inspector-card rows, strictly more useful than a nudge and the first
+  non-mouse path either object ever had; window **rebind = ADDED**
+  (`WindowTitleButtons`'s new "⇄" button opens a dataset picker, guarded the
+  same `kind !== snapshot/panel` way the drag gesture already is). All 4
+  sub-boxes close — none left open. `store/useApp.ts` untouched (3229/3240,
+  zero ratchet cost — the new `activeDrag` state and every new action live
+  in existing slice files); `PlotWindowFrame.tsx` 398/400, `DatasetRow.tsx`
+  395/400 (both inside their pins). Frontend 269 files / 3736 tests green
+  (+2 files / +28 tests); build green.
 
 - ~~**#13 Folder organization density**~~ (2026-07-17) — 5 of 6 sub-items
   shipped: a dedicated grip-dot drag handle (`.qzk-drag-handle`, the ONLY

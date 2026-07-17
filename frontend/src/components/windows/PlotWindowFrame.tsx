@@ -98,6 +98,7 @@ export default function PlotWindowFrame({
   const toggleMaximizeWindow = useApp((s) => s.toggleMaximizeWindow);
   const renameWindow = useApp((s) => s.renameWindow);
   const rebindWindow = useApp((s) => s.rebindWindow);
+  const activeDrag = useApp((s) => s.activeDrag);
 
   // Item 14: this frame is a drop target for a Library dataset drag
   // (DATASET_DND — the SAME dataTransfer type DatasetRow sets, so a row
@@ -268,9 +269,16 @@ export default function PlotWindowFrame({
     if (!focused) e.preventDefault();
   };
 
+  // GUI_INTERACTION #3 sub-item 2b: the SAME eligibility a real drop already
+  // checks (kind !== snapshot/panel) — every OTHER eligible frame lights up
+  // the moment a dataset drag starts, not only the one the pointer happens
+  // to be over (`dropping`, above).
+  const isDropCandidate =
+    activeDrag?.kind === "dataset" && win.kind !== "snapshot" && win.kind !== "panel" && !dropping;
+
   return (
     <div
-      className={`qzk-plotwin${focused ? " focused" : ""}${dropping ? " dropping" : ""}`}
+      className={`qzk-plotwin${focused ? " focused" : ""}${dropping ? " dropping" : ""}${isDropCandidate ? " drop-candidate" : ""}`}
       style={style}
       onPointerDownCapture={onFrameCapture}
       onContextMenuCapture={onFrameContextMenu}
@@ -299,6 +307,7 @@ export default function PlotWindowFrame({
     >
       <div
         className="qzk-plotwin-titlebar"
+        title="Drag to move · double-click to maximize · drop a dataset here to rebind"
         onPointerDown={beginDrag("move")}
         onDoubleClick={() => toggleMaximizeWindow(win.id)}
       >

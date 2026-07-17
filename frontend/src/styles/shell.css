@@ -206,6 +206,33 @@ body {
 .qzk-drag-handle:focus { box-shadow: 0 0 0 1px var(--accent); }
 .qzk-drag-handle:active { cursor: grabbing; }
 
+/* GUI_INTERACTION #3 sub-item 2b: the resting "this is a legal drop target"
+   tint — every OTHER folder row lights up the instant a dataset/folder drag
+   starts (store/libraryPanel.ts's `activeDrag`), not only the one under the
+   pointer. Deliberately outline-only (no background) so it never fights the
+   stronger `.dropinto`/`.drop-above`/`.drop-below` box-shadow the specific
+   hovered row shows instead (FolderRow drops the class there — see its
+   `!dropZone` guard). */
+.qzk-folder-head.drop-candidate { outline: 1px dashed var(--accent); outline-offset: -2px; }
+
+/* GUI_INTERACTION #3 sub-item 3: the floating "here's what this drop does"
+   label — one small element per FolderRow, positioned near the pointer and
+   updated on every dragover while that row owns the live drop zone.
+   `pointer-events: none` so it can never itself become the drop target. */
+.qzk-drop-label {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  background: var(--surface-3);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+}
+
 /* Context-menu resting cue (GUI_INTERACTION #8) — a "⋯" button coexisting
    with the drag handle above: hidden at rest, revealed on row hover/focus
    (same reveal rule), so right-click is never the ONLY way to discover a
@@ -346,6 +373,19 @@ body {
    bubbled from a child .it row — see PlotLegend's onBoxMouseDown). */
 .qzk-stage.tool-pointer .qzk-legend { cursor: move; }
 .qzk-stage.tool-pointer .qzk-legend .it { cursor: default; }
+/* GUI_INTERACTION #3 sub-item 1: a legend entry is ALSO a channel-chip drag
+   source (drag onto an axis band to re-plot it there — lib/dragaxis.ts) in
+   every tool mode, not just pointer — `grab` beats the row's own
+   click-to-toggle default cursor above whenever it's actually draggable
+   (overlay rows never carry `draggable`, so they're untouched). Higher
+   specificity than the tool-pointer default-cursor rule above so it wins there. */
+.qzk-stage.tool-pointer .qzk-legend .it[draggable="true"],
+.qzk-legend .it[draggable="true"] { cursor: grab; }
+/* GUI_INTERACTION #3 sub-item 1: the Inspector Channels card's per-channel
+   row is the SAME channel-chip drag source (onto an axis band) — overrides
+   the shared `.qz-check` primitive's flat `cursor: default` only where this
+   one row is actually draggable. */
+.qz-check[draggable="true"] { cursor: grab; }
 /* Floating-legend corner placement (Inspector "Legend position"). */
 .qzk-legend.ne { top: 12px; right: 12px; }
 .qzk-legend.nw { top: 12px; left: 12px; }
@@ -507,6 +547,13 @@ body {
 /* Item 14 — a Library dataset drag hovering THIS frame ("drop = rebind");
    stronger than the focus ring so the target reads unambiguously mid-drag. */
 .qzk-plotwin.dropping { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+/* GUI_INTERACTION #3 sub-item 2b: the SAME resting "legal drop target" tint
+   FolderRow uses, applied to the second real drop-target family that shares
+   `activeDrag` (store/libraryPanel.ts) — every eligible window frame lights
+   up the moment a dataset drag starts, not only the one under the pointer.
+   Outline-only so it never fights `.dropping`'s stronger border/box-shadow
+   on the actually-hovered frame. */
+.qzk-plotwin.drop-candidate { outline: 1px dashed var(--accent); outline-offset: -2px; }
 .qzk-plotwin-titlebar { display: flex; align-items: center; gap: 8px; height: 28px; flex-shrink: 0; padding: 0 6px 0 10px; background: var(--surface-2); border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); color: var(--text-dim); cursor: default; user-select: none; touch-action: none; }
 .qzk-plotwin.focused .qzk-plotwin-titlebar { background: var(--accent-soft); color: var(--accent-text); }
 .qzk-plotwin-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
@@ -540,6 +587,10 @@ body {
 .qzk-plotwin-pin { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 3px; border: none; background: transparent; color: var(--text-faint); cursor: default; padding: 0; flex-shrink: 0; font-size: 11px; line-height: 1; }
 .qzk-plotwin-pin:hover { background: var(--surface-3); color: var(--text); }
 .qzk-plotwin-pin.pinned { background: var(--accent-soft); color: var(--accent); }
+/* GUI_INTERACTION #3 sub-item 4: the menu equivalent of "drag a Library row
+   onto this frame" — same glyph-button family as -bg/-pin. */
+.qzk-plotwin-rebind { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 3px; border: none; background: transparent; color: var(--text-faint); cursor: default; padding: 0; flex-shrink: 0; font-size: 11px; line-height: 1; }
+.qzk-plotwin-rebind:hover { background: var(--surface-3); color: var(--text); }
 .qzk-plotwin-close { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-3); cursor: default; padding: 0; flex-shrink: 0; }
 .qzk-plotwin-close:hover { background: var(--danger); border-color: var(--danger); }
 .qzk-plotwin-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }

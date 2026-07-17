@@ -101,6 +101,7 @@ export default function PanelCell({ dataset, syncKey, windowId, index }: PanelCe
     >
       <div
         className="qzk-panel-cell-hd"
+        title="Drag to reorder panels"
         draggable
         onDragStart={(e) => {
           e.dataTransfer.setData(PANEL_CELL_DND, encodePanelCellDrag({ windowId, fromIndex: index }));

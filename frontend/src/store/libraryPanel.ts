@@ -5,7 +5,7 @@
 // architecture.test.ts size-ratchet pin (same "small new slice" reasoning as
 // every other extracted slice).
 //
-// Three concerns share this one small file (kept small so an over-budget
+// Four concerns share this one small file (kept small so an over-budget
 // useApp.ts can shed a self-contained block here post-merge with main's
 // #7/#10/#14 slices, rather than raise the ratchet pin):
 //   - `libraryPanelWidth` — the resizable Library panel's width. Its VALUE
@@ -26,9 +26,27 @@
 //     actions in useApp.ts purely for ratchet headroom; it's still a normal
 //     top-level store field at runtime (see pointerTool.ts's header for why
 //     that's safe) — `renameFolder` (useApp.ts) still owns the name.
+//   - `activeDrag` — GUI_INTERACTION #3 sub-item 2b's "reveal every valid
+//     drop target the moment a drag starts" state. Set by a dataset/folder
+//     row's `.qzk-drag-handle` `onDragStart` (cleared on `onDragEnd`) — the
+//     dragged object's OWN id, not just a boolean, so a folder row can
+//     self-exclude (a folder can't become its own drop target, nor a
+//     descendant's) without needing to read `dataTransfer.getData()` (browsers
+//     only allow that on `drop`, not `dragover`/render). Every consumer
+//     (FolderRow's resting "candidate" tint, PlotWindowFrame's rebind-target
+//     tint) reads it non-reactively where a per-row render doesn't need to
+//     re-run on every OTHER row's drag, and reactively where the whole-tree
+//     highlight does.
 
 import { updateFolder as treeUpdateFolder } from "../lib/foldertree";
 import type { AppState } from "./useApp";
+
+/** What's being drag-sourced right now (module-internal drag, not an OS file
+ *  drop) — null when no drag is in flight. */
+export interface ActiveDrag {
+  kind: "dataset" | "folder";
+  id: string;
+}
 
 export interface LibraryPanelSlice {
   libraryPanelWidth: number;
@@ -39,6 +57,9 @@ export interface LibraryPanelSlice {
   /** Consumed by Library.tsx once the reveal has run. */
   clearReveal: () => void;
   updateFolder: (id: string, patch: { notes?: string; color?: string; defaultTemplate?: string }) => void;
+  /** GUI_INTERACTION #3 sub-item 2b — see the module doc above. */
+  activeDrag: ActiveDrag | null;
+  setActiveDrag: (drag: ActiveDrag | null) => void;
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -50,5 +71,7 @@ export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): Li
     requestReveal: (datasetId) => set({ revealTarget: datasetId }),
     clearReveal: () => set({ revealTarget: null }),
     updateFolder: (id, patch) => set((s) => ({ folders: treeUpdateFolder(s.folders, id, patch) })),
+    activeDrag: null,
+    setActiveDrag: (activeDrag) => set({ activeDrag }),
   };
 }

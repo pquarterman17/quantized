@@ -103,4 +103,17 @@ describe("PlotContextMenu", () => {
     fireEvent.click(screen.getByText("2 px"));
     expect(useApp.getState().seriesStyles[0]?.width).toBe(2);
   });
+
+  it("GUI_INTERACTION #3 sub-item 4: 'Move later (draw over)' reorders the hit-tested series", () => {
+    // plotted=[0,1]; the hit-tested series is channel 0 (index 0) — moving it
+    // later swaps it with channel 1.
+    open();
+    fireEvent.click(screen.getByText("Move later (draw over)"));
+    expect(useApp.getState().seriesOrder).toEqual([1, 0]);
+  });
+
+  it("'Move earlier (draw under)' is disabled for the first channel in draw order", () => {
+    open();
+    expect(screen.getByRole("menuitem", { name: "Move earlier (draw under)" })).toBeDisabled();
+  });
 });

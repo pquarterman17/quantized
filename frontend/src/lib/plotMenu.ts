@@ -54,6 +54,13 @@ export interface PlotMenuContext {
   toggleHidden: (channel: number) => void;
   rename: (channel: number) => void;
   toggleY2: (channel: number) => void;
+  /** GUI_INTERACTION #3 sub-item 4 — reorder this channel's draw order by one
+   *  step (dir -1 = earlier/under, +1 = later/over); mirrors PlotLegend's own
+   *  `move`. */
+  moveSeries: (channel: number, dir: -1 | 1) => void;
+  /** Whether `moveSeries(channel, dir)` would do anything (already at that
+   *  end of the draw order, or the channel isn't currently plotted). */
+  canMoveSeries: (channel: number, dir: -1 | 1) => boolean;
 
   // ── axis actions ──
   setXScale: (v: AxisScale) => void;

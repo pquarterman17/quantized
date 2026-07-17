@@ -218,6 +218,15 @@ describe("DatasetRow — drag starts only from the handle (GUI_INTERACTION_PLAN 
     fireDragStart(handle, { setData });
     expect(setData).toHaveBeenCalledWith(DATASET_DND, "plain");
   });
+
+  it("GUI_INTERACTION #3 sub-item 2b: flags activeDrag on dragstart, clears it on dragend", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
+    const handle = container.querySelector(".qzk-drag-handle")!;
+    fireDragStart(handle, { setData: () => {} });
+    expect(useApp.getState().activeDrag).toEqual({ kind: "dataset", id: "plain" });
+    fireEvent.dragEnd(handle);
+    expect(useApp.getState().activeDrag).toBeNull();
+  });
 });
 
 describe("DatasetRow — Show in folder + path caption (GUI_INTERACTION_PLAN #13 sub-item 2)", () => {
