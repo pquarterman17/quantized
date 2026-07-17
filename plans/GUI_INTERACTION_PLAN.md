@@ -127,9 +127,44 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
 
 11. **Graph Builder → durable artifact** — promote its output to a first-class
     saved `PlotSpec` in `.dwk`.
-    - [ ] Save / Save As / Duplicate / Open in Figure Builder / Export; Stage shows
-          which saved spec it renders + unsaved-changes state; finish faceting for
-          statistical marks; allow plot/layer reordering.
+    - [x] Save / Save As / Duplicate / Rename / Delete, from a new PlotSpecBar
+          toolbar in the Graph Builder panel.
+    - [x] `.dwk` persistence (`savedPlotSpecs`, additive-optional).
+    - [x] The builder surfaces which saved spec it's bound to + an
+          unsaved-changes dot (scoped to the builder header, not the Stage
+          canvas — see the 2026-07-17 progress note below).
+    - [x] Export (scoped to the xy family — see the progress note).
+    - [ ] Open in Figure Builder.
+    - [ ] Finish faceting for statistical marks.
+    - [ ] Allow plot/layer reordering.
+
+    _Progress (2026-07-17):_ core landed — a `savedPlotSpecs` collection
+    (`store/graphBuilder.ts`, a new slice; also absorbed the pre-existing
+    `graphBuilderOpen`/`graphBuilderSeed` handshake relocated from
+    `useApp.ts` verbatim) with id/name/created/modified + the `PlotSpec`
+    payload (`lib/plotspec.ts`'s existing grammar — serialization was
+    already there from #51, this only added `SavedPlotSpec` +
+    `sanitizeSavedPlotSpecs` + `plotSpecsEqual`). Round-trips through `.dwk`
+    v3 as an additive-optional field (legacy files load unchanged).
+    `PlotSpecBar.tsx` (new sub-component) shows the active spec's name + a
+    dirty dot (structural compare vs. the saved payload) and a collapsible
+    "Saved graphs" list with per-row Open/Duplicate/Rename/Delete; Save/Save
+    As prompt via the existing `askParams`/`askConfirm` dialogs. Export
+    calls `sendToStage()` then reuses the ordinary "Export figure…" File
+    command for the xy family (scatter/line) — box/violin/bar render via
+    the Stat Stage's OWN hook-local exporter (`useStatStage.exportFigure`,
+    which needs live UI state — bin rule, fit distribution — that only
+    exists once that view is mounted), so Export hands off with a toast
+    there instead of building a second export pipeline; a faceted spec's
+    export also inherits the existing gap that `facetByColumn` resets the
+    live xKey/yKeys (baked into panels instead), so it falls back to the
+    plot's default channel selection — both are the residuals this item's
+    open boxes already track. `useApp.ts` stayed within its ratchet pin
+    (3239/3240 at the start of this work → **3229/3240** after) by
+    relocating the Graph Builder's pre-existing open/seed state into the
+    new slice alongside the new savedPlotSpecs fields — a net reduction
+    that funds the slice's own wiring cost. Frontend 3637 tests green
+    (+70 new), build green.
 
 12. **One canonical plot specification** across Stage / Graph Builder / Figure
     Builder / export — all edit or render the same underlying object.
