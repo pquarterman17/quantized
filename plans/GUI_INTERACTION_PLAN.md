@@ -210,9 +210,11 @@ plotting, publication export.
     - [ ] annotation/shape move/edit/delete/undo
     - [ ] window arrange/restore
     - [ ] export round-trip
-    - [ ] CI workflow — `.github/workflows/e2e.yml` shipped (ubuntu-latest,
-          non-required, `continue-on-error: false`) but not yet verified by a
-          live GitHub Actions run.
+    - [x] CI workflow — `.github/workflows/e2e.yml` VERIFIED LIVE 2026-07-17:
+          first push-run failed 4 menu tests (spec `role="button"` locators vs
+          the #8 registry's explicit `role="menuitem"`; local runs had masked
+          it via `reuseExistingServer` against a STALE server), fixed in
+          `a2fb74a` — second live run green 18/18 (run 29610916988).
 
     _Progress (2026-07-17):_ core harness + 7 journeys shipped. Server under
     test: `uv run qz --no-browser --port 8934` (cwd = repo root), Playwright's
