@@ -107,7 +107,11 @@ const STORE_PINS: Record<string, number> = {
   // hand-re-listed all 24 group-2 PlotView fields; replaced with a single
   // `...(restoredView ?? {})` spread (hydrateView guarantees the field set),
   // so a new view field (axisLabelStyles) LOWERED the pin instead of raising it.
-  "/store/useApp.ts": 3312,
+  // 3312 -> 3240 (2026-07-16, ORIGIN_FILE_DECODE_PLAN #54 page-setup): the
+  // ~118-line prefs block (Prefs/PREF_DEFAULTS/loadPrefs/prefsOf/syncPrefs)
+  // moved to store/prefs.ts, funding #54's panelFit/pageSetup state + the
+  // defaultPanelFit pref across the feature's staged commits — a net LOWERING.
+  "/store/useApp.ts": 3240,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

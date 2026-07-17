@@ -47,6 +47,24 @@ describe("defaultPlotView", () => {
     expect(v.xScale).toBe("linear");
     expect(v.yScale).toBe("linear");
     expect(v.y2Scale).toBeNull();
+    expect(v.panelFit).toBe("frames");
+  });
+});
+
+describe("sanitizeView panelFit (#54)", () => {
+  it("defaults an absent (pre-#54) panelFit to frames, round-trips a valid one, rejects garbage", () => {
+    const missing = sanitizePlotWindows([win({ view: legacyView() as PlotView })], new Set(["d1"]));
+    expect(missing[0].view.panelFit).toBe("frames");
+    const valid = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), panelFit: "window" } })],
+      new Set(["d1"]),
+    );
+    expect(valid[0].view.panelFit).toBe("window");
+    const garbage = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), panelFit: "zoomy" } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(garbage[0].view.panelFit).toBe("frames");
   });
 });
 

@@ -16,6 +16,7 @@
 // decisions" #2), and global Preferences-dialog defaults (defaultTrace,
 // wheelZoom, excludedDisplay, sigFigs, … — app-wide, not per-window).
 
+import { PANEL_FITS, type PanelFit } from "./panelLayout";
 import {
   sanitizePanelDatasetIds,
   sanitizePanelLayout,
@@ -154,6 +155,12 @@ export interface PlotView {
   seriesOrder: number[] | null;
   hiddenChannels: number[];
   waterfall: number;
+  /** How a spatial multi-panel composition fills the stage (#54): `"frames"`
+   *  (letterbox the frames' bounding box — PR #47's default, and the
+   *  back-compat value for a `.dwk` predating this field), `"window"` (fill
+   *  the host), or `"page"` (true page coordinates — Stage 2). Only the
+   *  spatial multi-panel view reads it; a plain XY plot ignores it. */
+  panelFit: PanelFit;
 }
 
 /** A fresh view — what a brand-new window starts from. Mirrors the store's
@@ -205,6 +212,7 @@ export function defaultPlotView(): PlotView {
     seriesOrder: null,
     hiddenChannels: [],
     waterfall: 0,
+    panelFit: "frames",
   };
 }
 
@@ -664,6 +672,8 @@ function sanitizeView(v: unknown): PlotView {
       ? o.hiddenChannels.filter((n): n is number => typeof n === "number")
       : [],
     waterfall: num(o.waterfall, fb.waterfall),
+    // Unknown/absent (a pre-#54 .dwk) -> "frames", the PR #47 letterbox default.
+    panelFit: PANEL_FITS.includes(o.panelFit as PanelFit) ? (o.panelFit as PanelFit) : fb.panelFit,
   };
 }
 

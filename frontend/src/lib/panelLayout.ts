@@ -24,6 +24,32 @@
 
 import type { SpatialPanel } from "./multipanel";
 
+/** How a spatial multi-panel composition fills the interactive stage
+ *  (ORIGIN_FILE_DECODE_PLAN #54):
+ *   - `"frames"` — letterbox the decoded frames' bounding box, preserving its
+ *     aspect (PR #47's default; the compatibility behaviour when the field is
+ *     absent from an older `.dwk`).
+ *   - `"window"` — ignore aspect, stretch the frames to fill the whole host
+ *     (the wide-multi-panel "poor fill" remedy for e.g. RockingCurve Graph3).
+ *   - `"page"` — letterbox the FULL Origin page (aspect from the window's
+ *     `pageSetup`) and place each frame at its true page coordinates within it
+ *     (Stage 2 — needs `pageRect`/`pageSetup`; falls back to `"frames"` when
+ *     that geometry isn't available). */
+export type PanelFit = "frames" | "window" | "page";
+
+/** The fit modes in cycle order. `page` is only offered when the window has a
+ *  decoded/edited page (see `nextPanelFit`'s `allowPage`). */
+export const PANEL_FITS: readonly PanelFit[] = ["frames", "window", "page"];
+
+/** The next fit mode in the toolbar/command cycle. `page` is skipped unless
+ *  `allowPage` (no `pageSetup` -> a two-way frames<->window toggle). Pure so
+ *  the store action and its test share one source of truth. */
+export function nextPanelFit(current: PanelFit, allowPage: boolean): PanelFit {
+  const cycle: readonly PanelFit[] = allowPage ? PANEL_FITS : ["frames", "window"];
+  const i = cycle.indexOf(current);
+  return cycle[(i + 1) % cycle.length];
+}
+
 /** Default tolerance for "the same x axis", as a fraction of the larger
  *  span — generous enough for float rounding in decoded page-unit/axis-
  *  range values, tight enough not to fuse two genuinely different ranges
@@ -65,11 +91,19 @@ export function fittedLayoutRect(aspectRatio: number, totalWidth: number, totalH
 
 /** Scale trusted normalized frame rectangles into the current stage. Returns
  *  null as an all-or-nothing fail-closed signal if any panel lacks a valid
- *  rectangle, keeping ordinal/non-Origin layouts on the equal-grid path. */
+ *  rectangle, keeping ordinal/non-Origin layouts on the equal-grid path.
+ *
+ *  `mode` (ORIGIN_FILE_DECODE_PLAN #54) chooses how the composition fills the
+ *  host: `"frames"` (default — letterbox the frames' bounding box, PR #47's
+ *  behaviour, byte-identical to the pre-#54 call) or `"window"` (fill the host,
+ *  aspect ignored). `"page"` is handled by `spatialPageRects` (Stage 2) and
+ *  falls back to `"frames"` here. Passing no `mode` reproduces the old
+ *  signature exactly. */
 export function spatialPixelRects(
   panels: readonly Pick<SpatialPanel, "frameRect" | "layoutAspect">[],
   totalWidth: number,
   totalHeight: number,
+  mode: PanelFit = "frames",
 ): PixelRect[] | null {
   if (panels.length === 0 || panels.some((panel) => {
     const rect = panel.frameRect;
@@ -79,7 +113,11 @@ export function spatialPixelRects(
   })) return null;
   const aspects = panels.map((panel) => panel.layoutAspect);
   const aspect = aspects[0];
-  const useAspect = aspect != null && Number.isFinite(aspect) && aspect > 0
+  // "window" fills the host regardless of aspect (the wide-figure remedy);
+  // "frames" (and "page" until its own path lands) letterbox when every panel
+  // agrees on the aspect.
+  const useAspect = mode !== "window"
+    && aspect != null && Number.isFinite(aspect) && aspect > 0
     && aspects.every((value) => value != null && Math.abs(value - aspect) <= 1e-9);
   const page = useAspect
     ? fittedLayoutRect(aspect, totalWidth, totalHeight)

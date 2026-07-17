@@ -4,6 +4,7 @@ import {
   columnWidths,
   cumulativeOffsets,
   fittedLayoutRect,
+  nextPanelFit,
   type PanelPos,
   rowBoundaryGaps,
   rowHeights,
@@ -214,6 +215,43 @@ describe("spatialPixelRects", () => {
       { frameRect: { left: 0, top: 0, width: 1.1, height: 1 } },
     ], 100, 100)).toBeNull();
     expect(spatialPixelRects([], 100, 100)).toBeNull();
+  });
+
+  it('"frames" mode is identical to the default (letterboxes the aspect)', () => {
+    const panels = [{
+      frameRect: { left: 0.1, top: 0.2, width: 0.8, height: 0.6 },
+      layoutAspect: 2,
+    }];
+    expect(spatialPixelRects(panels, 1000, 800, "frames")).toEqual(
+      spatialPixelRects(panels, 1000, 800),
+    );
+  });
+
+  it('"window" mode ignores the aspect and fills the whole host', () => {
+    // Same panel the letterbox test uses (aspect 2) — but window mode places it
+    // against the full 1000x800 host, not the centered aspect-fitted rect.
+    const panels = [{
+      frameRect: { left: 0.1, top: 0.2, width: 0.8, height: 0.6 },
+      layoutAspect: 2,
+    }];
+    expect(spatialPixelRects(panels, 1000, 800, "window")).toEqual([
+      { left: 100, top: 160, width: 800, height: 480 },
+    ]);
+  });
+});
+
+describe("nextPanelFit", () => {
+  it("cycles frames <-> window when page is not allowed", () => {
+    expect(nextPanelFit("frames", false)).toBe("window");
+    expect(nextPanelFit("window", false)).toBe("frames");
+    // A stale "page" with no page model degrades into the two-way cycle.
+    expect(nextPanelFit("page", false)).toBe("frames");
+  });
+
+  it("includes page in the cycle when allowed", () => {
+    expect(nextPanelFit("frames", true)).toBe("window");
+    expect(nextPanelFit("window", true)).toBe("page");
+    expect(nextPanelFit("page", true)).toBe("frames");
   });
 });
 

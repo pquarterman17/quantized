@@ -12,6 +12,7 @@ afterEach(() => {
   s.setPref("confirmRemove", false);
   s.setPref("excludedDisplay", "hide");
   s.setPref("originBookClickOpens", "worksheet");
+  s.setPref("defaultPanelFit", "frames");
 });
 
 describe("preferences", () => {
@@ -49,5 +50,12 @@ describe("preferences", () => {
     useApp.getState().setPref("originBookClickOpens", "plot");
     expect(useApp.getState().originBookClickOpens).toBe("plot");
     expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").originBookClickOpens).toBe("plot");
+  });
+
+  it("defaultPanelFit (#54) defaults to frames and persists when changed to window", () => {
+    expect(useApp.getState().defaultPanelFit).toBe("frames");
+    useApp.getState().setPref("defaultPanelFit", "window");
+    expect(useApp.getState().defaultPanelFit).toBe("window");
+    expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").defaultPanelFit).toBe("window");
   });
 });

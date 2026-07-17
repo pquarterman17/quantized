@@ -595,6 +595,7 @@ export function buildAppActions(s: StoreGet): Action[] {
       label: "Toggle stacked layout",
       run: () => s().setStackMode(!s().stackMode),
     },
+    { id: "panel-fit", group: "Plot", label: "Multi-panel fit (letterbox / fill)", keywords: "aspect window spatial page", run: () => s().cyclePanelFit() },
     {
       id: "statMode",
       group: "Plot",

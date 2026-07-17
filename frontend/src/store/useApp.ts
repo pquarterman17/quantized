@@ -20,7 +20,7 @@ import { centralDifference, sortByX, type DerivativeResult } from "../lib/differ
 import { computeCursorReadout } from "../lib/gadgetCursors";
 import type { Measurement } from "../lib/measure";
 import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
-import { setFormatOpts, type Notation } from "../lib/format";
+import type { Notation } from "../lib/format";
 import { applyFormulas, baseColumns, recomputeData } from "../lib/formula";
 import { lit } from "../lib/macro";
 import {
@@ -88,7 +88,7 @@ import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
-import { applyPalette, normalizePalette } from "../lib/palettes";
+import { nextPanelFit, type PanelFit } from "../lib/panelLayout";
 import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
 import { effectiveChannels } from "../lib/plotdata";
@@ -107,6 +107,7 @@ import {
 } from "../lib/recentFiles";
 import { toast } from "./toasts";
 import { confirmOriginReapplyDiscard, deferOriginFigureApply } from "./originFigureApply";
+import { loadPrefs, syncPrefs } from "./prefs";
 import {
   createOriginImportSlice,
   pruneOriginFidelityRefs,
@@ -311,7 +312,8 @@ export type PrefKey =
   | "notation"
   | "confirmRemove"
   | "excludedDisplay"
-  | "originBookClickOpens";
+  | "originBookClickOpens"
+  | "defaultPanelFit";
 
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
@@ -382,6 +384,10 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   confirmRemove: boolean;
   excludedDisplay: ExcludedDisplay;
   originBookClickOpens: OriginBookClickOpens;
+  // #54: app-wide default fit a fresh Origin multi-panel apply starts from
+  // (frames = aspect-preserving letterbox, window = fill). Read at apply time,
+  // mirroring how `defaultGrid` seeds `showGrid`.
+  defaultPanelFit: PanelFit;
   prefsOpen: boolean;
   yScale: AxisScale; // Y axis scale (MAIN #12: linear/log/reciprocal)
   xScale: AxisScale; // X axis scale
@@ -393,6 +399,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   plotTemplate: string; // on-screen publication template (base font + line width)
   showAxisBox: boolean; // draw a full frame around the plot area
   stackMode: boolean; // multi-panel: one stacked sub-plot per channel
+  panelFit: PanelFit; // #54: how a spatial multi-panel view fills the stage (PlotView field)
   // Spatial multi-panel apply (decode-plan #36): set by `applyOriginFigure`
   // when a multi-layer Origin figure's layers all resolve to a dataset +
   // plotted channels — each panel owns its OWN dataset/ranges instead of
@@ -753,6 +760,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setPlotTemplate: (template: string) => void;
   setShowAxisBox: (show: boolean) => void;
   setStackMode: (stackMode: boolean) => void;
+  setPanelFit: (mode: PanelFit) => void; // #54
+  cyclePanelFit: () => void; // #54 — frames<->window (page joins in Stage 2)
   setInsetMode: (insetMode: boolean) => void;
   setPolarMode: (polarMode: boolean) => void;
   setStatMode: (statMode: boolean) => void;
@@ -909,126 +918,9 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setStatus: (status: string) => void;
 }
 
-// ── Appearance prefs persisted to localStorage (survive a reload) ──
-const PREFS_KEY = "qz.prefs";
-const THEMES = ["dark", "light"];
-const ACCENTS = ["violet", "teal", "ocean", "amber", "rose"];
-const DENSITIES = ["compact", "regular", "comfy"];
-
-const NOTATIONS = ["auto", "scientific", "fixed"];
-const TRACES = ["Line", "Line + markers", "Scatter", "Step"];
-
-// Everything the Preferences dialog (and the Appearance menu) persists. Defaults
-// reproduce the app's prior behaviour so nothing changes until a user opts in.
-interface Prefs {
-  theme: Theme;
-  accent: Accent;
-  density: Density;
-  palette: string;
-  reduceMotion: boolean;
-  wheelZoom: boolean;
-  defaultTrace: string;
-  defaultLineWidth: number;
-  defaultGrid: boolean;
-  antialias: boolean;
-  sigFigs: number;
-  notation: Notation;
-  confirmRemove: boolean;
-  excludedDisplay: ExcludedDisplay;
-  originBookClickOpens: OriginBookClickOpens;
-}
-
-const ORIGIN_BOOK_CLICK_OPENS = ["worksheet", "plot"];
-
-const PREF_DEFAULTS: Prefs = {
-  theme: "dark",
-  accent: "violet",
-  density: "regular",
-  palette: "default",
-  reduceMotion: false,
-  wheelZoom: true,
-  defaultTrace: "Line",
-  defaultLineWidth: 1.5,
-  defaultGrid: true,
-  antialias: true,
-  sigFigs: 6,
-  notation: "auto",
-  confirmRemove: false,
-  excludedDisplay: "hide",
-  originBookClickOpens: "worksheet",
-};
-
-function loadPrefs(): Prefs {
-  const fb = PREF_DEFAULTS;
-  try {
-    const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") as Record<string, unknown>;
-    const bool = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
-    const num = (v: unknown, d: number, lo: number, hi: number) =>
-      typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
-    return {
-      theme: THEMES.includes(p.theme as string) ? (p.theme as Theme) : fb.theme,
-      accent: ACCENTS.includes(p.accent as string) ? (p.accent as Accent) : fb.accent,
-      density: DENSITIES.includes(p.density as string) ? (p.density as Density) : fb.density,
-      palette: normalizePalette(p.palette),
-      reduceMotion: bool(p.reduceMotion, fb.reduceMotion),
-      wheelZoom: bool(p.wheelZoom, fb.wheelZoom),
-      defaultTrace: TRACES.includes(p.defaultTrace as string) ? (p.defaultTrace as string) : fb.defaultTrace,
-      defaultLineWidth: num(p.defaultLineWidth, fb.defaultLineWidth, 0.5, 4),
-      defaultGrid: bool(p.defaultGrid, fb.defaultGrid),
-      antialias: bool(p.antialias, fb.antialias),
-      sigFigs: num(p.sigFigs, fb.sigFigs, 1, 12),
-      notation: NOTATIONS.includes(p.notation as string) ? (p.notation as Notation) : fb.notation,
-      confirmRemove: bool(p.confirmRemove, fb.confirmRemove),
-      excludedDisplay: p.excludedDisplay === "grey" ? "grey" : fb.excludedDisplay,
-      originBookClickOpens: ORIGIN_BOOK_CLICK_OPENS.includes(p.originBookClickOpens as string)
-        ? (p.originBookClickOpens as OriginBookClickOpens)
-        : fb.originBookClickOpens,
-    };
-  } catch {
-    return fb;
-  }
-}
-
-/** Snapshot the pref fields out of the store state. */
-function prefsOf(s: AppState): Prefs {
-  return {
-    theme: s.theme,
-    accent: s.accent,
-    density: s.density,
-    palette: s.palette,
-    reduceMotion: s.reduceMotion,
-    wheelZoom: s.wheelZoom,
-    defaultTrace: s.defaultTrace,
-    defaultLineWidth: s.defaultLineWidth,
-    defaultGrid: s.defaultGrid,
-    antialias: s.antialias,
-    sigFigs: s.sigFigs,
-    notation: s.notation,
-    confirmRemove: s.confirmRemove,
-    excludedDisplay: s.excludedDisplay,
-    originBookClickOpens: s.originBookClickOpens,
-  };
-}
-
-/** Apply appearance prefs to <html> + the number formatter, then persist all
- *  prefs. Called on load and after every pref change (token system keys off the
- *  data-* attributes; data-reduce-motion drives the motion-killing rule). */
-function syncPrefs(s: AppState): void {
-  applyPalette(s.palette);
-  const el = document.documentElement;
-  el.dataset.theme = s.theme;
-  el.dataset.accent = s.accent;
-  el.dataset.density = s.density;
-  if (s.reduceMotion) el.dataset.reduceMotion = "";
-  else delete el.dataset.reduceMotion;
-  setFormatOpts(s.sigFigs, s.notation);
-  try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefsOf(s)));
-  } catch {
-    /* storage unavailable (private mode) — non-fatal */
-  }
-}
-
+// Appearance/behaviour prefs persistence (the `qz.prefs` blob) lives in
+// store/prefs.ts (store-size ratchet, #54) — `loadPrefs`/`syncPrefs` imported
+// above; `defaultPanelFit` (#54) rides the same mechanism as `defaultGrid`.
 const _initialPrefs = loadPrefs();
 
 // Origin figures apply boxed + gridless (item 4; grid undecodable) — Origin's clean look, ticks still draw, user re-enables.
@@ -1081,6 +973,7 @@ export const useApp = create<AppState>((set, get) => ({
   sigFigs: _initialPrefs.sigFigs,
   notation: _initialPrefs.notation,
   confirmRemove: _initialPrefs.confirmRemove,
+  defaultPanelFit: _initialPrefs.defaultPanelFit,
   prefsOpen: false,
   yScale: "linear",
   xScale: "linear",
@@ -1092,6 +985,7 @@ export const useApp = create<AppState>((set, get) => ({
   plotTemplate: "screen",
   showAxisBox: false,
   stackMode: false,
+  panelFit: "frames",
   spatialPanels: null,
   facetPanels: null,
   breakPanels: null,
@@ -1653,6 +1547,10 @@ export const useApp = create<AppState>((set, get) => ({
           spatialPanels: placed,
           facetPanels: null,
           breakPanels: null,
+          // #54: a fresh apply starts at the app-wide default fit (Preferences
+          // ▸ Plot ▸ Multi-panel fit) — aspect-preserving unless the user set
+          // fill. The per-window value then persists in `.dwk`.
+          panelFit: get().defaultPanelFit,
           ...ORIGIN_FIGURE_AXIS,
           // Region bands are single-plot overlays; a spatial multi-panel
           // apply clears any prior figure's bands (no per-panel shade
@@ -2547,6 +2445,10 @@ export const useApp = create<AppState>((set, get) => ({
   // is what the user asked for, never a stale spatial/facet grid.
   setStackMode: (stackMode) =>
     set({ stackMode, spatialPanels: null, facetPanels: null, breakPanels: null }),
+  // #54: the spatial multi-panel fit mode (PlotView field). `cyclePanelFit`
+  // advances frames<->window until a page model exists (Stage 2 opens page).
+  setPanelFit: (panelFit) => set({ panelFit }),
+  cyclePanelFit: () => set((s) => ({ panelFit: nextPanelFit(s.panelFit, false) })),
   setInsetMode: (insetMode) => set({ insetMode }),
   setPolarMode: (polarMode) => set({ polarMode }),
   setStatMode: (statMode) => set({ statMode }),

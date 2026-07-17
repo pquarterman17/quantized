@@ -162,6 +162,13 @@ export default function PreferencesDialog() {
                 <PrefRow label="Grid lines" hint="default for the plot">
                   <Switch checked={p.defaultGrid} onChange={(v) => setPref("defaultGrid", v)} />
                 </PrefRow>
+                <PrefRow label="Multi-panel fit" hint="fresh Origin multi-panel figures">
+                  <SegmentedControl
+                    options={["Aspect", "Fill"]}
+                    value={p.defaultPanelFit === "window" ? "Fill" : "Aspect"}
+                    onChange={(v) => setPref("defaultPanelFit", v === "Fill" ? "window" : "frames")}
+                  />
+                </PrefRow>
                 <PrefRow label="Excluded rows" hint="filtered / excluded points on the plot">
                   <SegmentedControl
                     options={["Hide", "Grey"]}

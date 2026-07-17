@@ -81,6 +81,8 @@ export default function MultiPanelStage() {
   const plotTool = useApp((s) => s.plotTool);
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
+  const panelFit = useApp((s) => s.panelFit);
+  const setPanelFit = useApp((s) => s.setPanelFit);
   const ensureBookData = useApp((s) => s.ensureBookData);
   const { hostRef, hostStyle, readout, tool } = useMultiPanelStage({
     active,
@@ -88,6 +90,7 @@ export default function MultiPanelStage() {
     spatialPanels,
     facetPanels,
     breakPanels,
+    panelFit,
     yScale,
     xScale,
     xLim,
@@ -124,6 +127,27 @@ export default function MultiPanelStage() {
         >
           ▤
         </button>
+        {/* #54: spatial multi-panel fit — aspect-preserving letterbox vs fill.
+            Only shown for a decoded spatial arrangement (the only mode that
+            reads panelFit); the plain stack / facet / break modes ignore it. */}
+        {spatialPanels && (
+          <>
+            <button
+              className={`qzk-tool-btn${panelFit === "frames" ? " active" : ""}`}
+              title="Fit: preserve the figure's aspect ratio (letterbox)"
+              onClick={() => setPanelFit("frames")}
+            >
+              ▭
+            </button>
+            <button
+              className={`qzk-tool-btn${panelFit === "window" ? " active" : ""}`}
+              title="Fill: stretch the panels to fill the window"
+              onClick={() => setPanelFit("window")}
+            >
+              ⛶
+            </button>
+          </>
+        )}
       </div>
       {tool === "cursor" && readout && (
         <div className="qzk-glass qzk-readout">
