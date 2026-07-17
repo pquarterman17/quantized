@@ -89,6 +89,17 @@ export interface PlotView {
    *  keeps the corner-preset behaviour untouched — an Origin-imported
    *  position stays a `legendPos` corner, never this. */
   legendXY: [number, number] | null;
+  /** Static legend mode (decode #52): when true the legend renders as a clean,
+   *  read-only Origin-style block — no reorder arrows, no click-to-hide /
+   *  double-click-rename / drag / context-menu row chrome, and hidden channels
+   *  are SKIPPED entirely (not shown greyed). The box stays draggable in
+   *  pointer mode. `applyOriginFigure` sets it true; a plot menu toggle flips
+   *  it back. Default false = the full interactive legend, unchanged. */
+  legendStatic: boolean;
+  /** Legend TITLE header text (decode #52) — Origin's bold legend header,
+   *  drawn above the entries in the static legend. Set from
+   *  `OriginFigure.legend_title` by `applyOriginFigure`; null = no title. */
+  legendTitle: string | null;
   /** Per-axis title drag offsets (CSS px). Nudges an axis title clear of long
    *  tick labels; absent axes sit at default. Persisted like `legendXY`. */
   axisLabelOffsets: AxisLabelOffsets;
@@ -143,6 +154,8 @@ export function defaultPlotView(): PlotView {
     showLegend: true,
     legendPos: "ne",
     legendXY: null,
+    legendStatic: false,
+    legendTitle: null,
     axisLabelOffsets: {},
     axisLabelStyles: {},
     plotTemplate: "screen",
@@ -589,6 +602,8 @@ function sanitizeView(v: unknown): PlotView {
     showLegend: boolOrDefault(o.showLegend, fb.showLegend),
     legendPos: LEGEND_POS.includes(o.legendPos as LegendPos) ? (o.legendPos as LegendPos) : fb.legendPos,
     legendXY: legendXYOrNull(o.legendXY),
+    legendStatic: boolOrDefault(o.legendStatic, fb.legendStatic),
+    legendTitle: typeof o.legendTitle === "string" ? o.legendTitle : null,
     axisLabelOffsets: axisLabelOffsetsOrDefault(o.axisLabelOffsets),
     axisLabelStyles: axisLabelStylesOrDefault(o.axisLabelStyles),
     plotTemplate: strOrDefault(o.plotTemplate, fb.plotTemplate),

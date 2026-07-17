@@ -1752,6 +1752,23 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(s.showGrid).toBe(false);
   });
 
+  it("applies the static legend + decoded legend title (decode #52)", () => {
+    useApp.setState({
+      originFigures: [{ ...figureEntry, figure: { ...figureEntry.figure, legend_title: "Nb/Au" } }],
+    });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    const s = useApp.getState();
+    expect(s.legendStatic).toBe(true);
+    expect(s.legendTitle).toBe("Nb/Au");
+  });
+
+  it("clears a stale legend title when the applied figure has none", () => {
+    useApp.setState({ legendTitle: "Old title" });
+    useApp.getState().applyOriginFigure("fig-XRD-0"); // figureEntry carries no legend_title
+    expect(useApp.getState().legendStatic).toBe(true);
+    expect(useApp.getState().legendTitle).toBeNull();
+  });
+
   it("resolves every pending cross-book source before materializing an overlay (#48)", async () => {
     const preview = (book: string): DataStruct => ({
       time: [0],

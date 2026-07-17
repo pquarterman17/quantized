@@ -85,6 +85,36 @@ export function originLegendPos(
   return `${fy >= 0.5 ? "n" : "s"}${fx >= 0.5 ? "e" : "w"}` as "ne" | "nw" | "se" | "sw";
 }
 
+/** The legend state `applyOriginFigure` pins for a figure (decode #52): the
+ *  decoded legend-box corner preset (only when the position decoded — never
+ *  guessed) PLUS the decoded legend title header. `legendTitle` is ALWAYS
+ *  present (null when the figure has no title) so re-applying / switching
+ *  figures clears a previous figure's stale title. Spread into the apply
+ *  `set({...})` in place of the bare `legendPos` conditional — one call site
+ *  per apply branch, so the two coupled legend fields never drift apart. */
+export function originLegendState(
+  fig: Parameters<typeof originLegendPos>[0] & Pick<OriginFigure, "legend_title">,
+): { legendPos?: "ne" | "nw" | "se" | "sw"; legendTitle: string | null } {
+  const pos = originLegendPos(fig);
+  return {
+    ...(pos ? { legendPos: pos } : {}),
+    legendTitle: fig.legend_title ? fig.legend_title : null,
+  };
+}
+
+/** The channel-selection slice of a single-layer apply's plot state — the
+ *  `xKey`/`yKeys`/style/label fields when `figureChannelSelection` resolved a
+ *  selection, or `{}` (leave the default view) when it didn't. Extracted from
+ *  `applyOriginFigure`'s single-layer branch so the store stays under its
+ *  size ratchet; pure and independently testable. */
+export function figureSelectionState(
+  sel: ReturnType<typeof figureChannelSelection>,
+): { xKey?: number | null; yKeys?: number[]; seriesStyles?: Record<number, SeriesStyle>; seriesLabels?: Record<number, string> } {
+  return sel
+    ? { xKey: sel.xKey, yKeys: sel.yKeys, seriesStyles: sel.styles, seriesLabels: sel.labels }
+    : {};
+}
+
 // A leading swatch marker Origin's own legend text carries per curve
 // (`\l(n)`) — our legend already draws its own colour/marker swatch, so this
 // code (plus any whitespace right after it) is always dropped, never shown.

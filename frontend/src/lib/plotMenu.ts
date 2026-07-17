@@ -41,6 +41,8 @@ export interface PlotMenuContext {
   showGrid: boolean;
   showLegend: boolean;
   legendPos: LegendCorner;
+  /** Static (Origin) legend mode — clean read-only block (decode #52). */
+  legendStatic: boolean;
 
   // ── series actions (existing store actions) ──
   setColor: (channel: number, color: string) => void;
@@ -67,6 +69,7 @@ export interface PlotMenuContext {
   setShowGrid: (v: boolean) => void;
   setShowLegend: (v: boolean) => void;
   setLegendPos: (pos: LegendCorner) => void;
+  setLegendStatic: (v: boolean) => void;
   resetView: () => void;
   copyImage: () => void;
   savePng: () => void;
@@ -213,6 +216,9 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     label: "Legend",
     submenu: [
       { label: ctx.showLegend ? "Hide legend" : "Show legend", run: () => ctx.setShowLegend(!ctx.showLegend), checked: ctx.showLegend },
+      // decode #52: a clean read-only block (Origin apply) vs the full
+      // interactive legend; the user flips it back after an Origin apply.
+      { label: "Static (Origin) legend", run: () => ctx.setLegendStatic(!ctx.legendStatic), checked: ctx.legendStatic, disabled: !ctx.showLegend },
       { separator: true },
       ...LEGEND_OPTS.map((o) => ({
         label: o.label,

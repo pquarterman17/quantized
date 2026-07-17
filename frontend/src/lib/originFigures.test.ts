@@ -8,9 +8,11 @@ import {
   figureFrameY2Pairs,
   figureLabel,
   figureLayerFamily,
+  figureSelectionState,
   originCurveSeriesStyle,
   originFigureAnnotations,
   originLegendPos,
+  originLegendState,
   originRegionShades,
   type OriginFigureEntry,
   resolveFigureDataset,
@@ -1009,6 +1011,40 @@ describe("originLegendPos", () => {
     expect(
       originLegendPos({ ...base, x_from: 5, x_to: 5, legend_pos: { x: 5, y: 50 } }),
     ).toBeNull();
+  });
+});
+
+describe("originLegendState (decode #52)", () => {
+  const base = { x_from: 0, x_to: 10, x_log: false, y_from: 0, y_to: 100, y_log: false };
+
+  it("carries the decoded corner AND the legend title together", () => {
+    expect(originLegendState({ ...base, legend_pos: { x: 8, y: 90 }, legend_title: "Nb/Au" })).toEqual({
+      legendPos: "ne",
+      legendTitle: "Nb/Au",
+    });
+  });
+
+  it("always sets legendTitle (null when none) so a stale title is cleared on re-apply", () => {
+    expect(originLegendState({ ...base, legend_pos: { x: 1, y: 10 } })).toEqual({
+      legendPos: "sw",
+      legendTitle: null,
+    });
+    // No decoded position -> legendPos omitted (never guessed), title still present.
+    expect(originLegendState({ ...base, legend_title: "S" })).toEqual({ legendTitle: "S" });
+    expect(originLegendState({ ...base })).toEqual({ legendTitle: null });
+  });
+});
+
+describe("figureSelectionState (decode #52 — store-ratchet extraction)", () => {
+  it("spreads the channel selection when present, or {} to leave the default view", () => {
+    const sel = { xKey: 0, yKeys: [1, 2], styles: { 1: { color: "#111" } }, labels: { 1: "L" }, errKeys: {}, hiddenChannels: [] };
+    expect(figureSelectionState(sel)).toEqual({
+      xKey: 0,
+      yKeys: [1, 2],
+      seriesStyles: { 1: { color: "#111" } },
+      seriesLabels: { 1: "L" },
+    });
+    expect(figureSelectionState(null)).toEqual({});
   });
 });
 

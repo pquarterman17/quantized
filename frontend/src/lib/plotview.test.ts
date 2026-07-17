@@ -218,6 +218,34 @@ describe("sanitizeView — legendXY (MAIN #18 — free legend position)", () => 
   });
 });
 
+describe("sanitizeView — legendStatic / legendTitle (decode #52)", () => {
+  it("defaults OFF so a non-Origin view behaves exactly as before", () => {
+    const v = defaultPlotView();
+    expect(v.legendStatic).toBe(false);
+    expect(v.legendTitle).toBeNull();
+  });
+
+  it("round-trips the static flag + title through a persisted .dwk view", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), legendStatic: true, legendTitle: "Nb/Au" } as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.legendStatic).toBe(true);
+    expect(out[0].view.legendTitle).toBe("Nb/Au");
+  });
+
+  it("coerces malformed persisted values to the safe defaults", () => {
+    const out = sanitizePlotWindows(
+      [win({
+        view: { ...defaultPlotView(), legendStatic: "yes", legendTitle: 42 } as unknown as PlotView,
+      })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.legendStatic).toBe(false); // non-bool -> default false
+    expect(out[0].view.legendTitle).toBeNull(); // non-string -> null
+  });
+});
+
 describe("sanitizeView — annotations (MAIN #21 — page/data anchor)", () => {
   it("round-trips a data-anchored annotation (anchor absent) unchanged", () => {
     const out = sanitizePlotWindows(

@@ -67,6 +67,13 @@ export default function PlotLegend({
   const legendXY = useApp((s) => s.legendXY);
   const setLegendXY = useApp((s) => s.setLegendXY);
   const setLegendPos = useApp((s) => s.setLegendPos);
+  // Static mode (decode #52): an applied Origin figure renders a clean,
+  // read-only legend — no reorder arrows, no row click/dblclick/drag/context
+  // handlers, hidden channels omitted (not greyed) — plus an optional bold
+  // title header. The BOX itself stays draggable (still Origin-like). Default
+  // false keeps the full interactive legend for every ordinary plot.
+  const legendStatic = useApp((s) => s.legendStatic);
+  const legendTitle = useApp((s) => s.legendTitle);
   const tool = useApp((s) => s.plotTool);
   const [editing, setEditing] = useState<{ channel: number; value: string } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; channel: number; i: number } | null>(null);
@@ -160,6 +167,13 @@ export default function PlotLegend({
       onDoubleClick={onBoxDoubleClick}
       title={tool === "pointer" ? "Drag to move · double-click to reset to a corner" : undefined}
     >
+      {/* Decode #52: Origin's bold legend title header, drawn above the
+          entries in static mode (rich-text so `\g(q)`→θ etc. render). */}
+      {legendStatic && legendTitle ? (
+        <div className="it qzk-legend-title" style={{ fontWeight: 700 }}>
+          <RichText text={legendTitle} />
+        </div>
+      ) : null}
       {series.map((s, i) => {
         // Keep the CSS token for default series (re-themes); use the resolved
         // override color when one is set, so the legend matches the line. A
@@ -179,6 +193,10 @@ export default function PlotLegend({
         const isChannel = i < plotted.length;
         const channel = isChannel ? plotted[i] : -1;
         const isHidden = hidden?.[i] ?? false;
+        // Static (Origin) legend: omit hidden channels entirely rather than
+        // showing them greyed + struck through — Origin's legend never lists
+        // the error/secondary-X columns it doesn't draw (decode #52).
+        if (legendStatic && isHidden) return null;
         const visibleCount = plotted.filter((c) => !hiddenChannels.includes(c)).length;
         const text = isChannel ? (seriesLabels[channel] ?? defaultLabel(s)) : defaultLabel(s);
 
@@ -203,13 +221,17 @@ export default function PlotLegend({
           );
         }
 
-        const onClick = isChannel
+        // Static mode strips ALL per-row interactivity (decode #52): the
+        // legend is a faithful read-only Origin block. `interactive` gates
+        // every handler + the reorder arrows below in one place.
+        const interactive = isChannel && !legendStatic;
+        const onClick = interactive
           ? () => {
               if (!isHidden && visibleCount <= 1) return;
               toggleHidden(channel);
             }
           : undefined;
-        const draggable = isChannel && !!active;
+        const draggable = interactive && !!active;
         return (
           <div
             className="it"
@@ -228,10 +250,10 @@ export default function PlotLegend({
             }
             onClick={onClick}
             onDoubleClick={
-              isChannel ? () => setEditing({ channel, value: seriesLabels[channel] ?? "" }) : undefined
+              interactive ? () => setEditing({ channel, value: seriesLabels[channel] ?? "" }) : undefined
             }
             onContextMenu={
-              isChannel
+              interactive
                 ? (e) => {
                     e.preventDefault();
                     e.stopPropagation(); // don't fall through to the stage axes menu
@@ -240,7 +262,7 @@ export default function PlotLegend({
                 : undefined
             }
             title={
-              isChannel
+              interactive
                 ? "Click to hide/show · double-click to rename · drag onto an axis band · right-click for more"
                 : undefined
             }
@@ -252,7 +274,7 @@ export default function PlotLegend({
             <LegendSample color={swatch} style={styleList?.[i]} defaultTrace={defaultTrace} />
             {/* Rich-text rename support (GOTO #5): `$...$` renders as math. */}
             <RichText text={text} />
-            {isChannel && plotted.length > 1 && (
+            {interactive && plotted.length > 1 && (
               <span style={{ marginLeft: 6, display: "inline-flex", gap: 2 }}>
                 <button
                   className="qz-icon-btn"

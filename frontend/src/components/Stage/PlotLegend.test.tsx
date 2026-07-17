@@ -27,6 +27,8 @@ beforeEach(() => {
     y2Keys: null,
     legendPos: "ne",
     legendXY: null,
+    legendStatic: false,
+    legendTitle: null,
     plotTool: "pointer",
   });
 });
@@ -138,6 +140,61 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     const el = container.querySelector(".qzk-legend") as HTMLElement;
     fireEvent.doubleClick(el);
     expect(useApp.getState().legendPos).toBe("sw"); // untouched — nothing to reset
+  });
+});
+
+describe("PlotLegend static mode (decode #52 — applied Origin figure)", () => {
+  it("renders no reorder arrows and no per-row handlers", () => {
+    useApp.setState({ legendStatic: true, datasets: [{ id: "d1", name: "run", data: DATA }], activeId: "d1" });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    // No ▲▼ reorder buttons.
+    expect(container.querySelectorAll(".qzk-legend .it button").length).toBe(0);
+    const row = container.querySelector(".qzk-legend .it") as HTMLElement;
+    // Not draggable, no hover-hint title.
+    expect(row).toHaveAttribute("draggable", "false");
+    expect(row).not.toHaveAttribute("title");
+    // Clicking a row does NOT toggle visibility (no interactive handler).
+    fireEvent.click(row);
+    expect(useApp.getState().hiddenChannels).toEqual([]);
+  });
+
+  it("omits hidden channels entirely rather than showing them greyed", () => {
+    useApp.setState({ legendStatic: true });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[true, false]} />);
+    const rows = container.querySelectorAll(".qzk-legend .it");
+    expect(rows.length).toBe(1); // the hidden row is skipped, not struck through
+    expect(rows[0].textContent).toContain("B");
+  });
+
+  it("renders the legend title header when set", () => {
+    useApp.setState({ legendStatic: true, legendTitle: "Nb/Au" });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    const title = container.querySelector(".qzk-legend-title");
+    expect(title).not.toBeNull();
+    expect(title?.textContent).toContain("Nb/Au");
+  });
+
+  it("does not render a title header without legendStatic, or without a title", () => {
+    useApp.setState({ legendStatic: false, legendTitle: "Nb/Au" });
+    const a = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    expect(a.container.querySelector(".qzk-legend-title")).toBeNull();
+    useApp.setState({ legendStatic: true, legendTitle: null });
+    const b = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    expect(b.container.querySelector(".qzk-legend-title")).toBeNull();
+  });
+
+  it("keeps the box draggable in pointer mode even when static", () => {
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => { cb(0); return 0; });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    useApp.setState({ legendStatic: true });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    setParentRect(container, { width: 200, height: 100 });
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    fireEvent.mouseDown(el, { clientX: 50, clientY: 50, button: 0 });
+    fireEvent.mouseMove(document, { clientX: 100, clientY: 80 });
+    fireEvent.mouseUp(document, { clientX: 100, clientY: 80 });
+    expect(useApp.getState().legendXY).toEqual([0.5, 0.8]);
+    vi.unstubAllGlobals();
   });
 });
 

@@ -203,6 +203,14 @@ export interface OriginFigure {
    *  only — see its doc) and the cross-book overlay (`buildOverlayDataset`/
    *  `overlayCurveLabels`). */
   legend_labels?: string[];
+  /** The Legend object's own TITLE — its non-swatch header line(s) (decode
+   *  #52; `io/origin_project/figure_text._parse_legend_title`). "" / absent =
+   *  the legend carries no title line. Strictly the Legend object's OWN text,
+   *  never a nearby floating `Text` annotation (those stay in
+   *  `annotation_marks` at their own decoded position). `applyOriginFigure`
+   *  threads it to `PlotView.legendTitle`; the static legend draws it as a
+   *  bold header. */
+  legend_title?: string;
   /** Origin's decoded major-tick increment for this axis
    *  (`io/origin_project/figures.py`/`figures_opju.py`, oracle-verified). On a
    *  LOG axis this is a LINEAR value step, not a log10/decade multiplier

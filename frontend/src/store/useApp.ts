@@ -47,8 +47,9 @@ import {
   figureChannelSelection,
   figureLabel,
   figureLayerFamily,
+  figureSelectionState,
   originFigureAnnotations,
-  originLegendPos,
+  originLegendState,
   originRegionShades,
   resolveSpatialPanels,
 } from "../lib/originFigures";
@@ -387,6 +388,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   showGrid: boolean; // draw the plot grid lines
   showLegend: boolean; // show the floating legend overlay
   legendPos: LegendPos; // which corner the floating legend pins to
+  legendStatic: boolean; // clean read-only legend (Origin apply, decode #52)
+  legendTitle: string | null; // legend header text (Origin apply, decode #52)
   plotTemplate: string; // on-screen publication template (base font + line width)
   showAxisBox: boolean; // draw a full frame around the plot area
   stackMode: boolean; // multi-panel: one stacked sub-plot per channel
@@ -746,6 +749,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setShowGrid: (showGrid: boolean) => void;
   setShowLegend: (showLegend: boolean) => void;
   setLegendPos: (pos: LegendPos) => void;
+  setLegendStatic: (v: boolean) => void;
   setPlotTemplate: (template: string) => void;
   setShowAxisBox: (show: boolean) => void;
   setStackMode: (stackMode: boolean) => void;
@@ -1028,7 +1032,9 @@ function syncPrefs(s: AppState): void {
 const _initialPrefs = loadPrefs();
 
 // Origin figures apply boxed + gridless (item 4; grid undecodable) — Origin's clean look, ticks still draw, user re-enables.
-const ORIGIN_FIGURE_AXIS = { showAxisBox: true, showGrid: false };
+// Origin figures apply gridless + boxed + a clean read-only legend (decode
+// #52); every apply branch spreads this, so `legendStatic` costs zero lines.
+const ORIGIN_FIGURE_AXIS = { showAxisBox: true, showGrid: false, legendStatic: true };
 
 export const useApp = create<AppState>((set, get) => ({
   // Composed slices (each in its own file): windows #2, history #9, reimport
@@ -1081,6 +1087,8 @@ export const useApp = create<AppState>((set, get) => ({
   showGrid: _initialPrefs.defaultGrid,
   showLegend: true,
   legendPos: "ne",
+  legendStatic: false,
+  legendTitle: null,
   plotTemplate: "screen",
   showAxisBox: false,
   stackMode: false,
@@ -1554,9 +1562,9 @@ export const useApp = create<AppState>((set, get) => ({
           // Decoded Rect* region bands (item 41) — REPLACE, same lifecycle
           // as annotations (figures without shades clear the plot's bands).
           regionShades: originRegionShades([fig], entry.id),
-          // Origin's legend placement -> nearest corner preset (decoded box
-          // top-left; only when the position decoded, never guessed).
-          ...(originLegendPos(fig) ? { legendPos: originLegendPos(fig)! } : {}),
+          // Origin's legend placement -> nearest corner preset + decoded title
+          // header (decode #52; position only when decoded, never guessed).
+          ...originLegendState(fig),
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         return;
@@ -1611,9 +1619,7 @@ export const useApp = create<AppState>((set, get) => ({
           annotations: originFigureAnnotations([lower.figure, upper.figure], entry.id, [0, 1]),
           // Both layers' region bands, the upper layer's tagged to y2 (item 41).
           regionShades: originRegionShades([lower.figure, upper.figure], entry.id, [0, 1]),
-          ...(originLegendPos(lower.figure)
-            ? { legendPos: originLegendPos(lower.figure)! }
-            : {}),
+          ...originLegendState(lower.figure),
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
         return;
@@ -1685,15 +1691,8 @@ export const useApp = create<AppState>((set, get) => ({
       // Pin the figure's decoded floating text; REPLACE, never stack.
       annotations: originFigureAnnotations([fig], entry.id),
       regionShades: originRegionShades([fig], entry.id),
-      ...(originLegendPos(fig) ? { legendPos: originLegendPos(fig)! } : {}),
-      ...(selection
-        ? {
-            xKey: selection.xKey,
-            yKeys: selection.yKeys,
-            seriesStyles: selection.styles,
-            seriesLabels: selection.labels,
-          }
-        : {}),
+      ...originLegendState(fig),
+      ...figureSelectionState(selection),
     });
     get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
   },
@@ -2539,6 +2538,7 @@ export const useApp = create<AppState>((set, get) => ({
   setShowGrid: (showGrid) => set({ showGrid }),
   setShowLegend: (showLegend) => set({ showLegend }),
   setLegendPos: (legendPos) => set({ legendPos }),
+  setLegendStatic: (legendStatic) => set({ legendStatic }),
   setPlotTemplate: (plotTemplate) => set({ plotTemplate }),
   setShowAxisBox: (showAxisBox) => set({ showAxisBox }),
   // A manual toggle (on OR off) always drops any spatial arrangement from a
