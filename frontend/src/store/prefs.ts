@@ -144,3 +144,43 @@ export function syncPrefs(s: AppState): void {
     /* storage unavailable (private mode) — non-fatal */
   }
 }
+
+// ── Plot toolbar display prefs (GUI_INTERACTION_PLAN #7) ───────────────────
+// A tiny, store-INDEPENDENT localStorage blob for toolbar-only UI state
+// (currently: whether the named-group captions are shown). Deliberately NOT
+// folded into the Prefs/AppState above: useApp.ts sits at its store-size
+// ratchet ceiling (3240/3240, zero headroom — see architecture.test.ts), so
+// PlotToolbar reads/writes this directly via useState + these two functions
+// instead of routing through a new store field. Same guarded-parse/try-catch
+// discipline as loadPrefs/syncPrefs, own localStorage key.
+const TOOLBAR_PREFS_KEY = "qz.toolbarPrefs";
+
+export interface ToolbarPrefs {
+  /** Show the small uppercase group captions (Navigate/Inspect/Analyze/...)
+   *  above the plot toolbar's button clusters. Default true — visible out of
+   *  the box, since default legibility is the point of #7; toggle off from
+   *  the toolbar's own "..." flyout once the icon layout is familiar. */
+  showGroupLabels: boolean;
+}
+
+export const TOOLBAR_PREF_DEFAULTS: ToolbarPrefs = { showGroupLabels: true };
+
+export function loadToolbarPrefs(): ToolbarPrefs {
+  try {
+    const p = JSON.parse(localStorage.getItem(TOOLBAR_PREFS_KEY) ?? "{}") as Record<string, unknown>;
+    return {
+      showGroupLabels:
+        typeof p.showGroupLabels === "boolean" ? p.showGroupLabels : TOOLBAR_PREF_DEFAULTS.showGroupLabels,
+    };
+  } catch {
+    return TOOLBAR_PREF_DEFAULTS;
+  }
+}
+
+export function saveToolbarPrefs(p: ToolbarPrefs): void {
+  try {
+    localStorage.setItem(TOOLBAR_PREFS_KEY, JSON.stringify(p));
+  } catch {
+    /* storage unavailable (private mode) — non-fatal */
+  }
+}

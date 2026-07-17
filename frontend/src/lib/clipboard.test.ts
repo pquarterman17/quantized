@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { payloadToTSV, tableToTSV } from "./clipboard";
+import { clipboardImageSupported, payloadToTSV, tableToTSV } from "./clipboard";
 import type { PlotPayload } from "./plotdata";
 
 describe("payloadToTSV", () => {
@@ -78,5 +78,38 @@ describe("tableToTSV", () => {
 
   it("emits just the header for no rows", () => {
     expect(tableToTSV(["x", "y"], [])).toBe("x\ty");
+  });
+});
+
+describe("clipboardImageSupported", () => {
+  const originalClipboard = navigator.clipboard;
+  const originalClipboardItem = (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem;
+
+  afterEach(() => {
+    Object.defineProperty(navigator, "clipboard", { value: originalClipboard, configurable: true });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = originalClipboardItem;
+  });
+
+  it("is false in jsdom's default environment (no Clipboard image API)", () => {
+    // jsdom ships no navigator.clipboard at all — this is the real "Firefox /
+    // insecure context" case the toolbar's Copy Image button must disable for.
+    expect(clipboardImageSupported()).toBe(false);
+  });
+
+  it("is false when navigator.clipboard exists but lacks write()", () => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: async () => {} }, configurable: true });
+    expect(clipboardImageSupported()).toBe(false);
+  });
+
+  it("is false when write() exists but ClipboardItem is undefined", () => {
+    Object.defineProperty(navigator, "clipboard", { value: { write: async () => {} }, configurable: true });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = undefined;
+    expect(clipboardImageSupported()).toBe(false);
+  });
+
+  it("is true when both navigator.clipboard.write and ClipboardItem exist", () => {
+    Object.defineProperty(navigator, "clipboard", { value: { write: async () => {} }, configurable: true });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = class {};
+    expect(clipboardImageSupported()).toBe(true);
   });
 });

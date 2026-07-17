@@ -184,14 +184,17 @@
   animation: none;
 }
 
-/* ── hover tooltip (mounted at document body) ── */
+/* ── hover/focus tooltip (mounted at document body). GUI_INTERACTION_PLAN #7:
+   a bold name row (+ optional shortcut chip) and an optional one-line
+   behaviour description underneath — still a single-line pill when a caller
+   (e.g. MenuBar) only sets [data-tip]/[data-tip-key]. ── */
 .qz-tip {
   position: fixed;
   z-index: 2000;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 9px;
   background: var(--glass);
   backdrop-filter: blur(14px);
   border: 1px solid var(--glass-border);
@@ -202,6 +205,9 @@
   white-space: nowrap;
   pointer-events: none;
 }
+.qz-tip-head { display: flex; align-items: center; gap: 8px; }
+.qz-tip-name { font-weight: var(--weight-semibold); }
+.qz-tip-desc { color: var(--text-dim); white-space: normal; max-width: 220px; }
 .qz-tip-key {
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
