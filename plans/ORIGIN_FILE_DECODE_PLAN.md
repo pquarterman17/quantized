@@ -910,7 +910,7 @@ the shipped contract)
 
 ## Completed
 
-- ~~**58. Spatial multi-panel Origin legends**~~ (2026-07-17; PR pending) —
+- ~~**58. Spatial multi-panel Origin legends**~~ (2026-07-17; PR #56) —
   the spatial apply path already carried each layer's independently decoded
   `legend_labels`, curve styles, title, and frame position, but rendered no
   DOM legend at all. `SpatialPanel` now carries the proven title/position;
