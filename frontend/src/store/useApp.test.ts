@@ -1769,6 +1769,22 @@ describe("useApp applyOriginFigure (item 18)", () => {
     expect(useApp.getState().legendTitle).toBeNull();
   });
 
+  it("applies the faithful in-frame legend anchor (decode #52)", () => {
+    // legend_pos at x=59 (fx 0.5 in [18,100]) and y=1e3 (log half in [1,1e6],
+    // so fy 0.5 down from the top) -> box top-left at the frame centre.
+    useApp.setState({
+      originFigures: [{ ...figureEntry, figure: { ...figureEntry.figure, legend_pos: { x: 59, y: 1e3 } } }],
+    });
+    useApp.getState().applyOriginFigure("fig-XRD-0");
+    expect(useApp.getState().legendFrameXY).toEqual([0.5, 0.5]);
+  });
+
+  it("clears a stale frame anchor when the applied figure has no in-frame position", () => {
+    useApp.setState({ legendFrameXY: [0.3, 0.3] });
+    useApp.getState().applyOriginFigure("fig-XRD-0"); // figureEntry has no legend_pos
+    expect(useApp.getState().legendFrameXY).toBeNull();
+  });
+
   it("resolves every pending cross-book source before materializing an overlay (#48)", async () => {
     const preview = (book: string): DataStruct => ({
       time: [0],

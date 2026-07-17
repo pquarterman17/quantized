@@ -14,6 +14,7 @@ import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
 import type { PlotPayload } from "../../lib/plotdata";
+import { frameVarsPlugin } from "../../lib/uplotFrameVars";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 import type { Accent, AnchorEditBridge, PeakWizardEditBridge, Theme } from "../../store/useApp";
@@ -59,6 +60,12 @@ export interface PlotViewportProps
    *  snapshot/background windows) have title bars instead of docks and keep
    *  the default. */
   insetTop?: number;
+  /** Publish the plot-frame rect as CSS vars on the enclosing `.qzk-stage`
+   *  (decode #52), so a frame-anchored `PlotLegend` sibling can place itself
+   *  via calc(). Only the main interactive stage (PlotStage) mounts that
+   *  legend, so background / snapshot / panel windows leave this off (default)
+   *  and keep their plugin-free data pipeline. */
+  frameVars?: boolean;
 }
 
 /** The uPlot host + its create/resize/destroy effect. Renders a single
@@ -66,7 +73,7 @@ export interface PlotViewportProps
  *  every other Stage chrome (toolbar, legend, readouts, context menu) is a
  *  sibling owned by the caller. */
 export default function PlotViewport(props: PlotViewportProps) {
-  const { displayPayload, plotRef, theme, accent, peakWizardEdit, anchorEdit, syncKey, insetTop, ...args } =
+  const { displayPayload, plotRef, theme, accent, peakWizardEdit, anchorEdit, syncKey, insetTop, frameVars, ...args } =
     props;
   const hostRef = useRef<HTMLDivElement>(null);
 
@@ -101,6 +108,12 @@ export default function PlotViewport(props: PlotViewportProps) {
         onRemove: anchorEdit.removeAnchor,
       },
     });
+    // Frame-rect bridge (decode #52): publish the plotting-area rect as CSS
+    // vars on `.qzk-stage` so a frame-anchored PlotLegend can place itself via
+    // calc(). Patched post-buildOpts (like `syncKey`) and only for the main
+    // stage (`frameVars`) — background/snapshot/panel windows mount no legend,
+    // so they keep their plugin-free data pipeline.
+    if (frameVars) opts.plugins = [...(opts.plugins ?? []), frameVarsPlugin()];
     if (syncKey) {
       // Item 13 (cross-window link groups) — the MultiPanelStage sync idiom,
       // applied POST-buildOpts so no other buildOpts caller changes: cursor

@@ -89,6 +89,20 @@ export interface PlotView {
    *  keeps the corner-preset behaviour untouched — an Origin-imported
    *  position stays a `legendPos` corner, never this. */
   legendXY: [number, number] | null;
+  /** Frame-anchored legend position (decode #52): the legend box TOP-LEFT as
+   *  FRACTIONS of the plot FRAME (uPlot's plotting area, `u.over`), NOT of the
+   *  `.qzk-stage` container `legendXY` uses. Convention: `[fx, fy]` with fx
+   *  measured RIGHTWARD from the frame's left edge (0 = left, 1 = right) and
+   *  fy measured DOWNWARD from the frame's TOP edge (0 = top, 1 = bottom) —
+   *  identical in spirit to `legendXY` (top-origin), and identical to Origin's
+   *  own stored frame fraction (`frac_to_data`'s `frac_b` is "from the TOP"),
+   *  so no flip is needed at render. Origin legends are FRAME-anchored, so this
+   *  stays put through zoom/pan (unlike a data anchor). Set by
+   *  `applyOriginFigure` when Origin's decoded position is inside the frame;
+   *  WINS over `legendXY` and the corner `legendPos`. Dragging the box or a
+   *  reset clears it (one-way degrade → `legendXY`/corner). null = not
+   *  frame-anchored (the default; every non-Origin plot). */
+  legendFrameXY: [number, number] | null;
   /** Static legend mode (decode #52): when true the legend renders as a clean,
    *  read-only Origin-style block — no reorder arrows, no click-to-hide /
    *  double-click-rename / drag / context-menu row chrome, and hidden channels
@@ -154,6 +168,7 @@ export function defaultPlotView(): PlotView {
     showLegend: true,
     legendPos: "ne",
     legendXY: null,
+    legendFrameXY: null,
     legendStatic: false,
     legendTitle: null,
     axisLabelOffsets: {},
@@ -602,6 +617,8 @@ function sanitizeView(v: unknown): PlotView {
     showLegend: boolOrDefault(o.showLegend, fb.showLegend),
     legendPos: LEGEND_POS.includes(o.legendPos as LegendPos) ? (o.legendPos as LegendPos) : fb.legendPos,
     legendXY: legendXYOrNull(o.legendXY),
+    // Same fraction shape + clamp-not-drop convention as `legendXY` (decode #52).
+    legendFrameXY: legendXYOrNull(o.legendFrameXY),
     legendStatic: boolOrDefault(o.legendStatic, fb.legendStatic),
     legendTitle: typeof o.legendTitle === "string" ? o.legendTitle : null,
     axisLabelOffsets: axisLabelOffsetsOrDefault(o.axisLabelOffsets),

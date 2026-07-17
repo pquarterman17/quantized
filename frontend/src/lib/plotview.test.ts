@@ -218,6 +218,35 @@ describe("sanitizeView — legendXY (MAIN #18 — free legend position)", () => 
   });
 });
 
+describe("sanitizeView — legendFrameXY (decode #52 — frame anchor)", () => {
+  it("defaults to null so a non-Origin view behaves exactly as before", () => {
+    expect(defaultPlotView().legendFrameXY).toBeNull();
+  });
+
+  it("round-trips a frame-anchor fraction through a persisted .dwk view", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), legendFrameXY: [0.2, 0.8] } as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.legendFrameXY).toEqual([0.2, 0.8]);
+  });
+
+  it("clamps / nulls malformed persisted values like legendXY", () => {
+    const clamped = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), legendFrameXY: [-0.5, 1.5] } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(clamped[0].view.legendFrameXY).toEqual([0, 1]);
+    for (const bad of [null, "sw", [0.5], [0.5, NaN]]) {
+      const out = sanitizePlotWindows(
+        [win({ view: { ...defaultPlotView(), legendFrameXY: bad } as unknown as PlotView })],
+        new Set(["d1"]),
+      );
+      expect(out[0].view.legendFrameXY).toBeNull();
+    }
+  });
+});
+
 describe("sanitizeView — legendStatic / legendTitle (decode #52)", () => {
   it("defaults OFF so a non-Origin view behaves exactly as before", () => {
     const v = defaultPlotView();

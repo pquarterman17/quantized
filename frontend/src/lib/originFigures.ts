@@ -85,20 +85,51 @@ export function originLegendPos(
   return `${fy >= 0.5 ? "n" : "s"}${fx >= 0.5 ? "e" : "w"}` as "ne" | "nw" | "se" | "sw";
 }
 
+/** Origin's decoded legend-box TOP-LEFT as a fraction of the plot FRAME
+ *  (decode #52) — the faithful FRAME-anchored placement Origin actually draws,
+ *  which corner-snap (`originLegendPos`) loses. Returns `[fx, fy]` with fx
+ *  rightward from the left edge and fy DOWNWARD from the TOP edge (see
+ *  `PlotView.legendFrameXY`). This is the exact inverse of the backend decode:
+ *  `legend_pos` came from `frac_to_data(fracs, axes)` (annotation_marks.py), so
+ *  `axisFraction` recovers the original stored frame fraction — `fx` directly,
+ *  and `fy = 1 - axisFraction_y` because `axisFraction` measures UP from the
+ *  bottom while the stored fraction (and our convention) measures DOWN from the
+ *  top. Returns null when no position decoded, the range is degenerate, OR the
+ *  box top-left lands OUTSIDE the frame ([0, 1]²): an out-of-frame decode is
+ *  left to the corner-snap `legendPos` fallback rather than clamp-guessed. */
+export function originLegendFrameXY(
+  fig: Parameters<typeof originLegendPos>[0],
+): [number, number] | null {
+  const p = fig.legend_pos;
+  if (!p) return null;
+  const fx = axisFraction(p.x, fig.x_from, fig.x_to, fig.x_log);
+  const fyUp = axisFraction(p.y, fig.y_from, fig.y_to, fig.y_log); // 0 = bottom
+  if (!Number.isFinite(fx) || !Number.isFinite(fyUp)) return null;
+  const fy = 1 - fyUp; // 0 = top (box top-left, matches the stored fraction)
+  if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return null; // out of frame → corner-snap
+  return [fx, fy];
+}
+
 /** The legend state `applyOriginFigure` pins for a figure (decode #52): the
  *  decoded legend-box corner preset (only when the position decoded — never
- *  guessed) PLUS the decoded legend title header. `legendTitle` is ALWAYS
- *  present (null when the figure has no title) so re-applying / switching
- *  figures clears a previous figure's stale title. Spread into the apply
+ *  guessed), the decoded legend title header, AND the faithful FRAME-anchored
+ *  box position. `legendTitle` and `legendFrameXY` are ALWAYS present (null
+ *  when absent/untrustworthy) so re-applying / switching figures clears a
+ *  previous figure's stale title and stale anchor. Spread into the apply
  *  `set({...})` in place of the bare `legendPos` conditional — one call site
- *  per apply branch, so the two coupled legend fields never drift apart. */
+ *  per apply branch, so the coupled legend fields never drift apart. */
 export function originLegendState(
   fig: Parameters<typeof originLegendPos>[0] & Pick<OriginFigure, "legend_title">,
-): { legendPos?: "ne" | "nw" | "se" | "sw"; legendTitle: string | null } {
+): {
+  legendPos?: "ne" | "nw" | "se" | "sw";
+  legendTitle: string | null;
+  legendFrameXY: [number, number] | null;
+} {
   const pos = originLegendPos(fig);
   return {
     ...(pos ? { legendPos: pos } : {}),
     legendTitle: fig.legend_title ? fig.legend_title : null,
+    legendFrameXY: originLegendFrameXY(fig),
   };
 }
 

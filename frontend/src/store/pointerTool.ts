@@ -27,7 +27,21 @@ export interface PointerToolSlice {
   /** Free legend position (MAIN #18), FRACTIONS of the plot area — see
    *  `PlotView.legendXY`'s doc. */
   legendXY: [number, number] | null;
+  /** Setting a free `legendXY` (a pointer-mode box drag, or the reset that
+   *  passes `null`) ALSO clears `legendFrameXY` — the frame anchor is a
+   *  one-way degrade (decode #52): the moment the user grabs the box, it
+   *  leaves Origin's frame-anchored placement and follows the container-
+   *  fraction flow, and a reset clears both (falling back to the corner
+   *  `legendPos` the same figure apply already pinned). */
   setLegendXY: (xy: [number, number] | null) => void;
+  /** Frame-anchored legend position (decode #52): the legend box TOP-LEFT as
+   *  FRACTIONS of the plot FRAME (uPlot's plotting area) — see
+   *  `PlotView.legendFrameXY`'s doc for the origin/y-direction. Set by
+   *  `applyOriginFigure` (via `originLegendState`) when Origin's decoded
+   *  legend position lands inside the frame; null otherwise. Wins over
+   *  `legendXY` and the corner `legendPos` while set. No dedicated setter —
+   *  the apply spreads it directly and `setLegendXY` clears it. */
+  legendFrameXY: [number, number] | null;
   /** Per-axis title drag offsets (CSS px) — a genuine PlotView field like
    *  `legendXY` (snapshot/hydrate/`.dwk` sanitize in lib/plotview.ts). */
   axisLabelOffsets: AxisLabelOffsets;
@@ -59,7 +73,9 @@ type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState
 export function createPointerToolSlice(set: SliceSet): PointerToolSlice {
   return {
     legendXY: null,
-    setLegendXY: (legendXY) => set({ legendXY }),
+    legendFrameXY: null,
+    // Clears the frame anchor too (decode #52) — see the interface doc.
+    setLegendXY: (legendXY) => set({ legendXY, legendFrameXY: null }),
     axisLabelOffsets: {},
     setAxisLabelOffset: (axis, offset) =>
       set((s) => {

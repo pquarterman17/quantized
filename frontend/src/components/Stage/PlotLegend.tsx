@@ -14,6 +14,7 @@ import { resolveDrawColor } from "../../lib/contrastColor";
 import { fmtNum } from "../../lib/format";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import { nearestLegendCorner } from "../../lib/plotview";
+import { frameAnchorStyle } from "../../lib/uplotFrameVars";
 import type { SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -65,6 +66,13 @@ export default function PlotLegend({
   const setY2Keys = useApp((s) => s.setY2Keys);
   const legendPos = useApp((s) => s.legendPos);
   const legendXY = useApp((s) => s.legendXY);
+  // Frame-anchored position (decode #52): the box top-left as a fraction of the
+  // plot FRAME, set by an Origin figure apply. Wins over `legendXY`/`legendPos`
+  // and is placed via `frameAnchorStyle` (CSS calc over the published frame
+  // vars — see lib/uplotFrameVars). Dragging the box or resetting clears it
+  // (setLegendXY does so), a one-way degrade back to the container-fraction /
+  // corner flow.
+  const legendFrameXY = useApp((s) => s.legendFrameXY);
   const setLegendXY = useApp((s) => s.setLegendXY);
   const setLegendPos = useApp((s) => s.setLegendPos);
   // Static mode (decode #52): an applied Origin figure renders a clean,
@@ -120,8 +128,14 @@ export default function PlotLegend({
     document.addEventListener("mouseup", onUp);
   };
   const onBoxDoubleClick = (e: React.MouseEvent) => {
-    if (tool !== "pointer" || e.target !== e.currentTarget || !legendXY) return;
-    setLegendPos(nearestLegendCorner(legendXY[0], legendXY[1]));
+    if (tool !== "pointer" || e.target !== e.currentTarget) return;
+    // Reset a moved legend back to a corner. A free-dragged box (`legendXY`)
+    // snaps to its nearest corner; a frame-anchored box (`legendFrameXY`, decode
+    // #52) has no free fraction to snap from — it just clears the anchor and
+    // falls back to the corner `legendPos` the figure apply already pinned.
+    // Either way `setLegendXY(null)` clears BOTH (the coupled one-way degrade).
+    if (!legendXY && !legendFrameXY) return;
+    if (legendXY) setLegendPos(nearestLegendCorner(legendXY[0], legendXY[1]));
     setLegendXY(null);
   };
 
@@ -161,8 +175,16 @@ export default function PlotLegend({
   return (
     <div
       ref={boxRef}
-      className={`qzk-glass qzk-legend ${legendXY ? "" : legendPos}`}
-      style={legendXY ? { left: `${legendXY[0] * 100}%`, top: `${legendXY[1] * 100}%`, right: "auto", bottom: "auto" } : undefined}
+      // Precedence (decode #52): frame anchor > free container fraction > corner
+      // preset. A frame-anchored or free position drops the corner class.
+      className={`qzk-glass qzk-legend ${legendFrameXY || legendXY ? "" : legendPos}`}
+      style={
+        legendFrameXY
+          ? frameAnchorStyle(legendFrameXY)
+          : legendXY
+            ? { left: `${legendXY[0] * 100}%`, top: `${legendXY[1] * 100}%`, right: "auto", bottom: "auto" }
+            : undefined
+      }
       onMouseDown={onBoxMouseDown}
       onDoubleClick={onBoxDoubleClick}
       title={tool === "pointer" ? "Drag to move · double-click to reset to a corner" : undefined}

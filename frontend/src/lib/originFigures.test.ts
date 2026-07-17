@@ -11,6 +11,7 @@ import {
   figureSelectionState,
   originCurveSeriesStyle,
   originFigureAnnotations,
+  originLegendFrameXY,
   originLegendPos,
   originLegendState,
   originRegionShades,
@@ -1014,24 +1015,70 @@ describe("originLegendPos", () => {
   });
 });
 
+describe("originLegendFrameXY (decode #52 — faithful in-frame anchor)", () => {
+  const base = { x_from: 0, x_to: 10, x_log: false, y_from: 0, y_to: 100, y_log: false };
+
+  it("recovers the box top-left frame fraction (fx from left, fy DOWN from top)", () => {
+    // A high box: x=8 -> fx 0.8; y=75 -> 0.75 up from bottom -> 0.25 down from top.
+    expect(originLegendFrameXY({ ...base, legend_pos: { x: 8, y: 75 } })).toEqual([0.8, 0.25]);
+    // A low box: y=25 -> 0.25 up -> 0.75 down from top.
+    expect(originLegendFrameXY({ ...base, legend_pos: { x: 1, y: 25 } })).toEqual([0.1, 0.75]);
+  });
+
+  it("interpolates in log10 space on a log axis (matches the decode's model)", () => {
+    // y in [1, 1e6] log: y=1e3 -> half up -> 0.5 down from top; x in [18,100].
+    expect(
+      originLegendFrameXY({
+        x_from: 18, x_to: 100, x_log: false, y_from: 1, y_to: 1e6, y_log: true,
+        legend_pos: { x: 59, y: 1e3 },
+      }),
+    ).toEqual([0.5, 0.5]);
+  });
+
+  it("returns null OUTSIDE the frame rather than clamp-guessing (corner-snap takes over)", () => {
+    expect(originLegendFrameXY({ ...base, legend_pos: { x: 12, y: 50 } })).toBeNull(); // fx 1.2
+    expect(originLegendFrameXY({ ...base, legend_pos: { x: 5, y: 120 } })).toBeNull(); // above top
+    expect(originLegendFrameXY({ ...base, legend_pos: { x: 5, y: -5 } })).toBeNull(); // below bottom
+  });
+
+  it("returns null when no position decoded or the range is degenerate/non-finite", () => {
+    expect(originLegendFrameXY({ ...base, legend_pos: null })).toBeNull();
+    expect(originLegendFrameXY({ ...base })).toBeNull();
+    expect(
+      originLegendFrameXY({ ...base, x_from: 5, x_to: 5, legend_pos: { x: 5, y: 50 } }),
+    ).toBeNull();
+  });
+});
+
 describe("originLegendState (decode #52)", () => {
   const base = { x_from: 0, x_to: 10, x_log: false, y_from: 0, y_to: 100, y_log: false };
 
-  it("carries the decoded corner AND the legend title together", () => {
-    expect(originLegendState({ ...base, legend_pos: { x: 8, y: 90 }, legend_title: "Nb/Au" })).toEqual({
+  it("carries the decoded corner, the legend title AND the frame anchor together", () => {
+    expect(originLegendState({ ...base, legend_pos: { x: 8, y: 75 }, legend_title: "Nb/Au" })).toEqual({
       legendPos: "ne",
       legendTitle: "Nb/Au",
+      legendFrameXY: [0.8, 0.25],
     });
   });
 
-  it("always sets legendTitle (null when none) so a stale title is cleared on re-apply", () => {
-    expect(originLegendState({ ...base, legend_pos: { x: 1, y: 10 } })).toEqual({
+  it("always sets legendTitle + legendFrameXY (null when absent) so stale state is cleared on re-apply", () => {
+    expect(originLegendState({ ...base, legend_pos: { x: 1, y: 25 } })).toEqual({
       legendPos: "sw",
       legendTitle: null,
+      legendFrameXY: [0.1, 0.75],
     });
-    // No decoded position -> legendPos omitted (never guessed), title still present.
-    expect(originLegendState({ ...base, legend_title: "S" })).toEqual({ legendTitle: "S" });
-    expect(originLegendState({ ...base })).toEqual({ legendTitle: null });
+    // No decoded position -> legendPos omitted (never guessed), title + anchor null.
+    expect(originLegendState({ ...base, legend_title: "S" })).toEqual({
+      legendTitle: "S",
+      legendFrameXY: null,
+    });
+    expect(originLegendState({ ...base })).toEqual({ legendTitle: null, legendFrameXY: null });
+    // Out-of-frame position (x=8 in a [0,4] frame -> fx 2.0) -> corner-snap only.
+    expect(originLegendState({ ...base, legend_pos: { x: 8, y: 75 }, x_to: 4 })).toEqual({
+      legendPos: "ne",
+      legendTitle: null,
+      legendFrameXY: null,
+    });
   });
 });
 

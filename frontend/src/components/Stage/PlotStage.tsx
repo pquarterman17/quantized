@@ -87,8 +87,8 @@ export default function PlotStage() {
   // FOCUSED window (whether the sole maximized default, or the focused frame
   // inside an MDI canvas — see WindowCanvas), so its own `bg` is looked up by
   // the CURRENT focusedWindowId rather than threaded in as a prop. A derived
-  // string selector — re-renders only when the RESULT changes, same idiom as
-  // `nPlotted` below, not a `plotWindows` array-identity dependency.
+  // string selector — re-renders only when the RESULT changes, not a
+  // `plotWindows` array-identity dependency.
   const winBg = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.bg);
   const { axesBg, inkColor, isDark: isDarkBg } = resolvePlotBg(winBg);
   // Item 13 (cross-window link groups): the FOCUSED window's own link group,
@@ -217,12 +217,11 @@ export default function PlotStage() {
   });
 
   // Alternate render modes (each self-contained; polar wins, then stats, then stack).
-  const nPlotted = plotted.length;
   if (polarMode && active) return <PolarStage />;
   if (statMode && active) return <StatStage />;
   if (
     stackMode &&
-    (nPlotted >= 2 || (spatialPanels?.length ?? 0) >= 2 || (facetPanels?.length ?? 0) >= 1)
+    (plotted.length >= 2 || (spatialPanels?.length ?? 0) >= 2 || (facetPanels?.length ?? 0) >= 1)
   )
     return <MultiPanelStage />;
 
@@ -256,6 +255,7 @@ export default function PlotStage() {
         theme={theme}
         accent={accent}
         insetTop={52}
+        frameVars // publish the plot-frame rect for the frame-anchored legend (decode #52)
         bg={winBg}
         syncKey={windowSyncKey(winLinkGroup)}
         yScale={yScale}

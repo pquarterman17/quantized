@@ -27,6 +27,7 @@ beforeEach(() => {
     y2Keys: null,
     legendPos: "ne",
     legendXY: null,
+    legendFrameXY: null,
     legendStatic: false,
     legendTitle: null,
     plotTool: "pointer",
@@ -140,6 +141,57 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     const el = container.querySelector(".qzk-legend") as HTMLElement;
     fireEvent.doubleClick(el);
     expect(useApp.getState().legendPos).toBe("sw"); // untouched — nothing to reset
+  });
+});
+
+describe("PlotLegend frame anchor (decode #52 — faithful in-frame placement)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("drops the corner class and positions off the frame vars (not the legendXY %)", () => {
+    useApp.setState({ legendFrameXY: [0.2, 0.8], legendPos: "ne" });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    expect(el).not.toHaveClass("ne"); // corner preset dropped
+    // A positioned (not corner) legend sets right/bottom auto; and it is the
+    // FRAME branch, not the legendXY percent branch (which would be "20%").
+    expect(el.style.right).toBe("auto");
+    expect(el.style.left).not.toBe("20%");
+  });
+
+  it("wins over a stale legendXY (precedence: frame > free > corner)", () => {
+    useApp.setState({ legendFrameXY: [0.2, 0.8], legendXY: [0.5, 0.5] });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    expect(el.style.left).not.toBe("50%"); // not the legendXY branch
+  });
+
+  it("dragging the box hands over to legendXY and clears the frame anchor (one-way degrade)", () => {
+    useApp.setState({ legendFrameXY: [0.2, 0.8] });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    setParentRect(container, { width: 200, height: 100 });
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    fireEvent.mouseDown(el, { clientX: 50, clientY: 50, button: 0 });
+    fireEvent.mouseMove(document, { clientX: 100, clientY: 80 });
+    fireEvent.mouseUp(document, { clientX: 100, clientY: 80 });
+    expect(useApp.getState().legendXY).toEqual([0.5, 0.8]);
+    expect(useApp.getState().legendFrameXY).toBeNull();
+  });
+
+  it("double-click clears the frame anchor, falling back to the pinned corner", () => {
+    useApp.setState({ legendFrameXY: [0.2, 0.8], legendXY: null, legendPos: "sw" });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    const el = container.querySelector(".qzk-legend") as HTMLElement;
+    fireEvent.doubleClick(el);
+    expect(useApp.getState().legendFrameXY).toBeNull();
+    expect(useApp.getState().legendPos).toBe("sw"); // the corner the apply already pinned
+    expect(el).toHaveClass("sw");
   });
 });
 
