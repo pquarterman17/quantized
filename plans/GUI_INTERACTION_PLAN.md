@@ -11,7 +11,7 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-16
+**Updated:** 2026-07-17
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -156,11 +156,6 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
           (name/notes/colour/default template); persist expand/collapse + width;
           Undo for all folder moves/creates/renames/deletes (rides #1).
 
-14. **Worksheet windows: scope selection state** — multiple worksheet windows
-    share global row-selection + plotted-column highlight.
-    - [ ] Key selection / active cell / range / plotted-column emphasis by
-          worksheet-window ID; make any cross-sheet linking explicit + labelled.
-
 15. **Real-browser interaction coverage** — jsdom can't validate canvas hit
     targets, pointer capture, drag/drop, high-DPI, overlapping-plugin contention.
     - [ ] Playwright journeys at 100/125/200%: file-drop import; folder create/nest/
@@ -212,6 +207,30 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
 ---
 
 ## Completed
+
+- ~~**#14 Worksheet windows: scope selection state**~~ (2026-07-17) — an MDI
+  worksheet document window's row selection now lives in its own entry in the
+  new `store/worksheetSelection.ts` slice (`worksheetSelections`, keyed by
+  window id), fully independent of every other worksheet window — including
+  another document window on the SAME dataset (root cause: the legacy actions
+  keyed off `activeId`, not the worksheet's own dataset, so a background
+  window's clicks silently wrote into whatever was active). The Stage
+  "Worksheet" tab keeps the legacy active-dataset `selection` singleton — the
+  ONE deliberate link to the live plot's brush-select/highlight — now surfaced
+  explicitly via a "⧟ Linked to plot" badge (`WorksheetToolbar`) instead of
+  silently; a document window is NEVER linked. The column context menu's
+  "Set as X axis"/"Plot as Y" now claim the focused plot for the worksheet's
+  own dataset first (`claimForPlotIntent`, shared with "Plot selection") so
+  they can no longer silently retarget an unrelated active plot, and read as
+  gated-null (no stale checkmark) while unlinked. `windows.ts`'s `closeWindow`
+  drops the closed window's selection entry (no leak); a document-window
+  rebind leaves the old entry pointing at the old dataset, self-healing via
+  the same "live only if datasetId matches" guard the legacy singleton always
+  used. No new allowlist entries — `excludeSelectedRows`/`keepOnlySelectedRows`
+  (the only actions touching `Dataset.excludedRows`) stayed in `useApp.ts`,
+  widened with an optional `windowId`. "Active cell"/"range" don't exist as
+  separate dimensions today — nothing to scope. Frontend 3457 green;
+  `useApp.ts` 3236/3240, `windows.ts` 750/750 (both at their ratchet pins).
 
 - ~~**#6 Pipeline fit execution reproduces the interactive fit**~~ (2026-07-16,
   Opus worktree agent, merged `7d49fd9`) — recorded "fit" steps now carry the

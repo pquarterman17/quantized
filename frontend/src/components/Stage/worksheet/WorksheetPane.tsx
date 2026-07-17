@@ -8,22 +8,20 @@
 // `components/Stage/worksheet/` takes its dataset EXPLICITLY (a `datasetId`
 // prop here, threaded down as a resolved `Dataset`/`DataStruct` everywhere
 // below) and reads NO `useActiveDataset()` / `s.activeId` singleton anywhere
-// in the subtree — grep-verified clean. The one exception, BY DESIGN, is the
-// pre-existing plot-view singletons (`xKey`/`yKeys`/`selection`, read via
-// `useWorksheetView`): those are the CURRENT globally-shared plot/row-
-// selection state the column context menu and selection→plot (item 7)
-// legitimately read/write today, same as Tier 1's "Set as X axis"/"Plot as
-// Y" did before this item — they are not a "which dataset am I showing"
-// decision, so they don't violate the mountability contract.
+// in the subtree — grep-verified clean.
 //
 // MULTI_PLOT_PLAN item 17 (2026-07-10) promoted this component to a
 // floatable MDI window kind (`kind:"worksheet"` —
-// components/windows/DocumentWindow.tsx mounts it inside a PlotWindowFrame).
-// The singleton `xKey`/`yKeys`/`selection` reads above are that item's
-// DOCUMENTED v1 wart, deliberately not fixed there: N worksheet windows
-// SHARE the plotted-column highlight and the row selection (they track the
-// FOCUSED plot window's view). Making those window-scoped is a future item,
-// not booked yet.
+// components/windows/DocumentWindow.tsx mounts it inside a PlotWindowFrame),
+// which introduced a v1 wart GUI_INTERACTION #14 fixes: an optional
+// `windowId` prop (the MDI window's id, threaded to `useWorksheetView`) gives
+// each document window its OWN row selection, independent of every other
+// worksheet window — including the Stage tab (`windowId` omitted) and any
+// OTHER document window on the SAME dataset. The one deliberate exception is
+// `useWorksheetView`'s `plotLinked`/gated `xKey`/`yKeys`: while this
+// worksheet's dataset IS the live/focused plot's dataset, row selection and
+// the column menu's X/Y-axis actions stay linked to it (WorksheetToolbar's
+// "Linked to plot" badge makes that explicit) — never silent, never assumed.
 
 import { useEffect, useState } from "react";
 
@@ -40,9 +38,12 @@ import { columnMenuItems, rowMenuItems } from "./worksheetMenus";
 
 export interface WorksheetPaneProps {
   datasetId: string;
+  /** GUI_INTERACTION #14: an MDI document window's id — omit for the Stage
+   *  "Worksheet" tab (see useWorksheetView's doc for what this changes). */
+  windowId?: string;
 }
 
-export default function WorksheetPane({ datasetId }: WorksheetPaneProps) {
+export default function WorksheetPane({ datasetId, windowId }: WorksheetPaneProps) {
   const ds = useApp((s) => s.datasets.find((d) => d.id === datasetId));
   if (!ds) {
     return (
@@ -51,14 +52,14 @@ export default function WorksheetPane({ datasetId }: WorksheetPaneProps) {
       </div>
     );
   }
-  return <WorksheetPaneView ds={ds} />;
+  return <WorksheetPaneView ds={ds} windowId={windowId} />;
 }
 
 /** Split out from `WorksheetPane` so `useWorksheetView` (and every other hook
  *  below) is only ever called once a dataset is guaranteed to exist — hooks
  *  can't be called conditionally. */
-function WorksheetPaneView({ ds }: { ds: Dataset }) {
-  const view = useWorksheetView(ds);
+function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string }) {
+  const view = useWorksheetView(ds, windowId);
   const [menu, setMenu] = useState<{ kind: "col" | "row"; target: number; x: number; y: number } | null>(null);
 
   // ORIGIN_FILE_DECODE_PLAN #38: opening the worksheet on a still-lazy Origin
@@ -102,6 +103,7 @@ function WorksheetPaneView({ ds }: { ds: Dataset }) {
         onAddSelectionToPlot={view.addSelectionToPlot}
         onOpenInGraphBuilder={view.openSelectionInGraphBuilder}
         onClearColSelection={view.clearColSelection}
+        plotLinked={view.plotLinked}
       />
 
       <WorksheetFilterBar

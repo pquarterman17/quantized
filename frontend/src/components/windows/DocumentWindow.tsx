@@ -6,16 +6,14 @@
 // bound) shows the decision-#4 empty state, mirroring
 // `BackgroundPlotWindow`'s — the window is never force-closed.
 //
-// Known, documented v1 warts (deliberately NOT fixed with item 17 — see the
-// plan's Completed entry):
-// - The worksheet's plotted-column highlight (`xKey`/`yKeys`) and row
-//   `selection` still read the SINGLETON store fields (WorksheetPane's own
-//   doc calls this out as its deliberate exception): N worksheet windows
-//   SHARE them, so "which columns are plotted" reflects the FOCUSED plot
-//   window's view in every sheet window at once.
-// - MapStage's gridding/contour settings (`mapMethod`/`mapRes`/`contour*`)
-//   are app-wide Inspector state — two map windows share them. Only the
-//   dataset binding (and MapStage's local channel picks) are per-window.
+// GUI_INTERACTION #14 (fixed the item-17 v1 wart this used to document here):
+// `WorksheetWindow` passes its OWN `windowId` down to `WorksheetPane`, which
+// gives every worksheet document window an independent row selection (never
+// shared with another window, even on the same dataset) — see
+// useWorksheetView's doc for the full contract and the "Linked to plot"
+// badge. MapStage's gridding/contour settings remain app-wide Inspector
+// state — two map windows still share them; only the dataset binding (and
+// MapStage's local channel picks) are per-window.
 
 import type { Dataset } from "../../lib/types";
 import MapStage from "../Stage/MapStage";
@@ -35,9 +33,9 @@ function DocumentEmptyState() {
   );
 }
 
-export function WorksheetWindow({ dataset }: { dataset: Dataset | null }) {
+export function WorksheetWindow({ dataset, windowId }: { dataset: Dataset | null; windowId: string }) {
   if (!dataset) return <DocumentEmptyState />;
-  return <WorksheetPane datasetId={dataset.id} />;
+  return <WorksheetPane datasetId={dataset.id} windowId={windowId} />;
 }
 
 export function MapWindow({ dataset }: { dataset: Dataset | null }) {

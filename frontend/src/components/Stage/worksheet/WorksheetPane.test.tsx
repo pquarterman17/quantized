@@ -3,7 +3,7 @@
 // "loading full data" banner, and (c) trigger ensureBookData so the full
 // data arrives without the user needing to do anything else.
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
@@ -42,5 +42,28 @@ describe("WorksheetPane pending lazy book", () => {
   it("shows no loading banner for a fully-loaded dataset", () => {
     render(<WorksheetPane datasetId="full1" />);
     expect(screen.queryByText(/Loading full data/)).not.toBeInTheDocument();
+  });
+});
+
+// GUI_INTERACTION #14: this is the reported bug end-to-end — two worksheet
+// DOCUMENT windows (distinct `windowId`s) on the SAME dataset must select
+// independently, with no visible cross-window highlight.
+describe("WorksheetPane window-scoped selection (GUI_INTERACTION #14)", () => {
+  it("selecting a row in one window's grid never highlights it in another window on the same dataset", () => {
+    const a = render(<WorksheetPane datasetId="full1" windowId="win-a" />);
+    const b = render(<WorksheetPane datasetId="full1" windowId="win-b" />);
+    // Row-number gutter click selects that row (mirrors Worksheet.test.tsx's
+    // "Worksheet row selection" convention) — click row index 1 ("2") in A only.
+    fireEvent.click(within(a.container).getByText("2"));
+    expect(within(a.container).getByText("1 selected")).toBeInTheDocument();
+    expect(within(b.container).queryByText(/selected/)).not.toBeInTheDocument();
+    // The Stage tab's legacy singleton (no windowId anywhere here) is untouched.
+    expect(useApp.getState().selection).toBeNull();
+  });
+
+  it("no 'Linked to plot' badge on either document window (never linked, unlike the Stage tab)", () => {
+    useApp.setState({ activeId: "full1" }); // even though its OWN dataset IS active
+    const a = render(<WorksheetPane datasetId="full1" windowId="win-a" />);
+    expect(within(a.container).queryByText(/Linked to plot/)).not.toBeInTheDocument();
   });
 });
