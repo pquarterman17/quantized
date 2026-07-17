@@ -311,6 +311,17 @@ def _build_layer(
         "y_title": _first_title(bucket_texts["y_title"]),
         "y2_title": _first_title(bucket_texts["y2_title"]),
         "legend_labels": _parse_legend_labels(bucket_texts["legend"]),
+        # Legend TITLE: DELIBERATELY not emitted for `.opj` (decode #52). The
+        # `.opj` legend bucket is filled by `_texts_in`'s HEURISTIC printable
+        # scan, which admits non-swatch noise a title parse can't tell from a
+        # real header — a corpus sweep surfaced two such false positives
+        # (hc2convert.opj Graph33 `146="differentiate"` (a results-log record)
+        # and XMCD.opj Graph17 `3vl:` (binary junk)), both alongside real
+        # `\l(n)` entries. Precision is the invariant, so `.opj` ships "" (an
+        # honest gap — Graph25 precedent). The `.opju` path emits `legend_title`
+        # from its VALIDATED framed text runs (see opju_figure_text), where the
+        # same sweep found zero false positives.
+        "legend_title": "",
         # Raw legend lines for the WINDOW-level composite-legend pass
         # (`distribute_legend_layers` — dotted ``\\l(layer.plot)`` entries
         # belong to other layers' dicts); popped before figures ship.

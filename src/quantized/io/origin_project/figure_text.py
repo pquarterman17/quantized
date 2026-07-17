@@ -26,6 +26,7 @@ __all__ = [
     "_object_text",
     "_parse_legend_labels",
     "_parse_legend_layers",
+    "_parse_legend_title",
     "_texts_in",
     "distribute_legend_layers",
 ]
@@ -182,6 +183,41 @@ def _parse_legend_labels(texts: Sequence[str]) -> list[str]:
     if not labels:
         return []
     return [labels.get(i, "") for i in range(1, max(labels) + 1)]
+
+
+def _parse_legend_title(texts: Sequence[str]) -> str:
+    """The legend object's TITLE: its non-swatch line(s).
+
+    An Origin Legend text object may carry a title — text WITHOUT a ``\\l(n)``
+    swatch marker, which Origin draws as a header above the per-curve entries.
+    ``_parse_legend_labels`` keeps ONLY the ``\\l(n)`` swatch lines, so those
+    title lines would otherwise be silently dropped. Returns the cleaned,
+    ``\\n``-joined title, or ``""`` when the legend carries no title line.
+
+    Provable/structural, never a proximity guess: only text the decoders
+    already routed into the ``legend`` bucket (an object whose OWN name is
+    ``Legend``/``legend`` — see ``_object_bucket``) is considered, so a
+    floating ``Text*`` annotation that merely sits near the legend is NEVER
+    absorbed here (it stays an ``annotation_marks`` entry at its own decoded
+    position). A bare ``%(...)`` auto-template line is a legend ENTRY code, not
+    a title, and is excluded. Multi-line titles are PRESERVED (join with
+    ``\\n``): the real corpus carries no internal-title instance to decide
+    first-line-vs-all, so the least-lossy choice is kept — see
+    ``docs/origin_project_format.md``.
+
+    Used only by the ``.opju`` decoder, whose legend bucket is filled from
+    VALIDATED framed text runs. The ``.opj`` decoder deliberately does NOT call
+    this: its legend bucket comes from a heuristic printable scan that admits
+    non-swatch noise this parse can't tell from a real header (two corpus false
+    positives — see ``figure_layers``), so ``.opj`` ships ``legend_title == ""``
+    (an honest gap, Graph25 precedent).
+    """
+    lines = [
+        clean_richtext(s)
+        for t in texts
+        if (s := t.strip()) and "\\l(" not in s and "%(" not in s
+    ]
+    return "\n".join(x for x in lines if x.strip())
 
 
 def _parse_legend_layers(texts: Sequence[str]) -> dict[int, list[str]]:

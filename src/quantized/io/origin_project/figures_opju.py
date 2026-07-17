@@ -404,6 +404,8 @@ def extract_figures_opju(b: bytes) -> list[dict[str, Any]]:
                 "y_title": routed.y_title if routed else "",
                 "y2_title": routed.y2_title if routed else "",
                 "legend_labels": routed.legend_labels if routed else [],
+                # Legend TITLE (Legend object's own header line, "" = none).
+                "legend_title": routed.legend_title if routed else "",
                 # Legend box top-left in data coords, or None (never guessed).
                 "legend_pos": routed.legend_pos if routed else None,
                 # Panel geometry (page units); page size resolves after the

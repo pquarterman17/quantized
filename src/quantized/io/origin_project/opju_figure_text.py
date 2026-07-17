@@ -72,6 +72,7 @@ from quantized.io.origin_project.figure_text import (
     _first_title,
     _object_bucket,
     _parse_legend_labels,
+    _parse_legend_title,
 )
 from quantized.io.origin_project.origin_richtext import clean_richtext
 
@@ -97,6 +98,10 @@ class FigureText(NamedTuple):
     y_title: str
     y2_title: str
     legend_labels: list[str]
+    # Legend TITLE — the Legend object's own non-swatch header line(s), ""
+    # when none (see figure_text._parse_legend_title). Never a nearby floating
+    # Text object, which stays an annotation_marks entry.
+    legend_title: str
     annotations: list[str]
     # Positioned floating text ({"text", "x", "y"} in data coords, one per
     # Text object, multi-line preserved) — see annotation_marks.py. Empty
@@ -239,6 +244,7 @@ def routed_figure_text(
         y_title=_title(buckets["y_title"]),
         y2_title=_title(buckets["y2_title"]),
         legend_labels=_parse_legend_labels(buckets["legend"]),
+        legend_title=_parse_legend_title(buckets["legend"]),
         annotations=[clean_richtext(a) for a in _clean_annotations(notes)[:12]],
         annotation_marks=marks,
         legend_pos=legend_pos,

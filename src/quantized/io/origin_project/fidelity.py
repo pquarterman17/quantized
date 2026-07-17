@@ -98,6 +98,8 @@ def _recovered_groups(fig: dict[str, Any]) -> list[str]:
         recovered.append("axis_titles")
     if fig.get("legend_labels"):
         recovered.append("legend_labels")
+    if fig.get("legend_title"):
+        recovered.append("legend_title")
     if fig.get("annotation_marks"):
         recovered.append("positioned_annotations")
     if fig.get("region_shades"):

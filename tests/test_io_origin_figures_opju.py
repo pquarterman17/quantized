@@ -791,6 +791,51 @@ def test_synthetic_opju_text_objects_route_to_buckets() -> None:
     assert "Resistance (Ohms)" not in f["annotations"]  # no flat-bucket leak
 
 
+def test_synthetic_opju_legend_title_routes_from_legend_object() -> None:
+    """decode #52: a Legend object whose OWN text carries a non-swatch header
+    line (Origin's legend title) routes that line to `legend_title` -- the
+    per-curve `\\l(n)` entries still parse as `legend_labels`, and the title
+    never leaks into `annotations`/`annotation_marks`."""
+    blob = _synthetic_opju(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _opju_text_object("Legend", "Nb/Au\r\n\\l(1) 2\\g(q) = 2.2\r\n\\l(2) 2\\g(q) = 1.3")
+    )
+    f = extract_figures_opju(blob)[0]
+    assert f["legend_title"] == "Nb/Au"
+    assert f["legend_labels"] == ["2θ = 2.2", "2θ = 1.3"]
+    assert "Nb/Au" not in f["annotations"]
+    assert all(m["text"] != "Nb/Au" for m in f.get("annotation_marks", []))
+
+
+def test_synthetic_opju_legend_without_title_has_empty_title() -> None:
+    """A swatch-only Legend object carries no title line -> legend_title "".
+    (Guards against the mechanism firing on a plain per-curve legend.)"""
+    blob = _synthetic_opju(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _opju_text_object("Legend", "\\l(1) Nb\r\n\\l(2) Nb/Al")
+    )
+    f = extract_figures_opju(blob)[0]
+    assert f["legend_title"] == ""
+    assert f["legend_labels"] == ["Nb", "Nb/Al"]
+
+
+def test_synthetic_opju_separate_text_is_annotation_not_legend_title() -> None:
+    """The RockingCurve NbAuRocking shape (synthetic): a swatch-only Legend
+    PLUS a SEPARATE `Text` object ("Nb/Au") that merely sits near it. The
+    Text stays an annotation at its own position; `legend_title` stays "" --
+    the fix routes ONLY the legend object's own lines, never a neighbouring
+    floating Text (proximity would be an unproven guess -- Graph25 precedent).
+    """
+    blob = _synthetic_opju(
+        _layer_bytes(0.0, 9.0, 0.0, 1000.0, 200.0, 0x03, r"\l(1) %(1)")
+        + _opju_text_object("Legend", "\\l(1) 2\\g(q) = 2.2\r\n\\l(2) 2\\g(q) = 1.3")
+        + _opju_text_object("Text", "Nb/Au")
+    )
+    f = extract_figures_opju(blob)[0]
+    assert f["legend_title"] == ""  # NOT absorbed from the neighbouring Text
+    assert "Nb/Au" in f["annotations"]
+
+
 def test_synthetic_opju_alt_header_and_text_tags_with_utf8() -> None:
     """The header prelude tag varies (0x8a/0x84/0x92 observed) and the text
     field tag can be 0xa8 (Hc2 Graph33); text is UTF-8 (Hc2's raw ``⊥``/``∥``
@@ -1127,6 +1172,37 @@ def test_realdata_real_corpus_anchors_decode_and_match(stem: str, n_anchors: int
             and f["y_log"] == (y[2] == 2.0)
             for x, y in expected
         ), f"{stem}: decoded figure {f} matches no oracle layer"
+
+
+@pytest.mark.realdata
+def test_realdata_rockingcurve_nbaurocking_legend_title_is_a_gap() -> None:
+    """decode #52 anchor + honest gap (the OWNER-REPORTED case).
+
+    NbAuRocking's Origin legend shows a bold "Nb/Au" title. VERIFIED against
+    the bytes: that "Nb/Au" is a SEPARATE ``Text`` object (bucket=annotations)
+    sitting above the legend, NOT a line inside the ``Legend`` object (which
+    holds only its two ``\\l(n)`` swatch entries). So the structural,
+    provable decode is: ``legend_title == ""`` and "Nb/Au" stays a positioned
+    ``annotation_marks`` entry at its own coordinates. Attaching it to the
+    legend by proximity would be an unproven guess (Graph25 precedent) and
+    would MOVE the text off its true position -- the "renders as the legend
+    title" outcome is achieved by faithful positioning + the static legend,
+    not by reclassification. This test locks that honest behaviour so a future
+    proximity heuristic can't silently regress it. Sibling ``Graph1``/``Graph2``
+    confirm the object kind: they carry the same "Nb"/"Nb/Al" label with NO
+    legend at all."""
+    src = _SPEC.parent / "RockingCurve.opju"
+    if not src.exists():
+        pytest.skip("RockingCurve.opju not present on this machine")
+    figs = {(f["name"], f["layer"]): f for f in extract_figures_opju(src.read_bytes())}
+    nbau = figs[("NbAuRocking", 1)]
+    assert nbau["legend_title"] == ""  # NOT a decoded legend title (honest gap)
+    assert nbau["legend_labels"] == ["2θ = 2.2", "2θ = 1.3"]
+    marks = [m["text"] for m in nbau.get("annotation_marks", [])]
+    assert "Nb/Au" in marks  # correctly a floating annotation at its own position
+    # Sibling single-curve panels: same label object kind, no legend, no title.
+    assert figs[("Graph1", 1)]["legend_title"] == ""
+    assert figs[("Graph1", 1)]["legend_labels"] == []
 
 
 # ── realdata: curve->column binding (item 35) ─────────────────────────────────

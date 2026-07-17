@@ -2568,3 +2568,22 @@ def test_drop_empty_library_books_gates_all_nan_book() -> None:
     data = _mk_book("Real", values=np.array([[1.0], [2.0]]), labels=["A"])
     kept = drop_empty_library_books([nan_book, data])
     assert [b.metadata["origin_book"] for b in kept] == ["Real"]
+
+
+@pytest.mark.realdata
+def test_realdata_opj_legend_title_suppressed_no_scan_noise() -> None:
+    """decode #52: the `.opj` decoder ships legend_title == "" — its legend
+    bucket is a HEURISTIC printable scan that a title parse can't separate from
+    noise. Anchors the two corpus false positives the sweep found (a results-log
+    record + binary junk), locking the honest-gap suppression against a future
+    regression that would re-enable `.opj` title extraction."""
+    from quantized.io.origin_project.figures import extract_figures
+
+    for stem, graph in (("hc2convert", "Graph33"), ("XMCD", "Graph17")):
+        src = _CORPUS / f"{stem}.opj"
+        if not src.exists():
+            pytest.skip(f"{stem}.opj not present on this machine")
+        figs = {f["name"]: f for f in extract_figures(src.read_bytes())}
+        assert figs[graph]["legend_title"] == ""
+        # The real per-curve legend is untouched (labels still recovered).
+        assert figs[graph]["legend_labels"]
