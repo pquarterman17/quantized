@@ -4,7 +4,8 @@
 // EXISTING bulk operation — nothing here is a new primitive:
 //   - Plot    -> createPanelWindow(ids, "overlay") + focusWindow, the SAME
 //                "Overlay in one plot" quick pick DatasetRow's context menu
-//                already offers for a multi-selection (lib/panelMenu.ts).
+//                already offers for a multi-selection
+//                (lib/contextActions.ts's datasetMultiSelectActions).
 //   - Move    -> a minimal folder-picker prompt (askParams select, same
 //                pattern folderOps.runTemplateOnFolder already uses), then
 //                moveDatasetToFolder per id — the same store action the

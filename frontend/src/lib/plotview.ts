@@ -28,8 +28,9 @@ import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisSca
 
 // Re-exported: PlotWindow.panel (below) is the only reason this module
 // depends on panelwindow.ts at all — callers that just need the window-record
-// shape (store/panels.ts, PanelPlotWindow.tsx, lib/panelMenu.ts) import the
-// type from HERE like every other PlotWindow-adjacent type, not the leaf module.
+// shape (store/panels.ts, PanelPlotWindow.tsx, lib/contextActions.ts) import
+// the type from HERE like every other PlotWindow-adjacent type, not the leaf
+// module.
 export type { PanelLayout };
 
 export type LegendPos = "ne" | "nw" | "se" | "sw";

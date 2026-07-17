@@ -7,6 +7,7 @@
 // the result to <ContextMenu>.
 
 import type { ContextMenuItem, Swatch } from "../components/overlays/ContextMenu";
+import { buildMenuItems, curveActions } from "./contextActions";
 import { MARKER_SHAPES } from "./markers";
 import type { AxisZone } from "./plotHitTest";
 import type { AxisScale, LineStyle, MarkerShape, SeriesStyle } from "./types";
@@ -183,13 +184,11 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
       ],
     });
     items.push({ separator: true });
-    items.push({ label: s.hidden ? "Show series" : "Hide series", run: () => ctx.toggleHidden(s.channel), disabled: !s.hidden && !ctx.canHide });
-    items.push({ label: "Rename…", run: () => ctx.rename(s.channel) });
-    items.push({
-      label: s.onY2 ? "Move to left Y axis" : "Move to right Y axis",
-      run: () => ctx.toggleY2(s.channel),
-    });
-    if (overridden) items.push({ label: "Reset series style", run: () => ctx.resetStyle(s.channel) });
+    // GUI_INTERACTION #8: the discrete curve actions (as opposed to the
+    // colour/line/width/marker PICKERS above, which stay hand-built here)
+    // are defined once in the shared context-action registry so a future
+    // Command Palette / Plot Objects tree consumer renders identical labels.
+    items.push(...buildMenuItems(curveActions, { series: s, ctx, overridden }));
     items.push({ separator: true });
   }
 

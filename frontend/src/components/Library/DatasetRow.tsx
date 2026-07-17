@@ -14,17 +14,27 @@
 // (the drop-target logic above) are untouched. The full context menu moved
 // to datasetRowMenu.ts (component-ceiling ratchet — this file sits at the
 // 400-line pin).
+//
+// GUI_INTERACTION #8: the row is now a keyboard-reachable context-menu
+// target — `tabIndex` + the ContextMenu key (or Shift+F10) opens the SAME
+// menu anchored at the row, and a "⋯" resting-cue button (hidden until
+// hover/focus, mirroring the drag handle's own reveal rule) opens it too,
+// so right-click is never the only way in. Most menu items now come from
+// `lib/contextActions.ts`'s dataset registry via `datasetRowMenu.ts` — this
+// row only supplies the two genuinely local UI hooks (inline rename/tag
+// inputs) the registry can't own itself.
 
 import { useState } from "react";
 
-import { buildDatasetRowMenu, type DatasetRowMenuActions } from "./datasetRowMenu";
+import { buildDatasetRowMenu } from "./datasetRowMenu";
 import Sparkline from "./Sparkline";
 import { DATASET_DND } from "./useLibraryTree";
-import ContextMenu from "../overlays/ContextMenu";
-import { Badge } from "../primitives";
+import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import { dropEdgeAt, folderDatasets, resolveDropBeforeId, type DropEdge } from "../../lib/foldertree";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import ContextMenu from "../overlays/ContextMenu";
+import { Badge } from "../primitives";
 
 interface Props {
   dataset: Dataset;
@@ -68,27 +78,17 @@ export default function DatasetRow({
   const staleDs = useApp((s) => s.staleDatasets);
   const staleFits = useApp((s) => s.staleFits);
   const recalcNow = useApp((s) => s.recalcNow);
-  const setActive = useApp((s) => s.setActive);
   const activateFromLibrary = useApp((s) => s.activateFromLibrary);
   const toggleSelected = useApp((s) => s.toggleSelected);
   const selectRange = useApp((s) => s.selectRange);
   const removeDataset = useApp((s) => s.removeDataset);
-  const removeSelected = useApp((s) => s.removeSelected);
-  const mergeSelected = useApp((s) => s.mergeSelected);
-  const applyCorrectionsToMany = useApp((s) => s.applyCorrectionsToMany);
   const duplicateDataset = useApp((s) => s.duplicateDataset);
   const moveDataset = useApp((s) => s.moveDataset);
   const renameDataset = useApp((s) => s.renameDataset);
   const addDatasetTag = useApp((s) => s.addDatasetTag);
   const removeDatasetTag = useApp((s) => s.removeDatasetTag);
   const moveDatasetToFolder = useApp((s) => s.moveDatasetToFolder);
-  const createFolder = useApp((s) => s.createFolder);
   const folders = useApp((s) => s.folders);
-  const reimportDataset = useApp((s) => s.reimportDataset);
-  const openSplitDialog = useApp((s) => s.openSplitDialog);
-  const createPanelWindow = useApp((s) => s.createPanelWindow);
-  const focusWindow = useApp((s) => s.focusWindow);
-  const requestReveal = useApp((s) => s.requestReveal);
 
   // Inline editors (null = not editing); rename allows an empty draft.
   const [rename, setRename] = useState<string | null>(null);
@@ -128,25 +128,31 @@ export default function DatasetRow({
     setMenu({ x: e.clientX, y: e.clientY });
   };
 
-  const actions: DatasetRowMenuActions = {
-    setActive,
-    duplicateDataset,
-    reimportDataset,
-    openSplitDialog,
-    moveDatasetToFolder,
-    createFolder,
-    applyCorrectionsToMany,
-    moveDataset,
-    removeDataset,
-    removeSelected,
-    requestReveal,
-    mergeSelected,
-    createPanelWindow,
-    focusWindow,
-    onRename: () => setRename(d.name),
-    onAddTag: () => setTag(""),
+  // Keyboard path (GUI_INTERACTION #8): the ContextMenu key / Shift+F10 opens
+  // the identical menu, anchored at the row's own bottom-left corner (native
+  // context-menu convention) since there's no cursor position to anchor to.
+  const onRowKeyDown = (e: React.KeyboardEvent) => {
+    if (!isContextMenuKeyEvent(e)) return;
+    e.preventDefault();
+    if (!selected) activateFromLibrary(d.id);
+    const r = e.currentTarget.getBoundingClientRect();
+    setMenu({ x: r.left + 8, y: r.bottom });
   };
-  const menuItems = buildDatasetRowMenu(d, active, selected, folders, canMoveUp, canMoveDown, actions);
+  const openMenuAt = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    setMenu({ x: r.left, y: r.bottom });
+  };
+
+  const menuItems = buildDatasetRowMenu(
+    d,
+    active,
+    selected,
+    folders,
+    canMoveUp,
+    canMoveDown,
+    () => setRename(d.name),
+    () => setTag(""),
+  );
 
   return (
     <div
@@ -155,6 +161,8 @@ export default function DatasetRow({
       }${dropEdge ? ` drop-${dropEdge}` : ""}`}
       style={depth ? { marginLeft: depth * 14 } : undefined}
       data-ds-id={d.id}
+      tabIndex={0}
+      onKeyDown={onRowKeyDown}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes(DATASET_DND)) return;
         e.preventDefault(); // required every dragover to keep the drop legal
@@ -202,6 +210,21 @@ export default function DatasetRow({
         >
           ⠿
         </span>
+        {/* Resting cue (GUI_INTERACTION #8): a right-click isn't the only way
+         *  in — this reveals on row hover/focus (same rule as the drag
+         *  handle above) and opens the identical menu, anchored at itself. */}
+        <button
+          className="qzk-menu-btn"
+          title="More actions"
+          aria-label="More actions"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!selected) activateFromLibrary(d.id);
+            openMenuAt(e.currentTarget);
+          }}
+        >
+          ⋯
+        </button>
         {(staleDs.includes(d.id) || staleFits.includes(d.id)) && (
           <span
             className="qzk-stale-dot"

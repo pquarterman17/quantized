@@ -1,11 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { askConfirm } from "../overlays/ConfirmDialog";
 import { folderDatasets } from "../../lib/foldertree";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import DatasetRow from "./DatasetRow";
 import { DATASET_DND } from "./useLibraryTree";
+
+// GUI_INTERACTION #8: "Remove"/"Remove N selected" now confirm first.
+vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 const plain: Dataset = {
   id: "plain",
@@ -435,5 +439,65 @@ describe("DatasetRow panel/overlay quick picks (MAIN_PLAN #19 v1)", () => {
     fireEvent.click(screen.getByText("Panel: grid"));
     const win = useApp.getState().plotWindows.find((w) => w.kind === "panel")!;
     expect(win.panel?.layout).toBe("grid");
+  });
+});
+
+describe("DatasetRow — keyboard-reachable context menu (GUI_INTERACTION #8)", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [plain], activeId: null, selectedIds: [] });
+  });
+
+  it("is focusable and opens the SAME menu on the ContextMenu key", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
+    const row = container.querySelector(".qzk-ds")!;
+    expect(row).toHaveAttribute("tabindex", "0");
+    expect(screen.queryByText("Duplicate")).toBeNull();
+    fireEvent.keyDown(row, { key: "ContextMenu" });
+    expect(screen.getByText("Duplicate")).toBeInTheDocument();
+  });
+
+  it("also opens on Shift+F10", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
+    fireEvent.keyDown(container.querySelector(".qzk-ds")!, { key: "F10", shiftKey: true });
+    expect(screen.getByText("Duplicate")).toBeInTheDocument();
+  });
+
+  it("ignores an unrelated key", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
+    fireEvent.keyDown(container.querySelector(".qzk-ds")!, { key: "Enter" });
+    expect(screen.queryByText("Duplicate")).toBeNull();
+  });
+
+  it("the resting-cue '⋯' button opens the same menu", () => {
+    render(<DatasetRow dataset={plain} {...baseProps} />);
+    expect(screen.queryByText("Duplicate")).toBeNull();
+    fireEvent.click(screen.getByTitle("More actions"));
+    expect(screen.getByText("Duplicate")).toBeInTheDocument();
+  });
+});
+
+describe("DatasetRow — destructive Remove confirms first (GUI_INTERACTION #8)", () => {
+  beforeEach(() => {
+    vi.mocked(askConfirm).mockReset();
+    useApp.setState({ datasets: [plain], activeId: null, selectedIds: [] });
+  });
+
+  it("declining the confirm leaves the dataset in place", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    fireEvent.click(screen.getByText("Remove"));
+    expect(askConfirm).toHaveBeenCalledOnce();
+    await Promise.resolve();
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["plain"]);
+  });
+
+  it("confirming removes the dataset", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    fireEvent.click(screen.getByText("Remove"));
+    await Promise.resolve();
+    expect(useApp.getState().datasets).toEqual([]);
   });
 });

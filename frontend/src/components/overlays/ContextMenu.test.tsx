@@ -122,4 +122,119 @@ describe("ContextMenu", () => {
     expect(leaf).toHaveBeenCalledOnce();
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("carries ARIA menu roles: menu / menuitem / menuitemcheckbox + aria-disabled", () => {
+    render(
+      <ContextMenu
+        x={0}
+        y={0}
+        onClose={vi.fn()}
+        items={[
+          { label: "Rename", run: vi.fn() },
+          { label: "Grid", run: vi.fn(), checked: true },
+          { label: "Nope", run: vi.fn(), disabled: true },
+        ]}
+      />,
+    );
+    expect(document.querySelector('[role="menu"]')).toBeInTheDocument();
+    expect(screen.getByText("Rename").closest("button")).toHaveAttribute("role", "menuitem");
+    const grid = screen.getByText("Grid").closest("button")!;
+    expect(grid).toHaveAttribute("role", "menuitemcheckbox");
+    expect(grid).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByText("Nope").closest("button")).toHaveAttribute("aria-disabled", "true");
+  });
+});
+
+// GUI_INTERACTION #8: keyboard-complete navigation. The menu container grabs
+// DOM focus on mount (see ContextMenu's own useLayoutEffect), so the first
+// key fired at `document.activeElement` always lands on the menu itself.
+describe("ContextMenu — keyboard navigation (GUI_INTERACTION #8)", () => {
+  const nav: ContextMenuItem[] = [
+    { label: "Alpha", run: vi.fn() },
+    { separator: true },
+    { label: "Beta", run: vi.fn(), disabled: true },
+    { label: "Gamma", run: vi.fn() },
+  ];
+
+  it("ArrowDown from nothing focused lands on the first focusable item, skipping disabled", () => {
+    render(<ContextMenu x={0} y={0} items={nav} onClose={vi.fn()} />);
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(screen.getByText("Alpha").closest("button"));
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(screen.getByText("Gamma").closest("button")); // Beta is disabled
+  });
+
+  it("ArrowUp wraps from the first item to the last", () => {
+    render(<ContextMenu x={0} y={0} items={nav} onClose={vi.fn()} />);
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" }); // -> Alpha
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowUp" }); // wraps -> Gamma
+    expect(document.activeElement).toBe(screen.getByText("Gamma").closest("button"));
+  });
+
+  it("Home/End jump to the first/last focusable item", () => {
+    render(<ContextMenu x={0} y={0} items={nav} onClose={vi.fn()} />);
+    fireEvent.keyDown(document.activeElement!, { key: "End" });
+    expect(document.activeElement).toBe(screen.getByText("Gamma").closest("button"));
+    fireEvent.keyDown(document.activeElement!, { key: "Home" });
+    expect(document.activeElement).toBe(screen.getByText("Alpha").closest("button"));
+  });
+
+  it("a letter key type-ahead-jumps to the next matching item", () => {
+    render(<ContextMenu x={0} y={0} items={nav} onClose={vi.fn()} />);
+    fireEvent.keyDown(document.activeElement!, { key: "g" });
+    expect(document.activeElement).toBe(screen.getByText("Gamma").closest("button"));
+  });
+
+  it("Esc closes AND returns focus to the element that was focused before the menu opened", () => {
+    const trigger = document.createElement("button");
+    trigger.textContent = "trigger";
+    document.body.appendChild(trigger);
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+
+    const onClose = vi.fn();
+    render(<ContextMenu x={0} y={0} items={nav} onClose={onClose} />);
+    expect(document.activeElement).not.toBe(trigger); // the menu grabbed focus on open
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(trigger);
+    document.body.removeChild(trigger);
+  });
+
+  it("ArrowRight opens a submenu and focuses its first item; ArrowLeft collapses back to the trigger", () => {
+    const leaf = vi.fn();
+    render(
+      <ContextMenu
+        x={0}
+        y={0}
+        onClose={vi.fn()}
+        items={[{ label: "More", submenu: [{ label: "Deep", run: leaf }] }]}
+      />,
+    );
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" }); // -> "More"
+    expect(document.activeElement).toBe(screen.getByText("More").closest("button"));
+
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
+    expect(screen.getByText("Deep")).toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByText("Deep").closest("button"));
+
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+    expect(screen.queryByText("Deep")).toBeNull(); // flyout collapsed
+    expect(document.activeElement).toBe(screen.getByText("More").closest("button"));
+  });
+
+  it("Enter activates the focused item via the button's native click-on-Enter behaviour", () => {
+    const run = vi.fn();
+    const onClose = vi.fn();
+    render(<ContextMenu x={0} y={0} onClose={onClose} items={[{ label: "Go", run }]} />);
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    const btn = screen.getByText("Go").closest("button")!;
+    expect(document.activeElement).toBe(btn);
+    // jsdom doesn't synthesize the native Enter-triggers-click behaviour real
+    // browsers give a focused <button> — exercise the click it would fire.
+    fireEvent.click(btn);
+    expect(run).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
 });
