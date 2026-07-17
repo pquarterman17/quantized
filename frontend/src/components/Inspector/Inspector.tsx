@@ -17,12 +17,18 @@ import ShapesCard from "./ShapesCard";
 import StatsCard from "./StatsCard";
 import TickFormat from "./TickFormat";
 import TitlesCard from "./TitlesCard";
+import { folderPathLabel } from "../../lib/foldertree";
 import { PLOT_TEMPLATES } from "../../lib/plotTemplates";
 import { Card, Select } from "../primitives";
 import { useActiveDataset, useApp, type LegendPos } from "../../store/useApp";
 
 export default function Inspector() {
   const active = useActiveDataset();
+  // "Folder › Subfolder" breadcrumb for the active dataset (GUI_INTERACTION
+  // #13 sub-item 2) — the Inspector is the Library's existing selection-
+  // details surface, so the caption lives here rather than a new panel.
+  const folders = useApp((s) => s.folders);
+  const breadcrumb = active ? folderPathLabel(folders, active.folderId) : undefined;
   const stageTab = useApp((s) => s.stageTab);
   const showGrid = useApp((s) => s.showGrid);
   const setShowGrid = useApp((s) => s.setShowGrid);
@@ -37,6 +43,12 @@ export default function Inspector() {
 
   return (
     <aside className="qzk-inspector">
+      {breadcrumb && (
+        <div className="qzk-ds-breadcrumb" title={breadcrumb}>
+          {breadcrumb}
+        </div>
+      )}
+
       {stageTab === "map" && <MapCard />}
 
       <NotesCard active={active} />

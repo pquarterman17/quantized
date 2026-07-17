@@ -4,7 +4,7 @@
 // in tree mode, that the flat Figures section is hidden then (no duplication),
 // and that it reappears in the flat no-folders mode.
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import Library from "./Library";
@@ -127,6 +127,62 @@ describe("Library — group-chip UI retired (item 6)", () => {
     expect(screen.getByText("F1")).toBeInTheDocument(); // folder header renders
     expect(screen.getByText("a")).toBeInTheDocument(); // un-foldered dataset still shown at root
     expect(screen.getByText("b")).toBeInTheDocument(); // foldered dataset shown nested
+  });
+});
+
+describe("Library — Show in folder reveal (GUI_INTERACTION_PLAN #13 sub-item 2)", () => {
+  it("clears the filter, expands every ancestor folder, and selects the target", () => {
+    useApp.setState({
+      datasets: [dsWith("a", "child")],
+      folders: [
+        { id: "parent", name: "Parent", parentId: null, order: 0 },
+        { id: "child", name: "Child", parentId: "parent", order: 0 },
+      ],
+      expandedFolders: [],
+      activeId: null,
+      selectedIds: [],
+    });
+    render(<Library />);
+    const input = screen.getByPlaceholderText(/Filter/) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "something" } });
+    expect(input.value).toBe("something");
+
+    act(() => {
+      useApp.getState().requestReveal("a");
+    });
+
+    expect(input.value).toBe("");
+    expect(useApp.getState().expandedFolders).toEqual(expect.arrayContaining(["parent", "child"]));
+    expect(useApp.getState().selectedIds).toEqual(["a"]);
+    expect(useApp.getState().revealTarget).toBeNull();
+  });
+
+  it("silently no-ops for a stale/removed dataset id", () => {
+    useApp.setState({ datasets: [dsWith("a")], folders: [], expandedFolders: [], selectedIds: [] });
+    render(<Library />);
+    act(() => {
+      useApp.getState().requestReveal("gone");
+    });
+    expect(useApp.getState().revealTarget).toBeNull();
+    expect(useApp.getState().selectedIds).toEqual([]);
+  });
+});
+
+describe("Library — multi-select bar (GUI_INTERACTION_PLAN #13 sub-item 3)", () => {
+  it("is absent below 2 selected, appears at >=2 with the N-selected count", () => {
+    useApp.setState({ datasets: [dsWith("a"), dsWith("b")], selectedIds: ["a"] });
+    const { rerender } = render(<Library />);
+    expect(screen.queryByText(/selected$/)).not.toBeInTheDocument();
+    useApp.setState({ selectedIds: ["a", "b"] });
+    rerender(<Library />);
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+  });
+
+  it("Clear empties the multi-selection", () => {
+    useApp.setState({ datasets: [dsWith("a"), dsWith("b")], selectedIds: ["a", "b"] });
+    render(<Library />);
+    fireEvent.click(screen.getByText("Clear"));
+    expect(useApp.getState().selectedIds).toEqual([]);
   });
 });
 

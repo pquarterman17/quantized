@@ -6,8 +6,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   applyActiveCorrectionsToFolder,
+  exportDatasets,
   exportFolderCsv,
   folderContents,
+  openFolderProperties,
   removeFolderWithDatasets,
   runTemplateOnFolder,
   selectFolderContents,
@@ -182,6 +184,105 @@ describe("runTemplateOnFolder", () => {
     expect(summary!.data.values).toHaveLength(2);
     expect(summary!.data.values[0].every(Number.isNaN)).toBe(true);
     expect(summary!.data.values[1]).toEqual([1, 2, 0.9]);
+  });
+});
+
+describe("exportDatasets (shared export core, GUI_INTERACTION_PLAN #13 sub-item 3)", () => {
+  it("sends an explicit id list to the consolidated exporter under the given filename", async () => {
+    vi.mocked(exportConsolidated).mockResolvedValue(undefined);
+    await exportDatasets(["d1", "d3"], "selection-2.csv", "");
+    expect(exportConsolidated).toHaveBeenCalledWith({
+      datasets: [
+        { dataset: raw, name: "d1.dat" },
+        { dataset: raw, name: "d3.dat" },
+      ],
+      filename: "selection-2.csv",
+    });
+  });
+
+  it("is a no-op on an empty id list", async () => {
+    await exportDatasets([], "empty.csv", "");
+    expect(exportConsolidated).not.toHaveBeenCalled();
+  });
+});
+
+describe("openFolderProperties (GUI_INTERACTION_PLAN #13 sub-item 4)", () => {
+  it("renames + patches notes/colour via updateFolder on confirm", async () => {
+    vi.mocked(askParams).mockResolvedValue({
+      name: "Renamed",
+      notes: "  batch 3  ",
+      color: "amber",
+    });
+    await openFolderProperties(fld("grp"));
+    const f = useApp.getState().folders.find((x) => x.id === "grp")!;
+    expect(f.name).toBe("Renamed");
+    expect(f.notes).toBe("batch 3");
+    expect(f.color).toBe("amber");
+  });
+
+  it("clears notes/colour back to unset when set to blank/(none)", async () => {
+    useApp.setState({
+      folders: [{ ...fld("grp"), notes: "old", color: "rose" }, fld("sub", "grp")],
+    });
+    vi.mocked(askParams).mockResolvedValue({ name: "grp", notes: "", color: "(none)" });
+    await openFolderProperties(useApp.getState().folders[0]);
+    const f = useApp.getState().folders.find((x) => x.id === "grp")!;
+    expect(f.notes).toBeUndefined();
+    expect(f.color).toBeUndefined();
+  });
+
+  it("a cancelled dialog changes nothing", async () => {
+    vi.mocked(askParams).mockResolvedValue(null);
+    await openFolderProperties(fld("grp"));
+    expect(useApp.getState().folders.find((x) => x.id === "grp")!.name).toBe("grp");
+  });
+
+  it("omits the default-template field when no analysis templates are saved", async () => {
+    vi.mocked(askParams).mockResolvedValue({ name: "grp", notes: "", color: "(none)" });
+    await openFolderProperties(fld("grp"));
+    const fields = vi.mocked(askParams).mock.calls[0][1];
+    expect(fields.some((f) => f.key === "defaultTemplate")).toBe(false);
+  });
+
+  it("offers + applies a default template when one is saved", async () => {
+    localStorage.setItem(
+      "qz.analysisTemplates",
+      JSON.stringify([{ version: 1, name: "T", steps: [], outputs: [] }]),
+    );
+    vi.mocked(askParams).mockResolvedValue({
+      name: "grp",
+      notes: "",
+      color: "(none)",
+      defaultTemplate: "T",
+    });
+    await openFolderProperties(fld("grp"));
+    expect(useApp.getState().folders.find((x) => x.id === "grp")!.defaultTemplate).toBe("T");
+  });
+});
+
+describe("runTemplateOnFolder pre-selects the folder's default template", () => {
+  const template = {
+    version: 1,
+    name: "T",
+    steps: [{ id: "", kind: "fit", label: "Fit Linear", code: "qz.fit()", params: { model: "Linear" } }],
+    outputs: ["a", "b", "R2"],
+  };
+  const template2 = { ...template, name: "T2" };
+
+  it("passes the folder's defaultTemplate as the picker's default", async () => {
+    localStorage.setItem("qz.analysisTemplates", JSON.stringify([template, template2]));
+    vi.mocked(askParams).mockResolvedValue(null); // cancel — only checking the prompt args
+    await runTemplateOnFolder({ ...fld("grp"), defaultTemplate: "T2" });
+    const fields = vi.mocked(askParams).mock.calls[0][1];
+    expect(fields[0].default).toBe("T2");
+  });
+
+  it("falls back to the first template when defaultTemplate names a stale/missing template", async () => {
+    localStorage.setItem("qz.analysisTemplates", JSON.stringify([template, template2]));
+    vi.mocked(askParams).mockResolvedValue(null);
+    await runTemplateOnFolder({ ...fld("grp"), defaultTemplate: "gone" });
+    const fields = vi.mocked(askParams).mock.calls[0][1];
+    expect(fields[0].default).toBe("T");
   });
 });
 

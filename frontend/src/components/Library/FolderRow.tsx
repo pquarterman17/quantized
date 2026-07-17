@@ -12,12 +12,21 @@
 // folder into its own descendant is a silent no-op — `moveFolder` (the store
 // action → lib/foldertree's pure `moveFolder`) already guards that cycle via
 // `isSelfOrDescendant`, so this component doesn't need to re-check it.
+//
+// GUI_INTERACTION_PLAN #13: the drag GESTURE now starts only from the grip
+// handle (`.qzk-drag-handle`) — the rest of the header keeps its plain
+// expand/collapse click and never arms a drag. This changes the drag SOURCE
+// affordance only; the onDragOver/onDrop 3-zone drop-target logic below is
+// untouched. A folder's `color` (Properties, sub-item 4) tints the caret
+// glyph — resolved from the shared `ACCENT_SWATCHES` fixed-paint table
+// (store/prefs.ts), the same palette the Preferences accent swatches use.
 
 import { useState } from "react";
 
 import {
   applyActiveCorrectionsToFolder,
   exportFolderCsv,
+  openFolderProperties,
   removeFolderWithDatasets,
   runTemplateOnFolder,
   selectFolderContents,
@@ -27,6 +36,7 @@ import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { childFolders, dropZoneAt, resolveDropBeforeId, type DropZone3 } from "../../lib/foldertree";
 import { loadTemplates } from "../../lib/template";
 import type { FolderNode } from "../../lib/types";
+import { ACCENT_SWATCHES } from "../../store/prefs";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 
@@ -50,6 +60,9 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
   // dropped in the middle band; "above"/"below" for a folder dropped near an
   // edge (reposition as a sibling). Null = no drag currently over this row.
   const [dropZone, setDropZone] = useState<DropZone3 | null>(null);
+  // Folder Properties (sub-item 4): a fixed paint value for the picked accent
+  // name, or undefined for the neutral default look.
+  const folderColorCss = ACCENT_SWATCHES.find((a) => a.id === folder.color)?.c;
 
   const commit = () => {
     if (rename != null) renameFolder(folder.id, rename);
@@ -74,6 +87,7 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
         },
       },
       { label: "Rename…", run: () => setRename(folder.name) },
+      { label: "Properties…", run: () => void openFolderProperties(folder) },
       // ── bulk ops over the whole subtree (item 8) ──────────────────────────
       { separator: true },
       {
@@ -129,13 +143,6 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
         dropZone === "above" || dropZone === "below" ? ` drop-${dropZone}` : ""
       }`}
       style={{ paddingLeft: 6 + depth * 14 }}
-      // Renaming needs normal text-selection/click behaviour in the input —
-      // don't compete with a native drag gesture while that's open.
-      draggable={rename == null}
-      onDragStart={(e) => {
-        e.dataTransfer.setData(FOLDER_DND, folder.id);
-        e.dataTransfer.effectAllowed = "move";
-      }}
       onClick={() => toggle(folder.id)}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -184,7 +191,28 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} items={buildMenu()} onClose={() => setMenu(null)} />
       )}
-      <span className="qzk-group-caret">{expanded ? "▾" : "▸"}</span>
+      {/* Dedicated drag handle (plan #13 sub-item 1) — the ONLY draggable
+       *  element, so a drag only ever starts here; renaming still suppresses
+       *  it (a native drag would fight the input's own text-selection). */}
+      <span
+        className="qzk-drag-handle"
+        draggable={rename == null}
+        tabIndex={0}
+        role="button"
+        aria-label="Drag to move"
+        title="Drag to move"
+        onDragStart={(e) => {
+          e.stopPropagation();
+          e.dataTransfer.setData(FOLDER_DND, folder.id);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        ⠿
+      </span>
+      <span className="qzk-group-caret" style={folderColorCss ? { color: folderColorCss } : undefined}>
+        {expanded ? "▾" : "▸"}
+      </span>
       {rename != null ? (
         <input
           className="qz-input qzk-folder-rename"

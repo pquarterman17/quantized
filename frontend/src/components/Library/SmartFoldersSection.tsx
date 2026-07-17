@@ -9,6 +9,7 @@
 import { useState } from "react";
 
 import DatasetRow from "./DatasetRow";
+import { folderPathLabel } from "../../lib/foldertree";
 import { smartFolderMembers } from "../../lib/smartfolders";
 import { useApp } from "../../store/useApp";
 import { askParams } from "../overlays/ParamDialog";
@@ -39,6 +40,7 @@ export default function SmartFoldersSection({ onFilterTag }: Props) {
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
   const selectedIds = useApp((s) => s.selectedIds);
+  const folders = useApp((s) => s.folders);
   const addSmartFolder = useApp((s) => s.addSmartFolder);
   const updateSmartFolder = useApp((s) => s.updateSmartFolder);
   const removeSmartFolder = useApp((s) => s.removeSmartFolder);
@@ -124,6 +126,7 @@ export default function SmartFoldersSection({ onFilterTag }: Props) {
                   canMoveDown={false}
                   onFilterTag={onFilterTag}
                   depth={1}
+                  folderCaption={folderPathLabel(folders, d.folderId)}
                 />
               ))}
             {open && members.length === 0 && (

@@ -9,20 +9,13 @@ import { useEffect, useState } from "react";
 
 import { shortcutGroupsFor } from "../../lib/shortcuts";
 import { Button, SegmentedControl, Select, SliderRow, Switch } from "../primitives";
+import { ACCENT_SWATCHES as ACCENTS } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
 
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 
 const TABS = ["Appearance", "Plot", "Interaction", "Numbers", "Keyboard"] as const;
 type Tab = (typeof TABS)[number];
-
-const ACCENTS: { id: string; c: string }[] = [
-  { id: "violet", c: "oklch(0.7 0.17 295)" },
-  { id: "teal", c: "oklch(0.74 0.13 185)" },
-  { id: "ocean", c: "oklch(0.68 0.15 250)" },
-  { id: "amber", c: "oklch(0.78 0.14 75)" },
-  { id: "rose", c: "oklch(0.72 0.16 12)" },
-];
 
 const TRACE_OPTS = ["Line", "Line + markers", "Scatter", "Step"].map((v) => ({ value: v, label: v }));
 const NOTATION_OPTS = [

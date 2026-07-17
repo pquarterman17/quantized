@@ -193,6 +193,62 @@ function setRowRect(el: Element) {
   } as DOMRect);
 }
 
+function fireDragStart(el: Element, dataTransfer: unknown) {
+  const evt = new Event("dragstart", { bubbles: true, cancelable: true });
+  Object.defineProperty(evt, "dataTransfer", { value: dataTransfer, configurable: true });
+  fireEvent(el, evt);
+}
+
+describe("DatasetRow — drag starts only from the handle (GUI_INTERACTION_PLAN #13 sub-item 1)", () => {
+  it("does not arm a drag from the row body — only the grip handle", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
+    const row = container.querySelector(".qzk-ds")!;
+    const handle = container.querySelector(".qzk-drag-handle")!;
+    expect(row.getAttribute("draggable")).not.toBe("true");
+    expect(handle.getAttribute("draggable")).toBe("true");
+
+    const setData = vi.fn();
+    fireDragStart(row, { setData });
+    expect(setData).not.toHaveBeenCalled();
+
+    fireDragStart(handle, { setData });
+    expect(setData).toHaveBeenCalledWith(DATASET_DND, "plain");
+  });
+});
+
+describe("DatasetRow — Show in folder + path caption (GUI_INTERACTION_PLAN #13 sub-item 2)", () => {
+  it("offers 'Show in folder' only for a foldered dataset, and posts revealTarget", () => {
+    const foldered: Dataset = { ...plain, id: "f-ds", folderId: "grp" };
+    useApp.setState({
+      datasets: [foldered],
+      folders: [{ id: "grp", name: "Grp", parentId: null, order: 0 }],
+      activeId: null,
+      selectedIds: [],
+    });
+    const { container } = render(<DatasetRow dataset={foldered} {...baseProps} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    expect(screen.getByText("Show in folder")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Show in folder"));
+    expect(useApp.getState().revealTarget).toBe("f-ds");
+  });
+
+  it("omits 'Show in folder' for a root-level dataset", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-ds")!);
+    expect(screen.queryByText("Show in folder")).not.toBeInTheDocument();
+  });
+
+  it("renders the folder-path caption when supplied", () => {
+    render(<DatasetRow dataset={plain} {...baseProps} folderCaption="Samples › Batch3" />);
+    expect(screen.getByText("Samples › Batch3")).toBeInTheDocument();
+  });
+
+  it("renders no caption by default", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
+    expect(container.querySelector(".qzk-ds-path")).not.toBeInTheDocument();
+  });
+});
+
 describe("DatasetRow drop-between reorder", () => {
   const dsA: Dataset = { id: "a", name: "a", data: plain.data, folderId: "f1", order: 0 };
   const dsB: Dataset = { id: "b", name: "b", data: plain.data, folderId: "f1", order: 1 };

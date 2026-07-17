@@ -4,20 +4,29 @@
 // string is a read-only compat field only — migrated into folders on load
 // (lib/foldertree.migrateGroupsToFolders), never rendered as its own UI here
 // (item 6 — one organizational model, not two).
+//
+// GUI_INTERACTION_PLAN #13: also hosts the multi-select bar, the panel-width
+// resize handle, and the "Show in folder" reveal effect (a dataset id posted
+// to the store's `revealTarget` — see store/libraryPanel.ts — is consumed
+// here: clear the filter, expand the dataset's ancestor folders, select it,
+// scroll it into view).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import BookFamiliesSection from "./BookFamiliesSection";
 import DatasetRow from "./DatasetRow";
 import FigureRow from "./FigureRow";
 import FiguresSection from "./FiguresSection";
+import MultiSelectBar from "./MultiSelectBar";
 import OriginFidelitySection from "./OriginFidelitySection";
 import FolderRow from "./FolderRow";
 import ReportsSection from "./ReportsSection";
 import SavedFiguresSection from "./SavedFiguresSection";
 import SmartFoldersSection from "./SmartFoldersSection";
+import { useLibraryResize } from "./useLibraryResize";
 import { useLibraryTree } from "./useLibraryTree";
 import { makeDemoDataset } from "../../lib/demo";
+import { folderPath, folderPathLabel } from "../../lib/foldertree";
 import { originSheetGroups, originSheetNumber } from "../../lib/grouping";
 import { IMPORT_ACCEPT, openFilePicker } from "../../lib/openFilePicker";
 import { matchesQuery, parseQuery } from "../../lib/smartfolders";
@@ -37,9 +46,36 @@ export default function Library() {
   const folders = useApp((s) => s.folders);
   const createFolder = useApp((s) => s.createFolder);
   const addSmartFolder = useApp((s) => s.addSmartFolder);
+  const expandedFolders = useApp((s) => s.expandedFolders);
+  const toggleFolderExpanded = useApp((s) => s.toggleFolderExpanded);
+  const selectIds = useApp((s) => s.selectIds);
+  const revealTarget = useApp((s) => s.revealTarget);
+  const clearReveal = useApp((s) => s.clearReveal);
+  const startResize = useLibraryResize();
   const treeRows = useLibraryTree();
   const [query, setQuery] = useState("");
   const [dragging, setDragging] = useState(false);
+
+  // "Show in folder" (plan #13 sub-item 2): a dataset id posted to
+  // `revealTarget` clears the filter, expands every ancestor folder that
+  // isn't already open, selects the row, and scrolls it into view — then
+  // clears the signal. A stale/removed dataset id just clears silently.
+  useEffect(() => {
+    if (!revealTarget) return;
+    const id = revealTarget;
+    clearReveal();
+    const ds = datasets.find((d) => d.id === id);
+    if (!ds) return;
+    setQuery("");
+    for (const f of folderPath(folders, ds.folderId ?? null)) {
+      if (!expandedFolders.includes(f.id)) toggleFolderExpanded(f.id);
+    }
+    selectIds([id]);
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-ds-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest" });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires only on revealTarget
+  }, [revealTarget]);
 
   const onImport = () => openFilePicker((files) => void importFiles(files), ACCEPT);
 
@@ -88,7 +124,10 @@ export default function Library() {
     }
   }
 
-  const row = (d: Dataset, depth = 0) => (
+  // `showPath` (plan #13 sub-item 2): only the flat FILTERED list hides a
+  // row's location (the tree view already shows it via nesting) — so only
+  // that call site passes true.
+  const row = (d: Dataset, depth = 0, showPath = false) => (
     <DatasetRow
       key={d.id}
       dataset={d}
@@ -100,6 +139,7 @@ export default function Library() {
       onFilterTag={setQuery}
       sheetNumber={sheetOf.get(d.id)}
       depth={depth}
+      folderCaption={showPath ? folderPathLabel(folders, d.folderId) : undefined}
     />
   );
 
@@ -108,7 +148,7 @@ export default function Library() {
   const inTree = query.trim() === "" && folders.length > 0;
   let body: React.ReactNode;
   if (query.trim() !== "") {
-    body = shown.map((d) => row(d));
+    body = shown.map((d) => row(d, 0, folders.length > 0));
   } else if (inTree) {
     body = treeRows.map((r) => {
       if (r.kind === "folder")
@@ -187,6 +227,8 @@ export default function Library() {
         )}
       </div>
 
+      <MultiSelectBar />
+
       {!inTree && <FiguresSection />}
       <OriginFidelitySection />
       <SavedFiguresSection />
@@ -203,6 +245,15 @@ export default function Library() {
             : "No matches"}
         </div>
       )}
+      {/* Panel-width drag-resize (plan #13 sub-item 5) — a thin strip at the
+       *  right edge; drag streams --lw live, release persists to qz.prefs. */}
+      <div
+        className="qzk-lib-resizer"
+        onPointerDown={startResize}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize Library panel"
+      />
     </aside>
   );
 }

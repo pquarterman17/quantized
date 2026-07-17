@@ -6,17 +6,24 @@
 // over the top/bottom half of this one shows a thin indicator and, on drop,
 // reorders within (or moves into) THIS row's own folder — see lib/foldertree's
 // dropEdgeAt/resolveDropBeforeId for the pure hit-testing.
+//
+// GUI_INTERACTION_PLAN #13: the drag GESTURE now starts only from the grip
+// handle (`.qzk-drag-handle`, the only element carrying `draggable`) — the
+// rest of the row keeps its normal select/open behaviour and never arms a
+// drag. This changes the drag SOURCE affordance only; onDragOver/onDrop
+// (the drop-target logic above) are untouched. The full context menu moved
+// to datasetRowMenu.ts (component-ceiling ratchet — this file sits at the
+// 400-line pin).
 
 import { useState } from "react";
 
+import { buildDatasetRowMenu, type DatasetRowMenuActions } from "./datasetRowMenu";
 import Sparkline from "./Sparkline";
 import { DATASET_DND } from "./useLibraryTree";
-import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
+import ContextMenu from "../overlays/ContextMenu";
 import { Badge } from "../primitives";
 import { dropEdgeAt, folderDatasets, resolveDropBeforeId, type DropEdge } from "../../lib/foldertree";
-import { multiSelectMenuItems } from "../../lib/panelMenu";
 import type { Dataset } from "../../lib/types";
-import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 
 interface Props {
@@ -37,6 +44,11 @@ interface Props {
   /** Indent depth in the folder tree (0 = root); shifts the row right so nesting
    *  reads at a glance. Undefined outside the tree view. */
   depth?: number;
+  /** "Folder › Subfolder" caption (plan #13 sub-item 2) — set by Library.tsx
+   *  ONLY while showing a flat filtered/search result list, where a row's
+   *  location isn't otherwise visible (the tree view already shows it via
+   *  nesting). Undefined = no caption rendered. */
+  folderCaption?: string;
 }
 
 export default function DatasetRow({
@@ -49,6 +61,7 @@ export default function DatasetRow({
   onFilterTag,
   sheetNumber,
   depth = 0,
+  folderCaption,
 }: Props) {
   // Staleness badge (#4): amber when this dataset's corrections or fit await
   // recalculation (manual mode) — click runs the dirty set now.
@@ -75,6 +88,7 @@ export default function DatasetRow({
   const openSplitDialog = useApp((s) => s.openSplitDialog);
   const createPanelWindow = useApp((s) => s.createPanelWindow);
   const focusWindow = useApp((s) => s.focusWindow);
+  const requestReveal = useApp((s) => s.requestReveal);
 
   // Inline editors (null = not editing); rename allows an empty draft.
   const [rename, setRename] = useState<string | null>(null);
@@ -114,93 +128,25 @@ export default function DatasetRow({
     setMenu({ x: e.clientX, y: e.clientY });
   };
 
-  const { selectedIds } = useApp.getState();
-  const selectedCount = selectedIds.length;
-  const allIds = useApp.getState().datasets.map((x) => x.id);
-  // Move acts on the whole multi-selection when this row is part of one (bulk
-  // move — item 8); otherwise on this row alone.
-  const moveIds = selected && selectedCount > 1 ? selectedIds : [d.id];
-  const moveLabel = (dest: string) =>
-    moveIds.length > 1 ? `Move ${moveIds.length} selected to ${dest}` : `Move to ${dest}`;
-  const menuItems: ContextMenuItem[] = [
-    // Explicit plot-intent (item 15) — unlike the row click, this ALWAYS
-    // rebinds the focused plot window, even for an Origin book under the
-    // "worksheet" pref; it says "Plot" right there in the label.
-    { label: "Plot (make active)", run: () => setActive(d.id), disabled: active },
-    { label: "Duplicate", run: () => duplicateDataset(d.id) },
-    { label: "Rename…", run: () => setRename(d.name) },
-    { label: "Add tag…", run: () => setTag("") },
-    { label: d.source ? "Re-import from source" : "Re-import from file…", run: () => void reimportDataset(d.id) },
-    { label: "Split by column value…", run: () => openSplitDialog(d.id) },
-    // Move into a folder (project-organization item 3). Flat list of folders +
-    // an out-to-root option + create-a-new-folder-with-this. (Drag onto a folder
-    // header does the same.)
-    { separator: true },
-    ...folders.map(
-      (f): ContextMenuItem => ({
-        label: moveLabel(`"${f.name}"`),
-        run: () => moveIds.forEach((id) => moveDatasetToFolder(id, f.id)),
-        disabled: moveIds.length === 1 && d.folderId === f.id,
-      }),
-    ),
-    ...(d.folderId || moveIds.length > 1
-      ? [
-          {
-            label: moveLabel("top level"),
-            run: () => moveIds.forEach((id) => moveDatasetToFolder(id, null)),
-          } as ContextMenuItem,
-        ]
-      : []),
-    {
-      label: "New folder with this…",
-      run: () => moveDatasetToFolder(d.id, createFolder(null, "New Folder")),
-    },
-    // Batch-apply this dataset's corrections (only when it has any).
-    ...(d.corrections
-      ? [
-          { separator: true } as ContextMenuItem,
-          {
-            label: "Apply corrections to all",
-            run: () => void applyCorrectionsToMany(d.id, allIds),
-          } as ContextMenuItem,
-          ...(selected && selectedCount > 1
-            ? [
-                {
-                  label: `Apply corrections to ${selectedCount} selected`,
-                  run: () => void applyCorrectionsToMany(d.id, selectedIds),
-                } as ContextMenuItem,
-              ]
-            : []),
-        ]
-      : []),
-    // Merge / panel / overlay quick picks for the multi-selection (item 19).
-    ...multiSelectMenuItems(selected, selectedCount, selectedIds, { mergeSelected, createPanelWindow, focusWindow }),
-    { separator: true },
-    { label: "Move up", run: () => moveDataset(d.id, -1), disabled: !canMoveUp },
-    { label: "Move down", run: () => moveDataset(d.id, 1), disabled: !canMoveDown },
-    { separator: true },
-    {
-      label: "Remove",
-      run: () => {
-        removeDataset(d.id);
-        toast(`removed ${d.name}`);
-      },
-      danger: true,
-    },
-    ...(selected && selectedCount > 1
-      ? [
-          {
-            label: `Remove ${selectedCount} selected`,
-            run: () => {
-              const n = selectedCount;
-              removeSelected();
-              toast(`removed ${n} datasets`);
-            },
-            danger: true,
-          } as ContextMenuItem,
-        ]
-      : []),
-  ];
+  const actions: DatasetRowMenuActions = {
+    setActive,
+    duplicateDataset,
+    reimportDataset,
+    openSplitDialog,
+    moveDatasetToFolder,
+    createFolder,
+    applyCorrectionsToMany,
+    moveDataset,
+    removeDataset,
+    removeSelected,
+    requestReveal,
+    mergeSelected,
+    createPanelWindow,
+    focusWindow,
+    onRename: () => setRename(d.name),
+    onAddTag: () => setTag(""),
+  };
+  const menuItems = buildDatasetRowMenu(d, active, selected, folders, canMoveUp, canMoveDown, actions);
 
   return (
     <div
@@ -208,11 +154,7 @@ export default function DatasetRow({
         sheetNumber ? " qzk-ds-sheet" : ""
       }${dropEdge ? ` drop-${dropEdge}` : ""}`}
       style={depth ? { marginLeft: depth * 14 } : undefined}
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData(DATASET_DND, d.id);
-        e.dataTransfer.effectAllowed = "move";
-      }}
+      data-ds-id={d.id}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes(DATASET_DND)) return;
         e.preventDefault(); // required every dragover to keep the drop legal
@@ -240,6 +182,26 @@ export default function DatasetRow({
     >
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
       <div className="qzk-ds-top">
+        {/* Dedicated drag handle (plan #13 sub-item 1) — the ONLY
+         *  draggable="true" element in the row, so a drag can only start
+         *  here; the rest of the row keeps its plain select/open click.
+         *  Shown on row hover (CSS) and always while keyboard-focused. */}
+        <span
+          className="qzk-drag-handle"
+          draggable
+          tabIndex={0}
+          role="button"
+          aria-label="Drag to move"
+          title="Drag to move"
+          onDragStart={(e) => {
+            e.stopPropagation();
+            e.dataTransfer.setData(DATASET_DND, d.id);
+            e.dataTransfer.effectAllowed = "move";
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          ⠿
+        </span>
         {(staleDs.includes(d.id) || staleFits.includes(d.id)) && (
           <span
             className="qzk-stale-dot"
@@ -283,6 +245,11 @@ export default function DatasetRow({
           </span>
         )}
       </div>
+      {folderCaption && (
+        <span className="qzk-ds-path" title={`in ${folderCaption}`}>
+          {folderCaption}
+        </span>
+      )}
       <Sparkline data={d.data} />
       <div className="qzk-ds-foot">
         <span className="qzk-ds-meta" title={d.pending ? "full data loads on first view" : undefined}>

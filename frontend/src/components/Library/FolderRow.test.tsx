@@ -38,6 +38,12 @@ function fireDrag(el: Element, type: "dragover" | "drop", clientY: number, dataT
   fireEvent(el, evt);
 }
 
+function fireDragStart(el: Element, dataTransfer: unknown) {
+  const evt = new Event("dragstart", { bubbles: true, cancelable: true });
+  Object.defineProperty(evt, "dataTransfer", { value: dataTransfer, configurable: true });
+  fireEvent(el, evt);
+}
+
 // height 40 → edge band = min(40/3, max(6, 10)) = 10: above y<110, into
 // 110<=y<=130, below y>130 (rect top pinned at 100 by setRowRect).
 function setRowRect(el: Element) {
@@ -167,6 +173,46 @@ describe("FolderRow — folder drop (project-organization plan item 3b)", () => 
     expect(row).not.toHaveClass("dropinto");
     expect(row).not.toHaveClass("drop-above");
     expect(row).not.toHaveClass("drop-below");
+  });
+});
+
+describe("FolderRow — drag starts only from the handle (GUI_INTERACTION_PLAN #13 sub-item 1)", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [], folders: [fld("a", null, 0)], expandedFolders: [] });
+  });
+
+  it("does not arm a drag from the header body — only the grip handle", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    const handle = container.querySelector(".qzk-drag-handle")!;
+    expect(row.getAttribute("draggable")).not.toBe("true");
+    expect(handle.getAttribute("draggable")).toBe("true");
+
+    const setData = vi.fn();
+    fireDragStart(row, { setData });
+    expect(setData).not.toHaveBeenCalled();
+
+    fireDragStart(handle, { setData });
+    expect(setData).toHaveBeenCalledWith(FOLDER_DND, "a");
+  });
+});
+
+describe("FolderRow — Properties dialog (GUI_INTERACTION_PLAN #13 sub-item 4)", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [], folders: [fld("a", null, 0)], expandedFolders: [] });
+  });
+
+  it("offers 'Properties…' in the context menu", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    fireEvent.contextMenu(container.querySelector(".qzk-folder-head")!);
+    expect(screen.getByText("Properties…")).toBeInTheDocument();
+  });
+
+  it("tints the caret when the folder has a colour set", () => {
+    const colored = { ...fld("a", null, 0), color: "amber" };
+    const { container } = render(<FolderRow folder={colored} {...baseProps} />);
+    const caret = container.querySelector(".qzk-group-caret") as HTMLElement;
+    expect(caret.style.color).toBeTruthy();
   });
 });
 
