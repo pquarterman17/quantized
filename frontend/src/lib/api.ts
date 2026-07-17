@@ -1442,6 +1442,11 @@ export interface FigureSpec {
   fmt?: string;
   style?: string;
   dpi?: number;
+  /** Page size in inches (#54 Stage 2): overrides the style preset's figure
+   *  size so a publication export matches the window's PageSetup. Omit = the
+   *  preset's own size (today's behaviour). */
+  width_in?: number;
+  height_in?: number;
   title?: string;
   x_label?: string;
   y_label?: string;

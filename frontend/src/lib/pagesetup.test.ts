@@ -4,8 +4,10 @@ import {
   contentRectFractions,
   defaultPageSetup,
   fromInches,
+  marginFractions,
   pageAspect,
   pageSetupFromDecoded,
+  pageSizeInches,
   sanitizePageSetup,
   toInches,
   type PageSetup,
@@ -70,6 +72,30 @@ describe("contentRectFractions", () => {
     const c = contentRectFractions(ps);
     expect(c.left).toBeLessThan(c.right);
     expect(c.bottom).toBeLessThan(c.top);
+  });
+});
+
+describe("export helpers (#54 Stage 3)", () => {
+  it("pageSizeInches converts to inches", () => {
+    const cm: PageSetup = {
+      width: 25.4,
+      height: 12.7,
+      unit: "cm",
+      margins: { left: 0, right: 0, top: 0, bottom: 0 },
+      aspectDerived: false,
+    };
+    expect(pageSizeInches(cm)).toEqual({ width_in: 10, height_in: 5 });
+  });
+
+  it("marginFractions returns each margin as a fraction of its dimension (overrides convention)", () => {
+    const ps: PageSetup = {
+      width: 10,
+      height: 8,
+      unit: "in",
+      margins: { left: 1, right: 2, top: 1, bottom: 1 },
+      aspectDerived: false,
+    };
+    expect(marginFractions(ps)).toEqual({ left: 0.1, right: 0.2, top: 0.125, bottom: 0.125 });
   });
 });
 

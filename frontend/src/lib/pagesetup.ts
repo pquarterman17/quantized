@@ -120,6 +120,28 @@ export function contentRectFractions(ps: PageSetup): {
   return { left: ml, right: 1 - mr, bottom: mb, top: 1 - mt };
 }
 
+/** The page size in INCHES (export/matplotlib figsize unit). */
+export function pageSizeInches(ps: PageSetup): { width_in: number; height_in: number } {
+  return { width_in: toInches(ps.width, ps.unit), height_in: toInches(ps.height, ps.unit) };
+}
+
+/** Each margin as a FRACTION of its page dimension, in the convention
+ *  `calc.figure_overrides` expects for its `margins` override (left/bottom are
+ *  the distance from that edge; right/top are the distance from the far edge —
+ *  it subtracts them from 1 itself). Clamped so pathological margins can't
+ *  invert the plotting rect. */
+export function marginFractions(ps: PageSetup): PageMargins {
+  const w = ps.width > 0 ? ps.width : 1;
+  const h = ps.height > 0 ? ps.height : 1;
+  const c = (v: number) => Math.min(0.475, Math.max(0, v));
+  return {
+    left: c(ps.margins.left / w),
+    right: c(ps.margins.right / w),
+    top: c(ps.margins.top / h),
+    bottom: c(ps.margins.bottom / h),
+  };
+}
+
 const num = (v: unknown, d: number): number =>
   typeof v === "number" && Number.isFinite(v) ? v : d;
 

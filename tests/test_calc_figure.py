@@ -532,3 +532,28 @@ def test_figure_page_panel_carries_its_own_linear_tick_steps() -> None:
     )
     out = render_figure_page([panel], rows=1, cols=1, fmt="png")
     assert out[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_width_in_height_in_set_the_raster_pixel_size() -> None:
+    # #54 Stage 3: figsize = (width_in, height_in) from the window's PageSetup;
+    # at a known dpi the raster is exactly width_in*dpi x height_in*dpi.
+    from io import BytesIO
+
+    from PIL import Image
+
+    x = np.linspace(0.0, 1.0, 10)
+    out = render_figure(x, [("y", x)], fmt="png", width_in=4.0, height_in=2.0, dpi=100)
+    with Image.open(BytesIO(out)) as im:
+        assert im.size == (400, 200)
+
+
+def test_page_margins_override_changes_the_layout() -> None:
+    # #54 Stage 3: a page-margins override (subplots_adjust, from PageSetup
+    # margins) yields a genuinely different render than the default tight_layout.
+    x = np.linspace(0.0, 1.0, 10)
+    base = render_figure(x, [("y", x)], fmt="png", dpi=72)
+    with_margins = render_figure(
+        x, [("y", x)], fmt="png", dpi=72,
+        overrides={"margins": {"left": 0.25, "right": 0.05, "top": 0.05, "bottom": 0.25}},
+    )
+    assert base != with_margins

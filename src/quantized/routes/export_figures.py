@@ -58,6 +58,10 @@ class FigureRequest(BaseModel):
     fmt: str = "pdf"
     style: str = "default"  # publication preset: aps / report / web / …
     dpi: int = 200  # raster (png/tiff) resolution; ignored by vector formats
+    # #54 Stage 3: page size in inches (from the window's PageSetup) — overrides
+    # the preset's figure size. None = the preset's own size (today's behaviour).
+    width_in: float | None = None
+    height_in: float | None = None
     title: str = ""  # optional figure title
     x_label: str | None = None  # override the auto-derived axis labels (None = derive)
     y_label: str | None = None
@@ -144,6 +148,8 @@ def export_figure(req: FigureRequest) -> Response:
             fmt=req.fmt,
             style=req.style,
             series_styles=styles,
+            width_in=req.width_in,
+            height_in=req.height_in,
             dpi=dpi,
             overrides=req.overrides,
             x_fmt=_tick_fmt(req.x_fmt),

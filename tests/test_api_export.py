@@ -131,6 +131,28 @@ def test_figure_pdf_download() -> None:
     assert resp.content[:5] == b"%PDF-"
 
 
+def test_figure_page_size_sets_the_raster_pixels() -> None:
+    # #54 Stage 3: width_in/height_in (from the window's PageSetup) flow through
+    # the route to matplotlib figsize — the PNG is width_in*dpi x height_in*dpi.
+    from io import BytesIO
+
+    from PIL import Image
+
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "png",
+            "width_in": 5.0,
+            "height_in": 3.0,
+            "dpi": 100,
+        },
+    )
+    assert resp.status_code == 200
+    with Image.open(BytesIO(resp.content)) as im:
+        assert im.size == (500, 300)
+
+
 def test_figure_reciprocal_x_scale_renders() -> None:
     # MAIN #12 (Arrhenius reciprocal axis): x_scale takes precedence over
     # x_log/y_log booleans and renders without error via the FuncScale path.

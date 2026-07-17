@@ -12,6 +12,7 @@ import { exportFigure } from "./api";
 import { buildExportStyles } from "./exportStyles";
 import { exportActive, type StoreGet } from "./exportActive";
 import { compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
+import { marginFractions, pageSizeInches } from "./pagesetup";
 import { axisFmtParam } from "./types";
 
 export async function runExportFigureCommand(s: StoreGet): Promise<void> {
@@ -53,6 +54,13 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
   // Blank label fields mean "derive from the data" → send undefined, not "".
   const xl = (params.x_label as string).trim();
   const yl = (params.y_label as string).trim();
+  // #54 Stage 3: honor the window's page — figsize (inches) + margins. Absent
+  // pageSetup keeps today's behaviour (preset size, tight_layout).
+  const ps = s().pageSetup;
+  const pageSize = ps ? pageSizeInches(ps) : null;
+  const overrides = ps
+    ? compactOverrides({ ...(liveViewOverrides(s) ?? {}), margins: marginFractions(ps) }) ?? undefined
+    : liveViewOverrides(s);
   exportActive(s, (stem, ds) => {
     // Per-series styles in plotted order so the figure matches the screen.
     const plotted = s().yKeys ?? ds.data.labels.map((_, i) => i);
@@ -68,11 +76,13 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
       fmt: params.fmt as string,
       style: params.style as string,
       dpi: params.dpi as number,
+      width_in: pageSize?.width_in,
+      height_in: pageSize?.height_in,
       title: (params.title as string).trim(),
       x_label: xl || undefined,
       y_label: yl || undefined,
       series_styles: buildExportStyles(plotted, s().seriesStyles),
-      overrides: liveViewOverrides(s),
+      overrides,
       filename: stem,
     });
   });
