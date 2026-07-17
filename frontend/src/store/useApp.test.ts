@@ -2572,6 +2572,27 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
     expect(s.activeId).toBe("p2");
   });
 
+  it("opens trusted overlapping/inset layers in page mode instead of flattening them", () => {
+    const page = { width: 1000, height: 1000 };
+    const outer = mkEntry("fig-0", 1, "p1", "Book1", { left: 100, top: 100, right: 900, bottom: 900 }, [0, 1]);
+    const inset = mkEntry("fig-1", 2, "p2", "Book2", { left: 620, top: 160, right: 870, bottom: 410 }, [0, 2]);
+    useApp.setState({
+      defaultPanelFit: "window",
+      originFigures: [
+        { ...outer, figure: { ...outer.figure, page } },
+        { ...inset, figure: { ...inset.figure, page } },
+      ],
+    });
+
+    useApp.getState().applyOriginFigure("fig-0");
+    const s = useApp.getState();
+    expect(s.panelFit).toBe("page"); // composition safety overrides a grid-oriented preference
+    expect(s.spatialPanels?.map((panel) => panel.pageRect)).toEqual([
+      { left: 0.1, top: 0.1, width: 0.8, height: 0.8 },
+      { left: 0.62, top: 0.16, width: 0.25, height: 0.25 },
+    ]);
+  });
+
   it("falls back to the clicked layer's own single-layer apply when a family member's dataset never resolved", () => {
     const l1 = mkEntry("fig-0", 1, "p1", "Book1", null, [0, 1]);
     const l2 = mkEntry("fig-1", 2, null, "Book2", null, [0, 2]); // unresolved

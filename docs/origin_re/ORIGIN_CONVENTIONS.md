@@ -855,11 +855,11 @@ not inferred:
 - **Full sheet-hierarchy UI** (nested Book→Sheet trees) — out of scope by
   design, not a decode gap; extra sheets surface as flat `Book@N`
   pseudo-books instead (§5.1).
-- **Multi-layer free layout rendering** — Origin allows N independently
-  positioned/sized layers; every layer's data IS recovered (§6, item 36
-  closed), but quantized's plot surface only renders single-plot + stacked
-  panels + one inset, so >2 layers or non-stacked overlays are lossy *to
-  render*, not to decode.
+- **Multi-layer free layout rendering** — every layer's data IS recovered
+  (§6, item 36 closed), and validated page-relative rectangles now preserve
+  N free-positioned/overlapping layers and insets. Missing/invalid geometry
+  fails closed; >2 independent axis semantics remain lossy *to render*, not
+  to decode.
 - **Rich text per-run styling** (font/color/size beyond the escapes §7
   handles) — best-effort escape→Unicode transform, dropping per-run
   styling info Origin itself would render.

@@ -251,6 +251,18 @@ describe("spatialPixelRects", () => {
     ]);
   });
 
+  it('"page" mode preserves an overlapping inset instead of flattening it', () => {
+    const panels = [
+      { pageRect: { left: 0.1, top: 0.1, width: 0.8, height: 0.8 }, pageAspect: 1 },
+      { pageRect: { left: 0.62, top: 0.16, width: 0.25, height: 0.25 }, pageAspect: 1 },
+    ];
+    // The square page is centered in the 1000x800 host: left=100, width=800.
+    expect(spatialPixelRects(panels, 1000, 800, "page")).toEqual([
+      { left: 180, top: 80, width: 640, height: 640 },
+      { left: 596, top: 128, width: 200, height: 200 },
+    ]);
+  });
+
   it('"page" mode uses the pageSetup aspect when supplied (overrides the decoded one)', () => {
     const panels = [{ pageRect: { left: 0, top: 0, width: 0.4, height: 1 }, pageAspect: 2 }];
     // pageSetup aspect 4 -> fittedLayoutRect(4, 1000, 800) = {0, 275, 1000, 250}.

@@ -7,6 +7,7 @@
 import { originErrKeys, originHiddenChannels } from "./errorbars";
 import type { SpatialPanel } from "./multipanel";
 import { computePanelLayout, framesCoincide, pageNormalizedRect } from "./originPanels";
+import { pageValidRects } from "./panelLayout";
 import type {
   Annotation,
   Dataset,
@@ -565,16 +566,17 @@ function mergePanelWithY2(
  *  reaches the clusterer as a second cell (the bug: two layers occupying the
  *  SAME page rectangle tripped `computePanelLayout`'s own "frames overlap
  *  rather than tile the page" bail-out for the WHOLE figure, collapsing a
- *  real 2-panel layout to a 1xN ordinal stack). A genuine, non-double-Y
- *  coincidence/overlap among the REMAINING (post-merge) frames still
- *  correctly falls back — `computePanelLayout` itself is untouched. Returns
- *  `null` when `resolveFigurePanels` does (nothing resolved); `spatial`
- *  mirrors the underlying layout's own flag (false = geometry undecoded or
- *  untrustworthy, ordinal stack). */
+ *  real 2-panel layout to a 1xN ordinal stack). `computePanelLayout` remains
+ *  a strict tiled-grid classifier; genuine overlap among the remaining
+ *  frames is accepted only through independently validated page rectangles.
+ *  Returns
+ *  `null` when `resolveFigurePanels` does. `layout` distinguishes trusted
+ *  tiled geometry, trusted full-page overlap/inset geometry, and the ordinal
+ *  fail-closed fallback; `spatial` retains the legacy tiled-only signal. */
 export function resolveSpatialPanels(
   family: OriginFigureEntry[],
   datasets: Dataset[],
-): { panels: SpatialPanel[]; spatial: boolean } | null {
+): { panels: SpatialPanel[]; spatial: boolean; layout: "tiled" | "page" | "ordinal" } | null {
   const resolved = resolveFigurePanels(family, datasets);
   if (!resolved) return null;
   const pairs = figureFrameY2Pairs(family);
@@ -608,7 +610,16 @@ export function resolveSpatialPanels(
       ...(pageAspect != null ? { pageAspect } : {}),
     };
   });
-  return { panels, spatial: layout.spatial };
+  // Overlap is invalid for the tiled-frame clusterer but valid (and required)
+  // for Origin insets/free-positioned layers. If every layer has a trusted
+  // full-page rectangle, preserve that composition in page mode instead of
+  // mislabelling it as undecoded and flattening it to an ordinal stack.
+  const layoutKind = layout.spatial
+    ? "tiled"
+    : pageAspect != null && pageValidRects(panels) != null
+      ? "page"
+      : "ordinal";
+  return { panels, spatial: layout.spatial, layout: layoutKind };
 }
 
 /** The store `annotations` an applied figure pins on the plot: every decoded

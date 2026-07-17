@@ -858,6 +858,7 @@ describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual â€
       const result = resolveSpatialPanels([reflectivity, nuclearSld, magneticSld], [ds]);
       expect(result).not.toBeNull();
       expect(result!.spatial).toBe(true);
+      expect(result!.layout).toBe("tiled");
       expect(result!.panels).toHaveLength(2); // NOT 3 â€” layer 3 merged into layer 2's panel
       const [top, bottom] = result!.panels;
       expect(top.row).toBe(0);
@@ -882,6 +883,7 @@ describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual â€
       expect(result).not.toBeNull();
       expect(result!.panels).toHaveLength(2);
       expect(result!.spatial).toBe(true);
+      expect(result!.layout).toBe("tiled");
       expect(result!.panels.every((p) => (p.y2Keys ?? null) === null)).toBe(true);
     });
 
@@ -910,19 +912,24 @@ describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual â€
       const result = resolveSpatialPanels([l1, l2, l3], [ds]);
       expect(result).not.toBeNull();
       expect(result!.spatial).toBe(false);
+      expect(result!.layout).toBe("ordinal");
       expect(result!.panels).toHaveLength(3); // nothing to merge â€” degenerate geometry, not a real y2 pair
     });
 
-    it("still bails to the ordinal fallback for a genuine (non-double-Y) frame conflict among 3 layers", () => {
+    it("keeps a genuine non-double-Y frame overlap as a trusted page composition", () => {
       // layer 2/3 coincide in frame but have the SAME y-range (two real panels
       // that happen to decode identically) â€” not a valid y2 pair, so the
       // reduced set still hands computePanelLayout a coincident pair, which
-      // bails to the ordinal stack exactly as it did before this fix.
+      // rejects a tiled-grid interpretation; the full-page rectangles remain
+      // trustworthy and preserve the overlap instead of flattening it.
       const conflictingPair = entry("f3", 3, { frame: bottomFrame, page, x_from: 2950, x_to: 3550, y_from: -1, y_to: 10 });
       const result = resolveSpatialPanels([reflectivity, nuclearSld, conflictingPair], [ds]);
       expect(result).not.toBeNull();
       expect(result!.panels).toHaveLength(3); // no merge -> nothing removed from the layout input
-      expect(result!.spatial).toBe(false); // computePanelLayout's own overlap guard still fires
+      expect(result!.spatial).toBe(false); // not a tiled grid
+      expect(result!.layout).toBe("page"); // trusted overlap remains native page geometry
+      expect(result!.panels.every((panel) => panel.pageRect != null)).toBe(true);
+      expect(result!.panels[1].pageRect).toEqual(result!.panels[2].pageRect);
     });
 
     it("returns null (all-or-nothing, unchanged) when any layer fails to resolve a dataset", () => {

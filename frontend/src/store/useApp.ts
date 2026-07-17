@@ -1551,7 +1551,7 @@ export const useApp = create<AppState>((set, get) => ({
     if (family.length >= 2) {
       const spatialResult = resolveSpatialPanels(family, get().datasets);
       if (spatialResult) {
-        const { panels: placed, spatial } = spatialResult;
+        const { panels: placed, layout } = spatialResult;
         get().setActive(entry.datasetId);
         // showAxisBox is the SINGLETON flag `useMultiPanelStage` reads for
         // every spatial panel (item 4) — Origin layers are boxed by default.
@@ -1560,10 +1560,12 @@ export const useApp = create<AppState>((set, get) => ({
           spatialPanels: placed,
           facetPanels: null,
           breakPanels: null,
-          // #54: a fresh apply starts at the app-wide default fit (Preferences
-          // ▸ Plot ▸ Multi-panel fit) — aspect-preserving unless the user set
-          // fill. The per-window value then persists in `.dwk`.
-          panelFit: get().defaultPanelFit,
+          // #54: a fresh tiled apply starts at the app-wide default fit
+          // (Preferences ▸ Plot ▸ Multi-panel fit). The per-window value then
+          // persists in `.dwk`.
+          // A trusted overlapping/inset composition must begin in page mode;
+          // the grid-oriented default would otherwise flatten its geometry.
+          panelFit: layout === "page" ? "page" : get().defaultPanelFit,
           // #54 Stage 2: prefill the window's page from the figure's decoded
           // page size — aspect-honest (Origin page units aren't physical), null
           // when the page didn't decode. Enables the "page" fit + page export.
@@ -1575,7 +1577,7 @@ export const useApp = create<AppState>((set, get) => ({
           regionShades: [],
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
-        if (!spatial) {
+        if (layout === "ordinal") {
           toast(
             `applied ${placed.length} panels stacked in layer order — page geometry not decoded`,
             "info",
