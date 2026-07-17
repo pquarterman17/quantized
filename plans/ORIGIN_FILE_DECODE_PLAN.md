@@ -14,7 +14,11 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-16 (#52 legend residue FULLY SHIPPED: static-legend mode
+**Updated:** 2026-07-17 (#54 page-setup control SHIPPED `5a4b8eb`: fit modes
+frames/window/page, PageSetup model + dialog, single-figure export at page
+size + margins; useApp ratcheted 3312→3240 via the prefs extraction; residual
+= spatial-view export at true page coordinates). Prior: 2026-07-16 (#52
+legend residue FULLY SHIPPED: static-legend mode
 + provable `legend_title` decode `eb48aed`, then owner-selected faithful
 in-frame legend placement `d9967b0` — `legendFrameXY` frame anchor, exact
 axes-fraction export loc; "Nb/Au" proven a floating annotation, not a title.
@@ -567,18 +571,36 @@ Official model references used for this routing:
       PNR pages unreadably small; exact page margins/aspect remain open for
       publication export where typography can scale with the page. Corpus
       gates remain PNR 99/99, MnN_Diffusion_PNR 36/36, and Moke 12/12.
-    - [ ] **Origin-style page-boundary / page-size control** (owner-requested
-      2026-07-14). Add the Boson Plotter equivalent of Origin's page setup:
-      user-settable page dimensions (width/height + units) and margins. A
-      recovered multi-panel figure can then lay its frames out at true page
-      coordinates — not just the frame bounding box #47 letterboxes to — which
-      is the enabler for the deferred exact page margins/aspect and faithful
-      publication (PDF/SVG) export at a chosen page size.
-      - Owner-observed 2026-07-15: a wide multi-panel composition (e.g.
-        RockingCurve `Graph3`) letterboxes to preserve aspect and so fills the
-        interactive window poorly (small, lots of whitespace). Not wrong — the
-        #47 tradeoff — but a page-size/fit control (or a "fit to window vs
-        preserve aspect" toggle) is the intended remedy.
+    - [x] **Origin-style page-boundary / page-size control** (owner-requested
+      2026-07-14; SHIPPED 2026-07-17, merged `5a4b8eb`, 3 staged commits).
+      **Fit modes** (`PanelFit`: frames / window / page) at the
+      `panelLayout.spatialPixelRects` chokepoint — `frames` = the #47
+      bounding-box letterbox (compatibility default, byte-identical when the
+      field is absent), `window` = fill the host (the Graph3 remedy,
+      harness-verified: h 0.233 → 1.0), `page` = letterbox the FULL Origin
+      page and place every frame at its true page coordinates
+      (`SpatialPanel.pageRect` via `originPanels.pageNormalizedRect` — the
+      margins #47's normalization discarded; no decode change, `figure.frame`
+      + `figure.page` were already on the frontend). UI: MultiPanelStage
+      tools + palette + Preferences default (`defaultPanelFit`) + per-window
+      `.dwk` persistence. **PageSetup model** (`lib/pagesetup.ts`: W/H, unit,
+      margins) per view — prefill from the decoded page is ASPECT-HONEST
+      (`aspectDerived: true`; Origin page units have no proven cm/in mapping,
+      checked against the format doc) — with a Page Setup dialog. **Export**:
+      single-figure PDF/SVG/PNG at the chosen page size + margins
+      (`width_in`/`height_in` figsize + the existing margins-override
+      chokepoint). Funding: the ~118-line prefs block extracted to
+      `store/prefs.ts`, RATCHETING useApp.ts 3312→3240. Verified: PNR
+      Graph14 all three modes distinct with real 8% margins in page mode;
+      RockingCurve page-size undecoded → fail-closed to frames; corpus sweep
+      RockingCurve 4/4 · Moke 12/12 · PNR 99/99 zero mismatches; frontend
+      3421 + backend 2893 green.
+    - [ ] **Spatial-view export at true page coordinates** (scoped residual
+      from the page-setup work): the spatial Origin view has no page-export
+      command — a dedicated command feeding the decoded `pageRect`s into a
+      `render_figure_page` `add_axes` placement path would close the last
+      export-geometry gap. Single-figure export (the primary path) is fully
+      closed; deliberately not shipped as an untriggered route param.
 
 ### Tier 3 — acceptance and handoff
 

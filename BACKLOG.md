@@ -36,7 +36,7 @@ baseline framing) are under Owner actions below, not here.
 | **Worksheet window-scoped selection** — key selection/highlight by worksheet-window ID | GUI_INTERACTION #14 |
 | **Real-browser (Playwright) interaction journeys** at 100/125/200% | GUI_INTERACTION #15 |
 | Larger bets / polish: unified select→edit Plot Objects tree (#2, owner-gate scope), canonical plot spec across surfaces (#12), buttons/menus/tooltips polish (#17), owner-dependent Origin gaps (#16) | GUI_INTERACTION Tier 1–3 |
-| **Origin-style page-boundary/page-size control** — user-settable page dimensions + margins (owner-requested 2026-07-14); enabler for true page-coordinate multi-panel layout + a fit-to-window vs preserve-aspect toggle | ORIGIN_FILE_DECODE #54 |
+| **Spatial-view export at true page coordinates** — feed decoded `pageRect`s into a `render_figure_page` `add_axes` placement path + a page-export command on the spatial Origin view; the scoped residual after the page-setup control shipped 2026-07-17 | ORIGIN_FILE_DECODE #54 residual |
 | **Origin graphic objects / rich annotations decode** — arrows, lines, standalone rects/ellipses, framed text, callouts onto native Shape/annotation models (RE-heavy; Codex-routed per the plan) | ORIGIN_FILE_DECODE #53 |
 
 ## Owner actions & owner-gated decisions
@@ -90,5 +90,5 @@ the root; every active plan below is its declared sub-plan.
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | Tier 1 #1–#3,#5 + Tier 2 #7–#15 + Tier 3 #16–#17 open; #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16; 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
-| `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#51 complete; #52 FULLY SHIPPED 2026-07-16 (static legend + legend_title decode + frame-anchored placement; "Nb/Au" proven a floating annotation) + #57 re-apply confirm SHIPPED same day; open = #53 graphic objects (subsumes #47), #54 layout (incl. page-size control); #55/#56 close on the owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
+| `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#51 complete; #52 FULLY SHIPPED 2026-07-16 + #57 same day; #54 page-setup control SHIPPED 2026-07-17 (fit modes + PageSetup + export at page size); open = #53 graphic objects (subsumes #47), #54's remaining layout generality (free-positioned layers/insets/>2Y) + spatial page-coordinate export residual; #55/#56 close on the owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |
