@@ -44,7 +44,10 @@ test("import via the Command Palette, then open + act on a row's context menu, a
   await handle.focus();
   await page.keyboard.press("Shift+F10");
 
-  const duplicateItem = page.getByRole("button", { name: "Duplicate", exact: true });
+  // GUI_INTERACTION #8 gave every plain-action menu row an explicit
+  // role="menuitem" (ContextMenu.tsx's MenuList) — the accessible role is
+  // "menuitem", not the element's old implicit "button".
+  const duplicateItem = page.getByRole("menuitem", { name: "Duplicate", exact: true });
   await expect(duplicateItem).toBeVisible();
   await duplicateItem.press("Enter");
 

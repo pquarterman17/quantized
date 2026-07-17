@@ -9,9 +9,14 @@
 // instance's scale/pixel math; it never clicks a live canvas).
 //
 // The context menu (ContextMenu.tsx) is under concurrent refactor per the
-// task brief — every item here is a plain <button>, located by its
-// TEXT/accessible name (never DOM structure/class), so it survives that
-// refactor.
+// task brief — every item here is located by its TEXT/accessible name
+// (never DOM structure/class), so it survives that refactor. Colour
+// swatches are plain <button>s (implicit role "button"), but the GUI_-
+// INTERACTION #8 keyboard-complete pass gave every other row an EXPLICIT
+// ARIA role — submenu triggers ("Marker") are role="menuitem", and leaf
+// items with a `checked` state (shape options like "◆ diamond") are
+// role="menuitemcheckbox" — so those two need the matching role, not
+// "button" (see MenuList in ContextMenu.tsx).
 
 import { expect, test } from "@playwright/test";
 
@@ -62,8 +67,12 @@ test.describe("Plot canvas right-click curve restyle @core", () => {
     //    click here would immediately re-toggle it closed — the submenu
     //    opens on mouseenter, see ContextMenu.tsx's MenuList), pick a shape ──
     await plotOver.click({ button: "right" });
-    await page.getByRole("button", { name: "Marker" }).hover();
-    await page.getByRole("button", { name: "◆ diamond" }).click();
+    const markerTrigger = page.getByRole("menuitem", { name: "Marker" });
+    await expect(markerTrigger).toBeVisible();
+    await markerTrigger.hover();
+    const diamondOption = page.getByRole("menuitemcheckbox", { name: "◆ diamond" });
+    await expect(diamondOption).toBeVisible();
+    await diamondOption.click();
 
     await expect.poll(() => readSeriesStyle(page, 0).then((s) => s.markerShape)).toBe("diamond");
     const marker = await readSeriesStyle(page, 0).then((s) => s.marker);
