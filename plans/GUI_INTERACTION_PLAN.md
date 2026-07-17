@@ -33,7 +33,8 @@ editing grammar:
   reports, book families; dense drag/drop with 3-zone folder drops.
 - **Workshops** (`components/workshops/*`, floating `ToolWindow`s) — the no-code
   analysis UIs (curve fit, peaks, baseline, filter, pipeline…).
-- **Graph/Figure Builder** — plot construction, currently ephemeral.
+- **Graph/Figure Builder** — plot construction; builder output is a durable
+  saved `PlotSpec` since 2026-07-17 (#11 core; Figure-Builder handoff still open).
 - **History** (`store/history.ts`) — undo/redo, today scoped to DATA mutations
   only; visual/layout/organization edits are excluded by design.
 
@@ -43,11 +44,14 @@ language**. An expert can be productive; the owner after weeks away, or a new
 user, must remember too much. The return-on-effort is making existing
 capability **visible, predictable, and reversible** — not adding algorithms.
 
-### Default-tool readiness (condensed from the audit)
-Highest return-to-Origin risk: **direct graph editing** (capable but hidden),
-**undo/recovery** (strong for data, weak for visual/organizational), **buttons &
-tooltips** (dense, icon-only), **reusable graph construction** (Graph Builder is
-ephemeral). Lower risk: core 2-D plotting, publication export.
+### Default-tool readiness (condensed from the audit; risk labels as of the
+2026-07-12 audit — the 2026-07-17 campaign has since addressed much of this)
+Highest return-to-Origin risk THEN: **direct graph editing** (capable but
+hidden — #3/#7/#8/#9 shipped since), **undo/recovery** (strong for data, weak
+for visual/organizational — still true, gated on #1), **buttons & tooltips**
+(dense, icon-only — #7 shipped since), **reusable graph construction**
+(was ephemeral — #11 core shipped saved PlotSpecs). Lower risk: core 2-D
+plotting, publication export.
 
 ### Dependency map / sequencing notes
 - **Correctness traps first.** #5 (baseline channel) and #6 (pipeline channel)

@@ -6,22 +6,20 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last regenerated:** 2026-07-17 (GUI_INTERACTION #3 gesture discoverability
-— drag-handle audit, resting drop-target reveal (`activeDrag`), the 3-zone
-folder-drop label, and a menu path for every drag (folder reorder + window
-rebind ADDED, curve reorder promoted into the shared registry, annotation/
-shape precise-position fields) — SHIPPED, closing the last open Tier 1 item
-without an owner gate. Prior: same day, GUI_INTERACTION #10 floating-workshop
-recovery — clamp/reset/persist/collapse/resize — SHIPPED, docking deferred.
-Before that: 2026-07-16 GUI_INTERACTION #6 pipeline-fit-spec +
-ORIGIN_FILE_DECODE #57 re-apply confirm both SHIPPED today, `7d49fd9`/`4fa2b5a`.
-Folded in the 2026-07-14/15 decode-campaign bookings that post-dated the last
-regeneration: #52 legend residue (chrome suppression + legend-title placement)
-and #54 page-boundary/page-size control are now dashboarded; the #55 owner
-screenshot-review gate points at the corpus review dashboard (62 paired
-screenshots, 0/353 reviewed). v0.10.0 is the current release. Prior context:
-GUI_INTERACTION adopted 2026-07-12 from the ChatGPT-Sol audit; MAIN holds only
-owner gates + deferrals; the fresh-machine PyPI acceptance run is still open.)
+**Last regenerated:** 2026-07-17, end of the autonomous GUI_INTERACTION
+campaign (11 merges, local main `d7f6e6b`, NOT yet pushed to origin): the
+entire no-blocker actionable list was worked — #3, #7, #9, #10, #13, #14
+CLOSED in full; #8, #11, #15 CORE shipped with residuals re-dashboarded
+below; plus the ORIGIN_FILE_DECODE #54 spatial page-coordinate export
+residual and an `appCommands.ts` decomposition (684→36, per-domain
+`commands/*` modules, pin 684→56). Verified on the final merged tree:
+frontend 3736 unit + 18 Playwright e2e + build green; backend 2906 + ruff +
+mypy green. What remains actionable = the #8/#11/#15 residual rows, #12 and
+Tier 3 larger bets, and Codex-routed #53. The #55 owner screenshot-review
+gate is unchanged (62 paired screenshots, 0/353 reviewed). v0.10.0 is the
+current release. Prior context: GUI_INTERACTION adopted 2026-07-12 from the
+ChatGPT-Sol audit; MAIN holds only owner gates + deferrals; the
+fresh-machine PyPI acceptance run is still open.)
 
 ---
 
