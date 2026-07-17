@@ -73,19 +73,17 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
-// Undo/redo (#9) + re-import-from-source (#10) slices, composed the same way.
+// Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistorySlice } from "./history";
-// Per-worksheet-window row selection (GUI_INTERACTION_PLAN #14) — see its doc.
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
-// Save-workspace-to-file (#38 + MAIN_PLAN #16 ratchet offset) — see its doc.
 import { runSaveWorkspaceToFile } from "./workspaceIO";
-// Composed store slices (each documented in its own file):
 import { createReductionsSlice, type ReductionsSlice } from "./reductions";
 import { createReimportSlice, type ReimportSlice } from "./reimport";
 import { createPanelsSlice, type PanelsSlice } from "./panels";
 import { createPointerToolSlice, type PointerToolSlice } from "./pointerTool";
 import { createSplitSlice, type SplitSlice } from "./split";
 import { createShapesSlice, type ShapesSlice } from "./shapes";
+import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -321,7 +319,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -950,8 +948,7 @@ const _initialPrefs = loadPrefs();
 const ORIGIN_FIGURE_AXIS = { showAxisBox: true, showGrid: false, legendStatic: true };
 
 export const useApp = create<AppState>((set, get) => ({
-  // Composed slices (each in its own file): windows #2, history #9, reimport
-  // #10, reductions #11, panels #19, pointer #18, split #26, shapes #27.
+  // Composed slices — one create*Slice per store/ file, each self-documented.
   ...createWindowsSlice(set, get),
   ...createWorksheetSelectionSlice(set),
   ...createHistorySlice(set),
@@ -961,6 +958,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createPointerToolSlice(set),
   ...createSplitSlice(set, get),
   ...createShapesSlice(set),
+  ...createToolWindowsSlice(set),
   ...createOriginImportSlice(set),
   ...createOriginFallbackSlice(set, get),
   datasets: [],
@@ -1750,8 +1748,7 @@ export const useApp = create<AppState>((set, get) => ({
         folders: migrated.folders,
         expandedFolders: [...new Set([...(ws.expandedFolders ?? []), ...migrated.createdFolderIds])],
         activeId: active,
-        // item 15: never round-trips (transient UI, like `stageTab`) — a
-        // fresh load always falls back to `activeId`.
+        // item 15: transient UI (like `stageTab`) — a fresh load falls back to activeId.
         worksheetId: null,
         worksheetSelections: {}, // #14: also transient — never round-trips
         selectedIds: selected.length ? selected : active ? [active] : [],
@@ -1814,6 +1811,11 @@ export const useApp = create<AppState>((set, get) => ({
         gadgetCursorResult: null,
         plotWindows,
         focusedWindowId,
+        // GUI_INTERACTION #10 item 3: already validated + viewport-clamped by
+        // parseWorkspace (lib/workspace.ts's sanitizeToolWindowLayout) — a
+        // legacy doc with no field defaults to {} (every window falls back
+        // to its own default props, same as a fresh app start).
+        toolWindowLayout: ws.toolWindowLayout ?? {},
         // The rest of the PlotView cluster (item 7) — only touched when
         // restoring an actual persisted layout; the legacy/fresh path never
         // wrote these here before item 7, so they're left alone (whatever the

@@ -131,11 +131,6 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
          persistent-tool pref is set); right-click cancels an unfinished gesture
          before opening a menu; cursor/overlay reflect the active mode.
 
-10. **Floating workshops recoverable** — `ToolWindow` clamps left/top only.
-    - [ ] Clamp the full title bar to the viewport; add `Reset window positions`;
-          persist positions in the workspace; support collapse + resize; later,
-          dock into the right panel.
-
 11. **Graph Builder → durable artifact** — promote its output to a first-class
     saved `PlotSpec` in `.dwk`.
     - [ ] Save / Save As / Duplicate / Open in Figure Builder / Export; Stage shows
@@ -231,6 +226,22 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
   widened with an optional `windowId`. "Active cell"/"range" don't exist as
   separate dimensions today — nothing to scope. Frontend 3457 green;
   `useApp.ts` 3236/3240, `windows.ts` 750/750 (both at their ratchet pins).
+
+- ~~**#10 Floating workshops recoverable**~~ (2026-07-17) — `ToolWindow`
+  (`components/overlays/ToolWindow.tsx`) now clamps the ENTIRE title bar
+  (not just the top-left corner) inside the viewport, both on drag end and
+  on every `window resize` (the monitor-unplug loss scenario); a View-menu
+  `Reset window positions` command (`commands/uiCommands.ts`) restores every
+  ToolWindow to its default layout in one shot. Geometry (position/size/
+  collapsed) moved out of local `useState` into a new `store/toolwindows.ts`
+  slice keyed by each window's `id` prop (threaded through all 24 consumers
+  + `ResultsWindow`), so a window survives close/reopen and round-trips
+  through the `.dwk` workspace (`lib/workspace.ts`'s `toolWindowLayout`
+  field, additive-optional — legacy files load unchanged — and
+  viewport-clamped on load). Added collapse (double-click the title bar or
+  its chevron button) and corner-drag resize (`.qzk-win-resize`), both
+  persisted alongside position. Docking into the right panel deferred per
+  the plan. Frontend 3483 tests green; `store/useApp.ts` 3231/3240.
 
 - ~~**#6 Pipeline fit execution reproduces the interactive fit**~~ (2026-07-16,
   Opus worktree agent, merged `7d49fd9`) — recorded "fit" steps now carry the

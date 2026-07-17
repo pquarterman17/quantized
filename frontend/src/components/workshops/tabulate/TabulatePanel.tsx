@@ -28,7 +28,7 @@ export default function TabulatePanel() {
   }
 
   return (
-    <ToolWindow title="Tabulate" width={440} onClose={() => setOpen(false)}>
+    <ToolWindow id="tabulate" title="Tabulate" width={440} onClose={() => setOpen(false)}>
       {!t.hasData ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           Select a dataset to summarize.

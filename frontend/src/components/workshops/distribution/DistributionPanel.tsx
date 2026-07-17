@@ -35,7 +35,7 @@ export default function DistributionPanel() {
   const isNormal = d.norm ? d.norm.p >= 0.05 : null;
 
   return (
-    <ToolWindow title="Distribution" width={380} onClose={() => setOpen(false)}>
+    <ToolWindow id="distribution" title="Distribution" width={380} onClose={() => setOpen(false)}>
       {!d.hasData ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           Select a dataset to profile.

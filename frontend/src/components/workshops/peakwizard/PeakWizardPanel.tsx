@@ -37,7 +37,7 @@ export default function PeakWizardPanel() {
   ][w.step];
 
   return (
-    <ToolWindow title="Peak Analyzer" width={420} onClose={close}>
+    <ToolWindow id="peakwizard" title="Peak Analyzer" width={420} onClose={close}>
       {!w.active ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           Select a dataset to analyze.

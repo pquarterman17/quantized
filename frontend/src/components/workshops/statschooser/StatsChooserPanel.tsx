@@ -17,7 +17,7 @@ export default function StatsChooserPanel() {
   const faint = { color: "var(--text-faint)" } as const;
 
   return (
-    <ToolWindow title="Test chooser" width={400} onClose={() => setOpen(false)}>
+    <ToolWindow id="statschooser" title="Test chooser" width={400} onClose={() => setOpen(false)}>
       {!c.active ? (
         <div className="qzk-ds-meta" style={faint}>
           Select a dataset to analyze.

@@ -136,7 +136,7 @@ export default function CurveFitPanel() {
   // (new sub-component — the registry-model body stays untouched).
   if (isCustom) {
     return (
-      <ToolWindow title="Curve Fit" width={340} onClose={close}>
+      <ToolWindow id="curvefit" title="Curve Fit" width={340} onClose={close}>
         <label className="qzk-field-lbl">Model</label>
         <Select
           options={modelOptions}
@@ -154,7 +154,7 @@ export default function CurveFitPanel() {
   }
 
   return (
-    <ToolWindow title="Curve Fit" width={340} onClose={close}>
+    <ToolWindow id="curvefit" title="Curve Fit" width={340} onClose={close}>
       <label className="qzk-field-lbl">Model</label>
       <Select
         options={modelOptions}

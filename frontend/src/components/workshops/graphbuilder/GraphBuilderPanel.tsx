@@ -26,7 +26,7 @@ export default function GraphBuilderPanel() {
   const faint = { color: "var(--text-faint)" } as const;
 
   return (
-    <ToolWindow title="Graph Builder" width={420} onClose={() => setOpen(false)}>
+    <ToolWindow id="graphbuilder" title="Graph Builder" width={420} onClose={() => setOpen(false)}>
       {!g.hasData ? (
         <div className="qzk-ds-meta" style={faint}>
           Select a dataset to build a graph.

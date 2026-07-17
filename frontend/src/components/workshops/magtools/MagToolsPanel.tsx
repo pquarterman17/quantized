@@ -21,7 +21,7 @@ export default function MagToolsPanel() {
   const m = useMagTools();
 
   return (
-    <ToolWindow title="Magnetometry" width={330} onClose={() => setOpen(false)}>
+    <ToolWindow id="magtools" title="Magnetometry" width={330} onClose={() => setOpen(false)}>
       <SegmentedControl<MagTab>
         options={[
           { value: "background", label: "Background" },

@@ -13,7 +13,7 @@ export default function ReflView() {
   const v = useReflView();
 
   return (
-    <ToolWindow title="Reflectometry" x={130} y={70} width={480} onClose={() => close(false)}>
+    <ToolWindow id="reflview" title="Reflectometry" x={130} y={70} width={480} onClose={() => close(false)}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div className="qzk-ds-meta">
           Data + model on top, SLD profile below. Pairs a refl1d <code>-refl.dat</code> with its{" "}
