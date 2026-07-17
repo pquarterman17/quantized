@@ -11,7 +11,7 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-16
+**Updated:** 2026-07-17
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -149,13 +149,6 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
           limits, labels, fonts, colours, widths, markers, annotations, error bars,
           legends, facets, panel geometry). Do NOT dissolve the canvas/vector split.
 
-13. **Folder organization density** — reduce accidental drags + hidden meanings.
-    - [ ] Dedicated drag handle (not the whole header); breadcrumbs / `Show in
-          folder` for filtered results; a multi-select bar
-          (`7 selected · Plot · Move · Tag · Export · Clear`); folder Properties
-          (name/notes/colour/default template); persist expand/collapse + width;
-          Undo for all folder moves/creates/renames/deletes (rides #1).
-
 14. **Worksheet windows: scope selection state** — multiple worksheet windows
     share global row-selection + plotted-column highlight.
     - [ ] Key selection / active cell / range / plotted-column emphasis by
@@ -212,6 +205,38 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
 ---
 
 ## Completed
+
+- ~~**#13 Folder organization density**~~ (2026-07-17) — 5 of 6 sub-items
+  shipped: a dedicated grip-dot drag handle (`.qzk-drag-handle`, the ONLY
+  draggable element) on both dataset and folder rows, replacing whole-header
+  dragging without touching the existing 3-zone drop-target logic; "Show in
+  folder" (DatasetRow's context menu, gated on `folderId`) posts a
+  `revealTarget` signal (new tiny `store/libraryPanel.ts` slice) that
+  Library.tsx consumes to clear the filter, expand ancestor folders, select,
+  and scroll into view — plus a "Folder › Subfolder" path caption on filtered/
+  smart-folder rows and an Inspector breadcrumb for the active dataset
+  (`lib/foldertree.folderPath`/`folderPathLabel`); a compact multi-select bar
+  (`N selected · Plot · Move · Tag · Export · Clear`) wired entirely to
+  existing bulk ops (`createPanelWindow`/`moveDatasetToFolder`/
+  `addDatasetTag`/the new shared `folderOps.exportDatasets` core); folder
+  Properties (name/notes/colour/default template) via `askParams` + a new
+  `updateFolder` store action, with `notes`/`color`/`defaultTemplate` added
+  as ADDITIVE-OPTIONAL `FolderNode` fields round-tripped through `.dwk`
+  (`lib/workspace.ts`'s `parseFolders`) — colour reuses the SAME
+  `ACCENT_SWATCHES` fixed-paint table now shared with the Preferences accent
+  swatches (de-duplicated); default template pre-selects
+  `runTemplateOnFolder`'s picker. Panel width persists via a new
+  `libraryPanelWidth` pref (`store/prefs.ts`, applied to the `--lw` CSS
+  custom property `shell.css` already declared but never wired) with a
+  drag-resize handle (`useLibraryResize.ts`, mirrors
+  `worksheet/useColResize.ts`); expand/collapse already lived in the
+  workspace (`expandedFolders`, unchanged). Undo for folder moves/creates/
+  renames/deletes is DEFERRED — it rides the owner-gated undo-scopes decision
+  (#1), out of scope here. `store/useApp.ts` held to 3231/3240 (offset via
+  the `store/libraryPanel.ts` slice + reusing the generic `setPref`, not new
+  per-field setters); `DatasetRow.tsx` extraction (`datasetRowMenu.ts`) kept
+  it at 367/400 despite the new handle/caption/reveal wiring. Frontend
+  3463 green (+42 tests), build green.
 
 - ~~**#6 Pipeline fit execution reproduces the interactive fit**~~ (2026-07-16,
   Opus worktree agent, merged `7d49fd9`) — recorded "fit" steps now carry the
