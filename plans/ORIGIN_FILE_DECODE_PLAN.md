@@ -914,8 +914,8 @@ the shipped contract)
 
 ## Completed
 
-- ~~**59. Spatial multi-panel Origin region bands**~~ (2026-07-17; PR
-  pending) — `resolveFigurePanels` now carries each layer's already-proven
+- ~~**59. Spatial multi-panel Origin region bands**~~ (2026-07-17; PR #57) —
+  `resolveFigurePanels` now carries each layer's already-proven
   `region_shades` into its own `SpatialPanel`; `MultiPanelStage` feeds only
   that list to the existing behind-data `regionShadePlugin`. A
   frame-coincident y2 layer's shades are retagged `axis: 1` during the same
