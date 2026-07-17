@@ -14,7 +14,11 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-17 (#54 page-setup control SHIPPED `5a4b8eb`: fit modes
+**Updated:** 2026-07-17 (#54 residual SHIPPED: spatial-view export at true
+page coordinates — free page-coordinate `add_axes` placement in
+`calc.figure_page` + a fail-closed "Export page…" command on the spatial
+MultiPanelStage; #54 itself fully closed, no open items remain). Same day,
+prior: 2026-07-17 (#54 page-setup control SHIPPED `5a4b8eb`: fit modes
 frames/window/page, PageSetup model + dialog, single-figure export at page
 size + margins; useApp ratcheted 3312→3240 via the prefs extraction; residual
 = spatial-view export at true page coordinates). Prior: 2026-07-16 (#52
@@ -595,12 +599,28 @@ Official model references used for this routing:
       RockingCurve page-size undecoded → fail-closed to frames; corpus sweep
       RockingCurve 4/4 · Moke 12/12 · PNR 99/99 zero mismatches; frontend
       3421 + backend 2893 green.
-    - [ ] **Spatial-view export at true page coordinates** (scoped residual
-      from the page-setup work): the spatial Origin view has no page-export
-      command — a dedicated command feeding the decoded `pageRect`s into a
-      `render_figure_page` `add_axes` placement path would close the last
-      export-geometry gap. Single-figure export (the primary path) is fully
-      closed; deliberately not shipped as an untriggered route param.
+    - [x] **Spatial-view export at true page coordinates** (scoped residual
+      from the page-setup work; SHIPPED 2026-07-17, 2 commits). Backend:
+      `calc.figure_page.PagePanel` gains an optional `page_rect`
+      (page-normalized x/y/w/h, top-left origin) — when every panel on the
+      page sets one, `render_figure_page` places axes via `fig.add_axes`
+      at their true page coordinates (with the top-left -> bottom-left
+      y-flip) instead of the rows/cols gridspec; overlapping rects are
+      allowed (unlike the grid path), mixed rect/no-rect panels raise, and
+      the no-rect path stays byte-identical (existing tests unmodified).
+      `routes/export_page.py` threads `PagePanelSpec.page_rect` through.
+      Frontend: a real trigger, not an untriggered route param — spatial
+      MultiPanelStage gains an "Export page…" toolbar button (mirroring
+      the fit-mode buttons) + palette entry, fail-closed (omitted, never
+      shown disabled, unless every panel has a valid `pageRect` — the same
+      guard `panelLayout.pageValidRects` already used for the "page" fit
+      render, now exported and shared). Never sends a `margins` override
+      (the decoded `pageRect` already embeds Origin's true margins — doing
+      so would squeeze them twice); `label_format: "none"` (page
+      recreation, not a lettered figure). New `lib/spatialPageExport.ts`
+      (pure request assembly) + `lib/exportPageCommand.ts` (store-facing
+      command, resolves each panel's dataset first per the #38 discipline).
+      Backend 2916 + frontend 3434 green.
 
 ### Tier 3 — acceptance and handoff
 
