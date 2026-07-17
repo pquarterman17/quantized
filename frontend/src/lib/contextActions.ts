@@ -285,10 +285,16 @@ function activeDataset(): Dataset | undefined {
   return s.datasets.find((d) => d.id === s.activeId);
 }
 
-// A flat MenuEntry list with separators embedded at the group boundaries —
-// unlike the dataset registry, nothing dynamic needs splicing in, so
-// `folderRowMenu.ts` can render this straight through `buildMenuItems`.
-export const folderActions: MenuEntry<FolderActionTarget>[] = [
+// GUI_INTERACTION #3 sub-item 4: split into named groups (mirroring the
+// dataset registry's own `datasetCoreActions`/`datasetMoveActions`/…) so
+// `folderRowMenu.ts` can splice the genuinely-dynamic per-folder "Move to …"
+// list (one entry per LIVE folder, same reason the dataset one can't be a
+// fixed registry entry) between the core and bulk-ops groups — the same
+// slot the drag-onto-another-folder-header gesture's menu equivalent
+// belongs in. `folderActions` below is still the flat concatenation (with
+// separators) for a caller that wants "every folder action" without caring
+// about layout.
+export const folderCoreActions: ContextAction<FolderActionTarget>[] = [
   {
     id: "folder.newSubfolder",
     label: "New subfolder",
@@ -299,8 +305,10 @@ export const folderActions: MenuEntry<FolderActionTarget>[] = [
   },
   { id: "folder.rename", label: "Rename…", run: (t) => t.onRename() },
   { id: "folder.properties", label: "Properties…", run: (t) => void openFolderProperties(t.folder) },
-  // ── bulk ops over the whole subtree (project-organization plan item 8) ──
-  { separator: true },
+];
+
+// ── bulk ops over the whole subtree (project-organization plan item 8) ──
+export const folderBulkActions: ContextAction<FolderActionTarget>[] = [
   {
     id: "folder.selectAll",
     label: (t) => `Select all in folder (${t.count})`,
@@ -325,7 +333,9 @@ export const folderActions: MenuEntry<FolderActionTarget>[] = [
     hidden: (t) => t.count === 0 || loadTemplates().length === 0,
     run: (t) => void runTemplateOnFolder(t.folder),
   },
-  { separator: true },
+];
+
+export const folderDeleteActions: ContextAction<FolderActionTarget>[] = [
   {
     id: "folder.delete",
     label: "Delete folder",
@@ -350,6 +360,15 @@ export const folderActions: MenuEntry<FolderActionTarget>[] = [
   },
 ];
 
+/** Every folder action, flat — for callers that don't care about layout. */
+export const folderActions: MenuEntry<FolderActionTarget>[] = [
+  ...folderCoreActions,
+  { separator: true },
+  ...folderBulkActions,
+  { separator: true },
+  ...folderDeleteActions,
+];
+
 // ── plot curve (series) registry ────────────────────────────────────────
 
 export interface CurveActionTarget {
@@ -372,6 +391,23 @@ export const curveActions: ContextAction<CurveActionTarget>[] = [
     id: "curve.toggleY2",
     label: (t) => (t.series.onY2 ? "Move to left Y axis" : "Move to right Y axis"),
     run: (t) => t.ctx.toggleY2(t.series.channel),
+  },
+  // GUI_INTERACTION #3 sub-item 4: the menu-path equivalent of the legend
+  // row's own draw-order reorder (its up/down arrow buttons + its own
+  // right-click menu) — now defined ONCE here so the plot-canvas right-click
+  // (lib/plotMenu.ts's curve menu) offers the same reorder PlotLegend always
+  // has, instead of it being legend-only.
+  {
+    id: "curve.moveEarlier",
+    label: "Move earlier (draw under)",
+    enabled: (t) => t.ctx.canMoveSeries(t.series.channel, -1),
+    run: (t) => t.ctx.moveSeries(t.series.channel, -1),
+  },
+  {
+    id: "curve.moveLater",
+    label: "Move later (draw over)",
+    enabled: (t) => t.ctx.canMoveSeries(t.series.channel, 1),
+    run: (t) => t.ctx.moveSeries(t.series.channel, 1),
   },
   {
     id: "curve.resetStyle",

@@ -3,9 +3,16 @@
 // 400-line component ceiling (`architecture.test.ts`): the ratchet's job is to
 // force exactly this split. Every button stopPropagation()s its pointerdown so
 // clicking chrome never starts a title-bar drag (the frame owns that gesture).
+//
+// GUI_INTERACTION #3 sub-item 4: the "⇄" button is the menu-path equivalent
+// of item 14's drag-a-Library-row-onto-the-frame rebind gesture — until this
+// landed, rebinding a window had NO non-mouse path at all.
+
+import { useState } from "react";
 
 import { nextPlotBg, type PlotBg, type PlotWindow } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
+import ContextMenu from "../overlays/ContextMenu";
 
 const BG_LABEL: Record<PlotBg, string> = { theme: "Theme", light: "Light", dark: "Dark" };
 
@@ -14,9 +21,43 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
   const setWindowBg = useApp((s) => s.setWindowBg);
   const cycleWindowLinkGroup = useApp((s) => s.cycleWindowLinkGroup);
   const toggleWindowPin = useApp((s) => s.toggleWindowPin);
+  const rebindWindow = useApp((s) => s.rebindWindow);
+  const datasets = useApp((s) => s.datasets);
+  const [rebindMenu, setRebindMenu] = useState<{ x: number; y: number } | null>(null);
 
   return (
     <>
+      {/* Item 14's rebind gesture is drag-only for a snapshot/panel window
+          too (both kinds silently ignore a drop — "frozen means frozen" /
+          panel's binding is a list, not a single id) — same guard here. */}
+      {win.kind !== "snapshot" && win.kind !== "panel" && datasets.length > 0 && (
+        <button
+          type="button"
+          className="qzk-plotwin-rebind"
+          title="Rebind to another dataset… (or drag a Library row onto this window)"
+          aria-label="Rebind window to another dataset"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            const r = e.currentTarget.getBoundingClientRect();
+            setRebindMenu({ x: r.left, y: r.bottom });
+          }}
+        >
+          ⇄
+        </button>
+      )}
+      {rebindMenu && (
+        <ContextMenu
+          x={rebindMenu.x}
+          y={rebindMenu.y}
+          onClose={() => setRebindMenu(null)}
+          items={datasets.map((d) => ({
+            label: d.name,
+            run: () => rebindWindow(win.id, d.id),
+            disabled: d.id === win.datasetId,
+          }))}
+        />
+      )}
       {/* Items 13 + 14 (tightened by 17): link + pin only make sense on the
           kind:"plot" window — a snapshot is never dataset-bound (pin is
           meaningless) and its static viewport isn't wired into the sync

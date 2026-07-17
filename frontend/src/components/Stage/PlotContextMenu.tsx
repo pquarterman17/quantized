@@ -104,6 +104,24 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       else set.add(channel);
       st.setY2Keys(set.size ? [...set] : null);
     };
+    // Draw-order reorder (GUI_INTERACTION #3 sub-item 4) — the same swap-with-
+    // neighbor `plotted` mutation PlotLegend's own `move` uses, so the canvas
+    // right-click curve menu and the legend menu agree on what "earlier"/
+    // "later" mean.
+    const seriesIdx = (channel: number) => plotted.indexOf(channel);
+    const canMoveSeries = (channel: number, dir: -1 | 1) => {
+      const i = seriesIdx(channel);
+      const j = i + dir;
+      return i >= 0 && j >= 0 && j < plotted.length;
+    };
+    const moveSeries = (channel: number, dir: -1 | 1) => {
+      const i = seriesIdx(channel);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= plotted.length) return;
+      const order = [...plotted];
+      [order[i], order[j]] = [order[j], order[i]];
+      st.setSeriesOrder(order);
+    };
     const rename = (channel: number) => {
       void askParams("Rename series", [
         { key: "label", label: "Label", type: "text", default: st.seriesLabels[channel] ?? series?.label ?? "" },
@@ -153,6 +171,8 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       toggleHidden: st.toggleHidden,
       rename,
       toggleY2,
+      moveSeries,
+      canMoveSeries,
       setXScale: st.setXScale,
       setYScale: st.setYScale,
       setY2Scale: st.setY2Scale,

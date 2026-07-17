@@ -89,6 +89,7 @@ export default function DatasetRow({
   const removeDatasetTag = useApp((s) => s.removeDatasetTag);
   const moveDatasetToFolder = useApp((s) => s.moveDatasetToFolder);
   const folders = useApp((s) => s.folders);
+  const setActiveDrag = useApp((s) => s.setActiveDrag);
 
   // Inline editors (null = not editing); rename allows an empty draft.
   const [rename, setRename] = useState<string | null>(null);
@@ -205,7 +206,12 @@ export default function DatasetRow({
             e.stopPropagation();
             e.dataTransfer.setData(DATASET_DND, d.id);
             e.dataTransfer.effectAllowed = "move";
+            // GUI_INTERACTION #3 sub-item 2b: flag every valid drop target
+            // (folder rows, plot window frames) the moment the drag starts,
+            // not only once the pointer happens to hover one.
+            setActiveDrag({ kind: "dataset", id: d.id });
           }}
+          onDragEnd={() => setActiveDrag(null)}
           onClick={(e) => e.stopPropagation()}
         >
           ⠿

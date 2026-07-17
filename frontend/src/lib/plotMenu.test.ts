@@ -46,6 +46,8 @@ function makeCtx(over: Partial<PlotMenuContext> = {}): PlotMenuContext {
     toggleHidden: vi.fn(),
     rename: vi.fn(),
     toggleY2: vi.fn(),
+    moveSeries: vi.fn(),
+    canMoveSeries: vi.fn(() => true),
     setXScale: vi.fn(),
     setYScale: vi.fn(),
     setY2Scale: vi.fn(),
@@ -97,6 +99,20 @@ describe("buildPlotMenu — sections by cursor context", () => {
     expect(find(items, "Hide series")).toBeTruthy();
     expect(find(items, "Rename…")).toBeTruthy();
     expect(find(items, "Move to right Y axis")).toBeTruthy();
+    // GUI_INTERACTION #3 sub-item 4: the draw-order reorder registered on
+    // curveActions now surfaces on the canvas curve menu too, not just the
+    // legend's own hand-built menu.
+    expect(find(items, "Move earlier (draw under)")).toBeTruthy();
+    expect(find(items, "Move later (draw over)")).toBeTruthy();
+  });
+
+  it("curve reorder entries dispatch ctx.moveSeries and respect ctx.canMoveSeries", () => {
+    const ctx = makeCtx({ series: series({ channel: 2 }), canMoveSeries: vi.fn(() => false) });
+    const items = buildPlotMenu(ctx);
+    const earlier = find(items, "Move earlier (draw under)")!;
+    expect("disabled" in earlier && earlier.disabled).toBe(true);
+    if ("run" in earlier) earlier.run();
+    expect(ctx.moveSeries).toHaveBeenCalledWith(2, -1);
   });
 
   it("gutter zones show only that axis (X below, Y2 right)", () => {

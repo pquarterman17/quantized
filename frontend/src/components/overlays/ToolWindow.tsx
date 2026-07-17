@@ -146,6 +146,7 @@ export default function ToolWindow({
       <div
         ref={titleRef}
         className="qzk-win-title"
+        title="Drag to move · double-click to collapse"
         onPointerDown={onTitleDown}
         onPointerMove={onTitleMove}
         onPointerUp={onTitleUp}

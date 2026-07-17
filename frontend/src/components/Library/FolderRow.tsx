@@ -26,6 +26,13 @@
 // resting-cue button coexisting with the drag handle; the menu itself is
 // built by `folderRowMenu.ts` from the shared `lib/contextActions.ts`
 // registry instead of an inline array.
+//
+// GUI_INTERACTION #3 sub-item 2b + 3: while ANY dataset/folder drag is in
+// flight (`activeDrag`, store/libraryPanel.ts), every folder that's a legal
+// drop target gets a subtle resting "candidate" outline — not only the one
+// the pointer happens to be over — and the hovered row additionally floats a
+// small label near the pointer naming the exact outcome ("Move inside X" /
+// "Place before X" / "Place after X"), updated on every dragover.
 
 import { useState } from "react";
 
@@ -33,10 +40,22 @@ import { buildFolderRowMenu } from "./folderRowMenu";
 import { DATASET_DND, FOLDER_DND } from "./useLibraryTree";
 import ContextMenu from "../overlays/ContextMenu";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
-import { childFolders, dropZoneAt, resolveDropBeforeId, type DropZone3 } from "../../lib/foldertree";
+import {
+  childFolders,
+  dropZoneAt,
+  isSelfOrDescendant,
+  resolveDropBeforeId,
+  type DropZone3,
+} from "../../lib/foldertree";
 import type { FolderNode } from "../../lib/types";
 import { ACCENT_SWATCHES } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
+
+/** The floating drop-outcome label's text for the given zone (sub-item 3). */
+function dropLabelText(zone: DropZone3, name: string): string {
+  if (zone === "into") return `Move inside ${name}`;
+  return zone === "above" ? `Place before ${name}` : `Place after ${name}`;
+}
 
 interface Props {
   folder: FolderNode;
@@ -50,12 +69,28 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
   const renameFolder = useApp((s) => s.renameFolder);
   const moveDatasetToFolder = useApp((s) => s.moveDatasetToFolder);
   const moveFolder = useApp((s) => s.moveFolder);
+  const activeDrag = useApp((s) => s.activeDrag);
+  const setActiveDrag = useApp((s) => s.setActiveDrag);
   const [rename, setRename] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   // Unified drop indicator: "into" for a whole-row dataset-drop OR a folder
   // dropped in the middle band; "above"/"below" for a folder dropped near an
   // edge (reposition as a sibling). Null = no drag currently over this row.
   const [dropZone, setDropZone] = useState<DropZone3 | null>(null);
+  // Pointer position for the floating drop-outcome label (sub-item 3) — only
+  // meaningful while `dropZone` is set (this row is the one being hovered).
+  const [dropPointer, setDropPointer] = useState<{ x: number; y: number } | null>(null);
+  // Resting "candidate" highlight (sub-item 2b): true for every OTHER legal
+  // drop target the instant a drag starts, not only the one under the
+  // pointer. A dataset drag accepts any folder; a folder drag excludes
+  // itself and its own descendants (moveFolder's own cycle guard, mirrored
+  // here so the resting highlight never advertises a drop it would silently
+  // reject). Folders don't change mid-drag, so a one-time getState() read is
+  // enough — only `activeDrag` needs to be reactive.
+  const isDropCandidate =
+    activeDrag != null &&
+    (activeDrag.kind === "dataset" ||
+      (activeDrag.id !== folder.id && !isSelfOrDescendant(useApp.getState().folders, activeDrag.id, folder.id)));
   // Folder Properties (sub-item 4): a fixed paint value for the picked accent
   // name, or undefined for the neutral default look.
   const folderColorCss = ACCENT_SWATCHES.find((a) => a.id === folder.color)?.c;
@@ -92,7 +127,7 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
     <div
       className={`qzk-folder-head${dropZone === "into" ? " dropinto" : ""}${
         dropZone === "above" || dropZone === "below" ? ` drop-${dropZone}` : ""
-      }`}
+      }${isDropCandidate && !dropZone ? " drop-candidate" : ""}`}
       style={{ paddingLeft: 6 + depth * 14 }}
       tabIndex={0}
       onClick={() => toggle(folder.id)}
@@ -105,16 +140,22 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
         if (e.dataTransfer.types.includes(DATASET_DND)) {
           e.preventDefault();
           if (dropZone !== "into") setDropZone("into");
+          setDropPointer({ x: e.clientX, y: e.clientY });
         } else if (e.dataTransfer.types.includes(FOLDER_DND)) {
           e.preventDefault();
           const zone = dropZoneAt(e.currentTarget.getBoundingClientRect(), e.clientY);
           if (zone !== dropZone) setDropZone(zone);
+          setDropPointer({ x: e.clientX, y: e.clientY });
         }
       }}
-      onDragLeave={() => setDropZone(null)}
+      onDragLeave={() => {
+        setDropZone(null);
+        setDropPointer(null);
+      }}
       onDrop={(e) => {
         const zone = dropZone ?? dropZoneAt(e.currentTarget.getBoundingClientRect(), e.clientY);
         setDropZone(null);
+        setDropPointer(null);
         if (e.dataTransfer.types.includes(DATASET_DND)) {
           const id = e.dataTransfer.getData(DATASET_DND);
           if (!id) return;
@@ -142,6 +183,15 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
       }}
     >
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
+      {/* Floating drop-outcome label (sub-item 3) — one cheap absolutely-
+       *  positioned element, updated on every dragover while THIS row is the
+       *  one being hovered; `pointer-events: none` (shell.css) so it never
+       *  steals the drop itself. */}
+      {dropZone && dropPointer && (
+        <div className="qzk-drop-label" style={{ left: dropPointer.x + 14, top: dropPointer.y + 14 }}>
+          {dropLabelText(dropZone, folder.name)}
+        </div>
+      )}
       {/* Dedicated drag handle (plan #13 sub-item 1) — the ONLY draggable
        *  element, so a drag only ever starts here; renaming still suppresses
        *  it (a native drag would fight the input's own text-selection). */}
@@ -156,7 +206,9 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
           e.stopPropagation();
           e.dataTransfer.setData(FOLDER_DND, folder.id);
           e.dataTransfer.effectAllowed = "move";
+          setActiveDrag({ kind: "folder", id: folder.id });
         }}
+        onDragEnd={() => setActiveDrag(null)}
         onClick={(e) => e.stopPropagation()}
       >
         ⠿
