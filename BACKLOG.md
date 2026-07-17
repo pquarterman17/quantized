@@ -6,9 +6,14 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last regenerated:** 2026-07-17 (GUI_INTERACTION #10 floating-workshop
+**Last regenerated:** 2026-07-17 (GUI_INTERACTION #3 gesture discoverability
+— drag-handle audit, resting drop-target reveal (`activeDrag`), the 3-zone
+folder-drop label, and a menu path for every drag (folder reorder + window
+rebind ADDED, curve reorder promoted into the shared registry, annotation/
+shape precise-position fields) — SHIPPED, closing the last open Tier 1 item
+without an owner gate. Prior: same day, GUI_INTERACTION #10 floating-workshop
 recovery — clamp/reset/persist/collapse/resize — SHIPPED, docking deferred.
-Prior: 2026-07-16 GUI_INTERACTION #6 pipeline-fit-spec +
+Before that: 2026-07-16 GUI_INTERACTION #6 pipeline-fit-spec +
 ORIGIN_FILE_DECODE #57 re-apply confirm both SHIPPED today, `7d49fd9`/`4fa2b5a`.
 Folded in the 2026-07-14/15 decode-campaign bookings that post-dated the last
 regeneration: #52 legend residue (chrome suppression + legend-title placement)
@@ -28,7 +33,6 @@ baseline framing) are under Owner actions below, not here.
 
 | Item | Plan / item |
 |------|-------------|
-| **Make powerful gestures discoverable** — drag handles/grip dots, cursor-over-draggable, reveal drop targets on drag-start, 3-zone folder-drop feedback, a menu path for every drag | GUI_INTERACTION #3 |
 | **Context menus as a system — residual** — registry + keyboard-complete `ContextMenu` + resting cue + confirm SHIPPED 2026-07-17 (dataset-row/folder-row/plot-curve menus retrofitted); open: Command Palette + Plot Objects tree (#2) reuse of the same entries, mini-toolbar, retrofitting the worksheet/window/annotation menus | GUI_INTERACTION #8 |
 | **Graph Builder residuals** (core — save/duplicate/rename/delete, `.dwk` persistence, active-spec+dirty indicator, export — SHIPPED 2026-07-17) — Open in Figure Builder; finish faceting for statistical marks; allow plot/layer reordering | GUI_INTERACTION #11 |
 | **Real-browser (Playwright) interaction journeys** at 100/125/200% | GUI_INTERACTION #15 |
@@ -84,6 +88,6 @@ the root; every active plan below is its declared sub-plan.
 | `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only — MAIN #9–#28 ALL shipped 2026-07-11/12 (zero open dev items) |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
-| `plans/GUI_INTERACTION_PLAN.md` | Active | Tier 1 #1–#3,#5 + Tier 2 #8 (residual), #11 (residual), #12, #15 + Tier 3 #16–#17 open; #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = Open in Figure Builder / stat-mark faceting / layer reordering); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
+| `plans/GUI_INTERACTION_PLAN.md` | Active | Tier 1 #1,#2,#5 (all owner-gated) + Tier 2 #8 (residual), #11 (residual), #12, #15 + Tier 3 #16–#17 open; #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = Open in Figure Builder / stat-mark faceting / layer reordering); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#51 complete; #52 FULLY SHIPPED 2026-07-16 + #57 same day; #54 page-setup control + its spatial-export residual BOTH SHIPPED 2026-07-17 (fit modes + PageSetup + export at page size, single-figure AND spatial); open = #53 graphic objects (subsumes #47), #54's remaining layout generality (free-positioned layers/insets/>2Y); #55/#56 close on the owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |
