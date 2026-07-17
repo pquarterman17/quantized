@@ -56,7 +56,9 @@ export default defineConfig({
   webServer: {
     // Plain executable + args (no shell pipes/redirects) so this runs
     // identically under Windows cmd.exe and a POSIX shell.
-    command: `uv run qz --no-browser --port ${PORT}`,
+    // --no-sync: a bare `uv run` re-syncs the venv on every e2e run, and an
+    // interrupted sync (OneDrive file locks) leaves half-installed packages.
+    command: `uv run --no-sync qz --no-browser --port ${PORT}`,
     cwd: REPO_ROOT,
     url: `http://127.0.0.1:${PORT}/api/health`,
     reuseExistingServer: !process.env.CI,
