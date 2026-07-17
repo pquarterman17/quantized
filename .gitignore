@@ -16,6 +16,13 @@ node_modules/
 frontend/dist/
 *.tsbuildinfo
 
+# ── Playwright E2E (GUI_INTERACTION_PLAN #15) ──────────────────────────
+frontend/test-results/
+frontend/playwright-report/
+frontend/e2e/test-results/
+frontend/e2e/playwright-report/
+frontend/blob-report/
+
 # ── Tauri / desktop ───────────────────────────────────────────────────
 src-tauri/target/
 

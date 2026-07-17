@@ -194,11 +194,56 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
 
 15. **Real-browser interaction coverage** — jsdom can't validate canvas hit
     targets, pointer capture, drag/drop, high-DPI, overlapping-plugin contention.
-    - [ ] Playwright journeys at 100/125/200%: file-drop import; folder create/nest/
-          reorder + undo; channel→X/Y/Y2 drag; right-click curve restyle;
-          annotation/shape move/edit/delete/undo; axis title+limits edit; graph
-          build/save/reopen/export; window arrange/restore; each analysis drag +
-          Esc-cancel; the same essential journey keyboard-only.
+    - [x] Playwright harness (`frontend/e2e/`) — own `playwright.config.ts`,
+          separate `npm run e2e` script (never runs inside `npm test`/vitest),
+          synthetic CSV fixtures only (never `../test-data`), 100/125/200%
+          zoom-matrix projects.
+    - [x] File-drop import
+    - [x] Folder create/nest/reorder + drag a dataset into one via its grip
+          handle (3-zone drop)
+    - [x] Right-click curve restyle (colour + marker)
+    - [x] Axis title + limits edit
+    - [x] Graph build/save/reopen (PlotSpecBar)
+    - [x] Each analysis drag + Esc-cancel (region-tool arm/cancel + ToolHud)
+    - [x] The same essential journey keyboard-only (Command Palette import,
+          Shift+F10 context menu, Enter activates)
+    - [ ] Folder reorder/nest **undo** — gated on the #1 undo-scopes owner
+          decision; there is no visual-edit undo to test yet.
+    - [ ] channel→X/Y/Y2 drag (the on-canvas `CHANNEL_DND` legend/axis-band
+          drag, distinct from the Graph Builder's ZoneWell click-to-assign
+          path already covered above)
+    - [ ] annotation/shape move/edit/delete/undo
+    - [ ] window arrange/restore
+    - [ ] export round-trip
+    - [ ] CI workflow — `.github/workflows/e2e.yml` shipped (ubuntu-latest,
+          non-required, `continue-on-error: false`) but not yet verified by a
+          live GitHub Actions run.
+
+    _Progress (2026-07-17):_ core harness + 7 journeys shipped. Server under
+    test: `uv run qz --no-browser --port 8934` (cwd = repo root), Playwright's
+    `webServer.url` polls `/api/health`; `--no-browser` means
+    `QZ_AUTO_SHUTDOWN` never arms, so the server survives the browser
+    contexts' `/api/ws` presence-socket churn between tests. Prerequisite is
+    `npm run build` (documented in `frontend/e2e/README.md`) — the backend
+    serves the built SPA from `src/quantized/web/`, exactly the `qz` run
+    model. State assertions read the `?harness` seam already used by
+    `tools/visual` (`window.__qz.useApp.getState()`) for store fields a DOM
+    query can't reach cleanly (series style, axis label/limits,
+    `savedPlotSpecs`, folder tree). Zoom matrix: `chromium-100` runs all 8
+    tests (7 spec files, `region-tool-escape.spec.ts` has 2); `chromium-125`/
+    `chromium-200` run only the 4 `@core`-tagged specs (import-drop,
+    folder-organize, curve-restyle, region-tool-escape) — the ones touching
+    canvas hit-testing/pointer capture/native drag-drop, the actual gaps this
+    plan item names; axis-limits/graph-builder/keyboard-only are plain DOM
+    form/keyboard interactions, not DPI-sensitive, so they run at the 100%
+    baseline only. 18 tests total (8+5+5), all green across 3 consecutive
+    full-suite runs (54/54). Zero `frontend/src` changes — the `?harness` seam
+    (`main.tsx`) already existed for `tools/visual`; no new testability seam
+    was needed. Menu-dependent selectors (context-menu items, the
+    concurrently-refactored `ContextMenu.tsx`/`PlotContextMenu.tsx`) are
+    located by accessible name/text, never DOM structure, so they survive
+    that refactor. `npm test` (3671 tests) and `npm run build` both still
+    green.
 
 ## Tier 3 — Nice-to-Have
 
