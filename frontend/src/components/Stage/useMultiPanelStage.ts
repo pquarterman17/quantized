@@ -420,6 +420,9 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           // Each panel's OWN layer's floating text (fix #5 — a multi-panel
           // apply used to drop every layer's annotations).
           annotations: p.annotations,
+          // Already-decoded Rect* bands, scoped to this layer's own data
+          // coordinates. The shared plugin draws them behind grid/data.
+          regionShades: p.regionShades,
           bg,
           linearPaths: LINEAR_PATHS,
           pointsPaths: POINTS_PATHS,

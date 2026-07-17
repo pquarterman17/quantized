@@ -671,16 +671,17 @@ describe("resolveFigurePanels", () => {
     });
     const panels = resolveFigurePanels([l1, l2], [ds1, ds2]);
     expect(panels).toEqual([
-      { sourceFigureIds: ["f1"], datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 10], yLim: [0, 50], xLog: false, yLog: true, xAxisLabel: "Time", yAxisLabel: "V", seriesStyles: {}, seriesLabels: {}, errKeys: {}, hiddenChannels: [], xStep: null, yStep: null, annotations: [] },
-      { sourceFigureIds: ["f2"], datasetId: "d2", xKey: null, yKeys: [0], xLim: [0, 20], yLim: [-1, 1], xLog: false, yLog: false, xAxisLabel: undefined, yAxisLabel: undefined, seriesStyles: {}, seriesLabels: {}, errKeys: {}, hiddenChannels: [], xStep: null, yStep: null, annotations: [] },
+      { sourceFigureIds: ["f1"], datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 10], yLim: [0, 50], xLog: false, yLog: true, xAxisLabel: "Time", yAxisLabel: "V", seriesStyles: {}, seriesLabels: {}, errKeys: {}, hiddenChannels: [], xStep: null, yStep: null, annotations: [], regionShades: [] },
+      { sourceFigureIds: ["f2"], datasetId: "d2", xKey: null, yKeys: [0], xLim: [0, 20], yLim: [-1, 1], xLog: false, yLog: false, xAxisLabel: undefined, yAxisLabel: undefined, seriesStyles: {}, seriesLabels: {}, errKeys: {}, hiddenChannels: [], xStep: null, yStep: null, annotations: [], regionShades: [] },
     ]);
   });
 
-  it("carries each layer's decoded x_step/y_step and its OWN annotation_marks (fixes #2 + #5)", () => {
+  it("carries each layer's decoded steps, annotations, and region shades", () => {
     const l1 = entry("f1", 1, "d1", {
       x_from: 0, x_to: 10, y_from: 0, y_to: 50, x_step: 2, y_step: 10,
       curves: [{ book: "Book1", x: "A", y: "B" }],
       annotation_marks: [{ text: "panel 1 label", x: 5, y: 25 }],
+      region_shades: [{ x1: 2, x2: 4, y1: 10, y2: 20, fill: "#99AABB" }],
     });
     const l2 = entry("f2", 2, "d2", {
       x_from: 0, x_to: 20, y_from: -1, y_to: 1,
@@ -693,9 +694,13 @@ describe("resolveFigurePanels", () => {
     expect(panels?.[0].annotations).toEqual([
       { id: "figann-f1-0-0", x: 5, y: 25, text: "panel 1 label" },
     ]);
+    expect(panels?.[0].regionShades).toEqual([
+      { id: "figshade-f1-0-0", x1: 2, x2: 4, y1: 10, y2: 20, fill: "#99AABB" },
+    ]);
     expect(panels?.[1].xStep).toBeNull();
     expect(panels?.[1].yStep).toBeNull();
     expect(panels?.[1].annotations).toEqual([]);
+    expect(panels?.[1].regionShades).toEqual([]);
   });
 
   it("carries each layer's decoded legend_labels into its own seriesLabels", () => {
@@ -860,6 +865,28 @@ describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual â€
   });
 
   describe("resolveSpatialPanels", () => {
+    it("merges a frame-coincident y2 layer's region shades onto the y2 scale", () => {
+      const host = {
+        ...nuclearSld,
+        figure: {
+          ...nuclearSld.figure,
+          region_shades: [{ x1: 3000, x2: 3100, y1: 1, y2: 2, fill: "#112233" }],
+        },
+      };
+      const y2 = {
+        ...magneticSld,
+        figure: {
+          ...magneticSld.figure,
+          region_shades: [{ x1: 3200, x2: 3300, y1: 0, y2: 1, fill: "#445566" }],
+        },
+      };
+      const result = resolveSpatialPanels([reflectivity, host, y2], [ds]);
+      expect(result?.panels[1].regionShades).toEqual([
+        { id: "figshade-f2-0-0", x1: 3000, x2: 3100, y1: 1, y2: 2, fill: "#112233" },
+        { id: "figshade-f3-0-0", x1: 3200, x2: 3300, y1: 0, y2: 1, fill: "#445566", axis: 1 },
+      ]);
+    });
+
     it("collapses the PNR/S7/Book33 repro to 2 SPATIAL panels, the second carrying a y2 overlay", () => {
       const result = resolveSpatialPanels([reflectivity, nuclearSld, magneticSld], [ds]);
       expect(result).not.toBeNull();

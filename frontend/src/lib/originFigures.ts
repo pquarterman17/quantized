@@ -441,6 +441,10 @@ export function resolveFigurePanels(
       // annotation_marks are already recorded per-layer, so no coordinate
       // transform is needed (fix #5: multi-panel figures used to drop them).
       annotations: originFigureAnnotations([fig], entry.id),
+      // Same per-layer/data-coordinate contract as annotations. This is
+      // rendering plumbing for the already-proven Rect* decode, not a new
+      // graphic-object interpretation.
+      regionShades: originRegionShades([fig], entry.id),
     });
   }
   return out;
@@ -560,6 +564,10 @@ function mergePanelWithY2(
     annotations: [
       ...(host.annotations ?? []),
       ...(y2.annotations ?? []).map((a) => ({ ...a, axis: 1 as const })),
+    ],
+    regionShades: [
+      ...(host.regionShades ?? []),
+      ...(y2.regionShades ?? []).map((shade) => ({ ...shade, axis: 1 as const })),
     ],
   };
 }

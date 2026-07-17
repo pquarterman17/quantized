@@ -1571,9 +1571,8 @@ export const useApp = create<AppState>((set, get) => ({
           // when the page didn't decode. Enables the "page" fit + page export.
           pageSetup: pageSetupFromDecoded(family[0].figure.page ?? null),
           ...ORIGIN_FIGURE_AXIS,
-          // Region bands are single-plot overlays; a spatial multi-panel
-          // apply clears any prior figure's bands (no per-panel shade
-          // support yet — an honest, documented gap, not a guess).
+          // Spatial bands live on each SpatialPanel; clear only the singleton
+          // overlay list so a prior single plot cannot leak into this view.
           regionShades: [],
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);

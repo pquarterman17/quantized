@@ -139,6 +139,34 @@ describe("MultiPanelStage — mode regressions", () => {
     expect(opts.opts.plugins.length).toBe(1);
   });
 
+  it("threads a panel's decoded region bands into the behind-data shade plugin", async () => {
+    useApp.setState({
+      spatialPanels: [
+        {
+          datasetId: "d1",
+          xKey: null,
+          yKeys: [0],
+          xLim: [0, 3],
+          yLim: [0, 40],
+          xLog: false,
+          yLog: false,
+          row: 0,
+          col: 0,
+          regionShades: [
+            { id: "shade-1", x1: 0.5, x2: 1.5, y1: 10, y2: 30, fill: "#99AABB" },
+          ],
+        },
+      ],
+    });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const opts = created[0] as {
+      opts: { plugins: { hooks?: { drawClear?: unknown[] } }[] };
+    };
+    expect(opts.opts.plugins).toHaveLength(1);
+    expect(opts.opts.plugins[0].hooks?.drawClear).toHaveLength(1);
+  });
+
   // Fix #4: a spatial panel's decoded legend label overrides the series name.
   it("spatial-apply mode threads a panel's seriesLabels through to the series label", async () => {
     useApp.setState({

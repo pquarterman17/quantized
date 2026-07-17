@@ -14,7 +14,11 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-17 (visual-import campaign PR 1 READY: decoded static
+**Updated:** 2026-07-17 (visual-import campaign PR 2 READY: already-decoded
+Rect* region bands now render in their owning spatial panel, including
+secondary-axis tagging for a frame-coincident y2 layer; positive-specimen
+corpus strict-pass 167/167 resolved / 0 renderer failures). Same day, PR 1:
+decoded static
 legends now render inside each spatial Origin panel, reusing the ordinary
 line+marker swatch and the panel's own frame-relative position; full corpus
 strict-pass 332 resolved / 18 known unresolved / 0 renderer failures). Same
@@ -909,6 +913,23 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**59. Spatial multi-panel Origin region bands**~~ (2026-07-17; PR
+  pending) — `resolveFigurePanels` now carries each layer's already-proven
+  `region_shades` into its own `SpatialPanel`; `MultiPanelStage` feeds only
+  that list to the existing behind-data `regionShadePlugin`. A
+  frame-coincident y2 layer's shades are retagged `axis: 1` during the same
+  established merge that retags its annotations. Empty layers stay empty,
+  and the singleton shade list is still cleared on spatial apply so a prior
+  single plot cannot leak bands into the page. No object bytes, extents,
+  fills, transparency, bindings, row order, limits, or paths were decoded or
+  reinterpreted.
+  - Verification: focused 187 tests; full frontend 3744 tests; production
+    build + typecheck; integrity, ruff, and mypy green. Real-browser positive
+    specimens (MnN_Diffusion_PNR, PNR, SuperlatticeFits): 167/167 resolved,
+    zero renderer/process failures. Visual checks: MnN Graph19, PNR Graph14,
+    SuperlatticeFits Graph10 — panel-local ownership, behind-data ordering,
+    and y2 overlays preserved.
 
 - ~~**58. Spatial multi-panel Origin legends**~~ (2026-07-17; PR #56) —
   the spatial apply path already carried each layer's independently decoded
