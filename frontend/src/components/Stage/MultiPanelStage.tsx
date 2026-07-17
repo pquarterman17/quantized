@@ -52,10 +52,14 @@
 
 import "uplot/dist/uPlot.min.css";
 
+import { createPortal } from "react-dom";
+
 import { runExportSpatialPageCommand } from "../../lib/exportPageCommand";
 import { canExportSpatialPage } from "../../lib/spatialPageExport";
+import { resolvePlotBg } from "../../lib/uplotOpts";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { MULTIPANEL_SYNC_KEY, useMultiPanelStage } from "./useMultiPanelStage";
+import SpatialPanelLegend from "./SpatialPanelLegend";
 
 export default function MultiPanelStage() {
   const setStackMode = useApp((s) => s.setStackMode);
@@ -71,6 +75,7 @@ export default function MultiPanelStage() {
   const xFmt = useApp((s) => s.xFmt);
   const yFmt = useApp((s) => s.yFmt);
   const showGrid = useApp((s) => s.showGrid);
+  const showLegend = useApp((s) => s.showLegend);
   const showAxisBox = useApp((s) => s.showAxisBox);
   const refLines = useApp((s) => s.refLines);
   const seriesStyles = useApp((s) => s.seriesStyles);
@@ -87,7 +92,7 @@ export default function MultiPanelStage() {
   const setPanelFit = useApp((s) => s.setPanelFit);
   const pageSetup = useApp((s) => s.pageSetup);
   const ensureBookData = useApp((s) => s.ensureBookData);
-  const { hostRef, hostStyle, readout, tool } = useMultiPanelStage({
+  const { hostRef, hostStyle, readout, tool, spatialLegends } = useMultiPanelStage({
     active,
     datasets,
     spatialPanels,
@@ -119,10 +124,26 @@ export default function MultiPanelStage() {
     // exactly as before item 15 — see the item-18 note in MULTI_PLOT_PLAN.
     ensureBookData,
   });
+  const { inkColor, isDark: isDarkBg } = resolvePlotBg();
 
   return (
     <div className="qzk-stage">
       <div ref={hostRef} style={hostStyle} />
+      {showLegend
+        ? spatialLegends.map((legend) =>
+            createPortal(
+              <SpatialPanelLegend
+                entries={legend.entries}
+                title={legend.title}
+                frameXY={legend.frameXY}
+                isDarkBg={isDarkBg}
+                inkColor={inkColor}
+              />,
+              legend.target,
+              legend.key,
+            ),
+          )
+        : null}
       <div className="qzk-glass qzk-float-tools">
         <button
           className="qzk-tool-btn active"

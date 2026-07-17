@@ -14,7 +14,11 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-17 (#54 residual SHIPPED: spatial-view export at true
+**Updated:** 2026-07-17 (visual-import campaign PR 1 READY: decoded static
+legends now render inside each spatial Origin panel, reusing the ordinary
+line+marker swatch and the panel's own frame-relative position; full corpus
+strict-pass 332 resolved / 18 known unresolved / 0 renderer failures). Same
+day, #54 residual SHIPPED: spatial-view export at true
 page coordinates — free page-coordinate `add_axes` placement in
 `calc.figure_page` + a fail-closed "Export page…" command on the spatial
 MultiPanelStage). #54 layout generality remains ACTIVE: consolidation
@@ -905,6 +909,24 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**58. Spatial multi-panel Origin legends**~~ (2026-07-17; PR pending) —
+  the spatial apply path already carried each layer's independently decoded
+  `legend_labels`, curve styles, title, and frame position, but rendered no
+  DOM legend at all. `SpatialPanel` now carries the proven title/position;
+  `MultiPanelStage` renders a read-only per-panel portal using the SAME
+  `LegendSample` as the ordinary plot, so `line_symbol` curves show both the
+  line and marker instead of a line-only key. A panel-local frame-vars bridge
+  keeps decoded placement relative to that panel's uPlot frame through resize
+  and zoom; panels with no decoded legend text/title remain legend-free
+  (negative control, never synthesize content). No parser bytes, curve
+  bindings, acquisition order, limits, or path builders changed.
+  - Verification: focused 113 tests; full frontend 3742 tests; production
+    build + typecheck; backend 2906 passed / 3 skipped / 12 xfailed; integrity,
+    ruff, and mypy green. Full 12-project real-browser Origin corpus:
+    350 graph windows, 332 resolved, 18 known unresolved, zero renderer or
+    process failures. Visual oracle spot-checks: PNR Graph11, RockingCurve
+    Graph3, XMCD Graph37 (including line+marker legend samples).
 
 - ~~**#50 Exact source-workbook and Graph Builder fallback**~~ (2026-07-12,
   PR #27) — every decoded figure exposes its exact import-scoped source books
