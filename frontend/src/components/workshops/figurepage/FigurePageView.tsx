@@ -68,7 +68,7 @@ export default function FigurePageView() {
   const sel = selIdx !== null ? p.slots[selIdx] : null;
 
   return (
-    <ToolWindow title="Figure page (multi-panel)" width={840} onClose={() => setOpen(false)}>
+    <ToolWindow id="figurepage" title="Figure page (multi-panel)" width={840} onClose={() => setOpen(false)}>
       <div style={{ display: "flex", gap: 12 }}>
         {/* Page options */}
         <div style={{ width: 170, display: "flex", flexDirection: "column", gap: 6 }}>

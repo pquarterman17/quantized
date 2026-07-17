@@ -144,7 +144,7 @@ export default function ReportPanel() {
   };
 
   return (
-    <ToolWindow title={entry.name} width={460} onClose={() => setOpenReport(null)}>
+    <ToolWindow id="report" title={entry.name} width={460} onClose={() => setOpenReport(null)}>
       {entry.report.created && (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           {entry.report.created}

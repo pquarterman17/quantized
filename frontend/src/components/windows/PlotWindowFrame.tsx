@@ -13,11 +13,15 @@
 // on the editable text never also reaches the title bar's maximize toggle.
 //
 // A separate component from `overlays/ToolWindow` (the 24-consumer workshop
-// floating panel): that one is deliberately store-decoupled with fixed width
-// and no resize/persistence; this one is store-controlled geometry with
-// resize, because plot windows need it and workshops don't (Key Decision 3).
-// It shares the `qzk-win*` naming FAMILY (see shell.css) under a distinct
-// `qzk-plotwin*` prefix so the two don't collide in the stylesheet.
+// floating panel — GUI_INTERACTION_PLAN #10 gave it its OWN store-backed
+// geometry in store/toolwindows.ts, distinct from this MDI plot-window
+// slice): the two live in unrelated stores because a workshop's identity is
+// its `id` prop (stable across close/reopen) while a plot window's identity
+// is a generated `PlotWindow.id` (MULTI_PLOT_PLAN's window-management
+// model) — different lifecycles, different clamp/snap rules (this one snaps
+// to siblings + the canvas; ToolWindow clamps its title bar to the
+// viewport). It shares the `qzk-win*` naming FAMILY (see shell.css) under a
+// distinct `qzk-plotwin*` prefix so the two don't collide in the stylesheet.
 
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 

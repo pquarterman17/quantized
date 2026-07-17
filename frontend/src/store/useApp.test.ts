@@ -2983,6 +2983,26 @@ describe("useApp loadWorkspace", () => {
     expect(useApp.getState().activeId).toBeNull();
   });
 
+  // GUI_INTERACTION_PLAN #10 item 3: the ToolWindow layout registry
+  // round-trips through loadWorkspace exactly like plotWindows/folders — a
+  // legacy doc with no field resets to {} (every window falls back to its
+  // own default props), same as a fresh app start.
+  it("restores a persisted ToolWindow layout map", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "w1", name: "first", data: raw }],
+      toolWindowLayout: { baseline: { x: 200, y: 150, width: 320, height: null, collapsed: false } },
+    });
+    expect(useApp.getState().toolWindowLayout).toEqual({
+      baseline: { x: 200, y: 150, width: 320, height: null, collapsed: false },
+    });
+  });
+
+  it("defaults toolWindowLayout to {} for a doc without the field", () => {
+    useApp.getState().setToolWindowLayout("stale", { x: 1, y: 1, width: 300, height: null, collapsed: false });
+    useApp.getState().loadWorkspace({ datasets: [{ id: "w1", name: "first", data: raw }] });
+    expect(useApp.getState().toolWindowLayout).toEqual({});
+  });
+
   it("restores the folder tree, expansion, and persisted active/selection (v2)", () => {
     useApp.getState().loadWorkspace({
       datasets: [
@@ -3060,6 +3080,7 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       figureDocs: [],
       plotWindows: [],
       focusedWindowId: null,
+      toolWindowLayout: {},
     };
   }
 
@@ -3559,6 +3580,35 @@ describe("useApp row selection (#50 selection dimension)", () => {
     expect(useApp.getState().selection).toEqual({ datasetId: "d1", rows: [2] });
     useApp.setState({ selection: { datasetId: "other", rows: [0] } });
     useApp.getState().excludeSelectedRows(); // stale → no-op
+    expect(excludedOf("d1")).toBeUndefined();
+  });
+
+  // GUI_INTERACTION #14: a `windowId` argument targets `worksheetSelections`
+  // instead — completely independent of the active-dataset singleton above.
+  it("excludeSelectedRows(windowId) acts on that window's own selection, leaving the active-dataset one untouched", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds", data: raw }],
+      selection: { datasetId: "d1", rows: [0] }, // the Stage tab's own selection
+      worksheetSelections: { ws1: { datasetId: "d1", rows: [1, 2] } },
+    });
+    useApp.getState().excludeSelectedRows("ws1");
+    expect(excludedOf("d1")).toEqual([1, 2]);
+    expect(useApp.getState().worksheetSelections.ws1).toBeUndefined(); // that window's selection cleared
+    expect(useApp.getState().selection).toEqual({ datasetId: "d1", rows: [0] }); // Stage tab's untouched
+  });
+
+  it("keepOnlySelectedRows(windowId) excludes that window's complement only", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds", data: raw }],
+      worksheetSelections: { ws1: { datasetId: "d1", rows: [1] } },
+    });
+    useApp.getState().keepOnlySelectedRows("ws1");
+    expect(excludedOf("d1")).toEqual([0, 2]);
+    expect(useApp.getState().worksheetSelections.ws1).toBeUndefined();
+  });
+
+  it("excludeSelectedRows(windowId) is a no-op for an unknown or empty window selection", () => {
+    useApp.getState().excludeSelectedRows("no-such-window");
     expect(excludedOf("d1")).toBeUndefined();
   });
 });
@@ -5140,5 +5190,56 @@ describe("useApp plot windows — item 17 (worksheet/map document windows, full 
     expect(s.plotWindows.find((w) => w.id === "ws1")?.datasetId).toBe("d1"); // binding restored
     const focused = s.plotWindows.find((w) => w.id === s.focusedWindowId);
     expect(focused?.kind).toBe("plot"); // the appended main window took focus
+  });
+
+  // GUI_INTERACTION #14: a worksheet document window's row selection lives in
+  // `worksheetSelections`, keyed by its OWN window id — closing/rebinding it
+  // must not leak a stale entry that could resurface on an unrelated future
+  // window (id reuse across a long session, or a coincidental datasetId match).
+  it("closeWindow drops the closed document window's worksheetSelections entry (no leak)", () => {
+    seed();
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "ws1", kind: "worksheet" })],
+      focusedWindowId: "w1",
+      worksheetSelections: { ws1: { datasetId: "d1", rows: [0, 1] } },
+    });
+    useApp.getState().closeWindow("ws1"); // background window — the non-focused branch
+    expect(useApp.getState().worksheetSelections.ws1).toBeUndefined();
+  });
+
+  it("closeWindow drops the entry even when closing the FOCUSED window (the refocus branch)", () => {
+    seed();
+    useApp.setState({
+      plotWindows: [win({ id: "w1" }), win({ id: "ws1", kind: "worksheet" })],
+      focusedWindowId: "ws1",
+      worksheetSelections: { ws1: { datasetId: "d1", rows: [2] } },
+    });
+    useApp.getState().closeWindow("ws1");
+    expect(useApp.getState().worksheetSelections.ws1).toBeUndefined();
+    expect(useApp.getState().focusedWindowId).toBe("w1");
+  });
+
+  it("rebindWindow on a document window leaves its OLD selection entry stale — self-heals via the datasetId guard, never rebinds it to the new dataset", () => {
+    seed();
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "alpha", data: raw },
+        { id: "d2", name: "beta", data: raw },
+      ],
+      plotWindows: [win({ id: "w1" }), win({ id: "ws1", kind: "worksheet" })],
+      focusedWindowId: "w1",
+      worksheetSelections: { ws1: { datasetId: "d1", rows: [0] } },
+    });
+    useApp.getState().rebindWindow("ws1", "d2");
+    // Same "live only if datasetId still matches" contract useWorksheetView
+    // reads through: the entry still names the OLD dataset, so it reads as
+    // empty for the window's NEW binding — the old rows never leak forward.
+    expect(useApp.getState().worksheetSelections.ws1?.datasetId).toBe("d1");
+  });
+
+  it("loadWorkspace resets worksheetSelections — transient UI state never round-trips", () => {
+    useApp.setState({ worksheetSelections: { ws1: { datasetId: "d1", rows: [0] } } });
+    useApp.getState().loadWorkspace({ datasets: [{ id: "d1", name: "a", data: raw }], activeId: "d1" });
+    expect(useApp.getState().worksheetSelections).toEqual({});
   });
 });

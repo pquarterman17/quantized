@@ -170,6 +170,37 @@ def test_page_panel_title_override_beats_figure_title() -> None:
     assert "inner title" not in svg
 
 
+def _page_rects(rects: list[tuple[float, float, float, float]], **extra: Any) -> dict[str, Any]:
+    panels = [
+        {"figure": {"dataset": _dataset(1.0 + i)}, "row": 0, "col": 0, "page_rect": list(r)}
+        for i, r in enumerate(rects)
+    ]
+    return {"rows": 1, "cols": 1, "panels": panels, **extra}
+
+
+def test_page_rect_free_placement_renders() -> None:
+    resp = client.post(
+        "/api/export/figure-page",
+        json=_page_rects([(0.05, 0.05, 0.4, 0.4), (0.55, 0.55, 0.4, 0.4)], fmt="svg"),
+    )
+    assert resp.status_code == 200
+    assert b"<svg" in resp.content[:400]
+
+
+def test_page_rect_mixed_with_no_rect_is_422() -> None:
+    body = _page_rects([(0.1, 0.1, 0.4, 0.4)])
+    body["panels"].append({"figure": {"dataset": _dataset()}, "row": 0, "col": 0})
+    resp = client.post("/api/export/figure-page", json=body)
+    assert resp.status_code == 422
+    assert "mixed free/grid" in resp.json()["detail"]
+
+
+def test_page_rect_out_of_bounds_is_422() -> None:
+    resp = client.post("/api/export/figure-page", json=_page_rects([(0.8, 0.1, 0.5, 0.4)]))
+    assert resp.status_code == 422
+    assert "page_rect" in resp.json()["detail"]
+
+
 def test_page_filename_is_sanitized() -> None:
     resp = client.post(
         "/api/export/figure-page",

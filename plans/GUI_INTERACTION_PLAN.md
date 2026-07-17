@@ -111,12 +111,6 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
 
 ## Tier 2 — Medium Impact
 
-7. **Plot toolbar legibility** — ~2 dozen glyph-only buttons with `title`-only hints.
-   - [ ] Shared tooltip component: name + one-line behaviour + shortcut.
-   - [ ] `aria-label`/`aria-pressed`/focus styles on every icon button.
-   - [ ] Split into named flyouts: Navigate / Inspect / Analyze / Annotate / View /
-         Export; persist toolbar config; disable impossible actions with a reason.
-
 8. **Context menus as a complete system** — one **context-action registry** keyed
    by selected object type, reused in right-click menus, the Plot Objects tree
    (#2), Command Palette, and an optional mini-toolbar.
@@ -131,11 +125,6 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
          persistent-tool pref is set); right-click cancels an unfinished gesture
          before opening a menu; cursor/overlay reflect the active mode.
 
-10. **Floating workshops recoverable** — `ToolWindow` clamps left/top only.
-    - [ ] Clamp the full title bar to the viewport; add `Reset window positions`;
-          persist positions in the workspace; support collapse + resize; later,
-          dock into the right panel.
-
 11. **Graph Builder → durable artifact** — promote its output to a first-class
     saved `PlotSpec` in `.dwk`.
     - [ ] Save / Save As / Duplicate / Open in Figure Builder / Export; Stage shows
@@ -148,11 +137,6 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
           renderer, but over ONE spec; add export-preview + parity tests (axis
           limits, labels, fonts, colours, widths, markers, annotations, error bars,
           legends, facets, panel geometry). Do NOT dissolve the canvas/vector split.
-
-14. **Worksheet windows: scope selection state** — multiple worksheet windows
-    share global row-selection + plotted-column highlight.
-    - [ ] Key selection / active cell / range / plotted-column emphasis by
-          worksheet-window ID; make any cross-sheet linking explicit + labelled.
 
 15. **Real-browser interaction coverage** — jsdom can't validate canvas hit
     targets, pointer capture, drag/drop, high-DPI, overlapping-plugin contention.
@@ -237,6 +221,69 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
   per-field setters); `DatasetRow.tsx` extraction (`datasetRowMenu.ts`) kept
   it at 367/400 despite the new handle/caption/reveal wiring. Frontend
   3463 green (+42 tests), build green.
+
+- ~~**#7 Plot toolbar legibility**~~ (2026-07-17) — the shared `TooltipLayer`
+  (already mounted app-wide) now renders a bold NAME + one-line BEHAVIOUR
+  description + optional keyboard SHORTCUT, shows on keyboard focus (not just
+  hover, via delegated focusin/focusout) and dismisses on Esc. Every
+  `PlotToolbar` button carries `aria-label` + `aria-pressed` (toggle/tool-
+  select buttons) sourced from a single `{tool: key}` table
+  (`lib/plotToolKeys.ts`'s new `keyForTool`, the exact inverse of the existing
+  `toolForKey`, so the tooltip can't drift from the real handler). Buttons
+  regrouped into six named ARIA groups (Navigate/Inspect/Analyze/Annotate/
+  View/Export, new `PlotToolbarGroup`) with a subtle uppercase caption
+  toggleable from a new "..." flyout — persisted via `store/prefs.ts`'s
+  `loadToolbarPrefs`/`saveToolbarPrefs` (own `qz.toolbarPrefs` key,
+  deliberately NOT `store/useApp.ts`, which sits at its ratchet ceiling with
+  zero headroom). No button moved behind a flyout — pointer/zoom/pan/
+  autoscale stay one click away. Two buttons disable with a real reason:
+  Reset View when `xLim`/`yLim` are both null (mirrors the "A" key's own
+  no-op guard), and Copy Image when `clipboardImageSupported()` is false (the
+  same condition `usePlotStageActions`' `snapshot()` already falls back on).
+  Data lives in the new pure `lib/plotToolbarDefs.ts`; `PlotToolbar.tsx` stays
+  at 255 lines, `PlotStage.tsx` (already at its exact 400-line ceiling) and
+  `store/useApp.ts` (3239/3240) untouched. Frontend 258 files / 3534 tests
+  green; build green.
+
+- ~~**#14 Worksheet windows: scope selection state**~~ (2026-07-17) — an MDI
+  worksheet document window's row selection now lives in its own entry in the
+  new `store/worksheetSelection.ts` slice (`worksheetSelections`, keyed by
+  window id), fully independent of every other worksheet window — including
+  another document window on the SAME dataset (root cause: the legacy actions
+  keyed off `activeId`, not the worksheet's own dataset, so a background
+  window's clicks silently wrote into whatever was active). The Stage
+  "Worksheet" tab keeps the legacy active-dataset `selection` singleton — the
+  ONE deliberate link to the live plot's brush-select/highlight — now surfaced
+  explicitly via a "⧟ Linked to plot" badge (`WorksheetToolbar`) instead of
+  silently; a document window is NEVER linked. The column context menu's
+  "Set as X axis"/"Plot as Y" now claim the focused plot for the worksheet's
+  own dataset first (`claimForPlotIntent`, shared with "Plot selection") so
+  they can no longer silently retarget an unrelated active plot, and read as
+  gated-null (no stale checkmark) while unlinked. `windows.ts`'s `closeWindow`
+  drops the closed window's selection entry (no leak); a document-window
+  rebind leaves the old entry pointing at the old dataset, self-healing via
+  the same "live only if datasetId matches" guard the legacy singleton always
+  used. No new allowlist entries — `excludeSelectedRows`/`keepOnlySelectedRows`
+  (the only actions touching `Dataset.excludedRows`) stayed in `useApp.ts`,
+  widened with an optional `windowId`. "Active cell"/"range" don't exist as
+  separate dimensions today — nothing to scope. Frontend 3457 green;
+  `useApp.ts` 3236/3240, `windows.ts` 750/750 (both at their ratchet pins).
+
+- ~~**#10 Floating workshops recoverable**~~ (2026-07-17) — `ToolWindow`
+  (`components/overlays/ToolWindow.tsx`) now clamps the ENTIRE title bar
+  (not just the top-left corner) inside the viewport, both on drag end and
+  on every `window resize` (the monitor-unplug loss scenario); a View-menu
+  `Reset window positions` command (`commands/uiCommands.ts`) restores every
+  ToolWindow to its default layout in one shot. Geometry (position/size/
+  collapsed) moved out of local `useState` into a new `store/toolwindows.ts`
+  slice keyed by each window's `id` prop (threaded through all 24 consumers
+  + `ResultsWindow`), so a window survives close/reopen and round-trips
+  through the `.dwk` workspace (`lib/workspace.ts`'s `toolWindowLayout`
+  field, additive-optional — legacy files load unchanged — and
+  viewport-clamped on load). Added collapse (double-click the title bar or
+  its chevron button) and corner-drag resize (`.qzk-win-resize`), both
+  persisted alongside position. Docking into the right panel deferred per
+  the plan. Frontend 3483 tests green; `store/useApp.ts` 3231/3240.
 
 - ~~**#6 Pipeline fit execution reproduces the interactive fit**~~ (2026-07-16,
   Opus worktree agent, merged `7d49fd9`) — recorded "fit" steps now carry the

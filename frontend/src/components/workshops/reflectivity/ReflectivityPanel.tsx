@@ -28,7 +28,7 @@ export default function ReflectivityPanel() {
   } = useReflectivity();
 
   return (
-    <ToolWindow title="Reflectivity" width={380} onClose={() => setOpen(false)}>
+    <ToolWindow id="reflectivity" title="Reflectivity" width={380} onClose={() => setOpen(false)}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <label className="qzk-field-lbl" style={{ margin: 0 }}>
           Radiation

@@ -38,6 +38,8 @@ beforeEach(() => {
     graphBuilderOpen: false,
     graphBuilderSeed: null,
     originWorksheetSeed: null,
+    selection: null,
+    worksheetSelections: {}, // #14: isolate each test's per-window selections
   });
 });
 
@@ -160,5 +162,79 @@ describe("useWorksheetView — per-column widths (MAIN_PLAN #3)", () => {
     expect(result.current.colWidths[0]).toBe(300);
     rerender({ d: other });
     expect(result.current.colWidths).toEqual({});
+  });
+});
+
+describe("useWorksheetView — window-scoped row selection (GUI_INTERACTION #14)", () => {
+  it("two document windows on the SAME dataset select independently", () => {
+    const a = renderHook(() => useWorksheetView(ds, "w1"));
+    const b = renderHook(() => useWorksheetView(ds, "w2"));
+    act(() => a.result.current.toggleRowSelected(0));
+    act(() => b.result.current.toggleRowSelected(2));
+    expect([...a.result.current.selected]).toEqual([0]);
+    expect([...b.result.current.selected]).toEqual([2]);
+    // Selecting more in `a` never touches `b`'s selection.
+    act(() => a.result.current.toggleRowSelected(1));
+    expect([...a.result.current.selected]).toEqual([0, 1]);
+    expect([...b.result.current.selected]).toEqual([2]);
+  });
+
+  it("a document window's selection never touches the Stage tab's (no windowId) selection", () => {
+    const stage = renderHook(() => useWorksheetView(ds));
+    const doc = renderHook(() => useWorksheetView(ds, "w1"));
+    act(() => doc.result.current.toggleRowSelected(0));
+    expect([...doc.result.current.selected]).toEqual([0]);
+    expect([...stage.result.current.selected]).toEqual([]);
+    expect(useApp.getState().selection).toBeNull(); // the legacy singleton is untouched
+  });
+
+  it("plotLinked is true for the Stage tab showing the active dataset, false for a document window", () => {
+    const stage = renderHook(() => useWorksheetView(ds));
+    const doc = renderHook(() => useWorksheetView(ds, "w1"));
+    expect(stage.result.current.plotLinked).toBe(true);
+    expect(doc.result.current.plotLinked).toBe(false);
+  });
+
+  it("plotLinked is false for the Stage tab when it shows a non-active dataset (item 15 worksheetId override)", () => {
+    const other = { ...ds, id: "d2" };
+    useApp.setState({ datasets: [ds, other], activeId: "d2" }); // active plot is d2
+    const stage = renderHook(() => useWorksheetView(ds)); // Stage tab showing d1 via worksheetId override
+    expect(stage.result.current.plotLinked).toBe(false);
+  });
+
+  it("an unlinked worksheet's own row selection stays live (not swallowed by the plotLinked gate)", () => {
+    const other = { ...ds, id: "d2" };
+    useApp.setState({ datasets: [ds, other], activeId: "d2" });
+    const stage = renderHook(() => useWorksheetView(ds));
+    act(() => stage.result.current.toggleRowSelected(1));
+    expect([...stage.result.current.selected]).toEqual([1]);
+  });
+
+  it("plotted-column emphasis (xKey/yKeys) is gated to null for an unlinked worksheet window", () => {
+    // The focused plot shows d2's axes; a worksheet window bound to d1 must
+    // never echo them as if they were ITS OWN plotted columns.
+    const other = { ...ds, id: "d2" };
+    useApp.setState({ datasets: [ds, other], activeId: "d2", xKey: 0, yKeys: [1] });
+    const { result } = renderHook(() => useWorksheetView(ds, "w1"));
+    expect(result.current.xKey).toBeNull();
+    expect(result.current.yKeys).toBeNull();
+  });
+
+  it("setXKey on an unlinked worksheet claims the focused plot for its dataset first, then sets it", () => {
+    const other = { ...ds, id: "d2" };
+    useApp.setState({ datasets: [ds, other], activeId: "d2", stageTab: "plot" });
+    const { result } = renderHook(() => useWorksheetView(ds, "w1")); // bound to d1, plot shows d2
+    act(() => result.current.setXKey(1));
+    const s = useApp.getState();
+    expect(s.activeId).toBe("d1"); // claimed
+    expect(s.xKey).toBe(1);
+  });
+
+  it("closing a document window's selection (clearWorksheetRowSelection) is reflected live in the hook", () => {
+    const { result } = renderHook(() => useWorksheetView(ds, "w1"));
+    act(() => result.current.toggleRowSelected(0));
+    expect([...result.current.selected]).toEqual([0]);
+    act(() => useApp.getState().clearWorksheetRowSelection("w1"));
+    expect([...result.current.selected]).toEqual([]);
   });
 });

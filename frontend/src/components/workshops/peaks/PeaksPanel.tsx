@@ -65,7 +65,7 @@ export default function PeaksPanel() {
   const faint = { color: "var(--text-faint)" } as const;
 
   return (
-    <ToolWindow title="Peaks" width={360} onClose={close}>
+    <ToolWindow id="peaks" title="Peaks" width={360} onClose={close}>
       {!active && (
         <div className="qzk-ds-meta" style={faint}>
           Select a dataset to find peaks.

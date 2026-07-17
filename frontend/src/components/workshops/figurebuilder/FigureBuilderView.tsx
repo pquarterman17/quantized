@@ -20,7 +20,7 @@ export default function FigureBuilderView() {
   const [tplName, setTplName] = useState("");
 
   return (
-    <ToolWindow title={f.frozen ? "Figure builder (frozen data)" : "Figure builder"} width={560} onClose={() => setOpen(false)}>
+    <ToolWindow id="figurebuilder" title={f.frozen ? "Figure builder (frozen data)" : "Figure builder"} width={560} onClose={() => setOpen(false)}>
       {!f.data ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           Select a dataset to build a figure.

@@ -37,7 +37,6 @@ import {
   moveDatasetToFolder as treeMoveDatasetToFolder,
   moveFolder as treeMoveFolder,
   renameFolder as treeRenameFolder,
-  updateFolder as treeUpdateFolder,
 } from "../lib/foldertree";
 import { isOriginBookDataset } from "../lib/grouping";
 import { mergeDatasets } from "../lib/merge";
@@ -74,11 +73,10 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
-// Undo/redo (#9) + re-import-from-source (#10) slices, composed the same way.
+// Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistorySlice } from "./history";
-// Save-workspace-to-file (#38 + MAIN_PLAN #16 ratchet offset) — see its doc.
+import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
 import { runSaveWorkspaceToFile } from "./workspaceIO";
-// Composed store slices (each documented in its own file):
 import { createReductionsSlice, type ReductionsSlice } from "./reductions";
 import { createReimportSlice, type ReimportSlice } from "./reimport";
 import { createPanelsSlice, type PanelsSlice } from "./panels";
@@ -86,6 +84,7 @@ import { createPointerToolSlice, type PointerToolSlice } from "./pointerTool";
 import { createSplitSlice, type SplitSlice } from "./split";
 import { createShapesSlice, type ShapesSlice } from "./shapes";
 import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel";
+import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -100,7 +99,7 @@ import type { PlotSpec } from "../lib/plotspec";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import { fitDataForSpec, fitStepParams } from "../lib/fitselection";
 import { firstVisiblePlottedChannel, qfitSpec, selectRoiRows, type GadgetMode } from "../lib/quickfit";
-import { activeRowIndices, analysisData, droppedRows, expandToFull, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
+import { activeRowIndices, analysisData, droppedRows, expandToFull, keepOnlyExcluded, mergeExcluded, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
 import {
   addRecentEntry,
   clearRecentMeta,
@@ -322,7 +321,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, OriginImportSlice, OriginFallbackSlice, LibraryPanelSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -331,12 +330,9 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // WORKSHEET_PLAN item 15 ("origin book click opens…"): the Worksheet tab's
   // dataset override, set by `activateFromLibrary`'s worksheet-intent path
   // instead of `activeId` — `activeId` stays the FOCUSED plot window's bound
-  // dataset (PlotStage/Inspector/every workshop read `activeId` and MUST
-  // keep doing so unchanged, per MULTI_PLOT_PLAN's facade), so switching
-  // Worksheet content here can never rebind or reset the plot. null = "no
-  // override" — `Worksheet.tsx` falls back to `activeId`, today's behavior.
-  // Cleared by `setActive` (any full plot-intent activation drops it — the
-  // plot it now shows is the worksheet's again, via the `activeId` fallback).
+  // dataset (PlotStage/Inspector/every workshop MUST keep reading it
+  // unchanged, per MULTI_PLOT_PLAN's facade). null = "no override"
+  // (`Worksheet.tsx` falls back to `activeId`); `setActive` clears it.
   worksheetId: string | null;
   // Report sheets (#36): named analysis reports (curve fits, peak tables,
   // stats) living in the library. `datasetId` ties one back to its source
@@ -357,9 +353,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // when its dataset's data changed under a saved fitSpec.
   staleDatasets: string[];
   staleFits: string[];
-  // Library folder tree (project-organization plan, Approach B). Pure
-  // organization over the flat `datasets[]` array — datasets point in via
-  // `Dataset.folderId`; folders never gate row-state. Round-trips .dwk v2.
+  // Library folder tree (project-organization plan, Approach B): pure
+  // organization over `datasets[]` (`Dataset.folderId`); never gates row-state.
   folders: FolderNode[];
   // Expanded folder ids (Library tree UI state); persisted so a project reopens
   // with the same folders open. Round-trips .dwk v2.
@@ -733,9 +728,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   moveFolder: (id: string, newParentId: string | null, beforeId?: string) => void;
   moveDatasetToFolder: (id: string, folderId: string | null, beforeId?: string) => void;
   toggleFolderExpanded: (id: string) => void;
-  // Folder Properties (GUI_INTERACTION_PLAN #13 sub-item 4): patch notes/
-  // colour/defaultTemplate; `renameFolder` above still owns the name.
-  updateFolder: (id: string, patch: { notes?: string; color?: string; defaultTemplate?: string }) => void;
+  // updateFolder (Properties: notes/colour/defaultTemplate) lives on
+  // LibraryPanelSlice (store/libraryPanel.ts) — ratchet headroom.
   // Smart folders (item 9): saved queries only — membership is derived.
   addSmartFolder: (name: string, query: string) => void;
   updateSmartFolder: (id: string, name: string, query: string) => void;
@@ -809,13 +803,17 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // Row selection (#50 selection dimension): a transient brush on the active
   // dataset. `selection` is null or {datasetId, rows}; it is "live" only when its
   // datasetId matches activeId, so switching datasets naturally drops it (no
-  // reset wiring). The bulk actions turn a selection into persistent exclusions.
+  // reset wiring). This is the Stage "Worksheet" tab's channel only — an MDI
+  // document window uses its own independent one (`worksheetSelections`,
+  // GUI_INTERACTION #14, store/worksheetSelection.ts). The bulk actions turn a
+  // selection into persistent exclusions; their optional `windowId` targets
+  // that per-window map instead (omit it for the Stage tab's own selection).
   selection: { datasetId: string; rows: number[] } | null;
   toggleRowSelected: (row: number) => void;
   setRowSelection: (rows: number[]) => void;
   clearRowSelection: () => void;
-  excludeSelectedRows: () => void;
-  keepOnlySelectedRows: () => void;
+  excludeSelectedRows: (windowId?: string) => void;
+  keepOnlySelectedRows: (windowId?: string) => void;
   // Local data filter (#53): non-destructive per-column predicates that narrow
   // the analysis view of a dataset. Only active predicates are stored.
   setDatasetFilter: (id: string, filter: DataFilter) => void;
@@ -927,6 +925,18 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setStatus: (status: string) => void;
 }
 
+// #14: the live selection for excludeSelectedRows/keepOnlySelectedRows — a
+// document window's own map entry, or the legacy active-dataset singleton
+// for the Stage tab (`windowId` omitted); same stale-datasetId guard either way.
+function worksheetOrActiveSelection(
+  s: AppState,
+  windowId: string | undefined,
+): { datasetId: string; rows: number[] } | null {
+  if (windowId) return s.worksheetSelections[windowId] ?? null;
+  const id = s.activeId;
+  return id != null && s.selection?.datasetId === id ? s.selection : null;
+}
+
 // Appearance/behaviour prefs persistence (the `qz.prefs` blob) lives in
 // store/prefs.ts (store-size ratchet, #54) — `loadPrefs`/`syncPrefs` imported
 // above; `defaultPanelFit` (#54) rides the same mechanism as `defaultGrid`.
@@ -938,9 +948,9 @@ const _initialPrefs = loadPrefs();
 const ORIGIN_FIGURE_AXIS = { showAxisBox: true, showGrid: false, legendStatic: true };
 
 export const useApp = create<AppState>((set, get) => ({
-  // Composed slices (each in its own file): windows #2, history #9, reimport
-  // #10, reductions #11, panels #19, pointer #18, split #26, shapes #27.
+  // Composed slices — one create*Slice per store/ file, each self-documented.
   ...createWindowsSlice(set, get),
+  ...createWorksheetSelectionSlice(set),
   ...createHistorySlice(set),
   ...createReductionsSlice(set),
   ...createReimportSlice(set, get),
@@ -948,6 +958,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createPointerToolSlice(set),
   ...createSplitSlice(set, get),
   ...createShapesSlice(set),
+  ...createToolWindowsSlice(set),
   ...createOriginImportSlice(set),
   ...createOriginFallbackSlice(set, get),
   ...createLibraryPanelSlice(set, _initialPrefs.libraryPanelWidth),
@@ -1738,9 +1749,9 @@ export const useApp = create<AppState>((set, get) => ({
         folders: migrated.folders,
         expandedFolders: [...new Set([...(ws.expandedFolders ?? []), ...migrated.createdFolderIds])],
         activeId: active,
-        // item 15: never round-trips (transient UI, like `stageTab`) — a
-        // fresh load always falls back to `activeId`.
+        // item 15: transient UI (like `stageTab`) — a fresh load falls back to activeId.
         worksheetId: null,
+        worksheetSelections: {}, // #14: also transient — never round-trips
         selectedIds: selected.length ? selected : active ? [active] : [],
         originFigures: ws.originFigures ?? [], // restored from the .dwk (v2 persists them)
         originFidelity: ws.originFidelity ?? [],
@@ -1801,6 +1812,11 @@ export const useApp = create<AppState>((set, get) => ({
         gadgetCursorResult: null,
         plotWindows,
         focusedWindowId,
+        // GUI_INTERACTION #10 item 3: already validated + viewport-clamped by
+        // parseWorkspace (lib/workspace.ts's sanitizeToolWindowLayout) — a
+        // legacy doc with no field defaults to {} (every window falls back
+        // to its own default props, same as a fresh app start).
+        toolWindowLayout: ws.toolWindowLayout ?? {},
         // The rest of the PlotView cluster (item 7) — only touched when
         // restoring an actual persisted layout; the legacy/fresh path never
         // wrote these here before item 7, so they're left alone (whatever the
@@ -2263,7 +2279,6 @@ export const useApp = create<AppState>((set, get) => ({
     return id;
   },
   renameFolder: (id, name) => set((s) => ({ folders: treeRenameFolder(s.folders, id, name) })),
-  updateFolder: (id, patch) => set((s) => ({ folders: treeUpdateFolder(s.folders, id, patch) })),
   deleteFolder: (id, mode = "reparent") =>
     set((s) => treeDeleteFolder(s.folders, s.datasets, id, mode)),
   moveFolder: (id, newParentId, beforeId) =>
@@ -2646,35 +2661,29 @@ export const useApp = create<AppState>((set, get) => ({
     set({ selection: clean.length ? { datasetId: id, rows: clean } : null });
   },
   clearRowSelection: () => set({ selection: null }),
-  excludeSelectedRows: () => {
-    const id = get().activeId;
-    const sel = get().selection;
-    if (id == null || sel?.datasetId !== id || !sel.rows.length) return;
+  excludeSelectedRows: (windowId) => {
+    const sel = worksheetOrActiveSelection(get(), windowId);
+    if (!sel?.rows.length) return;
     get().recordHistory("row exclusion");
     set((s) => ({
-      datasets: s.datasets.map((d) => {
-        if (d.id !== id) return d;
-        const merged = [...new Set([...(d.excludedRows ?? []), ...sel.rows])].sort((a, b) => a - b);
-        return { ...d, excludedRows: merged };
-      }),
-      selection: null,
+      datasets: s.datasets.map((d) =>
+        d.id === sel.datasetId ? { ...d, excludedRows: mergeExcluded(d.excludedRows, sel.rows) } : d,
+      ),
     }));
+    if (windowId) get().clearWorksheetRowSelection(windowId);
+    else set({ selection: null });
   },
-  keepOnlySelectedRows: () => {
-    const id = get().activeId;
-    const sel = get().selection;
-    if (id == null || sel?.datasetId !== id || !sel.rows.length) return;
+  keepOnlySelectedRows: (windowId) => {
+    const sel = worksheetOrActiveSelection(get(), windowId);
+    if (!sel?.rows.length) return;
     get().recordHistory("row exclusion");
     set((s) => ({
-      datasets: s.datasets.map((d) => {
-        if (d.id !== id) return d;
-        const keep = new Set(sel.rows);
-        const excluded: number[] = [];
-        for (let r = 0; r < d.data.time.length; r++) if (!keep.has(r)) excluded.push(r);
-        return { ...d, excludedRows: excluded.length ? excluded : undefined };
-      }),
-      selection: null,
+      datasets: s.datasets.map((d) =>
+        d.id === sel.datasetId ? { ...d, excludedRows: keepOnlyExcluded(sel.rows, d.data.time.length) } : d,
+      ),
     }));
+    if (windowId) get().clearWorksheetRowSelection(windowId);
+    else set({ selection: null });
   },
   // Persist an explicit plotted-channel draw order (a permutation of the current
   // plotted channels). effectiveChannels reorders by it; stale entries (channels

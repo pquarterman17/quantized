@@ -37,7 +37,7 @@ export default function ColumnSwitcher() {
   };
 
   return (
-    <ToolWindow title="Column switcher" width={280} onClose={() => setOpen(false)}>
+    <ToolWindow id="columnswitcher" title="Column switcher" width={280} onClose={() => setOpen(false)}>
       {!active || plotted.length < 2 ? (
         <div style={{ color: "var(--text-faint)" }}>
           Needs a dataset with at least two plotted channels.

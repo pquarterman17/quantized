@@ -26,7 +26,7 @@ export default function ReductionsPanel() {
   const setMethod = useApp((s) => s.setReductionsMethod);
 
   return (
-    <ToolWindow title="Reductions" width={380} onClose={() => setOpen(false)}>
+    <ToolWindow id="reductions" title="Reductions" width={380} onClose={() => setOpen(false)}>
       <label className="qzk-field-lbl">Method</label>
       <Select
         options={METHODS}

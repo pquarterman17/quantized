@@ -64,3 +64,17 @@ export async function copyImage(blob: Blob): Promise<boolean> {
   }
   return false;
 }
+
+/** Synchronous capability check for the async Clipboard image API — the exact
+ *  condition copyImage gates on above, exposed so the plot toolbar (#7) can
+ *  disable its "Copy Image" button with a reason instead of clicking through
+ *  to a failure toast on browsers that never support it (Firefox, insecure
+ *  contexts). Not a substitute for copyImage's own try/catch: a runtime
+ *  permission denial can still happen even when this returns true. */
+export function clipboardImageSupported(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    typeof navigator.clipboard?.write === "function" &&
+    typeof ClipboardItem !== "undefined"
+  );
+}
