@@ -30,6 +30,7 @@ function fakeGet(over: {
   showLegend?: boolean;
   legendPos?: "ne" | "nw" | "se" | "sw";
   legendXY?: [number, number] | null;
+  legendFrameXY?: [number, number] | null;
   legendTitle?: string | null;
   annotations?: Annotation[];
   shapes?: Shape[];
@@ -38,6 +39,7 @@ function fakeGet(over: {
     showLegend: over.showLegend ?? true,
     legendPos: over.legendPos ?? "ne",
     legendXY: over.legendXY ?? null,
+    legendFrameXY: over.legendFrameXY ?? null,
     legendTitle: over.legendTitle ?? null,
     annotations: over.annotations ?? [],
     shapes: over.shapes ?? [],
@@ -67,6 +69,16 @@ describe("liveViewOverrides", () => {
     expect(corner?.legend).toEqual({ show: true, loc: "upper right", title: "Nb/Au" });
     const free = liveViewOverrides(fakeGet({ legendTitle: "Nb/Au", legendXY: [0.2, 0.8] }));
     expect(free?.legend).toEqual({ show: true, loc: "custom", anchor: [0.2, 0.8], title: "Nb/Au" });
+  });
+
+  it("maps a frame anchor to loc:axes + anchor, winning over legendXY (decode #52)", () => {
+    const framed = liveViewOverrides(fakeGet({ legendFrameXY: [0.1, 0.15] }));
+    expect(framed?.legend).toEqual({ show: true, loc: "axes", anchor: [0.1, 0.15] });
+    // Frame anchor beats a free container fraction AND carries the title.
+    const both = liveViewOverrides(
+      fakeGet({ legendFrameXY: [0.1, 0.15], legendXY: [0.2, 0.8], legendTitle: "Nb/Au" }),
+    );
+    expect(both?.legend).toEqual({ show: true, loc: "axes", anchor: [0.1, 0.15], title: "Nb/Au" });
   });
 
   it("carries each annotation's size override through, omitting it when unset", () => {

@@ -96,10 +96,16 @@ export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
   // Decode #52: the legend title (Origin's bold header) rides the legend
   // override so vector export matches the screen's static legend.
   const legendTitle = st.legendTitle ? { title: st.legendTitle } : {};
+  // Precedence matches the screen (decode #52): a frame anchor (`legendFrameXY`,
+  // an AXES fraction — `loc: "axes"`, exact via ax.transAxes) beats a free
+  // container fraction (`legendXY` → figure-fraction `loc: "custom"`, MAIN #14),
+  // which beats the corner preset.
   const legend: FigureOverrides["legend"] = st.showLegend
-    ? st.legendXY
-      ? { show: true, loc: "custom", anchor: st.legendXY, ...legendTitle }
-      : { show: true, loc: legendPosToLoc(st.legendPos), ...legendTitle }
+    ? st.legendFrameXY
+      ? { show: true, loc: "axes", anchor: st.legendFrameXY, ...legendTitle }
+      : st.legendXY
+        ? { show: true, loc: "custom", anchor: st.legendXY, ...legendTitle }
+        : { show: true, loc: legendPosToLoc(st.legendPos), ...legendTitle }
     : { show: false };
   const annotations = st.annotations
     .filter((a) => Number.isFinite(a.x) && Number.isFinite(a.y))

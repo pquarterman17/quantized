@@ -24,7 +24,7 @@ __all__ = ["_apply_overrides", "_validate_overrides"]
 _LEGEND_LOCS = frozenset({
     "best", "upper right", "upper left", "lower left", "lower right",
     "right", "center left", "center right", "lower center", "upper center",
-    "center", "outside right", "outside top", "custom",
+    "center", "outside right", "outside top", "custom", "axes",
 })
 
 
@@ -96,6 +96,20 @@ def _apply_overrides(
                     loc="center",
                     bbox_to_anchor=(float(anchor[0]), float(anchor[1])),
                     bbox_transform=fig.transFigure,
+                )
+            elif loc == "axes":
+                # decode-plan #52: a frame-anchored Origin legend. The anchor is
+                # an AXES fraction -- Origin's legend frame fraction IS the axes
+                # fraction, so this is EXACT (ax.transAxes), not the lossy
+                # figure-space conversion "custom" uses. It is the box TOP-LEFT
+                # with fy measured DOWN from the top (screen convention, see
+                # PlotView.legendFrameXY) -> flip to matplotlib's bottom-origin
+                # axes fraction and pin the legend's upper-left corner there.
+                anchor = legend.get("anchor") or (0.0, 0.0)
+                kw.update(
+                    loc="upper left",
+                    bbox_to_anchor=(float(anchor[0]), 1.0 - float(anchor[1])),
+                    bbox_transform=ax.transAxes,
                 )
             else:
                 kw["loc"] = loc

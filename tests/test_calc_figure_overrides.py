@@ -65,6 +65,39 @@ def test_legend_custom_anchor_moves_the_legend_box() -> None:
     assert tl["y0"] < br["y0"]  # near the top (small image-y) vs near the bottom
 
 
+def test_legend_axes_anchor_places_the_frame_anchored_legend_with_the_screen_y_flip() -> None:
+    # decode #52: loc "axes" anchors the legend at a FRAME (== axes) fraction,
+    # exact via ax.transAxes. The anchor is the box TOP-LEFT with fy measured
+    # DOWN from the top (screen `legendFrameXY`), so the backend flips to
+    # matplotlib's bottom-origin axes fraction: a SMALL fy must sit HIGH on the
+    # page (small image-y), a large fy low; a small fx sits left.
+    x = np.linspace(0, 10, 5)
+    top_left = render_figure_map(
+        x, [("a", x), ("b", 2 * x)],
+        overrides={"legend": {"show": True, "loc": "axes", "anchor": [0.02, 0.02]}},
+    )
+    bottom_right = render_figure_map(
+        x, [("a", x), ("b", 2 * x)],
+        overrides={"legend": {"show": True, "loc": "axes", "anchor": [0.98, 0.98]}},
+    )
+    tl = _legend_box(top_left)
+    br = _legend_box(bottom_right)
+    assert tl is not None and br is not None
+    assert tl["x0"] < br["x0"]  # fx 0.02 (left) vs 0.98 (right)
+    assert tl["y0"] < br["y0"]  # fy 0.02 (top -> small image-y) vs 0.98 (bottom)
+
+
+def test_legend_axes_anchor_with_a_title_forces_the_legend_on_for_a_single_series() -> None:
+    # The NbAuRocking shape: one series, a frame anchor, and a bold title. The
+    # title forces the legend on and loc "axes" places it (decode #52).
+    x = np.linspace(0, 10, 5)
+    framed = render_figure_map(
+        x, [("Nb/Au", x)],
+        overrides={"legend": {"loc": "axes", "anchor": [0.1, 0.1], "title": "Nb/Au"}},
+    )
+    assert _legend_box(framed) is not None
+
+
 def test_legend_show_override_forces_it_on_for_a_single_series() -> None:
     # figure.py's OWN default gate is `len(series) > 1` — an explicit
     # `show: true` override must win regardless (MAIN #18: matches the
