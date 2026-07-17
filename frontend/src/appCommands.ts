@@ -21,6 +21,7 @@ import { loadSampleDataset } from "./lib/sampleDataset";
 import { clearAutosave } from "./lib/autosave";
 import { exportActive, type StoreGet } from "./lib/exportActive";
 import { runExportFigureCommand } from "./lib/exportFigureCommand";
+import { runPageSetupDialog } from "./lib/pageSetupCommand";
 import { IMPORT_ACCEPT, openFilePicker } from "./lib/openFilePicker";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "./lib/originTemplate";
 import { cycleAxisScale, cycleTickMode } from "./lib/plotview";
@@ -560,10 +561,7 @@ export function buildAppActions(s: StoreGet): Action[] {
       group: "Plot",
       label: "Autoscale / reset view",
       shortcut: "A",
-      run: () => {
-        s().setXLim(null);
-        s().setYLim(null);
-      },
+      run: () => { s().setXLim(null); s().setYLim(null); },
     },
     {
       id: "xLog", // see the "yLog" command above — same cycle, X axis
@@ -596,6 +594,7 @@ export function buildAppActions(s: StoreGet): Action[] {
       run: () => s().setStackMode(!s().stackMode),
     },
     { id: "panel-fit", group: "Plot", label: "Multi-panel fit (letterbox / fill)", keywords: "aspect window spatial page", run: () => s().cyclePanelFit() },
+    { id: "page-setup", group: "Plot", label: "Page setup…", keywords: "page size margins width height print export #54", run: () => void runPageSetupDialog(s) },
     {
       id: "statMode",
       group: "Plot",

@@ -238,6 +238,36 @@ describe("spatialPixelRects", () => {
       { left: 100, top: 160, width: 800, height: 480 },
     ]);
   });
+
+  it('"page" mode letterboxes the full page (decoded pageAspect) and places pageRects', () => {
+    const panels = [
+      { pageRect: { left: 0, top: 0, width: 0.4, height: 1 }, pageAspect: 2 },
+      { pageRect: { left: 0.5, top: 0, width: 0.5, height: 1 }, pageAspect: 2 },
+    ];
+    // fittedLayoutRect(2, 1000, 800) = { left: 0, top: 150, width: 1000, height: 500 }.
+    expect(spatialPixelRects(panels, 1000, 800, "page")).toEqual([
+      { left: 0, top: 150, width: 400, height: 500 },
+      { left: 500, top: 150, width: 500, height: 500 },
+    ]);
+  });
+
+  it('"page" mode uses the pageSetup aspect when supplied (overrides the decoded one)', () => {
+    const panels = [{ pageRect: { left: 0, top: 0, width: 0.4, height: 1 }, pageAspect: 2 }];
+    // pageSetup aspect 4 -> fittedLayoutRect(4, 1000, 800) = {0, 275, 1000, 250}.
+    expect(
+      spatialPixelRects(panels, 1000, 800, "page", { width: 4, height: 1 }),
+    ).toEqual([{ left: 0, top: 275, width: 400, height: 250 }]);
+  });
+
+  it('"page" mode falls back to "frames" when a panel lacks a pageRect', () => {
+    const panels = [{
+      frameRect: { left: 0.1, top: 0.2, width: 0.8, height: 0.6 },
+      layoutAspect: 2,
+    }];
+    expect(spatialPixelRects(panels, 1000, 800, "page")).toEqual(
+      spatialPixelRects(panels, 1000, 800, "frames"),
+    );
+  });
 });
 
 describe("nextPanelFit", () => {

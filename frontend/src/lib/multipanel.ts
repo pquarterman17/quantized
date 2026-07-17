@@ -100,6 +100,15 @@ export interface SpatialPanel {
   /** Aspect ratio of the recovered frame composition that `frameRect` is
    *  normalized to. */
   layoutAspect?: number;
+  /** This layer's frame normalized to the FULL Origin PAGE (not the frames'
+   *  bounding box) — the "page" fit places panels by this so a wide figure's
+   *  real page margins/whitespace survive (#54 Stage 2). Absent when the page
+   *  size didn't decode (then "page" fit falls back to "frames"). */
+  pageRect?: NormalizedFrameRect;
+  /** Aspect (width/height) of the full decoded page `pageRect` is normalized to
+   *  — the letterbox aspect for "page" fit when the window has no `pageSetup`
+   *  override yet. */
+  pageAspect?: number;
 }
 
 /** The channels a spatial panel actually plots: its `yKeys` minus any

@@ -66,6 +66,17 @@ describe("sanitizeView panelFit (#54)", () => {
     );
     expect(garbage[0].view.panelFit).toBe("frames");
   });
+
+  it("defaults an absent pageSetup to null and round-trips a valid one (clamped)", () => {
+    expect(sanitizePlotWindows([win({ view: legacyView() as PlotView })], new Set(["d1"]))[0].view.pageSetup)
+      .toBeNull();
+    const page = { width: 6, height: 4, unit: "in" as const, margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5 }, aspectDerived: true };
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), pageSetup: page } })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.pageSetup).toEqual(page);
+  });
 });
 
 describe("scaleFromLog / isAxisScale / cycleAxisScale (MAIN #12)", () => {

@@ -89,6 +89,7 @@ import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type Face
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
 import { nextPanelFit, type PanelFit } from "../lib/panelLayout";
+import { pageSetupFromDecoded, type PageSetup } from "../lib/pagesetup";
 import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
 import { effectiveChannels } from "../lib/plotdata";
@@ -400,6 +401,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   showAxisBox: boolean; // draw a full frame around the plot area
   stackMode: boolean; // multi-panel: one stacked sub-plot per channel
   panelFit: PanelFit; // #54: how a spatial multi-panel view fills the stage (PlotView field)
+  pageSetup: PageSetup | null; // #54: this window's physical page model (PlotView field; null = none)
   // Spatial multi-panel apply (decode-plan #36): set by `applyOriginFigure`
   // when a multi-layer Origin figure's layers all resolve to a dataset +
   // plotted channels — each panel owns its OWN dataset/ranges instead of
@@ -761,7 +763,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setShowAxisBox: (show: boolean) => void;
   setStackMode: (stackMode: boolean) => void;
   setPanelFit: (mode: PanelFit) => void; // #54
-  cyclePanelFit: () => void; // #54 — frames<->window (page joins in Stage 2)
+  cyclePanelFit: () => void; // #54 — frames<->window, +page when a pageSetup exists
+  setPageSetup: (pageSetup: PageSetup | null) => void; // #54
   setInsetMode: (insetMode: boolean) => void;
   setPolarMode: (polarMode: boolean) => void;
   setStatMode: (statMode: boolean) => void;
@@ -986,6 +989,7 @@ export const useApp = create<AppState>((set, get) => ({
   showAxisBox: false,
   stackMode: false,
   panelFit: "frames",
+  pageSetup: null,
   spatialPanels: null,
   facetPanels: null,
   breakPanels: null,
@@ -1551,6 +1555,10 @@ export const useApp = create<AppState>((set, get) => ({
           // ▸ Plot ▸ Multi-panel fit) — aspect-preserving unless the user set
           // fill. The per-window value then persists in `.dwk`.
           panelFit: get().defaultPanelFit,
+          // #54 Stage 2: prefill the window's page from the figure's decoded
+          // page size — aspect-honest (Origin page units aren't physical), null
+          // when the page didn't decode. Enables the "page" fit + page export.
+          pageSetup: pageSetupFromDecoded(family[0].figure.page ?? null),
           ...ORIGIN_FIGURE_AXIS,
           // Region bands are single-plot overlays; a spatial multi-panel
           // apply clears any prior figure's bands (no per-panel shade
@@ -2448,7 +2456,8 @@ export const useApp = create<AppState>((set, get) => ({
   // #54: the spatial multi-panel fit mode (PlotView field). `cyclePanelFit`
   // advances frames<->window until a page model exists (Stage 2 opens page).
   setPanelFit: (panelFit) => set({ panelFit }),
-  cyclePanelFit: () => set((s) => ({ panelFit: nextPanelFit(s.panelFit, false) })),
+  cyclePanelFit: () => set((s) => ({ panelFit: nextPanelFit(s.panelFit, s.pageSetup != null) })),
+  setPageSetup: (pageSetup) => set({ pageSetup }),
   setInsetMode: (insetMode) => set({ insetMode }),
   setPolarMode: (polarMode) => set({ polarMode }),
   setStatMode: (statMode) => set({ statMode }),

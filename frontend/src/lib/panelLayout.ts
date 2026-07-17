@@ -23,6 +23,7 @@
 // `rowBoundaryGaps`/`columnWidths`/`rowHeights`/`cumulativeOffsets`.
 
 import type { SpatialPanel } from "./multipanel";
+import type { NormalizedFrameRect } from "./originPanels";
 
 /** How a spatial multi-panel composition fills the interactive stage
  *  (ORIGIN_FILE_DECODE_PLAN #54):
@@ -95,16 +96,39 @@ export function fittedLayoutRect(aspectRatio: number, totalWidth: number, totalH
  *
  *  `mode` (ORIGIN_FILE_DECODE_PLAN #54) chooses how the composition fills the
  *  host: `"frames"` (default — letterbox the frames' bounding box, PR #47's
- *  behaviour, byte-identical to the pre-#54 call) or `"window"` (fill the host,
- *  aspect ignored). `"page"` is handled by `spatialPageRects` (Stage 2) and
- *  falls back to `"frames"` here. Passing no `mode` reproduces the old
- *  signature exactly. */
+ *  behaviour, byte-identical to the pre-#54 call), `"window"` (fill the host,
+ *  aspect ignored), or `"page"` (letterbox the full page — aspect from
+ *  `pageSetup`, else the decoded `pageAspect` — and place each panel at its
+ *  TRUE page coordinates via `pageRect`). `"page"` falls back to `"frames"`
+ *  when the page geometry is missing (no `pageRect` on a panel). Passing no
+ *  `mode` reproduces the old signature exactly. */
 export function spatialPixelRects(
-  panels: readonly Pick<SpatialPanel, "frameRect" | "layoutAspect">[],
+  panels: readonly Pick<SpatialPanel, "frameRect" | "layoutAspect" | "pageRect" | "pageAspect">[],
   totalWidth: number,
   totalHeight: number,
   mode: PanelFit = "frames",
+  pageSetup?: { width: number; height: number } | null,
 ): PixelRect[] | null {
+  // "page" mode: place each panel at its PAGE-relative rect inside the
+  // letterboxed FULL page. Needs a valid `pageRect` on every panel and a
+  // positive page aspect (from `pageSetup`, else the decoded `pageAspect`);
+  // otherwise fall through to frame-based placement below.
+  if (mode === "page") {
+    const pageRects = pageValidRects(panels);
+    const aspect =
+      pageSetup && pageSetup.width > 0 && pageSetup.height > 0
+        ? pageSetup.width / pageSetup.height
+        : panels[0]?.pageAspect;
+    if (pageRects && aspect != null && Number.isFinite(aspect) && aspect > 0) {
+      const page = fittedLayoutRect(aspect, totalWidth, totalHeight);
+      return pageRects.map((rect) => ({
+        left: Math.round(page.left + rect.left * page.width),
+        top: Math.round(page.top + rect.top * page.height),
+        width: Math.max(1, Math.round(rect.width * page.width)),
+        height: Math.max(1, Math.round(rect.height * page.height)),
+      }));
+    }
+  }
   if (panels.length === 0 || panels.some((panel) => {
     const rect = panel.frameRect;
     return !rect || ![rect.left, rect.top, rect.width, rect.height].every(Number.isFinite)
@@ -114,7 +138,7 @@ export function spatialPixelRects(
   const aspects = panels.map((panel) => panel.layoutAspect);
   const aspect = aspects[0];
   // "window" fills the host regardless of aspect (the wide-figure remedy);
-  // "frames" (and "page" until its own path lands) letterbox when every panel
+  // "frames" (and a "page" that fell back here) letterbox when every panel
   // agrees on the aspect.
   const useAspect = mode !== "window"
     && aspect != null && Number.isFinite(aspect) && aspect > 0
@@ -128,6 +152,25 @@ export function spatialPixelRects(
     width: Math.max(1, Math.round(rect!.width * page.width)),
     height: Math.max(1, Math.round(rect!.height * page.height)),
   }));
+}
+
+/** Every panel's `pageRect` as a plain list when ALL are present and in-bounds
+ *  ([0,1], positive extent) — else null (fail-closed, mirrors the frame-rect
+ *  guard). Keeps the "page" branch readable. */
+function pageValidRects(
+  panels: readonly Pick<SpatialPanel, "pageRect">[],
+): NormalizedFrameRect[] | null {
+  if (panels.length === 0) return null;
+  const out: NormalizedFrameRect[] = [];
+  for (const { pageRect: rect } of panels) {
+    if (!rect || ![rect.left, rect.top, rect.width, rect.height].every(Number.isFinite)
+      || rect.left < 0 || rect.top < 0 || rect.width <= 0 || rect.height <= 0
+      || rect.left + rect.width > 1 + 1e-6 || rect.top + rect.height > 1 + 1e-6) {
+      return null;
+    }
+    out.push(rect);
+  }
+  return out;
 }
 
 /** True when `panel` shares its x-range (within tolerance) with whatever

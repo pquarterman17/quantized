@@ -145,6 +145,34 @@ function clusterIndices(values: number[], tol: number): number[] {
  *  the backend's own `opju_page_size` structural-validation spirit. */
 const PAGE_SLOP_FACTOR = 1.1;
 
+/** A layer frame normalized to the FULL page rectangle (0..1), or null when
+ *  the page/frame is missing or degenerate. Unlike `computePanelLayout`'s
+ *  bounding-box normalization (which discards the page's margins/whitespace so
+ *  the frames tile edge-to-edge — PR #47), this keeps each frame's TRUE page
+ *  position, for the "page" fit (#54 Stage 2). Frames that slightly overshoot
+ *  the page bound (page-unit rounding) still normalize; a wildly out-of-page
+ *  frame yields null (fail-closed). */
+export function pageNormalizedRect(
+  frame: FrameQuad | null | undefined,
+  page: PageSize | null | undefined,
+): NormalizedFrameRect | null {
+  if (!frame || !page || !(page.width > 0) || !(page.height > 0)) return null;
+  if (isDegenerate(frame)) return null;
+  const rect = {
+    left: frame.left / page.width,
+    top: frame.top / page.height,
+    width: (frame.right - frame.left) / page.width,
+    height: (frame.bottom - frame.top) / page.height,
+  };
+  // Fail closed if the frame lands well outside the page (a mismatched decode)
+  // — a small overshoot from page-unit rounding is tolerated by the slop.
+  const slop = 1.1;
+  if (rect.left < -0.05 || rect.top < -0.05 || rect.left + rect.width > slop || rect.top + rect.height > slop) {
+    return null;
+  }
+  return rect;
+}
+
 /** Infer a grid arrangement for a multi-layer figure's panels from their
  *  decoded frame quads (`null`/`undefined` for an undecoded layer). `page`
  *  is optional — when given, it's used to sanity-check the frames (a frame

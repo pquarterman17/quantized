@@ -17,6 +17,7 @@
 // wheelZoom, excludedDisplay, sigFigs, … — app-wide, not per-window).
 
 import { PANEL_FITS, type PanelFit } from "./panelLayout";
+import { sanitizePageSetup, type PageSetup } from "./pagesetup";
 import {
   sanitizePanelDatasetIds,
   sanitizePanelLayout,
@@ -161,6 +162,11 @@ export interface PlotView {
    *  the host), or `"page"` (true page coordinates — Stage 2). Only the
    *  spatial multi-panel view reads it; a plain XY plot ignores it. */
   panelFit: PanelFit;
+  /** The window's physical page model (#54 Stage 2): drives the `"page"` fit
+   *  and publication export. null = no page model (today's behaviour — export
+   *  and fit fall back exactly as before). Prefilled aspect-honestly from a
+   *  decoded Origin page on apply; editable via Page Setup. */
+  pageSetup: PageSetup | null;
 }
 
 /** A fresh view — what a brand-new window starts from. Mirrors the store's
@@ -213,6 +219,7 @@ export function defaultPlotView(): PlotView {
     hiddenChannels: [],
     waterfall: 0,
     panelFit: "frames",
+    pageSetup: null,
   };
 }
 
@@ -674,6 +681,8 @@ function sanitizeView(v: unknown): PlotView {
     waterfall: num(o.waterfall, fb.waterfall),
     // Unknown/absent (a pre-#54 .dwk) -> "frames", the PR #47 letterbox default.
     panelFit: PANEL_FITS.includes(o.panelFit as PanelFit) ? (o.panelFit as PanelFit) : fb.panelFit,
+    // null (absent = today's no-page behaviour) or a clamped page model.
+    pageSetup: sanitizePageSetup(o.pageSetup),
   };
 }
 

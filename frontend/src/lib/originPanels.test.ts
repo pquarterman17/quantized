@@ -4,6 +4,7 @@ import {
   computePanelLayout,
   framesCoincide,
   type FrameQuad,
+  pageNormalizedRect,
   type PanelLayout,
 } from "./originPanels";
 
@@ -248,5 +249,30 @@ describe("framesCoincide", () => {
     const f: FrameQuad = { left: 10, top: 10, right: 100, bottom: 50 };
     expect(framesCoincide(zero, f)).toBe(false);
     expect(framesCoincide(f, zero)).toBe(false);
+  });
+});
+
+describe("pageNormalizedRect (#54 Stage 2)", () => {
+  it("normalizes a frame to the full page, keeping its true page position", () => {
+    // A frame sitting in the top-right quadrant of a 1000x800 page.
+    const frame: FrameQuad = { left: 600, top: 80, right: 900, bottom: 400 };
+    expect(pageNormalizedRect(frame, { width: 1000, height: 800 })).toEqual({
+      left: 0.6,
+      top: 0.1,
+      width: 0.3,
+      height: 0.4,
+    });
+  });
+
+  it("returns null without a page, with a degenerate page, or a degenerate frame", () => {
+    const frame: FrameQuad = { left: 0, top: 0, right: 100, bottom: 100 };
+    expect(pageNormalizedRect(frame, null)).toBeNull();
+    expect(pageNormalizedRect(frame, { width: 0, height: 800 })).toBeNull();
+    expect(pageNormalizedRect({ left: 10, top: 10, right: 10, bottom: 50 }, { width: 100, height: 100 })).toBeNull();
+  });
+
+  it("fails closed when the frame lands well outside the page (mismatched decode)", () => {
+    const frame: FrameQuad = { left: 0, top: 0, right: 5000, bottom: 100 };
+    expect(pageNormalizedRect(frame, { width: 1000, height: 800 })).toBeNull();
   });
 });

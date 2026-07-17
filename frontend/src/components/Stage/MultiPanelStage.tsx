@@ -83,6 +83,7 @@ export default function MultiPanelStage() {
   const accent = useApp((s) => s.accent);
   const panelFit = useApp((s) => s.panelFit);
   const setPanelFit = useApp((s) => s.setPanelFit);
+  const pageSetup = useApp((s) => s.pageSetup);
   const ensureBookData = useApp((s) => s.ensureBookData);
   const { hostRef, hostStyle, readout, tool } = useMultiPanelStage({
     active,
@@ -91,6 +92,7 @@ export default function MultiPanelStage() {
     facetPanels,
     breakPanels,
     panelFit,
+    pageSetup,
     yScale,
     xScale,
     xLim,
@@ -146,6 +148,16 @@ export default function MultiPanelStage() {
             >
               ⛶
             </button>
+            {/* Page fit only when this window has a page model (#54 Stage 2). */}
+            {pageSetup && (
+              <button
+                className={`qzk-tool-btn${panelFit === "page" ? " active" : ""}`}
+                title="Page: place panels at their true page coordinates"
+                onClick={() => setPanelFit("page")}
+              >
+                ▦
+              </button>
+            )}
           </>
         )}
       </div>

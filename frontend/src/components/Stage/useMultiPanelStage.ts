@@ -44,6 +44,7 @@ import {
   spatialPixelRects,
   suppressedXIndices,
 } from "../../lib/panelLayout";
+import type { PageSetup } from "../../lib/pagesetup";
 import { scaleFromLog, type PlotBg } from "../../lib/plotview";
 import type { AxisFormat, AxisScale, Dataset, RefLine, SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
@@ -103,6 +104,9 @@ export interface MultiPanelStageParams {
    *  windows (which never render spatial mode) can omit it; defaults to the
    *  PR #47 letterbox ("frames"). */
   panelFit?: PanelFit;
+  /** The window's page model (#54 Stage 2) — the letterbox aspect for the
+   *  "page" fit. Omitted/null on background windows and non-page fits. */
+  pageSetup?: PageSetup | null;
   yScale: AxisScale;
   xScale: AxisScale;
   xLim: [number, number] | null;
@@ -153,6 +157,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     facetPanels,
     breakPanels,
     panelFit = "frames",
+    pageSetup,
     yScale,
     xScale,
     xLim,
@@ -333,7 +338,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       const rowH = rowHeights(grid.rows, h, rowGaps);
       const colLefts = cumulativeOffsets(colW, GRID_GAP);
       const rowTops = cumulativeOffsets(rowH, rowGaps);
-      const decodedRects = spatialPixelRects(panels, w, h, panelFit);
+      const decodedRects = spatialPixelRects(panels, w, h, panelFit, pageSetup);
       const suppressed = suppressedXIndices(panels);
       const divs: HTMLDivElement[] = [];
       panels.forEach((p, i) => {
@@ -418,7 +423,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         const rh = rowHeights(grid.rows, height, rg);
         const cl = cumulativeOffsets(cw, GRID_GAP);
         const rt = cumulativeOffsets(rh, rg);
-        const resizedRects = spatialPixelRects(panels, width, height, panelFit);
+        const resizedRects = spatialPixelRects(panels, width, height, panelFit, pageSetup);
         panels.forEach((p, idx) => {
           const div = divs[idx];
           const u = plotsRef.current[idx];
@@ -611,6 +616,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     panels,
     grid,
     panelFit, // #54: switching fit mode re-lays the spatial grid
+    pageSetup, // #54 Stage 2: page dims/aspect change re-lays "page" fit
     breakMode,
     breakPanels,
     breakYLim,

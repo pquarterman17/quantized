@@ -6,7 +6,7 @@
 
 import { originErrKeys, originHiddenChannels } from "./errorbars";
 import type { SpatialPanel } from "./multipanel";
-import { computePanelLayout, framesCoincide } from "./originPanels";
+import { computePanelLayout, framesCoincide, pageNormalizedRect } from "./originPanels";
 import type {
   Annotation,
   Dataset,
@@ -587,17 +587,27 @@ export function resolveSpatialPanels(
       ? resolved[i]
       : mergePanelWithY2(resolved[i], resolved[y2Index], family[y2Index].figure);
   });
+  const page = family[0].figure.page ?? null;
   const layout = computePanelLayout(
     reducedIndices.map((i) => family[i].figure.frame ?? null),
-    family[0].figure.page ?? null,
+    page,
   );
-  const panels: SpatialPanel[] = reducedPanels.map((p, pos) => ({
-    ...p,
-    row: layout.placements[pos]?.row ?? pos,
-    col: layout.placements[pos]?.col ?? 0,
-    frameRect: layout.placements[pos]?.rect,
-    layoutAspect: layout.aspectRatio,
-  }));
+  // The full-PAGE aspect + per-panel page-normalized rect for the "page" fit
+  // (#54 Stage 2) — distinct from `frameRect`/`layoutAspect`, which discard the
+  // page's margins by normalizing to the frames' bounding box (PR #47).
+  const pageAspect = page && page.width > 0 && page.height > 0 ? page.width / page.height : undefined;
+  const panels: SpatialPanel[] = reducedPanels.map((p, pos) => {
+    const pageRect = pageNormalizedRect(family[reducedIndices[pos]]?.figure.frame, page);
+    return {
+      ...p,
+      row: layout.placements[pos]?.row ?? pos,
+      col: layout.placements[pos]?.col ?? 0,
+      frameRect: layout.placements[pos]?.rect,
+      layoutAspect: layout.aspectRatio,
+      ...(pageRect ? { pageRect } : {}),
+      ...(pageAspect != null ? { pageAspect } : {}),
+    };
+  });
   return { panels, spatial: layout.spatial };
 }
 
