@@ -76,10 +76,15 @@ def _apply_overrides(
     legend = ov.get("legend")
     if legend is not None:
         show = legend.get("show")
-        if (show is None and n_series > 1) or show:
+        # A legend TITLE (Origin's bold legend header, decode-plan #52) forces
+        # the legend on even for a single series — the header is the point.
+        title = legend.get("title")
+        if (show is None and (n_series > 1 or title)) or show:
             frame = bool(legend.get("frame", st.legend_box))
             loc = str(legend.get("loc", "best"))
             kw: dict[str, Any] = {"frameon": frame, "fontsize": st.legend_font_size}
+            if title:
+                kw["title"] = str(title)
             if loc == "outside right":
                 kw.update(loc="center left", bbox_to_anchor=(1.02, 0.5))
             elif loc == "outside top":

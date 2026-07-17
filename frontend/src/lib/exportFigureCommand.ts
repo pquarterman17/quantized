@@ -93,10 +93,13 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
  *  path before. */
 export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
   const st = s();
+  // Decode #52: the legend title (Origin's bold header) rides the legend
+  // override so vector export matches the screen's static legend.
+  const legendTitle = st.legendTitle ? { title: st.legendTitle } : {};
   const legend: FigureOverrides["legend"] = st.showLegend
     ? st.legendXY
-      ? { show: true, loc: "custom", anchor: st.legendXY }
-      : { show: true, loc: legendPosToLoc(st.legendPos) }
+      ? { show: true, loc: "custom", anchor: st.legendXY, ...legendTitle }
+      : { show: true, loc: legendPosToLoc(st.legendPos), ...legendTitle }
     : { show: false };
   const annotations = st.annotations
     .filter((a) => Number.isFinite(a.x) && Number.isFinite(a.y))

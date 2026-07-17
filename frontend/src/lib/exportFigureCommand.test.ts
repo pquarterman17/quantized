@@ -30,6 +30,7 @@ function fakeGet(over: {
   showLegend?: boolean;
   legendPos?: "ne" | "nw" | "se" | "sw";
   legendXY?: [number, number] | null;
+  legendTitle?: string | null;
   annotations?: Annotation[];
   shapes?: Shape[];
 }) {
@@ -37,6 +38,7 @@ function fakeGet(over: {
     showLegend: over.showLegend ?? true,
     legendPos: over.legendPos ?? "ne",
     legendXY: over.legendXY ?? null,
+    legendTitle: over.legendTitle ?? null,
     annotations: over.annotations ?? [],
     shapes: over.shapes ?? [],
   };
@@ -58,6 +60,13 @@ describe("liveViewOverrides", () => {
   it("sends show:false when the screen legend is hidden, ignoring legendPos/legendXY", () => {
     const ov = liveViewOverrides(fakeGet({ showLegend: false, legendXY: [0.1, 0.1] }));
     expect(ov?.legend).toEqual({ show: false });
+  });
+
+  it("carries the legend title (decode #52) through, corner and free position", () => {
+    const corner = liveViewOverrides(fakeGet({ legendTitle: "Nb/Au" }));
+    expect(corner?.legend).toEqual({ show: true, loc: "upper right", title: "Nb/Au" });
+    const free = liveViewOverrides(fakeGet({ legendTitle: "Nb/Au", legendXY: [0.2, 0.8] }));
+    expect(free?.legend).toEqual({ show: true, loc: "custom", anchor: [0.2, 0.8], title: "Nb/Au" });
   });
 
   it("carries each annotation's size override through, omitting it when unset", () => {

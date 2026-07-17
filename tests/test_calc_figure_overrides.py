@@ -84,6 +84,33 @@ def test_legend_show_override_forces_it_off_for_multiple_series() -> None:
     assert _legend_box(hidden) is None
 
 
+def test_legend_title_enlarges_the_legend_box() -> None:
+    # decode #52: a legend TITLE (Origin's bold header) renders as a real
+    # matplotlib legend title -> the legend's laid-out box grows taller to fit
+    # the header row (asserted on the actual render's hitmap geometry).
+    x = np.linspace(0, 10, 5)
+    plain = render_figure_map(
+        x, [("a", x), ("b", 2 * x)], overrides={"legend": {"show": True, "loc": "upper right"}}
+    )
+    titled = render_figure_map(
+        x,
+        [("a", x), ("b", 2 * x)],
+        overrides={"legend": {"show": True, "loc": "upper right", "title": "Nb/Au"}},
+    )
+    lp, lt = _legend_box(plain), _legend_box(titled)
+    assert lp is not None and lt is not None
+    assert (lt["y1"] - lt["y0"]) > (lp["y1"] - lp["y0"])  # header row adds height
+
+
+def test_legend_title_forces_the_legend_on_for_a_single_series() -> None:
+    # A title is meaningless without a legend, so it forces the legend on even
+    # for a single series (the header is the point) — decode #52.
+    x = np.linspace(0, 10, 5)
+    assert _legend_box(render_figure_map(x, [("y", x)])) is None
+    titled = render_figure_map(x, [("y", x)], overrides={"legend": {"title": "S"}})
+    assert _legend_box(titled) is not None
+
+
 # MAIN #21 (page-anchored annotations): `anchor: "page"` renders an
 # annotation's x/y as FIGURE-fraction placement (matplotlib's
 # `xycoords="figure fraction"`) instead of axes-data coordinates, so the
