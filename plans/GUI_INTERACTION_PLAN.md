@@ -114,10 +114,35 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
 8. **Context menus as a complete system** — one **context-action registry** keyed
    by selected object type, reused in right-click menus, the Plot Objects tree
    (#2), Command Palette, and an optional mini-toolbar.
-   - [ ] Keyboard-complete menus: `role="menu"`/`menuitem`/`menuitemcheckbox`,
+   - [x] Keyboard-complete menus: `role="menu"`/`menuitem`/`menuitemcheckbox`,
          arrow-key nav, type-ahead, Home/End, Esc-returns-focus.
-   - [ ] A resting cue that right-click is available; shared confirm/undo policy for
+   - [x] A resting cue that right-click is available; shared confirm/undo policy for
          destructive/reorganizing actions.
+   - [ ] Residual (2026-07-17): the registry (`lib/contextActions.ts`, keyed
+         `dataset`/`folder`/`curve`) landed with its 3 MANDATORY retrofits —
+         the Library dataset-row menu, the folder-row menu, and the plot
+         curve/series menu all now BUILD from shared `ContextAction<T>`
+         entries instead of hand-rolled arrays, so a label/gate is defined
+         once. `ContextMenu.tsx` is keyboard-complete (arrow-nav math split
+         into pure `lib/menuKeyboardNav.ts` to hold the .tsx ceiling); rows
+         gained `tabIndex` + the ContextMenu-key/Shift+F10 handler and a
+         "⋯" resting-cue button (hidden until hover/focus, coexisting with
+         #13's drag handle); `destructive: true` entries (Remove/Remove-N-
+         selected, Delete folder[+datasets]) now confirm via the shared
+         `askConfirm` before running. Superseded `lib/panelMenu.ts`'s
+         `multiSelectMenuItems` (folded into the registry) — deleted rather
+         than left as unused duplicate logic. NOT done: Command Palette /
+         Plot Objects tree (#2, owner-gated) / mini-toolbar reuse of the
+         SAME entries (the registry's `run(target)` shape supports it, but
+         no consumer wired yet); the worksheet column/row, window, and
+         annotation/shape menus are untouched (still hand-built) — retrofit
+         on next touch, not urgent since they're lower-traffic than the 3
+         done. Axis/plot-level pickers in `plotMenu.ts` (colour swatches,
+         line/width/marker/scale submenus) deliberately stayed hand-built —
+         parameterized pickers, not discrete actions, don't fit the
+         registry's `{id,label,run}` shape. Frontend 265 files / 3647 tests
+         green (net: +1 file vs. pre-#8 after `panelMenu.ts`'s deletion);
+         build green.
 
 11. **Graph Builder → durable artifact** — promote its output to a first-class
     saved `PlotSpec` in `.dwk`.

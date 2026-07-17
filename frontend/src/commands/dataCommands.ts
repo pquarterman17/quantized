@@ -67,7 +67,8 @@ export function buildDataCommands(s: StoreGet): Action[] {
     { id: "split", group: "Data", label: "Split by column value…", run: () => { const id = s().activeId; if (id) s().openSplitDialog(id); } },
     // Panel/overlay composite windows over the current selection (MAIN_PLAN
     // #19 v1) — the command-palette counterparts of the Library's quick
-    // picks (lib/panelMenu.ts), acting on the live multi-selection.
+    // picks (lib/contextActions.ts's datasetMultiSelectActions), acting on
+    // the live multi-selection.
     ...(
       [
         ["panel-row", "Panel: side by side", "row"],

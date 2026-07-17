@@ -11,9 +11,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import FolderRow from "./FolderRow";
 import { DATASET_DND, FOLDER_DND } from "./useLibraryTree";
+import { askConfirm } from "../overlays/ConfirmDialog";
 import { childFolders } from "../../lib/foldertree";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+
+// GUI_INTERACTION #8: destructive registry actions (Delete folder [+
+// datasets]) now confirm first — stub the shared ConfirmDialog like every
+// other askConfirm-gated store test does (see store/useApp.test.ts).
+vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 function folderTransfer(id: string) {
   return {
@@ -241,18 +247,33 @@ describe("FolderRow — bulk-ops context menu (project-organization plan item 8)
     expect(useApp.getState().activeId).toBe("d3"); // plot unaffected
   });
 
-  it("'Delete folder + N dataset(s)' destroys the folder and its datasets", () => {
+  it("'Delete folder + N dataset(s)' confirms, then destroys the folder and its datasets", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
     open(fld("grp", null, 0), 2);
     fireEvent.click(screen.getByText("Delete folder + 2 dataset(s)"));
+    expect(askConfirm).toHaveBeenCalledOnce();
+    await Promise.resolve(); // flush the askConfirm promise
     const s = useApp.getState();
     expect(s.datasets.map((d) => d.id)).toEqual(["d3"]);
     expect(s.folders).toEqual([]);
   });
 
+  it("declining the confirm leaves the folder and its datasets untouched", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    open(fld("grp", null, 0), 2);
+    fireEvent.click(screen.getByText("Delete folder + 2 dataset(s)"));
+    await Promise.resolve();
+    const s = useApp.getState();
+    expect(s.datasets.map((d) => d.id).sort()).toEqual(["d1", "d2", "d3"]);
+    expect(s.folders.map((f) => f.id)).toEqual(["grp"]);
+  });
+
   it("gates the bulk items on an empty folder", () => {
     useApp.setState({ datasets: [], folders: [fld("empty", null, 0)] });
     open(fld("empty", null, 0), 0);
-    expect(screen.getByRole("button", { name: "Select all in folder (0)" })).toBeDisabled();
+    // GUI_INTERACTION #8: menu items carry role="menuitem" now, not the
+    // button's implicit "button" role.
+    expect(screen.getByRole("menuitem", { name: "Select all in folder (0)" })).toBeDisabled();
     expect(screen.queryByText(/Delete folder \+/)).not.toBeInTheDocument();
     // No corrections on the active dataset / no saved templates → gated items absent.
     expect(screen.queryByText(/Apply active corrections/)).not.toBeInTheDocument();
@@ -273,5 +294,33 @@ describe("FolderRow — bulk-ops context menu (project-organization plan item 8)
     );
     open(fld("grp", null, 0), 2);
     expect(screen.getByText("Run analysis template on folder…")).toBeInTheDocument();
+  });
+});
+
+describe("FolderRow — keyboard-reachable context menu (GUI_INTERACTION #8)", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [], folders: [fld("a", null, 0)], expandedFolders: [] });
+  });
+
+  it("is focusable and opens the SAME menu on the ContextMenu key", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    expect(row).toHaveAttribute("tabindex", "0");
+    expect(screen.queryByText("Properties…")).toBeNull();
+    fireEvent.keyDown(row, { key: "ContextMenu" });
+    expect(screen.getByText("Properties…")).toBeInTheDocument();
+  });
+
+  it("also opens on Shift+F10", () => {
+    const { container } = render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    fireEvent.keyDown(container.querySelector(".qzk-folder-head")!, { key: "F10", shiftKey: true });
+    expect(screen.getByText("Properties…")).toBeInTheDocument();
+  });
+
+  it("the resting-cue '⋯' button opens the same menu", () => {
+    render(<FolderRow folder={fld("a", null, 0)} {...baseProps} />);
+    expect(screen.queryByText("Properties…")).toBeNull();
+    fireEvent.click(screen.getByTitle("More actions"));
+    expect(screen.getByText("Properties…")).toBeInTheDocument();
   });
 });

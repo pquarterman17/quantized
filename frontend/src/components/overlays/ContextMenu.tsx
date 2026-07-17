@@ -22,9 +22,23 @@
 // scale flyouts opened "way off" and closed before the pointer could reach
 // them. Row-anchoring is immune; a layout effect only FLIPS the side / shifts
 // vertically when the flyout would overflow the viewport.
+//
+// GUI_INTERACTION #8: keyboard-complete — `role="menu"`/`menuitem`/
+// `menuitemcheckbox` + `aria-disabled`; ArrowUp/Down cycle (wrapping),
+// Home/End jump, a letter type-ahead-jumps; ArrowRight opens a submenu +
+// focuses its first item, ArrowLeft collapses back to the trigger. Enter/
+// Space are mostly FREE (real `<button>`s already fire `onClick`) — the
+// index math for the rest lives in lib/menuKeyboardNav.ts (pure, unit-
+// tested). Esc still closes the WHOLE menu (unchanged) and now ALSO returns
+// focus to whatever was focused when the menu opened. The menu container
+// grabs focus on open (no pre-highlighted item, matching native OS menus)
+// so the FIRST arrow key already navigates. Swatch grids stay mouse-first
+// (like a native colour picker); a hover-opened submenu doesn't steal focus.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+import { edgeFocusableIndex, nextFocusableIndex, typeaheadIndex } from "../../lib/menuKeyboardNav";
 
 /** One swatch in a `{ swatches }` colour row. */
 export interface Swatch {
@@ -136,25 +150,115 @@ function FlyoutBox({ children }: { children: React.ReactNode }) {
   );
 }
 
+interface MenuListProps {
+  items: ContextMenuItem[];
+  onClose: () => void;
+  /** A NEWLY MOUNTED submenu focuses its own first item when true (an
+   *  explicit open — ArrowRight/click/Enter), not for a hover-preview open.
+   *  Unused at the root — <ContextMenu> focuses the root container itself. */
+  autoFocusFirst?: boolean;
+  /** Submenu-only: ArrowLeft calls this to close the flyout and refocus the
+   *  item that opened it. Absent at the root (nothing further out). */
+  onCollapse?: () => void;
+  /** Root-only: lets <ContextMenu> focus this level's container on mount. */
+  menuRef?: React.Ref<HTMLDivElement>;
+}
+
 /** Renders one item list (root or a submenu). Owns which submenu is currently
- *  hovered-open. `onClose` closes the WHOLE menu after any leaf action runs. */
-function MenuList({ items, onClose }: { items: ContextMenuItem[]; onClose: () => void }) {
-  const [openSub, setOpenSub] = useState<number | null>(null);
-  const anchors = useRef<Record<number, HTMLElement | null>>({});
+ *  hovered/opened. `onClose` closes the WHOLE menu after any leaf action runs. */
+function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef }: MenuListProps) {
+  const [openSub, setOpenSub] = useState<{ i: number; via: "mouse" | "key" } | null>(null);
+  const itemRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // The index-arithmetic (which item is next for Up/Down/Home/End/type-ahead)
+  // is pure and lives in lib/menuKeyboardNav.ts; this is just the DOM glue —
+  // "which item currently HAS focus" and "move focus to index i".
+  const focusAt = (i: number | null) => {
+    if (i != null) itemRefs.current[i]?.focus();
+  };
+  const curFocused = (): number =>
+    Object.keys(itemRefs.current)
+      .map(Number)
+      .find((k) => itemRefs.current[k] === document.activeElement) ?? -1;
+
+  useLayoutEffect(() => {
+    if (autoFocusFirst) focusAt(edgeFocusableIndex(items, "start"));
+    // Only on mount — a later re-render must not re-steal focus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        focusAt(nextFocusableIndex(items, curFocused(), 1));
+        return;
+      case "ArrowUp":
+        e.preventDefault();
+        focusAt(nextFocusableIndex(items, curFocused(), -1));
+        return;
+      case "Home":
+        e.preventDefault();
+        focusAt(edgeFocusableIndex(items, "start"));
+        return;
+      case "End":
+        e.preventDefault();
+        focusAt(edgeFocusableIndex(items, "end"));
+        return;
+      case "ArrowRight": {
+        const idx = curFocused();
+        const it = idx >= 0 ? items[idx] : undefined;
+        if (it && "submenu" in it && !it.disabled) {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpenSub({ i: idx, via: "key" });
+        }
+        return;
+      }
+      case "ArrowLeft":
+        if (onCollapse) {
+          e.preventDefault();
+          e.stopPropagation();
+          onCollapse();
+        }
+        return;
+      default:
+        if (e.key.length === 1 && /[a-z0-9]/i.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          focusAt(typeaheadIndex(items, curFocused(), e.key));
+        }
+    }
+  };
 
   return (
-    <>
+    <div
+      ref={(node) => {
+        containerRef.current = node;
+        if (typeof menuRef === "function") menuRef(node);
+        else if (menuRef) (menuRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      }}
+      role="menu"
+      tabIndex={-1}
+      style={{ display: "contents" }}
+      onKeyDown={onKeyDown}
+    >
       {items.map((it, i) => {
-        if ("separator" in it) return <div key={`sep-${i}`} className="qzk-ctx-sep" />;
+        if ("separator" in it) return <div key={`sep-${i}`} className="qzk-ctx-sep" role="separator" />;
         if ("header" in it)
           return (
-            <div key={`h-${i}`} className="qzk-ctx-header">
+            <div key={`h-${i}`} className="qzk-ctx-header" role="presentation">
               {it.header}
             </div>
           );
         if ("swatches" in it)
           return (
-            <div key={`sw-${i}`} className="qzk-ctx-swatches" onMouseEnter={() => setOpenSub(null)}>
+            <div
+              key={`sw-${i}`}
+              className="qzk-ctx-swatches"
+              role="group"
+              aria-label="Colours"
+              onMouseEnter={() => setOpenSub(null)}
+            >
               {it.swatches.map((sw) => (
                 <button
                   key={sw.key}
@@ -175,25 +279,37 @@ function MenuList({ items, onClose }: { items: ContextMenuItem[]; onClose: () =>
             <div
               key={it.label}
               className="qzk-ctx-subwrap"
-              onMouseEnter={() => !it.disabled && setOpenSub(i)}
-              onMouseLeave={() => setOpenSub((s) => (s === i ? null : s))}
+              onMouseEnter={() => !it.disabled && setOpenSub({ i, via: "mouse" })}
+              onMouseLeave={() => setOpenSub((s) => (s?.i === i ? null : s))}
             >
               <button
                 ref={(el) => {
-                  anchors.current[i] = el;
+                  itemRefs.current[i] = el;
                 }}
                 className="qzk-menu-item qzk-ctx-hassub"
                 disabled={it.disabled}
-                onClick={() => setOpenSub((s) => (s === i ? null : i))}
+                role="menuitem"
+                aria-haspopup="true"
+                aria-expanded={openSub?.i === i}
+                aria-disabled={it.disabled || undefined}
+                onClick={() => setOpenSub((s) => (s?.i === i ? null : { i, via: "key" }))}
               >
                 <span>{it.label}</span>
                 <span className="qzk-ctx-arrow" aria-hidden="true">
                   ›
                 </span>
               </button>
-              {openSub === i && (
+              {openSub?.i === i && (
                 <FlyoutBox>
-                  <MenuList items={it.submenu} onClose={onClose} />
+                  <MenuList
+                    items={it.submenu}
+                    onClose={onClose}
+                    autoFocusFirst={openSub.via === "key"}
+                    onCollapse={() => {
+                      setOpenSub(null);
+                      itemRefs.current[i]?.focus();
+                    }}
+                  />
                 </FlyoutBox>
               )}
             </div>
@@ -202,10 +318,13 @@ function MenuList({ items, onClose }: { items: ContextMenuItem[]; onClose: () =>
           <button
             key={it.label}
             ref={(el) => {
-              anchors.current[i] = el;
+              itemRefs.current[i] = el;
             }}
             className={`qzk-menu-item${it.danger ? " danger" : ""}`}
             disabled={it.disabled}
+            role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+            aria-checked={it.checked === undefined ? undefined : it.checked}
+            aria-disabled={it.disabled || undefined}
             onMouseEnter={() => setOpenSub(null)}
             onClick={() => {
               onClose();
@@ -221,12 +340,24 @@ function MenuList({ items, onClose }: { items: ContextMenuItem[]; onClose: () =>
           </button>
         );
       })}
-    </>
+    </div>
   );
 }
 
 export default function ContextMenu({ x, y, items, onClose }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // Captured once, synchronously, before the menu steals focus — GUI_INTERACTION
+  // #8's "Esc returns focus to the invoking element" (a keyboard-opened row,
+  // the "⋯" resting-cue button, or nothing for a plain mouse right-click).
+  const [prevFocus] = useState<HTMLElement | null>(() => document.activeElement as HTMLElement | null);
+
+  useLayoutEffect(() => {
+    // Grab focus onto the menu itself (not any one item) as soon as it opens
+    // — mirrors native OS context menus, where the very first arrow key
+    // already navigates without a preceding "wake up" keypress.
+    menuRef.current?.focus({ preventScroll: true });
+  }, []);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -242,6 +373,8 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
       if (e.key === "Escape") {
         e.stopPropagation();
         onClose();
+        // GUI_INTERACTION #8: return focus to whatever opened the menu.
+        prevFocus?.focus?.();
       }
     };
     document.addEventListener("mousedown", onDown);
@@ -254,11 +387,11 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
       window.removeEventListener("scroll", onClose, true);
       window.removeEventListener("resize", onClose);
     };
-  }, [onClose]);
+  }, [onClose, prevFocus]);
 
   return createPortal(
     <PopupBox x={x} y={y} boxRef={rootRef}>
-      <MenuList items={items} onClose={onClose} />
+      <MenuList items={items} onClose={onClose} menuRef={menuRef} />
     </PopupBox>,
     document.body,
   );

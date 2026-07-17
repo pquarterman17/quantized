@@ -20,24 +20,22 @@
 // untouched. A folder's `color` (Properties, sub-item 4) tints the caret
 // glyph — resolved from the shared `ACCENT_SWATCHES` fixed-paint table
 // (store/prefs.ts), the same palette the Preferences accent swatches use.
+//
+// GUI_INTERACTION #8: the header is now a keyboard-reachable context-menu
+// target (ContextMenu key / Shift+F10, matching DatasetRow) with a "⋯"
+// resting-cue button coexisting with the drag handle; the menu itself is
+// built by `folderRowMenu.ts` from the shared `lib/contextActions.ts`
+// registry instead of an inline array.
 
 import { useState } from "react";
 
-import {
-  applyActiveCorrectionsToFolder,
-  exportFolderCsv,
-  openFolderProperties,
-  removeFolderWithDatasets,
-  runTemplateOnFolder,
-  selectFolderContents,
-} from "./folderOps";
+import { buildFolderRowMenu } from "./folderRowMenu";
 import { DATASET_DND, FOLDER_DND } from "./useLibraryTree";
-import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
+import ContextMenu from "../overlays/ContextMenu";
+import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import { childFolders, dropZoneAt, resolveDropBeforeId, type DropZone3 } from "../../lib/foldertree";
-import { loadTemplates } from "../../lib/template";
 import type { FolderNode } from "../../lib/types";
 import { ACCENT_SWATCHES } from "../../store/prefs";
-import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 
 interface Props {
@@ -49,9 +47,7 @@ interface Props {
 
 export default function FolderRow({ folder, depth, count, expanded }: Props) {
   const toggle = useApp((s) => s.toggleFolderExpanded);
-  const createFolder = useApp((s) => s.createFolder);
   const renameFolder = useApp((s) => s.renameFolder);
-  const deleteFolder = useApp((s) => s.deleteFolder);
   const moveDatasetToFolder = useApp((s) => s.moveDatasetToFolder);
   const moveFolder = useApp((s) => s.moveFolder);
   const [rename, setRename] = useState<string | null>(null);
@@ -72,69 +68,24 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
     if (!expanded) toggle(folder.id);
   };
 
-  // Built only while the menu is open — the bulk-op gates read live store
-  // state + the saved-template list, which shouldn't run on every row render.
-  const buildMenu = (): ContextMenuItem[] => {
-    const s = useApp.getState();
-    const activeDs = s.datasets.find((d) => d.id === s.activeId);
-    const hasTemplates = loadTemplates().length > 0;
-    return [
-      {
-        label: "New subfolder",
-        run: () => {
-          createFolder(folder.id, "New Folder");
-          expand();
-        },
-      },
-      { label: "Rename…", run: () => setRename(folder.name) },
-      { label: "Properties…", run: () => void openFolderProperties(folder) },
-      // ── bulk ops over the whole subtree (item 8) ──────────────────────────
-      { separator: true },
-      {
-        label: `Select all in folder (${count})`,
-        run: () => selectFolderContents(folder),
-        disabled: count === 0,
-      },
-      {
-        label: "Export folder as consolidated CSV",
-        run: () => void exportFolderCsv(folder),
-        disabled: count === 0,
-      },
-      ...(activeDs?.corrections && count > 0
-        ? [
-            {
-              label: `Apply active corrections to folder (${count})`,
-              run: () => void applyActiveCorrectionsToFolder(folder),
-            } as ContextMenuItem,
-          ]
-        : []),
-      ...(hasTemplates && count > 0
-        ? [
-            {
-              label: "Run analysis template on folder…",
-              run: () => void runTemplateOnFolder(folder),
-            } as ContextMenuItem,
-          ]
-        : []),
-      { separator: true },
-      {
-        label: "Delete folder",
-        run: () => {
-          deleteFolder(folder.id); // reparent: contents move up; datasets are never deleted
-          toast(`deleted folder "${folder.name}"`);
-        },
-        danger: true,
-      },
-      ...(count > 0
-        ? [
-            {
-              label: `Delete folder + ${count} dataset(s)`,
-              run: () => removeFolderWithDatasets(folder),
-              danger: true,
-            } as ContextMenuItem,
-          ]
-        : []),
-    ];
+  // GUI_INTERACTION #8: every item's label/gating/run now lives in the
+  // shared `lib/contextActions.ts` folder registry — rebuilt on every render
+  // (matching the pre-registry cost profile) since it's cheap and only
+  // actually shown while `menu` is set.
+  const menuItems = buildFolderRowMenu(folder, count, () => setRename(folder.name), expand);
+
+  // Keyboard path (matches DatasetRow): the ContextMenu key / Shift+F10, or
+  // the "⋯" resting-cue button, opens the identical menu anchored at the
+  // triggering element (no cursor position to anchor a keyboard open to).
+  const onHeaderKeyDown = (e: React.KeyboardEvent) => {
+    if (!isContextMenuKeyEvent(e)) return;
+    e.preventDefault();
+    const r = e.currentTarget.getBoundingClientRect();
+    setMenu({ x: r.left + 8, y: r.bottom });
+  };
+  const openMenuAt = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    setMenu({ x: r.left, y: r.bottom });
   };
 
   return (
@@ -143,7 +94,9 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
         dropZone === "above" || dropZone === "below" ? ` drop-${dropZone}` : ""
       }`}
       style={{ paddingLeft: 6 + depth * 14 }}
+      tabIndex={0}
       onClick={() => toggle(folder.id)}
+      onKeyDown={onHeaderKeyDown}
       onContextMenu={(e) => {
         e.preventDefault();
         setMenu({ x: e.clientX, y: e.clientY });
@@ -188,9 +141,7 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
         }
       }}
     >
-      {menu && (
-        <ContextMenu x={menu.x} y={menu.y} items={buildMenu()} onClose={() => setMenu(null)} />
-      )}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
       {/* Dedicated drag handle (plan #13 sub-item 1) — the ONLY draggable
        *  element, so a drag only ever starts here; renaming still suppresses
        *  it (a native drag would fight the input's own text-selection). */}
@@ -210,6 +161,19 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
       >
         ⠿
       </span>
+      {/* Resting cue (GUI_INTERACTION #8): reveals on row hover/focus, opens
+       *  the identical menu the header's own right-click does. */}
+      <button
+        className="qzk-menu-btn"
+        title="More actions"
+        aria-label="More actions"
+        onClick={(e) => {
+          e.stopPropagation();
+          openMenuAt(e.currentTarget);
+        }}
+      >
+        ⋯
+      </button>
       <span className="qzk-group-caret" style={folderColorCss ? { color: folderColorCss } : undefined}>
         {expanded ? "▾" : "▸"}
       </span>
