@@ -14,11 +14,12 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-16 (#52 legend residue SHIPPED `eb48aed`: static-legend
-mode on Origin apply + provable `legend_title` decode; "Nb/Au" proven a
-floating annotation, not a title — faithful in-frame legend placement booked
-as the owner-call residual. Same day: #57 overlay-edit re-apply confirm
-SHIPPED, merged `4fa2b5a`). Prior: 2026-07-15 (grid fidelity fix — Origin figures apply gridless via
+**Updated:** 2026-07-16 (#52 legend residue FULLY SHIPPED: static-legend mode
++ provable `legend_title` decode `eb48aed`, then owner-selected faithful
+in-frame legend placement `d9967b0` — `legendFrameXY` frame anchor, exact
+axes-fraction export loc; "Nb/Au" proven a floating annotation, not a title.
+Same day: #57 overlay-edit re-apply confirm SHIPPED `4fa2b5a`). Prior:
+2026-07-15 (grid fidelity fix — Origin figures apply gridless via
 `ORIGIN_FIGURE_AXIS`; booked #52 legend-title placement + #54 letterbox
 space-fill from owner gallery review). Prior: 2026-07-14 (Codex stacks #39–#53
 reviewed + landed; #51–#53 legend swatches / linear steps / log minor ticks).
@@ -500,15 +501,29 @@ Official model references used for this routing:
         `ax.legend(title=…)` in vector export; fidelity manifest tracks
         it. Corpus sweep 618 figures: purely additive, 0 mark/label
         deltas. Findings in `docs/origin_project_format.md`.
-      - [ ] **Faithful in-frame legend placement** (owner call, follow-up
-        from the 2026-07-16 work): place the applied legend at Origin's
-        actual decoded position by expressing it in the uPlot data-frame
-        coordinate system (not the stage container), eliminating the
-        corner-snap approximation — the remaining gap behind the
-        "Nb/Au looks detached from the legend" impression. Alternative
-        (also owner call): an explicit proximity heuristic grouping
-        adjacent text objects into the legend — a taste decision, not a
-        provable decode. Judge via the #55 gallery first.
+      - [x] **Faithful in-frame legend placement** (owner-selected option 1,
+        SHIPPED 2026-07-16, merged `d9967b0`). New `PlotView.legendFrameXY`
+        — the legend box top-left as PLOT-FRAME fractions (fy down from the
+        top; Origin's own stored convention, verified against
+        `frac_to_data`) — recovered losslessly in `originLegendState` via
+        `axisFraction` (its exact log-aware inverse; no backend decode
+        change), emitted only when the decoded position lands in-frame
+        (out-of-frame → the corner-snap fallback stays). Rendered via a new
+        stateless uPlot plugin `lib/uplotFrameVars.ts` that publishes the
+        frame rect (CSS px, DPR-safe) as `--qz-frame-*` CSS vars on
+        `.qzk-stage` — the legend positions by pure `calc()`, zero React
+        re-renders on zoom/resize. Precedence frame > free `legendXY` >
+        corner; a pointer drag one-way degrades to `legendXY` (frame anchor
+        cleared), double-click reset falls back to the pinned corner; state
+        lives in the non-ratcheted pointerTool slice (useApp untouched at
+        its pin). Export parity: new `"axes"` legend loc —
+        `bbox_to_anchor` under `ax.transAxes` with the y-flip, EXACT since
+        a frame fraction is an axes fraction. Harness-verified vs the
+        Origin PNG oracles: RockingCurve 4/4 (NbAuRocking's legend now
+        in-frame adjacent to "Nb/Au", matching Origin), Moke 12/12
+        (Graph1 upper-left inset matches), PNR 99/99, zero mismatches/
+        runtime errors. Known out-of-scope surface: MultiPanelStage mounts
+        no PlotLegend. Frontend 3397 green on the merged tree.
     - [x] **Background gridlines suppressed on Origin apply** (fixed 2026-07-15).
       Origin graphs draw NO background gridlines and grid visibility is
       undecodable, but Quantized applied its default grid (and #53's minor ticks
