@@ -235,7 +235,14 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) onClose();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      // GUI_INTERACTION #9: an open menu OWNS Escape — stop it here so it
+      // never also reaches a window-level consumer underneath (e.g. the
+      // plot-tool Esc handler reverting the active tool to Pointer as an
+      // unrelated side effect of closing this menu).
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);

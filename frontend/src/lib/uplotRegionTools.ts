@@ -7,6 +7,7 @@
 
 import type uPlot from "uplot";
 
+import { setActiveGestureCancel } from "./gestureCancel";
 import { trapz } from "./integrate";
 import { fwhm, type FwhmResult } from "./peakwidth";
 
@@ -64,6 +65,7 @@ export function integratePlugin(
                 const onUp = (ev: MouseEvent) => {
                   document.removeEventListener("mousemove", onMove);
                   document.removeEventListener("mouseup", onUp);
+                  setActiveGestureCancel(null);
                   const x1 = u.posToVal(ev.clientX - rect.left, "x");
                   band = null;
                   const dpx = Math.abs(
@@ -84,6 +86,15 @@ export function integratePlugin(
                 };
                 document.addEventListener("mousemove", onMove);
                 document.addEventListener("mouseup", onUp);
+                // GUI_INTERACTION #9: Escape/right-click cancel — discard the
+                // live band (no onIntegrate commit) and tear down like a
+                // normal release.
+                setActiveGestureCancel(() => {
+                  document.removeEventListener("mousemove", onMove);
+                  document.removeEventListener("mouseup", onUp);
+                  band = null;
+                  u.redraw();
+                });
               });
             }
           : undefined,
@@ -183,6 +194,7 @@ export function fwhmPlugin(
                 const onUp = (ev: MouseEvent) => {
                   document.removeEventListener("mousemove", onMove);
                   document.removeEventListener("mouseup", onUp);
+                  setActiveGestureCancel(null);
                   const x1 = u.posToVal(ev.clientX - rect.left, "x");
                   band = null;
                   const dpx = Math.abs(
@@ -197,6 +209,15 @@ export function fwhmPlugin(
                 };
                 document.addEventListener("mousemove", onMove);
                 document.addEventListener("mouseup", onUp);
+                // GUI_INTERACTION #9: Escape/right-click cancel — discard the
+                // live band (no onFwhm commit) and tear down like a normal
+                // release.
+                setActiveGestureCancel(() => {
+                  document.removeEventListener("mousemove", onMove);
+                  document.removeEventListener("mouseup", onUp);
+                  band = null;
+                  u.redraw();
+                });
               });
             }
           : undefined,

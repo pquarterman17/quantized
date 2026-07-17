@@ -6,6 +6,17 @@
 // lib/ so it's trivially unit-testable and free of the .tsx component-ceiling
 // ratchet. Wording is reworded from PlotToolbar's old single-line `title`
 // strings, not new behavior — see PlotToolbar.tsx for how these render.
+//
+// GUI_INTERACTION_PLAN #9 (active-tool feedback): `hint` is the optional
+// gesture-phrased override ToolHud.tsx shows ("drag a range to…", "click a
+// point to…"); every entry below already reads as a gesture in `desc`, so
+// none need one today — the field exists so a future tool whose `desc`
+// reads as a feature description rather than an instruction can override
+// without forking the toolbar's own copy. `TOOL_DEFS`/`toolDefFor` are the
+// single lookup ToolHud uses to go from the live `plotTool` to its
+// name/hint — including "region" (the Baseline workshop's programmatic
+// "pick from plot" mode, `useBaseline.pickRegion`), which has no toolbar
+// button of its own but is still a real non-pointer `PlotTool`.
 
 import type { DrawShapeKind } from "../components/Stage/useShapeDraw";
 import type { PlotTool } from "./uplotOpts";
@@ -15,6 +26,7 @@ export interface ToolDef {
   glyph: string;
   name: string;
   desc: string;
+  hint?: string;
 }
 
 export interface ActionDef {
@@ -54,6 +66,30 @@ export const ANALYZE_TOOLS: ToolDef[] = [
   { id: "fwhm", glyph: "∩", name: "Peak / FWHM", desc: "Drag a range to measure a peak's width" },
   { id: "qfit", glyph: "≈", name: "Gadget", desc: "Drag a region or place cursors for a live fit or analysis" },
 ];
+
+// The Baseline workshop's "Fit from region" (useBaseline.pickRegion) arms
+// this tool programmatically — no toolbar button, but still a real
+// non-pointer `PlotTool` that needs a HUD entry (GUI_INTERACTION #9).
+// Mirrors PlotReadouts' existing resting text for this tool.
+const REGION_TOOL: ToolDef = {
+  id: "region",
+  glyph: "▭",
+  name: "Background Region",
+  desc: "Drag to select a background range for baseline fitting",
+};
+
+/** Every PlotTool with a ToolDef, keyed by id — the ONE lookup ToolHud.tsx
+ *  (and anything else that wants a tool's name/hint) reads from, so the
+ *  toolbar and the HUD can never drift onto different wording. */
+export const TOOL_DEFS: Readonly<Record<PlotTool, ToolDef | undefined>> = Object.fromEntries(
+  [...NAVIGATE_TOOLS, ...INSPECT_TOOLS, ...ANALYZE_TOOLS, REGION_TOOL].map((t) => [t.id, t]),
+) as Record<PlotTool, ToolDef | undefined>;
+
+/** The ToolDef for a live `plotTool` value, or undefined for a tool with no
+ *  def (there are none today — every PlotTool variant is covered above). */
+export function toolDefFor(tool: PlotTool): ToolDef | undefined {
+  return TOOL_DEFS[tool];
+}
 
 // ── Annotate: the shape dock flyout (MAIN #27) — the ONE place a first-time
 // user discovers every drawable mark, including "Text box" (not a Shape

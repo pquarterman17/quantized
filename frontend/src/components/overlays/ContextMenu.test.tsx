@@ -43,6 +43,20 @@ describe("ContextMenu", () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
+  // GUI_INTERACTION #9: an open menu owns Escape — it must not also reach a
+  // window-level consumer underneath (e.g. the plot-tool Esc handler), or
+  // closing this menu would have an unrelated side effect on the plot tool.
+  it("stops Escape from propagating past the menu", () => {
+    const onClose = vi.fn();
+    const windowListener = vi.fn();
+    window.addEventListener("keydown", windowListener);
+    render(<ContextMenu x={0} y={0} items={items} onClose={onClose} />);
+    fireEvent.keyDown(document, { key: "Escape" });
+    window.removeEventListener("keydown", windowListener);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(windowListener).not.toHaveBeenCalled();
+  });
+
   // A portaled child's synthetic click still bubbles through the REACT tree
   // (not the DOM tree) to whatever rendered <ContextMenu> — e.g. a Library
   // row's own onClick. Without stopPropagation, clicking a menu item would

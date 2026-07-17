@@ -119,12 +119,6 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
    - [ ] A resting cue that right-click is available; shared confirm/undo policy for
          destructive/reorganizing actions.
 
-9. **Active-tool feedback + universal cancel** — a consistent interaction HUD/
-   status strip (e.g. `Peak/FWHM — drag across one peak · Esc cancels`).
-   - [ ] Esc always cancels the in-progress gesture and returns to Pointer (unless a
-         persistent-tool pref is set); right-click cancels an unfinished gesture
-         before opening a menu; cursor/overlay reflect the active mode.
-
 11. **Graph Builder → durable artifact** — promote its output to a first-class
     saved `PlotSpec` in `.dwk`.
     - [ ] Save / Save As / Duplicate / Open in Figure Builder / Export; Stage shows
@@ -221,6 +215,39 @@ ephemeral). Lower risk: core 2-D plotting, publication export.
   per-field setters); `DatasetRow.tsx` extraction (`datasetRowMenu.ts`) kept
   it at 367/400 despite the new handle/caption/reveal wiring. Frontend
   3463 green (+42 tests), build green.
+
+- ~~**#9 Active-tool feedback + universal cancel**~~ (2026-07-17) — a floating
+  `ToolHud.tsx` strip shows the armed non-Pointer tool's name + one-line
+  gesture hint + "Esc cancels" (e.g. `∩ Peak / FWHM — drag a range to measure
+  a peak's width · W · Esc cancels`), sourced from `plotToolbarDefs.ts`
+  (extended with an optional `hint` override + a `region`-tool entry +
+  `toolDefFor` lookup, one source of truth with the toolbar's own tooltips)
+  and `plotToolKeys.ts`'s `keyForTool`. A new `lib/gestureCancel.ts` registry
+  lets a drag (pan/measure/stats/integrate/FWHM/quick-fit ROI/gadget cursors —
+  every custom-JS gesture in `uplotTools`/`uplotRegionTools`/`uplotGadgets`)
+  register a canceller at mousedown and be aborted from OUTSIDE its own
+  closure: Esc (the one centralized handler in `useGlobalShortcuts`) cancels
+  a live gesture first (tool stays armed for an immediate retry), then an
+  idle-armed qfit gadget (folded in from `useGadgetChip`'s old per-effect
+  listener, which re-registered on every drag tick and could race the new
+  gesture-cancel for the same keypress), and only then reverts the tool to
+  Pointer — skipped while typing in a field or when the new "Persistent plot
+  tool" preference (`store/prefs.ts`, own `qz.interactionPrefs` key, default
+  off — `store/useApp.ts` has zero ratchet headroom) is set. Right-click
+  (`useStageContextMenu.ts`, extracted from `PlotStage.tsx` to hold its
+  line-ceiling pin while mounting the HUD) now always cancels any live
+  gesture and opens the menu, replacing an `e.buttons & 1` guard that
+  silently swallowed the click while the drag's listeners stayed live
+  underneath. `ContextMenu.tsx` now `stopPropagation()`s on Escape so an open
+  menu owns the key (matches the dialogs' capture+stopPropagation
+  precedence) instead of also reaching the new tool-revert handler. Cursor
+  audit found ONE real gap — the "select" tool (native uPlot rubber-band, no
+  plugin to set one inline) had no crosshair; added to `shell.css`'s existing
+  rule. uPlot's own native rubber-band (zoom box, select/region x-band) has
+  no exposed "abort this drag" API — documented as a deliberate scope gap,
+  not silently dropped. `PlotStage.tsx` 398/400 lines (was exactly at 400,
+  net negative after the context-menu extraction); `store/useApp.ts`
+  untouched (3238/3240). Frontend 263 files / 3568 tests green; build green.
 
 - ~~**#7 Plot toolbar legibility**~~ (2026-07-17) — the shared `TooltipLayer`
   (already mounted app-wide) now renders a bold NAME + one-line BEHAVIOUR

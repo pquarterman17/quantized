@@ -5,11 +5,25 @@
 // round-trip; this hook owns only what the CHIP itself needs: the mode
 // picker, each mode's live result for display, the fit model picker, the
 // mode-aware "Commit" ending (fit → durable fitSpec; fft → a new library
-// dataset; other modes have no commit action), the "→ Report" ending for the
-// modes with a natural report emitter (fit/integrate/stats — mirrors the
-// Curve Fit workshop's own toReport, lib/report #36), and Escape-to-dismiss.
+// dataset; other modes have no commit action), and the "→ Report" ending
+// for the modes with a natural report emitter (fit/integrate/stats —
+// mirrors the Curve Fit workshop's own toReport, lib/report #36).
+//
+// GUI_INTERACTION #9 (universal Esc-cancel): dismissing the ARMED-BUT-IDLE
+// gadget (a committed roi/cursors sitting with no drag in progress) on
+// Escape now lives in the ONE centralized handler (useGlobalShortcuts),
+// alongside every other plot-tool's Esc semantics — not a bespoke listener
+// here. Reasoning: `roi`/`cursors` change on every mousemove tick of a live
+// drag (setQfitRoi/setGadgetCursors fire continuously), so a listener keyed
+// off them (as this hook used to have) tears down and re-registers dozens
+// of times a second while dragging, racing the drag's OWN gesture-cancel
+// registration (lib/gestureCancel) for which one wins a given Escape press.
+// The centralized handler calls `cancelActiveGesture()` first (so a live
+// drag is aborted in place, keeping whatever was committed before it
+// started) and only falls back to this hook's `dismiss` (still exported,
+// unchanged) when nothing was mid-drag.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { reportEmit, type FftSpectralResult, type IntegrateResponse } from "../../lib/api";
 import type { DerivativeResult } from "../../lib/differentiate";
@@ -81,18 +95,6 @@ export function useGadgetChip(): GadgetChipState {
 
   const busy = mode === "fit" ? qfitBusy : gadgetBusy;
   const error = mode === "fit" ? qfitError : gadgetError;
-
-  // Escape clears the gadget (roi/cursors + chip + overlays) while it's
-  // armed — the other trigger, a tool switch, is handled by PlotStage's own
-  // tool effect.
-  useEffect(() => {
-    if (!roi && !cursors) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") dismiss();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [roi, cursors, dismiss]);
 
   function commit(): void {
     if (mode === "fit") commitQfit();

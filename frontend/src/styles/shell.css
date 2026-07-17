@@ -78,7 +78,14 @@ body {
 .qzk-stage.tool-cursor .u-over,
 .qzk-stage.tool-measure .u-over,
 .qzk-stage.tool-stats .u-over,
+.qzk-stage.tool-select .u-over,
 .qzk-stage.tool-region .u-over { cursor: crosshair; }
+/* integ/fwhm/qfit set the SAME crosshair (+ qfit's dynamic ew-resize/move on
+   its ROI handles) inline via their plugin's `ready` hook, since it must
+   already flip at runtime as the pointer crosses a handle — no static class
+   rule would stay correct, so they're deliberately absent from the list
+   above (GUI_INTERACTION #9 cursor-consistency check: "select" above was the
+   one real gap — it used uPlot's native rubber-band with no cursor at all). */
 
 /* ── Preferences dialog (⌘,) — adapted from the design-system mock shell.css ── */
 .qzk-prefs-overlay { display: flex; align-items: flex-start; justify-content: center; }
@@ -290,6 +297,16 @@ body {
   white-space: nowrap;
 }
 .qzk-tool-group-row { display: flex; gap: 3px; }
+/* GUI_INTERACTION_PLAN #9: active-tool HUD, top-left — clear of the toolbar
+   (top-center) and the legend's default NE/NW/SE/SW corners. Hidden for
+   Pointer (ToolHud.tsx returns null), so a fresh workspace shows nothing. */
+.qzk-tool-hud { top: 12px; left: 12px; padding: 5px 10px; display: flex; align-items: center; gap: 7px; font-size: var(--font-size-sm); white-space: nowrap; }
+.qzk-tool-hud .g { color: var(--accent); font-size: 14px; }
+.qzk-tool-hud .name { color: var(--text); font-weight: var(--weight-semibold); }
+.qzk-tool-hud .sep,
+.qzk-tool-hud .hint { color: var(--text-dim); }
+.qzk-tool-hud .key { padding: 1px 5px; border-radius: var(--radius-sm); background: var(--surface-3); color: var(--text-dim); font-family: var(--font-mono); font-size: var(--type-nano); }
+.qzk-tool-hud .esc { color: var(--text-faint); font-size: var(--type-nano); }
 .qzk-zoom-chip { bottom: 12px; left: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
 .qzk-readout { bottom: 12px; right: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); }
 /* On-plot analysis result chips (∫ Integrate / ∩ FWHM) — stack bottom-center,

@@ -1,4 +1,4 @@
-import { fireEvent, renderHook, waitFor } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -57,23 +57,10 @@ describe("useGadgetChip — fit mode (gap #33, unchanged behavior)", () => {
     expect(result.current.fitResult).toEqual(expect.objectContaining({ R2: 0.9 }));
   });
 
-  it("Escape dismisses the gadget while a roi is armed", () => {
-    renderHook(() => useGadgetChip());
+  it("dismiss() clears the roi (Escape-dismiss now lives in useGlobalShortcuts — see its test)", () => {
+    const { result } = renderHook(() => useGadgetChip());
     expect(useApp.getState().qfitRoi).toEqual([1, 2]);
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(useApp.getState().qfitRoi).toBeNull();
-  });
-
-  it("a non-Escape key while armed does not clear the gadget", () => {
-    renderHook(() => useGadgetChip());
-    fireEvent.keyDown(window, { key: "Enter" });
-    expect(useApp.getState().qfitRoi).toEqual([1, 2]);
-  });
-
-  it("is a harmless no-op with no roi/cursors armed", () => {
-    useApp.setState({ qfitRoi: null });
-    renderHook(() => useGadgetChip());
-    fireEvent.keyDown(window, { key: "Escape" });
+    act(() => result.current.dismiss());
     expect(useApp.getState().qfitRoi).toBeNull();
   });
 
@@ -212,7 +199,7 @@ describe("useGadgetChip — fft mode (gap #34)", () => {
 });
 
 describe("useGadgetChip — cursors mode (gap #34)", () => {
-  it("exposes cursors + the Δx/Δy/slope readout, dismisses on Escape", () => {
+  it("exposes cursors + the Δx/Δy/slope readout, dismiss() clears them", () => {
     useApp.setState({
       gadgetMode: "cursors",
       qfitRoi: null,
@@ -222,7 +209,7 @@ describe("useGadgetChip — cursors mode (gap #34)", () => {
     const { result } = renderHook(() => useGadgetChip());
     expect(result.current.cursors).toEqual([1, 3]);
     expect(result.current.cursorResult?.slope).toBe(10);
-    fireEvent.keyDown(window, { key: "Escape" });
+    act(() => result.current.dismiss());
     expect(useApp.getState().gadgetCursors).toBeNull();
   });
 });
