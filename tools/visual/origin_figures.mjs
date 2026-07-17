@@ -198,7 +198,10 @@ async function main() {
   await mkdir(QZ_DIR, { recursive: true });
 
   console.log(`[1/5] starting backend on :${PORT} …`);
-  const backend = spawn("uv", ["run", "qz", "--no-browser", "--port", String(PORT)], {
+  // --no-sync: a bare `uv run` re-syncs the venv per spawn; an interrupted
+  // sync (OneDrive file locks) leaves half-installed packages and kills the
+  // NEXT project's backend mid-corpus-run.
+  const backend = spawn("uv", ["run", "--no-sync", "qz", "--no-browser", "--port", String(PORT)], {
     cwd: REPO_ROOT,
     shell: process.platform === "win32",
     stdio: ["ignore", "pipe", "pipe"],
