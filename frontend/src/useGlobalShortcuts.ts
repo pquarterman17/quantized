@@ -7,8 +7,10 @@
 import { useEffect } from "react";
 
 import { askParams } from "./components/overlays/ParamDialog";
+import { cancelActiveGesture } from "./lib/gestureCancel";
 import { openFilePicker } from "./lib/openFilePicker";
 import { toolForKey } from "./lib/plotToolKeys";
+import { loadInteractionPrefs } from "./store/prefs";
 import { toast } from "./store/toasts";
 import { useApp } from "./store/useApp";
 
@@ -41,6 +43,37 @@ export function useGlobalShortcuts(): void {
           });
         } else {
           doRemove();
+        }
+        return;
+      }
+      // Esc: universal plot-tool cancel (GUI_INTERACTION #9). A capture-phase
+      // dialog (ConfirmDialog/PreferencesDialog/…) or a bubble-phase menu
+      // (ContextMenu) that stopPropagation()s on Escape already wins over
+      // this — it's a plain window-level bubble listener, the same
+      // composition priority as every other Esc consumer in components/Stage.
+      // A live drag (integrate/FWHM/measure/stats/pan/quick-fit ROI/gadget
+      // cursors) wins next — cancelActiveGesture() tears down its listeners
+      // and discards the gesture WITHOUT committing, and the tool stays
+      // armed so the user can immediately retry. With nothing mid-drag: an
+      // idle-but-armed qfit gadget (a committed roi/cursors sitting with no
+      // drag in progress) clears the same way its own chip dismiss does.
+      // Only then — tool not already Pointer, not typing in a field, and
+      // Preferences ▸ Interaction ▸ "Persistent plot tool" not set — does
+      // Esc revert the active tool to Pointer.
+      if (e.key === "Escape") {
+        if (cancelActiveGesture()) {
+          e.preventDefault();
+          return;
+        }
+        const s = useApp.getState();
+        if (s.qfitRoi || s.gadgetCursors) {
+          e.preventDefault();
+          s.clearQfit();
+          return;
+        }
+        if (!isEditing(e.target) && s.plotTool !== "pointer" && !loadInteractionPrefs().persistentTool) {
+          e.preventDefault();
+          s.setPlotTool("pointer");
         }
         return;
       }

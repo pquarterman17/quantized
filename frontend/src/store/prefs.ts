@@ -184,3 +184,41 @@ export function saveToolbarPrefs(p: ToolbarPrefs): void {
     /* storage unavailable (private mode) — non-fatal */
   }
 }
+
+// ── Plot interaction prefs (GUI_INTERACTION_PLAN #9, active-tool feedback +
+// universal Esc-cancel) ─────────────────────────────────────────────────
+// Same store-INDEPENDENT localStorage pattern as ToolbarPrefs above and for
+// the same reason: useApp.ts is at its store-size ratchet ceiling. Read
+// directly (no store round-trip needed) from useGlobalShortcuts' Escape
+// handler.
+const INTERACTION_PREFS_KEY = "qz.interactionPrefs";
+
+export interface InteractionPrefs {
+  /** Default OFF (today's behaviour): Esc with no gesture in progress
+   *  reverts the active plot tool to Pointer. When ON, Esc still cancels an
+   *  in-progress drag but never reverts the tool — it stays armed until the
+   *  user picks a different one (toolbar / shortcut). */
+  persistentTool: boolean;
+}
+
+export const INTERACTION_PREF_DEFAULTS: InteractionPrefs = { persistentTool: false };
+
+export function loadInteractionPrefs(): InteractionPrefs {
+  try {
+    const p = JSON.parse(localStorage.getItem(INTERACTION_PREFS_KEY) ?? "{}") as Record<string, unknown>;
+    return {
+      persistentTool:
+        typeof p.persistentTool === "boolean" ? p.persistentTool : INTERACTION_PREF_DEFAULTS.persistentTool,
+    };
+  } catch {
+    return INTERACTION_PREF_DEFAULTS;
+  }
+}
+
+export function saveInteractionPrefs(p: InteractionPrefs): void {
+  try {
+    localStorage.setItem(INTERACTION_PREFS_KEY, JSON.stringify(p));
+  } catch {
+    /* storage unavailable (private mode) — non-fatal */
+  }
+}

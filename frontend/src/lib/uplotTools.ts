@@ -7,6 +7,7 @@
 
 import type uPlot from "uplot";
 
+import { setActiveGestureCancel } from "./gestureCancel";
 import { computeMeasurement, type Measurement } from "./measure";
 import { computeRegionStats, type RegionStats } from "./regionStats";
 
@@ -57,9 +58,20 @@ export function panPlugin(): uPlot.Plugin {
             over.style.cursor = "grab";
             document.removeEventListener("mousemove", onMove);
             document.removeEventListener("mouseup", onUp);
+            setActiveGestureCancel(null);
           };
           document.addEventListener("mousemove", onMove);
           document.addEventListener("mouseup", onUp);
+          // GUI_INTERACTION #9: Escape/right-click cancel — restore the pan's
+          // starting scales (a pan has no "committed result" to discard, just
+          // the view it moved) and tear down like a normal release.
+          setActiveGestureCancel(() => {
+            document.removeEventListener("mousemove", onMove);
+            document.removeEventListener("mouseup", onUp);
+            over.style.cursor = "grab";
+            u.setScale("x", { min: x0min, max: x0max });
+            u.setScale("y", { min: y0min, max: y0max });
+          });
         });
       },
     },
@@ -105,9 +117,19 @@ export function measurePlugin(
           const onUp = () => {
             document.removeEventListener("mousemove", onMove);
             document.removeEventListener("mouseup", onUp);
+            setActiveGestureCancel(null);
           };
           document.addEventListener("mousemove", onMove);
           document.addEventListener("mouseup", onUp);
+          // GUI_INTERACTION #9: Escape/right-click cancel — discard the live
+          // segment (no onMeasure commit) and tear down like a normal release.
+          setActiveGestureCancel(() => {
+            document.removeEventListener("mousemove", onMove);
+            document.removeEventListener("mouseup", onUp);
+            seg = null;
+            onMeasure(null);
+            u.redraw();
+          });
         });
       },
       draw: (u: uPlot) => {
@@ -194,9 +216,19 @@ export function statsPlugin(
           const onUp = () => {
             document.removeEventListener("mousemove", onMove);
             document.removeEventListener("mouseup", onUp);
+            setActiveGestureCancel(null);
           };
           document.addEventListener("mousemove", onMove);
           document.addEventListener("mouseup", onUp);
+          // GUI_INTERACTION #9: Escape/right-click cancel — discard the live
+          // band (no onStats commit) and tear down like a normal release.
+          setActiveGestureCancel(() => {
+            document.removeEventListener("mousemove", onMove);
+            document.removeEventListener("mouseup", onUp);
+            band = null;
+            recompute(u);
+            u.redraw();
+          });
         });
       },
       draw: (u: uPlot) => {

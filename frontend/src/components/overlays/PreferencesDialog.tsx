@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 
 import { shortcutGroupsFor } from "../../lib/shortcuts";
 import { Button, SegmentedControl, Select, SliderRow, Switch } from "../primitives";
+import { loadInteractionPrefs, saveInteractionPrefs } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
 
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
@@ -57,6 +58,9 @@ export default function PreferencesDialog() {
   const setPref = useApp((s) => s.setPref);
   const p = useApp((s) => s);
   const [tab, setTab] = useState<Tab>("Appearance");
+  // GUI_INTERACTION #9: store-independent, like PlotToolbar's showGroupLabels
+  // (useApp.ts has zero ratchet headroom) — see store/prefs.ts's header.
+  const [persistentTool, setPersistentTool] = useState(() => loadInteractionPrefs().persistentTool);
 
   useEffect(() => {
     if (!open) return;
@@ -210,6 +214,18 @@ export default function PreferencesDialog() {
                   <Switch
                     checked={p.confirmRemove}
                     onChange={(v) => setPref("confirmRemove", v)}
+                  />
+                </PrefRow>
+                <PrefRow
+                  label="Persistent plot tool"
+                  hint="Esc cancels a drag but keeps the tool armed, instead of returning to Pointer"
+                >
+                  <Switch
+                    checked={persistentTool}
+                    onChange={(v) => {
+                      setPersistentTool(v);
+                      saveInteractionPrefs({ persistentTool: v });
+                    }}
                   />
                 </PrefRow>
               </>

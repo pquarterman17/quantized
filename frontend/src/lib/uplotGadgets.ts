@@ -9,6 +9,7 @@
 
 import type uPlot from "uplot";
 
+import { setActiveGestureCancel } from "./gestureCancel";
 import { normalizeRange } from "./regionSelect";
 
 export type RoiHandle = "left" | "right" | "move";
@@ -127,9 +128,21 @@ export function quickFitPlugin(
                     document.removeEventListener("mousemove", onMove);
                     document.removeEventListener("mouseup", onUp);
                     dragging = false;
+                    setActiveGestureCancel(null);
                   };
                   document.addEventListener("mousemove", onMove);
                   document.addEventListener("mouseup", onUp);
+                  // GUI_INTERACTION #9: Escape/right-click cancel — revert to
+                  // the pre-resize band (`c`) instead of discarding it outright
+                  // (unlike the one-shot ∫/∩ tools, a committed ROI is a
+                  // durable object the user was editing, not building fresh).
+                  setActiveGestureCancel(() => {
+                    document.removeEventListener("mousemove", onMove);
+                    document.removeEventListener("mouseup", onUp);
+                    dragging = false;
+                    commit(c, onRoiChange);
+                    u.redraw();
+                  });
                   return;
                 }
 
@@ -159,9 +172,19 @@ export function quickFitPlugin(
                     document.removeEventListener("mousemove", onMove);
                     document.removeEventListener("mouseup", onUp);
                     dragging = false;
+                    setActiveGestureCancel(null);
                   };
                   document.addEventListener("mousemove", onMove);
                   document.addEventListener("mouseup", onUp);
+                  // GUI_INTERACTION #9: Escape/right-click cancel — snap the
+                  // band back to where it was before this move started.
+                  setActiveGestureCancel(() => {
+                    document.removeEventListener("mousemove", onMove);
+                    document.removeEventListener("mouseup", onUp);
+                    dragging = false;
+                    commit(c, onRoiChange);
+                    u.redraw();
+                  });
                   return;
                 }
 
@@ -178,6 +201,7 @@ export function quickFitPlugin(
                   document.removeEventListener("mousemove", onMove);
                   document.removeEventListener("mouseup", onUp);
                   dragging = false;
+                  setActiveGestureCancel(null);
                   const x1 = u.posToVal(ev.clientX - rect.left, "x");
                   const dpx = Math.abs(u.valToPos(x1, "x", true) - u.valToPos(x0, "x", true));
                   if (dpx < 6) {
@@ -193,6 +217,17 @@ export function quickFitPlugin(
                 };
                 document.addEventListener("mousemove", onMove);
                 document.addEventListener("mouseup", onUp);
+                // GUI_INTERACTION #9: Escape/right-click cancel — revert to
+                // whatever was committed before this create-new drag started
+                // (`c`, possibly null) rather than leaving the just-started
+                // sliver band behind.
+                setActiveGestureCancel(() => {
+                  document.removeEventListener("mousemove", onMove);
+                  document.removeEventListener("mouseup", onUp);
+                  dragging = false;
+                  commit(c, onRoiChange);
+                  u.redraw();
+                });
               });
             }
           : undefined,
@@ -325,9 +360,19 @@ export function gadgetCursorsPlugin(
                     document.removeEventListener("mousemove", onMove);
                     document.removeEventListener("mouseup", onUp);
                     dragging = false;
+                    setActiveGestureCancel(null);
                   };
                   document.addEventListener("mousemove", onMove);
                   document.addEventListener("mouseup", onUp);
+                  // GUI_INTERACTION #9: Escape/right-click cancel — snap the
+                  // moved cursor back to where it was before this drag started.
+                  setActiveGestureCancel(() => {
+                    document.removeEventListener("mousemove", onMove);
+                    document.removeEventListener("mouseup", onUp);
+                    dragging = false;
+                    commit(c, onCursorsChange);
+                    u.redraw();
+                  });
                   return;
                 }
 
@@ -344,6 +389,7 @@ export function gadgetCursorsPlugin(
                   document.removeEventListener("mousemove", onMove);
                   document.removeEventListener("mouseup", onUp);
                   dragging = false;
+                  setActiveGestureCancel(null);
                   const x1 = u.posToVal(ev.clientX - rect.left, "x");
                   const dpx = Math.abs(u.valToPos(x1, "x", true) - u.valToPos(x0, "x", true));
                   if (dpx < 6) {
@@ -356,6 +402,16 @@ export function gadgetCursorsPlugin(
                 };
                 document.addEventListener("mousemove", onMove);
                 document.addEventListener("mouseup", onUp);
+                // GUI_INTERACTION #9: Escape/right-click cancel — revert to
+                // whatever was placed before this create-new drag started
+                // (`c`, possibly null).
+                setActiveGestureCancel(() => {
+                  document.removeEventListener("mousemove", onMove);
+                  document.removeEventListener("mouseup", onUp);
+                  dragging = false;
+                  commit(c, onCursorsChange);
+                  u.redraw();
+                });
               });
             }
           : undefined,

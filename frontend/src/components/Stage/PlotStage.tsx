@@ -31,6 +31,7 @@ import PlotToolbar from "./PlotToolbar";
 import PlotViewport from "./PlotViewport";
 import PolarStage from "./PolarStage";
 import StatStage from "./StatStage";
+import ToolHud from "./ToolHud";
 import { useAnnotationEdit } from "./useAnnotationEdit";
 import { useAxisLabelEdit } from "./useAxisLabelEdit";
 import { useAxisDrop } from "./useAxisDrop";
@@ -40,6 +41,7 @@ import { usePlotPayload } from "./usePlotPayload";
 import { usePlotStageActions } from "./usePlotStageActions";
 import { useShapeDraw } from "./useShapeDraw";
 import { useShapeEdit } from "./useShapeEdit";
+import { useStageContextMenu } from "./useStageContextMenu";
 
 export default function PlotStage() {
   const active = useActiveDataset();
@@ -148,7 +150,6 @@ export default function PlotStage() {
   const [readout, setReadout] = useState<Readout | null>(null);
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
   const [statsSel, setStatsSel] = useState<RegionStats | null>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   const { displayPayload, plotted, styleList, labelList, errorBars, colorByColumns, hidden } = usePlotPayload({
     active,
@@ -170,6 +171,15 @@ export default function PlotStage() {
     derivOverlay,
     selection,
   });
+
+  // Right-click state (menu position + the gesture-cancel-then-open handler)
+  // lives in useStageContextMenu — kept PlotStage at its line-ceiling pin
+  // while making room for ToolHud; see that file's header for why a live
+  // drag no longer silently swallows the click. Called here (unconditionally,
+  // before the alternate-render-mode early returns below) per the Rules of
+  // Hooks — NOT down by those returns, where the old inline `menu` useState
+  // never had to worry about it.
+  const { menu, setMenu, onStageContextMenu } = useStageContextMenu(displayPayload);
 
   // The ruler is pinned to the active dataset's data coords, so clear it when we
   // leave measure mode or switch datasets (the uPlot rebuild already drops the
@@ -224,18 +234,6 @@ export default function PlotStage() {
     (plotted.length >= 2 || (spatialPanels?.length ?? 0) >= 2 || (facetPanels?.length ?? 0) >= 1)
   )
     return <MultiPanelStage />;
-
-  // Right-click anywhere on the plot canvas → the series/axis/plot editing menu
-  // (PlotContextMenu hit-tests the nearest curve + the axis zone). Legend
-  // right-clicks stop their own propagation, so they don't fall through here.
-  // Skip while a left-button drag is live (a plot tool mid-gesture): `buttons`
-  // carries bit 1 when the primary button is still down.
-  const onStageContextMenu = (e: React.MouseEvent) => {
-    if (!displayPayload) return;
-    e.preventDefault();
-    if (e.buttons & 1) return;
-    setMenu({ x: e.clientX, y: e.clientY });
-  };
 
   return (
     <AxisDropZones
@@ -360,6 +358,7 @@ export default function PlotStage() {
           onSnapshotWindow={snapshotToNewWindow}
         />
       )}
+      {displayPayload && <ToolHud tool={tool} />}
 
       {insetMode && displayPayload && (
         <InsetPlot payload={displayPayload} styleList={styleList} />
