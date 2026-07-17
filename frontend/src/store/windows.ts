@@ -38,6 +38,7 @@ import type { FrozenPlotBundle } from "../lib/plotsnapshot";
 import { plotIntentStageTab } from "../lib/stagetab";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
+import { dropWorksheetSelection } from "./worksheetSelection";
 
 // Window ids get their own sequence (dataset/folder/report ids keep useApp's)
 // — the `win-` prefix + timestamp keeps them collision-free across both.
@@ -496,16 +497,15 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       set((s) => {
         const target = s.plotWindows.find((w) => w.id === id);
         if (!target) return {}; // id not found
-        // Only the last PLOT window is uncloseable — every non-plot kind
-        // (snapshot / worksheet / map) closes freely, since none of them can
-        // be the view-facade focus survivor.
         if (target.kind === "plot" && s.plotWindows.filter((w) => w.kind === "plot").length <= 1)
           return {};
         const remaining = s.plotWindows.filter((w) => w.id !== id);
-        if (s.focusedWindowId !== id) return { plotWindows: remaining };
+        const worksheetSelections = dropWorksheetSelection(s.worksheetSelections, id); // #14: no leak
+        if (s.focusedWindowId !== id) return { plotWindows: remaining, worksheetSelections };
         const next = remaining.filter((w) => w.kind === "plot").reduce((a, b) => (b.z > a.z ? b : a));
         return {
           plotWindows: remaining,
+          worksheetSelections,
           focusedWindowId: next.id,
           activeId: next.datasetId,
           selectedIds: next.datasetId ? [next.datasetId] : [],

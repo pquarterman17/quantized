@@ -30,6 +30,10 @@ export interface WorksheetToolbarProps {
    *  is only offered (and thus never enabled) with a non-empty selection. */
   onOpenInGraphBuilder: () => void;
   onClearColSelection: () => void;
+  /** GUI_INTERACTION #14: is THIS worksheet linked to the live plot (row
+   *  selection highlights plotted points; "Set as X axis"/"Plot as Y" edit it
+   *  directly)? Shown as an explicit badge — never a silent assumption. */
+  plotLinked: boolean;
 }
 
 export default function WorksheetToolbar({
@@ -53,6 +57,7 @@ export default function WorksheetToolbar({
   onAddSelectionToPlot,
   onOpenInGraphBuilder,
   onClearColSelection,
+  plotLinked,
 }: WorksheetToolbarProps) {
   return (
     <div
@@ -156,6 +161,15 @@ export default function WorksheetToolbar({
             Deselect columns
           </button>
         </>
+      )}
+      {plotLinked && (
+        <span
+          className="qzk-ds-meta"
+          style={{ color: "var(--accent)" }}
+          title="This worksheet's dataset is the live plot's — row selection highlights plotted points, and Set as X axis/Plot as Y edit it directly"
+        >
+          ⧟ Linked to plot
+        </span>
       )}
       <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
         vars: {vars}

@@ -141,8 +141,9 @@ export default function WindowCanvas() {
               ) : win.kind === "worksheet" ? (
                 // Item 17: a document window mounts the SAME component the
                 // stage tab does, live-bound to ITS dataset — also never the
-                // focus target, so before the focused dispatch.
-                <WorksheetWindow dataset={dataset} />
+                // focus target, so before the focused dispatch. #14: its own
+                // window id gives it an independent row selection.
+                <WorksheetWindow dataset={dataset} windowId={win.id} />
               ) : win.kind === "map" ? (
                 <MapWindow dataset={dataset} />
               ) : win.kind === "panel" ? (

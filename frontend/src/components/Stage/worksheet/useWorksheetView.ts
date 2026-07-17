@@ -20,6 +20,19 @@
 // macro recording and row-state honoring come free (setXKey/setYKeys already
 // record macro steps; the plotted result already reads through
 // lib/rowstate's analysisData/droppedRows via the existing plot pipeline).
+//
+// GUI_INTERACTION #14: an optional `windowId` (an MDI worksheet DOCUMENT
+// window's id — see components/windows/DocumentWindow.tsx) switches the row
+// SELECTION dimension (only — column selection above was already local
+// per-hook-instance, so already independent) to its own entry in
+// `store/worksheetSelection.ts`'s per-window map, instead of the legacy
+// active-dataset `selection` singleton the Stage "Worksheet" tab keeps using
+// (`windowId` omitted). `plotLinked` (below) tells the caller — and the user,
+// via WorksheetToolbar's "Linked to plot" badge — whether THIS worksheet's
+// dataset is the one the live plot/brush-select responds to; the column
+// context menu's X/Y-axis actions claim the focused plot for `ds` first
+// (`claimForPlotIntent`) so they can never silently retarget a plot showing
+// an unrelated dataset.
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -95,6 +108,10 @@ export interface WorksheetView {
   clearRowSelection: () => void;
   excludeSelectedRows: () => void;
   keepOnlySelectedRows: () => void;
+  /** #14: is THIS worksheet's dataset the one the live plot/brush-select
+   *  responds to? True for the Stage tab whenever it shows the active
+   *  dataset; a document window (`windowId` set) is never linked. */
+  plotLinked: boolean;
 
   showStats: boolean;
   setShowStats: (v: boolean | ((cur: boolean) => boolean)) => void;
@@ -152,12 +169,21 @@ export interface WorksheetView {
   textCols: TextColumn[];
 }
 
-export function useWorksheetView(ds: Dataset): WorksheetView {
+// #14: the Stage tab (no `windowId`) still shares ITS OWN worksheetSelections
+// entry, keyed by this sentinel, whenever it shows a NON-active dataset (the
+// item-15 `worksheetId` override) — the same fix a document window gets,
+// applied to the one pre-existing case that could ALSO silently misattribute
+// a selection (row clicks used to key off `activeId`, not the worksheet's own
+// dataset). Never collides with a real MDI window id (those are `win-...`).
+const STAGE_TAB_SELECTION_KEY = "stage-worksheet";
+
+export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView {
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
   const setCellValue = useApp((s) => s.setCellValue);
   const addFormula = useApp((s) => s.addFormula);
   const removeFormula = useApp((s) => s.removeFormula);
+  const activeId = useApp((s) => s.activeId);
   const xKey = useApp((s) => s.xKey);
   const setXKey = useApp((s) => s.setXKey);
   const yKeys = useApp((s) => s.yKeys);
@@ -166,12 +192,34 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
   const originWorksheetSeed = useApp((s) => s.originWorksheetSeed);
   const toggleRowExcluded = useApp((s) => s.toggleRowExcluded);
   const clearRowExclusions = useApp((s) => s.clearRowExclusions);
-  const selection = useApp((s) => s.selection);
-  const toggleRowSelected = useApp((s) => s.toggleRowSelected);
-  const setRowSelection = useApp((s) => s.setRowSelection);
-  const clearRowSelection = useApp((s) => s.clearRowSelection);
-  const excludeSelectedRows = useApp((s) => s.excludeSelectedRows);
-  const keepOnlySelectedRows = useApp((s) => s.keepOnlySelectedRows);
+  // #14: a document window (`windowId` set) NEVER touches the legacy
+  // singleton below — it's always independent, even from another window on
+  // the SAME dataset. Only the Stage tab can be "linked" to the live plot,
+  // and only while it shows the active dataset; every other case (including
+  // the Stage tab showing a worksheetId-override dataset) reads/writes its
+  // OWN entry in the per-window map instead — both selectors are read
+  // unconditionally (hooks can't branch) and `plotLinked` below picks the
+  // live source.
+  const plotLinked = windowId === undefined && ds.id === activeId;
+  const legacySelection = useApp((s) => s.selection);
+  const legacyToggle = useApp((s) => s.toggleRowSelected);
+  const legacySetSelection = useApp((s) => s.setRowSelection);
+  const legacyClearSelection = useApp((s) => s.clearRowSelection);
+  const legacyExclude = useApp((s) => s.excludeSelectedRows);
+  const legacyKeepOnly = useApp((s) => s.keepOnlySelectedRows);
+  const worksheetSelections = useApp((s) => s.worksheetSelections);
+  const toggleWorksheetRowSelected = useApp((s) => s.toggleWorksheetRowSelected);
+  const setWorksheetRowSelection = useApp((s) => s.setWorksheetRowSelection);
+  const clearWorksheetRowSelection = useApp((s) => s.clearWorksheetRowSelection);
+  const selectionKey = windowId ?? STAGE_TAB_SELECTION_KEY;
+  const selection = plotLinked ? legacySelection : (worksheetSelections[selectionKey] ?? null);
+  const toggleRowSelected = (row: number) =>
+    plotLinked ? legacyToggle(row) : toggleWorksheetRowSelected(selectionKey, ds.id, row);
+  const setRowSelection = (rows: number[]) =>
+    plotLinked ? legacySetSelection(rows) : setWorksheetRowSelection(selectionKey, ds.id, rows);
+  const clearRowSelection = () => (plotLinked ? legacyClearSelection() : clearWorksheetRowSelection(selectionKey));
+  const excludeSelectedRows = () => (plotLinked ? legacyExclude() : legacyExclude(selectionKey));
+  const keepOnlySelectedRows = () => (plotLinked ? legacyKeepOnly() : legacyKeepOnly(selectionKey));
 
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   const [formula, setFormula] = useState("");
@@ -225,25 +273,31 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
   const setColSelection = (cols: number[]) => setSelectedCols(new Set(cols));
   const clearColSelection = () => setSelectedCols(new Set());
 
-  function plotCols(cols: number[], mode: "replace" | "add") {
-    // Plot-intent (WORKSHEET_PLAN item 15 "origin book click opens…"):
-    // "Plot selection"/"Add to plot" mean PUT THIS ON THE GRAPH. If the
-    // worksheet is showing a dataset the focused plot window ISN'T bound to
-    // (a worksheet-intent Library click, `useApp.activateFromLibrary`,
-    // deliberately left the window alone), rebind the focused window to
-    // THIS dataset first — mirrors Origin's "select columns, then Plot"
-    // landing on the active graph. Re-reads xKey/yKeys AFTER the rebind
-    // (`setActive` resets them) rather than trusting the closured values
-    // above, which would otherwise describe the PREVIOUS plot's axes.
+  // #14: claim the FOCUSED plot window for `ds` (+ jump to its plot-intent
+  // tab) before ANY direct plot-axis mutation — shared by `plotCols` (Plot
+  // selection/Add to plot, item 15) and the column menu's "Set as X
+  // axis"/"Plot as Y" (below). A worksheet window bound to a dataset OTHER
+  // than the focused plot must never silently retarget that unrelated plot —
+  // this makes every such action either a no-op-safe claim or an explicit,
+  // deliberate rebind, the same semantics `plotCols` already had.
+  function claimForPlotIntent() {
     const store = useApp.getState();
     if (store.activeId !== ds.id) store.setActive(ds.id);
     // Owner-routing item 1: `ds` is ALREADY active often enough (the common
     // "worksheet + plot bound to the same dataset" case) that `setActive`
     // above never runs — so its stageTab fix alone doesn't cover this call
     // site. Force the Plot tab here too, whenever it isn't already showing.
-    const afterActivate = useApp.getState();
     const wantTab = plotIntentStageTab(ds);
-    if (afterActivate.stageTab !== wantTab) useApp.setState({ stageTab: wantTab });
+    if (useApp.getState().stageTab !== wantTab) useApp.setState({ stageTab: wantTab });
+  }
+
+  function plotCols(cols: number[], mode: "replace" | "add") {
+    // Plot-intent (WORKSHEET_PLAN item 15 "origin book click opens…"):
+    // "Plot selection"/"Add to plot" mean PUT THIS ON THE GRAPH.
+    claimForPlotIntent();
+    // Re-reads xKey/yKeys AFTER the claim (a rebind resets them) rather than
+    // trusting the closured values above, which would otherwise describe the
+    // PREVIOUS plot's axes.
     const cur = useApp.getState();
     const result = resolveSelectionPlot(ds.data, new Set(cols), { xKey: cur.xKey, yKeys: cur.yKeys }, mode);
     for (const action of result.actions) {
@@ -256,6 +310,24 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
 
   const plotSelection = () => plotCols([...selectedCols], "replace");
   const addSelectionToPlot = () => plotCols([...selectedCols], "add");
+
+  // #14: the column context menu's direct "Set as X axis"/"Plot as Y"
+  // actions claim the plot first too — same reasoning as plotCols above, so
+  // a click in an unlinked worksheet window rebinds the plot deliberately
+  // instead of silently mutating whatever dataset happened to be active.
+  const setXKeyLinked = (col: number) => {
+    claimForPlotIntent();
+    setXKey(col);
+  };
+  const setYKeysLinked = (cols: number[]) => {
+    claimForPlotIntent();
+    setYKeys(cols);
+  };
+  // The menu's X/Y checks are only MEANINGFUL while linked — otherwise they'd
+  // echo the focused plot's unrelated axes, which is exactly the "N worksheet
+  // windows share the plotted-column highlight" bug (#14) for this dimension.
+  const menuXKey = plotLinked ? xKey : null;
+  const menuYKeys = plotLinked ? yKeys : null;
 
   // Masked (excluded) original-row indices: kept visible (greyed) but dropped
   // from analysis. Sourced from the persistent per-dataset row-state model
@@ -533,10 +605,11 @@ export function useWorksheetView(ds: Dataset): WorksheetView {
     err,
     onEditCell: (row, col, value) => setCellValue(ds.id, row, col, value),
     onRemoveFormula: (index) => removeFormula(ds.id, index),
-    xKey,
-    yKeys,
-    setXKey,
-    setYKeys,
+    xKey: menuXKey,
+    yKeys: menuYKeys,
+    setXKey: setXKeyLinked,
+    setYKeys: setYKeysLinked,
+    plotLinked,
     selectedCols,
     toggleColSelected,
     setColSelection,
