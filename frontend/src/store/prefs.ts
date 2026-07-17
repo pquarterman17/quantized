@@ -22,7 +22,23 @@ import type {
 export const PREFS_KEY = "qz.prefs";
 
 const THEMES = ["dark", "light"];
-const ACCENTS = ["violet", "teal", "ocean", "amber", "rose"];
+// Exported for the folder-Properties colour picker (plan #13 sub-item 4) —
+// the SAME 5 design-token accent names the Appearance/Preferences accent
+// swatches use, so a folder's colour is drawn from one canonical palette.
+export const ACCENTS = ["violet", "teal", "ocean", "amber", "rose"];
+// The paint value per accent name — a FIXED colour per option (not the
+// currently-active --accent custom property, which only ever holds ONE of
+// these), so a swatch/glyph can show what an option looks like regardless of
+// the app's current accent choice. The single source both the Preferences
+// accent swatches AND the folder-Properties colour picker read (moved here
+// from a PreferencesDialog.tsx-local copy — one palette, not two).
+export const ACCENT_SWATCHES: { id: string; c: string }[] = [
+  { id: "violet", c: "oklch(0.7 0.17 295)" },
+  { id: "teal", c: "oklch(0.74 0.13 185)" },
+  { id: "ocean", c: "oklch(0.68 0.15 250)" },
+  { id: "amber", c: "oklch(0.78 0.14 75)" },
+  { id: "rose", c: "oklch(0.72 0.16 12)" },
+];
 const DENSITIES = ["compact", "regular", "comfy"];
 const NOTATIONS = ["auto", "scientific", "fixed"];
 const TRACES = ["Line", "Line + markers", "Scatter", "Step"];
@@ -30,6 +46,12 @@ const ORIGIN_BOOK_CLICK_OPENS = ["worksheet", "plot"];
 // The app-wide multi-panel fit DEFAULT is aspect-preserving vs fill only —
 // "page" is a per-window choice (needs a page model), never a global default.
 const PANEL_FIT_DEFAULTS: PanelFit[] = ["frames", "window"];
+// Library panel resize clamp (plan #13 sub-item 5) — matches shell.css's
+// var(--lw, 210px) default; the lower bound keeps the grip handle + a couple
+// characters of a folder name usable, the upper bound leaves the Stage room.
+export const LIBRARY_PANEL_WIDTH_MIN = 160;
+export const LIBRARY_PANEL_WIDTH_MAX = 420;
+export const LIBRARY_PANEL_WIDTH_DEFAULT = 210;
 
 export interface Prefs {
   theme: Theme;
@@ -49,6 +71,13 @@ export interface Prefs {
   originBookClickOpens: OriginBookClickOpens;
   // #54: the fit a FRESH Origin multi-panel apply starts from (frames/window).
   defaultPanelFit: PanelFit;
+  // GUI_INTERACTION_PLAN #13 sub-item 5: the Library panel's drag-resized
+  // width in CSS px, applied to the --lw custom property (see shell.css's
+  // .qzk-main grid). Width, not expand/collapse — the folder tree's
+  // expand/collapse set lives in the WORKSPACE (`expandedFolders`, already
+  // part of the .dwk v2 shape), since it's per-project organization, not a
+  // cross-project appearance preference.
+  libraryPanelWidth: number;
 }
 
 export const PREF_DEFAULTS: Prefs = {
@@ -68,6 +97,7 @@ export const PREF_DEFAULTS: Prefs = {
   excludedDisplay: "hide",
   originBookClickOpens: "worksheet",
   defaultPanelFit: "frames",
+  libraryPanelWidth: LIBRARY_PANEL_WIDTH_DEFAULT,
 };
 
 export function loadPrefs(): Prefs {
@@ -98,6 +128,12 @@ export function loadPrefs(): Prefs {
       defaultPanelFit: PANEL_FIT_DEFAULTS.includes(p.defaultPanelFit as PanelFit)
         ? (p.defaultPanelFit as PanelFit)
         : fb.defaultPanelFit,
+      libraryPanelWidth: num(
+        p.libraryPanelWidth,
+        fb.libraryPanelWidth,
+        LIBRARY_PANEL_WIDTH_MIN,
+        LIBRARY_PANEL_WIDTH_MAX,
+      ),
     };
   } catch {
     return fb;
@@ -123,6 +159,7 @@ export function prefsOf(s: AppState): Prefs {
     excludedDisplay: s.excludedDisplay,
     originBookClickOpens: s.originBookClickOpens,
     defaultPanelFit: s.defaultPanelFit,
+    libraryPanelWidth: s.libraryPanelWidth,
   };
 }
 
@@ -137,6 +174,7 @@ export function syncPrefs(s: AppState): void {
   el.dataset.density = s.density;
   if (s.reduceMotion) el.dataset.reduceMotion = "";
   else delete el.dataset.reduceMotion;
+  el.style.setProperty("--lw", `${s.libraryPanelWidth}px`);
   setFormatOpts(s.sigFigs, s.notation);
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify(prefsOf(s)));

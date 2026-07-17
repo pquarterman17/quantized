@@ -7,6 +7,8 @@ import {
   dropEdgeAt,
   dropZoneAt,
   folderDatasets,
+  folderPath,
+  folderPathLabel,
   isSelfOrDescendant,
   migrateGroupsToFolders,
   moveDatasetToFolder,
@@ -16,6 +18,7 @@ import {
   resolveDropBeforeId,
   subtreeDatasets,
   subtreeIds,
+  updateFolder,
 } from "./foldertree";
 import type { Dataset, FolderNode } from "./types";
 
@@ -122,6 +125,50 @@ describe("createFolder / renameFolder", () => {
     expect(folders[0].name).toBe("XRD");
     folders = renameFolder(folders, "f1", "   ");
     expect(folders[0].name).toBe("XRD"); // unchanged
+  });
+});
+
+describe("updateFolder (Folder Properties, GUI_INTERACTION_PLAN #13 sub-item 4)", () => {
+  it("patches notes/color/defaultTemplate onto the folder, leaving name/order/parentId alone", () => {
+    const folders = [fld("a", null, 0)];
+    const out = updateFolder(folders, "a", { notes: "n", color: "amber", defaultTemplate: "T" });
+    expect(out[0]).toMatchObject({ id: "a", name: "a", notes: "n", color: "amber", defaultTemplate: "T" });
+  });
+
+  it("setting a field to undefined clears it (back to unset)", () => {
+    const folders: FolderNode[] = [{ id: "a", name: "a", parentId: null, order: 0, notes: "n", color: "rose" }];
+    const out = updateFolder(folders, "a", { notes: undefined, color: undefined });
+    expect(out[0].notes).toBeUndefined();
+    expect(out[0].color).toBeUndefined();
+  });
+
+  it("is a no-op on an unknown id", () => {
+    const folders = [fld("a", null, 0)];
+    expect(updateFolder(folders, "gone", { notes: "n" })).toEqual(folders);
+  });
+});
+
+describe("folderPath / folderPathLabel (breadcrumb + Show in folder, sub-item 2)", () => {
+  const nested = [fld("a", null, 0), fld("a1", "a", 0), fld("a1x", "a1", 0), fld("b", null, 1)];
+
+  it("folderPath returns the ancestor chain root-first, inclusive", () => {
+    expect(folderPath(nested, "a1x").map((f) => f.id)).toEqual(["a", "a1", "a1x"]);
+    expect(folderPath(nested, "a").map((f) => f.id)).toEqual(["a"]);
+  });
+
+  it("folderPath resolves to [] for null/an unknown id", () => {
+    expect(folderPath(nested, null)).toEqual([]);
+    expect(folderPath(nested, "ghost")).toEqual([]);
+  });
+
+  it("folderPathLabel joins the names with the breadcrumb separator", () => {
+    expect(folderPathLabel(nested, "a1x")).toBe("a › a1 › a1x");
+    expect(folderPathLabel(nested, "a")).toBe("a");
+  });
+
+  it("folderPathLabel is undefined for a root-level (null/absent) folderId", () => {
+    expect(folderPathLabel(nested, null)).toBeUndefined();
+    expect(folderPathLabel(nested, undefined)).toBeUndefined();
   });
 });
 

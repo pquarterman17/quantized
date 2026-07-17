@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
+import { loadPrefs, LIBRARY_PANEL_WIDTH_MAX, LIBRARY_PANEL_WIDTH_MIN } from "./prefs";
 import { useApp } from "./useApp";
 import { fmtNum } from "../lib/format";
 
@@ -13,6 +14,7 @@ afterEach(() => {
   s.setPref("excludedDisplay", "hide");
   s.setPref("originBookClickOpens", "worksheet");
   s.setPref("defaultPanelFit", "frames");
+  s.setPref("libraryPanelWidth", 210);
 });
 
 describe("preferences", () => {
@@ -57,5 +59,20 @@ describe("preferences", () => {
     useApp.getState().setPref("defaultPanelFit", "window");
     expect(useApp.getState().defaultPanelFit).toBe("window");
     expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").defaultPanelFit).toBe("window");
+  });
+
+  it("libraryPanelWidth (#13 sub-item 5) defaults to 210 and persists + applies --lw on change", () => {
+    expect(useApp.getState().libraryPanelWidth).toBe(210);
+    useApp.getState().setPref("libraryPanelWidth", 260);
+    expect(useApp.getState().libraryPanelWidth).toBe(260);
+    expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").libraryPanelWidth).toBe(260);
+    expect(document.documentElement.style.getPropertyValue("--lw")).toBe("260px");
+  });
+
+  it("libraryPanelWidth clamps out-of-range values on load", () => {
+    localStorage.setItem("qz.prefs", JSON.stringify({ libraryPanelWidth: 9999 }));
+    expect(loadPrefs().libraryPanelWidth).toBe(LIBRARY_PANEL_WIDTH_MAX);
+    localStorage.setItem("qz.prefs", JSON.stringify({ libraryPanelWidth: 1 }));
+    expect(loadPrefs().libraryPanelWidth).toBe(LIBRARY_PANEL_WIDTH_MIN);
   });
 });

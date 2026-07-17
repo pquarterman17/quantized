@@ -37,6 +37,7 @@ import {
   moveDatasetToFolder as treeMoveDatasetToFolder,
   moveFolder as treeMoveFolder,
   renameFolder as treeRenameFolder,
+  updateFolder as treeUpdateFolder,
 } from "../lib/foldertree";
 import { isOriginBookDataset } from "../lib/grouping";
 import { mergeDatasets } from "../lib/merge";
@@ -84,6 +85,7 @@ import { createPanelsSlice, type PanelsSlice } from "./panels";
 import { createPointerToolSlice, type PointerToolSlice } from "./pointerTool";
 import { createSplitSlice, type SplitSlice } from "./split";
 import { createShapesSlice, type ShapesSlice } from "./shapes";
+import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -314,12 +316,13 @@ export type PrefKey =
   | "confirmRemove"
   | "excludedDisplay"
   | "originBookClickOpens"
-  | "defaultPanelFit";
+  | "defaultPanelFit"
+  | "libraryPanelWidth";
 
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, OriginImportSlice, OriginFallbackSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, OriginImportSlice, OriginFallbackSlice, LibraryPanelSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -730,6 +733,9 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   moveFolder: (id: string, newParentId: string | null, beforeId?: string) => void;
   moveDatasetToFolder: (id: string, folderId: string | null, beforeId?: string) => void;
   toggleFolderExpanded: (id: string) => void;
+  // Folder Properties (GUI_INTERACTION_PLAN #13 sub-item 4): patch notes/
+  // colour/defaultTemplate; `renameFolder` above still owns the name.
+  updateFolder: (id: string, patch: { notes?: string; color?: string; defaultTemplate?: string }) => void;
   // Smart folders (item 9): saved queries only — membership is derived.
   addSmartFolder: (name: string, query: string) => void;
   updateSmartFolder: (id: string, name: string, query: string) => void;
@@ -944,6 +950,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createShapesSlice(set),
   ...createOriginImportSlice(set),
   ...createOriginFallbackSlice(set, get),
+  ...createLibraryPanelSlice(set, _initialPrefs.libraryPanelWidth),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -2256,6 +2263,7 @@ export const useApp = create<AppState>((set, get) => ({
     return id;
   },
   renameFolder: (id, name) => set((s) => ({ folders: treeRenameFolder(s.folders, id, name) })),
+  updateFolder: (id, patch) => set((s) => ({ folders: treeUpdateFolder(s.folders, id, patch) })),
   deleteFolder: (id, mode = "reparent") =>
     set((s) => treeDeleteFolder(s.folders, s.datasets, id, mode)),
   moveFolder: (id, newParentId, beforeId) =>

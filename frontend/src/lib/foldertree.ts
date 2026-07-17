@@ -101,6 +101,58 @@ export function renameFolder(folders: FolderNode[], id: string, name: string): F
   return folders.map((f) => (f.id === id ? { ...f, name: nm } : f));
 }
 
+/** Patch a folder's Properties fields (plan #13 sub-item 4: notes/colour/
+ *  default template) — everything but `name` (that's `renameFolder`'s job,
+ *  which also guards blank input; this one has no such special case since
+ *  every patchable field is legitimately clearable to "unset"). Setting a
+ *  field to `undefined` in the patch removes it (back to "no override");
+ *  a no-op on an unknown `id`. */
+export function updateFolder(
+  folders: FolderNode[],
+  id: string,
+  patch: Partial<Pick<FolderNode, "notes" | "color" | "defaultTemplate">>,
+): FolderNode[] {
+  return folders.map((f) => {
+    if (f.id !== id) return f;
+    const next = { ...f, ...patch };
+    for (const k of ["notes", "color", "defaultTemplate"] as const) {
+      if (next[k] === undefined) delete next[k];
+    }
+    return next;
+  });
+}
+
+/** The ancestor chain from the root down to `id`, inclusive (breadcrumb /
+ *  "Show in folder" support, plan #13 sub-items 2/5). `null`/an unknown id
+ *  resolves to an empty path — a dataset at the Library root has nothing to
+ *  show. A folder whose parent chain is broken (shouldn't happen post-
+ *  `parseFolders`/`pruneOrphans`, but degrade rather than loop forever)
+ *  stops at the break instead of throwing. */
+export function folderPath(folders: FolderNode[], id: string | null): FolderNode[] {
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const path: FolderNode[] = [];
+  const seen = new Set<string>();
+  let cur = id;
+  while (cur !== null) {
+    const f = byId.get(cur);
+    if (!f || seen.has(f.id)) break; // missing link or a cycle — stop, don't loop
+    seen.add(f.id);
+    path.unshift(f);
+    cur = f.parentId;
+  }
+  return path;
+}
+
+/** "Folder › Subfolder" display caption for a dataset's containing folder
+ *  (plan #13 sub-item 2 — the breadcrumb caption + "Show in folder" path a
+ *  filtered/search/smart-folder result row shows). `undefined` for a
+ *  root-level dataset (`folderId` null/absent) — nothing to caption. */
+export function folderPathLabel(folders: FolderNode[], folderId: string | null | undefined): string | undefined {
+  if (!folderId) return undefined;
+  const path = folderPath(folders, folderId);
+  return path.length ? path.map((f) => f.name).join(" › ") : undefined;
+}
+
 /**
  * Delete a folder. Datasets are never destroyed — only re-homed:
  *   - "reparent" (default): child folders + datasets move up to the deleted

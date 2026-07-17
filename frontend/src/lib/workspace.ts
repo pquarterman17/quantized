@@ -161,7 +161,10 @@ export function serializeWorkspace(ws: WorkspaceState): string {
 }
 
 /** Validate a folder-node array (drops malformed entries; reparents a folder to
- *  root if its parent is missing). */
+ *  root if its parent is missing). `notes`/`color`/`defaultTemplate` (plan
+ *  #13 sub-item 4, Folder Properties) are additive-optional: present + a
+ *  non-blank string carries through, absent/malformed is silently dropped —
+ *  a legacy .dwk (no such fields at all) loads exactly as before. */
 function parseFolders(v: unknown): FolderNode[] {
   if (!Array.isArray(v)) return [];
   const out: FolderNode[] = [];
@@ -175,7 +178,18 @@ function parseFolders(v: unknown): FolderNode[] {
       typeof o.order === "number" &&
       Number.isFinite(o.order)
     ) {
-      out.push({ id: o.id, name: o.name, parentId: (o.parentId as string | null) ?? null, order: o.order });
+      const node: FolderNode = {
+        id: o.id,
+        name: o.name,
+        parentId: (o.parentId as string | null) ?? null,
+        order: o.order,
+      };
+      if (typeof o.notes === "string" && o.notes.trim()) node.notes = o.notes;
+      if (typeof o.color === "string" && o.color.trim()) node.color = o.color;
+      if (typeof o.defaultTemplate === "string" && o.defaultTemplate.trim()) {
+        node.defaultTemplate = o.defaultTemplate;
+      }
+      out.push(node);
     }
   }
   const ids = new Set(out.map((f) => f.id));

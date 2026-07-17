@@ -232,6 +232,50 @@ describe("workspace v2 folder tree", () => {
     expect(ws.folders[0].parentId).toBe(null);
   });
 
+});
+
+describe("workspace folder Properties (GUI_INTERACTION_PLAN #13 sub-item 4)", () => {
+  it("round-trips notes/colour/defaultTemplate — additive-optional fields", () => {
+    const ws = parseWorkspace(
+      serializeWorkspace({
+        datasets: [makeDataset("a", "x")],
+        folders: [
+          { id: "f1", name: "XRD", parentId: null, order: 0, notes: "batch 3", color: "amber", defaultTemplate: "T" },
+        ],
+      }),
+    );
+    expect(ws.folders[0]).toMatchObject({ notes: "batch 3", color: "amber", defaultTemplate: "T" });
+  });
+
+  it("a legacy folder (no Properties fields at all) loads unchanged", () => {
+    const doc = {
+      format: WORKSPACE_FORMAT,
+      version: 2,
+      datasets: [],
+      folders: [{ id: "f1", name: "XRD", parentId: null, order: 0 }],
+    };
+    const ws = parseWorkspace(JSON.stringify(doc));
+    expect(ws.folders[0]).toEqual({ id: "f1", name: "XRD", parentId: null, order: 0 });
+    expect("notes" in ws.folders[0]).toBe(false);
+    expect("color" in ws.folders[0]).toBe(false);
+    expect("defaultTemplate" in ws.folders[0]).toBe(false);
+  });
+
+  it("drops blank/malformed Properties fields instead of carrying them through", () => {
+    const doc = {
+      format: WORKSPACE_FORMAT,
+      version: 2,
+      datasets: [],
+      folders: [{ id: "f1", name: "XRD", parentId: null, order: 0, notes: "   ", color: 7, defaultTemplate: "" }],
+    };
+    const ws = parseWorkspace(JSON.stringify(doc));
+    expect(ws.folders[0].notes).toBeUndefined();
+    expect(ws.folders[0].color).toBeUndefined();
+    expect(ws.folders[0].defaultTemplate).toBeUndefined();
+  });
+});
+
+describe("workspace v2 folder tree — stale id clamping", () => {
   it("clamps a stale activeId / selection to live dataset ids", () => {
     const doc = {
       format: WORKSPACE_FORMAT,

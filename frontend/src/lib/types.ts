@@ -486,6 +486,22 @@ export interface FolderNode {
   parentId: string | null;
   /** Sort key among siblings sharing the same parent (see lib/order). */
   order: number;
+  /** Folder Properties (GUI_INTERACTION_PLAN #13): a short free-text caption
+   *  (Origin's "Comments"). Additive-optional — absent on every folder
+   *  created before this field existed; round-trips through .dwk. */
+  notes?: string;
+  /** Folder Properties: one of the app's accent design tokens (see
+   *  `store/prefs.ts`'s `ACCENTS`), applied to the folder glyph/row in the
+   *  Library tree. Absent = no override (the neutral default look).
+   *  Additive-optional; round-trips through .dwk. */
+  color?: string;
+  /** Folder Properties: the analysis template (`lib/template.ts`) that
+   *  "Run analysis template on folder…" (folderOps.runTemplateOnFolder)
+   *  pre-selects for this folder. A name, not an id — templates are
+   *  user-named and stored by name (`loadTemplates`); a stale name (the
+   *  template was renamed/deleted) just falls back to the picker's normal
+   *  default. Additive-optional; round-trips through .dwk. */
+  defaultTemplate?: string;
 }
 
 /** A registered fit model's metadata (from GET /api/fitting/models). */
