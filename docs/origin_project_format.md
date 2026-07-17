@@ -1858,10 +1858,11 @@ yet):
   *recovery*: quantized's plot surface still has no dual-Y/stacked-panel
   view to render N linked layers as Origin composed them — the recovered
   dicts are there, one per layer, for a future frontend feature to consume.
-- **Multi-layer free layout (UI target).** Origin allows N independently
-  positioned/sized layers; quantized's plot surface has single-plot +
-  stacked panels + one inset. Backend recovery of every layer is no longer
-  the gap (see above) — >2 layers or non-stacked overlays are still lossy
+- **Multi-layer free layout (UI target).** Backend recovery of every layer is
+  no longer the gap (see above). The frontend now preserves N independently
+  positioned/sized layers, including overlaps and insets, when every layer
+  has a validated page-relative rectangle; missing/invalid geometry still
+  fails closed to an ordinal stack. Arbitrary >2-axis semantics remain lossy
   *to render*, not to decode.
 - **>2 Y axes / independent top-right axes** (`XT`,`YR` with own scales).
 - **Rich text** (super/subscript, Greek, per-run font/color/size) — best

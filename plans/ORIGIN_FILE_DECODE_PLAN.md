@@ -17,7 +17,10 @@ trustworthy (W7). Gap analysis: see Context.
 **Updated:** 2026-07-17 (#54 residual SHIPPED: spatial-view export at true
 page coordinates — free page-coordinate `add_axes` placement in
 `calc.figure_page` + a fail-closed "Export page…" command on the spatial
-MultiPanelStage; #54 itself fully closed, no open items remain). Same day,
+MultiPanelStage). #54 layout generality remains ACTIVE: consolidation
+incorrectly treated page setup plus true-coordinate export as closure of the
+whole item. Trusted overlapping/inset layers are the current bounded slice;
+>2 Y axes and the generalized FigureDoc layer model remain open. Same day,
 prior: 2026-07-17 (#54 page-setup control SHIPPED `5a4b8eb`: fit modes
 frames/window/page, PageSetup model + dialog, single-figure export at page
 size + margins; useApp ratcheted 3312→3240 via the prefs extraction; residual
@@ -621,6 +624,21 @@ Official model references used for this routing:
       (pure request assembly) + `lib/exportPageCommand.ts` (store-facing
       command, resolves each panel's dataset first per the #38 discipline).
       Backend 2916 + frontend 3434 green.
+    - [ ] **Free-positioned / overlapping layers and insets.** Implemented on
+      `codex/origin-layout-generality`, awaiting review: keep the tiled-layout overlap guard,
+      but classify an otherwise non-tiled family as a native page composition
+      when every recovered layer has a validated `pageRect`. Fresh applies
+      start in `panelFit="page"`, preserving source order and exact rectangles
+      in the existing absolute-position renderer and true-coordinate export.
+      Missing/invalid page geometry still fails closed to ordinal stacking.
+      This is frontend contract/rendering work only: no Origin bytes, curve
+      bindings, row order, or axis semantics are reinterpreted.
+      Verification: focused 443 tests; full frontend 3,738 + production build;
+      backend 2,906; repository integrity, ruff, mypy, and diff checks green.
+    - [ ] **Generalized page/layer model and >2 Y axes.** Still open. Do not
+      extend the current greedy double-Y pairing heuristic; model arbitrary
+      axes/layers explicitly, with per-layer provenance and Graph Builder /
+      saved-preview fallback when the native renderer cannot express them.
 
 ### Tier 3 — acceptance and handoff
 
