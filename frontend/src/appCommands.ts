@@ -21,6 +21,7 @@ import { loadSampleDataset } from "./lib/sampleDataset";
 import { clearAutosave } from "./lib/autosave";
 import { exportActive, type StoreGet } from "./lib/exportActive";
 import { runExportFigureCommand } from "./lib/exportFigureCommand";
+import { runExportSpatialPageCommand } from "./lib/exportPageCommand";
 import { runPageSetupDialog } from "./lib/pageSetupCommand";
 import { IMPORT_ACCEPT, openFilePicker } from "./lib/openFilePicker";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "./lib/originTemplate";
@@ -595,6 +596,7 @@ export function buildAppActions(s: StoreGet): Action[] {
     },
     { id: "panel-fit", group: "Plot", label: "Multi-panel fit (letterbox / fill)", keywords: "aspect window spatial page", run: () => s().cyclePanelFit() },
     { id: "page-setup", group: "Plot", label: "Page setup…", keywords: "page size margins width height print export #54", run: () => void runPageSetupDialog(s) },
+    { id: "export-page", group: "File", label: "Export page… (spatial, true page coords)", keywords: "origin multi-panel page rect true coordinates #54", run: () => void runExportSpatialPageCommand(s) },
     {
       id: "statMode",
       group: "Plot",

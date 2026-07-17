@@ -1483,6 +1483,13 @@ export interface PagePanelSpec {
   label?: string;
   /** Per-panel title override; omit = the nested figure payload's title. */
   title?: string;
+  /** #54 residual: page-normalized [x, y, w, h], TOP-LEFT origin (the
+   *  frontend's NormalizedFrameRect convention). When EVERY panel on the
+   *  page sets this, the composer places panels at their true page
+   *  coordinates instead of row/col (see calc.figure_page). Omit (the
+   *  default) for the ordinary grid path; row/col are still required by
+   *  this schema but unused when every panel sets page_rect. */
+  page_rect?: [number, number, number, number];
 }
 
 /** Multi-panel figure page request (GOTO #4): N plots -> ONE exported page. */

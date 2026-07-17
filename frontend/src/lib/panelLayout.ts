@@ -156,8 +156,11 @@ export function spatialPixelRects(
 
 /** Every panel's `pageRect` as a plain list when ALL are present and in-bounds
  *  ([0,1], positive extent) — else null (fail-closed, mirrors the frame-rect
- *  guard). Keeps the "page" branch readable. */
-function pageValidRects(
+ *  guard). Keeps the "page" branch readable; also the shared "can this
+ *  spatial view export at true page coordinates?" check (lib/spatialPageExport,
+ *  #54 residual) — the fit mode and the export command must never disagree
+ *  about which panel sets count as a valid page layout. */
+export function pageValidRects(
   panels: readonly Pick<SpatialPanel, "pageRect">[],
 ): NormalizedFrameRect[] | null {
   if (panels.length === 0) return null;

@@ -52,6 +52,8 @@
 
 import "uplot/dist/uPlot.min.css";
 
+import { runExportSpatialPageCommand } from "../../lib/exportPageCommand";
+import { canExportSpatialPage } from "../../lib/spatialPageExport";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { MULTIPANEL_SYNC_KEY, useMultiPanelStage } from "./useMultiPanelStage";
 
@@ -156,6 +158,21 @@ export default function MultiPanelStage() {
                 onClick={() => setPanelFit("page")}
               >
                 ▦
+              </button>
+            )}
+            {/* #54 residual: export the page at TRUE page coordinates (the
+                same decoded pageRect geometry the "page" fit renders on
+                screen). Fail-closed like the button above it — omitted
+                (never a disabled/greyed button) unless every panel actually
+                has a valid page position, so this never silently falls back
+                to the grid layout. */}
+            {canExportSpatialPage(spatialPanels, pageSetup) && (
+              <button
+                className="qzk-tool-btn"
+                title="Export page… (true page coordinates)"
+                onClick={() => void runExportSpatialPageCommand(useApp.getState)}
+              >
+                ⤓
               </button>
             )}
           </>
