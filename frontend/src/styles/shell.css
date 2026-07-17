@@ -364,6 +364,17 @@ body {
 .qzk-graph-preview-approx { position: absolute; left: 6px; bottom: 4px; font-size: var(--type-nano); color: var(--text-faint); }
 .qzk-graph-actions { display: flex; gap: 8px; margin-top: 10px; }
 
+/* ── Graph Builder saved-spec toolbar (GUI_INTERACTION_PLAN #11) ── */
+.qzk-plotspec-bar { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.qzk-plotspec-bar-row { display: flex; align-items: center; gap: 6px; }
+.qzk-plotspec-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; font-size: var(--font-size-sm); color: var(--text); }
+.qzk-plotspec-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.qzk-plotspec-row.active { background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: var(--radius-sm); }
+.qzk-plotspec-open { flex: 1; min-width: 0; text-align: left; background: none; border: none; color: var(--text); cursor: pointer; padding: 2px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-sm); }
+.qzk-plotspec-open:hover { color: var(--accent-text); text-decoration: underline; }
+.qzk-plotspec-meta { font-size: var(--type-nano); color: var(--text-faint); white-space: nowrap; }
+.qzk-plotspec-actions { display: flex; gap: 2px; flex-shrink: 0; }
+
 /* worksheet — the pane wraps a chrome (toolbar/filter bar) column above the
    virtualized grid, which owns its own scroll region (GridViewport). */
 .qzk-sheet { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--surface-0); }

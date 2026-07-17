@@ -1,14 +1,19 @@
-// Graph Builder (ORIGIN_GAP_PLAN #51 phase 2) — view. A draggable ToolWindow:
-// drop channels from the Channels card / legend (the #49 CHANNEL_DND drag) into
-// the X / Y / Group / Facet wells (or click-to-assign for keyboard/AT); the mark
-// morphs as columns land (scatter ⇄ line ⇄ box ⇄ violin ⇄ bar); a live preview
-// updates; "Send to Stage" applies the spec to the main plot. Thin — all state
-// and the plot-spec grammar live in useGraphBuilder / lib/plotspec.
+// Graph Builder (ORIGIN_GAP_PLAN #51 phase 2, durable artifact GUI_INTERACTION
+// #11) — view. A draggable ToolWindow: drop channels from the Channels card /
+// legend (the #49 CHANNEL_DND drag) into the X / Y / Group / Facet wells (or
+// click-to-assign for keyboard/AT); the mark morphs as columns land (scatter
+// ⇄ line ⇄ box ⇄ violin ⇄ bar); a live preview updates; "Send to Stage"
+// applies the spec to the main plot; "Export" sends it, then exports via the
+// existing figure-export path. PlotSpecBar (the Save/Open/Duplicate/Rename/
+// Delete toolbar) sits ABOVE the wells and stays visible even with no dataset
+// selected, so saved graphs are always reachable. Thin — all state and the
+// plot-spec grammar live in useGraphBuilder / lib/plotspec.
 
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button } from "../../primitives";
 import GraphPreview from "./GraphPreview";
+import PlotSpecBar from "./PlotSpecBar";
 import { useGraphBuilder } from "./useGraphBuilder";
 import ZoneWell from "./ZoneWell";
 
@@ -27,6 +32,18 @@ export default function GraphBuilderPanel() {
 
   return (
     <ToolWindow id="graphbuilder" title="Graph Builder" width={420} onClose={() => setOpen(false)}>
+      <PlotSpecBar
+        specs={g.savedSpecs}
+        activeSpec={g.activeSpec}
+        dirty={g.dirty}
+        canSave={g.canSend}
+        onSaveActive={g.saveActive}
+        onSaveAs={g.saveAs}
+        onOpen={g.openSpec}
+        onDuplicate={g.duplicateSpec}
+        onRename={g.renameSpec}
+        onDelete={g.deleteSpec}
+      />
       {!g.hasData ? (
         <div className="qzk-ds-meta" style={faint}>
           Select a dataset to build a graph.
@@ -95,6 +112,14 @@ export default function GraphBuilderPanel() {
           <div className="qzk-graph-actions">
             <Button variant="primary" size="sm" disabled={!g.canSend} onClick={g.sendToStage} style={{ flex: 1 }}>
               Send to Stage
+            </Button>
+            <Button
+              size="sm"
+              disabled={!g.canSend}
+              onClick={() => void g.exportPlot()}
+              title="Send to Stage, then export via the Export figure dialog"
+            >
+              Export
             </Button>
             <Button size="sm" onClick={g.reset}>
               Reset

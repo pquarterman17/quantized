@@ -1,9 +1,26 @@
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { exportFigure } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useGraphBuilder } from "./useGraphBuilder";
+
+vi.mock("../../../lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/api")>();
+  return { ...actual, exportFigure: vi.fn().mockResolvedValue(undefined) };
+});
+
+vi.mock("../../overlays/ParamDialog", () => ({
+  askParams: vi.fn().mockResolvedValue({
+    fmt: "pdf",
+    style: "default",
+    dpi: 300,
+    title: "",
+    x_label: "",
+    y_label: "",
+  }),
+}));
 
 // channel 0 monotonic continuous x, channel 1 continuous y, channel 2 a 2-level
 // nominal grouping column (needs ≥12 rows for nominal inference), channel 3 a
@@ -41,6 +58,8 @@ beforeEach(() => {
     statMode: false,
     statStageSeed: null,
     graphBuilderSeed: null,
+    savedPlotSpecs: [],
+    activePlotSpecId: null,
     macroRecording: false,
     stackMode: false,
     spatialPanels: null,
@@ -282,5 +301,152 @@ describe("useGraphBuilder — send to stage", () => {
     const s = useApp.getState();
     expect(s.facetPanels).toBeNull();
     expect(s.stackMode).toBe(false);
+  });
+});
+
+describe("useGraphBuilder — saved PlotSpecs (GUI_INTERACTION_PLAN #11)", () => {
+  it("starts with nothing active and not dirty", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    expect(result.current.activeSpec).toBeNull();
+    expect(result.current.dirty).toBe(false);
+    expect(result.current.savedSpecs).toEqual([]);
+  });
+
+  it("saveAs creates a saved entry, activates it, and clears dirty", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.saveAs("My scatter"));
+    expect(result.current.savedSpecs).toHaveLength(1);
+    expect(result.current.activeSpec?.name).toBe("My scatter");
+    expect(result.current.dirty).toBe(false);
+    expect(useApp.getState().activePlotSpecId).toBe(result.current.activeSpec?.id);
+  });
+
+  it("editing a saved graph's wells flips dirty true; saveActive clears it again", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.saveAs("My scatter"));
+    expect(result.current.dirty).toBe(false);
+    act(() => result.current.assign("y", 2)); // add a second Y — diverges from the saved payload
+    expect(result.current.dirty).toBe(true);
+    act(() => result.current.saveActive());
+    expect(result.current.dirty).toBe(false);
+    expect(result.current.activeSpec?.spec.zones.y).toHaveLength(2);
+  });
+
+  it("saveActive is a no-op when nothing is active", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.saveActive());
+    expect(result.current.savedSpecs).toEqual([]);
+  });
+
+  it("openSpec restores the builder state exactly (item 3)", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.saveAs("Saved one"));
+    const id = result.current.activeSpec!.id;
+    act(() => result.current.reset()); // fresh builder, unbound
+    expect(result.current.activeSpec).toBeNull();
+    expect(result.current.chips("y")).toHaveLength(0);
+    act(() => result.current.openSpec(id));
+    expect(result.current.activeSpec?.id).toBe(id);
+    expect(result.current.chips("x")).toEqual([{ channel: 0, label: "x" }]);
+    expect(result.current.chips("y")).toEqual([{ channel: 1, label: "y" }]);
+    expect(result.current.dirty).toBe(false);
+  });
+
+  it("duplicateSpec copies the STORED payload under an auto-named copy and opens it", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.saveAs("Original"));
+    const origId = result.current.activeSpec!.id;
+    act(() => result.current.duplicateSpec(origId));
+    expect(result.current.savedSpecs).toHaveLength(2);
+    expect(result.current.activeSpec?.name).toBe("Original copy");
+    expect(result.current.activeSpec?.id).not.toBe(origId);
+    expect(result.current.chips("y")).toEqual([{ channel: 1, label: "y" }]);
+  });
+
+  it("renameSpec + deleteSpec pass through to the store", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.saveAs("Old"));
+    const id = result.current.activeSpec!.id;
+    act(() => result.current.renameSpec(id, "New name"));
+    expect(result.current.savedSpecs[0].name).toBe("New name");
+    act(() => result.current.deleteSpec(id));
+    expect(result.current.savedSpecs).toEqual([]);
+    expect(result.current.activeSpec).toBeNull();
+  });
+
+  it("Reset unbinds from the active saved spec", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.saveAs("Bound"));
+    expect(result.current.activeSpec).not.toBeNull();
+    act(() => result.current.reset());
+    expect(result.current.activeSpec).toBeNull();
+    expect(useApp.getState().activePlotSpecId).toBeNull();
+  });
+
+  it("a vanished bound dataset also clears activePlotSpecId", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.saveAs("Bound"));
+    act(() => {
+      useApp.setState({ datasets: [{ id: "d2", name: "other.dat", data: DATA }], activeId: "d2" });
+    });
+    expect(useApp.getState().activePlotSpecId).toBeNull();
+  });
+
+  it("a worksheet seed starts unbound even if a spec was active before", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.saveAs("Bound"));
+    act(() =>
+      useApp.getState().openGraphBuilderSeeded({
+        version: 1,
+        zones: { x: { datasetId: "d1", channel: 0 }, y: [{ datasetId: "d1", channel: 1 }], group: null, facet: null },
+        mark: "scatter",
+      }),
+    );
+    expect(useApp.getState().activePlotSpecId).toBeNull();
+  });
+});
+
+describe("useGraphBuilder — exportPlot (item 6)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(exportFigure).mockResolvedValue(undefined);
+  });
+
+  it("scatter/line: sends to stage, then exports via the existing Export-figure path", async () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    await act(async () => result.current.exportPlot());
+    expect(useApp.getState().xKey).toBe(0);
+    expect(useApp.getState().yKeys).toEqual([1]);
+    expect(exportFigure).toHaveBeenCalledTimes(1);
+  });
+
+  it("box/violin: sends to stage but does NOT call the xy export path", async () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("x", 2)); // nominal → box
+    await act(async () => result.current.exportPlot());
+    expect(useApp.getState().statMode).toBe(true);
+    expect(exportFigure).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when nothing can be sent", async () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    await act(async () => result.current.exportPlot());
+    expect(exportFigure).not.toHaveBeenCalled();
   });
 });

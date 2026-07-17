@@ -12,6 +12,8 @@ import {
   isMonotonicChannel,
   markContext,
   markFamily,
+  plotSpecsEqual,
+  sanitizeSavedPlotSpecs,
   serializePlotSpec,
   specDatasetId,
   specToRender,
@@ -21,6 +23,7 @@ import {
   type ChannelRef,
   type MarkContext,
   type PlotSpec,
+  type SavedPlotSpec,
 } from "./plotspec";
 import type { DataStruct, Dataset, ModelingType } from "./types";
 
@@ -346,5 +349,61 @@ describe("serialize / deserialize / validate", () => {
 
   it("deserialize returns null for malformed JSON", () => {
     expect(deserializePlotSpec("{not json")).toBeNull();
+  });
+});
+
+// ── Saved specs (GUI_INTERACTION_PLAN #11) ──────────────────────────────────
+describe("plotSpecsEqual", () => {
+  it("true for structurally identical specs, even with different field order", () => {
+    const a = spec(ref(0), [ref(1), ref(2)], "scatter");
+    const b: PlotSpec = { mark: "scatter", zones: { y: [ref(1), ref(2)], x: ref(0), group: null, facet: null }, version: 1 };
+    expect(plotSpecsEqual(a, b)).toBe(true);
+  });
+
+  it("false when a zone or the mark differs", () => {
+    const a = spec(ref(0), [ref(1)], "scatter");
+    expect(plotSpecsEqual(a, spec(ref(0), [ref(2)], "scatter"))).toBe(false);
+    expect(plotSpecsEqual(a, spec(ref(0), [ref(1)], "line"))).toBe(false);
+  });
+
+  it("true for two empty specs", () => {
+    expect(plotSpecsEqual(emptySpec(), emptySpec())).toBe(true);
+  });
+});
+
+describe("sanitizeSavedPlotSpecs", () => {
+  const saved = (id: string): SavedPlotSpec => ({
+    id,
+    name: `graph ${id}`,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    modifiedAt: "2026-01-01T00:00:00.000Z",
+    spec: spec(ref(0), [ref(1)], "scatter"),
+  });
+
+  it("passes through a well-formed list, normalizing each spec", () => {
+    const out = sanitizeSavedPlotSpecs([saved("a"), saved("b")]);
+    expect(out).toEqual([saved("a"), saved("b")]);
+  });
+
+  it("returns [] for a non-array input", () => {
+    expect(sanitizeSavedPlotSpecs(null)).toEqual([]);
+    expect(sanitizeSavedPlotSpecs("nope")).toEqual([]);
+    expect(sanitizeSavedPlotSpecs(undefined)).toEqual([]);
+  });
+
+  it("drops an entry missing id/name/createdAt/modifiedAt", () => {
+    const out = sanitizeSavedPlotSpecs([saved("a"), { id: "b" }, { name: "no id" }]);
+    expect(out.map((s) => s.id)).toEqual(["a"]);
+  });
+
+  it("drops an entry whose spec is structurally impossible, keeps the rest", () => {
+    const out = sanitizeSavedPlotSpecs([saved("a"), { ...saved("b"), spec: "not an object" }]);
+    expect(out.map((s) => s.id)).toEqual(["a"]);
+  });
+
+  it("normalizes (not drops) a spec with a bad mark/refs — validatePlotSpec is tolerant", () => {
+    const out = sanitizeSavedPlotSpecs([{ ...saved("a"), spec: { version: 1, zones: {}, mark: "bogus" } }]);
+    expect(out).toHaveLength(1);
+    expect(out[0].spec).toEqual(emptySpec());
   });
 });

@@ -261,6 +261,7 @@ describe("per-action-class undo/redo coverage", () => {
       plotWindows: [],
       focusedWindowId: null,
       toolWindowLayout: {},
+      savedPlotSpecs: [],
     };
 
     useApp.getState().appendWorkspace(incoming);

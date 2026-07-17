@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { OriginFigureEntry } from "./originFigures";
 import type { OriginFidelityEntry } from "./originFidelity";
+import { emptySpec, type PlotSpec, type SavedPlotSpec } from "./plotspec";
 import type { FrozenPlotBundle } from "./plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { ReportEntry } from "./report";
@@ -964,6 +965,70 @@ describe("workspace ToolWindow layout persistence (GUI_INTERACTION_PLAN #10)", (
   });
 });
 
+describe("workspace saved-PlotSpec persistence (GUI_INTERACTION_PLAN #11)", () => {
+  const specA: PlotSpec = {
+    version: 1,
+    zones: { x: { datasetId: "a", channel: -1 }, y: [{ datasetId: "a", channel: 0 }], group: null, facet: null },
+    mark: "line",
+  };
+  const savedA: SavedPlotSpec = {
+    id: "pspec-1",
+    name: "My graph",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    modifiedAt: "2026-01-02T00:00:00.000Z",
+    spec: specA,
+  };
+
+  it("round-trips a well-formed saved-spec list unchanged", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, savedPlotSpecs: [savedA] }));
+    expect(loaded.savedPlotSpecs).toEqual([savedA]);
+  });
+
+  it("defaults to an empty list for a legacy doc with no savedPlotSpecs field (back-compat)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets }));
+    expect(loaded.savedPlotSpecs).toEqual([]);
+  });
+
+  it("drops a malformed entry without throwing or dropping the rest of the doc", () => {
+    const doc = JSON.parse(
+      serializeWorkspace({ datasets: [makeDataset("a", "first")], savedPlotSpecs: [savedA] }),
+    ) as Record<string, unknown>;
+    doc.savedPlotSpecs = [
+      (doc.savedPlotSpecs as unknown[])[0],
+      { id: "bad" }, // missing name/createdAt/modifiedAt/spec
+      { id: "bad2", name: "n", createdAt: "x", modifiedAt: "y", spec: { version: 99 } }, // bad spec
+    ];
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.savedPlotSpecs).toHaveLength(1);
+    expect(loaded.savedPlotSpecs[0].id).toBe("pspec-1");
+  });
+
+  it("never throws on a hand-edited non-array savedPlotSpecs", () => {
+    const doc = JSON.parse(serializeWorkspace({ datasets: [makeDataset("a", "first")] })) as Record<
+      string,
+      unknown
+    >;
+    doc.savedPlotSpecs = "not an array";
+    expect(parseWorkspace(JSON.stringify(doc)).savedPlotSpecs).toEqual([]);
+  });
+
+  it("normalizes a malformed inner spec to an empty spec rather than dropping the entry", () => {
+    // validatePlotSpec tolerates a partial spec (drops bad refs) — only a
+    // structurally-impossible `spec` (not an object at all) drops the entry.
+    const withPartialSpec: SavedPlotSpec = {
+      ...savedA,
+      spec: { version: 1, zones: {}, mark: "bogus" } as unknown as PlotSpec,
+    };
+    const loaded = parseWorkspace(
+      serializeWorkspace({ datasets: [makeDataset("a", "first")], savedPlotSpecs: [withPartialSpec] }),
+    );
+    expect(loaded.savedPlotSpecs).toHaveLength(1);
+    expect(loaded.savedPlotSpecs[0].spec).toEqual(emptySpec());
+  });
+});
+
 describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
   // A minimal LoadedWorkspace wrapper — mergeWorkspace only ever reads
   // `.datasets` (see its doc for why every other field is ignored).
@@ -984,6 +1049,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       plotWindows: [],
       focusedWindowId: null,
       toolWindowLayout: {},
+      savedPlotSpecs: [],
     };
   }
 

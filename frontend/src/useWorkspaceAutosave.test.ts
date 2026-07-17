@@ -16,6 +16,7 @@ const base: AutosaveState = {
   figureDocs: [],
   plotWindows: [],
   focusedWindowId: null,
+  savedPlotSpecs: [],
 };
 
 describe("shouldAutosave", () => {
@@ -23,7 +24,7 @@ describe("shouldAutosave", () => {
     expect(shouldAutosave(base, base)).toBe(false);
   });
 
-  it.each(["originFigures", "reports", "macroSteps", "figureDocs"] as const)(
+  it.each(["originFigures", "reports", "macroSteps", "figureDocs", "savedPlotSpecs"] as const)(
     "saves when %s changes",
     (field) => {
       expect(shouldAutosave({ ...base, [field]: [] }, base)).toBe(true);
