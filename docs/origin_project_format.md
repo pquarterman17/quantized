@@ -1014,6 +1014,46 @@ same visual position in a different unit. The oracle comparison test
 accepts either interpretation (`test_realdata_legend_positions_match_com_oracle`,
 now 55 exact / 0 wrong / 0 missed).
 
+**Legend title (`legend_title`) — decode #52, 2026-07-16.** An Origin legend
+object may carry a **title**: a line in the Legend object's OWN text that has
+no `\l(n)` swatch marker, which Origin draws as a bold header above the
+per-curve entries. `_parse_legend_labels` keeps only the swatch lines, so a
+title line would otherwise be dropped; `figure_text._parse_legend_title` routes
+the Legend object's non-swatch line(s) to a new `legend_title` field (multi-line
+PRESERVED — the corpus has no internal-title instance to decide first-line vs
+all, so the least-lossy choice is kept; `%(...)` auto-template lines are entry
+codes, excluded).
+
+Two deliberate scope decisions, both evidence-driven:
+
+- **`.opju` only.** The `.opju` legend bucket is filled from VALIDATED framed
+  text runs (NUL-terminated, strict UTF-8) owned by a `Legend` header. The
+  `.opj` bucket is filled by a HEURISTIC printable scan (`_texts_in`) that
+  admits non-swatch noise a title parse cannot separate from a real header — a
+  full-corpus sweep surfaced exactly two such `.opj` false positives:
+  `hc2convert.opj` Graph33 → `146="differentiate"` (a results-log operation
+  record) and `XMCD.opj` Graph17 → `3vl:` (binary junk), both alongside genuine
+  `\l(n)` entries. So `.opj` ships `legend_title == ""` (an honest gap, Graph25
+  precedent); `.opju` emits the title, where the same sweep found zero false
+  positives.
+
+- **A neighbouring `Text` object is NOT a legend title.** The owner-reported
+  anchor — `RockingCurve.opju`'s `NbAuRocking`, whose Origin render shows a
+  bold "Nb/Au" atop the legend — was VERIFIED at the byte level: that "Nb/Au"
+  is a SEPARATE `Text` object (bucket=annotations, its own decoded position
+  above the legend box), NOT a line inside the `Legend` object (which holds
+  only its two `\l(n)` swatch entries). Sibling `Graph1`/`Graph2` carry the
+  same "Nb"/"Nb/Al" label object with NO legend at all — confirming these are
+  floating sample-name annotations, not legend titles. So the structural decode
+  keeps "Nb/Au" as a positioned `annotation_marks` entry and `legend_title`
+  stays `""`. Attaching a nearby Text to the legend by proximity would be an
+  unproven guess AND would move the text off its true position; the "renders as
+  the legend title" outcome is instead achieved on the render side (faithful
+  positioning + the static legend), not by reclassification. Corpus sweep of
+  the `legend_title` change: 618 figures, 0 titles recovered (no proven
+  internal title anywhere), **0 annotation-mark deltas, 0 legend-label deltas**
+  vs base — a purely additive, precise change.
+
 **What `%(n)` resolves to — column Comment first.** Origin's auto legend
 text for a curve substitutes the bound Y column's **Comment** when one is
 set, falling back to the Long Name: PNR.opj `Graph1`'s rendered legend
