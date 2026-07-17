@@ -87,7 +87,7 @@ export default function PipelinePanel() {
   const [addError, setAddError] = useState<string | null>(null);
 
   return (
-    <ToolWindow title="Pipeline" width={440} onClose={() => setOpen(false)}>
+    <ToolWindow id="pipeline" title="Pipeline" width={440} onClose={() => setOpen(false)}>
       {p.steps.length === 0 ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           No steps yet — turn on the macro recorder (Inspector ▸ Macro recorder) and work

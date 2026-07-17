@@ -14,6 +14,7 @@ import type { RecalcMode } from "./recalc";
 import { sanitizeReports, type ReportEntry } from "./report";
 import { sanitizeExcluded } from "./rowstate";
 import { sanitizeSmartFolders, type SmartFolder } from "./smartfolders";
+import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
 import type {
   BookSource,
   ChannelRole,
@@ -32,9 +33,10 @@ import type {
 export const WORKSPACE_FORMAT = "quantized-workspace";
 // v2 (project-organization plan item 2): adds the folder tree, active/selection,
 // and folder-expansion. v3 (gap #5): adds the typed pipeline steps, the recalc
-// mode, per-dataset fit specs, and reports; later also smart folders (org #9)
-// and the plot window layout (MULTI_PLOT_PLAN item 7) — both additive-optional,
-// no bump needed. Older docs still load — migrated on parse with safe defaults.
+// mode, per-dataset fit specs, and reports; later also smart folders (org #9),
+// the plot window layout (MULTI_PLOT_PLAN item 7), and the ToolWindow layout
+// registry (GUI_INTERACTION_PLAN #10) — all additive-optional, no bump needed.
+// Older docs still load — migrated on parse with safe defaults.
 export const WORKSPACE_VERSION = 3;
 
 /** The persistable slice of app state (input to serialize). The store's AppState
@@ -59,6 +61,9 @@ export interface WorkspaceState {
   figureDocs?: FigureDoc[];
   plotWindows?: PlotWindow[];
   focusedWindowId?: string | null;
+  /** GUI_INTERACTION_PLAN #10 item 3 — every floating ToolWindow's persisted
+   *  position/size/collapsed, keyed by its `id` prop. */
+  toolWindowLayout?: Record<string, ToolWindowLayout>;
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -78,6 +83,7 @@ export interface LoadedWorkspace {
   figureDocs: FigureDoc[];
   plotWindows: PlotWindow[];
   focusedWindowId: string | null;
+  toolWindowLayout: Record<string, ToolWindowLayout>;
 }
 
 interface WorkspaceDoc {
@@ -98,6 +104,7 @@ interface WorkspaceDoc {
   figureDocs: FigureDoc[];
   plotWindows: PlotWindow[];
   focusedWindowId: string | null;
+  toolWindowLayout: Record<string, ToolWindowLayout>;
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
@@ -123,6 +130,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
     // stays a plain serializer, same as every other field here.
     plotWindows: ws.plotWindows ?? [],
     focusedWindowId: ws.focusedWindowId ?? null,
+    toolWindowLayout: ws.toolWindowLayout ?? {},
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
@@ -317,8 +325,14 @@ function isDataStruct(v: unknown): v is DataStruct {
 
 /** Parse a .dwk document into the full workspace state, throwing a clear error on
  *  anything malformed (bad JSON, wrong format/version, or an invalid DataStruct).
- *  v1 docs (datasets only) load with an empty folder tree (migration). */
-export function parseWorkspace(text: string): LoadedWorkspace {
+ *  v1 docs (datasets only) load with an empty folder tree (migration).
+ *  `viewport` (GUI_INTERACTION_PLAN #10 item 3) is only for clamping a
+ *  restored `toolWindowLayout` — defaults to the real browser window, so
+ *  callers only pass it explicitly in tests. */
+export function parseWorkspace(
+  text: string,
+  viewport?: { width: number; height: number },
+): LoadedWorkspace {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -483,6 +497,11 @@ export function parseWorkspace(text: string): LoadedWorkspace {
     plotWindows.some((w) => w.id === o.focusedWindowId && w.kind === "plot")
       ? o.focusedWindowId
       : null;
+  // GUI_INTERACTION_PLAN #10 item 3: validated AND clamped to `viewport`
+  // right here — a workspace saved on a big monitor must stay reachable on
+  // a laptop the moment it's restored, not just lazily whenever a given
+  // window is later reopened.
+  const toolWindowLayout = sanitizeToolWindowLayout(o.toolWindowLayout, viewport);
   return {
     datasets,
     folders,
@@ -498,6 +517,7 @@ export function parseWorkspace(text: string): LoadedWorkspace {
     figureDocs,
     plotWindows,
     focusedWindowId,
+    toolWindowLayout,
   };
 }
 

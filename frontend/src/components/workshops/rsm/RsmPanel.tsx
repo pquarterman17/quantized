@@ -29,7 +29,7 @@ export default function RsmPanel() {
   const canStrain = !!peaks && strainPair(peaks) != null;
 
   return (
-    <ToolWindow title="RSM analysis" width={360} onClose={close}>
+    <ToolWindow id="rsm" title="RSM analysis" width={360} onClose={close}>
       {!active && <Hint>Select a dataset first.</Hint>}
       {active && !isRsm && (
         <Hint>

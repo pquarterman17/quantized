@@ -84,6 +84,7 @@ import { createPanelsSlice, type PanelsSlice } from "./panels";
 import { createPointerToolSlice, type PointerToolSlice } from "./pointerTool";
 import { createSplitSlice, type SplitSlice } from "./split";
 import { createShapesSlice, type ShapesSlice } from "./shapes";
+import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -319,7 +320,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, OriginImportSlice, OriginFallbackSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -933,7 +934,8 @@ const ORIGIN_FIGURE_AXIS = { showAxisBox: true, showGrid: false, legendStatic: t
 
 export const useApp = create<AppState>((set, get) => ({
   // Composed slices (each in its own file): windows #2, history #9, reimport
-  // #10, reductions #11, panels #19, pointer #18, split #26, shapes #27.
+  // #10, reductions #11, panels #19, pointer #18, split #26, shapes #27,
+  // toolwindows (GUI_INTERACTION #10).
   ...createWindowsSlice(set, get),
   ...createHistorySlice(set),
   ...createReductionsSlice(set),
@@ -942,6 +944,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createPointerToolSlice(set),
   ...createSplitSlice(set, get),
   ...createShapesSlice(set),
+  ...createToolWindowsSlice(set),
   ...createOriginImportSlice(set),
   ...createOriginFallbackSlice(set, get),
   datasets: [],
@@ -1794,6 +1797,11 @@ export const useApp = create<AppState>((set, get) => ({
         gadgetCursorResult: null,
         plotWindows,
         focusedWindowId,
+        // GUI_INTERACTION #10 item 3: already validated + viewport-clamped by
+        // parseWorkspace (lib/workspace.ts's sanitizeToolWindowLayout) — a
+        // legacy doc with no field defaults to {} (every window falls back
+        // to its own default props, same as a fresh app start).
+        toolWindowLayout: ws.toolWindowLayout ?? {},
         // The rest of the PlotView cluster (item 7) — only touched when
         // restoring an actual persisted layout; the legacy/fresh path never
         // wrote these here before item 7, so they're left alone (whatever the

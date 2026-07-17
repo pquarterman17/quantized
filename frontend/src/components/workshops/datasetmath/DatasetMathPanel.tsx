@@ -16,7 +16,7 @@ export default function DatasetMathPanel() {
   const enough = m.datasets.length >= 2;
 
   return (
-    <ToolWindow title="Dataset Math" width={320} onClose={() => setOpen(false)}>
+    <ToolWindow id="datasetmath" title="Dataset Math" width={320} onClose={() => setOpen(false)}>
       {!enough ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           Load at least two datasets to combine.

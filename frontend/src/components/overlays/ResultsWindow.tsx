@@ -1,6 +1,8 @@
 // Adapted from fermiviewer frontend/src/components/overlays/ResultsWindow.tsx.
 // Floating, draggable results table (curve-fit params, peak tables, …) built on
-// ToolWindow + the DataTable primitive, with CSV/JSON download.
+// ToolWindow + the DataTable primitive, with CSV/JSON download. `id` is the
+// caller's stable ToolWindow identity (GUI_INTERACTION_PLAN #10) — pass one
+// per distinct results view so its position/size persist independently.
 
 import ToolWindow from "./ToolWindow";
 import { Button, DataTable } from "../primitives";
@@ -29,15 +31,17 @@ function toCSV(columns: string[], rows: (string | number)[][]): string {
 }
 
 export default function ResultsWindow({
+  id,
   data,
   onClose,
 }: {
+  id: string;
   data: ResultsData;
   onClose?: () => void;
 }) {
   const stem = data.title.replace(/\s+/g, "_").toLowerCase();
   return (
-    <ToolWindow title={data.title} width={420} onClose={onClose}>
+    <ToolWindow id={id} title={data.title} width={420} onClose={onClose}>
       <DataTable columns={data.columns} rows={data.rows} />
       <div className="qz-btn-row">
         <Button

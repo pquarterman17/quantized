@@ -27,7 +27,7 @@ export default function HysteresisPanel() {
     : [];
 
   return (
-    <ToolWindow title="Hysteresis" width={320} onClose={() => setOpen(false)}>
+    <ToolWindow id="hysteresis" title="Hysteresis" width={320} onClose={() => setOpen(false)}>
       {!active && (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           Select an M-H dataset.

@@ -11,7 +11,7 @@ export default function CalculatorsPanel() {
   const setOpen = useApp((s) => s.setCalculatorsOpen);
 
   return (
-    <ToolWindow title="Calculators" width={360} onClose={() => setOpen(false)}>
+    <ToolWindow id="calculators" title="Calculators" width={360} onClose={() => setOpen(false)}>
       <CalculatorsContent />
     </ToolWindow>
   );

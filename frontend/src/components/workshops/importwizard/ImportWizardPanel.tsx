@@ -53,7 +53,7 @@ export default function ImportWizardPanel() {
   }
 
   return (
-    <ToolWindow title="Import wizard" width={640} onClose={() => setOpen(false)}>
+    <ToolWindow id="importwizard" title="Import wizard" width={640} onClose={() => setOpen(false)}>
       <input ref={inputRef} type="file" style={{ display: "none" }} onChange={onFileChosen} />
 
       {w.filters.length > 0 && (

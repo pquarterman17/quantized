@@ -869,6 +869,57 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
   });
 });
 
+describe("workspace ToolWindow layout persistence (GUI_INTERACTION_PLAN #10)", () => {
+  const VIEWPORT = { width: 1200, height: 800 };
+
+  it("round-trips a well-formed layout map unchanged", () => {
+    const datasets = [makeDataset("a", "first")];
+    const toolWindowLayout = {
+      baseline: { x: 200, y: 150, width: 320, height: null, collapsed: false },
+      curvefit: { x: 400, y: 100, width: 340, height: 500, collapsed: true },
+    };
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, toolWindowLayout }), VIEWPORT);
+    expect(loaded.toolWindowLayout).toEqual(toolWindowLayout);
+  });
+
+  it("defaults to an empty layout for a legacy doc with no toolWindowLayout field (back-compat)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets }), VIEWPORT);
+    expect(loaded.toolWindowLayout).toEqual({});
+  });
+
+  it("clamps a restored position to the CURRENT viewport (saved on a big monitor, opened on a laptop)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const toolWindowLayout = {
+      peaks: { x: 3000, y: 2000, width: 360, height: null, collapsed: false },
+    };
+    const laptop = { width: 1024, height: 768 };
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, toolWindowLayout }), laptop);
+    expect(loaded.toolWindowLayout.peaks.x).toBe(laptop.width - 360);
+    expect(loaded.toolWindowLayout.peaks.y).toBeLessThanOrEqual(laptop.height);
+  });
+
+  it("drops a malformed entry without throwing or dropping the rest of the doc", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(
+      serializeWorkspace({
+        datasets,
+        toolWindowLayout: { good: { x: 1, y: 1, width: 300, height: null, collapsed: false } },
+      }),
+    ) as Record<string, unknown>;
+    doc.toolWindowLayout = { good: (doc.toolWindowLayout as Record<string, unknown>).good, bad: "nope" };
+    const loaded = parseWorkspace(JSON.stringify(doc), VIEWPORT);
+    expect(Object.keys(loaded.toolWindowLayout)).toEqual(["good"]);
+  });
+
+  it("never throws on a hand-edited non-object toolWindowLayout", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(serializeWorkspace({ datasets })) as Record<string, unknown>;
+    doc.toolWindowLayout = "not an object";
+    expect(parseWorkspace(JSON.stringify(doc), VIEWPORT).toolWindowLayout).toEqual({});
+  });
+});
+
 describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
   // A minimal LoadedWorkspace wrapper — mergeWorkspace only ever reads
   // `.datasets` (see its doc for why every other field is ignored).
@@ -888,6 +939,7 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       figureDocs: [],
       plotWindows: [],
       focusedWindowId: null,
+      toolWindowLayout: {},
     };
   }
 

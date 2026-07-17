@@ -64,6 +64,16 @@ export function buildUiCommands(s: StoreGet): Action[] {
       label: "Show worksheet",
       run: () => s().setStageTab("worksheet"),
     },
+    // GUI_INTERACTION #10: restores every open-or-ever-opened floating
+    // ToolWindow (curve fit, peaks, baseline, …) to its own default
+    // position/size, uncollapsed — the recovery path for a window dragged
+    // off-screen or left collapsed/tiny after a monitor change.
+    {
+      id: "reset-tool-windows",
+      group: "View",
+      label: "Reset window positions",
+      run: () => s().resetToolWindowPositions(),
+    },
     {
       id: "plot",
       group: "View",

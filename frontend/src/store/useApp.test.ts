@@ -2983,6 +2983,26 @@ describe("useApp loadWorkspace", () => {
     expect(useApp.getState().activeId).toBeNull();
   });
 
+  // GUI_INTERACTION_PLAN #10 item 3: the ToolWindow layout registry
+  // round-trips through loadWorkspace exactly like plotWindows/folders — a
+  // legacy doc with no field resets to {} (every window falls back to its
+  // own default props), same as a fresh app start.
+  it("restores a persisted ToolWindow layout map", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [{ id: "w1", name: "first", data: raw }],
+      toolWindowLayout: { baseline: { x: 200, y: 150, width: 320, height: null, collapsed: false } },
+    });
+    expect(useApp.getState().toolWindowLayout).toEqual({
+      baseline: { x: 200, y: 150, width: 320, height: null, collapsed: false },
+    });
+  });
+
+  it("defaults toolWindowLayout to {} for a doc without the field", () => {
+    useApp.getState().setToolWindowLayout("stale", { x: 1, y: 1, width: 300, height: null, collapsed: false });
+    useApp.getState().loadWorkspace({ datasets: [{ id: "w1", name: "first", data: raw }] });
+    expect(useApp.getState().toolWindowLayout).toEqual({});
+  });
+
   it("restores the folder tree, expansion, and persisted active/selection (v2)", () => {
     useApp.getState().loadWorkspace({
       datasets: [
@@ -3060,6 +3080,7 @@ describe("useApp appendWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
       figureDocs: [],
       plotWindows: [],
       focusedWindowId: null,
+      toolWindowLayout: {},
     };
   }
 
