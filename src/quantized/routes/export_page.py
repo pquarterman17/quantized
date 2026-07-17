@@ -44,6 +44,12 @@ class PagePanelSpec(BaseModel):
     label: str | None = None
     # Per-panel title override; None = the nested figure payload's own title.
     title: str | None = None
+    # #54 residual: page-normalized (x, y, w, h), TOP-LEFT origin -- when
+    # EVERY panel on the page sets this, the composer places panels at their
+    # true page coordinates instead of row/col (see calc.figure_page). None
+    # (the default) keeps the grid path byte-identical; row/col are then
+    # still required by this schema but unused.
+    page_rect: tuple[float, float, float, float] | None = None
 
 
 class FigurePageRequest(BaseModel):
@@ -104,6 +110,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                     series_styles=styles,
                     overrides=f.overrides,
                     label=spec.label,
+                    page_rect=spec.page_rect,
                 )
             )
         data = render_figure_page(

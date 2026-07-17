@@ -171,3 +171,106 @@ def test_page_width_preset_default_and_override() -> None:
         panels, rows=1, cols=2, fmt="png", style="aps", dpi=72, width_in=7.0
     )
     assert len(double) != len(single)
+
+
+# ── free page-coordinate placement (#54 residual) ──────────────────────────
+
+
+def _rect_panel(rect: tuple[float, float, float, float], **kw: Any) -> PagePanel:
+    x = np.linspace(0.0, 5.0, 30)
+    return PagePanel(x=x, series=[("y", np.sin(x))], row=0, col=0, page_rect=rect, **kw)
+
+
+def test_free_placement_axes_at_flipped_page_positions() -> None:
+    # page_rect (0.1, 0.2, 0.3, 0.4) top-left origin -> matplotlib add_axes
+    # bottom-left origin: bottom = 1 - y - h = 1 - 0.2 - 0.4 = 0.4.
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    panels = [_rect_panel((0.1, 0.2, 0.3, 0.4)), _rect_panel((0.5, 0.5, 0.4, 0.3))]
+    st = figure_style("default")
+    fig = _build_page_figure(
+        panels, free_placement=True, w=6.0, h=6.0, rows=1, cols=1,
+        st=st, label_format="(a)", label_pos="nw",
+    )
+    try:
+        assert len(fig.axes) == 2
+        pos0 = fig.axes[0].get_position()
+        pos1 = fig.axes[1].get_position()
+        assert pos0.x0 == pytest.approx(0.1) and pos0.y0 == pytest.approx(0.4)
+        assert pos0.width == pytest.approx(0.3) and pos0.height == pytest.approx(0.4)
+        assert pos1.x0 == pytest.approx(0.5) and pos1.y0 == pytest.approx(0.2)
+        assert pos1.width == pytest.approx(0.4) and pos1.height == pytest.approx(0.3)
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+
+
+def test_free_placement_two_panels_render() -> None:
+    panels = [_rect_panel((0.05, 0.05, 0.4, 0.4)), _rect_panel((0.55, 0.55, 0.4, 0.4))]
+    out = render_figure_page(panels, rows=1, cols=1, fmt="png", dpi=72)
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_free_placement_overlapping_rects_allowed() -> None:
+    # Unlike the grid path, free placement allows overlap (Origin layers can
+    # legitimately overlap).
+    panels = [_rect_panel((0.1, 0.1, 0.6, 0.6)), _rect_panel((0.2, 0.2, 0.6, 0.6))]
+    out = render_figure_page(panels, rows=1, cols=1, fmt="svg")
+    assert b"<svg" in out[:300]
+
+
+def test_free_placement_mixed_rect_and_no_rect_raises() -> None:
+    panels = [_rect_panel((0.1, 0.1, 0.4, 0.4)), _panel(0, 0)]
+    with pytest.raises(ValueError, match="mixed free/grid"):
+        render_figure_page(panels, rows=1, cols=1)
+
+
+def test_free_placement_out_of_bounds_rect_raises() -> None:
+    panels = [_rect_panel((0.8, 0.1, 0.5, 0.4))]
+    with pytest.raises(ValueError, match="page_rect must fit"):
+        render_figure_page(panels, rows=1, cols=1)
+
+
+def test_free_placement_degenerate_rect_raises() -> None:
+    panels = [_rect_panel((0.1, 0.1, 0.0, 0.4))]
+    with pytest.raises(ValueError, match="positive"):
+        render_figure_page(panels, rows=1, cols=1)
+
+
+def test_free_placement_negative_origin_raises() -> None:
+    panels = [_rect_panel((-0.1, 0.1, 0.4, 0.4))]
+    with pytest.raises(ValueError, match=">= 0"):
+        render_figure_page(panels, rows=1, cols=1)
+
+
+def test_free_placement_label_order_by_page_position() -> None:
+    # Auto-label sequence follows page position (top-to-bottom, left-to-
+    # right via the (y, x) sort key), not list order or the (unused)
+    # row/col fields -- both panels share y=0.0, so x breaks the tie: the
+    # explicit (iv)/"" labels below prove WHICH panel got which slot.
+    panels = [
+        _rect_panel((0.5, 0.0, 0.4, 0.4), label=None),  # x=0.5 -> second -> (b)
+        _rect_panel((0.0, 0.0, 0.4, 0.4), label="(iv)"),  # x=0.0 -> first, explicit label
+    ]
+    out = render_figure_page(panels, rows=1, cols=1, fmt="svg")
+    svg = out.decode("utf-8", "ignore")
+    assert "(iv)" in svg and "(b)" in svg and "(a)" not in svg
+
+
+def test_free_placement_x_breaks_and_margins_still_rejected() -> None:
+    p = _rect_panel((0.1, 0.1, 0.4, 0.4), overrides={"x_breaks": [[1.0, 2.0]]})
+    with pytest.raises(ValueError, match="x_breaks"):
+        render_figure_page([p], rows=1, cols=1)
+    p2 = _rect_panel((0.1, 0.1, 0.4, 0.4), overrides={"margins": {"left": 0.2}})
+    with pytest.raises(ValueError, match="margins"):
+        render_figure_page([p2], rows=1, cols=1)
+
+
+def test_no_rect_requests_unaffected_by_free_placement_code() -> None:
+    # Byte-for-byte the same as before the #54 residual landed: no panel
+    # sets page_rect, so the grid path renders identically.
+    panels = [_panel(0, 0), _panel(0, 1), _panel(1, 0), _panel(1, 1)]
+    out = render_figure_page(panels, rows=2, cols=2, fmt="pdf")
+    assert out[:5] == b"%PDF-"

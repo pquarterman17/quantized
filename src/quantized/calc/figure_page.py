@@ -19,6 +19,15 @@ label. Two single-figure overrides are page-incompatible and rejected with a
 clear ``ValueError`` (-> 422 at the route): per-panel ``x_breaks`` (the break
 renderer owns its own figure) and per-panel ``margins`` (page layout is
 constrained-layout, figure-level).
+
+FREE PAGE-COORDINATE PLACEMENT (#54 residual): when every panel carries a
+``page_rect`` (page-normalized ``(x, y, w, h)``, TOP-LEFT origin -- the
+frontend's ``NormalizedFrameRect`` convention, e.g. a decoded Origin page
+layout), panels are placed with ``fig.add_axes`` at their true page
+coordinates instead of the ``rows``/``cols`` gridspec; ``rows``/``cols`` are
+then accepted but unused. Mixing panels with and without a ``page_rect`` is
+rejected. Unlike the grid path, overlapping rects are ALLOWED (Origin layers
+can legitimately overlap).
 """
 
 from __future__ import annotations
@@ -120,6 +129,31 @@ class PagePanel:
     series_styles: Sequence[Mapping[str, Any] | None] | None = None
     overrides: Mapping[str, Any] | None = None
     label: str | None = None
+    # #54 residual: page-normalized (x, y, w, h), TOP-LEFT origin. When every
+    # panel on the page sets this, render_figure_page places panels at their
+    # true page coordinates instead of the rows/cols grid -- see the module
+    # docstring. None (the default) keeps the grid path byte-identical.
+    page_rect: tuple[float, float, float, float] | None = None
+
+
+# Tolerance on a page_rect's [0, 1] bounds -- decode rounding can put a
+# rect a hair outside the exact unit square.
+_RECT_EPS = 1e-6
+
+
+def _validate_panel_overrides(n: int, p: PagePanel) -> None:
+    """Raise ``ValueError`` on a page-incompatible per-panel override
+    (``x_breaks`` / ``margins``), shared by both the grid and free-placement
+    validators."""
+    ov = dict(p.overrides or {})
+    if "x_breaks" in ov:
+        raise ValueError(f"panel {n}: x_breaks is not supported on a figure page")
+    if "margins" in ov:
+        raise ValueError(
+            f"panel {n}: margins are page-level on a figure page; "
+            "remove the per-panel margins override"
+        )
+    _validate_overrides(ov)
 
 
 def _validate_page(rows: int, cols: int, panels: Sequence[PagePanel]) -> None:
@@ -146,15 +180,29 @@ def _validate_page(rows: int, cols: int, panels: Sequence[PagePanel]) -> None:
                 if other is not None:
                     raise ValueError(f"panels {other} and {n} overlap at grid cell ({r}, {c})")
                 occupied[(r, c)] = n
-        ov = dict(p.overrides or {})
-        if "x_breaks" in ov:
-            raise ValueError(f"panel {n}: x_breaks is not supported on a figure page")
-        if "margins" in ov:
+        _validate_panel_overrides(n, p)
+
+
+def _validate_page_rects(panels: Sequence[PagePanel]) -> None:
+    """Raise ``ValueError`` on an invalid free-placement page spec: empty
+    page, an out-of-bounds/degenerate ``page_rect``, page-incompatible
+    overrides. Unlike ``_validate_page``, overlapping rects are ALLOWED
+    (Origin layers can legitimately overlap) -- rows/cols placement is not
+    involved at all."""
+    if not panels:
+        raise ValueError("page must contain at least one panel")
+    for n, p in enumerate(panels):
+        assert p.page_rect is not None  # caller guarantees this (free_placement)
+        x, y, w, h = p.page_rect
+        if w <= 0 or h <= 0:
+            raise ValueError(f"panel {n}: page_rect width/height must be positive")
+        if x < -_RECT_EPS or y < -_RECT_EPS:
+            raise ValueError(f"panel {n}: page_rect x/y must be >= 0")
+        if x + w > 1 + _RECT_EPS or y + h > 1 + _RECT_EPS:
             raise ValueError(
-                f"panel {n}: margins are page-level on a figure page; "
-                "remove the per-panel margins override"
+                f"panel {n}: page_rect must fit within the page (x + w <= 1, y + h <= 1)"
             )
-        _validate_overrides(ov)
+        _validate_panel_overrides(n, p)
 
 
 def _place_label(ax: Any, text: str, pos: str, st: FigureStyle) -> None:
@@ -177,6 +225,14 @@ def _place_label(ax: Any, text: str, pos: str, st: FigureStyle) -> None:
             0.03, 0.96, text, transform=ax.transAxes,
             ha="left", va="top", fontweight="bold", fontsize=size,
         )
+
+
+def _rect_sort_key(p: PagePanel) -> tuple[float, float]:
+    """Top-to-bottom, left-to-right by ``page_rect`` (y, x) -- the free-
+    placement auto-label order. Caller guarantees ``page_rect`` is set (only
+    used once every panel on the page has one)."""
+    assert p.page_rect is not None
+    return (p.page_rect[1], p.page_rect[0])
 
 
 def render_figure_page(
@@ -206,6 +262,12 @@ def render_figure_page(
     a panel's explicit ``label`` wins over the auto sequence. Raises
     ``ValueError`` on any invalid spec (unknown format/style/label options,
     empty grid, out-of-bounds or overlapping panels).
+
+    #54 residual: when every panel sets ``page_rect``, panels are placed at
+    their true page coordinates instead of the ``rows``/``cols`` grid (see
+    the module docstring); ``rows``/``cols`` are then accepted but unused,
+    and overlapping rects are allowed. Mixing panels with and without
+    ``page_rect`` raises ``ValueError``.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -214,57 +276,121 @@ def render_figure_page(
     if label_format != "none" and label_format not in _LABEL_TEMPLATES:
         allowed = (*_LABEL_TEMPLATES, "none")
         raise ValueError(f"label_format must be one of {allowed}")
-    _validate_page(rows, cols, panels)
+
+    has_rect = [p.page_rect is not None for p in panels]
+    free_placement = any(has_rect)
+    if free_placement and not all(has_rect):
+        raise ValueError(
+            "panels must either all set page_rect or none -- mixed free/grid "
+            "placement is not supported"
+        )
+    if free_placement:
+        _validate_page_rects(panels)
+    else:
+        _validate_page(rows, cols, panels)
+
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
 
     w = float(width_in) if width_in is not None else st.fig_width_in
-    h = (
-        float(height_in)
-        if height_in is not None
-        else w * (st.fig_height_in / st.fig_width_in) * (rows / cols)
-    )
+    if free_placement:
+        # rows/cols are meaningless in free placement -- no grid-cell aspect
+        # to preserve, so height falls back to the preset's own aspect.
+        h = float(height_in) if height_in is not None else st.fig_height_in
+    else:
+        h = (
+            float(height_in)
+            if height_in is not None
+            else w * (st.fig_height_in / st.fig_width_in) * (rows / cols)
+        )
     if w <= 0 or h <= 0:
         raise ValueError("width_in and height_in must be positive")
 
-    # Row-major placement order defines the auto-label sequence.
-    ordered = sorted(panels, key=lambda p: (p.row, p.col))
+    # Placement order defines the auto-label sequence: row-major grid cell,
+    # or top-to-bottom/left-to-right by page_rect (y, x) in free placement.
+    if free_placement:
+        ordered = sorted(panels, key=_rect_sort_key)
+    else:
+        ordered = sorted(panels, key=lambda p: (p.row, p.col))
     # (matplotlib's RcParams Literal-key type is impractical with the dynamic
     # font.<generic> key -- same targeted ignore as calc.figure.)
     with matplotlib.rc_context(style_rc(st, {})):  # type: ignore[arg-type]
-        fig = plt.figure(figsize=(w, h), layout="constrained")
+        fig = _build_page_figure(
+            ordered,
+            free_placement=free_placement,
+            w=w,
+            h=h,
+            rows=rows,
+            cols=cols,
+            st=st,
+            label_format=label_format,
+            label_pos=label_pos,
+        )
         try:
-            gs = fig.add_gridspec(rows, cols)
-            for idx, p in enumerate(ordered):
-                ax = fig.add_subplot(
-                    gs[p.row : p.row + p.row_span, p.col : p.col + p.col_span]
-                )
-                # Rich-text guard (GOTO #5) on every user string; see figure.py.
-                series = [(safe_mathtext_label(label), y) for label, y in p.series]
-                draw_series_axes(
-                    fig,
-                    ax,
-                    np.asarray(p.x, dtype=float),
-                    series,
-                    st=st,
-                    ov=dict(p.overrides or {}),
-                    x_log=p.x_log,
-                    y_log=p.y_log,
-                    x_scale=p.x_scale,
-                    y_scale=p.y_scale,
-                    title=safe_mathtext_label(p.title),
-                    x_label=safe_mathtext_label(p.x_label),
-                    y_label=safe_mathtext_label(p.y_label),
-                    series_styles=p.series_styles,
-                    x_fmt=p.x_fmt,
-                    y_fmt=p.y_fmt,
-                    x_step=p.x_step,
-                    y_step=p.y_step,
-                )
-                text = p.label if p.label is not None else panel_label(idx, label_format)
-                _place_label(ax, safe_mathtext_label(text), label_pos, st)
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=resolved_dpi)
             return buf.getvalue()
         finally:
             plt.close(fig)
+
+
+def _build_page_figure(
+    ordered: Sequence[PagePanel],
+    *,
+    free_placement: bool,
+    w: float,
+    h: float,
+    rows: int,
+    cols: int,
+    st: FigureStyle,
+    label_format: str,
+    label_pos: str,
+) -> Any:
+    """Build (but do not save or close) the composed page figure, in
+    ``ordered`` placement order. Split out of ``render_figure_page`` so a
+    test can inspect ``ax.get_position()`` directly -- the free-placement
+    y-flip is otherwise only observable via rendered image bytes. Must run
+    inside the caller's ``matplotlib.rc_context(style_rc(st, {}))``."""
+    # Constrained layout fights manually placed axes (add_axes) -- only the
+    # grid path (gridspec subplots) uses it.
+    fig = (
+        plt.figure(figsize=(w, h))
+        if free_placement
+        else plt.figure(figsize=(w, h), layout="constrained")
+    )
+    gs = None if free_placement else fig.add_gridspec(rows, cols)
+    for idx, p in enumerate(ordered):
+        if free_placement:
+            assert p.page_rect is not None
+            x, y, pw, ph = p.page_rect
+            # y-flip: page_rect is top-left origin; matplotlib axes rects
+            # are bottom-left origin.
+            ax = fig.add_axes((x, 1 - y - ph, pw, ph))
+        else:
+            assert gs is not None
+            ax = fig.add_subplot(gs[p.row : p.row + p.row_span, p.col : p.col + p.col_span])
+        # Rich-text guard (GOTO #5) on every user string; see figure.py.
+        series = [(safe_mathtext_label(label), y) for label, y in p.series]
+        draw_series_axes(
+            fig,
+            ax,
+            np.asarray(p.x, dtype=float),
+            series,
+            st=st,
+            ov=dict(p.overrides or {}),
+            x_log=p.x_log,
+            y_log=p.y_log,
+            x_scale=p.x_scale,
+            y_scale=p.y_scale,
+            title=safe_mathtext_label(p.title),
+            x_label=safe_mathtext_label(p.x_label),
+            y_label=safe_mathtext_label(p.y_label),
+            series_styles=p.series_styles,
+            x_fmt=p.x_fmt,
+            y_fmt=p.y_fmt,
+            x_step=p.x_step,
+            y_step=p.y_step,
+        )
+        text = p.label if p.label is not None else panel_label(idx, label_format)
+        _place_label(ax, safe_mathtext_label(text), label_pos, st)
+    return fig
