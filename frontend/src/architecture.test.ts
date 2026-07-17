@@ -115,7 +115,14 @@ const STORE_PINS: Record<string, number> = {
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
-  "/appCommands.ts": 684,
+  // 684 -> 56 (2026-07-17, zero headroom for upcoming features): the curated
+  // command list was split by menu domain into commands/fileCommands.ts,
+  // commands/dataCommands.ts, commands/analysisCommands.ts,
+  // commands/plotCommands.ts (Plot + Insert), and commands/uiCommands.ts
+  // (View + Edit + Help) — appCommands.ts is now just the thin composing
+  // aggregator (36 lines + slack). Add a new command to its owning
+  // commands/*.ts module, not here.
+  "/appCommands.ts": 56,
   "/store/windows.ts": 751,
 };
 

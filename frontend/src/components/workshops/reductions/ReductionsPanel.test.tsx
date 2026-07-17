@@ -63,8 +63,14 @@ describe("ReductionsPanel", () => {
 });
 
 describe("Analyze-menu command registry entries (MAIN_PLAN #11)", () => {
+  // Reductions moved from appCommands.ts to commands/analysisCommands.ts
+  // when that module was decomposed by menu domain (2026-07-17).
   const commandsSrc = Object.values(
-    import.meta.glob("../../../appCommands.ts", { query: "?raw", import: "default", eager: true }),
+    import.meta.glob("../../../commands/analysisCommands.ts", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }),
   )[0] as string;
   const overlaysSrc = Object.values(
     import.meta.glob("../../../AppOverlays.tsx", { query: "?raw", import: "default", eager: true }),

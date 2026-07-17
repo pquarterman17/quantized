@@ -202,18 +202,21 @@ describe("SplitDatasetDialog — confirm / cancel", () => {
 });
 
 describe("Analyze-menu/⌘K command registry entry (MAIN_PLAN #26)", () => {
-  // appCommands.ts's curated actions array IS the command registry (MenuBar
-  // and the ⌘K palette both consume it) — the same source-scan pattern
+  // commands/dataCommands.ts's curated actions array IS (part of) the
+  // command registry (MenuBar and the ⌘K palette both consume the
+  // aggregated appCommands.ts) — the same source-scan pattern
   // TextFormatHelp.test.tsx uses for the identical reason (the App tree is
-  // too heavy to render in jsdom). The overlay mount lives in AppOverlays.tsx.
+  // too heavy to render in jsdom). Split moved here from appCommands.ts
+  // when that module was decomposed by menu domain (2026-07-17). The
+  // overlay mount lives in AppOverlays.tsx.
   const commandsSrc = Object.values(
-    import.meta.glob("../../appCommands.ts", { query: "?raw", import: "default", eager: true }),
+    import.meta.glob("../../commands/dataCommands.ts", { query: "?raw", import: "default", eager: true }),
   )[0] as string;
   const overlaysSrc = Object.values(
     import.meta.glob("../../AppOverlays.tsx", { query: "?raw", import: "default", eager: true }),
   )[0] as string;
 
-  it("appCommands.ts registers the Split command in the Data group, acting on the active dataset", () => {
+  it("commands/dataCommands.ts registers the Split command in the Data group, acting on the active dataset", () => {
     expect(commandsSrc).toContain('id: "split"');
     expect(commandsSrc).toContain('group: "Data"');
     expect(commandsSrc).toContain('label: "Split by column value…"');
