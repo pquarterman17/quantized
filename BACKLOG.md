@@ -7,7 +7,8 @@ derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
 **Last regenerated:** 2026-07-17, end of the autonomous GUI_INTERACTION
-campaign (11 merges, local main `d7f6e6b`, NOT yet pushed to origin): the
+campaign (11 merges; pushed to origin same day, CI + CodeQL + live E2E all
+green): the
 entire no-blocker actionable list was worked — #3, #7, #9, #10, #13, #14
 CLOSED in full; #8, #11, #15 CORE shipped with residuals re-dashboarded
 below; plus the ORIGIN_FILE_DECODE #54 spatial page-coordinate export
@@ -36,7 +37,7 @@ baseline framing) are under Owner actions below, not here.
 | **Real-browser (Playwright) interaction journeys** at 100/125/200% (core harness + 7 journeys — import-drop/folder-organize/curve-restyle/axis-limits/graph-builder/region-tool-escape/keyboard-only — SHIPPED 2026-07-17, `frontend/e2e/`) — residual: folder-reorder undo (gated on #1), channel→X/Y/Y2 on-canvas drag, annotation/shape move/edit/delete/undo, window arrange/restore, export round-trip (CI workflow verified live 2026-07-17, 18/18 green) | GUI_INTERACTION #15 |
 | Larger bets / polish: unified select→edit Plot Objects tree (#2, owner-gate scope), canonical plot spec across surfaces (#12), buttons/menus/tooltips polish (#17), owner-dependent Origin gaps (#16) | GUI_INTERACTION Tier 1–3 |
 | **Origin graphic objects / rich annotations decode** — arrows, lines, standalone rects/ellipses, framed text, callouts onto native Shape/annotation models (RE-heavy; Codex-routed per the plan) | ORIGIN_FILE_DECODE #53 |
-| **Origin layout generality** — free-positioned/overlapping layers and insets in progress; generalized page/layer model and >2 Y axes remain after page setup + true-coordinate export shipped | ORIGIN_FILE_DECODE #54 |
+| **Origin layout generality residual** — free-positioned/overlapping layers + insets SHIPPED 2026-07-17 (Codex PR #55 `90c49ad`, page-mode classification, fail-closed); remaining: generalized page/layer model + >2 Y axes (do NOT extend the greedy double-Y heuristic) | ORIGIN_FILE_DECODE #54 |
 
 ## Owner actions & owner-gated decisions
 

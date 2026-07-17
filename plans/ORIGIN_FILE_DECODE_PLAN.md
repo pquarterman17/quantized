@@ -624,8 +624,12 @@ Official model references used for this routing:
       (pure request assembly) + `lib/exportPageCommand.ts` (store-facing
       command, resolves each panel's dataset first per the #38 discipline).
       Backend 2916 + frontend 3434 green.
-    - [ ] **Free-positioned / overlapping layers and insets.** Implemented on
-      `codex/origin-layout-generality`, awaiting review: keep the tiled-layout overlap guard,
+    - [x] **Free-positioned / overlapping layers and insets.** SHIPPED
+      2026-07-17 — Codex PR #55, reviewed + merged `90c49ad`. Local corpus
+      sweep on the PR build: 12/12 projects, 0 renderer failures, 0
+      regressions vs the #48 baseline (the overlap/inset class is RARE in
+      the corpus — the shape is pinned by synthetic tests, per the
+      samples-are-not-standards rule). Design: keep the tiled-layout overlap guard,
       but classify an otherwise non-tiled family as a native page composition
       when every recovered layer has a validated `pageRect`. Fresh applies
       start in `panelFit="page"`, preserving source order and exact rectangles
