@@ -920,7 +920,7 @@ the shipped contract)
 ## Completed
 
 - ~~**61. Spatial-page export content parity (proven-contract slice)**~~
-  (2026-07-17; `codex/origin-spatial-export-content`) — the true-coordinate
+  (2026-07-17; PR #59) — the true-coordinate
   page exporter now carries each panel's proven primary-axis content through
   the existing figure-page renderer: decoded/partial legend labels and title,
   decoded legend placement, primary annotations, panel limits, log minor
