@@ -64,6 +64,7 @@ beforeEach(() => {
     spatialPanels: null,
     facetPanels: null,
     breakPanels: null,
+    showLegend: true,
     showAxisBox: false,
   });
 });
@@ -160,6 +161,60 @@ describe("MultiPanelStage — mode regressions", () => {
     await waitFor(() => expect(created.length).toBe(1));
     const opts = created[0] as { opts: { series: { label?: string }[] } };
     expect(opts.opts.series[1].label).toBe("Field-cooled");
+  });
+
+  it("renders a panel-local static legend with the decoded title, position, and line+marker swatch", async () => {
+    useApp.setState({
+      spatialPanels: [
+        {
+          sourceFigureIds: ["fig-1"],
+          datasetId: "d1",
+          xKey: null,
+          yKeys: [0],
+          xLim: [0, 3],
+          yLim: [0, 40],
+          xLog: false,
+          yLog: false,
+          row: 0,
+          col: 0,
+          seriesLabels: { 0: "Field-cooled" },
+          seriesStyles: { 0: { width: 2, marker: true, markerShape: "circle" } },
+          legendTitle: "Cooling sweep",
+          legendFrameXY: [0.2, 0.3],
+        },
+      ],
+    });
+    const { container } = render(<MultiPanelStage />);
+    await waitFor(() => expect(container.querySelector(".qzk-spatial-legend")).not.toBeNull());
+    expect(container.textContent).toContain("Cooling sweep");
+    expect(container.textContent).toContain("Field-cooled");
+    const sample = container.querySelector(".qzk-spatial-legend .qzk-legend-sample");
+    expect(sample?.getAttribute("data-line")).toBe("true");
+    expect(sample?.getAttribute("data-marker")).toBe("circle");
+    const legend = container.querySelector<HTMLElement>(".qzk-spatial-legend");
+    expect(legend?.style.left).toContain("--qz-frame-left");
+    expect(legend?.style.top).toContain("--qz-frame-top");
+  });
+
+  it("does not invent a spatial legend when no layer legend text decoded", async () => {
+    useApp.setState({
+      spatialPanels: [
+        {
+          datasetId: "d1",
+          xKey: null,
+          yKeys: [0],
+          xLim: [0, 3],
+          yLim: [0, 40],
+          xLog: false,
+          yLog: false,
+          row: 0,
+          col: 0,
+        },
+      ],
+    });
+    const { container } = render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(1));
+    expect(container.querySelector(".qzk-spatial-legend")).toBeNull();
   });
 
   // Fix #2: a panel's decoded step drives fixed log-axis ticks.

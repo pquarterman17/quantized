@@ -49,8 +49,10 @@ import { scaleFromLog, type PlotBg } from "../../lib/plotview";
 import type { AxisFormat, AxisScale, Dataset, RefLine, SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts } from "../../lib/uplotOpts";
+import { frameVarsPlugin } from "../../lib/uplotFrameVars";
 import type { Readout } from "../../lib/uplotTools";
 import type { Accent, PlotTool, Theme } from "../../store/useApp";
+import type { SpatialLegendEntry } from "./SpatialPanelLegend";
 
 /** The focused stage's uPlot cursor-sync group (all its panels crosshair
  *  together). A background stack window passes its OWN per-window key instead
@@ -81,11 +83,20 @@ interface SpatialFetch {
   errorBars: Map<number, (number | null)[]>;
 }
 
+export interface SpatialLegendPortal {
+  key: string;
+  target: HTMLDivElement;
+  entries: SpatialLegendEntry[];
+  title?: string;
+  frameXY?: [number, number];
+}
+
 export interface MultiPanelStageState {
   hostRef: RefObject<HTMLDivElement | null>;
   hostStyle: CSSProperties;
   readout: Readout | null;
   tool: string;
+  spatialLegends: SpatialLegendPortal[];
 }
 
 export interface MultiPanelStageParams {
@@ -186,6 +197,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   const [payload, setPayload] = useState<PlotPayload | null>(null);
   const [spatialPayloads, setSpatialPayloads] = useState<(SpatialFetch | null)[]>([]);
   const [readout, setReadout] = useState<Readout | null>(null);
+  const [spatialLegends, setSpatialLegends] = useState<SpatialLegendPortal[]>([]);
 
   // Spatial panels whose dataset still exists (a removed dataset degrades to
   // dropping that one cell, never a crash).
@@ -277,8 +289,8 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         if (!ds) return Promise.resolve(null);
         // Item A (PNR.opj Book14 Graph11 repro): drop this panel's Origin-
         // hidden channels (a "Y-error" column like dSA) from what's actually
-        // fetched/plotted — the spatial grid has no per-panel legend to keep
-        // them toggle-able, unlike the single-plot path (see
+        // fetched/plotted — the spatial grid's decoded legend is static and
+        // cannot keep them toggle-able, unlike the single-plot path (see
         // `multipanel.spatialPlottedChannels`'s doc). y2Keys is filtered the
         // same way for consistency, though a hidden channel is never itself
         // curve-bound to y2 in practice.
@@ -321,6 +333,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     if (spatial) {
       if (spatialPayloads.length !== panels.length || spatialPayloads.some((p) => !p)) {
         destroyAll();
+        setSpatialLegends((prev) => (prev.length === 0 ? prev : []));
         return;
       }
       destroyAll();
@@ -341,6 +354,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       const decodedRects = spatialPixelRects(panels, w, h, panelFit, pageSetup);
       const suppressed = suppressedXIndices(panels);
       const divs: HTMLDivElement[] = [];
+      const legends: SpatialLegendPortal[] = [];
       panels.forEach((p, i) => {
         const entry = spatialPayloads[i];
         if (!entry) return;
@@ -349,6 +363,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           left: colLefts[p.col], top: rowTops[p.row], width: colW[p.col], height: rowH[p.row],
         };
         const div = document.createElement("div");
+        div.className = "qzk-spatial-panel";
         div.style.position = "absolute";
         div.style.left = `${rect.left}px`;
         div.style.top = `${rect.top}px`;
@@ -362,6 +377,10 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         const plottedChannels = spatialPlottedChannels(p);
         const cellStyles = plottedChannels.map((ch) => p.seriesStyles?.[ch]);
         const cellLabels = plottedChannels.map((ch) => p.seriesLabels?.[ch]);
+        const legendEntries: SpatialLegendEntry[] = plottedChannels.flatMap((ch, displayIndex) => {
+          const label = p.seriesLabels?.[ch];
+          return label ? [{ label, style: p.seriesStyles?.[ch], displayIndex }] : [];
+        });
         const opts = buildOpts(pp, {
           width: rect.width,
           height: rect.height,
@@ -406,6 +425,12 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           pointsPaths: POINTS_PATHS,
         });
         opts.cursor = { ...opts.cursor, sync: { key: syncKey } };
+        // Only a panel that actually owns decoded legend content needs the
+        // frame-variable bridge. Keeping it conditional leaves every other
+        // spatial uPlot's plugin set byte-for-byte unchanged.
+        if (legendEntries.length > 0 || p.legendTitle) {
+          opts.plugins = [...(opts.plugins ?? []), frameVarsPlugin(".qzk-spatial-panel")];
+        }
         // Item B: blank x tick values + title on every panel with a flush
         // shared-x neighbor directly below it (only the run's bottom panel
         // keeps them) — same idiom the plain per-channel stack mode already
@@ -414,7 +439,20 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           opts.axes[0] = { ...opts.axes[0], label: undefined, values: (_u, splits) => splits.map(() => "") };
         }
         plotsRef.current.push(new uPlot(opts, pp.data, div));
+        if (legendEntries.length > 0 || p.legendTitle) {
+          const target = document.createElement("div");
+          target.className = "qzk-spatial-legend-layer";
+          div.appendChild(target);
+          legends.push({
+            key: `${p.datasetId}-${p.sourceFigureIds?.join("-") ?? i}`,
+            target,
+            entries: legendEntries,
+            ...(p.legendTitle ? { title: p.legendTitle } : {}),
+            ...(p.legendFrameXY ? { frameXY: p.legendFrameXY } : {}),
+          });
+        }
       });
+      setSpatialLegends(legends);
       const ro = new ResizeObserver(() => {
         const width = host.clientWidth || w;
         const height = host.clientHeight || h;
@@ -444,6 +482,8 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         destroyAll();
       };
     }
+
+    setSpatialLegends((prev) => (prev.length === 0 ? prev : []));
 
     if (breakMode) {
       const bPanels = breakPanels ?? [];
@@ -666,5 +706,5 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           }
         : { position: "absolute", inset: 8, display: "flex", flexDirection: "column", gap: 8 };
 
-  return { hostRef, hostStyle, readout, tool };
+  return { hostRef, hostStyle, readout, tool, spatialLegends };
 }

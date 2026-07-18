@@ -701,10 +701,16 @@ describe("resolveFigurePanels", () => {
   it("carries each layer's decoded legend_labels into its own seriesLabels", () => {
     const l1 = entry("f1", 1, "d1", {
       legend_labels: ["Field-cooled"],
+      legend_title: "Cooling sweep",
+      legend_pos: { x: 2, y: 40 },
+      x_from: 0, x_to: 10, y_from: 0, y_to: 50, x_log: false, y_log: false,
       curves: [{ book: "Book1", x: "A", y: "B" }],
     });
     const panels = resolveFigurePanels([l1, entry("f2", 2, "d2", { curves: [{ book: "Book2", x: "A", y: "B" }] })], [ds1, ds2]);
     expect(panels?.[0].seriesLabels).toEqual({ 0: "Field-cooled" });
+    expect(panels?.[0].legendTitle).toBe("Cooling sweep");
+    expect(panels?.[0].legendFrameXY?.[0]).toBeCloseTo(0.2);
+    expect(panels?.[0].legendFrameXY?.[1]).toBeCloseTo(0.2);
   });
 
   it("returns null (all-or-nothing) when ANY family member has no resolved dataset", () => {

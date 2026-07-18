@@ -60,6 +60,12 @@ export interface SpatialPanel {
   /** Per-channel legend-label overrides (Origin's decoded `legend_labels`,
    *  fix #4), same channel-index keying as `seriesStyles`. */
   seriesLabels?: Record<number, string>;
+  /** Static legend metadata recovered for this panel's own Origin layer.
+   *  `legendFrameXY` is the box top-left as a fraction of THIS panel's plot
+   *  frame (not the page/window); absent means the position was not decoded
+   *  and the renderer uses its ordinary north-east fallback. */
+  legendTitle?: string;
+  legendFrameXY?: [number, number];
   /** This panel's Origin Y-error pairings (value channel -> error channel),
    *  from `originFigures.figureChannelSelection`'s dataset-level
    *  `errorbars.originErrKeys` — draws whiskers via `buildErrorColumns`
@@ -68,8 +74,8 @@ export interface SpatialPanel {
   errKeys?: Record<number, number>;
   /** This panel's Origin-hidden channels (`errorbars.originHiddenChannels`)
    *  — paired error / secondary-X columns Origin never draws as their own
-   *  curve. Unlike the single-plot path (which keeps them in the legend,
-   *  toggleable), the spatial grid has no per-panel legend, so
+   *  curve. Unlike the single-plot path (which keeps them in an interactive
+   *  legend), a spatial panel's decoded legend is read-only, so
    *  `spatialPlottedChannels` drops them outright. */
   hiddenChannels?: number[];
   /** Origin's decoded major-tick increment for this panel's OWN x/y axes
@@ -117,7 +123,8 @@ export interface SpatialPanel {
  *  series because the spatial multi-panel path never dropped/paired it).
  *  Unlike the single-plot path (`usePlotPayload`'s `hidden` boolean array,
  *  which keeps a hidden channel in the legend for interactive toggling), a
- *  spatial grid cell has no per-panel legend to toggle it back on, so it's
+ *  spatial grid cell's Origin legend is static and cannot toggle it back on,
+ *  so it's
  *  simplest — and matches Origin's own rendering — to drop it outright
  *  rather than fetch+hide it. Pure so the mapping is unit-testable without a
  *  dataset/store. */

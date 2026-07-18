@@ -410,6 +410,7 @@ export function resolveFigurePanels(
     const sel = figureChannelSelection(entry.figure, ds);
     if (!sel) return null;
     const fig = entry.figure;
+    const legend = originLegendState(fig);
     out.push({
       sourceFigureIds: [entry.id],
       datasetId: entry.datasetId,
@@ -430,6 +431,8 @@ export function resolveFigurePanels(
       yAxisLabel: fig.y_title || undefined,
       seriesStyles: sel.styles,
       seriesLabels: sel.labels,
+      ...(legend.legendTitle ? { legendTitle: legend.legendTitle } : {}),
+      ...(legend.legendFrameXY ? { legendFrameXY: legend.legendFrameXY } : {}),
       errKeys: sel.errKeys,
       hiddenChannels: sel.hiddenChannels,
       xStep: fig.x_step ?? null,
@@ -539,12 +542,16 @@ function mergePanelWithY2(
   y2: Omit<SpatialPanel, "row" | "col">,
   y2Figure: OriginFigure,
 ): Omit<SpatialPanel, "row" | "col"> {
+  const legendTitle = host.legendTitle ?? y2.legendTitle;
+  const legendFrameXY = host.legendFrameXY ?? y2.legendFrameXY;
   return {
     ...host,
     sourceFigureIds: [...(host.sourceFigureIds ?? []), ...(y2.sourceFigureIds ?? [])],
     yKeys: [...host.yKeys, ...y2.yKeys.filter((k) => !host.yKeys.includes(k))],
     seriesStyles: { ...host.seriesStyles, ...y2.seriesStyles },
     seriesLabels: { ...host.seriesLabels, ...y2.seriesLabels },
+    ...(legendTitle ? { legendTitle } : {}),
+    ...(legendFrameXY ? { legendFrameXY } : {}),
     y2Keys: y2.yKeys,
     y2Lim: y2.yLim,
     y2Log: y2.yLog,
