@@ -25,7 +25,7 @@ import {
   markContext,
   markFamily,
   moveYZone,
-  plotSpecsEqual,
+  plotSpecCoreEqual,
   specDatasetId,
   specToRender,
   validMarks,
@@ -38,6 +38,7 @@ import {
   type SpecRender,
   type ZoneName,
 } from "../../../lib/plotspec";
+import { buildAxesBlock, buildDisplayBlock } from "../../../lib/plotspec2";
 import { toast } from "../../../store/toasts";
 import { plotIntentStageTab, useActiveDataset, useApp } from "../../../store/useApp";
 import type { WellChip, WellOption } from "./ZoneWell";
@@ -298,22 +299,76 @@ export function useGraphBuilder(): GraphBuilderState {
     setStatus("opened XY plot in Figure Builder");
   }
 
-  // ── Saved PlotSpecs (#11) ─────────────────────────────────────────────────
+  // ── Saved PlotSpecs (#11 / #12 Slice 3) ────────────────────────────────────
   const activeSpec = useMemo(
     () => savedSpecs.find((p) => p.id === activeSpecId) ?? null,
     [savedSpecs, activeSpecId],
   );
-  const dirty = activeSpec !== null && !plotSpecsEqual(spec, activeSpec.spec);
+  // #12 Slice 3: compares ZONES + MARK only, never the v2 blocks — see
+  // plotSpecCoreEqual's doc for why a full-spec compare here would falsely
+  // read "dirty" right after a save (captureLiveBlocks below hands the store
+  // a spec with blocks the live `spec` state itself never gets back).
+  const dirty = activeSpec !== null && !plotSpecCoreEqual(spec, activeSpec.spec);
+
+  // #12 Slice 3 ("Capture on save"): fold the LIVE display/axes state into
+  // the spec being saved. store/graphBuilder.ts stays dumb (it persists
+  // whatever PlotSpec it's handed) — this hook is the one place that holds
+  // both the spec and the live store, so it's the only place that can build
+  // the snapshot. Scoped to the spec's OWN plotted channels (zones.y ∪
+  // zones.x): seriesStyles/hiddenChannels/y2Keys/the axis singleton fields
+  // are the store's CURRENT-PLOT state (per-window, not per-dataset — see
+  // useApp's `restoredView` hydration), so they only describe whichever
+  // dataset is presently ACTIVE. A spec bound to a different (non-active)
+  // dataset — the #8i "worksheet handoff to a non-active dataset" case — has
+  // no live state to read here at all, so it saves zones-only, exactly like
+  // every save before this slice. Blocks are recomputed FRESH from the live
+  // store on every save (never merged with whatever blocks the spec carried
+  // IN, e.g. from a reopened v2 spec — see openSpec's doc): those blocks
+  // were never applied back to the live store anyway (that's Slice 5), so
+  // they're stale the moment the user touches anything, and a resave
+  // legitimately reflects the CURRENT plot, not the old saved one.
+  const captureLiveBlocks = (base: PlotSpec): PlotSpec => {
+    const dsId = specDatasetId(base);
+    const s = useApp.getState();
+    if (dsId === null || dsId !== s.activeId) return base;
+    const yChannels = base.zones.y.map((r) => r.channel);
+    const xChannel = base.zones.x?.channel;
+    const plotted = [...new Set(xChannel !== undefined ? [xChannel, ...yChannels] : yChannels)];
+    const display = buildDisplayBlock(s.seriesStyles, plotted, s.y2Keys, s.hiddenChannels, s.seriesOrder);
+    const axes = buildAxesBlock({
+      title: s.plotTitle,
+      xLabel: s.xAxisLabel,
+      yLabel: s.yAxisLabel,
+      y2Label: s.y2AxisLabel,
+      xLim: s.xLim,
+      yLim: s.yLim,
+      y2Lim: s.y2Lim,
+      xScale: s.xScale,
+      yScale: s.yScale,
+      y2Scale: s.y2Scale,
+      xStep: s.xStep,
+      yStep: s.yStep,
+      xFmt: s.xFmt,
+      yFmt: s.yFmt,
+    });
+    return {
+      version: display || axes ? 2 : 1,
+      zones: base.zones,
+      mark: base.mark,
+      ...(display ? { display } : {}),
+      ...(axes ? { axes } : {}),
+    };
+  };
 
   const saveActive = (): void => {
-    const id = useApp.getState().savePlotSpec(spec);
+    const id = useApp.getState().savePlotSpec(captureLiveBlocks(spec));
     if (!id) return; // nothing active — the panel falls back to saveAs
     const nm = useApp.getState().savedPlotSpecs.find((p) => p.id === id)?.name ?? "";
     setStatus(`saved "${nm}"`);
   };
 
   const saveAs = (name: string): void => {
-    const id = useApp.getState().saveAsPlotSpec(name, spec);
+    const id = useApp.getState().saveAsPlotSpec(name, captureLiveBlocks(spec));
     const nm = useApp.getState().savedPlotSpecs.find((p) => p.id === id)?.name ?? name;
     setStatus(`saved "${nm}"`);
   };

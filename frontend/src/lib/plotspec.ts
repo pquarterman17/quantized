@@ -667,3 +667,30 @@ export function sanitizeSavedPlotSpecs(v: unknown): SavedPlotSpec[] {
 export function plotSpecsEqual(a: PlotSpec, b: PlotSpec): boolean {
   return serializePlotSpec(a) === serializePlotSpec(b);
 }
+
+/** Structural equality restricted to ZONES + MARK, deliberately ignoring the
+ *  v2 blocks (display/axes/page/decor). GUI_INTERACTION_PLAN #12 Slice 3:
+ *  useGraphBuilder's `dirty` (unsaved-changes indicator) uses THIS, not
+ *  `plotSpecsEqual` — the trap `plotSpecsEqual` falls into here is that
+ *  Slice 3's save-time block capture (useGraphBuilder's saveActive/saveAs,
+ *  via `buildDisplayBlock`/`buildAxesBlock`) computes `display`/`axes`
+ *  FRESH from live store state and hands the result straight to
+ *  `store/graphBuilder.ts` — the builder's own live `spec` never carries
+ *  those captured blocks back. A full-spec comparison would therefore read
+ *  "dirty" the instant a save completes (the just-saved payload gained
+ *  blocks the live spec doesn't have), and would read "dirty" just as
+ *  wrongly the instant a v2 spec is reopened, were `openSpec` ever changed
+ *  to strip blocks off the live spec (today it doesn't — blocks simply ride
+ *  along unapplied; see openSpec's doc). Block-level dirtiness (an edited
+ *  display/axes diverging from what's saved) arrives once the builder can
+ *  actually EDIT blocks (Slice 5); until then only zones/mark reflect
+ *  user-visible builder state, so only zones/mark should ever flip the dot.
+ *  Normalizes each side via `validatePlotSpec` first (same tolerance as
+ *  `plotSpecsEqual`), then compares just the `zones`/`mark` slice. */
+export function plotSpecCoreEqual(a: PlotSpec, b: PlotSpec): boolean {
+  const core = (s: PlotSpec): string => {
+    const norm = validatePlotSpec(s) ?? emptySpec();
+    return JSON.stringify({ zones: norm.zones, mark: norm.mark });
+  };
+  return core(a) === core(b);
+}

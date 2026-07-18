@@ -13,6 +13,7 @@ import {
   markContext,
   markFamily,
   moveYZone,
+  plotSpecCoreEqual,
   plotSpecsEqual,
   sanitizeSavedPlotSpecs,
   serializePlotSpec,
@@ -584,6 +585,45 @@ describe("plotSpecsEqual", () => {
       display: { series: { 1: { color: "#ff8800" } } },
     };
     expect(plotSpecsEqual(a, b)).toBe(false);
+  });
+});
+
+// GUI_INTERACTION_PLAN #12 Slice 3 — the Graph Builder's dirty-dot switched
+// from plotSpecsEqual to this: it must ignore v2 block content entirely,
+// which is exactly what a save-time block capture (useGraphBuilder's
+// captureLiveBlocks) needs (see plotSpecCoreEqual's own doc for the false-
+// dirty trap this closes).
+describe("plotSpecCoreEqual", () => {
+  it("true for identical zones+mark even when one side carries v2 blocks the other lacks", () => {
+    const a = spec(ref(0), [ref(1)], "scatter");
+    const b: PlotSpec = {
+      ...spec(ref(0), [ref(1)], "scatter"),
+      display: { series: { 1: { color: "#ff8800", width: 3 } } },
+      axes: { x: { label: "Field" } },
+    };
+    expect(plotSpecCoreEqual(a, b)).toBe(true);
+  });
+
+  it("stays true even when the two sides' blocks disagree with each other", () => {
+    const a: PlotSpec = {
+      ...spec(ref(0), [ref(1)], "scatter"),
+      display: { series: { 1: { color: "#ff0000" } } },
+    };
+    const b: PlotSpec = {
+      ...spec(ref(0), [ref(1)], "scatter"),
+      display: { series: { 1: { color: "#00ff00" } } },
+    };
+    expect(plotSpecCoreEqual(a, b)).toBe(true);
+  });
+
+  it("false when a zone or the mark differs, exactly like plotSpecsEqual", () => {
+    const a = spec(ref(0), [ref(1)], "scatter");
+    expect(plotSpecCoreEqual(a, spec(ref(0), [ref(2)], "scatter"))).toBe(false);
+    expect(plotSpecCoreEqual(a, spec(ref(0), [ref(1)], "line"))).toBe(false);
+  });
+
+  it("true for two empty specs", () => {
+    expect(plotSpecCoreEqual(emptySpec(), emptySpec())).toBe(true);
   });
 });
 

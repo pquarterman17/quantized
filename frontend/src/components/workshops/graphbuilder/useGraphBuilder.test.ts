@@ -506,6 +506,142 @@ describe("useGraphBuilder — saved PlotSpecs (GUI_INTERACTION_PLAN #11)", () =>
   });
 });
 
+describe("useGraphBuilder — capture on save (GUI_INTERACTION_PLAN #12 Slice 3)", () => {
+  // The axis/style singleton fields below aren't touched by the outer
+  // beforeEach (no other test in this file reads them) — reset them here so
+  // test order relative to other describe blocks can never leak state in.
+  beforeEach(() => {
+    useApp.setState({
+      seriesStyles: {},
+      hiddenChannels: [],
+      seriesOrder: null,
+      y2Keys: null,
+      xAxisLabel: "",
+      yAxisLabel: "",
+      y2AxisLabel: "",
+      xLim: null,
+      yLim: null,
+      y2Lim: null,
+      xScale: "linear",
+      yScale: "linear",
+      y2Scale: null,
+      xStep: null,
+      yStep: null,
+      plotTitle: "",
+    });
+  });
+
+  it("styled state captures a v2 display block scoped to the spec's plotted channels (zones.y ∪ zones.x)", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => {
+      useApp.setState({
+        seriesStyles: {
+          0: { color: "#111111" }, // the X channel — also "plotted" per zones.y ∪ zones.x
+          1: { color: "#ff0000", width: 2 },
+          2: { color: "#00ff00" }, // NOT in this spec's zones — must never leak in
+        },
+      });
+    });
+    act(() => result.current.saveAs("Styled"));
+    const saved = result.current.activeSpec!.spec;
+    expect(saved.version).toBe(2);
+    expect(saved.display?.series).toEqual({
+      0: { color: "#111111" },
+      1: { color: "#ff0000", width: 2 },
+    });
+  });
+
+  it("all-default styling state stays v1 — no blocks captured", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.saveAs("Plain"));
+    const saved = result.current.activeSpec!.spec;
+    expect(saved.version).toBe(1);
+    expect(saved.display).toBeUndefined();
+    expect(saved.axes).toBeUndefined();
+  });
+
+  it("captures live axis label/limits into a v2 axes block", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => useApp.setState({ xAxisLabel: "Field (Oe)", yLim: [0, 100] }));
+    act(() => result.current.saveAs("Axis-styled"));
+    const saved = result.current.activeSpec!.spec;
+    expect(saved.version).toBe(2);
+    expect(saved.axes?.x?.label).toBe("Field (Oe)");
+    expect(saved.axes?.y?.lim).toEqual([0, 100]);
+  });
+
+  it("a spec bound to a NON-active dataset saves zones-only — no live state to read (#8i)", () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "run.dat", data: DATA },
+        { id: "d2", name: "other.dat", data: DATA },
+      ],
+      activeId: "d1",
+    });
+    act(() =>
+      useApp.getState().openGraphBuilderSeeded({
+        version: 1,
+        zones: { x: { datasetId: "d2", channel: 0 }, y: [{ datasetId: "d2", channel: 1 }], group: null, facet: null },
+        mark: "scatter",
+      }),
+    );
+    const { result } = renderHook(() => useGraphBuilder());
+    expect(result.current.datasetId).toBe("d2"); // bound, but NOT active (d1 is)
+    // The live singleton fields describe whichever dataset/window is
+    // actually active (d1) — they have nothing to do with d2's would-be
+    // plot, so even real styling here must never leak into a d2-bound save.
+    act(() => useApp.setState({ seriesStyles: { 1: { color: "#ff0000" } } }));
+    act(() => result.current.saveAs("Non-active bound"));
+    const saved = result.current.activeSpec!.spec;
+    expect(saved.version).toBe(1);
+    expect(saved.display).toBeUndefined();
+    expect(saved.axes).toBeUndefined();
+  });
+
+  // The subtle bug this slice has to avoid: captureLiveBlocks hands the
+  // STORE a spec with fresh blocks, but the live builder `spec` (component
+  // state) never gets those blocks back — a full-spec dirty comparison
+  // (plotSpecsEqual) would therefore misread this as an unsaved change the
+  // instant the save completes. useGraphBuilder's `dirty` now uses
+  // plotSpecCoreEqual (zones+mark only) specifically to avoid this.
+  it("dirty stays false immediately after a save that captured v2 blocks", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => useApp.setState({ seriesStyles: { 1: { color: "#ff0000" } } }));
+    act(() => result.current.saveAs("Styled"));
+    expect(result.current.activeSpec?.spec.version).toBe(2); // sanity: really is v2
+    expect(result.current.dirty).toBe(false);
+  });
+
+  // The mirror case named explicitly in the slice's design: reopening a v2
+  // spec must not false-flag dirty either — a regression guard against a
+  // plausible-sounding but wrong future "fix" to openSpec (stripping blocks
+  // off the live spec on the theory that unapplied blocks shouldn't be
+  // carried — they should; see openSpec's own doc, blocks apply in Slice 5).
+  it("dirty stays false immediately after reopening a v2 saved spec", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => useApp.setState({ seriesStyles: { 1: { color: "#ff0000" } } }));
+    act(() => result.current.saveAs("Styled"));
+    const id = result.current.activeSpec!.id;
+    act(() => result.current.reset());
+    expect(result.current.activeSpec).toBeNull();
+
+    act(() => result.current.openSpec(id));
+    expect(result.current.activeSpec?.id).toBe(id);
+    expect(result.current.activeSpec?.spec.version).toBe(2); // sanity: really reopened v2
+    expect(result.current.dirty).toBe(false);
+  });
+});
+
 describe("useGraphBuilder — exportPlot (item 6)", () => {
   beforeEach(() => {
     vi.clearAllMocks();

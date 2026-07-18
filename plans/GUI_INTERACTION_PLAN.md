@@ -11,7 +11,7 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-18 (#17 e2e-findings sub-item closed)
+**Updated:** 2026-07-18 (#12 Slice 3 landed)
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -150,13 +150,52 @@ plotting, publication export.
           until Slices 4–5). `version: 1 | 2` RECOMPUTED from block content,
           never trusted from the tag; v1 payloads byte-stable (regression-
           proven on a fixture string). 3933 + 2 expected-fail green.
-    - [ ] Slice 3 — Figure Builder adapter (make `plotSpecToFigureDoc`
-          lossless over the covered subset; un-fail-closed grouped specs).
+    - [x] Slice 3 — capture-on-save + Figure Builder adapter (2026-07-18):
+          `useGraphBuilder`'s `saveActive`/`saveAs` now fold the LIVE
+          display/axes state into the saved spec's v2 blocks via Slice 2's
+          `buildDisplayBlock`/`buildAxesBlock` (`captureLiveBlocks`), scoped
+          to the spec's OWN plotted channels (`zones.y ∪ zones.x`) and ONLY
+          when the spec's dataset is the currently-active one (the store's
+          seriesStyles/hiddenChannels/y2Keys/axis singletons are per-active-
+          plot state, not per-dataset) — otherwise saves zones-only exactly
+          as before. `store/graphBuilder.ts` stays dumb (unchanged). Found +
+          fixed the slice's own subtle trap: the dirty-dot (`useGraphBuilder`)
+          switched from `plotSpecsEqual` to a new `plotSpecCoreEqual`
+          (zones+mark only, `lib/plotspec.ts`) — a full-spec compare would
+          misread "dirty" the instant a styled save completes (the live
+          builder `spec` never gets the captured blocks back; only the saved
+          payload does) and would have the same failure mode if a future
+          `openSpec` "fix" ever stripped blocks off the live spec (it
+          doesn't — blocks ride along unapplied until Slice 5). `lib/
+          plotSpecFigure.ts`'s `plotSpecToFigureDoc` now reads a v2 spec's
+          own blocks as the PRIMARY source (per-series color/width/marker/
+          line from `display`; label/scale/title from `axes`, lim mapped
+          onto `FigureOverrides.x_lim`/`y_lim` — `step`/`fmt` have no
+          FigureOverrides equivalent and are simply omitted); the live
+          `seriesStyles` arg is now purely the v1 fallback (regression-
+          pinned). Investigated un-fail-closing GROUPED specs (the slice's
+          named deliverable) and kept them fail-closed: a group split turns
+          one channel into N synthetic per-level series, but
+          `FigureConfig.yKeys` / the export wire's `y_keys` are both a flat
+          list of REAL dataset channel indices with no group-by/split field
+          anywhere in the contract — representing it needs a wire contract
+          change, so it's noted for Slice 5, not forced. Also newly
+          fail-closed: a spec whose display assigns `axis: 1` to any series,
+          or whose axes block carries y2 content — FigureDoc has no y2 field
+          (`figuredoc.ts`'s documented limitation). Frontend 3951 + 2
+          expected-fail green; build green.
     - [ ] Slice 4 — export adapter + the booked export residuals: faceted
           stat export, xy facet-export xKey/yKeys reset, page-export y2,
           and Slice 1's pinned findings (stale y2_lim gate, log-y2 minor
           ticks incl. the twinx overrides sweep, y2_fmt store field + UI).
-    - [ ] Slice 5 — Stage adapter (buildOpts reads the spec's blocks).
+    - [ ] Slice 5 — Stage adapter (buildOpts reads the spec's blocks);
+          ALSO now owns two residuals surfaced by Slice 3: (a) make
+          `openSpec` apply a reopened v2 spec's blocks back onto the live
+          store (today they only "ride along" unapplied), and (b) a wire
+          contract extension so Figure Builder can represent a GROUPED xy
+          spec's per-level synthetic series (`FigureConfig.yKeys` is
+          currently a flat list of real channel indices with no group-split
+          field — see Slice 3's `plotSpecFigureReason` finding).
 
 15. **Real-browser interaction coverage** — jsdom can't validate canvas hit
     targets, pointer capture, drag/drop, high-DPI, overlapping-plugin contention.
