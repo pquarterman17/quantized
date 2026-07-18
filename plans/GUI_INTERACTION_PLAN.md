@@ -12,8 +12,11 @@ for a publication tool outrank any discoverability gap.
 **Status:** Active
 **Created:** 2026-07-12
 **Updated:** 2026-07-18 (#12 Slice 5 landed — Stage adapter applies a spec's
-display/axes blocks on Send, closing the save/reopen/send loop; item 12 now
-open only for Slice 4's y2_fmt residual)
+display/axes blocks on Send, closing the save/reopen/send loop; the SAME
+slice's grouped wire-contract residual (found feasible, not implemented) is
+now also implemented — `group_col` on `calc.plotting`/`FigureRequest`/
+`FigureConfig`/`FigureSpec`, the Graph Builder handoff un-fail-closed; item
+12 now open only for Slice 4's y2_fmt residual)
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -295,6 +298,39 @@ plotting, publication export.
           Frontend 3986 tests (+15: `lib/plotspecApply.test.ts` unit tests +
           4 new `useGraphBuilder` integration tests incl. the full-loop
           acceptance test) + build green.
+
+          **Follow-through (2026-07-18, same day):** the grouped
+          wire-contract residual above was then implemented as designed.
+          `calc/plotting.py` gained `build_grouped_series` (a faithful port
+          of `buildXY`'s colour split — level-sort, `(yChannel, level)`
+          nesting, finite-masking, `f"{yLabel} ({gLabel}={level})"` labels;
+          a `_format_level` helper matches JS's `${level}` coercion, which
+          drops the trailing `.0` Python's `str(float)` always adds to a
+          whole number). `routes/export_figures.py`'s `FigureRequest`
+          gained `group_col: int | None` (absent = byte-identical to
+          before); `_figure_series` branches to the grouped resolve path
+          when set, REJECTS `group_col` + `y2_keys` together with a 422
+          (`buildXY` never assigns a grouped series to axis 1 — no sound
+          secondary-axis semantic to invent), and skips `series_styles`
+          resolution for the synthetic per-level series (matplotlib's
+          default color cycle takes over, matching the screen). Frontend:
+          `FigureConfig.groupCol`/`FigureSpec.group_col` (both additive-
+          optional, so a pre-Slice-5 `.dwk` figure doc round-trips
+          unchanged); `plotSpecFigureReason` no longer fails closed for a
+          plain grouped spec (still fails closed for grouped + Y2, mirroring
+          the backend); `useFigureBuilder` threads `docGroupCol` through the
+          SAME preview/export request path as every other doc field, so the
+          Figure Builder's live WYSIWYG preview (`/api/export/figure-hitmap`,
+          already the same `_figure_series` resolve step as the real export)
+          renders the actual per-level split — not a placeholder, a genuine
+          render, since the backend needed no separate preview path. A
+          cross-language parity fixture (same tiny 5-row dataset, hand-
+          computed labels + finite-masks) is asserted identically in both
+          `tests/test_calc_plotting.py` and `frontend/src/lib/
+          plotspec.test.ts` so a future drift between `buildXY` and its
+          Python port fails on one side or the other. Backend 2989 passed +
+          3 skipped + 12 xfailed, ruff + mypy clean; frontend 4008 tests +
+          build green.
 
     Item 12 stays open only for Slice 4's own still-open residual (the
     `y2_fmt` screen store field/UI — see above); every other named

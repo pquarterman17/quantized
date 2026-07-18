@@ -369,16 +369,34 @@ describe("useGraphBuilder — open in Figure Builder", () => {
     });
   });
 
-  it("fails closed when a group or facet would be lost", () => {
+  it("fails closed when a facet zone would be lost", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("facet", 2));
+    expect(result.current.canOpenFigureBuilder).toBe(false);
+    expect(result.current.figureBuilderReason).toContain("Faceted");
+    act(() => result.current.openInFigureBuilder());
+    expect(useApp.getState().figureBuilderOpen).toBe(false);
+    expect(useApp.getState().figureDocSeed).toBeNull();
+  });
+
+  // GUI_INTERACTION #12 Slice 5: a group zone no longer fails closed --
+  // Slice 3 investigated this and left it fail-closed for lack of a
+  // group-split wire field; Slice 5 added FigureConfig.groupCol /
+  // FigureSpec.group_col, so the doc now opens carrying the split.
+  it("opens a grouped scatter as an ephemeral FigureDoc carrying groupCol", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
     act(() => result.current.assign("group", 2));
-    expect(result.current.canOpenFigureBuilder).toBe(false);
-    expect(result.current.figureBuilderReason).toContain("Grouped");
+    expect(result.current.canOpenFigureBuilder).toBe(true);
+
     act(() => result.current.openInFigureBuilder());
-    expect(useApp.getState().figureBuilderOpen).toBe(false);
-    expect(useApp.getState().figureDocSeed).toBeNull();
+
+    const state = useApp.getState();
+    expect(state.figureBuilderOpen).toBe(true);
+    expect(state.figureDocSeed?.config).toMatchObject({ xKey: 0, yKeys: [1], groupCol: 2 });
   });
 
   it("preserves an explicit Y reorder through save, Stage, and Figure Builder", () => {

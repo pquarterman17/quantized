@@ -19,6 +19,7 @@ __all__ = [
     "PlotData",
     "PlotSeries",
     "PlotState",
+    "build_grouped_series",
     "build_series",
     "resolve_style_channels",
     "validate_y2_subset",
@@ -117,6 +118,110 @@ def build_series(ds: DataStruct, state: PlotState | None = None) -> PlotData:
         series=series,
         x_log=state.x_log,
         y_log=state.y_log,
+    )
+
+
+def _format_level(level: float) -> str:
+    """Format a group-column LEVEL value to match the frontend's
+    ``${level}`` template-literal coercion (JS ``Number.prototype.
+    toString``), NOT Python's ``str(float)`` -- the two diverge exactly on
+    whole numbers: JS has one numeric type, so ``(2.0).toString() ===
+    "2"``, while Python's float ``str``/``repr`` always shows the trailing
+    ``.0`` (``str(2.0) == "2.0"``). Every other case (a genuinely
+    fractional level) already matches -- both languages print the shortest
+    round-trip decimal digits. See ``plans/GUI_INTERACTION_PLAN.md`` #12
+    Slice 5: the level is the RAW numeric group value, never a resolved
+    category text label -- ``buildXY`` doesn't resolve one either, so this
+    port doesn't "improve" on it."""
+    return str(int(level)) if float(level).is_integer() else str(level)
+
+
+def build_grouped_series(
+    ds: DataStruct,
+    x_key: int | str | None,
+    y_keys: Sequence[int | str],
+    group_col: int | str,
+) -> PlotData:
+    """Faithful port of the frontend's ``lib/plotspec.ts`` ``buildXY``
+    colour split (GUI_INTERACTION #12 Slice 5): each ``y_keys`` channel
+    becomes one masked series PER LEVEL of ``group_col`` instead of one
+    series per channel, so a Graph Builder "group" zone renders identically
+    on screen and in a publication export. ``calc.figure.draw_series_axes``
+    needs no changes for this -- it already renders an arbitrary
+    ``series: Sequence[tuple[label, array]]`` with no concept of "channel"
+    at all; the gap was entirely at this resolve step.
+
+    Algorithm (matches ``buildXY`` exactly -- verified against the frontend
+    source, not "improved"):
+      - ``levels`` = the SORTED unique FINITE values of the group column
+        (ascending numeric sort; a non-finite group value is dropped, never
+        becomes its own level/series).
+      - One series per ``(yChannel, level)`` pair, nested outer-to-inner as
+        ``yChannel`` (in the given order) then ``level`` (sorted) -- this
+        exact nesting is what keeps the screen and the export series lists
+        aligned.
+      - Each series value is the y value where the row's group column
+        equals the level AND the y value is itself finite; NaN everywhere
+        else (``buildXY`` uses ``null`` for the same rows -- the wire
+        layer's existing NaN -> null conversion covers this series the
+        same way it covers every other one; this pure layer stays NaN,
+        like :func:`build_series`).
+      - Label: ``f"{y_label} ({group_label}={level})"`` -- ``level`` is the
+        RAW numeric group value (see :func:`_format_level`), never a
+        resolved category text label.
+      - Every series stays on axis 0 -- ``buildXY`` never assigns
+        ``axis: 1`` to a grouped series; a request combining a group split
+        with a secondary axis is rejected earlier, at the route layer
+        (``routes.export_figures._figure_series``).
+
+    Raises ``ValueError`` when ``group_col`` (or any entry of ``y_keys``/
+    ``x_key``) doesn't resolve to a real channel -- caught by the same
+    route-layer ``except (ValueError, ...)`` every other malformed channel
+    index already goes through.
+    """
+    if x_key is None:
+        x = ds.time
+        x_label = str(ds.metadata.get("x_column_name", "x"))
+        x_unit = str(ds.metadata.get("x_column_unit", ""))
+    else:
+        xi = _resolve(ds, x_key)
+        x = ds.values[:, xi]
+        x_label = ds.labels[xi]
+        x_unit = ds.units[xi]
+
+    gi = _resolve(ds, group_col)
+    if not (0 <= gi < ds.n_channels):
+        raise ValueError(f"group_col {group_col!r} is out of range")
+    group_vals = ds.values[:, gi]
+    finite_group = group_vals[np.isfinite(group_vals)]
+    levels = np.sort(np.unique(finite_group))
+    g_label = ds.labels[gi]
+
+    series: list[PlotSeries] = []
+    for yk in y_keys:
+        yi = _resolve(ds, yk)
+        y_label = ds.labels[yi]
+        y_unit = ds.units[yi]
+        y_vals = ds.values[:, yi]
+        for lvl in levels:
+            mask = (group_vals == lvl) & np.isfinite(y_vals)
+            masked = np.where(mask, y_vals, np.nan)
+            series.append(
+                PlotSeries(
+                    label=f"{y_label} ({g_label}={_format_level(float(lvl))})",
+                    unit=y_unit,
+                    values=np.asarray(masked, dtype=float),
+                    axis=0,
+                )
+            )
+
+    return PlotData(
+        x=x,
+        x_label=x_label,
+        x_unit=x_unit,
+        series=tuple(series),
+        x_log=False,
+        y_log=False,
     )
 
 

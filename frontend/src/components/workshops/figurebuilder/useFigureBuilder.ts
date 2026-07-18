@@ -79,6 +79,11 @@ export function useFigureBuilder() {
   // (#12) restores its own picks without touching the live plot state.
   const [docXKey, setDocXKey] = useState<number | null | undefined>(undefined);
   const [docYKeys, setDocYKeys] = useState<number[] | null | undefined>(undefined);
+  // Grouped doc (#12 Slice 5): only ever set by opening a FigureDoc whose
+  // config carries one (the Graph Builder handoff) -- the plain builder,
+  // mirroring the live on-screen plot, has no "group" concept of its own,
+  // so a fresh (non-doc-seeded) builder always sends group_col: undefined.
+  const [docGroupCol, setDocGroupCol] = useState<number | null>(null);
   const [docScales, setDocScales] = useState<{ x: AxisScale; y: AxisScale } | undefined>(undefined);
   // FigureDoc styles are aligned to its saved Y display order. `undefined`
   // means a fresh builder should continue mirroring live per-channel styles;
@@ -106,6 +111,7 @@ export function useFigureBuilder() {
     setOverrides(c.overrides ?? {});
     setDocXKey(c.xKey);
     setDocYKeys(c.yKeys);
+    setDocGroupCol(c.groupCol ?? null); // absent on a pre-Slice-5 doc -> null
     setDocScales({ x: c.xScale, y: c.yScale });
     setDocSeriesStyles(c.seriesStyles);
     setFrozenData(!figureDocSeed.live ? (figureDocSeed.dataSnapshot ?? null) : null);
@@ -157,6 +163,7 @@ export function useFigureBuilder() {
       series_styles: docSeriesStyles !== undefined
         ? (docSeriesStyles ?? undefined)
         : buildExportStyles(plotted, seriesStyles),
+      group_col: docGroupCol ?? undefined,
     };
   }, [
     data,
@@ -172,6 +179,7 @@ export function useFigureBuilder() {
     yLabel,
     seriesStyles,
     docSeriesStyles,
+    docGroupCol,
     overrides,
   ]);
 
@@ -189,6 +197,7 @@ export function useFigureBuilder() {
       config: {
         xKey: effXKey,
         yKeys: effYKeys,
+        groupCol: docGroupCol,
         xScale: effXScale,
         yScale: effYScale,
         title,

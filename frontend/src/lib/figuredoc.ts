@@ -17,6 +17,15 @@ import type { AxisScale, DataStruct } from "./types";
 export interface FigureConfig {
   xKey: number | null;
   yKeys: number[] | null;
+  /** Categorical column that splits every yKey into one series per group
+   *  level (GUI_INTERACTION #12 Slice 5 -- the Graph Builder "group" zone's
+   *  colour split, `lib/plotspec.ts`'s `buildXY`). Additive/optional: absent
+   *  (undefined) on any doc saved before this field existed, and on every
+   *  ordinary (non-grouped) doc -- `null` and `undefined` both mean "no
+   *  group split". Only `plotSpecToFigureDoc` (the Graph Builder handoff)
+   *  ever sets it; the plain Figure Builder screen has no live "group"
+   *  concept of its own. */
+  groupCol?: number | null;
   xScale: AxisScale;
   yScale: AxisScale;
   title: string;

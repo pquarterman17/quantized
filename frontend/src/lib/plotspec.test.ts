@@ -277,6 +277,44 @@ describe("specToRender", () => {
     expect(r.payload.series[1].label).toContain("grp=1");
   });
 
+  // Cross-language parity fixture (GUI_INTERACTION #12 Slice 5): the SAME
+  // tiny dataset + hand-computed expected series is asserted here AND in
+  // the backend's tests/test_calc_plotting.py
+  // (test_build_grouped_series_matches_frontend_parity_fixture) -- if
+  // buildXY's group-split algorithm and its Python port
+  // (calc.plotting.build_grouped_series) ever drift, one of the two tests
+  // catches it. Row 2's NaN VALUE proves per-series finite-masking applies
+  // independently of the group match; row 4's NaN GROUP proves a
+  // non-finite group value is dropped from `levels` (never becomes its
+  // own series). Integer-valued levels ("Group=1", not "Group=1.0") also
+  // pin JS's `${level}` coercion, which the Python port must match by hand
+  // (calc.plotting._format_level).
+  it("cross-language parity fixture: matches the backend's build_grouped_series exactly", () => {
+    const parityData: DataStruct = {
+      time: [0, 1, 2, 3, 4],
+      values: [[10, 1], [20, 2], [NaN, 1], [40, 2], [50, NaN]],
+      labels: ["Value", "Group"],
+      units: ["V", ""],
+      metadata: {},
+    };
+    const parityDs: Dataset = { id: "p1", name: "parity.dat", data: parityData };
+    const r = specToRender(
+      spec(null, [{ datasetId: "p1", channel: 0 }], "scatter", { datasetId: "p1", channel: 1 }),
+      [parityDs],
+    );
+    expect(r.kind).toBe("xy");
+    if (r.kind !== "xy") return;
+    expect(r.payload.series.map((s) => s.label)).toEqual([
+      "Value (Group=1)",
+      "Value (Group=2)",
+    ]);
+    expect(r.payload.data).toEqual([
+      [0, 1, 2, 3, 4],
+      [10, null, null, null, null],
+      [null, 20, null, 40, null],
+    ]);
+  });
+
   it("nominal X + continuous Y → box stats grouped by the category", () => {
     const r = specToRender(spec(ref(2), [ref(1)], "box"), [DS]);
     expect(r.kind).toBe("box");

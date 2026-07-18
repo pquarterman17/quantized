@@ -1452,6 +1452,13 @@ export interface FigureSpec {
   y2_scale?: AxisScale;
   y2_fmt?: AxisFormat;
   y2_step?: number | null;
+  /** Categorical column that splits every `y_keys` channel into one series
+   *  per group level (GUI_INTERACTION #12 Slice 5 -- the Graph Builder
+   *  "group" zone's colour split; see `lib/plotspec.ts`'s `buildXY`).
+   *  Omit/undefined = today's behaviour, byte-identical. Every synthetic
+   *  series lands on the primary axis (`buildXY` never assigns `axis: 1`),
+   *  so combining this with `y2_keys` is rejected by the backend (422). */
+  group_col?: number;
   fmt?: string;
   style?: string;
   dpi?: number;

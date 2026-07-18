@@ -999,6 +999,94 @@ def test_figure_y2_keys_empty_is_todays_single_axis_behaviour() -> None:
     assert no_y2.content == empty_y2.content
 
 
+# ── Grouped xy split (GUI_INTERACTION #12 Slice 5) ──────────────────────────
+def _group_fixture() -> dict[str, Any]:
+    # Same tiny fixture as calc.plotting's test_build_grouped_series_matches_
+    # frontend_parity_fixture (tests/test_calc_plotting.py) and the
+    # frontend's plotspec.test.ts parity test -- row 2's NaN VALUE and row
+    # 4's NaN GROUP prove finite-masking / non-finite-level-dropping.
+    return {
+        "time": [0.0, 1.0, 2.0, 3.0, 4.0],
+        "values": [[10.0, 1.0], [20.0, 2.0], [None, 1.0], [40.0, 2.0], [50.0, None]],
+        "labels": ["Value", "Group"],
+        "units": ["V", ""],
+        "metadata": {},
+    }
+
+
+def test_figure_group_col_splits_series_and_renders() -> None:
+    # Two points per level -- a masked line with only ONE finite point draws
+    # a zero-width artist that the hitmap silently drops (calc.figure_hitmap's
+    # bbox.width <= 0 guard), so this is a deliberately "2+ points/level"
+    # fixture, not the single-point-per-level parity fixture above.
+    ds = {
+        "time": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+        "values": [[1.0, 10.0], [2.0, 10.0], [3.0, 20.0], [4.0, 20.0], [5.0, 30.0], [6.0, 30.0]],
+        "labels": ["a", "g"],
+        "units": ["V", ""],
+        "metadata": {},
+    }
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": ds, "y_keys": ["a"], "group_col": 1, "dpi": 100},
+    )
+    assert resp.status_code == 200
+    ids = {e["id"] for e in resp.json()["elements"]}
+    assert {"series:0", "series:1", "series:2"} <= ids  # one per level
+    assert "series:3" not in ids
+
+
+def test_figure_group_col_series_labels_render_in_svg() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _group_fixture(),
+            "fmt": "svg",
+            "y_keys": ["Value"],
+            "group_col": 1,
+        },
+    )
+    assert resp.status_code == 200
+    svg = resp.content.decode("utf-8", "ignore")
+    # Integer-valued levels render WITHOUT a trailing ".0" (JS `${level}`
+    # coercion, not Python's `str(float)` -- calc.plotting._format_level).
+    assert "Value (Group=1)" in svg
+    assert "Value (Group=2)" in svg
+    assert "Group=1.0" not in svg
+    assert "Group=2.0" not in svg
+
+
+def test_figure_group_col_with_y2_keys_is_422() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _three_channel_dataset(),
+            "group_col": 2,
+            "y2_keys": ["b"],
+        },
+    )
+    assert resp.status_code == 422
+    assert "group_col" in resp.json()["detail"]
+
+
+def test_figure_group_col_bad_column_is_422() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _three_channel_dataset(), "group_col": 99},
+    )
+    assert resp.status_code == 422
+
+
+def test_figure_without_group_col_is_byte_identical_to_before() -> None:
+    ds = _xrd_dataset()
+    omitted = client.post("/api/export/figure", json={"dataset": ds, "fmt": "png"})
+    explicit_none = client.post(
+        "/api/export/figure", json={"dataset": ds, "fmt": "png", "group_col": None}
+    )
+    assert omitted.status_code == explicit_none.status_code == 200
+    assert omitted.content == explicit_none.content
+
+
 def test_figure_y2_lim_and_scale_render() -> None:
     resp = client.post(
         "/api/export/figure",

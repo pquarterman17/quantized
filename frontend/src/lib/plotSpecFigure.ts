@@ -11,18 +11,19 @@
 // the spec is self-describing and the live arg is ignored for whichever
 // piece (styling / axes) the spec's own blocks cover.
 //
-// Grouped specs stay fail-closed — NOT a placeholder, a structural finding
-// (#12 Slice 3 investigation): a group split turns ONE channel into N
-// synthetic per-level series (`plotspec.ts`'s `buildXY`), but `FigureConfig`
-// (figuredoc.ts) and the export wire shape (`FigureSpec.y_keys` /
-// `exportFigureCommand`'s `y_keys`) are both a flat list of REAL dataset
-// channel indices — there is no group-by/split field anywhere in that
-// contract to carry the extra synthetic series through. Forcing it would
-// mean inventing fake channel indices or silently dropping levels, either
-// of which is exactly the "misleading publication figure" this bridge
-// exists to prevent. Representing a group split needs a wire contract
-// change (a Slice 5 concern, alongside the Stage adapter) — noted, not
-// solved here.
+// Grouped specs (#12 Slice 5, finishing the #12 Slice 3 investigation's
+// named residual): a group split turns ONE channel into N synthetic
+// per-level series (`plotspec.ts`'s `buildXY`) — `FigureConfig.groupCol`
+// (figuredoc.ts) and the export wire's `FigureSpec.group_col` now carry
+// that split through, so `calc.plotting.build_grouped_series` (the
+// backend's faithful port of `buildXY`) can reproduce it server-side.
+// Per-level styling is intentionally NOT carried (see `displayToSeriesStyles`
+// call site below) — `FigureConfig.seriesStyles` is 1:1-with-`yKeys`, which
+// doesn't align with the synthetic per-level series, and the screen doesn't
+// assign per-level colors either (`buildXY` never touches `seriesStyles`).
+// A grouped spec still fails closed if it ALSO uses the secondary (Y2)
+// axis — `buildXY` never assigns a grouped series to axis 1, so there's no
+// sound semantic for the combination (see `specUsesY2` below).
 
 import { buildExportStyles, type ExportSeriesStyle } from "./exportStyles";
 import { compactOverrides, type FigureOverrides } from "./figureOverrides";
@@ -45,9 +46,6 @@ function specUsesY2(spec: PlotSpec): boolean {
 export function plotSpecFigureReason(spec: PlotSpec): string | null {
   if (spec.mark !== "line" && spec.mark !== "scatter") return "Only line and scatter plots can open in Figure Builder.";
   if (spec.zones.y.length === 0) return "Assign at least one Y channel first.";
-  if (spec.zones.group) {
-    return "Grouped plots split one channel into a series per group level — Figure Builder's y-keys are real dataset channel indices with no group-split slot yet (needs a Slice 5 wire contract change).";
-  }
   if (spec.zones.facet) return "Faceted plots need a multi-panel Figure Builder contract first.";
   const datasetIds = new Set(
     [spec.zones.x, ...spec.zones.y].filter((ref) => ref !== null).map((ref) => ref.datasetId),
@@ -55,6 +53,9 @@ export function plotSpecFigureReason(spec: PlotSpec): string | null {
   if (datasetIds.size !== 1) return "Every plotted channel must belong to one dataset.";
   if (specDatasetId(spec) === null) return "Every plotted channel must belong to one dataset.";
   if (specUsesY2(spec)) {
+    if (spec.zones.group) {
+      return "A group split puts every synthetic per-level series on the primary axis (buildXY never assigns axis: 1) — remove the secondary (Y2) axis assignment before opening in Figure Builder.";
+    }
     return "Figure Builder has no secondary (Y2) axis yet — move this series to the primary axis first.";
   }
   return null;
@@ -128,6 +129,8 @@ export function plotSpecToFigureDoc(
   // back to the live arg exactly as today.
   const liveSeriesStyles = spec.display ? displayToSeriesStyles(spec.display) : seriesStyles;
 
+  const groupCol = spec.zones.group?.channel ?? null;
+
   return {
     id: `plotspec-${Date.now().toString(36)}`,
     name: name.trim() || "Graph Builder plot",
@@ -136,6 +139,7 @@ export function plotSpecToFigureDoc(
     config: {
       xKey: spec.zones.x?.channel ?? null,
       yKeys: spec.zones.y.map((r) => r.channel),
+      groupCol,
       xScale,
       yScale,
       title,
@@ -145,7 +149,11 @@ export function plotSpecToFigureDoc(
       fmt: "pdf",
       dpi: 300,
       overrides,
-      seriesStyles: stylesForMark(spec, liveSeriesStyles),
+      // A grouped spec's yKeys don't align 1:1 with the rendered synthetic
+      // per-level series (see the module doc comment) -- there's no sound
+      // per-channel style to carry, so styling is omitted entirely and
+      // matplotlib's default color cycle takes over, matching the screen.
+      seriesStyles: groupCol !== null ? null : stylesForMark(spec, liveSeriesStyles),
     },
   };
 }

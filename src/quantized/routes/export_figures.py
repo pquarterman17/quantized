@@ -72,6 +72,20 @@ class FigureRequest(BaseModel):
     y2_scale: str | None = None
     y2_fmt: TickFormatSpec | None = None
     y2_step: float | None = None
+    # GUI_INTERACTION #12 Slice 5: an optional categorical column that
+    # splits every `y_keys` channel into one series per (channel, group
+    # level) instead of one series per channel -- the Graph Builder "group"
+    # zone's colour split (`lib/plotspec.ts`'s `buildXY`), now representable
+    # on the export wire (`calc.plotting.build_grouped_series`). None
+    # (default) = today's behaviour, byte-identical. Every synthetic series
+    # lands on the PRIMARY axis (`buildXY` never assigns `axis: 1` to a
+    # grouped series), so combining `group_col` with `y2_keys` is rejected
+    # (422) rather than inventing a secondary-axis semantic for it -- see
+    # `_figure_series`. `series_styles` is not applied in this path either
+    # (it's 1:1-with-`y_keys`, which doesn't align with the synthetic
+    # per-level series) -- matplotlib's default color cycle takes over,
+    # exactly like the screen, which never assigns per-level colors either.
+    group_col: int | None = None
     fmt: str = "pdf"
     style: str = "default"  # publication preset: aps / report / web / …
     dpi: int = 200  # raster (png/tiff) resolution; ignored by vector formats
@@ -121,15 +135,50 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     resolution happens, so every figure-export route gets it for free.
     Raises ``ValueError`` when ``req.y2_keys`` isn't a subset of
     ``req.y_keys`` (``calc.plotting.validate_y2_subset``, mapped to a 422 by
-    every caller's existing ``except (ValueError, ...)`` handler)."""
+    every caller's existing ``except (ValueError, ...)`` handler).
+
+    ``req.group_col`` (GUI_INTERACTION #12 Slice 5) switches to the grouped
+    resolve path (``calc.plotting.build_grouped_series``): every ``y_keys``
+    channel becomes one series per group level instead of one series per
+    channel, matching the screen's ``buildXY`` colour split. Mutually
+    exclusive with ``req.y2_keys`` (raises ``ValueError`` -- ``buildXY``
+    never assigns a grouped series to the secondary axis, so there's no
+    sound semantic to invent for the combination)."""
     from quantized.calc.plotting import (
         PlotState,
+        build_grouped_series,
         build_series,
         resolve_style_channels,
         validate_y2_subset,
     )
 
     ds = DataStruct.from_dict(req.dataset)
+
+    if req.group_col is not None:
+        if req.y2_keys:
+            raise ValueError(
+                "group_col cannot be combined with y2_keys -- a group split "
+                "puts every synthetic per-level series on the primary axis "
+                "(buildXY never assigns axis: 1); move the secondary-axis "
+                "series to the primary axis first"
+            )
+        y_keys = list(req.y_keys) if req.y_keys is not None else list(range(ds.n_channels))
+        grouped = build_grouped_series(ds, req.x_key, y_keys, req.group_col)
+        x_label = req.x_label
+        if x_label is None:
+            x_label = (
+                f"{grouped.x_label} ({grouped.x_unit})" if grouped.x_unit else grouped.x_label
+            )
+        y_label = req.y_label
+        if y_label is None:
+            y_label = ""
+        g_series: list[tuple[str, Any]] = [
+            (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in grouped.series
+        ]
+        return _ResolvedFigure(
+            grouped.x, g_series, x_label, y_label, None, [False] * len(g_series), ""
+        )
+
     validate_y2_subset(req.y_keys, req.y2_keys)
     state = PlotState(
         x_key=req.x_key,

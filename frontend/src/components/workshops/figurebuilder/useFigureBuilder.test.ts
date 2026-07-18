@@ -178,6 +178,55 @@ describe("useFigureBuilder", () => {
     ]);
   });
 
+  // GUI_INTERACTION #12 Slice 5: a grouped FigureDoc (the Graph Builder
+  // handoff, plotSpecToFigureDoc) carries config.groupCol through the SAME
+  // preview/export request path as every other doc field -- opening,
+  // previewing, exporting, and re-saving must all thread it.
+  it("threads a grouped FigureDoc's groupCol through preview, export, and re-save", async () => {
+    useApp.setState({
+      figureDocSeed: {
+        id: "draft",
+        name: "Grouped plot",
+        datasetId: "d1",
+        live: true,
+        config: {
+          xKey: null,
+          yKeys: [0],
+          groupCol: 1,
+          xScale: "linear",
+          yScale: "linear",
+          title: "",
+          xLabel: "",
+          yLabel: "",
+          style: "default",
+          fmt: "pdf",
+          dpi: 300,
+          overrides: null,
+          seriesStyles: null,
+        },
+      },
+    });
+    const { result } = renderHook(() => useFigureBuilder());
+    await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+    const preview = vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0];
+    expect(preview?.group_col).toBe(1);
+
+    await act(async () => result.current.exportNow());
+    expect(vi.mocked(exportFigure).mock.calls.at(-1)?.[0].group_col).toBe(1);
+
+    act(() => result.current.saveAsFigure("Re-saved", true));
+    const saved = useApp.getState().figureDocs.at(-1);
+    expect(saved?.config.groupCol).toBe(1);
+  });
+
+  it("a plain (non-doc-seeded) builder sends no group_col", async () => {
+    const { result } = renderHook(() => useFigureBuilder());
+    await act(async () => {
+      await result.current.exportNow();
+    });
+    expect(vi.mocked(exportFigure).mock.calls[0][0].group_col).toBeUndefined();
+  });
+
   it("syncs DPI to the preset's calibrated value when the style changes", () => {
     const { result } = renderHook(() => useFigureBuilder());
     expect(result.current.dpi).toBe(FIGURE_STYLE_DPI.default);
