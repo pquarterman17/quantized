@@ -680,3 +680,155 @@ describe("useGraphBuilder — exportPlot (item 6)", () => {
     expect(exportFigure).not.toHaveBeenCalled();
   });
 });
+
+describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #12 Slice 5)", () => {
+  // Same isolation rationale as the "capture on save" describe block above —
+  // these fields aren't touched by the outer beforeEach.
+  beforeEach(() => {
+    useApp.setState({
+      seriesStyles: {},
+      hiddenChannels: [],
+      seriesOrder: null,
+      y2Keys: null,
+      y2Lim: null,
+      y2Scale: null,
+      y2AxisLabel: "",
+      xAxisLabel: "",
+      yAxisLabel: "",
+      xLim: null,
+      yLim: null,
+      xScale: "linear",
+      yScale: "linear",
+      xStep: null,
+      yStep: null,
+      plotTitle: "",
+    });
+  });
+
+  it("regression pin: a v1 spec's sendToStage leaves every style/axis field byte-identical", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() =>
+      useApp.setState({
+        seriesStyles: { 1: { color: "#ff0000" } },
+        hiddenChannels: [2],
+        y2Keys: [3],
+        seriesOrder: [1, 0],
+        xLim: [0, 10],
+        plotTitle: "Keep me",
+      }),
+    );
+    const before = useApp.getState();
+    const snapshot = {
+      seriesStyles: before.seriesStyles,
+      hiddenChannels: before.hiddenChannels,
+      y2Keys: before.y2Keys,
+      seriesOrder: before.seriesOrder,
+      xLim: before.xLim,
+      plotTitle: before.plotTitle,
+    };
+    expect(result.current.activeSpec?.spec.version).not.toBe(2); // sanity: nothing saved, this is a plain v1 spec
+    act(() => result.current.sendToStage());
+    const s = useApp.getState();
+    expect(s.seriesStyles).toEqual(snapshot.seriesStyles);
+    expect(s.hiddenChannels).toEqual(snapshot.hiddenChannels);
+    expect(s.y2Keys).toEqual(snapshot.y2Keys);
+    expect(s.seriesOrder).toEqual(snapshot.seriesOrder);
+    expect(s.xLim).toEqual(snapshot.xLim);
+    expect(s.plotTitle).toEqual(snapshot.plotTitle);
+  });
+
+  // THE acceptance test of the #12 campaign so far: save captures the live
+  // display/axes state (Slice 3), reopening restores the BUILDER's wells
+  // (item 3, pre-#12), and now Send restores the STORE's style/axis state
+  // too — the full save → reopen → send loop.
+  it("FULL LOOP: save styled → reset → reopen → send → styles/limits/y2 restored", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("y", 2)); // second Y channel — will ride y2
+    act(() =>
+      useApp.setState({
+        seriesStyles: { 1: { color: "#ff0000", width: 2 }, 2: { color: "#00ff00" } },
+        y2Keys: [2],
+        xAxisLabel: "Field (Oe)",
+        yLim: [0, 100],
+        plotTitle: "My Plot",
+      }),
+    );
+    act(() => result.current.saveAs("Styled"));
+    const saved = result.current.activeSpec!.spec;
+    expect(saved.version).toBe(2);
+    expect(saved.display?.series).toEqual({
+      1: { color: "#ff0000", width: 2 },
+      2: { color: "#00ff00", axis: 1 },
+    });
+    expect(saved.axes?.x?.label).toBe("Field (Oe)");
+    expect(saved.axes?.y?.lim).toEqual([0, 100]);
+    expect(saved.axes?.title).toBe("My Plot");
+    const id = result.current.activeSpec!.id;
+
+    // Simulate the user wandering off and changing everything before
+    // reopening — a bare "reset" the way a real session would leave things.
+    act(() =>
+      useApp.setState({
+        seriesStyles: {},
+        hiddenChannels: [],
+        y2Keys: null,
+        y2Lim: null,
+        xAxisLabel: "",
+        yLim: null,
+        plotTitle: "",
+      }),
+    );
+    act(() => result.current.reset());
+    expect(result.current.activeSpec).toBeNull();
+    expect(result.current.chips("y")).toHaveLength(0);
+
+    // Reopen: the builder's wells restore (pre-#12 behavior), but the STORE
+    // is still the "wandered off" state — blocks haven't applied yet.
+    act(() => result.current.openSpec(id));
+    expect(result.current.activeSpec?.id).toBe(id);
+    expect(result.current.chips("y").map((c) => c.channel)).toEqual([1, 2]);
+    expect(useApp.getState().seriesStyles).toEqual({}); // NOT yet applied — Send does that
+
+    // Send: NOW the blocks apply.
+    act(() => result.current.sendToStage());
+    const s = useApp.getState();
+    expect(s.yKeys).toEqual([1, 2]);
+    expect(s.seriesStyles[1]).toMatchObject({ color: "#ff0000", width: 2 });
+    expect(s.seriesStyles[2]).toMatchObject({ color: "#00ff00" });
+    expect(s.y2Keys).toEqual([2]);
+    expect(s.xAxisLabel).toBe("Field (Oe)");
+    expect(s.yLim).toEqual([0, 100]);
+    expect(s.plotTitle).toBe("My Plot");
+  });
+
+  it("openSpec's status message flags a saved spec that carries display/axes blocks", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => useApp.setState({ seriesStyles: { 1: { color: "#ff0000" } } }));
+    act(() => result.current.saveAs("Styled"));
+    const styledId = result.current.activeSpec!.id;
+    act(() => result.current.reset());
+
+    act(() => result.current.openSpec(styledId));
+    expect(useApp.getState().status).toBe(
+      'opened "Styled" (includes saved styles — Send to Stage applies them)',
+    );
+  });
+
+  it("openSpec's status message is plain for a v1 (blocks-free) saved spec", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.saveAs("Plain"));
+    const plainId = result.current.activeSpec!.id;
+    act(() => result.current.reset());
+
+    act(() => result.current.openSpec(plainId));
+    expect(useApp.getState().status).toBe('opened "Plain"');
+  });
+});

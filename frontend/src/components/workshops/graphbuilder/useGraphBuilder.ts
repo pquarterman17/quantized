@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import { runExportFigureCommand } from "../../../lib/exportFigureCommand";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { plotSpecFigureReason, plotSpecToFigureDoc } from "../../../lib/plotSpecFigure";
+import { applySpecBlocks } from "../../../lib/plotspecApply";
 import {
   assignZone,
   clearZone,
@@ -237,6 +238,11 @@ export function useGraphBuilder(): GraphBuilderState {
       setXKey(spec.zones.x?.channel ?? null);
       setYKeys(spec.zones.y.map((r) => r.channel));
       setStatMode(false);
+      // #12 Slice 5: apply the spec's own captured display/axes blocks (if
+      // any) onto the now-live dataset — closes the save/reopen/send loop.
+      // A v1 spec (no blocks) makes zero calls here — see plotspecApply.ts's
+      // regression-pin note.
+      applySpecBlocks(spec, useApp.getState);
       if (spec.zones.group) {
         toast("series-split by group is preview-only in v1 (lands with faceting)", "info");
       }
@@ -253,6 +259,13 @@ export function useGraphBuilder(): GraphBuilderState {
       setStatus(`sent ${spec.mark} to the plot`);
       return;
     }
+    // box/violin/bar (below): #12 Slice 5 investigated applying the spec's
+    // axes.title/x/y labels here too, but useStatStage ALWAYS derives its own
+    // title/x_label/y_label from the group/value/facet column labels at
+    // draw/export time (e.g. `${valueLabel} by ${groupLabel}`) — there is no
+    // store-driven override it reads. Applying the block would silently do
+    // nothing (or fight a future StatStage change), so this is a deliberate
+    // no-op rather than a dead call — see plotspecApply.ts, not wired here.
     if (spec.mark === "box" || spec.mark === "violin") {
       const x = spec.zones.x;
       const groupCol = x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel : null;
@@ -381,7 +394,14 @@ export function useGraphBuilder(): GraphBuilderState {
     if (!saved) return;
     setSpec(withInferredMark(saved.spec, markContext(saved.spec, useApp.getState().datasets)));
     useApp.getState().setActivePlotSpecId(id);
-    setStatus(`opened "${saved.name}"`);
+    // #12 Slice 5: opening never applies the spec's display/axes blocks
+    // itself (that would silently mutate the live plot on a mere open) —
+    // only Send does (applySpecBlocks, above). This is the one affordance
+    // that tells the user those blocks exist at all.
+    const hint = saved.spec.display || saved.spec.axes
+      ? " (includes saved styles — Send to Stage applies them)"
+      : "";
+    setStatus(`opened "${saved.name}"${hint}`);
   };
 
   const duplicateSpec = (id: string): void => {

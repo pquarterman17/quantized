@@ -11,8 +11,9 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-18 (#12 Slice 4b landed — faceted stat export, xy
-facet-export reset, page-export y2)
+**Updated:** 2026-07-18 (#12 Slice 5 landed — Stage adapter applies a spec's
+display/axes blocks on Send, closing the save/reopen/send loop; item 12 now
+open only for Slice 4's y2_fmt residual)
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -226,14 +227,78 @@ plotting, publication export.
           **Still open in Slice 4:** `y2_fmt` store field + UI (a screen y2
           axis format control) — the wire field exists
           (`FigureRequest.y2_fmt`) but has no store field/UI yet.
-    - [ ] Slice 5 — Stage adapter (buildOpts reads the spec's blocks);
-          ALSO now owns two residuals surfaced by Slice 3: (a) make
-          `openSpec` apply a reopened v2 spec's blocks back onto the live
-          store (today they only "ride along" unapplied), and (b) a wire
-          contract extension so Figure Builder can represent a GROUPED xy
-          spec's per-level synthetic series (`FigureConfig.yKeys` is
-          currently a flat list of real channel indices with no group-split
-          field — see Slice 3's `plotSpecFigureReason` finding).
+    - [x] Slice 5 — Stage adapter (2026-07-18): new `lib/plotspecApply.ts`
+          (`applySpecBlocks`, mirroring `plotspec2.ts`'s "pure capture
+          builders" — takes a `StoreGet` handle, exportActive.ts's own
+          established seam, never `useApp` directly, so a future macro/
+          template replay can reuse it). `display.series` maps to
+          `resetSeriesStyle`+`setSeriesStyle` (style fields only) per
+          channel, `toggleHidden` (delta-only against the LIVE
+          `hiddenChannels` — there's no bulk setter), `setY2Keys` (the
+          `axis: 1` members), `setSeriesOrder`; `axes` maps to
+          `setPlotTitle`/`setX·Y·Y2AxisLabel`/`setX·Y·Y2Lim`/
+          `setX·Y·Y2Scale`/`setX·YFmt`. Two field classes have NO store
+          setter at all and are silently skipped (documented once in the
+          module, not per-field): `step` on any axis (only ever a decode
+          side-effect or cleared alongside `setXLim`/`setYLim`/`setY2Lim`,
+          never independently settable) and `axes.y2.fmt` (Slice 1's own
+          finding — `y2_fmt` is on the export wire with no store field/UI
+          yet, still true — see Slice 4's "Still open"). Display block
+          applies BEFORE axes: `setY2Keys(null)` clears
+          y2Lim/y2Scale/y2AxisLabel as a side effect, so applying axes.y2
+          SECOND is what lets a real captured value win over that clear —
+          regression-tested directly (a fake store that reproduces the real
+          clearing side-effect, not bare spies). Wired into
+          `useGraphBuilder.sendToStage`'s xy (scatter/line) branch only,
+          right after the existing setXKey/setYKeys/setStatMode calls — a
+          v1 spec (no blocks) makes zero extra store calls
+          (regression-pinned against the real store, not mocks).
+          box/violin/bar deliberately NOT wired: `useStatStage` always
+          derives its own title/x_label/y_label from the group/value/facet
+          column labels at draw/export time — there is no store-driven
+          override for a block to feed, so applying one would silently do
+          nothing (documented in `useGraphBuilder`, not a missed case).
+          `openSpec` gained the ONE planned affordance — opening never
+          applies blocks itself (that would silently mutate the live plot on
+          a mere open; only Send does), so its status message just appends
+          "(includes saved styles — Send to Stage applies them)" when the
+          reopened spec carries any. This closes the loop named at Slice 3:
+          save captures live style/axis state → reopen restores the
+          builder's wells → Send now restores the STORE's style/axis state
+          too (full-loop-tested: save styled → wander off and change
+          everything → reset → reopen → send → styles/y2/limits/title come
+          back exactly). Slice 5's second named residual — a wire-contract
+          extension so Figure Builder/export can represent a GROUPED xy
+          spec's per-level synthetic series — was INVESTIGATED (30-minute
+          cap, per scope) and found feasible, not implemented:
+          `calc.figure.draw_series_axes`/`_render_impl` already render an
+          arbitrary `series: Sequence[tuple[label, array]]` with no concept
+          of "channel" at all, so the render layer needs ZERO changes; the
+          gap is entirely at the RESOLVE step (`routes/export_figures.py`'s
+          `FigureRequest` + `calc.plotting.build_series`/`_resolve`, where
+          every `y_keys` entry — even today's existing `int | str` union —
+          resolves to exactly ONE real dataset column, never a synthesized
+          split). The fix is additive: a new optional `group_col`
+          field on `FigureConfig`/`FigureRequest` (absent = today's
+          behavior, byte-identical, no schema break for persisted `.dwk`
+          docs) + a small pure port of the frontend's `buildXY` group-split
+          algorithm (level-sort, one masked series per (yChannel, level),
+          `f"{yLabel} ({gLabel}={lvl})"` labels) into `calc/plotting.py`,
+          plugged into `_figure_series` as an alternate resolve path;
+          per-level styling can defer to matplotlib's default color cycle
+          (the screen path itself assigns no explicit per-level color
+          either — `buildXY` doesn't touch `seriesStyles`), sidestepping
+          `series_styles`' current 1:1-with-`y_keys` alignment entirely.
+          Small-to-medium follow-on, not booked as a new numbered item (no
+          urgency signal) — this paragraph + `plotSpecFigureReason`/
+          `lib/plotSpecFigure.ts` are the pickup point if it becomes one.
+          Frontend 3986 tests (+15: `lib/plotspecApply.test.ts` unit tests +
+          4 new `useGraphBuilder` integration tests incl. the full-loop
+          acceptance test) + build green.
+
+    Item 12 stays open only for Slice 4's own still-open residual (the
+    `y2_fmt` screen store field/UI — see above); every other named
+    deliverable across all 5 slices has shipped.
 
 15. **Real-browser interaction coverage** — jsdom can't validate canvas hit
     targets, pointer capture, drag/drop, high-DPI, overlapping-plugin contention.
