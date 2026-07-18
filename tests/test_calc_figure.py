@@ -7,7 +7,7 @@ import re
 import numpy as np
 import pytest
 
-from quantized.calc.figure import render_figure, render_figure_map
+from quantized.calc.figure import _plot_kwargs, render_figure, render_figure_map
 
 # PDF bytes embed a /CreationDate second-resolution timestamp, so two renders
 # of the SAME figure straddling a second boundary differ by those bytes alone
@@ -107,6 +107,12 @@ def test_series_styles_render() -> None:
     ]
     out = render_figure(x, [("y", np.sin(x))], fmt="pdf", series_styles=styles)
     assert out[:5] == b"%PDF-"
+
+
+def test_point_only_series_style_disables_line_and_keeps_marker() -> None:
+    kwargs = _plot_kwargs(1.5, 5.0, {"line": "none", "marker": True})
+    assert kwargs["linestyle"] == "none"
+    assert kwargs["marker"] == "o"
 
 
 def test_series_styles_color_appears_in_svg() -> None:

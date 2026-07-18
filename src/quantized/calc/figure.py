@@ -32,7 +32,7 @@ from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps  # 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
 
 _FORMATS = ("pdf", "svg", "png", "tiff")
-_LINESTYLE = {"solid": "-", "dashed": "--", "dotted": ":"}
+_LINESTYLE = {"solid": "-", "dashed": "--", "dotted": ":", "none": "none"}
 # Fixed fill translucency for MAIN #13 (fill under/between curves) — matches
 # the screen side's `uplotFill.ts` FILL_ALPHA_PCT (25%) so an exported figure
 # reads the same as its on-screen counterpart.

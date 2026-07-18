@@ -115,6 +115,14 @@ export default function GraphBuilderPanel() {
             </Button>
             <Button
               size="sm"
+              disabled={!g.canOpenFigureBuilder}
+              onClick={g.openInFigureBuilder}
+              title={g.figureBuilderReason ?? "Continue this XY plot in Figure Builder"}
+            >
+              Figure Builder
+            </Button>
+            <Button
+              size="sm"
               disabled={!g.canSend}
               onClick={() => void g.exportPlot()}
               title="Send to Stage, then export via the Export figure dialog"

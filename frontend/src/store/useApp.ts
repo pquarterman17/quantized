@@ -651,6 +651,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   removeFigureDoc: (id: string) => void;
   renameFigureDoc: (id: string, name: string) => void;
   duplicateFigureDoc: (id: string) => void;
+  /** Open an ephemeral or saved FigureDoc without adding it to the library. */
+  openFigureDraft: (doc: FigureDoc) => void;
   openFigureDoc: (id: string) => void;
   // Item 9's figure-doc half: opens a NEW window bound to the doc's dataset
   // and applies its channel/scale/label config (xKey/yKeys/log flags/titles)
@@ -3028,12 +3030,15 @@ export const useApp = create<AppState>((set, get) => ({
       };
       return { figureDocs: [...s.figureDocs, copy] };
     }),
-  // Open = activate the doc's dataset and hand the config to the builder.
-  openFigureDoc: (id) => {
-    const doc = get().figureDocs.find((f) => f.id === id);
+  openFigureDraft: (doc) => {
     if (!doc || !docRenderable(doc)) return;
     if (doc.live && doc.datasetId) get().setActive(doc.datasetId);
     set({ figureDocSeed: doc, figureBuilderOpen: true });
+  },
+  // Open = activate the doc's dataset and hand the config to the builder.
+  openFigureDoc: (id) => {
+    const doc = get().figureDocs.find((f) => f.id === id);
+    if (doc) get().openFigureDraft(doc);
   },
   // Item 9's figure-doc half: a live doc only (a frozen doc's snapshot isn't
   // a live `Dataset` a window can bind to — that gap is Tier 3 item 11's

@@ -65,6 +65,9 @@ beforeEach(() => {
     spatialPanels: null,
     facetPanels: null,
     breakPanels: null,
+    figureBuilderOpen: false,
+    figureDocSeed: null,
+    figureDocs: [],
     // Owner-routing item 1: starts parked on Worksheet so "sendToStage
     // surfaces the Plot tab" assertions below don't need a separate fixture.
     stageTab: "worksheet",
@@ -301,6 +304,39 @@ describe("useGraphBuilder — send to stage", () => {
     const s = useApp.getState();
     expect(s.facetPanels).toBeNull();
     expect(s.stackMode).toBe(false);
+  });
+});
+
+describe("useGraphBuilder — open in Figure Builder", () => {
+  it("opens an ordinary scatter as an ephemeral point-only FigureDoc", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    expect(result.current.mark).toBe("scatter");
+    expect(result.current.canOpenFigureBuilder).toBe(true);
+
+    act(() => result.current.openInFigureBuilder());
+
+    const state = useApp.getState();
+    expect(state.figureBuilderOpen).toBe(true);
+    expect(state.figureDocs).toEqual([]); // draft is not silently saved
+    expect(state.figureDocSeed?.config).toMatchObject({ xKey: 0, yKeys: [1] });
+    expect(state.figureDocSeed?.config.seriesStyles?.[0]).toMatchObject({
+      line: "none",
+      marker: true,
+    });
+  });
+
+  it("fails closed when a group or facet would be lost", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("group", 2));
+    expect(result.current.canOpenFigureBuilder).toBe(false);
+    expect(result.current.figureBuilderReason).toContain("Grouped");
+    act(() => result.current.openInFigureBuilder());
+    expect(useApp.getState().figureBuilderOpen).toBe(false);
+    expect(useApp.getState().figureDocSeed).toBeNull();
   });
 });
 

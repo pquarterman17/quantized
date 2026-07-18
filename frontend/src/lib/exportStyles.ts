@@ -10,7 +10,10 @@ import { seriesColor } from "./uplotOpts";
 export interface ExportSeriesStyle {
   color?: string;
   width?: number;
-  line?: string;
+  /** `none` is the publication-renderer representation of a point-only
+   * Graph Builder scatter. Interactive SeriesStyle intentionally remains
+   * solid/dashed/dotted because uPlot controls line visibility separately. */
+  line?: "solid" | "dashed" | "dotted" | "none";
   marker?: boolean;
   marker_size?: number;
   /** Fill under/between curves (MAIN #13) — mirrors `SeriesStyle.fill`, but

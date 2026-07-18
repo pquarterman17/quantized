@@ -14,7 +14,7 @@ import {
   type GraphTemplate,
 } from "../../../lib/figuredoc";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
-import { buildExportStyles } from "../../../lib/exportStyles";
+import { buildExportStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
 import {
   groupForElement,
   pxToData,
@@ -80,6 +80,12 @@ export function useFigureBuilder() {
   const [docXKey, setDocXKey] = useState<number | null | undefined>(undefined);
   const [docYKeys, setDocYKeys] = useState<number[] | null | undefined>(undefined);
   const [docScales, setDocScales] = useState<{ x: AxisScale; y: AxisScale } | undefined>(undefined);
+  // FigureDoc styles are aligned to its saved Y display order. `undefined`
+  // means a fresh builder should continue mirroring live per-channel styles;
+  // null is an explicitly style-free saved document.
+  const [docSeriesStyles, setDocSeriesStyles] = useState<
+    (ExportSeriesStyle | null)[] | null | undefined
+  >(undefined);
   // Frozen doc (#12): render from its data snapshot instead of the live dataset.
   const [frozenData, setFrozenData] = useState<DataStruct | null>(null);
   // User graph templates (#15).
@@ -101,6 +107,7 @@ export function useFigureBuilder() {
     setDocXKey(c.xKey);
     setDocYKeys(c.yKeys);
     setDocScales({ x: c.xScale, y: c.yScale });
+    setDocSeriesStyles(c.seriesStyles);
     setFrozenData(!figureDocSeed.live ? (figureDocSeed.dataSnapshot ?? null) : null);
     clearFigureDocSeed();
   }, [figureDocSeed, clearFigureDocSeed]);
@@ -147,7 +154,9 @@ export function useFigureBuilder() {
       title: title.trim(),
       x_label: xLabel.trim() || undefined,
       y_label: yLabel.trim() || undefined,
-      series_styles: buildExportStyles(plotted, seriesStyles),
+      series_styles: docSeriesStyles !== undefined
+        ? (docSeriesStyles ?? undefined)
+        : buildExportStyles(plotted, seriesStyles),
     };
   }, [
     data,
@@ -162,6 +171,7 @@ export function useFigureBuilder() {
     xLabel,
     yLabel,
     seriesStyles,
+    docSeriesStyles,
     overrides,
   ]);
 
@@ -188,7 +198,9 @@ export function useFigureBuilder() {
         fmt,
         dpi,
         overrides: compactOverrides(overrides),
-        seriesStyles: buildExportStyles(plotted, seriesStyles),
+        seriesStyles: docSeriesStyles !== undefined
+          ? docSeriesStyles
+          : buildExportStyles(plotted, seriesStyles),
       },
     });
   }
@@ -213,6 +225,7 @@ export function useFigureBuilder() {
     if (!t) return;
     setStyle(t.style);
     setOverrides(t.overrides ?? {});
+    setDocSeriesStyles(t.seriesStyles ?? null);
     setStatus(`graph template "${name}" applied`);
   }
 

@@ -26,6 +26,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { runExportFigureCommand } from "../../../lib/exportFigureCommand";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
+import { plotSpecFigureReason, plotSpecToFigureDoc } from "../../../lib/plotSpecFigure";
 import {
   assignZone,
   clearZone,
@@ -70,6 +71,9 @@ export interface GraphBuilderState {
   reset: () => void;
   canSend: boolean;
   sendToStage: () => void;
+  canOpenFigureBuilder: boolean;
+  figureBuilderReason: string | null;
+  openInFigureBuilder: () => void;
 
   // ── Saved PlotSpecs (#11) ──────────────────────────────────────────────
   /** Every saved graph, most-recently-modified first. */
@@ -218,6 +222,8 @@ export function useGraphBuilder(): GraphBuilderState {
   };
 
   const canSend = family !== null; // there's a value to plot
+  const figureBuilderReason = plotSpecFigureReason(spec);
+  const canOpenFigureBuilder = ds !== null && figureBuilderReason === null;
 
   function sendToStage(): void {
     if (!ds) return;
@@ -272,6 +278,21 @@ export function useGraphBuilder(): GraphBuilderState {
     }
     seedStatStage({ mode: "bar", groupCol, valueCol: spec.zones.y[0]?.channel ?? 0 });
     setStatus("sent bar chart to the stat stage");
+  }
+
+  function openInFigureBuilder(): void {
+    if (!ds) return;
+    const doc = plotSpecToFigureDoc(
+      spec,
+      activeSpec?.name ?? "Graph Builder plot",
+      useApp.getState().seriesStyles,
+    );
+    if (!doc) {
+      toast(plotSpecFigureReason(spec) ?? "This graph cannot open in Figure Builder.", "info");
+      return;
+    }
+    useApp.getState().openFigureDraft(doc);
+    setStatus("opened XY plot in Figure Builder");
   }
 
   // ── Saved PlotSpecs (#11) ─────────────────────────────────────────────────
@@ -362,6 +383,9 @@ export function useGraphBuilder(): GraphBuilderState {
     reset,
     canSend,
     sendToStage,
+    canOpenFigureBuilder,
+    figureBuilderReason,
+    openInFigureBuilder,
     savedSpecs,
     activeSpec,
     dirty,

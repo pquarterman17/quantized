@@ -42,6 +42,8 @@ beforeEach(() => {
     xFmt: { mode: "auto", digits: 2 },
     yFmt: { mode: "auto", digits: 2 },
     seriesStyles: {},
+    figureDocSeed: null,
+    figureBuilderOpen: false,
     status: "",
   });
 });
@@ -139,6 +141,41 @@ describe("useFigureBuilder", () => {
     const body = vi.mocked(exportFigure).mock.calls[0][0];
     expect(body.x_fmt).toEqual({ mode: "fixed", digits: 3 });
     expect(body.y_fmt).toEqual({ mode: "sci", digits: 1 });
+  });
+
+  it("restores a FigureDoc's display-ordered series styles into preview and export", async () => {
+    useApp.setState({
+      figureDocSeed: {
+        id: "draft",
+        name: "Point plot",
+        datasetId: "d1",
+        live: true,
+        config: {
+          xKey: null,
+          yKeys: [1],
+          xScale: "linear",
+          yScale: "linear",
+          title: "",
+          xLabel: "",
+          yLabel: "",
+          style: "default",
+          fmt: "pdf",
+          dpi: 300,
+          overrides: null,
+          seriesStyles: [{ color: "#123456", line: "none", marker: true }],
+        },
+      },
+    });
+    const { result } = renderHook(() => useFigureBuilder());
+    await waitFor(() => expect(renderFigureHitmap).toHaveBeenCalled());
+    const preview = vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0];
+    expect(preview?.series_styles).toEqual([{ color: "#123456", line: "none", marker: true }]);
+    expect(useApp.getState().figureDocSeed).toBeNull();
+
+    await act(async () => result.current.exportNow());
+    expect(vi.mocked(exportFigure).mock.calls.at(-1)?.[0].series_styles).toEqual([
+      { color: "#123456", line: "none", marker: true },
+    ]);
   });
 
   it("syncs DPI to the preset's calibrated value when the style changes", () => {
