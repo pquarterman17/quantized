@@ -920,7 +920,7 @@ the shipped contract)
 ## Completed
 
 - ~~**62. Saved-Origin-preview comparison UX**~~
-  (2026-07-17; `codex/origin-saved-preview-ux`) — the validated file-saved
+  (2026-07-17; PR #60) — the validated file-saved
   graph preview no longer expands inside the narrow Library sidebar. Its
   figure-row action opens a movable, resizable reference window that can stay
   beside the editable Stage, with explicit Origin-reference labeling, pixel
