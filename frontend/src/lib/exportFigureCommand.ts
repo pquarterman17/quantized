@@ -11,7 +11,12 @@ import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api";
 import { buildExportStyles } from "./exportStyles";
 import { exportActive, type StoreGet } from "./exportActive";
-import { compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
+import {
+  compactOverrides,
+  gateY2Overrides,
+  legendPosToLoc,
+  type FigureOverrides,
+} from "./figureOverrides";
 import { marginFractions, pageSizeInches } from "./pagesetup";
 import { effectiveChannels } from "./plotdata";
 import { axisFmtParam } from "./types";
@@ -93,6 +98,17 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
     const y2Set = new Set(st.y2Keys ?? []);
     const y2Plotted = plotted.filter((ch) => y2Set.has(ch));
     const y2l = st.y2AxisLabel.trim();
+    // `overrides` (above) was built by `liveViewOverrides` before this
+    // callback ever learns the plotted/y2 split — gate the two fields that
+    // depend on it (a stale y2_lim; a log-scaled secondary axis's minor
+    // ticks) now that y2Plotted is known. See `gateY2Overrides`'s doc.
+    const gatedOverrides = gateY2Overrides(overrides, {
+      y2Plotted: y2Plotted.length > 0,
+      minorTicks:
+        st.xScale === "log" ||
+        st.yScale === "log" ||
+        (y2Plotted.length > 0 && (st.y2Scale ?? st.yScale) === "log"),
+    });
     return exportFigure({
       dataset,
       x_key: st.xKey ?? undefined,
@@ -108,6 +124,11 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
             y2_keys: y2Plotted,
             y2_label: y2l || undefined,
             y2_scale: st.y2Scale ?? st.yScale,
+            // yFmt "also drives y2" on screen (store/useApp.ts's own field
+            // comment, TickFormat.tsx has no separate Y2 control) — thread
+            // the SAME live format through as y2_fmt so export matches,
+            // rather than adding a distinct y2Fmt store field.
+            y2_fmt: axisFmtParam(st.yFmt),
             y2_step: st.y2Step,
           }
         : {}),
@@ -120,7 +141,7 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
       x_label: xl || undefined,
       y_label: yl || undefined,
       series_styles: buildExportStyles(plotted, st.seriesStyles),
-      overrides,
+      overrides: gatedOverrides,
       filename: stem,
     });
   });

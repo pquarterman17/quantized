@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { compactOverrides, legendPosToLoc } from "./figureOverrides";
+import { compactOverrides, gateY2Overrides, legendPosToLoc } from "./figureOverrides";
 
 describe("compactOverrides", () => {
   it("returns null when nothing is set (presets rule untouched figures)", () => {
@@ -42,6 +42,46 @@ describe("compactOverrides", () => {
     expect(
       compactOverrides({ annotations: [{ x: 1, y: 2, text: "peak", size: 24 }] }),
     ).toEqual({ annotations: [{ x: 1, y: 2, text: "peak", size: 24 }] });
+  });
+});
+
+describe("gateY2Overrides (GUI_INTERACTION #12 slice 4a)", () => {
+  it("strips y2_lim when nothing is plotted on y2, keeping every other field", () => {
+    const gated = gateY2Overrides(
+      { grid: true, y2_lim: [-5, 5] },
+      { y2Plotted: false, minorTicks: false },
+    );
+    expect(gated).toEqual({ grid: true });
+  });
+
+  it("keeps y2_lim when a channel is plotted on y2", () => {
+    const gated = gateY2Overrides(
+      { grid: true, y2_lim: [-5, 5] },
+      { y2Plotted: true, minorTicks: false },
+    );
+    expect(gated).toEqual({ grid: true, y2_lim: [-5, 5] });
+  });
+
+  it("turns ticks.minor on when minorTicks is true, even with no prior ticks override", () => {
+    const gated = gateY2Overrides({ grid: true }, { y2Plotted: false, minorTicks: true });
+    expect(gated).toEqual({ grid: true, ticks: { minor: true } });
+  });
+
+  it("leaves other ticks fields (dir/len) untouched while forcing minor on", () => {
+    const gated = gateY2Overrides(
+      { ticks: { dir: "out", len: 5 } },
+      { y2Plotted: false, minorTicks: true },
+    );
+    expect(gated).toEqual({ ticks: { dir: "out", len: 5, minor: true } });
+  });
+
+  it("passes an undefined overrides object through untouched when minorTicks is false", () => {
+    expect(gateY2Overrides(undefined, { y2Plotted: false, minorTicks: false })).toBeUndefined();
+  });
+
+  it("builds a fresh ticks override from undefined overrides when minorTicks is true", () => {
+    const gated = gateY2Overrides(undefined, { y2Plotted: false, minorTicks: true });
+    expect(gated).toEqual({ ticks: { minor: true } });
   });
 });
 

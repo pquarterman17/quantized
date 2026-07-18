@@ -26,15 +26,20 @@
 // series display). `exportParity2.test.ts`: rows 5-8 (y2 split regression,
 // annotations/shapes/legend/grid/ticks, error bars, fail-closed pins).
 //
-// TWO ROWS IN THIS FILE ARE REAL FINDINGS, not assumptions confirmed true —
-// pinned with vitest's `it.fails` per the task's instruction to document
+// Row 1 (below) and row 6 (sibling file) were ONCE real findings pinned with
+// vitest's `it.fails`, per the task's instruction at the time to document
 // rather than silently "fix" production code:
-//   - Row 1: `overrides.y2_lim` is sent even when NO channel is tagged into
-//     `y2Keys` (`lib/exportFigureCommand.ts`'s `liveViewOverrides` computes
-//     it unconditionally from `st.y2Lim`, before `runExportFigureCommand`
-//     ever computes `y2Plotted`), contradicting `figureOverrides.ts`'s own
-//     doc comment ("Only meaningful when the request also sets y2_keys").
-//   - (row 6, in the sibling file) log minor ticks ignore a log y2Scale.
+//   - Row 1 (FIXED, GUI_INTERACTION #12 slice 4a): `overrides.y2_lim` used
+//     to be sent even when NO channel was tagged into `y2Keys` —
+//     `liveViewOverrides` computes it unconditionally from `st.y2Lim`,
+//     before `runExportFigureCommand` ever computes `y2Plotted`, so the
+//     gate now lives at that call site instead
+//     (`lib/figureOverrides.ts`'s `gateY2Overrides`, applied once
+//     `y2Plotted` is known) — `liveViewOverrides` itself stays unchanged
+//     and is still exercised directly (unaware of the plotted split) by
+//     `exportFigureCommand.test.ts`.
+//   - (row 6, in the sibling file) log minor ticks ignoring a log y2Scale —
+//     also FIXED there, same slice.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -174,15 +179,17 @@ describe("1. Axis limits", () => {
     expect(body.overrides?.y2_lim).toEqual([-5, 5]);
   });
 
-  // REAL FINDING: figureOverrides.ts's own doc comment says y2_lim is "only
-  // meaningful when the request also sets y2_keys", but liveViewOverrides
-  // reads st.y2Lim unconditionally — runExportFigureCommand doesn't learn
-  // whether any channel is tagged into y2 until AFTER it has already called
-  // liveViewOverrides. A user who once used the secondary axis, then
-  // untagged every y2 channel but never cleared the stale range, silently
-  // exports a y2_lim override the backend has no y2 axis to apply it to.
-  it.fails(
-    "GAP: y2Lim should NOT reach overrides.y2_lim when no channel is tagged into y2Keys (currently it does — see lib/exportFigureCommand.ts's liveViewOverrides, called before y2Plotted is known)",
+  // FIXED (GUI_INTERACTION #12 slice 4a): figureOverrides.ts's own doc
+  // comment says y2_lim is "only meaningful when the request also sets
+  // y2_keys" — liveViewOverrides still reads st.y2Lim unconditionally (it
+  // has no way to know the plotted/y2 split), but runExportFigureCommand
+  // now gates the field itself (`gateY2Overrides`) once y2Plotted is known,
+  // after `liveViewOverrides` has already run. A user who once used the
+  // secondary axis, then untagged every y2 channel but never cleared the
+  // stale range, no longer exports a y2_lim override the backend has no y2
+  // axis to apply it to.
+  it(
+    "y2Lim does NOT reach overrides.y2_lim when no channel is tagged into y2Keys",
     async () => {
       useApp.setState({ y2Keys: null, y2Lim: [-5, 5] });
       const body = await exportBody();

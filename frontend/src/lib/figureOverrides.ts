@@ -18,7 +18,11 @@ export interface FigureOverrides {
    *  `y_lim`, applied by `calc.figure_y2.render_with_secondary_axis`
    *  (not `calc.figure_overrides._apply_overrides`, which only ever
    *  targets a single axes). Only meaningful when the request also sets
-   *  `y2_keys`. */
+   *  `y2_keys` — `lib/exportFigureCommand.ts`'s `runExportFigureCommand`
+   *  (via `gateY2Overrides`) strips a stale value here once it learns no
+   *  channel is actually plotted on the secondary axis, so a request never
+   *  carries a leftover range with no y2 axis to apply it to
+   *  (GUI_INTERACTION #12 slice 4a). */
   y2_lim?: [number | null, number | null];
   margins?: { left?: number; right?: number; top?: number; bottom?: number };
   grid?: boolean;
@@ -120,4 +124,34 @@ export function compactOverrides(ov: FigureOverrides): FigureOverrides | null {
     }
   }
   return Object.keys(out).length ? (out as FigureOverrides) : null;
+}
+
+/** Second-pass gate for the two override fields `liveViewOverrides` cannot
+ *  compute correctly on its own, because it only sees raw store state
+ *  before the caller has derived which channels are ACTUALLY plotted on
+ *  the secondary axis (GUI_INTERACTION #12 slice 4a):
+ *    - `y2_lim` must not reach the request when nothing is plotted on y2
+ *      (a stale range from a since-untagged y2 channel would otherwise
+ *      leak through — the request would have no y2 axis to apply it to).
+ *    - `ticks.minor` must ALSO turn on for a log-scaled secondary axis,
+ *      not just a log primary xScale/yScale — folded into the SAME single
+ *      boolean `_apply_overrides` already reads (see its caller,
+ *      `runExportFigureCommand`, for the exact OR condition).
+ *  `liveViewOverrides` itself stays a pure function of raw state (and its
+ *  own unit tests keep exercising it directly with no knowledge of the
+ *  plotted split) — this runs ONLY at the `runExportFigureCommand` call
+ *  site, once `y2Plotted`/`minorTicks` are known. */
+export function gateY2Overrides(
+  ov: FigureOverrides | undefined,
+  opts: { y2Plotted: boolean; minorTicks: boolean },
+): FigureOverrides | undefined {
+  if (!ov && !opts.minorTicks) return ov;
+  const { y2_lim, ticks, ...rest } = ov ?? {};
+  return (
+    compactOverrides({
+      ...rest,
+      ...(opts.y2Plotted ? { y2_lim } : {}),
+      ticks: opts.minorTicks ? { ...ticks, minor: true } : ticks,
+    }) ?? undefined
+  );
 }

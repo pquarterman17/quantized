@@ -8,17 +8,21 @@
 // shapes/legend/grid/spines/log ticks), the error-bar documented gap, and
 // the two fail-closed pins (faceted stat export, xy facet-export reset).
 //
-// A THIRD real finding lives in this file (rows 1 and 2's findings are in
-// the sibling file's header):
-//   - Row 6: `ticks.minor` is derived from `st.xScale`/`st.yScale` only —
-//     a log-scaled y2Scale never sets it, even though the secondary axis
-//     itself renders log-scaled (`y2_scale` DOES reach the request). Pinned
-//     with `it.fails`, but see that test's comment: the backend's twinx
-//     path (`calc/figure_y2.py`'s `draw_secondary_axes`) explicitly skips
-//     the override sweep for the secondary axes ("NO overrides sweep" in
-//     its own docstring), so fixing the frontend gate alone would not yet
-//     produce visible minor ticks — this is a joint frontend+backend gap,
-//     left for a later slice, not silently patched here.
+// Row 6 was a THIRD real finding (rows 1 and 2's findings are in the
+// sibling file's header), now FIXED (GUI_INTERACTION #12 slice 4a):
+//   - Row 6: `ticks.minor` used to be derived from `st.xScale`/`st.yScale`
+//     only — a log-scaled y2Scale never set it, even though the secondary
+//     axis itself renders log-scaled (`y2_scale` DOES reach the request).
+//     This was a joint frontend+backend gap: the frontend gate
+//     (`runExportFigureCommand`, folding a plotted log y2Scale into the
+//     same `minorTicks` boolean via `gateY2Overrides`) is only half the
+//     fix — the backend's twinx path (`calc/figure_y2.py`'s
+//     `draw_secondary_axes`) still keeps its "NO overrides sweep" doctrine
+//     for everything else, but now takes an explicit `minor_ticks: bool`
+//     parameter and applies it to `ax2` the same way
+//     `calc.figure_overrides._apply_overrides` applies it to the primary
+//     axes (`render_with_secondary_axis` threads `ov["ticks"]["minor"]`
+//     through, nothing more).
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -191,12 +195,14 @@ describe("6. Decor: annotations, shapes, legend, grid/spines, log ticks", () => 
     expect(body.overrides?.ticks).toEqual({ minor: true });
   });
 
-  // REAL FINDING (see this file's header for the full context): the
-  // live-overrides ticks.minor gate only inspects st.xScale/st.yScale, never
-  // st.y2Scale, so a log-scaled secondary axis exports without minor ticks
+  // FIXED (see this file's header for the full context): the live-overrides
+  // ticks.minor gate used to only inspect st.xScale/st.yScale, never
+  // st.y2Scale, so a log-scaled secondary axis exported without minor ticks
   // even though its own y2_scale:"log" DOES reach the request.
-  it.fails(
-    "GAP: a log y2Scale should also set ticks.minor for the secondary axis (currently ignored — lib/exportFigureCommand.ts's liveViewOverrides only checks xScale/yScale)",
+  // runExportFigureCommand now folds a plotted log y2Scale into the same
+  // gate (`gateY2Overrides`), applied once y2Plotted is known.
+  it(
+    "a log y2Scale also sets ticks.minor for the secondary axis",
     async () => {
       useApp.setState({ y2Keys: [1], y2Scale: "log", xScale: "linear", yScale: "linear" });
       const body = await exportBody();

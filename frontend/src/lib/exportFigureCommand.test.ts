@@ -415,4 +415,42 @@ describe("runExportFigureCommand — y2 (secondary axis) export parity", () => {
     const body = vi.mocked(exportFigure).mock.calls[0][0];
     expect(body.overrides?.y2_lim).toEqual([-5, 5]);
   });
+
+  // GUI_INTERACTION #12 slice 4a — gateY2Overrides (lib/figureOverrides.ts):
+  // a no-y2 request must never carry overrides.y2_lim, whether the stale
+  // range is set-but-unplotted (covered by exportParity.test.ts's flipped
+  // pin) or was simply never touched at all (this case).
+  it("omits overrides.y2_lim when y2Lim was never set and no channel is plotted on y2", async () => {
+    useApp.setState({ y2Keys: null, y2Lim: null });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.overrides?.y2_lim).toBeUndefined();
+  });
+
+  // y2_fmt exists on the wire (lib/api.ts's FigureSpec, backend
+  // routes/export_figures.py) but store/useApp.ts has no distinct y2Fmt
+  // field by design — yFmt "also drives y2" on screen (its own field
+  // comment; TickFormat.tsx has no Y2 row). runExportFigureCommand threads
+  // the SAME live yFmt through as y2_fmt so export honors that convention
+  // too, instead of leaving the secondary axis's tick format unset.
+  it("threads the live yFmt through as y2_fmt when a channel is plotted on y2", async () => {
+    useApp.setState({ y2Keys: [1], yFmt: { mode: "sci", digits: 2 } });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.y2_fmt).toEqual({ mode: "sci", digits: 2 });
+  });
+
+  it("omits y2_fmt when yFmt is auto, even with a y2 channel plotted", async () => {
+    useApp.setState({ y2Keys: [1] }); // yFmt stays the beforeEach default (auto)
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.y2_fmt).toBeUndefined();
+  });
+
+  it("omits y2_fmt entirely when no channel is plotted on y2, regardless of yFmt", async () => {
+    useApp.setState({ y2Keys: null, yFmt: { mode: "fixed", digits: 1 } });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.y2_fmt).toBeUndefined();
+  });
 });

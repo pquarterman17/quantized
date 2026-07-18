@@ -118,12 +118,18 @@ def draw_secondary_axes(
     y_fmt: Mapping[str, Any] | None = None,
     y_step: float | None = None,
     color_offset: int = 0,
+    minor_ticks: bool = False,
 ) -> list[Any]:
     """Plot ``series`` (the y2 subset, in request order) onto an EXISTING
     ``twinx()`` axes: lines, y-axis scale/label/tick-format/step. NO
     overrides sweep, NO legend, NO grid, NO title -- the primary axes owns
     all of those (:func:`render_with_secondary_axis` rebuilds one combined
-    legend after both axes are drawn).
+    legend after both axes are drawn). The ONE exception is ``minor_ticks``
+    (GUI_INTERACTION #12 slice 4a): a single explicit bool, not the ``ov``
+    dict, threaded through by the caller so a log-scaled secondary axis
+    still gets minor ticks -- see this function's own ``ax2.minorticks_on()``
+    call below, which mirrors ``calc.figure_overrides._apply_overrides``'s
+    ``ticks.minor`` handling for the primary axes verbatim.
 
     COLOR STABILITY: a fresh ``twinx()`` axes gets its OWN matplotlib prop
     cycle, restarting at C0 -- colliding with whatever the primary axes'
@@ -153,6 +159,11 @@ def draw_secondary_axes(
     apply_tick_formats(ax2, None, y_fmt)
     if y_label:
         ax2.set_ylabel(y_label)
+    # Mirrors calc.figure_overrides._apply_overrides's `if ticks.get("minor"):
+    # ax.minorticks_on()` for the primary axes -- the secondary axes gets
+    # NO other override, per this function's own "NO overrides sweep" doc.
+    if minor_ticks:
+        ax2.minorticks_on()
     return artists
 
 
@@ -225,10 +236,17 @@ def render_with_secondary_axis(
         x_fmt=x_fmt, y_fmt=y_fmt, x_step=x_step, y_step=y_step,
     )
     ax2 = ax.twinx()
+    # ov["ticks"]["minor"] already covers "is EITHER axis log" (the frontend
+    # folds a log y2Scale into the same single flag -- lib/exportFigureCommand
+    # .ts's runExportFigureCommand) -- thread just that bit to the secondary
+    # axes too, not the whole ov dict (see draw_secondary_axes's own doc).
+    ticks = ov.get("ticks")
+    minor_ticks = bool(ticks and ticks.get("minor"))
     y2_artists = draw_secondary_axes(
         fig, ax2, xv, y2_series,
         st=st, series_styles=y2_styles, y_scale=y2_scale, y_label=y2_label,
         y_fmt=y2_fmt, y_step=y2_step, color_offset=len(primary),
+        minor_ticks=minor_ticks,
     )
     ax2.spines["right"].set_visible(True)
     y2_lim = ov.get("y2_lim")

@@ -201,6 +201,42 @@ class TestRenderWithSecondaryAxis:
         finally:
             plt.close(fig)
 
+    # ── ticks.minor threading (GUI_INTERACTION #12 slice 4a) ──────────────
+    def test_ticks_minor_override_also_applies_to_the_secondary_axis(self):
+        # `ax.minorticks_on()` (called by both
+        # calc.figure_overrides._apply_overrides, for the primary axes, and
+        # now draw_secondary_axes, for ax2) swaps the minor locator from
+        # matplotlib's default NullLocator to an AutoMinorLocator -- the one
+        # matplotlib-version-independent, directly observable effect of that
+        # call (tick MARK visibility on a linear scale additionally depends
+        # on the `ytick.minor.visible` rcParam, which defaults to False and
+        # so isn't a reliable signal here -- see
+        # test_calc_figure.py's log-scale minor-tick test for a case where
+        # the scale itself, not this override, is what makes ticks visible).
+        from matplotlib.ticker import AutoMinorLocator, NullLocator
+
+        x = np.linspace(0, 10, 10)
+        fig, ax, _ = self._render(
+            [("a", x), ("b", x)], [False, True], ov={"ticks": {"minor": True}}
+        )
+        try:
+            ax2 = fig.axes[1]
+            assert isinstance(ax2.yaxis.get_minor_locator(), AutoMinorLocator)
+            assert not isinstance(ax2.yaxis.get_minor_locator(), NullLocator)
+        finally:
+            plt.close(fig)
+
+    def test_no_ticks_override_leaves_the_secondary_axis_minor_locator_untouched(self):
+        from matplotlib.ticker import NullLocator
+
+        x = np.linspace(0, 10, 10)
+        fig, ax, _ = self._render([("a", x), ("b", x)], [False, True])
+        try:
+            ax2 = fig.axes[1]
+            assert isinstance(ax2.yaxis.get_minor_locator(), NullLocator)
+        finally:
+            plt.close(fig)
+
 
 # ── _split_by_mask -- the off-by-one class ────────────────────────────────
 class TestSplitByMask:
