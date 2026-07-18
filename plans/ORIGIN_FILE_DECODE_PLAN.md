@@ -920,7 +920,7 @@ the shipped contract)
 ## Completed
 
 - ~~**60. Ordinary imported-view export parity (proven-contract slice)**~~
-  (2026-07-17; PR pending) — `runExportFigureCommand` previously exported
+  (2026-07-17; PR #58) — `runExportFigureCommand` previously exported
   raw `yKeys` against time/default X and omitted most live axis/chrome state.
   It now uses `effectiveChannels` plus hidden/order state, sends `x_key`,
   applies channel-keyed Origin/renamed captions to a request-local label copy,
