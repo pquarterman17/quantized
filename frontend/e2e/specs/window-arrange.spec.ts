@@ -17,6 +17,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { runPaletteCommand } from "../utils/palette";
 
 interface WindowSnapshot {
   id: string;
@@ -30,22 +31,6 @@ async function readWindows(page: Page): Promise<WindowSnapshot[]> {
       (window as unknown as { __qz: { useApp: { getState: () => { plotWindows: WindowSnapshot[] } } } }).__qz.useApp
         .getState().plotWindows,
   );
-}
-
-/** Run a Command Palette command by its exact label — the same ⌘K flow
- *  keyboard-only.spec.ts uses for "Import data…", reused here for the
- *  Window-menu commands `useWindowCommands.ts` publishes into the SAME
- *  registry (MenuBar merges `useCommands().menuCommands`, so these are
- *  reachable from the Window menu too — the palette is just the more
- *  deterministic path to drive from a spec: fuzzy-filter to the exact
- *  label, Enter runs whatever's highlighted at cursor 0). */
-async function runPaletteCommand(page: Page, label: string): Promise<void> {
-  await page.keyboard.press("Control+k");
-  await page.getByPlaceholder("Type a command…").fill(label);
-  // The item's text also carries its shortcut badge (e.g. "New Graph
-  // Window⌘⇧N") when the command has one — containment, not equality.
-  await expect(page.locator(".qz-cmdk-item").first()).toContainText(label);
-  await page.keyboard.press("Enter");
 }
 
 /** True if two axis-aligned rects (x/y/w/h) do NOT overlap — used to assert

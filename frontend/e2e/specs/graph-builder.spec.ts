@@ -11,6 +11,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import { dropFileOnto } from "../utils/dnd";
 import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
+import { runPaletteCommand } from "../utils/palette";
 
 /** A ZoneWell by its exact title ("X"/"Y"/"Group"/"Facet") — `hasText`
  *  substring matching is unsafe here (the Y well's own hint text, "value
@@ -26,10 +27,10 @@ test("build, save, and reopen a Graph Builder PlotSpec", async ({ page }) => {
   await waitForDatasetCount(page, 1);
 
   // Open via the Command Palette (mouse-optional entry point; the plan's #11
-  // command lives in commands/analysisCommands.ts).
-  await page.keyboard.press("Control+k");
-  await page.getByPlaceholder("Type a command…").fill("Graph Builder");
-  await page.keyboard.press("Enter");
+  // command lives in commands/analysisCommands.ts — a curated action, so
+  // immune to the registry-publish race `runPaletteCommand` guards against,
+  // but shares the driver for consistency; see utils/palette.ts).
+  await runPaletteCommand(page, "Graph Builder");
 
   const builder = page.locator(".qzk-glass").filter({ has: page.getByText("Graph Builder", { exact: true }) });
   await expect(builder).toBeVisible();
