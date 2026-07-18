@@ -47,7 +47,31 @@ describe("defaultPlotView", () => {
     expect(v.xScale).toBe("linear");
     expect(v.yScale).toBe("linear");
     expect(v.y2Scale).toBeNull();
+    expect(v.y2Fmt).toBeNull();
     expect(v.panelFit).toBe("frames");
+  });
+});
+
+describe("sanitizeView — y2Fmt (independent Y2 tick format)", () => {
+  it("defaults an absent (pre-y2Fmt) view's y2Fmt to null (inherit yFmt)", () => {
+    const out = sanitizePlotWindows([win({ view: legacyView() as PlotView })], new Set(["d1"]));
+    expect(out[0].view.y2Fmt).toBeNull();
+  });
+
+  it("round-trips a valid y2Fmt", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), y2Fmt: { mode: "sci", digits: 1 } } })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.y2Fmt).toEqual({ mode: "sci", digits: 1 });
+  });
+
+  it("falls back to null for a malformed y2Fmt", () => {
+    const out = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), y2Fmt: "sci" } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(out[0].view.y2Fmt).toBeNull();
   });
 });
 

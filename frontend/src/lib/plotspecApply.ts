@@ -24,8 +24,8 @@
 // an Origin figure decode, or clears them alongside `setXLim`/`setYLim`/
 // `setY2Lim`. A restored axis limit therefore loses its captured tick step
 // (falls back to auto ticks) — an accepted, documented gap, not a bug.
-// `axes.y2.fmt`: no `setY2Fmt` action exists at all (Slice 4b's own finding —
-// `y2_fmt` is on the export wire with no store field/UI yet); nothing to call.
+// (`axes.y2.fmt` now HAS a setter — `setY2Fmt` — applied like x/y.fmt below;
+// a captured block always carries a real, non-null format.)
 //
 // ── SCOPE (blocks absent → zero effect) ─────────────────────────────────────
 // A v1 spec (no `display`/`axes` content) makes zero store calls — the
@@ -91,7 +91,7 @@ function applyAxesBlock(axes: AxesBlock | undefined, s: StoreGet): void {
     if (axes.y2.label !== undefined) state.setY2AxisLabel(axes.y2.label);
     if (axes.y2.lim !== undefined) state.setY2Lim(axes.y2.lim);
     if (axes.y2.scale !== undefined) state.setY2Scale(axes.y2.scale);
-    // axes.y2.fmt: no setY2Fmt action exists yet — see module doc.
+    if (axes.y2.fmt !== undefined) state.setY2Fmt(axes.y2.fmt);
     // axes.y2.step: no setY2Step action exists — see module doc.
   }
 }

@@ -363,6 +363,7 @@ export function useGraphBuilder(): GraphBuilderState {
       yStep: s.yStep,
       xFmt: s.xFmt,
       yFmt: s.yFmt,
+      y2Fmt: s.y2Fmt,
     });
     return {
       version: display || axes ? 2 : 1,

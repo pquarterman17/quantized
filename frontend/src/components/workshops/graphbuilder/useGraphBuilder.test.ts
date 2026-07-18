@@ -702,6 +702,7 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
       xStep: null,
       yStep: null,
       plotTitle: "",
+      y2Fmt: null,
     });
   });
 
@@ -755,6 +756,7 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
         xAxisLabel: "Field (Oe)",
         yLim: [0, 100],
         plotTitle: "My Plot",
+        y2Fmt: { mode: "fixed", digits: 1 },
       }),
     );
     act(() => result.current.saveAs("Styled"));
@@ -767,6 +769,7 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
     expect(saved.axes?.x?.label).toBe("Field (Oe)");
     expect(saved.axes?.y?.lim).toEqual([0, 100]);
     expect(saved.axes?.title).toBe("My Plot");
+    expect(saved.axes?.y2?.fmt).toEqual({ mode: "fixed", digits: 1 });
     const id = result.current.activeSpec!.id;
 
     // Simulate the user wandering off and changing everything before
@@ -780,6 +783,7 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
         xAxisLabel: "",
         yLim: null,
         plotTitle: "",
+        y2Fmt: null,
       }),
     );
     act(() => result.current.reset());
@@ -803,6 +807,7 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
     expect(s.xAxisLabel).toBe("Field (Oe)");
     expect(s.yLim).toEqual([0, 100]);
     expect(s.plotTitle).toBe("My Plot");
+    expect(s.y2Fmt).toEqual({ mode: "fixed", digits: 1 });
   });
 
   it("openSpec's status message flags a saved spec that carries display/axes blocks", () => {

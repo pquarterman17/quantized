@@ -444,7 +444,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   xStep: number | null;
   yStep: number | null;
   xFmt: AxisFormat; // X-axis tick number format
-  yFmt: AxisFormat; // Y-axis tick number format (also applied to the secondary axis)
+  yFmt: AxisFormat; // Y-axis tick number format (default source for y2Fmt when null)
+  y2Fmt: AxisFormat | null; // secondary-axis tick format; null = inherit yFmt (default)
   plotTitle: string; // chart title rendered above the plot ("" = none)
   xAxisLabel: string; // override for the x-axis label ("" = auto from data)
   yAxisLabel: string; // override for the primary y-axis label ("" = auto)
@@ -778,6 +779,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setY2Lim: (y2Lim: [number, number] | null) => void;
   setXFmt: (xFmt: AxisFormat) => void;
   setYFmt: (yFmt: AxisFormat) => void;
+  setY2Fmt: (y2Fmt: AxisFormat | null) => void;
   setPlotTitle: (plotTitle: string) => void;
   setXAxisLabel: (xAxisLabel: string) => void;
   setYAxisLabel: (yAxisLabel: string) => void;
@@ -1017,6 +1019,7 @@ export const useApp = create<AppState>((set, get) => ({
   yStep: null,
   xFmt: { mode: "auto", digits: 2 },
   yFmt: { mode: "auto", digits: 2 },
+  y2Fmt: null,
   plotTitle: "",
   xAxisLabel: "",
   yAxisLabel: "",
@@ -2488,6 +2491,7 @@ export const useApp = create<AppState>((set, get) => ({
   setY2Lim: (y2Lim) => set({ y2Lim, y2Step: null }),
   setXFmt: (xFmt) => set({ xFmt }),
   setYFmt: (yFmt) => set({ yFmt }),
+  setY2Fmt: (y2Fmt) => set({ y2Fmt }),
   setPlotTitle: (plotTitle) => {
     set({ plotTitle });
     get().recordMacro(`Title → ${plotTitle || "(none)"}`, `qz.setPlotTitle(${lit(plotTitle)})`);

@@ -12,6 +12,8 @@ beforeEach(() => {
   useApp.setState({
     xFmt: { mode: "auto", digits: 2 },
     yFmt: { mode: "auto", digits: 2 },
+    y2Fmt: null,
+    y2Keys: null,
   });
 });
 
@@ -63,5 +65,45 @@ describe("TickFormat", () => {
     const [xGroup, yGroup] = container.querySelectorAll('[role="tablist"]');
     expect(xGroup.querySelector('[aria-selected="true"]')?.textContent).toBe("Eng");
     expect(yGroup.querySelector('[aria-selected="true"]')?.textContent).toBe("Sci");
+  });
+
+  it("hides the Y2 row entirely when no y2 channel is plotted", () => {
+    const { queryByText } = render(<TickFormat />);
+    expect(queryByText("Y2")).toBeNull();
+  });
+
+  it("shows the Y2 row (checked 'inherits Y', no controls) once a y2 channel is plotted", () => {
+    useApp.setState({ y2Keys: [1] });
+    const { getByText, container } = render(<TickFormat />);
+    expect(getByText("Y2")).toBeTruthy();
+    const checkbox = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    expect(container.querySelectorAll('[role="tablist"]')).toHaveLength(2); // X, Y only — no Y2 controls yet
+  });
+
+  it("unchecking 'inherits Y' sets y2Fmt to the current yFmt and reveals its own controls", () => {
+    useApp.setState({ y2Keys: [1], yFmt: { mode: "sci", digits: 3 } });
+    const { container } = render(<TickFormat />);
+    const checkbox = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    fireEvent.click(checkbox);
+    expect(useApp.getState().y2Fmt).toEqual({ mode: "sci", digits: 3 });
+    expect(container.querySelectorAll('[role="tablist"]')).toHaveLength(3); // X, Y, Y2
+  });
+
+  it("changing the Y2 mode writes y2Fmt independently, leaving yFmt untouched", () => {
+    useApp.setState({ y2Keys: [1], y2Fmt: { mode: "auto", digits: 2 } });
+    const { container } = render(<TickFormat />);
+    const [, , y2Group] = container.querySelectorAll('[role="tablist"]');
+    fireEvent.click(Array.from(y2Group.querySelectorAll('[role="tab"]')).find((b) => b.textContent === "Fixed")!);
+    expect(useApp.getState().y2Fmt).toEqual({ mode: "fixed", digits: 2 });
+    expect(useApp.getState().yFmt.mode).toBe("auto"); // untouched
+  });
+
+  it("re-checking 'inherits Y' resets y2Fmt back to null", () => {
+    useApp.setState({ y2Keys: [1], y2Fmt: { mode: "fixed", digits: 1 } });
+    const { container } = render(<TickFormat />);
+    const checkbox = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    fireEvent.click(checkbox);
+    expect(useApp.getState().y2Fmt).toBeNull();
   });
 });

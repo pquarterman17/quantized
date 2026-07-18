@@ -240,6 +240,7 @@ describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
       yScale: "linear",
       xFmt: { mode: "auto", digits: 2 },
       yFmt: { mode: "auto", digits: 2 },
+      y2Fmt: null,
       xStep: null,
       yStep: null,
       seriesStyles: {},
@@ -344,6 +345,7 @@ describe("runExportFigureCommand — y2 (secondary axis) export parity", () => {
       yScale: "linear",
       xFmt: { mode: "auto", digits: 2 },
       yFmt: { mode: "auto", digits: 2 },
+      y2Fmt: null,
       xStep: null,
       yStep: null,
       seriesStyles: {},
@@ -428,26 +430,32 @@ describe("runExportFigureCommand — y2 (secondary axis) export parity", () => {
   });
 
   // y2_fmt exists on the wire (lib/api.ts's FigureSpec, backend
-  // routes/export_figures.py) but store/useApp.ts has no distinct y2Fmt
-  // field by design — yFmt "also drives y2" on screen (its own field
-  // comment; TickFormat.tsx has no Y2 row). runExportFigureCommand threads
-  // the SAME live yFmt through as y2_fmt so export honors that convention
-  // too, instead of leaving the secondary axis's tick format unset.
-  it("threads the live yFmt through as y2_fmt when a channel is plotted on y2", async () => {
+  // routes/export_figures.py). store/useApp.ts's y2Fmt defaults to `null`
+  // ("inherit yFmt" — the compatibility default, TickFormat.tsx's Y2 row);
+  // runExportFigureCommand mirrors that same inherit fallback so export
+  // matches whatever the screen is showing.
+  it("threads the live yFmt through as y2_fmt when y2Fmt is unset (inherit) and a channel is plotted on y2", async () => {
     useApp.setState({ y2Keys: [1], yFmt: { mode: "sci", digits: 2 } });
     await runExportFigureCommand(useApp.getState);
     const body = vi.mocked(exportFigure).mock.calls[0][0];
     expect(body.y2_fmt).toEqual({ mode: "sci", digits: 2 });
   });
 
-  it("omits y2_fmt when yFmt is auto, even with a y2 channel plotted", async () => {
-    useApp.setState({ y2Keys: [1] }); // yFmt stays the beforeEach default (auto)
+  it("sends the independently-set y2Fmt when it overrides the inherit default, even if yFmt differs", async () => {
+    useApp.setState({ y2Keys: [1], yFmt: { mode: "sci", digits: 2 }, y2Fmt: { mode: "fixed", digits: 0 } });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.y2_fmt).toEqual({ mode: "fixed", digits: 0 });
+  });
+
+  it("omits y2_fmt when the effective format (y2Fmt ?? yFmt) is auto, even with a y2 channel plotted", async () => {
+    useApp.setState({ y2Keys: [1] }); // yFmt stays the beforeEach default (auto), y2Fmt inherits it
     await runExportFigureCommand(useApp.getState);
     const body = vi.mocked(exportFigure).mock.calls[0][0];
     expect(body.y2_fmt).toBeUndefined();
   });
 
-  it("omits y2_fmt entirely when no channel is plotted on y2, regardless of yFmt", async () => {
+  it("omits y2_fmt entirely when no channel is plotted on y2, regardless of yFmt/y2Fmt", async () => {
     useApp.setState({ y2Keys: null, yFmt: { mode: "fixed", digits: 1 } });
     await runExportFigureCommand(useApp.getState);
     const body = vi.mocked(exportFigure).mock.calls[0][0];

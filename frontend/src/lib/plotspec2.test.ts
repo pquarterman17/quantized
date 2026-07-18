@@ -242,6 +242,17 @@ describe("buildAxesBlock", () => {
     expect(buildAxesBlock({ y2Scale: null })).toBeUndefined();
   });
 
+  it("omits y2Fmt when null (inherit yFmt) — never flips a spec to v2 on its own", () => {
+    expect(buildAxesBlock({ y2Fmt: null })).toBeUndefined();
+    expect(buildAxesBlock({ y2Fmt: undefined })).toBeUndefined();
+  });
+
+  it("captures an explicit y2Fmt independently of yFmt", () => {
+    expect(
+      buildAxesBlock({ yFmt: { mode: "auto", digits: 2 }, y2Fmt: { mode: "sci", digits: 3 } }),
+    ).toEqual({ y2: { fmt: { mode: "sci", digits: 3 } } });
+  });
+
   it("captures xScale/yScale only when they differ from the linear default", () => {
     expect(buildAxesBlock({ xScale: "linear", yScale: "linear" })).toBeUndefined();
     expect(buildAxesBlock({ xScale: "log" })).toEqual({ x: { scale: "log" } });

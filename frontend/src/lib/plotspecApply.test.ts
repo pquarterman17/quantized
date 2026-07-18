@@ -42,6 +42,7 @@ function makeFakeStore() {
     yScale: string;
     xFmt: AxisFormat;
     yFmt: AxisFormat;
+    y2Fmt: AxisFormat | null;
     seriesOrder: number[] | null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [action: string]: any;
@@ -61,6 +62,7 @@ function makeFakeStore() {
     yScale: "linear",
     xFmt: { mode: "auto", digits: 2 },
     yFmt: { mode: "auto", digits: 2 },
+    y2Fmt: null,
     seriesOrder: null,
   };
   const fns = {
@@ -121,6 +123,9 @@ function makeFakeStore() {
     }),
     setYFmt: vi.fn((f: AxisFormat) => {
       state.yFmt = f;
+    }),
+    setY2Fmt: vi.fn((f: AxisFormat | null) => {
+      state.y2Fmt = f;
     }),
   };
   Object.assign(state, fns);
@@ -245,10 +250,9 @@ describe("applySpecBlocks — axes block", () => {
     expect(fns.setYFmt).toHaveBeenCalledWith(fmt);
   });
 
-  it("never calls setY2Fmt/setXStep-shaped actions — no such setters exist (documented gap)", () => {
-    // axes.y2 has no `fmt` field at all in AxisSpecV2 today (module doc), and
+  it("never calls setXStep-shaped actions — no such setters exist (documented gap)", () => {
     // `step` on any axis has no setter — this test just pins that applying a
-    // full axes block never THROWS despite those gaps.
+    // full axes block never THROWS despite that gap.
     const { s } = makeFakeStore();
     expect(() =>
       applySpecBlocks(
@@ -256,6 +260,14 @@ describe("applySpecBlocks — axes block", () => {
         s,
       ),
     ).not.toThrow();
+  });
+
+  it("maps axes.y2.fmt to setY2Fmt", () => {
+    const { s, fns, state } = makeFakeStore();
+    const fmt: AxisFormat = { mode: "sci", digits: 1 };
+    applySpecBlocks(baseSpec({ axes: { y2: { lim: [0, 5], fmt } } }), s);
+    expect(fns.setY2Fmt).toHaveBeenCalledWith(fmt);
+    expect(state.y2Fmt).toEqual(fmt);
   });
 
   it("applies axes.y2 AFTER display's setY2Keys, so real y2 values always win over the clearing side effect", () => {

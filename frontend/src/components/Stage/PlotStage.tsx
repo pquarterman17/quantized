@@ -53,6 +53,7 @@ export default function PlotStage() {
   const yStep = useApp((s) => s.yStep);
   const xFmt = useApp((s) => s.xFmt);
   const yFmt = useApp((s) => s.yFmt);
+  const y2Fmt = useApp((s) => s.y2Fmt);
   const plotTitle = useApp((s) => s.plotTitle);
   const xAxisLabel = useApp((s) => s.xAxisLabel);
   const yAxisLabel = useApp((s) => s.yAxisLabel);
@@ -266,7 +267,7 @@ export default function PlotStage() {
         y2Scale={y2Scale}
         y2Step={y2Step}
         xFmt={xFmt}
-        yFmt={yFmt}
+        yFmt={yFmt} y2Fmt={y2Fmt}
         showGrid={showGrid}
         axisBox={showAxisBox}
         fontSize={resolveTemplate(plotTemplate).fontSize}

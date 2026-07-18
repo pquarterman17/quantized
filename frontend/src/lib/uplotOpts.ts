@@ -626,9 +626,12 @@ export interface BuildOptsArgs {
   /** Per-display-series visibility (aligned 1:1 with `payload.series`); `true`
    *  hides that series (interactive legend). Undefined = all visible. */
   hidden?: boolean[];
-  /** Axis tick number formats (auto = uPlot default). yFmt also drives y2. */
+  /** Axis tick number formats (auto = uPlot default). y2Fmt null/undefined
+   *  inherits yFmt (the compatibility default — see store/useApp.ts's
+   *  y2Fmt doc); an explicit y2Fmt formats the secondary axis independently. */
   xFmt?: AxisFormat;
   yFmt?: AxisFormat;
+  y2Fmt?: AxisFormat | null;
   /** Draw grid lines (default true). */
   showGrid?: boolean;
   /** Base axis tick/label font size in px (publication template; default 12
@@ -762,7 +765,7 @@ function scaleDistrProps(
 
 export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Options {
   const { width, height, yScale, xScale, tool, onReadout, xLim, yLim, refLines, seriesStyles } = args;
-  const { xFmt, yFmt, annotations, showGrid, onRegionSelect } = args;
+  const { xFmt, yFmt, y2Fmt, annotations, showGrid, onRegionSelect } = args;
   const xAscending = xIsAscending(payload.data[0] as (number | null)[]);
   // Non-monotonic x: wrap a path builder so it ignores uPlot's (collapsed)
   // index window and draws the full acquisition order. See `linearPaths` docs.
@@ -1061,6 +1064,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     ? categoricalTickFormatter(payload.xCategories)
     : tickFormatter(xFmt);
   const yValues = tickFormatter(yFmt);
+  // y2Fmt null/undefined inherits yFmt (compatibility default — see the
+  // BuildOptsArgs doc); only build a distinct formatter when overridden.
+  const y2Values = y2Fmt ? tickFormatter(y2Fmt) : yValues;
   // A FIXED range (xLim/yLim/y2Lim — an applied Origin figure or a hand-typed
   // Inspector AxisLimits value) bypasses uPlot's own rangeLog decade-snapping
   // on a log axis, so supply our own splits generator there (see
@@ -1162,7 +1168,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       size: yAxisSize,
       label: y2Drawn ? "" : y2LabelText,
       grid: { show: false },
-      ...(yValues ? { values: yValues } : {}),
+      ...(y2Values ? { values: y2Values } : {}),
       ...(y2Splits ? { splits: y2Splits } : {}),
       ...(y2ScaleEff === "log" ? { filter: logMajorTickFilter } : {}),
     });

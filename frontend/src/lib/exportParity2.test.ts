@@ -109,6 +109,7 @@ function baseline(): Record<string, unknown> {
     yStep: null,
     xFmt: { mode: "auto", digits: 2 },
     yFmt: { mode: "auto", digits: 2 },
+    y2Fmt: null,
     plotTitle: "",
     xAxisLabel: "",
     yAxisLabel: "",
@@ -164,6 +165,20 @@ describe("5. y2 split — display-order regression (08b7066)", () => {
     const body = await exportBody();
     expect(body.y_keys).toEqual([0, 1, 2]);
     expect(body.y2_keys).toEqual([1]);
+  });
+});
+
+describe("5b. y2Fmt — independent secondary-axis tick format (GUI #12 finish, part A)", () => {
+  it("inherit default (y2Fmt unset): y2_fmt mirrors the live yFmt, matching pre-y2Fmt behavior", async () => {
+    useApp.setState({ y2Keys: [1], yFmt: { mode: "sci", digits: 2 } });
+    const body = await exportBody();
+    expect(body.y2_fmt).toEqual({ mode: "sci", digits: 2 });
+  });
+
+  it("an explicit y2Fmt overrides yFmt in the export request", async () => {
+    useApp.setState({ y2Keys: [1], yFmt: { mode: "sci", digits: 2 }, y2Fmt: { mode: "fixed", digits: 1 } });
+    const body = await exportBody();
+    expect(body.y2_fmt).toEqual({ mode: "fixed", digits: 1 });
   });
 });
 

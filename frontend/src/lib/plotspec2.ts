@@ -313,8 +313,10 @@ export function buildDisplayBlock(
 
 /** The live values `buildAxesBlock` reads — plain args mirroring the store's
  *  per-axis singleton fields. Blank/default values are omitted per-field
- *  (see the doc below); `y2Fmt` has no store field/UI today (Slice 1 export-
- *  parity finding), so there is deliberately no `y2Fmt` arg here. */
+ *  (see the doc below); `y2Fmt` follows its own store default of `null`
+ *  ("inherit yFmt") — captured only when non-null, so an unset y2Fmt never
+ *  flips a spec to version 2 (same inherit-semantics as `y2Scale`'s `null`,
+ *  but fmt's non-null default is NOT itself a real override to preserve). */
 export interface AxesBlockArgs {
   title?: string;
   xLabel?: string;
@@ -336,6 +338,9 @@ export interface AxesBlockArgs {
   yStep?: number | null;
   xFmt?: AxisFormat;
   yFmt?: AxisFormat;
+  /** null/undefined = inherit yFmt (the compatibility default) — captured
+   *  ONLY when explicitly set to a real format. */
+  y2Fmt?: AxisFormat | null;
 }
 
 function captureAxisSpec(
@@ -365,7 +370,17 @@ export function buildAxesBlock(args: AxesBlockArgs): AxesBlock | undefined {
   const y = captureAxisSpec(args.yLabel, args.yLim, args.yScale, "linear", args.yStep, args.yFmt);
   // y2Scale's default is `null` (inherit), not "linear" — pass a
   // never-matching sentinel default so an explicit "linear" still captures.
-  const y2 = captureAxisSpec(args.y2Label, args.y2Lim, args.y2Scale ?? undefined, undefined, undefined, undefined);
+  // y2Fmt's own `null` (inherit yFmt) collapses to `undefined` here so
+  // captureAxisSpec's `fmt ? ... : undefined` never captures the inherit
+  // default (see AxesBlockArgs's doc — inherit must never flip a spec to v2).
+  const y2 = captureAxisSpec(
+    args.y2Label,
+    args.y2Lim,
+    args.y2Scale ?? undefined,
+    undefined,
+    undefined,
+    args.y2Fmt ?? undefined,
+  );
 
   const block: AxesBlock = {};
   if (Object.keys(x).length > 0) block.x = x;

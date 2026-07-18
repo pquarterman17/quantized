@@ -124,11 +124,10 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
             y2_keys: y2Plotted,
             y2_label: y2l || undefined,
             y2_scale: st.y2Scale ?? st.yScale,
-            // yFmt "also drives y2" on screen (store/useApp.ts's own field
-            // comment, TickFormat.tsx has no separate Y2 control) — thread
-            // the SAME live format through as y2_fmt so export matches,
-            // rather than adding a distinct y2Fmt store field.
-            y2_fmt: axisFmtParam(st.yFmt),
+            // y2Fmt null inherits yFmt on screen (store/useApp.ts's own
+            // field doc, TickFormat.tsx's Y2 row) — mirror that same
+            // inherit-default here so export matches the live plot.
+            y2_fmt: axisFmtParam(st.y2Fmt ?? st.yFmt),
             y2_step: st.y2Step,
           }
         : {}),

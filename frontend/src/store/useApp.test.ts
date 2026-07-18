@@ -883,6 +883,16 @@ describe("useApp tick format", () => {
     expect(useApp.getState().xFmt).toEqual({ mode: "sci", digits: 3 });
     expect(useApp.getState().yFmt).toEqual({ mode: "fixed", digits: 1 });
   });
+
+  it("y2Fmt defaults to null (inherit yFmt) and can be set/cleared independently of yFmt", () => {
+    useApp.setState({ y2Fmt: null, yFmt: { mode: "auto", digits: 2 } });
+    expect(useApp.getState().y2Fmt).toBeNull();
+    useApp.getState().setY2Fmt({ mode: "sci", digits: 1 });
+    expect(useApp.getState().y2Fmt).toEqual({ mode: "sci", digits: 1 });
+    expect(useApp.getState().yFmt).toEqual({ mode: "auto", digits: 2 }); // untouched
+    useApp.getState().setY2Fmt(null); // back to inherit
+    expect(useApp.getState().y2Fmt).toBeNull();
+  });
 });
 
 describe("useApp annotations", () => {
@@ -3863,6 +3873,19 @@ describe("useApp plot windows (MULTI_PLOT_PLAN #2 — the focused-window facade)
     expect(s.focusedWindowId).toBe("w2");
     expect(s.plotTitle).toBe("w2 title"); // hydrated from w2's stored view
     expect(s.plotWindows.find((w) => w.id === "w1")?.view.plotTitle).toBe("live w1 title"); // snapshotted
+  });
+
+  it("y2Fmt travels with the per-window view swap, same as yFmt/xFmt", () => {
+    const w1 = win({
+      id: "w1",
+      view: { ...defaultPlotView(), y2Fmt: { mode: "fixed", digits: 0 } },
+    });
+    const w2 = win({ id: "w2", datasetId: "d2", view: { ...defaultPlotView(), y2Fmt: null } });
+    useApp.setState({ plotWindows: [w1, w2], focusedWindowId: "w1", y2Fmt: { mode: "sci", digits: 2 } });
+    useApp.getState().focusWindow("w2");
+    const s = useApp.getState();
+    expect(s.y2Fmt).toBeNull(); // hydrated from w2's stored (inherit) view
+    expect(s.plotWindows.find((w) => w.id === "w1")?.view.y2Fmt).toEqual({ mode: "sci", digits: 2 }); // snapshotted
   });
 
   it("focusWindow is a no-op when the target is already focused or unknown", () => {

@@ -134,6 +134,9 @@ export interface PlotView {
   yStep: number | null;
   xFmt: AxisFormat;
   yFmt: AxisFormat;
+  /** Secondary-axis tick format override; null = inherit `yFmt` (the
+   *  compatibility default — see store/useApp.ts's own y2Fmt doc). */
+  y2Fmt: AxisFormat | null;
   plotTitle: string;
   xAxisLabel: string;
   yAxisLabel: string;
@@ -199,6 +202,7 @@ export function defaultPlotView(): PlotView {
     yStep: null,
     xFmt: { mode: "auto", digits: 2 },
     yFmt: { mode: "auto", digits: 2 },
+    y2Fmt: null,
     plotTitle: "",
     xAxisLabel: "",
     yAxisLabel: "",
@@ -651,6 +655,7 @@ function sanitizeView(v: unknown): PlotView {
     yStep: numOrNull(o.yStep),
     xFmt: isAxisFormat(o.xFmt) ? o.xFmt : fb.xFmt,
     yFmt: isAxisFormat(o.yFmt) ? o.yFmt : fb.yFmt,
+    y2Fmt: isAxisFormat(o.y2Fmt) ? o.y2Fmt : fb.y2Fmt,
     plotTitle: strOrDefault(o.plotTitle, fb.plotTitle),
     xAxisLabel: strOrDefault(o.xAxisLabel, fb.xAxisLabel),
     yAxisLabel: strOrDefault(o.yAxisLabel, fb.yAxisLabel),
