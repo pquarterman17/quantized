@@ -66,6 +66,9 @@ beforeEach(() => {
     breakPanels: null,
     showLegend: true,
     showAxisBox: false,
+    plotTemplate: "screen",
+    defaultLineWidth: 1.5,
+    defaultTrace: "Line",
   });
 });
 
@@ -79,6 +82,29 @@ describe("MultiPanelStage — mode regressions", () => {
     await waitFor(() => expect(created.length).toBeGreaterThan(0));
     // Both channels (a, b) plot by default -> one panel each.
     expect(created).toHaveLength(2);
+  });
+
+  it("applies the selected presentation template and default trace to every panel", async () => {
+    useApp.setState({ plotTemplate: "poster", defaultLineWidth: 9, defaultTrace: "Line + markers" });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    for (const panel of created as { opts: { axes: { font?: string }[]; series: { width?: number; points?: { show?: boolean } }[] } }[]) {
+      expect(panel.opts.axes[0].font).toContain("18px");
+      // Poster owns its calibrated 3.5px fallback; the Screen-only 9px user
+      // default must not leak into a named publication template.
+      expect(panel.opts.series[1].width).toBe(3.5);
+      expect(panel.opts.series[1].points?.show).toBe(true);
+    }
+  });
+
+  it("keeps the user's fallback line width in the Screen template", async () => {
+    useApp.setState({ plotTemplate: "screen", defaultLineWidth: 4, defaultTrace: "Line" });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    for (const panel of created as { opts: { axes: { font?: string }[]; series: { width?: number }[] } }[]) {
+      expect(panel.opts.axes[0].font).toContain("12px");
+      expect(panel.opts.series[1].width).toBe(4);
+    }
   });
 
   it("facet-by-column mode still renders (regression)", async () => {

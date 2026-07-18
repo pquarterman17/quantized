@@ -919,6 +919,28 @@ the shipped contract)
 
 ## Completed
 
+- ~~**63. Multi-panel presentation-template parity**~~
+  (2026-07-17; `codex/multipanel-presentation-template`) — all four focused
+  multi-panel modes and unfocused/background stack windows now receive the
+  same presentation inputs as the ordinary XY viewport: the window's selected
+  template font size, its calibrated fallback line width, and the global
+  default trace style. Imported Origin spatial pages therefore respond to
+  Screen/APS/Nature/Thesis/Report/Presentation/Poster typography instead of
+  silently reverting to uPlot's 12px/1.5px/Line defaults. Screen mode still
+  honors the user's custom default line width; named templates keep their own
+  calibrated widths. Template changes rebuild existing panels because these
+  inputs participate in the shared render-effect dependencies.
+  - Safety boundary: this is renderer/UI parity, not an Origin font decode.
+    Origin font family/size remains an unproven on-disk field and is not
+    inferred from page dimensions, preview pixels, or unrelated bytes. No
+    curves, bindings, acquisition order, limits, or axis semantics changed.
+  - Verification: focused frontend 54 tests; all 3759 frontend tests passed
+    with the unchanged assertions/timeouts under `--maxWorkers=1`; production
+    build + typecheck; integrity, ruff, mypy, component-size, and convention
+    guards green. Parallel full runs exposed only unrelated host-contention
+    timing failures (the 100k×200 grid and polar-window ceilings); each
+    affected file passed in isolation and no threshold was loosened.
+
 - ~~**62. Saved-Origin-preview comparison UX**~~
   (2026-07-17; PR #60) — the validated file-saved
   graph preview no longer expands inside the narrow Library sidebar. Its
