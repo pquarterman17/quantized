@@ -139,7 +139,17 @@ plotting, publication export.
           overrides sweep on the twinx axes). Also flagged: `y2_fmt` exists
           on the wire but has no store field/UI. All three land in Slice 4.
           Suite 3888 passed + 2 expected-fail; build green.
-    - [ ] Slice 2 — PlotSpec v2 schema + up-convert + `.dwk` round-trip.
+    - [x] Slice 2 — PlotSpec v2 schema (2026-07-18, `9fe0bcb`): new
+          `lib/plotspec2.ts` — `display` (SeriesDisplay keyed by channel,
+          field names matched to the REAL store vocabulary: `line` not
+          "lineStyle"; `hidden`/`axis` capture hiddenChannels/y2Keys
+          membership) + `axes` (x/y/y2 label/lim/scale/step/fmt + title)
+          blocks with tolerant per-field validators + pure capture builders
+          (all-default → undefined so a default spec never flips to v2);
+          `page`/`decor` reserved placeholders (validators strip content
+          until Slices 4–5). `version: 1 | 2` RECOMPUTED from block content,
+          never trusted from the tag; v1 payloads byte-stable (regression-
+          proven on a fixture string). 3933 + 2 expected-fail green.
     - [ ] Slice 3 — Figure Builder adapter (make `plotSpecToFigureDoc`
           lossless over the covered subset; un-fail-closed grouped specs).
     - [ ] Slice 4 — export adapter + the booked export residuals: faceted
