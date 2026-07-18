@@ -137,12 +137,19 @@ plotting, publication export.
     - [x] The same essential journey keyboard-only (Command Palette import,
           Shift+F10 context menu, Enter activates)
     - [ ] Folder reorder/nest **undo** — gated on the #1 undo-scopes owner
-          decision; there is no visual-edit undo to test yet.
-    - [ ] channel→X/Y/Y2 drag (the on-canvas `CHANNEL_DND` legend/axis-band
-          drag, distinct from the Graph Builder's ZoneWell click-to-assign
-          path already covered above)
-    - [ ] annotation/shape move/edit/delete/undo
-    - [ ] window arrange/restore
+          decision; there is no visual-edit undo to test yet. (The ONLY
+          remaining sub-item as of 2026-07-18.)
+    - [x] channel→X/Y/Y2 drag (2026-07-18, `channel-axis-drag.spec.ts` @core —
+          hand-built `DataTransfer` + dispatched drag events, since the axis
+          bands only mount mid-drag and `dragTo` can't resolve them upfront)
+    - [x] annotation/shape move/edit/delete (2026-07-18,
+          `annotation-shape-lifecycle.spec.ts` @core, 3 tests: create via
+          Annotations card → dblclick-edit → canvas drag-move → menu delete;
+          mini-toolbar delete; shape draw/Dashed/delete. Undo halves stay
+          gated on #1.)
+    - [x] window arrange/restore (2026-07-18, `window-arrange.spec.ts`,
+          100%-only: New Graph Window ×2, Tile, Cascade, maximize/restore,
+          close via the #8 title-bar menu)
     - [x] Export round-trip — a real-browser journey now carries ordered
           Graph Builder XY/scatter intent into Figure Builder, downloads real
           FastAPI/matplotlib PDF/SVG/PNG artifacts, validates MIME types,
@@ -197,6 +204,11 @@ plotting, publication export.
     - [ ] Text on high-consequence actions (Fit/Apply/Subtract/Export/Delete/Save/
           Send to Stage); standard dialog button order (secondary first, primary
           last, destructive separated); split buttons for last-used tool.
+    - [ ] Two real-browser findings from the 2026-07-18 e2e work: the selection
+          mini-toolbar's rightmost buttons can sit under the floating plot
+          toolbar at common viewports (z-order/offset fix), and the Channels
+          card's checkbox visually overflows into its sibling select in the
+          Inspector's fixed 296px column.
     - [ ] Regroup menus: Analyze by Fit/Peaks-Baseline/Magnetometry/XRD-Reflectivity/
           Transform-Signal/Statistics/Workflow; Graph owns builders/plot-types/
           layers/themes/templates/export; Data owns worksheet/row-col/filter/
