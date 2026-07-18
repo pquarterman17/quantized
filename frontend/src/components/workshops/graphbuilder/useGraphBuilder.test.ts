@@ -323,12 +323,19 @@ describe("useGraphBuilder — send to stage", () => {
     expect(s.stackMode).toBe(true);
     expect(s.facetPanels).toHaveLength(2);
     expect(s.spatialPanels).toBeNull();
-    // facetByColumn's own setActive resets the LIVE xKey/yKeys to null (same
-    // as the App.tsx "Facet by column…" command path), but it read the x/y
-    // selection just assigned (channel 0/1, not the time axis / all-channels
-    // default) BEFORE that reset, baking it into each panel's payload.
+    // facetByColumn read the x/y selection just assigned (channel 0/1, not
+    // the time axis / all-channels default), baking it into each panel's
+    // payload.
     expect(s.facetPanels?.[0].payload.xLabel).toBe("x");
     expect(s.facetPanels?.[0].payload.series.map((ser) => ser.label)).toEqual(["y"]);
+    // FIXED (GUI_INTERACTION #12 slice 4b): facetByColumn's own trailing
+    // setActive call used to reset the LIVE xKey/yKeys to null even though
+    // `ds.id` was already active — store/windows.ts's focusedRebindPatch now
+    // only resets channel-keyed defaults on a genuine dataset switch, so the
+    // just-assigned selection survives on the live store too (a subsequent
+    // export now reflects it instead of the default dense-channel set).
+    expect(s.xKey).toBe(0);
+    expect(s.yKeys).toEqual([1]);
   });
 
   it("scatter/line WITHOUT a facet zone does not touch facetPanels/stackMode", () => {

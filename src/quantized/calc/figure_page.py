@@ -134,6 +134,23 @@ class PagePanel:
     # true page coordinates instead of the rows/cols grid -- see the module
     # docstring. None (the default) keeps the grid path byte-identical.
     page_rect: tuple[float, float, float, float] | None = None
+    # Secondary (right) Y axis, matplotlib twinx (GUI_INTERACTION #12 slice
+    # 4c) -- mirrors calc.figure._render_impl's y2 params verbatim (see its
+    # own doc): `y2_mask` is parallel to `series`, True marks a channel drawn
+    # on the secondary axis via a real `Axes.twinx()`
+    # (`figure_y2.draw_secondary_axes`, reused so a doubleY panel on a page
+    # looks exactly like its single-figure export). None/all-False (the
+    # default) is today's single-axis behaviour, byte-identical. A fixed
+    # secondary range rides `overrides["y2_lim"]`; minor ticks ride
+    # `overrides["ticks"]["minor"]` -- same as the single-figure path, no new
+    # override keys. Rejected together with `x_breaks` (that combination is
+    # already impossible: `_validate_panel_overrides` rejects any `x_breaks`
+    # override on a page panel outright).
+    y2_mask: Sequence[bool] | None = None
+    y2_label: str = ""
+    y2_scale: str | None = None
+    y2_fmt: Mapping[str, Any] | None = None
+    y2_step: float | None = None
 
 
 # Tolerance on a page_rect's [0, 1] bounds -- decode rounding can put a
@@ -143,8 +160,10 @@ _RECT_EPS = 1e-6
 
 def _validate_panel_overrides(n: int, p: PagePanel) -> None:
     """Raise ``ValueError`` on a page-incompatible per-panel override
-    (``x_breaks`` / ``margins``), shared by both the grid and free-placement
-    validators."""
+    (``x_breaks`` / ``margins``) or a malformed ``y2_mask`` (GUI_INTERACTION
+    #12 slice 4c -- mirrors ``calc.figure._render_impl``'s own
+    ``len(y2_mask) != len(series)`` guard), shared by both the grid and
+    free-placement validators."""
     ov = dict(p.overrides or {})
     if "x_breaks" in ov:
         raise ValueError(f"panel {n}: x_breaks is not supported on a figure page")
@@ -154,6 +173,8 @@ def _validate_panel_overrides(n: int, p: PagePanel) -> None:
             "remove the per-panel margins override"
         )
     _validate_overrides(ov)
+    if p.y2_mask is not None and len(p.y2_mask) != len(p.series):
+        raise ValueError(f"panel {n}: y2_mask must have the same length as series")
 
 
 def _validate_page(rows: int, cols: int, panels: Sequence[PagePanel]) -> None:
@@ -369,28 +390,60 @@ def _build_page_figure(
         else:
             assert gs is not None
             ax = fig.add_subplot(gs[p.row : p.row + p.row_span, p.col : p.col + p.col_span])
-        # Rich-text guard (GOTO #5) on every user string; see figure.py.
-        series = [(safe_mathtext_label(label), y) for label, y in p.series]
-        draw_series_axes(
-            fig,
-            ax,
-            np.asarray(p.x, dtype=float),
-            series,
-            st=st,
-            ov=dict(p.overrides or {}),
-            x_log=p.x_log,
-            y_log=p.y_log,
-            x_scale=p.x_scale,
-            y_scale=p.y_scale,
-            title=safe_mathtext_label(p.title),
-            x_label=safe_mathtext_label(p.x_label),
-            y_label=safe_mathtext_label(p.y_label),
-            series_styles=p.series_styles,
-            x_fmt=p.x_fmt,
-            y_fmt=p.y_fmt,
-            x_step=p.x_step,
-            y_step=p.y_step,
-        )
+        _draw_panel(fig, ax, p, st)
         text = p.label if p.label is not None else panel_label(idx, label_format)
         _place_label(ax, safe_mathtext_label(text), label_pos, st)
     return fig
+
+
+def _draw_panel(fig: Any, ax: Any, p: PagePanel, st: FigureStyle) -> None:
+    """Draw one panel's series into ``ax`` -- ``draw_series_axes`` (single
+    axes) normally, or ``figure_y2.render_with_secondary_axis`` (a real
+    ``Axes.twinx()``) when ``p.y2_mask`` marks at least one channel for the
+    secondary axis (GUI_INTERACTION #12 slice 4c) -- mirrors
+    ``calc.figure._render_impl``'s own ``has_y2`` dispatch verbatim, so a
+    doubleY panel on a page looks exactly like its single-figure export."""
+    # Rich-text guard (GOTO #5) on every user string; see figure.py.
+    series = [(safe_mathtext_label(label), y) for label, y in p.series]
+    ov = dict(p.overrides or {})
+    xv = np.asarray(p.x, dtype=float)
+    title = safe_mathtext_label(p.title)
+    x_label = safe_mathtext_label(p.x_label)
+    y_label = safe_mathtext_label(p.y_label)
+    y2_mask = list(p.y2_mask) if p.y2_mask is not None else [False] * len(series)
+    if any(y2_mask):
+        # Lazy import: mirrors calc.figure._render_impl's own lazy import of
+        # this module -- keeps the twinx orchestration out of this module's
+        # top-level import list.
+        from quantized.calc.figure_y2 import render_with_secondary_axis
+
+        render_with_secondary_axis(
+            fig, ax, xv, series, p.series_styles, y2_mask,
+            st=st, ov=ov, x_log=p.x_log, y_log=p.y_log,
+            x_scale=p.x_scale, y_scale=p.y_scale,
+            title=title, x_label=x_label, y_label=y_label,
+            x_fmt=p.x_fmt, y_fmt=p.y_fmt, x_step=p.x_step, y_step=p.y_step,
+            y2_label=safe_mathtext_label(p.y2_label), y2_scale=p.y2_scale,
+            y2_fmt=p.y2_fmt, y2_step=p.y2_step,
+        )
+        return
+    draw_series_axes(
+        fig,
+        ax,
+        xv,
+        series,
+        st=st,
+        ov=ov,
+        x_log=p.x_log,
+        y_log=p.y_log,
+        x_scale=p.x_scale,
+        y_scale=p.y_scale,
+        title=title,
+        x_label=x_label,
+        y_label=y_label,
+        series_styles=p.series_styles,
+        x_fmt=p.x_fmt,
+        y_fmt=p.y_fmt,
+        x_step=p.x_step,
+        y_step=p.y_step,
+    )

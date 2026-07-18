@@ -118,29 +118,35 @@ describe("StatStage — facet grid (GUI_INTERACTION #11)", () => {
     expect(picker.value).toBe("2");
   });
 
-  it("Export is disabled while faceted (draw is null) and enabled for a flat draw", () => {
+  it("Export is enabled for a flat draw AND for a faceted grid (GUI_INTERACTION #12 slice 4b), disabled only when both are empty", () => {
+    // Faceted: drawFacets set, flat draw null.
     stateRef.current = makeState({
       draw: null,
       drawFacets: [{ label: "a", draw: { mode: "box", boxes: [], valueLabel: "y", groupLabel: "grp" } }],
     });
     const { rerender } = render(<StatStage />);
-    expect(screen.getByRole("button", { name: /Export/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Export/ })).not.toBeDisabled();
 
+    // Flat: draw set, drawFacets null.
     stateRef.current = makeState({
       draw: { mode: "box", boxes: [], valueLabel: "y", groupLabel: "grp" },
       drawFacets: null,
     });
     rerender(<StatStage />);
     expect(screen.getByRole("button", { name: /Export/ })).not.toBeDisabled();
+
+    // Neither: nothing to export yet (e.g. an error state).
+    stateRef.current = makeState({ draw: null, drawFacets: null });
+    rerender(<StatStage />);
+    expect(screen.getByRole("button", { name: /Export/ })).toBeDisabled();
   });
 
-  it("shows the faceted note text when set by the hook", () => {
+  it("shows a hook-provided note when set", () => {
     stateRef.current = makeState({
-      draw: null,
-      drawFacets: [{ label: "a", draw: { mode: "box", boxes: [], valueLabel: "y", groupLabel: "grp" } }],
-      note: "faceted view — figure export lands with the canonical-spec work",
+      draw: { mode: "box", boxes: [], valueLabel: "y", groupLabel: "grp" },
+      note: "backend unavailable — computed locally",
     });
     render(<StatStage />);
-    expect(screen.getByText(/faceted view/)).toBeInTheDocument();
+    expect(screen.getByText(/backend unavailable/)).toBeInTheDocument();
   });
 });

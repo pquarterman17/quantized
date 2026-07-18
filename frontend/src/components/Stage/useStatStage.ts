@@ -24,6 +24,15 @@
 // slice) and the flat `draw` goes null; `drawFacets` is null the rest of the
 // time. Background windows never facet (no Picker, no seed field reaches
 // them) — see the param docs below.
+//
+// Faceted export (GUI_INTERACTION #12 slice 4b): `exportFigure` renders a
+// small-multiples figure server-side (`calc.figure_facets`, the SAME
+// ceil(sqrt(n)) grid drawFacets shows on screen) instead of the flat single
+// panel. Box/Violin facets carry each panel's raw finite-value groups
+// (`FacetDraw.rawGroups`, attached by `computeFacetGroupDraws`) AND that
+// panel's own resolved mode (`FacetDraw.draw.mode`) — a violin facet that
+// independently degraded to box on screen exports as box, per-slice mode
+// fidelity, not a uniform re-request of the top-level picked mode.
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -35,7 +44,9 @@ import {
   statsHistogram,
   statsQQ,
   statsViolin,
+  type CategoricalFacetSpec,
   type CategoricalFigureSpec,
+  type StatplotFacetSpec,
   type StatplotFigureSpec,
 } from "../../lib/api";
 import { facetSlices } from "../../lib/facet";
@@ -54,10 +65,17 @@ import type { StatStageSeed } from "../../store/useApp";
 import type { StatDrawData } from "./statRender";
 
 /** One faceted small-multiple: a facet-column level's label + its own
- *  already-computed draw (GUI_INTERACTION #11). */
+ *  already-computed draw (GUI_INTERACTION #11). `rawGroups` (box/violin
+ *  facets only, GUI_INTERACTION #12 slice 4b) carries the raw finite-value
+ *  groups `draw` was computed from — export needs these (matplotlib's own
+ *  boxplot/violinplot recompute their stats from raw values; they never
+ *  reuse the interactive stage's precomputed boxes/violins), while bar
+ *  facets don't need it (`draw.data` already has everything exportFigure
+ *  needs, mean/SEM per category/series). */
 export interface FacetDraw {
   label: string;
   draw: StatDrawData;
+  rawGroups?: { label: string; values: number[] }[];
 }
 
 export interface StatColumn {
@@ -121,12 +139,15 @@ export interface StatStageState {
   /** Small multiples for Box/Violin/Bar (#11) — one draw per facet-column
    *  level, non-null only when `facetCol` is set AND the mode is box/violin/
    *  bar. `draw` above is null while this is non-null (a facet grid has no
-   *  single flat panel), which also auto-disables the Export button — figure
-   *  export doesn't understand a facet grid yet (tracked alongside the
-   *  Graph Builder's own facet-export residual). */
+   *  single flat panel) — `exportFigure` below reads THIS instead when set
+   *  (GUI_INTERACTION #12 slice 4b: faceted export renders a small-multiples
+   *  figure matching this same grid, server-side via `calc.figure_facets`). */
   drawFacets: FacetDraw[] | null;
   /** Builds the same-shape request the interactive stage saw, for the
-   *  "Export figure" button (null when there's nothing to export yet). */
+   *  "Export figure" button (a no-op when there's nothing to export yet).
+   *  Renders a faceted small-multiples figure when `drawFacets` is set
+   *  (GUI_INTERACTION #12 slice 4b), otherwise the flat single-panel figure
+   *  from `draw`. */
   exportFigure: (fmt: string) => Promise<void>;
 }
 
@@ -164,19 +185,18 @@ function computeBarData(
   };
 }
 
-/** Box mode's draw for one dataset (flat OR one facet slice): the backend's
- *  exact box stats, degrading to the client-side fallback on failure. `null`
- *  when the slice has no finite groups to draw (the caller drops it). */
+/** Box mode's draw for an already-resolved finite-groups list (flat OR one
+ *  facet slice): the backend's exact box stats, degrading to the
+ *  client-side fallback on failure. Takes `finiteGroups` directly (rather
+ *  than re-resolving them) so the caller can share ONE `resolveGroups` call
+ *  with whatever else needs the raw values (GUI_INTERACTION #12 slice 4b's
+ *  faceted export, which needs the SAME raw groups this draw was computed
+ *  from — matplotlib recomputes its own stats, never reusing these numbers). */
 async function computeBoxDraw(
-  data: DataStruct,
-  groupCol: number | null,
-  valueCol: number,
-  plotted: readonly number[],
+  finiteGroups: GroupSpec[],
   valueLabel: string,
   groupLabel: string,
-): Promise<StatDrawData | null> {
-  const finiteGroups = resolveGroups(data, groupCol, valueCol, plotted).filter((g) => g.values.length > 0);
-  if (!finiteGroups.length) return null;
+): Promise<StatDrawData> {
   try {
     const r = await statsBox(
       finiteGroups.map((g) => g.values),
@@ -188,20 +208,16 @@ async function computeBoxDraw(
   }
 }
 
-/** Violin mode's draw for one dataset (flat OR one facet slice): a real KDE
- *  per group, degrading to the SAME box stats `computeBoxDraw` would show for
- *  these groups on failure — the "never fabricate a KDE offline" rule. `null`
- *  when the slice has no finite groups (the caller drops it). */
+/** Violin mode's draw for an already-resolved finite-groups list (flat OR
+ *  one facet slice): a real KDE per group, degrading to the SAME box stats
+ *  `computeBoxDraw` would show for these groups on failure — the "never
+ *  fabricate a KDE offline" rule. See `computeBoxDraw`'s doc for why this
+ *  takes `finiteGroups` directly. */
 async function computeViolinDraw(
-  data: DataStruct,
-  groupCol: number | null,
-  valueCol: number,
-  plotted: readonly number[],
+  finiteGroups: GroupSpec[],
   valueLabel: string,
   groupLabel: string,
-): Promise<StatDrawData | null> {
-  const finiteGroups = resolveGroups(data, groupCol, valueCol, plotted).filter((g) => g.values.length > 0);
-  if (!finiteGroups.length) return null;
+): Promise<StatDrawData> {
   try {
     const rs = await Promise.all(finiteGroups.map((g) => statsViolin(g.values)));
     return {
@@ -261,9 +277,17 @@ async function computeFacetGroupDraws(
 ): Promise<FacetDraw[]> {
   const compute = mode === "box" ? computeBoxDraw : computeViolinDraw;
   const rs = await Promise.all(
-    slices.map(async (s) => {
-      const draw = await compute(s.data, groupCol, valueCol, plotted, valueLabel, groupLabel);
-      return draw ? { label: s.label, draw } : null;
+    slices.map(async (s): Promise<FacetDraw | null> => {
+      const finiteGroups = resolveGroups(s.data, groupCol, valueCol, plotted).filter(
+        (g) => g.values.length > 0,
+      );
+      if (!finiteGroups.length) return null;
+      const draw = await compute(finiteGroups, valueLabel, groupLabel);
+      // Export fidelity (GUI_INTERACTION #12 slice 4b): carry the raw groups
+      // this draw was computed from so exportFigure can rebuild a faithful
+      // per-facet request without a second resolveGroups pass.
+      const rawGroups = finiteGroups.map((g) => ({ label: g.label, values: g.values }));
+      return { label: s.label, draw, rawGroups };
     }),
   );
   return rs.filter((f): f is FacetDraw => f !== null);
@@ -374,8 +398,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
 
     // Faceted box/violin/bar (GUI_INTERACTION #11): one draw per facet-column
     // level instead of the flat single panel. The flat `draw` stays null
-    // while faceted (see the StatStageState doc — this is what auto-disables
-    // Export).
+    // while faceted (see the StatStageState doc — `exportFigure` reads
+    // `drawFacets` instead, GUI_INTERACTION #12 slice 4b).
     if (facetCol != null && (mode === "box" || mode === "violin" || mode === "bar")) {
       setDrawData(null);
       const slices = facetSlices(data, facetCol);
@@ -386,7 +410,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
           setError("no finite values to group");
         } else {
           setDrawFacets(results);
-          setNote("faceted view — figure export lands with the canonical-spec work");
+          setNote(null);
         }
       };
       if (mode === "bar") {
@@ -559,6 +583,13 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
 
   async function exportFigure(fmt: string): Promise<void> {
     if (!data) return;
+    // Faceted export (GUI_INTERACTION #12 slice 4b): drawFacets is set for
+    // exactly the modes that facet (box/violin/bar) — see the useEffect
+    // above. Checked before the flat branches below.
+    if (drawFacets && drawFacets.length > 0) {
+      await exportFacetedFigure(fmt);
+      return;
+    }
     if (mode === "bar") {
       if (!barData || barData.groups.length === 0) return;
       const spec: CategoricalFigureSpec = {
@@ -578,6 +609,74 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     }
     const spec = buildExportSpec(mode, data, groups, valueCol, valueLabel, groupLabel, dist, bins, fit, fmt);
     if (spec) await exportStatplotFigure(spec);
+  }
+
+  /** Rebuilds a `facets[]` wire payload from `drawFacets` and renders one
+   *  faceted figure — the SAME ceil(sqrt(n)) grid the screen shows (gap
+   *  #21's shared `calc.figure_facets` layout). Bar facets reuse
+   *  `draw.data` directly (already the full category x series matrix,
+   *  computed synchronously with no possible per-slice degrade); box/violin
+   *  facets reuse the raw `rawGroups` values `computeFacetGroupDraws`
+   *  attached, paired with each facet's OWN resolved `draw.mode` for
+   *  per-slice degrade fidelity — a violin facet that fell back to box on
+   *  screen (its own /api/statplots/violin call failed) exports as box, not
+   *  a fresh (and maybe now-successful) violin recompute. */
+  async function exportFacetedFigure(fmt: string): Promise<void> {
+    if (!drawFacets || drawFacets.length === 0) return;
+    if (mode === "bar") {
+      const facets: CategoricalFacetSpec[] = [];
+      for (const f of drawFacets) {
+        const draw = f.draw;
+        if (draw.mode !== "bar") continue;
+        facets.push({
+          label: f.label,
+          groups: draw.data.groups.map((g) => g.label),
+          series: draw.data.seriesLabels,
+          values: draw.data.groups.map((g) => g.series.map((s) => s.mean)),
+          errors: draw.data.groups.map((g) => g.series.map((s) => (Number.isFinite(s.sem) ? s.sem : null))),
+        });
+      }
+      if (!facets.length) return;
+      const spec: CategoricalFigureSpec = {
+        groups: facets[0].groups,
+        series: facets[0].series,
+        values: facets[0].values,
+        errors: facets[0].errors,
+        stacked: barStack,
+        fmt,
+        title: `${barValueLabel} by ${groupLabel}, faceted`,
+        x_label: groupLabel,
+        y_label: barValueLabel,
+        filename: `bar_${barValueLabel}_faceted`,
+        facets,
+      };
+      await exportCategoricalFigure(spec);
+      return;
+    }
+    if (mode !== "box" && mode !== "violin") return;
+    const facets: StatplotFacetSpec[] = [];
+    for (const f of drawFacets) {
+      if (!f.rawGroups || f.rawGroups.length === 0) continue;
+      facets.push({
+        label: f.label,
+        kind: f.draw.mode === "violin" ? "violin" : "box",
+        data: f.rawGroups.map((g) => g.values),
+        labels: f.rawGroups.map((g) => g.label),
+      });
+    }
+    if (!facets.length) return;
+    const spec: StatplotFigureSpec = {
+      kind: mode,
+      data: facets[0].data,
+      labels: facets[0].labels,
+      fmt,
+      title: `${valueLabel} by ${groupLabel}, faceted`,
+      x_label: groupLabel,
+      y_label: valueLabel,
+      filename: `${mode}_${valueLabel}_faceted`,
+      facets,
+    };
+    await exportStatplotFigure(spec);
   }
 
   return {

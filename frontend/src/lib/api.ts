@@ -1596,10 +1596,26 @@ export function exportFieldFigure(body: FieldFigureSpec): Promise<void> {
   return postDownload("/api/export/field-figure", body, `field.${body.fmt ?? "pdf"}`);
 }
 
+/** One box/violin small-multiple panel (GUI_INTERACTION #12 slice 4b —
+ *  StatStage's faceted export). `kind` is per-facet MODE FIDELITY: a violin
+ *  facet that degraded to box ON SCREEN (its own /api/statplots/violin call
+ *  failed independently of its sibling facets) carries `kind: "box"` so the
+ *  export shows the SAME degrade rather than a fresh recompute; omitted
+ *  falls back to the request's own top-level `kind`. */
+export interface StatplotFacetSpec {
+  label: string;
+  kind?: "box" | "violin";
+  data: number[][];
+  labels?: string[] | null;
+}
+
 /** A statistical-plot export request (StatStage's "Export figure" button):
  *  `data` is a list of groups for box/violin, or one flat sample for
  *  qq/histogram — the SAME raw values the interactive stats/box, /violin,
- *  /qq, /histogram calls saw, so the exported figure matches the stage. */
+ *  /qq, /histogram calls saw, so the exported figure matches the stage.
+ *  `facets` (optional) renders a faceted box/violin small-multiples grid
+ *  instead of the flat single panel — `data`/`labels` above are still
+ *  required by the wire shape but unused server-side in that case. */
 export interface StatplotFigureSpec {
   kind: "box" | "violin" | "qq" | "probability" | "histogram";
   data: number[][] | number[];
@@ -1614,6 +1630,7 @@ export interface StatplotFigureSpec {
   y_label?: string;
   dpi?: number;
   filename?: string;
+  facets?: StatplotFacetSpec[] | null;
 }
 
 /** Render a statistical plot (box/violin/Q-Q/histogram) server-side
@@ -1628,8 +1645,22 @@ export function exportStatplotFigure(body: StatplotFigureSpec): Promise<void> {
 // the mean, `errors[group][series]` the SEM (null = no error bar for that
 // cell), so the exported figure matches the on-screen bars exactly.
 
+/** One bar-chart small-multiple panel (GUI_INTERACTION #12 slice 4b —
+ *  StatStage bar mode's faceted export). Self-contained (own `groups`): a
+ *  facet-column level can be absent from one slice, so panels never share
+ *  one category set. */
+export interface CategoricalFacetSpec {
+  label: string;
+  groups: string[];
+  series: string[];
+  values: number[][];
+  errors: (number | null)[][];
+}
+
 /** A grouped/stacked bar-chart export request (StatStage bar mode's "Export
- *  figure" button). */
+ *  figure" button). `facets` (optional) renders a faceted small-multiples
+ *  grid instead of the flat single panel — `groups`/`series`/`values` above
+ *  are still required by the wire shape but unused server-side in that case. */
 export interface CategoricalFigureSpec {
   groups: string[]; // category tick labels, in axis order
   series: string[]; // series (legend) labels, in stack/cluster order
@@ -1643,6 +1674,7 @@ export interface CategoricalFigureSpec {
   y_label?: string;
   dpi?: number;
   filename?: string;
+  facets?: CategoricalFacetSpec[] | null;
 }
 
 /** Render a grouped/stacked bar chart server-side (matplotlib) and download

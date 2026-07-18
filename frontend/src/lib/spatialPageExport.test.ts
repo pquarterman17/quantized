@@ -119,7 +119,10 @@ describe("buildSpatialPageRequest", () => {
     expect(fig.overrides?.legend).toEqual({ show: false });
   });
 
-  it("carries primary annotations but drops y2 annotations the page endpoint cannot place", () => {
+  it("carries every finite annotation through, including axis:1 ones (GUI_INTERACTION #12 slice 4c)", () => {
+    // The wire schema has no per-annotation axis tag (same as the
+    // single-figure path's liveViewOverrides), so an axis:1 mark rides
+    // through unchanged rather than being dropped — see the module doc.
     const fig = buildSpatialPageRequest(
       [panel({
         annotations: [
@@ -130,25 +133,81 @@ describe("buildSpatialPageRequest", () => {
       new Map([["ds1", ds()]]),
       defaultPageSetup(),
     )!.panels[0].figure;
-    expect(fig.overrides?.annotations).toEqual([{ x: 0.2, y: 0.4, text: "primary" }]);
+    expect(fig.overrides?.annotations).toEqual([
+      { x: 0.2, y: 0.4, text: "primary" },
+      { x: 0.3, y: 0.5, text: "secondary" },
+    ]);
   });
 
-  it("omits y2 curves instead of flattening them onto the primary export axis", () => {
+  it("carries y2 curves through (GUI_INTERACTION #12 slice 4c: real twinx support) instead of omitting them", () => {
     const fig = buildSpatialPageRequest(
       [panel({ yKeys: [1, 2], y2Keys: [2] })],
       new Map([["ds1", ds()]]),
       defaultPageSetup(),
     )!.panels[0].figure;
-    expect(fig.y_keys).toEqual([1]);
+    expect(fig.y_keys).toEqual([1, 2]); // full plotted list, primary + y2
+    expect(fig.y2_keys).toEqual([2]); // the y2 subset
   });
 
-  it("fails closed when a panel has no representable primary-axis curve", () => {
+  it("a panel made solely of a y2 overlay still renders (no longer fails the whole export closed)", () => {
     const spec = buildSpatialPageRequest(
       [panel({ yKeys: [1], y2Keys: [1] })],
       new Map([["ds1", ds()]]),
       defaultPageSetup(),
     );
-    expect(spec).toBeNull();
+    expect(spec).not.toBeNull();
+    const fig = spec!.panels[0].figure;
+    expect(fig.y_keys).toEqual([1]);
+    expect(fig.y2_keys).toEqual([1]);
+  });
+
+  it("gates y2_lim/minor-ticks to panels that actually plot a y2 channel", () => {
+    const withY2 = buildSpatialPageRequest(
+      [panel({ yKeys: [1, 2], y2Keys: [2], y2Lim: [1, 100], y2Log: true })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    expect(withY2.overrides?.y2_lim).toEqual([1, 100]);
+    expect(withY2.overrides?.ticks).toEqual({ minor: true });
+    expect(withY2.y2_scale).toBe("log");
+
+    // A y2Lim/y2Log decoded on the panel but no y2Keys plotted at all —
+    // must not leak a stale y2_lim/minor-ticks with no y2 axis to apply it to.
+    const noY2Plotted = buildSpatialPageRequest(
+      [panel({ yKeys: [1, 2], y2Lim: [1, 100], y2Log: true })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    expect(noY2Plotted.overrides?.y2_lim).toBeUndefined();
+    expect(noY2Plotted.overrides?.ticks).toBeUndefined();
+    expect(noY2Plotted.y2_keys).toBeUndefined();
+  });
+
+  it("omits y2_label to let the backend auto-derive it, unless the panel decoded one", () => {
+    const derived = buildSpatialPageRequest(
+      [panel({ yKeys: [1, 2], y2Keys: [2] })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    expect(derived.y2_label).toBeUndefined();
+
+    const decoded = buildSpatialPageRequest(
+      [panel({ yKeys: [1, 2], y2Keys: [2], y2AxisLabel: "SLD (10⁻⁶ Å⁻²)" })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    expect(decoded.y2_label).toBe("SLD (10⁻⁶ Å⁻²)");
+  });
+
+  it("the primary-axis single-channel Y-label fallback never borrows a y2 channel's name", () => {
+    // channel 1 is the LONE primary series, channel 2 is a y2 overlay —
+    // the auto-derived y_label must describe channel 1 ("b"), not channel 2.
+    const fig = buildSpatialPageRequest(
+      [panel({ yKeys: [1, 2], y2Keys: [2] })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    expect(fig.y_label).toBe("b");
   });
 
   it("carries page appearance, panel limits, and log minor-tick state", () => {

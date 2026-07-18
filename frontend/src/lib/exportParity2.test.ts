@@ -6,7 +6,7 @@
 // limits, labels, scales/steps/formats, series display); THIS file covers
 // rows 5-8: the y2-split display-order regression, decor (annotations/
 // shapes/legend/grid/spines/log ticks), the error-bar documented gap, and
-// the two fail-closed pins (faceted stat export, xy facet-export reset).
+// the fail-closed pins (faceted stat export, xy facet-export reset).
 //
 // Row 6 was a THIRD real finding (rows 1 and 2's findings are in the
 // sibling file's header), now FIXED (GUI_INTERACTION #12 slice 4a):
@@ -23,6 +23,32 @@
 //     `calc.figure_overrides._apply_overrides` applies it to the primary
 //     axes (`render_with_secondary_axis` threads `ov["ticks"]["minor"]`
 //     through, nothing more).
+//
+// 8b (xy facet-export xKey/yKeys reset) is ALSO now FIXED (GUI_INTERACTION
+// #12 slice 4b): `store/windows.ts`'s `focusedRebindPatch` (the shared body
+// of `setActive`/`rebindWindow`'s focused-target path) only spreads
+// `datasetViewDefaults(ds)` — the xKey/yKeys/seriesStyles/… reset — when
+// `id` is a GENUINE dataset switch (`s.activeId !== id`); re-activating the
+// dataset that's already active (facetByColumn's trailing `setActive` call,
+// among others) now leaves the live channel selection untouched.
+//
+// 8a (faceted stat export) is ALSO now FIXED (GUI_INTERACTION #12 slice
+// 4b): `useStatStage.exportFigure` reads `drawFacets` (when set) instead of
+// the flat `draw`, rebuilding a `facets[]` wire payload — box/violin facets
+// carry each panel's raw finite-value groups (`FacetDraw.rawGroups`) PLUS
+// that panel's own resolved mode (`FacetDraw.draw.mode`, per-slice degrade
+// fidelity — a violin facet that independently fell back to box on screen
+// exports as box); bar facets reuse `draw.data` directly. The backend
+// (`calc.figure_facets.render_stat_facets_figure`/
+// `render_categorical_facets_figure`) composes one small-multiples figure
+// via the SAME ceil(sqrt(n)) grid the screen shows, reusing
+// `figure_statplots`/`figure_categorical`'s own per-panel draw functions so
+// a single facet matches that module's flat single-panel export exactly.
+// `StatStage.tsx`'s Export button now enables on EITHER `draw` or
+// `drawFacets`. Covered end-to-end in `useStatStage.test.ts`'s "faceted
+// export" describe block (not duplicated here — that hook-level harness
+// already exercises the request-assembly path this file's OWN 1-7 matrix
+// covers for the xy family).
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -230,30 +256,31 @@ describe("7. Error bars — documented gap", () => {
   });
 });
 
-describe("8. Fail-closed documentation pins", () => {
-  // 8a — faceted stat marks: useStatStage's "flat draw goes null while
-  // drawFacets is set" shape (StatStage.tsx disables Export via `!st.draw`)
-  // is already covered by useStatStage.test.ts's "faceted box: drawFacets
-  // has one draw per finite facet level; the flat draw stays null" test,
-  // extended with a comment referencing this harness rather than duplicated
-  // here (per the task's own instruction to avoid a redundant second test
-  // of the same hook state).
+describe("8. Formerly fail-closed, now FIXED (GUI_INTERACTION #12 slice 4b)", () => {
+  // 8a — faceted stat marks: FIXED. useStatStage's "flat draw goes null
+  // while drawFacets is set" shape (StatStage.tsx now enables Export via
+  // `st.draw || st.drawFacets`) is exercised end-to-end in
+  // useStatStage.test.ts's "faceted export" describe block (request
+  // assembly, per-facet mode fidelity, bar/box/violin) — not duplicated
+  // here, since this file's own request-assembly harness is for the xy
+  // family (rows 1-7 above), not the Stat Stage's own hook-local exporter.
 
-  // 8b — xy facet-export xKey/yKeys reset: `facetByColumn` (store/useApp.ts)
-  // computes its panels from the LIVE xKey/yKeys when the target dataset is
-  // already active (captured correctly — the facetPanels below really do
-  // reflect the pre-facet selection), but then unconditionally calls
-  // `setActive(datasetId)`, whose `focusedRebindPatch` -> `datasetViewDefaults`
-  // resets xKey/yKeys to null REGARDLESS of whether the dataset was already
-  // active (store/windows.ts has no "already this id" special case). A
-  // subsequent export therefore silently reverts to the default dense-
-  // channel set instead of what the facet grid is actually showing. Booked
-  // in plans/GUI_INTERACTION_PLAN.md's #11 Completed note ("the xy family's
-  // facet-export xKey/yKeys reset... ride #12's canonical-spec work") — this
-  // pins the CURRENT (fallback) behavior as a known gap, not correct
-  // behavior, so it must be revisited (not just re-asserted) when #12
-  // Slice 4 lands.
-  it("GAP: facetByColumn resets the live xKey/yKeys even when the SAME dataset stays active, so a post-facet export silently reverts to the default channel set", async () => {
+  // 8b — xy facet-export xKey/yKeys reset: FIXED (GUI_INTERACTION #12 slice
+  // 4b). `facetByColumn` (store/useApp.ts) computes its panels from the LIVE
+  // xKey/yKeys when the target dataset is already active (captured
+  // correctly — the facetPanels below really do reflect the pre-facet
+  // selection), then calls `setActive(datasetId)` to normalize window/tab
+  // state. That call used to unconditionally reset xKey/yKeys to null via
+  // `focusedRebindPatch` -> `datasetViewDefaults`, even though `datasetId`
+  // was ALREADY active — `store/windows.ts` now only applies
+  // `datasetViewDefaults` on a genuine dataset switch (`s.activeId !== id`),
+  // so a same-id `setActive` (facetByColumn/breakAtGaps's trailing call, a
+  // drag-drop re-target, …) leaves the live selection untouched. A
+  // subsequent export therefore reflects what the facet grid is actually
+  // showing, not the default dense-channel fallback. Was booked in
+  // plans/GUI_INTERACTION_PLAN.md's #11 Completed note ("the xy family's
+  // facet-export xKey/yKeys reset... ride #12's canonical-spec work").
+  it("FIXED: facetByColumn preserves the live xKey/yKeys when the SAME dataset stays active, so a post-facet export reflects the pre-facet channel selection", async () => {
     const facetData: DataStruct = {
       time: [0, 1, 2, 3],
       values: [
@@ -277,14 +304,39 @@ describe("8. Fail-closed documentation pins", () => {
     useApp.getState().facetByColumn("d1", 2); // facet by "grp" — d1 is already active
     expect(useApp.getState().facetPanels?.length).toBe(2); // 2 finite grp levels
 
-    // The panels themselves DO carry the pre-facet selection (facetByColumn
-    // reads xKey/yKeys before calling setActive) — it's the STORE's live
-    // singleton fields that get clobbered afterward.
-    expect(useApp.getState().xKey).toBeNull();
-    expect(useApp.getState().yKeys).toBeNull();
+    // The panels captured the pre-facet selection AND the store's live
+    // singleton fields now survive the trailing setActive call intact.
+    expect(useApp.getState().xKey).toBe(1);
+    expect(useApp.getState().yKeys).toEqual([0]);
 
     const body = await exportBody();
-    expect(body.x_key).toBeUndefined(); // reverted to .time, not channel 1
-    expect(body.y_keys).toEqual([0, 1, 2]); // default-dense fallback, not the pre-facet [0]
+    expect(body.x_key).toBe(1); // the pre-facet x channel, not .time
+    expect(body.y_keys).toEqual([0]); // the pre-facet y selection, not the dense fallback
+  });
+
+  it("a facetByColumn targeting a DIFFERENT (not-yet-active) dataset still resets to that dataset's defaults", async () => {
+    const otherData: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [5, 0],
+        [6, 0],
+        [7, 1],
+        [8, 1],
+      ],
+      labels: ["C", "grp"],
+      units: ["u", ""],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [makeDataset(), { id: "d2", name: "other.dat", data: otherData }],
+      activeId: "d1",
+      xKey: null,
+      yKeys: [0],
+    });
+    useApp.getState().facetByColumn("d2", 1); // d1 was active, not d2 — a genuine switch
+    expect(useApp.getState().activeId).toBe("d2");
+    // datasetViewDefaults still applies on a real switch: yKeys resets to
+    // null (plot-all) since d1's [0] selection is meaningless for d2's columns.
+    expect(useApp.getState().yKeys).toBeNull();
   });
 });

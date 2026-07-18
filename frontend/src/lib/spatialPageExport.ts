@@ -19,9 +19,25 @@
 // NEVER adds a `margins` override to a panel's figure payload (unlike
 // lib/exportFigureCommand.ts's single-figure path), or the real whitespace
 // would be squeezed a second time.
+//
+// Secondary (right) Y axis (GUI_INTERACTION #12 slice 4c): the page endpoint
+// now has a real twinx model (calc.figure_page._draw_panel ->
+// figure_y2.render_with_secondary_axis, reused verbatim from the
+// single-figure path), so a panel's y2 channels are no longer filtered out
+// of `plotted`, and a panel made SOLELY of a y2 overlay no longer fails the
+// whole export closed. `spatialPanelFigure` mirrors
+// lib/exportFigureCommand.ts's own y2Plotted derivation + `gateY2Overrides`
+// two-pass gating (reused, not reimplemented) so a doubleY spatial panel
+// (the PNR SLD graphs this residual exists for) exports exactly like its
+// on-screen dual-Y render. Data-coordinate annotations pinned to the y2
+// scale (`Annotation.axis === 1`) are no longer dropped either — the wire
+// schema has no per-annotation axis tag (same as the single-figure path's
+// own `liveViewOverrides`), so they render in the PRIMARY axes' data
+// coordinates, an accepted pre-existing limitation this path now simply
+// shares instead of being needlessly MORE conservative about.
 
 import { buildExportStyles } from "./exportStyles";
-import { compactOverrides, type FigureOverrides } from "./figureOverrides";
+import { compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
 import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./multipanel";
 import { pageValidRects } from "./panelLayout";
 import { pageSizeInches, type PageSetup } from "./pagesetup";
@@ -48,9 +64,11 @@ function panelOverrides(
   const labels = panel.seriesLabels ?? {};
   const hasLegend = Object.keys(labels).length > 0 || !!panel.legendTitle;
   const annotations = (panel.annotations ?? [])
-    // The page endpoint is single-axis today. Dropping a proven y2 mark is
-    // honest; drawing it against primary Y would put it at the wrong value.
-    .filter((ann) => ann.axis !== 1 && Number.isFinite(ann.x) && Number.isFinite(ann.y))
+    // GUI_INTERACTION #12 slice 4c: axis:1 (y2-pinned) annotations are no
+    // longer dropped — see the module doc for why rendering them in the
+    // primary axes' data coordinates is an accepted, pre-existing limitation
+    // shared with the single-figure export path, not a new one.
+    .filter((ann) => Number.isFinite(ann.x) && Number.isFinite(ann.y))
     .map((ann) => ({
       x: ann.x,
       y: ann.y,
@@ -71,10 +89,18 @@ function panelOverrides(
     annotations,
     x_lim: panel.xLim,
     y_lim: panel.yLim,
+    // GUI_INTERACTION #12 slice 4c: a fixed secondary range, mirroring
+    // x_lim/y_lim above — gated (dropped if no y2 channel is actually
+    // plotted) by `spatialPanelFigure`'s `gateY2Overrides` call, same
+    // two-pass pattern as lib/exportFigureCommand.ts's liveViewOverrides/
+    // runExportFigureCommand split.
+    y2_lim: panel.y2Lim ?? undefined,
     grid: appearance?.showGrid,
     spines: appearance
       ? { top: appearance.showAxisBox, right: appearance.showAxisBox }
       : undefined,
+    // Primary-axis-only condition (matches liveViewOverrides) — a log-scaled
+    // y2 axis is folded in separately via gateY2Overrides' `minorTicks`.
     ticks: panel.xLog || panel.yLog ? { minor: true } : undefined,
   }) ?? undefined;
 }
@@ -84,14 +110,14 @@ function spatialPanelFigure(
   dataset: DataStruct,
   appearance?: SpatialPageAppearance,
 ): FigureSpec | null {
-  // The page endpoint has no twinx model. Omit secondary-axis curves rather
-  // than flattening them onto primary Y at scientifically wrong coordinates.
-  const y2 = new Set(panel.y2Keys ?? []);
-  const plotted = spatialPlottedChannels(panel).filter((ch) => !y2.has(ch));
-  // A panel made solely from a secondary-axis overlay cannot be represented
-  // by the single-axis page schema. Fail the whole export closed instead of
-  // emitting an empty/ambiguous panel or rebinding those values to primary Y.
+  // GUI_INTERACTION #12 slice 4c: the page endpoint now has a real twinx
+  // model (calc.figure_page._draw_panel), so y2 channels stay in `plotted`
+  // (full list, display order) — `y2Plotted` tags the secondary-axis
+  // subset, mirroring lib/exportFigureCommand.ts's own y2Plotted split.
+  const plotted = spatialPlottedChannels(panel);
   if (plotted.length === 0) return null;
+  const y2Set = new Set(panel.y2Keys ?? []);
+  const y2Plotted = plotted.filter((ch) => y2Set.has(ch));
   const decodedLabels = panel.seriesLabels ?? {};
   const hasLegend = Object.keys(decodedLabels).length > 0 || !!panel.legendTitle;
   // Matplotlib suppresses labels beginning with "_". For a partial decoded
@@ -105,12 +131,18 @@ function spatialPanelFigure(
         ),
       }
     : dataset;
-  const only = plotted.length === 1 ? plotted[0] : null;
+  // The single-channel Y-label fallback derives from the PRIMARY axis only
+  // (mirrors calc.figure._figure_series' own `primary_only` derivation) — a
+  // panel with exactly one primary channel plus a y2 overlay must not
+  // borrow the y2 channel's name for the primary axis label.
+  const primaryOnly = plotted.filter((ch) => !y2Set.has(ch));
+  const only = primaryOnly.length === 1 ? primaryOnly[0] : null;
   const fallbackYLabel = only == null
     ? undefined
     : dataset.units[only]
       ? `${dataset.labels[only]} (${dataset.units[only]})`
       : dataset.labels[only];
+  const minorTicks = !!(panel.xLog || panel.yLog || (y2Plotted.length > 0 && panel.y2Log));
   return {
     dataset: exportDataset,
     x_key: panel.xKey ?? undefined,
@@ -126,7 +158,21 @@ function spatialPanelFigure(
     x_step: panel.xStep,
     y_step: panel.yStep,
     series_styles: buildExportStyles(plotted, panel.seriesStyles ?? {}),
-    overrides: panelOverrides(panel, appearance),
+    overrides: gateY2Overrides(panelOverrides(panel, appearance), {
+      y2Plotted: y2Plotted.length > 0,
+      minorTicks,
+    }),
+    ...(y2Plotted.length
+      ? {
+          y2_keys: y2Plotted,
+          // Blank/undecoded -> omit and let the backend auto-derive it the
+          // same way it does for the single-figure route (calc's
+          // _figure_series: a lone y2 series -> "label (unit)").
+          y2_label: panel.y2AxisLabel || undefined,
+          y2_scale: panel.y2Log ? "log" : undefined,
+          y2_step: panel.y2Step ?? undefined,
+        }
+      : {}),
   };
 }
 

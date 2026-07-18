@@ -274,3 +274,120 @@ def test_no_rect_requests_unaffected_by_free_placement_code() -> None:
     panels = [_panel(0, 0), _panel(0, 1), _panel(1, 0), _panel(1, 1)]
     out = render_figure_page(panels, rows=2, cols=2, fmt="pdf")
     assert out[:5] == b"%PDF-"
+
+
+# ── secondary (right) Y axis / twinx (GUI_INTERACTION #12 slice 4c) ────────
+# The page composer's own real Axes.twinx() -- mirrors test_calc_figure_y2.py's
+# render_figure(y2_mask=...) coverage for the single-figure path this reuses
+# (figure_y2.draw_secondary_axes/render_with_secondary_axis, unmodified).
+
+
+def _y2_panel(row: int, col: int, y2_mask: list[bool], **kw: Any) -> PagePanel:
+    x = np.linspace(0.0, 5.0, 30)
+    series = [("primary", np.sin(x)), ("secondary", 100.0 * np.cos(x))]
+    return PagePanel(x=x, series=series, row=row, col=col, y2_mask=y2_mask, **kw)
+
+
+def test_no_y2_mask_is_byte_identical_to_omitting_it() -> None:
+    # PNG (not PDF): a PDF's /CreationDate second-resolution timestamp would
+    # make two renders straddling a second boundary differ by those bytes
+    # alone -- PNG has no such timestamp (mirrors test_calc_figure_y2.py's
+    # own precedent).
+    omitted = render_figure_page([_panel(0, 0)], rows=1, cols=1, fmt="png", dpi=72)
+    explicit_false = render_figure_page(
+        [_panel(0, 0, y2_mask=[False])], rows=1, cols=1, fmt="png", dpi=72
+    )
+    assert omitted == explicit_false
+
+
+def test_panel_with_y2_mask_renders_a_real_twinx_axes() -> None:
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    panels = [_y2_panel(0, 0, [False, True])]
+    st = figure_style("default")
+    fig = _build_page_figure(
+        panels, free_placement=False, w=6.0, h=4.0, rows=1, cols=1,
+        st=st, label_format="(a)", label_pos="nw",
+    )
+    try:
+        # The primary subplot axes plus its twinx sibling.
+        assert len(fig.axes) == 2
+        assert fig.axes[1] is not fig.axes[0]
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+
+
+def test_y2_panel_renders_and_differs_from_flat_render() -> None:
+    flat = render_figure_page(
+        [_y2_panel(0, 0, [False, False])], rows=1, cols=1, fmt="png", dpi=72
+    )
+    with_y2 = render_figure_page(
+        [_y2_panel(0, 0, [False, True])], rows=1, cols=1, fmt="png", dpi=72
+    )
+    assert flat[:8] == b"\x89PNG\r\n\x1a\n"
+    assert with_y2[:8] == b"\x89PNG\r\n\x1a\n"
+    assert flat != with_y2
+
+
+def test_mixed_page_one_y2_panel_one_flat_panel_both_render() -> None:
+    panels = [_y2_panel(0, 0, [False, True]), _panel(0, 1)]
+    out = render_figure_page(panels, rows=1, cols=2, fmt="svg")
+    assert b"<svg" in out[:300]
+
+
+def test_y2_mask_length_mismatch_raises() -> None:
+    p = _y2_panel(0, 0, [True])  # 2 series, 1-entry mask
+    with pytest.raises(ValueError, match="y2_mask must have the same length"):
+        render_figure_page([p], rows=1, cols=1)
+
+
+def test_y2_label_scale_and_step_apply_to_the_secondary_axis() -> None:
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    panels = [
+        _y2_panel(0, 0, [False, True], y2_label="secondary (units)", y2_scale="log")
+    ]
+    st = figure_style("default")
+    fig = _build_page_figure(
+        panels, free_placement=False, w=6.0, h=4.0, rows=1, cols=1,
+        st=st, label_format="(a)", label_pos="nw",
+    )
+    try:
+        ax2 = fig.axes[1]
+        assert ax2.get_ylabel() == "secondary (units)"
+        assert ax2.get_yscale() == "log"
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+
+
+def test_y2_lim_override_fixes_the_secondary_axis_range() -> None:
+    from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_styles import figure_style
+
+    panels = [_y2_panel(0, 0, [False, True], overrides={"y2_lim": [1.0, 10.0]})]
+    st = figure_style("default")
+    fig = _build_page_figure(
+        panels, free_placement=False, w=6.0, h=4.0, rows=1, cols=1,
+        st=st, label_format="(a)", label_pos="nw",
+    )
+    try:
+        ax2 = fig.axes[1]
+        assert ax2.get_ylim() == (1.0, 10.0)
+    finally:
+        import matplotlib.pyplot as plt
+
+        plt.close(fig)
+
+
+def test_y2_free_placement_also_renders_a_twinx() -> None:
+    # #54 free page-coordinate placement + #12 slice 4c y2 are independent
+    # dimensions -- a panel can use both at once.
+    p = _y2_panel(0, 0, [False, True], page_rect=(0.1, 0.1, 0.8, 0.8))
+    out = render_figure_page([p], rows=1, cols=1, fmt="png", dpi=72)
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"

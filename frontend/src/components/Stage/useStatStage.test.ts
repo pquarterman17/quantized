@@ -1,7 +1,12 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { statsBox, statsViolin } from "../../lib/api";
+import {
+  exportCategoricalFigure,
+  exportStatplotFigure,
+  statsBox,
+  statsViolin,
+} from "../../lib/api";
 import type { DataStruct, Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
 import { useStatStage, type UseStatStageParams } from "./useStatStage";
@@ -10,6 +15,8 @@ vi.mock("../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/api")>()),
   statsBox: vi.fn(),
   statsViolin: vi.fn(),
+  exportStatplotFigure: vi.fn(),
+  exportCategoricalFigure: vi.fn(),
 }));
 
 // Same fixture shape verified in lib/plotspec.test.ts's "box/bar faceting"
@@ -67,6 +74,8 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(statsBox).mockImplementation(() => new Promise(() => {}));
   vi.mocked(statsViolin).mockImplementation(() => new Promise(() => {}));
+  vi.mocked(exportStatplotFigure).mockResolvedValue(undefined);
+  vi.mocked(exportCategoricalFigure).mockResolvedValue(undefined);
 });
 
 describe("useStatStage — faceting (GUI_INTERACTION #11)", () => {
@@ -96,14 +105,16 @@ describe("useStatStage — faceting (GUI_INTERACTION #11)", () => {
     expect(result.current.drawFacets).toHaveLength(2); // levels "0"/"1"; "2" dropped
     expect(result.current.drawFacets?.map((f) => f.label)).toEqual(["0", "1"]);
     expect(result.current.drawFacets?.every((f) => f.draw.mode === "box")).toBe(true);
-    expect(result.current.note).toContain("faceted view");
     expect(result.current.error).toBeNull();
-    // GUI_INTERACTION #12 Slice 1 (lib/exportParity.test.ts, matrix row 8)
-    // pins this exact shape as its "faceted stat state fails closed" harness
-    // assertion: StatStage.tsx disables the Export button via `!st.draw`, so
-    // a null flat `draw` while `drawFacets` holds the small multiples IS the
-    // export-disable signal the harness relies on — restated explicitly so a
-    // change here is felt as a harness break, not just a local one.
+    // GUI_INTERACTION #12 slice 4b: each box facet carries its raw finite
+    // groups alongside the computed draw — exportFigure rebuilds a faithful
+    // per-facet request from these (matplotlib recomputes its own stats, so
+    // export can't reuse `draw.boxes` the way bar facets reuse `draw.data`).
+    expect(result.current.drawFacets?.[0].rawGroups?.map((g) => g.label)).toEqual(["grp = 0", "grp = 1"]);
+    // A null flat `draw` while `drawFacets` holds the small multiples is
+    // still the "no flat panel to export" signal — StatStage.tsx's Export
+    // button now ALSO checks `drawFacets` (slice 4b), so this no longer
+    // disables Export outright, just routes it to the faceted path.
     expect(result.current.draw).toBeNull();
   });
 
@@ -116,7 +127,6 @@ describe("useStatStage — faceting (GUI_INTERACTION #11)", () => {
     expect(result.current.drawFacets).toHaveLength(2);
     // Never fabricate a KDE offline — every slice degrades to box.
     expect(result.current.drawFacets?.every((f) => f.draw.mode === "box")).toBe(true);
-    expect(result.current.note).toContain("faceted view");
     // Real client-side math on the level-"0" slice's grp=0 group ([10,12,14]).
     const firstDraw = result.current.drawFacets?.[0].draw;
     if (firstDraw?.mode === "box") {
@@ -124,6 +134,11 @@ describe("useStatStage — faceting (GUI_INTERACTION #11)", () => {
     } else {
       throw new Error("expected a box draw");
     }
+    // GUI_INTERACTION #12 slice 4b: this IS the per-slice mode-fidelity case
+    // exportFigure must honor — every facet's `draw.mode` reads "box" (the
+    // degrade), so a faceted export sends `kind: "box"` per facet, never a
+    // fresh violin recompute for a slice that failed on screen.
+    expect(result.current.drawFacets?.every((f) => f.rawGroups && f.rawGroups.length > 0)).toBe(true);
   });
 
   it("bar facets synchronously (no backend round-trip) and drops the empty level", async () => {
@@ -194,5 +209,104 @@ describe("useStatStage — faceting (GUI_INTERACTION #11)", () => {
     act(() => result.current.setFacetCol(null));
     await waitFor(() => expect(result.current.draw).not.toBeNull());
     expect(result.current.drawFacets).toBeNull();
+  });
+});
+
+describe("useStatStage — faceted export (GUI_INTERACTION #12 slice 4b)", () => {
+  it("box: exportFigure sends one facets[] entry per level, each with its raw finite groups + labels", async () => {
+    vi.mocked(statsBox).mockResolvedValue({
+      n_groups: 2,
+      boxes: [
+        { label: "grp = 0", q1: 1, median: 2, q3: 3, iqr: 2, whislo: 0, whishi: 4, mean: 2, n: 6, fliers: [], whis: 1.5 },
+        { label: "grp = 1", q1: 1, median: 2, q3: 3, iqr: 2, whislo: 0, whishi: 4, mean: 2, n: 6, fliers: [], whis: 1.5 },
+      ],
+    });
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setFacetCol(2));
+    await waitFor(() => expect(result.current.drawFacets).not.toBeNull());
+
+    await act(async () => {
+      await result.current.exportFigure("pdf");
+    });
+
+    expect(exportStatplotFigure).toHaveBeenCalledTimes(1);
+    expect(exportCategoricalFigure).not.toHaveBeenCalled();
+    const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
+    expect(spec.kind).toBe("box");
+    expect(spec.fmt).toBe("pdf");
+    expect(spec.facets).toHaveLength(2);
+    expect(spec.facets?.[0]).toMatchObject({
+      label: "0",
+      kind: "box",
+      data: [[10, 12, 14], [30, 32, 34]],
+      labels: ["grp = 0", "grp = 1"],
+    });
+    expect(spec.facets?.[1].label).toBe("1");
+  });
+
+  it("violin: a per-facet kind carries each slice's OWN resolved mode, not a uniform re-request (per-slice degrade fidelity)", async () => {
+    // grp=0's slice degrades (statsViolin throws); grp=1's slice succeeds —
+    // a mixed grid, exactly the case exportFigure must reproduce faithfully.
+    vi.mocked(statsViolin).mockImplementation(async (values) => {
+      if (values.includes(10)) throw new Error("boom"); // the grp=0 slice's first group
+      return { x: [0, 1], density: [0.1, 0.2], bandwidth: 0.5, quartiles: [1, 2, 3], n: values.length };
+    });
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setMode("violin"));
+    act(() => result.current.setFacetCol(2));
+    await waitFor(() => expect(result.current.drawFacets).not.toBeNull());
+    expect(result.current.drawFacets?.[0].draw.mode).toBe("box"); // degraded
+    expect(result.current.drawFacets?.[1].draw.mode).toBe("violin"); // succeeded
+
+    await act(async () => {
+      await result.current.exportFigure("svg");
+    });
+
+    const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
+    expect(spec.kind).toBe("violin"); // the top-level requested mode
+    expect(spec.facets?.[0].kind).toBe("box"); // per-facet override: this slice degraded
+    expect(spec.facets?.[1].kind).toBe("violin"); // this slice succeeded
+  });
+
+  it("bar: exportFigure reuses each facet's already-computed matrix (no re-derivation)", async () => {
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setMode("bar"));
+    act(() => result.current.setFacetCol(2));
+    await waitFor(() => expect(result.current.drawFacets).not.toBeNull());
+
+    await act(async () => {
+      await result.current.exportFigure("png");
+    });
+
+    expect(exportCategoricalFigure).toHaveBeenCalledTimes(1);
+    expect(exportStatplotFigure).not.toHaveBeenCalled();
+    const spec = vi.mocked(exportCategoricalFigure).mock.calls[0][0];
+    expect(spec.fmt).toBe("png");
+    expect(spec.facets).toHaveLength(2);
+    expect(spec.facets?.map((f) => f.label)).toEqual(["0", "1"]);
+    expect(spec.facets?.[0].series).toEqual(spec.series); // consistent series across facets
+  });
+
+  it("qq/histogram never facet, so exportFigure always takes the flat path even with a facetCol set on a prior mode", async () => {
+    vi.mocked(statsBox).mockResolvedValue({
+      n_groups: 2,
+      boxes: [
+        { label: "grp = 0", q1: 1, median: 2, q3: 3, iqr: 2, whislo: 0, whishi: 4, mean: 2, n: 6, fliers: [], whis: 1.5 },
+        { label: "grp = 1", q1: 1, median: 2, q3: 3, iqr: 2, whislo: 0, whishi: 4, mean: 2, n: 6, fliers: [], whis: 1.5 },
+      ],
+    });
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    act(() => result.current.setFacetCol(2)); // box mode facets
+    await waitFor(() => expect(result.current.drawFacets).not.toBeNull());
+    act(() => result.current.setMode("qq")); // qq never facets — drawFacets clears
+    await waitFor(() => expect(result.current.drawFacets).toBeNull());
+
+    await act(async () => {
+      await result.current.exportFigure("pdf");
+    });
+
+    const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
+    expect(spec.kind).toBe("qq");
+    expect(spec.facets).toBeUndefined();
   });
 });

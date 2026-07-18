@@ -37,7 +37,7 @@ baseline framing) are under Owner actions below, not here.
 | Item | Plan / item |
 |------|-------------|
 | Larger bets / polish: unified select→edit Plot Objects tree (#2, owner-gate scope), canonical plot spec across surfaces (#12), buttons/menus/tooltips polish (#17), owner-dependent Origin gaps (#16) | GUI_INTERACTION Tier 1–3 |
-| **Origin layout generality residual** — overlay grouping generalized past pairs (`adab0cc`, corpus 12/12·99/99·4/4 clean) AND y2 export twinx fix (`08b7066`: single-figure export no longer flattens y2 onto the wrong axis; page-panel y2 422s loudly) BOTH SHIPPED 2026-07-18; remaining: native >2-Y-axes rendering (specimen-gated) + generalized page/layer MODEL + page-export y2 (all ride GUI #12's canonical spec) | ORIGIN_FILE_DECODE #54 |
+| **Origin layout generality residual** — overlay grouping generalized past pairs (`adab0cc`, corpus 12/12·99/99·4/4 clean) AND y2 export twinx fix (`08b7066`: single-figure export no longer flattens y2 onto the wrong axis) AND page-export y2 (GUI #12 slice 4b: `routes/export_page.py`'s 422 guard replaced with real `figure_y2.render_with_secondary_axis` threading per panel; `lib/spatialPageExport.ts` no longer filters y2 channels/fails a y2-only panel closed) ALL SHIPPED 2026-07-18; remaining: native >2-Y-axes rendering (specimen-gated) + generalized page/layer MODEL (rides GUI #12's canonical spec) | ORIGIN_FILE_DECODE #54 |
 
 ## Owner actions & owner-gated decisions
 

@@ -11,7 +11,8 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-18 (#12 Slice 3 landed)
+**Updated:** 2026-07-18 (#12 Slice 4b landed — faceted stat export, xy
+facet-export reset, page-export y2)
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -184,10 +185,47 @@ plotting, publication export.
           or whose axes block carries y2 content — FigureDoc has no y2 field
           (`figuredoc.ts`'s documented limitation). Frontend 3951 + 2
           expected-fail green; build green.
-    - [ ] Slice 4 — export adapter + the booked export residuals: faceted
-          stat export, xy facet-export xKey/yKeys reset, page-export y2,
-          and Slice 1's pinned findings (stale y2_lim gate, log-y2 minor
-          ticks incl. the twinx overrides sweep, y2_fmt store field + UI).
+    - [ ] Slice 4 — export adapter + the booked export residuals. Slice 1's
+          pinned findings (stale y2_lim gate, log-y2 minor ticks incl. the
+          twinx overrides sweep) landed as slice 4a (`a90048d`). Slice 4b
+          (2026-07-18) closed the three remaining named residuals: **faceted
+          stat export** — `useStatStage.exportFigure` now reads `drawFacets`
+          (box/violin facets carry each panel's raw finite-value groups PLUS
+          its own resolved mode for per-slice degrade fidelity — a violin
+          facet that independently fell back to box on screen exports as
+          box; bar facets reuse `draw.data` directly), backed by
+          `calc.figure_facets.render_stat_facets_figure`/
+          `render_categorical_facets_figure` (new — composes the SAME
+          ceil(sqrt(n)) grid the screen shows, reusing
+          `figure_statplots`/`figure_categorical`'s own per-panel draw
+          functions) behind an OPTIONAL `facets` list on the existing
+          `/statplot-figure`/`/categorical-figure` requests (byte-identical
+          when absent); `StatStage.tsx`'s Export button now enables on
+          EITHER `draw` or `drawFacets`. **xy facet-export xKey/yKeys
+          reset** — `store/windows.ts`'s `focusedRebindPatch` (the shared
+          body of `setActive`/`rebindWindow`'s focused-target path) only
+          resets channel-keyed view state on a GENUINE dataset switch
+          (`s.activeId !== id`); re-activating the dataset that's already
+          active (`facetByColumn`'s trailing `setActive` call, among others)
+          no longer clobbers the live selection. **page-export y2** —
+          `calc.figure_page.PagePanel` gains `y2_mask`/`y2_label`/
+          `y2_scale`/`y2_fmt`/`y2_step` (mirrors `calc.figure._render_impl`'s
+          own y2 params verbatim) and dispatches to
+          `figure_y2.render_with_secondary_axis` (reused, not reimplemented)
+          per panel; `routes/export_page.py`'s 422 guard (commit `08b7066`)
+          is gone — a page panel's `y2_keys` now threads through for real;
+          `lib/spatialPageExport.ts` stops filtering y2 channels out of
+          `plotted` and drops its y2-only-panel fail-closed guard, mirroring
+          `lib/exportFigureCommand.ts`'s own y2Plotted/`gateY2Overrides`
+          two-pass pattern (reused). Axis:1 annotations are no longer
+          dropped either (the wire schema has no per-annotation axis tag —
+          same accepted limitation the single-figure path's
+          `liveViewOverrides` already has, now just shared rather than being
+          needlessly more conservative). Backend 2979 passed + 3 skipped +
+          12 xfailed, ruff + mypy clean; frontend 3971 tests + build green.
+          **Still open in Slice 4:** `y2_fmt` store field + UI (a screen y2
+          axis format control) — the wire field exists
+          (`FigureRequest.y2_fmt`) but has no store field/UI yet.
     - [ ] Slice 5 — Stage adapter (buildOpts reads the spec's blocks);
           ALSO now owns two residuals surfaced by Slice 3: (a) make
           `openSpec` apply a reopened v2 spec's blocks back onto the live

@@ -686,12 +686,21 @@ Official model references used for this routing:
       legend from both axes' handles; right spine stays visible with a live
       y2; incompatible with `x_breaks` → loud ValueError).
       `routes/export_figures.py` split (would have crossed the 500-line
-      ceiling) → new `export_figures_aux.py`. RESIDUAL booked: the
-      multi-panel PAGE export (`figure_page.PagePanel`) has no y2 — a
-      page-panel request carrying `y2_keys` now 422s LOUDLY (and the
-      spatial page-export UI still omits y2 curves fail-closed); rides the
-      #12 canonical-spec/page-layer work. Backend 2936+ruff+mypy, frontend
-      3865+build green.
+      ceiling) → new `export_figures_aux.py`. Backend 2936+ruff+mypy, frontend
+      3865+build green. RESIDUAL (the multi-panel PAGE export had no y2 — a
+      page-panel request carrying `y2_keys` 422ed LOUDLY, and the spatial
+      page-export UI omitted y2 curves fail-closed) CLOSED 2026-07-18 as
+      GUI_INTERACTION #12 slice 4b: `figure_page.PagePanel` gains
+      `y2_mask`/`y2_label`/`y2_scale`/`y2_fmt`/`y2_step` (mirrors
+      `_render_impl`'s own y2 params) and dispatches to
+      `figure_y2.render_with_secondary_axis` per panel (reused, not
+      reimplemented); the 422 guard in `routes/export_page.py` is gone;
+      `lib/spatialPageExport.ts` no longer filters y2 channels out of
+      `plotted` or fails a y2-only panel closed — the PNR SLD doubleY
+      figures now export their real secondary axis on a page. See
+      `plans/GUI_INTERACTION_PLAN.md`'s #12 Slice 4b entry for the full
+      detail (also closed the same day: faceted stat export, xy
+      facet-export xKey/yKeys reset).
     - [ ] **Native >2-Y-axes rendering.** SPECIMEN-GATED: no corpus figure
       has a proven ≥3-coincident-axis composition, and the backend decoder
       itself buckets only YL/YR titles (`figure_text._TITLE_OBJECT_BUCKETS`)

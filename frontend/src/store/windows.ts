@@ -160,7 +160,7 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
     // it always means "show me the plot", so it uses `plotIntentStageTab`
     // (never sticks on a stale Worksheet tab; owner-routing item 1).
     stageTab: ds ? plotIntentStageTab(ds) : s.stageTab,
-    ...datasetViewDefaults(ds),
+    ...(s.activeId === id ? {} : datasetViewDefaults(ds)), // #12 slice 4b: a GENUINE dataset switch resets channel-keyed defaults; re-activating the id that's ALREADY active (facetByColumn/breakAtGaps's trailing setActive) must not clobber a selection the caller just made — exportParity2.test.ts 8b
     // A plain click on a different dataset always drops a prior spatial
     // multi-panel arrangement (decode-plan #36) — it was built for a specific
     // figure's layers, not whatever is now active. Same for facet/x-break

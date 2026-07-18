@@ -28,6 +28,44 @@ __all__ = ["render_categorical_figure"]
 _FORMATS = ("pdf", "svg", "png", "tiff")
 
 
+def _draw_categorical_bars(
+    ax: Any,
+    groups: list[str],
+    series: list[str],
+    vals: Any,
+    errs: Any | None,
+    stacked: bool,
+) -> None:
+    """Draw one grouped/stacked bar panel into `ax` — shared by the flat
+    single-panel path below and `figure_facets.render_categorical_facets_figure`
+    (GUI_INTERACTION #12 slice 4b), so a faceted panel matches the flat
+    export exactly. Caller applies title/axis-labels/spines/legend/grid —
+    this function only draws the bars + category ticks + zero baseline."""
+    n_groups, n_series = len(groups), len(series)
+    x = np.arange(n_groups, dtype=float)
+    if stacked:
+        bottom = np.zeros(n_groups)
+        for si in range(n_series):
+            yerr = errs[:, si] if errs is not None and si == n_series - 1 else None
+            ax.bar(
+                x, vals[:, si], 0.68, bottom=bottom, yerr=yerr, capsize=3,
+                label=series[si],
+            )
+            bottom = bottom + np.nan_to_num(vals[:, si])
+    else:
+        width = 0.8 / n_series
+        for si in range(n_series):
+            offset = (si - (n_series - 1) / 2) * width
+            yerr = errs[:, si] if errs is not None else None
+            ax.bar(
+                x + offset, vals[:, si], width * 0.85, yerr=yerr, capsize=3,
+                label=series[si],
+            )
+    ax.set_xticks(x)
+    ax.set_xticklabels(groups)
+    ax.axhline(0, color="0.3", linewidth=0.8)  # baseline, visible for mixed-sign data
+
+
 def _to_matrix(
     values: list[list[float]], n_groups: int, n_series: int, name: str
 ) -> np.ndarray:
@@ -111,28 +149,7 @@ def render_categorical_figure(
     with matplotlib.rc_context(rc):  # type: ignore[arg-type]
         fig, ax = plt.subplots(figsize=figsize)
         try:
-            x = np.arange(n_groups, dtype=float)
-            if stacked:
-                bottom = np.zeros(n_groups)
-                for si in range(n_series):
-                    yerr = errs[:, si] if errs is not None and si == n_series - 1 else None
-                    ax.bar(
-                        x, vals[:, si], 0.68, bottom=bottom, yerr=yerr, capsize=3,
-                        label=series[si],
-                    )
-                    bottom = bottom + np.nan_to_num(vals[:, si])
-            else:
-                width = 0.8 / n_series
-                for si in range(n_series):
-                    offset = (si - (n_series - 1) / 2) * width
-                    yerr = errs[:, si] if errs is not None else None
-                    ax.bar(
-                        x + offset, vals[:, si], width * 0.85, yerr=yerr, capsize=3,
-                        label=series[si],
-                    )
-            ax.set_xticks(x)
-            ax.set_xticklabels(groups)
-            ax.axhline(0, color="0.3", linewidth=0.8)  # baseline, visible for mixed-sign data
+            _draw_categorical_bars(ax, groups, series, vals, errs, stacked)
             if title:
                 ax.set_title(title)
             if x_label:

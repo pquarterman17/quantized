@@ -415,10 +415,13 @@ export function useGraphBuilder(): GraphBuilderState {
   // the exact same way as any other stat-stage state: the Stat Stage's OWN
   // Export button disables itself while `drawFacets` is non-null (see
   // useStatStage's doc) — this toast hand-off never risks silently exporting
-  // the wrong flat panel. The xy family's OWN facet export is a separate,
-  // still-open residual: facetByColumn resets the live xKey/yKeys (baked
-  // into facetPanels instead), so an exported xy facet spec falls back to
-  // the plot's default channel selection.
+  // the wrong flat panel. The xy family's OWN facet export used to be a
+  // separate residual (facetByColumn's trailing setActive reset the live
+  // xKey/yKeys even though the dataset was already active, so an exported xy
+  // facet spec fell back to the plot's default channel selection) — FIXED
+  // in GUI_INTERACTION #12 slice 4b (store/windows.ts's focusedRebindPatch
+  // now only resets channel-keyed defaults on a genuine dataset switch), so
+  // the export below reflects whatever channels the facet grid is showing.
   const exportPlot = async (): Promise<void> => {
     if (!ds || !canSend) return;
     sendToStage();

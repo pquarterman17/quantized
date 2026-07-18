@@ -282,6 +282,69 @@ def test_statplot_bad_kind_is_422() -> None:
     assert resp.status_code == 422
 
 
+# ── /api/export/statplot-figure facets (GUI_INTERACTION #12 slice 4b) ───────
+def test_statplot_facets_box_pdf() -> None:
+    resp = client.post(
+        "/api/export/statplot-figure",
+        json={
+            "kind": "box",
+            "data": [[1, 2, 3]],  # unused single-panel fallback, still required
+            "facets": [
+                {"label": "grp=0", "data": [[1, 2, 3, 4], [2, 3, 4, 5]], "labels": ["A", "B"]},
+                {"label": "grp=1", "data": [[5, 6, 7], [6, 7, 8]], "labels": ["A", "B"]},
+            ],
+            "fmt": "pdf",
+            "filename": "box facets",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.headers["content-disposition"] == 'attachment; filename="box_facets.pdf"'
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_statplot_facets_per_facet_kind_mixes_box_and_violin() -> None:
+    # Per-slice mode fidelity: a violin facet that degraded to box on screen
+    # carries its own "kind", independent of the request's top-level "kind".
+    resp = client.post(
+        "/api/export/statplot-figure",
+        json={
+            "kind": "violin",
+            "data": [[1, 2, 3]],
+            "facets": [
+                {"label": "grp=0", "kind": "violin", "data": [[1, 2, 3, 4, 5]]},
+                {"label": "grp=1", "kind": "box", "data": [[2, 3, 4, 5, 6]]},
+            ],
+            "fmt": "png",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_statplot_facets_bad_kind_is_422() -> None:
+    resp = client.post(
+        "/api/export/statplot-figure",
+        json={
+            "kind": "box",
+            "data": [[1, 2]],
+            "facets": [{"label": "a", "kind": "swarm", "data": [[1, 2, 3]]}],
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_statplot_facets_empty_list_falls_back_to_single_panel() -> None:
+    # An empty (not None) facets list is falsy -> today's flat single-panel
+    # path, matching the calc layer's own `if req.facets:` gate.
+    resp = client.post(
+        "/api/export/statplot-figure",
+        json={"kind": "box", "data": [[1, 2, 3], [4, 5, 6]], "facets": [], "fmt": "pdf"},
+    )
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
 def test_map_figure_degenerate_grid_is_422_not_500() -> None:
     # a 1-wide grid used to raise matplotlib TypeError -> 500
     resp = client.post(
@@ -786,6 +849,62 @@ def test_categorical_figure_bad_format_is_422() -> None:
     assert resp.status_code == 422
 
 
+# ── /api/export/categorical-figure facets (GUI_INTERACTION #12 slice 4b) ────
+def test_categorical_facets_grouped_pdf() -> None:
+    resp = client.post(
+        "/api/export/categorical-figure",
+        json={
+            "groups": ["Low"], "series": ["A"], "values": [[1.0]],  # unused fallback
+            "facets": [
+                {
+                    "label": "grp=0", "groups": ["Low", "High"], "series": ["A", "B"],
+                    "values": [[10.0, 20.0], [15.0, 25.0]], "errors": [[1.0, None], [2.0, 3.0]],
+                },
+                {
+                    "label": "grp=1", "groups": ["Low", "High"], "series": ["A", "B"],
+                    "values": [[5.0, 8.0], [6.0, 9.0]],
+                },
+            ],
+            "fmt": "pdf",
+            "filename": "bar facets",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.headers["content-disposition"] == 'attachment; filename="bar_facets.pdf"'
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_categorical_facets_panels_with_different_category_sets() -> None:
+    resp = client.post(
+        "/api/export/categorical-figure",
+        json={
+            "groups": ["Low"], "series": ["A"], "values": [[1.0]],
+            "facets": [
+                {
+                    "label": "a", "groups": ["Low", "High"], "series": ["A"],
+                    "values": [[1.0], [2.0]],
+                },
+                {"label": "b", "groups": ["Low"], "series": ["A"], "values": [[3.0]]},
+            ],
+            "fmt": "png",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_categorical_facets_shape_mismatch_is_422() -> None:
+    resp = client.post(
+        "/api/export/categorical-figure",
+        json={
+            "groups": ["A"], "series": ["x"], "values": [[1.0]],
+            "facets": [{"label": "a", "groups": ["A", "B"], "series": ["x"], "values": [[1.0]]}],
+        },
+    )
+    assert resp.status_code == 422
+
+
 # ── /api/export/facets-figure (gap #21 faceting) ────────────────────────────
 def test_facets_figure_pdf() -> None:
     resp = client.post(
@@ -910,10 +1029,11 @@ def test_figure_hitmap_with_y2_does_not_error() -> None:
     assert "series:0" in ids and "series:1" in ids
 
 
-def test_figure_page_panel_with_y2_keys_is_422_not_silently_dropped() -> None:
-    # The page composer has no twinx model yet (booked residual) — a y2
-    # request must fail loud, not silently flatten onto the primary axis
-    # (the exact bug the single-figure route above just fixed).
+def test_figure_page_panel_with_y2_keys_renders_a_real_twinx() -> None:
+    # GUI_INTERACTION #12 slice 4c: FIXED — a page panel's y2_keys now
+    # threads through to a real Axes.twinx() (calc.figure_page._draw_panel),
+    # the same as the single-figure /figure route (test_figure_y2_subset_
+    # renders_a_real_twinx above); it no longer fails loud with a 422.
     resp = client.post(
         "/api/export/figure-page",
         json={
@@ -921,7 +1041,58 @@ def test_figure_page_panel_with_y2_keys_is_422_not_silently_dropped() -> None:
             "cols": 1,
             "panels": [
                 {
+                    "figure": {
+                        "dataset": _three_channel_dataset(), "y2_keys": ["c"],
+                        "y2_scale": "log",
+                    },
+                    "row": 0,
+                    "col": 0,
+                }
+            ],
+            "fmt": "png",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_figure_page_two_panels_one_with_y2_one_without_both_render() -> None:
+    # A mixed page (a doubleY panel alongside an ordinary one) must not
+    # cross-contaminate — each panel's own y2_mask is independent.
+    resp = client.post(
+        "/api/export/figure-page",
+        json={
+            "rows": 1,
+            "cols": 2,
+            "panels": [
+                {
                     "figure": {"dataset": _three_channel_dataset(), "y2_keys": ["c"]},
+                    "row": 0, "col": 0,
+                },
+                {
+                    "figure": {"dataset": _three_channel_dataset()},
+                    "row": 0, "col": 1,
+                },
+            ],
+            "fmt": "pdf",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
+def test_figure_page_panel_y2_keys_not_a_subset_of_y_keys_is_422() -> None:
+    resp = client.post(
+        "/api/export/figure-page",
+        json={
+            "rows": 1,
+            "cols": 1,
+            "panels": [
+                {
+                    "figure": {
+                        "dataset": _three_channel_dataset(), "y_keys": ["a", "b"],
+                        "y2_keys": ["c"],
+                    },
                     "row": 0,
                     "col": 0,
                 }
@@ -930,4 +1101,3 @@ def test_figure_page_panel_with_y2_keys_is_422_not_silently_dropped() -> None:
         },
     )
     assert resp.status_code == 422
-    assert "y2_keys" in resp.json()["detail"]

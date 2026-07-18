@@ -209,9 +209,13 @@ export default function StatStage() {
         <span className="qzk-tool-sep" />
         <Button
           size="sm"
-          disabled={!st.draw || exporting}
+          disabled={(!st.draw && !st.drawFacets) || exporting}
           onClick={() => void onExport()}
-          title="Render this plot server-side and download it (PDF)"
+          title={
+            st.drawFacets
+              ? "Render this facet grid server-side and download it (PDF)"
+              : "Render this plot server-side and download it (PDF)"
+          }
         >
           ⤓ Export
         </Button>
