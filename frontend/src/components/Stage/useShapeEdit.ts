@@ -3,13 +3,21 @@
 // object menu (stroke/fill swatches, opacity/width/dash, pin to page/data,
 // delete). Extracted out of PlotStage the same way useAnnotationEdit is
 // (keep PlotStage under its line ceiling).
+//
+// GUI_INTERACTION #8 residual: the menu's fixed actions (Dashed, pin
+// toggle, Delete) now come from the shared registry
+// (`annotationShapeActions`) via `buildMenuItems` — defined once, reused by
+// the ⌘K palette and the selection mini-toolbar. The swatch/opacity/width
+// pickers (parameterized, not discrete actions) stay hand-built here.
 
 import { useEffect, useMemo, useState } from "react";
 
+import { buildMenuItems } from "../../lib/contextActions";
 import { SERIES_VARS, cssVar, type BuildOptsArgs } from "../../lib/uplotOpts";
-import { DEFAULT_SHAPE_WIDTH, resolveShapeOpacity, type ShapeAnchorConversion } from "../../lib/uplotShapes";
+import { DEFAULT_SHAPE_WIDTH, resolveShapeOpacity } from "../../lib/uplotShapes";
 import { useApp } from "../../store/useApp";
 import type { ContextMenuItem, Swatch } from "../overlays/ContextMenu";
+import { shapeDeleteAction, shapeToggleActions, type ShapeConv } from "./annotationShapeActions";
 
 const OPACITY_STEPS = [0.25, 0.5, 0.75, 1] as const;
 const WIDTH_STEPS = [1, 2, 3] as const;
@@ -34,7 +42,6 @@ export function useShapeEdit(tool: string): ShapeEditResult {
   const selectedShapeId = useApp((s) => s.selectedShapeId);
   const setSelectedShapeId = useApp((s) => s.setSelectedShapeId);
   const updateShape = useApp((s) => s.updateShape);
-  const removeShape = useApp((s) => s.removeShape);
   const hasShapes = useApp((s) => s.shapes.length > 0);
   const [menu, setMenu] = useState<ShapeMenuState | null>(null);
 
@@ -48,31 +55,13 @@ export function useShapeEdit(tool: string): ShapeEditResult {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedShapeId, setSelectedShapeId]);
 
-  // MAIN #27: flip a shape between "data" (moves with zoom/pan) and "page"
-  // (canvas-fraction, resize-stable) anchoring, converting BOTH endpoints
-  // IN PLACE from the plugin's precomputed `conv` — same reasoning as
-  // useAnnotationEdit's togglePageAnchor.
-  const togglePageAnchor = (id: string, conv: { toPage: ShapeAnchorConversion; toData: ShapeAnchorConversion }) => {
-    const s = useApp.getState().shapes.find((x) => x.id === id);
-    if (s?.anchor === "page") {
-      updateShape(id, { anchor: "data", ...conv.toData });
-    } else {
-      updateShape(id, { anchor: "page", ...conv.toPage });
-    }
-  };
-
-  const openMenu = (
-    id: string,
-    clientX: number,
-    clientY: number,
-    conv: { toPage: ShapeAnchorConversion; toData: ShapeAnchorConversion },
-  ) => {
+  const openMenu = (id: string, clientX: number, clientY: number, conv: ShapeConv) => {
     const s = useApp.getState().shapes.find((x) => x.id === id);
     if (!s) return;
-    const isPage = s.anchor === "page";
     const opacity = resolveShapeOpacity(s);
     const width = s.width ?? DEFAULT_SHAPE_WIDTH;
     const canFill = s.kind === "rect" || s.kind === "ellipse";
+    const target = { id, conv };
     // The "ink" swatch shows the app's general foreground token as a stand-in
     // (the REAL resolved plot ink color depends on this window's background
     // override, resolved only at draw/export time) — clicking it clears the
@@ -133,21 +122,9 @@ export function useShapeEdit(tool: string): ShapeEditResult {
             run: () => updateShape(id, { width: w }),
           })),
         },
-        { label: "Dashed", checked: !!s.dash, run: () => updateShape(id, { dash: !s.dash }) },
-        {
-          label: isPage ? "Pin to data (follows zoom)" : "Pin to page (stays on zoom)",
-          checked: isPage,
-          run: () => togglePageAnchor(id, conv),
-        },
+        ...buildMenuItems(shapeToggleActions, target),
         { separator: true },
-        {
-          label: "Delete",
-          danger: true,
-          run: () => {
-            removeShape(id);
-            setSelectedShapeId(null);
-          },
-        },
+        ...buildMenuItems([shapeDeleteAction], target),
       ],
     });
   };

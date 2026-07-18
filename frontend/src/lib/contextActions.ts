@@ -3,9 +3,11 @@
 // the array for its object type via `buildMenuItems` instead of hand-rolling
 // a `ContextMenuItem[]` inline — so an action is defined exactly once and
 // every right-click menu offering it renders the identical label/gating.
-// (Command Palette / Plot Objects tree (#2) / mini-toolbar reuse is future
-// work — see the plan's residual note; this lands the registry + the 3
-// mandatory retrofits: dataset row, folder row, plot curve.)
+// (Consumers today: the retrofitted right-click menus — dataset row, folder
+// row, plot curve, worksheet column/row, window title bar, annotation/shape
+// objects — plus the ⌘K palette (`lib/paletteContextActions` via
+// `actionPaletteEntry`) and the selection mini-toolbar
+// (`Stage/SelectionMiniToolbar`). The Plot Objects tree (#2) stays gated.)
 //
 // `run()` calls the store (`useApp.getState()`) or the existing `folderOps`
 // helpers DIRECTLY, unlike the older ad-hoc builders that threaded a bag of
@@ -33,6 +35,7 @@ import { askConfirm } from "../components/overlays/ConfirmDialog";
 import type { PlotMenuContext, MenuSeries } from "./plotMenu";
 import { loadTemplates } from "./template";
 import type { Dataset, FolderNode } from "./types";
+import type { Action as PaletteAction } from "../store/commands";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 
@@ -57,6 +60,13 @@ export interface ContextAction<T> {
   hidden?: (t: T) => boolean;
   /** Data-destroying / hard-to-reverse — routes through `askConfirm` first. */
   destructive?: boolean;
+  /** Renders red like `destructive` but WITHOUT the confirm step — for
+   *  deleting cheap-to-recreate canvas objects (annotation/shape), where a
+   *  confirm dialog would cost more than the object (undo is the eventual
+   *  answer there — owner-gated #1). */
+  danger?: boolean;
+  /** Checkmark state for toggle actions (menu renders ✓). */
+  checked?: (t: T) => boolean;
   confirm?: (t: T) => ConfirmSpec;
   run: (t: T) => void;
 }
@@ -89,7 +99,29 @@ export function actionMenuItem<T>(a: ContextAction<T>, t: T): ContextMenuItem | 
     label: resolveLabel(a, t),
     run: () => runContextAction(a, t),
     disabled: a.enabled ? !a.enabled(t) : false,
-    danger: a.destructive || undefined,
+    danger: a.destructive || a.danger || undefined,
+    checked: a.checked ? a.checked(t) : undefined,
+  };
+}
+
+/** One registry action → one ⌘K palette `Action`, or null when the entry
+ *  doesn't apply: hidden/disabled entries are OMITTED (the palette has no
+ *  greyed rows — a command you can't run shouldn't be findable). The same
+ *  `runContextAction` routing means destructive entries keep their confirm
+ *  step when launched from the palette. */
+export function actionPaletteEntry<T>(
+  a: ContextAction<T>,
+  t: T,
+  group: string,
+  idPrefix: string,
+): PaletteAction | null {
+  if (a.hidden?.(t)) return null;
+  if (a.enabled && !a.enabled(t)) return null;
+  return {
+    id: `${idPrefix}.${a.id}`,
+    group,
+    label: resolveLabel(a, t),
+    run: () => runContextAction(a, t),
   };
 }
 
