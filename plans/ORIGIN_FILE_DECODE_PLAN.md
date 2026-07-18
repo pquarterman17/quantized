@@ -14,20 +14,16 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-17 (visual-import campaign PR 3 READY: ordinary
-publication export now sends the live x channel, visible draw order, decoded
-display labels, axes limits, grid/box state, log minor ticks, and imported
-title/axis-label defaults through existing renderer contracts; unsupported
-y2/error bars/region bands/reference lines remain explicit residuals). Same
-day, PR 2: already-decoded
-Rect* region bands now render in their owning spatial panel, including
-secondary-axis tagging for a frame-coincident y2 layer; positive-specimen
-corpus strict-pass 167/167 resolved / 0 renderer failures). Same day, PR 1:
-decoded static
-legends now render inside each spatial Origin panel, reusing the ordinary
-line+marker swatch and the panel's own frame-relative position; full corpus
-strict-pass 332 resolved / 18 known unresolved / 0 renderer failures). Same
-day, #54 residual SHIPPED: spatial-view export at true
+**Updated:** 2026-07-18 (visual-import campaign: the ENTIRE six-PR Codex
+stack #56–#61 reviewed + merged to main `854271c` — items #58–#63 below:
+spatial panel legends (#56), spatial region bands (#57), imported-view
+figure-export parity (#58), spatial-page export content parity (#59),
+saved-preview comparison window (#60), multi-panel presentation templates
+(#61). Independently verified on the stack tip: frontend 3,759 green +
+build, 18/18 Playwright e2e, full 12-project corpus strict-pass 332
+resolved / 18 known unresolved / 0 renderer / 0 process failures —
+baseline-identical, zero regressions. Prior same-day: #54 residual
+SHIPPED: spatial-view export at true
 page coordinates — free page-coordinate `add_axes` placement in
 `calc.figure_page` + a fail-closed "Export page…" command on the spatial
 MultiPanelStage). #54 layout generality remains ACTIVE: consolidation
