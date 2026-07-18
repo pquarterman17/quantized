@@ -39,6 +39,8 @@ export interface ZoneWellProps {
   multiple?: boolean;
   onAssign: (channel: number) => void;
   onRemove: (channel: number) => void;
+  /** Optional one-slot display-order move (used by the multi-value Y well). */
+  onMove?: (channel: number, direction: -1 | 1) => void;
   /** Optional: a channel-drag reached this well but was rejected (foreign
    *  dataset or a malformed payload) — callers can surface a toast. Omit for
    *  the original silent-reject behavior (dragging is exploratory). */
@@ -60,6 +62,7 @@ export default function ZoneWell({
   multiple = false,
   onAssign,
   onRemove,
+  onMove,
   onReject,
 }: ZoneWellProps) {
   const [over, setOver] = useState(false);
@@ -106,10 +109,34 @@ export default function ZoneWell({
         {assigned.length === 0 && !note && (
           <span className="qzk-zone-well-empty">drop a channel</span>
         )}
-        {assigned.map((c) => (
+        {assigned.map((c, index) => (
           <span key={c.channel} className="qzk-zone-chip">
+            {onMove && <span className="qzk-zone-chip-order">{index + 1}</span>}
             {c.label}
+            {onMove && (
+              <span className="qzk-zone-chip-move">
+                <button
+                  type="button"
+                  title={`Move ${c.label} earlier`}
+                  aria-label={`Move ${c.label} earlier`}
+                  disabled={index === 0}
+                  onClick={() => onMove(c.channel, -1)}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  title={`Move ${c.label} later`}
+                  aria-label={`Move ${c.label} later`}
+                  disabled={index === assigned.length - 1}
+                  onClick={() => onMove(c.channel, 1)}
+                >
+                  ↓
+                </button>
+              </span>
+            )}
             <button
+              type="button"
               className="qzk-zone-chip-x"
               title={`Remove ${c.label}`}
               aria-label={`Remove ${c.label}`}

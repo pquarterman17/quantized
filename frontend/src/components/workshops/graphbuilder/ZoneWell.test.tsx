@@ -124,4 +124,26 @@ describe("ZoneWell", () => {
     fireEvent.click(getByLabelText("Remove y"));
     expect(onRemove).toHaveBeenCalledWith(1);
   });
+
+  it("offers ordered, accessible one-slot moves for a multi-value well", () => {
+    const onMove = vi.fn();
+    const { getByLabelText, getByText } = render(
+      <ZoneWell
+        title="Y"
+        multiple
+        datasetId="d1"
+        options={OPTIONS}
+        assigned={[{ channel: 0, label: "x" }, { channel: 1, label: "y" }]}
+        onAssign={() => {}}
+        onRemove={() => {}}
+        onMove={onMove}
+      />,
+    );
+    expect(getByText("1")).toBeInTheDocument();
+    expect(getByText("2")).toBeInTheDocument();
+    expect(getByLabelText("Move x earlier")).toBeDisabled();
+    expect(getByLabelText("Move y later")).toBeDisabled();
+    fireEvent.click(getByLabelText("Move y earlier"));
+    expect(onMove).toHaveBeenCalledWith(1, -1);
+  });
 });

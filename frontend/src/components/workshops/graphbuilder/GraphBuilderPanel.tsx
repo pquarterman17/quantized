@@ -69,6 +69,7 @@ export default function GraphBuilderPanel() {
               assigned={g.chips("y")}
               onAssign={(c) => g.assign("y", c)}
               onRemove={(c) => g.remove("y", c)}
+              onMove={g.moveY}
             />
             <ZoneWell
               title="Group"

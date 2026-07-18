@@ -12,6 +12,7 @@ import {
   isMonotonicChannel,
   markContext,
   markFamily,
+  moveYZone,
   plotSpecsEqual,
   sanitizeSavedPlotSpecs,
   serializePlotSpec,
@@ -98,6 +99,14 @@ describe("channelRefEq + zone assignment", () => {
     expect(s.zones.y).toEqual([ref(2)]);
     s = clearZone(s, "group");
     expect(s.zones.group).toBeNull();
+  });
+
+  it("moves Y refs by one explicit display-order slot and no-ops at boundaries", () => {
+    const original = spec(ref(0), [ref(1), ref(2), ref(3)], "line");
+    const moved = moveYZone(original, ref(3), -1);
+    expect(moved.zones.y).toEqual([ref(1), ref(3), ref(2)]);
+    expect(moveYZone(moved, ref(1), -1)).toBe(moved);
+    expect(moveYZone(moved, ref(99), 1)).toBe(moved);
   });
 
   it("specDatasetId resolves the shared dataset (X wins, then Y)", () => {

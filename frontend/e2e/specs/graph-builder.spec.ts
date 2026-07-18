@@ -36,9 +36,14 @@ test("build, save, and reopen a Graph Builder PlotSpec", async ({ page }) => {
 
   await page.getByLabel("Assign a channel to X").selectOption({ label: "Resistance" });
   await page.getByLabel("Assign a channel to Y").selectOption({ label: "Voltage" });
+  await page.getByLabel("Assign a channel to Y").selectOption({ label: "Resistance" });
 
-  await expect(wellByTitle(page, "X").locator(".qzk-zone-chip")).toHaveText("Resistance×");
-  await expect(wellByTitle(page, "Y").locator(".qzk-zone-chip").first()).toHaveText("Voltage×");
+  await expect(wellByTitle(page, "X").locator(".qzk-zone-chip")).toContainText("Resistance");
+  const yChips = wellByTitle(page, "Y").locator(".qzk-zone-chip");
+  await expect(yChips).toHaveCount(2);
+  await page.getByRole("button", { name: "Move Resistance earlier" }).click();
+  await expect(yChips.nth(0)).toContainText("Resistance");
+  await expect(yChips.nth(1)).toContainText("Voltage");
 
   // ── Save As a named PlotSpec ────────────────────────────────────────────
   await page.getByRole("button", { name: "Save As…" }).click();
@@ -60,6 +65,7 @@ test("build, save, and reopen a Graph Builder PlotSpec", async ({ page }) => {
   );
   expect(saved).toHaveLength(1);
   expect(saved[0].name).toBe("E2E test graph");
+  expect((saved[0].spec as { zones: { y: { channel: number }[] } }).zones.y.map((r) => r.channel)).toEqual([0, 1]);
 
   // ── Reset the builder (clears the wells), then reopen the saved graph via
   //    PlotSpecBar's "Saved graphs" list and verify the wells restore ──────
@@ -77,8 +83,9 @@ test("build, save, and reopen a Graph Builder PlotSpec", async ({ page }) => {
   // `aria-label="<Action> E2E test graph"`, a superset substring match.
   await page.getByRole("button", { name: "E2E test graph", exact: true }).click(); // the Open row
 
-  await expect(wellByTitle(page, "X").locator(".qzk-zone-chip")).toHaveText("Resistance×");
-  await expect(wellByTitle(page, "Y").locator(".qzk-zone-chip").first()).toHaveText("Voltage×");
+  await expect(wellByTitle(page, "X").locator(".qzk-zone-chip")).toContainText("Resistance");
+  await expect(wellByTitle(page, "Y").locator(".qzk-zone-chip").nth(0)).toContainText("Resistance");
+  await expect(wellByTitle(page, "Y").locator(".qzk-zone-chip").nth(1)).toContainText("Voltage");
 
   const activeId = await page.evaluate(
     () =>

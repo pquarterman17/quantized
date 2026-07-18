@@ -338,6 +338,22 @@ describe("useGraphBuilder — open in Figure Builder", () => {
     expect(useApp.getState().figureBuilderOpen).toBe(false);
     expect(useApp.getState().figureDocSeed).toBeNull();
   });
+
+  it("preserves an explicit Y reorder through save, Stage, and Figure Builder", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("y", 2));
+    act(() => result.current.moveY(2, -1));
+    expect(result.current.chips("y").map((chip) => chip.channel)).toEqual([2, 1]);
+
+    act(() => result.current.saveAs("Ordered"));
+    expect(result.current.activeSpec?.spec.zones.y.map((ref) => ref.channel)).toEqual([2, 1]);
+    act(() => result.current.sendToStage());
+    expect(useApp.getState().yKeys).toEqual([2, 1]);
+    act(() => result.current.openInFigureBuilder());
+    expect(useApp.getState().figureDocSeed?.config.yKeys).toEqual([2, 1]);
+  });
 });
 
 describe("useGraphBuilder — saved PlotSpecs (GUI_INTERACTION_PLAN #11)", () => {

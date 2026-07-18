@@ -1,17 +1,6 @@
-// Graph Builder (ORIGIN_GAP_PLAN #51 phase 2, durable artifact GUI_INTERACTION
-// #11) — state hook. Holds a PlotSpec (lib/plotspec.ts — the grammar), morphs
-// the mark as channels land in the wells, renders a live preview off the
-// ANALYSIS view (guard #11, via specToRender → rowstate.analysisData), and
-// "sends" the spec to the main stage: scatter/line through the ordinary axis
-// store actions (setXKey/setYKeys — which record their own macro steps),
-// box/violin through the stat-stage seed (seedStatStage → useStatStage
-// pickers). When the Facet zone is also filled (scatter/line only —
-// box/violin/bar don't facet, see plotspec.ts), sendToStage enters the main
-// Stage's facet-grid mode (store.facetByColumn) instead of the flat plot:
-// setXKey/setYKeys run FIRST so facetByColumn's own "carry the current x/y
-// selection when the dataset is already active" rule picks them up (gap #21
-// residual — closes GAP_PLOTTYPES_PLAN item 5's booked (c)). Thin: all
-// grammar lives in lib/plotspec.
+// Graph Builder state hook (GUI_INTERACTION #11). PlotSpec grammar and pure
+// transforms live in lib/plotspec; this hook binds them to live datasets,
+// Stage/stat renderers, Figure Builder, export, and saved-spec CRUD.
 //
 // #11 "durable artifact": the CRUD (save/duplicate/rename/delete) lives in
 // store/graphBuilder.ts; this hook only wraps it with the live builder spec +
@@ -35,6 +24,7 @@ import {
   emptySpec,
   markContext,
   markFamily,
+  moveYZone,
   plotSpecsEqual,
   specDatasetId,
   specToRender,
@@ -66,6 +56,7 @@ export interface GraphBuilderState {
   chips: (zone: ZoneName) => WellChip[];
   assign: (zone: ZoneName, channel: number) => void;
   remove: (zone: ZoneName, channel: number) => void;
+  moveY: (channel: number, direction: -1 | 1) => void;
   cycle: () => void;
   /** Clears the wells AND unbinds from any saved spec — a fresh graph. */
   reset: () => void;
@@ -210,6 +201,8 @@ export function useGraphBuilder(): GraphBuilderState {
       return withInferredMark(next, markContext(next, datasets));
     });
   };
+  const moveY = (channel: number, direction: -1 | 1) => setSpec((prev) =>
+    moveYZone(prev, { datasetId: ds?.id ?? "", channel }, direction));
 
   const cycle = () => setSpec((prev) => ({ ...prev, mark: cycleMark(prev, markContext(prev, datasets)) }));
 
@@ -379,6 +372,7 @@ export function useGraphBuilder(): GraphBuilderState {
     chips,
     assign,
     remove,
+    moveY,
     cycle,
     reset,
     canSend,

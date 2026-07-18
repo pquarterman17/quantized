@@ -198,6 +198,18 @@ export function clearZone(spec: PlotSpec, zone: ZoneName, ref?: ChannelRef): Plo
   return { ...spec, zones };
 }
 
+/** Move one Y series by one display-order slot. This changes only the
+ * explicit PlotSpec list; it never mutates worksheet columns or source-row
+ * acquisition order. Boundary/missing moves preserve object identity. */
+export function moveYZone(spec: PlotSpec, ref: ChannelRef, direction: -1 | 1): PlotSpec {
+  const index = spec.zones.y.findIndex((candidate) => channelRefEq(candidate, ref));
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= spec.zones.y.length) return spec;
+  const y = [...spec.zones.y];
+  [y[index], y[target]] = [y[target], y[index]];
+  return { ...spec, zones: { ...spec.zones, y } };
+}
+
 /** The channel indices assigned to a zone (0..n; a single-slot zone yields 0 or
  *  1 entry). Handy for the UI's "assigned chips" rendering. */
 export function zoneChannels(spec: PlotSpec, zone: ZoneName): number[] {

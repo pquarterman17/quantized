@@ -437,6 +437,11 @@ body {
 .qzk-zone-well-empty { font-size: var(--font-size-sm); color: var(--text-faint); font-style: italic; }
 .qzk-zone-well-note { font-size: var(--type-nano); color: var(--text-faint); }
 .qzk-zone-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 6px; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent-text); font-size: var(--font-size-sm); }
+.qzk-zone-chip-order { min-width: 1.2em; color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-nano); text-align: right; }
+.qzk-zone-chip-move { display: inline-flex; gap: 1px; }
+.qzk-zone-chip-move button { border: none; border-radius: 2px; padding: 0 2px; background: transparent; color: inherit; line-height: 1; }
+.qzk-zone-chip-move button:hover:not(:disabled), .qzk-zone-chip-move button:focus-visible { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.qzk-zone-chip-move button:disabled { color: var(--text-faint); opacity: 0.45; }
 .qzk-zone-chip-x { border: none; background: none; color: inherit; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
 .qzk-zone-well-add { width: 100%; margin-top: 2px; }
 .qzk-graph-mark-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
