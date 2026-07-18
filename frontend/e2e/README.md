@@ -84,11 +84,13 @@ triple an already browser-heavy suite for marginal extra coverage, so:
 - **`chromium-125`** / **`chromium-200`** run only specs/tests tagged
   `@core` — the ones that directly exercise canvas hit-testing, pointer
   capture, or native drag-and-drop (import-drop, folder-organize,
-  curve-restyle, region-tool-escape): the exact gaps jsdom leaves
-  uncovered and the ones most likely to regress under a DPI change. Axis
-  editing, the Graph Builder, and the keyboard-only journey are plain DOM
-  form/keyboard interactions — not DPI-sensitive — so they run at the
-  100% baseline only.
+  curve-restyle, region-tool-escape, channel-axis-drag,
+  annotation-shape-lifecycle): the exact gaps jsdom leaves uncovered and
+  the ones most likely to regress under a DPI change. Axis editing, the
+  Graph Builder, the keyboard-only journey, the export round trip, and
+  window arrange/tile/cascade are plain DOM form/keyboard/pointer-on-chrome
+  interactions — not DPI-sensitive (no canvas hit-testing involved) — so
+  they run at the 100% baseline only.
 
 Run one project directly: `npx playwright test --project=chromium-125`.
 
@@ -103,13 +105,16 @@ Run one project directly: `npx playwright test --project=chromium-125`.
 | e | `graph-builder.spec.ts` — build a graph, Save As a named PlotSpec, reopen it | 100% only |
 | f | `region-tool-escape.spec.ts` — arm Integrate, drag, Esc cancels the gesture (tool stays armed); Esc with no drag reverts to Pointer | `@core` |
 | g | `keyboard-only.spec.ts` — import via the Command Palette, Shift+F10 opens a row's context menu, Enter activates an action — no mouse | 100% only |
+| h | `export-roundtrip.spec.ts` — Graph Builder → Figure Builder preview → real matplotlib PDF/SVG/PNG download → saved FigureDoc reopen → identical request | 100% only |
+| i | `channel-axis-drag.spec.ts` — drag a channel chip from the Channels card onto the plot's X/Y/Y2 axis bands, re-plotting it through the same store actions the card's own checkboxes use | `@core` |
+| j | `annotation-shape-lifecycle.spec.ts` — annotation create/edit-text/move/delete (right-click menu AND the selection mini-toolbar); shape draw/Dashed-toggle/delete — no undo coverage (gated on #1) | `@core` |
+| k | `window-arrange.spec.ts` — New Graph Window ×2, Tile Windows (non-overlapping grid), Cascade Windows (staggered offsets), maximize/restore via title-bar double-click, close via the title bar's own right-click menu | 100% only |
 
 ## Residuals (booked, not shipped here)
 
-See `plans/GUI_INTERACTION_PLAN.md` #15 for the dated progress note and the
-still-open sub-items: annotation/shape move/edit/delete/undo; channel→X/Y/Y2
-drag; window arrange/restore; export round-trip; undo/redo of a folder
-reorganize.
+See `plans/GUI_INTERACTION_PLAN.md` #15 for the dated progress note. Only
+remaining open sub-item: undo/redo of a folder reorganize (gated on the
+separate #1 owner decision — annotation/shape undo is the same gate).
 
 ## Notes for CI / non-interactive runs
 
