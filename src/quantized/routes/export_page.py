@@ -87,18 +87,29 @@ def export_figure_page(req: FigurePageRequest) -> Response:
         panels = []
         for spec in req.panels:
             f = spec.figure
-            x, series, x_label, y_label, styles = _figure_series(f)
+            resolved = _figure_series(f)
+            if any(resolved.y2_mask):
+                # The page composer has no twinx model yet (booked residual,
+                # not silently dropped -- see calc.figure_y2's module doc for
+                # the single-figure path this mirrors). Fail loud rather than
+                # silently flattening y2 channels onto the primary axis,
+                # which is exactly the bug the single-figure route just
+                # fixed.
+                raise HTTPException(
+                    status_code=422,
+                    detail="y2_keys is not supported on figure-page panels yet",
+                )
             panels.append(
                 PagePanel(
-                    x=x,
-                    series=series,
+                    x=resolved.x,
+                    series=resolved.series,
                     row=spec.row,
                     col=spec.col,
                     row_span=spec.row_span,
                     col_span=spec.col_span,
                     title=spec.title if spec.title is not None else f.title,
-                    x_label=x_label,
-                    y_label=y_label,
+                    x_label=resolved.x_label,
+                    y_label=resolved.y_label,
                     x_log=f.x_log,
                     y_log=f.y_log,
                     x_scale=f.x_scale,
@@ -107,7 +118,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                     y_fmt=_tick_fmt(f.y_fmt),
                     x_step=f.x_step,
                     y_step=f.y_step,
-                    series_styles=styles,
+                    series_styles=resolved.styles,
                     overrides=f.overrides,
                     label=spec.label,
                     page_rect=spec.page_rect,

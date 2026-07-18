@@ -15,7 +15,14 @@ from numpy.typing import NDArray
 
 from quantized.datastruct import DataStruct
 
-__all__ = ["PlotData", "PlotSeries", "PlotState", "build_series", "resolve_style_channels"]
+__all__ = [
+    "PlotData",
+    "PlotSeries",
+    "PlotState",
+    "build_series",
+    "resolve_style_channels",
+    "validate_y2_subset",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +60,25 @@ class PlotData:
 
 def _resolve(ds: DataStruct, key: int | str) -> int:
     return key if isinstance(key, int) else ds.labels.index(key)
+
+
+def validate_y2_subset(
+    y_keys: Sequence[int | str] | None, y2_keys: Sequence[int | str] | None
+) -> None:
+    """``y2_keys`` (the channels drawn on the secondary/right Y axis, MAIN
+    y2-export-parity) must be a SUBSET of ``y_keys`` (the full plotted
+    list) -- raises ``ValueError`` (the export route maps it to a 422)
+    rather than silently intersecting or dropping the mismatched entries.
+    ``y_keys is None`` means "every channel" (:func:`build_series`'s own
+    default), so any ``y2_keys`` passes here; an out-of-range channel is
+    still caught later by the normal channel-resolution error path
+    (:func:`_resolve`, via ``ValueError``/``KeyError``/``IndexError``)."""
+    if not y2_keys or y_keys is None:
+        return
+    y_set = set(y_keys)
+    bad = [k for k in y2_keys if k not in y_set]
+    if bad:
+        raise ValueError(f"y2_keys must be a subset of y_keys (not in y_keys: {bad!r})")
 
 
 def build_series(ds: DataStruct, state: PlotState | None = None) -> PlotData:

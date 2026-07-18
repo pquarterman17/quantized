@@ -14,6 +14,12 @@ export interface FigureOverrides {
   spines?: { top?: boolean; right?: boolean };
   x_lim?: [number | null, number | null];
   y_lim?: [number | null, number | null];
+  /** Fixed secondary (right) Y-axis range — the twinx counterpart of
+   *  `y_lim`, applied by `calc.figure_y2.render_with_secondary_axis`
+   *  (not `calc.figure_overrides._apply_overrides`, which only ever
+   *  targets a single axes). Only meaningful when the request also sets
+   *  `y2_keys`. */
+  y2_lim?: [number | null, number | null];
   margins?: { left?: number; right?: number; top?: number; bottom?: number };
   grid?: boolean;
   /** `size` (MAIN #18 — export parity for the pointer tool's font-size
@@ -101,7 +107,8 @@ export function compactOverrides(ov: FigureOverrides): FigureOverrides | null {
     if (Array.isArray(v)) {
       // limits: keep only when at least one bound is set; annotations/breaks/shapes: non-empty
       if ((k === "annotations" || k === "x_breaks" || k === "shapes") && v.length === 0) continue;
-      if ((k === "x_lim" || k === "y_lim") && v.every((b) => b === null)) continue;
+      if ((k === "x_lim" || k === "y_lim" || k === "y2_lim") && v.every((b) => b === null))
+        continue;
       out[k] = v;
     } else if (typeof v === "object" && v !== null) {
       const grp = Object.fromEntries(

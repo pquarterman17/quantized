@@ -1,15 +1,17 @@
-"""Figure export routes: render dataset/statplot/map/ternary/field visualizations.
+"""Figure export routes: render dataset/statplot/categorical visualizations.
 
-Wraps ``calc.figure`` (basic plots), ``calc.figure_statplots`` (box/violin/
-Q-Q/histogram), ``calc.figure_map`` (gridded 2-D heatmap/contour/surface),
-``calc.figure_corner`` (posterior/bootstrap pairs plots), ``calc.figure_ternary``
-(3-component compositions), and ``calc.figure_field`` (quiver/streamline vector
-fields). Output formats: PDF/SVG/PNG/TIFF. No formatting logic here — renderers
-own it. Filenames are sanitized before reaching the Content-Disposition header.
+Wraps ``calc.figure`` (basic plots, incl. the y2/secondary-axis twinx split —
+see ``calc.figure_y2``) and ``calc.figure_statplots`` (box/violin/Q-Q/
+histogram). The map/corner/ternary/field routes live in
+``routes.export_figures_aux`` (split out to stay under the 500-line
+god-module ceiling — see that module's docstring). Output formats:
+PDF/SVG/PNG/TIFF. No formatting logic here — renderers own it. Filenames are
+sanitized before reaching the Content-Disposition header.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Response
@@ -49,12 +51,27 @@ class FigureRequest(BaseModel):
     x_scale: str | None = None
     y_scale: str | None = None
     # MAIN #24: tick-label number format, mirroring the screen's xFmt/yFmt
-    # (yFmt also drives the screen's y2 axis; this backend has no y2/twinx
-    # rendering to mirror it onto). None = auto (omit to keep requests lean).
+    # (a screen y2 axis maps to this request's OWN `y2_fmt` field below, not
+    # `y_fmt`). None = auto (omit to keep requests lean).
     x_fmt: TickFormatSpec | None = None
     y_fmt: TickFormatSpec | None = None
     x_step: float | None = None
     y_step: float | None = None
+    # Secondary (right) Y axis, matplotlib twinx (MAIN y2-export-parity):
+    # `y2_keys` is a SUBSET of `y_keys` (every entry must also be in
+    # `y_keys`, else 422 -- see `calc.plotting.validate_y2_subset`) naming
+    # which of the plotted channels draw against the secondary axis; the
+    # rest stay on the primary axis. None/empty = today's single-axis
+    # behaviour, byte-identical. `y2_label` mirrors `y_label` (None = auto-
+    # derive "label (unit)" when there's exactly one y2 series); `y2_scale`/
+    # `y2_fmt`/`y2_step` mirror their primary-axis counterparts but apply
+    # only to the secondary axis. A fixed secondary range rides
+    # `overrides["y2_lim"]` (the same [lo, hi] shape as `x_lim`/`y_lim`).
+    y2_keys: list[int | str] | None = None
+    y2_label: str | None = None
+    y2_scale: str | None = None
+    y2_fmt: TickFormatSpec | None = None
+    y2_step: float | None = None
     fmt: str = "pdf"
     style: str = "default"  # publication preset: aps / report / web / …
     dpi: int = 200  # raster (png/tiff) resolution; ignored by vector formats
@@ -76,24 +93,48 @@ class FigureRequest(BaseModel):
     filename: str = "figure"
 
 
-def _figure_series(
-    req: FigureRequest,
-) -> tuple[Any, list[tuple[str, Any]], str, str, list[dict[str, Any] | None] | None]:
+@dataclass(frozen=True)
+class _ResolvedFigure:
+    """``_figure_series``'s resolved output, in DISPLAY (``y_keys``) order.
+    ``y2_mask[i]`` is ``True`` when ``series[i]`` is one of ``req.y2_keys``
+    (see ``calc.plotting.PlotState.y2_keys``) -- all-``False`` (the default,
+    ``req.y2_keys`` absent) means "no secondary axis", the pre-y2 shape."""
+
+    x: Any
+    series: list[tuple[str, Any]]
+    x_label: str
+    y_label: str
+    styles: list[dict[str, Any] | None] | None
+    y2_mask: list[bool]
+    y2_label: str
+
+
+def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     """Resolve a ``FigureRequest``'s dataset + channel picks into the
-    renderer's ``(x, series, x_label, y_label, series_styles)`` — shared by
-    ``/figure``, ``/figure-hitmap``, and the figure-page route
-    (``routes.export_page``). Caller-supplied labels override the
-    auto-derived "label (unit)" strings. ``series_styles`` is
+    renderer's inputs — shared by ``/figure``, ``/figure-hitmap``, and the
+    figure-page route (``routes.export_page``). Caller-supplied labels
+    override the auto-derived "label (unit)" strings (``y2_label`` derives
+    the same way as ``y_label``, but from the y2 subset only). ``styles`` is
     ``req.series_styles`` resolved against ``ds``/the plotted channel order
     (MAIN #13/#14's ``fill``/``color_by`` channel references —
     ``calc.plotting.resolve_style_channels``) — the ONLY place this
-    resolution happens, so every figure-export route gets it for free."""
-    from quantized.calc.plotting import PlotState, build_series, resolve_style_channels
+    resolution happens, so every figure-export route gets it for free.
+    Raises ``ValueError`` when ``req.y2_keys`` isn't a subset of
+    ``req.y_keys`` (``calc.plotting.validate_y2_subset``, mapped to a 422 by
+    every caller's existing ``except (ValueError, ...)`` handler)."""
+    from quantized.calc.plotting import (
+        PlotState,
+        build_series,
+        resolve_style_channels,
+        validate_y2_subset,
+    )
 
     ds = DataStruct.from_dict(req.dataset)
+    validate_y2_subset(req.y_keys, req.y2_keys)
     state = PlotState(
         x_key=req.x_key,
         y_keys=tuple(req.y_keys) if req.y_keys is not None else None,
+        y2_keys=tuple(req.y2_keys) if req.y2_keys is not None else None,
         x_log=req.x_log,
         y_log=req.y_log,
     )
@@ -101,17 +142,26 @@ def _figure_series(
     x_label = req.x_label
     if x_label is None:
         x_label = f"{plot.x_label} ({plot.x_unit})" if plot.x_unit else plot.x_label
+    primary_only = [s for s in plot.series if s.axis == 0]
+    y2_only = [s for s in plot.series if s.axis == 1]
     y_label = req.y_label
     if y_label is None:
         y_label = ""
-        if len(plot.series) == 1:
-            only = plot.series[0]
+        if len(primary_only) == 1:
+            only = primary_only[0]
             y_label = f"{only.label} ({only.unit})" if only.unit else only.label
+    y2_label = req.y2_label
+    if y2_label is None:
+        y2_label = ""
+        if len(y2_only) == 1:
+            only = y2_only[0]
+            y2_label = f"{only.label} ({only.unit})" if only.unit else only.label
     series: list[tuple[str, Any]] = [
         (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series
     ]
     styles = resolve_style_channels(ds, req.y_keys, req.series_styles)
-    return plot.x, series, x_label, y_label, styles
+    y2_mask = [s.axis == 1 for s in plot.series]
+    return _ResolvedFigure(plot.x, series, x_label, y_label, styles, y2_mask, y2_label)
 
 
 def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:
@@ -134,20 +184,20 @@ def export_figure(req: FigureRequest) -> Response:
     from quantized.calc.figure import render_figure
 
     try:
-        x, series, x_label, y_label, styles = _figure_series(req)
+        resolved = _figure_series(req)
         data = render_figure(
-            x,
-            series,
+            resolved.x,
+            resolved.series,
             title=req.title,
-            x_label=x_label,
-            y_label=y_label,
+            x_label=resolved.x_label,
+            y_label=resolved.y_label,
             x_log=req.x_log,
             y_log=req.y_log,
             x_scale=req.x_scale,
             y_scale=req.y_scale,
             fmt=req.fmt,
             style=req.style,
-            series_styles=styles,
+            series_styles=resolved.styles,
             width_in=req.width_in,
             height_in=req.height_in,
             dpi=dpi,
@@ -156,6 +206,11 @@ def export_figure(req: FigureRequest) -> Response:
             y_fmt=_tick_fmt(req.y_fmt),
             x_step=req.x_step,
             y_step=req.y_step,
+            y2_mask=resolved.y2_mask,
+            y2_label=resolved.y2_label,
+            y2_scale=req.y2_scale,
+            y2_fmt=_tick_fmt(req.y2_fmt),
+            y2_step=req.y2_step,
         )
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -176,25 +231,30 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
     from quantized.calc.figure import render_figure_map
 
     try:
-        x, series, x_label, y_label, styles = _figure_series(req)
+        resolved = _figure_series(req)
         return render_figure_map(
-            x,
-            series,
+            resolved.x,
+            resolved.series,
             title=req.title,
-            x_label=x_label,
-            y_label=y_label,
+            x_label=resolved.x_label,
+            y_label=resolved.y_label,
             x_log=req.x_log,
             y_log=req.y_log,
             x_scale=req.x_scale,
             y_scale=req.y_scale,
             style=req.style,
-            series_styles=styles,
+            series_styles=resolved.styles,
             dpi=dpi,
             overrides=req.overrides,
             x_fmt=_tick_fmt(req.x_fmt),
             y_fmt=_tick_fmt(req.y_fmt),
             x_step=req.x_step,
             y_step=req.y_step,
+            y2_mask=resolved.y2_mask,
+            y2_label=resolved.y2_label,
+            y2_scale=req.y2_scale,
+            y2_fmt=_tick_fmt(req.y2_fmt),
+            y2_step=req.y2_step,
         )
     except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -287,197 +347,3 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
         headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
     )
 
-
-class MapFigureRequest(BaseModel):
-    x_axis: list[float]
-    y_axis: list[float]
-    # (ny, nx), NaN allowed for gaps -- required when contour_source="grid".
-    z_grid: list[list[float]] | None = None
-    # Scattered per-point z, same length as x_axis/y_axis -- required when
-    # contour_source="points" (gap #17 tri-contour: the RSM cloud shape,
-    # never regridded).
-    z_values: list[float] | None = None
-    contour_source: str = "grid"  # grid (z_grid) | points (x_axis/y_axis/z_values cloud)
-    kind: str = "contourf"  # contourf|contour|heatmap|surface|scatter3d|waterfall
-    fmt: str = "pdf"
-    style: str = "default"
-    # None (default) resolves to the style preset's calibrated dpi, matching
-    # calc.figure's resolved_dpi convention (see corner/ternary/field siblings).
-    dpi: int | None = None
-    cmap: str = "viridis"
-    levels: int | list[float] = 12
-    level_scale: str = "linear"  # linear|log
-    label_contours: bool = True
-    colorbar: bool = True
-    title: str = ""
-    x_label: str = ""
-    y_label: str = ""
-    z_label: str = ""
-    width_in: float | None = None
-    height_in: float | None = None
-    view_elev: float = 30.0
-    view_azim: float = -60.0
-    filename: str = "map"
-
-
-@router.post("/map-figure")
-def export_map_figure(req: MapFigureRequest) -> Response:
-    """Render a 2-D map to a publication figure: filled/line contour, heatmap,
-    or static 3-D surface/scatter/waterfall (PDF/SVG/PNG/TIFF) — from either a
-    regridded ``z_grid`` (``contour_source="grid"``, default) or a raw
-    scattered ``(x_axis, y_axis, z_values)`` point cloud contoured straight
-    off a Delaunay triangulation, no regridding (``contour_source="points"``,
-    ``kind`` restricted to ``contour``/``contourf``)."""
-    if req.fmt not in _FIGURE_MIME:
-        raise HTTPException(
-            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
-        )
-    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
-    from quantized.calc.figure_map import render_map_figure  # lazy: matplotlib is heavy
-
-    try:
-        data = render_map_figure(
-            req.x_axis, req.y_axis, req.z_grid,
-            contour_source=req.contour_source, z_values=req.z_values,
-            kind=req.kind, fmt=req.fmt, style=req.style, dpi=dpi, cmap=req.cmap,
-            levels=req.levels, level_scale=req.level_scale,
-            label_contours=req.label_contours, colorbar=req.colorbar,
-            title=req.title, x_label=req.x_label, y_label=req.y_label, z_label=req.z_label,
-            width_in=req.width_in, height_in=req.height_in,
-            view_elev=req.view_elev, view_azim=req.view_azim,
-        )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return Response(
-        content=data,
-        media_type=_FIGURE_MIME[req.fmt],
-        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
-    )
-
-
-class CornerFigureRequest(BaseModel):
-    samples: list[list[float]]  # (n_samples, n_params) joint parameter draws
-    param_names: list[str]
-    truths: list[float] | None = None  # reference value per parameter (e.g. the fit)
-    fmt: str = "pdf"
-    style: str = "default"
-    # None (default) resolves to the style preset's calibrated dpi, matching
-    # calc.figure's resolved_dpi convention — unlike its statplot/map
-    # siblings above, which always pass an explicit dpi (a documented,
-    # separately-tracked gap; GAP_TIER3_PLAN open question 2 follow-ups).
-    dpi: int | None = None
-    bins: str | int = "fd"
-    title: str = ""
-    width_in: float | None = None
-    height_in: float | None = None
-    filename: str = "corner"
-
-
-@router.post("/corner-figure")
-def export_corner_figure(req: CornerFigureRequest) -> Response:
-    """Render a pairwise posterior/bootstrap corner (pairs) plot from posted
-    joint parameter samples — e.g. ``/api/fitting/posterior``'s ``samples``
-    or ``/api/fitting/bootstrap``'s ``boot_samples``
-    (``return_samples: true``). Stateless: the client posts samples it
-    already has; no fit is re-run server-side."""
-    if req.fmt not in _FIGURE_MIME:
-        raise HTTPException(
-            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
-        )
-    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
-    from quantized.calc.figure_corner import render_corner_figure  # lazy: matplotlib is heavy
-
-    try:
-        img = render_corner_figure(
-            req.samples, req.param_names, truths=req.truths,
-            title=req.title, fmt=req.fmt, style=req.style, dpi=dpi, bins=req.bins,
-            width_in=req.width_in, height_in=req.height_in,
-        )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return Response(
-        content=img,
-        media_type=_FIGURE_MIME[req.fmt],
-        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
-    )
-
-
-class TernaryFigureRequest(BaseModel):
-    data: list[list[float]]  # (n, 3) composition array
-    labels: tuple[str, str, str] = ("A", "B", "C")  # corner labels
-    values: list[float] | None = None  # optional color values (length n)
-    fmt: str = "pdf"
-    style: str = "default"
-    dpi: int | None = None
-    marker_size: float | None = None
-    title: str = ""
-    filename: str = "ternary"
-
-
-@router.post("/ternary-figure")
-def export_ternary_figure(req: TernaryFigureRequest) -> Response:
-    """Render a ternary diagram (3-component composition scatter plot) to a
-    publication figure (PDF/SVG/PNG/TIFF). Points are normalized so each row
-    sums to 1; non-positive components raise 422 error."""
-    if req.fmt not in _FIGURE_MIME:
-        raise HTTPException(
-            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
-        )
-    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
-    from quantized.calc.figure_ternary import render_ternary_figure  # lazy: matplotlib
-
-    try:
-        img = render_ternary_figure(
-            req.data, labels=req.labels, values=req.values,
-            fmt=req.fmt, style=req.style, dpi=dpi, marker_size=req.marker_size,
-            title=req.title,
-        )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return Response(
-        content=img,
-        media_type=_FIGURE_MIME[req.fmt],
-        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
-    )
-
-
-class FieldFigureRequest(BaseModel):
-    x_axis: list[float]  # 1-D coordinate array
-    y_axis: list[float]  # 1-D coordinate array
-    u_grid: list[list[float]]  # (ny, nx) component grid
-    v_grid: list[list[float]]  # (ny, nx) component grid
-    kind: str = "quiver"  # quiver|streamline
-    fmt: str = "pdf"
-    style: str = "default"
-    dpi: int | None = None
-    title: str = ""
-    x_label: str = ""
-    y_label: str = ""
-    filename: str = "field"
-
-
-@router.post("/field-figure")
-def export_field_figure(req: FieldFigureRequest) -> Response:
-    """Render a vector field plot (quiver arrows or streamlines) to a
-    publication figure (PDF/SVG/PNG/TIFF). u_grid and v_grid must have shape
-    (len(y_axis), len(x_axis))."""
-    if req.fmt not in _FIGURE_MIME:
-        raise HTTPException(
-            status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
-        )
-    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
-    from quantized.calc.figure_field import render_field_figure  # lazy: matplotlib
-
-    try:
-        img = render_field_figure(
-            req.x_axis, req.y_axis, req.u_grid, req.v_grid,
-            kind=req.kind, fmt=req.fmt, style=req.style, dpi=dpi,
-            title=req.title, x_label=req.x_label, y_label=req.y_label,
-        )
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return Response(
-        content=img,
-        media_type=_FIGURE_MIME[req.fmt],
-        headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
-    )
