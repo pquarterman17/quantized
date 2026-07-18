@@ -6,17 +6,21 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last regenerated:** 2026-07-17, end of the autonomous GUI_INTERACTION
-campaign (11 merges; pushed to origin same day, CI + CodeQL + live E2E all
-green): the
+**Last reconciled:** 2026-07-18, after the six-PR Origin visual-import stack
+merged and received an independent tip verification (frontend 3,759 + build,
+18/18 Playwright, full corpus baseline-identical). The last full regeneration
+was 2026-07-17, at the end of the autonomous GUI_INTERACTION campaign (11
+merges; CI + CodeQL + live E2E all green): the
 entire no-blocker actionable list was worked — #3, #7, #9, #10, #13, #14
 CLOSED in full; #8, #11, #15 CORE shipped with residuals re-dashboarded
 below; plus the ORIGIN_FILE_DECODE #54 spatial page-coordinate export
 residual and an `appCommands.ts` decomposition (684→36, per-domain
 `commands/*` modules, pin 684→56). Verified on the final merged tree:
 frontend 3736 unit + 18 Playwright e2e + build green; backend 2906 + ruff +
-mypy green. What remains actionable = the #8/#11/#15 residual rows, #12 and
-Tier 3 larger bets, and Codex-routed #53. The #55 owner screenshot-review
+mypy green. What remains actionable = the #8/#11/#15 residual rows, #12,
+Tier 3 larger bets, and #54's explicit page/layer architecture residual.
+Origin graphic objects (#53) are evidence-gated, not routine implementation.
+The #55 owner screenshot-review
 gate is unchanged (62 paired screenshots, 0/353 reviewed). v0.10.0 is the
 current release. Prior context: GUI_INTERACTION adopted 2026-07-12 from the
 ChatGPT-Sol audit; MAIN holds only owner gates + deferrals; the
@@ -36,7 +40,6 @@ baseline framing) are under Owner actions below, not here.
 | **Graph Builder residuals** (core — save/duplicate/rename/delete, `.dwk` persistence, active-spec+dirty indicator, export — SHIPPED 2026-07-17) — Open in Figure Builder; finish faceting for statistical marks; allow plot/layer reordering | GUI_INTERACTION #11 |
 | **Real-browser (Playwright) interaction journeys** at 100/125/200% (core harness + 7 journeys — import-drop/folder-organize/curve-restyle/axis-limits/graph-builder/region-tool-escape/keyboard-only — SHIPPED 2026-07-17, `frontend/e2e/`) — residual: folder-reorder undo (gated on #1), channel→X/Y/Y2 on-canvas drag, annotation/shape move/edit/delete/undo, window arrange/restore, export round-trip (CI workflow verified live 2026-07-17, 18/18 green) | GUI_INTERACTION #15 |
 | Larger bets / polish: unified select→edit Plot Objects tree (#2, owner-gate scope), canonical plot spec across surfaces (#12), buttons/menus/tooltips polish (#17), owner-dependent Origin gaps (#16) | GUI_INTERACTION Tier 1–3 |
-| **Origin graphic objects / rich annotations decode** — arrows, lines, standalone rects/ellipses, framed text, callouts onto native Shape/annotation models (RE-heavy; Codex-routed per the plan) | ORIGIN_FILE_DECODE #53 |
 | **Origin layout generality residual** — free-positioned/overlapping layers + insets SHIPPED 2026-07-17 (Codex PR #55 `90c49ad`, page-mode classification, fail-closed); remaining: generalized page/layer model + >2 Y axes (do NOT extend the greedy double-Y heuristic) | ORIGIN_FILE_DECODE #54 |
 
 ## Owner actions & owner-gated decisions
@@ -64,10 +67,10 @@ baseline framing) are under Owner actions below, not here.
 | `importOxford` (Oxford Instruments MagLab) — no published spec, not attempted | a real example file arrives | PORT_PLAN #15 / PORT_CHECKLIST W1 |
 | Rigaku `.raw` 2-D RSM — reverse-engineered header has no ω field | a multi-range Rigaku RSM sample arrives | PORT_PLAN #10 / PORT_CHECKLIST W1 |
 | Consolidated-CSV polarized-asymmetry path (shared-Q interp + ++/−− spin asymmetry) | files with ++/−− polarization metadata | PORT_PLAN #12 / PORT_CHECKLIST W1 |
+| Origin graphic objects / rich annotations (#53) | controlled specimens plus Origin COM/LabTalk and rendered-output oracles establish each object record, with negative controls and a plausible corpus distribution | ORIGIN_FILE_DECODE #53 (subsumes #47) |
 
 ## Deliberate deferrals (decision gates — revisit on demand, don't schedule)
 
-- **Recover Origin drawn graphic objects + richer annotations on import** (LOW PRIORITY, ORIGIN_FILE_DECODE #47) — imported Origin figures currently drop arrows/lines/standalone rect-ellipse objects + framed/callout annotations (only curves, styles, legends, plain text, and Rect fill-shades recover). Unblocked once MAIN #25/#27 land a native Shape/framed-annotation target to decode onto; revisit after #27 ships.
 - **Interactive WebGL 3-D** (MAIN deferral; gate UNIFIED with GOTO Q4) — revisit when users ask to rotate views the static 3-D export can't satisfy.
 - **`.opju` writer** (MAIN deferral = ORIGIN_FILE_DECODE #27) — revisit only if a real Origin build refuses `.opj`.
 - **`quantized-plugin-template` starter repo** (MAIN deferral, was ORIGIN_GAP #8) — a separate repo, out of scope for this codebase.
@@ -89,5 +92,5 @@ the root; every active plan below is its declared sub-plan.
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | Tier 1 #1,#2,#5 (all owner-gated) + Tier 2 #8 (residual), #11 (residual), #12, #15 (residual) + Tier 3 #16–#17 open; #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = Open in Figure Builder / stat-mark faceting / layer reordering), #15 core harness + 7 journeys SHIPPED 2026-07-17 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange, export round-trip, live CI verify); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
-| `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#51 complete; #52 FULLY SHIPPED 2026-07-16 + #57 same day; #54 page-setup control + spatial-export residual + overlap/inset layout slice ALL SHIPPED 2026-07-17 (Codex PR #55); visual-import campaign #58–#63 ALL SHIPPED 2026-07-18 (Codex stack #56–#61 `854271c`: spatial legends, region bands, imported-view + spatial-page export parity, saved-preview window, presentation templates); open = #53 graphic objects (subsumes #47), #54 generalized page/layer model + >2 Y axes; #55/#56 close on the owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
+| `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#52 complete; #54 page-setup control + spatial-export residual + overlap/inset layout slice ALL SHIPPED 2026-07-17 (Codex PR #55); visual-import campaign #58–#63 ALL SHIPPED 2026-07-18 (Codex stack #56–#61 `854271c`: spatial legends, region bands, imported-view + spatial-page export parity, saved-preview window, presentation templates); open = #53 graphic objects (evidence-gated; subsumes #47), #54 generalized page/layer model + >2 Y axes; #55 tooling is complete and #55/#56 close on owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |

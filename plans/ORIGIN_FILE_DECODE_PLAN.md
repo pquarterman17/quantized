@@ -457,10 +457,11 @@ Official model references used for this routing:
 
 ### Tier 2 — close corpus-visible plot mismatches
 
-52. **Curve and axis fidelity campaign.** **IN PROGRESS: line/scatter/
-    line+symbol and verified dimensions merged in PR #29. The speculative
+52. **Curve and axis fidelity campaign.** **FULLY SHIPPED 2026-07-16.** The
+    line/scatter/line+symbol and verified-dimensions foundation merged in PR
+    #29. The speculative
     byte-17 segment-connect work in PRs #30/#31 was reverted by PR #32; do not
-    restore it without the independent evidence required by `AGENTS.md`.**
+    restore it without the independent evidence required by `AGENTS.md`.
     Drive this item from the existing
     Origin↔Quantized gallery and structural report, ordered by how many real
     graphs visibly differ.
@@ -553,8 +554,13 @@ Official model references used for this routing:
       against RockingCurve `NbAuRocking`. (Matplotlib publication export still
       uses the chosen style preset's grid — a separate, deliberate path.)
 
-53. **Graphic objects and rich annotations** — this campaign's promoted form
-    of item #47. Decode Origin arrows, arbitrary lines, standalone rectangles/
+53. **Graphic objects and rich annotations — OPEN, EVIDENCE-GATED.** This is
+    the campaign's promoted form of item #47. The native `Shape` and framed
+    annotation targets have shipped, but the Origin object-record decode must
+    not begin from corpus coincidences alone. It requires a controlled specimen,
+    Origin COM/LabTalk plus rendered-output oracles, negative controls, and a
+    plausible whole-corpus distribution before implementation. Once proven,
+    decode Origin arrows, arbitrary lines, standalone rectangles/
     ellipses, framed text, and callouts onto the native `Shape`/annotation
     models. Preserve coordinate space (data/layer/page), z-order, line/fill,
     arrowheads, and frame style where proven. Apply on single, double-Y, and
@@ -655,9 +661,10 @@ Official model references used for this routing:
 
 ### Tier 3 — acceptance and handoff
 
-55. **Corpus-wide plot-fidelity acceptance matrix.** **IN PROGRESS: durable
-    per-graph JSON/CSV aggregation and review import/export in PR #41.**
-    Runtime-error attribution/fail-closed reporting follows in PR #42.
+55. **Corpus-wide plot-fidelity acceptance matrix.** **TOOLING COMPLETE;
+    OWNER VISUAL-REVIEW GATE OPEN.** Durable per-graph JSON/CSV aggregation
+    and review import/export landed in PR #41.
+    Runtime-error attribution/fail-closed reporting landed in PR #42.
     The resulting passive-plugin hook crash is fixed in PR #43.
     PR #46 strengthens the rendered oracle itself: every canvas must contain
     sampled paint variation, and every trusted decoded panel rectangle must
@@ -721,19 +728,24 @@ Official model references used for this routing:
     applies and edit-free re-applies stay silent. +6 store tests; frontend
     3362 green on the merged tree.
 
-### Delivery slices and estimate
+### Historical delivery slices and current gates
 
 - **PR 1 (complete):** #48 + #49 correctness, diagnostics, corpus regressions
   shipped as PRs #25 and #26.
 - **PR 2 (complete):** #50 workbook/Graph Builder fallback shipped as PR #27.
-- **PR 3 (1–2 days):** #51 original-preview preservation and comparison UI.
-- **PR 4 (2–4 days):** #52 + #53 highest-frequency visual mismatches.
-- **PR 5 (as evidence requires):** #54 layout generalization + #55 acceptance.
+- **PR 3 (complete):** #51 original-preview preservation and comparison UI.
+- **PR 4 (part complete / part evidence-gated):** #52 visual mismatches shipped;
+  #53 graphic-object decode waits for the independent evidence gate above.
+- **PR 5 (part complete / part gated):** #54's page-layout slices shipped;
+  generalized layers and >2 Y axes remain. #55 tooling shipped and waits on
+  owner screenshot review.
 
-Expected focused campaign: **6–10 working days** for a strong corpus-validated
-result. Unknown proprietary records or missing independent oracles can extend
-individual fidelity items; they do not block the fallback contract or justify
-silent loss. Use stacked/reviewable PRs rather than one unreviewable change.
+The original focused-campaign estimate was **6–10 working days**. The bounded
+implementation slices are now shipped; remaining timing is controlled by the
+#53 evidence gate, the #55 owner screenshot review, and the deliberate #54
+architecture decision. Unknown proprietary records or missing independent
+oracles never justify silent loss. Use stacked/reviewable PRs for any reopened
+work.
 
 ---
 
@@ -802,10 +814,10 @@ item 40 CLOSED same day, see Completed)
     graphic OBJECTS or rich/framed annotation variants). Recovering them
     means an imported figure lands complete, then editable with the
     pointer tool. *Passive* (happens on import; no UI to discover).
-    - Newly unblocked: only worth doing now that quantized has a NATIVE
-      target model to decode onto — the `Shape` model (MAIN #27:
-      arrow/line/rect/ellipse) + rich-text/framed annotations (MAIN
-      #25/#27). Depends on both landing.
+    - Native target shipped: quantized now has the `Shape` model (MAIN #27:
+      arrow/line/rect/ellipse) plus rich-text/framed annotations (MAIN
+      #25/#27). The remaining blocker is independent decode evidence, not a
+      missing UI model; use the controlled-specimen/oracle gate in #53.
     - Scope: decode Origin's graphic-object records (arrow/line/rect/
       ellipse as OBJECTS, distinct from the region-fill Rect* class
       already in `opj_shapes.py`) → map to `Shape`; decode richer text-
