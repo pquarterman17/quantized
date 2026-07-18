@@ -98,6 +98,13 @@ describe("useStatStage — faceting (GUI_INTERACTION #11)", () => {
     expect(result.current.drawFacets?.every((f) => f.draw.mode === "box")).toBe(true);
     expect(result.current.note).toContain("faceted view");
     expect(result.current.error).toBeNull();
+    // GUI_INTERACTION #12 Slice 1 (lib/exportParity.test.ts, matrix row 8)
+    // pins this exact shape as its "faceted stat state fails closed" harness
+    // assertion: StatStage.tsx disables the Export button via `!st.draw`, so
+    // a null flat `draw` while `drawFacets` holds the small multiples IS the
+    // export-disable signal the harness relies on — restated explicitly so a
+    // change here is felt as a harness break, not just a local one.
+    expect(result.current.draw).toBeNull();
   });
 
   it("faceted violin: a per-slice backend failure degrades that slice to real client box stats", async () => {
