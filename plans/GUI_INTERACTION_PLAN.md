@@ -110,54 +110,9 @@ plotting, publication export.
    The one remaining consumer — the Plot Objects tree — rides the owner-gated
    #2 itself; the registry's `run(target)` shape is ready for it.
 
-11. **Graph Builder → durable artifact** — promote its output to a first-class
-    saved `PlotSpec` in `.dwk`.
-    - [x] Save / Save As / Duplicate / Rename / Delete, from a new PlotSpecBar
-          toolbar in the Graph Builder panel.
-    - [x] `.dwk` persistence (`savedPlotSpecs`, additive-optional).
-    - [x] The builder surfaces which saved spec it's bound to + an
-          unsaved-changes dot (scoped to the builder header, not the Stage
-          canvas — see the 2026-07-17 progress note below).
-    - [x] Export (scoped to the xy family — see the progress note).
-    - [x] Open ordinary single-dataset XY line/scatter specs in Figure Builder
-          (PR #62). The bridge preserves explicit X/Y display order and
-          per-series publication styles; scatter remains point-only. Grouped,
-          faceted, statistical, incomplete, and cross-dataset specs fail closed
-          until their target contracts exist.
-    - [ ] Finish faceting for statistical marks.
-    - [x] Allow explicit XY series reordering (PR #63): numbered Y chips expose
-          accessible one-slot moves, and `PlotSpec.zones.y` remains the single
-          saved/display/export order. This never mutates worksheet columns or
-          source acquisition order. Arbitrary multi-panel layer ordering stays
-          with the canonical plot/page-layer work in #12 / ORIGIN decode #54.
-
-    _Progress (2026-07-17):_ core landed — a `savedPlotSpecs` collection
-    (`store/graphBuilder.ts`, a new slice; also absorbed the pre-existing
-    `graphBuilderOpen`/`graphBuilderSeed` handshake relocated from
-    `useApp.ts` verbatim) with id/name/created/modified + the `PlotSpec`
-    payload (`lib/plotspec.ts`'s existing grammar — serialization was
-    already there from #51, this only added `SavedPlotSpec` +
-    `sanitizeSavedPlotSpecs` + `plotSpecsEqual`). Round-trips through `.dwk`
-    v3 as an additive-optional field (legacy files load unchanged).
-    `PlotSpecBar.tsx` (new sub-component) shows the active spec's name + a
-    dirty dot (structural compare vs. the saved payload) and a collapsible
-    "Saved graphs" list with per-row Open/Duplicate/Rename/Delete; Save/Save
-    As prompt via the existing `askParams`/`askConfirm` dialogs. Export
-    calls `sendToStage()` then reuses the ordinary "Export figure…" File
-    command for the xy family (scatter/line) — box/violin/bar render via
-    the Stat Stage's OWN hook-local exporter (`useStatStage.exportFigure`,
-    which needs live UI state — bin rule, fit distribution — that only
-    exists once that view is mounted), so Export hands off with a toast
-    there instead of building a second export pipeline; a faceted spec's
-    export also inherits the existing gap that `facetByColumn` resets the
-    live xKey/yKeys (baked into panels instead), so it falls back to the
-    plot's default channel selection — both are the residuals this item's
-    open boxes already track. `useApp.ts` stayed within its ratchet pin
-    (3239/3240 at the start of this work → **3229/3240** after) by
-    relocating the Graph Builder's pre-existing open/seed state into the
-    new slice alongside the new savedPlotSpecs fields — a net reduction
-    that funds the slice's own wiring cost. Frontend 3637 tests green
-    (+70 new), build green.
+11. **Graph Builder → durable artifact** — CLOSED 2026-07-18 (see Completed;
+    core + every sub-box shipped 2026-07-17/18). Faceting-adjacent export
+    gaps ride #12's canonical-spec work.
 
 12. **One canonical plot specification** across Stage / Graph Builder / Figure
     Builder / export — all edit or render the same underlying object.
@@ -270,6 +225,28 @@ plotting, publication export.
 ---
 
 ## Completed
+
+- ~~**#11 Graph Builder → durable artifact**~~ (2026-07-18; core 2026-07-17,
+  Figure-Builder handoff + series reorder via Codex PRs #62/#63) — the last
+  open box, **faceting for statistical marks**, shipped: `lib/facet.ts` gains
+  the shared `facetSlices` row-slicing primitive (facetPayloads now delegates
+  to it, output-identical); `specToRender`'s box/violin and bar variants gain
+  optional per-level `facets` (same groupCol/valueCol pipeline re-run per
+  slice; empty levels drop, all-empty omits the field; flat fields still
+  computed from ALL rows); `StatStageSeed` gains `facetCol`; `useStatStage`
+  computes `drawFacets` per slice (per-slice offline degrade — a backend
+  hiccup on one slice never takes down the others; violin degrades to box
+  per the never-fabricate-a-KDE rule; flat `draw` goes null while faceted,
+  auto-disabling Export with a "lands with the canonical-spec work" note);
+  `StatStage` renders a captioned CSS grid of independent `StatStageCanvas`
+  cells + a "facet by" picker (box/violin/bar only); `GraphPreview` mirrors
+  the same grid for box/bar facets (`statRender.ts` untouched — the grid is
+  N canvases, not a rect-aware renderer); `sendToStage` seeds carry
+  `facetCol` and the status names the facet column. Implemented by a sonnet
+  agent from spec, adversarially reviewed. Frontend 279 files / 3845 tests
+  (+28) + build green on the merged tree. Remaining faceting-adjacent gaps
+  now live where they belong: faceted figure EXPORT + the xy family's
+  facet-export xKey/yKeys reset both ride #12's canonical-spec work.
 
 - ~~**#8 Context menus as a complete system**~~ (2026-07-18; core 2026-07-17) —
   the residual consumers + retrofits all landed: the ⌘K **Command Palette**
