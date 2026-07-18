@@ -15,6 +15,7 @@ import { figureLabel, type OriginFigureEntry } from "../../lib/originFigures";
 import { originPreviewDataUrl } from "../../lib/originPreview";
 import { resolveOriginFigureSources } from "../../lib/originSources";
 import { useApp } from "../../store/useApp";
+import OriginSavedPreviewWindow from "./OriginSavedPreviewWindow";
 
 export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEntry; depth?: number }) {
   const applyOriginFigure = useApp((s) => s.applyOriginFigure);
@@ -25,6 +26,9 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
   const sourceResolution = resolveOriginFigureSources(entry, figures, datasets);
   const [showSavedPreview, setShowSavedPreview] = useState(false);
   const savedPreviewSrc = originPreviewDataUrl(entry.figure.saved_preview);
+  const previewActionLabel = showSavedPreview
+    ? "Close saved Origin preview"
+    : "Open saved Origin preview for comparison";
   const siblingDatasets = datasets.filter((ds) => entry.siblingIds.includes(ds.id));
   const resolved = entry.datasetId != null;
   const n = entry.figure.n_curves;
@@ -81,7 +85,8 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
       {savedPreviewSrc && (
         <button
           className="qz-icon-btn"
-          title={showSavedPreview ? "Hide saved Origin preview" : "Show saved Origin preview"}
+          title={previewActionLabel}
+          aria-label={previewActionLabel}
           aria-pressed={showSavedPreview}
           onClick={() => setShowSavedPreview((shown) => !shown)}
         >
@@ -104,19 +109,12 @@ export default function FigureRow({ entry, depth = 0 }: { entry: OriginFigureEnt
         </select>
       )}
       </div>
-      {showSavedPreview && savedPreviewSrc && entry.figure.saved_preview && (
-        <figure className="qzk-origin-saved-preview" style={depth ? { marginLeft: depth * 14 } : undefined}>
-          <figcaption>
-            Saved Origin preview · compare with the editable graph on the Stage
-          </figcaption>
-          <img
-            src={savedPreviewSrc}
-            width={entry.figure.saved_preview.width}
-            height={entry.figure.saved_preview.height}
-            alt={`Saved Origin preview of ${figureLabel(entry)}`}
-          />
-          <small>File-saved reference; it may be stale or low resolution.</small>
-        </figure>
+      {showSavedPreview && savedPreviewSrc && (
+        <OriginSavedPreviewWindow
+          entry={entry}
+          src={savedPreviewSrc}
+          onClose={() => setShowSavedPreview(false)}
+        />
       )}
     </div>
   );

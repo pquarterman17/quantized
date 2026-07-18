@@ -24,6 +24,7 @@
 
 import { useId } from "react";
 
+import { resolveTemplate } from "../../lib/plotTemplates";
 import type { PlotBg, PlotView } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -103,6 +104,9 @@ export function BackgroundStackWindow({ dataset, view, bg }: BackgroundStackWind
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const ensureBookData = useApp((s) => s.ensureBookData);
+  const defaultLineWidth = useApp((s) => s.defaultLineWidth);
+  const defaultTrace = useApp((s) => s.defaultTrace);
+  const template = resolveTemplate(view.plotTemplate);
   // Per-window sync key: this window's panels crosshair/x-zoom together, but
   // never with the focused stage's panels or another window's (cross-window
   // linking stays item 13's opt-in XY feature — deliberately NOT wired here).
@@ -121,6 +125,9 @@ export function BackgroundStackWindow({ dataset, view, bg }: BackgroundStackWind
     yFmt: view.yFmt,
     showGrid: view.showGrid,
     showAxisBox: view.showAxisBox,
+    fontSize: template.fontSize,
+    baseLineWidth: view.plotTemplate === "screen" ? defaultLineWidth : template.lineWidth,
+    defaultTrace,
     refLines: view.refLines,
     seriesStyles: view.seriesStyles,
     xKey: view.xKey,

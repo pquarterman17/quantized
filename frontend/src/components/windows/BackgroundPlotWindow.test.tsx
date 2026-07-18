@@ -81,6 +81,7 @@ afterAll(() => vi.unstubAllGlobals());
 beforeEach(() => {
   created.length = 0;
   statDrawCalls.length = 0;
+  useApp.setState({ defaultLineWidth: 1.5, defaultTrace: "Line" });
 });
 afterEach(() =>
   useApp.setState({
@@ -221,6 +222,22 @@ describe("BackgroundPlotWindow — item 15 alternate render modes", () => {
       // This window's panels sync among THEMSELVES — never with the focused
       // stage's "qz-multipanel" group or another window's panels.
       expect(opts.cursor.sync?.key).toMatch(/^qz-win-stack-/);
+    }
+  });
+
+  it("view.stackMode uses its own publication template while preserving global trace defaults", async () => {
+    useApp.setState({ defaultLineWidth: 9, defaultTrace: "Line + markers" });
+    const view = { ...defaultPlotView(), stackMode: true, plotTemplate: "poster" };
+    render(<BackgroundPlotWindow dataset={DATASET2} view={view} />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    for (const panel of created) {
+      const opts = panel.opts as {
+        axes: { font?: string }[];
+        series: { width?: number; points?: { show?: boolean } }[];
+      };
+      expect(opts.axes[0].font).toContain("18px");
+      expect(opts.series[1].width).toBe(3.5);
+      expect(opts.series[1].points?.show).toBe(true);
     }
   });
 

@@ -6,7 +6,7 @@ import type uPlot from "uplot";
 
 import type { NormalizedFrameRect } from "./originPanels";
 import type { PlotPayload } from "./plotdata";
-import type { Annotation, SeriesStyle } from "./types";
+import type { Annotation, RegionShade, SeriesStyle } from "./types";
 
 /** One payload per plotted series: each keeps the shared x column + a single
  *  y-series, so each renders in its own stacked panel against the same x. */
@@ -85,6 +85,9 @@ export interface SpatialPanel {
   /** This panel's OWN layer's floating text marks, in its own data coords
    *  (fix #5 — a multi-panel apply used to drop every layer's annotations). */
   annotations?: Annotation[];
+  /** This panel's own decoded Origin rectangular bands in its data coords.
+   *  Missing/empty means no proven band; renderers never synthesize one. */
+  regionShades?: RegionShade[];
   /** Secondary (right) Y axis for THIS panel — set when a frame-coincident
    *  y2 overlay layer merged into it (decode-plan #36 residual: the
    *  PNR/S7/Book33 repro, where a 3-layer graph rendered as a bogus 1x3

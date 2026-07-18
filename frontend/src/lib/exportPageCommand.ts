@@ -37,7 +37,15 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
     const datasets = new Map(
       entries.filter((e): e is readonly [string, DataStruct] => e !== null),
     );
-    const spec = missing ? null : buildSpatialPageRequest(panels!, datasets, s().pageSetup);
+    const live = s();
+    const spec = missing
+      ? null
+      : buildSpatialPageRequest(panels!, datasets, live.pageSetup, {
+          xFmt: live.xFmt,
+          yFmt: live.yFmt,
+          showGrid: live.showGrid,
+          showAxisBox: live.showAxisBox,
+        });
     if (!spec) {
       const msg = "export page failed: a panel's dataset or page geometry is no longer available";
       s().setStatus(msg);

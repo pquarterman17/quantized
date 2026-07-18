@@ -55,6 +55,7 @@ import "uplot/dist/uPlot.min.css";
 import { createPortal } from "react-dom";
 
 import { runExportSpatialPageCommand } from "../../lib/exportPageCommand";
+import { resolveTemplate } from "../../lib/plotTemplates";
 import { canExportSpatialPage } from "../../lib/spatialPageExport";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -77,6 +78,9 @@ export default function MultiPanelStage() {
   const showGrid = useApp((s) => s.showGrid);
   const showLegend = useApp((s) => s.showLegend);
   const showAxisBox = useApp((s) => s.showAxisBox);
+  const plotTemplate = useApp((s) => s.plotTemplate);
+  const defaultLineWidth = useApp((s) => s.defaultLineWidth);
+  const defaultTrace = useApp((s) => s.defaultTrace);
   const refLines = useApp((s) => s.refLines);
   const seriesStyles = useApp((s) => s.seriesStyles);
   const xKey = useApp((s) => s.xKey);
@@ -92,6 +96,7 @@ export default function MultiPanelStage() {
   const setPanelFit = useApp((s) => s.setPanelFit);
   const pageSetup = useApp((s) => s.pageSetup);
   const ensureBookData = useApp((s) => s.ensureBookData);
+  const template = resolveTemplate(plotTemplate);
   const { hostRef, hostStyle, readout, tool, spatialLegends } = useMultiPanelStage({
     active,
     datasets,
@@ -108,6 +113,9 @@ export default function MultiPanelStage() {
     yFmt,
     showGrid,
     showAxisBox,
+    fontSize: template.fontSize,
+    baseLineWidth: plotTemplate === "screen" ? defaultLineWidth : template.lineWidth,
+    defaultTrace,
     refLines,
     seriesStyles,
     xKey,

@@ -126,6 +126,11 @@ export interface MultiPanelStageParams {
   yFmt: AxisFormat;
   showGrid: boolean;
   showAxisBox: boolean;
+  /** Same presentation inputs PlotViewport receives. Multi-panel modes must
+   * not silently fall back to uPlot's 12px/1.5px/Line defaults. */
+  fontSize?: number;
+  baseLineWidth?: number;
+  defaultTrace?: string;
   refLines: RefLine[];
   seriesStyles: Record<number, SeriesStyle>;
   xKey: number | null;
@@ -177,6 +182,9 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     yFmt,
     showGrid,
     showAxisBox,
+    fontSize,
+    baseLineWidth,
+    defaultTrace,
     refLines,
     seriesStyles,
     xKey,
@@ -405,6 +413,9 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           yFmt,
           showGrid,
           axisBox: showAxisBox,
+          fontSize,
+          baseLineWidth,
+          defaultTrace,
           tool,
           onReadout: setReadout,
           seriesStyles: cellStyles,
@@ -420,6 +431,9 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           // Each panel's OWN layer's floating text (fix #5 — a multi-panel
           // apply used to drop every layer's annotations).
           annotations: p.annotations,
+          // Already-decoded Rect* bands, scoped to this layer's own data
+          // coordinates. The shared plugin draws them behind grid/data.
+          regionShades: p.regionShades,
           bg,
           linearPaths: LINEAR_PATHS,
           pointsPaths: POINTS_PATHS,
@@ -516,6 +530,9 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           yFmt,
           showGrid,
           axisBox: showAxisBox,
+          fontSize,
+          baseLineWidth,
+          defaultTrace,
           tool,
           onReadout: setReadout,
           bg,
@@ -567,6 +584,9 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           yFmt,
           showGrid,
           axisBox: showAxisBox,
+          fontSize,
+          baseLineWidth,
+          defaultTrace,
           tool,
           onReadout: setReadout,
           title: p.label,
@@ -617,6 +637,9 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         yFmt,
         showGrid,
         axisBox: showAxisBox,
+        fontSize,
+        baseLineWidth,
+        defaultTrace,
         refLines,
         tool,
         onReadout: setReadout,
@@ -672,6 +695,9 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     yFmt,
     showGrid,
     showAxisBox,
+    fontSize,
+    baseLineWidth,
+    defaultTrace,
     refLines,
     styleList,
     errorBarsList,

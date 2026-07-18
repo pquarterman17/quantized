@@ -13,6 +13,7 @@ import { buildExportStyles } from "./exportStyles";
 import { exportActive, type StoreGet } from "./exportActive";
 import { compactOverrides, legendPosToLoc, type FigureOverrides } from "./figureOverrides";
 import { marginFractions, pageSizeInches } from "./pagesetup";
+import { effectiveChannels } from "./plotdata";
 import { axisFmtParam } from "./types";
 
 export async function runExportFigureCommand(s: StoreGet): Promise<void> {
@@ -40,15 +41,15 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
       default: 300,
       hint: "Resolution for PNG / TIFF (50–1200); ignored by vector",
     },
-    { key: "title", label: "Title", type: "text", default: "" },
+    { key: "title", label: "Title", type: "text", default: s().plotTitle },
     {
       key: "x_label",
       label: "X label",
       type: "text",
-      default: "",
+      default: s().xAxisLabel,
       hint: "Blank = derive from the data column",
     },
-    { key: "y_label", label: "Y label", type: "text", default: "" },
+    { key: "y_label", label: "Y label", type: "text", default: s().yAxisLabel },
   ]);
   if (!params) return;
   // Blank label fields mean "derive from the data" → send undefined, not "".
@@ -62,17 +63,38 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
     ? compactOverrides({ ...(liveViewOverrides(s) ?? {}), margins: marginFractions(ps) }) ?? undefined
     : liveViewOverrides(s);
   exportActive(s, (stem, ds) => {
-    // Per-series styles in plotted order so the figure matches the screen.
-    const plotted = s().yKeys ?? ds.data.labels.map((_, i) => i);
+    const st = s();
+    // Match the DISPLAY order, not the raw yKeys: seriesOrder and hidden
+    // legend entries are both visible-state decisions. Multi-X Origin books
+    // also require the live xKey instead of silently falling back to time.
+    const plotted = effectiveChannels(
+      ds.data,
+      st.yKeys,
+      st.xKey,
+      ds.channelRoles,
+      st.seriesOrder,
+    ).filter((ch) => !st.hiddenChannels.includes(ch));
+    if (plotted.length === 0) throw new Error("no visible series to export");
+    // Legend renames / decoded Origin captions are channel-keyed. Apply them
+    // to a request-local DataStruct label copy so the established backend
+    // series builder and legend path both see the same display names without
+    // mutating the imported workbook.
+    const dataset = Object.keys(st.seriesLabels).length
+      ? {
+          ...ds.data,
+          labels: ds.data.labels.map((label, ch) => st.seriesLabels[ch] ?? label),
+        }
+      : ds.data;
     return exportFigure({
-      dataset: ds.data,
-      y_keys: s().yKeys ?? undefined,
-      x_scale: s().xScale,
-      y_scale: s().yScale,
-      x_fmt: axisFmtParam(s().xFmt),
-      y_fmt: axisFmtParam(s().yFmt),
-      x_step: s().xStep,
-      y_step: s().yStep,
+      dataset,
+      x_key: st.xKey ?? undefined,
+      y_keys: plotted,
+      x_scale: st.xScale,
+      y_scale: st.yScale,
+      x_fmt: axisFmtParam(st.xFmt),
+      y_fmt: axisFmtParam(st.yFmt),
+      x_step: st.xStep,
+      y_step: st.yStep,
       fmt: params.fmt as string,
       style: params.style as string,
       dpi: params.dpi as number,
@@ -81,7 +103,7 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
       title: (params.title as string).trim(),
       x_label: xl || undefined,
       y_label: yl || undefined,
-      series_styles: buildExportStyles(plotted, s().seriesStyles),
+      series_styles: buildExportStyles(plotted, st.seriesStyles),
       overrides,
       filename: stem,
     });
@@ -98,9 +120,10 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
  *  see `calc.figure_overrides._apply_overrides`'s y-flip. MAIN #27 adds
  *  `shapes` (drawn arrow/line/rect/ellipse marks) and an annotation's
  *  `frame` ("text box") — see `calc.figure_shapes._apply_shapes`.
- *  Everything else this command already sends (title/labels/scales/
- *  styles) — this only adds the screen-state pieces that had no export
- *  path before. */
+ *  The same override carries live finite x/y limits, grid, axis-box spines,
+ *  and log minor-tick state through fields the backend already supports.
+ *  Unsupported y2/error-bar/region/ref-line concepts are not flattened into
+ *  this single-axis contract. */
 export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
   const st = s();
   // Decode #52: the legend title (Origin's bold header) rides the legend
@@ -144,5 +167,16 @@ export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
       ...(s.width != null ? { width: s.width } : {}),
       ...(s.dash ? { dash: s.dash } : {}),
     }));
-  return compactOverrides({ legend, annotations, shapes }) ?? undefined;
+  const finiteLim = (lim: [number, number] | null): [number, number] | undefined =>
+    lim && lim.every(Number.isFinite) ? lim : undefined;
+  return compactOverrides({
+    legend,
+    annotations,
+    shapes,
+    x_lim: finiteLim(st.xLim),
+    y_lim: finiteLim(st.yLim),
+    grid: st.showGrid,
+    spines: { top: st.showAxisBox, right: st.showAxisBox },
+    ticks: st.xScale === "log" || st.yScale === "log" ? { minor: true } : undefined,
+  }) ?? undefined;
 }

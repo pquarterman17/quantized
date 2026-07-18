@@ -21,10 +21,11 @@
 // would be squeezed a second time.
 
 import { buildExportStyles } from "./exportStyles";
+import { compactOverrides, type FigureOverrides } from "./figureOverrides";
 import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./multipanel";
 import { pageValidRects } from "./panelLayout";
 import { pageSizeInches, type PageSetup } from "./pagesetup";
-import type { DataStruct } from "./types";
+import { axisFmtParam, type AxisFormat, type DataStruct } from "./types";
 import type { FigurePageSpec, FigureSpec, PagePanelSpec } from "./api";
 
 /** One spatial panel's own dataset + channel selection -> the single-figure
@@ -33,10 +34,85 @@ import type { FigurePageSpec, FigureSpec, PagePanelSpec } from "./api";
  *  hidden-filtered `y_keys`, this panel's own log/step axis state, its own
  *  (possibly explicitly-blank) axis labels, and its per-channel styles in
  *  plotted order. */
-function spatialPanelFigure(panel: SpatialPanel, dataset: DataStruct): FigureSpec {
-  const plotted = spatialPlottedChannels(panel);
+export interface SpatialPageAppearance {
+  xFmt: AxisFormat;
+  yFmt: AxisFormat;
+  showGrid: boolean;
+  showAxisBox: boolean;
+}
+
+function panelOverrides(
+  panel: SpatialPanel,
+  appearance?: SpatialPageAppearance,
+): FigureOverrides | undefined {
+  const labels = panel.seriesLabels ?? {};
+  const hasLegend = Object.keys(labels).length > 0 || !!panel.legendTitle;
+  const annotations = (panel.annotations ?? [])
+    // The page endpoint is single-axis today. Dropping a proven y2 mark is
+    // honest; drawing it against primary Y would put it at the wrong value.
+    .filter((ann) => ann.axis !== 1 && Number.isFinite(ann.x) && Number.isFinite(ann.y))
+    .map((ann) => ({
+      x: ann.x,
+      y: ann.y,
+      text: ann.text,
+      ...(ann.size ? { size: ann.size } : {}),
+      ...(ann.anchor === "page" ? { anchor: "page" as const } : {}),
+      ...(ann.frame ? { frame: ann.frame } : {}),
+    }));
+  return compactOverrides({
+    legend: hasLegend
+      ? {
+          show: true,
+          loc: panel.legendFrameXY ? "axes" : "upper right",
+          ...(panel.legendFrameXY ? { anchor: panel.legendFrameXY } : {}),
+          ...(panel.legendTitle ? { title: panel.legendTitle } : {}),
+        }
+      : { show: false },
+    annotations,
+    x_lim: panel.xLim,
+    y_lim: panel.yLim,
+    grid: appearance?.showGrid,
+    spines: appearance
+      ? { top: appearance.showAxisBox, right: appearance.showAxisBox }
+      : undefined,
+    ticks: panel.xLog || panel.yLog ? { minor: true } : undefined,
+  }) ?? undefined;
+}
+
+function spatialPanelFigure(
+  panel: SpatialPanel,
+  dataset: DataStruct,
+  appearance?: SpatialPageAppearance,
+): FigureSpec | null {
+  // The page endpoint has no twinx model. Omit secondary-axis curves rather
+  // than flattening them onto primary Y at scientifically wrong coordinates.
+  const y2 = new Set(panel.y2Keys ?? []);
+  const plotted = spatialPlottedChannels(panel).filter((ch) => !y2.has(ch));
+  // A panel made solely from a secondary-axis overlay cannot be represented
+  // by the single-axis page schema. Fail the whole export closed instead of
+  // emitting an empty/ambiguous panel or rebinding those values to primary Y.
+  if (plotted.length === 0) return null;
+  const decodedLabels = panel.seriesLabels ?? {};
+  const hasLegend = Object.keys(decodedLabels).length > 0 || !!panel.legendTitle;
+  // Matplotlib suppresses labels beginning with "_". For a partial decoded
+  // Origin legend this preserves ONLY proven entries instead of inventing
+  // captions for the remaining curves. This is a request-local copy.
+  const exportDataset = hasLegend
+    ? {
+        ...dataset,
+        labels: dataset.labels.map((label, ch) =>
+          plotted.includes(ch) ? (decodedLabels[ch] ?? "_nolegend_") : label,
+        ),
+      }
+    : dataset;
+  const only = plotted.length === 1 ? plotted[0] : null;
+  const fallbackYLabel = only == null
+    ? undefined
+    : dataset.units[only]
+      ? `${dataset.labels[only]} (${dataset.units[only]})`
+      : dataset.labels[only];
   return {
-    dataset,
+    dataset: exportDataset,
     x_key: panel.xKey ?? undefined,
     y_keys: plotted,
     x_log: panel.xLog,
@@ -44,10 +120,13 @@ function spatialPanelFigure(panel: SpatialPanel, dataset: DataStruct): FigureSpe
     // null = Origin decoded an EXPLICITLY blank title (force blank, never
     // synthesize — see SpatialPanel.xAxisLabel's own doc); undefined = auto.
     x_label: panel.xAxisLabel === null ? "" : panel.xAxisLabel,
-    y_label: panel.yAxisLabel,
+    y_label: panel.yAxisLabel ?? fallbackYLabel,
+    x_fmt: appearance ? axisFmtParam(appearance.xFmt) : undefined,
+    y_fmt: appearance ? axisFmtParam(appearance.yFmt) : undefined,
     x_step: panel.xStep,
     y_step: panel.yStep,
     series_styles: buildExportStyles(plotted, panel.seriesStyles ?? {}),
+    overrides: panelOverrides(panel, appearance),
   };
 }
 
@@ -75,6 +154,7 @@ export function buildSpatialPageRequest(
   panels: readonly SpatialPanel[],
   datasets: ReadonlyMap<string, DataStruct>,
   pageSetup: PageSetup | null,
+  appearance?: SpatialPageAppearance,
 ): FigurePageSpec | null {
   if (panels.length === 0 || !pageSetup) return null;
   const rects = pageValidRects(panels);
@@ -84,9 +164,11 @@ export function buildSpatialPageRequest(
     const p = panels[i];
     const dataset = datasets.get(p.datasetId);
     if (!dataset) return null;
+    const figure = spatialPanelFigure(p, dataset, appearance);
+    if (!figure) return null;
     const r = rects[i];
     panelSpecs.push({
-      figure: spatialPanelFigure(p, dataset),
+      figure,
       row: p.row,
       col: p.col,
       page_rect: [r.left, r.top, r.width, r.height],

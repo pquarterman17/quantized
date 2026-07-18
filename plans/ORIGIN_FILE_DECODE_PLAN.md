@@ -14,7 +14,16 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-17 (visual-import campaign PR 1 READY: decoded static
+**Updated:** 2026-07-17 (visual-import campaign PR 3 READY: ordinary
+publication export now sends the live x channel, visible draw order, decoded
+display labels, axes limits, grid/box state, log minor ticks, and imported
+title/axis-label defaults through existing renderer contracts; unsupported
+y2/error bars/region bands/reference lines remain explicit residuals). Same
+day, PR 2: already-decoded
+Rect* region bands now render in their owning spatial panel, including
+secondary-axis tagging for a frame-coincident y2 layer; positive-specimen
+corpus strict-pass 167/167 resolved / 0 renderer failures). Same day, PR 1:
+decoded static
 legends now render inside each spatial Origin panel, reusing the ordinary
 line+marker swatch and the panel's own frame-relative position; full corpus
 strict-pass 332 resolved / 18 known unresolved / 0 renderer failures). Same
@@ -909,6 +918,107 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**63. Multi-panel presentation-template parity**~~
+  (2026-07-17; PR #61) — all four focused
+  multi-panel modes and unfocused/background stack windows now receive the
+  same presentation inputs as the ordinary XY viewport: the window's selected
+  template font size, its calibrated fallback line width, and the global
+  default trace style. Imported Origin spatial pages therefore respond to
+  Screen/APS/Nature/Thesis/Report/Presentation/Poster typography instead of
+  silently reverting to uPlot's 12px/1.5px/Line defaults. Screen mode still
+  honors the user's custom default line width; named templates keep their own
+  calibrated widths. Template changes rebuild existing panels because these
+  inputs participate in the shared render-effect dependencies.
+  - Safety boundary: this is renderer/UI parity, not an Origin font decode.
+    Origin font family/size remains an unproven on-disk field and is not
+    inferred from page dimensions, preview pixels, or unrelated bytes. No
+    curves, bindings, acquisition order, limits, or axis semantics changed.
+  - Verification: focused frontend 54 tests; all 3759 frontend tests passed
+    with the unchanged assertions/timeouts under `--maxWorkers=1`; production
+    build + typecheck; integrity, ruff, mypy, component-size, and convention
+    guards green. Parallel full runs exposed only unrelated host-contention
+    timing failures (the 100k×200 grid and polar-window ceilings); each
+    affected file passed in isolation and no threshold was loosened.
+
+- ~~**62. Saved-Origin-preview comparison UX**~~
+  (2026-07-17; PR #60) — the validated file-saved
+  graph preview no longer expands inside the narrow Library sidebar. Its
+  figure-row action opens a movable, resizable reference window that can stay
+  beside the editable Stage, with explicit Origin-reference labeling, pixel
+  dimensions, page-attribution confidence, and the stale/low-resolution
+  caveat. The window can restore the editable graph without closing, closes
+  by button/Escape, and keeps the preview viewable while disabling restore
+  when the workbook binding is unresolved. The glyph-only row action now has
+  an accessible comparison label.
+  - Safety boundary: the window renders only bytes already accepted by
+    `originPreviewDataUrl`; it never derives plot state from the bitmap and
+    changes no preview extraction, attribution, Origin decoding, bindings,
+    acquisition order, axis state, or renderer paths.
+  - Verification: focused frontend 26 tests; final full frontend 3756 tests;
+    production build + typecheck; integrity, ruff, mypy, component-size, and
+    convention guards green. A real-browser visual check covered default
+    placement, bounded image canvas, Stage visibility, metadata, actions, and
+    responsive window chrome; its temporary fixture was removed before the
+    final gates.
+
+- ~~**61. Spatial-page export content parity (proven-contract slice)**~~
+  (2026-07-17; PR #59) — the true-coordinate
+  page exporter now carries each panel's proven primary-axis content through
+  the existing figure-page renderer: decoded/partial legend labels and title,
+  decoded legend placement, primary annotations, panel limits, log minor
+  ticks, global engineering/scientific tick formatting, grid state, and
+  top/right axis-box state. Legend captions are applied to a request-local
+  dataset copy; undecoded entries in a partial Origin legend are suppressed
+  rather than invented. Panels with no decoded legend remain legend-free.
+  - Safety boundary: the page endpoint is single-axis. Secondary-axis curves
+    and annotations are omitted rather than rebound to primary Y; an
+    unrepresentable y2-only panel fails the whole export closed. Error bars,
+    region bands, reference lines, y2 axes, and full typography still lack a
+    faithful figure-page wire model and remain explicit residuals. No Origin
+    bytes, bindings, acquisition order, limits, or renderer paths changed.
+  - Verification: focused frontend 20 tests; full frontend 3755 tests;
+    production build + typecheck; integrity, ruff, mypy, and convention guards
+    green; 145 focused backend page/API/figure/override/tick render tests
+    green. Negative controls cover partial/no legend, workbook immutability,
+    y2 omission and y2-only fail-closed behavior, and primary-only annotation
+    transport.
+
+- ~~**60. Ordinary imported-view export parity (proven-contract slice)**~~
+  (2026-07-17; PR #58) — `runExportFigureCommand` previously exported
+  raw `yKeys` against time/default X and omitted most live axis/chrome state.
+  It now uses `effectiveChannels` plus hidden/order state, sends `x_key`,
+  applies channel-keyed Origin/renamed captions to a request-local label copy,
+  pre-fills title/x/y label fields from the live view, and carries finite
+  x/y limits, grid, top/right box spines, and log minor ticks through the
+  already-supported `FigureOverrides` API. Styles remain aligned to the
+  visible display order; the imported `DataStruct` is never mutated.
+  - Safety boundary: no backend/Origin semantics changed. The current figure
+    endpoint still has no faithful y2, error-bar, region-band, or reference-
+    line wire model; this slice does not silently coerce those concepts and
+    does not claim full WYSIWYG closure.
+  - Verification: focused frontend 34 tests; full frontend 3748 tests;
+    production build + typecheck; integrity, ruff, mypy green; 149 focused
+    backend API/figure/override/tick tests green. Request tests cover multi-X,
+    hidden+reordered series, label-copy immutability, finite-limit fail-closed
+    behavior, and imported dialog defaults.
+
+- ~~**59. Spatial multi-panel Origin region bands**~~ (2026-07-17; PR #57) —
+  `resolveFigurePanels` now carries each layer's already-proven
+  `region_shades` into its own `SpatialPanel`; `MultiPanelStage` feeds only
+  that list to the existing behind-data `regionShadePlugin`. A
+  frame-coincident y2 layer's shades are retagged `axis: 1` during the same
+  established merge that retags its annotations. Empty layers stay empty,
+  and the singleton shade list is still cleared on spatial apply so a prior
+  single plot cannot leak bands into the page. No object bytes, extents,
+  fills, transparency, bindings, row order, limits, or paths were decoded or
+  reinterpreted.
+  - Verification: focused 187 tests; full frontend 3744 tests; production
+    build + typecheck; integrity, ruff, and mypy green. Real-browser positive
+    specimens (MnN_Diffusion_PNR, PNR, SuperlatticeFits): 167/167 resolved,
+    zero renderer/process failures. Visual checks: MnN Graph19, PNR Graph14,
+    SuperlatticeFits Graph10 — panel-local ownership, behind-data ordering,
+    and y2 overlays preserved.
 
 - ~~**58. Spatial multi-panel Origin legends**~~ (2026-07-17; PR #56) —
   the spatial apply path already carried each layer's independently decoded
