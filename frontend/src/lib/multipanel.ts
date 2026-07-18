@@ -92,7 +92,7 @@ export interface SpatialPanel {
    *  y2 overlay layer merged into it (decode-plan #36 residual: the
    *  PNR/S7/Book33 repro, where a 3-layer graph rendered as a bogus 1x3
    *  ordinal stack instead of 2 panels with the second carrying a right-Y
-   *  overlay — see `originFigures.figureFrameY2Pairs`/`resolveSpatialPanels`).
+   *  overlay — see `originFigures.coincidentOverlayGroups`/`resolveSpatialPanels`).
    *  Mirrors the store's own single-plot double-Y apply fields
    *  (`y2Keys`/`y2Lim`/`y2Log`/`y2Step`/`y2AxisLabel`) but scoped to this one
    *  panel instead of the whole plot. Absent/null on an ordinary panel. */

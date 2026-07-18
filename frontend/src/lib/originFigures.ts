@@ -492,39 +492,61 @@ function isFrameCoincidentY2Overlay(host: OriginFigureEntry, candidate: OriginFi
   return rangesEqual(hf.x_from, hf.x_to, cf.x_from, cf.x_to); // must MATCH
 }
 
-/** One detected frame-coincident double-Y pair within a spatial family, as
- *  indices into that same `family` array. `hostIndex` always names the
- *  LOWER layer number (mirrors `applyOriginFigure`'s 2-layer doubleY
- *  convention: axis state comes from the lower layer). */
-export interface SpatialY2Pair {
-  hostIndex: number;
-  y2Index: number;
+/** One frame-coincident overlay group within a spatial family, as indices
+ *  into that same `family` array. `indices[0]` is the HOST — the group's
+ *  lowest Origin `layer` number (mirrors `applyOriginFigure`'s 2-layer
+ *  doubleY convention: axis state comes from the lower layer); the rest are
+ *  partners in family order, so `indices[1]` is the FIRST partner (the one
+ *  a native panel actually merges with — the 2-axis renderer has no 3rd
+ *  axis to give a 2nd partner); `indices.slice(2)`, if any, are coincident
+ *  layers a native panel can't also carry (see `resolveSpatialPanels`'s
+ *  `droppedOverlays`). Length 1 = no coincident overlay at all — an
+ *  ordinary standalone panel. */
+export interface CoincidentOverlayGroup {
+  indices: number[];
 }
 
-/** Detect every frame-coincident double-Y pair within a ≥2-layer spatial
- *  family (`isFrameCoincidentY2Overlay`, above). Greedy, family order (a
- *  triple-overlay isn't a real Origin shape, so each layer pairs into AT
- *  MOST one merge); members that don't pair are simply absent from the
- *  result — callers treat every family index not named here as its own,
- *  ordinary spatial panel. */
-export function figureFrameY2Pairs(family: OriginFigureEntry[]): SpatialY2Pair[] {
+/** Partition a ≥2-layer spatial family into frame-coincident overlay groups
+ *  (decode-plan #54 residual — generalizes the old greedy PAIRWISE
+ *  `figureFrameY2Pairs`, which silently left a 3rd coincident layer
+ *  unpaired and unmerged: exactly the overlap `computePanelLayout` misreads
+ *  as untrusted geometry, forcing the WHOLE figure to the ordinal
+ *  fallback). Origin's on-disk model is N free-positioned layers —
+ *  "double-Y" is just 2 layers that happen to share a frame, and nothing in
+ *  the format caps that at 2 (native ≥3-axis RENDERING stays deliberately
+ *  deferred; this only fixes the GROUPING so a 3rd coincident layer no
+ *  longer pollutes the layout classifier).
+ *
+ *  Each group forms around a HOST — the earliest unclaimed member, which
+ *  (given `figureLayerFamily`'s layer-ascending sort) is also its
+ *  lowest-layer member — and every OTHER unclaimed member that is
+ *  frame-coincident with THAT HOST (`isFrameCoincidentY2Overlay`,
+ *  unchanged: same dataset, both have curves, X ranges match, Y ranges
+ *  differ, frames coincide) joins it. Candidates are tested against the
+ *  host only — transitive-FROM-HOST, not a full pairwise closure — which
+ *  matches the geometry Origin itself produces: every coincident overlay
+ *  layer shares the SAME frame quad as its host (decode-plan #36's
+ *  byte-identical-frame finding), so host-coincidence is the whole
+ *  relation. A defensive re-sort by actual `layer` value keeps "lowest
+ *  layer = host" true even if a caller hands in unsorted order. Layers that
+ *  don't pair with anyone come back as their own length-1 group (unlike the
+ *  old function, which omitted them entirely). */
+export function coincidentOverlayGroups(family: OriginFigureEntry[]): CoincidentOverlayGroup[] {
   const used = new Set<number>();
-  const pairs: SpatialY2Pair[] = [];
+  const groups: CoincidentOverlayGroup[] = [];
   for (let i = 0; i < family.length; i++) {
     if (used.has(i)) continue;
+    const members = [i];
+    used.add(i);
     for (let j = i + 1; j < family.length; j++) {
-      if (used.has(j)) continue;
-      if (!isFrameCoincidentY2Overlay(family[i], family[j])) continue;
-      const iLayer = family[i].figure.layer ?? 1;
-      const jLayer = family[j].figure.layer ?? 1;
-      const [hostIndex, y2Index] = iLayer <= jLayer ? [i, j] : [j, i];
-      pairs.push({ hostIndex, y2Index });
-      used.add(i);
+      if (used.has(j) || !isFrameCoincidentY2Overlay(family[i], family[j])) continue;
+      members.push(j);
       used.add(j);
-      break;
     }
+    members.sort((a, b) => (family[a].figure.layer ?? 1) - (family[b].figure.layer ?? 1));
+    groups.push({ indices: members });
   }
-  return pairs;
+  return groups;
 }
 
 /** Combine a resolved host panel with its frame-coincident y2 overlay panel
@@ -573,37 +595,66 @@ function mergePanelWithY2(
 }
 
 /** Full spatial multi-panel resolution for `applyOriginFigure` (decode-plan
- *  #36, residual fix — PNR/S7/Book33 repro): resolves every family member
- *  (`resolveFigurePanels`, all-or-nothing — unchanged), then collapses any
- *  frame-coincident double-Y pair (`figureFrameY2Pairs`) into ONE merged
- *  panel (`mergePanelWithY2`) BEFORE handing frames to
- *  `originPanels.computePanelLayout` — so a y2 overlay's frame never even
- *  reaches the clusterer as a second cell (the bug: two layers occupying the
- *  SAME page rectangle tripped `computePanelLayout`'s own "frames overlap
- *  rather than tile the page" bail-out for the WHOLE figure, collapsing a
- *  real 2-panel layout to a 1xN ordinal stack). `computePanelLayout` remains
- *  a strict tiled-grid classifier; genuine overlap among the remaining
- *  frames is accepted only through independently validated page rectangles.
- *  Returns
+ *  #36, residual fix — PNR/S7/Book33 repro; #54 residual — generalized past
+ *  pairs): resolves every family member (`resolveFigurePanels`,
+ *  all-or-nothing — unchanged), then collapses each frame-coincident
+ *  overlay GROUP (`coincidentOverlayGroups`, arbitrary size — a real Origin
+ *  figure is N free-positioned layers, not a hardcoded pair) into ONE
+ *  merged panel (`mergePanelWithY2`, host + its first partner — the native
+ *  2-axis renderer has no 3rd axis for a 2nd partner) BEFORE handing frames
+ *  to `originPanels.computePanelLayout` — so a coincident layer's frame
+ *  never reaches the clusterer as its own cell (the bug: layers occupying
+ *  the SAME page rectangle tripped `computePanelLayout`'s own "frames
+ *  overlap rather than tile the page" bail-out for the WHOLE figure,
+ *  collapsing a real spatial layout to a 1xN ordinal stack). A group of
+ *  3+ merges host+first-partner and DROPS the rest — counted in
+ *  `droppedOverlays` — rather than rendering them wrong or re-polluting the
+ *  layout; the dropped members' figure-entry ids still land in the merged
+ *  panel's `sourceFigureIds` (provenance only, never branched on) so a
+ *  caller can point the user at the figure's saved preview/Graph Builder
+ *  fallback for the full picture. `computePanelLayout` remains a strict
+ *  tiled-grid classifier; genuine overlap among the remaining frames is
+ *  accepted only through independently validated page rectangles. Returns
  *  `null` when `resolveFigurePanels` does. `layout` distinguishes trusted
  *  tiled geometry, trusted full-page overlap/inset geometry, and the ordinal
  *  fail-closed fallback; `spatial` retains the legacy tiled-only signal. */
 export function resolveSpatialPanels(
   family: OriginFigureEntry[],
   datasets: Dataset[],
-): { panels: SpatialPanel[]; spatial: boolean; layout: "tiled" | "page" | "ordinal" } | null {
+): {
+  panels: SpatialPanel[];
+  spatial: boolean;
+  layout: "tiled" | "page" | "ordinal";
+  /** Frame-coincident layers a native 2-axis panel couldn't also carry (a
+   *  group of 3+ merges host+first-partner only) — 0 when every coincident
+   *  layer fit. Provenance for these still lands in the merged panel's
+   *  `sourceFigureIds`. */
+  droppedOverlays: number;
+} | null {
   const resolved = resolveFigurePanels(family, datasets);
   if (!resolved) return null;
-  const pairs = figureFrameY2Pairs(family);
-  const y2ByHost = new Map(pairs.map((p) => [p.hostIndex, p.y2Index]));
-  const consumed = new Set(pairs.map((p) => p.y2Index));
-  const reducedIndices = family.map((_, i) => i).filter((i) => !consumed.has(i));
-  const reducedPanels = reducedIndices.map((i) => {
-    const y2Index = y2ByHost.get(i);
-    return y2Index == null
-      ? resolved[i]
-      : mergePanelWithY2(resolved[i], resolved[y2Index], family[y2Index].figure);
-  });
+  const groups = coincidentOverlayGroups(family);
+  let droppedOverlays = 0;
+  const reducedIndices: number[] = [];
+  const reducedPanels: Omit<SpatialPanel, "row" | "col">[] = [];
+  for (const { indices } of groups) {
+    const [hostIndex, y2Index, ...dropped] = indices;
+    reducedIndices.push(hostIndex);
+    if (y2Index == null) {
+      reducedPanels.push(resolved[hostIndex]);
+      continue;
+    }
+    const merged = mergePanelWithY2(resolved[hostIndex], resolved[y2Index], family[y2Index].figure);
+    if (dropped.length === 0) {
+      reducedPanels.push(merged);
+      continue;
+    }
+    droppedOverlays += dropped.length;
+    reducedPanels.push({
+      ...merged,
+      sourceFigureIds: [...(merged.sourceFigureIds ?? []), ...dropped.map((i) => family[i].id)],
+    });
+  }
   const page = family[0].figure.page ?? null;
   const layout = computePanelLayout(
     reducedIndices.map((i) => family[i].figure.frame ?? null),
@@ -634,7 +685,33 @@ export function resolveSpatialPanels(
     : pageAspect != null && pageValidRects(panels) != null
       ? "page"
       : "ordinal";
-  return { panels, spatial: layout.spatial, layout: layoutKind };
+  return { panels, spatial: layout.spatial, layout: layoutKind, droppedOverlays };
+}
+
+/** Info-toast wording for `applyOriginFigure`'s spatial branch (#54
+ *  residual) — one line per condition the apply couldn't render exactly as
+ *  decoded: the ordinal fallback (page geometry not decoded, unchanged
+ *  wording) and/or coincident overlay layers a native 2-axis panel couldn't
+ *  also carry (`resolveSpatialPanels`'s `droppedOverlays`) — pointing the
+ *  user at the figure's saved preview/Graph Builder fallback for those.
+ *  Both can fire together; `[]` means the apply rendered cleanly. Pulled out
+ *  of `useApp.applyOriginFigure` so the store's per-condition toast wiring
+ *  stays a one-line loop (store-size ratchet). */
+export function spatialApplyNotices(
+  layout: "tiled" | "page" | "ordinal",
+  panelCount: number,
+  droppedOverlays: number,
+): string[] {
+  const out: string[] = [];
+  if (layout === "ordinal") {
+    out.push(`applied ${panelCount} panels stacked in layer order — page geometry not decoded`);
+  }
+  if (droppedOverlays > 0) {
+    out.push(
+      `${droppedOverlays} overlay layer(s) exceed the 2-axis native renderer — open the figure's saved preview for the original`,
+    );
+  }
+  return out;
 }
 
 /** The store `annotations` an applied figure pins on the plot: every decoded

@@ -52,6 +52,7 @@ import {
   originLegendState,
   originRegionShades,
   resolveSpatialPanels,
+  spatialApplyNotices,
 } from "../lib/originFigures";
 import { planOriginFolders } from "../lib/originFolders";
 import {
@@ -1554,7 +1555,7 @@ export const useApp = create<AppState>((set, get) => ({
     if (family.length >= 2) {
       const spatialResult = resolveSpatialPanels(family, get().datasets);
       if (spatialResult) {
-        const { panels: placed, layout } = spatialResult;
+        const { panels: placed, layout, droppedOverlays } = spatialResult;
         get().setActive(entry.datasetId);
         // showAxisBox is the SINGLETON flag `useMultiPanelStage` reads for
         // every spatial panel (item 4) — Origin layers are boxed by default.
@@ -1579,12 +1580,7 @@ export const useApp = create<AppState>((set, get) => ({
           regionShades: [],
         });
         get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
-        if (layout === "ordinal") {
-          toast(
-            `applied ${placed.length} panels stacked in layer order — page geometry not decoded`,
-            "info",
-          );
-        }
+        for (const msg of spatialApplyNotices(layout, placed.length, droppedOverlays)) toast(msg, "info");
         return;
       }
       toast(

@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildOriginFigureEntries,
+  coincidentOverlayGroups,
   curveDisplayName,
   doubleYPartner,
   figureChannelSelection,
-  figureFrameY2Pairs,
   figureLabel,
   figureLayerFamily,
   figureSelectionState,
@@ -20,6 +20,7 @@ import {
   resolveFigurePanels,
   resolveLegendTemplate,
   resolveSpatialPanels,
+  spatialApplyNotices,
 } from "./originFigures";
 import type { Dataset, OriginCurve, OriginFigure } from "./types";
 
@@ -766,7 +767,7 @@ describe("resolveFigurePanels", () => {
   });
 });
 
-describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual — PNR/S7/Book33 repro)", () => {
+describe("coincidentOverlayGroups / resolveSpatialPanels (decode-plan #36/#54 residuals — PNR/S7/Book33 repro)", () => {
   // Same dataset for every entry in these tests: a real double-Y pair always
   // shares a book (`doubleYPartner`'s own check, reused here).
   const ds = book("d1", "PNR:Book33", {
@@ -819,48 +820,62 @@ describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual �
     curves: [{ book: "Book33", x: "A", y: "D" }], // channel index 2 — distinct from the host's
   });
 
-  describe("figureFrameY2Pairs", () => {
-    it("pairs the frame-coincident host/y2 layers, host = lower layer number", () => {
-      const pairs = figureFrameY2Pairs([reflectivity, nuclearSld, magneticSld]);
-      expect(pairs).toEqual([{ hostIndex: 1, y2Index: 2 }]);
+  describe("coincidentOverlayGroups", () => {
+    it("groups the frame-coincident host/y2 layers, host = lower layer number; the rest stay singleton", () => {
+      const groups = coincidentOverlayGroups([reflectivity, nuclearSld, magneticSld]);
+      expect(groups).toEqual([{ indices: [0] }, { indices: [1, 2] }]);
     });
 
-    it("does not pair when the y-ranges are the same (two real panels, not a double-Y)", () => {
+    it("does not group when the y-ranges are the same (two real panels, not a double-Y)", () => {
       const sameY = entry("f3", 3, { frame: bottomFrame, page, x_from: 2950, x_to: 3550, y_from: -1, y_to: 10 });
-      expect(figureFrameY2Pairs([nuclearSld, sameY])).toEqual([]);
+      expect(coincidentOverlayGroups([nuclearSld, sameY])).toEqual([{ indices: [0] }, { indices: [1] }]);
     });
 
-    it("does not pair when the x-ranges differ (not sharing the host's x axis)", () => {
+    it("does not group when the x-ranges differ (not sharing the host's x axis)", () => {
       const differentX = entry("f3", 3, {
         frame: bottomFrame, page, x_from: 0, x_to: 100, y_from: -0.5, y_to: 2.5,
       });
-      expect(figureFrameY2Pairs([nuclearSld, differentX])).toEqual([]);
+      expect(coincidentOverlayGroups([nuclearSld, differentX])).toEqual([{ indices: [0] }, { indices: [1] }]);
     });
 
-    it("does not pair across different datasets", () => {
+    it("does not group across different datasets", () => {
       const otherDs = entry("f3", 3, { frame: bottomFrame, page, x_from: 2950, x_to: 3550, y_from: -0.5, y_to: 2.5 }, "d2");
-      expect(figureFrameY2Pairs([nuclearSld, otherDs])).toEqual([]);
+      expect(coincidentOverlayGroups([nuclearSld, otherDs])).toEqual([{ indices: [0] }, { indices: [1] }]);
     });
 
-    it("does not pair when either layer has no decoded curves", () => {
+    it("does not group when either layer has no decoded curves", () => {
       const noCurves = { ...magneticSld, figure: { ...magneticSld.figure, curves: [] } };
-      expect(figureFrameY2Pairs([nuclearSld, noCurves])).toEqual([]);
+      expect(coincidentOverlayGroups([nuclearSld, noCurves])).toEqual([{ indices: [0] }, { indices: [1] }]);
     });
 
-    it("does not pair frames that merely overlap, rather than coincide (a real geometry conflict)", () => {
+    it("does not group frames that merely overlap, rather than coincide (a real geometry conflict)", () => {
       const partiallyOverlapping = entry("f3", 3, {
         frame: { left: 867, top: 3000, right: 6686, bottom: 4500 }, // shifted down — partial overlap only
         page, x_from: 2950, x_to: 3550, y_from: -0.5, y_to: 2.5,
       });
-      expect(figureFrameY2Pairs([nuclearSld, partiallyOverlapping])).toEqual([]);
+      expect(coincidentOverlayGroups([nuclearSld, partiallyOverlapping])).toEqual([{ indices: [0] }, { indices: [1] }]);
     });
 
-    it("returns [] for a fully spatially-distinct family (no coincident frames at all)", () => {
+    it("returns every layer as its own singleton group for a fully spatially-distinct family", () => {
       const third = entry("f3", 3, {
         frame: { left: 867, top: 4300, right: 6686, bottom: 5000 },
         page, x_from: 0, x_to: 1, y_from: 0, y_to: 1,
       });
-      expect(figureFrameY2Pairs([reflectivity, nuclearSld, third])).toEqual([]);
+      expect(coincidentOverlayGroups([reflectivity, nuclearSld, third])).toEqual([
+        { indices: [0] },
+        { indices: [1] },
+        { indices: [2] },
+      ]);
+    });
+
+    it("generalizes past 2: THREE frame-coincident layers form ONE group, host first then family order", () => {
+      const thirdOverlay = entry("f4", 4, {
+        frame: bottomFrame, page, x_from: 2950, x_to: 3550, x_log: false,
+        y_from: -10, y_to: 10, y_log: false, // distinct from both host and magneticSld's y-range
+        curves: [{ book: "Book33", x: "A", y: "B" }],
+      });
+      const groups = coincidentOverlayGroups([reflectivity, nuclearSld, magneticSld, thirdOverlay]);
+      expect(groups).toEqual([{ indices: [0] }, { indices: [1, 2, 3] }]);
     });
   });
 
@@ -907,6 +922,7 @@ describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual �
       expect(top.sourceFigureIds).toEqual(["f1"]);
       expect(bottom.sourceFigureIds).toEqual(["f2", "f3"]);
       expect(top.y2Keys ?? null).toBeNull();
+      expect(result!.droppedOverlays).toBe(0); // only a 2-group here — nothing dropped
     });
 
     it("leaves a fully spatially-distinct ≥2-layer family as one panel per layer (unmerged, unaffected)", () => {
@@ -918,6 +934,77 @@ describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual �
       expect(result!.spatial).toBe(true);
       expect(result!.layout).toBe("tiled");
       expect(result!.panels.every((p) => (p.y2Keys ?? null) === null)).toBe(true);
+      expect(result!.droppedOverlays).toBe(0);
+    });
+
+    it("generalizes past 2: THREE frame-coincident layers merge host+first-partner and DROP the third, counted", () => {
+      const thirdOverlay = entry("f4", 4, {
+        frame: bottomFrame, page, x_from: 2950, x_to: 3550, x_log: false,
+        y_from: -10, y_to: 10, y_log: false,
+        curves: [{ book: "Book33", x: "A", y: "B" }],
+      });
+      const result = resolveSpatialPanels([reflectivity, nuclearSld, magneticSld, thirdOverlay], [ds]);
+      expect(result).not.toBeNull();
+      expect(result!.panels).toHaveLength(2); // reflectivity + ONE merged bottom panel — f4 absent
+      const [top, bottom] = result!.panels;
+      expect(top.sourceFigureIds).toEqual(["f1"]);
+      // Merge is host(f2) + FIRST partner(f3) only — same as the 2-group case —
+      // with the dropped third (f4) folded into provenance, not rendered.
+      expect(bottom.yKeys).toEqual([1, 2]);
+      expect(bottom.y2Keys).toEqual([2]);
+      expect(bottom.sourceFigureIds).toEqual(["f2", "f3", "f4"]); // dropped layer still traceable
+      expect(result!.droppedOverlays).toBe(1);
+      expect(result!.layout).toBe("tiled"); // NOT polluted to ordinal by the 3rd coincident layer
+    });
+
+    it("mixed family: 3 coincident + 1 spatially-separate layer — the separate layer tiles cleanly, no ordinal pollution", () => {
+      // reflectivity sits in its OWN frame (topFrame) — spatially separate
+      // from the coincident trio (nuclearSld/magneticSld/thirdOverlay, all
+      // bottomFrame). Same input as the merge-detail test above; this one
+      // asserts the layout/dropped-count contract on its own, since that's
+      // the actual regression this task fixes (a 3rd coincident layer used
+      // to pollute the WHOLE figure's layout classification into "ordinal").
+      const thirdOverlay = entry("f4", 4, {
+        frame: bottomFrame, page, x_from: 2950, x_to: 3550, x_log: false,
+        y_from: -10, y_to: 10, y_log: false,
+        curves: [{ book: "Book33", x: "A", y: "B" }],
+      });
+      const result = resolveSpatialPanels([reflectivity, nuclearSld, magneticSld, thirdOverlay], [ds]);
+      expect(result).not.toBeNull();
+      expect(result!.layout).not.toBe("ordinal"); // the dropped 3rd overlay never reaches the layout classifier
+      expect(result!.spatial).toBe(true);
+      expect(result!.panels).toHaveLength(2);
+      expect(result!.panels[0].row).toBe(0);
+      expect(result!.panels[1].row).toBe(1); // still a clean top/bottom 2-stack
+      expect(result!.droppedOverlays).toBe(1);
+    });
+
+    it("collapses to a SINGLE panel when the whole family is one coincident group (host+partner+dropped, nothing else)", () => {
+      const thirdOverlay = entry("f4", 4, {
+        frame: bottomFrame, page, x_from: 2950, x_to: 3550, x_log: false,
+        y_from: -10, y_to: 10, y_log: false,
+        curves: [{ book: "Book33", x: "A", y: "B" }],
+      });
+      const result = resolveSpatialPanels([nuclearSld, magneticSld, thirdOverlay], [ds]);
+      expect(result).not.toBeNull();
+      expect(result!.panels).toHaveLength(1); // 1-panel spatial apply — renders fine (spatialGridSize -> 1x1)
+      expect(result!.spatial).toBe(true);
+      expect(result!.layout).toBe("tiled");
+      expect(result!.panels[0].row).toBe(0);
+      expect(result!.panels[0].col).toBe(0);
+      expect(result!.panels[0].sourceFigureIds).toEqual(["f2", "f3", "f4"]);
+      expect(result!.droppedOverlays).toBe(1);
+    });
+
+    it("does not group/drop anything when coincident frames have mismatched X ranges", () => {
+      const differentX = entry("f3", 3, {
+        frame: bottomFrame, page, x_from: 0, x_to: 100, y_from: -0.5, y_to: 2.5,
+      });
+      const result = resolveSpatialPanels([nuclearSld, differentX], [ds]);
+      expect(result).not.toBeNull();
+      expect(result!.panels).toHaveLength(2); // no merge — both layers stay their own panel
+      expect(result!.panels.every((p) => (p.y2Keys ?? null) === null)).toBe(true);
+      expect(result!.droppedOverlays).toBe(0);
     });
 
     it("carries unequal decoded frame proportions into the spatial panel contract", () => {
@@ -947,6 +1034,7 @@ describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual �
       expect(result!.spatial).toBe(false);
       expect(result!.layout).toBe("ordinal");
       expect(result!.panels).toHaveLength(3); // nothing to merge — degenerate geometry, not a real y2 pair
+      expect(result!.droppedOverlays).toBe(0);
     });
 
     it("keeps a genuine non-double-Y frame overlap as a trusted page composition", () => {
@@ -968,6 +1056,31 @@ describe("figureFrameY2Pairs / resolveSpatialPanels (decode-plan #36 residual �
     it("returns null (all-or-nothing, unchanged) when any layer fails to resolve a dataset", () => {
       const unresolved = entry("f3", 3, { frame: bottomFrame, page, x_from: 2950, x_to: 3550, y_from: -0.5, y_to: 2.5 }, null);
       expect(resolveSpatialPanels([reflectivity, nuclearSld, unresolved], [ds])).toBeNull();
+    });
+  });
+
+  describe("spatialApplyNotices", () => {
+    it("returns [] for a clean tiled apply (nothing to report)", () => {
+      expect(spatialApplyNotices("tiled", 2, 0)).toEqual([]);
+    });
+
+    it("reports the ordinal fallback alone (unchanged wording)", () => {
+      expect(spatialApplyNotices("ordinal", 3, 0)).toEqual([
+        "applied 3 panels stacked in layer order — page geometry not decoded",
+      ]);
+    });
+
+    it("reports dropped overlays alone", () => {
+      expect(spatialApplyNotices("tiled", 2, 1)).toEqual([
+        "1 overlay layer(s) exceed the 2-axis native renderer — open the figure's saved preview for the original",
+      ]);
+    });
+
+    it("reports BOTH when a family is simultaneously ordinal and has dropped overlays", () => {
+      expect(spatialApplyNotices("ordinal", 1, 2)).toEqual([
+        "applied 1 panels stacked in layer order — page geometry not decoded",
+        "2 overlay layer(s) exceed the 2-axis native renderer — open the figure's saved preview for the original",
+      ]);
     });
   });
 });

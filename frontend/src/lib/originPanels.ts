@@ -70,7 +70,7 @@ const OVERLAP_TOL_FRACTION = 0.02;
  *  "same panel" signal — structurally different from the partial/one-sided
  *  overlap `OVERLAP_TOL_FRACTION` guards against above (a real multi-panel
  *  layout whose decoded frames disagree, which should still bail to the
- *  ordinal fallback). Consumed by `originFigures.figureFrameY2Pairs`, which
+ *  ordinal fallback). Consumed by `originFigures.coincidentOverlayGroups`, which
  *  also checks the figure-level y2-ness heuristics (dataset/curves/y-range/
  *  x-range) before treating a coincident pair as a real double-Y overlay —
  *  this predicate is pure geometry only, so a caller wanting the full

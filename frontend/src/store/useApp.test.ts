@@ -16,6 +16,7 @@ import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import type { Dataset, DataStruct } from "../lib/types";
 import type { LoadedWorkspace } from "../lib/workspace";
 import { useApp } from "./useApp";
+import { useToasts } from "./toasts";
 
 vi.mock("../lib/api", () => ({
   applyCorrections: vi.fn(),
@@ -2614,6 +2615,26 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
     expect(s.spatialPanels).toBeNull();
     expect(s.stackMode).toBe(false);
     expect(s.activeId).toBe("p1");
+  });
+
+  // #54 residual: a THIRD frame-coincident layer used to pollute the whole
+  // family's layout classification (the "generalize past pairs" fix, see
+  // originFigures.test.ts's coincidentOverlayGroups/resolveSpatialPanels
+  // coverage). Here the whole family IS the one coincident group — host +
+  // first partner merge into a single panel, the 3rd is dropped and counted.
+  it("droppedOverlays > 0 (a 3-way frame-coincident overlay) toasts an info notice pointing at the saved preview", () => {
+    const bottomFrame = { left: 0, top: 520, right: 995, bottom: 990 };
+    const host = mkEntry("fig-h", 2, "p1", "Book1", bottomFrame, [-1, 10]);
+    const partner = mkEntry("fig-p", 3, "p1", "Book1", bottomFrame, [-0.5, 2.5]);
+    const dropped = mkEntry("fig-d", 4, "p1", "Book1", bottomFrame, [-10, 10]);
+    useToasts.setState({ toasts: [] });
+    useApp.setState({ originFigures: [host, partner, dropped] });
+    useApp.getState().applyOriginFigure("fig-h");
+    const s = useApp.getState();
+    expect(s.stackMode).toBe(true);
+    expect(s.spatialPanels).toHaveLength(1); // host+partner merged; the 3rd never becomes its own panel
+    const msgs = useToasts.getState().toasts.map((t) => t.msg);
+    expect(msgs.some((m) => m.includes("1 overlay layer(s) exceed the 2-axis native renderer"))).toBe(true);
   });
 });
 
