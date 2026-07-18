@@ -189,7 +189,7 @@ describe("FiguresSection", () => {
     expect(useApp.getState().graphBuilderSeed?.zones.y).toEqual([{ datasetId: "d1", channel: 0 }]);
   });
 
-  it("toggles the file-saved Origin preview beside the editable Stage", () => {
+  it("opens the file-saved Origin preview in a comparison window", () => {
     useApp.setState({
       originFigures: [{
         id: "preview", stem: "XAS", datasetId: "d1", siblingIds: ["d1"],
@@ -206,12 +206,42 @@ describe("FiguresSection", () => {
     });
     render(<FiguresSection />);
     expect(screen.queryByAltText(/Saved Origin preview of GraphPreview/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTitle("Show saved Origin preview"));
+    fireEvent.click(screen.getByTitle("Open saved Origin preview for comparison"));
     const image = screen.getByAltText(/Saved Origin preview of GraphPreview/);
     expect(image).toHaveAttribute("src", "data:image/png;base64,iVBORw0KGgo=");
+    expect(screen.getByText("200 × 155 PNG")).toBeInTheDocument();
+    expect(screen.getByText("Exact graph-page attribution")).toBeInTheDocument();
     expect(screen.getByText(/may be stale or low resolution/)).toBeInTheDocument();
-    fireEvent.click(screen.getByTitle("Hide saved Origin preview"));
+    fireEvent.click(screen.getByText("Restore editable graph on Stage"));
+    expect(useApp.getState().activeId).toBe("d1");
+    fireEvent.click(screen.getByText("Close reference"));
     expect(screen.queryByAltText(/Saved Origin preview of GraphPreview/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("Open saved Origin preview for comparison"));
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByAltText(/Saved Origin preview of GraphPreview/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the preview available but disables restore when the editable binding is unresolved", () => {
+    useApp.setState({
+      originFigures: [{
+        id: "unresolved-preview", stem: "XAS", datasetId: null, siblingIds: [],
+        figure: {
+          name: "UnresolvedPreview", source_hint: "MissingBook",
+          x_from: 0, x_to: 1, x_log: false, y_from: 0, y_to: 1, y_log: false,
+          n_curves: 1, annotations: [],
+          saved_preview: {
+            format: "png", mime: "image/png", width: 200, height: 155,
+            sha256: "b".repeat(64), data: "iVBORw0KGgo=",
+            confidence: "exact_page", page_name: "UnresolvedPreview",
+          },
+        },
+      }],
+    });
+    render(<FiguresSection />);
+    fireEvent.click(screen.getByRole("button", { name: "Open saved Origin preview for comparison" }));
+    expect(screen.getByRole("button", { name: "Restore editable graph on Stage" })).toBeDisabled();
+    expect(screen.getByAltText(/Saved Origin preview of UnresolvedPreview/)).toBeInTheDocument();
   });
 
   it("collapses/expands via the section header", () => {

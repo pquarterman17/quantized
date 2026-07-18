@@ -919,6 +919,27 @@ the shipped contract)
 
 ## Completed
 
+- ~~**62. Saved-Origin-preview comparison UX**~~
+  (2026-07-17; `codex/origin-saved-preview-ux`) — the validated file-saved
+  graph preview no longer expands inside the narrow Library sidebar. Its
+  figure-row action opens a movable, resizable reference window that can stay
+  beside the editable Stage, with explicit Origin-reference labeling, pixel
+  dimensions, page-attribution confidence, and the stale/low-resolution
+  caveat. The window can restore the editable graph without closing, closes
+  by button/Escape, and keeps the preview viewable while disabling restore
+  when the workbook binding is unresolved. The glyph-only row action now has
+  an accessible comparison label.
+  - Safety boundary: the window renders only bytes already accepted by
+    `originPreviewDataUrl`; it never derives plot state from the bitmap and
+    changes no preview extraction, attribution, Origin decoding, bindings,
+    acquisition order, axis state, or renderer paths.
+  - Verification: focused frontend 26 tests; final full frontend 3756 tests;
+    production build + typecheck; integrity, ruff, mypy, component-size, and
+    convention guards green. A real-browser visual check covered default
+    placement, bounded image canvas, Stage visibility, metadata, actions, and
+    responsive window chrome; its temporary fixture was removed before the
+    final gates.
+
 - ~~**61. Spatial-page export content parity (proven-contract slice)**~~
   (2026-07-17; PR #59) — the true-coordinate
   page exporter now carries each panel's proven primary-axis content through
