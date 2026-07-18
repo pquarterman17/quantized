@@ -106,38 +106,9 @@ plotting, publication export.
 
 ## Tier 2 — Medium Impact
 
-8. **Context menus as a complete system** — one **context-action registry** keyed
-   by selected object type, reused in right-click menus, the Plot Objects tree
-   (#2), Command Palette, and an optional mini-toolbar.
-   - [x] Keyboard-complete menus: `role="menu"`/`menuitem`/`menuitemcheckbox`,
-         arrow-key nav, type-ahead, Home/End, Esc-returns-focus.
-   - [x] A resting cue that right-click is available; shared confirm/undo policy for
-         destructive/reorganizing actions.
-   - [ ] Residual (2026-07-17): the registry (`lib/contextActions.ts`, keyed
-         `dataset`/`folder`/`curve`) landed with its 3 MANDATORY retrofits —
-         the Library dataset-row menu, the folder-row menu, and the plot
-         curve/series menu all now BUILD from shared `ContextAction<T>`
-         entries instead of hand-rolled arrays, so a label/gate is defined
-         once. `ContextMenu.tsx` is keyboard-complete (arrow-nav math split
-         into pure `lib/menuKeyboardNav.ts` to hold the .tsx ceiling); rows
-         gained `tabIndex` + the ContextMenu-key/Shift+F10 handler and a
-         "⋯" resting-cue button (hidden until hover/focus, coexisting with
-         #13's drag handle); `destructive: true` entries (Remove/Remove-N-
-         selected, Delete folder[+datasets]) now confirm via the shared
-         `askConfirm` before running. Superseded `lib/panelMenu.ts`'s
-         `multiSelectMenuItems` (folded into the registry) — deleted rather
-         than left as unused duplicate logic. NOT done: Command Palette /
-         Plot Objects tree (#2, owner-gated) / mini-toolbar reuse of the
-         SAME entries (the registry's `run(target)` shape supports it, but
-         no consumer wired yet); the worksheet column/row, window, and
-         annotation/shape menus are untouched (still hand-built) — retrofit
-         on next touch, not urgent since they're lower-traffic than the 3
-         done. Axis/plot-level pickers in `plotMenu.ts` (colour swatches,
-         line/width/marker/scale submenus) deliberately stayed hand-built —
-         parameterized pickers, not discrete actions, don't fit the
-         registry's `{id,label,run}` shape. Frontend 265 files / 3647 tests
-         green (net: +1 file vs. pre-#8 after `panelMenu.ts`'s deletion);
-         build green.
+8. **Context menus as a complete system** — CLOSED 2026-07-18 (see Completed).
+   The one remaining consumer — the Plot Objects tree — rides the owner-gated
+   #2 itself; the registry's `run(target)` shape is ready for it.
 
 11. **Graph Builder → durable artifact** — promote its output to a first-class
     saved `PlotSpec` in `.dwk`.
@@ -299,6 +270,33 @@ plotting, publication export.
 ---
 
 ## Completed
+
+- ~~**#8 Context menus as a complete system**~~ (2026-07-18; core 2026-07-17) —
+  the residual consumers + retrofits all landed: the ⌘K **Command Palette**
+  merges context-registry actions computed at open time
+  (`lib/paletteContextActions.ts` — active dataset with `askParams` dialog
+  fallbacks for the row-local Rename/Add-tag editors, selected annotation,
+  selected shape; hidden/disabled entries omitted, destructive entries keep
+  their confirm); a **selection mini-toolbar**
+  (`Stage/SelectionMiniToolbar.tsx`) shares ToolHud's HUD slot (mutually
+  exclusive by construction: HUD = non-pointer tools, toolbar = pointer +
+  selection) offering the selected annotation/shape's registry actions as
+  buttons; the **worksheet column/row menus** (`worksheetMenus.ts`) and the
+  **annotation/shape object menus** (`annotationShapeActions.ts`, composed by
+  `useAnnotationEdit`/`useShapeEdit`) rebuilt from registry entries with
+  IDENTICAL menu output (parameterized pickers — Frame presets, swatches,
+  opacity/width — deliberately stay hand-built, the plotMenu precedent); a
+  **window title-bar right-click menu** (`windows/windowMenu.ts` +
+  `WindowTitleButtons`, delegated native listener since `PlotWindowFrame` is
+  at its ratchet pin) with labels PINNED verbatim to `useWindowCommands`'s
+  palette wording by a drift-guard test — same words, different target (this
+  window vs. the focused one); bgCycle kind-gated to plot+snapshot like the
+  physical ◐ button. `ContextAction` gained `danger` (red, no confirm — for
+  cheap-to-recreate canvas objects) and `checked` (toggle ✓). Registry engine
+  + annotation/shape registries hand-written (pattern-setting), remainder
+  implemented by a sonnet agent from spec, adversarially reviewed. Frontend
+  278 files / 3817 tests green (+81 vs. pre-residual), build green. Remaining
+  registry consumer = the Plot Objects tree, riding owner-gated #2.
 
 - ~~**#15 Export round-trip browser validation**~~ (2026-07-18, PR #64) —
   `frontend/e2e/specs/export-roundtrip.spec.ts` exercises the production
