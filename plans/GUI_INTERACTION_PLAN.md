@@ -217,14 +217,19 @@ plotting, publication export.
           path already covered above)
     - [ ] annotation/shape move/edit/delete/undo
     - [ ] window arrange/restore
-    - [ ] export round-trip
+    - [x] Export round-trip — a real-browser journey now carries ordered
+          Graph Builder XY/scatter intent into Figure Builder, downloads real
+          FastAPI/matplotlib PDF/SVG/PNG artifacts, validates MIME types,
+          filenames, and file signatures, then saves/reopens the FigureDoc and
+          proves the publication request is identical. A companion regression
+          keeps connected line and line+marker series connected.
     - [x] CI workflow — `.github/workflows/e2e.yml` VERIFIED LIVE 2026-07-17:
           first push-run failed 4 menu tests (spec `role="button"` locators vs
           the #8 registry's explicit `role="menuitem"`; local runs had masked
           it via `reuseExistingServer` against a STALE server), fixed in
           `a2fb74a` — second live run green 18/18 (run 29610916988).
 
-    _Progress (2026-07-17):_ core harness + 7 journeys shipped. Server under
+    _Progress (2026-07-18):_ core harness + 8 journeys shipped. Server under
     test: `uv run qz --no-browser --port 8934` (cwd = repo root), Playwright's
     `webServer.url` polls `/api/health`; `--no-browser` means
     `QZ_AUTO_SHUTDOWN` never arms, so the server survives the browser
@@ -234,15 +239,16 @@ plotting, publication export.
     model. State assertions read the `?harness` seam already used by
     `tools/visual` (`window.__qz.useApp.getState()`) for store fields a DOM
     query can't reach cleanly (series style, axis label/limits,
-    `savedPlotSpecs`, folder tree). Zoom matrix: `chromium-100` runs all 8
-    tests (7 spec files, `region-tool-escape.spec.ts` has 2); `chromium-125`/
+    `savedPlotSpecs`, folder tree). Zoom matrix: `chromium-100` runs all 10
+    tests (8 spec files; `region-tool-escape.spec.ts` and
+    `export-roundtrip.spec.ts` each have 2); `chromium-125`/
     `chromium-200` run only the 4 `@core`-tagged specs (import-drop,
     folder-organize, curve-restyle, region-tool-escape) — the ones touching
     canvas hit-testing/pointer capture/native drag-drop, the actual gaps this
     plan item names; axis-limits/graph-builder/keyboard-only are plain DOM
     form/keyboard interactions, not DPI-sensitive, so they run at the 100%
-    baseline only. 18 tests total (8+5+5), all green across 3 consecutive
-    full-suite runs (54/54). Zero `frontend/src` changes — the `?harness` seam
+    baseline only. 20 tests total (10+5+5), all green in the current full-suite
+    run. Zero `frontend/src` changes — the `?harness` seam
     (`main.tsx`) already existed for `tools/visual`; no new testability seam
     was needed. Menu-dependent selectors (context-menu items, the
     concurrently-refactored `ContextMenu.tsx`/`PlotContextMenu.tsx`) are
@@ -293,6 +299,15 @@ plotting, publication export.
 ---
 
 ## Completed
+
+- ~~**#15 Export round-trip browser validation**~~ (2026-07-18, PR #64) —
+  `frontend/e2e/specs/export-roundtrip.spec.ts` exercises the production
+  browser→FastAPI→matplotlib download path without mocked requests: ordered
+  XY keys, labels, colours, widths, marker state/size, and scatter connection
+  mode survive Figure Builder save/reopen; PDF/SVG/PNG downloads have the
+  expected MIME type, filename, and binary signature. A negative regression
+  protects continuous line and line+marker series from being rewritten as
+  disconnected scatter/segment paths. Full Playwright suite: 20/20 green.
 
 - ~~**#3 Make powerful gestures discoverable**~~ (2026-07-17) — closed as a
   gap-audit-and-fill: sibling work landed earlier the SAME day already
