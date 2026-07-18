@@ -6,6 +6,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api";
 import { liveViewOverrides, runExportFigureCommand } from "./exportFigureCommand";
 import type { Annotation, Shape } from "./types";
@@ -34,6 +35,12 @@ function fakeGet(over: {
   legendTitle?: string | null;
   annotations?: Annotation[];
   shapes?: Shape[];
+  xLim?: [number, number] | null;
+  yLim?: [number, number] | null;
+  showGrid?: boolean;
+  showAxisBox?: boolean;
+  xScale?: "linear" | "log" | "reciprocal";
+  yScale?: "linear" | "log" | "reciprocal";
 }) {
   const state = {
     showLegend: over.showLegend ?? true,
@@ -43,6 +50,12 @@ function fakeGet(over: {
     legendTitle: over.legendTitle ?? null,
     annotations: over.annotations ?? [],
     shapes: over.shapes ?? [],
+    xLim: over.xLim,
+    yLim: over.yLim,
+    showGrid: over.showGrid,
+    showAxisBox: over.showAxisBox,
+    xScale: over.xScale,
+    yScale: over.yScale,
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (() => state) as any;
@@ -157,6 +170,31 @@ describe("liveViewOverrides", () => {
     const ov = liveViewOverrides(fakeGet({}));
     expect(ov).not.toHaveProperty("shapes");
   });
+
+  it("carries finite live limits, grid, box spines, and log minor ticks", () => {
+    const ov = liveViewOverrides(
+      fakeGet({
+        xLim: [1, 9],
+        yLim: [0.01, 100],
+        showGrid: false,
+        showAxisBox: true,
+        xScale: "linear",
+        yScale: "log",
+      }),
+    );
+    expect(ov).toMatchObject({
+      x_lim: [1, 9],
+      y_lim: [0.01, 100],
+      grid: false,
+      spines: { top: true, right: true },
+      ticks: { minor: true },
+    });
+  });
+
+  it("drops a non-finite live limit instead of exporting an invalid range", () => {
+    const ov = liveViewOverrides(fakeGet({ xLim: [0, Number.NaN] }));
+    expect(ov).not.toHaveProperty("x_lim");
+  });
 });
 
 describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
@@ -168,11 +206,19 @@ describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
         {
           id: "d1",
           name: "scan.dat",
-          data: { time: [0, 1], values: [[1], [2]], labels: ["A"], units: ["u"], metadata: {} },
+          data: {
+            time: [0, 1],
+            values: [[1, 10, 100], [2, 20, 200]],
+            labels: ["A", "B", "C"],
+            units: ["u", "v", "w"],
+            metadata: {},
+          },
         },
       ],
       activeId: "d1",
+      xKey: null,
       yKeys: null,
+      y2Keys: null,
       xScale: "linear",
       yScale: "linear",
       xFmt: { mode: "auto", digits: 2 },
@@ -180,6 +226,16 @@ describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
       xStep: null,
       yStep: null,
       seriesStyles: {},
+      seriesLabels: {},
+      seriesOrder: null,
+      hiddenChannels: [],
+      xLim: null,
+      yLim: null,
+      showGrid: true,
+      showAxisBox: false,
+      plotTitle: "",
+      xAxisLabel: "",
+      yAxisLabel: "",
       status: "",
     });
   });
@@ -208,5 +264,35 @@ describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
     const body = vi.mocked(exportFigure).mock.calls[0][0];
     expect(body.x_step).toBe(2000);
     expect(body.y_step).toBe(0.5);
+  });
+
+  it("exports the live x channel, visible draw order, and display-label overrides", async () => {
+    useApp.setState({
+      xKey: 1,
+      yKeys: [0, 2],
+      seriesOrder: [2, 0],
+      hiddenChannels: [2],
+      seriesLabels: { 0: "Measured signal" },
+    });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.x_key).toBe(1);
+    expect(body.y_keys).toEqual([0]);
+    expect(body.dataset.labels).toEqual(["Measured signal", "B", "C"]);
+    // The imported workbook itself remains untouched.
+    expect(useApp.getState().datasets[0].data.labels).toEqual(["A", "B", "C"]);
+  });
+
+  it("prefills the dialog from the live imported title and axis labels", async () => {
+    useApp.setState({
+      plotTitle: "Imported graph",
+      xAxisLabel: "Q (nm^-1)",
+      yAxisLabel: "Reflectivity",
+    });
+    await runExportFigureCommand(useApp.getState);
+    const fields = vi.mocked(askParams).mock.calls[0][1];
+    expect(fields.find((f) => f.key === "title")?.default).toBe("Imported graph");
+    expect(fields.find((f) => f.key === "x_label")?.default).toBe("Q (nm^-1)");
+    expect(fields.find((f) => f.key === "y_label")?.default).toBe("Reflectivity");
   });
 });

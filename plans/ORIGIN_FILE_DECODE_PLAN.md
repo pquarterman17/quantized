@@ -14,7 +14,12 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-17 (visual-import campaign PR 2 READY: already-decoded
+**Updated:** 2026-07-17 (visual-import campaign PR 3 READY: ordinary
+publication export now sends the live x channel, visible draw order, decoded
+display labels, axes limits, grid/box state, log minor ticks, and imported
+title/axis-label defaults through existing renderer contracts; unsupported
+y2/error bars/region bands/reference lines remain explicit residuals). Same
+day, PR 2: already-decoded
 Rect* region bands now render in their owning spatial panel, including
 secondary-axis tagging for a frame-coincident y2 layer; positive-specimen
 corpus strict-pass 167/167 resolved / 0 renderer failures). Same day, PR 1:
@@ -913,6 +918,25 @@ the shipped contract)
 
 
 ## Completed
+
+- ~~**60. Ordinary imported-view export parity (proven-contract slice)**~~
+  (2026-07-17; PR pending) — `runExportFigureCommand` previously exported
+  raw `yKeys` against time/default X and omitted most live axis/chrome state.
+  It now uses `effectiveChannels` plus hidden/order state, sends `x_key`,
+  applies channel-keyed Origin/renamed captions to a request-local label copy,
+  pre-fills title/x/y label fields from the live view, and carries finite
+  x/y limits, grid, top/right box spines, and log minor ticks through the
+  already-supported `FigureOverrides` API. Styles remain aligned to the
+  visible display order; the imported `DataStruct` is never mutated.
+  - Safety boundary: no backend/Origin semantics changed. The current figure
+    endpoint still has no faithful y2, error-bar, region-band, or reference-
+    line wire model; this slice does not silently coerce those concepts and
+    does not claim full WYSIWYG closure.
+  - Verification: focused frontend 34 tests; full frontend 3748 tests;
+    production build + typecheck; integrity, ruff, mypy green; 149 focused
+    backend API/figure/override/tick tests green. Request tests cover multi-X,
+    hidden+reordered series, label-copy immutability, finite-limit fail-closed
+    behavior, and imported dialog defaults.
 
 - ~~**59. Spatial multi-panel Origin region bands**~~ (2026-07-17; PR #57) —
   `resolveFigurePanels` now carries each layer's already-proven
