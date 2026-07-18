@@ -116,10 +116,33 @@ plotting, publication export.
 
 12. **One canonical plot specification** across Stage / Graph Builder / Figure
     Builder / export — all edit or render the same underlying object.
-    - [ ] Keep Stage=fast renderer, Figure Builder=page editor, export=vector
-          renderer, but over ONE spec; add export-preview + parity tests (axis
-          limits, labels, fonts, colours, widths, markers, annotations, error bars,
-          legends, facets, panel geometry). Do NOT dissolve the canvas/vector split.
+    Design resolved 2026-07-18 (within the item's own stated constraints):
+    the canonical spec is **PlotSpec v2** — today's zones+mark grammar
+    extended with ADDITIVE-OPTIONAL blocks (`display`: per-series style/axis
+    assignment/hidden; `axes`: labels/limits/scales/steps/formats for the
+    fixed x/y/y2 keys — N axes stays #54-specimen-gated; `page`:
+    panel/facet/layer geometry — subsumes ORIGIN #54's generalized layer
+    model; `decor`: annotations/shapes/legend). v1 specs up-convert in
+    `validatePlotSpec`. Surfaces become ADAPTERS over the spec (Stage→uPlot,
+    Figure Builder→page editor view, export→FigureSpec request); the store's
+    singleton fields stay the LIVE working state — the spec is the durable
+    interchange, migrated consumer-by-consumer, never a big-bang store
+    replacement. The canvas/vector renderer split stays. The enforcement
+    instrument is a PARITY HARNESS that defines "one spec" empirically
+    before the model lands.
+    - [ ] Slice 1 — **export-parity contract harness**: one test suite
+          asserting, over a matrix of live states, that the assembled export
+          request preserves axis limits/labels/scales/steps/formats, series
+          colours/widths/markers/order/hidden, y2 split (new), error bars,
+          annotations (+page anchor), shapes, legend state, grid/spines; and
+          that facets/stat marks fail closed exactly as documented. Each
+          later slice upgrades assertions from adapter-level to spec-level.
+    - [ ] Slice 2 — PlotSpec v2 schema + up-convert + `.dwk` round-trip.
+    - [ ] Slice 3 — Figure Builder adapter (make `plotSpecToFigureDoc`
+          lossless over the covered subset; un-fail-closed grouped specs).
+    - [ ] Slice 4 — export adapter + the booked export residuals: faceted
+          stat export, xy facet-export xKey/yKeys reset, page-export y2.
+    - [ ] Slice 5 — Stage adapter (buildOpts reads the spec's blocks).
 
 15. **Real-browser interaction coverage** — jsdom can't validate canvas hit
     targets, pointer capture, drag/drop, high-DPI, overlapping-plugin contention.
