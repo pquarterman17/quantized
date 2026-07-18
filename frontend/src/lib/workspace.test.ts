@@ -985,6 +985,26 @@ describe("workspace saved-PlotSpec persistence (GUI_INTERACTION_PLAN #11)", () =
     expect(loaded.savedPlotSpecs).toEqual([savedA]);
   });
 
+  it("round-trips a v2 saved spec (display + axes blocks) unchanged (GUI_INTERACTION #12 Slice 2)", () => {
+    const specV2: PlotSpec = {
+      version: 2,
+      zones: { x: { datasetId: "a", channel: -1 }, y: [{ datasetId: "a", channel: 0 }], group: null, facet: null },
+      mark: "scatter",
+      display: { series: { 0: { color: "#ff8800", width: 2 } } },
+      axes: { x: { label: "Field", lim: [0, 10] }, title: "My graph" },
+    };
+    const savedV2: SavedPlotSpec = {
+      id: "pspec-2",
+      name: "V2 graph",
+      createdAt: "2026-07-18T00:00:00.000Z",
+      modifiedAt: "2026-07-18T00:00:00.000Z",
+      spec: specV2,
+    };
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, savedPlotSpecs: [savedA, savedV2] }));
+    expect(loaded.savedPlotSpecs).toEqual([savedA, savedV2]);
+  });
+
   it("defaults to an empty list for a legacy doc with no savedPlotSpecs field (back-compat)", () => {
     const datasets = [makeDataset("a", "first")];
     const loaded = parseWorkspace(serializeWorkspace({ datasets }));

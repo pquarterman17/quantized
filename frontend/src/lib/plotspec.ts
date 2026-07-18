@@ -96,12 +96,28 @@
 // serializePlotSpec → a JSON string; deserializePlotSpec / validatePlotSpec
 // round-trip it back to a normalized PlotSpec (or null for anything malformed),
 // so a figure / template / macro can persist and replay a built graph. The
-// `version: 1` tag is the migration seam — a future v2 reads v1 and up-converts.
+// `version` tag is the migration seam: a spec is version 1 (today's exact
+// zones+mark shape, byte-stable) unless at least one v2 block (`display`/
+// `axes`) survives validation with actual content, in which case it
+// serializes as version 2 — the block GRAMMAR itself (SeriesDisplay/
+// AxesBlock/the reserved page/decor placeholders + their validators/pure
+// capture builders) lives in `./plotspec2` (GUI_INTERACTION_PLAN #12, Slice
+// 2); this module only owns the top-level version/promotion seam.
 
 import { buildBarMatrix, type BarChartData } from "./barlayout";
 import { facetPayloads, facetSlices, type FacetPanel } from "./facet";
 import { channelModelingType, isCategorical } from "./modeling";
 import { buildColumns, type PlotPayload } from "./plotdata";
+import {
+  axesBlockHasContent,
+  displayBlockHasContent,
+  validateAxesBlock,
+  validateDisplayBlock,
+  type AxesBlock,
+  type DecorBlock,
+  type DisplayBlock,
+  type PageBlock,
+} from "./plotspec2";
 import { analysisData } from "./rowstate";
 import {
   type BoxStat,
@@ -109,6 +125,15 @@ import {
   resolveGroups,
 } from "./statstage";
 import type { DataStruct, Dataset, ModelingType } from "./types";
+
+export type {
+  AxesBlock,
+  AxisSpecV2,
+  DecorBlock,
+  DisplayBlock,
+  PageBlock,
+  SeriesDisplay,
+} from "./plotspec2";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -133,9 +158,26 @@ export interface PlotZones {
 }
 
 export interface PlotSpec {
-  version: 1;
+  /** 1 = today's zones+mark shape only (byte-stable). 2 = at least one v2
+   *  block below carries actual content. Always RECOMPUTED by
+   *  `validatePlotSpec`/`serializePlotSpec` from the blocks' presence —
+   *  never trust an incoming `version` tag as authoritative on its own. */
+  version: 1 | 2;
   zones: PlotZones;
   mark: PlotMark;
+  /** Per-series style override + explicit display order (Slice 2 schema;
+   *  wired by Slice 3/5). Omitted entirely (not even `undefined`-valued) when
+   *  empty — see `./plotspec2` for the grammar + validators/builders. */
+  display?: DisplayBlock;
+  /** Axis label/limits/scale/step/format + plot title (Slice 2 schema; wired
+   *  by Slice 5). Same omit-when-empty rule as `display`. */
+  axes?: AxesBlock;
+  /** Reserved for Slice 4 (page/panel/facet/layer geometry) — always
+   *  stripped by `validatePlotSpec` today; see `./plotspec2`'s doc. */
+  page?: PageBlock;
+  /** Reserved for Slice 5 (annotations/shapes/legend) — always stripped by
+   *  `validatePlotSpec` today; see `./plotspec2`'s doc. */
+  decor?: DecorBlock;
 }
 
 /** Every mark, in declaration order (also the validation allow-list). */
@@ -519,11 +561,21 @@ function isPlotMark(v: unknown): v is PlotMark {
 /** Validate + normalize an arbitrary value into a PlotSpec, or null if it isn't
  *  one. Tolerant of missing/extra fields (a partial persisted spec still loads):
  *  unknown zone refs drop to null / out of the Y list, an unknown mark falls
- *  back to scatter. This is the .dwk / macro replay entry point. */
+ *  back to scatter. This is the .dwk / macro replay entry point.
+ *
+ *  Accepts an incoming `version` of 1 OR 2 (anything else -> null); the
+ *  incoming tag is otherwise ADVISORY ONLY — `display`/`axes` are parsed
+ *  whenever present regardless of what the tag said (a v1-tagged spec with
+ *  no such keys naturally yields no blocks), and the RETURNED `version` is
+ *  always recomputed from whether a block survived validation with actual
+ *  content (see `plotspec2.ts`'s `displayBlockHasContent`/
+ *  `axesBlockHasContent`). `page`/`decor` are reserved (Slice 4/5) and
+ *  STRIPPED unconditionally — no validator call, no matter what's on those
+ *  keys. */
 export function validatePlotSpec(value: unknown): PlotSpec | null {
   if (value === null || typeof value !== "object") return null;
   const o = value as Record<string, unknown>;
-  if (o.version !== 1) return null;
+  if (o.version !== 1 && o.version !== 2) return null;
   const zin = (o.zones ?? {}) as Record<string, unknown>;
   const y = Array.isArray(zin.y) ? zin.y.map(normRef).filter((r): r is ChannelRef => r !== null) : [];
   const zones: PlotZones = {
@@ -532,7 +584,18 @@ export function validatePlotSpec(value: unknown): PlotSpec | null {
     group: normRef(zin.group),
     facet: normRef(zin.facet),
   };
-  return { version: 1, zones, mark: isPlotMark(o.mark) ? o.mark : "scatter" };
+  const mark = isPlotMark(o.mark) ? o.mark : "scatter";
+  const rawDisplay = validateDisplayBlock(o.display);
+  const rawAxes = validateAxesBlock(o.axes);
+  const display = displayBlockHasContent(rawDisplay) ? rawDisplay : undefined;
+  const axes = axesBlockHasContent(rawAxes) ? rawAxes : undefined;
+  return {
+    version: display || axes ? 2 : 1,
+    zones,
+    mark,
+    ...(display ? { display } : {}),
+    ...(axes ? { axes } : {}),
+  };
 }
 
 /** Serialize a spec to a stable JSON string (for .dwk / macro / template). */

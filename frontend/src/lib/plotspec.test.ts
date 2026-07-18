@@ -421,10 +421,19 @@ describe("serialize / deserialize / validate", () => {
     expect(back).toEqual(s);
   });
 
-  it("validatePlotSpec rejects a wrong version", () => {
-    expect(validatePlotSpec({ version: 2, zones: {}, mark: "scatter" })).toBeNull();
+  it("validatePlotSpec rejects an unsupported version (1 and 2 are both valid now)", () => {
+    // A version-2 TAG with no v2 block content is tolerated (and normalizes
+    // back down to version 1 — see the "recomputes version" tests below);
+    // only a genuinely unknown version number is rejected.
+    expect(validatePlotSpec({ version: 99, zones: {}, mark: "scatter" })).toBeNull();
+    expect(validatePlotSpec({ version: 0, zones: {}, mark: "scatter" })).toBeNull();
     expect(validatePlotSpec(null)).toBeNull();
     expect(validatePlotSpec("nope")).toBeNull();
+  });
+
+  it("accepts an incoming version of 1 or 2", () => {
+    expect(validatePlotSpec({ version: 1, zones: {}, mark: "scatter" })).not.toBeNull();
+    expect(validatePlotSpec({ version: 2, zones: {}, mark: "scatter" })).not.toBeNull();
   });
 
   it("normalizes a bad mark to scatter and drops malformed Y refs", () => {
@@ -440,6 +449,101 @@ describe("serialize / deserialize / validate", () => {
 
   it("deserialize returns null for malformed JSON", () => {
     expect(deserializePlotSpec("{not json")).toBeNull();
+  });
+});
+
+// ── PlotSpec v2 (GUI_INTERACTION_PLAN #12, Slice 2) ─────────────────────────
+describe("PlotSpec v2 — schema, up-convert, byte-stability", () => {
+  // The EXACT string a v1 spec has always serialized to — the byte-stability
+  // contract every existing saved spec / .dwk payload depends on. If this
+  // literal ever needs to change, something broke back-compat.
+  const V1_FIXTURE =
+    '{"version":1,"zones":{"x":{"datasetId":"d1","channel":-1},"y":[{"datasetId":"d1","channel":0}],"group":null,"facet":null},"mark":"line"}';
+
+  it("a v1 fixture string round-trips through load -> serialize byte-identical", () => {
+    const loaded = validatePlotSpec(JSON.parse(V1_FIXTURE));
+    expect(loaded).not.toBeNull();
+    expect(loaded!.version).toBe(1);
+    expect(loaded!.display).toBeUndefined();
+    expect(loaded!.axes).toBeUndefined();
+    expect(serializePlotSpec(loaded!)).toBe(V1_FIXTURE);
+  });
+
+  it("emptySpec() still serializes as version 1 (unaffected by v2 existing)", () => {
+    expect(emptySpec().version).toBe(1);
+    expect(JSON.parse(serializePlotSpec(emptySpec())).version).toBe(1);
+  });
+
+  it("a plain zone/mark edit (no v2 content) never promotes to version 2", () => {
+    const s = spec(ref(0), [ref(1), ref(2)], "scatter", ref(2), ref(1));
+    expect(JSON.parse(serializePlotSpec(s)).version).toBe(1);
+  });
+
+  it("a v2 spec with display + axes content round-trips losslessly and serializes as version 2", () => {
+    const s: PlotSpec = {
+      ...spec(ref(0), [ref(1)], "scatter"),
+      display: { series: { 1: { color: "#ff8800", width: 2, marker: true } }, order: [1, 0] },
+      axes: { x: { label: "Field", lim: [0, 10] }, title: "My graph" },
+    };
+    const raw = serializePlotSpec(s);
+    expect(JSON.parse(raw).version).toBe(2);
+    const back = deserializePlotSpec(raw);
+    expect(back).toEqual({ ...s, version: 2 });
+  });
+
+  it("a display/axes block present but empty of content does not promote to version 2", () => {
+    const v = validatePlotSpec({
+      version: 2,
+      zones: {},
+      mark: "scatter",
+      display: { series: {}, order: [] },
+      axes: { x: {} },
+    });
+    expect(v).not.toBeNull();
+    expect(v!.version).toBe(1);
+    expect(v!.display).toBeUndefined();
+    expect(v!.axes).toBeUndefined();
+  });
+
+  it("malformed display/axes fields drop per-field, never null the whole spec", () => {
+    const v = validatePlotSpec({
+      version: 2,
+      zones: { x: ref(0), y: [ref(1)], group: null, facet: null },
+      mark: "scatter",
+      display: { series: { 0: { color: "#fff", markerShape: "hexagon" }, "1.5": { color: "#000" } } },
+      axes: { x: { label: "Field", lim: [0, NaN] }, y: { scale: "bogus" } },
+    });
+    expect(v).not.toBeNull();
+    expect(v!.version).toBe(2); // display.series.0.color survives
+    expect(v!.display).toEqual({ series: { 0: { color: "#fff" } } });
+    expect(v!.axes).toEqual({ x: { label: "Field" } }); // bad lim dropped, bad y.scale drops y entirely
+  });
+
+  it("reserved page/decor content is stripped entirely, without affecting the rest of the spec", () => {
+    const v = validatePlotSpec({
+      version: 2,
+      zones: { x: ref(0), y: [ref(1)], group: null, facet: null },
+      mark: "scatter",
+      page: { anything: "goes here", nested: { a: 1 } },
+      decor: { legend: "fancy" },
+    });
+    expect(v).not.toBeNull();
+    expect(v!.page).toBeUndefined();
+    expect(v!.decor).toBeUndefined();
+    expect(v!.version).toBe(1); // page/decor never count toward v2 promotion
+    expect("page" in v!).toBe(false);
+    expect("decor" in v!).toBe(false);
+  });
+
+  it("an unknown version number is rejected regardless of otherwise-valid content", () => {
+    expect(
+      validatePlotSpec({
+        version: 3,
+        zones: {},
+        mark: "scatter",
+        display: { series: { 0: { color: "#fff" } } },
+      }),
+    ).toBeNull();
   });
 });
 
@@ -459,6 +563,27 @@ describe("plotSpecsEqual", () => {
 
   it("true for two empty specs", () => {
     expect(plotSpecsEqual(emptySpec(), emptySpec())).toBe(true);
+  });
+
+  it("true between a v1 spec and a version-2-tagged spec carrying only empty/all-default v2 blocks (GUI_INTERACTION #12)", () => {
+    const a = spec(ref(0), [ref(1)], "scatter");
+    const b: PlotSpec = {
+      version: 2,
+      zones: { x: ref(0), y: [ref(1)], group: null, facet: null },
+      mark: "scatter",
+      display: { series: {}, order: [] },
+      axes: { x: {}, y: {} },
+    };
+    expect(plotSpecsEqual(a, b)).toBe(true);
+  });
+
+  it("false once a v2 block carries actual content", () => {
+    const a = spec(ref(0), [ref(1)], "scatter");
+    const b: PlotSpec = {
+      ...spec(ref(0), [ref(1)], "scatter"),
+      display: { series: { 1: { color: "#ff8800" } } },
+    };
+    expect(plotSpecsEqual(a, b)).toBe(false);
   });
 });
 
