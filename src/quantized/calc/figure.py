@@ -278,6 +278,11 @@ def _render_impl(
     y_fmt: Mapping[str, Any] | None = None,
     x_step: float | None = None,
     y_step: float | None = None,
+    y2_mask: Sequence[bool] | None = None,
+    y2_label: str = "",
+    y2_scale: str | None = None,
+    y2_fmt: Mapping[str, Any] | None = None,
+    y2_step: float | None = None,
 ) -> bytes | dict[str, Any]:
     """Render ``series`` (each ``(label, y)``) against ``x`` to image bytes.
 
@@ -303,7 +308,17 @@ def _render_impl(
     (MAIN #12) select linear/log/reciprocal; ``x_log``/``y_log`` are the
     back-compat boolean fallback (see :func:`draw_series_axes`'s doc).
     ``x_fmt``/``y_fmt`` (MAIN #24) are the tick-label number format -- see
-    :func:`draw_series_axes`'s doc.
+    :func:`draw_series_axes`'s doc. ``y2_mask`` (parallel to ``series``,
+    ``True`` marks a channel drawn on a secondary/right Y axis) dispatches to
+    :func:`quantized.calc.figure_y2.render_with_secondary_axis` -- a real
+    ``Axes.twinx()`` -- instead of ``draw_series_axes``'s single axes;
+    ``None``/all-``False`` (the default) is today's single-axis behaviour,
+    byte-identical. ``y2_label``/``y2_scale``/``y2_fmt``/``y2_step`` mirror
+    their primary-axis counterparts but apply only to the secondary axis;
+    a fixed secondary range rides ``overrides["y2_lim"]`` (see
+    ``figure_y2.render_with_secondary_axis``'s doc). Not compatible with
+    ``x_breaks`` (raises ``ValueError``) -- a broken figure has several
+    axes already and gains no coherent secondary-axis meaning.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -315,11 +330,16 @@ def _render_impl(
     title = safe_mathtext_label(title)
     x_label = safe_mathtext_label(x_label)
     y_label = safe_mathtext_label(y_label)
+    y2_label = safe_mathtext_label(y2_label)
     series = [(safe_mathtext_label(label), y) for label, y in series]
     st = figure_style(style)
     ov = dict(overrides or {})
     _validate_overrides(ov)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
+    y2_mask_list = list(y2_mask) if y2_mask is not None else [False] * len(series)
+    if len(y2_mask_list) != len(series):
+        raise ValueError("y2_mask must have the same length as series")
+    has_y2 = any(y2_mask_list)
 
     # rc_context scopes typography to this render (see style_rc). (matplotlib's
     # RcParams Literal-key type is impractical with the dynamic font.<generic>
@@ -329,6 +349,8 @@ def _render_impl(
 
     xv: NDArray[np.float64] = np.asarray(x, dtype=float)
     x_breaks = ov.get("x_breaks")
+    if has_y2 and x_breaks:
+        raise ValueError("y2_keys is not supported together with x_breaks")
     with matplotlib.rc_context(rc):  # type: ignore[arg-type]
         # Manual axis breaks (gap #21): a distinct, twinned-panel rendering
         # path — not compatible with the hit-map collector (collect_map is
@@ -365,26 +387,42 @@ def _render_impl(
             )
         fig, ax = plt.subplots(figsize=figsize)
         try:
-            artists = draw_series_axes(
-                fig,
-                ax,
-                xv,
-                series,
-                st=st,
-                ov=ov,
-                x_log=x_log,
-                y_log=y_log,
-                x_scale=x_scale,
-                y_scale=y_scale,
-                title=title,
-                x_label=x_label,
-                y_label=y_label,
-                series_styles=series_styles,
-                x_fmt=x_fmt,
-                y_fmt=y_fmt,
-                x_step=x_step,
-                y_step=y_step,
-            )
+            if has_y2:
+                # Lazy import: mirrors figure_break's own lazy import above —
+                # keeps this module's own top-level import list light, and
+                # the twinx orchestration out of the 500-line ceiling here.
+                from quantized.calc.figure_y2 import render_with_secondary_axis
+
+                artists = render_with_secondary_axis(
+                    fig, ax, xv, series, series_styles, y2_mask_list,
+                    st=st, ov=ov, x_log=x_log, y_log=y_log,
+                    x_scale=x_scale, y_scale=y_scale,
+                    title=title, x_label=x_label, y_label=y_label,
+                    x_fmt=x_fmt, y_fmt=y_fmt, x_step=x_step, y_step=y_step,
+                    y2_label=y2_label, y2_scale=y2_scale,
+                    y2_fmt=y2_fmt, y2_step=y2_step,
+                )
+            else:
+                artists = draw_series_axes(
+                    fig,
+                    ax,
+                    xv,
+                    series,
+                    st=st,
+                    ov=ov,
+                    x_log=x_log,
+                    y_log=y_log,
+                    x_scale=x_scale,
+                    y_scale=y_scale,
+                    title=title,
+                    x_label=x_label,
+                    y_label=y_label,
+                    series_styles=series_styles,
+                    x_fmt=x_fmt,
+                    y_fmt=y_fmt,
+                    x_step=x_step,
+                    y_step=y_step,
+                )
             if not ov.get("margins"):
                 fig.tight_layout()
             if collect_map:

@@ -835,3 +835,99 @@ def test_figure_custom_legend_anchor_renders() -> None:
     })
     assert resp.status_code == 200
     assert resp.content[:4] == b"\x89PNG"
+
+
+# ── Secondary (right) Y axis / matplotlib twinx (y2 export parity) ──────────
+def test_figure_y2_subset_renders_a_real_twinx() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _three_channel_dataset(),
+            "fmt": "svg",
+            "y2_keys": ["c"],
+            "y2_label": "Temperature (K)",
+        },
+    )
+    assert resp.status_code == 200
+    svg = resp.content.decode("utf-8", "ignore")
+    assert "Temperature (K)" in svg
+
+
+def test_figure_y2_keys_not_a_subset_of_y_keys_is_422() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _three_channel_dataset(),
+            "fmt": "pdf",
+            "y_keys": ["a", "b"],
+            "y2_keys": ["c"],  # not in y_keys
+        },
+    )
+    assert resp.status_code == 422
+    assert "y2_keys" in resp.json()["detail"]
+
+
+def test_figure_y2_keys_empty_is_todays_single_axis_behaviour() -> None:
+    # PNG (not PDF): a PDF embeds a /CreationDate second-resolution
+    # timestamp, so two renders straddling a second boundary would differ by
+    # those bytes alone (see test_calc_figure.py's `_stable_pdf` precedent).
+    ds = _three_channel_dataset()
+    no_y2 = client.post("/api/export/figure", json={"dataset": ds, "fmt": "png"})
+    empty_y2 = client.post(
+        "/api/export/figure", json={"dataset": ds, "fmt": "png", "y2_keys": []}
+    )
+    assert no_y2.status_code == empty_y2.status_code == 200
+    assert no_y2.content == empty_y2.content
+
+
+def test_figure_y2_lim_and_scale_render() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _three_channel_dataset(),
+            "fmt": "png",
+            "y2_keys": ["c"],
+            "y2_scale": "log",
+            "overrides": {"y2_lim": [1.0, 10.0]},
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_figure_hitmap_with_y2_does_not_error() -> None:
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": _three_channel_dataset(), "y2_keys": ["c"], "dpi": 100},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["image"]
+    # Primary series ("a", "b") remain individually hit-testable; the y2
+    # series ("c") is rendered but not required to be (see calc.figure_y2's
+    # doc on the hitmap's known y2 limitation).
+    ids = {e["id"] for e in body["elements"]}
+    assert "series:0" in ids and "series:1" in ids
+
+
+def test_figure_page_panel_with_y2_keys_is_422_not_silently_dropped() -> None:
+    # The page composer has no twinx model yet (booked residual) — a y2
+    # request must fail loud, not silently flatten onto the primary axis
+    # (the exact bug the single-figure route above just fixed).
+    resp = client.post(
+        "/api/export/figure-page",
+        json={
+            "rows": 1,
+            "cols": 1,
+            "panels": [
+                {
+                    "figure": {"dataset": _three_channel_dataset(), "y2_keys": ["c"]},
+                    "row": 0,
+                    "col": 0,
+                }
+            ],
+            "fmt": "pdf",
+        },
+    )
+    assert resp.status_code == 422
+    assert "y2_keys" in resp.json()["detail"]

@@ -85,6 +85,14 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
           labels: ds.data.labels.map((label, ch) => st.seriesLabels[ch] ?? label),
         }
       : ds.data;
+    // Secondary (right) Y axis (matplotlib twinx): y2Keys tags a SUBSET of
+    // `plotted` — send y_keys = the FULL plotted list exactly as today (the
+    // backend's y2_keys is a subset marker, not a replacement), plus that
+    // subset in display order, so the export renders the same dual-Y split
+    // the screen already shows instead of flattening it onto one axis.
+    const y2Set = new Set(st.y2Keys ?? []);
+    const y2Plotted = plotted.filter((ch) => y2Set.has(ch));
+    const y2l = st.y2AxisLabel.trim();
     return exportFigure({
       dataset,
       x_key: st.xKey ?? undefined,
@@ -95,6 +103,14 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
       y_fmt: axisFmtParam(st.yFmt),
       x_step: st.xStep,
       y_step: st.yStep,
+      ...(y2Plotted.length
+        ? {
+            y2_keys: y2Plotted,
+            y2_label: y2l || undefined,
+            y2_scale: st.y2Scale ?? st.yScale,
+            y2_step: st.y2Step,
+          }
+        : {}),
       fmt: params.fmt as string,
       style: params.style as string,
       dpi: params.dpi as number,
@@ -122,8 +138,10 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
  *  `frame` ("text box") — see `calc.figure_shapes._apply_shapes`.
  *  The same override carries live finite x/y limits, grid, axis-box spines,
  *  and log minor-tick state through fields the backend already supports.
- *  Unsupported y2/error-bar/region/ref-line concepts are not flattened into
- *  this single-axis contract. */
+ *  A live secondary-axis range (`y2Lim`) rides `y2_lim` through this SAME
+ *  override mechanism (only meaningful alongside `runExportFigureCommand`'s
+ *  own `y2_keys`); error-bar/region/ref-line concepts remain unsupported
+ *  here. */
 export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
   const st = s();
   // Decode #52: the legend title (Origin's bold header) rides the legend
@@ -175,6 +193,7 @@ export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
     shapes,
     x_lim: finiteLim(st.xLim),
     y_lim: finiteLim(st.yLim),
+    y2_lim: finiteLim(st.y2Lim),
     grid: st.showGrid,
     spines: { top: st.showAxisBox, right: st.showAxisBox },
     ticks: st.xScale === "log" || st.yScale === "log" ? { minor: true } : undefined,

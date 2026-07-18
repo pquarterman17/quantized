@@ -1432,13 +1432,26 @@ export interface FigureSpec {
   y_scale?: AxisScale;
   /** Tick-label number format (MAIN #24) — omit (or `undefined`) for auto,
    *  the backend's own default formatter; see `types.ts`'s `axisFmtParam`.
-   *  `y_fmt` also drives the screen's y2 axis, but the matplotlib export
-   *  backend has no y2/twinx rendering to mirror it onto. */
+   *  A screen y2 axis maps to this request's OWN `y2_fmt` field below, not
+   *  `y_fmt`. */
   x_fmt?: AxisFormat;
   y_fmt?: AxisFormat;
   /** Saved major-tick increments (Origin figure apply); honored on linear axes. */
   x_step?: number | null;
   y_step?: number | null;
+  /** Secondary (right) Y axis, matplotlib twinx: `y2_keys` is a SUBSET of
+   *  `y_keys` (every entry must also appear in `y_keys`, else 422) naming
+   *  which of the plotted channels draw against the secondary axis; the
+   *  rest stay on the primary axis. Omit/empty = today's single-axis
+   *  behaviour, byte-identical. `y2_label`/`y2_scale`/`y2_fmt`/`y2_step`
+   *  mirror their primary-axis counterparts but apply only to the
+   *  secondary axis; a fixed secondary range rides `overrides.y2_lim`
+   *  (`FigureOverrides`). */
+  y2_keys?: (number | string)[];
+  y2_label?: string;
+  y2_scale?: AxisScale;
+  y2_fmt?: AxisFormat;
+  y2_step?: number | null;
   fmt?: string;
   style?: string;
   dpi?: number;

@@ -37,6 +37,7 @@ function fakeGet(over: {
   shapes?: Shape[];
   xLim?: [number, number] | null;
   yLim?: [number, number] | null;
+  y2Lim?: [number, number] | null;
   showGrid?: boolean;
   showAxisBox?: boolean;
   xScale?: "linear" | "log" | "reciprocal";
@@ -52,6 +53,7 @@ function fakeGet(over: {
     shapes: over.shapes ?? [],
     xLim: over.xLim,
     yLim: over.yLim,
+    y2Lim: over.y2Lim,
     showGrid: over.showGrid,
     showAxisBox: over.showAxisBox,
     xScale: over.xScale,
@@ -195,6 +197,21 @@ describe("liveViewOverrides", () => {
     const ov = liveViewOverrides(fakeGet({ xLim: [0, Number.NaN] }));
     expect(ov).not.toHaveProperty("x_lim");
   });
+
+  it("carries a finite live y2Lim through as y2_lim", () => {
+    const ov = liveViewOverrides(fakeGet({ y2Lim: [-1, 5] }));
+    expect(ov).toMatchObject({ y2_lim: [-1, 5] });
+  });
+
+  it("drops a non-finite y2Lim instead of exporting an invalid range", () => {
+    const ov = liveViewOverrides(fakeGet({ y2Lim: [0, Number.NaN] }));
+    expect(ov).not.toHaveProperty("y2_lim");
+  });
+
+  it("omits y2_lim entirely when there is no live secondary-axis range", () => {
+    const ov = liveViewOverrides(fakeGet({}));
+    expect(ov).not.toHaveProperty("y2_lim");
+  });
 });
 
 describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
@@ -294,5 +311,108 @@ describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
     expect(fields.find((f) => f.key === "title")?.default).toBe("Imported graph");
     expect(fields.find((f) => f.key === "x_label")?.default).toBe("Q (nm^-1)");
     expect(fields.find((f) => f.key === "y_label")?.default).toBe("Reflectivity");
+  });
+});
+
+describe("runExportFigureCommand — y2 (secondary axis) export parity", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(exportFigure).mockResolvedValue(undefined);
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "scan.dat",
+          data: {
+            time: [0, 1],
+            values: [[1, 10, 100], [2, 20, 200]],
+            labels: ["A", "B", "C"],
+            units: ["u", "v", "w"],
+            metadata: {},
+          },
+        },
+      ],
+      activeId: "d1",
+      xKey: null,
+      yKeys: null,
+      y2Keys: null,
+      y2Lim: null,
+      y2Scale: null,
+      y2Step: null,
+      y2AxisLabel: "",
+      xScale: "linear",
+      yScale: "linear",
+      xFmt: { mode: "auto", digits: 2 },
+      yFmt: { mode: "auto", digits: 2 },
+      xStep: null,
+      yStep: null,
+      seriesStyles: {},
+      seriesLabels: {},
+      seriesOrder: null,
+      hiddenChannels: [],
+      xLim: null,
+      yLim: null,
+      showGrid: true,
+      showAxisBox: false,
+      plotTitle: "",
+      xAxisLabel: "",
+      yAxisLabel: "",
+      status: "",
+    });
+  });
+
+  it("omits every y2 field when y2Keys is null (today's single-axis behaviour, byte-identical request shape)", async () => {
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.y2_keys).toBeUndefined();
+    expect(body.y2_label).toBeUndefined();
+    expect(body.y2_scale).toBeUndefined();
+    expect(body.y2_step).toBeUndefined();
+  });
+
+  it("splits y2Keys out of the FULL y_keys list, sending y_keys unchanged", async () => {
+    useApp.setState({ y2Keys: [2] });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    // y2_keys is a SUBSET marker, not a replacement — y_keys carries every
+    // plotted channel exactly as a no-y2 request would (all 3 channels here).
+    expect(body.y_keys).toEqual([0, 1, 2]);
+    expect(body.y2_keys).toEqual([2]);
+  });
+
+  it("defaults y2_scale to the live primary yScale when y2Scale is unset", async () => {
+    useApp.setState({ y2Keys: [1], y2Scale: null, yScale: "log" });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.y2_scale).toBe("log");
+  });
+
+  it("prefers an explicit y2Scale over the primary yScale", async () => {
+    useApp.setState({ y2Keys: [1], y2Scale: "reciprocal", yScale: "log" });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.y2_scale).toBe("reciprocal");
+  });
+
+  it("sends the saved y2AxisLabel and y2Step", async () => {
+    useApp.setState({ y2Keys: [1], y2AxisLabel: "Resistance (Ohm)", y2Step: 5 });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.y2_label).toBe("Resistance (Ohm)");
+    expect(body.y2_step).toBe(5);
+  });
+
+  it("a blank y2AxisLabel is omitted so the backend auto-derives, like x_label/y_label", async () => {
+    useApp.setState({ y2Keys: [1], y2AxisLabel: "   " });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.y2_label).toBeUndefined();
+  });
+
+  it("carries a live y2Lim through overrides.y2_lim", async () => {
+    useApp.setState({ y2Keys: [1], y2Lim: [-5, 5] });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.overrides?.y2_lim).toEqual([-5, 5]);
   });
 });

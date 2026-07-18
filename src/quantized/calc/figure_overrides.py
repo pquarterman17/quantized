@@ -40,7 +40,11 @@ def _validate_overrides(ov: Mapping[str, Any]) -> None:
         tdir = ticks.get("dir")
         if tdir is not None and tdir not in ("in", "out"):
             raise ValueError("ticks dir must be 'in' or 'out'")
-    for key in ("x_lim", "y_lim"):
+    # y2_lim (secondary/right Y axis, MAIN y2-export-parity) mirrors x_lim/
+    # y_lim's validation exactly, but is APPLIED separately by
+    # figure_y2.render_with_secondary_axis (it targets the twinx axes, not
+    # the single ``ax`` this module's _apply_overrides receives).
+    for key in ("x_lim", "y_lim", "y2_lim"):
         lim = ov.get(key)
         if lim is not None and (not isinstance(lim, (list, tuple)) or len(lim) != 2):
             raise ValueError(f"{key} must be a [lo, hi] pair (null member = auto)")
