@@ -183,6 +183,15 @@ plotting, publication export.
           filenames, and file signatures, then saves/reopens the FigureDoc and
           proves the publication request is identical. A companion regression
           keeps connected line and line+marker series connected.
+    - [x] Palette-race hardening (2026-07-18, `46669e7`): the one observed
+          window-arrange flake reproduced as CommandPalette's open-effect
+          `setQuery("")` clobbering automation-typed input (test-timing
+          artifact, not a production bug — humans can't type inside React's
+          effect-flush gap). Shared `e2e/utils/palette.ts` `runPaletteCommand`
+          (exact-text row click + Esc-reopen retry) adopted by
+          window-arrange/graph-builder/export-roundtrip; keyboard-only keeps
+          its own sequence (filechooser arming). 30× repeat + 2 full suites
+          clean.
     - [x] CI workflow — `.github/workflows/e2e.yml` VERIFIED LIVE 2026-07-17:
           first push-run failed 4 menu tests (spec `role="button"` locators vs
           the #8 registry's explicit `role="menuitem"`; local runs had masked
