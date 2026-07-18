@@ -154,7 +154,11 @@ plotting, publication export.
           faceted, statistical, incomplete, and cross-dataset specs fail closed
           until their target contracts exist.
     - [ ] Finish faceting for statistical marks.
-    - [ ] Allow plot/layer reordering.
+    - [x] Allow explicit XY series reordering (PR #63): numbered Y chips expose
+          accessible one-slot moves, and `PlotSpec.zones.y` remains the single
+          saved/display/export order. This never mutates worksheet columns or
+          source acquisition order. Arbitrary multi-panel layer ordering stays
+          with the canonical plot/page-layer work in #12 / ORIGIN decode #54.
 
     _Progress (2026-07-17):_ core landed — a `savedPlotSpecs` collection
     (`store/graphBuilder.ts`, a new slice; also absorbed the pre-existing
