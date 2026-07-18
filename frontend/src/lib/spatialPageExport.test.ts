@@ -25,12 +25,12 @@ function ds(): DataStruct {
   return {
     time: [0, 1, 2],
     values: [
-      [1, 2],
-      [3, 4],
-      [5, 6],
+      [1, 2, 3],
+      [3, 4, 5],
+      [5, 6, 7],
     ],
-    labels: ["a", "b"],
-    units: ["", ""],
+    labels: ["a", "b", "c"],
+    units: ["", "", ""],
     metadata: {},
   };
 }
@@ -85,6 +85,93 @@ describe("buildSpatialPageRequest", () => {
     expect(fig.x_log).toBe(true);
     expect(fig.y_log).toBe(false);
     expect(fig.x_step).toBe(0.5);
+  });
+
+  it("preserves only decoded partial legend entries and never mutates the workbook labels", () => {
+    const dataset = ds();
+    const p = panel({
+      seriesLabels: { 1: "Measured" },
+      legendTitle: "SLD",
+      legendFrameXY: [0.2, 0.3],
+    });
+    const fig = buildSpatialPageRequest(
+      [p],
+      new Map([["ds1", dataset]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    expect(fig.dataset).not.toBe(dataset);
+    expect(fig.dataset.labels).toEqual(["a", "Measured", "_nolegend_"]);
+    expect(dataset.labels).toEqual(["a", "b", "c"]);
+    expect(fig.overrides?.legend).toEqual({
+      show: true,
+      loc: "axes",
+      anchor: [0.2, 0.3],
+      title: "SLD",
+    });
+  });
+
+  it("does not invent a legend when the panel has no decoded legend content", () => {
+    const fig = buildSpatialPageRequest(
+      [panel()],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    expect(fig.overrides?.legend).toEqual({ show: false });
+  });
+
+  it("carries primary annotations but drops y2 annotations the page endpoint cannot place", () => {
+    const fig = buildSpatialPageRequest(
+      [panel({
+        annotations: [
+          { id: "a1", x: 0.2, y: 0.4, text: "primary" },
+          { id: "a2", x: 0.3, y: 0.5, text: "secondary", axis: 1 },
+        ],
+      })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    expect(fig.overrides?.annotations).toEqual([{ x: 0.2, y: 0.4, text: "primary" }]);
+  });
+
+  it("omits y2 curves instead of flattening them onto the primary export axis", () => {
+    const fig = buildSpatialPageRequest(
+      [panel({ yKeys: [1, 2], y2Keys: [2] })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    expect(fig.y_keys).toEqual([1]);
+  });
+
+  it("fails closed when a panel has no representable primary-axis curve", () => {
+    const spec = buildSpatialPageRequest(
+      [panel({ yKeys: [1], y2Keys: [1] })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    );
+    expect(spec).toBeNull();
+  });
+
+  it("carries page appearance, panel limits, and log minor-tick state", () => {
+    const fig = buildSpatialPageRequest(
+      [panel({ xLim: [2, 8], yLim: [0.01, 10], yLog: true })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+      {
+        xFmt: { mode: "eng", digits: 2 },
+        yFmt: { mode: "sci", digits: 1 },
+        showGrid: false,
+        showAxisBox: true,
+      },
+    )!.panels[0].figure;
+    expect(fig.x_fmt).toEqual({ mode: "eng", digits: 2 });
+    expect(fig.y_fmt).toEqual({ mode: "sci", digits: 1 });
+    expect(fig.overrides).toMatchObject({
+      x_lim: [2, 8],
+      y_lim: [0.01, 10],
+      grid: false,
+      spines: { top: true, right: true },
+      ticks: { minor: true },
+    });
   });
 
   it("an explicitly-blank decoded axis title (null) exports as blank, not auto-derived", () => {

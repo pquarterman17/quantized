@@ -919,6 +919,28 @@ the shipped contract)
 
 ## Completed
 
+- ~~**61. Spatial-page export content parity (proven-contract slice)**~~
+  (2026-07-17; `codex/origin-spatial-export-content`) — the true-coordinate
+  page exporter now carries each panel's proven primary-axis content through
+  the existing figure-page renderer: decoded/partial legend labels and title,
+  decoded legend placement, primary annotations, panel limits, log minor
+  ticks, global engineering/scientific tick formatting, grid state, and
+  top/right axis-box state. Legend captions are applied to a request-local
+  dataset copy; undecoded entries in a partial Origin legend are suppressed
+  rather than invented. Panels with no decoded legend remain legend-free.
+  - Safety boundary: the page endpoint is single-axis. Secondary-axis curves
+    and annotations are omitted rather than rebound to primary Y; an
+    unrepresentable y2-only panel fails the whole export closed. Error bars,
+    region bands, reference lines, y2 axes, and full typography still lack a
+    faithful figure-page wire model and remain explicit residuals. No Origin
+    bytes, bindings, acquisition order, limits, or renderer paths changed.
+  - Verification: focused frontend 20 tests; full frontend 3755 tests;
+    production build + typecheck; integrity, ruff, mypy, and convention guards
+    green; 145 focused backend page/API/figure/override/tick render tests
+    green. Negative controls cover partial/no legend, workbook immutability,
+    y2 omission and y2-only fail-closed behavior, and primary-only annotation
+    transport.
+
 - ~~**60. Ordinary imported-view export parity (proven-contract slice)**~~
   (2026-07-17; PR #58) — `runExportFigureCommand` previously exported
   raw `yKeys` against time/default X and omitted most live axis/chrome state.
