@@ -1,9 +1,16 @@
 // Ported from fermiviewer frontend/src/components/overlays/CommandPalette.tsx.
 // ⌘K fuzzy command palette. Curated actions come from App; menu commands are
 // published by the MenuBar into the commands store and merged on open.
+// quantized-only divergence from the fermiviewer original: also merges
+// GUI_INTERACTION #8's context-action registry entries
+// (`lib/paletteContextActions`) for the active dataset / selected annotation
+// / selected shape — fermiviewer has no such registry yet; see
+// `store/commands.ts`'s MAIN #9 note for the "keep in sync, document
+// divergences" precedent this follows.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { contextPaletteActions } from "../../lib/paletteContextActions";
 import { fuzzy } from "../../lib/fuzzy";
 import { mergeCommands, useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
@@ -22,7 +29,10 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
     if (open) {
       setQuery("");
       setCursor(0);
-      setMenuCmds(useCommands.getState().menuCommands);
+      // Context-selection commands (the active dataset / selected annotation
+      // / selected shape's registry actions) are computed fresh each open —
+      // non-reactive by design, same snapshot discipline as menuCommands.
+      setMenuCmds([...useCommands.getState().menuCommands, ...contextPaletteActions()]);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);

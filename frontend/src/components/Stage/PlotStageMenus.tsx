@@ -1,8 +1,11 @@
 // The three plot-canvas context menus (series/axis, annotation object, shape
 // object) — extracted out of PlotStage to keep it under its line ceiling
 // (MAIN #27 offset; same reasoning as the useShape*/useLiveSnapshotPublish
-// extractions). Pure presentational — every menu's open/closed state and
-// item list is computed by the caller's hooks.
+// extractions). Mostly presentational — every menu's open/closed state and
+// item list is computed by the caller's hooks — but ALSO mounts the
+// self-contained selection mini-toolbar (GUI_INTERACTION #8 residual): it
+// reads its own store slice, so PlotStage (at its own line pin) stays
+// untouched while still getting the feature.
 
 import type { RefObject } from "react";
 import type uPlot from "uplot";
@@ -10,6 +13,7 @@ import type uPlot from "uplot";
 import type { PlotPayload } from "../../lib/plotdata";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import PlotContextMenu from "./PlotContextMenu";
+import SelectionMiniToolbar from "./SelectionMiniToolbar";
 import type { PlotStageActions } from "./usePlotStageActions";
 
 interface ObjectMenu {
@@ -68,6 +72,7 @@ export default function PlotStageMenus(p: PlotStageMenusProps) {
       {p.shapeMenu && (
         <ContextMenu x={p.shapeMenu.x} y={p.shapeMenu.y} items={p.shapeMenu.items} onClose={p.onCloseShapeMenu} />
       )}
+      <SelectionMiniToolbar />
     </>
   );
 }

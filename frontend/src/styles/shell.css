@@ -353,6 +353,15 @@ body {
 .qzk-tool-hud .hint { color: var(--text-dim); }
 .qzk-tool-hud .key { padding: 1px 5px; border-radius: var(--radius-sm); background: var(--surface-3); color: var(--text-dim); font-family: var(--font-mono); font-size: var(--type-nano); }
 .qzk-tool-hud .esc { color: var(--text-faint); font-size: var(--type-nano); }
+/* GUI_INTERACTION #8: the pointer-mode selection mini-toolbar. Shares
+   .qzk-tool-hud's slot/positioning (top-left) — mutually exclusive with it
+   by construction (ToolHud only renders for a non-pointer tool). */
+.qzk-mini-toolbar .hint { color: var(--text-dim); }
+.qzk-mini-toolbar button { padding: 1px 7px; font-size: var(--font-size-sm); border-radius: var(--radius-sm); background: var(--surface-3); color: var(--text); border: 1px solid transparent; cursor: default; }
+.qzk-mini-toolbar button:hover { background: var(--surface-2); }
+.qzk-mini-toolbar button:disabled { color: var(--text-faint); opacity: 0.4; cursor: default; }
+.qzk-mini-toolbar button.danger { color: var(--danger, #e5484d); }
+.qzk-mini-toolbar button.danger:hover { background: color-mix(in srgb, var(--danger, #e5484d) 18%, transparent); }
 .qzk-zoom-chip { bottom: 12px; left: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
 .qzk-readout { bottom: 12px; right: 12px; padding: 3px 9px; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-dim); }
 /* On-plot analysis result chips (∫ Integrate / ∩ FWHM) — stack bottom-center,
