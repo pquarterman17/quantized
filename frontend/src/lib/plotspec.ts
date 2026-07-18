@@ -68,10 +68,24 @@
 //                                mini-preview shows a box and the real KDE
 //                                renders once the spec reaches the live stat
 //                                stage (the exact degrade useStatStage uses).
+//                                `facets` (GUI_INTERACTION #11, only when
+//                                zones.facet is set) is one box set per
+//                                facet-column level (lib/facet.facetSlices):
+//                                the SAME groupCol/valueCol grouping the flat
+//                                `boxes` field runs, re-run per slice — a
+//                                level whose slice groups to nothing finite is
+//                                dropped, and the field is omitted entirely
+//                                when every level drops. The flat fields
+//                                always stay computed from ALL rows (fallback
+//                                + back-compat for a caller that ignores
+//                                facets).
 //   { kind: "bar", data, … }   — a lib/barlayout BarChartData (GAP_PLOTTYPES
 //                                #4 categorical plots) for the SAME stat-stage
 //                                renderer's "bar" mode (statRender.ts). The Y
 //                                zone's channels become the clustered series.
+//                                `facets` mirrors the box variant's: one
+//                                matrix per facet-column level, same drop/
+//                                omit rules, flat `data` unaffected.
 //   { kind: "message", … }     — nothing to draw yet: tone "hint" = the spec is
 //                                incomplete (drop more channels); tone "note" =
 //                                the combo can't render (e.g. bar with a
@@ -85,7 +99,7 @@
 // `version: 1` tag is the migration seam — a future v2 reads v1 and up-converts.
 
 import { buildBarMatrix, type BarChartData } from "./barlayout";
-import { facetPayloads, type FacetPanel } from "./facet";
+import { facetPayloads, facetSlices, type FacetPanel } from "./facet";
 import { channelModelingType, isCategorical } from "./modeling";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import { analysisData } from "./rowstate";
@@ -326,8 +340,27 @@ export type SpecRender =
        *  ordinary single-panel xy render. */
       facets?: FacetPanel[];
     }
-  | { kind: "box"; boxes: BoxStat[]; valueLabel: string; groupLabel: string; violin: boolean }
-  | { kind: "bar"; data: BarChartData; valueLabel: string; groupLabel: string; stacked: boolean }
+  | {
+      kind: "box";
+      boxes: BoxStat[];
+      valueLabel: string;
+      groupLabel: string;
+      violin: boolean;
+      /** Small multiples (GUI_INTERACTION #11), one per facet-column level —
+       *  present only when `zones.facet` is set AND at least one level's
+       *  slice still groups to a non-empty box set. */
+      facets?: { label: string; boxes: BoxStat[] }[];
+    }
+  | {
+      kind: "bar";
+      data: BarChartData;
+      valueLabel: string;
+      groupLabel: string;
+      stacked: boolean;
+      /** Small multiples (GUI_INTERACTION #11), one per facet-column level —
+       *  same presence rule as the box variant's `facets`. */
+      facets?: { label: string; data: BarChartData }[];
+    }
   | { kind: "message"; message: string; tone: "hint" | "note" };
 
 const hint = (message: string): SpecRender => ({ kind: "message", message, tone: "hint" });
@@ -417,12 +450,25 @@ export function specToRender(spec: PlotSpec, datasets: readonly Dataset[]): Spec
     const valueCol = yChannels[0];
     const groups = resolveGroups(data, groupCol, valueCol, yChannels).filter((g) => g.values.length > 0);
     if (groups.length === 0) return hint("No finite values to group.");
+    const facetCol = spec.zones.facet?.channel ?? null;
+    const facets =
+      facetCol !== null
+        ? facetSlices(data, facetCol)
+            .map((s) => {
+              const sliceGroups = resolveGroups(s.data, groupCol, valueCol, yChannels).filter(
+                (g) => g.values.length > 0,
+              );
+              return sliceGroups.length > 0 ? { label: s.label, boxes: groupBoxStatsClient(sliceGroups) } : null;
+            })
+            .filter((f): f is { label: string; boxes: BoxStat[] } => f !== null)
+        : undefined;
     return {
       kind: "box",
       boxes: groupBoxStatsClient(groups),
       valueLabel: channelLabel(data, valueCol),
       groupLabel: groupCol !== null ? channelLabel(data, groupCol) : "channel",
       violin: spec.mark === "violin",
+      ...(facets && facets.length > 0 ? { facets } : {}),
     };
   }
 
@@ -434,12 +480,23 @@ export function specToRender(spec: PlotSpec, datasets: readonly Dataset[]): Spec
   const seriesLabels = yChannels.map((c) => channelLabel(data, c));
   const matrix = buildBarMatrix(data, groupCol, yChannels, seriesLabels);
   if (matrix.groups.length === 0) return hint("No finite values to group.");
+  const facetCol = spec.zones.facet?.channel ?? null;
+  const facets =
+    facetCol !== null
+      ? facetSlices(data, facetCol)
+          .map((s) => {
+            const sliceMatrix = buildBarMatrix(s.data, groupCol, yChannels, seriesLabels);
+            return sliceMatrix.groups.length > 0 ? { label: s.label, data: sliceMatrix } : null;
+          })
+          .filter((f): f is { label: string; data: BarChartData } => f !== null)
+      : undefined;
   return {
     kind: "bar",
     data: matrix,
     valueLabel: seriesLabels.length > 1 ? "value" : seriesLabels[0],
     groupLabel: channelLabel(data, groupCol),
     stacked: false,
+    ...(facets && facets.length > 0 ? { facets } : {}),
   };
 }
 

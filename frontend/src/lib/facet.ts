@@ -1,16 +1,17 @@
 // Faceting + axis-break suggestion (ORIGIN_GAP_PLAN #21). Pure — no React /
 // store / fetch.
 //
-// Two consumers: the Graph Builder preview (GraphPreview.tsx) renders a
-// small-multiples grid directly from `facetPayloads` for its own live-preview
-// canvas; the interactive MAIN stage consumes it via the store's
-// `facetByColumn` action, which populates `facetPanels` for
-// `components/Stage/MultiPanelStage.tsx`'s facet-grid render mode (a THIRD
-// mode alongside the plain per-channel stack and the Origin spatial apply —
-// see that file's module doc). `sharedXDomain` below is that mode's one bit
-// of derived state: a fixed x-range computed ONCE across every panel so the
-// small multiples read on the same horizontal scale (the point of faceting
-// is comparing shape across levels, not just presence).
+// `facetSlices` is the shared row-slicing primitive (one level -> one
+// row-sliced DataStruct): the xy family wraps it as `facetPayloads` for the
+// Graph Builder preview (GraphPreview.tsx) and the MAIN stage's facet grid
+// (`facetByColumn` -> `facetPanels`, `MultiPanelStage.tsx`); the categorical
+// marks (box/violin/bar, GUI_INTERACTION #11) call it directly from
+// `lib/plotspec.specToRender` (builder preview) and `Stage/useStatStage`
+// (the live Stat Stage), re-running their own group/bar pipeline per slice
+// instead of building a PlotPayload. `sharedXDomain` below is the xy facet
+// grid's one bit of extra derived state: a fixed x-range computed ONCE across
+// every panel so the small multiples read on the same horizontal scale (the
+// point of faceting is comparing shape across levels, not just presence).
 //
 // A FOURTH mode (gap #21's last residual) reuses `suggestBreaks`:
 // `breakPayloads` slices one series into one panel per x-segment implied by a
@@ -30,19 +31,21 @@ export interface FacetPanel {
   payload: PlotPayload;
 }
 
-/** Split `data` into one panel per distinct level of `facetCol`: each panel's
- *  payload is built (via `buildColumns`, same xKey/yChannels semantics as the
- *  main plot) from ONLY the rows at that level. Category labels resolve the
- *  same way bar charts do (`lib/barlayout.resolveCategoryLabels` — a metadata
- *  text-label column when present, else formatted numeric levels). Rows
- *  whose facet value is non-finite belong to no panel (dropped everywhere).
- *  `[]` when `facetCol` has no finite levels at all. */
-export function facetPayloads(
-  data: DataStruct,
-  facetCol: number,
-  xKey: number | null,
-  yChannels: number[] | null,
-): FacetPanel[] {
+export interface FacetSlice {
+  label: string;
+  data: DataStruct;
+}
+
+/** Split `data` into one row-sliced `DataStruct` per distinct level of
+ *  `facetCol` (ascending) — the shared row-slicing idiom every faceted mark
+ *  builds on: the xy family via `facetPayloads` below, box/violin/bar via
+ *  `lib/plotspec.specToRender` and `Stage/useStatStage` (GUI_INTERACTION #11).
+ *  Category labels resolve the same way bar charts do
+ *  (`lib/barlayout.resolveCategoryLabels` — a metadata text-label column when
+ *  present, else formatted numeric levels). Rows whose facet value is
+ *  non-finite belong to no slice (dropped everywhere). `[]` when `facetCol`
+ *  has no finite levels at all. */
+export function facetSlices(data: DataStruct, facetCol: number): FacetSlice[] {
   const by = facetCol < 0 ? data.time : data.values.map((row) => row[facetCol]);
   const levels = categoryLevels(data, facetCol);
   if (levels.length === 0) return [];
@@ -55,8 +58,25 @@ export function facetPayloads(
       time: rows.map((r) => data.time[r]),
       values: rows.map((r) => data.values[r]),
     };
-    return { label: labels[i], payload: buildColumns(sliced, null, xKey, yChannels) };
+    return { label: labels[i], data: sliced };
   });
+}
+
+/** Split `data` into one panel per distinct level of `facetCol`: each panel's
+ *  payload is built (via `buildColumns`, same xKey/yChannels semantics as the
+ *  main plot) from ONLY the rows at that level (`facetSlices`). The xy
+ *  family's small-multiples panel — see `facetSlices` for the shared slicing
+ *  rules (label resolution, non-finite/empty-level handling). */
+export function facetPayloads(
+  data: DataStruct,
+  facetCol: number,
+  xKey: number | null,
+  yChannels: number[] | null,
+): FacetPanel[] {
+  return facetSlices(data, facetCol).map((s) => ({
+    label: s.label,
+    payload: buildColumns(s.data, null, xKey, yChannels),
+  }));
 }
 
 /** Union x-domain across a set of facet panels — the min/max of every panel's

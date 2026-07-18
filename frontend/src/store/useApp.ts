@@ -264,6 +264,7 @@ export interface StatStageSeed {
   mode: "box" | "violin" | "bar";
   groupCol: number | null;
   valueCol: number;
+  facetCol?: number | null; // GUI_INTERACTION #11: facet column, null = unfaceted
 }
 
 /** Peak Analyzer wizard click-on-plot marker editing (interaction plan item

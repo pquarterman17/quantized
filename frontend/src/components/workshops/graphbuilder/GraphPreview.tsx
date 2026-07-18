@@ -2,10 +2,15 @@
 // renderer (Stage/statRender.ts); scatter/line paint a compact Canvas2D
 // scatter/line from the specToRender PlotPayload — one panel normally, or a
 // small-multiples GRID when the spec's facet zone is set (#21 faceting,
-// lib/facet.facetPayloads; see plotspec.ts's `SpecRender.facets`). A
-// "message" render shows its text instead. The canvas is invisible to jsdom
-// (no layout / 2-D context), so this component is eyeball-verified — the
-// grammar it draws from is unit-tested in lib/plotspec + lib/facet.
+// lib/facet.facetPayloads; see plotspec.ts's `SpecRender.facets`). box/bar
+// facet the SAME way (GUI_INTERACTION #11 residual) but render differently:
+// the xy grid paints every panel onto ONE shared canvas (`drawFacetGrid`),
+// while box/bar tile N independent `StatStageCanvas`es (`FacetStatGrid`
+// below) — mirroring the live Stat Stage's own facet grid so the two stay
+// visually consistent. A "message" render shows its text instead. The canvas
+// is invisible to jsdom (no layout / 2-D context), so this component is
+// eyeball-verified — the grammar it draws from is unit-tested in
+// lib/plotspec + lib/facet.
 
 import { useEffect, useRef } from "react";
 
@@ -14,8 +19,10 @@ import type { PlotPayload } from "../../../lib/plotdata";
 import type { SpecRender } from "../../../lib/plotspec";
 import { finiteDomain } from "../../../lib/statstage";
 import { seriesColor } from "../../../lib/uplotOpts";
+import type { Accent, Theme } from "../../../store/useApp";
 import { useApp } from "../../../store/useApp";
-import { draw as drawStat } from "../../Stage/statRender";
+import StatStageCanvas from "../../Stage/StatStageCanvas";
+import { draw as drawStat, type StatDrawData } from "../../Stage/statRender";
 
 const MARGIN = { left: 42, right: 10, top: 10, bottom: 26 };
 
@@ -145,9 +152,10 @@ function drawFacetGrid(
   });
 }
 
-export default function GraphPreview({ render }: { render: SpecRender }) {
-  const theme = useApp((s) => s.theme);
-  const accent = useApp((s) => s.accent);
+/** The single-panel canvas host (xy incl. its own facet grid, flat box/bar,
+ *  message). Owns the ONE canvas + its paint effect — unchanged from before
+ *  #11's box/bar facet grid split it out of the default export. */
+function CanvasHost({ render, theme, accent }: { render: SpecRender; theme: Theme; accent: Accent }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -189,10 +197,94 @@ export default function GraphPreview({ render }: { render: SpecRender }) {
   }, [render, theme, accent]);
 
   return (
+    <div ref={hostRef} style={{ position: "absolute", inset: 0 }}>
+      <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" }} />
+    </div>
+  );
+}
+
+/** A CSS grid of independent, DOM-captioned `StatStageCanvas` cells — the
+ *  shared tiling both box-facets and bar-facets use below (#11). Mirrors
+ *  StatStage.tsx's own facet grid so the builder preview and the live stage
+ *  read the same. */
+function FacetCellGrid({
+  cells,
+  theme,
+  accent,
+}: {
+  cells: { label: string; draw: StatDrawData }[];
+  theme: Theme;
+  accent: Accent;
+}) {
+  const cols = Math.ceil(Math.sqrt(cells.length));
+  return (
+    <div style={{ position: "absolute", inset: 0, display: "grid", gap: 4, gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+      {cells.map((c) => (
+        <div key={c.label} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+          <div
+            style={{
+              fontSize: 9,
+              fontFamily: "'JetBrains Mono', monospace",
+              color: "var(--text-dim)",
+              padding: "0 2px",
+            }}
+          >
+            {c.label}
+          </div>
+          <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+            <StatStageCanvas data={c.draw} theme={theme} accent={accent} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Faceted box/bar (#11): one small `StatStageCanvas` per facet level instead
+ *  of the single shared canvas `CanvasHost` paints — each cell built via the
+ *  SAME draw-arg shape the flat `CanvasHost` box/bar branches construct
+ *  above, just per facet slice. Narrows on `render.kind` once (not per cell)
+ *  so each branch's `facets` element type stays concrete. */
+function FacetStatGrid({
+  render,
+  theme,
+  accent,
+}: {
+  render: Extract<SpecRender, { kind: "box" | "bar" }>;
+  theme: Theme;
+  accent: Accent;
+}) {
+  if (render.kind === "box") {
+    const cells = (render.facets ?? []).map((f) => ({
+      label: f.label,
+      draw: { mode: "box", boxes: f.boxes, valueLabel: render.valueLabel, groupLabel: render.groupLabel } as StatDrawData,
+    }));
+    return <FacetCellGrid cells={cells} theme={theme} accent={accent} />;
+  }
+  const cells = (render.facets ?? []).map((f) => ({
+    label: f.label,
+    draw: {
+      mode: "bar",
+      data: f.data,
+      valueLabel: render.valueLabel,
+      groupLabel: render.groupLabel,
+      stacked: render.stacked,
+    } as StatDrawData,
+  }));
+  return <FacetCellGrid cells={cells} theme={theme} accent={accent} />;
+}
+
+export default function GraphPreview({ render }: { render: SpecRender }) {
+  const theme = useApp((s) => s.theme);
+  const accent = useApp((s) => s.accent);
+
+  return (
     <div className="qzk-graph-preview">
-      <div ref={hostRef} style={{ position: "absolute", inset: 0 }}>
-        <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" }} />
-      </div>
+      {(render.kind === "box" || render.kind === "bar") && render.facets && render.facets.length > 0 ? (
+        <FacetStatGrid render={render} theme={theme} accent={accent} />
+      ) : (
+        <CanvasHost render={render} theme={theme} accent={accent} />
+      )}
       {render.kind === "message" && (
         <div className={`qzk-graph-preview-msg${render.tone === "note" ? " note" : ""}`}>
           {render.message}
