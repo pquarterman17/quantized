@@ -37,7 +37,7 @@ baseline framing) are under Owner actions below, not here.
 | Item | Plan / item |
 |------|-------------|
 | Larger bets / polish: unified select→edit Plot Objects tree (#2, owner-gate scope), canonical plot spec across surfaces (#12), buttons/menus/tooltips polish (#17), owner-dependent Origin gaps (#16) | GUI_INTERACTION Tier 1–3 |
-| **Origin layout generality residual** — overlay grouping generalized past pairs 2026-07-18 (`adab0cc`: greedy heuristic REPLACED, ≥3 coincident layers fail closed with provenance+toast, corpus 12/12·99/99·4/4 clean); y2 EXPORT twinx fix in flight; remaining: native >2-Y-axes rendering (specimen-gated) + generalized page/layer MODEL (design rides GUI #12's canonical spec) | ORIGIN_FILE_DECODE #54 |
+| **Origin layout generality residual** — overlay grouping generalized past pairs (`adab0cc`, corpus 12/12·99/99·4/4 clean) AND y2 export twinx fix (`08b7066`: single-figure export no longer flattens y2 onto the wrong axis; page-panel y2 422s loudly) BOTH SHIPPED 2026-07-18; remaining: native >2-Y-axes rendering (specimen-gated) + generalized page/layer MODEL + page-export y2 (all ride GUI #12's canonical spec) | ORIGIN_FILE_DECODE #54 |
 
 ## Owner actions & owner-gated decisions
 

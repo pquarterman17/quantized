@@ -672,6 +672,26 @@ Official model references used for this routing:
       Corpus gate: Moke 12/12 · PNR 99/99 · RockingCurve 4/4 fully
       consistent, zero mismatches (all existing doubleY/multiPanel figures
       baseline-identical). Frontend 3855 + build green.
+    - [x] **y2 export correctness — twinx** (2026-07-18, `08b7066`). The
+      single-figure matplotlib export previously FLATTENED y2 channels onto
+      the primary axis at the wrong scale (the store's post-apply `yKeys` is
+      the primary∪y2 union and `exportFigureCommand` sent it unfiltered).
+      Now: the export contract gains `y2_keys` (a validated SUBSET marker of
+      `y_keys` → 422 on violation, mirroring `calc/plotting.py`'s
+      interactive convention) + `y2_label`/`y2_scale`/`y2_fmt`/`y2_step`,
+      with `y2_lim` riding the existing overrides mechanism; NEW
+      `calc/figure_y2.py` renders the subset on a real `Axes.twinx()`
+      (primary path byte-identical when absent; explicit `C{n}` color-cycle
+      continuation so split axes don't restart the palette; ONE combined
+      legend from both axes' handles; right spine stays visible with a live
+      y2; incompatible with `x_breaks` → loud ValueError).
+      `routes/export_figures.py` split (would have crossed the 500-line
+      ceiling) → new `export_figures_aux.py`. RESIDUAL booked: the
+      multi-panel PAGE export (`figure_page.PagePanel`) has no y2 — a
+      page-panel request carrying `y2_keys` now 422s LOUDLY (and the
+      spatial page-export UI still omits y2 curves fail-closed); rides the
+      #12 canonical-spec/page-layer work. Backend 2936+ruff+mypy, frontend
+      3865+build green.
     - [ ] **Native >2-Y-axes rendering.** SPECIMEN-GATED: no corpus figure
       has a proven ≥3-coincident-axis composition, and the backend decoder
       itself buckets only YL/YR titles (`figure_text._TITLE_OBJECT_BUCKETS`)
