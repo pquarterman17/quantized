@@ -254,8 +254,43 @@ describe("useGraphBuilder — send to stage", () => {
     act(() => result.current.assign("y", 1));
     act(() => result.current.assign("x", 2)); // nominal → box
     act(() => result.current.sendToStage());
-    expect(useApp.getState().statStageSeed).toEqual({ mode: "box", groupCol: 2, valueCol: 1 });
+    expect(useApp.getState().statStageSeed).toEqual({ mode: "box", groupCol: 2, valueCol: 1, facetCol: null });
     expect(useApp.getState().statMode).toBe(true);
+  });
+
+  // GUI_INTERACTION #11 residual: box/violin/bar now facet too (mirrors the
+  // xy family's own facet send above).
+  it("box WITH a facet zone seeds facetCol and mentions it in the status", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("x", 2)); // nominal → box
+    act(() => result.current.assign("facet", 3)); // 2-level nominal facet column
+    act(() => result.current.sendToStage());
+    expect(useApp.getState().statStageSeed).toEqual({ mode: "box", groupCol: 2, valueCol: 1, facetCol: 3 });
+    expect(useApp.getState().status).toContain("faceted by fct");
+  });
+
+  it("bar WITH a facet zone seeds facetCol and mentions it in the status", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("x", 2)); // nominal → box
+    act(() => result.current.cycle()); // box -> violin
+    act(() => result.current.cycle()); // violin -> bar
+    act(() => result.current.assign("facet", 3));
+    act(() => result.current.sendToStage());
+    expect(useApp.getState().statStageSeed).toEqual({ mode: "bar", groupCol: 2, valueCol: 1, facetCol: 3 });
+    expect(useApp.getState().status).toContain("faceted by fct");
+  });
+
+  it("scatter/line WITH a facet zone is unaffected by the box/bar facet seed change (regression)", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.assign("facet", 3));
+    act(() => result.current.sendToStage());
+    // The xy family never touches statStageSeed at all.
+    expect(useApp.getState().statStageSeed).toBeNull();
+    expect(useApp.getState().status).toContain("faceted by fct");
   });
 
   // Owner-routing item 1 ("have to remember to toggle up"): every branch of

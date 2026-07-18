@@ -16,6 +16,14 @@
 // are the exact store-selected references it used to read itself), while a
 // background window feeds it the window's OWN `PlotView` snapshot
 // (`windows/BackgroundAltModes.tsx`). ZERO store value imports (types only).
+//
+// Faceting (GUI_INTERACTION #11 residual): Box/Violin/Bar can facet by a
+// second categorical column (`facetCol`, internal picker state — see its
+// declaration below). When set, `drawFacets` holds one draw per facet-column
+// level (`lib/facet.facetSlices` re-runs the SAME group/bar pipeline per
+// slice) and the flat `draw` goes null; `drawFacets` is null the rest of the
+// time. Background windows never facet (no Picker, no seed field reaches
+// them) — see the param docs below.
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -30,6 +38,7 @@ import {
   type CategoricalFigureSpec,
   type StatplotFigureSpec,
 } from "../../lib/api";
+import { facetSlices } from "../../lib/facet";
 import { effectiveChannels } from "../../lib/plotdata";
 import { analysisData } from "../../lib/rowstate";
 import type { GroupSpec } from "../../lib/statschooser";
@@ -43,6 +52,13 @@ import {
 import type { DataStruct, Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
 import type { StatDrawData } from "./statRender";
+
+/** One faceted small-multiple: a facet-column level's label + its own
+ *  already-computed draw (GUI_INTERACTION #11). */
+export interface FacetDraw {
+  label: string;
+  draw: StatDrawData;
+}
 
 export interface StatColumn {
   index: number;
@@ -91,11 +107,24 @@ export interface StatStageState {
    *  stacked (true, one bar per category). */
   barStack: boolean;
   setBarStack: (s: boolean) => void;
+  /** Box/Violin/Bar "facet by" column (GUI_INTERACTION #11) — null = no
+   *  facet (the ordinary single-panel draw). Internal picker state, not a
+   *  hook param: background windows never seed or set one (see the module
+   *  doc). */
+  facetCol: number | null;
+  setFacetCol: (i: number | null) => void;
   busy: boolean;
   error: string | null;
   /** Non-fatal note (e.g. an offline degrade) shown alongside the plot. */
   note: string | null;
   draw: StatDrawData | null;
+  /** Small multiples for Box/Violin/Bar (#11) — one draw per facet-column
+   *  level, non-null only when `facetCol` is set AND the mode is box/violin/
+   *  bar. `draw` above is null while this is non-null (a facet grid has no
+   *  single flat panel), which also auto-disables the Export button — figure
+   *  export doesn't understand a facet grid yet (tracked alongside the
+   *  Graph Builder's own facet-export residual). */
+  drawFacets: FacetDraw[] | null;
   /** Builds the same-shape request the interactive stage saw, for the
    *  "Export figure" button (null when there's nothing to export yet). */
   exportFigure: (fmt: string) => Promise<void>;
@@ -109,6 +138,135 @@ const finiteOf = (data: DataStruct, index: number): number[] =>
 
 function numArr(v: unknown): number[] {
   return Array.isArray(v) ? v.map((x) => Number(x)) : [];
+}
+
+// ── Pure per-slice compute helpers (module-level: no React/store, so each is
+// independently testable and reusable across the flat and faceted paths) ──
+
+/** Bar mode's category x series matrix for one dataset (flat OR one facet
+ *  slice): a picked categorical column groups every plotted channel into its
+ *  own clustered/stacked series; with no categorical column, fall back to one
+ *  category per plotted channel (mirrors box/violin's own fallback). */
+function computeBarData(
+  data: DataStruct,
+  groupCol: number | null,
+  valueChannels: readonly number[],
+  valueLabels: readonly string[],
+  valueCol: number,
+  plotted: readonly number[],
+  fallbackLabel: string,
+): BarChartData {
+  if (groupCol != null) return buildBarMatrix(data, groupCol, valueChannels, valueLabels);
+  const fallbackGroups = resolveGroups(data, null, valueCol, plotted);
+  return {
+    groups: fallbackGroups.map((g) => ({ label: g.label, series: [seriesStat(g.values)] })),
+    seriesLabels: [fallbackLabel],
+  };
+}
+
+/** Box mode's draw for one dataset (flat OR one facet slice): the backend's
+ *  exact box stats, degrading to the client-side fallback on failure. `null`
+ *  when the slice has no finite groups to draw (the caller drops it). */
+async function computeBoxDraw(
+  data: DataStruct,
+  groupCol: number | null,
+  valueCol: number,
+  plotted: readonly number[],
+  valueLabel: string,
+  groupLabel: string,
+): Promise<StatDrawData | null> {
+  const finiteGroups = resolveGroups(data, groupCol, valueCol, plotted).filter((g) => g.values.length > 0);
+  if (!finiteGroups.length) return null;
+  try {
+    const r = await statsBox(
+      finiteGroups.map((g) => g.values),
+      finiteGroups.map((g) => g.label),
+    );
+    return { mode: "box", boxes: r.boxes, valueLabel, groupLabel };
+  } catch {
+    return { mode: "box", boxes: groupBoxStatsClient(finiteGroups), valueLabel, groupLabel };
+  }
+}
+
+/** Violin mode's draw for one dataset (flat OR one facet slice): a real KDE
+ *  per group, degrading to the SAME box stats `computeBoxDraw` would show for
+ *  these groups on failure — the "never fabricate a KDE offline" rule. `null`
+ *  when the slice has no finite groups (the caller drops it). */
+async function computeViolinDraw(
+  data: DataStruct,
+  groupCol: number | null,
+  valueCol: number,
+  plotted: readonly number[],
+  valueLabel: string,
+  groupLabel: string,
+): Promise<StatDrawData | null> {
+  const finiteGroups = resolveGroups(data, groupCol, valueCol, plotted).filter((g) => g.values.length > 0);
+  if (!finiteGroups.length) return null;
+  try {
+    const rs = await Promise.all(finiteGroups.map((g) => statsViolin(g.values)));
+    return {
+      mode: "violin",
+      violins: rs.map((r, i) => ({
+        label: finiteGroups[i].label,
+        x: r.x,
+        density: r.density,
+        quartiles: r.quartiles,
+        n: r.n,
+      })),
+      valueLabel,
+      groupLabel,
+    };
+  } catch {
+    return { mode: "box", boxes: groupBoxStatsClient(finiteGroups), valueLabel, groupLabel };
+  }
+}
+
+/** Bar facet path is synchronous (no backend round-trip) — one matrix per
+ *  slice via `computeBarData`, dropping any slice that groups to nothing. */
+function computeFacetBarDraws(
+  slices: readonly { label: string; data: DataStruct }[],
+  groupCol: number | null,
+  barValueChannels: readonly number[],
+  barLabels: readonly string[],
+  valueCol: number,
+  plotted: readonly number[],
+  barValueLabel: string,
+  barStack: boolean,
+  groupLabel: string,
+): FacetDraw[] {
+  const out: FacetDraw[] = [];
+  for (const s of slices) {
+    const bd = computeBarData(s.data, groupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel);
+    if (bd.groups.length > 0) {
+      out.push({
+        label: s.label,
+        draw: { mode: "bar", data: bd, valueLabel: barValueLabel, groupLabel, stacked: barStack },
+      });
+    }
+  }
+  return out;
+}
+
+/** Box/Violin facet path: one async compute per slice (in parallel), each
+ *  independently degrading on failure (a backend hiccup on one slice never
+ *  takes down the others); slices with no finite groups drop. */
+async function computeFacetGroupDraws(
+  slices: readonly { label: string; data: DataStruct }[],
+  mode: "box" | "violin",
+  groupCol: number | null,
+  valueCol: number,
+  plotted: readonly number[],
+  valueLabel: string,
+  groupLabel: string,
+): Promise<FacetDraw[]> {
+  const compute = mode === "box" ? computeBoxDraw : computeViolinDraw;
+  const rs = await Promise.all(
+    slices.map(async (s) => {
+      const draw = await compute(s.data, groupCol, valueCol, plotted, valueLabel, groupLabel);
+      return draw ? { label: s.label, draw } : null;
+    }),
+  );
+  return rs.filter((f): f is FacetDraw => f !== null);
 }
 
 export function useStatStage(params: UseStatStageParams): StatStageState {
@@ -138,6 +296,10 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const [bins, setBins] = useState<string>("fd");
   const [fit, setFit] = useState<string | null>(null);
   const [barStack, setBarStack] = useState(false);
+  // Facet column (GUI_INTERACTION #11) — internal picker state, NOT a hook
+  // param: background windows (params.seed === null) have no facet Picker
+  // and never call setFacetCol, so they simply never facet.
+  const [facetCol, setFacetColState] = useState<number | null>(null);
 
   // Re-derive the default picks whenever the active dataset changes — a
   // channel index from the PREVIOUS dataset would silently mis-group.
@@ -146,17 +308,19 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     const g = cats[0] ?? null;
     setGroupColState(g);
     setValueCol(firstValueChannel(active, g ?? -999));
+    setFacetColState(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
 
   // Cross-panel hook: the Graph Builder hands over the mode + pickers for a
-  // box/violin spec it "sent to stage" (mirrors the reflectivity SLD seed).
-  // Declared AFTER the active-id reset so a same-dataset send wins over it.
+  // box/violin/bar spec it "sent to stage" (mirrors the reflectivity SLD
+  // seed). Declared AFTER the active-id reset so a same-dataset send wins.
   useEffect(() => {
     if (!seed) return;
     setMode(seed.mode);
     setGroupColState(seed.groupCol);
     setValueCol(seed.valueCol);
+    setFacetColState(seed.facetCol ?? null);
     onSeedConsumed();
   }, [seed, onSeedConsumed]);
 
@@ -164,6 +328,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [drawData, setDrawData] = useState<StatDrawData | null>(null);
+  const [drawFacets, setDrawFacets] = useState<FacetDraw[] | null>(null);
 
   const groups = useMemo<GroupSpec[]>(() => {
     if (!data || (mode !== "box" && mode !== "violin")) return [];
@@ -188,18 +353,14 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     if (barValueChannels.length > 1) return "value";
     return columns.find((c) => c.index === barValueChannels[0])?.label ?? valueLabel;
   }, [barValueChannels, columns, valueLabel]);
+  const barLabels = useMemo(
+    () => barValueChannels.map((c) => columns.find((col) => col.index === c)?.label ?? `col ${c}`),
+    [barValueChannels, columns],
+  );
   const barData = useMemo<BarChartData | null>(() => {
     if (!data || mode !== "bar") return null;
-    if (groupCol != null) {
-      const labels = barValueChannels.map((c) => columns.find((col) => col.index === c)?.label ?? `col ${c}`);
-      return buildBarMatrix(data, groupCol, barValueChannels, labels);
-    }
-    const fallbackGroups = resolveGroups(data, null, valueCol, plotted);
-    return {
-      groups: fallbackGroups.map((g) => ({ label: g.label, series: [seriesStat(g.values)] })),
-      seriesLabels: [barValueLabel],
-    };
-  }, [data, mode, groupCol, barValueChannels, columns, valueCol, plotted, barValueLabel]);
+    return computeBarData(data, groupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel);
+  }, [data, mode, groupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -207,8 +368,56 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setNote(null);
     if (!data) {
       setDrawData(null);
+      setDrawFacets(null);
       return;
     }
+
+    // Faceted box/violin/bar (GUI_INTERACTION #11): one draw per facet-column
+    // level instead of the flat single panel. The flat `draw` stays null
+    // while faceted (see the StatStageState doc — this is what auto-disables
+    // Export).
+    if (facetCol != null && (mode === "box" || mode === "violin" || mode === "bar")) {
+      setDrawData(null);
+      const slices = facetSlices(data, facetCol);
+      const finishFacets = (results: FacetDraw[]) => {
+        if (cancelled) return;
+        if (results.length === 0) {
+          setDrawFacets(null);
+          setError("no finite values to group");
+        } else {
+          setDrawFacets(results);
+          setNote("faceted view — figure export lands with the canonical-spec work");
+        }
+      };
+      if (mode === "bar") {
+        // Synchronous (no backend round-trip) — mirrors the flat bar branch
+        // below, which also skips busy/cancelled bookkeeping.
+        finishFacets(
+          computeFacetBarDraws(
+            slices,
+            groupCol,
+            barValueChannels,
+            barLabels,
+            valueCol,
+            plotted,
+            barValueLabel,
+            barStack,
+            groupLabel,
+          ),
+        );
+        return () => {
+          cancelled = true;
+        };
+      }
+      setBusy(true);
+      computeFacetGroupDraws(slices, mode, groupCol, valueCol, plotted, valueLabel, groupLabel)
+        .then(finishFacets)
+        .finally(() => !cancelled && setBusy(false));
+      return () => {
+        cancelled = true;
+      };
+    }
+    setDrawFacets(null);
 
     if (mode === "box" || mode === "violin") {
       const finiteGroups = groups.filter((g) => g.values.length > 0);
@@ -328,7 +537,25 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     return () => {
       cancelled = true;
     };
-  }, [data, mode, groups, valueCol, dist, bins, fit, valueLabel, groupLabel, barData, barValueLabel, barStack]);
+  }, [
+    data,
+    mode,
+    groups,
+    valueCol,
+    dist,
+    bins,
+    fit,
+    valueLabel,
+    groupLabel,
+    barData,
+    barValueLabel,
+    barStack,
+    facetCol,
+    groupCol,
+    plotted,
+    barValueChannels,
+    barLabels,
+  ]);
 
   async function exportFigure(fmt: string): Promise<void> {
     if (!data) return;
@@ -371,10 +598,13 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setFit,
     barStack,
     setBarStack,
+    facetCol,
+    setFacetCol: setFacetColState,
     busy,
     error,
     note,
     draw: drawData,
+    drawFacets,
     exportFigure,
   };
 }

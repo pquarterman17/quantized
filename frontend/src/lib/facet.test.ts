@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   breakPayloads,
   facetPayloads,
+  facetSlices,
   sharedXDomain,
   sharedYDomain,
   suggestBreaks,
@@ -71,6 +72,84 @@ describe("facetPayloads", () => {
     expect(panels).toHaveLength(2);
     expect(panels[0].payload.data[1]).toEqual([10, 20]);
     expect(panels[1].payload.data[1]).toEqual([30]);
+  });
+});
+
+// facetSlices (GUI_INTERACTION #11): the row-slicing primitive facetPayloads
+// now builds on. facetPayloads' OWN describe block above is left completely
+// unmodified — it must keep passing byte-for-byte as a behavior-unchanged
+// regression check on the refactor.
+describe("facetSlices", () => {
+  const ds: DataStruct = {
+    time: [0, 1, 2, 3, 4, 5],
+    values: [
+      [1, 10],
+      [1, 20],
+      [2, 30],
+      [2, 40],
+      [1, 50],
+      [2, 60],
+    ],
+    labels: ["grp", "y"],
+    units: ["", ""],
+    metadata: {},
+  };
+
+  it("splits into one row-sliced DataStruct per distinct level, ascending", () => {
+    const slices = facetSlices(ds, 0);
+    expect(slices).toHaveLength(2);
+    expect(slices[0].label).toBe("1");
+    expect(slices[1].label).toBe("2");
+  });
+
+  it("each slice's data contains ONLY rows at that level", () => {
+    const slices = facetSlices(ds, 0);
+    expect(slices[0].data.time).toEqual([0, 1, 4]);
+    expect(slices[0].data.values).toEqual([[1, 10], [1, 20], [1, 50]]);
+    expect(slices[1].data.time).toEqual([2, 3, 5]);
+    expect(slices[1].data.values).toEqual([[2, 30], [2, 40], [2, 60]]);
+  });
+
+  it("uses the resolved category label (text column) when present", () => {
+    const withLabels: DataStruct = {
+      ...ds,
+      metadata: { origin_text_columns: { C: ["North", "North", "South", "South", "North", "South"] } },
+    };
+    const slices = facetSlices(withLabels, 0);
+    expect(slices.map((s) => s.label)).toEqual(["North", "South"]);
+  });
+
+  it("returns [] when the facet column has no finite levels", () => {
+    const allNaN: DataStruct = { ...ds, values: ds.values.map((r) => [NaN, r[1]]) };
+    expect(facetSlices(allNaN, 0)).toEqual([]);
+  });
+
+  it("rows with a non-finite facet value belong to no slice", () => {
+    const mixed: DataStruct = { ...ds, values: [[1, 10], [NaN, 20], [2, 30]], time: [0, 1, 2] };
+    const slices = facetSlices(mixed, 0);
+    expect(slices).toHaveLength(2);
+    expect(slices.flatMap((s) => s.data.time)).toEqual([0, 2]); // row 1 (NaN) dropped everywhere
+  });
+
+  it("supports channel<0 (facet by the x/time column itself)", () => {
+    const small: DataStruct = {
+      time: [1, 1, 2],
+      values: [[10], [20], [30]],
+      labels: ["y"],
+      units: [""],
+      metadata: {},
+    };
+    const slices = facetSlices(small, -1);
+    expect(slices).toHaveLength(2);
+    expect(slices[0].data.time).toEqual([1, 1]);
+    expect(slices[1].data.time).toEqual([2]);
+  });
+
+  it("preserves every other DataStruct field verbatim (labels/units/metadata)", () => {
+    const slices = facetSlices(ds, 0);
+    expect(slices[0].data.labels).toBe(ds.labels);
+    expect(slices[0].data.units).toBe(ds.units);
+    expect(slices[0].data.metadata).toBe(ds.metadata);
   });
 });
 

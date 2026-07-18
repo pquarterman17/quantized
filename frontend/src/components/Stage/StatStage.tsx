@@ -71,10 +71,46 @@ export default function StatStage() {
     ...st.categoricalCols.map((c) => ({ value: String(c.index), label: c.label })),
   ];
   const columnOptions = st.columns.map((c) => ({ value: String(c.index), label: c.label }));
+  // #11: small multiples for Box/Violin/Bar — one panel per level of a
+  // SECOND categorical column (independent of "group by").
+  const facetByOptions = [
+    { value: "none", label: "(none)" },
+    ...st.categoricalCols.map((c) => ({ value: String(c.index), label: c.label })),
+  ];
 
   return (
     <div className="qzk-stage">
-      <StatStageCanvas data={st.draw} theme={theme} accent={accent} />
+      {st.drawFacets ? (
+        <div
+          style={{
+            position: "absolute",
+            inset: 8,
+            display: "grid",
+            gap: 8,
+            gridTemplateColumns: `repeat(${Math.ceil(Math.sqrt(st.drawFacets.length))}, 1fr)`,
+          }}
+        >
+          {st.drawFacets.map((f) => (
+            <div key={f.label} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  color: "var(--text-dim)",
+                  padding: "0 2px 2px",
+                }}
+              >
+                {f.label}
+              </div>
+              <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+                <StatStageCanvas data={f.draw} theme={theme} accent={accent} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <StatStageCanvas data={st.draw} theme={theme} accent={accent} />
+      )}
 
       <div
         className="qzk-glass qzk-float-tools"
@@ -111,6 +147,13 @@ export default function StatStage() {
                 />
               </Picker>
             )}
+            <Picker label="facet by">
+              <Select
+                options={facetByOptions}
+                value={st.facetCol == null ? "none" : String(st.facetCol)}
+                onChange={(e) => st.setFacetCol(e.target.value === "none" ? null : Number(e.target.value))}
+              />
+            </Picker>
           </>
         )}
 

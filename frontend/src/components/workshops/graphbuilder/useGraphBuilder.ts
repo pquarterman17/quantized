@@ -255,8 +255,13 @@ export function useGraphBuilder(): GraphBuilderState {
     if (spec.mark === "box" || spec.mark === "violin") {
       const x = spec.zones.x;
       const groupCol = x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel : null;
-      seedStatStage({ mode: spec.mark, groupCol, valueCol: spec.zones.y[0].channel });
-      setStatus(`sent ${spec.mark} plot to the stat stage`);
+      const facetCol = spec.zones.facet?.channel ?? null;
+      seedStatStage({ mode: spec.mark, groupCol, valueCol: spec.zones.y[0].channel, facetCol });
+      setStatus(
+        facetCol !== null
+          ? `sent ${spec.mark} plot to the stat stage, faceted by ${labelOf(facetCol)}`
+          : `sent ${spec.mark} plot to the stat stage`,
+      );
       return;
     }
     // mark === "bar" (gap #20): the stat stage's bar mode reads its series
@@ -269,8 +274,13 @@ export function useGraphBuilder(): GraphBuilderState {
       toast("Bar charts need a categorical X column.", "info");
       return;
     }
-    seedStatStage({ mode: "bar", groupCol, valueCol: spec.zones.y[0]?.channel ?? 0 });
-    setStatus("sent bar chart to the stat stage");
+    const facetCol = spec.zones.facet?.channel ?? null;
+    seedStatStage({ mode: "bar", groupCol, valueCol: spec.zones.y[0]?.channel ?? 0, facetCol });
+    setStatus(
+      facetCol !== null
+        ? `sent bar chart to the stat stage, faceted by ${labelOf(facetCol)}`
+        : "sent bar chart to the stat stage",
+    );
   }
 
   function openInFigureBuilder(): void {
@@ -346,10 +356,14 @@ export function useGraphBuilder(): GraphBuilderState {
   // bin rule/fit distribution that only exists once that view is mounted),
   // which isn't reachable from here without duplicating that pipeline — so
   // this hands off with a toast instead of silently exporting the wrong
-  // (flat xy) figure. Faceted specs share the same known gap: facetByColumn
-  // resets the live xKey/yKeys (baked into facetPanels instead), so an
-  // exported facet spec falls back to the plot's default channel selection
-  // — tracked as a residual alongside "finish faceting" (GUI_INTERACTION #11).
+  // (flat xy) figure. A faceted box/violin/bar spec (#11, now real) degrades
+  // the exact same way as any other stat-stage state: the Stat Stage's OWN
+  // Export button disables itself while `drawFacets` is non-null (see
+  // useStatStage's doc) — this toast hand-off never risks silently exporting
+  // the wrong flat panel. The xy family's OWN facet export is a separate,
+  // still-open residual: facetByColumn resets the live xKey/yKeys (baked
+  // into facetPanels instead), so an exported xy facet spec falls back to
+  // the plot's default channel selection.
   const exportPlot = async (): Promise<void> => {
     if (!ds || !canSend) return;
     sendToStage();

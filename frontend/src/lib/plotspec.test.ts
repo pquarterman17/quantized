@@ -54,6 +54,38 @@ const DATA: DataStruct = {
 };
 const DS: Dataset = { id: "d1", name: "run.dat", data: DATA };
 
+// A second fixture for box/bar faceting (GUI_INTERACTION #11): channel 0 is
+// the box/bar GROUP column (2-level nominal, needs ≥12 finite samples),
+// channel 1 the value column, channel 2 a THIRD column used only as the
+// FACET (3 levels: "0"/"1" carry real data, "2" is entirely non-finite in
+// BOTH the group and value columns — a facet level that groups to nothing
+// finite in either mark, so it must drop from `facets` for box AND bar).
+const FACET_DATA: DataStruct = {
+  time: Array.from({ length: 16 }, (_, i) => i),
+  values: [
+    [0, 10, 0],
+    [0, 12, 0],
+    [0, 14, 0],
+    [1, 30, 0],
+    [1, 32, 0],
+    [1, 34, 0],
+    [0, 110, 1],
+    [0, 112, 1],
+    [0, 114, 1],
+    [1, 130, 1],
+    [1, 132, 1],
+    [1, 134, 1],
+    [NaN, NaN, 2],
+    [NaN, NaN, 2],
+    [NaN, NaN, 2],
+    [NaN, NaN, 2],
+  ],
+  labels: ["grp", "y", "fac"],
+  units: ["", "", ""],
+  metadata: {},
+};
+const FACET_DS: Dataset = { id: "d3", name: "facet3.dat", data: FACET_DATA };
+
 const TYPES: Record<number, ModelingType> = { 0: "continuous", 1: "continuous", 2: "nominal" };
 const ctx = (xMonotonic?: boolean): MarkContext => ({
   typeOf: (r) => TYPES[r.channel] ?? "continuous",
@@ -306,6 +338,56 @@ describe("specToRender", () => {
     expect(r.kind).toBe("xy");
     if (r.kind !== "xy") return;
     expect(r.facets).toBeUndefined();
+  });
+
+  // ── Box/Violin/Bar faceting (GUI_INTERACTION #11) ─────────────────────────
+  describe("box/bar faceting", () => {
+    it("box: one box set per facet level, dropping a level with no finite groups", () => {
+      const s = spec(ref(0, "d3"), [ref(1, "d3")], "box", null, ref(2, "d3"));
+      const r = specToRender(s, [FACET_DS]);
+      expect(r.kind).toBe("box");
+      if (r.kind !== "box") return;
+      // The flat fallback field is unaffected — still computed from ALL rows.
+      expect(r.boxes).toHaveLength(2);
+      expect(r.facets).toBeDefined();
+      expect(r.facets).toHaveLength(2); // levels "0"/"1" kept, "2" dropped
+      expect(r.facets?.map((f) => f.label)).toEqual(["0", "1"]);
+      expect(r.facets?.[0].boxes).toHaveLength(2); // grp 0 and 1 within fac=0
+      expect(r.facets?.[1].boxes).toHaveLength(2);
+      expect(r.facets?.[0].boxes[0].median).toBe(12); // fac=0, grp=0 -> y 10,12,14
+      expect(r.facets?.[1].boxes[0].median).toBe(112); // fac=1, grp=0 -> y 110,112,114
+    });
+
+    it("violin mark carries the same facets shape as box (offline degrade)", () => {
+      const s = spec(ref(0, "d3"), [ref(1, "d3")], "violin", null, ref(2, "d3"));
+      const r = specToRender(s, [FACET_DS]);
+      expect(r.kind).toBe("box");
+      if (r.kind !== "box") return;
+      expect(r.violin).toBe(true);
+      expect(r.facets).toHaveLength(2);
+    });
+
+    it("bar: one matrix per facet level, same drop rule", () => {
+      const s = spec(ref(0, "d3"), [ref(1, "d3")], "bar", null, ref(2, "d3"));
+      const r = specToRender(s, [FACET_DS]);
+      expect(r.kind).toBe("bar");
+      if (r.kind !== "bar") return;
+      expect(r.data.groups).toHaveLength(2); // flat fallback unaffected
+      expect(r.facets).toBeDefined();
+      expect(r.facets).toHaveLength(2);
+      expect(r.facets?.map((f) => f.label)).toEqual(["0", "1"]);
+      expect(r.facets?.[0].data.groups).toHaveLength(2);
+      expect(r.facets?.[0].data.groups[0].series[0].mean).toBeCloseTo(12, 10); // fac=0, grp=0
+      expect(r.facets?.[1].data.groups[0].series[0].mean).toBeCloseTo(112, 10); // fac=1, grp=0
+    });
+
+    it("omits facets entirely when zones.facet is unset (regression)", () => {
+      const s = spec(ref(0, "d3"), [ref(1, "d3")], "box");
+      const r = specToRender(s, [FACET_DS]);
+      expect(r.kind).toBe("box");
+      if (r.kind !== "box") return;
+      expect(r.facets).toBeUndefined();
+    });
   });
 
   it("an empty spec is an incomplete hint", () => {
