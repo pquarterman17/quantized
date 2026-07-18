@@ -130,18 +130,22 @@ plotting, publication export.
     replacement. The canvas/vector renderer split stays. The enforcement
     instrument is a PARITY HARNESS that defines "one spec" empirically
     before the model lands.
-    - [ ] Slice 1 — **export-parity contract harness**: one test suite
-          asserting, over a matrix of live states, that the assembled export
-          request preserves axis limits/labels/scales/steps/formats, series
-          colours/widths/markers/order/hidden, y2 split (new), error bars,
-          annotations (+page anchor), shapes, legend state, grid/spines; and
-          that facets/stat marks fail closed exactly as documented. Each
-          later slice upgrades assertions from adapter-level to spec-level.
+    - [x] Slice 1 — **export-parity contract harness** (2026-07-18,
+          `79766bb`): `lib/exportParity{,2}.test.ts`, 25 tests over the full
+          8-row matrix against the real store + request-assembly path. Found
+          + pinned as `it.fails`: (a) stale `overrides.y2_lim` sent even
+          with zero y2 channels plotted; (b) `ticks.minor` ignores a
+          log-scaled y2 (joint gap — `figure_y2.draw_secondary_axes` runs no
+          overrides sweep on the twinx axes). Also flagged: `y2_fmt` exists
+          on the wire but has no store field/UI. All three land in Slice 4.
+          Suite 3888 passed + 2 expected-fail; build green.
     - [ ] Slice 2 — PlotSpec v2 schema + up-convert + `.dwk` round-trip.
     - [ ] Slice 3 — Figure Builder adapter (make `plotSpecToFigureDoc`
           lossless over the covered subset; un-fail-closed grouped specs).
     - [ ] Slice 4 — export adapter + the booked export residuals: faceted
-          stat export, xy facet-export xKey/yKeys reset, page-export y2.
+          stat export, xy facet-export xKey/yKeys reset, page-export y2,
+          and Slice 1's pinned findings (stale y2_lim gate, log-y2 minor
+          ticks incl. the twinx overrides sweep, y2_fmt store field + UI).
     - [ ] Slice 5 — Stage adapter (buildOpts reads the spec's blocks).
 
 15. **Real-browser interaction coverage** — jsdom can't validate canvas hit
