@@ -920,7 +920,7 @@ the shipped contract)
 ## Completed
 
 - ~~**63. Multi-panel presentation-template parity**~~
-  (2026-07-17; `codex/multipanel-presentation-template`) — all four focused
+  (2026-07-17; PR #61) — all four focused
   multi-panel modes and unfocused/background stack windows now receive the
   same presentation inputs as the ordinary XY viewport: the window's selected
   template font size, its calibrated fallback line width, and the global
