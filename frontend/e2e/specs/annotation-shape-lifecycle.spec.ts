@@ -206,18 +206,15 @@ test.describe("Annotation lifecycle @core", () => {
 
     const toolbar = page.getByRole("toolbar", { name: "Selected object actions" });
     await expect(toolbar).toBeVisible();
-    // The mini-toolbar shares ToolHud's top-left slot (shell.css), but the
-    // floating plot toolbar (`.qzk-float-tools`, top-center) is wide enough
-    // at this viewport to overlap it — a real, pre-existing layout squeeze
-    // unrelated to this journey (confirmed via Playwright's own actionability
-    // diagnostic: the Analyze tool group intercepts the pointer at the
-    // Delete button's coordinates). A direct DOM `.click()` still fires
-    // React's onClick (unlike a checkbox's native toggle, a <button>'s click
-    // handler doesn't require a trusted event) without depending on real
-    // browser hit-testing at an obstructed point.
-    await toolbar
-      .getByRole("button", { name: "Delete", exact: true })
-      .evaluate((el) => (el as HTMLElement).click());
+    // GUI_INTERACTION #17 fixed the layout squeeze this journey used to work
+    // around: the floating plot toolbar (`.qzk-float-tools`, top-center) can
+    // span nearly the full stage width at this viewport, and used to paint
+    // over the mini-toolbar's top-left slot (shell.css's `.qzk-mini-toolbar`
+    // now sits below the toolbar's row instead of sharing ToolHud's exact
+    // `top: 12px`) — Playwright's own actionability diagnostic used to catch
+    // the Analyze tool group intercepting the pointer at the Delete button's
+    // coordinates. A real click now lands correctly.
+    await toolbar.getByRole("button", { name: "Delete", exact: true }).click();
 
     await expect.poll(async () => readAnnotations(page)).toEqual([]);
     await expect.poll(() => readSelectedAnnotationId(page)).toBeNull();

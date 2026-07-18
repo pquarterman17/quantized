@@ -115,16 +115,16 @@ test.describe("Channel-chip drag onto an axis band @core", () => {
     // the dense "all three" default, so it can't collapse to the auto
     // sentinel null — see ChannelsCard.tsx's toggle()).
     //
-    // The row's own `label.qz-check` box (flex:1, minWidth:0) collapses to
-    // ~0 CSS width in the Inspector's fixed 296px column once the modeling-
-    // type/role/error selects claim their space, so the checkbox visually
-    // overflows a few px into the NEXT flex item's (the selects') box —
-    // Playwright's default center-of-element click point lands in that
-    // overlap and hits the select instead. A left-edge `position` stays
-    // inside the checkbox's own un-overlapped sliver (confirmed empirically:
-    // the box starts 4px before its neighbour does).
+    // GUI_INTERACTION #17 fixed the layout squeeze this journey used to work
+    // around: the row's own `label.qz-check` box (flex:1, minWidth:0) still
+    // collapses in the Inspector's fixed 296px column once the modeling-
+    // type/role/error selects claim their space, but the checkbox itself no
+    // longer shrinks with it (`.qz-check input { flex-shrink: 0 }`,
+    // components.css) — only the channel-name text truncates now
+    // (ChannelsCard.tsx wraps it in an ellipsis span). A plain center-click
+    // uncheck lands on the checkbox correctly.
     const gammaRow = channelsBody.locator("label.qz-check", { hasText: "Gamma" });
-    await gammaRow.locator('input[type="checkbox"]').uncheck({ position: { x: 2, y: 7 } });
+    await gammaRow.locator('input[type="checkbox"]').uncheck();
     await expect.poll(async () => (await readAxisState(page)).yKeys).toEqual([0, 1]);
 
     // ── Drag Gamma onto the Y band: rejoins the dense default (all three

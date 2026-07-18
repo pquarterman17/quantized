@@ -118,7 +118,23 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
           >
             <label
               className="qz-check"
-              style={{ flex: 1, minWidth: 0, opacity: isData ? 1 : 0.6 }}
+              // GUI_INTERACTION #17: `minWidth: 0` here alone gave this label a
+              // flexbox shrink WEIGHT of 0 (flex:1 => flex-basis:0%, and CSS
+              // shrink weight = flex-basis * flex-shrink) — so the row's negative
+              // space (this checkbox + the 2-4 right-hand selects don't all fit
+              // in the Inspector's fixed 296px column) was entirely assigned to
+              // the right-hand controls `<div>` below. But THAT div's own
+              // children (the Selects) had no `minWidth: 0` of their own, so it
+              // hit ITS min-content floor before absorbing enough — leaving this
+              // label's box at literally 0 width, with the right-hand div
+              // rendered starting at the row's left edge, painting directly over
+              // the checkbox. A small explicit floor (checkbox 14px + gap 7px +
+              // a few px buffer) guarantees the checkbox always has a real box;
+              // pushing `minWidth: 0` onto the right-hand controls instead (see
+              // below) makes THEM absorb the rest of the squeeze — their text
+              // is short (native <select> already clips its own display value)
+              // and less harmed by shrinking than a hidden/overlapped checkbox.
+              style={{ flex: 1, minWidth: 24, opacity: isData ? 1 : 0.6 }}
               draggable
               title={`Drag onto the plot's X / Y / Y2 axis band to re-plot "${lab}" there`}
               onDragStart={(e) => {
@@ -127,12 +143,19 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
               }}
             >
               <input type="checkbox" checked={visible} disabled={!isData} onChange={() => toggle(i)} />
-              {lab}
-              {units[i] ? ` (${units[i]})` : ""}
+              {/* The channel name + units still truncates (rather than
+                  overflowing into the right-hand controls) once the label
+                  itself is down near its 24px floor. */}
+              <span
+                style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}
+              >
+                {lab}
+                {units[i] ? ` (${units[i]})` : ""}
+              </span>
             </label>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
               <Select
-                style={{ maxWidth: 64 }}
+                style={{ maxWidth: 64, minWidth: 0 }}
                 value={active.channelTypes?.[i] ?? ""}
                 onChange={(e) =>
                   setChannelType(i, e.target.value === "" ? null : (e.target.value as ModelingType))
@@ -146,7 +169,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
                 ]}
               />
               <Select
-                style={{ maxWidth: 78 }}
+                style={{ maxWidth: 78, minWidth: 0 }}
                 value={role ?? ""}
                 onChange={(e) => changeRole(i, e.target.value === "" ? null : (e.target.value as ChannelRole))}
                 title="Column role — Data: plotted · Label: kept in the worksheet but off the plot · Ignore: also dropped from statistics"
@@ -158,7 +181,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
               />
               {visible && (
                 <Select
-                  style={{ maxWidth: 88 }}
+                  style={{ maxWidth: 88, minWidth: 0 }}
                   value={errKeys[i] == null ? "" : String(errKeys[i])}
                   onChange={(e) => setErrKey(i, e.target.value === "" ? null : Number(e.target.value))}
                   title="Channel holding this series' ± error (draws error bars)"

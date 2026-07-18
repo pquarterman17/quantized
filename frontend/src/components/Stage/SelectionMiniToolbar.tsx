@@ -2,11 +2,20 @@
 // registry consumer alongside the right-click menus, the ⌘K palette
 // (lib/paletteContextActions), and (implicitly) the object menus themselves.
 // A slim floating strip offering the currently-selected annotation/shape's
-// registry actions without a right-click. Shares ToolHud's position slot
-// (`.qzk-tool-hud`'s CSS, top-left) — the two are mutually exclusive by
-// construction: ToolHud only renders for a non-pointer tool, this only for
-// pointer mode with a live selection. conv-dependent entries (the pin
-// toggle) pass `conv: null` and self-hide, same as the palette bridge.
+// registry actions without a right-click. Shares ToolHud's top-left corner
+// (`.qzk-tool-hud`'s CSS class, for its base glass/typography styling) and
+// render logic — the two are mutually exclusive by construction: ToolHud
+// only renders for a non-pointer tool, this only for pointer mode with a
+// live selection. conv-dependent entries (the pin toggle) pass `conv: null`
+// and self-hide, same as the palette bridge.
+//
+// GUI_INTERACTION #17: unlike ToolHud (plain status text, nothing to
+// click), this strip has real buttons — so it needs a real, unobstructed
+// hit area. `.qzk-mini-toolbar` in shell.css overrides `.qzk-tool-hud`'s
+// `top: 12px` to sit below the floating plot toolbar's row instead, since
+// that toolbar can span nearly the full stage width at common viewports
+// and would otherwise paint over (and swallow clicks on) this strip's
+// rightmost buttons.
 
 import { runContextAction, type ContextAction } from "../../lib/contextActions";
 import { useApp } from "../../store/useApp";

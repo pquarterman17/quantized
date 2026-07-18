@@ -354,8 +354,30 @@ body {
 .qzk-tool-hud .key { padding: 1px 5px; border-radius: var(--radius-sm); background: var(--surface-3); color: var(--text-dim); font-family: var(--font-mono); font-size: var(--type-nano); }
 .qzk-tool-hud .esc { color: var(--text-faint); font-size: var(--type-nano); }
 /* GUI_INTERACTION #8: the pointer-mode selection mini-toolbar. Shares
-   .qzk-tool-hud's slot/positioning (top-left) — mutually exclusive with it
-   by construction (ToolHud only renders for a non-pointer tool). */
+   .qzk-tool-hud's slot (top-left) for its render logic — mutually
+   exclusive with it by construction (ToolHud only renders for a
+   non-pointer tool; this only for pointer mode with a live selection) —
+   but NOT its exact pixel position (below, see #17). */
+/* GUI_INTERACTION #17: at common viewports .qzk-float-tools (top-center,
+   see above) is wide enough — up to ~823px with its default group-label
+   captions on (22 buttons + 6 separators) — that its LEFT edge sits at or
+   near x:12px, i.e. it can cover almost the entire top row of the stage.
+   Both elements are plain absolutely-positioned children of the same
+   .qzk-stage stacking context with no z-index, so whichever renders later
+   in the DOM (PlotToolbar, after PlotStageMenus's SelectionMiniToolbar —
+   see PlotStage.tsx) paints on top and swallows pointer events there
+   (confirmed live: Playwright's actionability check found the Analyze
+   tool group intercepting a click aimed at the mini-toolbar's Delete
+   button). Because the toolbar can span nearly the full row, capping the
+   mini-toolbar's own width can't guarantee clearance, and z-index would
+   only flip WHICH toolbar's buttons get obstructed. Dropping it below the
+   toolbar's tallest possible row (group-label 9px + 2px gap + 32px button
+   + 4px top/bottom padding = 51px from its top:12px, so its bottom edge is
+   at 63px) is the only offset that is correct regardless of content
+   width. ToolHud is untouched — it has no interactive elements
+   (role="status", plain text), so an equivalent visual overlap there has
+   no functional impact and needs no fix. */
+.qzk-mini-toolbar { top: 72px; }
 .qzk-mini-toolbar .hint { color: var(--text-dim); }
 .qzk-mini-toolbar button { padding: 1px 7px; font-size: var(--font-size-sm); border-radius: var(--radius-sm); background: var(--surface-3); color: var(--text); border: 1px solid transparent; cursor: default; }
 .qzk-mini-toolbar button:hover { background: var(--surface-2); }

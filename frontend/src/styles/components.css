@@ -220,6 +220,13 @@
   accent-color: var(--accent);
   width: 14px;
   height: 14px;
+  /* GUI_INTERACTION #17: a `.qz-check` label used as a `flex: 1; min-width:
+     0` row item (e.g. Inspector/ChannelsCard, a tight fixed-width column)
+     must never let the squeeze fall on the checkbox itself — that shrinks
+     the native control into an unclickable sliver instead of truncating
+     the adjacent label text. Keep it at its natural size always; callers
+     truncate their own text node instead (see ChannelsCard.tsx). */
+  flex-shrink: 0;
 }
 
 .qz-switch {

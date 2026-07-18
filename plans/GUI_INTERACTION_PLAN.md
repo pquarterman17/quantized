@@ -11,7 +11,7 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-18
+**Updated:** 2026-07-18 (#17 e2e-findings sub-item closed)
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -231,11 +231,21 @@ plotting, publication export.
     - [ ] Text on high-consequence actions (Fit/Apply/Subtract/Export/Delete/Save/
           Send to Stage); standard dialog button order (secondary first, primary
           last, destructive separated); split buttons for last-used tool.
-    - [ ] Two real-browser findings from the 2026-07-18 e2e work: the selection
-          mini-toolbar's rightmost buttons can sit under the floating plot
-          toolbar at common viewports (z-order/offset fix), and the Channels
-          card's checkbox visually overflows into its sibling select in the
-          Inspector's fixed 296px column.
+    - [x] Two real-browser findings from the 2026-07-18 e2e work (fixed
+          2026-07-18): the selection mini-toolbar's rightmost buttons could
+          sit under the floating plot toolbar at common viewports — fixed
+          by offsetting `.qzk-mini-toolbar` below the toolbar's row
+          (`shell.css`), since the toolbar can span nearly the full stage
+          width and z-index would only relocate the obstruction; and the
+          Channels card's checkbox visually overflowed into its sibling
+          select in the Inspector's fixed 296px column — fixed by giving
+          the checkbox `flex-shrink: 0` + a small min-width floor on its
+          label so the squeeze falls on the (truncating) text and the
+          right-hand selects instead. Both e2e workarounds (a synthetic
+          `.click()` in annotation-shape-lifecycle.spec.ts, a left-edge
+          `position` click in channel-axis-drag.spec.ts) were removed in
+          favor of real center clicks, verified passing at all three DPI
+          scales.
     - [ ] Regroup menus: Analyze by Fit/Peaks-Baseline/Magnetometry/XRD-Reflectivity/
           Transform-Signal/Statistics/Workflow; Graph owns builders/plot-types/
           layers/themes/templates/export; Data owns worksheet/row-col/filter/
