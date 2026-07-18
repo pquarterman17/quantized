@@ -148,7 +148,11 @@ plotting, publication export.
           unsaved-changes dot (scoped to the builder header, not the Stage
           canvas — see the 2026-07-17 progress note below).
     - [x] Export (scoped to the xy family — see the progress note).
-    - [ ] Open in Figure Builder.
+    - [x] Open ordinary single-dataset XY line/scatter specs in Figure Builder
+          (PR #62). The bridge preserves explicit X/Y display order and
+          per-series publication styles; scatter remains point-only. Grouped,
+          faceted, statistical, incomplete, and cross-dataset specs fail closed
+          until their target contracts exist.
     - [ ] Finish faceting for statistical marks.
     - [ ] Allow plot/layer reordering.
 
