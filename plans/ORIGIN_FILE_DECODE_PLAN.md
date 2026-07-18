@@ -654,10 +654,34 @@ Official model references used for this routing:
       bindings, row order, or axis semantics are reinterpreted.
       Verification: focused 443 tests; full frontend 3,738 + production build;
       backend 2,906; repository integrity, ruff, mypy, and diff checks green.
-    - [ ] **Generalized page/layer model and >2 Y axes.** Still open. Do not
-      extend the current greedy double-Y pairing heuristic; model arbitrary
-      axes/layers explicitly, with per-layer provenance and Graph Builder /
-      saved-preview fallback when the native renderer cannot express them.
+    - [x] **Overlay grouping generalized past pairs** (2026-07-18, `adab0cc`).
+      The greedy pairwise `figureFrameY2Pairs` is REPLACED (not extended) by
+      `coincidentOverlayGroups`: a spatial family partitions into
+      frame-coincident overlay groups of arbitrary size (host = lowest layer;
+      the pairing conditions themselves are unchanged). Group of 2 merges
+      exactly as before (regression-pinned); a group of 3+ merges
+      host+first-partner and DROPS the rest from the panel list BEFORE
+      `computePanelLayout` runs — so a 3rd coincident layer no longer
+      pollutes the whole figure's layout classification into the ordinal
+      fallback. Dropped layers are counted (`droppedOverlays`), their ids
+      land in the merged panel's `sourceFigureIds` (provenance), and the
+      apply toasts a pointer at the saved preview (`spatialApplyNotices`,
+      extracted so `useApp.ts` NETS −4 lines vs. its pin). A family that
+      collapses to ONE merged panel renders via the existing 1-panel spatial
+      path (verified against `computePanelLayout`/`useMultiPanelStage`).
+      Corpus gate: Moke 12/12 · PNR 99/99 · RockingCurve 4/4 fully
+      consistent, zero mismatches (all existing doubleY/multiPanel figures
+      baseline-identical). Frontend 3855 + build green.
+    - [ ] **Native >2-Y-axes rendering.** SPECIMEN-GATED: no corpus figure
+      has a proven ≥3-coincident-axis composition, and the backend decoder
+      itself buckets only YL/YR titles (`figure_text._TITLE_OBJECT_BUCKETS`)
+      — a real 3rd axis needs a specimen + decode evidence first (the
+      Graph25 discipline: don't build unproven mechanisms). Until then the
+      ≥3 case fails closed with provenance + toast (above).
+    - [ ] **Generalized page/layer MODEL** (replace the singleton y2/panel
+      state branches with one explicit layer model) — design belongs with
+      GUI_INTERACTION #12's canonical plot spec; keep the two in one
+      architecture conversation, not two competing ones.
 
 ### Tier 3 — acceptance and handoff
 

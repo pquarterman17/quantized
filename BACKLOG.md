@@ -37,7 +37,7 @@ baseline framing) are under Owner actions below, not here.
 | Item | Plan / item |
 |------|-------------|
 | Larger bets / polish: unified select→edit Plot Objects tree (#2, owner-gate scope), canonical plot spec across surfaces (#12), buttons/menus/tooltips polish (#17), owner-dependent Origin gaps (#16) | GUI_INTERACTION Tier 1–3 |
-| **Origin layout generality residual** — free-positioned/overlapping layers + insets SHIPPED 2026-07-17 (Codex PR #55 `90c49ad`, page-mode classification, fail-closed); remaining: generalized page/layer model + >2 Y axes (do NOT extend the greedy double-Y heuristic) | ORIGIN_FILE_DECODE #54 |
+| **Origin layout generality residual** — overlay grouping generalized past pairs 2026-07-18 (`adab0cc`: greedy heuristic REPLACED, ≥3 coincident layers fail closed with provenance+toast, corpus 12/12·99/99·4/4 clean); y2 EXPORT twinx fix in flight; remaining: native >2-Y-axes rendering (specimen-gated) + generalized page/layer MODEL (design rides GUI #12's canonical spec) | ORIGIN_FILE_DECODE #54 |
 
 ## Owner actions & owner-gated decisions
 
