@@ -83,8 +83,13 @@ export default function ConfirmDialog() {
       <div className="qzk-glass qz-dialog" onMouseDown={(e) => e.stopPropagation()}>
         <h2>{title}</h2>
         {message && <p>{message}</p>}
-        <div className="qz-btn-row">
+        {/* #17: a destructive confirm is SEPARATED from Cancel rather than
+            sitting flush against it as an equal-width twin -- order stays
+            secondary-first/primary-last, but the irreversible button is no
+            longer one stray pixel away from the safe one. */}
+        <div className={danger ? "qz-btn-row qz-btn-row--danger" : "qz-btn-row"}>
           <Button onClick={() => finish(false)}>Cancel</Button>
+          {danger && <span className="qz-btn-row-gap" data-testid="destructive-gap" aria-hidden="true" />}
           <Button variant={danger ? "danger" : "primary"} onClick={() => finish(true)}>
             {confirmLabel}
           </Button>

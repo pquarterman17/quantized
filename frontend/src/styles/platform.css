@@ -249,3 +249,13 @@
 .qz-btn-row .qz-btn {
   flex: 1;
 }
+/* Destructive confirmations (GUI_INTERACTION #17): stop the irreversible
+   button being an equal-width twin sitting flush against Cancel. The buttons
+   size to their content and a flexible gap pushes them apart, so a stray
+   click near Cancel cannot land on Delete. */
+.qz-btn-row--danger .qz-btn {
+  flex: 0 0 auto;
+}
+.qz-btn-row--danger .qz-btn-row-gap {
+  flex: 1 1 var(--pad);
+}

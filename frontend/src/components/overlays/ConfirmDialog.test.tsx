@@ -52,4 +52,23 @@ describe("ConfirmDialog / askConfirm", () => {
     fireEvent.mouseDown(container.querySelector(".qz-overlay-backdrop")!);
     await expect(result).resolves.toBe(false);
   });
+  // GUI_INTERACTION #17 — destructive actions are visually separated.
+  it("separates a DESTRUCTIVE confirm from Cancel", async () => {
+    const { container } = render(<ConfirmDialog />);
+    const result = open("Delete it?", "gone forever", "Delete", true);
+    expect(container.querySelector(".qz-btn-row--danger")).not.toBeNull();
+    expect(screen.getByTestId("destructive-gap")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    await expect(result).resolves.toBe(false);
+  });
+
+  it("does NOT separate a non-destructive confirm (ordinary primary row)", async () => {
+    const { container } = render(<ConfirmDialog />);
+    const result = open("Proceed?", "", "OK");
+    expect(container.querySelector(".qz-btn-row")).not.toBeNull();
+    expect(container.querySelector(".qz-btn-row--danger")).toBeNull();
+    expect(screen.queryByTestId("destructive-gap")).toBeNull();
+    fireEvent.keyDown(window, { key: "Escape" });
+    await expect(result).resolves.toBe(false);
+  });
 });
