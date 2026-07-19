@@ -22,18 +22,21 @@ export function buildPlotCommands(s: StoreGet): Action[] {
     {
       id: "yLog", // MAIN #12: cycles linear -> log -> reciprocal -> linear
       group: "Plot",
+      section: "Axes",
       label: "Cycle Y axis scale (linear/log/reciprocal)",
       run: () => s().setYScale(cycleAxisScale(s().yScale)),
     },
     {
       id: "yTickFormat", // MAIN #20: cycles auto -> fixed -> sci -> eng -> auto
       group: "Plot",
+      section: "Axes",
       label: "Cycle Y tick format (auto/fixed/sci/eng)",
       run: () => s().setYFmt({ ...s().yFmt, mode: cycleTickMode(s().yFmt.mode) }),
     },
     {
       id: "waterfall",
       group: "Plot",
+      section: "Layout",
       label: "Waterfall (stack datasets)…",
       run: () => s().setWaterfallOpen(true),
     },
@@ -41,6 +44,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
     {
       id: "autoscale",
       group: "Plot",
+      section: "Axes",
       label: "Autoscale / reset view",
       shortcut: "A",
       run: () => { s().setXLim(null); s().setYLim(null); },
@@ -48,44 +52,51 @@ export function buildPlotCommands(s: StoreGet): Action[] {
     {
       id: "xLog", // see the "yLog" command above — same cycle, X axis
       group: "Plot",
+      section: "Axes",
       label: "Cycle X axis scale (linear/log/reciprocal)",
       run: () => s().setXScale(cycleAxisScale(s().xScale)),
     },
     {
       id: "xTickFormat", // see the "yTickFormat" command above — same cycle, X axis
       group: "Plot",
+      section: "Axes",
       label: "Cycle X tick format (auto/fixed/sci/eng)",
       run: () => s().setXFmt({ ...s().xFmt, mode: cycleTickMode(s().xFmt.mode) }),
     },
     {
       id: "grid",
       group: "Plot",
+      section: "Display",
       label: "Toggle grid lines",
       run: () => s().setShowGrid(!s().showGrid),
     },
     {
       id: "legend",
       group: "Plot",
+      section: "Display",
       label: "Toggle legend",
       run: () => s().setShowLegend(!s().showLegend),
     },
     {
       id: "stacked",
       group: "Plot",
+      section: "Layout",
       label: "Toggle stacked layout",
       run: () => s().setStackMode(!s().stackMode),
     },
-    { id: "panel-fit", group: "Plot", label: "Multi-panel fit (letterbox / fill)", keywords: "aspect window spatial page", run: () => s().cyclePanelFit() },
-    { id: "page-setup", group: "Plot", label: "Page setup…", keywords: "page size margins width height print export #54", run: () => void runPageSetupDialog(s) },
+    { id: "panel-fit", group: "Plot", section: "Layout", label: "Multi-panel fit (letterbox / fill)", keywords: "aspect window spatial page", run: () => s().cyclePanelFit() },
+    { id: "page-setup", group: "Plot", section: "Layout", label: "Page setup…", keywords: "page size margins width height print export #54", run: () => void runPageSetupDialog(s) },
     {
       id: "statMode",
       group: "Plot",
+      section: "Display",
       label: "Toggle statistics view (box / violin / Q-Q / histogram)",
       run: () => s().setStatMode(!s().statMode),
     },
     {
       id: "facet-by-column",
       group: "Plot",
+      section: "Layout",
       label: "Facet by column…",
       run: async () => {
         const ds = s().datasets.find((d) => d.id === s().activeId);
@@ -123,6 +134,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
     {
       id: "break-x-axis",
       group: "Plot",
+      section: "Layout",
       label: "Break x-axis at gaps…",
       run: async () => {
         const ds = s().datasets.find((d) => d.id === s().activeId);

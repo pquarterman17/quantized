@@ -68,22 +68,14 @@ describe("Insert commands (MAIN #27 drawing shapes — the menu-driven counterpa
   });
 });
 
-// GUI_INTERACTION #17 — the Analyze menu's sub-topic grouping. A new analysis
-// command that forgets `section` would render header-less ABOVE every grouped
-// item (withSectionHeaders puts unsectioned first), quietly re-growing the
-// flat 17-item list this item exists to fix. Cheaper to fail here.
-describe("Analyze menu sections (#17)", () => {
-  const analyze = () => buildAppActions(useApp.getState).filter((a) => a.group === "Analyze");
-
-  it("files every Analyze command under a section", () => {
-    const unfiled = analyze()
-      .filter((a) => !a.section)
-      .map((a) => a.id);
-    expect(unfiled).toEqual([]);
-  });
-
-  it("uses only the plan's agreed section vocabulary", () => {
-    const allowed = new Set([
+// GUI_INTERACTION #17 — sub-topic grouping in the long menus. A new command
+// that forgets `section` renders header-less ABOVE every grouped item
+// (withSectionHeaders puts unsectioned first), quietly re-growing the flat
+// list this item exists to fix. Cheaper to fail here than to notice in the UI.
+const SECTIONED_MENUS: Record<string, { min: number; allowed: string[] }> = {
+  Analyze: {
+    min: 17,
+    allowed: [
       "Fit",
       "Peaks & baseline",
       "Magnetometry",
@@ -91,12 +83,28 @@ describe("Analyze menu sections (#17)", () => {
       "Transform & signal",
       "Statistics",
       "Workflow",
-    ]);
-    const stray = [...new Set(analyze().map((a) => a.section!))].filter((s) => !allowed.has(s));
-    expect(stray).toEqual([]);
+    ],
+  },
+  Data: {
+    min: 14,
+    allowed: ["Combine & split", "Rows & summary", "Recalculation", "Composite windows"],
+  },
+  Plot: { min: 14, allowed: ["Axes", "Display", "Layout"] },
+};
+
+describe.each(Object.entries(SECTIONED_MENUS))("%s menu sections (#17)", (group, cfg) => {
+  const items = () => buildAppActions(useApp.getState).filter((a) => a.group === group);
+
+  it("files every command under a section", () => {
+    expect(items().filter((a) => !a.section).map((a) => a.id)).toEqual([]);
   });
 
-  it("still registers the full Analyze command set (the scan is not vacuous)", () => {
-    expect(analyze().length).toBeGreaterThanOrEqual(17);
+  it("uses only the agreed section vocabulary", () => {
+    const allowed = new Set(cfg.allowed);
+    expect([...new Set(items().map((a) => a.section!))].filter((s) => !allowed.has(s))).toEqual([]);
+  });
+
+  it("still registers the full command set (the scan is not vacuous)", () => {
+    expect(items().length).toBeGreaterThanOrEqual(cfg.min);
   });
 });

@@ -16,30 +16,35 @@ export function buildDataCommands(s: StoreGet): Action[] {
     {
       id: "dataset-math",
       group: "Data",
+      section: "Combine & split",
       label: "Dataset math (combine two datasets)…",
       run: () => s().setDatasetMathOpen(true),
     },
     {
       id: "tabulate",
       group: "Data",
+      section: "Rows & summary",
       label: "Tabulate (group summary stats by column)…",
       run: () => s().setTabulateOpen(true),
     },
     {
       id: "pipeline",
       group: "Data",
+      section: "Recalculation",
       label: "Pipeline (edit + re-run recorded steps)…",
       run: () => s().setPipelineOpen(true),
     },
     {
       id: "recalc-now",
       group: "Data",
+      section: "Recalculation",
       label: "Recalculate now (run stale corrections + fits)",
       run: () => void s().recalcNow(),
     },
     {
       id: "recalc-mode",
       group: "Data",
+      section: "Recalculation",
       label: "Recalc mode (cycle auto → manual → off)",
       run: () => {
         const order = ["auto", "manual", "off"] as const;
@@ -52,6 +57,7 @@ export function buildDataCommands(s: StoreGet): Action[] {
     {
       id: "data-filter",
       group: "Data",
+      section: "Rows & summary",
       label: "Data filter (live per-column row filter)…",
       run: () => s().setDataFilterOpen(true),
     },
@@ -59,12 +65,13 @@ export function buildDataCommands(s: StoreGet): Action[] {
     {
       id: "merge",
       group: "Data",
+      section: "Combine & split",
       label: "Merge selected datasets",
       run: () => s().mergeSelected(),
     },
-    { id: "duplicate", group: "Data", label: "Duplicate active dataset", run: () => { const id = s().activeId; if (id) s().duplicateDataset(id); } },
-    { id: "reimport", group: "Data", label: "Re-import active dataset", run: () => { const id = s().activeId; if (id) void s().reimportDataset(id); } },
-    { id: "split", group: "Data", label: "Split by column value…", run: () => { const id = s().activeId; if (id) s().openSplitDialog(id); } },
+    { id: "duplicate", group: "Data", section: "Combine & split", label: "Duplicate active dataset", run: () => { const id = s().activeId; if (id) s().duplicateDataset(id); } },
+    { id: "reimport", group: "Data", section: "Recalculation", label: "Re-import active dataset", run: () => { const id = s().activeId; if (id) void s().reimportDataset(id); } },
+    { id: "split", group: "Data", section: "Combine & split", label: "Split by column value…", run: () => { const id = s().activeId; if (id) s().openSplitDialog(id); } },
     // Panel/overlay composite windows over the current selection (MAIN_PLAN
     // #19 v1) — the command-palette counterparts of the Library's quick
     // picks (lib/contextActions.ts's datasetMultiSelectActions), acting on
@@ -79,6 +86,7 @@ export function buildDataCommands(s: StoreGet): Action[] {
     ).map(([id, label, layout]) => ({
       id,
       group: "Data",
+      section: "Composite windows",
       label,
       run: () => {
         const ids = s().selectedIds;
