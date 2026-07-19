@@ -111,7 +111,8 @@ export interface TextColumn {
  *  length-then-lex, so "A".."Z" then "AA".."AZ", …), or `[]` when the sheet
  *  carries none (every non-Origin dataset, and most Origin sheets). */
 export function originTextColumns(ds: DataStruct): TextColumn[] {
-  const raw = (ds.metadata ?? {})["origin_text_columns"];
+  const metadata = ds.metadata ?? {};
+  const raw = metadata["text_columns"] ?? metadata["origin_text_columns"];
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
   return Object.entries(raw as Record<string, unknown>)
     .filter((entry): entry is [string, unknown[]] => Array.isArray(entry[1]))

@@ -87,7 +87,7 @@ const SECTIONED_MENUS: Record<string, { min: number; allowed: string[] }> = {
   },
   Data: {
     min: 10,
-    allowed: ["Combine & split", "Rows & summary", "Recalculation"],
+    allowed: ["Import & query", "Combine & split", "Rows & summary", "Recalculation"],
   },
   Plot: { min: 21, allowed: ["Axes", "Display", "Layout", "Build & export"] },
 };

@@ -41,6 +41,7 @@ import ReductionsPanel from "./components/workshops/reductions/ReductionsPanel";
 import RsmPanel from "./components/workshops/rsm/RsmPanel";
 import DigitizerView from "./components/workshops/digitizer/DigitizerView";
 import WaterfallView from "./components/workshops/waterfall/WaterfallView";
+import SqliteQueryDialog from "./components/workshops/database/SqliteQueryDialog";
 import ReflView from "./components/workshops/reflview/ReflView";
 import { useApp } from "./store/useApp";
 
@@ -80,6 +81,7 @@ export default function AppOverlays() {
       <TooltipLayer />
       <WhatIsThis />
       <InteractionHints />
+      <SqliteQueryDialog />
       {curveFitOpen && <CurveFitPanel />}
       {hysteresisOpen && <HysteresisPanel />}
       {peaksOpen && <PeaksPanel />}

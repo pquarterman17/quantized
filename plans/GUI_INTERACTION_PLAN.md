@@ -11,8 +11,8 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-19 19:40 EDT (date/time import, interactive axes, saved
-PlotSpecs, and publication export added as the next stacked feature)
+**Updated:** 2026-07-19 19:49 EDT (secure read-only SQLite query connector added
+as the first database integration in the stacked feature series)
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -264,7 +264,12 @@ feature checklist.
           and golden-tested; domain FFT reductions and ROI FFT UI also ship.
     - [x] General 2-D/3-D rendering already exists outside RSM: heatmap, contour,
           filled contour, surface, scatter-3D, and waterfall publication paths.
-    - [ ] Database/query connectors.
+    - [x] Database/query connector foundation — local SQLite ships first because
+          it is cross-platform and dependency-free: read-only URI, SELECT/CTE
+          allowlist, SQLite authorizer, timeout and row caps, numeric DataStruct
+          conversion, and worksheet text-column preservation. Remote PostgreSQL/
+          ODBC connectors remain demand-driven because they add credentials,
+          drivers, and network policy rather than more analysis capability.
     - [ ] `.opju` migration edges (matrix books, some 2-D instrument data, richer
           graphic-object/callout fidelity). Protected by the Origin recovery
           evidence gate; never infer new binary semantics from this UX plan.
@@ -455,6 +460,14 @@ feature checklist.
 ---
 
 ## Completed
+
+- ~~**#16 database/query connector foundation**~~ (2026-07-19, ChatGPT-Sol,
+  stacked after date/time axes) — Data ▸ Query SQLite database opens a movable
+  no-code query window. The backend opens the file read-only, accepts one SELECT
+  or CTE, denies mutation/attach/schema actions through SQLite's authorizer,
+  enforces row and execution limits, and returns the canonical DataStruct.
+  Numeric columns plot normally; text columns remain visible/searchable in the
+  worksheet; the original database is never modified.
 
 - ~~**#16 date/time data and axes**~~ (2026-07-19, ChatGPT-Sol, stacked after
   worksheet reshape) — generic delimited import recognizes a date/time X column

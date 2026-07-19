@@ -12,12 +12,20 @@ import {
   runUnstackWorksheet,
 } from "../lib/worksheetTransformCommands";
 import type { Action } from "../store/commands";
+import { SHOW_SQLITE_QUERY } from "../components/workshops/database/SqliteQueryDialog";
 
 /** Build the Data-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
  *  once. */
 export function buildDataCommands(s: StoreGet): Action[] {
   return [
+    {
+      id: "sqlite-query",
+      group: "Data",
+      section: "Import & query",
+      label: "Query SQLite database…",
+      run: () => window.dispatchEvent(new Event(SHOW_SQLITE_QUERY)),
+    },
     {
       id: "dataset-math",
       group: "Data",

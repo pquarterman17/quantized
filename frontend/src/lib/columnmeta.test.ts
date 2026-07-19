@@ -151,6 +151,13 @@ describe("originTextColumns (item 8)", () => {
   });
 });
 
+describe("generic query text columns", () => {
+  it("renders database text metadata through the worksheet text-column path", () => {
+    const ds: DataStruct = { ...plain, metadata: { text_columns: { sample: ["A", "B", "C"] } } };
+    expect(originTextColumns(ds)).toEqual([{ shortName: "sample", rows: ["A", "B", "C"] }]);
+  });
+});
+
 describe("hasOriginReportSheets (item 8)", () => {
   it("is false when the metadata carries no report sheets", () => {
     expect(hasOriginReportSheets(plain)).toBe(false);

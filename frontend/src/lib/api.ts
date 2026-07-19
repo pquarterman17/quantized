@@ -50,6 +50,18 @@ async function deleteJSON<T>(path: string): Promise<T> {
   return unwrap<T>(await fetch(path, { method: "DELETE" }));
 }
 
+export interface SqliteQueryRequest {
+  path: string;
+  query: string;
+  x_column?: string;
+  max_rows?: number;
+}
+
+/** Execute one read-only SELECT/CTE against a local SQLite database. */
+export async function querySqlite(req: SqliteQueryRequest): Promise<DataStruct> {
+  return postJSON<DataStruct>("/api/database/sqlite/query", req);
+}
+
 /** Pass an ok response through; throw the backend's error detail (or the
  *  status line) otherwise. The SINGLE error-extraction path — every backend
  *  fetch funnels through here (via `unwrap`/`postForm`/`postBlob`/
