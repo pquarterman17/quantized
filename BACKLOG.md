@@ -54,6 +54,7 @@ baseline framing) are under Owner actions below, not here.
 | **Origin corpus screenshot review** — the #55 review dashboard exposes 62 paired Origin↔Quantized screenshots (Moke 8, PNR 50, RockingCurve 4); review state is 0/353 until the owner exports gallery marks. The campaign (#56) closes only on this visual sign-off; new mismatches get booked in the decode plan | ORIGIN_FILE_DECODE #55/#56 gate |
 | **Pop-out books/plots into windows** — PLAN WITH OWNER FIRST (gesture, "pop out a BOOK" semantics, bulk "window everything" command) | MAIN gate (was MULTI_PLOT #19) |
 | **Worksheet view-state persistence** — decide once, with usage evidence, whether sort/widths/selection persist per-dataset in `.dwk` (default: no) | MAIN gate (was WORKSHEET #14) |
+| **Dependabot alert #1 — `glib` unsoundness (medium), BLOCKED UPSTREAM, owner call** | security |
 | **Apache-2.0 copyright holder line** for LICENSE/NOTICE | PORT_PLAN #1 |
 | **Code-signing cert + auto-update E2E** (two consecutive signed releases to verify the updater) | MAIN gate (was PORT #47/#49 residue) |
 | **GOTO owner gates** — 3-D (Q4), worksheet reshape (Q6), date-time axes (Q7), signal-processing non-goal (Q8), switch-trigger project pick + start timing (Q9; protocol in the plan's Context) | GOTO_PLAN Owner gates |
@@ -61,6 +62,28 @@ baseline framing) are under Owner actions below, not here.
 | **Baseline: frontend channel-bind vs. backend corrections-DAG** — cross-audit contradiction; scope before starting #5 | GUI_INTERACTION #5 gate |
 | **Plot Objects tree scope** — full Origin-style Object Manager vs. better-signposted gestures + undo (large bet) | GUI_INTERACTION #2 gate |
 | **Shared AnalysisSelection contract timing** — when to generalize the #4 `lib/fitweights` seed into the full cross-workflow selection contract | GUI_INTERACTION gate |
+
+### Dependabot alert #1 (investigated 2026-07-19 — no action available)
+
+`glib` 0.18.5, `RUSTSEC` unsoundness in the `Iterator`/`DoubleEndedIterator`
+impls for `glib::VariantStrIter`. Medium, runtime scope, `src-tauri/Cargo.lock`.
+
+- **Not fixable here.** Patched upstream in glib 0.20.0, but the chain is
+  `glib 0.18.5 <- gtk 0.18.2 <- tauri 2.11.5`. Tauri 2.11.5 IS the current
+  latest and our `Cargo.toml` already floats on `tauri = "2"`, so we are on
+  the newest release; Tauri v2's GTK stack has not moved to the glib 0.20
+  ecosystem. `cargo update -p glib` locks 0 packages — 0.18.5 is already the
+  latest COMPATIBLE version. Forcing it would mean patching Tauri.
+- **Linux-only, but genuinely shipped.** gtk/webkit2gtk are Tauri's Linux
+  backend and are not compiled on Windows/macOS — however `release.yml` does
+  build a `.deb`, so the artifact exists. Exposure is not zero.
+- **Not reachable from our code.** Quantized never calls `glib` directly, let
+  alone `VariantStrIter`; it sits deep inside GTK bindings driven by Tauri.
+  It is a soundness hole, not a directly exploitable RCE.
+- **Owner decision:** dismiss the alert as "no fix available" (keeps the
+  security tab honest) vs. leave it open pending a Tauri GTK bump. Deliberately
+  NOT dismissed autonomously — that is a visible security-posture change on a
+  public repo. Re-check whenever Tauri v2 bumps its GTK stack.
 
 ## Blocked on external samples / specs
 
