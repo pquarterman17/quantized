@@ -92,4 +92,25 @@ describe("HelpDialog", () => {
     act(() => useHelp.getState().openHelp());
     expect(screen.getByLabelText("Search help")).toHaveValue("");
   });
+  it("search covers import formats, not just tools", () => {
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    fireEvent.change(screen.getByLabelText("Search help"), { target: { value: "xrdml" } });
+    expect(titleShown("PANalytical XRDML")).toBe(true);
+  });
+
+  it("the Importing data tab lists formats grouped by category", () => {
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp("importing"));
+    expect(screen.getByRole("tab", { name: "Importing data" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByText("OriginLab project")).toBeInTheDocument();
+    expect(screen.getByText("X-ray & diffraction")).toBeInTheDocument();
+    // The extension chip is shown so the user knows what to pick.
+    expect(screen.getByText(".xrdml")).toBeInTheDocument();
+    // No search box on a browse tab.
+    expect(screen.queryByLabelText("Search help")).not.toBeInTheDocument();
+  });
 });

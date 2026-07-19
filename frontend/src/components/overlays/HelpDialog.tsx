@@ -16,6 +16,11 @@ import {
   toolToHelpItem,
   type ScoredHelpItem,
 } from "../../lib/helpContent";
+import {
+  IMPORT_FORMATS,
+  formatToHelpItem,
+  type ImportFormat,
+} from "../../lib/importFormats";
 import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
 import { Button } from "../primitives";
 import { useHelp, type HelpSection } from "../../store/help";
@@ -25,9 +30,22 @@ const IS_MAC = isMacPlatform();
 const TABS: { id: HelpSection; label: string }[] = [
   { id: "search", label: "Topics" },
   { id: "shortcuts", label: "Keyboard & mouse" },
+  { id: "importing", label: "Importing data" },
 ];
 
-const TOOL_ITEMS = HELP_TOOLS.map(toolToHelpItem);
+// The one searchable index — tools AND formats, so a search covers both.
+const SEARCH_ITEMS = [...HELP_TOOLS.map(toolToHelpItem), ...IMPORT_FORMATS.map(formatToHelpItem)];
+
+/** Formats grouped by category, in first-appearance order (for the browse tab). */
+function formatsByCategory(): [string, ImportFormat[]][] {
+  const groups = new Map<string, ImportFormat[]>();
+  for (const f of IMPORT_FORMATS) {
+    const g = groups.get(f.category);
+    if (g) g.push(f);
+    else groups.set(f.category, [f]);
+  }
+  return [...groups];
+}
 
 export default function HelpDialog() {
   const open = useHelp((s) => s.open);
@@ -58,7 +76,7 @@ export default function HelpDialog() {
     if (open && section === "search") inputRef.current?.focus();
   }, [open, section]);
 
-  const results = useMemo(() => searchHelpItems(TOOL_ITEMS, query), [query]);
+  const results = useMemo(() => searchHelpItems(SEARCH_ITEMS, query), [query]);
 
   if (!open) return null;
 
@@ -86,12 +104,9 @@ export default function HelpDialog() {
         </div>
 
         {section === "search" ? (
-          <SearchTab
-            query={query}
-            setQuery={setQuery}
-            results={results}
-            inputRef={inputRef}
-          />
+          <SearchTab query={query} setQuery={setQuery} results={results} inputRef={inputRef} />
+        ) : section === "importing" ? (
+          <ImportingTab />
         ) : (
           <ShortcutsTab />
         )}
@@ -155,6 +170,32 @@ function ShortcutsTab() {
               {/* shortcutGroupsFor already platform-translated these keys. */}
               <kbd className="qzk-kbd">{s.keys}</kbd>
               <span className="qzk-sc-desc">{s.desc}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ImportingTab() {
+  return (
+    <div className="qzk-help-list">
+      <div className="qzk-help-detail" style={{ marginBottom: 6 }}>
+        Import via File ▸ Import data…, or drag a file onto the window. Any
+        delimited text file also works through the Import Wizard's guided
+        preview.
+      </div>
+      {formatsByCategory().map(([category, formats]) => (
+        <div key={category} className="qzk-help-fmt-group">
+          <div className="qzk-sc-title">{category}</div>
+          {formats.map((f) => (
+            <div key={f.exts[0]} className="qzk-help-row">
+              <div className="qzk-help-row-head">
+                <span className="qzk-help-title">{f.name}</span>
+                <span className="qzk-help-meta">{f.exts.join(" ")}</span>
+              </div>
+              {f.note && <div className="qzk-help-detail">{f.note}</div>}
             </div>
           ))}
         </div>
