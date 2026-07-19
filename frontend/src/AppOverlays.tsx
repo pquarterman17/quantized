@@ -10,6 +10,7 @@ import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
 import PreferencesDialog from "./components/overlays/PreferencesDialog";
 import ShortcutsDialog from "./components/overlays/ShortcutsDialog";
+import HelpDialog from "./components/overlays/HelpDialog";
 import SplitDatasetDialog from "./components/overlays/SplitDatasetDialog";
 import TextFormatHelp from "./components/overlays/TextFormatHelp";
 import Toaster from "./components/overlays/Toaster";
@@ -101,6 +102,7 @@ export default function AppOverlays() {
       {waterfallOpen && <WaterfallView />}
       {reflViewOpen && <ReflView />}
       <ShortcutsDialog />
+      <HelpDialog />
       <TextFormatHelp />
       <PreferencesDialog />
       <Toaster />

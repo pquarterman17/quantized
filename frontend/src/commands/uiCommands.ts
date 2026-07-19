@@ -7,6 +7,7 @@
 // own module. Behavior is unchanged — this is a verbatim move.
 
 import type { StoreGet } from "../lib/exportActive";
+import { openHelp } from "../store/help";
 import { PALETTE_LABEL, PALETTE_SHORTCUT, type Action } from "../store/commands";
 
 /** Build the View/Edit/Help-group curated palette actions against the live
@@ -95,6 +96,15 @@ export function buildUiCommands(s: StoreGet): Action[] {
       shortcut: "⌘V",
       keywords: "clipboard import tsv csv table",
       run: () => void s().pasteDataFromClipboard(),
+    },
+    {
+      id: "help",
+      group: "Help",
+      label: "Help topics…",
+      keywords: "documentation guide how to search tools help",
+      // Standalone store (store/help) — imported directly like toasts, not a
+      // useApp flag (see store/help for why).
+      run: () => openHelp("search"),
     },
     {
       id: "shortcuts",

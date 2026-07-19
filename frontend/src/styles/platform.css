@@ -137,6 +137,65 @@
   white-space: nowrap;
 }
 
+/* ── Help hub (GUI_INTERACTION #17) ── */
+.qzk-help {
+  width: min(680px, 92vw);
+}
+.qzk-help-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: var(--pad);
+}
+.qzk-help-tab {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: var(--font-size);
+  padding: 6px 10px;
+  cursor: default;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.qzk-help-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.qzk-help-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.qzk-help-row {
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+}
+.qzk-help-row:hover {
+  background: var(--surface-2);
+}
+.qzk-help-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.qzk-help-title {
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+.qzk-help-meta {
+  flex: none;
+  font-size: var(--font-size-sm);
+  color: var(--text-faint);
+}
+.qzk-help-detail {
+  font-size: var(--font-size-sm);
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
 /* ── toast stack (transient confirmations, above the status bar) ── */
 .qzk-toaster {
   position: fixed;
