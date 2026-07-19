@@ -2,11 +2,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MenuBar from "./MenuBar";
-import { useCommands, type Action } from "../../store/commands";
+import { PALETTE_LABEL, useCommands, type Action } from "../../store/commands";
 
 const actions: Action[] = [
   { id: "imp", group: "File", label: "Import data…", run: vi.fn() },
-  { id: "pal", group: "Edit", label: "Command palette…", run: vi.fn() },
+  { id: "pal", group: "Edit", label: PALETTE_LABEL, run: vi.fn() },
   { id: "merge", group: "Data", label: "Merge selected datasets", run: vi.fn() },
   { id: "auto", group: "Plot", label: "Autoscale / reset view", run: vi.fn() },
   { id: "fit", group: "Analyze", label: "Curve fit…", run: vi.fn() },
@@ -45,11 +45,16 @@ describe("MenuBar", () => {
     expect((actions[2].run as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
   });
 
-  it("the Help menu offers the command palette", () => {
+  it("the Help menu offers the command palette under the SAME label as the Edit menu", () => {
+    // #17: this test previously clicked the literal "Command palette" while
+    // the Edit-menu fixture above said "Command palette…" — it DOCUMENTED the
+    // label divergence instead of catching it. Both now resolve through
+    // PALETTE_LABEL, so a future edit cannot reintroduce the mismatch here.
     const onOpenPalette = vi.fn();
     render(<MenuBar actions={actions} onOpenPalette={onOpenPalette} />);
     fireEvent.click(screen.getByText("Help"));
-    fireEvent.click(screen.getByText("Command palette"));
+    const entries = screen.getAllByText(PALETTE_LABEL);
+    fireEvent.click(entries[entries.length - 1]);
     expect(onOpenPalette).toHaveBeenCalledOnce();
   });
 });

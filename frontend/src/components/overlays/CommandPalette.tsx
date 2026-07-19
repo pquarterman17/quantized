@@ -12,10 +12,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { contextPaletteActions } from "../../lib/paletteContextActions";
 import { fuzzy } from "../../lib/fuzzy";
+import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
 import { mergeCommands, useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
 
 export type { Action };
+
+// Resolved once at module load — the host platform does not change.
+const IS_MAC = isMacPlatform();
 
 export default function CommandPalette({ actions }: { actions: Action[] }) {
   const open = useApp((s) => s.cmdkOpen);
@@ -114,7 +118,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
                   onMouseDown={() => run(a)}
                 >
                   <span>{highlight(a.label, m.hits)}</span>
-                  {a.shortcut && <span className="qz-shortcut">{a.shortcut}</span>}
+                  {a.shortcut && <span className="qz-shortcut">{formatShortcut(a.shortcut, IS_MAC)}</span>}
                 </div>
               </div>
             );

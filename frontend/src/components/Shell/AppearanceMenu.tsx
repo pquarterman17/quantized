@@ -7,12 +7,16 @@ import { useEffect, useRef, useState } from "react";
 import { PALETTES } from "../../lib/palettes";
 import { type Accent, type Density, type Theme, useApp } from "../../store/useApp";
 import { Select } from "../primitives";
+import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
 
 const THEMES: Theme[] = ["dark", "light"];
 const ACCENTS: Accent[] = ["violet", "teal", "ocean", "amber", "rose"];
 const DENSITIES: Density[] = ["compact", "regular", "comfy"];
 const opts = (xs: string[]) => xs.map((v) => ({ value: v, label: v }));
 const PALETTE_OPTS = PALETTES.map((p) => ({ value: p.value, label: p.label }));
+
+// Resolved once at module load — the host platform does not change.
+const IS_MAC = isMacPlatform();
 
 export default function AppearanceMenu() {
   const [open, setOpen] = useState(false);
@@ -97,7 +101,7 @@ export default function AppearanceMenu() {
             }}
           >
             <span>All preferences…</span>
-            <span className="qz-shortcut">⌘,</span>
+            <span className="qz-shortcut">{formatShortcut("⌘,", IS_MAC)}</span>
           </button>
         </div>
       )}

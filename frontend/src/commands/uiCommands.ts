@@ -7,7 +7,7 @@
 // own module. Behavior is unchanged — this is a verbatim move.
 
 import type { StoreGet } from "../lib/exportActive";
-import type { Action } from "../store/commands";
+import { PALETTE_LABEL, PALETTE_SHORTCUT, type Action } from "../store/commands";
 
 /** Build the View/Edit/Help-group curated palette actions against the live
  *  store handle (`useApp.getState`) — store setters are stable, so callers
@@ -84,8 +84,8 @@ export function buildUiCommands(s: StoreGet): Action[] {
     {
       id: "palette",
       group: "Edit",
-      label: "Command palette…",
-      shortcut: "⌘K",
+      label: PALETTE_LABEL,
+      shortcut: PALETTE_SHORTCUT,
       run: () => s().setCmdk(true),
     },
     {

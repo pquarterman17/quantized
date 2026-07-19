@@ -77,14 +77,38 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
   },
 ];
 
-/** macOS uses ⌘; everything else shows Ctrl. Pure so the dialog can localize.
- *  `⌃` (the literal Control key — item 5's window-cycling shortcuts are Ctrl
- *  ONLY, never Cmd, so they don't collide with the macOS app switcher) reads
- *  the same as `⌘` once translated: both mean "Ctrl" outside macOS. */
+/** Translate ONE key-combo string for the host platform: macOS keeps ⌘;
+ *  everything else shows Ctrl. `⌃` (the literal Control key — item 5's
+ *  window-cycling shortcuts are Ctrl ONLY, never Cmd, so they don't collide
+ *  with the macOS app switcher) reads the same as `⌘` once translated: both
+ *  mean "Ctrl" outside macOS.
+ *
+ *  GUI_INTERACTION #17: this used to be inlined inside `shortcutGroupsFor`,
+ *  which meant ONLY the Shortcuts dialog localized. The menubar and the ⌘K
+ *  palette rendered `Action.shortcut` raw, so a Windows user saw "⌘O" in the
+ *  File menu and "Ctrl+O" in Help ▸ Keyboard shortcuts — the same app giving
+ *  two answers for one key. Exported so every surface runs the same
+ *  translation. */
+export function formatShortcut(keys: string, isMac: boolean): string {
+  return isMac ? keys : keys.replace(/⌘|⌃/g, "Ctrl");
+}
+
+/** Is the host a Mac? Single definition — `ShortcutsDialog` and
+ *  `PreferencesDialog` each carried their own copy of this regex over the
+ *  DEPRECATED `navigator.platform`. Prefers the modern
+ *  `navigator.userAgentData.platform` and falls back to the old field. */
+export function isMacPlatform(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const uaPlatform = (navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform;
+  if (typeof uaPlatform === "string" && uaPlatform.length > 0) return /mac/i.test(uaPlatform);
+  return /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+}
+
+/** The whole cheat-sheet, platform-translated. */
 export function shortcutGroupsFor(isMac: boolean): ShortcutGroup[] {
   if (isMac) return SHORTCUT_GROUPS;
   return SHORTCUT_GROUPS.map((g) => ({
     ...g,
-    items: g.items.map((s) => ({ ...s, keys: s.keys.replace(/⌘|⌃/g, "Ctrl") })),
+    items: g.items.map((s) => ({ ...s, keys: formatShortcut(s.keys, isMac) })),
   }));
 }

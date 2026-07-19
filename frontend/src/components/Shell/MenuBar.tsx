@@ -6,9 +6,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { mergeCommands, useCommands, type Action } from "../../store/commands";
+import { mergeCommands, PALETTE_LABEL, PALETTE_SHORTCUT, useCommands, type Action } from "../../store/commands";
 import { IMPORT_ACCEPT, openFilePicker } from "../../lib/openFilePicker";
 import { relativeTime } from "../../lib/recentFiles";
+import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
 import { useApp } from "../../store/useApp";
 
 // Top-level menus and the action group each shows. "Help" is built in below.
@@ -20,6 +21,9 @@ import { useApp } from "../../store/useApp";
 // to App.tsx. "Insert" (MAIN #27) is the NEW top-level menu this repo
 // didn't have before — the drawn-shapes commands' second discoverability
 // path alongside the plot's own dock flyout (`PlotToolbar`).
+// Resolved once at module load — the host platform does not change.
+const IS_MAC = isMacPlatform();
+
 const MENUS: { label: string; group: string }[] = [
   { label: "File", group: "File" },
   { label: "Edit", group: "Edit" },
@@ -111,7 +115,7 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
                     }}
                   >
                     <span>{a.label}</span>
-                    {a.shortcut && <span className="qz-shortcut">{a.shortcut}</span>}
+                    {a.shortcut && <span className="qz-shortcut">{formatShortcut(a.shortcut, IS_MAC)}</span>}
                   </button>
                 ))}
                 {isFile && recent.length > 0 && (
@@ -162,7 +166,7 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
                   }}
                 >
                   <span>{a.label}</span>
-                  {a.shortcut && <span className="qz-shortcut">{a.shortcut}</span>}
+                  {a.shortcut && <span className="qz-shortcut">{formatShortcut(a.shortcut, IS_MAC)}</span>}
                 </button>
               ))}
             <button
@@ -172,8 +176,8 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
                 onOpenPalette();
               }}
             >
-              <span>Command palette</span>
-              <span className="qz-shortcut">⌘K</span>
+              <span>{PALETTE_LABEL}</span>
+              <span className="qz-shortcut">{formatShortcut(PALETTE_SHORTCUT, IS_MAC)}</span>
             </button>
             <a
               className="qzk-menu-item"
@@ -192,12 +196,12 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
       <span
         className="qzk-search"
         onClick={onOpenPalette}
-        data-tip="Command palette"
-        data-tip-key="⌘K"
+        data-tip={PALETTE_LABEL}
+        data-tip-key={formatShortcut(PALETTE_SHORTCUT, IS_MAC)}
       >
         <span>⌕</span>
         <span>Search…</span>
-        <span className="qz-shortcut">⌘K</span>
+        <span className="qz-shortcut">{formatShortcut(PALETTE_SHORTCUT, IS_MAC)}</span>
       </span>
     </nav>
   );

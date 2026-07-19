@@ -45,3 +45,14 @@ export function mergeCommands(curated: Action[], menu: Action[]): Action[] {
   const extra = menu.filter((a) => !seen.has(a.label.toLowerCase()));
   return [...curated, ...extra];
 }
+
+/** The ONE canonical label + shortcut for "open the command palette".
+ *
+ *  GUI_INTERACTION #17 requires palette labels to match menu labels exactly.
+ *  This action is reachable from four surfaces (the Edit-menu registry entry,
+ *  the ⌘K palette's own list, the Help menu, and the menubar search chip's
+ *  tooltip) and before this constant existed three of them hard-coded three
+ *  DIFFERENT strings — "Command palette…", "Command palette", "Search…".
+ *  Import these rather than retyping the text. */
+export const PALETTE_LABEL = "Command palette…";
+export const PALETTE_SHORTCUT = "⌘K";

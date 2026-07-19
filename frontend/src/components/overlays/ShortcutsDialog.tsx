@@ -5,11 +5,11 @@
 
 import { useEffect } from "react";
 
-import { shortcutGroupsFor } from "../../lib/shortcuts";
+import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
 import { Button } from "../primitives";
 import { useApp } from "../../store/useApp";
 
-const IS_MAC = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+const IS_MAC = isMacPlatform();
 
 export default function ShortcutsDialog() {
   const open = useApp((s) => s.shortcutsOpen);

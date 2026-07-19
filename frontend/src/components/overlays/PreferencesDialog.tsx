@@ -7,12 +7,12 @@
 
 import { useEffect, useState } from "react";
 
-import { shortcutGroupsFor } from "../../lib/shortcuts";
+import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
 import { Button, SegmentedControl, Select, SliderRow, Switch } from "../primitives";
 import { ACCENT_SWATCHES as ACCENTS, loadInteractionPrefs, saveInteractionPrefs } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
 
-const IS_MAC = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+const IS_MAC = isMacPlatform();
 
 const TABS = ["Appearance", "Plot", "Interaction", "Numbers", "Keyboard"] as const;
 type Tab = (typeof TABS)[number];
