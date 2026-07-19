@@ -87,6 +87,7 @@ import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel"
 import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
+import { remapDatasetChannels, remapViewChannels } from "../lib/channelRemap";
 import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
 import { breakPayloads, facetPayloads, suggestBreaks } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -2155,39 +2156,30 @@ export const useApp = create<AppState>((set, get) => ({
   // computed columns, then reapplies the shrunk list (NaN-stable indices).
   removeFormula: (id, index) => {
     get().recordHistory("remove column");
+    // Computed columns are the LAST formulas.length value columns, in order,
+    // so the removed one is column (baseCount + index) and every later column
+    // shifts down by one. BOTH halves of the index-keyed state have to follow
+    // it -- the dataset-scoped roles/types/filter AND the live view's
+    // xKey/yKeys/styles/hidden/errKeys. See lib/channelRemap.ts for why the
+    // view half was missing until 2026-07-19.
+    const target = get().datasets.find((d) => d.id === id);
+    if (!target?.formulas) return;
+    const removedCol = baseColumns(target.data, target.formulas.length).labels.length + index;
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id || !d.formulas) return d;
         const base = baseColumns(d.data, d.formulas.length);
         const formulas = d.formulas.filter((_, i) => i !== index);
-        // Computed columns are the LAST formulas.length value columns, in order,
-        // so the removed one is column (baseCount + index); every later column
-        // shifts down by one. Remap the index-keyed metadata so a role/type/
-        // filter set on a later computed column keeps pointing at the right
-        // column instead of its shifted neighbour (or a now-nonexistent index).
-        const removedCol = base.labels.length + index;
-        const remapKeyed = <T,>(rec?: Record<number, T>): Record<number, T> | undefined => {
-          if (!rec) return rec;
-          const out: Record<number, T> = {};
-          for (const [k, v] of Object.entries(rec)) {
-            const c = Number(k);
-            if (c === removedCol) continue; // the removed column's entry is gone
-            out[c > removedCol ? c - 1 : c] = v;
-          }
-          return Object.keys(out).length ? out : undefined;
-        };
-        const filter = d.filter
-          ?.filter((f) => f.col !== removedCol)
-          .map((f) => (f.col > removedCol ? { ...f, col: f.col - 1 } : f));
         return {
           ...d,
           formulas: formulas.length ? formulas : undefined,
           data: applyFormulas(base, formulas),
-          channelRoles: remapKeyed(d.channelRoles),
-          channelTypes: remapKeyed(d.channelTypes),
-          filter: filter && filter.length ? filter : undefined,
+          ...remapDatasetChannels(d, removedCol),
         };
       }),
+      // Only the FOCUSED view is patched here; a background window bound to
+      // the same dataset keeps its own copy (booked as a follow-up).
+      ...(s.activeId === id ? remapViewChannels(s, removedCol) : {}),
     }));
     get().touchDataset(id); // recalc graph (#1): data changed
   },

@@ -3761,6 +3761,56 @@ describe("useApp removeFormula column remap", () => {
     expect(ds.channelRoles).toEqual({ 1: "ignore" }); // remapped 2 -> 1, not stale
     expect(ds.filter).toEqual([{ col: 1, kind: "range", min: 0 }]);
   });
+
+  // 2026-07-19: the SAME remap was missing for the parallel VIEW-scoped
+  // channel-keyed state, which lives in a different slice than the dataset
+  // fields the 2026-07-05 round fixed. The test above asserts only the fields
+  // that were fixed then, which is how the gap stayed invisible.
+  it("remaps the live view's channel-keyed state too (styles/hidden/yKeys/errKeys)", () => {
+    const data: DataStruct = {
+      time: [1, 2, 3],
+      values: [
+        [10, 20, 30],
+        [20, 40, 60],
+        [30, 60, 90],
+      ],
+      labels: ["m", "F1", "F2"],
+      units: ["emu", "", ""],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "x",
+          data,
+          formulas: [
+            { name: "F1", expr: "m*2" },
+            { name: "F2", expr: "m*3" },
+          ],
+        },
+      ],
+      activeId: "d1",
+      xKey: 0,
+      yKeys: [1, 2],
+      hiddenChannels: [1], // hide F1 (column 1)
+      seriesStyles: { 2: { color: "#ff0000" } }, // F2 (column 2) is red
+      errKeys: { 2: 1 }, // F2's error bars come from F1
+    });
+
+    useApp.getState().removeFormula("d1", 0); // remove F1 -> F2 shifts 2 -> 1
+
+    const s = useApp.getState();
+    // F2 is now column 1 and keeps its red style.
+    expect(s.seriesStyles).toEqual({ 1: { color: "#ff0000" } });
+    // The stale [1] would now hide F2 -- a column the user never hid.
+    expect(s.hiddenChannels).toEqual([]);
+    expect(s.yKeys).toEqual([1]);
+    // F2's error channel WAS the removed column, so the pairing is dropped
+    // rather than left pointing at whatever slid into that index.
+    expect(s.errKeys).toEqual({});
+    expect(s.xKey).toBe(0); // below the removed column -> untouched
+  });
 });
 
 describe("useApp smart folders (org #9)", () => {

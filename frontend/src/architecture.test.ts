@@ -129,7 +129,13 @@ const STORE_PINS: Record<string, number> = {
   // now enforces, and the field block carried ~28 lines of comment explaining
   // why three parallel fields were not a reuse of each other. A feature paying
   // for itself, not a buffer — the pin drops to what the file actually is.
-  "/store/useApp.ts": 3090,
+  // 3090 -> 3082 (2026-07-19, channel-index staleness fix): `removeFormula`'s
+  // inline remap helpers moved to the new pure lib/channelRemap.ts, which now
+  // states the "what happens to index-keyed state when a column disappears"
+  // rule ONCE for BOTH halves -- the dataset-scoped fields the 2026-07-05
+  // round fixed AND the view-scoped ones it missed. A bug fix that pays for
+  // itself by extracting the rule rather than duplicating it.
+  "/store/useApp.ts": 3082,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
