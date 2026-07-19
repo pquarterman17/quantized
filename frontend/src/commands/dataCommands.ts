@@ -5,6 +5,12 @@
 // whose `group` is "Data". Behavior is unchanged — this is a verbatim move.
 
 import type { StoreGet } from "../lib/exportActive";
+import {
+  runJoinWorksheets,
+  runStackWorksheet,
+  runTransposeWorksheet,
+  runUnstackWorksheet,
+} from "../lib/worksheetTransformCommands";
 import type { Action } from "../store/commands";
 
 /** Build the Data-group curated palette actions against the live store
@@ -19,6 +25,10 @@ export function buildDataCommands(s: StoreGet): Action[] {
       label: "Dataset math (combine two datasets)…",
       run: () => s().setDatasetMathOpen(true),
     },
+    { id: "transpose", group: "Data", section: "Combine & split", label: "Transpose worksheet…", run: () => runTransposeWorksheet(s) },
+    { id: "stack-columns", group: "Data", section: "Combine & split", label: "Stack columns to long form…", run: () => runStackWorksheet(s) },
+    { id: "unstack-columns", group: "Data", section: "Combine & split", label: "Unstack / pivot to wide form…", run: () => runUnstackWorksheet(s) },
+    { id: "join-by-key", group: "Data", section: "Combine & split", label: "Join datasets by key…", run: () => runJoinWorksheets(s) },
     {
       id: "tabulate",
       group: "Data",

@@ -11,9 +11,8 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-19 19:28 EDT (stacked Plot Objects completion added on top
-of the interaction-foundation pass; remaining Tier 3 feature families stay
-separately scoped)
+**Updated:** 2026-07-19 19:34 EDT (worksheet reshape stack added; Tier 3 list
+reconciled against existing spectral and general 2-D/3-D map rendering)
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -252,13 +251,19 @@ feature checklist.
 
 16. **Owner-dependent Origin feature gaps** — prioritize ONLY from real projects
     (the friction-log test), not Origin's checklist.
-    - [ ] Candidates (intentionally not started without a real-project trigger):
-          worksheet stack/unstack/reshape/transpose/pivot/join-by-key;
-          date/time axes + date-aware ops; broad signal processing; general 3-D
-          surface/mesh/contour outside the RSM path; database/query connectors;
-          `.opju` migration edges (matrix books, some 2-D instrument data, richer
-          graphic-object/callout fidelity). (Several overlap MAIN owner gates /
-          deferrals — reconcile, don't double-book.)
+    - [x] Worksheet stack/unstack/pivot/transpose/join-by-key — no-code dialogs,
+          derived datasets only, provenance, deterministic duplicate handling,
+          and dimension-explosion safeguards.
+    - [ ] Date/time axes + date-aware operations.
+    - [x] Broad signal processing already exists: general FFT/Welch spectra,
+          cross-correlation, and low/high/band/notch filtering are implemented
+          and golden-tested; domain FFT reductions and ROI FFT UI also ship.
+    - [x] General 2-D/3-D rendering already exists outside RSM: heatmap, contour,
+          filled contour, surface, scatter-3D, and waterfall publication paths.
+    - [ ] Database/query connectors.
+    - [ ] `.opju` migration edges (matrix books, some 2-D instrument data, richer
+          graphic-object/callout fidelity). Protected by the Origin recovery
+          evidence gate; never infer new binary semantics from this UX plan.
 
 17. **Buttons / labels / menus / tooltips polish**
     - [x] Split button for the existing shape-tool family: the main button repeats
@@ -446,6 +451,13 @@ feature checklist.
 ---
 
 ## Completed
+
+- ~~**#16 worksheet reshape family**~~ (2026-07-19, ChatGPT-Sol, stacked after
+  Plot Objects) — Data menu commands create derived datasets for transpose,
+  wide-to-long stack, long-to-wide pivot/unstack, and exact numeric key joins.
+  Source data is untouched; transform provenance is stored; duplicate pivot
+  cells use an explicit mean/first/last rule; joins avoid many-to-many expansion;
+  operations refuse output shapes likely to overwhelm the worksheet UI.
 
 - ~~**#2 Plot Objects multi-object editing**~~ (2026-07-19, ChatGPT-Sol,
   stacked after the interaction-foundation PR) — checkboxes provide multi-object
