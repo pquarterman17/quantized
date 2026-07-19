@@ -105,3 +105,37 @@ describe("command-palette label is single-sourced (#17)", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("the cheat-sheet and the command registry do not drift (#17)", () => {
+  // Two independently-authored lists describe overlapping key combos:
+  // `Action.shortcut` on each registered command, and SHORTCUT_GROUPS in the
+  // Help sheet. They HAD drifted -- undo/redo, paste and Preferences were
+  // registry commands absent from the sheet -- and the drift was invisible
+  // because the two use different spacing ("⌘ Z" vs "⌘Z").
+  const norm = (k: string) => k.replace(/\s+/g, "");
+
+  /** Every `shortcut: "..."` literal declared anywhere in the source tree. */
+  function registryShortcuts(): string[] {
+    const out = new Set<string>();
+    for (const [, src] of sources()) {
+      for (const m of src.matchAll(/shortcut: "([^"]+)"/g)) out.add(m[1]);
+      // The palette's shortcut moved to an exported constant.
+      for (const m of src.matchAll(/PALETTE_SHORTCUT = "([^"]+)"/g)) out.add(m[1]);
+    }
+    return [...out];
+  }
+
+  it("every registry shortcut appears in the Help cheat-sheet", () => {
+    const sheet = new Set(shortcutGroupsFor(true).flatMap((g) => g.items.map((i) => norm(i.keys))));
+    const missing = registryShortcuts()
+      .map(norm)
+      .filter((k) => !sheet.has(k));
+    expect(missing).toEqual([]);
+  });
+
+  it("finds a non-trivial number of registry shortcuts (the scan still works)", () => {
+    // Guards the guard: if the `shortcut:` literal shape ever changes, the
+    // test above would vacuously pass on an empty list.
+    expect(registryShortcuts().length).toBeGreaterThan(8);
+  });
+});

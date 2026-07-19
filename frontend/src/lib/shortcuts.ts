@@ -2,6 +2,16 @@
 // MATLAB "Help"). Pure data so the dialog stays a dumb renderer and the list is
 // unit-testable (keys non-empty, no duplicate keys within a group). Keep the
 // glyphs in sync with the actual handlers in App.tsx / the interactive surfaces.
+//
+// GUI_INTERACTION #17: "keep in sync manually" is no longer the whole story.
+// This sheet and the command registry's own `Action.shortcut` field are two
+// lists describing overlapping key combos, and they HAD drifted -- undo/redo,
+// paste and Preferences were real registry commands missing from the sheet, a
+// gap hidden by the two sources using different spacing ("Cmd Z" here vs
+// "CmdZ" there). `shortcutDisplay.test.ts` now normalizes spacing and asserts
+// every registry shortcut appears here, so the drift cannot silently return.
+// Entries with NO registry command (mouse gestures, single-key plot tools
+// handled directly in useGlobalShortcuts) are sheet-only by design.
 
 export interface Shortcut {
   /** Key combo or gesture, rendered in <kbd>. */
@@ -21,6 +31,10 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     items: [
       { keys: "⌘ K", desc: "Open the command palette" },
       { keys: "⌘ O", desc: "Import data files" },
+      { keys: "⌘ Z", desc: "Undo the last change" },
+      { keys: "⌘ ⇧ Z", desc: "Redo" },
+      { keys: "⌘ V", desc: "Paste data from the clipboard" },
+      { keys: "⌘ ,", desc: "Open Preferences" },
       { keys: "⌘ [", desc: "Toggle the Library panel" },
       { keys: "⌘ ]", desc: "Toggle the Inspector panel" },
       { keys: "⌘ ⇧ L", desc: "Toggle light / dark theme" },
