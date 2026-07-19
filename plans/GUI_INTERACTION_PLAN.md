@@ -215,8 +215,18 @@ plotting, publication export.
 
 17. **Buttons / labels / menus / tooltips polish**
     - [ ] Text on high-consequence actions (Fit/Apply/Subtract/Export/Delete/Save/
-          Send to Stage); standard dialog button order (secondary first, primary
-          last, destructive separated); split buttons for last-used tool.
+          Send to Stage); split buttons for last-used tool. **Dialog button
+          order DONE 2026-07-19** (`2bb2b04`): an audit found the order already
+          correct everywhere (secondary first, primary last, hand-copied from
+          ParamDialog/ConfirmDialog across all 8 backdrop dialogs) — the gap
+          was the "destructive separated" half. `.qz-btn-row` is a plain
+          equal-width flex row, so a destructive Confirm sat flush against
+          Cancel as its identical-width twin, distinguished by colour alone.
+          A danger confirm now gets `.qz-btn-row--danger`: buttons size to
+          content and a flexible gap pushes them apart. Order deliberately
+          unchanged (moving the destructive button would contradict the same
+          convention); non-destructive dialogs render byte-identically, pinned
+          from both sides.
     - [x] Two real-browser findings from the 2026-07-18 e2e work (fixed
           2026-07-18): the selection mini-toolbar's rightmost buttons could
           sit under the floating plot toolbar at common viewports — fixed
@@ -232,13 +242,63 @@ plotting, publication export.
           `position` click in channel-axis-drag.spec.ts) were removed in
           favor of real center clicks, verified passing at all three DPI
           scales.
-    - [ ] Regroup menus: Analyze by Fit/Peaks-Baseline/Magnetometry/XRD-Reflectivity/
-          Transform-Signal/Statistics/Workflow; Graph owns builders/plot-types/
-          layers/themes/templates/export; Data owns worksheet/row-col/filter/
-          reshape/merge/correction/metadata; fill out Help (searchable tool help,
-          mouse interactions, import guides, Origin migration, `What is this?` mode).
-    - [ ] Show shortcuts in menus; Command Palette labels match menu labels exactly;
-          optional first-run "show interaction hints" mode.
+    - [ ] **Menu regrouping — SUB-TOPIC HEADERS DONE 2026-07-19** (`a13e273`,
+          `3947d8d`); the cross-menu ownership move and the Help build-out
+          remain open.
+      - [x] Analyze (17 flat items) -> Fit / Peaks & baseline / Magnetometry /
+            XRD & reflectivity / Transform & signal / Statistics / Workflow;
+            Data (14) -> Combine & split / Rows & summary / Recalculation /
+            Composite windows; Plot (14) -> Axes / Display / Layout. New
+            OPTIONAL `Action.section` field + pure `lib/menuSections.ts`,
+            reusing the `.qzk-menu-sep`/`.qzk-menu-label` markup the File
+            menu's "Recent" block established. Grouping is STABLE, not
+            contiguous (a contiguous run emits a duplicate header the first
+            time a command is added in the "wrong" place — the exact
+            maintenance trap this item removes). Unsectioned menus render
+            byte-identically. The palette ignores `section` — it is searched,
+            not browsed. Guarded by a `describe.each` over all three menus:
+            every command filed, vocabulary restricted, non-vacuous floor.
+      - [ ] Cross-menu OWNERSHIP move (Graph owns builders/plot-types/layers/
+            themes/templates/export; Data owns worksheet/row-col/filter/
+            reshape/merge/correction/metadata). Deliberately NOT done as a
+            side effect of sectioning: relocating commands between menus
+            breaks muscle memory and deserves a deliberate call.
+      - [ ] Fill out Help: searchable tool help, mouse interactions, import
+            guides, Origin migration, `What is this?` mode. Help currently
+            holds only Keyboard shortcuts + Text formatting (+ a palette entry
+            and an About link).
+    - [ ] **Shortcuts + palette labels DONE 2026-07-19** (`42b4174`,
+          `8b66988`); the first-run hints mode remains open.
+      - [x] Shortcuts were already RENDERED in menus and the palette, but only
+            the Shortcuts DIALOG localized them: `Action.shortcut` bakes in the
+            macOS glyphs and the translation lived inside `shortcutGroupsFor`,
+            so on Windows the File menu showed the Cmd glyph + O while Help ▸
+            Keyboard shortcuts showed Ctrl+O — one app, two answers for one
+            key. Translation is now an exported `formatShortcut(keys, isMac)`
+            every surface runs. Also de-duplicated `IS_MAC` (two copies of the
+            same regex over the DEPRECATED `navigator.platform`).
+      - [x] Palette/menu label parity: "open the command palette" is reachable
+            from four surfaces and three hard-coded three DIFFERENT strings.
+            Now one exported `PALETTE_LABEL`/`PALETTE_SHORTCUT`. Note
+            `MenuBar.test.tsx` had been DOCUMENTING the divergence (fixture
+            said "Command palette…", assertion clicked "Command palette"), so
+            it was rewritten to assert the parity it previously encoded as
+            expected.
+      - [x] Cheat-sheet drift: the Help sheet and the registry are two
+            independently-authored lists whose spacing conventions differ
+            ("Cmd Z" vs "CmdZ"), hiding that undo, redo, paste and Preferences
+            were registered commands MISSING from the sheet — a user pressing
+            `?` was told undo has no shortcut. Added, and guarded by a
+            normalizing cross-check that was adversarially verified (removing
+            an entry fails it) rather than assumed.
+      - [x] All of the above pinned at the CLASS level by
+            `src/shortcutDisplay.test.ts`, which scans raw module text: no
+            module may interpolate `.shortcut` outside `formatShortcut`, no
+            component may hard-code a modifier glyph in `qz-shortcut` markup,
+            and only `store/commands.ts` may spell the palette label. The
+            glyph scan immediately caught a THIRD offender the manual audit
+            had missed (AppearanceMenu's "All preferences…").
+      - [ ] Optional first-run "show interaction hints" mode.
 
 ---
 
