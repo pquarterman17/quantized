@@ -230,6 +230,33 @@ plotting, publication export.
             `contextActions.ts` carves out for canvas objects, so it gets a
             confirm; the label now names what it clears and the confirm counts
             the results and states favourites survive.
+      - [x] **Class hunt (`c09befc`)** — rather than stop at the two reported
+            instances, swept every destroying/overwriting store action for
+            the same shape ("reachable on a path that skips the confirm an
+            equivalent path applies"). Found THREE more, all fixed:
+            **Open workspace (.dwk)…** silently discarded the entire session
+            (datasets, folders, reports, figure docs, specs, macro steps,
+            windows) with no confirm AND no undo entry — while the strictly
+            LESS destructive "Remove all…" in the same menu did both; the
+            800ms autosave debounce then overwrote the discarded session's
+            autosave record, so recovery was gone within a second. Plus
+            **removeFigureDoc** and **removeReport**, one-click "×"/"Delete"
+            on saved authoring work, neither wired into the contextActions
+            registry so neither inherited its confirm policy.
+            NOTE the fix LOCATION differs from the earlier ones: the guard
+            went on the open-workspace COMMAND, not inside `loadWorkspace`,
+            because that action has two legitimate non-interactive callers
+            (`clearAll`, already confirmed at its own call site, and the
+            startup autosave restore, which must never prompt). "Guard inside
+            the action" is the better default but has to be checked against
+            the caller set. A test pins the restore path for that reason.
+            Left alone deliberately: `deletePlotSpec` (already confirms
+            locally) and the individual canvas-object "×" buttons (documented
+            exception). OPEN JUDGMENT CALL for the owner: `clearShapes`
+            ("Clear all" in ShapesCard) is a one-click, un-undoable BULK wipe
+            of N hand-placed shapes riding on a policy written for deleting
+            them one at a time — arguably in the spirit of the exception,
+            arguably not.
       - [x] Audit outcome for the rest: every other high-consequence control
             already carries text or `title`+`aria-label`, and the five
             annotation/shape/ref-line/table-row "✕" buttons are a DOCUMENTED
