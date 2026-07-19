@@ -11,6 +11,12 @@ export interface Action {
   group: string;
   label: string;
   shortcut?: string;
+  /** Optional sub-topic header this command sits under WITHIN its menu
+   *  (GUI_INTERACTION #17 — e.g. Analyze ▸ "Peaks & baseline"). Purely a menu
+   *  presentation concern: the ⌘K palette ignores it, since the palette is
+   *  searched, not browsed. Omit it and the command renders flat, exactly as
+   *  before. See lib/menuSections.ts. */
+  section?: string;
   /** Extra space-separated search terms for the ⌘K palette (not displayed).
    *  Lets a command stay findable by names/aliases not in its visible label
    *  (e.g. "diraculator", or domain terms dropped to keep the label short). */

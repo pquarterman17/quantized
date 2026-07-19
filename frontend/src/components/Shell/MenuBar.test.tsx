@@ -57,4 +57,35 @@ describe("MenuBar", () => {
     fireEvent.click(entries[entries.length - 1]);
     expect(onOpenPalette).toHaveBeenCalledOnce();
   });
+  // GUI_INTERACTION #17 — sub-topic headers in a long menu.
+  it("renders section headers for a sectioned menu, and none for a flat one", () => {
+    const sectioned: Action[] = [
+      { id: "cf", group: "Analyze", section: "Fit", label: "Curve fit…", run: vi.fn() },
+      { id: "pk", group: "Analyze", section: "Peaks & baseline", label: "Find peaks…", run: vi.fn() },
+      { id: "bl", group: "Analyze", section: "Peaks & baseline", label: "Baseline…", run: vi.fn() },
+    ];
+    const { container } = render(<MenuBar actions={sectioned} onOpenPalette={vi.fn()} />);
+    fireEvent.click(screen.getByText("Analyze"));
+    const headers = [...container.querySelectorAll(".qzk-menu-label")].map((n) => n.textContent);
+    expect(headers).toEqual(["Fit", "Peaks & baseline"]);
+    // Both peak tools live under the ONE header.
+    expect(screen.getByText("Find peaks…")).toBeInTheDocument();
+    expect(screen.getByText("Baseline…")).toBeInTheDocument();
+
+    // The File menu declares no sections -> no headers (Recent aside, which
+    // needs recent files this fixture has none of).
+    fireEvent.click(screen.getByText("File"));
+    expect(container.querySelectorAll(".qzk-menu-label")).toHaveLength(0);
+  });
+
+  it("still runs a command that sits under a section header", () => {
+    const run = vi.fn();
+    const sectioned: Action[] = [
+      { id: "cf", group: "Analyze", section: "Fit", label: "Curve fit…", run },
+    ];
+    render(<MenuBar actions={sectioned} onOpenPalette={vi.fn()} />);
+    fireEvent.click(screen.getByText("Analyze"));
+    fireEvent.click(screen.getByText("Curve fit…"));
+    expect(run).toHaveBeenCalledOnce();
+  });
 });

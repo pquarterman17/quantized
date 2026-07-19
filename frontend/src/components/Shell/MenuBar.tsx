@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { mergeCommands, PALETTE_LABEL, PALETTE_SHORTCUT, useCommands, type Action } from "../../store/commands";
 import { IMPORT_ACCEPT, openFilePicker } from "../../lib/openFilePicker";
 import { relativeTime } from "../../lib/recentFiles";
+import { withSectionHeaders } from "../../lib/menuSections";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
 import { useApp } from "../../store/useApp";
 
@@ -105,19 +106,31 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
             {title(m.label)}
             {open === m.label && (items.length > 0 || (isFile && recent.length > 0)) && (
               <div className="qzk-menu-pop">
-                {items.map((a) => (
-                  <button
-                    key={a.id}
-                    className="qzk-menu-item"
-                    onClick={() => {
-                      setOpen(null);
-                      a.run();
-                    }}
-                  >
-                    <span>{a.label}</span>
-                    {a.shortcut && <span className="qz-shortcut">{formatShortcut(a.shortcut, IS_MAC)}</span>}
-                  </button>
-                ))}
+                {/* #17: menus that declare `section` render sub-topic headers
+                    (Analyze had grown to 17 flat items). Menus that don't set
+                    it produce exactly one item row each, as before. */}
+                {withSectionHeaders(items).map((row, i) =>
+                  row.kind === "header" ? (
+                    <div key={`h-${row.label}`}>
+                      {i > 0 && <div className="qzk-menu-sep" />}
+                      <div className="qzk-menu-label">{row.label}</div>
+                    </div>
+                  ) : (
+                    <button
+                      key={row.action.id}
+                      className="qzk-menu-item"
+                      onClick={() => {
+                        setOpen(null);
+                        row.action.run();
+                      }}
+                    >
+                      <span>{row.action.label}</span>
+                      {row.action.shortcut && (
+                        <span className="qz-shortcut">{formatShortcut(row.action.shortcut, IS_MAC)}</span>
+                      )}
+                    </button>
+                  ),
+                )}
                 {isFile && recent.length > 0 && (
                   <>
                     <div className="qzk-menu-sep" />
