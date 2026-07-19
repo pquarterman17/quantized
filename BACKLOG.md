@@ -45,6 +45,18 @@ baseline framing) are under Owner actions below, not here.
 | **#17 polish — 5 slices SHIPPED 2026-07-19**: platform-correct shortcuts everywhere (`42b4174` — menus/palette showed macOS glyphs on Windows while the Help sheet said Ctrl), one canonical palette label, destructive dialog separation (`2bb2b04`), cheat-sheet drift fixed + guarded (`8b66988` — undo/redo/paste/Preferences were missing from Help), and sub-topic headers for the Analyze/Data/Plot menus (`a13e273`, `3947d8d`). Also fixed FIVE real data-loss defects of one class (a destructive action reachable on a path that skips the confirm an equivalent path applies): unconfirmed dataset delete on the Library row's ✕ (`320df6f`), unconfirmed calculator-history wipe (`9593165`), and — found by then sweeping the whole class (`c09befc`) — **Open workspace (.dwk)… silently discarding the entire session with no confirm and no undo** (while the LESS destructive "Remove all…" did both, and autosave overwrote the recovery record within ~1s), plus one-click deletes of saved figure docs and saved reports. REMAINING: split buttons for last-used tool; the cross-menu ownership move; the Help build-out (searchable tool help, mouse interactions, import guides, Origin migration, "What is this?"); first-run interaction hints | GUI_INTERACTION #17 |
 | **Origin layout generality residual** — overlay grouping generalized past pairs (`adab0cc`, corpus 12/12·99/99·4/4 clean) AND y2 export twinx fix (`08b7066`: single-figure export no longer flattens y2 onto the wrong axis) AND page-export y2 (GUI #12 slice 4b: `routes/export_page.py`'s 422 guard replaced with real `figure_y2.render_with_secondary_axis` threading per panel; `lib/spatialPageExport.ts` no longer filters y2 channels/fails a y2-only panel closed) ALL SHIPPED 2026-07-18; remaining: native >2-Y-axes rendering (specimen-gated) + the generalized page/layer MODEL, now landing in three passes — **A (composition union, `5cdc730`) and C (`page` block, `4dbe9da`) SHIPPED 2026-07-19**, leaving **pass B: unify the y2 singleton behind one shared AxisSpec** (six fields mirrored 4x across store/PlotView/SpatialPanel/AxesBlock, plus two incompatible axis-membership representations; representation only — >2 Y axes stays specimen-gated) | ORIGIN_FILE_DECODE #54 |
 
+### Backend hardening round (2026-07-19, `4d61e56`)
+
+A second sweep of the "route catches a narrow exception tuple, callee raises
+something else" class first named on 2026-07-05. Three live HTTP 500s on
+plausible user input, all confirmed against the real app before fixing and all
+now 422: `DataStruct.from_dict`'s TypeError on a non-numeric `dataset` (the
+class-wide one — ~17 handlers across 7 route modules, fixed in the ONE shared
+constructor), `semiconductor.fermi_level`'s ZeroDivisionError from an
+underflowed `ni`, and `fitting.curve_fit`'s ZeroDivisionError on empty arrays.
+Backend 3000 + ruff + mypy green. The class recurs as new routes land —
+re-sweep periodically.
+
 ## Owner actions & owner-gated decisions
 
 | Item | Plan / item |
