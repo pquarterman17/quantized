@@ -13,6 +13,7 @@ import { useState } from "react";
 
 import { docRenderable } from "../../lib/figuredoc";
 import { useApp } from "../../store/useApp";
+import { askConfirm } from "../overlays/ConfirmDialog";
 
 export default function SavedFiguresSection() {
   const docs = useApp((s) => s.figureDocs);
@@ -70,7 +71,19 @@ export default function SavedFiguresSection() {
               <button
                 className="qz-btn qz-ghost qz-sm"
                 title="delete figure"
-                onClick={() => removeFigureDoc(d.id)}
+                onClick={() => {
+                  // A saved figure doc is authoring work (config + optional
+                  // frozen data snapshot) and `removeFigureDoc` records no
+                  // undo entry, so one click is unrecoverable.
+                  void askConfirm(
+                    `Delete "${d.name}"?`,
+                    "This saved figure can't be recovered unless it's in a .dwk you saved.",
+                    "Delete",
+                    true,
+                  ).then((ok) => {
+                    if (ok) removeFigureDoc(d.id);
+                  });
+                }}
               >
                 ×
               </button>

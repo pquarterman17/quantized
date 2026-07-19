@@ -17,6 +17,7 @@ import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button } from "../../primitives";
+import { askConfirm } from "../../overlays/ConfirmDialog";
 
 const EXPORTS: { format: "html" | "latex" | "docx" | "pptx"; label: string }[] = [
   { format: "html", label: "HTML" },
@@ -166,11 +167,21 @@ export default function ReportPanel() {
         <span style={{ flex: 1 }} />
         <Button
           onClick={() => {
-            removeReport(entry.id);
-            toast(`removed report "${entry.name}"`);
+            // A saved report is accumulated analysis output and
+            // `removeReport` records no undo entry.
+            void askConfirm(
+              `Delete report "${entry.name}"?`,
+              "This can't be undone.",
+              "Delete",
+              true,
+            ).then((ok) => {
+              if (!ok) return;
+              removeReport(entry.id);
+              toast(`removed report "${entry.name}"`);
+            });
           }}
         >
-          Delete
+          Delete report
         </Button>
       </div>
     </ToolWindow>

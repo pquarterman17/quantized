@@ -122,7 +122,37 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "open-workspace",
       group: "File",
       label: "Open workspace (.dwk)…",
-      run: openWorkspaceCommand(s, "open", (ws) => s().loadWorkspace(ws)),
+      // `loadWorkspace` REPLACES the entire library (datasets, folders,
+      // reports, figure docs, saved specs, macro steps, windows) -- clearAll's
+      // own comment calls it "loadWorkspace's replace-everything reset". The
+      // strictly LESS destructive "Remove all…" above both confirms and
+      // records undo; this path did neither, and the 800ms autosave debounce
+      // then overwrote the discarded session's autosave record too.
+      //
+      // The guard lives HERE, not inside `loadWorkspace`, because that action
+      // has two legitimate non-interactive callers: `clearAll` (already
+      // confirmed at its own call site) and the startup autosave restore
+      // (useWorkspaceAutosave), which must never prompt.
+      run: openWorkspaceCommand(s, "open", (ws) => {
+        const n = s().datasets.length;
+        if (n === 0) {
+          s().recordHistory("open workspace");
+          s().loadWorkspace(ws);
+          return;
+        }
+        void askConfirm(
+          "Replace the current workspace?",
+          `Opening this file discards the ${n} dataset${n === 1 ? "" : "s"} currently ` +
+            `loaded, plus every folder, report and saved figure. Save your work first ` +
+            `if you need it.`,
+          "Replace",
+          true,
+        ).then((ok) => {
+          if (!ok) return;
+          s().recordHistory("open workspace");
+          s().loadWorkspace(ws);
+        });
+      }),
     },
     {
       id: "append-workspace",

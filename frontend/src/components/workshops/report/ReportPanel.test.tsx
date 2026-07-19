@@ -1,5 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it , vi } from "vitest";
+
+import { askConfirm } from "../../overlays/ConfirmDialog";
+
+vi.mock("../../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 import ReportPanel from "./ReportPanel";
 import type { ReportEntry } from "../../../lib/report";
@@ -67,11 +71,23 @@ describe("ReportPanel", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("Delete removes the report and closes the viewer", () => {
+  // #17: a saved report is accumulated analysis output with no undo entry, so
+  // deleting it confirms first.
+  it("Delete report removes it and closes the viewer, once confirmed", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
     render(<ReportPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete report" }));
+    await Promise.resolve();
     const s = useApp.getState();
     expect(s.reports).toHaveLength(0);
     expect(s.openReportId).toBeNull();
+  });
+
+  it("declining the confirm keeps the report", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    render(<ReportPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Delete report" }));
+    await Promise.resolve();
+    expect(useApp.getState().reports).toHaveLength(1);
   });
 });

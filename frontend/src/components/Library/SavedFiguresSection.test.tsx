@@ -1,5 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { askConfirm } from "../overlays/ConfirmDialog";
+
+vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 import SavedFiguresSection from "./SavedFiguresSection";
 import type { FigureDoc } from "../../lib/figuredoc";
@@ -100,13 +104,17 @@ describe("SavedFiguresSection", () => {
     expect(screen.getByTitle(/only a live figure/)).toBeDisabled();
   });
 
-  it("duplicate and delete edit the doc list; dataset removal nulls refs", () => {
+  it("duplicate and delete edit the doc list; dataset removal nulls refs", async () => {
     useApp.setState({ figureDocs: [doc()] });
     render(<SavedFiguresSection />);
     fireEvent.click(screen.getByTitle("duplicate figure"));
     expect(useApp.getState().figureDocs).toHaveLength(2);
     expect(useApp.getState().figureDocs[1].name).toBe("MH loop copy");
+    // #17: deleting a saved figure now confirms first (it is authoring work
+    // with no undo entry).
+    vi.mocked(askConfirm).mockResolvedValue(true);
     fireEvent.click(screen.getAllByTitle("delete figure")[1]);
+    await Promise.resolve();
     expect(useApp.getState().figureDocs).toHaveLength(1);
 
     useApp.getState().removeDataset("d1");
