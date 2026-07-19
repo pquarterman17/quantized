@@ -35,7 +35,7 @@ class TickFormatSpec(BaseModel):
     `"auto"` (the default) leaves matplotlib's own formatter untouched --
     see `calc.figure_ticks.axis_tick_formatter`."""
 
-    mode: Literal["auto", "fixed", "sci", "eng"] = "auto"
+    mode: Literal["auto", "fixed", "sci", "eng", "date", "time", "datetime"] = "auto"
     digits: float = 2
 
 
@@ -465,4 +465,3 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
         media_type=_FIGURE_MIME[req.fmt],
         headers=_attachment(_safe_name(req.filename, f".{req.fmt}")),
     )
-

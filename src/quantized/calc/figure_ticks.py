@@ -34,13 +34,14 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from typing import Any
 
 from matplotlib.ticker import Formatter, MultipleLocator
 
 __all__ = ["apply_tick_formats", "apply_tick_steps", "axis_tick_formatter"]
 
-_MODES = ("fixed", "sci", "eng")
+_MODES = ("fixed", "sci", "eng", "date", "time", "datetime")
 
 
 def _pow10(k: int) -> float:
@@ -170,6 +171,13 @@ class _AxisTickFormatter(Formatter):
         self.digits = max(0, min(20, _js_round(digits)))
 
     def __call__(self, x: float, pos: int | None = None) -> str:
+        if self.mode in ("date", "time", "datetime"):
+            stamp = datetime.fromtimestamp(x, tz=UTC)
+            if self.mode == "date":
+                return stamp.strftime("%Y-%m-%d")
+            if self.mode == "time":
+                return stamp.strftime("%H:%M:%S")
+            return stamp.strftime("%Y-%m-%d %H:%M")
         # `self.axis` is typed as a union of matplotlib's real `Axis` and two
         # internal placeholder types (`_DummyAxis`/`_AxisWrapper`) that don't
         # declare `get_majorticklocs` -- getattr-with-default sidesteps the

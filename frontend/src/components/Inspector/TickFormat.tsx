@@ -19,6 +19,7 @@ const MODES: { value: TickMode; label: string }[] = [
   { value: "sci", label: "Sci" },
   { value: "eng", label: "Eng" },
 ];
+const DATE_MODES = new Set<TickMode>(["date", "time", "datetime"]);
 
 export default function TickFormat() {
   const xFmt = useApp((s) => s.xFmt);
@@ -29,14 +30,27 @@ export default function TickFormat() {
   const setYFmt = useApp((s) => s.setYFmt);
   const setY2Fmt = useApp((s) => s.setY2Fmt);
 
-  const controls = (fmt: AxisFormat, set: (f: AxisFormat) => void) => (
+  const controls = (fmt: AxisFormat, set: (f: AxisFormat) => void, allowDate = false) => (
     <>
       <SegmentedControl<TickMode>
         options={MODES}
         value={fmt.mode}
         onChange={(mode) => set({ ...fmt, mode })}
       />
-      {fmt.mode !== "auto" && (
+      {allowDate && (
+        <select
+          className="qz-select"
+          aria-label="X date/time format"
+          value={DATE_MODES.has(fmt.mode) ? fmt.mode : "numeric"}
+          onChange={(event) => set({ ...fmt, mode: event.target.value === "numeric" ? "auto" : event.target.value as TickMode })}
+        >
+          <option value="numeric">Numeric</option>
+          <option value="date">Date (UTC)</option>
+          <option value="time">Time (UTC)</option>
+          <option value="datetime">Date + time (UTC)</option>
+        </select>
+      )}
+      {fmt.mode !== "auto" && !DATE_MODES.has(fmt.mode) && (
         <NumberField
           value={String(fmt.digits)}
           width={44}
@@ -51,12 +65,12 @@ export default function TickFormat() {
     </>
   );
 
-  const row = (label: string, fmt: AxisFormat, set: (f: AxisFormat) => void) => (
+  const row = (label: string, fmt: AxisFormat, set: (f: AxisFormat) => void, allowDate = false) => (
     <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
       <span className="qzk-field-lbl" style={{ margin: 0, width: 14 }}>
         {label}
       </span>
-      {controls(fmt, set)}
+      {controls(fmt, set, allowDate)}
     </div>
   );
 
@@ -65,7 +79,7 @@ export default function TickFormat() {
   return (
     <div style={{ marginTop: 8 }}>
       <span className="qzk-field-lbl">Tick format</span>
-      {row("X", xFmt, setXFmt)}
+      {row("X", xFmt, setXFmt, true)}
       {row("Y", yFmt, setYFmt)}
       {hasY2 && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>

@@ -11,8 +11,8 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-19 19:34 EDT (worksheet reshape stack added; Tier 3 list
-reconciled against existing spectral and general 2-D/3-D map rendering)
+**Updated:** 2026-07-19 19:40 EDT (date/time import, interactive axes, saved
+PlotSpecs, and publication export added as the next stacked feature)
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -254,7 +254,11 @@ feature checklist.
     - [x] Worksheet stack/unstack/pivot/transpose/join-by-key — no-code dialogs,
           derived datasets only, provenance, deterministic duplicate handling,
           and dimension-explosion safeguards.
-    - [ ] Date/time axes + date-aware operations.
+    - [x] Date/time axes + date-aware operations — conservative ISO/common lab
+          timestamp recognition on delimited import converts to UTC epoch
+          seconds; X-axis Date/Time/Date+time modes persist in PlotView/PlotSpec
+          and render consistently on screen and in publication export. Existing
+          numeric filtering/formulas/joins then operate on epoch seconds.
     - [x] Broad signal processing already exists: general FFT/Welch spectra,
           cross-correlation, and low/high/band/notch filtering are implemented
           and golden-tested; domain FFT reductions and ROI FFT UI also ship.
@@ -451,6 +455,14 @@ feature checklist.
 ---
 
 ## Completed
+
+- ~~**#16 date/time data and axes**~~ (2026-07-19, ChatGPT-Sol, stacked after
+  worksheet reshape) — generic delimited import recognizes a date/time X column
+  only when at least 80% of an otherwise nonnumeric column parses, records UTC
+  metadata, and leaves ordinary numeric imports byte-compatible. The Inspector
+  offers compact UTC Date, Time, and Date+time X formats; uPlot uses its time
+  scale while matplotlib export formats the same epoch-second values. Modes
+  round-trip through workspaces and saved plot specifications.
 
 - ~~**#16 worksheet reshape family**~~ (2026-07-19, ChatGPT-Sol, stacked after
   Plot Objects) — Data menu commands create derived datasets for transpose,

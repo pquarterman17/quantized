@@ -26,6 +26,8 @@ import {
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
 
+const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime"];
+
 // Re-exported: PlotWindow.panel (below) is the only reason this module
 // depends on panelwindow.ts at all — callers that just need the window-record
 // shape (store/panels.ts, PanelPlotWindow.tsx, lib/contextActions.ts) import
@@ -47,7 +49,6 @@ export function nearestLegendCorner(fx: number, fy: number): LegendPos {
 }
 
 const AXIS_SCALES: readonly AxisScale[] = ["linear", "log", "reciprocal"];
-const TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng"];
 
 /** Narrow an arbitrary value to a valid `AxisScale`. */
 export function isAxisScale(v: unknown): v is AxisScale {
@@ -75,8 +76,9 @@ export function cycleAxisScale(current: AxisScale): AxisScale {
  *  advances auto -> fixed -> sci -> eng -> auto. Same pure/unit-testable
  *  shape as `cycleAxisScale`. */
 export function cycleTickMode(current: TickMode): TickMode {
-  const i = TICK_MODES.indexOf(current);
-  return TICK_MODES[(i + 1) % TICK_MODES.length];
+  const modes: readonly TickMode[] = ["auto", "fixed", "sci", "eng"];
+  const i = modes.indexOf(current);
+  return modes[(i + 1) % modes.length];
 }
 
 /** One plot's full display configuration — everything that differs window to
@@ -447,7 +449,12 @@ function isRange(v: unknown): v is [number, number] {
 }
 
 function isAxisFormat(v: unknown): v is AxisFormat {
-  return typeof v === "object" && v !== null && typeof (v as { mode?: unknown }).mode === "string";
+  if (typeof v !== "object" || v === null) return false;
+  const candidate = v as { mode?: unknown; digits?: unknown };
+  return typeof candidate.mode === "string"
+    && (VALID_TICK_MODES as readonly string[]).includes(candidate.mode)
+    && typeof candidate.digits === "number"
+    && Number.isFinite(candidate.digits);
 }
 
 /** Every valid legend corner preset — exported so a consumer that needs to

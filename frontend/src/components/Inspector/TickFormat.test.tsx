@@ -51,6 +51,13 @@ describe("TickFormat", () => {
     expect(useApp.getState().yFmt.mode).toBe("auto"); // untouched
   });
 
+  it("offers compact UTC date/time modes for X without showing a digits field", () => {
+    const { getByLabelText, container } = render(<TickFormat />);
+    fireEvent.change(getByLabelText("X date/time format"), { target: { value: "datetime" } });
+    expect(useApp.getState().xFmt).toEqual({ mode: "datetime", digits: 2 });
+    expect(container.querySelectorAll('input[type="number"]')).toHaveLength(0);
+  });
+
   it("editing the digits field in Eng mode updates the mantissa digit count", () => {
     useApp.setState({ yFmt: { mode: "eng", digits: 2 } });
     const { container } = render(<TickFormat />);

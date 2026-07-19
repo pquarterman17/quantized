@@ -576,6 +576,14 @@ describe("buildOpts defaultTrace", () => {
       const fmt = tickFormatter({ mode: "eng", digits: 0 });
       expect(fmt(null as never, [999.9996], 0, 0, 0)).toEqual(["1e+3"]);
     });
+
+    it("date/time modes interpret numeric values as UTC epoch seconds", () => {
+      const stamp = Date.UTC(2026, 6, 19, 12, 34, 56) / 1_000;
+      const date = String(tickFormatter({ mode: "date", digits: 2 })(null as never, [stamp], 0, 0, 0)[0]);
+      const time = String(tickFormatter({ mode: "time", digits: 2 })(null as never, [stamp], 0, 0, 0)[0]);
+      expect(date).toContain("2026");
+      expect(time).toMatch(/12.*34.*56/);
+    });
   });
 
   it("categoricalTickFormatter maps in-range integer splits to labels, blanks the rest", () => {

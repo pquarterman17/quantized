@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,28 @@ def _is_numeric(token: str) -> bool:
     except ValueError:
         return False
     return not math.isnan(value)
+
+
+def _datetime_epoch(token: str) -> float | None:
+    """Conservatively parse common ISO/lab timestamp forms as UTC seconds."""
+    value = token.strip()
+    if not value:
+        return None
+    parsed: datetime | None = None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        for fmt in ("%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M", "%m/%d/%Y"):
+            try:
+                parsed = datetime.strptime(value, fmt)
+                break
+            except ValueError:
+                continue
+    if parsed is None:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.timestamp()
 
 
 def _to_float(token: str) -> float:
@@ -84,7 +107,10 @@ def _extract_units(header: str) -> tuple[str, str]:
 def _numeric_score(row: Sequence[str]) -> float:
     if not row:
         return 0.0
-    return sum(1 for t in row if _is_numeric(t.strip())) / len(row)
+    recognized = sum(
+        1 for token in row if _is_numeric(token.strip()) or _datetime_epoch(token) is not None
+    )
+    return recognized / len(row)
 
 
 def _looks_like_units_row(row: Sequence[str], n_data_cols: int) -> bool:
@@ -175,7 +201,22 @@ def import_csv(
     else:
         time_idx = resolve_column(time_column, col_headers)
 
-    time_vec = np.arange(1, n_rows + 1, dtype=float) if time_idx < 0 else matrix[:, time_idx]
+    time_is_datetime = False
+    if time_idx < 0:
+        time_vec = np.arange(1, n_rows + 1, dtype=float)
+    else:
+        time_vec = matrix[:, time_idx]
+        if np.count_nonzero(np.isfinite(time_vec)) / max(n_rows, 1) < 0.1:
+            parsed_dates = [
+                _datetime_epoch(row[time_idx]) if time_idx < len(row) else None
+                for row in tokens[data_start:]
+            ]
+            if sum(value is not None for value in parsed_dates) / max(n_rows, 1) >= 0.8:
+                time_vec = np.asarray(
+                    [value if value is not None else np.nan for value in parsed_dates],
+                    dtype=float,
+                )
+                time_is_datetime = True
 
     if data_columns is None:
         candidates = [c for c in range(n_cols) if c != time_idx]
@@ -217,6 +258,8 @@ def import_csv(
         "delimiter": delim,
         "all_column_names": col_headers,
     }
+    if time_is_datetime:
+        metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     return DataStruct.create(
         time_vec, matrix[:, data_idx], labels=labels, units=units, metadata=metadata
     )

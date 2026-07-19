@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -34,3 +35,16 @@ def test_csv_structure(fixtures_dir: Path) -> None:
 def test_registry_routes_csv(fixtures_dir: Path) -> None:
     ds = import_auto(fixtures_dir / "csv_xrd.csv")
     assert ds.metadata["parser_name"] == "import_csv"
+
+
+def test_csv_iso_datetime_x_is_converted_to_epoch_seconds(tmp_path: Path) -> None:
+    path = tmp_path / "dated.csv"
+    path.write_text(
+        "Timestamp,Signal\n2026-07-19T12:00:00Z,1\n2026-07-19T12:01:00Z,2\n",
+        encoding="utf-8",
+    )
+    ds = import_csv(path)
+    expected = datetime(2026, 7, 19, 12, 0, tzinfo=UTC).timestamp()
+    assert ds.time.tolist() == [expected, expected + 60]
+    assert ds.metadata["time_is_datetime"] is True
+    assert ds.metadata["time_timezone"] == "UTC"

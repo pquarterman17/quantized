@@ -256,6 +256,15 @@ function formatEng(v: number, digits: number, incr: number): string {
 export function tickFormatter(fmt?: AxisFormat): TickValues {
   const mode = fmt?.mode ?? "auto";
   if (mode === "auto") return autoTickValues;
+  if (mode === "date" || mode === "time" || mode === "datetime") {
+    const options: Intl.DateTimeFormatOptions = mode === "date"
+      ? { year: "numeric", month: "short", day: "2-digit", timeZone: "UTC" }
+      : mode === "time"
+        ? { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: "UTC" }
+        : { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "UTC" };
+    const formatter = new Intl.DateTimeFormat(undefined, options);
+    return (_u, splits) => splits.map((value) => value == null ? null : formatter.format(new Date(value * 1_000)));
+  }
   const digits = fmt ? Math.max(0, Math.min(20, Math.round(fmt.digits))) : 2;
   if (mode === "sci") {
     return (_u, splits, _axisIdx, _foundSpace, foundIncr) => {
@@ -1053,7 +1062,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     : null;
   const scales: uPlot.Scales = {
     x: {
-      time: false,
+      time: xFmt?.mode === "date" || xFmt?.mode === "time" || xFmt?.mode === "datetime",
       ...scaleDistrProps(xScale),
       ...(xLim ? { range: xLim } : loopX ? { range: () => loopX } : {}),
     },

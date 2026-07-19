@@ -744,7 +744,7 @@ export interface Shape {
  *  non-auto mode still FLOORS its decimal/mantissa count at whatever the
  *  actual tick increment needs, so `digits` sets a minimum, not an exact
  *  count (`tickFormatter`'s `Math.max(digits, decimalsForIncrement(...))`). */
-export type TickMode = "auto" | "fixed" | "sci" | "eng";
+export type TickMode = "auto" | "fixed" | "sci" | "eng" | "date" | "time" | "datetime";
 
 export interface AxisFormat {
   mode: TickMode;

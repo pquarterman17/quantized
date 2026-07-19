@@ -12,6 +12,8 @@ screen side, not just internal self-consistency.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import matplotlib
 
 matplotlib.use("Agg")  # headless
@@ -228,6 +230,22 @@ def test_eng_mode_renormalizes_when_mantissa_rounds_up_to_1000() -> None:
         apply_tick_formats(ax, {"mode": "eng", "digits": 0}, None)
         fig.canvas.draw()
         assert [t.get_text() for t in ax.get_xticklabels()] == ["1e+3"]
+    finally:
+        plt.close(fig)
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [("date", "2026-07-19"), ("time", "12:34:56"), ("datetime", "2026-07-19 12:34")],
+)
+def test_datetime_modes_format_epoch_seconds_in_utc(mode: str, expected: str) -> None:
+    fig, ax = plt.subplots()
+    try:
+        stamp = datetime(2026, 7, 19, 12, 34, 56, tzinfo=UTC).timestamp()
+        ax.set_xticks([stamp])
+        apply_tick_formats(ax, {"mode": mode, "digits": 2}, None)
+        fig.canvas.draw()
+        assert [tick.get_text() for tick in ax.get_xticklabels()] == [expected]
     finally:
         plt.close(fig)
 
