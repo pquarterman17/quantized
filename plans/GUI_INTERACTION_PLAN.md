@@ -11,11 +11,9 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-18 (#12 CLOSED — all 5 slices + parts A/B/C shipped
-same day: Part A's `y2Fmt` store field/setter, Part B's grouped-series wire
-contract + Figure Builder handoff, and Part C's `decor` block
-(annotations/shapes/legend) with its `plotspecApply.ts` REPLACE-semantics
-apply on Send; see Completed for the full slice-by-slice record)
+**Updated:** 2026-07-19 19:02 EDT (implementation pass based on `main` at
+`632a414`; undo/view history, plotted-channel baseline, Plot Objects first
+slice, folder-undo e2e, interaction polish, tests, and guards recorded below)
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -38,9 +36,10 @@ editing grammar:
 - **Workshops** (`components/workshops/*`, floating `ToolWindow`s) — the no-code
   analysis UIs (curve fit, peaks, baseline, filter, pipeline…).
 - **Graph/Figure Builder** — plot construction; builder output is a durable
-  saved `PlotSpec` since 2026-07-17 (#11 core; Figure-Builder handoff still open).
-- **History** (`store/history.ts`) — undo/redo, today scoped to DATA mutations
-  only; visual/layout/organization edits are excluded by design.
+  saved `PlotSpec` since 2026-07-17, including Figure-Builder handoff.
+- **History** (`store/history.ts`) — one current-session edit history spanning
+  data, visual/layout, and organization changes, plus a separate Back/Forward
+  history for zoom/pan/autoscale navigation.
 
 ### The central thesis
 quantized has the individual gestures Origin has, but not one **object-editing
@@ -72,41 +71,87 @@ plotting, publication export.
 - The **friction-log acceptance test** (Reference) is the empirical re-prioritizer
   — run it once against a real month of projects and let it reorder the middle.
 
+### 2026-07-19 status reconciliation
+
+This audit re-read current `main`, recent history, the live plan, and the raw Sol
+source audit. The raw `SOL_FEATURE_GUI_INTERACTION_AUDIT.md` intentionally keeps
+its original unchecked boxes for provenance; they are **not** current status.
+Use this section plus Completed below to avoid duplicating Claude's campaign.
+
+Already shipped and verified — do not rebuild:
+- weighted fitting from plotted error columns (#4);
+- typed pipeline fit replay (#6);
+- gesture handles/drop reveal/menu alternatives (#3);
+- grouped accessible plot toolbar + shared tooltips (#7);
+- keyboard-complete shared context-action registry across menus/palette/
+  worksheet/mini-toolbar/window surfaces (#8);
+- active-tool HUD + centralized Escape cancel (#9);
+- viewport-clamped, persisted, resettable/collapsible/resizable ToolWindows
+  (#10; Inspector docking remains a separate future enhancement);
+- durable saved Graph Builder PlotSpecs with Save/Save As/Open/Duplicate/
+  Rename/Delete, `.dwk` persistence, statistical faceting, and Figure Builder
+  handoff (#11);
+- canonical PlotSpec v2 display/axes/decor contract and screen/export parity
+  harness (#12), since extended with page/panel presentation;
+- folder drag handle, breadcrumbs, selection bar, folder Properties, and
+  clearer drop results (#13; folder changes are now undoable);
+- worksheet-window-scoped selections (#14);
+- real-browser import/drag/context/axis/Graph Builder/tool/window/export
+  journeys at the planned DPI matrix (#15; folder undo journey now included);
+- Help hub, importing guide, Origin migration guide, keyboard/mouse help,
+  searchable tool catalog, and What Is This? mode (#17 sub-work);
+- platform-correct shortcut labels, menu sub-topic grouping, destructive
+  confirmation consistency, and the two e2e-discovered layout fixes.
+
+This reconciliation was the pre-implementation queue. The 2026-07-19 Sol pass
+closed #1, #5, the last #15 journey, and the concrete #17 items. #2 now has a
+useful first slice but deliberately remains open for multi-object layout/group
+operations. #16 remains an owner-triggered candidate list, not a blanket Origin
+feature checklist.
+
 ---
 
 ## Tier 1 — High Impact
 
 1. **Undoable mouse-driven visual edits** — every committed visual/layout/
    organization edit becomes one named, coalesced history transaction.
-   - [ ] Decide the undo **scopes** first (Origin uses scoped undo; a single flat
-         stack mixing "undo my fit" with "undo my axis colour" is confusing) —
-         this is an owner gate, see Owner gates.
-   - [ ] Coalesce a drag into ONE step (`Move annotation`, not 80 pointer moves).
-   - [ ] Cover: axis-title drag/format, annotation/shape move/resize/delete, curve
+   - [x] Decide the undo **scopes** first — OWNER DECISION captured in the Sol
+         interview and reconciled 2026-07-19: one current-session EDIT history
+         covering data + visual/layout + organization edits; zoom/pan/autoscale
+         navigation uses a separate Back/Forward VIEW history. Undo history does
+         not persist across restart.
+   - [x] Coalesce a drag into ONE step (`Move annotation`, not 80 pointer moves).
+   - [x] Cover: axis-title drag/format, annotation/shape move/resize/delete, curve
          colour/marker/width/order/visibility/Y-axis, ref-line move, window
          move/resize/close/rebind, folder/dataset reparent, graph-spec changes.
-   - [ ] Show the action name in Edit▸Undo + a brief toast; keep navigation-only
+   - [x] Show the action name in Edit▸Undo + a brief toast; keep navigation-only
          zoom/pan as a SEPARATE Back/Forward view history (resolve the "one Ctrl+Z
          restores exactly the previous state" vs. separate-view-history tension).
 
 2. **Unified "select object → edit it" model (Plot Objects tree)** — one
    synchronized tree (Inspector mode) exposing curves/axes/layers/legends/
    annotations/shapes.
-   - [ ] Two-way selection sync (click canvas ↔ tree row highlights).
-   - [ ] Row actions: visibility, reorder, delete, duplicate, Properties — map
+   - [x] Two-way selection sync for editable graphic objects (annotation/shape
+         canvas selection ↔ tree row); curve rows expose the active plot model.
+   - [x] Row actions: visibility, reorder, delete, duplicate, Properties — map
          these onto the channel model (a "curve" = a dataset channel; settle what
-         "duplicate"/"delete" mean per object type before building).
+         "duplicate"/"delete" mean per object type before building). Curve
+         delete is intentionally non-destructive Hide; annotations/shapes use
+         duplicate/delete; every Properties action routes to its editor.
    - [ ] Multi-select: align, distribute, group, shared styling for graphic objects.
    - [ ] Large bet — size it deliberately; reuses #8's action registry.
 
 5. **Baseline analysis honors the plotted X/Y channels** — the baseline workshop
    still computes on `time`/`values[0]` and subtracts into `values[0]`, diverging
    from the displayed channels. (Correctness trap.)
-   - [ ] Bind baseline to the plotted X + selected primary Y, show those names in
+   - [x] Bind baseline to the plotted X + selected primary Y, show those names in
          the workshop, store them in provenance, subtract into that same channel.
-   - [ ] OWNER GATE: the OriginPro audit frames baseline as a BACKEND corrections/
+   - [x] OWNER GATE: the OriginPro audit frames baseline as a BACKEND corrections/
          recalc-DAG change (`bgAnchors`/`applyCorrections`), not a frontend read —
-         scope which before starting (see Owner gates).
+         scope which before starting (see Owner gates). Resolution: preserve the
+         established correction DAG for default time/value-0 data; arbitrary
+         plotted channels subtract into a derived dataset with explicit X/Y
+         provenance, never silently writing the wrong DAG channel.
 
 ## Tier 2 — Medium Impact
 
@@ -140,9 +185,8 @@ plotting, publication export.
     - [x] Each analysis drag + Esc-cancel (region-tool arm/cancel + ToolHud)
     - [x] The same essential journey keyboard-only (Command Palette import,
           Shift+F10 context menu, Enter activates)
-    - [ ] Folder reorder/nest **undo** — gated on the #1 undo-scopes owner
-          decision; there is no visual-edit undo to test yet. (The ONLY
-          remaining sub-item as of 2026-07-18.)
+    - [x] Folder reorder/nest **undo** — the browser journey now reverses dataset
+          reparent, folder nesting, rename, creation, and reorder step-by-step.
     - [x] channel→X/Y/Y2 drag (2026-07-18, `channel-axis-drag.spec.ts` @core —
           hand-built `DataTransfer` + dispatched drag events, since the axis
           bands only mount mid-drag and `dragTo` can't resolve them upfront)
@@ -206,7 +250,8 @@ plotting, publication export.
 
 16. **Owner-dependent Origin feature gaps** — prioritize ONLY from real projects
     (the friction-log test), not Origin's checklist.
-    - [ ] Candidates: worksheet stack/unstack/reshape/transpose/pivot/join-by-key;
+    - [ ] Candidates (intentionally not started without a real-project trigger):
+          worksheet stack/unstack/reshape/transpose/pivot/join-by-key;
           date/time axes + date-aware ops; broad signal processing; general 3-D
           surface/mesh/contour outside the RSM path; database/query connectors;
           `.opju` migration edges (matrix books, some 2-D instrument data, richer
@@ -214,7 +259,10 @@ plotting, publication export.
           deferrals — reconcile, don't double-book.)
 
 17. **Buttons / labels / menus / tooltips polish**
-    - [ ] Split buttons for last-used tool. **High-consequence-action audit
+    - [x] Split button for the existing shape-tool family: the main button repeats
+          the last drawing tool while its arrow opens the chooser. Broader toolbar
+          grouping remains fixed until owner use justifies customization.
+          **High-consequence-action audit
           DONE 2026-07-19** — and it found two REAL DEFECTS, not polish:
       - [x] **Unconfirmed dataset delete** (`320df6f`). The Library row's
             footer "✕" called `removeDataset()` straight on the store, while
@@ -293,9 +341,9 @@ plotting, publication export.
           `position` click in channel-axis-drag.spec.ts) were removed in
           favor of real center clicks, verified passing at all three DPI
           scales.
-    - [ ] **Menu regrouping — SUB-TOPIC HEADERS DONE 2026-07-19** (`a13e273`,
-          `3947d8d`); the cross-menu ownership move and the Help build-out
-          remain open.
+    - [x] **Menu regrouping — SUB-TOPIC HEADERS + HELP DONE 2026-07-19**
+          (`a13e273`, `3947d8d`, `f5e9162`, `315d31a`, `9bc4daa`, `6af84e9`),
+          followed by the cross-menu ownership move recorded below.
       - [x] Analyze (17 flat items) -> Fit / Peaks & baseline / Magnetometry /
             XRD & reflectivity / Transform & signal / Statistics / Workflow;
             Data (14) -> Combine & split / Rows & summary / Recalculation /
@@ -309,11 +357,11 @@ plotting, publication export.
             byte-identically. The palette ignores `section` — it is searched,
             not browsed. Guarded by a `describe.each` over all three menus:
             every command filed, vocabulary restricted, non-vacuous floor.
-      - [ ] Cross-menu OWNERSHIP move (Graph owns builders/plot-types/layers/
+      - [x] Cross-menu OWNERSHIP move (Plot owns builders/plot-types/layers/
             themes/templates/export; Data owns worksheet/row-col/filter/
-            reshape/merge/correction/metadata). Deliberately NOT done as a
-            side effect of sectioning: relocating commands between menus
-            breaks muscle memory and deserves a deliberate call.
+            reshape/merge/correction/metadata). Completed deliberately after
+            sectioning: graph/figure/page builders, export, and composite-panel
+            commands moved to Plot; Data now stays focused on data operations.
       - [x] Fill out Help — **ALL FIVE sub-items DONE 2026-07-19**
             (`f5e9162`, `315d31a`, `9bc4daa`, `6af84e9`). A new searchable Help hub (Help ▸ Help topics…, also in ⌘K)
             with tabs: **Topics** (fuzzy search over a catalog of all 17
@@ -338,8 +386,8 @@ plotting, publication export.
             coverage grows incrementally. The only Help-adjacent item still
             open is the shortcuts sub-item's optional "first-run interaction
             hints" below.
-    - [ ] **Shortcuts + palette labels DONE 2026-07-19** (`42b4174`,
-          `8b66988`); the first-run hints mode remains open.
+    - [x] **Shortcuts + palette labels DONE 2026-07-19** (`42b4174`,
+          `8b66988`), including first-run interaction hints.
       - [x] Shortcuts were already RENDERED in menus and the palette, but only
             the Shortcuts DIALOG localized them: `Action.shortcut` bakes in the
             macOS glyphs and the translation lived inside `shortcutGroupsFor`,
@@ -369,18 +417,23 @@ plotting, publication export.
             and only `store/commands.ts` may spell the palette label. The
             glyph scan immediately caught a THIRD offender the manual audit
             had missed (AppearanceMenu's "All preferences…").
-      - [ ] Optional first-run "show interaction hints" mode.
+      - [x] Optional first-run "show interaction hints" mode — a small,
+            dismissible, non-modal card teaches the three core mouse gestures,
+            persists dismissal locally, and can be reopened from Help.
 
 ---
 
 ## Owner gates (decide before the gated item starts)
 
-- **Undo scopes (#1)** — one unified stack vs. scoped undo (visual / data /
-  organization) + a separate view-history for zoom/pan. Origin uses scoped;
-  pick the model before building.
-- **Baseline: frontend bind vs. backend DAG (#5)** — cross-audit contradiction.
-  This plan says "bind to plotted X/Y"; the OriginPro audit says baseline is
-  entangled with the corrections/recalc DAG. Resolve the scope first.
+- ~~**Undo scopes (#1)**~~ **RESOLVED** — one current-session edit history for
+  data + visual/layout + organization, with separate Back/Forward view history
+  for zoom/pan/autoscale. Do not persist either history across restart. Owner
+  accepted this interaction model in the Sol interview; recorded 2026-07-19.
+- ~~**Baseline: frontend bind vs. backend DAG (#5)**~~ **RESOLVED** — the
+  established DAG remains authoritative for its default time/value-0 channel;
+  arbitrary plotted X/Y baseline subtraction creates a derived dataset carrying
+  explicit channel provenance so the raw source and unrelated channels remain
+  untouched.
 - **Plot Objects tree scope (#2)** — full Origin-style Object Manager is a large
   bet; confirm it's wanted vs. better-signposted existing gestures + undo.
 - **Shared AnalysisSelection contract** — the OriginPro audit wants ONE selection
@@ -391,6 +444,23 @@ plotting, publication export.
 ---
 
 ## Completed
+
+- ~~**#1 + #5 + #15 + #17 implementation pass**~~ (2026-07-19, ChatGPT-Sol)
+  — edit history now covers persistent data, plot styling/objects, window
+  layout, folders, and saved graph specifications with one entry per committed
+  gesture; zoom/pan/autoscale has independent Back/Forward history and shortcuts.
+  Baseline preview/subtraction follows the plotted X and primary Y, displays and
+  records both channels, and uses a safe derived dataset outside the legacy DAG's
+  default channel. The folder browser test proves five organization mutations
+  reverse in order. Plot's shape chooser is a remembered split button; builders,
+  export, and composite-panel commands now belong to Plot; a dismissible first-run
+  mouse-hints card can be reopened from Help. A first Plot Objects Inspector slice
+  also shipped (axes/legend/curve/annotation/shape inventory, object selection,
+  visibility/order/Y2/properties, graphic duplicate/delete); multi-select layout
+  and grouping deliberately remain under #2. Verification: full frontend unit
+  suite, production build, focused real-browser folder journey, backend integrity,
+  Ruff, mypy, frontend typecheck, architecture ratchets, convention greps, and
+  whitespace checks all green.
 
 - ~~**#12 One canonical plot specification**~~ (2026-07-18) — PlotSpec v2:
   today's zones+mark grammar extended with ADDITIVE-OPTIONAL blocks

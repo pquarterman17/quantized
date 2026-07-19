@@ -21,6 +21,7 @@ import {
   baselineShirley,
   baselineXrdLowAngle,
 } from "../../../lib/api";
+import { fullPlottedX, plottedYKey } from "../../../lib/fitselection";
 import type { CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
@@ -67,6 +68,8 @@ export interface BaselineState {
   error: string | null;
   /** Anchor method (#2): the picked (x, y) anchors, in click order. */
   anchors: [number, number][];
+  /** Plotted channels the next estimate will use. */
+  binding: BaselineBinding | null;
   setMethod: (m: BaselineMethod) => void;
   setParams: (patch: Partial<BaselineParams>) => void;
   compute: () => Promise<void>;
@@ -78,6 +81,44 @@ export interface BaselineState {
   /** Anchor method (#2): subtract via the corrections chokepoint (bgAnchors
    *  params) — records a replayable correction step + rides the recalc DAG. */
   applyAnchors: () => Promise<void>;
+}
+
+export interface BaselineBinding {
+  datasetId: string;
+  xKey: number | null;
+  yKey: number;
+  xLabel: string;
+  yLabel: string;
+}
+
+interface BaselineInput {
+  binding: BaselineBinding;
+  x: number[];
+  y: number[];
+}
+
+function baselineInput(
+  ds: Dataset,
+  xKey: number | null,
+  yKeys: number[] | null,
+  seriesOrder: number[] | null,
+): BaselineInput | null {
+  const yKey = plottedYKey(ds, xKey, yKeys, seriesOrder);
+  if (yKey == null) return null;
+  const x = fullPlottedX(ds.data, xKey);
+  const y = ds.data.values.map((row) => row[yKey]);
+  if (x.length === 0 || x.length !== y.length) return null;
+  return {
+    binding: {
+      datasetId: ds.id,
+      xKey,
+      yKey,
+      xLabel: xKey == null ? "Time" : (ds.data.labels[xKey] ?? `Channel ${xKey + 1}`),
+      yLabel: ds.data.labels[yKey] ?? `Channel ${yKey + 1}`,
+    },
+    x,
+    y,
+  };
 }
 
 /** The full-range polynomial methods reuse the region-fit calc (#8: the
@@ -139,6 +180,9 @@ function callBaseline(
 
 export function useBaseline(): BaselineState {
   const active = useActiveDataset();
+  const xKey = useApp((s) => s.xKey);
+  const yKeys = useApp((s) => s.yKeys);
+  const seriesOrder = useApp((s) => s.seriesOrder);
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
   const setBaselineOverlay = useApp((s) => s.setBaselineOverlay);
@@ -149,9 +193,11 @@ export function useBaseline(): BaselineState {
   const [method, setMethod] = useState<BaselineMethod>("als");
   const [params, setParamsState] = useState<BaselineParams>(DEFAULTS);
   const [baseline, setBaseline] = useState<(number | null)[] | null>(null);
+  const [estimateBinding, setEstimateBinding] = useState<BaselineBinding | null>(null);
   const [anchors, setAnchors] = useState<[number, number][]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const binding = active ? baselineInput(active, xKey, yKeys, seriesOrder)?.binding ?? null : null;
   // The debounced anchor-preview effect must re-estimate with the LATEST
   // anchors without holding compute() in its dependency list (a fresh closure
   // every render would defeat the debounce) — the shared plugin-bridge idiom.
@@ -169,10 +215,11 @@ export function useBaseline(): BaselineState {
   // the anchors — they're coordinates on the OLD data).
   useEffect(() => {
     setBaseline(null);
+    setEstimateBinding(null);
     setError(null);
     setAnchors([]);
     setBaselineOverlay(null);
-  }, [active, setBaselineOverlay]);
+  }, [active, xKey, yKeys, seriesOrder, setBaselineOverlay]);
 
   const setParams = (patch: Partial<BaselineParams>): void =>
     setParamsState((p) => ({ ...p, ...patch }));
@@ -201,10 +248,13 @@ export function useBaseline(): BaselineState {
       // preview — resolve the active dataset's full data first.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
-      const x = ds.data.time;
-      const y = ds.data.values.map((row) => row[0]);
+      const state = useApp.getState();
+      const input = baselineInput(ds, state.xKey, state.yKeys, state.seriesOrder);
+      if (!input) throw new Error("the plotted X/Y selection has no usable primary Y channel");
+      const { x, y } = input;
       const res = await callBaseline(method, x, y, params, anchors);
       setBaseline(res.baseline);
+      setEstimateBinding(input.binding);
       setBaselineOverlay({ datasetId: ds.id, y: res.baseline });
     } catch (e) {
       setError(e instanceof Error ? e.message : "baseline failed");
@@ -250,20 +300,34 @@ export function useBaseline(): BaselineState {
   }, [method, anchors, params.anchorMethod, active, setBaselineOverlay]);
 
   async function subtract(): Promise<void> {
-    if (!active || !baseline) return;
+    if (!active || !baseline || !estimateBinding) return;
     const ds = await useApp.getState().resolveDataset(active.id);
     if (!ds) return;
+    if (estimateBinding.datasetId !== ds.id || baseline.length !== ds.data.values.length) {
+      setError("the baseline no longer matches this dataset; recompute it before subtracting");
+      return;
+    }
     const src = ds.data;
+    const yKey = estimateBinding.yKey;
     const values = src.values.map((row, i) => {
       const b = baseline[i];
       const next = [...row];
-      if (Number.isFinite(row[0]) && b != null) next[0] = row[0] - b;
+      if (Number.isFinite(row[yKey]) && b != null) next[yKey] = row[yKey] - b;
       return next;
     });
     const data: DataStruct = {
       ...src,
       values,
-      metadata: { ...src.metadata, baseline_subtracted: method },
+      metadata: {
+        ...src.metadata,
+        baseline_subtracted: method,
+        baseline_source: {
+          x_key: estimateBinding.xKey,
+          x_label: estimateBinding.xLabel,
+          y_key: estimateBinding.yKey,
+          y_label: estimateBinding.yLabel,
+        },
+      },
     };
     const stem = ds.name.replace(/\.[^.]+$/, "");
     addDataset({ id: `bgsub-${++_subCounter}`, name: `${stem} (bg-sub)`, data });
@@ -277,6 +341,19 @@ export function useBaseline(): BaselineState {
     if (!active || anchors.length < 2) return;
     const ds = await useApp.getState().resolveDataset(active.id);
     if (!ds) return;
+    // The established correction-DAG anchor step operates on time + values[0].
+    // For any other plotted pair, subtract the exact plotted-channel preview
+    // into a linked dataset instead of silently correcting the wrong channel.
+    if (estimateBinding && (estimateBinding.xKey != null || estimateBinding.yKey !== 0)) {
+      if (!baseline) {
+        setError("wait for the selected-channel preview, then Apply again");
+        return;
+      }
+      await subtract();
+      setAnchors([]);
+      setStatus("subtracted selected-channel anchor baseline (new dataset)");
+      return;
+    }
     // Preview-consistency guard (review 2026-07-11): anchors are picked on
     // the DISPLAYED curve, but the correction replay runs at pipeline step 3
     // against RAW data - before smoothing/normalization/yOff, and silently
@@ -326,6 +403,7 @@ export function useBaseline(): BaselineState {
 
   function clear(): void {
     setBaseline(null);
+    setEstimateBinding(null);
     setError(null);
     setBaselineOverlay(null);
   }
@@ -340,6 +418,7 @@ export function useBaseline(): BaselineState {
     busy,
     error,
     anchors,
+    binding,
     setMethod,
     setParams,
     compute,

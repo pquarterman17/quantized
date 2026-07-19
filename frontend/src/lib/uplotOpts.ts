@@ -36,7 +36,9 @@ import {
   panPlugin,
   readoutPlugin,
   statsPlugin,
+  viewHistoryPlugin,
   wheelZoomPlugin,
+  type PlotViewBounds,
   type Readout,
 } from "./uplotTools";
 
@@ -646,6 +648,8 @@ export interface BuildOptsArgs {
   defaultTrace?: string;
   /** Enable wheel-to-zoom over the plot (Preferences ▸ Interaction ▸ Mouse wheel). */
   wheelZoom?: boolean;
+  /** Completed box-zoom/pan/wheel gesture, coalesced to one view-history step. */
+  onViewChange?: (before: PlotViewBounds, after: PlotViewBounds) => void;
   /** Stepped path builder (uPlot.paths.stepped) used for the "Step" default trace.
    *  Supplied by the caller so this module stays free of the uPlot *runtime*
    *  (a value import would pull uPlot's matchMedia init into headless tests). */
@@ -995,6 +999,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (args.wheelZoom) {
     plugins.push(wheelZoomPlugin());
   }
+  if (args.onViewChange) plugins.push(viewHistoryPlugin(args.onViewChange));
   // Peak wizard click-on-plot marker editing (item 5): also tool-independent —
   // wizard-scoped, not toolbar-tool-scoped (see BuildOptsArgs.peakWizardEdit).
   if (args.peakWizardEdit) {

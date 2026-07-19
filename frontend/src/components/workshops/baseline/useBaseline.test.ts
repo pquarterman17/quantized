@@ -48,6 +48,9 @@ beforeEach(() => {
     baselineAnchorEdit: null,
     plotTool: "zoom",
     regionPicked: null,
+    xKey: null,
+    yKeys: null,
+    seriesOrder: null,
   });
 });
 
@@ -179,6 +182,44 @@ describe("useBaseline", () => {
     expect(sub.name).toBe("scan (bg-sub)");
     expect(sub.data.values).toEqual([[9], [10], [10], [10]]); // y - baseline
     expect(sub.data.metadata.baseline_subtracted).toBe("modpoly");
+  });
+
+  it("uses the plotted X/primary Y and subtracts only that Y with provenance", async () => {
+    const multi: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[10, 100, 5], [20, 200, 7], [30, 300, 9], [40, 400, 11]],
+      labels: ["Field", "Monitor", "Moment"],
+      units: ["T", "V", "emu"],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "scan.dat", data: multi }],
+      activeId: "d1",
+      xKey: 0,
+      yKeys: [2],
+      seriesOrder: [2],
+    });
+    vi.mocked(baselineRegion).mockResolvedValue({
+      background: [1, 2, 3, 4], coeffs: [0, 1], n_points: 4,
+      mean: 1, std: 0, min: 1, max: 1, order: 1,
+    });
+    const { result } = renderHook(() => useBaseline());
+
+    expect(result.current.binding).toMatchObject({ xKey: 0, yKey: 2, xLabel: "Field", yLabel: "Moment" });
+    act(() => result.current.setMethod("linear"));
+    await act(async () => result.current.compute());
+    expect(baselineRegion).toHaveBeenCalledWith({
+      x: [10, 20, 30, 40], y: [5, 7, 9, 11], x_min: 10, x_max: 40, order: 1,
+    });
+    await act(async () => result.current.subtract());
+
+    const sub = useApp.getState().datasets.find((ds) => ds.id !== "d1")!;
+    expect(sub.data.values).toEqual([
+      [10, 100, 4], [20, 200, 5], [30, 300, 6], [40, 400, 7],
+    ]);
+    expect(sub.data.metadata.baseline_source).toEqual({
+      x_key: 0, x_label: "Field", y_key: 2, y_label: "Moment",
+    });
   });
 
   it("subtract is a no-op before an estimate exists", async () => {

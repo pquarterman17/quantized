@@ -39,17 +39,14 @@ import { plotIntentStageTab } from "../lib/stagetab";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
 import { dropWorksheetSelection } from "./worksheetSelection";
-
 // Window ids get their own sequence (dataset/folder/report ids keep useApp's)
 // — the `win-` prefix + timestamp keeps them collision-free across both.
 let _winSeq = 0;
 export const nextWindowId = (): string => `win-${Date.now().toString(36)}-${++_winSeq}`;
-
 /** The highest z among a window list (0 if empty) — z-order helper shared by
  *  every action that raises a window (focus/raise/create/duplicate). */
 export const maxZ = (windows: readonly PlotWindow[]): number =>
   windows.reduce((m, w) => Math.max(m, w.z), 0);
-
 /** A brand-new sole main window — the ≥1-window invariant's default: one
  *  MAXIMIZED window bound to `datasetId`, with a fresh view (MULTI_PLOT_PLAN
  *  decision #6 — pixel-identical to today's single-plot Stage). Used at store
@@ -331,6 +328,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
     plotCanvasBounds: null,
     createWindow: (datasetId, view, title) => {
       const id = nextWindowId();
+      get().recordHistory("create window");
       set((s) => {
         const boundId = datasetId !== undefined ? datasetId : s.activeId;
         // Item 10: a computed default title (the bound dataset's name, or
@@ -372,6 +370,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       const s = get();
       const src = s.plotWindows.find((w) => w.id === s.focusedWindowId);
       if (!src) return null;
+      get().recordHistory("create snapshot window");
       const id = nextWindowId();
       const title = dedupeWindowTitle(
         `Snapshot — ${displayedWindowTitle(src, s.datasets)}`,
@@ -407,6 +406,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       const s = get();
       const ds = s.datasets.find((d) => d.id === datasetId) ?? null;
       const id = nextWindowId();
+      get().recordHistory(`create ${kind} window`);
       const title = dedupeWindowTitle(
         ds?.name ?? "Untitled",
         s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
@@ -451,6 +451,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       // Neither a snapshot ("frozen means frozen") nor a panel window (item
       // 19's binding is `panel.datasetIds`, not this field) rebinds on drop.
       if (win.kind === "snapshot" || win.kind === "panel") return;
+      get().recordHistory("rebind window");
       if (win.kind === "worksheet" || win.kind === "map") {
         // Item 17: a document window has no PlotView to reset — the explicit
         // drop just retargets which dataset the mounted WorksheetPane/MapStage
@@ -491,7 +492,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
     // call sites — the other is focusWindow) and following the same "focus
     // switch" contract focusWindow does below (activeId/selectedIds track the
     // new focus's dataset; transient tool state clears — item 4).
-    closeWindow: (id) =>
+    closeWindow: (id) => (get().recordHistory("close window"),
       set((s) => {
         const target = s.plotWindows.find((w) => w.id === id);
         if (!target) return {}; // id not found
@@ -510,7 +511,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           ...hydrateView(next.view),
           ...focusTransientReset(),
         };
-      }),
+      })),
     // The ONLY snapshot+hydrate caller besides closeWindow: freeze the
     // currently-focused window's LIVE view into its record, then hydrate the
     // target window's stored view onto the live singleton fields. A no-op when
@@ -552,6 +553,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       const s = get();
       const src = s.plotWindows.find((w) => w.id === id);
       if (!src) return null;
+      get().recordHistory("duplicate window");
       const newId = nextWindowId();
       // Duplicating the FOCUSED window: its record is stale (the live view
       // lives in the singleton fields), so snapshot those instead of `src.view`.
@@ -612,7 +614,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
     // bounds aren't known yet (e.g. invoked from the palette before the Plot
     // tab ever mounted). A no-op with fewer than 2 visible windows (nothing to
     // arrange).
-    tileWindows: () =>
+    tileWindows: () => (get().recordHistory("tile windows"),
       set((s) => {
         const visible = s.plotWindows.filter((w) => w.winState !== "minimized");
         if (visible.length < 2) return {};
@@ -627,8 +629,8 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
             return placed;
           }),
         };
-      }),
-    cascadeWindows: () =>
+      })),
+    cascadeWindows: () => (get().recordHistory("cascade windows"),
       set((s) => {
         const visible = s.plotWindows.filter((w) => w.winState !== "minimized");
         if (visible.length < 2) return {};
@@ -642,14 +644,14 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
             return placed;
           }),
         };
-      }),
+      })),
     // Minimizing the FOCUSED window hands focus to the top-z remaining VISIBLE
     // window — `closeWindow`'s exact refocus formula, but the window stays IN
     // `plotWindows` (docked in the strip) rather than being removed. A no-op
     // if there's no other visible window to hand focus to (focus just stays
     // put on the now-hidden window — the ≥1-window invariant is about array
     // length, not visibility, so this is a valid, if unusual, state).
-    minimizeWindow: (id) =>
+    minimizeWindow: (id) => (get().recordHistory("minimize window"),
       set((s) => {
         const target = s.plotWindows.find((w) => w.id === id);
         if (!target || target.winState === "minimized") return {};
@@ -674,12 +676,12 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           ...hydrateView(next.view),
           ...focusTransientReset(),
         };
-      }),
+      })),
     // Restore + focus a minimized window in one step — clicking a strip entry
     // is "bring this back and make it live" (a taskbar button, not just an
     // inert un-minimize), the same snapshot-outgoing/hydrate-incoming contract
     // `focusWindow` uses, plus the winState flip.
-    restoreWindow: (id) =>
+    restoreWindow: (id) => (get().recordHistory("restore window"),
       set((s) => {
         const target = s.plotWindows.find((w) => w.id === id);
         if (!target || target.winState !== "minimized") return {};
@@ -709,36 +711,36 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
           ...hydrateView(target.view),
           ...focusTransientReset(),
         };
-      }),
+      })),
     // Origin habit: double-clicking a window's title BAR (not its editable
     // title text — that renames, see `renameWindow`) toggles normal<->
     // maximized. A no-op on a minimized window (it has no on-canvas frame to
     // toggle).
-    toggleMaximizeWindow: (id) =>
+    toggleMaximizeWindow: (id) => (get().recordHistory("resize window"),
       set((s) => {
         const target = s.plotWindows.find((w) => w.id === id);
         if (!target || target.winState === "minimized") return {};
         const winState: WinState = target.winState === "maximized" ? "normal" : "maximized";
         return { plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, winState } : w)) };
-      }),
-    renameWindow: (id, title) =>
+      })),
+    renameWindow: (id, title) => (get().recordHistory("rename window"),
       set((s) => ({
         plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, title } : w)),
-      })),
-    setWindowBg: (id, bg) =>
+      }))),
+    setWindowBg: (id, bg) => (get().recordHistory("change window background"),
       set((s) => ({
         plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, bg } : w)),
-      })),
-    cycleWindowLinkGroup: (id) =>
+      }))),
+    cycleWindowLinkGroup: (id) => (get().recordHistory("change window link"),
       set((s) => ({
         plotWindows: s.plotWindows.map((w) =>
           w.id === id ? { ...w, linkGroup: nextLinkGroup(w.linkGroup) } : w,
         ),
-      })),
-    toggleWindowPin: (id) =>
+      }))),
+    toggleWindowPin: (id) => (get().recordHistory("toggle window pin"),
       set((s) => ({
         plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, pinned: !w.pinned } : w)),
-      })),
+      }))),
     windowsForSave: () => {
       const s = get();
       if (s.focusedWindowId === null) return s.plotWindows;

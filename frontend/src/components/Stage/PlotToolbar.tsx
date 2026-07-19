@@ -115,6 +115,7 @@ export default function PlotToolbar({
   const xLim = useApp((s) => s.xLim);
   const yLim = useApp((s) => s.yLim);
   const [shapeFlyout, setShapeFlyout] = useState<{ x: number; y: number } | null>(null);
+  const [lastShapeKind, setLastShapeKind] = useState(SHAPE_TOOLS[0].kind);
   const [optsFlyout, setOptsFlyout] = useState<{ x: number; y: number } | null>(null);
   const [showGroupLabels, setShowGroupLabels] = useState(() => loadToolbarPrefs().showGroupLabels);
   const shapeBtnRef = useRef<HTMLButtonElement>(null);
@@ -171,20 +172,32 @@ export default function PlotToolbar({
       </PlotToolbarGroup>
       <span className="qzk-tool-sep" />
       <PlotToolbarGroup label="Annotate" showLabel={showGroupLabels}>
-        <button
-          ref={shapeBtnRef}
-          className={`qzk-tool-btn${drawShapeKind ? " active" : ""}`}
-          aria-label="Draw Shape"
-          aria-pressed={Boolean(drawShapeKind)}
-          data-tip="Draw Shape"
-          data-tip-desc="Add an arrow, line, rectangle, ellipse, or text box"
-          onClick={() => {
-            const r = shapeBtnRef.current?.getBoundingClientRect();
-            setShapeFlyout(r ? { x: r.left, y: r.bottom + 4 } : { x: 0, y: 0 });
-          }}
-        >
-          ▱
-        </button>
+        <span style={{ display: "inline-flex" }}>
+          <button
+            className={`qzk-tool-btn${drawShapeKind ? " active" : ""}`}
+            aria-label={`Draw ${SHAPE_TOOLS.find((t) => t.kind === lastShapeKind)?.label ?? "Shape"}`}
+            aria-pressed={Boolean(drawShapeKind)}
+            data-tip="Draw Shape"
+            data-tip-desc="Use the last drawing tool; choose another with the arrow"
+            onClick={() => setDrawShapeKind(lastShapeKind)}
+          >
+            {SHAPE_TOOLS.find((t) => t.kind === lastShapeKind)?.glyph ?? "▱"}
+          </button>
+          <button
+            ref={shapeBtnRef}
+            className="qzk-tool-btn"
+            aria-label="Choose drawing tool"
+            data-tip="Choose Drawing Tool"
+            data-tip-desc="Pick an arrow, line, rectangle, ellipse, or text box"
+            style={{ width: 14, paddingInline: 1 }}
+            onClick={() => {
+              const r = shapeBtnRef.current?.getBoundingClientRect();
+              setShapeFlyout(r ? { x: r.left, y: r.bottom + 4 } : { x: 0, y: 0 });
+            }}
+          >
+            ▾
+          </button>
+        </span>
       </PlotToolbarGroup>
       {shapeFlyout && (
         <ContextMenu
@@ -193,7 +206,10 @@ export default function PlotToolbar({
           items={SHAPE_TOOLS.map((t) => ({
             label: `${t.glyph}  ${t.label}`,
             checked: drawShapeKind === t.kind,
-            run: () => setDrawShapeKind(t.kind),
+            run: () => {
+              setLastShapeKind(t.kind);
+              setDrawShapeKind(t.kind);
+            },
           }))}
           onClose={() => setShapeFlyout(null)}
         />

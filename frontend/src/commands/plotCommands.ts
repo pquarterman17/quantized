@@ -47,8 +47,13 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       section: "Axes",
       label: "Autoscale / reset view",
       shortcut: "A",
-      run: () => { s().setXLim(null); s().setYLim(null); },
+      run: () => s().recordView(
+        { xLim: s().xLim, yLim: s().yLim },
+        { xLim: null, yLim: null },
+      ),
     },
+    { id: "view-back", group: "Plot", section: "Axes", label: "Back to previous view", shortcut: "Alt←", run: () => s().backView() },
+    { id: "view-forward", group: "Plot", section: "Axes", label: "Forward to next view", shortcut: "Alt→", run: () => s().forwardView() },
     {
       id: "xLog", // see the "yLog" command above — same cycle, X axis
       group: "Plot",
@@ -155,6 +160,27 @@ export function buildPlotCommands(s: StoreGet): Action[] {
         s().breakAtGaps(ds.id, undefined, Number(params.gapFactor));
       },
     },
+    ...(
+      [
+        ["panel-row", "Panel: side by side", "row"],
+        ["panel-column", "Panel: stacked", "column"],
+        ["panel-grid", "Panel: grid", "grid"],
+        ["panel-overlay", "Overlay in one plot", "overlay"],
+      ] as const
+    ).map(([id, label, layout]) => ({
+      id,
+      group: "Plot",
+      section: "Layout",
+      label,
+      run: () => {
+        const ids = s().selectedIds;
+        if (ids.length < 2) {
+          toast("select at least 2 datasets first", "danger");
+          return;
+        }
+        s().focusWindow(s().createPanelWindow(ids, layout));
+      },
+    })),
     // ── Insert (MAIN #27: drawing shapes on plots — the menu-driven
     // counterpart of PlotToolbar's dock flyout) ──
     { id: "insert-arrow", group: "Insert", label: "Arrow", run: () => s().setDrawShapeKind("arrow") },

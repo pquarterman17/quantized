@@ -83,6 +83,15 @@ export function useGlobalShortcuts(): void {
         useApp.getState().setShortcutsOpen(true);
         return;
       }
+      if (e.altKey && !e.metaKey && !e.ctrlKey && !isEditing(e.target)) {
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          e.preventDefault();
+          const s = useApp.getState();
+          if (e.key === "ArrowLeft") s.backView();
+          else s.forwardView();
+          return;
+        }
+      }
       // Single-key tool / nav shortcuts (design interaction layer) — only with no
       // modifier held and not while typing in a field.
       if (!e.metaKey && !e.ctrlKey && !e.altKey && !isEditing(e.target)) {
@@ -92,9 +101,7 @@ export function useGlobalShortcuts(): void {
           case "A": // autoscale / reset the plot view
             if (!s.xLim && !s.yLim) return; // nothing to reset
             e.preventDefault();
-            s.setXLim(null);
-            s.setYLim(null);
-            s.setStatus("view reset");
+            s.recordView({ xLim: s.xLim, yLim: s.yLim }, { xLim: null, yLim: null });
             return;
           case "f":
           case "F": // curve-fit workshop

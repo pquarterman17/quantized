@@ -66,7 +66,7 @@ function StyleRow({
   const canError = errCol != null || naturalErr != null;
 
   return (
-    <details className="qz-card" style={{ marginBottom: 4 }}>
+    <details id={`series-style-${channel}`} className="qz-card" style={{ marginBottom: 4 }}>
       <summary>
         <span
           style={{

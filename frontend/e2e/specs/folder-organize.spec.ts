@@ -43,6 +43,13 @@ async function readDatasets(page: import("@playwright/test").Page): Promise<Data
         .getState().datasets,
   );
 }
+async function readHistoryLabels(page: import("@playwright/test").Page): Promise<string[]> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { __qz: { useApp: { getState: () => { history: { label: string }[] } } } }).__qz.useApp
+        .getState().history.map((entry) => entry.label),
+  );
+}
 
 test.describe("Library folder organization @core", () => {
   test("create, nest, reorder folders and drag a dataset into one", async ({ page }) => {
@@ -97,7 +104,6 @@ test.describe("Library folder organization @core", () => {
         return a.parentId === b.parentId && b.order < a.order;
       })
       .toBe(true);
-
     // ── Nest: create a third folder "Gamma", drag it into Alpha's MIDDLE
     //    band ("into" zone) so it becomes Alpha's child ────────────────────
     await newFolderBtn.click();
@@ -120,6 +126,8 @@ test.describe("Library folder organization @core", () => {
       })
       .toBe(true);
 
+    const gammaId = (await readFolders(page)).find((f) => f.name === "Gamma")!.id;
+
     // ── Drag the dataset into Alpha via its own grip handle (whole-row
     //    "into" target, no split — FolderRow.tsx's dataset branch) ────────
     const dsHandle = page.locator("[data-ds-id]", { hasText: "dataset-a" }).locator(".qzk-drag-handle");
@@ -130,6 +138,43 @@ test.describe("Library folder organization @core", () => {
         const datasets = await readDatasets(page);
         const alphaId = (await readFolders(page)).find((f) => f.name === "Alpha")!.id;
         return datasets[0]?.folderId === alphaId;
+      })
+      .toBe(true);
+
+    const historyCount = (await readHistoryLabels(page)).length;
+    expect((await readHistoryLabels(page)).slice(-3)).toEqual(["rename folder", "move folder", "move dataset"]);
+    expect(await page.evaluate((id) => {
+      const h = (window as unknown as { __qz: { useApp: { getState: () => { history: { label: string; snapshot: { folders: FolderSnapshot[] } }[] } } } }).__qz.useApp.getState().history;
+      return h.at(-2)?.snapshot.folders.some((f) => f.id === id) ?? false;
+    }, gammaId)).toBe(true);
+
+    // Edit history is organization-aware: one Ctrl+Z reverses one committed
+    // drop, never the drag's intermediate pointer events.
+    await page.keyboard.press("Control+z");
+    await expect.poll(async () => (await readHistoryLabels(page)).length).toBe(historyCount - 1);
+    await expect.poll(async () => (await readDatasets(page))[0]?.folderId ?? null).toBeNull();
+
+    await page.keyboard.press("Control+z");
+    await expect.poll(async () => (await readHistoryLabels(page)).length).toBe(historyCount - 2);
+    await expect
+      .poll(async () => {
+        const fs = await readFolders(page);
+        const gamma = fs.find((f) => f.id === gammaId);
+        return gamma ? gamma.parentId : "missing";
+      })
+      .toBeNull();
+
+    // Step back past Gamma's rename/create, then the next undo reverses the
+    // earlier Beta-before-Alpha reorder.
+    await page.keyboard.press("Control+z");
+    await page.keyboard.press("Control+z");
+    await page.keyboard.press("Control+z");
+    await expect
+      .poll(async () => {
+        const fs = await readFolders(page);
+        const a = fs.find((f) => f.name === "Alpha")!;
+        const b = fs.find((f) => f.name === "Beta")!;
+        return a.order < b.order;
       })
       .toBe(true);
   });

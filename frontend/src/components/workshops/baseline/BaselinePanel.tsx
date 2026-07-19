@@ -67,7 +67,7 @@ const FIELDS: Record<BaselineMethod, ParamField[]> = {
 export default function BaselinePanel() {
   const setOpen = useApp((s) => s.setBaselineOpen);
   const {
-    active, method, params, baseline, busy, error, anchors,
+    active, method, params, baseline, busy, error, anchors, binding,
     setMethod, setParams, compute, subtract, clear, pickRegion, clearAnchors, applyAnchors,
   } = useBaseline();
 
@@ -84,6 +84,10 @@ export default function BaselinePanel() {
         value={method}
         onChange={(e) => setMethod(e.target.value as BaselineMethod)}
       />
+
+      <div className="qzk-hint" style={{ marginTop: 6 }}>
+        {binding ? `Analyzing ${binding.yLabel} vs ${binding.xLabel}` : "Select a plotted Y channel"}
+      </div>
 
       <div
         style={{

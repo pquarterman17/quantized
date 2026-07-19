@@ -69,23 +69,27 @@ export interface PointerToolSlice {
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
+type SliceGet = () => AppState;
 
-export function createPointerToolSlice(set: SliceSet): PointerToolSlice {
+export function createPointerToolSlice(set: SliceSet, get: SliceGet): PointerToolSlice {
   return {
     legendXY: null,
     legendFrameXY: null,
     // Clears the frame anchor too (decode #52) — see the interface doc.
     setLegendXY: (legendXY) => set({ legendXY, legendFrameXY: null }),
     axisLabelOffsets: {},
-    setAxisLabelOffset: (axis, offset) =>
+    setAxisLabelOffset: (axis, offset) => {
+      get().recordHistory("move axis title");
       set((s) => {
         const next = { ...s.axisLabelOffsets };
         if (offset === null) delete next[axis];
         else next[axis] = offset;
         return { axisLabelOffsets: next };
-      }),
+      });
+    },
     axisLabelStyles: {},
-    setAxisLabelStyle: (axis, patch) =>
+    setAxisLabelStyle: (axis, patch) => {
+      get().recordHistory("format axis title");
       set((s) => {
         const merged: AxisLabelStyle = { ...s.axisLabelStyles[axis], ...patch };
         // Drop falsy/undefined keys so an emptied style resets to default.
@@ -96,16 +100,19 @@ export function createPointerToolSlice(set: SliceSet): PointerToolSlice {
         if (Object.keys(merged).length === 0) delete next[axis];
         else next[axis] = merged;
         return { axisLabelStyles: next };
-      }),
+      });
+    },
     selectedAnnotationId: null,
     setSelectedAnnotationId: (selectedAnnotationId) => set({ selectedAnnotationId }),
-    updateAnnotation: (id, patch) =>
+    updateAnnotation: (id, patch) => {
+      get().recordHistory("edit annotation");
       set((s) => ({
         annotations: s.annotations.map((a) =>
           a.id === id
             ? { ...a, ...patch, ...(patch.size !== undefined ? { size: clampAnnotationSize(patch.size) } : {}) }
             : a,
         ),
-      })),
+      }));
+    },
   };
 }

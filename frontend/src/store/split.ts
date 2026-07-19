@@ -61,13 +61,9 @@
 // it again) lands its children in the ORIGINAL folder instead of a second
 // identically-named one next to it.
 //
-// Undo scope note: folder-tree mutations (createFolder et al.) are OUTSIDE
-// the undo system everywhere in this codebase (store/useApp.ts's
-// createFolder/moveDatasetToFolder never call recordHistory either) — the
-// SAME precedent the DatasetRow "New folder with this…" entry already
-// relies on. Undoing a split removes the child datasets (`datasets` IS
-// snapshotted) but leaves the now-empty folder behind, exactly as undoing
-// that existing entry would.
+// Undo scope: the shared edit snapshot includes datasets and the folder tree.
+// Undoing this one transaction therefore restores the complete pre-split
+// organization without leaving an empty folder artifact.
 
 import { splitColumn, sliceDataStruct, tooManyGroups } from "../lib/datasetsplit";
 import { childFolders, createFolder as treeCreateFolder } from "../lib/foldertree";

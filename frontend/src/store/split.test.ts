@@ -161,7 +161,7 @@ describe("splitDatasetByColumn — undo", () => {
     expect(s.datasets[0].data).toEqual(wobble);
   });
 
-  it("undo leaves the (now-empty) split folder behind — folder-tree edits sit outside undo everywhere in this store", async () => {
+  it("undo restores the folder tree along with the split datasets", async () => {
     useApp.setState({ datasets: [baseDataset()] });
     await useApp.getState().splitDatasetByColumn("d1", 0);
     const foldersAfterSplit = useApp.getState().folders.length;
@@ -169,10 +169,8 @@ describe("splitDatasetByColumn — undo", () => {
 
     useApp.getState().undo();
 
-    // Same precedent as DatasetRow's "New folder with this…": createFolder
-    // never calls recordHistory, so the folder itself isn't part of the
-    // undo snapshot even though its (now-orphaned) contents are.
-    expect(useApp.getState().folders).toHaveLength(foldersAfterSplit);
+    expect(foldersAfterSplit).toBe(1);
+    expect(useApp.getState().folders).toHaveLength(0);
   });
 });
 

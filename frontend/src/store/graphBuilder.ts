@@ -78,6 +78,8 @@ export function createGraphBuilderSlice(set: SliceSet, get: SliceGet): GraphBuil
     savePlotSpec: (spec) => {
       const id = get().activePlotSpecId;
       if (!id) return null;
+      if (!get().savedPlotSpecs.some((p) => p.id === id)) return null;
+      get().recordHistory("Update graph specification");
       const now = new Date().toISOString();
       set((s) => ({
         savedPlotSpecs: s.savedPlotSpecs.map((p) => (p.id === id ? { ...p, spec, modifiedAt: now } : p)),
@@ -85,6 +87,7 @@ export function createGraphBuilderSlice(set: SliceSet, get: SliceGet): GraphBuil
       return id;
     },
     saveAsPlotSpec: (name, spec) => {
+      get().recordHistory("Save graph specification");
       const id = `pspec-${Date.now().toString(36)}-${++_specSeq}`;
       const now = new Date().toISOString();
       const nm = name.trim() || "Untitled graph";
@@ -97,6 +100,7 @@ export function createGraphBuilderSlice(set: SliceSet, get: SliceGet): GraphBuil
     duplicatePlotSpec: (id) => {
       const src = get().savedPlotSpecs.find((p) => p.id === id);
       if (!src) return null;
+      get().recordHistory("Duplicate graph specification");
       const newId = `pspec-${Date.now().toString(36)}-${++_specSeq}`;
       const now = new Date().toISOString();
       const names = new Set(get().savedPlotSpecs.map((p) => p.name));
@@ -115,15 +119,21 @@ export function createGraphBuilderSlice(set: SliceSet, get: SliceGet): GraphBuil
     renamePlotSpec: (id, name) => {
       const nm = name.trim();
       if (!nm) return;
+      const src = get().savedPlotSpecs.find((p) => p.id === id);
+      if (!src || src.name === nm) return;
+      get().recordHistory("Rename graph specification");
       set((s) => ({
         savedPlotSpecs: s.savedPlotSpecs.map((p) => (p.id === id ? { ...p, name: nm } : p)),
       }));
     },
-    deletePlotSpec: (id) =>
+    deletePlotSpec: (id) => {
+      if (!get().savedPlotSpecs.some((p) => p.id === id)) return;
+      get().recordHistory("Delete graph specification");
       set((s) => ({
         savedPlotSpecs: s.savedPlotSpecs.filter((p) => p.id !== id),
         activePlotSpecId: s.activePlotSpecId === id ? null : s.activePlotSpecId,
-      })),
+      }));
+    },
     setActivePlotSpecId: (activePlotSpecId) => set({ activePlotSpecId }),
   };
 }

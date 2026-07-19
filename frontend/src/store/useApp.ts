@@ -932,9 +932,9 @@ export const useApp = create<AppState>((set, get) => ({
   ...createReductionsSlice(set),
   ...createReimportSlice(set, get),
   ...createPanelsSlice(set),
-  ...createPointerToolSlice(set),
+  ...createPointerToolSlice(set, get),
   ...createSplitSlice(set, get),
-  ...createShapesSlice(set),
+  ...createShapesSlice(set, get),
   ...createToolWindowsSlice(set),
   ...createOriginImportSlice(set),
   ...createOriginFallbackSlice(set, get),
@@ -2228,22 +2228,19 @@ export const useApp = create<AppState>((set, get) => ({
       ),
     }));
   },
-
   // ── Folder tree (project-organization plan item 1) ──────────────────────
   // All five delegate to the pure lib/foldertree ops; the store only supplies
   // ids and threads state. deleteFolder re-homes datasets (never destroys them).
   createFolder: (parentId, name = "New Folder") => {
     const id = nextFolderId();
+    get().recordHistory("create folder");
     set((s) => ({ folders: treeCreateFolder(s.folders, parentId, name, id) }));
     return id;
   },
-  renameFolder: (id, name) => set((s) => ({ folders: treeRenameFolder(s.folders, id, name) })),
-  deleteFolder: (id, mode = "reparent") =>
-    set((s) => treeDeleteFolder(s.folders, s.datasets, id, mode)),
-  moveFolder: (id, newParentId, beforeId) =>
-    set((s) => ({ folders: treeMoveFolder(s.folders, id, newParentId, beforeId) })),
-  moveDatasetToFolder: (id, folderId, beforeId) =>
-    set((s) => ({ datasets: treeMoveDatasetToFolder(s.datasets, id, folderId, beforeId) })),
+  renameFolder: (id, name) => (get().recordHistory("rename folder"), set((s) => ({ folders: treeRenameFolder(s.folders, id, name) }))),
+  deleteFolder: (id, mode = "reparent") => (get().recordHistory("delete folder"), set((s) => treeDeleteFolder(s.folders, s.datasets, id, mode))),
+  moveFolder: (id, newParentId, beforeId) => (get().recordHistory("move folder"), set((s) => ({ folders: treeMoveFolder(s.folders, id, newParentId, beforeId) }))),
+  moveDatasetToFolder: (id, folderId, beforeId) => (get().recordHistory("move dataset"), set((s) => ({ datasets: treeMoveDatasetToFolder(s.datasets, id, folderId, beforeId) }))),
   toggleFolderExpanded: (id) =>
     set((s) => ({
       expandedFolders: s.expandedFolders.includes(id)
@@ -2254,25 +2251,25 @@ export const useApp = create<AppState>((set, get) => ({
   // ── Smart folders (project-organization plan item 9) ────────────────────
   // Saved queries, nothing else — members are derived per render by
   // lib/smartfolders, so there is no membership state to keep in sync.
-  addSmartFolder: (name, query) =>
+  addSmartFolder: (name, query) => {
+    if (!name.trim()) return;
+    get().recordHistory("add smart folder");
     set((s) => {
       const nm = name.trim();
-      if (!nm) return {};
       return {
         smartFolders: [
           ...s.smartFolders,
           { id: `smf-${Date.now().toString(36)}-${++_idSeq}`, name: nm, query: query.trim() },
         ],
       };
-    }),
-  updateSmartFolder: (id, name, query) =>
-    set((s) => ({
+    });
+  },
+  updateSmartFolder: (id, name, query) => (get().recordHistory("edit smart folder"), set((s) => ({
       smartFolders: s.smartFolders.map((f) =>
         f.id === id ? { ...f, name: name.trim() || f.name, query: query.trim() } : f,
       ),
-    })),
-  removeSmartFolder: (id) =>
-    set((s) => ({ smartFolders: s.smartFolders.filter((f) => f.id !== id) })),
+    }))),
+  removeSmartFolder: (id) => (get().recordHistory("remove smart folder"), set((s) => ({ smartFolders: s.smartFolders.filter((f) => f.id !== id) }))),
   toggleLeft: () => set((s) => ({ leftCollapsed: !s.leftCollapsed })),
   toggleRight: () => set((s) => ({ rightCollapsed: !s.rightCollapsed })),
   setStageTab: (stageTab) => set({ stageTab }),
@@ -2298,33 +2295,32 @@ export const useApp = create<AppState>((set, get) => ({
   },
   setPrefsOpen: (prefsOpen) => set({ prefsOpen }),
   setYScale: (yScale) => {
-    set({ yScale });
+    get().recordHistory("change Y scale"); set({ yScale });
     get().recordMacro(`Y axis ${yScale}`, `qz.setYScale(${lit(yScale)})`);
   },
   setXScale: (xScale) => {
-    set({ xScale });
+    get().recordHistory("change X scale"); set({ xScale });
     get().recordMacro(`X axis ${xScale}`, `qz.setXScale(${lit(xScale)})`);
   },
-  setShowGrid: (showGrid) => set({ showGrid }),
-  setShowLegend: (showLegend) => set({ showLegend }),
-  setLegendPos: (legendPos) => set({ legendPos }),
-  setLegendStatic: (legendStatic) => set({ legendStatic }),
-  setPlotTemplate: (plotTemplate) => set({ plotTemplate }),
-  setShowAxisBox: (showAxisBox) => set({ showAxisBox }),
+  setShowGrid: (showGrid) => { get().recordHistory("toggle grid"); set({ showGrid }); },
+  setShowLegend: (showLegend) => { get().recordHistory("toggle legend"); set({ showLegend }); },
+  setLegendPos: (legendPos) => { get().recordHistory("move legend"); set({ legendPos }); },
+  setLegendStatic: (legendStatic) => { get().recordHistory("change legend mode"); set({ legendStatic }); },
+  setPlotTemplate: (plotTemplate) => { get().recordHistory("apply plot template"); set({ plotTemplate }); },
+  setShowAxisBox: (showAxisBox) => { get().recordHistory("toggle axis box"); set({ showAxisBox }); },
   // A manual toggle (on OR off) always drops any spatial arrangement from a
   // prior Origin multi-panel apply, or a prior facet-by-column arrangement
   // (gap #21 residual) — the plain per-channel split (or leaving stack mode)
   // is what the user asked for, never a stale spatial/facet grid.
-  setStackMode: (stackMode) =>
-    set({ stackMode, composition: null }),
+  setStackMode: (stackMode) => (get().recordHistory("change plot layout"), set({ stackMode, composition: null })),
   // #54: the spatial multi-panel fit mode (PlotView field). `cyclePanelFit`
   // advances frames<->window until a page model exists (Stage 2 opens page).
-  setPanelFit: (panelFit) => set({ panelFit }),
-  cyclePanelFit: () => set((s) => ({ panelFit: nextPanelFit(s.panelFit, s.pageSetup != null) })),
-  setPageSetup: (pageSetup) => set({ pageSetup }),
-  setInsetMode: (insetMode) => set({ insetMode }),
-  setPolarMode: (polarMode) => set({ polarMode }),
-  setStatMode: (statMode) => set({ statMode }),
+  setPanelFit: (panelFit) => { get().recordHistory("change panel fit"); set({ panelFit }); },
+  cyclePanelFit: () => { get().recordHistory("change panel fit"); set((s) => ({ panelFit: nextPanelFit(s.panelFit, s.pageSetup != null) })); },
+  setPageSetup: (pageSetup) => { get().recordHistory("change page setup"); set({ pageSetup }); },
+  setInsetMode: (insetMode) => { get().recordHistory("toggle inset"); set({ insetMode }); },
+  setPolarMode: (polarMode) => { get().recordHistory("toggle polar plot"); set({ polarMode }); },
+  setStatMode: (statMode) => { get().recordHistory("toggle statistics plot"); set({ statMode }); },
   // Clears the paired decoded step too: a manual/Inspector range (or the
   // smart auto-scale reset to null) is no longer the Origin figure that
   // produced xStep/yStep, so a stale step must never leak onto it.
@@ -2332,74 +2328,73 @@ export const useApp = create<AppState>((set, get) => ({
   setYLim: (yLim) => set({ yLim, yStep: null }),
   // A manual y2 range is no longer the Origin figure that decoded y2Step, so
   // drop the stale step alongside it (mirrors setYLim / yStep above).
-  setY2Scale: (y2Scale) => set({ y2Scale }),
-  setY2Lim: (y2Lim) => set({ y2Lim, y2Step: null }),
-  setXFmt: (xFmt) => set({ xFmt }),
-  setYFmt: (yFmt) => set({ yFmt }),
-  setY2Fmt: (y2Fmt) => set({ y2Fmt }),
+  setY2Scale: (y2Scale) => { get().recordHistory("change Y2 scale"); set({ y2Scale }); },
+  setY2Lim: (y2Lim) => { get().recordHistory("change Y2 limits"); set({ y2Lim, y2Step: null }); },
+  setXFmt: (xFmt) => { get().recordHistory("format X axis"); set({ xFmt }); },
+  setYFmt: (yFmt) => { get().recordHistory("format Y axis"); set({ yFmt }); },
+  setY2Fmt: (y2Fmt) => { get().recordHistory("format Y2 axis"); set({ y2Fmt }); },
   setPlotTitle: (plotTitle) => {
-    set({ plotTitle });
+    get().recordHistory("edit plot title"); set({ plotTitle });
     get().recordMacro(`Title → ${plotTitle || "(none)"}`, `qz.setPlotTitle(${lit(plotTitle)})`);
   },
-  setXAxisLabel: (xAxisLabel) => set({ xAxisLabel }),
-  setYAxisLabel: (yAxisLabel) => set({ yAxisLabel }),
-  setY2AxisLabel: (y2AxisLabel) => set({ y2AxisLabel }),
+  setXAxisLabel: (xAxisLabel) => { get().recordHistory("edit X axis title"); set({ xAxisLabel }); },
+  setYAxisLabel: (yAxisLabel) => { get().recordHistory("edit Y axis title"); set({ yAxisLabel }); },
+  setY2AxisLabel: (y2AxisLabel) => { get().recordHistory("edit Y2 axis title"); set({ y2AxisLabel }); },
   setXKey: (xKey) => {
-    set({ xKey });
+    get().recordHistory("change X channel"); set({ xKey });
     get().recordMacro(`X axis → channel ${xKey ?? "time"}`, `qz.setXKey(${lit(xKey)})`);
   },
   setYKeys: (yKeys) => {
-    set({ yKeys });
+    get().recordHistory("change Y channels"); set({ yKeys });
     get().recordMacro(`Y channels → ${yKeys ? yKeys.join(",") : "all"}`, `qz.setYKeys(${lit(yKeys)})`);
   },
   setY2Keys: (y2Keys) => {
+    get().recordHistory("change Y2 channels");
     set({ y2Keys, ...(y2Keys ? {} : { y2Lim: null, y2Scale: null, y2Step: null, y2AxisLabel: "" }) });
     get().recordMacro(
       `Y2 channels → ${y2Keys ? y2Keys.join(",") : "none"}`,
       `qz.setY2Keys(${lit(y2Keys)})`,
     );
   },
-  addRefLine: (axis, value) =>
-    set((s) => ({ refLines: [...s.refLines, { id: `ref-${++_refSeq}`, axis, value }] })),
-  removeRefLine: (id) => set((s) => ({ refLines: s.refLines.filter((r) => r.id !== id) })),
+  addRefLine: (axis, value) => { get().recordHistory("add reference line"); set((s) => ({ refLines: [...s.refLines, { id: `ref-${++_refSeq}`, axis, value }] })); },
+  removeRefLine: (id) => { get().recordHistory("delete reference line"); set((s) => ({ refLines: s.refLines.filter((r) => r.id !== id) })); },
   // Move a reference line to a new value (drag commit). No-op for an unknown id.
-  updateRefLine: (id, value) =>
-    set((s) => ({ refLines: s.refLines.map((r) => (r.id === id ? { ...r, value } : r)) })),
+  updateRefLine: (id, value) => { get().recordHistory("move reference line"); set((s) => ({ refLines: s.refLines.map((r) => (r.id === id ? { ...r, value } : r)) })); },
   // Returns the new id (MAIN #27's "text box" flyout opens its text dialog).
   addAnnotation: (x, y, text) => {
     const id = `ann-${++_annSeq}`;
+    get().recordHistory("add annotation");
     set((s) => ({ annotations: [...s.annotations, { id, x, y, text }] }));
     return id;
   },
-  removeAnnotation: (id) =>
-    set((s) => ({ annotations: s.annotations.filter((a) => a.id !== id) })),
-  setSeriesStyle: (channel, patch) =>
+  removeAnnotation: (id) => { get().recordHistory("delete annotation"); set((s) => ({ annotations: s.annotations.filter((a) => a.id !== id) })); },
+  setSeriesStyle: (channel, patch) => (get().recordHistory("style curve"),
     set((s) => ({
       seriesStyles: { ...s.seriesStyles, [channel]: { ...s.seriesStyles[channel], ...patch } },
-    })),
-  resetSeriesStyle: (channel) =>
+    }))),
+  resetSeriesStyle: (channel) => (get().recordHistory("reset curve style"),
     set((s) => {
       const next = { ...s.seriesStyles };
       delete next[channel];
       return { seriesStyles: next };
-    }),
+    })),
   // Rename a channel's legend/series label. Blank (or whitespace) clears the
   // override, reverting to the dataset's own label.
-  setSeriesLabel: (channel, label) =>
+  setSeriesLabel: (channel, label) => (get().recordHistory("rename curve"),
     set((s) => {
       const next = { ...s.seriesLabels };
       const t = label.trim();
       if (t) next[channel] = t;
       else delete next[channel];
       return { seriesLabels: next };
-    }),
-  setErrKey: (channel, errChannel) =>
+    })),
+  setErrKey: (channel, errChannel) => (get().recordHistory("change error bars"),
     set((s) => {
       const next = { ...s.errKeys };
       if (errChannel == null) delete next[channel];
       else next[channel] = errChannel;
       return { errKeys: next };
-    }),
+    })),
   // Set (or clear, role=null) a column role on the ACTIVE dataset. Roles live on
   // the dataset (persist across switches + round-trip .dwk); the map empties to
   // undefined to keep saved files clean.
@@ -2530,16 +2525,19 @@ export const useApp = create<AppState>((set, get) => ({
   // Persist an explicit plotted-channel draw order (a permutation of the current
   // plotted channels). effectiveChannels reorders by it; stale entries (channels
   // no longer plotted) are ignored and newly-plotted channels append in order.
-  setSeriesOrder: (seriesOrder) => set({ seriesOrder }),
-  toggleHidden: (channel) =>
+  setSeriesOrder: (seriesOrder) => { get().recordHistory("reorder curves"); set({ seriesOrder }); },
+  toggleHidden: (channel) => {
+    get().recordHistory("toggle curve visibility");
     set((s) => ({
       hiddenChannels: s.hiddenChannels.includes(channel)
         ? s.hiddenChannels.filter((c) => c !== channel)
         : [...s.hiddenChannels, channel],
-    })),
+    }));
+  },
   // Solo = hide every plotted channel except `channel` (the column switcher's
   // engine). null clears. View state like toggleHidden — not macro-recorded.
-  soloChannel: (channel) =>
+  soloChannel: (channel) => {
+    get().recordHistory("solo curve");
     set((s) => {
       if (channel == null) return { hiddenChannels: [] };
       const ds = s.datasets.find((d) => d.id === s.activeId);
@@ -2547,8 +2545,10 @@ export const useApp = create<AppState>((set, get) => ({
       const plotted = effectiveChannels(ds.data, s.yKeys, s.xKey, ds.channelRoles, s.seriesOrder);
       if (!plotted.includes(channel)) return {};
       return { hiddenChannels: plotted.filter((c) => c !== channel) };
-    }),
+    });
+  },
   setWaterfall: (waterfall) => {
+    get().recordHistory("change waterfall offset");
     set({ waterfall });
     get().recordMacro(`Waterfall → ${waterfall}`, `qz.setWaterfall(${waterfall})`);
   },

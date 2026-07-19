@@ -58,6 +58,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     title: "Plot",
     items: [
       { keys: "A", desc: "Autoscale / reset the view" },
+      { keys: "Alt ←", desc: "Back to the previous zoom / pan view" },
+      { keys: "Alt →", desc: "Forward to the next zoom / pan view" },
       { keys: "Z", desc: "Box-zoom tool" },
       { keys: "H", desc: "Pan tool" },
       { keys: "D", desc: "Data-cursor tool" },

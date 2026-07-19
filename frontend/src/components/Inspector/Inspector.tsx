@@ -11,6 +11,7 @@ import MapCard from "./MapCard";
 import MetadataCard from "./MetadataCard";
 import NotesCard from "./NotesCard";
 import OriginProvenanceCard from "./OriginProvenanceCard";
+import PlotObjectsCard from "./PlotObjectsCard";
 import RefLinesCard from "./RefLinesCard";
 import SeriesStyleCard from "./SeriesStyleCard";
 import ShapesCard from "./ShapesCard";
@@ -54,6 +55,8 @@ export default function Inspector() {
       <NotesCard active={active} />
 
       <ChannelsCard active={active} />
+
+      <PlotObjectsCard />
 
       <CorrectionsCard key={active?.id ?? "none"} active={active} />
 

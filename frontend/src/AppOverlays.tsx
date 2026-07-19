@@ -16,6 +16,7 @@ import TextFormatHelp from "./components/overlays/TextFormatHelp";
 import Toaster from "./components/overlays/Toaster";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import WhatIsThis from "./components/overlays/WhatIsThis";
+import InteractionHints from "./components/overlays/InteractionHints";
 import BaselinePanel from "./components/workshops/baseline/BaselinePanel";
 import CalculatorsPanel from "./components/workshops/calculators/CalculatorsPanel";
 import DatasetMathPanel from "./components/workshops/datasetmath/DatasetMathPanel";
@@ -78,6 +79,7 @@ export default function AppOverlays() {
       <SplitDatasetDialog />
       <TooltipLayer />
       <WhatIsThis />
+      <InteractionHints />
       {curveFitOpen && <CurveFitPanel />}
       {hysteresisOpen && <HysteresisPanel />}
       {peaksOpen && <PeaksPanel />}

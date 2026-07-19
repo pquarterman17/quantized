@@ -1,4 +1,4 @@
-// App-wide undo/redo (MAIN_PLAN #9): snapshot history with structural
+// App-wide edit undo/redo (MAIN_PLAN #9, GUI_INTERACTION_PLAN #1): snapshots with structural
 // sharing, NOT inverse patches. The Zustand store updates immutably, so
 // capturing a reference to the previous `datasets` array (plus the sibling
 // "library" fields a data-mutating action can touch) is nearly free — old
@@ -9,23 +9,24 @@
 // `useApp((s) => ...)` selector and `useApp.getState()` call keeps working —
 // this file is a code boundary, not a second store.
 //
-// What participates (the undoable set — data-mutating actions only): every
+// What participates: scientific data edits, library/folder organization,
+// saved graph specifications, persistent PlotView styling/objects, and plot
+// window layout. Each user gesture records once at its boundary. Zoom/pan
+// limits use a separate back/forward view history so Ctrl+Z stays predictable.
+// The original data-only call sites include every
 // call site in useApp.ts that opens with `get().recordHistory("label")` —
 // worksheet cell edits + formula add/remove, dataset add/remove/remove-all/
 // rename/duplicate/reorder/tag/group/notes edits (a merge or an append-
 // import routes through `addDataset`, so it's covered by that one call
 // site), corrections apply/reset, row exclusion changes + clear, channel
-// role/type changes. View state (xKey/yKeys, log toggles, styles, window
-// layout, prefs) deliberately does NOT participate — cheap to redo by hand,
-// and folding it in would make Ctrl+Z feel random.
+// role/type changes. Preferences and transient tool/selection state remain
+// excluded.
 //
-// Snapshot shape: the "library" fields the participating actions actually
+// Snapshot shape: the persistent fields participating actions actually
 // mutate — `datasets`, `activeId`, `selectedIds`, `worksheetId`,
-// `originFigures`, `reports`, `figureDocs`. Deliberately NOT `plotWindows`
-// (window geometry/dataset-binding is view/layout territory, same
-// exclusion as above) — undoing a dataset removal can leave a window's
-// binding null even after its dataset reappears (redo-by-hand: rebind it).
-// The other direction — a window bound to a dataset undo just removed — IS
+// `originFigures`, `reports`, `figureDocs`, folder/spec collections,
+// `plotWindows`, and the live PlotView. A window bound to a dataset that an
+// undo just removed is
 // guarded below (`restorePatch` nulls it, the same treatment
 // `removeDataset` gives a live binding going forward), so a restored state
 // never shows a dangling reference, only the existing "no dataset" empty
@@ -36,6 +37,7 @@
 // when its promise settles, exactly like any other external mutation racing
 // the store.
 
+import { hydrateView, snapshotView, type PlotView } from "../lib/plotview";
 import { focusTransientReset } from "./windows";
 import type { AppState } from "./useApp";
 
@@ -55,12 +57,29 @@ export interface HistorySnapshot {
   originFidelity: AppState["originFidelity"];
   reports: AppState["reports"];
   figureDocs: AppState["figureDocs"];
+  folders: AppState["folders"];
+  smartFolders: AppState["smartFolders"];
+  savedPlotSpecs: AppState["savedPlotSpecs"];
+  activePlotSpecId: AppState["activePlotSpecId"];
+  plotWindows: AppState["plotWindows"];
+  focusedWindowId: AppState["focusedWindowId"];
+  view: PlotView;
 }
 
 export interface HistoryEntry {
   /** Shown by the Edit menu / ⌘K as "Undo <label>" / "Redo <label>". */
   label: string;
   snapshot: HistorySnapshot;
+}
+
+export interface ViewSnapshot {
+  xLim: [number, number] | null;
+  yLim: [number, number] | null;
+}
+
+export interface ViewHistoryEntry {
+  before: ViewSnapshot;
+  after: ViewSnapshot;
 }
 
 function snapshotOf(s: AppState): HistorySnapshot {
@@ -73,6 +92,13 @@ function snapshotOf(s: AppState): HistorySnapshot {
     originFidelity: s.originFidelity,
     reports: s.reports,
     figureDocs: s.figureDocs,
+    folders: s.folders,
+    smartFolders: s.smartFolders,
+    savedPlotSpecs: s.savedPlotSpecs,
+    activePlotSpecId: s.activePlotSpecId,
+    plotWindows: s.plotWindows,
+    focusedWindowId: s.focusedWindowId,
+    view: snapshotView(s),
   };
 }
 
@@ -88,8 +114,9 @@ function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppState> {
   const live = new Set(snap.datasets.map((d) => d.id));
   return {
     ...snap,
+    ...hydrateView(snap.view),
     selection: s.selection && live.has(s.selection.datasetId) ? s.selection : null,
-    plotWindows: s.plotWindows.map((w) =>
+    plotWindows: snap.plotWindows.map((w) =>
       w.datasetId && !live.has(w.datasetId) ? { ...w, datasetId: null } : w,
     ),
     ...focusTransientReset(),
@@ -108,6 +135,11 @@ export interface HistorySlice {
    *  check `history.length` themselves — see components/history). */
   undo: () => void;
   redo: () => void;
+  viewHistory: ViewHistoryEntry[];
+  viewFuture: ViewHistoryEntry[];
+  recordView: (before: ViewSnapshot, after: ViewSnapshot) => void;
+  backView: () => void;
+  forwardView: () => void;
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -116,6 +148,8 @@ export function createHistorySlice(set: SliceSet): HistorySlice {
   return {
     history: [],
     future: [],
+    viewHistory: [],
+    viewFuture: [],
     recordHistory: (label) =>
       set((s) => ({
         history: [...s.history, { label, snapshot: snapshotOf(s) }].slice(-HISTORY_DEPTH),
@@ -128,6 +162,7 @@ export function createHistorySlice(set: SliceSet): HistorySlice {
         return {
           history: s.history.slice(0, -1),
           future: [...s.future, { label: top.label, snapshot: snapshotOf(s) }].slice(-HISTORY_DEPTH),
+          status: `Undid ${top.label}`,
           ...restorePatch(s, top.snapshot),
         };
       }),
@@ -138,7 +173,54 @@ export function createHistorySlice(set: SliceSet): HistorySlice {
         return {
           future: s.future.slice(0, -1),
           history: [...s.history, { label: top.label, snapshot: snapshotOf(s) }].slice(-HISTORY_DEPTH),
+          status: `Redid ${top.label}`,
           ...restorePatch(s, top.snapshot),
+        };
+      }),
+    recordView: (before, after) =>
+      set((s) => {
+        if (
+          before.xLim?.[0] === after.xLim?.[0] && before.xLim?.[1] === after.xLim?.[1] &&
+          before.yLim?.[0] === after.yLim?.[0] && before.yLim?.[1] === after.yLim?.[1] &&
+          (before.xLim === null) === (after.xLim === null) &&
+          (before.yLim === null) === (after.yLim === null)
+        ) return {};
+        return {
+          viewHistory: [...s.viewHistory, { before, after }].slice(-HISTORY_DEPTH),
+          viewFuture: [],
+          xLim: after.xLim,
+          yLim: after.yLim,
+          xStep: null,
+          yStep: null,
+          status: "Plot view changed",
+        };
+      }),
+    backView: () =>
+      set((s) => {
+        const entry = s.viewHistory[s.viewHistory.length - 1];
+        if (!entry) return {};
+        return {
+          viewHistory: s.viewHistory.slice(0, -1),
+          viewFuture: [...s.viewFuture, entry].slice(-HISTORY_DEPTH),
+          xLim: entry.before.xLim,
+          yLim: entry.before.yLim,
+          xStep: null,
+          yStep: null,
+          status: "Back to previous plot view",
+        };
+      }),
+    forwardView: () =>
+      set((s) => {
+        const entry = s.viewFuture[s.viewFuture.length - 1];
+        if (!entry) return {};
+        return {
+          viewFuture: s.viewFuture.slice(0, -1),
+          viewHistory: [...s.viewHistory, entry].slice(-HISTORY_DEPTH),
+          xLim: entry.after.xLim,
+          yLim: entry.after.yLim,
+          xStep: null,
+          yStep: null,
+          status: "Forward to next plot view",
         };
       }),
   };

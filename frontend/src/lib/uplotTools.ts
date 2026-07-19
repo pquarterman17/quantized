@@ -305,6 +305,60 @@ export function wheelZoomPlugin(step = 1.18): uPlot.Plugin {
   };
 }
 
+export interface PlotViewBounds {
+  xLim: [number, number];
+  yLim: [number, number];
+}
+
+/** Observe completed navigation gestures without participating in their
+ * mechanics. Pointer drags (box zoom or pan) commit once on mouseup; a wheel
+ * burst commits once after a short idle period. */
+export function viewHistoryPlugin(onCommit: (before: PlotViewBounds, after: PlotViewBounds) => void): uPlot.Plugin {
+  let cleanup = () => {};
+  return {
+    hooks: {
+      ready: (u: uPlot) => {
+        const over = u.over;
+        const bounds = (): PlotViewBounds => ({
+          xLim: [u.scales.x.min ?? 0, u.scales.x.max ?? 1],
+          yLim: [u.scales.y.min ?? 0, u.scales.y.max ?? 1],
+        });
+        let pointerStart: PlotViewBounds | null = null;
+        let wheelStart: PlotViewBounds | null = null;
+        let wheelTimer: ReturnType<typeof setTimeout> | null = null;
+        const down = (e: MouseEvent) => {
+          if (e.button === 0) pointerStart = bounds();
+        };
+        const up = () => {
+          if (!pointerStart) return;
+          const before = pointerStart;
+          pointerStart = null;
+          setTimeout(() => onCommit(before, bounds()), 0);
+        };
+        const wheel = () => {
+          wheelStart ??= bounds();
+          if (wheelTimer) clearTimeout(wheelTimer);
+          wheelTimer = setTimeout(() => {
+            if (wheelStart) onCommit(wheelStart, bounds());
+            wheelStart = null;
+            wheelTimer = null;
+          }, 160);
+        };
+        over.addEventListener("mousedown", down);
+        document.addEventListener("mouseup", up);
+        over.addEventListener("wheel", wheel);
+        cleanup = () => {
+          over.removeEventListener("mousedown", down);
+          document.removeEventListener("mouseup", up);
+          over.removeEventListener("wheel", wheel);
+          if (wheelTimer) clearTimeout(wheelTimer);
+        };
+      },
+      destroy: () => cleanup(),
+    },
+  };
+}
+
 /** Report every visible series' value at the nearest-x cursor index (or null when
  *  off-plot / no visible series have a value there). The cursor index is shared
  *  across the aligned data, so one lookup per column gives a full readout. */

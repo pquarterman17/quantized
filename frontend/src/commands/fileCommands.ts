@@ -1,8 +1,8 @@
 // File-menu command registry entries (import/export/workspace/preferences) —
 // split out of appCommands.ts (that module's own store-size ratchet,
 // architecture.test.ts's STORE_PINS, had zero headroom). appCommands.ts
-// stays the thin aggregator; this module owns every command whose
-// `group` is "File". Behavior is unchanged — this is a verbatim move.
+// stays the thin aggregator. It owns file/workspace commands plus figure
+// build/export entries that are intentionally filed under Plot.
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import {
@@ -215,19 +215,22 @@ export function buildFileCommands(s: StoreGet): Action[] {
     },
     {
       id: "figure-builder",
-      group: "File",
+      group: "Plot",
+      section: "Build & export",
       label: "Figure builder (live preview)…",
       run: () => s().setFigureBuilderOpen(true),
     },
     {
       id: "figure-page",
-      group: "File",
+      group: "Plot",
+      section: "Build & export",
       label: "Figure page (multi-panel)…",
       run: () => s().setFigurePageOpen(true),
     },
     {
       id: "export-figure",
-      group: "File",
+      group: "Plot",
+      section: "Build & export",
       label: "Export figure…",
       // Body lives in lib/exportFigureCommand (store-size ratchet offset for
       // MAIN_PLAN #16's Append workspace command — see that file's doc).

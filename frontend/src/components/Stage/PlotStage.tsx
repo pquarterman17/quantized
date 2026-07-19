@@ -43,6 +43,7 @@ export default function PlotStage() {
   const xScale = useApp((s) => s.xScale);
   const xLim = useApp((s) => s.xLim);
   const yLim = useApp((s) => s.yLim);
+  const recordView = useApp((s) => s.recordView);
   const xStep = useApp((s) => s.xStep);
   const yStep = useApp((s) => s.yStep);
   const xFmt = useApp((s) => s.xFmt);
@@ -269,6 +270,7 @@ export default function PlotStage() {
         linearPaths={LINEAR_PATHS}
         pointsPaths={POINTS_PATHS}
         wheelZoom={wheelZoom}
+        onViewChange={(before, after) => recordView(before, after)}
         title={plotTitle}
         xAxisLabel={xAxisLabel}
         yAxisLabel={yAxisLabel}

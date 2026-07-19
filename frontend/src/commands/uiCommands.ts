@@ -9,6 +9,7 @@
 import type { StoreGet } from "../lib/exportActive";
 import { openHelp, useHelp } from "../store/help";
 import { PALETTE_LABEL, PALETTE_SHORTCUT, type Action } from "../store/commands";
+import { showInteractionHints } from "../components/overlays/InteractionHints";
 
 /** Build the View/Edit/Help-group curated palette actions against the live
  *  store handle (`useApp.getState`) — store setters are stable, so callers
@@ -121,6 +122,13 @@ export function buildUiCommands(s: StoreGet): Action[] {
       label: "What is this?",
       keywords: "inspect hover contextual help point identify tooltip",
       run: () => useHelp.getState().toggleWhatIsThis(),
+    },
+    {
+      id: "interaction-hints",
+      group: "Help",
+      label: "Show interaction hints",
+      keywords: "first run mouse right click double click drag drop tips",
+      run: showInteractionHints,
     },
   ];
 }

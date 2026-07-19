@@ -6,7 +6,6 @@
 
 import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
-import { toast } from "../store/toasts";
 
 /** Build the Data-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
@@ -72,30 +71,5 @@ export function buildDataCommands(s: StoreGet): Action[] {
     { id: "duplicate", group: "Data", section: "Combine & split", label: "Duplicate active dataset", run: () => { const id = s().activeId; if (id) s().duplicateDataset(id); } },
     { id: "reimport", group: "Data", section: "Recalculation", label: "Re-import active dataset", run: () => { const id = s().activeId; if (id) void s().reimportDataset(id); } },
     { id: "split", group: "Data", section: "Combine & split", label: "Split by column value…", run: () => { const id = s().activeId; if (id) s().openSplitDialog(id); } },
-    // Panel/overlay composite windows over the current selection (MAIN_PLAN
-    // #19 v1) — the command-palette counterparts of the Library's quick
-    // picks (lib/contextActions.ts's datasetMultiSelectActions), acting on
-    // the live multi-selection.
-    ...(
-      [
-        ["panel-row", "Panel: side by side", "row"],
-        ["panel-column", "Panel: stacked", "column"],
-        ["panel-grid", "Panel: grid", "grid"],
-        ["panel-overlay", "Overlay in one plot", "overlay"],
-      ] as const
-    ).map(([id, label, layout]) => ({
-      id,
-      group: "Data",
-      section: "Composite windows",
-      label,
-      run: () => {
-        const ids = s().selectedIds;
-        if (ids.length < 2) {
-          toast("select at least 2 datasets first", "danger");
-          return;
-        }
-        s().focusWindow(s().createPanelWindow(ids, layout));
-      },
-    })),
   ];
 }

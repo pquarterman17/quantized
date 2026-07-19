@@ -114,9 +114,14 @@ export default function PlotLegend({
   const onBoxMouseDown = (e: React.MouseEvent) => {
     if (tool !== "pointer" || e.button !== 0 || e.target !== e.currentTarget) return;
     e.preventDefault();
+    let recorded = false;
     const onMove = (ev: MouseEvent) => {
       const fxy = dragFraction(ev);
       if (!fxy) return;
+      if (!recorded) {
+        useApp.getState().recordHistory("move legend");
+        recorded = true;
+      }
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => setLegendXY(fxy));
     };
@@ -136,6 +141,7 @@ export default function PlotLegend({
     // Either way `setLegendXY(null)` clears BOTH (the coupled one-way degrade).
     if (!legendXY && !legendFrameXY) return;
     if (legendXY) setLegendPos(nearestLegendCorner(legendXY[0], legendXY[1]));
+    else useApp.getState().recordHistory("reset legend position");
     setLegendXY(null);
   };
 

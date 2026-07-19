@@ -43,6 +43,7 @@ export interface HelpTool {
   name: string;
   desc: string;
   section: string;
+  group?: "Analyze" | "Plot";
   shortcut?: string;
   keywords?: string;
 }
@@ -156,6 +157,7 @@ export const HELP_TOOLS: readonly HelpTool[] = [
     name: "Graph Builder",
     desc: "Drag channels into X / Y / Group / Facet wells; the mark morphs as columns land, then send it to the stage.",
     section: "Workflow",
+    group: "Plot",
     keywords: "drag wells x y group facet plot builder origin",
   },
   {
@@ -181,7 +183,7 @@ export function toolToHelpItem(t: HelpTool): HelpItem {
     key: t.id,
     title: t.name,
     detail: t.desc,
-    meta: `Analyze ▸ ${t.section}`,
+    meta: `${t.group ?? "Analyze"} ▸ ${t.section}`,
     keywords: `${t.section} ${t.keywords ?? ""} ${t.shortcut ?? ""}`.trim(),
   };
 }

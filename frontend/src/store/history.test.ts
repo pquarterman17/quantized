@@ -61,6 +61,8 @@ beforeEach(() => {
     selection: null,
     history: [],
     future: [],
+    viewHistory: [],
+    viewFuture: [],
     plotWindows: [win({ id: "w1" })],
     focusedWindowId: "w1",
   });
@@ -68,7 +70,9 @@ beforeEach(() => {
 
 describe("history slice mechanics", () => {
   it("recordHistory pushes a labeled snapshot and clears redo", () => {
-    useApp.setState({ future: [{ label: "stale", snapshot: { datasets: [], activeId: null, selectedIds: [], worksheetId: null, originFigures: [], originFidelity: [], reports: [], figureDocs: [] } }] });
+    useApp.getState().recordHistory("seed");
+    const snapshot = useApp.getState().history[0].snapshot;
+    useApp.setState({ history: [], future: [{ label: "stale", snapshot }] });
     useApp.getState().recordHistory("test action");
     const { history, future } = useApp.getState();
     expect(history).toHaveLength(1);
@@ -147,6 +151,25 @@ describe("history slice mechanics", () => {
     useApp.getState().undo();
 
     expect(useApp.getState().selection).toBeNull();
+  });
+});
+
+describe("separate plot-view history", () => {
+  it("walks committed navigation backward and forward without touching edit history", () => {
+    useApp.getState().recordView(
+      { xLim: null, yLim: null },
+      { xLim: [1, 3], yLim: [10, 20] },
+    );
+    expect(useApp.getState().xLim).toEqual([1, 3]);
+    expect(useApp.getState().history).toEqual([]);
+
+    useApp.getState().backView();
+    expect(useApp.getState().xLim).toBeNull();
+    expect(useApp.getState().viewFuture).toHaveLength(1);
+
+    useApp.getState().forwardView();
+    expect(useApp.getState().xLim).toEqual([1, 3]);
+    expect(useApp.getState().yLim).toEqual([10, 20]);
   });
 });
 

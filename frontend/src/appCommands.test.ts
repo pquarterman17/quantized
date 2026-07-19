@@ -74,7 +74,7 @@ describe("Insert commands (MAIN #27 drawing shapes — the menu-driven counterpa
 // list this item exists to fix. Cheaper to fail here than to notice in the UI.
 const SECTIONED_MENUS: Record<string, { min: number; allowed: string[] }> = {
   Analyze: {
-    min: 17,
+    min: 16,
     allowed: [
       "Fit",
       "Peaks & baseline",
@@ -86,10 +86,10 @@ const SECTIONED_MENUS: Record<string, { min: number; allowed: string[] }> = {
     ],
   },
   Data: {
-    min: 14,
-    allowed: ["Combine & split", "Rows & summary", "Recalculation", "Composite windows"],
+    min: 10,
+    allowed: ["Combine & split", "Rows & summary", "Recalculation"],
   },
-  Plot: { min: 14, allowed: ["Axes", "Display", "Layout"] },
+  Plot: { min: 21, allowed: ["Axes", "Display", "Layout", "Build & export"] },
 };
 
 describe.each(Object.entries(SECTIONED_MENUS))("%s menu sections (#17)", (group, cfg) => {

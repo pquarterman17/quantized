@@ -40,12 +40,13 @@ const props = {
 describe("PlotToolbar — shape dock flyout (MAIN #27)", () => {
   it("renders the ▱ dock button", () => {
     render(<PlotToolbar {...props} />);
-    expect(screen.getByRole("button", { name: "Draw Shape" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Draw Arrow" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose drawing tool" })).toBeInTheDocument();
   });
 
   it("clicking the dock button opens a flyout listing all five entries", () => {
     render(<PlotToolbar {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Draw Shape" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose drawing tool" }));
     for (const label of [/arrow/i, /line/i, /rectangle/i, /ellipse/i, /text box/i]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
@@ -53,7 +54,7 @@ describe("PlotToolbar — shape dock flyout (MAIN #27)", () => {
 
   it("picking 'Arrow' sets the store's drawShapeKind and closes the flyout", () => {
     render(<PlotToolbar {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Draw Shape" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose drawing tool" }));
     fireEvent.click(screen.getByText(/arrow/i));
     expect(useApp.getState().drawShapeKind).toBe("arrow");
     expect(screen.queryByText(/rectangle/i)).toBeNull(); // flyout closed
@@ -61,7 +62,7 @@ describe("PlotToolbar — shape dock flyout (MAIN #27)", () => {
 
   it("picking 'Text box' sets drawShapeKind to 'textbox'", () => {
     render(<PlotToolbar {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Draw Shape" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose drawing tool" }));
     fireEvent.click(screen.getByText(/text box/i));
     expect(useApp.getState().drawShapeKind).toBe("textbox");
   });
@@ -69,7 +70,16 @@ describe("PlotToolbar — shape dock flyout (MAIN #27)", () => {
   it("the dock button reads active while a draw mode is set", () => {
     useApp.setState({ drawShapeKind: "line" });
     render(<PlotToolbar {...props} />);
-    expect(screen.getByRole("button", { name: "Draw Shape" }).className).toMatch(/active/);
+    expect(screen.getByRole("button", { name: "Draw Arrow" }).className).toMatch(/active/);
+  });
+
+  it("the main half repeats the last tool selected from the arrow menu", () => {
+    render(<PlotToolbar {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Choose drawing tool" }));
+    fireEvent.click(screen.getByText(/text box/i));
+    useApp.getState().setDrawShapeKind(null);
+    fireEvent.click(screen.getByRole("button", { name: "Draw Text box" }));
+    expect(useApp.getState().drawShapeKind).toBe("textbox");
   });
 });
 

@@ -16,7 +16,14 @@ const spec = (channel: number): PlotSpec => ({
 });
 
 beforeEach(() => {
-  useApp.setState({ savedPlotSpecs: [], activePlotSpecId: null, graphBuilderSeed: null, graphBuilderOpen: false });
+  useApp.setState({
+    savedPlotSpecs: [],
+    activePlotSpecId: null,
+    graphBuilderSeed: null,
+    graphBuilderOpen: false,
+    history: [],
+    future: [],
+  });
 });
 
 describe("initial state", () => {
@@ -138,6 +145,22 @@ describe("deletePlotSpec", () => {
     expect(useApp.getState().activePlotSpecId).toBe(b);
     useApp.getState().deletePlotSpec(b);
     expect(useApp.getState().activePlotSpecId).toBeNull();
+  });
+});
+
+describe("edit history", () => {
+  it("undoes and redoes a saved graph specification with its active binding", () => {
+    const id = useApp.getState().saveAsPlotSpec("Reusable", spec(1));
+    expect(useApp.getState().history.at(-1)?.label).toBe("Save graph specification");
+
+    useApp.getState().undo();
+    expect(useApp.getState().savedPlotSpecs).toEqual([]);
+    expect(useApp.getState().activePlotSpecId).toBeNull();
+
+    useApp.getState().redo();
+    expect(useApp.getState().savedPlotSpecs).toHaveLength(1);
+    expect(useApp.getState().savedPlotSpecs[0].id).toBe(id);
+    expect(useApp.getState().activePlotSpecId).toBe(id);
   });
 });
 

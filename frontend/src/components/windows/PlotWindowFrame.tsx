@@ -216,6 +216,7 @@ export default function PlotWindowFrame({
   const beginDrag = (mode: DragMode) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
+    useApp.getState().recordHistory(mode === "move" ? "move window" : "resize window");
     dragRef.current = {
       mode,
       startX: e.clientX,

@@ -12,9 +12,10 @@
 // home for it.
 //
 // `drawShapeKind`/`selectedShapeId` are transient tool state (like
-// `selectedAnnotationId`) — NOT PlotView fields, NOT undo-recorded, NOT
+// `selectedAnnotationId`) — NOT PlotView fields and NOT undo-recorded, NOT
 // reset on window/dataset focus switch (ids are drawn from the module-local
-// `_shapeSeq`, never reused, so a stale id simply matches nothing).
+// `_shapeSeq`, never reused, so a stale id simply matches nothing). The
+// persistent `shapes` array itself participates in edit history.
 
 import type { Shape } from "../lib/types";
 import type { AppState } from "./useApp";
@@ -53,8 +54,9 @@ export interface ShapesSlice {
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
+type SliceGet = () => AppState;
 
-export function createShapesSlice(set: SliceSet): ShapesSlice {
+export function createShapesSlice(set: SliceSet, get: SliceGet): ShapesSlice {
   return {
     shapes: [],
     drawShapeKind: null,
@@ -63,12 +65,21 @@ export function createShapesSlice(set: SliceSet): ShapesSlice {
     setSelectedShapeId: (selectedShapeId) => set({ selectedShapeId }),
     addShape: (shape) => {
       const id = `shape-${++_shapeSeq}`;
+      get().recordHistory("add shape");
       set((s) => ({ shapes: [...s.shapes, { ...shape, id }] }));
       return id;
     },
-    updateShape: (id, patch) =>
-      set((s) => ({ shapes: s.shapes.map((sh) => (sh.id === id ? { ...sh, ...patch } : sh)) })),
-    removeShape: (id) => set((s) => ({ shapes: s.shapes.filter((sh) => sh.id !== id) })),
-    clearShapes: () => set({ shapes: [], selectedShapeId: null }),
+    updateShape: (id, patch) => {
+      get().recordHistory("edit shape");
+      set((s) => ({ shapes: s.shapes.map((sh) => (sh.id === id ? { ...sh, ...patch } : sh)) }));
+    },
+    removeShape: (id) => {
+      get().recordHistory("delete shape");
+      set((s) => ({ shapes: s.shapes.filter((sh) => sh.id !== id) }));
+    },
+    clearShapes: () => {
+      get().recordHistory("clear shapes");
+      set({ shapes: [], selectedShapeId: null });
+    },
   };
 }

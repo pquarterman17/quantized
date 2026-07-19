@@ -2,8 +2,8 @@
 // tools, peak finding, reflectivity, calculators, reductions, distributions,
 // stats chooser, graph builder, peak wizard) — split out of appCommands.ts
 // (that module's own store-size ratchet, zero headroom). appCommands.ts
-// stays the thin aggregator; this module owns every command whose `group`
-// is "Analyze". Behavior is unchanged — this is a verbatim move.
+// stays the thin aggregator. It owns analysis commands plus the Graph Builder
+// workflow, which is intentionally filed under Plot.
 
 import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
@@ -99,8 +99,8 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
     },
     {
       id: "graph-builder",
-      group: "Analyze",
-      section: "Workflow",
+      group: "Plot",
+      section: "Build & export",
       label: "Graph Builder (drag columns into X/Y/Group wells)…",
       keywords: "plot spec scatter line box violin bar mark morph drop zone well facet",
       run: () => s().setGraphBuilderOpen(true),

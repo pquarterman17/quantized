@@ -46,7 +46,13 @@ export function usePlotStageActions(
 } {
   function resetView() {
     if (plotRef.current && displayPayload) {
+      const u = plotRef.current;
+      const before = {
+        xLim: [u.scales.x.min ?? 0, u.scales.x.max ?? 1] as [number, number],
+        yLim: [u.scales.y.min ?? 0, u.scales.y.max ?? 1] as [number, number],
+      };
       plotRef.current.setData(displayPayload.data, true); // resetScales = re-fit
+      useApp.getState().recordView(before, { xLim: null, yLim: null });
     }
   }
 
