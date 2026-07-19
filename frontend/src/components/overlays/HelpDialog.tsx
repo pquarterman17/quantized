@@ -21,6 +21,7 @@ import {
   formatToHelpItem,
   type ImportFormat,
 } from "../../lib/importFormats";
+import { ORIGIN_TIPS, tipToHelpItem } from "../../lib/originTips";
 import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
 import { Button } from "../primitives";
 import { useHelp, type HelpSection } from "../../store/help";
@@ -31,10 +32,15 @@ const TABS: { id: HelpSection; label: string }[] = [
   { id: "search", label: "Topics" },
   { id: "shortcuts", label: "Keyboard & mouse" },
   { id: "importing", label: "Importing data" },
+  { id: "origin", label: "From Origin" },
 ];
 
 // The one searchable index — tools AND formats, so a search covers both.
-const SEARCH_ITEMS = [...HELP_TOOLS.map(toolToHelpItem), ...IMPORT_FORMATS.map(formatToHelpItem)];
+const SEARCH_ITEMS = [
+  ...HELP_TOOLS.map(toolToHelpItem),
+  ...IMPORT_FORMATS.map(formatToHelpItem),
+  ...ORIGIN_TIPS.map(tipToHelpItem),
+];
 
 /** Formats grouped by category, in first-appearance order (for the browse tab). */
 function formatsByCategory(): [string, ImportFormat[]][] {
@@ -107,6 +113,8 @@ export default function HelpDialog() {
           <SearchTab query={query} setQuery={setQuery} results={results} inputRef={inputRef} />
         ) : section === "importing" ? (
           <ImportingTab />
+        ) : section === "origin" ? (
+          <OriginTab />
         ) : (
           <ShortcutsTab />
         )}
@@ -198,6 +206,22 @@ function ImportingTab() {
               {f.note && <div className="qzk-help-detail">{f.note}</div>}
             </div>
           ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OriginTab() {
+  return (
+    <div className="qzk-help-list">
+      <div className="qzk-help-detail" style={{ marginBottom: 6 }}>
+        Familiar Origin workflows and where they live here.
+      </div>
+      {ORIGIN_TIPS.map((t) => (
+        <div key={t.id} className="qzk-help-row">
+          <div className="qzk-help-title">{t.origin}</div>
+          <div className="qzk-help-detail">{t.quantized}</div>
         </div>
       ))}
     </div>

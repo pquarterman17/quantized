@@ -113,4 +113,20 @@ describe("HelpDialog", () => {
     // No search box on a browse tab.
     expect(screen.queryByLabelText("Search help")).not.toBeInTheDocument();
   });
+  it("the From Origin tab maps Origin workflows to quantized", () => {
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp("origin"));
+    expect(screen.getByRole("tab", { name: "From Origin" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByText("Analysis ▸ Fitting (linear / nonlinear)")).toBeInTheDocument();
+  });
+
+  it("search covers Origin migration tips too", () => {
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    fireEvent.change(screen.getByLabelText("Search help"), { target: { value: "fitting" } });
+    expect(titleShown("Analysis ▸ Fitting (linear / nonlinear)")).toBe(true);
+  });
 });
