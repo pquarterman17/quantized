@@ -1,9 +1,9 @@
-// PlotSpec v2 block APPLY (GUI_INTERACTION_PLAN #12, Slice 5) — the mirror of
-// plotspec2.ts's "pure capture builders" (buildDisplayBlock/buildAxesBlock):
-// takes a spec's `display`/`axes` blocks and pushes them onto the LIVE store
-// through its existing public actions. Kept in its OWN module (not
-// useGraphBuilder) so a future macro/template replay can reuse it without
-// depending on the Graph Builder hook.
+// PlotSpec v2 block APPLY (GUI_INTERACTION_PLAN #12, Slice 5 + "part C") —
+// the mirror of plotspec2.ts's "pure capture builders" (buildDisplayBlock/
+// buildAxesBlock/buildDecorBlock): takes a spec's `display`/`axes`/`decor`
+// blocks and pushes them onto the LIVE store through its existing public
+// actions. Kept in its OWN module (not useGraphBuilder) so a future macro/
+// template replay can reuse it without depending on the Graph Builder hook.
 //
 // Takes a `StoreGet` handle (lib/exportActive.ts's own seam — "a lib
 // function reads the live store without importing the store module") rather
@@ -16,7 +16,9 @@
 // `setY2Keys`); `setY2Keys(nonEmptyArray)` does NOT. Applying the display
 // block FIRST means any `axes.y2` values applied afterward always win — the
 // reverse order would let a `setY2Keys(null)` wipe the y2 axis config right
-// after `axes.y2` set it.
+// after `axes.y2` set it. `decor` applies LAST (see below) — it never
+// interacts with display/axes' setters, so its position relative to them is
+// arbitrary; last simply mirrors the field order on `PlotSpec` itself.
 //
 // ── FIELDS WITH NO STORE SETTER (silently skipped, documented once here) ──
 // `AxisSpecV2.step` (x/y/y2): there is no `setXStep`/`setYStep`/`setY2Step`
@@ -26,15 +28,36 @@
 // (falls back to auto ticks) — an accepted, documented gap, not a bug.
 // (`axes.y2.fmt` now HAS a setter — `setY2Fmt` — applied like x/y.fmt below;
 // a captured block always carries a real, non-null format.)
+// `decor.legend.title`: no `setLegendTitle` action exists at all —
+// `legendTitle` is only ever written by `applyOriginFigure`'s own direct
+// `set()` call. Captured (see `LegendBlock`'s doc) but never pushed here —
+// same documented-gap category as `step` above.
+// `decor.annotations[].axis` (a y2-plotted annotation): NEITHER
+// `addAnnotation` nor `updateAnnotation`'s patch type accepts it — silently
+// dropped on restore. Annotations pinned to the secondary axis are a
+// decode-only shape (`originFigureAnnotations`) a hand-built Graph Builder
+// plot never produces, so this narrows the same way `legendFrameXY`'s
+// exclusion does (see `LegendBlock`'s doc).
 //
 // ── SCOPE (blocks absent → zero effect) ─────────────────────────────────────
-// A v1 spec (no `display`/`axes` content) makes zero store calls — the
-// GUI_INTERACTION #12 Slice 5 regression pin (sendToStage's store-effect
-// sequence for a v1 spec stays byte-identical to before this slice).
+// A v1 spec (no `display`/`axes`/`decor` content) makes zero store calls —
+// the GUI_INTERACTION #12 Slice 5 regression pin (sendToStage's store-effect
+// sequence for a v1 spec stays byte-identical to before this slice) extends
+// to `decor` unchanged.
+//
+// ── DECOR REPLACE SEMANTICS ─────────────────────────────────────────────────
+// `decor.annotations`/`decor.shapes` describe the plot's COMPLETE overlay
+// list (see `buildDecorBlock`'s doc — both are global, uncoped captures),
+// so applying either REPLACES whatever's live: `shapes` has a real bulk
+// `clearShapes` action to reuse; `annotations` has none (`ShapesSlice` grew
+// one where `store/useApp.ts`'s own annotation actions never did), so it's
+// cleared via a loop of the existing per-id `removeAnnotation` instead —
+// "clear+add via existing actions", never a new store action (this module
+// stays action-only, no `useApp.ts` edits).
 
 import type { StoreGet } from "./exportActive";
-import type { AxesBlock, DisplayBlock, PlotSpec } from "./plotspec";
-import type { SeriesStyle } from "./types";
+import type { AxesBlock, DecorBlock, DisplayBlock, PlotSpec } from "./plotspec";
+import type { Annotation, SeriesStyle } from "./types";
 
 function applyDisplayBlock(display: DisplayBlock | undefined, s: StoreGet): void {
   if (!display) return;
@@ -96,15 +119,66 @@ function applyAxesBlock(axes: AxesBlock | undefined, s: StoreGet): void {
   }
 }
 
-/** Apply a spec's v2 `display`/`axes` blocks onto the live store — the Slice
- *  5 counterpart of `captureLiveBlocks` (useGraphBuilder.ts's Slice 3 piece).
- *  Call AFTER the caller's own setActive/setXKey/setYKeys (the spec's
- *  dataset must already be the live one) — this only pushes STYLE/AXIS
- *  state, never zones/channel selection itself. A spec with neither block
- *  present makes zero store calls (see the module doc's regression-pin
- *  note). */
+function applyDecorBlock(decor: DecorBlock | undefined, s: StoreGet): void {
+  if (!decor) return;
+  const state = s();
+  // REPLACE: clear every LIVE annotation first (no bulk action exists — see
+  // the module doc's DECOR REPLACE SEMANTICS note), then re-add from the
+  // captured block. Reads `state.annotations` once, before any removal —
+  // each `removeAnnotation` call re-filters the store's live array itself,
+  // so a stale snapshot of WHICH ids to remove is all this loop needs.
+  if (decor.annotations !== undefined) {
+    for (const a of state.annotations) state.removeAnnotation(a.id);
+    for (const a of decor.annotations) {
+      const id = state.addAnnotation(a.x, a.y, a.text);
+      const patch: Partial<Pick<Annotation, "size" | "anchor" | "frame">> = {};
+      if (a.size !== undefined) patch.size = a.size;
+      if (a.anchor !== undefined) patch.anchor = a.anchor;
+      if (a.frame !== undefined) patch.frame = a.frame;
+      if (Object.keys(patch).length > 0) state.updateAnnotation(id, patch);
+      // a.axis: no setter accepts it anywhere — see module doc.
+    }
+  }
+  // REPLACE: `clearShapes` is a real bulk action (unlike annotations) —
+  // reuse it directly, then re-add every captured shape via `addShape`,
+  // which (unlike `addAnnotation`) already accepts the FULL shape payload.
+  if (decor.shapes !== undefined) {
+    state.clearShapes();
+    for (const sh of decor.shapes) {
+      state.addShape({
+        kind: sh.kind,
+        x1: sh.x1,
+        y1: sh.y1,
+        x2: sh.x2,
+        y2: sh.y2,
+        ...(sh.anchor !== undefined ? { anchor: sh.anchor } : {}),
+        ...(sh.stroke !== undefined ? { stroke: sh.stroke } : {}),
+        ...(sh.fill !== undefined ? { fill: sh.fill } : {}),
+        ...(sh.opacity !== undefined ? { opacity: sh.opacity } : {}),
+        ...(sh.width !== undefined ? { width: sh.width } : {}),
+        ...(sh.dash !== undefined ? { dash: sh.dash } : {}),
+      });
+    }
+  }
+  if (decor.legend) {
+    if (decor.legend.pos !== undefined) state.setLegendPos(decor.legend.pos);
+    if (decor.legend.xy !== undefined) state.setLegendXY(decor.legend.xy);
+    // decor.legend.title: no setLegendTitle action exists — see module doc.
+  }
+}
+
+/** Apply a spec's v2 `display`/`axes`/`decor` blocks onto the live store —
+ *  the Slice 5 / "part C" counterpart of `captureLiveBlocks`
+ *  (useGraphBuilder.ts's Slice 3 piece). Call AFTER the caller's own
+ *  setActive/setXKey/setYKeys (the spec's dataset must already be the live
+ *  one) — this only pushes STYLE/AXIS/OVERLAY state, never zones/channel
+ *  selection itself. A spec with none of the three blocks present makes
+ *  zero store calls (see the module doc's regression-pin note). */
 export function applySpecBlocks(spec: PlotSpec, s: StoreGet): void {
-  // Display FIRST, axes SECOND — see the module doc's ORDERING note.
+  // Display FIRST, axes SECOND — see the module doc's ORDERING note. Decor
+  // is independent of both — see the same note for why its position doesn't
+  // matter functionally.
   applyDisplayBlock(spec.display, s);
   applyAxesBlock(spec.axes, s);
+  applyDecorBlock(spec.decor, s);
 }

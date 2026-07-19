@@ -450,12 +450,17 @@ function isAxisFormat(v: unknown): v is AxisFormat {
   return typeof v === "object" && v !== null && typeof (v as { mode?: unknown }).mode === "string";
 }
 
-const LEGEND_POS: readonly LegendPos[] = ["ne", "nw", "se", "sw"];
+/** Every valid legend corner preset — exported so a consumer that needs to
+ *  validate a bare `legendPos` value outside `sanitizeView` (GUI_INTERACTION
+ *  #12's `decor.legend` block, `lib/plotspec2.ts`) reuses the SAME list
+ *  rather than redeclaring it. */
+export const LEGEND_POS: readonly LegendPos[] = ["ne", "nw", "se", "sw"];
 
 /** A `legendXY` fraction pair: a finite 2-tuple, each component clamped to
  *  [0, 1] — a hand-edited or stale `.dwk` can't smuggle in an off-canvas
- *  position. */
-function legendXYOrNull(v: unknown): [number, number] | null {
+ *  position. Exported so `lib/plotspec2.ts`'s `decor.legend.xy` validator
+ *  reuses this exact clamp instead of a second copy. */
+export function legendXYOrNull(v: unknown): [number, number] | null {
   if (!isRange(v)) return null;
   const clamp = (n: number) => Math.min(1, Math.max(0, n));
   return [clamp(v[0]), clamp(v[1])];
@@ -510,8 +515,11 @@ const ANNOTATION_ANCHORS: readonly Annotation["anchor"][] = ["data", "page"];
  *  fraction-coordinate shape — rather than dropping the whole annotation
  *  for a stale/hand-edited out-of-range value. An entry missing the
  *  required `id`/finite `x`/`y` shape is dropped (nothing sane to fall back
- *  to for a single list entry). Never throws. */
-function sanitizeAnnotations(v: unknown): Annotation[] {
+ *  to for a single list entry). Never throws. Exported so GUI_INTERACTION
+ *  #12's `decor` PlotSpec v2 block (`lib/plotspec2.ts`) validates a saved
+ *  spec's captured annotations through the SAME sanitizer `.dwk` window
+ *  restore uses — never a second, drifting copy. */
+export function sanitizeAnnotations(v: unknown): Annotation[] {
   if (!Array.isArray(v)) return [];
   const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
   const out: Annotation[] = [];
@@ -568,8 +576,10 @@ const SHAPE_ANCHORS: readonly Shape["anchor"][] = ["data", "page"];
  *  single list entry); a `"page"` anchor's coords are canvas FRACTIONS,
  *  clamped into [0, 1] (same convention as a page-anchored annotation);
  *  `opacity` clamps into [0, 1]; `width` floors at a hairline (0 would be
- *  invisible AND unclickable). Never throws. */
-function sanitizeShapes(v: unknown): Shape[] {
+ *  invisible AND unclickable). Never throws. Exported for the same reason
+ *  as `sanitizeAnnotations` — GUI_INTERACTION #12's `decor` block reuses
+ *  this exact sanitizer. */
+export function sanitizeShapes(v: unknown): Shape[] {
   if (!Array.isArray(v)) return [];
   const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
   const out: Shape[] = [];

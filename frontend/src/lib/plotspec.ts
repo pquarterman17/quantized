@@ -98,11 +98,12 @@
 // so a figure / template / macro can persist and replay a built graph. The
 // `version` tag is the migration seam: a spec is version 1 (today's exact
 // zones+mark shape, byte-stable) unless at least one v2 block (`display`/
-// `axes`) survives validation with actual content, in which case it
+// `axes`/`decor`) survives validation with actual content, in which case it
 // serializes as version 2 — the block GRAMMAR itself (SeriesDisplay/
-// AxesBlock/the reserved page/decor placeholders + their validators/pure
-// capture builders) lives in `./plotspec2` (GUI_INTERACTION_PLAN #12, Slice
-// 2); this module only owns the top-level version/promotion seam.
+// AxesBlock/DecorBlock/the reserved `page` placeholder + their validators/
+// pure capture builders) lives in `./plotspec2` (GUI_INTERACTION_PLAN #12,
+// Slices 2 + "part C"); this module only owns the top-level version/
+// promotion seam.
 
 import { buildBarMatrix, type BarChartData } from "./barlayout";
 import { facetPayloads, facetSlices, type FacetPanel } from "./facet";
@@ -110,8 +111,10 @@ import { channelModelingType, isCategorical } from "./modeling";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import {
   axesBlockHasContent,
+  decorBlockHasContent,
   displayBlockHasContent,
   validateAxesBlock,
+  validateDecorBlock,
   validateDisplayBlock,
   type AxesBlock,
   type DecorBlock,
@@ -172,11 +175,13 @@ export interface PlotSpec {
   /** Axis label/limits/scale/step/format + plot title (Slice 2 schema; wired
    *  by Slice 5). Same omit-when-empty rule as `display`. */
   axes?: AxesBlock;
-  /** Reserved for Slice 4 (page/panel/facet/layer geometry) — always
-   *  stripped by `validatePlotSpec` today; see `./plotspec2`'s doc. */
+  /** Reserved — panel/facet/layer geometry belongs to
+   *  ORIGIN_FILE_DECODE_PLAN #54, not a slice of this item; always stripped
+   *  by `validatePlotSpec` today. See `./plotspec2`'s doc. */
   page?: PageBlock;
-  /** Reserved for Slice 5 (annotations/shapes/legend) — always stripped by
-   *  `validatePlotSpec` today; see `./plotspec2`'s doc. */
+  /** Annotations/shapes/legend placement (the item's "part C" finish; wired
+   *  by `lib/plotspecApply.ts` on Send). Same omit-when-empty rule as
+   *  `display`/`axes` — see `./plotspec2`'s doc. */
   decor?: DecorBlock;
 }
 
@@ -564,14 +569,14 @@ function isPlotMark(v: unknown): v is PlotMark {
  *  back to scatter. This is the .dwk / macro replay entry point.
  *
  *  Accepts an incoming `version` of 1 OR 2 (anything else -> null); the
- *  incoming tag is otherwise ADVISORY ONLY — `display`/`axes` are parsed
- *  whenever present regardless of what the tag said (a v1-tagged spec with
- *  no such keys naturally yields no blocks), and the RETURNED `version` is
- *  always recomputed from whether a block survived validation with actual
- *  content (see `plotspec2.ts`'s `displayBlockHasContent`/
- *  `axesBlockHasContent`). `page`/`decor` are reserved (Slice 4/5) and
- *  STRIPPED unconditionally — no validator call, no matter what's on those
- *  keys. */
+ *  incoming tag is otherwise ADVISORY ONLY — `display`/`axes`/`decor` are
+ *  parsed whenever present regardless of what the tag said (a v1-tagged
+ *  spec with no such keys naturally yields no blocks), and the RETURNED
+ *  `version` is always recomputed from whether a block survived validation
+ *  with actual content (see `plotspec2.ts`'s `displayBlockHasContent`/
+ *  `axesBlockHasContent`/`decorBlockHasContent`). `page` is reserved (see
+ *  `./plotspec2`'s doc) and STRIPPED unconditionally — no validator call, no
+ *  matter what's on that key. */
 export function validatePlotSpec(value: unknown): PlotSpec | null {
   if (value === null || typeof value !== "object") return null;
   const o = value as Record<string, unknown>;
@@ -587,14 +592,17 @@ export function validatePlotSpec(value: unknown): PlotSpec | null {
   const mark = isPlotMark(o.mark) ? o.mark : "scatter";
   const rawDisplay = validateDisplayBlock(o.display);
   const rawAxes = validateAxesBlock(o.axes);
+  const rawDecor = validateDecorBlock(o.decor);
   const display = displayBlockHasContent(rawDisplay) ? rawDisplay : undefined;
   const axes = axesBlockHasContent(rawAxes) ? rawAxes : undefined;
+  const decor = decorBlockHasContent(rawDecor) ? rawDecor : undefined;
   return {
-    version: display || axes ? 2 : 1,
+    version: display || axes || decor ? 2 : 1,
     zones,
     mark,
     ...(display ? { display } : {}),
     ...(axes ? { axes } : {}),
+    ...(decor ? { decor } : {}),
   };
 }
 

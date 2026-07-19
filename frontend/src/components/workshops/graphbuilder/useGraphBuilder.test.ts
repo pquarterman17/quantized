@@ -553,6 +553,12 @@ describe("useGraphBuilder — capture on save (GUI_INTERACTION_PLAN #12 Slice 3)
       xStep: null,
       yStep: null,
       plotTitle: "",
+      // "part C" — same isolation rationale, extended to the decor fields.
+      annotations: [],
+      shapes: [],
+      legendPos: "ne",
+      legendXY: null,
+      legendTitle: null,
     });
   });
 
@@ -599,6 +605,24 @@ describe("useGraphBuilder — capture on save (GUI_INTERACTION_PLAN #12 Slice 3)
     expect(saved.version).toBe(2);
     expect(saved.axes?.x?.label).toBe("Field (Oe)");
     expect(saved.axes?.y?.lim).toEqual([0, 100]);
+  });
+
+  // "part C" — the item's last piece: annotations/shapes/legend placement.
+  it("captures live annotations/shapes/legend into a v2 decor block", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => {
+      useApp.getState().addAnnotation(1, 2, "peak");
+      useApp.getState().addShape({ kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1 });
+      useApp.getState().setLegendPos("sw");
+    });
+    act(() => result.current.saveAs("Decorated"));
+    const saved = result.current.activeSpec!.spec;
+    expect(saved.version).toBe(2);
+    expect(saved.decor?.annotations).toMatchObject([{ x: 1, y: 2, text: "peak" }]);
+    expect(saved.decor?.shapes).toMatchObject([{ kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1 }]);
+    expect(saved.decor?.legend).toEqual({ pos: "sw" });
   });
 
   it("a spec bound to a NON-active dataset saves zones-only — no live state to read (#8i)", () => {
@@ -721,14 +745,20 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
       yStep: null,
       plotTitle: "",
       y2Fmt: null,
+      // "part C" — same isolation rationale, extended to the decor fields.
+      annotations: [],
+      shapes: [],
+      legendPos: "ne",
+      legendXY: null,
+      legendTitle: null,
     });
   });
 
-  it("regression pin: a v1 spec's sendToStage leaves every style/axis field byte-identical", () => {
+  it("regression pin: a v1 spec's sendToStage leaves every style/axis/decor field byte-identical", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
-    act(() =>
+    act(() => {
       useApp.setState({
         seriesStyles: { 1: { color: "#ff0000" } },
         hiddenChannels: [2],
@@ -736,8 +766,11 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
         seriesOrder: [1, 0],
         xLim: [0, 10],
         plotTitle: "Keep me",
-      }),
-    );
+      });
+      useApp.getState().addAnnotation(1, 2, "keep me too");
+      useApp.getState().addShape({ kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1 });
+      useApp.getState().setLegendPos("sw");
+    });
     const before = useApp.getState();
     const snapshot = {
       seriesStyles: before.seriesStyles,
@@ -746,6 +779,9 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
       seriesOrder: before.seriesOrder,
       xLim: before.xLim,
       plotTitle: before.plotTitle,
+      annotations: before.annotations,
+      shapes: before.shapes,
+      legendPos: before.legendPos,
     };
     expect(result.current.activeSpec?.spec.version).not.toBe(2); // sanity: nothing saved, this is a plain v1 spec
     act(() => result.current.sendToStage());
@@ -756,18 +792,21 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
     expect(s.seriesOrder).toEqual(snapshot.seriesOrder);
     expect(s.xLim).toEqual(snapshot.xLim);
     expect(s.plotTitle).toEqual(snapshot.plotTitle);
+    expect(s.annotations).toEqual(snapshot.annotations);
+    expect(s.shapes).toEqual(snapshot.shapes);
+    expect(s.legendPos).toEqual(snapshot.legendPos);
   });
 
   // THE acceptance test of the #12 campaign so far: save captures the live
-  // display/axes state (Slice 3), reopening restores the BUILDER's wells
-  // (item 3, pre-#12), and now Send restores the STORE's style/axis state
-  // too — the full save → reopen → send loop.
-  it("FULL LOOP: save styled → reset → reopen → send → styles/limits/y2 restored", () => {
+  // display/axes/decor state (Slice 3 + "part C"), reopening restores the
+  // BUILDER's wells (item 3, pre-#12), and now Send restores the STORE's
+  // style/axis/decor state too — the full save → reopen → send loop.
+  it("FULL LOOP: save styled → reset → reopen → send → styles/limits/y2/decor restored", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
     act(() => result.current.assign("y", 2)); // second Y channel — will ride y2
-    act(() =>
+    act(() => {
       useApp.setState({
         seriesStyles: { 1: { color: "#ff0000", width: 2 }, 2: { color: "#00ff00" } },
         y2Keys: [2],
@@ -775,8 +814,11 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
         yLim: [0, 100],
         plotTitle: "My Plot",
         y2Fmt: { mode: "fixed", digits: 1 },
-      }),
-    );
+      });
+      useApp.getState().addAnnotation(1, 2, "peak");
+      useApp.getState().addShape({ kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1 });
+      useApp.getState().setLegendPos("sw");
+    });
     act(() => result.current.saveAs("Styled"));
     const saved = result.current.activeSpec!.spec;
     expect(saved.version).toBe(2);
@@ -788,11 +830,16 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
     expect(saved.axes?.y?.lim).toEqual([0, 100]);
     expect(saved.axes?.title).toBe("My Plot");
     expect(saved.axes?.y2?.fmt).toEqual({ mode: "fixed", digits: 1 });
+    expect(saved.decor?.annotations).toMatchObject([{ x: 1, y: 2, text: "peak" }]);
+    expect(saved.decor?.shapes).toMatchObject([{ kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1 }]);
+    expect(saved.decor?.legend).toEqual({ pos: "sw" });
     const id = result.current.activeSpec!.id;
 
     // Simulate the user wandering off and changing everything before
-    // reopening — a bare "reset" the way a real session would leave things.
-    act(() =>
+    // reopening — a bare "reset" the way a real session would leave things,
+    // including a DIFFERENT annotation/shape/legend so the restore below is
+    // provably a REPLACE, not a merge.
+    act(() => {
       useApp.setState({
         seriesStyles: {},
         hiddenChannels: [],
@@ -802,8 +849,13 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
         yLim: null,
         plotTitle: "",
         y2Fmt: null,
-      }),
-    );
+        annotations: [],
+        shapes: [],
+        legendPos: "ne",
+      });
+      useApp.getState().addAnnotation(9, 9, "stale");
+      useApp.getState().setLegendPos("nw");
+    });
     act(() => result.current.reset());
     expect(result.current.activeSpec).toBeNull();
     expect(result.current.chips("y")).toHaveLength(0);
@@ -814,6 +866,7 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
     expect(result.current.activeSpec?.id).toBe(id);
     expect(result.current.chips("y").map((c) => c.channel)).toEqual([1, 2]);
     expect(useApp.getState().seriesStyles).toEqual({}); // NOT yet applied — Send does that
+    expect(useApp.getState().annotations).toMatchObject([{ text: "stale" }]); // still the wandered-off state
 
     // Send: NOW the blocks apply.
     act(() => result.current.sendToStage());
@@ -826,6 +879,13 @@ describe("useGraphBuilder — apply saved blocks on Send (GUI_INTERACTION_PLAN #
     expect(s.yLim).toEqual([0, 100]);
     expect(s.plotTitle).toBe("My Plot");
     expect(s.y2Fmt).toEqual({ mode: "fixed", digits: 1 });
+    // The stale "wandered off" annotation is GONE (REPLACE, not append) and
+    // the captured one is back; same for the shape and legend position.
+    expect(s.annotations).toHaveLength(1);
+    expect(s.annotations[0]).toMatchObject({ x: 1, y: 2, text: "peak" });
+    expect(s.shapes).toHaveLength(1);
+    expect(s.shapes[0]).toMatchObject({ kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1 });
+    expect(s.legendPos).toBe("sw");
   });
 
   it("openSpec's status message flags a saved spec that carries display/axes blocks", () => {

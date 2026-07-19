@@ -3,13 +3,18 @@ import { describe, expect, it } from "vitest";
 import {
   axesBlockHasContent,
   buildAxesBlock,
+  buildDecorBlock,
   buildDisplayBlock,
+  decorBlockHasContent,
   displayBlockHasContent,
   validateAxesBlock,
+  validateDecorBlock,
   validateDisplayBlock,
   type AxesBlock,
+  type DecorBlock,
   type DisplayBlock,
 } from "./plotspec2";
+import type { Annotation, Shape } from "./types";
 
 // ── validateDisplayBlock ─────────────────────────────────────────────────────
 describe("validateDisplayBlock", () => {
@@ -260,5 +265,129 @@ describe("buildAxesBlock", () => {
 
   it("treats a blank label as absent", () => {
     expect(buildAxesBlock({ xLabel: "", title: "" })).toBeUndefined();
+  });
+});
+
+// ── validateDecorBlock ("part C") ───────────────────────────────────────────
+describe("validateDecorBlock", () => {
+  it("returns null only when the input isn't an object", () => {
+    expect(validateDecorBlock(null)).toBeNull();
+    expect(validateDecorBlock(undefined)).toBeNull();
+    expect(validateDecorBlock("nope")).toBeNull();
+    expect(validateDecorBlock(5)).toBeNull();
+  });
+
+  it("returns an empty (but non-null) block for an empty object", () => {
+    expect(validateDecorBlock({})).toEqual({});
+  });
+
+  it("captures a well-formed annotation + shape + legend via the reused sanitizers", () => {
+    const v = {
+      annotations: [{ id: "a1", x: 1, y: 2, text: "peak" }],
+      shapes: [{ id: "s1", kind: "arrow", x1: 0, y1: 0, x2: 1, y2: 1 }],
+      legend: { pos: "sw", xy: [0.2, 0.8], title: "Nb/Au" },
+    };
+    expect(validateDecorBlock(v)).toEqual({
+      annotations: [{ id: "a1", x: 1, y: 2, text: "peak" }],
+      shapes: [{ id: "s1", kind: "arrow", x1: 0, y1: 0, x2: 1, y2: 1 }],
+      legend: { pos: "sw", xy: [0.2, 0.8], title: "Nb/Au" },
+    });
+  });
+
+  it("drops a malformed annotation/shape entry per-entry via sanitizeAnnotations/sanitizeShapes, never nulls the block", () => {
+    const v = {
+      annotations: [{ id: "a1", x: 1, y: 2, text: "ok" }, { x: 1, y: 2 }], // missing id — dropped
+      shapes: [{ id: "s1", kind: "bogus", x1: 0, y1: 0, x2: 1, y2: 1 }], // unknown kind — dropped
+    };
+    expect(validateDecorBlock(v)).toEqual({
+      annotations: [{ id: "a1", x: 1, y: 2, text: "ok" }],
+    });
+  });
+
+  it("omits annotations/shapes keys entirely when the sanitized list is empty", () => {
+    expect(validateDecorBlock({ annotations: [], shapes: [] })).toEqual({});
+    expect(validateDecorBlock({ annotations: "not an array" })).toEqual({});
+  });
+
+  it("drops an unknown legend.pos value and an out-of-shape legend.xy, keeping the rest", () => {
+    expect(validateDecorBlock({ legend: { pos: "center" } })).toEqual({});
+    expect(validateDecorBlock({ legend: { pos: "nw", xy: "not a tuple" } })).toEqual({
+      legend: { pos: "nw" },
+    });
+  });
+
+  it("clamps an out-of-range legend.xy into [0, 1] (legendXYOrNull's convention)", () => {
+    expect(validateDecorBlock({ legend: { xy: [-0.5, 1.5] } })).toEqual({ legend: { xy: [0, 1] } });
+  });
+
+  it("drops a legend value that isn't an object, without nulling the whole block", () => {
+    expect(validateDecorBlock({ legend: "fancy", shapes: [{ id: "s1", kind: "line", x1: 0, y1: 0, x2: 1, y2: 1 }] })).toEqual({
+      shapes: [{ id: "s1", kind: "line", x1: 0, y1: 0, x2: 1, y2: 1 }],
+    });
+  });
+});
+
+// ── decorBlockHasContent ─────────────────────────────────────────────────────
+describe("decorBlockHasContent", () => {
+  it("is false for null/undefined/empty/empty-array fields", () => {
+    expect(decorBlockHasContent(null)).toBe(false);
+    expect(decorBlockHasContent(undefined)).toBe(false);
+    expect(decorBlockHasContent({})).toBe(false);
+    expect(decorBlockHasContent({ annotations: [] })).toBe(false);
+    expect(decorBlockHasContent({ shapes: [] })).toBe(false);
+  });
+
+  it("is true with any annotation, shape, or legend content", () => {
+    const withAnn: DecorBlock = { annotations: [{ id: "a1", x: 0, y: 0, text: "x" }] };
+    expect(decorBlockHasContent(withAnn)).toBe(true);
+    const withShape: DecorBlock = { shapes: [{ id: "s1", kind: "line", x1: 0, y1: 0, x2: 1, y2: 1 }] };
+    expect(decorBlockHasContent(withShape)).toBe(true);
+    const withLegend: DecorBlock = { legend: { pos: "sw" } };
+    expect(decorBlockHasContent(withLegend)).toBe(true);
+  });
+});
+
+// ── buildDecorBlock ──────────────────────────────────────────────────────────
+describe("buildDecorBlock", () => {
+  const ANN: Annotation = { id: "a1", x: 1, y: 2, text: "peak" };
+  const SHAPE: Shape = { id: "s1", kind: "rect", x1: 0, y1: 0, x2: 1, y2: 1 };
+
+  it("returns undefined for a fully-default capture (no overlays, default legend)", () => {
+    expect(buildDecorBlock([], [], { pos: "ne", xy: null, title: null })).toBeUndefined();
+  });
+
+  it("captures annotations/shapes verbatim when present", () => {
+    expect(buildDecorBlock([ANN], [SHAPE], { pos: "ne", xy: null, title: null })).toEqual({
+      annotations: [ANN],
+      shapes: [SHAPE],
+    });
+  });
+
+  it("captures legend.pos only when it differs from the 'ne' default", () => {
+    expect(buildDecorBlock([], [], { pos: "ne", xy: null, title: null })).toBeUndefined();
+    expect(buildDecorBlock([], [], { pos: "sw", xy: null, title: null })).toEqual({
+      legend: { pos: "sw" },
+    });
+  });
+
+  it("captures a free legend.xy independently of pos", () => {
+    expect(buildDecorBlock([], [], { pos: "ne", xy: [0.2, 0.8], title: null })).toEqual({
+      legend: { xy: [0.2, 0.8] },
+    });
+  });
+
+  it("captures a non-blank legend.title only", () => {
+    expect(buildDecorBlock([], [], { pos: "ne", xy: null, title: "" })).toBeUndefined();
+    expect(buildDecorBlock([], [], { pos: "ne", xy: null, title: "Nb/Au" })).toEqual({
+      legend: { title: "Nb/Au" },
+    });
+  });
+
+  it("combines overlays + legend into one block", () => {
+    expect(buildDecorBlock([ANN], [SHAPE], { pos: "sw", xy: [0.1, 0.1], title: "Nb/Au" })).toEqual({
+      annotations: [ANN],
+      shapes: [SHAPE],
+      legend: { pos: "sw", xy: [0.1, 0.1], title: "Nb/Au" },
+    });
   });
 });

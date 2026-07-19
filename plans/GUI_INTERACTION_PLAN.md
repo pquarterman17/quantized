@@ -11,12 +11,11 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-18 (#12 Slice 5 landed — Stage adapter applies a spec's
-display/axes blocks on Send, closing the save/reopen/send loop; the SAME
-slice's grouped wire-contract residual (found feasible, not implemented) is
-now also implemented — `group_col` on `calc.plotting`/`FigureRequest`/
-`FigureConfig`/`FigureSpec`, the Graph Builder handoff un-fail-closed; item
-12 now open only for Slice 4's y2_fmt residual)
+**Updated:** 2026-07-18 (#12 CLOSED — all 5 slices + parts A/B/C shipped
+same day: Part A's `y2Fmt` store field/setter, Part B's grouped-series wire
+contract + Figure Builder handoff, and Part C's `decor` block
+(annotations/shapes/legend) with its `plotspecApply.ts` REPLACE-semantics
+apply on Send; see Completed for the full slice-by-slice record)
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -120,221 +119,11 @@ plotting, publication export.
     gaps ride #12's canonical-spec work.
 
 12. **One canonical plot specification** across Stage / Graph Builder / Figure
-    Builder / export — all edit or render the same underlying object.
-    Design resolved 2026-07-18 (within the item's own stated constraints):
-    the canonical spec is **PlotSpec v2** — today's zones+mark grammar
-    extended with ADDITIVE-OPTIONAL blocks (`display`: per-series style/axis
-    assignment/hidden; `axes`: labels/limits/scales/steps/formats for the
-    fixed x/y/y2 keys — N axes stays #54-specimen-gated; `page`:
-    panel/facet/layer geometry — subsumes ORIGIN #54's generalized layer
-    model; `decor`: annotations/shapes/legend). v1 specs up-convert in
-    `validatePlotSpec`. Surfaces become ADAPTERS over the spec (Stage→uPlot,
-    Figure Builder→page editor view, export→FigureSpec request); the store's
-    singleton fields stay the LIVE working state — the spec is the durable
-    interchange, migrated consumer-by-consumer, never a big-bang store
-    replacement. The canvas/vector renderer split stays. The enforcement
-    instrument is a PARITY HARNESS that defines "one spec" empirically
-    before the model lands.
-    - [x] Slice 1 — **export-parity contract harness** (2026-07-18,
-          `79766bb`): `lib/exportParity{,2}.test.ts`, 25 tests over the full
-          8-row matrix against the real store + request-assembly path. Found
-          + pinned as `it.fails`: (a) stale `overrides.y2_lim` sent even
-          with zero y2 channels plotted; (b) `ticks.minor` ignores a
-          log-scaled y2 (joint gap — `figure_y2.draw_secondary_axes` runs no
-          overrides sweep on the twinx axes). Also flagged: `y2_fmt` exists
-          on the wire but has no store field/UI. All three land in Slice 4.
-          Suite 3888 passed + 2 expected-fail; build green.
-    - [x] Slice 2 — PlotSpec v2 schema (2026-07-18, `9fe0bcb`): new
-          `lib/plotspec2.ts` — `display` (SeriesDisplay keyed by channel,
-          field names matched to the REAL store vocabulary: `line` not
-          "lineStyle"; `hidden`/`axis` capture hiddenChannels/y2Keys
-          membership) + `axes` (x/y/y2 label/lim/scale/step/fmt + title)
-          blocks with tolerant per-field validators + pure capture builders
-          (all-default → undefined so a default spec never flips to v2);
-          `page`/`decor` reserved placeholders (validators strip content
-          until Slices 4–5). `version: 1 | 2` RECOMPUTED from block content,
-          never trusted from the tag; v1 payloads byte-stable (regression-
-          proven on a fixture string). 3933 + 2 expected-fail green.
-    - [x] Slice 3 — capture-on-save + Figure Builder adapter (2026-07-18):
-          `useGraphBuilder`'s `saveActive`/`saveAs` now fold the LIVE
-          display/axes state into the saved spec's v2 blocks via Slice 2's
-          `buildDisplayBlock`/`buildAxesBlock` (`captureLiveBlocks`), scoped
-          to the spec's OWN plotted channels (`zones.y ∪ zones.x`) and ONLY
-          when the spec's dataset is the currently-active one (the store's
-          seriesStyles/hiddenChannels/y2Keys/axis singletons are per-active-
-          plot state, not per-dataset) — otherwise saves zones-only exactly
-          as before. `store/graphBuilder.ts` stays dumb (unchanged). Found +
-          fixed the slice's own subtle trap: the dirty-dot (`useGraphBuilder`)
-          switched from `plotSpecsEqual` to a new `plotSpecCoreEqual`
-          (zones+mark only, `lib/plotspec.ts`) — a full-spec compare would
-          misread "dirty" the instant a styled save completes (the live
-          builder `spec` never gets the captured blocks back; only the saved
-          payload does) and would have the same failure mode if a future
-          `openSpec` "fix" ever stripped blocks off the live spec (it
-          doesn't — blocks ride along unapplied until Slice 5). `lib/
-          plotSpecFigure.ts`'s `plotSpecToFigureDoc` now reads a v2 spec's
-          own blocks as the PRIMARY source (per-series color/width/marker/
-          line from `display`; label/scale/title from `axes`, lim mapped
-          onto `FigureOverrides.x_lim`/`y_lim` — `step`/`fmt` have no
-          FigureOverrides equivalent and are simply omitted); the live
-          `seriesStyles` arg is now purely the v1 fallback (regression-
-          pinned). Investigated un-fail-closing GROUPED specs (the slice's
-          named deliverable) and kept them fail-closed: a group split turns
-          one channel into N synthetic per-level series, but
-          `FigureConfig.yKeys` / the export wire's `y_keys` are both a flat
-          list of REAL dataset channel indices with no group-by/split field
-          anywhere in the contract — representing it needs a wire contract
-          change, so it's noted for Slice 5, not forced. Also newly
-          fail-closed: a spec whose display assigns `axis: 1` to any series,
-          or whose axes block carries y2 content — FigureDoc has no y2 field
-          (`figuredoc.ts`'s documented limitation). Frontend 3951 + 2
-          expected-fail green; build green.
-    - [ ] Slice 4 — export adapter + the booked export residuals. Slice 1's
-          pinned findings (stale y2_lim gate, log-y2 minor ticks incl. the
-          twinx overrides sweep) landed as slice 4a (`a90048d`). Slice 4b
-          (2026-07-18) closed the three remaining named residuals: **faceted
-          stat export** — `useStatStage.exportFigure` now reads `drawFacets`
-          (box/violin facets carry each panel's raw finite-value groups PLUS
-          its own resolved mode for per-slice degrade fidelity — a violin
-          facet that independently fell back to box on screen exports as
-          box; bar facets reuse `draw.data` directly), backed by
-          `calc.figure_facets.render_stat_facets_figure`/
-          `render_categorical_facets_figure` (new — composes the SAME
-          ceil(sqrt(n)) grid the screen shows, reusing
-          `figure_statplots`/`figure_categorical`'s own per-panel draw
-          functions) behind an OPTIONAL `facets` list on the existing
-          `/statplot-figure`/`/categorical-figure` requests (byte-identical
-          when absent); `StatStage.tsx`'s Export button now enables on
-          EITHER `draw` or `drawFacets`. **xy facet-export xKey/yKeys
-          reset** — `store/windows.ts`'s `focusedRebindPatch` (the shared
-          body of `setActive`/`rebindWindow`'s focused-target path) only
-          resets channel-keyed view state on a GENUINE dataset switch
-          (`s.activeId !== id`); re-activating the dataset that's already
-          active (`facetByColumn`'s trailing `setActive` call, among others)
-          no longer clobbers the live selection. **page-export y2** —
-          `calc.figure_page.PagePanel` gains `y2_mask`/`y2_label`/
-          `y2_scale`/`y2_fmt`/`y2_step` (mirrors `calc.figure._render_impl`'s
-          own y2 params verbatim) and dispatches to
-          `figure_y2.render_with_secondary_axis` (reused, not reimplemented)
-          per panel; `routes/export_page.py`'s 422 guard (commit `08b7066`)
-          is gone — a page panel's `y2_keys` now threads through for real;
-          `lib/spatialPageExport.ts` stops filtering y2 channels out of
-          `plotted` and drops its y2-only-panel fail-closed guard, mirroring
-          `lib/exportFigureCommand.ts`'s own y2Plotted/`gateY2Overrides`
-          two-pass pattern (reused). Axis:1 annotations are no longer
-          dropped either (the wire schema has no per-annotation axis tag —
-          same accepted limitation the single-figure path's
-          `liveViewOverrides` already has, now just shared rather than being
-          needlessly more conservative). Backend 2979 passed + 3 skipped +
-          12 xfailed, ruff + mypy clean; frontend 3971 tests + build green.
-          **Still open in Slice 4:** `y2_fmt` store field + UI (a screen y2
-          axis format control) — the wire field exists
-          (`FigureRequest.y2_fmt`) but has no store field/UI yet.
-    - [x] Slice 5 — Stage adapter (2026-07-18): new `lib/plotspecApply.ts`
-          (`applySpecBlocks`, mirroring `plotspec2.ts`'s "pure capture
-          builders" — takes a `StoreGet` handle, exportActive.ts's own
-          established seam, never `useApp` directly, so a future macro/
-          template replay can reuse it). `display.series` maps to
-          `resetSeriesStyle`+`setSeriesStyle` (style fields only) per
-          channel, `toggleHidden` (delta-only against the LIVE
-          `hiddenChannels` — there's no bulk setter), `setY2Keys` (the
-          `axis: 1` members), `setSeriesOrder`; `axes` maps to
-          `setPlotTitle`/`setX·Y·Y2AxisLabel`/`setX·Y·Y2Lim`/
-          `setX·Y·Y2Scale`/`setX·YFmt`. Two field classes have NO store
-          setter at all and are silently skipped (documented once in the
-          module, not per-field): `step` on any axis (only ever a decode
-          side-effect or cleared alongside `setXLim`/`setYLim`/`setY2Lim`,
-          never independently settable) and `axes.y2.fmt` (Slice 1's own
-          finding — `y2_fmt` is on the export wire with no store field/UI
-          yet, still true — see Slice 4's "Still open"). Display block
-          applies BEFORE axes: `setY2Keys(null)` clears
-          y2Lim/y2Scale/y2AxisLabel as a side effect, so applying axes.y2
-          SECOND is what lets a real captured value win over that clear —
-          regression-tested directly (a fake store that reproduces the real
-          clearing side-effect, not bare spies). Wired into
-          `useGraphBuilder.sendToStage`'s xy (scatter/line) branch only,
-          right after the existing setXKey/setYKeys/setStatMode calls — a
-          v1 spec (no blocks) makes zero extra store calls
-          (regression-pinned against the real store, not mocks).
-          box/violin/bar deliberately NOT wired: `useStatStage` always
-          derives its own title/x_label/y_label from the group/value/facet
-          column labels at draw/export time — there is no store-driven
-          override for a block to feed, so applying one would silently do
-          nothing (documented in `useGraphBuilder`, not a missed case).
-          `openSpec` gained the ONE planned affordance — opening never
-          applies blocks itself (that would silently mutate the live plot on
-          a mere open; only Send does), so its status message just appends
-          "(includes saved styles — Send to Stage applies them)" when the
-          reopened spec carries any. This closes the loop named at Slice 3:
-          save captures live style/axis state → reopen restores the
-          builder's wells → Send now restores the STORE's style/axis state
-          too (full-loop-tested: save styled → wander off and change
-          everything → reset → reopen → send → styles/y2/limits/title come
-          back exactly). Slice 5's second named residual — a wire-contract
-          extension so Figure Builder/export can represent a GROUPED xy
-          spec's per-level synthetic series — was INVESTIGATED (30-minute
-          cap, per scope) and found feasible, not implemented:
-          `calc.figure.draw_series_axes`/`_render_impl` already render an
-          arbitrary `series: Sequence[tuple[label, array]]` with no concept
-          of "channel" at all, so the render layer needs ZERO changes; the
-          gap is entirely at the RESOLVE step (`routes/export_figures.py`'s
-          `FigureRequest` + `calc.plotting.build_series`/`_resolve`, where
-          every `y_keys` entry — even today's existing `int | str` union —
-          resolves to exactly ONE real dataset column, never a synthesized
-          split). The fix is additive: a new optional `group_col`
-          field on `FigureConfig`/`FigureRequest` (absent = today's
-          behavior, byte-identical, no schema break for persisted `.dwk`
-          docs) + a small pure port of the frontend's `buildXY` group-split
-          algorithm (level-sort, one masked series per (yChannel, level),
-          `f"{yLabel} ({gLabel}={lvl})"` labels) into `calc/plotting.py`,
-          plugged into `_figure_series` as an alternate resolve path;
-          per-level styling can defer to matplotlib's default color cycle
-          (the screen path itself assigns no explicit per-level color
-          either — `buildXY` doesn't touch `seriesStyles`), sidestepping
-          `series_styles`' current 1:1-with-`y_keys` alignment entirely.
-          Small-to-medium follow-on, not booked as a new numbered item (no
-          urgency signal) — this paragraph + `plotSpecFigureReason`/
-          `lib/plotSpecFigure.ts` are the pickup point if it becomes one.
-          Frontend 3986 tests (+15: `lib/plotspecApply.test.ts` unit tests +
-          4 new `useGraphBuilder` integration tests incl. the full-loop
-          acceptance test) + build green.
-
-          **Follow-through (2026-07-18, same day):** the grouped
-          wire-contract residual above was then implemented as designed.
-          `calc/plotting.py` gained `build_grouped_series` (a faithful port
-          of `buildXY`'s colour split — level-sort, `(yChannel, level)`
-          nesting, finite-masking, `f"{yLabel} ({gLabel}={level})"` labels;
-          a `_format_level` helper matches JS's `${level}` coercion, which
-          drops the trailing `.0` Python's `str(float)` always adds to a
-          whole number). `routes/export_figures.py`'s `FigureRequest`
-          gained `group_col: int | None` (absent = byte-identical to
-          before); `_figure_series` branches to the grouped resolve path
-          when set, REJECTS `group_col` + `y2_keys` together with a 422
-          (`buildXY` never assigns a grouped series to axis 1 — no sound
-          secondary-axis semantic to invent), and skips `series_styles`
-          resolution for the synthetic per-level series (matplotlib's
-          default color cycle takes over, matching the screen). Frontend:
-          `FigureConfig.groupCol`/`FigureSpec.group_col` (both additive-
-          optional, so a pre-Slice-5 `.dwk` figure doc round-trips
-          unchanged); `plotSpecFigureReason` no longer fails closed for a
-          plain grouped spec (still fails closed for grouped + Y2, mirroring
-          the backend); `useFigureBuilder` threads `docGroupCol` through the
-          SAME preview/export request path as every other doc field, so the
-          Figure Builder's live WYSIWYG preview (`/api/export/figure-hitmap`,
-          already the same `_figure_series` resolve step as the real export)
-          renders the actual per-level split — not a placeholder, a genuine
-          render, since the backend needed no separate preview path. A
-          cross-language parity fixture (same tiny 5-row dataset, hand-
-          computed labels + finite-masks) is asserted identically in both
-          `tests/test_calc_plotting.py` and `frontend/src/lib/
-          plotspec.test.ts` so a future drift between `buildXY` and its
-          Python port fails on one side or the other. Backend 2989 passed +
-          3 skipped + 12 xfailed, ruff + mypy clean; frontend 4008 tests +
-          build green.
-
-    Item 12 stays open only for Slice 4's own still-open residual (the
-    `y2_fmt` screen store field/UI — see above); every other named
-    deliverable across all 5 slices has shipped.
+    Builder / export — CLOSED 2026-07-18 (see Completed). Deliberately still
+    open, but NOT part of this item: the `page` block (panel/facet/layer
+    geometry) is tracked at ORIGIN_FILE_DECODE_PLAN #54; spec-level parity
+    upgrades (new adapters/consumers reading `display`/`axes`/`decor`) land
+    opportunistically as those surfaces evolve, not as a standing item here.
 
 15. **Real-browser interaction coverage** — jsdom can't validate canvas hit
     targets, pointer capture, drag/drop, high-DPI, overlapping-plugin contention.
@@ -471,6 +260,104 @@ plotting, publication export.
 ---
 
 ## Completed
+
+- ~~**#12 One canonical plot specification**~~ (2026-07-18) — PlotSpec v2:
+  today's zones+mark grammar extended with ADDITIVE-OPTIONAL blocks
+  (`display`: per-series style/axis/hidden; `axes`: label/limits/scale/
+  step/format for x/y/y2 + title; `decor`: annotations/shapes/legend
+  placement), each omitted-when-default so a plain spec never flips to
+  version 2; `page` (panel/facet/layer geometry) stays RESERVED — deferred
+  to ORIGIN_FILE_DECODE_PLAN #54's generalized FigureDoc/page-layer model,
+  not a slice of this item. Landed in 5 numbered slices plus 3 same-day
+  "finish" parts:
+  - **Slice 1** (`79766bb`) — export-parity contract harness
+    (`lib/exportParity{,2}.test.ts`, 25 tests over the full 8-row matrix
+    against the real store + request-assembly path) that DEFINES "one
+    spec" empirically; found + pinned 3 residuals, all closed later
+    (stale `y2_lim`, log-y2 minor ticks, missing `y2_fmt` store field).
+  - **Slice 2** (`9fe0bcb`) — `lib/plotspec2.ts`: the `display`/`axes`
+    schema (field vocabulary matched to the real store, e.g. `line` not
+    "lineStyle"), tolerant per-field validators, pure capture builders
+    (all-default → `undefined`), `page`/`decor` reserved placeholders;
+    `version` RECOMPUTED from block content on every validate/serialize,
+    never trusted from the incoming tag; v1 payloads regression-pinned
+    byte-stable.
+  - **Slice 3** (`a7a4eac`) — `useGraphBuilder`'s save now captures the
+    LIVE display/axes state (`captureLiveBlocks`, scoped to the spec's
+    own plotted channels ∪ active-dataset only); `plotSpecCoreEqual`
+    (zones+mark only) replaces `plotSpecsEqual` for the dirty check so a
+    styled save/reopen never false-flags; `plotSpecToFigureDoc` reads a
+    v2 spec's own blocks as the primary source for the Figure Builder
+    handoff.
+  - **Slice 4** (`a90048d` 4a, `bc0929d` 4b) — export-adapter residuals:
+    gated the stale `y2_lim` override + log-y2 minor ticks onto the twinx
+    overrides sweep; faceted stat export (new `calc/figure_facets.py`,
+    box/violin/bar, optional `facets` list, byte-identical when absent);
+    the xy family's facet-export xKey/yKeys reset (`store/windows.ts`'s
+    `focusedRebindPatch` now only resets on a GENUINE dataset switch, not
+    a same-dataset re-activate); page-export y2 (`PagePanel` gains y2
+    params mirroring `figure._render_impl`, `routes/export_page.py`'s 422
+    guard removed).
+  - **Slice 5** (`a45c0a0`) — new `lib/plotspecApply.ts`: the Stage
+    adapter, applying a spec's captured `display`/`axes` onto the live
+    store on Send (`useGraphBuilder.sendToStage`'s xy branch only —
+    box/violin/bar deliberately not wired, `useStatStage` has no
+    store-driven title/label override for a block to feed). Closes the
+    save → reopen → send loop (full-loop-tested). Investigated (not
+    implemented, 30-min cap) a grouped-xy wire-contract extension for
+    Figure Builder/export — landed same day as Part B below.
+  - **Part A** (`6356b37`) — Slice 4's own still-open residual: a real
+    `y2Fmt` store field + `setY2Fmt` action (`store/useApp.ts`,
+    `PlotView`), threaded through `uplotOpts`/`PlotStage`/export so the
+    secondary axis gets an independent tick format instead of hardcoding
+    `yFmt`.
+  - **Part B** (`490ae35`) — Slice 5's investigated-not-implemented
+    residual, implemented: a grouped xy spec's per-level synthetic series
+    gets a real wire representation (`calc.plotting.build_grouped_series`,
+    a faithful port of the frontend `buildXY` colour split;
+    `FigureRequest`/`FigureConfig`/`FigureSpec` gain additive-optional
+    `group_col`), un-fail-closing the Graph Builder → Figure Builder
+    handoff for a plain grouped spec (still fail-closed for grouped + Y2
+    — `buildXY` never assigns a grouped series to the secondary axis).
+    Cross-language parity fixture in both `test_calc_plotting.py` and
+    `plotspec.test.ts` guards `buildXY` ↔ Python port drift.
+  - **Part C** (this commit) — the item's last reserved block: `decor`
+    (annotations/shapes/legend). `lib/plotspec2.ts` gains `DecorBlock`
+    (`annotations?: Annotation[]`, `shapes?: Shape[]`,
+    `legend?: {pos?, xy?, title?}`), validated through the SAME
+    sanitizers `.dwk` window restore already uses (`sanitizeAnnotations`/
+    `sanitizeShapes`, exported from `lib/plotview.ts` for reuse — never a
+    second, drifting validator); `legendFrameXY`/`legendStatic` are
+    deliberately excluded from the block — both are Origin-decode-only
+    artifacts with no store setter at all (`applyOriginFigure` writes
+    them via a direct `set()` call). `buildDecorBlock` wires into
+    `useGraphBuilder`'s `captureLiveBlocks` with the SAME active-dataset
+    scoping as display/axes; annotations/shapes are GLOBAL plot overlays,
+    so — unlike `display` — captured verbatim rather than channel-
+    filtered. `plotspecApply.ts`'s `applyDecorBlock` applies on Send with
+    REPLACE semantics: shapes via the existing bulk `clearShapes` +
+    `addShape` (which already accepts the full payload); annotations via
+    a loop of the existing per-id `removeAnnotation` (no bulk action
+    exists) + `addAnnotation`/`updateAnnotation` (an annotation's `axis`
+    field has no setter ANYWHERE — a documented gap, not a silent drop);
+    legend via `setLegendPos`/`setLegendXY` (`legend.title` is captured
+    for round-trip fidelity but has no `setLegendTitle` action to push it
+    back through — same documented-gap category as `axes.*.step`).
+    `store/useApp.ts`/`components/Stage/PlotStage.tsx` UNTOUCHED (zero
+    ratchet cost — decor apply is pure orchestration over existing store
+    actions, no new setters needed). Full save → reset → reopen → send
+    loop test extended with annotation/shape/legend assertions, including
+    a REPLACE-not-merge proof (a "wandered off" stale annotation set
+    before reopen is gone after Send; the captured one is back).
+    Frontend 4035 tests (up from Part B's 4008) + build green.
+
+  Two deliberate remaining pointers, not open work on this item: the
+  `page` block lives at ORIGIN_FILE_DECODE_PLAN #54 (which explicitly
+  wants a generalized FigureDoc/page-layer model over more singleton
+  plot-state branches), and spec-level parity upgrades (new adapters or
+  consumers growing to read `display`/`axes`/`decor`) happen
+  opportunistically as those surfaces evolve, not as a standing backlog
+  item.
 
 - ~~**#11 Graph Builder → durable artifact**~~ (2026-07-18; core 2026-07-17,
   Figure-Builder handoff + series reorder via Codex PRs #62/#63) — the last

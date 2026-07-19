@@ -9,7 +9,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { StoreGet } from "./exportActive";
 import { applySpecBlocks } from "./plotspecApply";
 import type { PlotSpec } from "./plotspec";
-import type { AxisFormat, SeriesStyle } from "./types";
+import type { LegendPos } from "./plotview";
+import type { Annotation, AxisFormat, SeriesStyle, Shape } from "./types";
 
 const ZONES = { x: null, y: [], group: null, facet: null };
 
@@ -44,6 +45,10 @@ function makeFakeStore() {
     yFmt: AxisFormat;
     y2Fmt: AxisFormat | null;
     seriesOrder: number[] | null;
+    annotations: Annotation[];
+    shapes: Shape[];
+    legendPos: LegendPos;
+    legendXY: [number, number] | null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [action: string]: any;
   } = {
@@ -64,7 +69,13 @@ function makeFakeStore() {
     yFmt: { mode: "auto", digits: 2 },
     y2Fmt: null,
     seriesOrder: null,
+    annotations: [],
+    shapes: [],
+    legendPos: "ne",
+    legendXY: null,
   };
+  let _annSeq = 0;
+  let _shapeSeq = 0;
   const fns = {
     resetSeriesStyle: vi.fn((ch: number) => {
       delete state.seriesStyles[ch];
@@ -127,6 +138,34 @@ function makeFakeStore() {
     setY2Fmt: vi.fn((f: AxisFormat | null) => {
       state.y2Fmt = f;
     }),
+    // Decor ("part C") — mirrors the REAL actions' shapes closely enough for
+    // the REPLACE-semantics tests below to be meaningful, same rationale as
+    // setY2Keys's clearing side effect above.
+    addAnnotation: vi.fn((x: number, y: number, text: string) => {
+      const id = `ann-${++_annSeq}`;
+      state.annotations = [...state.annotations, { id, x, y, text }];
+      return id;
+    }),
+    removeAnnotation: vi.fn((id: string) => {
+      state.annotations = state.annotations.filter((a: Annotation) => a.id !== id);
+    }),
+    updateAnnotation: vi.fn((id: string, patch: Partial<Annotation>) => {
+      state.annotations = state.annotations.map((a: Annotation) => (a.id === id ? { ...a, ...patch } : a));
+    }),
+    addShape: vi.fn((shape: Omit<Shape, "id">) => {
+      const id = `shape-${++_shapeSeq}`;
+      state.shapes = [...state.shapes, { ...shape, id }];
+      return id;
+    }),
+    clearShapes: vi.fn(() => {
+      state.shapes = [];
+    }),
+    setLegendPos: vi.fn((pos: LegendPos) => {
+      state.legendPos = pos;
+    }),
+    setLegendXY: vi.fn((xy: [number, number] | null) => {
+      state.legendXY = xy;
+    }),
   };
   Object.assign(state, fns);
   const s = (() => state) as unknown as StoreGet;
@@ -134,7 +173,7 @@ function makeFakeStore() {
 }
 
 describe("applySpecBlocks — absent blocks", () => {
-  it("makes zero store calls for a v1 spec (no display, no axes)", () => {
+  it("makes zero store calls for a v1 spec (no display, no axes, no decor)", () => {
     const { s, fns } = makeFakeStore();
     applySpecBlocks(baseSpec({}), s);
     for (const fn of Object.values(fns)) expect(fn).not.toHaveBeenCalled();
@@ -285,5 +324,103 @@ describe("applySpecBlocks — axes block", () => {
     expect(state.y2Lim).toEqual([0, 5]);
     expect(state.y2Scale).toBe("log");
     expect(state.y2AxisLabel).toBe("Y2 (A)");
+  });
+});
+
+describe("applySpecBlocks — decor block ('part C')", () => {
+  it("REPLACEs live annotations: clears every existing one, then re-adds the captured set", () => {
+    const { s, fns, state } = makeFakeStore();
+    state.annotations = [{ id: "stale-1", x: 9, y: 9, text: "stale" }];
+    applySpecBlocks(
+      baseSpec({ decor: { annotations: [{ id: "a1", x: 1, y: 2, text: "peak" }] } }),
+      s,
+    );
+    expect(fns.removeAnnotation).toHaveBeenCalledWith("stale-1");
+    expect(fns.addAnnotation).toHaveBeenCalledWith(1, 2, "peak");
+    expect(state.annotations).toHaveLength(1);
+    expect(state.annotations[0]).toMatchObject({ x: 1, y: 2, text: "peak" });
+  });
+
+  it("applies an annotation's size/anchor/frame via updateAnnotation, but never touches axis (no setter)", () => {
+    const { s, fns } = makeFakeStore();
+    applySpecBlocks(
+      baseSpec({
+        decor: {
+          annotations: [
+            { id: "a1", x: 1, y: 2, text: "peak", size: 14, anchor: "page", frame: { fill: "#fff" }, axis: 1 },
+          ],
+        },
+      }),
+      s,
+    );
+    expect(fns.updateAnnotation).toHaveBeenCalledWith(expect.any(String), {
+      size: 14,
+      anchor: "page",
+      frame: { fill: "#fff" },
+    });
+  });
+
+  it("skips updateAnnotation when a captured entry has no size/anchor/frame", () => {
+    const { s, fns } = makeFakeStore();
+    applySpecBlocks(baseSpec({ decor: { annotations: [{ id: "a1", x: 1, y: 2, text: "peak" }] } }), s);
+    expect(fns.updateAnnotation).not.toHaveBeenCalled();
+  });
+
+  it("REPLACEs live shapes via clearShapes + addShape, carrying every field but the original id", () => {
+    const { s, fns, state } = makeFakeStore();
+    state.shapes = [{ id: "stale-1", kind: "rect", x1: 9, y1: 9, x2: 9, y2: 9 }];
+    applySpecBlocks(
+      baseSpec({
+        decor: {
+          shapes: [
+            { id: "captured-1", kind: "arrow", x1: 0, y1: 0, x2: 1, y2: 1, stroke: "#f00", width: 2 },
+          ],
+        },
+      }),
+      s,
+    );
+    expect(fns.clearShapes).toHaveBeenCalledTimes(1);
+    expect(fns.addShape).toHaveBeenCalledWith({
+      kind: "arrow",
+      x1: 0,
+      y1: 0,
+      x2: 1,
+      y2: 1,
+      stroke: "#f00",
+      width: 2,
+    });
+    expect(state.shapes).toHaveLength(1);
+    expect(state.shapes[0]).toMatchObject({ kind: "arrow", x1: 0, y1: 0, x2: 1, y2: 1, stroke: "#f00", width: 2 });
+    expect(state.shapes[0].id).not.toBe("captured-1"); // a fresh id, not the captured one
+  });
+
+  it("maps legend.pos/xy to their real setters; legend.title has no setter (documented gap)", () => {
+    const { s, fns, state } = makeFakeStore();
+    applySpecBlocks(baseSpec({ decor: { legend: { pos: "sw", xy: [0.2, 0.8], title: "Nb/Au" } } }), s);
+    expect(fns.setLegendPos).toHaveBeenCalledWith("sw");
+    expect(fns.setLegendXY).toHaveBeenCalledWith([0.2, 0.8]);
+    expect(state.legendPos).toBe("sw");
+    expect(state.legendXY).toEqual([0.2, 0.8]);
+    // No setLegendTitle action exists at all — nothing in `fns` should have
+    // been called with "Nb/Au" as a bare title-setting call.
+    expect(fns.setLegendPos).not.toHaveBeenCalledWith("Nb/Au");
+  });
+
+  it("touches only the fields present on decor.legend (pos-only never calls setLegendXY)", () => {
+    const { s, fns } = makeFakeStore();
+    applySpecBlocks(baseSpec({ decor: { legend: { pos: "sw" } } }), s);
+    expect(fns.setLegendPos).toHaveBeenCalledWith("sw");
+    expect(fns.setLegendXY).not.toHaveBeenCalled();
+  });
+
+  it("makes zero decor-related calls when decor is absent, even with display/axes present", () => {
+    const { s, fns } = makeFakeStore();
+    applySpecBlocks(baseSpec({ axes: { title: "T" } }), s);
+    expect(fns.removeAnnotation).not.toHaveBeenCalled();
+    expect(fns.addAnnotation).not.toHaveBeenCalled();
+    expect(fns.clearShapes).not.toHaveBeenCalled();
+    expect(fns.addShape).not.toHaveBeenCalled();
+    expect(fns.setLegendPos).not.toHaveBeenCalled();
+    expect(fns.setLegendXY).not.toHaveBeenCalled();
   });
 });

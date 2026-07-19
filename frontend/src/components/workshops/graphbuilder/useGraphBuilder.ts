@@ -39,7 +39,7 @@ import {
   type SpecRender,
   type ZoneName,
 } from "../../../lib/plotspec";
-import { buildAxesBlock, buildDisplayBlock } from "../../../lib/plotspec2";
+import { buildAxesBlock, buildDecorBlock, buildDisplayBlock } from "../../../lib/plotspec2";
 import { toast } from "../../../store/toasts";
 import { plotIntentStageTab, useActiveDataset, useApp } from "../../../store/useApp";
 import type { WellChip, WellOption } from "./ZoneWell";
@@ -238,10 +238,10 @@ export function useGraphBuilder(): GraphBuilderState {
       setXKey(spec.zones.x?.channel ?? null);
       setYKeys(spec.zones.y.map((r) => r.channel));
       setStatMode(false);
-      // #12 Slice 5: apply the spec's own captured display/axes blocks (if
-      // any) onto the now-live dataset — closes the save/reopen/send loop.
-      // A v1 spec (no blocks) makes zero calls here — see plotspecApply.ts's
-      // regression-pin note.
+      // #12 Slice 5 / "part C": apply the spec's own captured
+      // display/axes/decor blocks (if any) onto the now-live dataset —
+      // closes the save/reopen/send loop. A v1 spec (no blocks) makes zero
+      // calls here — see plotspecApply.ts's regression-pin note.
       applySpecBlocks(spec, useApp.getState);
       if (spec.zones.group) {
         toast("series-split by group is preview-only in v1 (lands with faceting)", "info");
@@ -323,8 +323,9 @@ export function useGraphBuilder(): GraphBuilderState {
   // a spec with blocks the live `spec` state itself never gets back).
   const dirty = activeSpec !== null && !plotSpecCoreEqual(spec, activeSpec.spec);
 
-  // #12 Slice 3 ("Capture on save"): fold the LIVE display/axes state into
-  // the spec being saved. store/graphBuilder.ts stays dumb (it persists
+  // #12 Slice 3 ("Capture on save"), extended by "part C" to also fold in
+  // decor: fold the LIVE display/axes/decor state into the spec being
+  // saved. store/graphBuilder.ts stays dumb (it persists
   // whatever PlotSpec it's handed) — this hook is the one place that holds
   // both the spec and the live store, so it's the only place that can build
   // the snapshot. Scoped to the spec's OWN plotted channels (zones.y ∪
@@ -365,12 +366,21 @@ export function useGraphBuilder(): GraphBuilderState {
       yFmt: s.yFmt,
       y2Fmt: s.y2Fmt,
     });
+    // "part C": annotations/shapes are GLOBAL plot overlays (not
+    // channel-scoped), so — unlike display — they're captured verbatim, not
+    // filtered against `plotted`.
+    const decor = buildDecorBlock(s.annotations, s.shapes, {
+      pos: s.legendPos,
+      xy: s.legendXY,
+      title: s.legendTitle,
+    });
     return {
-      version: display || axes ? 2 : 1,
+      version: display || axes || decor ? 2 : 1,
       zones: base.zones,
       mark: base.mark,
       ...(display ? { display } : {}),
       ...(axes ? { axes } : {}),
+      ...(decor ? { decor } : {}),
     };
   };
 
@@ -395,11 +405,11 @@ export function useGraphBuilder(): GraphBuilderState {
     if (!saved) return;
     setSpec(withInferredMark(saved.spec, markContext(saved.spec, useApp.getState().datasets)));
     useApp.getState().setActivePlotSpecId(id);
-    // #12 Slice 5: opening never applies the spec's display/axes blocks
-    // itself (that would silently mutate the live plot on a mere open) —
-    // only Send does (applySpecBlocks, above). This is the one affordance
-    // that tells the user those blocks exist at all.
-    const hint = saved.spec.display || saved.spec.axes
+    // #12 Slice 5 / "part C": opening never applies the spec's
+    // display/axes/decor blocks itself (that would silently mutate the live
+    // plot on a mere open) — only Send does (applySpecBlocks, above). This
+    // is the one affordance that tells the user those blocks exist at all.
+    const hint = saved.spec.display || saved.spec.axes || saved.spec.decor
       ? " (includes saved styles — Send to Stage applies them)"
       : "";
     setStatus(`opened "${saved.name}"${hint}`);

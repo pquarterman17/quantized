@@ -27,16 +27,30 @@
 //             bindings; axes are display). N-axis generalization stays
 //             #54-specimen-gated and is not this block's job.
 //
-//   page / decor : RESERVED — no fields yet. `page` lands with Slice 4
-//             (export/page geometry, subsumes ORIGIN #54's generalized layer
-//             model); `decor` lands with Slice 5 (annotations/shapes/
-//             legend). Declared now (empty-shape interfaces, not `unknown`)
-//             so `PlotSpec`'s field list doesn't need to change shape again
-//             when those slices land — but `validatePlotSpec` STRIPS any
-//             content on these keys unconditionally today (no validator call
-//             at all): a hand-edited or forward-authored `.dwk` cannot smuggle
-//             unvalidated content onto the wire before the slice that defines
-//             its shape exists.
+//   decor   : annotations/shapes/legend placement — the item's "part C"
+//             finish (2026-07-18, landed after the 5 numbered slices).
+//             `annotations`/`shapes` are the EXACT store types (`lib/
+//             types.ts`), validated through the SAME sanitizers `.dwk`
+//             window restore uses (`sanitizeAnnotations`/`sanitizeShapes`,
+//             `lib/plotview.ts`) — never a second, drifting validator for
+//             the identical shape. `legend` captures the free-placement
+//             subset of the store's legend fields (`legendPos`/`legendXY`/
+//             `legendTitle`) — see `LegendBlock`'s doc for exactly why
+//             `legendFrameXY`/`legendStatic` are deliberately excluded.
+//
+//   page    : RESERVED — no fields yet, and no slice of THIS item is
+//             planned to give it any. Panel/facet/layer geometry belongs to
+//             ORIGIN_FILE_DECODE_PLAN #54 ("Layer/page layout fidelity" —
+//             `plans/ORIGIN_FILE_DECODE_PLAN.md`), which explicitly prefers
+//             "a generalized FigureDoc/page-layer model over more singleton
+//             plot state branches" — that generalized model, when it lands,
+//             is what fills this block. Declared now (an empty-shape
+//             interface, not `unknown`) so `PlotSpec`'s field list doesn't
+//             need to change shape again when #54 lands — `validatePlotSpec`
+//             STRIPS any content on this key unconditionally today (no
+//             validator call at all): a hand-edited or forward-authored
+//             `.dwk` cannot smuggle unvalidated content onto the wire before
+//             #54 defines its shape.
 //
 // ─────────────────────────────────────────────────────────────────────────
 // VALIDATION STYLE
@@ -65,8 +79,9 @@
 // block convention: capturing a spec from a plot that never touched styling
 // must not flip that spec to version 2.
 
-import type { AxisFormat, AxisScale, LineStyle, MarkerShape, TickMode } from "./types";
+import type { Annotation, AxisFormat, AxisScale, LineStyle, MarkerShape, Shape, TickMode } from "./types";
 import { MARKER_SHAPES } from "./markers";
+import { LEGEND_POS, legendXYOrNull, sanitizeAnnotations, sanitizeShapes, type LegendPos } from "./plotview";
 import { axisFmtParam } from "./types";
 
 // ── Display block ───────────────────────────────────────────────────────
@@ -119,18 +134,53 @@ export interface AxesBlock {
   title?: string;
 }
 
-// ── Reserved blocks (content lands with later slices) ────────────────────
+// ── Decor block (annotations/shapes/legend — "part C") ───────────────────
 
-/** Reserved — content lands with Slice 4 (export/page geometry, subsumes
- *  ORIGIN #54's generalized layer model). No fields yet; `validatePlotSpec`
- *  strips any content on this key unconditionally (see the module doc). */
-export interface PageBlock {
-  readonly __reserved?: never;
+/** Free legend PLACEMENT (`pos`/`xy`) + its Origin-decode TITLE header — the
+ *  subset of the store's FIVE legend-adjacent fields (`legendPos`/
+ *  `legendXY`/`legendFrameXY`/`legendStatic`/`legendTitle`) a Graph Builder
+ *  save can meaningfully capture/reapply. `legendFrameXY` (Origin's
+ *  frame-anchored placement) and `legendStatic` (Origin's read-only legend
+ *  chrome) are deliberately OUT of this block: both are decode-only
+ *  artifacts `applyOriginFigure` writes with a direct `set()` call — no
+ *  setter exists for either at all (unlike `legendPos`/`legendXY`'s real
+ *  `setLegendPos`/`setLegendXY` actions), so there is nothing for
+ *  `plotspecApply.ts` to push even if they were captured here. A
+ *  hand-styled Graph Builder plot never has either field set, so this gap
+ *  only ever touches an Origin-imported legend's exact frame anchor — a
+ *  fidelity concern of the Origin import path itself, not the canonical
+ *  spec. `title` mirrors `axes.*.step`'s existing precedent: captured for
+ *  round-trip fidelity even though `plotspecApply.ts` currently has no
+ *  `setLegendTitle` action to push it back through (documented there, not
+ *  silently dropped). */
+export interface LegendBlock {
+  pos?: LegendPos;
+  xy?: [number, number];
+  title?: string;
 }
 
-/** Reserved — content lands with Slice 5 (annotations/shapes/legend). Same
- *  unconditional-strip rule as `PageBlock`. */
+/** Drawn overlays + legend placement (the item's "part C" finish —
+ *  annotations/shapes/legend). `annotations`/`shapes` reuse the EXACT store
+ *  types (`lib/types.ts`) and are validated through the SAME sanitizers
+ *  `.dwk` window restore uses (`sanitizeAnnotations`/`sanitizeShapes`,
+ *  `lib/plotview.ts`) — never a second, drifting validator for the
+ *  identical shape. Both are GLOBAL plot overlays (not channel-scoped like
+ *  `display.series`), so there's no "plotted subset" filter the way
+ *  `buildDisplayBlock` filters by channel — a capture takes the plot's
+ *  WHOLE annotation/shape list. */
 export interface DecorBlock {
+  annotations?: Annotation[];
+  shapes?: Shape[];
+  legend?: LegendBlock;
+}
+
+// ── Reserved blocks (content lands with a later, larger effort) ──────────
+
+/** Reserved — see the module doc's "page" entry: panel/facet/layer geometry
+ *  belongs to ORIGIN_FILE_DECODE_PLAN #54, not a slice of this item. No
+ *  fields yet; `validatePlotSpec` strips any content on this key
+ *  unconditionally. */
+export interface PageBlock {
   readonly __reserved?: never;
 }
 
@@ -261,7 +311,51 @@ export function axesBlockHasContent(b: AxesBlock | null | undefined): b is AxesB
   return b.x !== undefined || b.y !== undefined || b.y2 !== undefined || b.title !== undefined;
 }
 
-// ── Pure capture builders (no store import — Slice 3/5 wire these) ───────
+// ── Decor block validation ────────────────────────────────────────────────
+
+function validateLegendBlock(v: unknown): LegendBlock | null {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v as Record<string, unknown>;
+  const out: LegendBlock = {};
+  if (typeof o.pos === "string" && (LEGEND_POS as readonly string[]).includes(o.pos)) {
+    out.pos = o.pos as LegendPos;
+  }
+  const xy = legendXYOrNull(o.xy);
+  if (xy) out.xy = xy;
+  if (typeof o.title === "string") out.title = o.title;
+  return out;
+}
+
+/** Validate + normalize an arbitrary value into a `DecorBlock`, or null if
+ *  the input isn't even an object. `annotations`/`shapes` delegate entirely
+ *  to `sanitizeAnnotations`/`sanitizeShapes` (per-entry tolerant, same as
+ *  every `.dwk` window restore — this function never re-validates their
+ *  internals a second way). `legend` gets the same per-field tolerance as
+ *  `validateAxesBlock`. */
+export function validateDecorBlock(v: unknown): DecorBlock | null {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v as Record<string, unknown>;
+  const out: DecorBlock = {};
+  const annotations = sanitizeAnnotations(o.annotations);
+  if (annotations.length > 0) out.annotations = annotations;
+  const shapes = sanitizeShapes(o.shapes);
+  if (shapes.length > 0) out.shapes = shapes;
+  const legend = validateLegendBlock(o.legend);
+  if (legend && Object.keys(legend).length > 0) out.legend = legend;
+  return out;
+}
+
+/** Is this a `DecorBlock` with actual content? The v1/v2 promotion gate. */
+export function decorBlockHasContent(b: DecorBlock | null | undefined): b is DecorBlock {
+  if (!b) return false;
+  return (
+    (b.annotations !== undefined && b.annotations.length > 0) ||
+    (b.shapes !== undefined && b.shapes.length > 0) ||
+    b.legend !== undefined
+  );
+}
+
+// ── Pure capture builders (no store import — Slice 3/5/"part C" wire these) ─
 
 /** The live per-channel style shape `buildDisplayBlock` reads — the subset
  *  of `SeriesStyle` the display block captures (see the module doc for why
@@ -388,4 +482,40 @@ export function buildAxesBlock(args: AxesBlockArgs): AxesBlock | undefined {
   if (Object.keys(y2).length > 0) block.y2 = y2;
   if (args.title) block.title = args.title;
   return axesBlockHasContent(block) ? block : undefined;
+}
+
+/** The live legend-placement fields `buildDecorBlock` reads — the store's
+ *  `legendPos`/`legendXY`/`legendTitle` (see `LegendBlock`'s doc for why
+ *  `legendFrameXY`/`legendStatic` aren't part of v2 yet). */
+export interface DecorLegendArgs {
+  pos: LegendPos;
+  xy: [number, number] | null;
+  title: string | null;
+}
+
+/** Capture a `DecorBlock` from live annotations/shapes/legend state.
+ *  Returns `undefined` when there's nothing to capture (no annotations, no
+ *  shapes, and the legend sits at its default corner with no free position
+ *  and no title) — an all-default capture must never flip a spec to version
+ *  2, the same rule `buildDisplayBlock`/`buildAxesBlock` follow.
+ *  `annotations`/`shapes` are captured verbatim (both are GLOBAL plot state,
+ *  not channel-scoped, so there's no "plotted subset" to filter the way
+ *  `buildDisplayBlock` filters by channel). */
+export function buildDecorBlock(
+  annotations: readonly Annotation[],
+  shapes: readonly Shape[],
+  legend: DecorLegendArgs,
+): DecorBlock | undefined {
+  const block: DecorBlock = {};
+  if (annotations.length > 0) block.annotations = [...annotations];
+  if (shapes.length > 0) block.shapes = [...shapes];
+  const legendBlock: LegendBlock = {};
+  // "ne" is legendPos's default (store/useApp.ts's initial state) — only a
+  // real deviation counts as a captured override, mirroring buildAxesBlock's
+  // xScale/yScale "captured only when it differs from default" rule.
+  if (legend.pos !== "ne") legendBlock.pos = legend.pos;
+  if (legend.xy != null) legendBlock.xy = legend.xy;
+  if (legend.title) legendBlock.title = legend.title;
+  if (Object.keys(legendBlock).length > 0) block.legend = legendBlock;
+  return decorBlockHasContent(block) ? block : undefined;
 }

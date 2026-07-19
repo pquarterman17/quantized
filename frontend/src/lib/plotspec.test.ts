@@ -530,6 +530,21 @@ describe("PlotSpec v2 — schema, up-convert, byte-stability", () => {
     expect(back).toEqual({ ...s, version: 2 });
   });
 
+  it("a v2 spec with decor content ('part C') round-trips losslessly and serializes as version 2", () => {
+    const s: PlotSpec = {
+      ...spec(ref(0), [ref(1)], "scatter"),
+      decor: {
+        annotations: [{ id: "a1", x: 1, y: 2, text: "peak" }],
+        shapes: [{ id: "s1", kind: "arrow", x1: 0, y1: 0, x2: 1, y2: 1 }],
+        legend: { pos: "sw", xy: [0.2, 0.8], title: "Nb/Au" },
+      },
+    };
+    const raw = serializePlotSpec(s);
+    expect(JSON.parse(raw).version).toBe(2);
+    const back = deserializePlotSpec(raw);
+    expect(back).toEqual({ ...s, version: 2 });
+  });
+
   it("a display/axes block present but empty of content does not promote to version 2", () => {
     const v = validatePlotSpec({
       version: 2,
@@ -558,20 +573,44 @@ describe("PlotSpec v2 — schema, up-convert, byte-stability", () => {
     expect(v!.axes).toEqual({ x: { label: "Field" } }); // bad lim dropped, bad y.scale drops y entirely
   });
 
-  it("reserved page/decor content is stripped entirely, without affecting the rest of the spec", () => {
+  it("reserved page content is stripped entirely, without affecting the rest of the spec", () => {
     const v = validatePlotSpec({
       version: 2,
       zones: { x: ref(0), y: [ref(1)], group: null, facet: null },
       mark: "scatter",
       page: { anything: "goes here", nested: { a: 1 } },
-      decor: { legend: "fancy" },
     });
     expect(v).not.toBeNull();
     expect(v!.page).toBeUndefined();
-    expect(v!.decor).toBeUndefined();
-    expect(v!.version).toBe(1); // page/decor never count toward v2 promotion
+    expect(v!.version).toBe(1); // page never counts toward v2 promotion (nothing else here does either)
     expect("page" in v!).toBe(false);
-    expect("decor" in v!).toBe(false);
+  });
+
+  it("decor (annotations/shapes/legend, 'part C') is validated for real and counts toward v2 promotion", () => {
+    const v = validatePlotSpec({
+      version: 2,
+      zones: { x: ref(0), y: [ref(1)], group: null, facet: null },
+      mark: "scatter",
+      decor: { annotations: [{ id: "a1", x: 1, y: 2, text: "peak" }], legend: { pos: "sw" } },
+    });
+    expect(v).not.toBeNull();
+    expect(v!.version).toBe(2);
+    expect(v!.decor).toEqual({
+      annotations: [{ id: "a1", x: 1, y: 2, text: "peak" }],
+      legend: { pos: "sw" },
+    });
+  });
+
+  it("an empty/malformed decor block never promotes to version 2", () => {
+    const v = validatePlotSpec({
+      version: 2,
+      zones: { x: ref(0), y: [ref(1)], group: null, facet: null },
+      mark: "scatter",
+      decor: { legend: "fancy" }, // legend must be an object — drops entirely
+    });
+    expect(v).not.toBeNull();
+    expect(v!.version).toBe(1);
+    expect(v!.decor).toBeUndefined();
   });
 
   it("an unknown version number is rejected regardless of otherwise-valid content", () => {
