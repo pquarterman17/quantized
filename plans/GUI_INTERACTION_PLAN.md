@@ -314,10 +314,26 @@ plotting, publication export.
             reshape/merge/correction/metadata). Deliberately NOT done as a
             side effect of sectioning: relocating commands between menus
             breaks muscle memory and deserves a deliberate call.
-      - [ ] Fill out Help: searchable tool help, mouse interactions, import
-            guides, Origin migration, `What is this?` mode. Help currently
-            holds only Keyboard shortcuts + Text formatting (+ a palette entry
-            and an About link).
+      - [ ] Fill out Help — **FOUR of five sub-items DONE 2026-07-19**
+            (`f5e9162`, `315d31a`, `9bc4daa`), leaving only `What is this?`
+            mode. A new searchable Help hub (Help ▸ Help topics…, also in ⌘K)
+            with tabs: **Topics** (fuzzy search over a catalog of all 17
+            analysis tools — name, one-liner, and where to find it, folded
+            together with formats + Origin tips into one search), **Keyboard &
+            mouse** (reuses the existing shortcut data, no duplication),
+            **Importing data** (every supported format grouped by category),
+            and **From Origin** (twelve "in Origin X → here Y" migration tips,
+            authored net-new). Three design guards keep the content honest: a
+            coverage test asserts every Analyze command has a tool entry; the
+            format catalog is asserted ⊆ the file-dialog filter (which caught
+            + fixed the missing-.opj/.opju drift, `315d31a`); and Origin tips
+            that name a tool are cross-checked against the tool catalog so a
+            rename breaks the test. Content lives in pure lib/ modules; the
+            open state is a standalone store/help slice (useApp is at its pin).
+            REMAINING: `What is this?` contextual hover-help mode — a distinct,
+            larger feature (per-element `data-help` + a toggle + a hover
+            tooltip system), tracked with the shortcuts sub-item's "first-run
+            interaction hints" below.
     - [ ] **Shortcuts + palette labels DONE 2026-07-19** (`42b4174`,
           `8b66988`); the first-run hints mode remains open.
       - [x] Shortcuts were already RENDERED in menus and the palette, but only
