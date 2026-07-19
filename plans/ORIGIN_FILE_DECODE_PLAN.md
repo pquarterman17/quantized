@@ -710,7 +710,47 @@ Official model references used for this routing:
     - [ ] **Generalized page/layer MODEL** (replace the singleton y2/panel
       state branches with one explicit layer model) — design belongs with
       GUI_INTERACTION #12's canonical plot spec; keep the two in one
-      architecture conversation, not two competing ones.
+      architecture conversation, not two competing ones. Landing in three
+      passes; **A and C SHIPPED 2026-07-19**, B is the remaining open work.
+      - [x] **Pass A — the composition union** (`5cdc730`). The three
+        parallel nullable store fields `spatialPanels`/`facetPanels`/
+        `breakPanels` were mutually exclusive BY CONVENTION ONLY: seven
+        `set()` sites each had to remember to null the other two, and
+        `useMultiPanelStage` re-derived a defensive spatial > break > facet
+        precedence chain independently. They become ONE discriminated union
+        `composition: Composition | null` (new pure `lib/composition.ts`), so
+        two kinds cannot coexist by construction and the precedence chain
+        collapses to `breakPanels !== null` / `facetPanels !== null`. Two
+        invariants the module owns: "nothing" has exactly ONE representation
+        (constructors return null for an empty panel list), and the accessors
+        return the panel array BY REFERENCE so they stay safe inside a Zustand
+        selector. The field is ephemeral (never persisted) so there is no
+        `.dwk` migration. Self-funding: useApp.ts 3115 -> 3090, pin ratcheted
+        down. Frontend 4044 + build, backend 2989 + ruff + mypy green.
+      - [x] **Pass C — the `page` block** (`4dbe9da`). `PlotSpec.page`,
+        reserved-and-stripped since #12, gets real fields: `stack`/`fit`/
+        `setup` — the per-WINDOW page state a portable spec silently lost on
+        save/reopen (compose at 8.5x11in, save, re-apply → the page model was
+        dropped). Follows the established validate/hasContent/build contract,
+        omitted-when-default, and now participates in v1→v2 promotion. The
+        COMPOSITION itself is deliberately NOT serialized: a spatial
+        arrangement binds multiple datasets and a spec is single-dataset by
+        construction, so capturing it would be a second competing
+        serialization of the decode path; the facet arrangement already
+        re-derives from `zones.facet` on send. One pinned divergence: `setup`
+        reuses `pagesetup.sanitizePageSetup` (the shared `.dwk` gate), which
+        CLAMPS where sibling fields DROP. Frontend 4064 + build green.
+      - [ ] **Pass B — the y2 singleton.** Six fields (`y2Keys`/`y2Lim`/
+        `y2Scale`/`y2Step`/`y2Fmt`/`y2AxisLabel`) are mirrored FOUR times:
+        the store, `PlotView`, `SpatialPanel` (as `y2Log`, a live divergence),
+        and `AxesBlock.y2`. Axis membership is expressed two incompatible
+        ways — a `y2Keys` index array in the store vs a per-mark
+        `axis?: 0 | 1` tag on the wire/render side. Unify the REPRESENTATION
+        behind one shared `AxisSpec` WITHOUT generalizing cardinality (>2 Y
+        axes stays specimen-gated above — the Graph25 discipline). The payoff
+        is removing the duplicated y2 derivation between
+        `exportFigureCommand` and `spatialPageExport` that produced the
+        `08b7066` y2-flattening bug.
 
 ### Tier 3 — acceptance and handoff
 

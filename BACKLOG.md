@@ -6,7 +6,11 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-18, after the six-PR Origin visual-import stack
+**Last reconciled:** 2026-07-19, after ORIGIN_FILE_DECODE #54's page/layer
+model passes A + C shipped (composition discriminated union replacing the three
+parallel panel arrays, then PlotSpec's reserved `page` block filled); pass B
+(the y2 singleton) is the remaining open dev work on that row. Prior context:
+2026-07-18, after the six-PR Origin visual-import stack
 merged and received an independent tip verification (frontend 3,759 + build,
 18/18 Playwright, full corpus baseline-identical). The last full regeneration
 was 2026-07-17, at the end of the autonomous GUI_INTERACTION campaign (11
@@ -38,7 +42,7 @@ baseline framing) are under Owner actions below, not here.
 | Item | Plan / item |
 |------|-------------|
 | Larger bets / polish: unified select→edit Plot Objects tree (#2, owner-gate scope), buttons/menus/tooltips polish (#17), owner-dependent Origin gaps (#16) | GUI_INTERACTION Tier 1–3 |
-| **Origin layout generality residual** — overlay grouping generalized past pairs (`adab0cc`, corpus 12/12·99/99·4/4 clean) AND y2 export twinx fix (`08b7066`: single-figure export no longer flattens y2 onto the wrong axis) AND page-export y2 (GUI #12 slice 4b: `routes/export_page.py`'s 422 guard replaced with real `figure_y2.render_with_secondary_axis` threading per panel; `lib/spatialPageExport.ts` no longer filters y2 channels/fails a y2-only panel closed) ALL SHIPPED 2026-07-18; remaining: native >2-Y-axes rendering (specimen-gated) + generalized page/layer MODEL (GUI #12's canonical spec shipped 2026-07-18 as the substrate; the page/layer model itself is this row's own open work) | ORIGIN_FILE_DECODE #54 |
+| **Origin layout generality residual** — overlay grouping generalized past pairs (`adab0cc`, corpus 12/12·99/99·4/4 clean) AND y2 export twinx fix (`08b7066`: single-figure export no longer flattens y2 onto the wrong axis) AND page-export y2 (GUI #12 slice 4b: `routes/export_page.py`'s 422 guard replaced with real `figure_y2.render_with_secondary_axis` threading per panel; `lib/spatialPageExport.ts` no longer filters y2 channels/fails a y2-only panel closed) ALL SHIPPED 2026-07-18; remaining: native >2-Y-axes rendering (specimen-gated) + the generalized page/layer MODEL, now landing in three passes — **A (composition union, `5cdc730`) and C (`page` block, `4dbe9da`) SHIPPED 2026-07-19**, leaving **pass B: unify the y2 singleton behind one shared AxisSpec** (six fields mirrored 4x across store/PlotView/SpatialPanel/AxesBlock, plus two incompatible axis-membership representations; representation only — >2 Y axes stays specimen-gated) | ORIGIN_FILE_DECODE #54 |
 
 ## Owner actions & owner-gated decisions
 
