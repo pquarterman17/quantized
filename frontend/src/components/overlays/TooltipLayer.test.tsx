@@ -13,6 +13,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import TooltipLayer from "./TooltipLayer";
+import { useHelp } from "../../store/help";
 
 function renderTarget(attrs: Record<string, string>) {
   render(
@@ -33,8 +34,14 @@ function advance(ms: number) {
 }
 
 describe("TooltipLayer", () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  beforeEach(() => {
+    vi.useFakeTimers();
+    useHelp.setState({ whatIsThis: false });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    useHelp.setState({ whatIsThis: false });
+  });
 
   it("renders nothing until something is hovered or focused", () => {
     renderTarget({ "data-tip": "Zoom", "data-tip-desc": "Drag a box to zoom into a region" });
@@ -118,5 +125,24 @@ describe("TooltipLayer", () => {
     fireEvent.mouseOver(screen.getByTestId("plain"));
     advance(400);
     expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+  it("reveals help INSTANTLY (no dwell) in what-is-this mode", () => {
+    // The mode's whole point: point at a control and see its help at once.
+    act(() => useHelp.getState().setWhatIsThis(true));
+    const el = renderTarget({ "data-tip": "Zoom", "data-tip-desc": "Drag a box to zoom into a region" });
+    fireEvent.mouseOver(el);
+    // No timer advance — it should already be showing.
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    expect(screen.getByText("Zoom")).toBeInTheDocument();
+  });
+
+  it("keeps the 400ms dwell when the mode is off", () => {
+    const el = renderTarget({ "data-tip": "Zoom" });
+    fireEvent.mouseOver(el);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    advance(399);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    advance(1);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
   });
 });

@@ -14,17 +14,27 @@ export type HelpSection = "search" | "shortcuts" | "importing" | "origin";
 interface HelpState {
   open: boolean;
   section: HelpSection;
+  /** "What is this?" inspect mode (GUI_INTERACTION #17): while on, controls
+   *  carrying help text are outlined and reveal it instantly on hover. */
+  whatIsThis: boolean;
   openHelp: (section?: HelpSection) => void;
   closeHelp: () => void;
   setSection: (section: HelpSection) => void;
+  toggleWhatIsThis: () => void;
+  setWhatIsThis: (on: boolean) => void;
 }
 
 export const useHelp = create<HelpState>((set) => ({
   open: false,
   section: "search",
-  openHelp: (section = "search") => set({ open: true, section }),
+  whatIsThis: false,
+  // Opening the Help dialog exits inspect mode — the two are alternate ways
+  // to answer "what is this?", never both at once.
+  openHelp: (section = "search") => set({ open: true, section, whatIsThis: false }),
   closeHelp: () => set({ open: false }),
   setSection: (section) => set({ section }),
+  toggleWhatIsThis: () => set((s) => ({ whatIsThis: !s.whatIsThis, open: false })),
+  setWhatIsThis: (on) => set({ whatIsThis: on }),
 }));
 
 /** Imperative helper for non-component call sites (a command's `run`). */

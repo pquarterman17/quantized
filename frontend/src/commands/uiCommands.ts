@@ -7,7 +7,7 @@
 // own module. Behavior is unchanged — this is a verbatim move.
 
 import type { StoreGet } from "../lib/exportActive";
-import { openHelp } from "../store/help";
+import { openHelp, useHelp } from "../store/help";
 import { PALETTE_LABEL, PALETTE_SHORTCUT, type Action } from "../store/commands";
 
 /** Build the View/Edit/Help-group curated palette actions against the live
@@ -115,5 +115,12 @@ export function buildUiCommands(s: StoreGet): Action[] {
     },
     // GOTO #11: the rich-text label micro-syntax reference (Help menu + ⌘K).
     { id: "text-format-help", group: "Help", label: "Text formatting", run: () => s().setTextFormatHelpOpen(true) },
+    {
+      id: "what-is-this",
+      group: "Help",
+      label: "What is this?",
+      keywords: "inspect hover contextual help point identify tooltip",
+      run: () => useHelp.getState().toggleWhatIsThis(),
+    },
   ];
 }

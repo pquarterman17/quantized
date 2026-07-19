@@ -12,8 +12,10 @@
 // propagation, so it never steals Escape from a dialog/menu that's also
 // listening for it.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+import { useHelp } from "../../store/help";
 
 interface Tip {
   name: string;
@@ -34,6 +36,11 @@ function readTip(el: HTMLElement): { name: string; desc: string | null; hint: st
 
 export default function TooltipLayer() {
   const [tip, setTip] = useState<Tip | null>(null);
+  // "What is this?" mode reveals help INSTANTLY. Read through a ref so the one
+  // delegated listener below sees the current value without re-subscribing.
+  const whatIsThis = useHelp((s) => s.whatIsThis);
+  const whatIsThisRef = useRef(whatIsThis);
+  whatIsThisRef.current = whatIsThis;
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -46,7 +53,7 @@ export default function TooltipLayer() {
       if (!body) return;
       const rect = el.getBoundingClientRect();
       clear();
-      timer = setTimeout(() => {
+      const show = () => {
         const below = rect.top < 90; // flip below near the top edge
         setTip({
           ...body,
@@ -54,7 +61,9 @@ export default function TooltipLayer() {
           y: below ? rect.bottom + 8 : rect.top - 8,
           below,
         });
-      }, DWELL_MS);
+      };
+      if (whatIsThisRef.current) show();
+      else timer = setTimeout(show, DWELL_MS);
     };
     const dismiss = () => {
       clear();
