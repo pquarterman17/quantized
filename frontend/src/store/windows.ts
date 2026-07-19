@@ -81,9 +81,7 @@ export function mainWindow(datasetId: string | null): PlotWindow {
  *  `datasetId` and self-filter in `composeDisplayPayload`). */
 export function focusTransientReset(): Partial<AppState> {
   return {
-    spatialPanels: null,
-    facetPanels: null,
-    breakPanels: null,
+    composition: null,
     rsmPeaks: null,
     integral: null,
     fwhmResult: null,

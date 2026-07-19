@@ -114,9 +114,7 @@ export function BackgroundStackWindow({ dataset, view, bg }: BackgroundStackWind
   const { hostRef, hostStyle } = useMultiPanelStage({
     active: dataset,
     datasets: NO_DATASETS,
-    spatialPanels: null,
-    facetPanels: null,
-    breakPanels: null,
+    composition: null,
     yScale: view.yScale,
     xScale: view.xScale,
     xLim: view.xLim,

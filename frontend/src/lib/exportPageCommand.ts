@@ -9,6 +9,7 @@
 
 import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigurePage } from "./api";
+import { spatialPanelsOf } from "./composition";
 import type { StoreGet } from "./exportActive";
 import { buildSpatialPageRequest, canExportSpatialPage } from "./spatialPageExport";
 import { toast } from "../store/toasts";
@@ -19,7 +20,7 @@ import type { DataStruct } from "./types";
  *  never export small), then build + submit the export request. */
 export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
   const st = s();
-  const panels = st.spatialPanels;
+  const panels = spatialPanelsOf(st.composition);
   if (!canExportSpatialPage(panels, st.pageSetup)) {
     const msg = "export page: needs a decoded page and every panel's page position";
     st.setStatus(msg);

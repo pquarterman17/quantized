@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import type uPlot from "uplot";
 
+import { facetPanelsOf, spatialPanelsOf } from "../../lib/composition";
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { resolveTemplate } from "../../lib/plotTemplates";
@@ -115,15 +116,14 @@ export default function PlotStage() {
   // stack/inset/polar values gate the alternate render modes here; their toggle
   // setters live in PlotToolbar, which owns the tool dock.
   const stackMode = useApp((s) => s.stackMode);
-  // Set by applyOriginFigure's spatial multi-panel path (decode-plan #36):
-  // each panel owns its own dataset, so the plain "≥2 plotted channels on the
-  // active dataset" gate below doesn't apply — a spatial arrangement can be
-  // shown even with 0/1 channels selected on whatever is active.
-  const spatialPanels = useApp((s) => s.spatialPanels);
-  // Set by `facetByColumn` (gap #21 residual): same reasoning as above — a
-  // facet arrangement is its own explicit-intent gate, independent of the
-  // active dataset's plotted-channel count.
-  const facetPanels = useApp((s) => s.facetPanels);
+  // The panel arrangement (#54 pass A). A spatial or facet arrangement is its
+  // own explicit-intent gate: each spatial panel owns its own dataset, and a
+  // facet is a deliberate split, so the plain "≥2 plotted channels on the
+  // active dataset" gate below doesn't apply to either — both can show with
+  // 0/1 channels selected on whatever happens to be active.
+  const composition = useApp((s) => s.composition);
+  const spatialPanels = spatialPanelsOf(composition);
+  const facetPanels = facetPanelsOf(composition);
   const insetMode = useApp((s) => s.insetMode);
   const polarMode = useApp((s) => s.polarMode);
   const statMode = useApp((s) => s.statMode);

@@ -87,8 +87,8 @@ import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel"
 import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
-import type { SpatialPanel } from "../lib/multipanel";
-import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
+import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
+import { breakPayloads, facetPayloads, suggestBreaks } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
 import { nextPanelFit, type PanelFit } from "../lib/panelLayout";
@@ -404,34 +404,17 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   stackMode: boolean; // multi-panel: one stacked sub-plot per channel
   panelFit: PanelFit; // #54: how a spatial multi-panel view fills the stage (PlotView field)
   pageSetup: PageSetup | null; // #54: this window's physical page model (PlotView field; null = none)
-  // Spatial multi-panel apply (decode-plan #36): set by `applyOriginFigure`
-  // when a multi-layer Origin figure's layers all resolve to a dataset +
-  // plotted channels — each panel owns its OWN dataset/ranges instead of
-  // splitting the active dataset's channels (MultiPanelStage renders this
-  // in preference to the plain per-channel split when non-null). Cleared by
-  // `setStackMode` and `setActive` so a manual toggle or picking a different
-  // dataset never shows a stale spatial arrangement.
-  spatialPanels: SpatialPanel[] | null;
-  // Facet-by-column (gap #21 residual): set by `facetByColumn` — one
-  // small-multiples panel per distinct level of a chosen column, built from
-  // the active dataset's ANALYSIS view (guard #11) via `lib/facet.facetPayloads`.
-  // A PARALLEL field to `spatialPanels`, not a reuse of it: a spatial panel is
-  // a reference (datasetId + xKey/yKeys) MultiPanelStage fetches and gives its
-  // OWN fixed axis state, because it can point at a wholly different dataset
-  // per panel; a facet panel is a ROW-FILTERED SLICE of ONE dataset that
-  // `facetPayloads` already materializes as a `PlotPayload` (no dataset
-  // reference to fetch, no per-panel axis state — the whole point of faceting
-  // is a SHARED x-domain the render side computes once). Mutually exclusive
-  // with `spatialPanels` — every setter that assigns one clears the other.
-  facetPanels: FacetPanel[] | null;
-  // Paneled x-breaks (gap #21 last residual): set by `breakAtGaps` — one
-  // panel per contiguous x-segment implied by a set of axis breaks (a caller
-  // override or `lib/facet.suggestBreaks`'s own gap detection), sharing ONE
-  // y-domain across every panel (`lib/facet.sharedYDomain`) but each keeping
-  // its OWN local x-range (`lib/facet.breakPayloads`). A THIRD parallel field
-  // alongside `spatialPanels`/`facetPanels` — mutually exclusive with both
-  // (every setter that assigns one clears the other two).
-  breakPanels: BreakPanel[] | null;
+  // How the stage is arranged into panels (#54 pass A): ONE discriminated
+  // union replacing the former parallel `spatialPanels`/`facetPanels`/
+  // `breakPanels` nullable arrays, whose mutual exclusion every assigning
+  // `set()` had to re-enforce by hand. `null` = no multi-panel arrangement.
+  // Set by `applyOriginFigure` (spatial), `facetByColumn` (facet) and
+  // `breakAtGaps` (break); cleared by `setStackMode` and `setActive` so a
+  // manual toggle or a different dataset never shows a stale arrangement.
+  // EPHEMERAL — never persisted; a `.dwk` restore nulls it and the producing
+  // action recomputes. Each kind's panel shape, why the three differ, and the
+  // reference-stable accessors: `lib/composition.ts`.
+  composition: Composition | null;
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
   statMode: boolean; // render the Statistics stage (box/violin/qq/histogram, gap #16)
@@ -629,19 +612,19 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   applyOriginFigure: (id: string, opts?: { newWindow?: boolean; discardConfirmed?: boolean }) => void;
   // Facet-by-column (gap #21 residual): partitions `datasetId`'s analysis-view
   // rows into one small-multiples panel per distinct level of `col` (via
-  // `lib/facet.facetPayloads`) and populates `facetPanels` for MultiPanelStage
-  // to render. Activates `datasetId`, turns on `stackMode`, and clears any
-  // prior `spatialPanels` arrangement (the two are mutually exclusive). No-op
-  // (with a toast) when the dataset is missing or the column has no finite
-  // levels to facet on.
+  // `lib/facet.facetPayloads`) and sets a facet `composition` for
+  // MultiPanelStage to render. Activates `datasetId`, turns on `stackMode`,
+  // and REPLACES any prior arrangement (the union makes that structural).
+  // No-op (with a toast) when the dataset is missing or the column has no
+  // finite levels to facet on.
   facetByColumn: (datasetId: string, col: number) => void;
   // Paneled x-breaks (gap #21 last residual): mirrors `facetByColumn`'s shape
   // but slices `datasetId`'s CURRENT x-column into contiguous segments (via
   // `lib/facet.breakPayloads`) instead of partitioning by a category column.
   // `breaks` is an explicit `[lo,hi]` override list; when omitted (or empty),
   // auto-detects via `lib/facet.suggestBreaks(xs, gapFactor)`. Activates
-  // `datasetId`, turns on `stackMode`, and clears `spatialPanels`/
-  // `facetPanels`. No-op (with a toast) when the dataset is missing, has no
+  // `datasetId`, turns on `stackMode`, and replaces any prior `composition`.
+  // No-op (with a toast) when the dataset is missing, has no
   // rows in the analysis view, or no qualifying gap/override breaks exist.
   breakAtGaps: (datasetId: string, breaks?: [number, number][], gapFactor?: number) => void;
   // Report sheets (#36): add opens the viewer on the new report.
@@ -1003,9 +986,7 @@ export const useApp = create<AppState>((set, get) => ({
   stackMode: false,
   panelFit: "frames",
   pageSetup: null,
-  spatialPanels: null,
-  facetPanels: null,
-  breakPanels: null,
+  composition: null,
   insetMode: false,
   polarMode: false,
   statMode: false,
@@ -1560,9 +1541,7 @@ export const useApp = create<AppState>((set, get) => ({
         // every spatial panel (item 4) — Origin layers are boxed by default.
         set({
           stackMode: true,
-          spatialPanels: placed,
-          facetPanels: null,
-          breakPanels: null,
+          composition: spatialComposition(placed),
           // #54: a fresh tiled apply starts at the app-wide default fit
           // (Preferences ▸ Plot ▸ Multi-panel fit). The per-window value then
           // persists in `.dwk`.
@@ -1610,9 +1589,9 @@ export const useApp = create<AppState>((set, get) => ({
     });
     get().recordMacro(`Apply figure ${lit(fig.name)}`, `qz.applyFigure(${lit(id)})`);
   },
-  // Facet-by-column (gap #21 residual): see the state-field doc comment for
-  // why `facetPanels` is a parallel field rather than a reuse of
-  // `spatialPanels`. Reads the ANALYSIS view (guard #11 — exclusion #50 ∪
+  // Facet-by-column (gap #21 residual): see `lib/composition.ts` for why a
+  // facet panel is a different shape from a spatial one.
+  // Reads the ANALYSIS view (guard #11 — exclusion #50 ∪
   // filter #53) so faceting honors whatever rows are currently in play, the
   // same contract `plotspec.specToRender`'s facet path already follows. The
   // current x/y channel selection carries over ONLY when `datasetId` is
@@ -1640,7 +1619,7 @@ export const useApp = create<AppState>((set, get) => ({
       return;
     }
     get().setActive(datasetId);
-    set({ stackMode: true, spatialPanels: null, facetPanels: panels, breakPanels: null });
+    set({ stackMode: true, composition: facetComposition(panels) });
     get().recordMacro(
       `Facet by ${ds.data.labels[col] ?? `column ${col}`}`,
       `qz.facetByColumn(${lit(datasetId)}, ${col})`,
@@ -1675,7 +1654,7 @@ export const useApp = create<AppState>((set, get) => ({
       return;
     }
     get().setActive(datasetId);
-    set({ stackMode: true, spatialPanels: null, facetPanels: null, breakPanels: panels });
+    set({ stackMode: true, composition: breakComposition(panels) });
     get().recordMacro(`Break x-axis at gaps`, `qz.breakAtGaps(${lit(datasetId)})`);
   },
   // Replace the whole library with a restored workspace (from a .dwk file).
@@ -1777,9 +1756,7 @@ export const useApp = create<AppState>((set, get) => ({
         yLim: restoredView ? restoredView.yLim : null,
         xStep: restoredView ? restoredView.xStep : null,
         yStep: restoredView ? restoredView.yStep : null,
-        spatialPanels: null, // decode-plan #36 — never restored from a stale figure apply
-        facetPanels: null, // gap #21 residual — likewise never restored from a stale facet
-        breakPanels: null, // gap #21 residual — likewise never restored from a stale break
+        composition: null, // #54 — ephemeral; never restored from a stale apply
         fitOverlay: null,
         peakOverlay: null,
         baselineOverlay: null,
@@ -2078,9 +2055,7 @@ export const useApp = create<AppState>((set, get) => ({
         yLim: null,
         xStep: null,
         yStep: null,
-        spatialPanels: null, // decode-plan #36 — the clone becomes active, not a figure
-        facetPanels: null, // gap #21 residual — likewise, not a facet arrangement
-        breakPanels: null, // gap #21 residual — likewise, not a break arrangement
+        composition: null, // #54 — the clone becomes active, not an arrangement
         rsmPeaks: null,
         integral: null,
         fwhmResult: null,
@@ -2349,7 +2324,7 @@ export const useApp = create<AppState>((set, get) => ({
   // (gap #21 residual) — the plain per-channel split (or leaving stack mode)
   // is what the user asked for, never a stale spatial/facet grid.
   setStackMode: (stackMode) =>
-    set({ stackMode, spatialPanels: null, facetPanels: null, breakPanels: null }),
+    set({ stackMode, composition: null }),
   // #54: the spatial multi-panel fit mode (PlotView field). `cyclePanelFit`
   // advances frames<->window until a page model exists (Stage 2 opens page).
   setPanelFit: (panelFit) => set({ panelFit }),

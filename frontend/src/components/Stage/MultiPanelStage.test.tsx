@@ -9,6 +9,7 @@
 import { render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { breakPanelsOf, facetPanelsOf, spatialComposition } from "../../lib/composition";
 import type { SpatialPanel } from "../../lib/multipanel";
 import type { DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -61,9 +62,7 @@ beforeEach(() => {
     y2Keys: null,
     seriesOrder: null,
     stackMode: true,
-    spatialPanels: null,
-    facetPanels: null,
-    breakPanels: null,
+    composition: null,
     showLegend: true,
     showAxisBox: false,
     plotTemplate: "screen",
@@ -109,7 +108,7 @@ describe("MultiPanelStage — mode regressions", () => {
 
   it("facet-by-column mode still renders (regression)", async () => {
     useApp.getState().facetByColumn("d1", 0);
-    const expected = useApp.getState().facetPanels?.length ?? 0;
+    const expected = facetPanelsOf(useApp.getState().composition)?.length ?? 0;
     expect(expected).toBeGreaterThan(0);
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(expected));
@@ -117,7 +116,7 @@ describe("MultiPanelStage — mode regressions", () => {
 
   it("spatial-apply mode still renders (regression)", async () => {
     useApp.setState({
-      spatialPanels: [
+      composition: spatialComposition([
         {
           datasetId: "d1",
           xKey: null,
@@ -129,7 +128,7 @@ describe("MultiPanelStage — mode regressions", () => {
           row: 0,
           col: 0,
         },
-      ],
+      ]),
     });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(1));
@@ -144,7 +143,7 @@ describe("MultiPanelStage — mode regressions", () => {
   // `annotations` list.
   it("spatial-apply mode threads a panel's OWN annotations through (fix #5)", async () => {
     useApp.setState({
-      spatialPanels: [
+      composition: spatialComposition([
         {
           datasetId: "d1",
           xKey: null,
@@ -157,7 +156,7 @@ describe("MultiPanelStage — mode regressions", () => {
           col: 0,
           annotations: [{ id: "a1", x: 1, y: 20, text: "peak" }],
         },
-      ],
+      ]),
     });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(1));
@@ -167,7 +166,7 @@ describe("MultiPanelStage — mode regressions", () => {
 
   it("threads a panel's decoded region bands into the behind-data shade plugin", async () => {
     useApp.setState({
-      spatialPanels: [
+      composition: spatialComposition([
         {
           datasetId: "d1",
           xKey: null,
@@ -182,7 +181,7 @@ describe("MultiPanelStage — mode regressions", () => {
             { id: "shade-1", x1: 0.5, x2: 1.5, y1: 10, y2: 30, fill: "#99AABB" },
           ],
         },
-      ],
+      ]),
     });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(1));
@@ -196,7 +195,7 @@ describe("MultiPanelStage — mode regressions", () => {
   // Fix #4: a spatial panel's decoded legend label overrides the series name.
   it("spatial-apply mode threads a panel's seriesLabels through to the series label", async () => {
     useApp.setState({
-      spatialPanels: [
+      composition: spatialComposition([
         {
           datasetId: "d1",
           xKey: null,
@@ -209,7 +208,7 @@ describe("MultiPanelStage — mode regressions", () => {
           col: 0,
           seriesLabels: { 0: "Field-cooled" },
         },
-      ],
+      ]),
     });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(1));
@@ -219,7 +218,7 @@ describe("MultiPanelStage — mode regressions", () => {
 
   it("renders a panel-local static legend with the decoded title, position, and line+marker swatch", async () => {
     useApp.setState({
-      spatialPanels: [
+      composition: spatialComposition([
         {
           sourceFigureIds: ["fig-1"],
           datasetId: "d1",
@@ -236,7 +235,7 @@ describe("MultiPanelStage — mode regressions", () => {
           legendTitle: "Cooling sweep",
           legendFrameXY: [0.2, 0.3],
         },
-      ],
+      ]),
     });
     const { container } = render(<MultiPanelStage />);
     await waitFor(() => expect(container.querySelector(".qzk-spatial-legend")).not.toBeNull());
@@ -252,7 +251,7 @@ describe("MultiPanelStage — mode regressions", () => {
 
   it("does not invent a spatial legend when no layer legend text decoded", async () => {
     useApp.setState({
-      spatialPanels: [
+      composition: spatialComposition([
         {
           datasetId: "d1",
           xKey: null,
@@ -264,7 +263,7 @@ describe("MultiPanelStage — mode regressions", () => {
           row: 0,
           col: 0,
         },
-      ],
+      ]),
     });
     const { container } = render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(1));
@@ -274,7 +273,7 @@ describe("MultiPanelStage — mode regressions", () => {
   // Fix #2: a panel's decoded step drives fixed log-axis ticks.
   it("spatial-apply mode threads a panel's yStep through to the y-axis splits", async () => {
     useApp.setState({
-      spatialPanels: [
+      composition: spatialComposition([
         {
           datasetId: "d1",
           xKey: null,
@@ -287,7 +286,7 @@ describe("MultiPanelStage — mode regressions", () => {
           col: 0,
           yStep: 0.1,
         },
-      ],
+      ]),
     });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(1));
@@ -297,7 +296,7 @@ describe("MultiPanelStage — mode regressions", () => {
 
   it("spatial log panels retain 2-9 minor splits and decade-only labels", async () => {
     useApp.setState({
-      spatialPanels: [
+      composition: spatialComposition([
         {
           datasetId: "d1",
           xKey: null,
@@ -309,7 +308,7 @@ describe("MultiPanelStage — mode regressions", () => {
           row: 0,
           col: 0,
         },
-      ],
+      ]),
     });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(1));
@@ -327,7 +326,7 @@ describe("MultiPanelStage — mode regressions", () => {
 
   it("paneled x-break mode renders one uPlot per segment (gap #21 residual)", async () => {
     useApp.getState().breakAtGaps("d1", [[1, 2]]);
-    const expected = useApp.getState().breakPanels?.length ?? 0;
+    const expected = breakPanelsOf(useApp.getState().composition)?.length ?? 0;
     expect(expected).toBe(2);
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(expected));
@@ -353,7 +352,7 @@ describe("MultiPanelStage — per-panel axis box (item 4)", () => {
   it("spatial-apply mode adds the axis-box plugin per panel when showAxisBox is on", async () => {
     useApp.setState({
       showAxisBox: true,
-      spatialPanels: [
+      composition: spatialComposition([
         {
           datasetId: "d1",
           xKey: null,
@@ -365,7 +364,7 @@ describe("MultiPanelStage — per-panel axis box (item 4)", () => {
           row: 0,
           col: 0,
         },
-      ],
+      ]),
     });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(1));
@@ -386,7 +385,7 @@ describe("MultiPanelStage — per-panel axis box (item 4)", () => {
   it("facet-by-column mode adds the axis-box plugin per panel when showAxisBox is on", async () => {
     useApp.setState({ showAxisBox: true });
     useApp.getState().facetByColumn("d1", 0);
-    const expected = useApp.getState().facetPanels?.length ?? 0;
+    const expected = facetPanelsOf(useApp.getState().composition)?.length ?? 0;
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(expected));
     for (const c of created as { opts: { plugins: unknown[] } }[]) {
@@ -410,7 +409,7 @@ describe("MultiPanelStage — per-panel axis box (item 4)", () => {
 describe("MultiPanelStage — spatial error bars (item A)", () => {
   it("drops a hidden (Y-error) channel from the panel's series and draws whiskers instead", async () => {
     useApp.setState({
-      spatialPanels: [
+      composition: spatialComposition([
         {
           datasetId: "d1",
           xKey: null,
@@ -424,7 +423,7 @@ describe("MultiPanelStage — spatial error bars (item A)", () => {
           hiddenChannels: [1],
           errKeys: { 0: 1 },
         },
-      ],
+      ]),
     });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(1));
@@ -441,9 +440,9 @@ describe("MultiPanelStage — spatial error bars (item A)", () => {
 
   it("draws no error-bar plugin when the panel has no errKeys (regression: today's behaviour unaffected)", async () => {
     useApp.setState({
-      spatialPanels: [
+      composition: spatialComposition([
         { datasetId: "d1", xKey: null, yKeys: [0], xLim: [0, 3], yLim: [0, 40], xLog: false, yLog: false, row: 0, col: 0 },
-      ],
+      ]),
     });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(1));
@@ -462,7 +461,7 @@ describe("MultiPanelStage — shared-x flush stacking (item B)", () => {
   ];
 
   it("suppresses x tick values on the TOP panel of a flush run, keeps the BOTTOM panel's default ticks", async () => {
-    useApp.setState({ spatialPanels: sharedXPanels });
+    useApp.setState({ composition: spatialComposition(sharedXPanels) });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(2));
     const [top, bottom] = created as { opts: { axes: { label?: string; values?: unknown }[] } }[];
@@ -487,10 +486,10 @@ describe("MultiPanelStage — shared-x flush stacking (item B)", () => {
 
   it("does NOT suppress independent (non-shared-x) panels — same-shape grid, different x-ranges", async () => {
     useApp.setState({
-      spatialPanels: [
+      composition: spatialComposition([
         { ...sharedXPanels[0] },
         { ...sharedXPanels[1], xLim: [0, 999] }, // no longer shares the top panel's x-range
-      ],
+      ]),
     });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(2));

@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigure } from "../../../lib/api";
+import { facetPanelsOf, spatialPanelsOf } from "../../../lib/composition";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useGraphBuilder } from "./useGraphBuilder";
@@ -62,9 +63,7 @@ beforeEach(() => {
     activePlotSpecId: null,
     macroRecording: false,
     stackMode: false,
-    spatialPanels: null,
-    facetPanels: null,
-    breakPanels: null,
+    composition: null,
     figureBuilderOpen: false,
     figureDocSeed: null,
     figureDocs: [],
@@ -321,13 +320,13 @@ describe("useGraphBuilder — send to stage", () => {
     act(() => result.current.sendToStage());
     const s = useApp.getState();
     expect(s.stackMode).toBe(true);
-    expect(s.facetPanels).toHaveLength(2);
-    expect(s.spatialPanels).toBeNull();
+    expect(facetPanelsOf(s.composition)).toHaveLength(2);
+    expect(spatialPanelsOf(s.composition)).toBeNull();
     // facetByColumn read the x/y selection just assigned (channel 0/1, not
     // the time axis / all-channels default), baking it into each panel's
     // payload.
-    expect(s.facetPanels?.[0].payload.xLabel).toBe("x");
-    expect(s.facetPanels?.[0].payload.series.map((ser) => ser.label)).toEqual(["y"]);
+    expect(facetPanelsOf(s.composition)?.[0].payload.xLabel).toBe("x");
+    expect(facetPanelsOf(s.composition)?.[0].payload.series.map((ser) => ser.label)).toEqual(["y"]);
     // FIXED (GUI_INTERACTION #12 slice 4b): facetByColumn's own trailing
     // setActive call used to reset the LIVE xKey/yKeys to null even though
     // `ds.id` was already active — store/windows.ts's focusedRebindPatch now
@@ -344,7 +343,7 @@ describe("useGraphBuilder — send to stage", () => {
     act(() => result.current.assign("y", 1));
     act(() => result.current.sendToStage());
     const s = useApp.getState();
-    expect(s.facetPanels).toBeNull();
+    expect(facetPanelsOf(s.composition)).toBeNull();
     expect(s.stackMode).toBe(false);
   });
 });

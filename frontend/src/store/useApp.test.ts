@@ -8,6 +8,13 @@ import {
   uploadFile,
 } from "../lib/api";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
+import {
+  breakPanelsOf,
+  facetComposition,
+  facetPanelsOf,
+  spatialComposition,
+  spatialPanelsOf,
+} from "../lib/composition";
 import { defaultErrKeys } from "../lib/errorbars";
 import { saveBlob } from "../lib/download";
 import { effectiveChannels } from "../lib/plotdata";
@@ -2454,7 +2461,7 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
       ],
       originFigures: [layer1, { ...layer2, datasetId: "d3" }],
       stackMode: false,
-      spatialPanels: null,
+      composition: null,
     });
     useApp.getState().applyOriginFigure("fig-XRD-0");
     const s = useApp.getState();
@@ -2465,11 +2472,11 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
     // spatial apply takes over instead.
     expect(s.y2Keys).toBeNull();
     expect(s.stackMode).toBe(true);
-    expect(s.spatialPanels).toHaveLength(2);
+    expect(spatialPanelsOf(s.composition)).toHaveLength(2);
     // No decoded frame geometry on either layer -> the ordinal single-column
     // fallback stack (layer 1 first, per figureLayerFamily's layer-ascending
     // sort), each panel keeping its OWN layer's dataset/channels/ranges.
-    expect(s.spatialPanels?.[0]).toMatchObject({
+    expect(spatialPanelsOf(s.composition)?.[0]).toMatchObject({
       datasetId: "d2",
       xKey: null,
       yKeys: [0],
@@ -2478,7 +2485,7 @@ describe("useApp applyOriginFigure — double-Y (2-layer window, both layers -> 
       row: 0,
       col: 0,
     });
-    expect(s.spatialPanels?.[1]).toMatchObject({
+    expect(spatialPanelsOf(s.composition)?.[1]).toMatchObject({
       datasetId: "d3",
       xKey: null,
       yKeys: [1, 2],
@@ -2544,7 +2551,7 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
       ],
       activeId: null,
       stackMode: false,
-      spatialPanels: null,
+      composition: null,
       originFigures: [],
       originFidelity: [],
     });
@@ -2557,7 +2564,7 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
     useApp.getState().applyOriginFigure("fig-0");
     const s = useApp.getState();
     expect(s.stackMode).toBe(true);
-    expect(s.spatialPanels).toEqual([
+    expect(spatialPanelsOf(s.composition)).toEqual([
       expect.objectContaining({ datasetId: "p1", row: 0, col: 0, xLim: [0, 10], yLim: [0, 100] }),
       expect.objectContaining({ datasetId: "p2", row: 1, col: 0, xLim: [0, 10], yLim: [0, 200] }),
     ]);
@@ -2574,7 +2581,7 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
     useApp.getState().applyOriginFigure("fig-1"); // clicking the MIDDLE layer's own entry
     const s = useApp.getState();
     expect(s.stackMode).toBe(true);
-    expect(s.spatialPanels?.map((p) => [p.datasetId, p.row, p.col])).toEqual([
+    expect(spatialPanelsOf(s.composition)?.map((p) => [p.datasetId, p.row, p.col])).toEqual([
       ["p1", 0, 0],
       ["p2", 1, 0],
       ["p3", 2, 0],
@@ -2598,7 +2605,7 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
     useApp.getState().applyOriginFigure("fig-0");
     const s = useApp.getState();
     expect(s.panelFit).toBe("page"); // composition safety overrides a grid-oriented preference
-    expect(s.spatialPanels?.map((panel) => panel.pageRect)).toEqual([
+    expect(spatialPanelsOf(s.composition)?.map((panel) => panel.pageRect)).toEqual([
       { left: 0.1, top: 0.1, width: 0.8, height: 0.8 },
       { left: 0.62, top: 0.16, width: 0.25, height: 0.25 },
     ]);
@@ -2610,7 +2617,7 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
     useApp.setState({ originFigures: [l1, l2] });
     useApp.getState().applyOriginFigure("fig-0");
     const s = useApp.getState();
-    expect(s.spatialPanels).toBeNull(); // no multi-panel — all-or-nothing resolution failed
+    expect(spatialPanelsOf(s.composition)).toBeNull(); // no multi-panel — all-or-nothing resolution failed
     expect(s.stackMode).toBe(false); // untouched — the single-layer tail never turns it on
     expect(s.activeId).toBe("p1"); // clicked layer's own dataset activated instead
     expect(s.yLim).toEqual([0, 1]); // its own axis snapshot, not a panel arrangement
@@ -2622,7 +2629,7 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
     useApp.setState({ originFigures: [l1, l2] });
     useApp.getState().applyOriginFigure("fig-0");
     const s = useApp.getState();
-    expect(s.spatialPanels).toBeNull();
+    expect(spatialPanelsOf(s.composition)).toBeNull();
     expect(s.stackMode).toBe(false);
     expect(s.activeId).toBe("p1");
   });
@@ -2642,7 +2649,7 @@ describe("useApp applyOriginFigure — spatial multi-panel (decode-plan #36, ite
     useApp.getState().applyOriginFigure("fig-h");
     const s = useApp.getState();
     expect(s.stackMode).toBe(true);
-    expect(s.spatialPanels).toHaveLength(1); // host+partner merged; the 3rd never becomes its own panel
+    expect(spatialPanelsOf(s.composition)).toHaveLength(1); // host+partner merged; the 3rd never becomes its own panel
     const msgs = useToasts.getState().toasts.map((t) => t.msg);
     expect(msgs.some((m) => m.includes("1 overlay layer(s) exceed the 2-axis native renderer"))).toBe(true);
   });
@@ -2669,8 +2676,7 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
       datasets: [{ id: "d1", name: "ds1", data: facetData }],
       activeId: null,
       stackMode: false,
-      spatialPanels: null,
-      facetPanels: null,
+      composition: null,
       macroRecording: false,
       macroSteps: [],
     });
@@ -2681,14 +2687,14 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
     const s = useApp.getState();
     expect(s.activeId).toBe("d1");
     expect(s.stackMode).toBe(true);
-    expect(s.spatialPanels).toBeNull();
-    expect(s.facetPanels).toHaveLength(2);
-    expect(s.facetPanels?.map((p) => p.label)).toEqual(["1", "2"]);
+    expect(spatialPanelsOf(s.composition)).toBeNull();
+    expect(facetPanelsOf(s.composition)).toHaveLength(2);
+    expect(facetPanelsOf(s.composition)?.map((p) => p.label)).toEqual(["1", "2"]);
   });
 
   it("clears a prior spatial arrangement", () => {
     useApp.setState({
-      spatialPanels: [
+      composition: spatialComposition([
         {
           datasetId: "other",
           xKey: null,
@@ -2700,16 +2706,16 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
           row: 0,
           col: 0,
         },
-      ],
+      ]),
     });
     useApp.getState().facetByColumn("d1", 0);
-    expect(useApp.getState().spatialPanels).toBeNull();
+    expect(spatialPanelsOf(useApp.getState().composition)).toBeNull();
   });
 
   it("no-ops (with a toast, no crash) when the dataset is missing", () => {
     useApp.getState().facetByColumn("nope", 0);
     const s = useApp.getState();
-    expect(s.facetPanels).toBeNull();
+    expect(facetPanelsOf(s.composition)).toBeNull();
     expect(s.stackMode).toBe(false);
     expect(s.activeId).toBeNull();
   });
@@ -2719,7 +2725,7 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "ds1", data: allNaN }] });
     useApp.getState().facetByColumn("d1", 0);
     const s = useApp.getState();
-    expect(s.facetPanels).toBeNull();
+    expect(facetPanelsOf(s.composition)).toBeNull();
     expect(s.stackMode).toBe(false);
   });
 
@@ -2728,7 +2734,7 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
       datasets: [{ id: "d1", name: "ds1", data: facetData, excludedRows: [0, 1, 2, 3, 4, 5] }],
     });
     useApp.getState().facetByColumn("d1", 0);
-    expect(useApp.getState().facetPanels).toBeNull();
+    expect(facetPanelsOf(useApp.getState().composition)).toBeNull();
   });
 
   it("honors row exclusion (guard #11) — an excluded row never enters a facet panel", () => {
@@ -2740,7 +2746,7 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
       yKeys: [1],
     });
     useApp.getState().facetByColumn("d1", 0);
-    const level1 = useApp.getState().facetPanels?.find((p) => p.label === "1");
+    const level1 = facetPanelsOf(useApp.getState().composition)?.find((p) => p.label === "1");
     expect(level1?.payload.data[0]).toEqual([1, 4]);
     expect(level1?.payload.data[1]).toEqual([20, 50]);
   });
@@ -2760,14 +2766,14 @@ describe("useApp facetByColumn (gap #21 residual)", () => {
     });
     useApp.getState().facetByColumn("d1", 0);
     const s = useApp.getState();
-    expect(s.facetPanels?.[0].payload.xLabel).not.toBe("y");
+    expect(facetPanelsOf(s.composition)?.[0].payload.xLabel).not.toBe("y");
   });
 
   it("carries over the current x/y channel selection when the dataset IS already active", () => {
     useApp.setState({ activeId: "d1", xKey: null, yKeys: [1] });
     useApp.getState().facetByColumn("d1", 0);
     const s = useApp.getState();
-    expect(s.facetPanels?.[0].payload.series.map((ser) => ser.label)).toEqual(["y"]);
+    expect(facetPanelsOf(s.composition)?.[0].payload.series.map((ser) => ser.label)).toEqual(["y"]);
   });
 
   it("records a macro step while recording", () => {
@@ -2800,9 +2806,7 @@ describe("useApp breakAtGaps (gap #21 last residual)", () => {
       xKey: null,
       yKeys: null,
       stackMode: false,
-      spatialPanels: null,
-      facetPanels: null,
-      breakPanels: null,
+      composition: null,
       macroRecording: false,
       macroSteps: [],
     });
@@ -2813,16 +2817,16 @@ describe("useApp breakAtGaps (gap #21 last residual)", () => {
     const s = useApp.getState();
     expect(s.activeId).toBe("d1");
     expect(s.stackMode).toBe(true);
-    expect(s.spatialPanels).toBeNull();
-    expect(s.facetPanels).toBeNull();
-    expect(s.breakPanels).toHaveLength(2);
-    expect(s.breakPanels?.[0].xRange).toEqual([0, 9]);
-    expect(s.breakPanels?.[1].xRange).toEqual([60, 63]);
+    expect(spatialPanelsOf(s.composition)).toBeNull();
+    expect(facetPanelsOf(s.composition)).toBeNull();
+    expect(breakPanelsOf(s.composition)).toHaveLength(2);
+    expect(breakPanelsOf(s.composition)?.[0].xRange).toEqual([0, 9]);
+    expect(breakPanelsOf(s.composition)?.[1].xRange).toEqual([60, 63]);
   });
 
   it("clears a prior spatial arrangement", () => {
     useApp.setState({
-      spatialPanels: [
+      composition: spatialComposition([
         {
           datasetId: "other",
           xKey: null,
@@ -2834,26 +2838,26 @@ describe("useApp breakAtGaps (gap #21 last residual)", () => {
           row: 0,
           col: 0,
         },
-      ],
+      ]),
     });
     useApp.getState().breakAtGaps("d1");
-    expect(useApp.getState().spatialPanels).toBeNull();
+    expect(spatialPanelsOf(useApp.getState().composition)).toBeNull();
   });
 
   it("clears a prior facet arrangement", () => {
     useApp.setState({
-      facetPanels: [
+      composition: facetComposition([
         { label: "x", payload: { data: [[0]], series: [], xLabel: "", xUnit: "" } },
-      ],
+      ]),
     });
     useApp.getState().breakAtGaps("d1");
-    expect(useApp.getState().facetPanels).toBeNull();
+    expect(facetPanelsOf(useApp.getState().composition)).toBeNull();
   });
 
   it("no-ops (with a toast, no crash) when the dataset is missing", () => {
     useApp.getState().breakAtGaps("nope");
     const s = useApp.getState();
-    expect(s.breakPanels).toBeNull();
+    expect(breakPanelsOf(s.composition)).toBeNull();
     expect(s.stackMode).toBe(false);
     expect(s.activeId).toBeNull();
   });
@@ -2866,7 +2870,7 @@ describe("useApp breakAtGaps (gap #21 last residual)", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "ds1", data: even }] });
     useApp.getState().breakAtGaps("d1");
     const s = useApp.getState();
-    expect(s.breakPanels).toBeNull();
+    expect(breakPanelsOf(s.composition)).toBeNull();
     expect(s.stackMode).toBe(false);
   });
 
@@ -2877,7 +2881,7 @@ describe("useApp breakAtGaps (gap #21 last residual)", () => {
       ],
     });
     useApp.getState().breakAtGaps("d1");
-    expect(useApp.getState().breakPanels).toBeNull();
+    expect(breakPanelsOf(useApp.getState().composition)).toBeNull();
   });
 
   it("honors row exclusion (guard #11) — an excluded row never enters a break panel", () => {
@@ -2887,15 +2891,15 @@ describe("useApp breakAtGaps (gap #21 last residual)", () => {
     });
     useApp.getState().breakAtGaps("d1");
     const s = useApp.getState();
-    expect(s.breakPanels?.[0].payload.data[0]).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(breakPanelsOf(s.composition)?.[0].payload.data[0]).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 
   it("accepts an explicit breaks override instead of auto-detecting", () => {
     useApp.getState().breakAtGaps("d1", [[2, 8]]);
     const s = useApp.getState();
-    expect(s.breakPanels).toHaveLength(2);
-    expect(s.breakPanels?.[0].xRange).toEqual([0, 2]);
-    expect(s.breakPanels?.[1].xRange).toEqual([8, 63]);
+    expect(breakPanelsOf(s.composition)).toHaveLength(2);
+    expect(breakPanelsOf(s.composition)?.[0].xRange).toEqual([0, 2]);
+    expect(breakPanelsOf(s.composition)?.[1].xRange).toEqual([8, 63]);
   });
 
   it("does NOT carry over the x/y channel selection of a DIFFERENT active dataset", () => {
@@ -2911,21 +2915,21 @@ describe("useApp breakAtGaps (gap #21 last residual)", () => {
       yKeys: [0],
     });
     useApp.getState().breakAtGaps("d1");
-    expect(useApp.getState().breakPanels).toHaveLength(2);
+    expect(breakPanelsOf(useApp.getState().composition)).toHaveLength(2);
   });
 
   it("carries over the current x/y channel selection when the dataset IS already active", () => {
     // xKey=0 (evenly spaced) IS honored when d1 is already active -> no gap -> no-op.
     useApp.setState({ activeId: "d1", xKey: 0, yKeys: [0] });
     useApp.getState().breakAtGaps("d1");
-    expect(useApp.getState().breakPanels).toBeNull();
+    expect(breakPanelsOf(useApp.getState().composition)).toBeNull();
   });
 
   it("no-ops when the breaks would leave fewer than 2 non-empty panels", () => {
     // [-5,-1] carves no rows out of the actual data range (everything is
     // >= 0) -> only ONE segment ends up non-empty.
     useApp.getState().breakAtGaps("d1", [[-5, -1]]);
-    expect(useApp.getState().breakPanels).toBeNull();
+    expect(breakPanelsOf(useApp.getState().composition)).toBeNull();
   });
 
   it("records a macro step while recording", () => {

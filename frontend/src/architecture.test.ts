@@ -121,7 +121,15 @@ const STORE_PINS: Record<string, number> = {
   // precedent) so the new slice can re-derive computed columns after an
   // apply/reset. No headroom slack added deliberately — the ratchet's whole
   // point is that the NEXT feature earns its own extraction, not a buffer.
-  "/store/useApp.ts": 3115,
+  // 3115 -> 3090 (2026-07-19, ORIGIN_FILE_DECODE_PLAN #54 pass A): the three
+  // parallel `spatialPanels`/`facetPanels`/`breakPanels` nullable fields
+  // collapsed into ONE discriminated union `composition` (lib/composition.ts).
+  // The saving is structural, not cosmetic: seven `set()` sites each had to
+  // null the other two arrays by hand to maintain a mutual exclusion the type
+  // now enforces, and the field block carried ~28 lines of comment explaining
+  // why three parallel fields were not a reuse of each other. A feature paying
+  // for itself, not a buffer — the pin drops to what the file actually is.
+  "/store/useApp.ts": 3090,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

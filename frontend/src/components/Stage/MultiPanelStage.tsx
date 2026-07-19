@@ -54,6 +54,7 @@ import "uplot/dist/uPlot.min.css";
 
 import { createPortal } from "react-dom";
 
+import { spatialPanelsOf } from "../../lib/composition";
 import { runExportSpatialPageCommand } from "../../lib/exportPageCommand";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import { canExportSpatialPage } from "../../lib/spatialPageExport";
@@ -66,9 +67,8 @@ export default function MultiPanelStage() {
   const setStackMode = useApp((s) => s.setStackMode);
   const active = useActiveDataset();
   const datasets = useApp((s) => s.datasets);
-  const spatialPanels = useApp((s) => s.spatialPanels);
-  const facetPanels = useApp((s) => s.facetPanels);
-  const breakPanels = useApp((s) => s.breakPanels);
+  const composition = useApp((s) => s.composition);
+  const spatialPanels = spatialPanelsOf(composition);
   const yScale = useApp((s) => s.yScale);
   const xScale = useApp((s) => s.xScale);
   const xLim = useApp((s) => s.xLim);
@@ -100,9 +100,7 @@ export default function MultiPanelStage() {
   const { hostRef, hostStyle, readout, tool, spatialLegends } = useMultiPanelStage({
     active,
     datasets,
-    spatialPanels,
-    facetPanels,
-    breakPanels,
+    composition,
     panelFit,
     pageSetup,
     yScale,

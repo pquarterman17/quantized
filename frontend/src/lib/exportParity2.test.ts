@@ -53,6 +53,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigure } from "./api";
+import { facetPanelsOf } from "./composition";
 import { runExportFigureCommand } from "./exportFigureCommand";
 import { useApp } from "../store/useApp";
 import type { Annotation, DataStruct, Dataset, Shape } from "./types";
@@ -317,7 +318,7 @@ describe("8. Formerly fail-closed, now FIXED (GUI_INTERACTION #12 slice 4b)", ()
     expect(useApp.getState().yKeys).toEqual([0]);
 
     useApp.getState().facetByColumn("d1", 2); // facet by "grp" — d1 is already active
-    expect(useApp.getState().facetPanels?.length).toBe(2); // 2 finite grp levels
+    expect(facetPanelsOf(useApp.getState().composition)?.length).toBe(2); // 2 finite grp levels
 
     // The panels captured the pre-facet selection AND the store's live
     // singleton fields now survive the trailing setActive call intact.

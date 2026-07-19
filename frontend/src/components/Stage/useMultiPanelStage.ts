@@ -1,10 +1,10 @@
 // State + imperative uPlot-instance render effect for MultiPanelStage.tsx
 // (kept a thin view, the `useStatStage`/`StatStage.tsx` precedent). Extracted
 // so the view component stays under the ~400-line convention once a 4th mode
-// (paneled x-breaks) landed. FOUR modes share one host div, in store
-// precedence order: spatial > break > facet > plain per-channel stack
-// (defensive — the store keeps `spatialPanels`/`breakPanels`/`facetPanels`
-// mutually exclusive, see their doc comments in `store/useApp.ts`). See
+// (paneled x-breaks) landed. FOUR modes share one host div; which one is
+// active is now STRUCTURAL rather than a precedence chain — the store's
+// `composition` is a discriminated union (`lib/composition.ts`, #54 pass A),
+// so at most one kind of panel array can be non-null at a time. See
 // `MultiPanelStage.tsx`'s module doc for what each mode means; this file owns
 // the payload-building effects and the one DOM-manipulating uPlot-instance
 // effect.
@@ -21,8 +21,14 @@
 import { type CSSProperties, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 
+import {
+  breakPanelsOf,
+  facetPanelsOf,
+  spatialPanelsOf,
+  type Composition,
+} from "../../lib/composition";
 import { buildErrorColumns } from "../../lib/errorbars";
-import { sharedXDomain, sharedYDomain, type BreakPanel, type FacetPanel } from "../../lib/facet";
+import { sharedXDomain, sharedYDomain } from "../../lib/facet";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import {
   breakPanelWidths,
@@ -33,7 +39,6 @@ import {
   spatialPlottedChannels,
   splitPayload,
   xZoomSyncHook,
-  type SpatialPanel,
 } from "../../lib/multipanel";
 import {
   columnWidths,
@@ -106,11 +111,9 @@ export interface MultiPanelStageParams {
   /** Spatial-panel dataset lookup only — a background window (which never
    *  renders spatial arrangements) passes a stable empty list. */
   datasets: Dataset[];
-  /** The three transient panel arrangements (decode-plan #36 / gap #21) —
-   *  focused-only singleton state; background windows pass null for all. */
-  spatialPanels: SpatialPanel[] | null;
-  facetPanels: FacetPanel[] | null;
-  breakPanels: BreakPanel[] | null;
+  /** The transient panel arrangement (decode-plan #36 / gap #21) — focused-only
+   *  singleton state; background windows pass null. */
+  composition: Composition | null;
   /** How the spatial composition fills the host (#54). Optional so background
    *  windows (which never render spatial mode) can omit it; defaults to the
    *  PR #47 letterbox ("frames"). */
@@ -169,9 +172,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   const {
     active,
     datasets,
-    spatialPanels: rawSpatialPanels,
-    facetPanels,
-    breakPanels,
+    composition,
     panelFit = "frames",
     pageSetup,
     yScale,
@@ -200,6 +201,11 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     bg,
     ensureBookData,
   } = params;
+  // The union's three faces. Each accessor returns the stored array BY
+  // REFERENCE (or null), so these stay valid `useMemo`/effect dependencies.
+  const rawSpatialPanels = spatialPanelsOf(composition);
+  const facetPanels = facetPanelsOf(composition);
+  const breakPanels = breakPanelsOf(composition);
   const hostRef = useRef<HTMLDivElement>(null);
   const plotsRef = useRef<uPlot[]>([]);
   const [payload, setPayload] = useState<PlotPayload | null>(null);
@@ -216,10 +222,11 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   const spatial = panels.length > 0;
   const grid = useMemo(() => spatialGridSize(panels), [panels]);
 
-  // Paneled x-breaks (gap #21 residual) and facet grid: the store keeps
-  // spatial/break/facet mutually exclusive; this precedence is defensive.
-  const breakMode = !spatial && (breakPanels?.length ?? 0) > 0;
-  const facet = !spatial && !breakMode && (facetPanels?.length ?? 0) > 0;
+  // Paneled x-breaks (gap #21 residual) and facet grid. No precedence guard
+  // needed: the union makes the kinds exclusive, and a composition is never
+  // constructed around an EMPTY panel list — so a non-null array IS the mode.
+  const breakMode = breakPanels !== null;
+  const facet = facetPanels !== null;
   const facetGrid = useMemo(() => facetGridSize(facetPanels?.length ?? 0), [facetPanels]);
   // The explicit store xLim (a manual override / prior zoom) wins; otherwise
   // the union domain across every facet panel — one shared horizontal scale.

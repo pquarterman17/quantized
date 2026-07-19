@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigurePage } from "./api";
+import { spatialComposition } from "./composition";
 import { runExportSpatialPageCommand } from "./exportPageCommand";
 import { defaultPageSetup } from "./pagesetup";
 import { useApp } from "../store/useApp";
@@ -29,7 +30,7 @@ describe("runExportSpatialPageCommand", () => {
         },
       ],
       activeId: "d1",
-      spatialPanels: [
+      composition: spatialComposition([
         {
           datasetId: "d1",
           xKey: null,
@@ -42,7 +43,7 @@ describe("runExportSpatialPageCommand", () => {
           col: 0,
           pageRect: { left: 0.1, top: 0.2, width: 0.7, height: 0.6 },
         },
-      ],
+      ]),
       pageSetup: defaultPageSetup(),
       xFmt: { mode: "eng", digits: 2 },
       yFmt: { mode: "sci", digits: 1 },
