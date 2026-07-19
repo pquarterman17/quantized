@@ -39,7 +39,7 @@ import {
   type SpecRender,
   type ZoneName,
 } from "../../../lib/plotspec";
-import { buildAxesBlock, buildDecorBlock, buildDisplayBlock } from "../../../lib/plotspec2";
+import { buildAxesBlock, buildDecorBlock, buildDisplayBlock, buildPageBlock } from "../../../lib/plotspec2";
 import { toast } from "../../../store/toasts";
 import { plotIntentStageTab, useActiveDataset, useApp } from "../../../store/useApp";
 import type { WellChip, WellOption } from "./ZoneWell";
@@ -374,12 +374,22 @@ export function useGraphBuilder(): GraphBuilderState {
       xy: s.legendXY,
       title: s.legendTitle,
     });
+    // #54 pass C: the page state a spec would otherwise lose on save/reopen —
+    // the page size a figure was composed at, its fit mode, and whether it
+    // was stacked. All-default captures to `undefined` (an ordinary flat plot
+    // never flips to v2).
+    const page = buildPageBlock({
+      stackMode: s.stackMode,
+      panelFit: s.panelFit,
+      pageSetup: s.pageSetup,
+    });
     return {
-      version: display || axes || decor ? 2 : 1,
+      version: display || axes || decor || page ? 2 : 1,
       zones: base.zones,
       mark: base.mark,
       ...(display ? { display } : {}),
       ...(axes ? { axes } : {}),
+      ...(page ? { page } : {}),
       ...(decor ? { decor } : {}),
     };
   };

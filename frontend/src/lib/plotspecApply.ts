@@ -56,7 +56,7 @@
 // stays action-only, no `useApp.ts` edits).
 
 import type { StoreGet } from "./exportActive";
-import type { AxesBlock, DecorBlock, DisplayBlock, PlotSpec } from "./plotspec";
+import type { AxesBlock, DecorBlock, DisplayBlock, PageBlock, PlotSpec } from "./plotspec";
 import type { Annotation, SeriesStyle } from "./types";
 
 function applyDisplayBlock(display: DisplayBlock | undefined, s: StoreGet): void {
@@ -167,18 +167,32 @@ function applyDecorBlock(decor: DecorBlock | undefined, s: StoreGet): void {
   }
 }
 
-/** Apply a spec's v2 `display`/`axes`/`decor` blocks onto the live store —
- *  the Slice 5 / "part C" counterpart of `captureLiveBlocks`
- *  (useGraphBuilder.ts's Slice 3 piece). Call AFTER the caller's own
- *  setActive/setXKey/setYKeys (the spec's dataset must already be the live
- *  one) — this only pushes STYLE/AXIS/OVERLAY state, never zones/channel
- *  selection itself. A spec with none of the three blocks present makes
- *  zero store calls (see the module doc's regression-pin note). */
+function applyPageBlock(page: PageBlock | undefined, s: StoreGet): void {
+  if (!page) return;
+  const state = s();
+  // `setStackMode` CLEARS the composition (see store/useApp.ts) — harmless
+  // here because a caller that wants a facet arrangement calls
+  // `facetByColumn` AFTER `applySpecBlocks` (useGraphBuilder's send path),
+  // and that rebuilds the composition and re-sets stackMode itself.
+  if (page.stack !== undefined) state.setStackMode(page.stack);
+  if (page.fit !== undefined) state.setPanelFit(page.fit);
+  if (page.setup !== undefined) state.setPageSetup(page.setup);
+}
+
+/** Apply a spec's v2 `display`/`axes`/`page`/`decor` blocks onto the live
+ *  store — the Slice 5 / "part C" / #54-pass-C counterpart of
+ *  `captureLiveBlocks` (useGraphBuilder.ts's Slice 3 piece). Call AFTER the
+ *  caller's own setActive/setXKey/setYKeys (the spec's dataset must already
+ *  be the live one) — this only pushes STYLE/AXIS/OVERLAY/PAGE state, never
+ *  zones/channel selection itself. A spec with none of the four blocks
+ *  present makes zero store calls (see the module doc's regression-pin
+ *  note). */
 export function applySpecBlocks(spec: PlotSpec, s: StoreGet): void {
   // Display FIRST, axes SECOND — see the module doc's ORDERING note. Decor
-  // is independent of both — see the same note for why its position doesn't
-  // matter functionally.
+  // and page are independent of both — see the same note for why their
+  // position doesn't matter functionally.
   applyDisplayBlock(spec.display, s);
   applyAxesBlock(spec.axes, s);
+  applyPageBlock(spec.page, s);
   applyDecorBlock(spec.decor, s);
 }

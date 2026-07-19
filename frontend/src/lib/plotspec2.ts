@@ -38,19 +38,17 @@
 //             `legendTitle`) — see `LegendBlock`'s doc for exactly why
 //             `legendFrameXY`/`legendStatic` are deliberately excluded.
 //
-//   page    : RESERVED — no fields yet, and no slice of THIS item is
-//             planned to give it any. Panel/facet/layer geometry belongs to
-//             ORIGIN_FILE_DECODE_PLAN #54 ("Layer/page layout fidelity" —
-//             `plans/ORIGIN_FILE_DECODE_PLAN.md`), which explicitly prefers
-//             "a generalized FigureDoc/page-layer model over more singleton
-//             plot state branches" — that generalized model, when it lands,
-//             is what fills this block. Declared now (an empty-shape
-//             interface, not `unknown`) so `PlotSpec`'s field list doesn't
-//             need to change shape again when #54 lands — `validatePlotSpec`
-//             STRIPS any content on this key unconditionally today (no
-//             validator call at all): a hand-edited or forward-authored
-//             `.dwk` cannot smuggle unvalidated content onto the wire before
-//             #54 defines its shape.
+//   page    : page/panel PRESENTATION — stacking, fit mode, and the physical
+//             page model (ORIGIN_FILE_DECODE_PLAN #54 pass C, 2026-07-19;
+//             this key was reserved-and-stripped until then). Pass A first
+//             replaced the three parallel `spatialPanels`/`facetPanels`/
+//             `breakPanels` store fields with one `composition` discriminated
+//             union (`lib/composition.ts`) — that union is what made the
+//             arrangement describable at all. The composition itself is
+//             deliberately NOT serialized here (a spatial one binds multiple
+//             datasets; a spec is single-dataset — see `PageBlock`'s doc);
+//             what this block carries is the per-window page state a portable
+//             spec would otherwise lose on save/reopen.
 //
 // ─────────────────────────────────────────────────────────────────────────
 // VALIDATION STYLE
@@ -81,6 +79,8 @@
 
 import type { Annotation, AxisFormat, AxisScale, LineStyle, MarkerShape, Shape, TickMode } from "./types";
 import { MARKER_SHAPES } from "./markers";
+import { PANEL_FITS, type PanelFit } from "./panelLayout";
+import { sanitizePageSetup, type PageSetup } from "./pagesetup";
 import { LEGEND_POS, legendXYOrNull, sanitizeAnnotations, sanitizeShapes, type LegendPos } from "./plotview";
 import { axisFmtParam } from "./types";
 
@@ -174,14 +174,31 @@ export interface DecorBlock {
   legend?: LegendBlock;
 }
 
-// ── Reserved blocks (content lands with a later, larger effort) ──────────
-
-/** Reserved — see the module doc's "page" entry: panel/facet/layer geometry
- *  belongs to ORIGIN_FILE_DECODE_PLAN #54, not a slice of this item. No
- *  fields yet; `validatePlotSpec` strips any content on this key
- *  unconditionally. */
+/** Page/panel presentation — how the plot is arranged ONTO a page
+ *  (ORIGIN_FILE_DECODE_PLAN #54 pass C, filling what pass A's `composition`
+ *  union made describable).
+ *
+ *  What this block deliberately does NOT carry: the composition itself. A
+ *  spatial arrangement binds MULTIPLE datasets per panel, and a `PlotSpec` is
+ *  single-dataset by construction (`ChannelRef` names one `datasetId` per
+ *  zone) — capturing it here would be a second, competing serialization of
+ *  the Origin decode path. The facet arrangement needs no capture either: it
+ *  re-derives on send from `zones.facet` via the store's own `facetByColumn`.
+ *  What IS captured is the per-window page state a portable spec would
+ *  otherwise silently lose on save/reopen — the page size a figure was
+ *  composed at, its fit mode, and whether it was stacked.
+ *
+ *  All fields optional and omitted when default (see `buildPageBlock`), so an
+ *  ordinary flat plot never flips a spec to version 2. */
 export interface PageBlock {
-  readonly __reserved?: never;
+  /** Multi-panel stacking (`store.stackMode`). Omitted when false. */
+  stack?: boolean;
+  /** How a multi-panel composition fills the stage (`store.panelFit`).
+   *  Omitted when "frames" — the #47 letterbox, the compatibility default. */
+  fit?: PanelFit;
+  /** The physical page model: width/height/unit/margins (`store.pageSetup`).
+   *  Omitted when the window has no page model at all. */
+  setup?: PageSetup;
 }
 
 // ── Small validation primitives ───────────────────────────────────────────
@@ -355,6 +372,39 @@ export function decorBlockHasContent(b: DecorBlock | null | undefined): b is Dec
   );
 }
 
+// ── Page block validation ─────────────────────────────────────────────────
+
+/** Validate + normalize an arbitrary value into a `PageBlock`, or null if the
+ *  input isn't even an object. `stack`/`fit` follow the usual per-field
+ *  tolerance — a malformed field drops just that field.
+ *
+ *  `setup` is the ONE deliberate divergence: it reuses
+ *  `pagesetup.sanitizePageSetup`, the same untrusted-input gate the `.dwk`
+ *  window restore runs, which CLAMPS rather than drops (a negative width
+ *  floors to 0.01; an unknown unit falls back to "in"). That follows the
+ *  decor block's precedent of reusing the `.dwk` sanitizer for a shape
+ *  instead of growing a second, drifting validator for it — nothing invalid
+ *  reaches the wire either way, it is normalized instead of discarded.
+ *  Pinned explicitly in plotspec2.test.ts so the divergence stays a choice. */
+export function validatePageBlock(v: unknown): PageBlock | null {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v as Record<string, unknown>;
+  const out: PageBlock = {};
+  if (typeof o.stack === "boolean") out.stack = o.stack;
+  if (typeof o.fit === "string" && (PANEL_FITS as readonly string[]).includes(o.fit)) {
+    out.fit = o.fit as PanelFit;
+  }
+  const setup = sanitizePageSetup(o.setup);
+  if (setup) out.setup = setup;
+  return out;
+}
+
+/** Is this a `PageBlock` with actual content? The v1/v2 promotion gate. */
+export function pageBlockHasContent(b: PageBlock | null | undefined): b is PageBlock {
+  if (!b) return false;
+  return b.stack !== undefined || b.fit !== undefined || b.setup !== undefined;
+}
+
 // ── Pure capture builders (no store import — Slice 3/5/"part C" wire these) ─
 
 /** The live per-channel style shape `buildDisplayBlock` reads — the subset
@@ -518,4 +568,26 @@ export function buildDecorBlock(
   if (legend.title) legendBlock.title = legend.title;
   if (Object.keys(legendBlock).length > 0) block.legend = legendBlock;
   return decorBlockHasContent(block) ? block : undefined;
+}
+
+/** The live page/panel fields `buildPageBlock` reads — the store's
+ *  `stackMode`/`panelFit`/`pageSetup`. */
+export interface PageBlockArgs {
+  stackMode: boolean;
+  panelFit: PanelFit;
+  pageSetup: PageSetup | null;
+}
+
+/** Capture a `PageBlock` from live page/panel state. Returns `undefined` when
+ *  everything is default — an ordinary unstacked, frames-fit, no-page-model
+ *  plot must never flip a spec to version 2, the same rule
+ *  `buildAxesBlock`/`buildDecorBlock` follow for their own defaults. */
+export function buildPageBlock(args: PageBlockArgs): PageBlock | undefined {
+  const block: PageBlock = {};
+  if (args.stackMode) block.stack = true;
+  // "frames" is panelFit's default (the #47 bounding-box letterbox), so only
+  // a real deviation counts as a captured override.
+  if (args.panelFit !== "frames") block.fit = args.panelFit;
+  if (args.pageSetup) block.setup = args.pageSetup;
+  return pageBlockHasContent(block) ? block : undefined;
 }

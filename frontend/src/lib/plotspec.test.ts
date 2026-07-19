@@ -573,7 +573,12 @@ describe("PlotSpec v2 — schema, up-convert, byte-stability", () => {
     expect(v!.axes).toEqual({ x: { label: "Field" } }); // bad lim dropped, bad y.scale drops y entirely
   });
 
-  it("reserved page content is stripped entirely, without affecting the rest of the spec", () => {
+  it("unrecognized page keys drop out and never promote to v2 (#54 pass C)", () => {
+    // Was "reserved page content is stripped entirely" before pass C gave the
+    // block real fields. The outcome is unchanged for GARBAGE input — every
+    // unknown key drops, leaving an empty block that fails the content gate —
+    // but it now happens via a real validator rather than an unconditional
+    // strip, so a spec cannot smuggle unvalidated page content through.
     const v = validatePlotSpec({
       version: 2,
       zones: { x: ref(0), y: [ref(1)], group: null, facet: null },
@@ -582,8 +587,62 @@ describe("PlotSpec v2 — schema, up-convert, byte-stability", () => {
     });
     expect(v).not.toBeNull();
     expect(v!.page).toBeUndefined();
-    expect(v!.version).toBe(1); // page never counts toward v2 promotion (nothing else here does either)
+    expect(v!.version).toBe(1);
     expect("page" in v!).toBe(false);
+  });
+
+  it("real page content is validated and counts toward v2 promotion (#54 pass C)", () => {
+    const v = validatePlotSpec({
+      version: 1, // incoming tag is advisory — recomputed from block content
+      zones: { x: ref(0), y: [ref(1)], group: null, facet: null },
+      mark: "scatter",
+      page: {
+        stack: true,
+        fit: "page",
+        setup: { width: 8.5, height: 11, unit: "in", margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5 } },
+      },
+    });
+    expect(v).not.toBeNull();
+    expect(v!.version).toBe(2);
+    expect(v!.page).toEqual({
+      stack: true,
+      fit: "page",
+      setup: {
+        width: 8.5,
+        height: 11,
+        unit: "in",
+        margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5 },
+        aspectDerived: false,
+      },
+    });
+  });
+
+  it("drops a malformed page field without discarding the rest of the block", () => {
+    const v = validatePlotSpec({
+      version: 2,
+      zones: { x: ref(0), y: [ref(1)], group: null, facet: null },
+      mark: "scatter",
+      page: { stack: true, fit: "not-a-fit-mode", setup: { width: -3, height: 11, unit: "in" } },
+    });
+    expect(v).not.toBeNull();
+    expect(v!.version).toBe(2);
+    expect(v!.page!.stack).toBe(true);
+    expect(v!.page!.fit).toBeUndefined(); // unknown enum value -> field dropped
+    // ...but `setup` is CLAMPED, not dropped: it reuses the shared `.dwk`
+    // sanitizer rather than a second validator. See plotspec2.test.ts.
+    expect(v!.page!.setup).toMatchObject({ width: 0.01, height: 11, unit: "in" });
+  });
+
+  it("round-trips a page block through serialize -> parse", () => {
+    const spec = validatePlotSpec({
+      version: 2,
+      zones: { x: ref(0), y: [ref(1)], group: null, facet: null },
+      mark: "line",
+      page: { stack: true, fit: "window" },
+    })!;
+    const back = deserializePlotSpec(serializePlotSpec(spec));
+    expect(back).toEqual(spec);
+    expect(back!.page).toEqual({ stack: true, fit: "window" });
   });
 
   it("decor (annotations/shapes/legend, 'part C') is validated for real and counts toward v2 promotion", () => {

@@ -10,10 +10,14 @@ import {
   validateAxesBlock,
   validateDecorBlock,
   validateDisplayBlock,
+  buildPageBlock,
+  pageBlockHasContent,
+  validatePageBlock,
   type AxesBlock,
   type DecorBlock,
   type DisplayBlock,
 } from "./plotspec2";
+import type { PageSetup } from "./pagesetup";
 import type { Annotation, Shape } from "./types";
 
 // ── validateDisplayBlock ─────────────────────────────────────────────────────
@@ -389,5 +393,92 @@ describe("buildDecorBlock", () => {
       shapes: [SHAPE],
       legend: { pos: "sw", xy: [0.1, 0.1], title: "Nb/Au" },
     });
+  });
+});
+
+// ── page block (#54 pass C) ──────────────────────────────────────────────────
+const PAGE: PageSetup = {
+  width: 8.5,
+  height: 11,
+  unit: "in",
+  margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5 },
+  aspectDerived: false,
+};
+
+describe("validatePageBlock", () => {
+  it("returns null only when the input isn't an object at all", () => {
+    expect(validatePageBlock(null)).toBeNull();
+    expect(validatePageBlock("page")).toBeNull();
+    expect(validatePageBlock(7)).toBeNull();
+    expect(validatePageBlock({})).toEqual({});
+  });
+
+  it("keeps valid stack/fit/setup", () => {
+    expect(validatePageBlock({ stack: true, fit: "page", setup: PAGE })).toEqual({
+      stack: true,
+      fit: "page",
+      setup: PAGE,
+    });
+  });
+
+  it("keeps an explicit stack:false (a boolean is a boolean)", () => {
+    expect(validatePageBlock({ stack: false })).toEqual({ stack: false });
+  });
+
+  it("drops a malformed field without dropping the block", () => {
+    expect(validatePageBlock({ stack: "yes", fit: "sideways", setup: 3 })).toEqual({});
+    expect(validatePageBlock({ stack: true, fit: "sideways" })).toEqual({ stack: true });
+  });
+
+  it("CLAMPS a bad page setup through the shared sanitizer rather than dropping it", () => {
+    // Deliberate divergence from the sibling fields (a bad `fit` DROPS): the
+    // decor block's own precedent is to reuse the `.dwk` restore sanitizer for
+    // a shape rather than grow a second, drifting validator for it, and
+    // `sanitizePageSetup` is a CLAMPING gate (Math.max floors, unit falls back
+    // to "in"). Nothing invalid escapes either way; it just normalizes instead
+    // of discarding. Asserted explicitly so the divergence stays intentional.
+    expect(validatePageBlock({ setup: { width: -1, height: 11, unit: "in" } })?.setup).toMatchObject({
+      width: 0.01,
+      height: 11,
+      unit: "in",
+    });
+    expect(validatePageBlock({ setup: { width: 8.5, height: 11, unit: "furlongs" } })?.setup).toMatchObject({
+      unit: "in",
+    });
+  });
+});
+
+describe("pageBlockHasContent", () => {
+  it("is the v1/v2 promotion gate", () => {
+    expect(pageBlockHasContent(null)).toBe(false);
+    expect(pageBlockHasContent(undefined)).toBe(false);
+    expect(pageBlockHasContent({})).toBe(false);
+    expect(pageBlockHasContent({ stack: false })).toBe(true);
+    expect(pageBlockHasContent({ fit: "window" })).toBe(true);
+    expect(pageBlockHasContent({ setup: PAGE })).toBe(true);
+  });
+});
+
+describe("buildPageBlock", () => {
+  it("captures nothing when every field is default (never flips a spec to v2)", () => {
+    expect(buildPageBlock({ stackMode: false, panelFit: "frames", pageSetup: null })).toBeUndefined();
+  });
+
+  it("captures stacking", () => {
+    expect(buildPageBlock({ stackMode: true, panelFit: "frames", pageSetup: null })).toEqual({ stack: true });
+  });
+
+  it("captures a non-default fit only", () => {
+    expect(buildPageBlock({ stackMode: false, panelFit: "page", pageSetup: null })).toEqual({ fit: "page" });
+    expect(buildPageBlock({ stackMode: false, panelFit: "window", pageSetup: null })).toEqual({ fit: "window" });
+  });
+
+  it("captures the page model", () => {
+    expect(buildPageBlock({ stackMode: false, panelFit: "frames", pageSetup: PAGE })).toEqual({ setup: PAGE });
+  });
+
+  it("round-trips a full capture through the validator", () => {
+    const built = buildPageBlock({ stackMode: true, panelFit: "page", pageSetup: PAGE });
+    expect(validatePageBlock(built)).toEqual(built);
   });
 });

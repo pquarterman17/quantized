@@ -10,6 +10,8 @@ import type { StoreGet } from "./exportActive";
 import { applySpecBlocks } from "./plotspecApply";
 import type { PlotSpec } from "./plotspec";
 import type { LegendPos } from "./plotview";
+import type { PageSetup } from "./pagesetup";
+import type { PanelFit } from "./panelLayout";
 import type { Annotation, AxisFormat, SeriesStyle, Shape } from "./types";
 
 const ZONES = { x: null, y: [], group: null, facet: null };
@@ -49,6 +51,9 @@ function makeFakeStore() {
     shapes: Shape[];
     legendPos: LegendPos;
     legendXY: [number, number] | null;
+    stackMode: boolean;
+    panelFit: PanelFit;
+    pageSetup: PageSetup | null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [action: string]: any;
   } = {
@@ -73,6 +78,9 @@ function makeFakeStore() {
     shapes: [],
     legendPos: "ne",
     legendXY: null,
+    stackMode: false,
+    panelFit: "frames",
+    pageSetup: null,
   };
   let _annSeq = 0;
   let _shapeSeq = 0;
@@ -165,6 +173,19 @@ function makeFakeStore() {
     }),
     setLegendXY: vi.fn((xy: [number, number] | null) => {
       state.legendXY = xy;
+    }),
+    // #54 pass C. setStackMode mirrors the real action's composition-clearing
+    // side effect (store/useApp.ts) so the page block's interaction with a
+    // later facetByColumn stays honestly modelled.
+    setStackMode: vi.fn((stackMode: boolean) => {
+      state.stackMode = stackMode;
+      state.composition = null;
+    }),
+    setPanelFit: vi.fn((panelFit: PanelFit) => {
+      state.panelFit = panelFit;
+    }),
+    setPageSetup: vi.fn((pageSetup: PageSetup | null) => {
+      state.pageSetup = pageSetup;
     }),
   };
   Object.assign(state, fns);
@@ -422,5 +443,50 @@ describe("applySpecBlocks — decor block ('part C')", () => {
     expect(fns.addShape).not.toHaveBeenCalled();
     expect(fns.setLegendPos).not.toHaveBeenCalled();
     expect(fns.setLegendXY).not.toHaveBeenCalled();
+  });
+});
+
+describe("applySpecBlocks — page block (#54 pass C)", () => {
+  const PAGE: PageSetup = {
+    width: 8.5,
+    height: 11,
+    unit: "in",
+    margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5 },
+    aspectDerived: false,
+  };
+
+  it("pushes stack/fit/setup through the existing store actions", () => {
+    const { s, fns, state } = makeFakeStore();
+    applySpecBlocks(baseSpec({ page: { stack: true, fit: "page", setup: PAGE } }), s);
+    expect(fns.setStackMode).toHaveBeenCalledWith(true);
+    expect(fns.setPanelFit).toHaveBeenCalledWith("page");
+    expect(fns.setPageSetup).toHaveBeenCalledWith(PAGE);
+    expect(state.stackMode).toBe(true);
+    expect(state.panelFit).toBe("page");
+    expect(state.pageSetup).toEqual(PAGE);
+  });
+
+  it("touches only the fields present on the block", () => {
+    const { s, fns } = makeFakeStore();
+    applySpecBlocks(baseSpec({ page: { fit: "window" } }), s);
+    expect(fns.setPanelFit).toHaveBeenCalledWith("window");
+    expect(fns.setStackMode).not.toHaveBeenCalled();
+    expect(fns.setPageSetup).not.toHaveBeenCalled();
+  });
+
+  it("applies an explicit stack:false (a captured un-stacked page is not a no-op)", () => {
+    const { s, fns, state } = makeFakeStore();
+    state.stackMode = true;
+    applySpecBlocks(baseSpec({ page: { stack: false } }), s);
+    expect(fns.setStackMode).toHaveBeenCalledWith(false);
+    expect(state.stackMode).toBe(false);
+  });
+
+  it("makes zero page-related calls when page is absent, even with other blocks present", () => {
+    const { s, fns } = makeFakeStore();
+    applySpecBlocks(baseSpec({ axes: { title: "T" }, decor: { legend: { pos: "sw" } } }), s);
+    expect(fns.setStackMode).not.toHaveBeenCalled();
+    expect(fns.setPanelFit).not.toHaveBeenCalled();
+    expect(fns.setPageSetup).not.toHaveBeenCalled();
   });
 });

@@ -114,8 +114,10 @@ import {
   decorBlockHasContent,
   displayBlockHasContent,
   validateAxesBlock,
+  pageBlockHasContent,
   validateDecorBlock,
   validateDisplayBlock,
+  validatePageBlock,
   type AxesBlock,
   type DecorBlock,
   type DisplayBlock,
@@ -175,9 +177,10 @@ export interface PlotSpec {
   /** Axis label/limits/scale/step/format + plot title (Slice 2 schema; wired
    *  by Slice 5). Same omit-when-empty rule as `display`. */
   axes?: AxesBlock;
-  /** Reserved — panel/facet/layer geometry belongs to
-   *  ORIGIN_FILE_DECODE_PLAN #54, not a slice of this item; always stripped
-   *  by `validatePlotSpec` today. See `./plotspec2`'s doc. */
+  /** Page/panel presentation — stacking, fit mode, physical page model
+   *  (ORIGIN_FILE_DECODE_PLAN #54 pass C; reserved-and-stripped before that).
+   *  Same omit-when-empty rule as `display`/`axes`. The composition itself is
+   *  deliberately not serialized here — see `./plotspec2`'s `PageBlock`. */
   page?: PageBlock;
   /** Annotations/shapes/legend placement (the item's "part C" finish; wired
    *  by `lib/plotspecApply.ts` on Send). Same omit-when-empty rule as
@@ -574,9 +577,9 @@ function isPlotMark(v: unknown): v is PlotMark {
  *  spec with no such keys naturally yields no blocks), and the RETURNED
  *  `version` is always recomputed from whether a block survived validation
  *  with actual content (see `plotspec2.ts`'s `displayBlockHasContent`/
- *  `axesBlockHasContent`/`decorBlockHasContent`). `page` is reserved (see
- *  `./plotspec2`'s doc) and STRIPPED unconditionally — no validator call, no
- *  matter what's on that key. */
+ *  `axesBlockHasContent`/`decorBlockHasContent`/`pageBlockHasContent`).
+ *  `page` is validated like the rest as of #54 pass C — it was
+ *  reserved-and-stripped until then. */
 export function validatePlotSpec(value: unknown): PlotSpec | null {
   if (value === null || typeof value !== "object") return null;
   const o = value as Record<string, unknown>;
@@ -593,15 +596,18 @@ export function validatePlotSpec(value: unknown): PlotSpec | null {
   const rawDisplay = validateDisplayBlock(o.display);
   const rawAxes = validateAxesBlock(o.axes);
   const rawDecor = validateDecorBlock(o.decor);
+  const rawPage = validatePageBlock(o.page);
   const display = displayBlockHasContent(rawDisplay) ? rawDisplay : undefined;
   const axes = axesBlockHasContent(rawAxes) ? rawAxes : undefined;
   const decor = decorBlockHasContent(rawDecor) ? rawDecor : undefined;
+  const page = pageBlockHasContent(rawPage) ? rawPage : undefined;
   return {
-    version: display || axes || decor ? 2 : 1,
+    version: display || axes || decor || page ? 2 : 1,
     zones,
     mark,
     ...(display ? { display } : {}),
     ...(axes ? { axes } : {}),
+    ...(page ? { page } : {}),
     ...(decor ? { decor } : {}),
   };
 }

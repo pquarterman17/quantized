@@ -606,6 +606,46 @@ describe("useGraphBuilder — capture on save (GUI_INTERACTION_PLAN #12 Slice 3)
     expect(saved.axes?.y?.lim).toEqual([0, 100]);
   });
 
+  // #54 pass C — the page block. The gap this closes: page size / fit mode /
+  // stacking are per-WINDOW state, so a spec (a portable, re-appliable
+  // artifact) silently lost them on save/reopen before this.
+  it("captures live page state into a v2 page block", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() =>
+      useApp.setState({
+        stackMode: true,
+        panelFit: "page",
+        pageSetup: {
+          width: 8.5,
+          height: 11,
+          unit: "in",
+          margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5 },
+          aspectDerived: false,
+        },
+      }),
+    );
+    act(() => result.current.saveAs("Paged"));
+    const saved = result.current.activeSpec!.spec;
+    expect(saved.version).toBe(2);
+    expect(saved.page?.stack).toBe(true);
+    expect(saved.page?.fit).toBe("page");
+    expect(saved.page?.setup?.width).toBe(8.5);
+    expect(saved.page?.setup?.unit).toBe("in");
+  });
+
+  it("an ordinary flat plot captures no page block (stays v1)", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => useApp.setState({ stackMode: false, panelFit: "frames", pageSetup: null }));
+    act(() => result.current.saveAs("Flat"));
+    const saved = result.current.activeSpec!.spec;
+    expect(saved.version).toBe(1);
+    expect(saved.page).toBeUndefined();
+  });
+
   // "part C" — the item's last piece: annotations/shapes/legend placement.
   it("captures live annotations/shapes/legend into a v2 decor block", () => {
     const { result } = renderHook(() => useGraphBuilder());
