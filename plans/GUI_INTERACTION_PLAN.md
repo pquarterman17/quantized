@@ -214,9 +214,33 @@ plotting, publication export.
           deferrals — reconcile, don't double-book.)
 
 17. **Buttons / labels / menus / tooltips polish**
-    - [ ] Text on high-consequence actions (Fit/Apply/Subtract/Export/Delete/Save/
-          Send to Stage); split buttons for last-used tool. **Dialog button
-          order DONE 2026-07-19** (`2bb2b04`): an audit found the order already
+    - [ ] Split buttons for last-used tool. **High-consequence-action audit
+          DONE 2026-07-19** — and it found two REAL DEFECTS, not polish:
+      - [x] **Unconfirmed dataset delete** (`320df6f`). The Library row's
+            footer "✕" called `removeDataset()` straight on the store, while
+            the SAME deletion via the row's context menu was confirm-gated
+            (`dataset.remove`, `destructive: true`). One irreversible action,
+            two paths, one confirm. Fixed at the mechanism: the button routes
+            through the same registry action (looked up BY ID, never by array
+            index), so the confirm is structural. Adversarially verified —
+            restoring the direct call fails the new tests.
+      - [x] **Unconfirmed calculator-history wipe** (`9593165`). A one-click
+            ghost button labelled bare "Clear" irrecoverably wiped accumulated
+            work. History is not in the "cheap to recreate" category
+            `contextActions.ts` carves out for canvas objects, so it gets a
+            confirm; the label now names what it clears and the confirm counts
+            the results and states favourites survive.
+      - [x] Audit outcome for the rest: every other high-consequence control
+            already carries text or `title`+`aria-label`, and the five
+            annotation/shape/ref-line/table-row "✕" buttons are a DOCUMENTED
+            deliberate exception (`contextActions.ts` — cheap-to-recreate
+            canvas objects, undo is the eventual answer under the #1 gate),
+            not a silent gap. `CorrectionsCard`'s bare "Apply"/"Reset" was
+            considered and deliberately LEFT: it sits inside a Card titled
+            "Corrections", and widening button text in the fixed 296px
+            Inspector column without visual verification risks exactly the
+            truncation this item complains about elsewhere.
+      - [x] **Dialog button order DONE 2026-07-19** (`2bb2b04`): an audit found the order already
           correct everywhere (secondary first, primary last, hand-copied from
           ParamDialog/ConfirmDialog across all 8 backdrop dialogs) — the gap
           was the "destructive separated" half. `.qz-btn-row` is a plain
