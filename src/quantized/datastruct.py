@@ -99,10 +99,29 @@ class DataStruct:
         units: Sequence[str] | None = None,
         metadata: Mapping[str, Any] | None = None,
     ) -> DataStruct:
-        """Mirror of MATLAB ``createDataStruct``. Accepts array-likes."""
+        """Mirror of MATLAB ``createDataStruct``. Accepts array-likes.
+
+        Raises ``ValueError`` for anything that is not coercible to a float
+        array. ``np.asarray(..., dtype=float)`` raises ``TypeError`` for a
+        non-numeric payload (a nested dict, say), which is NOT in the
+        ``(ValueError, KeyError, IndexError)`` tuple every route that builds a
+        DataStruct catches -- so a malformed ``dataset`` on the wire escaped as
+        an unhandled HTTP 500 from ~17 handlers across 7 route modules. Every
+        such route types the field as ``dict[str, Any]``, so pydantic does not
+        filter it.
+
+        Normalizing here rather than widening each route's except tuple is the
+        class fix: this is the ONE constructor they all go through, so current
+        and future callers are covered without touching a route file.
+        """
+        try:
+            time_arr = np.asarray(time, dtype=float)
+            values_arr = np.asarray(values, dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"dataset time/values must be numeric arrays: {exc}") from exc
         return cls(
-            time=np.asarray(time, dtype=float),
-            values=np.asarray(values, dtype=float),
+            time=time_arr,
+            values=values_arr,
             labels=tuple(labels) if labels is not None else (),
             units=tuple(units) if units is not None else (),
             metadata=dict(metadata) if metadata is not None else {},

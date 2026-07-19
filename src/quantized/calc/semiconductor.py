@@ -335,6 +335,17 @@ def fermi_level(
     if nd < 0 or na < 0:
         raise ValueError("Nd and Na must be non-negative")
     ni = intrinsic_carrier_conc(eg, me_star, mh_star, t, material)["ni"]
+    # A merely-large `eg` (the schema bounds it below at 0 but not above)
+    # underflows exp(-eg*e/(2*kB*T)) to exactly 0.0, so `ni` is 0 and the
+    # asinh below divided by zero -> unhandled HTTP 500. Same underflow class
+    # the 2026-07-05 round already fixed for `unit_convert`'s exponent; the
+    # fix shape (detect it, raise ValueError so the route maps it to 422) is
+    # carried over here rather than reinvented.
+    if ni <= 0.0:
+        raise ValueError(
+            "intrinsic carrier concentration underflowed to zero "
+            f"(Eg={eg} eV at T={t} K is too large) - Fermi level is undefined"
+        )
     c = constants()
     kt = c["kB"] * t / c["e"]
     net = nd - na

@@ -124,6 +124,18 @@ def curve_fit(
     yv = np.asarray(y, dtype=float).ravel()
     m = len(p0)
     n = xv.size
+    # `rmse = sqrt(ss_res / n)` below is a plain-Python float/int division, so
+    # n == 0 raises ZeroDivisionError rather than yielding nan the way the
+    # neighbouring numpy divisions do -> unhandled HTTP 500 from /fitting/fit
+    # and /fitting/equation/fit (neither `x`/`y` list has a pydantic
+    # min_length, and passing an explicit `p0` skips auto_guess, so empty
+    # arrays reach here). The sibling `/fitting/scan` already guards the same
+    # degenerate case in `fit_scan.scan_models`; this carries it to the
+    # shared fitter so every caller inherits it.
+    if n == 0:
+        raise ValueError("need at least one data point to fit")
+    if n != yv.size:
+        raise ValueError(f"x and y must be the same length (got {n} and {yv.size})")
     lb = np.array(lower if lower is not None else [-math.inf] * m, dtype=float)
     ub = np.array(upper if upper is not None else [math.inf] * m, dtype=float)
     fixed_mask = np.array(fixed if fixed is not None else [False] * m, dtype=bool)

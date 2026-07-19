@@ -12,6 +12,9 @@ and a paired sanity assert confirms the guard doesn't over-fire on valid input.
 
 from __future__ import annotations
 
+import math
+from collections.abc import Sequence
+
 import numpy as np
 import pytest
 
@@ -125,3 +128,65 @@ def test_sld_profile_bad_shape_raises_valueerror_not_indexerror() -> None:
         sld_profile(np.zeros((0, 4)))
     with pytest.raises(ValueError):
         sld_profile(np.zeros((3, 3)))  # too few columns
+
+
+# ── 2026-07-19 round ──────────────────────────────────────────────────────
+# A second sweep of the same class (a route's narrow except tuple vs. what the
+# callee actually raises), all three confirmed as live HTTP 500s against the
+# real app before fixing.
+
+
+def test_datastruct_non_numeric_payload_raises_valueerror_not_typeerror() -> None:
+    """``np.asarray(dict, dtype=float)`` raises TypeError, which is NOT in the
+    ``(ValueError, KeyError, IndexError)`` tuple every DataStruct-building
+    route catches — so a malformed ``dataset`` escaped as a 500 from ~17
+    handlers across 7 route modules. Every one types the field as
+    ``dict[str, Any]``, so pydantic does not filter it.
+
+    Fixed in ``DataStruct.create`` (the ONE constructor they all share) rather
+    than by widening N route tuples.
+    """
+    with pytest.raises(ValueError, match="numeric"):
+        DataStruct.from_dict({"time": {"bad": "dict"}, "values": [[1.0], [2.0]]})
+    with pytest.raises(ValueError, match="numeric"):
+        DataStruct.from_dict({"time": [0.0, 1.0], "values": "not an array"})
+    # Guard must not over-fire: ordinary payloads still build.
+    ok = DataStruct.from_dict({"time": [0.0, 1.0], "values": [[1.0], [2.0]]})
+    assert ok.n_points == 2
+
+
+def test_fermi_level_underflowed_ni_raises_valueerror_not_zerodivision() -> None:
+    """A large ``eg`` (bounded below at 0 by the schema, but not above)
+    underflows ``exp(-eg*e/(2*kB*T))`` to exactly 0.0, so ``ni == 0`` and
+    ``asinh(net / (2*ni))`` divided by zero — the same underflow class already
+    fixed once for ``unit_convert``'s exponent.
+    """
+    from quantized.calc.semiconductor import fermi_level
+
+    with pytest.raises(ValueError, match="underflow"):
+        fermi_level(eg=100.0, me_star=1.0, mh_star=1.0, nd=1e16, na=0.0, t=300.0)
+    # Silicon-ish input still works.
+    out = fermi_level(eg=1.12, me_star=1.08, mh_star=0.81, nd=1e16, na=0.0, t=300.0)
+    assert math.isfinite(out["EF"])
+
+
+def test_curve_fit_empty_arrays_raise_valueerror_not_zerodivision() -> None:
+    """``rmse = sqrt(ss_res / n)`` is a plain-Python float/int division, so
+    ``n == 0`` raises ZeroDivisionError rather than yielding nan the way the
+    neighbouring numpy divisions do. Neither ``x`` nor ``y`` has a pydantic
+    ``min_length``, and passing an explicit ``p0`` skips ``auto_guess``, so
+    empty arrays reached the fitter. ``/fitting/scan`` already guarded this;
+    the guard now lives in the shared fitter instead.
+    """
+    from quantized.calc.fitting import curve_fit
+
+    def linear(x: np.ndarray, p: Sequence[float]) -> np.ndarray:
+        return np.asarray(p[0] * x + p[1], dtype=float)
+
+    with pytest.raises(ValueError, match="at least one data point"):
+        curve_fit([], [], linear, [1.0, 0.0])
+    with pytest.raises(ValueError, match="same length"):
+        curve_fit([1.0, 2.0, 3.0], [1.0, 2.0], linear, [1.0, 0.0])
+    # A real fit is unaffected.
+    res = curve_fit([0.0, 1.0, 2.0], [1.0, 3.0, 5.0], linear, [1.0, 0.0])
+    assert res["params"][0] == pytest.approx(2.0, rel=1e-6)
