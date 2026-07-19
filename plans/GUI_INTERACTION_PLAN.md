@@ -314,9 +314,8 @@ plotting, publication export.
             reshape/merge/correction/metadata). Deliberately NOT done as a
             side effect of sectioning: relocating commands between menus
             breaks muscle memory and deserves a deliberate call.
-      - [ ] Fill out Help — **FOUR of five sub-items DONE 2026-07-19**
-            (`f5e9162`, `315d31a`, `9bc4daa`), leaving only `What is this?`
-            mode. A new searchable Help hub (Help ▸ Help topics…, also in ⌘K)
+      - [x] Fill out Help — **ALL FIVE sub-items DONE 2026-07-19**
+            (`f5e9162`, `315d31a`, `9bc4daa`, `6af84e9`). A new searchable Help hub (Help ▸ Help topics…, also in ⌘K)
             with tabs: **Topics** (fuzzy search over a catalog of all 17
             analysis tools — name, one-liner, and where to find it, folded
             together with formats + Origin tips into one search), **Keyboard &
@@ -330,10 +329,15 @@ plotting, publication export.
             that name a tool are cross-checked against the tool catalog so a
             rename breaks the test. Content lives in pure lib/ modules; the
             open state is a standalone store/help slice (useApp is at its pin).
-            REMAINING: `What is this?` contextual hover-help mode — a distinct,
-            larger feature (per-element `data-help` + a toggle + a hover
-            tooltip system), tracked with the shortcuts sub-item's "first-run
-            interaction hints" below.
+            The fifth sub-item, `What is this?` inspect mode (`6af84e9`),
+            reuses the existing [data-tip] tooltip layer rather than a
+            per-element data-help scatter: toggling it outlines every
+            DOCUMENTED control and reveals its help instantly, so an
+            undocumented control simply isn't highlighted (dodging the
+            "feels broken when under-populated" trap). Its [data-tip]
+            coverage grows incrementally. The only Help-adjacent item still
+            open is the shortcuts sub-item's optional "first-run interaction
+            hints" below.
     - [ ] **Shortcuts + palette labels DONE 2026-07-19** (`42b4174`,
           `8b66988`); the first-run hints mode remains open.
       - [x] Shortcuts were already RENDERED in menus and the palette, but only
