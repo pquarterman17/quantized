@@ -111,7 +111,17 @@ const STORE_PINS: Record<string, number> = {
   // ~118-line prefs block (Prefs/PREF_DEFAULTS/loadPrefs/prefsOf/syncPrefs)
   // moved to store/prefs.ts, funding #54's panelFit/pageSetup state + the
   // defaultPanelFit pref across the feature's staged commits — a net LOWERING.
-  "/store/useApp.ts": 3240,
+  // 3240 -> 3115 (2026-07-18, headroom restore, pure refactor / zero behavior
+  // change): applyCorrections/resetCorrections/applyCorrectionsToMany (the
+  // whole corrections-apply pipeline) moved verbatim to the new
+  // store/corrections.ts (CorrectionsSlice), composed in exactly like
+  // graphBuilder.ts — it owns no state of its own, mutating the shared
+  // `datasets` field through set/get the same way store/reimport.ts already
+  // does. `recompute` was exported from useApp.ts (nextDatasetId/split.ts
+  // precedent) so the new slice can re-derive computed columns after an
+  // apply/reset. No headroom slack added deliberately — the ratchet's whole
+  // point is that the NEXT feature earns its own extraction, not a buffer.
+  "/store/useApp.ts": 3115,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -148,9 +158,12 @@ describe("store-size ratchet (MAIN_PLAN #2)", () => {
 describe("row-state model guard (#50 universal linking)", () => {
   it("only the row-state model reads/writes Dataset.excludedRows", () => {
     // rowstate = the exclusion primitives; workspace = .dwk (de)serialize;
-    // useApp = the store mutation actions. Everything else goes through
-    // rowstate.analysisData / droppedRows / excludedSet.
-    const allow = ["/lib/rowstate.ts", "/lib/workspace.ts", "/store/useApp.ts"];
+    // useApp = the store mutation actions; corrections = the
+    // applyCorrections/resetCorrections mutation actions extracted out of
+    // useApp.ts (2026-07-18, store-size ratchet) — still a store mutation
+    // action, just relocated to its own slice file. Everything else goes
+    // through rowstate.analysisData / droppedRows / excludedSet.
+    const allow = ["/lib/rowstate.ts", "/lib/workspace.ts", "/store/useApp.ts", "/store/corrections.ts"];
     expect(
       offenders(/\.excludedRows\b/, allow),
       "read exclusion via lib/rowstate (analysisData/droppedRows/excludedSet), not Dataset.excludedRows directly",

@@ -1,21 +1,28 @@
 // The plot toolbar's "whole plot" actions — reset view, smart auto-scale,
-// save-as-PNG, copy-data (TSV), and snapshot-to-clipboard. Split out of
-// PlotStage.tsx (component-ceiling ratchet, PROJECT_ORGANIZATION_PLAN #7):
-// these are self-contained callbacks over the live uPlot instance + the
-// currently displayed payload, not state PlotStage itself needs to react to,
-// so they extract cleanly with no behavior change.
+// save-as-PNG, copy-data (TSV), and snapshot-to-clipboard — plus the two
+// PlotViewport drag-gesture callbacks (onRegionSelect/onRangeSelect, added
+// 2026-07-18 to free PlotStage headroom). Split out of PlotStage.tsx
+// (component-ceiling ratchet, PROJECT_ORGANIZATION_PLAN #7): these are all
+// self-contained callbacks over the live uPlot instance + the currently
+// displayed payload, not state PlotStage itself needs to react to, so they
+// extract cleanly with no behavior change.
 
 import type { RefObject } from "react";
 import type uPlot from "uplot";
 
 import { suggestLogScale } from "../../lib/autoscale";
 import { copyImage, copyText, payloadToTSV } from "../../lib/clipboard";
-import type { PlotPayload } from "../../lib/plotdata";
+import { clampPlottedRange, rowsInXRange, type PlotPayload } from "../../lib/plotdata";
 import { exportPlotPng, plotPngBlob } from "../../lib/plotExport";
 import type { Dataset } from "../../lib/types";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 
+// resetView/smartScale/savePng/copyData/snapshot — the fields the "actions"
+// bag threaded through to PlotStageMenus/PlotStageOverlays as a single prop.
+// Kept to exactly these 5 keys (not the drag-gesture callbacks below) since
+// both callers build the bag as an object LITERAL, and PlotStageActions is
+// their prop's structural type.
 export interface PlotStageActions {
   resetView: () => void;
   smartScale: () => void;
@@ -24,12 +31,19 @@ export interface PlotStageActions {
   snapshot: () => void;
 }
 
-/** Build the toolbar/context-menu action callbacks for the active plot. */
+/** Build the toolbar/context-menu action callbacks for the active plot, plus
+ *  the two PlotViewport drag-gesture callbacks (onRegionSelect/onRangeSelect)
+ *  — a separate return shape, not folded into PlotStageActions, since
+ *  PlotStage passes those two straight to PlotViewport as their own props,
+ *  never through the "actions" bag. */
 export function usePlotStageActions(
   plotRef: RefObject<uPlot | null>,
   displayPayload: PlotPayload | null,
   active: Dataset | null | undefined,
-): PlotStageActions {
+): PlotStageActions & {
+  onRegionSelect: (x0: number, x1: number) => void;
+  onRangeSelect: (x0: number, x1: number) => void;
+} {
   function resetView() {
     if (plotRef.current && displayPayload) {
       plotRef.current.setData(displayPayload.data, true); // resetScales = re-fit
@@ -86,5 +100,20 @@ export function usePlotStageActions(
     });
   }
 
-  return { resetView, smartScale, savePng, copyData, snapshot };
+  // Baseline-workshop region pick (drag on the "region" tool): clamp to the
+  // plotted x-extent, stash it via setRegionPicked, then exit to "zoom".
+  function onRegionSelect(x0: number, x1: number) {
+    if (!displayPayload) return;
+    const range = clampPlottedRange(displayPayload.data[0] as (number | null)[], x0, x1);
+    if (range) useApp.getState().setRegionPicked(range);
+    useApp.getState().setPlotTool("zoom");
+  }
+
+  // Plot-brush: a dragged x-band → row indices (original order) → worksheet selection.
+  function onRangeSelect(x0: number, x1: number) {
+    if (!displayPayload) return;
+    useApp.getState().setRowSelection(rowsInXRange(displayPayload.data[0] as (number | null)[], x0, x1));
+  }
+
+  return { resetView, smartScale, savePng, copyData, snapshot, onRegionSelect, onRangeSelect };
 }

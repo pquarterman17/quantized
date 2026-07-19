@@ -3,9 +3,8 @@
 
 import { create } from "zustand";
 
-import type { CorrectionsRequest, FftSpectralResult, IntegrateResponse } from "../lib/api";
+import type { FftSpectralResult, IntegrateResponse } from "../lib/api";
 import {
-  applyCorrections as applyCorrectionsApi,
   fetchBookData,
   fftSpectral,
   fitModel,
@@ -87,6 +86,7 @@ import { createShapesSlice, type ShapesSlice } from "./shapes";
 import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel";
 import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
+import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import type { SpatialPanel } from "../lib/multipanel";
 import { breakPayloads, facetPayloads, suggestBreaks, type BreakPanel, type FacetPanel } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -127,7 +127,6 @@ import type {
   CalcResult,
   ChannelRole,
   ComputedColumn,
-  CorrectionParams,
   DataFilter,
   Dataset,
   DataStruct,
@@ -142,8 +141,11 @@ import type {
 } from "../lib/types";
 
 /** Recompute a dataset's computed columns from its current base (no-op without
- *  formulas). Routed through after any base-data mutation (cell edit, corrections). */
-const recompute = (d: Dataset): Dataset =>
+ *  formulas). Routed through after any base-data mutation (cell edit, corrections).
+ *  Exported for store/corrections.ts (nextDatasetId/split.ts precedent) — the
+ *  corrections slice re-derives computed columns after every apply/reset from
+ *  the SAME formula-recompute logic every other base-data mutation here uses. */
+export const recompute = (d: Dataset): Dataset =>
   d.formulas?.length ? { ...d, data: recomputeData(d.data, d.formulas) } : d;
 
 let _refSeq = 0;
@@ -323,7 +325,7 @@ export type PrefKey =
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -736,15 +738,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   addSmartFolder: (name: string, query: string) => void;
   updateSmartFolder: (id: string, name: string, query: string) => void;
   removeSmartFolder: (id: string) => void;
-  applyCorrections: (
-    id: string,
-    params: CorrectionParams,
-    bg?: { datasetId: string; interp: string },
-  ) => Promise<boolean>;
-  resetCorrections: (id: string) => void;
-  // Copy `sourceId`'s correction params (+ bg reference) onto every target id,
-  // re-deriving each from its own raw. Batch parity with MATLAB "Apply to All".
-  applyCorrectionsToMany: (sourceId: string, targetIds: string[]) => Promise<void>;
+  // applyCorrections/resetCorrections/applyCorrectionsToMany live on
+  // CorrectionsSlice (store/corrections.ts) — see AppState's extends list.
   toggleLeft: () => void;
   toggleRight: () => void;
   setStageTab: (tab: StageTab) => void;
@@ -961,6 +956,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createOriginFallbackSlice(set, get),
   ...createLibraryPanelSlice(set, _initialPrefs.libraryPanelWidth),
   ...createGraphBuilderSlice(set, get),
+  ...createCorrectionsSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -2310,124 +2306,6 @@ export const useApp = create<AppState>((set, get) => ({
     })),
   removeSmartFolder: (id) =>
     set((s) => ({ smartFolders: s.smartFolders.filter((f) => f.id !== id) })),
-
-  // Corrections always apply to the pristine `raw`, never to an already-
-  // corrected `data` (the MATLAB pipeline is replace, not accumulate). The
-  // first import becomes `raw`; re-applying with new params re-derives `data`.
-  // An optional `bg` picks another loaded dataset as the reference background
-  // (step 4 of the pipeline): we forward its CURRENT `data` + the interp method
-  // so the golden /api/corrections/apply does the interpolated subtraction.
-  applyCorrections: async (id, params, bg) => {
-    try {
-      // #38 deferred edge: corrections must never compute on a still-pending
-      // (preview-only) dataset — resolve the target AND any bg reference to
-      // full data first. A resolve failure lands in the catch below, reusing
-      // the existing "corrections failed" status/toast rather than silently
-      // falling through to the preview.
-      const ds = await get().resolveDataset(id);
-      if (!ds) return false;
-      const raw = ds.raw ?? ds.data;
-      // Resolve the background only if it points at a real, different dataset.
-      const bgDs =
-        bg && bg.datasetId !== id ? await get().resolveDataset(bg.datasetId) : undefined;
-      const bgRef = bgDs ? { datasetId: bgDs.id, interp: bg!.interp } : undefined;
-      const req: CorrectionsRequest = { dataset: raw, params };
-      if (bgDs) {
-        req.bg_dataset = bgDs.data;
-        req.bg_interp = bg!.interp;
-      }
-      const corrected = await applyCorrectionsApi(req);
-      // excludedRows are raw row INDICES into ds.data; an xTrim shrinks/shifts
-      // the rows (corrections.py step 1), so carrying stale indices forward would
-      // exclude the WRONG rows (or silently lose the exclusion). Drop them when
-      // the row count changes rather than corrupt the analysis view.
-      const rowsChanged = corrected.time.length !== ds.data.time.length;
-      // Recompute any computed columns from the freshly-corrected base.
-      get().recordHistory("apply corrections");
-      set((s) => ({
-        datasets: s.datasets.map((d) =>
-          d.id === id
-            ? recompute({
-                ...d,
-                data: corrected,
-                raw,
-                corrections: params,
-                bgRef,
-                ...(rowsChanged ? { excludedRows: undefined } : {}),
-              })
-            : d,
-        ),
-      }));
-      if (rowsChanged && ds.excludedRows?.length) {
-        get().setStatus(
-          "Row exclusions cleared: a trim changed the row count, so the saved row indices no longer apply.",
-        );
-      }
-      get().recordMacro(
-        `Corrections → ${ds.name}`,
-        bgDs
-          ? `qz.applyCorrections(${lit(ds.name)}, ${lit(params)}, ${lit({ bg: bgDs.name, interp: bg!.interp })})`
-          : `qz.applyCorrections(${lit(ds.name)}, ${lit(params)})`,
-        { kind: "correction", params: { params, bg } },
-      );
-      get().touchDataset(id); // recalc graph (#1): data changed
-      return true;
-    } catch (e) {
-      get().setStatus(
-        `corrections failed: ${e instanceof Error ? e.message : "error"}`,
-      );
-      return false; // callers can see failure (review 2026-07-11)
-    }
-  },
-  resetCorrections: (id) => {
-    const ds = get().datasets.find((d) => d.id === id);
-    get().recordHistory("reset corrections");
-    set((s) => ({
-      datasets: s.datasets.map((d) => {
-        if (d.id !== id || !d.raw) return d;
-        // Reverting a trim restores rows, so index-based excludedRows are stale.
-        const rowsChanged = d.raw.time.length !== d.data.time.length;
-        return recompute({
-          ...d,
-          data: d.raw,
-          raw: undefined,
-          corrections: undefined,
-          bgRef: undefined,
-          ...(rowsChanged ? { excludedRows: undefined } : {}),
-        });
-      }),
-    }));
-    if (ds?.raw) {
-      get().recordMacro(`Reset corrections → ${ds.name}`, `qz.resetCorrections(${lit(ds.name)})`, {
-        kind: "reset",
-        params: {},
-      });
-    }
-    get().touchDataset(id); // recalc graph (#1): data changed
-  },
-  // Propagate one dataset's corrections to a batch. Each target re-derives from
-  // its OWN raw (applyCorrections is replace-not-accumulate), so this is safe to
-  // run repeatedly. The same bg-reference dataset is reused for all targets.
-  applyCorrectionsToMany: async (sourceId, targetIds) => {
-    const src = get().datasets.find((d) => d.id === sourceId);
-    if (!src?.corrections) {
-      get().setStatus("no corrections on the source dataset to copy");
-      return;
-    }
-    const bg = src.bgRef ? { datasetId: src.bgRef.datasetId, interp: src.bgRef.interp } : undefined;
-    let n = 0;
-    for (const id of targetIds) {
-      if (id === sourceId) continue;
-      // Don't subtract a dataset from itself if it's the shared bg reference.
-      const useBg = bg && bg.datasetId !== id ? bg : undefined;
-      const transferable = { ...src.corrections }; // anchors are hand-traced on the SOURCE curve - not transferable
-      delete transferable.bgAnchors;
-      delete transferable.bgAnchorMethod;
-      await get().applyCorrections(id, transferable, useBg);
-      n += 1;
-    }
-    get().setStatus(`applied ${src.name}'s corrections to ${n} dataset${n === 1 ? "" : "s"}`);
-  },
   toggleLeft: () => set((s) => ({ leftCollapsed: !s.leftCollapsed })),
   toggleRight: () => set((s) => ({ rightCollapsed: !s.rightCollapsed })),
   setStageTab: (stageTab) => set({ stageTab }),

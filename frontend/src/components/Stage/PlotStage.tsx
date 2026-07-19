@@ -10,7 +10,6 @@
 import { useEffect, useRef, useState } from "react";
 import type uPlot from "uplot";
 
-import { clampPlottedRange, rowsInXRange } from "../../lib/plotdata";
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { resolveTemplate } from "../../lib/plotTemplates";
@@ -19,19 +18,13 @@ import { LINEAR_PATHS, POINTS_PATHS, STEPPED_PATHS } from "../../lib/uplotPaths"
 import { windowSyncKey } from "../../lib/windowsync";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
-import { snapshotToNewWindow } from "../windows/useWindowCommands";
 import AxisDropZones from "./AxisDropZones";
-import InsetPlot from "./InsetPlot";
 import MultiPanelStage from "./MultiPanelStage";
-import PlotLegend from "./PlotLegend";
-import PlotReadouts from "./PlotReadouts";
-import PlotResultChips from "./PlotResultChips";
 import PlotStageMenus from "./PlotStageMenus";
-import PlotToolbar from "./PlotToolbar";
+import PlotStageOverlays from "./PlotStageOverlays";
 import PlotViewport from "./PlotViewport";
 import PolarStage from "./PolarStage";
 import StatStage from "./StatStage";
-import ToolHud from "./ToolHud";
 import { useAnnotationEdit } from "./useAnnotationEdit";
 import { useAxisLabelEdit } from "./useAxisLabelEdit";
 import { useAxisDrop } from "./useAxisDrop";
@@ -102,7 +95,6 @@ export default function PlotStage() {
     (s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.linkGroup ?? null,
   );
   const tool = useApp((s) => s.plotTool);
-  const setPlotTool = useApp((s) => s.setPlotTool);
   // MAIN #18: pointer-mode annotation select/drag/resize/edit/menu bridge.
   const { bridge: annotationEdit, menu: annotationMenu, closeMenu: closeAnnotationMenu } = useAnnotationEdit(tool);
   const { bridge: axisLabelEdit, menu: axisLabelMenu, closeMenu: closeAxisLabelMenu } = useAxisLabelEdit(tool);
@@ -110,9 +102,7 @@ export default function PlotStage() {
   // drag-to-draw-a-new-shape mode bridge.
   const { bridge: shapeEdit, menu: shapeMenu, closeMenu: closeShapeMenu } = useShapeEdit(tool);
   const { shapeDraw } = useShapeDraw();
-  const setRegionPicked = useApp((s) => s.setRegionPicked);
   const selection = useApp((s) => s.selection);
-  const setRowSelection = useApp((s) => s.setRowSelection);
   const integral = useApp((s) => s.integral);
   const fwhmResult = useApp((s) => s.fwhmResult);
   const setIntegral = useApp((s) => s.setIntegral);
@@ -202,7 +192,7 @@ export default function PlotStage() {
     if (active?.pending) useApp.getState().ensureBookData(active.id);
   }, [active?.id, active?.pending]);
 
-  const { resetView, smartScale, savePng, copyData, snapshot } = usePlotStageActions(
+  const { resetView, smartScale, savePng, copyData, snapshot, onRegionSelect, onRangeSelect } = usePlotStageActions(
     plotRef,
     displayPayload,
     active,
@@ -300,18 +290,8 @@ export default function PlotStage() {
         hidden={hidden}
         tool={tool}
         onReadout={setReadout}
-        onRegionSelect={(x0, x1) => {
-          // Clamp to the plotted x-extent → baseline workshop; then exit the mode.
-          if (!displayPayload) return;
-          const range = clampPlottedRange(displayPayload.data[0] as (number | null)[], x0, x1);
-          if (range) setRegionPicked(range);
-          setPlotTool("zoom");
-        }}
-        // Plot-brush: dragged x-band → row indices (original order → worksheet).
-        onRangeSelect={(x0, x1) => {
-          if (!displayPayload) return;
-          setRowSelection(rowsInXRange(displayPayload.data[0] as (number | null)[], x0, x1));
-        }}
+        onRegionSelect={onRegionSelect}
+        onRangeSelect={onRangeSelect}
         onMeasure={setMeasurement}
         onStats={setStatsSel}
         integral={integral}
@@ -349,51 +329,29 @@ export default function PlotStage() {
         onCloseShapeMenu={closeShapeMenu}
       />
 
-      {displayPayload && (
-        <PlotToolbar
-          onReset={resetView}
-          onSmartScale={smartScale}
-          onSavePng={savePng}
-          onCopyData={copyData}
-          onSnapshot={snapshot}
-          onSnapshotWindow={snapshotToNewWindow}
-        />
-      )}
-      {displayPayload && <ToolHud tool={tool} />}
-
-      {insetMode && displayPayload && (
-        <InsetPlot payload={displayPayload} styleList={styleList} />
-      )}
-
-      {!active && (
-        <div
-          className="qzk-ds-meta"
-          style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}
-        >
-          Select a dataset to plot
-        </div>
-      )}
-
-      <PlotReadouts tool={tool} readout={readout} measurement={measurement} stats={statsSel} />
-      <PlotResultChips
+      <PlotStageOverlays
+        displayPayload={displayPayload}
+        active={active}
+        tool={tool}
+        insetMode={insetMode}
+        showLegend={showLegend}
+        styleList={styleList}
+        plotted={plotted}
+        hidden={hidden}
+        colorByColumns={colorByColumns}
+        isDarkBg={isDarkBg}
+        inkColor={inkColor}
+        defaultTrace={defaultTrace}
+        actions={{ resetView, smartScale, savePng, copyData, snapshot }}
+        readout={readout}
+        measurement={measurement}
+        stats={statsSel}
         integral={integral}
         fwhm={fwhmResult}
         onClearIntegral={() => setIntegral(null)}
         onClearFwhm={() => setFwhmResult(null)}
         gadget={gadget}
       />
-      {displayPayload && showLegend && (
-        <PlotLegend
-          series={displayPayload.series}
-          styleList={styleList}
-          plotted={plotted}
-          hidden={hidden}
-          colorByColumns={colorByColumns}
-          isDarkBg={isDarkBg}
-          inkColor={inkColor}
-          defaultTrace={defaultTrace}
-        />
-      )}
     </AxisDropZones>
   );
 }
