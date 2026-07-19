@@ -26,6 +26,7 @@ import {
   datasetMultiSelectActions,
   datasetNewFolderAction,
   datasetRemoveActions,
+  runContextAction,
   type DatasetActionTarget,
 } from "../../lib/contextActions";
 import type { Dataset, FolderNode } from "../../lib/types";
@@ -94,4 +95,31 @@ export function buildDatasetRowMenu(
     { separator: true },
     ...buildMenuItems(datasetRemoveActions, target),
   ];
+}
+
+/** Remove a dataset through the SAME registry action the row's context menu
+ *  uses, so the shared confirm step cannot be bypassed.
+ *
+ *  GUI_INTERACTION #17: the row's footer "✕" icon button used to call
+ *  `removeDataset(d.id)` straight on the store. That made TWO paths to one
+ *  irreversible deletion — the menu entry (`dataset.remove`, `destructive:
+ *  true`, confirmed with the dataset's name) and a bare icon whose only
+ *  affordance was a hover title. Routing the button here fixes the mechanism
+ *  rather than the instance: there is one definition of "remove a dataset"
+ *  and the confirm is structural. Looked up BY ID, never by array index, so
+ *  reordering the registry can't silently re-open the hole. */
+export function removeDatasetConfirmed(d: Dataset): void {
+  const action = datasetRemoveActions.find((a) => a.id === "dataset.remove");
+  if (!action) throw new Error("dataset.remove missing from the context-action registry");
+  const { selectedIds } = useApp.getState();
+  runContextAction(action, {
+    dataset: d,
+    active: false,
+    selected: false,
+    selectedIds,
+    canMoveUp: false,
+    canMoveDown: false,
+    onRename: () => {},
+    onAddTag: () => {},
+  });
 }

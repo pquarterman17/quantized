@@ -26,7 +26,7 @@
 
 import { useState } from "react";
 
-import { buildDatasetRowMenu } from "./datasetRowMenu";
+import { buildDatasetRowMenu, removeDatasetConfirmed } from "./datasetRowMenu";
 import Sparkline from "./Sparkline";
 import { DATASET_DND } from "./useLibraryTree";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
@@ -81,7 +81,6 @@ export default function DatasetRow({
   const activateFromLibrary = useApp((s) => s.activateFromLibrary);
   const toggleSelected = useApp((s) => s.toggleSelected);
   const selectRange = useApp((s) => s.selectRange);
-  const removeDataset = useApp((s) => s.removeDataset);
   const duplicateDataset = useApp((s) => s.duplicateDataset);
   const moveDataset = useApp((s) => s.moveDataset);
   const renameDataset = useApp((s) => s.renameDataset);
@@ -330,9 +329,10 @@ export default function DatasetRow({
           <button
             className="qz-icon-btn"
             title="Remove"
+            aria-label={`Remove ${d.name}`}
             onClick={(e) => {
               e.stopPropagation();
-              removeDataset(d.id);
+              removeDatasetConfirmed(d);
             }}
           >
             ✕

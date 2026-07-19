@@ -509,4 +509,33 @@ describe("DatasetRow — destructive Remove confirms first (GUI_INTERACTION #8)"
     await Promise.resolve();
     expect(useApp.getState().datasets).toEqual([]);
   });
+
+  // GUI_INTERACTION #17: the row's footer "✕" icon button called
+  // removeDataset() straight on the store, so the SAME irreversible deletion
+  // had a confirmed path (this menu entry) and an unconfirmed one (the icon).
+  // Both now route through the one registry action. Pinned from both sides so
+  // a future refactor can't silently re-open the hole.
+  it("the ✕ icon button ALSO confirms before removing", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    render(<DatasetRow dataset={plain} {...baseProps} />);
+    fireEvent.click(screen.getByLabelText(`Remove ${plain.name}`));
+    expect(askConfirm).toHaveBeenCalledOnce();
+    await Promise.resolve();
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["plain"]);
+  });
+
+  it("the ✕ icon button removes once confirmed", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    render(<DatasetRow dataset={plain} {...baseProps} />);
+    fireEvent.click(screen.getByLabelText(`Remove ${plain.name}`));
+    await Promise.resolve();
+    expect(useApp.getState().datasets).toEqual([]);
+  });
+
+  it("names the dataset in the icon button's confirm, like the menu entry does", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    render(<DatasetRow dataset={plain} {...baseProps} />);
+    fireEvent.click(screen.getByLabelText(`Remove ${plain.name}`));
+    expect(vi.mocked(askConfirm).mock.calls[0][0]).toContain(plain.name);
+  });
 });
