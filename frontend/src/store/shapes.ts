@@ -17,7 +17,7 @@
 // `_shapeSeq`, never reused, so a stale id simply matches nothing). The
 // persistent `shapes` array itself participates in edit history.
 
-import type { Shape } from "../lib/types";
+import type { Annotation, Shape } from "../lib/types";
 import type { AppState } from "./useApp";
 
 let _shapeSeq = 0;
@@ -51,6 +51,12 @@ export interface ShapesSlice {
   removeShape: (id: string) => void;
   /** Inspector "Shapes" card bulk action. */
   clearShapes: () => void;
+  /** Commit a cross-type Object Manager bulk edit as one undo step. */
+  editPlotObjects: (
+    label: string,
+    annotations: Readonly<Record<string, Partial<Omit<Annotation, "id">>>>,
+    shapes: Readonly<Record<string, Partial<Omit<Shape, "id">>>>,
+  ) => void;
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -80,6 +86,18 @@ export function createShapesSlice(set: SliceSet, get: SliceGet): ShapesSlice {
     clearShapes: () => {
       get().recordHistory("clear shapes");
       set({ shapes: [], selectedShapeId: null });
+    },
+    editPlotObjects: (label, annotationPatches, shapePatches) => {
+      if (!Object.keys(annotationPatches).length && !Object.keys(shapePatches).length) return;
+      get().recordHistory(label);
+      set((s) => ({
+        annotations: s.annotations.map((a) =>
+          annotationPatches[a.id] ? { ...a, ...annotationPatches[a.id] } : a,
+        ),
+        shapes: s.shapes.map((shape) =>
+          shapePatches[shape.id] ? { ...shape, ...shapePatches[shape.id] } : shape,
+        ),
+      }));
     },
   };
 }

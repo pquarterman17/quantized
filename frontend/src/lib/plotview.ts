@@ -535,6 +535,7 @@ export function sanitizeAnnotations(v: unknown): Annotation[] {
     const frame = sanitizeFrame(o.frame);
     out.push({
       id: o.id,
+      ...(typeof o.groupId === "string" && o.groupId ? { groupId: o.groupId } : {}),
       x: isPage ? clamp01(o.x) : o.x,
       y: isPage ? clamp01(o.y) : o.y,
       text: typeof o.text === "string" ? o.text : "",
@@ -595,6 +596,7 @@ export function sanitizeShapes(v: unknown): Shape[] {
     const isPage = anchor === "page";
     out.push({
       id: o.id,
+      ...(typeof o.groupId === "string" && o.groupId ? { groupId: o.groupId } : {}),
       kind: o.kind as Shape["kind"],
       x1: isPage ? clamp01(o.x1 as number) : (o.x1 as number),
       y1: isPage ? clamp01(o.y1 as number) : (o.y1 as number),

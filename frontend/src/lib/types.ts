@@ -661,6 +661,9 @@ export type ModelingType = "continuous" | "ordinal" | "nominal";
  *  `y` is always in the coordinate space named by `axis`. */
 export interface Annotation {
   id: string;
+  /** Optional persistent Object Manager group. Grouping changes selection and
+   *  bulk-edit behavior only; it never changes rendering coordinates. */
+  groupId?: string;
   x: number;
   y: number;
   text: string;
@@ -715,6 +718,8 @@ export interface Annotation {
  *  time, never stored unless the user picks a custom color. */
 export interface Shape {
   id: string;
+  /** Optional persistent Object Manager group; see `Annotation.groupId`. */
+  groupId?: string;
   kind: "arrow" | "line" | "rect" | "ellipse";
   x1: number;
   y1: number;

@@ -64,7 +64,7 @@ export interface PointerToolSlice {
    *  preview already clamps it. No-op for an unknown id. */
   updateAnnotation: (
     id: string,
-    patch: Partial<Pick<Annotation, "x" | "y" | "text" | "size" | "anchor" | "frame">>,
+    patch: Partial<Pick<Annotation, "x" | "y" | "text" | "size" | "anchor" | "frame" | "groupId">>,
   ) => void;
 }
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { useApp } from "../../store/useApp";
@@ -53,5 +53,49 @@ describe("PlotObjectsCard", () => {
     expect(useApp.getState().shapes).toHaveLength(2);
     fireEvent.click(screen.getAllByTitle("Delete")[1]);
     expect(useApp.getState().shapes).toHaveLength(1);
+  });
+
+  it("aligns, groups, and styles a multi-selection as named undo steps", () => {
+    useApp.setState({
+      annotations: [{ id: "a1", x: 0, y: 1, text: "peak" }],
+      shapes: [{ id: "s1", kind: "line", x1: 2, y1: 0, x2: 3, y2: 1 }],
+    });
+    render(<PlotObjectsCard />);
+    fireEvent.click(screen.getByText("Plot objects"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select annotation peak" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select line shape" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Left" }));
+    expect(useApp.getState().shapes[0]).toMatchObject({ x1: 0, x2: 1 });
+    expect(useApp.getState().history.at(-1)?.label).toBe("align plot objects");
+
+    fireEvent.click(screen.getByRole("button", { name: "Group" }));
+    const { annotations, shapes } = useApp.getState();
+    expect(annotations[0].groupId).toBeTruthy();
+    expect(shapes[0].groupId).toBe(annotations[0].groupId);
+
+    fireEvent.change(screen.getByLabelText("Shared color"), { target: { value: "#ff0000" } });
+    fireEvent.change(screen.getByLabelText("Shared opacity"), { target: { value: "0.5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(useApp.getState().annotations[0].frame).toMatchObject({ stroke: "#ff0000", opacity: 0.5 });
+    expect(useApp.getState().shapes[0]).toMatchObject({ stroke: "#ff0000", opacity: 0.5 });
+
+    useApp.getState().undo();
+    expect(useApp.getState().shapes[0].stroke).toBeUndefined();
+    expect(useApp.getState().annotations[0].groupId).toBeTruthy();
+  });
+
+  it("selecting one grouped object from the canvas selects its whole group", async () => {
+    useApp.setState({
+      annotations: [{ id: "a1", groupId: "g1", x: 0, y: 1, text: "peak" }],
+      shapes: [{ id: "s1", groupId: "g1", kind: "line", x1: 0, y1: 0, x2: 1, y2: 1 }],
+    });
+    render(<PlotObjectsCard />);
+    fireEvent.click(screen.getByText("Plot objects"));
+    act(() => useApp.getState().setSelectedShapeId("s1"));
+    await waitFor(() => {
+      expect(screen.getByRole("checkbox", { name: "Select annotation peak" })).toBeChecked();
+      expect(screen.getByRole("checkbox", { name: "Select line shape" })).toBeChecked();
+    });
   });
 });

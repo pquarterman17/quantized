@@ -11,9 +11,9 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-19 19:02 EDT (implementation pass based on `main` at
-`632a414`; undo/view history, plotted-channel baseline, Plot Objects first
-slice, folder-undo e2e, interaction polish, tests, and guards recorded below)
+**Updated:** 2026-07-19 19:28 EDT (stacked Plot Objects completion added on top
+of the interaction-foundation pass; remaining Tier 3 feature families stay
+separately scoped)
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -138,8 +138,10 @@ feature checklist.
          "duplicate"/"delete" mean per object type before building). Curve
          delete is intentionally non-destructive Hide; annotations/shapes use
          duplicate/delete; every Properties action routes to its editor.
-   - [ ] Multi-select: align, distribute, group, shared styling for graphic objects.
-   - [ ] Large bet — size it deliberately; reuses #8's action registry.
+   - [x] Multi-select: align, distribute, group, shared styling for graphic objects.
+   - [x] Large bet completed as a bounded Inspector extension: additive-optional
+         persistent group IDs, fail-closed mixed coordinate spaces, and one
+         named undo transaction per bulk command.
 
 5. **Baseline analysis honors the plotted X/Y channels** — the baseline workshop
    still computes on `time`/`values[0]` and subtracts into `values[0]`, diverging
@@ -444,6 +446,15 @@ feature checklist.
 ---
 
 ## Completed
+
+- ~~**#2 Plot Objects multi-object editing**~~ (2026-07-19, ChatGPT-Sol,
+  stacked after the interaction-foundation PR) — checkboxes provide multi-object
+  working selection; canvas selection expands a stored group; align left/center/
+  right/top/middle/bottom and horizontal/vertical distribution preserve object
+  geometry; grouping round-trips through workspaces/PlotSpecs; a shared style
+  applies stroke/opacity to the selected annotations and shapes. Layout refuses
+  mixed page/data coordinate spaces rather than moving objects incorrectly, and
+  every bulk operation is one named undo step.
 
 - ~~**#1 + #5 + #15 + #17 implementation pass**~~ (2026-07-19, ChatGPT-Sol)
   — edit history now covers persistent data, plot styling/objects, window
