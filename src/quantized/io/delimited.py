@@ -37,7 +37,15 @@ def _is_numeric(token: str) -> bool:
 
 
 def _datetime_epoch(token: str) -> float | None:
-    """Conservatively parse common ISO/lab timestamp forms as UTC seconds."""
+    """Conservatively parse common ISO/lab timestamp forms as UTC seconds.
+
+    ISO 8601 is tried first and is unambiguous. The slash-format fallback
+    assumes US month/day/year order (the common lab-instrument convention).
+    KNOWN LIMITATION: a ``DD/MM/YYYY`` file whose day is ≤ 12 on every row
+    parses with month and day swapped rather than failing — where day > 12,
+    ``strptime`` correctly rejects it. There is no locale-free way to
+    disambiguate a bare ``03/04/2026``; ISO is the safe input format.
+    """
     value = token.strip()
     if not value:
         return None

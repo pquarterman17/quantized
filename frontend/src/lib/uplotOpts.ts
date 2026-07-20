@@ -263,7 +263,13 @@ export function tickFormatter(fmt?: AxisFormat): TickValues {
         ? { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: "UTC" }
         : { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "UTC" };
     const formatter = new Intl.DateTimeFormat(undefined, options);
-    return (_u, splits) => splits.map((value) => value == null ? null : formatter.format(new Date(value * 1_000)));
+    // Guard NaN/non-finite splits: `Intl.DateTimeFormat.format(new Date(NaN))`
+    // throws RangeError ("Invalid time value") per ECMA-262, which would break
+    // uPlot's draw. `value == null` alone doesn't cover a non-finite tick.
+    return (_u, splits) =>
+      splits.map((value) =>
+        value == null || !Number.isFinite(value) ? null : formatter.format(new Date(value * 1_000)),
+      );
   }
   const digits = fmt ? Math.max(0, Math.min(20, Math.round(fmt.digits))) : 2;
   if (mode === "sci") {
@@ -1003,12 +1009,17 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (args.axisBox) {
     plugins.push(axisBoxPlugin(inkDimColor));
   }
+  // View history is pushed BEFORE wheel-zoom so its `wheel` listener on `u.over`
+  // is registered first and therefore fires first: at the event target,
+  // listeners run in registration order. It must capture the PRE-zoom bounds
+  // as the "before" snapshot; if wheel-zoom ran first it would already have
+  // mutated the scale, so Alt+Left restored a range one wheel-tick off.
+  if (args.onViewChange) plugins.push(viewHistoryPlugin(args.onViewChange));
   // Wheel-to-zoom is independent of the active tool (it's a navigation aid, not a
   // drag gesture), so it composes with any tool when the pref is on.
   if (args.wheelZoom) {
     plugins.push(wheelZoomPlugin());
   }
-  if (args.onViewChange) plugins.push(viewHistoryPlugin(args.onViewChange));
   // Peak wizard click-on-plot marker editing (item 5): also tool-independent —
   // wizard-scoped, not toolbar-tool-scoped (see BuildOptsArgs.peakWizardEdit).
   if (args.peakWizardEdit) {

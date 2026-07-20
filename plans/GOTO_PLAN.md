@@ -79,10 +79,13 @@ DREAM fit → job submit → GET-poll progress → posterior + corner plot.
 - **Q4 3-D:** rotatable 3-D used for real work in the past year, or is
   2-D map + line cuts + static 3-D export enough? (Decides the WebGL
   deferral gate, ORIGIN_GAP #22.)
-- **Q6 Worksheet reshape:** would you actually miss stack/unstack
-  (wide↔long), split-by-values, or join-by-key?
-- **Q7 Date-time axes:** ever plot against real clock time (long
-  PPMS/MPMS runs), or always elapsed/derived quantities?
+- ~~**Q6 Worksheet reshape:**~~ **DECIDED YES** (2026-07-19) — shipped as the
+  worksheet reshape family (transpose / stack / unstack-pivot / join), Codex
+  PR #67, owner-approved during the stack review. See GUI_INTERACTION_PLAN
+  Completed #18.
+- ~~**Q7 Date-time axes:**~~ **DECIDED YES** (2026-07-19) — shipped as date/time
+  import + Date/Time/Date+time X-axis modes, Codex PR #68, owner-approved.
+  See GUI_INTERACTION_PLAN Completed #19.
 - **Q8 Signal processing:** any real use of wavelets / Hilbert / STFT /
   deconvolution? If no → declared non-goal.
 - **Q9 Switch-trigger project:** pick the project + start date (protocol

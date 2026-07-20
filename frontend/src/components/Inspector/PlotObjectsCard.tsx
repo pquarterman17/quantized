@@ -3,7 +3,7 @@
 // is intentionally NON-DESTRUCTIVE visibility (a curve is a dataset channel,
 // not an owned copy of data); graphic objects expose real duplicate/delete.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   annotationKey,
@@ -53,7 +53,21 @@ export default function PlotObjectsCard() {
   const editPlotObjects = useApp((s) => s.editPlotObjects);
   const setStatus = useApp((s) => s.setStatus);
 
+  // Sync the checkbox working-set to a CANVAS single-selection (click an
+  // object on the plot -> its group expands here). This must fire ONLY when
+  // the canvas selection id actually changes, NOT whenever the annotations/
+  // shapes arrays mutate: a bulk align/style edit changes those array refs,
+  // and re-running the sync then collapsed a multi-selection the user had
+  // built via checkboxes back down to the single canvas anchor — silently
+  // dropping members from the next bulk command. The ref gate is what stops
+  // that; annotations/shapes stay in deps only so the group lookup reads
+  // current data on the runs that DO fire.
+  const lastCanvasSel = useRef<{ a: string | null; s: string | null }>({ a: null, s: null });
   useEffect(() => {
+    if (lastCanvasSel.current.a === selectedAnnotationId && lastCanvasSel.current.s === selectedShapeId) {
+      return;
+    }
+    lastCanvasSel.current = { a: selectedAnnotationId, s: selectedShapeId };
     const a = annotations.find((item) => item.id === selectedAnnotationId);
     const shape = shapes.find((item) => item.id === selectedShapeId);
     const groupId = a?.groupId ?? shape?.groupId;
@@ -134,7 +148,11 @@ export default function PlotObjectsCard() {
     const annotationPatches: Record<string, Partial<Omit<Annotation, "id">>> = {};
     const shapePatches: Record<string, Partial<Omit<Shape, "id">>> = {};
     for (const a of annotations) {
-      if (selection.has(annotationKey(a.id))) {
+      // Recolor an annotation's text box ONLY if it already HAS one. An
+      // annotation's only strokeable geometry is its `frame` (the MAIN #27
+      // text box); patching `frame` on a frameless annotation would spawn a
+      // visible box it never had — recolor existing geometry, never add new.
+      if (selection.has(annotationKey(a.id)) && a.frame) {
         annotationPatches[a.id] = { frame: { ...a.frame, stroke: sharedColor, opacity: sharedOpacity } };
       }
     }
@@ -175,7 +193,10 @@ export default function PlotObjectsCard() {
         </div>
       )}
 
-      <div className="qz-meta-row"><span className="qz-k">Axes</span><span className="qz-v">X · Y{y2Keys?.length ? " · Y2" : ""}</span></div>
+      {/* "On axes" not bare "Axes" — the latter collides with the Axes card's
+          own title in the same Inspector (confusing to read, and it made an
+          exact-text locator ambiguous). */}
+      <div className="qz-meta-row"><span className="qz-k">On axes</span><span className="qz-v">X · Y{y2Keys?.length ? " · Y2" : ""}</span></div>
       <div className="qz-meta-row" style={{ display: "flex", alignItems: "center" }}>
         <button className="qzk-tool-btn" aria-pressed={showLegend} onClick={() => setShowLegend(!showLegend)}>Legend</button>
         <span style={{ marginLeft: "auto", color: "var(--text-faint)" }}>{showLegend ? "visible" : "hidden"}</span>

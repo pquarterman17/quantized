@@ -10,7 +10,7 @@
 // "Cycle X/Y tick format" (appCommands.ts) steps through all four (X/Y only).
 
 import type { AxisFormat, TickMode } from "../../lib/types";
-import { useApp } from "../../store/useApp";
+import { useActiveDataset, useApp } from "../../store/useApp";
 import { Checkbox, NumberField, SegmentedControl } from "../primitives";
 
 const MODES: { value: TickMode; label: string }[] = [
@@ -76,10 +76,19 @@ export default function TickFormat() {
 
   const hasY2 = (y2Keys?.length ?? 0) > 0;
 
+  // Offer the Date/Time X-axis modes ONLY when the active dataset's X column
+  // was recognized as timestamps on import (metadata.time_is_datetime). A date
+  // format applied to a physics X-axis produces out-of-range epochs that used
+  // to crash the export; gating it here is the primary fix (the formatter also
+  // degrades safely as a backstop). Stays available if a saved spec already
+  // selected a date mode, so it can be switched back.
+  const active = useActiveDataset();
+  const xIsDate = active?.data.metadata?.time_is_datetime === true || DATE_MODES.has(xFmt.mode);
+
   return (
     <div style={{ marginTop: 8 }}>
       <span className="qzk-field-lbl">Tick format</span>
-      {row("X", xFmt, setXFmt, true)}
+      {row("X", xFmt, setXFmt, xIsDate)}
       {row("Y", yFmt, setYFmt)}
       {hasY2 && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>

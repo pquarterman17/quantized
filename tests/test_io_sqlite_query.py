@@ -48,9 +48,27 @@ def test_query_sqlite_rejects_non_select_statements(database: Path, query: str) 
         query_sqlite(database, query)
 
 
-def test_query_sqlite_authorizer_blocks_write_hidden_inside_cte(database: Path) -> None:
+@pytest.mark.parametrize(
+    "query",
+    [
+        # SQLite's grammar lets a WITH clause PREFIX a DML statement, so these
+        # pass the first-token "select or with" gate as valid SQL. The gate is
+        # therefore decorative; the AUTHORIZER is the real enforcement. Earlier
+        # this test used `WITH x AS (DELETE ...)` which is a syntax ERROR — it
+        # passed because ANY sqlite3.Error matched, so it never actually
+        # exercised a valid write bypass. These are the real thing.
+        "WITH z(n) AS (SELECT 1) DELETE FROM measurement",
+        "WITH z(n) AS (SELECT 1) UPDATE measurement SET moment = 0",
+        "WITH z(n) AS (SELECT 99) INSERT INTO measurement(sample, field, moment)"
+        " SELECT 'z', n, n FROM z",
+    ],
+)
+def test_query_sqlite_authorizer_blocks_with_prefixed_write(database: Path, query: str) -> None:
     with pytest.raises(ValueError, match="SQLite query failed"):
-        query_sqlite(
-            database,
-            "WITH changed AS (DELETE FROM measurement RETURNING field) SELECT * FROM changed",
-        )
+        query_sqlite(database, query)
+    # And the row count is unchanged — the write really did not land.
+    check = sqlite3.connect(database)
+    try:
+        assert check.execute("SELECT count(*) FROM measurement").fetchone()[0] == 3
+    finally:
+        check.close()

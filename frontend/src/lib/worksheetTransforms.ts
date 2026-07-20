@@ -102,6 +102,13 @@ export function unstackWorksheet(
   if (categoryOrder.length > 2_000) {
     throw new Error("Unstack would create more than 2,000 output columns; reduce category levels first");
   }
+  // The category count caps columns, but a high-cardinality KEY column would
+  // still produce an unbounded number of rows — cap total output cells too
+  // (consistent with stack's 5M limit) so the "refuses transforms likely to
+  // overwhelm the UI" contract holds on the row axis as well.
+  if (keyOrder.length * categoryOrder.length > 5_000_000) {
+    throw new Error("Unstack would create more than 5,000,000 cells; reduce key or category levels first");
+  }
   return {
     time: keyOrder,
     values: keyOrder.map((key) => categoryOrder.map((category) => pick(cells.get(`${key}\u0000${category}`) ?? []))),
@@ -112,7 +119,10 @@ export function unstackWorksheet(
 }
 
 /** Exact numeric key join. Duplicate keys retain their first row, making the
- * operation deterministic and preventing an accidental many-to-many explosion. */
+ * operation deterministic and preventing an accidental many-to-many explosion.
+ * Rows whose join-column value is not finite (NaN/blank) are excluded on that
+ * side — a non-finite key cannot match anything — so a `left` join keeps every
+ * left row that HAS a finite key, not literally every left row. */
 export function joinWorksheets(
   left: DataStruct,
   right: DataStruct,
@@ -120,6 +130,13 @@ export function joinWorksheets(
   rightKey: number,
   mode: JoinMode = "inner",
 ): DataStruct {
+  // Cheap upper-bound guard, before building any maps: a join's output can
+  // never exceed left + right rows (full outer with disjoint keys). Refusing
+  // on that bound keeps the "won't overwhelm the UI" contract without paying
+  // to materialize a giant result first.
+  if (left.time.length + right.time.length > 5_000_000) {
+    throw new Error("Join would create more than 5,000,000 rows; filter or subset the inputs first");
+  }
   const leftKeys = column(left, leftKey);
   const rightKeys = column(right, rightKey);
   const leftMap = new Map<string, number>();

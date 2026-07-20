@@ -62,7 +62,7 @@ export default function SqliteQueryDialog() {
           <label className="qzk-field-lbl">Maximum rows</label>
           <NumberField value={String(maxRows)} width={90} onChange={(value) => setMaxRows(Math.max(1, Math.min(1_000_000, Number(value) || 1)))} />
         </div>
-        <div className="qz-hint">Read-only connection · SELECT/CTE only · 30-second hard timeout · source database is never modified.</div>
+        <div className="qz-hint">Read-only connection · SELECT/CTE only · 5-second hard timeout · path confined to allowed roots · source database is never modified.</div>
         {error && <div role="alert" style={{ color: "var(--danger)" }}>{error}</div>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <Button onClick={() => setOpen(false)}>Cancel</Button>

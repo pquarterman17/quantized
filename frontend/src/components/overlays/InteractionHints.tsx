@@ -29,10 +29,23 @@ export default function InteractionHints() {
   };
 
   return (
+    // pointer-events:none so this first-run card NEVER blocks interaction with
+    // the Inspector cards it overlaps in the lower-right — it's a hint, not a
+    // modal. Only the "Got it" button re-enables pointer events. (This also
+    // fixed 10 e2e tests: a fresh Playwright session has no `seen` flag, so
+    // the card rendered over the Annotations card and swallowed their clicks.)
     <aside
       className="qzk-glass"
       aria-label="Interaction hints"
-      style={{ position: "fixed", right: 16, bottom: 34, width: 310, zIndex: 1200, padding: 12 }}
+      style={{
+        position: "fixed",
+        right: 16,
+        bottom: 34,
+        width: 310,
+        zIndex: 1200,
+        padding: 12,
+        pointerEvents: "none",
+      }}
     >
       <strong>Three fast ways to work</strong>
       <ul style={{ margin: "8px 0 10px", paddingLeft: 20, lineHeight: 1.55 }}>
@@ -42,7 +55,9 @@ export default function InteractionHints() {
       </ul>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span className="qz-hint">Help ▸ Show interaction hints reopens this.</span>
-        <Button size="sm" onClick={dismiss}>Got it</Button>
+        <Button size="sm" onClick={dismiss} style={{ pointerEvents: "auto" }}>
+          Got it
+        </Button>
       </div>
     </aside>
   );

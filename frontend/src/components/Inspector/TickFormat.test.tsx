@@ -51,11 +51,42 @@ describe("TickFormat", () => {
     expect(useApp.getState().yFmt.mode).toBe("auto"); // untouched
   });
 
-  it("offers compact UTC date/time modes for X without showing a digits field", () => {
+  const withDateColumn = () =>
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "run",
+          data: { time: [0, 1], values: [[1], [2]], labels: ["y"], units: [""], metadata: { time_is_datetime: true } },
+        },
+      ],
+      activeId: "d1",
+    });
+
+  it("offers compact UTC date/time modes for X (date-recognized column) without a digits field", () => {
+    withDateColumn();
     const { getByLabelText, container } = render(<TickFormat />);
     fireEvent.change(getByLabelText("X date/time format"), { target: { value: "datetime" } });
     expect(useApp.getState().xFmt).toEqual({ mode: "datetime", digits: 2 });
     expect(container.querySelectorAll('input[type="number"]')).toHaveLength(0);
+  });
+
+  it("HIDES the date/time control when the X column is not a recognized timestamp", () => {
+    // #68 gate: a date format applied to a physics axis produced out-of-range
+    // epochs that crashed export — so the control is only offered for
+    // date-recognized columns.
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "run",
+          data: { time: [0, 1], values: [[1], [2]], labels: ["y"], units: [""], metadata: {} },
+        },
+      ],
+      activeId: "d1",
+    });
+    const { queryByLabelText } = render(<TickFormat />);
+    expect(queryByLabelText("X date/time format")).toBeNull();
   });
 
   it("editing the digits field in Eng mode updates the mantissa digit count", () => {

@@ -114,11 +114,13 @@ feature checklist.
 
 1. **Undoable mouse-driven visual edits** — every committed visual/layout/
    organization edit becomes one named, coalesced history transaction.
-   - [x] Decide the undo **scopes** first — OWNER DECISION captured in the Sol
-         interview and reconciled 2026-07-19: one current-session EDIT history
-         covering data + visual/layout + organization edits; zoom/pan/autoscale
-         navigation uses a separate Back/Forward VIEW history. Undo history does
-         not persist across restart.
+   - [x] Decide the undo **scopes** first — Owner APPROVED the shipped model on
+         2026-07-19 during the Codex-stack adversarial review (the 2026-07-12
+         Sol audit pointed this direction but did not settle the flat-vs-scoped
+         gate; the accepted model is one flat current-session EDIT history
+         covering data + visual/layout + organization edits, with a separate
+         Back/Forward VIEW history for zoom/pan/autoscale). Undo does not
+         persist across restart.
    - [x] Coalesce a drag into ONE step (`Move annotation`, not 80 pointer moves).
    - [x] Cover: axis-title drag/format, annotation/shape move/resize/delete, curve
          colour/marker/width/order/visibility/Y-axis, ref-line move, window
@@ -375,9 +377,12 @@ feature checklist.
             every command filed, vocabulary restricted, non-vacuous floor.
       - [x] Cross-menu OWNERSHIP move (Plot owns builders/plot-types/layers/
             themes/templates/export; Data owns worksheet/row-col/filter/
-            reshape/merge/correction/metadata). Completed deliberately after
-            sectioning: graph/figure/page builders, export, and composite-panel
-            commands moved to Plot; Data now stays focused on data operations.
+            reshape/merge/correction/metadata). This REVERSES the earlier
+            "deliberately NOT done — breaks muscle memory, deserves a deliberate
+            call" deferral; the owner approved the move on 2026-07-19 during the
+            Codex-stack review. Graph/figure/page builders, export, and
+            composite-panel commands moved to Plot; Data now stays focused on
+            data operations.
       - [x] Fill out Help — **ALL FIVE sub-items DONE 2026-07-19**
             (`f5e9162`, `315d31a`, `9bc4daa`, `6af84e9`). A new searchable Help hub (Help ▸ Help topics…, also in ⌘K)
             with tabs: **Topics** (fuzzy search over a catalog of all 17
@@ -444,7 +449,7 @@ feature checklist.
 - ~~**Undo scopes (#1)**~~ **RESOLVED** — one current-session edit history for
   data + visual/layout + organization, with separate Back/Forward view history
   for zoom/pan/autoscale. Do not persist either history across restart. Owner
-  accepted this interaction model in the Sol interview; recorded 2026-07-19.
+  approved this model on 2026-07-19 during the Codex-stack adversarial review.
 - ~~**Baseline: frontend bind vs. backend DAG (#5)**~~ **RESOLVED** — the
   established DAG remains authoritative for its default time/value-0 channel;
   arbitrary plotted X/Y baseline subtraction creates a derived dataset carrying
@@ -461,15 +466,17 @@ feature checklist.
 
 ## Completed
 
-- ~~**#16 database/query connector foundation**~~ (2026-07-19, ChatGPT-Sol,
-  stacked after date/time axes) — Data ▸ Query SQLite database opens a movable
+- ~~**#20 database/query connector foundation**~~ (2026-07-19, Codex PR #69,
+  owner-approved during the stack review — was the MAIN "database connectors"
+  deferral; stacked after date/time axes) — Data ▸ Query SQLite database opens a movable
   no-code query window. The backend opens the file read-only, accepts one SELECT
   or CTE, denies mutation/attach/schema actions through SQLite's authorizer,
   enforces row and execution limits, and returns the canonical DataStruct.
   Numeric columns plot normally; text columns remain visible/searchable in the
   worksheet; the original database is never modified.
 
-- ~~**#16 date/time data and axes**~~ (2026-07-19, ChatGPT-Sol, stacked after
+- ~~**#19 date/time data and axes**~~ (2026-07-19, Codex PR #68, owner-approved
+  during the stack review — resolves GOTO_PLAN Q7; stacked after
   worksheet reshape) — generic delimited import recognizes a date/time X column
   only when at least 80% of an otherwise nonnumeric column parses, records UTC
   metadata, and leaves ordinary numeric imports byte-compatible. The Inspector
@@ -477,7 +484,8 @@ feature checklist.
   scale while matplotlib export formats the same epoch-second values. Modes
   round-trip through workspaces and saved plot specifications.
 
-- ~~**#16 worksheet reshape family**~~ (2026-07-19, ChatGPT-Sol, stacked after
+- ~~**#18 worksheet reshape family**~~ (2026-07-19, Codex PR #67, owner-approved
+  during the stack review — resolves GOTO_PLAN Q6; stacked after
   Plot Objects) — Data menu commands create derived datasets for transpose,
   wide-to-long stack, long-to-wide pivot/unstack, and exact numeric key joins.
   Source data is untouched; transform provenance is stored; duplicate pivot

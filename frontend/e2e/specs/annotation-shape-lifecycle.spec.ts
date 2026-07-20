@@ -229,11 +229,14 @@ test.describe("Shape lifecycle @core", () => {
     const plotOver = page.locator(".qzk-stage .u-over");
     await expect(plotOver).toBeVisible();
 
-    // ── Arm the rectangle tool from the Annotate group's shape-dock flyout
+    // ── Arm the rectangle tool from the Annotate group's shape-dock flyout.
+    //    The shape dock is now a SPLIT button: the main button repeats the
+    //    last-used tool (its aria-label is dynamic, "Draw Rectangle" etc.),
+    //    and the arrow button "Choose drawing tool" opens the picker flyout
     //    (lib/plotToolbarDefs.ts's SHAPE_TOOLS — glyph + label, e.g.
     //    "▭  Rectangle"; the flyout item carries a `checked` state, so it
     //    renders role="menuitemcheckbox", not "menuitem"). ─────────────────
-    await page.getByRole("button", { name: "Draw Shape" }).click();
+    await page.getByRole("button", { name: "Choose drawing tool" }).click();
     await page.getByRole("menuitemcheckbox", { name: /Rectangle/ }).click();
     await expect
       .poll(() =>

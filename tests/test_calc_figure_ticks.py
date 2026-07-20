@@ -310,3 +310,21 @@ def test_digits_clamped_at_extremes_do_not_crash(digits: int) -> None:
         assert label  # renders something, doesn't raise
     finally:
         plt.close(fig)
+
+
+@pytest.mark.parametrize("bad", [2.5e11, -6e10, float("nan")])
+def test_date_mode_degrades_to_blank_on_out_of_range_epoch(bad: float) -> None:
+    """A date tick format applied to a non-time axis produces out-of-range
+    epochs; `datetime.fromtimestamp` raises OSError/OverflowError/ValueError
+    there, which used to escape the routes' narrow `except (ValueError,
+    KeyError, IndexError)` as an uncaught HTTP 500. The formatter now degrades
+    to a blank tick instead of crashing the export.
+    """
+    fig, ax = plt.subplots()
+    try:
+        ax.set_xticks([bad])
+        apply_tick_formats(ax, {"mode": "date", "digits": 2}, None)
+        fig.canvas.draw()  # must not raise
+        assert [t.get_text() for t in ax.get_xticklabels()] == [""]
+    finally:
+        plt.close(fig)

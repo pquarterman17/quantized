@@ -172,7 +172,20 @@ class _AxisTickFormatter(Formatter):
 
     def __call__(self, x: float, pos: int | None = None) -> str:
         if self.mode in ("date", "time", "datetime"):
-            stamp = datetime.fromtimestamp(x, tz=UTC)
+            # `datetime.fromtimestamp` raises OSError/OverflowError for an
+            # out-of-range epoch and ValueError for NaN. That happens when a
+            # date tick format is applied to a NON-time axis (huge physics
+            # values) -- the UI now gates against that (TickFormat only offers
+            # date modes on date-recognized columns), but a hand-authored spec
+            # or a stray non-finite tick could still reach here, and this
+            # Formatter runs deep enough that the exception escaped the routes'
+            # `except (ValueError, KeyError, IndexError)` as an OSError -> HTTP
+            # 500 (the narrow-except class fixed repo-wide 2026-07-19). Degrade
+            # to a blank tick instead of crashing the whole export.
+            try:
+                stamp = datetime.fromtimestamp(x, tz=UTC)
+            except (OSError, OverflowError, ValueError):
+                return ""
             if self.mode == "date":
                 return stamp.strftime("%Y-%m-%d")
             if self.mode == "time":

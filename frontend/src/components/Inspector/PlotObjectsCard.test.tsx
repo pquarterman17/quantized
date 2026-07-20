@@ -77,12 +77,57 @@ describe("PlotObjectsCard", () => {
     fireEvent.change(screen.getByLabelText("Shared color"), { target: { value: "#ff0000" } });
     fireEvent.change(screen.getByLabelText("Shared opacity"), { target: { value: "0.5" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
-    expect(useApp.getState().annotations[0].frame).toMatchObject({ stroke: "#ff0000", opacity: 0.5 });
+    // #66 fix: a frameless annotation is NOT given a text box by "shared style"
+    // (recolor existing geometry, never add new). Only the shape recolors.
+    expect(useApp.getState().annotations[0].frame).toBeUndefined();
     expect(useApp.getState().shapes[0]).toMatchObject({ stroke: "#ff0000", opacity: 0.5 });
 
     useApp.getState().undo();
     expect(useApp.getState().shapes[0].stroke).toBeUndefined();
     expect(useApp.getState().annotations[0].groupId).toBeTruthy();
+  });
+
+  it("recolors an annotation that ALREADY has a frame (shared style)", () => {
+    useApp.setState({
+      annotations: [{ id: "a1", x: 0, y: 1, text: "peak", frame: { stroke: "#000", opacity: 1 } }],
+      shapes: [],
+    });
+    render(<PlotObjectsCard />);
+    fireEvent.click(screen.getByText("Plot objects"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select annotation peak" }));
+    fireEvent.change(screen.getByLabelText("Shared color"), { target: { value: "#00ff00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(useApp.getState().annotations[0].frame).toMatchObject({ stroke: "#00ff00" });
+  });
+
+  it("a multi-selection survives a bulk edit even with a canvas anchor set", () => {
+    // Regression for the collapse bug: the sync effect used to re-fire on the
+    // annotations/shapes array change caused by a bulk edit and reset the
+    // working set to just the canvas-selected object, silently dropping the
+    // other member from the NEXT bulk command.
+    useApp.setState({
+      annotations: [{ id: "a1", x: 0, y: 5, text: "peak" }],
+      shapes: [{ id: "s1", kind: "line", x1: 2, y1: 0, x2: 3, y2: 1 }],
+      selectedAnnotationId: "a1", // a canvas anchor exists
+      selectedShapeId: null,
+    });
+    render(<PlotObjectsCard />);
+    fireEvent.click(screen.getByText("Plot objects"));
+    // The canvas anchor a1 is already selected on mount; ADD the shape to make
+    // a 2-object working set (the real scenario the bug hit).
+    expect(screen.getByRole("checkbox", { name: "Select annotation peak" })).toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select line shape" }));
+
+    // First bulk command (mutates the arrays → old code collapsed the
+    // selection to just the canvas anchor a1 right here).
+    fireEvent.click(screen.getByRole("button", { name: "Left" }));
+    // The working set must SURVIVE — both checkboxes still checked. With the
+    // old bug, the shape's checkbox would be cleared (selection = {a1} only).
+    expect(screen.getByRole("checkbox", { name: "Select annotation peak" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Select line shape" })).toBeChecked();
+    // And a second bulk command still records a step (still has ≥2 objects).
+    fireEvent.click(screen.getByRole("button", { name: "Top" }));
+    expect(useApp.getState().history.at(-1)?.label).toBe("align plot objects");
   });
 
   it("selecting one grouped object from the canvas selects its whole group", async () => {
