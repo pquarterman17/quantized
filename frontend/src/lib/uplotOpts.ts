@@ -263,13 +263,21 @@ export function tickFormatter(fmt?: AxisFormat): TickValues {
         ? { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: "UTC" }
         : { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "UTC" };
     const formatter = new Intl.DateTimeFormat(undefined, options);
-    // Guard NaN/non-finite splits: `Intl.DateTimeFormat.format(new Date(NaN))`
-    // throws RangeError ("Invalid time value") per ECMA-262, which would break
-    // uPlot's draw. `value == null` alone doesn't cover a non-finite tick.
+    // `Intl.DateTimeFormat.format(new Date(x))` throws RangeError ("Invalid
+    // time value") for NaN AND for any FINITE value beyond the ECMA-262 Date
+    // range (±8.64e15 ms, i.e. |seconds| > 8.64e12) — which a date format
+    // applied to a physics/epoch-ms axis easily exceeds. uPlot has no error
+    // boundary, so an uncaught throw here breaks the whole draw. Degrade to a
+    // blank tick, mirroring the backend's `_AxisTickFormatter` exactly.
     return (_u, splits) =>
-      splits.map((value) =>
-        value == null || !Number.isFinite(value) ? null : formatter.format(new Date(value * 1_000)),
-      );
+      splits.map((value) => {
+        if (value == null || !Number.isFinite(value)) return null;
+        try {
+          return formatter.format(new Date(value * 1_000));
+        } catch {
+          return null;
+        }
+      });
   }
   const digits = fmt ? Math.max(0, Math.min(20, Math.round(fmt.digits))) : 2;
   if (mode === "sci") {

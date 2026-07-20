@@ -58,6 +58,38 @@ describe("worksheet transforms", () => {
 
   // The safety claim ("refuses transforms likely to overwhelm the UI") has to
   // hold on the ROW axis, not just columns — these were the gaps.
+  it("caps transpose on BOTH output axes, not just rows", () => {
+    // rows (2000, at the column cap) x channels (4096) = 8.19M cells > 5M.
+    const wideDetector: DataStruct = {
+      time: Array.from({ length: 2000 }, (_, i) => i),
+      values: Array.from({ length: 2000 }, () => Array.from({ length: 4096 }, () => 1)),
+      labels: Array.from({ length: 4096 }, (_, i) => `ch${i}`),
+      units: Array.from({ length: 4096 }, () => ""),
+      metadata: {},
+    };
+    expect(() => transposeWorksheet(wideDetector)).toThrow(/5,000,000 cells/);
+  });
+
+  it("strips stale date/x-axis metadata so a reshape can't re-open the date gate", () => {
+    // A datetime dataset transposed has a channel-index X — it is NOT a date
+    // axis, so time_is_datetime must not survive (it would let TickFormat offer
+    // date formatting on non-date data, and feed the date formatter huge
+    // values).
+    const dated: DataStruct = {
+      time: [1e9, 2e9],
+      values: [[1], [2]],
+      labels: ["y"],
+      units: [""],
+      metadata: { time_is_datetime: true, time_timezone: "UTC", x_column_name: "t", sample: "S1" },
+    };
+    const out = transposeWorksheet(dated);
+    expect(out.metadata.time_is_datetime).toBeUndefined();
+    expect(out.metadata.time_timezone).toBeUndefined();
+    expect(out.metadata.x_column_name).toBeUndefined();
+    // Non-axis provenance is preserved.
+    expect(out.metadata.sample).toBe("S1");
+  });
+
   it("caps unstack on total output cells, not just columns", () => {
     // 2510 distinct keys x 2000 categories = 5.02M cells > 5M — must refuse,
     // even though neither axis alone trips the 2,000-column cap. Small input.

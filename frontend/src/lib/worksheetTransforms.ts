@@ -11,7 +11,18 @@ function finiteKey(value: number): string | null {
 }
 
 function provenance(ds: DataStruct, operation: string): Record<string, unknown> {
-  return { ...ds.metadata, worksheet_transform: operation };
+  // Every reshape REPLACES the X axis (transpose -> channel index;
+  // stack/unstack/join -> a different key column), so X-axis-identity metadata
+  // carried from the source is stale. Dropping `time_is_datetime` in
+  // particular stops the Inspector's date-format gate (TickFormat keys on it)
+  // from re-opening on a provably-non-date axis — which would also feed the
+  // date tick formatter out-of-range values. Fails closed: a reshaped datetime
+  // dataset just won't offer date formatting until re-imported.
+  const rest: Record<string, unknown> = { ...ds.metadata };
+  for (const k of ["time_is_datetime", "time_timezone", "x_column_name", "x_column_unit"]) {
+    delete rest[k];
+  }
+  return { ...rest, worksheet_transform: operation };
 }
 
 /** Transpose the numeric Y matrix. The new X is the original channel index;
@@ -21,6 +32,12 @@ export function transposeWorksheet(ds: DataStruct): DataStruct {
   const rows = ds.values.length;
   const channels = ds.labels.length;
   if (rows > 2_000) throw new Error("Transpose would create more than 2,000 output columns; filter or subset rows first");
+  // Cap the OTHER output axis too: the new time length is `channels`, which is
+  // uncapped on its own (a 4096-channel detector scan × 2000 rows = 8.2M
+  // cells). Match the 5M-cell budget the sibling transforms enforce.
+  if (rows * channels > 5_000_000) {
+    throw new Error("Transpose would create more than 5,000,000 cells; filter or subset the source first");
+  }
   return {
     time: Array.from({ length: channels }, (_, i) => i),
     values: Array.from({ length: channels }, (_, channel) =>

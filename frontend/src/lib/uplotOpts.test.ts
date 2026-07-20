@@ -584,6 +584,15 @@ describe("buildOpts defaultTrace", () => {
       expect(date).toContain("2026");
       expect(time).toMatch(/12.*34.*56/);
     });
+
+    it("date mode degrades to null (never throws) on a finite out-of-Date-range value", () => {
+      // A date format on a physics/epoch-ms axis: |sec| > 8.64e12 pushes
+      // value*1000 past the ECMA-262 Date range, and Intl.format throws
+      // RangeError. uPlot has no error boundary, so this must not throw.
+      const fmt = tickFormatter({ mode: "date", digits: 2 });
+      expect(() => fmt(null as never, [1e13, -1e13, NaN, Infinity], 0, 0, 0)).not.toThrow();
+      expect(fmt(null as never, [1e13, NaN], 0, 0, 0)).toEqual([null, null]);
+    });
   });
 
   it("categoricalTickFormatter maps in-range integer splits to labels, blanks the rest", () => {
