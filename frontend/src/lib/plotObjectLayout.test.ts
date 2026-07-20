@@ -29,6 +29,25 @@ describe("layoutPlotObjects", () => {
     expect(result.annotations.a3.x).toBe(9);
   });
 
+  it("keeps page-anchored objects inside [0,1] when centring mixed widths", () => {
+    // hcenter targets the mean of the CENTRES, ignoring extent, so the wide
+    // rect's right edge was pushed to 1.1625 — off-canvas, and silently
+    // re-clamped by sanitizeShapes on the next .dwk round-trip.
+    const page: Shape[] = [
+      { id: "wide", kind: "rect", anchor: "page", x1: 0, x2: 0.9, y1: 0, y2: 0.2 },
+      { id: "narrow", kind: "rect", anchor: "page", x1: 0.95, x2: 1, y1: 0.5, y2: 0.6 },
+    ];
+    const result = layoutPlotObjects([], page, new Set([shapeKey("wide"), shapeKey("narrow")]), "hcenter");
+    for (const patch of Object.values(result.shapes)) {
+      for (const v of [patch.x1, patch.x2, patch.y1, patch.y2]) {
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThanOrEqual(1);
+      }
+    }
+    // Clamped by DELTA, so the wide rect keeps its 0.9 width.
+    expect((result.shapes.wide.x2 as number) - (result.shapes.wide.x1 as number)).toBeCloseTo(0.9, 10);
+  });
+
   it("rejects mixed coordinate spaces and fewer than three distribution targets", () => {
     const page = [{ ...annotations[0], anchor: "page" as const }];
     expect(layoutPlotObjects(page, shapes, new Set([annotationKey("a1"), shapeKey("s1")]), "top").error)

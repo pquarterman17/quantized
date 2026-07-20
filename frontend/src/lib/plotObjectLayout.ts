@@ -69,6 +69,20 @@ function translate(
   shapes: readonly Shape[],
   out: PlotObjectPatches,
 ): void {
+  // Page-anchored coordinates are [0,1] canvas fractions, and EVERY other
+  // write path enforces that range (clampPageXY, canvasPxToPageXY,
+  // sanitizeShapes/sanitizeAnnotations). The edge commands are safe by
+  // construction — they target one of the selection's own valid edges — but
+  // hcenter/vcenter/distribute align by object CENTRES and ignore each
+  // object's extent, so a mixed-width selection could push a wide object's
+  // far edge past 1: off-canvas now, and silently re-clamped on the next
+  // .dwk round-trip (a second, unexplained jump). Clamp the DELTA rather
+  // than the endpoints so the object slides back into range at its original
+  // size instead of being squashed.
+  if (item.anchor === "page") {
+    dx = Math.min(Math.max(dx, -item.left), 1 - item.right);
+    dy = Math.min(Math.max(dy, -item.top), 1 - item.bottom);
+  }
   if (item.type === "annotation") {
     const a = annotations.find((candidate) => candidate.id === item.id)!;
     out.annotations[item.id] = { x: a.x + dx, y: a.y + dy };

@@ -248,6 +248,59 @@ function formatEng(v: number, digits: number, incr: number): string {
   return stripNegZero(`${sign}${mStr}e${exp >= 0 ? "+" : ""}${exp}`);
 }
 
+/** uPlot `tzDate` pinning calendar tick placement to UTC: return a Date whose
+ *  LOCAL accessors (which uPlot uses to find day/month/year boundaries) read
+ *  the UTC field values. `getTimezoneOffset` is evaluated at that instant, so
+ *  DST is handled per timestamp. */
+export function utcTzDate(ts: number): Date {
+  const at = new Date(ts * 1_000);
+  return new Date(at.getTime() + at.getTimezoneOffset() * 60_000);
+}
+
+const SECONDS_PER_DAY = 86_400;
+const SECONDS_PER_MINUTE = 60;
+const _dateFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** Pick the date/time resolution from the ACTUAL tick spacing, so a date axis
+ *  obeys the same "two different ticks can never share a label" guarantee the
+ *  numeric modes get by flooring `digits` at the increment.
+ *
+ *  A fixed template broke it in both directions: `date` over an hourly span
+ *  printed the same "Jan 01, 2026" on every tick, and `time` over a multi-day
+ *  span printed a wall clock that silently jumped between days. So widen when
+ *  the ticks are closer together than the template resolves, and add the
+ *  calendar date when they are further apart than a day. */
+function dateTickFormatter(
+  mode: "date" | "time" | "datetime",
+  incr: number,
+): Intl.DateTimeFormat {
+  const step = Number.isFinite(incr) && incr > 0 ? incr : 0;
+  const wantDate = mode !== "time" || step >= SECONDS_PER_DAY;
+  const wantClock = mode !== "date" || (step > 0 && step < SECONDS_PER_DAY);
+  // `time` keeps seconds by default (its historical shape); the others only
+  // add them once the ticks are closer together than a minute.
+  const wantSeconds = wantClock
+    && (mode === "time" ? step === 0 || step < SECONDS_PER_MINUTE : step > 0 && step < SECONDS_PER_MINUTE);
+  const key = `${wantDate}|${wantClock}|${wantSeconds}`;
+  const cached = _dateFormatters.get(key);
+  if (cached) return cached;
+  const options: Intl.DateTimeFormatOptions = { timeZone: "UTC" };
+  if (wantDate) {
+    options.year = "numeric";
+    options.month = "short";
+    options.day = "2-digit";
+  }
+  if (wantClock) {
+    options.hour = "2-digit";
+    options.minute = "2-digit";
+    options.hour12 = false;
+  }
+  if (wantSeconds) options.second = "2-digit";
+  const built = new Intl.DateTimeFormat(undefined, options);
+  _dateFormatters.set(key, built);
+  return built;
+}
+
 /** Build a uPlot axis `values` formatter for a tick mode. `auto` no longer
  *  defers to uPlot's own formatter (see `autoTickValues`'s doc for why);
  *  `fixed`/`sci`/`eng` each floor their configured `digits` at what the
@@ -257,20 +310,15 @@ export function tickFormatter(fmt?: AxisFormat): TickValues {
   const mode = fmt?.mode ?? "auto";
   if (mode === "auto") return autoTickValues;
   if (mode === "date" || mode === "time" || mode === "datetime") {
-    const options: Intl.DateTimeFormatOptions = mode === "date"
-      ? { year: "numeric", month: "short", day: "2-digit", timeZone: "UTC" }
-      : mode === "time"
-        ? { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: "UTC" }
-        : { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "UTC" };
-    const formatter = new Intl.DateTimeFormat(undefined, options);
     // `Intl.DateTimeFormat.format(new Date(x))` throws RangeError ("Invalid
     // time value") for NaN AND for any FINITE value beyond the ECMA-262 Date
     // range (±8.64e15 ms, i.e. |seconds| > 8.64e12) — which a date format
     // applied to a physics/epoch-ms axis easily exceeds. uPlot has no error
     // boundary, so an uncaught throw here breaks the whole draw. Degrade to a
     // blank tick, mirroring the backend's `_AxisTickFormatter` exactly.
-    return (_u, splits) =>
-      splits.map((value) => {
+    return (_u, splits, _axisIdx, _foundSpace, foundIncr) => {
+      const formatter = dateTickFormatter(mode, splitsIncrement(splits, foundIncr));
+      return splits.map((value) => {
         if (value == null || !Number.isFinite(value)) return null;
         try {
           return formatter.format(new Date(value * 1_000));
@@ -278,6 +326,7 @@ export function tickFormatter(fmt?: AxisFormat): TickValues {
           return null;
         }
       });
+    };
   }
   const digits = fmt ? Math.max(0, Math.min(20, Math.round(fmt.digits))) : 2;
   if (mode === "sci") {
@@ -1331,6 +1380,17 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     },
     plugins: plugins.map(compactPluginHooks),
     legend: { show: false },
+    // Setting `scales.x.time` engages uPlot's CALENDAR-aware tick placement,
+    // which snaps splits to day/month/year boundaries through `tzDate`. Left
+    // unset, uPlot defaults to `ts => new Date(ts * 1e3)` and reads it with
+    // LOCAL accessors — so ticks landed on local midnight while the labels
+    // above render `timeZone: "UTC"` (and the Inspector literally promises
+    // "(UTC)"). Placement and label must agree, or the same saved spec puts
+    // its date ticks in different places in different timezones. Shifting by
+    // the instant's own offset makes the local accessors read UTC fields —
+    // exact (it follows DST per timestamp) and far cheaper than uPlot.tzDate,
+    // which builds an Intl formatter per call.
+    ...(scales.x?.time ? { tzDate: utcTzDate } : {}),
     scales,
     axes,
     series: seriesArr,

@@ -161,6 +161,38 @@ def _format_eng(v: float, digits: int, incr: float) -> str:
     return _strip_neg_zero(f"{sign}{m_str}e{exp_str}")
 
 
+_SECONDS_PER_DAY = 86_400
+_SECONDS_PER_MINUTE = 60
+
+
+def _date_tick_pattern(mode: str, incr: float) -> str:
+    """Pick the ``strftime`` resolution from the ACTUAL tick spacing, so a
+    date axis obeys the same "two different ticks can never share a label"
+    guarantee the numeric modes get by flooring ``digits`` at the increment.
+
+    Mirrors the frontend's ``dateTickFormatter`` decision table exactly (the
+    two engines must agree, or an exported figure's date ticks read
+    differently from the interactive plot they were composed in). A fixed
+    template broke it both ways: ``date`` over an hourly span repeated one
+    label, and ``time`` over a multi-day span showed a wall clock that
+    silently jumped between days.
+    """
+    step = incr if math.isfinite(incr) and incr > 0 else 0.0
+    want_date = mode != "time" or step >= _SECONDS_PER_DAY
+    want_clock = mode != "date" or 0 < step < _SECONDS_PER_DAY
+    want_seconds = want_clock and (
+        (step == 0 or step < _SECONDS_PER_MINUTE)
+        if mode == "time"
+        else 0 < step < _SECONDS_PER_MINUTE
+    )
+    parts = []
+    if want_date:
+        parts.append("%Y-%m-%d")
+    if want_clock:
+        parts.append("%H:%M:%S" if want_seconds else "%H:%M")
+    return " ".join(parts) if parts else "%Y-%m-%d"
+
+
 class _AxisTickFormatter(Formatter):
     """A ``matplotlib.ticker.Formatter`` for one non-``auto`` ``AxisFormat``
     mode. See the module doc for why this is a ``Formatter`` subclass
@@ -171,6 +203,15 @@ class _AxisTickFormatter(Formatter):
         self.digits = max(0, min(20, _js_round(digits)))
 
     def __call__(self, x: float, pos: int | None = None) -> str:
+        # `self.axis` is typed as a union of matplotlib's real `Axis` and two
+        # internal placeholder types (`_DummyAxis`/`_AxisWrapper`) that don't
+        # declare `get_majorticklocs` -- getattr-with-default sidesteps the
+        # union-attr mismatch; a placeholder axis (never seen in practice,
+        # only used by matplotlib internals for detached artists) just skips
+        # the increment floor, same as the "no axis attached yet" case.
+        get_locs = getattr(self.axis, "get_majorticklocs", None)
+        locs = get_locs() if callable(get_locs) else ()
+        incr = _splits_increment(locs)
         if self.mode in ("date", "time", "datetime"):
             # `datetime.fromtimestamp` raises OSError/OverflowError for an
             # out-of-range epoch and ValueError for NaN. That happens when a
@@ -186,20 +227,7 @@ class _AxisTickFormatter(Formatter):
                 stamp = datetime.fromtimestamp(x, tz=UTC)
             except (OSError, OverflowError, ValueError):
                 return ""
-            if self.mode == "date":
-                return stamp.strftime("%Y-%m-%d")
-            if self.mode == "time":
-                return stamp.strftime("%H:%M:%S")
-            return stamp.strftime("%Y-%m-%d %H:%M")
-        # `self.axis` is typed as a union of matplotlib's real `Axis` and two
-        # internal placeholder types (`_DummyAxis`/`_AxisWrapper`) that don't
-        # declare `get_majorticklocs` -- getattr-with-default sidesteps the
-        # union-attr mismatch; a placeholder axis (never seen in practice,
-        # only used by matplotlib internals for detached artists) just skips
-        # the increment floor, same as the "no axis attached yet" case.
-        get_locs = getattr(self.axis, "get_majorticklocs", None)
-        locs = get_locs() if callable(get_locs) else ()
-        incr = _splits_increment(locs)
+            return stamp.strftime(_date_tick_pattern(self.mode, incr))
         if self.mode == "sci":
             return _format_sci(x, self.digits, incr)
         if self.mode == "eng":

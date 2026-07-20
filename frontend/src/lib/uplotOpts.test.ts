@@ -11,6 +11,7 @@ import {
   reciprocalTransform,
   resolvePlotBg,
   tickFormatter,
+  utcTzDate,
   xIsAscending,
 } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
@@ -592,6 +593,37 @@ describe("buildOpts defaultTrace", () => {
       const fmt = tickFormatter({ mode: "date", digits: 2 });
       expect(() => fmt(null as never, [1e13, -1e13, NaN, Infinity], 0, 0, 0)).not.toThrow();
       expect(fmt(null as never, [1e13, NaN], 0, 0, 0)).toEqual([null, null]);
+    });
+
+    it("date mode widens to a clock when ticks are closer together than a day", () => {
+      // A fixed day-resolution template printed the SAME label on every tick
+      // of an hourly-spaced axis — the exact "two ticks, one label" failure
+      // the numeric modes floor their digits to avoid.
+      const base = Date.UTC(2026, 0, 1, 0, 0, 0) / 1_000;
+      const hourly = [0, 1, 2, 3, 4, 5, 6].map((h) => base + h * 3_600);
+      const labels = tickFormatter({ mode: "date", digits: 2 })(null as never, hourly, 0, 0, 3_600);
+      expect(new Set(labels).size).toBe(hourly.length);
+    });
+
+    it("time mode adds the calendar date when ticks span more than a day", () => {
+      // Wall-clock-only labels made a multi-day axis look like it jumped
+      // backwards, with no indication which day each tick belonged to.
+      const base = Date.UTC(2026, 0, 1) / 1_000;
+      const daily = [0, 1, 2, 3].map((d) => base + d * 86_400);
+      const labels = tickFormatter({ mode: "time", digits: 2 })(null as never, daily, 0, 0, 86_400);
+      expect(new Set(labels).size).toBe(daily.length);
+      expect(String(labels[0])).toMatch(/2026/);
+    });
+
+    it("utcTzDate reads UTC fields through the local accessors uPlot uses", () => {
+      // uPlot finds day/month/year boundaries with LOCAL getters; pinning the
+      // shift keeps tick PLACEMENT in the same zone as the UTC labels.
+      const noon = Date.UTC(2026, 6, 19, 12, 0, 0) / 1_000;
+      const shifted = utcTzDate(noon);
+      expect(shifted.getFullYear()).toBe(2026);
+      expect(shifted.getMonth()).toBe(6);
+      expect(shifted.getDate()).toBe(19);
+      expect(shifted.getHours()).toBe(12);
     });
   });
 

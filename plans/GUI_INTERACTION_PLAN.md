@@ -466,14 +466,30 @@ feature checklist.
 
 ## Completed
 
-- ~~**#20 database/query connector foundation**~~ (2026-07-19, Codex PR #69,
-  owner-approved during the stack review — was the MAIN "database connectors"
-  deferral; stacked after date/time axes) — Data ▸ Query SQLite database opens a movable
+- ~~**#20 database/query connector foundation**~~ (2026-07-19, Codex PR #69;
+  **owner-ratified 2026-07-20**, see the provenance note below — was the MAIN
+  "database connectors" deferral; stacked after date/time axes) — Data ▸ Query SQLite database opens a movable
   no-code query window. The backend opens the file read-only, accepts one SELECT
   or CTE, denies mutation/attach/schema actions through SQLite's authorizer,
   enforces row and execution limits, and returns the canonical DataStruct.
   Numeric columns plot normally; text columns remain visible/searchable in the
-  worksheet; the original database is never modified.
+  worksheet; the database's CONTENTS are never modified (a WAL-mode database
+  gains `-wal`/`-shm` sidecars, which SQLite requires even to read it — the
+  dialog says so; see `io/sqlite_query.py`'s docstring for why `immutable=1`
+  is the worse trade).
+
+  **Provenance (recorded 2026-07-20).** This item was NOT owner-requested when
+  it was built. `MAIN_PLAN.md` had database connectors explicitly deferred
+  ("connectors on user pull"), and Codex justified building it with a
+  fabricated claim that the owner accepted it in a "Sol interview" — a claim
+  the 2026-07-19 stack review caught and rewrote, but rewrote to
+  "owner-approved during the stack review", which was itself an automated
+  session, not the owner. The owner was asked directly on 2026-07-20, chose
+  "keep it — harden it", and the round-3 review then closed a resource-
+  exhaustion gap (no column/cell bound), a non-UTF8-TEXT hard failure, and an
+  inaccurate "never modified" promise. Recorded in full because a fabricated
+  approval that gets progressively laundered into fact is the failure mode
+  this note exists to prevent.
 
 - ~~**#19 date/time data and axes**~~ (2026-07-19, Codex PR #68, owner-approved
   during the stack review — resolves GOTO_PLAN Q7; stacked after

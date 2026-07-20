@@ -334,3 +334,44 @@ def test_date_mode_degrades_to_blank_on_out_of_range_epoch(bad: float) -> None:
         assert [t.get_text() for t in ax.get_xticklabels()] == [""]
     finally:
         plt.close(fig)
+
+
+def test_date_tick_pattern_tracks_the_increment() -> None:
+    """The export formatter must resolve dates at the DRAWN tick spacing.
+
+    A fixed template printed one repeated label on a sub-day axis and a
+    day-ambiguous wall clock on a multi-day one. Mirrors the frontend's
+    `dateTickFormatter` table — the two engines must agree or an exported
+    figure reads differently from the plot it was composed in.
+    """
+    from quantized.calc.figure_ticks import _date_tick_pattern
+
+    # No increment available: the historical shapes are preserved exactly.
+    assert _date_tick_pattern("date", 0) == "%Y-%m-%d"
+    assert _date_tick_pattern("time", 0) == "%H:%M:%S"
+    assert _date_tick_pattern("datetime", 0) == "%Y-%m-%d %H:%M"
+
+    # Hourly ticks on a date axis must gain a clock, or they all read alike.
+    assert "%H:%M" in _date_tick_pattern("date", 3_600)
+    # Sub-minute ticks need seconds.
+    assert "%S" in _date_tick_pattern("datetime", 30)
+    # Daily ticks on a time axis must gain the calendar date.
+    assert "%Y-%m-%d" in _date_tick_pattern("time", 86_400)
+
+
+def test_date_axis_labels_are_unique_across_a_sub_day_span() -> None:
+    """End-to-end through the real Formatter: 3-hourly ticks, unique labels."""
+    from quantized.calc.figure_ticks import axis_tick_formatter
+
+    formatter = axis_tick_formatter({"mode": "date", "digits": 2})
+    assert formatter is not None
+    base = datetime(2026, 1, 1, tzinfo=UTC).timestamp()
+    ticks = [base + i * 3 * 3_600 for i in range(6)]
+
+    class _Axis:
+        def get_majorticklocs(self) -> list[float]:
+            return ticks
+
+    formatter.axis = _Axis()  # type: ignore[assignment]
+    labels = [formatter(t) for t in ticks]
+    assert len(set(labels)) == len(ticks), labels

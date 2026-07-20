@@ -1,6 +1,7 @@
 import { askParams, type ParamField, type ParamValues } from "../components/overlays/ParamDialog";
 import type { StoreGet } from "./exportActive";
-import type { DataStruct } from "./types";
+import { analysisData } from "./rowstate";
+import type { DataStruct, Dataset } from "./types";
 import {
   joinWorksheets,
   stackWorksheet,
@@ -32,6 +33,16 @@ async function activeData(s: StoreGet): Promise<ReturnType<StoreGet>["datasets"]
   return (await s().resolveDataset(id)) ?? null;
 }
 
+/** The dataset's ANALYSIS view: rows the user excluded (#50) or filtered out
+ *  (#53) are pruned. A reshape DERIVES a new dataset from the source's data, so
+ *  it reads rows through the row-state chokepoint like every other consumer
+ *  (architecture-guards #11) — `Dataset.data` deliberately stays full so the
+ *  worksheet can grey excluded rows, which means reading it directly silently
+ *  resurrects the rows the user just told us to drop. */
+function rowsOf(ds: Dataset): DataStruct {
+  return analysisData(ds) ?? ds.data;
+}
+
 async function withErrors(s: StoreGet, fn: () => Promise<void>): Promise<void> {
   try { await fn(); }
   catch (error) { s().setStatus(error instanceof Error ? error.message : "worksheet transform failed"); }
@@ -46,7 +57,7 @@ export function runTransposeWorksheet(s: StoreGet): void {
       hint: "The source remains unchanged; original labels and units are kept in provenance.",
     }]);
     if (!params || !params.confirm) return;
-    addDerived(s, source.name, "transposed", transposeWorksheet(source.data));
+    addDerived(s, source.name, "transposed", transposeWorksheet(rowsOf(source)));
   });
 }
 
@@ -61,7 +72,7 @@ export function runStackWorksheet(s: StoreGet): void {
     }]);
     if (!params) return;
     const channels = String(params.channels).split(",").map((token) => Number.parseInt(token.trim(), 10) - 1);
-    addDerived(s, source.name, "stacked", stackWorksheet(source.data, channels));
+    addDerived(s, source.name, "stacked", stackWorksheet(rowsOf(source), channels));
   });
 }
 
@@ -79,7 +90,7 @@ export function runUnstackWorksheet(s: StoreGet): void {
     const params = await askParams("Unstack / pivot to wide form", fields);
     if (!params) return;
     const data = unstackWorksheet(
-      source.data,
+      rowsOf(source),
       optionIndex(params.key),
       optionIndex(params.category),
       optionIndex(params.value),
@@ -114,8 +125,8 @@ export function runJoinWorksheets(s: StoreGet): void {
     }]);
     if (!second) return;
     const data = joinWorksheets(
-      left.data,
-      right.data,
+      rowsOf(left),
+      rowsOf(right),
       optionIndex(first.leftKey),
       optionIndex(second.rightKey),
       String(first.mode) as JoinMode,

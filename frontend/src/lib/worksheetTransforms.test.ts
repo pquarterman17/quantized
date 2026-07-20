@@ -131,4 +131,68 @@ describe("worksheet transforms", () => {
     // The NaN-key left row is excluded — documented behavior, not silent.
     expect(out.time).toEqual([1, 2]);
   });
+
+  it("unstack emits an ASCENDING x even when the key column is unsorted", () => {
+    // uPlot reads the last x as the axis max (it assumes ascending x — the same
+    // invariant dropTrailingEmptyRows protects for imports). First-appearance
+    // key order emitted [20, 10] here and collapsed the plotted range.
+    const long: DataStruct = {
+      time: [0, 0, 0, 0],
+      values: [[20, 0, 5], [10, 0, 7], [20, 1, 9], [10, 1, 11]],
+      labels: ["key", "cat", "val"], units: ["", "", ""], metadata: {},
+    };
+    const out = unstackWorksheet(long, 0, 1, 2);
+    expect(out.time).toEqual([10, 20]);
+    // Values must follow the sorted keys, not the encounter order.
+    expect(out.values).toEqual([[7, 11], [5, 9]]);
+  });
+
+  it("join emits an ASCENDING x, including right-only keys in a full join", () => {
+    // `full` appended right-only keys after ALL left keys regardless of value,
+    // so a right side holding lower keys produced a non-monotonic x.
+    const left: DataStruct = {
+      time: [0, 1], values: [[10, 1], [30, 3]],
+      labels: ["k", "lv"], units: ["", ""], metadata: {},
+    };
+    const right: DataStruct = {
+      time: [0, 1, 2], values: [[5, 50], [20, 200], [30, 300]],
+      labels: ["k", "rv"], units: ["", ""], metadata: {},
+    };
+    const out = joinWorksheets(left, right, 0, 0, "full");
+    expect(out.time).toEqual([5, 10, 20, 30]);
+    // Row for key 30 carries BOTH sides; key 5 is right-only (left = NaN).
+    expect(out.values[3]).toEqual([3, 300]);
+    expect(out.values[0][0]).toBeNaN();
+    expect(out.values[0][1]).toBe(50);
+  });
+
+  it("unstack aggregates duplicates in O(1) per row, not by collecting them", () => {
+    // Regression guard for a quadratic accumulator: every row shared ONE cell,
+    // so `[...bucket, v]` per row made a trivial 1x1 output cost O(n^2)
+    // (~3.5 s at 40k rows, minutes at 200k) with no cap able to trip. The
+    // bound is deliberately loose — it separates O(n) from O(n^2), and CI
+    // Windows runs several times slower than local.
+    const n = 100_000;
+    const long: DataStruct = {
+      time: Array.from({ length: n }, () => 0),
+      values: Array.from({ length: n }, (_, i) => [7, 3, i]),
+      labels: ["key", "cat", "val"], units: ["", "", ""], metadata: {},
+    };
+    const started = performance.now();
+    const out = unstackWorksheet(long, 0, 1, 2, "mean");
+    expect(performance.now() - started).toBeLessThan(5_000);
+    // Mean of 0..n-1 — proves the streaming accumulator still aggregates right.
+    expect(out.values).toEqual([[(n - 1) / 2]]);
+  });
+
+  it("unstack keeps first/last duplicate semantics under the streaming accumulator", () => {
+    const long: DataStruct = {
+      time: [0, 0, 0],
+      values: [[1, 0, 10], [1, 0, 20], [1, 0, 30]],
+      labels: ["key", "cat", "val"], units: ["", "", ""], metadata: {},
+    };
+    expect(unstackWorksheet(long, 0, 1, 2, "first").values).toEqual([[10]]);
+    expect(unstackWorksheet(long, 0, 1, 2, "last").values).toEqual([[30]]);
+    expect(unstackWorksheet(long, 0, 1, 2, "mean").values).toEqual([[20]]);
+  });
 });

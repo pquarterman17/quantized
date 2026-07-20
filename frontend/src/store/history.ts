@@ -37,7 +37,7 @@
 // when its promise settles, exactly like any other external mutation racing
 // the store.
 
-import { hydrateView, snapshotView, type PlotView } from "../lib/plotview";
+import { hydrateView, navigationView, snapshotView, type PlotView } from "../lib/plotview";
 import { focusTransientReset } from "./windows";
 import type { AppState } from "./useApp";
 
@@ -112,9 +112,21 @@ function snapshotOf(s: AppState): HistorySnapshot {
  *  `focusWindow`/`closeWindow` already clear on any underlying-data swap). */
 function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppState> {
   const live = new Set(snap.datasets.map((d) => d.id));
+  // Destructure `view` out: it is a nested field of the SNAPSHOT, not of
+  // AppState, and spreading `snap` wholesale wrote an inert `state.view` onto
+  // the live store on every undo/redo (harmless today, a silent clobber the
+  // day AppState gains a real `view` field).
+  const { view, ...fields } = snap;
   return {
-    ...snap,
-    ...hydrateView(snap.view),
+    ...fields,
+    ...hydrateView(view),
+    // Then put the LIVE zoom/pan back. `hydrateView` restores every PlotView
+    // field including the navigation ones, so without this an ordinary
+    // Ctrl+Z ("undo add shape") also silently discarded a zoom performed
+    // afterwards — and left the separate viewHistory/viewFuture stack
+    // pointing at bounds that are no longer live. Navigation is undone with
+    // Alt+left/right, edits with Ctrl+Z; this keeps that split intact.
+    ...navigationView(s),
     selection: s.selection && live.has(s.selection.datasetId) ? s.selection : null,
     plotWindows: snap.plotWindows.map((w) =>
       w.datasetId && !live.has(w.datasetId) ? { ...w, datasetId: null } : w,

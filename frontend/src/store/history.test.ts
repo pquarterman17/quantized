@@ -382,4 +382,40 @@ describe("per-action-class undo/redo coverage", () => {
     useApp.getState().redo();
     expect(useApp.getState().datasets).toEqual(post);
   });
+
+  // Ctrl+Z is the EDIT history; Alt+left/right is the navigation history. An
+  // edit snapshot captured the whole PlotView, so undoing an edit also rolled
+  // back a zoom the user performed afterwards (and desynced viewHistory).
+  it("undo/redo leaves a LATER zoom alone (navigation is not an edit)", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1", xLim: null, yLim: null });
+
+    useApp.getState().setChannelRole(0, "ignore"); // the recorded edit
+    useApp.getState().setXLim([1, 3]);             // a LATER, separate gesture
+    useApp.getState().setYLim([0, 9]);
+
+    useApp.getState().undo();
+    expect(useApp.getState().datasets[0].channelRoles).toBeUndefined(); // edit undone
+    expect(useApp.getState().xLim).toEqual([1, 3]);                     // zoom kept
+    expect(useApp.getState().yLim).toEqual([0, 9]);
+
+    useApp.getState().redo();
+    expect(useApp.getState().datasets[0].channelRoles).toEqual({ 0: "ignore" });
+    expect(useApp.getState().xLim).toEqual([1, 3]);
+    expect(useApp.getState().yLim).toEqual([0, 9]);
+  });
+
+  // The other half of the carve-out: y2 is NOT navigation (nothing zooms it and
+  // setY2Lim records), so an explicit Y2-limit edit must still undo.
+  it("Y2 limits stay inside the edit history", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1", y2Lim: null });
+
+    useApp.getState().setY2Lim([2, 8]);
+    expect(useApp.getState().y2Lim).toEqual([2, 8]);
+
+    useApp.getState().undo();
+    expect(useApp.getState().y2Lim).toBeNull();
+
+    useApp.getState().redo();
+    expect(useApp.getState().y2Lim).toEqual([2, 8]);
+  });
 });

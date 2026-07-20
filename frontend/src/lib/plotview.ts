@@ -244,6 +244,25 @@ export function snapshotView(source: PlotView): PlotView {
   return out as unknown as PlotView;
 }
 
+/** The NAVIGATION subset of PlotView: the x/y zoom-pan window and the tick
+ *  steps that travel with it (`setXLim`/`setYLim` clear their step). These sit
+ *  OUTSIDE the edit undo/redo domain — zoom/pan rides the separate
+ *  back/forward view history (see store/history.ts's header: "so Ctrl+Z stays
+ *  predictable"), so folding them into an edit snapshot makes Ctrl+Z revert a
+ *  zoom the user performed AFTER the action being undone.
+ *
+ *  `y2Lim`/`y2Step` are deliberately NOT here: nothing zooms y2 (the view
+ *  history's ViewSnapshot carries x and y only) and `setY2Lim` calls
+ *  `recordHistory` itself, so y2 limits are an ordinary undoable edit. */
+export const NAV_VIEW_KEYS = ["xLim", "yLim", "xStep", "yStep"] as const;
+
+export type NavigationView = Pick<PlotView, (typeof NAV_VIEW_KEYS)[number]>;
+
+/** Pick the LIVE navigation fields, to carry across an undo/redo restore. */
+export function navigationView(source: PlotView): NavigationView {
+  return { xLim: source.xLim, yLim: source.yLim, xStep: source.xStep, yStep: source.yStep };
+}
+
 /** The inverse: produce a fresh, independent copy of a stored view to spread
  *  back onto the live singleton fields (e.g. `set(hydrateView(record.view))`).
  *  Identity with `snapshotView` at the field level (see the round-trip test)

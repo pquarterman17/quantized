@@ -72,3 +72,61 @@ def test_query_sqlite_authorizer_blocks_with_prefixed_write(database: Path, quer
         assert check.execute("SELECT count(*) FROM measurement").fetchone()[0] == 3
     finally:
         check.close()
+
+
+def test_query_sqlite_degrades_non_utf8_text_instead_of_failing(tmp_path: Path) -> None:
+    """One mis-encoded TEXT byte must not fail the whole query.
+
+    The default strict-UTF-8 text factory raises inside `fetchmany`, so a
+    single legacy/corrupted text cell took down every valid NUMERIC column in
+    the same result set. Legacy instrument logs really do carry these.
+    """
+    path = tmp_path / "legacy.sqlite"
+    connection = sqlite3.connect(path)
+    try:
+        connection.executescript("CREATE TABLE t (note TEXT, value REAL);")
+        # x'fffe' is not valid UTF-8.
+        connection.execute("INSERT INTO t VALUES (CAST(x'fffe' AS TEXT), 1.5)")
+        connection.execute("INSERT INTO t VALUES ('ok', 2.5)")
+        connection.commit()
+    finally:
+        connection.close()
+
+    out = query_sqlite(path, "SELECT note, value FROM t")
+    # The numeric column survived intact — that is the point of the fix.
+    assert np.allclose(out.values[:, 0], [1.5, 2.5])
+
+
+def test_query_sqlite_rejects_an_absurd_column_count(tmp_path: Path) -> None:
+    """`max_rows` bounds one axis only; a very wide SELECT bounded nothing."""
+    path = tmp_path / "wide.sqlite"
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("CREATE TABLE t (v REAL)")
+        connection.execute("INSERT INTO t VALUES (1.0)")
+        connection.commit()
+    finally:
+        connection.close()
+
+    columns = ", ".join(f"v AS c{i}" for i in range(1_001))
+    with pytest.raises(ValueError, match="columns"):
+        query_sqlite(path, f"SELECT {columns} FROM t")
+
+
+def test_query_sqlite_clamps_rows_to_the_cell_budget(tmp_path: Path) -> None:
+    """Wide-and-tall stays inside the budget by TRUNCATING, not refusing."""
+    path = tmp_path / "budget.sqlite"
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("CREATE TABLE t (v REAL)")
+        connection.executemany("INSERT INTO t VALUES (?)", [(float(i),) for i in range(400)])
+        connection.commit()
+    finally:
+        connection.close()
+
+    # 500 columns => the 5M-cell budget allows 10,000 rows, so a 400-row table
+    # is untouched; the clamp must not fire on ordinary data.
+    columns = ", ".join(f"v AS c{i}" for i in range(500))
+    out = query_sqlite(path, f"SELECT {columns} FROM t", max_rows=1_000_000)
+    assert out.values.shape[0] == 400
+    assert out.metadata["query_truncated"] is False

@@ -39,6 +39,15 @@ _DENIED_ACTIONS = {
     sqlite3.SQLITE_TRANSACTION,
 }
 
+# `max_rows` bounds only ONE axis of the result. SQLite happily returns up to
+# SQLITE_LIMIT_COLUMN (2000 by default) columns, so `SELECT * FROM wide` on a
+# wide-and-tall table built a row x column float64 block far past anything the
+# row cap implies (2000 x 1e6 = 2e9 cells ~ 16 GB) and then serialized it to
+# JSON in one shot. Bound the OTHER axis and the product, the same way the
+# frontend's worksheet transforms bound theirs.
+_MAX_COLUMNS = 1_000
+_MAX_CELLS = 5_000_000
+
 
 def _numeric(values: list[Any]) -> tuple[np.ndarray, float]:
     out = np.full(len(values), np.nan, dtype=float)
@@ -68,6 +77,14 @@ def query_sqlite(
 
     Duplicate column names are made unique. Numeric columns become DataStruct
     channels; nonnumeric columns remain searchable worksheet text metadata.
+
+    "Read-only" means the database's CONTENTS are never modified. It does not
+    mean nothing is written next to it: opening a WAL-mode database -- even
+    `mode=ro` -- makes SQLite create `-wal`/`-shm` sidecar files it needs for
+    reader/writer coordination, and a read-only connection cannot checkpoint
+    them away on close. `immutable=1` would suppress that, but it asserts the
+    file cannot change while open, which would serve stale data for a database
+    another process is actively writing -- a worse failure than a sidecar file.
     """
     db = Path(path).expanduser().resolve()
     if not db.is_file():
@@ -80,6 +97,11 @@ def query_sqlite(
 
     deadline = time.monotonic() + max(0.1, min(timeout_s, 30.0))
     connection = sqlite3.connect(f"{db.as_uri()}?mode=ro", uri=True)
+    # Legacy instrument logs carry mis-encoded TEXT. The default strict-UTF-8
+    # text factory raises mid-`fetchmany`, failing the WHOLE query (including
+    # every valid numeric column) over one bad byte in an unrelated text cell.
+    # Every other type path in this module degrades gracefully; match it.
+    connection.text_factory = lambda raw: raw.decode("utf-8", errors="replace")
     try:
         connection.set_authorizer(
             lambda action, _arg1, _arg2, _db, _trigger: (
@@ -94,14 +116,23 @@ def query_sqlite(
         ]
         if not raw_names:
             raise ValueError("query did not return columns")
+        if len(raw_names) > _MAX_COLUMNS:
+            raise ValueError(
+                f"query returned {len(raw_names)} columns; select at most "
+                f"{_MAX_COLUMNS} (narrow the column list)"
+            )
         names: list[str] = []
         counts: dict[str, int] = {}
         for name in raw_names:
             counts[name] = counts.get(name, 0) + 1
             names.append(name if counts[name] == 1 else f"{name} ({counts[name]})")
-        rows = cursor.fetchmany(max_rows + 1)
-        truncated = len(rows) > max_rows
-        rows = rows[:max_rows]
+        # Clamp the row cap so rows x columns stays inside the cell budget. This
+        # TRUNCATES rather than refusing (reported via `truncated` below), so a
+        # wide table still imports its leading rows instead of failing outright.
+        row_cap = min(max_rows, max(1, _MAX_CELLS // len(names)))
+        rows = cursor.fetchmany(row_cap + 1)
+        truncated = len(rows) > row_cap
+        rows = rows[:row_cap]
     except sqlite3.Error as exc:
         message = "query timed out" if "interrupted" in str(exc).lower() else str(exc)
         raise ValueError(f"SQLite query failed: {message}") from exc

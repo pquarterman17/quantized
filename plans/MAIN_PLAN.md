@@ -165,8 +165,10 @@ GOTO #11 drift (implemented but listed open).
   residual) — separate repo, out of scope here.
 - **Plugin pipeline-step route + frontend palette** (was GAP_ECOSYSTEM
   #2) — v1 registers steps server-side only.
-- **Database connectors** (was ORIGIN_GAP #47) — paste/append shipped;
-  connectors on user pull.
+- ~~**Database connectors**~~ (was ORIGIN_GAP #47) — **no longer deferred.** A
+  read-only SQLite connector shipped 2026-07-19 (Codex PR #69) ahead of this
+  gate, on a fabricated approval; the owner ratified it on 2026-07-20 after
+  review, so it stays. Further connectors remain on user pull.
 - **Worksheet designation editing** (was WORKSHEET D2) — read-only in
   v1 unless requested.
 - **Graph Builder export button + `.dwk` plot-spec persistence** —
