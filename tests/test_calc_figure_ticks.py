@@ -312,13 +312,19 @@ def test_digits_clamped_at_extremes_do_not_crash(digits: int) -> None:
         plt.close(fig)
 
 
-@pytest.mark.parametrize("bad", [2.5e11, -6e10, float("nan")])
+@pytest.mark.parametrize("bad", [1e18, -1e18, float("nan"), float("inf")])
 def test_date_mode_degrades_to_blank_on_out_of_range_epoch(bad: float) -> None:
     """A date tick format applied to a non-time axis produces out-of-range
     epochs; `datetime.fromtimestamp` raises OSError/OverflowError/ValueError
     there, which used to escape the routes' narrow `except (ValueError,
     KeyError, IndexError)` as an uncaught HTTP 500. The formatter now degrades
     to a blank tick instead of crashing the export.
+
+    Values must be out of range on EVERY platform: Windows' fromtimestamp
+    rejects far-future epochs (~year 9999) with OSError, but 64-bit
+    macOS/Linux happily format them, so 2.5e11 raised only on Windows. 1e18 /
+    -1e18 blow past datetime.MAXYEAR/MINYEAR (ValueError) and inf/nan raise
+    everywhere.
     """
     fig, ax = plt.subplots()
     try:
