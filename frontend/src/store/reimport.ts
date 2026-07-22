@@ -42,6 +42,7 @@ import { reimportShapeChanged, resolveFreshData } from "../lib/reimport";
 import type { DataStruct, Dataset } from "../lib/types";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
+import { datasetViewDefaults } from "./windows";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -78,6 +79,14 @@ async function commitReimport(
     newData = await applyCorrectionsApi(req);
   }
   get().recordHistory("re-import dataset");
+  // A shape change makes the old channel-keyed VIEW state (keys/styles/labels/
+  // order/hidden/errKeys) stale — it indexes the PREVIOUS columns. Reset it to
+  // the new shape's smart defaults (the same derivation setActive/addDataset
+  // use, re-seeding errKeys/hiddenChannels from the fresh columns) for the live
+  // view (if this dataset is active) AND every window bound to it — mirroring
+  // the dataset-scoped clear below and removeFormula's window walk. An unchanged
+  // shape keeps the view state (the user's styles still apply to the new data).
+  const viewReset = shapeChanged ? datasetViewDefaults({ ...ds, data: newData }) : null;
   set((s) => ({
     datasets: s.datasets.map((d) => {
       if (d.id !== ds.id) return d;
@@ -100,6 +109,14 @@ async function commitReimport(
         ? { ...merged, data: recomputeData(merged.data, merged.formulas) }
         : merged;
     }),
+    ...(viewReset && s.activeId === ds.id ? viewReset : {}),
+    ...(viewReset
+      ? {
+          plotWindows: s.plotWindows.map((w) =>
+            w.datasetId === ds.id ? { ...w, view: { ...w.view, ...viewReset } } : w,
+          ),
+        }
+      : {}),
   }));
   if (shapeChanged) {
     toast(`"${ds.name}" changed shape on re-import — row/column selections were cleared`, "info");

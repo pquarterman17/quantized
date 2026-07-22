@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyCorrections as applyCorrectionsApi, importFile, uploadFile } from "../lib/api";
+import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import type { DataStruct, Dataset } from "../lib/types";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
@@ -98,6 +99,22 @@ describe("reimportDataset — shape preserved", () => {
     expect(ds.name).toBe("sample.dat");
   });
 
+  it("keeps the live view's channel-keyed state when the shape is unchanged", async () => {
+    vi.mocked(importFile).mockResolvedValue(fresh); // same 1-column shape
+    useApp.setState({
+      datasets: [baseDataset()],
+      activeId: "d1",
+      hiddenChannels: [0],
+      seriesStyles: { 0: { color: "#ff0000" } },
+    });
+
+    await useApp.getState().reimportDataset("d1");
+
+    const s = useApp.getState();
+    expect(s.hiddenChannels).toEqual([0]); // unchanged shape → styles still apply
+    expect(s.seriesStyles).toEqual({ 0: { color: "#ff0000" } });
+  });
+
   it("keeps id/name/tags/group/notes across the swap", async () => {
     vi.mocked(importFile).mockResolvedValue(fresh);
     useApp.setState({
@@ -138,6 +155,63 @@ describe("reimportDataset — row/column count change", () => {
     await useApp.getState().reimportDataset("d1");
 
     expect(useApp.getState().datasets[0].channelRoles).toBeUndefined();
+  });
+
+  // The dataset-scoped clear above had a parallel VIEW-scoped gap: the live
+  // singleton view AND every window's stored view kept channel-keyed state
+  // (styles/hidden/keys) indexing the OLD columns (noted 2026-07-21, fixed).
+  it("resets the live view's channel-keyed state on a shape change (active dataset)", async () => {
+    vi.mocked(importFile).mockResolvedValue({
+      ...fresh,
+      labels: ["m", "T"],
+      units: ["emu", "K"],
+      values: [[11, 1], [21, 2], [31, 3]],
+    });
+    useApp.setState({
+      datasets: [baseDataset()],
+      activeId: "d1",
+      hiddenChannels: [0],
+      seriesStyles: { 0: { color: "#ff0000" } },
+      yKeys: [0],
+    });
+
+    await useApp.getState().reimportDataset("d1");
+
+    const s = useApp.getState();
+    expect(s.hiddenChannels).toEqual([]); // reset to the new shape's defaults
+    expect(s.seriesStyles).toEqual({});
+    expect(s.yKeys).toBeNull();
+  });
+
+  it("resets a background window's view on a shape change, not just the singleton", async () => {
+    vi.mocked(importFile).mockResolvedValue({
+      ...fresh,
+      labels: ["m", "T"],
+      units: ["emu", "K"],
+      values: [[11, 1], [21, 2], [31, 3]],
+    });
+    const bgWindow: PlotWindow = {
+      id: "wBg",
+      kind: "plot",
+      title: "",
+      datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 480, h: 360 },
+      z: 0,
+      winState: "normal",
+      bg: "theme",
+      linkGroup: null,
+      pinned: false,
+      view: { ...defaultPlotView(), hiddenChannels: [0], seriesStyles: { 0: { color: "#0000ff" } } },
+    };
+    // activeId stays null (beforeEach) so the singleton branch is skipped —
+    // any reset of the window's view can only come from the window walk.
+    useApp.setState({ datasets: [baseDataset()], plotWindows: [bgWindow] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    const win = useApp.getState().plotWindows.find((w) => w.id === "wBg")!;
+    expect(win.view.hiddenChannels).toEqual([]);
+    expect(win.view.seriesStyles).toEqual({});
   });
 });
 

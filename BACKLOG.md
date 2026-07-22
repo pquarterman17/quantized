@@ -8,8 +8,8 @@ in the same commit). Every edit here must have a matching plan edit.
 
 **Last reconciled:** 2026-07-21, after the three index-staleness follow-ups
 booked 2026-07-19 ALL shipped (background-window view remap, spec re-key by
-label, corrections overlay-clear — see the section below); a separate
-`reimportDataset` view-clearing residual in the same class was noted, not fixed.
+label, corrections overlay-clear — see the section below), plus a fourth
+`reimportDataset` view-scoped clear found and fixed while working the first.
 Prior: 2026-07-19, after ORIGIN_FILE_DECODE #54's page/layer
 model passes A + C shipped (composition discriminated union replacing the three
 parallel panel arrays, then PlotSpec's reserved `page` block filled); pass B
@@ -72,11 +72,13 @@ fail-before/pass-after regression test:
   source (`store/corrections.ts`) whenever a trim changes the row count, the same
   `rowsChanged` guard that already clears `excludedRows`.
 
-Residual noted while fixing the first item (NOT part of the booked trio, left
-open rather than widened into this fix): `reimportDataset` clears the
-dataset-scoped index-keyed state on a shape change but never the view-scoped
-state (neither the live singleton nor any window) — a separate latent instance
-of the same class.
+- ~~**`reimportDataset` view-scoped clear on a shape change**~~ (2026-07-21) — a
+  fourth instance of the same class, found while fixing the first: reimport
+  cleared the dataset-scoped index-keyed state on a shape change but never the
+  view-scoped state. Now resets the live view (if active) AND every bound window
+  to the new shape's `datasetViewDefaults` (the derivation setActive/addDataset
+  already use, re-seeding errKeys/hiddenChannels from the fresh columns); an
+  unchanged shape still keeps the user's styles/hidden/keys.
 
 ### Backend hardening round (2026-07-19, `4d61e56`)
 
