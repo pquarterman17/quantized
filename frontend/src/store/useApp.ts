@@ -87,7 +87,7 @@ import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel"
 import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
-import { remapDatasetChannels, remapViewChannels } from "../lib/channelRemap";
+import { remapDatasetChannels, remapViewChannels, remapWindowViews } from "../lib/channelRemap";
 import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
 import { breakPayloads, facetPayloads, suggestBreaks } from "../lib/facet";
 import { pruneReportRefs, type ReportEntry, type ReportSheet } from "../lib/report";
@@ -2177,9 +2177,9 @@ export const useApp = create<AppState>((set, get) => ({
           ...remapDatasetChannels(d, removedCol),
         };
       }),
-      // Only the FOCUSED view is patched here; a background window bound to
-      // the same dataset keeps its own copy (booked as a follow-up).
+      // Remap the live view (if active) + every background window (5ac2674 f/u).
       ...(s.activeId === id ? remapViewChannels(s, removedCol) : {}),
+      plotWindows: remapWindowViews(s.plotWindows, id, removedCol),
     }));
     get().touchDataset(id); // recalc graph (#1): data changed
   },

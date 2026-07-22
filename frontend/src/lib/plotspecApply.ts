@@ -63,10 +63,32 @@ function applyDisplayBlock(display: DisplayBlock | undefined, s: StoreGet): void
   if (!display) return;
   const state = s();
   const currentHidden = state.hiddenChannels;
+  // Re-key each saved channel index by its captured column LABEL. `series`/
+  // `order` are by-value indices; if the active dataset's columns shifted since
+  // this spec was saved (a column removed/inserted), those indices now name the
+  // WRONG column — or a NEW column that landed at that index would silently
+  // inherit the old style. `display.labels` records the label each index had at
+  // save time; resolveChannel finds where that label lives now. Legacy specs
+  // (no `labels`) or an unknown active dataset fall back to the by-index
+  // behavior — no worse than before, and the common no-change case stays
+  // identity (also safe when two columns share a label).
+  const currentLabels =
+    state.datasets?.find((d) => d.id === state.activeId)?.data.labels ?? null;
+  const saved = display.labels;
+  const resolveChannel = (k: number): number | null => {
+    if (!saved || !currentLabels) return k;
+    const label = saved[k];
+    if (label === undefined) return k; // this channel carried no captured label
+    if (currentLabels[k] === label) return k; // unchanged position (duplicate-safe)
+    const idx = currentLabels.indexOf(label);
+    return idx >= 0 ? idx : null; // moved → new index; gone → drop the entry
+  };
   const y2Channels: number[] = [];
   for (const [key, sd] of Object.entries(display.series ?? {})) {
-    const channel = Number(key);
-    if (!Number.isInteger(channel)) continue; // hand-crafted/malformed key — ignore
+    const savedChannel = Number(key);
+    if (!Number.isInteger(savedChannel)) continue; // hand-crafted/malformed key — ignore
+    const channel = resolveChannel(savedChannel);
+    if (channel === null) continue; // the column this style belonged to is gone
     // Reset first, then reconstruct from the captured fields ONLY — a full
     // restore must not merge with whatever leftover style the channel
     // happens to carry right now (see the module doc: this runs right after
@@ -89,7 +111,12 @@ function applyDisplayBlock(display: DisplayBlock | undefined, s: StoreGet): void
     if (sd.axis === 1) y2Channels.push(channel);
   }
   state.setY2Keys(y2Channels.length > 0 ? y2Channels : null);
-  state.setSeriesOrder(display.order && display.order.length > 0 ? display.order : null);
+  // Remap the order through the same label resolver, dropping any entry whose
+  // column is gone (an unresolved index would re-introduce the by-value bug).
+  const order = display.order
+    ? display.order.map(resolveChannel).filter((c): c is number => c !== null)
+    : null;
+  state.setSeriesOrder(order && order.length > 0 ? order : null);
 }
 
 function applyAxesBlock(axes: AxesBlock | undefined, s: StoreGet): void {

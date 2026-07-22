@@ -109,6 +109,15 @@ export interface SeriesDisplay {
 export interface DisplayBlock {
   series?: Record<number, SeriesDisplay>;
   order?: number[];
+  /** Each captured channel index → the column LABEL it named AT SAVE TIME.
+   *  `series`/`order` are by-value channel indices; if the source dataset's
+   *  columns shift between save and apply (a column removed/inserted), those
+   *  indices point at the wrong column. This map lets `applyDisplayBlock`
+   *  re-key by label — find where each saved label lives NOW, or drop the
+   *  entry if the label is gone. Only ever attached alongside real
+   *  series/order content (never flips a spec to v2 on its own); a legacy
+   *  spec without it falls back to the by-index behavior. */
+  labels?: Record<number, string>;
 }
 
 // ── Axes block ───────────────────────────────────────────────────────────
@@ -276,6 +285,14 @@ export function validateDisplayBlock(v: unknown): DisplayBlock | null {
     const order = o.order.filter((n): n is number => typeof n === "number" && Number.isInteger(n));
     if (order.length > 0) out.order = order;
   }
+  if (typeof o.labels === "object" && o.labels !== null) {
+    const labels: Record<number, string> = {};
+    for (const [key, val] of Object.entries(o.labels as Record<string, unknown>)) {
+      const channel = Number(key);
+      if (Number.isInteger(channel) && typeof val === "string") labels[channel] = val;
+    }
+    if (Object.keys(labels).length > 0) out.labels = labels;
+  }
   return out;
 }
 
@@ -427,6 +444,7 @@ export function buildDisplayBlock(
   y2Keys: number[] | null,
   hiddenChannels: number[],
   seriesOrder: number[] | null,
+  channelLabels: readonly string[] = [],
 ): DisplayBlock | undefined {
   const y2Set = new Set(y2Keys ?? []);
   const hiddenSet = new Set(hiddenChannels);
@@ -452,6 +470,17 @@ export function buildDisplayBlock(
   const block: DisplayBlock = {};
   if (Object.keys(series).length > 0) block.series = series;
   if (orderDiffers) block.order = [...(seriesOrder as number[])];
+  // Attach the plotted channels' current labels so apply can re-key by label
+  // (see DisplayBlock.labels). Only when the block already carries real
+  // content — labels never promote an all-default plot to v2 on their own.
+  if (displayBlockHasContent(block)) {
+    const labels: Record<number, string> = {};
+    for (const ch of plotted) {
+      const lbl = channelLabels[ch];
+      if (typeof lbl === "string" && lbl.length > 0) labels[ch] = lbl;
+    }
+    if (Object.keys(labels).length > 0) block.labels = labels;
+  }
   return displayBlockHasContent(block) ? block : undefined;
 }
 

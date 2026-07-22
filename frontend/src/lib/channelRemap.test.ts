@@ -6,6 +6,7 @@ import {
   remapDatasetChannels,
   remapKeyedRecord,
   remapViewChannels,
+  remapWindowViews,
   type ViewChannelState,
 } from "./channelRemap";
 import type { SeriesStyle } from "./types";
@@ -115,5 +116,27 @@ describe("remapViewChannels", () => {
     expect(out.yKeys).toBeNull();
     expect(out.y2Keys).toBeNull();
     expect(out.seriesOrder).toBeNull();
+  });
+});
+
+describe("remapWindowViews", () => {
+  const win = (id: string, datasetId: string | null, over: Partial<ViewChannelState> = {}) => ({
+    id,
+    datasetId,
+    view: view(over),
+  });
+
+  it("remaps only the windows bound to the target dataset", () => {
+    const windows = [
+      win("a", "d1", { hiddenChannels: [4], seriesStyles: { 4: style("red") } }),
+      win("b", "d2", { hiddenChannels: [4] }), // different dataset — untouched
+      win("c", null, { hiddenChannels: [4] }), // panel/snapshot (null) — untouched
+    ];
+    const out = remapWindowViews(windows, "d1", 3);
+    expect(out[0].view.hiddenChannels).toEqual([3]); // index 4 shifts down past removed col 3
+    expect(out[0].view.seriesStyles).toEqual({ 3: style("red") });
+    expect(out[1].view.hiddenChannels).toEqual([4]); // d2 window left alone
+    expect(out[1]).toBe(windows[1]); // untouched windows keep identity
+    expect(out[2]).toBe(windows[2]);
   });
 });

@@ -348,7 +348,18 @@ export function useGraphBuilder(): GraphBuilderState {
     const yChannels = base.zones.y.map((r) => r.channel);
     const xChannel = base.zones.x?.channel;
     const plotted = [...new Set(xChannel !== undefined ? [xChannel, ...yChannels] : yChannels)];
-    const display = buildDisplayBlock(s.seriesStyles, plotted, s.y2Keys, s.hiddenChannels, s.seriesOrder);
+    // The active dataset's column labels (dsId === s.activeId is guaranteed
+    // above) — captured so a re-applied spec can re-key by label if the
+    // columns shift later (see plotspecApply.applyDisplayBlock).
+    const channelLabels = s.datasets.find((d) => d.id === dsId)?.data.labels ?? [];
+    const display = buildDisplayBlock(
+      s.seriesStyles,
+      plotted,
+      s.y2Keys,
+      s.hiddenChannels,
+      s.seriesOrder,
+      channelLabels,
+    );
     const axes = buildAxesBlock({
       title: s.plotTitle,
       xLabel: s.xAxisLabel,

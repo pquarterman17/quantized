@@ -54,6 +54,9 @@ function makeFakeStore() {
     stackMode: boolean;
     panelFit: PanelFit;
     pageSetup: PageSetup | null;
+    // Read by applyDisplayBlock to re-key saved styles by column label.
+    datasets: { id: string; data: { labels: string[] } }[];
+    activeId: string | null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [action: string]: any;
   } = {
@@ -81,6 +84,8 @@ function makeFakeStore() {
     stackMode: false,
     panelFit: "frames",
     pageSetup: null,
+    datasets: [],
+    activeId: null,
   };
   let _annSeq = 0;
   let _shapeSeq = 0;
@@ -282,6 +287,77 @@ describe("applySpecBlocks — display block", () => {
     applySpecBlocks(spec, s);
     expect(fns.resetSeriesStyle).not.toHaveBeenCalled();
     expect(fns.setSeriesStyle).not.toHaveBeenCalled();
+  });
+});
+
+describe("applySpecBlocks — display block re-keys by column label", () => {
+  // Helper: point the fake store at an active dataset with the given labels.
+  function withDataset(labels: string[]) {
+    const store = makeFakeStore();
+    store.state.datasets = [{ id: "d1", data: { labels } }];
+    store.state.activeId = "d1";
+    return store;
+  }
+
+  it("re-applies a saved style to the label's NEW index after a column shift", () => {
+    // Saved against labels [A, B, C]: channel 1 = "B", red. A new column "T" was
+    // inserted at the front, so "B" now lives at index 2. The red style must
+    // follow "B" to index 2 — NOT hit whatever now sits at the stale index 1.
+    const { s, fns, state } = withDataset(["T", "A", "B", "C"]);
+    applySpecBlocks(
+      baseSpec({ display: { series: { 1: { color: "#ff0000" } }, labels: { 1: "B" } } }),
+      s,
+    );
+    expect(fns.setSeriesStyle).toHaveBeenCalledWith(2, { color: "#ff0000" });
+    expect(fns.setSeriesStyle).not.toHaveBeenCalledWith(1, expect.anything());
+    expect(state.seriesStyles[2]).toEqual({ color: "#ff0000" });
+    expect(state.seriesStyles[1]).toBeUndefined();
+  });
+
+  it("drops a saved style whose column label no longer exists", () => {
+    // "B" was deleted; the saved style for it must NOT land on a random column.
+    const { s, fns } = withDataset(["A", "C"]);
+    applySpecBlocks(
+      baseSpec({ display: { series: { 1: { color: "#ff0000" } }, labels: { 1: "B" } } }),
+      s,
+    );
+    expect(fns.resetSeriesStyle).not.toHaveBeenCalled();
+    expect(fns.setSeriesStyle).not.toHaveBeenCalled();
+  });
+
+  it("keeps the index when the label is unchanged at that position (identity, duplicate-safe)", () => {
+    const { s, fns } = withDataset(["A", "B", "C"]);
+    applySpecBlocks(
+      baseSpec({ display: { series: { 1: { color: "#00ff00" } }, labels: { 1: "B" } } }),
+      s,
+    );
+    expect(fns.setSeriesStyle).toHaveBeenCalledWith(1, { color: "#00ff00" });
+  });
+
+  it("falls back to by-index when the spec carries no labels (legacy spec)", () => {
+    const { s, fns } = withDataset(["T", "A", "B", "C"]);
+    applySpecBlocks(baseSpec({ display: { series: { 1: { color: "#0000ff" } } } }), s);
+    expect(fns.setSeriesStyle).toHaveBeenCalledWith(1, { color: "#0000ff" }); // unchanged behavior
+  });
+
+  it("remaps the display order through the same resolver and drops gone columns", () => {
+    // Saved order [2,1,0] against labels [A,B,C]; a front insert shifts each by
+    // one (A→1, B→2, C→3), and index 0's label isn't captured so it stays 0.
+    const { s, fns } = withDataset(["T", "A", "B", "C"]);
+    applySpecBlocks(
+      baseSpec({ display: { order: [2, 1, 0], labels: { 2: "C", 1: "B", 0: "A" } } }),
+      s,
+    );
+    expect(fns.setSeriesOrder).toHaveBeenCalledWith([3, 2, 1]);
+  });
+
+  it("re-keys y2 membership by label too", () => {
+    const { s, fns } = withDataset(["T", "A", "B"]);
+    applySpecBlocks(
+      baseSpec({ display: { series: { 1: { axis: 1 } }, labels: { 1: "B" } } }),
+      s,
+    );
+    expect(fns.setY2Keys).toHaveBeenCalledWith([2]); // "B" moved 1 → 2
   });
 });
 

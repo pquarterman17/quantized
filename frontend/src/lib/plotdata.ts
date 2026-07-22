@@ -344,7 +344,11 @@ export function composeDisplayPayload(payload: PlotPayload, o: DisplayCompose): 
  *  Returns null only when the overlay is strictly SHORTER than the plotted x (a
  *  genuine mismatch that can't be aligned). Without this, an overlay on any
  *  dataset with trailing empty rows (e.g. a sparse Hc2 worksheet) silently
- *  vanishes because its full length != the trimmed payload length. */
+ *  vanishes because its full length != the trimmed payload length.
+ *  NOTE: this can only handle a TAIL trim (the prefix survives). A FRONT trim
+ *  (corrections' `x_min` mask) leaves a different set of rows, which lengths
+ *  alone can't detect — so those overlays are invalidated at the source, when
+ *  the row count changes, by store/corrections.ts's clearOverlaysFor. */
 function alignOverlayY(y: (number | null)[], target: number): (number | null)[] | null {
   if (y.length === target) return y;
   if (y.length > target) return y.slice(0, target);

@@ -117,3 +117,22 @@ export function remapViewChannels(v: ViewChannelState, removedCol: number): View
     errKeys,
   };
 }
+
+/** Remap the channel-keyed view state of every window bound to `datasetId`
+ *  after `removedCol` disappears — the per-window analogue of `remapViewChannels`.
+ *  A background `PlotWindow` keeps its OWN PlotView copy of these fields, so
+ *  remapping only the live singleton leaves those stale (a hidden/styled channel
+ *  in an unfocused window would follow the shifted column). Generic over the
+ *  window shape so this module stays store-free; windows with a `null` datasetId
+ *  (panels, snapshots) are left untouched. */
+export function remapWindowViews<W extends { datasetId: string | null; view: ViewChannelState }>(
+  windows: readonly W[],
+  datasetId: string,
+  removedCol: number,
+): W[] {
+  return windows.map((w) =>
+    w.datasetId === datasetId
+      ? { ...w, view: { ...w.view, ...remapViewChannels(w.view, removedCol) } }
+      : w,
+  );
+}

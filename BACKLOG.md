@@ -6,7 +6,11 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-19, after ORIGIN_FILE_DECODE #54's page/layer
+**Last reconciled:** 2026-07-21, after the three index-staleness follow-ups
+booked 2026-07-19 ALL shipped (background-window view remap, spec re-key by
+label, corrections overlay-clear — see the section below); a separate
+`reimportDataset` view-clearing residual in the same class was noted, not fixed.
+Prior: 2026-07-19, after ORIGIN_FILE_DECODE #54's page/layer
 model passes A + C shipped (composition discriminated union replacing the three
 parallel panel arrays, then PlotSpec's reserved `page` block filled); pass B
 (the y2 singleton) is the remaining open dev work on that row. Prior context:
@@ -51,13 +55,28 @@ A fourth instance of the row/column-index staleness class was found and fixed
 (`5ac2674` — `removeFormula` remapped the dataset-scoped index-keyed fields but
 not the parallel VIEW-scoped ones, so hiding a formula column and then removing
 it silently hid a DIFFERENT column). The same sweep confirmed three more, each
-with a concrete reproduction, left open here rather than fixed blind:
+with a concrete reproduction; **all three shipped 2026-07-21**, each with a
+fail-before/pass-after regression test:
 
-| Item | Evidence |
-|------|----------|
-| **Background windows keep a stale `PlotView`** — the fix above patches only the FOCUSED view; every unfocused `PlotWindow.view` bound to the same dataset holds its own copy of the channel-keyed fields and is not remapped. Needs a different mechanism (walk every window's view, not the singleton) | `store/windows.ts` — `datasetViewDefaults` fires only from `focusedRebindPatch`, i.e. only on a genuine `activeId` change; `removeFormula`/`reimportDataset` mutate the already-active dataset in place |
-| **Saved Graph Builder specs go stale and are re-applied blind** — `savedPlotSpecs[].spec.display.series`/`.order`/`zones.*.channel` capture channel indices BY VALUE at save time; nothing invalidates them when the source dataset's columns change, and `validateDisplayBlock` is a pure structural check with no dataset context. Styling silently no-ops today, but a new column later landing at that index inherits the old style. Fix direction: re-key by column LABEL at apply time, or drop keys that don't resolve | `lib/plotspecApply.ts` `applyDisplayBlock`; captured in `useGraphBuilder.captureLiveBlocks`. Untested — no test simulates a column change between spec-save and spec-apply |
-| **`alignOverlayY` assumes a TAIL trim; `xTrimMin` is a FRONT trim** — its doc states the assumption explicitly (true for `dropTrailingEmptyRows`, false for corrections' `x_min` mask). `.slice(0, target)` then takes the wrong old rows, drawing the fit curve at a visibly wrong x-offset. Persistent when `recalcMode` is "manual"/"off" (a real persisted user setting); `fitOverlay` is the confirmed case since, unlike peaks/baseline, it has no `active`-keyed self-heal. Fix direction: clear the four overlays in the same `rowsChanged` guard `store/corrections.ts` already uses to clear `excludedRows` | `lib/plotdata.ts` `alignOverlayY`; `src/quantized/calc/corrections.py` confirms `time >= x_min` is front-capable. Untested for the failing direction |
+- ~~**Background windows keep a stale `PlotView`**~~ (2026-07-21) — `removeFormula`
+  now walks every `PlotWindow.view` bound to the dataset via a new pure
+  `remapWindowViews` (`lib/channelRemap.ts`), not just the live singleton that
+  the `5ac2674` fix covered.
+- ~~**Saved Graph Builder specs go stale and are re-applied blind**~~ (2026-07-21)
+  — `buildDisplayBlock` now captures the plotted channels' labels
+  (`DisplayBlock.labels`) and `applyDisplayBlock` re-keys `series`/`order` by
+  label at apply time (identity-first + duplicate-safe; drop when the label is
+  gone; by-index fallback for legacy specs).
+- ~~**`alignOverlayY` assumes a TAIL trim; `xTrimMin` is a FRONT trim**~~
+  (2026-07-21) — the four fit/peak/baseline/deriv overlays are now cleared at the
+  source (`store/corrections.ts`) whenever a trim changes the row count, the same
+  `rowsChanged` guard that already clears `excludedRows`.
+
+Residual noted while fixing the first item (NOT part of the booked trio, left
+open rather than widened into this fix): `reimportDataset` clears the
+dataset-scoped index-keyed state on a shape change but never the view-scoped
+state (neither the live singleton nor any window) — a separate latent instance
+of the same class.
 
 ### Backend hardening round (2026-07-19, `4d61e56`)
 

@@ -80,6 +80,17 @@ describe("validateDisplayBlock", () => {
       series: { 1: { color: "#abc" } },
     });
   });
+
+  it("captures a labels map, dropping non-integer keys and non-string values", () => {
+    const v = {
+      series: { 1: { color: "#abc" } },
+      labels: { 0: "A", 1: "B", "1.5": "bad", x: "nope", 2: 42 },
+    };
+    expect(validateDisplayBlock(v)).toEqual({
+      series: { 1: { color: "#abc" } },
+      labels: { 0: "A", 1: "B" },
+    });
+  });
 });
 
 // ── validateAxesBlock ────────────────────────────────────────────────────────
@@ -197,6 +208,22 @@ describe("buildDisplayBlock", () => {
   it("ignores channels not in `plotted` even if styled", () => {
     const styles = { 5: { color: "#fff" } }; // channel 5 not plotted
     expect(buildDisplayBlock(styles, [0, 1], null, [], null)).toBeUndefined();
+  });
+
+  it("captures the plotted channels' labels alongside real content", () => {
+    const styles = { 1: { color: "#abc" } };
+    const block = buildDisplayBlock(styles, [0, 1], null, [], null, ["A", "B"]);
+    expect(block).toEqual({ series: { 1: { color: "#abc" } }, labels: { 0: "A", 1: "B" } });
+  });
+
+  it("omits labels entirely for an all-default plot (never flips to v2 on its own)", () => {
+    // Content-free block → undefined even though labels were supplied.
+    expect(buildDisplayBlock({}, [0, 1], null, [], null, ["A", "B"])).toBeUndefined();
+  });
+
+  it("skips channels with a missing or empty label", () => {
+    const block = buildDisplayBlock({ 0: { color: "#abc" } }, [0, 1], null, [], null, ["A", ""]);
+    expect(block).toEqual({ series: { 0: { color: "#abc" } }, labels: { 0: "A" } });
   });
 });
 

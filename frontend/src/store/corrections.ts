@@ -36,6 +36,26 @@ export interface CorrectionsSlice {
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
+// The four analysis overlays (fit/peak/baseline/deriv) are singleton AppState
+// fields: a row-indexed y-array tagged with the datasetId it was built for. A
+// corrections xTrim changes the row count AND, for a FRONT trim (the `x_min`
+// mask, corrections.py step 1), shifts WHICH rows survive — so a full-length
+// overlay can no longer be aligned onto the trimmed payload. `alignOverlayY`
+// only sees array lengths, assumes a TAIL trim, and `.slice(0, target)` would
+// draw the fit/baseline curve at a visibly wrong x-offset (persistent when
+// recalcMode is manual/off, which has no self-heal). Drop any overlay belonging
+// to the re-derived dataset — same reasoning the excludedRows guard uses — and
+// leave overlays for OTHER datasets untouched. The owning workshop recomputes
+// on its next run.
+function clearOverlaysFor(s: AppState, id: string): Partial<AppState> {
+  const p: Partial<AppState> = {};
+  if (s.fitOverlay?.datasetId === id) p.fitOverlay = null;
+  if (s.peakOverlay?.datasetId === id) p.peakOverlay = null;
+  if (s.baselineOverlay?.datasetId === id) p.baselineOverlay = null;
+  if (s.derivOverlay?.datasetId === id) p.derivOverlay = null;
+  return p;
+}
+
 export function createCorrectionsSlice(set: SliceSet, get: SliceGet): CorrectionsSlice {
   return {
     applyCorrections: async (id, params, bg) => {
@@ -78,6 +98,9 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
                 })
               : d,
           ),
+          // A trim also invalidates the row-indexed fit/peak/baseline/deriv
+          // overlays for this dataset (see clearOverlaysFor).
+          ...(rowsChanged ? clearOverlaysFor(s, id) : {}),
         }));
         if (rowsChanged && ds.excludedRows?.length) {
           get().setStatus(
@@ -103,21 +126,26 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
     resetCorrections: (id) => {
       const ds = get().datasets.find((d) => d.id === id);
       get().recordHistory("reset corrections");
-      set((s) => ({
-        datasets: s.datasets.map((d) => {
-          if (d.id !== id || !d.raw) return d;
-          // Reverting a trim restores rows, so index-based excludedRows are stale.
-          const rowsChanged = d.raw.time.length !== d.data.time.length;
-          return recompute({
-            ...d,
-            data: d.raw,
-            raw: undefined,
-            corrections: undefined,
-            bgRef: undefined,
-            ...(rowsChanged ? { excludedRows: undefined } : {}),
-          });
-        }),
-      }));
+      set((s) => {
+        const target = s.datasets.find((d) => d.id === id);
+        // Reverting a trim restores rows, so index-based row state (excludedRows
+        // + the four overlays) is stale — clear it, same as the apply path.
+        const rowsChanged = !!target?.raw && target.raw.time.length !== target.data.time.length;
+        return {
+          datasets: s.datasets.map((d) => {
+            if (d.id !== id || !d.raw) return d;
+            return recompute({
+              ...d,
+              data: d.raw,
+              raw: undefined,
+              corrections: undefined,
+              bgRef: undefined,
+              ...(rowsChanged ? { excludedRows: undefined } : {}),
+            });
+          }),
+          ...(rowsChanged ? clearOverlaysFor(s, id) : {}),
+        };
+      });
       if (ds?.raw) {
         get().recordMacro(`Reset corrections → ${ds.name}`, `qz.resetCorrections(${lit(ds.name)})`, {
           kind: "reset",

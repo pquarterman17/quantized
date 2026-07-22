@@ -57,6 +57,12 @@ beforeEach(() => {
     folders: [],
     expandedFolders: [],
     originBookClickOpens: "worksheet", // item 15 — reset the pref between tests
+    // The four row-indexed analysis overlays are singleton fields — null them
+    // so one test's overlay can't leak into another's corrections assertions.
+    fitOverlay: null,
+    peakOverlay: null,
+    baselineOverlay: null,
+    derivOverlay: null,
   });
 });
 
@@ -391,6 +397,74 @@ describe("useApp corrections", () => {
     await useApp.getState().applyCorrections("d1", { yOff: 5 });
 
     expect(useApp.getState().datasets[0].excludedRows).toEqual([1]);
+  });
+
+  it("clears the row-indexed overlays when a front-trim changes the row count", async () => {
+    // A front trim (x_min mask) drops row 0, but the overlays were built at the
+    // full row count. alignOverlayY can't tell a front trim from a tail trim, so
+    // a stale overlay would draw the fit/baseline curve at the wrong x. All four
+    // overlays for THIS dataset must be dropped at the source.
+    const trimmed: DataStruct = { ...raw, time: [2, 3], values: [[20], [30]] };
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(trimmed);
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x", data: raw }],
+      activeId: "d1",
+      fitOverlay: { datasetId: "d1", y: [100, 200, 300] },
+      baselineOverlay: { datasetId: "d1", y: [1, 2, 3] },
+      peakOverlay: { datasetId: "d1", y: [null, 20, null] },
+      derivOverlay: { datasetId: "d1", y: [0, 0, 0] },
+    });
+
+    await useApp.getState().applyCorrections("d1", { xTrimMin: 1.5 });
+
+    const s = useApp.getState();
+    expect(s.fitOverlay).toBeNull();
+    expect(s.baselineOverlay).toBeNull();
+    expect(s.peakOverlay).toBeNull();
+    expect(s.derivOverlay).toBeNull();
+  });
+
+  it("keeps an overlay belonging to a DIFFERENT dataset when one is trimmed", async () => {
+    const trimmed: DataStruct = { ...raw, time: [2, 3], values: [[20], [30]] };
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(trimmed);
+    const other = { datasetId: "d2", y: [7, 8, 9] };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x", data: raw }],
+      activeId: "d1",
+      fitOverlay: other,
+    });
+
+    await useApp.getState().applyCorrections("d1", { xTrimMin: 1.5 });
+
+    expect(useApp.getState().fitOverlay).toBe(other); // untouched — not d1's overlay
+  });
+
+  it("keeps a fit overlay when the correction preserves the row count", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...raw, values: [[5], [15], [25]] });
+    const overlay = { datasetId: "d1", y: [100, 200, 300] };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x", data: raw }],
+      activeId: "d1",
+      fitOverlay: overlay,
+    });
+
+    await useApp.getState().applyCorrections("d1", { yOff: 5 });
+
+    expect(useApp.getState().fitOverlay).toBe(overlay); // row count unchanged → kept
+  });
+
+  it("clears d1's overlay when resetting corrections restores trimmed rows", async () => {
+    const trimmed: DataStruct = { ...raw, time: [2, 3], values: [[20], [30]] };
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(trimmed);
+    useApp.setState({ datasets: [{ id: "d1", name: "x", data: raw }], activeId: "d1" });
+    await useApp.getState().applyCorrections("d1", { xTrimMin: 1.5 });
+
+    // Build an overlay on the now-trimmed (2-row) dataset, then reset — which
+    // restores the full 3 rows, so the row count changes again.
+    useApp.setState({ fitOverlay: { datasetId: "d1", y: [20, 30] } });
+    useApp.getState().resetCorrections("d1");
+
+    expect(useApp.getState().fitOverlay).toBeNull();
   });
 
   it("forwards a reference-background dataset + interp and records bgRef", async () => {
@@ -3810,6 +3884,61 @@ describe("useApp removeFormula column remap", () => {
     // rather than left pointing at whatever slid into that index.
     expect(s.errKeys).toEqual({});
     expect(s.xKey).toBe(0); // below the removed column -> untouched
+  });
+
+  // 2026-07-21: the singleton remap above only fixes the FOCUSED/live view. A
+  // background PlotWindow bound to the same dataset keeps its OWN PlotView copy
+  // of these channel-keyed fields and was left stale (booked follow-up).
+  it("remaps a BACKGROUND window's view, not just the live singleton", () => {
+    const data: DataStruct = {
+      time: [1, 2, 3],
+      values: [
+        [10, 20, 30],
+        [20, 40, 60],
+        [30, 60, 90],
+      ],
+      labels: ["m", "F1", "F2"],
+      units: ["emu", "", ""],
+      metadata: {},
+    };
+    const bgWindow: PlotWindow = {
+      id: "wBg",
+      kind: "plot",
+      title: "",
+      datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 480, h: 360 },
+      z: 0,
+      winState: "normal",
+      bg: "theme",
+      linkGroup: null,
+      pinned: false,
+      view: {
+        ...defaultPlotView(),
+        xKey: 0,
+        yKeys: [1, 2],
+        hiddenChannels: [1], // F1 (col 1) hidden in this unfocused window
+        seriesStyles: { 2: { color: "#0000ff" } }, // F2 (col 2) is blue
+      },
+    };
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "x", data, formulas: [{ name: "F1", expr: "m*2" }, { name: "F2", expr: "m*3" }] },
+        { id: "other", name: "o", data: raw },
+      ],
+      // Active dataset is NOT d1, so the singleton branch is skipped entirely —
+      // any remap of the window's view can only come from the window walk.
+      activeId: "other",
+      plotWindows: [bgWindow],
+    });
+
+    useApp.getState().removeFormula("d1", 0); // remove F1 -> F2 shifts col 2 -> 1
+
+    const win = useApp.getState().plotWindows.find((w) => w.id === "wBg")!;
+    // Without the walk these stayed stale: [1] would now hide F2, and the blue
+    // style would be stranded at the vanished index 2.
+    expect(win.view.hiddenChannels).toEqual([]);
+    expect(win.view.seriesStyles).toEqual({ 1: { color: "#0000ff" } });
+    expect(win.view.yKeys).toEqual([1]);
   });
 });
 
