@@ -142,3 +142,119 @@ def test_corrections_identity() -> None:
     ds = DataStruct.create(x, y)
     out = apply_corrections(ds, {})  # all defaults -> no-op (bgSlope/bgInt/yOff = 0)
     assert_allclose(out.values[:, 0], y, atol=1e-12)
+
+
+# --- MAIN_PLAN #37: arbitrary non-destructive X/Y rescaling -----------------
+
+
+def test_rescale_absent_is_identity() -> None:
+    x = np.linspace(1.0, 5.0, 20)
+    y = np.cos(x)
+    ds = DataStruct.create(x, y)
+    out = apply_corrections(ds, {})
+    assert_allclose(out.time, x)
+    assert_allclose(out.values[:, 0], y, atol=1e-12)
+
+
+def test_rescale_unity_is_identity() -> None:
+    """An explicit 1.0 must be a true no-op, not a float round-trip."""
+    x = np.linspace(1.0, 5.0, 20)
+    y = np.cos(x)
+    ds = DataStruct.create(x, y)
+    out = apply_corrections(ds, {"xScale": 1.0, "yScale": 1.0})
+    assert_allclose(out.time, x, atol=0)
+    assert_allclose(out.values[:, 0], y, atol=0)
+
+
+def test_rescale_multiplies_x_and_y() -> None:
+    x = np.linspace(1.0, 5.0, 20)
+    y = np.linspace(2.0, 9.0, 20)
+    ds = DataStruct.create(x, y)
+    out = apply_corrections(ds, {"xScale": 0.1, "yScale": 1000.0})
+    assert_allclose(out.time, x * 0.1)
+    assert_allclose(out.values[:, 0], y * 1000.0)
+
+
+def test_rescale_division_is_the_reciprocal_multiplier() -> None:
+    """The UI stores 1/v for a division; verify that is exactly a divide."""
+    x = np.linspace(1.0, 5.0, 10)
+    ds = DataStruct.create(x, x * 3.0)
+    out = apply_corrections(ds, {"yScale": 1.0 / 3.0})
+    assert_allclose(out.values[:, 0], x, atol=1e-12)
+
+
+def test_rescale_scales_every_channel_so_error_bars_stay_consistent() -> None:
+    """A y-channel and its paired error channel must scale together."""
+    x = np.linspace(0.0, 1.0, 8)
+    y = np.linspace(1.0, 8.0, 8)
+    err = np.full(8, 0.5)
+    ds = DataStruct.create(x, np.column_stack([y, err]), labels=["M", "dM"], units=["", ""])
+    out = apply_corrections(ds, {"yScale": 4.0})
+    assert_allclose(out.values[:, 0], y * 4.0)
+    assert_allclose(out.values[:, 1], err * 4.0)
+    # The ratio is what error bars are drawn from — it must be invariant.
+    assert_allclose(out.values[:, 1] / out.values[:, 0], err / y)
+
+
+def test_rescale_runs_before_trim_so_bounds_are_in_displayed_units() -> None:
+    """Trim bounds are picked off the PLOT, so they must mean scaled units."""
+    x = np.linspace(0.0, 100.0, 101)  # scaled by 0.1 -> 0..10
+    ds = DataStruct.create(x, x)
+    out = apply_corrections(ds, {"xScale": 0.1, "xTrimMin": 2.0, "xTrimMax": 4.0})
+    assert out.time.min() == pytest.approx(2.0)
+    assert out.time.max() == pytest.approx(4.0)
+    assert out.n_points == 21  # x = 20..40 step 1 -> 2.0..4.0 step 0.1
+
+
+def test_rescale_runs_before_x_offset() -> None:
+    x = np.linspace(0.0, 10.0, 11)
+    ds = DataStruct.create(x, x)
+    out = apply_corrections(ds, {"xScale": 2.0, "xOff": 5.0})
+    assert_allclose(out.time, x * 2.0 - 5.0)  # scale, THEN subtract the offset
+
+
+def test_rescale_derivative_uses_both_factors() -> None:
+    """The ordering guard: d(y*sy)/d(x*sx) = (sy/sx) dy/dx.
+
+    Scaling AFTER the derivative would multiply by sy alone and silently give
+    an answer wrong by a factor of sx. This test is the reason step 0 exists.
+    """
+    x = np.linspace(0.0, 10.0, 201)
+    y = 3.0 * x  # dy/dx = 3
+    ds = DataStruct.create(x, y)
+    sx, sy = 2.0, 5.0
+    out = apply_corrections(ds, {"xScale": sx, "yScale": sy, "derivativeMode": "dY/dX"})
+    expected = 3.0 * sy / sx
+    assert_allclose(out.values[:, 0], np.full_like(out.values[:, 0], expected), rtol=1e-9)
+
+
+def test_rescale_is_invisible_to_range_normalization() -> None:
+    """Range/peak/z-score normalize the factor away — no interaction."""
+    x = np.linspace(0.0, 1.0, 25)
+    y = np.sin(x * 3.0) + 2.0
+    ds = DataStruct.create(x, y)
+    plain = apply_corrections(ds, {"normMethod": "Range [0,1]"})
+    scaled = apply_corrections(ds, {"yScale": 250.0, "normMethod": "Range [0,1]"})
+    assert_allclose(scaled.values[:, 0], plain.values[:, 0], atol=1e-12)
+
+
+@pytest.mark.parametrize("bad", [0.0, float("inf"), float("-inf"), float("nan")])
+def test_rescale_rejects_zero_and_non_finite(bad: float) -> None:
+    ds = DataStruct.create(np.linspace(0.0, 1.0, 5), np.ones(5))
+    for key in ("xScale", "yScale"):
+        with pytest.raises(ValueError):
+            apply_corrections(ds, {key: bad})
+
+
+def test_rescale_rejects_non_numeric() -> None:
+    ds = DataStruct.create(np.linspace(0.0, 1.0, 5), np.ones(5))
+    with pytest.raises(ValueError):
+        apply_corrections(ds, {"xScale": "abc"})
+
+
+def test_rescale_error_message_is_ascii() -> None:
+    """Non-ASCII in an error string crashes Windows cp1252 log handlers."""
+    ds = DataStruct.create(np.linspace(0.0, 1.0, 5), np.ones(5))
+    with pytest.raises(ValueError) as exc:
+        apply_corrections(ds, {"yScale": 0.0})
+    str(exc.value).encode("ascii")  # raises UnicodeEncodeError if it regressed

@@ -56,6 +56,12 @@ class CorrectionParams(BaseModel):
     footprint_w: float | None = Field(default=None, alias="footprintW")
     footprint_l: float | None = Field(default=None, alias="footprintL")
     footprint_two_theta: bool | None = Field(default=None, alias="footprintTwoTheta")
+    # MAIN_PLAN #37 arbitrary rescaling. Always the literal MULTIPLIER — the UI
+    # offers x/÷ and stores 1/v for a division, so there is exactly one stored
+    # representation and no second field to drift out of sync. Absent or 1.0 is
+    # a no-op; zero/non-finite is rejected by calc (-> 422).
+    x_scale: float | None = Field(default=None, alias="xScale")
+    y_scale: float | None = Field(default=None, alias="yScale")
 
 
 class CorrectionsRequest(BaseModel):

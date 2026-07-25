@@ -7,6 +7,7 @@ to HTTP status codes.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -139,3 +140,46 @@ def test_apply_footprint_scales_low_angles() -> None:
     out = resp.json()
     assert out["values"][0][0] > 1.0  # below spill-over: scaled up
     assert out["values"][1][0] == 1.0  # above spill-over: untouched
+
+
+# --- MAIN_PLAN #37: arbitrary rescaling over the wire -----------------------
+
+
+def test_apply_scale_multiplies_over_the_wire() -> None:
+    dataset = _import()
+    resp = client.post(
+        "/api/corrections/apply",
+        json={"dataset": dataset, "params": {"xScale": 2.0, "yScale": 0.5}},
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["time"][0] == dataset["time"][0] * 2.0
+    assert out["values"][0][0] == dataset["values"][0][0] * 0.5
+
+
+def test_apply_zero_scale_is_422_not_500() -> None:
+    """The narrow-except class: calc raises ValueError, the route maps it."""
+    dataset = _import()
+    resp = client.post(
+        "/api/corrections/apply",
+        json={"dataset": dataset, "params": {"yScale": 0.0}},
+    )
+    assert resp.status_code == 422
+    assert "non-zero" in resp.json()["detail"]
+
+
+def test_apply_non_finite_scale_is_rejected() -> None:
+    """Reachable only via a RAW body: Python's json encoder refuses to emit
+    ``inf``, but its decoder happily accepts ``1e400`` from a JS client and
+    yields ``inf``. So the guard has to be tested the way a browser would hit
+    it, not through a Python dict."""
+    dataset = _import()
+    body = json.dumps({"dataset": dataset, "params": {}})
+    body = body.replace('"params": {}', '"params": {"xScale": 1e400}')
+    resp = client.post(
+        "/api/corrections/apply",
+        content=body,
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status_code == 422
+    assert "finite" in resp.json()["detail"]

@@ -30,6 +30,27 @@ from .units import convert_units
 __all__ = ["apply_corrections"]
 
 
+def _finite_scale(raw: Any, name: str) -> float:
+    """Validate a MAIN_PLAN #37 rescale factor, returning 1.0 when unset.
+
+    A zero factor would collapse the axis to a point and a non-finite one would
+    poison every downstream stage, so both fail loudly here rather than
+    producing a silently ruined dataset. Error text stays ASCII — non-ASCII in
+    an exception crashes Windows cp1252 log handlers.
+    """
+    if raw is None:
+        return 1.0
+    try:
+        scale = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a number, got {raw!r}") from exc
+    if not math.isfinite(scale):
+        raise ValueError(f"{name} must be finite, got {scale}")
+    if scale == 0.0:
+        raise ValueError(f"{name} must be non-zero (a zero factor collapses the axis)")
+    return scale
+
+
 def _matlab_round(x: float) -> int:
     return int(math.copysign(math.floor(abs(x) + 0.5), x))
 
@@ -66,12 +87,36 @@ def apply_corrections(
     normMethod, derivativeMode. GOTO additions (new, beyond MATLAB parity):
     bgAnchors + bgAnchorMethod (anchor-point baseline subtraction, #2) and
     footprintW + footprintL + footprintTwoTheta (XRR/NR beam-footprint scale,
-    #7b — skips channels labelled ``dq``, like the neutron R-scale). Returns a
-    new DataStruct.
+    #7b — skips channels labelled ``dq``, like the neutron R-scale). MAIN_PLAN
+    #37 adds xScale + yScale (arbitrary multiplicative rescaling, applied FIRST
+    — see step 0). Returns a new DataStruct.
+
+    Raises ``ValueError`` on a zero or non-finite xScale/yScale (the route
+    turns that into a 422 rather than a 500).
     """
     time = np.asarray(data.time, dtype=float).copy()
     values = np.asarray(data.values, dtype=float).copy()
     labels = list(data.labels)
+
+    # 0. Arbitrary X/Y rescaling (MAIN_PLAN #37) — a non-destructive unit
+    # re-expression, so it runs FIRST and everything downstream is expressed in
+    # the new units. That ordering is the whole design:
+    #   * xTrimMin/Max, xOff, bgSlope/bgInt and bgAnchors are all picked by the
+    #     user FROM THE PLOT, i.e. in displayed coordinates. Scaling later would
+    #     silently redefine every one of them.
+    #   * step 8's derivative then differentiates scaled y against scaled x, so
+    #     d(y·sy)/d(x·sx) = (sy/sx)·dy/dx falls out correctly. Scaling at the END
+    #     instead would multiply the derivative by sy alone — plainly wrong.
+    #   * step 7's normalizations are scale-invariant, so they don't interact.
+    # yScale multiplies EVERY value channel, so a y-channel and its paired error
+    # channel scale together and error bars stay consistent for free (same
+    # uniform treatment step 5's emu/g conversion already applies).
+    x_scale = _finite_scale(params.get("xScale"), "xScale")
+    y_scale = _finite_scale(params.get("yScale"), "yScale")
+    if x_scale != 1.0:
+        time = time * x_scale
+    if y_scale != 1.0:
+        values = values * y_scale
 
     # 1. Trim on x.
     x_min = params.get("xTrimMin", float("nan"))
