@@ -429,15 +429,24 @@ in git history @ `e4f6590`.)*
       uniform yScale means error channels scale with their y-channel for
       free.
 
-38. **A useful home screen and project-wide navigation** — the empty
+38. **A useful home screen and project-wide navigation** — **home shipped
+    2026-07-25**; project-wide SEARCH remains deliberately deferred per the
+    sub-item below (validate the home/recent/path model in real use first).
+    Originally: the empty
     Library offers essentially file drop ("Drop files here, or use ⊞ to
     import / ✚ for a demo"); recents and smart folders exist but do not
     add up to project-level navigation.
-    - [ ] Home shows recent and pinned projects/files, working-path
-          choices, drop/import, and recovery status without clutter
-    - [ ] Entries expose Open, Locate, Unpin, Remove from Recent, Retry
-    - [ ] Missing/offline sources are visible but never trigger automatic
-          deletion, relinking or destructive cleanup
+    - [x] Home shows recent files, working-path choices (pinnable),
+          drop/import, and autosave/recovery status — COMPOSING the #31 and
+          #32 stores, never duplicating them, so it cannot disagree with
+          the menus showing the same things
+    - [x] Entries expose Open (click, via `reopenRecent`, which decides
+          Locate-vs-Retry from the path's real state), Remove from Recent
+          (✕), and Pin/Unpin for working paths
+    - [x] Missing/offline sources are VISIBLE and nothing more — distinct
+          badges, no automatic cleanup, and a pathless (browser-uploaded)
+          entry is never probed at all, because claiming to know its state
+          would be a false signal
     - [ ] Later sub-phase: project-wide search across dataset names,
           column labels, metadata, notes, reports, figures, with Reveal
           in Library/Worksheet/Figure

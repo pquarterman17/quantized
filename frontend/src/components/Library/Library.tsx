@@ -28,6 +28,7 @@ import { useLibraryTree } from "./useLibraryTree";
 import { makeDemoDataset } from "../../lib/demo";
 import { folderPath, folderPathLabel } from "../../lib/foldertree";
 import { originSheetGroups, originSheetNumber } from "../../lib/grouping";
+import HomeScreen from "./HomeScreen";
 import { chooseAndImport } from "../../lib/importEntry";
 import { IMPORT_ACCEPT } from "../../lib/openFilePicker";
 import { matchesQuery, parseQuery } from "../../lib/smartfolders";
@@ -242,11 +243,16 @@ export default function Library() {
       {body}
 
       {shown.length === 0 && folders.length === 0 && (
-        <div className="qzk-ds-meta" style={{ padding: 8, textAlign: "center" }}>
-          {datasets.length === 0
-            ? "Drop files here, or use ⊞ to import / ✚ for a demo"
-            : "No matches"}
-        </div>
+        // MAIN #38: an empty Library is the most common launch state, so it
+        // gets the resume-work surface rather than a one-line hint. A filtered
+        // no-match is a different situation and keeps its plain message.
+        datasets.length === 0 ? (
+          <HomeScreen onImport={onImport} />
+        ) : (
+          <div className="qzk-ds-meta" style={{ padding: 8, textAlign: "center" }}>
+            No matches
+          </div>
+        )
       )}
       {/* Panel-width drag-resize (plan #13 sub-item 5) — a thin strip at the
        *  right edge; drag streams --lw live, release persists to qz.prefs. */}
