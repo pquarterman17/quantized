@@ -462,10 +462,8 @@ in git history @ `e4f6590`.)*
       uniform yScale means error channels scale with their y-channel for
       free.
 
-38. **A useful home screen and project-wide navigation** — **home shipped
-    2026-07-25**; project-wide SEARCH remains deliberately deferred per the
-    sub-item below (validate the home/recent/path model in real use first).
-    Originally: the empty
+~~38. **A useful home screen and project-wide navigation**~~ COMPLETED
+    2026-07-25 — home screen AND project-wide search. Originally: the empty
     Library offers essentially file drop ("Drop files here, or use ⊞ to
     import / ✚ for a demo"); recents and smart folders exist but do not
     add up to project-level navigation.
@@ -480,13 +478,23 @@ in git history @ `e4f6590`.)*
           badges, no automatic cleanup, and a pathless (browser-uploaded)
           entry is never probed at all, because claiming to know its state
           would be a false signal
-    - [ ] Later sub-phase: project-wide search across dataset names,
-          column labels, metadata, notes, reports, figures, with Reveal
-          in Library/Worksheet/Figure
-    - [ ] Search stays deferred until the home/recent/path model is
-          validated in real use
-    - Compose #31's paths/recents and #32's recovery health; do not
-      duplicate their state.
+    - [x] Project-wide search across dataset names, column labels, tags,
+          metadata, notes, reports and figures, with Reveal — Data ▸ "Find
+          in project…". REVEAL, not filter: the Library's own filter
+          already narrows the dataset list, so the gap was finding a
+          column or note inside a dataset you do not have OPEN. Each hit
+          carries the surface that can actually show it, so a column
+          opens the worksheet rather than merely selecting its dataset.
+          Ranked name > column > tag > note > metadata, because typing
+          "Rxy" means the column, not a note mentioning it. Bulky decoded
+          blobs (`origin_books`, `text_columns`) are excluded — matching
+          inside a 10 kB inventory produces hits nobody can act on and
+          drowns the ones they can
+    - [x] The deferral is resolved: the home/recent/path model shipped
+          earlier the same day and search was then built on the owner's
+          instruction, rather than left as a standing "later"
+    - Composes #31's paths/recents and #32's recovery health; owns no
+      state of its own.
 
 ~~12. **Reciprocal (Arrhenius) axis scale**~~ COMPLETED 2026-07-11 (see
     Completed).

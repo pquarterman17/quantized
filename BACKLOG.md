@@ -117,14 +117,20 @@ From `GUI_INTERACTION_PLAN.md` (see it for the full tiered list + per-item
 detail). Owner-gated items in that plan (#1 undo scopes, #2 tree scope, #5
 baseline framing) are under Owner actions below, not here.
 
-The 2026-07-24 reconciliation left this table empty. The 2026-07-25 plan-tree
+**This table is EMPTY, and this time every booked item is genuinely finished
+rather than partially shipped with residuals.** MAIN #30–#38 all closed
+2026-07-25; each item's Completed entry records what was built and, where a
+boundary was deliberately drawn (the import WIZARD does not expose error
+pairing; trash covers datasets not folders; the Tauri dialog is unwired),
+says so explicitly instead of leaving an unticked box behind.
+
+Historical: the 2026-07-24 reconciliation left this table empty. The 2026-07-25 plan-tree
 consolidation first refilled it from the deleted Sol audit docs; the later
 ChatGPT-Sol implementation audit then added eight current-code gaps that could
 still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
-| **Home screen/project navigation — HOME SHIPPED** 2026-07-25: the empty Library now shows recents (with offline/missing badges), pinnable working paths, import, and autosave health — composing the #31/#32 stores rather than duplicating them. Project-wide SEARCH stays deliberately deferred until the model is validated in real use, per the plan's own sub-item | MAIN #38 |
 
 The remaining dev item is a judgment call the plan explicitly parked for the
 owner rather than a task:

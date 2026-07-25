@@ -77,6 +77,7 @@ const DigitizerView = lazyPanel(() => import("./components/workshops/digitizer/D
 const WaterfallView = lazyPanel(() => import("./components/workshops/waterfall/WaterfallView"));
 const ReflView = lazyPanel(() => import("./components/workshops/reflview/ReflView"));
 const TrashPanel = lazyPanel(() => import("./components/workshops/trash/TrashPanel"));
+const SearchPanel = lazyPanel(() => import("./components/workshops/search/SearchPanel"));
 
 export default function AppOverlays() {
   const curveFitOpen = useApp((s) => s.curveFitOpen);
@@ -100,6 +101,7 @@ export default function AppOverlays() {
   const waterfallOpen = useApp((s) => s.waterfallOpen);
   const reflViewOpen = useApp((s) => s.reflViewOpen);
   const trashOpen = useApp((s) => s.trashOpen);
+  const searchOpen = useApp((s) => s.searchOpen);
   const openReportId = useApp((s) => s.openReportId);
   const statsChooserOpen = useApp((s) => s.statsChooserOpen);
   const peakWizardOpen = useApp((s) => s.peakWizardOpen);
@@ -142,6 +144,7 @@ export default function AppOverlays() {
       {waterfallOpen && <WaterfallView />}
       {reflViewOpen && <ReflView />}
       {trashOpen && <TrashPanel />}
+      {searchOpen && <SearchPanel />}
       <ShortcutsDialog />
       <HelpDialog />
       <TextFormatHelp />

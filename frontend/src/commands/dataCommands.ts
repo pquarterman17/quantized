@@ -27,6 +27,15 @@ export function buildDataCommands(s: StoreGet): Action[] {
       run: () => window.dispatchEvent(new Event(SHOW_SQLITE_QUERY)),
     },
     {
+      // MAIN #38: find a column or note inside a dataset you do not have open —
+      // the thing a Library filter cannot do.
+      id: "find-in-project",
+      group: "Data",
+      section: "Import & query",
+      label: "Find in project…",
+      run: () => s().setSearchOpen(true),
+    },
+    {
       // MAIN #32: the trash shipped with restore/purge already tested, but no
       // way to SEE it — a safety net nobody can find is not one.
       id: "trash",

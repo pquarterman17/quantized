@@ -46,6 +46,11 @@ export interface TrashSlice {
    *  own UI state, and useApp sits at its size ratchet. */
   trashOpen: boolean;
   setTrashOpen: (trashOpen: boolean) => void;
+  /** MAIN #38 project-wide search panel. Shares this slice for the same
+   *  reason trashOpen does: it is tool-window UI state and useApp is at its
+   *  ratchet. */
+  searchOpen: boolean;
+  setSearchOpen: (searchOpen: boolean) => void;
   /** Newest first. Session-scoped: deliberately NOT serialized into a `.dwk`,
    *  which is a portable description of a workspace, not a wastebasket. */
   trash: TrashEntry[];
@@ -65,6 +70,8 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
     trash: [],
     trashOpen: false,
     setTrashOpen: (trashOpen) => set({ trashOpen }),
+    searchOpen: false,
+    setSearchOpen: (searchOpen) => set({ searchOpen }),
 
     sendToTrash: (datasets, now = Date.now()) => {
       if (datasets.length === 0) return;
