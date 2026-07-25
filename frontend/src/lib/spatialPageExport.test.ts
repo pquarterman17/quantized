@@ -199,6 +199,51 @@ describe("buildSpatialPageRequest", () => {
     expect(decoded.y2_label).toBe("SLD (10⁻⁶ Å⁻²)");
   });
 
+  it("gives the secondary axis the page's Y tick format (#54 pass B — it used to be dropped)", () => {
+    // REGRESSION (fails before ORIGIN_FILE_DECODE_PLAN #54 pass B): a
+    // SpatialPanel carries no per-panel y2 tick format, and this path used to
+    // send `y_fmt` while simply omitting `y2_fmt`. The backend has no inherit
+    // rule (calc/figure_y2.draw_secondary_axes passes y_fmt straight to
+    // apply_tick_formats; None = no formatter), so a page export rendered its
+    // PRIMARY axis in the chosen format beside a DEFAULT-formatted secondary
+    // axis — while the screen showed both formatted, because uplotOpts does
+    // inherit (`y2Fmt ? tickFormatter(y2Fmt) : yValues`). The single-figure
+    // export path applied the inherit rule all along; only this hand-copy of
+    // its derivation missed it.
+    const fig = buildSpatialPageRequest(
+      [panel({ yKeys: [1, 2], y2Keys: [2] })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+      {
+        xFmt: { mode: "auto", digits: 2 },
+        yFmt: { mode: "sci", digits: 3 },
+        showGrid: false,
+        showAxisBox: false,
+      },
+    )!.panels[0].figure;
+    expect(fig.y_fmt).toEqual({ mode: "sci", digits: 3 });
+    expect(fig.y2_fmt).toEqual({ mode: "sci", digits: 3 });
+  });
+
+  it('leaves y2_fmt off when the page format is "auto" (axisFmtParam omits it)', () => {
+    // The inherit rule must not start SENDING a format where none was sent
+    // before: "auto" is exactly what `axisFmtParam` maps back to undefined,
+    // so the ordinary request stays byte-identical to the pre-pass-B one.
+    const fig = buildSpatialPageRequest(
+      [panel({ yKeys: [1, 2], y2Keys: [2] })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+      {
+        xFmt: { mode: "auto", digits: 2 },
+        yFmt: { mode: "auto", digits: 2 },
+        showGrid: false,
+        showAxisBox: false,
+      },
+    )!.panels[0].figure;
+    expect(fig.y_fmt).toBeUndefined();
+    expect(fig.y2_fmt).toBeUndefined();
+  });
+
   it("the primary-axis single-channel Y-label fallback never borrows a y2 channel's name", () => {
     // channel 1 is the LONE primary series, channel 2 is a y2 overlay —
     // the auto-derived y_label must describe channel 1 ("b"), not channel 2.

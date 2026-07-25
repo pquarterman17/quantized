@@ -27,6 +27,7 @@ import {
   spatialPanelsOf,
   type Composition,
 } from "../../lib/composition";
+import { resolveSecondaryAxis, secondaryAxisFromPanel } from "../../lib/axisspec";
 import { buildErrorColumns } from "../../lib/errorbars";
 import { sharedXDomain, sharedYDomain } from "../../lib/facet";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
@@ -310,7 +311,15 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         // same way for consistency, though a hidden channel is never itself
         // curve-bound to y2 in practice.
         const plottedChannels = spatialPlottedChannels(p);
-        const y2 = p.y2Keys ? p.y2Keys.filter((ch) => plottedChannels.includes(ch)) : null;
+        // #54 pass B: the plotted∩y2 intersection comes from the shared
+        // resolver, the same one both export paths use — `y2_keys` is a set
+        // membership marker on the wire (lib/plotdata's `new Set(y2Keys)`),
+        // so this is the identical selection expressed once instead of thrice.
+        const y2 =
+          resolveSecondaryAxis(plottedChannels, secondaryAxisFromPanel(p), {
+            scale: p.yLog ? "log" : "linear",
+            fmt: { mode: "auto", digits: 2 },
+          })?.keys ?? null;
         // A panel carrying a merged y2 overlay (decode-plan #36 residual —
         // `originFigures.resolveSpatialPanels`) passes its OWN y2Keys so the
         // fetched payload tags those series `axis: 1`, same as the single-
@@ -413,7 +422,11 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           // (decode-plan #36 residual) — mirrors the single-plot double-Y
           // apply's y2Lim/y2Scale/y2Step/y2AxisLabel, scoped to this cell.
           y2Lim: p.y2Lim ?? null,
-          y2Scale: p.y2Log != null ? scaleFromLog(p.y2Log) : null,
+          // #54 pass B: the y2Log -> AxisScale bridge lives in the shared
+          // adapter (lib/axisspec.secondaryAxisFromPanel), so this render
+          // path and the page-export path convert a decoded panel the SAME
+          // way instead of each spelling out `scaleFromLog` themselves.
+          y2Scale: secondaryAxisFromPanel(p).scale,
           y2Step: p.y2Step ?? null,
           y2AxisLabel: p.y2AxisLabel,
           xFmt,

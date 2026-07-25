@@ -25,17 +25,26 @@
 // figure_y2.render_with_secondary_axis, reused verbatim from the
 // single-figure path), so a panel's y2 channels are no longer filtered out
 // of `plotted`, and a panel made SOLELY of a y2 overlay no longer fails the
-// whole export closed. `spatialPanelFigure` mirrors
-// lib/exportFigureCommand.ts's own y2Plotted derivation + `gateY2Overrides`
-// two-pass gating (reused, not reimplemented) so a doubleY spatial panel
-// (the PNR SLD graphs this residual exists for) exports exactly like its
-// on-screen dual-Y render. Data-coordinate annotations pinned to the y2
+// whole export closed. As of #54 pass B `spatialPanelFigure` no longer
+// MIRRORS lib/exportFigureCommand.ts's y2 derivation — both call the one
+// shared resolver in lib/axisspec.ts, alongside the same `gateY2Overrides`
+// two-pass gating — so a doubleY spatial panel (the PNR SLD graphs this
+// residual exists for) exports exactly like its on-screen dual-Y render.
+// (The mirror is what let this path silently omit `y2_fmt` while the
+// single-figure path sent it; see lib/axisspec.ts's module doc.)
+// Data-coordinate annotations pinned to the y2
 // scale (`Annotation.axis === 1`) are no longer dropped either — the wire
 // schema has no per-annotation axis tag (same as the single-figure path's
 // own `liveViewOverrides`), so they render in the PRIMARY axes' data
 // coordinates, an accepted pre-existing limitation this path now simply
 // shares instead of being needlessly MORE conservative about.
 
+import {
+  resolveSecondaryAxis,
+  secondaryAxisFromPanel,
+  secondaryAxisIsLog,
+  secondaryAxisWire,
+} from "./axisspec";
 import { buildExportStyles } from "./exportStyles";
 import { compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
 import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./multipanel";
@@ -112,12 +121,26 @@ function spatialPanelFigure(
 ): FigureSpec | null {
   // GUI_INTERACTION #12 slice 4c: the page endpoint now has a real twinx
   // model (calc.figure_page._draw_panel), so y2 channels stay in `plotted`
-  // (full list, display order) — `y2Plotted` tags the secondary-axis
-  // subset, mirroring lib/exportFigureCommand.ts's own y2Plotted split.
+  // (full list, display order) — the resolved axis below tags the
+  // secondary-axis subset.
   const plotted = spatialPlottedChannels(panel);
   if (plotted.length === 0) return null;
-  const y2Set = new Set(panel.y2Keys ?? []);
-  const y2Plotted = plotted.filter((ch) => y2Set.has(ch));
+  // #54 pass B: the y2 split + the scale/format inherit rules now come from
+  // the SHARED resolver (lib/axisspec.ts), not a hand-copy of the
+  // single-figure path. `fmt` is null on a SpatialPanel (Origin decodes no
+  // per-panel y2 tick format), so it inherits the page's primary Y format —
+  // which is what the on-screen render has always done and what this path
+  // previously dropped, leaving a formatted primary axis beside a
+  // default-formatted secondary one.
+  const y2Axis = resolveSecondaryAxis(plotted, secondaryAxisFromPanel(panel), {
+    scale: panel.yLog ? "log" : "linear",
+    // No appearance = no format at all on ANY axis here (see x_fmt/y_fmt
+    // below, which are likewise `undefined` without one); "auto" is the
+    // value `axisFmtParam` maps back to `undefined` on the wire, so the
+    // no-appearance request stays byte-identical to before.
+    fmt: appearance?.yFmt ?? { mode: "auto", digits: 2 },
+  });
+  const y2Set = new Set(y2Axis?.keys ?? []);
   const decodedLabels = panel.seriesLabels ?? {};
   const hasLegend = Object.keys(decodedLabels).length > 0 || !!panel.legendTitle;
   // Matplotlib suppresses labels beginning with "_". For a partial decoded
@@ -142,7 +165,7 @@ function spatialPanelFigure(
     : dataset.units[only]
       ? `${dataset.labels[only]} (${dataset.units[only]})`
       : dataset.labels[only];
-  const minorTicks = !!(panel.xLog || panel.yLog || (y2Plotted.length > 0 && panel.y2Log));
+  const minorTicks = panel.xLog || panel.yLog || secondaryAxisIsLog(y2Axis);
   return {
     dataset: exportDataset,
     x_key: panel.xKey ?? undefined,
@@ -159,20 +182,13 @@ function spatialPanelFigure(
     y_step: panel.yStep,
     series_styles: buildExportStyles(plotted, panel.seriesStyles ?? {}),
     overrides: gateY2Overrides(panelOverrides(panel, appearance), {
-      y2Plotted: y2Plotted.length > 0,
+      y2Plotted: y2Axis !== null,
       minorTicks,
     }),
-    ...(y2Plotted.length
-      ? {
-          y2_keys: y2Plotted,
-          // Blank/undecoded -> omit and let the backend auto-derive it the
-          // same way it does for the single-figure route (calc's
-          // _figure_series: a lone y2 series -> "label (unit)").
-          y2_label: panel.y2AxisLabel || undefined,
-          y2_scale: panel.y2Log ? "log" : undefined,
-          y2_step: panel.y2Step ?? undefined,
-        }
-      : {}),
+    // Blank/undecoded y2_label is omitted by `secondaryAxisWire` so the
+    // backend auto-derives it the same way it does for the single-figure
+    // route (calc's _figure_series: a lone y2 series -> "label (unit)").
+    ...secondaryAxisWire(y2Axis),
   };
 }
 

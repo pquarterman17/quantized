@@ -9,6 +9,12 @@
 
 import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api";
+import {
+  resolveSecondaryAxis,
+  secondaryAxisFromView,
+  secondaryAxisIsLog,
+  secondaryAxisWire,
+} from "./axisspec";
 import { buildExportStyles } from "./exportStyles";
 import { exportActive, type StoreGet } from "./exportActive";
 import {
@@ -95,19 +101,21 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
     // backend's y2_keys is a subset marker, not a replacement), plus that
     // subset in display order, so the export renders the same dual-Y split
     // the screen already shows instead of flattening it onto one axis.
-    const y2Set = new Set(st.y2Keys ?? []);
-    const y2Plotted = plotted.filter((ch) => y2Set.has(ch));
-    const y2l = st.y2AxisLabel.trim();
+    // The split + the scale/format inherit rules live in lib/axisspec.ts
+    // (#54 pass B) — shared verbatim with the spatial page export, which
+    // used to re-derive them by hand.
+    const y2Axis = resolveSecondaryAxis(plotted, secondaryAxisFromView(st), {
+      scale: st.yScale,
+      fmt: st.yFmt,
+    });
     // `overrides` (above) was built by `liveViewOverrides` before this
     // callback ever learns the plotted/y2 split — gate the two fields that
     // depend on it (a stale y2_lim; a log-scaled secondary axis's minor
-    // ticks) now that y2Plotted is known. See `gateY2Overrides`'s doc.
+    // ticks) now that the y2 split is known. See `gateY2Overrides`'s doc.
     const gatedOverrides = gateY2Overrides(overrides, {
-      y2Plotted: y2Plotted.length > 0,
+      y2Plotted: y2Axis !== null,
       minorTicks:
-        st.xScale === "log" ||
-        st.yScale === "log" ||
-        (y2Plotted.length > 0 && (st.y2Scale ?? st.yScale) === "log"),
+        st.xScale === "log" || st.yScale === "log" || secondaryAxisIsLog(y2Axis),
     });
     return exportFigure({
       dataset,
@@ -119,18 +127,11 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
       y_fmt: axisFmtParam(st.yFmt),
       x_step: st.xStep,
       y_step: st.yStep,
-      ...(y2Plotted.length
-        ? {
-            y2_keys: y2Plotted,
-            y2_label: y2l || undefined,
-            y2_scale: st.y2Scale ?? st.yScale,
-            // y2Fmt null inherits yFmt on screen (store/useApp.ts's own
-            // field doc, TickFormat.tsx's Y2 row) — mirror that same
-            // inherit-default here so export matches the live plot.
-            y2_fmt: axisFmtParam(st.y2Fmt ?? st.yFmt),
-            y2_step: st.y2Step,
-          }
-        : {}),
+      // y2Fmt/y2Scale null inherit yFmt/yScale on screen (store/useApp.ts's
+      // own field docs, TickFormat.tsx's Y2 row) — `resolveSecondaryAxis`
+      // applied that same inherit-default above, so export matches the live
+      // plot without this call site restating the rule.
+      ...secondaryAxisWire(y2Axis),
       fmt: params.fmt as string,
       style: params.style as string,
       dpi: params.dpi as number,
