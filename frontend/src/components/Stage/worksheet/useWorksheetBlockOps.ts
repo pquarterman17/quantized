@@ -53,6 +53,11 @@ export interface BlockOpsApi {
   hasRows: boolean;
 }
 
+/** Cell count past which a paste announces itself first. Chosen as the point
+ *  where the apply plus React's re-render stops being imperceptible on a
+ *  mid-range machine; below it, a status message would flash and vanish. */
+export const LARGE_PASTE_CELLS = 5_000;
+
 /** Ascending, de-duplicated — the order a spreadsheet block is read in. */
 function ordered(xs: readonly number[]): number[] {
   return [...new Set(xs)].sort((a, b) => a - b);
@@ -98,6 +103,15 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
         if (edits.length === 0) {
           src.setStatus("nothing pasted (outside the sheet or read-only columns)");
           return;
+        }
+        // MAIN #34: say something BEFORE a big apply, not after. The apply is
+        // O(rows + edits) and a normal paste lands inside a frame, so this is
+        // not a progress bar — it is the honest fix for the only case that can
+        // actually stall: a very large block, where a silent freeze reads as a
+        // hang. Below the threshold nothing is announced, because a message
+        // that flashes for 3 ms is noise.
+        if (edits.length >= LARGE_PASTE_CELLS) {
+          src.setStatus(`pasting ${edits.length.toLocaleString()} cells…`);
         }
         setCellBlock(src.datasetId, edits, "paste cells");
         // Say what was DROPPED. Silently ignoring overflow is how a user ends up

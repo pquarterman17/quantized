@@ -321,7 +321,8 @@ in git history @ `e4f6590`.)*
       deferral (read-only in v1) — keep them distinct so that deferral
       does not reopen by accident.
 
-34. **Spreadsheet-style block editing for fast data cleanup** — single
+~~34. **Spreadsheet-style block editing for fast data cleanup**~~ COMPLETED
+    2026-07-25 — single
     worksheet cells are editable, but there are no rectangular
     operations anywhere in `Stage/worksheet/`, `store/worksheetSelection`
     or `lib/worksheetTransforms` (verified: no clipboard/paste/fill
@@ -348,10 +349,12 @@ in git history @ `e4f6590`.)*
     - [x] Raw imported data stays immutable — writes go through the same
           `recompute` path single-cell editing already used; `raw` is
           untouched and corrections re-derive from it
-    - [ ] Large pastes show progress — still not done, and deliberately
-          left: the apply is O(rows + edits) and a realistic paste lands
-          well inside a frame, so a progress affordance would be UI for a
-          problem not yet observed. Revisit if a real paste ever stutters
+    - [x] Large pastes announce themselves BEFORE the apply (≥5,000 cells).
+          Not a progress bar: the apply is O(rows + edits) and an ordinary
+          paste is imperceptible, so a bar would be theatre. This covers the
+          only case that can actually stall, where a silent freeze reads as
+          a hang; below the threshold nothing is said, because a message
+          that flashes for 3 ms is noise rather than feedback
     - Build on the existing worksheet selection, edit, undo and
       corrected-data conventions.
 

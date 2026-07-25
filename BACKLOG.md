@@ -124,7 +124,6 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
-| **Spreadsheet-style block editing — CORE SHIPPED** 2026-07-25 (copy/paste/clear/fill-down over a row×column selection; `lib/clipboardGrid.ts` pure + `setCellBlock` applying a whole block as ONE undo entry). Remaining: cut, insert/delete rows and derived columns, keyboard bindings, and a progress affordance for very large pastes | MAIN #34 |
 | **Complete X/Y error bars** — symmetric/asymmetric X and Y pairing, override UI, and interactive/export parity | MAIN #36 |
 | **Home screen/project navigation — HOME SHIPPED** 2026-07-25: the empty Library now shows recents (with offline/missing badges), pinnable working paths, import, and autosave health — composing the #31/#32 stores rather than duplicating them. Project-wide SEARCH stays deliberately deferred until the model is validated in real use, per the plan's own sub-item | MAIN #38 |
 
