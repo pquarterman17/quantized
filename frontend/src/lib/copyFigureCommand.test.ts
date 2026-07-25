@@ -71,6 +71,7 @@ function fakeGet(over: Record<string, unknown> = {}) {
     annotations: [],
     shapes: [],
     pageSetup: null,
+    copyFigureTransparent: false,
     ...over,
   };
   return (() => state) as never;
@@ -126,6 +127,16 @@ describe("runCopyFigureCommand", () => {
     const messages = setStatus.mock.calls.map((c) => String(c[0]));
     expect(messages.some((m) => m.startsWith("copy failed"))).toBe(true);
     expect(messages.some((m) => m.startsWith("export failed"))).toBe(false);
+  });
+
+  it("sends the opaque background by default", async () => {
+    await runCopyFigureCommand(fakeGet());
+    expect(vi.mocked(renderFigureBlob).mock.calls[0][0].transparent).toBe(false);
+  });
+
+  it("honours the transparent-background preference", async () => {
+    await runCopyFigureCommand(fakeGet({ copyFigureTransparent: true }));
+    expect(vi.mocked(renderFigureBlob).mock.calls[0][0].transparent).toBe(true);
   });
 
   it("reports when there is no dataset to copy", async () => {

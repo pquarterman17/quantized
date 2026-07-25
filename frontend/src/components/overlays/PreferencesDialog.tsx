@@ -172,6 +172,13 @@ export default function PreferencesDialog() {
                     onChange={(v) => setPref("excludedDisplay", v === "Grey" ? "grey" : "hide")}
                   />
                 </PrefRow>
+                <PrefRow label="Copy figure background" hint="transparent pastes onto coloured slides; opaque is safer for Word/print">
+                  <SegmentedControl
+                    options={["Opaque", "Transparent"]}
+                    value={p.copyFigureTransparent ? "Transparent" : "Opaque"}
+                    onChange={(v) => setPref("copyFigureTransparent", v === "Transparent")}
+                  />
+                </PrefRow>
                 <PrefRow label="Antialias 2-D map" hint="smooth vs crisp heatmap cells">
                   <Switch checked={p.antialias} onChange={(v) => setPref("antialias", v)} />
                 </PrefRow>

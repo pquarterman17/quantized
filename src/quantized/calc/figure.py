@@ -272,6 +272,10 @@ def _render_impl(
     width_in: float | None = None,
     height_in: float | None = None,
     dpi: int | None = None,
+    # MAIN_PLAN #35: render onto a transparent canvas instead of the
+    # preset's opaque background. Matters for pasting a figure onto a
+    # coloured slide; ignored in practice by formats that have no alpha.
+    transparent: bool = False,
     overrides: Mapping[str, Any] | None = None,
     collect_map: bool = False,
     x_fmt: Mapping[str, Any] | None = None,
@@ -377,6 +381,7 @@ def _render_impl(
                 fmt=fmt,
                 st=st,
                 ov=ov,
+                transparent=transparent,
                 dpi=resolved_dpi,
                 figsize=figsize,
                 series_styles=series_styles,
@@ -435,7 +440,7 @@ def _render_impl(
                     y_scale=resolve_axis_scale(y_scale, y_log),
                 )
             buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=resolved_dpi)
+            fig.savefig(buf, format=fmt, dpi=resolved_dpi, transparent=transparent)
             return buf.getvalue()
         finally:
             plt.close(fig)

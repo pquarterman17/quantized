@@ -135,7 +135,12 @@ const STORE_PINS: Record<string, number> = {
   // rule ONCE for BOTH halves -- the dataset-scoped fields the 2026-07-05
   // round fixed AND the view-scoped ones it missed. A bug fix that pays for
   // itself by extracting the rule rather than duplicating it.
-  "/store/useApp.ts": 3082,
+  // 3082 -> 3071 (2026-07-25, MAIN #35 copy-figure background pref): the
+  // pref cost 4 lines here, so it was offset by deriving `PrefKey` from
+  // `Prefs` (`keyof`) instead of restating all 18 keys as a hand-
+  // maintained union — 18 lines back, and the union can no longer drift
+  // out of sync with prefs.ts when a preference is added.
+  "/store/useApp.ts": 3071,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

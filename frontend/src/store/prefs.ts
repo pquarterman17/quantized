@@ -78,6 +78,11 @@ export interface Prefs {
   // part of the .dwk v2 shape), since it's per-project organization, not a
   // cross-project appearance preference.
   libraryPanelWidth: number;
+  // MAIN_PLAN #35: background for "Copy figure". Transparent pastes
+  // cleanly onto a coloured slide; opaque is safer for Word/print, where a
+  // transparent PNG can pick up whatever is behind it. Opaque default —
+  // it matches what an exported figure looks like today.
+  copyFigureTransparent: boolean;
 }
 
 export const PREF_DEFAULTS: Prefs = {
@@ -98,6 +103,7 @@ export const PREF_DEFAULTS: Prefs = {
   originBookClickOpens: "worksheet",
   defaultPanelFit: "frames",
   libraryPanelWidth: LIBRARY_PANEL_WIDTH_DEFAULT,
+  copyFigureTransparent: false,
 };
 
 export function loadPrefs(): Prefs {
@@ -117,6 +123,7 @@ export function loadPrefs(): Prefs {
       defaultTrace: TRACES.includes(p.defaultTrace as string) ? (p.defaultTrace as string) : fb.defaultTrace,
       defaultLineWidth: num(p.defaultLineWidth, fb.defaultLineWidth, 0.5, 4),
       defaultGrid: bool(p.defaultGrid, fb.defaultGrid),
+      copyFigureTransparent: bool(p.copyFigureTransparent, fb.copyFigureTransparent),
       antialias: bool(p.antialias, fb.antialias),
       sigFigs: num(p.sigFigs, fb.sigFigs, 1, 12),
       notation: NOTATIONS.includes(p.notation as string) ? (p.notation as Notation) : fb.notation,
@@ -153,6 +160,7 @@ export function prefsOf(s: AppState): Prefs {
     defaultLineWidth: s.defaultLineWidth,
     defaultGrid: s.defaultGrid,
     antialias: s.antialias,
+    copyFigureTransparent: s.copyFigureTransparent,
     sigFigs: s.sigFigs,
     notation: s.notation,
     confirmRemove: s.confirmRemove,

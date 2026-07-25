@@ -111,7 +111,7 @@ import {
 } from "../lib/recentFiles";
 import { toast } from "./toasts";
 import { confirmOriginReapplyDiscard, deferOriginFigureApply } from "./originFigureApply";
-import { loadPrefs, syncPrefs } from "./prefs";
+import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
 import {
   createOriginImportSlice,
   pruneOriginFidelityRefs,
@@ -304,24 +304,10 @@ export interface AnchorEditBridge {
 
 export type LegendPos = "ne" | "nw" | "se" | "sw";
 // Keys the Preferences dialog can set through the generic setPref action.
-export type PrefKey =
-  | "theme"
-  | "accent"
-  | "density"
-  | "palette"
-  | "reduceMotion"
-  | "wheelZoom"
-  | "defaultTrace"
-  | "defaultLineWidth"
-  | "defaultGrid"
-  | "antialias"
-  | "sigFigs"
-  | "notation"
-  | "confirmRemove"
-  | "excludedDisplay"
-  | "originBookClickOpens"
-  | "defaultPanelFit"
-  | "libraryPanelWidth";
+// DERIVED from `Prefs` rather than restated: the hand-maintained union had
+// to be edited in lockstep with prefs.ts for every new preference, which is
+// drift waiting to happen (and 18 lines of it). `keyof` cannot go stale.
+export type PrefKey = keyof Prefs;
 
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
@@ -382,6 +368,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   defaultTrace: string;
   defaultLineWidth: number;
   defaultGrid: boolean;
+  /** MAIN #35: Copy figure background — transparent vs the preset's opaque. */
+  copyFigureTransparent: boolean;
   antialias: boolean;
   sigFigs: number;
   notation: Notation;
@@ -967,6 +955,7 @@ export const useApp = create<AppState>((set, get) => ({
   defaultTrace: _initialPrefs.defaultTrace,
   defaultLineWidth: _initialPrefs.defaultLineWidth,
   defaultGrid: _initialPrefs.defaultGrid,
+  copyFigureTransparent: _initialPrefs.copyFigureTransparent,
   antialias: _initialPrefs.antialias,
   excludedDisplay: _initialPrefs.excludedDisplay,
   originBookClickOpens: _initialPrefs.originBookClickOpens,

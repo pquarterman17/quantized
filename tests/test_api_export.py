@@ -1189,3 +1189,34 @@ def test_figure_page_panel_y2_keys_not_a_subset_of_y_keys_is_422() -> None:
         },
     )
     assert resp.status_code == 422
+
+
+# --- MAIN_PLAN #35: transparent background over the wire --------------------
+
+
+def _alpha_at_origin(png: bytes) -> int:
+    from io import BytesIO
+
+    from PIL import Image
+
+    with Image.open(BytesIO(png)) as im:
+        return im.convert("RGBA").getpixel((0, 0))[3]
+
+
+def test_figure_transparent_defaults_off() -> None:
+    """Omitting the field must not change any existing caller's output."""
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "png", "dpi": 50},
+    )
+    assert resp.status_code == 200
+    assert _alpha_at_origin(resp.content) == 255
+
+
+def test_figure_transparent_true_reaches_the_renderer() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={"dataset": _xrd_dataset(), "fmt": "png", "dpi": 50, "transparent": True},
+    )
+    assert resp.status_code == 200
+    assert _alpha_at_origin(resp.content) == 0

@@ -61,6 +61,7 @@ def render_breaks_impl(
     st: Any,
     ov: Mapping[str, Any],
     dpi: int,
+    transparent: bool = False,
     figsize: tuple[float, float],
     series_styles: Sequence[Mapping[str, Any] | None] | None,
     x_fmt: Mapping[str, Any] | None = None,
@@ -152,7 +153,7 @@ def render_breaks_impl(
                 loc=st.legend_location,
             )
         buf = BytesIO()
-        fig.savefig(buf, format=fmt, dpi=dpi)
+        fig.savefig(buf, format=fmt, dpi=dpi, transparent=transparent)
         return buf.getvalue()
     finally:
         plt.close(fig)

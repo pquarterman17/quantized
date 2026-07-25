@@ -45,14 +45,21 @@ export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
   await exportActive(
     s,
     async (stem, ds) => {
-      const spec = buildFigureSpec(s, ds, stem, {
-        fmt: COPY_FIGURE_FMT,
-        style: COPY_FIGURE_STYLE,
-        dpi: COPY_FIGURE_DPI,
-        title: s().plotTitle,
-        xLabel: s().xAxisLabel,
-        yLabel: s().yAxisLabel,
-      });
+      const spec = {
+        ...buildFigureSpec(s, ds, stem, {
+          fmt: COPY_FIGURE_FMT,
+          style: COPY_FIGURE_STYLE,
+          dpi: COPY_FIGURE_DPI,
+          title: s().plotTitle,
+          xLabel: s().xAxisLabel,
+          yLabel: s().yAxisLabel,
+        }),
+        // Background is a preference rather than a fixed choice: transparent
+        // pastes cleanly onto a coloured slide, opaque is safer for Word and
+        // print. Set in Preferences ▸ Plot; opaque by default so a copy looks
+        // like an export.
+        transparent: s().copyFigureTransparent,
+      };
       // Progress feedback: a large multi-panel render is not instant, and a
       // silent pause reads as a broken button.
       s().setStatus("rendering figure for the clipboard…");

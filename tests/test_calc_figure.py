@@ -563,3 +563,40 @@ def test_page_margins_override_changes_the_layout() -> None:
         overrides={"margins": {"left": 0.25, "right": 0.05, "top": 0.05, "bottom": 0.25}},
     )
     assert base != with_margins
+
+
+# --- MAIN_PLAN #35: transparent background for "Copy figure" ----------------
+
+
+def _corner_alpha(png: bytes) -> int:
+    """Alpha of the PNG's top-left pixel — 0 when the canvas is transparent."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    with Image.open(BytesIO(png)) as im:
+        return im.convert("RGBA").getpixel((0, 0))[3]
+
+
+def _png(**kw: object) -> bytes:
+    x = np.linspace(0.0, 1.0, 10)
+    return render_figure(x, [("A", x * 2.0)], fmt="png", dpi=50, **kw)
+
+
+def test_render_defaults_to_an_opaque_canvas() -> None:
+    """Unchanged behaviour: an export still looks like it always did."""
+    assert _corner_alpha(_png()) == 255
+
+
+def test_render_transparent_produces_a_see_through_canvas() -> None:
+    assert _corner_alpha(_png(transparent=True)) == 0
+
+
+def test_render_transparent_does_not_change_the_image_size() -> None:
+    """Transparency is a background choice, not a layout one."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    with Image.open(BytesIO(_png())) as a, Image.open(BytesIO(_png(transparent=True))) as b:
+        assert a.size == b.size
