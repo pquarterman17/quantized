@@ -6,9 +6,21 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-25 — a plan-TREE consolidation pass. The previous
-reconciliations audited the rows in this file against the plans; this one audited
-the set of plan FILES itself, and found two that no dashboard derived from:
+**Last reconciled:** 2026-07-25 — a ChatGPT-Sol follow-up audit added MAIN
+#31–#38 after checking the current implementation against the owner's
+OriginPro daily-driver workflows. Summarized in Actionable dev work below;
+MAIN_PLAN holds the problem, goal, completion criteria and dependencies for
+each. **All eight problem statements were verified against the code before
+booking** — several are quoted from the implementation's own docstrings
+(`recentFiles.ts` on picker-only reopen, `autosave.ts` on the ~5 MB quota,
+`plotExport.plotPngBlob` on the screen-resolution grab). Two corrections were
+applied during that review: #32's quota failure is NOT silent
+(`useWorkspaceAutosave.ts` sets a status message — the real gap is that a
+transient line is weaker than a persistent error, plus no durable generations),
+and the audit's per-item Claude-model routing was dropped from both files as
+stale process detail that does not belong in a plan. Earlier the same day, a
+plan-TREE consolidation audited the set of plan FILES and found two that no
+dashboard derived from:
 
 - **The two orphan ChatGPT-"Sol" audit docs were absorbed and DELETED**
   (`SOL_FEATURE_GUI_INTERACTION_AUDIT.md`, 924 lines / 257 permanently-unchecked
@@ -99,13 +111,21 @@ detail). Owner-gated items in that plan (#1 undo scopes, #2 tree scope, #5
 baseline framing) are under Owner actions below, not here.
 
 The 2026-07-24 reconciliation left this table empty. The 2026-07-25 plan-tree
-consolidation refilled it with two items that had been sitting un-booked inside
-the deleted Sol audit docs (see the header) — a reminder that "no open items" is
-only as true as the set of documents you reconcile against.
+consolidation first refilled it from the deleted Sol audit docs; the later
+ChatGPT-Sol implementation audit then added eight current-code gaps that could
+still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
 | **Fit-recipe residual fields** — `FitSpec` now carries `xKey`/`yKey`/`weight`/`params`/`exitFlag`; still missing explicit fit range, starting values, parameter bounds, covariance/uncertainty method, preprocessing state, and a historical-vs-recomputed UI distinction. Partly design-constrained (registry fits expose no user bounds) | MAIN #30 |
+| **Native file/workspace handling** — retain real source references on desktop; working/recent/pinned paths; true reopen, Save As, reimport/relink; distinguish offline network targets from deleted files | MAIN #31 |
+| **Durable autosave/recovery/trash** — replace the `localStorage`-only recovery ceiling with rotating durable generations, visible health, crash recovery, and age/size-bounded project trash | MAIN #32 |
+| **Import metadata/categorical/error roles** — preserve multiple label rows and text columns for legends/grouping/search; carry explicit error roles and provenance through templates and `DataStruct` | MAIN #33 |
+| **Spreadsheet-style block editing** — rectangular clipboard operations, fill/clear/insert/delete, undo, and corrected-data provenance | MAIN #34 |
+| **Publication-quality clipboard copy** — one-click 300-DPI publication-rendered copy with screen/export parity and platform fallbacks | MAIN #35 |
+| **Complete X/Y error bars** — symmetric/asymmetric X and Y pairing, override UI, and interactive/export parity — after MAIN #33 | MAIN #36 |
+| **Arbitrary non-destructive rescaling** — multiply/divide X or Y by a value with units, preview, undo, provenance, and consistent error scaling | MAIN #37 |
+| **Home screen/project navigation** — recent and pinned work, working paths, recovery health, safe missing-source handling; defer global search until the base organization is validated | MAIN #38 |
 
 The remaining dev item is a judgment call the plan explicitly parked for the
 owner rather than a task:

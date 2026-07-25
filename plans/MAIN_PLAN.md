@@ -10,9 +10,10 @@ via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-07-25 (plan-tree consolidation: the two orphan
-ChatGPT-"Sol" audit docs were absorbed and deleted — their un-booked
-residue is now items 29–30 below)
+**Updated:** 2026-07-25 (ChatGPT-Sol follow-up audit added items 31–38,
+each problem statement verified against the code before booking; the
+earlier same-day plan-tree consolidation absorbed the two orphan Sol
+audit docs and booked their prior residue as items 29–30)
 
 ---
 
@@ -110,6 +111,61 @@ GOTO #11 drift (implemented but listed open).
 
 ~~10. **Re-import from source file**~~ COMPLETED 2026-07-11 (see Completed).
 
+*(items 31–38 booked 2026-07-25 from a ChatGPT-"Sol" follow-up audit that
+checked the CURRENT implementation against the owner's daily OriginPro
+workflow. Every problem statement was verified against the code before
+booking — see the verification notes on each. #31 and #32 sit in Tier 1
+because they are default-tool blockers with a data-loss failure mode;
+#33–#38 are Tier 2. The audit's per-item model-routing recommendations
+were dropped: process detail does not belong in a plan doc, and they had
+already gone stale.)*
+
+31. **Native file/workspace handling that remembers real paths** — a
+    browser `<input type=file>` yields no persistent path or handle, so a
+    Recent entry cannot reopen by path; clicking one just reopens the
+    import picker (`lib/recentFiles.ts` says so in its own header, and
+    `RecentFile` stores only `name`/`size`/`at`). That makes repeat work,
+    source relinking, and long network-drive paths markedly slower than
+    Origin/MATLAB. Goal: make desktop use file-native while keeping a
+    safe browser fallback, and treat an unavailable network drive as
+    temporarily offline rather than proof a source was deleted.
+    - [ ] Desktop imports retain a canonical source reference and can
+          reimport without another picker
+    - [ ] Working paths can be selected, pinned, renamed, removed
+    - [ ] Recent file/workspace entries reopen their target; stale
+          entries offer Locate, Remove, Retry
+    - [ ] Offline/network-unavailable and genuinely missing files are
+          distinct, non-destructive states
+    - [ ] Browser mode degrades visibly to picker behaviour, with no
+          false promise that a path was retained
+    - [ ] Tests enforce allowed-root / path-validation rules
+    - Foundation for #32 and #38. Reuse the existing source-linked
+      reimport contract rather than creating a second one.
+
+32. **Durable autosave, crash recovery, and bounded project trash** —
+    autosave writes the whole workspace to one `localStorage` slot
+    (`lib/autosave.ts`, key `qz.autosave`), whose own header notes large
+    libraries "can exceed the ~5 MB quota". There is no durable
+    generation history, so recovery is one slot deep. Verified nuance:
+    quota failure is NOT silent — `useWorkspaceAutosave.ts` surfaces
+    "autosave skipped (storage full or unavailable)" — but a transient
+    status line is weaker than a persistent, actionable error for the
+    default home of experimental work.
+    - [ ] Durable backing store: IndexedDB in browser mode, a native
+          file-backed store on desktop (or an equally durable documented
+          design)
+    - [ ] Multiple rotating recovery generations, written atomically
+    - [ ] UI shows last successful save, current health, and a
+          persistent actionable error when saving fails
+    - [ ] Startup offers recovery only when the copy is newer or the
+          prior session ended uncleanly
+    - [ ] Deleted project objects enter a recoverable trash with age and
+          size caps, visible cleanup rules, Restore / Delete Permanently
+    - [ ] Raw source files are never rewritten or placed in trash
+    - Build on #31's storage/path boundary; integrate with the existing
+      session undo and `.dwk` serialization instead of inventing a
+      parallel state format.
+
 ## Tier 2 — Medium Impact
 
 *(items 29–30 folded up 2026-07-25 from the two orphan ChatGPT-"Sol"
@@ -131,6 +187,126 @@ in git history @ `e4f6590`.)*
     recomputed one. Partly constrained by design: registry fits expose
     no user bounds, so those fields can only be captured as the
     weighted/equation fit paths surface them.
+
+*(items 33–38 from the same 2026-07-25 ChatGPT-Sol follow-up audit as
+#31/#32 above; each problem statement verified against the code.)*
+
+33. **Complete import metadata, categorical columns, and column roles** —
+    `DataStruct.values` is `number[][]`, so the canonical contract is
+    numeric-only. Text columns DO survive, but only as metadata sidecars
+    and only for two sources (Origin projects via `meta.origin_text_
+    columns`/`columnmeta.originTextColumns`, and SQLite queries via
+    `io/sqlite_query.py` — the sole backend emitter); generic delimited
+    imports drop them. `TextColumn`'s own docstring notes text columns
+    "have no channel index", which is exactly why they cannot yet drive
+    legend, grouping, facet, or box-plot inputs. Goal: import an
+    arbitrary lab file once, retain useful context, and choose later
+    which metadata row or categorical column drives labels and grouping
+    — without editing the source file.
+    - [ ] Wizard previews and preserves multiple selectable label rows
+          (sample ID, field, temperature)
+    - [ ] Text/categorical columns retained as searchable data, hidden
+          from numeric plotting until selected
+    - [ ] Legend-label source is choosable, and changeable later from
+          plot properties
+    - [ ] Generic delimited imports preserve cleaned headers, units,
+          comments, ignored instrument preamble, original metadata
+    - [ ] X, Y, label, ignore, X-error, Y-error and asymmetric-error
+          roles survive template save/reapply into canonical `DataStruct`
+          metadata
+    - [ ] Import decisions and any cleaned output carry provenance; the
+          original file stays untouched
+    - [ ] Tests cover mixed text+numeric files, repeated label rows,
+          ambiguous error names, manual role override
+    - Establish this contract BEFORE #36 and before deeper JMP-style
+      grouped/box-plot work. Boundary note: this is import-time role
+      assignment, NOT the standing "worksheet designation editing"
+      deferral (read-only in v1) — keep them distinct so that deferral
+      does not reopen by accident.
+
+34. **Spreadsheet-style block editing for fast data cleanup** — single
+    worksheet cells are editable, but there are no rectangular
+    operations anywhere in `Stage/worksheet/`, `store/worksheetSelection`
+    or `lib/worksheetTransforms` (verified: no clipboard/paste/fill
+    handlers), so cleanup of a copied table means one cell at a time or
+    a detour through Excel/Origin.
+    - [ ] Rectangular copy/cut/paste with tab-newline clipboard data and
+          predictable shape-mismatch behaviour
+    - [ ] Paste-over-selection, clear block, fill down, insert/delete
+          rows or derived columns — keyboard and context menu
+    - [ ] Every operation undoable in-session with a compact provenance
+          entry
+    - [ ] Raw imported data stays immutable; edits create/update the
+          corrected working representation
+    - [ ] Large pastes show progress and never freeze ordinary tables
+    - Build on the existing worksheet selection, edit, undo and
+      corrected-data conventions.
+
+35. **One-click publication-quality figure copy** — Copy currently
+    composites the live uPlot canvas at screen resolution;
+    `plotExport.plotPngBlob`'s own docstring calls it "a quick raster
+    grab of exactly what's on screen". The expected workflow is seconds
+    from finished plot to PowerPoint or Word.
+    - [ ] Copy Figure puts a 300-DPI transparent-or-white PNG (user
+          preference) on the clipboard via the publication render path
+    - [ ] SVG offered where the platform clipboard supports it; Windows
+          EMF stays separately scoped
+    - [ ] Copied output matches Figure Builder/export for limits, ticks,
+          fonts, line widths, error bars, annotations, multi-panel layout
+    - [ ] Normal figures copy within seconds, with clear progress and
+          failure feedback on large renders
+    - [ ] The screen-canvas grab survives only as an explicitly named
+          quick/screenshot option
+    - Reuse the server-side matplotlib publication renderer and its
+      parity tests — do NOT create a third rendering implementation.
+
+36. **Complete symmetric and asymmetric X/Y error bars** — `errKeys` is
+    `Record<number, number>`, i.e. exactly one error channel per series,
+    so interactive support is symmetric vertical Y only. PORT_CHECKLIST
+    confirms that much shipped (`buildErrorColumns` + `errorBarsPlugin`
+    draw y±e whiskers); X error and asymmetric plus/minus are not a
+    complete import-to-screen-to-export workflow.
+    - [ ] Canonical mapping supports X±, Y±, X+/X−, Y+/Y−
+    - [ ] Common names (`err`, `sigma`, `sd`, `se`, `xerr`, `yerr`,
+          `err+`, `err-`) suggested, never silently forced when ambiguous
+    - [ ] Import Wizard and plot Inspector expose pairing/override
+    - [ ] Interactive, clipboard, PNG, SVG and PDF paths agree
+    - [ ] Error data stay independent of raw X/Y and can be toggled or
+          restyled without mutation
+    - [ ] Tests cover asymmetric values, X error, missing values, log
+          axes, clipped/off-scale bars
+    - Implement AFTER #33 defines durable roles and `DataStruct` metadata.
+
+37. **Arbitrary non-destructive X/Y rescaling** — `CorrectionParams`
+    carries `xOff`/`yOff` offsets but no scale factor anywhere in the
+    interface, so multiplying or dividing a channel for inconvenient
+    units or normalization is not possible without rewriting data.
+    - [ ] Corrections offer X and Y multiply/divide by a validated
+          numeric factor, with preview and Cancel
+    - [ ] Labels/units updatable in the same operation
+    - [ ] Undoable, recorded in provenance, recomputable, round-trips
+          through project/template save
+    - [ ] Zero, non-finite and invalid factors fail clearly; log-axis and
+          error-channel behaviour tested
+    - Extend the existing non-destructive corrections pipeline; scale
+      associated error channels consistently.
+
+38. **A useful home screen and project-wide navigation** — the empty
+    Library offers essentially file drop ("Drop files here, or use ⊞ to
+    import / ✚ for a demo"); recents and smart folders exist but do not
+    add up to project-level navigation.
+    - [ ] Home shows recent and pinned projects/files, working-path
+          choices, drop/import, and recovery status without clutter
+    - [ ] Entries expose Open, Locate, Unpin, Remove from Recent, Retry
+    - [ ] Missing/offline sources are visible but never trigger automatic
+          deletion, relinking or destructive cleanup
+    - [ ] Later sub-phase: project-wide search across dataset names,
+          column labels, metadata, notes, reports, figures, with Reveal
+          in Library/Worksheet/Figure
+    - [ ] Search stays deferred until the home/recent/path model is
+          validated in real use
+    - Compose #31's paths/recents and #32's recovery health; do not
+      duplicate their state.
 
 ~~12. **Reciprocal (Arrhenius) axis scale**~~ COMPLETED 2026-07-11 (see
     Completed).
