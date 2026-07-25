@@ -82,6 +82,15 @@ export function fitSpecFrom(
   weight?: FitWeighting,
   /** Corrections active on the source at fit time (MAIN_PLAN #30). */
   preprocessing?: string[],
+  /** Starting values / bounds / fixed flags, when the user changed them from
+   *  the model defaults (MAIN_PLAN #30). Omitted when untouched — recording the
+   *  registry default says nothing about what was CHOSEN. */
+  starts?: {
+    p0?: number[];
+    lower?: (number | null)[];
+    upper?: (number | null)[];
+    fixed?: boolean[];
+  },
   /** Injected so the recipe is reproducible in tests. */
   now: () => string = () => new Date().toISOString(),
 ): FitSpec {
@@ -95,6 +104,14 @@ export function fitSpecFrom(
     spec.nPoints = sel.x.length;
   }
   if (preprocessing && preprocessing.length > 0) spec.preprocessing = preprocessing;
+  if (starts?.p0) spec.p0 = starts.p0;
+  if (starts?.lower) spec.lower = starts.lower;
+  if (starts?.upper) spec.upper = starts.upper;
+  if (starts?.fixed?.some(Boolean)) spec.fixed = starts.fixed;
+  // Errors come from the fitter's covariance matrix whenever it returned
+  // any — recording WHICH method produced them is the audit's point, since
+  // "±0.02" means different things depending on its origin.
+  spec.uncertainty = Array.isArray(result.errors) ? "covariance" : "none";
   // Record the weighting so recompute + pipeline reproduce it (audit P1 #3);
   // `none` is the default, so it stays absent to keep specs minimal.
   if (weight && weight.mode !== "none") spec.weight = weight;

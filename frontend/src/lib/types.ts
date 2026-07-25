@@ -403,6 +403,21 @@ export interface FitSpec {
    *  e.g. ["smooth", "bgPoly"]). Preprocessing changes what was fit, so a
    *  recipe that omits it can look reproducible while silently not being. */
   preprocessing?: string[];
+  /** Starting values actually used. Absent = the model's registry defaults, so
+   *  an untouched fit records nothing and stays lean. */
+  p0?: number[];
+  /** Parameter bounds, `null` where unbounded — JSON has no Infinity literal,
+   *  and leaning on `JSON.stringify`'s silent Infinity→null is how a bound
+   *  turns into garbage on the round trip. */
+  lower?: (number | null)[];
+  upper?: (number | null)[];
+  /** Parameters held at their start value instead of being fitted. */
+  fixed?: boolean[];
+  /** How the reported parameter errors were derived. `covariance` = from the
+   *  fitter's covariance matrix (`calc_errors`); `none` = not computed. The
+   *  audit asked for the uncertainty METHOD because "±0.02" means different
+   *  things depending on where it came from. */
+  uncertainty?: "covariance" | "none";
 }
 
 export interface Dataset {

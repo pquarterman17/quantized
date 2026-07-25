@@ -11,6 +11,7 @@
 // found in the first place.
 
 import { fitModel } from "../lib/api";
+import { boundsFromWire } from "../lib/fitParams";
 import { fitDataForSpec, stampRecompute } from "../lib/fitselection";
 import { activeRowIndices, droppedRows, expandToFull } from "../lib/rowstate";
 import type { AppState } from "./useApp";
@@ -31,7 +32,21 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
       // to the live plotted selection for legacy specs — not time/values[0].
       const sel = fitDataForSpec(d, d.fitSpec, get().xKey, get().yKeys, get().seriesOrder);
       if (!sel || sel.x.length === 0) throw new Error("no data");
-      const r = await fitModel({ model: d.fitSpec.model, x: sel.x, y: sel.y, dy: sel.dy });
+      // MAIN #30: replay the RECORDED starting values / bounds / fixed flags
+      // too. Without this the recipe records them while the recompute quietly
+      // refits from the registry defaults — a recipe that documents a fit it
+      // does not reproduce is worse than one admitting it has no opinion.
+      const spec = d.fitSpec;
+      const r = await fitModel({
+        model: spec.model,
+        x: sel.x,
+        y: sel.y,
+        dy: sel.dy,
+        ...(spec.p0 ? { p0: spec.p0 } : {}),
+        ...(spec.lower ? { lower: boundsFromWire(spec.lower, -1) } : {}),
+        ...(spec.upper ? { upper: boundsFromWire(spec.upper, 1) } : {}),
+        ...(spec.fixed ? { fixed: spec.fixed } : {}),
+      });
       const yFit = r.yFit as (number | null)[] | undefined;
       // Refresh the overlay only if this dataset's fit is the one shown.
       if (Array.isArray(yFit) && get().fitOverlay?.datasetId === id) {

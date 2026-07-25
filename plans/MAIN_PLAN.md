@@ -239,26 +239,22 @@ in git history @ `e4f6590`.)*
 ~~29. **Frontend bundle code-splitting**~~ COMPLETED 2026-07-25 (see
     Completed).
 
-30. **Fit-recipe residual fields** — **mostly shipped 2026-07-25.** Added:
-    the x-WINDOW the fit consumed (`range` + `nPoints`; without it a recipe
-    names the channels but not which part of them, so "fit the peak" and
-    "fit the whole scan" were indistinguishable), `fittedAt`/`recomputedAt`
-    with a `↻` marker in the Library (a recomputed fit is not the fit the
-    user ran — that is the difference between a number you can cite and one
-    you should re-check), and `preprocessing` (correction NAMES only, never
-    values, which would be a second copy of `Dataset.corrections` free to
-    drift). STILL OPEN and still design-constrained: starting values,
-    parameter bounds and covariance/uncertainty method — registry fits
-    expose none of them, so there is nothing to record until the
-    weighted/equation fit paths surface them. Original statement: — `FitSpec` became a reproducible
-    recipe (`xKey`/`yKey`/`weight`/`params`/`exitFlag`), closing the
-    channel and weighting half of the audit's provenance finding. The
-    remainder is genuinely open: explicit fit range, starting values,
-    parameter bounds, covariance/uncertainty method, and preprocessing
-    state — plus a UI distinction between a historical result and a
-    recomputed one. Partly constrained by design: registry fits expose
-    no user bounds, so those fields can only be captured as the
-    weighted/equation fit paths surface them.
+~~30. **Fit-recipe residual fields**~~ COMPLETED 2026-07-25 — the whole
+    recipe now records and REPRODUCES: channels, weighting, x-window +
+    point count, fittedAt/recomputedAt, preprocessing provenance, and
+    (this pass) starting values, parameter bounds, fixed parameters and
+    the uncertainty method.
+
+    **The "design-constrained" claim was simply wrong** and had been
+    repeated from the plan text without checking. `calc.fitting.curve_fit`
+    has always taken `p0`/`lower`/`upper`/`fixed` and returned `covar`,
+    and `/api/fitting/fit` has always accepted them; the custom-equation
+    path even had a guess/min/max table already. Nothing was blocked — the
+    registry path was just missing the control. It now has one
+    (`FitParamsSection`, collapsed by default), and `store/recalcFits.ts`
+    REPLAYS the recorded starts/bounds on recompute, because a recipe that
+    documents a fit it does not reproduce is worse than one admitting it
+    has no opinion.
 
 *(items 33–38 from the same 2026-07-25 ChatGPT-Sol follow-up audit as
 #31/#32 above; each problem statement verified against the code.)*

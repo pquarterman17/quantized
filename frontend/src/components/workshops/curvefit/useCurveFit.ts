@@ -14,6 +14,14 @@ import {
   fitStepParams,
   selectedFitData,
 } from "../../../lib/fitselection";
+import {
+  boundsForWire,
+  parseFitParams,
+  resetRows,
+  rowsAreDefault,
+  rowsForModel,
+  type FitParamRow,
+} from "../../../lib/fitParams";
 import { dyForFit } from "../../../lib/fitweights";
 
 export interface CurveFitState {
@@ -35,6 +43,12 @@ export interface CurveFitState {
   /** [min, max] of the fitted x data — the domain Find X/Y (MAIN #15)
    *  searches over; null when there's no analysis data yet. */
   xRange: { min: number; max: number } | null;
+  /** MAIN #30: editable starting values / bounds / fixed flags for the
+   *  registry model. Seeded from its registry defaults; edits survive a
+   *  model change when the parameter name survives. */
+  paramRows: FitParamRow[];
+  setParamRow: (index: number, patch: Partial<FitParamRow>) => void;
+  resetParamRows: () => void;
   /** Weighting (Sol audit): mode selector + a picked sigma column for `manual`. */
   weightMode: WeightMode;
   setWeightMode: (m: WeightMode) => void;
@@ -57,6 +71,11 @@ export function useCurveFit(): CurveFitState {
   const errKeys = useApp((s) => s.errKeys);
   const [models, setModels] = useState<FitModel[]>([]);
   const [modelName, setModelName] = useState("Linear");
+  // #30: the editable parameter table. Re-seeded on a model change, KEEPING
+  // edits for parameters whose name survives — models share names (amp,
+  // center), and discarding a hand-tuned start on every model flip would
+  // throw away work the user just did.
+  const [paramRows, setParamRows] = useState<FitParamRow[]>([]);
   const [result, setResult] = useState<CalcResult | null>(null);
   const [guessOnly, setGuessOnly] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -107,6 +126,13 @@ export function useCurveFit(): CurveFitState {
   // has a designated error column (from Origin designations or manual pairing).
   const hasYErr = xy != null && errKeys[xy.yKey] != null;
 
+  const model = models.find((m) => m.name === modelName);
+  useEffect(() => {
+    setParamRows((prev) => rowsForModel(model, prev));
+    // Keyed on the model identity, not the object, so a models[] refetch
+    // does not wipe the user's edits.
+  }, [modelName, models.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function run(kind: "guess" | "fit"): Promise<void> {
     if (!active) return;
     setBusy(true);
@@ -133,11 +159,29 @@ export function useCurveFit(): CurveFitState {
         const weight = weightingFor(localXy.yKey);
         const { dy, issue } = dyForFit(ds, localXy.yKey, weight);
         setWeightNote(issue ?? null);
+        // #30: the user's starting values / bounds / fixed flags. An
+        // UNTOUCHED table is the registry default, so it is neither sent nor
+        // recorded — that keeps the request lean and the recipe honest about
+        // what was actually chosen.
+        const parsed = parseFitParams(paramRows, model);
+        if (parsed.error) {
+          setError(parsed.error);
+          return;
+        }
+        const custom = !rowsAreDefault(paramRows, model);
         const r = await fitModel({
           model: modelName,
           x: localXy.x,
           y: localXy.y,
           ...(dy ? { dy } : {}),
+          ...(custom
+            ? {
+                p0: parsed.p0,
+                lower: parsed.lower,
+                upper: parsed.upper,
+                ...(parsed.fixed.some(Boolean) ? { fixed: parsed.fixed } : {}),
+              }
+            : {}),
         });
         setResult(r);
         setGuessOnly(false);
@@ -154,6 +198,14 @@ export function useCurveFit(): CurveFitState {
           r,
           effWeight,
           activeCorrectionNames(ds.corrections),
+          custom
+            ? {
+                p0: parsed.p0,
+                lower: boundsForWire(parsed.lower),
+                upper: boundsForWire(parsed.upper),
+                fixed: parsed.fixed,
+              }
+            : undefined,
         );
         // Same recipe into the typed step (#6) so a template/pipeline batch
         // replays THESE channels + weighting, and the pipeline view can edit
@@ -226,6 +278,10 @@ export function useCurveFit(): CurveFitState {
   }
 
   return {
+    paramRows,
+    setParamRow: (index, patch) =>
+      setParamRows((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r))),
+    resetParamRows: () => setParamRows(resetRows(model)),
     active,
     models,
     modelName,

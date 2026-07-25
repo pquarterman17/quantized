@@ -164,34 +164,34 @@ describe("fit recipe residual fields (MAIN #30)", () => {
   it("records the x-WINDOW the fit consumed, not just the channels", () => {
     // Without it a recipe says which channels were fit but not which part of
     // them: "fit the peak" and "fit the whole scan" look identical.
-    const spec = fitSpecFrom("gauss", null, sel, result, undefined, undefined, at);
+    const spec = fitSpecFrom("gauss", null, sel, result, undefined, undefined, undefined, at);
     expect(spec.range).toEqual([1, 4]);
     expect(spec.nPoints).toBe(4);
   });
 
   it("ignores non-finite x when computing the range", () => {
     const gappy = { x: [NaN, 2, Infinity, 5], y: [1, 2, 3, 4], yKey: 0 };
-    expect(fitSpecFrom("g", null, gappy, result, undefined, undefined, at).range).toEqual([2, 5]);
+    expect(fitSpecFrom("g", null, gappy, result, undefined, undefined, undefined, at).range).toEqual([2, 5]);
   });
 
   it("omits the range when nothing is finite", () => {
     const bad = { x: [NaN, NaN], y: [1, 2], yKey: 0 };
-    const spec = fitSpecFrom("g", null, bad, result, undefined, undefined, at);
+    const spec = fitSpecFrom("g", null, bad, result, undefined, undefined, undefined, at);
     expect(spec.range).toBeUndefined();
     expect(spec.nPoints).toBeUndefined();
   });
 
   it("stamps when the fit was produced", () => {
-    expect(fitSpecFrom("g", null, sel, result, undefined, undefined, at).fittedAt).toBe(at());
+    expect(fitSpecFrom("g", null, sel, result, undefined, undefined, undefined, at).fittedAt).toBe(at());
   });
 
   it("records which corrections the source carried", () => {
-    const spec = fitSpecFrom("g", null, sel, result, undefined, ["smoothEnabled"], at);
+    const spec = fitSpecFrom("g", null, sel, result, undefined, ["smoothEnabled"], undefined, at);
     expect(spec.preprocessing).toEqual(["smoothEnabled"]);
   });
 
   it("omits preprocessing when nothing was applied", () => {
-    expect(fitSpecFrom("g", null, sel, result, undefined, [], at).preprocessing).toBeUndefined();
+    expect(fitSpecFrom("g", null, sel, result, undefined, [], undefined, at).preprocessing).toBeUndefined();
   });
 });
 
@@ -241,5 +241,49 @@ describe("stampRecompute (MAIN #30)", () => {
   it("leaves params alone when the recompute returned none", () => {
     const spec = { model: "g", params: [1] };
     expect(stampRecompute(spec, {}, now).params).toEqual([1]);
+  });
+});
+
+describe("starts/bounds in the recipe (MAIN #30)", () => {
+  const sel = { x: [1, 2, 3], y: [1, 2, 3], yKey: 0 };
+  const at = () => "2026-07-25T12:00:00.000Z";
+
+  it("records the user's starting values and bounds", () => {
+    const spec = fitSpecFrom("g", null, sel, { params: [1] }, undefined, undefined, {
+      p0: [1, 2],
+      lower: [null, 0],
+      upper: [10, null],
+      fixed: [false, false],
+    }, at);
+    expect(spec.p0).toEqual([1, 2]);
+    expect(spec.lower).toEqual([null, 0]);
+    expect(spec.upper).toEqual([10, null]);
+  });
+
+  it("omits them entirely when the table was untouched", () => {
+    // Recording the registry default says nothing about what was CHOSEN, and
+    // would make every ordinary fit's recipe noisier for no information.
+    const spec = fitSpecFrom("g", null, sel, { params: [1] }, undefined, undefined, undefined, at);
+    expect(spec.p0).toBeUndefined();
+    expect(spec.lower).toBeUndefined();
+  });
+
+  it("records `fixed` only when something is actually held", () => {
+    const none = fitSpecFrom("g", null, sel, {}, undefined, undefined, {
+      fixed: [false, false],
+    }, at);
+    expect(none.fixed).toBeUndefined();
+    const held = fitSpecFrom("g", null, sel, {}, undefined, undefined, {
+      fixed: [true, false],
+    }, at);
+    expect(held.fixed).toEqual([true, false]);
+  });
+
+  it("records HOW the uncertainties were derived", () => {
+    // "±0.02" means different things depending on where it came from.
+    const withErrors = fitSpecFrom("g", null, sel, { errors: [0.1] }, undefined, undefined, undefined, at);
+    expect(withErrors.uncertainty).toBe("covariance");
+    const without = fitSpecFrom("g", null, sel, {}, undefined, undefined, undefined, at);
+    expect(without.uncertainty).toBe("none");
   });
 });

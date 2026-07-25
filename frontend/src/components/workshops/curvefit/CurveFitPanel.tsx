@@ -18,6 +18,7 @@ import EquationModelPanel from "./EquationModelPanel";
 import FitConvergenceWarning from "./FitConvergenceWarning";
 import FindXYSection from "./FindXYSection";
 import ModelScanSection from "./ModelScanSection";
+import FitParamsSection from "./FitParamsSection";
 import WeightingSection from "./WeightingSection";
 import { useCurveFit } from "./useCurveFit";
 import { useModelScan } from "./useModelScan";
@@ -50,7 +51,16 @@ export default function CurveFitPanel() {
     setManualKey,
     hasYErr,
     weightNote,
+    // Renamed on destructure: `paramRows` below is the RESULTS table (fitted
+    // value + error per parameter). This is the INPUT table.
+    paramRows: paramInputs,
+    setParamRow,
+    resetParamRows,
   } = useCurveFit();
+
+  const fitParams = (
+    <FitParamsSection rows={paramInputs} setRow={setParamRow} reset={resetParamRows} />
+  );
 
   const weighting = (
     <WeightingSection
@@ -163,6 +173,7 @@ export default function CurveFitPanel() {
       />
 
       {weighting}
+      {fitParams}
 
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <Button size="sm" disabled={!active || busy} onClick={() => run("guess")}>

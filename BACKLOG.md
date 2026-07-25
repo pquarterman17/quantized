@@ -124,7 +124,6 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
-| **Fit-recipe residual fields — MOSTLY SHIPPED** 2026-07-25: fit range + point count, fittedAt/recomputedAt with a `↻` Library marker, and preprocessing provenance (names only). Remaining and still design-constrained: starting values, parameter bounds, covariance/uncertainty method — registry fits expose none, so there is nothing to record yet | MAIN #30 |
 | **Import metadata/categorical/error roles — PARTIAL** — generic delimited imports now preserve text/categorical columns and the comment preamble (`b99e7d6`; also fixed a header-detection bug where equal text and numeric column counts made the HEADER parse as data). Remaining: multiple selectable label rows in the wizard, choosing the legend-label source, explicit X/Y/asymmetric-error roles surviving template reapply, and import provenance | MAIN #33 |
 | **Spreadsheet-style block editing — CORE SHIPPED** 2026-07-25 (copy/paste/clear/fill-down over a row×column selection; `lib/clipboardGrid.ts` pure + `setCellBlock` applying a whole block as ONE undo entry). Remaining: cut, insert/delete rows and derived columns, keyboard bindings, and a progress affordance for very large pastes | MAIN #34 |
 | **Complete X/Y error bars** — symmetric/asymmetric X and Y pairing, override UI, and interactive/export parity — after MAIN #33 | MAIN #36 |
