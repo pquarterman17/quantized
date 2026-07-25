@@ -56,7 +56,11 @@
   --glass: oklch(0.2 0.008 280 / 0.78);
   --glass-border: oklch(0.6 0.01 280 / 0.25);
 
-  /* plot / data canvas — stays dark in both themes */
+  /* plot / data canvas — FOLLOWS the app theme (owner request 2026-07-25).
+     Previously pinned dark in both themes; a light-mode app with a dark
+     plot reads as a rendering bug, not a design choice. A window can still
+     be PINNED light/dark independently — that uses the mode-scoped
+     --axes-bg-light/--axes-bg-dark pair below, which stays theme-invariant. */
   --axes-bg: oklch(0.13 0.006 280);
   --grid-line: oklch(0.3 0.008 280);
 
@@ -102,9 +106,11 @@
   --glass: oklch(0.96 0.004 280 / 0.82);
   --glass-border: oklch(0.4 0.01 280 / 0.2);
 
-  /* plot canvas stays dark even in light mode */
-  --axes-bg: oklch(0.13 0.006 280);
-  --grid-line: oklch(0.3 0.008 280);
+  /* plot canvas follows the theme (2026-07-25) — same values as
+     --axes-bg-light/--grid-line-light below, which the explicit
+     window-level "light" pin uses. */
+  --axes-bg: oklch(0.98 0.004 280);
+  --grid-line: oklch(0.86 0.006 280);
 
   --shadow: 0 6px 24px oklch(0 0 0 / 0.18);
 }
@@ -154,11 +160,14 @@
    scoped: same value regardless of the app's global [data-theme], so a
    window pinned to "light"/"dark" renders correctly even when that differs
    from the surrounding chrome's theme (Origin's white-page-in-a-dark-app
-   model). "dark" mode reuses --axes-bg/--grid-line above (already
-   theme-invariant, "stays dark in both themes"); ink needs its own
-   theme-invariant pair here since --text/--text-dim DO follow the global
-   theme. Consumed by `lib/uplotOpts.ts`'s `resolvePlotBg`. ─────────────── */
+   model). Every pair here is theme-invariant, INCLUDING the dark one: as of
+   2026-07-25 --axes-bg/--grid-line follow the app theme, so a window pinned
+   to "dark" can no longer borrow them — it would turn light with the app
+   and the pin would mean nothing. Consumed by `lib/uplotOpts.ts`'s
+   `resolvePlotBg`. ──────────────────────────────────────────────────────── */
 :root {
+  --axes-bg-dark: oklch(0.13 0.006 280);
+  --grid-line-dark: oklch(0.3 0.008 280);
   --ink-on-dark: oklch(0.93 0.005 280);
   --ink-dim-on-dark: oklch(0.72 0.008 280);
   --axes-bg-light: oklch(0.98 0.004 280);

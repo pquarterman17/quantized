@@ -1,19 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  buildOpts,
-  categoricalTickFormatter,
-  fixedLinearAxisSplits,
-  fixedLogAxisSplits,
-  logMajorTickFilter,
-  niceLinearStep,
-  reciprocalAxisSplits,
-  reciprocalTransform,
-  resolvePlotBg,
-  tickFormatter,
-  utcTzDate,
-  xIsAscending,
-} from "./uplotOpts";
+import { buildOpts, categoricalTickFormatter, fixedLinearAxisSplits, fixedLogAxisSplits, logMajorTickFilter, niceLinearStep, reciprocalAxisSplits, reciprocalTransform, resolvePlotBg, tickFormatter, utcTzDate, xIsAscending } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
 import type { SeriesStyle } from "./types";
 
@@ -1469,5 +1456,49 @@ describe("buildOpts colour-mapped scatter (MAIN #14)", () => {
     });
     const s = opts.series?.[1] as { width?: number };
     expect(s.width).toBe(1.5); // the ordinary default line width
+  });
+});
+
+describe("resolvePlotBg follows the app theme (owner request 2026-07-25)", () => {
+  const setTheme = (t: string | null) => {
+    if (t === null) delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = t;
+  };
+  afterEach(() => setTheme(null));
+
+  it("resolves LIGHT when the app is in light mode", () => {
+    // The reported bug: toggling to light left the plot canvas dark, which
+    // reads as a rendering fault rather than a design choice.
+    setTheme("light");
+    expect(resolvePlotBg("theme").isDark).toBe(false);
+    expect(resolvePlotBg(undefined).isDark).toBe(false);
+  });
+
+  it("resolves DARK when the app is in dark mode", () => {
+    setTheme("dark");
+    expect(resolvePlotBg("theme").isDark).toBe(true);
+  });
+
+  it("defaults to dark when no theme is set", () => {
+    setTheme(null);
+    expect(resolvePlotBg("theme").isDark).toBe(true);
+  });
+
+  it("an explicit window pin still WINS over the app theme", () => {
+    // Origin's white-page-in-a-dark-app model — the pin must keep meaning what
+    // it says, in both directions.
+    setTheme("light");
+    expect(resolvePlotBg("dark").isDark).toBe(true);
+    setTheme("dark");
+    expect(resolvePlotBg("light").isDark).toBe(false);
+  });
+
+  it("a pinned window uses the mode-scoped tokens, not the theme-following ones", () => {
+    // --axes-bg now follows the theme, so a "dark" pin borrowing it would turn
+    // light with the app and the pin would mean nothing.
+    setTheme("light");
+    const pinned = resolvePlotBg("dark");
+    const following = resolvePlotBg("theme");
+    expect(pinned.axesBg).not.toBe(following.axesBg);
   });
 });

@@ -10,9 +10,12 @@
 // `useHistoryCommands` (MAIN_PLAN #9, undo/redo) is mounted here for the
 // identical reason — Ctrl+Z must work no matter which stage tab is showing.
 
+import { useEffect } from "react";
+
 import MapStage from "./MapStage";
+import { canRenderMap } from "../../lib/mapdata";
 import Worksheet from "./Worksheet";
-import { useApp } from "../../store/useApp";
+import { useActiveDataset, useApp } from "../../store/useApp";
 import { useHistoryCommands } from "../history/useHistoryCommands";
 import { useWindowCommands } from "../windows/useWindowCommands";
 import WindowCanvas from "../windows/WindowCanvas";
@@ -26,13 +29,28 @@ const TABS = [
 export default function Stage() {
   const stageTab = useApp((s) => s.stageTab);
   const setStageTab = useApp((s) => s.setStageTab);
+  const active = useActiveDataset();
   useWindowCommands();
   useHistoryCommands();
+
+  // Owner request 2026-07-25: the Map tab is CONTEXTUAL. A 1-D dataset can
+  // never produce a map, so the tab was a permanent invitation to a screen that
+  // only apologises. Same capability rule MapStage itself uses (lib/mapdata),
+  // not a second copy of it.
+  const mappable = canRenderMap(active?.data);
+  const tabs = TABS.filter((t) => t.id !== "map" || mappable);
+
+  // Falling back matters as much as hiding: switching to a 1-D dataset while
+  // the Map tab is open would otherwise strand the user on a tab that no longer
+  // has a strip entry, with no visible way back.
+  useEffect(() => {
+    if (stageTab === "map" && !mappable) setStageTab("plot");
+  }, [stageTab, mappable, setStageTab]);
 
   return (
     <section className="qzk-stage-cell">
       <div className="qzk-tabs">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <span
             key={t.id}
             className={`qzk-tab${stageTab === t.id ? " active" : ""}`}
@@ -42,7 +60,15 @@ export default function Stage() {
           </span>
         ))}
       </div>
-      {stageTab === "plot" ? <WindowCanvas /> : stageTab === "map" ? <MapStage /> : <Worksheet />}
+      {stageTab === "plot" ? (
+        <WindowCanvas />
+      ) : stageTab === "map" && mappable ? (
+        <MapStage />
+      ) : stageTab === "worksheet" ? (
+        <Worksheet />
+      ) : (
+        <WindowCanvas />
+      )}
     </section>
   );
 }

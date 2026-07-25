@@ -96,8 +96,23 @@ export interface PlotBgTokens {
   isDark: boolean;
 }
 
+/** The app's current global theme. Read from the DOM rather than the store so
+ *  this stays a pure-ish helper the canvas builders can call — `[data-theme]`
+ *  is where the theme actually lives (store/prefs stamps it onto <html>). */
+function appThemeIsDark(): boolean {
+  if (typeof document === "undefined") return true; // SSR/tests: match the default
+  return document.documentElement.dataset.theme !== "light";
+}
+
 export function resolvePlotBg(bg?: PlotBg): PlotBgTokens {
-  if ((bg ?? "theme") === "light") {
+  // "theme" now FOLLOWS the app theme (owner request 2026-07-25). It used to
+  // resolve dark unconditionally, so switching the app to light left the plot
+  // canvas dark — which reads as a rendering bug rather than a design choice.
+  // An explicit per-window "light"/"dark" pin still overrides, and those use
+  // the MODE-scoped token pairs, which stay theme-invariant so a pin keeps
+  // meaning what it says.
+  const mode = (bg ?? "theme") === "theme" ? (appThemeIsDark() ? "dark" : "light") : bg;
+  if (mode === "light") {
     return {
       axesBg: cssVar("--axes-bg-light") || "#f7f7fa",
       gridColor: cssVar("--grid-line-light") || "#ccc",
@@ -107,8 +122,8 @@ export function resolvePlotBg(bg?: PlotBg): PlotBgTokens {
     };
   }
   return {
-    axesBg: cssVar("--axes-bg") || "#13131a",
-    gridColor: cssVar("--grid-line") || "#333",
+    axesBg: cssVar("--axes-bg-dark") || "#13131a",
+    gridColor: cssVar("--grid-line-dark") || "#333",
     inkColor: cssVar("--ink-on-dark") || "#eee",
     inkDimColor: cssVar("--ink-dim-on-dark") || "#aaa",
     isDark: true,

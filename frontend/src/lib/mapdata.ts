@@ -202,3 +202,18 @@ export async function fetchMap(
     return buildMapColumns(ds, xKey, yKey, zKey, opts.nx, opts.ny);
   }
 }
+
+/** Can this dataset produce a 2-D map at all? (owner request 2026-07-25)
+ *
+ *  A map needs three channels — x, y and the z it colours by — so a dataset
+ *  with fewer cannot make one. Defined ONCE here because two consumers now ask:
+ *  `MapStage` (to decide between the canvas and its "needs 3 channels" notice)
+ *  and `Stage` (to decide whether the Map TAB exists at all). Two copies of the
+ *  rule would eventually disagree, and the visible symptom would be a tab that
+ *  opens onto a permanent apology.
+ *
+ *  Deliberately capability, not history: "has a map been drawn" would be
+ *  circular — you could never reach the tab to draw the first one. */
+export function canRenderMap(data: DataStruct | null | undefined): boolean {
+  return (data?.labels.length ?? 0) >= 3;
+}
