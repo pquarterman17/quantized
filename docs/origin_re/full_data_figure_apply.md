@@ -85,9 +85,10 @@ npm test
   244 files, 3297 tests passed
 ```
 
-The worktree is under OneDrive, so a fresh `uv` environment may need
-`UV_LINK_MODE=copy`; that is an environment workaround, not an application
-requirement.
+(A fresh `uv` environment used to need `UV_LINK_MODE=copy` here, because the
+worktree was under OneDrive. The repo moved out on 2026-07-25 and plain
+`uv sync --group dev` now works — that was always an environment workaround,
+never an application requirement.)
 
 ## Reviewer checklist
 

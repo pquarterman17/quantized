@@ -8,13 +8,15 @@
 set -e
 cd "$(dirname "$0")"
 
-# Copy link mode avoids a OneDrive "incompatible hardlinks" error on sync.
-export UV_LINK_MODE=copy
+# UV_LINK_MODE=copy used to be forced here to dodge a OneDrive
+# "incompatible hardlinks" sync error. The repo moved off OneDrive
+# (2026-07-25), so uv can hardlink again — faster and less disk. Re-add it
+# only if this tree ends up on a syncing folder again.
 
 # First run: create the Python environment.
 if [ ! -d ".venv" ]; then
   echo "[quantized] First run: installing Python dependencies..."
-  uv sync --link-mode=copy
+  uv sync
 fi
 
 # First run: build the SPA (the build output is gitignored).

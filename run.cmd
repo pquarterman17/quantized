@@ -7,13 +7,15 @@ REM ============================================================================
 setlocal
 cd /d "%~dp0"
 
-REM Copy link mode avoids a OneDrive "incompatible hardlinks" error on sync.
-set UV_LINK_MODE=copy
+REM UV_LINK_MODE=copy used to be forced here to dodge a OneDrive
+REM "incompatible hardlinks" sync error. The repo moved off OneDrive
+REM (2026-07-25), so uv can hardlink again — which is faster and uses less
+REM disk. Re-add it only if this tree ends up on a syncing folder again.
 
 REM First run: create the Python environment.
 if not exist ".venv" (
   echo [quantized] First run: installing Python dependencies...
-  uv sync --link-mode=copy
+  uv sync
   if errorlevel 1 goto :err
 )
 

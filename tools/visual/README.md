@@ -129,8 +129,9 @@ directory instead; its default corpus discovery is otherwise identical.
 port 8793, override with `--port`) to parse the project — the SAME process
 also serves the just-built SPA, so no separate static server is needed — and
 kills the whole process tree on exit. It uploads via `/api/parsers/upload`
-(the OneDrive-dehydrated-file-immune path — never the path-based `/import`),
-then drives the store directly through the `?harness` seam, exactly mirroring
+— the path the GUI itself uses, never the path-based `/import`, so the
+harness exercises what a real user exercises — then drives the store
+directly through the `?harness` seam, exactly mirroring
 `useApp.importFiles`'s real book-naming + `addOriginFigures` call. Multi-layer
 graph windows (double-Y pairs, spatial multi-panel figures) are applied ONCE
 per graph-window family — clicking any one row applies the whole family, so

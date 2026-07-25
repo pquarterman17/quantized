@@ -2,7 +2,8 @@
 // "Side-by-side Origin<->quantized figure comparison campaign").
 //
 // Imports an Origin project through the REAL running backend exactly once
-// (POST /api/parsers/upload, the OneDrive-placeholder-immune path), then
+// (POST /api/parsers/upload -- the path the GUI itself uses, never the
+// path-based /import), then
 // replays the Library's real "click a figure" flow --
 // `addOriginFigures` + `applyOriginFigure` via the `?harness` store seam
 // (frontend/src/main.tsx) -- for every decoded graph window, screenshotting
@@ -198,9 +199,11 @@ async function main() {
   await mkdir(QZ_DIR, { recursive: true });
 
   console.log(`[1/5] starting backend on :${PORT} …`);
-  // --no-sync: a bare `uv run` re-syncs the venv per spawn; an interrupted
-  // sync (OneDrive file locks) leaves half-installed packages and kills the
-  // NEXT project's backend mid-corpus-run.
+  // --no-sync: a bare `uv run` re-syncs the venv per spawn. Keep the flag —
+  // a corpus run spawns the backend repeatedly, and a sync interrupted
+  // between projects leaves half-installed packages that kill the NEXT
+  // project's backend. (OneDrive locks were the original trigger; the repo
+  // left OneDrive 2026-07-25, but the per-spawn re-sync is still waste.)
   const backend = spawn("uv", ["run", "--no-sync", "qz", "--no-browser", "--port", String(PORT)], {
     cwd: REPO_ROOT,
     shell: process.platform === "win32",

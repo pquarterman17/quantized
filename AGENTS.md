@@ -13,7 +13,7 @@ theme, tooling, and the enforcement discipline that the MATLAB monoliths
 lacked. `fermiviewer` is the structural reference; `quantized_matlab` is
 the behavioural reference (parity + golden values).
 
-## Reference repos (siblings under `Coding/git/`)
+## Reference repos (siblings in the same checkout root)
 
 | Repo | Role |
 |------|------|

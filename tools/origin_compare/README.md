@@ -18,8 +18,8 @@ piece of work — this script only produces the Origin-side oracle images.
   real, launchable `Origin.ApplicationSI`).
 - `pywin32` importable from whichever Python runs the script. This repo's
   own `.venv` has it as an optional extra (`uv pip install pywin32` if
-  missing) — but see "pywin32 gotcha" below, this venv's install has been
-  seen corrupted by OneDrive sync.
+  missing) — but see "pywin32 gotcha" below: a partially-installed pywin32
+  fails in a way that looks like a script bug.
 - No other dependency. Deliberately dependency-free (stdlib only, plus
   `pywin32`) — PNG width/height are read directly from the IHDR chunk
   rather than pulling in an imaging library, to keep this Apache-2.0-clean
@@ -117,13 +117,14 @@ docstring) so nobody re-derives them:
    this Origin build/version, not vendor-documented — flag it if a future
    Origin version's export sizes look wrong.
 5. **The `win32com.client` package can go missing its own source files.**
-   This repo's `.venv` is inside a OneDrive-synced folder; at least once,
-   `win32com/client/*.py` were simply absent on disk (only a stale
-   `__pycache__` remained) while `win32com/gen_py` etc. looked fine —
+   Repeatedly seen while this repo lived under OneDrive (moved out
+   2026-07-25): `win32com/client/*.py` were simply absent on disk (only a
+   stale `__pycache__` remained) while `win32com/gen_py` etc. looked fine —
    `import win32com.client` succeeded (namespace package) but
    `wc.gencache` raised `AttributeError`. Fix: `uv pip install --reinstall
-   pywin32` (with `UV_LINK_MODE=copy` set, per this repo's usual OneDrive
-   hardlink gotcha). Always sanity-check
+   pywin32`. The sync engine was the cause and is gone, but the *diagnosis*
+   is the durable part: a half-installed dependency fails in a way that
+   reads like broken logic. Always sanity-check
    `python -c "import win32com.client; win32com.client.gencache"` once
    before trusting a COM script's failure is a *logic* bug and not a
    corrupted venv.

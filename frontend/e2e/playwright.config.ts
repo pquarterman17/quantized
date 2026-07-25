@@ -56,8 +56,11 @@ export default defineConfig({
   webServer: {
     // Plain executable + args (no shell pipes/redirects) so this runs
     // identically under Windows cmd.exe and a POSIX shell.
-    // --no-sync: a bare `uv run` re-syncs the venv on every e2e run, and an
-    // interrupted sync (OneDrive file locks) leaves half-installed packages.
+    // --no-sync: a bare `uv run` re-syncs the venv on every e2e run. Keep the
+    // flag — mutating the venv underneath a running suite is the hazard, and
+    // it costs a re-sync per run for nothing. (The original trigger was
+    // OneDrive file locks corrupting a half-finished sync; the repo left
+    // OneDrive 2026-07-25, but an interrupted sync is bad on any disk.)
     command: `uv run --no-sync qz --no-browser --port ${PORT}`,
     cwd: REPO_ROOT,
     url: `http://127.0.0.1:${PORT}/api/health`,
