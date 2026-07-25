@@ -197,13 +197,24 @@ def _run_desktop(
         time.sleep(0.25)
 
     try:
-        webview.create_window(
+        # MAIN_PLAN #31: expose the native file-dialog bridge at
+        # window.pywebview.api so a GUI import can carry a REAL path (and so a
+        # re-import needs no second picker). Browser mode has no
+        # window.pywebview and degrades to the file picker, unchanged.
+        from quantized.desktop_bridge import DesktopApi
+
+        api = DesktopApi()
+        win = webview.create_window(
             title,
             f"http://{host}:{port}{path}",
             width=width,
             height=height,
             background_color="#121116",  # dark --surface-0 (oklch 0.16 0.008 280)
+            js_api=api,
         )
+        # The dialog methods live on the WINDOW, not the module, so the api
+        # object only becomes fully capable once the window exists.
+        api.attach(win)
         webview.start()
     except Exception as e:
         print(f"[qz] {_WEBVIEW_HINT}\n(error: {e})")

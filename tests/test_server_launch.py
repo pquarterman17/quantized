@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from quantized import server_launch
+from quantized.desktop_bridge import DesktopApi
 
 # ── probe helpers ────────────────────────────────────────────────────────────
 
@@ -218,13 +219,15 @@ def test_run_desktop_default_title_and_geometry_unchanged(
     monkeypatch.setattr(server_launch, "_bind", lambda *a: None)  # reuse-if-healthy path
     monkeypatch.setattr(server_launch, "_health_ok", lambda *a, **k: True)  # our own instance
     server_launch._run_desktop("127.0.0.1", 8000)
-    webview.create_window.assert_called_once_with(
-        "Quantized",
-        "http://127.0.0.1:8000",
-        width=1440,
-        height=920,
-        background_color="#121116",
-    )
+    # MAIN_PLAN #31 added js_api (the native file-dialog bridge). Assert the
+    # geometry positionally/by-kwarg as before, and the bridge separately, so
+    # this test keeps pinning the window AND now pins that the bridge is wired.
+    (args, kwargs) = webview.create_window.call_args
+    assert args == ("Quantized", "http://127.0.0.1:8000")
+    assert kwargs["width"] == 1440
+    assert kwargs["height"] == 920
+    assert kwargs["background_color"] == "#121116"
+    assert isinstance(kwargs["js_api"], DesktopApi)
     webview.start.assert_called_once()
 
 
@@ -241,11 +244,26 @@ def test_run_desktop_calc_combo_uses_diraculator_title_and_geometry(
     server_launch._run_desktop(
         "127.0.0.1", 8000, title="DiraCulator", width=520, height=680, path="/?view=calc"
     )
-    webview.create_window.assert_called_once_with(
-        "DiraCulator",
-        "http://127.0.0.1:8000/?view=calc",
-        width=520,
-        height=680,
-        background_color="#121116",
-    )
+    (args, kwargs) = webview.create_window.call_args
+    assert args == ("DiraCulator", "http://127.0.0.1:8000/?view=calc")
+    assert kwargs["width"] == 520
+    assert kwargs["height"] == 680
+    assert kwargs["background_color"] == "#121116"
+    assert isinstance(kwargs["js_api"], DesktopApi)
     webview.start.assert_called_once()
+
+
+def test_run_desktop_attaches_the_window_to_the_bridge(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """MAIN_PLAN #31: the dialog methods live on the WINDOW, not the module, so
+    a bridge that never gets attached reports no capability and every native
+    pick silently falls back to the browser picker."""
+    monkeypatch.setattr(server_launch, "_WEB_DIR", tmp_path)
+    webview = MagicMock()
+    monkeypatch.setitem(sys.modules, "webview", webview)
+    monkeypatch.setattr(server_launch, "_bind", lambda *a: None)
+    monkeypatch.setattr(server_launch, "_health_ok", lambda *a, **k: True)
+    server_launch._run_desktop("127.0.0.1", 8000)
+    api = webview.create_window.call_args.kwargs["js_api"]
+    assert api.probe()["canPickFiles"] is True

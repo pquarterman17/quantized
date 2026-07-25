@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from quantized.datastruct import DataStruct
+from quantized.desktop_consent import is_consented
 from quantized.io import import_auto
 from quantized.io.origin_project import (
     drop_empty_library_books,
@@ -263,7 +264,16 @@ def import_file(req: ImportRequest) -> dict[str, Any]:
                 break
         except ValueError:
             continue  # different drives (Windows) -> not under this root
-    if not within_allowed:
+    # MAIN_PLAN #31: a path the user physically picked in a NATIVE OS dialog is
+    # explicitly consented, exactly as a browser file-picker upload is, so it
+    # passes even from outside the roots. This is what makes a network share or
+    # a second drive importable at all — the plan's headline pain point. The
+    # containment check above still runs first and is unchanged; consent is a
+    # narrow, additive second gate, never a replacement. Consent is per EXACT
+    # resolved path, is only ever granted by the in-process desktop bridge after
+    # a modal dialog returns, and has no HTTP route — a page pointed at this
+    # server cannot self-authorize. See quantized/desktop_consent.py.
+    if not within_allowed and not is_consented(resolved):
         raise HTTPException(
             status_code=403,
             detail="path is outside the allowed roots (set QZ_DATA_ROOTS to widen)",
