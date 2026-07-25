@@ -247,18 +247,29 @@ in git history @ `e4f6590`.)*
     `plotExport.plotPngBlob`'s own docstring calls it "a quick raster
     grab of exactly what's on screen". The expected workflow is seconds
     from finished plot to PowerPoint or Word.
-    - [ ] Copy Figure puts a 300-DPI transparent-or-white PNG (user
-          preference) on the clipboard via the publication render path
+    **Substantially shipped 2026-07-25** (see Completed); two sub-items
+    remain, both needing backend work rather than wiring.
+    - [x] Copy Figure puts a 300-DPI PNG on the clipboard via the
+          publication render path — **but always on the renderer's
+          default background.** Transparent-or-white is NOT a choice yet:
+          `calc/figure.py`'s `fig.savefig` never passes `transparent=`,
+          so there is nothing to expose. Threading that flag through
+          savefig → the route schema → `FigureSpec` → a preference is the
+          real remaining work
     - [ ] SVG offered where the platform clipboard supports it; Windows
           EMF stays separately scoped
-    - [ ] Copied output matches Figure Builder/export for limits, ticks,
+    - [x] Copied output matches Figure Builder/export for limits, ticks,
           fonts, line widths, error bars, annotations, multi-panel layout
-    - [ ] Normal figures copy within seconds, with clear progress and
-          failure feedback on large renders
-    - [ ] The screen-canvas grab survives only as an explicitly named
-          quick/screenshot option
-    - Reuse the server-side matplotlib publication renderer and its
-      parity tests — do NOT create a third rendering implementation.
+          — structural, not maintained by hand: both callers build the
+          same spec through `lib/figureSpec.buildFigureSpec`
+    - [x] Normal figures copy within seconds, with clear progress and
+          failure feedback; capability is checked BEFORE rendering so an
+          unsupported browser fails immediately instead of burning a
+          render
+    - [x] The screen-canvas grab survives only as an explicitly named
+          quick option ("Copy image (screen)")
+    - Reuses the server-side matplotlib publication renderer and its
+      parity tests — no third rendering implementation was added.
 
 36. **Complete symmetric and asymmetric X/Y error bars** — `errKeys` is
     `Record<number, number>`, i.e. exactly one error channel per series,
@@ -404,6 +415,33 @@ in git history @ `e4f6590`.)*
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- **#35 Publication-quality figure copy** (2026-07-25) — shipped in two
+  commits (`70342fa` extraction, `e45cb48` feature); two sub-items left
+  open above (clipboard SVG, and a transparent-background option that
+  needs `transparent=` threaded through `savefig` first).
+  - **The fix is structural, not cosmetic.** `runExportFigureCommand`
+    built its spec inline, so the ~70 lines translating live view state
+    into a request were reachable only by the download command. Those
+    moved to `lib/figureSpec.buildFigureSpec`, and BOTH commands now
+    build the same spec and post it to the same renderer — screen-vs-
+    paste parity can no longer drift, and no third rendering path exists.
+    The extraction landed as its own commit, verified behaviour-
+    preserving against the 35 existing tests.
+  - **Two details that decide whether it works at all.** (1) The
+    clipboard gets the PENDING render, not an awaited Blob — awaiting a
+    server round-trip can drop the transient user activation the
+    Clipboard API requires, and the copy then fails invisibly; the spec
+    permits a promise-valued `ClipboardItem`, with await-then-write as
+    the fallback. (2) Capability is checked BEFORE rendering, so Firefox
+    or an insecure context fails at once rather than burning a render.
+  - **Routed through the existing `exportActive` chokepoint** instead of
+    resolving the dataset independently — that chokepoint is what stops
+    an export running on a lazy book's small preview (#38), so
+    duplicating the resolve would have reopened exactly that bug. It
+    gained optional verb/past labels for copy wording.
+  - Verified: frontend 4273 / 304 files + build; bundle 913.0 kB eager
+    (36.2 kB under budget).
 
 - **#37 Arbitrary non-destructive X/Y rescaling** (2026-07-25) — shipped
   in two commits (backend `8754cbc`, frontend `54998e3`); one sub-item
