@@ -87,6 +87,7 @@ import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel"
 import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
 import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
+import { createTrashSlice, type TrashSlice } from "./trash";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import { remapDatasetChannels, remapViewChannels, remapWindowViews } from "../lib/channelRemap";
 import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
@@ -313,7 +314,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -930,6 +931,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createGraphBuilderSlice(set, get),
   ...createCorrectionsSlice(set, get),
   ...createCellEditSlice(set, get),
+  ...createTrashSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1870,6 +1872,7 @@ export const useApp = create<AppState>((set, get) => ({
     }),
   removeDataset: (id) => {
     get().recordHistory("remove dataset");
+    get().sendToTrash(get().datasets.filter((d) => d.id === id)); // #32 trash
     set((s) => {
       const datasets = s.datasets.filter((d) => d.id !== id);
       const activeId =
@@ -1892,43 +1895,26 @@ export const useApp = create<AppState>((set, get) => ({
       return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, plotWindows };
     });
   },
-  // Delete key: remove every selected dataset (falling back to the active one if
-  // nothing is multi-selected); reselect the first survivor so the plot recovers.
+  // Delete key: remove every selected dataset (falling back to the active one
+  // if nothing is multi-selected); reselect the first survivor so the plot
+  // recovers. DELEGATES to removeDatasets rather than repeating its ~25 lines
+  // of reference pruning (origin figures, fidelity, reports, figure docs, plot
+  // windows) — that block had drifted into three near-identical copies, and a
+  // new prune target had to be remembered in all of them. The only behaviour
+  // this adds on top is the reselect.
   removeSelected: () => {
-    get().recordHistory("remove selected datasets");
-    set((s) => {
-      const ids = new Set(
-        s.selectedIds.length ? s.selectedIds : s.activeId ? [s.activeId] : [],
-      );
-      if (ids.size === 0) return {};
-      const datasets = s.datasets.filter((d) => !ids.has(d.id));
-      const activeId =
-        s.activeId && !ids.has(s.activeId) ? s.activeId : (datasets[0]?.id ?? null);
-      const worksheetId = s.worksheetId && ids.has(s.worksheetId) ? null : s.worksheetId;
-      const originFigures = pruneOriginFigureRefs(s.originFigures, ids);
-      const originFidelity = pruneOriginFidelityRefs(s.originFidelity, ids);
-      const reports = pruneReportRefs(s.reports, ids);
-      const figureDocs = s.figureDocs.map((f) =>
-        f.datasetId && ids.has(f.datasetId) ? { ...f, datasetId: null } : f,
-      );
-      const plotWindows = pruneWindowDatasetRefs(s.plotWindows, ids);
-      return {
-        datasets,
-        activeId,
-        worksheetId,
-        selectedIds: activeId ? [activeId] : [],
-        originFigures,
-        originFidelity,
-        reports,
-        figureDocs,
-        plotWindows,
-      };
-    });
+    const s = get();
+    const ids = s.selectedIds.length ? s.selectedIds : s.activeId ? [s.activeId] : [];
+    if (ids.length === 0) return;
+    get().removeDatasets(ids);
+    const activeId = get().activeId;
+    set({ selectedIds: activeId ? [activeId] : [] });
   },
   // Bulk-remove by explicit id list (item 17's "manage books" dialog) — unlike
   // removeSelected, this doesn't touch/depend on the transient row selection.
   removeDatasets: (ids) => {
     get().recordHistory("remove datasets");
+    get().sendToTrash(get().datasets.filter((d) => ids.includes(d.id))); // #32 trash
     set((s) => {
       if (ids.length === 0) return {};
       const drop = new Set(ids);

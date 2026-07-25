@@ -144,7 +144,11 @@ const STORE_PINS: Record<string, number> = {
   // have pushed useApp over the pin, so setCellValue moved out WITH it into
   // store/cellEdit.ts — a cohesive "write cells into a dataset grid" slice,
   // the same extraction store/corrections.ts got.
-  "/store/useApp.ts": 3045,
+  // 3045 -> 3032 (2026-07-25, MAIN #32 project trash): trash capture needed
+  // lines, paid for by making removeSelected DELEGATE to removeDatasets
+  // instead of repeating its ~25 lines of reference pruning — that block had
+  // drifted into three near-identical copies.
+  "/store/useApp.ts": 3032,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

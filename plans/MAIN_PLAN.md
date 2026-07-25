@@ -151,9 +151,10 @@ already gone stale.)*
     "autosave skipped (storage full or unavailable)" — but a transient
     status line is weaker than a persistent, actionable error for the
     default home of experimental work.
-    **Slices 1 + 2 shipped 2026-07-25** (`6464498`, `feat/crash-recovery`)
-    — the durable store, the generations, the health readout, and crash
-    detection. Slice 3 (project trash) remains.
+    **All three slices shipped 2026-07-25.** Durable multi-generation store
+    + health (`6464498`), crash detection (`7fb58ae`), dataset trash
+    (`feat/project-trash`). Residual: a trash VIEW, and extending trash
+    beyond datasets to folders.
     - [x] Durable backing store: IndexedDB where the engine has it
           (`lib/autosaveBackend.ts`), localStorage as a one-generation
           fallback so no browser is worse off than before, in-memory as
@@ -175,8 +176,13 @@ already gone stale.)*
           on every launch would be worse. What was actually missing was the
           distinction, so a crash now raises a toast telling the user to
           check their latest edits, and an ordinary close stays silent
-    - [ ] Deleted project objects enter a recoverable trash with age and
-          size caps, visible cleanup rules, Restore / Delete Permanently
+    - [x] Deleted DATASETS enter a recoverable trash bounded by both entry
+          count (25) and age (7 days), evicted oldest-first on every send,
+          with restore and purge actions (`store/trash.ts`). Trash is not a
+          duplicate of undo: undo is session-scoped, trash answers "I
+          deleted that and only noticed later". NOT covered: folders and
+          other project objects, and there is no trash VIEW yet — the
+          actions exist and are tested, the UI surface does not
     - [x] Raw source files are never rewritten or placed in trash — the
           autosave layer only ever writes serialized workspace text to its
           own store; it has no path to a source file
