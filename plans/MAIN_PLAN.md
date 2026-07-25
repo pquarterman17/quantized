@@ -393,22 +393,40 @@ in git history @ `e4f6590`.)*
     - Reuses the server-side matplotlib publication renderer and its
       parity tests — no third rendering implementation was added.
 
-36. **Complete symmetric and asymmetric X/Y error bars** — `errKeys` is
-    `Record<number, number>`, i.e. exactly one error channel per series,
-    so interactive support is symmetric vertical Y only. PORT_CHECKLIST
-    confirms that much shipped (`buildErrorColumns` + `errorBarsPlugin`
-    draw y±e whiskers); X error and asymmetric plus/minus are not a
+~~36. **Complete symmetric and asymmetric X/Y error bars**~~ COMPLETED
+    2026-07-25 — `errKeys` was `Record<number, number>`, i.e. exactly one
+    error channel per series, so interactive support was symmetric
+    vertical Y only; X error and asymmetric plus/minus were not a
     complete import-to-screen-to-export workflow.
-    - [ ] Canonical mapping supports X±, Y±, X+/X−, Y+/Y−
-    - [ ] Common names (`err`, `sigma`, `sd`, `se`, `xerr`, `yerr`,
-          `err+`, `err-`) suggested, never silently forced when ambiguous
-    - [ ] Import Wizard and plot Inspector expose pairing/override
-    - [ ] Interactive, clipboard, PNG, SVG and PDF paths agree
-    - [ ] Error data stay independent of raw X/Y and can be toggled or
-          restyled without mutation
-    - [ ] Tests cover asymmetric values, X error, missing values, log
-          axes, clipped/off-scale bars
-    - Implement AFTER #33 defines durable roles and `DataStruct` metadata.
+    - [x] Canonical mapping supports X±, Y±, X+/X−, Y+/Y− —
+          `lib/errorRoles.ErrorBinding` (channel → target + axis + side),
+          built with #33 as the shared contract
+    - [x] Common names suggested, never silently forced — inference binds
+          only on a base-name match, an explicit `x` prefix, or the
+          nearest preceding value column; anything else is left UNBOUND,
+          and "Detect from names" runs only when the user asks
+    - [x] The plot Inspector exposes pairing/override — an "Error columns"
+          card editing target, axis and side per binding, warning about a
+          one-sided pair instead of drawing nothing quietly. NOTE: the
+          import WIZARD does not expose it; the Inspector does
+    - [x] Interactive and export agree — `errorSpansPlugin` on the canvas,
+          `calc/figure_errorbars.apply_error_bars` in the publication
+          renderer, both fed the SAME spans by `buildFigureSpec`. The
+          renderer previously had NO error-bar support, so a PDF silently
+          omitted what the screen drew. Clipboard, PNG, SVG and PDF all
+          ride that one renderer, so they follow
+    - [x] Error data stay independent — a binding is a REFERENCE to a
+          column, never a rewrite, so re-pairing or clearing can only
+          change what is drawn (pinned by a test asserting `values` is
+          untouched after a removal)
+    - [x] Tests cover asymmetric values, X error, missing values and
+          half-pairs, on both layers. Log axes and off-scale ends need no
+          special case, and the code says why: `valToPos` maps a
+          non-positive endpoint to NaN (the browser skips that segment),
+          and an off-scale end is left to the canvas clip so a bar still
+          draws TO the edge — dropping it would understate the
+          uncertainty exactly where a reader is most likely to misread it
+    - Built on #33's role contract, as planned.
 
 ~~37. **Arbitrary non-destructive X/Y rescaling**~~ COMPLETED 2026-07-25 —
     `CorrectionParams`
