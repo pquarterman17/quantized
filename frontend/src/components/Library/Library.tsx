@@ -28,7 +28,8 @@ import { useLibraryTree } from "./useLibraryTree";
 import { makeDemoDataset } from "../../lib/demo";
 import { folderPath, folderPathLabel } from "../../lib/foldertree";
 import { originSheetGroups, originSheetNumber } from "../../lib/grouping";
-import { IMPORT_ACCEPT, openFilePicker } from "../../lib/openFilePicker";
+import { chooseAndImport } from "../../lib/importEntry";
+import { IMPORT_ACCEPT } from "../../lib/openFilePicker";
 import { matchesQuery, parseQuery } from "../../lib/smartfolders";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -77,7 +78,9 @@ export default function Library() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fires only on revealTarget
   }, [revealTarget]);
 
-  const onImport = () => openFilePicker((files) => void importFiles(files), ACCEPT);
+  // MAIN #31: routes through the shared entry point so a desktop shell gets a
+  // NATIVE dialog (paths -> source.path) and a browser gets today's picker.
+  const onImport = () => void chooseAndImport(useApp.getState(), ACCEPT);
 
   const onDemo = () => {
     const ds: Dataset = {

@@ -120,7 +120,13 @@ because they are default-tool blockers with a data-loss failure mode;
 were dropped: process detail does not belong in a plan doc, and they had
 already gone stale.)*
 
-31. **Native file/workspace handling that remembers real paths** — a
+31. **Native file/workspace handling that remembers real paths** —
+    **Core shipped 2026-07-25** (`e5f04e1` backend bridge + consent,
+    `feat/native-paths` frontend). Remaining: the working-path list
+    (select/pin/rename/remove), Recent entries reopening their target with
+    Locate/Remove/Retry, and surfacing the offline-vs-missing states in the
+    UI — `path_status` computes them, nothing displays them yet. Original
+    problem statement: a
     browser `<input type=file>` yields no persistent path or handle, so a
     Recent entry cannot reopen by path; clicking one just reopens the
     import picker (`lib/recentFiles.ts` says so in its own header, and
@@ -129,8 +135,14 @@ already gone stale.)*
     Origin/MATLAB. Goal: make desktop use file-native while keeping a
     safe browser fallback, and treat an unavailable network drive as
     temporarily offline rather than proof a source was deleted.
-    - [ ] Desktop imports retain a canonical source reference and can
-          reimport without another picker
+    - [x] Desktop imports retain a canonical source reference and can
+          reimport without another picker — `qz --desktop` now injects a
+          `js_api` bridge (`quantized/desktop_bridge.py`) whose native
+          dialog returns real paths; those import through the ORDINARY
+          `/api/parsers/import` route and the dataset carries
+          `source.path`, which the existing re-import contract already
+          consumes. NOTE: pywebview only — the Tauri shell's dialog plugin
+          is still Rust-only and unwired
     - [ ] Working paths can be selected, pinned, renamed, removed
     - [ ] Recent file/workspace entries reopen their target; stale
           entries offer Locate, Remove, Retry
@@ -138,7 +150,11 @@ already gone stale.)*
           distinct, non-destructive states
     - [ ] Browser mode degrades visibly to picker behaviour, with no
           false promise that a path was retained
-    - [ ] Tests enforce allowed-root / path-validation rules
+    - [x] Tests enforce allowed-root / path-validation rules — 12 cases
+          around `desktop_consent`, including that consent is per EXACT
+          path (never a directory prefix), is bounded and evicts
+          oldest-first, does not bypass the existence check, and that an
+          unconsented outside path and a traversal attempt still fail
     - Foundation for #32 and #38. Reuse the existing source-linked
       reimport contract rather than creating a second one.
 

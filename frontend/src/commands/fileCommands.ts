@@ -19,6 +19,7 @@ import { clearAutosave } from "../lib/autosave";
 import { exportActive, type StoreGet } from "../lib/exportActive";
 import { runExportFigureCommand } from "../lib/exportFigureCommand";
 import { runExportSpatialPageCommand } from "../lib/exportPageCommand";
+import { chooseAndImport } from "../lib/importEntry";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "../lib/originTemplate";
 import { parseWorkspace, type LoadedWorkspace } from "../lib/workspace";
@@ -59,7 +60,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "File",
       label: "Import data…",
       shortcut: "⌘O",
-      run: () => openFilePicker((files) => void s().importFiles(files)),
+      run: () => void chooseAndImport(s()),
     },
     {
       id: "import-append",

@@ -53,7 +53,6 @@ import {
   resolveSpatialPanels,
   spatialApplyNotices,
 } from "../lib/originFigures";
-import { planOriginFolders } from "../lib/originFolders";
 import {
   dedupeWindowTitle,
   displayedWindowTitle,
@@ -87,6 +86,7 @@ import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel"
 import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
 import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
+import { createImportSlice, type ImportSlice } from "./importDatasets";
 import { createTrashSlice, type TrashSlice } from "./trash";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import { remapDatasetChannels, remapViewChannels, remapWindowViews } from "../lib/channelRemap";
@@ -121,7 +121,6 @@ import {
   type OriginImportSlice,
 } from "./originImport";
 import { createOriginFallbackSlice, type OriginFallbackSlice } from "./originFallback";
-import { isLazyBookEntry, isPrimaryBookMarker } from "../lib/types";
 import type {
   Annotation,
   AxisFormat, AxisScale,
@@ -314,7 +313,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -545,7 +544,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   status: string;
 
   addDataset: (ds: Dataset) => void;
-  importFiles: (files: File[]) => Promise<void>;
   // Import ≥2 files and concatenate them row-wise into ONE dataset (gap #47) —
   // the alternative to importFiles' N-separate-datasets result, for same-shape
   // multi-file series (e.g. a scan split across daily files). Falls back to
@@ -932,6 +930,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createCorrectionsSlice(set, get),
   ...createCellEditSlice(set, get),
   ...createTrashSlice(set, get),
+  ...createImportSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1118,115 +1117,6 @@ export const useApp = create<AppState>((set, get) => ({
 
   // Upload + parse each picked/dropped file; add to the library (continues on a
   // per-file error so one bad file doesn't abort the batch).
-  importFiles: async (files) => {
-    let added = 0;
-    let lastError = "";
-    for (const file of files) {
-      get().setStatus(`importing ${file.name}…`);
-      try {
-        const data = await uploadFile(file);
-        const stem = file.name.replace(/\.[^.]+$/, "");
-        const figures = data.figures;
-        const fidelity = data.origin_fidelity;
-        delete data.figures;
-        delete data.origin_fidelity;
-        const newIds: string[] = [];
-        if (data.books && data.books.length > 1) {
-          // Origin project: import every workbook as its own dataset. Per
-          // ORIGIN_FILE_DECODE_PLAN #38, `book` is one of three shapes: the
-          // PRIMARY book's no-data marker (its real time/values are at the
-          // top-level `data` instead), another book's lazy preview (small
-          // preview time/values now, full data fetched on first activation —
-          // `pending` records how), or — only under the `full_books` escape
-          // hatch, never requested here — a full inline DataStruct.
-          const bookSource = data.book_source;
-          for (const book of data.books) {
-            const meta = (book.metadata ?? {}) as Record<string, unknown>;
-            const short = String(meta.origin_book ?? "Book");
-            const long = String(meta.origin_book_long ?? "");
-            const label = long && long !== short ? `${short} — ${long}` : short;
-            const id = nextDatasetId();
-            if (isPrimaryBookMarker(book)) {
-              get().addDataset({
-                id,
-                name: `${stem}:${label}`,
-                data: {
-                  time: data.time,
-                  values: data.values,
-                  labels: book.labels,
-                  units: book.units,
-                  metadata: book.metadata,
-                },
-              });
-            } else if (isLazyBookEntry(book)) {
-              get().addDataset({
-                id,
-                name: `${stem}:${label}`,
-                data: {
-                  time: book.preview.time,
-                  values: book.preview.values,
-                  labels: book.labels,
-                  units: book.units,
-                  metadata: book.metadata,
-                },
-                ...(bookSource
-                  ? { pending: { ...bookSource, bookId: book.id, rows: book.rows, cols: book.cols } }
-                  : {}),
-              });
-            } else {
-              get().addDataset({ id, name: `${stem}:${label}`, data: book });
-            }
-            newIds.push(id);
-          }
-          // item 4: organize the imported books into a project folder that mirrors
-          // Origin's Project Explorer (origin_folder_path) → book → sheet, instead
-          // of dumping N workbooks flat into the Library.
-          const newIdSet = new Set(newIds);
-          const projectDatasets = get().datasets.filter((d) => newIdSet.has(d.id));
-          const plan = planOriginFolders(stem, projectDatasets, nextFolderId);
-          set((s) => ({
-            folders: [...s.folders, ...plan.folders],
-            expandedFolders: [...new Set([...s.expandedFolders, ...plan.expanded])],
-            datasets: s.datasets.map((d) =>
-              plan.membership[d.id] ? { ...d, folderId: plan.membership[d.id] } : d,
-            ),
-          }));
-        } else {
-          delete data.books;
-          delete data.book_source;
-          const id = nextDatasetId();
-          get().addDataset({ id, name: file.name, data });
-          newIds.push(id);
-        }
-        if (figures?.length) get().addOriginFigures(stem, figures, newIds);
-        if (fidelity) {
-          get().addOriginFidelity(stem, fidelity, newIds);
-          toast(
-            `${stem}: ${fidelity.graph_records_actionable}/${fidelity.graph_records_total} Origin graph records are editable; fidelity details saved`,
-            "info",
-          );
-        }
-        get().recordMacro(`Import ${file.name}`, `qz.import(${lit(file.name)})`, {
-          kind: "import",
-          params: { name: file.name },
-        });
-        get().pushRecent(file.name, file.size);
-        added += 1;
-      } catch (e) {
-        lastError = `${file.name}: ${e instanceof Error ? e.message : "error"}`;
-      }
-    }
-    // A parse failure is the wizard's second front door (#40): the auto-detect
-    // path gave up, so point at the manual guess/preview/parse one instead of
-    // just reporting the error.
-    const hint = " — try the Import wizard (⌘K → Import wizard…)";
-    const summary = lastError
-      ? `imported ${added}/${files.length} — failed ${lastError}${hint}`
-      : `imported ${added} file${added === 1 ? "" : "s"}`;
-    get().setStatus(summary);
-    if (added > 0) toast(`imported ${added} file${added === 1 ? "" : "s"}`, "ok");
-    if (lastError) toast(`${lastError}${hint}`, "danger");
-  },
 
   // Upload every file, then concatenate them row-wise into ONE dataset instead
   // of importFiles' N separate ones (gap #47) — for a same-shape multi-file
