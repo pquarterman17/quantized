@@ -13,7 +13,8 @@ import type uPlot from "uplot";
 import { suggestLogScale } from "../../lib/autoscale";
 import { copyImage, copyText, payloadToTSV } from "../../lib/clipboard";
 import { clampPlottedRange, rowsInXRange, type PlotPayload } from "../../lib/plotdata";
-import { runCopyFigureCommand } from "../../lib/copyFigureCommand";
+import { clipboardSvgSupported } from "../../lib/clipboard";
+import { runCopyFigureCommand, runCopyFigureSvgCommand } from "../../lib/copyFigureCommand";
 import { exportPlotPng, plotPngBlob } from "../../lib/plotExport";
 import type { Dataset } from "../../lib/types";
 import { toast } from "../../store/toasts";
@@ -31,6 +32,7 @@ export interface PlotStageActions {
   savePng: () => void;
   copyData: () => void;
   copyFigure: () => void;
+  copyFigureSvg?: () => void;
   snapshot: () => void;
 }
 
@@ -101,6 +103,12 @@ export function usePlotStageActions(
     void runCopyFigureCommand(useApp.getState);
   }
 
+  // MAIN #35: undefined where the browser won't take SVG, so the menu can
+  // simply omit the entry rather than offer one that always fails.
+  const copyFigureSvg = clipboardSvgSupported()
+    ? () => void runCopyFigureSvgCommand(useApp.getState)
+    : undefined;
+
   // Snapshot: copy exactly what's on screen to the clipboard as a PNG — a quick
   // raster grab for pasting into notes/chat (distinct from the TSV copy and the
   // server-rendered vector Figure export). Falls back to a toast where the async
@@ -139,6 +147,7 @@ export function usePlotStageActions(
     savePng,
     copyData,
     copyFigure,
+    copyFigureSvg,
     snapshot,
     onRegionSelect,
     onRangeSelect,

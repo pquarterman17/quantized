@@ -114,3 +114,52 @@ export function clipboardImageSupported(): boolean {
     typeof ClipboardItem !== "undefined"
   );
 }
+
+/** MIME for a vector clipboard copy (MAIN_PLAN #35). */
+export const SVG_MIME = "image/svg+xml";
+
+/** Will this browser accept an SVG on the clipboard?
+ *
+ *  Browsers do NOT allow arbitrary MIME types through `clipboard.write` — the
+ *  set is sanctioned, and `image/svg+xml` is outside it almost everywhere
+ *  today. `ClipboardItem.supports()` is the standard probe for exactly this
+ *  question, so we ask instead of assuming, and offer the option only where the
+ *  answer is yes.
+ *
+ *  Deliberately NOT falling back to writing the markup as text/plain: that
+ *  pastes a wall of XML into Word rather than a figure, which is worse than the
+ *  option simply not appearing. The PNG copy already covers everyone; a user
+ *  who needs vector has "Export figure…". */
+export function clipboardSvgSupported(): boolean {
+  if (typeof ClipboardItem === "undefined") return false;
+  const supports = (ClipboardItem as unknown as { supports?: (t: string) => boolean }).supports;
+  // No `supports` at all means an older implementation with a fixed, narrow
+  // allowlist that never included SVG — treat that as "no", not "unknown".
+  if (typeof supports !== "function") return false;
+  try {
+    return supports(SVG_MIME) === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Write a PENDING SVG render to the clipboard, keeping the user gesture alive
+ *  the same way `copyImageAsync` does. Resolves false when the browser will not
+ *  take SVG, so the caller can say why rather than failing silently. */
+export async function copySvgAsync(pending: Promise<Blob | null>): Promise<boolean> {
+  if (!clipboardSvgSupported()) {
+    await pending.catch(() => null); // no unhandled rejection left behind
+    return false;
+  }
+  try {
+    const asBlob = (async () => {
+      const blob = await pending;
+      if (!blob) throw new Error("render produced no image");
+      return blob;
+    })();
+    await navigator.clipboard.write([new ClipboardItem({ [SVG_MIME]: asBlob })]);
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -6,14 +6,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderFigureBlob } from "./api";
-import { clipboardImageSupported, copyImageAsync } from "./clipboard";
-import { COPY_FIGURE_DPI, COPY_FIGURE_FMT, runCopyFigureCommand } from "./copyFigureCommand";
+import {
+  clipboardImageSupported,
+  clipboardSvgSupported,
+  copyImageAsync,
+  copySvgAsync,
+} from "./clipboard";
+import {
+  COPY_FIGURE_DPI,
+  COPY_FIGURE_FMT,
+  runCopyFigureCommand,
+  runCopyFigureSvgCommand,
+} from "./copyFigureCommand";
 import type { DataStruct, Dataset } from "./types";
 
 vi.mock("./api", () => ({ renderFigureBlob: vi.fn() }));
 vi.mock("./clipboard", () => ({
   clipboardImageSupported: vi.fn(() => true),
+  clipboardSvgSupported: vi.fn(() => true),
   copyImageAsync: vi.fn(async () => true),
+  copySvgAsync: vi.fn(async () => true),
 }));
 
 const data: DataStruct = {
@@ -80,6 +92,8 @@ function fakeGet(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(clipboardImageSupported).mockReturnValue(true);
+  vi.mocked(clipboardSvgSupported).mockReturnValue(true);
+  vi.mocked(copySvgAsync).mockResolvedValue(true);
   vi.mocked(copyImageAsync).mockResolvedValue(true);
   vi.mocked(renderFigureBlob).mockResolvedValue(new Blob(["x"], { type: "image/png" }));
 });
@@ -150,5 +164,39 @@ describe("runCopyFigureCommand", () => {
     await runCopyFigureCommand(fakeGet());
     const messages = setStatus.mock.calls.map((c) => String(c[0]));
     expect(messages.some((m) => m.includes("boom"))).toBe(true);
+  });
+});
+
+describe("runCopyFigureSvgCommand (MAIN #35)", () => {
+  it("renders VECTOR through the same publication route", async () => {
+    await runCopyFigureSvgCommand(fakeGet());
+    const spec = vi.mocked(renderFigureBlob).mock.calls[0][0];
+    expect(spec.fmt).toBe("svg");
+  });
+
+  it("hands the pending render to the clipboard, keeping the gesture", async () => {
+    await runCopyFigureSvgCommand(fakeGet());
+    const arg = vi.mocked(copySvgAsync).mock.calls[0][0];
+    expect(typeof (arg as Promise<Blob | null>).then).toBe("function");
+  });
+
+  it("does not render at all when the browser won't take SVG", async () => {
+    // An entry that always fails is worse than no entry; the caller says why.
+    vi.mocked(clipboardSvgSupported).mockReturnValue(false);
+    await runCopyFigureSvgCommand(fakeGet());
+    expect(renderFigureBlob).not.toHaveBeenCalled();
+    expect(setStatus).toHaveBeenCalledWith(expect.stringContaining("Export figure"));
+  });
+
+  it("carries the on-screen view, like the raster copy", async () => {
+    await runCopyFigureSvgCommand(fakeGet({ hiddenChannels: [1] }));
+    expect(vi.mocked(renderFigureBlob).mock.calls[0][0].y_keys).toEqual([0]);
+  });
+
+  it("reports a refused clipboard write with copy wording", async () => {
+    vi.mocked(copySvgAsync).mockResolvedValue(false);
+    await runCopyFigureSvgCommand(fakeGet());
+    const msgs = setStatus.mock.calls.map((c) => String(c[0]));
+    expect(msgs.some((m) => m.startsWith("copy failed"))).toBe(true);
   });
 });

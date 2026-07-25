@@ -81,6 +81,8 @@ export interface PlotMenuContext {
   resetView: () => void;
   /** MAIN #35: publication render -> clipboard (the default copy). */
   copyFigure: () => void;
+  /** MAIN #35: vector copy. Absent when the browser won't take SVG. */
+  copyFigureSvg?: () => void;
   /** The quick screen-resolution canvas grab. */
   copyImage: () => void;
   savePng: () => void;
@@ -255,6 +257,10 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   // the screen grab keeps a slot but says what it is, so the fast option
   // stays available without being mistaken for publication output.
   items.push({ label: "Copy figure", run: ctx.copyFigure });
+  // Vector copy appears ONLY where the clipboard accepts SVG. An entry that
+  // always fails is worse than no entry — the PNG copy already serves
+  // everyone, and "Export figure…" is the universal vector route.
+  if (ctx.copyFigureSvg) items.push({ label: "Copy figure (vector)", run: ctx.copyFigureSvg });
   items.push({ label: "Copy image (screen)", run: ctx.copyImage });
   items.push({ label: "Copy data (TSV)", run: ctx.copyData });
   items.push({ label: "Save as PNG", run: ctx.savePng });

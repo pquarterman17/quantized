@@ -188,6 +188,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       setLegendStatic: st.setLegendStatic,
       resetView: actions.resetView,
       copyFigure: actions.copyFigure,
+      copyFigureSvg: actions.copyFigureSvg,
       copyImage: actions.snapshot,
       savePng: actions.savePng,
       copyData: actions.copyData,

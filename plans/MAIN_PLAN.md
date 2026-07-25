@@ -328,13 +328,14 @@ in git history @ `e4f6590`.)*
     - Build on the existing worksheet selection, edit, undo and
       corrected-data conventions.
 
-35. **One-click publication-quality figure copy** — Copy currently
+~~35. **One-click publication-quality figure copy**~~ COMPLETED 2026-07-25 —
+    Copy previously
     composites the live uPlot canvas at screen resolution;
     `plotExport.plotPngBlob`'s own docstring calls it "a quick raster
     grab of exactly what's on screen". The expected workflow is seconds
     from finished plot to PowerPoint or Word.
-    **Substantially shipped 2026-07-25** (see Completed); one sub-item
-    remains (clipboard SVG).
+    **SHIPPED 2026-07-25** (see Completed). Residual: Windows EMF, which the
+    sub-item itself scoped out.
     - [x] Copy Figure puts a 300-DPI transparent-or-white PNG (user
           preference) on the clipboard via the publication render path —
           `transparent=` now threads through BOTH render paths (the main
@@ -342,8 +343,13 @@ in git history @ `e4f6590`.)*
           `FigureSpec`, and a Preferences ▸ Plot control. Opaque stays the
           default at every layer, with tests pinning that an omitted field
           still renders alpha=255
-    - [ ] SVG offered where the platform clipboard supports it; Windows
-          EMF stays separately scoped
+    - [x] SVG offered where the platform clipboard supports it — probed via
+          `ClipboardItem.supports("image/svg+xml")` rather than assumed,
+          and the menu entry is ABSENT where the answer is no, because an
+          entry that always fails is worse than none. Deliberately does NOT
+          fall back to writing the markup as text/plain: that pastes a wall
+          of XML into Word instead of a figure. Windows EMF remains
+          separately scoped and untouched
     - [x] Copied output matches Figure Builder/export for limits, ticks,
           fonts, line widths, error bars, annotations, multi-panel layout
           — structural, not maintained by hand: both callers build the

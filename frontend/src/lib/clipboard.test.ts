@@ -1,6 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { clipboardImageSupported, payloadToTSV, tableToTSV } from "./clipboard";
+import {
+  clipboardImageSupported,
+  clipboardSvgSupported,
+  payloadToTSV,
+  tableToTSV,
+} from "./clipboard";
 import type { PlotPayload } from "./plotdata";
 
 describe("payloadToTSV", () => {
@@ -111,5 +116,52 @@ describe("clipboardImageSupported", () => {
     Object.defineProperty(navigator, "clipboard", { value: { write: async () => {} }, configurable: true });
     (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = class {};
     expect(clipboardImageSupported()).toBe(true);
+  });
+});
+
+describe("clipboardSvgSupported (MAIN #35)", () => {
+  const orig = globalThis.ClipboardItem;
+  afterEach(() => {
+    if (orig === undefined) delete (globalThis as { ClipboardItem?: unknown }).ClipboardItem;
+    else (globalThis as { ClipboardItem?: unknown }).ClipboardItem = orig;
+  });
+
+  function setClipboardItem(v: unknown) {
+    (globalThis as { ClipboardItem?: unknown }).ClipboardItem = v;
+  }
+
+  it("is false when there is no ClipboardItem at all", () => {
+    delete (globalThis as { ClipboardItem?: unknown }).ClipboardItem;
+    expect(clipboardSvgSupported()).toBe(false);
+  });
+
+  it("is false when the implementation has no supports() probe", () => {
+    // An older implementation has a fixed, narrow allowlist that never
+    // included SVG — that is a "no", not an "unknown".
+    setClipboardItem(function () {});
+    expect(clipboardSvgSupported()).toBe(false);
+  });
+
+  it("asks supports() rather than assuming", () => {
+    const supports = vi.fn(() => true);
+    setClipboardItem(Object.assign(function () {}, { supports }));
+    expect(clipboardSvgSupported()).toBe(true);
+    expect(supports).toHaveBeenCalledWith("image/svg+xml");
+  });
+
+  it("is false when supports() says no", () => {
+    setClipboardItem(Object.assign(function () {}, { supports: () => false }));
+    expect(clipboardSvgSupported()).toBe(false);
+  });
+
+  it("is false when supports() throws", () => {
+    setClipboardItem(
+      Object.assign(function () {}, {
+        supports: () => {
+          throw new Error("nope");
+        },
+      }),
+    );
+    expect(clipboardSvgSupported()).toBe(false);
   });
 });

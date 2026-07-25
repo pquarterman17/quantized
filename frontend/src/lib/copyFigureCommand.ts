@@ -15,7 +15,12 @@
 // publication defaults rather than prompted.
 
 import { renderFigureBlob } from "./api";
-import { copyImageAsync, clipboardImageSupported } from "./clipboard";
+import {
+  clipboardImageSupported,
+  clipboardSvgSupported,
+  copyImageAsync,
+  copySvgAsync,
+} from "./clipboard";
 import { exportActive, type StoreGet } from "./exportActive";
 import { buildFigureSpec } from "./figureSpec";
 import { toast } from "../store/toasts";
@@ -30,6 +35,40 @@ export const COPY_FIGURE_FMT = "png";
  *  "Export figure…", which prompts. Keeping this equal to the dialog default
  *  is what makes copy and export produce identical pixels by default. */
 export const COPY_FIGURE_STYLE = "default";
+
+/** MAIN #35: vector copy, offered only where the browser will actually take an
+ *  SVG on the clipboard (see clipboardSvgSupported — the sanctioned MIME set
+ *  excludes it almost everywhere today). Same spec, same renderer, same
+ *  gesture-preserving write as the raster copy; only `fmt` differs. */
+export async function runCopyFigureSvgCommand(s: StoreGet): Promise<void> {
+  if (!clipboardSvgSupported()) {
+    const msg = "this browser can't put SVG on the clipboard — use Export figure…";
+    s().setStatus(msg);
+    toast(msg, "danger");
+    return;
+  }
+  await exportActive(
+    s,
+    async (stem, ds) => {
+      const spec = {
+        ...buildFigureSpec(s, ds, stem, {
+          fmt: "svg",
+          style: COPY_FIGURE_STYLE,
+          dpi: COPY_FIGURE_DPI, // ignored by vector, sent for spec symmetry
+          title: s().plotTitle,
+          xLabel: s().xAxisLabel,
+          yLabel: s().yAxisLabel,
+        }),
+        transparent: s().copyFigureTransparent,
+      };
+      s().setStatus("rendering vector figure for the clipboard…");
+      const ok = await copySvgAsync(renderFigureBlob(spec));
+      s().setStatus("");
+      if (!ok) throw new Error("clipboard write refused");
+    },
+    { verb: "copy", past: "copied (vector)" },
+  );
+}
 
 export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
   // Check capability BEFORE rendering: on a browser without the async
