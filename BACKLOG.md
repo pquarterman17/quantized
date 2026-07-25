@@ -124,7 +124,7 @@ still make the owner switch back to Origin.
 | **Spreadsheet-style block editing** — rectangular clipboard operations, fill/clear/insert/delete, undo, and corrected-data provenance | MAIN #34 |
 | **Publication-quality clipboard copy** — one-click 300-DPI publication-rendered copy with screen/export parity and platform fallbacks | MAIN #35 |
 | **Complete X/Y error bars** — symmetric/asymmetric X and Y pairing, override UI, and interactive/export parity — after MAIN #33 | MAIN #36 |
-| **Arbitrary non-destructive rescaling** — multiply/divide X or Y by a value with units, preview, undo, provenance, and consistent error scaling | MAIN #37 |
+| **Arbitrary non-destructive rescaling — RESIDUAL ONLY** — the ×/÷ factor SHIPPED 2026-07-25 (`8754cbc` backend step-0 rescaling + `54998e3` Corrections-card UI; undo/persistence/error-scaling all inherited, both layers validated). Remaining: update labels/units in the same operation, so the numbers and the unit string stop disagreeing | MAIN #37 |
 | **Home screen/project navigation** — recent and pinned work, working paths, recovery health, safe missing-source handling; defer global search until the base organization is validated | MAIN #38 |
 
 The remaining dev item is a judgment call the plan explicitly parked for the

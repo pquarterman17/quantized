@@ -258,3 +258,30 @@ def test_rescale_error_message_is_ascii() -> None:
     with pytest.raises(ValueError) as exc:
         apply_corrections(ds, {"yScale": 0.0})
     str(exc.value).encode("ascii")  # raises UnicodeEncodeError if it regressed
+
+
+def test_rescale_negative_factor_flips_sign() -> None:
+    """A negative factor is legitimate (inverting a signal), so it is allowed.
+
+    The log-axis consequence is handled upstream, not here: the frontend's
+    existing ``log && v <= 0`` extent guard already drops non-positive values
+    from a log scale, so a sign-flipped series degrades the same way any other
+    non-positive data does. Nothing about rescaling needs its own log rule.
+    """
+    x = np.linspace(1.0, 5.0, 10)
+    y = np.linspace(2.0, 20.0, 10)
+    ds = DataStruct.create(x, y)
+    out = apply_corrections(ds, {"yScale": -1.0})
+    assert_allclose(out.values[:, 0], -y)
+
+
+def test_rescale_composes_with_offset_and_trim_in_scaled_units() -> None:
+    """End-to-end ordering check across three interacting corrections."""
+    x = np.linspace(0.0, 100.0, 101)
+    ds = DataStruct.create(x, np.ones_like(x))
+    out = apply_corrections(
+        ds, {"xScale": 0.1, "xTrimMin": 2.0, "xTrimMax": 4.0, "xOff": 2.0}
+    )
+    # scale -> 0..10, trim -> 2..4, then subtract the offset -> 0..2.
+    assert out.time[0] == pytest.approx(0.0)
+    assert out.time[-1] == pytest.approx(2.0)

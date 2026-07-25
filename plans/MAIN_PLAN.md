@@ -278,18 +278,31 @@ in git history @ `e4f6590`.)*
     - Implement AFTER #33 defines durable roles and `DataStruct` metadata.
 
 37. **Arbitrary non-destructive X/Y rescaling** — `CorrectionParams`
-    carries `xOff`/`yOff` offsets but no scale factor anywhere in the
-    interface, so multiplying or dividing a channel for inconvenient
-    units or normalization is not possible without rewriting data.
-    - [ ] Corrections offer X and Y multiply/divide by a validated
-          numeric factor, with preview and Cancel
-    - [ ] Labels/units updatable in the same operation
-    - [ ] Undoable, recorded in provenance, recomputable, round-trips
-          through project/template save
-    - [ ] Zero, non-finite and invalid factors fail clearly; log-axis and
-          error-channel behaviour tested
-    - Extend the existing non-destructive corrections pipeline; scale
-      associated error channels consistently.
+    carried `xOff`/`yOff` offsets but no scale factor, so multiplying or
+    dividing a channel for inconvenient units or normalization was not
+    possible without rewriting data. **Substantially shipped 2026-07-25**
+    (see Completed for the design rationale); one sub-item remains.
+    - [x] Corrections offer X and Y multiply/divide by a validated
+          numeric factor — ×/÷ rows in the Corrections card, existing
+          Apply / Reset serving as commit and revert
+    - [ ] Labels/units updatable in the same operation — NOT done; the
+          scale changes the numbers but the unit string still says the
+          old unit, so this is the honest remaining gap
+    - [x] Undoable, recorded in provenance, recomputable, round-trips
+          through project/template save — all inherited, none re-built:
+          `store/corrections.ts` already calls
+          `recordHistory("apply corrections")`, and `lib/workspace.ts`
+          serializes the whole `corrections` object generically, so the
+          new fields persist with no per-field wiring
+    - [x] Zero, non-finite and invalid factors fail clearly (both
+          layers); error-channel behaviour tested. Log-axis behaviour
+          needs no new rule — the frontend's existing `log && v <= 0`
+          extent guard already drops non-positive values, so a
+          sign-flipped series degrades exactly like any other
+          non-positive data
+    - Extends the existing non-destructive corrections pipeline; a
+      uniform yScale means error channels scale with their y-channel for
+      free.
 
 38. **A useful home screen and project-wide navigation** — the empty
     Library offers essentially file drop ("Drop files here, or use ⊞ to
@@ -391,6 +404,41 @@ in git history @ `e4f6590`.)*
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- **#37 Arbitrary non-destructive X/Y rescaling** (2026-07-25) — shipped
+  in two commits (backend `8754cbc`, frontend `54998e3`); one sub-item
+  (labels/units in the same operation) deliberately left open above.
+  - **`xScale`/`yScale` run FIRST, as step 0 before the trim** — the
+    ordering IS the design, not an implementation detail. Trim bounds,
+    `xOff`, bg slope/intercept and anchors are all picked by the user off
+    the PLOT, so scaling later would silently redefine every one of them.
+    And step 8's derivative then differentiates scaled y against scaled
+    x, giving d(y·sy)/d(x·sx) = (sy/sx)·dy/dx for free; scaling at the
+    END would multiply by sy alone and be wrong by a factor of sx. A
+    regression test pins exactly that case (7.5, not 15).
+  - **One stored representation.** The ×/÷ operator is input sugar; the
+    stored value is always the literal multiplier (÷v stores 1/v), so no
+    second field can drift. Consequence is deliberate and tested: "÷ 10"
+    re-opens as "× 0.1".
+  - **Error bars for free** — a uniform `yScale` over every value channel
+    means a y-channel and its paired error channel scale together, so the
+    y±e ratio is invariant. Same uniform treatment step 5's emu/g
+    conversion already applies.
+  - **Validated on both layers.** Zero/non-finite/non-numeric rejected in
+    `lib/rescale.ts` (disables Apply, names the reason in a
+    `role="alert"` note) and independently in calc, which raises
+    `ValueError` that the route maps to 422 — not a 500 (the
+    narrow-except class). Error strings ASCII-tested for Windows cp1252.
+  - **Two wrong assumptions the tests caught** (code was right, my
+    expectations weren't): `Number("1e-400")` underflows to exactly 0 in
+    JS so it hits the zero guard, not the finite one — the reachable
+    overflow is `÷ 5e-324`, whose reciprocal is Infinity; and the
+    non-finite ROUTE guard is only reachable via a raw JSON body, since
+    Python's encoder refuses to emit `inf` while its decoder accepts
+    `1e400` from a JS client.
+  - Verified: backend 3042→3044 + ruff + mypy; frontend 4266 / 303 files
+    + build; bundle ratchet 911.9 kB eager (37.3 kB under);
+    `CorrectionsCard.tsx` 369 of ~400.
 
 - ~~**#29 Frontend bundle code-splitting**~~ (2026-07-25) — eager JS
   **1,120,960 B → 932,219 B (−16.8%)**; gzip 338.55 → 288.44 kB. The 25
