@@ -150,7 +150,7 @@ function addFromPayload(
     kind: "import",
     params: { name: origin.name },
   });
-  get().pushRecent(origin.name, origin.size);
+  get().pushRecent(origin.name, origin.size, origin.source?.path);
 }
 
 /** Shared per-batch loop + status/toast summary. */

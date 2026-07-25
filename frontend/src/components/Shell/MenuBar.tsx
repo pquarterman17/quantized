@@ -7,7 +7,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { mergeCommands, PALETTE_LABEL, PALETTE_SHORTCUT, useCommands, type Action } from "../../store/commands";
-import { IMPORT_ACCEPT, openFilePicker } from "../../lib/openFilePicker";
+import { reopenRecent } from "../../lib/reopenRecent";
+import type { RecentFile } from "../../lib/recentFiles";
 import { relativeTime } from "../../lib/recentFiles";
 import { withSectionHeaders } from "../../lib/menuSections";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
@@ -36,7 +37,6 @@ const MENUS: { label: string; group: string }[] = [
   { label: "View", group: "View" },
 ];
 
-const ACCEPT = IMPORT_ACCEPT;
 
 interface MenuBarProps {
   actions: Action[];
@@ -48,7 +48,6 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
   const navRef = useRef<HTMLElement>(null);
   const recent = useApp((s) => s.recent);
   const clearRecent = useApp((s) => s.clearRecent);
-  const importFiles = useApp((s) => s.importFiles);
   // App's curated list PLUS anything published into the shared command
   // registry (e.g. the Window menu's commands — see MULTI_PLOT_PLAN item 5)
   // — the same merge the ⌘K palette does, so a menu entry and a palette
@@ -72,12 +71,19 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
     };
   }, [open]);
 
-  // A browser picker can't re-open a file by path, so a Recent entry re-opens the
-  // import dialog (with a hint of which file you last used).
-  const reopen = (name: string) => {
+  // MAIN #31: an entry imported through a native dialog carries a path and
+  // reopens its TARGET; a browser-uploaded one still re-opens the picker,
+  // because no path was ever knowable. reopenRecent owns the missing-vs-offline
+  // decision — an unmounted share must not be treated as a deleted file.
+  const reopen = (entry: RecentFile) => {
     setOpen(null);
-    useApp.getState().setStatus(`re-select "${name}" to import it`);
-    openFilePicker((files) => void importFiles(files), ACCEPT);
+    if (!entry.path) useApp.getState().setStatus(`re-select "${entry.name}" to import it`);
+    void reopenRecent(useApp.getState(), entry);
+  };
+  const forget = (e: React.MouseEvent, name: string) => {
+    // Removing a stale entry must not also re-import it.
+    e.stopPropagation();
+    useApp.getState().removeRecent(name);
   };
 
   function title(label: string) {
@@ -139,11 +145,25 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
                       <button
                         key={r.name}
                         className="qzk-menu-item"
-                        title={`${r.name} — re-opens the import picker`}
-                        onClick={() => reopen(r.name)}
+                        title={
+                          r.path
+                            ? `${r.path} — reopens this file directly`
+                            : `${r.name} — re-opens the import picker (no path was saved)`
+                        }
+                        onClick={() => reopen(r)}
                       >
                         <span className="qzk-menu-trunc">{r.name}</span>
                         <span className="qz-shortcut">{relativeTime(r.at, now)}</span>
+                        <span
+                          role="button"
+                          tabIndex={-1}
+                          aria-label={`Remove ${r.name} from recent`}
+                          title="Remove from recent"
+                          className="qz-shortcut"
+                          onClick={(e) => forget(e, r.name)}
+                        >
+                          ✕
+                        </span>
                       </button>
                     ))}
                     <button

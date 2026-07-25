@@ -120,13 +120,12 @@ because they are default-tool blockers with a data-loss failure mode;
 were dropped: process detail does not belong in a plan doc, and they had
 already gone stale.)*
 
-31. **Native file/workspace handling that remembers real paths** —
-    **Core shipped 2026-07-25** (`e5f04e1` backend bridge + consent,
-    `feat/native-paths` frontend). Remaining: the working-path list
-    (select/pin/rename/remove), Recent entries reopening their target with
-    Locate/Remove/Retry, and surfacing the offline-vs-missing states in the
-    UI — `path_status` computes them, nothing displays them yet. Original
-    problem statement: a
+~~31. **Native file/workspace handling that remembers real paths**~~
+    COMPLETED 2026-07-25 —
+    **SHIPPED 2026-07-25.** Every sub-item is closed. Residual, recorded
+    rather than implied: pywebview only (the Tauri shell's dialog plugin is
+    still Rust-only and unwired), and Recent covers FILES, not workspaces.
+    Original problem statement: a
     browser `<input type=file>` yields no persistent path or handle, so a
     Recent entry cannot reopen by path; clicking one just reopens the
     import picker (`lib/recentFiles.ts` says so in its own header, and
@@ -143,11 +142,25 @@ already gone stale.)*
           `source.path`, which the existing re-import contract already
           consumes. NOTE: pywebview only — the Tauri shell's dialog plugin
           is still Rust-only and unwired
-    - [ ] Working paths can be selected, pinned, renamed, removed
-    - [ ] Recent file/workspace entries reopen their target; stale
-          entries offer Locate, Remove, Retry
-    - [ ] Offline/network-unavailable and genuinely missing files are
-          distinct, non-destructive states
+    - [x] Working paths can be selected, pinned, renamed, removed
+          (`store/workingPaths.ts`, persisted): the native dialog opens at
+          the current one and the folder actually picked from floats to the
+          top. Pinned entries survive eviction; a rename survives revisiting
+          the folder. A working path grants NO read access — consent stays
+          per-file, so this is only where to START looking
+    - [x] Recent entries reopen their target — `RecentFile.path` is set for
+          native imports, and `lib/reopenRecent.ts` owns the outcome:
+          present = import it, missing = offer LOCATE (the picker), offline
+          = say the share is unavailable and STOP (retry is clicking again),
+          no bridge = picker, as before. REMOVE is a per-row ✕. NOTE:
+          FILES only — workspace (`.dwk`) entries are not in the recent list
+    - [x] Offline and missing are distinct and non-destructive — computed
+          per platform by `_volume_present` (Windows drive/UNC root; POSIX
+          mount point), surfaced in the reopen flow, and NEITHER state
+          deletes, relinks or cleans up anything. The documented limit:
+          outside a recognizable mount prefix POSIX reports `missing`,
+          because over-reporting `offline` would suppress a real "your file
+          is gone"
     - [ ] Browser mode degrades visibly to picker behaviour, with no
           false promise that a path was retained
     - [x] Tests enforce allowed-root / path-validation rules — 12 cases

@@ -10,6 +10,12 @@ export interface RecentFile {
   size: number;
   /** ISO timestamp of the most recent import. */
   at: string;
+  /** MAIN_PLAN #31: the real source path, when one was knowable — i.e. the
+   *  import came from a native desktop dialog rather than a browser upload.
+   *  Present = this entry can REOPEN its target directly; absent = clicking it
+   *  can only re-open the picker, which is the pre-#31 behaviour and remains
+   *  correct for a browser, where no path exists to remember. */
+  path?: string;
 }
 
 const KEY = "qz.recent";
@@ -45,6 +51,13 @@ export function saveRecent(list: RecentFile[]): void {
   } catch {
     /* storage unavailable — recents are best-effort */
   }
+}
+
+/** Drop one entry by name (the per-row "Remove from recent" action). Pure —
+ *  a stale entry should be removable without also being re-imported, and
+ *  without nuking the whole list. */
+export function removeRecentEntry(list: RecentFile[], name: string): RecentFile[] {
+  return list.filter((r) => r.name !== name);
 }
 
 /** Wipe the recent list (the "Clear recent" menu item). */

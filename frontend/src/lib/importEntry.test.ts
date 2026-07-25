@@ -4,7 +4,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { chooseAndImport } from "./importEntry";
+import { chooseAndImport, parentDirectory } from "./importEntry";
+import { useWorkingPaths } from "../store/workingPaths";
 
 const openFilePicker = vi.fn();
 vi.mock("./openFilePicker", () => ({
@@ -27,6 +28,8 @@ const store = { importFiles: vi.fn(async () => {}), importPaths: vi.fn(async () 
 beforeEach(() => {
   vi.clearAllMocks();
   setShell(null);
+  localStorage.clear();
+  useWorkingPaths.setState({ paths: [], current: "" });
 });
 afterEach(() => setShell(null));
 
@@ -83,5 +86,42 @@ describe("chooseAndImport — desktop shell", () => {
     setShell({});
     await chooseAndImport(store);
     expect(openFilePicker).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("parentDirectory", () => {
+  it("strips the filename on either separator", () => {
+    const B = String.fromCharCode(92);
+    expect(parentDirectory("/data/runs/scan.dat")).toBe("/data/runs");
+    expect(parentDirectory(`C:${B}data${B}scan.dat`)).toBe(`C:${B}data`);
+  });
+
+  it("returns empty when there is no directory part", () => {
+    expect(parentDirectory("scan.dat")).toBe("");
+  });
+});
+
+describe("working paths (MAIN #31)", () => {
+  it("opens the native dialog at the current working path", async () => {
+    // A native dialog only fixes picking a file once; starting in the right
+    // folder is what makes the second and tenth time fast.
+    const pick = vi.fn(async () => ({ paths: ["/data/xrd/scan.dat"] }));
+    setShell({ pick_files: pick });
+    useWorkingPaths.setState({ paths: [], current: "/data/xrd" });
+    await chooseAndImport(store);
+    expect(pick).toHaveBeenCalledWith("/data/xrd", true);
+  });
+
+  it("remembers the folder actually picked from", async () => {
+    setShell({ pick_files: async () => ({ paths: ["/data/xrd/scan.dat"] }) });
+    await chooseAndImport(store);
+    expect(useWorkingPaths.getState().current).toBe("/data/xrd");
+    expect(useWorkingPaths.getState().paths[0].label).toBe("xrd");
+  });
+
+  it("records nothing when the user cancels", async () => {
+    setShell({ pick_files: async () => ({ paths: [] }) });
+    await chooseAndImport(store);
+    expect(useWorkingPaths.getState().paths).toHaveLength(0);
   });
 });

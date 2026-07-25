@@ -87,6 +87,7 @@ import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
 import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
 import { createImportSlice, type ImportSlice } from "./importDatasets";
+import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createTrashSlice, type TrashSlice } from "./trash";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import { remapDatasetChannels, remapViewChannels, remapWindowViews } from "../lib/channelRemap";
@@ -104,13 +105,6 @@ import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import { fitDataForSpec, fitStepParams } from "../lib/fitselection";
 import { firstVisiblePlottedChannel, qfitSpec, selectRoiRows, type GadgetMode } from "../lib/quickfit";
 import { activeRowIndices, analysisData, droppedRows, expandToFull, keepOnlyExcluded, mergeExcluded, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
-import {
-  addRecentEntry,
-  clearRecentMeta,
-  loadRecent,
-  saveRecent,
-  type RecentFile,
-} from "../lib/recentFiles";
 import { toast } from "./toasts";
 import { confirmOriginReapplyDiscard, deferOriginFigureApply } from "./originFigureApply";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
@@ -313,7 +307,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice, TrashSlice, ImportSlice, RecentsSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -514,8 +508,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   columnSwitcherOpen: boolean; // the JMP-style solo-a-channel flipper (#54)
   shortcutsOpen: boolean;
   textFormatHelpOpen: boolean; // Help ▸ Text formatting (GOTO #11)
-  // Recent-imports history (File ▸ Recent); persisted via lib/recentFiles.
-  recent: RecentFile[];
   fitOverlay: FitOverlay | null;
   peakOverlay: PeakOverlay | null;
   baselineOverlay: BaselineOverlay | null;
@@ -853,9 +845,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setColumnSwitcherOpen: (open: boolean) => void;
   setShortcutsOpen: (open: boolean) => void;
   setTextFormatHelpOpen: (open: boolean) => void;
-  // Record a successful import in the recent list; clearRecent empties it.
-  pushRecent: (name: string, size: number) => void;
-  clearRecent: () => void;
   setFitOverlay: (overlay: FitOverlay | null) => void;
   setPeakOverlay: (overlay: PeakOverlay | null) => void;
   setBaselineOverlay: (overlay: BaselineOverlay | null) => void;
@@ -931,6 +920,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createCellEditSlice(set, get),
   ...createTrashSlice(set, get),
   ...createImportSlice(set, get),
+  ...createRecentsSlice(set),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1055,7 +1045,6 @@ export const useApp = create<AppState>((set, get) => ({
   columnSwitcherOpen: false,
   shortcutsOpen: false,
   textFormatHelpOpen: false,
-  recent: loadRecent(),
   fitOverlay: null,
   peakOverlay: null,
   baselineOverlay: null,
@@ -2846,16 +2835,6 @@ export const useApp = create<AppState>((set, get) => ({
   setColumnSwitcherOpen: (columnSwitcherOpen) => set({ columnSwitcherOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setTextFormatHelpOpen: (textFormatHelpOpen) => set({ textFormatHelpOpen }),
-  pushRecent: (name, size) =>
-    set((s) => {
-      const next = addRecentEntry(s.recent, { name, size, at: new Date().toISOString() });
-      saveRecent(next);
-      return { recent: next };
-    }),
-  clearRecent: () => {
-    clearRecentMeta();
-    set({ recent: [] });
-  },
   setMagToolsOpen: (magToolsOpen) => set({ magToolsOpen }),
   setFitOverlay: (fitOverlay) => set({ fitOverlay }),
   setPeakOverlay: (peakOverlay) => set({ peakOverlay }),

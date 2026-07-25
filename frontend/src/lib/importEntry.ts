@@ -19,6 +19,7 @@
 
 import { hasDesktopShell, pickNativeFiles } from "./desktopBridge";
 import { IMPORT_ACCEPT, openFilePicker } from "./openFilePicker";
+import { useWorkingPaths } from "../store/workingPaths";
 
 export interface ImportEntryStore {
   importFiles: (files: File[]) => Promise<void>;
@@ -34,14 +35,31 @@ export async function chooseAndImport(
   accept: string = IMPORT_ACCEPT,
 ): Promise<void> {
   if (hasDesktopShell()) {
-    const paths = await pickNativeFiles();
+    // MAIN #31: open where the user already works. This is the half that
+    // actually removes the pain of a long network path — a native dialog
+    // only fixes picking a file ONCE; starting in the right folder is what
+    // makes the second and tenth time fast.
+    const paths = await pickNativeFiles(useWorkingPaths.getState().current || undefined);
     if (paths !== null) {
       // Includes the empty (cancelled) case — deliberately NOT a fallback.
-      if (paths.length > 0) await store.importPaths(paths);
+      if (paths.length > 0) {
+        await store.importPaths(paths);
+        // Remember the folder they actually picked from, so it floats to
+        // the top of the working-path list next time.
+        const dir = parentDirectory(paths[0]);
+        if (dir) useWorkingPaths.getState().use(dir);
+      }
       return;
     }
     // null = the bridge is present but unusable (no window attached yet, or it
     // errored). Fall through rather than leaving the user with no dialog at all.
   }
   openFilePicker((files) => void store.importFiles(files), accept);
+}
+
+/** Directory holding `path`, or "" when it has no separator. Kept here rather
+ *  than reaching for a node path module — this runs in the browser. */
+export function parentDirectory(path: string): string {
+  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf(String.fromCharCode(92)));
+  return cut > 0 ? path.slice(0, cut) : "";
 }
