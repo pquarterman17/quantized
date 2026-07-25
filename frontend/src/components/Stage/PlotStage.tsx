@@ -193,7 +193,16 @@ export default function PlotStage() {
     if (active?.pending) useApp.getState().ensureBookData(active.id);
   }, [active?.id, active?.pending]);
 
-  const { resetView, smartScale, savePng, copyData, snapshot, onRegionSelect, onRangeSelect } = usePlotStageActions(
+  const {
+    resetView,
+    smartScale,
+    savePng,
+    copyData,
+    copyFigure,
+    snapshot,
+    onRegionSelect,
+    onRangeSelect,
+  } = usePlotStageActions(
     plotRef,
     displayPayload,
     active,
@@ -322,7 +331,7 @@ export default function PlotStage() {
         plotRef={plotRef}
         plotted={plotted}
         hidden={hidden}
-        actions={{ resetView, smartScale, savePng, copyData, snapshot }}
+        actions={{ resetView, smartScale, savePng, copyData, copyFigure, snapshot }}
         annotationMenu={annotationMenu}
         onCloseAnnotationMenu={closeAnnotationMenu}
         axisLabelMenu={axisLabelMenu}
@@ -344,7 +353,7 @@ export default function PlotStage() {
         isDarkBg={isDarkBg}
         inkColor={inkColor}
         defaultTrace={defaultTrace}
-        actions={{ resetView, smartScale, savePng, copyData, snapshot }}
+        actions={{ resetView, smartScale, savePng, copyData, copyFigure, snapshot }}
         readout={readout}
         measurement={measurement}
         stats={statsSel}

@@ -39,6 +39,7 @@ const actions: PlotStageActions = {
   smartScale: vi.fn(),
   savePng: vi.fn(),
   copyData: vi.fn(),
+  copyFigure: vi.fn(),
   snapshot: vi.fn(),
 };
 

@@ -65,6 +65,42 @@ export async function copyImage(blob: Blob): Promise<boolean> {
   return false;
 }
 
+/** Write a PNG the caller is still RENDERING, without losing the user gesture.
+ *
+ *  This exists for MAIN #35: the publication copy has to round-trip through the
+ *  server renderer, and `await`ing that before touching the clipboard can drop
+ *  the transient user-activation the Clipboard API requires — the copy then
+ *  fails for no visible reason. The spec allows a `ClipboardItem` value to be a
+ *  *promise*, so handing the pending render straight to the constructor keeps
+ *  the write inside the originating gesture while the bytes are still in
+ *  flight.
+ *
+ *  Falls back to awaiting the blob and writing it normally when the browser
+ *  rejects a promise value, so a stricter engine degrades to "might lose the
+ *  gesture" rather than "never copies". Resolves false if both routes fail. */
+export async function copyImageAsync(pending: Promise<Blob | null>): Promise<boolean> {
+  if (!clipboardImageSupported()) {
+    await pending.catch(() => null); // don't leave an unhandled rejection behind
+    return false;
+  }
+  const asBlob = async (): Promise<Blob> => {
+    const blob = await pending;
+    if (!blob) throw new Error("render produced no image");
+    return blob;
+  };
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": asBlob() })]);
+    return true;
+  } catch {
+    /* promise-valued ClipboardItem unsupported, or the render failed */
+  }
+  try {
+    return await copyImage(await asBlob());
+  } catch {
+    return false;
+  }
+}
+
 /** Synchronous capability check for the async Clipboard image API — the exact
  *  condition copyImage gates on above, exposed so the plot toolbar (#7) can
  *  disable its "Copy Image" button with a reason instead of clicking through

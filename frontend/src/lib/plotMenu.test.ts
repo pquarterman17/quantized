@@ -62,6 +62,7 @@ function makeCtx(over: Partial<PlotMenuContext> = {}): PlotMenuContext {
     setLegendPos: vi.fn(),
     setLegendStatic: vi.fn(),
     resetView: vi.fn(),
+    copyFigure: vi.fn(),
     copyImage: vi.fn(),
     savePng: vi.fn(),
     copyData: vi.fn(),

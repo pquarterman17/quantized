@@ -79,6 +79,9 @@ export interface PlotMenuContext {
   setLegendPos: (pos: LegendCorner) => void;
   setLegendStatic: (v: boolean) => void;
   resetView: () => void;
+  /** MAIN #35: publication render -> clipboard (the default copy). */
+  copyFigure: () => void;
+  /** The quick screen-resolution canvas grab. */
   copyImage: () => void;
   savePng: () => void;
   copyData: () => void;
@@ -248,7 +251,11 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   // First in the block — the owner's "I zoomed by accident, get me back"
   // escape hatch (2026-07-11; double-click on empty canvas does it too).
   items.push({ label: "Reset zoom (autoscale)", run: ctx.resetView });
-  items.push({ label: "Copy image", run: ctx.copyImage });
+  // MAIN #35: the publication-quality copy is the DEFAULT "Copy figure";
+  // the screen grab keeps a slot but says what it is, so the fast option
+  // stays available without being mistaken for publication output.
+  items.push({ label: "Copy figure", run: ctx.copyFigure });
+  items.push({ label: "Copy image (screen)", run: ctx.copyImage });
   items.push({ label: "Copy data (TSV)", run: ctx.copyData });
   items.push({ label: "Save as PNG", run: ctx.savePng });
 

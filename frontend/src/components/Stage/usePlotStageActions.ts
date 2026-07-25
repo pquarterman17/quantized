@@ -13,21 +13,24 @@ import type uPlot from "uplot";
 import { suggestLogScale } from "../../lib/autoscale";
 import { copyImage, copyText, payloadToTSV } from "../../lib/clipboard";
 import { clampPlottedRange, rowsInXRange, type PlotPayload } from "../../lib/plotdata";
+import { runCopyFigureCommand } from "../../lib/copyFigureCommand";
 import { exportPlotPng, plotPngBlob } from "../../lib/plotExport";
 import type { Dataset } from "../../lib/types";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 
-// resetView/smartScale/savePng/copyData/snapshot — the fields the "actions"
-// bag threaded through to PlotStageMenus/PlotStageOverlays as a single prop.
-// Kept to exactly these 5 keys (not the drag-gesture callbacks below) since
-// both callers build the bag as an object LITERAL, and PlotStageActions is
-// their prop's structural type.
+// resetView/smartScale/savePng/copyData/copyFigure/snapshot — the fields the
+// "actions" bag threaded through to PlotStageMenus/PlotStageOverlays as a
+// single prop. Kept to exactly these 6 keys (not the drag-gesture callbacks
+// below) since both callers build the bag as an object LITERAL, and
+// PlotStageActions is their prop's structural type. copyFigure joined for
+// MAIN #35 (publication copy); snapshot stays as the screen grab.
 export interface PlotStageActions {
   resetView: () => void;
   smartScale: () => void;
   savePng: () => void;
   copyData: () => void;
+  copyFigure: () => void;
   snapshot: () => void;
 }
 
@@ -89,6 +92,15 @@ export function usePlotStageActions(
     );
   }
 
+  // MAIN #35: the publication copy — renders through the SAME server-side
+  // matplotlib path as "Export figure…" (one shared `buildFigureSpec`) so a
+  // pasted figure matches an exported one on fonts, line widths, tick formats,
+  // limits, legend placement and multi-panel layout. This is the default
+  // "Copy figure"; `snapshot` below stays as the quick screen grab.
+  function copyFigure() {
+    void runCopyFigureCommand(useApp.getState);
+  }
+
   // Snapshot: copy exactly what's on screen to the clipboard as a PNG — a quick
   // raster grab for pasting into notes/chat (distinct from the TSV copy and the
   // server-rendered vector Figure export). Falls back to a toast where the async
@@ -121,5 +133,14 @@ export function usePlotStageActions(
     useApp.getState().setRowSelection(rowsInXRange(displayPayload.data[0] as (number | null)[], x0, x1));
   }
 
-  return { resetView, smartScale, savePng, copyData, snapshot, onRegionSelect, onRangeSelect };
+  return {
+    resetView,
+    smartScale,
+    savePng,
+    copyData,
+    copyFigure,
+    snapshot,
+    onRegionSelect,
+    onRangeSelect,
+  };
 }
