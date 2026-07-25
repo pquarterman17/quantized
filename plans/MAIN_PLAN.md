@@ -161,8 +161,12 @@ already gone stale.)*
           outside a recognizable mount prefix POSIX reports `missing`,
           because over-reporting `offline` would suppress a real "your file
           is gone"
-    - [ ] Browser mode degrades visibly to picker behaviour, with no
-          false promise that a path was retained
+    - [x] Browser mode degrades visibly to picker behaviour — the one
+          shared `lib/importEntry.chooseAndImport` owns the native-vs-
+          browser branch so entry points cannot drift, and a browser
+          dataset still gets NO `source`, because a browser genuinely
+          cannot know a path (tested both ways). Checkbox was stale: the
+          work shipped with the #31 core, the box was missed
     - [x] Tests enforce allowed-root / path-validation rules — 12 cases
           around `desktop_consent`, including that consent is per EXACT
           path (never a directory prefix), is bounded and evicts
