@@ -77,13 +77,29 @@ def _to_float(token: str) -> float:
 
 
 def _read_raw_lines(text: str) -> list[str]:
-    out: list[str] = []
+    return _split_lines(text)[0]
+
+
+def _split_lines(text: str) -> tuple[list[str], list[str]]:
+    """Split into (data lines, comment/preamble lines).
+
+    MAIN_PLAN #33: the comment lines used to be dropped on the floor. An
+    instrument preamble routinely carries the sample id, temperature, or
+    operator notes that make the file interpretable later, so it is kept in
+    ``metadata["comments"]`` rather than discarded — the original file is never
+    modified, so this is the only place that context can survive an import.
+    """
+    data: list[str] = []
+    comments: list[str] = []
     for raw in text.splitlines():
         stripped = raw.strip()
-        if not stripped or stripped[0] in _COMMENT_CHARS:
+        if not stripped:
             continue
-        out.append(stripped)
-    return out
+        if stripped[0] in _COMMENT_CHARS:
+            comments.append(stripped)
+        else:
+            data.append(stripped)
+    return data, comments
 
 
 def _detect_delimiter(raw_lines: Sequence[str]) -> str:
@@ -145,7 +161,23 @@ def _looks_like_units_row(row: Sequence[str], n_data_cols: int) -> bool:
 def _detect_layout(tokens: Sequence[Sequence[str]]) -> tuple[int, int, int]:
     """Return 0-based (header_row, data_start, units_row); -1 when absent."""
     scores = [_numeric_score(row) for row in tokens]
-    first_data = next((i for i, s in enumerate(scores) if s > 0.5), 0)
+    first_data = next((i for i, s in enumerate(scores) if s > 0.5), -1)
+    if first_data < 0:
+        # MAIN_PLAN #33. The `> 0.5` rule needs a strict NUMERIC MAJORITY, so a
+        # file with as many text columns as numeric ones (T, M, Sample, Operator
+        # -> exactly 0.5) matched no row at all and fell back to treating the
+        # HEADER as data. That is precisely the mixed text+numeric shape that
+        # preserving text columns makes worth importing, so it had to be fixed
+        # alongside.
+        #
+        # Fallback rule: a header is LESS numeric than the data under it. Take
+        # the first row that is strictly more numeric than row 0 and still has
+        # some numbers. This only runs when the primary rule already failed, so
+        # it cannot change any file that parses correctly today.
+        first_data = next(
+            (i for i, s in enumerate(scores) if i > 0 and s > scores[0] and s > 0),
+            0,
+        )
     header_row = -1
     units_row = -1
     if (
@@ -169,7 +201,7 @@ def import_csv(
 ) -> DataStruct:
     """Import a generic delimited text file (first column = x-axis by default)."""
     path = Path(filepath)
-    raw_lines = _read_raw_lines(path.read_text(encoding="latin-1"))
+    raw_lines, comment_lines = _split_lines(path.read_text(encoding="latin-1"))
     if not raw_lines:
         raise ValueError(f"file empty or only comments: {path.name}")
     delim = _detect_delimiter(raw_lines)
@@ -258,6 +290,23 @@ def import_csv(
     else:
         x_name, x_unit = "Sample Index", ""
 
+    # MAIN_PLAN #33: columns that failed the numeric test are TEXT columns —
+    # sample ids, operator names, run labels. They used to be dropped, which is
+    # why generic imports could not drive legends, grouping, or faceting the way
+    # an Origin or SQLite import could. Same `text_columns` metadata shape those
+    # two already emit, so the worksheet renders them with no frontend change.
+    used = {time_idx, *data_idx}
+    text_columns: dict[str, list[str]] = {}
+    for c in range(n_cols):
+        if c in used:
+            continue
+        numeric_ratio = float(np.count_nonzero(~np.isnan(matrix[:, c]))) / max(n_rows, 1)
+        if numeric_ratio > 0.1:
+            continue  # a sparse NUMERIC column, not text — leave it dropped
+        cells = [row[c].strip() if c < len(row) else "" for row in tokens[data_start:]]
+        if any(cells):  # an entirely blank column is padding, not data
+            text_columns[col_headers[c]] = cells
+
     metadata: dict[str, Any] = {
         "source": str(path),
         "parser_name": "import_csv",
@@ -266,6 +315,10 @@ def import_csv(
         "delimiter": delim,
         "all_column_names": col_headers,
     }
+    if text_columns:
+        metadata["text_columns"] = text_columns
+    if comment_lines:
+        metadata["comments"] = comment_lines
     if time_is_datetime:
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     return DataStruct.create(

@@ -223,12 +223,20 @@ in git history @ `e4f6590`.)*
     — without editing the source file.
     - [ ] Wizard previews and preserves multiple selectable label rows
           (sample ID, field, temperature)
-    - [ ] Text/categorical columns retained as searchable data, hidden
-          from numeric plotting until selected
+    - [x] Text/categorical columns retained as searchable data, hidden
+          from numeric plotting — they are metadata sidecars, never bogus
+          all-NaN channels. NOTE: still not selectable AS a grouping key;
+          that is the legend-source sub-item below
     - [ ] Legend-label source is choosable, and changeable later from
           plot properties
-    - [ ] Generic delimited imports preserve cleaned headers, units,
-          comments, ignored instrument preamble, original metadata
+    - [x] Generic delimited imports preserve text/categorical columns
+          (`metadata["text_columns"]`, the shape Origin and SQLite already
+          emit, so the worksheet renders them with no frontend change) and
+          the comment/instrument preamble (`metadata["comments"]`), which
+          was previously dropped on the floor despite routinely carrying
+          the sample id / operator / temperature that make a file
+          interpretable later. Surfaced and fixed a real header-detection
+          bug in the process — see Completed
     - [ ] X, Y, label, ignore, X-error, Y-error and asymmetric-error
           roles survive template save/reapply into canonical `DataStruct`
           metadata
