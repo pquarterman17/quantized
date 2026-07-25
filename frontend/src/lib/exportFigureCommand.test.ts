@@ -8,7 +8,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api";
-import { liveViewOverrides, runExportFigureCommand } from "./exportFigureCommand";
+import { runExportFigureCommand } from "./exportFigureCommand";
+import { liveViewOverrides } from "./figureSpec";
 import type { Annotation, Shape } from "./types";
 import { useApp } from "../store/useApp";
 
