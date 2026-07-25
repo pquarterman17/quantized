@@ -43,6 +43,7 @@ import { originTextColumns, type TextColumn } from "../../../lib/columnmeta";
 import { autofitColWidth, clampColWidth } from "../../../lib/gridwindow";
 import { excludedSet, filteredOutSet } from "../../../lib/rowstate";
 import { resolveSelectionPlot, selectionToSpec } from "../../../lib/selectionplot";
+import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
 import { plotIntentStageTab, useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
@@ -99,6 +100,8 @@ export interface WorksheetView {
   canExtract: boolean;
   extractSubset: () => void;
   copyRows: () => void;
+  /** MAIN #34 rectangular block operations over the row×column selection. */
+  blockOps: BlockOpsApi;
   copyRow: (r: number) => void;
   toggleMask: (r: number) => void;
   unmaskAll: () => void;
@@ -416,6 +419,18 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   const filterActive = filtered.length !== Math.max(time.length, textRowCount);
   const canExtract = analysisRows.length > 0 && analysisRows.length !== Math.max(time.length, textRowCount);
 
+  // MAIN #34 rectangular block ops (copy/paste/clear/fill-down). Logic is
+  // pure in lib/clipboardGrid; this only supplies the current selection.
+  const blockOps = useWorksheetBlockOps({
+    datasetId: ds.id,
+    rows: [...selected],
+    cols: [...selectedCols],
+    rowCount: time.length,
+    writableCols: baseCount,
+    valueAt: (row, col) => (col < 0 ? time[row] : values[row]?.[col]),
+    setStatus,
+  });
+
   const toggleMask = (r: number) => toggleRowExcluded(ds.id, r);
   const unmaskAll = () => clearRowExclusions(ds.id);
 
@@ -585,6 +600,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     extractSubset,
     copyRows,
     copyRow,
+    blockOps,
     toggleMask,
     unmaskAll,
     toggleRowSelected,

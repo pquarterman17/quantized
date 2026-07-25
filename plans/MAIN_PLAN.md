@@ -242,15 +242,26 @@ in git history @ `e4f6590`.)*
     or `lib/worksheetTransforms` (verified: no clipboard/paste/fill
     handlers), so cleanup of a copied table means one cell at a time or
     a detour through Excel/Origin.
-    - [ ] Rectangular copy/cut/paste with tab-newline clipboard data and
-          predictable shape-mismatch behaviour
-    - [ ] Paste-over-selection, clear block, fill down, insert/delete
-          rows or derived columns — keyboard and context menu
-    - [ ] Every operation undoable in-session with a compact provenance
-          entry
-    - [ ] Raw imported data stays immutable; edits create/update the
-          corrected working representation
-    - [ ] Large pastes show progress and never freeze ordinary tables
+    **Core shipped 2026-07-25.** Copy/paste/clear/fill-down over a
+    row×column selection, via a new `setCellBlock` store action.
+    - [x] Rectangular copy/paste with tab-newline clipboard data and
+          predictable shape mismatch — handles CRLF and Excel's trailing
+          newline, and CLIPS rather than growing the sheet (growing would
+          invalidate every row-indexed piece of state at once: exclusions,
+          filters, fit overlays). Dropped cells are REPORTED, split into
+          "outside the sheet" vs "read-only column"
+    - [x] Paste-over-selection, clear block, fill down — toolbar, shown
+          only when a block is selected. Cut and insert/delete rows or
+          derived columns are NOT done; keyboard bindings are NOT done
+    - [x] Every operation undoable in-session with a compact provenance
+          entry — ONE undo entry and one macro line per block, not one per
+          cell (a paste needing N presses of Ctrl+Z is not a usable model)
+    - [x] Raw imported data stays immutable — writes go through the same
+          `recompute` path single-cell editing already used; `raw` is
+          untouched and corrections re-derive from it
+    - [ ] Large pastes show progress — not done. Edits are indexed by row
+          so the apply is O(rows + edits) rather than O(rows × edits), but
+          there is no progress affordance for a very large paste
     - Build on the existing worksheet selection, edit, undo and
       corrected-data conventions.
 

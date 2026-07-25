@@ -140,7 +140,11 @@ const STORE_PINS: Record<string, number> = {
   // `Prefs` (`keyof`) instead of restating all 18 keys as a hand-
   // maintained union — 18 lines back, and the union can no longer drift
   // out of sync with prefs.ts when a preference is added.
-  "/store/useApp.ts": 3071,
+  // 3071 -> 3045 (2026-07-25, MAIN #34 block editing): setCellBlock would
+  // have pushed useApp over the pin, so setCellValue moved out WITH it into
+  // store/cellEdit.ts — a cohesive "write cells into a dataset grid" slice,
+  // the same extraction store/corrections.ts got.
+  "/store/useApp.ts": 3045,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

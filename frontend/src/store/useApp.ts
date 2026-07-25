@@ -86,6 +86,7 @@ import { createShapesSlice, type ShapesSlice } from "./shapes";
 import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel";
 import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
+import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import { remapDatasetChannels, remapViewChannels, remapWindowViews } from "../lib/channelRemap";
 import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
@@ -312,7 +313,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, CellEditSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -689,7 +690,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   duplicateDataset: (id: string) => Promise<void>;
   moveDataset: (id: string, dir: -1 | 1) => void;
   renameDataset: (id: string, name: string) => void;
-  setCellValue: (id: string, row: number, col: number, value: number) => void;
   addFormula: (id: string, name: string, expr: string) => void;
   removeFormula: (id: string, index: number) => void;
   setDatasetNotes: (id: string, notes: string) => void;
@@ -929,6 +929,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createLibraryPanelSlice(set, _initialPrefs.libraryPanelWidth),
   ...createGraphBuilderSlice(set, get),
   ...createCorrectionsSlice(set, get),
+  ...createCellEditSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -2092,33 +2093,6 @@ export const useApp = create<AppState>((set, get) => ({
   // are read-only — a recompute would overwrite them — so an edit there is a
   // no-op. Editing a base cell recomputes the computed columns. Recovery of the
   // original is via Duplicate.
-  setCellValue: (id, row, col, value) => {
-    const ds = get().datasets.find((d) => d.id === id);
-    if (!ds) return;
-    const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
-    if (col >= baseCount) return; // computed column — read-only
-    get().recordHistory("cell edit");
-    set((s) => ({
-      datasets: s.datasets.map((d) => {
-        if (d.id !== id) return d;
-        const data =
-          col < 0
-            ? { ...d.data, time: d.data.time.map((t, i) => (i === row ? value : t)) }
-            : {
-                ...d.data,
-                values: d.data.values.map((r, i) =>
-                  i === row ? r.map((v, c) => (c === col ? value : v)) : r,
-                ),
-              };
-        return recompute({ ...d, data });
-      }),
-    }));
-    get().recordMacro(
-      `Edit ${ds.name} [${row},${col}]`,
-      `qz.setCell(${lit(ds.name)}, ${row}, ${col}, ${lit(value)})`,
-    );
-    get().touchDataset(id); // recalc graph (#1): data changed
-  },
   // Append a computed column (formula) to a dataset and evaluate it. The column
   // lands as the last column of `data` and recomputes whenever the base changes.
   // Strips the OLD computed columns first, then reapplies the grown list.

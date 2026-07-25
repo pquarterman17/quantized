@@ -4,6 +4,8 @@
 // plot" cluster. All state lives in the parent (Worksheet); this is a thin
 // props-driven view so the worksheet stays under the size budget.
 
+import type { BlockOpsApi } from "./useWorksheetBlockOps";
+
 export interface WorksheetToolbarProps {
   formula: string;
   colName: string;
@@ -13,6 +15,8 @@ export interface WorksheetToolbarProps {
   showStats: boolean;
   onToggleStats: () => void;
   onCopy: () => void;
+  /** MAIN #34 block ops — shown only when a row×column block is selected. */
+  blockOps: BlockOpsApi;
   maskedCount: number;
   onUnmaskAll: () => void;
   /** #50 selection dimension: bulk actions on the selected rows. */
@@ -45,6 +49,7 @@ export default function WorksheetToolbar({
   showStats,
   onToggleStats,
   onCopy,
+  blockOps,
   maskedCount,
   onUnmaskAll,
   selectedCount,
@@ -102,6 +107,24 @@ export default function WorksheetToolbar({
       <button className="qz-btn" onClick={onCopy} title="Copy visible rows to clipboard (TSV)">
         ⧉ Copy
       </button>
+      {blockOps.hasBlock && (
+        <>
+          {/* MAIN #34: rectangular operations, shown only with a real block
+              selected so the toolbar stays quiet the rest of the time. */}
+          <button className="qz-btn" onClick={blockOps.copyBlock} title="Copy the selected block (no header, pastes back cleanly)">
+            ⧉ Block
+          </button>
+          <button className="qz-btn" onClick={blockOps.pasteBlock} title="Paste clipboard cells at the top-left of the selection">
+            Paste
+          </button>
+          <button className="qz-btn" onClick={blockOps.fillDown} title="Copy the top selected row down the rest of the selection">
+            Fill ↓
+          </button>
+          <button className="qz-btn" onClick={blockOps.clearBlock} title="Blank every selected cell (undoable)">
+            Clear
+          </button>
+        </>
+      )}
       {maskedCount > 0 && (
         <button className="qz-btn" onClick={onUnmaskAll} title="Clear all masked rows">
           Unmask ({maskedCount})

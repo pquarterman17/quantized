@@ -91,6 +91,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         showStats={view.showStats}
         onToggleStats={() => view.setShowStats((v) => !v)}
         onCopy={view.copyRows}
+        blockOps={view.blockOps}
         maskedCount={view.masked.size}
         onUnmaskAll={view.unmaskAll}
         selectedCount={view.selectedCount}
