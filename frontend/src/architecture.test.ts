@@ -195,7 +195,22 @@ describe("row-state model guard (#50 universal linking)", () => {
     // useApp.ts (2026-07-18, store-size ratchet) — still a store mutation
     // action, just relocated to its own slice file. Everything else goes
     // through rowstate.analysisData / droppedRows / excludedSet.
-    const allow = ["/lib/rowstate.ts", "/lib/workspace.ts", "/store/useApp.ts", "/store/corrections.ts"];
+    //
+    // cellEdit added 2026-07-25 (MAIN_PLAN #34, insert/delete rows) — a
+    // deliberate extension, which per this guard's own contract is the review
+    // checkpoint. It is a WRITER, not a new reader-of-truth: inserting or
+    // deleting rows renumbers every stored row index, so it REMAPS
+    // excludedRows through lib/rowShift instead of leaving them pointing at
+    // the wrong rows. Clearing them (the corrections fallback) would be
+    // needless damage here, because an explicit insert/delete knows exactly
+    // what moved — unlike a trim, whose mapping is unrecoverable from lengths.
+    const allow = [
+      "/lib/rowstate.ts",
+      "/lib/workspace.ts",
+      "/store/useApp.ts",
+      "/store/corrections.ts",
+      "/store/cellEdit.ts",
+    ];
     expect(
       offenders(/\.excludedRows\b/, allow),
       "read exclusion via lib/rowstate (analysisData/droppedRows/excludedSet), not Dataset.excludedRows directly",

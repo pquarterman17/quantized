@@ -14,6 +14,8 @@
 // so writing them would be overwritten on the next recompute anyway.
 
 import { lit } from "../lib/macro";
+import { dropRows, insertBlanks, shiftForDelete, shiftForInsert } from "../lib/rowShift";
+import { clearOverlaysFor } from "./corrections";
 import type { CellEdit } from "../lib/clipboardGrid";
 import { recompute, type AppState } from "./useApp";
 
@@ -23,6 +25,10 @@ export interface CellEditSlice {
    *  macro line. As N setCellValue calls a paste would need N presses of
    *  Ctrl+Z to reverse, which is not an undo model anyone can use. */
   setCellBlock: (id: string, edits: readonly CellEdit[], label: string) => void;
+  /** Insert `count` blank rows above row `at` (MAIN_PLAN #34). */
+  insertRows: (id: string, at: number, count: number) => void;
+  /** Delete the given rows (MAIN_PLAN #34). */
+  deleteRows: (id: string, rows: readonly number[]) => void;
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -30,6 +36,66 @@ type SliceGet = () => AppState;
 
 export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice {
   return {
+    insertRows: (id, at, count) => {
+      const ds = get().datasets.find((d) => d.id === id);
+      if (!ds || count <= 0) return;
+      get().recordHistory("insert rows");
+      set((s) => ({
+        datasets: s.datasets.map((d) => {
+          if (d.id !== id) return d;
+          const time = insertBlanks(d.data.time, at, count);
+          const blankRow = () => d.data.labels.map(() => Number.NaN);
+          const clamped = Math.max(0, Math.min(at, d.data.values.length));
+          const values = [
+            ...d.data.values.slice(0, clamped),
+            ...Array.from({ length: count }, blankRow),
+            ...d.data.values.slice(clamped),
+          ];
+          // REMAP rather than clear: an explicit insert knows exactly what
+          // moved, so discarding the user's row exclusions would be needless
+          // damage (unlike a trim, whose mapping is unrecoverable).
+          const excluded = d.excludedRows
+            ? shiftForInsert(d.excludedRows, at, count)
+            : undefined;
+          return recompute({
+            ...d,
+            data: { ...d.data, time, values },
+            ...(excluded ? { excludedRows: excluded } : {}),
+          });
+        }),
+        // Row COUNT changed, so any fit/peak/baseline/deriv curve for this
+        // dataset is drawn against a grid that no longer exists.
+        ...clearOverlaysFor(s, id),
+      }));
+      get().recordMacro(`Insert ${count} row(s) in ${ds.name}`, `qz.insertRows(${lit(ds.name)}, ${at}, ${count})`);
+      get().touchDataset(id);
+    },
+
+    deleteRows: (id, rows) => {
+      const ds = get().datasets.find((d) => d.id === id);
+      if (!ds || rows.length === 0) return;
+      const deleted = new Set(rows.filter((r) => r >= 0 && r < ds.data.time.length));
+      if (deleted.size === 0) return;
+      get().recordHistory("delete rows");
+      set((s) => ({
+        datasets: s.datasets.map((d) => {
+          if (d.id !== id) return d;
+          const excluded = d.excludedRows ? shiftForDelete(d.excludedRows, deleted) : undefined;
+          return recompute({
+            ...d,
+            data: {
+              ...d.data,
+              time: dropRows(d.data.time, deleted),
+              values: dropRows(d.data.values, deleted),
+            },
+            ...(excluded ? { excludedRows: excluded } : {}),
+          });
+        }),
+        ...clearOverlaysFor(s, id),
+      }));
+      get().recordMacro(`Delete ${deleted.size} row(s) from ${ds.name}`, `qz.deleteRows(${lit(ds.name)}, ${deleted.size})`);
+      get().touchDataset(id);
+    },
   setCellValue: (id, row, col, value) => {
     const ds = get().datasets.find((d) => d.id === id);
     if (!ds) return;

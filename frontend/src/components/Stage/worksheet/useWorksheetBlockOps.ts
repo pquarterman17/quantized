@@ -38,11 +38,19 @@ export interface BlockOpsSource {
 
 export interface BlockOpsApi {
   copyBlock: () => void;
+  /** Copy then clear — the spreadsheet Cut. */
+  cutBlock: () => void;
   pasteBlock: () => void;
   clearBlock: () => void;
   fillDown: () => void;
+  /** Insert blank rows above the selection (MAIN_PLAN #34). */
+  insertRows: () => void;
+  /** Delete the selected rows (MAIN_PLAN #34). */
+  deleteRows: () => void;
   /** True when a rectangular selection exists to act on. */
   hasBlock: boolean;
+  /** True when rows are selected — the row operations need rows, not a block. */
+  hasRows: boolean;
 }
 
 /** Ascending, de-duplicated — the order a spreadsheet block is read in. */
@@ -52,6 +60,8 @@ function ordered(xs: readonly number[]): number[] {
 
 export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   const setCellBlock = useApp((s) => s.setCellBlock);
+  const insertRowsAction = useApp((s) => s.insertRows);
+  const deleteRowsAction = useApp((s) => s.deleteRows);
   const rows = ordered(src.rows);
   const cols = ordered(src.cols);
   const bounds: PasteBounds = { rows: src.rowCount, writableCols: src.writableCols };
@@ -128,5 +138,58 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
     src.setStatus(`filled ${edits.length} cell${edits.length === 1 ? "" : "s"}`);
   }
 
-  return { copyBlock, pasteBlock, clearBlock, fillDown, hasBlock };
+  function cutBlock() {
+    if (!hasBlock) {
+      src.setStatus("select rows and columns first");
+      return;
+    }
+    // Copy FIRST and only clear once the clipboard write resolved — a cut that
+    // clears after a failed copy destroys data with nowhere to paste it.
+    const grid = rows.map((r) => cols.map((c) => src.valueAt(r, c) ?? null));
+    void copyText(gridToClipboardText(grid)).then((ok) => {
+      if (!ok) {
+        src.setStatus("clipboard unavailable — nothing was cut");
+        return;
+      }
+      const edits = clearEdits(rows, cols, bounds);
+      if (edits.length === 0) {
+        src.setStatus("copied, but those columns are read-only");
+        return;
+      }
+      setCellBlock(src.datasetId, edits, "cut cells");
+      src.setStatus(`cut ${edits.length} cell${edits.length === 1 ? "" : "s"}`);
+    });
+  }
+
+  function insertRows() {
+    if (rows.length === 0) {
+      src.setStatus("select a row to insert above");
+      return;
+    }
+    // Insert as many rows as are selected, above the topmost — the spreadsheet
+    // convention, and it makes "make room for 3 more" one gesture.
+    insertRowsAction(src.datasetId, rows[0], rows.length);
+    src.setStatus(`inserted ${rows.length} row${rows.length === 1 ? "" : "s"}`);
+  }
+
+  function deleteRows() {
+    if (rows.length === 0) {
+      src.setStatus("select rows to delete");
+      return;
+    }
+    deleteRowsAction(src.datasetId, rows);
+    src.setStatus(`deleted ${rows.length} row${rows.length === 1 ? "" : "s"}`);
+  }
+
+  return {
+    copyBlock,
+    cutBlock,
+    pasteBlock,
+    clearBlock,
+    fillDown,
+    insertRows,
+    deleteRows,
+    hasBlock,
+    hasRows: rows.length > 0,
+  };
 }

@@ -308,18 +308,23 @@ in git history @ `e4f6590`.)*
           invalidate every row-indexed piece of state at once: exclusions,
           filters, fit overlays). Dropped cells are REPORTED, split into
           "outside the sheet" vs "read-only column"
-    - [x] Paste-over-selection, clear block, fill down — toolbar, shown
-          only when a block is selected. Cut and insert/delete rows or
-          derived columns are NOT done; keyboard bindings are NOT done
+    - [x] Paste-over-selection, clear block, fill down, CUT, and insert/
+          delete ROWS — toolbar plus ⌘C/⌘X/⌘V/⌘D and Delete, scoped to the
+          worksheet pane so it cannot hijack ⌘C from the plot, and inert
+          while a cell edit is open. Delete clears CONTENT (every
+          spreadsheet's meaning); removing rows stays an explicit button,
+          since one stray keypress should not renumber the sheet. NOT done:
+          insert/delete of derived COLUMNS
     - [x] Every operation undoable in-session with a compact provenance
           entry — ONE undo entry and one macro line per block, not one per
           cell (a paste needing N presses of Ctrl+Z is not a usable model)
     - [x] Raw imported data stays immutable — writes go through the same
           `recompute` path single-cell editing already used; `raw` is
           untouched and corrections re-derive from it
-    - [ ] Large pastes show progress — not done. Edits are indexed by row
-          so the apply is O(rows + edits) rather than O(rows × edits), but
-          there is no progress affordance for a very large paste
+    - [ ] Large pastes show progress — still not done, and deliberately
+          left: the apply is O(rows + edits) and a realistic paste lands
+          well inside a frame, so a progress affordance would be UI for a
+          problem not yet observed. Revisit if a real paste ever stutters
     - Build on the existing worksheet selection, edit, undo and
       corrected-data conventions.
 

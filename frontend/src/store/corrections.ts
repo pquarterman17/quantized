@@ -47,7 +47,7 @@ type SliceGet = () => AppState;
 // to the re-derived dataset — same reasoning the excludedRows guard uses — and
 // leave overlays for OTHER datasets untouched. The owning workshop recomputes
 // on its next run.
-function clearOverlaysFor(s: AppState, id: string): Partial<AppState> {
+export function clearOverlaysFor(s: AppState, id: string): Partial<AppState> {
   const p: Partial<AppState> = {};
   if (s.fitOverlay?.datasetId === id) p.fitOverlay = null;
   if (s.peakOverlay?.datasetId === id) p.peakOverlay = null;

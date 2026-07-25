@@ -80,8 +80,29 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
   // spreadsheet convention for an ad hoc single-column plot/replot.
   const effectiveCols = (target: number) => (view.selectedCols.has(target) ? [...view.selectedCols] : [target]);
 
+  // MAIN #34 keyboard bindings. Scoped to the pane, not the window, so the
+  // worksheet cannot hijack ⌘C while the user is copying from the plot or a
+  // dialog. An active cell EDIT is left alone — the native input handles its
+  // own clipboard, and stealing ⌘V there would paste a grid over a half-typed
+  // number.
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+    const accel = e.metaKey || e.ctrlKey;
+    if (accel && e.key === "c") { e.preventDefault(); view.blockOps.copyBlock(); }
+    else if (accel && e.key === "x") { e.preventDefault(); view.blockOps.cutBlock(); }
+    else if (accel && e.key === "v") { e.preventDefault(); view.blockOps.pasteBlock(); }
+    else if (accel && e.key === "d") { e.preventDefault(); view.blockOps.fillDown(); }
+    else if (e.key === "Delete" || e.key === "Backspace") {
+      // Delete clears CONTENT, matching every spreadsheet. Removing rows is a
+      // structural edit and stays an explicit button — one stray keypress
+      // should not renumber the sheet.
+      if (view.blockOps.hasBlock) { e.preventDefault(); view.blockOps.clearBlock(); }
+    }
+  };
+
   return (
-    <div className="qzk-sheet">
+    <div className="qzk-sheet" onKeyDown={onKeyDown} tabIndex={-1}>
       <WorksheetToolbar
         formula={view.formula}
         colName={view.colName}

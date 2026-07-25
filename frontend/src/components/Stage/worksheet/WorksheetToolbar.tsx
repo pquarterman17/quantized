@@ -114,7 +114,10 @@ export default function WorksheetToolbar({
           <button className="qz-btn" onClick={blockOps.copyBlock} title="Copy the selected block (no header, pastes back cleanly)">
             ⧉ Block
           </button>
-          <button className="qz-btn" onClick={blockOps.pasteBlock} title="Paste clipboard cells at the top-left of the selection">
+          <button className="qz-btn" onClick={blockOps.cutBlock} title="Copy the selected block, then blank it (⌘X)">
+            Cut
+          </button>
+          <button className="qz-btn" onClick={blockOps.pasteBlock} title="Paste clipboard cells at the top-left of the selection (⌘V)">
             Paste
           </button>
           <button className="qz-btn" onClick={blockOps.fillDown} title="Copy the top selected row down the rest of the selection">
@@ -122,6 +125,18 @@ export default function WorksheetToolbar({
           </button>
           <button className="qz-btn" onClick={blockOps.clearBlock} title="Blank every selected cell (undoable)">
             Clear
+          </button>
+        </>
+      )}
+      {blockOps.hasRows && (
+        <>
+          {/* Row operations need ROWS, not a rectangular block — they are
+              offered whenever rows are selected, even with no column picked. */}
+          <button className="qz-btn" onClick={blockOps.insertRows} title="Insert blank rows above the selection">
+            +Rows
+          </button>
+          <button className="qz-btn" onClick={blockOps.deleteRows} title="Delete the selected rows (undoable; exclusions are remapped)">
+            −Rows
           </button>
         </>
       )}
