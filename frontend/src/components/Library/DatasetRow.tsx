@@ -32,6 +32,7 @@ import { DATASET_DND } from "./useLibraryTree";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import { dropEdgeAt, folderDatasets, resolveDropBeforeId, type DropEdge } from "../../lib/foldertree";
 import type { Dataset } from "../../lib/types";
+import RecomputedMark from "./RecomputedMark";
 import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
 import { Badge } from "../primitives";
@@ -77,6 +78,7 @@ export default function DatasetRow({
   // recalculation (manual mode) — click runs the dirty set now.
   const staleDs = useApp((s) => s.staleDatasets);
   const staleFits = useApp((s) => s.staleFits);
+  const stale = staleDs.includes(d.id) || staleFits.includes(d.id);
   const recalcNow = useApp((s) => s.recalcNow);
   const activateFromLibrary = useApp((s) => s.activateFromLibrary);
   const toggleSelected = useApp((s) => s.toggleSelected);
@@ -230,7 +232,7 @@ export default function DatasetRow({
         >
           ⋯
         </button>
-        {(staleDs.includes(d.id) || staleFits.includes(d.id)) && (
+        {stale && (
           <span
             className="qzk-stale-dot"
             title="stale — data changed; click to recalculate now"
@@ -242,6 +244,7 @@ export default function DatasetRow({
             ●
           </span>
         )}
+        <RecomputedMark spec={d.fitSpec} stale={stale} />
         {sheetNumber != null && (
           <span className="qzk-ds-sheet-chip" title={`Sheet ${sheetNumber} of the same Origin workbook`}>
             └ sheet {sheetNumber}

@@ -148,12 +148,14 @@ const STORE_PINS: Record<string, number> = {
   // lines, paid for by making removeSelected DELEGATE to removeDatasets
   // instead of repeating its ~25 lines of reference pruning — that block had
   // drifted into three near-identical copies.
-  // 3032 -> 2901 (2026-07-25, MAIN #31 native paths + recents slice): importFiles moved to
+  // 3032 -> 2875 (2026-07-25, MAIN #31 recents slice, then MAIN #30 moved the
+  // fit-recalc loop to store/recalcFits.ts — the ONE place a saved recipe is
+  // replayed, so #30 recompute stamping belongs beside it): importFiles moved to
   // store/importDatasets.ts so importPaths could SHARE its Origin multi-book
   // expansion, folder planning and figures/fidelity handling rather than
   // duplicating ~90 lines of it — two copies of that branch would drift, and
   // it is exactly where drift would be expensive and hard to notice.
-  "/store/useApp.ts": 2901,
+  "/store/useApp.ts": 2875,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

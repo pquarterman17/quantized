@@ -7,6 +7,7 @@ import { dyForFit } from "./fitweights";
 import { effectiveChannels } from "./plotdata";
 import { analysisData } from "./rowstate";
 import type {
+  CorrectionParams,
   CalcResult,
   Dataset,
   DataStruct,
@@ -79,8 +80,21 @@ export function fitSpecFrom(
   sel: FitSelection,
   result: CalcResult,
   weight?: FitWeighting,
+  /** Corrections active on the source at fit time (MAIN_PLAN #30). */
+  preprocessing?: string[],
+  /** Injected so the recipe is reproducible in tests. */
+  now: () => string = () => new Date().toISOString(),
 ): FitSpec {
-  const spec: FitSpec = { model, xKey, yKey: sel.yKey };
+  const spec: FitSpec = { model, xKey, yKey: sel.yKey, fittedAt: now() };
+  // #30: the x-WINDOW the fit consumed, after exclusions/filters pruned it.
+  // Without it a recipe names the channels but not which part of them, so
+  // "fit the peak" and "fit the whole scan" look identical on reopening.
+  const range = finiteRange(sel.x);
+  if (range) {
+    spec.range = range;
+    spec.nPoints = sel.x.length;
+  }
+  if (preprocessing && preprocessing.length > 0) spec.preprocessing = preprocessing;
   // Record the weighting so recompute + pipeline reproduce it (audit P1 #3);
   // `none` is the default, so it stays absent to keep specs minimal.
   if (weight && weight.mode !== "none") spec.weight = weight;
@@ -172,4 +186,59 @@ export function fitDataForSpec(
   // Reproduce the recorded weighting over the same analysis rows (Sol audit);
   // a missing/invalid error column refits unweighted (dyForFit returns null).
   return { x, y, yKey, dy: dyForFit(dataset, yKey, spec.weight).dy };
+}
+
+/** Min/max of the finite values, or null when nothing is finite. Pure. */
+export function finiteRange(xs: readonly number[]): [number, number] | null {
+  let lo = Number.POSITIVE_INFINITY;
+  let hi = Number.NEGATIVE_INFINITY;
+  for (const v of xs) {
+    if (!Number.isFinite(v)) continue;
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  return lo <= hi ? [lo, hi] : null;
+}
+
+/** Names of the corrections active on a dataset (MAIN_PLAN #30 provenance).
+ *
+ *  Names only, never values: the point is "this fit ran on smoothed,
+ *  background-subtracted data", which is what makes a reproduction honest.
+ *  Duplicating the parameter values here would be a second copy of
+ *  `Dataset.corrections` that can drift from the real one. */
+export function activeCorrectionNames(corrections: CorrectionParams | undefined): string[] {
+  if (!corrections) return [];
+  const on: string[] = [];
+  const c = corrections as Record<string, unknown>;
+  for (const [key, value] of Object.entries(c)) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === "number" && value === 0) continue; // an unset offset
+    if (typeof value === "boolean" && !value) continue;
+    if (typeof value === "string" && (value === "" || value === "None")) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    on.push(key);
+  }
+  return on.sort();
+}
+
+/** Stamp a spec with the result of a RECOMPUTE (MAIN_PLAN #30).
+ *
+ *  Params are refreshed together with the timestamp on purpose: leaving the
+ *  original numbers beside a fresh `recomputedAt` would claim the fit was
+ *  re-run while showing the values it produced last time, which is worse than
+ *  either alone. Pure, so the recalc path stays a thin caller. */
+export function stampRecompute(
+  spec: FitSpec,
+  result: CalcResult,
+  now: () => string = () => new Date().toISOString(),
+): FitSpec {
+  const params = result.params;
+  return {
+    ...spec,
+    recomputedAt: now(),
+    ...(Array.isArray(params) && params.every((v) => typeof v === "number")
+      ? { params: params as number[] }
+      : {}),
+    ...(typeof result.exitFlag === "number" ? { exitFlag: result.exitFlag } : {}),
+  };
 }

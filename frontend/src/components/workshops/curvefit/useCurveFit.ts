@@ -8,7 +8,12 @@ import { autoGuess, bootstrapFit, exportCornerFigure, fitModel, listFitModels } 
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { fitSpecFrom, fitStepParams, selectedFitData } from "../../../lib/fitselection";
+import {
+  activeCorrectionNames,
+  fitSpecFrom,
+  fitStepParams,
+  selectedFitData,
+} from "../../../lib/fitselection";
 import { dyForFit } from "../../../lib/fitweights";
 
 export interface CurveFitState {
@@ -140,7 +145,16 @@ export function useCurveFit(): CurveFitState {
         // weighting ACTUALLY used (unweighted if dy couldn't resolve) so the
         // recalc graph (#1) reproduces the original fit, not time/values[0].
         const effWeight: FitWeighting = dy ? weight : { mode: "none" };
-        const spec = fitSpecFrom(modelName, state.xKey, localXy, r, effWeight);
+        // #30: record WHICH corrections the source carried, so a reproduction
+        // cannot silently run on differently-preprocessed data.
+        const spec = fitSpecFrom(
+          modelName,
+          state.xKey,
+          localXy,
+          r,
+          effWeight,
+          activeCorrectionNames(ds.corrections),
+        );
         // Same recipe into the typed step (#6) so a template/pipeline batch
         // replays THESE channels + weighting, and the pipeline view can edit
         // the model without losing the provenance.

@@ -1,14 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { CalcResult, Dataset } from "./types";
-import {
-  fitDataForSpec,
-  fitSpecFrom,
-  fitSpecFromStepParams,
-  fitStepParams,
-  fullPlottedX,
-  selectedFitData,
-} from "./fitselection";
+import { activeCorrectionNames, fitDataForSpec, fitSpecFrom, fitSpecFromStepParams, fitStepParams, fullPlottedX, selectedFitData, stampRecompute } from "./fitselection";
 
 const dataset: Dataset = {
   id: "d",
@@ -50,7 +43,11 @@ describe("fitSpecFrom (provenance recipe, audit P1 #3)", () => {
   it("records the model, plotted channels, and result snapshot", () => {
     const sel = { x: [100, 200], y: [10, 20], yKey: 1 };
     const result: CalcResult = { params: [2, 0.5], exitFlag: 1, R2: 0.99 };
-    expect(fitSpecFrom("Linear", 0, sel, result)).toEqual({
+    // toMatchObject, not toEqual: MAIN #30 added range/nPoints/fittedAt to the
+    // recipe, and this test is about the CHANNELS + result snapshot. Pinning
+    // the exact key set here would make every future recipe field a failure in
+    // a test that has no opinion about it — those fields have their own tests.
+    expect(fitSpecFrom("Linear", 0, sel, result)).toMatchObject({
       model: "Linear",
       xKey: 0,
       yKey: 1,
@@ -61,11 +58,11 @@ describe("fitSpecFrom (provenance recipe, audit P1 #3)", () => {
 
   it("omits a non-numeric params/exitFlag snapshot", () => {
     const sel = { x: [1], y: [2], yKey: 0 };
-    expect(fitSpecFrom("Gauss", null, sel, { params: "bad" } as CalcResult)).toEqual({
-      model: "Gauss",
-      xKey: null,
-      yKey: 0,
-    });
+    const spec = fitSpecFrom("Gauss", null, sel, { params: "bad" } as CalcResult);
+    expect(spec).toMatchObject({ model: "Gauss", xKey: null, yKey: 0 });
+    // The point of this test: a non-numeric snapshot is DROPPED, not stored.
+    expect(spec.params).toBeUndefined();
+    expect(spec.exitFlag).toBeUndefined();
   });
 
   it("records a non-none weighting choice and omits `none`", () => {
@@ -156,5 +153,93 @@ describe("fitStepParams / fitSpecFromStepParams (pipeline fit-step recipe #6)", 
     expect(
       fitSpecFromStepParams({ model: "Linear", yKey: 0, xKey: 0, weight: { mode: "bogus" } }).weight,
     ).toBeUndefined();
+  });
+});
+
+describe("fit recipe residual fields (MAIN #30)", () => {
+  const sel = { x: [1, 2, 3, 4], y: [1, 2, 3, 4], yKey: 0 };
+  const result = { params: [1, 2], exitFlag: 1 };
+  const at = () => "2026-07-25T12:00:00.000Z";
+
+  it("records the x-WINDOW the fit consumed, not just the channels", () => {
+    // Without it a recipe says which channels were fit but not which part of
+    // them: "fit the peak" and "fit the whole scan" look identical.
+    const spec = fitSpecFrom("gauss", null, sel, result, undefined, undefined, at);
+    expect(spec.range).toEqual([1, 4]);
+    expect(spec.nPoints).toBe(4);
+  });
+
+  it("ignores non-finite x when computing the range", () => {
+    const gappy = { x: [NaN, 2, Infinity, 5], y: [1, 2, 3, 4], yKey: 0 };
+    expect(fitSpecFrom("g", null, gappy, result, undefined, undefined, at).range).toEqual([2, 5]);
+  });
+
+  it("omits the range when nothing is finite", () => {
+    const bad = { x: [NaN, NaN], y: [1, 2], yKey: 0 };
+    const spec = fitSpecFrom("g", null, bad, result, undefined, undefined, at);
+    expect(spec.range).toBeUndefined();
+    expect(spec.nPoints).toBeUndefined();
+  });
+
+  it("stamps when the fit was produced", () => {
+    expect(fitSpecFrom("g", null, sel, result, undefined, undefined, at).fittedAt).toBe(at());
+  });
+
+  it("records which corrections the source carried", () => {
+    const spec = fitSpecFrom("g", null, sel, result, undefined, ["smoothEnabled"], at);
+    expect(spec.preprocessing).toEqual(["smoothEnabled"]);
+  });
+
+  it("omits preprocessing when nothing was applied", () => {
+    expect(fitSpecFrom("g", null, sel, result, undefined, [], at).preprocessing).toBeUndefined();
+  });
+});
+
+describe("activeCorrectionNames (MAIN #30)", () => {
+  it("names only the corrections that are actually on", () => {
+    expect(
+      activeCorrectionNames({ xOff: 0, yOff: 2, smoothEnabled: true, normMethod: "None" }),
+    ).toEqual(["smoothEnabled", "yOff"]);
+  });
+
+  it("is empty for no corrections", () => {
+    expect(activeCorrectionNames(undefined)).toEqual([]);
+    expect(activeCorrectionNames({})).toEqual([]);
+  });
+
+  it("records names, never values — a second copy of the params would drift", () => {
+    const names = activeCorrectionNames({ yOff: 12345 });
+    expect(names).toEqual(["yOff"]);
+    expect(JSON.stringify(names)).not.toContain("12345");
+  });
+
+  it("skips empty arrays and blank strings", () => {
+    expect(activeCorrectionNames({ bgPoly: [], smoothMethod: "" })).toEqual([]);
+  });
+});
+
+describe("stampRecompute (MAIN #30)", () => {
+  const now = () => "2026-07-25T13:00:00.000Z";
+
+  it("marks the result as regenerated, not original", () => {
+    const spec = { model: "g", fittedAt: "2026-07-25T12:00:00.000Z" };
+    expect(stampRecompute(spec, { params: [9] }, now).recomputedAt).toBe(now());
+  });
+
+  it("refreshes the params ALONGSIDE the stamp", () => {
+    // Leaving the old numbers beside a fresh timestamp would claim a re-run
+    // while showing what the previous run produced.
+    const spec = { model: "g", params: [1, 2] };
+    expect(stampRecompute(spec, { params: [7, 8] }, now).params).toEqual([7, 8]);
+  });
+
+  it("keeps the original fittedAt, so both times are readable", () => {
+    const spec = { model: "g", fittedAt: "orig" };
+    expect(stampRecompute(spec, {}, now).fittedAt).toBe("orig");
+  });
+
+  it("leaves params alone when the recompute returned none", () => {
+    const spec = { model: "g", params: [1] };
+    expect(stampRecompute(spec, {}, now).params).toEqual([1]);
   });
 });

@@ -383,6 +383,26 @@ export interface FitSpec {
   params?: number[];
   /** Optimizer exit flag (1 = success, 0 = did not converge). */
   exitFlag?: number;
+  /** MAIN_PLAN #30 — the rest of the reproducible recipe.
+   *
+   *  The x-window the fit actually consumed, AFTER row exclusions and filters
+   *  pruned it. Without this a recipe says which channels were fit but not
+   *  which part of them, so "fit the peak" and "fit the whole scan" are
+   *  indistinguishable on reopening. */
+  range?: [number, number];
+  /** Points the fit consumed — the cheap corroborator for `range`: same window,
+   *  different count means the underlying rows changed. */
+  nPoints?: number;
+  /** ISO time the fit was first produced. */
+  fittedAt?: string;
+  /** ISO time the recalc graph last RE-ran it. Present = the numbers on screen
+   *  came from a recompute over changed data, not from the original fit — the
+   *  historical-vs-recomputed distinction the audit asked for. */
+  recomputedAt?: string;
+  /** Which corrections were active on the source when the fit ran (names only,
+   *  e.g. ["smooth", "bgPoly"]). Preprocessing changes what was fit, so a
+   *  recipe that omits it can look reproducible while silently not being. */
+  preprocessing?: string[];
 }
 
 export interface Dataset {

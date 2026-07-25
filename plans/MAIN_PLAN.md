@@ -231,7 +231,18 @@ in git history @ `e4f6590`.)*
 ~~29. **Frontend bundle code-splitting**~~ COMPLETED 2026-07-25 (see
     Completed).
 
-30. **Fit-recipe residual fields** — `FitSpec` became a reproducible
+30. **Fit-recipe residual fields** — **mostly shipped 2026-07-25.** Added:
+    the x-WINDOW the fit consumed (`range` + `nPoints`; without it a recipe
+    names the channels but not which part of them, so "fit the peak" and
+    "fit the whole scan" were indistinguishable), `fittedAt`/`recomputedAt`
+    with a `↻` marker in the Library (a recomputed fit is not the fit the
+    user ran — that is the difference between a number you can cite and one
+    you should re-check), and `preprocessing` (correction NAMES only, never
+    values, which would be a second copy of `Dataset.corrections` free to
+    drift). STILL OPEN and still design-constrained: starting values,
+    parameter bounds and covariance/uncertainty method — registry fits
+    expose none of them, so there is nothing to record until the
+    weighted/equation fit paths surface them. Original statement: — `FitSpec` became a reproducible
     recipe (`xKey`/`yKey`/`weight`/`params`/`exitFlag`), closing the
     channel and weighting half of the audit's provenance finding. The
     remainder is genuinely open: explicit fit range, starting values,

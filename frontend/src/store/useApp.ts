@@ -87,6 +87,7 @@ import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
 import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
 import { createImportSlice, type ImportSlice } from "./importDatasets";
+import { recomputeStaleFits } from "./recalcFits";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createTrashSlice, type TrashSlice } from "./trash";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
@@ -102,9 +103,9 @@ import type { FwhmResult } from "../lib/peakwidth";
 import { effectiveChannels } from "../lib/plotdata";
 import { docRenderable, type FigureDoc } from "../lib/figuredoc";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
-import { fitDataForSpec, fitStepParams } from "../lib/fitselection";
+import { fitStepParams } from "../lib/fitselection";
 import { firstVisiblePlottedChannel, qfitSpec, selectRoiRows, type GadgetMode } from "../lib/quickfit";
-import { activeRowIndices, analysisData, droppedRows, expandToFull, keepOnlyExcluded, mergeExcluded, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
+import { analysisData, expandToFull, keepOnlyExcluded, mergeExcluded, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
 import { toast } from "./toasts";
 import { confirmOriginReapplyDiscard, deferOriginFigureApply } from "./originFigureApply";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
@@ -2788,33 +2789,7 @@ export const useApp = create<AppState>((set, get) => ({
           set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
         }
       }
-      for (const id of [...get().staleFits]) {
-        const d = get().datasets.find((x) => x.id === id);
-        if (!d?.fitSpec) {
-          set((s) => ({ staleFits: s.staleFits.filter((x) => x !== id) }));
-          continue;
-        }
-        try {
-          // Reproduce the fit's RECORDED channels (audit P1 #3), falling back
-          // to the live plotted selection for legacy specs — not time/values[0].
-          const sel = fitDataForSpec(d, d.fitSpec, get().xKey, get().yKeys, get().seriesOrder);
-          if (!sel || sel.x.length === 0) throw new Error("no data");
-          const r = await fitModel({ model: d.fitSpec.model, x: sel.x, y: sel.y, dy: sel.dy });
-          const yFit = r.yFit as (number | null)[] | undefined;
-          // Refresh the overlay only if this dataset's fit is the one shown.
-          if (Array.isArray(yFit) && get().fitOverlay?.datasetId === id) {
-            const n = d.data.time.length;
-            const kept = activeRowIndices(n, droppedRows(d));
-            const y = kept.length === n ? yFit : expandToFull(yFit, kept, n);
-            set({ fitOverlay: { datasetId: id, y } });
-          }
-          set((s) => ({ staleFits: s.staleFits.filter((x) => x !== id) }));
-        } catch (e) {
-          get().setStatus(
-            `recalc fit failed: ${e instanceof Error ? e.message : "error"}`,
-          );
-        }
-      }
+      await recomputeStaleFits(set, get);
     } finally {
       _recalcInProgress = false;
     }
