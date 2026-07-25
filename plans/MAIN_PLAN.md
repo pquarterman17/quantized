@@ -151,17 +151,29 @@ already gone stale.)*
     "autosave skipped (storage full or unavailable)" — but a transient
     status line is weaker than a persistent, actionable error for the
     default home of experimental work.
-    - [ ] Durable backing store: IndexedDB in browser mode, a native
-          file-backed store on desktop (or an equally durable documented
-          design)
-    - [ ] Multiple rotating recovery generations, written atomically
-    - [ ] UI shows last successful save, current health, and a
-          persistent actionable error when saving fails
+    **Slice 1 shipped 2026-07-25** (`6464498`) — the durable store, the
+    generations, and the health readout. Slices 2 (startup recovery
+    prompt) and 3 (project trash) remain.
+    - [x] Durable backing store: IndexedDB where the engine has it
+          (`lib/autosaveBackend.ts`), localStorage as a one-generation
+          fallback so no browser is worse off than before, in-memory as
+          the last resort. A native desktop store can slot in behind the
+          same `AutosaveBackend` interface when #31 lands
+    - [x] Multiple rotating recovery generations — 3 by default, capped
+          by total bytes, written in ONE IndexedDB transaction so a crash
+          mid-write leaves the previous set intact. A corrupt newest
+          generation falls back to the newest good one
+    - [x] UI shows last successful save, current health, and a persistent
+          actionable error when saving fails (status bar, `role="alert"`,
+          stays until the next SUCCESS)
     - [ ] Startup offers recovery only when the copy is newer or the
-          prior session ended uncleanly
+          prior session ended uncleanly — TODAY it still restores
+          unconditionally, as it always has; needs a clean-shutdown marker
     - [ ] Deleted project objects enter a recoverable trash with age and
           size caps, visible cleanup rules, Restore / Delete Permanently
-    - [ ] Raw source files are never rewritten or placed in trash
+    - [x] Raw source files are never rewritten or placed in trash — the
+          autosave layer only ever writes serialized workspace text to its
+          own store; it has no path to a source file
     - Build on #31's storage/path boundary; integrate with the existing
       session undo and `.dwk` serialization instead of inventing a
       parallel state format.
