@@ -256,14 +256,23 @@ in git history @ `e4f6590`.)*
     arbitrary lab file once, retain useful context, and choose later
     which metadata row or categorical column drives labels and grouping
     — without editing the source file.
-    - [ ] Wizard previews and preserves multiple selectable label rows
-          (sample ID, field, temperature)
+    - [x] Multiple selectable label rows are PRESERVED and selectable —
+          `metadata.label_rows`, already reduced to value channels (the x
+          cell split out) so no consumer redoes the column→channel mapping.
+          Emitted only when ≥2 descriptive rows exist, i.e. when a choice
+          actually exists. NOTE: surfaced in the Inspector, not the import
+          WIZARD preview — the wizard half is not done
     - [x] Text/categorical columns retained as searchable data, hidden
           from numeric plotting — they are metadata sidecars, never bogus
           all-NaN channels. NOTE: still not selectable AS a grouping key;
           that is the legend-source sub-item below
-    - [ ] Legend-label source is choosable, and changeable later from
-          plot properties
+    - [x] Legend-label source is choosable and changeable at any time —
+          Channels card ▸ "Legend from", listing each preserved row by its
+          own content ("NbAu-1, NbAu-2, …"), which is what makes a row
+          recognizable. Writes the same per-channel overrides a manual
+          rename does, so it is one undo entry and round-trips through
+          `.dwk`. Blank cells are SKIPPED, never written as "": a sparse
+          descriptive row must not blank a real parser-derived label
     - [x] Generic delimited imports preserve text/categorical columns
           (`metadata["text_columns"]`, the shape Origin and SQLite already
           emit, so the worksheet renders them with no frontend change) and

@@ -6,6 +6,7 @@
 // channel; this controls the plot only.
 
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
+import { describeLabelRow, labelRows, labelsFromRow, type LabelRow } from "../../lib/labelRows";
 import { channelModelingType } from "../../lib/modeling";
 import { defaultDenseChannels } from "../../lib/plotdata";
 import type { ChannelRole, Dataset, ModelingType } from "../../lib/types";
@@ -56,6 +57,18 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   // Default x source name (ds.time), e.g. "Temperature" or "Index". Prefer the
   // Origin long name over the raw column letter, matching the plot x-axis.
   const meta = active.data.metadata;
+  // #33: the file's other descriptive rows, offered as legend-label sources.
+  const sources = labelRows(active.data);
+  const applyLabelRow = (row: LabelRow) => {
+    // One history entry for the whole row: picking a source is a single
+    // gesture, and undoing it channel-by-channel would be unusable.
+    useApp.getState().recordHistory("legend labels from header row");
+    const labelsMap = labelsFromRow(row);
+    useApp.setState((s) => ({ seriesLabels: { ...s.seriesLabels, ...labelsMap } }));
+    useApp.getState().setStatus(
+      `legend labels from "${describeLabelRow(row)}" (${Object.keys(labelsMap).length} channels)`,
+    );
+  };
   const xDefaultLabel = String(meta?.["x_column_long"] || meta?.["x_column_name"] || "Index");
 
   const toggle = (i: number) => {
@@ -106,6 +119,30 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
           ]}
         />
       </div>
+      {sources.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          {/* MAIN #33: a lab file often describes its columns on several rows
+              (name, units, sample id, applied field). The parser keeps them all
+              now; which one deserves to be the legend depends on the plot, not
+              on the file, so it is a choice here rather than a parse-time
+              guess. Applying one writes the same per-channel overrides a manual
+              legend rename does, so it is undoable and round-trips. */}
+          <span style={{ flex: "0 0 auto", color: "var(--text-dim)" }}>Legend from</span>
+          <Select
+            style={{ flex: 1 }}
+            value=""
+            onChange={(e) => {
+              const row = sources.find((r) => String(r.index) === e.target.value);
+              if (row) applyLabelRow(row);
+            }}
+            title="Use one of the file's descriptive header rows as the legend labels"
+            options={[
+              { value: "", label: "— choose a header row —" },
+              ...sources.map((r) => ({ value: String(r.index), label: describeLabelRow(r) })),
+            ]}
+          />
+        </div>
+      )}
       {labels.map((lab, i) => {
         if (i === xKey) return null; // this channel is the X axis, not a Y series
         const role = channelRoles[i];

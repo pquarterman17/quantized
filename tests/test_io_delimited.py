@@ -149,3 +149,69 @@ def test_csv_header_detected_with_equal_text_and_numeric_columns(tmp_path: Path)
     assert list(ds.labels) == ["M"]
     assert set(ds.metadata["text_columns"]) == {"Sample", "Operator"}
     assert ds.n_points == 2  # the header row did not become a data row
+
+
+# --- MAIN_PLAN #33: multiple selectable label rows --------------------------
+
+
+_MULTI_HEADER = (
+    "Temp,M1,M2,M3\n"
+    "(K),(emu),(emu),(emu)\n"
+    ",NbAu-1,NbAu-2,NbAu-3\n"
+    ",10 Oe,50 Oe,100 Oe\n"
+    "1,10,11,12\n"
+    "2,20,21,22\n"
+)
+
+
+def test_csv_preserves_every_label_row(tmp_path: Path) -> None:
+    """Layout detection consumes ONE row as the header and one as units; the
+    rest used to be dropped, and which row won was an accident of position.
+    A 4-row header left the caller with no way back to the sample ids."""
+    ds = import_csv(_write(tmp_path, "multi.csv", _MULTI_HEADER))
+    rows = ds.metadata["label_rows"]
+    assert [r["cells"] for r in rows] == [
+        ["M1", "M2", "M3"],
+        ["(emu)", "(emu)", "(emu)"],
+        ["NbAu-1", "NbAu-2", "NbAu-3"],
+        ["10 Oe", "50 Oe", "100 Oe"],
+    ]
+
+
+def test_label_row_cells_align_with_channels_not_raw_columns(tmp_path: Path) -> None:
+    """A consumer indexes a row BY CHANNEL, so the x column must already be
+    split out — otherwise every caller redoes the column->channel mapping."""
+    ds = import_csv(_write(tmp_path, "multi.csv", _MULTI_HEADER))
+    for row in ds.metadata["label_rows"]:
+        assert len(row["cells"]) == len(ds.labels)
+    assert ds.metadata["label_rows"][0]["x"] == "Temp"
+
+
+def test_label_rows_mark_the_rows_layout_detection_consumed(tmp_path: Path) -> None:
+    ds = import_csv(_write(tmp_path, "multi.csv", _MULTI_HEADER))
+    roles = [r["role"] for r in ds.metadata["label_rows"]]
+    assert "header" in roles  # the row that became `labels`
+    assert roles.count("header") == 1
+
+
+def test_label_rows_absent_for_an_ordinary_single_header_file(tmp_path: Path) -> None:
+    """No choice exists, so recording one would be metadata bloat."""
+    ds = import_csv(_write(tmp_path, "plain.csv", "T,M\n1,10\n2,20\n"))
+    assert "label_rows" not in ds.metadata
+
+
+def test_label_rows_skip_a_blank_separator_row(tmp_path: Path) -> None:
+    ds = import_csv(_write(tmp_path, "gap.csv", "T,M\n,\n(K),(emu)\n1,10\n2,20\n"))
+    assert all(any(r["cells"]) or r["x"] for r in ds.metadata["label_rows"])
+
+
+def test_label_rows_pad_a_short_row_to_the_channel_count(tmp_path: Path) -> None:
+    """A ragged descriptive row must not misalign the ones after it."""
+    ds = import_csv(_write(tmp_path, "ragged.csv", "T,M1,M2\n(K)\n,a,b\n1,10,11\n2,20,21\n"))
+    for row in ds.metadata["label_rows"]:
+        assert len(row["cells"]) == len(ds.labels)
+
+
+def test_label_rows_do_not_become_data(tmp_path: Path) -> None:
+    ds = import_csv(_write(tmp_path, "multi.csv", _MULTI_HEADER))
+    assert ds.n_points == 2

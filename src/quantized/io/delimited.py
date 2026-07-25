@@ -290,7 +290,40 @@ def import_csv(
     else:
         x_name, x_unit = "Sample Index", ""
 
-    # MAIN_PLAN #33: columns that failed the numeric test are TEXT columns —
+    # MAIN_PLAN #33: a file can carry SEVERAL descriptive rows above the data
+    # (column name, units, sample id, applied field...). Layout detection picks
+    # exactly one as the header and one as units, so every other row was simply
+    # dropped — and which row won was an accident of position, not a choice. A
+    # 4-row header left the caller with the LAST row as labels and no way back
+    # to the sample ids. Keep them all, aligned to the data columns, so the UI
+    # can offer them as legend-label sources; `role` marks the two that layout
+    # detection already consumed.
+    label_rows: list[dict[str, Any]] = []
+    if data_start >= 2:  # only a real choice is worth recording
+        for i in range(data_start):
+            raw_cells = [c.strip() for c in tokens[i]]
+            if not any(raw_cells):
+                continue
+
+            # Named `at`, not `cell`: a `cell` str already exists in this
+            # function's scope (the units-row parse above) and shadowing it
+            # makes mypy — rightly — call the redefinition a type error.
+            def at(col: int, row: list[str] = raw_cells) -> str:
+                return row[col] if 0 <= col < len(row) else ""
+
+            # Aligned to the VALUE CHANNELS, not the raw columns, so a consumer
+            # can index a row by channel with no knowledge of which column
+            # became x or which were dropped as text.
+            label_rows.append(
+                {
+                    "index": i,
+                    "role": "header" if i == header_row else "units" if i == units_row else "label",
+                    "x": at(time_idx) if time_idx >= 0 else "",
+                    "cells": [at(c) for c in data_idx],
+                }
+            )
+
+    # columns that failed the numeric test are TEXT columns —
     # sample ids, operator names, run labels. They used to be dropped, which is
     # why generic imports could not drive legends, grouping, or faceting the way
     # an Origin or SQLite import could. Same `text_columns` metadata shape those
@@ -319,6 +352,8 @@ def import_csv(
         metadata["text_columns"] = text_columns
     if comment_lines:
         metadata["comments"] = comment_lines
+    if len(label_rows) >= 2:
+        metadata["label_rows"] = label_rows
     if time_is_datetime:
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     return DataStruct.create(
