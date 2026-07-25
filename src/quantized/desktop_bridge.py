@@ -64,6 +64,49 @@ def _dialog_kind(name: str, fallback: int) -> int:
         return fallback
 
 
+# Where POSIX mounts removable and network volumes. These are not a guess: a
+# volume named "share" is mounted AT `/Volumes/share` (macOS) or `/mnt/share` /
+# `/media/<user>/share` (Linux), so the mount point's absence is exactly the
+# statement "that volume is not mounted right now".
+_POSIX_VOLUME_PREFIXES = ("/Volumes", "/media", "/mnt", "/net", "/run/media")
+
+
+def _volume_present(resolved: str) -> bool:
+    """Is the VOLUME holding ``resolved`` currently attached?
+
+    Windows gives a directly checkable answer: every path carries a drive letter
+    or a UNC share root, and if that root is not a directory the volume is gone.
+
+    POSIX has no such thing — ``splitdrive`` returns nothing and the anchor is
+    always ``/``, which always exists. So the check is the mount point instead:
+    for a path under a standard volume prefix, the component just below that
+    prefix IS the mount point, and its absence means the volume is not mounted.
+
+    Outside those prefixes POSIX genuinely cannot distinguish "unmounted share"
+    from "path that never existed", so this returns True and the caller reports
+    ``missing``. That is the deliberate, documented limit rather than a guess:
+    over-reporting ``offline`` would suppress a real "your file is gone", which
+    is the more useful of the two messages to get right.
+    """
+    drive = os.path.splitdrive(resolved)[0]
+    if drive:  # Windows drive letter or UNC \\server\share
+        try:
+            return os.path.isdir(drive + os.sep) or os.path.isdir(drive)
+        except OSError:
+            return False
+    for prefix in _POSIX_VOLUME_PREFIXES:
+        if not resolved.startswith(prefix + "/"):
+            continue
+        rest = resolved[len(prefix) + 1 :].split("/", 1)[0]
+        if not rest:
+            continue
+        try:
+            return os.path.isdir(os.path.join(prefix, rest))
+        except OSError:
+            return False
+    return True  # not on a recognizable volume — cannot tell, so do not claim offline
+
+
 class DesktopApi:
     """The object pywebview exposes at ``window.pywebview.api``.
 
@@ -155,9 +198,9 @@ class DesktopApi:
         A vanished network share and a deleted file look identical to a naive
         ``exists()`` check, and treating the first as the second is how an app
         talks a user into re-picking or discarding a source that is fine and
-        will be back. So: report the file, and separately whether its ROOT is
-        currently reachable. A missing file whose root is also unreachable is
-        reported as ``offline``, never as ``missing``.
+        will be back. So a file is only ``missing`` when the volume it lives on
+        is demonstrably present; when the volume itself is gone, that is
+        ``offline`` and nothing downstream should offer to clean it up.
         """
         try:
             resolved = os.path.realpath(path)
@@ -165,9 +208,7 @@ class DesktopApi:
             return {"state": "invalid"}
         if os.path.isfile(resolved):
             return {"state": "ok", "path": resolved}
-        anchor = os.path.splitdrive(resolved)[0] or os.sep
-        try:
-            root_reachable = os.path.isdir(anchor)
-        except OSError:
-            root_reachable = False
-        return {"state": "missing" if root_reachable else "offline", "path": resolved}
+        return {
+            "state": "missing" if _volume_present(resolved) else "offline",
+            "path": resolved,
+        }

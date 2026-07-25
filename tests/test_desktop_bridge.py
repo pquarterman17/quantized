@@ -9,6 +9,7 @@ cancellation) and how it classifies a path's status.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -140,9 +141,8 @@ def test_path_status_missing_when_the_root_is_reachable(tmp_path: Path) -> None:
     assert DesktopApi().path_status(str(tmp_path / "nope.csv"))["state"] == "missing"
 
 
-def test_path_status_offline_when_the_root_is_unreachable() -> None:
-    """A vanished share must NOT be reported as a deleted file — that is how an
-    app talks a user into discarding a source that is fine and will be back.
+def _unmounted_volume_path() -> str:
+    """A path on a volume that is definitely not mounted, per platform.
 
     The UNC prefix is assembled from ``chr(92)`` rather than written as a
     literal: this test was briefly WRONG because a quoting layer ate one
@@ -150,23 +150,40 @@ def test_path_status_offline_when_the_root_is_unreachable() -> None:
     whose anchor is a real drive, so the test asserted "offline" against a case
     that is legitimately "missing" and blamed the implementation for it.
     """
-    b = chr(92)
-    unc = b + b + "no-such-server" + b + "share" + b + "run.dat"
-    unreachable = unc if os.name == "nt" else "/mnt/no-such-server/share/run.dat"
-    assert DesktopApi().path_status(unreachable)["state"] == "offline"
+    if os.name == "nt":
+        b = chr(92)
+        return b + b + "no-such-server" + b + "share" + b + "run.dat"
+    # POSIX mounts volumes under these prefixes, so an absent mount point IS
+    # the statement "that volume is not attached".
+    base = "/Volumes" if sys.platform == "darwin" else "/mnt"
+    return f"{base}/qz-no-such-volume/run.dat"
 
 
-def test_path_status_distinguishes_a_local_miss_from_an_offline_root(
+def test_path_status_offline_when_the_volume_is_not_mounted() -> None:
+    """A vanished share must NOT be reported as a deleted file — that is how an
+    app talks a user into discarding a source that is fine and will be back."""
+    assert DesktopApi().path_status(_unmounted_volume_path())["state"] == "offline"
+
+
+def test_path_status_distinguishes_a_local_miss_from_an_unmounted_volume(
     tmp_path: Path,
 ) -> None:
-    """The two states must not collapse into one — that distinction IS the
-    sub-item. A gone file on a live drive is 'missing'; an unreachable root is
-    'offline', and only the first justifies suggesting the source is gone."""
+    """The two states must not collapse — that distinction IS the sub-item. A
+    gone file on a live volume is 'missing'; an unmounted volume is 'offline',
+    and only the first justifies suggesting the source is gone."""
     local_miss = DesktopApi().path_status(str(tmp_path / "gone.csv"))["state"]
-    b = chr(92)
-    unc = b + b + "no-such-server" + b + "share" + b + "run.dat"
-    remote = unc if os.name == "nt" else "/mnt/no-such-server/share/run.dat"
-    remote_state = DesktopApi().path_status(remote)["state"]
+    remote_state = DesktopApi().path_status(_unmounted_volume_path())["state"]
     assert local_miss == "missing"
     assert remote_state == "offline"
-    assert local_miss != remote_state
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX-only limitation")
+def test_path_status_reports_missing_outside_a_recognizable_volume() -> None:
+    """The documented POSIX limit, pinned so it stays deliberate.
+
+    Outside a known mount prefix, POSIX cannot distinguish an unmounted share
+    from a path that never existed. We report 'missing' there rather than guess
+    'offline', because over-reporting offline would suppress a real "your file
+    is gone" — the more useful of the two messages to get right.
+    """
+    assert DesktopApi().path_status("/qz-no-such-dir/run.dat")["state"] == "missing"
