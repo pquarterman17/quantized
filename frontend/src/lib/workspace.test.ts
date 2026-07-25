@@ -1,3 +1,4 @@
+import type { ErrorBinding } from "./errorRoles";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { OriginFigureEntry } from "./originFigures";
@@ -1191,5 +1192,60 @@ describe("mergeWorkspace (MAIN_PLAN #16 — Append workspace)", () => {
     expect(result.datasets).toEqual(current);
     expect(result.remapped).toBe(0);
     expect(result.renamed).toBe(0);
+  });
+});
+
+describe("error roles survive save/reapply (MAIN #33)", () => {
+  // Typed rather than `unknown`: the helper builds a real Dataset, and an
+  // `unknown` role list widens to {} and fails the BUILD while the test run
+  // stays green — the same trap as the HomeScreen mock.
+  const ds = (labels: string[], errorRoles?: ErrorBinding[]) => ({
+    id: "d1",
+    name: "r.dat",
+    data: {
+      time: [0, 1],
+      values: [labels.map(() => 1), labels.map(() => 2)],
+      labels,
+      units: labels.map(() => ""),
+      metadata: {},
+    },
+    ...(errorRoles ? { errorRoles } : {}),
+  });
+
+  it("round-trips a binding through .dwk", () => {
+    const roles: ErrorBinding[] = [{ channel: 1, target: 0, axis: "y", side: "both" }];
+    const out = parseWorkspace(serializeWorkspace({ datasets: [ds(["R", "dR"], roles)] }));
+    expect(out.datasets[0].errorRoles).toEqual(roles);
+  });
+
+  it("round-trips an ASYMMETRIC pair and an X-error binding", () => {
+    const roles: ErrorBinding[] = [
+      { channel: 1, target: 0, axis: "y", side: "+" },
+      { channel: 2, target: 0, axis: "y", side: "-" },
+      { channel: 3, target: -1, axis: "x", side: "both" },
+    ];
+    const out = parseWorkspace(
+      serializeWorkspace({ datasets: [ds(["M", "u", "l", "xe"], roles)] }),
+    );
+    expect(out.datasets[0].errorRoles).toEqual(roles);
+  });
+
+  it("DROPS a binding that points past the current channel count", () => {
+    // A template reapplied to a differently-shaped source must not bind error
+    // bars to whatever column now happens to sit at that index.
+    const roles: ErrorBinding[] = [{ channel: 9, target: 0, axis: "y", side: "both" }];
+    const out = parseWorkspace(serializeWorkspace({ datasets: [ds(["R", "dR"], roles)] }));
+    expect(out.datasets[0].errorRoles).toBeUndefined();
+  });
+
+  it("round-trips import provenance", () => {
+    const d = { ...ds(["T", "M"]), importedAt: "2026-07-25T12:00:00.000Z" };
+    const out = parseWorkspace(serializeWorkspace({ datasets: [d] }));
+    expect(out.datasets[0].importedAt).toBe("2026-07-25T12:00:00.000Z");
+  });
+
+  it("adds nothing for a dataset with no roles", () => {
+    const out = parseWorkspace(serializeWorkspace({ datasets: [ds(["T", "M"])] }));
+    expect(out.datasets[0].errorRoles).toBeUndefined();
   });
 });

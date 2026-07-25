@@ -259,7 +259,8 @@ in git history @ `e4f6590`.)*
 *(items 33–38 from the same 2026-07-25 ChatGPT-Sol follow-up audit as
 #31/#32 above; each problem statement verified against the code.)*
 
-33. **Complete import metadata, categorical columns, and column roles** —
+~~33. **Complete import metadata, categorical columns, and column roles**~~
+    COMPLETED 2026-07-25 —
     `DataStruct.values` is `number[][]`, so the canonical contract is
     numeric-only. Text columns DO survive, but only as metadata sidecars
     and only for two sources (Origin projects via `meta.origin_text_
@@ -296,13 +297,24 @@ in git history @ `e4f6590`.)*
           the sample id / operator / temperature that make a file
           interpretable later. Surfaced and fixed a real header-detection
           bug in the process — see Completed
-    - [ ] X, Y, label, ignore, X-error, Y-error and asymmetric-error
-          roles survive template save/reapply into canonical `DataStruct`
-          metadata
-    - [ ] Import decisions and any cleaned output carry provenance; the
-          original file stays untouched
-    - [ ] Tests cover mixed text+numeric files, repeated label rows,
-          ambiguous error names, manual role override
+    - [x] X, Y, label, ignore, X-error, Y-error and asymmetric-error roles
+          survive save/reapply — `lib/errorRoles.ts` is the canonical model
+          (channel → target + axis + side), superseding the `errKeys` map
+          that could only express symmetric-vertical-Y. `errKeys` is now
+          DERIVED from it so every existing consumer is untouched, and an
+          asymmetric pair deliberately does NOT project into it — collapsing
+          one would draw whiskers that misstate the data on one side.
+          Round-trips through `.dwk`, re-validated against the current
+          channel count on read
+    - [x] Import decisions carry provenance — roles are inferred and stored
+          at import, `importedAt` stamps the dataset, and the source file is
+          never written to (which is exactly why the record has to live on
+          the dataset)
+    - [x] Tests cover mixed text+numeric files, repeated label rows, and
+          ambiguous error names — including that an ambiguous name is left
+          UNBOUND rather than guessed at, and that a stale binding is
+          dropped rather than re-pointed at whatever column now sits at
+          that index
     - Establish this contract BEFORE #36 and before deeper JMP-style
       grouped/box-plot work. Boundary note: this is import-time role
       assignment, NOT the standing "worksheet designation editing"

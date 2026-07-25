@@ -124,9 +124,8 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
-| **Import metadata/categorical/error roles — PARTIAL** — generic delimited imports now preserve text/categorical columns and the comment preamble (`b99e7d6`; also fixed a header-detection bug where equal text and numeric column counts made the HEADER parse as data). Remaining: multiple selectable label rows in the wizard, choosing the legend-label source, explicit X/Y/asymmetric-error roles surviving template reapply, and import provenance | MAIN #33 |
 | **Spreadsheet-style block editing — CORE SHIPPED** 2026-07-25 (copy/paste/clear/fill-down over a row×column selection; `lib/clipboardGrid.ts` pure + `setCellBlock` applying a whole block as ONE undo entry). Remaining: cut, insert/delete rows and derived columns, keyboard bindings, and a progress affordance for very large pastes | MAIN #34 |
-| **Complete X/Y error bars** — symmetric/asymmetric X and Y pairing, override UI, and interactive/export parity — after MAIN #33 | MAIN #36 |
+| **Complete X/Y error bars** — symmetric/asymmetric X and Y pairing, override UI, and interactive/export parity | MAIN #36 |
 | **Home screen/project navigation — HOME SHIPPED** 2026-07-25: the empty Library now shows recents (with offline/missing badges), pinnable working paths, import, and autosave health — composing the #31/#32 stores rather than duplicating them. Project-wide SEARCH stays deliberately deferred until the model is validated in real use, per the plan's own sub-item | MAIN #38 |
 
 The remaining dev item is a judgment call the plan explicitly parked for the

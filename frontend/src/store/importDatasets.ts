@@ -18,6 +18,7 @@
 
 import { importFile, uploadFile } from "../lib/api";
 import { lit } from "../lib/macro";
+import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
 import { planOriginFolders } from "../lib/originFolders";
 import { isLazyBookEntry, isPrimaryBookMarker, type DataStruct } from "../lib/types";
 import { toast } from "./toasts";
@@ -64,6 +65,10 @@ function addFromPayload(
 ): void {
   const stem = origin.name.replace(/\.[^.]+$/, "");
   const src = origin.source ? { source: origin.source } : {};
+  // MAIN #33 provenance: what this import DECIDED, recorded on the dataset
+  // rather than inferred later. The original file is never written to, so
+  // this is the only place the decisions can survive.
+  const importedAt = new Date().toISOString();
   const figures = data.figures;
   const fidelity = data.origin_fidelity;
   delete data.figures;
@@ -135,7 +140,14 @@ function addFromPayload(
     delete data.books;
     delete data.book_source;
     const id = nextDatasetId();
-    get().addDataset({ id, name: origin.name, data, ...src });
+    get().addDataset({
+      id,
+      name: origin.name,
+      data,
+      ...src,
+      ...importRoles(data),
+      importedAt,
+    });
     newIds.push(id);
   }
   if (figures?.length) get().addOriginFigures(stem, figures, newIds);
@@ -200,4 +212,15 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
         origin: { name: pathBasename(path), size: 0, source: { kind: "path", path } },
       })),
   };
+}
+
+/** Seed the canonical error-column roles from the parsed labels (MAIN #33).
+ *
+ *  Inference SUGGESTS — it only binds where the pairing is unambiguous or
+ *  follows the instrument convention, and everything stays overridable. Omitted
+ *  entirely when nothing is inferable, so an ordinary two-column file carries
+ *  no empty role list. */
+function importRoles(data: DataStruct): { errorRoles?: ErrorBinding[] } {
+  const roles = inferErrorBindings(data);
+  return roles.length ? { errorRoles: roles } : {};
 }

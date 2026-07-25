@@ -4,6 +4,7 @@
 // testable; the App wires it to Save/Open commands (download + file picker).
 
 import { sanitizeFilter } from "./datafilter";
+import { sanitizeBindings } from "./errorRoles";
 import { pruneOrphans } from "./foldertree";
 import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
@@ -150,6 +151,8 @@ export function serializeWorkspace(ws: WorkspaceState): string {
       ...(d.folderId ? { folderId: d.folderId } : {}),
       ...(d.order !== undefined ? { order: d.order } : {}),
       ...(d.formulas?.length ? { formulas: d.formulas } : {}),
+      ...(d.errorRoles?.length ? { errorRoles: d.errorRoles } : {}),
+      ...(d.importedAt ? { importedAt: d.importedAt } : {}),
       ...(d.channelRoles && Object.keys(d.channelRoles).length
         ? { channelRoles: d.channelRoles }
         : {}),
@@ -412,6 +415,13 @@ export function parseWorkspace(
       );
       if (formulas.length) ds.formulas = formulas;
     }
+    // MAIN #33: error roles survive save/reapply, but are re-validated
+    // against the CURRENT channel count — a template reapplied to a
+    // differently-shaped source must not bind error bars to whatever column
+    // now happens to sit at that index.
+    const bindings = sanitizeBindings(dd.errorRoles, ds.data.labels.length);
+    if (bindings?.length) ds.errorRoles = bindings;
+    if (typeof dd.importedAt === "string") ds.importedAt = dd.importedAt;
     if (dd.channelRoles && typeof dd.channelRoles === "object") {
       const roles: Record<number, ChannelRole> = {};
       for (const [k, v] of Object.entries(dd.channelRoles as Record<string, unknown>)) {

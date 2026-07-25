@@ -94,3 +94,68 @@ describe("importFiles still behaves as before", () => {
     expect(ds.source).toBeUndefined();
   });
 });
+
+describe("import roles and provenance (MAIN #33)", () => {
+  const withLabels = (labels: string[]) => ({
+    time: [0, 1],
+    values: [labels.map(() => 1), labels.map(() => 2)],
+    labels,
+    units: labels.map(() => ""),
+    metadata: {},
+  });
+
+  it("seeds error roles from the parsed column names", () => {
+    vi.mocked(importFile).mockResolvedValue(withLabels(["R", "dR"]));
+    return useApp
+      .getState()
+      .importPaths(["/d/refl.dat"])
+      .then(() => {
+        expect(useApp.getState().datasets[0].errorRoles).toEqual([
+          { channel: 1, target: 0, axis: "y", side: "both" },
+        ]);
+      });
+  });
+
+  it("records asymmetric halves separately, not as one symmetric bar", () => {
+    vi.mocked(importFile).mockResolvedValue(withLabels(["M", "M_err+", "M_err-"]));
+    return useApp
+      .getState()
+      .importPaths(["/d/asym.dat"])
+      .then(() => {
+        const roles = useApp.getState().datasets[0].errorRoles ?? [];
+        expect(roles.map((r) => r.side).sort()).toEqual(["+", "-"]);
+      });
+  });
+
+  it("leaves an AMBIGUOUS error name unbound rather than guessing", () => {
+    // The plan's "suggested, never silently forced": a leading error column has
+    // nothing defensible to bind to.
+    vi.mocked(importFile).mockResolvedValue(withLabels(["err", "M"]));
+    return useApp
+      .getState()
+      .importPaths(["/d/amb.dat"])
+      .then(() => {
+        expect(useApp.getState().datasets[0].errorRoles).toBeUndefined();
+      });
+  });
+
+  it("adds no role list to an ordinary numeric file", () => {
+    vi.mocked(importFile).mockResolvedValue(withLabels(["Temp", "Moment"]));
+    return useApp
+      .getState()
+      .importPaths(["/d/plain.csv"])
+      .then(() => {
+        expect(useApp.getState().datasets[0].errorRoles).toBeUndefined();
+      });
+  });
+
+  it("stamps import provenance on the dataset, since the file is never written", () => {
+    vi.mocked(importFile).mockResolvedValue(withLabels(["T", "M"]));
+    return useApp
+      .getState()
+      .importPaths(["/d/plain.csv"])
+      .then(() => {
+        expect(useApp.getState().datasets[0].importedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      });
+  });
+});

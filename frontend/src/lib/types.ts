@@ -1,5 +1,9 @@
 // Wire types mirroring the FastAPI backend payloads (src/quantized/routes).
 
+// The error-role model lives in ./errorRoles (it owns the inference too);
+// imported type-only, so there is no runtime cycle with this contract file.
+import type { ErrorBinding } from "./errorRoles";
+
 import type { ColormapName } from "./colormap";
 
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
@@ -470,6 +474,18 @@ export interface Dataset {
    *  dataset (persist across dataset switches + round-trip .dwk), not in the
    *  transient view state. */
   channelRoles?: Record<number, ChannelRole>;
+  /** MAIN_PLAN #33: the canonical error-column roles — X±, Y±, and the two
+   *  halves of an asymmetric pair. Supersedes the store's `errKeys` map,
+   *  which expressed only symmetric-vertical-Y and is now DERIVED from this
+   *  (see `lib/errorRoles.errKeysFromBindings`) so existing consumers are
+   *  untouched. Seeded by inference at import, fully overridable, and
+   *  round-trips through `.dwk` — a binding is a REFERENCE to a column,
+   *  never a rewrite of one, so re-pairing can't mutate the data. */
+  errorRoles?: ErrorBinding[];
+  /** MAIN_PLAN #33: when this dataset was imported. Import provenance is
+   *  recorded on the DATASET because the source file is never written to —
+   *  this is the only place the decision survives. Round-trips via `.dwk`. */
+  importedAt?: string;
   /** Per-channel modeling-type OVERRIDES (channel index → type). Only user
    *  overrides are stored; absent channels use the auto-inference
    *  (lib/modeling.channelModelingType). Lives on the dataset like
@@ -1002,3 +1018,5 @@ export interface ReflectivityFftResult {
   wavelength_a?: number;
   superlattice: SuperlatticeResult;
 }
+
+export type { ErrorBinding, ErrorSide } from "./errorRoles";
