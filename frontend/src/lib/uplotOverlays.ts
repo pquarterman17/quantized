@@ -5,6 +5,7 @@
 // the rest are pure draw hooks. The active drag-gesture tools live in uplotTools.
 
 import type uPlot from "uplot";
+import type { ErrorSpan } from "./errorbars";
 
 import {
   canvasToOverCss,
@@ -1084,6 +1085,86 @@ export function colorScatterPlugin(specs: Map<number, ColorScatterSpec>): uPlot.
             ctx.fillStyle = `rgb(${rr}, ${gg}, ${bb})`;
             ctx.arc(px, py, r, 0, Math.PI * 2);
             ctx.fill();
+          }
+        }
+        ctx.restore();
+      },
+    },
+  };
+}
+
+/** Draw asymmetric and/or X error bars (MAIN_PLAN #36).
+ *
+ *  The sibling `errorBarsPlugin` draws one symmetric VERTICAL magnitude, which
+ *  is all the legacy `errKeys` shape could express. This one honours what the
+ *  instrument actually supplied: independent up/down magnitudes, and horizontal
+ *  whiskers for x uncertainty.
+ *
+ *  Off-scale ends are left to the canvas clip rather than pre-filtered — a bar
+ *  whose far end sits outside the view should still be drawn TO the edge, since
+ *  dropping it entirely would understate the uncertainty exactly where the
+ *  reader is most likely to misread it. Log axes need no special case for the
+ *  same reason `valToPos` already handles them: a non-positive endpoint maps to
+ *  NaN and the browser skips that segment.
+ */
+export function errorSpansPlugin(
+  spansByCol: Map<number, ErrorSpan[]>,
+  color: string,
+  capHalfWidth = 0,
+): uPlot.Plugin {
+  return {
+    hooks: {
+      draw: (u: uPlot) => {
+        const { ctx } = u;
+        const { left, top, width, height } = u.bbox;
+        const xs = u.data[0];
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(left, top, width, height);
+        ctx.clip();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        for (const [col, spans] of spansByCol) {
+          const ys = u.data[col];
+          if (!ys) continue;
+          const scaleKey = u.series[col]?.scale ?? "y";
+          for (const span of spans) {
+            for (let i = 0; i < xs.length; i++) {
+              const x = xs[i];
+              const y = ys[i];
+              const up = span.plus[i];
+              const dn = span.minus[i];
+              if (x == null || y == null || (up == null && dn == null)) continue;
+              ctx.beginPath();
+              if (span.axis === "y") {
+                const py = u.valToPos(y, scaleKey, true);
+                const pHi = up == null ? py : u.valToPos(y + up, scaleKey, true);
+                const pLo = dn == null ? py : u.valToPos(y - dn, scaleKey, true);
+                const px = u.valToPos(x, "x", true);
+                ctx.moveTo(px, pLo);
+                ctx.lineTo(px, pHi);
+                if (capHalfWidth > 0) {
+                  ctx.moveTo(px - capHalfWidth, pHi);
+                  ctx.lineTo(px + capHalfWidth, pHi);
+                  ctx.moveTo(px - capHalfWidth, pLo);
+                  ctx.lineTo(px + capHalfWidth, pLo);
+                }
+              } else {
+                const px = u.valToPos(x, "x", true);
+                const pR = up == null ? px : u.valToPos(x + up, "x", true);
+                const pL = dn == null ? px : u.valToPos(x - dn, "x", true);
+                const py = u.valToPos(y, scaleKey, true);
+                ctx.moveTo(pL, py);
+                ctx.lineTo(pR, py);
+                if (capHalfWidth > 0) {
+                  ctx.moveTo(pR, py - capHalfWidth);
+                  ctx.lineTo(pR, py + capHalfWidth);
+                  ctx.moveTo(pL, py - capHalfWidth);
+                  ctx.lineTo(pL, py + capHalfWidth);
+                }
+              }
+              ctx.stroke();
+            }
           }
         }
         ctx.restore();

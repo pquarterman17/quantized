@@ -16,7 +16,8 @@ import {
   secondaryAxisIsLog,
   secondaryAxisWire,
 } from "./axisspec";
-import type { FigureSpec } from "./api";
+import type { ErrorPair, FigureSpec } from "./api";
+import { buildErrorSpans } from "./errorbars";
 import { buildExportStyles } from "./exportStyles";
 import type { StoreGet } from "./exportActive";
 import {
@@ -27,7 +28,8 @@ import {
 } from "./figureOverrides";
 import { marginFractions, pageSizeInches } from "./pagesetup";
 import { effectiveChannels } from "./plotdata";
-import type { Dataset } from "./types";
+import type { ErrorBinding } from "./errorRoles";
+import type { Dataset, DataStruct } from "./types";
 import { axisFmtParam } from "./types";
 
 /** The render-time choices a caller supplies. Everything else about the spec
@@ -127,6 +129,11 @@ export function buildFigureSpec(
     x_label: o.xLabel || undefined,
     y_label: o.yLabel || undefined,
     series_styles: buildExportStyles(plotted, st.seriesStyles),
+    // MAIN #36: the SAME spans the canvas draws, so a PDF cannot quietly
+    // understate the uncertainty the screen showed.
+    ...(ds.errorRoles?.length
+      ? { error_spans: exportErrorSpans(ds.data, plotted, ds.errorRoles) }
+      : {}),
     overrides: gatedOverrides,
     filename: stem,
   };
@@ -205,4 +212,25 @@ export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
       ticks: st.xScale === "log" || st.yScale === "log" ? { minor: true } : undefined,
     }) ?? undefined
   );
+}
+
+/** Project the canvas error spans onto the export wire shape.
+ *
+ *  `buildErrorSpans` keys by uPlot COLUMN (0 = x, p+1 = the p-th series); the
+ *  renderer wants one entry per plotted SERIES, so this re-indexes rather than
+ *  letting the two conventions meet in the route — where the off-by-one would
+ *  show up as error bars on the wrong curve. */
+export function exportErrorSpans(
+  data: DataStruct,
+  plotted: number[],
+  roles: ErrorBinding[],
+): ({ x?: ErrorPair; y?: ErrorPair } | null)[] {
+  const byCol = buildErrorSpans(data, plotted, roles);
+  return plotted.map((_ch, p) => {
+    const spans = byCol.get(p + 1);
+    if (!spans?.length) return null;
+    const out: { x?: ErrorPair; y?: ErrorPair } = {};
+    for (const s of spans) out[s.axis] = { plus: s.plus, minus: s.minus };
+    return out;
+  });
 }

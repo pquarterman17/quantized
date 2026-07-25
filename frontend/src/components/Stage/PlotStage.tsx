@@ -143,7 +143,16 @@ export default function PlotStage() {
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
   const [statsSel, setStatsSel] = useState<RegionStats | null>(null);
 
-  const { displayPayload, plotted, styleList, labelList, errorBars, colorByColumns, hidden } = usePlotPayload({
+  const {
+    displayPayload,
+    plotted,
+    styleList,
+    labelList,
+    errorBars,
+    errorSpans,
+    colorByColumns,
+    hidden,
+  } = usePlotPayload({
     active,
     yScale,
     xScale,
@@ -297,6 +306,7 @@ export default function PlotStage() {
         plotted={plotted}
         seriesLabels={labelList}
         errorBars={errorBars}
+        errorSpans={errorSpans}
         colorByColumns={colorByColumns}
         hidden={hidden}
         tool={tool}

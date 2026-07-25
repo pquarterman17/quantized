@@ -29,6 +29,8 @@ from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale  # 
 from quantized.calc.figure_styles import FigureStyle, figure_style  # noqa: E402
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps  # noqa: E402
 
+from .figure_errorbars import apply_error_bars
+
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
 
 _FORMATS = ("pdf", "svg", "png", "tiff")
@@ -175,6 +177,11 @@ def draw_series_axes(
     x_label: str = "",
     y_label: str = "",
     series_styles: Sequence[Mapping[str, Any] | None] | None = None,
+    # MAIN_PLAN #36: per-series {x?: {plus, minus}, y?: {plus, minus}} error
+    # spans. Without these an exported figure silently omits the bars the
+    # screen drew, understating the uncertainty in the artefact that gets
+    # published.
+    error_spans: Sequence[Mapping[str, Any] | None] | None = None,
     x_fmt: Mapping[str, Any] | None = None,
     y_fmt: Mapping[str, Any] | None = None,
     x_step: float | None = None,
@@ -223,6 +230,7 @@ def draw_series_axes(
         (line,) = ax.plot(xv, yv, label=label, **kw)
         _apply_fill(ax, xv, yv, series, i, spec, line.get_color())
         artists.append(line)
+    apply_error_bars(ax, xv, series, error_spans, artists)
     resolved_x_scale = resolve_axis_scale(x_scale, x_log)
     resolved_y_scale = resolve_axis_scale(y_scale, y_log)
     apply_axis_scale(ax, "x", resolved_x_scale)
@@ -269,6 +277,7 @@ def _render_impl(
     fmt: str = "pdf",
     style: str = "default",
     series_styles: Sequence[Mapping[str, Any] | None] | None = None,
+    error_spans: Sequence[Mapping[str, Any] | None] | None = None,
     width_in: float | None = None,
     height_in: float | None = None,
     dpi: int | None = None,
@@ -423,6 +432,7 @@ def _render_impl(
                     x_label=x_label,
                     y_label=y_label,
                     series_styles=series_styles,
+                    error_spans=error_spans,
                     x_fmt=x_fmt,
                     y_fmt=y_fmt,
                     x_step=x_step,

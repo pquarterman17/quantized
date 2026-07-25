@@ -5,6 +5,7 @@ import AnnotationsCard from "./AnnotationsCard";
 import AxisLimits from "./AxisLimits";
 import AxisScaleControls from "./AxisScaleControls";
 import ChannelsCard from "./ChannelsCard";
+import ErrorRolesCard from "./ErrorRolesCard";
 import CorrectionsCard from "./CorrectionsCard";
 import MacroCard from "./MacroCard";
 import MapCard from "./MapCard";
@@ -55,6 +56,7 @@ export default function Inspector() {
       <NotesCard active={active} />
 
       <ChannelsCard active={active} />
+      <ErrorRolesCard active={active} />
 
       <PlotObjectsCard />
 

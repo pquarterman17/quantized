@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildErrorColumns,
-  defaultErrKeys,
-  originErrKeys,
-  originHiddenChannels,
-} from "./errorbars";
+import { buildErrorColumns, buildErrorSpans, defaultErrKeys, originErrKeys, originHiddenChannels } from "./errorbars";
 import type { DataStruct } from "./types";
 
 /** Build an Origin-shaped DataStruct carrying only the metadata originErrKeys
@@ -206,5 +201,83 @@ describe("defaultErrKeys (Origin designations + parser error_channels hint)", ()
   it("falls back to Origin-only when no hint is present", () => {
     const ds = origin(["A", "B", "C"], { A: "X", B: "Y", C: "Y-error" });
     expect(defaultErrKeys(ds)).toEqual({ 1: 2 });
+  });
+});
+
+describe("buildErrorSpans (MAIN #36)", () => {
+  const ds = (labels: string[], rows: number[][]): DataStruct => ({
+    time: rows.map((_, i) => i),
+    values: rows,
+    labels,
+    units: labels.map(() => ""),
+    metadata: {},
+  });
+
+  const data = ds(
+    ["M", "up", "dn", "xe"],
+    [
+      [10, 2, 1, 0.5],
+      [20, 2, 1, 0.5],
+    ],
+  );
+
+  it("keeps asymmetric sides independent", () => {
+    const spans = buildErrorSpans(data, [0], [
+      { channel: 1, target: 0, axis: "y", side: "+" },
+      { channel: 2, target: 0, axis: "y", side: "-" },
+    ]);
+    const y = spans.get(1)?.find((s) => s.axis === "y");
+    expect(y?.plus).toEqual([2, 2]);
+    expect(y?.minus).toEqual([1, 1]);
+  });
+
+  it("uses one array for both sides of a symmetric binding", () => {
+    const spans = buildErrorSpans(data, [0], [
+      { channel: 1, target: 0, axis: "y", side: "both" },
+    ]);
+    const y = spans.get(1)?.find((s) => s.axis === "y");
+    expect(y?.plus).toEqual(y?.minus);
+  });
+
+  it("emits an X span from an x-axis binding", () => {
+    const spans = buildErrorSpans(data, [0], [
+      { channel: 3, target: -1, axis: "x", side: "both" },
+    ]);
+    expect(spans.get(1)?.some((s) => s.axis === "x")).toBe(true);
+  });
+
+  it("carries BOTH axes for one series", () => {
+    const spans = buildErrorSpans(data, [0], [
+      { channel: 1, target: 0, axis: "y", side: "both" },
+      { channel: 3, target: -1, axis: "x", side: "both" },
+    ]);
+    expect(spans.get(1)?.map((s) => s.axis).sort()).toEqual(["x", "y"]);
+  });
+
+  it("ignores HALF an asymmetric pair rather than inventing the other side", () => {
+    const spans = buildErrorSpans(data, [0], [
+      { channel: 1, target: 0, axis: "y", side: "+" },
+    ]);
+    expect(spans.get(1)).toBeUndefined();
+  });
+
+  it("takes magnitudes absolutely — a sign is a convention, not a direction", () => {
+    const negative = ds(["M", "e"], [[10, -3], [20, -3]]);
+    const spans = buildErrorSpans(negative, [0], [
+      { channel: 1, target: 0, axis: "y", side: "both" },
+    ]);
+    expect(spans.get(1)?.[0].plus).toEqual([3, 3]);
+  });
+
+  it("maps a non-finite error to null, not to a zero-length bar", () => {
+    const gappy = ds(["M", "e"], [[10, Number.NaN], [20, 2]]);
+    const spans = buildErrorSpans(gappy, [0], [
+      { channel: 1, target: 0, axis: "y", side: "both" },
+    ]);
+    expect(spans.get(1)?.[0].plus).toEqual([null, 2]);
+  });
+
+  it("is empty with no bindings", () => {
+    expect(buildErrorSpans(data, [0], []).size).toBe(0);
   });
 });

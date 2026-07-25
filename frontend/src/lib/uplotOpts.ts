@@ -1,6 +1,7 @@
 // Build uPlot options from live design tokens, so the plot restyles for free
 // when theme/accent change. The plot canvas stays dark in both themes.
 
+import type { ErrorSpan } from "./errorbars";
 import type uPlot from "uplot";
 
 import type { ColorScatterSpec } from "./colorscatter";
@@ -21,6 +22,7 @@ import {
   axisBoxPlugin,
   colorScatterPlugin,
   errorBarsPlugin,
+  errorSpansPlugin,
   refLinePlugin,
   regionShadePlugin,
   type AnnotationEditOpts,
@@ -708,6 +710,10 @@ export interface BuildOptsArgs {
   /** Error-bar magnitudes keyed by uPlot data-column index (1-based). Draws
    *  vertical y±e whiskers for the mapped plotted series. */
   errorBars?: Map<number, (number | null)[]>;
+  /** MAIN #36: asymmetric and/or X error spans. Drawn INSTEAD of
+   *  `errorBars` for the columns it covers — running both would double-draw
+   *  the same whisker at a different thickness. */
+  errorSpans?: Map<number, ErrorSpan[]>;
   /** Colour-mapped-scatter specs (MAIN #14), keyed by uPlot data-column index
    *  (1-based) — see `colorscatter.buildColorByColumns`. A series present here
    *  has its native line/points hidden; `colorScatterPlugin` draws it instead. */
@@ -1072,8 +1078,16 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   if (args.regionShades && args.regionShades.length > 0) {
     plugins.push(regionShadePlugin(args.regionShades));
   }
-  if (args.errorBars && args.errorBars.size > 0) {
-    plugins.push(errorBarsPlugin(args.errorBars, inkDimColor));
+  if (args.errorSpans && args.errorSpans.size > 0) {
+    // The richer payload supersedes the legacy one for every column it
+    // covers; anything it does not cover still falls through below.
+    plugins.push(errorSpansPlugin(args.errorSpans, inkDimColor));
+  }
+  const legacyBars = args.errorBars
+    ? new Map([...args.errorBars].filter(([col]) => !args.errorSpans?.has(col)))
+    : undefined;
+  if (legacyBars && legacyBars.size > 0) {
+    plugins.push(errorBarsPlugin(legacyBars, inkDimColor));
   }
   if (args.colorByColumns && args.colorByColumns.size > 0) {
     plugins.push(colorScatterPlugin(args.colorByColumns));

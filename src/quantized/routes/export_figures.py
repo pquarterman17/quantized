@@ -92,6 +92,10 @@ class FigureRequest(BaseModel):
     # MAIN_PLAN #35: transparent canvas instead of the preset background —
     # what "Copy figure" needs to paste cleanly onto a coloured slide.
     transparent: bool = False
+    # MAIN_PLAN #36: per-series error spans, mirroring the frontend's
+    # ErrorSpan — {x?: {plus, minus}, y?: {plus, minus}} with independent
+    # magnitudes so an asymmetric pair survives to the exported figure.
+    error_spans: list[dict[str, Any] | None] | None = None
     # #54 Stage 3: page size in inches (from the window's PageSetup) — overrides
     # the preset's figure size. None = the preset's own size (today's behaviour).
     width_in: float | None = None
@@ -250,6 +254,7 @@ def export_figure(req: FigureRequest) -> Response:
             fmt=req.fmt,
             style=req.style,
             series_styles=resolved.styles,
+            error_spans=req.error_spans,
             width_in=req.width_in,
             height_in=req.height_in,
             dpi=dpi,

@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { buildColorByColumns, type ColorScatterSpec } from "../../lib/colorscatter";
-import { buildErrorColumns } from "../../lib/errorbars";
+import { buildErrorColumns, buildErrorSpans, type ErrorSpan } from "../../lib/errorbars";
 import { channelModelingType } from "../../lib/modeling";
 import {
   categoricalXPayload,
@@ -60,6 +60,8 @@ export interface PlotPayloadResult {
   labelList: (string | undefined)[] | undefined;
   /** Error-bar magnitudes keyed by uPlot data-column index (1-based). */
   errorBars: Map<number, (number | null)[]>;
+  /** MAIN #36: asymmetric / X error spans from the canonical role bindings. */
+  errorSpans: Map<number, ErrorSpan[]>;
   /** Colour-mapped-scatter specs (MAIN #14) keyed by uPlot data-column index. */
   colorByColumns: Map<number, ColorScatterSpec>;
   /** Per-display-series visibility (interactive legend), aligned 1:1 with `displayPayload.series`. */
@@ -178,5 +180,25 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     };
   }, [active, p.yScale, p.xScale, plotted, p.y2Keys, p.xKey]);
 
-  return { payload, displayPayload, plotted, styleList, labelList, errorBars, colorByColumns, hidden };
+  // #36: built from Dataset.errorRoles (the canonical contract) — absent for
+  // a dataset with no roles, in which case the legacy symmetric bars stand.
+  const errorSpans = useMemo(
+    () =>
+      active?.errorRoles?.length
+        ? buildErrorSpans(active.data, plotted, active.errorRoles)
+        : new Map<number, ErrorSpan[]>(),
+    [active, plotted],
+  );
+
+  return {
+    payload,
+    displayPayload,
+    plotted,
+    styleList,
+    labelList,
+    errorBars,
+    errorSpans,
+    colorByColumns,
+    hidden,
+  };
 }

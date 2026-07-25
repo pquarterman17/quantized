@@ -5,6 +5,7 @@
 // canvas drawing lives in uplotOverlays.errorBarsPlugin.
 
 import { columnMetaList } from "./columnmeta";
+import { asymmetricPair, symmetricBinding, type ErrorBinding } from "./errorRoles";
 import type { DataStruct } from "./types";
 
 /** Per-display-column error magnitudes, keyed by the uPlot data-column index
@@ -86,5 +87,79 @@ export function originHiddenChannels(ds: DataStruct): number[] {
     const g = list[i]?.designation;
     if (g === "Y-error" || g === "X-error" || g === "X") out.push(i);
   }
+  return out;
+}
+
+// ── MAIN_PLAN #36: asymmetric and X error ──────────────────────────────────
+// `buildErrorColumns` above carries ONE symmetric magnitude per point and draws
+// vertically. That is the shape #33's role contract replaces, so this is the
+// richer payload the plugin needs to honour what the instrument actually
+// supplied: a separate up/down (or right/left) magnitude, per axis.
+
+/** One error span for a display column: magnitudes in each direction. For a
+ *  symmetric binding `plus` and `minus` are the same values. */
+export interface ErrorSpan {
+  axis: "x" | "y";
+  /** Upward (y) or rightward (x) magnitude per point; null = no bar here. */
+  plus: (number | null)[];
+  /** Downward (y) or leftward (x) magnitude per point. */
+  minus: (number | null)[];
+}
+
+function magnitudes(ds: DataStruct, channel: number, n: number): (number | null)[] {
+  const out: (number | null)[] = [];
+  for (let i = 0; i < n; i++) {
+    const v = ds.values[i]?.[channel];
+    // abs(): a sign on an uncertainty column is a convention artefact, not a
+    // direction — the SIDE is carried by the binding, not by the value.
+    out.push(typeof v === "number" && Number.isFinite(v) ? Math.abs(v) : null);
+  }
+  return out;
+}
+
+/** Error spans per uPlot data-column index, from the canonical role bindings.
+ *
+ *  Keying matches `buildErrorColumns` (column 0 is x, column p+1 is the p-th
+ *  plotted series) so the plugin indexes both the same way. A column can carry
+ *  BOTH an x and a y span, which is why the value is a list.
+ *
+ *  X-error binds to the x axis (`target === -1`) and is emitted against every
+ *  plotted column, since the x uncertainty applies to each point regardless of
+ *  which series is drawn there. */
+export function buildErrorSpans(
+  ds: DataStruct,
+  plotted: number[],
+  bindings: readonly ErrorBinding[],
+): Map<number, ErrorSpan[]> {
+  const out = new Map<number, ErrorSpan[]>();
+  const n = ds.time.length;
+  const push = (col: number, span: ErrorSpan) => {
+    const list = out.get(col);
+    if (list) list.push(span);
+    else out.set(col, [span]);
+  };
+
+  plotted.forEach((ch, p) => {
+    const col = p + 1;
+    for (const axis of ["y", "x"] as const) {
+      // An asymmetric pair needs BOTH halves; half a pair would mean inventing
+      // the other side, so it is skipped in favour of the symmetric binding.
+      const target = axis === "x" ? -1 : ch;
+      const pair = asymmetricPair(bindings, target, axis);
+      if (pair) {
+        push(col, {
+          axis,
+          plus: magnitudes(ds, pair.plus, n),
+          minus: magnitudes(ds, pair.minus, n),
+        });
+        continue;
+      }
+      const sym = symmetricBinding(bindings, target, axis);
+      if (sym != null) {
+        const mag = magnitudes(ds, sym, n);
+        push(col, { axis, plus: mag, minus: mag });
+      }
+    }
+  });
   return out;
 }

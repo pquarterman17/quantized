@@ -15,6 +15,11 @@
 // natively picked file, consented to — see quantized/desktop_consent.py). The
 // path branch is also the only one that can set `Dataset.source`, which is what
 // makes "re-import from source" work without asking the picker again.
+//
+// It also owns ERROR ROLES end to end (MAIN #33/#36): inferred here at import,
+// and edited through the slice below. Keeping the seed and the edit in one
+// module is what stops the two drifting into different ideas of what a
+// binding means.
 
 import { importFile, uploadFile } from "../lib/api";
 import { lit } from "../lib/macro";
@@ -37,15 +42,47 @@ interface ImportOrigin {
   source?: { kind: "path"; path: string };
 }
 
-export interface ImportSlice {
+interface ErrorRolesActions {
+  /** Replace a dataset's error roles. `[]` clears them. */
+  setErrorRoles: (id: string, roles: readonly ErrorBinding[]) => void;
+  /** Re-run name inference over the dataset's columns — the "suggested, never
+   *  forced" affordance made explicit: the user asks for the guess. */
+  detectErrorRoles: (id: string) => number;
+}
+
+type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
+type SliceGet = () => AppState;
+
+function createErrorRolesActions(set: SliceSet, get: SliceGet): ErrorRolesActions {
+  const write = (id: string, roles: readonly ErrorBinding[], label: string) => {
+    get().recordHistory(label);
+    set((s) => ({
+      datasets: s.datasets.map((d) =>
+        d.id === id ? { ...d, errorRoles: roles.length ? [...roles] : undefined } : d,
+      ),
+    }));
+  };
+
+  return {
+    setErrorRoles: (id, roles) => write(id, roles, "edit error roles"),
+
+    detectErrorRoles: (id) => {
+      const ds = get().datasets.find((d) => d.id === id);
+      if (!ds) return 0;
+      const found = inferErrorBindings(ds.data);
+      write(id, found, "detect error roles");
+      return found.length;
+    },
+  };
+}
+
+export interface ImportSlice extends ErrorRolesActions {
   importFiles: (files: File[]) => Promise<void>;
   /** Import real filesystem paths (native desktop dialog, MAIN_PLAN #31). Each
    *  dataset carries `source.path`, so re-import needs no second picker. */
   importPaths: (paths: string[]) => Promise<void>;
 }
 
-type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
-type SliceGet = () => AppState;
 
 /** Basename without directory — the display name for a path import. */
 export function pathBasename(path: string): string {
@@ -199,6 +236,10 @@ async function runImport<T>(
 
 export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
   return {
+    // Error-role editing rides the same slice: this module already OWNS the
+    // roles (it infers them at import), and splitting the seed from the edit
+    // is how the two drift into different ideas of what a binding means.
+    ...createErrorRolesActions(set, get),
     importFiles: (files) =>
       runImport(set, get, files, (f) => f.name, async (file) => ({
         data: await uploadFile(file),

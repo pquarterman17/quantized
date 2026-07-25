@@ -1476,6 +1476,9 @@ export interface FigureSpec {
   dpi?: number;
   /** MAIN #35: render on a transparent canvas (Copy figure preference). */
   transparent?: boolean;
+  /** MAIN #36: per-plotted-series error spans, so an exported figure shows
+   *  the same bars the screen does. `null` for a series with none. */
+  error_spans?: ({ x?: ErrorPair; y?: ErrorPair } | null)[];
   /** Page size in inches (#54 Stage 2): overrides the style preset's figure
    *  size so a publication export matches the window's PageSetup. Omit = the
    *  preset's own size (today's behaviour). */
@@ -2072,4 +2075,11 @@ export function reflectivityFft(body: {
   peak_prominence_threshold?: number;
 }): Promise<ReflectivityFftResult> {
   return postJSON("/api/reductions/reflectivity-fft", body);
+}
+
+/** One direction-pair of error magnitudes (MAIN #36). Equal arrays for a
+ *  symmetric binding; independent ones for an asymmetric pair. */
+export interface ErrorPair {
+  plus: (number | null)[];
+  minus: (number | null)[];
 }
