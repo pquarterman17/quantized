@@ -25,10 +25,15 @@ the set of plan FILES itself, and found two that no dashboard derived from:
   fallback — exactly the prescribed fix), and the baseline residual is **shipped**
   behind the GUI #5 gate resolution. The Origin-migration and owner-decision
   findings were already tracked as gates or blocked rows below.
-- **Two findings were booked NOWHERE and are now MAIN #29 and #30** — the
+- **Two findings were booked NOWHERE and became MAIN #29 and #30** — the
   frontend bundle (measured today at **1,120.96 kB** in one chunk, up from ~969 kB
-  at audit time) and the fit-recipe residual fields. #29 is the first unblocked,
-  un-gated dev item this dashboard has listed since 2026-07-24.
+  at audit time) and the fit-recipe residual fields.
+- **#29 SHIPPED the same day** — eager JS **1,120,960 → 932,219 B (−16.8%)** by
+  lazy-loading the 25 flag-gated workshop panels out of `AppOverlays.tsx`, plus a
+  `check-bundle-size.mjs` ratchet wired into `npm run build` that budgets *eager*
+  JS (entry + modulepreloads = what the browser fetches before first paint) and
+  fails BOTH over budget and well under it. Both branches were verified by
+  planting violations. #30 remains the one open dev row.
 
 Prior: 2026-07-24 — a FULL reconciliation pass, prompted by
 finding that several rows below had gone stale against the plans they derive
@@ -100,7 +105,6 @@ only as true as the set of documents you reconcile against.
 
 | Item | Plan / item |
 |------|-------------|
-| **Frontend bundle code-splitting** — the SPA ships as ONE ~1.12 MB JS chunk (gzip 339 kB) and Vite's 500 kB warning has fired since at least 2026-07-12; it has grown ~15% since. `AppOverlays.tsx` statically imports 26 workshop panels that only render behind an `open` flag, so opening one costs all 26. Fix = lazy-load the flag-gated panels + a ratchet so it cannot silently re-inflate | MAIN #29 |
 | **Fit-recipe residual fields** — `FitSpec` now carries `xKey`/`yKey`/`weight`/`params`/`exitFlag`; still missing explicit fit range, starting values, parameter bounds, covariance/uncertainty method, preprocessing state, and a historical-vs-recomputed UI distinction. Partly design-constrained (registry fits expose no user bounds) | MAIN #30 |
 
 The remaining dev item is a judgment call the plan explicitly parked for the
@@ -264,7 +268,7 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | **#29 bundle code-splitting + #30 fit-recipe residual** (both folded up 2026-07-25 from the deleted Sol audits), plus owner gates + deferrals. MAIN #9–#28 ALL shipped 2026-07-11/12 |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | **#30 fit-recipe residual** (folded up 2026-07-25 from the deleted Sol audits), plus owner gates + deferrals. #29 bundle code-splitting SHIPPED 2026-07-25; MAIN #9–#28 ALL shipped 2026-07-11/12 |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates **Q4/Q8/Q9 only** — Q6 (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and shipped 2026-07-19 |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | **Tier 1 #1, #2, #5 ALL SHIPPED 2026-07-19** (Codex PRs #65/#66 + the two gate resolutions); **#17 CLOSED** (its last three items — split buttons, cross-menu ownership move, first-run hints — are struck); the ONLY open box in the whole plan is #16's `.opju` migration edges (owner-dependent). Remaining gates: the AnalysisSelection contract timing. Historical: #8, #11, #12 CLOSED and #15 fully covered except the #1-gated folder-undo journey, ALL 2026-07-18 (#8: palette bridge + mini-toolbar + worksheet/window/annotation retrofits; #11: stat-mark faceting end-to-end; #12: PlotSpec v2 canonical spec (display/axes/decor blocks) across Stage/Graph Builder/Figure Builder/export — all 5 slices + parts A (y2Fmt)/B (grouped-series export)/C (decor: annotations/shapes/legend) shipped same day, `page` block deferred to ORIGIN_FILE_DECODE #54; #15: channel-drag + annotation/shape + window-arrange journeys, e2e 33/33 across the zoom matrix); #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = stat-mark faceting; arbitrary multi-panel ordering belongs to #54), #15 core harness + 7 journeys SHIPPED 2026-07-17 and export round-trip SHIPPED 2026-07-18 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |

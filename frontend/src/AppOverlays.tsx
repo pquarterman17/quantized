@@ -4,7 +4,21 @@
 // stacking order the monolithic App used (always-mounted dialogs first, then
 // the flag-gated workshop panels, then the sheets + toaster). CommandPalette
 // stays in App — it needs the curated actions list.
+//
+// CODE SPLITTING (MAIN_PLAN #29). The flag-gated workshop panels below are
+// `lazyPanel(...)`, not static imports: each renders only when its `open` flag
+// is true, so a static import made a user who opens ONE panel download all 25.
+// The always-mounted dialogs stay eager on purpose — they mount on load, so
+// lazying them buys nothing and only adds a fallback flash. `SqliteQueryDialog`
+// is eager for a stronger reason: it self-gates on a `SHOW_SQLITE_QUERY` window
+// event registered in a `useEffect`, so it must stay mounted to hear it at all.
+//
+// The JSX block is deliberately unchanged — wrapping at the IMPORT site keeps
+// the mount lines byte-identical for the raw-source assertions in
+// SplitDatasetDialog / TextFormatHelp / ReductionsPanel tests (the App tree is
+// too heavy to render in jsdom, so those tests scan this file's text).
 
+import { lazy, Suspense, type ComponentType } from "react";
 import AnnotationTextDialog from "./components/overlays/AnnotationTextDialog";
 import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
@@ -17,33 +31,51 @@ import Toaster from "./components/overlays/Toaster";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import WhatIsThis from "./components/overlays/WhatIsThis";
 import InteractionHints from "./components/overlays/InteractionHints";
-import BaselinePanel from "./components/workshops/baseline/BaselinePanel";
-import CalculatorsPanel from "./components/workshops/calculators/CalculatorsPanel";
-import DatasetMathPanel from "./components/workshops/datasetmath/DatasetMathPanel";
-import TabulatePanel from "./components/workshops/tabulate/TabulatePanel";
-import DistributionPanel from "./components/workshops/distribution/DistributionPanel";
-import ReportPanel from "./components/workshops/report/ReportPanel";
-import StatsChooserPanel from "./components/workshops/statschooser/StatsChooserPanel";
-import PeakWizardPanel from "./components/workshops/peakwizard/PeakWizardPanel";
-import ImportWizardPanel from "./components/workshops/importwizard/ImportWizardPanel";
-import PipelinePanel from "./components/workshops/pipeline/PipelinePanel";
-import DataFilterPanel from "./components/workshops/datafilter/DataFilterPanel";
-import ColumnSwitcher from "./components/workshops/switcher/ColumnSwitcher";
-import FigureBuilderView from "./components/workshops/figurebuilder/FigureBuilderView";
-import FigurePageView from "./components/workshops/figurepage/FigurePageView";
-import GraphBuilderPanel from "./components/workshops/graphbuilder/GraphBuilderPanel";
-import CurveFitPanel from "./components/workshops/curvefit/CurveFitPanel";
-import HysteresisPanel from "./components/workshops/hysteresis/HysteresisPanel";
-import MagToolsPanel from "./components/workshops/magtools/MagToolsPanel";
-import PeaksPanel from "./components/workshops/peaks/PeaksPanel";
-import ReflectivityPanel from "./components/workshops/reflectivity/ReflectivityPanel";
-import ReductionsPanel from "./components/workshops/reductions/ReductionsPanel";
-import RsmPanel from "./components/workshops/rsm/RsmPanel";
-import DigitizerView from "./components/workshops/digitizer/DigitizerView";
-import WaterfallView from "./components/workshops/waterfall/WaterfallView";
 import SqliteQueryDialog from "./components/workshops/database/SqliteQueryDialog";
-import ReflView from "./components/workshops/reflview/ReflView";
 import { useApp } from "./store/useApp";
+
+/** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
+ *  Suspense boundary. The per-panel boundary is the point: with one shared
+ *  boundary, opening a second panel would suspend the whole subtree and blank
+ *  an already-open panel while the new chunk loaded. `fallback={null}` because
+ *  these are overlays served from localhost — the chunk arrives in a frame or
+ *  two, and a spinner would flash more than it informs. */
+function lazyPanel(load: () => Promise<{ default: ComponentType }>): ComponentType {
+  const Panel = lazy(load);
+  return function LazyPanel() {
+    return (
+      <Suspense fallback={null}>
+        <Panel />
+      </Suspense>
+    );
+  };
+}
+
+const BaselinePanel = lazyPanel(() => import("./components/workshops/baseline/BaselinePanel"));
+const CalculatorsPanel = lazyPanel(() => import("./components/workshops/calculators/CalculatorsPanel"));
+const DatasetMathPanel = lazyPanel(() => import("./components/workshops/datasetmath/DatasetMathPanel"));
+const TabulatePanel = lazyPanel(() => import("./components/workshops/tabulate/TabulatePanel"));
+const DistributionPanel = lazyPanel(() => import("./components/workshops/distribution/DistributionPanel"));
+const ReportPanel = lazyPanel(() => import("./components/workshops/report/ReportPanel"));
+const StatsChooserPanel = lazyPanel(() => import("./components/workshops/statschooser/StatsChooserPanel"));
+const PeakWizardPanel = lazyPanel(() => import("./components/workshops/peakwizard/PeakWizardPanel"));
+const ImportWizardPanel = lazyPanel(() => import("./components/workshops/importwizard/ImportWizardPanel"));
+const PipelinePanel = lazyPanel(() => import("./components/workshops/pipeline/PipelinePanel"));
+const DataFilterPanel = lazyPanel(() => import("./components/workshops/datafilter/DataFilterPanel"));
+const ColumnSwitcher = lazyPanel(() => import("./components/workshops/switcher/ColumnSwitcher"));
+const FigureBuilderView = lazyPanel(() => import("./components/workshops/figurebuilder/FigureBuilderView"));
+const FigurePageView = lazyPanel(() => import("./components/workshops/figurepage/FigurePageView"));
+const GraphBuilderPanel = lazyPanel(() => import("./components/workshops/graphbuilder/GraphBuilderPanel"));
+const CurveFitPanel = lazyPanel(() => import("./components/workshops/curvefit/CurveFitPanel"));
+const HysteresisPanel = lazyPanel(() => import("./components/workshops/hysteresis/HysteresisPanel"));
+const MagToolsPanel = lazyPanel(() => import("./components/workshops/magtools/MagToolsPanel"));
+const PeaksPanel = lazyPanel(() => import("./components/workshops/peaks/PeaksPanel"));
+const ReflectivityPanel = lazyPanel(() => import("./components/workshops/reflectivity/ReflectivityPanel"));
+const ReductionsPanel = lazyPanel(() => import("./components/workshops/reductions/ReductionsPanel"));
+const RsmPanel = lazyPanel(() => import("./components/workshops/rsm/RsmPanel"));
+const DigitizerView = lazyPanel(() => import("./components/workshops/digitizer/DigitizerView"));
+const WaterfallView = lazyPanel(() => import("./components/workshops/waterfall/WaterfallView"));
+const ReflView = lazyPanel(() => import("./components/workshops/reflview/ReflView"));
 
 export default function AppOverlays() {
   const curveFitOpen = useApp((s) => s.curveFitOpen);

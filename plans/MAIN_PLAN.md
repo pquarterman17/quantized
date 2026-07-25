@@ -119,20 +119,8 @@ shipped or already represented as an owner gate / blocked row before the
 delete — these two were the only residue booked nowhere. Full audit text
 in git history @ `e4f6590`.)*
 
-29. **Frontend bundle code-splitting** — the production SPA emits ONE
-    JavaScript chunk and Vite's 500 kB warning has fired since at least
-    2026-07-12. Measured 2026-07-25: **1,120.96 kB** (gzip 338.55 kB),
-    up from ~969 kB at audit time — it regresses as features land
-    because nothing bounds it. Not a correctness issue; it is startup
-    parse/compile cost, paid on every launch.
-    - [ ] Lazy-load the flag-gated workshop panels — `AppOverlays.tsx`
-          statically imports 26 panels that render only when their
-          `open` flag is true, so a user who opens one pays for all 26
-    - [ ] Keep the always-mounted dialogs eager (they mount on load;
-          lazying them buys nothing and adds a fallback flash)
-    - [ ] Add a size ratchet so the win is locked in and the next
-          feature cannot silently re-inflate it (the
-          `size-ratchet-every-language` habit, applied to the bundle)
+~~29. **Frontend bundle code-splitting**~~ COMPLETED 2026-07-25 (see
+    Completed).
 
 30. **Fit-recipe residual fields** — `FitSpec` became a reproducible
     recipe (`xKey`/`yKey`/`weight`/`params`/`exitFlag`), closing the
@@ -227,6 +215,43 @@ in git history @ `e4f6590`.)*
   `statRender.ts`/`useStatStage.ts` split candidates.
 
 ## Completed
+
+- ~~**#29 Frontend bundle code-splitting**~~ (2026-07-25) — eager JS
+  **1,120,960 B → 932,219 B (−16.8%)**; gzip 338.55 → 288.44 kB. The 25
+  flag-gated workshop panels in `AppOverlays.tsx` became `lazyPanel(...)`
+  dynamic imports, so opening one panel no longer downloads all 25; they
+  now emit 25 on-demand chunks (0.28–24.22 kB).
+  - **Per-panel Suspense boundaries, not one shared boundary.** A single
+    boundary would suspend the whole subtree when a second panel opened,
+    blanking an already-open panel while the new chunk loaded. Wrapping
+    at the IMPORT site (`lazyPanel` returns a component that owns its own
+    `<Suspense fallback={null}>`) isolates suspension per panel.
+  - **The JSX block is byte-identical.** Three tests
+    (SplitDatasetDialog / TextFormatHelp / ReductionsPanel) assert
+    against this file's RAW SOURCE TEXT because the App tree is too heavy
+    for jsdom. Wrapping at the import site rather than the render site
+    meant the mount lines never changed and all three stayed green.
+  - **Eager on purpose:** the always-mounted dialogs (they mount on load,
+    so lazying only adds a fallback flash) and `SqliteQueryDialog`, which
+    self-gates on a `SHOW_SQLITE_QUERY` window event registered in a
+    `useEffect` — it must stay mounted to hear it at all.
+  - **Ratchet:** `frontend/scripts/check-bundle-size.mjs`, wired into
+    `npm run build` so CI enforces it for free. It budgets *eager* JS
+    (entry + `modulepreload` chunks, parsed out of the built
+    `index.html`) — a truer number than Vite's largest-single-chunk
+    warning, because it measures what the browser fetches before it can
+    paint. Pinned at 972,000 B with 40 kB slack; going over fails, and so
+    does dropping well under (that demands the pin be lowered, which is
+    what locks a gain in). Both failure branches were verified by
+    planting violations — a gate that never fails is indistinguishable
+    from a disabled one.
+  - **Honest residual:** the entry chunk is still 702 kB, so Vite's
+    generic 500 kB warning still prints. That warning was deliberately
+    NOT silenced. Going below it would mean splitting the plot path,
+    which is the app's primary view and on the startup critical path —
+    deferring it would move cost around rather than remove it. Verified:
+    frontend 4,248 tests / 302 files + build green; repo-integrity guard
+    3 passed; `AppOverlays.tsx` 149 lines vs the ~400 ceiling.
 
 - ~~**#28 Widen rich-text labels: fractions, roots, sums**~~ (2026-07-12,
   3 staged commits on `feat/richtext-widen`) — the `$...$` label subset
