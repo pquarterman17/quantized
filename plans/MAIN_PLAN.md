@@ -10,7 +10,9 @@ via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-07-12
+**Updated:** 2026-07-25 (plan-tree consolidation: the two orphan
+ChatGPT-"Sol" audit docs were absorbed and deleted — their un-booked
+residue is now items 29–30 below)
 
 ---
 
@@ -30,6 +32,21 @@ Six residue plans were folded up into this doc and archived on
 GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP — each was ≤3 open items. Their
 `## Completed` histories live in `plans/archive/`. Provenance is kept on
 every folded item below.
+
+Two orphan audit docs were absorbed and **deleted** on 2026-07-25:
+`SOL_FEATURE_GUI_INTERACTION_AUDIT.md` (924 lines) and
+`SOL_ORIGINPRO_REPLACEMENT_AUDIT.md` (261 lines). Neither declared a
+parent or appeared in the BACKLOG dashboard, and the first carried 257
+permanently-unchecked boxes that were *not* current status — so
+`GUI_INTERACTION_PLAN.md` had to keep a standing disclaimer warning
+readers off them. That is the plan-consolidation rule's warning sign
+exactly (an interim artifact alive next to the plan it spawned). Before
+deleting, every finding was checked against the code: the analysis-
+selection contract, convergence diagnostics and autosave findings are
+shipped; the pipeline residual is shipped (`executeSteps.ts` replays a
+typed per-step fit spec); the Origin-migration and owner-decision
+findings are already tracked as gates or blocked rows. The only residue
+booked nowhere became items 29–30.
 
 ### Cross-plan dependencies
 - GOTO #4 (fig composer) + #5 (rich text) gate the PNR half of the
@@ -94,6 +111,38 @@ GOTO #11 drift (implemented but listed open).
 ~~10. **Re-import from source file**~~ COMPLETED 2026-07-11 (see Completed).
 
 ## Tier 2 — Medium Impact
+
+*(items 29–30 folded up 2026-07-25 from the two orphan ChatGPT-"Sol"
+audit docs, which were absorbed and deleted the same day per the
+plan-consolidation rule. Every OTHER Sol finding was verified either
+shipped or already represented as an owner gate / blocked row before the
+delete — these two were the only residue booked nowhere. Full audit text
+in git history @ `e4f6590`.)*
+
+29. **Frontend bundle code-splitting** — the production SPA emits ONE
+    JavaScript chunk and Vite's 500 kB warning has fired since at least
+    2026-07-12. Measured 2026-07-25: **1,120.96 kB** (gzip 338.55 kB),
+    up from ~969 kB at audit time — it regresses as features land
+    because nothing bounds it. Not a correctness issue; it is startup
+    parse/compile cost, paid on every launch.
+    - [ ] Lazy-load the flag-gated workshop panels — `AppOverlays.tsx`
+          statically imports 26 panels that render only when their
+          `open` flag is true, so a user who opens one pays for all 26
+    - [ ] Keep the always-mounted dialogs eager (they mount on load;
+          lazying them buys nothing and adds a fallback flash)
+    - [ ] Add a size ratchet so the win is locked in and the next
+          feature cannot silently re-inflate it (the
+          `size-ratchet-every-language` habit, applied to the bundle)
+
+30. **Fit-recipe residual fields** — `FitSpec` became a reproducible
+    recipe (`xKey`/`yKey`/`weight`/`params`/`exitFlag`), closing the
+    channel and weighting half of the audit's provenance finding. The
+    remainder is genuinely open: explicit fit range, starting values,
+    parameter bounds, covariance/uncertainty method, and preprocessing
+    state — plus a UI distinction between a historical result and a
+    recomputed one. Partly constrained by design: registry fits expose
+    no user bounds, so those fields can only be captured as the
+    weighted/equation fit paths surface them.
 
 ~~12. **Reciprocal (Arrhenius) axis scale**~~ COMPLETED 2026-07-11 (see
     Completed).

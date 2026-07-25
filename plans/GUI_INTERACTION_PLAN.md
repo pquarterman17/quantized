@@ -19,9 +19,9 @@ migration edges, which is owner-dependent. Prior: 2026-07-19 19:49 EDT, secure
 read-only SQLite query connector added as the first database integration in
 the stacked feature series.)
 **Parent:** MAIN_PLAN.md
-**Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
-at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
-live tracker, update here, not there).
+**Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12. The raw audit was
+absorbed and DELETED on 2026-07-25 (plan-consolidation rule) — full text in git
+history @ `e4f6590`. THIS file is the live tracker and always was.
 
 ---
 
@@ -78,9 +78,10 @@ plotting, publication export.
 ### 2026-07-19 status reconciliation
 
 This audit re-read current `main`, recent history, the live plan, and the raw Sol
-source audit. The raw `SOL_FEATURE_GUI_INTERACTION_AUDIT.md` intentionally keeps
-its original unchecked boxes for provenance; they are **not** current status.
-Use this section plus Completed below to avoid duplicating Claude's campaign.
+source audit. (That raw audit kept its original unchecked boxes for provenance
+even though they were **not** current status — needing this disclaimer at all is
+why it was absorbed and deleted on 2026-07-25.) Use this section plus Completed
+below to avoid duplicating Claude's campaign.
 
 Already shipped and verified — do not rebuild:
 - weighted fitting from plotted error columns (#4);
