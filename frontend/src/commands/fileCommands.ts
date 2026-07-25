@@ -166,7 +166,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "File",
       label: "Clear autosaved workspace…",
       run: () => {
-        clearAutosave();
+        void clearAutosave();
         s().setStatus("autosaved workspace cleared (current library unchanged)");
       },
     },

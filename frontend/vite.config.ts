@@ -24,5 +24,14 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
+    // Vitest's 5 s default is too tight for this suite's canvas/uPlot-heavy
+    // tests once the full 300+ file run is executing in parallel: a DIFFERENT
+    // file (StatStage, WindowCanvas, …) would time out on each run while every
+    // one of them passed in isolation and in pairs. That is a scheduling
+    // symptom, not a defect, and it matches the repo's existing note that
+    // Windows runs ~5-6x slower and needs generous timing bounds. Raising this
+    // weakens no assertion — it only changes how long a genuinely hung test
+    // takes to fail.
+    testTimeout: 20_000,
   },
 });

@@ -5,7 +5,8 @@
 
 import { useEffect } from "react";
 
-import { loadAutosave, saveAutosave } from "./lib/autosave";
+import { autosaveHealth, loadAutosave, saveAutosave } from "./lib/autosave";
+import { reportAutosaveHealth } from "./store/autosaveStatus";
 import { useApp, type AppState } from "./store/useApp";
 
 /** Every store field serialized into a .dwk workspace. Keep this list in one
@@ -52,12 +53,19 @@ export function useWorkspaceAutosave(): void {
 
   // Restore the autosaved library once on startup (before any new import).
   useEffect(() => {
-    const restored = loadAutosave();
-    if (restored?.datasets.length) {
+    // Async since #32 (IndexedDB has no sync mode). `cancelled` guards the
+    // StrictMode double-invoke and an unmount mid-read — restoring into a
+    // torn-down store would clobber whatever the user did in between.
+    let cancelled = false;
+    void loadAutosave().then((restored) => {
+      if (cancelled || !restored?.datasets.length) return;
       useApp.getState().loadWorkspace(restored);
       const n = restored.datasets.length;
       setStatus(`restored ${n} dataset${n === 1 ? "" : "s"} from autosave`);
-    }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [setStatus]);
 
   // Debounced autosave whenever the library changes (identity comparisons).
@@ -84,9 +92,14 @@ export function useWorkspaceAutosave(): void {
         // `windowsForSave()` freezes the FOCUSED window's live view into its
         // record first (the plan's "save is one of the three sanctioned
         // snapshot points") — never persist `s.plotWindows` raw.
-        if (!saveAutosave({ ...s, plotWindows: s.windowsForSave() })) {
-          useApp.getState().setStatus("autosave skipped (storage full or unavailable)");
-        }
+        void saveAutosave({ ...s, plotWindows: s.windowsForSave() }).then((ok) => {
+          // #32: report through the store so the warning PERSISTS until the
+          // next successful save, instead of a status line that scrolls away.
+          reportAutosaveHealth(autosaveHealth());
+          if (!ok) {
+            useApp.getState().setStatus("autosave failed (storage full or unavailable)");
+          }
+        });
       }, 800);
     });
     return () => {
