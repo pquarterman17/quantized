@@ -11,8 +11,13 @@ for a publication tool outrank any discoverability gap.
 
 **Status:** Active
 **Created:** 2026-07-12
-**Updated:** 2026-07-19 19:49 EDT (secure read-only SQLite query connector added
-as the first database integration in the stacked feature series)
+**Updated:** 2026-07-24 (reconciliation: the #2 Plot Objects tree owner gate
+is struck as MOOT — the large bet was taken and delivered by PR #66 on
+2026-07-19, but the gate above it was never closed. With #1/#2/#5 shipped and
+#17 complete, the ONLY unchecked box left in this plan is #16's `.opju`
+migration edges, which is owner-dependent. Prior: 2026-07-19 19:49 EDT, secure
+read-only SQLite query connector added as the first database integration in
+the stacked feature series.)
 **Parent:** MAIN_PLAN.md
 **Origin:** ChatGPT-"Sol" GUI interaction audit, 2026-07-12 (raw audit preserved
 at `plans/SOL_FEATURE_GUI_INTERACTION_AUDIT.md` — reference only; THIS file is the
@@ -455,8 +460,13 @@ feature checklist.
   arbitrary plotted X/Y baseline subtraction creates a derived dataset carrying
   explicit channel provenance so the raw source and unrelated channels remain
   untouched.
-- **Plot Objects tree scope (#2)** — full Origin-style Object Manager is a large
-  bet; confirm it's wanted vs. better-signposted existing gestures + undo.
+- ~~**Plot Objects tree scope (#2)**~~ **RESOLVED / MOOT** (2026-07-24
+  reconciliation) — the gate asked whether to take the large bet. It was taken
+  and DELIVERED on 2026-07-19 (Codex PR #66) as a bounded Inspector extension
+  rather than a full Origin-style Object Manager: two-way selection sync,
+  row actions mapped onto the channel model, and multi-select align/distribute/
+  group with one named undo transaction per bulk command. Every #2 sub-item is
+  struck; the gate had simply never been closed behind it.
 - **Shared AnalysisSelection contract** — the OriginPro audit wants ONE selection
   contract across fitting/peaks/baseline/magnetometry; #4 shipped a small shared
   `lib/fitweights` helper as the seed. Decide when to generalize it into the full

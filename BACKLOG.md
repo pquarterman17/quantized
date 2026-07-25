@@ -6,14 +6,40 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-21, after the three index-staleness follow-ups
+**Last reconciled:** 2026-07-24 — a FULL reconciliation pass, prompted by
+finding that several rows below had gone stale against the plans they derive
+from. What changed:
+
+- **ORIGIN #54's generalized page/layer MODEL is COMPLETE.** Pass B (the y2
+  singleton) shipped `50b4c9c`, joining A + C. One pure `lib/axisspec.ts`
+  now owns the y2 representation and derivation; the pass surfaced a real
+  screen-vs-export divergence (the spatial page export omitted `y2_fmt`
+  entirely, so a non-default Y tick format formatted the primary axis only).
+  Corpus swept both ways: identical, zero regressions. #54's only remaining
+  sub-item is the specimen-gated >2-Y-axes rendering, which is evidence-
+  blocked, not actionable — it has moved to the blocked table.
+- **Security: 13 of 14 Dependabot alerts CLOSED** (`c63f7af`) — pillow
+  12.2.0→12.3.0 (10 high + 3 medium) and setuptools 82.0.1→83.0.0. Only the
+  upstream-blocked `glib` alert remains. All ten open Dependabot PRs were
+  applied in that one commit, plus TypeScript 5.9.3→7.0.2 (`f398ac9`).
+- **Four owner gates were already answered and are struck below** — GOTO Q6
+  (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and SHIPPED
+  on 2026-07-19; GUI #1 (undo scopes) and #5 (baseline framing) were RESOLVED
+  the same day during the Codex-stack review; GUI #2 (Plot Objects tree
+  scope) was delivered by PR #66, so its gate is moot.
+- **GUI #17 is fully complete** — the three items this file still listed as
+  remaining (split buttons, the cross-menu ownership move, first-run
+  interaction hints) are all struck in the plan.
+- **v0.11.1 is the version in `pyproject.toml`** (v0.10.0 in the old note
+  below was two releases stale).
+
+Prior: 2026-07-21, after the three index-staleness follow-ups
 booked 2026-07-19 ALL shipped (background-window view remap, spec re-key by
 label, corrections overlay-clear — see the section below), plus a fourth
 `reimportDataset` view-scoped clear found and fixed while working the first.
 Prior: 2026-07-19, after ORIGIN_FILE_DECODE #54's page/layer
 model passes A + C shipped (composition discriminated union replacing the three
-parallel panel arrays, then PlotSpec's reserved `page` block filled); pass B
-(the y2 singleton) is the remaining open dev work on that row. Prior context:
+parallel panel arrays, then PlotSpec's reserved `page` block filled). Prior context:
 2026-07-18, after the six-PR Origin visual-import stack
 merged and received an independent tip verification (frontend 3,759 + build,
 18/18 Playwright, full corpus baseline-identical). The last full regeneration
@@ -43,11 +69,26 @@ From `GUI_INTERACTION_PLAN.md` (see it for the full tiered list + per-item
 detail). Owner-gated items in that plan (#1 undo scopes, #2 tree scope, #5
 baseline framing) are under Owner actions below, not here.
 
+**As of the 2026-07-24 reconciliation this table is EMPTY of unblocked,
+un-gated dev work.** Both rows that stood here on 2026-07-21 are closed:
+ORIGIN #54's page/layer model (pass B shipped `50b4c9c` — see the header)
+and GUI #17's polish tail (all three "remaining" items were already struck
+in the plan). What is left across every active plan is owner gates, sample-
+blocked items, and deliberate deferrals — the three tables below.
+
+The one dev item that is neither gated nor blocked is a judgment call the
+plan explicitly parked for the owner rather than a task:
+
 | Item | Plan / item |
 |------|-------------|
-| Larger bets / polish: unified select→edit Plot Objects tree (#2, owner-gate scope), owner-dependent Origin gaps (#16) | GUI_INTERACTION Tier 1–3 |
-| **#17 polish — 5 slices SHIPPED 2026-07-19**: platform-correct shortcuts everywhere (`42b4174` — menus/palette showed macOS glyphs on Windows while the Help sheet said Ctrl), one canonical palette label, destructive dialog separation (`2bb2b04`), cheat-sheet drift fixed + guarded (`8b66988` — undo/redo/paste/Preferences were missing from Help), and sub-topic headers for the Analyze/Data/Plot menus (`a13e273`, `3947d8d`). Also fixed FIVE real data-loss defects of one class (a destructive action reachable on a path that skips the confirm an equivalent path applies): unconfirmed dataset delete on the Library row's ✕ (`320df6f`), unconfirmed calculator-history wipe (`9593165`), and — found by then sweeping the whole class (`c09befc`) — **Open workspace (.dwk)… silently discarding the entire session with no confirm and no undo** (while the LESS destructive "Remove all…" did both, and autosave overwrote the recovery record within ~1s), plus one-click deletes of saved figure docs and saved reports. Also shipped the Help build-out IN FULL (`f5e9162`/`315d31a`/`9bc4daa`/`6af84e9`): a searchable Help hub — Topics (all 17 tools), Keyboard & mouse, Importing data (fixed the .opj/.opju file-dialog drift), From Origin (12 migration tips) — plus a `What is this?` inspect mode that outlines documented controls and reveals their help instantly. All five Help sub-items done. REMAINING #17 work: split buttons for last-used tool; the cross-menu ownership move; first-run interaction hints | GUI_INTERACTION #17 |
-| **Origin layout generality residual** — overlay grouping generalized past pairs (`adab0cc`, corpus 12/12·99/99·4/4 clean) AND y2 export twinx fix (`08b7066`: single-figure export no longer flattens y2 onto the wrong axis) AND page-export y2 (GUI #12 slice 4b: `routes/export_page.py`'s 422 guard replaced with real `figure_y2.render_with_secondary_axis` threading per panel; `lib/spatialPageExport.ts` no longer filters y2 channels/fails a y2-only panel closed) ALL SHIPPED 2026-07-18; remaining: native >2-Y-axes rendering (specimen-gated) + the generalized page/layer MODEL, now landing in three passes — **A (composition union, `5cdc730`) and C (`page` block, `4dbe9da`) SHIPPED 2026-07-19**, leaving **pass B: unify the y2 singleton behind one shared AxisSpec** (six fields mirrored 4x across store/PlotView/SpatialPanel/AxesBlock, plus two incompatible axis-membership representations; representation only — >2 Y axes stays specimen-gated) | ORIGIN_FILE_DECODE #54 |
+| `clearShapes` ("Clear all" in ShapesCard) — a one-click, un-undoable BULK wipe of N hand-placed shapes, riding on a confirm-exemption policy written for deleting them ONE at a time. Arguably in the spirit of the documented canvas-object exception, arguably not; the 2026-07-19 destructive-action class sweep flagged it and deliberately left it | GUI_INTERACTION #17 (open judgment call) |
+| Owner-dependent Origin feature gaps — prioritize ONLY from real projects (#16); its one open sub-item is `.opju` migration edges (matrix books, some 2-D instrument data), which needs owner-supplied real files to prioritize | GUI_INTERACTION #16 |
+
+(The two rows that stood here through 2026-07-21 — GUI #17's polish tail and
+the ORIGIN #54 layout-generality residual — are CLOSED as of 2026-07-24 and
+have been removed per the plan-hygiene archival rule. Their outcomes live in
+the respective plans' Completed/struck entries; the header above summarizes
+what landed. Do not re-add shipped work here.)
 
 ### Index-staleness follow-ups (booked 2026-07-19 by a class sweep)
 
@@ -105,11 +146,45 @@ re-sweep periodically.
 | **Dependabot alert #1 — `glib` unsoundness (medium), BLOCKED UPSTREAM, owner call** | security |
 | **Apache-2.0 copyright holder line** for LICENSE/NOTICE | PORT_PLAN #1 |
 | **Code-signing cert + auto-update E2E** (two consecutive signed releases to verify the updater) | MAIN gate (was PORT #47/#49 residue) |
-| **GOTO owner gates** — 3-D (Q4), worksheet reshape (Q6), date-time axes (Q7), signal-processing non-goal (Q8), switch-trigger project pick + start timing (Q9; protocol in the plan's Context) | GOTO_PLAN Owner gates |
-| **Undo scopes** — one unified stack vs. scoped undo (visual/data/org) + separate zoom/pan view-history; decide before building #1 | GUI_INTERACTION #1 gate |
-| **Baseline: frontend channel-bind vs. backend corrections-DAG** — cross-audit contradiction; scope before starting #5 | GUI_INTERACTION #5 gate |
-| **Plot Objects tree scope** — full Origin-style Object Manager vs. better-signposted gestures + undo (large bet) | GUI_INTERACTION #2 gate |
+| **GOTO owner gates** — 3-D (Q4), signal-processing non-goal (Q8), switch-trigger project pick + start timing (Q9; protocol in the plan's Context). ~~Q6 worksheet reshape~~ and ~~Q7 date-time axes~~ were DECIDED YES and SHIPPED 2026-07-19 (Codex PRs #67/#68) — struck here 2026-07-24 | GOTO_PLAN Owner gates |
 | **Shared AnalysisSelection contract timing** — when to generalize the #4 `lib/fitweights` seed into the full cross-workflow selection contract | GUI_INTERACTION gate |
+| ~~**Undo scopes** (#1)~~ **RESOLVED 2026-07-19** — one flat current-session EDIT history (data + visual/layout + organization) with a SEPARATE Back/Forward view history for zoom/pan/autoscale; neither persists across restart. Owner-approved during the Codex-stack review; #1 shipped behind it | GUI_INTERACTION #1 gate |
+| ~~**Baseline: frontend channel-bind vs. backend corrections-DAG** (#5)~~ **RESOLVED 2026-07-19** — the established DAG stays authoritative for its default time/value-0 channel; an arbitrary plotted X/Y baseline subtracts into a DERIVED dataset carrying explicit channel provenance, so the raw source and unrelated channels are never silently rewritten | GUI_INTERACTION #5 gate |
+| ~~**Plot Objects tree scope** (#2)~~ **MOOT 2026-07-24** — the large bet was taken and delivered (PR #66) as a bounded Inspector extension, not a full Object Manager; every #2 sub-item is struck. The gate was simply never closed behind the shipped work | GUI_INTERACTION #2 gate |
+
+### Dependency security (swept 2026-07-24 — 13 of 14 alerts CLOSED)
+
+`c63f7af` applied all ten open Dependabot PRs in one commit. They fell into
+three mutually-conflicting groups (`uv.lock` ×3, frontend lock ×3, workflows
+×4), so merging them serially would have meant nine rebase waits for no
+added safety.
+
+- **pillow 12.2.0 → 12.3.0 closed 13 alerts** (10 high, 3 medium): heap
+  out-of-bounds writes in `ImageCmsTransform.apply()`, `Image.paste`/`crop`,
+  `ImageFilter.RankFilter` and the mmap path, plus several
+  decompression-bomb-check bypasses (`GdImageFile`, `BdfFontFile`,
+  `FontFile.compile`, `PcfFontFile`) and an EPS infinite loop. Pillow is NOT
+  a declared dependency — it arrives transitively via `matplotlib`, which
+  `routes/export` renders user-supplied data through, so the exposure is
+  real. This is also why the whole class was missing from this file: the
+  repo enforces a dependency *policy* (Apache-2.0, no GPL) but has no
+  standing check on transitive *vulnerability* surface. Re-sweep with
+  `gh api repos/:owner/:repo/dependabot/alerts` periodically.
+- **setuptools 82.0.1 → 83.0.0** closed the fourteenth (MANIFEST.in
+  exclusion bypass via Unicode NFC/NFD collision on macOS).
+- `npm audit` separately flagged a high-severity unbounded-expansion DoS in
+  `brace-expansion`; fixed in the same pass. Frontend is at 0
+  vulnerabilities.
+- CI action versions had drifted to an inconsistent v4/v6/v7 mix across the
+  five workflows; now uniform (checkout v7, setup-node v7, upload-artifact
+  v7, download-artifact v8).
+- **TypeScript 5.9.3 → 7.0.2** (`f398ac9`) was held back since 2026-07-13 as
+  the one major bump deserving a deliberate call, because `npm run build` is
+  `tsc -b && vite build` — TypeScript IS this repo's type-check gate. Adopted
+  only after a forced full `tsc -b --force` came back clean, the emitted
+  bundle hashes proved byte-identical, and a PLANTED type error confirmed the
+  gate still fails (zero errors from a major bump is also what a silently
+  disabled checker looks like).
 
 ### Dependabot alert #1 (investigated 2026-07-19 — no action available)
 
@@ -141,6 +216,7 @@ impls for `glib::VariantStrIter`. Medium, runtime scope, `src-tauri/Cargo.lock`.
 | Rigaku `.raw` 2-D RSM — reverse-engineered header has no ω field | a multi-range Rigaku RSM sample arrives | PORT_PLAN #10 / PORT_CHECKLIST W1 |
 | Consolidated-CSV polarized-asymmetry path (shared-Q interp + ++/−− spin asymmetry) | files with ++/−− polarization metadata | PORT_PLAN #12 / PORT_CHECKLIST W1 |
 | Origin graphic objects / rich annotations (#53) | controlled specimens plus Origin COM/LabTalk and rendered-output oracles establish each object record, with negative controls and a plausible corpus distribution | ORIGIN_FILE_DECODE #53 (subsumes #47) |
+| Native >2-Y-axes rendering (#54's last open sub-item; moved here 2026-07-24 now that the page/layer MODEL is complete) | a corpus figure with a proven ≥3-coincident-axis composition exists AND the decoder can attribute a third axis — today `figure_text._TITLE_OBJECT_BUCKETS` buckets only YL/YR titles. Until then the ≥3 case fails closed with provenance + a toast (the Graph25 discipline: don't build unproven mechanisms) | ORIGIN_FILE_DECODE #54 |
 
 ## Deliberate deferrals (decision gates — revisit on demand, don't schedule)
 
@@ -163,7 +239,7 @@ the root; every active plan below is its declared sub-plan.
 |------|--------|-----------|
 | `plans/MAIN_PLAN.md` | Active (ROOT) | owner gates + deferrals only — MAIN #9–#28 ALL shipped 2026-07-11/12 (zero open dev items) |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
-| `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates Q4/Q6/Q7/Q8/Q9 |
-| `plans/GUI_INTERACTION_PLAN.md` | Active | Tier 1 #1,#2,#5 (all owner-gated) + Tier 3 #16–#17 open; #8, #11, #12 CLOSED and #15 fully covered except the #1-gated folder-undo journey, ALL 2026-07-18 (#8: palette bridge + mini-toolbar + worksheet/window/annotation retrofits; #11: stat-mark faceting end-to-end; #12: PlotSpec v2 canonical spec (display/axes/decor blocks) across Stage/Graph Builder/Figure Builder/export — all 5 slices + parts A (y2Fmt)/B (grouped-series export)/C (decor: annotations/shapes/legend) shipped same day, `page` block deferred to ORIGIN_FILE_DECODE #54; #15: channel-drag + annotation/shape + window-arrange journeys, e2e 33/33 across the zoom matrix); #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = stat-mark faceting; arbitrary multi-panel ordering belongs to #54), #15 core harness + 7 journeys SHIPPED 2026-07-17 and export round-trip SHIPPED 2026-07-18 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
-| `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#52 complete; #54 page-setup control + spatial-export residual + overlap/inset layout slice ALL SHIPPED 2026-07-17 (Codex PR #55); visual-import campaign #58–#63 ALL SHIPPED 2026-07-18 (Codex stack #56–#61 `854271c`: spatial legends, region bands, imported-view + spatial-page export parity, saved-preview window, presentation templates); open = #53 graphic objects (evidence-gated; subsumes #47), #54 generalized page/layer model + >2 Y axes; #55 tooling is complete and #55/#56 close on owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
+| `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates **Q4/Q8/Q9 only** — Q6 (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and shipped 2026-07-19 |
+| `plans/GUI_INTERACTION_PLAN.md` | Active | **Tier 1 #1, #2, #5 ALL SHIPPED 2026-07-19** (Codex PRs #65/#66 + the two gate resolutions); **#17 CLOSED** (its last three items — split buttons, cross-menu ownership move, first-run hints — are struck); the ONLY open box in the whole plan is #16's `.opju` migration edges (owner-dependent). Remaining gates: the AnalysisSelection contract timing. Historical: #8, #11, #12 CLOSED and #15 fully covered except the #1-gated folder-undo journey, ALL 2026-07-18 (#8: palette bridge + mini-toolbar + worksheet/window/annotation retrofits; #11: stat-mark faceting end-to-end; #12: PlotSpec v2 canonical spec (display/axes/decor blocks) across Stage/Graph Builder/Figure Builder/export — all 5 slices + parts A (y2Fmt)/B (grouped-series export)/C (decor: annotations/shapes/legend) shipped same day, `page` block deferred to ORIGIN_FILE_DECODE #54; #15: channel-drag + annotation/shape + window-arrange journeys, e2e 33/33 across the zoom matrix); #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = stat-mark faceting; arbitrary multi-panel ordering belongs to #54), #15 core harness + 7 journeys SHIPPED 2026-07-17 and export round-trip SHIPPED 2026-07-18 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
+| `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#52 complete; #54 page-setup control + spatial-export residual + overlap/inset layout slice ALL SHIPPED 2026-07-17 (Codex PR #55); visual-import campaign #58–#63 ALL SHIPPED 2026-07-18 (Codex stack #56–#61 `854271c`: spatial legends, region bands, imported-view + spatial-page export parity, saved-preview window, presentation templates); **#54's generalized page/layer MODEL is COMPLETE — pass B shipped `50b4c9c` 2026-07-24**, joining A + C; open = #53 graphic objects (evidence-gated; subsumes #47) and #54's specimen-gated >2-Y-axes rendering (now in the blocked table); #55 tooling is complete and #55/#56 close on owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |

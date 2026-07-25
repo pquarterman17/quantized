@@ -14,7 +14,15 @@ trustworthy (W7). Gap analysis: see Context.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-03
-**Updated:** 2026-07-18 (visual-import campaign: the ENTIRE six-PR Codex
+**Updated:** 2026-07-24 (#54's generalized page/layer MODEL is now COMPLETE:
+pass B — the y2 singleton — shipped `50b4c9c`, joining passes A and C from
+2026-07-19. One pure `lib/axisspec.ts` replaces the y2 derivation each
+consumer used to hand-copy, and the pass found a real screen-vs-export
+divergence: the spatial page export omitted `y2_fmt` entirely, so any
+non-default Y tick format formatted the primary axis and not the secondary.
+Corpus swept before and after: identical (25 pre-existing renderer failures
+both ways, Moke 12/12 clean). What remains open under #54 is ONLY the
+specimen-gated >2-Y-axes rendering. Prior: 2026-07-18 (visual-import campaign: the ENTIRE six-PR Codex
 stack #56–#61 reviewed + merged to main `854271c` — items #58–#63 below:
 spatial panel legends (#56), spatial region bands (#57), imported-view
 figure-export parity (#58), spatial-page export content parity (#59),
@@ -707,11 +715,13 @@ Official model references used for this routing:
       — a real 3rd axis needs a specimen + decode evidence first (the
       Graph25 discipline: don't build unproven mechanisms). Until then the
       ≥3 case fails closed with provenance + toast (above).
-    - [ ] **Generalized page/layer MODEL** (replace the singleton y2/panel
+    - [x] **Generalized page/layer MODEL** (replace the singleton y2/panel
       state branches with one explicit layer model) — design belongs with
       GUI_INTERACTION #12's canonical plot spec; keep the two in one
-      architecture conversation, not two competing ones. Landing in three
-      passes; **A and C SHIPPED 2026-07-19**, B is the remaining open work.
+      architecture conversation, not two competing ones. Landed in three
+      passes; **A and C SHIPPED 2026-07-19, B SHIPPED 2026-07-24 — the item
+      is COMPLETE.** What remains under #54 is only the specimen-gated
+      >2-Y-axes rendering above, which is deliberately not a modelling task.
       - [x] **Pass A — the composition union** (`5cdc730`). The three
         parallel nullable store fields `spatialPanels`/`facetPanels`/
         `breakPanels` were mutually exclusive BY CONVENTION ONLY: seven
@@ -740,17 +750,28 @@ Official model references used for this routing:
         re-derives from `zones.facet` on send. One pinned divergence: `setup`
         reuses `pagesetup.sanitizePageSetup` (the shared `.dwk` gate), which
         CLAMPS where sibling fields DROP. Frontend 4064 + build green.
-      - [ ] **Pass B — the y2 singleton.** Six fields (`y2Keys`/`y2Lim`/
-        `y2Scale`/`y2Step`/`y2Fmt`/`y2AxisLabel`) are mirrored FOUR times:
-        the store, `PlotView`, `SpatialPanel` (as `y2Log`, a live divergence),
-        and `AxesBlock.y2`. Axis membership is expressed two incompatible
-        ways — a `y2Keys` index array in the store vs a per-mark
-        `axis?: 0 | 1` tag on the wire/render side. Unify the REPRESENTATION
-        behind one shared `AxisSpec` WITHOUT generalizing cardinality (>2 Y
-        axes stays specimen-gated above — the Graph25 discipline). The payoff
-        is removing the duplicated y2 derivation between
-        `exportFigureCommand` and `spatialPageExport` that produced the
-        `08b7066` y2-flattening bug.
+      - [x] **Pass B — the y2 singleton** (2026-07-24, `50b4c9c`). The six
+        fields (`y2Keys`/`y2Lim`/`y2Scale`/`y2Step`/`y2Fmt`/`y2AxisLabel`)
+        were mirrored FOUR times — the store/`PlotView`, `SpatialPanel` (as
+        `y2Log`, a live divergence), `AxesBlock.y2`, and each consumer's own
+        re-derivation — with membership expressed two incompatible ways
+        (`y2Keys` index array vs a per-mark `axis?: 0 | 1` tag). The new pure
+        `lib/axisspec.ts` states it ONCE: `SecondaryAxisSpec` (null = inherit
+        the primary scale/format, the rule the screen already applies), one
+        `resolveSecondaryAxis`, one wire builder, one adapter per mirror.
+        Cardinality deliberately NOT generalized.
+        **It found a real bug, which is the point of the pass:** a
+        `SpatialPanel` has no y2 tick format, and the page-export hand-copy
+        sent `y_fmt` while omitting `y2_fmt`. The backend has no inherit rule
+        (`calc/figure_y2.draw_secondary_axes` → `apply_tick_formats`, `None`
+        = no formatter), so a page export with any non-default Y tick format
+        drew a formatted primary axis beside a default-formatted secondary
+        one — while the screen formatted both. The single-figure path had
+        applied the rule all along; only the copy missed it. Same family as
+        `08b7066`. Regression test verified fail-before/pass-after by
+        reverting the fix line, and the Origin corpus swept BOTH ways came
+        back identical (25 pre-existing renderer failures either way; Moke
+        12/12 clean) — zero regressions.
 
 ### Tier 3 — acceptance and handoff
 

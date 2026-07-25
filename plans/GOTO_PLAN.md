@@ -10,7 +10,10 @@ plan-consolidation rule; full text in git history @ `4e97e6d`).
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-07-10
-**Updated:** 2026-07-11
+**Updated:** 2026-07-24 (header sync — Q6 worksheet reshape and Q7 date-time
+axes were DECIDED YES and shipped on 2026-07-19 in the plan body, but this
+date and BACKLOG.md still listed them as open gates. Remaining gates: Q4, Q8,
+Q9.)
 
 ---
 
