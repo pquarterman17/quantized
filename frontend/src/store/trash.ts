@@ -42,6 +42,10 @@ export function evictTrash(
 }
 
 export interface TrashSlice {
+  /** Trash panel visibility. Lives here rather than on useApp: it is trash's
+   *  own UI state, and useApp sits at its size ratchet. */
+  trashOpen: boolean;
+  setTrashOpen: (trashOpen: boolean) => void;
   /** Newest first. Session-scoped: deliberately NOT serialized into a `.dwk`,
    *  which is a portable description of a workspace, not a wastebasket. */
   trash: TrashEntry[];
@@ -59,6 +63,8 @@ type SliceGet = () => AppState;
 export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
   return {
     trash: [],
+    trashOpen: false,
+    setTrashOpen: (trashOpen) => set({ trashOpen }),
 
     sendToTrash: (datasets, now = Date.now()) => {
       if (datasets.length === 0) return;

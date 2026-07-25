@@ -171,7 +171,8 @@ already gone stale.)*
     - Foundation for #32 and #38. Reuse the existing source-linked
       reimport contract rather than creating a second one.
 
-32. **Durable autosave, crash recovery, and bounded project trash** —
+~~32. **Durable autosave, crash recovery, and bounded project trash**~~
+    COMPLETED 2026-07-25 —
     autosave writes the whole workspace to one `localStorage` slot
     (`lib/autosave.ts`, key `qz.autosave`), whose own header notes large
     libraries "can exceed the ~5 MB quota". There is no durable
@@ -180,10 +181,10 @@ already gone stale.)*
     "autosave skipped (storage full or unavailable)" — but a transient
     status line is weaker than a persistent, actionable error for the
     default home of experimental work.
-    **All three slices shipped 2026-07-25.** Durable multi-generation store
-    + health (`6464498`), crash detection (`7fb58ae`), dataset trash
-    (`feat/project-trash`). Residual: a trash VIEW, and extending trash
-    beyond datasets to folders.
+    **SHIPPED 2026-07-25** — durable multi-generation store + health
+    (`6464498`), crash detection (`7fb58ae`), dataset trash
+    (`4460937`) and its view. Residual: extending trash beyond datasets to
+    folders and other project objects.
     - [x] Durable backing store: IndexedDB where the engine has it
           (`lib/autosaveBackend.ts`), localStorage as a one-generation
           fallback so no browser is worse off than before, in-memory as
@@ -209,9 +210,12 @@ already gone stale.)*
           count (25) and age (7 days), evicted oldest-first on every send,
           with restore and purge actions (`store/trash.ts`). Trash is not a
           duplicate of undo: undo is session-scoped, trash answers "I
-          deleted that and only noticed later". NOT covered: folders and
-          other project objects, and there is no trash VIEW yet — the
-          actions exist and are tested, the UI surface does not
+          deleted that and only noticed later". The VIEW shipped 2026-07-25
+          (Data ▸ Trash): restore is one click, Delete Permanently is
+          two-step, and the eviction rules are STATED — an entry vanishing
+          unannounced teaches users the trash cannot be trusted, which is
+          worse than not having one. NOT covered: folders and other project
+          objects, datasets only
     - [x] Raw source files are never rewritten or placed in trash — the
           autosave layer only ever writes serialized workspace text to its
           own store; it has no path to a source file

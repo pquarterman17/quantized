@@ -27,6 +27,15 @@ export function buildDataCommands(s: StoreGet): Action[] {
       run: () => window.dispatchEvent(new Event(SHOW_SQLITE_QUERY)),
     },
     {
+      // MAIN #32: the trash shipped with restore/purge already tested, but no
+      // way to SEE it — a safety net nobody can find is not one.
+      id: "trash",
+      group: "Data",
+      section: "Import & query",
+      label: "Trash (restore deleted datasets)…",
+      run: () => s().setTrashOpen(true),
+    },
+    {
       id: "dataset-math",
       group: "Data",
       section: "Combine & split",
