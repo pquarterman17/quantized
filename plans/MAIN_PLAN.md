@@ -151,9 +151,9 @@ already gone stale.)*
     "autosave skipped (storage full or unavailable)" — but a transient
     status line is weaker than a persistent, actionable error for the
     default home of experimental work.
-    **Slice 1 shipped 2026-07-25** (`6464498`) — the durable store, the
-    generations, and the health readout. Slices 2 (startup recovery
-    prompt) and 3 (project trash) remain.
+    **Slices 1 + 2 shipped 2026-07-25** (`6464498`, `feat/crash-recovery`)
+    — the durable store, the generations, the health readout, and crash
+    detection. Slice 3 (project trash) remains.
     - [x] Durable backing store: IndexedDB where the engine has it
           (`lib/autosaveBackend.ts`), localStorage as a one-generation
           fallback so no browser is worse off than before, in-memory as
@@ -166,9 +166,15 @@ already gone stale.)*
     - [x] UI shows last successful save, current health, and a persistent
           actionable error when saving fails (status bar, `role="alert"`,
           stays until the next SUCCESS)
-    - [ ] Startup offers recovery only when the copy is newer or the
-          prior session ended uncleanly — TODAY it still restores
-          unconditionally, as it always has; needs a clean-shutdown marker
+    - [x] Startup distinguishes an ordinary restore from a CRASH recovery
+          (`lib/sessionMarker.ts`: a flag set at startup and cleared on
+          `beforeunload`/`pagehide`; still present next launch = the prior
+          session never ran its unload handler). Deliberate deviation from
+          the original wording: restore stays UNCONDITIONAL, because this
+          is a workspace app and users expect their library back — a prompt
+          on every launch would be worse. What was actually missing was the
+          distinction, so a crash now raises a toast telling the user to
+          check their latest edits, and an ordinary close stays silent
     - [ ] Deleted project objects enter a recoverable trash with age and
           size caps, visible cleanup rules, Restore / Delete Permanently
     - [x] Raw source files are never rewritten or placed in trash — the

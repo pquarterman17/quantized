@@ -6,7 +6,9 @@
 import { useEffect } from "react";
 
 import { autosaveHealth, loadAutosave, saveAutosave } from "./lib/autosave";
+import { installSessionMarker, priorSessionEnd } from "./lib/sessionMarker";
 import { reportAutosaveHealth } from "./store/autosaveStatus";
+import { toast } from "./store/toasts";
 import { useApp, type AppState } from "./store/useApp";
 
 /** Every store field serialized into a .dwk workspace. Keep this list in one
@@ -57,14 +59,29 @@ export function useWorkspaceAutosave(): void {
     // StrictMode double-invoke and an unmount mid-read — restoring into a
     // torn-down store would clobber whatever the user did in between.
     let cancelled = false;
+    // Read how the PREVIOUS session ended before marking this one active —
+    // installSessionMarker overwrites the flag.
+    const priorEnd = priorSessionEnd();
+    const teardown = installSessionMarker();
     void loadAutosave().then((restored) => {
       if (cancelled || !restored?.datasets.length) return;
       useApp.getState().loadWorkspace(restored);
       const n = restored.datasets.length;
-      setStatus(`restored ${n} dataset${n === 1 ? "" : "s"} from autosave`);
+      const what = `${n} dataset${n === 1 ? "" : "s"}`;
+      // #32: restoring is unremarkable after an ordinary close, but after a
+      // CRASH the user should be told — that is the case where the last few
+      // seconds may be missing and the workspace is worth checking. Toast
+      // only in that case, so the notice means something when it appears.
+      if (priorEnd === "unclean") {
+        setStatus(`recovered ${what} after an unexpected close`);
+        toast(`Recovered ${what} after an unexpected close — check your latest edits`, "info");
+      } else {
+        setStatus(`restored ${what} from autosave`);
+      }
     });
     return () => {
       cancelled = true;
+      teardown();
     };
   }, [setStatus]);
 
