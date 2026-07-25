@@ -191,3 +191,47 @@ describe("CorrectionsCard rescaling (MAIN #37)", () => {
     expect(opSelect("X scale").value).toBe("×");
   });
 });
+
+describe("CorrectionsCard rescale relabel (MAIN #37)", () => {
+  function scaleInput(label: "X scale" | "Y scale"): HTMLInputElement {
+    const row = screen.getByText(label).closest(".qz-meta-row");
+    return row?.querySelector("input") as HTMLInputElement;
+  }
+  function labelInput(label: "X label" | "Y label"): HTMLInputElement {
+    const row = screen.getByText(label).closest(".qz-meta-row");
+    return row?.querySelector("input") as HTMLInputElement;
+  }
+
+  it("hides the relabel fields until a scale is actually entered", () => {
+    render(<CorrectionsCard active={d1} />);
+    expect(screen.queryByText("X label")).not.toBeInTheDocument();
+    expect(screen.queryByText("Y label")).not.toBeInTheDocument();
+  });
+
+  it("reveals them once a scale is set — the moment a unit can go stale", () => {
+    render(<CorrectionsCard active={d1} />);
+    fireEvent.change(scaleInput("Y scale"), { target: { value: "1000" } });
+    expect(screen.getByText("X label")).toBeInTheDocument();
+    expect(screen.getByText("Y label")).toBeInTheDocument();
+  });
+
+  it("applies the axis relabel in the SAME operation as the scale", async () => {
+    render(<CorrectionsCard active={d1} />);
+    fireEvent.change(scaleInput("Y scale"), { target: { value: "1000" } });
+    fireEvent.change(labelInput("Y label"), { target: { value: "Moment (memu)" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(applyCorrectionsApi).toHaveBeenCalled());
+    await waitFor(() => expect(useApp.getState().yAxisLabel).toBe("Moment (memu)"));
+    // …and the scale still went with it.
+    expect(vi.mocked(applyCorrectionsApi).mock.calls[0][0].params.yScale).toBe(1000);
+  });
+
+  it("leaves an axis label untouched when its field is blank", async () => {
+    useApp.setState({ yAxisLabel: "original" });
+    render(<CorrectionsCard active={d1} />);
+    fireEvent.change(scaleInput("Y scale"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(applyCorrectionsApi).toHaveBeenCalled());
+    expect(useApp.getState().yAxisLabel).toBe("original");
+  });
+});

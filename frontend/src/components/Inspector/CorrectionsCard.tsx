@@ -7,13 +7,9 @@ import { useState } from "react";
 
 import { Button, Card, Checkbox, NumberField, Select } from "../primitives";
 import { fromMultiplier, toMultiplier, type ScaleOp } from "../../lib/rescale";
+import RescaleFields from "./RescaleFields";
 import type { CorrectionParams, Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-
-const SCALE_OPS: { value: ScaleOp; label: ScaleOp }[] = [
-  { value: "×", label: "×" },
-  { value: "÷", label: "÷" },
-];
 
 const NORM_METHODS = [
   "None",
@@ -38,6 +34,11 @@ interface FormState {
   xScaleVal: string;
   yScaleOp: ScaleOp;
   yScaleVal: string;
+  // Optional axis relabel applied WITH the scale (MAIN #37): blank leaves
+  // the label alone. Rescaling is the moment a unit string goes stale, so
+  // fixing it has to be available in the same operation.
+  xLabelText: string;
+  yLabelText: string;
   bgSlope: string;
   bgInt: string;
   xTrimMin: string;
@@ -66,6 +67,8 @@ function initialForm(active: Dataset | null): FormState {
     xScaleVal: fromMultiplier(c?.xScale),
     yScaleOp: "×",
     yScaleVal: fromMultiplier(c?.yScale),
+    xLabelText: "",
+    yLabelText: "",
     bgSlope: s(c?.bgSlope),
     bgInt: s(c?.bgInt),
     xTrimMin: s(c?.xTrimMin),
@@ -137,17 +140,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-/** Inline validation note (MAIN #37). `role="alert"` so the reason Apply is
- *  disabled is announced, not just coloured — same convention as the fit
- *  convergence warnings. */
-function FieldNote({ children }: { children: React.ReactNode }) {
-  return (
-    <div role="alert" className="qz-meta-row" style={{ color: "var(--danger, #d33)" }}>
-      {children}
-    </div>
-  );
-}
-
 export default function CorrectionsCard({ active }: { active: Dataset | null }) {
   const applyCorrections = useApp((s) => s.applyCorrections);
   const resetCorrections = useApp((s) => s.resetCorrections);
@@ -197,6 +189,14 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
           ? { bgAnchors: prior.bgAnchors, bgAnchorMethod: prior.bgAnchorMethod }
           : {};
       await applyCorrections(active.id, { ...buildParams(form), ...anchorFields }, bg);
+      // MAIN #37: relabel in the SAME operation, so a rescaled axis never
+      // keeps a unit string that no longer matches the numbers. Blank = leave
+      // it alone. These are the same store overrides the axis-label menu and
+      // the figure export already read, and they record their own undo entry.
+      const xl = form.xLabelText.trim();
+      const yl = form.yLabelText.trim();
+      if (xl) useApp.getState().setXAxisLabel(xl);
+      if (yl) useApp.getState().setYAxisLabel(yl);
     } finally {
       setBusy(false);
     }
@@ -214,40 +214,17 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
       <Field label="Y offset">
         <NumberField value={form.yOff} placeholder="0" onChange={(v) => upd("yOff", v)} />
       </Field>
-      <Field label="X scale">
-        <div style={{ display: "flex", gap: 4 }}>
-          <Select
-            options={SCALE_OPS}
-            value={form.xScaleOp}
-            onChange={(e) => upd("xScaleOp", e.target.value as ScaleOp)}
-            style={{ width: 52 }}
-            title="Multiply or divide the X axis by a factor"
-          />
-          <NumberField
-            value={form.xScaleVal}
-            placeholder="1"
-            onChange={(v) => upd("xScaleVal", v)}
-          />
-        </div>
-      </Field>
-      {xScaleIssue && <FieldNote>X scale {xScaleIssue}</FieldNote>}
-      <Field label="Y scale">
-        <div style={{ display: "flex", gap: 4 }}>
-          <Select
-            options={SCALE_OPS}
-            value={form.yScaleOp}
-            onChange={(e) => upd("yScaleOp", e.target.value as ScaleOp)}
-            style={{ width: 52 }}
-            title="Multiply or divide every Y channel (error channels scale with them)"
-          />
-          <NumberField
-            value={form.yScaleVal}
-            placeholder="1"
-            onChange={(v) => upd("yScaleVal", v)}
-          />
-        </div>
-      </Field>
-      {yScaleIssue && <FieldNote>Y scale {yScaleIssue}</FieldNote>}
+      <RescaleFields
+        xScaleOp={form.xScaleOp}
+        xScaleVal={form.xScaleVal}
+        yScaleOp={form.yScaleOp}
+        yScaleVal={form.yScaleVal}
+        xLabelText={form.xLabelText}
+        yLabelText={form.yLabelText}
+        xScaleIssue={xScaleIssue}
+        yScaleIssue={yScaleIssue}
+        onChange={(k, v) => upd(k, v as never)}
+      />
       <Field label="BG slope">
         <NumberField value={form.bgSlope} placeholder="0" onChange={(v) => upd("bgSlope", v)} />
       </Field>

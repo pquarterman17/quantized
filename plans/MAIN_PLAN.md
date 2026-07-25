@@ -247,15 +247,15 @@ in git history @ `e4f6590`.)*
     `plotExport.plotPngBlob`'s own docstring calls it "a quick raster
     grab of exactly what's on screen". The expected workflow is seconds
     from finished plot to PowerPoint or Word.
-    **Substantially shipped 2026-07-25** (see Completed); two sub-items
-    remain, both needing backend work rather than wiring.
-    - [x] Copy Figure puts a 300-DPI PNG on the clipboard via the
-          publication render path — **but always on the renderer's
-          default background.** Transparent-or-white is NOT a choice yet:
-          `calc/figure.py`'s `fig.savefig` never passes `transparent=`,
-          so there is nothing to expose. Threading that flag through
-          savefig → the route schema → `FigureSpec` → a preference is the
-          real remaining work
+    **Substantially shipped 2026-07-25** (see Completed); one sub-item
+    remains (clipboard SVG).
+    - [x] Copy Figure puts a 300-DPI transparent-or-white PNG (user
+          preference) on the clipboard via the publication render path —
+          `transparent=` now threads through BOTH render paths (the main
+          one and figure_break's broken-axis renderer), the route schema,
+          `FigureSpec`, and a Preferences ▸ Plot control. Opaque stays the
+          default at every layer, with tests pinning that an omitted field
+          still renders alpha=255
     - [ ] SVG offered where the platform clipboard supports it; Windows
           EMF stays separately scoped
     - [x] Copied output matches Figure Builder/export for limits, ticks,
@@ -288,7 +288,8 @@ in git history @ `e4f6590`.)*
           axes, clipped/off-scale bars
     - Implement AFTER #33 defines durable roles and `DataStruct` metadata.
 
-37. **Arbitrary non-destructive X/Y rescaling** — `CorrectionParams`
+~~37. **Arbitrary non-destructive X/Y rescaling**~~ COMPLETED 2026-07-25 —
+    `CorrectionParams`
     carried `xOff`/`yOff` offsets but no scale factor, so multiplying or
     dividing a channel for inconvenient units or normalization was not
     possible without rewriting data. **Substantially shipped 2026-07-25**
@@ -296,9 +297,15 @@ in git history @ `e4f6590`.)*
     - [x] Corrections offer X and Y multiply/divide by a validated
           numeric factor — ×/÷ rows in the Corrections card, existing
           Apply / Reset serving as commit and revert
-    - [ ] Labels/units updatable in the same operation — NOT done; the
-          scale changes the numbers but the unit string still says the
-          old unit, so this is the honest remaining gap
+    - [x] Labels/units updatable in the same operation — X/Y label fields
+          appear in the Corrections card as soon as a scale is entered
+          (exactly when a unit string is about to stop matching the
+          numbers) and apply with it. They set the axis-label overrides
+          the screen, copy and export all already read. NOTE: per-channel
+          `DataStruct.units` are deliberately NOT rewritten — a uniform
+          yScale across channels with different units cannot produce one
+          correct unit string, so the axis label the reader actually sees
+          is the honest place to fix this
     - [x] Undoable, recorded in provenance, recomputable, round-trips
           through project/template save — all inherited, none re-built:
           `store/corrections.ts` already calls
