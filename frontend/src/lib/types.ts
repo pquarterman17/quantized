@@ -852,6 +852,15 @@ export interface CorrectionParams {
   footprintW?: number;
   footprintL?: number;
   footprintTwoTheta?: boolean;
+  /** MAIN_PLAN #37 arbitrary rescaling — the literal MULTIPLIER for x / y.
+   *  The Corrections card offers ×/÷ but stores 1/v for a division, so this is
+   *  the single stored representation (see `lib/rescale.ts`). Applied FIRST in
+   *  the backend pipeline (step 0), so every other correction on this object —
+   *  trims, offsets, bg slope/intercept, anchors — is expressed in the SCALED
+   *  units the user sees on the plot. Absent or 1 = no-op; the backend rejects
+   *  zero/non-finite with a 422. */
+  xScale?: number;
+  yScale?: number;
 }
 
 // ── Import wizard (ORIGIN_GAP_PLAN #40) ─────────────────────────────────────

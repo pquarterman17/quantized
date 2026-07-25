@@ -6,8 +6,14 @@
 import { useState } from "react";
 
 import { Button, Card, Checkbox, NumberField, Select } from "../primitives";
+import { fromMultiplier, toMultiplier, type ScaleOp } from "../../lib/rescale";
 import type { CorrectionParams, Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+
+const SCALE_OPS: { value: ScaleOp; label: ScaleOp }[] = [
+  { value: "×", label: "×" },
+  { value: "÷", label: "÷" },
+];
 
 const NORM_METHODS = [
   "None",
@@ -26,6 +32,12 @@ const opts = (xs: string[]) => xs.map((v) => ({ value: v, label: v }));
 interface FormState {
   xOff: string;
   yOff: string;
+  // MAIN #37 rescaling. The op is input sugar only — buildParams folds it into
+  // the stored multiplier, so reloading a "÷ 10" shows "× 0.1" by design.
+  xScaleOp: ScaleOp;
+  xScaleVal: string;
+  yScaleOp: ScaleOp;
+  yScaleVal: string;
   bgSlope: string;
   bgInt: string;
   xTrimMin: string;
@@ -50,6 +62,10 @@ function initialForm(active: Dataset | null): FormState {
   return {
     xOff: s(c?.xOff),
     yOff: s(c?.yOff),
+    xScaleOp: "×",
+    xScaleVal: fromMultiplier(c?.xScale),
+    yScaleOp: "×",
+    yScaleVal: fromMultiplier(c?.yScale),
     bgSlope: s(c?.bgSlope),
     bgInt: s(c?.bgInt),
     xTrimMin: s(c?.xTrimMin),
@@ -81,6 +97,11 @@ function buildParams(f: FormState): CorrectionParams {
   };
   set("xOff", num(f.xOff));
   set("yOff", num(f.yOff));
+  // MAIN #37: fold the ×/÷ operator into the single stored multiplier. An
+  // invalid entry contributes nothing — Apply is already disabled by
+  // `scaleIssues`, so this only guards against a stale form.
+  set("xScale", toMultiplier(f.xScaleOp, f.xScaleVal).multiplier);
+  set("yScale", toMultiplier(f.yScaleOp, f.yScaleVal).multiplier);
   set("bgSlope", num(f.bgSlope));
   set("bgInt", num(f.bgInt));
   set("xTrimMin", num(f.xTrimMin));
@@ -116,6 +137,17 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+/** Inline validation note (MAIN #37). `role="alert"` so the reason Apply is
+ *  disabled is announced, not just coloured — same convention as the fit
+ *  convergence warnings. */
+function FieldNote({ children }: { children: React.ReactNode }) {
+  return (
+    <div role="alert" className="qz-meta-row" style={{ color: "var(--danger, #d33)" }}>
+      {children}
+    </div>
+  );
+}
+
 export default function CorrectionsCard({ active }: { active: Dataset | null }) {
   const applyCorrections = useApp((s) => s.applyCorrections);
   const resetCorrections = useApp((s) => s.resetCorrections);
@@ -143,6 +175,13 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
       </Card>
     );
   }
+
+  // MAIN #37: validate locally so the user sees WHY before a round trip. The
+  // backend re-validates independently (422) — this is the fast half, never
+  // the only guard.
+  const xScaleIssue = toMultiplier(form.xScaleOp, form.xScaleVal).issue;
+  const yScaleIssue = toMultiplier(form.yScaleOp, form.yScaleVal).issue;
+  const hasScaleIssue = Boolean(xScaleIssue || yScaleIssue);
 
   const onApply = async () => {
     setBusy(true);
@@ -175,6 +214,40 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
       <Field label="Y offset">
         <NumberField value={form.yOff} placeholder="0" onChange={(v) => upd("yOff", v)} />
       </Field>
+      <Field label="X scale">
+        <div style={{ display: "flex", gap: 4 }}>
+          <Select
+            options={SCALE_OPS}
+            value={form.xScaleOp}
+            onChange={(e) => upd("xScaleOp", e.target.value as ScaleOp)}
+            style={{ width: 52 }}
+            title="Multiply or divide the X axis by a factor"
+          />
+          <NumberField
+            value={form.xScaleVal}
+            placeholder="1"
+            onChange={(v) => upd("xScaleVal", v)}
+          />
+        </div>
+      </Field>
+      {xScaleIssue && <FieldNote>X scale {xScaleIssue}</FieldNote>}
+      <Field label="Y scale">
+        <div style={{ display: "flex", gap: 4 }}>
+          <Select
+            options={SCALE_OPS}
+            value={form.yScaleOp}
+            onChange={(e) => upd("yScaleOp", e.target.value as ScaleOp)}
+            style={{ width: 52 }}
+            title="Multiply or divide every Y channel (error channels scale with them)"
+          />
+          <NumberField
+            value={form.yScaleVal}
+            placeholder="1"
+            onChange={(v) => upd("yScaleVal", v)}
+          />
+        </div>
+      </Field>
+      {yScaleIssue && <FieldNote>Y scale {yScaleIssue}</FieldNote>}
       <Field label="BG slope">
         <NumberField value={form.bgSlope} placeholder="0" onChange={(v) => upd("bgSlope", v)} />
       </Field>
@@ -284,7 +357,7 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
       </Field>
 
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <Button variant="primary" size="sm" disabled={busy} onClick={onApply}>
+        <Button variant="primary" size="sm" disabled={busy || hasScaleIssue} onClick={onApply}>
           {busy ? "Applying…" : "Apply"}
         </Button>
         <Button variant="ghost" size="sm" disabled={busy || !active.raw} onClick={onReset}>

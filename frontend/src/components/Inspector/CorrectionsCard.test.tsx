@@ -111,3 +111,83 @@ describe("CorrectionsCard beam footprint (GOTO #7b)", () => {
     expect(applyCorrectionsApi).toHaveBeenCalledWith({ dataset: sample, params: {} });
   });
 });
+
+describe("CorrectionsCard rescaling (MAIN #37)", () => {
+  /** The number input sitting next to a given ×/÷ operator select. */
+  function scaleInput(label: "X scale" | "Y scale"): HTMLInputElement {
+    const row = screen.getByText(label).closest(".qz-meta-row");
+    if (!row) throw new Error(`no row for ${label}`);
+    const input = row.querySelector("input");
+    if (!input) throw new Error(`no input in the ${label} row`);
+    return input as HTMLInputElement;
+  }
+  function opSelect(label: "X scale" | "Y scale"): HTMLSelectElement {
+    const row = screen.getByText(label).closest(".qz-meta-row");
+    const sel = row?.querySelector("select");
+    if (!sel) throw new Error(`no operator select in the ${label} row`);
+    return sel as HTMLSelectElement;
+  }
+  const apply = () => fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+  it("sends a multiply straight through as the stored multiplier", async () => {
+    render(<CorrectionsCard active={d1} />);
+    fireEvent.change(scaleInput("Y scale"), { target: { value: "1000" } });
+    apply();
+    await waitFor(() => expect(applyCorrectionsApi).toHaveBeenCalled());
+    const { params } = vi.mocked(applyCorrectionsApi).mock.calls[0][0];
+    expect(params.yScale).toBe(1000);
+  });
+
+  it("stores a division as its reciprocal", async () => {
+    render(<CorrectionsCard active={d1} />);
+    fireEvent.change(opSelect("X scale"), { target: { value: "÷" } });
+    fireEvent.change(scaleInput("X scale"), { target: { value: "10" } });
+    apply();
+    await waitFor(() => expect(applyCorrectionsApi).toHaveBeenCalled());
+    expect(vi.mocked(applyCorrectionsApi).mock.calls[0][0].params.xScale).toBe(0.1);
+  });
+
+  it("omits the scale entirely when the field is blank", async () => {
+    render(<CorrectionsCard active={d1} />);
+    apply();
+    await waitFor(() => expect(applyCorrectionsApi).toHaveBeenCalled());
+    const { params } = vi.mocked(applyCorrectionsApi).mock.calls[0][0];
+    expect(params.xScale).toBeUndefined();
+    expect(params.yScale).toBeUndefined();
+  });
+
+  it("blocks Apply and says why on a zero factor", () => {
+    render(<CorrectionsCard active={d1} />);
+    fireEvent.change(opSelect("Y scale"), { target: { value: "÷" } });
+    fireEvent.change(scaleInput("Y scale"), { target: { value: "0" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("cannot divide by zero");
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+  });
+
+  it("blocks Apply on non-numeric text", () => {
+    render(<CorrectionsCard active={d1} />);
+    fireEvent.change(scaleInput("X scale"), { target: { value: "abc" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("must be a finite number");
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+  });
+
+  it("re-enables Apply once the bad factor is cleared", () => {
+    render(<CorrectionsCard active={d1} />);
+    const input = scaleInput("X scale");
+    fireEvent.change(input, { target: { value: "0" } });
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+    fireEvent.change(input, { target: { value: "" } });
+    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("re-opens a stored multiplier verbatim, as × (documented round-trip)", () => {
+    // "÷ 10" was stored as 0.1; the multiplier IS the stored truth, so it
+    // comes back as "× 0.1" rather than resurrecting a second field.
+    const scaled: Dataset = { ...d1, corrections: { xScale: 0.1 } };
+    useApp.setState({ datasets: [scaled, bgDs], activeId: "d1" });
+    render(<CorrectionsCard active={scaled} />);
+    expect(scaleInput("X scale").value).toBe("0.1");
+    expect(opSelect("X scale").value).toBe("×");
+  });
+});
