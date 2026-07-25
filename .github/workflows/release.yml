@@ -55,7 +55,7 @@ jobs:
             updater-glob: ""
             server-archive: qz-server-linux.tar.gz
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Linux build deps (Tauri)
         if: runner.os == 'Linux'
@@ -65,7 +65,7 @@ jobs:
             libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf \
             libayatana-appindicator3-dev libxdo-dev file
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
