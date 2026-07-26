@@ -35,6 +35,22 @@ describe("primitives", () => {
     });
   });
 
+  // Regression: the `?` action used to be a bare sibling of a bare title text
+  // node, so the summary's own text content became "Axes?" and an e2e locator
+  // querying the title by EXACT text stopped matching. The title must stay an
+  // isolated node no matter what else the header carries.
+  it("Card keeps the title queryable by exact text alongside header actions", () => {
+    render(
+      <Card title="Axes" count={3} defaultOpen={false} helpTopic="axis scale">
+        body
+      </Card>,
+    );
+    // Exact-text lookup must resolve to one node whose text is only the title.
+    expect(screen.getByText("Axes", { selector: "*" }).textContent).toBe("Axes");
+    // ...and the decorative glyph must not contribute an accessible name.
+    expect(screen.getByRole("button", { name: "Help for Axes" })).toBeInTheDocument();
+  });
+
   it("MetaRow shows label and value", () => {
     render(<MetaRow label="Points" value={201} />);
     expect(screen.getByText("Points")).toBeInTheDocument();

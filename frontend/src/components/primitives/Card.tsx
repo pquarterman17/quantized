@@ -22,7 +22,15 @@ export default function Card({
   return (
     <details className="qz-card" open={defaultOpen}>
       <summary>
-        {title}
+        {/* The title is its OWN node, never a bare text child of <summary>.
+            Every affordance in this header (the count badge, the `?` action,
+            whatever comes next) is a sibling inside <summary>, so a bare text
+            child would fuse with them: adding `?` turned the summary's text
+            content from "Axes" into "Axes?" and broke an e2e locator that had
+            queried the title by exact text. Keeping the title wrapped means
+            text queries and the summary's accessible name stay clean however
+            many controls this header grows. */}
+        <span className="qz-card-heading">{title}</span>
         {count != null && (
           <span className="qz-badge" style={{ marginLeft: "auto" }}>
             {count}
@@ -42,7 +50,8 @@ export default function Card({
               openHelpTopic(helpTopic);
             }}
           >
-            ?
+            {/* Decorative: the accessible name comes from aria-label above. */}
+            <span aria-hidden="true">?</span>
           </button>
         )}
       </summary>
