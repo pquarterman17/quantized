@@ -3,10 +3,12 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-07-26 (P0.3 fixtures/generator/checklists shipped `9d4ce6d`;
-P0.4 unblocked; new P1.4 import-boundary evidence — see the session log. The
-`P0.1`-style IDs remain the stable identifiers cited by BACKLOG rows and PR
-history)
+**Updated:** 2026-07-26 (P0.3 fixtures/generator/checklists shipped `9d4ce6d`
+AND P0.4's core envelope shipped + first dated run `5a2ce6e`/`5c938b9` —
+synthesis in `docs/performance_envelope.md`; two evidence-backed follow-ups
+booked under P0.4; new P1.4 import-boundary evidence — see the session log.
+The `P0.1`-style IDs remain the stable identifiers cited by BACKLOG rows and
+PR history)
 **Audit author:** ChatGPT-Sol
 **Audited baseline:** Quantized 0.11.1, commit `261cd3a` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -240,22 +242,64 @@ profiling. **Dependency:** P0.3 fixtures (shipped 2026-07-26 —
 Measure import, first render, interaction, memory, save/autosave, reopen,
 copy/export, and cleanup for:
 
-- [ ] 1 million-row numeric worksheet;
-- [ ] several large 2-D matrix sizes;
-- [ ] 50+ datasets and 20+ plot windows;
-- [ ] a large `.dwk` with derived data, figures, and results;
-- [ ] dense multi-series plots before/after downsampling;
-- [ ] network/offline source transitions.
+- [x] 1 million-row numeric worksheet (import/plot/interaction/memory
+  measured 2026-07-26; worksheet-GRID interaction, save/reopen and
+  copy/export at 1M remain residuals);
+- [x] several large 2-D matrix sizes (backend 500²/1000²/2000² measured;
+  browser-side map interaction is a residual);
+- [x] 50+ datasets and 20+ plot windows;
+- [ ] a large `.dwk` with derived data, figures, and results (F4 covered a
+  50-small-dataset/20-window session — cheap; derived data + a 1M-row
+  member untested);
+- [x] dense multi-series plots before/after downsampling ("after" is n/a —
+  NO plot-path downsampler exists; that absence is the finding);
+- [ ] network/offline source transitions (unmeasurable until P1.1 creates
+  an offline-vs-deleted distinction; re-measure after P1.1).
 
 **Acceptance**
 
-- [ ] Every result records hardware, fixture, command, and measurement.
-- [ ] Direct manipulation targets <100 ms.
+- [x] Every result records hardware, fixture, command, and measurement
+  (`docs/envelope/2026-07-26-*.json`).
+- [ ] Direct manipulation targets <100 ms — MEASURED 2026-07-26: pan meets
+  it everywhere (≤60 ms even at 7M points); zoom misses at scale (p95
+  259 ms at 1M×7, 122 ms at 20×100k). Re-check after the point-reduction
+  follow-up ships.
 - [ ] Operations >500 ms have suitable busy/progress feedback; safe long jobs
-  offer cancellation.
-- [ ] Failed thresholds have profiles.
-- [ ] WebGL/workers/downsampling/chunked arrays/format changes are booked only
-  where evidence supports them.
+  offer cancellation (not audited this pass; F1's ~14–28 s import is the
+  case to audit first).
+- [ ] Failed thresholds have profiles (mechanism-level attribution exists —
+  no point reduction; import small-object churn — formal profiles only if
+  the follow-ups' fixes dispute it).
+- [x] WebGL/workers/downsampling/chunked arrays/format changes are booked only
+  where evidence supports them (downsampling + import efficiency booked
+  below; WebGL/workers/chunked arrays deliberately NOT booked — no evidence;
+  P1.2 format change answered "not at 50-dataset scale").
+
+**Progress (2026-07-26):** core envelope SHIPPED — backend harness
+(`tools/baselines/envelope.py`, `5a2ce6e`) + frontend harness
+(`tools/bench/frontend_envelope.mjs`, real app end-to-end, `5c938b9`) +
+first dated run on the Ryzen 7800X3D machine. Raw records in
+`docs/envelope/`, synthesis + residuals in `docs/performance_envelope.md`.
+P0.4 stays open for the residuals above.
+
+**Booked follow-ups (evidence-backed, 2026-07-26 run):**
+
+- [ ] Wire point reduction into the interactive plot path.
+  `frontend/src/lib/downsample.ts` (min/max bucketing) is real and tested
+  but feeds only Library sparklines; the uPlot path (`usePlotPayload` →
+  `plotdata.buildColumns`) plots every raw point and `/api/plot/series`
+  ships **78 MB of JSON** for 1M×7. Evidence: zoom p95 259 ms / 122 ms vs
+  the 100 ms target. Frontend bucketing first; server-side payload
+  decimation second only if still needed. (Backend has no correct general
+  tool today: `resample_data` interpolates — wrong for spikes;
+  `origin_project/preview.decimate_datastruct` is single-channel-keyed and
+  lives outside `calc/`.)
+- [ ] Import-path efficiency: `io/delimited.py` builds per-cell Python
+  floats in pure-Python loops (16× peak memory, ~6 s per 1M rows) and the
+  ambiguous-`.csv` sniffer chain (`is_sims_file`, `is_lakeshore_file`)
+  `read_text()`s the WHOLE file to inspect ≤4 KB (~140 MB throwaway reads
+  on a 70 MB file). Cap the sniff reads; vectorize the tokenize/convert
+  path.
 
 ---
 
@@ -290,7 +334,11 @@ the existing remote-IPC security boundary must remain.
 
 **Current evidence:** `.dwk` is readable JSON with inline arrays; browser save
 downloads a generic filename; autosave stores whole workspaces in IndexedDB
-with localStorage fallback.
+with localStorage fallback. P0.4 (2026-07-26) measured persistence at a
+50-dataset/20-window session: 13 ms serialize, 3.6 MB file, 194 ms restore,
+~17 ms autosave write — so "compressed containers/chunked binary arrays only
+if P0.4 requires it" is answered NOT REQUIRED at that scale; a `.dwk`
+holding a 1M-row dataset remains untested (P0.4 residual).
 
 - [ ] Show project name/path and dirty state.
 - [ ] Atomic temporary-write, validation, then replace.
@@ -821,6 +869,12 @@ At the end of each session:
   deterministic generator + 9 matrix-validated committed fixtures (172 KiB) +
   `docs/timed_workflow_baselines.md` (8 journey checklists + results template).
   P0.3 stays open for the first dated timed runs (owner hands).
+- ~~**P0.4 core envelope + first dated run**~~ (2026-07-26) — backend +
+  frontend harnesses, raw records in `docs/envelope/`, synthesis in
+  `docs/performance_envelope.md`. Headlines: 78 MB plot payload at 1M×7,
+  zoom p95 259 ms vs the 100 ms target (pan fine everywhere), 16× import
+  memory expansion, persistence cheap at 50-dataset scale. Two
+  evidence-backed follow-ups booked; P0.4 stays open for the residuals.
 
 **P3.1 stays OPEN.** The four slices above cover curated commands and the first
 five Inspector cards; workshop-level coverage is the remaining evidence-led
@@ -982,6 +1036,33 @@ work (its BACKLOG row).
   labels. Noted in the journey checklist.
 - Residual: the first dated timed RUNS (owner). P0.4 is now unblocked and is
   the next owner-free item.
+
+#### 2026-07-26 — P0.4 core envelope, both halves (two parallel Sonnet agents, Fable orchestrating)
+
+- Backend harness (`tools/baselines/envelope*.py`, 4 modules ≤415 lines,
+  stdlib-only hardware fingerprint, timing separated from tracemalloc runs —
+  tracing itself inflates the 1M import 6 s → 22 s) + frontend harness
+  (`tools/bench/frontend_envelope.mjs` + `envelope-lib.mjs`, drives the REAL
+  app: `qz` on :8942, built SPA, Chromium, real Command-Palette import, real
+  pan/zoom gestures, IndexedDB autosave polled from outside).
+- First dated run committed (`docs/envelope/2026-07-26-{backend,frontend}.json`);
+  human synthesis written by the orchestrator (`docs/performance_envelope.md`).
+- Key numbers: 1M×8 import 5.96 s / 1,117 MB peak (16×); `/api/plot/series`
+  payload 78.0 MB at 1M×7; F1 plots all 7M points (no cap), zoom p95 259 ms,
+  pan p95 52 ms; maps healthy to 2000² backend; `.dwk` 13 ms / 3.6 MB at 50
+  datasets + 20 windows; no O(n) window-open drift.
+- Findings booked as P0.4 follow-ups (plot-path point reduction; import-path
+  efficiency incl. whole-file sniffer reads); WebGL/workers/chunked-arrays
+  deliberately NOT booked (no evidence). P1.2's container question annotated
+  "not required at measured scale".
+- Frontend agent's harness caught a real race in its own methodology (UI
+  `clearAutosave()` is fire-and-forget; navigating away immediately lets
+  autosave-restore repopulate silently) and one self-reporting bug it fixed
+  before the committed run. Run-to-run variance on F1 upload+parse (14 s vs
+  28 s) recorded; qualitative conclusions held across both runs.
+- Both worktrees merged (`5a2ce6e`, `5c938b9` via `753864d`), targeted gate
+  green post-merge (byte-guard + repo integrity + ruff + mypy), worktrees
+  removed.
 
 ## Reference baseline
 

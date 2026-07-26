@@ -6,7 +6,18 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-26. P0.3's dev half SHIPPED (`9d4ce6d`:
+**Last reconciled:** 2026-07-26 (second pass, same day). **P0.4's core
+envelope SHIPPED** (`5a2ce6e` backend + `5c938b9` frontend harnesses + first
+dated run; synthesis in `docs/performance_envelope.md`). The measurement row
+below is replaced by the two evidence-backed follow-ups it produced: the
+interactive plot path has NO point reduction (78 MB JSON payload and zoom
+p95 259 ms at 1M×7 — pan meets <100 ms everywhere), and CSV import costs 16×
+file size in peak memory with whole-file sniffer reads in front. Persistence
+measured cheap at 50-dataset scale (P1.2's container question: not required
+there). P0.4 stays open only for named residuals (worksheet grid @1M, big
+`.dwk`, browser maps, offline transitions — last one blocked on P1.1).
+
+Prior same day: P0.3's dev half SHIPPED (`9d4ce6d`:
 `tools/baselines/` deterministic generator, 9 matrix-validated fixtures,
 `docs/timed_workflow_baselines.md` protocol + results template); its residue —
 the first dated timed runs — needs the owner's hands and moved to Owner
@@ -146,7 +157,8 @@ still make the owner switch back to Origin.
 | Item | Plan / item |
 |------|-------------|
 | Continue contextual help after the first five Inspector `?` links: cover high-friction workshops and registered context actions from real-use evidence | PRIMARY SOFTWARE P3.1 |
-| Measure the large-data, 2-D, and large-workspace performance envelope before choosing architecture — **unblocked 2026-07-26** (P0.3 fixtures shipped; `make_fixtures.py --large` generates the scale set) | PRIMARY SOFTWARE P0.4 |
+| Wire point reduction into the interactive plot path — `lib/downsample.ts` (min/max bucketing) exists but feeds only sparklines; uPlot gets every raw point and `/api/plot/series` ships 78 MB JSON at 1M×7. Evidence: zoom p95 259/122 ms vs the 100 ms target | PRIMARY SOFTWARE P0.4 follow-up |
+| Import-path efficiency — `io/delimited.py` per-token float loops (16× peak mem, ~6 s/1M rows); ambiguous-`.csv` sniffers `read_text()` the whole file for a ≤4 KB sniff | PRIMARY SOFTWARE P0.4 follow-up |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are
@@ -335,7 +347,7 @@ the root; every active plan below is its declared sub-plan.
 | `plans/MAIN_PLAN.md` | Active (ROOT) | MAIN #9–#38 are shipped; remaining work is owner gates, evidence-gated deferrals, and the active sub-plans |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous); **#54 SPC/JCAMP gaps CLOSED 2026-07-25 same-day booked** |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates **Q4/Q8/Q9 only** — Q6 (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and shipped 2026-07-19 |
-| `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: switch-trigger trial, Origin visual owner review, timed workflows, and large-data envelope. Gate B–C: native project lifecycle, portability, categorical metadata, Import Wizard roles, live grouping, and full plot recipes. Later technique/usability/distribution work is evidence-ranked. **P4.1 lint restore + P4.2's npm-ci item SHIPPED 2026-07-25; P0.3's fixtures/generator/checklists SHIPPED 2026-07-26 (dated timed runs = owner residue; P0.4 unblocked)** |
+| `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: switch-trigger trial, Origin visual owner review, timed workflows, and large-data envelope. Gate B–C: native project lifecycle, portability, categorical metadata, Import Wizard roles, live grouping, and full plot recipes. Later technique/usability/distribution work is evidence-ranked. **P4.1 lint restore + P4.2's npm-ci item SHIPPED 2026-07-25; P0.3's fixtures/generator/checklists AND P0.4's core envelope + first dated run SHIPPED 2026-07-26 (P0.3 residue = owner timed runs; P0.4 residue = named unmeasured cases; two evidence-backed follow-ups booked)** |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | **Tier 1 #1, #2, #5 ALL SHIPPED 2026-07-19** (Codex PRs #65/#66 + the two gate resolutions); **#17 CLOSED** (its last three items — split buttons, cross-menu ownership move, first-run hints — are struck); the ONLY open box in the whole plan is #16's `.opju` migration edges (owner-dependent). Remaining gates: the AnalysisSelection contract timing. Historical: #8, #11, #12 CLOSED and #15 fully covered except the #1-gated folder-undo journey, ALL 2026-07-18 (#8: palette bridge + mini-toolbar + worksheet/window/annotation retrofits; #11: stat-mark faceting end-to-end; #12: PlotSpec v2 canonical spec (display/axes/decor blocks) across Stage/Graph Builder/Figure Builder/export — all 5 slices + parts A (y2Fmt)/B (grouped-series export)/C (decor: annotations/shapes/legend) shipped same day, `page` block deferred to ORIGIN_FILE_DECODE #54; #15: channel-drag + annotation/shape + window-arrange journeys, e2e 33/33 across the zoom matrix); #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = stat-mark faceting; arbitrary multi-panel ordering belongs to #54), #15 core harness + 7 journeys SHIPPED 2026-07-17 and export round-trip SHIPPED 2026-07-18 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#52 complete; #54 page-setup control + spatial-export residual + overlap/inset layout slice ALL SHIPPED 2026-07-17 (Codex PR #55); visual-import campaign #58–#63 ALL SHIPPED 2026-07-18 (Codex stack #56–#61 `854271c`: spatial legends, region bands, imported-view + spatial-page export parity, saved-preview window, presentation templates); **#54's generalized page/layer MODEL is COMPLETE — pass B shipped `50b4c9c` 2026-07-24**, joining A + C; open = #53 graphic objects (evidence-gated; subsumes #47) and #54's specimen-gated >2-Y-axes rendering (now in the blocked table); #55 tooling is complete and #55/#56 close on owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |
