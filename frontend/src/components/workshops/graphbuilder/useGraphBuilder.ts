@@ -139,7 +139,6 @@ export function useGraphBuilder(): GraphBuilderState {
       // this session was bound to.
       useApp.getState().setActivePlotSpecId(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires only on
     // active-dataset change, by design (#8i); `spec`/`datasets` read fresh.
   }, [active?.id]);
 

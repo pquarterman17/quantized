@@ -93,7 +93,6 @@ describe("GridViewport perf validation at scale (item 10)", () => {
     const renderedRows = screen.getAllByRole("row").length; // header + windowed data rows
     const renderedCells = container.querySelectorAll(".qzk-grid-cell, .qzk-grid-headcell").length;
 
-    // eslint-disable-next-line no-console
     console.info(`[perf/item10] mount 100k×200: ${mountMs.toFixed(1)}ms, ${renderedRows} rows, ${renderedCells} cells in DOM`);
 
     // The invariant that matters: virtualization caps DOM size independent of
@@ -142,7 +141,6 @@ describe("GridViewport perf validation at scale (item 10)", () => {
     fireEvent.scroll(scrollEl);
     const scrollMs = performance.now() - t0;
 
-    // eslint-disable-next-line no-console
     console.info(`[perf/item10] scroll re-window at 100k rows: ${scrollMs.toFixed(1)}ms`);
     expect(screen.getAllByRole("row").length).toBeLessThan(60); // still windowed after the jump
     expect(scrollMs).toBeLessThan(800); // measured ~18ms on a dev machine — generous CI headroom
@@ -189,7 +187,6 @@ describe("GridViewport perf validation at scale (item 10)", () => {
     rerender(props({ 5: 320 }));
     const resizeMs = performance.now() - t0;
 
-    // eslint-disable-next-line no-console
     console.info(`[perf/main3] 3 resize re-renders at 100k×200: ${resizeMs.toFixed(1)}ms`);
     expect(screen.getAllByRole("row").length).toBeLessThan(60); // still windowed
     // Generous CI ceiling (same discipline as the scroll case above —
@@ -214,7 +211,6 @@ describe("GridViewport perf validation at scale (item 10)", () => {
     await waitFor(() => expect(statsDescriptive).toHaveBeenCalledTimes(201)); // x + 200 channels
     const fanoutMs = performance.now() - t0;
 
-    // eslint-disable-next-line no-console
     console.info(`[perf/item10] stats fan-out (201 parallel calls @ ${LATENCY_MS}ms simulated latency): ${fanoutMs.toFixed(1)}ms`);
     // If the 201 calls were serialized (a bug), this would be >= 201*15 = 3015ms.
     // Promise.all already parallelizes them client-side (measured ~120ms on a

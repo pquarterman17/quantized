@@ -95,7 +95,6 @@ export function useShapeDraw(): ShapeDrawResult {
         setSelectedShapeId(id);
       },
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     drawShapeKind,
     addShape,
