@@ -3,7 +3,10 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-07-25
+**Updated:** 2026-07-25 (pre-merge review of the four P3.1 discoverability PRs:
+one keyword-vocabulary regression fixed and guarded, and this doc re-headed onto
+`plan-format.md`'s Tier 1/2/3 + `## Completed` structure — the `P0.1`-style IDs
+are kept as the stable identifiers cited by BACKLOG rows and the PR history)
 **Audit author:** ChatGPT-Sol
 **Audited baseline:** Quantized 0.11.1, commit `261cd3a` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -84,10 +87,10 @@ harnesses, and official Origin/OriginPro feature documentation.
 
 A new live visible desktop session could not be performed because the in-app
 browser-control runtime was unavailable. Tests and static evidence cannot
-replace the owner's judgment of appearance and friction, so Phase 0 gates
+replace the owner's judgment of appearance and friction, so the Gate A items gate
 further large feature work.
 
-## Completed capability — do not rebuild without evidence
+## Already built — do not rebuild without evidence
 
 Reopen these only for a reproduced defect, failed acceptance journey, or a
 specific residual below:
@@ -147,9 +150,13 @@ Sol/Opus or proves to require an unusually hard long autonomous run.
 
 ---
 
-# Phase 0 — Prove the switch and measure friction
+## Tier 1 — High Impact
 
-## P0.1 — Real switch-trigger project and friction log
+Prove the switch and measure friction (Gate A), then remove the
+primary-application blockers: the trustworthy daily project (Gate B) and
+the arbitrary-data-to-figure contract (Gate C).
+
+### P0.1 — Real switch-trigger project and friction log
 
 **Goal:** complete one current project from raw files to reopened workspace,
 analysis table, publication figure, and PowerPoint/Word paste without silently
@@ -177,7 +184,7 @@ finishing steps in Origin.
   and organization.
 - [ ] Any use of another application is documented and triaged.
 
-## P0.2 — Origin visual-fidelity owner review
+### P0.2 — Origin visual-fidelity owner review
 
 **Goal:** turn the existing corpus into owner-approved visual evidence.
 
@@ -194,7 +201,7 @@ finishing steps in Origin.
 **Acceptance:** all 353 matrix rows have a review state; each rejection is
 reproducible and prioritized; no high-priority scientific mismatch remains.
 
-## P0.3 — Timed workflow baseline
+### P0.3 — Timed workflow baseline
 
 **Goal:** make usability changes measurable across weeks.
 
@@ -214,7 +221,7 @@ Create fixtures/checklists for:
 Record gestures, time, confusing labels, failures, and discoverability.
 Commit reusable, non-sensitive fixtures and dated results.
 
-## P0.4 — Large-data and long-session performance envelope
+### P0.4 — Large-data and long-session performance envelope
 
 **Goal:** find real limits before choosing rendering/storage architecture.
 
@@ -243,9 +250,7 @@ copy/export, and cleanup for:
 
 ---
 
-# Phase 1 — Remove primary-application blockers
-
-## P1.1 — Native desktop file and project bridge
+### P1.1 — Native desktop file and project bridge
 
 **Goal:** native Open, re-import, Save/Save As, recents, working directories,
 and safe missing/offline path handling in packaged Tauri.
@@ -267,7 +272,7 @@ the existing remote-IPC security boundary must remain.
 - [ ] Bridge schemas/security assumptions are documented and tested.
 - [ ] Packaged Windows/macOS E2E covers the lifecycle.
 
-## P1.2 — Named project lifecycle, atomic recovery, scalable workspace
+### P1.2 — Named project lifecycle, atomic recovery, scalable workspace
 
 **Goal:** make a project safe to trust for weeks.
 
@@ -291,7 +296,7 @@ with localStorage fallback.
 - [ ] Kill-process/interrupted-write and old-version round trips pass.
 - [ ] Raw source files are never rewritten.
 
-## P1.3 — Complete reusable plot-recipe templates
+### P1.3 — Complete reusable plot-recipe templates
 
 **Goal:** explicitly save a successful figure as an opt-in recipe for related
 future data without rebuilding it or writing code.
@@ -327,7 +332,7 @@ Behavior:
   auto-applied to SIMS.
 - [ ] Stage/Figure Builder/reopen/export/clipboard remain equivalent.
 
-## P1.4 — First-class categorical and metadata channels
+### P1.4 — First-class categorical and metadata channels
 
 **Goal:** use text columns and multiple metadata rows directly for grouping,
 faceting, legends, categorical axes, filters, and statistics.
@@ -349,7 +354,7 @@ sidecars but are not uniformly first-class plot channels.
 - [ ] Lot/wafer/type can form nested grouping for a box plot.
 - [ ] Existing numeric projects migrate unchanged.
 
-## P1.5 — Live Graph Builder grouping parity
+### P1.5 — Live Graph Builder grouping parity
 
 **Goal:** Group/Facet must match and remain editable across preview, Stage,
 Figure Builder, workspace, and export.
@@ -367,7 +372,7 @@ appears stale.
 - [ ] Update stale wording/help.
 - [ ] E2E covers drag-to-Group, edit, undo, reopen, copy.
 
-## P1.6 — Import Wizard metadata and error roles
+### P1.6 — Import Wizard metadata and error roles
 
 **Goal:** fully describe arbitrary scientific data during import and save the
 mapping as a reusable template.
@@ -384,7 +389,7 @@ mapping as a reusable template.
 - [ ] Live preview plus Apply/Cancel.
 - [ ] No guess can silently attach error to the wrong signal.
 
-## P1.7 — Project portability and source relinking
+### P1.7 — Project portability and source relinking
 
 **Goal:** move/share projects without confusing raw, linked, corrected, and
 derived data.
@@ -401,12 +406,14 @@ derived data.
 
 ---
 
-# Phase 2 — Technique and JMP replacement workflows
+## Tier 2 — Medium Impact
 
-Start these in the order Phase 0 use demands. Compose existing engines rather
-than duplicate them.
+Technique and JMP-replacement workbenches (Gate D), then the
+usability-and-trust pass (Gate E). Start these in the order the Gate A
+friction log demands, and compose the existing engines rather than
+duplicating them.
 
-## P2.1 — XRD end-to-end workbench
+### P2.1 — XRD end-to-end workbench
 
 **Goal:** corrected pattern to durable peak table, structural analysis,
 reusable recipe, and figure in one flow.
@@ -419,7 +426,7 @@ reusable recipe, and figure in one flow.
 - [ ] Technique-specific plot recipe is manually chosen, never auto-overwrites.
 - [ ] Validate on representative owner instruments/phases.
 
-## P2.2 — XRR/PNR fit-to-data workbench
+### P2.2 — XRR/PNR fit-to-data workbench
 
 **Goal:** connect layer model/reflectivity engine to measured data, constraints,
 fit, uncertainty, SLD, residuals, results, and publication output.
@@ -432,7 +439,7 @@ fit, uncertainty, SLD, residuals, results, and publication output.
 - [ ] Durable results table and FigureDoc.
 - [ ] Validate representative XRR and PNR fits against trusted results.
 
-## P2.3 — SIMS depth profiles
+### P2.3 — SIMS depth profiles
 
 **Goal:** calibration, correction, comparison, stacked/log plotting, and
 summary without leaving Quantized.
@@ -445,7 +452,7 @@ summary without leaving Quantized.
 - [ ] Region measures and summary export.
 - [ ] Validate on owner data before expanding.
 
-## P2.4 — Peak Analyzer refinement
+### P2.4 — Peak Analyzer refinement
 
 **Goal:** Origin-like convenience plus reproducibility.
 
@@ -457,10 +464,10 @@ summary without leaving Quantized.
 - [ ] Explicit model metrics/warnings.
 - [ ] Batch recipe and uncertainty/diagnostic result table.
 
-## P2.5 — Transform/combine/clean wizard
+### P2.5 — Transform/combine/clean wizard
 
 **Goal:** cover common trips to Python/JMP for joins, derived quantities, and
-messy metadata. Begin only from Phase 0 examples; much pipeline logic exists.
+messy metadata. Begin only from Gate A examples; much pipeline logic exists.
 
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5.
 
@@ -471,7 +478,7 @@ messy metadata. Begin only from Phase 0 examples; much pipeline logic exists.
 - [ ] Saved transformation recipe, undo, provenance, derived output.
 - [ ] Warnings for duplicate keys, unit mismatch, or row loss.
 
-## P2.6 — Categorical/JMP-style plot workbench
+### P2.6 — Categorical/JMP-style plot workbench
 
 **Goal:** drag Y and factors such as lot/wafer/type into production box,
 violin, bar, strip, or summary plots.
@@ -484,7 +491,7 @@ violin, bar, strip, or summary plots.
 - [ ] ANOVA/post-hoc, PCA, regression/correlation, GLM, survival, and ROC stay
   lower priority until demand is shown.
 
-## P2.7 — Equation/fit authoring polish
+### P2.7 — Equation/fit authoring polish
 
 **Goal:** approachable Python-syntax custom models.
 
@@ -495,7 +502,7 @@ violin, bar, strip, or summary plots.
 - [ ] Save model with units/description.
 - [ ] Stretch: pretty LaTeX rendering while Python remains editable source.
 
-## P2.8 — 2-D map polish
+### P2.8 — 2-D map polish
 
 **Goal:** measured performance plus linked slice/ROI work.
 
@@ -507,16 +514,14 @@ violin, bar, strip, or summary plots.
 - [ ] Fix profiled rendering/memory bottlenecks.
 - [ ] Interactive 3-D remains gated by GOTO Q4; static 3-D is adequate now.
 
-## P2.9 — Signal-processing UI
+### P2.9 — Signal-processing UI
 
 Expose the existing backend only if GOTO Q8 and a real project justify it.
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
 ---
 
-# Phase 3 — Usability and trust
-
-## P3.1 — Complete contextual help
+### P3.1 — Complete contextual help
 
 **Goal:** make current breadth findable without clutter.
 
@@ -552,7 +557,7 @@ covers a much smaller subset and guards focus on Analyze.
   cards have compact `?` actions that open Help with a relevant search already
   applied (2026-07-25).
 
-## P3.2 — First-plot onboarding/Home
+### P3.2 — First-plot onboarding/Home
 
 **Goal:** a technical newcomer makes a respectable first plot in five minutes.
 
@@ -563,7 +568,7 @@ covers a much smaller subset and guards focus on Analyze.
 - [ ] Optional 1-D, grouped, and 2-D examples.
 - [ ] Hints stop once learned.
 
-## P3.3 — Accessibility/input-quality pass
+### P3.3 — Accessibility/input-quality pass
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
@@ -573,7 +578,7 @@ covers a much smaller subset and guards focus on Analyze.
 - [ ] Windows/macOS scaling and high-DPI readability.
 - [ ] Reduced motion.
 
-## P3.4 — Error/progress/cancel/diagnostics
+### P3.4 — Error/progress/cancel/diagnostics
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
@@ -583,7 +588,7 @@ covers a much smaller subset and guards focus on Analyze.
 - [ ] Copyable diagnostic bundle excludes raw/private data by default.
 - [ ] Persistent recovery/write-failure notices.
 
-## P3.5 — Unified recipe library
+### P3.5 — Unified recipe library
 
 **Goal:** organize Import, Plot, Analysis, and Technique Workflow recipes.
 
@@ -594,7 +599,7 @@ covers a much smaller subset and guards focus on Analyze.
 - [ ] Search comes later if real use proves navigation insufficient.
 - [ ] Revisit organization after usage; do not freeze it prematurely.
 
-## P3.6 — Office/report export acceptance
+### P3.6 — Office/report export acceptance
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
@@ -605,7 +610,7 @@ covers a much smaller subset and guards focus on Analyze.
 - [ ] Consider EMF only if Windows Office tests show material benefit.
 - [ ] Editable embedded figures remain a future goal, not release blocker.
 
-## P3.7 — Complete project trash
+### P3.7 — Complete project trash
 
 **Models:** GPT-5.6 Terra low / Claude Haiku 4.5.
 
@@ -616,9 +621,11 @@ covers a much smaller subset and guards focus on Analyze.
 
 ---
 
-# Phase 4 — Sustainability, distribution, gated edges
+## Tier 3 — Nice-to-Have
 
-## P4.1 — Decompose high-risk frontend modules
+Sustainability, distribution, and specimen-gated edges.
+
+### P4.1 — Decompose high-risk frontend modules
 
 **Goal:** reduce regression risk without mass rewrite.
 
@@ -639,7 +646,7 @@ eager against a 949.2 kB budget**, leaving only 3.7 kB headroom.
   `eslint.config.*` or TypeScript parser configuration exists, so the declared
   lint command currently exits before examining source.
 
-## P4.2 — Canonical plot/project regression matrix
+### P4.2 — Canonical plot/project regression matrix
 
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5.
 
@@ -648,7 +655,7 @@ eager against a 949.2 kB budget**, leaving only 3.7 kB headroom.
 - [ ] Migration fixtures for supported contract/workspace versions.
 - [ ] Document one ownership path per field before deleting adapters.
 
-## P4.3 — Installer/signing/notarization/update
+### P4.3 — Installer/signing/notarization/update
 
 **Goal:** clean Windows/macOS install and update without developer tools or
 security workarounds.
@@ -662,7 +669,7 @@ security workarounds.
 - [ ] Ubuntu `.deb` smoke test when low effort.
 - [ ] Record OS, checksum, timing, first import, upgrade, recovery.
 
-## P4.4 — Sample-gated edges
+### P4.4 — Sample-gated edges
 
 **Models:** Terra medium/Sonnet 5 for normal parsers; Sol xhigh/Opus 4.8 only
 for Origin RE with specimens.
@@ -676,9 +683,12 @@ for Origin RE with specimens.
 
 ---
 
-# Execution order and review gates
+## Gates — acceptance sequence
 
-## Gate A — Evidence first
+Each gate is a checklist over the tier items above; the P-IDs are the
+identifiers, the gates are the order.
+
+### Gate A — Evidence first
 
 1. [ ] P0.1 switch-trigger.
 2. [ ] P0.2 visual review.
@@ -686,14 +696,14 @@ for Origin RE with specimens.
 4. [ ] P0.4 performance envelope.
 5. [ ] Re-rank or remove later tasks from findings.
 
-## Gate B — Trustworthy daily project
+### Gate B — Trustworthy daily project
 
 1. [ ] P1.1 native bridge.
 2. [ ] P1.2 project lifecycle.
 3. [ ] P1.7 portability/relink.
 4. [ ] Repeat P0.1 and compare friction.
 
-## Gate C — Arbitrary data to desired figure
+### Gate C — Arbitrary data to desired figure
 
 1. [ ] P1.4 categorical/metadata contract.
 2. [ ] P1.6 Import Wizard roles.
@@ -702,13 +712,13 @@ for Origin RE with specimens.
 5. [ ] P3.5 library.
 6. [ ] Repeat CSV, parametric, and grouped-stat journeys.
 
-## Gate D — Technique replacement
+### Gate D — Technique replacement
 
 Choose by owner frequency after Gate A: P2.1 XRD, P2.2 XRR/PNR, P2.3 SIMS,
 P2.4 peaks, then P2.5/P2.6. Each must pass a real project before another large
 workflow begins.
 
-## Gate E — Release-quality comfort
+### Gate E — Release-quality comfort
 
 Complete relevant P3 usability/Office work, P4.1-P4.3 sustainability and
 distribution, and only triggered P4.4 edges.
@@ -721,7 +731,7 @@ distribution, and only triggered P4.4 edges.
 - Stacked PRs state bases and are rebased/retargeted after merges.
 - Never mix major refactoring with new scientific behavior.
 
-# Definition of primary software
+## Definition of primary software
 
 - [ ] Three representative real projects finish without unplanned Origin/JMP.
 - [ ] First plot <5 minutes; production figure <20 minutes.
@@ -739,7 +749,7 @@ distribution, and only triggered P4.4 edges.
 - [ ] Remaining Origin-only features are low-frequency, explicitly deferred,
   or have a documented fallback.
 
-# Update and handoff protocol
+## Update and handoff protocol
 
 At the end of each session:
 
@@ -750,9 +760,40 @@ At the end of each session:
 4. Reconcile `BACKLOG.md` and affected plans in the same change.
 5. If code contradicts the plan, code/tests are truth; correct stale text.
 
-## Work log
+## Completed
 
-### 2026-07-25 — Fresh readiness audit (ChatGPT-Sol)
+- ~~**Fresh readiness audit**~~ (2026-07-25) — audited 0.11.1 at `261cd3a`;
+  booked P0–P4 and this plan into the MAIN_PLAN tree.
+- ~~**P3.1 Plot/Insert discoverability slice**~~ (2026-07-25) — shared
+  descriptions on every Plot and Insert command; Help and the command palette
+  both derive from the command registry; Help lazy-loaded (945.5 → 934.4 kB
+  eager).
+- ~~**P3.1 File/Data discoverability slice**~~ (2026-07-25) — the same
+  descriptions on every File and Data command, with the coverage guard extended
+  so a new one cannot ship undocumented.
+- ~~**P3.1 Analyze/UI discoverability slice**~~ (2026-07-25) — remaining
+  Analyze/View/Edit/Help commands documented; deleted the parallel
+  hand-authored Analyze help catalog, so a dangling help topic is now
+  structurally impossible.
+- ~~**P3.1 contextual Inspector help slice**~~ (2026-07-25) — optional `?`
+  action on the shared `Card` primitive, wired into the five
+  highest-complexity property groups.
+
+- ~~**P3.1 keyword-vocabulary repair**~~ (2026-07-25) — pre-merge review of the
+  four slices above found that folding the hand-authored catalog into the
+  command registry migrated its `desc` field but dropped its `keywords` field
+  from 15 of 17 tools, so 27 of 34 domain terms ("SNIP", "Parratt", "ANOVA",
+  "FWHM", "VSM") no longer found their tool. Vocabulary restored onto the
+  `Action`s — the chokepoint both Help and the palette read — and locked with a
+  31-case `it.each` guard in `helpContent.test.ts`.
+
+**P3.1 stays OPEN.** The four slices above cover curated commands and the first
+five Inspector cards; workshop-level coverage is the remaining evidence-led
+work (its BACKLOG row).
+
+### Session log
+
+#### 2026-07-25 — Fresh readiness audit (ChatGPT-Sol)
 
 - Audited 0.11.1 at `261cd3a`.
 - Verified backend 3,106 passed, 4 skipped, 12 expected failures.
@@ -768,7 +809,7 @@ At the end of each session:
   workflow cohesion, help, and distribution as remaining risks.
 - Live visible review was unavailable, so P0.1/P0.2 are first gates.
 
-### 2026-07-25 — P3.1 Plot/Insert discoverability slice (ChatGPT-Sol)
+#### 2026-07-25 — P3.1 Plot/Insert discoverability slice (ChatGPT-Sol)
 
 - Added shared descriptions to every Plot and Insert command, including Graph
   Builder, Figure Builder/Page, export, axes, display, layout, and shapes.
@@ -783,7 +824,7 @@ At the end of each session:
 - Found and recorded the pre-existing broken ESLint 10 configuration under
   P4.1 rather than expanding this usability slice.
 
-### 2026-07-25 — P3.1 File/Data discoverability slice (ChatGPT-Sol)
+#### 2026-07-25 — P3.1 File/Data discoverability slice (ChatGPT-Sol)
 
 - Added the same shared descriptions to every File and Data command.
 - Help now finds lifecycle and worksheet operations by outcomes such as
@@ -792,7 +833,7 @@ At the end of each session:
 - Validation: focused suite **47 passed**; production build and bundle ratchet
   passed at 937.4 kB eager.
 
-### 2026-07-25 — P3.1 Analyze/UI discoverability slice (ChatGPT-Sol)
+#### 2026-07-25 — P3.1 Analyze/UI discoverability slice (ChatGPT-Sol)
 
 - Added shared descriptions to every remaining curated Analyze, View, Edit,
   and Help command.
@@ -803,7 +844,7 @@ At the end of each session:
 - Validation: focused suite **44 passed**; production build and bundle ratchet
   passed at 940.4 kB eager.
 
-### 2026-07-25 — P3.1 contextual Inspector help slice (ChatGPT-Sol)
+#### 2026-07-25 — P3.1 contextual Inspector help slice (ChatGPT-Sol)
 
 - Added a reusable optional help topic to the shared collapsible Card
   primitive.
@@ -814,6 +855,31 @@ At the end of each session:
 - Validation: full frontend suite **4,590 passed across 325 files**; focused
   contextual/architecture suites passed; production build and bundle ratchet
   passed at 941.0 kB eager.
+
+#### 2026-07-25 — Pre-merge review of the four P3.1 PRs (Claude Opus 5)
+
+- Reviewed the #78→#79→#80→#81 stack. The architecture is endorsed: deriving
+  Help topics from the command registry makes a dangling help entry
+  structurally impossible, which the deleted hand-authored catalog could not.
+- **Found one real regression the 4,590-test suite did not catch.** The catalog
+  carried `desc` AND `keywords`; only `desc` was migrated. Because descriptions
+  are written in plain outcome language they contain no jargon, so 27 of 34
+  domain-term searches that worked on `main` returned nothing. Measured through
+  the real search path, not by inspection. Fixed + guarded (see Completed).
+- Lesson recorded: the coverage guard was rewritten alongside the code it
+  guards, so it validated the new shape ("every command has a description")
+  instead of preserving the old contract ("the search vocabulary did not
+  shrink"). Rewritten guards need a preservation assertion.
+- Re-headed this plan onto `plan-format.md` (Tier 1/2/3, one H1, `## Completed`);
+  removed the `# Phase N` banners the rule forbids. P-IDs kept.
+- Reconciled BACKLOG: P0.1 and P0.2 were booked as "actionable dev work (no
+  owner gate)" but are owner actions that **already existed** as owner-gate rows
+  (GOTO Q9; ORIGIN #55/#56). Annotated those rows instead of duplicating.
+- Verified: frontend **4,621 passed across 325 files**, production build clean,
+  bundle ratchet 942.0 kB eager against the 949.2 kB pin (7.2 kB headroom).
+- Audit-claim spot check: "16 Playwright specifications" is 11 spec files /
+  15 `test()` blocks. Imprecise, not fabricated; no owner approval was invented
+  anywhere in the doc.
 
 ## Reference baseline
 

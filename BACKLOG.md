@@ -128,10 +128,15 @@ still make the owner switch back to Origin.
 | Item | Plan / item |
 |------|-------------|
 | Continue contextual help after the first five Inspector `?` links: cover high-friction workshops and registered context actions from real-use evidence | PRIMARY SOFTWARE P3.1 |
-| Run one real raw-data-to-publication switch-trigger project and record elapsed time, workarounds, and every switch-back impulse | PRIMARY SOFTWARE P0.1 |
-| Complete owner review of the existing Origin/Quantized visual corpus | PRIMARY SOFTWARE P0.2 |
 | Establish repeatable timed workflow baselines and representative fixtures | PRIMARY SOFTWARE P0.3 |
 | Measure the large-data, 2-D, and large-workspace performance envelope before choosing architecture | PRIMARY SOFTWARE P0.4 |
+
+The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
+and **P0.2** (review the Origin visual corpus), are NOT dev work — they are
+owner actions, and both already existed as owner-gate rows before this plan was
+written. They are annotated on those rows under Owner actions below rather than
+duplicated here; P0.1 is GOTO gate Q9 and P0.2 is the ORIGIN #55/#56 screenshot
+review.
 
 After Gate A, the current dependency-ordered implementation candidates are:
 
@@ -146,8 +151,8 @@ After Gate A, the current dependency-ordered implementation candidates are:
 | Portable projects and safe source relinking | PRIMARY SOFTWARE P1.7 |
 | Restore the declared frontend lint command with a real ESLint 10 flat TypeScript configuration | PRIMARY SOFTWARE P4.1 |
 
-The remaining dev item is a judgment call the plan explicitly parked for the
-owner rather than a task:
+Carried over from the prior campaign, two items are judgment calls their plans
+explicitly parked for the owner rather than tasks:
 
 | Item | Plan / item |
 |------|-------------|
@@ -210,13 +215,13 @@ re-sweep periodically.
 | **PyPI fresh-machine acceptance run** — on a machine without dev tools: `pipx install quantized-lab` → import a CSV within 2 min; also verify the v0.8.1 installer's two Start Menu entries (#23). Registration + first publish DONE 2026-07-12 (`quantized-lab` 0.8.1 live) | MAIN gate (was ORIGIN_GAP #41) |
 | **Corpus publish licensing sign-off** — `../test-data` repo is `git init`-ed; publish gated on the licensing pass + 6 flagged public files | MAIN gate (was ORIGIN_GAP #45) |
 | **Defaults-audit eyeball** — rule on the taste calls in `plans/design/DEFAULTS_AUDIT.md` (aps preset height vs. log-decade label thinning; data-aware legend placement) | MAIN gate (was GAP_TIER3 #2) |
-| **Origin corpus screenshot review** — the #55 review dashboard exposes 62 paired Origin↔Quantized screenshots (Moke 8, PNR 50, RockingCurve 4); review state is 0/353 until the owner exports gallery marks. The campaign (#56) closes only on this visual sign-off; new mismatches get booked in the decode plan | ORIGIN_FILE_DECODE #55/#56 gate |
+| **Origin corpus screenshot review** — the #55 review dashboard exposes 62 paired Origin↔Quantized screenshots (Moke 8, PNR 50, RockingCurve 4); review state is 0/353 until the owner exports gallery marks. The campaign (#56) closes only on this visual sign-off; new mismatches get booked in the decode plan | ORIGIN_FILE_DECODE #55/#56 gate = PRIMARY SOFTWARE **P0.2** |
 | **Pop-out books/plots into windows** — PLAN WITH OWNER FIRST (gesture, "pop out a BOOK" semantics, bulk "window everything" command) | MAIN gate (was MULTI_PLOT #19) |
 | **Worksheet view-state persistence** — decide once, with usage evidence, whether sort/widths/selection persist per-dataset in `.dwk` (default: no) | MAIN gate (was WORKSHEET #14) |
 | **Dependabot alert #1 — `glib` unsoundness (medium), BLOCKED UPSTREAM, owner call** | security |
 | **Apache-2.0 copyright holder line** for LICENSE/NOTICE | PORT_PLAN #1 |
 | **Code-signing cert + auto-update E2E** (two consecutive signed releases to verify the updater) | MAIN gate (was PORT #47/#49 residue) |
-| **GOTO owner gates** — 3-D (Q4), signal-processing non-goal (Q8), switch-trigger project pick + start timing (Q9; protocol in the plan's Context). ~~Q6 worksheet reshape~~ and ~~Q7 date-time axes~~ were DECIDED YES and SHIPPED 2026-07-19 (Codex PRs #67/#68) — struck here 2026-07-24 | GOTO_PLAN Owner gates |
+| **GOTO owner gates** — 3-D (Q4), signal-processing non-goal (Q8), switch-trigger project pick + start timing (Q9; protocol in the plan's Context — Q9 is the same task as PRIMARY SOFTWARE **P0.1**, whose friction log gates that plan's Gate A). ~~Q6 worksheet reshape~~ and ~~Q7 date-time axes~~ were DECIDED YES and SHIPPED 2026-07-19 (Codex PRs #67/#68) — struck here 2026-07-24 | GOTO_PLAN Owner gates |
 | **Shared AnalysisSelection contract timing** — when to generalize the #4 `lib/fitweights` seed into the full cross-workflow selection contract | GUI_INTERACTION gate |
 | ~~**Undo scopes** (#1)~~ **RESOLVED 2026-07-19** — one flat current-session EDIT history (data + visual/layout + organization) with a SEPARATE Back/Forward view history for zoom/pan/autoscale; neither persists across restart. Owner-approved during the Codex-stack review; #1 shipped behind it | GUI_INTERACTION #1 gate |
 | ~~**Baseline: frontend channel-bind vs. backend corrections-DAG** (#5)~~ **RESOLVED 2026-07-19** — the established DAG stays authoritative for its default time/value-0 channel; an arbitrary plotted X/Y baseline subtracts into a DERIVED dataset carrying explicit channel provenance, so the raw source and unrelated channels are never silently rewritten | GUI_INTERACTION #5 gate |
