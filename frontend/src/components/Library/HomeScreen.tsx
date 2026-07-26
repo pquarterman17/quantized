@@ -59,7 +59,9 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
   const removeRecent = useApp((s) => s.removeRecent);
   const paths = useWorkingPaths((s) => s.paths);
   const setPinned = useWorkingPaths((s) => s.setPinned);
-  const usePath = useWorkingPaths((s) => s.use);
+  // Not `usePath`: a `use`-prefixed local reads as a React hook (and trips
+  // rules-of-hooks when called in the onClick below) — it is a store action.
+  const recordPathUse = useWorkingPaths((s) => s.use);
   const health = useAutosaveStatus((s) => s.health);
   const states = useRecentStates(recent);
 
@@ -133,7 +135,7 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
                 style={{ flex: 1, textAlign: "left" }}
                 title={`${p.path} — import dialogs will open here`}
                 onClick={() => {
-                  usePath(p.path);
+                  recordPathUse(p.path);
                   onImport();
                 }}
               >

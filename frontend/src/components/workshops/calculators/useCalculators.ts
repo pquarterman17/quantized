@@ -94,7 +94,7 @@ export function assembleCell(f: CrystalForm): {
   const a = num(f.a, "a");
   const b = spec?.lengths.includes("b") ? num(f.b, "b") : a;
   const c = spec?.lengths.includes("c") ? num(f.c, "c") : a;
-  let alpha = spec?.angles.includes("alpha") ? num(f.alpha, "α") : 90;
+  const alpha = spec?.angles.includes("alpha") ? num(f.alpha, "α") : 90;
   let beta = spec?.angles.includes("beta") ? num(f.beta, "β") : 90;
   let gamma = spec?.angles.includes("gamma") ? num(f.gamma, "γ") : 90;
   if (f.system === "hexagonal") gamma = 120;

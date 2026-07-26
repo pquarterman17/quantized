@@ -52,6 +52,8 @@ jobs:
         # different dependency versions than any local checkout (this hid a
         # real Playwright 1.61-vs-1.62 e2e regression on 2026-07-25).
         run: npm ci
+      - name: Lint (eslint flat config; errors fail, warnings don't)
+        run: npm run lint
       - name: Unit tests (vitest)
         run: npm test
       - name: Build (includes typecheck)
