@@ -151,6 +151,8 @@ After Gate A, the current dependency-ordered implementation candidates are:
 | Portable projects and safe source relinking | PRIMARY SOFTWARE P1.7 |
 | Restore the declared frontend lint command with a real ESLint 10 flat TypeScript configuration | PRIMARY SOFTWARE P4.1 |
 | Make the e2e job reproducible: `e2e.yml` uses `npm install`, so `^1.61.1` drifts off the lockfile's pinned Playwright 1.61.1 and CI tests a different version than any local run. It hid a real regression on 2026-07-25 (`getByText` exactness differs between 1.61 and 1.62) | PRIMARY SOFTWARE P4.2 |
+| **`.spc` multifile read drops data SILENTLY** — `rohanisaac_m_xyxy.spc` passes the parser matrix while `import_spc` returns `shape (8, 1)` and raises nothing. No test can catch it (an xfail cannot express "parses but lies"), so it is the one defect here that will not surface on its own | PORT_PLAN #54 |
+| SPC/JCAMP gaps the 2026-07-25 corpus exposed: TXYXYS `fnpts=0` wrongly rejected as empty (oracle reads 128 pts); `fversn=0x4D` decoder now specimen-unblocked; JCAMP `##DATA TYPE= LINK` needs sub-block recursion | PORT_PLAN #54 |
 
 Carried over from the prior campaign, two items are judgment calls their plans
 explicitly parked for the owner rather than tasks:

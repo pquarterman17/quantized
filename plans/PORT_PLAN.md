@@ -192,6 +192,39 @@ MATLAB."**
     `.dat`, refl1d `.dat`, SIMS, CSV/Excel + auto-detect); see
     PORT_CHECKLIST W1.
 
+54. **SPC/JCAMP gaps the 2026-07-25 corpus exposed** — the SPC/JCAMP
+    fixtures added to `../test-data` gave these parsers their first real
+    specimens (they had synthetic tests only). `252cc7d` registered four
+    files as `test_parsers_matrix` known gaps; the underlying defects were
+    recorded only in that commit's prose and its xfail reason strings, so
+    they are booked here. **All four are now specimen-backed, so none is
+    evidence-gated any more.**
+    - [ ] **`.spc` multifile read returns ONE subfile, silently.**
+      `rohanisaac_m_xyxy.spc` (`ftflgs=0xf5`, txyxys) **PASSES** the matrix
+      while `import_spc` returns `values.shape == (8, 1)` and raises
+      nothing — the rest of the file is dropped with no diagnostic. Worst
+      of the four precisely because no test can catch it: an xfail cannot
+      express "parses but lies". Fix the read, then assert the real point
+      count so a regression is loud.
+    - [ ] **TXYXYS `fnpts=0` is legal, not empty.** `io/spc.py:248` rejects
+      `fnpts <= 0` up front, but for TXYXYS each subfile carries its own
+      count and the main-header value is not authoritative — line 204
+      (`sub["subnpts"] if (txyxys and sub["subnpts"] > 0) else fnpts`)
+      already knows this, so the guard is simply too early. Oracle (upstream
+      `spc`) reads 128 points from `rohanisaac_ms_xyxys.spc`.
+    - [ ] **Write the SPC `fversn=0x4D` (old-format) branch.** Rejection was
+      the correct pinned behaviour only while no specimen existed;
+      `rohanisaac_old_0x4D_doerner.spc` and `..._m_ordz.spc` are the first
+      two. `0x4C` (MSB) and `0xCF` (Shimadzu) still have none and stay
+      rejected — do not guess them (samples-are-not-standards).
+    - [ ] **JCAMP `##DATA TYPE= LINK` with a non-spectral first block.**
+      `import_jcamp` reads the first block and counts the rest into
+      `metadata["extra_blocks"]`, so ordinary compound files work; it fails
+      when the spectrum is nested deeper — `nzhagen_official_ISAS_CDX.dx`
+      (`##BLOCKS= 2`, first sub-block is `##JCAMP-CS` structure data) raises
+      `no XYDATA/XYPOINTS/PEAK TABLE block found`. Recurse into sub-blocks.
+      Official jcamp-dx.org conformance file, so this is a real gap.
+
 ### Tier 2 — Medium Impact
 12. **Export writers** — Standard CSV + **Origin-ASCII** + **`.ogs` LabTalk
     import script** (cross-platform Origin path), multi-row headers, HDF5,
