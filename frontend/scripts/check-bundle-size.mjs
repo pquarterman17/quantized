@@ -22,13 +22,23 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
- *  2026-07-25 — pinned at 972,000 after MAIN #29 split the 25 flag-gated
+ *  2026-07-26 — pinned at 941,260 after P4.1 made `CalcOnlyApp` (the
+ *  `?view=calc` standalone DiraCulator launcher) a dynamic import in
+ *  `main.tsx`. It was the last static importer of `CalculatorsContent`'s
+ *  whole tab tree (SuperconductorTab, SldTab, VacuumTab, …) outside the
+ *  already-lazy in-app `CalculatorsPanel`, so that ~69 kB chunk was riding
+ *  the eager entry for every default-view user despite never rendering
+ *  there. Measured 901,260 B eager (659,048 entry + 242,212 shared store
+ *  chunk), down from 948,378 B (948.4 kB) before the split. Slack is 40 kB
+ *  so routine feature work does not churn the pin. NEVER raise this — split
+ *  a panel out or defer a module instead.
+ *
+ *  2026-07-25 — was 972,000 after MAIN #29 split the 25 flag-gated
  *  workshop panels out of `AppOverlays.tsx`. Measured 932,219 B eager
  *  (702,285 entry + 229,934 shared store chunk), down from a single
  *  1,120,960 B chunk before the split: -16.8% of what the browser fetches
- *  before first paint. Slack is ~40 kB so routine feature work does not churn
- *  the pin. NEVER raise this — split a panel out or defer a module instead. */
-const EAGER_JS_BUDGET = 972_000;
+ *  before first paint. */
+const EAGER_JS_BUDGET = 941_260;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

@@ -1,8 +1,7 @@
-import { StrictMode } from "react";
+import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 
 import App from "./App";
-import CalcOnlyApp from "./CalcOnlyApp";
 import { installErrLog } from "./lib/errlog";
 import { connectLifecycle } from "./lib/lifecycle";
 import { defaultPlotView } from "./lib/plotview";
@@ -106,11 +105,27 @@ if (new URLSearchParams(window.location.search).has("harness")) {
 // ── ?view=calc — standalone DiraCulator launcher (MAIN_PLAN #22) ───────────
 // Read once at startup, no router: mounts the calc-only shell (calculators
 // content, full-window, no Library/Stage/Inspector/menubar) instead of the
-// full App shell.
-const RootShell = isCalcOnlyView() ? CalcOnlyApp : App;
+// full App shell. CalcOnlyApp is a dynamic import (P4.1, eager-bundle
+// ratchet): its only caller is this rare deep-link path, but it pulls in
+// CalculatorsContent's entire tab tree (SuperconductorTab, SldTab, VacuumTab,
+// …) — ~136 kB of module source that every default-view user was previously
+// downloading for a shell they never mount. Same lazy()+Suspense seam as
+// AppOverlays.tsx's lazyPanel(); fallback={null} because the chunk is served
+// from localhost and arrives in a frame or two.
+const CalcOnlyApp = lazy(() => import("./CalcOnlyApp"));
+
+function Root() {
+  return isCalcOnlyView() ? (
+    <Suspense fallback={null}>
+      <CalcOnlyApp />
+    </Suspense>
+  ) : (
+    <App />
+  );
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <RootShell />
+    <Root />
   </StrictMode>,
 );
