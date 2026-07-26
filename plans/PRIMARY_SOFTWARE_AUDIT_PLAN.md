@@ -654,6 +654,13 @@ eager against a 949.2 kB budget**, leaving only 3.7 kB headroom.
 - [ ] Screen/export/reopen structural and visual equivalence.
 - [ ] Migration fixtures for supported contract/workspace versions.
 - [ ] Document one ownership path per field before deleting adapters.
+- [ ] **Make the e2e job reproducible against the lockfile.** `e2e.yml` runs
+  `npm install`, so `^1.61.1` resolves to whatever Playwright is newest and CI
+  silently drifts off the pinned 1.61.1. On 2026-07-25 that hid a real
+  regression from every local run and cost two wrong diagnoses: the versions
+  disagree on whether `getByText(..., {exact:true})` reads immediate text or
+  full `textContent`. Switch to `npm ci` (expect it to surface other drift), or
+  pin the version exactly and update it deliberately.
 
 ### P4.3 — Installer/signing/notarization/update
 
@@ -877,6 +884,23 @@ work (its BACKLOG row).
   (GOTO Q9; ORIGIN #55/#56). Annotated those rows instead of duplicating.
 - Verified: frontend **4,621 passed across 325 files**, production build clean,
   bundle ratchet 942.0 kB eager against the 949.2 kB pin (7.2 kB headroom).
+- **E2E regression from the contextual-help slice, found after merge and fixed
+  (`bc55463`).** The `?` action was a direct child of the Card's `<summary>`
+  beside a bare title text node, fusing them: the Axes card's summary text
+  became "Axes?", so `axis-title-limits.spec.ts`'s
+  `getByText("Axes", { exact: true })` matched zero elements. E2E was green 3/3
+  on #78–#80 and red 5/5 from `71581c5` (#81). Fixed at the primitive (the
+  title is now its own node), because every future header affordance would
+  fuse with a bare text child the same way.
+- **`e2e.yml` runs `npm install`, not `npm ci`** — so CI resolves
+  `^1.61.1` to a newer Playwright than the lockfile's 1.61.1, and the two differ
+  in whether `getByText` exactness reads immediate text or full `textContent`.
+  The bug is therefore invisible to any local run on the pinned version. Booked
+  under P4.2 as a reproducibility gap; it is why this slice shipped red.
+- Two review-method corrections worth carrying forward: a local test pass proves
+  nothing until the negative control shows the failure returning (mine passed
+  with AND without the fix), and Playwright's downloadable `error-context.md`
+  ARIA snapshot settles DOM questions that repeated theorising did not.
 - Audit-claim spot check: "16 Playwright specifications" is 11 spec files /
   15 `test()` blocks. Imprecise, not fabricated; no owner approval was invented
   anywhere in the doc.

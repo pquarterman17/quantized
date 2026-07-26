@@ -150,6 +150,7 @@ After Gate A, the current dependency-ordered implementation candidates are:
 | Full semantic plot-recipe templates with technique scope and opt-in application | PRIMARY SOFTWARE P1.3 |
 | Portable projects and safe source relinking | PRIMARY SOFTWARE P1.7 |
 | Restore the declared frontend lint command with a real ESLint 10 flat TypeScript configuration | PRIMARY SOFTWARE P4.1 |
+| Make the e2e job reproducible: `e2e.yml` uses `npm install`, so `^1.61.1` drifts off the lockfile's pinned Playwright 1.61.1 and CI tests a different version than any local run. It hid a real regression on 2026-07-25 (`getByText` exactness differs between 1.61 and 1.62) | PRIMARY SOFTWARE P4.2 |
 
 Carried over from the prior campaign, two items are judgment calls their plans
 explicitly parked for the owner rather than tasks:
