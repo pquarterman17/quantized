@@ -9,7 +9,7 @@
 // actions (reset view, save PNG, copy data, …) over the same uPlot instance —
 // see `usePlotStageActions`.
 
-import { type RefObject, useEffect, useRef } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
@@ -21,6 +21,7 @@ import {
   shouldDecimate,
   xExtent,
 } from "../../lib/plotDecimate";
+import { classifyLimChange, type Lim } from "../../lib/plotLimApply";
 import { frameVarsPlugin } from "../../lib/uplotFrameVars";
 import { buildOpts, xIsAscending, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
@@ -89,6 +90,59 @@ export default function PlotViewport(props: PlotViewportProps) {
     props;
   const hostRef = useRef<HTMLDivElement>(null);
 
+  // P0.4 follow-up #8 (docs/performance_envelope.md): a committed zoom/pan
+  // used to tear down and rebuild the WHOLE uPlot instance, because
+  // xLim/yLim/y2Lim were create-effect deps — even though the gesture that
+  // committed them (wheelZoomPlugin/panPlugin, via viewHistoryPlugin) had
+  // already painted the exact same scale live via `u.setScale`. `limsRef`
+  // holds the latest committed lims for the create effect to read (the
+  // "latest ref" pattern — satisfies react-hooks/exhaustive-deps without a
+  // disable comment, since a `.current` read isn't a tracked dependency);
+  // the effect below it updates the ref on every commit and, only when the
+  // live instance can't just be nudged via `u.setScale` (see
+  // `classifyLimChange`'s doc), bumps `rebuildEpoch` — the ONLY thing that
+  // still forces the create effect to run for a lim-only change.
+  const limsRef = useRef<{ x: Lim; y: Lim; y2: Lim }>({
+    x: args.xLim ?? null,
+    y: args.yLim ?? null,
+    y2: args.y2Lim ?? null,
+  });
+  const [rebuildEpoch, setRebuildEpoch] = useState(0);
+
+  // Declared BEFORE the create/destroy effect so that within a single commit
+  // where a lim change lands ALONGSIDE a genuine structural change (e.g. a
+  // workspace restore that sets xLim and theme together), `limsRef` is
+  // already fresh by the time the create effect (below) reads it — React
+  // runs same-commit effects in declaration order.
+  useEffect(() => {
+    const prev = limsRef.current;
+    const next: { x: Lim; y: Lim; y2: Lim } = {
+      x: args.xLim ?? null,
+      y: args.yLim ?? null,
+      y2: args.y2Lim ?? null,
+    };
+    limsRef.current = next;
+    const plot = plotRef.current;
+    if (!plot) return; // no live instance yet — the create effect will pick up `next` via limsRef when it (re)builds.
+
+    let needsRebuild = false;
+    (["x", "y", "y2"] as const).forEach((axis) => {
+      if (axis === "y2" && !plot.scales.y2) return; // no live y2 scale to nudge (payload carries no y2 series)
+      const live = plot.scales[axis];
+      const kind = classifyLimChange(prev[axis], next[axis], live?.min, live?.max);
+      if (kind === "apply") {
+        const lim = next[axis];
+        if (lim) plot.setScale(axis, { min: lim[0], max: lim[1] });
+      } else if (kind === "rebuild") {
+        needsRebuild = true;
+      }
+    });
+    if (needsRebuild) setRebuildEpoch((e) => e + 1);
+    // plotRef is a stable RefObject identity for this component's lifetime
+    // (owned by the caller, e.g. PlotStage's own useRef) — listed so
+    // exhaustive-deps doesn't warn; it never actually changes across renders.
+  }, [args.xLim, args.yLim, args.y2Lim, plotRef]);
+
   // (Re)create the uPlot instance when payload / size / theme change.
   useEffect(() => {
     const host = hostRef.current;
@@ -104,8 +158,18 @@ export default function PlotViewport(props: PlotViewportProps) {
     const titleH = args.title?.trim() ? 24 : 0;
     const h = (host.clientHeight || 400) - titleH;
     plotRef.current?.destroy();
+    // Read the LATEST committed lims through the ref (see its declaration
+    // above), never `args.xLim`/`yLim`/`y2Lim` directly: this is what lets
+    // xLim/yLim/y2Lim stay OFF this effect's own deps below while every
+    // structural rebuild (payload/theme/tool/… change) still bakes in the
+    // current view instead of whatever lim happened to be true the last time
+    // THIS effect ran.
+    const curLims = limsRef.current;
     const opts = buildOpts(displayPayload, {
       ...args,
+      xLim: curLims.x,
+      yLim: curLims.y,
+      y2Lim: curLims.y2,
       width: w,
       height: h,
       peakWizardEdit: peakWizardEdit && {
@@ -165,7 +229,7 @@ export default function PlotViewport(props: PlotViewportProps) {
       // `as (number | null)[][]` narrowing plotdata.ts already uses throughout
       // (e.g. maskExcludedPayload) applies here too.
       const fullData = displayPayload.data as (number | null)[][];
-      const [x0, x1] = args.xLim ?? xExtent(fullX) ?? [0, 1];
+      const [x0, x1] = curLims.x ?? xExtent(fullX) ?? [0, 1];
       plotData = buildDecimatedData(fullData, x0, x1, w) as uPlot.AlignedData;
       opts.plugins = [...(opts.plugins ?? []), decimatePlugin(() => fullData)];
     }
@@ -195,19 +259,26 @@ export default function PlotViewport(props: PlotViewportProps) {
     // add/remove click, not a live drag. args.bg (item 18) rebuilds so a
     // window's background-override toggle re-resolves axis/grid/ink colours
     // and the literal-colour contrast substitution immediately.
+    //
+    // xLim/yLim/y2Lim are DELIBERATELY not deps here (P0.4 follow-up #8):
+    // the lim-tracking effect above classifies every commit and either
+    // nudges the live instance via `u.setScale` (the common case — see
+    // `classifyLimChange`'s doc) or bumps `rebuildEpoch`, which IS a dep,
+    // for the rarer autoscale-restore/shape-change case. xStep/yStep/y2Step
+    // stay as-is: a commit that nulls a previously-set tick step still
+    // rebuilds once (acceptable and rare — steps only change alongside a
+    // lim edit, which no longer forces this effect on its own).
   }, [
     displayPayload,
     theme,
     accent,
     peakWizardEdit,
     anchorEdit,
+    rebuildEpoch,
     args.yScale,
     args.xScale,
-    args.xLim,
-    args.yLim,
     args.xStep,
     args.yStep,
-    args.y2Lim,
     args.y2Scale,
     args.y2Step,
     args.xFmt,
