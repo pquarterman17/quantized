@@ -78,6 +78,35 @@ _KNOWN_GAPS: dict[str, str] = {
     "origin/specimens/matrix_spec.opju": (
         "matrix-only Origin project: MBook codec undecoded (format gap register 13.2 #9)"
     ),
+    # --- corpus additions 2026-07-25 (see test-data/spc/MANIFEST.md) ---------
+    # These arrived with the SPC/JCAMP fixtures acquired to validate parsers
+    # that until then had only synthetic tests. Two are pinned contracts, two
+    # are real defects the fixtures exposed.
+    #
+    # fversn 0x4D "old format": recognized and rejected by contract — io/spc.py
+    # implements only 0x4B, and PORT_CHECKLIST records 0x4D/0x4C/0xCF as
+    # awaiting examples. These are the first 0x4D examples, so the branch can
+    # now be implemented; until then, rejection is the pinned behaviour.
+    "spc/spectroscopy/rohanisaac_old_0x4D_doerner.spc": (
+        "SPC fversn 0x4D (old format) rejected by contract — no decoder yet"
+    ),
+    "spc/spectroscopy/rohanisaac_old_0x4D_m_ordz.spc": (
+        "SPC fversn 0x4D (old format) rejected by contract — no decoder yet"
+    ),
+    # DEFECT, not a contract: for TXYXYS files the main-header fnpts is not
+    # authoritative (each subfile declares its own count), but the reader
+    # rejects fnpts=0 as an empty file. Oracle (upstream `spc` library) reads
+    # 128 points from this file.
+    "spc/spectroscopy/rohanisaac_ms_xyxys.spc": (
+        "SPC TXYXYS: header fnpts=0 is legal (per-subfile counts) but the "
+        "reader rejects it as empty — real defect, oracle reads 128 pts"
+    ),
+    # JCAMP LINK: spectra live in nested blocks; import_jcamp looks only for a
+    # top-level XYDATA/XYPOINTS/PEAK TABLE. Valid file from the official
+    # jcamp-dx.org conformance set — missing feature, not a bad fixture.
+    "jcamp/ir/nzhagen_official_ISAS_CDX.dx": (
+        "JCAMP ##DATA TYPE= LINK (nested blocks) unsupported by import_jcamp"
+    ),
 }
 
 
