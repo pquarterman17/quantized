@@ -1,7 +1,10 @@
 # quantized
 
 <p align="center">
-  <img src="assets/branding/quantized-app-icon.png" alt="Quantized logo" width="180">
+  <!-- Absolute URL, not a repo-relative path: this README is also the PyPI
+       long_description (pyproject `readme`), and PyPI cannot resolve
+       repo-relative images. -->
+  <img src="https://raw.githubusercontent.com/pquarterman17/quantized/main/assets/branding/quantized-app-icon.png" alt="Quantized logo" width="180">
 </p>
 
 **Plot, analyze, and publish lab data — magnetometry, X-ray/neutron
