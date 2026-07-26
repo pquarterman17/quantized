@@ -14,13 +14,13 @@ calibration-lamp spectrum, and a Nicolet FTIR/Raman scan) during development
 — see the parser test file for the offset-by-offset sanity checks that
 matched every one of those independently-produced binary files.
 
-Only the modern "new format, LSB-first" sub-version (``fversn == 0x4B``) is
-implemented — the sub-version every real sample file used, and the one
-every actively-maintained OPUS/SPC reader targets. The old pre-1996 format
-(``0x4D``), the rare new-format MSB variant (``0x4C``), and the
+Implemented sub-versions: the modern "new format, LSB-first" (``fversn ==
+0x4B``) and, since 2026-07-25, the old pre-1996 format (``0x4D`` — see
+``_OLD_HEAD_FMT``; validated against the two real specimens in the shared
+corpus). The rare new-format MSB variant (``0x4C``) and the
 Shimadzu-specific variant (``0xCF``) are recognized but rejected with a
-clear error rather than guessed at (no example file / spec text was
-available to validate them against).
+clear error rather than guessed at (still no example file to validate
+against).
 
 Binary layout (new format, 512-byte main header)
 --------------------------------------------------
@@ -95,9 +95,25 @@ _FLAG_BITS = ("tsprec", "tcgram", "tmulti", "trandm", "tordrd", "talabs", "txyxy
 
 _UNSUPPORTED_FVERSN = {
     0x4C: "new-format MSB-first",
-    0x4D: "old format (pre-1996)",
     0xCF: "Shimadzu-specific variant",
 }
+
+# Old (pre-1996) format, fversn == 0x4D: a 224-byte header holding the same
+# ideas in older types (int16 exponent, FLOAT32 npts/first/last), with the
+# first subfile's 32-byte subheader embedded at byte 224. Y values are 32-bit
+# fixed point stored as TWO 16-bit words, MOST significant word first
+# (settled empirically on the two real specimens: msw-first decodes to smooth
+# spectra, lsw-first to full-range noise; and the m_ordz multifile walk ends
+# exactly at EOF with per-subfile exponents 3..6 giving absorbance-scale y).
+_OLD_HEAD_SIZE = 224
+_OLD_HEAD_FMT = "<BBhfffBBHBBBB8sHH7f130s30s"
+_OLD_HEAD_FIELDS = (
+    "oftflgs", "oversn", "oexp", "onpts", "ofirst", "olast", "oxtype",
+    "oytype", "oyear", "omonth", "oday", "ohour", "ominute", "ores",
+    "opeakpt", "onscans", "os1", "os2", "os3", "os4", "os5", "os6", "os7",
+    "ocmnt", "ocatxt",
+)
+assert struct.calcsize(_OLD_HEAD_FMT) == _OLD_HEAD_SIZE
 
 # X/Z axis unit codes (fxtype/fztype) — the SPC spec's defined enumeration.
 _XZ_UNITS = (
@@ -265,6 +281,62 @@ def _read_subfile(
     return own_x, y, cursor - pos, sub
 
 
+def _import_old(raw: bytes, path: Path) -> DataStruct:
+    """Old-format (fversn=0x4D) reader — see the ``_OLD_HEAD_FMT`` note."""
+    if len(raw) < _OLD_HEAD_SIZE + _SUBHEAD_SIZE:
+        raise ValueError(f"truncated old-format SPC file: {path.name}")
+    head = dict(zip(_OLD_HEAD_FIELDS, struct.unpack_from(_OLD_HEAD_FMT, raw, 0), strict=True))
+    flags = _decode_flags(head["oftflgs"])
+    npts, oexp = int(head["onpts"]), int(head["oexp"])
+    if npts <= 0:
+        raise ValueError(f"empty old-format SPC file (npts={npts}): {path.name}")
+    # First subheader is embedded at 224; each later subfile carries its own.
+    block = _SUBHEAD_SIZE + 4 * npts
+    n_sub, rem = divmod(len(raw) - _OLD_HEAD_SIZE, block)
+    if n_sub < 1 or rem:
+        raise ValueError(
+            f"old-format SPC size mismatch: {len(raw) - _OLD_HEAD_SIZE} data bytes "
+            f"is not a whole number of {npts}-point subfiles: {path.name}"
+        )
+    ys = []
+    for k in range(n_sub):
+        pos = _OLD_HEAD_SIZE + k * block
+        subexp = struct.unpack_from("<Bb", raw, pos)[1]
+        exp = subexp if flags["tmulti"] and subexp != 0 else oexp
+        words = np.frombuffer(raw, dtype="<i2", offset=pos + _SUBHEAD_SIZE, count=2 * npts)
+        pairs = words.reshape(npts, 2)
+        y_int = (pairs[:, 0].astype(np.int32) << 16) | pairs[:, 1].astype(np.uint16).astype(
+            np.int32
+        )
+        ys.append(_y_from_ints(y_int, exp, 32))
+    x = np.linspace(head["ofirst"], head["olast"], npts)
+    y_label = _y_label(head["oytype"])
+    labels = [y_label] if n_sub == 1 else [f"{y_label} {i + 1}" for i in range(n_sub)]
+    year = int(head["oyear"])
+    date = None
+    if 0 < int(head["omonth"]) <= 12 and 0 < int(head["oday"]) <= 31:
+        date = {
+            "year": year + 1900 if year < 200 else year,
+            "month": int(head["omonth"]), "day": int(head["oday"]),
+            "hour": int(head["ohour"]), "minute": int(head["ominute"]),
+        }
+    metadata: dict[str, Any] = {
+        "source": str(path),
+        "parser_name": "import_spc",
+        "spc_format": "old (fversn=0x4D)",
+        "x_column_name": _axis_label(head["oxtype"]),
+        "x_column_unit": "",
+        "comment": _null_str(head["ocmnt"]),
+        "source_instrument": _null_str(head["ores"]),
+        "date": date,
+        "n_subfiles": n_sub,
+        "flags": flags,
+    }
+    return DataStruct.create(
+        x, np.column_stack(ys), labels=labels, units=[y_label] * n_sub, metadata=metadata
+    )
+
+
 def import_spc(filepath: str | Path) -> DataStruct:
     """Import a GRAMS/Thermo ``.spc`` spectral file into a DataStruct."""
     path = Path(filepath)
@@ -272,6 +344,8 @@ def import_spc(filepath: str | Path) -> DataStruct:
     if len(raw) < 2:
         raise ValueError(f"file too small to be an SPC file: {path.name}")
     fversn = raw[1]
+    if fversn == 0x4D:
+        return _import_old(raw, path)
     if fversn in _UNSUPPORTED_FVERSN:
         raise ValueError(
             f"SPC sub-format '{_UNSUPPORTED_FVERSN[fversn]}' (fversn=0x{fversn:02x}) is "
