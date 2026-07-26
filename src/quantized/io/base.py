@@ -7,12 +7,36 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 
-__all__ = ["NO_COLUMN", "parse_col_header", "resolve_column"]
+__all__ = ["NO_COLUMN", "parse_col_header", "read_head", "resolve_column"]
 
 NO_COLUMN = -1
 
 _HEADER_UNIT_RE = re.compile(r"^(.+?)\s*\(([^)]+)\)\s*$")
+
+
+def read_head(path: str | Path, nbytes: int = 65536, *, encoding: str = "latin-1") -> str:
+    """Read and decode at most ``nbytes`` bytes from the start of ``path``.
+
+    Shared by every content sniffer that only needs to inspect a small
+    header/preamble region. Replaces the ``Path(path).read_text(...)[:N]``
+    pattern, which pulls the WHOLE file into memory just to inspect its
+    first few KB -- P0.4 measured ~140 MB of throwaway reads sniffing a
+    70 MB CSV before import even begins (``is_sims_file``/``is_lakeshore_file``
+    each ``read_text()``-ing the full file twice more on top of the parse
+    itself). The default cap (64 KB) comfortably covers every existing sniff
+    region (the largest today is 4 KB), so swapping in this reader changes
+    nothing observable.
+
+    latin-1 maps every byte to a code point 1:1, so truncating at an
+    arbitrary byte boundary can never split a multi-byte character; other
+    encodings use ``errors="replace"`` for the same reason a truncated read
+    would otherwise risk.
+    """
+    with Path(path).open("rb") as fh:
+        raw = fh.read(nbytes)
+    return raw.decode(encoding, errors="replace")
 
 
 def parse_col_header(raw: str) -> tuple[str, str]:

@@ -14,6 +14,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io.base import read_head
 
 __all__ = ["import_refl1d_dat", "is_refl1d_dat"]
 
@@ -35,7 +36,7 @@ def is_refl1d_dat(path: Path) -> bool:
     ``[Header]`` file. The column header may follow other ``#`` metadata lines
     (e.g. ``# intensity:`` / ``# background:`` in refl-fit exports), so scan every
     comment line rather than only the first non-empty one."""
-    head = Path(path).read_text(encoding="latin-1", errors="replace")[:512]
+    head = read_head(path, 512)
     if "[header]" in head.lower():
         return False
     for line in head.splitlines():

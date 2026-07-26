@@ -21,6 +21,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io.base import read_head
 
 __all__ = ["import_sims", "is_sims_file"]
 
@@ -68,7 +69,7 @@ def is_sims_file(path: Path) -> bool:
         if p.suffix.lower() in _EXCEL_EXTS:
             text = _excel_preview_text(p)
         else:
-            text = p.read_text(encoding="latin-1", errors="replace")[:4096]
+            text = read_head(p, 4096)
     except Exception:  # noqa: BLE001 — a sniffer must never raise; unreadable -> not SIMS
         return False
     return _sims_signals(text)

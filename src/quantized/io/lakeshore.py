@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
-from quantized.io.base import NO_COLUMN, parse_col_header, resolve_column
+from quantized.io.base import NO_COLUMN, parse_col_header, read_head, resolve_column
 
 __all__ = ["import_lake_shore", "is_lakeshore_file"]
 
@@ -149,7 +149,7 @@ def is_lakeshore_file(path: Path) -> bool:
     CSV only matches if it self-identifies as Lake Shore in its first 2 KB.
     A sniffer must never raise; unreadable -> not Lake Shore."""
     try:
-        text = Path(path).read_text(encoding="latin-1", errors="replace")[:2048]
+        text = read_head(path, 2048)
     except Exception:  # noqa: BLE001
         return False
     lower = text.lower()

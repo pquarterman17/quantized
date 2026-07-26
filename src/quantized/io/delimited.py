@@ -158,6 +158,53 @@ def _looks_like_units_row(row: Sequence[str], n_data_cols: int) -> bool:
     return n_non_empty > 0 and (n_unit_like / max(n, 1)) >= 0.6
 
 
+def _tokens_to_columns(
+    data_tokens: Sequence[Sequence[str]], n_cols: int
+) -> Sequence[Sequence[str]]:
+    """Transpose already delimiter-split data rows into per-column string
+    sequences, ready for a C-speed per-column ``float`` conversion instead of
+    one Python-level ``_to_float`` call per cell.
+
+    A short row is padded with ``""`` and a long row's extra trailing cells
+    are dropped -- exactly the ``min(len(row), n_cols)`` truncation the old
+    per-cell loop applied, so every row (ragged or not) still lands the same
+    values in the same columns.
+    """
+    if all(len(row) == n_cols for row in data_tokens):
+        # Common case (a well-formed file): every row is already n_cols wide,
+        # so a plain transpose is enough -- no per-cell padding pass needed.
+        return list(zip(*data_tokens, strict=True)) if data_tokens else [[] for _ in range(n_cols)]
+    columns: list[list[str]] = [[] for _ in range(n_cols)]
+    for row in data_tokens:
+        width = min(len(row), n_cols)
+        for c in range(width):
+            columns[c].append(row[c])
+        for c in range(width, n_cols):
+            columns[c].append("")
+    return columns
+
+
+def _convert_column(cells: Sequence[str]) -> np.ndarray:
+    """Vectorized ``str`` -> ``float64`` conversion matching ``_to_float``'s
+    per-cell semantics (an NA token or anything ``float()`` rejects becomes
+    NaN; conversion never raises) while staying at C speed for the common
+    case of an already-clean numeric column.
+
+    ``np.asarray(cells, dtype=float)`` parses every cell in one C-level pass
+    -- but it RAISES on the first cell it can't parse (including every
+    ``_NA_TOKENS`` spelling other than the "nan"/"inf" ones numpy's own
+    parser already accepts), so a column with even one stray NA token or
+    typo falls back to the exact old element-by-element ``_to_float`` loop.
+    That fallback only runs on the (rare) messy column, never on the file as
+    a whole, so a clean numeric file -- the common case, including the P0.4
+    1M-row benchmark -- takes the fast path for every column.
+    """
+    try:
+        return np.asarray(cells, dtype=np.float64)
+    except (ValueError, TypeError):
+        return np.asarray([_to_float(c) for c in cells], dtype=np.float64)
+
+
 def _detect_layout(tokens: Sequence[Sequence[str]]) -> tuple[int, int, int]:
     """Return 0-based (header_row, data_start, units_row); -1 when absent."""
     scores = [_numeric_score(row) for row in tokens]
@@ -227,14 +274,12 @@ def import_csv(
             cell = utok[k] if k < len(utok) else ""
             row_units.append(re.sub(r"^\s*[(\[](.*?)[)\]]\s*$", r"\1", cell))
 
-    rows: list[list[float]] = []
-    for row in tokens[data_start:]:
-        vals = [float("nan")] * n_cols
-        for c in range(min(len(row), n_cols)):
-            vals[c] = _to_float(row[c])
-        rows.append(vals)
-    matrix = np.asarray(rows, dtype=float)
-    n_rows = matrix.shape[0]
+    data_tokens = tokens[data_start:]
+    n_rows = len(data_tokens)
+    columns_str = _tokens_to_columns(data_tokens, n_cols)
+    matrix = np.empty((n_rows, n_cols), dtype=np.float64)
+    for c in range(n_cols):
+        matrix[:, c] = _convert_column(columns_str[c])
 
     if isinstance(time_column, int) and time_column < 0:
         time_idx = -1
@@ -249,7 +294,7 @@ def import_csv(
         if np.count_nonzero(np.isfinite(time_vec)) / max(n_rows, 1) < 0.1:
             parsed_dates = [
                 _datetime_epoch(row[time_idx]) if time_idx < len(row) else None
-                for row in tokens[data_start:]
+                for row in data_tokens
             ]
             if sum(value is not None for value in parsed_dates) / max(n_rows, 1) >= 0.8:
                 time_vec = np.asarray(
@@ -336,7 +381,7 @@ def import_csv(
         numeric_ratio = float(np.count_nonzero(~np.isnan(matrix[:, c]))) / max(n_rows, 1)
         if numeric_ratio > 0.1:
             continue  # a sparse NUMERIC column, not text — leave it dropped
-        cells = [row[c].strip() if c < len(row) else "" for row in tokens[data_start:]]
+        cells = [row[c].strip() if c < len(row) else "" for row in data_tokens]
         if any(cells):  # an entirely blank column is padding, not data
             text_columns[col_headers[c]] = cells
 
