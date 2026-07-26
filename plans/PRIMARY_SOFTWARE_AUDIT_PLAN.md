@@ -3,14 +3,17 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-07-26 (P0.3 fixtures/generator/checklists shipped `9d4ce6d`
-AND P0.4's core envelope shipped + first dated run `5a2ce6e`/`5c938b9` —
-synthesis in `docs/performance_envelope.md`; two evidence-backed follow-ups
-booked under P0.4; new P1.4 import-boundary evidence — see the session log.
-The `P0.1`-style IDs remain the stable identifiers cited by BACKLOG rows and
-PR history)
+**Updated:** 2026-07-26 (ChatGPT-Sol status reconciliation after v0.12.0:
+the performance sprint shipped, but not all owner-free engineering is done.
+Three P0.4 tasks are actionable now; P1/P2/P3/P4 engineering remains
+incomplete where its boxes are open, even when sequencing waits for Gate A.
+Earlier same day: P0.3 fixtures/checklists `9d4ce6d`; P0.4 core envelope
+`5a2ce6e`/`5c938b9`; point reduction `244551c`; import efficiency `51af22d`;
+viewport fix `bcbfb2e`. See the session log. The `P0.1`-style IDs remain the
+stable identifiers cited by BACKLOG rows and PR history)
 **Audit author:** ChatGPT-Sol
 **Audited baseline:** Quantized 0.11.1, commit `261cd3a` on `main`
+**Reconciled baseline:** Quantized 0.12.0, commit `0527a14` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
 
 > The former OneDrive checkout is gone. Do not use or recreate
@@ -56,8 +59,10 @@ Primary-software readiness is **not yet proven**. The largest risks are:
 5. Graph Builder grouping is not fully live/editable on Stage.
 6. The Import Wizard does not expose the full metadata-row and error-role
    contract.
-7. Large 2-D maps, million-row sessions, many-window projects, and large
-   workspaces lack a measured performance envelope.
+7. The performance envelope now covers million-row import/plot, backend 2-D
+   maps, and many-window projects, but large derived workspaces, browser-side
+   maps, long-operation feedback/cancel, offline paths, and a real-GPU
+   interaction confirmation remain.
 8. Some strong backend analysis engines are not cohesive, discoverable daily
    workflows.
 9. Help covers less than the command, Inspector, and workshop surface.
@@ -76,7 +81,7 @@ Primary-software readiness is **not yet proven**. The largest risks are:
 | Project persistence | Medium | Native named-project lifecycle and stress tests |
 | Reusable plot recipes | Medium-low | Full semantic recipes, not style only |
 | Categorical/JMP workflow | Medium-low | First-class factors and grouped plots |
-| Large 2-D workflow | Unproven | Performance envelope and targeted fixes |
+| Large 2-D workflow | Partially measured | Browser interaction envelope and targeted fixes |
 | Origin migration | Technically strong, owner-unverified | Visual review and real migration |
 | Discoverability | Medium | Comprehensive contextual help |
 | Desktop distribution | Medium | Clean-machine, signing, notarization, updates |
@@ -133,6 +138,27 @@ specific residual below:
 7. Start with the economical recommended model and escalate only when needed.
 8. Check boxes only with code/test or owner-review evidence, then update the
    dated work log and `BACKLOG.md`.
+9. **Owner-gated** means progress actually requires owner judgment, credentials,
+   hardware interaction, or a missing specimen. It does not mean "not selected
+   for the current sprint."
+10. **Sequencing-gated** work remains unfinished engineering. Gate A controls
+    its order and scope; it must never be reported as implemented or as an
+    owner action merely because it is not yet scheduled.
+11. `BACKLOG.md`'s immediate queue is a start-here view, not an exhaustive list
+    of every unfinished agent-implementable criterion in this plan.
+
+### Current work-state summary (2026-07-26)
+
+| State | Work |
+|---|---|
+| **Actionable now; no owner gate** | P0.4 `_detect_layout`; large derived `.dwk` measurement; >500 ms progress/cancel audit |
+| **Owner/environment evidence now** | P0.1 switch-trigger project; P0.2 screenshot review; P0.3 timed journeys; P0.4 real-GPU confirmation |
+| **Sequencing-gated engineering; incomplete** | P1.1-P1.7 after Gate A; P2.1-P2.8 in the owner-ranked Gate D order; P3.1-P3.7 and P4.1-P4.2 as Gate E evidence warrants |
+| **Credentials/release acceptance** | P4.3; agents can implement and automate supporting work, but signing identities and clean-machine acceptance require the owner/environment |
+| **Specimen/demand gated** | P2.9 and P4.4; do not implement speculative scientific or Origin behavior |
+
+This table classifies scheduling, not completion. Open checkboxes below remain
+the authoritative acceptance criteria.
 
 ## Model routing
 
@@ -248,30 +274,34 @@ copy/export, and cleanup for:
 - [x] several large 2-D matrix sizes (backend 500²/1000²/2000² measured;
   browser-side map interaction is a residual);
 - [x] 50+ datasets and 20+ plot windows;
-- [ ] a large `.dwk` with derived data, figures, and results (F4 covered a
+- [ ] **Agent-actionable now:** a large `.dwk` with derived data, figures, and
+  results (F4 covered a
   50-small-dataset/20-window session — cheap; derived data + a 1M-row
   member untested);
-- [x] dense multi-series plots before/after downsampling ("after" is n/a —
-  NO plot-path downsampler exists; that absence is the finding);
-- [ ] network/offline source transitions (unmeasurable until P1.1 creates
+- [x] dense multi-series plots before and after window-aware min/max
+  decimation (`244551c`; 7M → ~82k points fed to uPlot);
+- [ ] **Sequencing-blocked by P1.1:** network/offline source transitions
+  (unmeasurable until P1.1 creates
   an offline-vs-deleted distinction; re-measure after P1.1).
 
 **Acceptance**
 
 - [x] Every result records hardware, fixture, command, and measurement
   (`docs/envelope/2026-07-26-*.json`).
-- [ ] Direct manipulation targets <100 ms — pan meets it everywhere
+- [ ] **Environment/evidence gate:** direct manipulation targets <100 ms —
+  pan meets it everywhere
   (≤60 ms even at 7M points). Zoom, after decimation (`244551c`) AND the
   viewport-rebuild fix (`bcbfb2e`): 20×100k **meets** the target (p95
   86 ms); 1M×7 is at p95 112 ms under HEADLESS software-rendered Chromium
   — close the box only after a real-GPU re-measure confirms (or refutes)
   the last 12 ms. History: 259 → 238 → 112 ms across the three fixes.
-- [ ] Operations >500 ms have suitable busy/progress feedback; safe long jobs
-  offer cancellation (not audited this pass; F1's ~14–28 s import is the
-  case to audit first).
-- [ ] Failed thresholds have profiles (mechanism-level attribution exists —
-  no point reduction; import small-object churn — formal profiles only if
-  the follow-ups' fixes dispute it).
+- [ ] **Agent-actionable now:** operations >500 ms have suitable busy/progress
+  feedback; safe long jobs offer cancellation (not audited this pass; F1's
+  ~14–28 s import is the case to audit first).
+- [ ] Failed thresholds have profiles (mechanism-level attribution exists:
+  import wall time is now `_detect_layout` scoring; F1's last 12 ms appears
+  to be headless canvas draw. Capture formal profiles if the targeted fix or
+  real-GPU run disputes either attribution).
 - [x] WebGL/workers/downsampling/chunked arrays/format changes are booked only
   where evidence supports them (downsampling + import efficiency booked
   below; WebGL/workers/chunked arrays deliberately NOT booked — no evidence;
@@ -282,7 +312,8 @@ copy/export, and cleanup for:
 (`tools/bench/frontend_envelope.mjs`, real app end-to-end, `5c938b9`) +
 first dated run on the Ryzen 7800X3D machine. Raw records in
 `docs/envelope/`, synthesis + residuals in `docs/performance_envelope.md`.
-P0.4 stays open for the residuals above.
+Three measured follow-ups shipped; P0.4 stays open for the residuals above
+and `_detect_layout` below.
 
 **Booked follow-ups (evidence-backed):**
 
@@ -311,7 +342,8 @@ P0.4 stays open for the residuals above.
   unchanged. F1's 12 ms residual is canvas draw under headless
   software rendering — NOT booked further; re-measure on a real GPU
   first (Graph25 discipline).
-- [ ] **`_detect_layout` per-cell numeric scoring** (found 2026-07-26):
+- [ ] **Agent-actionable now: `_detect_layout` per-cell numeric scoring**
+  (found 2026-07-26):
   ~9 s of a 14.6 s profiled 1M×8 import goes to `float()`-per-cell
   header/data-start scoring across 8M cells — same class as the tokenizer
   fix but inside delicate layout-detection logic (adjacent to MAIN #33
@@ -319,6 +351,11 @@ P0.4 stays open for the residuals above.
   realdata corpus.
 
 ---
+
+The P1 campaigns below are **sequencing-gated, not owner-gated and not
+complete**. Gate A determines their evidence-based order and exact scope.
+Agents implement them afterward; the owner is needed again only for the
+acceptance journeys explicitly named by the gates.
 
 ### P1.1 — Native desktop file and project bridge
 
@@ -1133,6 +1170,27 @@ work (its BACKLOG row).
 - Envelope re-measured: zoom p95 F1 238→112 ms, F3 116→86 ms; the <100 ms
   acceptance box stays open pending a real-GPU confirm of F1's last 12 ms.
 - `_detect_layout` scoring remains the one open P0.4 follow-up.
+
+#### 2026-07-26 — Non-owner work status reconciliation (ChatGPT-Sol)
+
+- Audited v0.12.0 at `0527a14` read-only against this plan, `BACKLOG.md`,
+  current code, recent history, and green main CI/E2E/CodeQL.
+- Corrected the claim that all work not requiring the owner was implemented.
+  The performance sprint is complete, but `_detect_layout` scoring, the large
+  derived-workspace measurement, and the long-operation progress/cancel audit
+  are owner-free P0.4 work that is actionable now.
+- Confirmed the Gate A owner work: P0.1 switch-trigger project, P0.2 screenshot
+  review, P0.3 timed journeys, and the real-GPU acceptance measurement.
+- Confirmed P1.1-P1.7 are not owner actions and are not implemented. They are
+  sequencing-gated by Gate A so the owner’s friction evidence chooses their
+  order and exact scope. Direct code checks still show no Tauri file-command
+  bridge or relink path, numeric-index PlotSpec bindings, and the single-row
+  Import Wizard contract.
+- Confirmed later P2/P3/P4 open boxes also remain incomplete engineering,
+  mixed with explicit owner, specimen, credential, and evidence gates. They
+  are not part of the immediate queue, but must not be described as completed.
+- No completion checkbox changed: this pass clarified state and reconciled
+  the derived dashboard only.
 
 ## Reference baseline
 

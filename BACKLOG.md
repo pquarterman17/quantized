@@ -6,13 +6,21 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-26 (fourth pass, same day). **The
-viewport-rebuild fix SHIPPED** (`bcbfb2e`: committed view limits apply via
-`u.setScale`/no-op instead of tearing down the uPlot instance; autoscale
-transitions still rebuild by design). Zoom p95: F3 **86 ms — meets the
-100 ms target**; F1 238→**112 ms** under headless software rendering, with
-the last 12 ms deliberately NOT booked pending a real-GPU re-measure. The
-one remaining actionable P0.4 row is `_detect_layout` scoring below.
+**Last reconciled:** 2026-07-26 (fifth pass, ChatGPT-Sol status audit after
+v0.12.0). The performance sprint is real and green, but "all work that does
+not require the owner is implemented" is false. The immediate owner-free P0.4
+queue has three rows: `_detect_layout` scoring, a large derived-workspace
+measurement, and the >500 ms progress/cancel audit. P1.1-P1.7 and later
+P2/P3/P4 engineering are incomplete but sequencing-gated; they are not owner
+actions and must not be described as shipped. This dashboard now distinguishes
+**actionable now**, **sequencing-gated**, and **owner/evidence-gated** work.
+
+Prior same day (fourth pass). **The viewport-rebuild fix SHIPPED**
+(`bcbfb2e`: committed view limits apply via `u.setScale`/no-op instead of
+tearing down the uPlot instance; autoscale transitions still rebuild by
+design). Zoom p95: F3 **86 ms — meets the 100 ms target**; F1
+238→**112 ms** under headless software rendering, with the last 12 ms
+deliberately NOT booked pending a real-GPU re-measure.
 
 Prior same day (third pass). **Both P0.4
 follow-ups SHIPPED** (`244551c` window-aware plot decimation, default-on,
@@ -172,8 +180,9 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
-| Continue contextual help after the first five Inspector `?` links: cover high-friction workshops and registered context actions from real-use evidence | PRIMARY SOFTWARE P3.1 |
 | `_detect_layout` per-cell numeric scoring — ~9 s of a 14.6 s 1M-row import profiles into `float()`-per-cell header detection (8M cells); vectorize the scoring only, semantics pinned by matrix + realdata corpus | PRIMARY SOFTWARE P0.4 follow-up 2 |
+| Measure a large `.dwk` containing derived data, figures/results, and a 1M-row member; F4 covered only many small datasets/windows | PRIMARY SOFTWARE P0.4 |
+| Audit operations over 500 ms for consistent busy/progress feedback and safe cancellation, beginning with F1's 14–28 s import | PRIMARY SOFTWARE P0.4 |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are
@@ -182,7 +191,9 @@ written. They are annotated on those rows under Owner actions below rather than
 duplicated here; P0.1 is GOTO gate Q9 and P0.2 is the ORIGIN #55/#56 screenshot
 review.
 
-After Gate A, the current dependency-ordered implementation candidates are:
+After Gate A, the current dependency-ordered implementation candidates are
+**unfinished engineering campaigns, not owner actions**. Gate A controls
+their order and exact scope; it does not make them complete:
 
 | Item | Plan / item |
 |------|-------------|
@@ -193,6 +204,14 @@ After Gate A, the current dependency-ordered implementation candidates are:
 | Live Stage parity for Graph Builder grouping/faceting | PRIMARY SOFTWARE P1.5 |
 | Full semantic plot-recipe templates with technique scope and opt-in application | PRIMARY SOFTWARE P1.3 |
 | Portable projects and safe source relinking | PRIMARY SOFTWARE P1.7 |
+| Continue contextual help after the first five Inspector `?` links, using real-use friction to select workshops and context actions | PRIMARY SOFTWARE P3.1 |
+
+The table above is the first dependency chain, not the whole unfinished
+engineering inventory. P2.1-P2.8 contain technique-workbench implementation,
+P3.2-P3.7 contain usability/accessibility/recovery/export engineering, and
+P4.1-P4.2 contain decomposition and regression-matrix engineering. Their
+open boxes remain open. They are intentionally scheduled after evidence and
+higher-impact gates; they are neither implemented nor automatically owner-gated.
 
 Carried over from the prior campaign, two items are judgment calls their plans
 explicitly parked for the owner rather than tasks:
@@ -256,6 +275,7 @@ re-sweep periodically.
 | Item | Plan / item |
 |------|-------------|
 | **First dated timed-workflow runs** — follow `docs/timed_workflow_baselines.md` (8 journey checklists, results template at the bottom); the gesture/confusion/discoverability fields need the owner's hands. Fixtures + protocol SHIPPED 2026-07-26 | PRIMARY SOFTWARE P0.3 residue |
+| **Real-GPU F1 interaction acceptance** — the automated headless run is 112 ms p95, 12 ms over target under software rendering; close only after a visible hardware-accelerated run on the owner workstation confirms or refutes it | PRIMARY SOFTWARE P0.4 acceptance |
 | **PyPI fresh-machine acceptance run** — on a machine without dev tools: `pipx install quantized-lab` → import a CSV within 2 min; also verify the v0.8.1 installer's two Start Menu entries (#23). Registration + first publish DONE 2026-07-12 (`quantized-lab` 0.8.1 live) | MAIN gate (was ORIGIN_GAP #41) |
 | **Corpus publish licensing sign-off** — `../test-data` repo is `git init`-ed; publish gated on the licensing pass + 6 flagged public files | MAIN gate (was ORIGIN_GAP #45) |
 | **Defaults-audit eyeball** — rule on the taste calls in `plans/design/DEFAULTS_AUDIT.md` (aps preset height vs. log-decade label thinning; data-aware legend placement) | MAIN gate (was GAP_TIER3 #2) |
@@ -362,7 +382,7 @@ the root; every active plan below is its declared sub-plan.
 | `plans/MAIN_PLAN.md` | Active (ROOT) | MAIN #9–#38 are shipped; remaining work is owner gates, evidence-gated deferrals, and the active sub-plans |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous); **#54 SPC/JCAMP gaps CLOSED 2026-07-25 same-day booked** |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates **Q4/Q8/Q9 only** — Q6 (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and shipped 2026-07-19 |
-| `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: switch-trigger trial, Origin visual owner review, timed workflows, and large-data envelope. Gate B–C: native project lifecycle, portability, categorical metadata, Import Wizard roles, live grouping, and full plot recipes. Later technique/usability/distribution work is evidence-ranked. **P4.1 lint restore + P4.2's npm-ci item SHIPPED 2026-07-25; P0.3's fixtures/generator/checklists AND P0.4's core envelope + first dated run SHIPPED 2026-07-26 (P0.3 residue = owner timed runs; P0.4 residue = named unmeasured cases; two evidence-backed follow-ups booked)** |
+| `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: owner switch-trigger trial, Origin visual review, timed workflows, and the real-GPU performance check. **Actionable now:** P0.4 `_detect_layout`, large derived `.dwk`, and long-operation progress/cancel audit. **Sequencing-gated, incomplete engineering:** P1.1-P1.7 native lifecycle/portability/metadata/import/grouping/recipes, followed by evidence-ranked P2/P3/P4 work. Shipped 2026-07-26: P0.3 fixtures/protocol, P0.4 core envelope, point reduction, import efficiency, and viewport fix. |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | **Tier 1 #1, #2, #5 ALL SHIPPED 2026-07-19** (Codex PRs #65/#66 + the two gate resolutions); **#17 CLOSED** (its last three items — split buttons, cross-menu ownership move, first-run hints — are struck); the ONLY open box in the whole plan is #16's `.opju` migration edges (owner-dependent). Remaining gates: the AnalysisSelection contract timing. Historical: #8, #11, #12 CLOSED and #15 fully covered except the #1-gated folder-undo journey, ALL 2026-07-18 (#8: palette bridge + mini-toolbar + worksheet/window/annotation retrofits; #11: stat-mark faceting end-to-end; #12: PlotSpec v2 canonical spec (display/axes/decor blocks) across Stage/Graph Builder/Figure Builder/export — all 5 slices + parts A (y2Fmt)/B (grouped-series export)/C (decor: annotations/shapes/legend) shipped same day, `page` block deferred to ORIGIN_FILE_DECODE #54; #15: channel-drag + annotation/shape + window-arrange journeys, e2e 33/33 across the zoom matrix); #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = stat-mark faceting; arbitrary multi-panel ordering belongs to #54), #15 core harness + 7 journeys SHIPPED 2026-07-17 and export round-trip SHIPPED 2026-07-18 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#52 complete; #54 page-setup control + spatial-export residual + overlap/inset layout slice ALL SHIPPED 2026-07-17 (Codex PR #55); visual-import campaign #58–#63 ALL SHIPPED 2026-07-18 (Codex stack #56–#61 `854271c`: spatial legends, region bands, imported-view + spatial-page export parity, saved-preview window, presentation templates); **#54's generalized page/layer MODEL is COMPLETE — pass B shipped `50b4c9c` 2026-07-24**, joining A + C; open = #53 graphic objects (evidence-gated; subsumes #47) and #54's specimen-gated >2-Y-axes rendering (now in the blocked table); #55 tooling is complete and #55/#56 close on owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |
