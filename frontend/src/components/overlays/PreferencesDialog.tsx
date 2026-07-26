@@ -9,7 +9,13 @@ import { useEffect, useState } from "react";
 
 import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
 import { Button, SegmentedControl, Select, SliderRow, Switch } from "../primitives";
-import { ACCENT_SWATCHES as ACCENTS, loadInteractionPrefs, saveInteractionPrefs } from "../../store/prefs";
+import {
+  ACCENT_SWATCHES as ACCENTS,
+  loadInteractionPrefs,
+  loadPlotPerfPrefs,
+  saveInteractionPrefs,
+  savePlotPerfPrefs,
+} from "../../store/prefs";
 import { useApp } from "../../store/useApp";
 
 const IS_MAC = isMacPlatform();
@@ -53,6 +59,10 @@ export default function PreferencesDialog() {
   // GUI_INTERACTION #9: store-independent, like PlotToolbar's showGroupLabels
   // (useApp.ts has zero ratchet headroom) — see store/prefs.ts's header.
   const [persistentTool, setPersistentTool] = useState(() => loadInteractionPrefs().persistentTool);
+  // P0.4: same store-independent pattern — see store/prefs.ts's PlotPerfPrefs.
+  const [decimateDensePlots, setDecimateDensePlots] = useState(
+    () => loadPlotPerfPrefs().decimateDensePlots,
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -181,6 +191,18 @@ export default function PreferencesDialog() {
                 </PrefRow>
                 <PrefRow label="Antialias 2-D map" hint="smooth vs crisp heatmap cells">
                   <Switch checked={p.antialias} onChange={(v) => setPref("antialias", v)} />
+                </PrefRow>
+                <PrefRow
+                  label="High-density plot decimation"
+                  hint="above ~10k rows, draw a min/max-reduced view that re-resolves on zoom"
+                >
+                  <Switch
+                    checked={decimateDensePlots}
+                    onChange={(v) => {
+                      setDecimateDensePlots(v);
+                      savePlotPerfPrefs({ decimateDensePlots: v });
+                    }}
+                  />
                 </PrefRow>
               </>
             )}

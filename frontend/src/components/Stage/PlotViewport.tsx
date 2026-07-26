@@ -14,9 +14,21 @@ import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
 import type { PlotPayload } from "../../lib/plotdata";
+import {
+  buildDecimatedData,
+  decimatePlugin,
+  decimationEligible,
+  shouldDecimate,
+  xExtent,
+} from "../../lib/plotDecimate";
 import { frameVarsPlugin } from "../../lib/uplotFrameVars";
-import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
+import { buildOpts, xIsAscending, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
+// loadPlotPerfPrefs is a plain localStorage read (like uplotOpts.ts's cssVar()
+// DOM read) — not a Zustand store subscription, so it doesn't break this
+// file's "driven entirely by props, NO store reads" contract (same reasoning
+// PreferencesDialog.tsx documents for the store-independent prefs it reads).
+import { loadPlotPerfPrefs } from "../../store/prefs";
 import type { Accent, AnchorEditBridge, PeakWizardEditBridge, Theme } from "../../store/useApp";
 
 export interface PlotViewportProps
@@ -126,7 +138,38 @@ export default function PlotViewport(props: PlotViewportProps) {
         setScale: [...(opts.hooks?.setScale ?? []), windowXSyncHook(syncKey)],
       };
     }
-    const plot = new uPlot(opts, displayPayload.data, host);
+    // View-window min/max decimation (P0.4): patched post-buildOpts, same
+    // idiom as frameVars/syncKey above, so it applies to every PlotViewport
+    // caller (main stage, background/panel/snapshot windows) with no per-
+    // caller wiring. `lib/plotDecimate.ts` is the single chokepoint — see its
+    // header for the full mechanism and `decimationEligible`'s doc for every
+    // guard (overlays/companions, non-ascending x, error bars, scatter mode).
+    const fullX = displayPayload.data[0] as (number | null)[];
+    const decimate =
+      loadPlotPerfPrefs().decimateDensePlots &&
+      shouldDecimate(fullX.length, w) &&
+      decimationEligible({
+        seriesColumnCount: displayPayload.series.length,
+        plottedCount: args.plotted?.length,
+        xAscending: xIsAscending(fullX),
+        hasErrorBars: !!(args.errorBars && args.errorBars.size > 0),
+        hasErrorSpans: !!(args.errorSpans && args.errorSpans.size > 0),
+        defaultTrace: args.defaultTrace,
+        hasColorByColumns: !!(args.colorByColumns && args.colorByColumns.size > 0),
+      });
+    let plotData = displayPayload.data;
+    if (decimate) {
+      // uPlot.AlignedData's y-column element type is `number | null | undefined`
+      // (TypedArray-friendly); this codebase's own columns only ever use `null`
+      // for a missing value (never `undefined` — see plotdata.ts), so the same
+      // `as (number | null)[][]` narrowing plotdata.ts already uses throughout
+      // (e.g. maskExcludedPayload) applies here too.
+      const fullData = displayPayload.data as (number | null)[][];
+      const [x0, x1] = args.xLim ?? xExtent(fullX) ?? [0, 1];
+      plotData = buildDecimatedData(fullData, x0, x1, w) as uPlot.AlignedData;
+      opts.plugins = [...(opts.plugins ?? []), decimatePlugin(() => fullData)];
+    }
+    const plot = new uPlot(opts, plotData, host);
     plotRef.current = plot;
     const unregister = syncKey ? registerSyncPlot(syncKey, plot) : null;
 
@@ -191,6 +234,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.plotted,
     args.seriesLabels,
     args.errorBars,
+    args.errorSpans,
     args.colorByColumns,
     args.hidden,
     args.tool,
