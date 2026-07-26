@@ -543,8 +543,9 @@ covers a much smaller subset and guards focus on Analyze.
   (2026-07-25).
 - [x] The growing Help catalog loads only when Help opens; its 14.4 kB chunk
   reduced audited eager startup from 945.5 kB to 934.4 kB.
-- [ ] Migrate Edit, View, Analyze, and Help commands from the
-  legacy/sparse catalogs to the shared description contract.
+- [x] Edit, View, Analyze, and Help commands use the shared description
+  contract; the separate 17-item Analyze help catalog was deleted
+  (2026-07-25).
 - [ ] Extend the same source to Inspector cards, context actions, and
   workshops, then add contextual `?` links.
 
@@ -787,6 +788,17 @@ At the end of each session:
 - Coverage prevents future File/Data commands from shipping undocumented.
 - Validation: focused suite **47 passed**; production build and bundle ratchet
   passed at 937.4 kB eager.
+
+### 2026-07-25 — P3.1 Analyze/UI discoverability slice (ChatGPT-Sol)
+
+- Added shared descriptions to every remaining curated Analyze, View, Edit,
+  and Help command.
+- Deleted the parallel hand-authored Analyze help catalog; all curated command
+  topics now derive from the real command registry.
+- One coverage test now fails on any undocumented curated command, regardless
+  of menu group, and Origin migration tips resolve against the same metadata.
+- Validation: focused suite **44 passed**; production build and bundle ratchet
+  passed at 940.4 kB eager.
 
 ## Reference baseline
 

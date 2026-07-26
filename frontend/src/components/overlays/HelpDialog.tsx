@@ -11,10 +11,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
-  HELP_TOOLS,
   actionToHelpItem,
   searchHelpItems,
-  toolToHelpItem,
   type ScoredHelpItem,
 } from "../../lib/helpContent";
 import { buildAppActions } from "../../appCommands";
@@ -39,14 +37,11 @@ const TABS: { id: HelpSection; label: string }[] = [
 ];
 
 const COMMAND_HELP_ITEMS = buildAppActions(useApp.getState)
-  .filter((action) =>
-    ["File", "Data", "Plot", "Insert"].includes(action.group),
-  )
+  .filter((action) => action.description)
   .map(actionToHelpItem);
 
-// The one searchable index — tools, plot/insert commands, formats, and tips.
+// The one searchable index — every curated command, formats, and Origin tips.
 const SEARCH_ITEMS = [
-  ...HELP_TOOLS.map(toolToHelpItem),
   ...COMMAND_HELP_ITEMS,
   ...IMPORT_FORMATS.map(formatToHelpItem),
   ...ORIGIN_TIPS.map(tipToHelpItem),

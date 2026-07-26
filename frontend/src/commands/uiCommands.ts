@@ -20,12 +20,14 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "theme",
       group: "View",
       label: "Toggle theme",
+      description: "Switch the application between light and dark appearance.",
       run: () => s().setTheme(s().theme === "dark" ? "light" : "dark"),
     },
     {
       id: "density",
       group: "View",
       label: "Cycle density",
+      description: "Cycle interface spacing between compact, regular, and comfortable layouts.",
       run: () => {
         const order = ["compact", "regular", "comfy"] as const;
         s().setDensity(order[(order.indexOf(s().density) + 1) % order.length]);
@@ -35,6 +37,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "accent",
       group: "View",
       label: "Cycle accent color",
+      description: "Cycle the interface highlight color without changing plot series colors.",
       run: () => {
         const order = ["violet", "teal", "ocean", "amber", "rose"] as const;
         s().setAccent(order[(order.indexOf(s().accent) + 1) % order.length]);
@@ -44,6 +47,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "left",
       group: "View",
       label: "Toggle library panel",
+      description: "Show or hide the left project library and dataset browser.",
       shortcut: "⌘[",
       run: () => s().toggleLeft(),
     },
@@ -51,6 +55,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "right",
       group: "View",
       label: "Toggle inspector panel",
+      description: "Show or hide the right properties Inspector for the current selection.",
       shortcut: "⌘]",
       run: () => s().toggleRight(),
     },
@@ -58,12 +63,14 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "column-switcher",
       group: "View",
       label: "Column switcher (flip through channels)…",
+      description: "Quickly preview and switch the plotted data channels in the active dataset.",
       run: () => s().setColumnSwitcherOpen(true),
     },
     {
       id: "worksheet",
       group: "View",
       label: "Show worksheet",
+      description: "Switch the central stage to the active dataset's worksheet.",
       run: () => s().setStageTab("worksheet"),
     },
     // GUI_INTERACTION #10: restores every open-or-ever-opened floating
@@ -74,12 +81,14 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "reset-tool-windows",
       group: "View",
       label: "Reset window positions",
+      description: "Restore floating analysis windows to visible default positions and sizes.",
       run: () => s().resetToolWindowPositions(),
     },
     {
       id: "plot",
       group: "View",
       label: "Show plot",
+      description: "Switch the central stage to the interactive plot.",
       run: () => s().setStageTab("plot"),
     },
     // ── Edit ──
@@ -87,6 +96,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "palette",
       group: "Edit",
       label: PALETTE_LABEL,
+      description: "Search available commands by name, purpose, alias, or shortcut.",
       shortcut: PALETTE_SHORTCUT,
       run: () => s().setCmdk(true),
     },
@@ -94,6 +104,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "paste-data",
       group: "Edit",
       label: "Paste data",
+      description: "Create a dataset from tabular text currently on the clipboard.",
       shortcut: "⌘V",
       keywords: "clipboard import tsv csv table",
       run: () => void s().pasteDataFromClipboard(),
@@ -102,6 +113,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "help",
       group: "Help",
       label: "Help topics…",
+      description: "Search tools, commands, import formats, shortcuts, and Origin migration guidance.",
       keywords: "documentation guide how to search tools help",
       // Standalone store (store/help) — imported directly like toasts, not a
       // useApp flag (see store/help for why).
@@ -111,15 +123,17 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "shortcuts",
       group: "Help",
       label: "Keyboard shortcuts",
+      description: "Open the keyboard and mouse shortcut reference.",
       shortcut: "?",
       run: () => s().setShortcutsOpen(true),
     },
     // GOTO #11: the rich-text label micro-syntax reference (Help menu + ⌘K).
-    { id: "text-format-help", group: "Help", label: "Text formatting", run: () => s().setTextFormatHelpOpen(true) },
+    { id: "text-format-help", group: "Help", label: "Text formatting", description: "View syntax for Greek letters, scientific symbols, fractions, roots, and formatted plot text.", run: () => s().setTextFormatHelpOpen(true) },
     {
       id: "what-is-this",
       group: "Help",
       label: "What is this?",
+      description: "Point at an interface control to reveal its concise contextual explanation.",
       keywords: "inspect hover contextual help point identify tooltip",
       run: () => useHelp.getState().toggleWhatIsThis(),
     },
@@ -127,6 +141,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "interaction-hints",
       group: "Help",
       label: "Show interaction hints",
+      description: "Replay the first-use hints for right-click, double-click, dragging, and plot controls.",
       keywords: "first run mouse right click double click drag drop tips",
       run: showInteractionHints,
     },

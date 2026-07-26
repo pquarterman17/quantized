@@ -1,124 +1,94 @@
 import { describe, expect, it } from "vitest";
 
 import { buildAppActions } from "../appCommands";
+import { useApp } from "../store/useApp";
 import {
-  HELP_TOOLS,
   actionToHelpItem,
   searchHelpItems,
-  toolToHelpItem,
   type HelpItem,
 } from "./helpContent";
-import { useApp } from "../store/useApp";
 
-const ITEMS = HELP_TOOLS.map(toolToHelpItem);
-
-describe("HELP_TOOLS coverage (the guard that keeps it data-driven)", () => {
-  it("has a help entry for every Analyze-menu command", () => {
-    // A new analysis tool cannot ship without a one-line description — the
-    // whole point of authoring the catalog here is that this fails otherwise.
-    const analyzeIds = buildAppActions(useApp.getState)
-      .filter((a) => a.group === "Analyze")
-      .map((a) => a.id);
-    const documented = new Set(HELP_TOOLS.map((t) => t.id));
-    const undocumented = analyzeIds.filter((id) => !documented.has(id));
-    expect(undocumented).toEqual([]);
-  });
-
-  it("does not document a tool that isn't a real command (no dangling entries)", () => {
-    const commandIds = new Set(buildAppActions(useApp.getState).map((a) => a.id));
-    const dangling = HELP_TOOLS.map((t) => t.id).filter((id) => !commandIds.has(id));
-    expect(dangling).toEqual([]);
-  });
-
-  it("every tool has a non-empty name and a sentence-ish description", () => {
-    for (const t of HELP_TOOLS) {
-      expect(t.name.length).toBeGreaterThan(0);
-      expect(t.desc.length).toBeGreaterThan(20);
-      expect(t.section.length).toBeGreaterThan(0);
-    }
-  });
-});
+const COMMANDS = buildAppActions(useApp.getState);
+const ITEMS = COMMANDS.map(actionToHelpItem);
 
 describe("shared command help metadata", () => {
-  const commands = buildAppActions(useApp.getState);
-  const documentedCommands = commands.filter(
-    (action) => ["File", "Data", "Plot", "Insert"].includes(action.group),
-  );
-
-  it("documents every migrated command at its command definition", () => {
-    expect(documentedCommands.length).toBeGreaterThan(50);
-    expect(documentedCommands.filter((action) => !action.description).map((action) => action.id)).toEqual([]);
-    for (const action of documentedCommands) {
+  it("documents every curated command at its command definition", () => {
+    expect(COMMANDS.length).toBeGreaterThan(80);
+    expect(
+      COMMANDS.filter((action) => !action.description).map(
+        (action) => action.id,
+      ),
+    ).toEqual([]);
+    for (const action of COMMANDS) {
+      expect(action.label.length).toBeGreaterThan(0);
       expect(action.description!.length).toBeGreaterThan(20);
     }
   });
 
+  it("uses unique stable command ids", () => {
+    const ids = COMMANDS.map((action) => action.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it("turns command metadata into a searchable menu-path topic", () => {
-    const command = documentedCommands.find((action) => action.id === "break-x-axis")!;
+    const command = COMMANDS.find(
+      (action) => action.id === "break-x-axis",
+    )!;
     const item = actionToHelpItem(command);
     expect(item.key).toBe("break-x-axis");
     expect(item.meta).toBe("Plot ▸ Layout");
     expect(item.detail).toContain("discontinuous");
   });
 
-  it("does not duplicate a legacy hand-authored help topic", () => {
-    const keys = [
-      ...HELP_TOOLS.map((tool) => tool.id),
-      ...documentedCommands.map((action) => action.id),
-    ];
-    expect(new Set(keys).size).toBe(keys.length);
-  });
-});
-
-describe("toolToHelpItem", () => {
-  it("maps a tool to a searchable item with a menu-path meta", () => {
-    const item = toolToHelpItem(HELP_TOOLS[0]);
-    expect(item.key).toBe(HELP_TOOLS[0].id);
-    expect(item.title).toBe(HELP_TOOLS[0].name);
-    expect(item.meta).toMatch(/^Analyze ▸ /);
-    expect(item.keywords).toContain(HELP_TOOLS[0].section);
+  it("rejects a command with no description", () => {
+    expect(() =>
+      actionToHelpItem({
+        id: "undocumented",
+        group: "Test",
+        label: "Undocumented",
+        run: () => undefined,
+      }),
+    ).toThrow('command "undocumented" has no help description');
   });
 });
 
 describe("searchHelpItems", () => {
-  it("returns everything (order-preserved, unscored) for a blank query", () => {
+  it("returns everything in order for a blank query", () => {
     const all = searchHelpItems(ITEMS, "");
     expect(all).toHaveLength(ITEMS.length);
     expect(all[0].key).toBe(ITEMS[0].key);
-    expect(all.every((r) => r.hits.length === 0)).toBe(true);
+    expect(all.every((result) => result.hits.length === 0)).toBe(true);
   });
 
-  it("finds a tool by a word in its title, with highlight hits", () => {
-    const r = searchHelpItems(ITEMS, "hyster");
-    expect(r[0].key).toBe("hysteresis");
-    expect(r[0].hits.length).toBeGreaterThan(0);
+  it("finds a command by a word in its title with highlight hits", () => {
+    const results = searchHelpItems(ITEMS, "hyster");
+    expect(results[0].key).toBe("hysteresis");
+    expect(results[0].hits.length).toBeGreaterThan(0);
   });
 
-  it("finds a tool by a keyword NOT in its title (no hits, still ranked)", () => {
-    // "coercivity" is only in hysteresis's keywords/detail, not its name.
-    const r = searchHelpItems(ITEMS, "coercivity");
-    expect(r.map((x) => x.key)).toContain("hysteresis");
-    const hit = r.find((x) => x.key === "hysteresis")!;
-    expect(hit.hits).toEqual([]); // matched the fallback tier, so no title highlight
+  it("finds a command by description text not present in its title", () => {
+    const results = searchHelpItems(ITEMS, "coercivity");
+    const hit = results.find((result) => result.key === "hysteresis");
+    expect(hit).toBeDefined();
+    expect(hit!.hits).toEqual([]);
   });
 
-  it("ranks a title match above a keyword-only match", () => {
-    // "peak" is in "Find peaks"/"Peak Analyzer" titles AND in other tools'
-    // keywords; the title matches must come first.
-    const r = searchHelpItems(ITEMS, "peak");
-    const firstTitleMatch = r[0];
-    expect(firstTitleMatch.title.toLowerCase()).toContain("peak");
+  it("ranks a title match above a description-only match", () => {
+    const results = searchHelpItems(ITEMS, "peak");
+    expect(results[0].title.toLowerCase()).toContain("peak");
   });
 
-  it("returns nothing for a query that matches no title, detail, or keyword", () => {
+  it("returns nothing for an unknown query", () => {
     expect(searchHelpItems(ITEMS, "zzxqwv")).toEqual([]);
   });
 
-  it("searches an arbitrary HelpItem list, not just tools (category-agnostic)", () => {
+  it("searches arbitrary HelpItem sources", () => {
     const items: HelpItem[] = [
       { key: "a", title: "Alpha", detail: "the first" },
       { key: "b", title: "Beta", detail: "the second" },
     ];
-    expect(searchHelpItems(items, "alph").map((r) => r.key)).toEqual(["a"]);
+    expect(searchHelpItems(items, "alph").map((result) => result.key)).toEqual([
+      "a",
+    ]);
   });
 });
