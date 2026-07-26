@@ -17,6 +17,8 @@ use std::process::{Child, Command};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
 
 struct ServerProc(Mutex<Option<Child>>);
@@ -160,6 +162,14 @@ fn kill_server(app: &tauri::AppHandle) {
     }
 }
 
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.show();
+        let _ = win.unminimize();
+        let _ = win.set_focus();
+    }
+}
+
 /// Background auto-update (Rust-driven): check GitHub Releases for a newer
 /// SIGNED build; if one exists, ask the user, then download + install +
 /// restart. Any failure (offline, no update, bad/absent manifest) is silent —
@@ -231,6 +241,40 @@ fn main() {
                 app.default_window_icon().cloned(),
             ) {
                 let _ = win.set_icon(icon);
+            }
+
+            // Use the same packaged artwork in the system tray. A normal
+            // left-click restores/focuses Quantized; right-click exposes the
+            // small menu that Linux tray implementations require as well.
+            if let Some(icon) = app.default_window_icon().cloned() {
+                let show =
+                    MenuItem::with_id(app, "tray-show", "Show Quantized", true, None::<&str>)?;
+                let quit =
+                    MenuItem::with_id(app, "tray-quit", "Quit Quantized", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&show, &quit])?;
+                TrayIconBuilder::with_id("quantized-tray")
+                    .icon(icon)
+                    .tooltip("Quantized")
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_tray_icon_event(|tray, event| {
+                        if matches!(
+                            event,
+                            TrayIconEvent::Click {
+                                button: MouseButton::Left,
+                                button_state: MouseButtonState::Up,
+                                ..
+                            }
+                        ) {
+                            show_main_window(tray.app_handle());
+                        }
+                    })
+                    .on_menu_event(|app, event| match event.id().as_ref() {
+                        "tray-show" => show_main_window(app),
+                        "tray-quit" => app.exit(0),
+                        _ => {}
+                    })
+                    .build(app)?;
             }
 
             // DiraCulator (`--calc`): the "main" window is config-defined in

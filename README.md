@@ -1,5 +1,9 @@
 # quantized
 
+<p align="center">
+  <img src="assets/branding/quantized-app-icon.png" alt="Quantized logo" width="180">
+</p>
+
 **Plot, analyze, and publish lab data — magnetometry, X-ray/neutron
 diffraction & reflectometry, transport — in one fast, reproducible app.**
 
