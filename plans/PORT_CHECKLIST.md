@@ -71,8 +71,14 @@ files"), so there is no behavioural truth to freeze golden values from.
   FTIR/Raman scan; not committed — no redistribution rights). Only the
   modern "new format LSB" sub-version (`fversn=0x4B`) is implemented; the
   old (`0x4D`), MSB (`0x4C`), and Shimadzu (`0xCF`) sub-formats are
-  recognized but rejected with a clear error (no example to validate
-  against). **Freeze pending: N/A (no MATLAB source exists).**
+  recognized but rejected with a clear error. **Freeze pending: N/A (no
+  MATLAB source exists).** **Updated 2026-07-25:** the corpus now holds two
+  real `0x4D` files (`spc/spectroscopy/rohanisaac_old_0x4D_{doerner,m_ordz}.spc`),
+  so that sub-format is no longer specimen-blocked — see PORT_PLAN #54. Two
+  further defects the same corpus exposed are booked there: TXYXYS
+  `fnpts=0` wrongly treated as empty, and a multifile read that returns one
+  subfile with no error. `0x4C`/`0xCF` still have no example and stay
+  rejected.
 - [ ] `importOxford` — **still blocked, not attempted.** Unlike Opus/SPC,
   Oxford Instruments MagLab exports have no published spec at all — the
   MATLAB roadmap itself says "format varies by software version... needs
