@@ -22,7 +22,8 @@ import { runExportSpatialPageCommand } from "../lib/exportPageCommand";
 import { chooseAndImport } from "../lib/importEntry";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "../lib/originTemplate";
-import { parseWorkspace, type LoadedWorkspace } from "../lib/workspace";
+import { currentViewport, parseWorkspaceFile } from "../lib/parseWorkspaceFile";
+import type { LoadedWorkspace } from "../lib/workspace";
 import type { Action } from "../store/commands";
 import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
 import { withOp } from "../store/pendingOps";
@@ -48,19 +49,28 @@ let sampleCounter = 0;
 
 /** Shared Open/Append-workspace flow (the only difference between the two
  *  File commands): pick a .dwk, parse it, and hand the result to `dispatch`
- *  (`loadWorkspace` or `appendWorkspace`). */
+ *  (`loadWorkspace` or `appendWorkspace`).
+ *
+ *  P3.4 slice 3: the picker's `onchange` callback fires the moment a file is
+ *  chosen — well before any parsing starts — so the `withOp` busy state is
+ *  registered HERE, inside the callback, not around the `openFilePicker`
+ *  call itself (which would show "Opening…" while the OS file dialog is
+ *  merely sitting open and the user hasn't picked anything yet). The parse
+ *  itself runs off the main thread via `parseWorkspaceFile` (a module Worker
+ *  when available, the prior synchronous path as a fallback) — see that
+ *  module's doc comment for why the two paths can't diverge. */
 function openWorkspaceCommand(
   s: StoreGet,
   verb: string,
   dispatch: (ws: LoadedWorkspace) => void,
 ): () => void {
+  const label = verb === "open" ? "Opening workspace…" : "Appending workspace…";
   return () =>
     openFilePicker((files) => {
       const file = files[0];
       if (!file) return;
-      file
-        .text()
-        .then((text) => dispatch(parseWorkspace(text)))
+      void withOp(label, () => parseWorkspaceFile(file, currentViewport()))
+        .then(dispatch)
         .catch((e: unknown) =>
           s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),
         );
