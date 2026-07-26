@@ -191,11 +191,19 @@ Findings:
 9. **Worksheet virtualization and autosave hold at 1M-row scale** —
    bounded DOM, in-budget scroll, and a 188 MB IndexedDB write that just
    works. No work booked here.
-10. **The `.dwk` reopen path freezes the renderer for ~5.8 s** at a 188 MB
-    workspace — the synchronous `JSON.parse` the feedback/cancel audit
-    flagged, now measured. This is hard evidence for P3.4 slice 3 (busy
-    state + move the parse off the main thread) and a data point for
-    P1.2's chunked/binary-container consideration for large members.
+10. **The `.dwk` reopen path freezes the renderer for ~5.8–6.7 s** at a
+    188 MB workspace. ATTRIBUTION CORRECTED 2026-07-26 (P3.4 slice 3,
+    `481e0ea`): instrumentation showed the synchronous `JSON.parse` +
+    validation is only **~0.4–0.6 s** of that; moving it to a worker
+    (shipped, with an equivalence-tested sync fallback) swapped it for a
+    comparable ~0.7–0.8 s structured-clone cost — an interleaved A/B
+    measured the freeze statistically unchanged (~6.5 s both ways). The
+    TRUE dominant term is **React re-render + 11-window mount + canvas
+    paint (~5–6 s) after `loadWorkspace`** — booked as P3.4 slice 4
+    (staged/progressive window mount on restore). The worker path still
+    removes parse-time blocking that scales with file size for
+    data-dominated, few-window workspaces, and slice 3's busy state means
+    the wait is at least signposted now.
 
 ## Residuals (explicitly unmeasured — carry in P0.4)
 

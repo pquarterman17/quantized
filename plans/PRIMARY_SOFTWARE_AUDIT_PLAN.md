@@ -3,7 +3,11 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-07-26 late (actionable-queue execution: `_detect_layout`
+**Updated:** 2026-07-26 latest (P3.4 slices 1–3 SHIPPED `3c3ccee`/`08c6a5b`/
+`481e0ea`; slice 3 corrected the freeze attribution — render/mount, not
+parse — booked as slice 4, now the actionable queue; branding drop merged
+`8fad871`; eager-bundle headroom down to 0.8 kB → P4.1 lazy-boundary item
+imminent. Prior: actionable-queue execution: `_detect_layout`
 shipped `9f12216` — 1M import now 4.72 s; the >500 ms feedback/cancel audit
 completed with gaps booked as P3.4 slices 1–3; the large derived-`.dwk`
 measurement is in flight. Earlier: ChatGPT-Sol status reconciliation after
@@ -155,7 +159,7 @@ specific residual below:
 
 | State | Work |
 |---|---|
-| **Actionable now; no owner gate** | P3.4 slices 1–3 (evidence-warranted by the 2026-07-26 audit; slice 3's freeze confirmed at 5.8 s). ~~P0.4 `_detect_layout`~~, the ~~>500 ms audit~~, and the ~~large derived-`.dwk` measurement~~ all completed 2026-07-26 |
+| **Actionable now; no owner gate** | P3.4 slice 4 (staged workspace-restore rendering — the corrected freeze term). ~~Slices 1–3~~, ~~P0.4 `_detect_layout`~~, the ~~>500 ms audit~~, and the ~~large derived-`.dwk` measurement~~ all completed 2026-07-26 |
 | **Owner/environment evidence now** | P0.1 switch-trigger project; P0.2 screenshot review; P0.3 timed journeys; P0.4 real-GPU confirmation |
 | **Sequencing-gated engineering; incomplete** | P1.1-P1.7 after Gate A; P2.1-P2.8 in the owner-ranked Gate D order; P3.1-P3.7 and P4.1-P4.2 as Gate E evidence warrants |
 | **Credentials/release acceptance** | P4.3; agents can implement and automate supporting work, but signing identities and clean-machine acceptance require the owner/environment |
@@ -302,12 +306,13 @@ copy/export, and cleanup for:
   — close the box only after a real-GPU re-measure confirms (or refutes)
   the last 12 ms. History: 259 → 238 → 112 ms across the three fixes.
 - [ ] Operations >500 ms have suitable busy/progress feedback; safe long
-  jobs offer cancellation — **AUDITED 2026-07-26, criterion NOT met**: the
-  job queue has one producer (DREAM fit — also the only op with progress +
-  working cancel); everything else is a bare fetch, zero `AbortController`
-  in the frontend. Full inventory + ranked gaps booked under **P3.4**,
-  whose evidence gate this audit satisfies. This box closes when the P3.4
-  slices ship.
+  jobs offer cancellation — AUDITED 2026-07-26 (criterion not met), then
+  the three worst gaps SHIPPED same day (P3.4 slices 1–3: import
+  feedback + cancel + double-import guard; universal async-command
+  in-flight signal; workspace-open busy state). Remaining tail before
+  this box closes: batch/scan fit cancellation, per-item progress for
+  `fitEach`/report formats, and the workspace-restore render freeze
+  (P3.4 slice 4).
 - [ ] Failed thresholds have profiles (mechanism-level attribution exists:
   import wall time is now `_detect_layout` scoring; F1's last 12 ms appears
   to be headless canvas draw. Capture formal profiles if the targeted fix or
@@ -730,19 +735,38 @@ synchronous `JSON.parse`, feedback only on failure.
 
 Prioritized slices (in pain order):
 
-- [ ] **Slice 1 — import progress + cancel** (the front door): route large
-  imports through the job queue or wire AbortController + busy state;
-  disable/guard the import affordances while running; keep the small-file
-  path snappy.
-- [ ] **Slice 2 — command-palette in-flight signal**: one chokepoint fix in
-  the palette/command runner so every command with async work shows a
-  running state (the fire-and-forget `a.run()` is a single call site).
-- [ ] **Slice 3 — workspace open feedback + off-main-thread parse**: the
-  large-`.dwk` measurement (2026-07-26) SHOWED the freeze — 5.8 s of a
-  6.0 s reopen frozen in synchronous `JSON.parse` at a 188 MB workspace.
-  Slice 3 therefore must both add a busy state AND move the parse off the
-  main thread (worker or chunked), not merely add a spinner over a frozen
-  renderer.
+- [x] ~~**Slice 1 — import progress + cancel**~~ SHIPPED 2026-07-26
+  (`08c6a5b`): batch imports register a cancellable pendingOps entry with
+  a live "Importing 3/19: name…" label; AbortController threaded through
+  `lib/api.ts`; cancel keeps files already imported ("cancelled — N/M
+  completed"); double-import guarded at the `runImport` chokepoint (covers
+  ⌘O, Library button, drag-drop, Recents) plus command pre-flight checks.
+  Live-verified against the 1M-row file (cancel → 0 datasets, clean
+  re-import, guard toast). Import wizard `importParse` left unwired (the
+  brief's optional carve-out).
+- [x] ~~**Slice 2 — command-palette in-flight signal**~~ SHIPPED 2026-07-26
+  (`3c3ccee`): standalone `store/pendingOps.ts` + one `runAction`
+  chokepoint (palette + both MenuBar call sites); StatusBar shows ops
+  older than 250 ms. `ContextMenu`'s fire-and-forget `ContextAction`
+  contract deliberately out of scope (different type, right-click actions
+  weren't the audit gap).
+- [x] ~~**Slice 3 — workspace open feedback + off-main-thread parse**~~
+  SHIPPED 2026-07-26 (`481e0ea`) **with a corrected attribution**: busy
+  state + worker parse (sync fallback, equivalence-tested; also fixed a
+  real latent bug — `parseWorkspace` read `window.innerWidth`, absent in
+  workers; viewport now threaded explicitly). HONEST OUTCOME: the freeze
+  did NOT move (~6.5 s A/B both ways) because parse is only ~0.4–0.6 s of
+  it — the dominant term is render/mount (slice 4). Autosave-restore not
+  converted (its `pickRestorable` validity predicate is synchronous by
+  contract; noted follow-up).
+- [ ] **Slice 4 — staged workspace-restore rendering** (booked 2026-07-26
+  from slice 3's instrumentation): after `loadWorkspace`, React
+  re-render + mounting 11 plot windows + canvas paint costs ~5–6 s on the
+  188 MB session and is the real freeze. Candidate shape: restore data
+  and the active window first, then mount remaining windows
+  staged/idle-deferred (or virtualize offscreen windows). Measure with
+  `tools/bench/workspace_envelope.mjs` before/after; target main-thread
+  freeze well under 1.5 s.
 
 Original acceptance criteria (unchanged):
 
@@ -799,6 +823,10 @@ Sustainability, distribution, and specimen-gated edges.
 `lib/uplotOpts.ts` ~1,384, `lib/uplotOverlays.ts` ~1,125, with several
 700-950 line state/contracts. The audited production build is also **945.5 kB
 eager against a 949.2 kB budget**, leaving only 3.7 kB headroom.
+(2026-07-26 late: after the P3.4 slices the eager bundle sits at
+**948.4 kB — 0.8 kB headroom**. The "lazy-load the next coherent heavy
+boundary before adding substantial UI" item below is now IMMINENT: the
+next eager feature cannot land without it.)
 
 - [ ] Characterization tests before moves.
 - [ ] Split one owned domain per PR with unchanged behavior/contracts.
@@ -1244,6 +1272,29 @@ work (its BACKLOG row).
   spawned one commit behind (`b1b32e7`, pre-`9f12216`), so its upload
   timing predates the layout fix — caveated in the envelope doc; all
   other numbers unaffected.
+
+#### 2026-07-26 late — P3.4 slices 1–3 shipped (3 Sonnet agents: sequential primitive, then parallel; Fable spec/verify/merge)
+
+- **Slice 2 first** (`3c3ccee`) because slices 1/3 consume its primitive:
+  `store/pendingOps.ts` + `runAction` chokepoint + age-gated StatusBar
+  indicator. Then **slices 1 and 3 in parallel worktrees** per the owner's
+  parallelize-agents directive; the predicted `fileCommands.ts` conflict
+  was a one-line import overlap, resolved at merge.
+- Slice 1 (`08c6a5b`): cancellable batch import, live-verified against the
+  1M-row file; pendingOps gained `cancel`/`updateOp`.
+- Slice 3 (`481e0ea`): worker parse + busy state — and the session's most
+  valuable output: **the 5.8 s freeze attribution was WRONG** (parse is
+  ~0.4–0.6 s; render/mount is ~5–6 s). Corrected in the envelope doc;
+  booked as slice 4. Also fixed a latent `window.innerWidth`-in-worker
+  bug found during the split.
+- Merged-tree gates: 4,726 vitest / lint baseline / build 948.4 kB
+  (0.8 kB headroom — P4.1's lazy-boundary item flagged IMMINENT) /
+  e2e 33/33. Both parallel agents hit the known stale-worktree-base
+  gotcha and self-corrected because the expected base sha was pinned.
+- Also landed this pass: the owner's branding drop (icons/favicon/brand
+  source) — reviewed per the external-contribution rule (tracked-set vs
+  `tauri.conf.json` consistency verified so clean-checkout release builds
+  stay green) and merged via `feat/branding-drop` (`8fad871`).
 
 #### 2026-07-26 — Non-owner work status reconciliation (ChatGPT-Sol)
 

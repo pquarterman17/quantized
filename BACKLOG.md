@@ -6,7 +6,18 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-26 (seventh pass). **The large
+**Last reconciled:** 2026-07-26 (eighth pass). **P3.4 slices 1–3 ALL
+SHIPPED** (`3c3ccee` pendingOps + universal async-command signal;
+`08c6a5b` cancellable import + double-import guard, live-verified at 1M
+rows; `481e0ea` workspace-open busy state + worker parse). Slice 3's
+instrumentation CORRECTED the freeze attribution — parse is ~0.5 s, the
+real ~5–6 s is React render/window-mount, now booked as **slice 4** (the
+one actionable row). The owner's branding drop (icons/favicon/brand
+source) was adversarially reviewed and merged (`8fad871`). Eager-bundle
+headroom is down to **0.8 kB** — P4.1's lazy-boundary item is imminent
+and gates any new eager UI.
+
+Prior same day (seventh pass). **The large
 derived-`.dwk`/1M-worksheet measurement is DONE** (`be40a69`): worksheet
 virtualization and autosave hold at 1M-row scale (bounded DOM, 51 ms
 scroll p95, a 188 MB IndexedDB write succeeds), and the reopen path
@@ -201,9 +212,7 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
-| P3.4 slice 1 — import progress + cancel (the front door: 14–28 s at 1M rows with status-text only, no cancel, double-import possible; generalize the DREAM-fit job pattern or wire AbortController) | PRIMARY SOFTWARE P3.4, evidence-warranted 2026-07-26 |
-| P3.4 slice 2 — command-palette in-flight signal (one chokepoint: `CommandPalette.tsx` fires `a.run()` untracked, so every export runs with zero running-state) | PRIMARY SOFTWARE P3.4 |
-| P3.4 slice 3 — workspace-open feedback + off-main-thread parse (freeze CONFIRMED 2026-07-26: 5.8 s of a 6.0 s reopen frozen in sync `JSON.parse` at a 188 MB workspace) | PRIMARY SOFTWARE P3.4 |
+| P3.4 slice 4 — staged workspace-restore rendering: the reopen freeze's REAL term is React re-render + 11-window mount (~5–6 s at the 188 MB session), not `JSON.parse` (~0.5 s, attribution corrected by slice 3's instrumentation). Restore data + active window first, stage the rest; measure with `workspace_envelope.mjs`, target <1.5 s freeze | PRIMARY SOFTWARE P3.4 |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are
