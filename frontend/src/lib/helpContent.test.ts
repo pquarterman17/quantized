@@ -30,6 +30,50 @@ describe("shared command help metadata", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  // Domain-vocabulary guard. Descriptions are written in plain outcome
+  // language, which does NOT contain the jargon a scientist actually types
+  // ("SNIP", "Parratt", "ANOVA"). That vocabulary lives in `keywords`, and it
+  // is invisible in the UI — so nothing but this table notices when a
+  // rewrite drops it. Every row below was findable before the help catalog
+  // was folded into the command registry; deleting a row is a deliberate act.
+  const VOCABULARY: readonly (readonly [string, string])[] = [
+    ["gaussian", "curvefit"],
+    ["lorentzian", "curvefit"],
+    ["least squares", "curvefit"],
+    ["regression", "curvefit"],
+    ["fwhm", "peaks"],
+    ["prominence", "peaks"],
+    ["snip", "baseline"],
+    ["shirley", "baseline"],
+    ["rolling ball", "baseline"],
+    ["vsm", "hysteresis"],
+    ["squid", "hysteresis"],
+    ["coercivity", "hysteresis"],
+    ["tesla", "magtools"],
+    ["oersted", "magtools"],
+    ["parratt", "reflectivity"],
+    ["xrr", "reflectivity"],
+    ["specular", "reflectivity"],
+    ["refl1d", "reflview"],
+    ["epitaxy", "rsm"],
+    ["reciprocal space", "rsm"],
+    ["crystallite", "reductions-wh"],
+    ["microstrain", "reductions-wh"],
+    ["kiessig", "reductions-fft"],
+    ["superlattice", "reductions-reflfft"],
+    ["shapiro", "distribution"],
+    ["t-test", "stats-chooser"],
+    ["anova", "stats-chooser"],
+    ["mann whitney", "stats-chooser"],
+    ["digitize", "digitizer"],
+    ["stepper", "peak-wizard"],
+    ["transport", "calculators"],
+  ];
+
+  it.each(VOCABULARY)("finds a tool by the domain term %j", (term, id) => {
+    expect(searchHelpItems(ITEMS, term).map((r) => r.key)).toContain(id);
+  });
+
   it("turns command metadata into a searchable menu-path topic", () => {
     const command = COMMANDS.find(
       (action) => action.id === "break-x-axis",
