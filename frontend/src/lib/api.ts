@@ -33,11 +33,15 @@ import type {
   WilliamsonHallResult,
 } from "./types";
 
-async function postJSON<T>(path: string, body: unknown): Promise<T> {
+/** `signal` is optional and threads through to `fetch` unchanged (undefined
+ *  is a normal, no-op `RequestInit.signal`) — added for the import-cancel
+ *  path (P3.4 slice 1); every other caller is unaffected. */
+async function postJSON<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
   const res = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
   return unwrap<T>(res);
 }
@@ -89,9 +93,9 @@ export async function unwrap<T>(res: Response): Promise<T> {
 }
 
 /** POST a FormData body (browser file uploads) -> JSON. Exported for the
- *  standalone upload clients (lib/originTemplate). */
-export async function postForm<T>(path: string, form: FormData): Promise<T> {
-  return unwrap<T>(await fetch(path, { method: "POST", body: form }));
+ *  standalone upload clients (lib/originTemplate). `signal` — see postJSON. */
+export async function postForm<T>(path: string, form: FormData, signal?: AbortSignal): Promise<T> {
+  return unwrap<T>(await fetch(path, { method: "POST", body: form, signal }));
 }
 
 /** POST JSON -> raw response bytes (the server-rendered preview images). */
@@ -124,16 +128,19 @@ export async function health(): Promise<{ status: string }> {
   return (await res.json()) as { status: string };
 }
 
-/** Import a local file path (auto-detect format) → DataStruct. */
-export function importFile(path: string): Promise<DataStruct> {
-  return postJSON<DataStruct>("/api/parsers/import", { path });
+/** Import a local file path (auto-detect format) → DataStruct. `signal` lets
+ *  a caller abort mid-request (P3.4 slice 1 import cancel) — the backend may
+ *  still finish parsing server-side; the client just stops waiting. */
+export function importFile(path: string, signal?: AbortSignal): Promise<DataStruct> {
+  return postJSON<DataStruct>("/api/parsers/import", { path }, signal);
 }
 
-/** Upload a file's bytes from the browser (file-picker / drag-drop) → DataStruct. */
-export async function uploadFile(file: File): Promise<DataStruct> {
+/** Upload a file's bytes from the browser (file-picker / drag-drop) → DataStruct.
+ *  `signal` — see importFile. */
+export async function uploadFile(file: File, signal?: AbortSignal): Promise<DataStruct> {
   const form = new FormData();
   form.append("file", file, file.name);
-  return postForm<DataStruct>("/api/parsers/upload", form);
+  return postForm<DataStruct>("/api/parsers/upload", form, signal);
 }
 
 /** Fetch one Origin book's full data (ORIGIN_FILE_DECODE_PLAN #38 — the lazy

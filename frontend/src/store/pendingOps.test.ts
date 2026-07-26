@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { beginOp, endOp, usePendingOps, withOp } from "./pendingOps";
+import { beginOp, endOp, updateOp, usePendingOps, withOp } from "./pendingOps";
 
 beforeEach(() => usePendingOps.setState({ ops: [] }));
 
@@ -70,5 +70,45 @@ describe("pendingOps store", () => {
     });
     expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Other op"]);
     endOp(other);
+  });
+
+  describe("cancel affordance (P3.4 slice 1)", () => {
+    it("beginOp without a cancel arg carries no `cancel` field", () => {
+      beginOp("Uncancellable");
+      expect(usePendingOps.getState().ops[0].cancel).toBeUndefined();
+    });
+
+    it("beginOp with a cancel arg stores it on the op", () => {
+      const cancel = vi.fn();
+      beginOp("Cancellable", cancel);
+      expect(usePendingOps.getState().ops[0].cancel).toBe(cancel);
+    });
+  });
+
+  describe("updateOp (P3.4 slice 1 — per-file progress)", () => {
+    it("changes the label without changing id or startedAt", () => {
+      const id = beginOp("Importing 1/3: a.dat…");
+      const before = usePendingOps.getState().ops[0];
+      updateOp(id, "Importing 2/3: b.dat…");
+      const after = usePendingOps.getState().ops[0];
+      expect(after.label).toBe("Importing 2/3: b.dat…");
+      expect(after.id).toBe(before.id);
+      expect(after.startedAt).toBe(before.startedAt);
+    });
+
+    it("leaves other ops untouched", () => {
+      const a = beginOp("A");
+      const b = beginOp("B");
+      updateOp(a, "A updated");
+      expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["A updated", "B"]);
+      endOp(a);
+      endOp(b);
+    });
+
+    it("is a harmless no-op for an unknown id", () => {
+      beginOp("A");
+      expect(() => updateOp(999_999, "nope")).not.toThrow();
+      expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["A"]);
+    });
   });
 });

@@ -550,6 +550,11 @@ body {
 .qzk-conn { display: inline-flex; align-items: center; gap: 5px; }
 /* P3.4 slice 2: age-gated busy indicator for an async command (StatusBar). */
 .qzk-pending { display: inline-flex; align-items: center; gap: 5px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+/* P3.4 slice 1: the optional Cancel control next to a cancellable op (import
+   batches). Deliberately smaller than .qz-icon-btn — the statusbar is a
+   slim footer row, not a toolbar. */
+.qzk-pending-cancel { display: inline-grid; place-items: center; width: 15px; height: 15px; flex: none; border: none; border-radius: 3px; background: transparent; color: var(--text-faint); font-size: 10px; line-height: 1; cursor: default; }
+.qzk-pending-cancel:hover { background: var(--surface-3); color: var(--danger, #d33); }
 
 /* fit results rows */
 .qzk-fit-row { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: var(--font-size-sm); padding: 2px 0; }

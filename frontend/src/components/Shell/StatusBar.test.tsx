@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import StatusBar from "./StatusBar";
@@ -86,5 +86,50 @@ describe("StatusBar pending-op indicator (P3.4 slice 2)", () => {
     useAutosaveStatus.setState({ health: { savedAt: null, error: "disk full", count: 0 } });
     render(<StatusBar />);
     expect(screen.getByRole("alert")).toHaveTextContent("autosave failing");
+  });
+});
+
+describe("StatusBar cancel affordance (P3.4 slice 1)", () => {
+  it("renders no Cancel control for an op with no cancel callback", () => {
+    render(<StatusBar />);
+    act(() => {
+      beginOp("Export figure…");
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(screen.getByText("Export figure…")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+  });
+
+  it("renders a Cancel control for an op that carries one, and clicking it calls cancel", () => {
+    const cancel = vi.fn();
+    render(<StatusBar />);
+    act(() => {
+      beginOp("Importing scan.dat…", cancel);
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    const btn = screen.getByRole("button", { name: "Cancel" });
+    fireEvent.click(btn);
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("shows Cancel for only the first (oldest) op when several are pending", () => {
+    const cancelA = vi.fn();
+    const cancelB = vi.fn();
+    render(<StatusBar />);
+    act(() => {
+      beginOp("Importing a.dat…", cancelA);
+      beginOp("Importing b.dat…", cancelB);
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(screen.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(cancelA).toHaveBeenCalledOnce();
+    expect(cancelB).not.toHaveBeenCalled();
   });
 });

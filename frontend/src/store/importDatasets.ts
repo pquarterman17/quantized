@@ -21,13 +21,47 @@
 // module is what stops the two drifting into different ideas of what a
 // binding means.
 
+import { create } from "zustand";
+
 import { importFile, uploadFile } from "../lib/api";
 import { lit } from "../lib/macro";
 import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
 import { planOriginFolders } from "../lib/originFolders";
 import { isLazyBookEntry, isPrimaryBookMarker, type DataStruct } from "../lib/types";
+import { beginOp, endOp, updateOp } from "./pendingOps";
 import { toast } from "./toasts";
 import { nextDatasetId, nextFolderId, type AppState } from "./useApp";
+
+// Double-import guard (P3.4 slice 1, 2026-07-26 audit gap #1): the single
+// source of truth for "is a batch import running right now". A standalone
+// store for the same reason pendingOps/toasts/commands are — session-only UI
+// state that must never touch useApp.ts's zero-headroom size ratchet.
+//
+// `runImport` below is the primary writer (importFiles/importPaths both
+// route through it). `commands/fileCommands.ts`'s "import-append" command
+// also sets/clears it around its own call: that flow's implementation
+// (`importFilesAppended`) lives in useApp.ts, which this slice deliberately
+// never touches, so the guard is applied at the command layer for that one
+// entry point instead of inside the action itself. Every OTHER import entry
+// point (⌘O, the command palette, the Library toolbar button, drag-drop, the
+// Recent-files list) calls `importFiles`/`importPaths` directly or through
+// `lib/importEntry.ts`'s `chooseAndImport`, so guarding those two actions
+// covers all of them from one chokepoint.
+interface ImportBatchState {
+  running: boolean;
+}
+export const useImportBatch = create<ImportBatchState>(() => ({ running: false }));
+
+/** True while an import batch is in flight. */
+export function isImportRunning(): boolean {
+  return useImportBatch.getState().running;
+}
+
+/** Shared with commands/fileCommands.ts's pre-flight guard (its own copy of
+ *  this check for "import"/"import-append", so those two commands don't even
+ *  pop a file dialog while a batch is running) — imported, not retyped, so
+ *  the two guard messages can't drift apart. */
+export const ALREADY_RUNNING_MSG = "an import is already running — cancel it first";
 
 /** Where one imported payload came from — the only thing the two entry points
  *  disagree about. */
@@ -202,26 +236,84 @@ function addFromPayload(
   get().pushRecent(origin.name, origin.size, origin.source?.path);
 }
 
-/** Shared per-batch loop + status/toast summary. */
+/** Shared per-batch loop + status/toast summary.
+ *
+ *  P3.4 slice 1: registers ONE pendingOps entry for the whole batch (label
+ *  ticks forward per file via `updateOp`, not a new op each time — see that
+ *  module's doc for why), carries a `cancel` that aborts the in-flight
+ *  fetch via a single AbortController shared across every file in the
+ *  batch, and guards against a second batch starting while this one runs.
+ *
+ *  Cancel semantics: files already fully imported STAY (added to the
+ *  library, undo-recorded, macro-recorded) — cancelling stops the NEXT file
+ *  from starting, it does not roll back completed ones. That is the honest
+ *  semantic for a batch: "imported 2 of 5, then stopped" rather than an
+ *  all-or-nothing transaction the user never asked for. The aborted file's
+ *  own fetch rejects (caught below, `data`/`origin` never assigned, so
+ *  `addFromPayload` never runs for it — no partial dataset lands); the
+ *  backend may still finish parsing that one request server-side, which is
+ *  harmless since the client just discards the response. */
 async function runImport<T>(
   set: SliceSet,
   get: SliceGet,
   items: T[],
   describe: (item: T) => string,
-  load: (item: T) => Promise<{ data: DataStruct; origin: ImportOrigin }>,
+  load: (item: T, signal: AbortSignal) => Promise<{ data: DataStruct; origin: ImportOrigin }>,
 ): Promise<void> {
+  if (useImportBatch.getState().running) {
+    get().setStatus(ALREADY_RUNNING_MSG);
+    toast(ALREADY_RUNNING_MSG, "danger");
+    return;
+  }
+
+  const controller = new AbortController();
+  const label = (i: number): string =>
+    items.length > 1
+      ? `Importing ${i + 1}/${items.length}: ${describe(items[i])}…`
+      : `Importing ${describe(items[0])}…`;
+  const opId = beginOp(label(0), () => controller.abort());
+  useImportBatch.setState({ running: true });
+
   let added = 0;
   let lastError = "";
-  for (const item of items) {
-    get().setStatus(`importing ${describe(item)}…`);
-    try {
-      const { data, origin } = await load(item);
-      addFromPayload(set, get, data, origin);
-      added += 1;
-    } catch (e) {
-      lastError = `${describe(item)}: ${e instanceof Error ? e.message : "error"}`;
+  let cancelled = false;
+  try {
+    for (let i = 0; i < items.length; i++) {
+      if (controller.signal.aborted) {
+        cancelled = true;
+        break;
+      }
+      const item = items[i];
+      updateOp(opId, label(i));
+      get().setStatus(`importing ${describe(item)}…`);
+      try {
+        const { data, origin } = await load(item, controller.signal);
+        addFromPayload(set, get, data, origin);
+        added += 1;
+      } catch (e) {
+        // A rejection that lands after cancel() was called is the abort,
+        // regardless of what the fetch layer happened to throw for it —
+        // checking the controller's own flag (rather than matching an
+        // error name/class) is robust to every fetch/mock implementation.
+        if (controller.signal.aborted) {
+          cancelled = true;
+          break;
+        }
+        lastError = `${describe(item)}: ${e instanceof Error ? e.message : "error"}`;
+      }
     }
+  } finally {
+    endOp(opId);
+    useImportBatch.setState({ running: false });
   }
+
+  if (cancelled) {
+    const summary = `import cancelled — ${added}/${items.length} completed`;
+    get().setStatus(summary);
+    toast(summary, "info");
+    return;
+  }
+
   // A parse failure is the wizard's second front door (#40): the auto-detect
   // path gave up, so point at the manual guess/preview/parse one instead of
   // just reporting the error.
@@ -241,14 +333,14 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
     // is how the two drift into different ideas of what a binding means.
     ...createErrorRolesActions(set, get),
     importFiles: (files) =>
-      runImport(set, get, files, (f) => f.name, async (file) => ({
-        data: await uploadFile(file),
+      runImport(set, get, files, (f) => f.name, async (file, signal) => ({
+        data: await uploadFile(file, signal),
         origin: { name: file.name, size: file.size },
       })),
 
     importPaths: (paths) =>
-      runImport(set, get, paths, pathBasename, async (path) => ({
-        data: await importFile(path),
+      runImport(set, get, paths, pathBasename, async (path, signal) => ({
+        data: await importFile(path, signal),
         // The path is what makes this import re-importable without a picker.
         origin: { name: pathBasename(path), size: 0, source: { kind: "path", path } },
       })),

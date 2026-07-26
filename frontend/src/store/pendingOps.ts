@@ -17,17 +17,31 @@
 // Public contract — this is the shared primitive the P3.4 slice 1
 // (import cancel) and slice 3 (workspace open) follow-up slices will also
 // register through, so keep the surface small and generic:
-//   beginOp(label) -> OpId   register one in-flight operation
+//   beginOp(label, cancel?) -> OpId   register one in-flight operation;
+//                            an optional `cancel` callback is what lets
+//                            StatusBar render a Cancel affordance next to it
+//                            (P3.4 slice 1) — omit it for an op that can't be
+//                            interrupted, exactly as before.
+//   updateOp(id, label)      change a still-running op's label in place
+//                            (P3.4 slice 1's per-file "Importing 3/19: …"
+//                            progress) WITHOUT a new begin/end pair, which
+//                            would reset both its age-gate timer and its id
+//                            (a caller holding the id for cancellation needs
+//                            it to stay stable). A no-op for an unknown id,
+//                            same tolerance as `endOp`.
 //   endOp(id)                unregister it (a no-op for an unknown/already-
 //                            gone id, so a late/duplicate call is harmless)
 //   withOp(label, fn)        wrap an async fn: begins before calling it,
 //                            ends in a `finally` (covers BOTH resolve and
 //                            reject), and rethrows on rejection — callers
 //                            keep their own try/catch/error-reporting
-//                            exactly as before; this only wraps it.
+//                            exactly as before; this only wraps it. No
+//                            `cancel` — for that, call `beginOp`/`endOp`
+//                            directly (see store/importDatasets.ts).
 //   usePendingOps            the zustand hook — `.ops` is oldest-first.
-// Do not add feature-specific fields to `PendingOp` — label + timestamp is
-// the whole contract every consumer shares.
+// The only feature-specific field is `cancel` (added deliberately for slice
+// 1, one Cancel affordance per op) — don't grow `PendingOp` further; label +
+// timestamp + optional cancel is the whole contract every consumer shares.
 
 import { create } from "zustand";
 
@@ -37,6 +51,11 @@ export interface PendingOp {
   id: OpId;
   label: string;
   startedAt: number;
+  /** Optional cancel affordance (P3.4 slice 1 — import cancel): when set,
+   *  StatusBar renders a small Cancel control next to this op's label.
+   *  Actually stopping the underlying work (e.g. aborting a fetch) is the
+   *  registering caller's job — this store only carries the callback. */
+  cancel?: () => void;
 }
 
 interface PendingOpsState {
@@ -48,13 +67,24 @@ let seq = 0;
 
 export const usePendingOps = create<PendingOpsState>(() => ({ ops: [] }));
 
-/** Register one in-flight operation. Returns its id — pass it to `endOp`. */
-export function beginOp(label: string): OpId {
+/** Register one in-flight operation. Returns its id — pass it to `endOp`.
+ *  Pass `cancel` when the work can actually be interrupted (P3.4 slice 1);
+ *  omit it and no Cancel control appears, exactly as before slice 1. */
+export function beginOp(label: string, cancel?: () => void): OpId {
   const id = ++seq;
   usePendingOps.setState((s) => ({
-    ops: [...s.ops, { id, label, startedAt: Date.now() }],
+    ops: [...s.ops, { id, label, startedAt: Date.now(), ...(cancel ? { cancel } : {}) }],
   }));
   return id;
+}
+
+/** Update a still-running op's label in place. Safe to call with an id
+ *  that's already gone — same tolerance as `endOp`, since a caller racing
+ *  its own completion against a label tick shouldn't need to guard it. */
+export function updateOp(id: OpId, label: string): void {
+  usePendingOps.setState((s) => ({
+    ops: s.ops.map((o) => (o.id === id ? { ...o, label } : o)),
+  }));
 }
 
 /** Unregister an operation. Safe to call with an id that's already gone

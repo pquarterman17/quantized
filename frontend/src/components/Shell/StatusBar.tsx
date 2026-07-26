@@ -62,6 +62,21 @@ export default function StatusBar() {
           <StatusDot tone="accent" />
           {visibleOps[0].label}
           {visibleOps.length > 1 && ` (+${visibleOps.length - 1} more)`}
+          {/* P3.4 slice 1: only the op(s) that opted in (import batches) carry
+              a `cancel` — everything else renders exactly as slice 2 left it.
+              Only the FIRST op gets the control, matching the "+N more"
+              collapse right above it. */}
+          {visibleOps[0].cancel && (
+            <button
+              type="button"
+              className="qzk-pending-cancel"
+              title="Cancel"
+              aria-label="Cancel"
+              onClick={visibleOps[0].cancel}
+            >
+              ✕
+            </button>
+          )}
         </span>
       )}
       <span className="qzk-spacer" style={{ flex: 1 }} />

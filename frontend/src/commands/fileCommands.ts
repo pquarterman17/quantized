@@ -24,7 +24,24 @@ import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "../lib/originTemplate";
 import { parseWorkspace, type LoadedWorkspace } from "../lib/workspace";
 import type { Action } from "../store/commands";
+import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
+import { withOp } from "../store/pendingOps";
 import { toast } from "../store/toasts";
+
+// P3.4 slice 1, 2026-07-26 audit gap #1: the double-import guard. The real
+// chokepoint lives in store/importDatasets.ts's `runImport` (covers ⌘O, the
+// Library toolbar button, drag-drop, and Recent-files — every entry point
+// that calls importFiles/importPaths, however it got there). These two
+// commands get an EXTRA pre-flight check so clicking "Import…" while a batch
+// runs doesn't even pop a file dialog first; "import-append" additionally
+// needs the guard applied here because `importFilesAppended` lives in
+// useApp.ts (out of bounds for this slice — see importDatasets.ts's own
+// comment on the same guard).
+function rejectIfImportRunning(): boolean {
+  if (!isImportRunning()) return false;
+  toast(ALREADY_RUNNING_MSG, "danger");
+  return true;
+}
 
 let demoCounter = 0;
 let sampleCounter = 0;
@@ -61,7 +78,10 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Import data…",
       description: "Open one or more supported data files as datasets.",
       shortcut: "⌘O",
-      run: () => void chooseAndImport(s()),
+      run: () => {
+        if (rejectIfImportRunning()) return;
+        void chooseAndImport(s());
+      },
     },
     {
       id: "import-append",
@@ -69,7 +89,26 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Import & append as one dataset…",
       description: "Import multiple compatible files and concatenate them into one dataset.",
       keywords: "combine concatenate merge multi-file append",
-      run: () => openFilePicker((files) => void s().importFilesAppended(files), IMPORT_ACCEPT),
+      run: () => {
+        if (rejectIfImportRunning()) return;
+        openFilePicker((files) => {
+          if (files.length === 0) return;
+          // importFilesAppended lives in useApp.ts (this slice's off-limits
+          // file), so its busy state is set/cleared HERE rather than inside
+          // the action itself — see the guard comment above. withOp gives it
+          // the same StatusBar presence importFiles/importPaths get (no
+          // cancel: the underlying upload loop has no AbortController, since
+          // adding one means touching useApp.ts).
+          useImportBatch.setState({ running: true });
+          void withOp(`Importing ${files.length} files to append…`, () =>
+            s().importFilesAppended(files),
+          )
+            .catch(() => {
+              /* importFilesAppended already reports its own status/toast */
+            })
+            .finally(() => useImportBatch.setState({ running: false }));
+        }, IMPORT_ACCEPT);
+      },
     },
     {
       id: "import-wizard",
