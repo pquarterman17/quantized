@@ -1,0 +1,12 @@
+{
+  "name": "qz-frontend-envelope-bench",
+  "private": true,
+  "type": "module",
+  "description": "PRIMARY_SOFTWARE_AUDIT_PLAN P0.4 — Playwright-driven browser-side performance envelope harness (large-data render/interaction/session/workspace-scale measurements). Isolated from tools/visual (puppeteer-core) and frontend/e2e (@playwright/test the test runner) — this is a plain scripted harness that needs raw CDP access (Performance.getMetrics) and custom timing loops, not a test-file format.",
+  "scripts": {
+    "envelope": "node frontend_envelope.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.62.0"
+  }
+}
