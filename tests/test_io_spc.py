@@ -189,7 +189,8 @@ def test_log_block_key_value_and_text(tmp_path: Path) -> None:
     assert "free text line" in ds.metadata["log"]["text"]
 
 
-@pytest.mark.parametrize("fversn,name", [(0x4C, "MSB"), (0x4D, "old"), (0xCF, "Shimadzu")])
+# (0x4D left this list 2026-07-25 — the old format is now implemented.)
+@pytest.mark.parametrize("fversn,name", [(0x4C, "MSB"), (0xCF, "Shimadzu")])
 def test_unsupported_subformat_raises(tmp_path: Path, fversn: int, name: str) -> None:
     raw = _pack_head(fversn=fversn, fnpts=1, fnsub=1) + _pack_sub() + struct.pack("<i", 1)
     with pytest.raises(ValueError, match="not implemented|recognized"):
@@ -375,3 +376,96 @@ def test_real_txyxys_multifile_loses_nothing(corpus_dir: Path) -> None:
     # Subfile column spans every scan — nothing was dropped.
     assert ds.values[:, 1].min() == 1.0
     assert ds.values[:, 1].max() == float(n_sub)
+
+
+# ── Old (pre-1996) format, fversn=0x4D — implemented 2026-07-25 when the
+# corpus gained its first two real specimens. 224-byte header (int16 exp,
+# FLOAT32 npts/first/last), first subheader embedded at 224, y as 32-bit
+# fixed point in word-swapped order (most significant 16-bit word first —
+# settled empirically: msw-first decodes both specimens to smooth spectra,
+# lsw-first to full-range noise). ─────────────────────────────────────────
+_OLD_HEAD_FMT = "<BBhfffBBHBBBB8sHH7f130s30s"
+assert struct.calcsize(_OLD_HEAD_FMT) == 224
+
+
+def _pack_old_head(
+    *, oftflgs: int = 0, oexp: int = 0, onpts: float = 0.0,
+    ofirst: float = 0.0, olast: float = 0.0, oxtype: int = 1, oytype: int = 4,
+) -> bytes:
+    return struct.pack(
+        _OLD_HEAD_FMT, oftflgs, 0x4D, oexp, onpts, ofirst, olast, oxtype,
+        oytype, 0, 0, 0, 0, 0, b"", 0, 0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, b"", b"",
+    )
+
+
+def _old_y_words(y_ints: list[int]) -> bytes:
+    """Encode int32 y values as (msw, lsw) little-endian int16 pairs."""
+    out = b""
+    for v in y_ints:
+        out += struct.pack("<hH", (v >> 16) & 0xFFFF if v >= 0 else (v >> 16), v & 0xFFFF)
+    return out
+
+
+def test_old_format_single_subfile(tmp_path: Path) -> None:
+    exp = 8
+    y_ints = [100, -50, 1 << 20]
+    raw = (
+        _pack_old_head(oexp=exp, onpts=3.0, ofirst=100.0, olast=102.0)
+        + _pack_sub(subexp=exp)
+        + _old_y_words(y_ints)
+    )
+    ds = import_spc(_write(tmp_path, "old.spc", raw))
+    assert_allclose(ds.time, [100.0, 101.0, 102.0])
+    assert_allclose(ds.values[:, 0], np.array(y_ints, dtype=float) * 2.0 ** (exp - 32))
+    assert ds.metadata["spc_format"] == "old (fversn=0x4D)"
+
+
+def test_old_format_multifile_per_subfile_exponent(tmp_path: Path) -> None:
+    y_a, y_b = [1 << 16, 2 << 16], [3 << 16, 4 << 16]
+    raw = (
+        _pack_old_head(oftflgs=_TMULTI, oexp=4, onpts=2.0, ofirst=0.0, olast=1.0)
+        + _pack_sub(subexp=4) + _old_y_words(y_a)
+        + _pack_sub(subexp=6) + _old_y_words(y_b)
+    )
+    ds = import_spc(_write(tmp_path, "old_multi.spc", raw))
+    assert ds.n_channels == 2
+    assert_allclose(ds.values[:, 0], np.array(y_a, dtype=float) * 2.0 ** (4 - 32))
+    assert_allclose(ds.values[:, 1], np.array(y_b, dtype=float) * 2.0 ** (6 - 32))
+
+
+def test_old_format_size_mismatch_raises(tmp_path: Path) -> None:
+    raw = _pack_old_head(onpts=5.0) + _pack_sub() + b"\x00" * 7  # not 5 points
+    with pytest.raises(ValueError, match="size mismatch"):
+        import_spc(_write(tmp_path, "old_bad.spc", raw))
+
+
+@pytest.mark.realdata
+def test_real_old_format_raman(corpus_dir: Path) -> None:
+    """rohanisaac_old_0x4D_doerner.spc: 1602-pt Raman spectrum, 100..1800
+    Raman shift. Word-order evidence: msw-first gives a smooth spectrum
+    (total variation ~15x the range); lsw-first gives ~535x (noise)."""
+    ds = import_spc(corpus_dir / "spc" / "spectroscopy" / "rohanisaac_old_0x4D_doerner.spc")
+    assert len(ds.time) == 1602
+    assert_allclose(ds.time[0], 100.0)
+    assert_allclose(ds.time[-1], 1800.0)
+    assert ds.metadata["x_column_name"] == "Raman Shift (cm-1)"
+    y = ds.values[:, 0]
+    assert np.abs(np.diff(y)).sum() / (y.max() - y.min()) < 30  # smooth, not noise
+    assert ds.metadata["date"]["year"] == 2013
+
+
+@pytest.mark.realdata
+def test_real_old_format_ftir_multifile(corpus_dir: Path) -> None:
+    """rohanisaac_old_0x4D_m_ordz.spc: 10 subfiles x 857 pts, wavenumber x
+    absorbance, per-subfile exponents 3..6. The sequential walk ends exactly
+    at EOF, which pins the embedded-first-subheader layout."""
+    ds = import_spc(corpus_dir / "spc" / "spectroscopy" / "rohanisaac_old_0x4D_m_ordz.spc")
+    assert ds.n_channels == 10
+    assert len(ds.time) == 857
+    assert ds.metadata["x_column_name"] == "Wavenumber (cm-1)"
+    assert ds.labels[0].startswith("Absorbance")
+    for k in range(10):  # every channel decodes to smooth absorbance-scale data
+        y = ds.values[:, k]
+        assert np.abs(y).max() < 20
+        assert np.abs(np.diff(y)).sum() / (np.ptp(y) + 1e-12) < 10

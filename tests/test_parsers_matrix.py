@@ -83,16 +83,10 @@ _KNOWN_GAPS: dict[str, str] = {
     # that until then had only synthetic tests. Two are pinned contracts, two
     # are real defects the fixtures exposed.
     #
-    # fversn 0x4D "old format": recognized and rejected by contract — io/spc.py
-    # implements only 0x4B, and PORT_CHECKLIST records 0x4D/0x4C/0xCF as
-    # awaiting examples. These are the first 0x4D examples, so the branch can
-    # now be implemented; until then, rejection is the pinned behaviour.
-    "spc/spectroscopy/rohanisaac_old_0x4D_doerner.spc": (
-        "SPC fversn 0x4D (old format) rejected by contract — no decoder yet"
-    ),
-    "spc/spectroscopy/rohanisaac_old_0x4D_m_ordz.spc": (
-        "SPC fversn 0x4D (old format) rejected by contract — no decoder yet"
-    ),
+    # (The two rohanisaac_old_0x4D_*.spc files were registered here as a
+    # rejected-by-contract sub-format awaiting examples; those examples made
+    # implementing it possible, and the old-format decoder landed 2026-07-25 —
+    # both now import. 0x4C/0xCF stay rejected: still no specimen.)
     # (rohanisaac_ms_xyxys.spc was registered here as a TXYXYS fnpts=0 defect;
     # FIXED 2026-07-25 — fnpts is a directory offset in that mode, never a
     # count — so it now imports and needs no entry. Anchored with realdata
