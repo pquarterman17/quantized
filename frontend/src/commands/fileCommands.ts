@@ -361,7 +361,12 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Export page… (spatial, true page coords)",
       description: "Export an imported multi-panel page using its original spatial page coordinates.",
       keywords: "origin multi-panel page rect true coordinates #54",
-      run: () => void runExportSpatialPageCommand(s),
+      // P3.4 slice 2: NOT `void`-prefixed (unlike the other command bodies
+      // in this file that intentionally fire-and-forget) — this returns the
+      // promise so the runAction chokepoint (CommandPalette/MenuBar) can
+      // observe it and register the in-flight signal. Behavior is
+      // unchanged: the async export still runs identically either way.
+      run: () => runExportSpatialPageCommand(s),
     },
   ];
 }

@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { mergeCommands, PALETTE_LABEL, PALETTE_SHORTCUT, useCommands, type Action } from "../../store/commands";
+import { mergeCommands, PALETTE_LABEL, PALETTE_SHORTCUT, runAction, useCommands, type Action } from "../../store/commands";
 import { reopenRecent } from "../../lib/reopenRecent";
 import type { RecentFile } from "../../lib/recentFiles";
 import { relativeTime } from "../../lib/recentFiles";
@@ -127,7 +127,10 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
                       className="qzk-menu-item"
                       onClick={() => {
                         setOpen(null);
-                        row.action.run();
+                        // P3.4 slice 2: same chokepoint the palette uses —
+                        // an async command (every File-menu export) now
+                        // registers an in-flight signal for StatusBar.
+                        runAction(row.action);
                       }}
                     >
                       <span>{row.action.label}</span>
@@ -195,7 +198,7 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
                   className="qzk-menu-item"
                   onClick={() => {
                     setOpen(null);
-                    a.run();
+                    runAction(a);
                   }}
                 >
                   <span>{a.label}</span>

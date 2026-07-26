@@ -548,6 +548,8 @@ body {
 .qzk-statusbar { display: flex; align-items: center; gap: var(--pad-lg); background: var(--surface-1); border-top: 1px solid var(--border-soft); padding: 0 var(--pad-lg); font-size: var(--font-size-sm); font-family: var(--font-mono); color: var(--text-faint); white-space: nowrap; overflow: hidden; }
 .qzk-statusbar .grow { flex: 1; }
 .qzk-conn { display: inline-flex; align-items: center; gap: 5px; }
+/* P3.4 slice 2: age-gated busy indicator for an async command (StatusBar). */
+.qzk-pending { display: inline-flex; align-items: center; gap: 5px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
 
 /* fit results rows */
 .qzk-fit-row { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: var(--font-size-sm); padding: 2px 0; }

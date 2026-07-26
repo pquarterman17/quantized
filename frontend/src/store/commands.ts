@@ -6,6 +6,8 @@
 
 import { create } from "zustand";
 
+import { withOp } from "./pendingOps";
+
 export interface Action {
   id: string;
   group: string;
@@ -53,6 +55,48 @@ export function mergeCommands(curated: Action[], menu: Action[]): Action[] {
   const seen = new Set(curated.map((a) => a.label.toLowerCase()));
   const extra = menu.filter((a) => !seen.has(a.label.toLowerCase()));
   return [...curated, ...extra];
+}
+
+/** True when `x` looks like a promise (has a callable `.then`) — the runtime
+ *  check `runAction` needs because `Action.run` is typed `() => void` even
+ *  though several commands are `async` bodies (TypeScript's void-return
+ *  covariance rule lets that satisfy the type; the real value is only
+ *  hidden from the STATIC type, never from what actually comes back at
+ *  runtime). */
+function isThenable(x: unknown): x is PromiseLike<unknown> {
+  return (
+    (typeof x === "object" || typeof x === "function") &&
+    x !== null &&
+    typeof (x as { then?: unknown }).then === "function"
+  );
+}
+
+/** THE chokepoint (P3.4 slice 2, 2026-07-26 audit gap #2): every surface that
+ *  invokes an `Action` — the ⌘K palette, the menu bar (dropdown items AND
+ *  the Help menu) — calls this instead of `action.run()` directly.
+ *
+ *  A sync command runs exactly as before: zero observable change. An async
+ *  command (`run()` returns a thenable — every File-menu export is one)
+ *  gets registered in the shared pendingOps store for its duration via
+ *  `withOp`, which is what lets StatusBar show its label instead of nothing
+ *  happening until the eventual completion/failure toast. This function
+ *  never changes what a command DOES — it only observes the promise the
+ *  command already returns.
+ *
+ *  A rejection is swallowed here (after `withOp` unregisters + rethrows):
+ *  every current async command already reports its own failure via
+ *  status/toast internally and resolves normally, so this only prevents an
+ *  otherwise-inert "unhandled rejection" console warning from a wrapper
+ *  that didn't exist before — it does not hide anything a user would have
+ *  seen, since `a.run()` was already fire-and-forget (uncaught) at every
+ *  call site before this chokepoint existed. */
+export function runAction(action: Action): void {
+  const result = (action.run as () => unknown)();
+  if (isThenable(result)) {
+    void withOp(action.label, () => Promise.resolve(result)).catch(() => {
+      /* see doc comment above — the command's own status/toast already ran */
+    });
+  }
 }
 
 /** The ONE canonical label + shortcut for "open the command palette".

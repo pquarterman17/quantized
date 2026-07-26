@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { contextPaletteActions } from "../../lib/paletteContextActions";
 import { fuzzy } from "../../lib/fuzzy";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
-import { mergeCommands, useCommands, type Action } from "../../store/commands";
+import { mergeCommands, runAction, useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
 
 export type { Action };
@@ -74,7 +74,10 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
 
   const run = (a: Action) => {
     setCmdk(false);
-    a.run();
+    // P3.4 slice 2: routes through the shared chokepoint so an async
+    // command (every File-menu export) registers an in-flight signal
+    // StatusBar can show instead of firing untracked.
+    runAction(a);
   };
 
   const onKey = (e: React.KeyboardEvent) => {
