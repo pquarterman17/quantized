@@ -7,9 +7,16 @@ ordinate data follows an ``##XYDATA= (X++(Y..Y))`` (equally-spaced, ASDF-
 compressed) or ``##XYPOINTS=``/``##PEAK TABLE= (XY..XY)`` (explicit pairs)
 record.
 
-This parser reads the first spectral block of a file (compound ``LINK`` files
-note the extra blocks in metadata) and returns a single-channel DataStruct.
-The ASDF ordinate decoding (SQZ/DIF/DUP) lives in :mod:`_jcamp_asdf`.
+This parser reads the first DATA-BEARING block of a file and returns a
+single-channel DataStruct. In compound ``##DATA TYPE= LINK`` files the
+spectrum may sit several blocks deep behind non-spectral blocks (e.g. a
+``##JCAMP-CS=`` chemical-structure block, as in the official ISAS_CDX
+conformance file) — those are skipped, the data block's own TITLE /
+DATA TYPE / units override the envelope's, and the sibling count is noted
+in metadata. Supported data records: ``##XYDATA``, ``##XYPOINTS``,
+``##PEAK TABLE`` and ``##PEAK ASSIGNMENTS= (XYA)/(XYMA)`` (peak lists with
+per-peak assignment strings, kept in metadata). The ASDF ordinate decoding
+(SQZ/DIF/DUP) lives in :mod:`_jcamp_asdf`.
 
 Correctness is self-checking: the decoded ordinate count must equal
 ``##NPOINTS`` and the first ordinate must equal ``##FIRSTY`` (JCAMP's built-in
@@ -21,6 +28,7 @@ compression-form test suite.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +39,7 @@ from quantized.io._jcamp_asdf import decode_xydata
 
 __all__ = ["import_jcamp", "is_jcamp"]
 
-_DATA_LABELS = {"XYDATA", "XYPOINTS", "PEAKTABLE"}
+_DATA_LABELS = {"XYDATA", "XYPOINTS", "PEAKTABLE", "PEAKASSIGNMENTS"}
 
 
 def _norm_label(label: str) -> str:
@@ -63,10 +71,16 @@ def is_jcamp(path: Path) -> bool:
 def _parse_records(text: str) -> tuple[dict[str, str], list[str], str, int]:
     """Split into (header LDRs, data lines, data-kind, extra block count).
 
-    Reads the *first* data block; counts how many additional ``##TITLE`` blocks
-    follow (compound/LINK files).
+    Scans every block for the first DATA record — compound/LINK files may
+    bury the spectrum behind non-spectral blocks (a ``##JCAMP-CS=`` structure
+    block, in the official ISAS_CDX conformance file). The returned header is
+    the envelope's first-seen labels overlaid with the data-bearing block's
+    own labels, so TITLE / DATA TYPE / units describe the spectrum rather
+    than the LINK wrapper.
     """
     header: dict[str, str] = {}
+    block: dict[str, str] = {}
+    data_block: dict[str, str] | None = None
     data_lines: list[str] = []
     data_kind = ""
     in_data = False
@@ -81,18 +95,22 @@ def _parse_records(text: str) -> tuple[dict[str, str], list[str], str, int]:
             nlabel = _norm_label(label)
             if nlabel == "TITLE":
                 title_count += 1
-                if title_count > 1:
-                    continue  # a later block; header already captured
+                block = {}  # a new block starts; collect its labels separately
             if nlabel in _DATA_LABELS and not data_kind:
                 data_kind = nlabel
+                data_block = block  # keeps filling until the block ends
                 in_data = True
-            elif nlabel == "END":
-                in_data = False
-            else:
-                header.setdefault(nlabel, value.strip())
+            elif nlabel != "END":
+                block.setdefault(nlabel, value.strip())
+                if title_count <= 1:
+                    header.setdefault(nlabel, value.strip())
         elif in_data and stripped:
             data_lines.append(stripped)
 
+    if data_block is not None:
+        # The data-bearing block's own labels (TITLE, DATA TYPE, units)
+        # describe the spectrum; the envelope's fill any gaps.
+        header = {**header, **data_block}
     return header, data_lines, data_kind, max(0, title_count - 1)
 
 
@@ -120,6 +138,35 @@ def _decode_pairs(data_lines: list[str], xfactor: float, yfactor: float) -> tupl
     return arr[:, 0] * xfactor, arr[:, 1] * yfactor
 
 
+def _decode_assignments(
+    data_lines: list[str], xfactor: float, yfactor: float
+) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Decode ``##PEAK ASSIGNMENTS= (XYA)/(XYMA)`` tuples.
+
+    Each peak is a parenthesized tuple ``(x[, y][, m][, <assignment>])`` —
+    x = position, y = intensity (1.0 when omitted), m = multiplicity
+    (ignored), ``<...>`` = the assignment text, collected per peak.
+    """
+    xs: list[float] = []
+    ys: list[float] = []
+    assignments: list[str] = []
+    for tup in re.findall(r"\(([^)]*)\)", " ".join(data_lines)):
+        note = re.search(r"<([^>]*)>", tup)
+        fields = re.sub(r"<[^>]*>", "", tup).split(",")
+        nums: list[float] = []
+        for field in fields:
+            try:
+                nums.append(float(field))
+            except ValueError:
+                continue
+        if not nums:
+            continue
+        xs.append(nums[0] * xfactor)
+        ys.append((nums[1] if len(nums) > 1 else 1.0) * yfactor)
+        assignments.append(note.group(1).strip() if note else "")
+    return np.asarray(xs, dtype=float), np.asarray(ys, dtype=float), assignments
+
+
 def import_jcamp(filepath: str | Path) -> DataStruct:
     """Import a JCAMP-DX ``.jdx``/``.dx`` spectrum (one channel).
 
@@ -137,6 +184,7 @@ def import_jcamp(filepath: str | Path) -> DataStruct:
 
     xfactor = _num(header, "XFACTOR", 1.0)
     yfactor = _num(header, "YFACTOR", 1.0)
+    assignments: list[str] = []
 
     if data_kind == "XYDATA":
         raw_y = np.asarray(decode_xydata(data_lines), dtype=float)
@@ -156,6 +204,10 @@ def import_jcamp(filepath: str | Path) -> DataStruct:
             raise ValueError(
                 f"first ordinate {y[0]:.6g} != ##FIRSTY={firsty:.6g}: {path.name}"
             )
+    elif data_kind == "PEAKASSIGNMENTS":
+        x, y, assignments = _decode_assignments(data_lines, xfactor, yfactor)
+        if not len(x):
+            raise ValueError(f"no data points in {data_kind} block: {path.name}")
     else:  # XYPOINTS / PEAK TABLE
         x, y = _decode_pairs(data_lines, xfactor, yfactor)
         if not len(x):
@@ -176,4 +228,6 @@ def import_jcamp(filepath: str | Path) -> DataStruct:
     }
     if extra_blocks:
         metadata["extra_blocks"] = extra_blocks  # compound/LINK file
+    if data_kind == "PEAKASSIGNMENTS" and assignments:
+        metadata["peak_assignments"] = assignments
     return DataStruct.create(x, y, labels=[yunits.title()], units=[""], metadata=metadata)
