@@ -224,6 +224,15 @@ fn main() {
             };
             app.manage(ServerProc(Mutex::new(child)));
 
+            // Keep the live window/taskbar thumbnail on the same Quantized
+            // artwork embedded in the packaged executable and shortcuts.
+            if let (Some(win), Some(icon)) = (
+                app.get_webview_window("main"),
+                app.default_window_icon().cloned(),
+            ) {
+                let _ = win.set_icon(icon);
+            }
+
             // DiraCulator (`--calc`): the "main" window is config-defined in
             // tauri.conf.json (title "Quantized", 1440x920) and already exists
             // by the time this closure runs, so the least invasive way to give
