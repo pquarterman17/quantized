@@ -262,8 +262,9 @@ copy/export, and cleanup for:
   (`docs/envelope/2026-07-26-*.json`).
 - [ ] Direct manipulation targets <100 ms — MEASURED 2026-07-26: pan meets
   it everywhere (≤60 ms even at 7M points); zoom misses at scale (p95
-  259 ms at 1M×7, 122 ms at 20×100k). Re-check after the point-reduction
-  follow-up ships.
+  259 ms at 1M×7, 122 ms at 20×100k). Point reduction shipped same day and
+  moved it only to 238 ms — the verified dominant term is the viewport
+  rebuild on committed zoom (booked below). Re-check after that ships.
 - [ ] Operations >500 ms have suitable busy/progress feedback; safe long jobs
   offer cancellation (not audited this pass; F1's ~14–28 s import is the
   case to audit first).
@@ -282,24 +283,39 @@ first dated run on the Ryzen 7800X3D machine. Raw records in
 `docs/envelope/`, synthesis + residuals in `docs/performance_envelope.md`.
 P0.4 stays open for the residuals above.
 
-**Booked follow-ups (evidence-backed, 2026-07-26 run):**
+**Booked follow-ups (evidence-backed):**
 
-- [ ] Wire point reduction into the interactive plot path.
-  `frontend/src/lib/downsample.ts` (min/max bucketing) is real and tested
-  but feeds only Library sparklines; the uPlot path (`usePlotPayload` →
-  `plotdata.buildColumns`) plots every raw point and `/api/plot/series`
-  ships **78 MB of JSON** for 1M×7. Evidence: zoom p95 259 ms / 122 ms vs
-  the 100 ms target. Frontend bucketing first; server-side payload
-  decimation second only if still needed. (Backend has no correct general
-  tool today: `resample_data` interpolates — wrong for spikes;
-  `origin_project/preview.decimate_datastruct` is single-channel-keyed and
-  lives outside `calc/`.)
-- [ ] Import-path efficiency: `io/delimited.py` builds per-cell Python
-  floats in pure-Python loops (16× peak memory, ~6 s per 1M rows) and the
-  ambiguous-`.csv` sniffer chain (`is_sims_file`, `is_lakeshore_file`)
-  `read_text()`s the WHOLE file to inspect ≤4 KB (~140 MB throwaway reads
-  on a 70 MB file). Cap the sniff reads; vectorize the tokenize/convert
-  path.
+- [x] ~~Wire point reduction into the interactive plot path~~ SHIPPED
+  2026-07-26 (`244551c`): window-aware min/max decimation behind ONE
+  chokepoint (`lib/plotDecimate.ts`), default-on pref, engages only >10k
+  rows AND >4 pts/px; disengages (documented) for scatter, non-monotonic x,
+  overlay/selection companions, and error-bar series (index-coupling needs
+  a live-getter refactor of the overlay plugins). 7M → ~82k points fed to
+  uPlot; zoom p95 259→238 ms only, because the REAL bottleneck surfaced —
+  see the viewport-rebuild item below.
+- [x] ~~Import-path efficiency (tokenize/convert + sniffer reads)~~ SHIPPED
+  2026-07-26 (`51af22d`): shared bounded `read_head` (io/base) converted
+  all five whole-file sniffers (`resolve_parser` on a 70 MB CSV: 63 ms →
+  0.5 ms); vectorized `_convert_column` with an exact-semantics per-cell
+  fallback (isolated convert step −25 % time / −67 % peak; end-to-end peak
+  1,117→869 MB). Wall time flat — the layout-detection item below is why.
+  P1.4-booked text-column warts preserved and re-verified.
+- [ ] **Viewport rebuild on committed zoom** (found + code-verified
+  2026-07-26): `args.xLim`/`args.yLim` are reactive deps of PlotViewport's
+  uPlot create/destroy effect, so every zoom that commits view limits
+  tears down and reconstructs the whole plot — the dominant term in zoom
+  p95 (238 ms with decimation active; target <100 ms). Fix shape: apply
+  lim-only changes via `u.setScale` on the live instance and rebuild only
+  on structural change. Secondary: re-bucket cost is O(visible×series) at
+  wide windows. Touching PlotViewport's dep design — review carefully
+  against the window/sync/theme rebuild semantics documented in its dep
+  comment.
+- [ ] **`_detect_layout` per-cell numeric scoring** (found 2026-07-26):
+  ~9 s of a 14.6 s profiled 1M×8 import goes to `float()`-per-cell
+  header/data-start scoring across 8M cells — same class as the tokenizer
+  fix but inside delicate layout-detection logic (adjacent to MAIN #33
+  history). Vectorize the scoring only, semantics pinned by the matrix +
+  realdata corpus.
 
 ---
 
@@ -869,6 +885,13 @@ At the end of each session:
   deterministic generator + 9 matrix-validated committed fixtures (172 KiB) +
   `docs/timed_workflow_baselines.md` (8 journey checklists + results template).
   P0.3 stays open for the first dated timed runs (owner hands).
+- ~~**P0.4 follow-up: plot-path point reduction**~~ (2026-07-26,
+  `244551c`) — window-aware min/max decimation, default-on, 7M→~82k points;
+  zoom p95 259→238 ms, exposing the viewport-rebuild bottleneck now booked.
+- ~~**P0.4 follow-up: import-path efficiency**~~ (2026-07-26, `51af22d`) —
+  bounded `read_head` across all five whole-file sniffers (63→0.5 ms sniff)
+  + vectorized column conversion (peak 1,117→869 MB); layout-detection
+  scoring booked as the remaining wall-time term.
 - ~~**P0.4 core envelope + first dated run**~~ (2026-07-26) — backend +
   frontend harnesses, raw records in `docs/envelope/`, synthesis in
   `docs/performance_envelope.md`. Headlines: 78 MB plot payload at 1M×7,
@@ -1063,6 +1086,30 @@ work (its BACKLOG row).
 - Both worktrees merged (`5a2ce6e`, `5c938b9` via `753864d`), targeted gate
   green post-merge (byte-guard + repo integrity + ruff + mypy), worktrees
   removed.
+
+#### 2026-07-26 — Both P0.4 follow-ups shipped (two parallel Sonnet agents, Fable orchestrating + verifying)
+
+- **Frontend (`244551c`)**: `lib/plotDecimate.ts` (287 lines + 29 unit
+  tests) — threshold-gated (>10k rows AND >4 pts/px), window-aware
+  (debounced `setScale` re-bucket from full columns, ±1 bucket pad), real
+  samples only, error-bar series disengaged rather than risk index
+  mispairing, prefs toggle default ON. Gates: 4,651 vitest, e2e 33/33,
+  lint 0 errors, bundle ratchet 944.8/949.2 kB.
+- **Backend (`51af22d`)**: `read_head` in io/base converted the five
+  whole-file sniffers (audit found the other nine already bounded);
+  vectorized `_convert_column` with the old per-cell loop as exact-semantics
+  fallback for NA-token/text columns. Full suite 3,161 passed / 3,173
+  collected (up 3 = the new tests; no corpus shrinkage), ruff + mypy clean.
+- **Orchestrator verification**: latin-1 head-read equivalence confirmed
+  against the old code (it already used latin-1/replace); the agent's
+  "zoom rebuilds the viewport" diagnosis confirmed at
+  `PlotViewport.tsx` (xLim/yLim in the create/destroy deps) BEFORE booking
+  it; merged tree re-gated (backend targeted 468 passed; frontend full
+  4,651 + build).
+- Envelope re-measured by the frontend agent (real harness): numbers in
+  `docs/performance_envelope.md` §Follow-up run. Net: the <100 ms zoom
+  target is NOT yet met; the two newly-booked items (viewport rebuild,
+  layout-detection scoring) are the measured remaining terms.
 
 ## Reference baseline
 

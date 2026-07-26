@@ -88,6 +88,35 @@ runs; the qualitative conclusions held in both).
 6. **Many-window sessions scale cleanly** — no per-window drift over 20
    windows, heap modest.
 
+## Follow-up run — 2026-07-26, after the first two fixes
+
+The two booked follow-ups shipped same-day (`51af22d` backend, `244551c`
+frontend) and were re-measured with the same harnesses:
+
+| Metric | Before | After | Note |
+|---|---|---|---|
+| Sniff cost, `resolve_parser` on the 70 MB CSV | 63.2 ms | 0.51 ms | bounded `read_head` class fix, 5 sniffers converted |
+| 1M×8 import peak memory | 1,117 MB | 869 MB | tokenize/convert vectorized (isolated step: 416→136 MB, 4.1→3.1 s) |
+| 1M×8 import wall | ~6–7 s | ~7 s | flat — see finding 7 |
+| Points fed to uPlot at 1M×7 | 7,000,000 | ~82,000 | window-aware min/max decimation, default on, disengaged ≤10k rows |
+| F1 zoom p95 | 259 ms | 238 ms | still misses 100 ms — see finding 8 |
+| F3 (20×100k) zoom p95 | 122 ms | 116 ms | |
+| F2 (small data) | unchanged | unchanged | below threshold, behavior identical |
+
+Two NEW root causes surfaced (and verified in code), now the booked queue:
+
+7. **`_detect_layout` numeric scoring dominates import wall time**: ~9 s of
+   14.6 s profiled calls `float()` per cell across all 8M cells just to find
+   the header/data-start row — same per-token class, but inside delicate
+   layout-detection logic, so it was deliberately NOT touched in the
+   tokenizer fix.
+8. **Committed zoom rebuilds the whole plot**: `args.xLim`/`args.yLim` are
+   reactive deps of the uPlot create/destroy effect
+   (`PlotViewport.tsx`), so every zoom that commits view limits tears down
+   and reconstructs the instance — which is why an 85× point reduction only
+   moved zoom p95 259→238 ms. Fix shape: apply lim changes via `u.setScale`
+   on the live instance; rebuild only on structural change.
+
 ## Residuals (explicitly unmeasured — carry in P0.4)
 
 - Worksheet-GRID interaction at 1M rows (only import→plot was measured;

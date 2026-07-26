@@ -6,8 +6,16 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-26 (second pass, same day). **P0.4's core
-envelope SHIPPED** (`5a2ce6e` backend + `5c938b9` frontend harnesses + first
+**Last reconciled:** 2026-07-26 (third pass, same day). **Both P0.4
+follow-ups SHIPPED** (`244551c` window-aware plot decimation, default-on,
+7M→~82k points fed to uPlot; `51af22d` bounded sniffer reads 63→0.5 ms +
+vectorized column conversion, import peak 1,117→869 MB). The <100 ms zoom
+target is NOT yet met (259→238 ms): each fix exposed and root-caused the
+next term, both code-verified and re-booked below — the PlotViewport
+teardown on committed zoom, and `_detect_layout`'s per-cell scoring.
+Numbers in `docs/performance_envelope.md` §Follow-up run.
+
+Prior same day: **P0.4's core envelope SHIPPED** (`5a2ce6e` backend + `5c938b9` frontend harnesses + first
 dated run; synthesis in `docs/performance_envelope.md`). The measurement row
 below is replaced by the two evidence-backed follow-ups it produced: the
 interactive plot path has NO point reduction (78 MB JSON payload and zoom
@@ -157,8 +165,8 @@ still make the owner switch back to Origin.
 | Item | Plan / item |
 |------|-------------|
 | Continue contextual help after the first five Inspector `?` links: cover high-friction workshops and registered context actions from real-use evidence | PRIMARY SOFTWARE P3.1 |
-| Wire point reduction into the interactive plot path — `lib/downsample.ts` (min/max bucketing) exists but feeds only sparklines; uPlot gets every raw point and `/api/plot/series` ships 78 MB JSON at 1M×7. Evidence: zoom p95 259/122 ms vs the 100 ms target | PRIMARY SOFTWARE P0.4 follow-up |
-| Import-path efficiency — `io/delimited.py` per-token float loops (16× peak mem, ~6 s/1M rows); ambiguous-`.csv` sniffers `read_text()` the whole file for a ≤4 KB sniff | PRIMARY SOFTWARE P0.4 follow-up |
+| Viewport rebuild on committed zoom — `PlotViewport.tsx` has `xLim`/`yLim` as create/destroy deps, so each committed zoom tears down + reconstructs the uPlot instance; verified in code, measured as the dominant zoom-p95 term (238 ms vs 100 ms target, even after decimation). Apply lim-only changes via `u.setScale`; rebuild only on structural change | PRIMARY SOFTWARE P0.4 follow-up 2 |
+| `_detect_layout` per-cell numeric scoring — ~9 s of a 14.6 s 1M-row import profiles into `float()`-per-cell header detection (8M cells); vectorize the scoring only, semantics pinned by matrix + realdata corpus | PRIMARY SOFTWARE P0.4 follow-up 2 |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are
