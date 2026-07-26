@@ -28,7 +28,13 @@ Bytes  0        ftflgs   (flags, see ``_FLAG_BITS``)
 Bytes  1        fversn   (0x4B for this parser)
 Bytes  2        fexper   (experiment-type code, see ``_EXPERIMENT_TYPES``)
 Bytes  3        fexp     (signed; y-scaling exponent, or -128 = IEEE float32 y)
-Bytes  4-7      fnpts    (points per subfile, uint32)
+Bytes  4-7      fnpts    (points per subfile, uint32 — EXCEPT when the
+                ``txyxys`` flag is set: each subfile then carries its own
+                point count in ``subnpts``, and ``fnpts`` is instead the
+                byte offset of the trailing subfile DIRECTORY (SSFSTC
+                entries), or 0 for none. Verified against a real 512-scan
+                TXYXYS mass-spec file whose "fnpts" is exactly the offset
+                of a 512×12-byte table ending at EOF.)
 Bytes  8-15     ffirst   (first x value, float64)
 Bytes 16-23     flast    (last x value, float64)
 Bytes 24-27     fnsub    (number of subfiles, uint32)
@@ -196,13 +202,46 @@ def _y_from_ints(raw_ints: NDArray[np.integer[Any]], exp: int, bits: int) -> NDA
 
 
 def _read_subfile(
-    raw: bytes, pos: int, *, fnpts: int, fexp: int, tmulti: bool, tsprec: bool, txyxys: bool
+    raw: bytes,
+    pos: int,
+    *,
+    index: int,
+    end: int,
+    fnpts: int,
+    fexp: int,
+    tmulti: bool,
+    tsprec: bool,
+    txyxys: bool,
 ) -> tuple[NDArray[np.float64] | None, NDArray[np.float64], int, dict[str, Any]]:
-    """Returns (own_x or None, y, bytes_consumed, subheader_info)."""
+    """Returns (own_x or None, y, bytes_consumed, subheader_info).
+
+    ``end`` is the last byte this subfile may occupy (start of the TXYXYS
+    directory when one exists, else EOF) — overruns raise instead of letting
+    ``frombuffer`` fail cryptically or, worse, read the directory as data.
+    """
+    if pos + _SUBHEAD_SIZE > end:
+        raise ValueError(
+            f"truncated SPC file: subfile {index} header would run past "
+            f"{'the subfile directory' if end != len(raw) else 'end of file'}"
+        )
     sub = dict(zip(_SUBHEAD_FIELDS, struct.unpack_from(_SUBHEAD_FMT, raw, pos), strict=True))
     exp = int(sub["subexp"]) if tmulti else fexp
-    pts = int(sub["subnpts"]) if (txyxys and sub["subnpts"] > 0) else fnpts
+    if txyxys:
+        # Per-subfile point count is authoritative; the header fnpts is the
+        # directory offset in this mode and must never be used as a count.
+        pts = int(sub["subnpts"])
+        if pts <= 0:
+            raise ValueError(f"TXYXYS subfile {index} declares no points (subnpts={pts})")
+    else:
+        pts = fnpts
     cursor = pos + _SUBHEAD_SIZE
+    x_bytes = 4 * pts if txyxys else 0
+    y_bytes = 4 * pts if (exp == _FLOAT_EXP_SENTINEL or not tsprec) else 2 * pts
+    if cursor + x_bytes + y_bytes > end:
+        raise ValueError(
+            f"truncated SPC file: subfile {index} data ({pts} pts) would run past "
+            f"{'the subfile directory' if end != len(raw) else 'end of file'}"
+        )
 
     own_x = None
     if txyxys:
@@ -236,8 +275,8 @@ def import_spc(filepath: str | Path) -> DataStruct:
     if fversn in _UNSUPPORTED_FVERSN:
         raise ValueError(
             f"SPC sub-format '{_UNSUPPORTED_FVERSN[fversn]}' (fversn=0x{fversn:02x}) is "
-            f"recognized but not implemented (no example file to validate against): "
-            f"{path.name}. Only the modern format (fversn=0x4B) is supported."
+            f"recognized but not implemented: {path.name}. "
+            f"Only the modern format (fversn=0x4B) is supported."
         )
     if fversn != 0x4B or len(raw) < _HEAD_SIZE:
         raise ValueError(f"not a recognized SPC file (fversn byte 0x{fversn:02x}): {path.name}")
@@ -245,10 +284,22 @@ def import_spc(filepath: str | Path) -> DataStruct:
     head = dict(zip(_HEAD_FIELDS, struct.unpack_from(_HEAD_FMT, raw, 0), strict=True))
     flags = _decode_flags(head["ftflgs"])
     fnpts, fnsub, fexp = int(head["fnpts"]), int(head["fnsub"]), int(head["fexp"])
-    if fnpts <= 0 or fnsub <= 0:
+    if fnsub <= 0:
+        raise ValueError(f"empty SPC file (fnsub={fnsub}): {path.name}")
+    if fnpts <= 0 and not flags["txyxys"]:
+        # In TXYXYS mode fnpts is the directory offset (0 = no directory) and
+        # each subfile carries its own count — 0 is legal there.
         raise ValueError(f"empty SPC file (fnpts={fnpts}, fnsub={fnsub}): {path.name}")
 
     pos = _HEAD_SIZE
+    # Subfile data may not run into the trailing subfile directory (TXYXYS,
+    # fnpts as offset) or the trailer log block, whichever comes first.
+    end = len(raw)
+    if flags["txyxys"] and 0 < fnpts <= len(raw):
+        end = fnpts
+    flogoff = int(head["flogoff"])
+    if 0 < flogoff < end:
+        end = flogoff
     global_x: NDArray[np.float64] | None = None
     if flags["txvals"] and not flags["txyxys"]:
         global_x = np.frombuffer(raw, dtype="<f4", count=fnpts, offset=pos).astype(float)
@@ -257,10 +308,10 @@ def import_spc(filepath: str | Path) -> DataStruct:
         global_x = np.linspace(head["ffirst"], head["flast"], fnpts)
 
     subfiles: list[tuple[NDArray[np.float64] | None, NDArray[np.float64], dict[str, Any]]] = []
-    for _ in range(fnsub):
+    for index in range(fnsub):
         own_x, y, consumed, sub_info = _read_subfile(
-            raw, pos, fnpts=fnpts, fexp=fexp, tmulti=flags["tmulti"],
-            tsprec=flags["tsprec"], txyxys=flags["txyxys"],
+            raw, pos, index=index, end=end, fnpts=fnpts, fexp=fexp,
+            tmulti=flags["tmulti"], tsprec=flags["tsprec"], txyxys=flags["txyxys"],
         )
         subfiles.append((own_x, y, sub_info))
         pos += consumed
@@ -275,10 +326,42 @@ def import_spc(filepath: str | Path) -> DataStruct:
             y_label = yl or y_label
 
     multi_x = flags["txyxys"] and fnsub > 1
+    long_form = False
+    x: NDArray[np.float64] | None
     if multi_x:
-        # Per-subfile x-axes can't share one DataStruct time column (jcamp.py
-        # precedent: use the first block, note the rest in metadata).
-        x, y_cols, y_labels = subfiles[0][0], subfiles[0][1][:, None], [y_label]
+        first_x = subfiles[0][0]
+        assert first_x is not None
+        if all(
+            own_x is not None
+            and own_x.shape == first_x.shape
+            and bool(np.array_equal(own_x, first_x))
+            for own_x, _y, _info in subfiles
+        ):
+            # Every subfile repeats the same x grid — a shared-x stack loses
+            # nothing (common for evenly-gridded TXYXYS map/series files).
+            x = first_x
+            y_cols = np.column_stack([y for _own_x, y, _info in subfiles])
+            y_labels = [f"{y_label} {i + 1}" for i in range(fnsub)]
+        else:
+            # Genuinely different x per subfile (e.g. per-scan m/z lists).
+            # One DataStruct time column can't hold 512 grids, but returning
+            # ONLY subfile 0 — the old behaviour — silently discarded >99% of
+            # a real mass-spec file with no error. Long form keeps every
+            # point: concatenated x/y plus a subfile-index column so
+            # downstream can split scans back apart.
+            long_form = True
+            x = np.concatenate([own_x for own_x, _y, _info in subfiles if own_x is not None])
+            sub_index = [
+                np.full(len(y), i + 1, dtype=float)
+                for i, (_own_x, y, _info) in enumerate(subfiles)
+            ]
+            y_cols = np.column_stack(
+                [
+                    np.concatenate([y for _own_x, y, _info in subfiles]),
+                    np.concatenate(sub_index),
+                ]
+            )
+            y_labels = [y_label, "Subfile"]
     else:
         x = global_x if global_x is not None else subfiles[0][0]
         y_cols = np.column_stack([y for _own_x, y, _info in subfiles])
@@ -305,6 +388,10 @@ def import_spc(filepath: str | Path) -> DataStruct:
     if multi_x:
         metadata["multi_x_subfiles"] = True
         metadata["n_subfiles_with_own_x"] = fnsub
+        metadata["txyxys_long_form"] = long_form
+        if long_form:
+            metadata["subfile_points"] = [len(y) for _own_x, y, _info in subfiles]
+            metadata["subfile_times"] = [float(info["subtime"]) for _ox, _y, info in subfiles]
 
     return DataStruct.create(
         x, y_cols, labels=y_labels, units=[y_label] * len(y_labels), metadata=metadata

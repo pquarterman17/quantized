@@ -247,3 +247,131 @@ def test_matches_real_perkin_elmer_ftir_header_shape(tmp_path: Path) -> None:
     assert_allclose(ds.time[0], 4000.0)
     assert_allclose(ds.time[-1], 450.0)
     assert_allclose(ds.values[:, 0], y_pct)
+
+
+# ── TXYXYS (per-subfile x) — the mode where header fnpts is NOT a point
+# count but the byte offset of the trailing subfile directory (0 = none).
+# Regression tests for two real-file defects found 2026-07-25: fnpts=0 was
+# rejected as "empty", and a multifile read returned subfile 0 ONLY with no
+# error (a real 512-scan mass-spec file shrank to 8 points, silently). ────
+_TXY = _TXYXYS | _TXVALS  # txyxys implies per-subfile x arrays
+
+
+def _pack_txyxys_sub(x_ints: list[int], y_ints: list[int], *, subexp: int) -> bytes:
+    n = len(x_ints)
+    assert n == len(y_ints)
+    return (
+        _pack_sub(subexp=subexp, subnpts=n)
+        + struct.pack(f"<{n}i", *x_ints)
+        + struct.pack(f"<{n}i", *y_ints)
+    )
+
+
+def test_txyxys_fnpts_zero_is_legal(tmp_path: Path) -> None:
+    """fnpts=0 with per-subfile counts is a valid TXYXYS file, not 'empty'."""
+    exp = 8
+    x_ints = [1 << 24, 2 << 24, 3 << 24]  # 1.0, 2.0, 3.0 at 2**(8-32)
+    y_ints = [100, 200, 300]
+    raw = _pack_head(ftflgs=_TXY, fnpts=0, fnsub=1, fexp=exp) + _pack_txyxys_sub(
+        x_ints, y_ints, subexp=exp
+    )
+    ds = import_spc(_write(tmp_path, "txy0.spc", raw))
+    assert_allclose(ds.time, [1.0, 2.0, 3.0])
+    assert_allclose(ds.values[:, 0], np.array(y_ints, dtype=float) * 2.0 ** (exp - 32))
+
+
+def test_txyxys_identical_x_stacks_columns(tmp_path: Path) -> None:
+    """Subfiles repeating one x grid stack losslessly as columns."""
+    exp = 8
+    x_ints = [1 << 24, 2 << 24]
+    sub_a = _pack_txyxys_sub(x_ints, [10, 20], subexp=exp)
+    sub_b = _pack_txyxys_sub(x_ints, [30, 40], subexp=exp)
+    raw = _pack_head(ftflgs=_TXY | _TMULTI, fnpts=0, fnsub=2, fexp=exp) + sub_a + sub_b
+    ds = import_spc(_write(tmp_path, "txy_same.spc", raw))
+    assert ds.n_channels == 2
+    assert_allclose(ds.time, [1.0, 2.0])
+    assert_allclose(ds.values[:, 1], np.array([30, 40], dtype=float) * 2.0 ** (exp - 32))
+
+
+def test_txyxys_differing_x_long_form_keeps_every_point(tmp_path: Path) -> None:
+    """Differing per-subfile x (e.g. per-scan m/z) concatenates to long form
+    with a Subfile index column — NEVER silently drops subfiles 1..N (the
+    old behaviour returned subfile 0 only, no error)."""
+    exp = 8
+    sub_a = _pack_txyxys_sub([1 << 24, 2 << 24], [10, 20], subexp=exp)
+    sub_b = _pack_txyxys_sub([5 << 24, 6 << 24, 7 << 24], [30, 40, 50], subexp=exp)
+    raw = _pack_head(ftflgs=_TXY | _TMULTI, fnpts=0, fnsub=2, fexp=exp) + sub_a + sub_b
+    ds = import_spc(_write(tmp_path, "txy_diff.spc", raw))
+    assert len(ds.time) == 5  # 2 + 3: every point survives
+    assert_allclose(ds.time, [1.0, 2.0, 5.0, 6.0, 7.0])
+    assert ds.labels[1] == "Subfile"
+    assert_allclose(ds.values[:, 1], [1, 1, 2, 2, 2])
+    assert ds.metadata["txyxys_long_form"] is True
+    assert ds.metadata["subfile_points"] == [2, 3]
+
+
+def test_txyxys_data_may_not_overrun_directory(tmp_path: Path) -> None:
+    """When fnpts is a directory offset, a subfile whose declared size would
+    run into the directory raises loudly instead of reading it as data."""
+    exp = 8
+    sub = _pack_txyxys_sub([1 << 24], [10], subexp=exp)
+    dir_off = 512 + len(sub)
+    # Claim a second subfile but place the directory right after the first —
+    # subfile 1 has nowhere to live.
+    raw = (
+        _pack_head(ftflgs=_TXY, fnpts=dir_off, fnsub=2, fexp=exp)
+        + sub
+        + struct.pack("<IIf", 512, len(sub), 0.0)
+    )
+    with pytest.raises(ValueError, match="subfile directory"):
+        import_spc(_write(tmp_path, "txy_overrun.spc", raw))
+
+
+def test_txyxys_zero_subnpts_raises(tmp_path: Path) -> None:
+    raw = _pack_head(ftflgs=_TXY, fnpts=0, fnsub=1) + _pack_sub(subnpts=0)
+    with pytest.raises(ValueError, match="declares no points"):
+        import_spc(_write(tmp_path, "txy_nopts.spc", raw))
+
+
+@pytest.mark.realdata
+def test_real_txyxys_single_subfile_reads_128_points(corpus_dir: Path) -> None:
+    """rohanisaac_ms_xyxys.spc: fnpts=0 (legal), subnpts=128 — the upstream
+    ``spc`` library reads 128 points; rejecting it as 'empty' was the bug."""
+    ds = import_spc(corpus_dir / "spc" / "spectroscopy" / "rohanisaac_ms_xyxys.spc")
+    assert len(ds.time) == 128
+    assert ds.n_channels == 1
+
+
+@pytest.mark.realdata
+def test_real_txyxys_multifile_loses_nothing(corpus_dir: Path) -> None:
+    """rohanisaac_m_xyxy.spc: 512 scans, per-scan m/z. The old reader
+    returned subfile 0 only — shape (8, 1), no error, >99% of the file
+    silently gone. Oracle: the file's own trailing directory (one 12-byte
+    SSFSTC entry per subfile) — entries 1..511 each match the sequential
+    subfile boundaries byte-for-byte (posn == computed start, size ==
+    32 + 6·subnpts for int32 x + int16 y), and every subheader's subindx
+    runs 0..511 contiguously with strictly increasing subtime, so the
+    sequential read is exact. Entry 0 alone is anomalous: it points at a
+    96-byte tail block just before the directory that is a REWRITTEN COPY
+    of subfile 0 (same subindx=0, same subtime, same 8 points, stored at
+    8 bytes/point) — a GRAMS update-in-place artifact, excluded from the
+    arithmetic below. Scans have VARIABLE length (3..53 pts; the
+    MANIFEST's '512 × 8 pts' was shorthand from that copy of subfile 0)."""
+    path = corpus_dir / "spc" / "spectroscopy" / "rohanisaac_m_xyxy.spc"
+    raw = path.read_bytes()
+    dir_off = struct.unpack_from("<I", raw, 4)[0]  # TXYXYS: fnpts = dir offset
+    n_sub = struct.unpack_from("<I", raw, 24)[0]
+    sub0_pts = struct.unpack_from("<I", raw, 512 + 16)[0]  # subnpts of subfile 0
+    sizes = [struct.unpack_from("<IIf", raw, dir_off + 12 * k)[1] for k in range(1, n_sub)]
+    expected_total = sub0_pts + sum((size - 32) // 6 for size in sizes)
+
+    ds = import_spc(path)
+    assert ds.metadata["n_subfiles"] == n_sub == 512
+    assert ds.metadata["txyxys_long_form"] is True
+    assert len(ds.time) == expected_total == 4344
+    assert sum(ds.metadata["subfile_points"]) == expected_total
+    assert min(ds.metadata["subfile_points"]) == 3
+    assert max(ds.metadata["subfile_points"]) == 53
+    # Subfile column spans every scan — nothing was dropped.
+    assert ds.values[:, 1].min() == 1.0
+    assert ds.values[:, 1].max() == float(n_sub)

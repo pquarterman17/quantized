@@ -93,14 +93,10 @@ _KNOWN_GAPS: dict[str, str] = {
     "spc/spectroscopy/rohanisaac_old_0x4D_m_ordz.spc": (
         "SPC fversn 0x4D (old format) rejected by contract — no decoder yet"
     ),
-    # DEFECT, not a contract: for TXYXYS files the main-header fnpts is not
-    # authoritative (each subfile declares its own count), but the reader
-    # rejects fnpts=0 as an empty file. Oracle (upstream `spc` library) reads
-    # 128 points from this file.
-    "spc/spectroscopy/rohanisaac_ms_xyxys.spc": (
-        "SPC TXYXYS: header fnpts=0 is legal (per-subfile counts) but the "
-        "reader rejects it as empty — real defect, oracle reads 128 pts"
-    ),
+    # (rohanisaac_ms_xyxys.spc was registered here as a TXYXYS fnpts=0 defect;
+    # FIXED 2026-07-25 — fnpts is a directory offset in that mode, never a
+    # count — so it now imports and needs no entry. Anchored with realdata
+    # tests in test_io_spc.py, alongside the m_xyxy silent-multifile fix.)
     # JCAMP LINK: spectra live in nested blocks; import_jcamp looks only for a
     # top-level XYDATA/XYPOINTS/PEAK TABLE. Valid file from the official
     # jcamp-dx.org conformance set — missing feature, not a bad fixture.
