@@ -160,3 +160,75 @@ def test_corpus_decodes_to_npoints(corpus_dir: Path, rel: str, npoints: int) -> 
     # abscissa is monotonic (ascending or descending per the scan direction)
     dx = np.diff(ds.time)
     assert np.all(dx > 0) or np.all(dx < 0)
+
+
+# --------------------------------------------------------------------------
+# Compound LINK files + ##PEAK ASSIGNMENTS (2026-07-25 corpus defect):
+# the official ISAS_CDX conformance file buries an NMR assignments block
+# behind a JCAMP-CS structure block, and its payload is (XYMA) tuples —
+# a data class this parser previously did not read at all.
+# --------------------------------------------------------------------------
+_LINK = """##TITLE= envelope compound
+##JCAMP-DX= 4.24
+##DATA TYPE= LINK
+##BLOCKS= 2
+##TITLE= Structure: not a spectrum
+##JCAMP-CS= 3.7
+##BLOCK_ID= 1
+##ATOMLIST=
+1 C
+2 C
+##END=   $$ end structure block
+##TITLE= NMR data block
+##JCAMP-DX= 5.00
+##DATA TYPE= NMR PEAK ASSIGNMENTS
+##BLOCK_ID= 2
+##XUNITS= PPM
+##YUNITS= ARBITRARY UNITS
+##NPOINTS= 3
+##PEAK ASSIGNMENTS= (XYMA)
+( 27.00, 1.0,, < 7>)
+( 32.10, 2.0,, < 6>)
+(218.40, 1.5,, < 2>)
+##END=   $$ end data block
+##END=   $$ end compound file"""
+
+
+def test_link_finds_data_behind_structure_block() -> None:
+    ds = import_jcamp_from_text(_LINK)
+    assert_allclose(ds.time, [27.0, 32.1, 218.4])
+    assert_allclose(ds.values[:, 0], [1.0, 2.0, 1.5])
+    # The data block's own labels win over the LINK envelope's.
+    assert ds.metadata["title"] == "NMR data block"
+    assert ds.metadata["data_type"] == "NMR PEAK ASSIGNMENTS"
+    assert ds.metadata["x_column_unit"] == "PPM"
+    assert ds.metadata["data_form"] == "PEAKASSIGNMENTS"
+    assert ds.metadata["peak_assignments"] == ["7", "6", "2"]
+    assert ds.metadata["extra_blocks"] == 2
+
+
+def test_assignments_without_y_default_to_one() -> None:
+    text = """##TITLE= xa only
+##PEAK ASSIGNMENTS= (XA)
+(10.5, <a>)(11.5, <b>)
+##END="""
+    ds = import_jcamp_from_text(text)
+    assert_allclose(ds.time, [10.5, 11.5])
+    assert_allclose(ds.values[:, 0], [1.0, 1.0])
+    assert ds.metadata["peak_assignments"] == ["a", "b"]
+
+
+@pytest.mark.realdata
+def test_real_isas_cdx_link_file(corpus_dir: Path) -> None:
+    """The official jcamp-dx.org ISAS_CDX conformance file: LINK envelope,
+    JCAMP-CS structure block first, then 13C assignments — 16 peaks."""
+    path = corpus_dir / "jcamp" / "ir" / "nzhagen_official_ISAS_CDX.dx"
+    if not path.exists():
+        pytest.skip("corpus file missing")
+    ds = import_auto(str(path))
+    assert len(ds.time) == 16
+    assert_allclose(ds.time[0], 27.0)
+    assert_allclose(ds.time[-1], 218.4)
+    assert ds.metadata["data_type"] == "NMR PEAK ASSIGNMENTS"
+    assert ds.metadata["x_column_unit"] == "PPM"
+    assert len(ds.metadata["peak_assignments"]) == 16

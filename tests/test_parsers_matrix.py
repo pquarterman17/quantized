@@ -97,12 +97,10 @@ _KNOWN_GAPS: dict[str, str] = {
     # FIXED 2026-07-25 — fnpts is a directory offset in that mode, never a
     # count — so it now imports and needs no entry. Anchored with realdata
     # tests in test_io_spc.py, alongside the m_xyxy silent-multifile fix.)
-    # JCAMP LINK: spectra live in nested blocks; import_jcamp looks only for a
-    # top-level XYDATA/XYPOINTS/PEAK TABLE. Valid file from the official
-    # jcamp-dx.org conformance set — missing feature, not a bad fixture.
-    "jcamp/ir/nzhagen_official_ISAS_CDX.dx": (
-        "JCAMP ##DATA TYPE= LINK (nested blocks) unsupported by import_jcamp"
-    ),
+    # (nzhagen_official_ISAS_CDX.dx was registered here as "LINK nested blocks
+    # unsupported"; FIXED 2026-07-25 — and the diagnosis was narrower than the
+    # xfail said: block scanning already worked, the missing piece was the
+    # ##PEAK ASSIGNMENTS= (XYMA) data class. Anchored in test_io_jcamp.py.)
 }
 
 
