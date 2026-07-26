@@ -2,10 +2,10 @@
 // data plus a fuzzy search over it. The dialog (components/overlays/HelpDialog)
 // is a dumb renderer, the same split ShortcutsDialog uses with lib/shortcuts.
 //
-// Plot/Insert commands now carry their own shared description metadata; Help
+// File/Data/Plot/Insert commands now carry shared description metadata; Help
 // and the command palette both consume it. The older Analyze workshop catalog
-// below is being migrated incrementally because those descriptions predate the
-// command field. Its ids remain equal to command ids so the coverage guard
+// below is being migrated incrementally because those descriptions predate
+// the command field. Its ids remain equal to command ids so the coverage guard
 // prevents a new Analyze tool from shipping undocumented.
 
 import { fuzzy } from "./fuzzy";

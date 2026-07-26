@@ -41,20 +41,20 @@ describe("HELP_TOOLS coverage (the guard that keeps it data-driven)", () => {
 
 describe("shared command help metadata", () => {
   const commands = buildAppActions(useApp.getState);
-  const plotAndInsert = commands.filter(
-    (action) => action.group === "Plot" || action.group === "Insert",
+  const documentedCommands = commands.filter(
+    (action) => ["File", "Data", "Plot", "Insert"].includes(action.group),
   );
 
-  it("documents every Plot and Insert command at its command definition", () => {
-    expect(plotAndInsert.length).toBeGreaterThan(20);
-    expect(plotAndInsert.filter((action) => !action.description).map((action) => action.id)).toEqual([]);
-    for (const action of plotAndInsert) {
+  it("documents every migrated command at its command definition", () => {
+    expect(documentedCommands.length).toBeGreaterThan(50);
+    expect(documentedCommands.filter((action) => !action.description).map((action) => action.id)).toEqual([]);
+    for (const action of documentedCommands) {
       expect(action.description!.length).toBeGreaterThan(20);
     }
   });
 
   it("turns command metadata into a searchable menu-path topic", () => {
-    const command = plotAndInsert.find((action) => action.id === "break-x-axis")!;
+    const command = documentedCommands.find((action) => action.id === "break-x-axis")!;
     const item = actionToHelpItem(command);
     expect(item.key).toBe("break-x-axis");
     expect(item.meta).toBe("Plot ▸ Layout");
@@ -64,7 +64,7 @@ describe("shared command help metadata", () => {
   it("does not duplicate a legacy hand-authored help topic", () => {
     const keys = [
       ...HELP_TOOLS.map((tool) => tool.id),
-      ...plotAndInsert.map((action) => action.id),
+      ...documentedCommands.map((action) => action.id),
     ];
     expect(new Set(keys).size).toBe(keys.length);
   });

@@ -538,9 +538,12 @@ covers a much smaller subset and guards focus on Analyze.
   used by both Help and the command palette (2026-07-25).
 - [x] Help and the command palette search those descriptions, with coverage
   guards preventing a new Plot/Insert command from shipping undocumented.
+- [x] File and Data commands use the same metadata and coverage contract,
+  including import/workspace/export and combine/reshape/recalculate actions
+  (2026-07-25).
 - [x] The growing Help catalog loads only when Help opens; its 14.4 kB chunk
   reduced audited eager startup from 945.5 kB to 934.4 kB.
-- [ ] Migrate File, Edit, View, Data, Analyze, and Help commands from the
+- [ ] Migrate Edit, View, Analyze, and Help commands from the
   legacy/sparse catalogs to the shared description contract.
 - [ ] Extend the same source to Inspector cards, context actions, and
   workshops, then add contextual `?` links.
@@ -775,6 +778,15 @@ At the end of each session:
   slice 46 passed; production TypeScript/Vite build and bundle ratchet passed.
 - Found and recorded the pre-existing broken ESLint 10 configuration under
   P4.1 rather than expanding this usability slice.
+
+### 2026-07-25 — P3.1 File/Data discoverability slice (ChatGPT-Sol)
+
+- Added the same shared descriptions to every File and Data command.
+- Help now finds lifecycle and worksheet operations by outcomes such as
+  "recovery snapshot" or "matching values," not only exact menu names.
+- Coverage prevents future File/Data commands from shipping undocumented.
+- Validation: focused suite **47 passed**; production build and bundle ratchet
+  passed at 937.4 kB eager.
 
 ## Reference baseline
 

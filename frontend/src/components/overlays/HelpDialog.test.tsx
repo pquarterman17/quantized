@@ -53,6 +53,20 @@ describe("HelpDialog", () => {
     expect(screen.getByText("Plot ▸ Layout")).toBeInTheDocument();
   });
 
+  it("searches File and Data commands by outcomes rather than menu labels", () => {
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    fireEvent.change(screen.getByLabelText("Search help"), {
+      target: { value: "recovery snapshot" },
+    });
+    expect(titleShown("Clear autosaved workspace")).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Search help"), {
+      target: { value: "matching values" },
+    });
+    expect(titleShown("Join datasets by key")).toBe(true);
+  });
+
   it("shows an empty state for no matches", () => {
     render(<HelpDialog />);
     act(() => useHelp.getState().openHelp());

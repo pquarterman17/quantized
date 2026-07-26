@@ -59,6 +59,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "import",
       group: "File",
       label: "Import data…",
+      description: "Open one or more supported data files as datasets.",
       shortcut: "⌘O",
       run: () => void chooseAndImport(s()),
     },
@@ -66,6 +67,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "import-append",
       group: "File",
       label: "Import & append as one dataset…",
+      description: "Import multiple compatible files and concatenate them into one dataset.",
       keywords: "combine concatenate merge multi-file append",
       run: () => openFilePicker((files) => void s().importFilesAppended(files), IMPORT_ACCEPT),
     },
@@ -73,6 +75,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "import-wizard",
       group: "File",
       label: "Import wizard (guided preview + saved filters)…",
+      description: "Preview and configure messy or unfamiliar files, then save the import settings for reuse.",
       keywords: "guess preview parse delimiter header units filter messy",
       run: () => s().setImportWizardOpen(true),
     },
@@ -80,6 +83,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "import-origin-template",
       group: "File",
       label: "Import Origin template (.otp/.otpu)…",
+      description: "Import plot styling and layout from an Origin graph template.",
       keywords: "otp otpu origin graph template style preset",
       run: () => openFilePicker((files) => void importOriginTemplateFiles(files), TEMPLATE_ACCEPT),
     },
@@ -87,6 +91,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "demo",
       group: "File",
       label: "Add demo dataset",
+      description: "Add a generated demonstration dataset for quickly trying plots and analysis.",
       run: () =>
         s().addDataset({
           id: `demo-${++demoCounter}`,
@@ -98,6 +103,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "load-sample",
       group: "File",
       label: "Load sample dataset (bundled)",
+      description: "Load the bundled sample data for a guided first workflow without finding a file.",
       keywords: "demo example first-run VSM hysteresis try this",
       run: () => {
         void loadSampleDataset().then(({ data, name, offline }) => {
@@ -114,6 +120,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "save-workspace",
       group: "File",
       label: "Save workspace (.dwk)…",
+      description: "Save datasets, folders, figures, results, and settings as a Quantized workspace.",
       // Resolving pending lazy books (#38) before serializing lives in the
       // store (saveWorkspaceToFile) — not here, so this stays a thin command
       // like every other one in this list.
@@ -123,6 +130,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "open-workspace",
       group: "File",
       label: "Open workspace (.dwk)…",
+      description: "Replace the current session with a previously saved Quantized workspace.",
       // `loadWorkspace` REPLACES the entire library (datasets, folders,
       // reports, figure docs, saved specs, macro steps, windows) -- clearAll's
       // own comment calls it "loadWorkspace's replace-everything reset". The
@@ -159,6 +167,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "append-workspace",
       group: "File",
       label: "Append workspace (.dwk)…",
+      description: "Merge another saved workspace into the current library without replacing it.",
       keywords: "merge combine import project origin append second library",
       run: openWorkspaceCommand(s, "append", (ws) => s().appendWorkspace(ws)),
     },
@@ -166,6 +175,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "clear-autosave",
       group: "File",
       label: "Clear autosaved workspace…",
+      description: "Delete the recovery snapshot while leaving the currently open workspace unchanged.",
       run: () => {
         void clearAutosave();
         s().setStatus("autosaved workspace cleared (current library unchanged)");
@@ -175,6 +185,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "remove-all",
       group: "File",
       label: "Remove all…",
+      description: "Permanently clear every dataset, folder, report, and imported figure from the session.",
       run: () => {
         const n = s().datasets.length;
         if (n === 0) {
@@ -198,6 +209,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "export-csv",
       group: "File",
       label: "Export XRD CSV…",
+      description: "Export the active dataset as a diffraction-friendly CSV file.",
       run: () =>
         exportActive(s, (stem, ds) => exportXrdCsv({ dataset: ds.data, filename: stem })),
     },
@@ -205,6 +217,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "export-hdf5",
       group: "File",
       label: "Export HDF5…",
+      description: "Export the active dataset and available raw/corrected forms to HDF5.",
       run: () =>
         exportActive(s, (stem, ds) =>
           exportHdf5(
@@ -244,6 +257,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "export-origin",
       group: "File",
       label: "Export Origin (.ogs)…",
+      description: "Export data and current plot settings as an Origin script plus accompanying data.",
       run: () =>
         exportActive(s, (stem, ds) =>
           exportOrigin({
@@ -268,6 +282,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "send-to-origin",
       group: "File",
       label: "Send to Origin (COM)…",
+      description: "Send selected datasets directly to a running Origin session on supported Windows systems.",
       run: async () => {
         // Selected datasets when a multi-selection exists, else the active one.
         const all = s().datasets;
@@ -311,6 +326,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "export-consolidated",
       group: "File",
       label: "Export consolidated CSV…",
+      description: "Combine every loaded dataset into one consolidated CSV export.",
       run: async () => {
         const all = s().datasets;
         if (all.length === 0) {
@@ -335,6 +351,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "preferences",
       group: "File",
       label: "Preferences…",
+      description: "Configure application appearance, behavior, and persistent user preferences.",
       shortcut: "⌘,",
       run: () => s().setPrefsOpen(true),
     },
@@ -342,6 +359,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       id: "export-page",
       group: "File",
       label: "Export page… (spatial, true page coords)",
+      description: "Export an imported multi-panel page using its original spatial page coordinates.",
       keywords: "origin multi-panel page rect true coordinates #54",
       run: () => void runExportSpatialPageCommand(s),
     },

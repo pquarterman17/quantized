@@ -39,7 +39,9 @@ const TABS: { id: HelpSection; label: string }[] = [
 ];
 
 const COMMAND_HELP_ITEMS = buildAppActions(useApp.getState)
-  .filter((action) => action.group === "Plot" || action.group === "Insert")
+  .filter((action) =>
+    ["File", "Data", "Plot", "Insert"].includes(action.group),
+  )
   .map(actionToHelpItem);
 
 // The one searchable index — tools, plot/insert commands, formats, and tips.
