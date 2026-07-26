@@ -27,6 +27,12 @@ frontend/blob-report/
 src-tauri/target/
 # tauri-build regenerates these capability schemas on every cargo build
 src-tauri/gen/schemas/
+# `tauri icon` also emits mobile/Store assets; this desktop app does not ship
+# those targets. Keep the PNG/ICO/ICNS desktop set only.
+src-tauri/icons/android/
+src-tauri/icons/ios/
+src-tauri/icons/Square*Logo.png
+src-tauri/icons/StoreLogo.png
 
 # ── Local-only research corpus (never commit instrument data) ─────────
 tests/realdata/
@@ -62,6 +68,9 @@ tools/audit_defaults_out/
 # regenerate locally, never commit (the small committed set lives under
 # tests/fixtures/baselines/, see docs/timed_workflow_baselines.md)
 tools/baselines/out/
+
+# Local ImageGen intermediates (final brand assets live under assets/branding/)
+tmp/imagegen/
 
 # OneDrive conflict copies — when two machines edit the same file, OneDrive
 # saves a duplicate named "<file>-<Device>.<ext>". Never commit these.

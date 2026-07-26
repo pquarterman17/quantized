@@ -84,13 +84,16 @@ Repo → Settings → Secrets and variables → Actions → *New repository secr
 > private key backed up; losing it means installed apps can no longer
 > auto-update (they'd need a manual reinstall to adopt a new key).
 
-### 4. (Optional) Replace the placeholder icons
+### 4. Regenerate the Quantized icons
 
-`src-tauri/icons/*` are currently copied from FermiViewer as placeholders.
-Generate Quantized-branded icons:
+The committed platform icons derive from
+`assets/branding/quantized-app-icon.png`. Regenerate them after changing the
+brand source:
 
 ```bash
-npx @tauri-apps/cli@2.11.2 icon path/to/quantized-1024.png
+npx --yes @tauri-apps/cli@2.11.2 icon \
+  assets/branding/quantized-app-icon.png \
+  --output src-tauri/icons
 ```
 
 ### 5. Register PyPI Trusted Publishing (`pypi.yml`)
