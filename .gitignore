@@ -58,6 +58,11 @@ src/quantized/web/
 # locally, never commit the PNG grid
 tools/audit_defaults_out/
 
+# P0.4-scale baseline fixtures (tools/baselines/make_fixtures.py --large) --
+# regenerate locally, never commit (the small committed set lives under
+# tests/fixtures/baselines/, see docs/timed_workflow_baselines.md)
+tools/baselines/out/
+
 # OneDrive conflict copies — when two machines edit the same file, OneDrive
 # saves a duplicate named "<file>-<Device>.<ext>". Never commit these.
 *MacBook*

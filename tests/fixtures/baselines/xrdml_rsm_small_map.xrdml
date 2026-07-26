@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xrdMeasurements xmlns="http://www.xrdml.com/XRDMeasurement/2.1" status="Completed">
+  <xrdMeasurement measurementType="Scan" sampleMode="Reflection">
+    <usedWavelength intended="K-Alpha 1">
+      <kAlpha1 unit="Angstrom">1.5405980</kAlpha1>
+    </usedWavelength>
+    <scan appendNumber="0" mode="Continuous" scanAxis="Omega" status="Completed">
+      <dataPoints>
+        <positions axis="2Theta" unit="deg">
+          <startPosition>40.000000</startPosition>
+          <endPosition>42.000000</endPosition>
+        </positions>
+        <positions axis="Omega" unit="deg">
+          <commonPosition>20.700000</commonPosition>
+        </positions>
+        <commonCountingTime unit="seconds">1.000000</commonCountingTime>
+        <counts unit="counts">16 24 28 34 50 65 83 101 144 160 201 212 281 373 382 415 503 493 508 526 583 524 560 504 495 444 416 343 286 260 202 168 148 108 79 61 50 52 25 20 28</counts>
+      </dataPoints>
+    </scan>
+    <scan appendNumber="1" mode="Continuous" scanAxis="Omega" status="Completed">
+      <dataPoints>
+        <positions axis="2Theta" unit="deg">
+          <startPosition>40.000000</startPosition>
+          <endPosition>42.000000</endPosition>
+        </positions>
+        <positions axis="Omega" unit="deg">
+          <commonPosition>20.736364</commonPosition>
+        </positions>
+        <commonCountingTime unit="seconds">1.000000</commonCountingTime>
+        <counts unit="counts">18 24 58 68 107 126 145 210 242 313 378 472 574 678 742 844 942 981 1078 1074 1071 1092 1021 907 935 818 734 613 544 440 362 323 271 193 161 119 81 84 61 38 24</counts>
+      </dataPoints>
+    </scan>
+    <scan appendNumber="2" mode="Continuous" scanAxis="Omega" status="Completed">
+      <dataPoints>
+        <positions axis="2Theta" unit="deg">
+          <startPosition>40.000000</startPosition>
+          <endPosition>42.000000</endPosition>
+        </positions>
+        <positions axis="Omega" unit="deg">
+          <commonPosition>20.772727</commonPosition>
+        </positions>
+        <commonCountingTime unit="seconds">1.000000</commonCountingTime>
+        <counts unit="counts">32 69 88 102 122 181 262 341 393 497 640 770 888 1120 1234 1415 1490 1605 1730 1813 1832 1756 1758 1669 1505 1409 1247 1051 910 773 653 557 445 334 256 188 156 102 86 51 42</counts>
+      </dataPoints>
+    </scan>
+    <scan appendNumber="3" mode="Continuous" scanAxis="Omega" status="Completed">
+      <dataPoints>
+        <positions axis="2Theta" unit="deg">
+          <startPosition>40.000000</startPosition>
+          <endPosition>42.000000</endPosition>
+        </positions>
+        <positions axis="Omega" unit="deg">
+          <commonPosition>20.809091</commonPosition>
+        </positions>
+        <commonCountingTime unit="seconds">1.000000</commonCountingTime>
+        <counts unit="counts">52 70 93 148 206 265 370 456 612 723 981 1154 1383 1592 1838 2096 2269 2411 2613 2547 2676 2726 2494 2448 2220 2081 1829 1654 1420 1158 931 807 579 500 377 266 174 154 115 72 52</counts>
+      </dataPoints>
+    </scan>
+    <scan appendNumber="4" mode="Continuous" scanAxis="Omega" status="Completed">
+      <dataPoints>
+        <positions axis="2Theta" unit="deg">
+          <startPosition>40.000000</startPosition>
+          <endPosition>42.000000</endPosition>
+        </positions>
+        <positions axis="Omega" unit="deg">
+          <commonPosition>20.845455</commonPosition>
+        </positions>
+        <commonCountingTime unit="seconds">1.000000</commonCountingTime>
+        <counts unit="counts">65 90 138 196 276 349 510 612 770 1033 1257 1558 1786 2053 2389 2668 2974 3072 3343 3380 3393 3408 3392 3206 2878 2605 2448 2070 1825 1460 1232 1026 798 637 469 381 289 197 136 115 74</counts>
+      </dataPoints>
+    </scan>
+    <scan appendNumber="5" mode="Continuous" scanAxis="Omega" status="Completed">
+      <dataPoints>
+        <positions axis="2Theta" unit="deg">
+          <startPosition>40.000000</startPosition>
+          <endPosition>42.000000</endPosition>
+        </positions>
+        <positions axis="Omega" unit="deg">
+          <commonPosition>20.881818</commonPosition>
+        </positions>
+        <commonCountingTime unit="seconds">1.000000</commonCountingTime>
+        <counts unit="counts">87 116 164 219 315 408 567 770 891 1192 1442 1765 2060 2337 2690 3024 3340 3540 3783 3947 3988 3947 3598 3622 3416 3064 2814 2392 2061 1703 1400 1146 901 723 583 435 279 199 166 107 75</counts>
+      </dataPoints>
+    </scan>
+    <scan appendNumber="6" mode="Continuous" scanAxis="Omega" status="Completed">
+      <dataPoints>
+        <positions axis="2Theta" unit="deg">
+          <startPosition>40.000000</startPosition>
+          <endPosition>42.000000</endPosition>
+        </positions>
+        <positions axis="Omega" unit="deg">
+          <commonPosition>20.918182</commonPosition>
+        </positions>
+        <commonCountingTime unit="seconds">1.000000</commonCountingTime>
+        <counts unit="counts">77 111 171 222 314 398 551 716 919 1178 1394 1727 2053 2429 2765 3058 3363 3636 3714 3871 3986 3986 3735 3636 3447 3006 2656 2297 2079 1730 1384 1152 923 767 519 415 339 206 162 105 61</counts>
+      </dataPoints>
+    </scan>
+    <scan appendNumber="7" mode="Continuous" scanAxis="Omega" status="Completed">
+      <dataPoints>
+        <positions axis="2Theta" unit="deg">
+          <startPosition>40.000000</startPosition>
+          <endPosition>42.000000</endPosition>
+        </positions>
+        <positions axis="Omega" unit="deg">
+          <commonPosition>20.954545</commonPosition>
+        </positions>
+        <commonCountingTime unit="seconds">1.000000</commonCountingTime>
+        <counts unit="counts">67 103 133 185 253 398 491 633 834 1026 1270 1537 1846 2069 2447 2708 2965 3099 3356 3415 3554 3462 3254 3157 3063 2812 2374 2172 1722 1531 1246 988 793 628 487 356 259 206 137 98 64</counts>
+      </dataPoints>
+    </scan>
+    <scan appendNumber="8" mode="Continuous" scanAxis="Omega" status="Completed">
+      <dataPoints>
+        <positions axis="2Theta" unit="deg">
+          <startPosition>40.000000</startPosition>
+          <endPosition>42.000000</endPosition>
+        </positions>
+        <positions axis="Omega" unit="deg">
+          <commonPosition>20.990909</commonPosition>
+        </positions>
+        <commonCountingTime unit="seconds">1.000000</commonCountingTime>
+        <counts unit="counts">50 75 106 175 215 271 384 514 623 778 992 1142 1375 1589 1775 2090 2336 2404 2672 2583 2642 2610 2504 2457 2282 2100 1852 1581 1411 1143 924 811 641 486 365 244 206 138 111 75 45</counts>
+      </dataPoints>
+    </scan>
+    <scan appendNumber="9" mode="Continuous" scanAxis="Omega" status="Completed">
+      <dataPoints>
+        <positions axis="2Theta" unit="deg">
+          <startPosition>40.000000</startPosition>
+          <endPosition>42.000000</endPosition>
+        </positions>
+        <positions axis="Omega" unit="deg">
+          <commonPosition>21.027273</commonPosition>
+        </positions>
+        <commonCountingTime unit="seconds">1.000000</commonCountingTime>
+        <counts unit="counts">53 43 80 99 135 205 268 338 381 563 585 795 919 1099 1192 1417 1456 1600 1703 1814 1849 1803 1747 1662 1464 1484 1291 1134 960 835 600 513 463 352 240 197 150 118 97 55 51</counts>
+      </dataPoints>
+    </scan>
+    <scan appendNumber="10" mode="Continuous" scanAxis="Omega" status="Completed">
+      <dataPoints>
+        <positions axis="2Theta" unit="deg">
+          <startPosition>40.000000</startPosition>
+          <endPosition>42.000000</endPosition>
+        </positions>
+        <positions axis="Omega" unit="deg">
+          <commonPosition>21.063636</commonPosition>
+        </positions>
+        <commonCountingTime unit="seconds">1.000000</commonCountingTime>
+        <counts unit="counts">31 46 51 62 88 128 133 191 276 326 380 464 536 612 760 799 878 950 1029 1048 1054 1021 1008 971 906 837 698 601 572 496 373 326 245 195 163 132 82 57 61 30 30</counts>
+      </dataPoints>
+    </scan>
+    <scan appendNumber="11" mode="Continuous" scanAxis="Omega" status="Completed">
+      <dataPoints>
+        <positions axis="2Theta" unit="deg">
+          <startPosition>40.000000</startPosition>
+          <endPosition>42.000000</endPosition>
+        </positions>
+        <positions axis="Omega" unit="deg">
+          <commonPosition>21.100000</commonPosition>
+        </positions>
+        <commonCountingTime unit="seconds">1.000000</commonCountingTime>
+        <counts unit="counts">17 25 27 36 52 71 79 127 137 194 195 263 342 361 382 450 515 510 545 503 562 540 554 504 489 439 347 335 295 248 205 174 162 111 90 69 46 40 31 29 9</counts>
+      </dataPoints>
+    </scan>
+  </xrdMeasurement>
+</xrdMeasurements>
