@@ -6,7 +6,17 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-26 (sixth pass — executing the fifth pass's
+**Last reconciled:** 2026-07-26 (seventh pass). **The large
+derived-`.dwk`/1M-worksheet measurement is DONE** (`be40a69`): worksheet
+virtualization and autosave hold at 1M-row scale (bounded DOM, 51 ms
+scroll p95, a 188 MB IndexedDB write succeeds), and the reopen path
+freezes the renderer **5.8 s** in synchronous `JSON.parse` — P3.4 slice 3
+is upgraded from conditional to confirmed. Every locally-measurable P0.4
+case is now measured; P0.4's remaining opens are browser-side big maps,
+UI copy/export at 1M, P1.1-blocked offline transitions, and the owner's
+real-GPU zoom check. The actionable queue is P3.4 slices 1–3.
+
+Prior same day (sixth pass — executing the fifth pass's
 queue). **`_detect_layout` SHIPPED** (`9f12216`: lazy + chunk-vectorized
 scoring, 1M-row import ~7→4.72 s, 36 differential tests). **The >500 ms
 feedback/cancel audit is DONE and the criterion is NOT met** — the job
@@ -193,8 +203,7 @@ still make the owner switch back to Origin.
 |------|-------------|
 | P3.4 slice 1 — import progress + cancel (the front door: 14–28 s at 1M rows with status-text only, no cancel, double-import possible; generalize the DREAM-fit job pattern or wire AbortController) | PRIMARY SOFTWARE P3.4, evidence-warranted 2026-07-26 |
 | P3.4 slice 2 — command-palette in-flight signal (one chokepoint: `CommandPalette.tsx` fires `a.run()` untracked, so every export runs with zero running-state) | PRIMARY SOFTWARE P3.4 |
-| P3.4 slice 3 — workspace-open feedback (totally silent sync `JSON.parse`; add busy state, defer/chunk if the large-`.dwk` measurement shows a freeze) | PRIMARY SOFTWARE P3.4 |
-| Measure a large `.dwk` containing derived data, figures/results, and a 1M-row member — **measurement run in flight 2026-07-26** | PRIMARY SOFTWARE P0.4 |
+| P3.4 slice 3 — workspace-open feedback + off-main-thread parse (freeze CONFIRMED 2026-07-26: 5.8 s of a 6.0 s reopen frozen in sync `JSON.parse` at a 188 MB workspace) | PRIMARY SOFTWARE P3.4 |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are

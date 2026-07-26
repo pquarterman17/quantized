@@ -155,7 +155,7 @@ specific residual below:
 
 | State | Work |
 |---|---|
-| **Actionable now; no owner gate** | P3.4 slices 1–3 (evidence-warranted by the 2026-07-26 audit); large derived `.dwk` measurement (in flight). ~~P0.4 `_detect_layout`~~ and the ~~>500 ms audit~~ completed 2026-07-26 |
+| **Actionable now; no owner gate** | P3.4 slices 1–3 (evidence-warranted by the 2026-07-26 audit; slice 3's freeze confirmed at 5.8 s). ~~P0.4 `_detect_layout`~~, the ~~>500 ms audit~~, and the ~~large derived-`.dwk` measurement~~ all completed 2026-07-26 |
 | **Owner/environment evidence now** | P0.1 switch-trigger project; P0.2 screenshot review; P0.3 timed journeys; P0.4 real-GPU confirmation |
 | **Sequencing-gated engineering; incomplete** | P1.1-P1.7 after Gate A; P2.1-P2.8 in the owner-ranked Gate D order; P3.1-P3.7 and P4.1-P4.2 as Gate E evidence warrants |
 | **Credentials/release acceptance** | P4.3; agents can implement and automate supporting work, but signing identities and clean-machine acceptance require the owner/environment |
@@ -278,10 +278,12 @@ copy/export, and cleanup for:
 - [x] several large 2-D matrix sizes (backend 500²/1000²/2000² measured;
   browser-side map interaction is a residual);
 - [x] 50+ datasets and 20+ plot windows;
-- [ ] **Agent-actionable now:** a large `.dwk` with derived data, figures, and
-  results (F4 covered a
-  50-small-dataset/20-window session — cheap; derived data + a 1M-row
-  member untested);
+- [x] a large `.dwk` with derived data, figures, and results — MEASURED
+  2026-07-26 (`be40a69`, with the 1M worksheet-grid residual in the same
+  run): 188 MB `.dwk`, 641 ms serialize, autosave SUCCEEDS at that size,
+  full integrity round-trip; reopen freezes the main thread **5.8 s** in
+  synchronous `JSON.parse` (→ P3.4 slice 3 evidence); worksheet grid
+  bounded + 51 ms scroll p95 at 1M rows;
 - [x] dense multi-series plots before and after window-aware min/max
   decimation (`244551c`; 7M → ~82k points fed to uPlot);
 - [ ] **Sequencing-blocked by P1.1:** network/offline source transitions
@@ -399,9 +401,12 @@ the existing remote-IPC security boundary must remain.
 downloads a generic filename; autosave stores whole workspaces in IndexedDB
 with localStorage fallback. P0.4 (2026-07-26) measured persistence at a
 50-dataset/20-window session: 13 ms serialize, 3.6 MB file, 194 ms restore,
-~17 ms autosave write — so "compressed containers/chunked binary arrays only
-if P0.4 requires it" is answered NOT REQUIRED at that scale; a `.dwk`
-holding a 1M-row dataset remains untested (P0.4 residual).
+~17 ms autosave write — "compressed containers/chunked binary arrays only
+if P0.4 requires it" answered NOT REQUIRED at that scale. The 1M-row-member
+case (measured 2026-07-26): 188 MB `.dwk`, serialize/autosave still fine,
+but reopen freezes the main thread 5.8 s in synchronous `JSON.parse` — the
+near-term mitigation is P3.4 slice 3 (worker/chunked parse); P1.2 should
+weigh chunked/binary arrays for large members with that number in hand.
 
 - [ ] Show project name/path and dirty state.
 - [ ] Atomic temporary-write, validation, then replace.
@@ -732,9 +737,12 @@ Prioritized slices (in pain order):
 - [ ] **Slice 2 — command-palette in-flight signal**: one chokepoint fix in
   the palette/command runner so every command with async work shows a
   running state (the fire-and-forget `a.run()` is a single call site).
-- [ ] **Slice 3 — workspace open feedback**: busy state before the parse,
-  and chunk or defer the synchronous `JSON.parse` if the large-`.dwk`
-  measurement shows a freeze.
+- [ ] **Slice 3 — workspace open feedback + off-main-thread parse**: the
+  large-`.dwk` measurement (2026-07-26) SHOWED the freeze — 5.8 s of a
+  6.0 s reopen frozen in synchronous `JSON.parse` at a 188 MB workspace.
+  Slice 3 therefore must both add a busy state AND move the parse off the
+  main thread (worker or chunked), not merely add a spinner over a frozen
+  renderer.
 
 Original acceptance criteria (unchanged):
 
@@ -1228,9 +1236,14 @@ work (its BACKLOG row).
   live observation on :8952): findings + ranked P3.4 slices booked; the
   audit also caught CLAUDE.md's "WebSocket job queue" drift (poll-based in
   reality; only DREAM uses the queue) — CLAUDE.md corrected this pass.
-- **Large derived-`.dwk` + 1M worksheet-grid measurement launched** (the
-  remaining locally-measurable P0.4 residuals); results land in
-  `docs/envelope/2026-07-26-workspace.json` when the run completes.
+- **Large derived-`.dwk` + 1M worksheet-grid measurement COMPLETED**
+  (`be40a69`, merged `1713e96`): 188 MB `.dwk`, autosave succeeds, full
+  integrity round-trip, worksheet bounded at 1M rows — and a measured
+  **5.8 s main-thread freeze** in the reopen `JSON.parse`, which upgrades
+  P3.4 slice 3 from conditional to confirmed. Note: the agent's worktree
+  spawned one commit behind (`b1b32e7`, pre-`9f12216`), so its upload
+  timing predates the layout fix — caveated in the envelope doc; all
+  other numbers unaffected.
 
 #### 2026-07-26 — Non-owner work status reconciliation (ChatGPT-Sol)
 

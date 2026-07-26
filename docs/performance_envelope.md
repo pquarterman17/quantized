@@ -166,13 +166,43 @@ sentence, import button never disabled, no cancel; (2) every
 command-palette export — fully fire-and-forget, zero in-flight signal;
 (3) workspace open — completely silent synchronous `JSON.parse`.
 
+## Large derived workspace + 1M worksheet — 2026-07-26 (`be40a69`)
+
+The remaining locally-measurable residuals, measured in one real session:
+20 datasets (one 1M×8), a corrections chain + formula column + real curve
+fit layered on one dataset, 11 plot windows (one on the 1M member). Run
+branched just before `9f12216` merged, so its upload number predates the
+layout-scoring fix; all other numbers are unaffected by that change.
+
+| Measurement | Value |
+|---|---|
+| Session build total (imports + derived + 11 windows) | 22.3 s |
+| JS heap after session | 1,016 MB (5 MB at start) |
+| Worksheet mount @ 1M rows | 1,580 ms |
+| Worksheet DOM (before AND after scroll) | 39 rows / 351 cells — bounded |
+| Worksheet scroll median / p95 | 50 / 51 ms — meets <100 ms |
+| `.dwk` serialize / size | 641 ms / **188 MB** |
+| Autosave at this scale | **SUCCESS** — ~17 ms write behind the 800 ms debounce; IndexedDB accepted the full 188 MB, no quota failure |
+| Reopen restore / **main-thread freeze** | 5,972 ms / **5,832 ms frozen** (synchronous `JSON.parse`) |
+| Reopen integrity | 20/20 datasets, 11/11 windows, derived value exact round-trip, 1M rows intact |
+
+Findings:
+
+9. **Worksheet virtualization and autosave hold at 1M-row scale** —
+   bounded DOM, in-budget scroll, and a 188 MB IndexedDB write that just
+   works. No work booked here.
+10. **The `.dwk` reopen path freezes the renderer for ~5.8 s** at a 188 MB
+    workspace — the synchronous `JSON.parse` the feedback/cancel audit
+    flagged, now measured. This is hard evidence for P3.4 slice 3 (busy
+    state + move the parse off the main thread) and a data point for
+    P1.2's chunked/binary-container consideration for large members.
+
 ## Residuals (explicitly unmeasured — carry in P0.4)
 
-- Worksheet-GRID interaction at 1M rows (only import→plot was measured;
-  the grid was previously verified to 100k×200 mount only).
-- `.dwk` save/reopen containing a 1M-row dataset (F4's session held 50
-  SMALL datasets; inline-JSON arrays at 78 MB-payload scale are untested).
 - Browser-side 2-D map rendering/interaction at 1000²–2000².
 - Network/offline source transitions — unmeasurable today: no offline-vs-
   deleted distinction exists until P1.1 ships. Re-measure after P1.1.
 - Copy/export timing at the 1M scale from the UI.
+- Real-GPU F1 zoom acceptance (owner hardware; headless run reads 112 ms).
+- ~~Worksheet-GRID interaction at 1M rows~~ / ~~`.dwk` with a 1M-row
+  member~~ — MEASURED 2026-07-26, see above.
