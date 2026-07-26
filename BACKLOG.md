@@ -6,7 +6,15 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-25 (fresh primary-software readiness audit) —
+**Last reconciled:** 2026-07-25 (late — standing-issues sweep). P4.1 (lint
+restore) and P4.2's npm-ci reproducibility item SHIPPED (PRs #88/#87);
+PORT_PLAN #54's four SPC/JCAMP defects ALL fixed same-day they were booked
+(PR #89) — including the silent m_xyxy data loss; the glib Dependabot alert
+was DISMISSED as tolerable risk (Linux-only transitive dep, fix blocked on
+Tauri adopting gtk-rs 0.20; dated rationale on the alert). Rows removed per
+the archival rule; outcomes live in the plans' Completed/struck entries.
+
+Prior: 2026-07-25 (fresh primary-software readiness audit) —
 `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` owns the new evidence-led,
 multi-session campaign. Its Gate A acceptance work comes first; implementation
 priorities are conditional on the resulting friction log. The prior MAIN
@@ -149,10 +157,6 @@ After Gate A, the current dependency-ordered implementation candidates are:
 | Live Stage parity for Graph Builder grouping/faceting | PRIMARY SOFTWARE P1.5 |
 | Full semantic plot-recipe templates with technique scope and opt-in application | PRIMARY SOFTWARE P1.3 |
 | Portable projects and safe source relinking | PRIMARY SOFTWARE P1.7 |
-| Restore the declared frontend lint command with a real ESLint 10 flat TypeScript configuration | PRIMARY SOFTWARE P4.1 |
-| Make the e2e job reproducible: `e2e.yml` uses `npm install`, so `^1.61.1` drifts off the lockfile's pinned Playwright 1.61.1 and CI tests a different version than any local run. It hid a real regression on 2026-07-25 (`getByText` exactness differs between 1.61 and 1.62) | PRIMARY SOFTWARE P4.2 |
-| **`.spc` multifile read drops data SILENTLY** — `rohanisaac_m_xyxy.spc` passes the parser matrix while `import_spc` returns `shape (8, 1)` and raises nothing. No test can catch it (an xfail cannot express "parses but lies"), so it is the one defect here that will not surface on its own | PORT_PLAN #54 |
-| SPC/JCAMP gaps the 2026-07-25 corpus exposed: TXYXYS `fnpts=0` wrongly rejected as empty (oracle reads 128 pts); `fversn=0x4D` decoder now specimen-unblocked; JCAMP `##DATA TYPE= LINK` needs sub-block recursion | PORT_PLAN #54 |
 
 Carried over from the prior campaign, two items are judgment calls their plans
 explicitly parked for the owner rather than tasks:
@@ -221,7 +225,6 @@ re-sweep periodically.
 | **Origin corpus screenshot review** — the #55 review dashboard exposes 62 paired Origin↔Quantized screenshots (Moke 8, PNR 50, RockingCurve 4); review state is 0/353 until the owner exports gallery marks. The campaign (#56) closes only on this visual sign-off; new mismatches get booked in the decode plan | ORIGIN_FILE_DECODE #55/#56 gate = PRIMARY SOFTWARE **P0.2** |
 | **Pop-out books/plots into windows** — PLAN WITH OWNER FIRST (gesture, "pop out a BOOK" semantics, bulk "window everything" command) | MAIN gate (was MULTI_PLOT #19) |
 | **Worksheet view-state persistence** — decide once, with usage evidence, whether sort/widths/selection persist per-dataset in `.dwk` (default: no) | MAIN gate (was WORKSHEET #14) |
-| **Dependabot alert #1 — `glib` unsoundness (medium), BLOCKED UPSTREAM, owner call** | security |
 | **Apache-2.0 copyright holder line** for LICENSE/NOTICE | PORT_PLAN #1 |
 | **Code-signing cert + auto-update E2E** (two consecutive signed releases to verify the updater) | MAIN gate (was PORT #47/#49 residue) |
 | **GOTO owner gates** — 3-D (Q4), signal-processing non-goal (Q8), switch-trigger project pick + start timing (Q9; protocol in the plan's Context — Q9 is the same task as PRIMARY SOFTWARE **P0.1**, whose friction log gates that plan's Gate A). ~~Q6 worksheet reshape~~ and ~~Q7 date-time axes~~ were DECIDED YES and SHIPPED 2026-07-19 (Codex PRs #67/#68) — struck here 2026-07-24 | GOTO_PLAN Owner gates |
@@ -264,7 +267,7 @@ added safety.
   gate still fails (zero errors from a major bump is also what a silently
   disabled checker looks like).
 
-### Dependabot alert #1 (investigated 2026-07-19 — no action available)
+### Dependabot alert #1 (RESOLVED 2026-07-25 — dismissed as tolerable risk)
 
 `glib` 0.18.5, `RUSTSEC` unsoundness in the `Iterator`/`DoubleEndedIterator`
 impls for `glib::VariantStrIter`. Medium, runtime scope, `src-tauri/Cargo.lock`.
@@ -281,10 +284,14 @@ impls for `glib::VariantStrIter`. Medium, runtime scope, `src-tauri/Cargo.lock`.
 - **Not reachable from our code.** Quantized never calls `glib` directly, let
   alone `VariantStrIter`; it sits deep inside GTK bindings driven by Tauri.
   It is a soundness hole, not a directly exploitable RCE.
-- **Owner decision:** dismiss the alert as "no fix available" (keeps the
-  security tab honest) vs. leave it open pending a Tauri GTK bump. Deliberately
-  NOT dismissed autonomously — that is a visible security-posture change on a
-  public repo. Re-check whenever Tauri v2 bumps its GTK stack.
+- **Owner decision:** the 2026-07-19 session deliberately did NOT dismiss
+  autonomously (a visible security-posture change on a public repo) and parked
+  it as an owner call. **Resolved 2026-07-25**: the owner delegated the
+  standing-issues decisions ("you just figure this out"), and an independent
+  re-investigation reproduced the identical chain and reachability analysis —
+  dismissed as `tolerable_risk` with a dated rationale on the alert naming
+  the re-eval condition (Tauri adopting the gtk-rs 0.20 line; the alert then
+  auto-resolves via the ordinary lockfile bump).
 
 ## Blocked on external samples / specs
 
@@ -316,9 +323,9 @@ the root; every active plan below is its declared sub-plan.
 | Plan | Status | Open items |
 |------|--------|-----------|
 | `plans/MAIN_PLAN.md` | Active (ROOT) | MAIN #9–#38 are shipped; remaining work is owner gates, evidence-gated deferrals, and the active sub-plans |
-| `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
+| `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous); **#54 SPC/JCAMP gaps CLOSED 2026-07-25 same-day booked** |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates **Q4/Q8/Q9 only** — Q6 (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and shipped 2026-07-19 |
-| `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: switch-trigger trial, Origin visual owner review, timed workflows, and large-data envelope. Gate B–C: native project lifecycle, portability, categorical metadata, Import Wizard roles, live grouping, and full plot recipes. Later technique/usability/distribution work is evidence-ranked |
+| `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: switch-trigger trial, Origin visual owner review, timed workflows, and large-data envelope. Gate B–C: native project lifecycle, portability, categorical metadata, Import Wizard roles, live grouping, and full plot recipes. Later technique/usability/distribution work is evidence-ranked. **P4.1 lint restore + P4.2's npm-ci item SHIPPED 2026-07-25** |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | **Tier 1 #1, #2, #5 ALL SHIPPED 2026-07-19** (Codex PRs #65/#66 + the two gate resolutions); **#17 CLOSED** (its last three items — split buttons, cross-menu ownership move, first-run hints — are struck); the ONLY open box in the whole plan is #16's `.opju` migration edges (owner-dependent). Remaining gates: the AnalysisSelection contract timing. Historical: #8, #11, #12 CLOSED and #15 fully covered except the #1-gated folder-undo journey, ALL 2026-07-18 (#8: palette bridge + mini-toolbar + worksheet/window/annotation retrofits; #11: stat-mark faceting end-to-end; #12: PlotSpec v2 canonical spec (display/axes/decor blocks) across Stage/Graph Builder/Figure Builder/export — all 5 slices + parts A (y2Fmt)/B (grouped-series export)/C (decor: annotations/shapes/legend) shipped same day, `page` block deferred to ORIGIN_FILE_DECODE #54; #15: channel-drag + annotation/shape + window-arrange journeys, e2e 33/33 across the zoom matrix); #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = stat-mark faceting; arbitrary multi-panel ordering belongs to #54), #15 core harness + 7 journeys SHIPPED 2026-07-17 and export round-trip SHIPPED 2026-07-18 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#52 complete; #54 page-setup control + spatial-export residual + overlap/inset layout slice ALL SHIPPED 2026-07-17 (Codex PR #55); visual-import campaign #58–#63 ALL SHIPPED 2026-07-18 (Codex stack #56–#61 `854271c`: spatial legends, region bands, imported-view + spatial-page export parity, saved-preview window, presentation templates); **#54's generalized page/layer MODEL is COMPLETE — pass B shipped `50b4c9c` 2026-07-24**, joining A + C; open = #53 graphic objects (evidence-gated; subsumes #47) and #54's specimen-gated >2-Y-axes rendering (now in the blocked table); #55 tooling is complete and #55/#56 close on owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |

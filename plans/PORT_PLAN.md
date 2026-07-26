@@ -8,7 +8,7 @@ the codebase never accretes the god-scripts the MATLAB original did.
 **Status:** Active
 **Parent:** MAIN_PLAN.md
 **Created:** 2026-06-21
-**Updated:** 2026-07-10 (full W0–W9 reconciliation against
+**Updated:** 2026-07-25 (#54 SPC/JCAMP corpus gaps closed same-day; prior: 2026-07-10 full W0–W9 reconciliation against
 `PORT_CHECKLIST.md` + the code: every shipped item is now struck below
 with a pointer to the checklist section that records it. Genuinely open
 after this pass: #3 run-model residue (auto-shutdown / `--dev` /
@@ -191,39 +191,6 @@ MATLAB."**
 ~~11. **Other lab data**~~ ✅ shipped & golden (Lake Shore, NCNR PNR/refl/
     `.dat`, refl1d `.dat`, SIMS, CSV/Excel + auto-detect); see
     PORT_CHECKLIST W1.
-
-54. **SPC/JCAMP gaps the 2026-07-25 corpus exposed** — the SPC/JCAMP
-    fixtures added to `../test-data` gave these parsers their first real
-    specimens (they had synthetic tests only). `252cc7d` registered four
-    files as `test_parsers_matrix` known gaps; the underlying defects were
-    recorded only in that commit's prose and its xfail reason strings, so
-    they are booked here. **All four are now specimen-backed, so none is
-    evidence-gated any more.**
-    - [ ] **`.spc` multifile read returns ONE subfile, silently.**
-      `rohanisaac_m_xyxy.spc` (`ftflgs=0xf5`, txyxys) **PASSES** the matrix
-      while `import_spc` returns `values.shape == (8, 1)` and raises
-      nothing — the rest of the file is dropped with no diagnostic. Worst
-      of the four precisely because no test can catch it: an xfail cannot
-      express "parses but lies". Fix the read, then assert the real point
-      count so a regression is loud.
-    - [ ] **TXYXYS `fnpts=0` is legal, not empty.** `io/spc.py:248` rejects
-      `fnpts <= 0` up front, but for TXYXYS each subfile carries its own
-      count and the main-header value is not authoritative — line 204
-      (`sub["subnpts"] if (txyxys and sub["subnpts"] > 0) else fnpts`)
-      already knows this, so the guard is simply too early. Oracle (upstream
-      `spc`) reads 128 points from `rohanisaac_ms_xyxys.spc`.
-    - [ ] **Write the SPC `fversn=0x4D` (old-format) branch.** Rejection was
-      the correct pinned behaviour only while no specimen existed;
-      `rohanisaac_old_0x4D_doerner.spc` and `..._m_ordz.spc` are the first
-      two. `0x4C` (MSB) and `0xCF` (Shimadzu) still have none and stay
-      rejected — do not guess them (samples-are-not-standards).
-    - [ ] **JCAMP `##DATA TYPE= LINK` with a non-spectral first block.**
-      `import_jcamp` reads the first block and counts the rest into
-      `metadata["extra_blocks"]`, so ordinary compound files work; it fails
-      when the spectrum is nested deeper — `nzhagen_official_ISAS_CDX.dx`
-      (`##BLOCKS= 2`, first sub-block is `##JCAMP-CS` structure data) raises
-      `no XYDATA/XYPOINTS/PEAK TABLE block found`. Recurse into sub-blocks.
-      Official jcamp-dx.org conformance file, so this is a real gap.
 
 ### Tier 2 — Medium Impact
 12. **Export writers** — Standard CSV + **Origin-ASCII** + **`.ogs` LabTalk
@@ -475,6 +442,20 @@ MATLAB."**
 > stats, fitting engine/models/diagnostics, reflectivity) is largely landed and
 > golden-verified — see `PORT_CHECKLIST.md` for the authoritative per-item state.
 > This log is being backfilled starting with the W6 plotting work.
+
+- ~~**#54 SPC/JCAMP corpus gaps**~~ (2026-07-25, same day booked) — all four
+  closed in PR #89 (`d84b8ec`+`5f754c6`+`3947908`): (a) TXYXYS multifile no
+  longer returns subfile 0 silently — identical x grids stack, differing
+  grids go long-form with a Subfile column; m_xyxy now yields its full 4,344
+  points (512 variable-length scans, verified from the file's own directory +
+  contiguous subindx), not `(8, 1)` with no error; (b) TXYXYS `fnpts=0` is
+  treated as the directory-offset it is — ms_xyxys imports its 128 pts;
+  (c) the 0x4D old format is IMPLEMENTED (224-byte header, embedded first
+  subheader, word-swapped msw-first y — settled empirically on both
+  specimens); (d) JCAMP gained the `##PEAK ASSIGNMENTS` data class +
+  per-block header overlay, importing the official ISAS_CDX LINK conformance
+  file. Matrix known-gaps 13→9 xfails; 10 synthetic + 5 realdata tests;
+  suite 3,136 passed. 0x4C/0xCF stay rejected (no specimen).
 
 - ~~**#19 Reductions**~~ (2026-07-10) — the last unstarted backend-parity
   item shipped + golden-verified (`calc_reductions.json`, 8 sub-cases):

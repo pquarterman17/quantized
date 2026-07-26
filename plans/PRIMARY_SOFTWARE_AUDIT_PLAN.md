@@ -3,7 +3,9 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-07-25 (pre-merge review of the four P3.1 discoverability PRs:
+**Updated:** 2026-07-25 late (standing-issues sweep: P4.1 + the P4.2 npm-ci
+item shipped, PORT_PLAN #54 closed, glib alert dismissed — see the session
+log; earlier same day: pre-merge review of the four P3.1 discoverability PRs:
 one keyword-vocabulary regression fixed and guarded, and this doc re-headed onto
 `plan-format.md`'s Tier 1/2/3 + `## Completed` structure — the `P0.1`-style IDs
 are kept as the stable identifiers cited by BACKLOG rows and the PR history)
@@ -642,9 +644,16 @@ eager against a 949.2 kB budget**, leaving only 3.7 kB headroom.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [ ] Profile the eager graph and lazy-load the next coherent heavy boundary
   before adding substantial UI; do not merely raise the existing budget.
-- [ ] Restore `npm run lint`: ESLint 10.7 is installed, but no flat
-  `eslint.config.*` or TypeScript parser configuration exists, so the declared
-  lint command currently exits before examining source.
+- [x] ~~Restore `npm run lint`~~ SHIPPED 2026-07-25 (PR #88, `ecbf99b`):
+  flat `eslint.config.js` (typescript-eslint recommended + classic
+  react-hooks rules), wired into CI's frontend job; 0 errors / 9
+  exhaustive-deps warnings. Cost taken with owner sign-off: root
+  `typescript` 7.0.2 → 6.0.3 (typescript-eslint hard-errors on TS 7.0,
+  their #10940; revert when it supports ≥7.1). hooks v7's six
+  React-Compiler-prep rules are deliberately OFF — adopting them (73
+  flagged sites) is its own reviewed campaign. Lint immediately caught a
+  real rules-of-hooks trip (store action named `usePath` → renamed) and
+  six stale disable directives.
 
 ### P4.2 — Canonical plot/project regression matrix
 
@@ -654,13 +663,14 @@ eager against a 949.2 kB budget**, leaving only 3.7 kB headroom.
 - [ ] Screen/export/reopen structural and visual equivalence.
 - [ ] Migration fixtures for supported contract/workspace versions.
 - [ ] Document one ownership path per field before deleting adapters.
-- [ ] **Make the e2e job reproducible against the lockfile.** `e2e.yml` runs
-  `npm install`, so `^1.61.1` resolves to whatever Playwright is newest and CI
-  silently drifts off the pinned 1.61.1. On 2026-07-25 that hid a real
-  regression from every local run and cost two wrong diagnoses: the versions
-  disagree on whether `getByText(..., {exact:true})` reads immediate text or
-  full `textContent`. Switch to `npm ci` (expect it to surface other drift), or
-  pin the version exactly and update it deliberately.
+- [x] ~~Make the e2e job reproducible against the lockfile~~ SHIPPED
+  2026-07-25 (PR #87, `034fdb4`): both `ci.yml` and `e2e.yml` now run
+  `npm ci` (the class fix — pypi/release already did), landed right after
+  #77 synced the lockfile to the floated versions so the pin changed no
+  resolved dependency. Backstory kept for the record: `npm install` off
+  `^1.61.1` had CI on a different Playwright than any local run, which
+  hid a real e2e regression and cost two wrong diagnoses (1.61 vs 1.62
+  `getByText` exactness semantics).
 
 ### P4.3 — Installer/signing/notarization/update
 
@@ -904,6 +914,27 @@ work (its BACKLOG row).
 - Audit-claim spot check: "16 Playwright specifications" is 11 spec files /
   15 `test()` blocks. Imprecise, not fabricated; no owner approval was invented
   anywhere in the doc.
+
+#### 2026-07-25 — Standing-issues sweep (Claude, owner: "you just figure this out")
+
+- **P4.1 lint restore and the P4.2 npm-ci item both SHIPPED** (PRs #88/#87 —
+  see the struck items for detail).
+- **PORT_PLAN #54 closed entirely** (PR #89): all four SPC/JCAMP corpus
+  defects fixed same-day — including the silent m_xyxy multifile data loss no
+  test could express — plus the 0x4D old-format decoder implemented off the
+  new specimens. Matrix known-gaps 13→9.
+- **Dependabot alert #1 (glib) dismissed as tolerable risk** with a dated
+  rationale: Linux-only transitive dep (glib←gtk 0.18←tauri 2.11.5, newest
+  2.x), fix requires the gtk-rs 0.20 line Tauri hasn't adopted, our code
+  never touches glib, Win/mac builds omit it. Auto-resolves when Tauri moves.
+- **Repo cruft cleared**: 9 fully-merged stale remote branches deleted, 4
+  dead remote-tracking namespaces removed, `src-tauri/gen/schemas` gitignored,
+  icon PR (#82→#86) rebased/verified/merged, Dependabot #77 verified in an
+  isolated worktree and merged.
+- Corpus MANIFEST corrected in `../test-data` (`a42900d`): the "512 × 8 pts"
+  oracle note was shorthand from a GRAMS update-in-place artifact; ground
+  truth (4,344 pts, variable 3–53-pt scans) established from the file's own
+  directory and recorded.
 
 ## Reference baseline
 
