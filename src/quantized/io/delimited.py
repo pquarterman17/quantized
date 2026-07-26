@@ -8,16 +8,15 @@ the stdlib ``csv`` module.
 
 from __future__ import annotations
 
-import math
 import re
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io import _delimited_layout as layout
 from quantized.io.base import resolve_column
 
 __all__ = ["import_csv"]
@@ -25,45 +24,6 @@ __all__ = ["import_csv"]
 _COMMENT_CHARS = "#%"
 _NA_TOKENS = {"", "nan", "na", "-", "n/a"}
 _DELIM_CANDIDATES = (",", "\t", ";", " ")
-
-
-def _is_numeric(token: str) -> bool:
-    """True if token parses to a number; NaN counts as non-numeric (str2double parity)."""
-    try:
-        value = float(token)
-    except ValueError:
-        return False
-    return not math.isnan(value)
-
-
-def _datetime_epoch(token: str) -> float | None:
-    """Conservatively parse common ISO/lab timestamp forms as UTC seconds.
-
-    ISO 8601 is tried first and is unambiguous. The slash-format fallback
-    assumes US month/day/year order (the common lab-instrument convention).
-    KNOWN LIMITATION: a ``DD/MM/YYYY`` file whose day is ≤ 12 on every row
-    parses with month and day swapped rather than failing — where day > 12,
-    ``strptime`` correctly rejects it. There is no locale-free way to
-    disambiguate a bare ``03/04/2026``; ISO is the safe input format.
-    """
-    value = token.strip()
-    if not value:
-        return None
-    parsed: datetime | None = None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        for fmt in ("%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M", "%m/%d/%Y"):
-            try:
-                parsed = datetime.strptime(value, fmt)
-                break
-            except ValueError:
-                continue
-    if parsed is None:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.timestamp()
 
 
 def _to_float(token: str) -> float:
@@ -128,36 +88,6 @@ def _extract_units(header: str) -> tuple[str, str]:
     return "", header
 
 
-def _numeric_score(row: Sequence[str]) -> float:
-    if not row:
-        return 0.0
-    recognized = sum(
-        1 for token in row if _is_numeric(token.strip()) or _datetime_epoch(token) is not None
-    )
-    return recognized / len(row)
-
-
-def _looks_like_units_row(row: Sequence[str], n_data_cols: int) -> bool:
-    n = len(row)
-    if n < max(n_data_cols * 0.5, 2):
-        return False
-    n_unit_like = 0
-    n_non_empty = 0
-    for cell in row:
-        token = cell.strip()
-        if not token:
-            n_unit_like += 1
-            continue
-        n_non_empty += 1
-        if re.match(r"^[(\[{].*[)\]}]$", token):
-            n_unit_like += 1
-        elif " " not in token and not _is_numeric(token):
-            has_non_alpha = re.search(r"[^a-zA-Z]", token) is not None
-            if (has_non_alpha and len(token) <= 10) or (not has_non_alpha and len(token) <= 4):
-                n_unit_like += 1
-    return n_non_empty > 0 and (n_unit_like / max(n, 1)) >= 0.6
-
-
 def _tokens_to_columns(
     data_tokens: Sequence[Sequence[str]], n_cols: int
 ) -> Sequence[Sequence[str]]:
@@ -205,41 +135,6 @@ def _convert_column(cells: Sequence[str]) -> np.ndarray:
         return np.asarray([_to_float(c) for c in cells], dtype=np.float64)
 
 
-def _detect_layout(tokens: Sequence[Sequence[str]]) -> tuple[int, int, int]:
-    """Return 0-based (header_row, data_start, units_row); -1 when absent."""
-    scores = [_numeric_score(row) for row in tokens]
-    first_data = next((i for i, s in enumerate(scores) if s > 0.5), -1)
-    if first_data < 0:
-        # MAIN_PLAN #33. The `> 0.5` rule needs a strict NUMERIC MAJORITY, so a
-        # file with as many text columns as numeric ones (T, M, Sample, Operator
-        # -> exactly 0.5) matched no row at all and fell back to treating the
-        # HEADER as data. That is precisely the mixed text+numeric shape that
-        # preserving text columns makes worth importing, so it had to be fixed
-        # alongside.
-        #
-        # Fallback rule: a header is LESS numeric than the data under it. Take
-        # the first row that is strictly more numeric than row 0 and still has
-        # some numbers. This only runs when the primary rule already failed, so
-        # it cannot change any file that parses correctly today.
-        first_data = next(
-            (i for i, s in enumerate(scores) if i > 0 and s > scores[0] and s > 0),
-            0,
-        )
-    header_row = -1
-    units_row = -1
-    if (
-        first_data >= 2
-        and scores[first_data - 1] < 0.5
-        and scores[first_data - 2] < 0.5
-        and _looks_like_units_row(tokens[first_data - 1], len(tokens[first_data]))
-    ):
-        units_row = first_data - 1
-        header_row = first_data - 2
-    elif first_data >= 1 and scores[first_data - 1] < 0.5:
-        header_row = first_data - 1
-    return header_row, first_data, units_row
-
-
 def import_csv(
     filepath: str | Path,
     *,
@@ -254,7 +149,7 @@ def import_csv(
     delim = _detect_delimiter(raw_lines)
     tokens = [line.split(delim) for line in raw_lines]
 
-    header_row, data_start, units_row = _detect_layout(tokens)
+    header_row, data_start, units_row = layout._detect_layout(tokens)
     n_data_cols = len(tokens[data_start])
     if header_row >= 0:
         col_headers = [c.strip() for c in tokens[header_row]]
@@ -293,7 +188,7 @@ def import_csv(
         time_vec = matrix[:, time_idx]
         if np.count_nonzero(np.isfinite(time_vec)) / max(n_rows, 1) < 0.1:
             parsed_dates = [
-                _datetime_epoch(row[time_idx]) if time_idx < len(row) else None
+                layout._datetime_epoch(row[time_idx]) if time_idx < len(row) else None
                 for row in data_tokens
             ]
             if sum(value is not None for value in parsed_dates) / max(n_rows, 1) >= 0.8:
