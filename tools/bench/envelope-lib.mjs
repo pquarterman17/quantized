@@ -191,6 +191,65 @@ export async function measureGestureLatencies(page, stageSelector = ".qzk-stage 
   return { panLatencies, zoomLatencies };
 }
 
+/** Wheel-scroll a plain scrollable element (e.g. the worksheet grid's
+ *  `.qzk-grid`, distinct from the uPlot canvas `measureGestureLatencies`
+ *  targets) `ticks` times, timing each tick's input->paint via
+ *  `timedGesture`. Same real-input technique as the pan/zoom gestures above,
+ *  applied to a virtualized DOM grid instead of a canvas. */
+export async function measureScrollLatencies(page, selector, ticks = 10) {
+  const box = await page.locator(selector).first().boundingBox();
+  if (!box) throw new Error(`no bounding box for ${selector} (grid not visible)`);
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  await page.mouse.move(cx, cy);
+
+  const latencies = [];
+  for (let i = 0; i < ticks; i++) {
+    // Alternate direction (like the zoom gesture) so a long run doesn't just
+    // scroll off the end of the data and start measuring a no-op.
+    const deltaY = i % 2 === 0 ? 400 : -300;
+    const t = await timedGesture(page, () => page.mouse.wheel(0, deltaY));
+    latencies.push(t);
+  }
+  return latencies;
+}
+
+/** Race a background poll loop of trivial `page.evaluate` round-trips
+ *  against `fn()`, recording the largest single round-trip gap. A CDP
+ *  `Runtime.evaluate` cannot return until the renderer's JS main thread is
+ *  free to service it, so a long synchronous task on that thread (e.g. the
+ *  `.dwk` load path's `JSON.parse` on a huge document) shows up here as one
+ *  big gap — a proxy for "how long was the page frozen", without needing a
+ *  full CDP trace. Returns { maxGapMs, sampleCount, totalMs }; `fn()`'s
+ *  return value is discarded (call it for its side effect / awaited
+ *  duration, read results separately after this resolves). */
+export async function measureMainThreadFreeze(page, fn) {
+  let stop = false;
+  let maxGap = 0;
+  let sampleCount = 0;
+  const pollLoop = (async () => {
+    while (!stop) {
+      const t0 = Date.now();
+      try {
+        await page.evaluate(() => true);
+      } catch {
+        break; // page mid-navigation or closed
+      }
+      const gap = Date.now() - t0;
+      if (gap > maxGap) maxGap = gap;
+      sampleCount++;
+    }
+  })();
+  const t0 = Date.now();
+  try {
+    await fn();
+  } finally {
+    stop = true;
+    await pollLoop;
+  }
+  return { maxGapMs: maxGap, sampleCount, totalMs: Date.now() - t0 };
+}
+
 // ---- Command Palette driving (mirrors frontend/e2e/utils/palette.ts) ------
 //
 // Reimplemented standalone rather than imported: that file is TypeScript
