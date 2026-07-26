@@ -12,10 +12,12 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   HELP_TOOLS,
+  actionToHelpItem,
   searchHelpItems,
   toolToHelpItem,
   type ScoredHelpItem,
 } from "../../lib/helpContent";
+import { buildAppActions } from "../../appCommands";
 import {
   IMPORT_FORMATS,
   formatToHelpItem,
@@ -25,6 +27,7 @@ import { ORIGIN_TIPS, tipToHelpItem } from "../../lib/originTips";
 import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
 import { Button } from "../primitives";
 import { useHelp, type HelpSection } from "../../store/help";
+import { useApp } from "../../store/useApp";
 
 const IS_MAC = isMacPlatform();
 
@@ -35,9 +38,14 @@ const TABS: { id: HelpSection; label: string }[] = [
   { id: "origin", label: "From Origin" },
 ];
 
-// The one searchable index — tools AND formats, so a search covers both.
+const COMMAND_HELP_ITEMS = buildAppActions(useApp.getState)
+  .filter((action) => action.group === "Plot" || action.group === "Insert")
+  .map(actionToHelpItem);
+
+// The one searchable index — tools, plot/insert commands, formats, and tips.
 const SEARCH_ITEMS = [
   ...HELP_TOOLS.map(toolToHelpItem),
+  ...COMMAND_HELP_ITEMS,
   ...IMPORT_FORMATS.map(formatToHelpItem),
   ...ORIGIN_TIPS.map(tipToHelpItem),
 ];

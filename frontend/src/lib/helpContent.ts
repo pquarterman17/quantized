@@ -2,16 +2,14 @@
 // data plus a fuzzy search over it. The dialog (components/overlays/HelpDialog)
 // is a dumb renderer, the same split ShortcutsDialog uses with lib/shortcuts.
 //
-// Why the content is hand-authored here rather than pulled live from each
-// tool: the command registry (store/commands.ts) has no description field, and
-// a tool's real one-liner lives in its workshop panel's top comment, which is
-// stripped at build time. So each sentence below is authored FROM that comment
-// (kept faithful to what the tool does) and the id is kept equal to the
-// command id, so `help.test.ts` can assert every Analyze-menu command has a
-// help entry -- a new tool cannot ship without one. That coverage guard is
-// what keeps "data-driven" honest instead of drift-prone.
+// Plot/Insert commands now carry their own shared description metadata; Help
+// and the command palette both consume it. The older Analyze workshop catalog
+// below is being migrated incrementally because those descriptions predate the
+// command field. Its ids remain equal to command ids so the coverage guard
+// prevents a new Analyze tool from shipping undocumented.
 
 import { fuzzy } from "./fuzzy";
+import type { Action } from "../store/commands";
 
 /** One searchable help topic, category-agnostic. Tools, formats, and Origin
  *  tips all normalize to this so ONE search covers the whole Help surface. */
@@ -153,14 +151,6 @@ export const HELP_TOOLS: readonly HelpTool[] = [
     keywords: "t-test anova mann whitney which test assumptions hypothesis",
   },
   {
-    id: "graph-builder",
-    name: "Graph Builder",
-    desc: "Drag channels into X / Y / Group / Facet wells; the mark morphs as columns land, then send it to the stage.",
-    section: "Workflow",
-    group: "Plot",
-    keywords: "drag wells x y group facet plot builder origin",
-  },
-  {
     id: "digitizer",
     name: "Graph digitizer",
     desc: "Trace a curve from an image of a plot (set two X and two Y reference points) and turn the traced points into a dataset.",
@@ -185,6 +175,22 @@ export function toolToHelpItem(t: HelpTool): HelpItem {
     detail: t.desc,
     meta: `${t.group ?? "Analyze"} ▸ ${t.section}`,
     keywords: `${t.section} ${t.keywords ?? ""} ${t.shortcut ?? ""}`.trim(),
+  };
+}
+
+/** Normalize shared command metadata into Help. This is the migration path
+ * away from a second hand-authored catalog: descriptions live beside the
+ * command and are also shown by the command palette. */
+export function actionToHelpItem(a: Action): HelpItem {
+  if (!a.description) {
+    throw new Error(`command "${a.id}" has no help description`);
+  }
+  return {
+    key: a.id,
+    title: a.label.replace(/…$/, ""),
+    detail: a.description,
+    meta: a.section ? `${a.group} ▸ ${a.section}` : a.group,
+    keywords: `${a.group} ${a.section ?? ""} ${a.keywords ?? ""} ${a.shortcut ?? ""}`.trim(),
   };
 }
 

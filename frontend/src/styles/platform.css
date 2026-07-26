@@ -72,6 +72,20 @@
   border-radius: var(--radius-sm);
   cursor: default;
 }
+.qz-cmdk-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.qz-cmdk-desc {
+  color: var(--text-faint);
+  font-size: var(--font-size-sm);
+  line-height: 1.3;
+}
+.qz-cmdk-item.active .qz-cmdk-desc {
+  color: var(--text-muted);
+}
 .qz-cmdk-item.active {
   background: var(--accent-soft);
   color: var(--accent-text);

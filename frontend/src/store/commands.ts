@@ -10,6 +10,9 @@ export interface Action {
   id: string;
   group: string;
   label: string;
+  /** One concise sentence explaining the outcome. Shared by searchable Help
+   *  and the command palette so those two discovery surfaces cannot drift. */
+  description?: string;
   shortcut?: string;
   /** Optional sub-topic header this command sits under WITHIN its menu
    *  (GUI_INTERACTION #17 — e.g. Analyze ▸ "Peaks & baseline"). Purely a menu

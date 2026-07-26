@@ -54,7 +54,13 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
         const ml = fuzzy(query, a.label);
         if (ml) return { a, m: ml };
         const mk = a.keywords ? fuzzy(query, a.keywords) : null;
-        return { a, m: mk ? { score: mk.score, hits: [] as number[] } : null };
+        if (mk) return { a, m: { score: mk.score, hits: [] as number[] } };
+        // A fuzzy subsequence over a full sentence matches too much. Search
+        // descriptions by precise substring, while labels/keywords remain
+        // typo-tolerant.
+        const q = query.trim().toLowerCase();
+        const md = q && a.description?.toLowerCase().includes(q);
+        return { a, m: md ? { score: 0, hits: [] as number[] } : null };
       })
       .filter((x): x is { a: Action; m: NonNullable<typeof x.m> } => !!x.m)
       .sort((x, y) => y.m.score - x.m.score);
@@ -117,7 +123,12 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
                   onMouseEnter={() => setCursor(i)}
                   onMouseDown={() => run(a)}
                 >
-                  <span>{highlight(a.label, m.hits)}</span>
+                  <span className="qz-cmdk-copy">
+                    <span>{highlight(a.label, m.hits)}</span>
+                    {a.description && (
+                      <span className="qz-cmdk-desc">{a.description}</span>
+                    )}
+                  </span>
                   {a.shortcut && <span className="qz-shortcut">{formatShortcut(a.shortcut, IS_MAC)}</span>}
                 </div>
               </div>

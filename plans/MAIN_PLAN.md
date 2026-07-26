@@ -10,10 +10,17 @@ via the switch-trigger protocol (GOTO_PLAN).
 
 **Status:** Active
 **Created:** 2026-07-10
-**Updated:** 2026-07-25 (ChatGPT-Sol follow-up audit added items 31–38,
-each problem statement verified against the code before booking; the
-earlier same-day plan-tree consolidation absorbed the two orphan Sol
-audit docs and booked their prior residue as items 29–30)
+**Updated:** 2026-07-25 (fresh ChatGPT-Sol primary-software readiness
+audit added `PRIMARY_SOFTWARE_AUDIT_PLAN.md`; the earlier follow-up audit
+added items 31–38 and the same-day consolidation absorbed the two orphan
+Sol audit docs and booked their prior residue as items 29–30)
+**Repository location:** `C:\Users\patri\git\quantized`
+
+> **Checkout move (2026-07-25):** The repository was moved out of
+> OneDrive because OneDrive synchronization caused merge conflicts. The
+> former `C:\Users\patri\OneDrive\Coding\git\quantized` checkout is gone.
+> Do not recreate, reference, or perform work in that old path; all future
+> work and documentation links should use the repository location above.
 
 ---
 
@@ -25,6 +32,7 @@ audit docs and booked their prior residue as items 29–30)
 |----------|-------|------------------------------|
 | `PORT_PLAN.md` (+ appendix `PORT_CHECKLIST.md`) | MATLAB parity, packaging (W8), CI/verification (W9) | Founding doc; W0–W9 history + the exhaustive per-feature parity inventory |
 | `GOTO_PLAN.md` | The go-to capability push vs Origin (10 owner-decided items + switch-trigger protocol) | Active build campaign, own decision log |
+| `PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Evidence-led multi-session readiness campaign for making Quantized the owner's primary plotting and analysis application | Cross-cutting audit with acceptance gates, dependency-ordered tasks, handoff detail, and per-task model routing |
 | `GUI_INTERACTION_PLAN.md` | Origin-parity interaction/UX campaign: undoable visual edits, unified object editing, gesture discoverability, scientific-selection correctness traps | Standing multi-tier campaign from the 2026-07-12 ChatGPT-Sol GUI audit; own owner-gate/decision log |
 | `ORIGIN_FILE_DECODE_PLAN.md` | `.opj`/`.opju` reverse-engineering + decode gaps | Large RE reference (format findings, §13 gap register) |
 

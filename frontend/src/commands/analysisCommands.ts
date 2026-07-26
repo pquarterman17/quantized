@@ -102,6 +102,7 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Build & export",
       label: "Graph Builder (drag columns into X/Y/Group wells)…",
+      description: "Build a plot by dragging data channels into X, Y, Group, and Facet roles.",
       keywords: "plot spec scatter line box violin bar mark morph drop zone well facet",
       run: () => s().setGraphBuilderOpen(true),
     },

@@ -43,6 +43,16 @@ describe("HelpDialog", () => {
     expect(titleShown("Hysteresis analysis")).toBe(true);
   });
 
+  it("searches Plot commands by their plain-language descriptions", () => {
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    fireEvent.change(screen.getByLabelText("Search help"), {
+      target: { value: "discontinuous" },
+    });
+    expect(titleShown("Break x-axis at gaps")).toBe(true);
+    expect(screen.getByText("Plot ▸ Layout")).toBeInTheDocument();
+  });
+
   it("shows an empty state for no matches", () => {
     render(<HelpDialog />);
     act(() => useHelp.getState().openHelp());
@@ -128,5 +138,22 @@ describe("HelpDialog", () => {
     act(() => useHelp.getState().openHelp());
     fireEvent.change(screen.getByLabelText("Search help"), { target: { value: "fitting" } });
     expect(titleShown("Analysis ▸ Fitting (linear / nonlinear)")).toBe(true);
+  });
+});
+
+describe("HelpDialog startup boundary", () => {
+  const overlaysSrc = Object.values(
+    import.meta.glob("../../AppOverlays.tsx", {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }),
+  )[0] as string;
+
+  it("loads the catalog only after the standalone Help store opens", () => {
+    expect(overlaysSrc).toContain(
+      'const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"))',
+    );
+    expect(overlaysSrc).toContain("{helpOpen && <HelpDialog />}");
   });
 });

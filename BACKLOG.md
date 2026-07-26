@@ -6,12 +6,11 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-25 (late) — post-campaign reconciliation. MAIN
-#31, #32 and #35 are COMPLETE and have been removed from the actionable table
-per the archival rule; their outcomes live in MAIN_PLAN's struck entries. A
-stale checkbox was also found and fixed: #31's "browser mode degrades"
-sub-item shipped with the core but its box was never ticked, leaving a struck
-item with an open box. Genuinely open dev work is now #30, #33, #34, #36, #38.
+**Last reconciled:** 2026-07-25 (fresh primary-software readiness audit) —
+`plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` owns the new evidence-led,
+multi-session campaign. Its Gate A acceptance work comes first; implementation
+priorities are conditional on the resulting friction log. The prior MAIN
+#30–#38 campaign is complete and is not being reopened.
 
 Prior: 2026-07-25 — a ChatGPT-Sol follow-up audit added MAIN
 #31–#38 after checking the current implementation against the owner's
@@ -113,16 +112,13 @@ fresh-machine PyPI acceptance run is still open.)
 
 ## Actionable dev work (no blockers, no owner gate)
 
-From `GUI_INTERACTION_PLAN.md` (see it for the full tiered list + per-item
-detail). Owner-gated items in that plan (#1 undo scopes, #2 tree scope, #5
-baseline framing) are under Owner actions below, not here.
+The table below is the immediate cross-plan queue. Detailed goals,
+dependencies, acceptance criteria, and model routing for the new campaign live
+in `PRIMARY_SOFTWARE_AUDIT_PLAN.md`.
 
-**This table is EMPTY, and this time every booked item is genuinely finished
-rather than partially shipped with residuals.** MAIN #30–#38 all closed
-2026-07-25; each item's Completed entry records what was built and, where a
-boundary was deliberately drawn (the import WIZARD does not expose error
-pairing; trash covers datasets not folders; the Tauri dialog is unwired),
-says so explicitly instead of leaving an unticked box behind.
+The prior implementation campaign is complete. New work is organized by the
+readiness plan and begins with evidence instead of another speculative feature
+stack.
 
 Historical: the 2026-07-24 reconciliation left this table empty. The 2026-07-25 plan-tree
 consolidation first refilled it from the deleted Sol audit docs; the later
@@ -131,6 +127,24 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
+| Continue shared help metadata after the Plot/Insert slice: migrate remaining commands, then Inspector/context/workshop actions and contextual `?` links | PRIMARY SOFTWARE P3.1 |
+| Run one real raw-data-to-publication switch-trigger project and record elapsed time, workarounds, and every switch-back impulse | PRIMARY SOFTWARE P0.1 |
+| Complete owner review of the existing Origin/Quantized visual corpus | PRIMARY SOFTWARE P0.2 |
+| Establish repeatable timed workflow baselines and representative fixtures | PRIMARY SOFTWARE P0.3 |
+| Measure the large-data, 2-D, and large-workspace performance envelope before choosing architecture | PRIMARY SOFTWARE P0.4 |
+
+After Gate A, the current dependency-ordered implementation candidates are:
+
+| Item | Plan / item |
+|------|-------------|
+| Native packaged-desktop file/project bridge and real paths | PRIMARY SOFTWARE P1.1 |
+| Named project identity, atomic save/recovery, bounded autosave, and scalable workspace | PRIMARY SOFTWARE P1.2 |
+| First-class categorical/text/metadata channels | PRIMARY SOFTWARE P1.4 |
+| Import Wizard multi-row metadata and complete error-role mapping | PRIMARY SOFTWARE P1.6 |
+| Live Stage parity for Graph Builder grouping/faceting | PRIMARY SOFTWARE P1.5 |
+| Full semantic plot-recipe templates with technique scope and opt-in application | PRIMARY SOFTWARE P1.3 |
+| Portable projects and safe source relinking | PRIMARY SOFTWARE P1.7 |
+| Restore the declared frontend lint command with a real ESLint 10 flat TypeScript configuration | PRIMARY SOFTWARE P4.1 |
 
 The remaining dev item is a judgment call the plan explicitly parked for the
 owner rather than a task:
@@ -293,9 +307,10 @@ the root; every active plan below is its declared sub-plan.
 
 | Plan | Status | Open items |
 |------|--------|-----------|
-| `plans/MAIN_PLAN.md` | Active (ROOT) | **#30 fit-recipe residual** (folded up 2026-07-25 from the deleted Sol audits), plus owner gates + deferrals. #29 bundle code-splitting SHIPPED 2026-07-25; MAIN #9–#28 ALL shipped 2026-07-11/12 |
+| `plans/MAIN_PLAN.md` | Active (ROOT) | MAIN #9–#38 are shipped; remaining work is owner gates, evidence-gated deferrals, and the active sub-plans |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47/#49 (owner cert), #50 (continuous) |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates **Q4/Q8/Q9 only** — Q6 (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and shipped 2026-07-19 |
+| `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: switch-trigger trial, Origin visual owner review, timed workflows, and large-data envelope. Gate B–C: native project lifecycle, portability, categorical metadata, Import Wizard roles, live grouping, and full plot recipes. Later technique/usability/distribution work is evidence-ranked |
 | `plans/GUI_INTERACTION_PLAN.md` | Active | **Tier 1 #1, #2, #5 ALL SHIPPED 2026-07-19** (Codex PRs #65/#66 + the two gate resolutions); **#17 CLOSED** (its last three items — split buttons, cross-menu ownership move, first-run hints — are struck); the ONLY open box in the whole plan is #16's `.opju` migration edges (owner-dependent). Remaining gates: the AnalysisSelection contract timing. Historical: #8, #11, #12 CLOSED and #15 fully covered except the #1-gated folder-undo journey, ALL 2026-07-18 (#8: palette bridge + mini-toolbar + worksheet/window/annotation retrofits; #11: stat-mark faceting end-to-end; #12: PlotSpec v2 canonical spec (display/axes/decor blocks) across Stage/Graph Builder/Figure Builder/export — all 5 slices + parts A (y2Fmt)/B (grouped-series export)/C (decor: annotations/shapes/legend) shipped same day, `page` block deferred to ORIGIN_FILE_DECODE #54; #15: channel-drag + annotation/shape + window-arrange journeys, e2e 33/33 across the zoom matrix); #4 SHIPPED 2026-07-12, #6 SHIPPED 2026-07-16, #3+#7+#9+#10+#13+#14 SHIPPED 2026-07-17 (#10 docking deferred, #13 undo sub-item deferred to the #1 gate), #8 core SHIPPED 2026-07-17 (registry + keyboard-complete menu + resting cue + confirm; residual = Command Palette/Plot Objects tree/mini-toolbar reuse + remaining menu retrofits), #11 core SHIPPED 2026-07-17 (residual = stat-mark faceting; arbitrary multi-panel ordering belongs to #54), #15 core harness + 7 journeys SHIPPED 2026-07-17 and export round-trip SHIPPED 2026-07-18 (residual = folder undo, channel→axis drag, annotation/shape edit, window arrange); 4 owner gates (undo scopes, baseline framing, tree scope, selection contract) |
 | `plans/ORIGIN_FILE_DECODE_PLAN.md` | Active | Plot Fidelity campaign: #48–#52 complete; #54 page-setup control + spatial-export residual + overlap/inset layout slice ALL SHIPPED 2026-07-17 (Codex PR #55); visual-import campaign #58–#63 ALL SHIPPED 2026-07-18 (Codex stack #56–#61 `854271c`: spatial legends, region bands, imported-view + spatial-page export parity, saved-preview window, presentation templates); **#54's generalized page/layer MODEL is COMPLETE — pass B shipped `50b4c9c` 2026-07-24**, joining A + C; open = #53 graphic objects (evidence-gated; subsumes #47) and #54's specimen-gated >2-Y-axes rendering (now in the blocked table); #55 tooling is complete and #55/#56 close on owner screenshot review. #27 deferred; #42 reopens only on new corpus evidence |
 | `plans/archive/` | Complete | 12 plans incl. the 2026-07-10 fold-ups (MULTI_PLOT, WORKSHEET, PROJECT_ORGANIZATION, GAP_TIER3, GAP_ECOSYSTEM, ORIGIN_GAP) |

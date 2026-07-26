@@ -219,6 +219,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Build & export",
       label: "Figure builder (live preview)…",
+      description: "Refine the active plot in a publication-sized live preview with precise figure settings.",
       run: () => s().setFigureBuilderOpen(true),
     },
     {
@@ -226,6 +227,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Build & export",
       label: "Figure page (multi-panel)…",
+      description: "Compose multiple plots into an aligned publication page with shared or independent axes.",
       run: () => s().setFigurePageOpen(true),
     },
     {
@@ -233,6 +235,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Build & export",
       label: "Export figure…",
+      description: "Export the current plot or composed page to a publication-ready image or vector file.",
       // Body lives in lib/exportFigureCommand (store-size ratchet offset for
       // MAIN_PLAN #16's Append workspace command — see that file's doc).
       run: () => runExportFigureCommand(s),

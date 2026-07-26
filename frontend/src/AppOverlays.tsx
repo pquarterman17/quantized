@@ -8,10 +8,11 @@
 // CODE SPLITTING (MAIN_PLAN #29). The flag-gated workshop panels below are
 // `lazyPanel(...)`, not static imports: each renders only when its `open` flag
 // is true, so a static import made a user who opens ONE panel download all 25.
-// The always-mounted dialogs stay eager on purpose — they mount on load, so
-// lazying them buys nothing and only adds a fallback flash. `SqliteQueryDialog`
-// is eager for a stronger reason: it self-gates on a `SHOW_SQLITE_QUERY` window
-// event registered in a `useEffect`, so it must stay mounted to hear it at all.
+// Most always-mounted dialogs stay eager. Help is the exception: its standalone
+// store exposes the open flag here, so its growing searchable catalog can be
+// omitted from startup without losing an event listener. `SqliteQueryDialog`
+// is eager because it self-gates on a `SHOW_SQLITE_QUERY` window event
+// registered in a `useEffect`, so it must stay mounted to hear it at all.
 //
 // The JSX block is deliberately unchanged — wrapping at the IMPORT site keeps
 // the mount lines byte-identical for the raw-source assertions in
@@ -24,7 +25,6 @@ import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
 import PreferencesDialog from "./components/overlays/PreferencesDialog";
 import ShortcutsDialog from "./components/overlays/ShortcutsDialog";
-import HelpDialog from "./components/overlays/HelpDialog";
 import SplitDatasetDialog from "./components/overlays/SplitDatasetDialog";
 import TextFormatHelp from "./components/overlays/TextFormatHelp";
 import Toaster from "./components/overlays/Toaster";
@@ -33,6 +33,7 @@ import WhatIsThis from "./components/overlays/WhatIsThis";
 import InteractionHints from "./components/overlays/InteractionHints";
 import SqliteQueryDialog from "./components/workshops/database/SqliteQueryDialog";
 import { useApp } from "./store/useApp";
+import { useHelp } from "./store/help";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
  *  Suspense boundary. The per-panel boundary is the point: with one shared
@@ -78,8 +79,10 @@ const WaterfallView = lazyPanel(() => import("./components/workshops/waterfall/W
 const ReflView = lazyPanel(() => import("./components/workshops/reflview/ReflView"));
 const TrashPanel = lazyPanel(() => import("./components/workshops/trash/TrashPanel"));
 const SearchPanel = lazyPanel(() => import("./components/workshops/search/SearchPanel"));
+const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"));
 
 export default function AppOverlays() {
+  const helpOpen = useHelp((s) => s.open);
   const curveFitOpen = useApp((s) => s.curveFitOpen);
   const hysteresisOpen = useApp((s) => s.hysteresisOpen);
   const peaksOpen = useApp((s) => s.peaksOpen);
@@ -146,7 +149,7 @@ export default function AppOverlays() {
       {trashOpen && <TrashPanel />}
       {searchOpen && <SearchPanel />}
       <ShortcutsDialog />
-      <HelpDialog />
+      {helpOpen && <HelpDialog />}
       <TextFormatHelp />
       <PreferencesDialog />
       <Toaster />

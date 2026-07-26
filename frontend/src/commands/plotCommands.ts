@@ -24,6 +24,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Axes",
       label: "Cycle Y axis scale (linear/log/reciprocal)",
+      description: "Switch the vertical axis between linear, logarithmic, and reciprocal scales.",
       run: () => s().setYScale(cycleAxisScale(s().yScale)),
     },
     {
@@ -31,6 +32,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Axes",
       label: "Cycle Y tick format (auto/fixed/sci/eng)",
+      description: "Change vertical-axis labels between automatic, fixed, scientific, and engineering notation.",
       run: () => s().setYFmt({ ...s().yFmt, mode: cycleTickMode(s().yFmt.mode) }),
     },
     {
@@ -38,6 +40,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Layout",
       label: "Waterfall (stack datasets)…",
+      description: "Separate overlapping curves with an adjustable vertical offset.",
       run: () => s().setWaterfallOpen(true),
     },
     // ── Plot ──
@@ -46,19 +49,37 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Axes",
       label: "Autoscale / reset view",
+      description: "Reset zoom and restore automatic limits around the plotted data.",
       shortcut: "A",
       run: () => s().recordView(
         { xLim: s().xLim, yLim: s().yLim },
         { xLim: null, yLim: null },
       ),
     },
-    { id: "view-back", group: "Plot", section: "Axes", label: "Back to previous view", shortcut: "Alt←", run: () => s().backView() },
-    { id: "view-forward", group: "Plot", section: "Axes", label: "Forward to next view", shortcut: "Alt→", run: () => s().forwardView() },
+    {
+      id: "view-back",
+      group: "Plot",
+      section: "Axes",
+      label: "Back to previous view",
+      description: "Return to the preceding zoom or pan state.",
+      shortcut: "Alt←",
+      run: () => s().backView(),
+    },
+    {
+      id: "view-forward",
+      group: "Plot",
+      section: "Axes",
+      label: "Forward to next view",
+      description: "Move forward to the next zoom or pan state.",
+      shortcut: "Alt→",
+      run: () => s().forwardView(),
+    },
     {
       id: "xLog", // see the "yLog" command above — same cycle, X axis
       group: "Plot",
       section: "Axes",
       label: "Cycle X axis scale (linear/log/reciprocal)",
+      description: "Switch the horizontal axis between linear, logarithmic, and reciprocal scales.",
       run: () => s().setXScale(cycleAxisScale(s().xScale)),
     },
     {
@@ -66,6 +87,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Axes",
       label: "Cycle X tick format (auto/fixed/sci/eng)",
+      description: "Change horizontal-axis labels between automatic, fixed, scientific, and engineering notation.",
       run: () => s().setXFmt({ ...s().xFmt, mode: cycleTickMode(s().xFmt.mode) }),
     },
     {
@@ -73,6 +95,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Display",
       label: "Toggle grid lines",
+      description: "Show or hide major plot grid lines.",
       run: () => s().setShowGrid(!s().showGrid),
     },
     {
@@ -80,6 +103,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Display",
       label: "Toggle legend",
+      description: "Show or hide the plot legend.",
       run: () => s().setShowLegend(!s().showLegend),
     },
     {
@@ -87,15 +111,33 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Layout",
       label: "Toggle stacked layout",
+      description: "Switch between overlaid curves and vertically stacked plot lanes.",
       run: () => s().setStackMode(!s().stackMode),
     },
-    { id: "panel-fit", group: "Plot", section: "Layout", label: "Multi-panel fit (letterbox / fill)", keywords: "aspect window spatial page", run: () => s().cyclePanelFit() },
-    { id: "page-setup", group: "Plot", section: "Layout", label: "Page setup…", keywords: "page size margins width height print export #54", run: () => void runPageSetupDialog(s) },
+    {
+      id: "panel-fit",
+      group: "Plot",
+      section: "Layout",
+      label: "Multi-panel fit (letterbox / fill)",
+      description: "Choose whether a multi-panel page preserves its aspect ratio or fills the available stage.",
+      keywords: "aspect window spatial page",
+      run: () => s().cyclePanelFit(),
+    },
+    {
+      id: "page-setup",
+      group: "Plot",
+      section: "Layout",
+      label: "Page setup…",
+      description: "Set publication-page dimensions and margins for layout and export.",
+      keywords: "page size margins width height print export #54",
+      run: () => void runPageSetupDialog(s),
+    },
     {
       id: "statMode",
       group: "Plot",
       section: "Display",
       label: "Toggle statistics view (box / violin / Q-Q / histogram)",
+      description: "Switch the active numeric column between its plot and statistical distribution views.",
       run: () => s().setStatMode(!s().statMode),
     },
     {
@@ -103,6 +145,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Layout",
       label: "Facet by column…",
+      description: "Split data into small-multiple panels using the distinct values of a selected column.",
       run: async () => {
         const ds = s().datasets.find((d) => d.id === s().activeId);
         if (!ds) {
@@ -141,6 +184,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       group: "Plot",
       section: "Layout",
       label: "Break x-axis at gaps…",
+      description: "Detect large gaps in horizontal values and display a discontinuous x-axis.",
       run: async () => {
         const ds = s().datasets.find((d) => d.id === s().activeId);
         if (!ds) {
@@ -162,16 +206,17 @@ export function buildPlotCommands(s: StoreGet): Action[] {
     },
     ...(
       [
-        ["panel-row", "Panel: side by side", "row"],
-        ["panel-column", "Panel: stacked", "column"],
-        ["panel-grid", "Panel: grid", "grid"],
-        ["panel-overlay", "Overlay in one plot", "overlay"],
+        ["panel-row", "Panel: side by side", "row", "Arrange selected datasets in one horizontal row of aligned panels."],
+        ["panel-column", "Panel: stacked", "column", "Arrange selected datasets in one vertical column of aligned panels."],
+        ["panel-grid", "Panel: grid", "grid", "Arrange selected datasets in a compact grid of panels."],
+        ["panel-overlay", "Overlay in one plot", "overlay", "Draw selected datasets together in one shared plot."],
       ] as const
-    ).map(([id, label, layout]) => ({
+    ).map(([id, label, layout, description]) => ({
       id,
       group: "Plot",
       section: "Layout",
       label,
+      description,
       run: () => {
         const ids = s().selectedIds;
         if (ids.length < 2) {
@@ -183,10 +228,40 @@ export function buildPlotCommands(s: StoreGet): Action[] {
     })),
     // ── Insert (MAIN #27: drawing shapes on plots — the menu-driven
     // counterpart of PlotToolbar's dock flyout) ──
-    { id: "insert-arrow", group: "Insert", label: "Arrow", run: () => s().setDrawShapeKind("arrow") },
-    { id: "insert-line", group: "Insert", label: "Line", run: () => s().setDrawShapeKind("line") },
-    { id: "insert-rect", group: "Insert", label: "Rectangle", run: () => s().setDrawShapeKind("rect") },
-    { id: "insert-ellipse", group: "Insert", label: "Ellipse", run: () => s().setDrawShapeKind("ellipse") },
-    { id: "insert-textbox", group: "Insert", label: "Text box", run: () => s().setDrawShapeKind("textbox") },
+    {
+      id: "insert-arrow",
+      group: "Insert",
+      label: "Arrow",
+      description: "Draw an arrow annotation directly on the active plot.",
+      run: () => s().setDrawShapeKind("arrow"),
+    },
+    {
+      id: "insert-line",
+      group: "Insert",
+      label: "Line",
+      description: "Draw a straight reference or annotation line on the active plot.",
+      run: () => s().setDrawShapeKind("line"),
+    },
+    {
+      id: "insert-rect",
+      group: "Insert",
+      label: "Rectangle",
+      description: "Draw a rectangular region or callout on the active plot.",
+      run: () => s().setDrawShapeKind("rect"),
+    },
+    {
+      id: "insert-ellipse",
+      group: "Insert",
+      label: "Ellipse",
+      description: "Draw an elliptical region or callout on the active plot.",
+      run: () => s().setDrawShapeKind("ellipse"),
+    },
+    {
+      id: "insert-textbox",
+      group: "Insert",
+      label: "Text box",
+      description: "Place a movable rich-text annotation box on the active plot.",
+      run: () => s().setDrawShapeKind("textbox"),
+    },
   ];
 }

@@ -7,8 +7,8 @@
 // Accuracy discipline: every `quantized` string below names a real, verified
 // menu label / tool (cross-checked against commands/*.ts) — a tip that points
 // at a menu path the app doesn't have is worse than no tip. originTips.test.ts
-// pins the shape; the tool references are the same ids the HELP_TOOLS coverage
-// guard already protects.
+// pins the shape; tool references resolve against the legacy Analyze catalog
+// plus commands carrying shared help metadata.
 
 import type { HelpItem } from "./helpContent";
 
