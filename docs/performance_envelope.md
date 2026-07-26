@@ -117,6 +117,26 @@ Two NEW root causes surfaced (and verified in code), now the booked queue:
    moved zoom p95 259→238 ms. Fix shape: apply lim changes via `u.setScale`
    on the live instance; rebuild only on structural change.
 
+## Third fix — 2026-07-26, viewport rebuild eliminated (`bcbfb2e`)
+
+Committed view limits now apply via `u.setScale` on the live instance
+(no-op when the gesture already painted them); only autoscale (null)
+transitions still rebuild, because a concrete lim is a static range tuple
+in opts while null is a range function/absent — inexpressible via setScale.
+
+| Metric | Before | After | Verdict |
+|---|---|---|---|
+| F1 (1M×7) zoom median/p95 | 106 / 238 ms | 98.5 / **112 ms** | −53 %, misses target by 12 ms |
+| F3 (20×100k) zoom median/p95 | — / 116 ms | 66 / **86 ms** | **meets <100 ms** |
+| Pan (both) | ~50 ms | ~50 ms | unaffected |
+
+The F1 residual (~112 ms p95) is downstream of `setScale`'s own redraw —
+plausibly the canvas line-draw of ~82k decimated points × 7 series under
+HEADLESS/software-rendered Chromium. Per the "book only on evidence" rule,
+no further work is booked: re-measure on a real-GPU interactive session
+first (the harness renders without hardware acceleration, so 112 ms is
+likely an overestimate of what the owner would feel).
+
 ## Residuals (explicitly unmeasured — carry in P0.4)
 
 - Worksheet-GRID interaction at 1M rows (only import→plot was measured;

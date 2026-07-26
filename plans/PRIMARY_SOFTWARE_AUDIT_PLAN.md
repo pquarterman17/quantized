@@ -260,11 +260,12 @@ copy/export, and cleanup for:
 
 - [x] Every result records hardware, fixture, command, and measurement
   (`docs/envelope/2026-07-26-*.json`).
-- [ ] Direct manipulation targets <100 ms — MEASURED 2026-07-26: pan meets
-  it everywhere (≤60 ms even at 7M points); zoom misses at scale (p95
-  259 ms at 1M×7, 122 ms at 20×100k). Point reduction shipped same day and
-  moved it only to 238 ms — the verified dominant term is the viewport
-  rebuild on committed zoom (booked below). Re-check after that ships.
+- [ ] Direct manipulation targets <100 ms — pan meets it everywhere
+  (≤60 ms even at 7M points). Zoom, after decimation (`244551c`) AND the
+  viewport-rebuild fix (`bcbfb2e`): 20×100k **meets** the target (p95
+  86 ms); 1M×7 is at p95 112 ms under HEADLESS software-rendered Chromium
+  — close the box only after a real-GPU re-measure confirms (or refutes)
+  the last 12 ms. History: 259 → 238 → 112 ms across the three fixes.
 - [ ] Operations >500 ms have suitable busy/progress feedback; safe long jobs
   offer cancellation (not audited this pass; F1's ~14–28 s import is the
   case to audit first).
@@ -300,16 +301,16 @@ P0.4 stays open for the residuals above.
   fallback (isolated convert step −25 % time / −67 % peak; end-to-end peak
   1,117→869 MB). Wall time flat — the layout-detection item below is why.
   P1.4-booked text-column warts preserved and re-verified.
-- [ ] **Viewport rebuild on committed zoom** (found + code-verified
-  2026-07-26): `args.xLim`/`args.yLim` are reactive deps of PlotViewport's
-  uPlot create/destroy effect, so every zoom that commits view limits
-  tears down and reconstructs the whole plot — the dominant term in zoom
-  p95 (238 ms with decimation active; target <100 ms). Fix shape: apply
-  lim-only changes via `u.setScale` on the live instance and rebuild only
-  on structural change. Secondary: re-bucket cost is O(visible×series) at
-  wide windows. Touching PlotViewport's dep design — review carefully
-  against the window/sync/theme rebuild semantics documented in its dep
-  comment.
+- [x] ~~**Viewport rebuild on committed zoom**~~ SHIPPED 2026-07-26
+  (`bcbfb2e`): lim-only commits now no-op (epsilon vs live scale) or
+  `u.setScale`; only null/autoscale transitions rebuild (a concrete lim is
+  a static range TUPLE in opts, null a range function/absent — the
+  brief's log-splits theory was corrected by the implementer against
+  code). Latest-ref pattern keeps exhaustive-deps clean. Zoom p95:
+  F1 238→**112 ms** (−53 %), F3 116→**86 ms (meets target)**; pan
+  unchanged. F1's 12 ms residual is canvas draw under headless
+  software rendering — NOT booked further; re-measure on a real GPU
+  first (Graph25 discipline).
 - [ ] **`_detect_layout` per-cell numeric scoring** (found 2026-07-26):
   ~9 s of a 14.6 s profiled 1M×8 import goes to `float()`-per-cell
   header/data-start scoring across 8M cells — same class as the tokenizer
@@ -885,6 +886,10 @@ At the end of each session:
   deterministic generator + 9 matrix-validated committed fixtures (172 KiB) +
   `docs/timed_workflow_baselines.md` (8 journey checklists + results template).
   P0.3 stays open for the first dated timed runs (owner hands).
+- ~~**P0.4 follow-up 2: viewport rebuild on committed zoom**~~ (2026-07-26,
+  `bcbfb2e`) — lim commits via `u.setScale`/no-op instead of instance
+  teardown; zoom p95 F1 238→112 ms, F3 116→86 ms (meets target). F1's
+  residual deliberately unbooked pending a real-GPU measure.
 - ~~**P0.4 follow-up: plot-path point reduction**~~ (2026-07-26,
   `244551c`) — window-aware min/max decimation, default-on, 7M→~82k points;
   zoom p95 259→238 ms, exposing the viewport-rebuild bottleneck now booked.
@@ -1110,6 +1115,24 @@ work (its BACKLOG row).
   `docs/performance_envelope.md` §Follow-up run. Net: the <100 ms zoom
   target is NOT yet met; the two newly-booked items (viewport rebuild,
   layout-detection scoring) are the measured remaining terms.
+
+#### 2026-07-26 — Viewport-rebuild fix (Haiku Explore map → Sonnet implement, Fable spec/verify/gate)
+
+- Cost routing per owner directive: a Haiku Explore agent mapped every
+  lim writer/reader (one factual error in its map — the view-history
+  shortcut — caught by the implementer); Fable wrote the spec; Sonnet
+  implemented (`lib/plotLimApply.ts` pure classifier + 11 unit tests +
+  PlotViewport latest-ref wiring, 3 files only).
+- The implementer CORRECTED the spec's log-splits rationale against real
+  code (fixedLogAxisSplits is unconditional; the true rebuild reason is
+  range tuple-vs-function in opts) — documented in both files.
+- Gates on the merged tree: 4,662 vitest, lint at the exact pre-existing
+  baseline (verified via stash diff), build + bundle ratchet 945.6/949.2 kB,
+  e2e 33/33 plus a 7-scenario view-lifecycle scratch spec (zoom→undo→redo,
+  reset, Inspector set/clear, workspace reopen) run and then deleted.
+- Envelope re-measured: zoom p95 F1 238→112 ms, F3 116→86 ms; the <100 ms
+  acceptance box stays open pending a real-GPU confirm of F1's last 12 ms.
+- `_detect_layout` scoring remains the one open P0.4 follow-up.
 
 ## Reference baseline
 
