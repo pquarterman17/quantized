@@ -11,6 +11,7 @@ import type {
 import clsx from "clsx";
 
 export { RangeSlider, type RangeSliderProps } from "./RangeSlider";
+export { default as Card, type CardProps } from "./Card";
 export { default as RichText } from "./RichText";
 export { default as RichLabelInput } from "./RichLabelInput";
 export {
@@ -70,30 +71,6 @@ export function IconButton({
     <button className={clsx("qz-icon-btn", active && "qz-active", className)} {...rest}>
       {children}
     </button>
-  );
-}
-
-// ── Card (collapsible <details>) ───────────────────────────────────────────
-interface CardProps {
-  title: ReactNode;
-  count?: number;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}
-
-export function Card({ title, count, defaultOpen = true, children }: CardProps) {
-  return (
-    <details className="qz-card" open={defaultOpen}>
-      <summary>
-        {title}
-        {count != null && (
-          <span className="qz-badge" style={{ marginLeft: "auto" }}>
-            {count}
-          </span>
-        )}
-      </summary>
-      <div className="qz-card-body">{children}</div>
-    </details>
   );
 }
 

@@ -216,7 +216,12 @@ export default function SeriesStyleCard({ active }: { active: Dataset | null }) 
   // per-row "Error bars" toggle knows which column to switch on.
   const natErr = defaultErrKeys(active.data);
   return (
-    <Card title="Series style" count={styled || undefined} defaultOpen={false}>
+    <Card
+      title="Series style"
+      count={styled || undefined}
+      defaultOpen={false}
+      helpTopic="Figure builder"
+    >
       {active.data.labels.map((lab, i) => (
         <StyleRow
           key={i}

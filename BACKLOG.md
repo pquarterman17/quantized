@@ -127,7 +127,7 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
-| Extend the completed curated-command help contract to Inspector cards, context/workshop actions, and contextual `?` links | PRIMARY SOFTWARE P3.1 |
+| Continue contextual help after the first five Inspector `?` links: cover high-friction workshops and registered context actions from real-use evidence | PRIMARY SOFTWARE P3.1 |
 | Run one real raw-data-to-publication switch-trigger project and record elapsed time, workarounds, and every switch-back impulse | PRIMARY SOFTWARE P0.1 |
 | Complete owner review of the existing Origin/Quantized visual corpus | PRIMARY SOFTWARE P0.2 |
 | Establish repeatable timed workflow baselines and representative fixtures | PRIMARY SOFTWARE P0.3 |

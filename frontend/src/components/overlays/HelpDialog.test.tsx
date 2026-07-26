@@ -10,7 +10,9 @@ function titleShown(name: string): boolean {
   return [...document.querySelectorAll(".qzk-help-title")].some((el) => el.textContent === name);
 }
 
-beforeEach(() => useHelp.setState({ open: false, section: "search" }));
+beforeEach(() =>
+  useHelp.setState({ open: false, section: "search", query: "" }),
+);
 afterEach(() => act(() => useHelp.getState().closeHelp()));
 
 describe("HelpDialog", () => {
@@ -90,6 +92,13 @@ describe("HelpDialog", () => {
       "aria-selected",
       "true",
     );
+  });
+
+  it("opens from contextual help with the relevant topic already filtered", () => {
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openTopic("axis scale"));
+    expect(screen.getByLabelText("Search help")).toHaveValue("axis scale");
+    expect(titleShown("Cycle Y axis scale (linear/log/reciprocal)")).toBe(true);
   });
 
   it("closes on the backdrop, the Close button, and Escape", () => {

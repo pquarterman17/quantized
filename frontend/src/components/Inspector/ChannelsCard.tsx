@@ -105,7 +105,7 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   };
 
   return (
-    <Card title="Channels" defaultOpen={false}>
+    <Card title="Channels" defaultOpen={false} helpTopic="Graph Builder">
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
         <span style={{ flex: "0 0 auto", color: "var(--text-dim)" }}>X axis</span>
         <Select

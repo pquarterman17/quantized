@@ -1,8 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { openHelp, useHelp } from "./help";
+import { openHelp, openHelpTopic, useHelp } from "./help";
 
-beforeEach(() => useHelp.setState({ open: false, section: "search", whatIsThis: false }));
+beforeEach(() =>
+  useHelp.setState({
+    open: false,
+    section: "search",
+    query: "",
+    whatIsThis: false,
+  }),
+);
 
 describe("useHelp", () => {
   it("starts closed on the search section", () => {
@@ -19,6 +26,22 @@ describe("useHelp", () => {
   it("opens directly to a named section", () => {
     useHelp.getState().openHelp("shortcuts");
     expect(useHelp.getState().section).toBe("shortcuts");
+  });
+
+  it("opens a contextual topic as a pre-filtered search", () => {
+    openHelpTopic("axis scale");
+    expect(useHelp.getState()).toMatchObject({
+      open: true,
+      section: "search",
+      query: "axis scale",
+      whatIsThis: false,
+    });
+  });
+
+  it("ordinary Help clears a previous contextual query", () => {
+    openHelpTopic("axis scale");
+    openHelp();
+    expect(useHelp.getState().query).toBe("");
   });
 
   it("switches section without closing", () => {

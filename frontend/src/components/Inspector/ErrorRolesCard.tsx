@@ -41,7 +41,12 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
   );
 
   return (
-    <Card title="Error columns" defaultOpen={false} count={roles.length || undefined}>
+    <Card
+      title="Error columns"
+      defaultOpen={false}
+      count={roles.length || undefined}
+      helpTopic="Import wizard"
+    >
       {roles.length === 0 ? (
         <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
           No error columns bound. Detect them from the column names, or pair one

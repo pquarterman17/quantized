@@ -548,6 +548,9 @@ covers a much smaller subset and guards focus on Analyze.
   (2026-07-25).
 - [ ] Extend the same source to Inspector cards, context actions, and
   workshops, then add contextual `?` links.
+- [x] Channels, Error columns, Corrections, Series style, and Axes Inspector
+  cards have compact `?` actions that open Help with a relevant search already
+  applied (2026-07-25).
 
 ## P3.2 — First-plot onboarding/Home
 
@@ -799,6 +802,18 @@ At the end of each session:
   of menu group, and Origin migration tips resolve against the same metadata.
 - Validation: focused suite **44 passed**; production build and bundle ratchet
   passed at 940.4 kB eager.
+
+### 2026-07-25 — P3.1 contextual Inspector help slice (ChatGPT-Sol)
+
+- Added a reusable optional help topic to the shared collapsible Card
+  primitive.
+- Added unobtrusive `?` actions to the five highest-complexity plotting
+  property groups: Channels, Error columns, Corrections, Series style, Axes.
+- Contextual help opens the existing lazy Help hub with a relevant query
+  prefilled; clicking help does not expand/collapse the property card.
+- Validation: full frontend suite **4,590 passed across 325 files**; focused
+  contextual/architecture suites passed; production build and bundle ratchet
+  passed at 941.0 kB eager.
 
 ## Reference baseline
 

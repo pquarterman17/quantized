@@ -14,12 +14,16 @@ export type HelpSection = "search" | "shortcuts" | "importing" | "origin";
 interface HelpState {
   open: boolean;
   section: HelpSection;
+  /** Search text seeded by a contextual help link. */
+  query: string;
   /** "What is this?" inspect mode (GUI_INTERACTION #17): while on, controls
    *  carrying help text are outlined and reveal it instantly on hover. */
   whatIsThis: boolean;
   openHelp: (section?: HelpSection) => void;
+  openTopic: (query: string) => void;
   closeHelp: () => void;
   setSection: (section: HelpSection) => void;
+  setQuery: (query: string) => void;
   toggleWhatIsThis: () => void;
   setWhatIsThis: (on: boolean) => void;
 }
@@ -27,12 +31,17 @@ interface HelpState {
 export const useHelp = create<HelpState>((set) => ({
   open: false,
   section: "search",
+  query: "",
   whatIsThis: false,
   // Opening the Help dialog exits inspect mode — the two are alternate ways
   // to answer "what is this?", never both at once.
-  openHelp: (section = "search") => set({ open: true, section, whatIsThis: false }),
+  openHelp: (section = "search") =>
+    set({ open: true, section, query: "", whatIsThis: false }),
+  openTopic: (query) =>
+    set({ open: true, section: "search", query, whatIsThis: false }),
   closeHelp: () => set({ open: false }),
   setSection: (section) => set({ section }),
+  setQuery: (query) => set({ query }),
   toggleWhatIsThis: () => set((s) => ({ whatIsThis: !s.whatIsThis, open: false })),
   setWhatIsThis: (on) => set({ whatIsThis: on }),
 }));
@@ -40,4 +49,9 @@ export const useHelp = create<HelpState>((set) => ({
 /** Imperative helper for non-component call sites (a command's `run`). */
 export function openHelp(section?: HelpSection): void {
   useHelp.getState().openHelp(section);
+}
+
+/** Open searchable Help pre-filtered from an Inspector/workshop context. */
+export function openHelpTopic(query: string): void {
+  useHelp.getState().openTopic(query);
 }

@@ -68,7 +68,7 @@ export default function Inspector() {
 
       <OriginProvenanceCard active={active} />
 
-      <Card title="Axes" defaultOpen={false}>
+      <Card title="Axes" defaultOpen={false} helpTopic="axis scale">
         <AxisScaleControls />
         <label className="qz-check">
           <input

@@ -8,7 +8,7 @@
 // existing shortcut data rather than duplicating it. The importing/origin tabs
 // are added by later slices; the store's HelpSection type already lists them.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 
 import {
   actionToHelpItem,
@@ -63,7 +63,8 @@ export default function HelpDialog() {
   const section = useHelp((s) => s.section);
   const setSection = useHelp((s) => s.setSection);
   const close = useHelp((s) => s.closeHelp);
-  const [query, setQuery] = useState("");
+  const query = useHelp((s) => s.query);
+  const setQuery = useHelp((s) => s.setQuery);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Esc closes even when focus isn't inside the dialog (ShortcutsDialog rule).
@@ -79,10 +80,7 @@ export default function HelpDialog() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open, close]);
 
-  // Fresh search each open; focus the box when the Topics tab is showing.
-  useEffect(() => {
-    if (!open) setQuery("");
-  }, [open]);
+  // Focus the box when the Topics tab is showing.
   useEffect(() => {
     if (open && section === "search") inputRef.current?.focus();
   }, [open, section]);

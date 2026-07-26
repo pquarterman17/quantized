@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Badge, Button, Card, MetaRow, Pill, RangeSlider, Switch } from "./index";
+import { useHelp } from "../../store/help";
 
 describe("primitives", () => {
   it("Button applies the primary variant class", () => {
@@ -14,6 +15,24 @@ describe("primitives", () => {
     render(<Card title="CORRECTIONS">body</Card>);
     expect(screen.getByText("CORRECTIONS")).toBeInTheDocument();
     expect(screen.getByText("body")).toBeInTheDocument();
+  });
+
+  it("Card contextual help opens a filtered topic without toggling the card", () => {
+    useHelp.setState({ open: false, query: "" });
+    const { container } = render(
+      <Card title="Axes" defaultOpen={false} helpTopic="axis scale">
+        body
+      </Card>,
+    );
+    const details = container.querySelector("details")!;
+    expect(details).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByRole("button", { name: "Help for Axes" }));
+    expect(details).not.toHaveAttribute("open");
+    expect(useHelp.getState()).toMatchObject({
+      open: true,
+      section: "search",
+      query: "axis scale",
+    });
   });
 
   it("MetaRow shows label and value", () => {
