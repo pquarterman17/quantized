@@ -268,3 +268,43 @@ export function saveInteractionPrefs(p: InteractionPrefs): void {
     /* storage unavailable (private mode) — non-fatal */
   }
 }
+
+// ── Plot performance prefs (P0.4, view-window decimation) ──────────────────
+// Same store-INDEPENDENT localStorage pattern as ToolbarPrefs/InteractionPrefs
+// above and for the same reason: useApp.ts is at its store-size ratchet
+// ceiling. Read directly (no store round-trip) from PlotViewport's uPlot
+// create effect — see lib/plotDecimate.ts for the mechanism this gates.
+const PLOT_PERF_PREFS_KEY = "qz.plotPerfPrefs";
+
+export interface PlotPerfPrefs {
+  /** Default ON: view-window min/max decimation for dense line/step series
+   *  above ~10k rows (lib/plotDecimate.ts). Already a no-op below that size,
+   *  for scatter/colour-mapped series, and for series with error bars — this
+   *  is strictly an escape hatch for the rare case a user wants every raw
+   *  point fed to uPlot regardless. */
+  decimateDensePlots: boolean;
+}
+
+export const PLOT_PERF_PREF_DEFAULTS: PlotPerfPrefs = { decimateDensePlots: true };
+
+export function loadPlotPerfPrefs(): PlotPerfPrefs {
+  try {
+    const p = JSON.parse(localStorage.getItem(PLOT_PERF_PREFS_KEY) ?? "{}") as Record<string, unknown>;
+    return {
+      decimateDensePlots:
+        typeof p.decimateDensePlots === "boolean"
+          ? p.decimateDensePlots
+          : PLOT_PERF_PREF_DEFAULTS.decimateDensePlots,
+    };
+  } catch {
+    return PLOT_PERF_PREF_DEFAULTS;
+  }
+}
+
+export function savePlotPerfPrefs(p: PlotPerfPrefs): void {
+  try {
+    localStorage.setItem(PLOT_PERF_PREFS_KEY, JSON.stringify(p));
+  } catch {
+    /* storage unavailable (private mode) — non-fatal */
+  }
+}
