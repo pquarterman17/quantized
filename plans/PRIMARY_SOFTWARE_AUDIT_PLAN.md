@@ -3,7 +3,11 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-07-26 (ChatGPT-Sol status reconciliation after v0.12.0:
+**Updated:** 2026-07-26 late (actionable-queue execution: `_detect_layout`
+shipped `9f12216` — 1M import now 4.72 s; the >500 ms feedback/cancel audit
+completed with gaps booked as P3.4 slices 1–3; the large derived-`.dwk`
+measurement is in flight. Earlier: ChatGPT-Sol status reconciliation after
+v0.12.0:
 the performance sprint shipped, but not all owner-free engineering is done.
 Three P0.4 tasks are actionable now; P1/P2/P3/P4 engineering remains
 incomplete where its boxes are open, even when sequencing waits for Gate A.
@@ -151,7 +155,7 @@ specific residual below:
 
 | State | Work |
 |---|---|
-| **Actionable now; no owner gate** | P0.4 `_detect_layout`; large derived `.dwk` measurement; >500 ms progress/cancel audit |
+| **Actionable now; no owner gate** | P3.4 slices 1–3 (evidence-warranted by the 2026-07-26 audit); large derived `.dwk` measurement (in flight). ~~P0.4 `_detect_layout`~~ and the ~~>500 ms audit~~ completed 2026-07-26 |
 | **Owner/environment evidence now** | P0.1 switch-trigger project; P0.2 screenshot review; P0.3 timed journeys; P0.4 real-GPU confirmation |
 | **Sequencing-gated engineering; incomplete** | P1.1-P1.7 after Gate A; P2.1-P2.8 in the owner-ranked Gate D order; P3.1-P3.7 and P4.1-P4.2 as Gate E evidence warrants |
 | **Credentials/release acceptance** | P4.3; agents can implement and automate supporting work, but signing identities and clean-machine acceptance require the owner/environment |
@@ -295,9 +299,13 @@ copy/export, and cleanup for:
   86 ms); 1M×7 is at p95 112 ms under HEADLESS software-rendered Chromium
   — close the box only after a real-GPU re-measure confirms (or refutes)
   the last 12 ms. History: 259 → 238 → 112 ms across the three fixes.
-- [ ] **Agent-actionable now:** operations >500 ms have suitable busy/progress
-  feedback; safe long jobs offer cancellation (not audited this pass; F1's
-  ~14–28 s import is the case to audit first).
+- [ ] Operations >500 ms have suitable busy/progress feedback; safe long
+  jobs offer cancellation — **AUDITED 2026-07-26, criterion NOT met**: the
+  job queue has one producer (DREAM fit — also the only op with progress +
+  working cancel); everything else is a bare fetch, zero `AbortController`
+  in the frontend. Full inventory + ranked gaps booked under **P3.4**,
+  whose evidence gate this audit satisfies. This box closes when the P3.4
+  slices ship.
 - [ ] Failed thresholds have profiles (mechanism-level attribution exists:
   import wall time is now `_detect_layout` scoring; F1's last 12 ms appears
   to be headless canvas draw. Capture formal profiles if the targeted fix or
@@ -342,13 +350,14 @@ and `_detect_layout` below.
   unchanged. F1's 12 ms residual is canvas draw under headless
   software rendering — NOT booked further; re-measure on a real GPU
   first (Graph25 discipline).
-- [ ] **Agent-actionable now: `_detect_layout` per-cell numeric scoring**
-  (found 2026-07-26):
-  ~9 s of a 14.6 s profiled 1M×8 import goes to `float()`-per-cell
-  header/data-start scoring across 8M cells — same class as the tokenizer
-  fix but inside delicate layout-detection logic (adjacent to MAIN #33
-  history). Vectorize the scoring only, semantics pinned by the matrix +
-  realdata corpus.
+- [x] ~~**`_detect_layout` per-cell numeric scoring**~~ SHIPPED 2026-07-26
+  (`9f12216`): scoring made lazy (the header scan provably consumes only a
+  prefix — pinned by a monkeypatch test) + chunk-vectorized for full-scan
+  files; `delimited.py` split to `io/_delimited_layout.py` (hdf5
+  precedent). Isolated 1,328→48 ms (27.9×); end-to-end 1M-row import
+  ~7→4.72 s. 36 new differential tests pin the fast path bit-identical to
+  the old per-cell logic; full suite 3,197 passed / 3,209 collected (no
+  corpus shrinkage).
 
 ---
 
@@ -699,6 +708,36 @@ covers a much smaller subset and guards focus on Analyze.
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
+**Audit evidence (2026-07-26 — this satisfies P3.4's Gate E evidence
+requirement; full table in `docs/performance_envelope.md`):** the job
+queue (`routes/jobs_api` + `jobs.py`, poll-based ~1 s GET, not WebSocket)
+has exactly ONE producer — `routes/fitting_bumps.py` (DREAM), which is
+also the only operation with a progress bar and end-to-end cancel
+(`useBumpsFit.ts`/`BumpsSection.tsx` — the reference pattern to
+generalize). No `AbortController` exists anywhere in the frontend.
+Ranked gaps: (1) file import — 14–28 s at 1M rows, status-bar text only
+(`store/importDatasets.ts` `runImport`), import button never disabled,
+double-import possible, no cancel; (2) every command-palette export —
+`CommandPalette.tsx` fires `a.run()` untracked, zero in-flight signal
+until the completion toast; (3) workspace open/append
+(`commands/fileCommands.ts` `openWorkspaceCommand`) — totally silent
+synchronous `JSON.parse`, feedback only on failure.
+
+Prioritized slices (in pain order):
+
+- [ ] **Slice 1 — import progress + cancel** (the front door): route large
+  imports through the job queue or wire AbortController + busy state;
+  disable/guard the import affordances while running; keep the small-file
+  path snappy.
+- [ ] **Slice 2 — command-palette in-flight signal**: one chokepoint fix in
+  the palette/command runner so every command with async work shows a
+  running state (the fire-and-forget `a.run()` is a single call site).
+- [ ] **Slice 3 — workspace open feedback**: busy state before the parse,
+  and chunk or defer the synchronous `JSON.parse` if the large-`.dwk`
+  measurement shows a freeze.
+
+Original acceptance criteria (unchanged):
+
 - [ ] Consistent progress location and job identity.
 - [ ] Safe cancel for long import/fit/batch/export.
 - [ ] Errors say what failed, whether data changed, and next action.
@@ -923,6 +962,13 @@ At the end of each session:
   deterministic generator + 9 matrix-validated committed fixtures (172 KiB) +
   `docs/timed_workflow_baselines.md` (8 journey checklists + results template).
   P0.3 stays open for the first dated timed runs (owner hands).
+- ~~**P0.4 follow-up 3: `_detect_layout` scoring**~~ (2026-07-26,
+  `9f12216`) — lazy + chunk-vectorized layout scoring, 1M-row import
+  ~7→4.72 s; 36 differential tests pin exact semantics.
+- ~~**P0.4 >500 ms feedback/cancel AUDIT**~~ (2026-07-26) — criterion NOT
+  met; single-producer job queue + zero AbortController confirmed; ranked
+  gaps booked as P3.4 slices 1–3 (its Gate E evidence requirement is now
+  satisfied). The acceptance box stays open until the slices ship.
 - ~~**P0.4 follow-up 2: viewport rebuild on committed zoom**~~ (2026-07-26,
   `bcbfb2e`) — lim commits via `u.setScale`/no-op instead of instance
   teardown; zoom p95 F1 238→112 ms, F3 116→86 ms (meets target). F1's
@@ -1170,6 +1216,21 @@ work (its BACKLOG row).
 - Envelope re-measured: zoom p95 F1 238→112 ms, F3 116→86 ms; the <100 ms
   acceptance box stays open pending a real-GPU confirm of F1's last 12 ms.
 - `_detect_layout` scoring remains the one open P0.4 follow-up.
+
+#### 2026-07-26 — Actionable-queue execution after the Sol reconciliation (Sonnet agents, Fable orchestrating)
+
+- Sol's reconciliation reviewed adversarially and committed (`b1b32e7`) —
+  no box changes found, classifications verified against plan/code state.
+- **`_detect_layout` scoring shipped** (`9f12216`, see the struck follow-up):
+  laziness proven semantics-pure by differential tests; import now 4.72 s
+  end-to-end at 1M×8 (was ~6–7 s before today's three io fixes combined).
+- **>500 ms feedback/cancel audit completed** (read-only agent, static +
+  live observation on :8952): findings + ranked P3.4 slices booked; the
+  audit also caught CLAUDE.md's "WebSocket job queue" drift (poll-based in
+  reality; only DREAM uses the queue) — CLAUDE.md corrected this pass.
+- **Large derived-`.dwk` + 1M worksheet-grid measurement launched** (the
+  remaining locally-measurable P0.4 residuals); results land in
+  `docs/envelope/2026-07-26-workspace.json` when the run completes.
 
 #### 2026-07-26 — Non-owner work status reconciliation (ChatGPT-Sol)
 

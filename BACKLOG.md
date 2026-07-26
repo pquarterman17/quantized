@@ -6,7 +6,18 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-26 (fifth pass, ChatGPT-Sol status audit after
+**Last reconciled:** 2026-07-26 (sixth pass — executing the fifth pass's
+queue). **`_detect_layout` SHIPPED** (`9f12216`: lazy + chunk-vectorized
+scoring, 1M-row import ~7→4.72 s, 36 differential tests). **The >500 ms
+feedback/cancel audit is DONE and the criterion is NOT met** — the job
+queue has one producer (DREAM fit, the only op with progress + cancel),
+zero `AbortController` anywhere; ranked gaps are now P3.4 slices 1–3 in
+the actionable table (the audit satisfies P3.4's Gate E evidence rule).
+The large derived-`.dwk`/1M-worksheet measurement is in flight. CLAUDE.md's
+"WebSocket job queue" description was corrected (poll-based; single
+producer).
+
+Prior same day (fifth pass, ChatGPT-Sol status audit after
 v0.12.0). The performance sprint is real and green, but "all work that does
 not require the owner is implemented" is false. The immediate owner-free P0.4
 queue has three rows: `_detect_layout` scoring, a large derived-workspace
@@ -180,9 +191,10 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
-| `_detect_layout` per-cell numeric scoring — ~9 s of a 14.6 s 1M-row import profiles into `float()`-per-cell header detection (8M cells); vectorize the scoring only, semantics pinned by matrix + realdata corpus | PRIMARY SOFTWARE P0.4 follow-up 2 |
-| Measure a large `.dwk` containing derived data, figures/results, and a 1M-row member; F4 covered only many small datasets/windows | PRIMARY SOFTWARE P0.4 |
-| Audit operations over 500 ms for consistent busy/progress feedback and safe cancellation, beginning with F1's 14–28 s import | PRIMARY SOFTWARE P0.4 |
+| P3.4 slice 1 — import progress + cancel (the front door: 14–28 s at 1M rows with status-text only, no cancel, double-import possible; generalize the DREAM-fit job pattern or wire AbortController) | PRIMARY SOFTWARE P3.4, evidence-warranted 2026-07-26 |
+| P3.4 slice 2 — command-palette in-flight signal (one chokepoint: `CommandPalette.tsx` fires `a.run()` untracked, so every export runs with zero running-state) | PRIMARY SOFTWARE P3.4 |
+| P3.4 slice 3 — workspace-open feedback (totally silent sync `JSON.parse`; add busy state, defer/chunk if the large-`.dwk` measurement shows a freeze) | PRIMARY SOFTWARE P3.4 |
+| Measure a large `.dwk` containing derived data, figures/results, and a 1M-row member — **measurement run in flight 2026-07-26** | PRIMARY SOFTWARE P0.4 |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are

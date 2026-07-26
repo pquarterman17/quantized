@@ -61,8 +61,10 @@ the behavioural reference (parity + golden values).
 
 - **Backend:** Python ≥3.11, FastAPI, numpy/scipy, matplotlib (export
   only), `uv` for env/deps. Package `quantized`, CLI `qz` (alias
-  `quantized`). Long-running work (batch fit/export/convert) runs through
-  a **WebSocket job queue** (`routes/jobs`, mirrors fermiviewer); the
+  `quantized`). Long-running work is meant to run through a **poll-based
+  job queue** (`routes/jobs_api`, ~1 s GET polling — NOT WebSocket;
+  design mirrors fermiviewer). As of 2026-07-26 only the DREAM/bumps fit
+  actually uses it (wiring import/export through it is plan P3.4); the
   queue is thin transport — the actual work stays pure in `calc/`.
 - **Optional Origin (COM):** live "Send to Origin" is a **Windows-only,
   OS-gated optional** extra (pywin32), behind a feature flag and untestable

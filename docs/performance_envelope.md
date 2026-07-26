@@ -137,6 +137,35 @@ no further work is booked: re-measure on a real-GPU interactive session
 first (the harness renders without hardware acceleration, so 112 ms is
 likely an overestimate of what the owner would feel).
 
+## Fourth fix — 2026-07-26, layout-detection scoring vectorized (`9f12216`)
+
+`_detect_layout` scored every row eagerly with per-cell `float()`; scoring
+is now lazy (the header scan stops at its decision point — proven a pure
+laziness refactor by a differential test against the old eager algorithm)
+and chunk-vectorized for full-scan files. `delimited.py` split to
+`io/_delimited_layout.py` (hdf5-precedent split).
+
+| Metric | Before | After |
+|---|---|---|
+| `_detect_layout` isolated, 1M×8 | 1,328 ms | **48 ms** (27.9×) |
+| End-to-end 1M×8 import wall | ~7 s | **4.72 s** |
+| Import peak memory | 869 MB | 869 MB (CPU fix, unchanged) |
+
+## Long-operation feedback/cancel audit — 2026-07-26
+
+The P0.4 acceptance criterion "operations >500 ms have busy/progress
+feedback; safe long jobs offer cancellation" was audited (static + live app
+observation). Verdict: **not met** — full inventory and ranked gaps are
+booked under plan P3.4. Structural facts: the job queue
+(`routes/jobs_api`, poll-based ~1 s GET — not WebSocket) has exactly ONE
+producer (the DREAM/bumps fit, which is also the only operation with a
+progress bar and working cancel); every other candidate is a bare fetch;
+`AbortController` appears nowhere in the frontend. Worst gaps by pain:
+(1) file import — 14–28 s at 1M rows with only a static status-bar
+sentence, import button never disabled, no cancel; (2) every
+command-palette export — fully fire-and-forget, zero in-flight signal;
+(3) workspace open — completely silent synchronous `JSON.parse`.
+
 ## Residuals (explicitly unmeasured — carry in P0.4)
 
 - Worksheet-GRID interaction at 1M rows (only import→plot was measured;
