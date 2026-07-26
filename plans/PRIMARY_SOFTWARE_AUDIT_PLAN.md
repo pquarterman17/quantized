@@ -3,12 +3,10 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-07-25 late (standing-issues sweep: P4.1 + the P4.2 npm-ci
-item shipped, PORT_PLAN #54 closed, glib alert dismissed — see the session
-log; earlier same day: pre-merge review of the four P3.1 discoverability PRs:
-one keyword-vocabulary regression fixed and guarded, and this doc re-headed onto
-`plan-format.md`'s Tier 1/2/3 + `## Completed` structure — the `P0.1`-style IDs
-are kept as the stable identifiers cited by BACKLOG rows and the PR history)
+**Updated:** 2026-07-26 (P0.3 fixtures/generator/checklists shipped `9d4ce6d`;
+P0.4 unblocked; new P1.4 import-boundary evidence — see the session log. The
+`P0.1`-style IDs remain the stable identifiers cited by BACKLOG rows and PR
+history)
 **Audit author:** ChatGPT-Sol
 **Audited baseline:** Quantized 0.11.1, commit `261cd3a` on `main`
 **Repository:** `C:\Users\patri\git\quantized`
@@ -211,24 +209,33 @@ reproducible and prioritized; no high-priority scientific mismatch remains.
 
 Create fixtures/checklists for:
 
-- [ ] CSV/TSV with pre-header metadata;
-- [ ] magnetometry parametric series;
-- [ ] XRD peak/phase work;
-- [ ] XRR/PNR layered curves;
-- [ ] SIMS depth profiles;
-- [ ] large 2-D maps and slices;
-- [ ] grouped box plot with multiple factors;
-- [ ] save/close/reopen/relink/export/Office copy.
+- [x] CSV/TSV with pre-header metadata;
+- [x] magnetometry parametric series;
+- [x] XRD peak/phase work;
+- [x] XRR/PNR layered curves;
+- [x] SIMS depth profiles;
+- [x] large 2-D maps and slices;
+- [x] grouped box plot with multiple factors;
+- [x] save/close/reopen/relink/export/Office copy.
 
 Record gestures, time, confusing labels, failures, and discoverability.
 Commit reusable, non-sensitive fixtures and dated results.
+
+**Progress:** all eight fixture/checklist sets shipped 2026-07-26 (`9d4ce6d`):
+deterministic generator `tools/baselines/` (9 committed fixtures, 172 KiB,
+byte-stability enforced by `tests/test_baseline_fixtures.py`; all nine route
+through the parsers matrix), protocol + results template in
+`docs/timed_workflow_baselines.md`. P0.4-scale fixtures generate via
+`--large` (never committed). **P0.3 stays open** for the first dated timed
+RUNS — the gesture/confusion fields need the owner's hands.
 
 ### P0.4 — Large-data and long-session performance envelope
 
 **Goal:** find real limits before choosing rendering/storage architecture.
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5. Escalate only after
-profiling. **Dependency:** P0.3 fixtures.
+profiling. **Dependency:** P0.3 fixtures (shipped 2026-07-26 —
+`uv run python tools/baselines/make_fixtures.py --large`).
 
 Measure import, first render, interaction, memory, save/autosave, reopen,
 copy/export, and cleanup for:
@@ -343,7 +350,13 @@ faceting, legends, categorical axes, filters, and statistics.
 **Dependency:** contract precedes P1.5/P1.6/P2.6.
 
 **Current evidence:** multiple comment rows/text columns are preserved in
-sidecars but are not uniformly first-class plot channels.
+sidecars but are not uniformly first-class plot channels. The P0.3 fixture
+work (2026-07-26) measured the import boundary directly: a CSV with a text
+column FIRST imports with a silently all-NaN positional time axis, and a
+numeric-first CSV with trailing text columns raises `ValueError: no valid
+data columns` — categorical columns cannot enter as data at all today. The
+baseline box-plot fixture (`grouped_factors_boxplot.csv`) had to encode
+factors as integer codes with the name legend in the preamble.
 
 - [ ] Stable numeric/datetime/text/categorical/metadata/error semantics.
 - [ ] Display multiple header/comment rows with clear roles.
@@ -804,6 +817,11 @@ At the end of each session:
   `Action`s — the chokepoint both Help and the palette read — and locked with a
   31-case `it.each` guard in `helpContent.test.ts`.
 
+- ~~**P0.3 fixtures + checklists slice**~~ (2026-07-26) — `tools/baselines/`
+  deterministic generator + 9 matrix-validated committed fixtures (172 KiB) +
+  `docs/timed_workflow_baselines.md` (8 journey checklists + results template).
+  P0.3 stays open for the first dated timed runs (owner hands).
+
 **P3.1 stays OPEN.** The four slices above cover curated commands and the first
 five Inspector cards; workshop-level coverage is the remaining evidence-led
 work (its BACKLOG row).
@@ -935,6 +953,35 @@ work (its BACKLOG row).
   oracle note was shorthand from a GRAMS update-in-place artifact; ground
   truth (4,344 pts, variable 3–53-pt scans) established from the file's own
   directory and recorded.
+
+#### 2026-07-26 — P0.3 fixtures + checklists slice (Sonnet agent, Fable orchestrating)
+
+- Shipped `9d4ce6d` (fast-forward to main after worktree review): deterministic
+  seeded generator `tools/baselines/` (10 modules, none over 145 lines), 9
+  committed fixtures under `tests/fixtures/baselines/` (172 KiB total), and
+  `docs/timed_workflow_baselines.md` — the 8-journey timing protocol with a
+  dated results-log template using the P0.1 friction taxonomy.
+- All nine fixtures route through the registry and joined the parsers matrix
+  automatically (its walk is recursive); post-merge gate: 392 passed / 8
+  xfailed across the fixture guard + full matrix + repo integrity, ruff and
+  mypy clean.
+- `tests/test_baseline_fixtures.py` regenerates via the real CLI and
+  byte-compares against the committed set (catches hand-edits AND proves
+  determinism). Negative control verified: a planted one-line tamper fails
+  exactly the right parametrized case.
+- `--large` writes the P0.4-scale set (1M-row CSV, ≥1000×1000 map, dense
+  multi-series) to gitignored `tools/baselines/out/` — deliberately OUTSIDE
+  `tests/fixtures/`, whose matrix walk is filesystem-based, not git-based.
+- **P1.4 evidence found while building the grouped-factors fixture:** text
+  columns cannot enter as data (silent all-NaN time axis when text is column
+  0; `ValueError` when text columns trail) — recorded under P1.4's Current
+  evidence.
+- **Journey-5 format brittleness:** SIMS species names resolve only via
+  `io/sims.py`'s `_recover_paired_names` when the exact 3-row banner of
+  `sims_barrier.csv` is mirrored; deviations silently yield placeholder
+  labels. Noted in the journey checklist.
+- Residual: the first dated timed RUNS (owner). P0.4 is now unblocked and is
+  the next owner-free item.
 
 ## Reference baseline
 
