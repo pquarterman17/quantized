@@ -47,7 +47,11 @@ jobs:
         with:
           node-version: 22
       - name: Install
-        run: npm install
+        # npm ci, not npm install: install exactly the lockfile. `npm install`
+        # resolves ^ranges to whatever is newest, so CI silently tested
+        # different dependency versions than any local checkout (this hid a
+        # real Playwright 1.61-vs-1.62 e2e regression on 2026-07-25).
+        run: npm ci
       - name: Unit tests (vitest)
         run: npm test
       - name: Build (includes typecheck)

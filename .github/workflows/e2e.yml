@@ -31,7 +31,9 @@ jobs:
         with:
           node-version: 22
       - name: Install frontend deps
-        run: npm install
+        # npm ci, not npm install — see ci.yml; the floating install here is
+        # exactly what let CI's Playwright drift off the lockfile.
+        run: npm ci
       - name: Install Playwright (chromium only)
         run: npx playwright install --with-deps chromium
       - name: Build the SPA (what the backend serves)
