@@ -6,7 +6,15 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-26 (ninth pass). **Slice 4 + the P4.1 lazy
+**Last reconciled:** 2026-07-27 (tenth pass). **The feedback/cancel tails
+SHIPPED** (`9e2e476`: job-queued model scan with progress + cooperative
+cancel — the queue's second producer; per-peak `fitEach` progress +
+cancel; ReportPanel format labels) — the P0.4 ">500 ms feedback/cancel"
+acceptance box is CLOSED. The window-mount divergence fix is in flight
+(its agent is A/B-measuring); it remains the one actionable row until its
+result lands.
+
+Prior (ninth pass, 2026-07-26). **Slice 4 + the P4.1 lazy
 boundary SHIPPED in parallel** (`65e3670` staged window hydration:
 time-to-first-paint on a 188 MB restore 906→106 ms, freeze −24 %;
 `95bf0b2` CalcOnlyApp dynamic import: eager 948.4→881.2 kB, budget

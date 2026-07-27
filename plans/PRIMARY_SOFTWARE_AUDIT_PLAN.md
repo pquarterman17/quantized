@@ -305,14 +305,19 @@ copy/export, and cleanup for:
   86 ms); 1M×7 is at p95 112 ms under HEADLESS software-rendered Chromium
   — close the box only after a real-GPU re-measure confirms (or refutes)
   the last 12 ms. History: 259 → 238 → 112 ms across the three fixes.
-- [ ] Operations >500 ms have suitable busy/progress feedback; safe long
+- [x] Operations >500 ms have suitable busy/progress feedback; safe long
   jobs offer cancellation — AUDITED 2026-07-26 (criterion not met), then
-  the three worst gaps SHIPPED same day (P3.4 slices 1–3: import
-  feedback + cancel + double-import guard; universal async-command
-  in-flight signal; workspace-open busy state). Remaining tail before
-  this box closes: batch/scan fit cancellation, per-item progress for
-  `fitEach`/report formats, and the workspace-restore render freeze
-  (P3.4 slice 4).
+  CLOSED the same day in four passes: slices 1–3 (import feedback +
+  cancel + double-import guard; universal async-command signal;
+  workspace-open busy state), slice 4 (staged restore), and the tails
+  (`9e2e476`): fit scan is now the job queue's SECOND producer with
+  per-model progress + cooperative cancel (DREAM pattern generalized,
+  sync route preserved), `fitEach` reports per-peak progress and cancels
+  between iterations, ReportPanel names the running format. Every
+  audited operation now has feedback; cancel exists wherever the work
+  loop allows it. Remaining PERF residuals (window-mount divergence,
+  real-GPU zoom) are latency targets tracked on their own lines, not
+  feedback gaps.
 - [ ] Failed thresholds have profiles (mechanism-level attribution exists:
   import wall time is now `_detect_layout` scoring; F1's last 12 ms appears
   to be headless canvas draw. Capture formal profiles if the targeted fix or
@@ -1292,6 +1297,19 @@ work (its BACKLOG row).
   spawned one commit behind (`b1b32e7`, pre-`9f12216`), so its upload
   timing predates the layout fix — caveated in the envelope doc; all
   other numbers unaffected.
+
+#### 2026-07-27 — Feedback/cancel tails shipped; divergence hunt in flight
+
+- Tails (`9e2e476`, Sonnet agent, parallel with the divergence agent):
+  job-queued model scan (queue's second producer; per-model progress,
+  cooperative cancel, result shape byte-identical to the sync route,
+  which stays for other callers), per-peak `fitEach` progress + cancel
+  (finished peaks keep results), ReportPanel format labels. Live-verified
+  end-to-end (cancel mid-scan → clean re-scan; StatusBar per-peak ticks).
+  Backend 3,205 passed / 3,217 collected (+9 = the new tests), frontend
+  4,757, e2e 33/33. The P0.4 feedback/cancel acceptance box is CLOSED.
+- The window-mount divergence agent is instrumenting/AB-measuring; its
+  result books separately.
 
 #### 2026-07-26 latest — Slice 4 + the P4.1 lazy boundary (two parallel Sonnet agents, fenced territories)
 
