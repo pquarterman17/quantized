@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { nextPlotBg, type PlotBg, type PlotWindow } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
+import { forceHydrate } from "../../store/windowHydration";
 import { buildMenuItems } from "../../lib/contextActions";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { windowCloseAction, windowCoreActions, type WindowActionTarget } from "./windowMenu";
@@ -130,7 +131,9 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
           }
           aria-label="Cycle window link group"
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => cycleWindowLinkGroup(win.id)}
+          // P3.4 slice 4: see windowMenu.ts's identical guard on this
+          // action's context-menu twin.
+          onClick={() => (forceHydrate(win.id), cycleWindowLinkGroup(win.id))}
         >
           ⧟
           {win.linkGroup != null && <span className="qzk-plotwin-link-n">{win.linkGroup}</span>}

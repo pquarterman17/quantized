@@ -19,6 +19,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import type { DataStruct, Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { resetWindowHydrationForTests, stageWorkspaceRestore } from "../../store/windowHydration";
 import WindowCanvas from "./WindowCanvas";
 
 const { created, MockUPlot } = vi.hoisted(() => {
@@ -463,5 +464,108 @@ describe("WindowCanvas — item 17 (worksheet/map document windows)", () => {
     expect(plotFrame.querySelector(".qzk-plotwin-link")).not.toBeNull();
     expect(plotFrame.querySelector(".qzk-plotwin-pin")).not.toBeNull();
     expect(plotFrame.querySelector(".qzk-plotwin-bg")).not.toBeNull();
+  });
+});
+
+// P3.4 slice 4 (docs/performance_envelope.md finding 10): the render-layer
+// half of store/windowHydration.ts's contract — that module's own test file
+// covers the pure queue/scheduler; these prove WindowCanvas actually wires
+// it (placeholder gate + the focus force-hydrate effect). rAF is stubbed to
+// a manually-steppable queue, same discipline as PlotWindowFrame.test.tsx.
+describe("WindowCanvas — P3.4 slice 4 (staged workspace-restore hydration)", () => {
+  let frameQueue: FrameRequestCallback[] = [];
+  function stepFrame() {
+    const cb = frameQueue.shift();
+    if (cb) cb(0);
+  }
+
+  beforeEach(() => {
+    resetWindowHydrationForTests();
+    frameQueue = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      frameQueue.push(cb);
+      return frameQueue.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => {
+      frameQueue = [];
+    });
+  });
+  afterEach(() => {
+    resetWindowHydrationForTests();
+  });
+
+  it("a staged (non-active) window renders a placeholder, not a live uPlot, until its drain turn", async () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
+      focusedWindowId: "w1",
+    });
+    stageWorkspaceRestore(useApp.getState().plotWindows, "w1");
+    const { container } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(1)); // only the active window mounts real content
+    expect(container.querySelector(".qzk-plotwin-placeholder")).not.toBeNull();
+
+    stepFrame(); // w2's drain turn
+    await waitFor(() => expect(created.length).toBe(2));
+    expect(container.querySelector(".qzk-plotwin-placeholder")).toBeNull();
+  });
+
+  it("an ordinary (unstaged) restore never shows a placeholder — staging is opt-in, not a heuristic", async () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
+      focusedWindowId: "w1",
+    });
+    // Deliberately no stageWorkspaceRestore call — the ordinary interactive
+    // path (and every OTHER test in this file).
+    const { container } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(2));
+    expect(container.querySelector(".qzk-plotwin-placeholder")).toBeNull();
+  });
+
+  it("focusing a placeholder window force-hydrates it immediately — no drain frame needed", async () => {
+    useApp.setState({
+      plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
+      focusedWindowId: "w1",
+    });
+    stageWorkspaceRestore(useApp.getState().plotWindows, "w1");
+    const { container } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(1));
+
+    const frames = container.querySelectorAll(".qzk-plotwin");
+    fireEvent.pointerDown(frames[1]!, { clientX: 5, clientY: 5, button: 0 }); // still-placeholder w2
+    await waitFor(() => expect(useApp.getState().focusedWindowId).toBe("w2"));
+    // A focus swap ALSO swaps w1 from PlotStage to BackgroundPlotWindow
+    // (pre-existing behavior, unrelated to staging: they're different
+    // component types in the same slot, so React tears down + rebuilds
+    // w1's uPlot instance too) — so this is 1 (initial) + 1 (w1's swap-away
+    // rebuild) + 1 (w2's placeholder -> real content) = 3, NOT a 2nd create
+    // for w2 alone. The point this proves is TIMING, not the total count:
+    // w2's create happens in the SAME waitFor, with zero stepFrame() calls.
+    await waitFor(() => expect(created.length).toBe(3));
+    expect(frameQueue).toHaveLength(0); // force-hydrate dequeued it — nothing left scheduled for w2
+  });
+
+  it("closing a window mid-stage prunes it — a later drain frame is harmless, not a crash", async () => {
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", winState: "normal" }),
+        win({ id: "w2", winState: "normal" }),
+        win({ id: "w3", winState: "normal" }),
+      ],
+      focusedWindowId: "w1",
+    });
+    stageWorkspaceRestore(useApp.getState().plotWindows, "w1"); // stages w2, w3 (z-tied, w2 first)
+    const { container } = render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(1));
+
+    useApp.getState().closeWindow("w2"); // closed before its drain turn
+    // WindowCanvas's own `plotWindows` effect prunes the closed id — by the
+    // time `waitFor` resolves, React has flushed that effect, so the ALREADY
+    // -scheduled frame below fires against the pruned queue (just "w3").
+    await waitFor(() => expect(useApp.getState().plotWindows).toHaveLength(2));
+
+    stepFrame(); // drains w3 (the pruned queue's only remaining id)
+    stepFrame(); // nothing left scheduled — must be harmless, not a crash
+    await waitFor(() => expect(created.length).toBe(2)); // w1 (active) + w3 — never a stray 3rd
+    expect(container.querySelectorAll(".qzk-plotwin-placeholder")).toHaveLength(0);
   });
 });

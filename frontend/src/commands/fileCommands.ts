@@ -28,6 +28,7 @@ import type { Action } from "../store/commands";
 import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
 import { withOp } from "../store/pendingOps";
 import { toast } from "../store/toasts";
+import { stageWorkspaceRestore } from "../store/windowHydration";
 
 // P3.4 slice 1, 2026-07-26 audit gap #1: the double-import guard. The real
 // chokepoint lives in store/importDatasets.ts's `runImport` (covers ⌘O, the
@@ -46,6 +47,16 @@ function rejectIfImportRunning(): boolean {
 
 let demoCounter = 0;
 let sampleCounter = 0;
+
+/** `loadWorkspace` + the P3.4 slice 4 staging call that must immediately
+ *  follow it (see `stageWorkspaceRestore`'s doc) — shared by open-workspace's
+ *  two branches (empty library, and the confirmed-replace path) so the
+ *  three-statement sequence isn't duplicated. */
+function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace): void {
+  s().recordHistory("open workspace");
+  s().loadWorkspace(ws);
+  stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
+}
 
 /** Shared Open/Append-workspace flow (the only difference between the two
  *  File commands): pick a .dwk, parse it, and hand the result to `dispatch`
@@ -191,13 +202,13 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // has two legitimate non-interactive callers: `clearAll` (already
       // confirmed at its own call site) and the startup autosave restore
       // (useWorkspaceAutosave), which must never prompt.
+      // P3.4 slice 4: `replaceWorkspace` stages every restored window except
+      // the active/linked ones behind a placeholder until its drain turn,
+      // instead of all mounting — and each creating a live uPlot instance —
+      // in one commit.
       run: openWorkspaceCommand(s, "open", (ws) => {
         const n = s().datasets.length;
-        if (n === 0) {
-          s().recordHistory("open workspace");
-          s().loadWorkspace(ws);
-          return;
-        }
+        if (n === 0) return replaceWorkspace(s, ws);
         void askConfirm(
           "Replace the current workspace?",
           `Opening this file discards the ${n} dataset${n === 1 ? "" : "s"} currently ` +
@@ -205,11 +216,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
             `if you need it.`,
           "Replace",
           true,
-        ).then((ok) => {
-          if (!ok) return;
-          s().recordHistory("open workspace");
-          s().loadWorkspace(ws);
-        });
+        ).then((ok) => ok && replaceWorkspace(s, ws));
       }),
     },
     {
@@ -218,6 +225,9 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Append workspace (.dwk)…",
       description: "Merge another saved workspace into the current library without replacing it.",
       keywords: "merge combine import project origin append second library",
+      // P3.4 slice 4: no stageWorkspaceRestore call here — appendWorkspace
+      // only merges `datasets` (store/useApp.ts), never `plotWindows`, so an
+      // append can't trigger the multi-window mount storm loadWorkspace can.
       run: openWorkspaceCommand(s, "append", (ws) => s().appendWorkspace(ws)),
     },
     {

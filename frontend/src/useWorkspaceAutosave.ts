@@ -10,6 +10,7 @@ import { installSessionMarker, priorSessionEnd } from "./lib/sessionMarker";
 import { reportAutosaveHealth } from "./store/autosaveStatus";
 import { toast } from "./store/toasts";
 import { useApp, type AppState } from "./store/useApp";
+import { stageWorkspaceRestore } from "./store/windowHydration";
 
 /** Every store field serialized into a .dwk workspace. Keep this list in one
  * place so autosave cannot silently omit a newly-persisted artifact. */
@@ -66,6 +67,9 @@ export function useWorkspaceAutosave(): void {
     void loadAutosave().then((restored) => {
       if (cancelled || !restored?.datasets.length) return;
       useApp.getState().loadWorkspace(restored);
+      // P3.4 slice 4: same synchronous-tick staging fileCommands.ts's
+      // open-workspace command uses — see stageWorkspaceRestore's doc.
+      stageWorkspaceRestore(useApp.getState().plotWindows, useApp.getState().focusedWindowId);
       const n = restored.datasets.length;
       const what = `${n} dataset${n === 1 ? "" : "s"}`;
       // #32: restoring is unremarkable after an ordinary close, but after a
