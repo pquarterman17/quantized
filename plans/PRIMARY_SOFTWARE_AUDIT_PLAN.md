@@ -774,14 +774,29 @@ Prioritized slices (in pain order):
   (−24 %). The <1.5 s freeze target was MISSED for a named reason: the
   1M-row window's OWN mount is ~6 s regardless of staging — see the
   divergence item below.
-- [ ] **Heavy plot-window mount diverges from the stage path** (found
-  2026-07-26 by slice 4's A/B): opening a window on the 1M-row dataset
-  costs ~4.5–6.3 s, while the SAME dataset's first frame on the main
-  stage after import is **874 ms** — the window path is doing ~5–7×
-  extra work somewhere (payload rebuild? decimation not engaging?
-  duplicated column packing?). Find the divergence, fix at the shared
-  chokepoint, and re-run `workspace_envelope.mjs` — this is what stands
-  between the restore freeze and the <1.5 s target.
+- [x] ~~**Heavy plot-window mount diverges from the stage path**~~ FIXED
+  2026-07-26 (`89499cc`) with a corrected diagnosis: the paths were NEVER
+  divergent code — the cost was `channelModelingType`/`inferModelingType`
+  and `defaultDenseChannels` running unmemoized IN RENDER
+  (O(rows×channels), ~14 calls per Inspector render at 100–300 ms each on
+  1M rows), blocking render→commit→effect before the plot fetch starts.
+  Fixed with WeakMap caches keyed on the `values` reference (the same
+  identity convention `usePlotPayload` already relies on) — benefits every
+  consumer, not just windows. Window open 6,066→~3,800 ms; restore freeze
+  5,604→~3,660 ms; wall 6,519→4,540 ms. Six cache-correctness tests.
+  Honest anomaly flagged: TTFP varied 89 ms vs ~2,300 ms between runs —
+  suspected save-time focused-window nondeterminism in the harness, being
+  settled by the final measurement wave.
+- [ ] **Server-side plot-payload decimation** (the pre-authorized second
+  half of the point-reduction follow-up — "server-side payload decimation
+  second only if still needed": it IS needed): `/api/plot/series` ships
+  **78 MB of JSON** for 1M×7, whose network+encode+parse (~2–5 s) is now
+  the measured remaining term in both window-mount (~3.8 s) and restore
+  freeze (~3.7 s vs the 1.5 s target). Decimate at the route/pure layer
+  to what the client will draw (the min/max bucketing contract
+  `lib/downsample.ts`/`plotDecimate.ts` already define), with a
+  full-resolution opt-out for analysis consumers — audit who reads the
+  payload besides the plot before changing the default.
 
 Original acceptance criteria (unchanged):
 

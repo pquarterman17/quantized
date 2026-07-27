@@ -231,7 +231,7 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
-| Heavy plot-window mount divergence — a window on the 1M-row dataset mounts in ~4.5–6.3 s while the SAME data's first stage frame after import is 874 ms (~5–7× extra work: payload rebuild? decimation not engaging in the window path?). Fix at the shared chokepoint; this is the last term before the restore-freeze <1.5 s target | PRIMARY SOFTWARE P3.4 (found by slice 4) |
+| Server-side plot-payload decimation — `/api/plot/series` ships 78 MB JSON at 1M×7; its network+encode+parse (~2–5 s) is the measured last term in window mount (~3.8 s) and restore freeze (~3.7 s vs 1.5 s target) after the render-memoization fix. Decimate at the route to the client's draw contract, full-res opt-out; audit non-plot payload consumers first | PRIMARY SOFTWARE P0.4/P3.4 (pre-authorized second half of point reduction) |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are

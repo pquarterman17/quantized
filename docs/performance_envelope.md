@@ -232,6 +232,24 @@ Findings:
     What remains eager is dominated by react-dom + uplot + the core store;
     no further cheap boundary exists today.
 
+## Window-mount "divergence" resolved — 2026-07-26 late (`89499cc`)
+
+13. **The paths were never divergent code** — profiling showed both window
+    and stage share the identical `usePlotPayload` → `/api/plot/series` →
+    `PlotViewport` pipeline. The extra seconds were
+    `channelModelingType`/`inferModelingType` + `defaultDenseChannels`
+    running unmemoized in render (~14 calls × 100–300 ms on 1M rows),
+    paid on every (re-)activation of a heavy dataset before the fetch
+    could start. WeakMap caches on the `values` reference fixed the class
+    for every consumer. Window open 6,066→~3,800 ms; restore freeze
+    5,604→~3,660 ms. The measured remaining term everywhere is now the
+    **78 MB `/api/plot/series` payload** (network + encode + parse,
+    ~2–5 s) — server-side payload decimation is booked (it was
+    pre-authorized as the second half of the original point-reduction
+    item). One anomaly under investigation by the final measurement wave:
+    restore TTFP varied 89 ms vs ~2,300 ms run-to-run, suspected
+    save-time focused-window nondeterminism in the harness.
+
 ## Residuals (explicitly unmeasured — carry in P0.4)
 
 - Browser-side 2-D map rendering/interaction at 1000²–2000².
