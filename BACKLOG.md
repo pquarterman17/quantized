@@ -6,7 +6,18 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-07-26 (eighth pass). **P3.4 slices 1–3 ALL
+**Last reconciled:** 2026-07-26 (ninth pass). **Slice 4 + the P4.1 lazy
+boundary SHIPPED in parallel** (`65e3670` staged window hydration:
+time-to-first-paint on a 188 MB restore 906→106 ms, freeze −24 %;
+`95bf0b2` CalcOnlyApp dynamic import: eager 948.4→881.2 kB, budget
+ratcheted DOWN to 919.2 kB, 38 kB headroom restored). The freeze target
+was missed for a NAMED reason now at the queue head: a window on the 1M
+dataset mounts in ~6 s while the same data's stage frame takes 874 ms —
+that divergence is the one actionable row. PR #90 (tray icon + README
+branding, ChatGPT) was adversarially reviewed, PyPI-image defect fixed,
+and squash-merged (`c76cdee`).
+
+Prior same day (eighth pass). **P3.4 slices 1–3 ALL
 SHIPPED** (`3c3ccee` pendingOps + universal async-command signal;
 `08c6a5b` cancellable import + double-import guard, live-verified at 1M
 rows; `481e0ea` workspace-open busy state + worker parse). Slice 3's
@@ -212,7 +223,7 @@ still make the owner switch back to Origin.
 
 | Item | Plan / item |
 |------|-------------|
-| P3.4 slice 4 — staged workspace-restore rendering: the reopen freeze's REAL term is React re-render + 11-window mount (~5–6 s at the 188 MB session), not `JSON.parse` (~0.5 s, attribution corrected by slice 3's instrumentation). Restore data + active window first, stage the rest; measure with `workspace_envelope.mjs`, target <1.5 s freeze | PRIMARY SOFTWARE P3.4 |
+| Heavy plot-window mount divergence — a window on the 1M-row dataset mounts in ~4.5–6.3 s while the SAME data's first stage frame after import is 874 ms (~5–7× extra work: payload rebuild? decimation not engaging in the window path?). Fix at the shared chokepoint; this is the last term before the restore-freeze <1.5 s target | PRIMARY SOFTWARE P3.4 (found by slice 4) |
 
 The plan's other two Gate A items, **P0.1** (run a real switch-trigger project)
 and **P0.2** (review the Origin visual corpus), are NOT dev work — they are

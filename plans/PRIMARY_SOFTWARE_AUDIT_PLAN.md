@@ -159,7 +159,7 @@ specific residual below:
 
 | State | Work |
 |---|---|
-| **Actionable now; no owner gate** | P3.4 slice 4 (staged workspace-restore rendering — the corrected freeze term). ~~Slices 1–3~~, ~~P0.4 `_detect_layout`~~, the ~~>500 ms audit~~, and the ~~large derived-`.dwk` measurement~~ all completed 2026-07-26 |
+| **Actionable now; no owner gate** | The heavy-window-mount divergence (window ~6 s vs stage 874 ms for the same 1M dataset — the last term before the restore-freeze target). ~~Slice 4~~ and the ~~P4.1 lazy boundary~~ shipped 2026-07-26 late; ~~slices 1–3~~, ~~`_detect_layout`~~, the ~~>500 ms audit~~, and the ~~`.dwk` measurement~~ earlier the same day |
 | **Owner/environment evidence now** | P0.1 switch-trigger project; P0.2 screenshot review; P0.3 timed journeys; P0.4 real-GPU confirmation |
 | **Sequencing-gated engineering; incomplete** | P1.1-P1.7 after Gate A; P2.1-P2.8 in the owner-ranked Gate D order; P3.1-P3.7 and P4.1-P4.2 as Gate E evidence warrants |
 | **Credentials/release acceptance** | P4.3; agents can implement and automate supporting work, but signing identities and clean-machine acceptance require the owner/environment |
@@ -759,14 +759,24 @@ Prioritized slices (in pain order):
   it — the dominant term is render/mount (slice 4). Autosave-restore not
   converted (its `pickRestorable` validity predicate is synchronous by
   contract; noted follow-up).
-- [ ] **Slice 4 — staged workspace-restore rendering** (booked 2026-07-26
-  from slice 3's instrumentation): after `loadWorkspace`, React
-  re-render + mounting 11 plot windows + canvas paint costs ~5–6 s on the
-  188 MB session and is the real freeze. Candidate shape: restore data
-  and the active window first, then mount remaining windows
-  staged/idle-deferred (or virtualize offscreen windows). Measure with
-  `tools/bench/workspace_envelope.mjs` before/after; target main-thread
-  freeze well under 1.5 s.
+- [x] ~~**Slice 4 — staged workspace-restore rendering**~~ SHIPPED
+  2026-07-26 (`65e3670`): bulk restores hydrate the active window first
+  and stage the rest one-per-frame (`store/windowHydration.ts`;
+  force-hydrate on focus/export/link-cycle; linked windows hydrate
+  eagerly to keep windowsync live; append-workspace correctly unwired —
+  it never mounts windows). A/B on one machine: **time-to-first-paint
+  906 → 106 ms (−88 %)**, restore wall −21 %, max freeze 7.6 → 5.7 s
+  (−24 %). The <1.5 s freeze target was MISSED for a named reason: the
+  1M-row window's OWN mount is ~6 s regardless of staging — see the
+  divergence item below.
+- [ ] **Heavy plot-window mount diverges from the stage path** (found
+  2026-07-26 by slice 4's A/B): opening a window on the 1M-row dataset
+  costs ~4.5–6.3 s, while the SAME dataset's first frame on the main
+  stage after import is **874 ms** — the window path is doing ~5–7×
+  extra work somewhere (payload rebuild? decimation not engaging?
+  duplicated column packing?). Find the divergence, fix at the shared
+  chokepoint, and re-run `workspace_envelope.mjs` — this is what stands
+  between the restore freeze and the <1.5 s target.
 
 Original acceptance criteria (unchanged):
 
@@ -832,8 +842,18 @@ next eager feature cannot land without it.)
 - [ ] Split one owned domain per PR with unchanged behavior/contracts.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
-- [ ] Profile the eager graph and lazy-load the next coherent heavy boundary
-  before adding substantial UI; do not merely raise the existing budget.
+- [x] ~~Profile the eager graph and lazy-load the next coherent heavy
+  boundary~~ SHIPPED 2026-07-26 (`95bf0b2`): profiling found `main.tsx`'s
+  STATIC import of `CalcOnlyApp` (the `?view=calc` DiraCulator launcher)
+  pinned the whole calculator tree into eager JS even though the in-app
+  panel was already lazy — reachability from an eager root defeats
+  code-splitting. Dynamic-imported: eager **948.4 → 881.2 kB** on the
+  merged tree; budget ratcheted DOWN 949.2 → 919.2 kB (38 kB working
+  headroom restored). Demand-load proven both directions (calc view
+  fetches its chunks; default view never does). The profile's top-15
+  eager contributors are in the agent report; react-dom (453 kB source)
+  + uplot (121 kB) + useApp.ts (59 kB) dominate what remains — no
+  further coherent boundary is currently cheap.
 - [x] ~~Restore `npm run lint`~~ SHIPPED 2026-07-25 (PR #88, `ecbf99b`):
   flat `eslint.config.js` (typescript-eslint recommended + classic
   react-hooks rules), wired into CI's frontend job; 0 errors / 9
@@ -1272,6 +1292,23 @@ work (its BACKLOG row).
   spawned one commit behind (`b1b32e7`, pre-`9f12216`), so its upload
   timing predates the layout fix — caveated in the envelope doc; all
   other numbers unaffected.
+
+#### 2026-07-26 latest — Slice 4 + the P4.1 lazy boundary (two parallel Sonnet agents, fenced territories)
+
+- Parallel by construction: slice 4 owned Stage/window/restore; P4.1 was
+  forbidden from that area and told to pick its boundary from a profile.
+  The fencing worked — zero merge conflicts, and P4.1's ratchet-down
+  (949.2 → 919.2 kB) absorbed slice 4's +1 kB that had failed the OLD
+  budget by 181 bytes in its worktree (merge order: P4.1 first).
+- Slice 4 (`65e3670`): TTFP 906 → 106 ms; freeze −24 %; target missed for
+  a named, now-booked reason (the 1M window's own ~6 s mount).
+- P4.1 (`95bf0b2`): the eager graph's hidden sin was `main.tsx` statically
+  importing `CalcOnlyApp` — 69.9 kB of calculators pinned eager despite
+  the in-app panel being lazy. Eager 948.4 → 881.2 kB merged.
+- New evidence-backed item: the window-vs-stage mount divergence
+  (~6 s vs 874 ms, same dataset) — booked under P3.4, now the queue head.
+- Merged-tree gates: 4,745 vitest / lint baseline / build 881.2 kB with
+  38 kB headroom / e2e 33/33.
 
 #### 2026-07-26 late — P3.4 slices 1–3 shipped (3 Sonnet agents: sequential primitive, then parallel; Fable spec/verify/merge)
 

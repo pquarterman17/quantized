@@ -205,6 +205,33 @@ Findings:
     data-dominated, few-window workspaces, and slice 3's busy state means
     the wait is at least signposted now.
 
+## Staged restore + eager-bundle boundary — 2026-07-26 late
+
+Slice 4 (`65e3670`) stages plot-window hydration on bulk restore (active
+window first, one per frame). Same-machine interleaved A/B on the 188 MB
+session:
+
+| Metric | Unstaged | Staged |
+|---|---|---|
+| Time-to-first-paint | 906 ms | **106 ms** (−88 %) |
+| Restore wall | 8,440 ms | ~6,660 ms (−21 %) |
+| Max main-thread freeze | 7,555 ms | ~5,750 ms (−24 %) |
+
+Findings:
+
+11. **The <1.5 s freeze target is now gated by ONE window**: mounting a
+    window on the 1M-row dataset costs ~4.5–6.3 s regardless of staging —
+    while the SAME dataset's first frame on the main stage after import is
+    **874 ms**. The window path is doing ~5–7× extra work somewhere;
+    finding that divergence is the booked next item.
+12. **Eager-bundle boundary** (`95bf0b2`): `main.tsx`'s static import of
+    `CalcOnlyApp` pinned the whole DiraCulator calculator tree (69.9 kB
+    minified) into eager JS — reachability from an eager root defeats
+    code-splitting even when another consumer lazy-loads the same tree.
+    Eager 948.4 → 881.2 kB merged; ratchet budget lowered 949.2 → 919.2 kB.
+    What remains eager is dominated by react-dom + uplot + the core store;
+    no further cheap boundary exists today.
+
 ## Residuals (explicitly unmeasured — carry in P0.4)
 
 - Browser-side 2-D map rendering/interaction at 1000²–2000².
