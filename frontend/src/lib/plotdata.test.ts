@@ -285,6 +285,50 @@ describe("defaultDenseChannels / primaryChannel (NaN-sparse default selection)",
     };
     expect(defaultDenseChannels(ds2)).toEqual([0, 1]);
   });
+
+  // P3.4 (docs/performance_envelope.md finding 11): defaultDenseChannels now
+  // caches its density scan per `(ds.values, xKey)` (ChannelsCard called it
+  // unmemoized on every Inspector render; at 1M rows that O(channels x rows)
+  // scan measured several hundred ms per call). These tests pin correctness,
+  // not just speed.
+  it("repeated calls with the same (values, xKey) return the same, correct result", () => {
+    expect(defaultDenseChannels(ds)).toEqual([1]);
+    expect(defaultDenseChannels(ds)).toEqual([1]); // cache hit, not stale
+  });
+
+  it("caches xKey=null and a real xKey independently on the same dataset", () => {
+    const withXKey: DataStruct = {
+      ...ds,
+      values: ds.values.map((row) => [...row, row[1]]), // channel 2 mirrors Moment
+      labels: [...ds.labels, "Moment2"],
+      units: [...ds.units, "emu"],
+    };
+    const byTime = defaultDenseChannels(withXKey, null);
+    const byChannel1 = defaultDenseChannels(withXKey, 1);
+    expect(byTime).toEqual([1, 2]); // sparse col excluded either way
+    expect(byChannel1).toEqual([2]); // channel 1 itself is now the x-axis, excluded from candidates
+    // Re-fetch both — neither cache entry clobbered the other.
+    expect(defaultDenseChannels(withXKey, null)).toEqual(byTime);
+    expect(defaultDenseChannels(withXKey, 1)).toEqual(byChannel1);
+  });
+
+  it("two DataStructs with different values arrays never cross-contaminate the cache", () => {
+    const other: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [1, 10],
+        [2, 20],
+        [3, 30],
+        [4, 40],
+      ],
+      labels: ["A", "B"],
+      units: ["", ""],
+      metadata: {},
+    };
+    expect(defaultDenseChannels(ds)).toEqual([1]); // primes ds's own cache entry
+    expect(defaultDenseChannels(other)).toEqual([0, 1]); // unrelated dataset, both dense
+    expect(defaultDenseChannels(ds)).toEqual([1]); // ds's answer is unaffected
+  });
 });
 
 describe("withFitOverlay", () => {

@@ -60,6 +60,38 @@ describe("channelModelingType", () => {
     expect(channelModelingType(d, 0)).toBe("nominal");
     expect(channelModelingType(d, 1)).toBe("ordinal");
   });
+
+  // P3.4 (docs/performance_envelope.md finding 11): channelModelingType now
+  // caches its inference per `(ds.data.values, channel)` so repeated calls
+  // (e.g. ChannelsCard re-rendering, or several windows on the same dataset)
+  // don't re-scan the whole column every time. These tests pin the cache's
+  // correctness contract, not just its speed.
+  it("repeated calls on the same dataset return the same, correct result", () => {
+    const d = ds(values);
+    expect(channelModelingType(d, 0)).toBe("continuous");
+    expect(channelModelingType(d, 0)).toBe("continuous"); // cache hit, not stale
+    expect(channelModelingType(d, 1)).toBe("nominal");
+    expect(channelModelingType(d, 1)).toBe("nominal");
+  });
+
+  it("two datasets with different values never cross-contaminate the cache", () => {
+    // d1's channel 1 is nominal (3 repeated levels); d2's channel 1 at the
+    // SAME index is a smooth ramp (continuous) — if the cache were keyed
+    // wrong (e.g. by channel index alone) this would leak d1's answer.
+    const d1 = ds(values);
+    const d2 = ds(Array.from({ length: 30 }, (_, i) => [i * 0.2, i * 0.3]));
+    expect(channelModelingType(d1, 1)).toBe("nominal");
+    expect(channelModelingType(d2, 1)).toBe("continuous");
+    // Re-check d1 after d2 primed its own cache entry — still correct.
+    expect(channelModelingType(d1, 1)).toBe("nominal");
+  });
+
+  it("a dataset that later gains a channelTypes override still reads the override, even though the underlying values array is unchanged (bypasses any stale cache entry)", () => {
+    const d = ds(values);
+    expect(channelModelingType(d, 1)).toBe("nominal"); // primes the inference cache
+    const withOverride: Dataset = { ...d, channelTypes: { 1: "continuous" } };
+    expect(channelModelingType(withOverride, 1)).toBe("continuous");
+  });
 });
 
 describe("isCategorical", () => {

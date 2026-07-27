@@ -128,6 +128,23 @@ function finitePairCount(xs: readonly number[], ys: readonly number[]): number {
  *  the *default* (yKeys=null) view — see defaultDenseChannels. */
 const MIN_DENSITY_RATIO = 0.1;
 
+// P3.4 (docs/performance_envelope.md finding 11's divergence investigation):
+// this is the density scan every default-channel-set consumer runs —
+// ChannelsCard's Inspector panel calls it UNMEMOIZED on every render (no
+// useMemo at all), and the Library's per-dataset sparkline (primaryChannel)
+// calls it once per dataset shown. At 1M rows the `xs`/`counts` build below
+// (an O(channels x rows) scan) measured several hundred ms; ChannelsCard
+// alone re-paid that on every Inspector re-render — including the one a
+// window focus change triggers when it activates a heavy dataset (the same
+// mechanism `lib/modeling.ts`'s `channelModelingType` cache addresses; see
+// its doc for why keying on the `values` array reference is safe — a
+// DataStruct's `values` only gets a new reference when the data itself
+// changes). Cache only the density-scan result (keyed on `(values, xKey)`);
+// the metadata-hint short-circuit above stays outside the cache since it's
+// already O(1)-ish and can read a channel-role/metadata change that doesn't
+// necessarily bump `values`.
+const denseChannelsCache = new WeakMap<readonly (readonly number[])[], Map<number | null, number[]>>();
+
 /** The channels an untouched dataset shows by default (yKeys=null): every
  *  non-x channel, EXCLUDING ones so NaN-sparse they can't be meaningfully
  *  co-plotted with the rest (fewer than 2 finite x/y pairs, or less than 10%
@@ -140,7 +157,8 @@ const MIN_DENSITY_RATIO = 0.1;
  *  (nothing to gain by hiding any of them) or none are dense at all, so the
  *  plot is never emptied outright. The single source of truth for "what does
  *  a freshly-loaded dataset show" — shared by the main plot (effectiveChannels)
- *  and the Library thumbnail (Sparkline). */
+ *  and the Library thumbnail (Sparkline). Cached per `(ds.values, xKey)` —
+ *  see the cache's doc above. */
 export function defaultDenseChannels(ds: DataStruct, xKey: number | null = null): number[] {
   // A parser-provided default plotted set (metadata.default_value_channels —
   // e.g. reflectometry .dat picks R + fit, leaving dQ/fresnel off by default)
@@ -153,6 +171,9 @@ export function defaultDenseChannels(ds: DataStruct, xKey: number | null = null)
     );
     if (picks.length > 0) return picks;
   }
+  let byXKey = denseChannelsCache.get(ds.values);
+  const cached = byXKey?.get(xKey);
+  if (cached) return cached;
   const xs = xKey == null ? ds.time : ds.values.map((row) => row[xKey]);
   const candidates = ds.labels.map((_, i) => i).filter((i) => i !== xKey);
   const counts = candidates.map((c) =>
@@ -162,10 +183,20 @@ export function defaultDenseChannels(ds: DataStruct, xKey: number | null = null)
     ),
   );
   const maxCount = counts.length ? Math.max(...counts) : 0;
-  if (maxCount === 0) return candidates; // nothing plots anyway — don't hide any
-  const floor = Math.max(2, maxCount * MIN_DENSITY_RATIO);
-  const dense = candidates.filter((_, i) => counts[i] >= floor);
-  return dense.length > 0 ? dense : candidates;
+  const result =
+    maxCount === 0
+      ? candidates // nothing plots anyway — don't hide any
+      : (() => {
+          const floor = Math.max(2, maxCount * MIN_DENSITY_RATIO);
+          const dense = candidates.filter((_, i) => counts[i] >= floor);
+          return dense.length > 0 ? dense : candidates;
+        })();
+  if (!byXKey) {
+    byXKey = new Map();
+    denseChannelsCache.set(ds.values, byXKey);
+  }
+  byXKey.set(xKey, result);
+  return result;
 }
 
 /** The single channel a one-line preview (the Library thumbnail) should draw:
