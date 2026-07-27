@@ -285,7 +285,7 @@ async function runF5(browser) {
     } catch {
       /* leave null */
     }
-    perWindow.push({ index: i, isBig: dsId === bigId, totalMs: Date.now() - t0, paintMs });
+    perWindow.push({ index: i, isBig: dsId === bigId, totalMs: Date.now() - t0, paintMs, winId });
     lastWinId = winId;
   }
   record(
@@ -379,6 +379,36 @@ async function runF5(browser) {
   } catch (e) {
     unmeasured(CASE, gridLabel, "worksheet_mount_ms", e.message);
     unmeasured(CASE, gridLabel, "scroll_latency_ms", "blocked — worksheet never mounted");
+  }
+
+  // ---- 4.5. Pin the focused window before saving (P0.4 FINAL residual M3) --
+  //
+  // docs/performance_envelope.md's TTFP anomaly (89 ms in some runs, ~2,300 ms
+  // in others): staged hydration (windowHydration.ts's stageWorkspaceRestore)
+  // mounts ONLY the window whose id equals the persisted `focusedWindowId`
+  // eagerly on restore — every other window renders a placeholder and drains
+  // one-per-frame. `focusedWindowId` is whatever window last called
+  // focusWindow() before the save; the window-creation loop above already
+  // ends on a SMALL dataset's window (windowTargets is [bigId, ...smallIds],
+  // so the LAST focusWindow() call in that loop is for a small window) — by
+  // construction this SHOULD already be deterministic. This explicit
+  // re-pin is a defensive belt-and-suspenders fix so the save is NEVER at the
+  // mercy of loop-order coincidence (e.g. if a future edit reorders
+  // windowTargets to put the big dataset last) — the harness change the task
+  // explicitly allows even when the underlying behavior turns out already
+  // deterministic.
+  const smallWin = perWindow.find((w) => !w.isBig) ?? perWindow[perWindow.length - 1];
+  if (smallWin) {
+    await page.evaluate((id) => window.__qz.useApp.getState().focusWindow(id), smallWin.winId);
+    const focusedNow = await page.evaluate(() => window.__qz.useApp.getState().focusedWindowId);
+    record(
+      CASE,
+      "session (20 datasets + 10 windows + derived content)",
+      "pre_save_focus_pin",
+      focusedNow === smallWin.winId,
+      "boolean",
+      `explicitly focusWindow()'d a SMALL dataset's window (index ${smallWin.index}) before saving, so staged hydration's eager window on reopen is deterministic — focusedWindowId after pin = "${focusedNow}"`,
+    );
   }
 
   // ---- 5. .dwk serialize -----------------------------------------------------
@@ -568,6 +598,57 @@ async function runF5(browser) {
         "expected 1000000",
         integrity.bigRowCount === 1000000 ? "ok" : "unmeasured",
       );
+      // ---- 8. Scenario B (A/B contrast, "if cheap"): re-focus the 1M-row
+      // window in this SAME already-restored live session, re-save (cheap —
+      // no session rebuild needed), clear autosave, and reopen again. This
+      // directly reproduces the anomaly's suspected cause with real numbers
+      // instead of just asserting the pin fixed it. --------------------------
+      try {
+        const bigWinIdNow = await page.evaluate(
+          (id) => window.__qz.useApp.getState().plotWindows.find((w) => w.datasetId === id)?.id ?? null,
+          bigId,
+        );
+        if (!bigWinIdNow) throw new Error("could not find a window bound to the 1M-row dataset after reopen");
+        await page.evaluate((id) => window.__qz.useApp.getState().focusWindow(id), bigWinIdNow);
+
+        const savedB = await withDeadline(() => saveWorkspaceCapture(page), 120000, "scenario B save (.dwk, big window focused)");
+        record(CASE, dwkLabel, "scenario_b_serialize_and_save_ms", Math.round(savedB.durationMs * 100) / 100, "ms", "same session re-saved with the 1M-row window explicitly focused — reference point, not the interesting number here");
+        const tmpDwkB = join(os.tmpdir(), `qz-envelope-f5-sceneb-${Date.now()}.dwk`);
+        await writeFile(tmpDwkB, savedB.text, "utf8");
+
+        await runPaletteAction(page, "Clear autosaved workspace");
+        await waitForAutosaveCleared(page, 8000).catch(() => {});
+
+        await gotoHarness(page, BASE_URL);
+        const { maxGapMs: maxGapB } = await measureMainThreadFreeze(page, async () => {
+          await withDeadline(
+            async () => {
+              await openWorkspaceViaPalette(page, tmpDwkB);
+              await waitForCountAtLeast(page, "[data-ds-id]", prevCount, 300000);
+            },
+            300000,
+            ".dwk reopen, scenario B (big window focused)",
+          );
+        });
+        try {
+          const paintMsB = await withDeadline(() => waitForCanvasPaint(page, 120000), 120000, "first canvas paint after reopen, scenario B");
+          record(
+            CASE,
+            dwkLabel,
+            "scenario_b_reopen_time_to_first_paint_ms",
+            paintMsB,
+            "ms",
+            `SAME measurement as reopen_time_to_first_paint_ms above, but with the 1,000,000-row window focused (and therefore staged-hydration-eager) at save time instead of a small one — this is the anomaly's "some runs ~2,300 ms" case reproduced on demand, not left to which window happened to be focused`,
+          );
+        } catch (e) {
+          unmeasured(CASE, dwkLabel, "scenario_b_reopen_time_to_first_paint_ms", e.message);
+        }
+        record(CASE, dwkLabel, "scenario_b_reopen_main_thread_max_freeze_ms", maxGapB, "ms", "same main-thread-freeze proxy as reopen_main_thread_max_freeze_ms above, scenario B");
+
+        await rm(tmpDwkB, { force: true }).catch(() => {});
+      } catch (e) {
+        unmeasured(CASE, dwkLabel, "scenario_b_reopen_time_to_first_paint_ms", e.message);
+      }
     } catch (e) {
       unmeasured(CASE, dwkLabel, "reopen_dataset_restore_ms", e.message);
     } finally {
