@@ -191,6 +191,29 @@ export async function measureGestureLatencies(page, stageSelector = ".qzk-stage 
   return { panLatencies, zoomLatencies };
 }
 
+/** Continuous mouse-move ("hover") latency over a plain canvas that has no
+ *  pan/zoom of its own (P0.4 residual M1 — MapStage: a static full-extent
+ *  heatmap with a hover readout but no viewport to pan/zoom). Each step times
+ *  input->next-frame via `timedGesture`, same technique as the pan half of
+ *  `measureGestureLatencies`, just without the mousedown/drag semantics a
+ *  panning plot needs. Returns an array of ms; throws if `selector` has no
+ *  bounding box (canvas not visible). */
+export async function measureHoverLatencies(page, selector, n = 10) {
+  const box = await page.locator(selector).first().boundingBox();
+  if (!box) throw new Error(`no bounding box for ${selector} (canvas not visible)`);
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  await page.mouse.move(cx, cy);
+  const latencies = [];
+  for (let i = 0; i < n; i++) {
+    const dx = (i % 2 === 0 ? 1 : -1) * (i + 1) * 3;
+    const dy = (i % 3 === 0 ? 1 : -1) * 2;
+    const t = await timedGesture(page, () => page.mouse.move(cx + dx, cy + dy));
+    latencies.push(t);
+  }
+  return latencies;
+}
+
 /** Wheel-scroll a plain scrollable element (e.g. the worksheet grid's
  *  `.qzk-grid`, distinct from the uPlot canvas `measureGestureLatencies`
  *  targets) `ticks` times, timing each tick's input->paint via
@@ -248,6 +271,91 @@ export async function measureMainThreadFreeze(page, fn) {
     await pollLoop;
   }
   return { maxGapMs: maxGap, sampleCount, totalMs: Date.now() - t0 };
+}
+
+// ---- Generic download / clipboard capture (P0.4 residual M2) --------------
+//
+// `saveWorkspaceCapture` (below) works because the whole gesture — call one
+// store action, get one blob — fits inside a single page.evaluate(). The
+// "Export figure…" command needs real mouse/keyboard interaction with a
+// dialog first (Command Palette -> ParamDialog -> "Run"), so the capture has
+// to be installed BEFORE that multi-step UI flow starts and read back AFTER
+// it finishes. Same non-monkeypatch discipline: these patch the PAGE's own
+// runtime for the duration of one capture, then restore it.
+
+/** Arm a one-shot capture of the next `URL.createObjectURL(blob)` +
+ *  `HTMLAnchorElement.click()` download pair, storing the resolved
+ *  `{size, headHex, type}` on `window.__qzDownloadCapture` (a promise) —
+ *  read it back with `waitForDownloadCapture`. `headHex` is the first 8
+ *  bytes as lowercase hex (e.g. "3c3f786d" = "<?xm" for an SVG/XML file,
+ *  "89504e47" for a PNG signature) — a cheap format sanity check without
+ *  decoding the whole blob as text (which would corrupt a binary PNG). */
+export async function installDownloadCapture(page) {
+  await page.evaluate(() => {
+    window.__qzDownloadCapture = new Promise((resolve, reject) => {
+      const OrigCreateObjectURL = URL.createObjectURL.bind(URL);
+      const OrigClick = HTMLAnchorElement.prototype.click;
+      URL.createObjectURL = (blob) => {
+        URL.createObjectURL = OrigCreateObjectURL;
+        HTMLAnchorElement.prototype.click = OrigClick;
+        blob
+          .arrayBuffer()
+          .then((buf) => {
+            const head = new Uint8Array(buf.slice(0, 8));
+            const headHex = Array.from(head)
+              .map((b) => b.toString(16).padStart(2, "0"))
+              .join("");
+            resolve({ size: blob.size, headHex, type: blob.type });
+          })
+          .catch(reject);
+        return "blob:harness-suppressed";
+      };
+      HTMLAnchorElement.prototype.click = function click() {
+        /* no-op: block the real download attempt in headless Chrome */
+      };
+    });
+  });
+}
+
+/** Read back a capture armed by `installDownloadCapture`. */
+export async function waitForDownloadCapture(page, timeoutMs = 60000) {
+  return await withDeadline(
+    () => page.evaluate(() => window.__qzDownloadCapture),
+    timeoutMs,
+    "download capture (URL.createObjectURL)",
+  );
+}
+
+/** Arm a one-shot capture of the next `navigator.clipboard.write(items)`
+ *  call, resolving `window.__qzClipboardCapture` once the REAL write settles
+ *  (success or failure) — the wrapped call still runs for real (this wraps,
+ *  it does not replace), so context.grantPermissions(['clipboard-write'])
+ *  must already be in effect for it to actually land. */
+export async function installClipboardWriteCapture(page) {
+  await page.evaluate(() => {
+    window.__qzClipboardCapture = new Promise((resolve) => {
+      const orig = navigator.clipboard.write.bind(navigator.clipboard);
+      navigator.clipboard.write = async (items) => {
+        try {
+          const r = await orig(items);
+          resolve({ ok: true, itemCount: items.length });
+          return r;
+        } catch (e) {
+          resolve({ ok: false, error: e instanceof Error ? e.message : String(e) });
+          throw e;
+        }
+      };
+    });
+  });
+}
+
+/** Read back a capture armed by `installClipboardWriteCapture`. */
+export async function waitForClipboardCapture(page, timeoutMs = 30000) {
+  return await withDeadline(
+    () => page.evaluate(() => window.__qzClipboardCapture),
+    timeoutMs,
+    "clipboard write capture",
+  );
 }
 
 // ---- Command Palette driving (mirrors frontend/e2e/utils/palette.ts) ------
